@@ -59,6 +59,8 @@ import ReactMarkdown from "react-markdown";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 /* Puro (sin Prisma): la misma fuente de conteos que la línea cerrada del «Contexto del cronograma». */
 import { lineaDeLectura, type LecturaDelMaterial } from "@/lib/contexto/material-cronograma";
+/* L1: qué dice el cajón con una propuesta (puro, con su tabla). */
+import { dondeEmpiezaLaPropuesta, type AvisoDelChat } from "@/lib/timeline/apertura-del-chat";
 
 /**
  * ⛔ ES EL MISMO TIPO QUE EMITE EL SERVIDOR, no una copia. Antes eran dos declaraciones a mano de
@@ -84,6 +86,8 @@ interface TurnoVista {
    * posicional de siempre, que es lo que había antes.
    */
   estado?: EstadoDeAcuerdo | null;
+  /** L1: cuándo se escribió (ISO). Ubica la divisoria de la propuesta; el optimista no lo trae. */
+  createdAt?: string;
 }
 
 /**
@@ -160,10 +164,18 @@ interface Props {
    */
   pedidoDeFoco?: number;
   /**
-   * E3 P5: de qué se habla («Sobre la propuesta desde «Regenerar todo»»). Reemplaza al subtítulo, y el
-   * estado vacío muestra ejemplos de lo que se le pide a una propuesta.
+   * L1 (2026-09-26): qué edita lo que se pide acá, según lo que hay en pantalla (`avisoDelChat`, puro, con su
+   * tabla en lib/timeline/apertura-del-chat.test.ts). Da el subtítulo, el aviso fijo arriba del campo (AUNQUE
+   * HAYA HISTORIAL: la conversación vieja no dice qué edita lo nuevo), la ayuda del campo y la bienvenida con
+   * sus ejemplos. Reemplaza a `referencia` (E3 P5), que solo existía con una propuesta editable. Sin él (los
+   * documentos), todo como siempre.
    */
-  referencia?: { titulo: string } | null;
+  aviso?: AvisoDelChat | null;
+  /**
+   * L1: la línea donde empieza la propuesta en la conversación (`divisoriaDelChat`). ⛔ La pinta el cajón y
+   * nunca se guarda como turno: entraría al contexto del modelo.
+   */
+  divisoria?: { texto: string; cuando: string } | null;
 }
 
 /** El id del cajón. Lo apunta el `aria-controls` del botón que lo abre, en el otro componente. */
@@ -182,7 +194,8 @@ export default function ChatDelAsistente({
   motivoParaNoAplicar,
   enfocarAlAbrir = true,
   pedidoDeFoco = 0,
-  referencia = null,
+  aviso = null,
+  divisoria = null,
 }: Props) {
   const hydrated = useHydrated();
   /** Por qué no se aplica ESTE acuerdo ahora (E3 P5: puede depender del acuerdo). */
@@ -581,6 +594,17 @@ export default function ChatDelAsistente({
     }
   }
 
+  /* L1: dónde empieza la propuesta en la conversación (null sin divisoria), y la bienvenida (solo editable).
+     Sin divisoria, la bienvenida reemplaza al estado vacío solo si no hay turnos. */
+  const inicioDeLaPropuesta = divisoria ? dondeEmpiezaLaPropuesta(turnos, divisoria.cuando) : null;
+  const conBienvenida = aviso?.variante === "editable" && !!aviso.bienvenida;
+  const bienvenidaSinDivisoria = conBienvenida && inicioDeLaPropuesta === null && turnos.length === 0;
+  const inicio = (
+    <InicioDeLaPropuesta texto={inicioDeLaPropuesta !== null ? (divisoria?.texto ?? null) : null} aviso={conBienvenida ? aviso : null} />
+  );
+  /* El estado vacío de siempre: sin aviso (los documentos) o sin propuesta. */
+  const conEstadoVacio = !aviso || aviso.variante === "sin-propuesta";
+
   if (!hydrated || !abierto) return null;
 
   return createPortal(
@@ -593,8 +617,8 @@ export default function ChatDelAsistente({
       <header className="px-4 py-3 border-b border-line flex items-center justify-between shrink-0">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-fg truncate">Asistente · {piezaLabel}</h2>
-          {/* E3 P5: con una propuesta abierta, de qué se habla (reemplaza al subtítulo). */}
-          <p className="text-xs text-fg-muted truncate">{referencia?.titulo ?? "Conversa el cambio antes de generarlo"}</p>
+          {/* L1: de qué se habla (la propuesta y de dónde viene, o el cronograma vigente). */}
+          <p className="text-xs text-fg-muted truncate">{aviso?.subtitulo ?? "Conversa el cambio antes de generarlo"}</p>
           {pieza === PIEZA_CRONOGRAMA && lectura ? (
             <p className={`text-[11px] ${lectura.error ? "text-warn-ink" : "text-fg-muted"}`}>
               {lineaDeLectura(lectura)}
@@ -629,15 +653,16 @@ export default function ChatDelAsistente({
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {cargando && <p className="text-xs text-fg-muted">Cargando la conversación…</p>}
 
-        {!cargando && turnos.length === 0 && (
+        {!cargando && turnos.length === 0 && conEstadoVacio && (
           <div className="text-sm text-fg-secondary space-y-2">
             <p>Pregúntale qué se puede cambiar y qué va a costar. Por ejemplo:</p>
-            {/* E3 P5: con una propuesta abierta, lo que se le pide a ELLA. */}
-            {referencia ? (
+            {/* L1: sin propuesta, los ejemplos del aviso (los de siempre, sin «Aplica la propuesta»). Lo que se le
+                pide a una propuesta va en la bienvenida, con sus números y sus fases de verdad. */}
+            {aviso?.ejemplos.length ? (
               <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
-                <li>«Deja el 2 como estaba»</li>
-                <li>«Quita las tareas nuevas de Integraciones»</li>
-                <li>«Aplica la propuesta»</li>
+                {aviso.ejemplos.map((e) => (
+                  <li key={e}>«{e}»</li>
+                ))}
               </ol>
             ) : (
               <ol className="text-xs text-fg-muted space-y-1 list-decimal pl-4">
@@ -656,9 +681,12 @@ export default function ChatDelAsistente({
             ) : null}
           </div>
         )}
+        {!cargando && bienvenidaSinDivisoria ? inicio : null}
 
-        {turnos.map((t) => (
+        {turnos.map((t, i) => (
           <div key={t.id}>
+            {/* L1: donde empieza la propuesta, la divisoria y la bienvenida (nunca un turno guardado). */}
+            {i === inicioDeLaPropuesta ? <div className="mb-3">{inicio}</div> : null}
             {/* ⭐ UN TURNO CON ACUERDO ES UNA SOLA CAJA (pedido de Elías, 2026-08-21).
                 Antes eran dos bloques que decían lo mismo: la burbuja del asistente enumeraba las
                 tres tareas y la cajita azul las volvía a enumerar debajo. Elías: *«lo siento
@@ -816,8 +844,10 @@ export default function ChatDelAsistente({
                             "aria-label": `${t.acuerdo.lineas.length} cambios acordados`,
                           }
                         : {})}
+                      /* L1: en el cronograma, viñetas: el único «12.» en pantalla es el número del Gantt (la lista
+                         numerada se leía como otra numeración de la propuesta). Los documentos siguen numerados. */
                       className={
-                        "mt-2 space-y-1 list-decimal pl-4 text-sm text-fg marker:text-fg-muted" +
+                        `mt-2 space-y-1 ${pieza === PIEZA_CRONOGRAMA ? "list-disc" : "list-decimal"} pl-4 text-sm text-fg marker:text-fg-muted` +
                         (t.acuerdo.lineas.length > 6
                           ? " max-h-56 overflow-y-auto pr-1 overscroll-contain" +
                             " focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-info-line rounded"
@@ -984,6 +1014,8 @@ export default function ChatDelAsistente({
             )}
           </div>
         ))}
+        {/* L1: toda la conversación es de antes de la propuesta: la divisoria va al final. */}
+        {!cargando && inicioDeLaPropuesta !== null && inicioDeLaPropuesta === turnos.length ? inicio : null}
 
         {/* ⚠ REGIONES MONTADAS SIEMPRE, aunque estén vacías. Una `live region` tiene que estar
             en el DOM ANTES del cambio para que el lector de pantalla la observe: insertarla ya
@@ -1027,15 +1059,35 @@ export default function ChatDelAsistente({
       </div>
 
       <div className="px-3 py-3 border-t border-line shrink-0">
+        {/* L1: el aviso FIJO, arriba del campo y con o sin historial: qué pasa con lo que se pide. Con una
+            conversación vieja arriba, nada más lo decía. */}
+        {aviso ? (
+          <p
+            role="note"
+            className={
+              "mb-2 rounded-lg border px-2 py-1.5 text-xs " +
+              (aviso.tono === "info"
+                ? "border-info-line bg-info-surface text-info-ink"
+                : aviso.tono === "warn"
+                  ? "border-warn-line bg-warn-surface text-warn-ink"
+                  : "border-line bg-surface-muted text-fg-secondary")
+            }
+          >
+            {aviso.aviso}
+          </p>
+        ) : null}
         {/* ⭐ El alcance, visible y revocable. Se queda después de enviar —encadenar dos ajustes
             sobre la misma sección es el caso normal— y otro botón «Cambiar» lo reemplaza en vez de
             abrir otro hilo: el alcance es por MENSAJE, no por conversación. */}
         {seccionReferida && (
           <div className="mb-2 flex items-center gap-1.5 text-xs">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-info-line bg-info-surface px-2 py-1 text-info-ink">
-              {/* E4 P1: el «IA» de una fase del Gantt fija una FASE, no una sección. */}
+              {/* E4 P1: el «IA» de una fase del Gantt fija una FASE, no una sección. L1: con una propuesta
+                  editable, la fase es la de la propuesta. */}
               {seccionReferida.tipo === "fase"
-                ? `Sobre la fase «${seccionReferida.label}»`
+                ? aviso?.variante === "editable"
+                  ? `Sobre «${seccionReferida.label}» de la propuesta`
+                  : `Sobre la fase «${seccionReferida.label}»`
                 : `Sobre «${seccionReferida.label}»`}
               <button
                 type="button"
@@ -1069,7 +1121,7 @@ export default function ChatDelAsistente({
             }
           }}
           rows={2}
-          placeholder="Escribe qué quieres cambiar…"
+          placeholder={aviso?.placeholder ?? "Escribe qué quieres cambiar…"}
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted resize-none overflow-y-auto"
           style={{ maxHeight: ALTO_MAXIMO_COMPOSER }}
         />
@@ -1083,6 +1135,36 @@ export default function ChatDelAsistente({
       </div>
     </aside>,
     document.body,
+  );
+}
+
+/**
+ * L1: donde empieza la propuesta en la conversación. La divisoria («── Propuesta desde «Regenerar todo» · 26 sep
+ * ──») y, con una propuesta editable, la bienvenida con sus ejemplos. ⛔ Solo se pinta: nunca se guarda como
+ * turno (entraría al contexto del modelo).
+ */
+function InicioDeLaPropuesta({ texto, aviso }: { texto: string | null; aviso: AvisoDelChat | null }) {
+  if (!texto && !aviso?.bienvenida) return null;
+  return (
+    <div className="space-y-2">
+      {texto ? (
+        <div role="separator" aria-label={texto} className="flex items-center gap-2 text-[11px] text-fg-muted">
+          <span aria-hidden="true" className="h-px flex-1 bg-line" />
+          <span className="shrink-0">{texto}</span>
+          <span aria-hidden="true" className="h-px flex-1 bg-line" />
+        </div>
+      ) : null}
+      {aviso?.bienvenida ? (
+        <p className="text-xs text-fg-muted">
+          {aviso.bienvenida}{" "}
+          {aviso.ejemplos.map((e, i) => (
+            <span key={e}>
+              {i > 0 ? " · " : ""}«{e}»
+            </span>
+          ))}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

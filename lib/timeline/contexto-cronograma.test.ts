@@ -523,8 +523,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "lib/asistente/contexto-del-cronograma.ts",
     /* E3 P5 (2026-09-25): el chat edita la propuesta. Lo que no registró y por qué, lo que cae con la
        propuesta y los desenlaces llegan tal cual al hilo (propuesta-del-chat.ts, textos-del-acuerdo.ts);
-       el botón, la espera y la caja resuelta, al cajón (textos-del-acuerdo.ts); la apertura sola no tiene
-       textos pero decide qué se abre (apertura-del-chat.ts). */
+       el botón, la espera y la caja resuelta, al cajón (textos-del-acuerdo.ts); la apertura sola decide qué se
+       abre (apertura-del-chat.ts), y desde L1 (2026-09-26) también da los textos del cajón: subtítulo, aviso
+       fijo, ayuda del campo, bienvenida y divisoria. */
     "lib/asistente/propuesta-del-chat.ts",
     "lib/asistente/textos-del-acuerdo.ts",
     "lib/timeline/apertura-del-chat.ts",

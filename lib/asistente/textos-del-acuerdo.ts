@@ -222,6 +222,9 @@ export const MOTIVOS_DEL_CHAT = {
   armando: "Espera: la IA está armando las tareas",
   // Revisión de E3 (#20): «Faltan recalcular» no concordaba (el sujeto es el infinitivo).
   recalcular: "Falta recalcular tareas: mira la barra",
+  /* L1 (2026-09-26): el borrador vacío cuya corrida falló. El servidor ya lo frena (409
+     `CHAT_CON_EL_VACIO_FALLIDO`); el botón no ofrece un clic que va a fallar. */
+  vacioFallido: "Descarta la propuesta vacía arriba del Gantt",
 } as const;
 
 /** Lo que el cronograma tiene en pantalla, leído en el momento. */
@@ -236,6 +239,8 @@ export interface LaPropuestaEnPantalla {
   version: number | null;
   /** Trae cambios que esta versión no sabe leer: solo se descarta en su barra. */
   conDesconocidos: boolean;
+  /** Es el borrador vacío y su corrida ya no va a traer nada (`estadoDelVacio` «fallo», L1). */
+  vacioFallido: boolean;
   /** La IA está armando o recalculando sus tareas. */
   tareasArmando: boolean;
   /** Aplicar está frenado (tareas por recalcular: lo dice la barra). */
@@ -267,11 +272,14 @@ export function motivoParaElAcuerdo(
   if (token === null) {
     if (!p.hayBorrador) return null;
     if (enSuBarra) return MOTIVOS_DEL_CHAT.enSuBarra;
+    if (p.vacioFallido) return MOTIVOS_DEL_CHAT.vacioFallido;
     if (p.tareasArmando) return MOTIVOS_DEL_CHAT.armando;
     return MOTIVOS_DEL_CHAT.hayPropuesta;
   }
   if (!p.hayBorrador || token !== p.token) return MOTIVOS_DEL_CHAT.cambio;
   if (enSuBarra) return MOTIVOS_DEL_CHAT.enSuBarra;
+  // L1: el vacío que falló no se edita ni se aplica desde el chat (el servidor responde 409): se descarta.
+  if (p.vacioFallido) return MOTIVOS_DEL_CHAT.vacioFallido;
   if (p.tareasArmando) return MOTIVOS_DEL_CHAT.armando;
   if (claseDeAcuerdo(a) === "aplicar") {
     const acordada = (a.operaciones[0] as { version?: unknown } | undefined)?.version;

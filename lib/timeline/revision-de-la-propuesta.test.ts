@@ -110,8 +110,10 @@ describe("los textos de la barra", () => {
   it("la línea fija y los avisos dicen lo que pasa con el cliente y qué hacer, en tuteo", () => {
     /* ⚠ ACTUALIZADA el 2026-09-24 con esta razón: Elías pidió menos texto en la barra y la línea va
        ahora junto al cierre, así que se acortó. Sigue diciendo lo mismo: nada llega al cliente hasta
-       aplicar. */
-    expect(LINEA_DEL_CLIENTE).toBe("El cliente no ve estos cambios hasta que apliques.");
+       aplicar.
+       ⚠ ACTUALIZADA en L1 (2026-09-26), con esta razón: «hasta que apliques» daba a entender que aplicar publica;
+       el cliente ve lo que se sube («Subir al cliente»). La misma frase va en el aviso del chat sin propuesta. */
+    expect(LINEA_DEL_CLIENTE).toBe("El cliente no ve nada hasta que subas el cronograma.");
     expect(AVISO_SUBIR_CON_PROPUESTA).toContain("sin aplicar");
     expect(AVISO_SUBIR_CON_PROPUESTA).toContain("si subes ahora");
     expect([TEXTO_VER_ANTES, TEXTO_VER_PROPUESTA]).toEqual(["Ver como estaba antes", "Ver la propuesta"]);
@@ -633,7 +635,7 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
        barra» (no null). Y el cronograma le pasa `propuestaIlegible`. */
     const motivo = tramo(CANVAS, "const motivoDelChat = (a: AcuerdoDelChat): string | null =>", "const pasarALaPropuesta");
     expect(contiene(motivo, "ilegible: propuestaIlegible,"), "el cronograma no le dice a la regla que hay algo ilegible").toBe(true);
-    const ilegible = { hayBorrador: false, ilegible: true, token: null, version: null, conDesconocidos: false, tareasArmando: false, bloqueada: false };
+    const ilegible = { hayBorrador: false, ilegible: true, token: null, version: null, conDesconocidos: false, vacioFallido: false, tareasArmando: false, bloqueada: false };
     /* ⚠ ACTUALIZADA en la revisión de E4 (#5c), con esta razón: el motivo decía «Resuelve la propuesta en su
        barra» y lo ilegible no tiene barra. Ahora «Descártala arriba del Gantt» (su tabla, en
        textos-del-acuerdo.test.ts). */
@@ -1606,7 +1608,8 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     const motivos = Object.values(MOTIVOS_DEL_CHAT);
     // E4: 6 → 5 (sale «Descarta la vista previa de «Pedir cambio con IA»»: se retiró).
     // Revisión de E4 (#5c): 5 → 6 (entra «Descártala arriba del Gantt», para lo que no se sabe leer).
-    expect(motivos.length).toBe(6);
+    // ⚠ ACTUALIZADA en L1 (2026-09-26), con esta razón: 6 → 7, entra «Descarta la propuesta vacía arriba del Gantt».
+    expect(motivos.length).toBe(7);
     for (const m of motivos) expect(m.length, m).toBeLessThanOrEqual(60);
     expect(CANVAS, "el cronograma volvió a tener sus propios motivos del botón").not.toContain("const MOTIVOS_DEL_CHAT");
   });
@@ -1635,14 +1638,28 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     expect(CANVAS.match(/xl:pr-\[400px\]/g)?.length).toBe(1);
     expect(contiene(CANVAS, '<div className={chatAbierto && hayBorrador ? "relative xl:pr-[400px]" : "relative"}>')).toBe(true);
     expect(contiene(CANVAS, "motivoParaNoAplicar={motivoDelChat}")).toBe(true);
-    /* ⚠ ACTUALIZADA en la revisión de E3 (#12), con esta razón: la referencia la arma `referenciaDelChat` (pura,
-       con su tabla en apertura-del-chat.test.ts): solo con una propuesta que el chat puede editar. */
+    /* ⚠ REESCRITA en L1 (2026-09-26), con esta razón: la referencia (solo con una propuesta editable) pasó a ser
+       un AVISO por estado: `estadoParaElChat` + `avisoDelChat` (puros, con su tabla en apertura-del-chat.test.ts).
+       El cronograma le pasa lo que hay en pantalla, con el permiso de editar y el vacío que falló. Las ediciones
+       que la ponen en rojo: olvidar `puedeEditar` (el chat ofrecería cambios sin permiso) o `vacioFallido` (el
+       cajón invitaría a editar un vacío que el servidor rechaza), o volver a la referencia. */
+    expect(contiene(CANVAS, "aviso={avisoDelChat(estadoParaElChat(entradaDelChat))}"), "el cajón no recibe el aviso por estado").toBe(true);
     expect(
-      contiene(
-        CANVAS,
-        "referencia={referenciaDelChat({ puedeEditar: canEdit, hayBorrador, editable: !conDesconocidos, conCambios: !!revision.resumen, desde: desdeDeLaPropuesta(deDondeViene(proposal)), })}",
-      ),
+      contiene(CANVAS, "divisoria={divisoriaDelChat(estadoParaElChat(entradaDelChat), autoriaEnPantalla?.cuando ?? null)}"),
+      "el cajón no recibe la divisoria de la propuesta",
     ).toBe(true);
+    const entradaDelChat = tramo(CANVAS, "const entradaDelChat: EntradaDelChat = {", "};");
+    expect(contiene(entradaDelChat, "puedeEditar: canEdit,"), "el chat no mira el permiso de editar").toBe(true);
+    expect(contiene(entradaDelChat, "vacioFallido,"), "el chat no mira el vacío que falló").toBe(true);
+    expect(contiene(entradaDelChat, "ilegible: propuestaIlegible,")).toBe(true);
+    expect(contiene(entradaDelChat, "conDesconocidos,")).toBe(true);
+    expect(contiene(entradaDelChat, "recalculando: recalculandoEnPantalla,")).toBe(true);
+    expect(contiene(entradaDelChat, "ejemplos: ejemplosDelResumen(revision.resumen),")).toBe(true);
+    expect(CANVAS, "volvió la referencia de E3").not.toContain("referencia={referenciaDelChat(");
+    // El botón del chat y el cajón miran el MISMO vacío que falló.
+    const motivoDelChat = tramo(CANVAS, "const motivoDelChat = (a: AcuerdoDelChat): string | null =>", "const pasarALaPropuesta");
+    expect(contiene(motivoDelChat, "vacioFallido,"), "el botón del chat no mira el vacío que falló").toBe(true);
+    expect(contiene(CANVAS, 'const vacioFallido = hayBorrador && estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "fallo";')).toBe(true);
     expect(contiene(CANVAS, "const conDesconocidos = hayBorrador && (revision.borrador?.desconocidos ?? 0) > 0;")).toBe(true);
   });
 

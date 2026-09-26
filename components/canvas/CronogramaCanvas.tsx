@@ -55,9 +55,13 @@ import {
   leerApertura,
   motivoParaPosponer,
   recordarApertura,
-  referenciaDelChat,
+  avisoDelChat,
+  divisoriaDelChat,
+  ejemplosDelResumen,
+  estadoParaElChat,
   seVuelveADecidir,
   type EntradaDeLaApertura,
+  type EntradaDelChat,
   type EventoDeLaEspera,
   type GestoEnElGantt,
   type MotivoDePosposicion,
@@ -2539,6 +2543,9 @@ export default function CronogramaCanvas({
   /* La propuesta trae cambios que esta versión no sabe leer: el chat no la puede tocar (se resuelve en su
      barra). La misma vara para el botón, la apertura sola y la referencia del cajón (revisión de E3, #12). */
   const conDesconocidos = hayBorrador && (revision.borrador?.desconocidos ?? 0) > 0;
+  /* L1: el borrador VACÍO cuya corrida ya no va a traer nada. El chat no lo edita ni lo aplica (el servidor
+     responde 409): el botón y el aviso del cajón mandan a descartarlo. */
+  const vacioFallido = hayBorrador && estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "fallo";
   /** Por qué el botón del chat no aplica ESTE acuerdo ahora (va en el botón: ≤ 60 caracteres), o null.
    *  Revisión de E3 (#24, #11): la regla es pura (`motivoParaElAcuerdo`, con su tabla corrida); acá solo se
    *  le pasa lo que hay en pantalla, leído en el momento. */
@@ -2549,6 +2556,7 @@ export default function CronogramaCanvas({
       token: hayBorrador ? proposalMeta.current.runId : null,
       version: revision.version ?? null,
       conDesconocidos,
+      vacioFallido,
       tareasArmando: tareasArmandoEnPantalla,
       bloqueada: !!revision.resumen?.bloqueo,
     });
@@ -2667,6 +2675,22 @@ export default function CronogramaCanvas({
   }, [registrarGestoEnElGantt]);
   const recalculandoEnPantalla = tareasEnPantalla?.recalculo?.estado === "armando";
   const soloFaseEnPantalla = !!revision.borrador?.soloFase;
+  /* L1 · QUÉ DICE EL CHAT (2026-09-26): qué edita lo que se pide en el cajón, según lo que hay en pantalla. Lo
+     decide `estadoParaElChat` (puro, con su tabla en apertura-del-chat.test.ts). Sin permiso de editar no ofrece
+     ningún cambio; con una propuesta que el chat no resuelve (versión nueva, ilegible, vacía que falló), dice
+     cómo salir. Las tareas «armando» son las de la propuesta (y el vacío que las espera); el recálculo va aparte. */
+  const entradaDelChat: EntradaDelChat = {
+    puedeEditar: canEdit,
+    hayBorrador,
+    ilegible: propuestaIlegible,
+    conDesconocidos,
+    vacioFallido,
+    tareasArmando:
+      estadoDeLasTareasEnPantalla === "armando" || estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "armando",
+    recalculando: recalculandoEnPantalla,
+    desde: desdeDeLaPropuesta(deDondeViene(proposal)),
+    ejemplos: ejemplosDelResumen(revision.resumen),
+  };
   useEffect(() => {
     if (!tokenParaLaApertura || aperturaVistaRef.current === tokenParaLaApertura) return;
     const reintento = reintentoDeLaApertura === tokenParaLaApertura;
@@ -3561,7 +3585,7 @@ export default function CronogramaCanvas({
                   ? "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary text-secondary-fg transition-colors"
                   : "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover transition-colors"
               }
-              title="Conversa el cambio con el asistente: te dice qué se puede y qué fecha mueve antes de generarlo"
+              title="Conversa el cambio con el asistente: te dice qué se puede y qué fecha mueve."
             >
               💬 Asistente
               {/* Revisión de E3 (#17): llegó una propuesta y el chat no se abrió solo (la persona estaba en
@@ -4455,15 +4479,12 @@ export default function CronogramaCanvas({
         enfocarAlAbrir={!aperturaAutomatica}
         /* Revisión de E4 (#10): el «IA» de una fase con el cajón ya abierto también lleva el cursor al campo. */
         pedidoDeFoco={pedidoDeFoco}
-        /* Revisión de E3 (#12): solo con una propuesta que el chat puede editar (la misma vara que la
-           apertura sola y el botón): sobre otra, los ejemplos ofrecían pedidos que terminaban en «no registré». */
-        referencia={referenciaDelChat({
-          puedeEditar: canEdit,
-          hayBorrador,
-          editable: !conDesconocidos,
-          conCambios: !!revision.resumen,
-          desde: desdeDeLaPropuesta(deDondeViene(proposal)),
-        })}
+        /* L1: el subtítulo, el aviso fijo (aunque haya historial), la ayuda del campo y la bienvenida, por
+           estado (`entradaDelChat`). Reemplaza a la referencia de E3 (#12), que solo existía con una propuesta
+           editable y callaba en todo lo demás. */
+        aviso={avisoDelChat(estadoParaElChat(entradaDelChat))}
+        /* L1: dónde empieza la propuesta en la conversación: la corrida de su token (se mueve sola si llega otra). */
+        divisoria={divisoriaDelChat(estadoParaElChat(entradaDelChat), autoriaEnPantalla?.cuando ?? null)}
       />
       </div>
     </div>

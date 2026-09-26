@@ -26,7 +26,12 @@
  * Revisión antes del push: el campo que pierde el foco no reintenta en el acto (el `focusout` llega a mitad del
  * clic): se espera a que termine el gesto en todo el documento (`faltaParaReintentarPorElCampo`). Y «💬 Asistente»
  * no cierra un cajón que se abrió solo en ese mismo clic (`abiertoTrasTocarElChat`).
+ *
+ * L1 (2026-09-26): además, QUÉ DICE el cajón con lo que hay en pantalla (`estadoParaElChat`, `avisoDelChat`) y
+ * dónde empieza la propuesta en la conversación (`dondeEmpiezaLaPropuesta`, `divisoriaDelChat`).
  */
+import { diaCorto } from "./autoria-de-la-propuesta";
+import { LINEA_DEL_CLIENTE } from "./borrador";
 
 /**
  * Qué hacer:
@@ -255,21 +260,247 @@ export function esCampoDeEscritura(el: ElementoEnfocado | null | undefined): boo
   return !INPUTS_SIN_TEXTO.has((el.type ?? "text").toLowerCase());
 }
 
-/**
- * De qué habla el cajón («Sobre la propuesta desde …») y, con eso, los ejemplos que ofrece («Aplica la
- * propuesta»). Solo con una propuesta que el chat puede editar (revisión de E3, #12): sobre una que se
- * resuelve en su barra, todo lo que se le pida termina en «no registré cambios».
- */
-export function referenciaDelChat(e: {
+/* ── L1 · EL CHAT DICE QUÉ EDITA (2026-09-26) ─────────────────────────────────────────────────────────────
+   Antes el cajón decía «Sobre la propuesta desde …» solo con una propuesta editable y SIN historial se veían
+   los ejemplos; con conversación vieja nada decía que lo nuevo editaba la propuesta y no el cronograma vigente.
+   Sin permiso no decía nada, y con una propuesta que no se resuelve en el chat (versión nueva, vacía que falló)
+   tampoco. Ahora hay UN estado por pantalla (`estadoParaElChat`) y sus textos (`avisoDelChat`):
+     · el subtítulo dice de dónde viene la propuesta;
+     · el aviso fijo, arriba del campo y AUNQUE HAYA HISTORIAL, dice qué pasa con lo que se pide. La idea «cambia
+       la propuesta» va una sola vez, ahí;
+     · la bienvenida (solo editable) trae ejemplos armados con la propuesta de verdad, nunca un nombre fijo.
+   ⛔ La divisoria y la bienvenida las pinta el cajón y NUNCA se guardan como turno: entrarían al contexto del
+   modelo (y romperían su caché). */
+
+/** Con qué se arman los ejemplos de una propuesta editable (`ejemplosDelResumen`). */
+export interface EjemplosDeLaPropuesta {
+  /** El primer número de la barra que no es un grupo de tareas; null = no hay (se dice «el 1»). */
+  numero: number | null;
+  /** La fase del grupo con más tareas nuevas; null = ninguna (ese ejemplo no va). */
+  faseConNuevas: string | null;
+}
+
+/** Lo que el cronograma tiene en pantalla, leído en el render. */
+export interface EntradaDelChat {
+  /** Quien mira puede editar el cronograma (`editTimeline`). */
   puedeEditar: boolean;
+  /** Hay una propuesta que esta versión sabe leer (`borrador-v1`). */
   hayBorrador: boolean;
-  editable: boolean;
-  conCambios: boolean;
-  /** «desde el handoff», «desde «Regenerar todo»»… */
+  /** Hay algo guardado que NO es un v1: solo se descarta, en su línea. */
+  ilegible: boolean;
+  /** La propuesta trae cambios que esta versión de Nexus no sabe leer. */
+  conDesconocidos: boolean;
+  /** Es el borrador vacío y su corrida ya no va a traer nada (`estadoDelVacio` «fallo»). */
+  vacioFallido: boolean;
+  /** La IA está armando las tareas de la propuesta. */
+  tareasArmando: boolean;
+  /** La IA está recalculando unas tareas (E2c). */
+  recalculando: boolean;
+  /** «desde el handoff», «desde «Regenerar todo»»… (`desdeDeLaPropuesta`). */
   desde: string;
-}): { titulo: string } | null {
-  if (!e.puedeEditar || !e.hayBorrador || !e.editable || !e.conCambios) return null;
-  return { titulo: `Sobre la propuesta ${e.desde}` };
+  ejemplos: EjemplosDeLaPropuesta | null;
+}
+
+export type EstadoParaElChat =
+  | { que: "sin-propuesta" }
+  | { que: "solo-lectura"; desde: string | null }
+  | { que: "editable"; desde: string; ejemplos: EjemplosDeLaPropuesta | null }
+  | { que: "armando" | "recalculando"; desde: string }
+  | { que: "version-nueva" | "ilegible" | "vacia-fallida" };
+
+/**
+ * Qué puede hacer el chat con lo que hay en pantalla. El orden importa: sin permiso gana a todo (no se ofrece
+ * ningún cambio); lo ilegible, a no tener propuesta (sigue guardado y hay que descartarlo); los cambios de una
+ * versión nueva, a todo lo demás (solo se resuelven recargando o descartando).
+ */
+export function estadoParaElChat(e: EntradaDelChat): EstadoParaElChat {
+  if (!e.puedeEditar) return { que: "solo-lectura", desde: e.hayBorrador ? e.desde : null };
+  if (e.ilegible) return { que: "ilegible" };
+  if (!e.hayBorrador) return { que: "sin-propuesta" };
+  if (e.conDesconocidos) return { que: "version-nueva" };
+  if (e.vacioFallido) return { que: "vacia-fallida" };
+  if (e.tareasArmando) return { que: "armando", desde: e.desde };
+  if (e.recalculando) return { que: "recalculando", desde: e.desde };
+  return { que: "editable", desde: e.desde, ejemplos: e.ejemplos };
+}
+
+/** Los textos del cajón para un estado. */
+export interface AvisoDelChat {
+  variante: EstadoParaElChat["que"];
+  /** Debajo del título del cajón: de qué se habla. */
+  subtitulo: string;
+  /** El aviso fijo, arriba del campo: qué pasa con lo que se pide. */
+  aviso: string;
+  /** La ayuda del campo de escribir. */
+  placeholder: string;
+  tono: "info" | "warn" | "neutro";
+  /** Solo editable: lo que va antes de los ejemplos, debajo de la divisoria. */
+  bienvenida: string | null;
+  /** Editable: los de la propuesta; sin propuesta: los de siempre (sin «Aplica la propuesta»); resto: ninguno. */
+  ejemplos: string[];
+}
+
+export const EJEMPLO_APLICAR_LA_PROPUESTA = "Aplica la propuesta";
+/** Los ejemplos de siempre, sin propuesta abierta. */
+export const EJEMPLOS_SIN_PROPUESTA: readonly string[] = [
+  "¿Qué pasa si alargo una fase dos semanas?",
+  "Hay fases duplicadas, ¿se pueden unir?",
+  "Quiero mover una tarea de fase — ¿pierdo algo?",
+];
+/** Un nombre de fase largo se corta: el ejemplo tiene que entrar en una línea del cajón. */
+const TOPE_DEL_NOMBRE = 40;
+const cortar = (s: string): string => (s.length > TOPE_DEL_NOMBRE ? `${s.slice(0, TOPE_DEL_NOMBRE - 1).trimEnd()}…` : s);
+
+/** Los ejemplos de una propuesta editable: con sus números y sus fases, nunca un nombre fijo. */
+export function ejemplosDeLaPropuesta(e: EjemplosDeLaPropuesta | null): string[] {
+  const fase = e?.faseConNuevas?.trim() ? cortar(e.faseConNuevas.trim()) : null;
+  return [
+    `Deja el ${e?.numero ?? 1} como estaba`,
+    ...(fase ? [`Quita las tareas nuevas de «${fase}»`] : []),
+    EJEMPLO_APLICAR_LA_PROPUESTA,
+  ];
+}
+
+/** Con qué armar los ejemplos, del resumen de la barra: el primer número de estructura que no está ya así y
+ *  la fase del grupo con más nuevas (el primero, si empatan). null sin resumen. */
+export function ejemplosDelResumen(
+  r: {
+    items: ReadonlyArray<{ numero: number; estado: string }>;
+    grupos: ReadonlyArray<{ nombre: string; nuevas: number }>;
+  } | null,
+): EjemplosDeLaPropuesta | null {
+  if (!r) return null;
+  let faseConNuevas: string | null = null;
+  let mas = 0;
+  for (const g of r.grupos) {
+    if (g.nuevas > mas) {
+      mas = g.nuevas;
+      faseConNuevas = g.nombre;
+    }
+  }
+  return { numero: r.items.find((it) => it.estado !== "ya-esta")?.numero ?? null, faseConNuevas };
+}
+
+const SIN_RESOLVER = "Hay una propuesta sin resolver";
+const VIGENTE = "Sobre el cronograma vigente";
+const PREGUNTA_LA_PROPUESTA = "Pregunta sobre la propuesta…";
+const ESCRIBE_TU_PREGUNTA = "Escribe tu pregunta…";
+
+export function avisoDelChat(e: EstadoParaElChat): AvisoDelChat {
+  const sinEjemplos = { bienvenida: null, ejemplos: [] as string[] };
+  switch (e.que) {
+    case "editable":
+      return {
+        variante: e.que,
+        subtitulo: `Propuesta ${e.desde}`,
+        aviso: "Lo que pidas acá cambia la propuesta. El cronograma vigente sigue igual hasta que la apliques.",
+        placeholder: "Pide un cambio a la propuesta…",
+        tono: "info",
+        bienvenida: "Por ejemplo:",
+        ejemplos: ejemplosDeLaPropuesta(e.ejemplos),
+      };
+    case "armando":
+      return {
+        variante: e.que,
+        subtitulo: `Propuesta ${e.desde} · armándose`,
+        aviso: "La IA está armando la propuesta: aparece arriba del Gantt cuando termine. Puedes preguntar; los cambios, después.",
+        placeholder: PREGUNTA_LA_PROPUESTA,
+        tono: "info",
+        ...sinEjemplos,
+      };
+    case "recalculando":
+      return {
+        variante: e.que,
+        subtitulo: `Propuesta ${e.desde}`,
+        aviso: "La IA está recalculando unas tareas de la propuesta. Puedes preguntar; los cambios, cuando termine.",
+        placeholder: PREGUNTA_LA_PROPUESTA,
+        tono: "info",
+        ...sinEjemplos,
+      };
+    case "solo-lectura":
+      return {
+        variante: e.que,
+        subtitulo: e.desde ? `Propuesta ${e.desde}` : VIGENTE,
+        aviso: "Puedes preguntar. Cambiar el cronograma o la propuesta lo hace quien lo edita.",
+        placeholder: ESCRIBE_TU_PREGUNTA,
+        tono: "neutro",
+        ...sinEjemplos,
+      };
+    case "version-nueva":
+      return {
+        variante: e.que,
+        subtitulo: SIN_RESOLVER,
+        aviso: "Esta propuesta viene de una versión más nueva de Nexus: recarga la página. Si sigue igual, descártala arriba del Gantt.",
+        placeholder: PREGUNTA_LA_PROPUESTA,
+        tono: "warn",
+        ...sinEjemplos,
+      };
+    case "ilegible":
+      return {
+        variante: e.que,
+        subtitulo: SIN_RESOLVER,
+        aviso: "Hay una propuesta guardada que Nexus no sabe leer: descártala arriba del Gantt y después pídeme cambios.",
+        placeholder: ESCRIBE_TU_PREGUNTA,
+        tono: "warn",
+        ...sinEjemplos,
+      };
+    case "vacia-fallida":
+      return {
+        variante: e.que,
+        subtitulo: SIN_RESOLVER,
+        aviso: "La IA no pudo armar la propuesta: descártala o vuelve a intentarlo arriba del Gantt.",
+        placeholder: ESCRIBE_TU_PREGUNTA,
+        tono: "warn",
+        ...sinEjemplos,
+      };
+    case "sin-propuesta":
+      return {
+        variante: e.que,
+        subtitulo: VIGENTE,
+        aviso: `No hay propuesta abierta: lo que apliques acá cambia el cronograma vigente. ${LINEA_DEL_CLIENTE}`,
+        placeholder: "Escribe qué quieres cambiar del cronograma…",
+        tono: "neutro",
+        bienvenida: null,
+        ejemplos: [...EJEMPLOS_SIN_PROPUESTA],
+      };
+    default: {
+      // Un estado nuevo sin sus textos no compila.
+      const _: never = e;
+      return _;
+    }
+  }
+}
+
+/** «Propuesta desde «Regenerar todo» · 26 sep»: la línea donde empieza la propuesta en la conversación. */
+export const textoDeLaDivisoria = (desde: string, cuando: string): string => `Propuesta ${desde} · ${diaCorto(cuando)}`;
+
+/**
+ * La divisoria, si va: con una propuesta que se lee (editable, armándose, recalculando, o solo lectura con
+ * propuesta) y sabiendo cuándo empezó (`cuando`, la corrida del token). Sin fecha no hay dónde ponerla.
+ */
+export function divisoriaDelChat(e: EstadoParaElChat, cuando: string | null): { texto: string; cuando: string } | null {
+  if (!cuando || !diaCorto(cuando)) return null;
+  const desde =
+    e.que === "editable" || e.que === "armando" || e.que === "recalculando" || e.que === "solo-lectura" ? e.desde : null;
+  return desde ? { texto: textoDeLaDivisoria(desde, cuando), cuando } : null;
+}
+
+/** Índice del primer turno con createdAt ≥ cuando (uno sin createdAt —optimista— cuenta como nuevo);
+ *  turnos.length si todos son anteriores; null sin `cuando`. Se compara al SEGUNDO: un turno del mismo segundo
+ *  en que empezó la propuesta ya es de ella. */
+export function dondeEmpiezaLaPropuesta(
+  turnos: ReadonlyArray<{ createdAt?: string | null }>,
+  cuando: string | null,
+): number | null {
+  if (!cuando) return null;
+  const desde = Date.parse(cuando);
+  if (Number.isNaN(desde)) return null;
+  const segundo = Math.floor(desde / 1000);
+  const i = turnos.findIndex((t) => {
+    const ms = t.createdAt ? Date.parse(t.createdAt) : Number.NaN;
+    return Number.isNaN(ms) || Math.floor(ms / 1000) >= segundo;
+  });
+  return i === -1 ? turnos.length : i;
 }
 
 /** Dónde recuerda este navegador para qué propuesta ya se abrió el chat (una entrada por proyecto). */

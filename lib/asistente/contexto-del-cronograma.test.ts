@@ -36,6 +36,7 @@ import {
   type EntradaDelContextoConPropuesta,
 } from "./contexto-del-cronograma";
 import { contextoDeCronograma, lineaParaRehacerTodo, TECHO_DEL_PREFIJO_CHARS } from "./contexto";
+import { avisoDelChat, estadoParaElChat } from "@/lib/timeline/apertura-del-chat";
 import { propuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
 import { resolverHandle } from "@/lib/timeline/handle-de-tarea";
 import {
@@ -685,5 +686,34 @@ describe("⛔ P4 no cambia lo que hace el chat: ve la propuesta, pero `fases` si
     expect(ctx.texto).toContain("EL CRONOGRAMA HOY");
     expect(ctx.texto).toContain("HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR");
     expect(ctx.propuesta).toBeUndefined();
+  });
+});
+
+/**
+ * L1 (2026-09-26): el cajón le dice al CSE, arriba del campo, qué pasa con lo que pide; el contexto se lo dice al
+ * modelo. Tienen que decir lo mismo: con una propuesta editable, el cronograma no cambia hasta aplicarla.
+ */
+describe("⛔ L1 · el aviso del cajón y la línea del contexto dicen lo mismo", () => {
+  it("con una propuesta editable, los dos dicen que el cronograma no cambia hasta que se aplica", () => {
+    /* La edición que la pone en rojo: cambiar el aviso del cajón a otra idea (el modelo contestaría una cosa y la
+       pantalla diría otra). `LINEA_DE_LA_PROPUESTA_EDITABLE` no cambia en L1. */
+    const editable = avisoDelChat(
+      estadoParaElChat({
+        puedeEditar: true,
+        hayBorrador: true,
+        ilegible: false,
+        conDesconocidos: false,
+        vacioFallido: false,
+        tareasArmando: false,
+        recalculando: false,
+        desde: "desde «Regenerar todo»",
+        ejemplos: null,
+      }),
+    );
+    expect(editable.variante).toBe("editable");
+    expect(editable.aviso).toMatch(/hasta que (la|se) apli/);
+    expect(LINEA_DE_LA_PROPUESTA_EDITABLE).toMatch(/hasta que (la|se) apli/);
+    expect(editable.aviso).toContain("cambia la propuesta");
+    expect(LINEA_DE_LA_PROPUESTA_EDITABLE).toContain("EDITA ESTA PROPUESTA");
   });
 });

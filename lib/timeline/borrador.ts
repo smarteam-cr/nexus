@@ -3039,8 +3039,10 @@ export const esperaEnCurso = (rotulo: string) =>
   `El cronograma está ocupado (${rotulo}). Espera a que termine y vuelve a aplicar: el acuerdo sigue acá.`;
 
 /** La línea fija de la barra: lo que pasa con el cliente mientras la propuesta espera. Corta a
- *  propósito (2026-09-24, «hay mucho texto»): va en la misma línea que el cierre. */
-export const LINEA_DEL_CLIENTE = "El cliente no ve estos cambios hasta que apliques.";
+ *  propósito (2026-09-24, «hay mucho texto»): va en la misma línea que el cierre.
+ *  L1 (2026-09-26): decía «hasta que apliques» y daba a entender que aplicar publica; el cliente ve la foto
+ *  que se congela al «Subir al cliente» (timeline-view.ts). La usan la barra y el aviso del chat sin propuesta. */
+export const LINEA_DEL_CLIENTE = "El cliente no ve nada hasta que subas el cronograma.";
 /** «Subir al cliente» queda libre con una propuesta abierta, con este aviso (respuesta 4 de Elías). */
 export const AVISO_SUBIR_CON_PROPUESTA =
   "Hay una propuesta del cronograma sin aplicar (arriba del Gantt): si subes ahora, el cliente ve el cronograma sin esos cambios.";

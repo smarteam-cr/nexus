@@ -22,15 +22,27 @@ import {
   leerApertura,
   motivoParaPosponer,
   recordarApertura,
-  referenciaDelChat,
+  avisoDelChat,
+  divisoriaDelChat,
+  dondeEmpiezaLaPropuesta,
+  EJEMPLO_APLICAR_LA_PROPUESTA,
+  ejemplosDelResumen,
+  EJEMPLOS_SIN_PROPUESTA,
+  estadoParaElChat,
+  textoDeLaDivisoria,
   seVuelveADecidir,
   VENTANA_DEL_GESTO_MS,
   type AlmacenDeLaApertura,
+  type AvisoDelChat,
   type DecisionDeApertura,
   type EntradaDeLaApertura,
+  type EntradaDelChat,
+  type EstadoParaElChat,
   type EventoDeLaEspera,
   type MotivoDePosposicion,
 } from "./apertura-del-chat";
+import { BLOQUEO_VERSION_NUEVA, LINEA_DEL_CLIENTE } from "./borrador";
+import { motivoParaElAcuerdo, MOTIVOS_DEL_CHAT, type LaPropuestaEnPantalla } from "../asistente/textos-del-acuerdo";
 
 const BASE: EntradaDeLaApertura = {
   puedeEditar: true,
@@ -278,14 +290,224 @@ describe("⭐ revisión de E3 (#26) · lo que hace el cronograma con cada decisi
     }
   });
 
-  it("⛔ revisión de E3 (#12) · la referencia del cajón (y sus ejemplos), solo con una propuesta que el chat puede editar", () => {
-    /* La edición que la pone en rojo: ofrecer «Sobre la propuesta…» y «Aplica la propuesta» sobre una que solo
-       se resuelve en su barra. */
-    const base = { puedeEditar: true, hayBorrador: true, editable: true, conCambios: true, desde: "desde el handoff" };
-    expect(referenciaDelChat(base)).toEqual({ titulo: "Sobre la propuesta desde el handoff" });
-    for (const c of [{ editable: false }, { puedeEditar: false }, { hayBorrador: false }, { conCambios: false }]) {
-      expect(referenciaDelChat({ ...base, ...c }), JSON.stringify(c)).toBeNull();
+  /* ⚠ REESCRITA en L1 (2026-09-26), con esta razón: «la referencia del cajón (y sus ejemplos), solo con una
+     propuesta que el chat puede editar» (revisión de E3, #12) era `referenciaDelChat`, que solo existía con una
+     propuesta editable y callaba en todo lo demás. Pasó a ser un AVISO por estado (`estadoParaElChat` +
+     `avisoDelChat`); la regla de E3 (#12) sigue: «Aplica la propuesta» solo con una propuesta editable. Sus
+     filas, en el bloque de L1 de abajo. */
+});
+
+/* ── L1 · EL CHAT DICE QUÉ EDITA ─────────────────────────────────────────────────────────────────────────── */
+
+const ENTRADA_DEL_CHAT: EntradaDelChat = {
+  puedeEditar: true,
+  hayBorrador: true,
+  ilegible: false,
+  conDesconocidos: false,
+  vacioFallido: false,
+  tareasArmando: false,
+  recalculando: false,
+  desde: "desde «Regenerar todo»",
+  ejemplos: { numero: 11, faseConNuevas: "Sales Hub" },
+};
+const entradaDelChat = (c: Partial<EntradaDelChat>): EntradaDelChat => ({ ...ENTRADA_DEL_CHAT, ...c });
+/** El `hoy` fijo de los tests (con zona): 26 sep en Costa Rica. */
+const CUANDO = "2026-09-26T12:00:00-06:00";
+/** Una entrada por variante: las 8. */
+const VARIANTES: Record<EstadoParaElChat["que"], EntradaDelChat> = {
+  editable: ENTRADA_DEL_CHAT,
+  armando: entradaDelChat({ tareasArmando: true }),
+  recalculando: entradaDelChat({ recalculando: true }),
+  "solo-lectura": entradaDelChat({ puedeEditar: false }),
+  "version-nueva": entradaDelChat({ conDesconocidos: true }),
+  ilegible: entradaDelChat({ hayBorrador: false, ilegible: true }),
+  "vacia-fallida": entradaDelChat({ vacioFallido: true }),
+  "sin-propuesta": entradaDelChat({ hayBorrador: false }),
+};
+const avisoPara = (e: EntradaDelChat): AvisoDelChat => avisoDelChat(estadoParaElChat(e));
+const VOSEO = /(?<!\p{L})(podés|querés|tenés|decime|decímelo|fijate|mirá|revisá|sabés|elegí|aplicá)(?!\p{L})/iu;
+/** Los nombres entre «» de los ejemplos (las fases que nombran). */
+const fasesDe = (ejemplos: string[]) => ejemplos.flatMap((e) => [...e.matchAll(/«([^»]+)»/g)].map((m) => m[1]));
+
+describe("⭐ L1 · qué dice el chat con lo que hay en pantalla", () => {
+  it("⭐ la tabla de las 8 variantes: subtítulo, tono y ayuda del campo", () => {
+    /* La edición que la pone en rojo: cambiar de qué habla una variante (el subtítulo), su tono (el warn es para
+       lo que hay que resolver) o pedir cambios en el campo de una variante que no los acepta. */
+    const tabla: Record<EstadoParaElChat["que"], [string, AvisoDelChat["tono"], string]> = {
+      editable: ["Propuesta desde «Regenerar todo»", "info", "Pide un cambio a la propuesta…"],
+      armando: ["Propuesta desde «Regenerar todo» · armándose", "info", "Pregunta sobre la propuesta…"],
+      recalculando: ["Propuesta desde «Regenerar todo»", "info", "Pregunta sobre la propuesta…"],
+      "solo-lectura": ["Propuesta desde «Regenerar todo»", "neutro", "Escribe tu pregunta…"],
+      "version-nueva": ["Hay una propuesta sin resolver", "warn", "Pregunta sobre la propuesta…"],
+      ilegible: ["Hay una propuesta sin resolver", "warn", "Escribe tu pregunta…"],
+      "vacia-fallida": ["Hay una propuesta sin resolver", "warn", "Escribe tu pregunta…"],
+      "sin-propuesta": ["Sobre el cronograma vigente", "neutro", "Escribe qué quieres cambiar del cronograma…"],
+    };
+    for (const [que, [subtitulo, tono, placeholder]] of Object.entries(tabla)) {
+      const a = avisoPara(VARIANTES[que as EstadoParaElChat["que"]]);
+      expect(a.variante, que).toBe(que);
+      expect([a.subtitulo, a.tono, a.placeholder], que).toEqual([subtitulo, tono, placeholder]);
     }
+  });
+
+  it("⛔ «Aplica la propuesta» solo en editable; «cambia la propuesta» una sola vez; tuteo y ≤ 140 caracteres", () => {
+    /* Las ediciones que la ponen en rojo: ofrecer ejemplos sin permiso o sobre una propuesta que el chat no
+       resuelve (revisión de E3, #12: todo terminaba en «no registré cambios»), repetir la idea «cambia la
+       propuesta» en el subtítulo, la divisoria o la bienvenida (Elías pidió menos texto), o escribir en voseo. */
+    for (const [que, e] of Object.entries(VARIANTES)) {
+      const estado = estadoParaElChat(e);
+      const a = avisoDelChat(estado);
+      const divisoria = divisoriaDelChat(estado, CUANDO)?.texto ?? "";
+      const textos = [a.subtitulo, a.aviso, a.placeholder, a.bienvenida ?? "", divisoria, ...a.ejemplos];
+      for (const t of textos) {
+        expect(t, `${que}: ${t}`).not.toMatch(VOSEO);
+        expect(t.length, `${que}: ${t}`).toBeLessThanOrEqual(140);
+      }
+      expect(textos.some((t) => t.includes(EJEMPLO_APLICAR_LA_PROPUESTA)), `${que} ofrece «Aplica la propuesta»`).toBe(que === "editable");
+      const juntos = [a.subtitulo, divisoria, a.bienvenida ?? "", a.aviso].join(" | ");
+      expect(juntos.split("cambia la propuesta").length - 1, `${que}: ${juntos}`).toBe(que === "editable" ? 1 : 0);
+      // La bienvenida, solo editable.
+      expect(a.bienvenida !== null, que).toBe(que === "editable");
+    }
+  });
+
+  it("⛔ sin permiso de editar no se ofrece ningún pedido de cambio, con o sin propuesta", () => {
+    /* La edición que la pone en rojo: darle ejemplos o bienvenida a quien no puede editar (la ruta le
+       respondería 403 a cada cambio). */
+    for (const e of [VARIANTES["solo-lectura"], entradaDelChat({ puedeEditar: false, hayBorrador: false })]) {
+      const a = avisoPara(e);
+      expect(a.variante).toBe("solo-lectura");
+      expect(a.ejemplos, "ofrece ejemplos sin permiso").toEqual([]);
+      expect(a.bienvenida).toBeNull();
+      expect(a.aviso).toBe("Puedes preguntar. Cambiar el cronograma o la propuesta lo hace quien lo edita.");
+    }
+    expect(avisoPara(entradaDelChat({ puedeEditar: false, hayBorrador: false })).subtitulo).toBe("Sobre el cronograma vigente");
+  });
+
+  it("sin propuesta: cambia el cronograma vigente y el cliente no ve nada hasta subirlo; versión nueva: recargar", () => {
+    /* Las ediciones que la ponen en rojo: decir que lo aplicado ya lo ve el cliente (aplicar no publica: se ve lo
+       que se sube), ofrecer «Aplica la propuesta» sin propuesta, o mandar a un botón apagado con una propuesta de
+       una versión más nueva (el verbo es el de `BLOQUEO_VERSION_NUEVA`: recargar). */
+    const sin = avisoPara(VARIANTES["sin-propuesta"]);
+    expect(sin.aviso).toContain("cambia el cronograma vigente");
+    expect(sin.aviso).toContain(LINEA_DEL_CLIENTE);
+    expect(sin.ejemplos).toEqual([...EJEMPLOS_SIN_PROPUESTA]);
+    expect(sin.bienvenida).toBeNull();
+    expect(BLOQUEO_VERSION_NUEVA).toContain("recarga la página");
+    expect(avisoPara(VARIANTES["version-nueva"]).aviso).toContain("recarga la página");
+    expect(avisoPara(VARIANTES["vacia-fallida"]).aviso).toContain("descártala");
+    expect(avisoPara(VARIANTES.ilegible).aviso).toContain("descártala arriba del Gantt");
+  });
+
+  it("⛔ los ejemplos salen de la propuesta: ninguno nombra una fase que no esté en la entrada", () => {
+    /* La edición que la pone en rojo: volver a un nombre fijo («Quita las tareas nuevas de Integraciones»), que no
+       existe en casi ningún cronograma. */
+    for (const fase of ["Sales Hub", "Integración Circle", "Reportería y Data"]) {
+      const a = avisoPara(entradaDelChat({ ejemplos: { numero: 3, faseConNuevas: fase } }));
+      expect(fasesDe(a.ejemplos), fase).toEqual([fase]);
+      expect(a.ejemplos).toEqual(["Deja el 3 como estaba", `Quita las tareas nuevas de «${fase}»`, EJEMPLO_APLICAR_LA_PROPUESTA]);
+    }
+    // Sin fase con nuevas, ese ejemplo no va; sin número, «el 1».
+    const sinNada = avisoPara(entradaDelChat({ ejemplos: null }));
+    expect(sinNada.ejemplos).toEqual(["Deja el 1 como estaba", EJEMPLO_APLICAR_LA_PROPUESTA]);
+    expect(fasesDe(sinNada.ejemplos)).toEqual([]);
+    // Un nombre larguísimo se corta: el ejemplo entra igual.
+    const larga = "Integración con el ERP de la casa matriz y sus sucursales regionales";
+    const conLarga = avisoPara(entradaDelChat({ ejemplos: { numero: 2, faseConNuevas: larga } }));
+    for (const t of conLarga.ejemplos) expect(t.length, t).toBeLessThanOrEqual(140);
+    expect(larga.startsWith(fasesDe(conLarga.ejemplos)[0].replace(/…$/, ""))).toBe(true);
+  });
+
+  it("los ejemplos, del resumen de la barra: el primer número que no está ya así y la fase con más nuevas", () => {
+    /* La edición que la pone en rojo: ofrecer «Deja el N como estaba» sobre lo que ya está así, o tomar la fase
+       equivocada. */
+    const resumen = {
+      items: [
+        { numero: 1, estado: "ya-esta" },
+        { numero: 2, estado: "aplica" },
+        { numero: 3, estado: "excluido" },
+      ],
+      grupos: [
+        { nombre: "Fase A", nuevas: 2 },
+        { nombre: "Fase B", nuevas: 5 },
+        { nombre: "Fase C", nuevas: 5 },
+      ],
+    };
+    expect(ejemplosDelResumen(resumen)).toEqual({ numero: 2, faseConNuevas: "Fase B" });
+    expect(ejemplosDelResumen({ items: [], grupos: [{ nombre: "Fase A", nuevas: 0 }] })).toEqual({ numero: null, faseConNuevas: null });
+    expect(ejemplosDelResumen(null)).toBeNull();
+  });
+
+  it("⛔ el orden: sin permiso gana a todo; ilegible a sin borrador; versión nueva a vacío y a armando", () => {
+    /* La edición que la pone en rojo: mirar `tareasArmando` (o el vacío) antes que `conDesconocidos` (el chat
+       diría «armándose» de una propuesta que solo se resuelve recargando), o mirar lo ilegible después de «sin
+       borrador» (diría que no hay propuesta con una guardada). */
+    const todo = { ilegible: true, conDesconocidos: true, vacioFallido: true, tareasArmando: true, recalculando: true };
+    expect(estadoParaElChat(entradaDelChat({ puedeEditar: false, ...todo })).que).toBe("solo-lectura");
+    expect(estadoParaElChat(entradaDelChat({ hayBorrador: false, ilegible: true })).que).toBe("ilegible");
+    expect(estadoParaElChat(entradaDelChat({ conDesconocidos: true, vacioFallido: true })).que).toBe("version-nueva");
+    expect(estadoParaElChat(entradaDelChat({ conDesconocidos: true, tareasArmando: true })).que).toBe("version-nueva");
+    expect(estadoParaElChat(entradaDelChat({ vacioFallido: true, tareasArmando: true })).que).toBe("vacia-fallida");
+    expect(estadoParaElChat(entradaDelChat({ tareasArmando: true, recalculando: true })).que).toBe("armando");
+    expect(estadoParaElChat(ENTRADA_DEL_CHAT)).toEqual({ que: "editable", desde: "desde «Regenerar todo»", ejemplos: { numero: 11, faseConNuevas: "Sales Hub" } });
+  });
+
+  it("⛔ el aviso y el botón dicen lo mismo: solo en editable el acuerdo pasa a la propuesta", () => {
+    /* Se arma, por variante, lo que el cronograma le pasa al botón (`LaPropuestaEnPantalla`, como en
+       CronogramaCanvas.tsx: las tareas «armando» incluyen el recálculo). La edición que la pone en rojo: no sumar
+       `vacioFallido` al motivo del botón (el cajón diría «descártala» y el botón seguiría ofreciendo un clic que
+       el servidor rechaza con 409). */
+    const pantalla = (e: EntradaDelChat): LaPropuestaEnPantalla => ({
+      hayBorrador: e.hayBorrador,
+      ilegible: e.ilegible,
+      token: e.hayBorrador ? "run-4" : null,
+      version: e.hayBorrador ? 3 : null,
+      conDesconocidos: e.conDesconocidos,
+      vacioFallido: e.vacioFallido,
+      tareasArmando: e.tareasArmando || e.recalculando,
+      bloqueada: false,
+    });
+    const pasar = { borrador: "run-4", operaciones: [{ op: "fase.duracion" }] };
+    expect(motivoParaElAcuerdo(pasar, pantalla(VARIANTES.editable)), "editable").toBeNull();
+    for (const que of ["armando", "recalculando", "version-nueva", "ilegible", "vacia-fallida"] as const) {
+      expect(motivoParaElAcuerdo(pasar, pantalla(VARIANTES[que])), que).not.toBeNull();
+    }
+    expect(motivoParaElAcuerdo(pasar, pantalla(VARIANTES["vacia-fallida"]))).toBe(MOTIVOS_DEL_CHAT.vacioFallido);
+    expect(motivoParaElAcuerdo(pasar, pantalla(VARIANTES["version-nueva"]))).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
+    expect(motivoParaElAcuerdo(pasar, pantalla(VARIANTES.ilegible))).toBe(MOTIVOS_DEL_CHAT.ilegible);
+  });
+
+  it("⛔ dónde empieza la propuesta en la conversación (y un turno del mismo segundo ya es de ella)", () => {
+    /* La edición que la pone en rojo: comparar con `>` (el turno del mismo segundo quedaría arriba de la
+       divisoria), tratar al optimista (sin fecha) como viejo, o poner una divisoria sin saber cuándo empezó. */
+    const antes = { createdAt: "2026-09-26T17:59:59.000Z" };
+    const despues = { createdAt: "2026-09-26T18:05:00.000Z" };
+    expect(dondeEmpiezaLaPropuesta([antes, despues], null), "sin cuándo").toBeNull();
+    expect(dondeEmpiezaLaPropuesta([antes], "no es una fecha")).toBeNull();
+    expect(dondeEmpiezaLaPropuesta([], CUANDO), "sin turnos").toBe(0);
+    expect(dondeEmpiezaLaPropuesta([antes, antes], CUANDO), "todos anteriores: al final").toBe(2);
+    expect(dondeEmpiezaLaPropuesta([antes, despues, despues], CUANDO)).toBe(1);
+    expect(dondeEmpiezaLaPropuesta([antes, {}], CUANDO), "el optimista, sin fecha, es nuevo").toBe(1);
+    expect(dondeEmpiezaLaPropuesta([antes, { createdAt: "2026-09-26T18:00:00.000Z" }], CUANDO), "iguales").toBe(1);
+    expect(
+      dondeEmpiezaLaPropuesta([antes, { createdAt: "2026-09-26T18:00:00.200Z" }], "2026-09-26T18:00:00.900Z"),
+      "iguales al segundo",
+    ).toBe(1);
+    // Llega otra propuesta con el cajón abierto: la divisoria se mueve sola.
+    expect(dondeEmpiezaLaPropuesta([antes, despues], "2026-09-26T18:10:00.000Z")).toBe(2);
+  });
+
+  it("la divisoria: con una propuesta que se lee y sabiendo cuándo empezó", () => {
+    /* La edición que la pone en rojo: pintarla sin propuesta o con una que no se lee (no hay «desde»), o sin fecha. */
+    expect(textoDeLaDivisoria("desde «Regenerar todo»", CUANDO)).toBe("Propuesta desde «Regenerar todo» · 26 sep");
+    const con: Array<EstadoParaElChat["que"]> = ["editable", "armando", "recalculando", "solo-lectura"];
+    for (const [que, e] of Object.entries(VARIANTES)) {
+      const d = divisoriaDelChat(estadoParaElChat(e), CUANDO);
+      expect(d?.texto ?? null, que).toBe(con.includes(que as EstadoParaElChat["que"]) ? "Propuesta desde «Regenerar todo» · 26 sep" : null);
+      expect(divisoriaDelChat(estadoParaElChat(e), null), `${que} sin fecha`).toBeNull();
+    }
+    expect(divisoriaDelChat(estadoParaElChat(entradaDelChat({ puedeEditar: false, hayBorrador: false })), CUANDO)).toBeNull();
+    expect(divisoriaDelChat(estadoParaElChat(ENTRADA_DEL_CHAT), CUANDO)?.cuando).toBe(CUANDO);
   });
 });
 

@@ -1164,14 +1164,49 @@ describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
     );
   });
 
-  it("⭐ la referencia reemplaza al subtítulo, y el estado vacío muestra lo que se le pide a una propuesta", () => {
-    expect(PANEL).toContain('{referencia?.titulo ?? "Conversa el cambio antes de generarlo"}');
-    const i = PANEL.indexOf("{referencia ? (");
-    expect(i, "el estado vacío no cambia con una propuesta").toBeGreaterThan(-1);
-    const ejemplos = PANEL.slice(i, PANEL.indexOf(") : (", i));
-    for (const e of ["«Deja el 2 como estaba»", "«Quita las tareas nuevas de Integraciones»", "«Aplica la propuesta»"]) {
-      expect(ejemplos).toContain(e);
-    }
+  it("⭐ L1 · el cajón dice qué edita: subtítulo y ayuda del aviso, y el aviso fijo aunque haya historial", () => {
+    /* ⚠ REESCRITA en L1 (2026-09-26), con esta razón: la «referencia» (solo con una propuesta editable, y sus
+       ejemplos solo con la conversación vacía) pasó a ser un AVISO por estado (`avisoDelChat`, su tabla en
+       lib/timeline/apertura-del-chat.test.ts). Los ejemplos ya no son fijos («Integraciones»): los arma la
+       propuesta y van en la bienvenida. Las ediciones que la ponen en rojo: pintar el aviso solo con la
+       conversación vacía (o dentro del estado vacío), mandar la bienvenida o la divisoria al POST, o volver a
+       numerar la lista del acuerdo del cronograma. */
+    expect(PANEL).toContain('{aviso?.subtitulo ?? "Conversa el cambio antes de generarlo"}');
+    expect(PANEL).toContain('placeholder={aviso?.placeholder ?? "Escribe qué quieres cambiar…"}');
+    expect(PANEL, "volvió la referencia de E3").not.toMatch(/\breferencia\b/);
+    expect(PANEL, "volvieron los ejemplos fijos").not.toContain("Integraciones");
+
+    // El aviso fijo va en el pie, DESPUÉS de la conversación, y no depende de que esté vacía.
+    const iMapa = PANEL.indexOf("{turnos.map(");
+    const iPie = PANEL.indexOf('<div className="px-3 py-3 border-t border-line shrink-0">');
+    const iAviso = PANEL.indexOf("{aviso.aviso}");
+    expect(iMapa, "no encuentro la conversación").toBeGreaterThan(-1);
+    expect(iAviso, "no se pinta el aviso fijo").toBeGreaterThan(-1);
+    expect(iPie, "el pie del cajón quedó antes de la conversación").toBeGreaterThan(iMapa);
+    expect(iAviso, "el aviso fijo no está en el pie, arriba del campo").toBeGreaterThan(iPie);
+    expect(iAviso, "el aviso fijo quedó debajo del campo").toBeLessThan(PANEL.indexOf("<textarea", iPie));
+    expect(PANEL.slice(iPie, iAviso), "el aviso fijo se ató a la conversación vacía").not.toMatch(/turnos\.length/);
+    // El estado vacío de siempre, solo sin aviso (los documentos) o sin propuesta.
+    expect(PANEL).toContain('const conEstadoVacio = !aviso || aviso.variante === "sin-propuesta";');
+    expect(PANEL).toContain("{!cargando && turnos.length === 0 && conEstadoVacio && (");
+
+    // ⛔ La bienvenida y la divisoria se pintan; nunca viajan al servidor como turno.
+    const iEnviar = PANEL.indexOf("async function enviar()");
+    const enviar = PANEL.slice(iEnviar, PANEL.indexOf("async function empezarDeCero()", iEnviar));
+    expect(enviar.length, "la guarda no está mirando `enviar`").toBeGreaterThan(500);
+    expect(enviar, "la bienvenida o la divisoria viajan al POST").not.toMatch(/bienvenida|divisoria|InicioDeLaPropuesta|inicioDeLaPropuesta/);
+    // Y van en el índice donde empieza la propuesta, o al final.
+    expect(PANEL).toContain("{i === inicioDeLaPropuesta ? <div className=\"mb-3\">{inicio}</div> : null}");
+    expect(PANEL).toContain("inicioDeLaPropuesta !== null && inicioDeLaPropuesta === turnos.length ? inicio : null");
+
+    // La lista del acuerdo del cronograma, con viñetas: el único «12.» en pantalla es el del Gantt.
+    const iLista = PANEL.indexOf("acuerdo.lineas.map");
+    expect(PANEL.slice(Math.max(0, iLista - 1500), iLista)).toContain(
+      '${pieza === PIEZA_CRONOGRAMA ? "list-disc" : "list-decimal"}',
+    );
+    // El chip del «IA» de una fase habla de la propuesta solo si es editable.
+    expect(PANEL).toContain('aviso?.variante === "editable"');
+    expect(PANEL).toContain("`Sobre «${seccionReferida.label}» de la propuesta`");
   });
 });
 
@@ -1198,9 +1233,10 @@ describe("E4 · un acuerdo viejo del chat (sin operaciones) no tiene carril", ()
     const motivo = tramo("const motivoDelChat = (a: AcuerdoDelChat): string | null =>", "const pasarALaPropuesta");
     expect(motivo, "motivoDelChat dejó de preguntarle a la regla pura").toContain("motivoParaElAcuerdo(a, {");
     const pantallas = [
-      { hayBorrador: true, ilegible: false, token: "run-4", version: 3, conDesconocidos: true, tareasArmando: true, bloqueada: true },
-      { hayBorrador: false, ilegible: true, token: null, version: null, conDesconocidos: false, tareasArmando: false, bloqueada: false },
-      { hayBorrador: false, ilegible: false, token: null, version: null, conDesconocidos: false, tareasArmando: false, bloqueada: false },
+      // L1: `vacioFallido` (el vacío que falló) también cede ante el acuerdo viejo.
+      { hayBorrador: true, ilegible: false, token: "run-4", version: 3, conDesconocidos: true, vacioFallido: true, tareasArmando: true, bloqueada: true },
+      { hayBorrador: false, ilegible: true, token: null, version: null, conDesconocidos: false, vacioFallido: false, tareasArmando: false, bloqueada: false },
+      { hayBorrador: false, ilegible: false, token: null, version: null, conDesconocidos: false, vacioFallido: false, tareasArmando: false, bloqueada: false },
     ];
     for (const p of pantallas) {
       for (const borrador of ["run-4", null, undefined]) {

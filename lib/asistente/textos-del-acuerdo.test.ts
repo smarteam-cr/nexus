@@ -198,6 +198,7 @@ describe("⛔ el motivo del botón (motivoParaElAcuerdo)", () => {
     token: "run-4",
     version: 3,
     conDesconocidos: false,
+    vacioFallido: false,
     tareasArmando: false,
     bloqueada: false,
   };
@@ -235,6 +236,22 @@ describe("⛔ el motivo del botón (motivoParaElAcuerdo)", () => {
     expect(motivoParaElAcuerdo(pasar, con({ bloqueada: true }))).toBeNull();
   });
 
+  it("⛔ L1 · el borrador vacío que falló: el botón manda a descartarlo, con o sin propuesta en el acuerdo", () => {
+    /* El servidor ya lo frena (409 `CHAT_CON_EL_VACIO_FALLIDO`, operaciones/route.ts); antes el botón quedaba vivo
+       y cada clic fallaba. Va después de «versión nueva» y antes de «armando». La edición que la pone en rojo: no
+       mirar `vacioFallido` en una de las dos ramas, o mirarlo antes de «versión nueva». */
+    const vacio = con({ vacioFallido: true });
+    for (const a of [pasar, aplicar, descartar, deHoy]) {
+      expect(motivoParaElAcuerdo(a, vacio), JSON.stringify(a)).toBe(MOTIVOS_DEL_CHAT.vacioFallido);
+    }
+    expect(motivoParaElAcuerdo(pasar, con({ vacioFallido: true, conDesconocidos: true }))).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
+    expect(motivoParaElAcuerdo(deHoy, con({ vacioFallido: true, conDesconocidos: true }))).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
+    expect(motivoParaElAcuerdo(pasar, con({ vacioFallido: true, tareasArmando: true }))).toBe(MOTIVOS_DEL_CHAT.vacioFallido);
+    // Acordado para otra propuesta sigue siendo «cambio».
+    expect(motivoParaElAcuerdo(pasar, con({ vacioFallido: true, token: "run-5" }))).toBe(MOTIVOS_DEL_CHAT.cambio);
+    expect(MOTIVOS_DEL_CHAT.vacioFallido).toBe("Descarta la propuesta vacía arriba del Gantt");
+  });
+
   it("sin propuesta en el acuerdo: el PUT de siempre, salvo que haya una propuesta en pantalla", () => {
     const sinNada = con({ hayBorrador: false, token: null, version: null });
     expect(motivoParaElAcuerdo(deHoy, sinNada)).toBeNull();
@@ -264,7 +281,9 @@ describe("⛔ el motivo del botón (motivoParaElAcuerdo)", () => {
     const motivos = Object.values(MOTIVOS_DEL_CHAT);
     // E4: 6 → 5 (sale «Descarta la vista previa de «Pedir cambio con IA»»: se retiró).
     // Revisión de E4 (#5c): 5 → 6 (entra «Descártala arriba del Gantt», para lo que no se sabe leer).
-    expect(motivos.length).toBe(6);
+    // ⚠ ACTUALIZADA en L1 (2026-09-26), con esta razón: 6 → 7, entra «Descarta la propuesta vacía arriba del
+    // Gantt» (el vacío que falló: el botón ya no ofrece un clic que el servidor rechaza).
+    expect(motivos.length).toBe(7);
     for (const m of motivos) {
       expect(m.length, m).toBeLessThanOrEqual(60);
       expect(m, m).not.toMatch(/\b(pod[eé]s|ten[eé]s|quer[eé]s|fijate|mirá|pedímelo|resolvé|esperá)\b/i);
