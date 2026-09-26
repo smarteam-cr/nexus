@@ -857,7 +857,10 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
        apagados, igual que con la corrida de las tareas en curso. La edición que la pone en rojo: montar
        la línea en otro lado, o dejar vivo un botón que lanzaría una segunda corrida pagada. */
     const iLinea = src.indexOf("<LineaDeLasTareas");
-    const iBarra = src.indexOf("{canEdit && hayBorrador && revision.resumen && (");
+    /* ⚠ ACTUALIZADA en L2 (2026-09-26), con esta razón: la barra se monta con `modo === "barra"` (mientras se
+       arma la propuesta no hay barra) y la línea suelta también sale con cambios mientras se arma. */
+    const iBarra = src.indexOf('{canEdit && modo === "barra" && revision.resumen && (');
+    expect(iBarra, "la guarda no encuentra la barra").toBeGreaterThan(-1);
     expect(iLinea).toBeGreaterThan(src.indexOf("<div ref={revision.contenedorRef}"));
     expect(iLinea, "la línea suelta no va antes de la barra").toBeLessThan(iBarra);
     expect(src.slice(iLinea - 60, iLinea)).toContain("{canEdit && lineaSuelta && (");
@@ -866,7 +869,9 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     expect(linea).toContain("suelta");
     const lineaSuelta = tramo("const lineaSuelta:", ": null;");
     expect(lineaSuelta, "el paso 1 no se dice").toMatch(/armando\?\.paso === 1\s*\?\s*\{ estado: "paso-1"/);
-    expect(lineaSuelta, "con la barra montada, la línea iría dos veces").toMatch(/hayBorrador && revision\.resumen\s*\?\s*null/);
+    expect(lineaSuelta, "con la barra montada, la línea iría dos veces").toMatch(
+      /hayBorrador && revision\.resumen && modo === "barra"\s*\?\s*null/,
+    );
     const apagado = 'disabled={armando !== null || tareasDelBorrador?.estado === "armando"}';
     expect(src.split(apagado).length - 1, "«Generar cronograma», «Regenerar todo» y «Genera las tareas»").toBe(3);
     expect(src).toContain("trabajando={armando !== null}");
@@ -889,8 +894,10 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
        ofrecía «Genera las tareas» encima de la propuesta, y «Qué hacer acá» y el chat mandaban a
        decidir algo que no estaba. La edición que la pone en rojo: deshacer cualquiera de esas. */
     const linea = tramo("<LineaDeLasTareas", "/>");
-    expect(linea, "el borrador sin cambios no se puede descartar").toContain(
-      "onDescartar={hayBorrador && !revision.resumen ? () => void discardProposal() : undefined}",
+    /* ⚠ ACTUALIZADA en L2 (2026-09-26), con esta razón: mientras se arma una propuesta CON cambios tampoco hay
+       barra (la que trae «Descartar»): la línea suelta lo trae también ahí. */
+    expect(linea, "el borrador sin cambios (o el que se arma) no se puede descartar").toContain(
+      'onDescartar={hayBorrador && (!revision.resumen || modo === "armandose") ? () => void discardProposal() : undefined}',
     );
     expect(linea).toContain("descartando={descartando}");
     /* ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: la línea suelta suma «ofrecer», la oferta
@@ -1142,11 +1149,13 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     expect(textoDeLaLineaDeTareas("armando", null, null, false, false, " Diseño ")?.texto).toBe(
       "Armando las tareas de «Diseño»… · suele tardar uno o dos minutos",
     );
+    /* ⚠ ACTUALIZADA en L2 (2026-09-26), con esta razón: sin fase, la espera dice «Armando la propuesta…» (llega
+       entera) y deja de repetir la fase del motor («Leyendo las reuniones…»). Con fase sigue igual. */
     expect(textoDeLaLineaDeTareas("armando", "Leyendo las reuniones…", null, false, false)?.texto).toBe(
-      "Armando las tareas… · Leyendo las reuniones…",
+      "Armando la propuesta · puede tardar unos minutos",
     );
     expect(textoDelChipDeEspera(false, false, "Diseño")).toBe("Armando las tareas de «Diseño»…");
-    expect(textoDelChipDeEspera(false, true)).toBe("Armando las tareas…");
+    expect(textoDelChipDeEspera(false, true)).toBe("Armando la propuesta…");
     expect(textoDelChipDeEspera(true, true, "Diseño"), "el paso 1 no es de una fase").toBe("Revisando fases y tiempos…");
     // La pantalla: el pedido la guarda, y la línea y el chip la leen (del pedido, o del vacío guardado).
     expect(tramo("const pedirRegenerarFase = async (", "const aplicarOperacionesAcordadas")).toContain(

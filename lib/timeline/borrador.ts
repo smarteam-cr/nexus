@@ -3178,9 +3178,58 @@ export function hayCambiosDeFasesAplicables(items: ReadonlyArray<Pick<ItemDeLaLi
   return items.some((it) => it.estado === "aplica" || it.estado === "excluido");
 }
 
+/* ── L2 · TODO SE VE CUANDO TERMINA DE ARMARSE (2026-09-26) ─────────────────────────────────────────────
+   Mientras el paso 2 arma las tareas, la barra mostraba la propuesta a medias (fases con «Sin tareas»,
+   números que se corrían al llegar las tareas) y el Gantt de la propuesta, de solo lectura. Ahora, mientras
+   se arma, NO hay propuesta en pantalla: el Gantt es el de hoy, editable, con una línea que dice que se está
+   armando; cuando llegan las tareas aparece la barra con la propuesta ENTERA. El servidor sigue aceptando
+   casillas (E2c): solo la pantalla deja de ofrecerlas. */
+
+/** Qué muestra la pantalla de la propuesta: la barra, la línea «Armando la propuesta…» o nada. */
+export type ModoDeLaPropuesta = "barra" | "armandose" | "nada";
+
+/**
+ * L2: el modo de la propuesta en pantalla. «armandose» mientras el paso 2 arma sus tareas, AUNQUE ya traiga
+ * cambios de fases (se revisa todo junto, al llegar); «barra» con cambios que revisar (también «faltan» y
+ * «fallo»: la barra con solo fases, como antes); si no, «nada». Puro: lo lee el Canvas.
+ */
+export function modoDeLaPropuesta(i: {
+  hayBorrador: boolean;
+  conCambios: boolean;
+  tareas: EstadoDeLasTareas | null;
+}): ModoDeLaPropuesta {
+  if (i.hayBorrador && i.tareas === "armando") return "armandose";
+  if (i.hayBorrador && i.conCambios) return "barra";
+  return "nada";
+}
+
+/** L2: el `title` de la línea de la espera. Lo que se edita mientras se arma no entra en la propuesta. */
+export const TITULO_DE_LA_ESPERA = "Si editas el cronograma ahora, esos cambios quedan fuera de la propuesta.";
+
+/** L2: el aviso cuando la propuesta llega mientras el CSE escribe: la barra aparece en «antes». */
+export const AVISO_LLEGO_LA_PROPUESTA = `Llegó la propuesta: la ves con «${TEXTO_VER_PROPUESTA}».`;
+
+/**
+ * L2 · LA LLEGADA: el modo pasó de «armandose» a «barra». Si el CSE está escribiendo (un campo con foco), el
+ * Gantt no se le cambia bajo el cursor: la revisión pasa a la vista «antes» y el aviso dice cómo verla
+ * (`AVISO_LLEGO_LA_PROPUESTA`, que dice el seguimiento: `desenlaceDelSeguimiento` con `escribiendo`).
+ * true = hay que alternar la vista.
+ */
+export function pasarAAntesAlLlegar(i: {
+  antes: ModoDeLaPropuesta;
+  ahora: ModoDeLaPropuesta;
+  escribiendo: boolean;
+  vista: VistaDelBorrador;
+}): boolean {
+  return i.antes === "armandose" && i.ahora === "barra" && i.escribiendo && i.vista === "propuesta";
+}
+
 /**
  * La línea de las tareas arriba del Gantt (dentro de la barra, o suelta si no hay barra). `fase` es
  * la fase de la corrida («Leyendo las reuniones…»); `motivo`, por qué falló. null = no hay línea.
+ * L2: «armando» ya NO pinta `fase` («Analizando sesiones…» mentía con 0 reuniones y «Guardando el
+ * resultado…» se quedaba de más): dice que se arma la propuesta, «paso 2 de 2» solo con material. El
+ * parámetro sigue (misma firma).
  * `conCambiosDeFases`: la propuesta trae cambios de fases que se pueden aplicar sin las tareas. Sin
  * ellos (el borrador que nace vacío cuando el paso 1 no propuso nada), «Si aplicas ahora, solo se
  * aplican los cambios de fases» es falso: no hay ninguno (revisión de E2a).
@@ -3209,7 +3258,14 @@ export function textoDeLaLineaDeTareas(
         accion: null,
       };
     case "armando":
-      return { texto: `${armandoLasTareas(deLaFase)} · ${fase?.trim() || "suele tardar uno o dos minutos"}`, accion: null };
+      return {
+        texto: deLaFase?.trim()
+          ? `${armandoLaEspera(deLaFase)} · suele tardar uno o dos minutos`
+          : conMaterial
+            ? "Armando la propuesta · paso 2 de 2 · puede tardar unos minutos"
+            : "Armando la propuesta · puede tardar unos minutos",
+        accion: null,
+      };
     case "faltan":
       return {
         texto: conCambiosDeFases
@@ -3251,14 +3307,15 @@ export function textoDeLaOfertaDeTareas(conCambiosDeFases: boolean): { texto: st
  * Revisión de E2a: el chip lo decía siempre, y la línea de al lado decía otra cosa.
  */
 export function textoDelChipDeEspera(enElPaso1: boolean, conMaterial: boolean, deLaFase: string | null = null): string {
-  if (!enElPaso1) return armandoLasTareas(deLaFase);
+  if (!enElPaso1) return armandoLaEspera(deLaFase);
   return conMaterial ? "Revisando fases y tiempos…" : "Preparando la propuesta…";
 }
 
-/** «Armando las tareas…», o «Armando las tareas de «X»…» en «Regenerar» de una fase (revisión de E2b). */
-function armandoLasTareas(deLaFase: string | null): string {
+/** «Armando las tareas de «X»…» en «Regenerar» de una fase (revisión de E2b). L2: sin fase, «Armando la
+ *  propuesta…» (antes «Armando las tareas…»): lo que llega es la propuesta entera, no solo sus tareas. */
+function armandoLaEspera(deLaFase: string | null): string {
   const nombre = deLaFase?.trim();
-  return nombre ? `Armando las tareas de «${nombre}»…` : "Armando las tareas…";
+  return nombre ? `Armando las tareas de «${nombre}»…` : "Armando la propuesta…";
 }
 
 /** ¿La propuesta guardada trae algún cambio de fases (o de fecha de arranque, u orden)? El handoff es
@@ -3450,6 +3507,8 @@ const pareceUnCodigo = (t: string) => /^[A-Z][A-Z0-9_]+$/.test(t);
  * del borrador siguen «listas» y caía en «otra propuesta → callar»).
  *   · El recálculo guardado es el de esta corrida: «armando» → se sigue; si no, falló (con su motivo).
  *   · Es otro: se calla. No hay ninguno: se fusionó entero (DONE con propuesta) → se avisa que llegaron.
+ * L2: «listas» con el CSE escribiendo (`escribiendo`): la barra llega en «antes» (`pasarAAntesAlLlegar`) y
+ * el aviso dice cómo verla (`AVISO_LLEGO_LA_PROPUESTA`), en vez de «revísala arriba del Gantt».
  */
 export function desenlaceDelSeguimiento(i: {
   corrida: string;
@@ -3459,6 +3518,8 @@ export function desenlaceDelSeguimiento(i: {
   aviso?: string | null;
   /** E2c: la corrida es un recálculo; los nombres de sus fases, tomados al empezar a seguirla. */
   recalculo?: readonly string[] | null;
+  /** L2: el CSE está escribiendo en un campo (`esCampoDeEscritura`) cuando llega la propuesta. */
+  escribiendo?: boolean;
 }): DesenlaceDelSeguimiento {
   if (i.lectura === null) return { que: "seguir" };
   if (i.recalculo) {
@@ -3476,7 +3537,7 @@ export function desenlaceDelSeguimiento(i: {
   if (t !== null && t.corrida === i.corrida) {
     if (t.estado === "armando") return { que: "seguir" };
     if (t.estado === "listas") {
-      return { que: "avisar", ok: true, tono: "exito", texto: AVISO_TAREAS_LISTAS };
+      return { que: "avisar", ok: true, tono: "exito", texto: i.escribiendo ? AVISO_LLEGO_LA_PROPUESTA : AVISO_TAREAS_LISTAS };
     }
     if (t.estado === "fallo") {
       const texto = textoDeLaLineaDeTareas("fallo", null, t.motivo, false, false)?.texto ?? "No se pudieron armar las tareas.";

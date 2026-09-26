@@ -17,6 +17,8 @@
  *      cronograma; el cierre fijado a mano; lo desmarcado RECORDADO entre montajes; y la propuesta
  *      abierta que el handoff no pisa.
  *   14. (E2b) «Regenerar» de una fase (`soloFase`) y de dónde viene cada propuesta.
+ *   15. (L2) Mientras se arma la propuesta no hay barra (`modoDeLaPropuesta`), la espera dice «propuesta» y
+ *      no la fase del motor, y la llegada no le cambia el Gantt a quien está escribiendo.
  *
  * ⚠ E4 (2026-09): lo guardado es siempre v1; la conversión quedó para los productores. Por eso §2, §8,
  * §9, §12 y §13 se reescribieron: ya no hay foto contra la que convertir al leer, y la identidad de una
@@ -854,5 +856,92 @@ describe("14 · E2b: «Regenerar» de una fase (`soloFase`) y de dónde viene ca
       de: "regenerar-fase",
       fase: "Diseño",
     });
+  });
+});
+
+/**
+ * L2 (2026-09-26) · Todo se ve cuando termina de armarse. Mientras el paso 2 arma las tareas la barra mostraba
+ * la propuesta a medias («Piloto Circle · Sin tareas», números que se corrían al llegar las tareas) y la línea
+ * repetía la fase del motor («Analizando sesiones…» con 0 reuniones). Ahora: sin barra hasta que llega entera.
+ */
+describe("15 · L2: mientras se arma la propuesta no hay barra, y la espera dice «propuesta»", () => {
+  const VOSEO = /\b(podés|querés|tenés|decime|decímelo|fijate|mirá|revisá|sabés|elegí|aplicá)\b/i;
+
+  it("⭐ la tabla de `modoDeLaPropuesta`: «armandose» aunque ya traiga cambios de fases", () => {
+    /* La edición que la pone en rojo: devolver «barra» con «armando» (la barra volvería a mostrar la propuesta a
+       medias), o dejar de mirar si hay borrador. */
+    const casos: Array<[string, Parameters<typeof moduloDelBorrador.modoDeLaPropuesta>[0], moduloDelBorrador.ModoDeLaPropuesta]> = [
+      ["armando con cambios de fases", { hayBorrador: true, conCambios: true, tareas: "armando" }, "armandose"],
+      ["armando, el vacío", { hayBorrador: true, conCambios: false, tareas: "armando" }, "armandose"],
+      ["listas con cambios", { hayBorrador: true, conCambios: true, tareas: "listas" }, "barra"],
+      ["faltan con cambios (solo fases)", { hayBorrador: true, conCambios: true, tareas: "faltan" }, "barra"],
+      ["fallo con cambios (solo fases)", { hayBorrador: true, conCambios: true, tareas: "fallo" }, "barra"],
+      ["sin tareas que esperar, con cambios", { hayBorrador: true, conCambios: true, tareas: null }, "barra"],
+      ["el vacío que falló", { hayBorrador: true, conCambios: false, tareas: "fallo" }, "nada"],
+      ["sin borrador", { hayBorrador: false, conCambios: false, tareas: null }, "nada"],
+      ["sin borrador, aunque diga armando", { hayBorrador: false, conCambios: true, tareas: "armando" }, "nada"],
+    ];
+    for (const [nombre, entrada, esperado] of casos) {
+      expect(moduloDelBorrador.modoDeLaPropuesta(entrada), nombre).toBe(esperado);
+    }
+  });
+
+  it("⭐ la línea de la espera no pinta la fase del motor ni «Sin tareas»; «paso 2 de 2» solo con material", () => {
+    /* La edición que la pone en rojo: volver a pintar la fase del motor en «armando» (`fase?.trim() || …`). */
+    const { textoDeLaLineaDeTareas, textoDelChipDeEspera } = moduloDelBorrador;
+    for (const conMaterial of [true, false]) {
+      const texto = textoDeLaLineaDeTareas("armando", "Analizando sesiones…", null, conMaterial)?.texto ?? "";
+      expect(texto, `material: ${conMaterial}`).not.toMatch(/Analizando|Sin tareas/);
+      expect(texto, `material: ${conMaterial}`).toMatch(/^Armando la propuesta · /);
+      expect(texto.includes("paso 2 de 2"), `material: ${conMaterial}`).toBe(conMaterial);
+    }
+    expect(textoDeLaLineaDeTareas("armando", "Guardando el resultado…", null, true)?.texto).toBe(
+      "Armando la propuesta · paso 2 de 2 · puede tardar unos minutos",
+    );
+    expect(textoDeLaLineaDeTareas("armando", null, null, false)?.texto).toBe("Armando la propuesta · puede tardar unos minutos");
+    // «Regenerar» de una fase: la de siempre, sin la fase del motor.
+    expect(textoDeLaLineaDeTareas("armando", "Analizando sesiones…", null, true, false, "Diseño")?.texto).toBe(
+      "Armando las tareas de «Diseño»… · suele tardar uno o dos minutos",
+    );
+    expect(textoDelChipDeEspera(false, true)).toBe("Armando la propuesta…");
+    expect(textoDelChipDeEspera(false, false, "Diseño")).toBe("Armando las tareas de «Diseño»…");
+  });
+
+  it("⭐ la llegada: con el CSE escribiendo, la barra aparece en «antes» y el aviso dice cómo verla", () => {
+    /* Las ediciones que la ponen en rojo: pasar a «antes» sin que esté escribiendo (o en cualquier cambio de
+       modo), o que el aviso de las tareas listas no cambie cuando está escribiendo. */
+    const { pasarAAntesAlLlegar, desenlaceDelSeguimiento, AVISO_LLEGO_LA_PROPUESTA, AVISO_TAREAS_LISTAS, TEXTO_VER_PROPUESTA } =
+      moduloDelBorrador;
+    const llega = { antes: "armandose", ahora: "barra", escribiendo: true, vista: "propuesta" } as const;
+    expect(pasarAAntesAlLlegar(llega)).toBe(true);
+    expect(pasarAAntesAlLlegar({ ...llega, escribiendo: false }), "sin escribir, se ve la propuesta").toBe(false);
+    expect(pasarAAntesAlLlegar({ ...llega, vista: "antes" }), "ya está en «antes»: alternar la volvería a la propuesta").toBe(false);
+    expect(pasarAAntesAlLlegar({ ...llega, antes: "nada" }), "no es una llegada").toBe(false);
+    expect(pasarAAntesAlLlegar({ ...llega, antes: "barra" }), "la barra ya estaba").toBe(false);
+    expect(pasarAAntesAlLlegar({ ...llega, ahora: "nada" }), "no llegó nada que mostrar").toBe(false);
+
+    const lectura = { hayPropuesta: true, tareas: { estado: "listas" as const, corrida: "r1", motivo: null }, recalculo: null };
+    const listas = (escribiendo?: boolean) => desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura, escribiendo });
+    expect(listas()).toEqual({ que: "avisar", ok: true, tono: "exito", texto: AVISO_TAREAS_LISTAS });
+    expect(listas(false)).toEqual({ que: "avisar", ok: true, tono: "exito", texto: AVISO_TAREAS_LISTAS });
+    expect(listas(true)).toEqual({ que: "avisar", ok: true, tono: "exito", texto: AVISO_LLEGO_LA_PROPUESTA });
+    expect(AVISO_LLEGO_LA_PROPUESTA).toBe("Llegó la propuesta: la ves con «Ver la propuesta».");
+    expect(AVISO_LLEGO_LA_PROPUESTA, "nombra un botón que no existe").toContain(`«${TEXTO_VER_PROPUESTA}»`);
+  });
+
+  it("los textos nuevos, cortos y en tuteo", () => {
+    const { TITULO_DE_LA_ESPERA, AVISO_LLEGO_LA_PROPUESTA, textoDeLaLineaDeTareas, textoDelChipDeEspera } = moduloDelBorrador;
+    expect(TITULO_DE_LA_ESPERA).toBe("Si editas el cronograma ahora, esos cambios quedan fuera de la propuesta.");
+    const textos = [
+      TITULO_DE_LA_ESPERA,
+      AVISO_LLEGO_LA_PROPUESTA,
+      textoDeLaLineaDeTareas("armando", null, null, true)?.texto ?? "",
+      textoDeLaLineaDeTareas("armando", null, null, false)?.texto ?? "",
+      textoDelChipDeEspera(false, true),
+    ];
+    for (const t of textos) {
+      expect(t).not.toMatch(VOSEO);
+      expect(t.length).toBeLessThan(90);
+    }
   });
 });

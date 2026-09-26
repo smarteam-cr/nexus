@@ -376,7 +376,9 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     const iBarra = rama.indexOf("<RevisionDeLaPropuesta");
     expect(iBarra).toBeGreaterThan(-1);
     expect(iBarra).toBeLessThan(rama.indexOf("<TimelineGantt"));
-    expect(contiene(rama.slice(Math.max(0, iBarra - 160), iBarra), "canEdit && hayBorrador && revision.resumen && (")).toBe(true);
+    /* ⚠ ACTUALIZADA en L2 (2026-09-26), con esta razón: la barra se monta con `modo === "barra"`: mientras se
+       arma la propuesta no hay barra (aparece entera al llegar las tareas). La guarda de L2, abajo. */
+    expect(contiene(rama.slice(Math.max(0, iBarra - 160), iBarra), 'canEdit && modo === "barra" && revision.resumen && (')).toBe(true);
     expect(contiene(rama, "onAplicar={() => void aplicarBorrador()}")).toBe(true);
     expect(contiene(rama, "onDescartar={() => void discardProposal()}")).toBe(true);
     expect(contiene(rama, 'enCurso={aplicandoBorrador ? "aplicar" : descartando ? "descartar" : null}')).toBe(true);
@@ -1795,5 +1797,124 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
       "el 💬 cierra un cajón que se abrió solo en su clic",
     ).toBe(true);
     expect(sinEspacios(boton), "el 💬 volvió a alternar a ciegas").not.toContain(sinEspacios("setChatAbierto((v) => !v)"));
+  });
+});
+
+/**
+ * L2 (2026-09-26) · TODO SE VE CUANDO TERMINA DE ARMARSE. Mientras el paso 2 arma las tareas no hay propuesta en
+ * pantalla: ni barra ni vista de la propuesta; el Gantt es el de hoy, editable, con la línea «Armando la
+ * propuesta…». La barra aparece entera al llegar las tareas. El modo lo decide `modoDeLaPropuesta` (su tabla,
+ * en borrador.test.ts); acá, el cableado. Se lee el fuente con los `\r\n` normalizados.
+ */
+describe("⛔ L2 · mientras se arma la propuesta no hay barra, y la línea suelta es el ancla", () => {
+  const leerFuente = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\r\n/g, "\n");
+  const fuente = ts.createSourceFile(RUTA_CANVAS, leerFuente(RUTA_CANVAS), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const canvas = soloCodigo(leerFuente(RUTA_CANVAS));
+  const linea = soloCodigo(leerFuente(RUTA_LINEA));
+  const sinParentesis = (e: ts.Expression): ts.Expression => (ts.isParenthesizedExpression(e) ? sinParentesis(e.expression) : e);
+  /** Los términos de la cadena `a && b && … && <X />` que monta un elemento. */
+  const condicionesDe = (el: ts.Node): string[] => {
+    const out: string[] = [];
+    let n: ts.Node = el;
+    while (n.parent && (ts.isParenthesizedExpression(n.parent) || ts.isBinaryExpression(n.parent))) {
+      n = n.parent;
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+        const izquierda = sinParentesis(n.left);
+        const partes: string[] = [];
+        const juntar = (e: ts.Expression) => {
+          const x = sinParentesis(e);
+          if (ts.isBinaryExpression(x) && x.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+            juntar(x.left);
+            juntar(x.right);
+          } else partes.push(sinEspacios(x.getText()));
+        };
+        juntar(izquierda);
+        out.push(...partes);
+      }
+    }
+    return out;
+  };
+  const elementos = (nombreDelElemento: string) =>
+    todos(fuente, (x) => esElemento(x) && nombre(x) === nombreDelElemento) as Array<ts.JsxElement | ts.JsxSelfClosingElement>;
+
+  it("⭐ la barra y la vista de la propuesta se montan solo con `modo === \"barra\"`", () => {
+    /* Las ediciones que la ponen en rojo: montar la barra con `revision.resumen` solo (volvería la propuesta a
+       medias mientras se arma), o dejar la vista de la propuesta sin mirar el modo (el Gantt de solo lectura con
+       una propuesta que no se ve). */
+    const modo = todos(fuente, (x) => ts.isVariableDeclaration(x) && x.name.getText() === "modo") as ts.VariableDeclaration[];
+    expect(modo.length, "no hay un `const modo`").toBe(1);
+    expect(sinEspacios(modo[0].initializer?.getText() ?? "")).toBe(
+      sinEspacios("modoDeLaPropuesta({ hayBorrador, conCambios: !!revision.resumen, tareas: estadoDeLasTareasEnPantalla })"),
+    );
+    const barras = elementos("RevisionDeLaPropuesta");
+    expect(barras.length, "tiene que haber UNA barra").toBe(1);
+    expect(condicionesDe(barras[0]), "la barra se monta sin mirar el modo").toContain(sinEspacios('modo === "barra"'));
+    const ver = todos(fuente, (x) => ts.isVariableDeclaration(x) && x.name.getText() === "verPropuesta") as ts.VariableDeclaration[];
+    expect(ver.length).toBe(1);
+    expect(sinEspacios(ver[0].initializer?.getText() ?? ""), "la vista de la propuesta no mira el modo").toContain(
+      sinEspacios('modo === "barra"'),
+    );
+    // «Revisar…» del encabezado tampoco sale mientras se arma (llevaría a una barra que no está).
+    expect(
+      contiene(canvas, 'revision.resumen.total > 0 && modo === "barra" && ('),
+      "«Revisar…» sale mientras se arma y lleva a una barra que no está",
+    ).toBe(true);
+  });
+
+  it("⭐ sin barra, la línea suelta lleva el ÚNICO `id=\"cronograma-propuesta\"` del Canvas, y trae «Descartar»", () => {
+    /* Las ediciones que la ponen en rojo: perder el id de la línea (los `scrollIntoView` de «Revisar…» y de los
+       avisos apuntarían a nada mientras se arma), dejarlo sin condición (dos ids con la barra), o que la línea no
+       lo pinte. */
+    const conElAncla = todos(
+      fuente,
+      (x) => ts.isJsxAttribute(x) && x.name.getText() === "id" && (x.initializer?.getText() ?? "").includes('"cronograma-propuesta"'),
+    ) as ts.JsxAttribute[];
+    expect(conElAncla.length, "el Canvas tiene que tener UN id del ancla de la propuesta").toBe(1);
+    const elDelId = conElAncla[0].parent.parent;
+    expect(ts.isJsxSelfClosingElement(elDelId) || ts.isJsxOpeningElement(elDelId)).toBe(true);
+    expect((elDelId as ts.JsxSelfClosingElement).tagName.getText(), "el ancla no está en la línea suelta").toBe("LineaDeLasTareas");
+    const valor = sinEspacios(conElAncla[0].initializer?.getText() ?? "");
+    expect(valor, "el id no depende de que no haya barra").toMatch(/modo(===|!==)"barra"/);
+    expect(valor).not.toBe(sinEspacios('"cronograma-propuesta"'));
+    expect(condicionesDe(ts.isJsxOpeningElement(elDelId) ? elDelId.parent : elDelId)).toContain("lineaSuelta");
+    // La línea lo pinta en su raíz, con el margen de la barra fija.
+    expect(contiene(linea, "id={id}"), "la línea no pinta el id en su raíz").toBe(true);
+    expect(linea).toMatch(/suelta && "scroll-mt-24/);
+    // Sin barra, «Descartar» vive en la línea (también mientras se arma una con cambios).
+    expect(
+      contiene(tramo(canvas, "<LineaDeLasTareas", "/>"), 'onDescartar={hayBorrador && (!revision.resumen || modo === "armandose") ?'),
+      "mientras se arma una propuesta con cambios no hay «Descartar» (la barra no está)",
+    ).toBe(true);
+    // Mientras se arma, la línea avisa que lo que se edita queda fuera de la propuesta.
+    expect(
+      contiene(linea, 'title={!recalculo && estado === "armando" ? TITULO_DE_LA_ESPERA : undefined}'),
+      "la línea de la espera no avisa que lo que se edita queda fuera",
+    ).toBe(true);
+  });
+
+  it("⭐ la llegada: un efecto sobre `modo` que mira el foco y pasa la revisión a «antes»", () => {
+    /* Las ediciones que la ponen en rojo: sacar el efecto, que no mire si el CSE está escribiendo
+       (`esCampoDeEscritura(`), o que no alterne; o que el seguimiento no le pase el foco al aviso. */
+    const efectos = todos(
+      fuente,
+      (x) =>
+        ts.isCallExpression(x) &&
+        x.expression.getText() === "useEffect" &&
+        x.arguments.length === 2 &&
+        sinEspacios(x.arguments[1].getText()) === "[modo]",
+    ) as ts.CallExpression[];
+    expect(efectos.length, "no hay un efecto sobre `modo`").toBe(1);
+    const cuerpo = sinEspacios(efectos[0].arguments[0].getText());
+    expect(cuerpo, "la llegada no mira si el CSE está escribiendo").toContain(
+      sinEspacios("esCampoDeEscritura(document.activeElement as HTMLElement | null)"),
+    );
+    expect(cuerpo).toContain(sinEspacios("pasarAAntesAlLlegar({ antes, ahora: modo, escribiendo, vista: r.vista })"));
+    expect(cuerpo, "la llegada no alterna la vista").toContain(sinEspacios("r.alternar()"));
+    expect(cuerpo).toContain(sinEspacios("modoAnteriorRef.current = modo;"));
+    const seguimiento = tramo(canvas, "const desenlace = desenlaceDelSeguimiento({", "});");
+    expect(
+      contiene(seguimiento, "escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),"),
+      "el aviso de la llegada no sabe si el CSE está escribiendo",
+    ).toBe(true);
   });
 });

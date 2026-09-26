@@ -47,7 +47,7 @@ import {
   type ReunionElegida,
 } from "@/lib/contexto/material-cronograma";
 import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs";
-import { estadoDelVacio, FORMATO_BORRADOR } from "@/lib/timeline/borrador";
+import { estadoDelVacio, FORMATO_BORRADOR, textoDelChipDeEspera } from "@/lib/timeline/borrador";
 
 /* La puerta del material, de mentira: la guarda «si falla, el chat sigue» la hace fallar. El resto
    de este archivo lee código, no llama a la puerta. */
@@ -556,6 +556,9 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     expect(armando, "manda a una barra que no existe").not.toMatch(/«Aplicar»|en su barra/);
     expect(armando, "calla la salida que la línea sí tiene").toContain("«Descartar»");
     expect(armando.length).toBeLessThan(420);
+    /* L2 (2026-09-26): la espera dice «Armando la propuesta…» arriba del Gantt; el chat cita lo que se ve. La
+       edición que la pone en rojo: volver a «Armando las tareas…» en una de las dos. */
+    expect(armando, "el chat cita un texto que la pantalla no muestra").toContain(`(arriba del Gantt dice «${textoDelChipDeEspera(false, false)}»)`);
     for (const conDetalleDeLaIA of [false, true]) {
       const l = lineaParaRehacerTodo({ conDetalleDeLaIA, publicadoAlgunaVez: false, cambiosDeFasesSinDecidir: true, armandoTareas: true });
       expect(l, String(conDetalleDeLaIA)).toContain("la IA está armando las tareas");

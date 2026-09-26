@@ -24,10 +24,15 @@
  * recalcular…». Sus textos salen de `textoDelRecalculo` (lib/timeline/recalculo-de-tareas.ts). UN solo
  * botón chico secundario (`onSecundaria`), con el texto que da la línea: «Ahora no» en «ofrecer»,
  * «Aplicar de todos modos» cuando el recálculo falló.
+ *
+ * L2 (2026-09-26): mientras se arma la propuesta no hay barra: la línea va suelta, dice «Armando la
+ * propuesta…» (ya no la fase del motor) y su `title` avisa que lo que se edita ahora queda fuera
+ * (`TITULO_DE_LA_ESPERA`). Suelta y sin barra lleva el `id` del ancla de la propuesta (`id`): los botones
+ * que llevan a la propuesta bajan hasta acá.
  */
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
-import { textoDeLaLineaDeTareas, type EstadoDeLasTareas } from "@/lib/timeline/borrador";
+import { textoDeLaLineaDeTareas, TITULO_DE_LA_ESPERA, type EstadoDeLasTareas } from "@/lib/timeline/borrador";
 import { textoDelRecalculo, type RecalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 
 /** Lo que la pantalla sabe de las tareas de la propuesta: el estado que calculó el servidor, la fase
@@ -52,6 +57,7 @@ export default function LineaDeLasTareas({
   descartando = false,
   trabajando = false,
   suelta = false,
+  id,
 }: {
   /** «paso-1»: la revisión de fases y tiempos está corriendo (todavía no hay propuesta).
    *  «ofrecer»: ya no hay propuesta y sus tareas no llegaron (`pasoTrasResolver`). */
@@ -81,6 +87,8 @@ export default function LineaDeLasTareas({
   trabajando?: boolean;
   /** Sin barra alrededor: la línea lleva su propio recuadro. */
   suelta?: boolean;
+  /** L2: el ancla de la propuesta (`cronograma-propuesta`) cuando no hay barra que la lleve. */
+  id?: string;
 }) {
   const deLasTareas = recalculo ? null : textoDeLaLineaDeTareas(estado, fase, motivo, conMaterial, conCambiosDeFases, deLaFase);
   // Con el recálculo, `onAccion` es «Recalcular las tareas»: sin él (sin permiso), la línea lo dice.
@@ -92,11 +100,13 @@ export default function LineaDeLasTareas({
   const info = enCurso || (!recalculo && estado === "ofrecer" && conCambiosDeFases);
   return (
     <div
+      id={id}
       role="status"
       aria-live="polite"
+      title={!recalculo && estado === "armando" ? TITULO_DE_LA_ESPERA : undefined}
       className={cn(
         "flex flex-wrap items-center gap-x-2 gap-y-1",
-        suelta && "rounded-xl border px-3 py-2",
+        suelta && "scroll-mt-24 rounded-xl border px-3 py-2",
         suelta && (info ? "border-info-line bg-info-surface" : "border-warn-line bg-warn-surface"),
       )}
     >

@@ -24,6 +24,8 @@
  * (`TareasDeLaPropuesta`), y la barra suma una segunda línea con el estado de la corrida que las arma
  * (`LineaDeLasTareas`): «Armando las tareas…», o «Faltan…» / «No se pudieron armar…» con el botón
  * para pedirlas. Si aplicar QUITA tareas, se confirma y el diálogo lo dice.
+ * L2 (2026-09-26): mientras se arman las tareas la barra no se monta (`modoDeLaPropuesta`): la espera va
+ * en la línea suelta, y acá solo quedan «Faltan…» y «No se pudieron armar…».
  *
  * E2c P3 (2026-09-25): si el CSE quita un cambio de fase, las tareas de esa fase se recalculan solas.
  * La barra suma la línea del RECÁLCULO (`recalculo`), debajo de la de las tareas: en qué está, y con

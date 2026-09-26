@@ -372,7 +372,7 @@ export function lineaDeCambiosDeFasesSinDecidir(
      esperando sin saber que podía salir), y con la corrida muerta no hay nada que esperar. */
   if (vacio === "armando") {
     return (
-      "⏳ LA IA ESTÁ ARMANDO LAS TAREAS DEL CRONOGRAMA (arriba del Gantt dice «Armando las tareas…»). " +
+      "⏳ LA IA ESTÁ ARMANDO LAS TAREAS DEL CRONOGRAMA (arriba del Gantt dice «Armando la propuesta…»). " +
       "Mientras tanto, NINGÚN cambio que acuerdes se puede aplicar: la pantalla lo frena. Si te piden un " +
       "cambio, dilo ANTES de armar la lista: hay que esperar a que termine (o «Descartar» en esa línea). " +
       COLA_DEL_FRENO

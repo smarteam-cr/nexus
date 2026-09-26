@@ -818,11 +818,16 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
 
     expect(textoDeLaLineaDeTareas("paso-1", null, null, true)?.texto).toMatch(/^Paso 1 de 2 · /);
     expect(textoDeLaLineaDeTareas("paso-1", null, null, false)?.texto).toBe("Preparando la propuesta del cronograma…");
+    /* ⚠ ACTUALIZADA en L2 (2026-09-26), con esta razón: mientras se arma no hay barra, lo que llega es la
+       propuesta entera y la espera lo dice («Armando la propuesta…», «paso 2 de 2» con material); ya no repite
+       la fase del motor («Leyendo las reuniones»), que mentía con 0 reuniones. */
     expect(textoDeLaLineaDeTareas("armando", null, null, true)).toEqual({
-      texto: "Armando las tareas… · suele tardar uno o dos minutos",
+      texto: "Armando la propuesta · paso 2 de 2 · puede tardar unos minutos",
       accion: null,
     });
-    expect(textoDeLaLineaDeTareas("armando", "Leyendo las reuniones", null, true)?.texto).toBe("Armando las tareas… · Leyendo las reuniones");
+    expect(textoDeLaLineaDeTareas("armando", "Leyendo las reuniones", null, true)?.texto).toBe(
+      "Armando la propuesta · paso 2 de 2 · puede tardar unos minutos",
+    );
     expect(textoDeLaLineaDeTareas("faltan", null, null, true)?.accion).toBe("Armar las tareas");
     expect(textoDeLaLineaDeTareas("fallo", null, "El modelo no respondió.", true)).toEqual({
       texto: "No se pudieron armar las tareas: El modelo no respondió. Si aplicas ahora, solo se aplican los cambios de fases.",
@@ -1045,8 +1050,10 @@ describe("revisión de E2a · el desenlace del seguimiento, el chip y la oferta"
     /* La edición que la pone en rojo: que el chip lo diga sin material (sin él, el paso 1 no revisa nada). */
     expect(textoDelChipDeEspera(true, true)).toBe("Revisando fases y tiempos…");
     expect(textoDelChipDeEspera(true, false), "sin material, el chip dice que revisa").toBe("Preparando la propuesta…");
-    expect(textoDelChipDeEspera(false, true)).toBe("Armando las tareas…");
-    expect(textoDelChipDeEspera(false, false)).toBe("Armando las tareas…");
+    /* ⚠ ACTUALIZADA en L2 (2026-09-26), con esta razón: la espera dice «propuesta» (llega entera, no solo sus
+       tareas), igual que la línea de arriba del Gantt. */
+    expect(textoDelChipDeEspera(false, true)).toBe("Armando la propuesta…");
+    expect(textoDelChipDeEspera(false, false)).toBe("Armando la propuesta…");
   });
 
   it("si lo que se resuelve traía cambios de fases (la oferta del paso 2 depende de eso)", () => {

@@ -13,6 +13,7 @@
  *   5. una propuesta enorme se manda igual, entera, y avisa;
  *   6. `contextoDeCronograma` con una propuesta abierta: el texto es el de la propuesta, pero `fases`
  *      sigue siendo el cronograma de HOY. E3 P5: editable, el chat la edita; en solo lectura, no.
+ *   7. (L2) mientras la IA arma la propuesta, la pantalla no la muestra: el chat va sin «LOS CAMBIOS».
  * Se imprime además la medida del peor caso realista contra el techo (no se fija: se mide).
  * Cada `it` nombra la edición que lo pone en rojo.
  */
@@ -30,6 +31,7 @@ vi.mock("@/lib/contexto/cargar", () => ({ cargarMaterialParaElChat: vi.fn() }));
 import {
   armarContextoConPropuesta,
   LINEA_DE_LA_PROPUESTA_EDITABLE,
+  lineaDeSoloLectura,
   RECORTE_NIVEL_1,
   RECORTE_NIVEL_2,
   type ContextoConPropuesta,
@@ -633,6 +635,11 @@ describe("⛔ P4 no cambia lo que hace el chat: ve la propuesta, pero `fases` si
       "CONSECUENCIAS QUE HAY QUE DECIR ANTES",
     );
     expect(ctx.texto, "ofrece resolverla desde el chat mientras no se puede").not.toContain("(o me lo pides acá)");
+    /* L2 (2026-09-26): mientras la IA arma la propuesta no hay barra en pantalla: el contexto lo dice y va sin el
+       índice numerado (no hay números que citar). */
+    expect(ctx.propuesta?.porQue).toBe("tareas-armando");
+    expect(ctx.texto, "manda el índice mientras se arma").not.toContain("LOS CAMBIOS");
+    expect(ctx.texto).toContain("todavía no se ve en pantalla");
   });
 
   it("una ilegible (lo que no es un v1) sigue con el contexto de HOY, con su propio freno: solo «Descartarla»", async () => {
@@ -715,5 +722,62 @@ describe("⛔ L1 · el aviso del cajón y la línea del contexto dicen lo mismo"
     expect(LINEA_DE_LA_PROPUESTA_EDITABLE).toMatch(/hasta que (la|se) apli/);
     expect(editable.aviso).toContain("cambia la propuesta");
     expect(LINEA_DE_LA_PROPUESTA_EDITABLE).toContain("EDITA ESTA PROPUESTA");
+  });
+});
+
+/**
+ * L2 (2026-09-26, D10): mientras la IA arma la propuesta, la pantalla no la muestra (ni barra ni números). El chat
+ * no recibe el índice numerado: «deja el 3» no tendría a qué apuntar en pantalla. El recálculo no cambia: su barra
+ * se ve, y su índice viaja.
+ */
+describe("⛔ L2 · mientras se arma la propuesta, el chat no recibe números que no se ven", () => {
+  const base = propuestaGrande({ vivas: 30, nuevas: 20, seVan: 8 });
+  const leida = (tareas: Parameters<typeof propuestaParaElChat>[0]["tareas"]) => {
+    const l = propuestaParaElChat({ guardado: JSON.parse(JSON.stringify(base.borrador)), token: "run-grande", vivo: base.vivo, tareas });
+    if (!l.resumen) throw new Error("la propuesta de prueba no se leyó");
+    return { ...l, resumen: l.resumen };
+  };
+  const armar = (p: ReturnType<typeof leida>, porQue: "tareas-armando" | "recalculando") =>
+    armarContextoConPropuesta(entrada(p, { puedeEditar: false, porQue: lineaDeSoloLectura(porQue) }), { techo: TECHO_DEL_PREFIJO_CHARS });
+
+  it("⭐ con «tareas-armando»: sin «LOS CAMBIOS» ni «se ve arriba del Gantt»; la propuesta sí va", () => {
+    /* La edición que la pone en rojo: mandar el índice mientras se arma (la sección 5 sin mirar `porQue`), o
+       volver a decir que se ve arriba del Gantt. */
+    const p = leida({ estado: "armando", fase: "Analizando sesiones…", motivo: null });
+    expect(p.porQue).toBe("tareas-armando");
+    expect(p.resumen.items.length + p.resumen.grupos.length, "la prueba necesita números que esconder").toBeGreaterThan(3);
+    const c = armar(p, "tareas-armando");
+    expect(c.texto, "manda el índice mientras se arma").not.toContain("LOS CAMBIOS");
+    expect(c.texto).not.toContain("se ve arriba del Gantt");
+    expect(c.medidas.indice, "cuenta un índice que no viaja").toBe(0);
+    expect(c.medidas.detalle).toBe(0);
+    expect(c.texto).toContain(
+      "⏳ LA IA ESTÁ ARMANDO ESTA PROPUESTA: todavía no se ve en pantalla, aparece entera cuando termina.",
+    );
+    expect(c.texto).toContain("no hay números que citar");
+    expect(c.texto, "la propuesta (lo que se va a ver) tiene que ir").toContain("LA PROPUESTA: el cronograma como quedaría");
+    expect(c.texto).toContain("PARA REHACER TODO");
+    expect(c.texto, "el recorte nombra una lista que no va").not.toContain(RECORTE_NIVEL_1);
+  });
+
+  it("con «recalculando» nada cambia: su barra se ve, y el índice viaja", () => {
+    /* La edición que la pone en rojo: esconder el índice también en el recálculo. */
+    const faseId = base.vivo.fases[2].id;
+    const p = leida({
+      estado: "listas",
+      fase: null,
+      motivo: null,
+      recalculo: { estado: "armando", corrida: "run-r", fases: [faseId], nombres: [base.vivo.fases[2].name], fase: null, motivo: null },
+    });
+    expect(p.porQue).toBe("recalculando");
+    const c = armar(p, "recalculando");
+    expect(c.texto).toContain("LOS CAMBIOS");
+    expect(c.texto).toContain("(se ve arriba del Gantt)");
+    expect(indiceDe(c.texto).length).toBeGreaterThan(3);
+  });
+
+  it("las líneas de solo lectura, en tuteo", () => {
+    const VOSEO = /\b(podés|querés|tenés|decime|decímelo|fijate|mirá|revisá|sabés|elegí|aplicá)\b/i;
+    for (const porQue of ["tareas-armando", "recalculando"] as const) expect(lineaDeSoloLectura(porQue)).not.toMatch(VOSEO);
   });
 });

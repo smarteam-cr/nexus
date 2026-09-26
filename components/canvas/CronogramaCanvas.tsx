@@ -120,8 +120,10 @@ import {
   juntarObservaciones,
   MENSAJE_PROPUESTA_ABIERTA,
   mensajeDeLaPropuestaAbierta,
+  modoDeLaPropuesta,
   observacionesDeLaFranja,
   observacionesParaElPaso2,
+  pasarAAntesAlLlegar,
   textoDelChipDeEspera,
   traeCambiosDeFases,
   versionDelBorrador,
@@ -1545,15 +1547,32 @@ export default function CronogramaCanvas({
     // E3: solo quien edita guarda lo que marca (la misma vara que la ruta); quien mira no ve la barra.
     guardarCasillas: canEdit ? guardarCasillas : undefined,
   });
+  /* L2 (2026-09-26): qué muestra la pantalla de la propuesta. Mientras el paso 2 arma sus tareas
+     («armandose») NO hay propuesta en pantalla: ni barra ni vista de la propuesta; el Gantt es el de hoy,
+     editable, con la línea «Armando la propuesta…». Aparece entera cuando llegan las tareas. */
+  const modo = modoDeLaPropuesta({ hayBorrador, conCambios: !!revision.resumen, tareas: estadoDeLasTareasEnPantalla });
   /* Solo quien edita ve la vista de la propuesta: la barra que la explica (y la alterna) es suya. Quien
      solo mira ve el cronograma actual, que es el que rige hasta que alguien aplique. */
-  const verPropuesta = canEdit && hayBorrador && !!revision.proyeccion && revision.vista === "propuesta";
+  const verPropuesta = canEdit && hayBorrador && modo === "barra" && !!revision.proyeccion && revision.vista === "propuesta";
   /* Lo ÚLTIMO de la revisión, para leerlo desde el aplicar (async): la closure del clic tiene la
      del render en que se apretó, y esperar el guardado puede mover lo vivo. */
   const revisionRef = useRef(revision);
   useEffect(() => {
     revisionRef.current = revision;
   });
+  /* L2 · LA LLEGADA: la propuesta terminó de armarse (el modo pasa de «armandose» a «barra»). Si el CSE está
+     escribiendo en un campo, el Gantt no se le cambia bajo el cursor: la barra aparece en la vista «antes». El
+     aviso lo da el seguimiento de la corrida, con la misma mirada al foco (`desenlaceDelSeguimiento` con
+     `escribiendo`): «Llegó la propuesta: la ves con «Ver la propuesta».». Va después del efecto de
+     `revisionRef`: lee la revisión de este render. */
+  const modoAnteriorRef = useRef(modo);
+  useEffect(() => {
+    const antes = modoAnteriorRef.current;
+    modoAnteriorRef.current = modo;
+    const r = revisionRef.current;
+    const escribiendo = esCampoDeEscritura(document.activeElement as HTMLElement | null);
+    if (pasarAAntesAlLlegar({ antes, ahora: modo, escribiendo, vista: r.vista })) r.alternar();
+  }, [modo]);
   /* E3 P5: la propuesta de AHORA, para leer lo desmarcado del servidor desde un callback async (el
      aplicar del chat, después de esperar el guardado y las casillas). */
   const proposalRef = useRef(proposal);
@@ -2401,6 +2420,8 @@ export default function CronogramaCanvas({
         lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas, recalculo: leida.tareas?.recalculo ?? null } : null,
         aviso: r.timelineSyncError,
         recalculo: recalcula,
+        // L2: si el CSE está escribiendo, la barra llega en «antes» (el efecto de la llegada) y el aviso lo dice.
+        escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),
       });
       if (desenlace.que === "seguir") {
         // Sigue «armando» (~6 min sin terminar) o el GET falló: se relee y se vuelve a seguir.
@@ -2445,11 +2466,13 @@ export default function CronogramaCanvas({
      vacía y llena al terminar). Con la barra montada, la línea va adentro de ella.
      E2b (2026-09-25): también «ofrecer» — sin propuesta y sin nada en curso, después de aplicar una
      propuesta cuyas tareas no llegaron o de descartar el vacío que falló (`ofrecerTareas`), y solo con
-     el permiso que el servidor va a exigir. Reemplaza a la franja de la cadena vieja. */
+     el permiso que el servidor va a exigir. Reemplaza a la franja de la cadena vieja.
+     L2: también mientras se arma la propuesta (`modo` «armandose»), aunque ya traiga cambios de fases: la
+     barra sale recién cuando llegan las tareas. */
   const lineaSuelta: { estado: EstadoDeLasTareas | "paso-1" | "ofrecer"; fase: string | null; motivo: string | null } | null =
     armando?.paso === 1
       ? { estado: "paso-1", fase: null, motivo: null }
-      : hayBorrador && revision.resumen
+      : hayBorrador && revision.resumen && modo === "barra"
         ? null
         : tareasDeLaBarra
           ? tareasDeLaBarra
@@ -3616,8 +3639,9 @@ export default function CronogramaCanvas({
               Gantt sigue editable y el aviso ámbar de abajo igual ofrece "Genera las tareas"—,
               así que la acción existía pero solo enterrada en un banner. Quedaban cuatro avisos
               apilados antes de ver el Gantt y ningún botón donde uno los busca.
-              NO aplica: baja hasta la barra de revisión, donde cada cambio se ve con su detalle. */}
-          {canEdit && hayBorrador && revision.resumen && revision.resumen.total > 0 && (
+              NO aplica: baja hasta la barra de revisión, donde cada cambio se ve con su detalle.
+              L2: mientras se arma la propuesta no sale (no hay barra hasta que llegan las tareas). */}
+          {canEdit && hayBorrador && revision.resumen && revision.resumen.total > 0 && modo === "barra" && (
             <button
               onClick={() =>
                 document
@@ -4199,13 +4223,15 @@ export default function CronogramaCanvas({
                   : armarLasTareas
               }
               onSecundaria={lineaSuelta.estado === "ofrecer" ? () => setOfrecerTareas(false) : undefined}
-              onDescartar={hayBorrador && !revision.resumen ? () => void discardProposal() : undefined}
+              onDescartar={hayBorrador && (!revision.resumen || modo === "armandose") ? () => void discardProposal() : undefined}
               descartando={descartando}
               trabajando={armando !== null}
               suelta
+              /* L2: sin barra, la línea es el ancla de la propuesta: «Revisar…» y los avisos bajan hasta acá. */
+              id={modo === "barra" ? undefined : "cronograma-propuesta"}
             />
           )}
-          {canEdit && hayBorrador && revision.resumen && (
+          {canEdit && modo === "barra" && revision.resumen && (
             <RevisionDeLaPropuesta
               resumen={revision.resumen}
               vista={revision.vista}

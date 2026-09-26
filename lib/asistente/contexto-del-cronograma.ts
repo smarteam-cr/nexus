@@ -10,7 +10,8 @@
  * tarea que la propuesta crea. Así que van las dos cosas que ve la pantalla:
  *   · LA PROPUESTA: el cronograma como quedaría con lo marcado (`resumen.proyeccion`), con los ids de
  *     las fases (`n:…` las nuevas) y las tareas por semana con su identificador;
- *   · LOS CAMBIOS: la lista de la barra, con SUS números (`resumen.items` y `resumen.grupos`).
+ *   · LOS CAMBIOS: la lista de la barra, con SUS números (`resumen.items` y `resumen.grupos`). L2: mientras
+ *     la IA arma la propuesta no hay barra en pantalla, así que esta sección no va (no hay números que citar).
  * ⛔ Van SIN las REGLAS DURAS del modificador (son de «Pedir cambio con IA», no de la propuesta) y SIN
  * las notas de las tareas: son contenido, y el chat no las necesita para conversar sobre la estructura.
  *
@@ -70,12 +71,20 @@ const LINEA_SIN_PERMISO =
  * Por qué no se puede cambiar la propuesta mientras la IA trabaja sobre ella. Los otros casos de solo
  * lectura (una ilegible, una versión nueva, el borrador vacío) usan el contexto de hoy con su línea
  * (`lineaDeCambiosDeFasesSinDecidir`, contexto.ts; la ilegible solo manda a «Descartarla»).
+ * L2 (2026-09-26): mientras se arma, la propuesta NO se ve en pantalla (aparece entera al terminar): la
+ * línea lo dice, y no hay números que citar (el contexto va sin «LOS CAMBIOS»). El recálculo no cambia: su
+ * barra sí se ve.
  */
 export function lineaDeSoloLectura(porQue: "tareas-armando" | "recalculando"): string {
-  const que = porQue === "tareas-armando" ? "ARMANDO LAS TAREAS DE ESTA PROPUESTA" : "RECALCULANDO TAREAS DE ESTA PROPUESTA";
+  if (porQue === "tareas-armando") {
+    return (
+      "⏳ LA IA ESTÁ ARMANDO ESTA PROPUESTA: todavía no se ve en pantalla, aparece entera cuando termina. " +
+      "Mientras tanto no se puede cambiar ni aplicar, y no hay números que citar. Puedes conversarlo, pero no lo registres."
+    );
+  }
   return (
-    `⏳ LA IA ESTÁ ${que} (se ve arriba del Gantt). Mientras tanto no se puede cambiar ni aplicar: si te ` +
-    "piden un cambio, dilo ANTES de armar la lista. Puedes conversarlo, pero no lo registres: pídelo cuando termine."
+    "⏳ LA IA ESTÁ RECALCULANDO TAREAS DE ESTA PROPUESTA (se ve arriba del Gantt). Mientras tanto no se puede cambiar " +
+    "ni aplicar: si te piden un cambio, dilo ANTES de armar la lista. Puedes conversarlo, pero no lo registres: pídelo cuando termine."
   );
 }
 
@@ -153,6 +162,10 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
   const titulo = (s: string) => (nivel >= 2 ? acortar(s) : s);
   const lista = (items: string[]) => items.join(" · ");
 
+  /* L2 (D10): mientras la IA arma la propuesta, la pantalla no la muestra (ni su barra ni sus números): el
+     chat no recibe el índice numerado, que el CSE no tiene enfrente para citar. */
+  const armandose = p.porQue === "tareas-armando";
+
   // ── 1-2 · De qué proyecto y qué se puede hacer con la propuesta ──
   const linea = d.puedeEditar ? LINEA_DE_LA_PROPUESTA_EDITABLE : d.porQue?.trim() || LINEA_SIN_PERMISO;
   const cabeza = [
@@ -160,7 +173,7 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     "",
     `PROPUESTA ABIERTA ${p.desde}. ${linea}`,
     ...(r.bloqueo ? [`⚠ Hoy no se puede aplicar: ${r.bloqueo}`] : []),
-    ...(nivel >= 1 ? [RECORTE_NIVEL_1] : []),
+    ...(nivel >= 1 && !armandose ? [RECORTE_NIVEL_1] : []),
     ...(nivel >= 2 ? [RECORTE_NIVEL_2] : []),
   ];
 
@@ -301,7 +314,14 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
   ];
 
   const bloqueDeLaPropuesta = propuesta.join("\n");
-  const texto = [...cabeza, "", bloqueDeLaPropuesta, "", ...fechas, "", ...cambios, "", ...cola].join("\n");
+  /* L2: mientras se arma, sin la sección 5 (ni el índice ni su detalle): no hay números en pantalla. Se arma
+     igual (es barato) y no se manda. */
+  const conCambios = armandose ? [] : [...cambios, ""];
+  if (armandose) {
+    indice.length = 0;
+    detalle.length = 0;
+  }
+  const texto = [...cabeza, "", bloqueDeLaPropuesta, "", ...fechas, "", ...conCambios, ...cola].join("\n");
   const largo = (ls: string[]) => ls.reduce((n, l) => n + l.length + 1, 0);
   return {
     texto,
