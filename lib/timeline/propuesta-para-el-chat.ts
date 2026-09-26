@@ -8,9 +8,12 @@
  * estado de cada fase (la misma lectura que aplicar y que la ruta que edita la propuesta), el borrador,
  * lo desmarcado, el estado de las tareas y del recálculo— y decide si el chat puede editarla.
  *
- * ⛔ Es el ÚNICO lugar que lee las notas de las tareas para el chat, y no se las pasa al modelo: el
+ * ⛔ Es el ÚNICO lugar que lee notas para el chat. Las de las TAREAS no se las pasa al modelo: el
  * texto lo arma `lib/asistente/contexto-del-cronograma.ts`, que nunca las escribe. Las necesita el plan
  * (la foto de una tarea que se va incluye su nota: si alguien la editó, choca).
+ * E4 P1: también las de las FASES (`notasDeLasFases`, o las de `vivo` con una propuesta). Esas sí
+ * llegan al modelo, pero solo la de la fase que la persona señaló con «IA», y solo en ese turno
+ * (`lib/asistente/fase-senalada.ts`): el chat reescribe una nota únicamente si la leyó entera.
  *
  * Solo lectura (`modo: "solo-lectura"`) en cinco casos, con su porqué:
  *   · «formato-viejo»: la propuesta de antes del borrador (se resuelve en su barra, como en E1);
@@ -126,6 +129,18 @@ export function propuestaParaElChat(i: {
     resumen: borrador ? resumir(i.vivo, borrador, excluidos, opciones) : null,
     desde: desdeDeLaPropuesta(deDondeViene(i.guardado)),
   };
+}
+
+/**
+ * E4 P1: la nota de cada fase de ESTE proyecto (sin propuesta abierta; con una, el chat usa las de su
+ * `vivo`). ⛔ Filtra por proyecto: el id de la fase señalada llega del navegador.
+ */
+export async function notasDeLasFases(projectId: string): Promise<Map<string, string | null>> {
+  const fases = await prisma.timelinePhase.findMany({
+    where: { timeline: { projectId } },
+    select: { id: true, notes: true },
+  });
+  return new Map(fases.map((f) => [f.id, f.notes ?? null]));
 }
 
 /**

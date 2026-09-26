@@ -183,6 +183,42 @@ describe("el contenido completo de la sección del chip", () => {
     expect(TURNO.slice(i - 120, i + 200)).toContain("contenido: mensajeDelCse");
   });
 
+  it("E4 P1: la nota de la fase señalada, igual: en los MENSAJES, nunca en `system`, y sin persistirse", () => {
+    /* `bloqueDeLaFase` le da al modelo la nota ENTERA de la fase que se señaló con «IA», solo en ese
+       turno. La edición que la pone en rojo: interpolarlo en el `system` (rompe la caché en cada turno)
+       o guardar el mensaje ya compuesto en el hilo (el turno siguiente leería una nota vieja). */
+    const i = TURNO.indexOf("const messages:");
+    const mensajes = TURNO.slice(i, TURNO.indexOf("];", i));
+    expect(mensajes.length, "la guarda no está mirando nada").toBeGreaterThan(200);
+    expect(mensajes, "la nota de la fase dejó de ir en los mensajes").toContain("bloqueDeLaFase(");
+    const j = TURNO.indexOf("system: [");
+    expect(TURNO.slice(j, TURNO.indexOf("],", j)), "la nota de la fase se coló al prefijo").not.toContain("bloqueDeLaFase");
+    const k = TURNO.indexOf('rol: "CSE"');
+    expect(TURNO.slice(k - 120, k + 200)).toContain("contenido: mensajeDelCse");
+  });
+
+  it("⛔ E4 P1: una nota que el modelo no leyó entera se saca ANTES de registrar, en los dos modos", () => {
+    /* Sin propuesta, lo que se registra sale de `fusionarPendientes`; con la propuesta editable, de
+       `acuerdoSobreLaPropuesta` (la prueba en seco). Las dos reciben lo que dejó `notasQueNoLeyo`, nunca
+       `opsNuevas` crudo. La edición que la pone en rojo: registrar sin la guarda (pasarles `opsNuevas`). */
+    const i = TURNO.indexOf("} else if (soloLectura) {");
+    const rama = TURNO.slice(TURNO.indexOf("} else {", i), TURNO.indexOf("⭐ E3 P5: EL ACUERDO DE CIERRE"));
+    expect(rama.length, "la guarda no está mirando nada").toBeGreaterThan(500);
+    const iGuarda = rama.indexOf("notasQueNoLeyo(");
+    expect(iGuarda, "el turno dejó de mirar si leyó la nota").toBeGreaterThan(-1);
+    const iSeco = rama.indexOf("acuerdoSobreLaPropuesta({");
+    const iFusion = rama.indexOf("fusionarPendientes(");
+    expect(iGuarda).toBeLessThan(iSeco);
+    expect(iGuarda).toBeLessThan(iFusion);
+    expect(rama.slice(iSeco, rama.indexOf("})", iSeco))).toContain("opsNuevas: opsQueSeRegistran");
+    expect(rama.slice(iFusion, rama.indexOf(");", iFusion))).toContain("opsQueSeRegistran.filter(");
+    const iDespues = rama.indexOf("\n", rama.indexOf("const opsQueSeRegistran ="));
+    expect(iDespues, "cambió cómo se arma lo que se registra").toBeGreaterThan(iGuarda);
+    // (`opsNuevas:` es el nombre del parámetro de `acuerdoSobreLaPropuesta`, no la variable.)
+    expect(rama.slice(iDespues), "algo se registra con lo que emitió el modelo, sin la guarda").not.toMatch(/\bopsNuevas\b(?!:)/);
+    expect(rama, "lo que no se registra se tiene que decir").toContain("avisoDeNotasQueNoLeyo(noLeidas)");
+  });
+
   it("⭐ los ítems se numeran desde 0 — el mismo número que va en `posicion`", () => {
     /* Numerarlos desde 1, que es lo natural al leer, fabricaría un error de una posición en cada
        borrado: el modelo pediría el 3 pensando en el que la lista llama 2. */

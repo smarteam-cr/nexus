@@ -29,6 +29,16 @@
  * ⚠ Y el chip es una PISTA, no una reja. Si la persona escribe sobre otra sección sin cerrarlo —lo
  * va a hacer— el modelo no puede negarse. La reja vive en las casillas del acuerdo, que es donde
  * se revisa.
+ *
+ * La línea que se antepone (`lineaDeAlcance`) y cómo se saca al pintar (`mensajeSinAlcance`) viven
+ * en `lib/asistente/alcance.ts`, que es puro y se prueba; acá se re-exportan.
+ *
+ * ── EL CRONOGRAMA MONTA SU PROPIO PROVEEDOR (E4 P1) ─────────────────────────
+ * El «IA» de cada fase del Gantt abre el chat con la fase señalada («Sobre la fase «X»»). El
+ * cronograma envuelve su pantalla en OTRO `ChatDeSeccionProvider`, anidado adentro del del panel, por
+ * dos motivos: el `onAbrir` del panel abre el cajón de los documentos, que en el cronograma no se
+ * monta (sin el propio, el «IA» no abría nada); y el estado del panel no se limpia al cambiar de
+ * pieza, así que un «Cambiar» tocado en otro documento se colaba como chip en el chat del cronograma.
  */
 import {
   createContext,
@@ -39,21 +49,17 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { SeccionReferida } from "@/lib/asistente/alcance";
 
-export interface SeccionReferida {
-  key: string;
-  label: string;
-  /**
-   * ⭐ El texto del ÍTEM que se señaló, cuando el pedido salió del 💬 de una tarjeta y no del
-   * botón de la sección entera.
-   *
-   * Es la misma cuerda que el campo `cita` de las operaciones (`lib/canvas/citas-de-documento.ts`):
-   * el modelo recibe el texto que la persona señaló y lo devuelve como identificador. Por eso
-   * señalar en pantalla y escribir «cambiá donde dice X» terminan en el MISMO mecanismo — no en
-   * dos caminos que pueden divergir.
-   */
-  cita?: string;
-}
+export {
+  MARCA_DE_ALCANCE,
+  MARCA_DE_FASE,
+  MARCAS_DE_ALCANCE,
+  PREFIJO_DE_FASE,
+  lineaDeAlcance,
+  mensajeSinAlcance,
+} from "@/lib/asistente/alcance";
+export type { SeccionReferida } from "@/lib/asistente/alcance";
 
 interface Registro {
   /** `null` = el chat está abierto sin alcance, o cerrado. */
@@ -186,45 +192,4 @@ export function SeccionEnPantallaProvider({
 
 export function useSeccionEnPantalla(): SeccionEnPantalla | null {
   return useContext(CtxEnPantalla);
-}
-
-/**
- * El marcador de alcance que se antepone al mensaje del CSE.
- *
- * ⚠ Va en el CONTENIDO del turno y no en un campo aparte porque el hilo se re-manda entero al
- * modelo en cada turno: lo que no está en el texto no existe dos mensajes después. Mismo mecanismo
- * que el bloque de pendientes, y misma razón.
- *
- * ⛔ Y por eso mismo hay que SACARLO al pintar: es una instrucción para el modelo, no algo que la
- * persona escribió. Verlo entero arriba de su propia frase —repitiendo lo que el chip ya dice al
- * lado— se lee como ruido del sistema metido en su mensaje. Visto en pantalla el 2026-08-22.
- */
-export const MARCA_DE_ALCANCE = "[SOBRE LA SECCIÓN";
-
-export function lineaDeAlcance(seccion: SeccionReferida | null): string {
-  if (!seccion) return "";
-  /* ⚠ La línea de la cita va DENTRO del bloque, antes de la línea en blanco que lo cierra: si
-     quedara después, `mensajeSinAlcance` cortaría en el primer «\n\n» y el marcador se pintaría
-     crudo arriba del mensaje de la persona — el bug que ya se vio en pantalla el 2026-08-22. */
-  const cita = seccion.cita?.trim()
-    ? `Señaló el punto que dice: «${seccion.cita.trim()}». Úsalo como \`cita\` para identificarlo.\n`
-    : "";
-  return (
-    `${MARCA_DE_ALCANCE} «${seccion.label}» (${seccion.key})]\n` +
-    cita +
-    "Es de dónde vino el pedido, no un límite: si lo que sigue habla de otra sección, atiéndelo igual.\n\n"
-  );
-}
-
-/**
- * El texto del CSE tal como lo escribió, sin el marcador de alcance.
- *
- * ⚠ Se corta por la línea en blanco que cierra el bloque, no por el largo del texto: el marcador
- * tiene dos líneas y el mensaje puede empezar con lo que sea. Si el bloque no está, devuelve el
- * mensaje intacto — un turno viejo, o uno mandado sin alcance.
- */
-export function mensajeSinAlcance(texto: string): string {
-  if (!texto.startsWith(MARCA_DE_ALCANCE)) return texto;
-  const corte = texto.indexOf("\n\n");
-  return corte === -1 ? texto : texto.slice(corte + 2);
 }

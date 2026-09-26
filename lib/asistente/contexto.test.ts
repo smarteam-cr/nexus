@@ -587,6 +587,9 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
        La edición que la pone en rojo: volver al encabezado viejo. */
     expect(soloCodigo(src)).not.toContain("REGLAS DURAS DEL MODIFICADOR");
     expect(src).toContain("REGLAS DURAS DEL CRONOGRAMA");
+    /* E4 P1: el rótulo se reescribió entero y dice que la NOTA de la fase también la lee el cliente
+       (`fase.nota`). La edición que la pone en rojo: volver a nombrar solo `titulo` y `nombre`. */
+    expect(soloCodigo(src)).toContain("lo que pongas en `titulo`, en `nombre` y en `nota` es lo que ve el cliente.");
   });
 });
 

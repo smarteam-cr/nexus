@@ -81,6 +81,7 @@ import {
   esOperacionDePropuesta,
   motivoDeTareaAmbigua,
   motivoDeTareaProtegida,
+  notaDeLaOperacion,
   OPERACIONES_VALIDAS,
   TIPOS_DE_ACTIVIDAD_VALIDOS,
   TIPOS_DE_TAREA_VALIDOS,
@@ -583,6 +584,17 @@ export function operarSobreElBorrador(i: {
         if (!(TIPOS_DE_ACTIVIDAD_VALIDOS as readonly string[]).includes(o.tipo)) return `«${String(o.tipo)}» no es un tipo de actividad`;
         if (f.tipo === "viva") upsertCampoDeFase(f.viva, "activityType", o.tipo);
         else editarFaseNueva(f.cambio, { activityType: o.tipo });
+        return null;
+      }
+      case "fase.nota": {
+        // E4 P1: la misma validación que el ejecutor del cronograma. Sin `ajustar`: la nota no es parte
+        // de la forma de la fase (no mueve sus tareas).
+        const f = resolverFase(o.phaseId, m);
+        if (typeof f === "string") return f;
+        const r = notaDeLaOperacion(o);
+        if ("rechazo" in r) return r.rechazo;
+        if (f.tipo === "viva") upsertCampoDeFase(f.viva, "notes", r.nota);
+        else editarFaseNueva(f.cambio, { notes: r.nota });
         return null;
       }
       case "fase.arranque-relativo": {

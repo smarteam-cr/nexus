@@ -267,6 +267,54 @@ describe("1 · los campos de una fase: D8 (re-anclar solo lo que se escribe) y D
   });
 });
 
+describe("1b · E4 P1: la nota de una fase (`fase.nota`) en la propuesta", () => {
+  it("⭐ una viva: nace un cambio del chat con el `desde` de lo vivo, SIN tocar la forma; en una nueva, su contenido", () => {
+    /* La edición que la pone en rojo: ajustar la forma (la nota no mueve tareas: `ajustadasPorElChat`
+       no cambia) o validar distinto que el ejecutor del cronograma (una `nota` ausente se leería null). */
+    const vivo = conFase("c", { notes: "Probamos los flujos contigo." });
+    const r = operar(
+      [
+        { op: "fase.nota", phaseId: "c", nota: "  Probamos los flujos y ajustamos.  " },
+        { op: "fase.nota", phaseId: "n:piloto", nota: "Con 5 usuarios." },
+      ],
+      { vivo },
+    );
+    sinRechazos(r);
+    expect(cambioDe(r, "fase:c:notes")).toEqual({
+      tipo: "fase-cambia",
+      clave: "fase:c:notes",
+      faseId: "c",
+      fase: "Pruebas",
+      campo: "notes",
+      desde: "Probamos los flujos contigo.",
+      a: "Probamos los flujos y ajustamos.",
+      porChat: true,
+    });
+    expect((cambioDe(r, "n:piloto") as CambioFaseNueva).fase.notes).toBe("Con 5 usuarios.");
+    expect(r.borrador.ajustadasPorElChat, "la nota tocó la forma de la fase").toBeUndefined();
+    // Aunque la forma que se ve no sea la armada (la duración de la IA quedó fuera), la nota no la ajusta.
+    const fuera = operar([{ op: "fase.nota", phaseId: "c", nota: "Otra." }], { vivo, excluidos: [DUR_C.clave] });
+    sinRechazos(fuera);
+    expect(fuera.borrador.ajustadasPorElChat, "la nota ajustó la forma de la fase").toBeUndefined();
+    expect(operar([{ op: "fase.nota", phaseId: "c" } as unknown as Operacion], { vivo }).rechazadas).toEqual([
+      { indice: 0, motivo: "falta `nota`: el texto completo, o null para quitarla" },
+    ]);
+  });
+
+  it("sobre el `ref` de un `fase.crear` del lote; pedir la nota de hoy no deja cambio", () => {
+    const r = operar([
+      { op: "fase.crear", nombre: "Cierre", semanas: 1, ref: "cierre" },
+      { op: "fase.nota", phaseId: "cierre", nota: "Entregamos y cerramos." },
+    ]);
+    sinRechazos(r);
+    const nueva = r.borrador.cambios.find((c): c is CambioFaseNueva => c.tipo === "fase-nueva" && c.fase.name === "Cierre");
+    expect(nueva?.fase.notes).toBe("Entregamos y cerramos.");
+    const igual = operar([{ op: "fase.nota", phaseId: "b", nota: null }]);
+    sinRechazos(igual);
+    expect(igual.cambio).toBe(false);
+  });
+});
+
 describe("2 · crear y mover fases", () => {
   it("`fase.crear` nace del chat en el lugar pedido, y su `ref` sirve en el mismo lote", () => {
     const r = operar([

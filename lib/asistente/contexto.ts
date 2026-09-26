@@ -598,11 +598,12 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     /* ⚠ Decía «REGLAS DURAS DEL MODIFICADOR (lo que va a pasar cuando ejecute la instrucción)»: de
        cuando el chat emitía una instrucción que un segundo modelo ejecutaba. Desde el 2026-08-20
        emite operaciones que el código escribe tal cual, y desde el 2026-09-23 lee las reuniones:
-       decirle que después corre un editor con contexto era invitarlo a dejarle el trabajo a nadie. */
-    "REGLAS DURAS DEL CRONOGRAMA (las comparte con «Pedir cambio con IA»). Tus operaciones las",
-    "escribe el código TAL CUAL, sin otro modelo detrás que las revise: lo que pongas en `titulo` y",
-    "en `nombre` es lo que ve el cliente. Lo de conservar ids u omitir para borrar es de ese otro",
-    "agente; tú borras y cambias con las operaciones:",
+       decirle que después corre un editor con contexto era invitarlo a dejarle el trabajo a nadie.
+       E4 P1: se reescribió entero. Ya no nombra a «Pedir cambio con IA» (se retira en E4) y suma la
+       nota de la fase (`fase.nota`), que también lee el cliente. */
+    "REGLAS DURAS DEL CRONOGRAMA. Tus operaciones las escribe el código TAL CUAL, sin otro modelo",
+    "detrás que las revise: lo que pongas en `titulo`, en `nombre` y en `nota` es lo que ve el cliente.",
+    "Lo de conservar ids u omitir para borrar no es para ti: tú borras y cambias con las operaciones:",
     REGLAS_DURAS_DEL_CRONOGRAMA,
     "",
     "CONSECUENCIAS QUE HAY QUE DECIR ANTES, no después de aplicar:",

@@ -43,6 +43,7 @@ import ChatDelAsistente, {
   type AcuerdoDelChat,
   type ResultadoDeAplicar,
 } from "@/components/asistente/ChatDelAsistente";
+import { ChatDeSeccionDisponible, ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
 import { debeAbrirseElChat, leerApertura, recordarApertura } from "@/lib/timeline/apertura-del-chat";
 import { claseDeAcuerdo } from "@/lib/asistente/textos-del-acuerdo";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
@@ -523,6 +524,13 @@ export default function CronogramaCanvas({
   const [chatAbierto, setChatAbierto] = useState(false);
   /* E3 P5: el chat se abrió SOLO (llegó una propuesta): no toma el foco. El botón 💬 lo apaga. */
   const [aperturaAutomatica, setAperturaAutomatica] = useState(false);
+  /* E4 P1: el «IA» de una fase abre el chat con esa fase señalada (el proveedor del chip de abajo, en el
+     `return`). Abierto a mano: toma el foco. ⛔ ESTABLE (`useCallback` sin dependencias): el proveedor
+     rehace su `abrirCon` con cada `onAbrir` nuevo, y una flecha suelta lo rehace en cada render. */
+  const abrirElChatDesdeUnaFase = useCallback(() => {
+    setAperturaAutomatica(false);
+    setChatAbierto(true);
+  }, []);
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
   // Drawer de detalle de tarea: se resuelve la tarea VIVA desde `phases` por _key.
@@ -3541,9 +3549,16 @@ export default function CronogramaCanvas({
   const validationMsg = phases.length > 0 ? validateLocal() : null;
 
   return (
-    /* E3 P5: con el chat abierto sobre una propuesta, el cronograma se corre (en pantallas anchas): el
-       cajón tapaba «Aplicar» y «Descartar» de la barra. Sin propuesta sigue tapando, a propósito
-       (ChatDelAsistente.tsx). */
+    /* E4 P1: el PROVEEDOR DEL CHIP propio del cronograma, anidado adentro del del panel. Sin él, el «IA»
+       de una fase no abría nada (el `onAbrir` del panel abre el cajón de los documentos, que acá no se
+       monta), y un «Cambiar» tocado en otro documento se colaba como chip en este chat. Envuelve el
+       Gantt, el chat y el header portalizado (el contexto cruza el portal). Se ofrece con la misma
+       condición que el botón 💬. */
+    <ChatDeSeccionProvider onAbrir={abrirElChatDesdeUnaFase}>
+    <ChatDeSeccionDisponible cuando={canEdit && phases.length > 0} />
+    {/* E3 P5: con el chat abierto sobre una propuesta, el cronograma se corre (en pantallas anchas): el
+        cajón tapaba «Aplicar» y «Descartar» de la barra. Sin propuesta sigue tapando, a propósito
+        (ChatDelAsistente.tsx). */}
     <div className={chatAbierto && hayBorrador ? "relative xl:pr-[400px]" : "relative"}>
       {/* ⭐ EL CRONOGRAMA SE BLOQUEA MIENTRAS SE APLICA UN CAMBIO.
 
@@ -4530,14 +4545,9 @@ export default function CronogramaCanvas({
                vista de la propuesta es de solo lectura (sin `onSetCloseOverride`). */
             closeOverride={closeOverride}
             onSetCloseOverride={verPropuesta ? undefined : setCloseOverrideFromGantt}
-            onAssistPhase={
-              /* Con cambios de fases sin decidir, «IA» de una fase no se ofrece: su propuesta
-                 reemplazaría la de las reuniones en pantalla y aplicarla o descartarla borraba la
-                 guardada (revisión adversarial, 2026-09-24; `submitAssist` también lo frena). */
-              (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline) && !hayBorrador
-                ? (phase) => { setAssistScopePhaseId(phase.id ?? null); setAssistOpen(true); }
-                : undefined
-            }
+            /* E4 P1: el «IA» de cada fase ya no abre «Pedir cambio con IA»: abre el chat con esa fase
+               señalada (el Gantt lo toma del proveedor del chip de arriba), con y sin propuesta. Con
+               una propuesta abierta, el chat la edita (E3). */
             onRegeneratePhase={
               // Rehacer una fase solo tiene sentido cuando YA hay detalle IA, y queda para quien puede
               // regenerar (cronograma.regenerate).
@@ -4771,6 +4781,7 @@ export default function CronogramaCanvas({
       />
       </div>
     </div>
+    </ChatDeSeccionProvider>
   );
 }
 

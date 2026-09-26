@@ -91,6 +91,16 @@ import {
   motivoDeCaidaPorToken,
   RESUMEN_DEL_CIERRE,
 } from "./propuesta-del-chat";
+import {
+  avisoDeNotasQueNoLeyo,
+  bloqueDeLaFase,
+  faseDelChip,
+  nombreDeLaFase,
+  notaDeHoy,
+  notasQueNoLeyo,
+  refsDelLote,
+} from "./fase-senalada";
+import { notasDeLasFases } from "@/lib/timeline/propuesta-para-el-chat";
 
 /**
  * ⚠ RE-EXPORTADO POR COMPATIBILIDAD. Los marcadores se mudaron a `acuerdo.ts` para cortar un
@@ -398,6 +408,17 @@ una respuesta para recién ahí proponer es una conversación entera.
 acortar saca las ÚLTIMAS semanas, quitar saca LA QUE DIGAS y sube las de abajo. Si la persona
 señala una semana concreta —«la 3 está vacía»— es quitar-semana, no duración.
 
+⭐ LA NOTA DE UNA FASE es el texto que el cliente lee debajo del nombre. \`fase.nota\` la REEMPLAZA
+entera: en \`nota\` va el texto COMPLETO, claro, sin nombres del equipo ni jerga interna (null la quita).
+Solo puedes cambiar la nota de la fase que la persona señaló con «IA», que te llega entera en su
+mensaje, o la de una fase que no tiene nota. Si no, pídele que toque «IA» en esa fase.
+Si el mensaje de la persona empieza con [SOBRE LA FASE «X» [id]], tocó «IA» en esa fase: ese id es el
+\`phaseId\`. Es de dónde vino el pedido, no un límite.
+Armar o rehacer las tareas a partir de lo que se vendió no lo haces tú: sugiere «Regenerar» en esa
+fase, o «Generar cronograma» si todavía no hay tareas de la IA. Con una propuesta abierta, primero hay
+que aplicarla o descartarla. Un enfoque para esas tareas se escribe en «Instrucciones adicionales» del
+Contexto del cronograma.
+
 ⭐ PARA MOVER O BORRAR TAREAS, EMITE UNA OPERACIÓN POR TAREA, ENUMERADAS.
 Si te piden «pasa las atrasadas a la última semana», mira el contexto, decide cuáles son y emite
 un "tarea.mover-semana" por cada una. Es a propósito: así la persona lee EXACTAMENTE qué tareas
@@ -488,7 +509,7 @@ después arma las tareas. Los pedidos puntuales los sigues atendiendo tú.
    pendiente, dilo: primero se pasa a la propuesta.
 6. «Descártala» es "propuesta.descartar-entera", sola. Lo pendiente cae con ella.
 7. Si piden cambiar un dato que tiene ⚠ (lo editaron a mano), tu operación reemplaza esa edición: dilo.
-8. Lo que va en "titulo" y "nombre" lo ve el cliente al aplicar.
+8. Lo que va en "titulo", "nombre" y "nota" lo ve el cliente al aplicar.
 9. Si el contexto dice que ahora no se puede cambiar la propuesta, no llames la herramienta: dilo y
    pide que te lo repitan cuando termine.`;
 
@@ -827,6 +848,7 @@ export const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "fase.quitar-semana",
                 "fase.insertar-semana",
                 "fase.tipo",
+                "fase.nota",
                 "tarea.mover-semana",
                 "tarea.mover-fase",
                 "tarea.borrar",
@@ -862,6 +884,8 @@ export const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "fase.insertar-semana: abre una semana vacía en esa posición y corre el resto. " +
                 "fase.tipo: cambia el tipo de actividad (EXPLORACION, PLANIFICACION, " +
                 "CONFIGURACION, ADOPCION o SEGUIMIENTO). " +
+                "fase.nota: REEMPLAZA la nota de la fase, la que lee el cliente debajo del nombre " +
+                "(phaseId, nota = el texto COMPLETO; null la quita). " +
                 "tarea.mover-semana: pasa UNA tarea a otra semana de su misma fase (taskId, " +
                 "semana base 0). " +
                 "tarea.mover-fase: pasa UNA tarea a otra fase (taskId, phaseId). Sin propuesta la recrea " +
@@ -946,6 +970,10 @@ export const TOOL_ACUERDO: Anthropic.Messages.Tool = {
                 "corresponde a la operación.",
             },
             fecha: { type: "string", description: "Para arranque. AAAA-MM-DD." },
+            nota: {
+              type: ["string", "null"],
+              description: "Para fase.nota. El texto completo de la nota: la lee el cliente. null la quita.",
+            },
           },
           required: ["op"],
         },
@@ -1028,6 +1056,19 @@ export async function correrTurno(
   const sha = huellaDeContexto(ctx.material?.texto ? `${ctx.texto}\n${ctx.material.texto}` : ctx.texto);
 
   /**
+   * E4 P1: LA NOTA DE CADA FASE (la que lee el cliente), para la línea de un `fase.nota` («hoy: …»),
+   * para el bloque de la fase señalada con «IA» y para no registrar una nota que el modelo no leyó
+   * entera. Con una propuesta abierta, las de su `vivo` (ya leídas); sin ella, una lectura por
+   * proyecto. Solo en el cronograma. ⛔ Nunca entran al prefijo cacheado (contexto.ts).
+   */
+  const notas: ReadonlyMap<string, string | null> =
+    esCronograma && hilo.projectId
+      ? ctx.propuesta?.vivo
+        ? new Map(ctx.propuesta.vivo.fases.map((f) => [f.id, f.notes ?? null] as const))
+        : await notasDeLasFases(hilo.projectId)
+      : new Map();
+
+  /**
    * ⭐ EL CRONOGRAMA DE HOY, traducible, y arriba de todo.
    *
    * Antes se armaba adentro del `if` que atendía la tool. Ahora hace falta ANTES de llamar al
@@ -1042,6 +1083,8 @@ export async function correrTurno(
     id: f.id,
     name: f.name,
     durationWeeks: f.durationWeeks,
+    /* E4 P1: `undefined` = no se leyó (la línea de `fase.nota` no dice nada de hoy); `null` = no tiene. */
+    notes: notas.has(f.id) ? (notas.get(f.id) ?? null) : undefined,
     /**
      * ⛔ `status` Y `source` VIAJAN, y sin ellos una guarda entera no existía.
      *
@@ -1197,7 +1240,9 @@ export async function correrTurno(
     })),
     {
       role: "user" as const,
-      content: `${bloqueDePendientes(lineasVivas)}${bloqueDeLaSeccion(ctx.secciones, seccionReferida)}${mensajeDelCse}`,
+      /* E4 P1: con el chip sobre una fase, su nota ENTERA viaja solo en este turno (fase-senalada.ts),
+         con el mismo contrato que el bloque de la sección: en los mensajes y sin persistirse. */
+      content: `${bloqueDePendientes(lineasVivas)}${bloqueDeLaSeccion(ctx.secciones, seccionReferida)}${esCronograma ? bloqueDeLaFase({ referida: seccionReferida, fases: ctx.fases ?? [], notas, propuesta: ctx.propuesta?.borrador ?? null }) : ""}${mensajeDelCse}`,
     },
   ];
 
@@ -1574,17 +1619,32 @@ export async function correrTurno(
      * fusiona con lo pendiente y valida EN SECO contra la propuesta, sin reintento. Lo que no registra
      * lo dice. · C — sin propuesta, lo de siempre; lo que era sobre una propuesta no se registra.
      */
+    /* E4 P1: una `fase.nota` sobre una nota que el modelo no leyó entera (no es la de la fase que se
+       señaló con «IA», o no entra entera) no se registra, y se dice. Va ANTES que todo lo demás, en los
+       dos modos que registran: en el de la propuesta, antes de la prueba en seco. */
+    const propuestaDeLasNotas = ctx.propuesta?.borrador ?? null;
+    const noLeidas = notasQueNoLeyo(opsNuevas as ReadonlyArray<{ op?: unknown; phaseId?: unknown }>, {
+      senalada: faseDelChip(seccionReferida),
+      notaDeHoy: (id) => notaDeHoy(id, { notas, propuesta: propuestaDeLasNotas }),
+      notaViva: (id) => (notas.has(id) ? (notas.get(id) ?? null) : undefined),
+      nombre: (id) => nombreDeLaFase(id, { fases: ctx.fases ?? [], propuesta: propuestaDeLasNotas }),
+      refsDelLote: refsDelLote(opsNuevas as ReadonlyArray<{ op?: unknown; ref?: unknown }>),
+    });
+    const fueraPorLaNota = new Set(noLeidas.map((x) => x.indice));
+    const opsQueSeRegistran = opsNuevas.filter((_, k) => !fueraPorLaNota.has(k));
+    const avisoDeLasNotas = avisoDeNotasQueNoLeyo(noLeidas);
     const sobreLaPropuesta = editable
       ? acuerdoSobreLaPropuesta({
           propuesta: editable,
           vivas: libro.vivas as OperacionDelChat[],
-          opsNuevas,
+          opsNuevas: opsQueSeRegistran,
           descartar,
           preguntaAbierta,
         })
       : null;
-    const sinPropuestaDondeHacerlo = editable ? [] : opsNuevas.filter((o) => esOperacionDePropuesta(o));
+    const sinPropuestaDondeHacerlo = editable ? [] : opsQueSeRegistran.filter((o) => esOperacionDePropuesta(o));
     const avisosDelTurno = [
+      ...(avisoDeLasNotas ? [avisoDeLasNotas] : []),
       ...(sobreLaPropuesta?.avisos ?? []),
       ...(sinPropuestaDondeHacerlo.length > 0 ? [AVISO_SIN_PROPUESTA_ABIERTA] : []),
     ];
@@ -1599,7 +1659,7 @@ export async function correrTurno(
       sobreLaPropuesta ??
       fusionarPendientes(
         libro.vivas as OperacionDelChat[],
-        opsNuevas.filter((o) => !esOperacionDePropuesta(o)),
+        opsQueSeRegistran.filter((o) => !esOperacionDePropuesta(o)),
         descartar,
       );
     if (fusion.operaciones.length > 0) {

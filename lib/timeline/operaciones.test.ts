@@ -17,6 +17,8 @@ import {
   describirOperaciones,
   esOperacionDePropuesta,
   MOTIVO_SIN_PROPUESTA_ABIERTA,
+  NOTA_DE_FASE_MAX,
+  notaDeLaOperacion,
   OPERACIONES_DE_PROPUESTA,
   OPERACIONES_VALIDAS,
   type DescripcionDeLaPropuesta,
@@ -817,6 +819,8 @@ describe("⭐ lo que se LEE es lo que se EJECUTA", () => {
        a 18 operaciones; una que no tenga rama cae al `default` y la cajita azul imprime
        «Operación desconocida: fase.tipo» — y el CSE aprueba eso, porque el botón sigue estando.
        Un ejemplo por operación, y ninguno puede salir desconocido.
+       ⚠ ACTUALIZADA en E4 P1 (2026-09-25), con esta razón: el vocabulario pasa a 19 con `fase.nota`
+       (la nota de la fase que lee el cliente, lo único que solo hacía «Pedir cambio con IA»).
 
        La edición que la pone en rojo: sumar una operación al vocabulario sin su línea. */
     const EJEMPLOS: Record<(typeof OPERACIONES_VALIDAS)[number], Operacion> = {
@@ -830,6 +834,7 @@ describe("⭐ lo que se LEE es lo que se EJECUTA", () => {
       "fase.quitar-semana": { op: "fase.quitar-semana", phaseId: "f2", semana: 1 },
       "fase.insertar-semana": { op: "fase.insertar-semana", phaseId: "f2", semana: 1 },
       "fase.tipo": { op: "fase.tipo", phaseId: "f2", tipo: "ADOPCION" },
+      "fase.nota": { op: "fase.nota", phaseId: "f2", nota: "Configuramos tu Sales Hub." },
       "tarea.mover-semana": { op: "tarea.mover-semana", taskId: "t3", semana: 1 },
       "tarea.mover-fase": { op: "tarea.mover-fase", taskId: "t3", phaseId: "f4" },
       "tarea.borrar": { op: "tarea.borrar", taskId: "t3" },
@@ -947,5 +952,98 @@ describe("E3 · las operaciones sobre la propuesta abierta", () => {
     expect(describirOperaciones(cronograma(), [{ op: "tarea.mover-fase", taskId: "t3", phaseId: "f4" }])[0]).toContain(
       "pierde su estado",
     );
+  });
+});
+
+describe("E4 P1 · `fase.nota`: la nota de la fase que lee el cliente", () => {
+  /** El mismo cronograma, con las notas de hoy de dos fases. */
+  const conNotas = (): FaseActual[] =>
+    cronograma().map((f) =>
+      f.id === "f2" ? { ...f, notes: "Configuramos el pipeline de ventas." } : f.id === "f3" ? { ...f, notes: null } : f,
+    );
+  const nota = (phaseId: string, n: unknown) => ({ op: "fase.nota", phaseId, nota: n }) as unknown as Operacion;
+  const notaDe = (r: ReturnType<typeof aplicarOperaciones>, id: string) => r.payload.phases.find((p) => p.id === id)?.notes;
+
+  it("⭐ escribe la nota normalizada y la fase sale SIN `tasks` (no toca sus tareas)", () => {
+    /* La edición que la pone en rojo: marcar la fase `tocada` (el payload emitiría sus tareas enteras, y
+       el PUT borra por omisión) o no recortar los espacios. */
+    const r = aplicarOperaciones(conNotas(), null, [nota("f2", "  Configuramos tu Sales Hub.\n  ")]);
+    expect(r.rechazadas).toEqual([]);
+    expect(notaDe(r, "f2")).toBe("Configuramos tu Sales Hub.");
+    expect(r.payload.phases.every((p) => p.tasks === undefined), "la nota marcó la fase como tocada").toBe(true);
+    // Las demás fases conservan su nota tal cual.
+    expect(notaDe(r, "f3")).toBeNull();
+  });
+
+  it("⛔ `nota` ausente se RECHAZA (no es null: borraría la nota por un olvido); \"\" y null la quitan", () => {
+    /* La edición que la pone en rojo: leer una `nota` ausente como null. La herramienta solo exige `op`. */
+    const ausente = aplicarOperaciones(conNotas(), null, [{ op: "fase.nota", phaseId: "f2" } as unknown as Operacion]);
+    expect(ausente.rechazadas.map((x) => x.motivo)).toEqual(["falta `nota`: el texto completo, o null para quitarla"]);
+    expect(notaDe(ausente, "f2"), "borró la nota por una `nota` ausente").toBe("Configuramos el pipeline de ventas.");
+    for (const vacia of ["", "   ", null]) {
+      const r = aplicarOperaciones(conNotas(), null, [nota("f2", vacia)]);
+      expect(r.rechazadas, String(vacia)).toEqual([]);
+      expect(notaDe(r, "f2"), String(vacia)).toBeNull();
+    }
+    expect(aplicarOperaciones(conNotas(), null, [nota("f2", 42)]).rechazadas.map((x) => x.motivo)).toEqual([
+      "la nota tiene que ser un texto, o null para quitarla",
+    ]);
+  });
+
+  it("⛔ una nota que pasa el tope se rechaza; una fase que no existe, también", () => {
+    const larga = aplicarOperaciones(conNotas(), null, [nota("f2", "x".repeat(NOTA_DE_FASE_MAX + 1))]);
+    expect(larga.rechazadas.map((x) => x.motivo)).toEqual([`la nota pasa de ${NOTA_DE_FASE_MAX} caracteres: acórtala`]);
+    expect(aplicarOperaciones(conNotas(), null, [nota("f2", "x".repeat(NOTA_DE_FASE_MAX))]).rechazadas).toEqual([]);
+    expect(aplicarOperaciones(conNotas(), null, [nota("fz", "Algo")]).rechazadas.map((x) => x.motivo)).toEqual([
+      "esa fase no existe en el cronograma",
+    ]);
+    expect(notaDeLaOperacion({ nota: "  a  " })).toEqual({ nota: "a" });
+  });
+
+  it("⭐ sobre el `ref` de un `fase.crear` del mismo lote", () => {
+    const r = aplicarOperaciones(conNotas(), null, [
+      { op: "fase.crear", nombre: "Piloto", semanas: 2, ref: "piloto" },
+      nota("piloto", "Probamos con 5 usuarios."),
+    ]);
+    expect(r.rechazadas).toEqual([]);
+    expect(r.payload.phases.find((p) => p.name === "Piloto")?.notes).toBe("Probamos con 5 usuarios.");
+  });
+
+  it("⭐ la línea dice la nota nueva ENTERA y cómo está hoy (los tres casos, el largo si se corta, los saltos)", () => {
+    /* La edición que la pone en rojo: no decir la nota de hoy (el CSE aprobaría reemplazar un texto que
+       no vio), cortar la nota NUEVA, o dejar los saltos crudos en la cajita. */
+    const larga = `${"Primera línea de la nota.\n".repeat(10)}Fin.`;
+    const actuales: FaseActual[] = conNotas().map((f) => (f.id === "f4" ? { ...f, notes: larga } : f));
+    const lineas = describirOperaciones(actuales, [
+      nota("f2", "Configuramos tu Sales Hub.\nY lo probamos contigo."),
+      nota("f3", "Conectamos el ERP."),
+      nota("f4", null),
+      nota("f1", "Arrancamos."),
+      { op: "fase.nota", phaseId: "f2" } as unknown as Operacion,
+    ]);
+    expect(lineas[0]).toBe(
+      "La nota de «Sales Hub», la que lee el cliente, pasa a: «Configuramos tu Sales Hub. / Y lo probamos contigo.» " +
+        "(hoy: «Configuramos el pipeline de ventas.»)",
+    );
+    expect(lineas[1]).toBe("La nota de «Integraciones», la que lee el cliente, pasa a: «Conectamos el ERP.» (hoy no tiene nota)");
+    expect(lineas[2]).toMatch(/^Se quita la nota de «Reportería» \(hoy: «Primera línea de la nota\. \/ Primera/);
+    expect(lineas[2]).toContain(`…», ${larga.length} caracteres)`);
+    expect(lineas[2]).not.toContain("Fin.");
+    // Sin la nota de hoy leída (`undefined`), la línea no dice nada de hoy.
+    expect(lineas[3]).toBe("La nota de «Semana 0», la que lee el cliente, pasa a: «Arrancamos.»");
+    // Con `nota` ausente, no tira: «(sin especificar)», y el ejecutor la rechaza.
+    expect(lineas[4]).toContain("pasa a: (sin especificar)");
+  });
+
+  it("con la propuesta abierta, «hoy» es la nota VIVA", () => {
+    const vivo = {
+      ancla: null,
+      fases: [{ id: "f2", name: "Sales Hub", durationWeeks: 4, startWeek: null, sessionCount: null, notes: "La de hoy.", activityType: null }],
+    };
+    const propuesta: FaseActual[] = [{ id: "f2", name: "Sales Hub", durationWeeks: 4, startWeek: null, notes: "La de la propuesta.", tasks: [] }];
+    const [linea] = describirOperaciones(propuesta, [nota("f2", "Otra.")], {
+      propuesta: { vivo, tituloDeClave: () => null, confirmacion: "" },
+    });
+    expect(linea).toBe("La nota de «Sales Hub», la que lee el cliente, pasa a: «Otra.» (hoy: «La de hoy.»)");
   });
 });

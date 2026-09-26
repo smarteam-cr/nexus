@@ -73,6 +73,9 @@ export type Operacion =
   | { op: "fase.quitar-semana"; phaseId: string; semana: number }
   | { op: "fase.insertar-semana"; phaseId: string; semana: number }
   | { op: "fase.tipo"; phaseId: string; tipo: TipoDeActividad }
+  /* E4 P1: la nota de la fase, la que lee el cliente debajo del nombre. Era lo único que solo hacía
+     «Pedir cambio con IA»: ninguna pantalla la edita. `null` la quita. */
+  | { op: "fase.nota"; phaseId: string; nota: string | null }
   | { op: "tarea.mover-semana"; taskId: string; semana: number }
   | { op: "tarea.mover-fase"; taskId: string; phaseId: string; semana?: number }
   | { op: "tarea.borrar"; taskId: string }
@@ -108,6 +111,7 @@ export const OPERACIONES_VALIDAS = [
   "fase.quitar-semana",
   "fase.insertar-semana",
   "fase.tipo",
+  "fase.nota",
   "tarea.mover-semana",
   "tarea.mover-fase",
   "tarea.borrar",
@@ -125,6 +129,55 @@ const _laListaCubreLaUnion: Record<OpDeLaUnion, true> = Object.fromEntries(
   OPERACIONES_VALIDAS.map((o) => [o, true]),
 ) as Record<OpDeLaLista, true>;
 void _laListaCubreLaUnion;
+
+/**
+ * E4 P1: el largo máximo de la nota de una fase que el chat escribe. Es también lo que el chat LEE de
+ * la nota de la fase señalada (`lib/asistente/fase-senalada.ts`): el tope de lectura es el de
+ * escritura, así que nunca reescribe una nota que no leyó entera.
+ * Medido en producción el 2026-09-25 (solo lectura): la nota más larga tiene 199 caracteres, y 385 de
+ * 390 fases tienen una. Queda en 4.000; si alguna pasara, el tope sube a ese valor redondeado al
+ * millar, con techo de 8.000.
+ */
+export const NOTA_DE_FASE_MAX = 4000;
+
+/**
+ * La nota que pide un `fase.nota`, normalizada, o el motivo del rechazo. La usan los dos ejecutores
+ * (el cronograma y la propuesta). ⛔ `undefined` NO es null: la herramienta solo exige `op`, y leer
+ * una `nota` ausente como «quitarla» borraría la nota que lee el cliente por un olvido del modelo.
+ */
+export function notaDeLaOperacion(o: { nota?: unknown }): { nota: string | null } | { rechazo: string } {
+  if (o.nota === undefined) return { rechazo: "falta `nota`: el texto completo, o null para quitarla" };
+  if (o.nota !== null && typeof o.nota !== "string") return { rechazo: "la nota tiene que ser un texto, o null para quitarla" };
+  const t = typeof o.nota === "string" ? o.nota.trim() : "";
+  if (t.length > NOTA_DE_FASE_MAX) return { rechazo: `la nota pasa de ${NOTA_DE_FASE_MAX} caracteres: acórtala` };
+  return { nota: t || null };
+}
+
+/** Una nota en UNA línea, para la cajita: los saltos se leen como « / ». */
+const enUnaLinea = (s: string): string => s.replace(/\s*\r?\n\s*/g, " / ");
+/** Cuánto de la nota de hoy se muestra en la línea: la línea se guarda en el hilo y se relee. */
+const LARGO_DE_LA_NOTA_EN_LA_LINEA = 160;
+
+/**
+ * La línea de un `fase.nota`: la nota nueva ENTERA y cómo está hoy. `hoy`: `undefined` si no se leyó
+ * (no se dice nada), `null` si la fase no tiene nota.
+ */
+function lineaDeLaNota(fase: string, nota: unknown, hoy: string | null | undefined): string {
+  const actual = typeof hoy === "string" && hoy.trim() ? hoy : hoy === undefined ? undefined : null;
+  const sufijo =
+    actual === undefined
+      ? ""
+      : actual === null
+        ? " (hoy no tiene nota)"
+        : actual.length > LARGO_DE_LA_NOTA_EN_LA_LINEA
+          ? ` (hoy: «${enUnaLinea(actual.slice(0, LARGO_DE_LA_NOTA_EN_LA_LINEA)).trimEnd()}…», ${actual.length} caracteres)`
+          : ` (hoy: «${enUnaLinea(actual)}»)`;
+  /* ⚠ `nota` puede llegar ausente o con otra forma: el `input_schema` solo exige `op`. La línea no tira
+     (como `fase.tipo`): dice «(sin especificar)», y el ejecutor la rechaza con su motivo. */
+  if (nota === null || (typeof nota === "string" && !nota.trim())) return `Se quita la nota de «${fase}»${sufijo}`;
+  const nueva = typeof nota === "string" ? `«${enUnaLinea(nota.trim())}»` : "(sin especificar)";
+  return `La nota de «${fase}», la que lee el cliente, pasa a: ${nueva}${sufijo}`;
+}
 
 /**
  * E3: lo que el chat pide sobre la PROPUESTA abierta del cronograma (no sobre el cronograma). Solo
@@ -668,6 +721,23 @@ export function aplicarOperaciones(
         break;
       }
 
+      case "fase.nota": {
+        const f = buscarFase(operacion.phaseId);
+        if (!f) {
+          rechazar(operacion, "esa fase no existe en el cronograma");
+          break;
+        }
+        const r = notaDeLaOperacion(operacion);
+        if ("rechazo" in r) {
+          rechazar(operacion, r.rechazo);
+          break;
+        }
+        /* ⛔ Sin `tocada`: la nota es de la fase, no de sus tareas. El payload ya lleva `notes` de TODAS
+           las fases; marcarla emitiría sus tareas enteras, y el PUT borra por omisión. */
+        f.notes = r.nota;
+        break;
+      }
+
       case "tarea.crear": {
         const f = buscarFase(operacion.phaseId);
         if (!f) {
@@ -1092,6 +1162,13 @@ export function describirOperaciones(
           `«${nombre(o.phaseId)}» pasa a ser de tipo ${String(o.tipo ?? "(sin especificar)").toLowerCase()}` +
           hoy(fase(o.phaseId)?.activityType ?? null, viva ? viva.activityType : undefined, String(viva?.activityType ?? "sin tipo").toLowerCase())
         );
+      }
+      case "fase.nota": {
+        /* «Hoy» es el cronograma de hoy: con la propuesta abierta, la nota viva (o la de la fase nueva,
+           que hoy no existe fuera de la propuesta); sin ella, la de `actuales`, que el turno trae solo
+           si la leyó (`undefined` = no se leyó, y la línea no dice nada de hoy). */
+        const viva = faseViva(o.phaseId);
+        return lineaDeLaNota(nombre(o.phaseId), (o as { nota?: unknown }).nota, viva ? viva.notes : fase(o.phaseId)?.notes);
       }
       case "tarea.crear": {
         /* Misma razón que arriba: el ejecutor acota, así que la línea dice dónde cae. */

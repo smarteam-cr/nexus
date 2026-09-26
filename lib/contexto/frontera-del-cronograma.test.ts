@@ -222,6 +222,22 @@ describe("⭐ las líneas del acuerdo del CHAT pasan por la frontera (paso C, 20
     expect(out[1]).toContain("⚠ revisa: lo lee el cliente y trae un monto");
   });
 
+  it("E4 P1: la NOTA de una fase también la lee el cliente: si copia una frase del material, «⚠ revisa…»", () => {
+    /* `fase.nota` escribe el texto que el cliente lee debajo del nombre de la fase: se mide con la
+       ventana de las NOTAS. La edición que la pone en rojo: sacar «fase.nota» del mapa de campos. */
+    const ops = [
+      {
+        op: "fase.nota",
+        phaseId: "f1",
+        nota: "Importación inicial. La migración de pedidos históricos anteriores a 2024 queda fuera del alcance.",
+      },
+      { op: "fase.nota", phaseId: "f2", nota: "Configuramos el pipeline y lo probamos contigo." },
+    ];
+    const out = lineasConFrontera(["línea 1", "línea 2"], ops, h);
+    expect(out[0]).toBe(`línea 1${avisoDeFronteraEnLaLinea(MOTIVOS_DE_FUGA.copia)}`);
+    expect(out[1]).toBe("línea 2");
+  });
+
   it("sin material, o con largos distintos, devuelve las líneas tal cual", () => {
     expect(lineasConFrontera(LINEAS, OPS, null)).toEqual(LINEAS);
     expect(lineasConFrontera(LINEAS, OPS, sinMaterial)).toEqual(LINEAS);

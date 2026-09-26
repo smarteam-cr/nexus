@@ -1196,15 +1196,22 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
   });
 
   it("#4 · con cambios de fases sin decidir, ni «IA» de una fase ni el acuerdo viejo del chat reemplazan la propuesta", () => {
-    /* La edición que la pone en rojo: sacar la guarda de `submitAssist`, o volver a ofrecer «IA» por
-       fase con una propuesta de estructura en pantalla. */
+    /* La edición que la pone en rojo: sacar la guarda de `submitAssist`, o volver a abrir «Pedir cambio
+       con IA» desde el «IA» de una fase.
+       ⚠ REESCRITA en E4 P1 (2026-09-25), con esta razón: el «IA» de una fase ya no abre el diálogo del
+       modificador (que reemplazaba la propuesta en pantalla): abre el chat con esa fase señalada, y el
+       chat, con una propuesta abierta, la EDITA (E3). Por eso ya no se apaga con una propuesta: lo que
+       se pide es que el Canvas no le pase ningún `onAssistPhase` al Gantt y que el Gantt abra el chat. */
     const assist = tramo("const submitAssist = async (", "const aplicarOperacionesAcordadas");
     // (E1, 2026-09-24: la guarda pregunta si hay un BORRADOR guardado; antes, `structureOnlyProposal`.)
     const iGuarda = assist.indexOf("if (hayBorrador) {");
     expect(iGuarda, "submitAssist no frena").toBeGreaterThan(-1);
     expect(iGuarda).toBeLessThan(assist.indexOf("/timeline/assist"));
     expect(assist.slice(iGuarda, iGuarda + 200)).toContain("fallo: CAMBIOS_DE_FASES_SIN_DECIDIR");
-    expect(canvas).toMatch(/onAssistPhase=\{\s*\(hasAiDetail \? canRegenerateTimeline : canGenerateTimeline\) && !hayBorrador/);
+    expect(canvas, "el «IA» de una fase volvió a abrir el modificador").not.toContain("onAssistPhase");
+    expect(soloCodigo(leer("components/canvas/TimelineGantt.tsx")), "el «IA» de una fase no abre el chat").toContain(
+      "chat.abrirCon(",
+    );
   });
 
   it("#4 · descartar la del modificador no toca el servidor, y el DELETE solo borra la que la pantalla tiene enfrente", () => {

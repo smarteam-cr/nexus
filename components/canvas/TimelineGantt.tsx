@@ -18,7 +18,11 @@
  *     fijarla (label amber cuando falta) o cambiarla (input compacto). Es el
  *     único campo de estructura con control directo; el resto va por IA.
  *
- * readOnly: para la VISTA PREVIA de una propuesta de la IA (sin handlers).
+ * readOnly: para «Ver la propuesta» y para quien no edita.
+ *
+ * «IA» de cada fase (E4 P1): abre el chat del cronograma con esa fase señalada («Sobre la fase «X»»).
+ * Lo ofrece el proveedor del chip que monta CronogramaCanvas (`useChatDeSeccion`): sin proveedor, o
+ * sin chat disponible, no se pinta.
  *
  * Derivados (nunca persistidos): el badge muestra el ESTADO real (pendiente /
  * en curso / hecho); si la semana ya pasó y la tarea no está DONE se marca
@@ -80,6 +84,7 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
 import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
+import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
 
 // ── Tipos (estado de trabajo del padre — key estable, id solo si está persistida) ──
 
@@ -146,7 +151,6 @@ interface Props {
   // preview de propuesta NO lo pasa, así que ahí el chip queda de solo lectura como siempre).
   closeOverride?: string | null;
   onSetCloseOverride?: (isoDate: string) => void;
-  onAssistPhase?: (phase: GanttPhase) => void; // abrir el dialog de IA scopeado a esta fase
   onRegeneratePhase?: (phase: GanttPhase) => void; // regenerar (borrar+rehacer) las tareas IA de esta fase
   kickoffDate?: string | null; // yyyy-mm-dd de la sesión de kickoff — sugerencia del anchor
   // Edición DIRECTA de fases (cuando editable) — además de la barra de IA
@@ -410,7 +414,6 @@ export default function TimelineGantt({
   onSetAnchor,
   closeOverride,
   onSetCloseOverride,
-  onAssistPhase,
   onRegeneratePhase,
   kickoffDate,
   onUpdatePhase,
@@ -433,6 +436,10 @@ export default function TimelineGantt({
   // onRemoveTask removido del Gantt: el borrado de tarea vive en el TaskDetailDrawer.
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /* E4 P1: el «IA» de una fase abre el chat con esa fase señalada. El id que viaja es el de la fase
+     guardada, o la clave `n:` de una fase nueva de la propuesta; una sin guardar no ofrece «IA». */
+  const chat = useChatDeSeccion();
+  const idParaElChat = (p: GanttPhase) => p.id ?? (p.key.startsWith("n:") ? p.key : null);
   // #3 — renombrar inline: el título es TEXTO; al hacer clic se vuelve input (solo esa tarea).
   const [editingTitleKey, setEditingTitleKey] = useState<string | null>(null);
   // Tanda K — "Mantener la mía" silencia el aviso de divergencia hasta la PRÓXIMA sugerencia
@@ -923,13 +930,16 @@ export default function TimelineGantt({
                             ¿repetida?
                           </span>
                         )}
-                        {(onAssistPhase || onRegeneratePhase || (editable && canDelete && onRemovePhase)) && (
+                        {(chat.disponible || onRegeneratePhase || (editable && canDelete && onRemovePhase)) && (
                           <span className="ml-auto flex items-center gap-1 flex-shrink-0">
-                            {onAssistPhase && (
+                            {chat.disponible && idParaElChat(p) && (
                               <button
-                                onClick={(e) => { e.stopPropagation(); onAssistPhase(p); }}
-                                className="flex items-center gap-1 text-[10px] font-semibold text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-300"
-                                title="Editar esta fase con IA"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  chat.abrirCon({ key: `fase:${idParaElChat(p)}`, label: p.name || "(sin nombre)", tipo: "fase" });
+                                }}
+                                className="flex items-center gap-1 text-[10px] font-semibold text-info-ink opacity-0 group-hover:opacity-100 transition-opacity hover:text-fg"
+                                title="Pídele al asistente un cambio en esta fase"
                               >
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
                                 IA
@@ -938,7 +948,7 @@ export default function TimelineGantt({
                             {onRegeneratePhase && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); onRegeneratePhase(p); }}
-                                className="flex items-center gap-1 text-[10px] font-semibold text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-300"
+                                className="flex items-center gap-1 text-[10px] font-semibold text-info-ink opacity-0 group-hover:opacity-100 transition-opacity hover:text-fg"
                                 title="Regenerar (rehacer) las tareas de esta fase con IA"
                               >
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>

@@ -165,14 +165,18 @@ export function marcarFugas<T extends { title: string; notes?: string | null }>(
 }
 
 /**
- * Las operaciones del CHAT cuyo texto lee el cliente, y el campo que lo lleva. El chat escribe
- * títulos de tarea y nombres de fase; nada más de lo que emite llega al cronograma publicado.
+ * Las operaciones del CHAT cuyo texto lee el cliente: el campo que lo lleva y con qué ventana de la
+ * copia se mide. El chat escribe títulos de tarea, nombres de fase y (E4 P1) la nota de una fase;
+ * nada más de lo que emite llega al cronograma publicado.
  */
-const CAMPO_QUE_LEE_EL_CLIENTE: Readonly<Record<string, "titulo" | "nombre">> = {
-  "tarea.crear": "titulo",
-  "tarea.renombrar": "titulo",
-  "fase.crear": "nombre",
-  "fase.renombrar": "nombre",
+const CAMPO_QUE_LEE_EL_CLIENTE: Readonly<
+  Record<string, { campo: "titulo" | "nombre" | "nota"; frontera: CampoDeFrontera }>
+> = {
+  "tarea.crear": { campo: "titulo", frontera: "titulo" },
+  "tarea.renombrar": { campo: "titulo", frontera: "titulo" },
+  "fase.crear": { campo: "nombre", frontera: "titulo" },
+  "fase.renombrar": { campo: "nombre", frontera: "titulo" },
+  "fase.nota": { campo: "nota", frontera: "nota" },
 };
 
 /** El sufijo de la línea marcada. `motivo` sale de `MOTIVOS_DE_FUGA`. */
@@ -187,22 +191,22 @@ export const avisoDeFronteraEnLaLinea = (motivo: string) => ` — ⚠ revisa: lo
  *
  * ⛔ Devuelve EXACTAMENTE una línea por operación, en el mismo orden: `leerAcuerdo` descarta las
  * líneas que no son una por operación y el botón queda apagado (lib/asistente/acuerdo.ts). Solo
- * les agrega un sufijo a las de `tarea.crear`, `tarea.renombrar`, `fase.crear` y `fase.renombrar`
- * cuyo texto cruza la frontera. Sin huellas (sin material), o con largos distintos, las devuelve
- * tal cual.
+ * les agrega un sufijo a las de `tarea.crear`, `tarea.renombrar`, `fase.crear`, `fase.renombrar` y
+ * `fase.nota` cuyo texto cruza la frontera (la nota, con la ventana de las notas). Sin huellas (sin
+ * material), o con largos distintos, las devuelve tal cual.
  */
 export function lineasConFrontera(
   lineas: readonly string[],
-  operaciones: readonly { op?: unknown; titulo?: unknown; nombre?: unknown }[],
+  operaciones: readonly { op?: unknown; titulo?: unknown; nombre?: unknown; nota?: unknown }[],
   h: HuellasDeFrontera | null,
 ): string[] {
   if (!h || !h.activa || lineas.length !== operaciones.length) return [...lineas];
   return lineas.map((linea, i) => {
     const o = operaciones[i];
-    const campo = typeof o?.op === "string" ? CAMPO_QUE_LEE_EL_CLIENTE[o.op] : undefined;
-    if (!campo) return linea;
-    const texto = o[campo];
-    const motivo = typeof texto === "string" ? fugaEn(texto, h, "titulo") : null;
+    const entrada = typeof o?.op === "string" ? CAMPO_QUE_LEE_EL_CLIENTE[o.op] : undefined;
+    if (!entrada) return linea;
+    const texto = o[entrada.campo];
+    const motivo = typeof texto === "string" ? fugaEn(texto, h, entrada.frontera) : null;
     return motivo ? `${linea}${avisoDeFronteraEnLaLinea(motivo)}` : linea;
   });
 }

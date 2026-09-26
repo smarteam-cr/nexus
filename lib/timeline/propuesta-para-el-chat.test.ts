@@ -15,10 +15,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   projectTimeline: { findUnique: vi.fn() },
   agentRun: { findUnique: vi.fn() },
+  // E4 P1: la nota de cada fase del proyecto (`notasDeLasFases`).
+  timelinePhase: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 
-import { leerPropuestaParaElChat, porQueDeSoloLectura, propuestaParaElChat } from "./propuesta-para-el-chat";
+import { leerPropuestaParaElChat, notasDeLasFases, porQueDeSoloLectura, propuestaParaElChat } from "./propuesta-para-el-chat";
 import { SELECT_DE_FASES_CON_TAREAS } from "./borrador-del-detalle";
 import {
   claveDeTareaQueSeVa,
@@ -186,5 +188,26 @@ describe("la lectura de la base", () => {
     expect(p?.modo).toBe("solo-lectura");
     expect(p?.porQue).toBe("tareas-armando");
     expect(p?.token).toBe("run-3");
+  });
+});
+
+describe("E4 P1 · la nota de cada fase, para el chat", () => {
+  it("⛔ se leen SOLO las fases de este proyecto, y solo su id y su nota", async () => {
+    /* El id de la fase señalada con «IA» llega del navegador: la lectura filtra por proyecto, así una key
+       ajena nunca encuentra una nota. Y no trae nada más que la nota. La edición que la pone en rojo:
+       buscar las fases por id sin el proyecto, o sumar campos al select. */
+    db.timelinePhase.findMany.mockResolvedValue([
+      { id: "a", notes: "Arrancamos con tu equipo." },
+      { id: "b", notes: null },
+    ]);
+    const notas = await notasDeLasFases("p1");
+    expect(db.timelinePhase.findMany).toHaveBeenCalledWith({
+      where: { timeline: { projectId: "p1" } },
+      select: { id: true, notes: true },
+    });
+    expect([...notas]).toEqual([
+      ["a", "Arrancamos con tu equipo."],
+      ["b", null],
+    ]);
   });
 });

@@ -83,6 +83,21 @@ describe("la cascada al desmarcar", () => {
     expect([...arrastreAlDesmarcar(conPropuesta, new Set([4]))]).toEqual([4]);
   });
 
+  it("E4 P1: desmarcar la fase nueva se lleva la NOTA que se le escribe en el mismo lote", () => {
+    /* `fase.nota` nombra la fase por su `phaseId`, igual que las tareas: sobre el `ref` de un
+       `fase.crear` del lote, depende de él. La edición que la pone en rojo: resolver la dependencia por
+       el nombre de la fase en vez de por su `ref` (la nota quedaría marcada apuntando a una fase que no
+       se crea, y el rechazo tumbaría el lote). */
+    const lote: OperacionDelChat[] = [
+      { op: "fase.crear", nombre: "Piloto", semanas: 1, ref: "piloto" },
+      { op: "fase.nota", phaseId: "piloto", nota: "Probamos con 5 usuarios." },
+      { op: "fase.nota", phaseId: "f2", nota: "Configuramos tu Sales Hub." },
+    ];
+    expect(dependenciasDeOperaciones(lote).get(1)).toEqual([0]);
+    expect(dependenciasDeOperaciones(lote).get(2)).toEqual([]);
+    expect([...arrastreAlDesmarcar(lote, new Set([0]))].sort()).toEqual([0, 1]);
+  });
+
   it("⚠ y la cascada llega hasta el final aunque la cadena tenga dos saltos", () => {
     /* Hoy la cadena es de un salto. Esto congela que el día que no lo sea no falle en silencio:
        la fase B se crea con un ref, algo la nombra, y desmarcar A tiene que llevarse las dos. */

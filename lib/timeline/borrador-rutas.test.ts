@@ -221,20 +221,45 @@ describe("POST /timeline/borrador/aplicar — la versión que vio el CSE", () =>
     expect(db.$transaction).not.toHaveBeenCalled();
   });
 
-  it("una versión que no es un entero: 400; sin versión (pestaña vieja) o con la misma, sigue a la transacción", async () => {
+  it("una versión que no es un entero: 400; con la misma, sigue a la transacción", async () => {
+    /* ⚠ REESCRITA en E4 P1 (2026-09-25), con esta razón: antes un pedido SIN versión («pestaña vieja»)
+       también seguía a la transacción. Desde la valla de versión, con un v1 que tiene versión, un pedido
+       sin ella responde 409 PROPUESTA_CAMBIO (su prueba, abajo). Sin versión sigue valiendo solo si lo
+       guardado no la tiene. */
     db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposal: v1(), pendingProposalRunId: "run-1" });
     const mal = await aplicarPOST(pedir({ token: "run-1", sin: [], huella: "h", version: "5" }), delProyecto);
     expect(mal.status).toBe(400);
     expect(db.$transaction).not.toHaveBeenCalled();
 
     db.$transaction.mockRejectedValue(new ErrorAlAplicar("PLAN_CAMBIO", "otra lista"));
-    for (const version of [undefined, null, 5]) {
+    const res = await aplicarPOST(pedir({ token: "run-1", sin: [], huella: "h", version: 5 }), delProyecto);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "PLAN_CAMBIO" });
+    // Un v1 guardado SIN versión (anterior a E2a): sin versión en el pedido, decide el token.
+    const { version: _sinVersion, ...sinVersion } = v1();
+    void _sinVersion;
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposal: sinVersion, pendingProposalRunId: "run-1" });
+    const viejo = await aplicarPOST(pedir({ token: "run-1", sin: [], huella: "h" }), delProyecto);
+    expect(await viejo.json()).toMatchObject({ error: "PLAN_CAMBIO" });
+    expect(db.$transaction).toHaveBeenCalledTimes(2);
+    expect(db.$transaction.mock.calls[0][1]).toEqual({ maxWait: 20000, timeout: 60000 });
+  });
+
+  it("⛔ E4 P1 · la valla: con un v1 que tiene versión, un pedido SIN versión es otra lista: 409 PROPUESTA_CAMBIO, sin escribir", async () => {
+    /* Durante la conversión de las propuestas viejas, una pestaña que todavía muestra el formato viejo
+       manda `version: null`. Sin la valla caía en PLAN_CAMBIO, cuya rama hace `load()` y no trae la
+       propuesta nueva: un bucle de 409. Con el 409 PROPUESTA_CAMBIO, la pantalla trae la nueva. La
+       edición que la pone en rojo: volver a `version !== null &&` en `otraVersion`. */
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposal: v1(), pendingProposalRunId: "run-1" });
+    db.$transaction.mockRejectedValue(new ErrorAlAplicar("PLAN_CAMBIO", "otra lista"));
+    for (const version of [undefined, null]) {
       const res = await aplicarPOST(pedir({ token: "run-1", sin: [], huella: "h", version }), delProyecto);
       expect(res.status, `version ${String(version)}`).toBe(409);
-      expect(await res.json()).toMatchObject({ error: "PLAN_CAMBIO" });
+      expect(await res.json(), `version ${String(version)}`).toMatchObject({ error: "PROPUESTA_CAMBIO" });
     }
-    expect(db.$transaction).toHaveBeenCalledTimes(3);
-    expect(db.$transaction.mock.calls[0][1]).toEqual({ maxWait: 20000, timeout: 60000 });
+    expect(db.$transaction, "abrió la transacción con una versión que no es la guardada").not.toHaveBeenCalled();
+    expect(db.projectTimeline.updateMany).not.toHaveBeenCalled();
+    expect(db.projectTimeline.update).not.toHaveBeenCalled();
   });
 
   it("el permiso de tocar tareas se pregunta solo si la propuesta trae tareas", async () => {

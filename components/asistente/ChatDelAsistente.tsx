@@ -991,12 +991,23 @@ export default function ChatDelAsistente({
         {seccionReferida && (
           <div className="mb-2 flex items-center gap-1.5 text-xs">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-info-line bg-info-surface px-2 py-1 text-info-ink">
-              Sobre «{seccionReferida.label}»
+              {/* E4 P1: el «IA» de una fase del Gantt fija una FASE, no una sección. */}
+              {seccionReferida.tipo === "fase"
+                ? `Sobre la fase «${seccionReferida.label}»`
+                : `Sobre «${seccionReferida.label}»`}
               <button
                 type="button"
                 onClick={soltarSeccion}
-                aria-label="Dejar de hablar solo de esta sección"
-                title="Dejar de hablar solo de esta sección"
+                aria-label={
+                  seccionReferida.tipo === "fase"
+                    ? "Dejar de hablar solo de esta fase"
+                    : "Dejar de hablar solo de esta sección"
+                }
+                title={
+                  seccionReferida.tipo === "fase"
+                    ? "Dejar de hablar solo de esta fase"
+                    : "Dejar de hablar solo de esta sección"
+                }
                 className="text-info-ink/70 hover:text-info-ink"
               >
                 ✕

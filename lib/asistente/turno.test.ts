@@ -111,6 +111,19 @@ describe("el asistente tiene UNA herramienta y no escribe", () => {
     ).toEqual([]);
   });
 
+  it("E4 P1: `nota` es un texto o null (null la quita), y la tool la describe como texto completo", () => {
+    /* `fase.nota` REEMPLAZA la nota que lee el cliente. La edición que la pone en rojo: declarar `nota`
+       solo como texto (el modelo no podría quitarla) o sacarla de la tool (no podría pedirla). */
+    const i = FUENTE.indexOf("const TOOL_ACUERDO:");
+    const bloque = FUENTE.slice(i, FUENTE.indexOf('required: ["resumen"', i));
+    const j = bloque.indexOf("nota: {");
+    expect(j, "la tool no declara `nota`").toBeGreaterThan(-1);
+    const prop = bloque.slice(j, bloque.indexOf("},", j));
+    expect(prop).toContain('type: ["string", "null"]');
+    expect(prop).toContain("null la quita");
+    expect(bloque).toContain("fase.nota: REEMPLAZA la nota de la fase");
+  });
+
   it("y el prompt le prohíbe decir que aplicó algo", () => {
     /* El daño de que lo diga no es cosmético: el CSE cierra la pantalla creyendo que el cambio
        está hecho. La edición que la pone en rojo: sacar esa línea del prompt. */
@@ -189,6 +202,11 @@ describe("el asistente habla español neutro, no rioplatense", () => {
     sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/propuesta-del-chat.ts"), "utf8")),
     sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/timeline/operar-sobre-el-borrador.ts"), "utf8")),
     sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/textos-del-acuerdo.ts"), "utf8")),
+    /* ⚠ SUMADOS en E4 P1 (2026-09-25): la línea de alcance (la de la fase señalada con «IA» va en el
+       texto de cada turno y se relee en el hilo) y el bloque de la nota de esa fase, con los motivos de
+       lo que no se registra («no leí entera la nota…»), que quedan en el hilo. */
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/alcance.ts"), "utf8")),
+    sinComentarios(fs.readFileSync(path.join(RAIZ, "lib/asistente/fase-senalada.ts"), "utf8")),
     /* ⚠ SUMADOS 2026-08-23: los `avisoDelChat` y los `brief` de las defs se interpolan al contexto
        —`firmaDeSeccion` los pega detrás de cada sección— así que también son texto que el modelo
        lee. Vivían fuera del alcance de esta guarda y ahí se había colado un «podés». */
@@ -235,6 +253,11 @@ describe("el asistente habla español neutro, no rioplatense", () => {
     "agregá",
     "quitá",
     "revisá",
+    /* ⚠ SUMADAS en E4 P1: el bloque de la nota de una fase le pide a la persona que TOQUE «IA» en la
+       fase y se lo PIDA de nuevo; el voseo de esas dos es el que se colaría ahí. */
+    "tocá",
+    "pedile",
+    "pedímelo",
   ];
 
   it("⛔ ni una forma de voseo en el texto que el modelo copia", () => {
@@ -947,7 +970,10 @@ describe("⭐ E3 P5: el chat con una propuesta abierta", () => {
     expect(FUENTE).toContain('const soloLectura = modo === "solo-lectura" || sinLeer;');
     expect(FUENTE).toContain("const congelado = soloLectura && caidaPorToken === null;");
     expect(FUENTE).toContain("congelado\n      ? { vivas: [...ops], caidas: [] }");
-    expect(FUENTE).toContain("opsNuevas.filter((o) => !esOperacionDePropuesta(o)),");
+    /* ⚠ ACTUALIZADA en E4 P1 (2026-09-25), con esta razón: lo que se registra ya no es `opsNuevas` crudo
+       sino lo que dejó la guarda de las notas (`opsQueSeRegistran`, sin las `fase.nota` que el modelo no
+       leyó enteras; su prueba, en loop-de-operaciones.test.ts). Sin propuesta, lo de ella sigue sin entrar. */
+    expect(FUENTE).toContain("opsQueSeRegistran.filter((o) => !esOperacionDePropuesta(o)),");
     expect(FUENTE).toContain("AVISO_SIN_PROPUESTA_ABIERTA");
   });
 });

@@ -26,6 +26,9 @@ const PROVEEDOR = "components/asistente/chat-de-seccion.tsx";
 const PANEL = "components/clients/ProjectCanvasPanel.tsx";
 const CHAT = "components/asistente/ChatDelAsistente.tsx";
 const HERRAMIENTAS = "components/business-cases/SectionTools.tsx";
+const ALCANCE = "lib/asistente/alcance.ts";
+const GANTT = "components/canvas/TimelineGantt.tsx";
+const CRONOGRAMA = "components/canvas/CronogramaCanvas.tsx";
 
 describe("⭐ el botón vive en el motor, así que está en los ocho documentos", () => {
   it("el chrome de cada sección lo pinta", () => {
@@ -113,9 +116,13 @@ describe("⭐ la sección referenciada sobrevive al turno siguiente", () => {
 
   it("⚠ y la línea dice que es una PISTA, no un límite", () => {
     /* Si el chip se leyera como reja, el modelo se negaría a un pedido razonable sobre otra
-       sección — y la persona va a escribir sobre otra sección sin cerrar el chip. */
-    const src = leer(PROVEEDOR);
-    expect(src).toContain("no un límite");
+       sección — y la persona va a escribir sobre otra sección sin cerrar el chip.
+       ⚠ ACTUALIZADA en E4 P1 (2026-09-25), con esta razón: la línea se mudó a `lib/asistente/alcance.ts`
+       (puro, para probarla; el proveedor la re-exporta) y suma la de una fase. Las dos lo dicen. */
+    const src = leer(ALCANCE);
+    expect(src).toContain("Es de dónde vino el pedido, no un límite: si lo que sigue habla de otra sección");
+    expect(src).toContain("es de dónde vino el pedido, no un límite; si habla de otra fase");
+    expect(leer(PROVEEDOR), "el proveedor dejó de re-exportar la línea").toContain('} from "@/lib/asistente/alcance";');
   });
 
   it("el chip se puede sacar sin cerrar el chat", () => {
@@ -138,5 +145,46 @@ describe("⛔ el cuadrito que escribía al instante ya no está", () => {
     ).toBe(false);
     /* Lo determinístico se queda: vaciar y borrar no necesitan una conversación. */
     expect(src, "se fue «Limpiar», que no es IA").toContain("🗑 Limpiar");
+  });
+});
+
+describe("⭐ E4 P1 · el «IA» de una fase abre el chat del cronograma con esa fase señalada", () => {
+  const sinComentarios = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " ")).replace(/^\s*\/\/.*$/gm, "");
+
+  it("el Gantt lo pide al proveedor del chip, no a un diálogo", () => {
+    /* La edición que la pone en rojo: volver a `onAssistPhase` (el diálogo de «Pedir cambio con IA»), o
+       pintar el «IA» sin preguntar si hay chat (se ofrecería sin nadie que lo abra). */
+    const gantt = sinComentarios(leer(GANTT));
+    expect(gantt).toContain("useChatDeSeccion()");
+    expect(gantt).toContain("chat.disponible &&");
+    expect(gantt).toContain("abrirCon(");
+    expect(gantt).toContain('tipo: "fase"');
+    expect(gantt, "volvió el «IA» que abre el diálogo").not.toContain("onAssistPhase");
+  });
+
+  it("⛔ el cronograma monta SU proveedor, envolviendo el Gantt y el chat, con un `onAbrir` estable", () => {
+    /* Sin el proveedor propio, el «IA» no abre nada: el del panel abre el cajón de los documentos, que
+       en el cronograma no se monta (y dejaba colar el chip de otro documento). Una flecha inline como
+       `onAbrir` rehace `abrirCon` en cada render. La edición que la pone en rojo: sacar el proveedor
+       anidado, o pasar una flecha inline. */
+    const canvas = sinComentarios(leer(CRONOGRAMA));
+    const abre = canvas.indexOf("<ChatDeSeccionProvider onAbrir={abrirElChatDesdeUnaFase}>");
+    const gantt = canvas.indexOf("<TimelineGantt", abre);
+    const chat = canvas.indexOf("<ChatDelAsistente", gantt);
+    const cierra = canvas.indexOf("</ChatDeSeccionProvider>", chat);
+    expect(abre, "el cronograma no monta su proveedor del chip").toBeGreaterThan(-1);
+    expect(gantt).toBeGreaterThan(abre);
+    expect(chat).toBeGreaterThan(gantt);
+    expect(cierra).toBeGreaterThan(chat);
+    expect(canvas).toContain("<ChatDeSeccionDisponible cuando={canEdit && phases.length > 0} />");
+    expect(canvas).toMatch(/const abrirElChatDesdeUnaFase = useCallback\(\(\) => \{\s*setAperturaAutomatica\(false\);\s*setChatAbierto\(true\);\s*\}, \[\]\);/);
+    expect(canvas, "el Canvas volvió a abrir el diálogo desde una fase").not.toContain("onAssistPhase");
+  });
+
+  it("el chip dice que es una fase", () => {
+    const chat = leer(CHAT);
+    expect(chat).toContain("Sobre la fase «${seccionReferida.label}»");
+    expect(chat).toContain("Dejar de hablar solo de esta fase");
   });
 });

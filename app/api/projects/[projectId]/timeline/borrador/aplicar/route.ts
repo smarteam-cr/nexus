@@ -10,7 +10,8 @@
  *     sin: string[],          ← las claves que desmarcó (viven en la memoria de la pantalla)
  *     huella: string,         ← la del plan que vio (`planDeAplicacion`, lib/timeline/borrador.ts)
  *     foto?: { ancla, fases }, ← la foto contra la que la pantalla convirtió el formato viejo
- *     version?: number | null, ← la versión del borrador que vio (sin ella, una pestaña vieja: como E1)
+ *     version?: number | null, ← la versión del borrador que vio: obligatoria con un v1 (sin ella, la
+ *                                pestaña tiene otro formato en pantalla → 409 y trae el nuevo)
  *     forzar?: string[] }     ← E2c: las fases desfasadas que aplica sin recalcular («Aplicar de todos modos»)
  *
  * ⭐ El que decide es el servidor: dentro de UNA transacción (lib/timeline/escribir-estructura.ts)
@@ -102,8 +103,8 @@ export async function POST(
   if (body.foto !== undefined && body.foto !== null && !foto) {
     return NextResponse.json({ error: "La foto del cronograma no tiene forma válida." }, { status: 400 });
   }
-  /* La versión del borrador que vio el CSE (E2a). Sin ella —una pestaña de antes—, como E1: decide
-     el token. */
+  /* La versión del borrador que vio el CSE (E2a). Desde E2a toda pantalla la manda con un v1; si falta,
+     la valla de abajo responde 409 (E4 P1). */
   if (
     body.version !== undefined &&
     body.version !== null &&
@@ -135,9 +136,13 @@ export async function POST(
   /* Atajo legible antes de abrir la transacción: la que se revisó ya no es la guardada. Con un
      borrador-v1, también si el CSE vio otra VERSIÓN (se le fusionaron las tareas, o se le volvieron a
      pedir): aplicar esa versión vieja es otra lista que la que tiene enfrente, y el 409 trae la nueva
-     (sin esto, la pantalla se quedaba con la vieja y cada «Aplicar» era otro 409 de PLAN_CAMBIO). */
+     (sin esto, la pantalla se quedaba con la vieja y cada «Aplicar» era otro 409 de PLAN_CAMBIO).
+     E4 P1 · la valla: con un v1 que tiene versión, un pedido SIN versión también es otra lista. Es una
+     pestaña que muestra el formato viejo mientras se convierte (manda `version: null`): sin la valla
+     caía en PLAN_CAMBIO, cuya rama hace `load()` y no trae la propuesta, y quedaba en un bucle de 409. */
+  const guardada = versionDelBorrador(tl.pendingProposal);
   const otraVersion =
-    version !== null && esBorradorV1(tl.pendingProposal) && versionDelBorrador(tl.pendingProposal) !== version;
+    esBorradorV1(tl.pendingProposal) && guardada !== null && (version === null || guardada !== version);
   if (tl.pendingProposal === null || (tl.pendingProposalRunId ?? null) !== token || otraVersion) {
     return NextResponse.json({ error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO }, { status: 409 });
   }
