@@ -16,14 +16,17 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  claveDeFaseQueSeVa,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   FORMATO_BORRADOR,
   fotoDeTarea,
+  necesitaPermisoDeIa,
   planDeAplicacion,
   proyectar,
   type Borrador,
   type Cambio,
+  type CambioDeOrden,
   type CambioFaseCambia,
   type CambioFaseNueva,
   type CambioTareaCambia,
@@ -34,8 +37,9 @@ import {
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
-import { motivoDeTareaProtegida, type Operacion } from "./operaciones";
+import { describirOperaciones, motivoDeTareaProtegida, type Operacion } from "./operaciones";
 import {
+  fasesDeLaPropuesta,
   operarSobreElBorrador,
   RECHAZO_CLAVE_NO_ESTA,
   RECHAZO_FASE_NO_ESTA,
@@ -358,6 +362,36 @@ describe("2 · crear y mover fases", () => {
     expect(ordenDe(deVuelta)).toEqual(["a", "b", "c", "n:piloto"]);
     expect(cambioDe(deVuelta, "orden")).toBeUndefined();
   });
+
+  it("⛔ mover una fase mientras otra se va: la que se va queda nombrada en su lugar, por si al final se queda", () => {
+    /* Revisión de E3 (#4). «Integraciones» se va entera y no está en la propuesta como se ve. La edición que
+       la pone en rojo: armar el orden solo con las fases que se ven (no la nombraría y, si al final se queda
+       —la dejas como estaba, o se rescata una tarea suya—, terminaría al final del cronograma sin que nadie
+       lo pidiera). */
+    const cuatro: Vivo = {
+      ancla: null,
+      fases: [
+        fase("a", "Kick-off", 1, [tarea("a2", "Presentar el equipo", 0)]),
+        fase("b", "Diseño", 2, [B1, B2]),
+        fase("x", "Integraciones", 2, [tarea("x1", "Conectar el ERP", 0)]),
+        fase("c", "Pruebas", 3, [C1, C2]),
+      ],
+    };
+    const vacio: Borrador = { ...BORRADOR, cambios: [], tareasArmadasPara: {} };
+    const r = operar(
+      [
+        { op: "fase.borrar", phaseId: "x" },
+        { op: "fase.mover", phaseId: "a", posicion: 2 },
+      ],
+      { vivo: cuatro, borrador: vacio },
+    );
+    sinRechazos(r);
+    expect(ordenDe(r, cuatro)).toEqual(["b", "c", "a"]);
+    expect((cambioDe(r, "orden") as CambioDeOrden).a, "el orden no nombra la fase que se va").toEqual(["b", "x", "c", "a"]);
+    // Si al final se queda, vuelve a su lugar: detrás de «Diseño», no al final.
+    const seQueda = proyectar(cuatro, r.borrador, [...r.excluidos, claveDeFaseQueSeVa("x")]).fases.map((f) => f.clave);
+    expect(seQueda, "la fase que se queda terminó al final").toEqual(["b", "x", "c", "a"]);
+  });
 });
 
 describe("3 · quitar una fase", () => {
@@ -596,6 +630,60 @@ describe("6 · las tareas nuevas, crear, y las semanas de una fase", () => {
     expect(fuera.rechazadas).toEqual([{ indice: 1, motivo: RECHAZO_TAREA_NUEVA_FUERA }]);
   });
 
+  it("⛔ mudar una nueva de la IA a otra fase la deja de la IA: su vara, su «por validar», y fuera del cierre de E2c", () => {
+    /* Revisión de E3 (#1). Las ediciones que la ponen en rojo: pasarla a `porChat` (se aplicaría sin la vara
+       de la IA y sin «por validar», aunque la barra la siga pintando con la marca), no marcarla
+       `mudadaPorElChat` o que el cierre no la salte (en «Kick-off», que no tiene forma armada, chocaría). */
+    const r = operar([{ op: "tarea.mover-fase", taskId: "t:c-1", phaseId: "a", semana: 0 }]);
+    sinRechazos(r);
+    const mudada = cambioDe(r, NUEVA_C.clave) as CambioTareaNueva;
+    expect(mudada).toEqual({ ...NUEVA_C, fase: "a", tarea: { ...NUEVA_C.tarea, weekIndex: 0 }, retocada: true, mudadaPorElChat: true });
+    expect(necesitaPermisoDeIa(mudada), "se aplicaría sin la vara de la IA").toBe(true);
+    expect(estadoDe(r, NUEVA_C.clave)?.estado, "el cierre de E2c la hizo chocar").toBe("aplica");
+    const escrita = planDe(r).escrituras.tareas.nuevas.find((n) => n.clave === NUEVA_C.clave);
+    expect(escrita?.tarea.needsValidation, "perdió «por validar»").toBe(true);
+    expect(escrita?.porChat).toBeUndefined();
+
+    // A una fase nueva la sigue, como lo del chat: desmarcada la fase, queda fuera con ella.
+    const aPiloto = operar([{ op: "tarea.mover-fase", taskId: "t:c-1", phaseId: "n:piloto" }]);
+    sinRechazos(aPiloto);
+    expect(
+      planDeAplicacion(VIVO, aPiloto.borrador, [...aPiloto.excluidos, "n:piloto"]).items.find((it) => it.cambio.clave === NUEVA_C.clave),
+      "se aplicaría en una fase nueva que no se crea",
+    ).toMatchObject({ estado: "excluido", dependeDe: "n:piloto" });
+
+    // A su misma fase es mover de semana (retocada y validada, sin mudanza); sin semana, no cambia nada.
+    const misma = operar([{ op: "tarea.mover-fase", taskId: "t:c-1", phaseId: "c", semana: 1 }]);
+    sinRechazos(misma);
+    expect(cambioDe(misma, NUEVA_C.clave)).toEqual(cambioDe(operar([{ op: "tarea.mover-semana", taskId: "t:c-1", semana: 1 }]), NUEVA_C.clave));
+    expect(cambioDe(misma, NUEVA_C.clave)).not.toHaveProperty("mudadaPorElChat");
+    expect(operar([{ op: "tarea.mover-fase", taskId: "t:c-1", phaseId: "c" }]).cambio).toBe(false);
+  });
+
+  it("⛔ la línea de «mover de fase» dice la semana donde la deja el ejecutor (con la propuesta abierta)", () => {
+    /* Revisión de E3 (#3). La edición que la pone en rojo: que la línea diga la semana solo si viene, o sin
+       acotarla (sin semana la tarea cae en la 1; la 7 en una fase de 2 cae en la 2; a su propia fase sin
+       semana, se queda en la suya). */
+    const ops: Operacion[] = [
+      { op: "tarea.mover-fase", taskId: "c2", phaseId: "b" },
+      { op: "tarea.mover-fase", taskId: "c1", phaseId: "b", semana: 6 },
+      { op: "tarea.mover-fase", taskId: "t:c-1", phaseId: "n:piloto" },
+      { op: "tarea.mover-fase", taskId: "b2", phaseId: "b" },
+      { op: "tarea.mover-fase", taskId: "t:b-1", phaseId: "b", semana: 9 },
+    ];
+    const propuesta = { vivo: VIVO, tituloDeClave: () => null, confirmacion: "" };
+    const antes = fasesDeLaPropuesta(proyectar(VIVO, BORRADOR, []));
+    for (const o of ops) {
+      const r = operar([o]);
+      sinRechazos(r);
+      const donde = proyectar(VIVO, r.borrador, r.excluidos)
+        .fases.flatMap((f) => f.tareas)
+        .find((t) => t.clave === (o as { taskId: string }).taskId)!;
+      const [linea] = describirOperaciones(antes, [o], { propuesta });
+      expect(linea, JSON.stringify(o)).toMatch(new RegExp(`, semana ${donde.weekIndex + 1} — conserva su estado$`));
+    }
+  });
+
   it("dueño y tipo: en una viva van a su cambio; en una nueva, a su contenido; un valor fuera del vocabulario se rechaza", () => {
     const r = operar([
       { op: "tarea.duenio", taskId: "c2", duenio: "CLIENTE" },
@@ -681,5 +769,19 @@ describe("7 · las casillas, el arranque y todo o nada", () => {
     expect(r.excluidos).toEqual([NUEVA_B.clave]);
     expect(r.avisos).toEqual([]);
     expect(r.cambio).toBe(false);
+  });
+
+  it("⛔ todo o nada, operación por operación: una que escribe y DESPUÉS se rechaza no contamina la siguiente", () => {
+    /* Revisión de E3 (#27). `fase.borrar` de una fase que ya arrancó escribe (su `fase-se-va`, y deja fuera
+       lo de la IA en ella) y recién después se rechaza. El chat, en seco, depende de esto para decir cuáles
+       no pasan. La edición que la pone en rojo: no volver al estado de antes de cada rechazada (la siguiente
+       se evaluaría sobre lo escrito, y el chat descartaría con un motivo falso un cambio que sí pasaba). */
+    const arranco = conFase("b", { status: "IN_PROGRESS" });
+    const renombrar: Operacion = { op: "tarea.renombrar", taskId: "t:b-1", titulo: "Mapear procesos de venta y posventa" };
+    const r = operar([{ op: "fase.borrar", phaseId: "b" }, renombrar], { vivo: arranco });
+    expect(r.rechazadas).toEqual([{ indice: 0, motivo: "la fase ya arrancó: se queda" }]);
+    expect(r.borrador).toBe(BORRADOR);
+    // Sola, la segunda pasa: el único rechazo es el de la primera.
+    sinRechazos(operar([renombrar], { vivo: arranco }));
   });
 });

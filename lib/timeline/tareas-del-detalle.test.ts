@@ -632,4 +632,31 @@ describe("7 · E3: lo que dictó el chat sobrevive a las fusiones de la IA", () 
     expect(b.ajustadasPorElChat).toEqual({ otra: { nombre: "Otra", semanas: 1 } });
     expect(b.excluidos).toEqual(["tarea:b2:se-va"]);
   });
+
+  it("⛔ lo que el chat retocó en una tarea nueva de la IA sobrevive a las dos fusiones, como lo del chat", () => {
+    /* Revisión de E3 (#2). El chat le cambió el título (quedó `retocada`, no `porChat`) y dijo «quedó en la
+       propuesta». La edición que la pone en rojo: conservar solo lo `porChat` (el recálculo de su fase, o
+       una vuelta del paso 2, la reemplazaría por una nueva de la IA y el cambio se perdería sin aviso). */
+    const RETOCADA: CambioTareaNueva = {
+      ...DE_LA_IA_ANTES,
+      clave: "t:ia-retocada",
+      tarea: { ...DE_LA_IA_ANTES.tarea, title: "Revisión conjunta con el cliente" },
+      retocada: true,
+    };
+    const conRetocada: Borrador = { ...CON_CHAT, cambios: [...BASE.cambios, DE_LA_IA_ANTES, RETOCADA, DEL_CHAT_NUEVA] };
+    const recalculadas: CambioTareaNueva[] = [{ ...DE_LA_IA_ANTES, clave: "t:ia-nueva", tarea: { ...DE_LA_IA_ANTES.tarea, title: "Pruebas guiadas" } }];
+    const mezcla = mezclarTareasDeFases(conRetocada.cambios, recalculadas, new Set(["c"]));
+    expect(mezcla.map((c) => c.clave), "el recálculo se llevó la retocada").toEqual([
+      ...BASE.cambios.map((c) => c.clave),
+      "t:ia-nueva",
+      "t:ia-retocada",
+      "t:del-chat",
+    ]);
+    expect(mezcla.find((c) => c.clave === RETOCADA.clave)).toEqual(RETOCADA);
+
+    const b = fusionarDetalle(conRetocada, cambios(salida([{ id: "c", tasks: [{ title: "Pruebas de aceptación", weekIndex: 3 }] }]), { borrador: conRetocada }), "run-2");
+    const claves = b.cambios.map((c) => c.clave);
+    expect(claves.slice(0, 4), "el paso 2 se llevó la retocada").toEqual(["fase:c:durationWeeks", PILOTO.clave, "t:ia-retocada", "t:del-chat"]);
+    expect(claves, "sobrevivió una tarea de la IA de antes").not.toContain("t:ia-vieja");
+  });
 });

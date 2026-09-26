@@ -47,6 +47,7 @@ import {
   jsonCanonico,
   mismaForma,
   normalizarExcluidos,
+  ordenConCambio,
   planDeAplicacion,
   proyectarConPlan,
   type Borrador,
@@ -257,6 +258,20 @@ const valorDeFase = (f: FaseViva, campo: CampoDeFase): ValorDeCampo => {
 };
 const valorDeTarea = (t: TareaDelVivo, campo: CampoDeTarea): string | number | null =>
   campo === "title" ? t.title : campo === "weekIndex" ? t.weekIndex : campo === "party" ? (t.party ?? null) : (t.type ?? null);
+/**
+ * `pedido` (las fases vivas que se ven, en el orden pedido) con las vivas que no se ven (se van enteras),
+ * cada una detrás de la que tiene delante en `deHoy`, o al principio si no tiene ninguna.
+ */
+function conLasQueNoSeVen(pedido: readonly string[], deHoy: readonly string[]): string[] {
+  const out = [...pedido];
+  deHoy.forEach((id, j) => {
+    if (out.includes(id)) return;
+    let k = j - 1;
+    while (k >= 0 && !out.includes(deHoy[k])) k--;
+    out.splice(k < 0 ? 0 : out.indexOf(deHoy[k]) + 1, 0, id);
+  });
+  return out;
+}
 
 /**
  * ⭐ Edita la propuesta con lo que acordó el chat. `vivo`: el cronograma de ahora, CON tareas y el estado
@@ -710,8 +725,13 @@ export function operarSobreElBorrador(i: {
     pedido.splice(destino, 0, clave);
     if (mismaLista(pedido, antes)) return null; // ya está ahí
     const idsVivos = vivo.fases.map((x) => x.id);
-    const existentes = pedido.filter((k) => fasePorId.has(k));
     const orden = cambios.find((c): c is CambioDeOrden => c.tipo === "orden");
+    /* Revisión de E3: el orden nombra TODAS las fases vivas. Una que se va entera no está en la propuesta
+       como se ve; si al final se queda (se deja como estaba, o se rescata una tarea suya), sin nombrarla
+       iría al final del cronograma. Va en su lugar de ahora: detrás de la que tiene delante en el orden
+       que se ve hoy (el cambio de orden marcado, o el vivo). */
+    const deHoy = orden && m.items.get(orden.clave)?.estado === "aplica" ? ordenConCambio(idsVivos, orden) : idsVivos;
+    const existentes = conLasQueNoSeVen(pedido.filter((k) => fasePorId.has(k)), deHoy);
     if (mismaLista(existentes, idsVivos.filter((id) => existentes.includes(id)))) {
       // Las existentes quedan en el orden de hoy: el cambio de orden sobra.
       if (orden) {
@@ -858,7 +878,8 @@ export function operarSobreElBorrador(i: {
     return null;
   };
 
-  /** `tarea.mover-fase`: una viva se MUDA (conserva su estado); una nueva cambia de fase y semana. */
+  /** `tarea.mover-fase`: una viva se MUDA (conserva su estado); una nueva cambia de fase y semana (una de
+   *  la IA sigue siendo de la IA: `retocada` + `mudadaPorElChat`). A su misma fase, es mover de semana. */
   const moverTarea = (o: Extract<Operacion, { op: "tarea.mover-fase" }>, m: Mirada): string | null => {
     const r = resolverTarea(o.taskId);
     if (typeof r === "string") return r;
@@ -878,11 +899,17 @@ export function operarSobreElBorrador(i: {
     }
     const veto = vetoDeTareaNueva(r.cambio, m);
     if (veto) return veto;
-    /* Una nueva de la IA que el chat muda de fase pasa a ser del chat: ya no es de la forma para la que se
-       armó (si no, el cierre de E2c la haría chocar en una fase sin forma armada). */
-    const { retocada: _r, ...sinRetoque } = r.cambio;
-    void _r;
-    reemplazar(r.cambio, { ...sinRetoque, fase: destino, tarea: { ...r.cambio.tarea, weekIndex: semana }, porChat: true });
+    // A su misma fase es mover de semana (sin semana pedida, se queda donde está).
+    if (destino === r.cambio.fase) {
+      if (o.semana !== undefined) editarTareaNueva(r.cambio, { weekIndex: semana }, true);
+      return null;
+    }
+    const mudada = { ...r.cambio, fase: destino, tarea: { ...r.cambio.tarea, weekIndex: semana } };
+    /* Revisión de E3: una nueva de la IA que el chat muda de fase SIGUE SIENDO DE LA IA —pide su vara al
+       aplicar y conserva «por validar»—; queda `retocada` (nace MODIFIED) y `mudadaPorElChat`, que la saca
+       del cierre de E2c: ya no es de la forma para la que se armó (chocaría en una fase sin forma armada).
+       Hasta la revisión pasaba a `porChat`, y con eso se aplicaba sin la vara de la IA. */
+    reemplazar(r.cambio, r.cambio.porChat ? mudada : { ...mudada, retocada: true, mudadaPorElChat: true });
     return null;
   };
 

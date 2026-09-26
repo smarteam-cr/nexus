@@ -1155,11 +1155,33 @@ export function describirOperaciones(
       case "tarea.mover-fase": {
         const t = tarea(o.taskId);
         /* ⚠ Se dice la consecuencia, no solo el acto: mudar una tarea la RECREA. */
+        if (!propuesta) {
+          return (
+            `«${t?.titulo ?? o.taskId}» se mueve de «${t?.fase ?? "?"}» a «${nombre(o.phaseId)}»` +
+            (typeof o.semana === "number" ? `, semana ${o.semana + 1}` : "") +
+            ` — se recrea ahí, así que pierde su estado`
+          );
+        }
+        /* E3: con la propuesta abierta la tarea se MUDA (conserva su id): no se recrea. Revisión de E3: la
+           línea dice SIEMPRE la semana donde cae, con la regla del ejecutor (operar-sobre-el-borrador.ts):
+           sin semana va a la 1; la pedida se acota a la duración del destino (la 7 en una fase de 4 cae en
+           la 4); y sin semana a su propia fase, se queda en la suya. */
+        const viva = t ? tareaViva(t.id) : undefined;
+        const suFase = viva ? propuesta.vivo.fases.find((f) => (f.tareas ?? []).some((x) => x.id === viva.id))?.id : t?.phaseId;
+        const pedida = typeof o.semana === "number" && Number.isFinite(o.semana) ? Math.max(Math.floor(o.semana), 0) : 0;
+        const creada = operaciones.find(
+          (x): x is Extract<Operacion, { op: "fase.crear" }> => x.op === "fase.crear" && x.ref?.trim() === o.phaseId,
+        );
+        const dur = duracionDe(o.phaseId) ?? creada?.semanas;
+        const semana =
+          o.semana === undefined && t && o.phaseId === suFase
+            ? (viva?.weekIndex ?? t.semana)
+            : dur === undefined
+              ? pedida
+              : Math.min(pedida, Math.max(dur - 1, 0));
         return (
-          `«${t?.titulo ?? o.taskId}» se mueve de «${t?.fase ?? "?"}» a «${nombre(o.phaseId)}»` +
-          (typeof o.semana === "number" ? `, semana ${o.semana + 1}` : "") +
-          /* E3: con la propuesta abierta la tarea se MUDA (conserva su id): no se recrea. */
-          (propuesta ? " — conserva su estado" : ` — se recrea ahí, así que pierde su estado`)
+          `«${t?.titulo ?? o.taskId}» se mueve de «${t?.fase ?? "?"}» a «${nombre(o.phaseId)}», semana ${semana + 1}` +
+          " — conserva su estado"
         );
       }
       case "tarea.borrar": {

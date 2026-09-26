@@ -67,7 +67,9 @@
  *     del cambio (la foto por tarea) se queda, y la fase con ello (`ItemDelPlan.rescate`).
  * `porChat` marca lo que dictó el chat (en los 8 tipos) y `retocada` una tarea nueva de la IA que el
  * chat editó. Deciden el permiso (`necesitaPermisoDeIa`), el `source` con que nace o queda lo escrito
- * y que el cierre de E2c no los mire. `excluidos` (las casillas guardadas) y `ajustadasPorElChat` (la
+ * y que el cierre de E2c no los mire. Una tarea nueva de la IA que el chat MUDA de fase sigue siendo de
+ * la IA (su vara, su «por validar»): va `retocada` y `mudadaPorElChat`, y esta última es la que la saca
+ * del cierre (revisión de E3). `excluidos` (las casillas guardadas) y `ajustadasPorElChat` (la
  * forma que el chat le dio a una fase armada, D9) viajan en el JSON; el plan NUNCA lee `excluidos`:
  * quien llama pasa `sin`.
  */
@@ -290,6 +292,12 @@ export interface CambioTareaNueva extends DelChat {
   motivo?: string;
   /** E3: una tarea nueva de la IA que el chat editó: nace MODIFIED y la aplica la vara de la IA. */
   retocada?: true;
+  /**
+   * E3 (revisión): una tarea nueva de la IA que el chat mudó a OTRA fase. Sigue siendo de la IA (pide su
+   * vara y conserva «por validar»), va `retocada` y no entra al cierre de E2c: ya no es de la forma para
+   * la que se armó (chocaría en una fase sin forma armada). Como lo del chat, solo sigue a su fase.
+   */
+  mudadaPorElChat?: true;
 }
 /** Una tarea pendiente de la IA que se quita. Se identifica por su id; su `desde` es la foto que LEYÓ
  *  quien lo produjo (E2b, D10): lo que alguien edite después, aunque sea mientras la IA arma, choca. */
@@ -877,8 +885,8 @@ function leerCambioDeTarea(v: unknown): CambioTareaCambia["a"] | null {
 }
 
 /** Un cambio del formato nuevo, validado. null = de un tipo o forma que esta versión no conoce.
- *  E3: `porChat` se lee en los 8 tipos y `retocada` en `tarea-nueva`: si no se leyeran, una fusión
- *  que reescribe `cambios` desde el borrador leído los borraría. */
+ *  E3: `porChat` se lee en los 8 tipos y `retocada` y `mudadaPorElChat` en `tarea-nueva`: si no se
+ *  leyeran, una fusión que reescribe `cambios` desde el borrador leído los borraría. */
 function leerCambio(v: unknown): Cambio | null {
   if (!esObjeto(v) || typeof v.clave !== "string" || !v.clave) return null;
   const motivo = textoOpcional(v.motivo);
@@ -939,6 +947,7 @@ function leerCambio(v: unknown): Cambio | null {
         ...conMotivo,
         ...delChat,
         ...(v.retocada === true ? { retocada: true as const } : {}),
+        ...(v.mudadaPorElChat === true ? { mudadaPorElChat: true as const } : {}),
       };
     }
     case "tarea-se-va": {
@@ -1273,8 +1282,9 @@ export const BLOQUEO_VERSION_NUEVA =
 export const MENSAJE_PROPUESTA_ABIERTA =
   "Hay una propuesta del cronograma sin decidir (arriba del Gantt): aplícala o descártala antes de guardar este cambio.";
 
-/** El orden resultante con el cambio de orden aplicado sobre `ids`: primero las que nombra, después el resto. */
-function ordenConCambio(ids: readonly string[], c: CambioDeOrden): string[] {
+/** El orden resultante con el cambio de orden aplicado sobre `ids`: primero las que nombra, después el resto.
+ *  Exportado para el chat (operar-sobre-el-borrador.ts): el lugar de hoy de una fase que se va. */
+export function ordenConCambio(ids: readonly string[], c: CambioDeOrden): string[] {
   const hay = new Set(ids);
   const nombradas = c.a.filter((id) => hay.has(id));
   const set = new Set(nombradas);
@@ -1869,8 +1879,9 @@ export function planDeAplicacion(
       return;
     }
     /* E3: una del chat en una fase nueva no pasa por el cierre (no se armó para ninguna forma): sigue
-       a su fase. Desmarcada la fase, queda fuera con ella (heredada); en choque, choca. */
-    if (c.porChat && nuevas.has(c.fase)) {
+       a su fase. Desmarcada la fase, queda fuera con ella (heredada); en choque, choca. Lo mismo una de
+       la IA que el chat mudó ahí (`mudadaPorElChat`, revisión de E3). */
+    if ((c.porChat || c.mudadaPorElChat) && nuevas.has(c.fase)) {
       const e = estadoDeLaClave(c.fase);
       if (e?.estado === "excluido") {
         estados[i] = { estado: "excluido", dependeDe: c.fase };
@@ -1938,8 +1949,10 @@ export function planDeAplicacion(
   };
   const forzadasEnElPlan = new Set<string>();
   borrador.cambios.forEach((c, i) => {
-    // E3 (D4): lo del chat y las que cambian no entran al cierre: solo dependen de que exista su fase.
+    /* E3 (D4): lo del chat y las que cambian no entran al cierre: solo dependen de que exista su fase.
+       Tampoco una de la IA que el chat mudó de fase (revisión de E3): ya no es de la forma armada. */
     if ((c.tipo !== "tarea-nueva" && c.tipo !== "tarea-se-va") || c.porChat) return;
+    if (c.tipo === "tarea-nueva" && c.mudadaPorElChat) return;
     const e = estados[i];
     if (!e || (e.estado !== "aplica" && e.estado !== "excluido")) return;
     const fase = faseDeLaTarea(c);

@@ -208,6 +208,8 @@ describe("1 · el formato: lo del chat sobrevive a guardarse, y lo mal formado b
         seVaLaFase("b", VIVO, { motivo: "Ya no va." }),
         nueva("t:chat", "c", "Pruebas de carga", 1, { porChat: true }),
         nueva("t:retocada", "c", "Pruebas de regresión", 2, { retocada: true }),
+        // Revisión de E3 (#1): la de la IA que el chat mudó de fase; sin su marca, volvería al cierre.
+        nueva("t:mudada", "b", "Pruebas de humo", 0, { retocada: true, mudadaPorElChat: true }),
         seVa(C1, "c", { porChat: true }),
         cambia(C2, "c", { title: "Pruebas con usuarios clave", weekIndex: 2, party: null, type: "SESSION", fase: PILOTO.clave }, { conCambio: DUR_C.clave }),
       ],

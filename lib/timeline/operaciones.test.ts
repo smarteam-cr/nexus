@@ -936,8 +936,10 @@ describe("E3 · las operaciones sobre la propuesta abierta", () => {
       ],
       conPropuesta,
     );
+    /* Revisión de E3 (#3): la mudanza dice SIEMPRE la semana donde cae. Sin semana pedida, el ejecutor la
+       deja en la 1 del destino; antes la línea lo callaba («… a «Piloto» — conserva su estado»). */
     expect(lineas).toEqual([
-      "«Configurar el pipeline» se mueve de «Sales Hub» a «Piloto» — conserva su estado",
+      "«Configurar el pipeline» se mueve de «Sales Hub» a «Piloto», semana 1 — conserva su estado",
       "Se quita la fase «Sales Hub» con su tarea pendiente; se queda 1 con avance o cargada a mano (y la fase con ella)",
       "La fase nueva «Piloto» sale de la propuesta",
       "La tarea nueva «Piloto con 5 usuarios» sale de la propuesta",

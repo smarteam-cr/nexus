@@ -1095,6 +1095,26 @@ describe("aplicar lo que dicta el chat (E3)", () => {
     expect(r.fasesBorradas).toEqual([]);
   });
 
+  it("⛔ la fase que se queda: si se borra otra cantidad de pendientes (una arrancó en el medio), PLAN_CAMBIO y nada más", async () => {
+    /* Revisión de E3 (#31). Con rescate la fase no se borra, así que el `tasks: { none: {} }` no cubre nada:
+       la cuenta de las pendientes borradas es la única guarda. La edición que la pone en rojo: no mirar esa
+       cuenta (se aplicaría a medias y en silencio: la que arrancó se queda y lo demás se escribe). */
+    const hecha = tareaDB("d1", "d", "Entregar documentación", 0, 0, { status: "DONE" });
+    const pendiente = tareaDB("d2", "d", "Firmar el acta", 0, 1);
+    const tareas = [...TAREAS, hecha, pendiente];
+    const v1 = v1DelChat([faseQueSeVa(FASES[3], tareas)]);
+    const db = baseFalsa(
+      { ancla: null, fases: FASES, tareas, propuesta: v1, token: "run-estructura" },
+      // Otra transacción arranca «Firmar el acta» entre la lectura y el borrado: el `where` ya no la toma.
+      { alBorrar: (e) => (e.tareas.find((t) => t.id === "d2")!.status = "IN_PROGRESS") },
+    );
+    const intento = await aplicarBorradorEnTx(db.tx, pedidoConTareas(v1, { fases: FASES, tareas })).catch((e: unknown) => e);
+    expect(intento).toBeInstanceOf(ErrorAlAplicar);
+    expect(intento).toMatchObject({ codigo: "PLAN_CAMBIO", status: 409 });
+    expect(db.llamadas, "siguió escribiendo con una cuenta que no cuadra").toEqual(["token", "leer", "tareas-con-la-fase:d"]);
+    expect(db.estado.tareas.find((t) => t.id === "d2")?.status).toBe("IN_PROGRESS");
+  });
+
   it("⭐ lo del chat nace como lo crea el PUT: fase HUMAN, tarea del chat o retocada MODIFIED (la del chat sin «por validar»), y la que cambia pasa de AGENT a MODIFIED", async () => {
     /* D4. Las ediciones que la ponen en rojo: crear todo como AGENT (el chat no podría deshacer lo que
        hizo, y `isKept` mentiría la procedencia), o dejar una que cambia como AGENT. */

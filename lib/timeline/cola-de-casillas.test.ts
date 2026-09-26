@@ -9,7 +9,7 @@
  *   · la REVERSIÓN: si un POST no entra, lo que no subió vuelve a lo del servidor;
  *   · ⭐ lo que ves es lo que queda: lo pendiente superpuesto a lo del servidor da lo mismo que el
  *     servidor calcula con el lote;
- *   · la migración única: solo con `excluidos` AUSENTE.
+ *   · la migración única: solo con `excluidos` AUSENTE, y la que no entró sale al esperar (revisión de E3).
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import { describe, expect, it } from "vitest";
@@ -282,6 +282,25 @@ describe("la cola en marcha: el reloj de 250 ms y la cadena", () => {
     reloj.vencer();
     await dejarCorrer();
     expect(servidor.pedidos[1].ops).toEqual([{ op: "excluir", claves: ["b"] }]);
+  });
+
+  it("⛔ la migración que no entró sale al esperar (antes de aplicar), aunque no haya clics", async () => {
+    /* Revisión de E3 (#5). Si el POST de la migración falló al montar, la barra muestra desmarcado lo que
+       el servidor no tiene, y el chat (que lee lo del servidor) lo cuenta marcado: cada «aplícala» chocaba
+       con PLAN_CAMBIO. La edición que la pone en rojo: que `esperar` mande solo lo encolado (sin clics, la
+       migración no se reintentaba hasta el próximo clic o una recarga). */
+    let migrar: OperacionDeCasillas | null = { op: "excluir", claves: ["viejo"] };
+    const { cola, servidor } = armar({ migracion: () => migrar });
+    const espera = cola.esperar();
+    await dejarCorrer();
+    expect(servidor.pedidos, "esperar no reintentó la migración").toHaveLength(1);
+    expect(servidor.pedidos[0].ops).toEqual([{ op: "excluir", claves: ["viejo"] }]);
+    servidor.pedidos[0].responder({ ok: true });
+    expect(await espera).toEqual({ motivo: null, mando: true });
+    // Ya manda el servidor: esperar no vuelve a mandar nada.
+    migrar = null;
+    expect(await cola.esperar()).toEqual({ motivo: null, mando: false });
+    expect(servidor.pedidos).toHaveLength(1);
   });
 
   it("soltar (llegó otra propuesta): lo encolado no sale y lo que vuelve del POST en vuelo no toca nada", async () => {

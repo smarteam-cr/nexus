@@ -138,8 +138,9 @@ export interface ColaEnMarcha {
   clic: (claves: readonly string[], incluir: boolean) => void;
   /** Manda YA lo encolado, detrás de lo que va en vuelo, y espera los dos. */
   mandar: () => Promise<void>;
-  /** Manda ya y espera hasta que no quede nada. `motivo`: el de un lote que falló MIENTRAS se esperaba
-   *  (quien espera no sigue); `mando`: si salió algo (la pantalla tiene que adoptar la versión nueva). */
+  /** Manda ya y espera hasta que no quede nada (también la migración única, si todavía no entró).
+   *  `motivo`: el de un lote que falló MIENTRAS se esperaba (quien espera no sigue); `mando`: si salió
+   *  algo (la pantalla tiene que adoptar la versión nueva). */
   esperar: () => Promise<{ motivo: string | null; mando: boolean }>;
   pendientes: () => OperacionDeCasillas[];
   /** ¿Hay clics esperando el reloj? (al desmontar, se mandan igual). */
@@ -220,6 +221,11 @@ export function crearColaDeCasillas(o: OpcionesDeLaCola): ColaEnMarcha {
     async esperar() {
       const antes = fallos;
       let mando = false;
+      /* Revisión de E3: la migración única que no entró (falló su POST al montar) sale acá, antes de lo que
+         manda la versión (aplicar, también desde el chat). Si no, el chat seguiría contando como marcado lo
+         que la barra muestra desmarcado, y cada «aplícala» chocaría con PLAN_CAMBIO. */
+      const migrar = !suelta && !hayPendientes(cola) ? (o.migracion?.() ?? null) : null;
+      if (migrar) poner(encolar(cola, migrar.claves, migrar.op === "incluir"));
       for (let vuelta = 0; vuelta < VUELTAS_AL_ESPERAR && !suelta && hayPendientes(cola); vuelta++) {
         mando = true;
         await mandar();

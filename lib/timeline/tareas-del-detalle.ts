@@ -38,8 +38,9 @@
  * lugar de la lista (`mezclarTareasDeFases`); el resto del borrador no se toca (`fusionarRecalculo`).
  *
  * ── LO QUE DICTÓ EL CHAT (E3) ────────────────────────────────────────────────
- * Las fusiones reemplazan solo las tareas de la IA: lo que dictó el chat (`porChat`) se conserva, detrás
- * de la estructura. Una tarea viva que el chat quita o cambia no la vuelve a proponer la IA (R2): si no,
+ * Las fusiones reemplazan solo las tareas de la IA: lo que dictó el chat (`porChat`) y las tareas nuevas
+ * de la IA que el chat retocó (`retocada`, revisión de E3) se conservan, detrás de la estructura. Una
+ * tarea viva que el chat quita o cambia no la vuelve a proponer la IA (R2): si no,
  * habría dos cambios de la misma tarea. Y una fase que se vuelve a armar pierde la forma que le había
  * dado el chat (`ajustadasPorElChat`, D9): sus tareas ya son de la forma nueva.
  */
@@ -334,6 +335,13 @@ function sinLasRearmadas(
   return quedan.length > 0 ? Object.fromEntries(quedan) : undefined;
 }
 
+/**
+ * E3: ¿la fusión conserva este cambio de tareas? Lo que dictó el chat (`porChat`) y una tarea nueva de la
+ * IA que el chat retocó (`retocada`, también la que mudó de fase): lo que el chat confirmó con «quedó en la
+ * propuesta» no se pierde en silencio porque su fase se recalcule (revisión de E3).
+ */
+const loTocoElChat = (c: Cambio): boolean => esCambioDeTarea(c) && (!!c.porChat || (c.tipo === "tarea-nueva" && !!c.retocada));
+
 /** Lo que el borrador guarda de E3 y la fusión no toca (salvo las ajustadas de lo que se rearma). */
 function loDelChat(b: Borrador, rearmadas: Iterable<string>): Pick<Borrador, "excluidos" | "ajustadasPorElChat"> {
   const ajustadas = sinLasRearmadas(b.ajustadasPorElChat, rearmadas);
@@ -345,8 +353,8 @@ function loDelChat(b: Borrador, rearmadas: Iterable<string>): Pick<Borrador, "ex
  * propuesto de las fases que no tenían y las tareas. Las tareas quedan `listas` con la corrida que las
  * armó, y la versión sube (toda escritura del JSON la sube). `soloFase` se conserva. No mezcla tareas de
  * otras fases: en E2b el borrador de una fase nace vacío. La mezcla por fase es `mezclarTareasDeFases`
- * (E2c, el recálculo). E3: lo que dictó el chat se conserva, detrás de la estructura; las fases que se
- * arman pierden su forma ajustada.
+ * (E2c, el recálculo). E3: lo que dictó o retocó el chat se conserva, detrás de la estructura; las fases
+ * que se arman pierden su forma ajustada.
  */
 export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: string): Borrador {
   const estructura: Cambio[] = b.cambios
@@ -356,7 +364,7 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
         ? { ...c, fase: { ...c.fase, activityType: r.tiposDeNuevas[c.clave] } }
         : c,
     );
-  const delChat = b.cambios.filter((c) => esCambioDeTarea(c) && c.porChat);
+  const delChat = b.cambios.filter(loTocoElChat);
   return {
     formato: b.formato,
     version: b.version + 1,
@@ -375,7 +383,8 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
  * Las tareas de `fases` se reemplazan por `nuevas`, EN EL LUGAR de la primera original de cada fase
  * (el grupo conserva su número); sin originales, al final. Lo demás, intacto (E2c, D2). Una tarea de
  * `nuevas` cuya fase no está en `fases` no entra: el alcance lo dice `fases`, no lo que devolvió el
- * modelo. E3: solo se reemplazan las tareas de la IA; lo que dictó el chat (`porChat`) se queda.
+ * modelo. E3: solo se reemplazan las tareas de la IA; lo que dictó o retocó el chat (`loTocoElChat`) se
+ * queda.
  */
 export function mezclarTareasDeFases(
   cambios: readonly Cambio[],
@@ -391,7 +400,7 @@ export function mezclarTareasDeFases(
   const puestas = new Set<string>();
   const out: Cambio[] = [];
   for (const c of cambios) {
-    if (!esCambioDeTarea(c) || c.porChat || !fases.has(faseDeLaTarea(c))) {
+    if (!esCambioDeTarea(c) || loTocoElChat(c) || !fases.has(faseDeLaTarea(c))) {
       out.push(c);
       continue;
     }
