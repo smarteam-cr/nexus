@@ -29,14 +29,73 @@ export function claseDeAcuerdo(a: Pick<CambioAcordado, "borrador" | "operaciones
   return "pasar";
 }
 
-/** El botón: «Pasar a la propuesta (N)» (N = lo que queda marcado), «Aplicar la propuesta al
- *  cronograma» o «Descartar la propuesta». */
-export function textoDelBoton(a: Pick<CambioAcordado, "borrador" | "operaciones">, aceptadas: number): string | null {
+/** El botón: «Pasar a la propuesta», «Aplicar la propuesta al cronograma» o «Descartar la propuesta».
+ *  Revisión de E3 (#21): el «(N)» (lo que queda marcado) sale solo si se desmarcó algo, como en el botón
+ *  de siempre; con todo marcado era texto de más. */
+export function textoDelBoton(
+  a: Pick<CambioAcordado, "borrador" | "operaciones">,
+  aceptadas: number,
+  desmarcadas: number,
+): string | null {
   const clase = claseDeAcuerdo(a);
   if (clase === "aplicar") return "Aplicar la propuesta al cronograma";
   if (clase === "descartar") return "Descartar la propuesta";
-  if (clase === "pasar") return `Pasar a la propuesta (${aceptadas})`;
+  if (clase === "pasar") return `Pasar a la propuesta${desmarcadas > 0 ? ` (${aceptadas})` : ""}`;
   return null;
+}
+
+/**
+ * ¿Las líneas del acuerdo llevan casilla? Revisión de E3 (#21): «aplícala» y «descártala» son UNA sola
+ * línea; desmarcarla solo dejaba el botón en «No queda nada marcado». Un control que solo servía para
+ * equivocarse: esas dos van sin casilla.
+ */
+export function llevaCasillas(a: Pick<CambioAcordado, "borrador" | "operaciones">): boolean {
+  const clase = claseDeAcuerdo(a);
+  return clase !== "aplicar" && clase !== "descartar";
+}
+
+/**
+ * Lo que manda el botón: las operaciones que quedaron marcadas y, ALINEADAS con ellas, sus líneas
+ * (`lineas[i]` es la de `operaciones[i]`). Sin operaciones (un acuerdo de texto), el acuerdo tal cual.
+ * Revisión de E3 (#19): se mandaban las operaciones recortadas con TODAS las líneas, así que quien
+ * aplicaba no sabía qué línea era la que falló.
+ */
+export function loQueSeManda<A extends Pick<CambioAcordado, "operaciones" | "lineas">>(
+  a: A,
+  desmarcadas?: ReadonlySet<number>,
+): A {
+  if (!a.operaciones) return a;
+  const fuera = desmarcadas ?? new Set<number>();
+  return {
+    ...a,
+    operaciones: a.operaciones.filter((_, i) => !fuera.has(i)),
+    ...(a.lineas ? { lineas: a.lineas.filter((_, i) => !fuera.has(i)) } : {}),
+  };
+}
+
+/** Cuánto de una línea se cita en un error (las más largas rondan los 120 caracteres). */
+const LARGO_DE_LA_CITA = 70;
+
+/**
+ * Qué no se pudo pasar, citando la LÍNEA que la persona leyó en la cajita: «Mover «X» a Pruebas»: esa
+ * tarea no está en la propuesta. Revisión de E3 (#19): decía «#2», contado entre lo marcado, mientras la
+ * cajita numera TODAS las líneas (también las tachadas): con la 2 desmarcada, «#2» era la 3. El texto no
+ * depende de lo desmarcado, y el modelo también lo entiende al releer el hilo.
+ * `indice` es la posición en lo que se MANDÓ; `lineas`, las de lo mandado (`loQueSeManda`). Sin su línea,
+ * el número de lo mandado.
+ */
+export function textoDeLosRechazos(
+  rechazadas: ReadonlyArray<{ indice: number; motivo: string }>,
+  lineas: readonly string[] | undefined,
+): string {
+  return rechazadas
+    .map((r) => {
+      const linea = lineas?.[r.indice]?.trim();
+      if (!linea) return `#${r.indice + 1}: ${r.motivo}`;
+      const cita = linea.length > LARGO_DE_LA_CITA ? `${linea.slice(0, LARGO_DE_LA_CITA - 1).trimEnd()}…` : linea;
+      return `«${cita}»: ${r.motivo}`;
+    })
+    .join(" · ");
 }
 
 /** Mientras corre: «Pasando a la propuesta…», «Aplicando la propuesta…», «Descartando la propuesta…». */
@@ -155,7 +214,8 @@ export const MOTIVOS_DEL_CHAT = {
   cambio: "La propuesta cambió: pídemelo de nuevo",
   enSuBarra: "Resuelve la propuesta en su barra",
   armando: "Espera: la IA está armando las tareas",
-  recalcular: "Faltan recalcular tareas: mira la barra",
+  // Revisión de E3 (#20): «Faltan recalcular» no concordaba (el sujeto es el infinitivo).
+  recalcular: "Falta recalcular tareas: mira la barra",
 } as const;
 
 /** Lo que el cronograma tiene en pantalla, leído en el momento. */

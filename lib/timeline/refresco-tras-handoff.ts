@@ -110,3 +110,38 @@ export function esLaMismaMasVieja(
 ): boolean {
   return enPantalla.runId !== null && enPantalla.runId === leida.runId && versionMayor(enPantalla.version, leida.version);
 }
+
+/** Revisión de E3 (#23): lo mínimo entre dos relecturas al volver a la pestaña. */
+export const ESPERA_ENTRE_RELECTURAS_MS = 2000;
+
+/**
+ * Revisión de E3 (#23): UNA relectura al volver a la pestaña. `visibilitychange` y `focus` llegan juntos
+ * al volver, y cada uno hacía un GET completo del cronograma (en Wherex, el más grande, carga de más).
+ * Devuelve el oyente: no relee si hay una relectura en vuelo, ni si la anterior empezó hace menos de
+ * `espera` ms (el `focus` que llega detrás del `visibilitychange`). Cuándo se relee no cambia: al volver.
+ * Sin React ni DOM a propósito: `ahora` es inyectable, y la prueba lo corre con un reloj falso.
+ */
+export function crearRelecturaAlVolver(
+  releer: () => Promise<unknown>,
+  { ahora = () => Date.now(), espera = ESPERA_ENTRE_RELECTURAS_MS }: { ahora?: () => number; espera?: number } = {},
+): () => void {
+  let enVuelo = false;
+  let ultima = Number.NEGATIVE_INFINITY;
+  return () => {
+    const t = ahora();
+    if (enVuelo || t - ultima < espera) return;
+    enVuelo = true;
+    ultima = t;
+    let relectura: Promise<unknown>;
+    try {
+      relectura = Promise.resolve(releer());
+    } catch {
+      relectura = Promise.resolve();
+    }
+    void relectura
+      .catch(() => {})
+      .finally(() => {
+        enVuelo = false;
+      });
+  };
+}

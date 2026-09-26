@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { decidirRefrescoTrasHandoff, debeReemplazarPropuesta, esLaMismaMasVieja } from "./refresco-tras-handoff";
+import {
+  crearRelecturaAlVolver,
+  decidirRefrescoTrasHandoff,
+  debeReemplazarPropuesta,
+  esLaMismaMasVieja,
+} from "./refresco-tras-handoff";
 import { reconcileAgentProposal } from "./reconcile-proposal";
 import { borradorDelHandoff } from "./borrador";
 
@@ -155,5 +160,84 @@ describe("E3 · la misma corrida: gana la versión mayor, y la de pantalla nunca
     expect(esLaMismaMasVieja({ runId: "r1", version: 5 }, { runId: "r2", version: 0 }), "una propuesta nueva quedó fuera").toBe(false);
     expect(esLaMismaMasVieja({ runId: null, version: null }, { runId: "r1", version: 0 })).toBe(false);
     expect(esLaMismaMasVieja({ runId: "r1", version: 5 }, { runId: "r1", version: null })).toBe(false);
+  });
+});
+
+/**
+ * ── REVISIÓN DE E3 (#23): UNA RELECTURA AL VOLVER A LA PESTAÑA ──────────────────────────────────────────
+ * `visibilitychange` y `focus` llegan juntos al volver, y cada uno hacía un GET completo del cronograma. Se
+ * corre con un reloj falso y una relectura que termina cuando el test quiere.
+ */
+describe("⭐ revisión de E3 (#23) · volver a la pestaña relee UNA vez", () => {
+  function montar(espera = 2000) {
+    let t = 1_000_000;
+    const pendientes: Array<() => void> = [];
+    let lecturas = 0;
+    const releer = () => {
+      lecturas++;
+      return new Promise<void>((ok) => pendientes.push(ok));
+    };
+    const alVolver = crearRelecturaAlVolver(releer, { ahora: () => t, espera });
+    const terminar = async () => {
+      pendientes.shift()?.();
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    return { alVolver, terminar, avanzar: (ms: number) => (t += ms), lecturas: () => lecturas };
+  }
+
+  it("⛔ `visibilitychange` y `focus` juntos: un solo GET", () => {
+    /* Las ediciones que la ponen en rojo: releer en cada señal (dos GET al volver), o no mirar la que está en
+       vuelo. */
+    const r = montar();
+    r.alVolver(); // visibilitychange
+    r.alVolver(); // focus, detrás
+    expect(r.lecturas(), "volver a la pestaña hizo dos relecturas").toBe(1);
+  });
+
+  it("⛔ con una relectura en vuelo no sale otra, aunque haya pasado la espera", async () => {
+    const r = montar();
+    r.alVolver();
+    r.avanzar(5000);
+    r.alVolver();
+    expect(r.lecturas(), "salió otra relectura con una en vuelo").toBe(1);
+    await r.terminar();
+    r.alVolver();
+    expect(r.lecturas(), "terminada la primera, volver otra vez relee").toBe(2);
+  });
+
+  it("⛔ la que llega detrás, ya terminada la primera, no relee; pasada la espera, sí (cuándo se relee no cambia)", async () => {
+    /* La edición que la pone en rojo: soltar la espera (el `focus` que llega tras un GET rápido relee otra vez),
+       o no volver a leer nunca (lo que marcó otra computadora no se vería hasta recargar). */
+    const r = montar(2000);
+    r.alVolver();
+    await r.terminar();
+    r.avanzar(500);
+    r.alVolver();
+    expect(r.lecturas(), "la señal de atrás releyó").toBe(1);
+    r.avanzar(2000);
+    r.alVolver();
+    expect(r.lecturas(), "una vuelta de verdad, después, no relee").toBe(2);
+  });
+
+  it("una relectura que falla no deja la vuelta trabada", async () => {
+    let t = 0;
+    let lecturas = 0;
+    const alVolver = crearRelecturaAlVolver(
+      () => {
+        lecturas++;
+        return Promise.reject(new Error("red"));
+      },
+      { ahora: () => t },
+    );
+    alVolver();
+    await new Promise((r) => setTimeout(r, 0));
+    t += 3000;
+    alVolver();
+    expect(lecturas, "después de una que falló, no vuelve a leer").toBe(2);
+    // Y una que tira en el acto, tampoco.
+    const tira = crearRelecturaAlVolver(() => {
+      throw new Error("x");
+    });
+    expect(() => tira()).not.toThrow();
   });
 });

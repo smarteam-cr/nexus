@@ -16,12 +16,15 @@ import {
   ACUERDO_DE_OTRA_VERSION,
   claseDeAcuerdo,
   destinoDelAcuerdo,
+  llevaCasillas,
+  loQueSeManda,
   motivoParaElAcuerdo,
   MOTIVOS_DEL_CHAT,
   NOTA_AVANCE_REEVALUANDOSE,
   rotuloDelAcuerdoAplicado,
   textoDelAcuerdoAplicado,
   textoDelBoton,
+  textoDeLosRechazos,
   textoDelDesenlace,
   textoDelDesenlaceDeLaPropuesta,
   textoMientrasAplica,
@@ -47,9 +50,12 @@ describe("⭐ qué hace el botón", () => {
   });
 
   it("los textos, cortos y en tuteo; sin propuesta, null (el cajón usa los de siempre)", () => {
-    expect(textoDelBoton(pasar, 2)).toBe("Pasar a la propuesta (2)");
-    expect(textoDelBoton(aplicar, 1)).toBe("Aplicar la propuesta al cronograma");
-    expect(textoDelBoton(descartar, 1)).toBe("Descartar la propuesta");
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#21), con esta razón: el «(N)» sale solo si se desmarcó algo (como
+       el botón de siempre), así que `textoDelBoton` recibe cuántas se desmarcaron. Con todo marcado, sin número. */
+    expect(textoDelBoton(pasar, 2, 0)).toBe("Pasar a la propuesta");
+    expect(textoDelBoton(pasar, 2, 1)).toBe("Pasar a la propuesta (2)");
+    expect(textoDelBoton(aplicar, 1, 0)).toBe("Aplicar la propuesta al cronograma");
+    expect(textoDelBoton(descartar, 1, 0)).toBe("Descartar la propuesta");
     expect(textoMientrasAplica(pasar)).toBe("Pasando a la propuesta…");
     expect(textoMientrasAplica(aplicar)).toBe("Aplicando la propuesta…");
     expect(textoMientrasAplica(descartar)).toBe("Descartando la propuesta…");
@@ -57,7 +63,7 @@ describe("⭐ qué hace el botón", () => {
     expect(textoDelAcuerdoAplicado(aplicar)).toBe("Propuesta aplicada al cronograma.");
     expect(textoDelAcuerdoAplicado(descartar)).toBe("Propuesta descartada.");
     for (const a of [deHoy, viejo]) {
-      expect(textoDelBoton(a, 1)).toBeNull();
+      expect(textoDelBoton(a, 1, 0)).toBeNull();
       expect(textoMientrasAplica(a)).toBeNull();
       expect(textoDelAcuerdoAplicado(a)).toBeNull();
       expect(rotuloDelAcuerdoAplicado(a)).toBeNull();
@@ -234,5 +240,59 @@ describe("⛔ el motivo del botón (motivoParaElAcuerdo)", () => {
       expect(m.length, m).toBeLessThanOrEqual(60);
       expect(m, m).not.toMatch(/\b(pod[eé]s|ten[eé]s|quer[eé]s|fijate|mirá|pedímelo|resolvé|esperá)\b/i);
     }
+  });
+});
+
+/**
+ * ── REVISIÓN DE E3 (#19, #20, #21): LA CAJITA Y SU BOTÓN DICEN LO QUE PASA ──────────────────────────────
+ */
+describe("⭐ revisión de E3 · la cajita del acuerdo", () => {
+  it("⛔ #21 · «Pasar a la propuesta» lleva «(N)» solo con algo desmarcado", () => {
+    /* La edición que la pone en rojo: volver a poner el número siempre («Pasar a la propuesta (1)» con un solo
+       cambio y nada desmarcado: texto de más y distinto del botón de siempre). */
+    expect(textoDelBoton(pasar, 2, 0), "el número salió sin nada desmarcado").toBe("Pasar a la propuesta");
+    expect(textoDelBoton(pasar, 1, 1), "con algo desmarcado, el número dice cuántos se pasan").toBe("Pasar a la propuesta (1)");
+  });
+
+  it("⛔ #21 · «aplícala» y «descártala» van sin casilla (una sola línea: desmarcarla solo servía para equivocarse)", () => {
+    /* La edición que la pone en rojo: darles casilla (el botón pasaba a «No queda nada marcado»), o quitársela a
+       lo que se pasa a la propuesta o a lo de siempre (ahí sí se elige qué va). */
+    expect(llevaCasillas(aplicar), "«aplícala» con casilla").toBe(false);
+    expect(llevaCasillas(descartar), "«descártala» con casilla").toBe(false);
+    for (const a of [pasar, deHoy, viejo]) expect(llevaCasillas(a), JSON.stringify(a)).toBe(true);
+  });
+
+  it("⛔ #19 · el rechazo cita la LÍNEA de la cajita, también con una desmarcada antes", () => {
+    /* La cajita numera TODAS las líneas (también las tachadas); el servidor numera entre lo mandado. Con la 2
+       desmarcada y la 3 rechazada, el error decía «#2»: la que se tachó. Las ediciones que la ponen en rojo:
+       mandar las operaciones recortadas con todas las líneas (`loQueSeManda` sin recortar `lineas`), o volver a
+       armar el error con el número. */
+    const acuerdo = {
+      borrador: "run-4",
+      operaciones: [{ op: "a" }, { op: "b" }, { op: "c" }],
+      lineas: ["Mover «Kickoff» a S2", "Quitar «Demo»", "Renombrar «Piloto» a «Pruebas»"],
+    };
+    const mandado = loQueSeManda(acuerdo, new Set([1]));
+    expect(mandado.operaciones).toEqual([{ op: "a" }, { op: "c" }]);
+    expect(mandado.lineas, "las líneas no quedaron alineadas con lo mandado").toEqual(["Mover «Kickoff» a S2", "Renombrar «Piloto» a «Pruebas»"]);
+    // El servidor rechaza la segunda de lo MANDADO (índice 1): es la 3 de la cajita.
+    const texto = textoDeLosRechazos([{ indice: 1, motivo: "esa fase no está en la propuesta" }], mandado.lineas);
+    expect(texto, "el error señala otra línea").toBe("«Renombrar «Piloto» a «Pruebas»»: esa fase no está en la propuesta");
+    expect(texto).not.toContain("#");
+    // El acuerdo de antes queda entero (la nota de lo descartado lo necesita) y sin nada desmarcado no cambia.
+    expect(acuerdo.lineas).toHaveLength(3);
+    expect(loQueSeManda(acuerdo)).toEqual(acuerdo);
+    // Un acuerdo de texto (sin operaciones) va tal cual.
+    const deTexto = { instruccion: "x", lineas: ["uno"] };
+    expect(loQueSeManda(deTexto, new Set([0]))).toBe(deTexto);
+    // Una línea larga se recorta; sin su línea, el número de lo mandado.
+    const larga = "x".repeat(120);
+    expect(textoDeLosRechazos([{ indice: 0, motivo: "m" }], [larga])).toBe(`«${"x".repeat(69)}…»: m`);
+    expect(textoDeLosRechazos([{ indice: 4, motivo: "m" }, { indice: 0, motivo: "n" }], ["a"])).toBe("#5: m · «a»: n");
+  });
+
+  it("⛔ #20 · «Falta recalcular tareas» (no «Faltan»: el sujeto es el infinitivo)", () => {
+    /* La edición que la pone en rojo: volver a «Faltan recalcular tareas: mira la barra». */
+    expect(MOTIVOS_DEL_CHAT.recalcular).toBe("Falta recalcular tareas: mira la barra");
   });
 });

@@ -561,11 +561,31 @@ describe("7 · lo que se escribe, lo que se ve y lo que se confirma", () => {
       [3, "c", 1, 0],
     ]);
     const [llega, masPiloto] = r.grupos[0].tareas;
-    expect([llega.signo, llega.ref, llega.titulo, llega.semana, llega.cambio]).toEqual(["→", "b2", "Definir pipeline", 2, "pasa a «Piloto», S2"]);
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#22), con esta razón: en el grupo de su destino, «pasa a «Piloto», S2»
+       repetía el nombre del grupo y la semana del renglón, y no decía de qué fase venía. Ahora dice el origen. */
+    expect([llega.signo, llega.ref, llega.titulo, llega.semana, llega.cambio]).toEqual(["→", "b2", "Definir pipeline", 2, "viene de «Diseño»"]);
     expect([masPiloto.signo, masPiloto.ref]).toEqual(["+", "t:p"]);
     const renombrada = r.grupos[1].tareas[0];
     expect([renombrada.signo, renombrada.ref, renombrada.cambio]).toEqual(["~", "c2", "renombrada a «Pruebas clave» · la hace el cliente"]);
     expect(tituloDeLaBarra(r)).toBe("La IA propone 1 cambio de fases y 3 de tareas");
+  });
+
+  it("⛔ revisión de E3 (#22) · la mudanza en el grupo de su destino dice DE DÓNDE viene, y la semana solo si cambia", () => {
+    /* Las ediciones que la ponen en rojo: volver a «pasa a «Pruebas», S2» en el grupo de «Pruebas» (repite el
+       grupo y la semana del renglón, y el origen no aparece en ningún lado), o decir la semana aunque no cambie. */
+    const r = resumir(
+      VIVO,
+      v1([cambia(B2, "b", { fase: "c", weekIndex: 1 }), cambia(B1, "b", { fase: "c", weekIndex: 2 })]),
+    );
+    const enPruebas = r.grupos.find((g) => g.fase === "c")!;
+    expect(enPruebas.tareas.map((t) => [t.signo, t.titulo, t.semana, t.cambio])).toEqual([
+      ["→", "Definir pipeline", 2, "viene de «Diseño»"],
+      ["→", "Mapear procesos", 3, "viene de «Diseño» · pasa a S3"],
+    ]);
+    for (const t of enPruebas.tareas) expect(t.cambio, "el renglón repite su grupo").not.toContain("«Pruebas»");
+    // Lo demás que le cambia sigue después («renombrada», el dueño).
+    const conMas = resumir(VIVO, v1([cambia(B2, "b", { fase: "c", title: "Pipeline", party: "CLIENTE" })]));
+    expect(conMas.grupos[0].tareas[0].cambio).toBe("viene de «Diseño» · renombrada a «Pipeline» · la hace el cliente");
   });
 
   it("⭐ la fase que se va en la barra: su título y la nota de lo que se queda", () => {

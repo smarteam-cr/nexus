@@ -55,6 +55,7 @@ import {
   claseDeAcuerdo,
   motivoParaElAcuerdo,
   NOTA_AVANCE_REEVALUANDOSE,
+  textoDeLosRechazos,
 } from "@/lib/asistente/textos-del-acuerdo";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
@@ -79,7 +80,7 @@ import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import RevisionDeLaPropuesta from "./RevisionDeLaPropuesta";
 import { useBorradorDelCronograma } from "./useBorradorDelCronograma";
-import type { ResultadoDeGuardarCasillas } from "@/lib/timeline/cola-de-casillas";
+import { motivoDeLasCasillasSinGuardar, type ResultadoDeGuardarCasillas } from "@/lib/timeline/cola-de-casillas";
 import { useRecalculoDeLasTareas } from "./useRecalculoDeLasTareas";
 import {
   corridasDeLaPropuesta,
@@ -128,6 +129,7 @@ import { Modal } from "@/components/ui/Modal";
 /* E2b (2026-09-25): se fue `PhaseRegenModal` (la curación de dos columnas de «Regenerar» de una fase).
    Esa propuesta se revisa en la barra de arriba del Gantt, como las demás. */
 import {
+  crearRelecturaAlVolver,
   decidirRefrescoTrasHandoff,
   debeReemplazarPropuesta,
   esLaMismaMasVieja,
@@ -1489,13 +1491,15 @@ export default function CronogramaCanvas({
         adoptarPropuesta(d);
         return { ok: true };
       }
-      const motivo: string = d?.message ?? d?.error ?? "No se pudo guardar lo que marcaste: vuelve a intentar.";
+      /* Revisión de E3 (#20): el 409 trae la guardada y dice lo suyo (no el «no se aplicó nada» de aplicar). */
       if (res.status === 409) {
-        await traerPropuestaPendiente();
+        const ahora = await traerPropuestaPendiente();
+        const motivo = motivoDeLasCasillasSinGuardar(d, !ahora.ok ? null : ahora.propuesta ? "hay" : "ninguna");
         toast.info(motivo);
-      } else {
-        toast.error(motivo);
+        return { ok: false, motivo };
       }
+      const motivo = motivoDeLasCasillasSinGuardar(d, null);
+      toast.error(motivo);
       return { ok: false, motivo };
     } catch {
       const motivo = "Error de conexión al guardar lo que marcaste: vuelve a intentar.";
@@ -1532,9 +1536,11 @@ export default function CronogramaCanvas({
      Mientras haya una propuesta guardada en pantalla. */
   useEffect(() => {
     if (!hayBorrador) return;
+    // Revisión de E3 (#23): los dos eventos de la vuelta hacen UNA relectura (en vuelo o recién hecha, no otra).
+    const releer = crearRelecturaAlVolver(refrescarPropuesta);
     const alVolver = () => {
       if (document.visibilityState !== "visible") return;
-      void refrescarPropuesta();
+      releer();
     };
     document.addEventListener("visibilitychange", alVolver);
     window.addEventListener("focus", alVolver);
@@ -1905,6 +1911,8 @@ export default function CronogramaCanvas({
   const aplicarOperacionesAcordadas = async (
     ops: Operacion[],
     resumen: string,
+    /* Las líneas de lo mandado, alineadas con `ops` (revisión de E3, #19): el rechazo las cita. */
+    lineas?: readonly string[],
   ): Promise<{ fallo: string | null; avisos: string[] }> => {
     /* ⛔ CON CAMBIOS DE FASES SIN DECIDIR, EL CHAT NO APLICA (2026-09-23). Este camino guarda con
        un PUT con motivo, y ese PUT borraba `pendingProposal`: las sugerencias del handoff o de las
@@ -1953,11 +1961,11 @@ export default function CronogramaCanvas({
     if (rechazadas.length > 0) {
       /* ⚠ Con lotes de doce operaciones, «no se pudo aplicar: esa tarea no existe» no dice
          CUÁL de las doce. El índice sale gratis: `rechazar` empuja la MISMA referencia que se
-         está iterando, así que `indexOf` da la posición exacta — y esa posición es el número de
-         la línea que la persona acaba de leer en la cajita azul. */
-      const motivo = rechazadas
-        .map((r) => `#${ops.indexOf(r.operacion) + 1}: ${r.motivo}`)
-        .join(" · ");
+         está iterando, así que `indexOf` da la posición exacta en lo MANDADO, y con ella se cita
+         la línea que la persona leyó (revisión de E3, #19: el número contaba solo lo marcado). */
+      const conIndice = rechazadas.map((r) => ({ indice: ops.indexOf(r.operacion), motivo: r.motivo }));
+      // El índice es la posición en lo mandado; `lineas` viene alineada con `ops` (`loQueSeManda`).
+      const motivo = textoDeLosRechazos(conIndice, lineas);
       setError(`No se pudo aplicar: ${motivo}`);
       return { fallo: motivo, avisos };
     }
@@ -2556,9 +2564,9 @@ export default function CronogramaCanvas({
       });
       const d = await res.json().catch(() => ({}));
       if (res.status === 422 && Array.isArray(d?.rechazadas)) {
-        // El número es la línea que se leyó en la cajita (entre las que quedaron marcadas).
+        // Revisión de E3 (#19): se cita la línea que se leyó en la cajita, no un número (contaba solo las marcadas).
         return falla(
-          (d.rechazadas as Array<{ indice: number; motivo: string }>).map((r) => `#${r.indice + 1}: ${r.motivo}`).join(" · "),
+          textoDeLosRechazos(d.rechazadas as Array<{ indice: number; motivo: string }>, acuerdo.lineas),
         );
       }
       if (res.status === 409) {
@@ -2581,7 +2589,7 @@ export default function CronogramaCanvas({
   const atenderElAcuerdo = (acuerdo: AcuerdoDelChat): Promise<ResultadoDeAplicar> =>
     acuerdo.borrador == null
       ? Array.isArray(acuerdo.operaciones) && acuerdo.operaciones.length > 0
-        ? aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen)
+        ? aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen, acuerdo.lineas)
         : Promise.resolve({ fallo: ACUERDO_DE_OTRA_VERSION, avisos: [] })
       : pasarALaPropuesta(acuerdo);
 

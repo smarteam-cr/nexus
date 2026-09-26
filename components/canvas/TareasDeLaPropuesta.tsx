@@ -23,8 +23,9 @@
  *   · Lo que choca con algo que editaste a mano lleva su ⚠ y no se puede marcar; lo que ya está así va
  *     tachado.
  *   · E3 P3: una tarea que ya existe y CAMBIA (renombre, semana, dueño o tipo) va con «~», y una que se
- *     MUDA a esta fase, con «→» en el grupo de su destino; en los dos, qué le cambia («pasa a «Pruebas»,
- *     S3», «renombrada a «Y»»), en gris.
+ *     MUDA a esta fase, con «→» en el grupo de su destino; en los dos, qué le cambia («viene de «Diseño»»,
+ *     «pasa a S3», «renombrada a «Y»»), en gris. Revisión de E3 (#22): la mudanza dice de dónde viene (el
+ *     grupo ya dice a dónde va), y la semana solo si cambia.
  *
  * Solo pinta: los grupos, los estados y los avisos salen de `resumir` (lib/timeline/borrador.ts).
  * Tokens del tema SIEMPRE (success = lo que se crea, warn = lo que se quita o choca, info = lo que cambia
@@ -102,7 +103,7 @@ function RenglonDeTarea({
             <span className={cn("font-semibold", COLOR_DEL_SIGNO[t.signo])}>{t.signo}</span>{" "}
             S{t.semana} · {t.titulo}
           </span>
-          {/* E3: qué le cambia a una que ya existe («pasa a «Pruebas», S3», «renombrada a «Y»»). */}
+          {/* E3: qué le cambia a una que ya existe («viene de «Diseño»», «renombrada a «Y»»). */}
           {t.cambio && <span className="text-fg-muted">{t.cambio}</span>}
           {t.porValidar && (
             <span className="rounded border border-line bg-surface-muted px-1 py-px text-[10px] text-fg-muted" title={t.porValidar}>

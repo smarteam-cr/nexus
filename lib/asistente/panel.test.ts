@@ -449,7 +449,9 @@ describe("⛔ el desenlace no manda a una vista previa que no existe", () => {
        tercer argumento. El default es `true` (vista previa) para no romper hilos viejos, así que
        olvidarlo no falla: miente. */
     expect(PANEL).toContain("vistaPrevia");
-    expect(PANEL).toContain("!acuerdo.operaciones?.length");
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#19), con esta razón: lo que se aplica es `mandado` (lo marcado con sus
+       líneas, `loQueSeManda`); la vista previa se decide sobre eso, como antes sobre el acuerdo recortado. */
+    expect(PANEL).toContain("!mandado.operaciones?.length");
   });
 });
 
@@ -667,7 +669,13 @@ describe("un acuerdo de doce líneas se sigue pudiendo leer entero", () => {
        La edición que la pone en rojo: aplicar `acuerdo.operaciones` entero en vez del subconjunto,
        o guardar lo desmarcado sin pasar por `arrastreAlDesmarcar`. */
     expect(PANEL).toContain("arrastreAlDesmarcar(ops, pedido)");
-    expect(PANEL).toContain("operaciones: operacionesAceptadas(t.id, t.acuerdo!)");
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#19), con esta razón: el subconjunto ya no se arma en el clic sino
+       adentro de `aplicar`, con `loQueSeManda` (recorta las operaciones Y sus líneas, alineadas: quien aplica
+       cita la línea que falló). Lo que se pide es lo mismo: se manda lo marcado, no el acuerdo entero. Su
+       conducta la corre textos-del-acuerdo.test.ts. */
+    expect(PANEL).toContain("const mandado = loQueSeManda(acuerdo, descartadas);");
+    expect(PANEL).toContain("await onAplicar(mandado);");
+    expect(PANEL, "el botón dejó de pasar lo desmarcado").toContain("}, desmarcadas[t.id])");
     expect(PANEL, "el botón deja aplicar con cero operaciones marcadas").toContain(
       "sinNadaQueAplicar",
     );
@@ -1116,13 +1124,17 @@ describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
   it("⭐ con una propuesta, el botón, la espera y la caja resuelta lo dicen (y el motivo es por acuerdo)", () => {
     /* «Aplicar al cronograma» sobre algo que va a la propuesta mentiría. La edición que la pone en rojo:
        volver al texto fijo, o leer el motivo sin el acuerdo (el cronograma lo decide por propuesta). */
-    expect(PANEL).toContain("textoDelBoton(t.acuerdo, operacionesAceptadas(t.id, t.acuerdo).length) ??");
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#21), con esta razón: el botón recibe también cuántas se desmarcaron
+       (el «(N)» sale solo entonces). Normalizado: el formato no cuenta. */
+    expect(PANEL.replace(/\s+/g, "")).toContain(
+      "textoDelBoton(t.acuerdo,operacionesAceptadas(t.id,t.acuerdo).length,desmarcadas[t.id]?.size??0,)??",
+    );
     expect(PANEL).toContain('(textoMientrasAplica(t.acuerdo) ?? "Aplicando…")');
     expect(PANEL).toContain('{textoDelAcuerdoAplicado(t.acuerdo) ?? "Aplicado. ¿Hay que cambiar algo más?"}');
     expect(PANEL).toContain("!!motivoPara(t.acuerdo!) ||");
     expect(PANEL).not.toContain("!!motivoParaNoAplicar ||");
-    // El desenlace dice a dónde fue.
-    expect(PANEL).toContain("const destino = destinoDelResultado ?? destinoDelAcuerdo(acuerdo);");
+    // El desenlace dice a dónde fue. (Revisión de E3, #19: sobre lo mandado, `mandado`.)
+    expect(PANEL).toContain("const destino = destinoDelResultado ?? destinoDelAcuerdo(mandado);");
     expect(PANEL).toContain("...(destino ? { destino } : {})");
   });
 
@@ -1130,13 +1142,26 @@ describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
     /* El avance que se vuelve a evaluar iba en `avisos` → `detalle`, y el hilo lo escribía como «⚠ el editor
        hizo algo distinto». La edición que la pone en rojo: no leer las notas del resultado, no pasarlas al
        desenlace, o volver a juntarlas con los avisos en el detalle. */
-    expect(PANEL).toContain("const { fallo, avisos, destino: destinoDelResultado, notas } = await onAplicar(acuerdo);");
+    // Revisión de E3 (#19): se aplica lo mandado (`mandado`: lo marcado con sus líneas).
+    expect(PANEL).toContain("const { fallo, avisos, destino: destinoDelResultado, notas } = await onAplicar(mandado);");
     expect(PANEL).toContain("...(notas?.length ? { notas } : {})");
     const i = PANEL.indexOf("const quedoEscrito = await anotarDesenlace(");
     expect(i, "el desenlace del éxito cambió de forma").toBeGreaterThan(-1);
     const llamada = PANEL.slice(i, PANEL.indexOf(").catch(() => false);", i));
     expect(llamada).toContain('[nota, avisos.join(" · ")].filter(Boolean).join(" "),');
     expect(llamada.replace(/\s+/g, ""), "las notas no llegan al desenlace").toContain("destino,notas,");
+  });
+
+  it("⛔ revisión de E3 (#19, #21) · se manda lo marcado con sus líneas; «aplícala» y «descártala» sin casilla", () => {
+    /* Las ediciones que la ponen en rojo: volver a recortar solo las operaciones en el clic (las líneas quedan
+       enteras y el error no puede citar la que falló), armar la nota de lo descartado con lo mandado (numeraría
+       mal lo que quedó afuera: va con la lista COMPLETA), o volver a darle casilla a todo acuerdo vivo. La
+       conducta de `loQueSeManda` y `llevaCasillas` la corre textos-del-acuerdo.test.ts. */
+    expect(PANEL, "el clic volvió a recortar solo las operaciones").not.toContain("operaciones: operacionesAceptadas(t.id, t.acuerdo!)");
+    expect(PANEL).toContain("const nota = notaDeDescarte(acuerdo.lineas ?? [], [...(descartadas ?? [])]);");
+    expect(PANEL, "todo acuerdo vivo volvió a llevar casilla").toContain(
+      "const vivo = t.id === idDelAcuerdoVivo && !!onAplicar && llevaCasillas(t.acuerdo!);",
+    );
   });
 
   it("⭐ la referencia reemplaza al subtítulo, y el estado vacío muestra lo que se le pide a una propuesta", () => {

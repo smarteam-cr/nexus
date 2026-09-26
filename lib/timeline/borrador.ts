@@ -2553,7 +2553,7 @@ export interface ItemDeTarea {
   /** «+» se crea, «−» se quita, «~» cambia en su fase, «→» se muda a esta fase (E3). */
   signo: "+" | "−" | "~" | "→";
   titulo: string;
-  /** E3: qué le cambia («pasa a «Pruebas», S3», «renombrada a «Y»», «la hace el cliente»). */
+  /** E3: qué le cambia («viene de «Diseño»», «pasa a S3», «renombrada a «Y»», «la hace el cliente»). */
   cambio?: string;
   /** La semana dentro de su fase, contando desde 1 (S1 = la primera de la fase). */
   semana: number;
@@ -2710,7 +2710,7 @@ function tituloDe(c: Cambio, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseN
     case "fase-se-va":
       return `Se quita la fase «${nombreDeFase(vivo, c.faseId, c.desde.name)}»`;
     case "tarea-cambia":
-      return `«${c.desde.title}» · ${textoDelCambioDeTarea(c, vivo, nuevas)}`;
+      return `«${c.desde.title}» · ${textoDelCambioDeTarea(c, vivo, nuevas, "suelta")}`;
     default: {
       const _: never = c;
       return _;
@@ -2726,14 +2726,26 @@ const PARTY_EN_PALABRAS: Record<Party, string> = {
 };
 
 /**
- * E3: qué le cambia a una tarea viva, en palabras del CSE: «pasa a «Pruebas», S3», «pasa a S2»,
- * «renombrada a «Y»», «la hace el cliente», «pasa a sesión». La semana es la pedida o, en una
- * mudanza sin semana, la que tenía.
+ * E3: qué le cambia a una tarea viva, en palabras del CSE: «viene de «Diseño»», «pasa a S2»,
+ * «renombrada a «Y»», «la hace el cliente», «pasa a sesión».
+ * Revisión de E3 (#22): una mudanza se pinta en el grupo de su DESTINO («en-su-grupo»), que ya dice a
+ * dónde va, y el renglón ya dice su semana: «pasa a «Pruebas», S3» repetía las dos cosas y callaba de
+ * dónde venía. En su grupo dice su fase de origen, y la semana solo si cambia. «pasa a «X», S3» queda
+ * para cuando se nombra suelta, fuera de un grupo.
  */
-function textoDelCambioDeTarea(c: CambioTareaCambia, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseNueva>): string {
+function textoDelCambioDeTarea(
+  c: CambioTareaCambia,
+  vivo: Vivo,
+  nuevas: ReadonlyMap<string, CambioFaseNueva>,
+  donde: "en-su-grupo" | "suelta",
+): string {
   const partes: string[] = [];
   const destino = destinoDeLaCambia(c);
-  if (destino !== null) {
+  if (destino !== null && donde === "en-su-grupo") {
+    const origen = vivo.fases.find((f) => f.id === c.faseId)?.name;
+    partes.push(origen ? `viene de «${origen}»` : "viene de otra fase");
+    if (c.a.weekIndex !== undefined && c.a.weekIndex !== c.desde.weekIndex) partes.push(`pasa a S${c.a.weekIndex + 1}`);
+  } else if (destino !== null) {
     const nombre = nuevas.get(destino)?.fase.name ?? nombreDeFase(vivo, destino, destino);
     partes.push(`pasa a «${nombre}», S${(c.a.weekIndex ?? c.desde.weekIndex) + 1}`);
   } else if (c.a.weekIndex !== undefined) {
@@ -2814,7 +2826,7 @@ function gruposDeTareas(
           signo: destinoDeLaCambia(c) !== null ? ("→" as const) : ("~" as const),
           titulo: c.desde.title,
           semana: (c.a.weekIndex ?? c.desde.weekIndex) + 1,
-          cambio: textoDelCambioDeTarea(c, vivo, nuevasPorClave),
+          cambio: textoDelCambioDeTarea(c, vivo, nuevasPorClave, "en-su-grupo"),
         };
       }
       const repetida = avisoDeRepetida(c.tarea.title, c.fase, indice);

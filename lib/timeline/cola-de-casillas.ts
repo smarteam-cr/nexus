@@ -28,6 +28,31 @@ const VUELTAS_AL_ESPERAR = 5;
 /** Si quien guarda tira en vez de responder (no debería: el Canvas atrapa sus errores). */
 export const MOTIVO_SIN_GUARDAR = "No se pudo guardar lo que marcaste: vuelve a intentar.";
 
+/** Revisión de E3 (#20): cuando la propuesta cambió en otra parte, las casillas lo dicen con lo suyo. */
+export const MOTIVO_CASILLAS_OTRA_PROPUESTA = "La propuesta cambió en otra parte: ya ves la de ahora.";
+export const MOTIVO_CASILLAS_YA_RESUELTA = "La propuesta ya se aplicó o se descartó en otra parte.";
+export const MOTIVO_CASILLAS_SIN_TRAERLA = "La propuesta cambió en otra parte: recarga la página.";
+
+/**
+ * Qué se le dice al CSE cuando la ruta no guardó lo que marcó. Revisión de E3 (#20): el 409
+ * «PROPUESTA_CAMBIO» traía el texto de aplicar («…: no se aplicó nada»), y tras un clic en una casilla no
+ * se aplica nada. Con ese 409 la pantalla ya trajo la guardada: `laDeAhora` dice qué encontró («hay»,
+ * «ninguna», o null si no se pudo leer). Cualquier otro rechazo dice su propio motivo.
+ */
+export function motivoDeLasCasillasSinGuardar(cuerpo: unknown, laDeAhora: "hay" | "ninguna" | null): string {
+  const d = (cuerpo ?? {}) as { error?: unknown; message?: unknown };
+  if (d.error === "PROPUESTA_CAMBIO") {
+    return laDeAhora === "hay"
+      ? MOTIVO_CASILLAS_OTRA_PROPUESTA
+      : laDeAhora === "ninguna"
+        ? MOTIVO_CASILLAS_YA_RESUELTA
+        : MOTIVO_CASILLAS_SIN_TRAERLA;
+  }
+  if (typeof d.message === "string" && d.message) return d.message;
+  if (typeof d.error === "string" && d.error) return d.error;
+  return MOTIVO_SIN_GUARDAR;
+}
+
 /** Lo que responde quien guarda. `motivo` ya se le dijo al CSE (un toast): la cola solo revierte y corta. */
 export type ResultadoDeGuardarCasillas = { ok: true } | { ok: false; motivo: string };
 

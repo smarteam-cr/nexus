@@ -1331,7 +1331,18 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
       contiene(guardar, 'body: JSON.stringify({ token, version: revisionRef.current.version ?? 0, origen: "casillas", operaciones: ops }),'),
     ).toBe(true);
     expect(contiene(guardar, "if (res.ok) { adoptarPropuesta(d); return { ok: true }; }"), "la respuesta no se adopta").toBe(true);
-    expect(contiene(tramo(guardar, "if (res.status === 409) {", "}"), "await traerPropuestaPendiente(); toast.info(motivo);")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#20), con esta razón: el 409 ya no muestra el texto de aplicar («…: no
+       se aplicó nada», tras un clic en una casilla): dice lo suyo según lo que trajo (`motivoDeLasCasillasSinGuardar`,
+       su tabla en cola-de-casillas.test.ts). Lo que se pide es lo mismo: trae la guardada y lo dice. */
+    expect(
+      contiene(
+        tramo(guardar, "if (res.status === 409) {", "toast.info(motivo);"),
+        'const ahora = await traerPropuestaPendiente(); const motivo = motivoDeLasCasillasSinGuardar(d, !ahora.ok ? null : ahora.propuesta ? "hay" : "ninguna");',
+      ),
+      "el 409 de las casillas no dice lo que encontró",
+    ).toBe(true);
+    expect(contiene(guardar, "const motivo = motivoDeLasCasillasSinGuardar(d, null); toast.error(motivo);"), "otra falla queda muda").toBe(true);
+    expect(guardar, "las casillas volvieron a mostrar el mensaje del servidor tal cual").not.toContain("d?.message");
     expect(guardar.match(/toast\.error\(motivo\)/g)?.length, "una falla del guardado queda muda").toBe(2);
     expect(contiene(tramo(CANVAS, "const revision = useBorradorDelCronograma({", "});"), "guardarCasillas: canEdit ? guardarCasillas : undefined,")).toBe(
       true,
@@ -1389,12 +1400,17 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
        hasta recargar), escucharla sin propuesta, no soltar los oyentes, comparar solo la corrida al
        refrescar, o poner una propuesta más vieja al traerla. (E4: sale «o con la vista previa del
        modificador»: se retiró «Pedir cambio con IA».) */
-    const volver = tramo(CANVAS, "const alVolver = () => {", "}, [hayBorrador, refrescarPropuesta]);");
-    expect(CANVAS.indexOf("if (!hayBorrador) return;", CANVAS.indexOf("const alVolver = () => {") - 80), "escucha sin propuesta").toBeLessThan(
-      CANVAS.indexOf("const alVolver = () => {"),
-    );
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#23), con esta razón: `visibilitychange` y `focus` llegan juntos al
+       volver y cada uno hacía un GET completo; ahora los dos llaman a UNA relectura (`crearRelecturaAlVolver`,
+       su conducta en refresco-tras-handoff.test.ts). Cuándo se relee es lo mismo: al volver, con propuesta. El
+       «escucha sin propuesta» mira ahora desde la relectura, y ya no pasa en verde si no encuentra el `if`. */
+    const iReleer = CANVAS.indexOf("const releer = crearRelecturaAlVolver(refrescarPropuesta);");
+    expect(iReleer, "la vuelta a la pestaña dejó de pasar por una sola relectura").toBeGreaterThan(-1);
+    expect(CANVAS.lastIndexOf("if (!hayBorrador) return;", iReleer), "escucha sin propuesta").toBeGreaterThan(iReleer - 80);
+    const volver = tramo(CANVAS, "const releer = crearRelecturaAlVolver(refrescarPropuesta);", "}, [hayBorrador, refrescarPropuesta]);");
     expect(contiene(volver, 'if (document.visibilityState !== "visible") return;')).toBe(true);
-    expect(contiene(volver, "void refrescarPropuesta();")).toBe(true);
+    expect(contiene(volver, 'const alVolver = () => { if (document.visibilityState !== "visible") return; releer(); };')).toBe(true);
+    expect(volver, "un oyente volvió a releer por su cuenta (dos GET al volver)").not.toContain("refrescarPropuesta()");
     expect(contiene(volver, 'document.addEventListener("visibilitychange", alVolver);')).toBe(true);
     expect(contiene(volver, 'window.addEventListener("focus", alVolver);')).toBe(true);
     expect(contiene(volver, 'document.removeEventListener("visibilitychange", alVolver);')).toBe(true);
@@ -1441,7 +1457,9 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     expect(contiene(CANVAS, "onAplicar={atenderElAcuerdo}")).toBe(true);
     const atender = tramo(CANVAS, "const atenderElAcuerdo =", "const tokenParaLaApertura");
     expect(contiene(atender, "acuerdo.borrador == null")).toBe(true);
-    expect(contiene(atender, "aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen)")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#19), con esta razón: el carril de siempre también recibe las líneas de
+       lo mandado, para citar la que el ejecutor rechaza (el número contaba solo lo marcado). */
+    expect(contiene(atender, "aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen, acuerdo.lineas)")).toBe(true);
     expect(contiene(atender, ": pasarALaPropuesta(acuerdo);")).toBe(true);
     // Ningún `aplicarOperaciones…(` nuevo: el del ejecutor y la llamada del despachador (antes, la del JSX).
     expect(CANVAS.match(/aplicarOperaciones\w*\(/g)?.length, "apareció un carril nuevo con el nombre del PUT").toBe(2);
@@ -1470,7 +1488,14 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     expect(contiene(pasar, 'body: JSON.stringify({ token: acuerdo.borrador, version: revisionRef.current.version ?? 0, origen: "chat", operaciones: ops }),')).toBe(true);
     // Aplicar va por el MISMO aplicar de la barra, con la lista acordada; el 422 dice qué línea.
     expect(contiene(pasar, "return aplicarBorrador({ acordada: { version: ops[0]?.version, huella: ops[0]?.huella }, desdeElChat: true });")).toBe(true);
-    expect(contiene(pasar, "`#${r.indice + 1}: ${r.motivo}`")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#19), con esta razón: el 422 cita la LÍNEA de la cajita
+       (`textoDeLosRechazos`, su conducta en textos-del-acuerdo.test.ts), no «#n» contado entre lo marcado. */
+    expect(contiene(pasar, "textoDeLosRechazos(d.rechazadas as Array<{ indice: number; motivo: string }>, acuerdo.lineas),")).toBe(true);
+    expect(pasar, "el 422 volvió a numerar entre lo marcado").not.toContain("r.indice + 1");
+    // El carril de siempre (sin propuesta) cita igual: la posición en lo mandado y sus líneas.
+    const ejecutor = tramo(CANVAS, "const aplicarOperacionesAcordadas = async (", "setApplying(true);");
+    expect(contiene(ejecutor, "const motivo = textoDeLosRechazos(conIndice, lineas);")).toBe(true);
+    expect(ejecutor, "el carril de siempre volvió a numerar entre lo marcado").not.toContain("indexOf(r.operacion) + 1");
     expect(contiene(pasar, 'if (revisionRef.current.vista === "antes") revisionRef.current.alternar();')).toBe(true);
   });
 

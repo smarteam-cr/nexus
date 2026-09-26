@@ -45,6 +45,8 @@ import type { CambioAcordado } from "@/lib/asistente/turno";
 import { esAcuerdoDeCierre } from "@/lib/asistente/acuerdo";
 import {
   destinoDelAcuerdo,
+  llevaCasillas,
+  loQueSeManda,
   rotuloDelAcuerdoAplicado,
   textoDelAcuerdoAplicado,
   textoDelBoton,
@@ -495,13 +497,16 @@ export default function ChatDelAsistente({
    */
   async function aplicar(acuerdo: AcuerdoDelChat, descartadas?: ReadonlySet<number>) {
     if (!onAplicar || aplicando) return;
+    /* Revisión de E3 (#19): se manda lo marcado CON sus líneas alineadas (`loQueSeManda`), así quien
+       aplica cita la línea que falló. `acuerdo` queda entero: la nota de lo descartado lo necesita. */
+    const mandado = loQueSeManda(acuerdo, descartadas);
     setAplicando(true);
-    setAplicandoEste(acuerdo);
+    setAplicandoEste(mandado);
     setError(null);
     try {
-      const { fallo, avisos, destino: destinoDelResultado, notas } = await onAplicar(acuerdo);
+      const { fallo, avisos, destino: destinoDelResultado, notas } = await onAplicar(mandado);
       /* E3 P5: a dónde fue lo decide quien aplicó; si no lo dice, lo que pide el acuerdo. */
-      const destino = destinoDelResultado ?? destinoDelAcuerdo(acuerdo);
+      const destino = destinoDelResultado ?? destinoDelAcuerdo(mandado);
       if (fallo) {
         /* ⛔ NO se cierra el panel: el error tiene que verse donde se apretó el botón. Antes
            aparecía suelto al pie del documento, con el cajón ya cerrado. */
@@ -525,7 +530,7 @@ export default function ChatDelAsistente({
         const quedoEscrito = await anotarDesenlace(
           true,
           [nota, avisos.join(" · ")].filter(Boolean).join(" "),
-          !acuerdo.operaciones?.length,
+          !mandado.operaciones?.length,
           destino,
           notas,
         ).catch(() => false);
@@ -804,7 +809,8 @@ export default function ChatDelAsistente({
                     >
                       {t.acuerdo.lineas.map((linea, i) => {
                         const fuera = (desmarcadas[t.id] ?? EMPTY).has(i);
-                        const vivo = t.id === idDelAcuerdoVivo && !!onAplicar;
+                        /* Revisión de E3 (#21): «aplícala» y «descártala» son una sola línea: sin casilla. */
+                        const vivo = t.id === idDelAcuerdoVivo && !!onAplicar && llevaCasillas(t.acuerdo!);
                         return (
                           <li key={i} className="leading-relaxed">
                             {vivo ? (
@@ -907,11 +913,10 @@ export default function ChatDelAsistente({
                 {t.id !== idDelAcuerdoVivo || esAcuerdoDeCierre(t.acuerdo) ? null : onAplicar ? (
                   <button
                     onClick={() =>
+                      /* Lo desmarcado se saca adentro de `aplicar` (`loQueSeManda`): las operaciones
+                         y sus líneas, juntas. */
                       void aplicar({
                         ...t.acuerdo!,
-                        ...(t.acuerdo!.operaciones
-                          ? { operaciones: operacionesAceptadas(t.id, t.acuerdo!) }
-                          : {}),
                         ...(instruccionEditada[t.id] !== undefined
                           ? { instruccion: instruccionEditada[t.id] }
                           : {}),
@@ -938,8 +943,13 @@ export default function ChatDelAsistente({
                         ? motivoPara(t.acuerdo)
                       : sinNadaQueAplicar(t.id, t.acuerdo)
                         ? "No queda nada marcado"
-                        : /* E3 P5: con una propuesta, «Pasar a la propuesta (N)», «Aplicar la propuesta…». */
-                          textoDelBoton(t.acuerdo, operacionesAceptadas(t.id, t.acuerdo).length) ??
+                        : /* E3 P5: con una propuesta, «Pasar a la propuesta», «Aplicar la propuesta…».
+                             Revisión de E3 (#21): el «(N)» solo con algo desmarcado, como el de siempre. */
+                          textoDelBoton(
+                            t.acuerdo,
+                            operacionesAceptadas(t.id, t.acuerdo).length,
+                            desmarcadas[t.id]?.size ?? 0,
+                          ) ??
                           (t.acuerdo.operaciones
                           ? `Aplicar al ${nombreDeLaPieza}${
                               (desmarcadas[t.id]?.size ?? 0) > 0

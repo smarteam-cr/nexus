@@ -24,11 +24,16 @@ import {
   ESPERA_DE_LA_COLA_MS,
   hayPendientes,
   juntarCasillas,
+  MOTIVO_CASILLAS_OTRA_PROPUESTA,
+  MOTIVO_CASILLAS_SIN_TRAERLA,
+  MOTIVO_CASILLAS_YA_RESUELTA,
   MOTIVO_SIN_GUARDAR,
+  motivoDeLasCasillasSinGuardar,
   pendientesDeLaCola,
   revertir,
   type ResultadoDeGuardarCasillas,
 } from "./cola-de-casillas";
+import { MENSAJE_PROPUESTA_CAMBIO } from "./escribir-estructura";
 
 // ── Un reloj falso y un «servidor» que responde cuando el test quiere ─────────────────────────
 function relojFalso() {
@@ -320,5 +325,44 @@ describe("la cola en marcha: el reloj de 250 ms y la cadena", () => {
     expect(vistos.length, "una propuesta soltada volvió a pintar").toBe(antes);
     cola.clic(["c"], false);
     expect(cola.pendientes()).toEqual([]);
+  });
+});
+
+/**
+ * ── REVISIÓN DE E3 (#20): LO QUE SE DICE CUANDO LAS CASILLAS NO SE GUARDARON ─────────────────────────────
+ * El 409 «PROPUESTA_CAMBIO» traía el texto de aplicar: «…(se regeneró el handoff, o se resolvió en otra
+ * pestaña): no se aplicó nada», tras un clic en una casilla. Ahora dice lo suyo, según lo que encontró al traer
+ * la guardada; y el de aplicar ya no nombra causas que no eran.
+ */
+describe("⭐ revisión de E3 (#20) · el motivo de las casillas que no se guardaron", () => {
+  const cambio = { error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO };
+
+  it("⛔ el 409 de la propuesta que cambió dice lo que se trajo, no «no se aplicó nada»", () => {
+    /* Las ediciones que la ponen en rojo: volver a mostrar el `message` del servidor (el de aplicar), o decir
+       «ya ves la de ahora» cuando ya no hay propuesta o cuando no se pudo traer. */
+    expect(motivoDeLasCasillasSinGuardar(cambio, "hay"), "volvió el texto de aplicar").toBe(MOTIVO_CASILLAS_OTRA_PROPUESTA);
+    expect(motivoDeLasCasillasSinGuardar(cambio, "ninguna")).toBe(MOTIVO_CASILLAS_YA_RESUELTA);
+    expect(motivoDeLasCasillasSinGuardar(cambio, null)).toBe(MOTIVO_CASILLAS_SIN_TRAERLA);
+    for (const laDeAhora of ["hay", "ninguna", null] as const) {
+      expect(motivoDeLasCasillasSinGuardar(cambio, laDeAhora), String(laDeAhora)).not.toContain("no se aplicó nada");
+    }
+  });
+
+  it("los demás rechazos dicen su propio motivo (una versión nueva de Nexus, un 400), y sin cuerpo el de siempre", () => {
+    expect(motivoDeLasCasillasSinGuardar({ error: "NO_SE_PUEDE", message: "Recarga la página." }, null)).toBe("Recarga la página.");
+    expect(motivoDeLasCasillasSinGuardar({ error: "JSON inválido" }, null)).toBe("JSON inválido");
+    expect(motivoDeLasCasillasSinGuardar({}, null)).toBe(MOTIVO_SIN_GUARDAR);
+    expect(motivoDeLasCasillasSinGuardar(null, null)).toBe(MOTIVO_SIN_GUARDAR);
+  });
+
+  it("⛔ los textos: cortos, en tuteo; y el 409 de aplicar sin causas entre paréntesis", () => {
+    /* La edición que la pone en rojo: volver a «(se regeneró el handoff, o se resolvió en otra pestaña)» (desde
+       E3 la versión también sube por las casillas de otra computadora o por el chat: nombraba causas que no eran). */
+    expect(MENSAJE_PROPUESTA_CAMBIO, "volvieron las causas entre paréntesis").not.toMatch(/[()]/);
+    expect(MENSAJE_PROPUESTA_CAMBIO).toBe("La propuesta cambió mientras la revisabas: no se aplicó nada. Revisa la que está ahora.");
+    for (const m of [MOTIVO_CASILLAS_OTRA_PROPUESTA, MOTIVO_CASILLAS_YA_RESUELTA, MOTIVO_CASILLAS_SIN_TRAERLA]) {
+      expect(m.length, m).toBeLessThanOrEqual(60);
+      expect(m, m).not.toMatch(/\b(pod[eé]s|ten[eé]s|quer[eé]s|fijate|mirá|recargá|revisá)\b/i);
+    }
   });
 });

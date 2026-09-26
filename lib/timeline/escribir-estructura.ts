@@ -121,8 +121,11 @@ export class ErrorAlAplicar extends Error {
   }
 }
 
+/* Revisión de E3 (#20): sin las causas entre paréntesis («se regeneró el handoff, o se resolvió en otra
+   pestaña»): desde E3 la versión también sube por las casillas de otra computadora o por el chat, y el
+   paréntesis nombraba causas que no eran. */
 export const MENSAJE_PROPUESTA_CAMBIO =
-  "La propuesta cambió mientras la revisabas (se regeneró el handoff, o se resolvió en otra pestaña): no se aplicó nada. Revisa la que está ahora.";
+  "La propuesta cambió mientras la revisabas: no se aplicó nada. Revisa la que está ahora.";
 export const MENSAJE_PLAN_CAMBIO =
   "El cronograma cambió mientras revisabas la propuesta (otra pestaña u otra persona): no se aplicó nada. Revisa la lista actualizada y vuelve a aplicar.";
 export const MENSAJE_NADA_QUE_APLICAR =
