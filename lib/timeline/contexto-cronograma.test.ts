@@ -489,6 +489,10 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
        las arma) y el núcleo que les da los textos (el título de la barra, la línea, la confirmación de
        quitar tareas, los choques): todo lo lee el CSE tal cual. */
     "components/canvas/TareasDeLaPropuesta.tsx",
+    /* L3 P3b (2026-09-26): los textos de la propuesta en el Gantt (verbos, chips, casillas de fase, la cuenta del
+       grupo y los títulos de la fuga y la repetida) viven en lib/, en la vista pura. TareasDeLaPropuesta.tsx sale
+       de esta lista cuando P3d lo borre. */
+    "lib/timeline/vista-de-la-propuesta.ts",
     "components/canvas/LineaDeLasTareas.tsx",
     "lib/timeline/borrador.ts",
     /* Revisión de E2a (2026-09-25): los textos del servidor que el CSE lee TAL CUAL también. El 409

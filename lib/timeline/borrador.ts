@@ -1436,8 +1436,9 @@ const mismaFoto = (a: FotoDeTarea, b: FotoDeTarea) =>
 const valorDeTarea = (t: TareaDelVivo, campo: CampoDeTarea): string | number | null =>
   campo === "title" ? t.title : campo === "weekIndex" ? t.weekIndex : campo === "party" ? (t.party ?? null) : (t.type ?? null);
 
-/** E3: la fase a la que se muda una tarea que cambia, o null si se queda en la suya. */
-const destinoDeLaCambia = (c: CambioTareaCambia): string | null =>
+/** E3: la fase a la que se muda una tarea que cambia, o null si se queda en la suya. L3 P3b: la exporta
+ *  para la vista de la propuesta (vista-de-la-propuesta.ts), que pinta la mudanza en su origen y su destino. */
+export const destinoDeLaCambia = (c: CambioTareaCambia): string | null =>
   c.a.fase !== undefined && c.a.fase !== c.faseId ? c.a.fase : null;
 
 /**
@@ -1620,14 +1621,7 @@ export function numeracionDeLaPropuesta(vivo: Vivo, cambios: readonly Cambio[]):
   for (const c of cambios) if (c.tipo === "orden") numerarCambio(c, null);
 
   // 2 · Fase por fase, en el orden completo (lo marcado no entra: el número no se mueve al tocar casillas).
-  const nuevasPorClave = new Map(
-    cambios.filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva").map((c) => [c.clave, c]),
-  );
-  const completo = ordenFinal(
-    vivo,
-    cambios.filter((c) => c.tipo === "fase-nueva" || c.tipo === "orden"),
-    nuevasPorClave,
-  ).map((l) => (l.tipo === "existente" ? l.id : l.clave));
+  const completo = ordenCompletoDeLaPropuesta(vivo, cambios);
   const enElOrden = new Set(completo);
   const impacto = (c: CambioFaseCambia) => CAMPOS_POR_IMPACTO.indexOf(c.campo);
   for (const fase of completo) {
@@ -1653,6 +1647,22 @@ export function numeracionDeLaPropuesta(vivo: Vivo, cambios: readonly Cambio[]):
     }
   }
   return { porClave, orden };
+}
+
+/**
+ * L3 (D3): el orden COMPLETO de la propuesta, con lo que la numera: el cambio de orden y todas las fases
+ * nuevas, marcadas o no, sin sacar las que se van. Lo usan la numeración y (P3b) la vista de la propuesta,
+ * que pone una fase que queda fuera del calendario detrás de la que la precede en este orden.
+ */
+export function ordenCompletoDeLaPropuesta(vivo: Vivo, cambios: readonly Cambio[]): string[] {
+  const nuevasPorClave = new Map(
+    cambios.filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva").map((c) => [c.clave, c]),
+  );
+  return ordenFinal(
+    vivo,
+    cambios.filter((c) => c.tipo === "fase-nueva" || c.tipo === "orden"),
+    nuevasPorClave,
+  ).map((l) => (l.tipo === "existente" ? l.id : l.clave));
 }
 
 /** El orden final: el cambio de orden (si se aplica) y las fases nuevas en su lugar. Es `buildPhaseOrder`.
@@ -2385,7 +2395,9 @@ export function proyectar(vivo: Vivo, borrador: Borrador, sin: Iterable<string> 
   return proyectarConPlan(vivo, planDeAplicacion(vivo, borrador, sin));
 }
 
-const acotarSemana = (semana: number, duracion: number) => Math.min(semana, Math.max(duracion - 1, 0));
+/** Una semana acotada a la duración de su fase (la última, si se pasa). L3 P3b: la exporta para la vista de la
+ *  propuesta, que ubica ahí las filas que no están en la proyección (las que se quitan, los fantasmas). */
+export const acotarSemana = (semana: number, duracion: number) => Math.min(semana, Math.max(duracion - 1, 0));
 const etiquetaDeTareas = (signo: "+" | "−", n: number) => `${signo}${plural(n, "tarea", "tareas")}`;
 
 /** La proyección de un plan ya calculado (E3: quien edita la propuesta mira el plan y la vista a la vez,

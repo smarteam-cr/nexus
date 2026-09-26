@@ -1,0 +1,4462 @@
+{
+  "_origen": "Un proyecto real anonimizado el 2026-09-26 con plan-legible/fixture/anonimizar.cjs (fuera del repo): su cronograma, la propuesta de «Regenerar todo» y la salida del paso 2.",
+  "ancla": "2026-05-19",
+  "hoy": "2026-09-26T12:00:00-06:00",
+  "vivo": {
+    "fases": [
+      {
+        "id": "f01",
+        "name": "Semana 0",
+        "order": 0,
+        "durationWeeks": 2,
+        "startWeek": null,
+        "sessionCount": 2,
+        "notes": "Nota 001",
+        "activityType": "PLANIFICACION",
+        "status": "IN_PROGRESS",
+        "statusSource": "HUMAN",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t001",
+            "title": "Tarea 001",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 002",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t002",
+            "title": "Tarea 002",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 003",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t003",
+            "title": "Tarea 003",
+            "weekIndex": 0,
+            "order": 2,
+            "notes": "Nota 004",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t004",
+            "title": "Tarea 004",
+            "weekIndex": 0,
+            "order": 3,
+            "notes": "Nota 005",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t005",
+            "title": "Tarea 005",
+            "weekIndex": 0,
+            "order": 4,
+            "notes": null,
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t006",
+            "title": "Tarea 006",
+            "weekIndex": 0,
+            "order": 5,
+            "notes": null,
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t007",
+            "title": "Tarea 007",
+            "weekIndex": 0,
+            "order": 6,
+            "notes": null,
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t008",
+            "title": "Tarea 008",
+            "weekIndex": 0,
+            "order": 7,
+            "notes": null,
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t009",
+            "title": "Tarea 009",
+            "weekIndex": 0,
+            "order": 8,
+            "notes": null,
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t010",
+            "title": "Tarea 010",
+            "weekIndex": 0,
+            "order": 9,
+            "notes": "Nota 006",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t011",
+            "title": "Tarea 011",
+            "weekIndex": 0,
+            "order": 10,
+            "notes": "Nota 007",
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t012",
+            "title": "Tarea 012",
+            "weekIndex": 0,
+            "order": 11,
+            "notes": "Nota 008",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t013",
+            "title": "Tarea 013",
+            "weekIndex": 0,
+            "order": 12,
+            "notes": "Nota 009",
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t014",
+            "title": "Tarea 014",
+            "weekIndex": 0,
+            "order": 13,
+            "notes": "Nota 010",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t015",
+            "title": "Tarea 015",
+            "weekIndex": 0,
+            "order": 14,
+            "notes": "Nota 011",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t016",
+            "title": "Tarea 016",
+            "weekIndex": 0,
+            "order": 15,
+            "notes": "Nota 012",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t017",
+            "title": "Tarea 017",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 013",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t018",
+            "title": "Tarea 018",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 014",
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f02",
+        "name": "Fase A",
+        "order": 1,
+        "durationWeeks": 4,
+        "startWeek": 2,
+        "sessionCount": 6,
+        "notes": "Nota 015",
+        "activityType": "CONFIGURACION",
+        "status": "IN_PROGRESS",
+        "statusSource": "AI_CONFIRMED",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t019",
+            "title": "Tarea 019",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 016",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t020",
+            "title": "Tarea 020",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 017",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t021",
+            "title": "Tarea 021",
+            "weekIndex": 0,
+            "order": 2,
+            "notes": "Nota 018",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t022",
+            "title": "Tarea 022",
+            "weekIndex": 0,
+            "order": 3,
+            "notes": "Nota 019",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t023",
+            "title": "Tarea 023",
+            "weekIndex": 0,
+            "order": 4,
+            "notes": "Nota 020",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t024",
+            "title": "Tarea 024",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 021",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t025",
+            "title": "Tarea 025",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 022",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t026",
+            "title": "Tarea 026",
+            "weekIndex": 1,
+            "order": 2,
+            "notes": "Nota 023",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t027",
+            "title": "Tarea 027",
+            "weekIndex": 1,
+            "order": 3,
+            "notes": "Nota 024",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t028",
+            "title": "Tarea 028",
+            "weekIndex": 1,
+            "order": 4,
+            "notes": "Nota 025",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t029",
+            "title": "Tarea 029",
+            "weekIndex": 1,
+            "order": 5,
+            "notes": "Nota 026",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t030",
+            "title": "Tarea 030",
+            "weekIndex": 1,
+            "order": 6,
+            "notes": "Nota 027",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t031",
+            "title": "Tarea 031",
+            "weekIndex": 1,
+            "order": 7,
+            "notes": "Nota 028",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f03",
+        "name": "Fase B",
+        "order": 2,
+        "durationWeeks": 4,
+        "startWeek": 1,
+        "sessionCount": 3,
+        "notes": "Nota 029",
+        "activityType": "CONFIGURACION",
+        "status": "DONE",
+        "statusSource": "AI_CONFIRMED",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t032",
+            "title": "Tarea 032",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 030",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t033",
+            "title": "Tarea 033",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 031",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t034",
+            "title": "Tarea 034",
+            "weekIndex": 0,
+            "order": 2,
+            "notes": "Nota 032",
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t035",
+            "title": "Tarea 035",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 033",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t036",
+            "title": "Tarea 036",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 034",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t037",
+            "title": "Tarea 037",
+            "weekIndex": 2,
+            "order": 0,
+            "notes": "Nota 035",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t038",
+            "title": "Tarea 038",
+            "weekIndex": 2,
+            "order": 1,
+            "notes": "Nota 036",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t039",
+            "title": "Tarea 039",
+            "weekIndex": 3,
+            "order": 0,
+            "notes": "Nota 037",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t040",
+            "title": "Tarea 040",
+            "weekIndex": 3,
+            "order": 1,
+            "notes": "Nota 038",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f04",
+        "name": "Fase C",
+        "order": 3,
+        "durationWeeks": 2,
+        "startWeek": 2,
+        "sessionCount": 8,
+        "notes": "Nota 039",
+        "activityType": "EXPLORACION",
+        "status": "IN_PROGRESS",
+        "statusSource": "HUMAN",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t041",
+            "title": "Tarea 041",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 040",
+            "party": "SMARTEAM",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t042",
+            "title": "Tarea 042",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 041",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t043",
+            "title": "Tarea 043",
+            "weekIndex": 0,
+            "order": 2,
+            "notes": "Nota 042",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t044",
+            "title": "Tarea 044",
+            "weekIndex": 0,
+            "order": 3,
+            "notes": "Nota 043",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t045",
+            "title": "Tarea 045",
+            "weekIndex": 0,
+            "order": 4,
+            "notes": "Nota 044",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t046",
+            "title": "Tarea 046",
+            "weekIndex": 0,
+            "order": 5,
+            "notes": "Nota 045",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t047",
+            "title": "Tarea 047",
+            "weekIndex": 0,
+            "order": 6,
+            "notes": null,
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "HUMAN",
+            "needsValidation": false
+          },
+          {
+            "id": "t048",
+            "title": "Tarea 048",
+            "weekIndex": 0,
+            "order": 7,
+            "notes": "Nota 046",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t049",
+            "title": "Tarea 049",
+            "weekIndex": 0,
+            "order": 8,
+            "notes": "Nota 047",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t050",
+            "title": "Tarea 050",
+            "weekIndex": 0,
+            "order": 9,
+            "notes": "Nota 048",
+            "party": "DEV",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t051",
+            "title": "Tarea 051",
+            "weekIndex": 0,
+            "order": 10,
+            "notes": "Nota 049",
+            "party": "DEV",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t052",
+            "title": "Tarea 052",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 050",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t053",
+            "title": "Tarea 053",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 051",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t054",
+            "title": "Tarea 054",
+            "weekIndex": 1,
+            "order": 2,
+            "notes": "Nota 052",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "HUMAN",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t055",
+            "title": "Tarea 055",
+            "weekIndex": 1,
+            "order": 3,
+            "notes": "Nota 053",
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t056",
+            "title": "Tarea 056",
+            "weekIndex": 1,
+            "order": 4,
+            "notes": "Nota 054",
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t057",
+            "title": "Tarea 057",
+            "weekIndex": 1,
+            "order": 5,
+            "notes": "Nota 055",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t058",
+            "title": "Tarea 058",
+            "weekIndex": 1,
+            "order": 6,
+            "notes": "Nota 056",
+            "party": "DEV",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t059",
+            "title": "Tarea 059",
+            "weekIndex": 1,
+            "order": 7,
+            "notes": "Nota 057",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t060",
+            "title": "Tarea 060",
+            "weekIndex": 1,
+            "order": 8,
+            "notes": "Nota 058",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t061",
+            "title": "Tarea 061",
+            "weekIndex": 1,
+            "order": 9,
+            "notes": "Nota 059",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f05",
+        "name": "Fase D",
+        "order": 4,
+        "durationWeeks": 4,
+        "startWeek": 5,
+        "sessionCount": 5,
+        "notes": "Nota 060",
+        "activityType": "CONFIGURACION",
+        "status": "PENDING",
+        "statusSource": "HUMAN",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t062",
+            "title": "Tarea 062",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 061",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t063",
+            "title": "Tarea 063",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 062",
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t064",
+            "title": "Tarea 064",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 063",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t065",
+            "title": "Tarea 065",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 064",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t066",
+            "title": "Tarea 066",
+            "weekIndex": 2,
+            "order": 0,
+            "notes": "Nota 065",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t067",
+            "title": "Tarea 067",
+            "weekIndex": 2,
+            "order": 1,
+            "notes": "Nota 066",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": true
+          },
+          {
+            "id": "t068",
+            "title": "Tarea 068",
+            "weekIndex": 3,
+            "order": 0,
+            "notes": "Nota 067",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t069",
+            "title": "Tarea 069",
+            "weekIndex": 3,
+            "order": 1,
+            "notes": "Nota 068",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f06",
+        "name": "Fase E",
+        "order": 5,
+        "durationWeeks": 4,
+        "startWeek": 5,
+        "sessionCount": 5,
+        "notes": "Nota 069",
+        "activityType": "ADOPCION",
+        "status": "PENDING",
+        "statusSource": "HUMAN",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t070",
+            "title": "Tarea 070",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 070",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t071",
+            "title": "Tarea 071",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 071",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t072",
+            "title": "Tarea 072",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 072",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t073",
+            "title": "Tarea 071",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 073",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t074",
+            "title": "Tarea 073",
+            "weekIndex": 2,
+            "order": 0,
+            "notes": "Nota 074",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "HUMAN",
+            "needsValidation": false
+          },
+          {
+            "id": "t075",
+            "title": "Tarea 074",
+            "weekIndex": 2,
+            "order": 1,
+            "notes": "Nota 075",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "HUMAN",
+            "needsValidation": false
+          },
+          {
+            "id": "t076",
+            "title": "Tarea 075",
+            "weekIndex": 2,
+            "order": 2,
+            "notes": "Nota 076",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t077",
+            "title": "Tarea 071",
+            "weekIndex": 2,
+            "order": 3,
+            "notes": "Nota 077",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t078",
+            "title": "Tarea 071",
+            "weekIndex": 3,
+            "order": 0,
+            "notes": "Nota 078",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f07",
+        "name": "Fase F",
+        "order": 6,
+        "durationWeeks": 3,
+        "startWeek": 9,
+        "sessionCount": 3,
+        "notes": "Nota 079",
+        "activityType": "CONFIGURACION",
+        "status": "IN_PROGRESS",
+        "statusSource": "AI_CONFIRMED",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t079",
+            "title": "Tarea 076",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 080",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t080",
+            "title": "Tarea 077",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 081",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t081",
+            "title": "Tarea 078",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 082",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t082",
+            "title": "Tarea 079",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 083",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t083",
+            "title": "Tarea 080",
+            "weekIndex": 2,
+            "order": 0,
+            "notes": "Nota 084",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t084",
+            "title": "Tarea 081",
+            "weekIndex": 2,
+            "order": 1,
+            "notes": "Nota 085",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f08",
+        "name": "Fase G",
+        "order": 7,
+        "durationWeeks": 1,
+        "startWeek": 11,
+        "sessionCount": 2,
+        "notes": "Nota 086",
+        "activityType": "SEGUIMIENTO",
+        "status": "PENDING",
+        "statusSource": "HUMAN",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t085",
+            "title": "Tarea 082",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 087",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t086",
+            "title": "Tarea 083",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 088",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f09",
+        "name": "Fase H",
+        "order": 8,
+        "durationWeeks": 4,
+        "startWeek": null,
+        "sessionCount": 3,
+        "notes": "Nota 089",
+        "activityType": "CONFIGURACION",
+        "status": "PENDING",
+        "statusSource": "HUMAN",
+        "source": "MODIFIED",
+        "tareas": [
+          {
+            "id": "t087",
+            "title": "Tarea 084",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 090",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t088",
+            "title": "Tarea 085",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 091",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t089",
+            "title": "Tarea 086",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 092",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t090",
+            "title": "Tarea 087",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 093",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t091",
+            "title": "Tarea 088",
+            "weekIndex": 1,
+            "order": 2,
+            "notes": "Nota 094",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t092",
+            "title": "Tarea 089",
+            "weekIndex": 2,
+            "order": 0,
+            "notes": "Nota 095",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t093",
+            "title": "Tarea 090",
+            "weekIndex": 2,
+            "order": 1,
+            "notes": "Nota 096",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f10",
+        "name": "Fase I",
+        "order": 9,
+        "durationWeeks": 1,
+        "startWeek": null,
+        "sessionCount": null,
+        "notes": null,
+        "activityType": "ADOPCION",
+        "status": "IN_PROGRESS",
+        "statusSource": "HUMAN",
+        "source": "HUMAN",
+        "tareas": [
+          {
+            "id": "t094",
+            "title": "Tarea 091",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": null,
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "HUMAN",
+            "needsValidation": false
+          },
+          {
+            "id": "t095",
+            "title": "Tarea 092",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": null,
+            "party": "DEV",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t096",
+            "title": "Tarea 093",
+            "weekIndex": 0,
+            "order": 2,
+            "notes": "Nota 097",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t097",
+            "title": "Tarea 094",
+            "weekIndex": 0,
+            "order": 3,
+            "notes": "Nota 098",
+            "party": "AMBOS",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t098",
+            "title": "Tarea 095",
+            "weekIndex": 0,
+            "order": 4,
+            "notes": "Nota 099",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "DONE",
+            "statusSource": "AI_CONFIRMED",
+            "source": "MODIFIED",
+            "needsValidation": false
+          },
+          {
+            "id": "t099",
+            "title": "Tarea 096",
+            "weekIndex": 0,
+            "order": 5,
+            "notes": null,
+            "party": null,
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "HUMAN",
+            "needsValidation": false
+          },
+          {
+            "id": "t100",
+            "title": "Tarea 097",
+            "weekIndex": 0,
+            "order": 6,
+            "notes": null,
+            "party": null,
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "HUMAN",
+            "needsValidation": false
+          },
+          {
+            "id": "t101",
+            "title": "Tarea 098",
+            "weekIndex": 0,
+            "order": 7,
+            "notes": null,
+            "party": null,
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "HUMAN",
+            "needsValidation": false
+          },
+          {
+            "id": "t102",
+            "title": "Tarea 099",
+            "weekIndex": 0,
+            "order": 8,
+            "notes": null,
+            "party": null,
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "HUMAN",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f11",
+        "name": "Fase J",
+        "order": 10,
+        "durationWeeks": 1,
+        "startWeek": null,
+        "sessionCount": null,
+        "notes": null,
+        "activityType": "SEGUIMIENTO",
+        "status": "PENDING",
+        "statusSource": "HUMAN",
+        "source": "HUMAN",
+        "tareas": [
+          {
+            "id": "t103",
+            "title": "Tarea 100",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": null,
+            "party": "SMARTEAM",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "HUMAN",
+            "needsValidation": false
+          },
+          {
+            "id": "t104",
+            "title": "Tarea 101",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 100",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t105",
+            "title": "Tarea 102",
+            "weekIndex": 0,
+            "order": 2,
+            "notes": "Nota 101",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          }
+        ]
+      },
+      {
+        "id": "f12",
+        "name": "Fase K",
+        "order": 11,
+        "durationWeeks": 3,
+        "startWeek": null,
+        "sessionCount": null,
+        "notes": null,
+        "activityType": "CONFIGURACION",
+        "status": "PENDING",
+        "statusSource": "HUMAN",
+        "source": "HUMAN",
+        "tareas": [
+          {
+            "id": "t106",
+            "title": "Tarea 103",
+            "weekIndex": 0,
+            "order": 0,
+            "notes": "Nota 102",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t107",
+            "title": "Tarea 104",
+            "weekIndex": 0,
+            "order": 1,
+            "notes": "Nota 103",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t108",
+            "title": "Tarea 105",
+            "weekIndex": 0,
+            "order": 2,
+            "notes": "Nota 104",
+            "party": "SMARTEAM",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": false
+          },
+          {
+            "id": "t109",
+            "title": "Tarea 106",
+            "weekIndex": 1,
+            "order": 0,
+            "notes": "Nota 105",
+            "party": "DEV",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": true
+          },
+          {
+            "id": "t110",
+            "title": "Tarea 107",
+            "weekIndex": 1,
+            "order": 1,
+            "notes": "Nota 106",
+            "party": "CLIENTE",
+            "type": "TASK",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": true
+          },
+          {
+            "id": "t111",
+            "title": "Tarea 108",
+            "weekIndex": 2,
+            "order": 0,
+            "notes": "Nota 107",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": true
+          },
+          {
+            "id": "t112",
+            "title": "Tarea 109",
+            "weekIndex": 2,
+            "order": 1,
+            "notes": "Nota 108",
+            "party": "AMBOS",
+            "type": "SESSION",
+            "status": "PENDING",
+            "statusSource": "HUMAN",
+            "source": "AGENT",
+            "needsValidation": true
+          }
+        ]
+      }
+    ]
+  },
+  "borrador": {
+    "formato": "borrador-v1",
+    "version": 6,
+    "origen": "contexto",
+    "pedido": "regenerar",
+    "observaciones": [
+      "Fase A sigue en curso con tres sesiones pendientes; el paso de tareas debe contemplarlas dentro de la fase.",
+      "Fase D está casi terminada según las instrucciones; el paso de tareas debe reflejarlo, pero la fase no se toca.",
+      "Fase E queda en pausa hasta que se entregue Fase K.",
+      "Fase B ya se completó y Fase C se entregó."
+    ],
+    "cambios": [
+      {
+        "a": 5,
+        "fase": "Fase K",
+        "tipo": "fase-cambia",
+        "campo": "durationWeeks",
+        "clave": "fase:f12:durationWeeks",
+        "desde": 3,
+        "faseId": "f12",
+        "motivo": "Instrucciones del CSE: «Fase K dura 5 semanas (no 3)»."
+      },
+      {
+        "fase": {
+          "name": "Fase L",
+          "notes": null,
+          "startWeek": null,
+          "activityType": "CONFIGURACION",
+          "sessionCount": null,
+          "durationWeeks": 2
+        },
+        "tipo": "fase-nueva",
+        "clave": "n:p01",
+        "motivo": "Instrucciones del CSE: «después de ella se suma una fase nueva «Fase L» de 2 semanas».",
+        "despuesDe": "f12"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t014:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 010",
+          "party": "AMBOS",
+          "title": "Tarea 014",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f01",
+        "tareaId": "t014"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t015:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 011",
+          "party": "CLIENTE",
+          "title": "Tarea 015",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f01",
+        "tareaId": "t015"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t016:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 012",
+          "party": "AMBOS",
+          "title": "Tarea 016",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f01",
+        "tareaId": "t016"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t017:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 013",
+          "party": "AMBOS",
+          "title": "Tarea 017",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f01",
+        "tareaId": "t017"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t018:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 014",
+          "party": "AMBOS",
+          "title": "Tarea 018",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f01",
+        "tareaId": "t018"
+      },
+      {
+        "fase": "f01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t113",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 109",
+          "party": "AMBOS",
+          "title": "Tarea 110",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t114",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 110",
+          "party": "CLIENTE",
+          "title": "Tarea 015",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t115",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 111",
+          "party": "AMBOS",
+          "title": "Tarea 016",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t116",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 112",
+          "party": "AMBOS",
+          "title": "Tarea 111",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t117",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 113",
+          "party": "AMBOS",
+          "title": "Tarea 112",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t021:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 018",
+          "party": "AMBOS",
+          "title": "Tarea 021",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f02",
+        "tareaId": "t021"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t022:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 019",
+          "party": "AMBOS",
+          "title": "Tarea 022",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f02",
+        "tareaId": "t022"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t023:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 020",
+          "party": "SMARTEAM",
+          "title": "Tarea 023",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f02",
+        "tareaId": "t023"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t027:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 024",
+          "party": "SMARTEAM",
+          "title": "Tarea 027",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f02",
+        "tareaId": "t027"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t028:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 025",
+          "party": "SMARTEAM",
+          "title": "Tarea 028",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f02",
+        "tareaId": "t028"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t029:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 026",
+          "party": "SMARTEAM",
+          "title": "Tarea 029",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f02",
+        "tareaId": "t029"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t030:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 027",
+          "party": "AMBOS",
+          "title": "Tarea 030",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f02",
+        "tareaId": "t030"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t031:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 028",
+          "party": "SMARTEAM",
+          "title": "Tarea 031",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f02",
+        "tareaId": "t031"
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t118",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 114",
+          "party": "AMBOS",
+          "title": "Tarea 113",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t119",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 115",
+          "party": "SMARTEAM",
+          "title": "Tarea 114",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t120",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 116",
+          "party": "SMARTEAM",
+          "title": "Tarea 115",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t121",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 117",
+          "party": "SMARTEAM",
+          "title": "Tarea 116",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t122",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 118",
+          "party": "AMBOS",
+          "title": "Tarea 117",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t123",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 119",
+          "party": "AMBOS",
+          "title": "Tarea 118",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t124",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 120",
+          "party": "AMBOS",
+          "title": "Tarea 119",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t125",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 121",
+          "party": "AMBOS",
+          "title": "Tarea 120",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f02",
+        "tipo": "tarea-nueva",
+        "clave": "t:t126",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 122",
+          "party": "SMARTEAM",
+          "title": "Tarea 121",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f03",
+        "tipo": "tarea-nueva",
+        "clave": "t:t127",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 123",
+          "party": "CLIENTE",
+          "title": "Tarea 122",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f03",
+        "tipo": "tarea-nueva",
+        "clave": "t:t128",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 124",
+          "party": "AMBOS",
+          "title": "Tarea 123",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f03",
+        "tipo": "tarea-nueva",
+        "clave": "t:t129",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 125",
+          "party": "SMARTEAM",
+          "title": "Tarea 124",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f03",
+        "tipo": "tarea-nueva",
+        "clave": "t:t130",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 126",
+          "party": "CLIENTE",
+          "title": "Tarea 125",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f03",
+        "tipo": "tarea-nueva",
+        "clave": "t:t131",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 127",
+          "party": "SMARTEAM",
+          "title": "Tarea 126",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f03",
+        "tipo": "tarea-nueva",
+        "clave": "t:t132",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 128",
+          "party": "SMARTEAM",
+          "title": "Tarea 127",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f03",
+        "tipo": "tarea-nueva",
+        "clave": "t:t133",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 129",
+          "party": "AMBOS",
+          "title": "Tarea 128",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f03",
+        "tipo": "tarea-nueva",
+        "clave": "t:t134",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 130",
+          "party": "SMARTEAM",
+          "title": "Tarea 129",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t048:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 046",
+          "party": "AMBOS",
+          "title": "Tarea 048",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f04",
+        "tareaId": "t048"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t049:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 047",
+          "party": "CLIENTE",
+          "title": "Tarea 049",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f04",
+        "tareaId": "t049"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t050:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 048",
+          "party": "DEV",
+          "title": "Tarea 050",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f04",
+        "tareaId": "t050"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t051:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 049",
+          "party": "DEV",
+          "title": "Tarea 051",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f04",
+        "tareaId": "t051"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t058:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 056",
+          "party": "DEV",
+          "title": "Tarea 058",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f04",
+        "tareaId": "t058"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t059:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 057",
+          "party": "AMBOS",
+          "title": "Tarea 059",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f04",
+        "tareaId": "t059"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t060:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 058",
+          "party": "AMBOS",
+          "title": "Tarea 060",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f04",
+        "tareaId": "t060"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t061:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 059",
+          "party": "AMBOS",
+          "title": "Tarea 061",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f04",
+        "tareaId": "t061"
+      },
+      {
+        "fase": "f04",
+        "tipo": "tarea-nueva",
+        "clave": "t:t135",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 131",
+          "party": "AMBOS",
+          "title": "Tarea 130",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f04",
+        "tipo": "tarea-nueva",
+        "clave": "t:t136",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 132",
+          "party": "SMARTEAM",
+          "title": "Tarea 131",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f04",
+        "tipo": "tarea-nueva",
+        "clave": "t:t137",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 133",
+          "party": "AMBOS",
+          "title": "Tarea 132",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f04",
+        "tipo": "tarea-nueva",
+        "clave": "t:t138",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 134",
+          "party": "AMBOS",
+          "title": "Tarea 133",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f04",
+        "tipo": "tarea-nueva",
+        "clave": "t:t139",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 135",
+          "party": "AMBOS",
+          "title": "Tarea 134",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t062:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 061",
+          "party": "AMBOS",
+          "title": "Tarea 062",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f05",
+        "tareaId": "t062"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t063:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 062",
+          "party": "AMBOS",
+          "title": "Tarea 063",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f05",
+        "tareaId": "t063"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t064:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 063",
+          "party": "SMARTEAM",
+          "title": "Tarea 064",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f05",
+        "tareaId": "t064"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t065:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 064",
+          "party": "SMARTEAM",
+          "title": "Tarea 065",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f05",
+        "tareaId": "t065"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t066:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 065",
+          "party": "SMARTEAM",
+          "title": "Tarea 066",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f05",
+        "tareaId": "t066"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t067:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 066",
+          "party": "SMARTEAM",
+          "title": "Tarea 067",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f05",
+        "tareaId": "t067"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t068:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 067",
+          "party": "AMBOS",
+          "title": "Tarea 068",
+          "finFijado": null,
+          "weekIndex": 3,
+          "inicioFijado": null
+        },
+        "faseId": "f05",
+        "tareaId": "t068"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t069:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 068",
+          "party": "SMARTEAM",
+          "title": "Tarea 069",
+          "finFijado": null,
+          "weekIndex": 3,
+          "inicioFijado": null
+        },
+        "faseId": "f05",
+        "tareaId": "t069"
+      },
+      {
+        "fase": "f05",
+        "tipo": "tarea-nueva",
+        "clave": "t:t140",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 136",
+          "party": "AMBOS",
+          "title": "Tarea 135",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f05",
+        "tipo": "tarea-nueva",
+        "clave": "t:t141",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 137",
+          "party": "SMARTEAM",
+          "title": "Tarea 064",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f05",
+        "tipo": "tarea-nueva",
+        "clave": "t:t142",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 138",
+          "party": "SMARTEAM",
+          "title": "Tarea 136",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f05",
+        "tipo": "tarea-nueva",
+        "clave": "t:t143",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 139",
+          "party": "SMARTEAM",
+          "title": "Tarea 066",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f05",
+        "tipo": "tarea-nueva",
+        "clave": "t:t144",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 140",
+          "party": "AMBOS",
+          "title": "Tarea 137",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f05",
+        "tipo": "tarea-nueva",
+        "clave": "t:t145",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 141",
+          "party": "SMARTEAM",
+          "title": "Tarea 138",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f05",
+        "tipo": "tarea-nueva",
+        "clave": "t:t146",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 142",
+          "party": "AMBOS",
+          "title": "Tarea 139",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f05",
+        "tipo": "tarea-nueva",
+        "clave": "t:t147",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 143",
+          "party": "SMARTEAM",
+          "title": "Tarea 140",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t070:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 070",
+          "party": "AMBOS",
+          "title": "Tarea 070",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f06",
+        "tareaId": "t070"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t071:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 071",
+          "party": "AMBOS",
+          "title": "Tarea 071",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f06",
+        "tareaId": "t071"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t072:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 072",
+          "party": "AMBOS",
+          "title": "Tarea 072",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f06",
+        "tareaId": "t072"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t073:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 073",
+          "party": "AMBOS",
+          "title": "Tarea 071",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f06",
+        "tareaId": "t073"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t076:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 076",
+          "party": "AMBOS",
+          "title": "Tarea 075",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f06",
+        "tareaId": "t076"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t077:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 077",
+          "party": "AMBOS",
+          "title": "Tarea 071",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f06",
+        "tareaId": "t077"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t078:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 078",
+          "party": "AMBOS",
+          "title": "Tarea 071",
+          "finFijado": null,
+          "weekIndex": 3,
+          "inicioFijado": null
+        },
+        "faseId": "f06",
+        "tareaId": "t078"
+      },
+      {
+        "fase": "f06",
+        "tipo": "tarea-nueva",
+        "clave": "t:t148",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 144",
+          "party": "AMBOS",
+          "title": "Tarea 141",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f06",
+        "tipo": "tarea-nueva",
+        "clave": "t:t149",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 145",
+          "party": "AMBOS",
+          "title": "Tarea 142",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f06",
+        "tipo": "tarea-nueva",
+        "clave": "t:t150",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 146",
+          "party": "AMBOS",
+          "title": "Tarea 143",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f06",
+        "tipo": "tarea-nueva",
+        "clave": "t:t151",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 147",
+          "party": "AMBOS",
+          "title": "Tarea 144",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f06",
+        "tipo": "tarea-nueva",
+        "clave": "t:t152",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 148",
+          "party": "AMBOS",
+          "title": "Tarea 145",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f06",
+        "tipo": "tarea-nueva",
+        "clave": "t:t153",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 149",
+          "party": "AMBOS",
+          "title": "Tarea 146",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f06",
+        "tipo": "tarea-nueva",
+        "clave": "t:t154",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 150",
+          "party": "AMBOS",
+          "title": "Tarea 147",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f06",
+        "tipo": "tarea-nueva",
+        "clave": "t:t155",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 151",
+          "party": "AMBOS",
+          "title": "Tarea 148",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t082:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 083",
+          "party": "SMARTEAM",
+          "title": "Tarea 079",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f07",
+        "tareaId": "t082"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t083:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 084",
+          "party": "AMBOS",
+          "title": "Tarea 080",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f07",
+        "tareaId": "t083"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t084:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 085",
+          "party": "SMARTEAM",
+          "title": "Tarea 081",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f07",
+        "tareaId": "t084"
+      },
+      {
+        "fase": "f07",
+        "tipo": "tarea-nueva",
+        "clave": "t:t156",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 152",
+          "party": "AMBOS",
+          "title": "Tarea 149",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f07",
+        "tipo": "tarea-nueva",
+        "clave": "t:t157",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 153",
+          "party": "SMARTEAM",
+          "title": "Tarea 150",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f07",
+        "tipo": "tarea-nueva",
+        "clave": "t:t158",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 154",
+          "party": "SMARTEAM",
+          "title": "Tarea 078",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f07",
+        "tipo": "tarea-nueva",
+        "clave": "t:t159",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 155",
+          "party": "SMARTEAM",
+          "title": "Tarea 151",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f07",
+        "tipo": "tarea-nueva",
+        "clave": "t:t160",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 156",
+          "party": "AMBOS",
+          "title": "Tarea 152",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f07",
+        "tipo": "tarea-nueva",
+        "clave": "t:t161",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 157",
+          "party": "SMARTEAM",
+          "title": "Tarea 153",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t085:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 087",
+          "party": "AMBOS",
+          "title": "Tarea 082",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f08",
+        "tareaId": "t085"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t086:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 088",
+          "party": "AMBOS",
+          "title": "Tarea 083",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f08",
+        "tareaId": "t086"
+      },
+      {
+        "fase": "f08",
+        "tipo": "tarea-nueva",
+        "clave": "t:t162",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 158",
+          "party": "AMBOS",
+          "title": "Tarea 082",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f08",
+        "tipo": "tarea-nueva",
+        "clave": "t:t163",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 159",
+          "party": "AMBOS",
+          "title": "Tarea 154",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t087:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 090",
+          "party": "AMBOS",
+          "title": "Tarea 084",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f09",
+        "tareaId": "t087"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t088:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 091",
+          "party": "SMARTEAM",
+          "title": "Tarea 085",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f09",
+        "tareaId": "t088"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t089:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 092",
+          "party": "SMARTEAM",
+          "title": "Tarea 086",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f09",
+        "tareaId": "t089"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t090:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 093",
+          "party": "SMARTEAM",
+          "title": "Tarea 087",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f09",
+        "tareaId": "t090"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t091:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 094",
+          "party": "CLIENTE",
+          "title": "Tarea 088",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f09",
+        "tareaId": "t091"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t092:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 095",
+          "party": "AMBOS",
+          "title": "Tarea 089",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f09",
+        "tareaId": "t092"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t093:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 096",
+          "party": "SMARTEAM",
+          "title": "Tarea 090",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f09",
+        "tareaId": "t093"
+      },
+      {
+        "fase": "f09",
+        "tipo": "tarea-nueva",
+        "clave": "t:t164",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 160",
+          "party": "AMBOS",
+          "title": "Tarea 084",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f09",
+        "tipo": "tarea-nueva",
+        "clave": "t:t165",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 161",
+          "party": "SMARTEAM",
+          "title": "Tarea 155",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f09",
+        "tipo": "tarea-nueva",
+        "clave": "t:t166",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 162",
+          "party": "SMARTEAM",
+          "title": "Tarea 156",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f09",
+        "tipo": "tarea-nueva",
+        "clave": "t:t167",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 163",
+          "party": "SMARTEAM",
+          "title": "Tarea 157",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f09",
+        "tipo": "tarea-nueva",
+        "clave": "t:t168",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 164",
+          "party": "AMBOS",
+          "title": "Tarea 158",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f09",
+        "tipo": "tarea-nueva",
+        "clave": "t:t169",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 165",
+          "party": "SMARTEAM",
+          "title": "Tarea 159",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t104:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 100",
+          "party": "AMBOS",
+          "title": "Tarea 101",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f11",
+        "tareaId": "t104"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t105:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 101",
+          "party": "SMARTEAM",
+          "title": "Tarea 102",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f11",
+        "tareaId": "t105"
+      },
+      {
+        "fase": "f11",
+        "tipo": "tarea-nueva",
+        "clave": "t:t170",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 166",
+          "party": "AMBOS",
+          "title": "Tarea 160",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f11",
+        "tipo": "tarea-nueva",
+        "clave": "t:t171",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 167",
+          "party": "SMARTEAM",
+          "title": "Tarea 161",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t106:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 102",
+          "party": "AMBOS",
+          "title": "Tarea 103",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f12",
+        "tareaId": "t106"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t107:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 103",
+          "party": "CLIENTE",
+          "title": "Tarea 104",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f12",
+        "tareaId": "t107"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t108:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 104",
+          "party": "SMARTEAM",
+          "title": "Tarea 105",
+          "finFijado": null,
+          "weekIndex": 0,
+          "inicioFijado": null
+        },
+        "faseId": "f12",
+        "tareaId": "t108"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t109:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 105",
+          "party": "DEV",
+          "title": "Tarea 106",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f12",
+        "tareaId": "t109"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t110:se-va",
+        "desde": {
+          "type": "TASK",
+          "notes": "Nota 106",
+          "party": "CLIENTE",
+          "title": "Tarea 107",
+          "finFijado": null,
+          "weekIndex": 1,
+          "inicioFijado": null
+        },
+        "faseId": "f12",
+        "tareaId": "t110"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t111:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 107",
+          "party": "AMBOS",
+          "title": "Tarea 108",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f12",
+        "tareaId": "t111"
+      },
+      {
+        "tipo": "tarea-se-va",
+        "clave": "tarea:t112:se-va",
+        "desde": {
+          "type": "SESSION",
+          "notes": "Nota 108",
+          "party": "AMBOS",
+          "title": "Tarea 109",
+          "finFijado": null,
+          "weekIndex": 2,
+          "inicioFijado": null
+        },
+        "faseId": "f12",
+        "tareaId": "t112"
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t172",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 168",
+          "party": "AMBOS",
+          "title": "Tarea 162",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t173",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 169",
+          "party": "CLIENTE",
+          "title": "Tarea 163",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t174",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 170",
+          "party": "AMBOS",
+          "title": "Tarea 164",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t175",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 171",
+          "party": "DEV",
+          "title": "Tarea 165",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t176",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 172",
+          "party": "DEV",
+          "title": "Tarea 166",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t177",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 173",
+          "party": "CLIENTE",
+          "title": "Tarea 107",
+          "weekIndex": 2,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t178",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 174",
+          "party": "DEV",
+          "title": "Tarea 167",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t179",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 175",
+          "party": "AMBOS",
+          "title": "Tarea 108",
+          "weekIndex": 3,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t180",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 176",
+          "party": "DEV",
+          "title": "Tarea 168",
+          "weekIndex": 4,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "f12",
+        "tipo": "tarea-nueva",
+        "clave": "t:t181",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 177",
+          "party": "AMBOS",
+          "title": "Tarea 169",
+          "weekIndex": 4,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "n:p01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t182",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 178",
+          "party": "AMBOS",
+          "title": "Tarea 170",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "n:p01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t183",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 179",
+          "party": "AMBOS",
+          "title": "Tarea 171",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "n:p01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t184",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 180",
+          "party": "AMBOS",
+          "title": "Tarea 172",
+          "weekIndex": 0,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "n:p01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t185",
+        "tarea": {
+          "fuga": null,
+          "type": "TASK",
+          "notes": "Nota 181",
+          "party": "SMARTEAM",
+          "title": "Tarea 173",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      },
+      {
+        "fase": "n:p01",
+        "tipo": "tarea-nueva",
+        "clave": "t:t186",
+        "tarea": {
+          "fuga": null,
+          "type": "SESSION",
+          "notes": "Nota 182",
+          "party": "AMBOS",
+          "title": "Tarea 174",
+          "weekIndex": 1,
+          "needsValidation": false,
+          "motivoPorValidar": null
+        }
+      }
+    ],
+    "tareas": {
+      "listas": true,
+      "corrida": "r-paso2"
+    },
+    "tareasArmadasPara": {
+      "n:p01": {
+        "nombre": "Fase L",
+        "semanas": 2,
+        "sesiones": null,
+        "semanaCero": false
+      },
+      "f01": {
+        "nombre": "Semana 0",
+        "semanas": 2,
+        "sesiones": 2,
+        "semanaCero": true
+      },
+      "f04": {
+        "nombre": "Fase C",
+        "semanas": 2,
+        "sesiones": 8,
+        "semanaCero": false
+      },
+      "f02": {
+        "nombre": "Fase A",
+        "semanas": 4,
+        "sesiones": 6,
+        "semanaCero": false
+      },
+      "f07": {
+        "nombre": "Fase F",
+        "semanas": 3,
+        "sesiones": 3,
+        "semanaCero": false
+      },
+      "f05": {
+        "nombre": "Fase D",
+        "semanas": 4,
+        "sesiones": 5,
+        "semanaCero": false
+      },
+      "f06": {
+        "nombre": "Fase E",
+        "semanas": 4,
+        "sesiones": 5,
+        "semanaCero": false
+      },
+      "f03": {
+        "nombre": "Fase B",
+        "semanas": 4,
+        "sesiones": 3,
+        "semanaCero": false
+      },
+      "f09": {
+        "nombre": "Fase H",
+        "semanas": 4,
+        "sesiones": 3,
+        "semanaCero": false
+      },
+      "f10": {
+        "nombre": "Fase I",
+        "semanas": 1,
+        "sesiones": null,
+        "semanaCero": false
+      },
+      "f08": {
+        "nombre": "Fase G",
+        "semanas": 1,
+        "sesiones": 2,
+        "semanaCero": false
+      },
+      "f11": {
+        "nombre": "Fase J",
+        "semanas": 1,
+        "sesiones": null,
+        "semanaCero": false
+      },
+      "f12": {
+        "nombre": "Fase K",
+        "semanas": 5,
+        "sesiones": null,
+        "semanaCero": false
+      }
+    },
+    "excluidos": [],
+    "chatAbiertoPara": [
+      "p0001"
+    ]
+  },
+  "paso2": {
+    "timelineDetail": {
+      "phases": [
+        {
+          "id": "f01",
+          "activityType": "PLANIFICACION",
+          "tasks": [
+            {
+              "title": "Tarea 110",
+              "weekIndex": 0,
+              "notes": "Nota 109",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 015",
+              "weekIndex": 0,
+              "notes": "Nota 110",
+              "porValidar": false,
+              "party": "CLIENTE",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 016",
+              "weekIndex": 0,
+              "notes": "Nota 111",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 111",
+              "weekIndex": 1,
+              "notes": "Nota 112",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 112",
+              "weekIndex": 1,
+              "notes": "Nota 113",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "TASK"
+            }
+          ]
+        },
+        {
+          "id": "f02",
+          "activityType": "CONFIGURACION",
+          "tasks": [
+            {
+              "title": "Tarea 113",
+              "weekIndex": 0,
+              "notes": "Nota 114",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 114",
+              "weekIndex": 0,
+              "notes": "Nota 115",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 115",
+              "weekIndex": 1,
+              "notes": "Nota 116",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 116",
+              "weekIndex": 1,
+              "notes": "Nota 117",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 117",
+              "weekIndex": 1,
+              "notes": "Nota 118",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 118",
+              "weekIndex": 2,
+              "notes": "Nota 119",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 119",
+              "weekIndex": 2,
+              "notes": "Nota 120",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 120",
+              "weekIndex": 3,
+              "notes": "Nota 121",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 121",
+              "weekIndex": 3,
+              "notes": "Nota 122",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            }
+          ]
+        },
+        {
+          "id": "f03",
+          "activityType": "CONFIGURACION",
+          "tasks": [
+            {
+              "title": "Tarea 122",
+              "weekIndex": 0,
+              "notes": "Nota 123",
+              "porValidar": false,
+              "party": "CLIENTE",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 123",
+              "weekIndex": 0,
+              "notes": "Nota 124",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 124",
+              "weekIndex": 1,
+              "notes": "Nota 125",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 125",
+              "weekIndex": 1,
+              "notes": "Nota 126",
+              "porValidar": false,
+              "party": "CLIENTE",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 126",
+              "weekIndex": 2,
+              "notes": "Nota 127",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 127",
+              "weekIndex": 2,
+              "notes": "Nota 128",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 128",
+              "weekIndex": 3,
+              "notes": "Nota 129",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 129",
+              "weekIndex": 3,
+              "notes": "Nota 130",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            }
+          ]
+        },
+        {
+          "id": "f04",
+          "activityType": "CONFIGURACION",
+          "tasks": [
+            {
+              "title": "Tarea 130",
+              "weekIndex": 0,
+              "notes": "Nota 131",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 131",
+              "weekIndex": 0,
+              "notes": "Nota 132",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 132",
+              "weekIndex": 0,
+              "notes": "Nota 133",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 133",
+              "weekIndex": 1,
+              "notes": "Nota 134",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 134",
+              "weekIndex": 1,
+              "notes": "Nota 135",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            }
+          ]
+        },
+        {
+          "id": "f05",
+          "activityType": "CONFIGURACION",
+          "tasks": [
+            {
+              "title": "Tarea 135",
+              "weekIndex": 0,
+              "notes": "Nota 136",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 064",
+              "weekIndex": 0,
+              "notes": "Nota 137",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 136",
+              "weekIndex": 1,
+              "notes": "Nota 138",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 066",
+              "weekIndex": 1,
+              "notes": "Nota 139",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 137",
+              "weekIndex": 2,
+              "notes": "Nota 140",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 138",
+              "weekIndex": 2,
+              "notes": "Nota 141",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 139",
+              "weekIndex": 3,
+              "notes": "Nota 142",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 140",
+              "weekIndex": 3,
+              "notes": "Nota 143",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            }
+          ]
+        },
+        {
+          "id": "f06",
+          "activityType": "ADOPCION",
+          "tasks": [
+            {
+              "title": "Tarea 141",
+              "weekIndex": 0,
+              "notes": "Nota 144",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 142",
+              "weekIndex": 0,
+              "notes": "Nota 145",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 143",
+              "weekIndex": 1,
+              "notes": "Nota 146",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 144",
+              "weekIndex": 1,
+              "notes": "Nota 147",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 145",
+              "weekIndex": 2,
+              "notes": "Nota 148",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 146",
+              "weekIndex": 2,
+              "notes": "Nota 149",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 147",
+              "weekIndex": 3,
+              "notes": "Nota 150",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 148",
+              "weekIndex": 3,
+              "notes": "Nota 151",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            }
+          ]
+        },
+        {
+          "id": "f07",
+          "activityType": "CONFIGURACION",
+          "tasks": [
+            {
+              "title": "Tarea 149",
+              "weekIndex": 0,
+              "notes": "Nota 152",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 150",
+              "weekIndex": 0,
+              "notes": "Nota 153",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 078",
+              "weekIndex": 1,
+              "notes": "Nota 154",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 151",
+              "weekIndex": 1,
+              "notes": "Nota 155",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 152",
+              "weekIndex": 2,
+              "notes": "Nota 156",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 153",
+              "weekIndex": 2,
+              "notes": "Nota 157",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            }
+          ]
+        },
+        {
+          "id": "f08",
+          "activityType": "SEGUIMIENTO",
+          "tasks": [
+            {
+              "title": "Tarea 082",
+              "weekIndex": 0,
+              "notes": "Nota 158",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 154",
+              "weekIndex": 0,
+              "notes": "Nota 159",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            }
+          ]
+        },
+        {
+          "id": "f09",
+          "activityType": "CONFIGURACION",
+          "tasks": [
+            {
+              "title": "Tarea 084",
+              "weekIndex": 0,
+              "notes": "Nota 160",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 155",
+              "weekIndex": 0,
+              "notes": "Nota 161",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 156",
+              "weekIndex": 1,
+              "notes": "Nota 162",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 157",
+              "weekIndex": 1,
+              "notes": "Nota 163",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 158",
+              "weekIndex": 2,
+              "notes": "Nota 164",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 159",
+              "weekIndex": 3,
+              "notes": "Nota 165",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            }
+          ]
+        },
+        {
+          "id": "f10",
+          "activityType": "ADOPCION",
+          "tasks": []
+        },
+        {
+          "id": "f11",
+          "activityType": "SEGUIMIENTO",
+          "tasks": [
+            {
+              "title": "Tarea 160",
+              "weekIndex": 0,
+              "notes": "Nota 166",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 161",
+              "weekIndex": 0,
+              "notes": "Nota 167",
+              "porValidar": false,
+              "party": "SMARTEAM",
+              "type": "TASK"
+            }
+          ]
+        },
+        {
+          "id": "f12",
+          "activityType": "CONFIGURACION",
+          "tasks": [
+            {
+              "title": "Tarea 162",
+              "weekIndex": 0,
+              "notes": "Nota 168",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 163",
+              "weekIndex": 0,
+              "notes": "Nota 169",
+              "porValidar": false,
+              "party": "CLIENTE",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 164",
+              "weekIndex": 1,
+              "notes": "Nota 170",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 165",
+              "weekIndex": 1,
+              "notes": "Nota 171",
+              "porValidar": false,
+              "party": "DEV",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 166",
+              "weekIndex": 2,
+              "notes": "Nota 172",
+              "porValidar": false,
+              "party": "DEV",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 107",
+              "weekIndex": 2,
+              "notes": "Nota 173",
+              "porValidar": false,
+              "party": "CLIENTE",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 167",
+              "weekIndex": 3,
+              "notes": "Nota 174",
+              "porValidar": false,
+              "party": "DEV",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 108",
+              "weekIndex": 3,
+              "notes": "Nota 175",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 168",
+              "weekIndex": 4,
+              "notes": "Nota 176",
+              "porValidar": false,
+              "party": "DEV",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 169",
+              "weekIndex": 4,
+              "notes": "Nota 177",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            }
+          ]
+        },
+        {
+          "id": "n:p01",
+          "activityType": "CONFIGURACION",
+          "tasks": [
+            {
+              "title": "Tarea 170",
+              "weekIndex": 0,
+              "notes": "Nota 178",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 171",
+              "weekIndex": 0,
+              "notes": "Nota 179",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 172",
+              "weekIndex": 0,
+              "notes": "Nota 180",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            },
+            {
+              "title": "Tarea 173",
+              "weekIndex": 1,
+              "notes": "Nota 181",
+              "porValidar": false,
+              "party": "DEV",
+              "type": "TASK"
+            },
+            {
+              "title": "Tarea 174",
+              "weekIndex": 1,
+              "notes": "Nota 182",
+              "porValidar": false,
+              "party": "AMBOS",
+              "type": "SESSION"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "instrucciones": {
+    "antes": "Priorizar Fase A antes que Fase E. Fase K depende del cliente.",
+    "ahora": "Priorizar Fase A antes que Fase E. Fase K depende del cliente.\nPRUEBA: «Fase K» dura 5 semanas (no 3) y después se suma una fase nueva «Fase L» de 2 semanas."
+  },
+  "prometido": {
+    "cierreISO": "2026-08-11",
+    "fecha": "2026-08-03",
+    "semanas": 12
+  },
+  "handoff": {
+    "semanas": 13,
+    "fecha": "2026-08-12"
+  },
+  "particularidades": [
+    {
+      "kind": "ATRASO",
+      "party": "CLIENTE",
+      "weeksImpact": 2,
+      "occurredAt": "2026-06-10"
+    },
+    {
+      "kind": "ATRASO",
+      "party": "SMARTEAM",
+      "weeksImpact": 1,
+      "occurredAt": "2026-07-15"
+    },
+    {
+      "kind": "ATRASO",
+      "party": "CLIENTE",
+      "weeksImpact": 3,
+      "occurredAt": "2026-08-12"
+    },
+    {
+      "kind": "ATRASO",
+      "party": "AMBOS",
+      "weeksImpact": 2,
+      "occurredAt": "2026-08-25"
+    },
+    {
+      "kind": "ATRASO",
+      "party": "SMARTEAM",
+      "weeksImpact": 2,
+      "occurredAt": "2026-09-02"
+    },
+    {
+      "kind": "ATRASO",
+      "party": "CLIENTE",
+      "weeksImpact": 4,
+      "occurredAt": "2026-09-15"
+    }
+  ]
+}

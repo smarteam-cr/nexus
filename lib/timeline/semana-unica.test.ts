@@ -13,7 +13,7 @@
  * contexto-del-cronograma.test.ts). Este escaneo cuida lo que una conducta no ve entera: que nadie vuelva a
  * escribir una «S» que suma 1 en los archivos que arman lo que leen el CSE y el chat, y que el campo
  * «inicia S» del Gantt siga en la base de su cabecera.
- * ⚠ P3b suma acá `lib/timeline/vista-de-la-propuesta.ts` cuando exista.
+ * P3b sumó `lib/timeline/vista-de-la-propuesta.ts`: sus chips y verbos («Pasar a Semana 3», «viene de la Semana 1»).
  * La fuente se lee normalizada (`\r\n` → `\n`: hay archivos CRLF) y sin comentarios.
  */
 import fs from "node:fs";
@@ -41,9 +41,15 @@ function funcion(src: string, nombre: string): string {
 
 describe("L3 (D4) · «S» con número es la semana del proyecto desde 0, en todos lados", () => {
   it("⛔ ninguna «S» suma 1 en lo que arma el contexto del chat y los textos de la propuesta", () => {
-    /* La edición que la pone en rojo: volver a `S${w + 1}` en las semanas del contexto (con o sin propuesta) o a
-       `S${Number(c.from) + 1}` en el chip del inicio. */
-    const archivos = ["lib/asistente/contexto-del-cronograma.ts", "lib/asistente/contexto.ts", "lib/timeline/proposal-deltas.ts"];
+    /* La edición que la pone en rojo: volver a `S${w + 1}` en las semanas del contexto (con o sin propuesta), a
+       `S${Number(c.from) + 1}` en el chip del inicio, o a una «S» que suma 1 en un chip o un verbo de la vista. */
+    const archivos = [
+      "lib/asistente/contexto-del-cronograma.ts",
+      "lib/asistente/contexto.ts",
+      "lib/timeline/proposal-deltas.ts",
+      // L3 P3b: la vista de la propuesta (los chips, los verbos y las casillas de fase del Gantt).
+      "lib/timeline/vista-de-la-propuesta.ts",
+    ];
     for (const rel of archivos) {
       const src = soloCodigo(leerFuente(rel));
       expect(src.length, rel).toBeGreaterThan(1000);
