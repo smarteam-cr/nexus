@@ -365,14 +365,18 @@ Rica cuota 5 y KAIZEN KAPITAL cuota 1, US$26.251) vuelven a pendientes. El porqu
 1. **SQL, desde una PC de desarrollo, ANTES del deploy.** Con el código nuevo, sin la tabla de marcas «Lo que no
    cuadra» da error, y sin las columnas de la vía de cobro abrir una cuenta da error.
    ```powershell
-   $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-09-25-1-via-de-cobro-firmada.sql --schema prisma/schema.prisma
-   $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-09-25-2-marcas-por-fila.sql --schema prisma/schema.prisma
+   $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-09-25-1-via-de-cobro-firmada.sql
+   $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-09-25-2-marcas-por-fila.sql
    Remove-Item Env:ALLOW_PROD_WRITE
    ```
-   Cada archivo trae al final su consulta de verificación (solo lectura).
+   ⚠ Sin `--schema`: en Prisma 7 `db execute` lo rechaza («unknown or unexpected option: --schema») antes de tocar
+   la base; la conexión sale de `prisma.config.ts` (el `DATABASE_URL` del `.env`, host directo `:5432`). Cada archivo
+   trae al final su consulta de verificación, pero `db execute` no muestra filas: la confirmación práctica es el
+   simulacro del paso 3, que deja de decir «La tabla de marcas todavía no existe».
 2. **Deploy**, en el VPS: `bash scripts/deploy.sh`. ⚠ Desde aquí la pantalla ya no lee la marca de grupo: las 15 notas
    vuelven a la lista hasta el paso 3. Córrelo enseguida.
-3. **Los dos scripts, desde una PC de desarrollo con el MISMO commit que quedó en producción** (`git pull` antes): el
+3. **Los dos scripts, desde una PC de desarrollo con el MISMO commit que quedó en producción** (`git pull` y
+   `npx prisma generate` antes: sin el cliente regenerado el script no conoce la tabla de marcas): el
    script arma las filas con el motor de su checkout, y una marca solo vale si sus números son los que calcula la
    pantalla. Cada uno, primero en simulacro —solo lee, con la conexión en solo lectura— y después con `--apply`:
    ```powershell

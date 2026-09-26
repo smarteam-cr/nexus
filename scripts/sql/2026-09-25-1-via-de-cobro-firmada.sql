@@ -30,7 +30,8 @@
 --
 -- Aditivo e idempotente: se puede correr dos veces, y si se corta a mitad se vuelve a correr.
 --
--- Aplicar con:  ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-09-25-1-via-de-cobro-firmada.sql --schema prisma/schema.prisma
+-- Aplicar con (PowerShell; ⚠ sin --schema: Prisma 7 lo rechaza, la URL sale de prisma.config.ts):
+--   $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-09-25-1-via-de-cobro-firmada.sql; Remove-Item Env:ALLOW_PROD_WRITE
 -- Después:      npx prisma generate   (NUNCA db push)
 
 ALTER TABLE "CuentaFinanciera" ADD COLUMN IF NOT EXISTS "viaCobroPor" TEXT;
