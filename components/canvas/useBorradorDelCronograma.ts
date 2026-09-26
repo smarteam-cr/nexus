@@ -6,23 +6,18 @@
  *
  * Lo que decide (qué se aplica, qué choca, la huella, cómo quedaría) es puro y vive en
  * lib/timeline/borrador.ts. Acá solo vive lo que es de ESTA pantalla:
- *   · la FOTO contra la que se convirtió el formato viejo: la del cronograma cuando llegó la
- *     propuesta. Lo que el CSE edite después choca y queda fuera; la foto viaja al aplicar para que
- *     el servidor arme el MISMO borrador;
  *   · lo DESMARCADO (en memoria de la pantalla: viaja como `sin`; desde E3, en un `borrador-v1` se
  *     guarda en el servidor, ver abajo);
  *   · la VISTA («Ver la propuesta» / «Ver como estaba antes») y el lugar del scroll al alternar:
  *     el mismo Gantt, sin desmontarse (las fases abiertas siguen abiertas), y la fila que se estaba
  *     mirando vuelve a quedar donde estaba, debajo de la barra fija.
  *
- * ⭐ La foto y lo desmarcado SOBREVIVEN AL REMONTE (revisión de E1, 2026-09-24): el cronograma se
- * desmonta al cambiar de canvas y se remonta al terminar «Chequear avance», y recargar empieza de
- * cero. Con la foto solo en el estado del componente, volver tomaba una foto del cronograma YA
- * editado y una edición a mano pasaba de ⚠ a «aplica». Ahora se recuerdan por proyecto, atadas a la
- * identidad de la propuesta (token + contenido): en un Map del módulo (cambiar de canvas) y en
- * `localStorage` (recargar o volver otro día). Otro navegador toma una foto nueva: el límite del
- * formato viejo, que resuelve E2 guardando el `desde` al crear la propuesta.
- * Una propuesta distinta (otro token u otro contenido) arranca con su propia foto.
+ * ⭐ Lo desmarcado SOBREVIVE AL REMONTE (revisión de E1, 2026-09-24): el cronograma se desmonta al
+ * cambiar de canvas y se remonta al terminar «Chequear avance», y recargar empieza de cero. Se
+ * recuerda por proyecto, atado a la identidad de la propuesta: en un Map del módulo (cambiar de
+ * canvas) y en `localStorage` (recargar o volver otro día). Una propuesta distinta arranca de cero.
+ * E4 (2026-09): la FOTO se fue. Solo servía para convertir el formato viejo, que ya no se lee: un
+ * v1 trae su `desde` guardado. Lo recordado por la versión anterior (con `foto`) se sigue leyendo.
  *
  * E2a (2026-09-25): un `borrador-v1` trae su `desde` y sube `version` cada vez que el servidor lo
  * reescribe (la marca «armando» y la fusión de las tareas). Su identidad es el TOKEN
@@ -49,7 +44,7 @@
  *     recuerda algo desmarcado de antes de E3, eso sube como un «excluir».
  *   · Lo que se recuerda en el navegador es lo desmarcado EFECTIVO: si se vuelve a E2c, la pantalla vieja
  *     arranca con lo mismo que se veía.
- * El formato viejo (y quien solo mira) sigue como en E1: lo desmarcado vive en la memoria de la pantalla.
+ * Quien solo mira sigue como en E1: lo desmarcado vive en la memoria de la pantalla.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { claveDeDesfasadas } from "@/lib/timeline/recalculo-de-tareas";
@@ -90,7 +85,7 @@ import {
   type Vivo,
 } from "@/lib/timeline/borrador";
 
-// ── DÓNDE SE RECUERDA LA FOTO ────────────────────────────────────────────────────────────────
+// ── DÓNDE SE RECUERDA LO DESMARCADO ────────────────────────────────────────────────────────────────
 /* El Map del módulo vive lo que vive la pestaña: cubre el remonte aunque el navegador no deje usar
    `localStorage`. `localStorage` cubre la recarga. Se lee primero la memoria y, si no es de esta
    propuesta, `localStorage` (otra pestaña pudo guardar la de una propuesta más nueva). */
@@ -174,7 +169,7 @@ function restaurarAncla(contenedor: HTMLElement | null, barra: HTMLElement | nul
 }
 
 export interface BorradorEnPantalla {
-  /** El borrador leído (formato viejo convertido contra la foto, o el nuevo), o null. */
+  /** El `borrador-v1` leído, o null (no hay, o no se sabe leer). */
   borrador: Borrador | null;
   /** Lo que pinta la barra. null también con un borrador SIN cambios (un v1 recién marcado
    *  «armando»): la barra no se monta vacía. */
@@ -188,9 +183,7 @@ export interface BorradorEnPantalla {
   /** E3: manda ya las casillas encoladas y espera a que se guarden (y la pantalla adopte la versión que
    *  subieron). null = todo guardado; si no, el motivo (ya dicho al CSE): quien llama no sigue. */
   esperarCasillas: () => Promise<string | null>;
-  /** La foto que viaja al aplicar. */
-  foto: Vivo | null;
-  /** La versión del `borrador-v1` que se está viendo (viaja al aplicar), o null (formato viejo). */
+  /** La versión del `borrador-v1` que se está viendo (viaja al aplicar), o null (no es un v1). */
   version: number | null;
   /** Todo lo que propone ya está así: no hay nada que decidir (se descarta sola). Sale del plan
    *  aunque el borrador no tenga cambios: uno vacío cuya corrida falló se descarta, uno que espera
@@ -224,7 +217,7 @@ export interface BorradorEnPantalla {
 
 export function useBorradorDelCronograma(entrada: {
   projectId: string;
-  /** Lo guardado en `pendingProposal` (o null si no es un borrador: la del modificador no lo es). */
+  /** Lo guardado en `pendingProposal` (si no es un `borrador-v1`, no hay borrador que revisar). */
   propuesta: unknown;
   /** La corrida que dejó la propuesta (`pendingProposalRunId`): parte de su identidad. */
   token: string | null;
@@ -249,13 +242,13 @@ export function useBorradorDelCronograma(entrada: {
   const [pendientesDe, setPendientesDe] = useState(SIN_PENDIENTES);
   const [servidorMandaEn, setServidorMandaEn] = useState<string | null>(null);
   /* Una propuesta distinta: se ajusta el estado EN EL RENDER (el patrón de React para «cuando cambia
-     una prop»), no en un efecto — un efecto pintaría primero la propuesta nueva con la foto vieja.
-     La foto es la RECORDADA de esa misma propuesta, si la hay; si no, la de ahora. Las fases forzadas
+     una prop»), no en un efecto — un efecto pintaría primero la propuesta nueva con lo desmarcado de
+     la vieja. Lo desmarcado es lo RECORDADO de esa misma propuesta, si lo hay. Las fases forzadas
      eran de la otra propuesta: se sueltan (E2c). */
   let actual = revision;
   let forzadas = forzadasGuardadas;
   if (revision.clave !== clave) {
-    actual = revisionPara(clave, vivo, clave ? recordado(projectId, clave) : null);
+    actual = revisionPara(clave, clave ? recordado(projectId, clave) : null);
     setRevision(actual);
     forzadas = SIN_FORZAR;
     if (forzadasGuardadas !== SIN_FORZAR) setForzadas(SIN_FORZAR);
@@ -274,13 +267,13 @@ export function useBorradorDelCronograma(entrada: {
     [compartidas, excluidosDelServidor, servidorManda, actual.sin, pendientes],
   );
 
-  /* Se recuerda la foto y lo desmarcado de ESTA propuesta: el próximo montaje los encuentra. E3: lo
-     desmarcado EFECTIVO (lo que se ve): si se vuelve a E2c, la pantalla vieja arranca con lo mismo. */
+  /* Se recuerda lo desmarcado de ESTA propuesta: el próximo montaje lo encuentra. E3: lo desmarcado
+     EFECTIVO (lo que se ve). E4: solo `sin`; la foto se fue. */
   useEffect(() => {
-    if (!actual.clave || !actual.base) return;
-    const recuerdo = { foto: actual.base, sin: [...sin] };
+    if (!actual.clave) return;
+    const recuerdo = { sin: [...sin] };
     for (const a of almacenes()) recordarRevision(a, projectId, actual.clave, recuerdo);
-  }, [projectId, actual.clave, actual.base, sin]);
+  }, [projectId, actual.clave, sin]);
 
   /* La cola (lib/timeline/cola-de-casillas.ts): UNA por propuesta, fuera del render (en su reloj de
      250 ms y en su cadena de POST). Lo que necesita de ESTE render lo lee de `paraEnviarRef`. */
@@ -367,10 +360,7 @@ export function useBorradorDelCronograma(entrada: {
     for (const a of almacenes()) olvidarRevision(a, projectId);
   }, [projectId]);
 
-  const borrador = useMemo(
-    () => (actual.base ? leerBorrador(propuesta, actual.base) : null),
-    [propuesta, actual.base],
-  );
+  const borrador = useMemo(() => leerBorrador(propuesta), [propuesta]);
   /* La barra solo con cambios: un v1 vacío (marcado «armando», todavía sin fases ni tareas) no monta
      una barra en blanco. La proyección sale del resumen: una evaluación del plan menos por render. */
   const resumen = useMemo(
@@ -440,7 +430,6 @@ export function useBorradorDelCronograma(entrada: {
     vista: actual.vista,
     sin,
     esperarCasillas,
-    foto: actual.base,
     version,
     nadaQueDecidir,
     alternar,

@@ -182,8 +182,7 @@ export async function leerEstadoDeLasTareas(
   ahora: Date = new Date(),
 ): Promise<EstadoDeLasTareasDelBorrador | null> {
   if (!esBorradorV1(guardado)) return null;
-  // La base no importa para un v1: solo se usa para convertir el formato viejo.
-  const leido = leerBorrador(guardado, { ancla: null, fases: [] });
+  const leido = leerBorrador(guardado);
   const tareas = leido?.tareas ?? null;
   if (tareas === null) return null;
   const conRecalculo = leido?.recalculo ? { recalculo: await recalculoConSuEstado(leido.recalculo, ahora) } : {};
@@ -351,7 +350,7 @@ export function vetoDelGuardado(
   if (pedido.token === null) return guardado === null ? null : PENDIENTE;
   if (runIdGuardado !== pedido.token || !esBorradorV1(guardado)) return CAMBIO;
   if (versionDelBorrador(guardado) !== pedido.version) return CAMBIO;
-  const leido = leerBorrador(guardado, { ancla: null, fases: [] });
+  const leido = leerBorrador(guardado);
   if (!leido) return CAMBIO;
   if ((leido.desconocidos ?? 0) > 0) return { error: "NO_SE_PUEDE", message: BLOQUEO_VERSION_NUEVA };
   return null;
@@ -602,7 +601,7 @@ async function desfasadasDelGuardado(
   const veto = vetoDelGuardado(tl.pendingProposal, tl.pendingProposalRunId, pedido);
   if (veto) return veto;
   const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
-  const borrador = leerBorrador(tl.pendingProposal, vivo);
+  const borrador = leerBorrador(tl.pendingProposal);
   if (!borrador || !esBorradorV1(tl.pendingProposal)) return CAMBIO;
   if (!borrador.tareas?.listas) return { error: "NO_SE_PUEDE", message: MENSAJE_SIN_TAREAS_QUE_ARMAR };
   if (borrador.recalculo && (await recalculoConSuEstado(borrador.recalculo, ahora)).estado === "armando") {
@@ -662,7 +661,7 @@ export async function estructuraParaElDetalle(
   });
   if (!tl || !esBorradorV1(tl.pendingProposal)) return null;
   const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
-  const borrador = leerBorrador(tl.pendingProposal, vivo);
+  const borrador = leerBorrador(tl.pendingProposal);
   if (!borrador || (borrador.desconocidos ?? 0) > 0) return null;
   // E2c: esta corrida es el recálculo del borrador (las tareas ya están «listas», de otra corrida).
   if (borrador.recalculo?.corrida === corrida) {
@@ -791,7 +790,7 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean):
   if (!tl || !esBorradorV1(tl.pendingProposal)) return { que: "perdido", motivo: perdido };
   const version = versionDelBorrador(tl.pendingProposal);
   const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
-  const borrador = leerBorrador(tl.pendingProposal, vivo);
+  const borrador = leerBorrador(tl.pendingProposal);
   if (borrador?.recalculo?.corrida === i.corrida) {
     return fusionarRecalculoEnElBorrador(i, {
       guardado: tl.pendingProposal,

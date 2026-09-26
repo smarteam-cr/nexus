@@ -145,7 +145,7 @@ describe("convertir las viejas del handoff — DB real", () => {
     const g = await guardado(m.tl.id);
     expect(formatoDe(g.pendingProposal)).toBe("v1");
     expect(g.pendingProposalRunId).toBe(m.run.id);
-    const leido = leerBorrador(g.pendingProposal, { ancla: null, fases: [] })!;
+    const leido = leerBorrador(g.pendingProposal)!;
     expect(leido.origen).toBe("handoff");
     // «Aplicar todo»: solo el Piloto. Ni Diseño (la copia vieja) ni Pruebas (choca) se escriben.
     const plan = planDeAplicacion(l.vivoHoy, leido);

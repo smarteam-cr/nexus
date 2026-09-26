@@ -9,7 +9,6 @@
  *   { token: string | null,   ← `pendingProposalRunId` de la propuesta que el CSE tiene enfrente (obligatorio)
  *     sin: string[],          ← las claves que desmarcó (viven en la memoria de la pantalla)
  *     huella: string,         ← la del plan que vio (`planDeAplicacion`, lib/timeline/borrador.ts)
- *     foto?: { ancla, fases }, ← la foto contra la que la pantalla convirtió el formato viejo
  *     version?: number | null, ← la versión del borrador que vio: obligatoria con un v1 (sin ella, la
  *                                pestaña tiene otro formato en pantalla → 409 y trae el nuevo)
  *     forzar?: string[] }     ← E2c: las fases desfasadas que aplica sin recalcular («Aplicar de todos modos»)
@@ -23,8 +22,10 @@
  * de esta ruta (no la de la IA), y sus eventos del watchdog se emiten acá, al aplicar, como los emite
  * el PUT cuando el chat escribe directo (lib/timeline/eventos-de-la-propuesta.ts).
  *
- * Reemplaza a `proposal/apply-items` (que queda como lápida con un 409 «Nexus se actualizó») y, para
- * «Regenerar todo», a `detail/apply-all` (desde E2b, también una lápida 409 hasta E4).
+ * Reemplazó a `proposal/apply-items` y, para «Regenerar todo», a `detail/apply-all`: las dos fueron
+ * lápidas 409 hasta E4, que las borró.
+ * E4: la `foto` que mandaba la pantalla (para convertir el formato viejo) ya no se lee ni se valida,
+ * pero se TOLERA: una pestaña de la versión anterior abierta durante el deploy la sigue mandando.
  * Guarded con guardTimelineEdit (interno/CSE).
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -34,7 +35,6 @@ import { Prisma } from "@prisma/client";
 import {
   deDondeViene,
   esBorradorV1,
-  leerFoto,
   nombresEnTexto,
   traeCambiosDeTareas,
   versionDelBorrador,
@@ -99,10 +99,7 @@ export async function POST(
   if (!Array.isArray(body.sin) || !body.sin.every((k) => typeof k === "string")) {
     return NextResponse.json({ error: "`sin` tiene que ser la lista de lo que desmarcaste." }, { status: 400 });
   }
-  const foto = body.foto === undefined || body.foto === null ? null : leerFoto(body.foto);
-  if (body.foto !== undefined && body.foto !== null && !foto) {
-    return NextResponse.json({ error: "La foto del cronograma no tiene forma válida." }, { status: 400 });
-  }
+  /* E4: `body.foto` no se lee. Una pestaña de antes la manda (válida o no) y no es motivo de 400. */
   /* La versión del borrador que vio el CSE (E2a). Desde E2a toda pantalla la manda con un v1; si falta,
      la valla de abajo responde 409 (E4 P1). */
   if (
@@ -168,7 +165,6 @@ export async function POST(
           timelineId: tl.id,
           token,
           guardado: tl.pendingProposal,
-          foto,
           sin,
           huella,
           ahora,

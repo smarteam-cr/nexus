@@ -223,7 +223,11 @@ describe("scripts de inspección — imprimen `origen` y `soloFase`", () => {
     const inspeccion = leer("scripts/inspect-timeline-proposal.ts");
     expect(inspeccion).toContain("origen: ${b.origen}");
     expect(inspeccion).toContain("soloFase: ${soloFase}");
-    expect(inspeccion).toContain("origen: ${origenDePropuesta(");
+    /* ⚠ REESCRITA en E4 P4 (2026-09), con esta razón: pedía que la inspección imprimiera el origen del
+       formato viejo. Desde P4 la app no lo lee: la inspección lo dice y remite al control de este script,
+       el único que todavía lo conoce. La edición que la pone en rojo: volver a leer el formato viejo ahí. */
+    expect(inspeccion).toContain("no es borrador-v1: corre npx tsx scripts/propuestas-abiertas.ts --antes-de-e4");
+    expect(inspeccion).not.toContain("origenDePropuesta(");
   });
 });
 

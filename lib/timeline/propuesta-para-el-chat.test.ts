@@ -76,13 +76,14 @@ const listas = { estado: "listas" as const, fase: null, motivo: null };
 
 describe("cuándo el chat puede cambiar la propuesta, y por qué no", () => {
   const caso = (guardado: unknown, tareas: Parameters<typeof porQueDeSoloLectura>[0]["tareas"]) =>
-    porQueDeSoloLectura({ guardado, borrador: leerBorrador(guardado, VIVO), tareas });
+    porQueDeSoloLectura({ guardado, borrador: leerBorrador(guardado), tareas });
 
   it("⭐ los cinco casos de solo lectura, cada uno con su porqué", () => {
     /* Son los frenos de la ruta que edita la propuesta: si el chat creyera que puede, acordaría algo que
        la ruta rechaza. Las ediciones que la ponen en rojo: dejar de mirar el recálculo, el vacío o los
        cambios desconocidos. */
-    expect(caso({ phases: [{ id: "b", name: "Diseño", durationWeeks: 3 }] }, null)).toBe("formato-viejo");
+    // E4: lo que no es un v1 (el formato viejo, por ejemplo) ya no se lee: «ilegible», se descarta arriba.
+    expect(caso({ phases: [{ id: "b", name: "Diseño", durationWeeks: 3 }] }, null)).toBe("ilegible");
     const deOtraVersion = [{ tipo: "tarea-que-no-existe", clave: "x" }] as unknown as Cambio[];
     expect(caso(v1({ cambios: deOtraVersion }), listas)).toBe("version-nueva");
     const vacio = v1({ cambios: [], tareas: { corrida: "run-3", listas: false } });
@@ -117,7 +118,7 @@ describe("⭐ el resumen es el de la barra", () => {
     const guardado = v1({ excluidos: [claveDeTareaQueSeVa("b2")] });
     const p = propuestaParaElChat({ guardado, token: "run-2", vivo: VIVO, tareas: listas });
     expect(p.excluidos).toEqual([claveDeTareaQueSeVa("b2")]);
-    const deLaBarra = resumir(VIVO, leerBorrador(guardado, VIVO)!, [claveDeTareaQueSeVa("b2")], { tareas: "listas", forzar: [] });
+    const deLaBarra = resumir(VIVO, leerBorrador(guardado)!, [claveDeTareaQueSeVa("b2")], { tareas: "listas", forzar: [] });
     expect(p.resumen?.huella).toBe(deLaBarra.huella);
     expect(p.resumen?.grupos.map((g) => g.numero)).toEqual(deLaBarra.grupos.map((g) => g.numero));
     const b2 = p.resumen?.grupos[0].tareas.find((t) => t.ref === "b2");

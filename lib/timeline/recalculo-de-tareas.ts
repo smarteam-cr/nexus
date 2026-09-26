@@ -26,7 +26,6 @@ import {
   type FaseDesfasada,
   type RecalculoEnElCable,
   type TareasDelBorrador,
-  type Vivo,
 } from "./borrador";
 import { AVISO_PROPUESTA_PENDIENTE } from "./propuesta-de-estructura";
 import { plural } from "./weeks";
@@ -184,11 +183,10 @@ export interface TareasDelBorradorEnPantalla {
 }
 
 const ESTADOS_DE_TAREAS: readonly EstadoDeLasTareas[] = ["listas", "faltan", "armando", "fallo"];
-const VIVO_VACIO: Vivo = { ancla: null, fases: [] };
 
 /** Las tareas que espera el `borrador-v1` guardado (su corrida y si ya llegaron), o null. */
 function tareasDelGuardado(json: unknown): TareasDelBorrador | null {
-  return esBorradorV1(json) ? (leerBorrador(json, VIVO_VACIO)?.tareas ?? null) : null;
+  return esBorradorV1(json) ? (leerBorrador(json)?.tareas ?? null) : null;
 }
 
 /** Lo que el GET del cronograma dice de las tareas de la propuesta guardada, o null si no espera. */

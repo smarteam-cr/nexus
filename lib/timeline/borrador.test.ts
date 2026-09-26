@@ -4,37 +4,46 @@
  * Correr: `npx vitest run lib/timeline/borrador.test.ts --project unit`.
  *
  * Lo que cuida, en el orden en que se puede romper:
- *   1. PARIDAD: la conversión del formato viejo, aplicada entera, da lo mismo que `apply-items`
- *      (el camino que reemplaza), salvo las dos inferencias del handoff, que son a propósito.
- *   2. IDA Y VUELTA: el borrador sobrevive a JSON y se lee igual (el formato nuevo se LEE en E1).
+ *   1. PARIDAD: el conversor de los productores (`convertirPropuestaDeFases`), aplicado entero, da lo
+ *      mismo que la vieja `apply-items`, salvo las dos inferencias del handoff, que son a propósito.
+ *   2. IDA Y VUELTA: el borrador sobrevive a JSON y se lee igual. E4: lo que no es un v1 no se lee.
  *   3. CHOQUES: lo que el CSE cambió después de la propuesta queda fuera por defecto, y aplicar
  *      todo deja intacta su edición.
  *   4. NÚMEROS: la lista se numera de corrido, determinista, y no se corre al marcar ni al editar.
  *   5. LA HUELLA: cambia si cambia lo que se aplicaría, y solo entonces.
- *   6-9. La vista, la barra, el estado de la pantalla y la foto que viaja.
+ *   6-8. La vista, la barra y el estado de la pantalla.
+ *   9. (E4) Se retiraron el lector del formato viejo y la foto.
  *   10-13. (Revisión de E1, 2026-09-24) «Aplicar todo» con un choque y la confirmación de otro
- *      cronograma; el cierre fijado a mano; la foto RECORDADA entre montajes (volver al canvas no
- *      convierte una edición a mano en «aplica»); y la propuesta abierta que el handoff no pisa.
+ *      cronograma; el cierre fijado a mano; lo desmarcado RECORDADO entre montajes; y la propuesta
+ *      abierta que el handoff no pisa.
  *   14. (E2b) «Regenerar» de una fase (`soloFase`) y de dónde viene cada propuesta.
+ *
+ * ⚠ E4 (2026-09): lo guardado es siempre v1; la conversión quedó para los productores. Por eso §2, §8,
+ * §9, §12 y §13 se reescribieron: ya no hay foto contra la que convertir al leer, y la identidad de una
+ * propuesta es su token (`|v1`).
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import * as moduloDelBorrador from "./borrador";
+import * as moduloDeDeltas from "./proposal-deltas";
 import {
   almacenEnMemoria,
   alternarVista,
   BLOQUEO_VERSION_NUEVA,
   borradorVacio,
-  claveDeLaFoto,
+  claveDelRecuerdo,
   claveDeRevision,
-  convertirPropuestaVieja,
+  convertirPropuestaDeFases,
   debeDescartarseSolo,
   deDondeViene,
   desdeDeLaPropuesta,
-  esBorradorGuardado,
+  esBorradorV1,
   FORMATO_BORRADOR,
   fraseDelCierre,
   huellaDeTexto,
+  jsonCanonico,
   leerBorrador,
-  leerFoto,
   marcarCambio,
   olvidarRevision,
   pideConfirmacion,
@@ -143,12 +152,14 @@ function comoApplyItems(vivo: Vivo, p: ProposalLike): { ancla: string | null; fa
 }
 
 function aplicadoEntero(vivo: Vivo, p: ProposalLike) {
-  const b = convertirPropuestaVieja(p, vivo);
+  const b = convertirPropuestaDeFases(p, vivo);
   const pr = proyectar(vivo, b, []);
   return { ancla: pr.ancla, fases: pr.fases.map(comparable) };
 }
 
-describe("1 · paridad con apply-items (la conversión del formato viejo aplicada entera)", () => {
+/* ⚠ RENOMBRADA en E4 (2026-09): era «la conversión del formato viejo». Lo guardado ya es siempre v1, pero
+   la conversión SIGUE: la usan los dos productores (el handoff y el paso 1) antes de guardar, una vez. */
+describe("1 · paridad con apply-items (el conversor de los productores, aplicado entero)", () => {
   it("la del handoff: renombre, duración, notas, fase nueva en su lugar, orden y arranque", () => {
     /* La edición que la pone en rojo: armar el orden final o los campos con otra regla que la de
        `buildPhaseOrder` y `computeProposalDeltas` (un segundo algoritmo que diverge en silencio). */
@@ -203,7 +214,7 @@ describe("1 · paridad con apply-items (la conversión del formato viejo aplicad
     expect(viejo.ancla, "apply-items movía el arranque que fijó una persona").toBe("2026-10-05");
     expect(viejo.fases[1].activityType, "y le devolvía el tipo viejo a la fase").toBe("PLANIFICACION");
 
-    const b = convertirPropuestaVieja(p, conAncla);
+    const b = convertirPropuestaDeFases(p, conAncla);
     const plan = planDeAplicacion(conAncla, b, []);
     expect(plan.items.map((it) => [it.cambio.clave, it.estado])).toEqual([["ancla", "choque"]]);
     expect(plan.items[0].choque).toContain("ya la fijaste a mano");
@@ -213,7 +224,7 @@ describe("1 · paridad con apply-items (la conversión del formato viejo aplicad
 
     // Sin arranque, la sugerencia del handoff se aplica como siempre.
     const sinAncla: Vivo = { ...conAncla, ancla: null };
-    expect(planDeAplicacion(sinAncla, convertirPropuestaVieja(p, sinAncla), []).items[0].estado).toBe("aplica");
+    expect(planDeAplicacion(sinAncla, convertirPropuestaDeFases(p, sinAncla), []).items[0].estado).toBe("aplica");
   });
 
   it("la de las reuniones SÍ puede cambiar el tipo… si algún día lo propone (hoy el armador no lo hace)", () => {
@@ -222,31 +233,34 @@ describe("1 · paridad con apply-items (la conversión del formato viejo aplicad
       origen: "contexto",
       phases: [{ ...A, activityType: "SEGUIMIENTO", campos: ["activityType"] }, { ...B }, { ...C }, { ...D }],
     };
-    const b = convertirPropuestaVieja(p, VIVO);
+    const b = convertirPropuestaDeFases(p, VIVO);
     expect(b.cambios.map((c) => c.clave)).toEqual(["fase:a:activityType"]);
   });
 });
 
 describe("2 · ida y vuelta: el borrador se lee igual después de guardarse", () => {
-  it("convertir → JSON → leer da el mismo borrador, y un borrador-v1 no necesita la foto", () => {
+  it("convertir → JSON → leer da el mismo borrador: el v1 trae su `desde`", () => {
     for (const p of [HANDOFF, CONTEXTO]) {
-      const b = convertirPropuestaVieja(p, VIVO);
+      const b = convertirPropuestaDeFases(p, VIVO);
       const guardado: unknown = JSON.parse(JSON.stringify(b));
-      expect(esBorradorGuardado(guardado)).toBe(true);
-      // La foto no importa: el formato nuevo trae su `desde`.
-      expect(leerBorrador(guardado, { ancla: null, fases: [] })).toEqual(b);
-      expect(planDeAplicacion(VIVO, leerBorrador(guardado, VIVO)!, []).huella).toBe(planDeAplicacion(VIVO, b, []).huella);
+      expect(esBorradorV1(guardado)).toBe(true);
+      expect(leerBorrador(guardado)).toEqual(b);
+      expect(planDeAplicacion(VIVO, leerBorrador(guardado)!, []).huella).toBe(planDeAplicacion(VIVO, b, []).huella);
     }
   });
 
-  it("el formato viejo se reconoce, y la propuesta del modificador (con tareas) NO es un borrador", () => {
-    expect(esBorradorGuardado(HANDOFF)).toBe(true);
-    expect(leerBorrador(HANDOFF, VIVO)?.formato).toBe(FORMATO_BORRADOR);
+  it("⛔ E4: lo que no es un v1 NO se lee: el formato viejo (`ProposalLike`) y la del modificador dan null", () => {
+    /* ⚠ REESCRITA en E4 (2026-09), con esta razón: pedía que el formato viejo se CONVIRTIERA al leer
+       (contra una foto). Desde E4 lo guardado es siempre v1: las viejas se convierten una vez con
+       scripts/propuestas-abiertas.ts. La edición que la pone en rojo: volver a convertir al leer, o
+       devolverle a `leerBorrador` su segundo parámetro. */
+    expect(leerBorrador(HANDOFF), "volvió a convertir el formato viejo al leer").toBeNull();
+    expect(leerBorrador(CONTEXTO)).toBeNull();
+    expect(leerBorrador.length, "`leerBorrador` volvió a pedir una foto").toBe(1);
     const delModificador = { anchorStartDate: null, phases: [{ ...A, tasks: [] }] };
-    expect(esBorradorGuardado(delModificador)).toBe(false);
-    expect(leerBorrador(delModificador, VIVO)).toBeNull();
-    expect(leerBorrador(null, VIVO)).toBeNull();
-    expect(leerBorrador("basura", VIVO)).toBeNull();
+    expect(leerBorrador(delModificador)).toBeNull();
+    expect(leerBorrador(null)).toBeNull();
+    expect(leerBorrador("basura")).toBeNull();
   });
 
   it("⛔ un borrador-v1 con cambios que esta versión no conoce se lee, pero NO se aplica a medias", () => {
@@ -262,7 +276,7 @@ describe("2 · ida y vuelta: el borrador se lee igual después de guardarse", ()
         { tipo: "tarea-nueva", clave: "tarea:1", titulo: "Algo" },
       ],
     };
-    const b = leerBorrador(v1, VIVO)!;
+    const b = leerBorrador(v1)!;
     expect(b.version).toBe(3);
     expect(b.origen).toBe("contexto");
     expect(b.cambios).toHaveLength(1);
@@ -274,7 +288,7 @@ describe("2 · ida y vuelta: el borrador se lee igual después de guardarse", ()
 });
 
 describe("3 · choques: lo que el CSE cambió después queda fuera, y su edición queda intacta", () => {
-  const b = convertirPropuestaVieja(HANDOFF, VIVO);
+  const b = convertirPropuestaDeFases(HANDOFF, VIVO);
   /* El CSE, con la propuesta abierta, edita a mano: la duración de Pruebas (que la propuesta TAMBIÉN
      cambia) y las notas de Diseño (que la propuesta no toca). */
   const editado: Vivo = {
@@ -357,17 +371,17 @@ describe("3 · choques: lo que el CSE cambió después queda fuera, y su edició
       ancla: "2026-10-05",
       fases: [A, { ...B, name: "Diseño funcional" }, f("p", "Piloto", 2), D, { ...C, durationWeeks: 4, notes: "más pruebas" }],
     };
-    const soloFases = convertirPropuestaVieja({ ...HANDOFF, phases: HANDOFF.phases.filter((x) => x.id) }, VIVO);
+    const soloFases = convertirPropuestaDeFases({ ...HANDOFF, phases: HANDOFF.phases.filter((x) => x.id) }, VIVO);
     expect(debeDescartarseSolo(planDeAplicacion(todoHecho, soloFases, []))).toBe(true);
-    expect(debeDescartarseSolo(planDeAplicacion(VIVO, convertirPropuestaVieja(HANDOFF, VIVO), []))).toBe(false);
+    expect(debeDescartarseSolo(planDeAplicacion(VIVO, convertirPropuestaDeFases(HANDOFF, VIVO), []))).toBe(false);
     expect(debeDescartarseSolo(planDeAplicacion(editadoConChoqueSolo(), soloDuracionDeC(), []))).toBe(false);
     // Sin ningún cambio (una propuesta vieja idéntica a lo vivo): también se descarta sola.
-    expect(debeDescartarseSolo(planDeAplicacion(VIVO, convertirPropuestaVieja({ anchorStartDate: null, phases: [A, B, C, D] }, VIVO), []))).toBe(true);
+    expect(debeDescartarseSolo(planDeAplicacion(VIVO, convertirPropuestaDeFases({ anchorStartDate: null, phases: [A, B, C, D] }, VIVO), []))).toBe(true);
   });
 });
 
 function soloDuracionDeC(): Borrador {
-  return convertirPropuestaVieja({ anchorStartDate: null, phases: [{ ...A }, { ...B }, { ...C, durationWeeks: 4 }, { ...D }] }, VIVO);
+  return convertirPropuestaDeFases({ anchorStartDate: null, phases: [{ ...A }, { ...B }, { ...C, durationWeeks: 4 }, { ...D }] }, VIVO);
 }
 function editadoConChoqueSolo(): Vivo {
   return { ...VIVO, fases: VIVO.fases.map((x) => (x.id === "c" ? { ...x, durationWeeks: 9 } : x)) };
@@ -375,7 +389,7 @@ function editadoConChoqueSolo(): Vivo {
 
 describe("4 · la lista se numera de corrido, determinista y estable", () => {
   it("arranque, orden y después fase por fase en el orden de la propuesta (lo que mueve fechas primero)", () => {
-    const b = convertirPropuestaVieja(HANDOFF, VIVO);
+    const b = convertirPropuestaDeFases(HANDOFF, VIVO);
     expect(b.cambios.map((c) => c.clave)).toEqual([
       "ancla",
       "orden",
@@ -389,8 +403,8 @@ describe("4 · la lista se numera de corrido, determinista y estable", () => {
 
   it("los mismos datos dan la misma lista, y marcar o editar no corre los números", () => {
     /* La edición que la pone en rojo: numerar solo lo que aplica (desmarcar el 2 volvería 3 al 4). */
-    const b1 = convertirPropuestaVieja(HANDOFF, VIVO);
-    const b2 = convertirPropuestaVieja(JSON.parse(JSON.stringify(HANDOFF)), { ...VIVO, fases: [...VIVO.fases] });
+    const b1 = convertirPropuestaDeFases(HANDOFF, VIVO);
+    const b2 = convertirPropuestaDeFases(JSON.parse(JSON.stringify(HANDOFF)), { ...VIVO, fases: [...VIVO.fases] });
     expect(b2).toEqual(b1);
     const base = planDeAplicacion(VIVO, b1, []).items.map((it) => [it.numero, it.cambio.clave]);
     expect(planDeAplicacion(VIVO, b1, ["orden", "nueva:2"]).items.map((it) => [it.numero, it.cambio.clave])).toEqual(base);
@@ -404,11 +418,11 @@ describe("4 · la lista se numera de corrido, determinista y estable", () => {
 });
 
 describe("5 · la huella", () => {
-  const b = convertirPropuestaVieja(HANDOFF, VIVO);
+  const b = convertirPropuestaDeFases(HANDOFF, VIVO);
 
   it("es la misma para los mismos datos, y cambia si cambia lo que se aplicaría", () => {
     const h = planDeAplicacion(VIVO, b, []).huella;
-    expect(planDeAplicacion({ ...VIVO, fases: VIVO.fases.map((x) => ({ ...x })) }, convertirPropuestaVieja(HANDOFF, VIVO), []).huella).toBe(h);
+    expect(planDeAplicacion({ ...VIVO, fases: VIVO.fases.map((x) => ({ ...x })) }, convertirPropuestaDeFases(HANDOFF, VIVO), []).huella).toBe(h);
     expect(planDeAplicacion(VIVO, b, ["orden"]).huella, "desmarcar cambia lo que se aplica").not.toBe(h);
     expect(planDeAplicacion(editadoConChoqueSolo(), b, []).huella, "un choque nuevo cambia la lista").not.toBe(h);
   });
@@ -427,7 +441,7 @@ describe("5 · la huella", () => {
 
 describe("6 · proyectar: la vista «Ver la propuesta» y sus marcas", () => {
   it("marca lo nuevo, lo que cambia y lo que se mueve, con etiquetas cortas", () => {
-    const b = convertirPropuestaVieja(HANDOFF, VIVO);
+    const b = convertirPropuestaDeFases(HANDOFF, VIVO);
     const p = proyectar(VIVO, b, []);
     const marca = (clave: string) => p.fases.find((x) => x.clave === clave)?.marca ?? null;
     expect(marca("nueva:2")).toEqual({ tono: "nueva", etiquetas: ["nueva"] });
@@ -438,7 +452,7 @@ describe("6 · proyectar: la vista «Ver la propuesta» y sus marcas", () => {
   });
 
   it("el inicio se dice en semanas del Gantt: dónde arranca hoy → dónde arrancaría", () => {
-    const b = convertirPropuestaVieja(
+    const b = convertirPropuestaDeFases(
       { anchorStartDate: null, phases: [{ ...A }, { ...B }, { ...C, startWeek: 6 }, { ...D }] },
       VIVO,
     );
@@ -450,7 +464,7 @@ describe("6 · proyectar: la vista «Ver la propuesta» y sus marcas", () => {
   });
 
   it("lo desmarcado no aparece en la vista: la propuesta es lo que se aplicaría", () => {
-    const b = convertirPropuestaVieja(HANDOFF, VIVO);
+    const b = convertirPropuestaDeFases(HANDOFF, VIVO);
     const p = proyectar(VIVO, b, ["nueva:2", "fase:b:name"]);
     expect(p.fases.map((x) => x.name)).toEqual(["Kick-off", "Diseño", "Cierre", "Pruebas"]);
     expect(p.fases.find((x) => x.id === "b")!.marca).toBeNull();
@@ -460,7 +474,7 @@ describe("6 · proyectar: la vista «Ver la propuesta» y sus marcas", () => {
 describe("7 · resumir: la barra dice el cierre antes → después y si es otro cronograma", () => {
   it("el cierre sigue a lo marcado", () => {
     const vivo: Vivo = { ...VIVO, ancla: "2026-09-07" };
-    const b = convertirPropuestaVieja({ ...HANDOFF, anchorStartDate: null }, vivo);
+    const b = convertirPropuestaDeFases({ ...HANDOFF, anchorStartDate: null }, vivo);
     const todo = resumir(vivo, b, []);
     expect(todo.cierreAntes.spanWeeks).toBe(7);
     expect(todo.cierreDespues.spanWeeks).toBe(10);
@@ -482,7 +496,7 @@ describe("7 · resumir: la barra dice el cierre antes → después y si es otro 
         { ...D },
       ],
     };
-    const r = resumir(VIVO, convertirPropuestaVieja(muchas, VIVO), []);
+    const r = resumir(VIVO, convertirPropuestaDeFases(muchas, VIVO), []);
     const viejo = medirPropuesta(VIVO.fases, muchas, null);
     expect(r.magnitud.esCronogramaNuevo).toBe(viejo.esCronogramaNuevo);
     expect(r.magnitud.motivos).toEqual(viejo.motivos);
@@ -490,7 +504,7 @@ describe("7 · resumir: la barra dice el cierre antes → después y si es otro 
   });
 
   it("cada ítem dice qué cambia, con el motivo y el detalle de lo que no cabe en una línea", () => {
-    const r = resumir(VIVO, convertirPropuestaVieja(CONTEXTO, VIVO), []);
+    const r = resumir(VIVO, convertirPropuestaDeFases(CONTEXTO, VIVO), []);
     expect(r.items.map((it) => it.titulo)).toEqual([
       "Reordenar las fases: Cierre sube de 4º a 3º · Pruebas baja de 3º a 4º",
       "Fase nueva «Piloto» · 1 semana · va después de «Diseño»",
@@ -500,23 +514,38 @@ describe("7 · resumir: la barra dice el cierre antes → después y si es otro 
     expect(r.items[1].motivo).toBe("M-piloto");
     expect(r.observaciones).toEqual(["En el kick-off se habló de 12 semanas en total."]);
     expect(r.origen).toBe("contexto");
-    const handoff = resumir(VIVO, convertirPropuestaVieja(HANDOFF, VIVO), []);
+    const handoff = resumir(VIVO, convertirPropuestaDeFases(HANDOFF, VIVO), []);
     expect(handoff.items[0].titulo).toBe("Fecha de arranque: sin fecha → 5 oct 2026");
     expect(handoff.items[2].titulo).toBe("Diseño · pasa a llamarse «Diseño funcional» (conserva sus tareas)");
     expect(handoff.items[5].detalle).toEqual([{ etiqueta: "Notas", antes: "(sin notas)", despues: "más pruebas" }]);
   });
 });
 
+/** Una propuesta como se GUARDA desde E4: siempre `borrador-v1` (convertida una vez por su productor). */
+const guardadaV1 = (p: ProposalLike, vivo: Vivo = VIVO): unknown => JSON.parse(JSON.stringify(convertirPropuestaDeFases(p, vivo)));
+
 describe("8 · el estado de la revisión en pantalla", () => {
-  it("una propuesta nueva arranca en «Ver la propuesta», sin nada desmarcado y con la foto de ese momento", () => {
-    const clave = claveDeRevision(HANDOFF, "run-1");
-    expect(clave).not.toBeNull();
-    expect(claveDeRevision(HANDOFF, "run-2"), "otro token es otra propuesta").not.toBe(clave);
-    expect(claveDeRevision({ ...HANDOFF, anchorStartDate: null }, "run-1"), "otro contenido también").not.toBe(clave);
+  it("una propuesta nueva arranca en «Ver la propuesta», sin nada desmarcado; su identidad es el token", () => {
+    /* ⚠ REESCRITA en E4 (2026-09), con esta razón: pedía la foto en el estado y una identidad por
+       contenido (token + huella del JSON), que era del formato viejo. Un v1 se identifica por su token
+       (`|v1`, desde E2a): lo desmarcado sobrevive a que suba la versión. */
+    const V1 = guardadaV1(HANDOFF);
+    const clave = claveDeRevision(V1, "run-1");
+    expect(clave).toBe("run-1|v1");
+    expect(claveDeRevision(V1, "run-2"), "otro token es otra propuesta").not.toBe(clave);
+    expect(claveDeRevision({ ...(V1 as object), version: 7 }, "run-1"), "otra versión es la MISMA propuesta").toBe(clave);
+    expect(claveDeRevision(HANDOFF, "run-1"), "el formato viejo ya no tiene identidad").toBeNull();
     expect(claveDeRevision({ phases: [{ ...A, tasks: [] }] }, "x"), "la del modificador no es un borrador").toBeNull();
-    /* La MISMA propuesta con las claves en otro orden es la misma propuesta: la respuesta del POST
-       /estructura y el GET (jsonb de Postgres) no traen el mismo orden. Con el texto crudo, recargar
-       perdía la foto y una edición a mano que chocaba pasaba a «aplica» (revisión de E1). */
+    const e = revisionPara(clave);
+    expect(e).toEqual({ clave, sin: new Set(), vista: "propuesta" });
+    expect("base" in e, "volvió la foto al estado de la revisión").toBe(false);
+    expect(revisionPara(null)).toBe(REVISION_VACIA);
+    expect(revisionPara(clave, { sin: ["orden"] }).sin).toEqual(new Set(["orden"]));
+  });
+
+  it("jsonCanonico: el mismo contenido con las claves en otro orden da el mismo texto", () => {
+    /* La respuesta del POST /estructura y el GET (jsonb de Postgres) no traen el mismo orden de claves.
+       Lo usa la huella del plan (`tarea-cambia`, E3): con el texto crudo, la misma lista era «otra». */
     const invertir = (v: unknown): unknown =>
       Array.isArray(v)
         ? v.map(invertir)
@@ -524,14 +553,12 @@ describe("8 · el estado de la revisión en pantalla", () => {
           ? Object.fromEntries(Object.entries(v as Record<string, unknown>).reverse().map(([k, x]) => [k, invertir(x)]))
           : v;
     expect(JSON.stringify(invertir(HANDOFF)), "el fixture tiene que cambiar de orden de verdad").not.toBe(JSON.stringify(HANDOFF));
-    expect(claveDeRevision(invertir(HANDOFF), "run-1"), "otro orden de claves no es otra propuesta").toBe(clave);
-    const e = revisionPara(clave, VIVO);
-    expect(e).toEqual({ clave, base: VIVO, sin: new Set(), vista: "propuesta" });
-    expect(revisionPara(null, VIVO)).toBe(REVISION_VACIA);
+    expect(jsonCanonico(invertir(HANDOFF))).toBe(jsonCanonico(HANDOFF));
+    expect(jsonCanonico({ ...HANDOFF, anchorStartDate: null }), "otro contenido es otro texto").not.toBe(jsonCanonico(HANDOFF));
   });
 
   it("alternar va y vuelve; marcar y desmarcar son inversos", () => {
-    const e = revisionPara("k", VIVO);
+    const e = revisionPara("k");
     expect(alternarVista(e).vista).toBe("antes");
     expect(alternarVista(alternarVista(e)).vista).toBe("propuesta");
     const sin = marcarCambio(e, "orden", false);
@@ -541,14 +568,36 @@ describe("8 · el estado de la revisión en pantalla", () => {
   });
 });
 
-describe("9 · la foto que manda la pantalla se valida", () => {
-  it("acepta la forma de un cronograma y rechaza la basura", () => {
-    expect(leerFoto({ ancla: "2026-10-05T00:00:00.000Z", fases: [A, B] })).toEqual({ ancla: "2026-10-05", fases: [A, B] });
-    expect(leerFoto({ ancla: null, fases: [{ id: "x", name: "X", durationWeeks: 1 }] })!.fases[0]).toEqual(f("x", "X", 1));
-    expect(leerFoto(null)).toBeNull();
-    expect(leerFoto({ ancla: 3, fases: [] })).toBeNull();
-    expect(leerFoto({ ancla: null, fases: [{ id: "x", name: "X", durationWeeks: "1" }] })).toBeNull();
-    expect(leerFoto({ ancla: null, fases: [{ id: "x", name: "X", durationWeeks: 1, notes: 4 }] })).toBeNull();
+/* ⚠ REESCRITA en E4 (2026-09), con esta razón: validaba la foto que mandaba la pantalla (`leerFoto`), que
+   solo servía para convertir el formato viejo. Ahora cuida que el lector viejo, la foto y lo que solo
+   ellos usaban no vuelvan. */
+describe("9 · E4: se retiraron el lector del formato viejo, la foto y las lápidas", () => {
+  it("⛔ borrador.ts no exporta `esBorradorGuardado` ni `leerFoto`; proposal-deltas.ts, `reescribirPropuestaPendiente`", () => {
+    /* La edición que la pone en rojo: restaurar cualquiera de los tres. */
+    expect("esBorradorGuardado" in moduloDelBorrador).toBe(false);
+    expect("leerFoto" in moduloDelBorrador).toBe(false);
+    expect("convertirPropuestaVieja" in moduloDelBorrador, "el conversor se llama convertirPropuestaDeFases").toBe(false);
+    expect("claveDeLaFoto" in moduloDelBorrador, "la clave se llama claveDelRecuerdo").toBe(false);
+    expect("reescribirPropuestaPendiente" in moduloDeDeltas).toBe(false);
+    expect("describeChanges" in moduloDeDeltas).toBe(false);
+    expect("sortChangesByImpact" in moduloDeDeltas).toBe(false);
+  });
+
+  it("⛔ api-guards.ts no define `guardTimelineDetailApply` ni `guardTimelineFullRegen`", () => {
+    /* Sin usos desde E2b (se fueron apply-all y la vista previa de una fase). La edición que la pone en
+       rojo: restaurar cualquiera de los dos. */
+    const guards = fs.readFileSync(path.join(process.cwd(), "lib/auth/api-guards.ts"), "utf8");
+    expect(guards).toContain("export async function guardIaDelCronograma(");
+    expect(guards).not.toMatch(/function guardTimelineDetailApply\b/);
+    expect(guards).not.toMatch(/function guardTimelineFullRegen\b/);
+  });
+
+  it("⛔ `propuestaPorDecidir` FALLA CERRADA: lo que no es un v1 cuenta como por decidir", () => {
+    /* El handoff no pisa lo que no sabe leer: la pantalla ofrece descartarlo y lo decide el CSE. La
+       edición que la pone en rojo: `if (!b) return false`. */
+    expect(propuestaPorDecidir(HANDOFF, VIVO), "el handoff pisaría lo que no sabe leer").toBe(true);
+    expect(propuestaPorDecidir({ cualquier: "cosa" }, VIVO)).toBe(true);
+    expect(propuestaPorDecidir(null, VIVO), "sin propuesta no hay nada que decidir").toBe(false);
   });
 });
 
@@ -563,7 +612,7 @@ describe("10 · «Aplicar todo» aplica lo limpio, y la confirmación mira lo MA
       { ...D, name: "Cuatro" },
     ],
   };
-  const b = convertirPropuestaVieja(MUCHAS, VIVO);
+  const b = convertirPropuestaDeFases(MUCHAS, VIVO);
   /* El CSE, con la propuesta abierta, alarga Pruebas a mano: ese cambio choca. */
   const conUnaEdicion: Vivo = { ...VIVO, fases: VIVO.fases.map((x) => (x.id === "c" ? { ...x, durationWeeks: 9 } : x)) };
 
@@ -603,7 +652,7 @@ describe("10 · «Aplicar todo» aplica lo limpio, y la confirmación mira lo MA
 
 describe("11 · el cierre de la barra, también con un cierre fijado a mano (Tanda K)", () => {
   const vivo: Vivo = { ...VIVO, ancla: "2026-09-07" };
-  const b = convertirPropuestaVieja({ ...HANDOFF, anchorStartDate: null }, vivo);
+  const b = convertirPropuestaDeFases({ ...HANDOFF, anchorStartDate: null }, vivo);
 
   it("sin cierre fijado, el corrimiento; sin arranque, las semanas", () => {
     expect(fraseDelCierre(resumir(vivo, b, []))).toBe("El cierre se corre 21 días: 26 oct 2026 → 16 nov 2026.");
@@ -630,61 +679,69 @@ describe("11 · el cierre de la barra, también con un cierre fijado a mano (Tan
   });
 });
 
-describe("12 · la foto se RECUERDA entre montajes: volver no convierte una edición a mano en «aplica»", () => {
+/* ⚠ REESCRITA en E4 (2026-09), con esta razón: cuidaba la FOTO recordada entre montajes, que evitaba que
+   una edición a mano pasara de ⚠ a «aplica» al volver. Un v1 trae su `desde` guardado: la edición choca
+   sin foto. Lo que se sigue recordando es lo desmarcado, atado a la identidad `token|v1`. */
+describe("12 · lo desmarcado se RECUERDA entre montajes, y un v1 choca sin foto", () => {
   /* El caso del probe de la revisión: el handoff propone Pruebas 3 → 4; con la propuesta abierta, el
      CSE pone 5 a mano, cambia de canvas (el cronograma se desmonta) y vuelve. */
-  const PROP: ProposalLike = { anchorStartDate: null, phases: [{ ...A }, { ...B }, { ...C, durationWeeks: 4 }, { ...D }] };
+  const PROP = guardadaV1({ anchorStartDate: null, phases: [{ ...A }, { ...B }, { ...C, durationWeeks: 4 }, { ...D }] });
   const editado: Vivo = { ...VIVO, fases: VIVO.fases.map((x) => (x.id === "c" ? { ...x, durationWeeks: 5 } : x)) };
-  const estadoDe = (vivo: Vivo, e: ReturnType<typeof revisionPara>) =>
-    planDeAplicacion(vivo, leerBorrador(PROP, e.base!)!, e.sin).items.find((it) => it.cambio.clave === "fase:c:durationWeeks")!
-      .estado;
 
-  it("⭐ montar → recordar → editar → remontar: la foto es la de antes y la edición sigue siendo un choque", () => {
-    /* La edición que la pone en rojo: remontar sin leer lo recordado (la foto nueva ya trae el 5, el
-       cambio pasa a «aplica», marcado, y aplicar escribe 4 encima del 5). */
-    const almacen = almacenEnMemoria();
-    const clave = claveDeRevision(PROP, "run-1")!;
-    const primera = revisionPara(clave, VIVO, recuerdoDeLaRevision(almacen, "p1", clave));
-    recordarRevision(almacen, "p1", clave, { foto: primera.base!, sin: [...primera.sin] });
-    expect(estadoDe(editado, primera)).toBe("choque");
-
-    const alVolver = revisionPara(clave, editado, recuerdoDeLaRevision(almacen, "p1", clave));
-    expect(alVolver.base, "tomó una foto nueva del cronograma ya editado").toEqual(VIVO);
-    expect(estadoDe(editado, alVolver)).toBe("choque");
-    const pr = proyectar(editado, leerBorrador(PROP, alVolver.base!)!, alVolver.sin);
+  it("⭐ la edición a mano es un choque siempre: el `desde` viene guardado, no de una foto", () => {
+    /* La edición que la pone en rojo: fijar el `desde` contra lo vivo al leer (el cambio pasaría a
+       «aplica», marcado, y aplicar escribiría 4 encima del 5). */
+    const b = leerBorrador(PROP)!;
+    const item = planDeAplicacion(editado, b, []).items.find((it) => it.cambio.clave === "fase:c:durationWeeks")!;
+    expect(item.estado).toBe("choque");
+    const pr = proyectar(editado, b, []);
     expect(pr.fases.find((x) => x.id === "c")!.durationWeeks, "aplicar todo revierte la edición a mano").toBe(5);
-
-    // Lo que pasaba sin recordar: foto nueva, y la edición del CSE se revertía.
-    expect(estadoDe(editado, revisionPara(clave, editado, null))).toBe("aplica");
   });
 
-  it("lo desmarcado también vuelve; otra propuesta (otro token u otro proyecto) no hereda la foto", () => {
+  it("montar → desmarcar → remontar: lo desmarcado vuelve; otra propuesta u otro proyecto no lo heredan", () => {
     const almacen = almacenEnMemoria();
     const clave = claveDeRevision(PROP, "run-1")!;
-    recordarRevision(almacen, "p1", clave, { foto: VIVO, sin: ["fase:c:durationWeeks"] });
-    expect(recuerdoDeLaRevision(almacen, "p1", clave)).toEqual({ foto: VIVO, sin: ["fase:c:durationWeeks"] });
-    expect([...revisionPara(clave, editado, recuerdoDeLaRevision(almacen, "p1", clave)).sin]).toEqual([
-      "fase:c:durationWeeks",
-    ]);
-    // El mismo contenido con otro token es OTRA propuesta: arranca con su propia foto.
+    expect(recuerdoDeLaRevision(almacen, "p1", clave)).toBeNull();
+    recordarRevision(almacen, "p1", clave, { sin: ["fase:c:durationWeeks"] });
+    expect(recuerdoDeLaRevision(almacen, "p1", clave)).toEqual({ sin: ["fase:c:durationWeeks"] });
+    expect([...revisionPara(clave, recuerdoDeLaRevision(almacen, "p1", clave)).sin]).toEqual(["fase:c:durationWeeks"]);
+    expect(JSON.parse(almacen.getItem(claveDelRecuerdo("p1"))!), "se guarda solo `sin`").toEqual({
+      revision: clave,
+      sin: ["fase:c:durationWeeks"],
+    });
+    // La misma propuesta con otra versión (llegaron sus tareas) es la MISMA: lo desmarcado sigue.
+    expect(recuerdoDeLaRevision(almacen, "p1", claveDeRevision({ ...(PROP as object), version: 4 }, "run-1")!)).not.toBeNull();
+    // Otro token es OTRA propuesta: arranca sin nada desmarcado.
     const otra = claveDeRevision(PROP, "run-2")!;
     expect(recuerdoDeLaRevision(almacen, "p1", otra)).toBeNull();
     expect(recuerdoDeLaRevision(almacen, "p2", clave), "la de otro proyecto").toBeNull();
     // Una sola entrada por proyecto: la propuesta nueva pisa la vieja; aplicar o descartar la borra.
-    recordarRevision(almacen, "p1", otra, { foto: editado, sin: [] });
+    recordarRevision(almacen, "p1", otra, { sin: [] });
     expect(recuerdoDeLaRevision(almacen, "p1", clave)).toBeNull();
     olvidarRevision(almacen, "p1");
     expect(recuerdoDeLaRevision(almacen, "p1", otra)).toBeNull();
-    expect(claveDeLaFoto("p1")).toBe("nexus:cronograma:foto-de-la-propuesta:p1");
+    // ⛔ El texto de la clave no cambia: lo desmarcado antes de E4 se sigue leyendo.
+    expect(claveDelRecuerdo("p1")).toBe("nexus:cronograma:foto-de-la-propuesta:p1");
+  });
+
+  it("⛔ una entrada de la versión anterior, CON `foto`, se lee igual: da solo `sin`", () => {
+    /* La migración única de E3 lee lo desmarcado de antes; una pestaña de E3 lo escribe con `foto`. La
+       edición que la pone en rojo: exigir la foto (o validarla) para devolver lo desmarcado. */
+    const almacen = almacenEnMemoria();
+    const clave = claveDeRevision(PROP, "run-1")!;
+    almacen.setItem(claveDelRecuerdo("p1"), JSON.stringify({ revision: clave, foto: VIVO, sin: ["orden"] }));
+    expect(recuerdoDeLaRevision(almacen, "p1", clave)).toEqual({ sin: ["orden"] });
+    almacen.setItem(claveDelRecuerdo("p1"), JSON.stringify({ revision: clave, foto: { ancla: 3, fases: [] }, sin: ["x"] }));
+    expect(recuerdoDeLaRevision(almacen, "p1", clave), "una foto sin forma ya no importa").toEqual({ sin: ["x"] });
+    almacen.setItem(claveDelRecuerdo("p1"), JSON.stringify({ revision: clave, sin: ["y"] }));
+    expect(recuerdoDeLaRevision(almacen, "p1", clave), "sin foto (la de ahora)").toEqual({ sin: ["y"] });
   });
 
   it("nunca tira: basura guardada, un navegador que no deja leer ni escribir, o sin almacén", () => {
     const clave = claveDeRevision(PROP, "run-1")!;
     const basura = almacenEnMemoria();
-    basura.setItem(claveDeLaFoto("p1"), "{no es json");
+    basura.setItem(claveDelRecuerdo("p1"), "{no es json");
     expect(recuerdoDeLaRevision(basura, "p1", clave)).toBeNull();
-    basura.setItem(claveDeLaFoto("p1"), JSON.stringify({ revision: clave, foto: { ancla: 3, fases: [] } }));
-    expect(recuerdoDeLaRevision(basura, "p1", clave), "una foto sin forma no se usa").toBeNull();
     const bloqueado: AlmacenDeFotos = {
       getItem: () => {
         throw new Error("SecurityError");
@@ -697,33 +754,35 @@ describe("12 · la foto se RECUERDA entre montajes: volver no convierte una edic
       },
     };
     expect(recuerdoDeLaRevision(bloqueado, "p1", clave)).toBeNull();
-    expect(() => recordarRevision(bloqueado, "p1", clave, { foto: VIVO, sin: [] })).not.toThrow();
+    expect(() => recordarRevision(bloqueado, "p1", clave, { sin: [] })).not.toThrow();
     expect(() => olvidarRevision(bloqueado, "p1")).not.toThrow();
     expect(recuerdoDeLaRevision(null, "p1", clave)).toBeNull();
   });
 });
 
+/* ⚠ REESCRITA en E4 (2026-09), con esta razón: usaba el formato viejo guardado. Desde E4 lo guardado es un
+   v1, y lo que no es un v1 falla cerrado (§9). */
 describe("13 · el handoff no pisa una propuesta abierta con algo por decidir", () => {
   it("⭐ con cambios pendientes (del handoff o de las reuniones), se queda la abierta", () => {
     /* La edición que la pone en rojo: que analyze vuelva a proteger solo la de las reuniones — la del
-       handoff se reemplazaba a mitad de la revisión y el CSE perdía la foto y lo desmarcado. */
-    expect(propuestaPorDecidir(HANDOFF, VIVO)).toBe(true);
-    expect(propuestaPorDecidir(CONTEXTO, VIVO)).toBe(true);
+       handoff se reemplazaba a mitad de la revisión y el CSE perdía lo desmarcado. */
+    expect(propuestaPorDecidir(guardadaV1(HANDOFF), VIVO)).toBe(true);
+    expect(propuestaPorDecidir(guardadaV1(CONTEXTO), VIVO)).toBe(true);
   });
 
   it("una que ya no tiene nada que decidir no frena: se puede reemplazar sin perder nada", () => {
-    expect(propuestaPorDecidir({ anchorStartDate: null, phases: [A, B, C, D] }, VIVO)).toBe(false);
+    expect(propuestaPorDecidir(guardadaV1({ anchorStartDate: null, phases: [A, B, C, D] }), VIVO)).toBe(false);
     const hecho: Vivo = { ...VIVO, fases: VIVO.fases.map((x) => (x.id === "c" ? { ...x, durationWeeks: 4 } : x)) };
-    expect(propuestaPorDecidir({ anchorStartDate: null, phases: [A, B, { ...C, durationWeeks: 4 }, D] }, hecho)).toBe(false);
+    expect(propuestaPorDecidir(guardadaV1({ anchorStartDate: null, phases: [A, B, { ...C, durationWeeks: 4 }, D] }), hecho)).toBe(false);
     expect(propuestaPorDecidir(null, VIVO)).toBe(false);
-    // La del modificador (con tareas) no es un borrador: nunca vive guardada, no frena.
-    expect(propuestaPorDecidir({ phases: [{ ...A, tasks: [] }] }, VIVO)).toBe(false);
+    // E4: la del modificador (con tareas) no es un v1: esta versión no la sabe leer, y FRENA (falla cerrada).
+    expect(propuestaPorDecidir({ phases: [{ ...A, tasks: [] }] }, VIVO)).toBe(true);
   });
 
   it("un arranque que el CSE fijó a mano después choca, y un choque también se decide (el ⚠ se ve)", () => {
     const conArranque: Vivo = { ...VIVO, ancla: "2026-09-21" };
     expect(
-      propuestaPorDecidir({ anchorStartDate: "2026-10-05T00:00:00.000Z", phases: [A, B, C, D] }, conArranque),
+      propuestaPorDecidir(guardadaV1({ anchorStartDate: "2026-10-05T00:00:00.000Z", phases: [A, B, C, D] }), conArranque),
     ).toBe(true);
   });
 });
@@ -734,21 +793,21 @@ describe("14 · E2b: «Regenerar» de una fase (`soloFase`) y de dónde viene ca
        de una fase), o leer cualquier cosa. */
     const deUnaFase = borradorVacio({ pedido: "regenerar", corrida: "run-f", soloFase: "c" });
     const guardado: unknown = JSON.parse(JSON.stringify(deUnaFase));
-    const leido = leerBorrador(guardado, VIVO)!;
+    const leido = leerBorrador(guardado)!;
     expect(leido.soloFase).toBe("c");
     expect(leido).toEqual(deUnaFase);
 
     // Ausente por defecto: ni `undefined` guardado ni la clave.
     for (const sin of [borradorVacio({ pedido: "regenerar", corrida: "run-f" }), borradorVacio({ pedido: "primera", corrida: "r", soloFase: null })]) {
       expect("soloFase" in sin).toBe(false);
-      expect("soloFase" in leerBorrador(JSON.parse(JSON.stringify(sin)), VIVO)!).toBe(false);
+      expect("soloFase" in leerBorrador(JSON.parse(JSON.stringify(sin)))!).toBe(false);
     }
-    expect("soloFase" in convertirPropuestaVieja(CONTEXTO, VIVO)).toBe(false);
+    expect("soloFase" in convertirPropuestaDeFases(CONTEXTO, VIVO)).toBe(false);
 
     // Un string de 1 a 200 caracteres; lo demás no es una fase.
-    expect(leerBorrador({ ...(guardado as object), soloFase: "x".repeat(200) }, VIVO)!.soloFase).toBe("x".repeat(200));
+    expect(leerBorrador({ ...(guardado as object), soloFase: "x".repeat(200) })!.soloFase).toBe("x".repeat(200));
     for (const malo of ["", "x".repeat(201), 7, null, {}, ["c"], true]) {
-      const b = leerBorrador({ ...(guardado as object), soloFase: malo }, VIVO)!;
+      const b = leerBorrador({ ...(guardado as object), soloFase: malo })!;
       expect("soloFase" in b, JSON.stringify(malo)?.slice(0, 20)).toBe(false);
     }
   });
@@ -769,8 +828,9 @@ describe("14 · E2b: «Regenerar» de una fase (`soloFase`) y de dónde viene ca
       ...extra,
     });
     const casos: Array<[string, unknown, string]> = [
-      ["el formato viejo del handoff (sin origen)", HANDOFF, "desde el handoff"],
-      ["el formato viejo de las reuniones", CONTEXTO, "desde el contexto del cronograma"],
+      // E4: lo que no es un v1 no se muestra, pero clasificarlo no tira (la auditoría y los carteles).
+      ["algo que no es un v1, sin origen", HANDOFF, "desde el handoff"],
+      ["algo que no es un v1, de las reuniones", CONTEXTO, "desde el contexto del cronograma"],
       ["un v1 del handoff", v1({ origen: "handoff" }), "desde el handoff"],
       ["un v1 sin origen", v1({ origen: undefined }), "desde el handoff"],
       ["«Generar cronograma»", v1({ pedido: "primera", tareas: { corrida: "r", listas: false } }), "desde «Generar cronograma»"],
@@ -787,7 +847,7 @@ describe("14 · E2b: «Regenerar» de una fase (`soloFase`) y de dónde viene ca
     for (const [nombre, json, texto] of casos) {
       expect(desdeDeLaPropuesta(deDondeViene(json)), nombre).toBe(texto);
       // Lo mismo sobre el borrador ya leído que sobre el JSON crudo.
-      const leido = leerBorrador(json, VIVO);
+      const leido = leerBorrador(json);
       if (leido) expect(desdeDeLaPropuesta(deDondeViene(leido)), `${nombre} (leído)`).toBe(texto);
     }
     expect(deDondeViene(v1({ soloFase: "b", tareasArmadasPara: { b: { nombre: "Diseño", semanas: 2 } } }))).toEqual({

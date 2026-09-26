@@ -379,7 +379,7 @@ export function lineaDeCambiosDeFasesSinDecidir(hay: boolean, vacio: EstadoDelVa
 
 /**
  * E3 P4: la línea de arriba del contexto con una propuesta abierta, o null si esa propuesta no se
- * muestra (el formato viejo, una versión nueva o el borrador vacío: el contexto de hoy, con su freno).
+ * muestra (una ilegible, una versión nueva o el borrador vacío: el contexto de hoy, con su freno).
  * E3 P5: editable → "" (sin porqué: el formato dice que lo acordado EDITA la propuesta). Mientras la IA
  * arma o recalcula, la línea del porqué (se lee, pero no se cambia).
  */
@@ -614,8 +614,9 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
   /**
    * ⭐ E3 P4: CON UNA PROPUESTA ABIERTA, EL CHAT CONVERSA SOBRE ELLA — la propuesta y la lista de la
    * barra, con sus números (`armarContextoConPropuesta`), en vez del cronograma de hoy. También mientras
-   * la IA arma o recalcula sus tareas: la propuesta se lee, aunque no se pueda cambiar. El formato
-   * viejo, una versión nueva y el borrador vacío siguen con el contexto de hoy y su línea de freno.
+   * la IA arma o recalcula sus tareas: la propuesta se lee, aunque no se pueda cambiar. Una ilegible
+   * (E4: lo que no es un v1), una versión nueva y el borrador vacío siguen con el contexto de hoy y su
+   * línea de freno.
    * ⚠ `fases` sigue siendo el cronograma de HOY: la propuesta viaja aparte (`propuesta`) y la usa el
    * turno para editarla. E3 P5: con la propuesta editable el chat la EDITA (`puedeEditar`); mientras la
    * IA arma o recalcula sus tareas, la lee sin poder cambiarla, con la línea del porqué.

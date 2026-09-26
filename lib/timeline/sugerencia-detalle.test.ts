@@ -6,7 +6,7 @@ import {
   movimientosPorSalto,
 } from "./sugerencia-detalle";
 import { computeProposalDeltas, describeChange, type CurrentPhaseLike, type ProposalLike } from "./proposal-deltas";
-import { convertirPropuestaVieja, proyectar, resumir } from "./borrador";
+import { convertirPropuestaDeFases, proyectar, resumir } from "./borrador";
 
 const fase = (id: string, name: string, durationWeeks: number, extra: Partial<CurrentPhaseLike> = {}): CurrentPhaseLike => ({
   id,
@@ -199,7 +199,7 @@ describe("G14 · el inicio de una fase se lee en base 1, como en el Gantt", () =
       { id: "b", name: "B", durationWeeks: 2, startWeek: null, sessionCount: null, notes: null, activityType: null },
     ];
     const vivo = { ancla: null, fases };
-    const b = convertirPropuestaVieja({ anchorStartDate: null, phases: [{ ...fases[0] }, { ...fases[1], startWeek: 6 }] }, vivo);
+    const b = convertirPropuestaDeFases({ anchorStartDate: null, phases: [{ ...fases[0] }, { ...fases[1], startWeek: 6 }] }, vivo);
     expect(resumir(vivo, b, []).items[0].titulo, "la lista no sabe dónde arranca hoy la fase").toBe("B · inicio S5 → S7");
     expect(proyectar(vivo, b, []).fases[1].marca?.etiquetas).toEqual(["inicio S5 → S7"]);
   });

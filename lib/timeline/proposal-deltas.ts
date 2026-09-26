@@ -1,12 +1,13 @@
 /**
  * lib/timeline/proposal-deltas.ts
  *
- * Deltas POR ÍTEM de una propuesta de cronograma (`ProjectTimeline.pendingProposal`) contra unas
- * fases — funciones PURAS, client-safe (sin Prisma). La propuesta (que el handoff re-emite ya
- * reconciliada por id, sin `tasks`) se descompone en cambios discretos. Desde E1 del borrador del
- * cronograma (2026-09-24) NO se resuelven uno por uno en el Gantt: `convertirPropuestaVieja`
- * (lib/timeline/borrador.ts) los calcula contra la FOTO de cuando llegó la propuesta y los vuelve la
- * lista numerada de la barra de revisión, que se aplica entera o en parte de una sola vez.
+ * Deltas POR ÍTEM de una propuesta de fases (`ProposalLike`) contra unas fases — funciones PURAS,
+ * client-safe (sin Prisma). `ProposalLike` es el FORMATO INTERMEDIO de los productores (el handoff y
+ * el paso 1 de «Regenerar todo»), que NUNCA se guarda: desde E4 (2026-09) lo guardado en
+ * `ProjectTimeline.pendingProposal` es siempre `borrador-v1`. La propuesta (que el handoff re-emite ya
+ * reconciliada por id, sin `tasks`) se descompone en cambios discretos, y `convertirPropuestaDeFases`
+ * (lib/timeline/borrador.ts) los vuelve, una vez, los cambios del borrador contra lo que leyó el
+ * productor.
  *
  * Tipos de delta:
  *  - ADD_PHASE       → fase propuesta sin id (no matcheó ninguna existente): una fase nueva.
@@ -384,92 +385,6 @@ export function buildPhaseOrder(
 }
 
 /**
- * La propuesta que QUEDA pendiente después de resolver `resolvedKeys`, reescrita de forma
- * CANÓNICA contra las fases ya escritas (`phasesAfter`, en su orden):
- *  - la SECUENCIA pasa a ser la del cronograma real, así un reordenamiento ya resuelto (aceptado
- *    O descartado) no se vuelve a proponer solo en la próxima lectura; si el reordenamiento sigue
- *    PENDIENTE, se conserva el orden propuesto (ver abajo);
- *  - cada fase conserva el contenido PROPUESTO solo si su sugerencia sigue pendiente (si se
- *    aceptó, la DB ya lo tiene; si se descartó, gana la DB);
- *  - las fases nuevas no resueltas se reinsertan detrás de su fase ancla.
- *
- * Extraída TAL CUAL de proposal/apply-items (2026-09-23). La única diferencia es `...proposal`:
- * antes se devolvía `{ anchorStartDate, phases }` a secas, así que `origen` y `observaciones` se
- * perdían con la primera sugerencia resuelta y la propuesta de las reuniones pasaba a leerse como
- * la del handoff a mitad de camino.
- */
-export function reescribirPropuestaPendiente(
-  proposal: ProposalLike,
-  phasesAfter: CurrentPhaseLike[],
-  resolvedKeys: ReadonlySet<string>,
-): ProposalLike {
-  const pendingModByPhase = new Map<string, ProposalPhaseLike>();
-  const keptNewByAnchor = new Map<string | null, ProposalPhaseLike[]>();
-  proposal.phases.forEach((p, i) => {
-    if (p.id) {
-      if (!resolvedKeys.has(`mod:${p.id}`)) pendingModByPhase.set(p.id, p);
-      return;
-    }
-    if (resolvedKeys.has(`add:${i}`)) return;
-    let anchorId: string | null = null;
-    for (let j = i - 1; j >= 0; j--) {
-      const q = proposal.phases[j];
-      if (q?.id) {
-        anchorId = q.id;
-        break;
-      }
-    }
-    const arr = keptNewByAnchor.get(anchorId) ?? [];
-    arr.push(p);
-    keptNewByAnchor.set(anchorId, arr);
-  });
-
-  /* ⛔ UN REORDENAMIENTO PENDIENTE NO SE PIERDE POR RESOLVER OTRA COSA (2026-09-23). Antes la
-     secuencia salía SIEMPRE del cronograma real: aceptar una duración borraba sin aviso el
-     «mover» que seguía sin decidir, y nadie lo había aceptado ni descartado. Mientras `reorder`
-     no esté resuelto, las existentes van en el orden PROPUESTO. Una fase que la propuesta no
-     nombra (la que se acaba de crear al aceptar un «agregar») viaja pegada a la fase que tiene
-     delante en el cronograma real: si fuera al final, el reordenamiento pasaría a mover también
-     la fase recién aceptada. Sin reordenamiento pendiente la secuencia es idéntica a la real. */
-  const idsPropuestos = [...new Set(proposal.phases.map((p) => p.id).filter((id): id is string => !!id))];
-  const nombradas = new Set(idsPropuestos);
-  const alPrincipio: CurrentPhaseLike[] = [];
-  const grupos = new Map<string, CurrentPhaseLike[]>();
-  let cabeza: string | null = null;
-  for (const ph of phasesAfter) {
-    if (nombradas.has(ph.id)) {
-      cabeza = ph.id;
-      grupos.set(ph.id, [ph]);
-    } else if (cabeza === null) alPrincipio.push(ph);
-    else grupos.get(cabeza)!.push(ph);
-  }
-  /* La de las reuniones con `movidas` no guarda el orden en el array: su reordenamiento se arma
-     sobre el orden vivo, así que la secuencia es SIEMPRE la real, y resuelto el «mover» (aceptado o
-     descartado) sus `movidas` se van con él. */
-  const conMovidas = origenDePropuesta(proposal) === "contexto" && Array.isArray(proposal.movidas);
-  const secuencia =
-    resolvedKeys.has("reorder") || conMovidas
-      ? phasesAfter
-      : [...alPrincipio, ...idsPropuestos.flatMap((id) => grupos.get(id) ?? [])];
-
-  const rebuilt: ProposalPhaseLike[] = [...(keptNewByAnchor.get(null) ?? [])];
-  for (const ph of secuencia) {
-    /* Una fase sin sugerencia pendiente se re-emite con lo que tiene la base; en la de las
-       reuniones, sin ningún campo propuesto (`campos: []`): así no puede volver como sugerencia. */
-    rebuilt.push(pendingModByPhase.get(ph.id) ?? (conMovidas ? { ...ph, campos: [] } : { ...ph }));
-    rebuilt.push(...(keptNewByAnchor.get(ph.id) ?? []));
-  }
-
-  const keptAnchor = resolvedKeys.has("anchor") ? null : proposal.anchorStartDate;
-  return {
-    ...proposal,
-    anchorStartDate: keptAnchor,
-    phases: rebuilt,
-    ...(conMovidas && resolvedKeys.has("reorder") ? { movidas: [] } : {}),
-  };
-}
-
-/**
  * ── LA PROYECCIÓN: CÓMO QUEDARÍA EL CALENDARIO SI ACEPTO ESTAS CLAVES ───────
  * (Tanda J, 2026-08-08.) Hasta ahora se podía saber QUÉ cambia, pero no CUÁNDO terminaría el
  * proyecto si se aceptara — así que el CSE aprobaba corrimientos de fecha sin verlos. Estas
@@ -527,36 +442,6 @@ export function phasesAfterDeltas(
       startWeek: (deLaPropuesta("startWeek") ? propuesta?.startWeek : actual?.startWeek) ?? null,
     };
   });
-}
-
-/**
- * Prioridad de un cambio para MOSTRARLO: primero lo que mueve el calendario
- * (duración y semana de inicio corren fechas de todo lo que sigue), después lo
- * operativo, y al final el renombre, que es cosmético.
- *
- * Existe porque el badge mostraba `changes[0]` y escondía el resto tras un "+N":
- * en el caso real de Grupo Inve se leía «renombrar a "Auditoría y cierre de gaps"
- * +2» y los dos escondidos eran justamente los que movían el cronograma.
- */
-const PESO_CAMBIO: Record<PhaseFieldChange["field"], number> = {
-  durationWeeks: 0,
-  startWeek: 1,
-  sessionCount: 2,
-  activityType: 3,
-  notes: 4,
-  name: 5,
-};
-
-/** Los cambios de una sugerencia ordenados por impacto (lo que mueve fechas primero). */
-export function sortChangesByImpact(changes: PhaseFieldChange[]): PhaseFieldChange[] {
-  return [...changes].sort((a, b) => PESO_CAMBIO[a.field] - PESO_CAMBIO[b.field]);
-}
-
-/** Frase completa de una sugerencia: TODOS los cambios, del más consecuente al menos. */
-export function describeChanges(changes: PhaseFieldChange[]): string {
-  return sortChangesByImpact(changes)
-    .map((c) => describeChange(c))
-    .join(" · ");
 }
 
 /** Lo que el chip no puede saber solo: dónde arranca HOY la fase (semana del proyecto desde 0). */

@@ -16,7 +16,8 @@
  * (`lib/asistente/fase-senalada.ts`): el chat reescribe una nota únicamente si la leyó entera.
  *
  * Solo lectura (`modo: "solo-lectura"`) en cinco casos, con su porqué:
- *   · «formato-viejo»: la propuesta de antes del borrador (se resuelve en su barra, como en E1);
+ *   · «ilegible»: lo guardado no es un `borrador-v1` (E4: el formato viejo ya no se lee). Se descarta
+ *     arriba del Gantt;
  *   · «version-nueva»: trae cambios que esta versión no sabe leer;
  *   · «vacio-armando» / «vacio-fallido»: el borrador vacío que espera sus tareas (no hay nada que editar);
  *   · «tareas-armando»: la IA está armando las tareas de la propuesta;
@@ -50,7 +51,7 @@ import {
 
 /** Por qué el chat no puede editar la propuesta ahora. */
 export type PorQueSoloLectura =
-  | "formato-viejo"
+  | "ilegible"
   | "version-nueva"
   | "vacio-armando"
   | "vacio-fallido"
@@ -63,7 +64,7 @@ export interface PropuestaParaElChat {
   porQue: PorQueSoloLectura | null;
   /** `pendingProposalRunId`: identifica la propuesta. "" solo en una propuesta de antes de los tokens. */
   token: string;
-  /** La versión del `borrador-v1` (sube con cada escritura), o null en el formato viejo. */
+  /** La versión del `borrador-v1` (sube con cada escritura), o null si lo guardado no es un v1. */
   version: number | null;
   /** El cronograma de hoy, con sus tareas (con notas) y el estado de cada fase. */
   vivo: Vivo;
@@ -91,7 +92,7 @@ export function porQueDeSoloLectura(i: {
   borrador: Borrador | null;
   tareas: EstadoDeLasTareasDelBorrador | null;
 }): PorQueSoloLectura | null {
-  if (!esBorradorV1(i.guardado) || !i.borrador) return "formato-viejo";
+  if (!esBorradorV1(i.guardado) || !i.borrador) return "ilegible";
   if ((i.borrador.desconocidos ?? 0) > 0) return "version-nueva";
   if (esVacioEsperandoTareas(i.guardado)) {
     return estadoDelVacio(i.guardado, i.tareas?.estado ?? null) === "fallo" ? "vacio-fallido" : "vacio-armando";
@@ -111,7 +112,7 @@ export function propuestaParaElChat(i: {
   vivo: Vivo;
   tareas: EstadoDeLasTareasDelBorrador | null;
 }): PropuestaParaElChat {
-  const borrador = leerBorrador(i.guardado, i.vivo);
+  const borrador = leerBorrador(i.guardado);
   const porQue = porQueDeSoloLectura({ guardado: i.guardado, borrador, tareas: i.tareas });
   const excluidos = excluidosDelGuardado(i.guardado) ?? [];
   const estado = i.tareas?.estado ?? null;

@@ -203,12 +203,14 @@ describe("⛔ el escalón de permiso cuelga de que el cronograma todavía no ten
   });
 
   it("⚠ y aplicar las tareas usa ESE guard, no el de vara fija", () => {
-    /* Si vuelve `guardTimelineFullRegen`, Ventas y Marketing dejan de poder crear el cronograma — y el síntoma
-       es un 403 al aplicar la propuesta, que se lee como «se rompió el permiso», no como
-       «alguien cambió el guard». */
+    /* Si aplicar pidiera la vara fija del regen, Ventas y Marketing dejarían de poder crear el cronograma —
+       y el síntoma sería un 403 al aplicar la propuesta, que se lee como «se rompió el permiso», no como
+       «alguien cambió el guard».
+       ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: `guardTimelineFullRegen` se borró de api-guards.ts,
+       así que negar su nombre quedaba decorativo. Queda el positivo (aplicar pide `guardIaDelCronograma`)
+       y la negación de pedir la vara del regen por su cuenta. */
     const apply = soloCodigo(RUTA_APPLY);
     expect(apply).toContain("(await guardIaDelCronograma(tl.id)) === null");
-    expect(apply, "volvió la vara fija del regen completo").not.toContain("guardTimelineFullRegen");
     expect(apply, "aplicar pide la vara del regen por su cuenta").not.toContain('guardCapability("regenerateTimeline")');
   });
 });

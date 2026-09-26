@@ -125,7 +125,7 @@ describe("guardarPropuestaDelHandoff — escribe un borrador v1", () => {
       a: 4,
     });
     // Lo leen igual la pantalla y el servidor (E2a): nada queda como desconocido.
-    expect(leerBorrador(guardado, { ancla: null, fases: [] })?.desconocidos).toBeUndefined();
+    expect(leerBorrador(guardado)?.desconocidos).toBeUndefined();
   });
 
   it("⭐ 6 · una v1 abierta SIN nada por decidir se reemplaza, condicionado a su token y su versión", async () => {
@@ -148,13 +148,16 @@ describe("guardarPropuestaDelHandoff — escribe un borrador v1", () => {
       pendingProposalRunId: "run-v",
       pendingProposal: { path: ["version"], equals: 3 },
     });
-    // Una vieja sin nada por decidir: solo el token (no tiene versión).
+    /* ⚠ REESCRITA en E4 (2026-09), con esta razón: pedía que una propuesta del formato viejo sin nada por
+       decidir se reemplazara condicionada solo al token. Desde E4 lo que no es un v1 no se sabe leer, y
+       `propuestaPorDecidir` FALLA CERRADA: el handoff no pisa lo que no entiende (se descarta en la
+       pantalla). La edición que la pone en rojo: `if (!b) return false` en `propuestaPorDecidir`. */
     vi.clearAllMocks();
     db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
     const vieja = { anchorStartDate: null, phases: FASES };
     db.projectTimeline.findUnique.mockResolvedValue(fila({ pendingProposal: vieja, pendingProposalRunId: "run-viejo" }));
-    expect(await guardar()).toEqual({ tipo: "propuesta" });
-    expect(escrito().where).toEqual({ projectId: "p1", pendingProposalRunId: "run-viejo" });
+    expect(await guardar()).toMatchObject({ tipo: "aviso" });
+    expect(db.projectTimeline.updateMany, "el handoff pisó lo que no sabe leer").not.toHaveBeenCalled();
   });
 
   it("⭐ 8 · el arranque solo se propone si el proyecto no tenía (su `desde` es null)", async () => {

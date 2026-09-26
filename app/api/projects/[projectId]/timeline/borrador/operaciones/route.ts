@@ -98,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     const vivo: Vivo = tl.phases
       ? vivoDeLaBase(tl.anchorStartDate, tl.phases)
       : { ancla: tl.anchorStartDate?.toISOString() ?? null, fases: [] };
-    const borrador = leerBorrador(guardado, vivo);
+    const borrador = leerBorrador(guardado);
     if (!borrador) return conflicto("PROPUESTA_CAMBIO", MENSAJE_PROPUESTA_CAMBIO);
     if ((borrador.desconocidos ?? 0) > 0) return conflicto("NO_SE_PUEDE", BLOQUEO_VERSION_NUEVA);
 

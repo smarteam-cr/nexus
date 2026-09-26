@@ -175,7 +175,7 @@ const TAREAS_DE_C = ["tarea:c1:se-va", "t:c-1"];
 
 const estadoDe = (plan: ReturnType<typeof planDeAplicacion>, clave: string) => plan.items.find((it) => it.cambio.clave === clave)!;
 const fasesDesfasadas = (plan: { desfasadas: FaseDesfasada[] }) => plan.desfasadas.map((d) => d.fase);
-const ida = (b: Borrador) => leerBorrador(JSON.parse(JSON.stringify(b)), { ancla: null, fases: [] })!;
+const ida = (b: Borrador) => leerBorrador(JSON.parse(JSON.stringify(b)))!;
 
 describe("1 · la lectura: la forma armada y el recálculo guardado", () => {
   it("⭐ `sesiones` y `semanaCero` hacen la ida y vuelta; si no vienen, no se inventan", () => {
@@ -202,7 +202,7 @@ describe("1 · la lectura: la forma armada y el recálculo guardado", () => {
     for (const mala of [{ sesiones: -1 }, { sesiones: 1.5 }, { sesiones: "8" }, { semanaCero: "sí" }, { semanaCero: null }]) {
       const guardado = JSON.parse(JSON.stringify(v1([], { tareasArmadasPara: {} })));
       guardado.tareasArmadasPara = { c: { nombre: "Pruebas", semanas: 4, ...mala } };
-      expect(leerBorrador(guardado, VIVO)!.tareasArmadasPara, JSON.stringify(mala)).toEqual({});
+      expect(leerBorrador(guardado)!.tareasArmadasPara, JSON.stringify(mala)).toEqual({});
     }
   });
 
@@ -236,14 +236,14 @@ describe("1 · la lectura: la forma armada y el recálculo guardado", () => {
     ];
     for (const malo of malos) {
       const guardado = { ...JSON.parse(JSON.stringify(v1([DUR_C]))), recalculo: malo };
-      const leido = leerBorrador(guardado, VIVO)!;
+      const leido = leerBorrador(guardado)!;
       expect(leido.recalculo, JSON.stringify(malo).slice(0, 80)).toBeUndefined();
       expect(leido.desconocidos).toBeUndefined();
       expect(planDeAplicacion(VIVO, leido).bloqueo).toBeNull();
     }
     // En el borde, vale.
     const borde = { corrida: "x".repeat(200), fases: [{ id: "y".repeat(200), nombre: "" }], sin: Array.from({ length: 2000 }, () => "z".repeat(300)) };
-    expect(leerBorrador({ ...JSON.parse(JSON.stringify(v1([]))), recalculo: borde }, VIVO)!.recalculo).toEqual(borde);
+    expect(leerBorrador({ ...JSON.parse(JSON.stringify(v1([]))), recalculo: borde })!.recalculo).toEqual(borde);
   });
 });
 

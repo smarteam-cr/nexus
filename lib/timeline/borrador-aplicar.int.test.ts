@@ -34,6 +34,7 @@ import {
   claveDeFaseQueSeVa,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
+  convertirDelHandoff,
   fotoDeTarea,
   leerBorrador,
   mensajeDeRecalculoAlAplicar,
@@ -84,7 +85,7 @@ async function mundoMinimo() {
     notes: null,
     activityType: null,
   });
-  const propuesta: ProposalLike = {
+  const delHandoff: ProposalLike = {
     anchorStartDate: "2026-10-05T00:00:00.000Z",
     phases: [
       fila(a),
@@ -94,20 +95,24 @@ async function mundoMinimo() {
       { ...fila(c), durationWeeks: 2 },
     ],
   };
+  const vivo: Vivo = { ancla: null, fases: [a, b, c, d].map(fila) };
+  /* ⚠ REESCRITO en E4 (2026-09), con esta razón: guardaba el formato viejo y el pedido mandaba la foto.
+     Lo guardado es siempre v1 (como lo guarda el handoff desde E2b): convertido una vez contra lo que
+     leyó, con su `desde`. Versión 0: el token se condiciona también a ella. */
+  const propuesta: unknown = JSON.parse(JSON.stringify(convertirDelHandoff({ propuesta: delHandoff, vivo })));
   await prisma.projectTimeline.update({
     where: { id: tl.id },
-    data: { pendingProposal: propuesta as unknown as Prisma.InputJsonValue, pendingProposalRunId: RUN },
+    data: { pendingProposal: propuesta as Prisma.InputJsonValue, pendingProposalRunId: RUN },
   });
-  const vivo: Vivo = { ancla: null, fases: [a, b, c, d].map(fila) };
   return { tl, a, b, c, d, tarea, propuesta, vivo };
 }
 
 describe("aplicar el borrador — DB real", () => {
   it("aplicado: la propuesta se limpia, las fases quedan en su orden y la tarea de la fase acortada se acomoda", async () => {
     const m = await mundoMinimo();
-    const huella = planDeAplicacion(m.vivo, leerBorrador(m.propuesta, m.vivo)!, []).huella;
+    const huella = planDeAplicacion(m.vivo, leerBorrador(m.propuesta)!, []).huella;
     const r = await prisma.$transaction((tx) =>
-      aplicarBorradorEnTx(tx, { timelineId: m.tl.id, token: RUN, guardado: m.propuesta, foto: m.vivo, sin: [], huella, ahora: new Date(), ...SIN_TAREAS }),
+      aplicarBorradorEnTx(tx, { timelineId: m.tl.id, token: RUN, guardado: m.propuesta, sin: [], huella, ahora: new Date(), ...SIN_TAREAS }),
     );
     expect(r.plan.marcadas).toBe(5);
     const tl = await prisma.projectTimeline.findUniqueOrThrow({
@@ -135,7 +140,7 @@ describe("aplicar el borrador — DB real", () => {
     const m = await mundoMinimo();
     await expect(
       prisma.$transaction((tx) =>
-        aplicarBorradorEnTx(tx, { timelineId: m.tl.id, token: RUN, guardado: m.propuesta, foto: m.vivo, sin: [], huella: "otra", ahora: new Date(), ...SIN_TAREAS }),
+        aplicarBorradorEnTx(tx, { timelineId: m.tl.id, token: RUN, guardado: m.propuesta, sin: [], huella: "otra", ahora: new Date(), ...SIN_TAREAS }),
       ),
     ).rejects.toMatchObject({ codigo: "PLAN_CAMBIO" });
     const tl = await prisma.projectTimeline.findUniqueOrThrow({ where: { id: m.tl.id }, select: { pendingProposalRunId: true, pendingProposal: true } });
@@ -147,9 +152,9 @@ describe("aplicar el borrador — DB real", () => {
 
   it("⛔ con otro token (la propuesta se reemplazó) no se escribe nada", async () => {
     const m = await mundoMinimo();
-    const huella = planDeAplicacion(m.vivo, leerBorrador(m.propuesta, m.vivo)!, []).huella;
+    const huella = planDeAplicacion(m.vivo, leerBorrador(m.propuesta)!, []).huella;
     const intento = prisma.$transaction((tx) =>
-      aplicarBorradorEnTx(tx, { timelineId: m.tl.id, token: "otra-corrida", guardado: m.propuesta, foto: m.vivo, sin: [], huella, ahora: new Date(), ...SIN_TAREAS }),
+      aplicarBorradorEnTx(tx, { timelineId: m.tl.id, token: "otra-corrida", guardado: m.propuesta, sin: [], huella, ahora: new Date(), ...SIN_TAREAS }),
     );
     await expect(intento).rejects.toBeInstanceOf(ErrorAlAplicar);
     const tl = await prisma.projectTimeline.findUniqueOrThrow({ where: { id: m.tl.id }, select: { pendingProposalRunId: true } });
@@ -293,9 +298,8 @@ async function pedidoDeLaPantalla(timelineId: string, v1: Borrador): Promise<Ped
     timelineId,
     token: RUN,
     guardado: v1,
-    foto: null,
     sin: [],
-    huella: planDeAplicacion(vivo, leerBorrador(v1, vivo)!, [], { tareas: "listas" }).huella,
+    huella: planDeAplicacion(vivo, leerBorrador(v1)!, [], { tareas: "listas" }).huella,
     ahora: new Date(),
     tareas: "listas",
     puedeTocarTareas: true,
@@ -530,9 +534,8 @@ describe("«Regenerar» de una fase — DB real (E2b)", () => {
       timelineId: tl.id,
       token: corrida.id,
       guardado,
-      foto: null,
-      sin: [],
-      huella: planDeAplicacion(vivo, leerBorrador(guardado, vivo)!, [], { tareas: "listas" }).huella,
+        sin: [],
+      huella: planDeAplicacion(vivo, leerBorrador(guardado)!, [], { tareas: "listas" }).huella,
       ahora: new Date(),
       tareas: "listas",
       puedeTocarTareas: true,
@@ -613,9 +616,8 @@ async function pedidoConLoMarcado(timelineId: string, sin: string[], forzar: str
     timelineId,
     token: RUN,
     guardado: pendingProposal,
-    foto: null,
     sin,
-    huella: planDeAplicacion(vivo, leerBorrador(pendingProposal, vivo)!, sin, { tareas: "listas", forzar }).huella,
+    huella: planDeAplicacion(vivo, leerBorrador(pendingProposal)!, sin, { tareas: "listas", forzar }).huella,
     ahora: new Date(),
     tareas: "listas",
     puedeTocarTareas: true,
@@ -634,7 +636,7 @@ describe("la fase desfasada — DB real (E2c)", () => {
     // Con la fase desfasada, aplicar espera.
     const antes = await pedidoConLoMarcado(m.tl.id, m.sin);
     const vivo = await vivoDeLaBase(m.tl.id);
-    expect(planDeAplicacion(vivo, leerBorrador(antes.guardado, vivo)!, m.sin, { tareas: "listas" }).bloqueoPorDesfasadas).toBe(true);
+    expect(planDeAplicacion(vivo, leerBorrador(antes.guardado)!, m.sin, { tareas: "listas" }).bloqueoPorDesfasadas).toBe(true);
 
     // 1. La marca: el recálculo va en `recalculo`, nunca en `tareas`.
     expect(
@@ -742,9 +744,8 @@ async function pedidoDelChat(timelineId: string, cambios: (vivo: Vivo) => Borrad
     timelineId,
     token: RUN,
     guardado: v1,
-    foto: null,
     sin: [],
-    huella: planDeAplicacion(vivo, leerBorrador(v1, vivo)!, [], { tareas: "listas" }).huella,
+    huella: planDeAplicacion(vivo, leerBorrador(v1)!, [], { tareas: "listas" }).huella,
     ahora: new Date(),
     tareas: "listas",
     puedeTocarTareas: false, // lo del chat pide la vara de editar, no la de la IA

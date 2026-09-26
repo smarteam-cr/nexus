@@ -627,10 +627,10 @@ describe("⛔ P4 no cambia lo que hace el chat: ve la propuesta, pero `fases` si
     expect(ctx.texto, "ofrece resolverla desde el chat mientras no se puede").not.toContain("(o me lo pides acá)");
   });
 
-  it("el formato viejo sigue con el contexto de HOY y su freno, pero lleva el token", async () => {
-    /* Una propuesta de antes del borrador se resuelve en su barra, como en E1: el chat no la puede leer
-       con los números de la barra. La edición que la pone en rojo: mostrar la propuesta en solo lectura
-       para el formato viejo. */
+  it("una ilegible (lo que no es un v1) sigue con el contexto de HOY y su freno, pero lleva el token", async () => {
+    /* ⚠ E4 (2026-09): era «el formato viejo», que ya no se lee: ahora es «ilegible» (se descarta arriba
+       del Gantt). El chat no la puede leer con los números de la barra. La edición que la pone en rojo:
+       mostrar la propuesta en solo lectura para lo que no se sabe leer. */
     montarLaBase({ phases: [{ id: "fa", name: "Kickoff", durationWeeks: 2 }] });
     const ctx = await contextoDeCronograma("p1");
     expect(ctx.texto).toContain("EL CRONOGRAMA HOY");
@@ -638,7 +638,7 @@ describe("⛔ P4 no cambia lo que hace el chat: ve la propuesta, pero `fases` si
     expect(ctx.texto).toContain("HAY UNA PROPUESTA DEL CRONOGRAMA SIN DECIDIR");
     expect(ctx.tokenDeLaPropuesta).toBe("run-4");
     expect(ctx.propuesta?.modo).toBe("solo-lectura");
-    expect(ctx.propuesta?.porQue).toBe("formato-viejo");
+    expect(ctx.propuesta?.porQue).toBe("ilegible");
   });
 
   it("sin propuesta, nada cambia: el cronograma de hoy, sin token", async () => {

@@ -33,12 +33,13 @@
  * La auditoría y los eventos del watchdog van AFUERA, después: alargar la transacción no, y perder
  * un evento es aceptable (mismo criterio que el PUT).
  *
- * Extraído de `proposal/apply-items` (2026-09-24), que queda como lápida: la reubicación de tareas,
+ * Extraído de `proposal/apply-items` (2026-09-24; la ruta se borró en E4): la reubicación de tareas,
  * el orden denso 0..N-1 y la escritura solo de lo que cambia son los mismos.
  */
 import { Prisma, type TimelineActivityType } from "@prisma/client";
 import { ACTIVITY_TYPES } from "./validate";
 import {
+  BLOQUEO_VERSION_NUEVA,
   leerBorrador,
   mensajeDeRecalculoAlAplicar,
   necesitaPermisoDeIa,
@@ -273,8 +274,6 @@ export interface PedidoDeAplicar {
   /** Lo que estaba guardado en `pendingProposal` cuando se leyó (fuera de la transacción). Para
    *  un token dado no cambia sin que cambie su versión (la escritura del paso 1 se condiciona a ella). */
   guardado: unknown;
-  /** La foto contra la que la pantalla convirtió el formato viejo (lib/timeline/borrador.ts). */
-  foto: Vivo | null;
   sin: readonly string[];
   huella: string;
   ahora: Date;
@@ -413,9 +412,10 @@ export async function aplicarBorradorEnTx(tx: TxDeEstructura, p: PedidoDeAplicar
     })),
   };
 
-  // 3) El plan: el mismo borrador que armó la pantalla (con su foto) y la misma función.
-  const borrador = leerBorrador(p.guardado, p.foto ?? vivo);
-  if (!borrador) throw new ErrorAlAplicar("PROPUESTA_CAMBIO", MENSAJE_PROPUESTA_CAMBIO);
+  /* 3) El plan: el mismo borrador que lee la pantalla y la misma función. E4: lo que no es un v1 no se
+     sabe leer (ya no se convierte con una foto): no se aplica, y la pantalla ofrece descartarlo. */
+  const borrador = leerBorrador(p.guardado);
+  if (!borrador) throw new ErrorAlAplicar("NO_SE_PUEDE", BLOQUEO_VERSION_NUEVA);
   const plan = planDeAplicacion(vivo, borrador, p.sin, { tareas: p.tareas, forzar: p.forzar });
   /* E2c P3: con fases desfasadas sin forzar, solo llega acá una pestaña de antes (la de ahora no
      manda nada con bloqueo): no sabe recalcular, así que se le dice que recargue. */

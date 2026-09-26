@@ -360,6 +360,10 @@ describe("el libro: lo pendiente se revalida contra la propuesta de ahora", () =
     expect(avisoDeSoloLectura("tareas-armando")).toBe(
       "⚠ Ahora no registré cambios: la IA está armando las tareas de la propuesta. Pídemelo cuando termine.",
     );
+    // E4: lo que no es un v1 no se lee (antes «formato-viejo», que se resolvía en su barra): se descarta.
+    expect(avisoDeSoloLectura("ilegible")).toBe(
+      "⚠ Ahora no registré cambios: la propuesta guardada no se puede leer; se descarta arriba del Gantt. Pídemelo cuando se resuelva.",
+    );
   });
 });
 

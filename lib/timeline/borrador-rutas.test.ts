@@ -31,8 +31,8 @@ const db = vi.hoisted(() => ({
   $transaction: vi.fn(),
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
-// E2b P5b: sale `guardTimelineDetailApply`. Lo pedía solo apply-all, que ahora es una lápida con
-// `guardTimelineEdit`: ninguna ruta de este archivo lo importa.
+// E2b P5b: sale `guardTimelineDetailApply` (lo pedía solo apply-all). E4: se borraron las lápidas y el
+// guard; ninguna ruta de este archivo lo importa.
 const guards = vi.hoisted(() => ({
   guardTimelineEdit: vi.fn(),
   guardIaDelCronograma: vi.fn(),
@@ -41,8 +41,6 @@ vi.mock("@/lib/auth/api-guards", () => guards);
 
 import { POST as aplicarPOST } from "@/app/api/projects/[projectId]/timeline/borrador/aplicar/route";
 import { DELETE as descartarDELETE } from "@/app/api/projects/[projectId]/timeline/proposal/route";
-import { POST as aplicarFasePOST } from "@/app/api/projects/[projectId]/timeline/phases/[phaseId]/apply/route";
-import { POST as aplicarTodoPOST } from "@/app/api/projects/[projectId]/timeline/detail/apply-all/route";
 import { ErrorAlAplicar, type ResultadoDeAplicar } from "@/lib/timeline/escribir-estructura";
 import { AVISO_DETALLE_SIN_CAMBIOS, FORMATO_BORRADOR, leerAvisoSinCambios, leerBorrador } from "@/lib/timeline/borrador";
 import {
@@ -178,7 +176,6 @@ const pedir = (body: unknown) =>
     body: JSON.stringify(body),
   }) as unknown as NextRequest;
 const delProyecto = { params: Promise.resolve({ projectId: "p1" }) };
-const deLaFase = { params: Promise.resolve({ projectId: "p1", phaseId: "f1" }) };
 
 /** Un borrador v1 guardado, como lo deja /estructura (y, con tareas, la fusión del paso 2). */
 const v1 = (extra: Record<string, unknown> = {}) => ({
@@ -198,8 +195,8 @@ const TAREA_NUEVA = {
   fase: "f1",
   tarea: { title: "Mapear procesos", weekIndex: 0, notes: null, party: null, type: null, needsValidation: false, motivoPorValidar: null, fuga: null },
 };
-/** El formato viejo del handoff: fases sin tareas. */
-const VIEJA = { anchorStartDate: null, phases: [{ id: "f1", name: "Diseño", durationWeeks: 2 }] };
+/** Algo guardado que NO es un v1 (el formato viejo del handoff: fases sin tareas). E4: ya no se lee. */
+const NO_V1 = { anchorStartDate: null, phases: [{ id: "f1", name: "Diseño", durationWeeks: 2 }] };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -288,7 +285,7 @@ describe("POST /timeline/borrador/aplicar — de dónde viene, en la auditoría 
       .mockResolvedValueOnce({ anchorStartDate: null });
     db.timelinePhase.findMany.mockResolvedValue([]);
     db.$transaction.mockResolvedValue({
-      borrador: leerBorrador(guardado, { ancla: null, fases: [] })!,
+      borrador: leerBorrador(guardado)!,
       plan: { marcadas: 1, total: 1, aplicadas: [] },
       avisos: [],
       anclaAntes: null,
@@ -367,62 +364,37 @@ describe("DELETE /timeline/proposal — el descarte automático no borra un borr
   });
 });
 
-describe("phases/[phaseId]/apply y detail/apply-all — un solo borrador por proyecto", () => {
-  /* ⚠ REESCRITO en E2b P5a (2026-09-25), con esta razón: phases/apply ya no aplica nada. «Regenerar»
-     de una fase deja una propuesta (con `soloFase`) que se aplica con /borrador/aplicar, y la ruta vieja
-     queda como lápida hasta E4, para las pestañas de antes del deploy. Estos `it` pedían que respondiera
-     409 PROPUESTA_ABIERTA con un v1 abierto y que aplicara con la propuesta vieja del handoff; ahora
-     responde siempre el 409 de la lápida.
-     ⚠ REESCRITO en E2b P5b (2026-09-25), con esta razón: apply-all corre la misma suerte. Aplicaba el
-     acordeón de dos columnas de «Regenerar todo», que se borró; desde E2a esas tareas se revisan y se
-     aplican en la propuesta. Sus dos `it` (409 PROPUESTA_ABIERTA con un v1, y que aplicara con la vieja
-     del handoff) pasan a uno: la lápida, con la misma forma que la de phases/apply. */
-  it("⛔ phases/apply es una lápida: 409 `{ code, message }` sin `error`, sin tocar la base, haya o no propuesta", async () => {
-    /* `{ code, message }` y no `{ error }`: el Canvas viejo lee `data?.error ?? data?.message`, y con
-       `error` el CSE leería un código. La edición que la pone en rojo: volver a aplicar o a leer la
-       base, responder con `error`, o dejar de pedir el permiso. */
-    for (const guardada of [v1(), VIEJA, null]) {
-      db.timelinePhase.findFirst.mockResolvedValue({ id: "f1", status: "PENDING", durationWeeks: 2, timeline: { id: "tl", pendingProposal: guardada }, tasks: [] });
-      const fase = await aplicarFasePOST(pedir({ tasks: [] }), deLaFase);
-      expect(fase.status).toBe(409);
-      const cuerpo = await fase.json();
-      expect(cuerpo.code).toBe("NEXUS_ACTUALIZADO");
-      expect(cuerpo, "el Canvas viejo mostraría un código").not.toHaveProperty("error");
-      expect(cuerpo.message).toMatch(/^Nexus se actualizó: recarga la página/);
-      expect(cuerpo.message).toContain("No se aplicó nada.");
+/* ⚠ REESCRITO en E4 (2026-09), con esta razón: pedía que phases/apply y apply-all respondieran el 409 de
+   su lápida («Nexus se actualizó»). Eran para las pestañas de antes del deploy de E2b; E4 las borró, con
+   `proposal/apply-items`. Una pestaña así de vieja recibe un 404. */
+describe("E4 · las tres lápidas se borraron", () => {
+  it("⛔ proposal/apply-items, phases/[phaseId]/apply y detail/apply-all no existen", () => {
+    /* La edición que la pone en rojo: restaurar cualquiera de las tres. Las rutas que se quedan
+       (phases/[phaseId] y proposal) sí existen: si esta guarda no las ve, está mirando otro lugar. */
+    const raiz = "app/api/projects/[projectId]/timeline";
+    for (const viva of [`${raiz}/phases/[phaseId]/route.ts`, `${raiz}/proposal/route.ts`, APLICAR]) {
+      expect(fs.existsSync(path.join(process.cwd(), viva)), `no encuentro ${viva}`).toBe(true);
     }
-    expect(guards.guardTimelineEdit, "la lápida dejó de pedir el permiso").toHaveBeenCalledTimes(3);
-    expect(db.timelinePhase.findFirst, "la lápida lee la base").not.toHaveBeenCalled();
-    expect(db.$transaction).not.toHaveBeenCalled();
-    expect(db.projectTimeline.update).not.toHaveBeenCalled();
-    expect(db.timelineChange.create).not.toHaveBeenCalled();
+    for (const lapida of [`${raiz}/proposal/apply-items/route.ts`, `${raiz}/phases/[phaseId]/apply/route.ts`, `${raiz}/detail/apply-all/route.ts`]) {
+      expect(fs.existsSync(path.join(process.cwd(), lapida)), `volvió ${lapida}`).toBe(false);
+    }
   });
+});
 
-  it("⛔ apply-all es una lápida: 409 `{ code, message }` sin `error`, sin tocar la base, haya o no propuesta", async () => {
-    /* Una pestaña de antes del deploy todavía puede mandar su acordeón: no se aplica nada y el CSE lee
-       la frase (el Canvas viejo lee `data?.error ?? data?.message`). La edición que la pone en rojo:
-       volver a aplicar o a leer la base, responder con `error`, o dejar de pedir el permiso. */
-    for (const guardada of [v1(), VIEJA, null]) {
-      db.projectTimeline.findUnique.mockResolvedValue({
-        id: "tl",
-        pendingProposal: guardada,
-        phases: [{ id: "f1", durationWeeks: 2, activityType: null, tasks: [] }],
-      });
-      const todo = await aplicarTodoPOST(pedir({ phases: [{ phaseId: "f1", tasks: [] }] }), delProyecto);
-      expect(todo.status).toBe(409);
-      const cuerpo = await todo.json();
-      expect(cuerpo, "el Canvas viejo mostraría un código").not.toHaveProperty("error");
-      expect(cuerpo).toEqual({
-        code: "NEXUS_ACTUALIZADO",
-        message: "Nexus se actualizó: recarga la página y vuelve a «Regenerar todo». No se aplicó nada.",
-      });
+describe("POST /timeline/borrador/aplicar — la `foto` de una pestaña de antes", () => {
+  it("⛔ E4: una `foto` en el cuerpo (válida o no) NO da 400: se ignora y decide la transacción", async () => {
+    /* Una pestaña de E3 abierta durante el deploy de E4 la sigue mandando. La edición que la pone en
+       rojo: volver a validarla (su 400 dejaría a esa pestaña sin poder aplicar). */
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposal: v1(), pendingProposalRunId: "run-1" });
+    db.$transaction.mockRejectedValue(new ErrorAlAplicar("PLAN_CAMBIO", "otra lista"));
+    const fotos = [{ ancla: null, fases: [{ id: "f1", name: "Diseño", durationWeeks: 2 }] }, { ancla: 3, fases: [] }, "basura", 7];
+    for (const foto of fotos) {
+      const res = await aplicarPOST(pedir({ token: "run-1", sin: [], huella: "h", version: 5, foto }), delProyecto);
+      expect(res.status, JSON.stringify(foto)).toBe(409);
+      expect(await res.json(), JSON.stringify(foto)).toMatchObject({ error: "PLAN_CAMBIO" });
     }
-    expect(guards.guardTimelineEdit, "la lápida dejó de pedir el permiso").toHaveBeenCalledTimes(3);
-    expect(db.projectTimeline.findUnique, "la lápida lee la base").not.toHaveBeenCalled();
-    expect(db.$transaction).not.toHaveBeenCalled();
-    expect(db.projectTimeline.update).not.toHaveBeenCalled();
-    expect(db.timelinePhase.findMany).not.toHaveBeenCalled();
-    expect(db.timelineChange.create).not.toHaveBeenCalled();
+    expect(db.$transaction).toHaveBeenCalledTimes(fotos.length);
+    expect(soloCodigo(leer(APLICAR)), "la ruta volvió a leer la foto").not.toMatch(/leerFoto|body\.foto/);
   });
 });
 
@@ -431,7 +403,7 @@ describe("leerEstadoDeLasTareas — el estado se DEDUCE de la corrida", () => {
     db.agentRun.findUnique.mockResolvedValue({ status, updatedAt: new Date(Date.now() - minutos * 60_000), currentPhase, output });
 
   it("sin v1 o sin tareas: null; listas o sin corrida: sin leer la corrida", async () => {
-    expect(await leerEstadoDeLasTareas(VIEJA)).toBeNull();
+    expect(await leerEstadoDeLasTareas(NO_V1)).toBeNull();
     expect(await leerEstadoDeLasTareas(v1({ tareas: null }))).toBeNull();
     expect(await leerEstadoDeLasTareas(v1({ tareas: { corrida: "run-t", listas: true } }))).toEqual({ estado: "listas", fase: null, motivo: null });
     expect(await leerEstadoDeLasTareas(v1())).toEqual({ estado: "faltan", fase: null, motivo: null });
@@ -479,7 +451,7 @@ describe("leerEstadoDeLasTareas — el estado se DEDUCE de la corrida", () => {
     db.agentRun.findUnique.mockClear();
     expect(await leerEstadoDelVacio(v1({ cambios: [TAREA_NUEVA], tareas: { corrida: "run-v", listas: false } }))).toBeNull();
     expect(await leerEstadoDelVacio(v1({ tareas: { corrida: "run-v", listas: true } }))).toBeNull();
-    expect(await leerEstadoDelVacio(VIEJA)).toBeNull();
+    expect(await leerEstadoDelVacio(NO_V1)).toBeNull();
     expect(await leerEstadoDelVacio(null)).toBeNull();
     expect(db.agentRun.findUnique, "leyó una corrida sin un vacío").not.toHaveBeenCalled();
   });
@@ -573,11 +545,12 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     expect(ruta.slice(iPrevalidar, iPrevalidar + 300)).toContain("return NextResponse.json(vetoDelBorrador, { status: 409 })");
   });
 
-  it("⛔ E2b P5a · lápida: el agente de detalle sin `borrador` responde 409 ANTES de crear la corrida", () => {
-    /* Una pestaña de antes del deploy (la vista previa de «Regenerar» de una fase, o el paso 2 viejo)
-       pagaría una corrida cuya salida ya no se puede aplicar. `{ error, message }`: sus lectores
-       muestran `message` primero. La edición que la pone en rojo: sacar la lápida, ponerla después de
-       crear la corrida, o hacerla solo para «Regenerar» de una fase. */
+  it("⛔ la regla (E2b P5a): el agente de detalle sin `borrador` responde 409 ANTES de crear la corrida", () => {
+    /* ⚠ RETITULADA en E4 (2026-09): se llamaba «lápida». No lo es: E4 borró las lápidas y esto se queda.
+       Un pedido sin `borrador` pagaría una corrida cuya salida no se puede aplicar, y más abajo la rama
+       del detalle da por hechos `timelineDelBorrador` y `sobreDelDetalle`. `{ error, message }`: sus
+       lectores muestran `message` primero. La edición que la pone en rojo: sacar el 409, ponerlo después
+       de crear la corrida, o hacerlo solo para «Regenerar» de una fase. */
     const iLapida = ruta.indexOf("if (isTimelineDetailAgent && pedidoLeido === null) {");
     expect(iLapida, "no encontré la lápida").toBeGreaterThan(-1);
     for (const crear of ["const run = existingRunId", "const pre = await prisma.agentRun.create("]) {
@@ -654,7 +627,7 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
        ⚠ REESCRITA en E2b P5a (2026-09-25), con esta razón: pedía que la fusión fuera ANTES de las dos
        vistas previas en memoria (`computeTimelineDetailPreview`, de una fase, y la de todas), que
        quedaban para las pestañas viejas y para «Regenerar» de una fase. Se borraron: una fase también
-       entra al borrador, y un pedido sin `borrador` ni llega (la lápida de abajo). Volver a sumar una
+       entra al borrador, y un pedido sin `borrador` ni llega (la regla de abajo). Volver a sumar una
        vista previa la pone en rojo. */
     const iRun = ruta.indexOf("const run = existingRunId");
     const iFusion = ruta.indexOf("fusionarDetalleEnElBorrador(");
@@ -688,7 +661,7 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
     // Lo que responde el paso 2 cuando no sigue: los vetos, el 409 dentro de la corrida y el 500 del modelo.
     const pedido = { token: "run-1", version: 5 };
     const cuerpos: unknown[] = [
-      vetoDelGuardado(VIEJA, "run-h", { token: null, version: null }),
+      vetoDelGuardado(NO_V1, "run-h", { token: null, version: null }),
       vetoDelGuardado(v1(), "run-otra", pedido),
       { error: "TAREAS_EN_CURSO", message: MENSAJE_TAREAS_EN_CURSO },
       { error: "NO_SE_PUEDE", message: MENSAJE_SIN_TAREAS_QUE_ARMAR },
@@ -713,7 +686,7 @@ describe("POST /api/clients/[id]/analyze — el paso 2 completa el borrador (E2a
        del centro de corridas solo lee PENDING, RUNNING, DONE y ERROR. La edición que la pone en rojo:
        volver a cerrarla en ERROR, o guardar el código en vez del texto. */
     for (const veto of [
-      vetoDelGuardado(VIEJA, "run-h", { token: null, version: null })!,
+      vetoDelGuardado(NO_V1, "run-h", { token: null, version: null })!,
       vetoDelGuardado(v1(), "run-otra", { token: "run-1", version: 5 })!,
     ]) {
       const cierre = cierreDeLaCorridaVetada(veto);
@@ -876,7 +849,7 @@ describe("prevalidarPedidoDeTareas — antes de pagar la corrida", () => {
   it("token null: solo sin ninguna propuesta abierta", async () => {
     db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: null, pendingProposalRunId: null });
     expect(await prevalidarPedidoDeTareas("tl", { token: null, version: null })).toBeNull();
-    db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: VIEJA, pendingProposalRunId: "run-h" });
+    db.projectTimeline.findUnique.mockResolvedValue({ pendingProposal: NO_V1, pendingProposalRunId: "run-h" });
     expect(await prevalidarPedidoDeTareas("tl", { token: null, version: null })).toMatchObject({ error: "PROPUESTA_PENDIENTE" });
   });
 

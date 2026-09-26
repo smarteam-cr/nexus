@@ -52,8 +52,8 @@ const ESCRITORES: { archivo: string; protege: string }[] = [
       "respuesta. Ese segundo caso era el agujero original.",
   },
   /* `proposal/apply-items` SALIÓ del censo el 2026-09-24 (E1 del borrador): quedó como lápida que
-     responde 409 y no escribe nada. Su escritura —con el acomodo que ganó acá— se mudó a
-     `lib/timeline/escribir-estructura.ts`, declarado abajo. */
+     respondía 409 y no escribía nada, y E4 (2026-09) la borró. Su escritura —con el acomodo que ganó
+     acá— se mudó a `lib/timeline/escribir-estructura.ts`, declarado abajo. */
   {
     /* Entró el 2026-09-24 (E1 del borrador del cronograma): es el escritor de la revisión nueva de
        la propuesta de fases y heredó de apply-items el acomodo. */
@@ -64,8 +64,8 @@ const ESCRITORES: { archivo: string; protege: string }[] = [
       "a la última semana que existe y el aviso vuelve en la respuesta (`avisos`).",
   },
   /* `detail/apply-all` y `lib/timeline/apply-curated-phase.ts` SALIERON del censo el 2026-09-25 (E2b
-     P5b), con la curación de dos columnas: apply-all quedó como lápida que responde 409 y no escribe
-     nada, y apply-curated-phase.ts se borró. Ninguno de los dos cambiaba la duración (la leían para
+     P5b), con la curación de dos columnas: apply-all quedó como lápida que respondía 409 (E4 la borró),
+     y apply-curated-phase.ts se borró. Ninguno de los dos cambiaba la duración (la leían para
      acotar las tareas curadas). Lo único que se salvó de ellos, el cierre de la fase
      (`recalcularCierreDeFase`, que toca solo el estado), vive en escribir-estructura.ts, declarado
      arriba. */
@@ -132,17 +132,14 @@ describe("los dos caminos vivos acomodan de verdad", () => {
     expect(put).toContain("weekIndex: { gte: p.durationWeeks }");
   });
 
-  it("⛔ y `apply-items` ya no escribe: es una lápida", () => {
+  it("⛔ y `apply-items` no existe: el único que aplica la propuesta es el escritor del borrador", () => {
     /* ⚠ REESCRITA en E1 del borrador (2026-09-24), con esta razón: pedía que apply-items acomodara
-       las tareas al acortar una fase; desde E1 no escribe NADA (responde 409 «recarga») y el acomodo
-       vive en el escritor del borrador (test de abajo). Lo que la guarda sigue impidiendo es un
-       escritor de duración sin acomodo: si la lápida vuelve a escribir, se pone en rojo acá. */
-    const items = leer(
-      "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts",
-    );
-    expect(items.length).toBeGreaterThan(100);
-    expect(items).toContain("status: 409");
-    expect(items).not.toMatch(/timelinePhase\.|timelineTask\./);
+       las tareas al acortar una fase; desde E1 no escribía NADA (una lápida 409) y el acomodo vive en
+       el escritor del borrador (test de abajo).
+       ⚠ REESCRITA en E4 (2026-09), con esta razón: la lápida se borró. La edición que la pone en rojo:
+       volver a crear la ruta (un segundo camino que aplica la propuesta, fuera del censo). */
+    expect(fs.existsSync(path.join(RAIZ, "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"))).toBe(false);
+    expect(fs.existsSync(path.join(RAIZ, "app/api/projects/[projectId]/timeline/proposal/route.ts")), "la guarda mira otra carpeta").toBe(true);
   });
 
   it("⛔ y el escritor del borrador también, y lo avisa", () => {

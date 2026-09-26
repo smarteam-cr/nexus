@@ -110,7 +110,7 @@ describe("el chat edita la propuesta — DB real (E3 P2)", () => {
     expect(chat.status).toBe(200);
     let g = await guardado(m.tl.id);
     expect(g.version).toBe(2);
-    const b = leerBorrador(g, { ancla: null, fases: [] })!;
+    const b = leerBorrador(g)!;
     expect(b.cambios.find((c) => c.clave === claveDeTareaQueCambia(m.hecha.id))).toMatchObject({
       faseId: m.diseno.id,
       a: { fase: m.pruebas.id, weekIndex: 0 },
@@ -148,14 +148,13 @@ describe("el chat edita la propuesta — DB real (E3 P2)", () => {
     });
     const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
     const sin = excluidosDelGuardado(tl.pendingProposal) ?? [];
-    const plan = planDeAplicacion(vivo, leerBorrador(tl.pendingProposal, vivo)!, sin, { tareas: "listas" });
+    const plan = planDeAplicacion(vivo, leerBorrador(tl.pendingProposal)!, sin, { tareas: "listas" });
     const r = await prisma.$transaction(
       (tx) =>
         aplicarBorradorEnTx(tx, {
           timelineId: m.tl.id,
           token: RUN,
           guardado: tl.pendingProposal,
-          foto: null,
           sin,
           huella: plan.huella,
           ahora: new Date(),

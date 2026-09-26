@@ -77,7 +77,8 @@ export const avisoDeCierre = (motivo: string): string =>
 
 /** Por qué no se registra nada mientras la propuesta es de solo lectura. */
 const POR_QUE_NO_SE_REGISTRA: Record<PorQueSoloLectura, string> = {
-  "formato-viejo": "la propuesta de arriba del Gantt se resuelve en su barra",
+  // E4: lo que no es un v1 ya no se lee; la pantalla solo ofrece descartarlo.
+  ilegible: "la propuesta guardada no se puede leer; se descarta arriba del Gantt",
   "version-nueva": "la propuesta de arriba del Gantt se resuelve en su barra",
   "vacio-armando": "la IA está armando las tareas del cronograma",
   "vacio-fallido": "hay una propuesta vacía arriba del Gantt: primero hay que sacarla con «Descartar»",

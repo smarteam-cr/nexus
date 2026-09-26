@@ -348,59 +348,11 @@ export async function guardTimelineDelete(
 }
 
 /**
- * Aplicar la regeneración de TODO el cronograma (Tanda N, apply-all): a diferencia de
- * guardTimelineEdit (`editTimeline`, la tiene el CSE), exige `regenerateTimeline` — el MISMO
- * gate que ya protege GENERAR la propuesta (resolveArtifactGate, vía hasAiTimelineDetail).
- * Deliberado y más estricto que el apply por-fase: aplicar TODO el cronograma de una sola vez
- * tiene mucho más blast radius que una fase — no tiene sentido heredar la asimetría de
- * guardTimelineEdit (hoy inofensiva porque la UI nunca deja generar el preview a quien no
- * tiene `regenerateTimeline`; un endpoint nuevo que aplica TODO no debe depender de que la UI
- * nunca se equivoque).
- */
-/**
- * Gate del apply del detalle COMPLETO (/timeline/detail/apply-all). La vara depende de qué hay
- * para destruir, no del nombre del endpoint:
- *
- *  - cronograma CON tareas → `regenerateTimeline`. Es el regen completo: reescribe N fases de un
- *    saque sobre trabajo que ya existe, y por eso pide más que el apply por fase.
- *  - cronograma VACÍO → alcanza `editTimeline`, la MISMA vara que el apply por fase. Es la
- *    primera generación, que desde 2026-08-16 también pasa por curación en vez de escribirse
- *    directo. Sin este escalón Ventas y Marketing —que generan pero NO regeneran
- *    (permissions/defaults.ts; el CSE sí regenera desde la decisión de Elías 2026-09-23)—
- *    verían la propuesta y no podrían aplicarla: les habríamos sacado la capacidad de crear el
- *    cronograma sin decirlo en ningún lado.
- *
- * ⛔ El escalón cuelga de que no haya NI UNA tarea. Con una sola, vuelve la vara alta: ahí ya hay
- * trabajo humano posible encima y el radio de explosión deja de ser cero.
- */
-export async function guardTimelineDetailApply(
-  projectId: string,
-): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string; cronogramaVacio: boolean }) | NextResponse> {
-  const access = await guardAccessToProject(projectId);
-  if (access instanceof NextResponse) return access;
-  const conTareas = await prisma.timelineTask.count({
-    where: { phase: { timeline: { projectId } } },
-    take: 1,
-  });
-  const cronogramaVacio = conTareas === 0;
-  const guard = await guardCapability(cronogramaVacio ? "editTimeline" : "regenerateTimeline");
-  if (guard instanceof NextResponse) return guard;
-  return { ...guard, clientId: access.clientId, cronogramaVacio };
-}
-
-export async function guardTimelineFullRegen(
-  projectId: string,
-): Promise<(Awaited<ReturnType<typeof requireCapability>> & { clientId: string }) | NextResponse> {
-  const access = await guardAccessToProject(projectId);
-  if (access instanceof NextResponse) return access;
-  const guard = await guardCapability("regenerateTimeline");
-  if (guard instanceof NextResponse) return guard;
-  return { ...guard, clientId: access.clientId };
-}
-
-/**
- * Cambiar el cronograma CON IA (el modificador «Pedir cambio con IA» y, después, el revisor de
- * fases y tiempos de «Regenerar todo»). Va DESPUÉS de guardTimelineEdit y ANTES de gastar tokens.
+ * Cambiar el cronograma CON IA. La piden el paso 1 de «Regenerar todo» / «Generar cronograma»
+ * (POST /timeline/estructura), DESPUÉS de guardTimelineEdit y ANTES de gastar tokens, y aplicar una
+ * propuesta que trae tareas de la IA (POST /timeline/borrador/aplicar): quien no podía pedirlas
+ * tampoco las escribe. E4: salieron `guardTimelineDetailApply` y `guardTimelineFullRegen`, sin
+ * usos desde que se fueron apply-all y la vista previa de una fase (E2b); sus rutas se borraron.
  *
  * Una vez YA generado pide `regenerateTimeline` (default: CSE, CSL y Super Admin; el CSE por
  * decisión de Elías 2026-09-23). El resto (Ventas, DEV sin plantilla, Marketing) puede armarlo
@@ -409,8 +361,8 @@ export async function guardTimelineFullRegen(
  * que `hasAiTimelineDetail` (permissions/artifact-gate.ts), que gatea al agente de detalle. Dos
  * pasos de una misma acción no pueden pedir varas distintas.
  *
- * Extraída TAL CUAL de timeline/assist (2026-09-23), con los mismos cuerpos de error. Devuelve
- * la respuesta 403 si corresponde bloquear, o null si pasa.
+ * Extraída TAL CUAL de timeline/assist (2026-09-23; la ruta se borró en E4), con los mismos cuerpos
+ * de error. Devuelve la respuesta 403 si corresponde bloquear, o null si pasa.
  */
 export async function guardIaDelCronograma(timelineId: string): Promise<NextResponse | null> {
   const aiDetailCount = await prisma.timelineTask.count({

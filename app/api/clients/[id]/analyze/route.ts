@@ -421,10 +421,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
       { status: 400 },
     );
   }
-  /* ⛔ LÁPIDA (E2b, 2026-09-25): el agente de detalle SOLO arma tareas dentro de un borrador. Sin
-     `borrador` es una pestaña de antes del deploy (la vista previa de «Regenerar» de una fase, o el
-     paso 2 viejo): se corta ANTES de crear la corrida, así no paga una salida que ya no se puede
-     aplicar. `{ error, message }`: esos lectores muestran `message` primero. */
+  /* ⛔ LA REGLA (E2b, 2026-09-25): el agente de detalle solo arma tareas dentro de un borrador. Un
+     pedido sin `borrador` se corta ANTES de crear la corrida, así no paga una salida que no se puede
+     aplicar (y no revienta más abajo, donde `timelineDelBorrador` y `sobreDelDetalle` se dan por
+     hechos). No es una lápida: E4 borró las lápidas y esto se queda. `{ error, message }`: los
+     lectores muestran `message` primero. */
   if (isTimelineDetailAgent && pedidoLeido === null) {
     return NextResponse.json(
       { error: "NEXUS_ACTUALIZADO", message: "Nexus se actualizó: recarga la página y vuelve a pedirlo." },
@@ -2345,7 +2346,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
        2026-08-16 la PRIMERA generación escribía directo con createMany, sin que nadie la mirara.
        Va DESPUÉS de guardar la salida de la corrida: si la fusión falla, lo armado queda en la corrida.
        E2b (2026-09-25): es la única salida. Las dos vistas previas en memoria (la de una fase y la de
-       todas) se fueron, y un pedido sin `borrador` ni llega acá (la lápida 409 de arriba). El alcance
+       todas) se fueron, y un pedido sin `borrador` ni llega acá (el 409 de arriba: la regla). El alcance
        de «Regenerar» de una fase lo lee la fusión del borrador GUARDADO (`soloFase`), no del body. */
     const tareas = await fusionarDetalleEnElBorrador({
       timelineId: timelineDelBorrador!,

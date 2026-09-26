@@ -9,11 +9,9 @@ import { describe, it, test, expect } from "vitest";
 import {
   computeProposalDeltas,
   describeChange,
-  describeChanges,
   buildPhaseOrder,
   anchorAfterDeltas,
   phasesAfterDeltas,
-  reescribirPropuestaPendiente,
   origenDePropuesta,
   type ProposalLike,
 } from "./proposal-deltas";
@@ -253,34 +251,8 @@ describe("phasesAfterDeltas / anchorAfterDeltas", () => {
   });
 });
 
-// ── describeChanges: qué se LEE en el badge del Gantt ──────────────────────────
-// El badge mostraba changes[0] + "+N" y escondía justo lo que mueve el calendario.
-// Caso real (Grupo Inve): «renombrar a "Auditoría y cierre de gaps" +2».
-
-test("describeChanges: lo que MUEVE fechas va primero; el renombre, último", () => {
-  const frase = describeChanges([
-    { field: "name", from: "Análisis y diseño", to: "Auditoría y cierre de gaps" },
-    { field: "sessionCount", from: 2, to: 4 },
-    { field: "durationWeeks", from: 2, to: 5 },
-  ]);
-  expect(frase).toBe("2 → 5 semanas · 2 → 4 sesiones · renombrar a «Auditoría y cierre de gaps»");
-});
-
-test("describeChanges: NADA queda escondido detrás de un +N", () => {
-  const frase = describeChanges([
-    { field: "name", from: "A", to: "B" },
-    { field: "durationWeeks", from: 1, to: 3 },
-    { field: "startWeek", from: 0, to: 4 },
-  ]);
-  expect(frase).toContain("semanas");
-  expect(frase).toContain("inicio");
-  expect(frase).toContain("renombrar");
-  expect(frase).not.toContain("+");
-});
-
-test("describeChanges: un solo cambio se lee igual que antes", () => {
-  expect(describeChanges([{ field: "durationWeeks", from: 4, to: 6 }])).toBe("4 → 6 semanas");
-});
+/* ⚠ E4 (2026-09): se borraron los tres tests de `describeChanges` con la función (y `sortChangesByImpact`):
+   eran el badge «Sugerencia» del Gantt, que se fue en E1, y no les quedaban llamadores. */
 
 // ── La propuesta NO puede vaciar la fila de acciones del cronograma ──────────
 
@@ -542,107 +514,21 @@ describe("G10 · el motivo viaja con la sugerencia y nunca es un cambio", () => 
 });
 
 /**
- * ── G11 · LA REESCRITURA PARCIAL CONSERVA EL ORIGEN Y LAS OBSERVACIONES ─────
- * Resolver UNA sugerencia reescribe la propuesta que queda (apply-items). Hasta el 2026-09-23 esa
- * reescritura devolvía `{ anchorStartDate, phases }` a secas: la propuesta de las reuniones perdía
- * su `origen` con la primera sugerencia aceptada, se leía como la del handoff, y la cadena al paso
- * de las tareas («Regenerar todo», paso 2) no arrancaba nunca. Tampoco llegaban las observaciones.
- * La edición que la pone en rojo: volver a armar el objeto a mano, sin `...proposal`, en la función
- * o en la ruta.
+ * ⚠ REESCRITO en E4 (2026-09), con esta razón: era «G11 · resolver una sugerencia no le borra el origen a
+ * la que queda», y cuidaba `reescribirPropuestaPendiente`, la reescritura de lo que quedaba al resolver
+ * UNA sugerencia (apply-items). Desde E1 la propuesta se resuelve entera y E4 borró la función (sin
+ * llamadores). Se quedan los tres casos que no dependían de ella: lo que responde la ruta que aplica, el
+ * arranque de la propuesta de las reuniones y la auditoría.
  */
-describe("G11 · resolver una sugerencia no le borra el origen a la que queda", () => {
+describe("la ruta que aplica, el origen y el arranque de la propuesta de las reuniones", () => {
   const a = cur({ id: "a", name: "A", durationWeeks: 2 });
   const b = cur({ id: "b", name: "B", durationWeeks: 2 });
-  const propuesta: ProposalLike = {
-    anchorStartDate: null,
-    origen: "contexto",
-    observaciones: ["En el kick-off se habló de 12 semanas en total."],
-    phases: [
-      { ...a, durationWeeks: 4, motivo: "M-a" },
-      { ...b, durationWeeks: 3, motivo: "M-b" },
-    ],
-  };
 
-  it("tras aceptar 1 de 2 quedan el origen, las observaciones y el motivo de la otra", () => {
-    const despues = [{ ...a, durationWeeks: 4 }, b]; // mod:a ya escrito
-    const queda = reescribirPropuestaPendiente(propuesta, despues, new Set(["mod:a"]));
-    expect(queda.origen, "la propuesta de las reuniones pasó a leerse como la del handoff").toBe("contexto");
-    expect(queda.observaciones).toEqual(propuesta.observaciones);
-    expect(origenDePropuesta(queda)).toBe("contexto");
-    expect(computeProposalDeltas(despues, queda, null)).toEqual([
-      {
-        key: "mod:b",
-        kind: "MODIFY_PHASE",
-        phaseId: "b",
-        name: "B",
-        changes: [{ field: "durationWeeks", from: 2, to: 3 }],
-        motivo: "M-b",
-      },
-    ]);
-  });
-
-  it("lo extraído se comporta como antes: fases nuevas en su ancla, resueltas afuera, ancla", () => {
-    const n1 = { name: "N1", durationWeeks: 1, sessionCount: null, notes: null };
-    const n2 = { name: "N2", durationWeeks: 1, sessionCount: null, notes: null };
-    const p: ProposalLike = {
-      anchorStartDate: "2026-06-01T00:00:00.000Z",
-      phases: [n1, { ...a }, n2, { ...b }],
-    };
-    const queda = reescribirPropuestaPendiente(p, [a, b], new Set(["add:0"]));
-    expect(queda.phases.map((f) => f.name)).toEqual(["A", "N2", "B"]);
-    expect(queda.anchorStartDate).toBe("2026-06-01T00:00:00.000Z");
-    expect(reescribirPropuestaPendiente(p, [a, b], new Set(["anchor"])).anchorStartDate).toBeNull();
-    // La del handoff sigue sin origen: no se inventa uno.
-    expect("origen" in queda).toBe(false);
-    expect(origenDePropuesta(queda)).toBe("handoff");
+  it("sin origen, o con uno que no se conoce, es la del handoff", () => {
+    expect(origenDePropuesta({})).toBe("handoff");
     expect(origenDePropuesta(null)).toBe("handoff");
     expect(origenDePropuesta({ origen: "otro" })).toBe("handoff");
-  });
-
-  it("⛔ un «mover» pendiente no se pierde por resolver otra sugerencia", () => {
-    /* Bug que la extracción conservó (revisión del paso A1): la reescritura rearmaba SIEMPRE en el
-       orden del cronograma real, así que aceptar una duración borraba sin aviso el reordenamiento
-       que nadie había decidido. Con los «mover» de la propuesta de las reuniones pasaba seguido.
-       La edición que la pone en rojo: volver a recorrer `phasesAfter` tal cual. */
-    const c = cur({ id: "c", name: "C", durationWeeks: 2 });
-    const p: ProposalLike = {
-      anchorStartDate: null,
-      origen: "contexto",
-      phases: [{ ...a, durationWeeks: 4, motivo: "M-a" }, { ...c, motivo: "M-c" }, { ...b }],
-    };
-    expect(computeProposalDeltas([a, b, c], p, null).map((d) => d.key)).toEqual(["mod:a", "reorder"]);
-
-    const despues = [{ ...a, durationWeeks: 4 }, b, c]; // mod:a aceptado; el orden sigue igual
-    const queda = reescribirPropuestaPendiente(p, despues, new Set(["mod:a"]));
-    const vivos = computeProposalDeltas(despues, queda, null);
-    expect(vivos.map((d) => d.key), "el reordenamiento pendiente se esfumó").toEqual(["reorder"]);
-    const reorder = vivos[0];
-    expect(reorder.kind === "REORDER_PHASES" ? reorder.motivos : null).toEqual(["M-c"]);
-
-    // Resuelto (acá, descartado), manda el cronograma real y no vuelve a proponerse.
-    expect(computeProposalDeltas(despues, reescribirPropuestaPendiente(queda, despues, new Set(["reorder"])), null)).toEqual(
-      [],
-    );
-  });
-
-  it("⛔ la fase recién aceptada viaja pegada a su vecina: el reordenamiento no la arrastra", () => {
-    /* Con un «mover» pendiente, una fase que la propuesta no nombra (la que se acaba de crear al
-       aceptar un «agregar») iba al final de la secuencia: el reordenamiento pasaba a mover también
-       esa fase, que nadie pidió mover. */
-    const c = cur({ id: "c", name: "C", durationWeeks: 2 });
-    const nueva = { name: "Piloto", durationWeeks: 1, sessionCount: null, notes: null, motivo: "M-n" };
-    const p: ProposalLike = {
-      anchorStartDate: null,
-      origen: "contexto",
-      phases: [{ ...a }, nueva, { ...c, motivo: "M-c" }, { ...b }],
-    };
-    // «add:1» aceptado: la fase nueva ya existe, detrás de A.
-    const creada = cur({ id: "n", name: "Piloto", durationWeeks: 1, sessionCount: null, activityType: null });
-    const despues = [a, creada, b, c];
-    const queda = reescribirPropuestaPendiente(p, despues, new Set(["add:1"]));
-    expect(queda.phases.map((f) => f.name)).toEqual(["A", "Piloto", "C", "B"]);
-    const [reorder] = computeProposalDeltas(despues, queda, null);
-    expect(reorder.kind === "REORDER_PHASES" ? reorder.movimientos.map((m) => m.id) : null).toEqual(["c", "b"]);
+    expect(origenDePropuesta({ origen: "contexto" })).toBe("contexto");
   });
 
   it("⛔ la ruta que aplica responde que no queda nada y de dónde salió, y no reescribe la propuesta a medias", () => {
@@ -663,7 +549,7 @@ describe("G11 · resolver una sugerencia no le borra el origen a la que queda", 
     expect(respuesta, "no se encontró la respuesta de la ruta").toContain("aplicadas,");
     expect(respuesta, "la respuesta dejó de decir cuántas sugerencias quedan").toMatch(/\bpendientes\s*[,:]/);
     expect(respuesta, "la respuesta dejó de decir de dónde salió la propuesta").toMatch(/\borigen\s*[,:]/);
-    expect(ruta, "la ruta volvió a reescribir la propuesta a medias").not.toContain("reescribirPropuestaPendiente(");
+    expect(ruta, "la ruta volvió a reescribir la propuesta a medias").not.toMatch(/reescribirPropuesta/);
     expect(ruta, "la ruta escribe la propuesta por su cuenta").not.toMatch(/pendingProposal:\s*(rewritten|Prisma\.DbNull)/);
   });
 
@@ -679,8 +565,6 @@ describe("G11 · resolver una sugerencia no le borra el origen a la que queda", 
       phases: [{ ...a }, { ...b }],
     };
     expect(computeProposalDeltas([a, b], p, "2026-09-14")).toEqual([]);
-    // Nada queda colgado: sin delta, la reescritura no deja una sugerencia viva que nadie ve.
-    expect(computeProposalDeltas([a, b], reescribirPropuestaPendiente(p, [a, b], new Set()), "2026-09-14")).toEqual([]);
     // La del handoff sigue proponiendo su arranque, igual que antes.
     const { origen: _sinOrigen, ...delHandoff } = p;
     void _sinOrigen;

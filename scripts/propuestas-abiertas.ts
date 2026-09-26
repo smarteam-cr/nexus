@@ -195,7 +195,7 @@ async function main() {
 
     // Las corridas del token (quién y cuándo) y las de las tareas de los v1 (su estado), en una lectura.
     const borradores = new Map(
-      filas.map((f) => [f.id, esBorradorV1(f.pendingProposal) ? leerBorrador(f.pendingProposal, { ancla: null, fases: [] }) : null]),
+      filas.map((f) => [f.id, esBorradorV1(f.pendingProposal) ? leerBorrador(f.pendingProposal) : null]),
     );
     const ids = new Set<string>();
     for (const f of filas) {

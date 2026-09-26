@@ -1485,7 +1485,9 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   (entendimiento → cuarteto por objeto [desarrollo/mapeo=DEV, homologación=CLIENTE, pruebas=AMBOS] →
   dirección inversa si se vendió). Orden de objetos INDICATIVO. Techo de tokens del detalle a 24k + rama
   de `repairTruncatedJson` para el agente de detalle (antes tiraba 500 al truncar).
-- **Regen POR FASE (retroactivo y seguro)**: `POST /analyze` con `regeneratePhaseId` rehace SOLO una
+- **SUPERSEDED 2026-09 (E2b–E4):** «Regenerar» de una fase deja una propuesta (`soloFase`) que se
+  revisa en la barra; no borra ni regenera en el lugar.
+  **Regen POR FASE (retroactivo y seguro)**: `POST /analyze` con `regeneratePhaseId` rehace SOLO una
   fase reusando el agente de detalle (prompt scopeado a esa fase → menos tokens/truncación). Salvaguarda
   **por ESTADO, no por source**: borra solo `AGENT` + `PENDING` + `actualStart:null`; preserva HUMAN,
   MODIFIED (curación) y todo lo iniciado. Borrado dentro de la `$transaction` de persistencia → atómico.
@@ -1494,8 +1496,11 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   G2 = la fase no tiene tareas iniciadas/hechas (borrar perdería avance sellado). Invalida
   `pendingProgress` (ids nuevos). Gate: `cronograma.regenerate` (ya lo aplica `resolveArtifactGate` en
   `/analyze`) — no se creó capacidad nueva.
-- **Follow-up — regen POR FASE en cronogramas PUBLICADOS + modo + contexto Desarrollo**:
-  - Se levantaron G1/G2. La seguridad ahora es: (a) el borrado nunca toca DONE/iniciadas; (b) tras
+- **SUPERSEDED 2026-09 (E2b–E4):** «Regenerar» de una fase deja una propuesta (`soloFase`) que se
+  revisa en la barra; no borra ni regenera en el lugar.
+  **Follow-up — regen POR FASE en cronogramas PUBLICADOS + modo + contexto Desarrollo**:
+  - **SUPERSEDED 2026-09 (E2b–E4):** la propuesta nunca parchea la foto publicada.
+    Se levantaron G1/G2. La seguridad ahora es: (a) el borrado nunca toca DONE/iniciadas; (b) tras
     regenerar, `patchBaselinePhaseTasks(tx, timelineId, phaseId)` (`lib/timeline/baseline.ts`) parchea
     **in-place** SOLO las tareas de esa fase en el baseline activo (ids nuevos + `plannedStart/End`
     recomputadas con `buildTaskSnapshotEntries`), sin nueva versión → el portafolio D.3 no reporta falso
@@ -1512,7 +1517,8 @@ Decisiones ya tomadas, con el porqué. Si vas a cambiar una, primero entendé po
   no-streaming — el SDK calcula `timeout = 3600·maxTokens/128000 > 600s` y lanza "Streaming is required"
   (`claude-sonnet-4-6` NO está en `MODEL_NONSTREAMING_TOKENS` → aplica la fórmula). El detalle ahora va por
   `.stream().finalMessage()`. **Regla: cualquier `messages.create` no-streaming con maxTokens >21.333 falla.**
-- **Modal de CURACIÓN viejo↔nuevo** (reemplaza el diálogo replace/keep): regenerar una fase ahora es
+- **SUPERSEDED 2026-09 (E2b–E4):** sin modal de dos columnas; la ruta se borró en E4.
+  **Modal de CURACIÓN viejo↔nuevo** (reemplaza el diálogo replace/keep): regenerar una fase ahora es
   **preview → curar → aplicar**, no reemplazo directo.
   - **Preview** (`/analyze` con `preview:true`): `computeTimelineDetailPreview` computa la propuesta de la
     fase con `computeDetailTasksForPhase` (extraído de la persistencia; mismo criterio party/DEV/type) SIN
@@ -3223,8 +3229,8 @@ fabricarla.
   eligiendo 12 al azar, no entra entero el 37,7 % de las veces con 32.000 y el 0,2 % con 48.000.
   Costo: en CAV entran 14.641 caracteres más (~4.550 tokens a 3,2 caracteres por token, medido en
   la A3), ~US$0,014 por llamada con Sonnet 4.6, y solo cuando lo elegido llena el espacio. Es la
-  misma cifra del comentario de `TOPE_REUNIONES_CRONOGRAMA`. Lo pagan el revisor de fases,
-  el detalle y «Pedir cambio con IA». **El chat no cambia**: sigue con 16.000 (`PRESUPUESTO_DEL_CHAT`),
+  misma cifra del comentario de `TOPE_REUNIONES_CRONOGRAMA`. Lo pagan el revisor de fases
+  y el detalle. **El chat no cambia**: sigue con 16.000 (`PRESUPUESTO_DEL_CHAT`),
   porque lo paga en cada turno.
 - **Los compromisos de Fireflies van antes de su overview**, como Gemini ya ponía Decisiones y
   Próximos pasos primero: lo que se recorta es el final, y lo acordado no puede ser lo primero en irse.
@@ -3240,13 +3246,15 @@ fabricarla.
 > Cinco commits (8f305d53, 2acde895, a04346f9, e6fbf553 y el de los textos). Lo que cambia para el
 > negocio, en el orden en que lo nota el CSE.
 
-- **La propuesta de fases de las reuniones guarda QUÉ cambia, no una foto.** Lo que el CSE edita
+- **SUPERSEDED 2026-09 (E2b–E4):** toda propuesta guarda el `desde` de cada cambio (E1–E4).
+  **La propuesta de fases de las reuniones guarda QUÉ cambia, no una foto.** Lo que el CSE edita
   mientras la propuesta espera (una nota, un nombre, otra duración, el orden) ya no vuelve como
   «sugerencia» de revertirlo; el paso 1 espera el autoguardado en vuelo antes de leer la base.
 - **El handoff no pisa la propuesta de las reuniones**: lo elegido por el CSE pesa más. Quien
   regenera el handoff lo ve en el aviso de siempre y vuelve a generarlo cuando se decida. Aplicar o
   descartar exige que la propuesta guardada sea la que el CSE tiene enfrente (409 si es otra).
-- **Con cambios de fases sin decidir, ningún otro cambio con IA se aplica** (el chat, «IA» de una
+- **SUPERSEDED 2026-09 (E2b–E4):** el chat edita la propuesta (E3).
+  **Con cambios de fases sin decidir, ningún otro cambio con IA se aplica** (el chat, «IA» de una
   fase, el acuerdo viejo del chat), y el chat lo sabe antes de armar la lista. Un 409 del paso 1 ya
   no corre el detalle pago: trae la propuesta pendiente y espera.
 - **Las «Instrucciones adicionales» solas también disparan la revisión de fases** (son la fuente de
@@ -3301,3 +3309,39 @@ fabricarla.
 - **Lo que se pierde:** la cuenta de cuántas propuestas del modificador se aplicaban (su historia
   sigue en `AgentRun`), y los acuerdos del chat de antes del 2026-08-20 que traían solo una
   instrucción: su botón pide que se vuelva a pedir.
+
+## El cronograma tiene UNA sola propuesta, que se revisa en un solo lugar (2026-09, E1–E4)
+
+> Decisión de Elías (respuestas del 2026-09-24). Convivían cuatro formas de revisar una propuesta
+> (las sugerencias una por una, el modal de «Regenerar» de una fase, el acordeón de «Regenerar
+> todo» y la vista previa de «Pedir cambio con IA»), cada una con su ruta de aplicar, y ninguna
+> sabía qué había visto el CSE.
+
+- **Una propuesta por proyecto, guardada en el servidor** (`pendingProposal`, formato
+  `borrador-v1`, sin SQL; lib/timeline/borrador.ts). Guarda QUÉ cambia, y cada cambio trae su
+  `desde`, fijado una vez al crearse contra lo que leyó quien la produjo. La dejan el handoff,
+  «Generar cronograma», «Regenerar todo», «Regenerar» de una fase, el recálculo de tareas y el chat.
+- **Lo que el CSE cambió a mano después queda fuera, con ⚠**, y «Aplicar todo» aplica solo lo
+  limpio. Con una propuesta abierta se puede seguir editando a mano (respuesta 2). Lo desmarcado
+  vive en la propuesta (`excluidos`) y se ve en cualquier computadora.
+- **Decide el servidor.** Aplicar es una transacción: token, versión obligatoria, el plan calculado
+  con la misma función que la pantalla, y la huella. Si no es la lista que viste, responde 409 y no
+  escribe nada.
+- **Una propuesta abierta no se pisa.** El handoff avisa a quien regeneró (respuesta 1), y tampoco
+  pisa lo que no sabe leer. El guardado con motivo responde 409. «Subir al cliente» queda libre,
+  con aviso (respuesta 4).
+- **Tareas:** nunca se parchea la foto publicada; lo que tiene avance o se escribió a mano no se
+  quita; una tarea idéntica no se recrea.
+- **El formato viejo ya no existe en la base** (E4 P4): el lector lo trata como algo que no sabe
+  leer, y la pantalla ofrece descartarlo. Las propuestas del handoff que seguían abiertas (6 al
+  2026-09-25, contadas en seco) se convierten con `scripts/propuestas-abiertas.ts --convertir-viejas
+  --apply` ANTES del deploy de P4, con respaldo en `backups/<fecha>-propuestas-abiertas/`; el
+  deploy de P4 va después de esa corrida y de `--antes-de-e4` en verde. La conversión es contra el
+  cronograma del día en que se crearon, reconstruido con `TimelineEvent`, así que lo editado a mano
+  después queda como choque y las copias viejas desaparecen. `ProposalLike` queda solo como el
+  formato intermedio del handoff y del paso 1: se convierte una vez y nunca se guarda.
+- **La foto se fue:** solo servía para convertir el formato viejo. Lo desmarcado que recordaba el
+  navegador se sigue leyendo (misma clave), sin la foto.
+- **Rutas que se fueron:** `proposal/apply-items`, `phases/[phaseId]/apply` y `detail/apply-all`
+  (y sus guards, `guardTimelineDetailApply` y `guardTimelineFullRegen`). /analyze sigue rechazando
+  el agente de detalle sin `borrador` antes de crear la corrida.

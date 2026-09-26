@@ -545,13 +545,12 @@ for (const t of ALL_PUBLIC_TABLES) {
 reuniones o notas elegidas en el «Contexto del cronograma», o con «Instrucciones adicionales»
 (solas también cuentan: son la fuente de más peso), «Regenerar todo el cronograma» corre en
 dos pasos. El paso 1 (`app/api/projects/[projectId]/timeline/estructura/route.ts`) revisa fases y
-tiempos y deja sus cambios en `pendingProposal` con `origen: "contexto"` —la misma propuesta de
-solo estructura que deja el handoff—, que el CSE decide uno por uno en el Gantt; al resolver la
-última, la pantalla sigue sola con el paso 2, el detalle de siempre. Sin material ni instrucciones,
-el paso 1 vuelve antes de leer el handoff y de llamar al modelo. Esa propuesta dice QUÉ cambia
-(`campos` por fase y `movidas`, en `lib/timeline/proposal-deltas.ts`): lo que el CSE edita mientras
-espera no vuelve como sugerencia de revertirlo. El handoff no la pisa, y `proposal/apply-items` y
-el DELETE de la propuesta exigen el `runId` de la que el CSE tiene enfrente (409 si es otra). Su prompt (`lib/agents/estructura-cronograma.ts`)
+tiempos y deja UNA propuesta (`pendingProposal`, formato `borrador-v1`, lib/timeline/borrador.ts) que
+espera sus tareas; el paso 2 (el detalle, por /analyze con `borrador`) las suma a esa misma
+propuesta. El CSE la revisa entera en la barra de arriba del Gantt y la aplica
+(`POST /timeline/borrador/aplicar`) o la descarta (`DELETE /timeline/proposal`), las dos con el
+token y la versión de la que tiene enfrente: 409 si es otra. Cada cambio guarda su `desde`: lo que
+el CSE edita mientras espera choca y queda fuera. El handoff no la pisa. Su prompt (`lib/agents/estructura-cronograma.ts`)
 NO tiene fila en `Agent` ni seed: con fila, `/analyze` podría despacharlo y correría sin celda de
 permiso. La ruta pide la misma vara que el paso 2 (`guardIaDelCronograma`) y la corrida nace con
 `agentId: null` y el `agentSlug` del medidor. El armador (`lib/timeline/propuesta-de-estructura.ts`)

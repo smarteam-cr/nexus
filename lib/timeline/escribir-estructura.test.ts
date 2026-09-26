@@ -20,6 +20,11 @@
  * (`timelineTask.updateMany` condicionado a su fase de origen) y borra las fases que se van
  * (`timelinePhase.deleteMany` con `tasks: { none: {} }`). El `tx` falso devuelve el estado de la
  * fase y suma esas dos llamadas; las listas de los casos de E1 y E2a no cambian.
+ *
+ * ⚠ REESCRITO en E4 (2026-09), con esta razón: lo guardado es siempre v1 y la conversión quedó para los
+ * productores. Lo guardado en los casos de E1 pasa a ser la propuesta del handoff YA convertida
+ * (`PROPUESTA_GUARDADA`) y el pedido no manda foto: el choque sale del `desde` guardado. Lo que no es un
+ * v1 no se aplica (NO_SE_PUEDE).
  */
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
@@ -37,10 +42,12 @@ import {
 import { escribirTareas, TareasQueNoCuadran } from "./escribir-tareas";
 import {
   BLOQUEO_TAREAS_EN_CURSO,
+  BLOQUEO_VERSION_NUEVA,
   borradorBase,
   claveDeFaseQueSeVa,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
+  convertirPropuestaDeFases,
   FORMATO_BORRADOR,
   fotoDeTarea,
   leerBorrador,
@@ -376,9 +383,13 @@ const PROPUESTA: ProposalLike = {
   }),
 };
 
-/** Lo que haría la pantalla: convertir contra su foto, planear y mandar la huella. */
-function pedidoDeLaPantalla(vivoPantalla: Vivo, foto: Vivo, sin: string[] = []) {
-  const borrador = leerBorrador(PROPUESTA, foto)!;
+/** Como la GUARDA el handoff (E2b; E4: lo guardado es siempre v1): convertida una vez contra lo que leyó
+ *  (FASES, sin arranque). Conserva las claves de la conversión (`nueva:2`) para no renumerar los casos. */
+const PROPUESTA_GUARDADA: unknown = JSON.parse(JSON.stringify(convertirPropuestaDeFases(PROPUESTA, { ancla: null, fases: FASES })));
+
+/** Lo que haría la pantalla: leer lo guardado, planear contra lo que ve y mandar la huella. */
+function pedidoDeLaPantalla(vivoPantalla: Vivo, sin: string[] = []) {
+  const borrador = leerBorrador(PROPUESTA_GUARDADA)!;
   return { huella: planDeAplicacion(vivoPantalla, borrador, sin).huella, borrador };
 }
 
@@ -451,12 +462,11 @@ function pedidoConTareas(
   const vivo = vivoDe(estado.fases, null, estado.tareas);
   const sin = extra.sin ?? [];
   const tareas = extra.tareas === undefined ? "listas" : extra.tareas;
-  const huella = planDeAplicacion(vivo, leerBorrador(v1, vivo)!, sin, { tareas }).huella;
+  const huella = planDeAplicacion(vivo, leerBorrador(v1)!, sin, { tareas }).huella;
   return {
     timelineId: "tl",
     token: "run-estructura",
     guardado: v1,
-    foto: null,
     sin,
     huella,
     ahora: new Date("2026-09-25T12:00:00Z"),
@@ -471,14 +481,13 @@ describe("aplicar el borrador: el orden de las escrituras", () => {
   it("⭐ token primero, lo vivo después, y la estructura en su orden: arranque → campos (+tareas) → nuevas/orden → editado", async () => {
     /* La edición que la pone en rojo: leer y planear ANTES de la escritura condicional del token, o
        escribir la estructura en otro orden (insertar y reordenar por separado se pisan). */
-    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA, token: "run-1" });
+    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA_GUARDADA, token: "run-1" });
     const vivo = vivoDe(FASES, null);
-    const { huella, borrador } = pedidoDeLaPantalla(vivo, vivo);
+    const { huella, borrador } = pedidoDeLaPantalla(vivo);
     const r = await aplicarBorradorEnTx(db.tx, {
       timelineId: "tl",
       token: "run-1",
-      guardado: PROPUESTA,
-      foto: vivo,
+      guardado: PROPUESTA_GUARDADA,
       sin: [],
       huella,
       ahora: new Date("2026-09-24T12:00:00Z"),
@@ -514,10 +523,10 @@ describe("aplicar el borrador: el orden de las escrituras", () => {
   });
 
   it("⛔ si la propuesta guardada no es la que el CSE tiene enfrente, NO se lee ni se escribe nada más", async () => {
-    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA, token: "run-2" });
+    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA_GUARDADA, token: "run-2" });
     const vivo = vivoDe(FASES, null);
-    const { huella } = pedidoDeLaPantalla(vivo, vivo);
-    const intento = aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA, foto: vivo, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
+    const { huella } = pedidoDeLaPantalla(vivo);
+    const intento = aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA_GUARDADA, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
     await expect(intento).rejects.toMatchObject({ codigo: "PROPUESTA_CAMBIO", status: 409 });
     expect(db.llamadas).toEqual(["token"]);
     expect(db.estado.fases).toEqual(FASES);
@@ -527,35 +536,42 @@ describe("aplicar el borrador: el orden de las escrituras", () => {
     /* En la base real el `throw` deshace también el token; acá se mira que después del token y de
        leer no haya ninguna escritura. La edición que la pone en rojo: escribir antes de comparar. */
     const enLaBase = FASES.map((f) => (f.id === "b" ? { ...f, name: "Diseño técnico" } : f)); // otra pestaña renombró
-    const db = baseFalsa({ ancla: null, fases: enLaBase, tareas: TAREAS, propuesta: PROPUESTA, token: "run-1" });
+    const db = baseFalsa({ ancla: null, fases: enLaBase, tareas: TAREAS, propuesta: PROPUESTA_GUARDADA, token: "run-1" });
     const vivoPantalla = vivoDe(FASES, null); // la pantalla no lo vio
-    const { huella } = pedidoDeLaPantalla(vivoPantalla, vivoPantalla);
-    const intento = aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA, foto: vivoPantalla, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
+    const { huella } = pedidoDeLaPantalla(vivoPantalla);
+    const intento = aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA_GUARDADA, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
     await expect(intento).rejects.toThrow(MENSAJE_PLAN_CAMBIO);
     expect(db.llamadas).toEqual(["token", "leer"]);
     expect(db.estado.fases.find((f) => f.id === "b")!.name).toBe("Diseño técnico");
   });
 
-  it("⭐ la foto de la pantalla hace que lo editado a mano después choque y quede intacto", async () => {
+  it("⭐ el `desde` guardado hace que lo editado a mano después choque y quede intacto (sin foto)", async () => {
+    /* E4: antes lo lograba la foto que mandaba la pantalla; ahora el `desde` viene en lo guardado. La
+       edición que la pone en rojo: fijar el `desde` contra lo vivo al leer. */
     // El CSE, con la propuesta abierta, alargó Pruebas a 6 (el autoguardado ya está en la base).
     const editadas = FASES.map((f) => (f.id === "c" ? { ...f, durationWeeks: 6 } : f));
-    const db = baseFalsa({ ancla: null, fases: editadas, tareas: TAREAS, propuesta: PROPUESTA, token: "run-1" });
-    const foto = vivoDe(FASES, null); // lo que la pantalla tenía cuando llegó la propuesta
+    const db = baseFalsa({ ancla: null, fases: editadas, tareas: TAREAS, propuesta: PROPUESTA_GUARDADA, token: "run-1" });
     const vivoPantalla = vivoDe(editadas, null);
-    const { huella } = pedidoDeLaPantalla(vivoPantalla, foto);
-    const r = await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA, foto, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
+    const { huella } = pedidoDeLaPantalla(vivoPantalla);
+    const r = await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA_GUARDADA, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
     expect(db.estado.fases.find((f) => f.id === "c")!.durationWeeks, "aplicar pisó lo que el CSE editó").toBe(6);
     // Solo choca la duración de Pruebas: el resto de la propuesta se aplica igual.
     expect(r.plan.choques).toBe(1);
     expect(db.llamadas).toEqual(["token", "leer", "ancla", "fase:b", "crear:Piloto", "orden:c", "editado"]);
   });
 
-  it("sin foto, el servidor convierte contra lo vivo (y la pantalla, igual)", async () => {
+  it("⛔ E4: lo que no es un v1 no se aplica: NO_SE_PUEDE, sin escribir estructura", async () => {
+    /* ⚠ REESCRITA en E4 (2026-09), con esta razón: pedía que sin foto el servidor convirtiera el formato
+       viejo contra lo vivo. Ya no se convierte al leer: lo que no es un v1 no se sabe leer, y la pantalla
+       ofrece descartarlo. (En la base real, el throw deshace también el token.) La edición que la pone
+       en rojo: volver a convertir al aplicar. */
     const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA, token: "run-1" });
     const vivo = vivoDe(FASES, null);
-    const { huella } = pedidoDeLaPantalla(vivo, vivo);
-    await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA, foto: null, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
-    expect(db.estado.propuesta).toBeNull();
+    const { huella } = pedidoDeLaPantalla(vivo);
+    const intento = aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
+    await expect(intento).rejects.toMatchObject({ codigo: "NO_SE_PUEDE", message: BLOQUEO_VERSION_NUEVA });
+    expect(db.llamadas).toEqual(["token", "leer"]);
+    expect(db.estado.fases).toEqual(FASES);
   });
 
   it("no toca filas que no cambian: un renombre solo escribe esa fase (ni orden ni arranque)", async () => {
@@ -563,26 +579,27 @@ describe("aplicar el borrador: el orden de las escrituras", () => {
       anchorStartDate: null,
       phases: FASES.map(({ order: _o, ...f }) => { void _o; return f.id === "b" ? { ...f, name: "Diseño funcional" } : f; }),
     };
-    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: soloRenombre, token: null });
     const vivo = vivoDe(FASES, null);
-    const huella = planDeAplicacion(vivo, leerBorrador(soloRenombre, vivo)!, []).huella;
-    await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: null, guardado: soloRenombre, foto: vivo, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
+    const guardado: unknown = JSON.parse(JSON.stringify(convertirPropuestaDeFases(soloRenombre, vivo)));
+    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: guardado, token: null });
+    const huella = planDeAplicacion(vivo, leerBorrador(guardado)!, []).huella;
+    await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: null, guardado, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
     expect(db.llamadas).toEqual(["token", "leer", "fase:b", "editado"]);
   });
 
   it("lo desmarcado viaja como `sin` y no se escribe; sin nada marcado, 400 (se descarta, no se aplica)", async () => {
     const vivo = vivoDe(FASES, null);
-    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA, token: "run-1" });
+    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA_GUARDADA, token: "run-1" });
     const sin = ["nueva:2", "orden", "ancla"];
-    const { huella } = pedidoDeLaPantalla(vivo, vivo, sin);
-    await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA, foto: vivo, sin, huella, ahora: new Date(), ...SIN_TAREAS });
+    const { huella } = pedidoDeLaPantalla(vivo, sin);
+    await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA_GUARDADA, sin, huella, ahora: new Date(), ...SIN_TAREAS });
     expect(db.llamadas).toEqual(["token", "leer", "fase:b", "fase:c", "tareas:c", "editado"]);
 
     const todas = ["ancla", "orden", "fase:b:name", "nueva:2", "fase:c:durationWeeks"];
-    const db2 = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA, token: "run-1" });
-    const h2 = pedidoDeLaPantalla(vivo, vivo, todas).huella;
+    const db2 = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA_GUARDADA, token: "run-1" });
+    const h2 = pedidoDeLaPantalla(vivo, todas).huella;
     await expect(
-      aplicarBorradorEnTx(db2.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA, foto: vivo, sin: todas, huella: h2, ahora: new Date(), ...SIN_TAREAS }),
+      aplicarBorradorEnTx(db2.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA_GUARDADA, sin: todas, huella: h2, ahora: new Date(), ...SIN_TAREAS }),
     ).rejects.toMatchObject({ codigo: "NADA_QUE_APLICAR", status: 400 });
   });
 
@@ -596,13 +613,13 @@ describe("aplicar el borrador: el orden de las escrituras", () => {
     };
     const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: v1, token: "run-9" });
     const vivo = vivoDe(FASES, null);
-    const huella = planDeAplicacion(vivo, leerBorrador(v1, vivo)!, []).huella;
-    const intento = aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-9", guardado: v1, foto: null, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
+    const huella = planDeAplicacion(vivo, leerBorrador(v1)!, []).huella;
+    const intento = aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-9", guardado: v1, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
     await expect(intento).rejects.toBeInstanceOf(ErrorAlAplicar);
     await expect(
       aplicarBorradorEnTx(
         baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: v1, token: "run-9" }).tx,
-        { timelineId: "tl", token: "run-9", guardado: v1, foto: null, sin: [], huella, ahora: new Date(), ...SIN_TAREAS },
+        { timelineId: "tl", token: "run-9", guardado: v1, sin: [], huella, ahora: new Date(), ...SIN_TAREAS },
       ),
     ).rejects.toMatchObject({ codigo: "VALOR_INVALIDO", status: 400 });
     expect(db.wheres[0]).toMatchObject({ pendingProposalRunId: "run-9", pendingProposal: { path: ["version"], equals: 3 } });
@@ -612,10 +629,10 @@ describe("aplicar el borrador: el orden de las escrituras", () => {
   it("⭐ estructura sola: ni una llamada de tareas, y el borrador de avance NO se invalida", async () => {
     /* Las fases nuevas solas no dejan viejo el avance (igual que E1). La edición que la pone en rojo:
        limpiar `pendingProgress` siempre, o llamar al escritor de tareas con listas vacías. */
-    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA, token: "run-1" });
+    const db = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: PROPUESTA_GUARDADA, token: "run-1" });
     const vivo = vivoDe(FASES, null);
-    const { huella } = pedidoDeLaPantalla(vivo, vivo);
-    await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA, foto: vivo, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
+    const { huella } = pedidoDeLaPantalla(vivo);
+    await aplicarBorradorEnTx(db.tx, { timelineId: "tl", token: "run-1", guardado: PROPUESTA_GUARDADA, sin: [], huella, ahora: new Date(), ...SIN_TAREAS });
     expect(db.llamadas.filter((l) => l.startsWith("tareas-") || l.startsWith("cierre:"))).toEqual([]);
     expect(db.editados).toHaveLength(1);
     expect(Object.keys(db.editados[0]), "aplicar solo fases invalidó el avance").toEqual(["lastEditedByHuman"]);
@@ -663,7 +680,7 @@ describe("aplicar el borrador CON tareas (E2a)", () => {
     expect(db.estado.detalle).toBe("run-tareas");
     // Lo que se escribió es la vista «Ver la propuesta».
     const vivo = vivoDe(FASES, null, TAREAS);
-    const mostrado = proyectar(vivo, leerBorrador(v1, vivo)!, []);
+    const mostrado = proyectar(vivo, leerBorrador(v1)!, []);
     const pruebas = mostrado.fases.find((f) => f.name === "Pruebas")!;
     expect(pruebas.tareas.map((t) => t.title).sort()).toEqual(
       db.estado.tareas.filter((t) => t.phaseId === "c").map((t) => t.title).sort(),
@@ -839,7 +856,7 @@ describe("aplicar el borrador CON tareas (E2a)", () => {
     expect(db.llamadas, "escribió algo con tareas desfasadas").toEqual(["token", "leer"]);
     // «Aplicar de todos modos» (la pantalla nueva, tras un recálculo fallido): la fase forzada aplica tal cual.
     const vivo = vivoDe(FASES, null, TAREAS);
-    const huella = planDeAplicacion(vivo, leerBorrador(acorta, vivo)!, sin, { tareas: "listas", forzar: ["c"] }).huella;
+    const huella = planDeAplicacion(vivo, leerBorrador(acorta)!, sin, { tareas: "listas", forzar: ["c"] }).huella;
     const db2 = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: acorta, token: "run-estructura" });
     const r = await aplicarBorradorEnTx(db2.tx, pedidoConTareas(acorta, { fases: FASES, tareas: TAREAS }, { sin, huella, forzar: ["c"] }));
     expect(r.tareas).toEqual({ creadas: 0, borradas: 1, cambiadas: 0, mudadas: 0 }); // E3 P1: más dos cuentas, en cero

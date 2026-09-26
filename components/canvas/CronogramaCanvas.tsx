@@ -84,7 +84,6 @@ import {
   deDondeViene,
   desdeDeLaPropuesta,
   desenlaceDelSeguimiento,
-  esBorradorGuardado,
   esBorradorV1,
   esperaEnCurso,
   estadoDelVacio,
@@ -1361,13 +1360,12 @@ export default function CronogramaCanvas({
 
   // ── LA PROPUESTA GUARDADA (el borrador) ────────────────────────────────────────────────────────
   // El handoff, «Regenerar todo», «Regenerar» de una fase, el recálculo y el chat guardan UNA
-  // propuesta (`borrador-v1`, o el formato viejo sin `tasks`): se revisa en la barra de arriba del
-  // Gantt, con un solo botón que alterna «Ver como estaba antes» ↔ «Ver la propuesta», y el
-  // cronograma actual sigue editable.
-  const hayBorrador = !!proposal && esBorradorGuardado(proposal);
-  /* E4 (2026-09): una propuesta guardada que esta versión NO sabe leer (no es un borrador). Antes era
-     la vista previa de «Pedir cambio con IA», que se retiró. No traba nada: una línea ofrece
-     descartarla y el cronograma sigue editable. */
+  // propuesta (`borrador-v1`): se revisa en la barra de arriba del Gantt, con un solo botón que
+  // alterna «Ver como estaba antes» ↔ «Ver la propuesta», y el cronograma actual sigue editable.
+  const hayBorrador = !!proposal && esBorradorV1(proposal);
+  /* E4 (2026-09): una propuesta guardada que esta versión NO sabe leer: todo lo que no es un v1 (el
+     formato viejo ya no se lee: se convierte una vez con scripts/propuestas-abiertas.ts). No traba
+     nada: una línea ofrece descartarla y el cronograma sigue editable. */
   const propuestaIlegible = !!proposal && !hayBorrador;
   /* El cronograma de la pantalla en la forma del núcleo del borrador: solo lo GUARDADO (una fase
      o una tarea sin id todavía no existe para la base). Memoizado: de él cuelgan la lista, los
@@ -1434,10 +1432,10 @@ export default function CronogramaCanvas({
     guardado: hayBorrador ? proposal : null,
     cerradaLaDelGuardado: franjaCerradaPara !== null && franjaCerradaPara === proposalMeta.current.runId,
   });
-  /* La foto, lo desmarcado, la vista y el lugar del scroll viven en el hook; lo que decide, en
-     lib/timeline/borrador.ts. La identidad de la propuesta es su token (la corrida) + su contenido:
-     con ella el hook RECUERDA la foto entre montajes (cambiar de canvas, «Chequear avance», recargar),
-     y una propuesta distinta con el mismo contenido no hereda la foto de la anterior.
+  /* Lo desmarcado, la vista y el lugar del scroll viven en el hook; lo que decide, en
+     lib/timeline/borrador.ts. La identidad de la propuesta es su token (la corrida): con ella el hook
+     RECUERDA lo desmarcado entre montajes (cambiar de canvas, «Chequear avance», recargar). E4: sin
+     foto (solo servía para convertir el formato viejo).
      ⚠ El token se lee de `proposalMeta` en el render a propósito: TODO `setProposal` que pone una
      propuesta escribe `proposalMeta` antes (o en su mismo updater), así que el render que la muestra
      ya ve su token. La guarda de revision-de-la-propuesta.test.ts cuida esa invariante. */
@@ -1870,7 +1868,7 @@ export default function CronogramaCanvas({
   /* E2a (2026-09-25): se fue `applyAllRegen` (el aplicar del acordeón de «Regenerar todo», por
      /timeline/detail/apply-all). Las tareas de la propuesta se aplican con sus fases en
      `aplicarBorrador` (POST /timeline/borrador/aplicar), que también encadena la reevaluación del
-     avance cuando tocó tareas. apply-all queda para pestañas viejas hasta E2b. */
+     avance cuando tocó tareas. apply-all fue una lápida hasta E4, que la borró. */
 
   // El detalle (tareas) ya NO se auto-genera en silencio: lo crea el CTA explícito
   // "Generar cronograma" (#2). Ver el portal de acciones más abajo.
@@ -2033,9 +2031,8 @@ export default function CronogramaCanvas({
       });
       guardadaEsOtra = res.status === 409;
       borrada = res.ok;
-      /* Solo se olvida la foto si el servidor ya no tiene ESTA propuesta (borrada, o ya era
-         otra). Si el DELETE falló, la propuesta sigue guardada: olvidar la foto haría que al
-         recargar una edición a mano que chocaba pase a «aplica» (revisión de E1). */
+      /* Solo se olvida lo recordado si el servidor ya no tiene ESTA propuesta (borrada, o ya era
+         otra). Si el DELETE falló, la propuesta sigue guardada, y lo desmarcado con ella. */
       yaNoEstaGuardada = res.ok || res.status === 409;
     } catch {
       /* limpiar local igual */
@@ -2043,7 +2040,7 @@ export default function CronogramaCanvas({
       descartandoRef.current = false;
       setDescartando(false);
     }
-    // La que se tenía enfrente ya no está (o ya no era la guardada): su foto recordada no sirve.
+    // La que se tenía enfrente ya no está (o ya no era la guardada): lo recordado de ella no sirve.
     if (yaNoEstaGuardada) revisionRef.current.olvidar();
     // Descartada a mano mientras se armaban (o se recalculaban) sus tareas: sus corridas terminan sin aviso.
     if (yaNoEstaGuardada && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);
@@ -2142,11 +2139,11 @@ export default function CronogramaCanvas({
         }
         if (acordada === null || revisionRef.current.version !== acordada) return resultado(MOTIVO_PROPUESTA_CAMBIO_DESDE_EL_ACUERDO);
       }
-      /* Lo ÚLTIMO de la revisión (el guardado de recién pudo mover lo vivo): la lista, la huella y
-         la foto que viajan son las de este momento. Y el historial de deshacer se limpia antes: un
-         «deshacer» a mitad del aplicar mandaría el cronograma de antes por encima del aplicado. */
+      /* Lo ÚLTIMO de la revisión (el guardado de recién pudo mover lo vivo): la lista y la huella que
+         viajan son las de este momento. Y el historial de deshacer se limpia antes: un «deshacer» a
+         mitad del aplicar mandaría el cronograma de antes por encima del aplicado. */
       await new Promise<void>((r) => window.setTimeout(r, 60));
-      const { resumen, sin, foto, forzadas } = revisionRef.current;
+      const { resumen, sin, forzadas } = revisionRef.current;
       if (!resumen) return resultado(MOTIVO_SIN_APLICAR);
       /* E2c: con un bloqueo (tareas que se recalculan o se arman) no se manda nada: el servidor lo
          rechazaría igual. La pantalla ya lo dice; esto cubre un clic que llegó justo antes. */
@@ -2159,7 +2156,8 @@ export default function CronogramaCanvas({
         headers: { "Content-Type": "application/json" },
         /* `token`: la propuesta que tienes ENFRENTE. Si la guardada es otra (el handoff la reemplazó,
            o se resolvió en otra pestaña), la ruta no aplica nada y responde 409.
-           `version` (E2a): la del `borrador-v1` que ves (null en el formato viejo). Si el servidor lo
+           `version` (E2a): la del `borrador-v1` que ves. E4: sin `foto` (ya no hay formato viejo que
+           convertir; la ruta la tolera si una pestaña de antes la manda). Si el servidor lo
            reescribió en el medio (llegaron las tareas), responde 409 PROPUESTA_CAMBIO con la nueva,
            que se trae abajo: sin ella, un «Aplicar» caía una y otra vez en PLAN_CAMBIO (el `load` no
            reemplaza la propuesta de la pantalla).
@@ -2171,7 +2169,6 @@ export default function CronogramaCanvas({
           token: proposalMeta.current.runId,
           sin: desdeElChat ? (excluidosDelGuardado(proposalRef.current) ?? [...sin]) : [...sin],
           huella: opts?.acordada?.huella ?? resumen.huella,
-          foto,
           version: revisionRef.current.version,
           forzar: desdeElChat ? [] : [...forzadas],
         }),
@@ -2186,7 +2183,7 @@ export default function CronogramaCanvas({
         if (!desdeElChat) toast.error(motivo);
         if (d?.error === "PLAN_CAMBIO") {
           /* La misma propuesta, otro cronograma (otra pestaña u otra persona): se recarga lo vivo y
-             la lista se recalcula contra la misma foto (lo nuevo aparece como choque). */
+             la lista se recalcula contra el mismo `desde` (lo nuevo aparece como choque). */
           await load();
         } else {
           await traerPropuestaPendiente();
@@ -2219,7 +2216,7 @@ export default function CronogramaCanvas({
       }
       final = resultado(null, avisosDelAplicar);
       // La propuesta ya no existe: se vacía ANTES de recargar (el load la toma con `prev ?? …`), y
-      // lo que se recordaba de ella (la foto, lo desmarcado) se olvida.
+      // lo que se recordaba de ella (lo desmarcado) se olvida.
       revisionRef.current.olvidar();
       // Sus corridas no avisan nada de una propuesta que ya se aplicó (ni sobre la próxima que entre).
       for (const c of corridasResueltas) CORRIDAS_ANUNCIADAS.add(c);
@@ -2470,9 +2467,12 @@ export default function CronogramaCanvas({
   const motivoDelChat = (a: AcuerdoDelChat): string | null => {
     // E4: un acuerdo sin operaciones es de antes del 2026-08-20 (solo una instrucción): ya no tiene carril.
     if (!Array.isArray(a.operaciones)) return ACUERDO_DE_OTRA_VERSION;
-    const enSuBarra = hayBorrador && (!esBorradorV1(proposal) || (revision.borrador?.desconocidos ?? 0) > 0);
+    const enSuBarra = hayBorrador && (revision.borrador?.desconocidos ?? 0) > 0;
     const token = a.borrador ?? null;
     if (token === null) {
+      /* E4: lo que no es un v1 (antes, el formato viejo, que caía en `enSuBarra`) ya no es `hayBorrador`,
+         pero sigue guardado: el PUT con motivo respondería 409. Se resuelve en su línea («Descartarla»). */
+      if (propuestaIlegible) return MOTIVOS_DEL_CHAT.enSuBarra;
       if (!hayBorrador) return null;
       if (enSuBarra) return MOTIVOS_DEL_CHAT.enSuBarra;
       if (tareasArmandoEnPantalla) return MOTIVOS_DEL_CHAT.armando;

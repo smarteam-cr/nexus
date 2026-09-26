@@ -1261,10 +1261,9 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(aplicar.length).toBeGreaterThan(500);
     expect(aplicar).toContain("token: proposalMeta.current.runId");
     expect(aplicar.slice(aplicar.indexOf("res.status === 409"))).toContain("traerPropuestaPendiente()");
-    // Y la lápida no escribe nada: solo dice que se recargue.
-    const lapida = soloCodigo(leer("app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"));
-    expect(lapida).toContain("status: 409");
-    expect(lapida).not.toMatch(/prisma\./);
+    /* ⚠ E4 (2026-09): pedía también que la lápida de apply-items no escribiera nada. E4 la borró: la
+       única ruta que aplica la propuesta es la de arriba. */
+    expect(fs.existsSync(path.join(process.cwd(), "app/api/projects/[projectId]/timeline/proposal/apply-items/route.ts"))).toBe(false);
   });
 
   it("#3 / #6 · el handoff no pisa una propuesta abierta con algo por decidir, sea de las reuniones o de un handoff anterior", () => {

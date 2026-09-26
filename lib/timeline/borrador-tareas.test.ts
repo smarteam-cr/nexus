@@ -30,7 +30,7 @@ import {
   borradorVacio,
   claveDeRevision,
   claveDeTareaQueSeVa,
-  convertirPropuestaVieja,
+  convertirPropuestaDeFases,
   debeDescartarseSolo,
   desenlaceDelSeguimiento,
   esBorradorV1,
@@ -227,7 +227,7 @@ describe("1 · el formato v1 con tareas: se lee igual, y lo que no se conoce blo
       { tareas: { corrida: "run-7", listas: true } },
     );
     const guardado: unknown = JSON.parse(JSON.stringify(b));
-    const leido = leerBorrador(guardado, { ancla: null, fases: [] })!;
+    const leido = leerBorrador(guardado)!;
     expect(leido).toEqual(b);
     expect(leido.desconocidos, "nada quedó como desconocido").toBeUndefined();
     const vivo = conTarea("b2", { notes: "con ventas", inicioFijado: "2026-10-12", finFijado: "2026-10-16" });
@@ -253,7 +253,7 @@ describe("1 · el formato v1 con tareas: se lee igual, y lo que no se conoce blo
         ],
       }),
     );
-    const b = leerBorrador(guardado, VIVO)!;
+    const b = leerBorrador(guardado)!;
     expect(b.cambios.map((c) => c.clave)).toEqual(["fase:c:durationWeeks", "tarea:b1:se-va"]);
     expect(b.desconocidos).toBe(2);
     const plan = planDeAplicacion(VIVO, b, [], { tareas: "listas" });
@@ -263,9 +263,11 @@ describe("1 · el formato v1 con tareas: se lee igual, y lo que no se conoce blo
     expect(traeCambiosDeTareas({ formato: FORMATO_BORRADOR, cambios: [{ tipo: "tarea-se-muda" }] })).toBe(true);
   });
 
-  it("el formato viejo y el handoff no esperan tareas; el pedido sale de las tareas que hay", () => {
-    const viejo = leerBorrador({ anchorStartDate: null, phases: [{ id: "a", name: "Kick-off", durationWeeks: 1 }] }, VIVO)!;
-    expect([viejo.pedido, viejo.tareas, viejo.tareasArmadasPara]).toEqual([null, null, {}]);
+  it("el handoff no espera tareas; el pedido sale de las tareas que hay", () => {
+    /* ⚠ REESCRITA en E4 (2026-09), con esta razón: leía el formato viejo guardado, que ya no se lee. Lo
+       que no espera tareas es lo que convierte el handoff (la misma conversión, antes de guardarse). */
+    const delHandoff = convertirPropuestaDeFases({ anchorStartDate: null, phases: [{ id: "a", name: "Kick-off", durationWeeks: 1 }] }, VIVO);
+    expect([delHandoff.pedido, delHandoff.tareas, delHandoff.tareasArmadasPara]).toEqual([null, null, {}]);
     expect(pedidoDelCronograma([{ source: "HUMAN" }, { source: "AGENT" }])).toBe("regenerar");
     expect(pedidoDelCronograma([{ source: "MODIFIED" }])).toBe("regenerar");
     expect(pedidoDelCronograma([{ source: "HUMAN" }, { source: null }])).toBe("primera");
@@ -347,17 +349,17 @@ describe("E2b · borradorDelHandoff: el handoff deja un v1 de fases, con el `des
 
   it("⭐ ida y vuelta por leerBorrador: se lee igual, sin desconocidos (así lo leen E1 y E2a)", () => {
     const b = borradorDelHandoff({ propuesta, vivo: VIVO_HANDOFF, nuevaClave: claves() })!;
-    const leido = leerBorrador(JSON.parse(JSON.stringify(b)), { ancla: null, fases: [] })!;
+    const leido = leerBorrador(JSON.parse(JSON.stringify(b)))!;
     expect(leido).toEqual(b);
     expect(leido.desconocidos).toBeUndefined();
     expect(planDeAplicacion(VIVO_HANDOFF, leido).huella).toBe(planDeAplicacion(VIVO_HANDOFF, b).huella);
   });
 
-  it("⭐ aplicado entero da lo mismo que la conversión del formato viejo (solo cambian las claves)", () => {
+  it("⭐ aplicado entero da lo mismo que la conversión de los productores (solo cambian las claves)", () => {
     /* La edición que la pone en rojo: que el productor cambie QUÉ se propone al pasar al formato nuevo. */
     const b = borradorDelHandoff({ propuesta, vivo: VIVO_HANDOFF, nuevaClave: claves() })!;
     const sinClave = (p: ReturnType<typeof proyectar>) => ({ ...p, fases: p.fases.map((f) => ({ ...f, clave: f.id ?? "nueva" })) });
-    expect(sinClave(proyectar(VIVO_HANDOFF, b))).toEqual(sinClave(proyectar(VIVO_HANDOFF, convertirPropuestaVieja(propuesta, VIVO_HANDOFF))));
+    expect(sinClave(proyectar(VIVO_HANDOFF, b))).toEqual(sinClave(proyectar(VIVO_HANDOFF, convertirPropuestaDeFases(propuesta, VIVO_HANDOFF))));
   });
 
   it("⛔ null si no hay nada que se pueda aplicar: lo mismo que hay, o solo algo que choca", () => {
@@ -657,7 +659,7 @@ describe("5 · la huella, el bloqueo, el descarte automático y la propuesta que
     expect(esVacioEsperandoTareas(null)).toBe(false);
     // Lo que notó el paso 1 viaja en el borrador vacío (así lo muestra la barra y sobrevive a recargar).
     const conNotas = borradorVacio({ pedido: "primera", corrida: "run-4", observaciones: ["Pruebas pasa a 3 semanas: no se pudo proponer."] });
-    expect(leerBorrador(JSON.parse(JSON.stringify(conNotas)), VIVO)?.observaciones).toEqual(["Pruebas pasa a 3 semanas: no se pudo proponer."]);
+    expect(leerBorrador(JSON.parse(JSON.stringify(conNotas)))?.observaciones).toEqual(["Pruebas pasa a 3 semanas: no se pudo proponer."]);
   });
 
   it("⭐ claveDeRevision de un v1: el mismo token con otra versión es la misma revisión (lo desmarcado sobrevive)", () => {
@@ -1049,14 +1051,15 @@ describe("revisión de E2a · el desenlace del seguimiento, el chip y la oferta"
 
   it("si lo que se resuelve traía cambios de fases (la oferta del paso 2 depende de eso)", () => {
     /* La edición que la pone en rojo: contar las tareas como fases (el borrador vacío o solo de tareas
-       diría que se aplicaron fases, y descartarlo no ofrecería las tareas), o dar por vacía una
-       propuesta del formato viejo. (E2b P4: la oferta pasó a la línea; el criterio es el mismo.) */
+       diría que se aplicaron fases, y descartarlo no ofrecería las tareas). (E2b P4: la oferta pasó a la
+       línea; el criterio es el mismo.) E4: lo que no es un v1 no se sabe leer: no trae nada que se sepa
+       decir (descartarlo no ofrece nada, porque tampoco esperaba tareas). */
     const vacio = borradorVacio({ pedido: "regenerar", corrida: "r1" });
     expect(traeCambiosDeFases(vacio), "el borrador vacío trae fases").toBe(false);
     expect(traeCambiosDeFases({ ...vacio, cambios: [{ tipo: "tarea-se-va", clave: "tarea:x:se-va" }] })).toBe(false);
     expect(traeCambiosDeFases({ ...vacio, cambios: [{ tipo: "fase-cambia", clave: "fase:b:notes" }] })).toBe(true);
     expect(traeCambiosDeFases({ ...vacio, cambios: [{ tipo: "tarea-nueva" }, { tipo: "ancla" }] })).toBe(true);
-    expect(traeCambiosDeFases({ phases: [] }), "el formato viejo es de fases").toBe(true);
+    expect(traeCambiosDeFases({ phases: [] }), "E4: lo que no es un v1 ya no se lee").toBe(false);
     expect(traeCambiosDeFases(null)).toBe(false);
   });
 });

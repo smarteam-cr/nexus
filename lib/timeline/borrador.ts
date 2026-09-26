@@ -15,31 +15,22 @@
  * Aplicar una propuesta nunca pisa una edición humana posterior (Elías, 2026-09-24: con una
  * propuesta abierta se puede seguir editando a mano, y lo que choca queda fuera).
  *
- * ── E1: CUATRO TIPOS, Y EL FORMATO VIEJO SE LEE, NO SE ESCRIBE ─────────────
- * Hoy solo el handoff y el paso 1 de «Regenerar todo» dejan propuestas, y las dos son de fases:
- * fecha de arranque, orden, fase nueva y fase que cambia (un cambio por CAMPO). Las dos siguen
- * guardando el formato viejo (`ProposalLike`, lib/timeline/proposal-deltas.ts). Este archivo lo
- * CONVIERTE, determinista, al borrador, y también sabe leer el formato nuevo (`borrador-v1`), que
- * nadie escribe todavía: así una vuelta atrás desde la entrega siguiente no rompe nada.
- *
- * ⚠ El formato viejo no guarda `desde`. La conversión lo fija contra una FOTO (`base`): la del
- * cronograma que la pantalla tenía cuando le llegó la propuesta. La pantalla la manda al aplicar y
- * el servidor convierte con la misma foto, así los dos arman el mismo borrador. Lo que el CSE edite
- * DESPUÉS de esa foto choca y queda fuera.
- * La foto se RECUERDA en el navegador, por proyecto, token y contenido de la propuesta (abajo,
- * «LA FOTO SE RECUERDA»): cambiar de canvas, terminar «Chequear avance» (remonta el cronograma) o
- * recargar usan la MISMA foto. Si no, una edición a mano hecha durante la revisión pasaba de ⚠ a
- * «aplica» con solo volver a entrar, y «Aplicar todo» la revertía. Lo que queda: otro navegador u
- * otra computadora toman una foto nueva. Es el límite del formato viejo y se resuelve en E2 (el
- * formato nuevo guarda el `desde` al crearse). Desde E2b el handoff también escribe el formato nuevo
- * (`borradorDelHandoff`): la foto queda solo para las propuestas viejas que siguen abiertas.
- * Dos cosas del handoff sí se saben sin foto, por cómo lo arma analyze (reconcile-proposal.ts):
+ * ── E1–E4: LO GUARDADO ES SIEMPRE `borrador-v1` ──────────────────────────────
+ * Los cuatro tipos de fases: fecha de arranque, orden, fase nueva y fase que cambia (un cambio por
+ * CAMPO). Desde E4 (2026-09) lo guardado en `pendingProposal` es siempre `borrador-v1`: el lector no
+ * conoce otro formato (`leerBorrador` da null) y la pantalla ofrece descartar lo que no sabe leer.
+ * Las propuestas viejas que seguían abiertas se convierten una vez, ANTES del deploy de E4 P4, con
+ * `scripts/propuestas-abiertas.ts --convertir-viejas`, el único que todavía conoce ese formato.
+ * `ProposalLike` (lib/timeline/proposal-deltas.ts) queda solo como lo que arman el handoff y el paso 1
+ * de «Regenerar todo» ANTES de convertirse, UNA vez, con `convertirPropuestaDeFases`: fija cada
+ * `desde` contra lo que leyó quien la produjo, y nunca se guarda así.
+ * Dos cosas del handoff se saben sin mirar lo que leyó, por cómo lo arma analyze (reconcile-proposal.ts):
  *   · la FECHA DE ARRANQUE solo la propone cuando el proyecto no tenía (`existente ?? kickoff`): su
  *     `desde` es siempre null, y una fecha que hoy puso una persona choca;
  *   · el TIPO de actividad lo copia tal cual de la fase existente: nunca es un cambio que proponga,
  *     así que una diferencia es una edición humana posterior y no se revierte.
- * Por eso la conversión aplicada entera da lo mismo que `apply-items` salvo en esos dos casos, y
- * los dos son a propósito (lib/timeline/borrador.test.ts, «paridad»).
+ * Por eso la conversión aplicada entera da lo mismo que la vieja `apply-items` salvo en esos dos
+ * casos, y los dos son a propósito (lib/timeline/borrador.test.ts, «paridad»).
  *
  * ── E2a: «REGENERAR TODO» DEJA UN SOLO BORRADOR, CON FASES Y TAREAS ───────────
  * Nace el formato `borrador-v1` escrito de verdad (lo escriben /estructura y /analyze) y dos tipos
@@ -167,7 +158,7 @@ export interface TareaDelVivo {
   needsValidation?: boolean;
 }
 
-/** Una fase del cronograma vivo (o de la foto `base`), en su orden. */
+/** Una fase del cronograma vivo (o de lo que leyó un productor, `base`), en su orden. */
 export interface FaseViva {
   id: string;
   name: string;
@@ -176,8 +167,8 @@ export interface FaseViva {
   sessionCount: number | null;
   notes: string | null;
   activityType: string | null;
-  /** Sus tareas, en su orden (semana y `order`). `undefined` = no se leyeron (el handoff, la foto
-   *  de E1): una tarea que se va choca, que es la dirección segura. */
+  /** Sus tareas, en su orden (semana y `order`). `undefined` = no se leyeron (el handoff): una tarea
+   *  que se va choca, que es la dirección segura. */
   tareas?: TareaDelVivo[];
   /** E3: el estado de la fase (PENDING, IN_PROGRESS…). `undefined` = no se leyó: una fase que se va
    *  choca. Lo tienen igual la pantalla y el servidor (si no, la huella difiere). */
@@ -411,7 +402,7 @@ export interface RecalculoEnElCable {
 
 export interface Borrador {
   formato: typeof FORMATO_BORRADOR;
-  /** Cuenta las ediciones del borrador. El formato viejo no la tiene: 0. */
+  /** Cuenta las ediciones del borrador. Recién convertido por un productor: 0. */
   version: number;
   origen: OrigenDelBorrador;
   /** Lo que la IA notó y no se aplica solo (interno). */
@@ -420,9 +411,9 @@ export interface Borrador {
   /** Solo al LEER un `borrador-v1`: cuántos cambios son de un tipo que esta versión no sabe aplicar.
    *  Nunca se guarda. */
   desconocidos?: number;
-  /** El formato viejo y el handoff: null. */
+  /** El handoff: null. */
   pedido: PedidoDelBorrador | null;
-  /** null = no espera tareas (el handoff, el formato viejo). */
+  /** null = no espera tareas (el handoff). */
   tareas: TareasDelBorrador | null;
   /** Por fase (id real o `n:…`): la forma para la que se armaron sus tareas. */
   tareasArmadasPara: Record<string, FormaDeFase>;
@@ -467,7 +458,8 @@ export function estadoDeLasTareas(
 }
 
 export const claveDeCampo = (faseId: string, campo: CampoDeFase): string => `fase:${faseId}:${campo}`;
-/** Solo para CONVERTIR el formato viejo: un productor de v1 nunca deriva claves de posiciones. */
+/** Solo DENTRO de la conversión de un `ProposalLike`: el productor la cambia por `n:…` antes de
+ *  guardar (`conClavesDeProductor`), nunca se guarda una clave derivada de posiciones. */
 export const claveDeNueva = (indice: number): string => `nueva:${indice}`;
 export const claveDeTareaQueSeVa = (tareaId: string): string => `tarea:${tareaId}:se-va`;
 /** E3: una sola fila por tarea que cambia (renombre, semana, dueño, tipo o mudanza). */
@@ -504,20 +496,8 @@ const valorDe = (f: FaseViva, campo: CampoDeFase): ValorDeCampo => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── LEER: el formato viejo (convertido) y el nuevo ───────────────────────────
+// ── CONVERTIR lo que arman los productores, y LEER lo guardado ───────────────
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * ¿Lo guardado en `pendingProposal` es un borrador de estructura (el formato nuevo, o el viejo sin
- * tareas)? Uno con `tasks` NO lo es: era la forma de la vista previa de «Pedir cambio con IA», que
- * nunca se guardaba y se retiró en E4. Si algo así apareciera guardado, la pantalla dice que no lo
- * sabe leer y ofrece descartarlo.
- */
-export function esBorradorGuardado(json: unknown): boolean {
-  if (!esObjeto(json)) return false;
-  if (json.formato === FORMATO_BORRADOR) return true;
-  return Array.isArray(json.phases) && json.phases.every((f) => esObjeto(f) && f.tasks === undefined);
-}
 
 function faseNuevaDe(p: ProposalPhaseLike): FaseNuevaPropuesta {
   return {
@@ -530,7 +510,7 @@ function faseNuevaDe(p: ProposalPhaseLike): FaseNuevaPropuesta {
   };
 }
 
-/** Detrás de qué va la fase nueva `i`: la entrada ANTERIOR de la propuesta que existe en la foto
+/** Detrás de qué va la fase nueva `i`: la entrada ANTERIOR de la propuesta que existe en `base`
  *  (o que es otra fase nueva). Es el mismo recorrido hacia atrás de `buildPhaseOrder`. */
 function despuesDeEnLaPropuesta(p: ProposalLike, i: number, enBase: ReadonlySet<string>): string | null {
   for (let j = i - 1; j >= 0; j--) {
@@ -546,13 +526,15 @@ function despuesDeEnLaPropuesta(p: ProposalLike, i: number, enBase: ReadonlySet<
 }
 
 /**
- * EL FORMATO VIEJO → EL BORRADOR, contra la foto `base`. Determinista: los mismos datos dan el mismo
- * borrador, en la pantalla y en el servidor. Sale de `computeProposalDeltas` a propósito: los cambios
- * son EXACTAMENTE los que la pantalla vieja mostraba, con dos inferencias del handoff (arriba).
+ * LO QUE ARMA UN PRODUCTOR (`ProposalLike`) → EL BORRADOR, contra `base`: lo que leyó ese productor.
+ * La usan solo `borradorBase` (el paso 1) y `convertirDelHandoff`, una vez, antes de guardar; lo
+ * guardado nunca vuelve a pasar por acá (E4). Determinista: los mismos datos dan el mismo borrador.
+ * Sale de `computeProposalDeltas` a propósito: los cambios son EXACTAMENTE los de la pantalla vieja,
+ * con dos inferencias del handoff (arriba).
  * Orden de la lista (y de los números): arranque, orden, y después fase por fase en el orden de la
  * propuesta —cada campo en `CAMPOS_POR_IMPACTO`—.
  */
-export function convertirPropuestaVieja(p: ProposalLike, base: Vivo): Borrador {
+export function convertirPropuestaDeFases(p: ProposalLike, base: Vivo): Borrador {
   const origen = origenDePropuesta(p);
   const actuales: CurrentPhaseLike[] = base.fases.map((f) => ({ ...f }));
   const deltas = computeProposalDeltas(actuales, p, base.ancla);
@@ -647,7 +629,7 @@ export function borradorBase(i: {
   pedido: PedidoDelBorrador;
   nuevaClave?: () => string;
 }): Borrador {
-  const viejo = convertirPropuestaVieja(i.propuesta, i.vivo);
+  const viejo = convertirPropuestaDeFases(i.propuesta, i.vivo);
   return {
     ...viejo,
     version: 0,
@@ -667,7 +649,7 @@ export function borradorBase(i: {
  * que solo choca no se tira, porque el CSE tiene que ver el ⚠.
  */
 export function convertirDelHandoff(i: { propuesta: ProposalLike; vivo: Vivo; nuevaClave?: () => string }): Borrador {
-  const viejo = convertirPropuestaVieja(i.propuesta, i.vivo);
+  const viejo = convertirPropuestaDeFases(i.propuesta, i.vivo);
   return {
     ...viejo,
     version: 0,
@@ -723,7 +705,8 @@ export function esBorradorV1(json: unknown): json is Record<string, unknown> {
   return esObjeto(json) && json.formato === FORMATO_BORRADOR;
 }
 
-/** La versión de un `borrador-v1` guardado, o null (el formato viejo no la tiene). */
+/** La versión de un `borrador-v1` guardado, o null si lo guardado no es un v1 (no hay propuesta que
+ *  se sepa leer: aplicar responde 409 y la pantalla trae lo nuevo). */
 export function versionDelBorrador(json: unknown): number | null {
   return esBorradorV1(json) && typeof json.version === "number" ? json.version : null;
 }
@@ -1063,10 +1046,11 @@ function leerExcluidos(v: unknown): string[] | null {
 }
 
 /**
- * Lo guardado en `pendingProposal` como borrador, o null si no hay (o no se sabe leer: uno viejo con
- * tareas). El formato nuevo se lee tal cual; el viejo se convierte contra `base`.
+ * Lo guardado en `pendingProposal` como borrador, o null si no hay o no es `borrador-v1`. E4: ya no
+ * convierte nada al leer (el formato viejo se convierte una vez, con scripts/propuestas-abiertas.ts):
+ * quien recibe null y hay algo guardado lo trata como una propuesta que no sabe leer.
  */
-export function leerBorrador(json: unknown, base: Vivo): Borrador | null {
+export function leerBorrador(json: unknown): Borrador | null {
   if (!esObjeto(json)) return null;
   if (json.formato === FORMATO_BORRADOR) {
     const crudos = Array.isArray(json.cambios) ? json.cambios : [];
@@ -1101,8 +1085,7 @@ export function leerBorrador(json: unknown, base: Vivo): Borrador | null {
       ...(ajustadas ? { ajustadasPorElChat: ajustadas } : {}),
     };
   }
-  if (!esBorradorGuardado(json)) return null;
-  return convertirPropuestaVieja(json as unknown as ProposalLike, base);
+  return null;
 }
 
 // ── DE DÓNDE VIENE: una sola clasificación (E2b, D8) ─────────────────────────
@@ -1117,9 +1100,11 @@ export type DeDondeViene =
 
 /**
  * De dónde viene lo guardado en `pendingProposal` (el JSON crudo o un `Borrador` ya leído). Puro.
+ * Desde E4 lo guardado es siempre un v1; con otra cosa no tira (la clasifica igual), pero nadie la
+ * muestra: la pantalla solo ofrece descartarla.
  *   · con `soloFase` → «Regenerar» de esa fase, con el nombre con que se armaron sus tareas (null
  *     mientras la IA todavía las arma);
- *   · un v1 que no es «contexto», o el formato viejo sin origen → el handoff;
+ *   · uno que no es «contexto» (sin `origen`, o «handoff») → el handoff;
  *   · «contexto» con pedido «primera» → «Generar cronograma»; con «regenerar» → «Regenerar todo»;
  *   · el resto de «contexto» → el contexto del cronograma (las reuniones y notas elegidas).
  */
@@ -1157,28 +1142,6 @@ export function desdeDeLaPropuesta(d: DeDondeViene): string {
       return _;
     }
   }
-}
-
-/**
- * La foto que manda la pantalla al aplicar, validada. null = no vino o no tiene forma de foto (el
- * servidor usa entonces lo vivo: sin foto no hay choques que detectar, y la huella decide).
- */
-export function leerFoto(json: unknown): Vivo | null {
-  if (!esObjeto(json) || !Array.isArray(json.fases) || json.fases.length > 500) return null;
-  if (!(json.ancla === null || typeof json.ancla === "string")) return null;
-  const fases: FaseViva[] = [];
-  for (const f of json.fases) {
-    if (!esObjeto(f) || typeof f.id !== "string" || typeof f.name !== "string" || typeof f.durationWeeks !== "number") return null;
-    const num = (x: unknown) => (typeof x === "number" ? x : x === null || x === undefined ? null : undefined);
-    const txt = (x: unknown) => (typeof x === "string" ? x : x === null || x === undefined ? null : undefined);
-    const startWeek = num(f.startWeek);
-    const sessionCount = num(f.sessionCount);
-    const notes = txt(f.notes);
-    const activityType = txt(f.activityType);
-    if (startWeek === undefined || sessionCount === undefined || notes === undefined || activityType === undefined) return null;
-    fases.push({ id: f.id, name: f.name, durationWeeks: f.durationWeeks, startWeek, sessionCount, notes, activityType });
-  }
-  return { ancla: dia(json.ancla), fases };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2207,17 +2170,19 @@ export function debeDescartarseSolo(plan: {
  * ¿La propuesta guardada todavía tiene algo que decidir? La usa el handoff antes de dejar la suya
  * (lib/timeline/borrador-del-handoff.ts): **una propuesta abierta no se pisa, sea del handoff o de las reuniones** —se
  * queda la abierta y se avisa a quien regeneró (respuesta 1 de Elías, 2026-09-24)—. Pisarla a mitad
- * de la revisión le cambiaba la lista al CSE, le hacía perder lo desmarcado y la foto, y su
- * «Aplicar» terminaba en un 409.
+ * de la revisión le cambiaba la lista al CSE, le hacía perder lo desmarcado, y su «Aplicar» terminaba
+ * en un 409.
  * Una que ya no tiene nada que decidir (todo ya está así) no frena: reemplazarla no pierde nada, y
- * la pantalla igual la descartaría sola. Se convierte contra LO VIVO: el handoff no tiene la foto de
- * la pantalla, y para saber si queda algo por decidir alcanza con lo de hoy.
+ * la pantalla igual la descartaría sola. El plan se calcula contra LO VIVO: para saber si queda algo
+ * por decidir alcanza con lo de hoy.
  * ⚠ Un v1 que ESPERA tareas (`tareas` sin `listas`) está por decidir sin leer la corrida: si el
  * handoff lo pisara a mitad del paso 2, la corrida pagada se perdería.
+ * ⛔ FALLA CERRADA (E4): algo guardado que no es un v1 (esta versión no lo sabe leer) cuenta como por
+ * decidir. El handoff no pisa lo que no entiende: la pantalla ofrece descartarlo, y lo decide el CSE.
  */
 export function propuestaPorDecidir(guardado: unknown, vivo: Vivo): boolean {
-  const borrador = leerBorrador(guardado, vivo);
-  if (!borrador) return false;
+  const borrador = leerBorrador(guardado);
+  if (!borrador) return guardado != null;
   if (borrador.tareas !== null && !borrador.tareas.listas) return true;
   return !debeDescartarseSolo(planDeAplicacion(vivo, borrador));
 }
@@ -3250,10 +3215,11 @@ function armandoLasTareas(deLaFase: string | null): string {
   return nombre ? `Armando las tareas de «${nombre}»…` : "Armando las tareas…";
 }
 
-/** ¿La propuesta guardada trae algún cambio de fases (o de fecha de arranque, u orden)? El handoff y el
- *  formato viejo son solo de fases: sí. El borrador vacío del paso 2, o uno solo de tareas: no. */
+/** ¿La propuesta guardada trae algún cambio de fases (o de fecha de arranque, u orden)? El handoff es
+ *  solo de fases: sí. El borrador vacío del paso 2, o uno solo de tareas: no. Lo que no es un v1 (E4:
+ *  esta versión no lo sabe leer) no trae nada que se sepa decir: no. */
 export function traeCambiosDeFases(json: unknown): boolean {
-  if (!esBorradorV1(json)) return json != null;
+  if (!esBorradorV1(json)) return false;
   return (
     Array.isArray(json.cambios) &&
     json.cambios.some((c) => esObjeto(c) && !(typeof c.tipo === "string" && c.tipo.startsWith("tarea-")))
@@ -3530,38 +3496,30 @@ export function fraseDelCierre(
 export type VistaDelBorrador = "propuesta" | "antes";
 
 /**
- * Lo que la pantalla recuerda de UNA propuesta: la foto contra la que se convirtió, lo desmarcado
- * (en memoria: viaja como `sin` al aplicar) y qué vista está mirando. `clave` identifica la
- * propuesta (su token y su contenido): si cambia, todo vuelve a empezar.
+ * Lo que la pantalla recuerda de UNA propuesta: lo desmarcado (en memoria: viaja como `sin` al
+ * aplicar) y qué vista está mirando. `clave` identifica la propuesta: si cambia, todo vuelve a empezar.
+ * E4: ya no hay foto. Un v1 trae su `desde` guardado; la foto solo servía para convertir el formato
+ * viejo, que ya no se lee.
  */
 export interface EstadoDeRevision {
   clave: string | null;
-  base: Vivo | null;
   sin: ReadonlySet<string>;
   vista: VistaDelBorrador;
 }
 
-export const REVISION_VACIA: EstadoDeRevision = { clave: null, base: null, sin: new Set(), vista: "propuesta" };
+export const REVISION_VACIA: EstadoDeRevision = { clave: null, sin: new Set(), vista: "propuesta" };
 
 /**
- * La identidad de lo que hay guardado: token + contenido. null si no es un borrador.
- *
- * ⚠ El contenido se mide con las claves ORDENADAS (`jsonCanonico`), no con `JSON.stringify` crudo.
- * La misma propuesta llega con otro orden de claves según el camino: la respuesta del POST
- * /estructura trae el orden en que la armó `construirPropuestaDeEstructura`, y el GET del cronograma
- * el que devuelve Postgres para un jsonb. Con el texto crudo eran dos «propuestas distintas»: al
- * recargar se perdía la foto recordada y una edición a mano que chocaba pasaba a «aplica»
- * (revisión de E1, 2026-09-24 — el caso del video de Wherex).
+ * La identidad de lo que hay guardado, o null si no es un v1. E2a: un v1 trae su `desde` y sube
+ * `version` en cada escritura (la marca y la fusión de las tareas). Su identidad es el TOKEN: lo
+ * desmarcado sobrevive a que lleguen las tareas.
  */
 export function claveDeRevision(json: unknown, token: string | null): string | null {
-  if (!esBorradorGuardado(json)) return null;
-  /* E2a: un v1 trae su `desde` y sube `version` en cada escritura (la marca y la fusión de las
-     tareas). Su identidad es el TOKEN: lo desmarcado sobrevive a que lleguen las tareas. */
-  if (esBorradorV1(json)) return `${token ?? ""}|v1`;
-  return `${token ?? ""}|${huellaDeTexto(jsonCanonico(json))}`;
+  return esBorradorV1(json) ? `${token ?? ""}|v1` : null;
 }
 
-/** JSON con las claves de cada objeto ordenadas: el mismo contenido da siempre el mismo texto. */
+/** JSON con las claves de cada objeto ordenadas: el mismo contenido da siempre el mismo texto. La usa
+ *  la huella del plan (`tarea-cambia`, E3). */
 export function jsonCanonico(v: unknown): string {
   return JSON.stringify(v, (_k, valor: unknown) =>
     valor && typeof valor === "object" && !Array.isArray(valor)
@@ -3571,14 +3529,12 @@ export function jsonCanonico(v: unknown): string {
 }
 
 /**
- * Una propuesta distinta: se mira la propuesta, con la foto y lo desmarcado que se recuerden de ESA
- * misma propuesta (volver a entrar o recargar), o con la foto de este momento y nada desmarcado.
+ * Una propuesta distinta: se mira la propuesta, con lo desmarcado que se recuerde de ESA misma
+ * propuesta (volver a entrar o recargar), o con nada desmarcado.
  */
-export function revisionPara(clave: string | null, vivo: Vivo, recuerdo: RecuerdoDeLaRevision | null = null): EstadoDeRevision {
+export function revisionPara(clave: string | null, recuerdo: RecuerdoDeLaRevision | null = null): EstadoDeRevision {
   if (clave === null) return REVISION_VACIA;
-  return recuerdo
-    ? { clave, base: recuerdo.foto, sin: new Set(recuerdo.sin), vista: "propuesta" }
-    : { clave, base: vivo, sin: new Set(), vista: "propuesta" };
+  return { clave, sin: new Set(recuerdo?.sin ?? []), vista: "propuesta" };
 }
 
 export function alternarVista(e: EstadoDeRevision): EstadoDeRevision {
@@ -3703,18 +3659,17 @@ export function conAbiertoPara(json: unknown, email: string): string[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── LA FOTO SE RECUERDA (en el navegador, nunca en el servidor) ──────────────
+// ── LO DESMARCADO SE RECUERDA (en el navegador) ──────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // El cronograma se DESMONTA al cambiar de canvas (Handoff, Kickoff…) y se remonta al terminar
-// «Chequear avance»; recargar también empieza de cero. Si la foto viviera solo en el estado del
-// componente, al volver se tomaba una foto NUEVA del cronograma ya editado: la edición a mano pasaba
-// de ⚠ a «aplica», marcada, y «Aplicar todo» la revertía (revisión de E1, 2026-09-24).
-// Por eso la foto (y lo desmarcado) se recuerdan por PROYECTO, atados a la identidad de la
-// propuesta —token + contenido (`claveDeRevision`)—: una propuesta distinta, aunque tenga el mismo
-// contenido, arranca con su propia foto. Una sola entrada por proyecto: la propuesta nueva pisa la
-// vieja, y aplicar o descartar la borra. Nada de esto viaja al servidor ni cambia el formato
-// guardado (E1 no escribe el formato nuevo): es memoria de la pantalla que sobrevive al remonte.
+// «Chequear avance»; recargar también empieza de cero. Lo desmarcado se recuerda por PROYECTO, atado a
+// la identidad de la propuesta (`claveDeRevision`): una propuesta distinta arranca sin nada
+// desmarcado. Una sola entrada por proyecto: la propuesta nueva pisa la vieja, y aplicar o descartar
+// la borra. Desde E3 lo desmarcado vive en el servidor (`excluidos`); esta entrada queda para la
+// migración única de E3, que la sube la primera vez.
+// E4: la FOTO se fue (solo servía para convertir el formato viejo). Una entrada escrita antes, con
+// `foto`, se sigue leyendo: se toma solo `sin`, y la clave del almacén no cambió de texto.
 
 /** Lo mínimo de `Storage` que usa la pantalla: `localStorage` en el navegador, un Map en los tests. */
 export interface AlmacenDeFotos {
@@ -3723,9 +3678,8 @@ export interface AlmacenDeFotos {
   removeItem(clave: string): void;
 }
 
-/** Lo que se recuerda de una propuesta: la foto contra la que se convirtió y lo desmarcado. */
+/** Lo que se recuerda de una propuesta: lo desmarcado. */
 export interface RecuerdoDeLaRevision {
-  foto: Vivo;
   sin: string[];
 }
 
@@ -3740,13 +3694,17 @@ export function almacenEnMemoria(): AlmacenDeFotos {
   };
 }
 
-/** Dónde vive la foto de la propuesta abierta de un proyecto: UNA entrada por proyecto. */
-export const claveDeLaFoto = (projectId: string): string => `nexus:cronograma:foto-de-la-propuesta:${projectId}`;
+/**
+ * Dónde vive lo recordado de la propuesta abierta de un proyecto: UNA entrada por proyecto.
+ * ⛔ El texto de la clave NO cambia (dice «foto» por historia): lo desmarcado antes de E4 se sigue
+ * leyendo, y la migración única de E3 lo sube.
+ */
+export const claveDelRecuerdo = (projectId: string): string => `nexus:cronograma:foto-de-la-propuesta:${projectId}`;
 
 /**
- * La foto (y lo desmarcado) recordados para ESA propuesta (`revision` = `claveDeRevision`), o null:
- * no hay, es de otra propuesta, está rota o el navegador no deja leer. Nunca tira: sin recuerdo, la
- * pantalla toma la foto de ahora, que es lo que hacía antes.
+ * Lo desmarcado recordado para ESA propuesta (`revision` = `claveDeRevision`), o null: no hay, es de
+ * otra propuesta, está rota o el navegador no deja leer. Nunca tira. E4: una entrada con `foto` (la
+ * escribía la versión anterior) vale igual; la foto se ignora.
  */
 export function recuerdoDeLaRevision(
   almacen: AlmacenDeFotos | null,
@@ -3755,20 +3713,18 @@ export function recuerdoDeLaRevision(
 ): RecuerdoDeLaRevision | null {
   if (!almacen) return null;
   try {
-    const crudo = almacen.getItem(claveDeLaFoto(projectId));
+    const crudo = almacen.getItem(claveDelRecuerdo(projectId));
     if (!crudo) return null;
     const json: unknown = JSON.parse(crudo);
     if (!esObjeto(json) || json.revision !== revision) return null;
-    const foto = leerFoto(json.foto);
-    if (!foto) return null;
     const sin = Array.isArray(json.sin) ? json.sin.filter((s): s is string => typeof s === "string") : [];
-    return { foto, sin };
+    return { sin };
   } catch {
     return null;
   }
 }
 
-/** Guarda la foto y lo desmarcado de esa propuesta (pisa lo de la propuesta anterior del proyecto). */
+/** Guarda lo desmarcado de esa propuesta (pisa lo de la propuesta anterior del proyecto). */
 export function recordarRevision(
   almacen: AlmacenDeFotos | null,
   projectId: string,
@@ -3777,17 +3733,17 @@ export function recordarRevision(
 ): void {
   if (!almacen) return;
   try {
-    almacen.setItem(claveDeLaFoto(projectId), JSON.stringify({ revision, foto: recuerdo.foto, sin: recuerdo.sin }));
+    almacen.setItem(claveDelRecuerdo(projectId), JSON.stringify({ revision, sin: recuerdo.sin }));
   } catch {
     /* sin lugar o sin permiso: la revisión sigue en memoria, como antes */
   }
 }
 
-/** La propuesta se resolvió (aplicada o descartada): su foto ya no sirve. */
+/** La propuesta se resolvió (aplicada o descartada): lo recordado ya no sirve. */
 export function olvidarRevision(almacen: AlmacenDeFotos | null, projectId: string): void {
   if (!almacen) return;
   try {
-    almacen.removeItem(claveDeLaFoto(projectId));
+    almacen.removeItem(claveDelRecuerdo(projectId));
   } catch {
     /* nada que hacer: la próxima propuesta la pisa */
   }

@@ -41,7 +41,6 @@ import {
   AVISO_PROPUESTA_DEL_HANDOFF_PENDIENTE,
   buildPhaseOrder,
   computeProposalDeltas,
-  reescribirPropuestaPendiente,
 } from "./proposal-deltas";
 import { tituloDeLoQueNoto } from "./borrador";
 import { ACTIVITY_TYPES } from "./validate";
@@ -1245,21 +1244,9 @@ describe("#1 / #28 · lo que el CSE edita mientras la propuesta espera no vuelve
     ]);
   });
 
-  it("resolver una sugerencia no convierte al resto en una foto: después de reescribir, sigue sin revertir", () => {
-    /* La edición que la pone en rojo: re-emitir las fases sin sugerencia SIN `campos: []` en
-       `reescribirPropuestaPendiente` (volverían a compararse todos sus campos). */
-    const r = armar([
-      { tipo: "ajustar", faseId: "c", durationWeeks: 3, motivo: "M1" },
-      { tipo: "mover", faseId: "b", despuesDeFaseId: "d", motivo: "M2" },
-    ]);
-    // Se aceptó «Capacitación» a 3 semanas; después el CSE le escribe una nota a esa fase y a otra.
-    const base = vivas((f) => (f.id === "c" ? { durationWeeks: 3 } : {}));
-    const reescrita = reescribirPropuestaPendiente(r.propuesta!, base, new Set(["mod:c"]));
-    const conNota = base.map((f) => (f.id === "a" || f.id === "c" ? { ...f, notes: "nota que escribió el CSE" } : f));
-    expect(computeProposalDeltas(conNota, reescrita, null).map((d) => d.key)).toEqual(["reorder"]);
-    // Resuelto el «mover», sus movidas se van con él.
-    expect(reescribirPropuestaPendiente(reescrita, base, new Set(["reorder"])).movidas).toEqual([]);
-  });
+  /* ⚠ E4 (2026-09): se borró «resolver una sugerencia no convierte al resto en una foto: después de
+     reescribir, sigue sin revertir», con `reescribirPropuestaPendiente`: la propuesta se resuelve entera
+     desde E1 y nadie la reescribe a medias. */
 
   it("la del handoff (sin `campos` ni `movidas`) sigue comparando todo, como antes", () => {
     const actuales = vivas(() => ({}));

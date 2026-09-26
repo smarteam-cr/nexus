@@ -109,10 +109,8 @@ const GUARDAS = [
   "guardProjectCanvasDelete(",
   "guardTimelineEdit(",
   "guardTimelineDelete(",
-  "guardTimelineFullRegen(",
-  // Hace guardAccessToProject + una vara de capacidad que depende de si el cronograma tiene
-  // tareas (vacío → la del apply por fase; con tareas → la del regen completo). Acota igual.
-  "guardTimelineDetailApply(",
+  // E4 (2026-09): salieron `guardTimelineFullRegen(` y `guardTimelineDetailApply(`, borrados de
+  // api-guards.ts sin usos (los pedían apply-all y la vista previa de una fase, que se fueron en E2b).
   "withProjectAccess",
   'guardCapability("seeAllClients")',
 ];

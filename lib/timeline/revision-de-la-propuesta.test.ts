@@ -389,7 +389,7 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(rama, "cierreFijado={closeOverride || null}")).toBe(true);
   });
 
-  it("⭐ aplicar: espera el guardado, limpia el deshacer, manda token + sin + huella + foto + versión, y ofrece las tareas que faltan", () => {
+  it("⭐ aplicar: espera el guardado, limpia el deshacer, manda token + sin + huella + versión, y ofrece las tareas que faltan", () => {
     /* La edición que la pone en rojo: aplicar sin esperar lo que está guardándose (el servidor
        compararía contra otra foto), no mandar el token, o volver a pedir las tareas solo.
        ⚠ ACTUALIZADA en E2b P4 (2026-09-25), con esta razón: pedía la cadena vieja al paso 2
@@ -421,7 +421,7 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(iCasillas, "aplicar no espera lo marcado").toBeGreaterThan(iEspera);
     expect(contiene(aplicar, "if (sinCasillas) return resultado(sinCasillas);"), "aplica aunque lo marcado no se guardó").toBe(true);
     expect(iCasillas, "aplicar lee la revisión antes de esperar lo marcado").toBeLessThan(
-      aplicar.indexOf("const { resumen, sin, foto, forzadas } = revisionRef.current;"),
+      aplicar.indexOf("const { resumen, sin, forzadas } = revisionRef.current;"),
     );
     expect(iCasillas).toBeLessThan(aplicar.indexOf("await new Promise<void>((r) => window.setTimeout(r, 60));"));
     expect(iCasillas).toBeLessThan(iLimpia);
@@ -436,7 +436,9 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(cuerpo, "token: proposalMeta.current.runId,")).toBe(true);
     expect(contiene(cuerpo, "sin: desdeElChat ? (excluidosDelGuardado(proposalRef.current) ?? [...sin]) : [...sin],")).toBe(true);
     expect(contiene(cuerpo, "huella: opts?.acordada?.huella ?? resumen.huella,")).toBe(true);
-    expect(contiene(cuerpo, "foto,")).toBe(true);
+    /* ⚠ E4 (2026-09): la foto ya no viaja (solo servía para convertir el formato viejo, que ya no se lee).
+       Volver a mandarla la pone en rojo. */
+    expect(cuerpo, "volvió a mandar la foto").not.toMatch(/\bfoto\b/);
     expect(contiene(cuerpo, "version: revisionRef.current.version,")).toBe(true);
     expect(contiene(cuerpo, "forzar: desdeElChat ? [] : [...forzadas],")).toBe(true);
     /* E3 P5: desde el chat, la versión de la pantalla tiene que ser la acordada, DESPUÉS de esperar lo marcado
@@ -475,23 +477,24 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(descartar, "finally { descartandoRef.current = false; setDescartando(false); }")).toBe(true);
   });
 
-  it("⭐ la foto se recuerda por la identidad de la propuesta, y se olvida al resolverla", () => {
+  it("⭐ lo desmarcado se recuerda por la identidad de la propuesta, y se olvida al resolverla", () => {
     /* La foto vivía solo en el estado del componente: cambiar de canvas o terminar «Chequear avance»
        la reemplazaba por una del cronograma ya editado (revisión de E1, 2026-09-24; el caso, en
        borrador.test.ts «12 · …»). La edición que la pone en rojo: no pasar el token o el proyecto al
-       hook, no leer lo recordado al cambiar de propuesta, o no olvidarla al aplicar/descartar. */
+       hook, no leer lo recordado al cambiar de propuesta, o no olvidarlo al aplicar/descartar.
+       ⚠ REESCRITA en E4 (2026-09), con esta razón: la foto se fue (un v1 trae su `desde`). Lo que se
+       recuerda es solo lo desmarcado; `revisionPara` ya no recibe lo vivo y el efecto no mira `base`. */
     expect(contiene(CANVAS, "token: hayBorrador ? proposalMeta.current.runId : null,")).toBe(true);
     expect(contiene(tramo(CANVAS, "const revision = useBorradorDelCronograma({", "});"), "projectId,")).toBe(true);
     expect(contiene(HOOK, "const clave = useMemo(() => claveDeRevision(propuesta, token), [propuesta, token]);")).toBe(true);
-    expect(contiene(HOOK, "actual = revisionPara(clave, vivo, clave ? recordado(projectId, clave) : null);")).toBe(true);
+    expect(contiene(HOOK, "actual = revisionPara(clave, clave ? recordado(projectId, clave) : null);")).toBe(true);
     /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: lo desmarcado se guarda en el servidor, y lo
        que se recuerda en el navegador es lo desmarcado EFECTIVO (`sin`: lo del servidor con lo pendiente
        encima), no la memoria de la pantalla (`actual.sin`), así una vuelta atrás a E2c arranca con lo mismo
        que se veía. Recordar `actual.sin` (lo de antes de E3), o dejar de recordar, la pone en rojo. */
-    expect(HOOK).toMatch(/useEffect\(\(\) => \{[\s\S]*?recordarRevision\([\s\S]*?\}, \[projectId, actual\.clave, actual\.base, sin\]\);/);
-    expect(contiene(tramo(HOOK, "if (!actual.clave || !actual.base) return;", "}, ["), "const recuerdo = { foto: actual.base, sin: [...sin] };")).toBe(
-      true,
-    );
+    expect(HOOK).toMatch(/useEffect\(\(\) => \{[\s\S]*?recordarRevision\([\s\S]*?\}, \[projectId, actual\.clave, sin\]\);/);
+    expect(contiene(tramo(HOOK, "if (!actual.clave) return;", "}, ["), "const recuerdo = { sin: [...sin] };")).toBe(true);
+    expect(HOOK, "volvió la foto al hook").not.toMatch(/actual\.base|foto:/);
     const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
     expect(aplicar.indexOf("revisionRef.current.olvidar()")).toBeGreaterThan(-1);
     expect(aplicar.indexOf("revisionRef.current.olvidar()")).toBeLessThan(aplicar.indexOf("setProposal(null)"));
@@ -573,6 +576,10 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
 
   it("lo viejo se fue: ni franja, ni recuadros «Sugerencia», ni filas fantasma, ni apply-items en pantalla", () => {
     expect(fs.existsSync(path.join(process.cwd(), "components/canvas/ProposalGlobalStrip.tsx"))).toBe(false);
+    // E4 (2026-09): y las tres rutas lápida ya no existen.
+    for (const ruta of ["proposal/apply-items", "phases/[phaseId]/apply", "detail/apply-all"]) {
+      expect(fs.existsSync(path.join(process.cwd(), `app/api/projects/[projectId]/timeline/${ruta}/route.ts`)), ruta).toBe(false);
+    }
     expect(CANVAS).not.toContain("ProposalGlobalStrip");
     expect(CANVAS).not.toContain("resolveProposalItems");
     expect(CANVAS).not.toContain("proposal/apply-items");
@@ -588,7 +595,9 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
        autoguardado no se frena y el Canvas no lee ningún campo de la propuesta a mano. Las ediciones que la
        ponen en rojo: volver a frenar el autoguardado con una propuesta, sacar la línea, o volver a leer
        `proposal.phases`. */
-    expect(contiene(CANVAS, "const hayBorrador = !!proposal && esBorradorGuardado(proposal);")).toBe(true);
+    /* ⚠ ACTUALIZADA en E4 P4 (2026-09), con esta razón: `esBorradorGuardado` se borró con el lector viejo.
+       Lo guardado es siempre un v1: todo lo que no lo es cae en `propuestaIlegible`. */
+    expect(contiene(CANVAS, "const hayBorrador = !!proposal && esBorradorV1(proposal);")).toBe(true);
     expect(contiene(CANVAS, "const propuestaIlegible = !!proposal && !hayBorrador;")).toBe(true);
     const linea = tramo(CANVAS, "{propuestaIlegible && (", "</div>");
     expect(linea).toContain("Descartarla");
@@ -596,6 +605,14 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     const autoguardado = tramo(CANVAS, "if (!dirty ||", "return;");
     expect(autoguardado, "el autoguardado volvió a frenarse con una propuesta").not.toContain("proposal &&");
     expect(CANVAS, "el Canvas volvió a leer las fases de la propuesta a mano").not.toMatch(/proposal\??\.phases/);
+    /* E4 P4: el formato viejo pasó de `hayBorrador` a `propuestaIlegible`, pero sigue guardado y el PUT con
+       motivo respondería 409: el botón de un acuerdo del chat dice que se resuelve en su línea, como antes
+       («Resuelve la propuesta en su barra»). La edición que la pone en rojo: sacar esa línea (el botón
+       quedaría vivo y fallaría), o ponerla después de `if (!hayBorrador) return null;`. */
+    const motivo = tramo(CANVAS, "const motivoDelChat = (a: AcuerdoDelChat): string | null => {", "const pasarALaPropuesta");
+    const iIlegible = motivo.indexOf("if (propuestaIlegible) return MOTIVOS_DEL_CHAT.enSuBarra;");
+    expect(iIlegible, "con una propuesta que no se sabe leer, el botón del chat queda vivo").toBeGreaterThan(-1);
+    expect(iIlegible).toBeLessThan(motivo.indexOf("if (!hayBorrador) return null;"));
   });
 });
 
@@ -913,7 +930,7 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(contiene(HOOK, "return debeDescartarseSolo(planDeAplicacion(vivo, borrador, sin, { tareas, forzar: forzadas }));")).toBe(true);
     expect(HOOK, "el plan volvió a leer la memoria de la pantalla").not.toMatch(/(resumir|planDeAplicacion)\(vivo, borrador, actual\.sin/);
     // El núcleo que eso usa: vacío «armando» o «faltan» no se descarta; vacío «fallo», sí.
-    const vacio = leerBorrador(borradorVacio({ pedido: "regenerar", corrida: "r1" }), VIVO_VACIO)!;
+    const vacio = leerBorrador(borradorVacio({ pedido: "regenerar", corrida: "r1" }))!;
     expect(debeDescartarseSolo(planDeAplicacion(VIVO_VACIO, vacio, [], { tareas: "armando" }))).toBe(false);
     expect(debeDescartarseSolo(planDeAplicacion(VIVO_VACIO, vacio, [], { tareas: "faltan" }))).toBe(false);
     expect(debeDescartarseSolo(planDeAplicacion(VIVO_VACIO, vacio, [], { tareas: "fallo" }))).toBe(true);
@@ -1071,7 +1088,7 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
        mandar `forzar` («Aplicar de todos modos» no haría nada), o soltar la fuerza solo si sale bien
        (un aplicar fallido o con 409 la dejaría puesta para el siguiente). */
     const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
-    const iLee = aplicar.indexOf("const { resumen, sin, foto, forzadas } = revisionRef.current;");
+    const iLee = aplicar.indexOf("const { resumen, sin, forzadas } = revisionRef.current;");
     const iBloqueo = aplicar.indexOf("if (resumen.bloqueo) {");
     expect(iLee).toBeGreaterThan(-1);
     expect(iBloqueo, "manda con un bloqueo").toBeGreaterThan(iLee);
@@ -1239,7 +1256,8 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
     expect(contiene(HOOK, "const excluidosDelServidor = useMemo(() => excluidosDelGuardado(propuesta), [propuesta]);")).toBe(true);
     // Los clics pendientes son de ESTA propuesta: los de otra no se superponen.
     expect(contiene(HOOK, "const pendientes = pendientesDe.clave === clave ? pendientesDe.ops : SIN_PENDIENTES.ops;")).toBe(true);
-    expect(contiene(HOOK, "vista: actual.vista, sin, esperarCasillas, foto: actual.base,")).toBe(true);
+    // E4: sin `foto` en lo que devuelve el hook.
+    expect(contiene(HOOK, "vista: actual.vista, sin, esperarCasillas, version,")).toBe(true);
     // La cola: una por propuesta; la de otra se suelta.
     const cola = tramo(HOOK, "const colaDeAhora = useCallback(", "const esperarCasillas = useCallback(");
     expect(contiene(cola, "if (colaRef.current?.clave === k) return colaRef.current.cola;")).toBe(true);
@@ -1331,7 +1349,7 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
     const pasar = tramo(CANVAS, "const pasarALaPropuesta = async (", "const atenderElAcuerdo =");
     for (const [nombre, src, espera, lectura] of [
       ["aplicar", aplicar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "if (acordada === null || revisionRef.current.version !== acordada)"],
-      ["aplicar (la barra)", aplicar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "const { resumen, sin, foto, forzadas } = revisionRef.current;"],
+      ["aplicar (la barra)", aplicar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "const { resumen, sin, forzadas } = revisionRef.current;"],
       ["pasar a la propuesta", pasar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "version: revisionRef.current.version ?? 0,"],
       ["armar las tareas", continuacion, "if (await revisionRef.current.esperarCasillas()) return;", "version = revisionRef.current.version;"],
     ] as const) {

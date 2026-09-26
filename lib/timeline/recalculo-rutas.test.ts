@@ -640,7 +640,7 @@ describe("7 · POST /timeline/borrador/aplicar con `forzar`", () => {
         .mockResolvedValueOnce({ anchorStartDate: null });
       db.timelinePhase.findMany.mockResolvedValue([]);
       db.$transaction.mockResolvedValue({
-        borrador: leerBorrador(guardado, { ancla: null, fases: [] })!,
+        borrador: leerBorrador(guardado)!,
         plan: { marcadas: 3, total: 3, aplicadas: [], forzadas },
         avisos: [],
         anclaAntes: null,

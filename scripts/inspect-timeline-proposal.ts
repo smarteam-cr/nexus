@@ -1,11 +1,10 @@
 /**
  * scripts/inspect-timeline-proposal.ts  (READ-ONLY)
- * Inspecciona el cronograma de un proyecto + la propuesta pendiente de re-generación.
- * Sirve para verificar la invariante NO-destructiva: las fases de pendingProposal llevan
- * id (matchean a existentes) y NO traen `tasks` (→ el PUT preserva el detalle/progreso).
- * Con un borrador `borrador-v1` (E1, E2a, E2b: no tiene `phases`) imprime el formato, la versión, el
- * origen, `soloFase` («Regenerar» de una fase), el estado de las tareas y los cambios por tipo, y
- * termina. Antes reventaba en `prop.phases`. Del formato viejo imprime también su origen.
+ * Inspecciona el cronograma de un proyecto + la propuesta pendiente.
+ * Con un borrador `borrador-v1` imprime el formato, la versión, el origen, `soloFase` («Regenerar» de
+ * una fase), el estado de las tareas y los cambios por tipo. E4: lo guardado es siempre un v1; si no
+ * lo es, lo dice y remite a `scripts/propuestas-abiertas.ts --antes-de-e4`, el único que todavía
+ * conoce el formato viejo.
  * Uso: npx tsx scripts/inspect-timeline-proposal.ts <projectId>
  */
 import { PrismaClient } from "@prisma/client";
@@ -13,13 +12,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import "dotenv/config";
 import { esBorradorV1, estadoDeLasTareas, leerBorrador } from "../lib/timeline/borrador";
-import { origenDePropuesta } from "../lib/timeline/proposal-deltas";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
-
-type ProposalPhase = { id?: string; name: string; order: number; durationWeeks: number; tasks?: unknown[] };
-type Proposal = { anchorStartDate: string | null; phases: ProposalPhase[] };
 
 async function main() {
   const projectId = process.argv[2];
@@ -55,7 +50,7 @@ async function main() {
     console.log("  (ninguna — pendingProposal = null)");
   } else if (esBorradorV1(tl.pendingProposal)) {
     // El borrador nuevo no trae `phases`: se lee con el mismo lector que la pantalla y el servidor.
-    const b = leerBorrador(tl.pendingProposal, { ancla: null, fases: [] });
+    const b = leerBorrador(tl.pendingProposal);
     if (!b) { console.log("  formato: borrador-v1 (ilegible)"); return; }
     const corrida = b.tareas?.corrida
       ? await prisma.agentRun.findUnique({
@@ -79,21 +74,8 @@ async function main() {
     console.log(`  fases con tareas armadas: ${Object.keys(b.tareasArmadasPara).length}  observaciones: ${b.observaciones.length}`);
     return;
   } else {
-    const prop = tl.pendingProposal as unknown as Proposal;
-    const existingIds = new Set(tl.phases.map((p) => p.id));
-    const withId = prop.phases.filter((p) => p.id).length;
-    const withValidId = prop.phases.filter((p) => p.id && existingIds.has(p.id)).length;
-    const withTasks = prop.phases.filter((p) => Array.isArray(p.tasks)).length;
-    console.log(`  formato: viejo  origen: ${origenDePropuesta(tl.pendingProposal as { origen?: unknown })}`);
+    console.log("  no es borrador-v1: corre npx tsx scripts/propuestas-abiertas.ts --antes-de-e4");
     console.log(`  pendingProposalRunId: ${tl.pendingProposalRunId ?? "—"}`);
-    console.log(`  anchorStartDate: ${prop.anchorStartDate ?? "null"}`);
-    console.log(`  fases: ${prop.phases.length}  (con id: ${withId}, id válido existente: ${withValidId}, con clave tasks: ${withTasks})`);
-    if (withTasks > 0) console.log(`  ⚠ ALGUNA FASE TRAE \`tasks\` — el PUT borraría/recrearía tareas (rompe la invariante no-destructiva).`);
-    else console.log(`  ✓ Ninguna fase trae \`tasks\` → aplicar preserva el detalle/progreso.`);
-    for (const p of prop.phases) {
-      const tag = !p.id ? "NUEVA" : existingIds.has(p.id) ? "match" : "id-desconocido";
-      console.log(`    [${p.order}] ${p.id ?? "(sin id)"}  "${p.name}"  ${p.durationWeeks}sem  [${tag}]`);
-    }
   }
 }
 

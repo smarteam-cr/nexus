@@ -21,6 +21,7 @@ import {
   claveDeFaseQueSeVa,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
+  convertirPropuestaDeFases,
   FORMATO_BORRADOR,
   fotoDeTarea,
   leerBorrador,
@@ -212,7 +213,7 @@ describe("1 · el formato: lo del chat sobrevive a guardarse, y lo mal formado b
       ],
       { excluidos: ["tarea:c1:se-va", "t:ya-no-esta"], ajustadasPorElChat: { c: { nombre: "Pruebas", semanas: 4, sesiones: null, semanaCero: false } } },
     );
-    const leido = leerBorrador(ida(b), { ancla: null, fases: [] })!;
+    const leido = leerBorrador(ida(b))!;
     expect(leido).toEqual(b);
     expect(leido.desconocidos, "nada quedó como desconocido").toBeUndefined();
     expect(planDeAplicacion(VIVO, leido).huella).toBe(planDeAplicacion(VIVO, b).huella);
@@ -233,11 +234,11 @@ describe("1 · el formato: lo del chat sobrevive a guardarse, y lo mal formado b
       { ...seVaLaFase("c"), desde: { ...seVaLaFase("c").desde, tareas: [{ id: "c1" }] } },
     ];
     for (const malo of malos) {
-      const b = leerBorrador({ ...crudo, cambios: [DUR_C, JSON.parse(JSON.stringify(malo))] }, VIVO)!;
+      const b = leerBorrador({ ...crudo, cambios: [DUR_C, JSON.parse(JSON.stringify(malo))] })!;
       expect(b.desconocidos, JSON.stringify(malo).slice(0, 80)).toBe(1);
       expect(planDeAplicacion(VIVO, b).bloqueo).not.toBeNull();
     }
-    const conCasillasRotas = leerBorrador({ ...crudo, excluidos: ["ok", 3] }, VIVO)!;
+    const conCasillasRotas = leerBorrador({ ...crudo, excluidos: ["ok", 3] })!;
     expect(conCasillasRotas.excluidos).toBeUndefined();
     expect(conCasillasRotas.desconocidos).toBeUndefined();
   });
@@ -476,7 +477,10 @@ describe("6 · la huella de lo de antes no cambia", () => {
         { name: "Piloto", durationWeeks: 2 },
       ],
     };
-    expect(planDeAplicacion(deAntes, leerBorrador(vieja, deAntes)!, [], { tareas: "listas" }).huella).toBe("038d4cba1aac5c");
+    /* ⚠ REESCRITA en E4 (2026-09), con esta razón: leía el formato viejo guardado (el lector lo convertía
+       contra una foto). Desde E4 no se lee; la misma conversión la hacen los productores antes de guardar,
+       y tiene que seguir dando la misma huella. */
+    expect(planDeAplicacion(deAntes, convertirPropuestaDeFases(vieja, deAntes), [], { tareas: "listas" }).huella).toBe("038d4cba1aac5c");
   });
 
   it("el rescate SÍ entra a la huella: otra tarea protegida en el medio es otra lista", () => {
