@@ -29,7 +29,8 @@
  * La barra suma la línea del RECÁLCULO (`recalculo`), debajo de la de las tareas: en qué está, y con
  * permiso «Recalcular las tareas» / «Volver a intentar» (`onRecalcular`) y, si falló, «Aplicar de todos
  * modos» (`onForzar`), que SIEMPRE confirma con el mismo diálogo en otro modo. Aplicar espera mientras
- * haya fases desfasadas sin forzar (el bloqueo lo dice la línea, no dos veces).
+ * haya fases desfasadas sin forzar (el bloqueo lo dice la línea, no dos veces) y, mientras tanto, dice
+ * solo «Aplicar»: sus tareas se ven marcadas pero todavía no cuentan (revisión de E2c).
  *
  * E3 P3 (2026-09-25): lo que se marca y desmarca se guarda en el servidor y se ve en cualquier
  * computadora (lo hace el hook: la barra solo llama `onMarcar`). Una fase que se quita y se queda con lo
@@ -48,7 +49,7 @@ import {
   resumenDeLaConfirmacion,
   TEXTO_VER_ANTES,
   TEXTO_VER_PROPUESTA,
-  textoDeAplicar,
+  textoDelBotonDeAplicar,
   textoDeLaConfirmacion,
   tituloDeLaBarra,
   tituloDeLoQueNoto,
@@ -110,13 +111,14 @@ export default function RevisionDeLaPropuesta({
   /* UN solo diálogo, en dos modos: «aplicar» (lo de siempre) y «forzar» («Aplicar de todos modos», que
      aplica tareas armadas para otra forma de la fase: siempre confirma). */
   const [confirmar, setConfirmar] = useState<null | "aplicar" | "forzar">(null);
-  const { items, grupos, marcadas, aplicables, choques, magnitud, bloqueo, observaciones } = resumen;
+  const { items, grupos, marcadas, choques, magnitud, bloqueo, observaciones } = resumen;
   /* E2b (2026-09-25): se fue la chapa «Paso 1 de 2 · después, las tareas» (y la prop `encadenado`).
      Era de la cadena vieja de dos pasos, que ya no existe: aplicar o descartar nunca sigue solo con
      las tareas (si no llegaron, la línea suelta las ofrece después). */
   const otroCronograma = magnitud.esCronogramaNuevo;
   const trabajando = enCurso !== null;
-  const textoDelBoton = textoDeAplicar(marcadas, aplicables);
+  // Revisión de E2c: con tareas que esperan su recálculo, sin «N de M» (todavía no cuentan).
+  const textoDelBoton = textoDelBotonDeAplicar(resumen);
   const pedirAplicar = () => (pideConfirmacion(resumen) ? setConfirmar("aplicar") : onAplicar());
   const forzando = confirmar === "forzar";
   const cierre = fraseDelCierre(resumen, cierreFijado);

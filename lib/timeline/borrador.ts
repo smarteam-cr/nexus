@@ -2438,8 +2438,19 @@ export function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion
     if (etiquetas.length > 0) f.marca = { tono: "cambia", etiquetas };
   });
 
+  /* Revisión de E2c: una fase desfasada (sin forzar) se ve SIN las tareas que esperan su recálculo (no
+     se aplican todavía). La marca lo dice: si no, parecía que el CSE las había quitado. */
+  const porRecalcular = new Set(plan.desfasadas.map((d) => d.fase));
+  for (const f of fases) {
+    if (!porRecalcular.has(f.clave)) continue;
+    f.marca = { tono: f.marca?.tono ?? "cambia", etiquetas: [...(f.marca?.etiquetas ?? []), ETIQUETA_POR_RECALCULAR] };
+  }
+
   return { ancla: plan.escrituras.ancla ?? dia(vivo.ancla), fases };
 }
+
+/** La marca de una fase desfasada en «Ver la propuesta»: sus tareas esperan el recálculo. */
+export const ETIQUETA_POR_RECALCULAR = "tareas por recalcular";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LA ESTRUCTURA QUE VE EL PASO 2 ───────────────────────────────────────────
@@ -3008,6 +3019,15 @@ export const TEXTO_VER_PROPUESTA = "Ver la propuesta";
  */
 export function textoDeAplicar(marcadas: number, aplicables: number): string {
   return marcadas === aplicables ? "Aplicar todo" : `Aplicar ${marcadas} de ${aplicables}`;
+}
+
+/**
+ * El texto del botón de la barra. Revisión de E2c: con fases desfasadas sin forzar, sus tareas se ven
+ * marcadas (esperan el recálculo) pero todavía no cuentan, y «Aplicar N de M» parecía decir que el CSE
+ * las había quitado. Mientras tanto dice solo «Aplicar»: el botón está apagado y su `title` dice por qué.
+ */
+export function textoDelBotonDeAplicar(r: Pick<ResumenDelBorrador, "marcadas" | "aplicables" | "desfasadas">): string {
+  return r.desfasadas.length > 0 ? "Aplicar" : textoDeAplicar(r.marcadas, r.aplicables);
 }
 
 /**

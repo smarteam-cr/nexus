@@ -18,7 +18,8 @@
  *   · E2c P3: las de una fase cuyo cambio desmarcaste (sus semanas, su nombre, sus sesiones) quedaron
  *     armadas para otra forma: la fase está DESFASADA y sus tareas se recalculan solas. Mientras tanto
  *     se ven marcadas (`enEspera`) y se pueden desmarcar, y el grupo dice en qué está el recálculo
- *     («recalculando…», «no se pudieron recalcular», «sigue después», «falta recalcularlas»).
+ *     («recalculando…», «no se pudieron recalcular», «sigue después», «falta recalcularlas»). Revisión
+ *     de E2c: solo con dos o más fases desfasadas; con una, lo dice la línea del recálculo (no dos veces).
  *   · Lo que choca con algo que editaste a mano lleva su ⚠ y no se puede marcar; lo que ya está así va
  *     tachado.
  *   · E3 P3: una tarea que ya existe y CAMBIA (renombre, semana, dueño o tipo) va con «~», y una que se
@@ -144,12 +145,15 @@ function GrupoDeLaLista({
   onMarcarVarios,
   trabajando,
   recalculo,
+  desfasadas,
 }: {
   g: GrupoDeTareas;
   onMarcar: (clave: string, incluir: boolean) => void;
   onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
   trabajando: boolean;
   recalculo: RecalculoEnPantalla | null;
+  /** Cuántas fases desfasadas hay en la lista (con una sola, el grupo no repite la línea). */
+  desfasadas: number;
 }) {
   // La casilla del grupo cuenta solo las que se pueden marcar: un choque o una heredada no se tocan.
   // E2c: una en espera de recalcularse cuenta como marcada (así se ve).
@@ -159,7 +163,7 @@ function GrupoDeLaLista({
   const aMedias = marcadas > 0 && marcadas < marcables.length;
   const heredado = g.dependeDe !== null;
   const avisoEsChoque = !!g.aviso && g.aviso.startsWith("⚠");
-  const desfase = g.desfasada ? textoDelGrupoDesfasado(g.fase, recalculo) : null;
+  const desfase = g.desfasada ? textoDelGrupoDesfasado(g.fase, recalculo, desfasadas) : null;
   // El nombre no se apaga en una desfasada: sus tareas siguen marcadas, esperando.
   const apagado = (g.estado === "excluido" || g.estado === "choque") && !g.desfasada;
   return (
@@ -232,6 +236,7 @@ export default function TareasDeLaPropuesta({
   recalculo?: RecalculoEnPantalla | null;
 }) {
   if (grupos.length === 0) return null;
+  const desfasadas = grupos.filter((g) => g.desfasada).length;
   return (
     <ol aria-label="Tareas propuestas" className="max-h-80 overflow-y-auto space-y-1.5 border-t border-line pt-1.5 pr-1">
       {grupos.map((g) => (
@@ -242,6 +247,7 @@ export default function TareasDeLaPropuesta({
           onMarcarVarios={onMarcarVarios}
           trabajando={trabajando}
           recalculo={recalculo}
+          desfasadas={desfasadas}
         />
       ))}
     </ol>

@@ -54,6 +54,7 @@ import {
   MENSAJE_TAREAS_EN_CURSO,
   MOTIVO_RECALCULO_CORTADO,
   MOTIVO_RECALCULO_EDITADA,
+  motivoDelRecalculo,
   MOTIVO_RECALCULO_PERDIDO,
   MOTIVO_RECALCULO_SIN_TAREAS,
   MOTIVO_TAREAS_CORTADAS,
@@ -422,13 +423,37 @@ describe("5 · fusionarDetalleEnElBorrador con un recálculo — solo cambian su
     expect(escrito().cambios).toEqual(CAMBIOS);
     expect(escrito().recalculo).toEqual({ ...RECALCULO, motivo: MOTIVO_RECALCULO_SIN_TAREAS });
 
-    // Con varias fases que fallan por causas distintas, el motivo las dice todas (en su orden).
+    /* Con varias fases que fallan por causas distintas, el motivo las dice todas (en su orden), cada una con
+       SUS fases.
+       ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: las causas se unían con «y» y no se
+       sabía cuál había fallado por qué («se editó a mano… y la IA no devolvió sus tareas»). */
     db.projectTimeline.updateMany.mockClear();
     const dos = { ...RECALCULO, fases: [{ id: "b", nombre: "Diseño" }, { id: "c", nombre: "Pruebas" }] };
     const r = await fusionar({ guardado: guardadoCon({ recalculo: dos }), durPruebasAhora: 5, analysisJson: sinTareas });
     expect(r).toEqual({ estado: "recalculadas", escritas: [], fallidas: ["b", "c"] });
     expect(escrito(), "borró el borrador").not.toBe(Prisma.DbNull);
-    expect(escrito().recalculo.motivo).toBe(`${MOTIVO_RECALCULO_EDITADA} y ${MOTIVO_RECALCULO_SIN_TAREAS}`);
+    expect(escrito().recalculo.motivo).toBe(`en «Pruebas», ${MOTIVO_RECALCULO_EDITADA}; en «Diseño», ${MOTIVO_RECALCULO_SIN_TAREAS}`);
+  });
+
+  it("⭐ motivoDelRecalculo: una causa, tal cual; causas distintas, cada una con sus fases y en su orden", () => {
+    /* Revisión de E2c. La edición que la pone en rojo: volver a unir las causas sin decir de qué fase es
+       cada una, o cambiar el texto de una sola causa (es el de siempre). */
+    expect(motivoDelRecalculo([])).toBeNull();
+    expect(motivoDelRecalculo([{ nombre: "Pruebas", motivo: MOTIVO_RECALCULO_CORTADO }])).toBe(MOTIVO_RECALCULO_CORTADO);
+    expect(
+      motivoDelRecalculo([
+        { nombre: "Pruebas", motivo: MOTIVO_RECALCULO_CORTADO },
+        { nombre: "Diseño", motivo: MOTIVO_RECALCULO_CORTADO },
+      ]),
+      "una sola causa en dos fases",
+    ).toBe(MOTIVO_RECALCULO_CORTADO);
+    expect(
+      motivoDelRecalculo([
+        { nombre: "Piloto", motivo: MOTIVO_RECALCULO_SIN_TAREAS },
+        { nombre: "Pruebas", motivo: MOTIVO_RECALCULO_CORTADO },
+        { nombre: "Diseño", motivo: MOTIVO_RECALCULO_SIN_TAREAS },
+      ]),
+    ).toBe(`en «Pruebas», ${MOTIVO_RECALCULO_CORTADO}; en «Piloto» y «Diseño», ${MOTIVO_RECALCULO_SIN_TAREAS}`);
   });
 
   it("⛔ otra corrida: «perdido», sin escribir y con el aviso en la corrida", async () => {

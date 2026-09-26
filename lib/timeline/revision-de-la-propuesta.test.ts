@@ -151,7 +151,9 @@ describe("la barra: UN botón que alterna, la línea fija, la lista con casillas
     expect(contiene(BARRA, '{vista === "propuesta" ? TEXTO_VER_ANTES : TEXTO_VER_PROPUESTA}')).toBe(true);
     expect(BARRA, "texto que cambia + aria-pressed se contradicen").not.toContain("aria-pressed");
     expect(contiene(BARRA, "{LINEA_DEL_CLIENTE}")).toBe(true);
-    expect(contiene(BARRA, "const textoDelBoton = textoDeAplicar(marcadas, aplicables);")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: con tareas que esperan su recálculo el botón dice
+       solo «Aplicar» (`textoDelBotonDeAplicar`; su conducta, en recalculo-en-la-pantalla.test.ts). */
+    expect(contiene(BARRA, "const textoDelBoton = textoDelBotonDeAplicar(resumen);")).toBe(true);
     expect(contiene(BARRA, 'enCurso === "aplicar" ? "Aplicando…" : textoDelBoton')).toBe(true);
     expect(contiene(BARRA, "onClick={onDescartar}")).toBe(true);
   });
@@ -688,10 +690,23 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     /* Descartar A MANO mientras se arman las tareas: su corrida termina sin aviso (ni «PROPUESTA_CAMBIO»,
        ni «no propone cambios»). La edición que la pone en rojo: no darla por avisada al descartar. */
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
-    expect(contiene(descartar, "const corridaDescartada = tareasEnPantalla?.corrida ?? null;")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: también la corrida del RECÁLCULO (si en ese minuto entraba
+       otra propuesta, avisaba «Listas las tareas recalculadas…» sobre la otra). Cuáles son las dos lo dice
+       `corridasDeLaPropuesta` (su guarda la llama, en recalculo-de-tareas.test.ts); acá, que se usen al
+       descartar (leídas ANTES de limpiar) y al aplicar. */
+    expect(contiene(descartar, "const corridasDescartadas = corridasDeLaPropuesta(tareasEnPantalla);")).toBe(true);
+    expect(descartar.indexOf("corridasDeLaPropuesta(tareasEnPantalla)"), "se leen después de limpiar").toBeLessThan(
+      descartar.indexOf("setTareasDelBorrador(null)"),
+    );
     expect(
-      contiene(descartar, "if (yaNoEstaGuardada && !reason && corridaDescartada) CORRIDAS_ANUNCIADAS.add(corridaDescartada);"),
-      "la corrida de una propuesta descartada a mano sigue avisando",
+      contiene(descartar, "if (yaNoEstaGuardada && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);"),
+      "las corridas de una propuesta descartada a mano siguen avisando",
+    ).toBe(true);
+    const aplicarLas = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
+    expect(contiene(aplicarLas, "const corridasResueltas = corridasDeLaPropuesta(tareasEnPantalla);")).toBe(true);
+    expect(
+      contiene(tramo(aplicarLas, "revisionRef.current.olvidar();", "await load();"), "for (const c of corridasResueltas) CORRIDAS_ANUNCIADAS.add(c);"),
+      "las corridas de una propuesta aplicada siguen avisando",
     ).toBe(true);
     /* Se sigue la corrida del MISMO GET que dio el estado, y solo el de la propuesta en pantalla.
        ⚠ ACTUALIZADA en E2c P3 (2026-09-25), con esta razón: quitar un cambio de fase ya no deja sus tareas fuera: se recalculan, y la corrida del
@@ -995,28 +1010,32 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
   const rama = tramo(CANVAS, '<div id="cronograma-gantt"', "<TaskDetailDrawer");
   const pedir = tramo(CANVAS, "const pedirRecalculo = async (", "const recalc = useRecalculoDeLasTareas(");
 
-  it("⭐ pedirRecalculo: espera el guardado, lee lo de ESE momento, manda `recalcular: { sin }` y no usa `armando`", () => {
-    /* Las ediciones que la ponen en rojo: pedir sin esperar el guardado (el servidor calcularía las
-       desfasadas contra otra base), leer `sin`/`desfasadas` antes del guardado (lo de un render viejo),
-       no cortar cuando ya no hay nada que recalcular, usar `setArmando` o `pedirPropuestaDeDetalle`
-       (frena el chat y «Generar», y su «Volver a intentar» arma TODAS las fases), o no recargar lo vivo
-       con NADA_QUE_RECALCULAR (la pantalla seguiría viendo una desfasada que la base no tiene). */
-    expect(pedir.length, "la guarda no está mirando la función").toBeGreaterThan(800);
-    const iGuardado = pedir.indexOf("await esperarQueSeGuarde()");
-    const iLee = pedir.indexOf("const { sin, version, desfasadas } = revisionRef.current;");
-    const iCorte = pedir.indexOf("if (desfasadas.length === 0 ||");
-    const iPedido = pedir.indexOf("/analyze");
-    expect(iGuardado, "no espera el guardado").toBeGreaterThan(-1);
-    expect(iLee, "lee lo desmarcado antes de que termine el guardado").toBeGreaterThan(iGuardado);
-    expect(iCorte, "no corta cuando ya no hay nada que recalcular").toBeGreaterThan(iLee);
-    expect(iPedido, "pide antes de leer lo de ese momento").toBeGreaterThan(iCorte);
-    expect(contiene(pedir, "borrador: { token, version, recalcular: { sin: [...sin] } },"), "no manda lo desmarcado").toBe(true);
-    expect(contiene(pedir, "async: true,")).toBe(true);
+  it("⭐ pedirRecalculo: el Canvas le pasa al pedido lo de la pantalla LEÍDO EN EL MOMENTO, y no usa `armando`", () => {
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: el pedido vive en
+       lib/timeline/recalculo-de-tareas.ts (`pedirElRecalculo`) y su guarda lo CORRE
+       (recalculo-en-la-pantalla.test.ts): espera el guardado y las casillas, lee lo de ese momento, corta
+       sin desfasadas o con otra propuesta, manda `recalcular: { sin }`, trae la propuesta al lanzar y relee
+       lo vivo con NADA_QUE_RECALCULAR. Quitar el `await traerPropuestaPendiente()` de después de lanzar
+       pasaba la suite entera. Acá queda el cableado: cada cosa se lee en el momento (una función, no un
+       valor del render en que se armó el pedido). Las ediciones que la ponen en rojo: pasar un valor en vez
+       de leerlo, dejar de mandar las instrucciones tipeadas, o usar `setArmando` / `pedirPropuestaDeDetalle`
+       (frena el chat y «Generar», y su «Volver a intentar» arma TODAS las fases). */
+    expect(pedir.length, "la guarda no está mirando la función").toBeGreaterThan(600);
+    expect(pedir.indexOf("await flushDocBrief();"), "no manda antes las instrucciones tipeadas").toBeLessThan(pedir.indexOf("await pedirElRecalculo("));
+    for (const cable of [
+      "token: proposalMeta.current.runId,",
+      "sePuedePedir: !proposalMeta.current.deAssist && !!revisionRef.current.borrador && !descartandoRef.current,",
+      "esperarQueSeGuarde,",
+      "esperarCasillas: () => revisionRef.current.esperarCasillas(),",
+      "revision: () => revisionRef.current,",
+      "traerPropuesta: () => traerPropuestaPendiente(),",
+      "recargar: () => load(),",
+      "automatico,",
+    ]) {
+      expect(contiene(pedir, cable), cable).toBe(true);
+    }
     expect(pedir, "usa `armando`").not.toContain("setArmando(");
     expect(pedir, "arma todas las fases").not.toContain("pedirPropuestaDeDetalle(");
-    expect(contiene(pedir, 'if (data?.error === "NADA_QUE_RECALCULAR") await load();'), "no recarga lo vivo").toBe(true);
-    // Automático: sin avisos por lo que no es un error (sigue en curso, o ya no hay nada que recalcular).
-    expect(contiene(pedir, "if (sinGuardar) { if (!automatico) toast.error(sinGuardar); return; }")).toBe(true);
   });
 
   it("⭐ el seguimiento: la corrida del recálculo se sigue y su aviso nombra sus fases, tomadas ANTES de seguirla", () => {
@@ -1082,14 +1101,42 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     );
     expect(contiene(ESPERA, "const marcasVistas = useRef(i.marcasDelCse);"), "arma la espera al montar").toBe(true);
     // La clave con la que se compara la próxima marca se actualiza DESPUÉS del efecto de la marca.
-    expect(ESPERA.indexOf("claveVista.current = i.claveDeDesfasadas;")).toBeGreaterThan(ESPERA.indexOf("}, [i.marcasDelCse]);"));
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: el hook recibe las desfasadas (recuerda lo lanzado
+       por fase) y arma la barra; la clave se calcula acá. Su conducta la prueba recalculo-en-la-pantalla.test.ts. */
+    expect(ESPERA.indexOf("claveVista.current = claveDeDesfasadas(i.desfasadas);")).toBeGreaterThan(ESPERA.indexOf("}, [i.marcasDelCse]);"));
     // Las forzadas viven en memoria: nunca se recuerdan.
     expect(tramo(HOOK, "const recuerdo = {", "};"), "las forzadas se recuerdan").not.toContain("forzadas");
     // El Canvas: la misma vara que «Armar las tareas», y el botón de la línea relanza ya.
     const hook = tramo(CANVAS, "const recalc = useRecalculoDeLasTareas({", "});");
     expect(contiene(hook, "marcasDelCse: revision.marcasDelCse,")).toBe(true);
     expect(contiene(hook, "puedePedir: canEdit && puedeArmarTareas,")).toBe(true);
-    expect(contiene(hook, 'tareasEnPantalla?.estado === "listas" && tareasEnPantalla.recalculo?.estado !== "armando"')).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: cuándo se puede lanzar lo decide
+       `puedeLanzarElRecalculo` (su guarda prueba cada freno); la guarda de antes fijaba solo el final de la
+       condición, y quitar `armando === null && !aplicandoBorrador && !descartando` pasaba. Acá, que el
+       Canvas le pase TODOS los frenos y las tareas del mismo GET, y que el hook reciba lo que decide.
+       También lo que llega a la barra: las desfasadas, el recálculo del GET y la fase de la corrida. */
+    const lanzamiento = tramo(CANVAS, "const lanzamientoDelRecalculo = puedeLanzarElRecalculo({", "});");
+    for (const cable of [
+      "puedeEditar: canEdit,",
+      "hayBorrador,",
+      "vistaPrevia: proposalMeta.current.deAssist,",
+      "armando: armando !== null,",
+      "aplicando: aplicandoBorrador,",
+      "descartando,",
+      "tareas: tareasEnPantalla,",
+    ]) {
+      expect(contiene(lanzamiento, cable), cable).toBe(true);
+    }
+    for (const cable of [
+      "desfasadas: revision.desfasadas,",
+      "servidor: tareasEnPantalla?.recalculo ?? null,",
+      "faseDeLaCorrida: faseDelArmado,",
+      "puedeLanzar: lanzamientoDelRecalculo.puedeLanzar,",
+      "puedeEsperar: lanzamientoDelRecalculo.puedeEsperar,",
+      "lanzar: (automatico) => pedirRecalculo(automatico),",
+    ]) {
+      expect(contiene(hook, cable), cable).toBe(true);
+    }
   });
 
   it("⭐ la barra: la línea del recálculo relanza (nunca arma todas), y «Aplicar de todos modos» fuerza y confirma", () => {
@@ -1106,7 +1153,10 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     expect(contiene(linea, 'onForzar && recalculo.que === "fallo"'), "«Aplicar de todos modos» sin que haya fallado").toBe(true);
     const confirmacion = tramo(BARRA, "<ConfirmDialog", "/>");
     expect(contiene(tramo(confirmacion, "onCancel={() => {", "}}"), "if (forzando) onForzar?.([]);"), "cancelar deja la fuerza").toBe(true);
-    expect(confirmacion).toContain("textoDeAplicarDeTodosModos(");
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: pedía solo el nombre de la función, y con
+       `resumen.desfasadas` (compila igual) o `{false && …}` el diálogo quedaba mudo. Lo que dice se prueba
+       ABRIÉNDOLO (recalculo-en-la-pantalla.test.ts); acá, la lista que recibe. */
+    expect(contiene(confirmacion, "{forzando && textoDeAplicarDeTodosModos(resumen.forzadas).map(")).toBe(true);
     expect(contiene(confirmacion, "confirmLabel={forzando ? ACCION_APLICAR_DE_TODOS_MODOS : textoDelBoton}")).toBe(true);
     // Lo de siempre sigue: las dos oraciones.
     expect(contiene(confirmacion, "{resumenDeLaConfirmacion(resumen)} {cierre}")).toBe(true);
@@ -1115,6 +1165,8 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     expect(contiene(BARRA, "{bloqueo && !(recalculo && resumen.bloqueoPorDesfasadas) && <p")).toBe(true);
     // El Canvas: la línea con permiso, el botón relanza ya y «Aplicar de todos modos» fuerza.
     expect(contiene(rama, "recalculo={recalculoDeLaBarra}")).toBe(true);
+    // ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: lo arma el hook (`recalc.barra`), con el recálculo del GET.
+    expect(contiene(CANVAS, "const recalculoDeLaBarra = recalc.barra;")).toBe(true);
     expect(contiene(rama, "onRecalcular={canEdit && puedeArmarTareas ? recalc.lanzarYa : undefined}")).toBe(true);
     expect(contiene(rama, "onForzar={canEdit && puedeArmarTareas ? revision.forzar : undefined}")).toBe(true);
     // La línea: sin permiso, sin botones (lo dice `textoDelRecalculo`), y UN solo botón chico secundario.
@@ -1129,7 +1181,10 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     expect(contiene(TAREAS, "checked={seAplica || !!t.enEspera}")).toBe(true);
     expect(contiene(TAREAS, 'const marcadas = marcables.filter((t) => t.estado === "aplica" || t.enEspera).length;')).toBe(true);
     expect(contiene(TAREAS, "disabled={trabajando || !t.seMarca}"), "mientras corre se traba").toBe(true);
-    expect(contiene(TAREAS, "const desfase = g.desfasada ? textoDelGrupoDesfasado(g.fase, recalculo) : null;")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: con una sola fase desfasada el grupo no repite la
+       línea: recibe cuántas hay (su conducta, en recalculo-en-la-pantalla.test.ts). */
+    expect(contiene(TAREAS, "const desfase = g.desfasada ? textoDelGrupoDesfasado(g.fase, recalculo, desfasadas) : null;")).toBe(true);
+    expect(contiene(TAREAS, "const desfasadas = grupos.filter((g) => g.desfasada).length;")).toBe(true);
   });
 
   it("los componentes del recálculo: solo tokens del tema (info = en curso, warn = falta o falló)", () => {
@@ -1248,7 +1303,13 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
        DESPUÉS; si no se pudo guardar, no siguen. Las ediciones que la ponen en rojo: sacar una espera,
        ponerla después de leer, o sumar un lector de la versión sin decidir si espera. */
     const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: recalcular espera las casillas dentro de
+       `pedirElRecalculo` (lib/timeline/recalculo-de-tareas.ts), y su guarda lo CORRE: el orden guardar →
+       casillas → leer → pedir sale de lo que llama (recalculo-en-la-pantalla.test.ts). Acá, que el Canvas le
+       pase la espera de las casillas y la revisión leída en el momento. */
     const recalcular = tramo(CANVAS, "const pedirRecalculo = async (", "const recalc = useRecalculoDeLasTareas(");
+    expect(contiene(recalcular, "esperarCasillas: () => revisionRef.current.esperarCasillas(),")).toBe(true);
+    expect(contiene(recalcular, "revision: () => revisionRef.current,")).toBe(true);
     const continuacion = tramo(tramo(CANVAS, "const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase"), "if (opts?.saltarEstructura) {", "} else {");
     /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: aplicar (que ahora también llama el chat) y el POST
        que pasa lo acordado a la propuesta devuelven el motivo si lo marcado no se guardó, así que su espera es
@@ -1258,7 +1319,6 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
       ["aplicar", aplicar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "if (acordada === null || revisionRef.current.version !== acordada)"],
       ["aplicar (la barra)", aplicar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "const { resumen, sin, foto, forzadas } = revisionRef.current;"],
       ["pasar a la propuesta", pasar, "const sinCasillas = await revisionRef.current.esperarCasillas();", "version: revisionRef.current.version ?? 0,"],
-      ["recalcular", recalcular, "if (await revisionRef.current.esperarCasillas()) return;", "const { sin, version, desfasadas } = revisionRef.current;"],
       ["armar las tareas", continuacion, "if (await revisionRef.current.esperarCasillas()) return;", "version = revisionRef.current.version;"],
     ] as const) {
       const iEspera = src.indexOf(espera);
@@ -1277,7 +1337,9 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
     const lectores =
       (CANVAS.match(/revisionRef\.current\.version\b/g)?.length ?? 0) +
       (CANVAS.match(/const \{[^}]*\bversion\b[^}]*\} = revisionRef\.current/g)?.length ?? 0);
-    expect(lectores, "hay un lector nuevo de la versión: ¿espera las casillas?").toBe(8);
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: el de recalcular salió del Canvas (lo lee
+       `pedirElRecalculo`, después de esperar las casillas): son siete. */
+    expect(lectores, "hay un lector nuevo de la versión: ¿espera las casillas?").toBe(7);
     expect(CANVAS, "la versión volvió a salir de la closure de un clic").not.toContain("versionDelBorrador(proposal)");
   });
 
@@ -1342,7 +1404,8 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     // Ningún `aplicarOperaciones…(` nuevo: el del ejecutor y la llamada del despachador (antes, la del JSX).
     expect(CANVAS.match(/aplicarOperaciones\w*\(/g)?.length, "apareció un carril nuevo con el nombre del PUT").toBe(2);
     // Las dos funciones nuevas van fuera de todo tramo que miran otras guardas: detrás del recálculo.
-    expect(CANVAS.indexOf("const pasarALaPropuesta = async (")).toBeGreaterThan(CANVAS.indexOf("const recalculoDeLaBarra = recalculoEnPantalla("));
+    // ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: la barra del recálculo sale del hook (`recalc.barra`).
+    expect(CANVAS.indexOf("const pasarALaPropuesta = async (")).toBeGreaterThan(CANVAS.indexOf("const recalculoDeLaBarra = recalc.barra;"));
   });
 
   it("⛔ pasar a la propuesta frena ANTES del POST: el cronograma ocupado, esta pantalla pidiendo, el motivo", () => {

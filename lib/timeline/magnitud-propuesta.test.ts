@@ -261,7 +261,10 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
        MISMO diálogo en otro modo («forzar»). En el modo de siempre el botón sigue diciendo lo mismo que
        el de la barra. */
     expect(tramo, "el botón perdió su etiqueta").toContain("confirmLabel={forzando ? ACCION_APLICAR_DE_TODOS_MODOS : textoDelBoton}");
-    expect(src).toContain("const textoDelBoton = textoDeAplicar(marcadas, aplicables);");
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: con tareas que esperan su recálculo el botón
+       dice solo «Aplicar» (todavía no cuentan: «N de M» parecía decir que el CSE las quitó). El texto sale
+       del núcleo (`textoDelBotonDeAplicar`, que llama a `textoDeAplicar` sin desfasadas). */
+    expect(src).toContain("const textoDelBoton = textoDelBotonDeAplicar(resumen);");
     /* ⚠ REESCRITA en E2a P5 (2026-09-25), con esta razón: desde E2a la propuesta de «Regenerar todo»
        puede QUITAR tareas pendientes de la IA, y la frase fija «No se borra ninguna fase ni ninguna
        tarea» pasaba a mentir justo en ese caso. La confirmación dice ahora lo que sale del núcleo

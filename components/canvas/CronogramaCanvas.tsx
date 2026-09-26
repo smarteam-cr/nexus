@@ -78,7 +78,13 @@ import RevisionDeLaPropuesta from "./RevisionDeLaPropuesta";
 import { useBorradorDelCronograma } from "./useBorradorDelCronograma";
 import type { ResultadoDeGuardarCasillas } from "@/lib/timeline/cola-de-casillas";
 import { useRecalculoDeLasTareas } from "./useRecalculoDeLasTareas";
-import { leerRecalculoDelCable, recalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
+import {
+  corridasDeLaPropuesta,
+  pedirElRecalculo,
+  puedeLanzarElRecalculo,
+  tareasDelGet,
+  type TareasDelBorradorEnPantalla,
+} from "@/lib/timeline/recalculo-de-tareas";
 import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
 import {
   abiertoPara,
@@ -94,7 +100,6 @@ import {
   estadoDelVacio,
   excluidosDelGuardado,
   juntarObservaciones,
-  leerBorrador,
   MENSAJE_PROPUESTA_ABIERTA,
   observacionesDeLaFranja,
   observacionesParaElPaso2,
@@ -103,8 +108,6 @@ import {
   versionDelBorrador,
   type EstadoDeLasTareas,
   type OperacionDeCasillas,
-  type RecalculoEnElCable,
-  type TareasDelBorrador,
   type Vivo,
 } from "@/lib/timeline/borrador";
 import { fraseDeAutoria, leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
@@ -295,42 +298,10 @@ interface PendingParticularidadDraft {
    «Regenerar todo» deja UN `borrador-v1` con fases y tareas; las tareas las arma una corrida aparte.
    Su estado («armando», «faltan», «fallo», «listas») NO se guarda: lo calcula el servidor en el GET
    del cronograma, de la corrida. Acá viaja junto con el token y la corrida del MISMO GET: así el
-   estado nunca se lee contra otra propuesta, y se sabe qué corrida seguir. */
-interface TareasDelBorradorEnPantalla extends TareasEnPantalla {
-  /** El token (`pendingProposalRunId`) de la propuesta a la que corresponde el estado. */
-  token: string | null;
-  /** La corrida que arma (o armó) las tareas. */
-  corrida: string | null;
-  /** E2c: el recálculo de las tareas de las fases desfasadas (su estado lo deduce el servidor de SU
-   *  corrida), o null/ausente si no hay. */
-  recalculo?: RecalculoEnElCable | null;
-}
-
-const ESTADOS_DE_TAREAS: readonly EstadoDeLasTareas[] = ["listas", "faltan", "armando", "fallo"];
-const VIVO_VACIO: Vivo = { ancla: null, fases: [] };
-
-/** Las tareas que espera el `borrador-v1` guardado (su corrida y si ya llegaron), o null. */
-function tareasDelGuardado(json: unknown): TareasDelBorrador | null {
-  return esBorradorV1(json) ? (leerBorrador(json, VIVO_VACIO)?.tareas ?? null) : null;
-}
-
-/** Lo que el GET del cronograma dice de las tareas de la propuesta guardada, o null si no espera. */
-function tareasDelGet(data: {
-  tareasDelBorrador?: unknown;
-  pendingProposal?: unknown;
-  pendingProposalRunId?: unknown;
-}): TareasDelBorradorEnPantalla | null {
-  const t = data.tareasDelBorrador as { estado?: unknown; fase?: unknown; motivo?: unknown; recalculo?: unknown } | null | undefined;
-  if (!t || !ESTADOS_DE_TAREAS.includes(t.estado as EstadoDeLasTareas)) return null;
-  return {
-    estado: t.estado as EstadoDeLasTareas,
-    fase: typeof t.fase === "string" ? t.fase : null,
-    motivo: typeof t.motivo === "string" ? t.motivo : null,
-    token: typeof data.pendingProposalRunId === "string" ? data.pendingProposalRunId : null,
-    corrida: tareasDelGuardado(data.pendingProposal)?.corrida ?? null,
-    recalculo: leerRecalculoDelCable(t.recalculo),
-  };
-}
+   estado nunca se lee contra otra propuesta, y se sabe qué corrida seguir.
+   Revisión de E2c: `TareasDelBorradorEnPantalla` y `tareasDelGet` viven en
+   lib/timeline/recalculo-de-tareas.ts, donde sus guardas los LLAMAN (el recálculo del GET llega a la
+   barra por ahí). */
 
 /** Un día YYYY-MM-DD de una fecha fijada a mano (ISO), o null. */
 const diaFijado = (s: string | null | undefined): string | null => (s ? s.slice(0, 10) : null);
@@ -2245,8 +2216,10 @@ export default function CronogramaCanvas({
     /* Revisión de E2a: la corrida que armaba sus tareas (su seguimiento sigue vivo: al terminar no
        avisa nada de una propuesta que el CSE descartó a propósito) y si traía cambios de fases (con
        ellos, descartar no ofrece las tareas: el CSE rechazó esas fases). E2b: y si era «Regenerar» de
-       una fase (nunca se ofrece: «Volver a intentar» lanzaría una corrida de todas las fases). */
-    const corridaDescartada = tareasEnPantalla?.corrida ?? null;
+       una fase (nunca se ofrece: «Volver a intentar» lanzaría una corrida de todas las fases).
+       Revisión de E2c: y la de su RECÁLCULO (`corridasDeLaPropuesta`): si en ese rato entraba otra
+       propuesta, avisaba «Listas las tareas recalculadas…» sobre la otra. */
+    const corridasDescartadas = corridasDeLaPropuesta(tareasEnPantalla);
     const conFasesLaDescartada = traeCambiosDeFases(proposal);
     const soloFaseLaDescartada = !!revision.borrador?.soloFase;
     // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
@@ -2288,8 +2261,8 @@ export default function CronogramaCanvas({
       }
       // La que se tenía enfrente ya no está (o ya no era la guardada): su foto recordada no sirve.
       if (yaNoEstaGuardada) revisionRef.current.olvidar();
-      // Descartada a mano mientras se armaban sus tareas: su corrida termina sin aviso.
-      if (yaNoEstaGuardada && !reason && corridaDescartada) CORRIDAS_ANUNCIADAS.add(corridaDescartada);
+      // Descartada a mano mientras se armaban (o se recalculaban) sus tareas: sus corridas terminan sin aviso.
+      if (yaNoEstaGuardada && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);
     }
     proposalMeta.current = { deAssist: false, runId: null };
     setProposal(null);
@@ -2372,6 +2345,8 @@ export default function CronogramaCanvas({
     const soloFaseLaResuelta = !!revisionRef.current.borrador?.soloFase;
     // E2a: el estado de sus tareas (null = no esperaba tareas), ANTES de limpiar la propuesta.
     const tareasResueltas = tareasEnPantalla?.estado ?? null;
+    // Revisión de E2c: sus corridas (la del armado y la del recálculo), para darlas por avisadas al aplicar.
+    const corridasResueltas = corridasDeLaPropuesta(tareasEnPantalla);
     let siguiente: "nada" | "ofrecer" = "nada";
     let final = resultado(null);
     try {
@@ -2473,6 +2448,8 @@ export default function CronogramaCanvas({
       // La propuesta ya no existe: se vacía ANTES de recargar (el load la toma con `prev ?? …`), y
       // lo que se recordaba de ella (la foto, lo desmarcado) se olvida.
       revisionRef.current.olvidar();
+      // Sus corridas no avisan nada de una propuesta que ya se aplicó (ni sobre la próxima que entre).
+      for (const c of corridasResueltas) CORRIDAS_ANUNCIADAS.add(c);
       proposalMeta.current = { deAssist: false, runId: null };
       setProposal(null);
       setTareasDelBorrador(null);
@@ -2664,67 +2641,51 @@ export default function CronogramaCanvas({
      pedido es el paso 2 sobre ESTA propuesta con `recalcular: { sin }` (todo lo desmarcado): qué fases
      recalcular lo calcula el servidor. Mientras corre no se traba nada; aplicar espera.
      ⛔ No usa `pedirPropuestaDeDetalle` ni `armando`: `armando` frena el chat y «Generar», y su «Volver
-     a intentar» arma TODAS las fases. `automatico`: lo lanzó la espera (sin avisos, salvo un error). */
+     a intentar» arma TODAS las fases. `automatico`: lo lanzó la espera (sin avisos, salvo un error).
+     Revisión de E2c: el pedido (`pedirElRecalculo`), cuándo se puede lanzar (`puedeLanzarElRecalculo`)
+     y lo que ve la barra (`recalc.barra`) viven fuera del Canvas, donde sus guardas los CORREN. Acá solo
+     se les pasa lo de la pantalla, leído en el momento. */
   const pedirRecalculo = async (automatico: boolean) => {
     await flushDocBrief();
-    const token = proposalMeta.current.runId;
-    if (proposalMeta.current.deAssist || !revisionRef.current.borrador || descartandoRef.current) return;
-    // El servidor compara contra la base: primero tiene que estar ahí lo que editaste.
-    const sinGuardar = await esperarQueSeGuarde();
-    if (sinGuardar) {
-      if (!automatico) toast.error(sinGuardar);
-      return;
-    }
-    // E3: cada casilla sube la versión: primero que se guarde lo marcado (y la pantalla adopte la versión).
-    if (await revisionRef.current.esperarCasillas()) return;
-    // Lo de ESTE momento (el guardado pudo mover lo vivo): si ya no hay nada que recalcular, nada.
-    const { sin, version, desfasadas } = revisionRef.current;
-    if (desfasadas.length === 0 || descartandoRef.current || proposalMeta.current.runId !== token) return;
-    try {
-      const res = await fetch(`/api/clients/${clientId}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stage: 1, step: 0, stepLabel: "Recalcular tareas", sectionLabel: "Recalcular tareas",
-          agentId: "agent-timeline-detail", projectId, async: true,
-          borrador: { token, version, recalcular: { sin: [...sin] } },
+    await pedirElRecalculo(
+      {
+        clientId,
+        projectId,
+        propuesta: () => ({
+          token: proposalMeta.current.runId,
+          sePuedePedir: !proposalMeta.current.deAssist && !!revisionRef.current.borrador && !descartandoRef.current,
         }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        // La propuesta quedó con su recálculo «armando»: se trae, y el seguimiento lo toma.
-        await traerPropuestaPendiente();
-        return;
-      }
-      if (res.status === 409) {
-        // Lo vivo cambió en la base: la pantalla veía otra cosa que recalcular.
-        if (data?.error === "NADA_QUE_RECALCULAR") await load();
-        await traerPropuestaPendiente();
-        if (!automatico && data?.error !== "TAREAS_EN_CURSO" && data?.error !== "NADA_QUE_RECALCULAR") {
-          toast.info(data?.message ?? AVISO_PROPUESTA_PENDIENTE);
-        }
-        return;
-      }
-      toast.error(data?.message ?? "No se pudieron recalcular las tareas.");
-    } catch {
-      toast.error("Error de conexión al recalcular las tareas.");
-    }
+        esperarQueSeGuarde,
+        esperarCasillas: () => revisionRef.current.esperarCasillas(),
+        revision: () => revisionRef.current,
+        fetch: (url, init) => fetch(url, init),
+        traerPropuesta: () => traerPropuestaPendiente(),
+        recargar: () => load(),
+        avisar: (tono, texto) => (tono === "error" ? toast.error(texto) : toast.info(texto)),
+      },
+      automatico,
+    );
   };
+  const lanzamientoDelRecalculo = puedeLanzarElRecalculo({
+    puedeEditar: canEdit,
+    hayBorrador,
+    vistaPrevia: proposalMeta.current.deAssist,
+    armando: armando !== null,
+    aplicando: aplicandoBorrador,
+    descartando,
+    tareas: tareasEnPantalla,
+  });
   const recalc = useRecalculoDeLasTareas({
     marcasDelCse: revision.marcasDelCse,
-    claveDeDesfasadas: revision.claveDeDesfasadas,
-    puedePedir: canEdit && puedeArmarTareas,
-    puedeLanzar:
-      canEdit && hayBorrador && !proposalMeta.current.deAssist && armando === null && !aplicandoBorrador && !descartando &&
-      tareasEnPantalla?.estado === "listas" && tareasEnPantalla.recalculo?.estado !== "armando",
-    lanzar: (automatico) => pedirRecalculo(automatico),
-  });
-  const recalculoDeLaBarra = recalculoEnPantalla({
     desfasadas: revision.desfasadas,
-    esperando: recalc.esperando,
     servidor: tareasEnPantalla?.recalculo ?? null,
     faseDeLaCorrida: faseDelArmado,
+    puedePedir: canEdit && puedeArmarTareas,
+    puedeLanzar: lanzamientoDelRecalculo.puedeLanzar,
+    puedeEsperar: lanzamientoDelRecalculo.puedeEsperar,
+    lanzar: (automatico) => pedirRecalculo(automatico),
   });
+  const recalculoDeLaBarra = recalc.barra;
 
   /* ── E3 P5: EL CHAT CON UNA PROPUESTA ABIERTA ─────────────────────────────────────────────────────
      Un acuerdo sin propuesta (`borrador` null) va por los dos carriles de siempre: el PUT directo

@@ -34,6 +34,8 @@ import {
   nombresEnTexto,
   planDeAplicacion,
   resumir,
+  ETIQUETA_POR_RECALCULAR,
+  textoDelBotonDeAplicar,
   textoDelFalloDelRecalculo,
   type Borrador,
   type Cambio,
@@ -53,8 +55,13 @@ import {
   ACCION_RECALCULAR,
   alVencer,
   claveDeDesfasadas,
+  corridasDeLaPropuesta,
   ESPERA_DEL_RECALCULO_MS,
+  formasDeDesfasadas,
+  hayFormasSinLanzar,
   leerRecalculoDelCable,
+  puedeLanzarElRecalculo,
+  tareasDelGet,
   recalculoEnPantalla,
   textoDeAplicarDeTodosModos,
   textoDelGrupoDesfasado,
@@ -630,28 +637,106 @@ describe("8 · el aviso al terminar la corrida de un recálculo", () => {
 });
 
 describe("9 · la espera antes de lanzar el recálculo", () => {
+  /* ⚠ REESCRITAS en la revisión de E2c (2026-09-25), con esta razón: lo lanzado se recuerda POR FASE (la
+     última forma de cada una), no como el texto del conjunto entero. Con el conjunto, «Pruebas|Diseño»
+     que fallaron juntas y después solo «Diseño» (desmarcaste las tareas de «Pruebas») daba una clave
+     «nueva» y se volvía a pagar la forma que acababa de fallar. Las funciones reciben las formas
+     (`formasDeDesfasadas`) y lo lanzado; `alVencer` también decide si es a mano, si hay un pedido en vuelo
+     y si esperar sirve, y devuelve si el lanzamiento es automático. */
+  const formas = (...pares: Array<[string, string]>) => new Map(pares);
+  const NADA = formas();
+
   it("⭐ trasLaMarca: arranca con algo nuevo que recalcular, vuelve a empezar si ya esperaba, y nada sin permiso ni sin clave", () => {
     /* La edición que la pone en rojo: arrancar la espera con la misma clave sin estar esperando (una
        casilla que no cambia nada lanzaría otra corrida pagada), o sin permiso. */
     expect(ESPERA_DEL_RECALCULO_MS).toBe(4000);
-    expect(trasLaMarca({ antes: "", ahora: "c", esperando: false, puedePedir: true })).toBe(true);
-    expect(trasLaMarca({ antes: "c", ahora: "c|b", esperando: false, puedePedir: true })).toBe(true);
-    expect(trasLaMarca({ antes: "c", ahora: "c", esperando: false, puedePedir: true })).toBe(false);
-    expect(trasLaMarca({ antes: "c", ahora: "c", esperando: true, puedePedir: true }), "la espera cuenta desde la última casilla").toBe(true);
-    expect(trasLaMarca({ antes: "c", ahora: "", esperando: true, puedePedir: true })).toBe(false);
-    expect(trasLaMarca({ antes: "", ahora: "c", esperando: false, puedePedir: false })).toBe(false);
+    const i = { antes: "", formas: formas(["c", "f3"]), lanzadas: NADA, esperando: false, puedePedir: true };
+    expect(trasLaMarca(i)).toBe(true);
+    expect(trasLaMarca({ ...i, antes: "c:f3", formas: formas(["c", "f3"], ["b", "f2"]) })).toBe(true);
+    expect(trasLaMarca({ ...i, antes: "c:f3" })).toBe(false);
+    expect(trasLaMarca({ ...i, antes: "c:f3", esperando: true }), "la espera cuenta desde la última casilla").toBe(true);
+    expect(trasLaMarca({ ...i, antes: "c:f3", formas: NADA, esperando: true })).toBe(false);
+    expect(trasLaMarca({ ...i, puedePedir: false })).toBe(false);
   });
 
-  it("⭐ alVencer: los cinco casos, y la misma clave no se relanza sola", () => {
-    /* La edición que la pone en rojo: relanzar la misma forma tras un fallo (pagaría en bucle), o
-       lanzar sin poder (con otra corrida, aplicando o guardando). */
-    const i = { clave: "c", ultimaLanzada: null as string | null, puedePedir: true, puedeLanzar: true };
-    expect(alVencer({ ...i, puedePedir: false })).toBe("nada");
-    expect(alVencer({ ...i, clave: "" })).toBe("nada");
-    expect(alVencer({ ...i, ultimaLanzada: "c" }), "la misma clave se relanzó sola").toBe("nada");
-    expect(alVencer({ ...i, puedeLanzar: false })).toBe("esperar");
-    expect(alVencer(i)).toBe("lanzar");
-    expect(alVencer({ ...i, ultimaLanzada: "b" })).toBe("lanzar");
+  it("⭐ trasLaMarca: lo que ya se lanzó no arranca la espera (tras un fallo, marcar y desmarcar el mismo cambio)", () => {
+    /* Revisión de E2c: la línea decía «Recalculando…» 4 s y al vencer no se lanzaba nada (la misma forma).
+       La edición que la pone en rojo: arrancar la espera sin mirar lo lanzado. */
+    const i = { antes: "", formas: formas(["c", "f3"]), lanzadas: formas(["c", "f3"]), esperando: false, puedePedir: true };
+    expect(trasLaMarca(i), "arranca con una forma que ya se lanzó").toBe(false);
+    expect(trasLaMarca({ ...i, lanzadas: formas(["c", "f4"]) }), "otra forma de la misma fase es nueva").toBe(true);
+    expect(trasLaMarca({ ...i, formas: formas(["c", "f3"], ["b", "f2"]) }), "una fase nueva junto a una lanzada").toBe(true);
+  });
+
+  it("⭐ alVencer: los casos, y la misma forma no se relanza sola", () => {
+    /* La edición que la pone en rojo: relanzar la misma forma tras un fallo (pagaría en bucle), lanzar sin
+       poder (con otra corrida, aplicando o guardando), o que el botón no pueda relanzar. */
+    const i = { formas: formas(["c", "f3"]), lanzadas: NADA, aMano: false, enVuelo: false, puedePedir: true, puedeLanzar: true, puedeEsperar: true };
+    expect(alVencer({ ...i, puedePedir: false })).toEqual({ que: "nada" });
+    expect(alVencer({ ...i, formas: NADA })).toEqual({ que: "nada" });
+    expect(alVencer({ ...i, lanzadas: formas(["c", "f3"]) }), "la misma forma se relanzó sola").toEqual({ que: "nada" });
+    expect(alVencer({ ...i, puedeLanzar: false })).toEqual({ que: "esperar" });
+    expect(alVencer({ ...i, enVuelo: true }), "dos pedidos a la vez").toEqual({ que: "esperar" });
+    expect(alVencer(i)).toEqual({ que: "lanzar", automatico: true });
+    expect(alVencer({ ...i, lanzadas: formas(["c", "f4"]) })).toEqual({ que: "lanzar", automatico: true });
+    // «Volver a intentar»: a mano sí relanza la misma forma, y no es automático (avisa sus errores).
+    expect(alVencer({ ...i, lanzadas: formas(["c", "f3"]), aMano: true }), "el botón no relanza").toEqual({ que: "lanzar", automatico: false });
+    expect(alVencer({ ...i, aMano: true, puedePedir: false })).toEqual({ que: "nada" });
+  });
+
+  it("⭐ alVencer: con «P|Q» ya lanzadas (y fallidas), solo «Q» da «nada»; con una fase nueva, lanza", () => {
+    /* Revisión de E2c (hallazgo de costo): «Pruebas» y «Diseño» fallaron juntas; desmarcas las tareas de
+       «Pruebas» y queda solo «Diseño». Con la clave del conjunto era «nueva» y a los 4 s salía sola otra
+       corrida pagada para la forma que acababa de fallar. La edición que la pone en rojo: volver a comparar
+       el conjunto entero contra lo último lanzado. */
+    const lanzadas = formas(["p", "f6"], ["q", "f2"]);
+    const i = { lanzadas, aMano: false, enVuelo: false, puedePedir: true, puedeLanzar: true, puedeEsperar: true };
+    expect(hayFormasSinLanzar(formas(["q", "f2"]), lanzadas)).toBe(false);
+    expect(alVencer({ ...i, formas: formas(["q", "f2"]) }), "se relanzó sola una forma que ya falló").toEqual({ que: "nada" });
+    expect(alVencer({ ...i, formas: formas(["q", "f2"], ["r", "f1"]) })).toEqual({ que: "lanzar", automatico: true });
+    // Las formas salen de las desfasadas, fase por fase, con la misma identidad que la clave.
+    const d: FaseDesfasada = {
+      fase: "c",
+      nombre: "Pruebas",
+      forma: { nombre: " Pruebas ", semanas: 3, sesiones: null, semanaCero: false },
+      armada: { nombre: "Pruebas", semanas: 4 },
+    };
+    expect([...formasDeDesfasadas([d])]).toEqual([["c", "pruebas:3::0"]]);
+  });
+
+  it("⭐ alVencer: si no se puede lanzar y esperar no sirve (sin tareas en pantalla), corta en vez de esperar para siempre", () => {
+    /* Revisión de E2c: con la propuesta resuelta en otra pestaña (el GET sin tareas), la vuelta «esperar»
+       no terminaba nunca y la línea decía «Recalculando…» sin que corriera nada. La edición que la pone en
+       rojo: esperar sin mirar `puedeEsperar`. */
+    const i = { formas: formas(["c", "f3"]), lanzadas: NADA, aMano: false, enVuelo: false, puedePedir: true, puedeLanzar: false, puedeEsperar: false };
+    expect(alVencer(i)).toEqual({ que: "nada" });
+    expect(alVencer({ ...i, aMano: true })).toEqual({ que: "nada" });
+    // Con un pedido en vuelo sí se espera: termina solo.
+    expect(alVencer({ ...i, enVuelo: true })).toEqual({ que: "esperar" });
+  });
+
+  it("⭐ puedeLanzarElRecalculo: cada freno apaga el lanzamiento; esperar sirve solo con tareas en pantalla", () => {
+    /* Revisión de E2c: la guarda del Canvas fijaba solo el final de la condición. Las ediciones que la
+       ponen en rojo: quitar un freno (lanzaría con otro pedido, aplicando o descartando: el servidor
+       rechaza o la corrida queda sin dueño) o esperar sin tareas. */
+    const listas = { estado: "listas" as const, recalculo: null };
+    const i = { puedeEditar: true, hayBorrador: true, vistaPrevia: false, armando: false, aplicando: false, descartando: false, tareas: listas };
+    expect(puedeLanzarElRecalculo(i)).toEqual({ puedeLanzar: true, puedeEsperar: true });
+    const corriendo: RecalculoEnElCable = { estado: "armando", corrida: "r", fases: [], nombres: [], fase: null, motivo: null };
+    const frenos: Array<[string, Partial<Parameters<typeof puedeLanzarElRecalculo>[0]>]> = [
+      ["sin permiso", { puedeEditar: false }],
+      ["sin propuesta", { hayBorrador: false }],
+      ["la vista previa del modificador", { vistaPrevia: true }],
+      ["pidiendo otra propuesta", { armando: true }],
+      ["aplicando", { aplicando: true }],
+      ["descartando", { descartando: true }],
+      ["las tareas armándose", { tareas: { estado: "armando", recalculo: null } }],
+      ["otro recálculo corriendo", { tareas: { estado: "listas", recalculo: corriendo } }],
+    ];
+    for (const [freno, cambio] of frenos) {
+      expect(puedeLanzarElRecalculo({ ...i, ...cambio }), freno).toEqual({ puedeLanzar: false, puedeEsperar: true });
+    }
+    expect(puedeLanzarElRecalculo({ ...i, tareas: null })).toEqual({ puedeLanzar: false, puedeEsperar: false });
   });
 
   it("claveDeDesfasadas: la fase con su forma, sin importar el orden; vacía sin ninguna", () => {
@@ -702,6 +787,16 @@ describe("10 · lo que se ve: la línea, el grupo, los textos y el resumen", () 
     expect(en({ servidor: servidor("fallo", ["c", "b"], "se cortó") })).toMatchObject({ que: "fallo", motivo: "se cortó" });
     expect(en({ servidor: servidor("fallo", ["c"]) })?.que, "falló solo una parte").toBe("pendiente");
     expect(en({})?.que).toBe("pendiente");
+    /* Revisión de E2c: «después, «Diseño»» solo con una espera viva, que es la que la lanza al terminar. Sin
+       ella (recargaste a mitad de camino, o no puedes pedir) nadie la lanza: no se promete. La edición que
+       la pone en rojo: armar `despues` sin mirar la espera. */
+    expect(en({ servidor: servidor("armando", ["c"]) })).toEqual({
+      que: "armando",
+      fases: [{ id: "c", nombre: "Pruebas" }],
+      despues: [],
+      fase: null,
+      motivo: null,
+    });
     expect(recalculoEnPantalla({ desfasadas: [], esperando: true, servidor: servidor("armando", ["c"]), faseDeLaCorrida: null })).toBeNull();
   });
 
@@ -762,7 +857,10 @@ describe("10 · lo que se ve: la línea, el grupo, los textos y el resumen", () 
     });
   });
 
-  it("textoDelGrupoDesfasado, fase por fase", () => {
+  it("textoDelGrupoDesfasado, fase por fase; con una sola desfasada, nada (lo dice la línea)", () => {
+    /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: recibe cuántas fases desfasadas hay.
+       Con una sola, la línea y el grupo decían lo mismo con dos spinners. La edición que la pone en rojo:
+       volver a repetir en el grupo lo que ya dice la línea. */
     const r = (que: RecalculoEnPantalla["que"]): RecalculoEnPantalla => ({
       que,
       fases: [{ id: "c", nombre: "Pruebas" }],
@@ -770,13 +868,18 @@ describe("10 · lo que se ve: la línea, el grupo, los textos y el resumen", () 
       fase: null,
       motivo: null,
     });
-    expect(textoDelGrupoDesfasado("c", r("esperando"))).toEqual({ texto: "recalculando…", enCurso: true });
-    expect(textoDelGrupoDesfasado("c", r("armando"))).toEqual({ texto: "recalculando…", enCurso: true });
-    expect(textoDelGrupoDesfasado("c", r("fallo"))).toEqual({ texto: "no se pudieron recalcular", enCurso: false });
-    expect(textoDelGrupoDesfasado("b", r("armando"))).toEqual({ texto: "sigue después", enCurso: false });
-    expect(textoDelGrupoDesfasado("c", r("pendiente"))).toEqual({ texto: "falta recalcularlas", enCurso: false });
-    expect(textoDelGrupoDesfasado("a", r("armando"))).toEqual({ texto: "falta recalcularlas", enCurso: false });
-    expect(textoDelGrupoDesfasado("c", null)).toEqual({ texto: "falta recalcularlas", enCurso: false });
+    expect(textoDelGrupoDesfasado("c", r("esperando"), 2)).toEqual({ texto: "recalculando…", enCurso: true });
+    expect(textoDelGrupoDesfasado("c", r("armando"), 2)).toEqual({ texto: "recalculando…", enCurso: true });
+    expect(textoDelGrupoDesfasado("c", r("fallo"), 2)).toEqual({ texto: "no se pudieron recalcular", enCurso: false });
+    expect(textoDelGrupoDesfasado("b", r("armando"), 2)).toEqual({ texto: "sigue después", enCurso: false });
+    expect(textoDelGrupoDesfasado("c", r("pendiente"), 2)).toEqual({ texto: "falta recalcularlas", enCurso: false });
+    expect(textoDelGrupoDesfasado("a", r("armando"), 2)).toEqual({ texto: "falta recalcularlas", enCurso: false });
+    expect(textoDelGrupoDesfasado("c", null, 2)).toEqual({ texto: "falta recalcularlas", enCurso: false });
+    for (const que of ["esperando", "armando", "fallo", "pendiente"] as const) {
+      expect(textoDelGrupoDesfasado("c", r(que), 1), `${que}: el grupo repite la línea`).toBeNull();
+    }
+    // Sin línea a la vista, el grupo lo dice aunque sea una sola.
+    expect(textoDelGrupoDesfasado("c", null, 1)).toEqual({ texto: "falta recalcularlas", enCurso: false });
   });
 
   it("⭐ los textos del núcleo: nombres con 1, 2 y 3; el bloqueo, el 409 viejo, el fallo y el aviso", () => {
@@ -832,5 +935,67 @@ describe("10 · lo que se ve: la línea, el grupo, los textos y el resumen", () 
     });
     expect(resumir(VIVO, b, [NOMBRE_C.clave]).grupos[0]).toMatchObject({ fase: "c", nombre: "Pruebas", desfasada: true });
     expect(resumir(VIVO, b).grupos[0]).toMatchObject({ fase: "c", nombre: "Pruebas finales", desfasada: false });
+  });
+
+  it("⭐ las tareas en espera no cuentan todavía: el botón no dice «N de M» y «Ver la propuesta» marca la fase", () => {
+    /* Revisión de E2c: se ven marcadas, pero su estado es «excluido» hasta que lleguen las recalculadas. El
+       botón decía «Aplicar 0 de 10» y «Ver la propuesta» mostraba «Pruebas» sin sus tareas: parecía que el
+       CSE las había quitado. Las ediciones que la ponen en rojo: volver a contarlas en el botón mientras
+       esperan, o no marcar la fase en la vista. */
+    const sin = ["fase:c:durationWeeks"];
+    const r = resumir(VIVO, BORRADOR, sin, { tareas: "listas" });
+    expect(r.desfasadas.map((d) => d.fase)).toEqual(["c"]);
+    expect(r.marcadas, "el caso ya no tiene tareas en espera fuera de la cuenta").toBeLessThan(r.aplicables);
+    expect(textoDelBotonDeAplicar(r), "el botón cuenta como quitadas las que esperan").toBe("Aplicar");
+    const pruebas = r.proyeccion.fases.find((f) => f.id === "c")!;
+    expect(pruebas.marca?.etiquetas ?? [], "la fase se ve sin sus tareas y sin decir por qué").toContain(ETIQUETA_POR_RECALCULAR);
+    expect(ETIQUETA_POR_RECALCULAR).toBe("tareas por recalcular");
+    // Las demás fases, no.
+    expect(r.proyeccion.fases.filter((f) => f.id !== "c").every((f) => !f.marca?.etiquetas.includes(ETIQUETA_POR_RECALCULAR))).toBe(true);
+    // Forzada, cuenta como siempre y la vista la muestra con sus tareas.
+    const forzada = resumir(VIVO, BORRADOR, sin, { tareas: "listas", forzar: ["c"] });
+    expect(textoDelBotonDeAplicar(forzada)).toBe(`Aplicar ${forzada.marcadas} de ${forzada.aplicables}`);
+    expect(forzada.proyeccion.fases.find((f) => f.id === "c")!.marca?.etiquetas ?? []).not.toContain(ETIQUETA_POR_RECALCULAR);
+    // Sin desfasadas, el texto de siempre.
+    const todo = resumir(VIVO, BORRADOR, [], { tareas: "listas" });
+    expect(textoDelBotonDeAplicar(todo)).toBe("Aplicar todo");
+  });
+
+  it("⭐ corridasDeLaPropuesta: la del armado y la del recálculo (las dos se dan por avisadas al descartar)", () => {
+    /* Revisión de E2c: descartar mientras recalculaba daba por avisada solo la del armado; si en ese minuto
+       entraba otra propuesta, la del recálculo avisaba «Listas las tareas recalculadas…» sobre la otra. La
+       edición que la pone en rojo: dejar afuera la corrida del recálculo. */
+    const recalculo: RecalculoEnElCable = { estado: "armando", corrida: "run-r", fases: ["c"], nombres: ["Pruebas"], fase: null, motivo: null };
+    expect(corridasDeLaPropuesta({ corrida: "run-2", recalculo })).toEqual(["run-2", "run-r"]);
+    expect(corridasDeLaPropuesta({ corrida: null, recalculo })).toEqual(["run-r"]);
+    expect(corridasDeLaPropuesta({ corrida: "run-2", recalculo: null })).toEqual(["run-2"]);
+    expect(corridasDeLaPropuesta({ corrida: "run-2" })).toEqual(["run-2"]);
+    expect(corridasDeLaPropuesta(null)).toEqual([]);
+  });
+
+  it("⭐ tareasDelGet: el recálculo del GET llega a la pantalla (también el de un GET sin él)", () => {
+    /* Revisión de E2c (hallazgo «alta» de guardas): con `recalculo: null` al leer el GET, la línea nunca
+       decía «Recalculando…» ni «No se pudieron recalcular», «Aplicar de todos modos» no aparecía y la
+       corrida del recálculo no se seguía; ninguna guarda caía. La edición que la pone en rojo: no leer el
+       recálculo, o leerlo sin validar. */
+    const recalculo = { estado: "fallo", corrida: "run-r", fases: ["c"], nombres: ["Pruebas"], fase: null, motivo: "se cortó" };
+    const guardado = JSON.parse(JSON.stringify(BORRADOR));
+    const data = {
+      tareasDelBorrador: { estado: "listas", fase: null, motivo: null, recalculo },
+      pendingProposal: guardado,
+      pendingProposalRunId: "tok-1",
+    };
+    expect(tareasDelGet(data)).toEqual({ estado: "listas", fase: null, motivo: null, token: "tok-1", corrida: "run-2", recalculo });
+    expect(tareasDelGet({ ...data, tareasDelBorrador: { estado: "armando", fase: "Leyendo", motivo: null } })).toEqual({
+      estado: "armando",
+      fase: "Leyendo",
+      motivo: null,
+      token: "tok-1",
+      corrida: "run-2",
+      recalculo: null,
+    });
+    expect(tareasDelGet({ ...data, tareasDelBorrador: { ...data.tareasDelBorrador, recalculo: { ...recalculo, estado: "listas" } } })?.recalculo).toBeNull();
+    expect(tareasDelGet({ ...data, tareasDelBorrador: { estado: "otra" } })).toBeNull();
+    expect(tareasDelGet({})).toBeNull();
   });
 });

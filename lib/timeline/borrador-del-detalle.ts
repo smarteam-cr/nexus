@@ -49,6 +49,7 @@ import {
   formaEnLaEstructura,
   leerBorrador,
   mismaForma,
+  nombresEnTexto,
   pedidoDelCronograma,
   planDeAplicacion,
   versionDelBorrador,
@@ -63,7 +64,6 @@ import {
   type Vivo,
 } from "./borrador";
 import { MENSAJE_PROPUESTA_CAMBIO, SELECT_DE_FASE, SELECT_DE_TAREA } from "./escribir-estructura";
-import { unirFrases } from "./magnitud-propuesta";
 import { AVISO_PROPUESTA_PENDIENTE, MENSAJE_ESTRUCTURA_EN_CURSO } from "./propuesta-de-estructura";
 import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
 import {
@@ -316,6 +316,23 @@ export const MOTIVO_RECALCULO_EDITADA = "se editó a mano mientras se recalculab
 export const MOTIVO_RECALCULO_CORTADO = "la respuesta de la IA quedó cortada";
 export const MOTIVO_RECALCULO_SIN_TAREAS = "la IA no devolvió sus tareas";
 const MOTIVOS_DEL_RECALCULO = [MOTIVO_RECALCULO_EDITADA, MOTIVO_RECALCULO_CORTADO, MOTIVO_RECALCULO_SIN_TAREAS];
+
+/**
+ * El motivo guardado de un recálculo que falló en una o más fases. Con una sola causa, la causa (el
+ * texto de siempre). Con causas distintas, cada una con SUS fases, en el orden de arriba: «en «Pruebas»,
+ * se editó a mano…; en «Diseño», la IA no devolvió sus tareas». Revisión de E2c: unidas con «y» no se
+ * sabía cuál había fallado por qué.
+ */
+export function motivoDelRecalculo(fallas: ReadonlyArray<{ nombre: string; motivo: string }>): string | null {
+  const orden = (m: string) => {
+    const i = MOTIVOS_DEL_RECALCULO.indexOf(m);
+    return i < 0 ? MOTIVOS_DEL_RECALCULO.length : i;
+  };
+  const motivos = [...new Set(fallas.map((f) => f.motivo))].sort((a, b) => orden(a) - orden(b));
+  if (motivos.length === 0) return null;
+  if (motivos.length === 1) return motivos[0];
+  return motivos.map((m) => `en ${nombresEnTexto(fallas.filter((f) => f.motivo === m).map((f) => f.nombre))}, ${m}`).join("; ");
+}
 
 const PENDIENTE: VetoDelPedido = { error: "PROPUESTA_PENDIENTE", message: AVISO_PROPUESTA_PENDIENTE };
 const CAMBIO: VetoDelPedido = { error: "PROPUESTA_CAMBIO", message: MENSAJE_PROPUESTA_CAMBIO };
@@ -923,14 +940,14 @@ async function fusionarRecalculoEnElBorrador(
   };
   const escritas: string[] = [];
   const fallidas: Array<{ id: string; nombre: string }> = [];
-  const motivos = new Set<string>();
+  const fallas: Array<{ nombre: string; motivo: string }> = [];
   for (const f of recalculo.fases) {
     const motivo = motivoDe(f.id);
     if (motivo === null) {
       escritas.push(f.id);
     } else {
       fallidas.push(f);
-      motivos.add(motivo);
+      fallas.push({ nombre: f.nombre, motivo });
     }
   }
 
@@ -949,8 +966,8 @@ async function fusionarRecalculoEnElBorrador(
     armadas: cambios.tareasArmadasPara,
     escritas,
     fallidas,
-    // Un solo motivo por recálculo: con varios, todos, en el orden de arriba.
-    motivo: motivos.size > 0 ? unirFrases(MOTIVOS_DEL_RECALCULO.filter((m) => motivos.has(m))) : null,
+    // Un solo texto por recálculo: con causas distintas, cada una con sus fases (`motivoDelRecalculo`).
+    motivo: motivoDelRecalculo(fallas),
     observaciones: cambios.observaciones,
   });
 
