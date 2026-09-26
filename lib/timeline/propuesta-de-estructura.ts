@@ -1172,3 +1172,23 @@ export function pasoTrasResolver(input: {
   if (input.tareas !== "faltan" && input.tareas !== "fallo") return "nada";
   return input.como === "aplicar" || !input.conCambiosDeFases ? "ofrecer" : "nada";
 }
+
+/**
+ * Cómo terminó el DELETE de la propuesta y qué hace la pantalla con ella (revisión de E3, #14). Puro.
+ *  · `respuesta` — el status del DELETE, o null si no hubo respuesta (sin conexión);
+ *  · `automatico` — el descarte automático («todo ya está así»), que manda `reason`.
+ * «descartada» (2xx) y «otra» (409: la guardada ya era otra y no se borró nada): el servidor ya no tiene
+ * ESTA propuesta, así que se suelta de la pantalla y se olvida lo desmarcado.
+ * Todo lo demás (sin conexión, un 5xx, la sesión vencida, el 423 del automático) es «fallo»: la propuesta
+ * sigue guardada. A mano (la barra o el chat) NO se suelta: antes se vaciaba igual, el chat decía «vuelve a
+ * intentar» y ya no había botón ni barra con que hacerlo (quedaba trabado hasta recargar). El automático sí
+ * la suelta en memoria: el 423 de la ruta existe para que no la vuelva a pedir.
+ */
+export function trasElDescarte(
+  respuesta: { ok: boolean; status: number } | null,
+  automatico: boolean,
+): { resultado: "descartada" | "otra" | "fallo"; soltar: boolean; olvidar: boolean } {
+  if (respuesta?.ok) return { resultado: "descartada", soltar: true, olvidar: true };
+  if (respuesta?.status === 409) return { resultado: "otra", soltar: true, olvidar: true };
+  return { resultado: "fallo", soltar: automatico, olvidar: false };
+}

@@ -29,7 +29,7 @@ import {
 import { correrTurno, MODELO_DEL_ASISTENTE } from "./turno";
 import { PIEZA_CRONOGRAMA } from "./piezas";
 import { leerAcuerdo, marcaDeDesenlace, textoVisible } from "./acuerdo";
-import { textoDelDesenlaceDeLaPropuesta } from "./textos-del-acuerdo";
+import { textoDelDesenlace } from "./textos-del-acuerdo";
 import { estadosDeAcuerdo } from "./acuerdo-vivo";
 
 const piezaSchema = z.string().trim().min(1).max(60);
@@ -67,6 +67,9 @@ const bodySchema = z.union([
       /* E3 P5: a DÓNDE fue lo acordado: al cronograma, a la propuesta abierta (arriba del Gantt) o se
          descartó la propuesta entera. Si falta, se deduce de `vistaPrevia` como antes. */
       destino: z.enum(["cronograma", "propuesta", "descarte"]).optional(),
+      /* Revisión de E3 (#10, #15): lo que se hizo ADEMÁS, sin desvío (el avance que se vuelve a evaluar
+         al aplicar la propuesta). Van como línea aparte: en `detalle` se leían como «algo distinto». */
+      notas: z.array(z.string().max(300)).max(5).optional(),
     }),
   }),
 ]);
@@ -159,10 +162,9 @@ export async function manejarPostDelAsistente(req: NextRequest, dueno: Dueno) {
   if ("desenlace" in parsed.data) {
     const hilo = await hiloVivo(pedido);
     if (!hilo) return NextResponse.json({ hilo: null });
-    const { ok, detalle, destino } = parsed.data.desenlace;
+    const { ok, detalle, destino, notas } = parsed.data.desenlace;
     // E3 P5: con `destino`, el carril lo dice él (al cronograma no hay vista previa); sin él, como antes.
     const vistaPrevia = destino ? false : (parsed.data.desenlace.vistaPrevia ?? true);
-    const deLaPropuesta = ok ? textoDelDesenlaceDeLaPropuesta(destino, detalle) : null;
     /* ⚠ ESTO ES VOZ DEL ASISTENTE Y SE PERSISTE EN EL HILO: el modelo lo relee como contexto en
        cada turno siguiente. Cableado a «el cronograma», el chat de un kickoff aprendía de su
        propio historial que estaba editando un cronograma. Visto en pantalla el 2026-08-22.
@@ -181,25 +183,11 @@ export async function manejarPostDelAsistente(req: NextRequest, dueno: Dueno) {
          Que un turno SEA un desenlace ya se sabe por `shaDeContexto === null` —ver
          `acuerdo-vivo.ts`—, que es retroactivo. Lo que la huella no puede decir es si entró: sin
          eso, un apply fallido vaciaría el libro de pendientes y la persona perdería lo que
-         justamente NO se escribió. */
-      contenido: marcaDeDesenlace({ ok }) + "\n\n" + (ok
-        ? deLaPropuesta
-          ? deLaPropuesta
-          : detalle
-          ? `⚠ Se aplicó, pero el editor hizo algo distinto con una parte:
-
-${detalle}
-
-${vistaPrevia ? "Revisa la vista previa antes de aceptar." : `Ya quedó guardado en ${elDocumento}: revísalo.`}`
-          : vistaPrevia
-            ? "✅ Se aplicó. Revisa la vista previa en el documento y acepta los cambios que quieras conservar."
-            : /* ⛔ EL CARRIL DE OPERACIONES NO DEJA VISTA PREVIA: escribe directo, en ~1 ms. Mandar
-                 a la persona a «aceptar los cambios» la deja buscando un banner que no existe —y
-                 peor, sugiere que lo que ya está guardado todavía se puede descartar. */
-              `✅ Listo, ${elDocumento} ya quedó actualizado. Si algo no está como esperabas, dímelo y lo ajustamos.`
-        : /* El punto final del motivo se saca: el motivo de la pantalla ya puede traerlo, y el hilo
-             —que el modelo vuelve a leer— quedaba con «(arriba del Gantt)..». */
-          `⛔ No se pudo aplicar: ${(detalle || "el editor rechazó el cambio").replace(/[\s.]+$/, "")}. Los cambios siguen pendientes: puedes aplicarlos de nuevo, o dime qué ajustamos.`),
+         justamente NO se escribió.
+         Revisión de E3 (#10, #11, #15): el texto lo arma `textoDelDesenlace` (puro, con sus casos
+         corridos en textos-del-acuerdo.test.ts): las `notas` van aparte (no son «algo distinto») y un
+         fallo que pide pedirlo de nuevo no dice «puedes aplicarlos de nuevo». */
+      contenido: marcaDeDesenlace({ ok }) + "\n\n" + textoDelDesenlace({ ok, detalle, destino, vistaPrevia, elDocumento, notas }),
     });
     return NextResponse.json(aVista(await hiloVivo(pedido)));
   }

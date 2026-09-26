@@ -1235,7 +1235,9 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
     expect(descartar, "volvió la vista previa del modificador al descarte").not.toContain("eraDelModificador");
     expect(descartar.indexOf("/timeline/proposal`"), "descartar ya no borra en el servidor").toBeGreaterThan(-1);
-    expect(descartar).toContain("runId: proposalMeta.current.runId");
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#24), con esta razón: el chat descarta con el token del ACUERDO
+       (`opts.token`); sin él, el de la pantalla. El DELETE sigue yendo siempre con un `runId`. */
+    expect(descartar).toContain("runId: opts?.token !== undefined ? opts.token : proposalMeta.current.runId,");
     const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/proposal/route.ts"));
     expect(ruta).toContain('if (body && "runId" in body) {');
     expect(ruta, "el borrado no está condicionado a la corrida que se leyó").toContain(

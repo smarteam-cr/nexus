@@ -13,13 +13,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
 import {
+  ACUERDO_DE_OTRA_VERSION,
   claseDeAcuerdo,
   destinoDelAcuerdo,
+  motivoParaElAcuerdo,
+  MOTIVOS_DEL_CHAT,
+  NOTA_AVANCE_REEVALUANDOSE,
   rotuloDelAcuerdoAplicado,
   textoDelAcuerdoAplicado,
   textoDelBoton,
+  textoDelDesenlace,
   textoDelDesenlaceDeLaPropuesta,
   textoMientrasAplica,
+  type LaPropuestaEnPantalla,
 } from "./textos-del-acuerdo";
 
 const pasar = { borrador: "run-4", operaciones: [{ op: "propuesta.dejar-como-estaba", claves: ["n:1"] }, { op: "fase.duracion" }] };
@@ -84,10 +90,149 @@ describe("⭐ el desenlace dice a dónde fue", () => {
 
   it("⛔ el manejador acepta `destino`, lo usa, y sin él deduce como antes", () => {
     /* La edición que la pone en rojo: no aceptar el campo (el zod lo rechaza y el desenlace no se escribe),
-       o dejar la vista previa en true con un destino (mandaría a «aceptar los cambios» que no existen). */
-    const handler = fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8");
+       o dejar la vista previa en true con un destino (mandaría a «aceptar los cambios» que no existen).
+       ⚠ ACTUALIZADA en la revisión de E3 (#10, #11, #15), con esta razón: el texto del desenlace salió del
+       manejador a `textoDelDesenlace` (puro: sus casos se CORREN abajo). Lo que se sigue pidiendo acá es el
+       cableado: el manejador acepta `destino` y `notas` y le pasa todo a la función pura. Normalizado: no
+       depende del fin de línea. */
+    const handler = fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8").replace(/\r\n/g, "\n");
     expect(handler).toContain('destino: z.enum(["cronograma", "propuesta", "descarte"]).optional(),');
+    expect(handler).toContain("notas: z.array(z.string().max(300)).max(5).optional(),");
     expect(handler).toContain("const vistaPrevia = destino ? false : (parsed.data.desenlace.vistaPrevia ?? true);");
-    expect(handler).toContain("const deLaPropuesta = ok ? textoDelDesenlaceDeLaPropuesta(destino, detalle) : null;");
+    expect(handler).toContain("const { ok, detalle, destino, notas } = parsed.data.desenlace;");
+    expect(handler).toContain(
+      'contenido: marcaDeDesenlace({ ok }) + "\\n\\n" + textoDelDesenlace({ ok, detalle, destino, vistaPrevia, elDocumento, notas }),',
+    );
+    expect(handler, "el manejador volvió a armar el texto por su cuenta").not.toContain("hizo algo distinto");
+  });
+});
+
+/**
+ * ── REVISIÓN DE E3 (#10, #11, #15): EL TEXTO DEL DESENLACE, CORRIDO ──────────────────────────────────
+ * Vivía adentro del manejador y nada lo corría: el «avance re-evaluado» quedaba en el hilo como «⚠ el editor
+ * hizo algo distinto», y un fallo que pedía pedirlo de nuevo sumaba «puedes aplicarlos de nuevo».
+ */
+describe("⭐ el texto del desenlace (textoDelDesenlace)", () => {
+  const base = { ok: true, detalle: "", vistaPrevia: false, elDocumento: "el cronograma" } as const;
+
+  it("⛔ una nota (el avance que se vuelve a evaluar) va APARTE, con ✅: no es «algo distinto»", () => {
+    /* La edición que la pone en rojo: volver a meter la nota en el detalle (el hilo diría «⚠ Se aplicó, pero
+       el editor hizo algo distinto…» y el modelo lo relee como un desvío que no hubo). */
+    const t = textoDelDesenlace({ ...base, destino: "cronograma", notas: [NOTA_AVANCE_REEVALUANDOSE] });
+    expect(t, "la nota se leyó como un desvío del editor").not.toContain("hizo algo distinto");
+    expect(t).toBe(`✅ Listo, el cronograma ya quedó actualizado. Si algo no está como esperabas, dímelo y lo ajustamos.\n\n${NOTA_AVANCE_REEVALUANDOSE}`);
+    // Con un aviso de verdad (tareas que se corrieron), el aviso sigue siendo ⚠ y la nota va después.
+    const conAviso = textoDelDesenlace({ ...base, destino: "cronograma", detalle: "2 tareas pasaron a la última semana", notas: [NOTA_AVANCE_REEVALUANDOSE] });
+    expect(conAviso.startsWith("⚠ Se aplicó, pero el editor hizo algo distinto con una parte:\n\n2 tareas pasaron a la última semana")).toBe(true);
+    expect(conAviso.endsWith(`revísalo.\n\n${NOTA_AVANCE_REEVALUANDOSE}`)).toBe(true);
+    // Sin notas, lo de siempre (y las vacías no suman renglones).
+    expect(textoDelDesenlace({ ...base, destino: "cronograma", notas: [" ", ""] })).toBe(
+      "✅ Listo, el cronograma ya quedó actualizado. Si algo no está como esperabas, dímelo y lo ajustamos.",
+    );
+    expect(NOTA_AVANCE_REEVALUANDOSE).not.toMatch(/\b(pod[eé]s|ten[eé]s|quer[eé]s|fijate|mirá|confirmá|revisá)\b/i);
+  });
+
+  it("⛔ un fallo que pide pedirlo de nuevo no dice «puedes aplicarlos de nuevo» (el botón ya no sirve)", () => {
+    /* La edición que la pone en rojo: sumar siempre «Los cambios siguen pendientes: puedes aplicarlos de nuevo»
+       (el hilo se contradice y el modelo lo relee). */
+    for (const motivo of [
+      "La propuesta cambió desde que lo acordamos: pídemelo de nuevo.",
+      "El cronograma cambió desde que lo acordamos: pídemelo de nuevo.",
+      "Llegó otra propuesta del cronograma: revísala.",
+      ACUERDO_DE_OTRA_VERSION,
+    ]) {
+      const t = textoDelDesenlace({ ...base, ok: false, detalle: motivo, destino: "cronograma" });
+      expect(t, motivo).not.toContain("puedes aplicarlos de nuevo");
+      expect(t, motivo).toBe(`⛔ No se pudo aplicar: ${motivo.replace(/[\s.]+$/, "")}.`);
+    }
+    // Un fallo que sí se puede reintentar lo sigue diciendo.
+    expect(textoDelDesenlace({ ...base, ok: false, detalle: "No se pudo descartar la propuesta: vuelve a intentar." })).toBe(
+      "⛔ No se pudo aplicar: No se pudo descartar la propuesta: vuelve a intentar. Los cambios siguen pendientes: puedes aplicarlos de nuevo, o dime qué ajustamos.",
+    );
+    expect(textoDelDesenlace({ ...base, ok: false, detalle: "" })).toContain("el editor rechazó el cambio. Los cambios siguen pendientes");
+  });
+
+  it("los de siempre no cambian: la propuesta, el descarte y la vista previa del editor de un documento", () => {
+    expect(textoDelDesenlace({ ...base, destino: "propuesta" })).toBe(textoDelDesenlaceDeLaPropuesta("propuesta", ""));
+    expect(textoDelDesenlace({ ...base, destino: "descarte" })).toBe(textoDelDesenlaceDeLaPropuesta("descarte", ""));
+    expect(textoDelDesenlace({ ...base, vistaPrevia: true, elDocumento: "el documento" })).toBe(
+      "✅ Se aplicó. Revisa la vista previa en el documento y acepta los cambios que quieras conservar.",
+    );
+    expect(textoDelDesenlace({ ...base, vistaPrevia: true, detalle: "x", elDocumento: "el documento" })).toBe(
+      "⚠ Se aplicó, pero el editor hizo algo distinto con una parte:\n\nx\n\nRevisa la vista previa antes de aceptar.",
+    );
+  });
+});
+
+/**
+ * ── REVISIÓN DE E3 (#24, #11): POR QUÉ EL BOTÓN DE UN ACUERDO NO APLICA AHORA, CORRIDO ─────────────────
+ * Era `motivoDelChat`, adentro del cronograma: sin la comparación del token, el «Descartar la propuesta»
+ * acordado para la propuesta A quedaba vivo cuando llegaba otra B y la borraba (mutación CV1: la suite entera
+ * en verde). Y «aplícala» con la versión vencida seguía con botón: cada clic fallaba.
+ */
+describe("⛔ el motivo del botón (motivoParaElAcuerdo)", () => {
+  const enPantalla: LaPropuestaEnPantalla = {
+    hayBorrador: true,
+    ilegible: false,
+    token: "run-4",
+    version: 3,
+    conDesconocidos: false,
+    tareasArmando: false,
+    bloqueada: false,
+  };
+  const con = (p: Partial<LaPropuestaEnPantalla>) => ({ ...enPantalla, ...p });
+
+  it("⭐ acordado para OTRA propuesta: «cambio» en las tres clases (pasar, aplicar y descartar)", () => {
+    /* La edición que la pone en rojo: dejar de comparar el token del acuerdo con el de la pantalla (el
+       «Descartar» de la A borraba la B, una propuesta ya pagada que nadie leyó). */
+    for (const a of [pasar, aplicar, descartar]) {
+      expect(motivoParaElAcuerdo(a, con({ token: "run-5" })), JSON.stringify(a.operaciones)).toBe(MOTIVOS_DEL_CHAT.cambio);
+      expect(motivoParaElAcuerdo(a, con({ hayBorrador: false, token: null })), "sin propuesta en pantalla").toBe(MOTIVOS_DEL_CHAT.cambio);
+      expect(motivoParaElAcuerdo(a, enPantalla), "la misma propuesta: se puede").toBeNull();
+    }
+  });
+
+  it("⛔ «aplícala» con la pantalla DESPUÉS de la versión acordada: «cambio»; atrás o igual, se puede", () => {
+    /* La edición que la pone en rojo: no mirar la versión (el botón seguía vivo y cada clic fallaba con
+       «La propuesta cambió desde que lo acordamos»), o frenar también cuando la pantalla va atrás (aplicar
+       trae la guardada y compara: frenarlo trababa un acuerdo bueno). */
+    expect(motivoParaElAcuerdo(aplicar, con({ version: 4 }))).toBe(MOTIVOS_DEL_CHAT.cambio);
+    expect(motivoParaElAcuerdo(aplicar, con({ version: 3 }))).toBeNull();
+    expect(motivoParaElAcuerdo(aplicar, con({ version: 2 }))).toBeNull();
+    expect(motivoParaElAcuerdo({ borrador: "run-4", operaciones: [{ op: "propuesta.aplicar" }] }, enPantalla), "sin versión acordada").toBe(
+      MOTIVOS_DEL_CHAT.cambio,
+    );
+    // Pasar y descartar no dependen de la versión (pasar opera sobre la de ahora; descartar, entera).
+    expect(motivoParaElAcuerdo(pasar, con({ version: 9 }))).toBeNull();
+    expect(motivoParaElAcuerdo(descartar, con({ version: 9 }))).toBeNull();
+  });
+
+  it("los demás frenos, en su orden: versión nueva, tareas armando, recálculo pendiente (solo aplicar)", () => {
+    expect(motivoParaElAcuerdo(aplicar, con({ conDesconocidos: true }))).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
+    expect(motivoParaElAcuerdo(pasar, con({ tareasArmando: true }))).toBe(MOTIVOS_DEL_CHAT.armando);
+    expect(motivoParaElAcuerdo(aplicar, con({ bloqueada: true }))).toBe(MOTIVOS_DEL_CHAT.recalcular);
+    expect(motivoParaElAcuerdo(pasar, con({ bloqueada: true }))).toBeNull();
+  });
+
+  it("sin propuesta en el acuerdo: el PUT de siempre, salvo que haya una propuesta en pantalla", () => {
+    const sinNada = con({ hayBorrador: false, token: null, version: null });
+    expect(motivoParaElAcuerdo(deHoy, sinNada)).toBeNull();
+    expect(motivoParaElAcuerdo(deHoy, con({ hayBorrador: false, ilegible: true, token: null }))).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
+    expect(motivoParaElAcuerdo(deHoy, con({ conDesconocidos: true }))).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
+    expect(motivoParaElAcuerdo(deHoy, con({ tareasArmando: true }))).toBe(MOTIVOS_DEL_CHAT.armando);
+    expect(motivoParaElAcuerdo(deHoy, enPantalla)).toBe(MOTIVOS_DEL_CHAT.hayPropuesta);
+    // Sin operaciones (E4): es de una versión anterior, antes que cualquier otra cosa.
+    expect(motivoParaElAcuerdo({ borrador: "run-4" }, enPantalla)).toBe(ACUERDO_DE_OTRA_VERSION);
+    expect(motivoParaElAcuerdo({ borrador: null }, sinNada)).toBe(ACUERDO_DE_OTRA_VERSION);
+  });
+
+  it("⭐ los motivos entran en el botón (≤ 60 caracteres) y van en tuteo", () => {
+    const motivos = Object.values(MOTIVOS_DEL_CHAT);
+    // E4: 6 → 5 (sale «Descarta la vista previa de «Pedir cambio con IA»»: se retiró).
+    expect(motivos.length).toBe(5);
+    for (const m of motivos) {
+      expect(m.length, m).toBeLessThanOrEqual(60);
+      expect(m, m).not.toMatch(/\b(pod[eé]s|ten[eé]s|quer[eé]s|fijate|mirá|pedímelo|resolvé|esperá)\b/i);
+    }
   });
 });

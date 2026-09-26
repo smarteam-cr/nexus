@@ -39,6 +39,7 @@ import {
   type Vivo,
 } from "./borrador";
 import { RAW_NEUTRAL_RE } from "../ui/raw-neutral.mjs";
+import { motivoParaElAcuerdo, MOTIVOS_DEL_CHAT } from "../asistente/textos-del-acuerdo";
 
 const RUTA_CANVAS = "components/canvas/CronogramaCanvas.tsx";
 const RUTA_BARRA = "components/canvas/RevisionDeLaPropuesta.tsx";
@@ -609,10 +610,16 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
        motivo respondería 409: el botón de un acuerdo del chat dice que se resuelve en su línea, como antes
        («Resuelve la propuesta en su barra»). La edición que la pone en rojo: sacar esa línea (el botón
        quedaría vivo y fallaría), o ponerla después de `if (!hayBorrador) return null;`. */
-    const motivo = tramo(CANVAS, "const motivoDelChat = (a: AcuerdoDelChat): string | null => {", "const pasarALaPropuesta");
-    const iIlegible = motivo.indexOf("if (propuestaIlegible) return MOTIVOS_DEL_CHAT.enSuBarra;");
-    expect(iIlegible, "con una propuesta que no se sabe leer, el botón del chat queda vivo").toBeGreaterThan(-1);
-    expect(iIlegible).toBeLessThan(motivo.indexOf("if (!hayBorrador) return null;"));
+    /* ⚠ REESCRITA en la revisión de E3 (#24), con esta razón: la regla salió a `motivoParaElAcuerdo` (pura), así
+       que se CORRE: sin propuesta en el acuerdo y con algo ilegible guardado, «Resuelve la propuesta en su
+       barra» (no null). Y el cronograma le pasa `propuestaIlegible`. */
+    const motivo = tramo(CANVAS, "const motivoDelChat = (a: AcuerdoDelChat): string | null =>", "const pasarALaPropuesta");
+    expect(contiene(motivo, "ilegible: propuestaIlegible,"), "el cronograma no le dice a la regla que hay algo ilegible").toBe(true);
+    const ilegible = { hayBorrador: false, ilegible: true, token: null, version: null, conDesconocidos: false, tareasArmando: false, bloqueada: false };
+    expect(
+      motivoParaElAcuerdo({ borrador: null, operaciones: [{ op: "fase.duracion" }] }, ilegible),
+      "con una propuesta que no se sabe leer, el botón del chat queda vivo",
+    ).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
   });
 });
 
@@ -726,8 +733,10 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(descartar.indexOf("corridasDeLaPropuesta(tareasEnPantalla)"), "se leen después de limpiar").toBeLessThan(
       descartar.indexOf("setTareasDelBorrador(null)"),
     );
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#14), con esta razón: «ya no está guardada» lo dice ahora
+       `trasElDescarte` (puro, con su tabla en propuesta-de-estructura.test.ts): `tras.olvidar`. */
     expect(
-      contiene(descartar, "if (yaNoEstaGuardada && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);"),
+      contiene(descartar, "if (tras.olvidar && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);"),
       "las corridas de una propuesta descartada a mano siguen avisando",
     ).toBe(true);
     const aplicarLas = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
@@ -1468,14 +1477,47 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
   it("⛔ descartar desde el chat da éxito SOLO si el servidor la borró («otra» no es éxito)", () => {
     /* Hoy un 409 (la guardada ya era otra) se trataba como «ya no está guardada». La edición que la pone en
        rojo: devolver éxito con «otra» o con un DELETE que falló. */
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#14, #24), con esta razón: cómo terminó lo decide `trasElDescarte`
+       (puro: su tabla está en propuesta-de-estructura.test.ts), y descartar recibe qué propuesta (`token`) y si
+       viene del chat. Lo que se pide es lo mismo: éxito solo con «descartada». */
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
-    expect(contiene(descartar, 'const discardProposal = async (reason?: string): Promise<"descartada" | "otra" | "fallo"> => {')).toBe(true);
-    expect(contiene(tramo(descartar, "if (guardadaEsOtra) {", "}"), 'return "otra";')).toBe(true);
-    expect(contiene(descartar, 'return borrada ? "descartada" : "fallo";')).toBe(true);
-    expect(contiene(descartar, "borrada = res.ok;")).toBe(true);
+    expect(
+      contiene(
+        descartar,
+        'const discardProposal = async ( reason?: string, opts?: { token?: string | null; desdeElChat?: boolean }, ): Promise<"descartada" | "otra" | "fallo"> => {',
+      ),
+    ).toBe(true);
+    expect(contiene(descartar, "respuesta = { ok: res.ok, status: res.status };")).toBe(true);
+    expect(contiene(descartar, "const tras = trasElDescarte(respuesta, !!reason);")).toBe(true);
+    expect(contiene(tramo(descartar, 'if (tras.resultado === "otra") {', "}"), 'return "otra";')).toBe(true);
+    expect(contiene(descartar, "return tras.resultado;")).toBe(true);
     const pasar = tramo(CANVAS, "const pasarALaPropuesta = async (", "const atenderElAcuerdo =");
     expect(contiene(pasar, 'if (r === "descartada") return { fallo: null, avisos: [], destino: "descarte" };')).toBe(true);
     expect(contiene(pasar, 'return falla(r === "otra" ? MOTIVO_OTRA_PROPUESTA : MOTIVO_NO_SE_DESCARTO);')).toBe(true);
+  });
+
+  it("⛔ revisión de E3 (#24) · «Descártala» manda el token del ACUERDO: con otra propuesta guardada, el servidor no borra nada", () => {
+    /* La única defensa era que el botón comparara el token del acuerdo con el de la pantalla; el DELETE mandaba
+       el de la pantalla. Ahora el chat manda el suyo y la ruta responde 409 si la guardada es otra (su prueba de
+       conducta, en borrador-rutas.test.ts). Las ediciones que la ponen en rojo: volver a mandar siempre el token
+       de la pantalla, o que el chat no pase el del acuerdo. */
+    const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
+    expect(contiene(descartar, "runId: opts?.token !== undefined ? opts.token : proposalMeta.current.runId,")).toBe(true);
+    const pasar = tramo(CANVAS, "const pasarALaPropuesta = async (", "const atenderElAcuerdo =");
+    expect(contiene(pasar, "const r = await discardProposal(undefined, { token: acuerdo.borrador ?? null, desdeElChat: true });")).toBe(true);
+  });
+
+  it("⛔ revisión de E3 (#14) · un descarte a mano que falló deja la propuesta en pantalla (y la barra lo dice)", () => {
+    /* Antes la pantalla la vaciaba pase lo que pase: el chat decía «vuelve a intentar» sin botón ni barra con que
+       hacerlo. La edición que la pone en rojo: limpiar la propuesta antes de mirar `tras.soltar`, o callar el
+       fallo en la barra. */
+    const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
+    const iSoltar = sinEspacios(descartar).indexOf(sinEspacios("if (!tras.soltar) {"));
+    expect(iSoltar, "descartar ya no pregunta si suelta la propuesta").toBeGreaterThan(-1);
+    const limpia = sinEspacios(descartar).indexOf(sinEspacios("proposalMeta.current = { runId: null };"));
+    expect(iSoltar, "se limpia la propuesta antes de saber si el DELETE anduvo").toBeLessThan(limpia);
+    expect(iSoltar).toBeLessThan(sinEspacios(descartar).indexOf("setProposal(null)"));
+    expect(contiene(tramo(descartar, "if (!tras.soltar) {", 'return "fallo";'), "if (!opts?.desdeElChat) toast.error(MOTIVO_NO_SE_DESCARTO);")).toBe(true);
   });
 
   it("⭐ aplicar desde el chat: sin toasts ni diálogo (la línea fue la confirmación), y devuelve el resultado", () => {
@@ -1486,12 +1528,31 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     expect(contiene(aplicar, 'const motivo = desdeElChat ? d?.error === "PLAN_CAMBIO" ? MOTIVO_CRONOGRAMA_CAMBIO_DESDE_EL_ACUERDO')).toBe(true);
   });
 
+  it("⛔ revisión de E3 (#10, #15) · aplicar desde el chat no espera al agente del avance y lo cuenta como NOTA, no como aviso", () => {
+    /* El botón seguía en «Aplicando la propuesta…» toda la corrida del agente del avance (otra llamada a la IA),
+       y el hilo quedaba con «⚠ el editor hizo algo distinto: Avance re-evaluado…». Las ediciones que la ponen en
+       rojo: volver a esperarlo desde el chat, o volver a sumarlo a los avisos. El texto que escribe la nota se
+       corre en textos-del-acuerdo.test.ts. */
+    const aplicar = tramo(CANVAS, "const aplicarBorrador = async (", "useEffect(");
+    const bloque = tramo(aplicar, 'if (typeof d.tareasTocadas === "number" && d.tareasTocadas > 0) {', "siguiente = pasoTrasResolver(");
+    expect(
+      contiene(
+        bloque,
+        "if (desdeElChat) { final = { ...final, notas: [NOTA_AVANCE_REEVALUANDOSE] }; void reevaluarElAvance(); } else { await reevaluarElAvance(); }",
+      ),
+    ).toBe(true);
+    expect(bloque, "el avance volvió a los avisos del desenlace").not.toMatch(/final\.avisos/);
+  });
+
   it("⭐ los motivos del botón del chat entran en el botón (≤ 60 caracteres)", () => {
-    const bloque = tramo(CANVAS, "const MOTIVOS_DEL_CHAT = {", "} as const;");
-    const motivos = [...bloque.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#24), con esta razón: los motivos y su regla salieron del cronograma a
+       lib/asistente/textos-del-acuerdo.ts (donde su tabla se corre). Se leen de ahí, y el cronograma no vuelve
+       a tener los suyos (dos listas divergen). */
+    const motivos = Object.values(MOTIVOS_DEL_CHAT);
     // E4: 6 → 5 (sale «Descarta la vista previa de «Pedir cambio con IA»»: se retiró).
     expect(motivos.length).toBe(5);
     for (const m of motivos) expect(m.length, m).toBeLessThanOrEqual(60);
+    expect(CANVAS, "el cronograma volvió a tener sus propios motivos del botón").not.toContain("const MOTIVOS_DEL_CHAT");
   });
 
   it("⭐ la apertura sola: una vez por persona (servidor y navegador), sin foco, y el cajón corre el cronograma", () => {
@@ -1512,6 +1573,52 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     expect(CANVAS.match(/xl:pr-\[400px\]/g)?.length).toBe(1);
     expect(contiene(CANVAS, '<div className={chatAbierto && hayBorrador ? "relative xl:pr-[400px]" : "relative"}>')).toBe(true);
     expect(contiene(CANVAS, "motivoParaNoAplicar={motivoDelChat}")).toBe(true);
-    expect(contiene(CANVAS, "{ titulo: `Sobre la propuesta ${desdeDeLaPropuesta(deDondeViene(proposal))}` }")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#12), con esta razón: la referencia la arma `referenciaDelChat` (pura,
+       con su tabla en apertura-del-chat.test.ts): solo con una propuesta que el chat puede editar. */
+    expect(
+      contiene(
+        CANVAS,
+        "referencia={referenciaDelChat({ puedeEditar: canEdit, hayBorrador, editable: !conDesconocidos, conCambios: !!revision.resumen, desde: desdeDeLaPropuesta(deDondeViene(proposal)), })}",
+      ),
+    ).toBe(true);
+    expect(contiene(CANVAS, "const conDesconocidos = hayBorrador && (revision.borrador?.desconocidos ?? 0) > 0;")).toBe(true);
+  });
+
+  it("⛔ revisión de E3 (#26, #17, #12) · el cronograma HACE lo que dice cada decisión de la apertura", () => {
+    /* La regla y las acciones son puras (sus tablas, en apertura-del-chat.test.ts); esto mira el último tramo,
+       el que las aplica. Las ediciones que la ponen en rojo (mutaciones CV2, CV3 y CV4 de la revisión, antes en
+       verde con la suite entera): abrirlo sin marcarlo automático (tomaría el foco), abrirlo con cualquier
+       decisión que no sea «abrir», no recordarlo; y (#17) no pasarle a la regla si se escribe, si el puntero está
+       sobre el Gantt o si ya se pospuso, o no dejar el punto al posponer. */
+    const apertura = tramo(CANVAS, "const tokenParaLaApertura", "}, [tokenParaLaApertura");
+    expect(contiene(apertura, "const acciones = accionesDeLaApertura(decision);")).toBe(true);
+    expect(contiene(apertura, "if (acciones.abrir) { setChatAbierto(true); setAperturaAutomatica(acciones.automatica); }")).toBe(true);
+    expect(apertura.match(/setChatAbierto\(/g)?.length, "el efecto abre el cajón por otro camino").toBe(1);
+    expect(contiene(apertura, "if (!acciones.decidida) return; aperturaVistaRef.current = tokenParaLaApertura;")).toBe(true);
+    expect(contiene(apertura, "if (!acciones.recordar) return; recordarApertura(projectId, tokenParaLaApertura);")).toBe(true);
+    expect(
+      contiene(apertura, "if (acciones.posponer) { aperturaPospuestaRef.current = tokenParaLaApertura; setPuntoDelChat(tokenParaLaApertura); }"),
+    ).toBe(true);
+    for (const entrada of [
+      "editable: !conDesconocidos,",
+      "soloFase: soloFaseEnPantalla,",
+      "recalculando: recalculandoEnPantalla,",
+      "escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),",
+      'punteroEnElGantt: !!document.querySelector("#cronograma-gantt:hover"),',
+      "pospuesta: aperturaPospuestaRef.current === tokenParaLaApertura,",
+    ]) {
+      expect(contiene(apertura, entrada), entrada).toBe(true);
+    }
+    // El selector del puntero mira algo que existe: el Gantt lleva ese id.
+    expect(CANVAS).toContain('<div id="cronograma-gantt"');
+    // Lo que la regla mira también despierta al efecto (si no, la propuesta «lista» no se decide nunca).
+    const deps = tramo(CANVAS, "}, [tokenParaLaApertura", "]);");
+    for (const d of ["conDesconocidos", "soloFaseEnPantalla", "recalculandoEnPantalla", "tareasArmandoEnPantalla", "chatAbierto"]) {
+      expect(deps, d).toContain(d);
+    }
+    // El punto del 💬: solo para ESTA propuesta y con el chat cerrado; abrirlo a mano lo apaga.
+    expect(contiene(CANVAS, "{puntoDelChat !== null && puntoDelChat === tokenParaLaApertura && !chatAbierto ? (")).toBe(true);
+    expect(contiene(CANVAS, "setAperturaAutomatica(false); setChatAbierto((v) => !v); setPuntoDelChat(null);")).toBe(true);
+    expect(contiene(tramo(CANVAS, "const abrirElChatDesdeUnaFase = useCallback(", "}, []);"), "setPuntoDelChat(null);")).toBe(true);
   });
 });

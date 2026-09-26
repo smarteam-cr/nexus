@@ -42,8 +42,20 @@ import ChatDelAsistente, {
   type ResultadoDeAplicar,
 } from "@/components/asistente/ChatDelAsistente";
 import { ChatDeSeccionDisponible, ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
-import { debeAbrirseElChat, leerApertura, recordarApertura } from "@/lib/timeline/apertura-del-chat";
-import { ACUERDO_DE_OTRA_VERSION, claseDeAcuerdo } from "@/lib/asistente/textos-del-acuerdo";
+import {
+  accionesDeLaApertura,
+  debeAbrirseElChat,
+  esCampoDeEscritura,
+  leerApertura,
+  recordarApertura,
+  referenciaDelChat,
+} from "@/lib/timeline/apertura-del-chat";
+import {
+  ACUERDO_DE_OTRA_VERSION,
+  claseDeAcuerdo,
+  motivoParaElAcuerdo,
+  NOTA_AVANCE_REEVALUANDOSE,
+} from "@/lib/asistente/textos-del-acuerdo";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -106,6 +118,7 @@ import {
   AVISO_PROPUESTA_PENDIENTE,
   pasoTrasEstructura,
   pasoTrasResolver,
+  trasElDescarte,
   type RespuestaDeEstructura,
 } from "@/lib/timeline/propuesta-de-estructura";
 import ObservacionesDelPaso1 from "./ObservacionesDelPaso1";
@@ -139,14 +152,8 @@ const MOTIVO_PROPUESTA_CAMBIO_DESDE_EL_ACUERDO = "La propuesta cambió desde que
 const MOTIVO_CRONOGRAMA_CAMBIO_DESDE_EL_ACUERDO = "El cronograma cambió desde que lo acordamos: pídemelo de nuevo.";
 const MOTIVO_OTRA_PROPUESTA = "Llegó otra propuesta del cronograma: revísala.";
 const MOTIVO_NO_SE_DESCARTO = "No se pudo descartar la propuesta: vuelve a intentar.";
-/** Los motivos del botón del chat (≤ 60 caracteres: van EN el botón). */
-const MOTIVOS_DEL_CHAT = {
-  hayPropuesta: "Hay una propuesta abierta: pídemelo de nuevo",
-  cambio: "La propuesta cambió: pídemelo de nuevo",
-  enSuBarra: "Resuelve la propuesta en su barra",
-  armando: "Espera: la IA está armando las tareas",
-  recalcular: "Faltan recalcular tareas: mira la barra",
-} as const;
+/* Revisión de E3 (#24): los motivos del BOTÓN del chat, y la regla que elige uno, viven en
+   lib/asistente/textos-del-acuerdo.ts (`MOTIVOS_DEL_CHAT`, `motivoParaElAcuerdo`), donde su tabla los corre. */
 
 interface TaskDraft {
   id?: string;
@@ -482,12 +489,18 @@ export default function CronogramaCanvas({
   const [chatAbierto, setChatAbierto] = useState(false);
   /* E3 P5: el chat se abrió SOLO (llegó una propuesta): no toma el foco. El botón 💬 lo apaga. */
   const [aperturaAutomatica, setAperturaAutomatica] = useState(false);
+  /* Revisión de E3 (#17): la propuesta llegó mientras la persona estaba en otra cosa (escribiendo, con el
+     puntero sobre el Gantt…): el chat no se abrió, y el 💬 lleva un punto hasta que lo abra. El token de ESA
+     propuesta: con otra, el punto se apaga solo. */
+  const [puntoDelChat, setPuntoDelChat] = useState<string | null>(null);
   /* E4 P1: el «IA» de una fase abre el chat con esa fase señalada (el proveedor del chip de abajo, en el
-     `return`). Abierto a mano: toma el foco. ⛔ ESTABLE (`useCallback` sin dependencias): el proveedor
-     rehace su `abrirCon` con cada `onAbrir` nuevo, y una flecha suelta lo rehace en cada render. */
+     `return`). Abierto a mano: toma el foco (y apaga el punto del 💬). ⛔ ESTABLE (`useCallback` sin
+     dependencias): el proveedor rehace su `abrirCon` con cada `onAbrir` nuevo, y una flecha suelta lo rehace
+     en cada render. */
   const abrirElChatDesdeUnaFase = useCallback(() => {
     setAperturaAutomatica(false);
     setChatAbierto(true);
+    setPuntoDelChat(null);
   }, []);
   // Drawer de detalle de tarea: se resuelve la tarea VIVA desde `phases` por _key.
   const [selectedTask, setSelectedTask] = useState<{ phaseKey: string; taskKey: string } | null>(null);
@@ -1986,8 +1999,13 @@ export default function CronogramaCanvas({
 
   /* E3 P5: devuelve cómo terminó: «descartada» (el servidor la borró),
      «otra» (la guardada ya era otra: no se borró nada) o «fallo» (el DELETE no anduvo, o ya había uno en
-     curso). El chat da éxito SOLO con «descartada»; la barra no mira el resultado. */
-  const discardProposal = async (reason?: string): Promise<"descartada" | "otra" | "fallo"> => {
+     curso). El chat da éxito SOLO con «descartada»; la barra no mira el resultado.
+     Revisión de E3 (#24): `token` = qué propuesta se quiere descartar (el chat manda la del ACUERDO); sin él,
+     la de la pantalla. `desdeElChat`: el fallo lo dice el chat, no un toast (#14). */
+  const discardProposal = async (
+    reason?: string,
+    opts?: { token?: string | null; desdeElChat?: boolean },
+  ): Promise<"descartada" | "otra" | "fallo"> => {
     /* Revisión de E2b: la oferta de las tareas es de lo que se resolvió ANTES. Resolver otra propuesta
        (la del handoff que la tapaba) la apaga: si no, volvía a aparecer después de este «Descartar».
        Si corresponde, `pasoTrasResolver` la vuelve a prender abajo. */
@@ -2012,11 +2030,12 @@ export default function CronogramaCanvas({
     const soloFaseLaDescartada = !!revision.borrador?.soloFase;
     /* La propuesta está persistida en `pendingProposal`: se limpia en el servidor para que no reaparezca
        al recargar, y solo si es la misma que esta pantalla tiene enfrente (`runId`: la ruta responde 409
-       si es otra). El estado local se limpia pase lo que pase. E4 (2026-09): se fue la rama de la vista
-       previa en memoria de «Pedir cambio con IA» (descartarla no tocaba el servidor). */
-    let guardadaEsOtra = false;
-    let yaNoEstaGuardada = false;
-    let borrada = false;
+       si es otra). E4 (2026-09): se fue la rama de la vista previa en memoria de «Pedir cambio con IA»
+       (descartarla no tocaba el servidor).
+       Revisión de E3 (#14): el estado local ya NO se limpia pase lo que pase. Qué se hace con cada
+       respuesta lo decide `trasElDescarte` (puro, con su tabla): si el DELETE falló a mano, la propuesta
+       sigue guardada y sigue en pantalla, así «vuelve a intentar» es cierto. */
+    let respuesta: { ok: boolean; status: number } | null = null;
     // Un doble clic (o el descarte automático encima del manual): el primer DELETE sigue en curso.
     if (descartandoRef.current) return "fallo";
     descartandoRef.current = true;
@@ -2027,23 +2046,30 @@ export default function CronogramaCanvas({
         headers: { "Content-Type": "application/json" },
         // Tanda M — `reason` es opcional: solo el auto-descarte silencioso lo manda, para
         // dejar un log server-side con la corrida que se evaporó (ver la ruta).
-        body: JSON.stringify({ runId: proposalMeta.current.runId, ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({
+          runId: opts?.token !== undefined ? opts.token : proposalMeta.current.runId,
+          ...(reason ? { reason } : {}),
+        }),
       });
-      guardadaEsOtra = res.status === 409;
-      borrada = res.ok;
-      /* Solo se olvida lo recordado si el servidor ya no tiene ESTA propuesta (borrada, o ya era
-         otra). Si el DELETE falló, la propuesta sigue guardada, y lo desmarcado con ella. */
-      yaNoEstaGuardada = res.ok || res.status === 409;
+      respuesta = { ok: res.ok, status: res.status };
     } catch {
-      /* limpiar local igual */
+      /* Sin conexión: `respuesta` queda en null (es un fallo). */
     } finally {
       descartandoRef.current = false;
       setDescartando(false);
     }
-    // La que se tenía enfrente ya no está (o ya no era la guardada): lo recordado de ella no sirve.
-    if (yaNoEstaGuardada) revisionRef.current.olvidar();
+    const tras = trasElDescarte(respuesta, !!reason);
+    /* Solo se olvida lo recordado si el servidor ya no tiene ESTA propuesta (borrada, o ya era otra). Si el
+       DELETE falló, la propuesta sigue guardada, y lo desmarcado con ella. */
+    if (tras.olvidar) revisionRef.current.olvidar();
     // Descartada a mano mientras se armaban (o se recalculaban) sus tareas: sus corridas terminan sin aviso.
-    if (yaNoEstaGuardada && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);
+    if (tras.olvidar && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);
+    if (!tras.soltar) {
+      /* El DELETE no anduvo (sin conexión, un error del servidor, la sesión vencida): la propuesta sigue
+         guardada y sigue acá, con su barra y el botón del chat vivos para reintentar. */
+      if (!opts?.desdeElChat) toast.error(MOTIVO_NO_SE_DESCARTO);
+      return "fallo";
+    }
     proposalMeta.current = { runId: null };
     setProposal(null);
     setTareasDelBorrador(null);
@@ -2051,7 +2077,7 @@ export default function CronogramaCanvas({
        Con el bug de refresco casi no se veía (la propuesta ni llegaba a cargarse); ahora que
        aparece siempre, un cartel fantasma se leería como que el arreglo no sirvió. */
     bumpGpsRefresh();
-    if (guardadaEsOtra) {
+    if (tras.resultado === "otra") {
       /* La guardada ya no es la que se descartó (otra la reemplazó): no se borró nada, se trae la que
          está y no se ofrece nada por la descartada. */
       void traerPropuestaPendiente();
@@ -2075,7 +2101,7 @@ export default function CronogramaCanvas({
       setOfertaConFases(conFasesLaDescartada);
       setOfrecerTareas(true);
     }
-    return borrada ? "descartada" : "fallo";
+    return tras.resultado;
   };
 
   // ── APLICAR LA PROPUESTA DE FASES (la del handoff, o la de las reuniones) ─────────────────────
@@ -2229,18 +2255,27 @@ export default function CronogramaCanvas({
          (lo mismo que hacía el camino viejo de «Regenerar todo» al aplicar). Best-effort: si falla,
          el cronograma ya quedó aplicado. Las fases nuevas solas no lo piden. */
       if (typeof d.tareasTocadas === "number" && d.tareasTocadas > 0) {
-        setChainingProgress(true);
-        try {
-          const pres = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
-          const pdata = await pres.json().catch(() => ({}));
-          if (pres.ok && pdata?.status === "ok") {
-            await load();
-            const avance = "Avance re-evaluado con el cronograma nuevo — confirma abajo.";
-            if (desdeElChat) final = resultado(null, [...final.avisos, avance]);
-            else toast.success(avance);
-          }
-        } catch { /* best-effort, mismo criterio que el camino viejo */ }
-        setChainingProgress(false);
+        const reevaluarElAvance = async () => {
+          setChainingProgress(true);
+          try {
+            const pres = await fetch(`/api/projects/${projectId}/timeline/progress`, { method: "POST" });
+            const pdata = await pres.json().catch(() => ({}));
+            if (pres.ok && pdata?.status === "ok") {
+              await load();
+              toast.success("Avance re-evaluado con el cronograma nuevo — confirma abajo.");
+            }
+          } catch { /* best-effort, mismo criterio que el camino viejo */ }
+          setChainingProgress(false);
+        };
+        /* Revisión de E3 (#10, #15): desde el chat, el botón termina apenas se aplicó (la re-evaluación es
+           otra llamada a la IA, larga: la dice el velo del Gantt) y el hilo la cuenta como NOTA, aparte. Iba
+           como aviso, y el hilo quedaba con «⚠ el editor hizo algo distinto», un desvío que no hubo. */
+        if (desdeElChat) {
+          final = { ...final, notas: [NOTA_AVANCE_REEVALUANDOSE] };
+          void reevaluarElAvance();
+        } else {
+          await reevaluarElAvance();
+        }
       }
       siguiente = pasoTrasResolver({
         como: "aplicar",
@@ -2463,27 +2498,22 @@ export default function CronogramaCanvas({
     estadoDeLasTareasEnPantalla === "armando" ||
     tareasEnPantalla?.recalculo?.estado === "armando" ||
     estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "armando";
-  /** Por qué el botón del chat no aplica ESTE acuerdo ahora (va en el botón: ≤ 60 caracteres), o null. */
-  const motivoDelChat = (a: AcuerdoDelChat): string | null => {
-    // E4: un acuerdo sin operaciones es de antes del 2026-08-20 (solo una instrucción): ya no tiene carril.
-    if (!Array.isArray(a.operaciones)) return ACUERDO_DE_OTRA_VERSION;
-    const enSuBarra = hayBorrador && (revision.borrador?.desconocidos ?? 0) > 0;
-    const token = a.borrador ?? null;
-    if (token === null) {
-      /* E4: lo que no es un v1 (antes, el formato viejo, que caía en `enSuBarra`) ya no es `hayBorrador`,
-         pero sigue guardado: el PUT con motivo respondería 409. Se resuelve en su línea («Descartarla»). */
-      if (propuestaIlegible) return MOTIVOS_DEL_CHAT.enSuBarra;
-      if (!hayBorrador) return null;
-      if (enSuBarra) return MOTIVOS_DEL_CHAT.enSuBarra;
-      if (tareasArmandoEnPantalla) return MOTIVOS_DEL_CHAT.armando;
-      return MOTIVOS_DEL_CHAT.hayPropuesta;
-    }
-    if (!hayBorrador || token !== proposalMeta.current.runId) return MOTIVOS_DEL_CHAT.cambio;
-    if (enSuBarra) return MOTIVOS_DEL_CHAT.enSuBarra;
-    if (tareasArmandoEnPantalla) return MOTIVOS_DEL_CHAT.armando;
-    if (claseDeAcuerdo(a) === "aplicar" && revision.resumen?.bloqueo) return MOTIVOS_DEL_CHAT.recalcular;
-    return null;
-  };
+  /* La propuesta trae cambios que esta versión no sabe leer: el chat no la puede tocar (se resuelve en su
+     barra). La misma vara para el botón, la apertura sola y la referencia del cajón (revisión de E3, #12). */
+  const conDesconocidos = hayBorrador && (revision.borrador?.desconocidos ?? 0) > 0;
+  /** Por qué el botón del chat no aplica ESTE acuerdo ahora (va en el botón: ≤ 60 caracteres), o null.
+   *  Revisión de E3 (#24, #11): la regla es pura (`motivoParaElAcuerdo`, con su tabla corrida); acá solo se
+   *  le pasa lo que hay en pantalla, leído en el momento. */
+  const motivoDelChat = (a: AcuerdoDelChat): string | null =>
+    motivoParaElAcuerdo(a, {
+      hayBorrador,
+      ilegible: propuestaIlegible,
+      token: hayBorrador ? proposalMeta.current.runId : null,
+      version: revision.version ?? null,
+      conDesconocidos,
+      tareasArmando: tareasArmandoEnPantalla,
+      bloqueada: !!revision.resumen?.bloqueo,
+    });
   const pasarALaPropuesta = async (acuerdo: AcuerdoDelChat): Promise<ResultadoDeAplicar> => {
     const falla = (fallo: string): ResultadoDeAplicar => ({ fallo, avisos: [], destino: "propuesta" });
     /* 1 · Los frenos de los otros carriles: nada se escribe mientras el cronograma está ocupado o esta
@@ -2505,9 +2535,11 @@ export default function CronogramaCanvas({
     if (clase === "aplicar") {
       return aplicarBorrador({ acordada: { version: ops[0]?.version, huella: ops[0]?.huella }, desdeElChat: true });
     }
-    // 5 · «Descártala»: éxito SOLO si el servidor la borró (con otra guardada no se borró nada).
+    /* 5 · «Descártala»: éxito SOLO si el servidor la borró (con otra guardada no se borró nada).
+       Revisión de E3 (#24): el DELETE lleva el token del ACUERDO, no el de la pantalla: si la guardada es
+       otra, la ruta responde 409 y no borra nada, aunque el motivo de arriba dejara pasar el botón. */
     if (clase === "descartar") {
-      const r = await discardProposal();
+      const r = await discardProposal(undefined, { token: acuerdo.borrador ?? null, desdeElChat: true });
       if (r === "descartada") return { fallo: null, avisos: [], destino: "descarte" };
       return falla(r === "otra" ? MOTIVO_OTRA_PROPUESTA : MOTIVO_NO_SE_DESCARTO);
     }
@@ -2555,9 +2587,18 @@ export default function CronogramaCanvas({
 
   /* ── E3 P5: EL CHAT SE ABRE SOLO CON UNA PROPUESTA NUEVA ──────────────────────────────────────────
      Una vez por persona y por propuesta (lo recuerdan el servidor y este navegador), sin tomar el foco,
-     en pantallas anchas y nunca encima de otra capa. Lo decide `debeAbrirseElChat` (puro). */
+     en pantallas anchas y nunca encima de otra capa. Lo decide `debeAbrirseElChat` (puro).
+     Revisión de E3 (#12, #17, #26): se decide UNA vez, cuando la propuesta llega y queda lista (lo que la
+     frena mientras tanto son sus tareas o el cronograma ocupado). Si la persona está en otra cosa —escribiendo,
+     con el puntero sobre el Gantt, con otra capa o en una pantalla angosta— se POSPONE: un punto en el 💬, y
+     no se abre sola después (antes la abría el primer clic en una casilla, corriendo el Gantt bajo el
+     cursor). Ni con «Regenerar» de una fase ni sobre una propuesta que el chat no puede editar. Qué hace el
+     cronograma con cada decisión lo dice `accionesDeLaApertura` (pura, con su tabla). */
   const tokenParaLaApertura = hayBorrador ? proposalMeta.current.runId : null;
   const aperturaVistaRef = useRef<string | null>(null);
+  const aperturaPospuestaRef = useRef<string | null>(null);
+  const recalculandoEnPantalla = tareasEnPantalla?.recalculo?.estado === "armando";
+  const soloFaseEnPantalla = !!revision.borrador?.soloFase;
   useEffect(() => {
     if (!tokenParaLaApertura || aperturaVistaRef.current === tokenParaLaApertura) return;
     const decision = debeAbrirseElChat({
@@ -2565,23 +2606,34 @@ export default function CronogramaCanvas({
       puedeConversar: me?.permissions?.sections?.asistente?.read === true,
       hayBorrador,
       token: tokenParaLaApertura,
+      editable: !conDesconocidos,
+      soloFase: soloFaseEnPantalla,
       conCambios: !!revision.resumen,
       nadaQueDecidir: revision.nadaQueDecidir,
       tareasArmando: tareasArmandoEnPantalla,
-      recalculando: tareasEnPantalla?.recalculo?.estado === "armando",
+      recalculando: recalculandoEnPantalla,
       ocupado: ocupado.activo || armando !== null,
       conOtraCapa: !!selectedTask || !!document.querySelector('[aria-modal="true"]'),
       chatAbierto,
       anchoSuficiente: window.matchMedia("(min-width: 1280px)").matches,
+      escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),
+      punteroEnElGantt: !!document.querySelector("#cronograma-gantt:hover"),
+      pospuesta: aperturaPospuestaRef.current === tokenParaLaApertura,
       abiertoEnElServidor: abiertoPara(proposal, me?.email),
       recordadoLocal: leerApertura(projectId, tokenParaLaApertura),
     });
-    if (decision === "nada") return;
-    aperturaVistaRef.current = tokenParaLaApertura;
-    if (decision === "abrir") {
-      setChatAbierto(true);
-      setAperturaAutomatica(true);
+    const acciones = accionesDeLaApertura(decision);
+    if (acciones.posponer) {
+      aperturaPospuestaRef.current = tokenParaLaApertura;
+      setPuntoDelChat(tokenParaLaApertura);
     }
+    if (!acciones.decidida) return;
+    aperturaVistaRef.current = tokenParaLaApertura;
+    if (acciones.abrir) {
+      setChatAbierto(true);
+      setAperturaAutomatica(acciones.automatica);
+    }
+    if (!acciones.recordar) return;
     recordarApertura(projectId, tokenParaLaApertura);
     // De mejor esfuerzo: si no llega, este navegador igual lo recuerda.
     void fetch(`/api/projects/${projectId}/timeline/borrador/operaciones`, {
@@ -2595,7 +2647,7 @@ export default function CronogramaCanvas({
       }),
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenParaLaApertura, canEdit, phases.length, me, revision.resumen, revision.nadaQueDecidir, tareasArmandoEnPantalla, ocupado.activo, armando, selectedTask, chatAbierto]);
+  }, [tokenParaLaApertura, canEdit, phases.length, me, revision.resumen, revision.nadaQueDecidir, conDesconocidos, soloFaseEnPantalla, tareasArmandoEnPantalla, recalculandoEnPantalla, ocupado.activo, armando, selectedTask, chatAbierto]);
 
   // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
   const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null }>();
@@ -3331,6 +3383,7 @@ export default function CronogramaCanvas({
                 // E3 P5: abierto a mano, el cajón sí toma el foco.
                 setAperturaAutomatica(false);
                 setChatAbierto((v) => !v);
+                setPuntoDelChat(null);
               }}
               /* Sin esto, un lector de pantalla anuncia «Asistente, botón» idéntico abierto y
                  cerrado: la única señal del estado era el color. */
@@ -3344,6 +3397,14 @@ export default function CronogramaCanvas({
               title="Conversa el cambio con el asistente: te dice qué se puede y qué fecha mueve antes de generarlo"
             >
               💬 Asistente
+              {/* Revisión de E3 (#17): llegó una propuesta y el chat no se abrió solo (la persona estaba en
+                  otra cosa): el punto lo dice hasta que lo abra. */}
+              {puntoDelChat !== null && puntoDelChat === tokenParaLaApertura && !chatAbierto ? (
+                <>
+                  <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand" />
+                  <span className="sr-only">(hay una propuesta nueva para conversar)</span>
+                </>
+              ) : null}
             </button>
           )}
           {/* E2a: la espera de «Regenerar todo» / «Generar cronograma» se dice acá (y en la línea de
@@ -4204,11 +4265,15 @@ export default function CronogramaCanvas({
         motivoParaNoAplicar={motivoDelChat}
         /* Abierto solo (llegó una propuesta): no se le roba el foco a quien estaba en otra cosa. */
         enfocarAlAbrir={!aperturaAutomatica}
-        referencia={
-          canEdit && hayBorrador && revision.resumen
-            ? { titulo: `Sobre la propuesta ${desdeDeLaPropuesta(deDondeViene(proposal))}` }
-            : null
-        }
+        /* Revisión de E3 (#12): solo con una propuesta que el chat puede editar (la misma vara que la
+           apertura sola y el botón): sobre otra, los ejemplos ofrecían pedidos que terminaban en «no registré». */
+        referencia={referenciaDelChat({
+          puedeEditar: canEdit,
+          hayBorrador,
+          editable: !conDesconocidos,
+          conCambios: !!revision.resumen,
+          desde: desdeDeLaPropuesta(deDondeViene(proposal)),
+        })}
       />
       </div>
     </div>

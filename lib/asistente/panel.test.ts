@@ -19,7 +19,7 @@ import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
 import { PIEZAS_CON_CHAT, PIEZA_CRONOGRAMA, tieneChat, puedeConversar } from "./piezas";
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
-import { ACUERDO_DE_OTRA_VERSION } from "./textos-del-acuerdo";
+import { ACUERDO_DE_OTRA_VERSION, motivoParaElAcuerdo } from "./textos-del-acuerdo";
 
 /**
  * ⚠ Se blanquean los COMENTARIOS antes de escanear, y hace falta de verdad: el docblock del
@@ -1126,6 +1126,19 @@ describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
     expect(PANEL).toContain("...(destino ? { destino } : {})");
   });
 
+  it("⛔ revisión de E3 (#10, #15) · lo que se hizo además (las `notas`) viaja aparte del detalle", () => {
+    /* El avance que se vuelve a evaluar iba en `avisos` → `detalle`, y el hilo lo escribía como «⚠ el editor
+       hizo algo distinto». La edición que la pone en rojo: no leer las notas del resultado, no pasarlas al
+       desenlace, o volver a juntarlas con los avisos en el detalle. */
+    expect(PANEL).toContain("const { fallo, avisos, destino: destinoDelResultado, notas } = await onAplicar(acuerdo);");
+    expect(PANEL).toContain("...(notas?.length ? { notas } : {})");
+    const i = PANEL.indexOf("const quedoEscrito = await anotarDesenlace(");
+    expect(i, "el desenlace del éxito cambió de forma").toBeGreaterThan(-1);
+    const llamada = PANEL.slice(i, PANEL.indexOf(").catch(() => false);", i));
+    expect(llamada).toContain('[nota, avisos.join(" · ")].filter(Boolean).join(" "),');
+    expect(llamada.replace(/\s+/g, ""), "las notas no llegan al desenlace").toContain("destino,notas,");
+  });
+
   it("⭐ la referencia reemplaza al subtítulo, y el estado vacío muestra lo que se le pide a una propuesta", () => {
     expect(PANEL).toContain('{referencia?.titulo ?? "Conversa el cambio antes de generarlo"}');
     const i = PANEL.indexOf("{referencia ? (");
@@ -1153,10 +1166,24 @@ describe("E4 · un acuerdo viejo del chat (sin operaciones) no tiene carril", ()
   it("⛔ motivoDelChat: con `operaciones` que no es un array devuelve ACUERDO_DE_OTRA_VERSION, antes que nada", () => {
     /* La edición que la pone en rojo: volver a despachar la instrucción (un carril que ya no existe), o
        mirar la propuesta antes (un acuerdo viejo diría «hay una propuesta abierta» y no que es viejo). */
-    const motivo = tramo("const motivoDelChat = (a: AcuerdoDelChat): string | null => {", "const pasarALaPropuesta");
-    const iViejo = motivo.indexOf("if (!Array.isArray(a.operaciones)) return ACUERDO_DE_OTRA_VERSION;");
-    expect(iViejo, "motivoDelChat dejó de frenar el acuerdo viejo").toBeGreaterThan(-1);
-    expect(iViejo, "el freno del acuerdo viejo ya no va primero").toBeLessThan(motivo.indexOf("const enSuBarra"));
+    /* ⚠ REESCRITA en la revisión de E3 (#24), con esta razón: la regla salió del cronograma a una función pura
+       (`motivoParaElAcuerdo`, lib/asistente/textos-del-acuerdo.ts), así que se CORRE en vez de buscar su texto:
+       con cualquier cosa en pantalla, un acuerdo sin operaciones es «de una versión anterior». Y el cronograma
+       la usa (su tabla entera está en textos-del-acuerdo.test.ts). */
+    const motivo = tramo("const motivoDelChat = (a: AcuerdoDelChat): string | null =>", "const pasarALaPropuesta");
+    expect(motivo, "motivoDelChat dejó de preguntarle a la regla pura").toContain("motivoParaElAcuerdo(a, {");
+    const pantallas = [
+      { hayBorrador: true, ilegible: false, token: "run-4", version: 3, conDesconocidos: true, tareasArmando: true, bloqueada: true },
+      { hayBorrador: false, ilegible: true, token: null, version: null, conDesconocidos: false, tareasArmando: false, bloqueada: false },
+      { hayBorrador: false, ilegible: false, token: null, version: null, conDesconocidos: false, tareasArmando: false, bloqueada: false },
+    ];
+    for (const p of pantallas) {
+      for (const borrador of ["run-4", null, undefined]) {
+        expect(motivoParaElAcuerdo({ borrador }, p), `el freno del acuerdo viejo ya no va primero: ${JSON.stringify({ borrador, p })}`).toBe(
+          ACUERDO_DE_OTRA_VERSION,
+        );
+      }
+    }
     // El texto va EN el botón (≤ 60 caracteres) y en tuteo.
     expect(ACUERDO_DE_OTRA_VERSION).toBe("Es de una versión anterior: pídemelo de nuevo");
     expect(ACUERDO_DE_OTRA_VERSION.length).toBeLessThanOrEqual(60);

@@ -106,6 +106,11 @@ export interface ResultadoDeAplicar {
    * Sin él se deduce como antes.
    */
   destino?: "cronograma" | "propuesta" | "descarte";
+  /**
+   * Revisión de E3 (#10, #15): lo que se hizo ADEMÁS, sin desvío (al aplicar la propuesta, el avance se
+   * vuelve a evaluar). Va al hilo como línea aparte: en `avisos` se leía «el editor hizo algo distinto».
+   */
+  notas?: string[];
 }
 
 interface Props {
@@ -467,11 +472,16 @@ export default function ChatDelAsistente({
     vistaPrevia = true,
     /* E3 P5: a dónde fue (la propuesta, el cronograma o el descarte): el hilo lo dice así. */
     destino?: ResultadoDeAplicar["destino"] | null,
+    /* Revisión de E3 (#10, #15): lo que se hizo además, sin desvío: línea aparte en el hilo. */
+    notas?: string[],
   ) {
     const r = await fetch(`${base}/asistente`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pieza, desenlace: { ok, detalle, vistaPrevia, ...(destino ? { destino } : {}) } }),
+      body: JSON.stringify({
+        pieza,
+        desenlace: { ok, detalle, vistaPrevia, ...(destino ? { destino } : {}), ...(notas?.length ? { notas } : {}) },
+      }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.hilo?.turnos) return false;
@@ -489,7 +499,7 @@ export default function ChatDelAsistente({
     setAplicandoEste(acuerdo);
     setError(null);
     try {
-      const { fallo, avisos, destino: destinoDelResultado } = await onAplicar(acuerdo);
+      const { fallo, avisos, destino: destinoDelResultado, notas } = await onAplicar(acuerdo);
       /* E3 P5: a dónde fue lo decide quien aplicó; si no lo dice, lo que pide el acuerdo. */
       const destino = destinoDelResultado ?? destinoDelAcuerdo(acuerdo);
       if (fallo) {
@@ -517,6 +527,7 @@ export default function ChatDelAsistente({
           [nota, avisos.join(" · ")].filter(Boolean).join(" "),
           !acuerdo.operaciones?.length,
           destino,
+          notas,
         ).catch(() => false);
         /* ⛔ Si el desenlace NO se pudo escribir, hay que DECIRLO. El cambio ya entró, pero el
            botón sigue vivo en el último turno y el silencio invita a apretarlo otra vez — sobre

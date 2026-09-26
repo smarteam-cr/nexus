@@ -33,6 +33,7 @@ import {
   pasoTrasEstructura,
   pasoTrasResolver,
   revisarDireccionDelPlazo,
+  trasElDescarte,
   type FaseParaEstructura,
 } from "./propuesta-de-estructura";
 import {
@@ -1397,6 +1398,27 @@ describe("la máquina de pasos de la pantalla", () => {
     expect(aplicado("armando")).toBe("nada");
     expect(aplicado("faltan")).toBe("ofrecer");
     expect(aplicado("fallo")).toBe("ofrecer");
+  });
+
+  it("⛔ revisión de E3 (#14) · un descarte a mano que FALLÓ no suelta la propuesta: «vuelve a intentar» tiene que ser cierto", () => {
+    /* Con un DELETE fallido (sin conexión, un 5xx, la sesión vencida) la pantalla vaciaba la propuesta igual,
+       aunque seguía guardada: el chat decía «vuelve a intentar» y ya no había botón ni barra con que hacerlo.
+       La edición que la pone en rojo: soltarla con cualquier fallo a mano, u olvidar lo desmarcado de una
+       propuesta que el servidor sigue teniendo. */
+    const FALLOS = [null, { ok: false, status: 500 }, { ok: false, status: 502 }, { ok: false, status: 401 }, { ok: false, status: 403 }];
+    for (const r of FALLOS) {
+      expect(trasElDescarte(r, false), `a mano · ${JSON.stringify(r)}`).toEqual({ resultado: "fallo", soltar: false, olvidar: false });
+    }
+    // El servidor la borró, o la guardada ya era otra: se suelta y se olvida (a mano y automático).
+    for (const automatico of [false, true]) {
+      expect(trasElDescarte({ ok: true, status: 200 }, automatico)).toEqual({ resultado: "descartada", soltar: true, olvidar: true });
+      expect(trasElDescarte({ ok: false, status: 409 }, automatico)).toEqual({ resultado: "otra", soltar: true, olvidar: true });
+    }
+    // El automático la suelta en memoria aunque falle (el 423 de la ruta existe para que no la vuelva a pedir),
+    // pero no olvida lo desmarcado: la propuesta sigue guardada.
+    for (const r of [...FALLOS, { ok: false, status: 423 }]) {
+      expect(trasElDescarte(r, true), `automático · ${JSON.stringify(r)}`).toEqual({ resultado: "fallo", soltar: true, olvidar: false });
+    }
   });
 
   it("#22 · el fallo del paso 1 se guarda como lo lee el CSE: la frase de la pantalla y la causa en tuteo", () => {

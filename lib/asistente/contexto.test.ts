@@ -34,6 +34,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { RAIZ, listarTsx } from "@/lib/ui/scan-source";
 import { renderSeccionParaElChat } from "@/lib/canvas/capacidades-de-documento";
+import { textoDelDesenlace } from "@/lib/asistente/textos-del-acuerdo";
 import {
   AVISO_DEL_MATERIAL_ILEGIBLE,
   PRESUPUESTO_DEL_CHAT,
@@ -517,8 +518,17 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
        contado con un filtro JSON, sino el estado LEÍDO del vacío (`vacio`: «armando» o «fallo»). */
     expect(src).toContain('...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, vacio)] : [])');
     // El desenlace fallido que guarda el hilo no queda con «..» (el motivo de la pantalla ya trae punto).
-    const handler = fs.readFileSync(path.join(RAIZ, "lib/asistente/handler.ts"), "utf8");
-    expect(handler).toContain('(detalle || "el editor rechazó el cambio").replace(/[\\s.]+$/, "")');
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#11), con esta razón: el texto del desenlace salió del manejador a
+       `textoDelDesenlace` (puro, lib/asistente/textos-del-acuerdo.ts), así que se CORRE en vez de buscar su
+       código. La edición que la pone en rojo es la misma: dejar el punto del motivo delante del de la frase. */
+    const fallido = textoDelDesenlace({
+      ok: false,
+      detalle: "Resuelve la propuesta en su línea (arriba del Gantt).",
+      vistaPrevia: false,
+      elDocumento: "el cronograma",
+    });
+    expect(fallido, "el hilo quedó con «..»").not.toContain("..");
+    expect(fallido).toContain("(arriba del Gantt). Los cambios siguen pendientes");
   });
 
   it("⛔ con el borrador VACÍO que espera sus tareas, el chat dice que la IA las está armando, no que hay algo que decidir", () => {

@@ -178,7 +178,12 @@ describe("⭐ E4 P1 · el «IA» de una fase abre el chat del cronograma con esa
     expect(chat).toBeGreaterThan(gantt);
     expect(cierra).toBeGreaterThan(chat);
     expect(canvas).toContain("<ChatDeSeccionDisponible cuando={canEdit && phases.length > 0} />");
-    expect(canvas).toMatch(/const abrirElChatDesdeUnaFase = useCallback\(\(\) => \{\s*setAperturaAutomatica\(false\);\s*setChatAbierto\(true\);\s*\}, \[\]\);/);
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#17), con esta razón: abrirlo desde una fase también apaga el punto
+       del 💬 (la propuesta que llegó mientras la persona estaba en otra cosa). Lo que se pide sigue igual:
+       estable (sin dependencias), sin apertura automática y abierto. */
+    expect(canvas).toMatch(
+      /const abrirElChatDesdeUnaFase = useCallback\(\(\) => \{\s*setAperturaAutomatica\(false\);\s*setChatAbierto\(true\);\s*setPuntoDelChat\(null\);\s*\}, \[\]\);/,
+    );
     expect(canvas, "el Canvas volvió a abrir el diálogo desde una fase").not.toContain("onAssistPhase");
   });
 

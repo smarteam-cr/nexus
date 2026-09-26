@@ -362,6 +362,21 @@ describe("DELETE /timeline/proposal — el descarte automático no borra un borr
     expect(await aMano.json()).toEqual({ cleared: true });
     expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(2);
   });
+
+  it("⛔ revisión de E3 (#24) · «Descártala» acordada para OTRA propuesta: 409 otra_propuesta, sin borrar nada", async () => {
+    /* El chat descarta con el token del ACUERDO. Si la guardada ya es otra (llegó una propuesta nueva después
+       de acordar), la ruta no la borra: es la defensa del servidor, aunque la pantalla dejara pasar el botón.
+       La edición que la pone en rojo: sacar la comparación del `runId` (o aceptar un runId vacío como «la que
+       haya»). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 }); // si llegara a borrar, borraría
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-B", pendingProposal: v1() });
+    for (const runId of ["run-A", "", null]) {
+      const res = await descartarDELETE(pedir({ runId }), delProyecto);
+      expect(res.status, `runId ${JSON.stringify(runId)}: borró una propuesta que no se acordó descartar`).toBe(409);
+      expect(await res.json()).toEqual({ cleared: false, reason: "otra_propuesta" });
+    }
+    expect(db.projectTimeline.updateMany).not.toHaveBeenCalled();
+  });
 });
 
 /* ⚠ REESCRITO en E4 (2026-09), con esta razón: pedía que phases/apply y apply-all respondieran el 409 de
