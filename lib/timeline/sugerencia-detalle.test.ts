@@ -156,32 +156,37 @@ describe("filasDeDetalle — el antes/después que faltaba", () => {
 });
 
 /**
- * ── G14 · EL INICIO SE LEE EN BASE 1, IGUAL QUE EL GANTT ─────────────────────
- * `startWeek` se guarda desde 0 y la fila del Gantt lo muestra desde 1 (el campo «inicia S» pinta
- * `startWeek + 1`). La sugerencia mostraba el valor crudo, así que el CSE leía «inicio S2» en el
- * recuadro y «S3» en la fila: aceptaba un inicio distinto del que creía. Con la propuesta de fases
- * que sale de las reuniones (el revisor habla en semanas del proyecto desde 1) el desfase dejaba de
- * ser cosmético.
- * La edición que la pone en rojo: volver al valor crudo en `valorLegible` o en `describeChange`.
+ * ── G14 · EL INICIO SE LEE COMO EN EL GANTT ─────────────────────────────────
+ * `startWeek` se guarda desde 0. La sugerencia mostraba el valor crudo mientras el campo «inicia S»
+ * pintaba `startWeek + 1`, así que el CSE leía «inicio S2» en el recuadro y «S3» en la fila: aceptaba
+ * un inicio distinto del que creía.
+ * ⚠ REESCRITO en L3 (D4), con esta razón: el arreglo de entonces fue sumar 1 también en el chip, y así
+ * quedó la cabecera del Gantt (S0, S1…) contando distinto que el campo y el chip. Desde L3 todo «S» con
+ * número es la semana del proyecto desde 0 (`semanaDelProyecto`), la de la cabecera, y el campo «inicia
+ * S» también. El detalle en palabras («semana 3», `valorLegible`) sigue desde 1: no se alcanza desde la
+ * propuesta (spec L3, D4) y no dice «S».
+ * La edición que la pone en rojo: volver a sumar 1 en `describeChange`, o al valor crudo en `valorLegible`.
  */
-describe("G14 · el inicio de una fase se lee en base 1, como en el Gantt", () => {
+describe("G14 · el inicio de una fase se lee como en el Gantt", () => {
   it("el detalle antes/después suma 1", () => {
     const [f] = filasDeDetalle([{ field: "startWeek", from: 0, to: 2 }]);
     expect(f.antes).toBe("semana 1");
     expect(f.despues, "el detalle volvió al valor crudo: una semana antes que el Gantt").toBe("semana 3");
   });
 
-  it("el chip de la sugerencia suma 1, y un inicio automático se lee por la semana en que arranca hoy", () => {
+  it("el chip de la sugerencia dice la semana del proyecto desde 0, y un inicio automático se lee por la semana en que arranca hoy", () => {
     /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: fijaba «inicio Sauto → S3».
        Un inicio automático (startWeek null) es el caso normal, y «Sauto» no dice si la sugerencia
        adelanta o atrasa la fase. Ahora el chip dice la semana en que arranca HOY (`inicioActual`, la
        que pinta la fila) o «tras la anterior». La edición que la pone en rojo: volver a «Sauto», o
-       que el Gantt deje de pasar el inicio de la fila. */
-    expect(describeChange({ field: "startWeek", from: null, to: 6 }, { inicioActual: 4 })).toBe("inicio S5 → S7");
-    expect(describeChange({ field: "startWeek", from: null, to: 2 })).toBe("inicio tras la anterior → S3");
-    expect(describeChange({ field: "startWeek", from: 4, to: null })).toBe("inicio S5 → tras la anterior");
-    expect(describeChange({ field: "startWeek", from: 0, to: 1 }), "S0 no existe en el Gantt").toBe(
-      "inicio S1 → S2",
+       que el Gantt deje de pasar el inicio de la fila.
+       ⚠ REESCRITA en L3 (D4): esperaba base 1 («inicio S5 → S7» para 4 → 6, «S0 no existe en el Gantt»).
+       S0 es la primera columna de la cabecera del Gantt: ahora el chip dice el valor guardado tal cual. */
+    expect(describeChange({ field: "startWeek", from: null, to: 6 }, { inicioActual: 4 })).toBe("inicio S4 → S6");
+    expect(describeChange({ field: "startWeek", from: null, to: 2 })).toBe("inicio tras la anterior → S2");
+    expect(describeChange({ field: "startWeek", from: 4, to: null })).toBe("inicio S4 → tras la anterior");
+    expect(describeChange({ field: "startWeek", from: 0, to: 1 }), "S0 es la primera columna de la cabecera").toBe(
+      "inicio S0 → S1",
     );
     for (const c of [
       { field: "startWeek" as const, from: null, to: 2 },
@@ -200,8 +205,8 @@ describe("G14 · el inicio de una fase se lee en base 1, como en el Gantt", () =
     ];
     const vivo = { ancla: null, fases };
     const b = convertirPropuestaDeFases({ anchorStartDate: null, phases: [{ ...fases[0] }, { ...fases[1], startWeek: 6 }] }, vivo);
-    expect(resumir(vivo, b, []).items[0].titulo, "la lista no sabe dónde arranca hoy la fase").toBe("B · inicio S5 → S7");
-    expect(proyectar(vivo, b, []).fases[1].marca?.etiquetas).toEqual(["inicio S5 → S7"]);
+    expect(resumir(vivo, b, []).items[0].titulo, "la lista no sabe dónde arranca hoy la fase").toBe("B · inicio S4 → S6");
+    expect(proyectar(vivo, b, []).fases[1].marca?.etiquetas).toEqual(["inicio S4 → S6"]);
   });
 });
 

@@ -152,6 +152,19 @@ function enElTurno(o: { borrador?: Borrador; vivo?: Vivo; excluidos?: string[] }
   return { ...p, handles: armado.handles, cierreFijado: null };
 }
 
+/**
+ * L3 (D3): el número de un cambio en ESA propuesta, como texto (lo que nombra el modelo). La numeración va
+ * fase por fase en el orden de la propuesta: el «1» ya no es el primer cambio de fases del borrador (acá es
+ * el grupo de «Diseño»), y sin «Pruebas» en el cronograma su duración pasa al final. Los tests que decían
+ * «1» por la duración de «Pruebas» la piden por su clave.
+ */
+const N_DUR = "fase:fc:durationWeeks";
+const numeroEn = (p: PropuestaEnElTurno, clave: string): string =>
+  String(
+    p.resumen!.items.find((it) => it.clave === clave)?.numero ??
+      p.resumen!.grupos.find((g) => g.tareas.some((t) => t.clave === clave))!.numero,
+  );
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("⭐ la traducción: lo que nombra el modelo → las claves de la barra", () => {
@@ -228,8 +241,11 @@ describe("⭐ la traducción: lo que nombra el modelo → las claves de la barra
   });
 
   it("fuera de rango, ya fuera, choca: se rechaza con el porqué (y lo demás del pedido va)", () => {
+    /* ⚠ ACTUALIZADA en L3 (D3), con esta razón: nombraba la duración de «Pruebas» como «1» (el primer cambio
+       de fases del borrador). Con la numeración por fase, «1» es el grupo de «Diseño»: se nombra por su
+       número en cada propuesta (`numeroEn`). */
     const ultimo = Math.max(...P.resumen!.items.map((i) => i.numero), ...P.resumen!.grupos.map((g) => g.numero));
-    const r = traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: ["1", "12", "P3"] }], P);
+    const r = traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: [numeroEn(P, N_DUR), "12", "P3"] }], P);
     expect(r.canonicas[0].op).toEqual({ op: "propuesta.dejar-como-estaba", claves: ["fase:fc:durationWeeks"] });
     expect(r.rechazadas.map((x) => x.motivo)).toEqual([
       `No hay un cambio 12: la lista llega hasta el ${ultimo}.`,
@@ -245,14 +261,19 @@ describe("⭐ la traducción: lo que nombra el modelo → las claves de la barra
        mano», aunque el choque fuera otro. Ahora dice el porqué del plan (el mismo ⚠ de la barra). */
     const editada: Vivo = { ...VIVO, fases: VIVO.fases.map((f) => (f.id === "fc" ? { ...f, durationWeeks: 4 } : f)) };
     const choca = enElTurno({ vivo: editada });
-    expect(traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: ["1"] }], choca).rechazadas[0].motivo).toBe(
-      "El 1 no se aplica igual. Lo cambiaste a mano después de la propuesta: queda como lo dejaste.",
+    const nChoca = numeroEn(choca, N_DUR);
+    expect(traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: [nChoca] }], choca).rechazadas[0].motivo).toBe(
+      `El ${nChoca} no se aplica igual. Lo cambiaste a mano después de la propuesta: queda como lo dejaste.`,
     );
     /* Un choque que NO es una edición a mano (la fase ya no está) dice ese porqué. La edición que la pone en
        rojo: volver a un motivo fijo para todo choque. */
     const sinPruebas: Vivo = { ...VIVO, fases: VIVO.fases.filter((f) => f.id !== "fc") };
-    const otro = traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: ["1"] }], enElTurno({ vivo: sinPruebas }));
-    expect(otro.rechazadas[0].motivo).toBe("El 1 no se aplica igual. La fase ya no está en el cronograma: este cambio queda fuera.");
+    const sinLaFase = enElTurno({ vivo: sinPruebas });
+    const nSinLaFase = numeroEn(sinLaFase, N_DUR);
+    const otro = traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: [nSinLaFase] }], sinLaFase);
+    expect(otro.rechazadas[0].motivo).toBe(
+      `El ${nSinLaFase} no se aplica igual. La fase ya no está en el cronograma: este cambio queda fuera.`,
+    );
     expect(traducirOperaciones([{ op: "propuesta.dejar-como-estaba" }], P).rechazadas[0].motivo).toContain("Falta decir qué cambio");
   });
 
@@ -302,7 +323,8 @@ describe("⭐ aplicar y descartar la propuesta entera: SOLAS", () => {
     // Con lo pendiente descartado a pedido (con la P), sí.
     expect(acordar({ vivas: [dejar], opsNuevas: [{ op: "propuesta.aplicar" }], descartar: ["P1"] }).operaciones[0].op).toBe("propuesta.aplicar");
     expect(acordar({ opsNuevas: [{ op: "propuesta.aplicar" }], preguntaAbierta: true }).avisos[0]).toContain("hay una pregunta sin contestar");
-    const mezclada = acordar({ opsNuevas: [{ op: "propuesta.aplicar" }, { op: "propuesta.dejar-como-estaba", cambios: ["1"] }] });
+    // L3 (D3): la duración de «Pruebas» por su número (decía «1»; ver `numeroEn`).
+    const mezclada = acordar({ opsNuevas: [{ op: "propuesta.aplicar" }, { op: "propuesta.dejar-como-estaba", cambios: [numeroEn(P, N_DUR)] }] });
     expect(mezclada.operaciones).toEqual([{ op: "propuesta.dejar-como-estaba", claves: ["fase:fc:durationWeeks"] }]);
     expect(mezclada.avisos).toEqual(["⚠ No registré «aplicar la propuesta»: va sola, en un pedido aparte."]);
     const nada = enElTurno({ excluidos: BORRADOR.cambios.map((c) => c.clave) });
@@ -363,7 +385,8 @@ describe("⭐ aplicar y descartar la propuesta entera: SOLAS", () => {
     const r = acordar({
       opsNuevas: [
         { op: "tarea.renombrar", taskId: "no-existe", titulo: "X" },
-        { op: "propuesta.dejar-como-estaba", cambios: ["1"] },
+        // L3 (D3): la duración de «Pruebas» por su número (decía «1»; ver `numeroEn`).
+        { op: "propuesta.dejar-como-estaba", cambios: [numeroEn(P, N_DUR)] },
       ],
     });
     expect(r.operaciones).toEqual([{ op: "propuesta.dejar-como-estaba", claves: ["fase:fc:durationWeeks"] }]);
@@ -585,7 +608,8 @@ describe("⭐ correrTurno con una propuesta abierta", () => {
       borrador: "run-4",
     };
     falsos.ctx = contexto(P);
-    contesta("Hecho.", { resumen: "y el 1", operaciones: [{ op: "propuesta.dejar-como-estaba", cambios: ["1"] }] });
+    // L3 (D3): la duración de «Pruebas» por su número (decía «1»; ver `numeroEn`).
+    contesta("Hecho.", { resumen: "y el 1", operaciones: [{ op: "propuesta.dejar-como-estaba", cambios: [numeroEn(P, N_DUR)] }] });
     const r = await correrTurno(
       hiloCon([
         { rol: "CSE", contenido: "deja el piloto" },
@@ -650,7 +674,8 @@ describe("⭐ correrTurno con una propuesta abierta", () => {
     falsos.ctx = contexto(enElTurno());
     contesta("¿Qué hago con el piloto?", {
       resumen: "Dejo el 1",
-      operaciones: [{ op: "propuesta.dejar-como-estaba", cambios: ["1"] }],
+      // L3 (D3): la duración de «Pruebas» por su número (decía «1»; ver `numeroEn`).
+      operaciones: [{ op: "propuesta.dejar-como-estaba", cambios: [numeroEn(enElTurno(), N_DUR)] }],
       preguntaAbierta: true,
     });
     const r = await correrTurno(hiloCon(antes), "deja el 1 y dime qué hago con el piloto");

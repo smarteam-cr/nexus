@@ -13,7 +13,8 @@
  *   5. el cierre de E2c no mira lo del chat, y la forma que le dio el chat evita el desfase;
  *   6. la huella de todo lo anterior no cambia;
  *   7. las escrituras, la proyección, la lista de la barra y la confirmación;
- *   8. el permiso (`necesitaPermisoDeIa`, `traeCambiosDeTareas`).
+ *   8. el permiso (`necesitaPermisoDeIa`, `traeCambiosDeTareas`);
+ *   9. (L3) los choques citan el número del Gantt (`numeracionDeLaPropuesta`).
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import { describe, expect, it } from "vitest";
@@ -556,9 +557,12 @@ describe("7 · lo que se escribe, lo que se ve y lo que se confirma", () => {
       nueva("t:p", PILOTO.clave, "Medir el piloto", 1, { porChat: true }),
     ]);
     const r = resumir(VIVO, b);
+    /* ⚠ ACTUALIZADA en L3 (D3), con esta razón: pedía los grupos después de la estructura (2 y 3). Con UNA
+       numeración por fase, en el orden de la propuesta: el grupo de «Pruebas» (c) es el 1, y «Piloto» (va
+       después de «Pruebas») es la fase 2 y su grupo, el 3. El orden de `grupos` no cambia. */
     expect(r.grupos.map((g) => [g.numero, g.fase, g.cambian, g.nuevas])).toEqual([
-      [2, PILOTO.clave, 1, 1],
-      [3, "c", 1, 0],
+      [3, PILOTO.clave, 1, 1],
+      [1, "c", 1, 0],
     ]);
     const [llega, masPiloto] = r.grupos[0].tareas;
     /* ⚠ ACTUALIZADA en la revisión de E3 (#22), con esta razón: en el grupo de su destino, «pasa a «Piloto», S2»
@@ -580,8 +584,11 @@ describe("7 · lo que se escribe, lo que se ve y lo que se confirma", () => {
     const enPruebas = r.grupos.find((g) => g.fase === "c")!;
     expect(enPruebas.tareas.map((t) => [t.signo, t.titulo, t.semana, t.cambio])).toEqual([
       ["→", "Definir pipeline", 2, "viene de «Diseño»"],
-      ["→", "Mapear procesos", 3, "viene de «Diseño» · pasa a S3"],
+      ["→", "Mapear procesos", 3, "viene de «Diseño» · pasa a la Semana 3"],
     ]);
+    /* ⚠ ACTUALIZADA en L3 (D4), con esta razón: decía «pasa a S3» para la semana 3 de la fase. «S» con número
+       es ahora solo la semana del proyecto (desde 0, la de la cabecera del Gantt); la de la fase va en palabras. */
+    for (const t of enPruebas.tareas) expect(t.cambio ?? "", "«S» con número para la semana de la fase").not.toMatch(/\bS\d/);
     for (const t of enPruebas.tareas) expect(t.cambio, "el renglón repite su grupo").not.toContain("«Pruebas»");
     // Lo demás que le cambia sigue después («renombrada», el dueño).
     const conMas = resumir(VIVO, v1([cambia(B2, "b", { fase: "c", title: "Pipeline", party: "CLIENTE" })]));
@@ -644,5 +651,39 @@ describe("8 · el permiso", () => {
     expect(traeCambiosDeTareas(crudo([{ tipo: "tarea-cambia", porChat: true }, { tipo: "fase-se-va", porChat: true }]))).toBe(false);
     expect(traeCambiosDeTareas(crudo([{ tipo: "tarea-se-muda", porChat: true }])), "un tipo que no conoce").toBe(true);
     expect(traeCambiosDeTareas(crudo([{ tipo: "fase-cambia" }]))).toBe(false);
+  });
+});
+
+/**
+ * L3 (D3) · «el cambio N» de un choque es el número que ve el CSE. Los números van a vivir en el Gantt, fase
+ * por fase (`numeracionDeLaPropuesta`); si el plan siguiera numerando como la barra vieja (la estructura 1..k
+ * en el orden del borrador y los grupos después), el ⚠ mandaría a otra casilla.
+ * (La spec la pedía en borrador.test.ts; va acá porque acá están los armadores de lo que dicta el chat.)
+ */
+describe("9 · L3: los choques citan el número del Gantt", () => {
+  it("⛔ «La fase de destino se quita con el cambio N» y «Va con el cambio N» usan la numeración única", () => {
+    /* La edición que la pone en rojo: dejar `numerosEnLaBarra` en `planDeAplicacion`. Con este borrador las dos
+       numeraciones difieren: la vieja daba 1 a la duración de «Pruebas» y 2 a la fase que se va; la del Gantt
+       numera «Diseño» primero (la fase que se va 1 y su grupo 2) y después «Pruebas» (su duración 3). */
+    const aDiseno = cambia(C2, "c", { fase: "b" });
+    const semana = cambia(C1, "c", { weekIndex: 3 }, { conCambio: DUR_C.clave });
+    const b = v1([{ ...DUR_C, porChat: true }, seVaLaFase("b"), aDiseno, semana]);
+    // «Pruebas» se editó a mano (5 semanas): su duración choca, y la tarea que va con ella también.
+    const vivo = conFase("c", (f) => ({ ...f, durationWeeks: 5 }));
+    const r = resumir(vivo, b);
+    const numero = (clave: string) => r.items.find((it) => it.clave === clave)!.numero;
+    expect([numero(claveDeFaseQueSeVa("b")), numero(DUR_C.clave)], "la guarda no está mirando dos numeraciones distintas").toEqual([1, 3]);
+    const plan = planDeAplicacion(vivo, b);
+    expect(itemDe(plan, aDiseno.clave)).toMatchObject({
+      estado: "choque",
+      choque: `La fase de destino se quita con el cambio ${numero(claveDeFaseQueSeVa("b"))}.`,
+    });
+    expect(itemDe(plan, semana.clave)).toMatchObject({
+      estado: "choque",
+      choque: `Va con el cambio ${numero(DUR_C.clave)}, que queda fuera.`,
+    });
+    // El ⚠ del grupo en la lista y el del chat dicen lo mismo que el plan.
+    const grupoDeDiseno = r.grupos.find((g) => g.fase === "b")!;
+    expect(grupoDeDiseno.tareas[0].aviso).toBe("⚠ La fase de destino se quita con el cambio 1.");
   });
 });

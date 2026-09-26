@@ -299,6 +299,27 @@ export function absoluteWeek(phaseStart: number, weekIndex: number): number {
 }
 
 /**
+ * L3 (D4): la semana del PROYECTO, desde 0, como la cabecera del Gantt (`S{w}`) y como
+ * `fase.arranque-relativo` del chat. Todo «S» con número usa esta base: antes el mismo cambio se leía
+ * «inicio S3 → S5» en un lado, «S4 → S6» en otro e «inicia S 4» en el campo.
+ */
+export const semanaDelProyecto = (w: number): string => `S${w}`;
+
+/**
+ * L3 (D4): la ÚNICA etiqueta de una semana de una fase: «Semana 2 · S3» = la semana 2 de la fase (desde
+ * 1) es la S3 del proyecto (desde 0, la de la cabecera). Sin el inicio de la fase (sin rango), solo
+ * «Semana 2». `semana` es el `weekIndex` de la tarea (desde 0).
+ */
+export function etiquetaDeSemana(
+  inicioDeFase: number | null,
+  semana: number,
+): { deLaFase: string; delProyecto: string | null; corta: string } {
+  const deLaFase = `Semana ${semana + 1}`;
+  const delProyecto = inicioDeFase === null ? null : semanaDelProyecto(absoluteWeek(inicioDeFase, semana));
+  return { deLaFase, delProyecto, corta: delProyecto === null ? deLaFase : `${deLaFase} · ${delProyecto}` };
+}
+
+/**
  * Fecha de FIN PLANEADO de una tarea (fin de su semana absoluta) según el anchor.
  * Convención "+1 = fin de semana" (misma que summary.ts): una tarea en la semana
  * absoluta `w` se espera terminada al llegar la fecha `anchor + (w+1) semanas`.

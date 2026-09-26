@@ -727,16 +727,28 @@ describe("7 · proyectar, la estructura que ve el paso 2, resumir y los textos",
     expect(e.ancla).toBe("2026-10-05");
   });
 
-  it("resumir: la estructura se numera 1..k y las tareas van en grupos por fase (k+1…), con su estado", () => {
+  it("resumir: cada fase numera sus cambios y después su grupo de tareas, en el orden de la propuesta, con su estado", () => {
+    /* ⚠ REESCRITA en L3 (D3), con esta razón: pedía la estructura 1..k en el orden del borrador y los grupos
+       después (k+1…). Con las casillas en el Gantt, esos números se leían salteados fase por fase. Ahora hay
+       UNA numeración (`numeracionDeLaPropuesta`): fase por fase en el orden de la propuesta, sus cambios y al
+       final su grupo. «Diseño» (b) = 1; «Pruebas» (c): su duración 2 y su grupo 3; «Piloto» (va después de
+       «Pruebas»): la fase 4 y su grupo 5. `items` y `grupos` siguen en su orden; `indice` los intercala. */
     const r = resumir(VIVO, BORRADOR, [], { tareas: "listas" });
     expect(r.items.map((it) => [it.numero, it.clave])).toEqual([
-      [1, "fase:c:durationWeeks"],
-      [2, PILOTO.clave],
+      [2, "fase:c:durationWeeks"],
+      [4, PILOTO.clave],
     ]);
     expect(r.grupos.map((g) => [g.numero, g.fase, g.nombre, g.nuevas, g.seVan, g.estado])).toEqual([
-      [3, "b", "Diseño", 1, 2, "aplica"],
-      [4, "c", "Pruebas", 1, 1, "aplica"],
+      [1, "b", "Diseño", 1, 2, "aplica"],
+      [3, "c", "Pruebas", 1, 1, "aplica"],
       [5, PILOTO.clave, "Piloto", 2, 0, "aplica"],
+    ]);
+    expect(r.indice.map((u) => [u.numero, u.tipo, u.tipo === "cambio" ? u.clave : u.fase])).toEqual([
+      [1, "grupo", "b"],
+      [2, "cambio", "fase:c:durationWeeks"],
+      [3, "grupo", "c"],
+      [4, "cambio", PILOTO.clave],
+      [5, "grupo", PILOTO.clave],
     ]);
     expect(r.grupos[0].tareas.map((t) => [t.signo, t.semana, t.titulo])).toEqual([
       ["−", 1, "Mapear procesos"],

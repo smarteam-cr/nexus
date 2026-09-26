@@ -30,6 +30,7 @@ vi.mock("@/lib/contexto/cargar", () => ({ cargarMaterialParaElChat: vi.fn() }));
 
 import {
   armarContextoConPropuesta,
+  COMO_SE_LEEN_LAS_SEMANAS,
   LINEA_DE_LA_PROPUESTA_EDITABLE,
   lineaDeSoloLectura,
   RECORTE_NIVEL_1,
@@ -41,6 +42,7 @@ import { contextoDeCronograma, lineaParaRehacerTodo, TECHO_DEL_PREFIJO_CHARS } f
 import { avisoDelChat, estadoParaElChat } from "@/lib/timeline/apertura-del-chat";
 import { propuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
 import { resolverHandle } from "@/lib/timeline/handle-de-tarea";
+import { computePhaseRanges } from "@/lib/timeline/weeks";
 import {
   claveDeFaseQueSeVa,
   claveDeTareaQueSeVa,
@@ -401,7 +403,10 @@ describe("el recorte va en su orden y no pierde identificadores", () => {
     expect(linea).toContain(`☐ Tareas de «${g.nombre}»`);
     const fila = nivel0.texto.split("\n").find((l) => l.startsWith("   desmarcadas: "))!;
     expect(fila, "las desmarcadas no se nombran").toBeTruthy();
-    for (const t of g.tareas) expect(fila).toContain(`${t.signo} S${t.semana} ${t.titulo} [${nivel0.handles.get(t.ref)}]`);
+    /* ⚠ ACTUALIZADA en L3 (D4), con esta razón: pedía «S2» para la semana 2 de la fase; la tarea ahora va con
+       su etiqueta única («Semana 2 · S23»: la de la fase y la del proyecto, la de la cabecera del Gantt). */
+    for (const t of g.tareas) expect(fila).toContain(`${t.signo} ${t.etiqueta} ${t.titulo} [${nivel0.handles.get(t.ref)}]`);
+    for (const t of g.tareas) expect(t.etiqueta).toMatch(new RegExp(`^Semana ${t.semana} · S\\d+$`));
   });
 });
 
@@ -679,6 +684,22 @@ describe("⛔ P4 no cambia lo que hace el chat: ve la propuesta, pero `fases` si
     expect(db.projectTimeline.findUnique.mock.calls.some((c) => "id" in (c[0] as { where: object }).where)).toBe(false);
   });
 
+  it("⛔ L3 (D4) · sin propuesta, las semanas dicen «Semana N · SK» (la del proyecto, desde S0) y se explica cómo se leen", async () => {
+    /* Con y sin propuesta el chat lee la MISMA etiqueta: «pásala a la S5» es la columna S5 de la cabecera.
+       La edición que la pone en rojo: volver a `S${w + 1}` en `contexto.ts` (la semana de la fase, que el chat
+       confundía con la S de la cabecera), o dejar el texto sin `COMO_SE_LEEN_LAS_SEMANAS`. */
+    montarLaBase(null);
+    const ctx = await contextoDeCronograma("p1");
+    expect(ctx.texto).toContain(COMO_SE_LEEN_LAS_SEMANAS);
+    // «Kickoff» arranca en S0; «Diseño» (2 semanas) en S1; «Pruebas» en S3.
+    expect(ctx.texto).toContain("   Semana 1 · S0: Reunión de arranque");
+    expect(ctx.texto).toContain("   Semana 1 · S1: Mapear procesos");
+    expect(ctx.texto).toContain("   Semana 2 · S2: Definir pipeline");
+    expect(ctx.texto).toContain("   Semana 1 · S3: (vacía)");
+    expect(ctx.texto).toContain("   Semana 2 · S4: Probar flujos");
+    expect(ctx.texto, "una semana con «S» de la fase (base 1)").not.toMatch(/^ {3}S\d+: /m);
+  });
+
   it("⚠ si la propuesta no se puede leer, el chat sigue con el cronograma de hoy y el freno", async () => {
     /* La edición que la pone en rojo: sacar el `.catch` de la lectura (el turno entero se rompería). */
     montarLaBase(JSON.parse(JSON.stringify(borrador)));
@@ -779,5 +800,64 @@ describe("⛔ L2 · mientras se arma la propuesta, el chat no recibe números qu
   it("las líneas de solo lectura, en tuteo", () => {
     const VOSEO = /\b(podés|querés|tenés|decime|decímelo|fijate|mirá|revisá|sabés|elegí|aplicá)\b/i;
     for (const porQue of ["tareas-armando", "recalculando"] as const) expect(lineaDeSoloLectura(porQue)).not.toMatch(VOSEO);
+  });
+});
+
+/**
+ * L3 (D3, D4) · el chat ve los números y las semanas como el Gantt. Un número es siempre un número de la
+ * propuesta (cambios y grupos intercalados, fase por fase, `r.indice`); las fases de «LA PROPUESTA» ya no
+ * llevan ordinal (se confundía con «el 3»). Cada semana dice «Semana N · SK»: N la de la fase, SK la del
+ * proyecto desde S0, la de la cabecera.
+ */
+describe("⛔ L3 · el chat ve los números y las semanas del Gantt", () => {
+  const p = paraElChat(PEOR_CASO);
+  const c = armarContextoConPropuesta(entrada(p), { techo: Number.POSITIVE_INFINITY });
+  const bloque = c.texto.slice(c.texto.indexOf("LA PROPUESTA: "), c.texto.indexOf("\nArranque: "));
+
+  it("⭐ el índice va 1..N en el orden de la numeración: cambios y grupos intercalados", () => {
+    /* La edición que la pone en rojo: recorrer `r.items` y después `r.grupos` (los números saldrían salteados:
+       el grupo de la primera fase es el 1 y los cambios de fases vienen después). */
+    const indice = indiceDe(c.texto);
+    const r = p.resumen;
+    expect(numerosDe(indice)).toEqual(r.indice.map((u) => u.numero));
+    expect(numerosDe(indice)).toEqual(r.indice.map((_, i) => i + 1));
+    expect(indice.map((l) => (/^\d+\. \S+ Tareas de «/.test(l) ? "grupo" : "cambio"))).toEqual(r.indice.map((u) => u.tipo));
+    const primerCambio = r.indice.findIndex((u) => u.tipo === "cambio");
+    const ultimoGrupo = r.indice.map((u) => u.tipo).lastIndexOf("grupo");
+    expect(primerCambio, "la guarda no está mirando grupos y cambios intercalados").toBeGreaterThan(0);
+    expect(ultimoGrupo).toBeGreaterThan(primerCambio);
+  });
+
+  it("⛔ las fases de «LA PROPUESTA» no empiezan con número", () => {
+    /* La edición que la pone en rojo: volver a numerar las fases (`${i + 1}. ${f.name}`): el modelo leía «el 3»
+       como la tercera fase. */
+    expect(bloque, "la guarda no encuentra «LA PROPUESTA»").toContain("LA PROPUESTA: ");
+    for (const f of p.resumen.proyeccion.fases) {
+      const linea = bloque.split("\n").find((l) => l.includes(`[${f.clave}] — `));
+      expect(linea, `no está la fase «${f.name}»`).toBeTruthy();
+      expect(linea!.startsWith(`- ${f.name} [${f.clave}]`), linea).toBe(true);
+    }
+    expect(bloque, "un renglón numerado en «LA PROPUESTA»").not.toMatch(/^\d+\. /m);
+  });
+
+  it("⛔ cada semana dice «Semana N · SK», con la S del proyecto desde S0, y el encabezado explica N − 1 y K", () => {
+    /* La edición que la pone en rojo: volver a `S${w + 1}` (la semana de la fase con «S», que el chat confundía
+       con la cabecera) o sumarle 1 a la del proyecto. */
+    const rangos = computePhaseRanges(p.resumen.proyeccion.fases);
+    const filas = bloque.split("\n").filter((l) => /^ {3}\S/.test(l) && !l.startsWith("   ⚠"));
+    expect(filas.length).toBeGreaterThan(20);
+    for (const l of filas) expect(l).toMatch(/^ {3}Semana \d+ · S\d+: /);
+    p.resumen.proyeccion.fases.forEach((f, i) => {
+      const desde = bloque.indexOf(`[${f.clave}] — `);
+      const primera = bloque.slice(desde).split("\n")[1];
+      expect(primera, f.name).toMatch(new RegExp(`^ {3}Semana 1 · S${rangos[i].start}: `));
+    });
+    expect(bloque).toContain(COMO_SE_LEEN_LAS_SEMANAS);
+    expect(COMO_SE_LEEN_LAS_SEMANAS).toContain("N − 1");
+    expect(COMO_SE_LEEN_LAS_SEMANAS).toContain("`fase.arranque-relativo` va K");
+    // Las tareas de «LOS CAMBIOS» también, con su etiqueta.
+    const seVan = c.texto.split("\n").find((l) => l.startsWith("   se van: "));
+    expect(seVan, "el fixture no tiene tareas que se van").toBeTruthy();
+    expect(seVan).toMatch(/^ {3}se van: Semana \d+ · S\d+ /);
   });
 });

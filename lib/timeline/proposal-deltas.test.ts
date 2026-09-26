@@ -78,6 +78,14 @@ test("describeChange redacta la sugerencia principal", () => {
   expect(describeChange({ field: "name", from: "A", to: "B" })).toBe("renombrar a «B»");
 });
 
+test("L3 (D4) · el inicio se dice en semanas del proyecto desde 0, como la cabecera del Gantt", () => {
+  /* La edición que la pone en rojo: volver a sumar 1 (`S${Number(c.from) + 1}` o `inicioActual + 1`): el chip
+     diría S3 para la columna que la cabecera llama S2. */
+  expect(describeChange({ field: "startWeek", from: 2, to: 4 })).toBe("inicio S2 → S4");
+  expect(describeChange({ field: "startWeek", from: null, to: 4 }, { inicioActual: 2 })).toBe("inicio S2 → S4");
+  expect(describeChange({ field: "startWeek", from: 0, to: null })).toBe("inicio S0 → tras la anterior");
+});
+
 // ── Asperezas corregidas ─────────────────────────────────────────────────────────────────
 
 test("una fase nueva sabe DÓNDE va (después de la fase previa de la propuesta)", () => {

@@ -27,6 +27,8 @@ import {
   displayedEnd,
   closeDateDiverges,
   fmtFull,
+  etiquetaDeSemana,
+  semanaDelProyecto,
   type PhaseSpanLike,
 } from "./weeks";
 
@@ -329,4 +331,31 @@ test("projectedEnd().label === la fórmula inline que tenía la vista del client
     const viejo = fmtFull(addWeeks(ANCHOR, timelineSpan(fases)).toISOString());
     expect(projectedEnd(ANCHOR, fases).label).toBe(viejo);
   }
+});
+
+/**
+ * ── L3 (D4) · UNA SOLA ETIQUETA DE SEMANA Y UNA SOLA BASE PARA «S» ─────────────
+ * La semana de la fase se cuenta desde 1 («Semana 2») y la del proyecto desde 0, como la cabecera del
+ * Gantt (`S{w}`) y `fase.arranque-relativo` del chat. Antes el mismo cambio se leía de tres formas
+ * («inicio S3 → S5» en la barra, «S4 → S6» en el chip, «inicia S 4» en el campo) y el chat leía «S1» como
+ * la semana 1 de la fase. La edición que la pone en rojo: contar el proyecto desde 1 (`inicio + semana + 1`)
+ * o la fase desde 0.
+ */
+describe("L3 · etiquetaDeSemana: «Semana N · SK»", () => {
+  it("la semana 2 de una fase que arranca en S2 es la S3 del proyecto", () => {
+    expect(etiquetaDeSemana(2, 1)).toEqual({ deLaFase: "Semana 2", delProyecto: "S3", corta: "Semana 2 · S3" });
+  });
+
+  it("la primera semana de la primera fase es la S0, la primera columna de la cabecera", () => {
+    expect(etiquetaDeSemana(0, 0).corta).toBe("Semana 1 · S0");
+    expect(semanaDelProyecto(0)).toBe("S0");
+    // La cabecera del Gantt pinta `S{w}` con w = inicio de la fase + semana: la etiqueta nombra esa columna.
+    for (const [inicio, semana] of [[0, 3], [5, 0], [12, 4]]) {
+      expect(etiquetaDeSemana(inicio, semana).delProyecto).toBe(`S${inicio + semana}`);
+    }
+  });
+
+  it("sin el inicio de la fase (sin rango) dice solo la semana de la fase", () => {
+    expect(etiquetaDeSemana(null, 1)).toEqual({ deLaFase: "Semana 2", delProyecto: null, corta: "Semana 2" });
+  });
 });

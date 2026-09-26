@@ -45,6 +45,7 @@
  * dice QUÉ quiere cambiar: `campos` por fase (solo esos se comparan y se escriben) y `movidas`
  * (el reordenamiento se arma sobre el orden VIVO). La del handoff, que no los trae, sigue igual.
  */
+import { semanaDelProyecto } from "./weeks";
 
 export interface CurrentPhaseLike {
   id: string;
@@ -453,9 +454,11 @@ export interface ContextoDelCambio {
 /**
  * Etiqueta humana de un cambio de campo (para el badge "Sugerencia" del Gantt).
  *
- * El inicio va en base 1, igual que el campo «inicia S» del Gantt (TimelineGantt: startWeek + 1):
- * con el valor crudo el CSE aceptaba un inicio una semana antes del que leía en la fila. Y una fase
- * que arranca sola (`startWeek` null, el caso normal) se lee por la semana en que arranca HOY
+ * L3 (D4): el inicio va en la semana del PROYECTO desde 0 (`semanaDelProyecto`), la misma base que la
+ * cabecera del Gantt (`S{w}`), el campo «inicia S» y `fase.arranque-relativo` del chat. Antes iba en
+ * base 1 para calzar con el campo, que sumaba 1: la cabecera decía S2 y el campo y este chip S3 para la
+ * misma columna, y el chat leía una tercera cosa. Lo guardado (`startWeek`) ya era base 0: no cambia.
+ * Una fase que arranca sola (`startWeek` null, el caso normal) se lee por la semana en que arranca HOY
  * (`inicioActual`), o «tras la anterior»: el chip decía «inicio Sauto → S7» y no se sabía si la
  * sugerencia la adelantaba o la atrasaba (revisión adversarial, 2026-09-24).
  */
@@ -465,8 +468,12 @@ export function describeChange(c: PhaseFieldChange, ctx: ContextoDelCambio = {})
       return `${c.from ?? "?"} → ${c.to ?? "?"} semanas`;
     case "startWeek": {
       const desde =
-        c.from != null ? `S${Number(c.from) + 1}` : ctx.inicioActual != null ? `S${ctx.inicioActual + 1}` : "tras la anterior";
-      const hasta = c.to != null ? `S${Number(c.to) + 1}` : "tras la anterior";
+        c.from != null
+          ? semanaDelProyecto(Number(c.from))
+          : ctx.inicioActual != null
+            ? semanaDelProyecto(ctx.inicioActual)
+            : "tras la anterior";
+      const hasta = c.to != null ? semanaDelProyecto(Number(c.to)) : "tras la anterior";
       return `inicio ${desde} → ${hasta}`;
     }
     case "name":

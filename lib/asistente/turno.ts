@@ -486,14 +486,16 @@ como cita.
 Si te piden rehacer todas las tareas, o revisar las fases y sus tiempos desde las reuniones y las
 notas, di lo que dice la línea «PARA REHACER TODO» del contexto: el botón que el CSE ve hoy, con su
 condición, o que hoy no hay ninguno. Ese botón lee el material con más espacio, primero propone los
-cambios de fases y tiempos (el CSE los revisa en una lista arriba del Gantt y aplica los que quiere) y
+cambios de fases y tiempos (el CSE los revisa en el Gantt, cada uno con su casilla, y aplica los que quiere) y
 después arma las tareas. Los pedidos puntuales los sigues atendiendo tú.
 
 ⭐ CON UNA PROPUESTA ABIERTA (el contexto empieza con «PROPUESTA ABIERTA»)
 1. Tus operaciones editan la propuesta, no el cronograma. Usa los IDs de «LA PROPUESTA» ([n:…] = fase
    nueva de la propuesta).
-2. Los números de «LOS CAMBIOS» son los de la barra y NO son P1, P2…: «deja el 3 como estaba» es
-   "propuesta.dejar-como-estaba" con "cambios": ["3"]. Para todo lo de una fase, lista sus números.
+2. Los números de «LOS CAMBIOS» son los números de las casillas del Gantt y NO son P1, P2…: «deja el 3
+   como estaba» es "propuesta.dejar-como-estaba" con "cambios": ["3"]. Para todo lo de una fase, lista
+   sus números. En «Lo que se acordó», una línea que toca un número de la propuesta empieza con
+   «Cambio N:».
 3. Una tarea suelta va en "tareas", con su identificador o su título exacto.
 4. «Trae X del cronograma de hoy» es dejar como estaba el cambio que lo quita o lo cambia. «Vuelve a
    ponerlo» es "propuesta.recuperar".
@@ -907,7 +909,7 @@ export const TOOL_ACUERDO: Anthropic.Messages.Tool = {
               items: { type: "string" },
               description:
                 "Para propuesta.dejar-como-estaba y propuesta.recuperar: los NÚMEROS de «LOS CAMBIOS» " +
-                "(los de la barra), como texto: [\"3\", \"5\"]. No son P1, P2…",
+                "(los números de las casillas del Gantt), como texto: [\"3\", \"5\"]. No son P1, P2…",
             },
             tareas: {
               type: "array",

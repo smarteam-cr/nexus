@@ -94,9 +94,11 @@ import {
   computePhaseRanges,
   describeEndShift,
   endShiftDays,
+  etiquetaDeSemana,
   fmtFull,
   plural,
   projectedEnd,
+  semanaDelProyecto,
   type ProjectedEnd,
 } from "./weeks";
 import { evaluarMagnitud, frasesDeCambios, unirFrases, type MagnitudPropuesta } from "./magnitud-propuesta";
@@ -1555,23 +1557,102 @@ export const faseDeLaTarea = (c: CambioDeTarea): string =>
   c.tipo === "tarea-nueva" ? c.fase : c.tipo === "tarea-cambia" ? (c.a.fase ?? c.faseId) : c.faseId;
 const llaveDeTarea = (titulo: string, semana: number) => `${huellaDeTitulo(titulo)}|${semana}`;
 
+/** L3 (D3): el grupo en que se numera una tarea: el de su fase (`faseDeLaTarea`). L7 lo cambia para las
+ *  mudanzas sugeridas, que se ven en su fase de ORIGEN. */
+export const grupoDeLaTarea = (c: CambioDeTarea): string => faseDeLaTarea(c);
+
 /**
- * El número de cada cambio en la barra: la estructura 1..k en su orden, y las tareas con el número de
- * su grupo (k + 1…, uno por fase en el orden en que aparece). Es la numeración de `resumir`: el plan
- * la usa para decir «el cambio N» en un choque.
+ * L3 (D3): una unidad numerada de la propuesta: un cambio suelto (el arranque, el orden, una fase nueva
+ * o que se va, un campo de una fase) o el grupo de las tareas de una fase. `yaEsta` lo pone `resumir`
+ * (depende de lo vivo); `numeracionDeLaPropuesta` lo deja en false.
  */
-function numerosEnLaBarra(cambios: readonly Cambio[]): Map<string, number> {
-  const out = new Map<string, number>();
-  let k = 0;
-  for (const c of cambios) if (!esCambioDeTarea(c)) out.set(c.clave, ++k);
-  const grupos = new Map<string, number>();
+export type UnidadNumerada =
+  | { numero: number; tipo: "cambio"; clave: string; fase: string | null; yaEsta: boolean }
+  | { numero: number; tipo: "grupo"; fase: string; claves: string[]; yaEsta: boolean };
+
+export interface NumeracionDeLaPropuesta {
+  /** La clave de cada cambio → su número (el de su grupo, en una tarea). */
+  porClave: Map<string, number>;
+  /** Las unidades, 1..N en orden. */
+  orden: UnidadNumerada[];
+}
+
+/**
+ * ⭐ L3 (D3): LA ÚNICA NUMERACIÓN DE LA PROPUESTA. La usan el plan (los choques que dicen «el cambio N»),
+ * `resumir`, el Gantt, la barra y el contexto del chat: «deja el 12 como estaba» apunta a lo que se ve.
+ * Sale solo de lo vivo y de los cambios, NUNCA de lo marcado: marcar o desmarcar no cambia ningún número.
+ *   1. la cabecera: el arranque y el orden;
+ *   2. fase por fase, en el orden COMPLETO de la propuesta (el cambio de orden y todas las fases nuevas,
+ *      marcadas o no, sin sacar las que se van): la fase nueva o la que se va, sus campos en
+ *      `CAMPOS_POR_IMPACTO` y al final el grupo de sus tareas;
+ *   3. lo que no tiene fase (un campo de una fase que ya no está, un grupo de una fase que no se
+ *      conoce), en el orden del borrador.
+ * Antes (E2a–E3) la estructura iba 1..k en el orden del borrador y las tareas después: el Gantt,
+ * ordenado por fase, habría mostrado los números salteados. `ItemDelPlan.numero` NO cambia (la huella).
+ */
+export function numeracionDeLaPropuesta(vivo: Vivo, cambios: readonly Cambio[]): NumeracionDeLaPropuesta {
+  const porClave = new Map<string, number>();
+  const orden: UnidadNumerada[] = [];
+  const unidadDe = new Map<string, UnidadNumerada>();
+  const numerarCambio = (c: Cambio, fase: string | null) => {
+    if (porClave.has(c.clave)) return;
+    const u: UnidadNumerada = { numero: orden.length + 1, tipo: "cambio", clave: c.clave, fase, yaEsta: false };
+    orden.push(u);
+    porClave.set(c.clave, u.numero);
+  };
+  const tareasPorGrupo = new Map<string, string[]>();
   for (const c of cambios) {
     if (!esCambioDeTarea(c)) continue;
-    const fase = faseDeLaTarea(c);
-    if (!grupos.has(fase)) grupos.set(fase, k + grupos.size + 1);
-    out.set(c.clave, grupos.get(fase)!);
+    const g = grupoDeLaTarea(c);
+    tareasPorGrupo.set(g, [...(tareasPorGrupo.get(g) ?? []), c.clave]);
   }
-  return out;
+  const numerarGrupo = (fase: string) => {
+    const claves = tareasPorGrupo.get(fase);
+    if (!claves || unidadDe.has(fase)) return;
+    const u: UnidadNumerada = { numero: orden.length + 1, tipo: "grupo", fase, claves, yaEsta: false };
+    orden.push(u);
+    unidadDe.set(fase, u);
+    for (const clave of claves) if (!porClave.has(clave)) porClave.set(clave, u.numero);
+  };
+
+  // 1 · La cabecera.
+  for (const c of cambios) if (c.tipo === "ancla") numerarCambio(c, null);
+  for (const c of cambios) if (c.tipo === "orden") numerarCambio(c, null);
+
+  // 2 · Fase por fase, en el orden completo (lo marcado no entra: el número no se mueve al tocar casillas).
+  const nuevasPorClave = new Map(
+    cambios.filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva").map((c) => [c.clave, c]),
+  );
+  const completo = ordenFinal(
+    vivo,
+    cambios.filter((c) => c.tipo === "fase-nueva" || c.tipo === "orden"),
+    nuevasPorClave,
+  ).map((l) => (l.tipo === "existente" ? l.id : l.clave));
+  const enElOrden = new Set(completo);
+  const impacto = (c: CambioFaseCambia) => CAMPOS_POR_IMPACTO.indexOf(c.campo);
+  for (const fase of completo) {
+    for (const c of cambios) {
+      if ((c.tipo === "fase-nueva" && c.clave === fase) || (c.tipo === "fase-se-va" && c.faseId === fase)) {
+        numerarCambio(c, fase);
+      }
+    }
+    const campos = cambios
+      .filter((c): c is CambioFaseCambia => c.tipo === "fase-cambia" && c.faseId === fase)
+      .map((c, i) => ({ c, i }))
+      .sort((a, b) => impacto(a.c) - impacto(b.c) || a.i - b.i);
+    for (const { c } of campos) numerarCambio(c, fase);
+    numerarGrupo(fase);
+  }
+
+  // 3 · Lo que no tiene fase en la propuesta, en el orden del borrador.
+  for (const c of cambios) {
+    if (esCambioDeTarea(c)) numerarGrupo(grupoDeLaTarea(c));
+    else {
+      const fase = c.tipo === "fase-nueva" ? c.clave : c.tipo === "fase-cambia" || c.tipo === "fase-se-va" ? c.faseId : null;
+      numerarCambio(c, fase !== null && enElOrden.has(fase) ? fase : null);
+    }
+  }
+  return { porClave, orden };
 }
 
 /** El orden final: el cambio de orden (si se aplica) y las fases nuevas en su lugar. Es `buildPhaseOrder`.
@@ -1703,8 +1784,9 @@ export function planDeAplicacion(
         : { estado: base(c) };
   const choca = (texto: string): Estado => ({ estado: "choque", choque: texto });
   const estados: Array<Estado | undefined> = new Array(borrador.cambios.length);
-  // E3: «el cambio N» de un choque es el número de la barra; el estado de otro cambio, por su clave.
-  const numeros = numerosEnLaBarra(borrador.cambios);
+  /* E3: «el cambio N» de un choque; el estado de otro cambio, por su clave. L3 (D3): el número es el de
+     `numeracionDeLaPropuesta`, el que se ve en el Gantt y cita el chat (antes, el de la barra). */
+  const numeros = numeracionDeLaPropuesta(vivo, borrador.cambios).porClave;
   const numeroDe = (clave: string): number => numeros.get(clave) ?? 0;
   const indicePorClave = new Map<string, number>();
   borrador.cambios.forEach((c, i) => {
@@ -2439,9 +2521,16 @@ export function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion
       if (!(campo in cambios)) continue;
       if (campo === "durationWeeks") etiquetas.push(etiquetaDeDuracion(actual.durationWeeks, f.durationWeeks));
       else if (campo === "startWeek") {
-        const de = (inicioHoy.get(f.id) ?? 0) + 1;
-        const a = rangosDespues[i].start + 1;
-        etiquetas.push(de === a ? (f.startWeek === null ? "inicio tras la anterior" : `inicio fijo en S${a}`) : `inicio S${de} → S${a}`);
+        // L3 (D4): la semana del proyecto desde 0, la de la cabecera del Gantt (antes sumaba 1).
+        const de = inicioHoy.get(f.id) ?? 0;
+        const a = rangosDespues[i].start;
+        etiquetas.push(
+          de === a
+            ? f.startWeek === null
+              ? "inicio tras la anterior"
+              : `inicio fijo en ${semanaDelProyecto(a)}`
+            : `inicio ${semanaDelProyecto(de)} → ${semanaDelProyecto(a)}`,
+        );
       } else if (campo === "name") etiquetas.push("renombrada");
       else if (campo === "sessionCount") etiquetas.push("sesiones");
       else if (campo === "notes") etiquetas.push("notas");
@@ -2572,10 +2661,13 @@ export interface ItemDeTarea {
   /** «+» se crea, «−» se quita, «~» cambia en su fase, «→» se muda a esta fase (E3). */
   signo: "+" | "−" | "~" | "→";
   titulo: string;
-  /** E3: qué le cambia («viene de «Diseño»», «pasa a S3», «renombrada a «Y»», «la hace el cliente»). */
+  /** E3: qué le cambia («viene de «Diseño»», «pasa a la Semana 3», «renombrada a «Y»», «la hace el cliente»). */
   cambio?: string;
-  /** La semana dentro de su fase, contando desde 1 (S1 = la primera de la fase). */
+  /** La semana dentro de su fase, contando desde 1 (la primera de la fase es la 1). */
   semana: number;
+  /** L3 (D4): «Semana 2 · S3» (`etiquetaDeSemana`), con el inicio de su fase en la proyección; sin
+   *  rango (su fase no queda en la proyección), «Semana 2». La que ven el chat y el Gantt. */
+  etiqueta: string;
   /** El ⚠ del choque, o que ya está (o ya no está). */
   aviso?: string;
   /** La casilla se puede tocar: aplica o la desmarcó el CSE. Una que quedó fuera con su fase nueva
@@ -2595,7 +2687,7 @@ export interface ItemDeTarea {
 
 /** Las tareas de UNA fase, en un solo renglón de la lista (con su casilla de grupo). */
 export interface GrupoDeTareas {
-  /** Sigue a los cambios de estructura: k + i + 1. */
+  /** L3 (D3): el de `numeracionDeLaPropuesta` (después de los campos de su fase). Decía k + i + 1. */
   numero: number;
   /** La fase: el id de una existente o la clave `n:…` de una nueva. */
   fase: string;
@@ -2631,10 +2723,14 @@ export interface TareasDelResumen {
 export interface ResumenDelBorrador {
   origen: OrigenDelBorrador;
   observaciones: string[];
-  /** Solo la estructura, numerada 1..k (las tareas van en `grupos`). La huella usa la posición interna. */
+  /** Solo la estructura, en el orden del borrador, con su número de `numeracionDeLaPropuesta` (las tareas
+   *  van en `grupos`). La huella usa la posición interna. */
   items: ItemDeLaLista[];
-  /** Las tareas, un grupo por fase, en el orden de la propuesta. */
+  /** Las tareas, un grupo por fase, en el orden en que aparece cada fase en el borrador. */
   grupos: GrupoDeTareas[];
+  /** L3 (D3): todas las unidades numeradas (cambios y grupos intercalados), 1..N en orden. `yaEsta`:
+   *  el cambio ya está así, o el grupo no tiene nada que escribir. */
+  indice: UnidadNumerada[];
   /** Todo lo marcado (estructura y tareas). */
   marcadas: number;
   /** Lo que se puede marcar: `marcadas === aplicables` es «Aplicar todo», con choques o sin ellos. */
@@ -2722,10 +2818,13 @@ function tituloDe(c: Cambio, vivo: Vivo, nuevas: ReadonlyMap<string, CambioFaseN
             : describeChange({ field: c.campo, from: c.desde, to: c.a }, { inicioActual });
       return `${nombre} · ${texto}`;
     }
+    /* L3 (D4): la semana de la fase va en palabras («Semana 3», desde 1); «S» con número es solo la
+       semana del proyecto (desde 0, la de la cabecera del Gantt). Antes decía «· S3» para la semana 3 de
+       la fase. */
     case "tarea-nueva":
-      return `Tarea nueva «${c.tarea.title}» · S${c.tarea.weekIndex + 1}`;
+      return `Tarea nueva «${c.tarea.title}» · ${etiquetaDeSemana(null, c.tarea.weekIndex).deLaFase}`;
     case "tarea-se-va":
-      return `Se quita la tarea «${c.desde.title}» · S${c.desde.weekIndex + 1}`;
+      return `Se quita la tarea «${c.desde.title}» · ${etiquetaDeSemana(null, c.desde.weekIndex).deLaFase}`;
     case "fase-se-va":
       return `Se quita la fase «${nombreDeFase(vivo, c.faseId, c.desde.name)}»`;
     case "tarea-cambia":
@@ -2745,12 +2844,14 @@ const PARTY_EN_PALABRAS: Record<Party, string> = {
 };
 
 /**
- * E3: qué le cambia a una tarea viva, en palabras del CSE: «viene de «Diseño»», «pasa a S2»,
+ * E3: qué le cambia a una tarea viva, en palabras del CSE: «viene de «Diseño»», «pasa a la Semana 2»,
  * «renombrada a «Y»», «la hace el cliente», «pasa a sesión».
  * Revisión de E3 (#22): una mudanza se pinta en el grupo de su DESTINO («en-su-grupo»), que ya dice a
  * dónde va, y el renglón ya dice su semana: «pasa a «Pruebas», S3» repetía las dos cosas y callaba de
- * dónde venía. En su grupo dice su fase de origen, y la semana solo si cambia. «pasa a «X», S3» queda
- * para cuando se nombra suelta, fuera de un grupo.
+ * dónde venía. En su grupo dice su fase de origen, y la semana solo si cambia. «pasa a la Semana 3 de
+ * «X»» queda para cuando se nombra suelta, fuera de un grupo.
+ * L3 (D4): la semana de la fase va en palabras («la Semana 3», desde 1). Decía «S3», y «S» con número
+ * es ahora solo la semana del proyecto (desde 0, la de la cabecera del Gantt).
  */
 function textoDelCambioDeTarea(
   c: CambioTareaCambia,
@@ -2760,15 +2861,16 @@ function textoDelCambioDeTarea(
 ): string {
   const partes: string[] = [];
   const destino = destinoDeLaCambia(c);
+  const semana = (w: number) => etiquetaDeSemana(null, w).deLaFase;
   if (destino !== null && donde === "en-su-grupo") {
     const origen = vivo.fases.find((f) => f.id === c.faseId)?.name;
     partes.push(origen ? `viene de «${origen}»` : "viene de otra fase");
-    if (c.a.weekIndex !== undefined && c.a.weekIndex !== c.desde.weekIndex) partes.push(`pasa a S${c.a.weekIndex + 1}`);
+    if (c.a.weekIndex !== undefined && c.a.weekIndex !== c.desde.weekIndex) partes.push(`pasa a la ${semana(c.a.weekIndex)}`);
   } else if (destino !== null) {
     const nombre = nuevas.get(destino)?.fase.name ?? nombreDeFase(vivo, destino, destino);
-    partes.push(`pasa a «${nombre}», S${(c.a.weekIndex ?? c.desde.weekIndex) + 1}`);
+    partes.push(`pasa a la ${semana(c.a.weekIndex ?? c.desde.weekIndex)} de «${nombre}»`);
   } else if (c.a.weekIndex !== undefined) {
-    partes.push(`pasa a S${c.a.weekIndex + 1}`);
+    partes.push(`pasa a la ${semana(c.a.weekIndex)}`);
   }
   if (c.a.title !== undefined) partes.push(`renombrada a «${c.a.title}»`);
   if (c.a.party !== undefined) partes.push(c.a.party === null ? "sin dueño" : PARTY_EN_PALABRAS[c.a.party]);
@@ -2784,14 +2886,18 @@ function estadoDelGrupo(its: readonly ItemDelPlan[]): GrupoDeTareas["estado"] {
   return marcadas === aplicables ? "aplica" : marcadas === 0 ? "excluido" : "parcial";
 }
 
-/** Los grupos de tareas: uno por fase, en el orden en que aparece cada fase en la propuesta. */
+/**
+ * Los grupos de tareas: uno por fase, en el orden en que aparece cada fase en la propuesta.
+ * L3: el número sale de `numeracionDeLaPropuesta` (`numeroEnLaLista`, por clave) y la etiqueta de semana
+ * del inicio de su fase en la proyección (`inicios`, por clave de fase).
+ */
 function gruposDeTareas(
   vivo: Vivo,
   borrador: Borrador,
   plan: PlanDeAplicacion,
   numeroEnLaLista: ReadonlyMap<string, number>,
-  k: number,
   sin: ReadonlySet<string>,
+  inicios: ReadonlyMap<string, number>,
 ): GrupoDeTareas[] {
   const desfasadas = new Map(plan.desfasadas.map((d) => [d.fase, d]));
   const porFase = new Map<string, ItemDelPlan[]>();
@@ -2812,7 +2918,9 @@ function gruposDeTareas(
       f.tareas ? [{ phaseId: f.id, phaseName: f.name, current: f.tareas.map((t) => ({ title: t.title, status: t.status })) }] : [],
     ),
   );
-  return [...porFase.entries()].map(([fase, its], i) => {
+  return [...porFase.entries()].map(([fase, its]) => {
+    const inicio = inicios.get(fase) ?? null;
+    const enSuSemana = (semana0: number) => ({ semana: semana0 + 1, etiqueta: etiquetaDeSemana(inicio, semana0).corta });
     const tareas: ItemDeTarea[] = its.map((it) => {
       const c = it.cambio as CambioDeTarea;
       const heredada = it.dependeDe !== undefined;
@@ -2836,7 +2944,7 @@ function gruposDeTareas(
         ...(it.recalcula && !sin.has(c.clave) ? { enEspera: true } : {}),
       };
       if (c.tipo === "tarea-se-va") {
-        return { ...comun, signo: "−" as const, titulo: c.desde.title, semana: c.desde.weekIndex + 1 };
+        return { ...comun, signo: "−" as const, titulo: c.desde.title, ...enSuSemana(c.desde.weekIndex) };
       }
       if (c.tipo === "tarea-cambia") {
         // E3: «→» si se muda a este grupo (el del destino), «~» si cambia en su fase.
@@ -2844,7 +2952,7 @@ function gruposDeTareas(
           ...comun,
           signo: destinoDeLaCambia(c) !== null ? ("→" as const) : ("~" as const),
           titulo: c.desde.title,
-          semana: (c.a.weekIndex ?? c.desde.weekIndex) + 1,
+          ...enSuSemana(c.a.weekIndex ?? c.desde.weekIndex),
           cambio: textoDelCambioDeTarea(c, vivo, nuevasPorClave, "en-su-grupo"),
         };
       }
@@ -2853,7 +2961,7 @@ function gruposDeTareas(
         ...comun,
         signo: "+" as const,
         titulo: c.tarea.title,
-        semana: c.tarea.weekIndex + 1,
+        ...enSuSemana(c.tarea.weekIndex),
         ...(c.tarea.needsValidation ? { porValidar: motivoDePorValidar(c.tarea) } : {}),
         ...(c.tarea.fuga ? { fuga: c.tarea.fuga } : {}),
         ...(repetida ? { repetida } : {}),
@@ -2876,7 +2984,7 @@ function gruposDeTareas(
        el grupo dice el nombre que se queda, no aquél para el que se armaron sus tareas. */
     const desfasada = desfasadas.get(fase);
     return {
-      numero: k + i + 1,
+      numero: numeroEnLaLista.get(its[0].cambio.clave) ?? 0,
       fase,
       nombre:
         desfasada?.nombre ?? borrador.tareasArmadasPara[fase]?.nombre ?? vivas.get(fase)?.name ?? fasesNuevas.get(fase) ?? fase,
@@ -2898,7 +3006,9 @@ function gruposDeTareas(
  * Lo que pinta la barra de revisión, con lo marcado (`sin` = lo desmarcado). La magnitud mide la
  * propuesta ENTERA —todo lo que se puede aplicar—, igual que la franja de antes: es la que decide
  * si «Aplicar todo» pide confirmación.
- * Desde E2a: la estructura se numera 1..k en `items` y las tareas van en `grupos` (k+1…), uno por fase.
+ * Desde E2a: la estructura va en `items` y las tareas en `grupos`, uno por fase. L3 (D3): los números
+ * salen de `numeracionDeLaPropuesta` (por fase, en el orden de la propuesta) y `indice` los lista 1..N;
+ * antes la estructura iba 1..k y las tareas k+1…
  * E2c: `forzar` va al plan tal cual, y el resumen lleva sus desfasadas y forzadas.
  */
 export function resumir(
@@ -2912,12 +3022,17 @@ export function resumir(
   const nuevas = new Map(
     borrador.cambios.filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva").map((c) => [c.clave, c]),
   );
-  const numeroEnLaLista = new Map<string, number>();
+  /* L3: la proyección va ANTES que los grupos (sus rangos dan la «S» de cada tarea) y todo se numera con
+     `numeracionDeLaPropuesta`: los mismos números en el Gantt, la barra, el plan y el chat. */
+  const proyeccion = proyectarConPlan(vivo, plan);
+  const rangos = computePhaseRanges(proyeccion.fases);
+  const inicios = new Map(proyeccion.fases.map((f, i) => [f.clave, rangos[i].start]));
+  const numeracion = numeracionDeLaPropuesta(vivo, borrador.cambios);
+  const numeroEnLaLista = numeracion.porClave;
   const items: ItemDeLaLista[] = plan.items.flatMap((it) => {
     const c = it.cambio;
     if (esCambioDeTarea(c)) return [];
-    const numero = numeroEnLaLista.size + 1;
-    numeroEnLaLista.set(c.clave, numero);
+    const numero = numeroEnLaLista.get(c.clave) ?? 0;
     const detalle =
       c.tipo === "fase-cambia" && (c.campo === "notes" || c.campo === "activityType" || c.campo === "name")
         ? filasDeDetalle([{ field: c.campo, from: c.desde, to: c.a }]).map((f) => ({
@@ -2947,9 +3062,16 @@ export function resumir(
       },
     ];
   });
-  const grupos = gruposDeTareas(vivo, borrador, plan, numeroEnLaLista, items.length, new Set(sinLista));
+  const grupos = gruposDeTareas(vivo, borrador, plan, numeroEnLaLista, new Set(sinLista), inicios);
+  // `yaEsta`: lo que ya está así se numera igual (el número no se mueve) y «Siguiente» lo salta.
+  const estadoDe = new Map(plan.items.map((it) => [it.cambio.clave, it.estado]));
+  const grupoPorFase = new Map(grupos.map((g) => [g.fase, g]));
+  const indice: UnidadNumerada[] = numeracion.orden.map((u) =>
+    u.tipo === "cambio"
+      ? { ...u, yaEsta: estadoDe.get(u.clave) === "ya-esta" }
+      : { ...u, yaEsta: grupoPorFase.get(u.fase)?.estado === "ya-esta" },
+  );
 
-  const proyeccion = proyectarConPlan(vivo, plan);
   const cierreAntes = projectedEnd(vivo.ancla, vivo.fases);
   const cierreDespues = projectedEnd(proyeccion.ancla, proyeccion.fases);
 
@@ -2977,6 +3099,7 @@ export function resumir(
     observaciones: borrador.observaciones,
     items,
     grupos,
+    indice,
     marcadas: plan.marcadas,
     aplicables: plan.aplicables,
     total: plan.total,

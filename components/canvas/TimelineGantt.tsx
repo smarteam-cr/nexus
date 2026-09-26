@@ -1010,13 +1010,15 @@ export default function TimelineGantt({
                             )}
                             <span className="text-fg-muted">·</span>
                             <span className="text-fg-muted">inicia S</span>
+                            {/* L3 (D4): base 0, la de la cabecera (`S{w}`): «inicia S 2» es la columna S2. Sumaba 1 y
+                                la misma columna se leía S2 arriba y S3 acá. Lo guardado (`startWeek`) ya era base 0. */}
                             <input
-                              type="number" min={1}
-                              value={p.startWeek != null ? p.startWeek + 1 : ""}
+                              type="number" min={0}
+                              value={p.startWeek ?? ""}
                               placeholder="auto"
-                              onChange={(e) => { const raw = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { startWeek: raw != null && raw >= 1 ? raw - 1 : null }); }}
+                              onChange={(e) => { const raw = e.target.value === "" ? null : parseInt(e.target.value, 10); onUpdatePhase(p.key, { startWeek: raw != null && raw >= 0 ? raw : null }); }}
                               className="w-10 bg-surface-hover border border-line rounded px-1 py-0.5 text-fg-secondary focus:outline-none focus:border-blue-500"
-                              title="Inicio de la fase (n° de semana). Vacío = automático (tras la fase anterior). Iguala el de otra fase para correr EN PARALELO."
+                              title="Semana del proyecto en que arranca (S0 = la primera, como la cabecera). Vacío = tras la anterior."
                             />
                             <span className="text-fg-muted ml-1">{fmtPhaseRange(anchor, range)}</span>
                           </span>

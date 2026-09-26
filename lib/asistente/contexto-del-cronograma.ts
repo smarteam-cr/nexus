@@ -10,8 +10,9 @@
  * tarea que la propuesta crea. Así que van las dos cosas que ve la pantalla:
  *   · LA PROPUESTA: el cronograma como quedaría con lo marcado (`resumen.proyeccion`), con los ids de
  *     las fases (`n:…` las nuevas) y las tareas por semana con su identificador;
- *   · LOS CAMBIOS: la lista de la barra, con SUS números (`resumen.items` y `resumen.grupos`). L2: mientras
- *     la IA arma la propuesta no hay barra en pantalla, así que esta sección no va (no hay números que citar).
+ *   · LOS CAMBIOS: cada número de la propuesta, en orden (`resumen.indice`, L3: la numeración única que
+ *     ve el CSE). L2: mientras la IA arma la propuesta no hay barra en pantalla, así que esta sección no va
+ *     (no hay números que citar).
  * ⛔ Van SIN las REGLAS DURAS del modificador (son de «Pedir cambio con IA», no de la propuesta) y SIN
  * las notas de las tareas: son contenido, y el chat no las necesita para conversar sobre la estructura.
  *
@@ -30,7 +31,16 @@ import { ADVERTENCIAS_SOBRE_LA_PROPUESTA } from "@/lib/timeline/capacidades";
 import { fraseDelCierre, type EstadoDelCambio, type GrupoDeTareas, type ItemDeTarea, type ResumenDelBorrador } from "@/lib/timeline/borrador";
 import { handlesSinChoque } from "@/lib/timeline/handle-de-tarea";
 import type { PropuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
-import { plural } from "@/lib/timeline/weeks";
+import { computePhaseRanges, etiquetaDeSemana, plural } from "@/lib/timeline/weeks";
+
+/**
+ * L3 (D4): cómo se leen las semanas, con y sin propuesta (la usa también `contexto.ts`). Es la etiqueta de
+ * `etiquetaDeSemana`, la misma del Gantt: la semana de la fase desde 1 y la del proyecto desde 0, como la
+ * cabecera. Sin esto, «pásala a la S5» se leía de tres formas (el campo «inicia S» contaba desde 1).
+ */
+export const COMO_SE_LEEN_LAS_SEMANAS =
+  "Las semanas dicen «Semana N · SK»: N es la semana de la fase (en `semana` va N − 1) y SK es la semana " +
+  "del proyecto, la de la cabecera del Gantt, desde S0 (en `fase.arranque-relativo` va K).";
 
 /** Los estados como los nombra la pantalla. Se omite «pendiente»: es el caso mayoritario. */
 function estadoCorto(status: string): string {
@@ -178,14 +188,19 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
   ];
 
   // ── 3 · LA PROPUESTA: cómo quedaría el cronograma con lo marcado ──
+  /* L3: las fases van SIN ordinal («- Nombre [id]»): un número es siempre un número de la propuesta (el del
+     Gantt). Y cada semana con su etiqueta única («Semana 1 · S0»), con el inicio de la fase en la proyección. */
   const propuesta: string[] = [
     "LA PROPUESTA: el cronograma como quedaría si se aplica lo marcado. Cada fase trae su ID entre corchetes",
-    "([n:…] = fase nueva de la propuesta) y, debajo, sus tareas por semana (S1, S2…) con su identificador",
+    "([n:…] = fase nueva de la propuesta) y, debajo, sus tareas por semana con su identificador",
     "entre corchetes: es lo que va en `taskId`. «+» = tarea nueva · «~» = cambia · «→» = llega de otra fase.",
     "Sin nada entre paréntesis = pendiente y escrita por la IA; las que dicen «hecha», «en curso»,",
     "«suspendida» o «cargada a mano» no se pueden quitar.",
+    COMO_SE_LEEN_LAS_SEMANAS,
   ];
+  const rangos = computePhaseRanges(r.proyeccion.fases);
   r.proyeccion.fases.forEach((f, i) => {
+    const inicio = rangos[i].start;
     const semanas = Math.max(f.durationWeeks, 1);
     const porSemana = Array.from({ length: semanas }, () => 0);
     let hechas = 0;
@@ -196,7 +211,7 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     const vacias = porSemana.filter((n) => n === 0).length;
     const etiquetas = f.marca?.etiquetas.length ? ` · (${f.marca.etiquetas.join(", ")})` : "";
     propuesta.push(
-      `${i + 1}. ${f.name} [${f.clave}] — ${f.durationWeeks} sem` +
+      `- ${f.name} [${f.clave}] — ${f.durationWeeks} sem` +
         (f.activityType ? ` · ${f.activityType.toLowerCase()}` : "") +
         ` · ${plural(f.tareas.length, "tarea", "tareas")}` +
         (vacias > 0 ? ` — ${vacias} ${vacias === 1 ? "semana VACÍA" : "semanas VACÍAS"}` : "") +
@@ -208,12 +223,13 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
       const marca = marcaDe(t);
       return `${signo}${titulo(t.title)} [${h(t.clave)}]${marca ? ` (${marca})` : ""}`;
     };
+    const semana = (w: number) => etiquetaDeSemana(inicio, w).corta;
     for (let w = 0; w < semanas; w++) {
       const suyas = f.tareas.filter((t) => t.weekIndex === w);
-      propuesta.push(`   S${w + 1}: ${suyas.length === 0 ? "(vacía)" : lista(suyas.map(renglon))}`);
+      propuesta.push(`   ${semana(w)}: ${suyas.length === 0 ? "(vacía)" : lista(suyas.map(renglon))}`);
     }
     const fuera = f.tareas.filter((t) => t.weekIndex < 0 || t.weekIndex >= semanas);
-    if (fuera.length > 0) propuesta.push(`   ⚠ fuera de rango: ${lista(fuera.map((t) => `${renglon(t)} (S${t.weekIndex + 1})`))}`);
+    if (fuera.length > 0) propuesta.push(`   ⚠ fuera de rango: ${lista(fuera.map((t) => `${renglon(t)} (${semana(t.weekIndex)})`))}`);
   });
   if (r.proyeccion.fases.length === 0) propuesta.push("(sin fases)");
 
@@ -228,11 +244,13 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     `Ancho de calendario: ${plural(ancho, "semana", "semanas")}${ancho !== anchoHoy ? ` (hoy ${anchoHoy})` : ""}`,
   ];
 
-  // ── 5 · LOS CAMBIOS: la lista de la barra, con sus números ──
+  /* ── 5 · LOS CAMBIOS: los números de la propuesta, en orden ──
+     L3 (D3): se recorre `r.indice` (1..N), cambios y grupos intercalados como los numera el Gantt; antes iban
+     primero los cambios de fases y después los grupos, y el número del grupo no seguía a su fase. */
   const indice: string[] = [];
   const detalle: string[] = [];
   const cambios: string[] = [
-    "LOS CAMBIOS CONTRA EL CRONOGRAMA DE HOY (los mismos números que la barra). ✓ = marcado · ☐ = desmarcado:",
+    "LOS CAMBIOS CONTRA EL CRONOGRAMA DE HOY (los mismos números que en pantalla). ✓ = marcado · ☐ = desmarcado:",
     "queda como está hoy · ◐ = marcado en parte · ⚠ = no se aplica, y dice por qué · = = ya está así. Las tareas",
     "de cada fase van juntas en un número; debajo de cada uno, su detalle.",
   ];
@@ -245,8 +263,14 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     cambios.push(`   ${l}`);
   };
   const porClave = new Map((p.borrador?.cambios ?? []).map((c) => [c.clave, c]));
-  const tareaViva = new Map(p.vivo.fases.flatMap((f) => (f.tareas ?? []).map((t) => [t.id, t] as const)));
-  for (const it of r.items) {
+  // Las tareas que se van con su fase están hoy en el cronograma: su «S» es la de hoy.
+  const rangosHoy = computePhaseRanges(p.vivo.fases);
+  const tareaViva = new Map(
+    p.vivo.fases.flatMap((f, i) => (f.tareas ?? []).map((t) => [t.id, { t, inicio: rangosHoy[i].start }] as const)),
+  );
+  const itemPorClave = new Map(r.items.map((it) => [it.clave, it]));
+  const grupoPorFase = new Map(r.grupos.map((g) => [g.fase, g]));
+  const delCambio = (it: (typeof r.items)[number]) => {
     const c = porClave.get(it.clave);
     const id =
       c?.tipo === "fase-se-va" ? c.faseId : c?.tipo === "fase-nueva" && it.estado === "excluido" ? c.clave : null;
@@ -260,15 +284,15 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     if (c?.tipo === "fase-se-va" && it.estado === "aplica") {
       const borrar = p.plan?.escrituras.fasesQueSeVan?.find((f) => f.id === c.faseId)?.borrar ?? [];
       const filas = borrar.flatMap((tid) => {
-        const t = tareaViva.get(tid);
-        return t ? [`S${t.weekIndex + 1} ${titulo(t.title)} [${h(t.id)}]`] : [];
+        const v = tareaViva.get(tid);
+        return v ? [`${etiquetaDeSemana(v.inicio, v.t.weekIndex).corta} ${titulo(v.t.title)} [${h(v.t.id)}]`] : [];
       });
       if (filas.length > 0) debajo(`se van con la fase: ${lista(filas)}`);
     }
-  }
+  };
   const fila = (t: ItemDeTarea, conSigno: boolean) =>
-    `${conSigno ? `${t.signo} ` : ""}S${t.semana} ${titulo(t.titulo)} [${h(t.ref)}]`;
-  for (const g of r.grupos) {
+    `${conSigno ? `${t.signo} ` : ""}${t.etiqueta} ${titulo(t.titulo)} [${h(t.ref)}]`;
+  const delGrupo = (g: GrupoDeTareas) => {
     const partes = [
       ...(g.nuevas > 0 ? [`+${g.nuevas} ${g.nuevas === 1 ? "nueva" : "nuevas"}`] : []),
       ...(g.seVan > 0 ? [`−${g.seVan} ${g.seVan === 1 ? "se va" : "se van"}`] : []),
@@ -295,6 +319,15 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     if (enEspera.length > 0) debajo(`se recalculan: ${lista(enEspera.map((t) => fila(t, true)))}`);
     const fuera = g.tareas.filter((t) => t.estado === "choque");
     if (fuera.length > 0) debajo(`quedan fuera: ${lista(fuera.map((t) => fila(t, true)))}`);
+  };
+  for (const u of r.indice) {
+    if (u.tipo === "cambio") {
+      const it = itemPorClave.get(u.clave);
+      if (it) delCambio(it);
+    } else {
+      const g = grupoPorFase.get(u.fase);
+      if (g) delGrupo(g);
+    }
   }
   if (r.items.length === 0 && r.grupos.length === 0) cambios.push("(ningún cambio)");
 

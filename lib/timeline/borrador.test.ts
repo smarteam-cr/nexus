@@ -19,6 +19,8 @@
  *   14. (E2b) «Regenerar» de una fase (`soloFase`) y de dónde viene cada propuesta.
  *   15. (L2) Mientras se arma la propuesta no hay barra (`modoDeLaPropuesta`), la espera dice «propuesta» y
  *      no la fase del motor, y la llegada no le cambia el Gantt a quien está escribiendo.
+ *   16. (L3) UNA numeración (`numeracionDeLaPropuesta`): cabecera y después fase por fase; no se mueve al
+ *      marcar, y la huella es la de antes de L3.
  *
  * ⚠ E4 (2026-09): lo guardado es siempre v1; la conversión quedó para los productores. Por eso §2, §8,
  * §9, §12 y §13 se reescribieron: ya no hay foto contra la que convertir al leer, y la identidad de una
@@ -36,12 +38,14 @@ import {
   borradorVacio,
   claveDelRecuerdo,
   claveDeRevision,
+  claveDeTareaQueSeVa,
   convertirPropuestaDeFases,
   debeDescartarseSolo,
   deDondeViene,
   desdeDeLaPropuesta,
   esBorradorV1,
   FORMATO_BORRADOR,
+  fotoDeTarea,
   fraseDelCierre,
   huellaDeTexto,
   jsonCanonico,
@@ -60,7 +64,9 @@ import {
   textoDeAplicar,
   type AlmacenDeFotos,
   type Borrador,
+  type Cambio,
   type FaseViva,
+  type TareaDelVivo,
   type Vivo,
 } from "./borrador";
 import {
@@ -459,9 +465,12 @@ describe("6 · proyectar: la vista «Ver la propuesta» y sus marcas", () => {
       VIVO,
     );
     // Pruebas arranca sola en la semana 3 (0-based); pasa a la 6.
+    /* ⚠ REESCRITO en L3 (D4), con esta razón: decía «inicio S4 → S7» (base 1, para calzar con el campo
+       «inicia S», que sumaba 1). La cabecera del Gantt cuenta desde S0, así que la misma columna se leía S3
+       arriba y S4 en la etiqueta. Ahora todo «S» es la semana del proyecto desde 0. */
     expect(proyectar(VIVO, b, []).fases.find((x) => x.id === "c")!.marca).toEqual({
       tono: "cambia",
-      etiquetas: ["inicio S4 → S7"],
+      etiquetas: ["inicio S3 → S6"],
     });
   });
 
@@ -945,3 +954,152 @@ describe("15 · L2: mientras se arma la propuesta no hay barra, y la espera dice
     }
   });
 });
+
+/**
+ * L3 (D3) · Una sola numeración. Los números de la propuesta van a vivir en el Gantt (una casilla por
+ * cambio de fase y una por grupo de tareas), así que se numera como se lee el Gantt: la cabecera (arranque,
+ * orden) y después fase por fase, en el orden COMPLETO de la propuesta (su orden y todas sus fases nuevas).
+ * La usan el plan (los choques), `resumir`, la barra y el chat. `ItemDelPlan.numero` NO cambia: la huella
+ * es la de antes de L3 y una pestaña abierta durante el deploy sigue aplicando.
+ */
+describe("16 · L3: una sola numeración, la del Gantt", () => {
+  const t = (id: string, title: string, weekIndex: number): TareaDelVivo => ({
+    id,
+    title,
+    weekIndex,
+    notes: null,
+    party: "SMARTEAM",
+    type: "TASK",
+    status: "PENDING",
+    source: "AGENT",
+    inicioFijado: null,
+    finFijado: null,
+  });
+  const B1 = t("b1", "Mapear procesos", 0);
+  const VIVO_T: Vivo = {
+    ancla: "2026-05-19",
+    fases: [
+      { ...A, tareas: [t("a1", "Reunión de arranque", 0)], status: "PENDING" },
+      { ...B, tareas: [B1], status: "PENDING" },
+      { ...C, tareas: [t("c1", "Probar flujos", 1)], status: "PENDING" },
+      { ...D, tareas: [], status: "PENDING" },
+    ],
+  };
+  const contenido = (title: string, weekIndex: number) => ({
+    title,
+    weekIndex,
+    notes: null,
+    party: "SMARTEAM" as const,
+    type: "TASK" as const,
+    needsValidation: false,
+    motivoPorValidar: null,
+    fuga: null,
+  });
+  /* A propósito en DESORDEN: el número sale de la fase y del impacto del campo, no del orden del borrador. */
+  const CAMBIOS: Cambio[] = [
+    { tipo: "tarea-nueva", clave: "t:c-1", fase: "c", tarea: contenido("Pruebas de aceptación", 2) },
+    { tipo: "fase-cambia", clave: "fase:b:name", faseId: "b", fase: "Diseño", campo: "name", desde: "Diseño", a: "Diseño funcional" },
+    { tipo: "ancla", clave: "ancla", desde: "2026-05-19", a: "2026-06-02" },
+    { tipo: "fase-cambia", clave: "fase:c:notes", faseId: "c", fase: "Pruebas", campo: "notes", desde: null, a: "más pruebas" },
+    { tipo: "orden", clave: "orden", desde: ["a", "b", "c", "d"], a: ["a", "c", "b", "d"] },
+    { tipo: "fase-cambia", clave: "fase:c:durationWeeks", faseId: "c", fase: "Pruebas", campo: "durationWeeks", desde: 3, a: 4 },
+    {
+      tipo: "fase-nueva",
+      clave: "n:piloto",
+      fase: { name: "Piloto", durationWeeks: 2, startWeek: null, sessionCount: null, notes: null, activityType: null },
+      despuesDe: "b",
+    },
+    { tipo: "tarea-se-va", clave: claveDeTareaQueSeVa("b1"), tareaId: "b1", faseId: "b", desde: fotoDeTarea(B1) },
+    { tipo: "tarea-nueva", clave: "t:p-1", fase: "n:piloto", tarea: contenido("Piloto con un equipo", 0) },
+  ];
+  const BORRADOR_L3: Borrador = {
+    formato: FORMATO_BORRADOR,
+    version: 1,
+    origen: "contexto",
+    observaciones: [],
+    cambios: CAMBIOS,
+    pedido: "regenerar",
+    tareas: { corrida: "r-paso2", listas: true },
+    tareasArmadasPara: {
+      b: { nombre: "Diseño funcional", semanas: 2 },
+      c: { nombre: "Pruebas", semanas: 4 },
+      "n:piloto": { nombre: "Piloto", semanas: 2 },
+    },
+  };
+  const unidades = (u: ReadonlyArray<moduloDelBorrador.UnidadNumerada>) =>
+    u.map((x) => [x.numero, x.tipo, x.tipo === "cambio" ? x.clave : x.fase]);
+  const ESPERADO = [
+    [1, "cambio", "ancla"],
+    [2, "cambio", "orden"],
+    // «Pruebas» va segunda con el orden propuesto: su duración, su nota (lo que mueve fechas primero) y su grupo.
+    [3, "cambio", "fase:c:durationWeeks"],
+    [4, "cambio", "fase:c:notes"],
+    [5, "grupo", "c"],
+    [6, "cambio", "fase:b:name"],
+    [7, "grupo", "b"],
+    // La fase nueva va después de «Diseño»: su cambio y su grupo.
+    [8, "cambio", "n:piloto"],
+    [9, "grupo", "n:piloto"],
+  ];
+
+  it("⭐ la cabecera y después fase por fase: la fase nueva o la que se va, sus campos por impacto y al final su grupo", () => {
+    /* La edición que la pone en rojo: volver a numerar en el orden del borrador (la estructura 1..k y los
+       grupos después, `numerosEnLaBarra`), o numerar los campos sin `CAMPOS_POR_IMPACTO`. */
+    const n = moduloDelBorrador.numeracionDeLaPropuesta(VIVO_T, CAMBIOS);
+    expect(unidades(n.orden)).toEqual(ESPERADO);
+    expect(n.porClave.get("t:c-1"), "una tarea lleva el número de su grupo").toBe(5);
+    expect(n.porClave.get(claveDeTareaQueSeVa("b1"))).toBe(7);
+    expect(n.porClave.get("t:p-1")).toBe(9);
+    const r = resumir(VIVO_T, BORRADOR_L3, [], { tareas: "listas" });
+    expect(unidades(r.indice), "el índice de `resumir` no es la numeración").toEqual(ESPERADO);
+    for (const it of r.items) expect(it.numero, it.clave).toBe(n.porClave.get(it.clave));
+    for (const g of r.grupos) expect(g.numero, g.fase).toBe(n.porClave.get(g.tareas[0].clave));
+  });
+
+  it("⛔ marcar o desmarcar no cambia ningún número", () => {
+    /* La edición que la pone en rojo: numerar con el estado (lo que aplica, o sin lo desmarcado): desmarcar el
+       orden correría a «Pruebas» detrás de «Diseño», y desmarcar la fase nueva le sacaría su número. */
+    const numeros = (sin: string[]) => {
+      const r = resumir(VIVO_T, BORRADOR_L3, sin, { tareas: "listas" });
+      return {
+        indice: unidades(r.indice),
+        items: r.items.map((it) => [it.clave, it.numero]),
+        grupos: r.grupos.map((g) => [g.fase, g.numero]),
+      };
+    };
+    const todo = numeros([]);
+    const todas = CAMBIOS.map((c) => c.clave);
+    for (const sin of [["orden"], ["n:piloto"], ["ancla", "fase:c:durationWeeks", "t:c-1"], todas]) {
+      expect(numeros(sin), `sin ${sin.join(", ")}`).toEqual(todo);
+    }
+  });
+
+  it("⛔ `ItemDelPlan.numero` y la huella son los de antes de L3 (una pestaña abierta durante el deploy sigue aplicando)", () => {
+    /* La edición que la pone en rojo: pasarle la numeración nueva a `ItemDelPlan.numero` (la huella la lleva, y
+       el servidor rechazaría el plan que vio la pantalla vieja). El valor se calculó con el código de antes de
+       L3 (eb42ab0c + L1 + L2) sobre este mismo borrador. */
+    const plan = planDeAplicacion(VIVO_T, BORRADOR_L3, [], { tareas: "listas" });
+    expect(plan.items.map((it) => it.numero)).toEqual(CAMBIOS.map((_, i) => i + 1));
+    expect(plan.huella).toBe(HUELLA_ANTES_DE_L3.todo);
+    expect(planDeAplicacion(VIVO_T, BORRADOR_L3, ["orden", "t:p-1"], { tareas: "listas" }).huella).toBe(
+      HUELLA_ANTES_DE_L3.sinOrdenNiPiloto,
+    );
+  });
+
+  it("lo que no tiene fase en la propuesta va al final, en el orden del borrador", () => {
+    /* Un campo de una fase que ya no está y un grupo de una fase que no se conoce: se numeran igual (el chat
+       puede nombrarlos), después de todo lo demás. */
+    const sinPruebas: Vivo = { ...VIVO_T, fases: VIVO_T.fases.filter((x) => x.id !== "c") };
+    const n = moduloDelBorrador.numeracionDeLaPropuesta(sinPruebas, CAMBIOS);
+    expect(unidades(n.orden).slice(-3)).toEqual([
+      [7, "grupo", "c"],
+      [8, "cambio", "fase:c:notes"],
+      [9, "cambio", "fase:c:durationWeeks"],
+    ]);
+    expect(n.orden.filter((u) => u.tipo === "cambio" && u.clave.startsWith("fase:c:")).every((u) => u.fase === null)).toBe(true);
+    expect(new Set(n.orden.map((u) => u.numero)).size, "un número repetido").toBe(n.orden.length);
+  });
+});
+
+/** Calculadas con el código de antes de L3 (19453cf3, `planDeAplicacion` sobre `BORRADOR_L3` de §16). */
+const HUELLA_ANTES_DE_L3 = { todo: "19eb2647a3f69f", sinOrdenNiPiloto: "1e179fd64f7812" };

@@ -64,7 +64,7 @@ import {
   ADVERTENCIAS_DEL_CRONOGRAMA,
   REGLAS_DURAS_DEL_CRONOGRAMA,
 } from "@/lib/timeline/capacidades";
-import { projectedEnd } from "@/lib/timeline/weeks";
+import { computePhaseRanges, etiquetaDeSemana, projectedEnd } from "@/lib/timeline/weeks";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
@@ -75,6 +75,7 @@ import { leerEstadoDelVacio } from "@/lib/timeline/borrador-del-detalle";
 import { leerPropuestaParaElChat, type PropuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
 import {
   armarContextoConPropuesta,
+  COMO_SE_LEEN_LAS_SEMANAS,
   lineaDeSoloLectura,
   marcaDe,
   type ContextoConPropuesta,
@@ -537,18 +538,24 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
    *
    * El estado va en una palabra y SOLO cuando no es pendiente: repetir «pendiente» sesenta veces
    * es pagar caracteres por nada.
+   *
+   * L3 (D4): cada semana con la etiqueta ÚNICA, «Semana 1 · S0» (`etiquetaDeSemana`, la del Gantt): la
+   * semana de la fase desde 1 y la del proyecto desde 0, como la cabecera. Decía «S1», que era la semana
+   * de la fase, y el chat la confundía con la S1 de la cabecera.
    */
-  const tareasDe = (f: (typeof timeline.phases)[number]): string => {
+  const rangos = computePhaseRanges(timeline.phases);
+  const tareasDe = (f: (typeof timeline.phases)[number], i: number): string => {
     const semanas = Math.max(f.durationWeeks, 1);
+    const semana = (w: number) => etiquetaDeSemana(rangos[i]?.start ?? null, w).corta;
     const renglones: string[] = [];
     for (let w = 0; w < semanas; w++) {
       const suyas = f.tasks.filter((t) => t.weekIndex === w);
       if (suyas.length === 0) {
-        renglones.push(`   S${w + 1}: (vacía)`);
+        renglones.push(`   ${semana(w)}: (vacía)`);
         continue;
       }
       renglones.push(
-        `   S${w + 1}: ` +
+        `   ${semana(w)}: ` +
           suyas
             .map(
               (t) =>
@@ -564,7 +571,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     if (fuera.length > 0) {
       renglones.push(
         `   ⚠ fuera de rango: ` +
-          fuera.map((t) => `${t.title} [${handleDeTarea(t.id)}] (S${t.weekIndex + 1})`).join(" · "),
+          fuera.map((t) => `${t.title} [${handleDeTarea(t.id)}] (${semana(t.weekIndex)})`).join(" · "),
       );
     }
     return renglones.join("\n");
@@ -598,7 +605,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
         `${f.activityType ? ` · ${f.activityType.toLowerCase()}` : ""}` +
         ` · ${f.tasks.length} tarea${f.tasks.length === 1 ? "" : "s"}` +
         `${repartoDe(f)}` +
-        `\n${tareasDe(f)}`,
+        `\n${tareasDe(f, i)}`,
     )
     .join("\n");
 
@@ -606,10 +613,11 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     `PROYECTO: ${timeline.project.name} — cliente ${timeline.project.client.name}`,
     "",
     "EL CRONOGRAMA HOY. Cada fase trae su ID entre corchetes y, debajo, sus tareas agrupadas por",
-    "semana (S1, S2…). Cada tarea trae su identificador entre corchetes: es lo que va en `taskId`",
+    "semana. Cada tarea trae su identificador entre corchetes: es lo que va en `taskId`",
     "para moverla o borrarla. Una tarea sin nada entre paréntesis está pendiente y la escribió la",
     "IA. ⛔ Las que dicen «hecha», «en curso», «suspendida» o «cargada a mano» NO se pueden borrar",
     "desde el chat: el cronograma las protege. Dilo antes de proponerlo.",
+    COMO_SE_LEEN_LAS_SEMANAS,
     fases || "(sin fases)",
     "",
     `Arranque: ${timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : "SIN FECHA DE ARRANQUE"}`,
