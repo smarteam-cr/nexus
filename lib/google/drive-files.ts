@@ -16,7 +16,9 @@
  *     compartido (lib/documents/extract-text).
  */
 
-import { google } from "googleapis";
+// Import profundo a propósito, nunca la raíz "googleapis": la raíz carga los tipos de ~400 APIs y
+// dejó sin memoria el build del VPS (2026-09-26). Ver lib/google/googleapis-sin-raiz.test.ts.
+import { drive as apiDrive } from "googleapis/build/src/apis/drive";
 import { getImpersonatedAuth } from "@/lib/google/auth";
 import { extractText, MAX_EXTRACTED_CHARS } from "@/lib/documents/extract-text";
 
@@ -119,7 +121,7 @@ export async function extractGoogleDriveFile(
   fileId: string,
 ): Promise<ExtractedDriveFile> {
   const auth = getImpersonatedAuth(userEmail);
-  const drive = google.drive({ version: "v3", auth });
+  const drive = apiDrive({ version: "v3", auth });
 
   // 1. Metadata (nombre + mimeType). Acá saltan 403/404 si no hay acceso.
   let name: string;

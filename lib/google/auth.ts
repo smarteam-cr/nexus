@@ -14,7 +14,9 @@
  *   - https://www.googleapis.com/auth/calendar.readonly
  */
 
-import { google } from "googleapis";
+// Import profundo a propósito, nunca la raíz "googleapis": la raíz carga los tipos de ~400 APIs y
+// dejó sin memoria el build del VPS (2026-09-26). Ver lib/google/googleapis-sin-raiz.test.ts.
+import { admin as apiAdmin, type admin_directory_v1 } from "googleapis/build/src/apis/admin";
 import { JWT } from "google-auth-library";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -91,7 +93,7 @@ export async function listDomainUsers(): Promise<DomainUser[]> {
     subject: adminEmail,
   });
 
-  const admin = google.admin({ version: "directory_v1", auth: adminAuth });
+  const admin = apiAdmin({ version: "directory_v1", auth: adminAuth });
   const users: DomainUser[] = [];
 
   // Extraer dominio del adminEmail
@@ -104,7 +106,7 @@ export async function listDomainUsers(): Promise<DomainUser[]> {
     try {
       // Anotación explícita: sin ella, `res` queda implícitamente `any` porque
       // `pageToken` (asignado desde res abajo) crea una inferencia circular.
-      const res: { data: import("googleapis").admin_directory_v1.Schema$Users } = await admin.users.list({
+      const res: { data: admin_directory_v1.Schema$Users } = await admin.users.list({
         domain,
         maxResults: 500,
         orderBy: "email",

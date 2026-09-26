@@ -23,7 +23,9 @@
  * UPDATE, cada corrida hacía 15.011 UPDATE y armaba ~221 MB para tirarlos, cada 20 minutos.
  */
 
-import { google } from "googleapis";
+// Import profundo a propósito, nunca la raíz "googleapis": la raíz carga los tipos de ~400 APIs y
+// dejó sin memoria el build del VPS (2026-09-26). Ver lib/google/googleapis-sin-raiz.test.ts.
+import { calendar as apiCalendar, type calendar_v3 } from "googleapis/build/src/apis/calendar";
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth, listDomainUsers } from "@/lib/google/auth";
 import { buildCategorizeCtx, resolveSessionClientId } from "@/lib/sessions/resolve-client";
@@ -73,7 +75,7 @@ const LOTE_ESCRITURA = 100;
 async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS_BACK): Promise<EventoMeet[]> {
   try {
     const auth = getImpersonatedAuth(userEmail);
-    const calendar = google.calendar({ version: "v3", auth });
+    const calendar = apiCalendar({ version: "v3", auth });
 
     const timeMin = new Date();
     timeMin.setDate(timeMin.getDate() - daysBack);
@@ -89,7 +91,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
     let pagesFetched = 0;
 
     do {
-      const res: { data: { items?: import("googleapis").calendar_v3.Schema$Event[]; nextPageToken?: string | null } } = await calendar.events.list({
+      const res: { data: { items?: calendar_v3.Schema$Event[]; nextPageToken?: string | null } } = await calendar.events.list({
         calendarId: "primary",
         timeMin: timeMin.toISOString(),
         timeMax: timeMax.toISOString(),
@@ -123,7 +125,7 @@ async function fetchMeetEventsForUser(userEmail: string, daysBack: number = DAYS
 
 // Helper: procesa items de una página y los agrega al array de eventos
 function processItems(
-  items: import("googleapis").calendar_v3.Schema$Event[],
+  items: calendar_v3.Schema$Event[],
   userEmail: string,
   events: EventoMeet[],
   bounds: { timeMin: Date; timeMax: Date }

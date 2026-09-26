@@ -24,7 +24,9 @@
  *    where exige `date < ahora - 1h`.
  */
 
-import { google } from "googleapis";
+// Import profundo a propósito, nunca la raíz "googleapis": la raíz carga los tipos de ~400 APIs y
+// dejó sin memoria el build del VPS (2026-09-26). Ver lib/google/googleapis-sin-raiz.test.ts.
+import { drive as apiDrive } from "googleapis/build/src/apis/drive";
 import { prisma } from "@/lib/db/prisma";
 import { getImpersonatedAuth } from "@/lib/google/auth";
 import { summarizeTranscript } from "@/lib/ai/summarize-session";
@@ -190,7 +192,7 @@ async function readDriveFile(
     }
 
     // VTT, texto plano u otros → exportar como texto
-    const drive = google.drive({ version: "v3", auth });
+    const drive = apiDrive({ version: "v3", auth });
     const res = await drive.files.export(
       { fileId, mimeType: "text/plain" },
       { responseType: "text" },
@@ -219,7 +221,7 @@ async function searchDriveForTranscript(
   });
   try {
     const auth = getImpersonatedAuth(userEmail);
-    const drive = google.drive({ version: "v3", auth });
+    const drive = apiDrive({ version: "v3", auth });
 
     const windowStart = new Date(date);
     windowStart.setDate(windowStart.getDate() - DRIVE_SEARCH_WINDOW_DAYS);

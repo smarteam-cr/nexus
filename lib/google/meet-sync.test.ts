@@ -41,17 +41,16 @@ const h = vi.hoisted(() => ({
   listados: 0,
 }));
 
-vi.mock("googleapis", () => ({
-  google: {
-    calendar: ({ auth }: { auth: { email: string } }) => ({
-      events: {
-        list: async () => {
-          await new Promise<void>((r) => setImmediate(r));
-          return { data: { items: h.calendarios.get(auth.email) ?? [], nextPageToken: null } };
-        },
+// La MISMA ruta que importa meet-sync.ts (el import profundo, no la raíz: ver googleapis-sin-raiz.test.ts).
+vi.mock("googleapis/build/src/apis/calendar", () => ({
+  calendar: ({ auth }: { auth: { email: string } }) => ({
+    events: {
+      list: async () => {
+        await new Promise<void>((r) => setImmediate(r));
+        return { data: { items: h.calendarios.get(auth.email) ?? [], nextPageToken: null } };
       },
-    }),
-  },
+    },
+  }),
 }));
 
 vi.mock("@/lib/google/auth", () => ({
