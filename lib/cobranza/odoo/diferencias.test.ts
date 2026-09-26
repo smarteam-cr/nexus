@@ -42,7 +42,7 @@ import {
   type FacturaParaCruzar,
   type LiberacionParaCruzar,
 } from "./diferencias";
-import { reabrirLiberacionTx } from "./marcas";
+import { deshacerMarcasTx, reabrirLiberacionTx } from "./marcas";
 
 /**
  * Las filas como las lee una persona, sin su nombre propio (`fila`): la identidad y la huella tienen sus propias
@@ -2529,6 +2529,46 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
       const { tx, escrituras } = txDePrueba({ abre: false, marcasVigentes: 0 });
       expect(await reabrir(tx)).toBe("YA_ESTABA_ABIERTA");
       expect(escrituras.map((e) => e.que)).toEqual(["soltada"]);
+    });
+  });
+
+  /**
+   * «Deshacer» de «Está bien así» (`deshacerMarcasTx`). ⚠ Revisión del 2026-09-25: una fila que volvió porque cambió un
+   * número y se volvió a marcar tiene dos marcas abiertas por documento, la vieja (vencida) y la nueva. Deshacer solo la
+   * nueva dejaba la vieja abierta, y la fila volvía diciendo «volvió porque cambió un número» cuando volvió porque alguien
+   * la deshizo. La edición que la pone en rojo: volver a deshacer solo los ids pedidos.
+   */
+  describe("«Deshacer» de «Está bien así»", () => {
+    const en = new Date("2026-09-26T12:00:00.000Z");
+    const txDePrueba = (abiertas: Array<{ linea: string; documento: string }>) => {
+      const escrituras: Array<Record<string, unknown>> = [];
+      const tx = {
+        diferenciaOdooMarca: {
+          findMany: async () => abiertas,
+          updateMany: async (arg: Record<string, unknown>) => {
+            escrituras.push(arg);
+            return { count: 2 };
+          },
+        },
+      };
+      return { tx: tx as never, escrituras };
+    };
+
+    it("deshace todas las marcas abiertas de los documentos de la fila en su línea, también la que había vencido", async () => {
+      const { tx, escrituras } = txDePrueba([{ linea: "ODOO-FACTURA-SIN-COBRO", documento: "f:f298" }]);
+      expect(await deshacerMarcasTx(tx, { ids: ["nueva"], actor: "ana@smarteamcr.com", en })).toBe(2);
+      expect(escrituras).toEqual([
+        {
+          where: { tipo: "BIEN_ASI", deshechaEn: null, OR: [{ linea: "ODOO-FACTURA-SIN-COBRO", documento: "f:f298" }] },
+          data: { deshechaPor: "ana@smarteamcr.com", deshechaEn: en },
+        },
+      ]);
+    });
+
+    it("si ya estaban deshechas, no escribe nada", async () => {
+      const { tx, escrituras } = txDePrueba([]);
+      expect(await deshacerMarcasTx(tx, { ids: ["nueva"], actor: "ana@smarteamcr.com", en })).toBe(0);
+      expect(escrituras).toEqual([]);
     });
   });
 });

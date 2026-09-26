@@ -64,13 +64,23 @@ export async function marcarFilasTx(
 /**
  * «Deshacer» de «Está bien así»: la fila vuelve a la lista en la próxima carga. No borra: firma quién y cuándo.
  * Devuelve cuántas deshizo (0 = ya estaban deshechas).
+ *
+ * ⚠ Deshace TODAS las marcas abiertas de los documentos de esa fila en su línea, también las que ya habían vencido
+ * porque cambió un número (la fila volvió y alguien la volvió a marcar con los números nuevos). Hasta la revisión del
+ * 2026-09-25 solo deshacía las pedidas: la vencida seguía abierta y la fila volvía a su línea diciendo «volvió porque
+ * cambió un número», cuando volvió porque alguien la deshizo.
  */
 export async function deshacerMarcasTx(
   tx: Prisma.TransactionClient,
   input: { ids: readonly string[]; actor: string; en: Date },
 ): Promise<number> {
-  const r = await tx.diferenciaOdooMarca.updateMany({
+  const pedidas = await tx.diferenciaOdooMarca.findMany({
     where: { id: { in: [...input.ids] }, tipo: MARCA_BIEN_ASI, deshechaEn: null },
+    select: { linea: true, documento: true },
+  });
+  if (!pedidas.length) return 0;
+  const r = await tx.diferenciaOdooMarca.updateMany({
+    where: { tipo: MARCA_BIEN_ASI, deshechaEn: null, OR: pedidas.map((m) => ({ linea: m.linea, documento: m.documento })) },
     data: { deshechaPor: input.actor, deshechaEn: input.en },
   });
   return r.count;
