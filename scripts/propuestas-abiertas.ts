@@ -27,16 +27,28 @@
  *
  * ⭐ Desde E4 P4, este script es el ÚNICO que conoce el formato viejo: la app lee solo `borrador-v1`.
  *
+ * ⭐ ORDEN DE E4 EN PRODUCCIÓN (decisión de Elías, revisión de E4): el deploy de siempre con TODO main
+ *   (E2b y E4 P1–P4 juntos) y, JUSTO DESPUÉS, contra producción:
+ *     1. `--convertir-viejas` en seco;
+ *     2. `--convertir-viejas --apply` (con ALLOW_PROD_WRITE);
+ *     3. `--antes-de-e4`, que tiene que dar verde.
+ *   Con E2b y P1 ya vivos se cumple lo que la conversión necesita: la valla de versión (D19) frena una
+ *   pestaña que aplique durante la corrida, y el handoff ya escribe `borrador-v1`. En el rato entre el
+ *   deploy y la conversión, las viejas se ven como «no se sabe leer» con «Descartarla»: la app pide
+ *   confirmación y, al descartarla, guarda una copia del JSON en `TimelineChange` (DELETE
+ *   /timeline/proposal). Una pestaña abierta desde antes la cambia por la convertida al volver a ella.
+ *
  * Uso:
  *   listar (solo lectura):   npx tsx scripts/propuestas-abiertas.ts
  *   antes del deploy:        npx tsx scripts/propuestas-abiertas.ts --antes-del-deploy
  *                            → termina con código 1 si hay viejas de «contexto», viejas con `tasks`
  *                              o ilegibles (tienen que estar en 0 para desplegar E2b). Los v1 y las
  *                              viejas del handoff no frenan: E2b los lee.
- *   antes de E4 P4:          npx tsx scripts/propuestas-abiertas.ts --antes-de-e4
+ *   control de E4:           npx tsx scripts/propuestas-abiertas.ts --antes-de-e4
  *                            → termina con código 1 si queda CUALQUIER formato viejo o algo ilegible:
- *                              desde P4 solo se lee `borrador-v1`. Se corre contra producción justo
- *                              antes de ese deploy.
+ *                              desde P4 solo se lee `borrador-v1`. Se corre contra producción después
+ *                              de `--convertir-viejas --apply` (paso 3 del orden de arriba) y tiene que
+ *                              dar verde.
  *   vuelta atrás, en seco:   npx tsx scripts/propuestas-abiertas.ts --rollback
  *   vuelta atrás, de verdad: $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/propuestas-abiertas.ts --rollback --apply
  *                            → respalda ProjectTimeline con pg_dump (scripts/lib/guard.ts) y deja
@@ -66,13 +78,17 @@
  *                              ANTES de escribir, y escribe fila por fila solo si sigue siendo la vieja
  *                              que se leyó, con su token. Conserva el token (la autoría sigue diciendo
  *                              «desde el handoff del …»). Una que no deja nada por decidir se limpia.
+ *                              Después de cada fila, el JSON anota si se escribió (`escrita`) y, en una
+ *                              limpiada, el `updatedAt` que le quedó al cronograma (`limpiadaEn`).
  *   E4 P3 · deshacer la conversión:
  *                            npx tsx scripts/propuestas-abiertas.ts --deshacer-conversion <archivo>        (en seco)
  *                            $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/propuestas-abiertas.ts --deshacer-conversion <archivo> --apply; Remove-Item Env:ALLOW_PROD_WRITE
- *                            → con el JSON que dejó la conversión, devuelve cada fila a la vieja, solo si
- *                              sigue siendo lo que escribió la conversión.
- *                            ⚠ VALE SOLO ANTES DEL DEPLOY DE E4 P4: después, lo devuelto sería una
- *                              propuesta que la app ya no sabe leer.
+ *                            → con el JSON que dejó la conversión, devuelve a la vieja SOLO las filas que
+ *                              la conversión escribió, y solo si siguen como las dejó (la convertida con
+ *                              su token, o vacía con su `limpiadaEn`). Las demás: «no se toca».
+ *                            ⚠ Con E4 P4 ya desplegado (el orden de arriba), lo devuelto vuelve al
+ *                              formato viejo: la app lo muestra como «no se sabe leer» y solo ofrece
+ *                              descartarlo. Sirve para no perder el dato, no para volver a revisarlas.
  *
  * ⚠ Solo lee, salvo `--rollback`, `--desde-e3`, `--convertir-viejas` o `--deshacer-conversion` con
  *   `--apply`, de a uno. `--apply` solo no hace nada: se niega.
@@ -105,6 +121,7 @@ import {
   traeAlgoDeE3,
   type ConversionDeLaVieja,
   type EntradaDeLaConversion,
+  type FilaDelRespaldo,
   type Formato,
   type VivoConOrden,
 } from "./lib/propuestas-abiertas";
@@ -141,7 +158,7 @@ async function main() {
 
   // El archivo de --deshacer-conversion se valida antes de todo: uno que no vale no respalda ni escribe.
   const archivo = DESHACER ? process.argv[iDeshacer + 1] : undefined;
-  let aDeshacer: EntradaDeLaConversion[] = [];
+  let aDeshacer: FilaDelRespaldo[] = [];
   if (DESHACER) {
     if (!archivo || archivo.startsWith("--") || !existsSync(archivo)) {
       console.error(
@@ -155,7 +172,7 @@ async function main() {
       console.error(`⛔ ${archivo}: ${leido.error}. No se toca nada.`);
       process.exit(1);
     }
-    aDeshacer = leido.entradas;
+    aDeshacer = leido.filas;
   }
 
   // El guard (y el respaldo de ProjectTimeline) corre solo en un modo que escribe, de verdad.
@@ -293,16 +310,18 @@ async function main() {
     }
 
     if (ANTES_DE_E4) {
-      // E4 P4: desde ese deploy solo se lee `borrador-v1`. Todo lo demás tiene que estar en 0.
+      /* E4 P4: desde ese deploy solo se lee `borrador-v1`. Todo lo demás tiene que estar en 0. Se corre
+         después de `--convertir-viejas --apply`, que va justo después del deploy de todo main. */
       const frenanE4 = FRENAN_ANTES_DE_E4.filter((k) => cuenta[k] > 0);
       if (frenanE4.length > 0) {
         console.error(
-          `\n⛔ Antes del deploy de E4 P4 tienen que estar en 0: ${frenanE4.map((k) => `${k} (${cuenta[k]})`).join(", ")}. ` +
-            "Convierte las del handoff con --convertir-viejas, decide las demás en su cronograma y vuelve a correr esto.",
+          `\n⛔ Con E4 P4 tienen que estar en 0: ${frenanE4.map((k) => `${k} (${cuenta[k]})`).join(", ")}. ` +
+            "Convierte las del handoff con --convertir-viejas (en seco y con --apply) y vuelve a correr esto. " +
+            "Las demás la app solo las deja descartar.",
         );
         process.exitCode = 1;
       } else {
-        console.log("\n✓ Nada en el formato viejo: se puede desplegar E4 P4.");
+        console.log("\n✓ Nada en el formato viejo: la app sabe leer todas las propuestas abiertas.");
       }
     }
 
@@ -404,16 +423,20 @@ async function main() {
       }
       if (APPLY) {
         const ruta = rutaDelRespaldoDeViejas(new Date());
-        // ⛔ El respaldo JSON se escribe ANTES de la primera escritura (escribirLaConversion lo llama primero).
+        if (entradas.length > 0) console.log(`\n   respaldo de lo que se escribe: ${ruta}`);
+        /* ⛔ El respaldo JSON se escribe ANTES de la primera escritura (escribirLaConversion lo llama primero)
+           y otra vez después de cada fila, con `escrita` y `limpiadaEn` (revisión de E4, #3). */
         const r = await escribirLaConversion(prisma, entradas, (todas) => {
           mkdirSync(dirname(ruta), { recursive: true });
           writeFileSync(ruta, JSON.stringify(todas, null, 2));
-          console.log(`\n   respaldo de lo que se escribe: ${ruta}`);
         });
         for (const e of r.cambiaron) console.log(`   = ${e.projectId}: cambió desde que se leyó; no se toca.`);
         console.log(`   ${r.escritas.length} de ${entradas.length} convertidas o limpiadas.`);
         if (r.escritas.length > 0) {
-          console.log("   Para deshacerla (SOLO antes del deploy de E4 P4):");
+          console.log("   Ahora: npx tsx scripts/propuestas-abiertas.ts --antes-de-e4 (tiene que dar verde).");
+          console.log(
+            "   Para deshacerla (vuelven al formato viejo: la app solo deja descartarlas; sirve para no perder el dato):",
+          );
           console.log(
             `   $env:ALLOW_PROD_WRITE="1"; npx tsx scripts/propuestas-abiertas.ts --deshacer-conversion ${ruta} --apply; Remove-Item Env:ALLOW_PROD_WRITE`,
           );
@@ -431,13 +454,20 @@ async function main() {
       console.log(
         `\n── Deshacer la conversión: ${aDeshacer.length} fila${aDeshacer.length === 1 ? "" : "s"} ${APPLY ? "a devolver" : "(en seco)"}`,
       );
-      console.log("   ⚠ Solo antes del deploy de E4 P4: después, lo devuelto sería una propuesta que la app ya no sabe leer.");
+      console.log(
+        "   ⚠ Con E4 P4 desplegado, lo devuelto vuelve al formato viejo: la app lo muestra como «no se sabe leer» y solo deja descartarlo.",
+      );
       if (APPLY) {
         const r = await deshacerLaConversion(prisma, aDeshacer);
+        for (const e of r.noEscritas) console.log(`   = ${e.projectId}: la conversión no la escribió; no se toca.`);
         for (const e of r.cambiaron) console.log(`   = ${e.projectId}: cambió desde la conversión; no se toca.`);
         console.log(`   ${r.escritas.length} de ${aDeshacer.length} devueltas a la vieja.`);
       } else {
         for (const e of aDeshacer) {
+          if (!e.escrita) {
+            console.log(`   · ${e.projectId}: la conversión no la escribió; no se tocaría`);
+            continue;
+          }
           const sigue = await prisma.projectTimeline.count({ where: escrituraDeDeshacer(e).where });
           console.log(`   · ${e.projectId}: ${sigue === 1 ? "se devolvería a la vieja" : "cambió desde la conversión; no se tocaría"}`);
         }

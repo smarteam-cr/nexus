@@ -3306,6 +3306,9 @@ fabricarla.
   despacha ni por id ni por su respaldo sin paso, aunque su fila siga activa. No se vuelve a sembrar.
 - **Una propuesta guardada que esta versión no sabe leer no traba nada:** una línea arriba del Gantt
   ofrece «Descartarla» y el cronograma sigue editable (antes, la vista previa lo congelaba).
+  Descartarla pide confirmación («lo que proponía se pierde de la pantalla»), y el servidor guarda
+  una copia del JSON en `TimelineChange` en la misma transacción que la limpia. El chat manda a
+  descartarla arriba del Gantt; no promete una barra ni «Aplicar».
 - **Lo que se pierde:** la cuenta de cuántas propuestas del modificador se aplicaban (su historia
   sigue en `AgentRun`), y los acuerdos del chat de antes del 2026-08-20 que traían solo una
   instrucción: su botón pide que se vuelva a pedir.
@@ -3334,12 +3337,23 @@ fabricarla.
   quita; una tarea idéntica no se recrea.
 - **El formato viejo ya no existe en la base** (E4 P4): el lector lo trata como algo que no sabe
   leer, y la pantalla ofrece descartarlo. Las propuestas del handoff que seguían abiertas (6 al
-  2026-09-25, contadas en seco) se convierten con `scripts/propuestas-abiertas.ts --convertir-viejas
-  --apply` ANTES del deploy de P4, con respaldo en `backups/<fecha>-propuestas-abiertas/`; el
-  deploy de P4 va después de esa corrida y de `--antes-de-e4` en verde. La conversión es contra el
-  cronograma del día en que se crearon, reconstruido con `TimelineEvent`, así que lo editado a mano
-  después queda como choque y las copias viejas desaparecen. `ProposalLike` queda solo como el
-  formato intermedio del handoff y del paso 1: se convierte una vez y nunca se guarda.
+  2026-09-25, contadas en seco) se convierten con `scripts/propuestas-abiertas.ts`, con respaldo en
+  `backups/<fecha>-propuestas-abiertas/`. La conversión es contra el cronograma del día en que se
+  crearon, reconstruido con `TimelineEvent`, así que lo editado a mano después queda como choque y
+  las copias viejas desaparecen. `ProposalLike` queda solo como el formato intermedio del handoff y
+  del paso 1: se convierte una vez y nunca se guarda.
+- **Orden en producción** (decisión de Elías, revisión de E4): el deploy de siempre con todo main
+  (E2b y E4 P1–P4 juntos) y, justo después, `--convertir-viejas` en seco, `--convertir-viejas
+  --apply` y `--antes-de-e4`, que tiene que dar verde. Con E2b y P1 vivos se cumple lo que la
+  conversión necesita: la valla de versión (D19) y el handoff que ya escribe `borrador-v1`. En el
+  rato entre el deploy y la conversión las viejas se ven como «no se sabe leer»: descartarlas pide
+  confirmación y deja copia, y una pestaña abierta desde antes cambia la línea por la convertida al
+  volver a ella (el DELETE de lo ilegible sobre algo ya convertido responde 409 y no borra).
+- **`--deshacer-conversion`** devuelve solo las filas que la conversión escribió (el respaldo lo
+  anota fila por fila) y solo si siguen como las dejó: la convertida con su token, o vacía con el
+  `updatedAt` que le dejó la limpieza. Con P4 ya desplegado, lo devuelto vuelve al formato viejo: se
+  ve como «no se sabe leer» y solo se puede descartar. Sirve para no perder el dato, no para volver
+  a revisarlas.
 - **La foto se fue:** solo servía para convertir el formato viejo. Lo desmarcado que recordaba el
   navegador se sigue leyendo (misma clave), sin la foto.
 - **Rutas que se fueron:** `proposal/apply-items`, `phases/[phaseId]/apply` y `detail/apply-all`

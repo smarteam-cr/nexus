@@ -177,14 +177,66 @@ describe("⭐ E4 P1 · el «IA» de una fase abre el chat del cronograma con esa
     expect(gantt).toBeGreaterThan(abre);
     expect(chat).toBeGreaterThan(gantt);
     expect(cierra).toBeGreaterThan(chat);
-    expect(canvas).toContain("<ChatDeSeccionDisponible cuando={canEdit && phases.length > 0} />");
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#12), con esta razón: pedía `<ChatDeSeccionDisponible …/>` en
+       cualquier parte del archivo. Afuera del proveedor anidado declara en el del PANEL, el del cronograma
+       queda en `disponible: false` y ninguna fase pinta «IA», con todo en verde. Ahora tiene que estar ADENTRO
+       (entre la apertura y el cierre, sin otro cierre en el medio) y antes del Gantt: el que tiene el estado
+       se registra desde adentro. */
+    const disponible = canvas.indexOf("<ChatDeSeccionDisponible cuando={canEdit && phases.length > 0} />", abre);
+    expect(disponible, "«Disponible» quedó afuera del proveedor del cronograma: ninguna fase pinta «IA»").toBeGreaterThan(abre);
+    expect(disponible, "«Disponible» quedó después del Gantt").toBeLessThan(gantt);
+    expect(canvas.indexOf("</ChatDeSeccionProvider>", abre), "el proveedor se cierra antes de «Disponible»").toBe(cierra);
     /* ⚠ ACTUALIZADA en la revisión de E3 (#17), con esta razón: abrirlo desde una fase también apaga el punto
        del 💬 (la propuesta que llegó mientras la persona estaba en otra cosa). Lo que se pide sigue igual:
-       estable (sin dependencias), sin apertura automática y abierto. */
+       estable (sin dependencias), sin apertura automática y abierto.
+       ⚠ ACTUALIZADA en la revisión de E4 (#10), con esta razón: también sube el pedido de foco (con el cajón ya
+       abierto, el cursor se quedaba en el «IA»). Su guarda es la de abajo. */
     expect(canvas).toMatch(
-      /const abrirElChatDesdeUnaFase = useCallback\(\(\) => \{\s*setAperturaAutomatica\(false\);\s*setChatAbierto\(true\);\s*setPuntoDelChat\(null\);\s*\}, \[\]\);/,
+      /const abrirElChatDesdeUnaFase = useCallback\(\(\) => \{\s*setAperturaAutomatica\(false\);\s*setChatAbierto\(true\);\s*setPuntoDelChat\(null\);\s*setPedidoDeFoco\(\(n\) => n \+ 1\);\s*\}, \[\]\);/,
     );
     expect(canvas, "el Canvas volvió a abrir el diálogo desde una fase").not.toContain("onAssistPhase");
+  });
+
+  it("⛔ revisión de E4 (#10) · con el chat ya abierto, el «IA» de otra fase lleva el cursor al campo de escribir", () => {
+    /* El efecto de foco del cajón escuchaba solo `abierto`: con el cajón abierto, el «IA» de otra fase cambiaba el
+       chip y el cursor se quedaba en el Gantt. Las ediciones que la ponen en rojo: sacar el pedido de foco de
+       `abrirElChatDesdeUnaFase` o del cajón, escucharlo junto a `abierto` (un pedido viejo haría que la apertura
+       automática tome el foco), o subirlo desde otro lado (la apertura automática). */
+    const canvas = sinComentarios(leer(CRONOGRAMA));
+    expect(canvas.match(/setPedidoDeFoco\(/g)?.length, "el pedido de foco se sube desde otro lado que el «IA»").toBe(1);
+    const montaje = canvas.slice(canvas.indexOf("<ChatDelAsistente"), canvas.indexOf("/>", canvas.indexOf("<ChatDelAsistente")));
+    expect(montaje.length).toBeGreaterThan(200);
+    expect(montaje, "el cronograma no le pasa el pedido de foco al cajón").toContain("pedidoDeFoco={pedidoDeFoco}");
+    const cajon = sinComentarios(leer(CHAT)).replace(/\r\n/g, "\n");
+    const iDeps = cajon.indexOf("}, [pedidoDeFoco]);");
+    expect(iDeps, "el cajón no tiene un efecto que escuche SOLO el pedido de foco").toBeGreaterThan(-1);
+    const efecto = cajon.slice(cajon.lastIndexOf("useEffect(() => {", iDeps), iDeps);
+    expect(efecto.length).toBeGreaterThan(60);
+    expect(efecto).toContain("if (!abierto || !pedidoDeFoco) return;");
+    expect(efecto).toContain("composerRef.current?.focus()");
+    expect(cajon).toContain("pedidoDeFoco = 0,");
+  });
+
+  it("⛔ revisión de E4 (#8) · los botones de cada fase se ven sin hover: con teclado y en pantallas táctiles", () => {
+    /* `opacity-0 group-hover:opacity-100` solo: en Tailwind 4 el hover va dentro de `@media (hover: hover)`, así
+       que en una tableta el «IA» (la única forma de cambiar una nota que ya existe) no aparecía nunca, y con Tab
+       se enfocaba un botón invisible. La edición que la pone en rojo: sacar `focus-visible:opacity-100` o
+       `[@media(hover:none)]:opacity-100` de cualquiera de los tres. */
+    const gantt = leer(GANTT);
+    for (const titulo of [
+      'title="Pídele al asistente un cambio en esta fase"',
+      'title="Regenerar (rehacer) las tareas de esta fase con IA"',
+      'title="Eliminar fase"',
+    ]) {
+      const iTitulo = gantt.indexOf(titulo);
+      expect(iTitulo, `no encuentro el botón ${titulo}`).toBeGreaterThan(-1);
+      const iClase = gantt.lastIndexOf('className="', iTitulo);
+      const clases = gantt.slice(iClase, gantt.indexOf('"', iClase + 'className="'.length));
+      expect(iTitulo - iClase, `la clase no es la de ${titulo}`).toBeLessThan(400);
+      expect(clases).toContain("opacity-0");
+      expect(clases, `${titulo}: invisible con el teclado`).toContain("focus-visible:opacity-100");
+      expect(clases, `${titulo}: invisible en una pantalla táctil`).toContain("[@media(hover:none)]:opacity-100");
+    }
   });
 
   it("el chip dice que es una fase", () => {

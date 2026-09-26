@@ -223,7 +223,9 @@ describe("⛔ el motivo del botón (motivoParaElAcuerdo)", () => {
   it("sin propuesta en el acuerdo: el PUT de siempre, salvo que haya una propuesta en pantalla", () => {
     const sinNada = con({ hayBorrador: false, token: null, version: null });
     expect(motivoParaElAcuerdo(deHoy, sinNada)).toBeNull();
-    expect(motivoParaElAcuerdo(deHoy, con({ hayBorrador: false, ilegible: true, token: null }))).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#5c), con esta razón: con algo que no se sabe leer decía «Resuelve la
+       propuesta en su barra», y no hay barra: solo la línea con «Descartarla». Su guarda es la de abajo. */
+    expect(motivoParaElAcuerdo(deHoy, con({ hayBorrador: false, ilegible: true, token: null }))).toBe(MOTIVOS_DEL_CHAT.ilegible);
     expect(motivoParaElAcuerdo(deHoy, con({ conDesconocidos: true }))).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
     expect(motivoParaElAcuerdo(deHoy, con({ tareasArmando: true }))).toBe(MOTIVOS_DEL_CHAT.armando);
     expect(motivoParaElAcuerdo(deHoy, enPantalla)).toBe(MOTIVOS_DEL_CHAT.hayPropuesta);
@@ -232,10 +234,22 @@ describe("⛔ el motivo del botón (motivoParaElAcuerdo)", () => {
     expect(motivoParaElAcuerdo({ borrador: null }, sinNada)).toBe(ACUERDO_DE_OTRA_VERSION);
   });
 
+  it("⛔ revisión de E4 (#5c) · con algo que no se sabe leer, el botón manda a descartarlo arriba del Gantt", () => {
+    /* No hay barra ni «Aplicar»: solo la línea con «Descartarla». Las ediciones que la ponen en rojo: volver a
+       «Resuelve la propuesta en su barra», o mirar lo ilegible solo sin propuesta en el acuerdo. */
+    const ilegible = con({ hayBorrador: false, ilegible: true, token: null, version: null });
+    for (const a of [deHoy, pasar, aplicar, descartar]) {
+      expect(motivoParaElAcuerdo(a, ilegible), JSON.stringify(a)).toBe(MOTIVOS_DEL_CHAT.ilegible);
+    }
+    expect(MOTIVOS_DEL_CHAT.ilegible).toBe("Descártala arriba del Gantt");
+    expect(MOTIVOS_DEL_CHAT.ilegible, "manda a una barra que no existe").not.toMatch(/barra|aplica/i);
+  });
+
   it("⭐ los motivos entran en el botón (≤ 60 caracteres) y van en tuteo", () => {
     const motivos = Object.values(MOTIVOS_DEL_CHAT);
     // E4: 6 → 5 (sale «Descarta la vista previa de «Pedir cambio con IA»»: se retiró).
-    expect(motivos.length).toBe(5);
+    // Revisión de E4 (#5c): 5 → 6 (entra «Descártala arriba del Gantt», para lo que no se sabe leer).
+    expect(motivos.length).toBe(6);
     for (const m of motivos) {
       expect(m.length, m).toBeLessThanOrEqual(60);
       expect(m, m).not.toMatch(/\b(pod[eé]s|ten[eé]s|quer[eé]s|fijate|mirá|pedímelo|resolvé|esperá)\b/i);

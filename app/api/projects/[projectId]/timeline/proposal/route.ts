@@ -13,12 +13,24 @@
  * cronograma, por eso este sub-recurso dedicado.
  *
  * Guarded con guardProjectHandoffAccess (interno/CSE).
+ *
+ * Revisión de E4 (#1, #2): lo guardado que NO es un `borrador-v1` (esta versión no lo sabe leer; por ejemplo,
+ * las viejas en el rato entre el deploy de E4 y su conversión) no se tira sin rastro: en la MISMA transacción
+ * que lo limpia queda una copia del JSON en `TimelineChange` (kind MANUAL, `snapshot.propuestaDescartada`). Y
+ * si la pantalla descarta lo ilegible (`ilegible: true`) pero lo guardado ya es un v1 (se convirtió en el
+ * medio, con el mismo token), responde 409 y no borra: la pantalla trae la convertida.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { leerEstadoDeLasTareas } from "@/lib/timeline/borrador-del-detalle";
+import { esBorradorV1 } from "@/lib/timeline/borrador";
+
+/** La razón del registro que guarda la copia de lo descartado sin poder leerlo (sin `export`: una ruta de Next
+ *  solo exporta sus métodos). */
+const RAZON_DESCARTE_ILEGIBLE =
+  "Se descartó una propuesta guardada que esta versión no sabe leer. Su contenido queda en este registro.";
 
 export async function DELETE(
   req: NextRequest,
@@ -41,7 +53,7 @@ export async function DELETE(
   // mano) — no amerita un toast. Pero antes no dejaba NINGÚN rastro de cuándo pasó ni de qué
   // corrida: si algún día una propuesta con contenido real se evapora acá, esto es lo único
   // que permite reconstruir cuál era.
-  const body = (await req.json().catch(() => null)) as { reason?: string; runId?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { reason?: string; runId?: unknown; ilegible?: unknown } | null;
   /* ⛔ Se descarta la propuesta que la pantalla tiene enfrente, no otra (revisión adversarial,
      2026-09-24). El DELETE era incondicional: descartar una propuesta del modificador (que vive solo
      en memoria) o una vieja borraba la que estaba guardada —por ejemplo, las sugerencias de fases
@@ -51,6 +63,12 @@ export async function DELETE(
     if (vista !== (existing.pendingProposalRunId ?? null)) {
       return NextResponse.json({ cleared: false, reason: "otra_propuesta" }, { status: 409 });
     }
+  }
+  /* Revisión de E4 (#2): la pantalla descarta lo que no sabe leer, pero lo guardado ya es un v1 (la conversión
+     corrió en el medio y conserva el token): no es lo que tiene enfrente. No se borra; la pantalla lo trae. */
+  const guardadoEsV1 = esBorradorV1(existing.pendingProposal);
+  if (body?.ilegible === true && guardadoEsV1) {
+    return NextResponse.json({ cleared: false, reason: "otra_propuesta" }, { status: 409 });
   }
   if (body?.reason === "auto-zero-deltas") {
     /* ⛔ E2a: un borrador que ESPERA sus tareas («faltan» o «armando») está vacío todavía, pero se
@@ -67,6 +85,40 @@ export async function DELETE(
     console.log(
       `[timeline] propuesta auto-descartada sin deltas visibles (project ${projectId}, run ${existing.pendingProposalRunId ?? "?"}).`,
     );
+  }
+
+  /* Revisión de E4 (#1): lo que no es un v1 se limpia SOLO si sigue siendo el mismo JSON que se leyó, y en la
+     misma transacción queda su copia (quién y cuándo). Sin eso, «Descartarla» lo tiraba sin rastro. */
+  const noSeSabeLeer = existing.pendingProposal !== null && !guardadoEsV1;
+  if (noSeSabeLeer) {
+    const conCopia = await prisma.$transaction(async (tx) => {
+      const r = await tx.projectTimeline.updateMany({
+        where: {
+          projectId,
+          pendingProposalRunId: existing.pendingProposalRunId,
+          pendingProposal: { equals: existing.pendingProposal as Prisma.InputJsonValue },
+        },
+        data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
+      });
+      if (r.count === 0) return 0;
+      await tx.timelineChange.create({
+        data: {
+          timelineId: existing.id,
+          kind: "MANUAL",
+          reason: RAZON_DESCARTE_ILEGIBLE,
+          changedByEmail: guard.user.email ?? null,
+          snapshot: {
+            propuestaDescartada: existing.pendingProposal,
+            pendingProposalRunId: existing.pendingProposalRunId,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      return r.count;
+    });
+    if (conCopia === 0) {
+      return NextResponse.json({ cleared: false, reason: "otra_propuesta" }, { status: 409 });
+    }
+    return NextResponse.json({ cleared: true });
   }
 
   /* Condicionado a la MISMA corrida que se leyó: si otra propuesta entró en el medio, no se borra. */

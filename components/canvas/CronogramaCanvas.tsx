@@ -103,6 +103,7 @@ import {
   excluidosDelGuardado,
   juntarObservaciones,
   MENSAJE_PROPUESTA_ABIERTA,
+  mensajeDeLaPropuestaAbierta,
   observacionesDeLaFranja,
   observacionesParaElPaso2,
   textoDelChipDeEspera,
@@ -498,11 +499,16 @@ export default function CronogramaCanvas({
   /* E4 P1: el «IA» de una fase abre el chat con esa fase señalada (el proveedor del chip de abajo, en el
      `return`). Abierto a mano: toma el foco (y apaga el punto del 💬). ⛔ ESTABLE (`useCallback` sin
      dependencias): el proveedor rehace su `abrirCon` con cada `onAbrir` nuevo, y una flecha suelta lo rehace
-     en cada render. */
+     en cada render.
+     Revisión de E4 (#10): con el cajón YA abierto, `chatAbierto` no cambia y el foco se quedaba en el «IA»: el
+     pedido de foco (un contador que el cajón escucha) lleva el cursor al campo de escribir. Solo lo sube este
+     gesto: la apertura automática nunca toma el foco. */
+  const [pedidoDeFoco, setPedidoDeFoco] = useState(0);
   const abrirElChatDesdeUnaFase = useCallback(() => {
     setAperturaAutomatica(false);
     setChatAbierto(true);
     setPuntoDelChat(null);
+    setPedidoDeFoco((n) => n + 1);
   }, []);
   // Drawer de detalle de tarea: se resuelve la tarea VIVA desde `phases` por _key.
   const [selectedTask, setSelectedTask] = useState<{ phaseKey: string; taskKey: string } | null>(null);
@@ -525,6 +531,8 @@ export default function CronogramaCanvas({
      «Aplicar» caía en PROPUESTA_CAMBIO. El ref frena la re-entrada; el estado apaga los botones. */
   const [descartando, setDescartando] = useState(false);
   const descartandoRef = useRef(false);
+  /* Revisión de E4 (#1): la confirmación de «Descartarla» sobre lo que esta versión no sabe leer. */
+  const [confirmarDescarteIlegible, setConfirmarDescarteIlegible] = useState(false);
   /* E4 (2026-09): se fueron la instrucción, lo descartado por ítem y la revisión de la vista previa de
      «Pedir cambio con IA». La razón de un cambio del chat es su resumen (`aplicarOperacionesAcordadas`). */
   // ── Avance detectado por el agente (D.2) — borrador que el CSE confirma ──
@@ -955,8 +963,9 @@ export default function CronogramaCanvas({
    * (su barra aparece arriba del Gantt, como dice el mensaje) y se devuelve el mensaje para el CSE.
    */
   const anteLaPropuestaGuardada = async (): Promise<string> => {
-    await traerPropuestaPendiente();
-    return MENSAJE_PROPUESTA_ABIERTA;
+    const traida = await traerPropuestaPendiente();
+    // Revisión de E4 (#5c): con algo que no se sabe leer, el mensaje no dice «aplícala» (no hay barra).
+    return traida.ok && traida.propuesta !== null ? mensajeDeLaPropuestaAbierta(traida.propuesta) : MENSAJE_PROPUESTA_ABIERTA;
   };
 
   // "Hoy" recién después de hidratar: en SSR no existe, y calcularlo en el primer render
@@ -1533,9 +1542,11 @@ export default function CronogramaCanvas({
   });
   /* E3 P3: al volver a la pestaña (o a la ventana), la propuesta se relee: lo que marcó otra computadora
      o lo que editó el chat sube la versión, y `refrescarPropuesta` la reemplaza solo si es más nueva.
-     Mientras haya una propuesta guardada en pantalla. */
+     Mientras haya una propuesta guardada en pantalla.
+     Revisión de E4 (#2): también con una que no se sabe leer: la conversión de las viejas corre justo después
+     del deploy, y al volver a la pestaña se ve la convertida en vez de «Descartarla». */
   useEffect(() => {
-    if (!hayBorrador) return;
+    if (!hayBorrador && !propuestaIlegible) return;
     // Revisión de E3 (#23): los dos eventos de la vuelta hacen UNA relectura (en vuelo o recién hecha, no otra).
     const releer = crearRelecturaAlVolver(refrescarPropuesta);
     const alVolver = () => {
@@ -1548,7 +1559,7 @@ export default function CronogramaCanvas({
       document.removeEventListener("visibilitychange", alVolver);
       window.removeEventListener("focus", alVolver);
     };
-  }, [hayBorrador, refrescarPropuesta]);
+  }, [hayBorrador, propuestaIlegible, refrescarPropuesta]);
   /* Las fases actuales CON sus tareas, en la forma que ejecutan las operaciones del chat
      (`aplicarOperacionesAcordadas`): borrar o mover una tarea mira su estado y su origen. */
   const fasesParaOperaciones: FaseActual[] = useMemo(
@@ -2009,10 +2020,12 @@ export default function CronogramaCanvas({
      «otra» (la guardada ya era otra: no se borró nada) o «fallo» (el DELETE no anduvo, o ya había uno en
      curso). El chat da éxito SOLO con «descartada»; la barra no mira el resultado.
      Revisión de E3 (#24): `token` = qué propuesta se quiere descartar (el chat manda la del ACUERDO); sin él,
-     la de la pantalla. `desdeElChat`: el fallo lo dice el chat, no un toast (#14). */
+     la de la pantalla. `desdeElChat`: el fallo lo dice el chat, no un toast (#14).
+     Revisión de E4 (#1): `ilegible` = se descarta lo que esta versión no sabe leer. El servidor guarda una copia
+     y, si lo guardado ya es un v1 (se convirtió en el medio), responde 409: se trae y no se borra. */
   const discardProposal = async (
     reason?: string,
-    opts?: { token?: string | null; desdeElChat?: boolean },
+    opts?: { token?: string | null; desdeElChat?: boolean; ilegible?: boolean },
   ): Promise<"descartada" | "otra" | "fallo"> => {
     /* Revisión de E2b: la oferta de las tareas es de lo que se resolvió ANTES. Resolver otra propuesta
        (la del handoff que la tapaba) la apaga: si no, volvía a aparecer después de este «Descartar».
@@ -2057,6 +2070,7 @@ export default function CronogramaCanvas({
         body: JSON.stringify({
           runId: opts?.token !== undefined ? opts.token : proposalMeta.current.runId,
           ...(reason ? { reason } : {}),
+          ...(opts?.ilegible ? { ilegible: true } : {}),
         }),
       });
       respuesta = { ok: res.ok, status: res.status };
@@ -3577,12 +3591,14 @@ export default function CronogramaCanvas({
           Acá estaba el banner de la vista previa de «Pedir cambio con IA» (se retiró). Si en el
           servidor hubiera una propuesta guardada que no es un borrador, no traba nada: se dice en una
           línea y se ofrece descartarla; el cronograma sigue editable. */}
+      {/* Revisión de E4 (#1): «Descartarla» pide confirmación (lo que proponía se pierde de la pantalla) y el
+          servidor guarda una copia. La línea ya no invita a descartar. */}
       {propuestaIlegible && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs text-warn-ink">
-          <span>Hay una propuesta guardada que esta versión no sabe leer. Si la descartas, el cronograma no cambia.</span>
+          <span>Hay una propuesta guardada que esta versión no sabe leer.</span>
           {canEdit && (
             <button
-              onClick={() => void discardProposal()}
+              onClick={() => setConfirmarDescarteIlegible(true)}
               disabled={descartando}
               className="ml-auto rounded-lg border border-line px-2.5 py-1 font-semibold text-fg-muted hover:text-fg hover:bg-surface-hover disabled:opacity-60"
             >
@@ -3946,8 +3962,10 @@ export default function CronogramaCanvas({
           {/* Revisión de E2a: con una propuesta abierta no se ofrece (sus tareas ya se arman o ya llegaron:
               el enlace solo daba «hay una propuesta sin decidir»), y el texto dice lo mismo que el
               `disabled`: mientras la IA arma, no vuelve a decir «Genera las tareas». E2b: ni con la
-              línea que ofrece las tareas (dos llamados a lo mismo). */}
-          {canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && !ofrecerTareas && (
+              línea que ofrece las tareas (dos llamados a lo mismo). Revisión de E4 (#5a): ni con una que no se
+              sabe leer (`!proposal`; el botón de arriba tampoco se ofrece): el enlace terminaba en «resuélvela»
+              sin barra donde resolverla. */}
+          {canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !proposal && !ofrecerTareas && (
             <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-700/50 text-amber-200">
               <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               <p className="text-xs leading-relaxed">
@@ -4166,6 +4184,21 @@ export default function CronogramaCanvas({
         onCancel={() => setConfirmDetailOpen(false)}
       />
 
+      {/* Revisión de E4 (#1): descartar lo que esta versión no sabe leer. El servidor guarda una copia del JSON
+          (TimelineChange), pero en pantalla no se vuelve a ver. */}
+      <ConfirmDialog
+        open={confirmarDescarteIlegible}
+        title="Descartar la propuesta"
+        description="Lo que proponía se pierde de la pantalla. El cronograma no cambia."
+        confirmLabel="Descartarla"
+        loading={descartando}
+        onConfirm={async () => {
+          await discardProposal(undefined, { ilegible: true });
+          setConfirmarDescarteIlegible(false);
+        }}
+        onCancel={() => setConfirmarDescarteIlegible(false)}
+      />
+
       {/* E2b (2026-09-25): «Regenerar» de una fase abría acá su modal de dos columnas
           (`PhaseRegenModal`), armado en memoria con la vista previa. Ahora deja una propuesta
           guardada que se revisa en la barra de arriba del Gantt; el aviso de «esta tarea ya existe en
@@ -4273,6 +4306,8 @@ export default function CronogramaCanvas({
         motivoParaNoAplicar={motivoDelChat}
         /* Abierto solo (llegó una propuesta): no se le roba el foco a quien estaba en otra cosa. */
         enfocarAlAbrir={!aperturaAutomatica}
+        /* Revisión de E4 (#10): el «IA» de una fase con el cajón ya abierto también lleva el cursor al campo. */
+        pedidoDeFoco={pedidoDeFoco}
         /* Revisión de E3 (#12): solo con una propuesta que el chat puede editar (la misma vara que la
            apertura sola y el botón): sobre otra, los ejemplos ofrecían pedidos que terminaban en «no registré». */
         referencia={referenciaDelChat({

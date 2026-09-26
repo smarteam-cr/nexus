@@ -19,8 +19,10 @@
  * Los cuatro tipos de fases: fecha de arranque, orden, fase nueva y fase que cambia (un cambio por
  * CAMPO). Desde E4 (2026-09) lo guardado en `pendingProposal` es siempre `borrador-v1`: el lector no
  * conoce otro formato (`leerBorrador` da null) y la pantalla ofrece descartar lo que no sabe leer.
- * Las propuestas viejas que seguían abiertas se convierten una vez, ANTES del deploy de E4 P4, con
- * `scripts/propuestas-abiertas.ts --convertir-viejas`, el único que todavía conoce ese formato.
+ * Las propuestas viejas que seguían abiertas se convierten una vez, JUSTO DESPUÉS del deploy de E4 (todo main
+ * junto), con `scripts/propuestas-abiertas.ts --convertir-viejas`, el único que todavía conoce ese formato;
+ * después, `--antes-de-e4` tiene que dar verde. En ese rato se ven como «no se sabe leer»: descartarlas pide
+ * confirmación y deja una copia (DELETE /timeline/proposal).
  * `ProposalLike` (lib/timeline/proposal-deltas.ts) queda solo como lo que arman el handoff y el paso 1
  * de «Regenerar todo» ANTES de convertirse, UNA vez, con `convertirPropuestaDeFases`: fija cada
  * `desde` contra lo que leyó quien la produjo, y nunca se guarda así.
@@ -1281,6 +1283,14 @@ export const BLOQUEO_VERSION_NUEVA =
  *  propuesta puede traer también tareas: se nombra «del cronograma», no «de cambios de fases». */
 export const MENSAJE_PROPUESTA_ABIERTA =
   "Hay una propuesta del cronograma sin decidir (arriba del Gantt): aplícala o descártala antes de guardar este cambio.";
+/** Revisión de E4 (#5c): el mismo 409 cuando lo guardado NO es un v1. No tiene barra ni «Aplicar»: solo se
+ *  descarta en su línea, así que no se le dice «aplícala». */
+export const MENSAJE_PROPUESTA_ILEGIBLE =
+  "Hay una propuesta guardada que esta versión no sabe leer (arriba del Gantt): descártala antes de guardar este cambio.";
+/** Qué dice el 409 del guardado con motivo, según lo que está guardado. La usan la ruta y la pantalla. */
+export function mensajeDeLaPropuestaAbierta(guardada: unknown): string {
+  return esBorradorV1(guardada) ? MENSAJE_PROPUESTA_ABIERTA : MENSAJE_PROPUESTA_ILEGIBLE;
+}
 
 /** El orden resultante con el cambio de orden aplicado sobre `ids`: primero las que nombra, después el resto.
  *  Exportado para el chat (operar-sobre-el-borrador.ts): el lugar de hoy de una fase que se va. */

@@ -538,7 +538,15 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/route.ts"));
     expect(contiene(ruta, 'code: "PROPUESTA_ABIERTA"')).toBe(true);
     const ante = tramo(CANVAS, "const anteLaPropuestaGuardada = async (", "};");
-    expect(contiene(ante, "=> { await traerPropuestaPendiente(); return MENSAJE_PROPUESTA_ABIERTA;")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#5c), con esta razón: el texto sale de lo que se trajo
+       (`mensajeDeLaPropuestaAbierta`): con algo que no se sabe leer ya no dice «aplícala». Sin traer, o sin
+       nada guardado, el de siempre. */
+    expect(
+      contiene(
+        ante,
+        "=> { const traida = await traerPropuestaPendiente(); return traida.ok && traida.propuesta !== null ? mensajeDeLaPropuestaAbierta(traida.propuesta) : MENSAJE_PROPUESTA_ABIERTA;",
+      ),
+    ).toBe(true);
     expect(MENSAJE_PROPUESTA_ABIERTA).toContain("arriba del Gantt");
     const chat = tramo(CANVAS, "const aplicarOperacionesAcordadas = async (", "const discardProposal = async (");
     expect(contiene(chat, 'res.status === 409 && data?.code === "PROPUESTA_ABIERTA" ? await anteLaPropuestaGuardada()')).toBe(true);
@@ -602,7 +610,17 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(CANVAS, "const propuestaIlegible = !!proposal && !hayBorrador;")).toBe(true);
     const linea = tramo(CANVAS, "{propuestaIlegible && (", "</div>");
     expect(linea).toContain("Descartarla");
-    expect(contiene(linea, "onClick={() => void discardProposal()}")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#1), con esta razón: «Descartarla» borraba sin preguntar, y en el rato
+       entre el deploy y la conversión las 6 viejas se ven así. Ahora abre una confirmación que dice que lo que
+       proponía se pierde de la pantalla, y recién ella descarta, avisándole al servidor que es lo ilegible (guarda
+       una copia; si ya se convirtió, 409 y se trae). Descartar directo desde la línea, o sin `ilegible`, la pone
+       en rojo. */
+    expect(contiene(linea, "onClick={() => setConfirmarDescarteIlegible(true)}")).toBe(true);
+    expect(linea, "la línea descarta sin preguntar").not.toContain("discardProposal(");
+    const confirmacion = tramo(CANVAS, "open={confirmarDescarteIlegible}", "/>");
+    expect(contiene(confirmacion, 'description="Lo que proponía se pierde de la pantalla. El cronograma no cambia."')).toBe(true);
+    expect(contiene(confirmacion, "await discardProposal(undefined, { ilegible: true });")).toBe(true);
+    expect(contiene(CANVAS, "...(opts?.ilegible ? { ilegible: true } : {}),"), "el DELETE no dice que descarta lo ilegible").toBe(true);
     const autoguardado = tramo(CANVAS, "if (!dirty ||", "return;");
     expect(autoguardado, "el autoguardado volvió a frenarse con una propuesta").not.toContain("proposal &&");
     expect(CANVAS, "el Canvas volvió a leer las fases de la propuesta a mano").not.toMatch(/proposal\??\.phases/);
@@ -616,10 +634,13 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     const motivo = tramo(CANVAS, "const motivoDelChat = (a: AcuerdoDelChat): string | null =>", "const pasarALaPropuesta");
     expect(contiene(motivo, "ilegible: propuestaIlegible,"), "el cronograma no le dice a la regla que hay algo ilegible").toBe(true);
     const ilegible = { hayBorrador: false, ilegible: true, token: null, version: null, conDesconocidos: false, tareasArmando: false, bloqueada: false };
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#5c), con esta razón: el motivo decía «Resuelve la propuesta en su
+       barra» y lo ilegible no tiene barra. Ahora «Descártala arriba del Gantt» (su tabla, en
+       textos-del-acuerdo.test.ts). */
     expect(
       motivoParaElAcuerdo({ borrador: null, operaciones: [{ op: "fase.duracion" }] }, ilegible),
       "con una propuesta que no se sabe leer, el botón del chat queda vivo",
-    ).toBe(MOTIVOS_DEL_CHAT.enSuBarra);
+    ).toBe(MOTIVOS_DEL_CHAT.ilegible);
   });
 });
 
@@ -1404,10 +1425,17 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
        volver y cada uno hacía un GET completo; ahora los dos llaman a UNA relectura (`crearRelecturaAlVolver`,
        su conducta en refresco-tras-handoff.test.ts). Cuándo se relee es lo mismo: al volver, con propuesta. El
        «escucha sin propuesta» mira ahora desde la relectura, y ya no pasa en verde si no encuentra el `if`. */
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#2), con esta razón: escuchaba solo con un v1 en pantalla. Con algo que
+       no se sabe leer tampoco releía, así que una pestaña abierta antes de la conversión de las viejas nunca veía
+       la convertida y seguía ofreciendo «Descartarla». Ahora escucha con cualquier propuesta guardada en pantalla
+       (y `debeReemplazarPropuesta` cambia la ilegible por su v1). Volver a `if (!hayBorrador) return;` la pone
+       en rojo. */
     const iReleer = CANVAS.indexOf("const releer = crearRelecturaAlVolver(refrescarPropuesta);");
     expect(iReleer, "la vuelta a la pestaña dejó de pasar por una sola relectura").toBeGreaterThan(-1);
-    expect(CANVAS.lastIndexOf("if (!hayBorrador) return;", iReleer), "escucha sin propuesta").toBeGreaterThan(iReleer - 80);
-    const volver = tramo(CANVAS, "const releer = crearRelecturaAlVolver(refrescarPropuesta);", "}, [hayBorrador, refrescarPropuesta]);");
+    expect(CANVAS.lastIndexOf("if (!hayBorrador && !propuestaIlegible) return;", iReleer), "escucha sin propuesta, o no con una ilegible").toBeGreaterThan(
+      iReleer - 80,
+    );
+    const volver = tramo(CANVAS, "const releer = crearRelecturaAlVolver(refrescarPropuesta);", "}, [hayBorrador, propuestaIlegible, refrescarPropuesta]);");
     expect(contiene(volver, 'if (document.visibilityState !== "visible") return;')).toBe(true);
     expect(contiene(volver, 'const alVolver = () => { if (document.visibilityState !== "visible") return; releer(); };')).toBe(true);
     expect(volver, "un oyente volvió a releer por su cuenta (dos GET al volver)").not.toContain("refrescarPropuesta()");
@@ -1505,11 +1533,13 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     /* ⚠ ACTUALIZADA en la revisión de E3 (#14, #24), con esta razón: cómo terminó lo decide `trasElDescarte`
        (puro: su tabla está en propuesta-de-estructura.test.ts), y descartar recibe qué propuesta (`token`) y si
        viene del chat. Lo que se pide es lo mismo: éxito solo con «descartada». */
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#1), con esta razón: `opts` suma `ilegible` (descartar lo que no se sabe
+       leer: el servidor guarda una copia). Lo que se pide sigue igual. */
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
     expect(
       contiene(
         descartar,
-        'const discardProposal = async ( reason?: string, opts?: { token?: string | null; desdeElChat?: boolean }, ): Promise<"descartada" | "otra" | "fallo"> => {',
+        'const discardProposal = async ( reason?: string, opts?: { token?: string | null; desdeElChat?: boolean; ilegible?: boolean }, ): Promise<"descartada" | "otra" | "fallo"> => {',
       ),
     ).toBe(true);
     expect(contiene(descartar, "respuesta = { ok: res.ok, status: res.status };")).toBe(true);
@@ -1575,7 +1605,8 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
        a tener los suyos (dos listas divergen). */
     const motivos = Object.values(MOTIVOS_DEL_CHAT);
     // E4: 6 → 5 (sale «Descarta la vista previa de «Pedir cambio con IA»»: se retiró).
-    expect(motivos.length).toBe(5);
+    // Revisión de E4 (#5c): 5 → 6 (entra «Descártala arriba del Gantt», para lo que no se sabe leer).
+    expect(motivos.length).toBe(6);
     for (const m of motivos) expect(m.length, m).toBeLessThanOrEqual(60);
     expect(CANVAS, "el cronograma volvió a tener sus propios motivos del botón").not.toContain("const MOTIVOS_DEL_CHAT");
   });

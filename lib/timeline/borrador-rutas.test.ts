@@ -42,7 +42,15 @@ vi.mock("@/lib/auth/api-guards", () => guards);
 import { POST as aplicarPOST } from "@/app/api/projects/[projectId]/timeline/borrador/aplicar/route";
 import { DELETE as descartarDELETE } from "@/app/api/projects/[projectId]/timeline/proposal/route";
 import { ErrorAlAplicar, type ResultadoDeAplicar } from "@/lib/timeline/escribir-estructura";
-import { AVISO_DETALLE_SIN_CAMBIOS, FORMATO_BORRADOR, leerAvisoSinCambios, leerBorrador } from "@/lib/timeline/borrador";
+import {
+  AVISO_DETALLE_SIN_CAMBIOS,
+  FORMATO_BORRADOR,
+  leerAvisoSinCambios,
+  leerBorrador,
+  MENSAJE_PROPUESTA_ABIERTA,
+  MENSAJE_PROPUESTA_ILEGIBLE,
+  mensajeDeLaPropuestaAbierta,
+} from "@/lib/timeline/borrador";
 import {
   causaDelFallo,
   cierreDeLaCorridaVetada,
@@ -379,6 +387,75 @@ describe("DELETE /timeline/proposal — el descarte automático no borra un borr
   });
 });
 
+/**
+ * ── REVISIÓN DE E4 (#1, #2): DESCARTAR LO QUE ESTA VERSIÓN NO SABE LEER ─────────────────────────────────
+ * Elías despliega E4 entero y corre la conversión de las viejas justo después. En ese rato las 6 viejas se ven
+ * como «no se sabe leer» con «Descartarla», que las tiraba sin rastro. Ahora la ruta guarda una copia en
+ * `TimelineChange` en la MISMA transacción que limpia, y no borra una que ya se convirtió.
+ */
+describe("⛔ revisión de E4 (#1, #2) · DELETE /timeline/proposal con algo que no es un v1", () => {
+  function txFalsa(count: number) {
+    const tx = {
+      projectTimeline: { updateMany: vi.fn(async () => ({ count })) },
+      timelineChange: { create: vi.fn(async () => ({})) },
+    };
+    db.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => fn(tx));
+    return tx;
+  }
+
+  it("⭐ guarda una copia del JSON descartado en la MISMA transacción que lo limpia, con quién", async () => {
+    /* Las ediciones que la ponen en rojo: limpiar sin la copia, escribirla fuera de la transacción (con la base
+       de siempre: si una falla, la otra queda), o limpiar sin exigir el mismo JSON que se copió. */
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: NO_V1 });
+    const tx = txFalsa(1);
+    const res = await descartarDELETE(pedir({ runId: "run-1", ilegible: true }), delProyecto);
+    expect(await res.json()).toEqual({ cleared: true });
+    expect(tx.projectTimeline.updateMany).toHaveBeenCalledWith({
+      where: { projectId: "p1", pendingProposalRunId: "run-1", pendingProposal: { equals: NO_V1 } },
+      data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
+    });
+    expect(tx.timelineChange.create, "descartó lo ilegible sin guardar la copia").toHaveBeenCalledTimes(1);
+    expect(tx.timelineChange.create).toHaveBeenCalledWith({
+      data: {
+        timelineId: "tl",
+        kind: "MANUAL",
+        reason: expect.stringContaining("no sabe leer"),
+        changedByEmail: "cse@smarteam.cr",
+        snapshot: { propuestaDescartada: NO_V1, pendingProposalRunId: "run-1" },
+      },
+    });
+    expect(db.projectTimeline.updateMany, "limpió fuera de la transacción de la copia").not.toHaveBeenCalled();
+    expect(db.timelineChange.create, "la copia quedó fuera de la transacción").not.toHaveBeenCalled();
+  });
+
+  it("⛔ si cambió desde que se leyó, 409 y sin copia; un v1 se descarta como siempre, sin copia", async () => {
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: NO_V1 });
+    const tx = txFalsa(0);
+    const res = await descartarDELETE(pedir({ runId: "run-1", ilegible: true }), delProyecto);
+    expect(res.status).toBe(409);
+    expect(tx.timelineChange.create, "copió algo que no se limpió").not.toHaveBeenCalled();
+
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: v1() });
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const legible = await descartarDELETE(pedir({ runId: "run-1" }), delProyecto);
+    expect(await legible.json()).toEqual({ cleared: true });
+    expect(db.timelineChange.create).not.toHaveBeenCalled();
+  });
+
+  it("⛔ la pantalla descarta lo ilegible pero lo guardado ya es un v1 (se convirtió, mismo token): 409, no borra", async () => {
+    /* La pestaña abierta antes de la conversión tocaba «Descartarla» y el DELETE, que solo compara el token,
+       borraba la convertida sin que nadie la viera. La edición que la pone en rojo: ignorar `ilegible`. */
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: v1({ origen: "handoff" }) });
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 }); // si llegara a borrar, borraría
+    const tx = txFalsa(1);
+    const res = await descartarDELETE(pedir({ runId: "run-1", ilegible: true }), delProyecto);
+    expect(res.status, "borró la propuesta ya convertida").toBe(409);
+    expect(await res.json()).toEqual({ cleared: false, reason: "otra_propuesta" });
+    expect(db.projectTimeline.updateMany).not.toHaveBeenCalled();
+    expect(tx.projectTimeline.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 /* ⚠ REESCRITO en E4 (2026-09), con esta razón: pedía que phases/apply y apply-all respondieran el 409 de
    su lápida («Nexus se actualizó»). Eran para las pestañas de antes del deploy de E2b; E4 las borró, con
    `proposal/apply-items`. Una pestaña así de vieja recibe un 404. */
@@ -520,7 +597,14 @@ describe("PUT /timeline con motivo, con una propuesta abierta", () => {
     const chequeo = put.slice(iChequeo, iUpsert);
     expect(chequeo).toContain("pendingProposal: { not: Prisma.DbNull }");
     expect(chequeo).toContain("statusCode: 409");
-    expect(chequeo).toContain("MENSAJE_PROPUESTA_ABIERTA");
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#5c), con esta razón: el 409 decía siempre «aplícala o descártala», y lo
+       que no se sabe leer no se puede aplicar. Ahora el texto sale de lo guardado (`mensajeDeLaPropuestaAbierta`,
+       su conducta en el caso de abajo). */
+    expect(chequeo).toContain("mensajeDeLaPropuestaAbierta(abierta.pendingProposal)");
+    expect(mensajeDeLaPropuestaAbierta(v1())).toBe(MENSAJE_PROPUESTA_ABIERTA);
+    expect(mensajeDeLaPropuestaAbierta(NO_V1), "con algo que no se sabe leer, el 409 manda a aplicarlo").toBe(MENSAJE_PROPUESTA_ILEGIBLE);
+    expect(MENSAJE_PROPUESTA_ILEGIBLE).not.toMatch(/aplíca/i);
+    expect(MENSAJE_PROPUESTA_ILEGIBLE).toContain("descártala");
     // El upsert existe y ya no toca la propuesta.
     const upsert = put.slice(iUpsert, put.indexOf("timelineId = tl.id", iUpsert));
     expect(upsert.length).toBeGreaterThan(200);

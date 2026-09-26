@@ -18,7 +18,7 @@
  * Corre contra nexus_test (test/setup.integration.ts la trunca antes de cada caso). Nunca producción.
  */
 import { describe, expect, it } from "vitest";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { leerBorrador, planDeAplicacion } from "./borrador";
 import {
@@ -136,9 +136,10 @@ describe("convertir las viejas del handoff — DB real", () => {
     ]);
     if (l.r.tipo !== "convertida") throw new Error(`se esperaba «convertida» y dio «${l.r.tipo}»`);
 
-    const avisos: number[] = [];
-    const w = await escribirLaConversion(prisma, [entradaDe(l)], (todas) => avisos.push(todas.length));
-    expect(avisos).toEqual([1]);
+    // Revisión de E4 (#3): se respalda antes de escribir y otra vez después, ya con `escrita`.
+    const avisos: boolean[][] = [];
+    const w = await escribirLaConversion(prisma, [entradaDe(l)], (todas) => avisos.push(todas.map((f) => f.escrita)));
+    expect(avisos).toEqual([[false], [true]]);
     expect(w.escritas).toHaveLength(1);
 
     // Lo guardado es un v1 del handoff con el MISMO token (la autoría sigue diciendo «desde el handoff»).
@@ -153,15 +154,20 @@ describe("convertir las viejas del handoff — DB real", () => {
     expect(plan.escrituras.fases).toEqual([]);
     expect(plan.items.find((it) => it.cambio.tipo === "fase-cambia")).toMatchObject({ estado: "choque" });
 
-    // Otra vez: la vieja ya no está, así que no se toca.
-    expect((await escribirLaConversion(prisma, [entradaDe(l)], () => {})).cambiaron).toHaveLength(1);
+    // Otra vez: la vieja ya no está, así que no se toca (y el respaldo de esa corrida dice que no la escribió).
+    const otraVez = await escribirLaConversion(prisma, [entradaDe(l)], () => {});
+    expect(otraVez.cambiaron).toHaveLength(1);
+    expect(otraVez.filas.map((f) => f.escrita)).toEqual([false]);
 
-    // Deshacer la devuelve tal cual, con su token; y una segunda vez ya no encuentra la convertida.
-    expect((await deshacerLaConversion(prisma, [entradaDe(l)])).escritas).toHaveLength(1);
+    // Deshacer (con el respaldo de la que escribió) la devuelve tal cual, con su token; y una segunda vez ya no
+    // encuentra la convertida. Con el respaldo de la que NO escribió, no toca nada.
+    expect((await deshacerLaConversion(prisma, otraVez.filas)).noEscritas).toHaveLength(1);
+    expect((await guardado(m.tl.id)).pendingProposal, "deshizo con el respaldo de una corrida que no escribió").toEqual(g.pendingProposal);
+    expect((await deshacerLaConversion(prisma, w.filas)).escritas).toHaveLength(1);
     const vuelta = await guardado(m.tl.id);
     expect(vuelta.pendingProposal).toEqual(m.vieja);
     expect(vuelta.pendingProposalRunId).toBe(m.run.id);
-    expect((await deshacerLaConversion(prisma, [entradaDe(l)])).cambiaron).toHaveLength(1);
+    expect((await deshacerLaConversion(prisma, w.filas)).cambiaron).toHaveLength(1);
   });
 
   it("⭐ una que no deja nada por decidir se limpia (propuesta y token), y deshacerla la devuelve", async () => {
@@ -175,11 +181,41 @@ describe("convertir las viejas del handoff — DB real", () => {
     const e = entradaDe(l);
     expect(e.convertida).toBeNull();
 
-    expect((await escribirLaConversion(prisma, [e], () => {})).escritas).toHaveLength(1);
+    const w = await escribirLaConversion(prisma, [e], () => {});
+    expect(w.escritas).toHaveLength(1);
     expect(await guardado(m.tl.id)).toEqual({ pendingProposal: null, pendingProposalRunId: null });
+    // Revisión de E4 (#3): la limpieza deja su marca en el cronograma, y el respaldo la guarda.
+    const { updatedAt } = await prisma.projectTimeline.findUniqueOrThrow({ where: { id: m.tl.id }, select: { updatedAt: true } });
+    expect(w.filas[0].limpiadaEn, "la marca del respaldo no es el updatedAt que quedó").toBe(updatedAt.toISOString());
 
-    expect((await deshacerLaConversion(prisma, [e])).escritas).toHaveLength(1);
+    expect((await deshacerLaConversion(prisma, w.filas)).escritas).toHaveLength(1);
     expect(await guardado(m.tl.id)).toEqual({ pendingProposal: soloPruebas, pendingProposalRunId: m.run.id });
+  });
+
+  it("⛔ revisión de E4 (#3) · una limpiada que volvió a quedar vacía por OTRA razón no recibe la vieja", async () => {
+    /* La conversión limpia X; después entra otra propuesta y el CSE la aplica (propuesta y token vuelven a null).
+       Deshacer pedía solo «vacía»: le devolvía la vieja del handoff de hace meses. Ahora exige el `updatedAt` que
+       dejó la limpieza, y cualquier escritura posterior lo mueve. La edición que la pone en rojo: soltar esa
+       marca del `where`. */
+    const m = await mundo();
+    const soloPruebas = { ...m.vieja, phases: m.vieja.phases.slice(0, 3) };
+    await prisma.projectTimeline.update({ where: { id: m.tl.id }, data: { pendingProposal: soloPruebas as unknown as Prisma.InputJsonValue } });
+    await prisma.timelinePhase.update({ where: { id: m.c.id }, data: { durationWeeks: 4 } });
+    const l = await leerComoElScript(m.tl.id);
+    expect(l.r.tipo).toBe("nada-que-decidir");
+    const w = await escribirLaConversion(prisma, [entradaDe(l)], () => {}, new Date(Date.now() - 60_000));
+    expect(w.escritas).toHaveLength(1);
+
+    // Entra otra propuesta y se aplica: queda vacía otra vez, pero no por la conversión.
+    await prisma.projectTimeline.update({
+      where: { id: m.tl.id },
+      data: { pendingProposal: { formato: "otra" } as Prisma.InputJsonValue, pendingProposalRunId: "otra-corrida" },
+    });
+    await prisma.projectTimeline.update({ where: { id: m.tl.id }, data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null } });
+
+    const d = await deshacerLaConversion(prisma, w.filas);
+    expect(d.cambiaron, "resucitó la vieja sobre un cronograma que otra propuesta dejó vacío").toHaveLength(1);
+    expect(await guardado(m.tl.id)).toEqual({ pendingProposal: null, pendingProposalRunId: null });
   });
 
   it("⛔ si la propuesta cambió después de leerla (otra propuesta u otro token), no se toca", async () => {

@@ -142,9 +142,24 @@ describe("E3 · la misma corrida: gana la versión mayor, y la de pantalla nunca
     expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: 3, versionNueva: 4 })).toBe(true);
     expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: 4, versionNueva: 4 })).toBe(false);
     expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: 5, versionNueva: 4 })).toBe(false);
-    // Sin versiones que comparar (el formato viejo), la regla de antes: la misma corrida no se re-pisa.
+    // Sin versiones que comparar, la regla de antes: la misma corrida no se re-pisa.
     expect(debeReemplazarPropuesta(base)).toBe(false);
-    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: null, versionNueva: 4 })).toBe(false);
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#2), con esta razón: pedía que la misma corrida con versión null en
+       pantalla (el formato viejo) NO se reemplazara por una v1. Pero ése es justo el caso de la conversión de las
+       viejas, que conserva el token: la pestaña abierta desde antes se quedaba con «Descartarla» encima de una
+       propuesta que ya se podía revisar. Su guarda es la de abajo. */
+    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: null, versionNueva: null })).toBe(false);
+  });
+
+  it("⛔ revisión de E4 (#2) · lo que no se sabía leer se reemplaza por su conversión, aunque sea el mismo token", () => {
+    /* Elías despliega E4 entero y justo después corre `--convertir-viejas --apply`. Una pestaña abierta en el
+       medio muestra «no se sabe leer» (versión null); al volver a ella, el servidor trae la convertida (v1,
+       versión 0) con el MISMO token. La edición que la pone en rojo: volver a exigir versiones numéricas en
+       las dos puntas (la línea de «Descartarla» queda viva y descarta la convertida sin haberla visto). */
+    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: null, versionNueva: 0 }), "la pestaña vieja no ve la convertida").toBe(true);
+    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: null, versionNueva: 4 })).toBe(true);
+    // Al revés no: una v1 en pantalla no se cambia por algo que no se sabe leer con el mismo token.
+    expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: 0, versionNueva: null })).toBe(false);
   });
 
   it("otra corrida gana siempre, sin mirar versiones (una propuesta nueva arranca en 0)", () => {

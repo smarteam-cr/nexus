@@ -57,7 +57,7 @@ import { partitionByValidation } from "@/lib/timeline/particularidad-state";
 // la tx ya sufrió P2028 contra el pooler — no se engorda con más writes.
 import { emitTimelineEventsSafe, diffFields, type DraftEvent } from "@/lib/cs/timeline-events";
 import { projectedEnd, describeEndShift, fmtFull } from "@/lib/timeline/weeks";
-import { MENSAJE_PROPUESTA_ABIERTA } from "@/lib/timeline/borrador";
+import { mensajeDeLaPropuestaAbierta } from "@/lib/timeline/borrador";
 import { leerEstadoDeLasTareas, type EstadoDeLasTareasDelBorrador } from "@/lib/timeline/borrador-del-detalle";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 import type { AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
@@ -524,11 +524,14 @@ export async function PUT(
          responde 409 y no escribe nada; el autoguardado (skipAudit) sigue igual: editar a mano con
          una propuesta abierta está permitido, y lo que choque lo excluye la revisión. */
       if (!skipAudit) {
-        const abiertas = await tx.projectTimeline.count({
+        /* Revisión de E4 (#5c): el texto depende de lo guardado. Lo que no se sabe leer no se aplica: se
+           descarta en su línea, y el 409 no dice «aplícala». */
+        const abierta = await tx.projectTimeline.findFirst({
           where: { projectId, pendingProposal: { not: Prisma.DbNull } },
+          select: { pendingProposal: true },
         });
-        if (abiertas > 0) {
-          throw Object.assign(new Error(MENSAJE_PROPUESTA_ABIERTA), { statusCode: 409 });
+        if (abierta) {
+          throw Object.assign(new Error(mensajeDeLaPropuestaAbierta(abierta.pendingProposal)), { statusCode: 409 });
         }
       }
       // Anchor previo (solo para detectar ANCHOR_CHANGED — select trivial por PK).

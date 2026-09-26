@@ -50,6 +50,7 @@ import {
   traeAlgoDeE3,
   type EntradaDeLaConversion,
   type EventoDelCronograma,
+  type FilaDelRespaldo,
   type VivoConOrden,
 } from "../../scripts/lib/propuestas-abiertas";
 import {
@@ -501,6 +502,11 @@ describe("E4 P3 · la escritura: condicionada a la vieja entera, con su respaldo
     convertida: DEL_HANDOFF,
   };
   const LIMPIA: EntradaDeLaConversion = { ...ENTRADA, projectId: "p2", timelineId: "tl2", token: "run-2", convertida: null };
+  /* Revisión de E4 (#3): la marca que la limpieza deja en el cronograma (`updatedAt`) y las filas del
+     respaldo, con si se escribieron y esa marca. */
+  const MARCA = new Date("2026-09-26T15:04:05.678Z");
+  const FILA: FilaDelRespaldo = { ...ENTRADA, escrita: true, limpiadaEn: null };
+  const FILA_LIMPIA: FilaDelRespaldo = { ...LIMPIA, escrita: true, limpiadaEn: MARCA.toISOString() };
   function baseFalsa(cuentas: number[]) {
     const llamadas: string[] = [];
     const updateMany = vi.fn(async () => {
@@ -513,38 +519,75 @@ describe("E4 P3 · la escritura: condicionada a la vieja entera, con su respaldo
   it("⭐ convertir: el mismo cronograma, el mismo token y la MISMA vieja entera; conserva el token", () => {
     /* La edición que la pone en rojo: soltar el token o el `equals` de la vieja (se pisaría una propuesta
        que se decidió o entró después de leer), o limpiar el token al convertir (la autoría diría otra cosa). */
-    expect(escrituraDeLaConversion(ENTRADA)).toEqual({
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#3), con esta razón: la limpieza deja en el cronograma una marca
+       propia de la conversión (`updatedAt: limpiadaEn`), la que exige deshacerla. Convertir no la necesita:
+       la convertida con su token ya es propia de la conversión. */
+    expect(escrituraDeLaConversion(ENTRADA, MARCA)).toEqual({
       where: { id: "tl1", pendingProposalRunId: "run-1", pendingProposal: { equals: VIEJA_DEL_HANDOFF } },
       data: { pendingProposal: DEL_HANDOFF },
     });
-    expect(escrituraDeLaConversion(LIMPIA)).toEqual({
+    expect(escrituraDeLaConversion(LIMPIA, MARCA)).toEqual({
       where: { id: "tl2", pendingProposalRunId: "run-2", pendingProposal: { equals: VIEJA_DEL_HANDOFF } },
-      data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
+      data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null, updatedAt: MARCA },
     });
   });
 
   it("⭐ deshacer: solo si sigue siendo lo que escribió la conversión; vuelve la vieja con su token", () => {
     /* La edición que la pone en rojo: deshacer sin mirar qué hay (pisaría lo que el CSE aplicó o lo que
-       entró después de la conversión). */
-    expect(escrituraDeDeshacer(ENTRADA)).toEqual({
+       entró después de la conversión).
+       ⚠ ACTUALIZADA en la revisión de E4 (#3), con esta razón: una limpiada pedía solo «vacía», y eso encaja
+       con cualquier cronograma vacío (otra propuesta que entró y se decidió después). Ahora exige también
+       el `updatedAt` que le dejó la limpieza. Soltarlo la pone en rojo. */
+    expect(escrituraDeDeshacer(FILA)).toEqual({
       where: { id: "tl1", pendingProposalRunId: "run-1", pendingProposal: { equals: DEL_HANDOFF } },
       data: { pendingProposal: VIEJA_DEL_HANDOFF },
     });
-    expect(escrituraDeDeshacer(LIMPIA)).toEqual({
-      where: { id: "tl2", pendingProposalRunId: null, pendingProposal: { equals: Prisma.DbNull } },
+    expect(escrituraDeDeshacer(FILA_LIMPIA)).toEqual({
+      where: { id: "tl2", pendingProposalRunId: null, pendingProposal: { equals: Prisma.DbNull }, updatedAt: MARCA },
       data: { pendingProposal: VIEJA_DEL_HANDOFF, pendingProposalRunId: "run-2" },
     });
   });
 
+  it("⛔ revisión de E4 (#3) · deshacer toca SOLO lo que la conversión escribió", async () => {
+    /* El respaldo guardaba todas las filas antes de escribir, sin decir cuáles quedaron en count 0, y deshacer
+       recorría todas: una que la conversión nunca tocó (alguien la aplicó o descartó en el medio) recibía de
+       vuelta la vieja. La edición que la pone en rojo: volver a deshacer sin mirar `escrita`. */
+    const base = baseFalsa([1]);
+    const d = await deshacerLaConversion(base.db, [{ ...FILA, escrita: false }, FILA_LIMPIA]);
+    expect(base.updateMany, "deshizo una fila que la conversión no escribió").toHaveBeenCalledTimes(1);
+    expect(base.updateMany).toHaveBeenCalledWith(escrituraDeDeshacer(FILA_LIMPIA));
+    expect([d.noEscritas.map((f) => f.projectId), d.escritas.map((f) => f.projectId)]).toEqual([["p1"], ["p2"]]);
+    // Una limpiada sin su marca no encaja con nada (1970), en vez de encajar con cualquier cronograma vacío.
+    expect(escrituraDeDeshacer({ ...FILA_LIMPIA, limpiadaEn: null }).where.updatedAt).toEqual(new Date(0));
+  });
+
   it("⛔ el respaldo se guarda ANTES de la primera escritura, con todas las filas; si falla, no se escribe nada", async () => {
-    /* La edición que la pone en rojo: guardar el respaldo después de escribir, o no guardarlo. */
-    const base = baseFalsa([1, 0]);
-    const r = await escribirLaConversion(base.db, [ENTRADA, LIMPIA], (todas) => {
-      base.llamadas.push(`respaldo de ${todas.length}`);
-    });
-    expect(base.llamadas).toEqual(["respaldo de 2", "updateMany", "updateMany"]);
-    expect(r.escritas.map((e) => e.projectId)).toEqual(["p1"]);
-    expect(r.cambiaron.map((e) => e.projectId), "count 0: cambió desde que se leyó").toEqual(["p2"]);
+    /* La edición que la pone en rojo: guardar el respaldo después de escribir, o no guardarlo.
+       ⚠ ACTUALIZADA en la revisión de E4 (#3), con esta razón: se vuelve a guardar después de CADA fila escrita,
+       con `escrita` y (en una limpiada) `limpiadaEn`: así el archivo dice qué se escribió de verdad. Una fila en
+       count 0 no se vuelve a guardar: queda `escrita: false`. Guardar una sola vez, o anotar `escrita` sin
+       mirar el count, la pone en rojo. */
+    const base = baseFalsa([0, 1]);
+    const guardados: FilaDelRespaldo[][] = [];
+    const r = await escribirLaConversion(
+      base.db,
+      [ENTRADA, LIMPIA],
+      (todas) => {
+        base.llamadas.push(`respaldo de ${todas.length}`);
+        guardados.push(JSON.parse(JSON.stringify(todas)));
+      },
+      MARCA,
+    );
+    expect(base.llamadas).toEqual(["respaldo de 2", "updateMany", "updateMany", "respaldo de 2"]);
+    expect(guardados[0].map((f) => f.escrita), "antes de escribir, ninguna escrita").toEqual([false, false]);
+    expect(guardados.at(-1), "el respaldo no dice qué se escribió de verdad").toEqual([
+      { ...ENTRADA, escrita: false, limpiadaEn: null },
+      { ...LIMPIA, escrita: true, limpiadaEn: MARCA.toISOString() },
+    ]);
+    expect(r.filas).toEqual(guardados.at(-1));
+    expect(r.escritas.map((e) => e.projectId)).toEqual(["p2"]);
+    expect(r.cambiaron.map((e) => e.projectId), "count 0: cambió desde que se leyó").toEqual(["p1"]);
+    expect(base.updateMany).toHaveBeenLastCalledWith(escrituraDeLaConversion(LIMPIA, MARCA));
 
     const rota = baseFalsa([]);
     await expect(
@@ -560,7 +603,7 @@ describe("E4 P3 · la escritura: condicionada a la vieja entera, con su respaldo
     expect(guardar, "sin filas no hay nada que respaldar").not.toHaveBeenCalled();
 
     const deshacer = baseFalsa([0, 1]);
-    const d = await deshacerLaConversion(deshacer.db, [ENTRADA, LIMPIA]);
+    const d = await deshacerLaConversion(deshacer.db, [FILA, FILA_LIMPIA]);
     expect([d.escritas.map((e) => e.projectId), d.cambiaron.map((e) => e.projectId)]).toEqual([["p2"], ["p1"]]);
   });
 
@@ -581,14 +624,20 @@ describe("E4 P3 · la escritura: condicionada a la vieja entera, con su respaldo
   });
 
   it("el respaldo se lee de vuelta para deshacer; uno con una sola fila rota no devuelve nada", () => {
-    const texto = JSON.stringify([ENTRADA, LIMPIA]);
-    expect(leerRespaldoDeViejas(texto)).toEqual({ entradas: JSON.parse(texto) });
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#3), con esta razón: cada fila trae ahora `escrita` y, si se limpió
+       y se escribió, `limpiadaEn`. Sin eso no se sabe qué deshacer: el archivo no vale. */
+    const texto = JSON.stringify([FILA, FILA_LIMPIA, { ...LIMPIA, escrita: false, limpiadaEn: null }]);
+    expect(leerRespaldoDeViejas(texto)).toEqual({ filas: JSON.parse(texto) });
     const rotos = [
       "no es json",
       "{}",
-      JSON.stringify([ENTRADA, { ...LIMPIA, token: "" }]),
-      JSON.stringify([{ ...ENTRADA, original: DEL_HANDOFF }]),
-      JSON.stringify([{ ...ENTRADA, convertida: VIEJA_DEL_HANDOFF }]),
+      JSON.stringify([FILA, { ...FILA_LIMPIA, token: "" }]),
+      JSON.stringify([{ ...FILA, original: DEL_HANDOFF }]),
+      JSON.stringify([{ ...FILA, convertida: VIEJA_DEL_HANDOFF }]),
+      // Revisión de E4 (#3): sin decir si se escribió, o limpiada y escrita sin su marca (o con una que no vale).
+      JSON.stringify([ENTRADA]),
+      JSON.stringify([{ ...FILA_LIMPIA, limpiadaEn: null }]),
+      JSON.stringify([{ ...FILA_LIMPIA, limpiadaEn: "ayer" }]),
     ];
     for (const t of rotos) expect(leerRespaldoDeViejas(t), t).toHaveProperty("error");
     expect(rutaDelRespaldoDeViejas(new Date(2026, 8, 25, 14, 3, 9))).toBe(
@@ -648,9 +697,37 @@ describe("E4 P3 · el script: `--antes-de-e4` y los modos que escriben", () => {
     expect(convertir.indexOf("writeFileSync(")).toBeGreaterThan(escribe);
     const helpers = leer("scripts/lib/conversion-de-viejas.ts");
     expect(helpers.match(/\.updateMany\(/g)).toHaveLength(2);
-    expect(helpers).toContain("await db.projectTimeline.updateMany(escrituraDeLaConversion(e));");
-    expect(helpers).toContain("await db.projectTimeline.updateMany(escrituraDeDeshacer(e));");
+    // ⚠ ACTUALIZADA en la revisión de E4 (#3): la conversión lleva la marca de la limpieza (`ahora`).
+    expect(helpers).toContain("await db.projectTimeline.updateMany(escrituraDeLaConversion(e, ahora));");
+    expect(helpers).toContain("await db.projectTimeline.updateMany(escrituraDeDeshacer(f));");
     expect(helpers).not.toMatch(/\.(update|upsert|delete|deleteMany|create|createMany)\(/);
+  });
+
+  it("⛔ revisión de E4 (#1, #2, #4) · el orden escrito es el que se va a correr: deploy de todo, conversión, control", () => {
+    /* Los commits de E4 están apilados en main y el deploy de siempre despliega todo: «P4 después de la
+       conversión» no se podía seguir. Elías decidió desplegar todo y convertir justo después. Las ediciones que
+       la ponen en rojo: volver a escribir en el script, en borrador.ts o en DECISIONS que P4 va después de la
+       conversión, o que deshacer «vale solo antes del deploy» (después también sirve: para no perder el dato). */
+    const cabecera = src.slice(0, src.indexOf("import "));
+    expect(cabecera).toContain("ORDEN DE E4 EN PRODUCCIÓN");
+    const i1 = cabecera.indexOf("1. `--convertir-viejas` en seco;");
+    const i2 = cabecera.indexOf("2. `--convertir-viejas --apply` (con ALLOW_PROD_WRITE);");
+    const i3 = cabecera.indexOf("3. `--antes-de-e4`, que tiene que dar verde.");
+    expect(i1, "la cabecera no dice el orden").toBeGreaterThan(cabecera.indexOf("el deploy de siempre con TODO main"));
+    expect(i2).toBeGreaterThan(i1);
+    expect(i3).toBeGreaterThan(i2);
+    expect(cabecera).toContain("Sirve para no perder el dato, no para volver a revisarlas.");
+    const decisiones = leer("docs/DECISIONS.md");
+    expect(decisiones).toContain("- **Orden en producción** (decisión de Elías, revisión de E4)");
+    for (const [rel, texto] of [
+      ["scripts/propuestas-abiertas.ts", src],
+      ["lib/timeline/borrador.ts", leer("lib/timeline/borrador.ts")],
+      ["docs/DECISIONS.md", decisiones],
+    ] as const) {
+      expect(texto, `${rel} vuelve a poner P4 después de la conversión`).not.toMatch(
+        /antes del deploy de (E4 )?P4|deploy de P4 va después|solo antes del deploy/i,
+      );
+    }
   });
 
   it("el listado dice cuántas ediciones leyó, qué dejaría la conversión, y no llama «el sistema» a una corrida sin email", () => {

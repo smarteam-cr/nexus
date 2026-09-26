@@ -74,6 +74,11 @@ export function decidirRefrescoTrasHandoff(e: EstadoDelCronograma): RefrescoTras
  * desmarcado se guarda en el servidor y cada casilla sube la versión del `borrador-v1`: al volver a la
  * pestaña, lo que marcó otra computadora tiene que verse. Una versión igual o menor no pisa nada (la
  * versión en pantalla nunca baja).
+ *
+ * Revisión de E4 (#2): la MISMA corrida también se reemplaza si en pantalla hay algo que no es un v1
+ * (versión null: esta versión no lo sabe leer) y lo nuevo sí lo es. Es la conversión de las viejas
+ * (`--convertir-viejas`), que corre justo después del deploy y conserva el token: sin esto, una pestaña
+ * abierta desde antes seguía ofreciendo «Descartarla» sobre una propuesta que ya se podía revisar.
  */
 export function debeReemplazarPropuesta(actual: {
   /** Si hay una propuesta en pantalla ahora. */
@@ -91,6 +96,8 @@ export function debeReemplazarPropuesta(actual: {
   // Del servidor contra el servidor: gana la corrida nueva. Sin runId nuevo no hay nada que traer.
   if (!actual.runIdNuevo) return false;
   if (actual.runIdNuevo !== actual.runIdEnPantalla) return true;
+  // Revisión de E4 (#2): la misma corrida convertida al formato que se sabe leer.
+  if (actual.versionEnPantalla == null && typeof actual.versionNueva === "number") return true;
   // E3: la misma corrida, solo si el servidor la reescribió después (otra computadora, el chat).
   return versionMayor(actual.versionNueva, actual.versionEnPantalla);
 }

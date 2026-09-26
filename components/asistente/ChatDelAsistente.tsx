@@ -155,6 +155,11 @@ interface Props {
    */
   enfocarAlAbrir?: boolean;
   /**
+   * Revisión de E4 (#10): cada vez que sube, el cursor va al campo de escribir, aunque el cajón ya estuviera
+   * abierto (el «IA» de otra fase). Lo sube solo un gesto de la persona: la apertura automática no.
+   */
+  pedidoDeFoco?: number;
+  /**
    * E3 P5: de qué se habla («Sobre la propuesta desde «Regenerar todo»»). Reemplaza al subtítulo, y el
    * estado vacío muestra ejemplos de lo que se le pide a una propuesta.
    */
@@ -176,6 +181,7 @@ export default function ChatDelAsistente({
   onAplicar,
   motivoParaNoAplicar,
   enfocarAlAbrir = true,
+  pedidoDeFoco = 0,
   referencia = null,
 }: Props) {
   const hydrated = useHydrated();
@@ -319,6 +325,17 @@ export default function ChatDelAsistente({
     // Solo al abrir: si deja de ser una apertura automática con el cajón abierto, no se le roba el foco.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierto]);
+
+  /* Revisión de E4 (#10): con el cajón YA abierto, el «IA» de otra fase no cambia `abierto` y el efecto de
+     arriba no vuelve a correr: el cursor se quedaba en el Gantt. Este escucha SOLO el pedido de foco (no
+     `abierto`: con un pedido viejo, una apertura automática tomaría el foco). Devolverlo al cerrar sigue
+     siendo del de arriba. */
+  useEffect(() => {
+    if (!abierto || !pedidoDeFoco) return;
+    const t = window.setTimeout(() => composerRef.current?.focus(), 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoDeFoco]);
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });

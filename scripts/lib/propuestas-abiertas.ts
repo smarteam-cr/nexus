@@ -291,8 +291,7 @@ export function rutaDelRespaldoDeViejas(ahora: Date, raiz = "backups"): string {
 
 /**
  * Una fila de la conversión: lo que había (`original`, la vieja tal cual se leyó) y lo que se escribe
- * (`convertida`, o null si no dejaba nada por decidir y se limpia). Es también lo que guarda el
- * respaldo JSON y lo que lee `--deshacer-conversion`.
+ * (`convertida`, o null si no dejaba nada por decidir y se limpia).
  */
 export interface EntradaDeLaConversion {
   projectId: string;
@@ -302,14 +301,28 @@ export interface EntradaDeLaConversion {
   convertida: Borrador | Record<string, unknown> | null;
 }
 
+/**
+ * Revisión de E4 (#3): una fila del RESPALDO, que es lo que lee `--deshacer-conversion`. Además de la
+ * entrada dice si la conversión la escribió de verdad (`escrita`: con count 0 no se tocó, y deshacerla
+ * resucitaría una propuesta vieja sobre algo que alguien ya decidió) y, en una que se limpió, el
+ * `updatedAt` que le quedó al cronograma (`limpiadaEn`, ISO): «vacío» no alcanza para saber que sigue como
+ * lo dejó la conversión, así que deshacer lo exige. En las demás, null.
+ */
+export interface FilaDelRespaldo extends EntradaDeLaConversion {
+  escrita: boolean;
+  limpiadaEn: string | null;
+}
+
 const esTexto = (v: unknown): v is string => typeof v === "string" && v.length > 0;
+const esFechaIso = (v: unknown): v is string => esTexto(v) && !Number.isNaN(Date.parse(v));
 
 /**
  * El respaldo de una conversión, validado para `--deshacer-conversion`. Cada fila tiene que traer su
- * proyecto, su cronograma y su token; un `original` en el formato viejo del handoff, y una `convertida`
- * que es un `borrador-v1` o null. Si una sola no vale, no se devuelve nada.
+ * proyecto, su cronograma y su token; un `original` en el formato viejo del handoff, una `convertida`
+ * que es un `borrador-v1` o null, si se escribió (`escrita`) y, en una limpiada que se escribió, la fecha
+ * que le quedó al cronograma (`limpiadaEn`). Si una sola no vale, no se devuelve nada.
  */
-export function leerRespaldoDeViejas(texto: string): { entradas: EntradaDeLaConversion[] } | { error: string } {
+export function leerRespaldoDeViejas(texto: string): { filas: FilaDelRespaldo[] } | { error: string } {
   let json: unknown;
   try {
     json = JSON.parse(texto);
@@ -317,14 +330,28 @@ export function leerRespaldoDeViejas(texto: string): { entradas: EntradaDeLaConv
     return { error: "el archivo no es un JSON" };
   }
   if (!Array.isArray(json)) return { error: "el archivo no es una lista de filas" };
-  const entradas: EntradaDeLaConversion[] = [];
+  const filas: FilaDelRespaldo[] = [];
   for (const [n, f] of json.entries()) {
     if (!esObjeto(f) || !esTexto(f.projectId) || !esTexto(f.timelineId) || !esTexto(f.token)) {
       return { error: `la fila ${n + 1} no trae su proyecto, su cronograma y su token` };
     }
     if (formatoDe(f.original) !== "viejo-handoff") return { error: `la fila ${n + 1} no trae la propuesta vieja del handoff` };
     if (f.convertida !== null && !esBorradorV1(f.convertida)) return { error: `la fila ${n + 1} no trae un borrador-v1 ni null` };
-    entradas.push({ projectId: f.projectId, timelineId: f.timelineId, token: f.token, original: f.original, convertida: f.convertida });
+    if (typeof f.escrita !== "boolean") return { error: `la fila ${n + 1} no dice si la conversión la escribió` };
+    const limpiadaEn = f.limpiadaEn ?? null;
+    if (limpiadaEn !== null && !esFechaIso(limpiadaEn)) return { error: `la fila ${n + 1} trae una fecha de limpieza que no vale` };
+    if (f.convertida === null && f.escrita && limpiadaEn === null) {
+      return { error: `la fila ${n + 1} se limpió y no dice cuándo: no se puede saber si sigue como la dejó la conversión` };
+    }
+    filas.push({
+      projectId: f.projectId,
+      timelineId: f.timelineId,
+      token: f.token,
+      original: f.original,
+      convertida: f.convertida,
+      escrita: f.escrita,
+      limpiadaEn,
+    });
   }
-  return { entradas };
+  return { filas };
 }

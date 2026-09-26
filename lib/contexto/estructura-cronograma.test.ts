@@ -930,8 +930,14 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     // El cartel ámbar: oculto con una propuesta abierta, y el texto con la MISMA condición que el `disabled`.
     /* (E2b P4: y oculto con la línea que ofrece las tareas: dos llamados a lo mismo. Su guarda propia,
        en «E2b P4 · la oferta de las tareas…».) */
-    const iCartel = src.indexOf("{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && !ofrecerTareas && (");
-    expect(iCartel, "el cartel «Genera las tareas» se ofrece encima de la propuesta").toBeGreaterThan(-1);
+    /* ⚠ ACTUALIZADA en la revisión de E4 (#5a), con esta razón: miraba `!hayBorrador`, y con una propuesta que no
+       se sabe leer el cartel ofrecía «Genera las tareas», que terminaba en «resuélvela» sin barra donde hacerlo.
+       Ahora `!proposal` (cualquier propuesta guardada). Volver a `!hayBorrador` la pone en rojo. */
+    const iCartel = src.indexOf("{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !proposal && !ofrecerTareas && (");
+    expect(iCartel, "el cartel «Genera las tareas» se ofrece encima de una propuesta (legible o no)").toBeGreaterThan(-1);
+    expect(src, "el cartel volvió a mirar solo lo que se sabe leer").not.toContain(
+      "canGenerateTimeline && !hayBorrador && !ofrecerTareas && (",
+    );
     const cartel = src.slice(iCartel, src.indexOf("</p>", iCartel));
     expect(cartel).toContain('disabled={armando !== null || tareasDelBorrador?.estado === "armando"}');
     expect(cartel, "el texto vuelve a decir «Genera las tareas» mientras la IA arma").toContain(
@@ -1094,8 +1100,9 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     );
     expect(componente, "volvió el «Ahora no» propio de la oferta").not.toContain("onCerrar");
     expect(textoDeLaLineaDeTareas("ofrecer", null, null, false, true)?.secundaria).toBe("Ahora no");
+    // ⚠ ACTUALIZADA en la revisión de E4 (#5a): `!proposal` en vez de `!hayBorrador` (la guarda, más arriba).
     expect(src, "el cartel ámbar dobla la oferta").toContain(
-      "{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !hayBorrador && !ofrecerTareas && (",
+      "{canEdit && !hasAiDetail && !hasPublishedOnce && canGenerateTimeline && !proposal && !ofrecerTareas && (",
     );
     // (4) Descartar lee si era de una fase y se lo dice al núcleo.
     const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");

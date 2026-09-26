@@ -213,6 +213,8 @@ export const MOTIVOS_DEL_CHAT = {
   hayPropuesta: "Hay una propuesta abierta: pídemelo de nuevo",
   cambio: "La propuesta cambió: pídemelo de nuevo",
   enSuBarra: "Resuelve la propuesta en su barra",
+  // Revisión de E4 (#5c): lo que no se sabe leer no tiene barra; solo se descarta en su línea.
+  ilegible: "Descártala arriba del Gantt",
   armando: "Espera: la IA está armando las tareas",
   // Revisión de E3 (#20): «Faltan recalcular» no concordaba (el sujeto es el infinitivo).
   recalcular: "Falta recalcular tareas: mira la barra",
@@ -252,12 +254,13 @@ export function motivoParaElAcuerdo(
 ): string | null {
   // E4: un acuerdo sin operaciones es de antes del 2026-08-20 (solo una instrucción): ya no tiene carril.
   if (!Array.isArray(a.operaciones)) return ACUERDO_DE_OTRA_VERSION;
+  /* E4: lo que no es un v1 ya no es `hayBorrador`, pero sigue guardado: el PUT con motivo respondería 409, y
+     un acuerdo para una propuesta no tiene a cuál ir. Se descarta en su línea («Descartarla»).
+     Revisión de E4 (#5c): decía «Resuelve la propuesta en su barra», y esa barra no existe. */
+  if (p.ilegible) return MOTIVOS_DEL_CHAT.ilegible;
   const enSuBarra = p.hayBorrador && p.conDesconocidos;
   const token = a.borrador ?? null;
   if (token === null) {
-    /* E4: lo que no es un v1 ya no es `hayBorrador`, pero sigue guardado: el PUT con motivo respondería 409.
-       Se resuelve en su línea («Descartarla»). */
-    if (p.ilegible) return MOTIVOS_DEL_CHAT.enSuBarra;
     if (!p.hayBorrador) return null;
     if (enSuBarra) return MOTIVOS_DEL_CHAT.enSuBarra;
     if (p.tareasArmando) return MOTIVOS_DEL_CHAT.armando;
