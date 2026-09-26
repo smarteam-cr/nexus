@@ -660,15 +660,15 @@ export function borradorBase(i: {
 }
 
 /**
- * El borrador que deja el HANDOFF (E2b), o null si no hay nada que se pueda aplicar: un productor sin
- * cambios nunca escribe. Solo fases y no espera tareas (`tareas: null`). La conversión es exacta para
- * este productor (arriba, las dos inferencias) y el `desde` queda fijado contra `vivo`, lo que leyó el
- * servidor: los choques son los mismos en cualquier computadora. `propuesta` nunca trae `origen`.
- * No es `borradorBase` con otro origen: aquél siempre devuelve un borrador que espera tareas.
+ * La conversión del handoff SIN el filtro de «nada aplicable»: exacta para este productor (arriba, las
+ * dos inferencias). Solo fases y no espera tareas (`tareas: null`); el `desde` queda fijado contra
+ * `vivo`. E4 (P3): la usa también la conversión de las propuestas viejas del handoff
+ * (scripts/propuestas-abiertas.ts), contra el cronograma del día en que se crearon; ahí una propuesta
+ * que solo choca no se tira, porque el CSE tiene que ver el ⚠.
  */
-export function borradorDelHandoff(i: { propuesta: ProposalLike; vivo: Vivo; nuevaClave?: () => string }): Borrador | null {
+export function convertirDelHandoff(i: { propuesta: ProposalLike; vivo: Vivo; nuevaClave?: () => string }): Borrador {
   const viejo = convertirPropuestaVieja(i.propuesta, i.vivo);
-  const b: Borrador = {
+  return {
     ...viejo,
     version: 0,
     origen: "handoff",
@@ -677,6 +677,16 @@ export function borradorDelHandoff(i: { propuesta: ProposalLike; vivo: Vivo; nue
     tareas: null,
     tareasArmadasPara: {},
   };
+}
+
+/**
+ * El borrador que deja el HANDOFF (E2b), o null si no hay nada que se pueda aplicar: un productor sin
+ * cambios nunca escribe. Es `convertirDelHandoff` con ese filtro, contra `vivo`, lo que leyó el
+ * servidor: los choques son los mismos en cualquier computadora. `propuesta` nunca trae `origen`.
+ * No es `borradorBase` con otro origen: aquél siempre devuelve un borrador que espera tareas.
+ */
+export function borradorDelHandoff(i: { propuesta: ProposalLike; vivo: Vivo; nuevaClave?: () => string }): Borrador | null {
+  const b = convertirDelHandoff(i);
   return planDeAplicacion(i.vivo, b).aplicables > 0 ? b : null;
 }
 
