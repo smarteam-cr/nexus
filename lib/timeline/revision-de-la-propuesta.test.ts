@@ -297,9 +297,17 @@ describe("el Gantt pinta las marcas de la vista «Ver la propuesta»", () => {
       "la fila marcada perdió el fondo del token o la línea a la izquierda",
     ).toBe(true);
     expect(GANTT, "el token se pintó a la mitad").not.toMatch(/bg-(success|info)-surface\/\d/);
-    const etiquetas = tramo(GANTT, "{marca && marca.etiquetas.length > 0 && (", "</div>");
+    /* ⚠ REESCRITA en L3 P3c (2026-09-26), con esta razón: con la vista de la propuesta (prop `propuesta`) las
+       etiquetas que ya dice una casilla («+2 semanas», «+9 tareas», «renombrada»…) no se repiten como chips
+       (spec §4.1); se pintan `etiquetasDeLaFila`, que sin `propuesta` son las etiquetas tal cual. Lo que
+       pinta cada una se mira de verdad en gantt-de-la-propuesta.test.ts. */
+    expect(
+      contiene(GANTT, "const etiquetasDeLaFila = !marca ? [] : propuesta ? etiquetasSinCasilla(marca.etiquetas) : marca.etiquetas;"),
+      "las etiquetas de la fila dejaron de salir de la marca (o se filtran sin propuesta)",
+    ).toBe(true);
+    const etiquetas = tramo(GANTT, "{marca && etiquetasDeLaFila.length > 0 && (", "</div>");
     expect(etiquetas.length).toBeGreaterThan(100);
-    expect(contiene(etiquetas, "{marca.etiquetas.map((e) => (")).toBe(true);
+    expect(contiene(etiquetas, "{etiquetasDeLaFila.map((e) => (")).toBe(true);
     expect(contiene(etiquetas, "{e}")).toBe(true);
   });
 
@@ -323,6 +331,100 @@ describe("el Gantt pinta las marcas de la vista «Ver la propuesta»", () => {
       expect(contiene(comp, "{open && !readOnly && ("), `${rel} abre el calendario en solo lectura`).toBe(true);
       expect(contiene(comp, "disabled={readOnly}"), `${rel} se puede apretar en solo lectura`).toBe(true);
     }
+  });
+});
+
+describe("L3 P3c · el Gantt: lo que no se ve sin clics (el teclado, el foco, las ramas)", () => {
+  /* Lo que se PINTA (dónde hay casilla, qué se tacha, «Atrasada», los chips, las fases fuera, sin useSortable) se
+     mira de verdad en gantt-de-la-propuesta.test.ts, con react-dom/server. Esto mira lo que ahí no se puede: que
+     un clic en una casilla no despliegue la fila, el foco y que cada rama pinte lo suyo. */
+  const FILA = tramo(GANTT, "function FilaDeLaPropuesta(", "function CasillaDeLaFase(");
+  const CASILLAS = tramo(GANTT, "function CasillaDeLaFase(", "function CasillasDeLaFase(");
+  const ESTILO = tramo(GANTT, "export function estiloDeLaFila(", "interface SeguirElFoco");
+  const RAMA_PROPUESTA = tramo(GANTT, "{isOpen && propuesta && (() => {", "{isOpen && !propuesta && (");
+  const RAMA_DE_SIEMPRE = tramo(GANTT, "{isOpen && !propuesta && (", "{(fueraDespuesDe.get(p.key) ?? []).map(filaDeFaseFuera)}");
+
+  it("⭐ cada casilla: data-casilla, data-lugar, scroll-mt-24, su label no despliega la fila y lleva el foco", () => {
+    /* La edición que la pone en rojo: sacar el `e.stopPropagation()` del label (marcar una casilla de la fila de
+       una fase la despliega o la pliega), o una casilla sin `data-casilla`/`data-lugar` (el foco no vuelve). */
+    for (const [nombre, src] of [["la fila de la tarea", FILA], ["las casillas de fase y de grupo", CASILLAS]] as const) {
+      expect(src.length, nombre).toBeGreaterThan(500);
+      const casillas = src.match(/type="checkbox"/g)?.length ?? 0;
+      expect(casillas, nombre).toBeGreaterThan(0);
+      expect(src.match(/<label\s+onClick=\{\(e\) => e\.stopPropagation\(\)\}/g)?.length, `${nombre}: el label despliega la fila`).toBe(casillas);
+      expect(src.match(/data-casilla=\{/g)?.length, `${nombre}: sin data-casilla`).toBe(casillas);
+      expect(src.match(/data-lugar=/g)?.length, `${nombre}: sin data-lugar`).toBe(casillas);
+      expect(src.match(/className=\{CASILLA\}/g)?.length, `${nombre}: sin scroll-mt-24`).toBe(casillas);
+      expect(src.match(/\{\.\.\.foco\}/g)?.length, `${nombre}: la casilla no avisa su foco`).toBe(casillas);
+    }
+    expect(GANTT).toMatch(/const CASILLA = "scroll-mt-24 [^"]*focus-visible:ring-2 focus-visible:ring-info-line"/);
+    expect(contiene(CASILLAS, 'data-lugar="grupo"')).toBe(true);
+    expect(contiene(CASILLAS, "el.indeterminate = aMedias;"), "el grupo perdió su tercer estado").toBe(true);
+    expect(contiene(FILA, "aria-label={etiquetaDeLaCasilla(marca, title)}")).toBe(true);
+  });
+
+  it("⭐ el chevron es un botón que despliega con Enter y dice si está abierta", () => {
+    /* La edición que la pone en rojo: volver al <svg> suelto, o un botón sin `aria-expanded`. */
+    expect(GANTT.match(/aria-expanded=\{isOpen\}/g)?.length, "la fase y la fase fuera").toBe(2);
+    expect(contiene(GANTT, "aria-label={`Desplegar «${p.name}»`}")).toBe(true);
+    expect(contiene(GANTT, "e.stopPropagation(); toggleExpand(p.key);")).toBe(true);
+  });
+
+  it("⭐ tachado: en la propuesta, SOLO `marca.tachada`; lo hecho se tacha solo en el Gantt de siempre", () => {
+    /* La edición que la pone en rojo: tachar las hechas en la vista de la propuesta. */
+    expect(RAMA_PROPUESTA.length).toBeGreaterThan(500);
+    expect(RAMA_DE_SIEMPRE.length).toBeGreaterThan(2000);
+    expect(FILA, "la fila de la propuesta tacha por su cuenta").not.toContain("line-through");
+    expect(RAMA_PROPUESTA).not.toContain("line-through");
+    expect(ESTILO.match(/line-through/g)?.length).toBe(1);
+    expect(contiene(ESTILO, 'if (m.tachada) { return { fila: "", titulo: "line-through text-warn-ink"')).toBe(true);
+    // El Gantt de siempre sigue tachando lo hecho (no cambia fuera de la propuesta).
+    expect(RAMA_DE_SIEMPRE).toContain('t.status === "DONE" || t.status === "SUSPENDED" ? "text-fg-muted line-through"');
+  });
+
+  it("⭐ la rama de la propuesta no arrastra: sin SortableRow ni SortableContext en sus filas de tareas", () => {
+    /* La edición que la pone en rojo: envolver `FilaDeLaPropuesta` en `SortableRow` (~130 useSortable con Wherex). */
+    for (const src of [RAMA_PROPUESTA, FILA]) {
+      expect(src).not.toMatch(/SortableRow|SortableContext|useSortable|DroppableWeek/);
+    }
+    expect(contiene(RAMA_PROPUESTA, "filaDeLaPropuesta(fila, tasksByKey, plannedEnd)")).toBe(true);
+    expect(contiene(RAMA_PROPUESTA, "propuesta.semanasPorKey.get(p.key)"), "el desplegado dejó el orden de la vista").toBe(true);
+  });
+
+  it("⭐ los atrasos de la propuesta miran solo lo que existe hoy; «Atrasada» con el rojo de token", () => {
+    /* La edición que la pone en rojo: `collectClientBlockers(phases, …)` sin filtrar, o volver al rojo crudo. */
+    expect(contiene(GANTT, "const fasesQueExistenHoy = propuesta ? phases.map((p) => ({ ...p, tasks: paraLosAtrasos(p.tasks) })) : phases;")).toBe(true);
+    expect(contiene(GANTT, "collectClientBlockers(fasesQueExistenHoy, anchor, today)")).toBe(true);
+    expect(GANTT).not.toContain("collectClientBlockers(phases");
+    expect(contiene(GANTT, "vencidas: paraLosAtrasos(p.tasks).filter(")).toBe(true);
+    expect(contiene(GANTT, "const weekOverdue = paraLosAtrasos(weekTasks).some(")).toBe(true);
+    expect(contiene(GANTT, "atrasada={overdue && marca?.existeHoyYSeQueda !== false}")).toBe(true);
+    expect(GANTT).toMatch(/const CHIP_ATRASADA =\s*"[^"]*border-danger-line bg-danger-surface text-danger-ink"/);
+    expect(GANTT.match(/className=\{CHIP_ATRASADA\}/g)?.length, "las dos «Atrasada» con el mismo chip").toBe(2);
+    expect(GANTT).not.toContain("text-red-300 bg-red-900/30 border-red-700/50");
+  });
+
+  it("⭐ los chips de la fila explican lo suyo: por validar, revisa el texto, ya existe en «X»", () => {
+    /* La edición que la pone en rojo: perder el `title` de un chip al mudarlo de TareasDeLaPropuesta. */
+    expect(contiene(FILA, "title={marca.porValidar}")).toBe(true);
+    expect(contiene(FILA, "title={tituloDeLaFuga(marca.fuga)}")).toBe(true);
+    expect(contiene(FILA, "title={tituloDeLaRepetida(marca.repetida)}")).toBe(true);
+    expect(FILA, "volvió el tooltip fijo de «la típica»").not.toContain('title="La IA no la sacó del handoff');
+  });
+
+  it("⭐ el foco vuelve a su casilla, y «Siguiente número» centra la suya", () => {
+    /* La edición que la pone en rojo: sacar el efecto que devuelve el foco (al marcar, una fila que cambia de nodo
+       deja el foco en el body y Tab vuelve al principio de la página), o el que centra la casilla del número. */
+    const foco = tramo(GANTT, "useLayoutEffect(() => {", "if (phases.length === 0 || total === 0) return null;");
+    expect(contiene(foco, "document.activeElement !== document.body")).toBe(true);
+    expect(foco).toContain("[data-casilla=");
+    expect(foco).toContain("[data-lugar=");
+    expect(contiene(foco, "el?.focus({ preventScroll: true });")).toBe(true);
+    const irA = tramo(GANTT, "useEffect(() => {\n    if (irANonce === null || irACasilla === null) return;", "}, [irANonce, irACasilla]);");
+    expect(contiene(irA, 'el.scrollIntoView({ block: "center" });')).toBe(true);
+    expect(contiene(irA, "el.focus(")).toBe(true);
+    // Depende de primitivos: un `irA` armado en cada render no vuelve a centrar ni roba el foco en cada tecla.
+    expect(GANTT).not.toMatch(/\}, \[irA\]\);/);
   });
 });
 

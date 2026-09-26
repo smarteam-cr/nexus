@@ -346,6 +346,54 @@ export function fasesADesplegarAlEntrar(v: VistaDeLaPropuesta, tope = 40): strin
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ── LO QUE EL GANTT PREGUNTA (L3 P3c) ────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Las etiquetas de la fila de una fase (`MarcaDeFase`, de `proyectarConPlan`) que ya dice una casilla: la
+ *  duración, el inicio, el nombre, las sesiones, la nota, el tipo, la fase nueva y lo que cuenta el grupo. */
+const DICHAS_POR_UNA_CASILLA: readonly RegExp[] = [
+  /^[+−]\d+ semanas?$/,
+  /^inicio /,
+  /^(renombrada|sesiones|notas|tipo|nueva)$/,
+  /^[+−]\d+ tareas?$/,
+  /^\d+ tareas? cambian?$/,
+];
+
+/** Las etiquetas de la fila de una fase que quedan como chips SIN casilla en la vista de la propuesta
+ *  («movida», «se queda con N tareas», «tareas por recalcular»): lo demás ya lo dice una casilla, no dos veces. */
+export function etiquetasSinCasilla(etiquetas: readonly string[]): string[] {
+  return etiquetas.filter((e) => !DICHAS_POR_UNA_CASILLA.some((re) => re.test(e)));
+}
+
+/** Las tareas que cuentan para los atrasos en la vista de la propuesta (el punto de la fase, el anillo de la
+ *  celda, «Pendiente del cliente · atrasadas»): las que existen hoy y se quedan en su semana. Sin marca, cuenta. */
+export function tareasQueExistenHoy<T extends { key: string }>(tareas: readonly T[], marcas: ReadonlyMap<string, MarcaDeTarea>): T[] {
+  return tareas.filter((t) => marcas.get(t.key)?.existeHoyYSeQueda !== false);
+}
+
+/** Lo que dice la casilla de una tarea a quien no la ve (su `aria-label`): el verbo con la tarea y su número.
+ *  «Quitar la tarea «T» · número 12», «Pasar «T» a la Semana 3 · número 7», «Mudar «T» a «Y» · número 9». */
+export function etiquetaDeLaCasilla(m: MarcaDeTarea, titulo: string): string {
+  const t = `«${titulo.trim() || "Sin título"}»`;
+  const sugerida = /^¿Mover a (.+)\?$/.exec(m.verbo);
+  const accion =
+    m.verbo === VERBO_CREAR
+      ? `Crear la tarea ${t}`
+      : m.verbo === VERBO_QUITAR
+        ? `Quitar la tarea ${t}`
+        : m.verbo === VERBO_CAMBIAR
+          ? `Cambiar la tarea ${t}`
+          : m.verbo.startsWith("Pasar a ")
+            ? `Pasar ${t} a la ${m.verbo.slice("Pasar a ".length)}`
+            : m.verbo.startsWith("Mudar a ")
+              ? `Mudar ${t} a ${m.verbo.slice("Mudar a ".length)}`
+              : sugerida
+                ? `Mover ${t} a ${sugerida[1]}`
+                : `${m.verbo} ${t}`;
+  return `${accion}${m.tipo === "sugerida" ? " (sugerida)" : ""} · número ${m.numero}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ── LA VISTA ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 

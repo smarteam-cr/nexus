@@ -34,12 +34,34 @@
  * aplican desde la propuesta—: cuenta en la firmeza del baseline al publicar
  * (lib/timeline/baseline.ts; con más de la mitad marcadas queda WEAK y el portafolio
  * atenúa su alarma de alcance) y se limpia al editar el contenido de la tarea.
- * «Confirmar detalle» no la limpia. Donde el CSE la ve es en la propuesta de arriba
- * del Gantt (TareasDeLaPropuesta), antes de aplicar; desde E2b también en «Regenerar»
- * de una fase. La marca nunca cruza al cliente (columna excluida del mapper externo).
+ * «Confirmar detalle» no la limpia. Donde el CSE la ve es en la propuesta, antes de aplicar
+ * (desde L3, en el chip «por validar» de la fila de la tarea en este mismo Gantt); desde E2b
+ * también en «Regenerar» de una fase. La marca nunca cruza al cliente (columna excluida del
+ * mapper externo).
+ *
+ * ⭐ L3 P3c (2026-09-26) · LA PROPUESTA SE DECIDE ACÁ (prop `propuesta`). Cada cambio tiene su casilla
+ * en su fila: los de campo y el grupo de tareas bajo el nombre de la fase, los de tarea después del
+ * título, con un verbo que no cambia al marcar («Crear», «Quitar», «Pasar a Semana 3»). Todo sale de
+ * `vistaDeLaPropuesta` (lib/timeline/vista-de-la-propuesta.ts): el Gantt no evalúa nada, solo pinta.
+ *   · Tachado = se quita, nada más; lo hecho, con su check y SIN tachar; lo que no va a existir así,
+ *     fantasma (borde punteado, cursiva). Ninguna fila cambia de lugar al marcar (el orden es el de la vista).
+ *   · «Atrasada» y todo lo que cuenta atrasos mira solo lo que existe hoy y se queda (`tareasQueExistenHoy`).
+ *   · Sin `SortableRow` en las filas de tareas de la propuesta (solo lectura; ~130 `useSortable` menos).
+ *   · El foco vuelve a su casilla cuando la fila cambia de nodo (`data-casilla` + `data-lugar`).
+ * Sin `propuesta`, el Gantt es el de siempre (y «Ver la propuesta» vieja, con `marcas`, sigue igual).
  */
 
-import { useState, useRef, useMemo, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent as ReactFocusEvent,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   DndContext,
   closestCorners,
@@ -79,7 +101,23 @@ import { findDuplicateGroups } from "@/lib/timeline/particularidad-identity";
 import { fasesProbablementeRepetidas } from "@/lib/timeline/phase-identity";
 import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
-import type { MarcaDeFase } from "@/lib/timeline/borrador";
+import type { MarcaDeFase, UnidadNumerada } from "@/lib/timeline/borrador";
+import {
+  chipDelChoque,
+  etiquetaDeLaCasilla,
+  etiquetasSinCasilla,
+  tareasQueExistenHoy,
+  tituloDeLaFuga,
+  tituloDeLaRepetida,
+  TITULO_SEMANA_QUE_SE_SUMA,
+  type CasillaDeCambio,
+  type CasillaDeGrupo,
+  type FaseFuera,
+  type FilaExtra,
+  type MarcaDeTarea,
+  type VistaDeFase,
+  type VistaDeLaPropuesta,
+} from "@/lib/timeline/vista-de-la-propuesta";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
@@ -201,6 +239,32 @@ interface Props {
    *  particularidades. Llega como slot y no como datos porque es un componente completo con su
    *  propio estado y sus llamadas al servidor: el Gantt solo le presta el lugar correcto. */
   sugerenciasSlot?: ReactNode;
+  /** L3 P3c: la vista de la propuesta con sus casillas. Sin esto, el Gantt de siempre. */
+  propuesta?: PropuestaEnElGantt;
+}
+
+/**
+ * L3 P3c · lo que el Gantt necesita para que la propuesta se decida en sus filas. Lo arma el canvas (P3d)
+ * desde `vistaDeLaPropuesta`, con las claves ya pasadas a las `key` de esta pantalla.
+ */
+export interface PropuestaEnElGantt {
+  vista: VistaDeLaPropuesta;
+  /** La marca de cada fila de tarea, por `GanttTask.key`. */
+  marcasPorKey: ReadonlyMap<string, MarcaDeTarea>;
+  /** Por `GanttPhase.key`: una lista por semana, en el orden en que se pinta (el de la vista). `extra` = una fila
+   *  que no está en `tasks` (lo que se quita, un fantasma, el origen de lo que se mueve); si no, `key` es la de
+   *  la `GanttTask`. */
+  semanasPorKey: ReadonlyMap<string, ReadonlyArray<ReadonlyArray<{ key: string; extra: FilaExtra | null }>>>;
+  onMarcar(clave: string, incluir: boolean): void;
+  onMarcarVarios(claves: readonly string[], incluir: boolean): void;
+  /** Mientras se guarda una casilla: todas quedan apagadas. */
+  trabajando: boolean;
+  /** «Siguiente número»: despliega su fase, la centra y enfoca su casilla. El `nonce` repite el pedido. */
+  irA: { unidad: UnidadNumerada; nonce: number } | null;
+  /** Las fases (por clave de fase: id o `n:…`) a desplegar UNA vez por `clave` (el token de la propuesta). */
+  desplegarAlEntrar: { clave: string; fases: string[] } | null;
+  /** El cierre de hoy y con lo marcado, para el chip de la cabecera. */
+  cierre: { antes: string; despues: string } | null;
 }
 
 // Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
@@ -401,6 +465,359 @@ function DroppableWeek({ id, children }: { id: string; children: ReactNode }) {
   );
 }
 
+// ── L3 P3c · la propuesta en las filas ────────────────────────────────────────
+
+/** «Atrasada»: la fecha de la tarea ya pasó y no está hecha. Rojo de token (L3: antes, rojo crudo). */
+const CHIP_ATRASADA =
+  "text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border border-danger-line bg-danger-surface text-danger-ink";
+/** El foco visible de toda casilla de la propuesta. `scroll-mt-24`: con Tab no queda debajo de la barra fija. */
+const CASILLA = "scroll-mt-24 flex-shrink-0 accent-brand focus-visible:ring-2 focus-visible:ring-info-line";
+/** La columna de la casilla de una tarea: el mismo ancho con o sin casilla (las filas no bailan). */
+const COLUMNA_DE_LA_CASILLA = "w-32 sm:w-44 shrink-0";
+const CHIP_AVISO = "border-warn-line bg-warn-surface text-warn-ink";
+/** El `data-casilla` de la casilla del grupo de tareas de una fase (lo busca «Siguiente número»). */
+const casillaDeGrupo = (fase: string) => `grupo:${fase}`;
+/** `CSS.escape` del navegador (`CSS`, en este archivo, es el de @dnd-kit/utilities). */
+const escaparSelector = (s: string) =>
+  typeof window !== "undefined" && window.CSS?.escape ? window.CSS.escape(s) : s.replace(/["\\]/g, "\\$&");
+
+export interface EstiloDeLaFila {
+  /** El fondo o el borde de la fila entera. */
+  fila: string;
+  /** El título. */
+  titulo: string;
+  /** El signo antes del título y su color. */
+  signo: { texto: "+" | "−" | "~"; clase: string } | null;
+  /** El chip de la propuesta («nueva», «se quita», «viene de «X»»…). */
+  chip: string;
+}
+
+/**
+ * ⭐ D13 · cómo se ve una fila de tarea en la vista de la propuesta. Tachado SOLO si la vista la tacha (lo que se
+ * quita, marcado): lo hecho va con su check y sin tachar, y lo que se queda, normal. Fantasma (borde punteado y
+ * cursiva) = lo que no va a existir así. Verde lo nuevo, azul lo que cambia o llega, ámbar lo que se quita o choca.
+ */
+export function estiloDeLaFila(m: MarcaDeTarea | null | undefined): EstiloDeLaFila {
+  const normal: EstiloDeLaFila = { fila: "", titulo: "text-fg-secondary", signo: null, chip: "border-line text-fg-muted" };
+  if (!m) return normal;
+  if (m.tachada) {
+    return { fila: "", titulo: "line-through text-warn-ink", signo: { texto: "−", clase: "text-warn-ink" }, chip: "border-warn-line text-warn-ink" };
+  }
+  if (m.fantasma) {
+    return {
+      fila: "italic text-fg-muted border border-dashed border-line",
+      titulo: "text-fg-muted",
+      signo: null,
+      chip: m.tipo === "choque" ? CHIP_AVISO : m.tipo === "sale" ? "border-info-line text-info-ink" : "border-line text-fg-muted",
+    };
+  }
+  if (m.tipo === "choque") return { ...normal, chip: CHIP_AVISO };
+  if (m.tipo === "nueva" && m.marcada) {
+    return { fila: "bg-success-surface", titulo: "text-fg-secondary", signo: { texto: "+", clase: "text-success-ink" }, chip: "border-success-line text-success-ink" };
+  }
+  if ((m.tipo === "cambia" && m.marcada) || m.lugar === "destino") {
+    return { fila: "bg-info-surface", titulo: "text-fg-secondary", signo: { texto: "~", clase: "text-info-ink" }, chip: "border-info-line text-info-ink" };
+  }
+  // Se quita o se mueve desmarcada, o espera el recálculo: se queda como está.
+  return normal;
+}
+
+/** Los manejadores de foco que lleva toda casilla (el Gantt recuerda la última para devolverle el foco). */
+interface SeguirElFoco {
+  onFocus: (e: ReactFocusEvent<HTMLInputElement>) => void;
+  onBlur: (e: ReactFocusEvent<HTMLInputElement>) => void;
+}
+
+/** Una fila de tarea de la propuesta: la que está en la proyección o una `FilaExtra`, con el MISMO molde (así
+ *  React conserva el nodo y el foco cuando la misma `key` pasa de una a otra al marcar). */
+function FilaDeLaPropuesta({
+  filaKey,
+  title,
+  status,
+  party,
+  type,
+  marca,
+  atrasada,
+  trabajando,
+  onMarcar,
+  foco,
+}: {
+  filaKey: string;
+  title: string;
+  status: GanttTaskStatus;
+  party: Party | null | undefined;
+  type: "SESSION" | "TASK" | null | undefined;
+  marca: MarcaDeTarea | null;
+  atrasada: boolean;
+  trabajando: boolean;
+  onMarcar: (clave: string, incluir: boolean) => void;
+  foco: SeguirElFoco;
+}) {
+  const estilo = estiloDeLaFila(marca);
+  const segundaLinea = !!marca && !!(marca.chip || marca.antes || marca.porValidar || marca.fuga || marca.repetida);
+  return (
+    <div data-fila={filaKey} className={`rounded-lg px-2.5 py-1.5 ${estilo.fila}`}>
+      <div className="flex items-center gap-2.5">
+        <span className="flex-shrink-0">
+          <StatusCircle status={status} />
+        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          {estilo.signo && (
+            <span aria-hidden className={`flex-shrink-0 text-xs font-semibold ${estilo.signo.clase}`}>
+              {estilo.signo.texto}
+            </span>
+          )}
+          <span className={`min-w-0 truncate text-xs ${estilo.titulo}`} title={title}>
+            {title.trim() ? title : "Sin título"}
+          </span>
+          {status === "IN_PROGRESS" && (
+            <span
+              className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border ${STATUS_META.IN_PROGRESS.cls}`}
+              title="Ya se está trabajando (no está solo pendiente)"
+            >
+              En curso
+            </span>
+          )}
+          {atrasada && (
+            <span className={CHIP_ATRASADA} title="La fecha de esta tarea ya pasó y todavía no está hecha">
+              Atrasada
+            </span>
+          )}
+        </div>
+        {marca?.conCasilla ? (
+          <label
+            onClick={(e) => e.stopPropagation()}
+            title={marca.titulo}
+            className={`${COLUMNA_DE_LA_CASILLA} flex items-center gap-1.5 text-[11px] font-semibold not-italic ${marca.seMarca ? "text-fg-secondary cursor-pointer" : "text-fg-muted"}`}
+          >
+            <input
+              type="checkbox"
+              data-casilla={marca.clave}
+              data-lugar={marca.lugar}
+              className={CASILLA}
+              checked={marca.marcada}
+              disabled={trabajando || !marca.seMarca}
+              onChange={(e) => onMarcar(marca.clave, e.target.checked)}
+              aria-label={etiquetaDeLaCasilla(marca, title)}
+              {...foco}
+            />
+            <span className="truncate">{marca.verbo}</span>
+          </label>
+        ) : (
+          <span className={COLUMNA_DE_LA_CASILLA} aria-hidden />
+        )}
+        {effType(type) === "SESSION" && (
+          <span
+            className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border not-italic ${TYPE_META.SESSION.cls}`}
+            title="Sesión / reunión con el cliente"
+          >
+            {TYPE_META.SESSION.label}
+          </span>
+        )}
+        <span
+          className={`text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border not-italic ${PARTY_META[effParty(party)].cls}`}
+          title="Responsable de la tarea"
+        >
+          {PARTY_META[effParty(party)].label}
+        </span>
+      </div>
+      {/* Los chips de la propuesta, en una SEGUNDA línea: el título conserva su ancho. */}
+      {segundaLinea && marca && (
+        <div className="ml-7 mt-0.5 flex flex-wrap items-center gap-1 text-[10px]">
+          {marca.chip && (
+            <span className={`rounded border px-1 py-px font-semibold ${estilo.chip}`} title={marca.titulo}>
+              {marca.chip}
+            </span>
+          )}
+          {marca.antes && (
+            <span className="min-w-0 truncate text-fg-muted" title={marca.titulo ?? marca.antes}>
+              {marca.antes}
+            </span>
+          )}
+          {marca.porValidar && (
+            <span className="rounded border border-line px-1 py-px text-fg-muted" title={marca.porValidar}>
+              por validar
+            </span>
+          )}
+          {marca.fuga && (
+            <span className={`rounded border px-1 py-px font-semibold ${CHIP_AVISO}`} title={tituloDeLaFuga(marca.fuga)}>
+              revisa el texto
+            </span>
+          )}
+          {marca.repetida && (
+            <span
+              className={`rounded border px-1 py-px font-semibold ${marca.repetida.yaAvanzada ? CHIP_AVISO : "border-line text-fg-muted"}`}
+              title={tituloDeLaRepetida(marca.repetida)}
+            >
+              ya existe en «{marca.repetida.fase}»
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** La casilla de un cambio de fase (o del arranque o el orden): «☑ 11. 3 → 5 semanas». */
+function CasillaDeLaFase({
+  c,
+  texto,
+  donde,
+  trabajando,
+  onMarcar,
+  foco,
+}: {
+  c: CasillaDeCambio;
+  /** Lo que dice al lado del número (el texto corto de la vista, o el verbo de una fase fuera). */
+  texto: string;
+  /** De qué es («Fase K», «el proyecto»): va en el `aria-label`. */
+  donde: string;
+  trabajando: boolean;
+  onMarcar: (clave: string, incluir: boolean) => void;
+  foco: SeguirElFoco;
+}) {
+  const choque = c.estado === "choque";
+  return (
+    <label
+      onClick={(e) => e.stopPropagation()}
+      title={c.aviso ?? c.motivo}
+      className={`inline-flex items-center gap-1.5 text-[11px] not-italic ${c.marcada ? "text-fg" : "text-fg-muted"} ${c.seMarca ? "cursor-pointer" : ""}`}
+    >
+      <input
+        type="checkbox"
+        data-casilla={c.clave}
+        data-lugar="fase"
+        className={CASILLA}
+        checked={c.marcada}
+        disabled={trabajando || !c.seMarca}
+        onChange={(e) => onMarcar(c.clave, e.target.checked)}
+        aria-label={`Incluir el número ${c.numero}: ${texto} (${donde})`}
+        {...foco}
+      />
+      <span>
+        <span className="font-semibold tabular-nums">{c.numero}.</span> {texto}
+      </span>
+      {choque && c.aviso && <span className={`rounded border px-1 py-px text-[10px] font-semibold ${CHIP_AVISO}`}>{chipDelChoque(c.aviso)}</span>}
+    </label>
+  );
+}
+
+/** La casilla de tres estados del grupo de tareas de una fase: «☑ 12. Tareas: 10 nuevas · 7 se quitan». */
+function CasillaDelGrupo({
+  g,
+  donde,
+  trabajando,
+  onMarcarVarios,
+  foco,
+}: {
+  g: CasillaDeGrupo;
+  donde: string;
+  trabajando: boolean;
+  onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
+  foco: SeguirElFoco;
+}) {
+  const todas = g.marcables > 0 && g.marcadas === g.marcables;
+  const aMedias = g.marcadas > 0 && g.marcadas < g.marcables;
+  return (
+    <label
+      onClick={(e) => e.stopPropagation()}
+      title={g.dependeDe !== null ? `Va con el número ${g.dependeDe}` : undefined}
+      className={`inline-flex items-center gap-1.5 text-[11px] not-italic ${g.marcadas > 0 ? "text-fg" : "text-fg-muted"} ${g.marcables > 0 ? "cursor-pointer" : ""}`}
+    >
+      <input
+        type="checkbox"
+        data-casilla={casillaDeGrupo(g.fase)}
+        data-lugar="grupo"
+        className={CASILLA}
+        checked={todas}
+        ref={(el) => {
+          if (el) el.indeterminate = aMedias;
+        }}
+        disabled={trabajando || g.marcables === 0}
+        onChange={(e) => onMarcarVarios(g.claves, e.target.checked)}
+        aria-label={`Incluir el número ${g.numero}: las tareas de «${donde}» (${g.texto.replace(/^Tareas: /, "")})`}
+        {...foco}
+      />
+      <span>
+        <span className="font-semibold tabular-nums">{g.numero}.</span> {g.texto}
+      </span>
+      {g.dependeDe !== null && (
+        <span className="rounded border border-line px-1 py-px text-[10px] text-fg-muted">va con el {g.dependeDe}</span>
+      )}
+    </label>
+  );
+}
+
+/** Lo que pinta la vista bajo el nombre de una fase: sus casillas, la del grupo y lo «ya está» (sin casilla). */
+function CasillasDeLaFase({
+  vf,
+  donde,
+  propuesta,
+  foco,
+}: {
+  vf: VistaDeFase;
+  donde: string;
+  propuesta: PropuestaEnElGantt;
+  foco: SeguirElFoco;
+}) {
+  if (vf.casillas.length === 0 && !vf.grupo && vf.yaEsta.length === 0) return null;
+  return (
+    <div className="ml-[18px] mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {vf.casillas.map((c) => (
+        <CasillaDeLaFase key={c.clave} c={c} texto={c.texto} donde={donde} trabajando={propuesta.trabajando} onMarcar={propuesta.onMarcar} foco={foco} />
+      ))}
+      {vf.grupo && (
+        <CasillaDelGrupo g={vf.grupo} donde={donde} trabajando={propuesta.trabajando} onMarcarVarios={propuesta.onMarcarVarios} foco={foco} />
+      )}
+      {vf.yaEsta.map((y) => (
+        <span key={y} className="rounded border border-line px-1.5 py-0.5 text-[10px] text-fg-muted" title="Ya está así: no hay nada que aplicar">
+          {y}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Al desplegar una fase con cambios: por qué los propone la IA y, si cambió la nota, el nombre o el tipo, el
+ *  antes y el después (se mudó de la lista de la barra). */
+function PorQueDeLaFase({ casillas }: { casillas: readonly CasillaDeCambio[] }) {
+  const motivos = [...new Set(casillas.flatMap((c) => (c.motivo ? [c.motivo] : [])))];
+  const conDetalle = casillas.filter((c) => c.detalle.length > 0);
+  if (motivos.length === 0 && conDetalle.length === 0) return null;
+  return (
+    <div className="space-y-1 text-xs">
+      {motivos.map((m) => (
+        <p key={m} className="text-fg-muted line-clamp-2" title={m}>
+          Según la IA: {m}
+        </p>
+      ))}
+      {conDetalle.map((c) => (
+        <details key={c.clave}>
+          <summary className="cursor-pointer font-semibold text-info-ink">
+            {c.numero}. Ver el antes y el después
+          </summary>
+          <dl className="mt-1 space-y-1 rounded border border-line bg-surface px-2 py-1.5">
+            {c.detalle.map((f) => (
+              <div key={f.etiqueta} className="grid grid-cols-[5rem_1fr] gap-x-2">
+                <dt className="font-semibold text-fg-muted">{f.etiqueta}</dt>
+                <dd className="min-w-0 break-words text-fg-secondary">
+                  <span className="text-fg-muted line-through">{f.antes}</span>
+                  <span className="mx-1 text-fg-muted">→</span>
+                  <span className="text-fg">{f.despues}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      ))}
+    </div>
+  );
+}
+
+/** El estado de una fila extra (texto libre en la vista) como lo entiende el Gantt. */
+const estadoDeLaExtra = (s: string): GanttTaskStatus =>
+  s === "IN_PROGRESS" || s === "DONE" || s === "SUSPENDED" ? s : "PENDING";
+
 // ── Componente ────────────────────────────────────────────────────────────────
 
 export default function TimelineGantt({
@@ -433,6 +850,7 @@ export default function TimelineGantt({
   onCerrarParticularidad,
   onOpenConvertedTask,
   focusGroup,
+  propuesta,
   // onRemoveTask removido del Gantt: el borrado de tarea vive en el TaskDetailDrawer.
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -661,6 +1079,90 @@ export default function TimelineGantt({
     onMoveTask(activeKey, toPhaseKey, toWeek, toOrder);
   };
 
+  /* ── L3 P3c · LA PROPUESTA EN EL GANTT ──────────────────────────────────────────
+     La vista habla de fases por su CLAVE (el id guardado, o `n:…` de una nueva); `expanded` guarda la `key` de
+     la fila. Una fase fuera del calendario (la nueva desmarcada, la que se va) no tiene fila: usa su clave. */
+  const keyDeLaFase = useMemo(() => new Map(phases.map((p) => [p.id ?? p.key, p.key])), [phases]);
+  const keyDe = (clave: string) => keyDeLaFase.get(clave) ?? clave;
+  /* Desplegar al entrar: UNA vez por token (la propuesta grande entra plegada; una chica, con sus fases con
+     cambios abiertas). Se ajusta DURANTE el render, como `focusGroup` en ParticularidadGroup: con un efecto se
+     pintaría plegada y después se abriría. */
+  const desplegar = propuesta?.desplegarAlEntrar ?? null;
+  const [desplegadoPara, setDesplegadoPara] = useState<string | null>(null);
+  if (desplegar && desplegar.clave !== desplegadoPara) {
+    setDesplegadoPara(desplegar.clave);
+    if (desplegar.fases.length > 0) {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        for (const f of desplegar.fases) next.add(keyDe(f));
+        return next;
+      });
+    }
+  }
+  /* «Siguiente número»: despliega la fase del número (durante el render) y, un frame después, centra su casilla
+     (la de fase o la de grupo) y le da el foco. El `nonce` repite el pedido aunque sea el mismo número. */
+  const irA = propuesta?.irA ?? null;
+  const [irAVisto, setIrAVisto] = useState<number | null>(null);
+  if (irA && irA.nonce !== irAVisto) {
+    setIrAVisto(irA.nonce);
+    const fase = irA.unidad.fase;
+    if (fase !== null) setExpanded((prev) => (prev.has(keyDe(fase)) ? prev : new Set(prev).add(keyDe(fase))));
+  }
+  /* El efecto depende del nonce y de la casilla (primitivos), no del objeto: si llegara armado en cada render, no
+     volvería a centrar ni a robar el foco en cada tecla. */
+  const irANonce = irA?.nonce ?? null;
+  const irACasilla = irA
+    ? irA.unidad.tipo === "grupo"
+      ? `[data-casilla="${escaparSelector(casillaDeGrupo(irA.unidad.fase))}"][data-lugar="grupo"]`
+      : `[data-casilla="${escaparSelector(irA.unidad.clave)}"][data-lugar="fase"]`
+    : null;
+  useEffect(() => {
+    if (irANonce === null || irACasilla === null) return;
+    const frame = requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(irACasilla);
+      if (!el) return;
+      el.scrollIntoView({ block: "center" });
+      el.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [irANonce, irACasilla]);
+  /* El foco: cuando una fila cambia de nodo al marcar (fantasma ↔ real, o de semana), el `<input>` que tenía el
+     foco desaparece y el foco cae al body. Se recuerda la última casilla y se le devuelve el foco a la que la
+     reemplaza (misma clave y mismo lugar; si no está, la primera con esa clave). */
+  const ultimaCasilla = useRef<{ clave: string; lugar: string } | null>(null);
+  const seguirElFoco: SeguirElFoco = {
+    onFocus: (e) => {
+      const d = e.currentTarget.dataset;
+      if (d.casilla) ultimaCasilla.current = { clave: d.casilla, lugar: d.lugar ?? "" };
+    },
+    onBlur: (e) => {
+      const destino = e.relatedTarget instanceof HTMLElement ? e.relatedTarget : null;
+      if (destino?.dataset.casilla !== undefined) return; // va a otra casilla: su onFocus la anota
+      if (destino) {
+        ultimaCasilla.current = null;
+        return;
+      }
+      // Sin destino: o se sacó el nodo (lo devuelve el efecto de abajo), o el CSE hizo clic en la nada.
+      const el = e.currentTarget;
+      requestAnimationFrame(() => {
+        if (el.isConnected && document.activeElement !== el) ultimaCasilla.current = null;
+      });
+    },
+  };
+  useLayoutEffect(() => {
+    if (!propuesta) {
+      ultimaCasilla.current = null;
+      return;
+    }
+    const u = ultimaCasilla.current;
+    if (!u || document.activeElement !== document.body) return;
+    const clave = escaparSelector(u.clave);
+    const el =
+      document.querySelector<HTMLElement>(`[data-casilla="${clave}"][data-lugar="${escaparSelector(u.lugar)}"]`) ??
+      document.querySelector<HTMLElement>(`[data-casilla="${clave}"]`);
+    el?.focus({ preventScroll: true });
+  });
+
   if (phases.length === 0 || total === 0) return null;
 
   const toggleExpand = (key: string) => {
@@ -673,6 +1175,122 @@ export default function TimelineGantt({
   };
 
   const gridCols = { gridTemplateColumns: `minmax(240px, 380px) repeat(${total}, minmax(26px, 1fr))` };
+
+  /* L3 P3c: lo que la vista de la propuesta pinta fuera de las filas, y lo que cuenta atrasos. En la vista de la
+     propuesta, el punto de la fase, el anillo de la celda y «Pendiente del cliente · atrasadas» miran SOLO lo que
+     existe hoy y se queda en su semana: una nueva en una semana vencida no está atrasada, la semana dice «ya pasó». */
+  const fasesFuera = propuesta?.vista.fasesFuera ?? [];
+  const paraLosAtrasos = (ts: GanttTask[]) => (propuesta ? tareasQueExistenHoy(ts, propuesta.marcasPorKey) : ts);
+  /** Las fases fuera del calendario, detrás de la fila de la fase que las precede (null: arriba de todo). */
+  const fueraDespuesDe = new Map<string | null, FaseFuera[]>();
+  for (const f of fasesFuera) {
+    const donde = f.despuesDe !== null && keyDeLaFase.has(f.despuesDe) ? keyDe(f.despuesDe) : null;
+    fueraDespuesDe.set(donde, [...(fueraDespuesDe.get(donde) ?? []), f]);
+  }
+  const desplegarTodo = () => setExpanded(new Set([...phases.map((p) => p.key), ...fasesFuera.map((f) => f.key)]));
+  const plegarTodo = () => setExpanded(new Set());
+
+  /** Una fila de tarea de la propuesta: la de la proyección (`extra` null) o una extra, con su atraso. */
+  const filaDeLaPropuesta = (
+    fila: { key: string; extra: FilaExtra | null },
+    tasksByKey: ReadonlyMap<string, GanttTask>,
+    plannedEnd: Date | null,
+  ) => {
+    if (!propuesta) return null;
+    const t = fila.extra ? null : tasksByKey.get(fila.key);
+    if (!fila.extra && !t) return null;
+    const marca = fila.extra ? fila.extra.marca : (propuesta.marcasPorKey.get(fila.key) ?? null);
+    const status = fila.extra ? estadoDeLaExtra(fila.extra.status) : t!.status;
+    const overdue = isOverdueByDate(plannedEnd, today, status);
+    return (
+      <FilaDeLaPropuesta
+        key={fila.key}
+        filaKey={fila.key}
+        title={fila.extra ? fila.extra.title : t!.title}
+        status={status}
+        party={fila.extra ? fila.extra.party : t!.party}
+        type={fila.extra ? fila.extra.type : t!.type}
+        marca={marca}
+        atrasada={overdue && marca?.existeHoyYSeQueda !== false}
+        trabajando={propuesta.trabajando}
+        onMarcar={propuesta.onMarcar}
+        foco={seguirElFoco}
+      />
+    );
+  };
+
+  /** Una fase fuera del calendario: la nueva desmarcada (fantasma, «no se suma») o la que se va (tachada). */
+  const filaDeFaseFuera = (f: FaseFuera) => {
+    if (!propuesta) return null;
+    const isOpen = expanded.has(f.key);
+    const seVa = f.tono === "se-va";
+    const vf = propuesta.vista.porFase.get(f.key);
+    const porSemana = new Map<number, FilaExtra[]>();
+    for (const x of f.tareas) porSemana.set(x.semana, [...(porSemana.get(x.semana) ?? []), x]);
+    return (
+      <div key={`fuera:${f.key}`} data-fase-key={f.key} data-fase-fuera={f.tono}>
+        <div
+          onClick={() => toggleExpand(f.key)}
+          className={`grid gap-1 items-center px-2 py-1.5 -mx-2 rounded-lg cursor-pointer ${seVa ? "" : "italic text-fg-muted border border-dashed border-line"}`}
+          style={gridCols}
+        >
+          <div className="flex flex-col min-w-0 pr-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium">
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-label={`Desplegar «${f.nombre}»`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleExpand(f.key);
+                }}
+                className="flex-shrink-0 rounded text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info-line"
+              >
+                <svg className={`w-3 h-3 transition-transform ${isOpen ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <span className={`flex-1 min-w-[12rem] break-words ${seVa ? "line-through text-warn-ink" : "text-fg-muted"}`}>{f.nombre}</span>
+            </div>
+            <div className="ml-[18px] mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <CasillaDeLaFase
+                c={f.casilla}
+                texto={seVa ? "Quitar la fase" : "Sumar la fase"}
+                donde={f.nombre}
+                trabajando={propuesta.trabajando}
+                onMarcar={propuesta.onMarcar}
+                foco={seguirElFoco}
+              />
+            </div>
+            {vf && <CasillasDeLaFase vf={vf} donde={f.nombre} propuesta={propuesta} foco={seguirElFoco} />}
+          </div>
+          <div
+            className={`text-[10px] font-semibold ${seVa ? "text-warn-ink" : "text-fg-muted"}`}
+            style={{ gridColumn: `span ${total} / span ${total}` }}
+          >
+            {plural(f.semanas, "semana", "semanas")} · {seVa ? "se quita" : "no se suma"}
+          </div>
+        </div>
+        {isOpen && (
+          <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
+            {[...porSemana.entries()]
+              .sort((a, b) => a[0] - b[0])
+              .map(([semana, filas]) => (
+                <div key={semana} data-semana={semana}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted border-b border-dashed border-line pb-1 mb-1.5">
+                    Semana {semana + 1}
+                  </p>
+                  <div className="space-y-1">
+                    {filas.map((x) => filaDeLaPropuesta({ key: x.key, extra: x }, new Map(), null))}
+                  </div>
+                </div>
+              ))}
+            {f.tareas.length === 0 && <p className="text-xs text-fg-muted py-1">Sin tareas.</p>}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     /* ── ESTE CRONOGRAMA SIGUE EL TEMA. El de afuera, no. ─────────────────────────────
@@ -716,6 +1334,45 @@ export default function TimelineGantt({
           </span>
         ) : (
           anchor && <AnchorDatePicker value={anchor} onChange={() => {}} readOnly />
+        )}
+
+        {/* L3 P3c · la cabecera de la propuesta: la casilla del arranque y la del orden (si la propuesta los
+            cambia), el cierre con lo marcado y desplegar o plegar todas las fases. */}
+        {propuesta && (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {propuesta.vista.cabecera.map((c) => (
+              <CasillaDeLaFase
+                key={c.clave}
+                c={c}
+                texto={c.texto}
+                donde="el proyecto"
+                trabajando={propuesta.trabajando}
+                onMarcar={propuesta.onMarcar}
+                foco={seguirElFoco}
+              />
+            ))}
+            {propuesta.cierre && (
+              <span className="rounded-lg border border-info-line bg-info-surface px-2.5 py-1 text-[11px] font-semibold text-info-ink">
+                {propuesta.cierre.antes === propuesta.cierre.despues
+                  ? `Cierre: ${propuesta.cierre.despues} (no cambia)`
+                  : `Cierre: ${propuesta.cierre.antes} → ${propuesta.cierre.despues}`}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={desplegarTodo}
+              className="rounded text-[11px] font-semibold text-fg-muted hover:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info-line"
+            >
+              Desplegar todo
+            </button>
+            <button
+              type="button"
+              onClick={plegarTodo}
+              className="rounded text-[11px] font-semibold text-fg-muted hover:text-fg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info-line"
+            >
+              Plegar todo
+            </button>
+          </span>
         )}
 
         {/* CIERRE PROYECTADO / FIJADO (Tanda J + K) — arranque + span, la misma fórmula que dibuja
@@ -823,6 +1480,9 @@ export default function TimelineGantt({
           <div className="px-4 py-2 space-y-0.5">
             <DndContext sensors={sensors} collisionDetection={collisionStrategy} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => setDragTasks(null)}>
             <SortableContext items={renderPhases.map((ph) => ph.key)} strategy={verticalListSortingStrategy}>
+            {/* L3 P3c: las fases fuera del calendario que no tienen a quién seguir, arriba de todo. Fuera del
+                orden de arrastre y de `computePhaseRanges` (esas siguen con `phases`). */}
+            {(fueraDespuesDe.get(null) ?? []).map(filaDeFaseFuera)}
             {renderPhases.map((p, i) => {
               const range = ranges[i];
               /* ── POR QUÉ ESTA FILA ARRANCA ANTES QUE LA DE ARRIBA ──────────────────
@@ -852,7 +1512,7 @@ export default function TimelineGantt({
                   tasks: p.tasks,
                   tipoLabel: meta?.label ?? null,
                   needsValidation: p.needsValidation,
-                  vencidas: p.tasks.filter((t) =>
+                  vencidas: paraLosAtrasos(p.tasks).filter((t) =>
                     isOverdueByDate(overduePlannedEnd(anchor, range.start, t.weekIndex), today, t.status),
                   ).length,
                 },
@@ -865,9 +1525,14 @@ export default function TimelineGantt({
                 arr.push(t);
                 tasksByWeek.set(t.weekIndex, arr);
               }
+              /* L3 P3c: lo que la vista de la propuesta pinta en esta fase (por su clave: el id o `n:…`). Las
+                 etiquetas que ya dice una casilla no se repiten como chips. */
+              const vistaDeLaFase = propuesta?.vista.porFase.get(p.id ?? p.key) ?? null;
+              const etiquetasDeLaFila = !marca ? [] : propuesta ? etiquetasSinCasilla(marca.etiquetas) : marca.etiquetas;
 
               return (
-                <SortableRow key={p.key} id={p.key} data={{ type: "phase" }} disabled={!editable || !onReorderPhases}>
+                <Fragment key={p.key}>
+                <SortableRow id={p.key} data={{ type: "phase" }} disabled={!editable || !onReorderPhases}>
                 {(attributes, listeners) => (
                 /* `data-fase-key`: el ancla con la que la revisión de la propuesta conserva el lugar
                    del scroll al alternar «Ver como estaba antes» ↔ «Ver la propuesta». */
@@ -905,12 +1570,25 @@ export default function TimelineGantt({
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" /></svg>
                           </button>
                         )}
-                        <svg
-                          className={`w-3 h-3 text-fg-muted flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                        {/* L3 P3c: el chevron es un BOTÓN (Tab lo alcanza, Enter despliega, el lector dice si
+                            está abierta). El clic en el resto de la fila sigue desplegando con el mouse. */}
+                        <button
+                          type="button"
+                          aria-expanded={isOpen}
+                          aria-label={`Desplegar «${p.name}»`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpand(p.key);
+                          }}
+                          className="flex-shrink-0 rounded text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info-line"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                        </svg>
+                          <svg
+                            className={`w-3 h-3 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
                         {editable && onUpdatePhase ? (
                           <input
                             value={p.name}
@@ -1060,12 +1738,13 @@ export default function TimelineGantt({
                         </span>
                       </div>
 
-                      {/* Qué cambia en esta fila, en la vista de la propuesta: etiquetas cortas.
-                          El detalle (antes → después, el porqué) vive en la lista numerada de la
-                          barra de revisión, no acá. */}
-                      {marca && marca.etiquetas.length > 0 && (
+                      {/* Qué cambia en esta fila, en la vista de la propuesta: etiquetas cortas. Con
+                          `propuesta` (L3) quedan solo las que no dice una casilla («movida», «se queda con
+                          N tareas», «tareas por recalcular»); el porqué y el antes → después van al
+                          desplegar la fase. */}
+                      {marca && etiquetasDeLaFila.length > 0 && (
                         <div className="ml-[18px] mt-1 flex flex-wrap items-center gap-1">
-                          {marca.etiquetas.map((e) => (
+                          {etiquetasDeLaFila.map((e) => (
                             <span
                               key={e}
                               className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
@@ -1079,6 +1758,12 @@ export default function TimelineGantt({
                           ))}
                         </div>
                       )}
+
+                      {/* L3 P3c: las casillas de la fase (una por cambio de campo, la del grupo de tareas y lo
+                          «ya está», sin casilla). Se ven igual con la fase plegada o desplegada. */}
+                      {propuesta && vistaDeLaFase && (
+                        <CasillasDeLaFase vf={vistaDeLaFase} donde={p.name} propuesta={propuesta} foco={seguirElFoco} />
+                      )}
                     </div>
 
                     {/* Celdas de semanas */}
@@ -1091,25 +1776,77 @@ export default function TimelineGantt({
                       const allDone = weekTasks.length > 0 && weekTasks.every((t) => t.status === "DONE" || t.status === "SUSPENDED");
                       const isPast = curWeek !== null && w < curWeek;
                       const isCur = curWeek === w;
-                      const weekOverdue = weekTasks.some((t) => isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), today, t.status));
+                      const weekOverdue = paraLosAtrasos(weekTasks).some((t) => isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), today, t.status));
+                      // L3 P3c: una semana que suma la propuesta (una duración que crece, marcada), en verde.
+                      const seSuma = !!vistaDeLaFase?.semanasQueSeSuman.includes(relWeek);
 
                       return (
                         <div
                           key={w}
                           onPointerDown={editable && onUpdatePhase ? (e) => startBarDrag(e, p.key, range.start) : undefined}
-                          className={`h-3 rounded transition-all ${meta?.seg ?? NEUTRAL_SEG} ${
+                          className={`h-3 rounded transition-all ${seSuma ? "bg-success-surface border border-success-line" : (meta?.seg ?? NEUTRAL_SEG)} ${
                             allDone || isPast ? "opacity-35" : ""
                           } ${isCur ? "timeline-now-pulse" : ""} ${
                             weekOverdue && !isCur ? "ring-1 ring-red-500/80" : ""
                           } ${editable && onUpdatePhase ? "cursor-ew-resize touch-none" : ""}`}
-                          title={editable && onUpdatePhase ? `S${w} — arrastra para mover el inicio de la fase` : `S${w}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`}
+                          title={
+                            seSuma
+                              ? TITULO_SEMANA_QUE_SE_SUMA
+                              : editable && onUpdatePhase
+                                ? `S${w} — arrastra para mover el inicio de la fase`
+                                : `S${w}${weekTasks.length ? ` · ${weekTasks.length} tareas` : ""}`
+                          }
                         />
                       );
                     })}
                   </div>
 
+                  {/* L3 P3c · Expandido en la vista de la propuesta: las semanas en el orden de la vista (ninguna
+                      fila cambia de lugar al marcar), solo lectura y SIN SortableRow. Lo que cuenta (`· N tareas`,
+                      el punto, las celdas) sigue con `p.tasks`: las filas extra solo se pintan. */}
+                  {isOpen && propuesta && (() => {
+                    const semanasDeLaVista = propuesta.semanasPorKey.get(p.key);
+                    const tasksByKey = new Map(p.tasks.map((t) => [t.key, t]));
+                    /* Una tarea que la vista no conoce (la recién escrita que el autoguardado todavía no mandó)
+                       va al final de su semana: nada de lo que está en `p.tasks` deja de verse. */
+                    const enLaVista = new Set((semanasDeLaVista ?? []).flatMap((s) => s.map((x) => x.key)));
+                    const semanas = Array.from({ length: p.durationWeeks }, (_, relWeek) => [
+                      ...(semanasDeLaVista?.[relWeek] ?? []),
+                      ...(tasksByWeek.get(relWeek) ?? []).filter((t) => !enLaVista.has(t.key)).map((t) => ({ key: t.key, extra: null })),
+                    ]);
+                    return (
+                      <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
+                        {vistaDeLaFase && <PorQueDeLaFase casillas={vistaDeLaFase.casillas} />}
+                        {semanas.map((filas, relWeek) => {
+                          if (filas.length === 0) return null;
+                          const absW = absoluteWeek(range.start, relWeek);
+                          const yaPaso = !!vistaDeLaFase?.semanasQueYaPasaron.includes(relWeek);
+                          const plannedEnd = overduePlannedEnd(anchor, range.start, relWeek);
+                          return (
+                            <div key={relWeek} data-semana={relWeek}>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-fg-muted border-b border-dashed border-line pb-1 mb-1.5 flex items-center">
+                                <span>
+                                  Semana {relWeek + 1}
+                                  <span className="text-fg-muted font-semibold ml-2">
+                                    S{absW}
+                                    {anchor && ` · ${fmtDay(addWeeks(anchor, absW))} – ${fmtDay(addWeeks(anchor, absW + 1))}`}
+                                  </span>
+                                  {/* Lo nuevo que cae en una semana vencida: el aviso va UNA vez por semana, no en
+                                      cada fila (y nunca «Atrasada» en lo que todavía no existe). */}
+                                  {yaPaso && <span className="text-danger-ink"> · ya pasó</span>}
+                                </span>
+                              </p>
+                              <div className="space-y-1">{filas.map((fila) => filaDeLaPropuesta(fila, tasksByKey, plannedEnd))}</div>
+                            </div>
+                          );
+                        })}
+                        {semanas.every((filas) => filas.length === 0) && <p className="text-xs text-fg-muted py-1">Sin tareas.</p>}
+                      </div>
+                    );
+                  })()}
+
                   {/* Expandido: tareas por semana (edición inline) */}
-                  {isOpen && (
+                  {isOpen && !propuesta && (
                     <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
                       {Array.from({ length: p.durationWeeks }).map((_, relWeek) => {
                         const weekTasks = tasksByWeek.get(relWeek) ?? [];
@@ -1214,10 +1951,7 @@ export default function TimelineGantt({
                                         </span>
                                       )}
                                       {overdue && (
-                                        <span
-                                          className="text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 flex-shrink-0 border text-red-300 bg-red-900/30 border-red-700/50"
-                                          title="La fecha de esta tarea ya pasó y todavía no está hecha"
-                                        >
+                                        <span className={CHIP_ATRASADA} title="La fecha de esta tarea ya pasó y todavía no está hecha">
                                           Atrasada
                                         </span>
                                       )}
@@ -1258,6 +1992,9 @@ export default function TimelineGantt({
                 </div>
                 )}
                 </SortableRow>
+                {/* L3 P3c: las fases fuera del calendario que siguen a esta en el orden de la propuesta. */}
+                {(fueraDespuesDe.get(p.key) ?? []).map(filaDeFaseFuera)}
+                </Fragment>
               );
             })}
             </SortableContext>
@@ -1279,7 +2016,9 @@ export default function TimelineGantt({
           frena la implementación. Mismo criterio de atraso (isOverdue por semana) que el tag rojo
           inline. Solo aparece si hay ≥1 y tras hidratar (necesita el "hoy" del cliente). */}
       {(() => {
-        const blockers = collectClientBlockers(phases, anchor, today);
+        /* L3 P3c: en la vista de la propuesta, solo lo que existe hoy y se queda (una nueva no está atrasada). */
+        const fasesQueExistenHoy = propuesta ? phases.map((p) => ({ ...p, tasks: paraLosAtrasos(p.tasks) })) : phases;
+        const blockers = collectClientBlockers(fasesQueExistenHoy, anchor, today);
         if (blockers.length === 0) return null;
         return (
           <div id="cronograma-pendientes-cliente" className="scroll-mt-24 rounded-2xl border border-warn-line bg-warn-surface px-4 py-3">

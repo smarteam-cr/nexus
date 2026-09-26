@@ -87,5 +87,14 @@ describe("⭐ la fuga se va al corregir SU campo, no otro (curación, 2026-09-23
     expect(renglon, "el chip del título dejó de decir que la nota también cruza").toContain(
       "f.motivoDeLaNota ? ` La nota también ${f.motivoDeLaNota}.`",
     );
+    /* L3 P3c (2026-09-26): el chip se mudó también a la fila de la tarea en el Gantt, y su texto a
+       lib/timeline/vista-de-la-propuesta.ts. TareasDeLaPropuesta.tsx sigue hasta que P3d lo borre (ahí se quitan
+       los asserts de arriba). La edición que la pone en rojo: que el chip del Gantt deje de explicar la fuga. */
+    const gantt = fs.readFileSync(path.join(process.cwd(), "components/canvas/TimelineGantt.tsx"), "utf8").replace(/\r\n/g, "\n");
+    expect(gantt, "el chip del Gantt dejó de explicar la fuga").toContain("title={tituloDeLaFuga(marca.fuga)}");
+    const vista = fs.readFileSync(path.join(process.cwd(), "lib/timeline/vista-de-la-propuesta.ts"), "utf8").replace(/\r\n/g, "\n");
+    expect(vista, "el título del chip dejó de decir que la nota también cruza").toContain(
+      "f.motivoDeLaNota ? ` La nota también ${f.motivoDeLaNota}.`",
+    );
   });
 });

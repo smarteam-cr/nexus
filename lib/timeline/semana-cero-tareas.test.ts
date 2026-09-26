@@ -127,6 +127,12 @@ describe("⛔ la rama de base de datos: TRES estados, no dos", () => {
       .replace(/\r\n/g, "\n");
     expect(renglon, "el chip «por validar» dejó de decir el motivo").toContain("title={t.porValidar}");
     expect(renglon, "volvió el tooltip fijo de «la típica»").not.toContain('title="La IA no la sacó del handoff');
+    /* L3 P3c (2026-09-26): el chip se mudó también a la fila de la tarea en el Gantt. TareasDeLaPropuesta.tsx sigue
+       hasta que P3d lo borre (ahí se quitan los asserts de arriba). La edición que la pone en rojo: el chip del
+       Gantt sin el motivo de SU tarea, o con el tooltip fijo. */
+    const gantt = fs.readFileSync(path.join(process.cwd(), "components/canvas/TimelineGantt.tsx"), "utf8").replace(/\r\n/g, "\n");
+    expect(gantt, "el chip «por validar» del Gantt dejó de decir el motivo").toContain("title={marca.porValidar}");
+    expect(gantt, "volvió el tooltip fijo de «la típica» al Gantt").not.toContain('title="La IA no la sacó del handoff');
   });
 
   it("⚠ la tarea que la IA propone CON EL TÍTULO de la de base de datos dice el motivo de la típica", () => {
