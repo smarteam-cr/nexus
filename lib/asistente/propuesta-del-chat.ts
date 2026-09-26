@@ -39,6 +39,7 @@ import {
 } from "@/lib/timeline/operaciones";
 import {
   fasesDeLaPropuesta,
+  MAX_OPERACIONES,
   operarSobreElBorrador,
   type OperacionSobreLaPropuesta,
 } from "@/lib/timeline/operar-sobre-el-borrador";
@@ -101,13 +102,23 @@ export const AVISO_SIN_PROPUESTA_ABIERTA =
 export const rechazoFueraDeRango = (pedido: string, ultimo: number): string =>
   ultimo > 0 ? `No hay un cambio ${pedido}: la lista llega hasta el ${ultimo}.` : `No hay un cambio ${pedido}: la propuesta no tiene cambios.`;
 export const rechazoYaFuera = (quien: string): string => `${quien} ya está fuera.`;
-export const rechazoChoca = (quien: string): string => `${quien} no se aplica igual: choca con lo que editaste a mano.`;
+/** Revisión de E3 (#13): con el porqué del choque (el de la barra); no todo choque es una edición a mano. */
+export const rechazoChoca = (quien: string, porques: readonly string[]): string =>
+  porques.length === 1
+    ? `${quien} no se aplica igual. ${porques[0]}`
+    : porques.length > 1
+      ? `${quien} no se aplica igual: sus tareas chocan con el cronograma de hoy, cada una por lo que dice la barra.`
+      : `${quien} no se aplica igual: el cronograma cambió desde la propuesta.`;
 export const rechazoYaEsta = (quien: string): string => `${quien} ya está así en el cronograma.`;
 export const rechazoYaMarcado = (quien: string): string => `${quien} ya está en la propuesta.`;
 export const rechazoTareaNoEsta = (pedido: string): string => `No encontré «${pedido}» entre las tareas que cambian.`;
 export const rechazoTareaAmbigua = (pedido: string, n: number): string =>
   `Hay ${n} tareas «${pedido}» entre las que cambian: nómbrala por su identificador.`;
 export const RECHAZO_SIN_CUALES = "Falta decir qué cambio: su número en la lista o la tarea.";
+/** Lo que sobra del tope de la ruta (revisión de E3, #9). */
+export const avisoDelTope = (sobran: number): string =>
+  `⚠ No registré ${sobran === 1 ? "1 de los cambios" : `${sobran} de los cambios`}: pasan a la propuesta de a ${MAX_OPERACIONES} por vez. ` +
+  "Pídemelos después de pasar estos.";
 /** Una operación que va SOLA llegó mezclada con otras. */
 export const rechazoNoVaSola = (que: string): string => `⚠ No registré «${que}»: va sola, en un pedido aparte.`;
 
@@ -132,6 +143,8 @@ interface Fila {
   padre: string | null;
   /** «El 3» o «Título», para decir por qué no. */
   quien: string;
+  /** Por qué choca (el texto del plan), solo en un choque. */
+  choque: string | null;
 }
 
 interface IndiceDeLaBarra {
@@ -163,6 +176,7 @@ function indiceDeLaBarra(r: ResumenDelBorrador, plan: readonly ItemDelPlan[]): I
         recuperable: it.estado === "excluido" && heredado === null,
         padre: heredado,
         quien: `El ${it.numero}`,
+        choque: it.estado === "choque" ? (delPlan.get(it.clave)?.choque ?? null) : null,
       },
     ]);
   }
@@ -180,6 +194,7 @@ function indiceDeLaBarra(r: ResumenDelBorrador, plan: readonly ItemDelPlan[]): I
         recuperable: t.estado === "excluido" && !t.enEspera && t.seMarca,
         padre: heredado,
         quien: `El ${g.numero}`,
+        choque: t.estado === "choque" ? (delPlan.get(t.clave)?.choque ?? null) : null,
       };
       filas.push(fila);
       tareas.push({ ...fila, quien: `«${t.titulo}»`, ref: t.ref, titulo: t.titulo, numero: g.numero });
@@ -201,7 +216,11 @@ function clavesDe(filas: readonly Fila[], dejar: boolean, quien: string): string
   if (claves.length > 0) return [...new Set(claves)];
   if (dejar && filas.some((f) => f.recuperable || f.padre !== null)) return { motivo: rechazoYaFuera(quien) };
   if (!dejar && filas.some((f) => f.marcado)) return { motivo: rechazoYaMarcado(quien) };
-  if (filas.some((f) => f.estado === "choque")) return { motivo: rechazoChoca(quien) };
+  const choques = filas.filter((f) => f.estado === "choque");
+  if (choques.length > 0) {
+    const porques = [...new Set(choques.map((f) => f.choque).filter((c): c is string => !!c))];
+    return { motivo: rechazoChoca(quien, porques) };
+  }
   return { motivo: rechazoYaEsta(quien) };
 }
 
@@ -384,6 +403,10 @@ function porQueNoAplicar(p: PropuestaEnElTurno, pendientes: number, preguntaAbie
 /** «aplicar» que quedó pendiente de un turno anterior: vale mientras la lista sea la misma que se leyó. */
 const MOTIVO_APLICAR_VIEJO = "la propuesta cambió desde que se acordó";
 
+/** Un «descartar la propuesta» pendiente, cuando ahora se pide «aplícala» (un «aplicar» de otra lista ya
+ *  cayó al revalidar lo pendiente, con `MOTIVO_APLICAR_VIEJO`). */
+const MOTIVO_OTRA_SOLA = "ahora pediste aplicar la propuesta";
+
 /**
  * ⭐ Lo pendiente, revalidado EN SECO contra la propuesta de ahora (antes del modelo): lo que ya no pasa
  * cae, con su motivo. `operarSobreElBorrador` corre el lote en orden y vuelve atrás cada operación que
@@ -448,7 +471,8 @@ export interface AcuerdoSobreLaPropuesta {
  *      del `descartar` del modelo), sin pregunta abierta, sin bloqueo y con algo marcado. Descartar
  *      la propuesta entera suelta lo pendiente;
  *   3. fusionar lo pendiente con lo nuevo (el descarte se pide con la P: «3» es un número de la barra);
- *   4. validar EN SECO la fusión: lo que no pasa sale y se dice. Sin reintento.
+ *   4. validar EN SECO la fusión: lo que no pasa sale y se dice. Sin reintento;
+ *   5. el tope de la ruta (`MAX_OPERACIONES`): lo que pasa de ahí no se registra y se dice.
  */
 export function acuerdoSobreLaPropuesta(i: {
   propuesta: PropuestaEnElTurno;
@@ -483,10 +507,22 @@ export function acuerdoSobreLaPropuesta(i: {
     } else {
       const sola = solas[0].op;
       if (sola.op === "propuesta.aplicar") {
-        const porQue = porQueNoAplicar(p, enPie.length, i.preguntaAbierta);
+        /* Revisión de E3 (#13): otra sola que quedó pendiente (un «aplicar» o «descartar la propuesta») no es
+           algo por pasar a la propuesta: la reemplaza este pedido. Si es el mismo «aplicar», sigue (arrastrado);
+           si no, cae con su motivo. Antes se decía «primero pasa lo pendiente» y volvía el botón de descartar. */
+        const porPasar = enPie.filter((o) => !esOperacionSola(o));
+        const porQue = porQueNoAplicar(p, porPasar.length, i.preguntaAbierta);
         if (!porQue) {
           decir();
-          return { operaciones: [sola], arrastradas: [], caidas: [], avisos };
+          const mismo = (o: OperacionDelChat) => JSON.stringify(o) === JSON.stringify(sola);
+          return {
+            operaciones: [sola],
+            arrastradas: enPie.some(mismo) ? [0] : [],
+            caidas: enPie
+              .filter((o) => esOperacionSola(o) && !mismo(o))
+              .map((o) => ({ operacion: o, motivo: MOTIVO_OTRA_SOLA })),
+            avisos,
+          };
         }
         avisos.push(`⚠ No registré «aplicar la propuesta»: ${porQue}`);
       } else {
@@ -528,6 +564,13 @@ export function acuerdoSobreLaPropuesta(i: {
     ops = ops.filter((x) => !fuera.has(x));
   }
   decir();
+  // ── 5 · El tope del pedido (revisión de E3, #9): la ruta recibe hasta MAX_OPERACIONES por vez, y un acuerdo
+  // más largo fallaría al apretar el botón, una y otra vez. Se registran las primeras (lo pendiente va
+  // primero) y lo que sobra se dice. Cortar la cola no invalida lo anterior: el lote corre en orden.
+  if (ops.length > MAX_OPERACIONES) {
+    avisos.push(avisoDelTope(ops.length - MAX_OPERACIONES));
+    ops = ops.slice(0, MAX_OPERACIONES);
+  }
   return {
     operaciones: ops.map((x) => x.op),
     arrastradas: ops.flatMap((x, k) => (x.arrastrada ? [k] : [])),

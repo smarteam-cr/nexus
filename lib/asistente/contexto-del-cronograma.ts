@@ -60,7 +60,7 @@ export const LARGO_DEL_TITULO_RECORTADO = 32;
 
 /** La línea de arriba cuando el chat PUEDE editar la propuesta. */
 export const LINEA_DE_LA_PROPUESTA_EDITABLE =
-  "Lo que acuerdes EDITA ESTA PROPUESTA, no el cronograma: el cliente sigue viendo el de hoy hasta que se aplique.";
+  "Lo que acuerdes EDITA ESTA PROPUESTA, no el cronograma: el cronograma no cambia hasta que se aplique, y el cliente lo ve recién cuando se sube («Subir al cliente»).";
 
 /** La línea de arriba cuando no, y nadie dijo por qué (no debería pasar: quien llama pasa el porqué). */
 const LINEA_SIN_PERMISO =
@@ -288,7 +288,9 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
   const cola = [
     d.paraRehacerTodo,
     "",
-    "Lo que pongas en `titulo` y `nombre` lo ve el cliente al aplicar: claro, sin nombres del equipo ni jerga interna.",
+    /* Revisión de E3 (#8): el cliente lee solo lo que se SUBIÓ («Subir al cliente» congela la foto); aplicar
+       no se lo muestra. */
+    "Lo que pongas en `titulo`, `nombre` y `nota` lo ve el cliente cuando se suba el cronograma: claro, sin nombres del equipo ni jerga interna.",
     /* Solo si el chat puede editar la propuesta: las consecuencias son de editarla (mover MUDA, quitar
        una fase deja lo que tiene avance). Mientras no puede, prometerlas sería contar algo que todavía
        no pasa. */

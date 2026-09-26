@@ -724,8 +724,10 @@ export default function ChatDelAsistente({
                 {/* ⚠ LO QUE SE SOLTÓ SE DICE. Un descarte tiene que ser tan legible como una
                     operación: si el modelo se equivoca al soltar algo, o si el cronograma cambió
                     debajo y un cambio pendiente dejó de poder aplicarse, la persona lo ve acá y
-                    puede volver a pedirlo. Callarlo es el mismo defecto, del otro lado. */}
-                {t.estado === "vivo" && t.acuerdo.descartadas?.length ? (
+                    puede volver a pedirlo. Callarlo es el mismo defecto, del otro lado.
+                    Revisión de E3 (#6): también con una pregunta abierta («en espera»): ese acuerdo es
+                    el vigente, y en el turno siguiente ya no queda caída que decir. */}
+                {(t.estado === "vivo" || t.estado === "en-espera") && t.acuerdo.descartadas?.length ? (
                   <ul className="mt-2 space-y-0.5 rounded-lg border border-warn-line bg-warn-surface px-2 py-1.5 text-xs text-warn-ink">
                     {t.acuerdo.descartadas.map((d, i) => (
                       <li key={i}>⚠ Ya no va: {d}</li>

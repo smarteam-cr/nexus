@@ -434,14 +434,14 @@ tarea lo escribe una persona en el Gantt, nunca un agente. Lo correcto es decirl
 se hace, no buscar la operación más parecida.
 
 Otro: «unifica estas dos fases en una». Tampoco existe como operación. Lo más cercano sí se puede
-armar —mover sus tareas a la otra fase y borrar la que queda vacía— pero mudarlas las RECREA y
-pierden su estado. Eso se dice ANTES: «puedo mover las 6 tareas de A a B y borrar A, pero las 6
-se recrean y pierden si estaban hechas — ¿lo hago igual, o prefieres unificarlas a mano?».
+armar —mover sus tareas a la otra fase y borrar la que queda vacía—. Sin propuesta abierta, mudarlas
+las RECREA y pierden su estado. Eso se dice ANTES: «puedo mover las 6 tareas de A a B y borrar A, pero
+las 6 se recrean y pierden si estaban hechas — ¿lo hago igual, o prefieres unificarlas a mano?».
 
 ⭐ DOBLE CONFIRMACIÓN CUANDO SE BORRA TRABAJO DE ALGUIEN
-Antes de emitir un "fase.borrar", mira el contexto: si esa fase tiene tareas HECHAS, dilo con el
-número y pide confirmación explícita — «esa fase tiene 4 tareas hechas, ¿la borro igual?». Solo
-con el sí emites la operación.
+Sin propuesta abierta, antes de emitir un "fase.borrar", mira el contexto: si esa fase tiene tareas
+HECHAS, dilo con el número y pide confirmación explícita — «esa fase tiene 4 tareas hechas, ¿la borro
+igual?». Solo con el sí emites la operación.
 
 ⛔ Y CON UNA TAREA SUELTA NO ALCANZA CON CONFIRMAR: NO SE PUEDE.
 Una tarea hecha, en curso o cargada a mano NO se borra desde el chat — la operación se rechaza
@@ -509,8 +509,11 @@ después arma las tareas. Los pedidos puntuales los sigues atendiendo tú.
    pendiente, dilo: primero se pasa a la propuesta.
 6. «Descártala» es "propuesta.descartar-entera", sola. Lo pendiente cae con ella.
 7. Si piden cambiar un dato que tiene ⚠ (lo editaron a mano), tu operación reemplaza esa edición: dilo.
-8. Lo que va en "titulo", "nombre" y "nota" lo ve el cliente al aplicar.
-9. Si el contexto dice que ahora no se puede cambiar la propuesta, no llames la herramienta: dilo y
+8. Mover una tarea de fase la MUDA con su estado, y quitar una fase deja lo que tiene avance: no avises
+   una pérdida que no hay ni pidas doble confirmación para quitar una fase.
+9. Lo que va en "titulo", "nombre" y "nota" lo ve el cliente cuando se suba el cronograma («Subir al
+   cliente»), no al aplicar.
+10. Si el contexto dice que ahora no se puede cambiar la propuesta, no llames la herramienta: dilo y
    pide que te lo repitan cuando termine.`;
 
 /**
@@ -1191,10 +1194,12 @@ export async function correrTurno(
   });
   /** Por qué cayó lo pendiente, para el aviso del acuerdo de cierre. */
   const motivosDeLaCaida = libro.caidas.map((c) => c.motivo);
-  if (caidaPorToken !== null && pend) {
-    soltadas.push(lineaDeLoQueNoVa(pend.operaciones.length, caidaPorToken));
-    motivosDeLaCaida.push(caidaPorToken);
-  }
+  /* Lo pendiente que cayó ENTERO por la propuesta, en una línea. Lo lleva solo el acuerdo de cierre: si el
+     turno deja un acuerdo nuevo, la caída la dice el texto del turno (abajo), que se ve aunque la cajita
+     espere una respuesta y que el modelo relee en el turno siguiente (revisión de E3, #6). */
+  const loQueNoVaPorLaPropuesta =
+    caidaPorToken !== null && pend ? lineaDeLoQueNoVa(pend.operaciones.length, caidaPorToken) : null;
+  if (caidaPorToken !== null) motivosDeLaCaida.push(caidaPorToken);
   /**
    * ⭐ UN SOLO TRADUCTOR PARA LOS DOS LECTORES (acuerdo-vivo.ts, `bloqueDePendientes`): la cajita
    * azul del CSE y el bloque de pendientes del modelo leen LAS MISMAS líneas, con el «⚠ revisa…» de
@@ -1717,15 +1722,20 @@ export async function correrTurno(
    * Va después de las dos ramas: también cubre los documentos y el caso de siempre en que todo lo
    * pendiente se cae sin nada nuevo.
    */
-  if (!acuerdo && soltadas.length > 0) {
+  if (!acuerdo && (soltadas.length > 0 || loQueNoVaPorLaPropuesta !== null)) {
     acuerdo = {
       resumen: RESUMEN_DEL_CIERRE,
       operaciones: [],
-      descartadas: soltadas,
+      descartadas: [...soltadas, ...(loQueNoVaPorLaPropuesta !== null ? [loQueNoVaPorLaPropuesta] : [])],
       ...(esCronograma ? { borrador: token } : {}),
     };
     const motivo = [...new Set(motivosDeLaCaida)].join(" · ") || "el cronograma cambió";
     respuesta = `${respuesta.trim()}\n\n${avisoDeCierre(motivo)}`;
+  } else if (acuerdo && caidaPorToken !== null) {
+    /* Revisión de E3 (#6): lo pendiente cayó por la propuesta y el turno dejó un acuerdo nuevo (que puede
+       quedar esperando una respuesta). La caída se dice acá, en el texto: el acuerdo nuevo no la lleva en
+       su lista, así no se lee dos veces en la misma cajita. */
+    respuesta = `${respuesta.trim()}\n\n${avisoDeCierre(caidaPorToken)}`;
   }
 
   /* Si el modelo cerró con la tool y sin texto, el panel igual tiene qué mostrar. */

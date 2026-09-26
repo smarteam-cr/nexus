@@ -20,7 +20,10 @@ import { RAIZ } from "@/lib/ui/scan-source";
 import { leerAcuerdo, marcaDeAcuerdo, MODELO_DEL_ASISTENTE, MARCA_DE_ACUERDO } from "./turno";
 import { OPERACIONES_DE_PROPUESTA, OPERACIONES_VALIDAS } from "@/lib/timeline/operaciones";
 
-const FUENTE = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8");
+/* Revisión de E3 (#29): el fuente se lee con los saltos normalizados. Con `core.autocrlf=true` un checkout
+   escribe turno.ts en CRLF, y las guardas que buscan "\n" salían rojas (o, negadas, verdes solas) sin que
+   el código cambiara. */
+const FUENTE = fs.readFileSync(path.join(RAIZ, "lib/asistente/turno.ts"), "utf8").replace(/\r\n/g, "\n");
 
 const PROMPT = (() => {
   const i = FUENTE.indexOf("function promptDelAsistente");
@@ -897,17 +900,23 @@ describe("los otros dos consumidores de contexto grande también cachean el pref
 });
 
 describe("⭐ E3 P5: el chat con una propuesta abierta", () => {
+  /** Dónde empieza el acuerdo de cierre (revisión de E3, #6: también con lo que cae entero por la propuesta). */
+  const INICIO_DEL_CIERRE = "if (!acuerdo && (soltadas.length > 0 || loQueNoVaPorLaPropuesta !== null)) {";
   it("⛔ SE SELLA para qué propuesta se acordó (también el acuerdo de cierre)", () => {
     /* Sin el token, el turno siguiente no sabría si lo pendiente sigue valiendo, y la pantalla no sabría
        si el botón escribe el cronograma o pasa a la propuesta. La edición que la pone en rojo: sacar
        `borrador: token` del acuerdo del cronograma o del cierre. */
     const iAcuerdo = FUENTE.indexOf("const fusion =");
-    const acuerdo = FUENTE.slice(iAcuerdo, FUENTE.indexOf("if (!acuerdo && soltadas.length > 0) {", iAcuerdo));
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#6), con esta razón: lo que cae ENTERO por la propuesta ya no va en
+       `soltadas` (lo lleva solo el cierre; con un acuerdo nuevo lo dice el texto), así que el cierre se abre
+       también con esa línea sola. Su conducta, en propuesta-del-chat.test.ts (correrTurno). */
+    const acuerdo = FUENTE.slice(iAcuerdo, FUENTE.indexOf(INICIO_DEL_CIERRE, iAcuerdo));
     expect(acuerdo.length, "la guarda no está mirando el acuerdo").toBeGreaterThan(500);
     expect(acuerdo).toContain("borrador: token,");
-    const cierre = FUENTE.slice(FUENTE.indexOf("if (!acuerdo && soltadas.length > 0) {"), FUENTE.indexOf("/* Si el modelo cerró con la tool"));
+    const cierre = FUENTE.slice(FUENTE.indexOf(INICIO_DEL_CIERRE), FUENTE.indexOf("} else if (acuerdo && caidaPorToken !== null) {"));
+    expect(cierre.length, "la guarda no está mirando el cierre").toBeGreaterThan(100);
     expect(cierre).toContain("operaciones: [],");
-    expect(cierre).toContain("descartadas: soltadas,");
+    expect(cierre).toContain("descartadas: [...soltadas, ...(loQueNoVaPorLaPropuesta !== null ? [loQueNoVaPorLaPropuesta] : [])],");
     expect(cierre).toContain("...(esCronograma ? { borrador: token } : {}),");
     expect(cierre).toContain("avisoDeCierre(");
   });
@@ -915,7 +924,8 @@ describe("⭐ E3 P5: el chat con una propuesta abierta", () => {
   it("⛔ el acuerdo de cierre va DESPUÉS de las dos ramas: también cubre los documentos", () => {
     /* La edición que la pone en rojo: escribirlo solo en la rama del cronograma (en un documento, todo lo
        pendiente que se cae sin nada nuevo se seguiría perdiendo en silencio). */
-    const iCierre = FUENTE.indexOf("if (!acuerdo && soltadas.length > 0) {");
+    const iCierre = FUENTE.indexOf(INICIO_DEL_CIERRE);
+    expect(iCierre, "desapareció el acuerdo de cierre").toBeGreaterThan(-1);
     expect(iCierre).toBeGreaterThan(FUENTE.indexOf("} else if (soloLectura) {"));
     expect(iCierre).toBeGreaterThan(FUENTE.indexOf("const opsDeDoc = ["));
     expect(iCierre).toBeLessThan(FUENTE.indexOf("await agregarTurno(hilo.id, {"));
@@ -956,6 +966,31 @@ describe("⭐ E3 P5: el chat con una propuesta abierta", () => {
     expect(cola).toContain("no llames la herramienta: dilo y");
     expect(PROMPT).toContain("Con una propuesta abierta, pasa lo");
     expect(PROMPT).not.toContain("se escriben directo,\nen un instante");
+  });
+
+  it("⛔ con una propuesta abierta el prompt fijo no promete pérdidas ni pide doble confirmación, y no dice que el cliente lo ve al aplicar", () => {
+    /* Revisión de E3 (#7 y #8). Con propuesta, mover una tarea la MUDA con su estado y quitar una fase deja lo
+       que tiene avance: «mudarlas las RECREA» y la doble confirmación de «fase.borrar» valen solo sin propuesta.
+       Y el cliente lee solo lo que se SUBIÓ. El prompt sigue estático (D16): la condición va en el texto.
+       Las ediciones que la ponen en rojo: sacar el renglón de la propuesta que lo dice, volver a dar las dos
+       reglas sin «Sin propuesta abierta», o volver a «lo ve el cliente al aplicar». */
+    const plano = (s: string) => s.replace(/\s+/g, " ");
+    const i = FUENTE.indexOf("const COLA_DEL_CRONOGRAMA");
+    const cola = plano(FUENTE.slice(i, FUENTE.indexOf("const COLA_DE_DOCUMENTO", i)));
+    const bloque = cola.slice(cola.indexOf("⭐ CON UNA PROPUESTA ABIERTA"));
+    expect(bloque.length, "la guarda no está mirando el bloque de la propuesta").toBeGreaterThan(300);
+    expect(bloque, "el bloque de la propuesta no anula las dos reglas fijas").toContain(
+      "Mover una tarea de fase la MUDA con su estado, y quitar una fase deja lo que tiene avance: no avises una pérdida que no hay ni pidas doble confirmación para quitar una fase.",
+    );
+    expect(cola, "«mudarlas las RECREA» volvió a valer también con propuesta").toContain(
+      "Sin propuesta abierta, mudarlas las RECREA y pierden su estado.",
+    );
+    expect(cola.match(/las RECREA/g)?.length, "hay otra promesa de que mudar recrea").toBe(1);
+    expect(cola, "la doble confirmación volvió a valer también con propuesta").toContain(
+      "DOBLE CONFIRMACIÓN CUANDO SE BORRA TRABAJO DE ALGUIEN Sin propuesta abierta, antes de emitir un \"fase.borrar\"",
+    );
+    expect(bloque).toContain("lo ve el cliente cuando se suba el cronograma («Subir al cliente»), no al aplicar.");
+    expect(plano(PROMPT), "el prompt dice que el cliente lo ve al aplicar").not.toMatch(/lo ve el cliente al aplicar/);
   });
 
   it("⛔ en solo lectura no se registra nada y lo pendiente queda congelado; sin propuesta, lo de ella no entra", () => {

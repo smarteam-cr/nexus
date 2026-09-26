@@ -110,7 +110,8 @@ export type PedidoDeOperaciones =
   | { token: string; version: number; origen: "chat"; operaciones: OperacionSobreLaPropuesta[] }
   | { token: string; version: number; origen: "apertura"; operaciones: Array<{ op: "chat-abierto" }> };
 
-const MAX_OPERACIONES = 50;
+/** Cuántas operaciones acepta un pedido. El chat no acuerda más que esto (propuesta-del-chat.ts). */
+export const MAX_OPERACIONES = 50;
 const esClaves = (v: unknown): v is string[] =>
   Array.isArray(v) && v.length >= 1 && v.length <= 2000 && v.every((k) => typeof k === "string" && k.length >= 1 && k.length <= 300);
 const esObjetoPlano = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

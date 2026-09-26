@@ -149,8 +149,9 @@ export type EstadoDeAcuerdo = "vivo" | "en-espera" | "aplicado" | "retomado" | "
  * lotes que se solapan aplicados en el orden en que la persona clickee, sobre un vocabulario que
  * no es idempotente. Un `tarea.crear` aplicado dos veces son dos tareas.
  *
- * E3 P5: un acuerdo seguido de un ACUERDO DE CIERRE (sin desenlace en el medio) queda "soltado": lo
- * que traía ya no va (la propuesta cambió, o el cronograma cambió debajo). El cierre mismo no es un
+ * E3 P5: un acuerdo seguido de un ACUERDO DE CIERRE, o de un acuerdo sellado para OTRA propuesta (sin
+ * desenlace en el medio), queda "soltado": lo que traía ya no va
+ * (la propuesta cambió, o el cronograma cambió debajo). El cierre mismo no es un
  * acuerdo que se aplique: su estado es null (no lleva botón; su texto dice qué cayó y por qué).
  */
 export function estadosDeAcuerdo(
@@ -169,7 +170,12 @@ export function estadosDeAcuerdo(
            si más adelante hay otro acuerdo, es ése el que lo lleva. */
         continue;
       }
-      if (tieneAcuerdo[j]) return esAcuerdoDeCierre(acuerdos[j]) ? "soltado" : "retomado";
+      if (tieneAcuerdo[j]) {
+        if (esAcuerdoDeCierre(acuerdos[j])) return "soltado";
+        /* Revisión de E3 (#6): el que sigue se selló para OTRA propuesta (o para el cronograma de hoy):
+           lo de este cayó entero por la propuesta y no viaja en aquel. «Retomado» diría «sigue abajo». */
+        return (acuerdos[i]?.borrador ?? null) !== (acuerdos[j]?.borrador ?? null) ? "soltado" : "retomado";
+      }
     }
     /**
      * ⭐ CON UNA PREGUNTA ABIERTA NO SE APLICA, y es la corrección de Elías (2026-08-21).

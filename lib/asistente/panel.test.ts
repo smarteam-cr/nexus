@@ -990,11 +990,14 @@ describe("⭐ lo acordado y no aplicado sobrevive al turno siguiente", () => {
     ).toBe(true);
     /* ⚠ Mismo defecto que ya se cazó en la nota de arrastradas: `toContain("t.acuerdo.descartadas")`
        pasa igual con la condición rota, porque el `.map()` de abajo repite la misma string. Se
-       afirma sobre la condición completa, que es única. */
+       afirma sobre la condición completa, que es única.
+       ⚠ ACTUALIZADA en la revisión de E3 (#6), con esta razón: la lista se pinta también «en espera».
+       Un acuerdo que pregunta y propone a la vez es el vigente; si lo que se cayó no se pinta ahí, en
+       el turno siguiente ya no queda caída que decir y se pierde en silencio. */
     expect(
       PANEL,
-      "la condición que decide si se pinta la lista dejó de mirar `descartadas`",
-    ).toContain('t.estado === "vivo" && t.acuerdo.descartadas?.length ?');
+      "la condición que decide si se pinta la lista dejó de mirar `descartadas`, o dejó fuera «en espera»",
+    ).toContain('(t.estado === "vivo" || t.estado === "en-espera") && t.acuerdo.descartadas?.length ?');
   });
 
   it("⭐ y ESE campo ya no lo alimenta lo que el modelo descartó por pedido del CSE", () => {

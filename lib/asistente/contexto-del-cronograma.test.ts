@@ -380,7 +380,14 @@ describe("el recorte va en su orden y no pierde identificadores", () => {
     /* D11: son de «Pedir cambio con IA», no de la propuesta. La edición que la pone en rojo: pegar
        `REGLAS_DURAS_DEL_CRONOGRAMA` al contexto con propuesta. */
     expect(nivel0.texto).not.toContain("REGLAS DURAS");
-    expect(nivel0.texto).toContain("lo ve el cliente al aplicar");
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#8), con esta razón: decía «lo ve el cliente al aplicar», y es falso.
+       El cliente lee solo la foto que congela «Subir al cliente»; aplicar no la toca. El chat se lo repetía
+       al CSE. La edición que la pone en rojo: volver a prometer que el cliente lo ve al aplicar. */
+    expect(nivel0.texto).toContain("lo ve el cliente cuando se suba el cronograma");
+    expect(nivel0.texto).toContain("el cliente lo ve recién cuando se sube («Subir al cliente»)");
+    expect(nivel0.texto, "el contexto le dice al modelo que el cliente lo ve al aplicar").not.toMatch(
+      /cliente (sigue viendo|lo ve|ve)[^.]*(al aplicar|hasta que se aplique)/,
+    );
     expect(nivel0.texto).toContain(`PROPUESTA ABIERTA ${p.desde}. ${LINEA_DE_LA_PROPUESTA_EDITABLE}`);
   });
 

@@ -24,7 +24,8 @@ const falsos = vi.hoisted(() => ({
   turnos: [] as Array<{ rol: string; contenido: string; shaDeContexto?: string | null }>,
   ctx: null as unknown,
 }));
-vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
+/* Sin propuesta, el turno lee la nota de cada fase (`notasDeLasFases`): acá no hay ninguna. */
+vi.mock("@/lib/db/prisma", () => ({ prisma: { timelinePhase: { findMany: vi.fn(async () => []) } } }));
 vi.mock("@/lib/anthropic", () => ({ anthropic: { messages: { create: falsos.crear } } }));
 vi.mock("./hilo", () => ({
   agregarTurno: vi.fn(async (_id: string, t: { rol: string; contenido: string; shaDeContexto?: string | null }) => {
@@ -65,6 +66,8 @@ import {
   type Vivo,
 } from "@/lib/timeline/borrador";
 import type { HiloConTurnos } from "./hilo";
+import type { OperacionDelChat } from "@/lib/timeline/operaciones";
+import { leerPedidoDeOperaciones } from "@/lib/timeline/operar-sobre-el-borrador";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Los fixtures ─────────────────────────────────────────────────────────────
@@ -238,11 +241,18 @@ describe("⭐ la traducción: lo que nombra el modelo → las claves de la barra
       `El ${n} ya está fuera.`,
     );
     // Pruebas se editó a mano después (4 semanas): su cambio choca.
+    /* ⚠ ACTUALIZADA en la revisión de E3 (#13), con esta razón: decía siempre «choca con lo que editaste a
+       mano», aunque el choque fuera otro. Ahora dice el porqué del plan (el mismo ⚠ de la barra). */
     const editada: Vivo = { ...VIVO, fases: VIVO.fases.map((f) => (f.id === "fc" ? { ...f, durationWeeks: 4 } : f)) };
     const choca = enElTurno({ vivo: editada });
     expect(traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: ["1"] }], choca).rechazadas[0].motivo).toBe(
-      "El 1 no se aplica igual: choca con lo que editaste a mano.",
+      "El 1 no se aplica igual. Lo cambiaste a mano después de la propuesta: queda como lo dejaste.",
     );
+    /* Un choque que NO es una edición a mano (la fase ya no está) dice ese porqué. La edición que la pone en
+       rojo: volver a un motivo fijo para todo choque. */
+    const sinPruebas: Vivo = { ...VIVO, fases: VIVO.fases.filter((f) => f.id !== "fc") };
+    const otro = traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: ["1"] }], enElTurno({ vivo: sinPruebas }));
+    expect(otro.rechazadas[0].motivo).toBe("El 1 no se aplica igual. La fase ya no está en el cronograma: este cambio queda fuera.");
     expect(traducirOperaciones([{ op: "propuesta.dejar-como-estaba" }], P).rechazadas[0].motivo).toContain("Falta decir qué cambio");
   });
 
@@ -308,6 +318,24 @@ describe("⭐ aplicar y descartar la propuesta entera: SOLAS", () => {
     expect(r.avisos[0]).toBe(`⚠ No registré «aplicar la propuesta»: ${p.resumen!.bloqueo}`);
   });
 
+  it("⛔ «aplícala» con una sola pendiente: la reemplaza, no pide «pasar lo pendiente» (revisión de E3, #13)", () => {
+    /* Con un «Descartar la propuesta» pendiente, «aplícala» decía «primero hay que pasar a la propuesta lo que
+       quedó pendiente» y volvía a ofrecer el botón de descartar. La edición que la pone en rojo: contar las
+       solas pendientes como algo por pasar a la propuesta. */
+    const descartar = { op: "propuesta.descartar-entera" as const };
+    const aplicar = { op: "propuesta.aplicar" as const, version: 4, huella: P.resumen!.huella };
+    const r = acordar({ vivas: [descartar], opsNuevas: [{ op: "propuesta.aplicar" }] });
+    expect(r.operaciones, "«aplícala» no se registró por el descarte pendiente").toEqual([aplicar]);
+    expect(r.caidas).toEqual([{ operacion: descartar, motivo: "ahora pediste aplicar la propuesta" }]);
+    expect(r.avisos).toEqual([]);
+    // El mismo «aplicar» pendiente sigue: arrastrado, sin caída ni aviso.
+    const otraVez = acordar({ vivas: [aplicar], opsNuevas: [{ op: "propuesta.aplicar" }] });
+    expect(otraVez.operaciones).toEqual([aplicar]);
+    expect(otraVez.arrastradas).toEqual([0]);
+    expect(otraVez.caidas).toEqual([]);
+    expect(otraVez.avisos).toEqual([]);
+  });
+
   it("«descártala»: sola, y lo pendiente cae con ella (se dice)", () => {
     const r = acordar({ vivas: [dejar], opsNuevas: [{ op: "propuesta.descartar-entera" }] });
     expect(r.operaciones).toEqual([{ op: "propuesta.descartar-entera" }]);
@@ -334,6 +362,25 @@ describe("⭐ aplicar y descartar la propuesta entera: SOLAS", () => {
       "⚠ No registré 1 de los cambios: esa tarea no está en la propuesta. Pídemelo de otra forma si lo quieres igual.",
     ]);
   });
+
+  it("⛔ no se acuerda más de lo que la ruta recibe de una vez: lo que sobra se dice (revisión de E3, #9)", () => {
+    /* La ruta rechaza más de 50 operaciones. Un acuerdo más largo pasaba la prueba en seco y fallaba al apretar
+       «Pasar a la propuesta», una y otra vez. La edición que la pone en rojo: sacar el tope de
+       `acuerdoSobreLaPropuesta` (el acuerdo de 52 no entra en la ruta). */
+    const tarea = (k: number) => ({ op: "tarea.crear", phaseId: "fb", titulo: `Tarea ${k}`, semana: 0 });
+    const pendientes = [tarea(0), tarea(1)] as OperacionDelChat[];
+    const r = acordar({ vivas: pendientes, opsNuevas: Array.from({ length: 50 }, (_, k) => tarea(k + 2)) });
+    expect(r.operaciones, "se acordó más de lo que la ruta recibe").toHaveLength(50);
+    // Lo pendiente va primero, y se queda.
+    expect(r.operaciones.slice(0, 2)).toEqual(pendientes);
+    expect(r.arrastradas).toEqual([0, 1]);
+    expect(r.avisos).toEqual([
+      "⚠ No registré 2 de los cambios: pasan a la propuesta de a 50 por vez. Pídemelos después de pasar estos.",
+    ]);
+    // Y lo que queda, la ruta lo recibe (la MISMA validación que al apretar el botón).
+    const pedido = leerPedidoDeOperaciones({ token: "run-4", version: 4, origen: "chat", operaciones: r.operaciones });
+    expect("error" in pedido ? pedido.error : null, "la ruta rechaza el acuerdo").toBeNull();
+  });
 });
 
 describe("el libro: lo pendiente se revalida contra la propuesta de ahora", () => {
@@ -344,6 +391,17 @@ describe("el libro: lo pendiente se revalida contra la propuesta de ahora", () =
     const r = libroSobreLaPropuesta(P, [{ op: "fase.duracion", phaseId: "fase-borrada", semanas: 2 }, aplicarViejo, aplicarVigente]);
     expect(r.vivas).toEqual([aplicarVigente]);
     expect(r.caidas.map((c) => c.motivo)).toEqual(["esa fase no está en la propuesta", "la propuesta cambió desde que se acordó"]);
+  });
+
+  it("⛔ un «aplicar» de la MISMA versión y otra huella también cae (revisión de E3, #30)", () => {
+    /* La huella cambia sin que cambie la versión (el cronograma de hoy cambió debajo, o las casillas): lo
+       acordado era aplicar OTRA lista. La edición que la pone en rojo: dejar de comparar la huella en
+       `libroSobreLaPropuesta` (el caso de arriba difiere en las dos y no lo ve). */
+    const P = enElTurno();
+    const mismaVersionOtraHuella = { op: "propuesta.aplicar", version: 4, huella: `${P.resumen!.huella}-otra` };
+    const r = libroSobreLaPropuesta(P, [mismaVersionOtraHuella]);
+    expect(r.vivas, "el «aplícala» viejo sigue con botón aunque la lista cambió").toEqual([]);
+    expect(r.caidas).toEqual([{ operacion: mismaVersionOtraHuella, motivo: "la propuesta cambió desde que se acordó" }]);
   });
 
   it("⭐ la línea de aplicar ES la confirmación de la barra", () => {
@@ -537,5 +595,105 @@ describe("⭐ correrTurno con una propuesta abierta", () => {
     expect(lineas[0], "la línea no nombra el cambio como la barra").toMatch(/^Queda como está hoy: \d+\. «/);
     const alModelo = JSON.stringify(falsos.crear.mock.calls[0][0].messages);
     expect(alModelo, "el bloque del modelo y la cajita leen líneas distintas").toContain(JSON.stringify(`P1. ${lineas[0]}`).slice(1, -1));
+  });
+
+  // ── Revisión de E3 (#25): las otras dos transiciones del token, corridas en el turno ──
+  /** Lo acordado para la propuesta «run-4» en el turno anterior. */
+  const selladoPara = (borrador: string): CambioAcordado => ({
+    resumen: "Diseño a 3 semanas",
+    operaciones: [{ op: "fase.duracion", phaseId: "fb", semanas: 3 }],
+    lineas: ["«Diseño» pasa de 2 a 3 semanas"],
+    borrador,
+  });
+
+  it("⛔ lo acordado para una propuesta que ya se aplicó (o se descartó) NO vuelve como acuerdo sobre el cronograma de hoy", async () => {
+    /* Sin propuesta, lo sellado para «run-4» cae entero: el acuerdo es el cierre, sin operaciones. La edición
+       que la pone en rojo: dejar de aplicar la caída cuando ya no hay propuesta (p. ej. `&& token !== null` en
+       `caidaPorToken`): lo pendiente se volvería a sellar con `borrador: null` y el botón escribiría el
+       cronograma de hoy por el PUT, que es justo lo que E3 promete que no pasa. */
+    const antes = [
+      { rol: "CSE", contenido: "alarga diseño" },
+      { rol: "ASISTENTE", contenido: `Listo.\n\n${marcaDeAcuerdo(selladoPara("run-4"))}` },
+    ];
+    falsos.ctx = contexto(null);
+    contesta("Ya no hay propuesta abierta.");
+    const r = await correrTurno(hiloCon(antes), "¿y lo de antes?");
+    expect(r.acuerdo, "no se escribió el acuerdo de cierre").not.toBeNull();
+    expect(r.acuerdo!.operaciones, "lo sellado para la propuesta volvió como acuerdo sobre el cronograma de hoy").toEqual([]);
+    expect(r.acuerdo!.borrador).toBeNull();
+    expect(r.acuerdo!.descartadas).toEqual(["Lo acordado antes (1 cambio) ya no va: la propuesta ya se aplicó o se descartó"]);
+    expect(r.respuesta).toContain("⚠ Lo que habíamos acordado ya no va: la propuesta ya se aplicó o se descartó.");
+    const guardado = loQueSeGuardo();
+    const conCierre = [...antes, { rol: "CSE", contenido: "¿y lo de antes?" }, { rol: "ASISTENTE", contenido: guardado.contenido }];
+    expect(estadosDeAcuerdo(hiloCon(conCierre).turnos)).toEqual([null, "soltado", null, null]);
+  });
+
+  it("⛔ llegó OTRA propuesta y el turno pregunta y propone a la vez: la caída se dice en el texto y el acuerdo viejo queda «ya no va» (#6)", async () => {
+    /* Con un acuerdo nuevo no se escribe el cierre. Antes la caída viajaba solo en la lista del acuerdo nuevo,
+       que en espera no se pintaba, y el viejo quedaba «retomado» («sigue abajo») sin viajar en el nuevo.
+       Las ediciones que la ponen en rojo: dejar de aplicar la caída por el token (lo de «run-3» se revalidaría
+       contra «run-4» y viajaría en el acuerdo), no sumar el aviso al texto cuando hay acuerdo nuevo, o volver a
+       marcar «retomado» un acuerdo sellado para otra propuesta. */
+    const antes = [
+      { rol: "CSE", contenido: "alarga diseño" },
+      { rol: "ASISTENTE", contenido: `Listo.\n\n${marcaDeAcuerdo(selladoPara("run-3"))}` },
+    ];
+    falsos.ctx = contexto(enElTurno());
+    contesta("¿Qué hago con el piloto?", {
+      resumen: "Dejo el 1",
+      operaciones: [{ op: "propuesta.dejar-como-estaba", cambios: ["1"] }],
+      preguntaAbierta: true,
+    });
+    const r = await correrTurno(hiloCon(antes), "deja el 1 y dime qué hago con el piloto");
+    expect(r.acuerdo?.operaciones, "lo de la otra propuesta viajó en el acuerdo nuevo").toEqual([
+      { op: "propuesta.dejar-como-estaba", claves: ["fase:fc:durationWeeks"] },
+    ]);
+    expect(r.acuerdo?.borrador).toBe("run-4");
+    expect(r.acuerdo?.enEspera).toBe(true);
+    expect(r.acuerdo?.arrastradas).toBeUndefined();
+    expect(r.respuesta, "la caída no se dice cuando el turno deja un acuerdo nuevo").toContain(
+      "⚠ Lo que habíamos acordado ya no va: llegó otra propuesta del cronograma.",
+    );
+    // Se dice UNA vez: el texto la lleva, la lista del acuerdo nuevo no la repite.
+    expect(r.acuerdo?.descartadas ?? []).toEqual([]);
+    const alModelo = JSON.stringify(falsos.crear.mock.calls[0][0].messages);
+    expect(alModelo, "lo de la otra propuesta se le contó al modelo como pendiente").not.toContain("P1.");
+    const guardado = loQueSeGuardo();
+    const despues = [...antes, { rol: "CSE", contenido: "deja el 1" }, { rol: "ASISTENTE", contenido: guardado.contenido }];
+    expect(estadosDeAcuerdo(hiloCon(despues).turnos), "el acuerdo viejo quedó «retomado» («sigue abajo»)").toEqual([
+      null,
+      "soltado",
+      null,
+      "en-espera",
+    ]);
+  });
+
+  // ── Revisión de E3 (#28): la propuesta no se pudo leer ──
+  it("⛔ si la propuesta no se pudo leer, lo pendiente queda CONGELADO: ni cae ni se cierra, y el modelo lo sigue viendo", async () => {
+    /* `propuestaSinLeer`: hay una propuesta pero falló su lectura (no se sabe su token). La edición que la pone
+       en rojo: ignorarlo (`const sinLeer = false`): lo sellado para una propuesta que sigue abierta caería con
+       el motivo falso «ya se aplicó o se descartó» y se escribiría el cierre, que no se deshace. */
+    const pendiente: CambioAcordado = {
+      resumen: "Una tarea en el piloto",
+      operaciones: [{ op: "tarea.crear", phaseId: N_PILOTO, titulo: "Demo", semana: 0 }],
+      lineas: ["Se agrega «Demo» a «Piloto», en la semana 1"],
+      borrador: "run-4",
+    };
+    falsos.ctx = { ...contexto(null), propuestaSinLeer: true };
+    contesta("Te lo dejo.", { resumen: "otra", operaciones: [{ op: "fase.duracion", phaseId: "fb", semanas: 4 }] });
+    const r = await correrTurno(
+      hiloCon([
+        { rol: "CSE", contenido: "agrega demo" },
+        { rol: "ASISTENTE", contenido: `Listo.\n\n${marcaDeAcuerdo(pendiente)}` },
+      ]),
+      "y diseño a 4",
+    );
+    expect(r.acuerdo, "se escribió un acuerdo (o el cierre) con la propuesta sin leer").toBeNull();
+    expect(r.respuesta, "lo pendiente cayó con un motivo falso").not.toContain("ya no va");
+    expect(r.respuesta).toContain("⚠ Ahora no registré cambios");
+    const alModelo = JSON.stringify(falsos.crear.mock.calls[0][0].messages);
+    expect(alModelo, "lo pendiente dejó de contársele al modelo con sus líneas guardadas").toContain(
+      "P1. Se agrega «Demo» a «Piloto», en la semana 1",
+    );
   });
 });

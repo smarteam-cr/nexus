@@ -61,7 +61,9 @@ import {
 } from "../../scripts/lib/conversion-de-viejas";
 
 const RAIZ = process.cwd();
-const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
+/* Revisión de E3 (#29): con los saltos normalizados. Con `core.autocrlf=true` un checkout escribe el script
+   en CRLF, y las guardas que buscan "\n" salían rojas sin que el código cambiara. */
+const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8").replace(/\r\n/g, "\n");
 
 const fase = (id: string, name: string, durationWeeks: number) => ({
   id,
