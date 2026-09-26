@@ -11,19 +11,26 @@
  * vacío; lo recordado acá solo sin la del servidor vuelve a mandarla (pudo perderse: una fusión la borra).
  *
  * Revisión de E3 (#12, #17, #26): se decide UNA vez por propuesta, cuando llega y queda lista. Si la persona
- * está en otra cosa (escribiendo, con el puntero sobre el Gantt, con otra capa o una pantalla angosta), no se
+ * está en otra cosa (escribiendo, con otra capa, una pantalla angosta o en medio de un gesto en el Gantt), no se
  * abre DESPUÉS en un momento cualquiera: queda un punto en el 💬. No se abre con «Regenerar» de una sola fase
  * ni sobre una propuesta que el chat no puede editar. Qué hace el cronograma con cada decisión lo dice
  * `accionesDeLaApertura` (pura, con su tabla).
+ *
+ * Revisión de los arreglos: el puntero QUIETO encima ya no pospone. Contaba el `:hover` de `#cronograma-gantt`,
+ * que envuelve la barra, la línea de las tareas y el Gantt (casi toda la pantalla), y el chat casi nunca se
+ * abría solo. Pospone lo que es actividad real: un campo con foco, otra capa, una pantalla angosta, o un gesto
+ * en curso en el Gantt (el botón apretado, o un clic o una tecla ahí en los últimos `VENTANA_DEL_GESTO_MS`). Y
+ * lo pasajero (un gesto, un campo, una capa) se vuelve a decidir UNA vez cuando termina (`seVuelveADecidir`), en
+ * vez de quedar en «nada» para siempre; con la pantalla angosta queda solo el punto.
  */
 
 /**
  * Qué hacer:
  *  · «abrir» el cajón (sin tomar el foco) y recordarlo;
  *  · «solo-marcar» que ya se abrió (lo tenía abierto, o este navegador ya lo había abierto);
- *  · «posponer»: era el momento, pero la persona estaba en otra cosa (una capa encima, una pantalla angosta,
- *    escribiendo, o con el puntero sobre el Gantt). No se abre DESPUÉS en un momento cualquiera: queda un
- *    punto en el 💬 (revisión de E3, #17);
+ *  · «posponer»: era el momento, pero la persona estaba en otra cosa (`motivoParaPosponer`). No se abre DESPUÉS
+ *    en un momento cualquiera: queda un punto en el 💬 (revisión de E3, #17), y si lo que la frenó es pasajero,
+ *    se vuelve a decidir una vez cuando termina (revisión de los arreglos);
  *  · «nada»: todavía no (sin permiso, la propuesta no está lista, o no corresponde). Se vuelve a mirar
  *    cuando cambia lo que lo frena.
  */
@@ -61,10 +68,24 @@ export interface EntradaDeLaApertura {
   anchoSuficiente: boolean;
   /** El foco está en un campo donde se escribe (`esCampoDeEscritura`). */
   escribiendo: boolean;
-  /** El puntero está sobre el Gantt: abrir lo correría 400 px debajo de él. */
+  /**
+   * Hay un gesto en curso en el Gantt (`gestoEnCurso`): el botón del puntero apretado (un arrastre), o un clic o
+   * una tecla ahí en los últimos `VENTANA_DEL_GESTO_MS`. Abrir en medio correría 400 px lo que se está tocando.
+   */
+  gestoEnCurso: boolean;
+  /**
+   * El puntero está QUIETO encima de la barra, la línea de las tareas o el Gantt (`#cronograma-gantt:hover`).
+   * ⛔ NO pospone (revisión de los arreglos): ese contenedor es casi toda la pantalla del cronograma, y quien mira
+   * la barra mientras espera la propuesta es justo a quien se le abre. Se pasa para que la tabla lo pruebe.
+   */
   punteroEnElGantt: boolean;
-  /** En esta pantalla ya se pospuso para esta propuesta: no se abre sola después. */
+  /** En esta pantalla ya se pospuso para esta propuesta: no se abre sola después (salvo `reintento`). */
   pospuesta: boolean;
+  /**
+   * Se pospuso por algo pasajero (un gesto, un campo con foco, otra capa) y eso YA terminó: se vuelve a decidir
+   * UNA vez, como si la propuesta acabara de quedar lista (revisión de los arreglos).
+   */
+  reintento: boolean;
   /** El servidor ya lo abrió para esta persona con esta propuesta. */
   abiertoEnElServidor: boolean;
   /** Este navegador ya lo abrió con esta propuesta. */
@@ -82,13 +103,65 @@ export function debeAbrirseElChat(e: EntradaDeLaApertura): DecisionDeApertura {
   if (e.recordadoLocal) return "solo-marcar";
   /* Revisión de E3 (#17): se decide UNA vez, cuando la propuesta llega y queda lista. Si en ese momento no se
      pudo, no se abre después (se abría con el primer clic en una casilla, corriendo el Gantt bajo el
-     cursor). Si la persona lo abre a mano, se marca. */
-  if (e.pospuesta) return e.chatAbierto ? "solo-marcar" : "nada";
+     cursor). Si la persona lo abre a mano, se marca. Revisión de los arreglos: salvo el reintento, cuando termina
+     lo pasajero que la frenó. */
+  if (e.pospuesta && !e.reintento) return e.chatAbierto ? "solo-marcar" : "nada";
   // Todavía no está lista: se espera (el efecto vuelve a mirar cuando termina).
   if (e.tareasArmando || e.recalculando || e.ocupado) return "nada";
   if (e.chatAbierto) return "solo-marcar";
-  if (e.conOtraCapa || !e.anchoSuficiente || e.escribiendo || e.punteroEnElGantt) return "posponer";
+  if (motivoParaPosponer(e) !== null) return "posponer";
   return "abrir";
+}
+
+/** Por qué se pospone: otra capa encima, una pantalla angosta, un campo con foco o un gesto en curso en el Gantt. */
+export type MotivoDePosposicion = "capa" | "angosta" | "escribiendo" | "gesto";
+
+/**
+ * Qué hay en el medio, o null si nada. ⛔ El puntero quieto encima (`punteroEnElGantt`) NO cuenta (revisión de
+ * los arreglos): solo lo que la persona está haciendo.
+ */
+export function motivoParaPosponer(
+  e: Pick<EntradaDeLaApertura, "conOtraCapa" | "anchoSuficiente" | "escribiendo" | "gestoEnCurso" | "punteroEnElGantt">,
+): MotivoDePosposicion | null {
+  if (e.conOtraCapa) return "capa";
+  if (!e.anchoSuficiente) return "angosta";
+  if (e.escribiendo) return "escribiendo";
+  if (e.gestoEnCurso) return "gesto";
+  return null;
+}
+
+/**
+ * ¿Se vuelve a decidir UNA vez cuando lo que la frenó termina? Lo pasajero sí: el gesto (se suelta el botón y
+ * pasa la ventana sin actividad), el campo (pierde el foco) y la capa (se cierra). La pantalla angosta no: queda
+ * el punto en el 💬 (abrir el cajón al agrandar la ventana correría todo en un momento cualquiera).
+ */
+export function seVuelveADecidir(m: MotivoDePosposicion): boolean {
+  return m !== "angosta";
+}
+
+/** Cuánto dura un gesto en el Gantt después del último clic o tecla (ms). */
+export const VENTANA_DEL_GESTO_MS = 2000;
+
+/** Lo que el cronograma sabe del gesto en el Gantt: si el botón sigue apretado y cuándo fue lo último. */
+export interface GestoEnElGantt {
+  apretado: boolean;
+  /** `Date.now()` del último pointerdown, pointerup o tecla dentro del Gantt; null si nunca hubo. */
+  ultimaActividad: number | null;
+}
+
+/** ¿Hay un gesto en curso? El botón apretado, o actividad hace menos de `VENTANA_DEL_GESTO_MS`. */
+export function gestoEnCurso(g: GestoEnElGantt, ahora: number): boolean {
+  return g.apretado || (g.ultimaActividad !== null && ahora - g.ultimaActividad < VENTANA_DEL_GESTO_MS);
+}
+
+/**
+ * Cuánto falta para que el gesto termine: null mientras el botón siga apretado (lo despierta el soltar), 0 si ya
+ * terminó, y si no los ms que faltan para cumplir la ventana sin actividad.
+ */
+export function faltaParaQueTermineElGesto(g: GestoEnElGantt, ahora: number): number | null {
+  if (g.apretado) return null;
+  if (g.ultimaActividad === null) return 0;
+  return Math.max(0, VENTANA_DEL_GESTO_MS - (ahora - g.ultimaActividad));
 }
 
 /** Lo que el cronograma hace con una decisión (revisión de E3, #26: el cableado, corrido por su tabla). */
@@ -101,7 +174,7 @@ export interface AccionesDeLaApertura {
   recordar: boolean;
   /** Ya se decidió para esta propuesta: el efecto no vuelve a mirar. */
   decidida: boolean;
-  /** Se pospuso: el punto del 💬, y no se abre sola después. */
+  /** Se pospuso: el punto del 💬, y no se abre sola después (salvo el reintento de `seVuelveADecidir`). */
   posponer: boolean;
 }
 

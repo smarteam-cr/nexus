@@ -43,6 +43,8 @@
  * tarea viva que el chat quita o cambia no la vuelve a proponer la IA (R2): si no,
  * habría dos cambios de la misma tarea. Y una fase que se vuelve a armar pierde la forma que le había
  * dado el chat (`ajustadasPorElChat`, D9): sus tareas ya son de la forma nueva.
+ * Revisión de los arreglos: la IA no ve lo que se conserva y vuelve a proponer la misma tarea; la nueva suya que
+ * repite una conservada (misma fase y huella del título) no entra (`sinLasQueRepitenLoDelChat`): se creaban las dos.
  */
 import {
   huellasDeFrontera,
@@ -71,6 +73,7 @@ import {
   type Vivo,
 } from "./borrador";
 import { computeDetailTasksForPhase, type ComputedDetailTask } from "./compute-detail-tasks";
+import { fingerprintFromTitle } from "./particularidad-identity";
 import { isKept } from "./regen-columnas";
 import { elegirFaseDeSemanaCero, tareasFijasDeSemanaCero } from "./semana-cero-tareas";
 import { plural } from "./weeks";
@@ -342,6 +345,52 @@ function sinLasRearmadas(
  */
 const loTocoElChat = (c: Cambio): boolean => esCambioDeTarea(c) && (!!c.porChat || (c.tipo === "tarea-nueva" && !!c.retocada));
 
+/** La tarea que un cambio conservado DEJA en su fase (fase de destino, título y semana resultantes). */
+function tareaQueDeja(c: CambioDeTarea): { fase: string; huella: string; semana: number } | null {
+  if (c.tipo === "tarea-nueva") return { fase: c.fase, huella: fingerprintFromTitle(c.tarea.title), semana: c.tarea.weekIndex };
+  if (c.tipo === "tarea-cambia") {
+    return { fase: faseDeLaTarea(c), huella: fingerprintFromTitle(c.a.title ?? c.desde.title), semana: c.a.weekIndex ?? c.desde.weekIndex };
+  }
+  return null; // una que se va no deja nada en la fase
+}
+
+/**
+ * Revisión de los arreglos: las tareas nuevas del agente, sin las que REPITEN lo que la fusión conserva del chat
+ * (`loTocoElChat`: una tarea nueva de la IA retocada, algo que dictó el chat). El agente arma la fase desde lo
+ * vivo, no ve esas tareas y vuelve a proponer la misma: sin esto quedaban las dos en «aplica», sin «Ya está» ni
+ * ⚠, y «Aplicar todo» creaba las dos. Se reconoce por la MISMA fase y la huella del título
+ * (`fingerprintFromTitle`), y cada conservada se lleva UNA sola del agente (primero la de su misma semana): una
+ * sesión que se repite cada semana no pierde las demás.
+ */
+function sinLasQueRepitenLoDelChat(nuevas: readonly CambioDeTarea[], conservadas: readonly Cambio[]): CambioDeTarea[] {
+  const dejan = conservadas.flatMap((c) => {
+    const t = loTocoElChat(c) ? tareaQueDeja(c as CambioDeTarea) : null;
+    return t && t.huella ? [t] : [];
+  });
+  if (dejan.length === 0) return [...nuevas];
+  const fuera = new Set<number>();
+  const buscar = (t: (typeof dejan)[number], conSemana: boolean) =>
+    nuevas.findIndex(
+      (n, j) =>
+        !fuera.has(j) &&
+        n.tipo === "tarea-nueva" &&
+        n.fase === t.fase &&
+        fingerprintFromTitle(n.tarea.title) === t.huella &&
+        (!conSemana || n.tarea.weekIndex === t.semana),
+    );
+  const sinPareja: typeof dejan = [];
+  for (const t of dejan) {
+    const j = buscar(t, true);
+    if (j >= 0) fuera.add(j);
+    else sinPareja.push(t);
+  }
+  for (const t of sinPareja) {
+    const j = buscar(t, false);
+    if (j >= 0) fuera.add(j);
+  }
+  return nuevas.filter((_, j) => !fuera.has(j));
+}
+
 /** Lo que el borrador guarda de E3 y la fusión no toca (salvo las ajustadas de lo que se rearma). */
 function loDelChat(b: Borrador, rearmadas: Iterable<string>): Pick<Borrador, "excluidos" | "ajustadasPorElChat"> {
   const ajustadas = sinLasRearmadas(b.ajustadasPorElChat, rearmadas);
@@ -370,7 +419,7 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
     version: b.version + 1,
     origen: b.origen,
     observaciones: [...b.observaciones, ...r.observaciones.filter((o) => !b.observaciones.includes(o))],
-    cambios: [...estructura, ...r.tipos, ...delChat, ...r.tareas],
+    cambios: [...estructura, ...r.tipos, ...delChat, ...sinLasQueRepitenLoDelChat(r.tareas, delChat)],
     pedido: b.pedido,
     tareas: { corrida, listas: true },
     tareasArmadasPara: r.tareasArmadasPara,
@@ -384,7 +433,7 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
  * (el grupo conserva su número); sin originales, al final. Lo demás, intacto (E2c, D2). Una tarea de
  * `nuevas` cuya fase no está en `fases` no entra: el alcance lo dice `fases`, no lo que devolvió el
  * modelo. E3: solo se reemplazan las tareas de la IA; lo que dictó o retocó el chat (`loTocoElChat`) se
- * queda.
+ * queda, y la nueva que lo repite no entra (`sinLasQueRepitenLoDelChat`, revisión de los arreglos).
  */
 export function mezclarTareasDeFases(
   cambios: readonly Cambio[],
@@ -392,7 +441,7 @@ export function mezclarTareasDeFases(
   fases: ReadonlySet<string>,
 ): Cambio[] {
   const nuevasPorFase = new Map<string, CambioDeTarea[]>();
-  for (const n of nuevas) {
+  for (const n of sinLasQueRepitenLoDelChat(nuevas, cambios)) {
     const fase = faseDeLaTarea(n);
     if (!fases.has(fase)) continue;
     nuevasPorFase.set(fase, [...(nuevasPorFase.get(fase) ?? []), n]);

@@ -14,7 +14,7 @@
  *
  * Correr: `npm test` (Vitest, proyecto unit).
  */
-import { test, expect } from "vitest";
+import { test, expect, vi } from "vitest";
 import {
   computeProjectSummary,
   type SummaryLifecycleCs,
@@ -23,7 +23,36 @@ import {
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import fs from "node:fs";
 import path from "node:path";
-import { summaryDesdeArbol, type ArbolDeSummary } from "./load";
+
+/* La base falsa de «el porqué de la cartera» (abajo): corre el `where` de la consulta sobre unas filas, con lo que
+   la consulta usa (`in`, `not`, igualdad), y el orden + distinct de Prisma. El resto del archivo no toca la base. */
+type FilaDeCambio = { timelineId: string; reason: string; kind: string; changedByEmail: string | null; createdAt: Date };
+const baseDeCambios = vi.hoisted(() => ({ filas: [] as FilaDeCambio[] }));
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    timelineChange: {
+      findMany: async (args: { where: Record<string, unknown> }) => {
+        const cumple = (valor: unknown, filtro: unknown): boolean => {
+          if (filtro && typeof filtro === "object") {
+            const f = filtro as { in?: unknown[]; not?: unknown };
+            if (f.in && !f.in.includes(valor)) return false;
+            if ("not" in f && valor === f.not) return false;
+            return true;
+          }
+          return valor === filtro;
+        };
+        const quedan = baseDeCambios.filas
+          .filter((fila) => Object.entries(args.where).every(([campo, filtro]) => cumple(fila[campo as keyof FilaDeCambio], filtro)))
+          .sort((a, b) => a.timelineId.localeCompare(b.timelineId) || b.createdAt.getTime() - a.createdAt.getTime());
+        const vistos = new Set<string>();
+        return quedan.filter((fila) => (vistos.has(fila.timelineId) ? false : (vistos.add(fila.timelineId), true)));
+      },
+    },
+  },
+}));
+
+import { summaryDesdeArbol, ultimasRazonesHumanas, type ArbolDeSummary } from "./load";
+import { RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
 
 const NOW = new Date("2026-06-21T00:00:00Z");
 const d = (s: string) => new Date(s);
@@ -431,4 +460,23 @@ test("C-17 — el GET del cronograma arma el summary con el árbol que ya leyó,
   const load = sinComentarios(leer("lib/portfolio/load.ts"));
   expect(load.split("computeProjectSummary(").length - 1, "el mapeo árbol → summary tiene UN solo dueño").toBe(1);
   expect(load.split("summaryDesdeArbol(").length - 1, "cartera, un proyecto y el GET pasan por el mismo mapeo").toBeGreaterThanOrEqual(3);
+});
+
+test("⛔ revisión de los arreglos · la copia de una propuesta ilegible descartada no tapa el porqué del atraso", async () => {
+  /* El DELETE de una propuesta que Nexus no sabe leer guarda su copia como MANUAL con `RAZON_DESCARTE_ILEGIBLE`, y
+     la tarjeta roja de la cartera muestra la última MANUAL/AI_ASSIST: decía «💬 «Se descartó una propuesta… queda
+     en este registro.»» en vez de la razón del CSE. La edición que la pone en rojo: que la consulta vuelva a
+     traerla (sacar el `reason: { not: … }`). La misma consulta corre contra Postgres en
+     lib/timeline/propuestas-abiertas.int.test.ts. */
+  baseDeCambios.filas = [
+    { timelineId: "tl-inve", reason: "El cliente pidió posponer la migración", kind: "MANUAL", changedByEmail: "cse@smarteam.cr", createdAt: new Date("2026-09-20T10:00:00Z") },
+    { timelineId: "tl-inve", reason: RAZON_DESCARTE_ILEGIBLE, kind: "MANUAL", changedByEmail: "cse@smarteam.cr", createdAt: new Date("2026-09-25T10:00:00Z") },
+    { timelineId: "tl-inve", reason: "avance", kind: "PROGRESS", changedByEmail: null, createdAt: new Date("2026-09-25T11:00:00Z") },
+    { timelineId: "tl-otro", reason: "Se sumó una fase de pruebas", kind: "AI_ASSIST", changedByEmail: null, createdAt: new Date("2026-09-24T10:00:00Z") },
+  ];
+  const razones = await ultimasRazonesHumanas(["tl-inve", "tl-otro"]);
+  expect(razones.map((r) => [r.timelineId, r.reason]), "la tarjeta mostraría la copia del descarte").toEqual([
+    ["tl-inve", "El cliente pidió posponer la migración"],
+    ["tl-otro", "Se sumó una fase de pruebas"],
+  ]);
 });

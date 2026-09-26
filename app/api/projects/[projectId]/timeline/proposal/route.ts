@@ -25,12 +25,9 @@ import { guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { leerEstadoDeLasTareas } from "@/lib/timeline/borrador-del-detalle";
-import { esBorradorV1 } from "@/lib/timeline/borrador";
-
-/** La razón del registro que guarda la copia de lo descartado sin poder leerlo (sin `export`: una ruta de Next
- *  solo exporta sus métodos). */
-const RAZON_DESCARTE_ILEGIBLE =
-  "Se descartó una propuesta guardada que esta versión no sabe leer. Su contenido queda en este registro.";
+/* La razón del registro que guarda la copia de lo descartado sin poder leerlo vive en lib (una ruta de Next solo
+   exporta sus métodos): la cartera la excluye del porqué de un atraso (revisión de los arreglos). */
+import { esBorradorV1, RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
 
 export async function DELETE(
   req: NextRequest,

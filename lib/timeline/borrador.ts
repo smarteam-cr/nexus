@@ -715,6 +715,15 @@ export function esBorradorV1(json: unknown): json is Record<string, unknown> {
   return esObjeto(json) && json.formato === FORMATO_BORRADOR;
 }
 
+/**
+ * Revisión de E4 (#1): la razón del `TimelineChange` (MANUAL) que guarda la copia de una propuesta descartada sin
+ * poder leerla (DELETE /timeline/proposal). Vive acá y no en la ruta (una ruta de Next solo exporta sus métodos)
+ * porque la cartera la EXCLUYE de la última razón de cada cronograma (lib/portfolio/load.ts, revisión de los
+ * arreglos): no es el porqué de un atraso, y tapaba la razón que el CSE escribió al guardar.
+ */
+export const RAZON_DESCARTE_ILEGIBLE =
+  "Se descartó una propuesta guardada que esta versión no sabe leer. Su contenido queda en este registro.";
+
 /** La versión de un `borrador-v1` guardado, o null si lo guardado no es un v1 (no hay propuesta que
  *  se sepa leer: aplicar responde 409 y la pantalla trae lo nuevo). */
 export function versionDelBorrador(json: unknown): number | null {

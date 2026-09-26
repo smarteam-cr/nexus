@@ -188,6 +188,28 @@ describe("scripts/propuestas-abiertas — la vuelta atrás a E2c (`--desde-e3`)"
     expect(esV1SoloDeFases({ ...DEL_HANDOFF, cambios: [{ ...DEL_HANDOFF.cambios[0], porChat: true }] })).toBe(false);
   });
 
+  it("⛔ revisión de los arreglos · también la tarea de la IA que el chat retocó o mudó de fase (sin `porChat`)", () => {
+    /* Desde la revisión de E3 (#1), mover por chat una tarea nueva de la IA la deja `retocada` +
+       `mudadaPorElChat`, sin `porChat`. E2c no conoce esas marcas: la escribiría como de la IA y metería la mudada
+       al cierre de su fase nueva (⚠ «choque» si esa fase no tiene forma armada). La edición que la pone en rojo:
+       mirar solo `porChat` (una propuesta cuya única huella de E3 es la mudanza no se limpiaría). */
+    const deLaIa = {
+      tipo: "tarea-nueva",
+      clave: "t:ia-1",
+      fase: "c",
+      tarea: { title: "Taller de requerimientos", weekIndex: 1, notes: null, party: null, type: null, needsValidation: false, motivoPorValidar: null, fuga: null },
+    };
+    const con = (marcas: Record<string, unknown>) => ({
+      ...DEL_HANDOFF,
+      tareas: { corrida: "run-1", listas: true },
+      cambios: [...DEL_HANDOFF.cambios, { ...deLaIa, ...marcas }],
+    });
+    expect(traeAlgoDeE3(con({})), "una tarea de la IA sin tocar no es de E3").toBe(false);
+    expect(traeAlgoDeE3(con({ retocada: true, mudadaPorElChat: true })), "la mudada por el chat").toBe(true);
+    expect(traeAlgoDeE3(con({ mudadaPorElChat: true })), "solo la marca de la mudanza").toBe(true);
+    expect(traeAlgoDeE3(con({ retocada: true })), "la retocada por el chat").toBe(true);
+  });
+
   it("⛔ con `--apply` limpia SOLO esos, respaldando antes y con la escritura condicionada de siempre", () => {
     /* La edición que la pone en rojo: recorrer todos los v1, escribir sin el guard (`resolverApply` con
        la tabla) o soltar el token o el formato del `where`.

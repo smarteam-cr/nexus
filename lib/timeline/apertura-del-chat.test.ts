@@ -13,12 +13,18 @@ import {
   claveDeLaApertura,
   debeAbrirseElChat,
   esCampoDeEscritura,
+  faltaParaQueTermineElGesto,
+  gestoEnCurso,
   leerApertura,
+  motivoParaPosponer,
   recordarApertura,
   referenciaDelChat,
+  seVuelveADecidir,
+  VENTANA_DEL_GESTO_MS,
   type AlmacenDeLaApertura,
   type DecisionDeApertura,
   type EntradaDeLaApertura,
+  type MotivoDePosposicion,
 } from "./apertura-del-chat";
 
 const BASE: EntradaDeLaApertura = {
@@ -37,8 +43,10 @@ const BASE: EntradaDeLaApertura = {
   chatAbierto: false,
   anchoSuficiente: true,
   escribiendo: false,
+  gestoEnCurso: false,
   punteroEnElGantt: false,
   pospuesta: false,
+  reintento: false,
   abiertoEnElServidor: false,
   recordadoLocal: false,
 };
@@ -96,9 +104,11 @@ describe("⭐ cuándo se abre solo", () => {
 
   it("⛔ revisión de E3 (#17) · si la persona está en otra cosa al llegar la propuesta, se pospone: no se abre después", () => {
     /* Se decide UNA vez, cuando la propuesta queda lista. La edición que la pone en rojo: abrirlo con otra capa,
-       en una pantalla angosta, mientras se escribe en un campo o con el puntero sobre el Gantt (el cajón lo corre
-       400 px debajo del cursor); o esperar («nada») y abrirlo después con cualquier cambio. */
-    for (const c of [{ conOtraCapa: true }, { anchoSuficiente: false }, { escribiendo: true }, { punteroEnElGantt: true }]) {
+       en una pantalla angosta, mientras se escribe en un campo o en medio de un gesto en el Gantt (el cajón corre
+       400 px lo que se está tocando); o esperar («nada») y abrirlo después con cualquier cambio.
+       ⚠ ACTUALIZADA en la revisión de los arreglos, con esta razón: el puntero QUIETO sobre el Gantt ya no pospone
+       (su fila, abajo); lo que pospone es el gesto en curso (`gestoEnCurso`). */
+    for (const c of [{ conOtraCapa: true }, { anchoSuficiente: false }, { escribiendo: true }, { gestoEnCurso: true }]) {
       expect(con(c), JSON.stringify(c)).toBe("posponer");
     }
     // Pospuesta en esta pantalla: aunque ya no haya nada en el medio, no se abre sola (antes: el primer clic
@@ -107,6 +117,68 @@ describe("⭐ cuándo se abre solo", () => {
     expect(con({ pospuesta: true, chatAbierto: true })).toBe("solo-marcar");
     // Lo que manda el servidor o el navegador gana igual.
     expect(con({ pospuesta: true, abiertoEnElServidor: true })).toBe("nada");
+  });
+
+  it("⭐ revisión de los arreglos · con el puntero QUIETO sobre la barra o el Gantt, sin gesto, se abre", () => {
+    /* `#cronograma-gantt` envuelve la barra de la propuesta, la línea de las tareas y el Gantt: casi toda la
+       pantalla. Quien mira la barra mientras espera «Regenerar todo» (o entra por «Revisar» del cartel, que salta
+       a ese id) es justo a quien se le abre. La edición que la pone en rojo: volver a contar el hover como «estar
+       en otra cosa» (el chat casi nunca se abría solo y quedaba solo el punto). */
+    expect(con({ punteroEnElGantt: true }), "puntero quieto sobre la barra o el Gantt, sin gesto").toBe("abrir");
+    expect(motivoParaPosponer({ ...BASE, punteroEnElGantt: true }), "el hover volvió a ser un motivo").toBeNull();
+    // Con un gesto de verdad (el botón apretado, un clic o una tecla recién), sí se pospone.
+    expect(con({ punteroEnElGantt: true, gestoEnCurso: true })).toBe("posponer");
+  });
+
+  it("⭐ revisión de los arreglos · se pospuso por algo pasajero que ya terminó: se vuelve a decidir UNA vez", () => {
+    /* Antes, «posponer» valía para siempre en esa pantalla: la regla respondía «nada» mientras el chat no se
+       abriera a mano. La edición que la pone en rojo: ignorar el reintento (queda «nada» para siempre) o dejar que
+       cualquier cosa lo abra después (sin reintento, sigue «nada»). */
+    expect(con({ pospuesta: true, reintento: true }), "se pospuso por un gesto que terminó").toBe("abrir");
+    expect(con({ pospuesta: true, reintento: false }), "sin reintento se abrió en un momento cualquiera").toBe("nada");
+    // El reintento DECIDE de nuevo: si ahora hay otra cosa en el medio, se vuelve a posponer; si ya está abierto, se marca.
+    expect(con({ pospuesta: true, reintento: true, escribiendo: true })).toBe("posponer");
+    expect(con({ pospuesta: true, reintento: true, chatAbierto: true })).toBe("solo-marcar");
+    // Y no pasa por encima de lo que manda el servidor ni de una propuesta que todavía no está lista.
+    expect(con({ pospuesta: true, reintento: true, abiertoEnElServidor: true })).toBe("nada");
+    expect(con({ pospuesta: true, reintento: true, recalculando: true })).toBe("nada");
+  });
+
+  it("⭐ revisión de los arreglos · qué pospone, y qué se vuelve a decidir cuando termina", () => {
+    /* La edición que la pone en rojo: reintentar con la pantalla angosta (el cajón se abriría al agrandar la
+       ventana, en un momento cualquiera) o no reintentar lo pasajero (quedaría solo el punto para siempre). */
+    const tabla: Array<[Partial<EntradaDeLaApertura>, MotivoDePosposicion | null]> = [
+      [{}, null],
+      [{ punteroEnElGantt: true }, null],
+      [{ conOtraCapa: true }, "capa"],
+      [{ anchoSuficiente: false }, "angosta"],
+      [{ escribiendo: true }, "escribiendo"],
+      [{ gestoEnCurso: true }, "gesto"],
+    ];
+    for (const [c, motivo] of tabla) expect(motivoParaPosponer({ ...BASE, ...c }), JSON.stringify(c)).toBe(motivo);
+    const reintenta: Record<MotivoDePosposicion, boolean> = { gesto: true, escribiendo: true, capa: true, angosta: false };
+    for (const [m, esperado] of Object.entries(reintenta)) {
+      expect(seVuelveADecidir(m as MotivoDePosposicion), m).toBe(esperado);
+    }
+  });
+
+  it("⭐ revisión de los arreglos · el gesto en el Gantt: el botón apretado o actividad en los últimos 2 s", () => {
+    /* La edición que la pone en rojo: tratar el gesto como terminado con el botón todavía apretado (un arrastre
+       largo), o no esperar la ventana después de un clic o una tecla. */
+    const T = 1_000_000;
+    expect(VENTANA_DEL_GESTO_MS).toBe(2000);
+    expect(gestoEnCurso({ apretado: false, ultimaActividad: null }, T), "sin actividad nunca").toBe(false);
+    expect(gestoEnCurso({ apretado: true, ultimaActividad: T - 60_000 }, T), "un arrastre largo sigue en curso").toBe(true);
+    expect(gestoEnCurso({ apretado: false, ultimaActividad: T - 1999 }, T)).toBe(true);
+    expect(gestoEnCurso({ apretado: false, ultimaActividad: T - 2000 }, T)).toBe(false);
+    expect(faltaParaQueTermineElGesto({ apretado: true, ultimaActividad: T }, T), "apretado: lo despierta el soltar").toBeNull();
+    expect(faltaParaQueTermineElGesto({ apretado: false, ultimaActividad: null }, T)).toBe(0);
+    expect(faltaParaQueTermineElGesto({ apretado: false, ultimaActividad: T - 500 }, T)).toBe(1500);
+    expect(faltaParaQueTermineElGesto({ apretado: false, ultimaActividad: T - 5000 }, T)).toBe(0);
+    // Cuando falta 0, ya no hay gesto: el reintento decide sin posponer por lo mismo.
+    const g = { apretado: false, ultimaActividad: T - 2000 };
+    expect(faltaParaQueTermineElGesto(g, T)).toBe(0);
+    expect(gestoEnCurso(g, T)).toBe(false);
   });
 
   it("⛔ revisión de E3 (#17, #12) · ni con «Regenerar» de una sola fase ni sobre una propuesta que el chat no puede editar", () => {

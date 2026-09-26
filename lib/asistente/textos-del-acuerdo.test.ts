@@ -138,6 +138,21 @@ describe("⭐ el texto del desenlace (textoDelDesenlace)", () => {
     expect(NOTA_AVANCE_REEVALUANDOSE).not.toMatch(/\b(pod[eé]s|ten[eé]s|quer[eé]s|fijate|mirá|confirmá|revisá)\b/i);
   });
 
+  it("⛔ revisión de los arreglos · la nota del avance no promete algo que confirmar: la re-evaluación puede no dejar nada", () => {
+    /* La nota se escribe antes de saber cómo termina la re-evaluación (no se la espera). Con tareas recién
+       detalladas lo común es `skipped` (`no_progress_detected`: nada hecho), o que falle: no aparece ningún aviso
+       abajo del Gantt. ⚠ ACTUALIZADA, con esta razón: decía «cuando termine, confírmalo abajo del Gantt»; el CSE
+       buscaba algo que no existía y el modelo, al releer el hilo, se lo volvía a pedir. La edición que la pone en
+       rojo: volver a prometerlo sin condición. */
+    expect(NOTA_AVANCE_REEVALUANDOSE).toBe(
+      "Además vuelvo a evaluar el avance con el cronograma nuevo; si encuentro algo hecho, aparece abajo del Gantt para que lo confirmes.",
+    );
+    expect(NOTA_AVANCE_REEVALUANDOSE, "promete un resultado que la re-evaluación puede no dejar").not.toMatch(/cuando termine|confírmalo/i);
+    // El caso skipped: el hilo, tal como queda, condiciona lo que aparece a que haya algo hecho.
+    const t = textoDelDesenlace({ ...base, destino: "cronograma", notas: [NOTA_AVANCE_REEVALUANDOSE] });
+    expect(t).toMatch(/si encuentro algo hecho, aparece abajo del Gantt/);
+  });
+
   it("⛔ un fallo que pide pedirlo de nuevo no dice «puedes aplicarlos de nuevo» (el botón ya no sirve)", () => {
     /* La edición que la pone en rojo: sumar siempre «Los cambios siguen pendientes: puedes aplicarlos de nuevo»
        (el hilo se contradice y el modelo lo relee). */

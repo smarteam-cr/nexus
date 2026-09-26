@@ -659,4 +659,59 @@ describe("7 · E3: lo que dictó el chat sobrevive a las fusiones de la IA", () 
     expect(claves.slice(0, 4), "el paso 2 se llevó la retocada").toEqual(["fase:c:durationWeeks", PILOTO.clave, "t:ia-retocada", "t:del-chat"]);
     expect(claves, "sobrevivió una tarea de la IA de antes").not.toContain("t:ia-vieja");
   });
+
+  it("⛔ revisión de los arreglos · la IA vuelve a proponer lo que el chat retocó o dictó: no entran las dos", () => {
+    /* La IA propuso «Taller de requerimientos» (S1) en «Pruebas» y el chat la retocó (quedó `retocada`). Al
+       recalcular la fase, el agente no la ve (arma desde lo vivo) y vuelve a proponer la misma. Antes quedaban
+       las dos en «aplica», sin «Ya está» ni ⚠, y «Aplicar todo» creaba las dos. La edición que la pone en rojo:
+       mezclar (o fusionar el paso 2) sin sacar la nueva del agente que repite una conservada de la misma fase. */
+    const TALLER: CambioTareaNueva = {
+      ...DE_LA_IA_ANTES,
+      clave: "t:ia-taller",
+      tarea: { ...DE_LA_IA_ANTES.tarea, title: "Taller de requerimientos", weekIndex: 1, party: "CLIENTE" },
+      retocada: true,
+    };
+    const conTaller: Borrador = { ...CON_CHAT, cambios: [...BASE.cambios, TALLER, DEL_CHAT_CAMBIA, DEL_CHAT_NUEVA] };
+    const delAgente = (clave: string, title: string, weekIndex: number, fase = "c"): CambioTareaNueva => ({
+      ...DE_LA_IA_ANTES,
+      clave,
+      fase,
+      tarea: { ...DE_LA_IA_ANTES.tarea, title, weekIndex },
+    });
+    const recalculadas = [
+      delAgente("t:ia-taller-otra-vez", "Taller de requerimientos.", 1), // la misma, con un punto de más
+      delAgente("t:ia-revision", "Revisión conjunta", 1), // la que dictó el chat
+      delAgente("t:ia-flujos", "Probar los flujos de venta", 2), // la viva que el chat renombró
+      delAgente("t:ia-guiadas", "Pruebas guiadas", 2),
+      delAgente("t:ia-en-otra-fase", "Taller de requerimientos", 1, "b"), // otra fase: no es la misma
+    ];
+    const mezcla = mezclarTareasDeFases(conTaller.cambios, recalculadas, new Set(["b", "c"]));
+    const claves = mezcla.map((c) => c.clave);
+    expect(claves, "el recálculo metió otra vez la tarea que el chat retocó").not.toContain("t:ia-taller-otra-vez");
+    expect(claves, "el recálculo metió otra vez la tarea que dictó el chat").not.toContain("t:ia-revision");
+    expect(claves, "el recálculo metió otra vez la tarea viva que el chat renombró").not.toContain("t:ia-flujos");
+    expect(claves).toEqual(expect.arrayContaining(["t:ia-taller", "t:ia-guiadas", "t:ia-en-otra-fase", "tarea:c1:cambia", "t:del-chat"]));
+    expect(mezcla.find((c) => c.clave === TALLER.clave), "la retocada es la que queda, con su retoque").toEqual(TALLER);
+
+    // Una sesión que se repite cada semana: la retocada se lleva UNA sola (la de su semana), no todas.
+    const SEGUIMIENTO: CambioTareaNueva = {
+      ...TALLER,
+      clave: "t:ia-seguimiento-s2",
+      tarea: { ...TALLER.tarea, title: "Sesión de seguimiento", weekIndex: 2 },
+    };
+    const semanales = [1, 2, 3].map((s) => delAgente(`t:seg-s${s}`, "Sesión de seguimiento", s));
+    const conSemanales = mezclarTareasDeFases([...BASE.cambios, SEGUIMIENTO], semanales, new Set(["c"])).map((c) => c.clave);
+    expect(conSemanales.filter((k) => k.startsWith("t:seg-")), "se perdieron las otras semanas de la sesión").toEqual(["t:seg-s1", "t:seg-s3"]);
+
+    // El paso 2 (fusionarDetalle) hace lo mismo.
+    const r = cambios(
+      salida([{ id: "c", tasks: [{ title: "Taller de requerimientos", weekIndex: 1 }, { title: "Pruebas de aceptación", weekIndex: 3 }] }]),
+      { borrador: conTaller },
+    );
+    const b = fusionarDetalle(conTaller, r, "run-2");
+    const titulos = b.cambios.flatMap((c) => (c.tipo === "tarea-nueva" && c.fase === "c" ? [c.tarea.title] : []));
+    expect(titulos.filter((t) => t === "Taller de requerimientos"), "el paso 2 dejó dos «Taller de requerimientos»").toHaveLength(1);
+    expect(titulos).toContain("Pruebas de aceptación");
+    expect(b.cambios.find((c) => c.clave === TALLER.clave)).toEqual(TALLER);
+  });
 });

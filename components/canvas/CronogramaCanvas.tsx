@@ -46,9 +46,16 @@ import {
   accionesDeLaApertura,
   debeAbrirseElChat,
   esCampoDeEscritura,
+  faltaParaQueTermineElGesto,
+  gestoEnCurso,
   leerApertura,
+  motivoParaPosponer,
   recordarApertura,
   referenciaDelChat,
+  seVuelveADecidir,
+  type EntradaDeLaApertura,
+  type GestoEnElGantt,
+  type MotivoDePosposicion,
 } from "@/lib/timeline/apertura-del-chat";
 import {
   ACUERDO_DE_OTRA_VERSION,
@@ -492,8 +499,8 @@ export default function CronogramaCanvas({
   const [chatAbierto, setChatAbierto] = useState(false);
   /* E3 P5: el chat se abrió SOLO (llegó una propuesta): no toma el foco. El botón 💬 lo apaga. */
   const [aperturaAutomatica, setAperturaAutomatica] = useState(false);
-  /* Revisión de E3 (#17): la propuesta llegó mientras la persona estaba en otra cosa (escribiendo, con el
-     puntero sobre el Gantt…): el chat no se abrió, y el 💬 lleva un punto hasta que lo abra. El token de ESA
+  /* Revisión de E3 (#17): la propuesta llegó mientras la persona estaba en otra cosa (escribiendo, en medio de
+     un gesto en el Gantt…): el chat no se abrió, y el 💬 lleva un punto hasta que lo abra. El token de ESA
      propuesta: con otra, el punto se apaga solo. */
   const [puntoDelChat, setPuntoDelChat] = useState<string | null>(null);
   /* E4 P1: el «IA» de una fase abre el chat con esa fase señalada (el proveedor del chip de abajo, en el
@@ -2612,18 +2619,49 @@ export default function CronogramaCanvas({
      en pantallas anchas y nunca encima de otra capa. Lo decide `debeAbrirseElChat` (puro).
      Revisión de E3 (#12, #17, #26): se decide UNA vez, cuando la propuesta llega y queda lista (lo que la
      frena mientras tanto son sus tareas o el cronograma ocupado). Si la persona está en otra cosa —escribiendo,
-     con el puntero sobre el Gantt, con otra capa o en una pantalla angosta— se POSPONE: un punto en el 💬, y
-     no se abre sola después (antes la abría el primer clic en una casilla, corriendo el Gantt bajo el
-     cursor). Ni con «Regenerar» de una fase ni sobre una propuesta que el chat no puede editar. Qué hace el
-     cronograma con cada decisión lo dice `accionesDeLaApertura` (pura, con su tabla). */
+     con otra capa, en una pantalla angosta o en medio de un gesto en el Gantt— se POSPONE: un punto en el 💬, y
+     no se abre sola en un momento cualquiera (antes la abría el primer clic en una casilla, corriendo el Gantt
+     bajo el cursor). Ni con «Regenerar» de una fase ni sobre una propuesta que el chat no puede editar. Qué hace
+     el cronograma con cada decisión lo dice `accionesDeLaApertura` (pura, con su tabla).
+     Revisión de los arreglos: el puntero QUIETO encima de `#cronograma-gantt` (la barra, la línea de las tareas y
+     el Gantt: casi toda la pantalla) ya no pospone; sí un gesto en curso ahí (`gestoEnCurso`: el botón apretado,
+     o un clic o una tecla en los últimos 2 s). Y lo pasajero que pospuso (el gesto, un campo con foco, una capa)
+     se espera: cuando termina, se vuelve a decidir UNA vez (`reintento`, los efectos de abajo). */
   const tokenParaLaApertura = hayBorrador ? proposalMeta.current.runId : null;
   const aperturaVistaRef = useRef<string | null>(null);
-  const aperturaPospuestaRef = useRef<string | null>(null);
+  /* Por qué se pospuso, y para qué propuesta; y el reintento (el token) cuando eso terminó. Estado y no refs: el
+     reintento vuelve a correr la decisión, y lo pospuesto arma la espera de lo que la frenó. */
+  const [pospuestaDeLaApertura, setPospuestaDeLaApertura] = useState<{ token: string; motivo: MotivoDePosposicion } | null>(null);
+  const [reintentoDeLaApertura, setReintentoDeLaApertura] = useState<string | null>(null);
+  /* El gesto en el Gantt: el botón apretado y lo último que se hizo ahí. Refs: cambia con cada clic y no pinta
+     nada. Lo registran el `pointerdown` y las teclas del contenedor del Gantt, y el `pointerup` del documento (el
+     botón se puede soltar afuera). `alCambiarElGestoRef`: la espera del reintento, si hay una. */
+  const gestoDelGanttRef = useRef<GestoEnElGantt>({ apretado: false, ultimaActividad: null });
+  const alCambiarElGestoRef = useRef<(() => void) | null>(null);
+  const registrarGestoEnElGantt = useCallback((tipo: "apretar" | "soltar" | "tecla") => {
+    const g = gestoDelGanttRef.current;
+    if (tipo === "apretar") g.apretado = true;
+    else if (tipo === "soltar") g.apretado = false;
+    g.ultimaActividad = Date.now();
+    alCambiarElGestoRef.current?.();
+  }, []);
+  useEffect(() => {
+    const soltar = () => {
+      if (gestoDelGanttRef.current.apretado) registrarGestoEnElGantt("soltar");
+    };
+    document.addEventListener("pointerup", soltar, true);
+    document.addEventListener("pointercancel", soltar, true);
+    return () => {
+      document.removeEventListener("pointerup", soltar, true);
+      document.removeEventListener("pointercancel", soltar, true);
+    };
+  }, [registrarGestoEnElGantt]);
   const recalculandoEnPantalla = tareasEnPantalla?.recalculo?.estado === "armando";
   const soloFaseEnPantalla = !!revision.borrador?.soloFase;
   useEffect(() => {
     if (!tokenParaLaApertura || aperturaVistaRef.current === tokenParaLaApertura) return;
-    const decision = debeAbrirseElChat({
+    const reintento = reintentoDeLaApertura === tokenParaLaApertura;
+    const entrada: EntradaDeLaApertura = {
       puedeEditar: canEdit && phases.length > 0,
       puedeConversar: me?.permissions?.sections?.asistente?.read === true,
       hayBorrador,
@@ -2639,18 +2677,26 @@ export default function CronogramaCanvas({
       chatAbierto,
       anchoSuficiente: window.matchMedia("(min-width: 1280px)").matches,
       escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),
+      gestoEnCurso: gestoEnCurso(gestoDelGanttRef.current, Date.now()),
+      // Se pasa y la regla NO lo cuenta (su fila en apertura-del-chat.test.ts): el puntero quieto no pospone.
       punteroEnElGantt: !!document.querySelector("#cronograma-gantt:hover"),
-      pospuesta: aperturaPospuestaRef.current === tokenParaLaApertura,
+      pospuesta: pospuestaDeLaApertura?.token === tokenParaLaApertura,
+      reintento,
       abiertoEnElServidor: abiertoPara(proposal, me?.email),
       recordadoLocal: leerApertura(projectId, tokenParaLaApertura),
-    });
+    };
+    const decision = debeAbrirseElChat(entrada);
     const acciones = accionesDeLaApertura(decision);
-    if (acciones.posponer) {
-      aperturaPospuestaRef.current = tokenParaLaApertura;
+    // El reintento se gasta al decidir (abrir, marcar o volver a posponer); con «nada» se guarda (no estaba lista).
+    if (reintento && (acciones.decidida || acciones.posponer)) setReintentoDeLaApertura(null);
+    const motivo = motivoParaPosponer(entrada);
+    if (acciones.posponer && motivo) {
+      setPospuestaDeLaApertura({ token: tokenParaLaApertura, motivo });
       setPuntoDelChat(tokenParaLaApertura);
     }
     if (!acciones.decidida) return;
     aperturaVistaRef.current = tokenParaLaApertura;
+    setPospuestaDeLaApertura(null);
     if (acciones.abrir) {
       setChatAbierto(true);
       setAperturaAutomatica(acciones.automatica);
@@ -2669,7 +2715,59 @@ export default function CronogramaCanvas({
       }),
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenParaLaApertura, canEdit, phases.length, me, revision.resumen, revision.nadaQueDecidir, conDesconocidos, soloFaseEnPantalla, tareasArmandoEnPantalla, recalculandoEnPantalla, ocupado.activo, armando, selectedTask, chatAbierto]);
+  }, [tokenParaLaApertura, canEdit, phases.length, me, revision.resumen, revision.nadaQueDecidir, conDesconocidos, soloFaseEnPantalla, tareasArmandoEnPantalla, recalculandoEnPantalla, ocupado.activo, armando, selectedTask, chatAbierto, pospuestaDeLaApertura, reintentoDeLaApertura]);
+
+  /* Revisión de los arreglos: la espera de lo que pospuso la apertura. Cuando termina, el reintento vuelve a correr
+     la decisión UNA vez (si otra cosa la frena, se pospone de nuevo por eso y se espera eso). La pantalla angosta
+     no se espera (`seVuelveADecidir`): queda el punto en el 💬.
+     · El gesto: se suelta el botón y pasa `VENTANA_DEL_GESTO_MS` sin clics ni teclas en el Gantt.
+     · El campo: pierde el foco (`focusout`). */
+  useEffect(() => {
+    const p = pospuestaDeLaApertura;
+    if (!p || !seVuelveADecidir(p.motivo) || p.motivo === "capa") return;
+    let hecho = false;
+    const reintentar = () => {
+      if (hecho) return;
+      hecho = true;
+      setReintentoDeLaApertura(p.token);
+    };
+    if (p.motivo === "escribiendo") {
+      document.addEventListener("focusout", reintentar);
+      return () => document.removeEventListener("focusout", reintentar);
+    }
+    let espera: ReturnType<typeof setTimeout> | undefined;
+    const esperar = () => {
+      clearTimeout(espera);
+      const falta = faltaParaQueTermineElGesto(gestoDelGanttRef.current, Date.now());
+      if (falta === null) return; // el botón sigue apretado: lo despierta el soltar
+      if (falta === 0) reintentar();
+      else espera = setTimeout(esperar, falta);
+    };
+    alCambiarElGestoRef.current = esperar;
+    esperar();
+    return () => {
+      clearTimeout(espera);
+      if (alCambiarElGestoRef.current === esperar) alCambiarElGestoRef.current = null;
+    };
+  }, [pospuestaDeLaApertura]);
+
+  /* · La capa: se cierra el detalle de la tarea y no queda ningún diálogo (`aria-modal`) abierto. */
+  useEffect(() => {
+    const p = pospuestaDeLaApertura;
+    if (!p || p.motivo !== "capa") return;
+    const libre = () => !selectedTask && !document.querySelector('[aria-modal="true"]');
+    if (libre()) {
+      setReintentoDeLaApertura(p.token);
+      return;
+    }
+    const observador = new MutationObserver(() => {
+      if (!libre()) return;
+      observador.disconnect();
+      setReintentoDeLaApertura(p.token);
+    });
+    observador.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-modal"] });
+    return () => observador.disconnect();
+  }, [pospuestaDeLaApertura, selectedTask]);
 
   // ── D/E — banner de avance: meta de tareas (título + fase) y regla de cierre de fase ──
   const progressTaskMeta = new Map<string, { title: string; phaseId: string; phaseName: string; party: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null }>();
@@ -3958,7 +4056,9 @@ export default function CronogramaCanvas({
       ) : (
         // `space-y-4` propio: el wrapper existe para que el panel "Qué hacer acá" pueda saltar acá
         // (scrollIntoView), y replica el espaciado que estos hijos tenían sueltos en el contenedor.
-        <div id="cronograma-gantt" className="space-y-4 scroll-mt-24">
+        // Revisión de los arreglos: el clic y las teclas acá son el gesto que pospone la apertura del chat (el
+        // puntero quieto encima, no).
+        <div id="cronograma-gantt" className="space-y-4 scroll-mt-24" onPointerDownCapture={() => registrarGestoEnElGantt("apretar")} onKeyDownCapture={() => registrarGestoEnElGantt("tecla")}>
           {/* Revisión de E2a: con una propuesta abierta no se ofrece (sus tareas ya se arman o ya llegaron:
               el enlace solo daba «hay una propuesta sin decidir»), y el texto dice lo mismo que el
               `disabled`: mientras la IA arma, no vuelve a decir «Genera las tareas». E2b: ni con la

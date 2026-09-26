@@ -145,9 +145,13 @@ export function textoDelDesenlaceDeLaPropuesta(
  * Lo que el hilo dice además, sin que el editor haya hecho nada distinto (revisión de E3, #10/#15): aplicar
  * la propuesta desde el chat creó o quitó tareas, y el avance se vuelve a evaluar solo. Iba como AVISO, y el
  * hilo quedaba con «⚠ el editor hizo algo distinto», que el modelo relee como un desvío que no hubo.
+ * Revisión de los arreglos: la nota se escribe ANTES de saber cómo termina la re-evaluación (no se la espera), y
+ * lo común con tareas recién detalladas es que no encuentre nada hecho (`no_progress_detected`) o que falle: no
+ * promete algo que confirmar. Decía «cuando termine, confírmalo abajo del Gantt», y el CSE buscaba un aviso que
+ * no existía (y el modelo, al releerla, se lo volvía a pedir).
  */
 export const NOTA_AVANCE_REEVALUANDOSE =
-  "Además estoy volviendo a evaluar el avance con el cronograma nuevo: cuando termine, confírmalo abajo del Gantt.";
+  "Además vuelvo a evaluar el avance con el cronograma nuevo; si encuentro algo hecho, aparece abajo del Gantt para que lo confirmes.";
 
 /* Un fallo cuyo motivo ya dice qué hacer (pedirlo otra vez, o revisar la propuesta que llegó) no deja nada
    que reintentar con el mismo botón: «puedes aplicarlos de nuevo» lo contradecía (revisión de E3, #11). */

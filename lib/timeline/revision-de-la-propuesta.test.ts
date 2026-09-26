@@ -1616,7 +1616,10 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
        tomar el foco al abrirse solo, o correr el cronograma también sin propuesta (el cajón tapa a
        propósito). */
     const apertura = tramo(CANVAS, "const tokenParaLaApertura", "}, [tokenParaLaApertura");
-    expect(apertura).toContain("debeAbrirseElChat({");
+    /* ⚠ ACTUALIZADA en la revisión de los arreglos, con esta razón: la entrada se arma aparte (`entrada`), porque
+       el motivo de posponer (`motivoParaPosponer`) se pregunta sobre la MISMA entrada que la decisión. */
+    expect(apertura).toContain("const entrada: EntradaDeLaApertura = {");
+    expect(apertura).toContain("const decision = debeAbrirseElChat(entrada);");
     expect(contiene(apertura, "puedeConversar: me?.permissions?.sections?.asistente?.read === true,")).toBe(true);
     expect(contiene(apertura, "abiertoEnElServidor: abiertoPara(proposal, me?.email),")).toBe(true);
     expect(contiene(apertura, "recordadoLocal: leerApertura(projectId, tokenParaLaApertura),")).toBe(true);
@@ -1652,16 +1655,25 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     expect(apertura.match(/setChatAbierto\(/g)?.length, "el efecto abre el cajón por otro camino").toBe(1);
     expect(contiene(apertura, "if (!acciones.decidida) return; aperturaVistaRef.current = tokenParaLaApertura;")).toBe(true);
     expect(contiene(apertura, "if (!acciones.recordar) return; recordarApertura(projectId, tokenParaLaApertura);")).toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de los arreglos, con esta razón: posponer guarda el MOTIVO (estado, no ref) para
+       esperar a que termine, y el reintento se gasta al decidir. */
     expect(
-      contiene(apertura, "if (acciones.posponer) { aperturaPospuestaRef.current = tokenParaLaApertura; setPuntoDelChat(tokenParaLaApertura); }"),
+      contiene(
+        apertura,
+        "if (acciones.posponer && motivo) { setPospuestaDeLaApertura({ token: tokenParaLaApertura, motivo }); setPuntoDelChat(tokenParaLaApertura); }",
+      ),
     ).toBe(true);
+    expect(contiene(apertura, "const motivo = motivoParaPosponer(entrada);")).toBe(true);
+    expect(contiene(apertura, "if (reintento && (acciones.decidida || acciones.posponer)) setReintentoDeLaApertura(null);")).toBe(true);
     for (const entrada of [
       "editable: !conDesconocidos,",
       "soloFase: soloFaseEnPantalla,",
       "recalculando: recalculandoEnPantalla,",
       "escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),",
+      "gestoEnCurso: gestoEnCurso(gestoDelGanttRef.current, Date.now()),",
       'punteroEnElGantt: !!document.querySelector("#cronograma-gantt:hover"),',
-      "pospuesta: aperturaPospuestaRef.current === tokenParaLaApertura,",
+      "pospuesta: pospuestaDeLaApertura?.token === tokenParaLaApertura,",
+      "const reintento = reintentoDeLaApertura === tokenParaLaApertura;",
     ]) {
       expect(contiene(apertura, entrada), entrada).toBe(true);
     }
@@ -1669,12 +1681,48 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     expect(CANVAS).toContain('<div id="cronograma-gantt"');
     // Lo que la regla mira también despierta al efecto (si no, la propuesta «lista» no se decide nunca).
     const deps = tramo(CANVAS, "}, [tokenParaLaApertura", "]);");
-    for (const d of ["conDesconocidos", "soloFaseEnPantalla", "recalculandoEnPantalla", "tareasArmandoEnPantalla", "chatAbierto"]) {
+    for (const d of [
+      "conDesconocidos",
+      "soloFaseEnPantalla",
+      "recalculandoEnPantalla",
+      "tareasArmandoEnPantalla",
+      "chatAbierto",
+      "pospuestaDeLaApertura",
+      "reintentoDeLaApertura",
+    ]) {
       expect(deps, d).toContain(d);
     }
     // El punto del 💬: solo para ESTA propuesta y con el chat cerrado; abrirlo a mano lo apaga.
     expect(contiene(CANVAS, "{puntoDelChat !== null && puntoDelChat === tokenParaLaApertura && !chatAbierto ? (")).toBe(true);
     expect(contiene(CANVAS, "setAperturaAutomatica(false); setChatAbierto((v) => !v); setPuntoDelChat(null);")).toBe(true);
     expect(contiene(tramo(CANVAS, "const abrirElChatDesdeUnaFase = useCallback(", "}, []);"), "setPuntoDelChat(null);")).toBe(true);
+  });
+
+  it("⛔ revisión de los arreglos · el gesto sale de lo que se HACE en el Gantt, y lo pasajero se espera para decidir de nuevo", () => {
+    /* La regla es pura (sus filas, en apertura-del-chat.test.ts: el puntero quieto abre, el reintento decide una
+       vez). Esto mira el cableado que la alimenta. Las ediciones que la ponen en rojo: volver a sacar el gesto del
+       `:hover` del contenedor (casi toda la pantalla), no registrar el clic, la tecla o el soltar, o no esperar lo
+       que pospuso (el gesto que termina, el campo que pierde el foco, la capa que se cierra): el chat quedaría en
+       «nada» para siempre en esa pantalla. */
+    const apertura = tramo(CANVAS, "const tokenParaLaApertura", "}, [tokenParaLaApertura");
+    expect(sinEspacios(apertura), "el gesto volvió a salir del hover").not.toMatch(/gestoEnCurso:[^,]*:hover/);
+    expect(
+      contiene(
+        CANVAS,
+        '<div id="cronograma-gantt" className="space-y-4 scroll-mt-24" onPointerDownCapture={() => registrarGestoEnElGantt("apretar")} onKeyDownCapture={() => registrarGestoEnElGantt("tecla")}>',
+      ),
+    ).toBe(true);
+    expect(contiene(apertura, 'document.addEventListener("pointerup", soltar, true);')).toBe(true);
+    expect(contiene(apertura, 'document.addEventListener("pointercancel", soltar, true);')).toBe(true);
+    expect(contiene(apertura, "alCambiarElGestoRef.current?.();")).toBe(true);
+
+    const espera = tramo(CANVAS, "}, [tokenParaLaApertura", "}, [pospuestaDeLaApertura, selectedTask]);");
+    expect(contiene(espera, "if (!p || !seVuelveADecidir(p.motivo) || p.motivo === \"capa\") return;")).toBe(true);
+    expect(contiene(espera, "setReintentoDeLaApertura(p.token);")).toBe(true);
+    expect(contiene(espera, 'document.addEventListener("focusout", reintentar);')).toBe(true);
+    expect(contiene(espera, "const falta = faltaParaQueTermineElGesto(gestoDelGanttRef.current, Date.now());")).toBe(true);
+    expect(contiene(espera, "alCambiarElGestoRef.current = esperar;")).toBe(true);
+    expect(contiene(espera, "const libre = () => !selectedTask && !document.querySelector('[aria-modal=\"true\"]');")).toBe(true);
+    expect(espera).toContain("new MutationObserver(");
   });
 });

@@ -25,6 +25,28 @@ import {
 import { canvasOfNested, canvasOfAnyNested } from "@/lib/pieces/canvas-query";
 import { slugForCanvas } from "@/lib/pieces/registry";
 import { diasSinConfirmar, type BorradorFechable } from "@/lib/timeline/avance-sin-confirmar";
+import { RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+
+/**
+ * La última razón "humana" (MANUAL/AI_ASSIST) de cada cronograma: el «porqué» que la tarjeta de un proyecto
+ * atrasado muestra («💬 «razón» — quién, cuándo»). Batcheada: distinct sobre timelineId + createdAt desc toma la
+ * más reciente de cada uno.
+ * Revisión de los arreglos: sin la copia que guarda el DELETE de una propuesta ilegible (MANUAL, con
+ * `RAZON_DESCARTE_ILEGIBLE`). No es el porqué de un atraso: tapaba la razón que el CSE escribió al guardar con un
+ * texto técnico («queda en este registro») atribuido a él. La copia se sigue guardando igual.
+ */
+export function ultimasRazonesHumanas(timelineIds: string[]) {
+  return prisma.timelineChange.findMany({
+    where: {
+      timelineId: { in: timelineIds },
+      kind: { in: ["MANUAL", "AI_ASSIST"] },
+      reason: { not: RAZON_DESCARTE_ILEGIBLE },
+    },
+    orderBy: [{ timelineId: "asc" }, { createdAt: "desc" }],
+    distinct: ["timelineId"],
+    select: { timelineId: true, reason: true, kind: true, changedByEmail: true, createdAt: true },
+  });
+}
 
 export interface PortfolioRow {
   projectId: string;
@@ -180,19 +202,12 @@ export async function loadPortfolio(
     },
   });
 
-  // 2da query (batcheada, sin N+1): la última razón "humana" (MANUAL/AI_ASSIST) por timeline.
-  // distinct sobre timelineId + orderBy createdAt desc → toma la más reciente de cada uno.
+  // 2da query (batcheada, sin N+1): la última razón "humana" (MANUAL/AI_ASSIST) por timeline, sin la copia
+  // de una propuesta ilegible descartada (`ultimasRazonesHumanas`).
   const timelineIds = projects
     .map((p) => p.timeline?.id)
     .filter((id): id is string => !!id);
-  const lastChanges = timelineIds.length
-    ? await prisma.timelineChange.findMany({
-        where: { timelineId: { in: timelineIds }, kind: { in: ["MANUAL", "AI_ASSIST"] } },
-        orderBy: [{ timelineId: "asc" }, { createdAt: "desc" }],
-        distinct: ["timelineId"],
-        select: { timelineId: true, reason: true, kind: true, changedByEmail: true, createdAt: true },
-      })
-    : [];
+  const lastChanges = timelineIds.length ? await ultimasRazonesHumanas(timelineIds) : [];
   const lastChangeByTimeline = new Map(lastChanges.map((c) => [c.timelineId, c]));
 
   /* D-12: cuándo se generó cada borrador de avance (los nuevos traen `generatedAt`; los

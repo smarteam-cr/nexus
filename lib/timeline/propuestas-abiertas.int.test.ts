@@ -15,12 +15,15 @@
  * Y el caso de la spec: el handoff copió todos los campos y propuso uno; después se editaron a mano el
  * copiado y el propuesto. Convertida, el copiado no aparece, el propuesto queda con ⚠ y «Aplicar todo»
  * no revierte ninguno de los dos.
+ * Y (revisión de los arreglos) la copia que deja el descarte de una vieja sin convertir no tapa el porqué del
+ * atraso en la cartera (`ultimasRazonesHumanas`, con el `not` de Postgres).
  * Corre contra nexus_test (test/setup.integration.ts la trunca antes de cada caso). Nunca producción.
  */
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { leerBorrador, planDeAplicacion } from "./borrador";
+import { leerBorrador, planDeAplicacion, RAZON_DESCARTE_ILEGIBLE } from "./borrador";
+import { ultimasRazonesHumanas } from "@/lib/portfolio/load";
 import {
   convertirLaVieja,
   formatoDe,
@@ -236,5 +239,38 @@ describe("convertir las viejas del handoff — DB real", () => {
     });
     expect((await escribirLaConversion(prisma, [e], () => {})).cambiaron).toHaveLength(1);
     expect(await guardado(m.tl.id)).toEqual({ pendingProposal: m.vieja, pendingProposalRunId: "otra-corrida" });
+  });
+});
+
+describe("la copia de una vieja descartada — DB real (revisión de los arreglos)", () => {
+  it("⛔ no tapa el porqué del atraso en la cartera, y se sigue guardando", async () => {
+    /* El DELETE de una propuesta que Nexus no sabe leer (una vieja sin convertir) guarda su copia como MANUAL con
+       `RAZON_DESCARTE_ILEGIBLE`. La cartera muestra la última MANUAL/AI_ASSIST de cada cronograma como el porqué
+       de un atraso. La edición que la pone en rojo: que `ultimasRazonesHumanas` vuelva a traer la copia (el
+       `reason: { not: … }` en Postgres). */
+    const m = await mundo();
+    await prisma.timelineChange.create({
+      data: {
+        timelineId: m.tl.id,
+        kind: "MANUAL",
+        reason: "El cliente pidió posponer la migración",
+        changedByEmail: "cse@smarteam.cr",
+        snapshot: {},
+        createdAt: new Date("2026-09-20T12:00:00.000Z"),
+      },
+    });
+    await prisma.timelineChange.create({
+      data: {
+        timelineId: m.tl.id,
+        kind: "MANUAL",
+        reason: RAZON_DESCARTE_ILEGIBLE,
+        changedByEmail: "cse@smarteam.cr",
+        snapshot: { propuestaDescartada: m.vieja } as unknown as Prisma.InputJsonValue,
+        createdAt: new Date("2026-09-25T12:00:00.000Z"),
+      },
+    });
+    const razones = await ultimasRazonesHumanas([m.tl.id]);
+    expect(razones.map((r) => r.reason), "la tarjeta mostraría la copia del descarte").toEqual(["El cliente pidió posponer la migración"]);
+    expect(await prisma.timelineChange.count({ where: { timelineId: m.tl.id, reason: RAZON_DESCARTE_ILEGIBLE } }), "la copia se dejó de guardar").toBe(1);
   });
 });

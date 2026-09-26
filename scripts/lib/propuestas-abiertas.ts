@@ -76,14 +76,22 @@ export const TIPOS_DE_E3: readonly string[] = ["tarea-cambia", "fase-se-va"];
  * `excluidos` no vacío o algún `porChat`. Los dos últimos E2c los ignora en silencio: una pantalla
  * vieja volvería a marcar lo desmarcado en otra computadora, y aplicaría lo del chat con la vara de la
  * IA. La vuelta atrás a E2c (`--desde-e3`) limpia estos. Se mira el JSON crudo.
+ * Revisión de los arreglos: también una tarea nueva de la IA que el chat retocó (`retocada`) o mudó de fase
+ * (`mudadaPorElChat`, que ya no lleva `porChat`). E2c no conoce ninguna de las dos marcas: escribiría como de la
+ * IA algo que el chat editó, y metería la mudada al cierre de su fase nueva (⚠ «choque» si no tiene forma armada).
  */
 export function traeAlgoDeE3(json: unknown): boolean {
   if (!esBorradorV1(json)) return false;
   if (Array.isArray(json.excluidos) && json.excluidos.length > 0) return true;
   const cambios = Array.isArray(json.cambios) ? json.cambios : [];
   return cambios.some((c) => {
-    const x = c as { tipo?: unknown; porChat?: unknown } | null;
-    return (typeof x?.tipo === "string" && TIPOS_DE_E3.includes(x.tipo)) || x?.porChat === true;
+    const x = c as { tipo?: unknown; porChat?: unknown; retocada?: unknown; mudadaPorElChat?: unknown } | null;
+    return (
+      (typeof x?.tipo === "string" && TIPOS_DE_E3.includes(x.tipo)) ||
+      x?.porChat === true ||
+      x?.retocada === true ||
+      x?.mudadaPorElChat === true
+    );
   });
 }
 
