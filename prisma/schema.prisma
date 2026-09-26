@@ -462,6 +462,7 @@ model Project {
   sessions            SessionProject[]
   participantSnapshot ProjectParticipantSnapshot?
   externalAccess      ProjectExternalAccess?
+  cuestionario        Cuestionario?
   timeline            ProjectTimeline?
   hilosDeChat         HiloDeChat[] // el asistente que conversa, un hilo por documento
   handoff             Handoff?
@@ -1157,6 +1158,13 @@ model ClientDocument {
   fileName  String? // nombre original del archivo (para FILE)
   fileSize  Int? // tamaño en bytes (para FILE)
   mimeType  String? // tipo MIME (para FILE)
+
+  // Cuestionario previo (2026-09-25): el cliente adjunta un documento a UNA pestaña y dice qué es.
+  // `descripcion` viaja con el texto al contexto de los agentes: sin ella, el agente lee un PDF
+  // sin saber si es el organigrama o una cotización vieja.
+  descripcion           String?              @db.Text
+  cuestionarioPestanaId String?
+  cuestionarioPestana   CuestionarioPestana? @relation(fields: [cuestionarioPestanaId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4936,4 +4944,101 @@ model ComentarioDoc {
   createdAt DateTime @default(now())
 
   @@index([hiloId, createdAt])
+}
+
+// ── Cuestionario previo (2026-09-25) ────────────────────────────────────────────
+// Reemplaza el Google Sheets que el CSE mandaba al cierre del kickoff. UNO por proyecto.
+// La ESTRUCTURA (pestañas y preguntas) se copia de la plantilla al generarlo y desde ahí es del
+// proyecto: el CSE (o el chat) la edita sin tocar la plantilla. Cada pestaña la contesta UN
+// responsable, con su propio enlace. Ver lib/cuestionario/.
+model Cuestionario {
+  id           String                    @id @default(cuid())
+  projectId    String                    @unique
+  project      Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // null = el CSE todavía lo arma; los enlaces no abren nada hasta publicarlo.
+  publicadoAt  DateTime?
+  // != null = el CSE lo dio por terminado: los enlaces muestran lo respondido en solo lectura.
+  cerradoAt    DateTime?
+  // Prellenado con IA (lo que ya sabemos del handoff y el kickoff). Corre FUERA del request:
+  // `prellenandoDesde` > `prellenadoAt` = en curso. El error queda escrito para mostrarlo.
+  prellenandoDesde DateTime?
+  prellenadoAt     DateTime?
+  prellenadoError  String?
+  createdById  String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  pestanas     CuestionarioPestana[]
+  responsables CuestionarioResponsable[]
+  cambios      CuestionarioCambio[]
+}
+
+model CuestionarioPestana {
+  id                   String                   @id @default(cuid())
+  cuestionarioId       String
+  cuestionario         Cuestionario             @relation(fields: [cuestionarioId], references: [id], onDelete: Cascade)
+  // Identidad estable dentro del cuestionario ("general", "proceso_comercial", "p_x7k2…").
+  key                  String
+  titulo               String
+  descripcion          String?                  @db.Text
+  orden                Int                      @default(0)
+  // "normal" | "etapas" (lleva la «Etapa N» duplicable con las 7 preguntas fijas).
+  tipo                 String                   @default("normal")
+  // [{ id, categoria, texto, ejemplo?, momento: "previo"|"sesion" }]
+  preguntas            Json                     @default("[]")
+  // { [preguntaId]: { valor, origen: "prellenado"|"cliente"|"cse", enSesion?, actualizadoAt } }
+  respuestas           Json                     @default("{}")
+  // [{ id, nombre, respuestas: { [preguntaId]: { … } } }] — solo tipo "etapas".
+  etapas               Json                     @default("[]")
+  // Lo que el cliente quiera contar que no entra en ninguna pregunta.
+  contextoAdicional    String?                  @db.Text
+  responsableId        String?
+  responsable          CuestionarioResponsable? @relation(fields: [responsableId], references: [id], onDelete: SetNull)
+  // != null = el responsable la envió: queda BLOQUEADA hasta que el CSE la reabra.
+  enviadaAt            DateTime?
+  // Último guardado del cliente (lo compara su borrador local para saber cuál es más nuevo).
+  clienteActualizadoAt DateTime?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  adjuntos             ClientDocument[]
+  cambios              CuestionarioCambio[]
+
+  @@unique([cuestionarioId, key])
+  @@index([responsableId])
+}
+
+// Una persona del cliente con su propio enlace. La URL ES el secreto (como la propuesta).
+model CuestionarioResponsable {
+  id             String                @id @default(cuid())
+  cuestionarioId String
+  cuestionario   Cuestionario          @relation(fields: [cuestionarioId], references: [id], onDelete: Cascade)
+  nombre         String
+  cargo          String?
+  email          String?
+  accessToken    String                @unique // 64 hex (crypto.randomBytes(32))
+  revokedAt      DateTime?
+  ultimoUsoAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  pestanas       CuestionarioPestana[]
+  cambios        CuestionarioCambio[]
+
+  @@index([cuestionarioId])
+}
+
+// El registro: envíos, cambios que pide el cliente después de enviar y reaperturas del CSE.
+model CuestionarioCambio {
+  id             String                   @id @default(cuid())
+  cuestionarioId String
+  cuestionario   Cuestionario             @relation(fields: [cuestionarioId], references: [id], onDelete: Cascade)
+  pestanaId      String?
+  enPestana      CuestionarioPestana?     @relation(fields: [pestanaId], references: [id], onDelete: SetNull)
+  responsableId  String?
+  responsable    CuestionarioResponsable? @relation(fields: [responsableId], references: [id], onDelete: SetNull)
+  // "ENVIO" | "SOLICITUD" | "REAPERTURA"
+  tipo           String
+  mensaje        String?                  @db.Text
+  autorEmail     String? // CSE que reabrió (las del cliente van por responsableId)
+  createdAt      DateTime                 @default(now())
+
+  @@index([cuestionarioId, createdAt])
 }

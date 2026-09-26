@@ -15,6 +15,7 @@ import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import KickoffWorkspace from "@/components/canvas/KickoffWorkspace";
 import DesarrolloWorkspace from "@/components/canvas/DesarrolloWorkspace";
 import ExploracionWorkspace from "@/components/canvas/ExploracionWorkspace";
+import ExploracionConCuestionario from "@/components/cuestionario/ExploracionConCuestionario";
 import DiagnosticoWorkspace from "@/components/canvas/DiagnosticoWorkspace";
 import PlanificacionWorkspace from "@/components/canvas/PlanificacionWorkspace";
 import ImplementacionWorkspace from "@/components/canvas/ImplementacionWorkspace";
@@ -948,7 +949,11 @@ export default function ProjectCanvasPanel({
       {!isResumenCanvas && activeSlug === "exploration" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
           <CanvasBoundary label="el canvas de Exploración">
-            <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
+            {/* 4A Cuestionario previo + 4B Informe: la misma fase, dos momentos. */}
+            <ExploracionConCuestionario
+              projectId={projectId}
+              informe={<ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />}
+            />
           </CanvasBoundary>
         </div>
       )}

@@ -24,6 +24,7 @@
  * cuándo el kickoff ya pasó.
  */
 import { prisma } from "@/lib/db/prisma";
+import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { Prisma } from "@prisma/client";
 import { EXPLORACION_CANVAS } from "@/lib/canvas/canvas-defs";
 import { createExploracionCanvas, reconcileExploracionCanvasSections } from "@/lib/canvas/default-canvases";
@@ -75,7 +76,7 @@ export async function runExploracionGeneration(opts: {
   const { projectId } = opts;
 
   // Todas las fuentes son independientes entre sí → en paralelo, no en serie.
-  const [canvasId, handoffCtx, kickoffCtx, timelineCtx, project] = await Promise.all([
+  const [canvasId, handoffCtx, kickoffCtx, timelineCtx, project, cuestionarioCtx] = await Promise.all([
     opts.canvasId ?? ensureExploracionCanvas(projectId),
     loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: EXPLORACION_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "kickoff", { onlyConfirmed: false }),
@@ -89,6 +90,8 @@ export async function runExploracionGeneration(opts: {
         client: { select: { name: true, company: true, industry: true } },
       },
     }),
+    // Lo que el cliente contestó por escrito en el cuestionario previo (lib/cuestionario/).
+    loadCuestionarioContext(projectId),
   ]);
 
   // Depende de `project.clientId` → va en una segunda tanda (también en paralelo).
@@ -122,6 +125,7 @@ export async function runExploracionGeneration(opts: {
     priorCtx ? `\n${priorCtx}` : "",
     businessCasesBlock(businessCases),
     kickoffCtx ? `\n=== KICKOFF DEL PROYECTO (lo que ya se le dijo al cliente) ===\n${kickoffCtx}` : "",
+    cuestionarioCtx ? `\n${cuestionarioCtx}` : "",
     timelineCtx ? `\n${timelineCtx}` : "",
     "",
     "Escribí la guía de exploración siguiendo tus instrucciones: separá lo AFIRMADO de lo SUPUESTO, derivá las preguntas de los supuestos sin verificar, y declará en el hero qué calibración de tamaño de cliente usaste.",

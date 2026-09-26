@@ -104,6 +104,14 @@ const LECTORES: Lector[] = [
     porque: "asistente de edición sobre el kickoff y el requerimiento técnico, los dos externos",
   },
   {
+    archivo: "lib/cuestionario/prellenar.ts",
+    pieza: null, // el cuestionario previo vive dentro de Exploración, no es una pieza propia
+    exposicion: "directo",
+    porque:
+      "prellena el cuestionario previo: el cliente ve cada respuesta como «esto es lo que " +
+      "entendimos» en su enlace, sin que nadie la revise antes — usa la allowlist del kickoff",
+  },
+  {
     archivo: "lib/canvas/entrega-generate.ts",
     pieza: "delivery",
     exposicion: "directo",

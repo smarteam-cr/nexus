@@ -218,7 +218,8 @@ describe("candado 3 — toda capacidad la lee alguien", () => {
     expect(caps.length, "no pude leer ProjectCapabilities").toBeGreaterThan(3);
 
     const fuentes = ["lib", "app", "components"].flatMap((d) => archivosDe(d)).map((f) => fs.readFileSync(f, "utf8"));
-    const sinLector = caps.filter((c) => !fuentes.some((s) => s.includes(`.${c}`)));
+    // Con borde de palabra: `.pestanas` o `.pestanaId` (el cuestionario previo) no son leer `pestana`.
+    const sinLector = caps.filter((c) => !fuentes.some((s) => new RegExp(`\\.${c}\\b`).test(s)));
 
     for (const c of sinLector) {
       expect(

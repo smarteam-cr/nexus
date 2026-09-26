@@ -22,6 +22,7 @@
  * prompt ya tenía la regla "sin fechas"; ahora el código la acompaña).
  */
 import { prisma } from "@/lib/db/prisma";
+import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { Prisma } from "@prisma/client";
 import { PLANIFICACION_CANVAS, planificacionSectionSequence } from "@/lib/canvas/canvas-defs";
 import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/canvas/default-canvases";
@@ -88,7 +89,7 @@ export async function runPlanificacionGeneration(opts: {
 }): Promise<{ canvasId: string; sectionCount: number }> {
   const { projectId } = opts;
 
-  const [canvasId, handoffCtx, diagnosticoCtx, exploracionCtx, desarrolloCtx, timelineCtx, project] =
+  const [canvasId, handoffCtx, diagnosticoCtx, exploracionCtx, desarrolloCtx, timelineCtx, project, cuestionarioCtx] =
     await Promise.all([
       opts.canvasId ?? ensurePlanificacionCanvas(projectId),
       loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: PLANIFICACION_HANDOFF_KEYS }),
@@ -105,6 +106,8 @@ export async function runPlanificacionGeneration(opts: {
           client: { select: { name: true, company: true, industry: true } },
         },
       }),
+      // Las etapas que el cliente describió en el cuestionario previo = las filas del proceso.
+      loadCuestionarioContext(projectId),
     ]);
 
   const [procesosCtx, portalCtx, adopcion] = await Promise.all([
@@ -131,6 +134,7 @@ export async function runPlanificacionGeneration(opts: {
     handoffCtx || "(Sin handoff generado.)",
     exploracionCtx ? `\n=== EXPLORACIÓN (lo confirmado y lo supuesto) ===\n${exploracionCtx}` : "",
     procesosCtx ? `\n=== PROCESOS REALES DEL CLIENTE (⚠ = fricción detectada) ===\n${procesosCtx}` : "",
+    cuestionarioCtx ? `\n${cuestionarioCtx}` : "",
     desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (objetos, dedup, triggers) ===\n${desarrolloCtx}` : "",
     portalCtx ? `\n=== EL PORTAL HOY ===\n${portalCtx}` : "",
     timelineCtx ? `\n${timelineCtx}` : "",
