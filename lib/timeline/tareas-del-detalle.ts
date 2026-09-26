@@ -49,7 +49,6 @@ import {
   type FugaDeTarea,
   type HuellasDeFrontera,
 } from "@/lib/contexto/frontera-del-cronograma";
-import { huella as huellaDeTitulo } from "./assist-items";
 import {
   claveDeCampo,
   claveDeTareaNueva,
@@ -58,6 +57,7 @@ import {
   faseDeLaTarea,
   formaEnLaEstructura,
   fotoDeTarea,
+  huellaDeTitulo,
   type Borrador,
   type Cambio,
   type CambioDeTarea,

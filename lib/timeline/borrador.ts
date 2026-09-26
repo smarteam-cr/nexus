@@ -80,7 +80,6 @@
  * forma que el chat le dio a una fase armada, D9) viajan en el JSON; el plan NUNCA lee `excluidos`:
  * quien llama pasa `sin`.
  */
-import { huella as huellaDeTitulo, type Party, type TipoDeTarea } from "./assist-items"; // sin ciclo: assist-items no importa nada
 import { estaColgada } from "@/lib/agents/run-colgada"; // puro, client-safe
 import { isKept } from "./regen-columnas";
 import { motivoDePorValidar } from "./semana-cero-tareas";
@@ -115,6 +114,24 @@ export const FORMATO_BORRADOR = "borrador-v1";
 
 export type CampoDeFase = PhaseField;
 export type ValorDeCampo = string | number | null;
+
+/** El dueño y el tipo de una tarea, como los guarda la base. */
+export type Party = "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV";
+export type TipoDeTarea = "SESSION" | "TASK";
+
+/**
+ * El título normalizado (sin mayúsculas, sin tildes y con un solo espacio): la llave con que se
+ * reconoce una tarea MUDADA de fase o repetida. E4 (2026-09): vivía con el diff por ítem de «Pedir
+ * cambio con IA», que se retiró; el rango es el de los acentos combinantes que deja `normalize("NFD")`.
+ */
+export function huellaDeTitulo(titulo: string): string {
+  return titulo
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
 
 /** Los campos de una fase en el orden en que se listan: lo que mueve fechas primero, el renombre al final. */
 export const CAMPOS_POR_IMPACTO: readonly CampoDeFase[] = [
@@ -492,8 +509,9 @@ const valorDe = (f: FaseViva, campo: CampoDeFase): ValorDeCampo => {
 
 /**
  * ¿Lo guardado en `pendingProposal` es un borrador de estructura (el formato nuevo, o el viejo sin
- * tareas)? La propuesta del modificador («Pedir cambio con IA») trae `tasks` y NO lo es: esa vive
- * solo en la memoria de la pantalla y se revisa con su propio banner.
+ * tareas)? Uno con `tasks` NO lo es: era la forma de la vista previa de «Pedir cambio con IA», que
+ * nunca se guardaba y se retiró en E4. Si algo así apareciera guardado, la pantalla dice que no lo
+ * sabe leer y ofrece descartarlo.
  */
 export function esBorradorGuardado(json: unknown): boolean {
   if (!esObjeto(json)) return false;
@@ -1035,8 +1053,8 @@ function leerExcluidos(v: unknown): string[] | null {
 }
 
 /**
- * Lo guardado en `pendingProposal` como borrador, o null si no hay (o es la propuesta del
- * modificador, que trae tareas). El formato nuevo se lee tal cual; el viejo se convierte contra `base`.
+ * Lo guardado en `pendingProposal` como borrador, o null si no hay (o no se sabe leer: uno viejo con
+ * tareas). El formato nuevo se lee tal cual; el viejo se convierte contra `base`.
  */
 export function leerBorrador(json: unknown, base: Vivo): Borrador | null {
   if (!esObjeto(json)) return null;
@@ -3299,9 +3317,6 @@ export function tituloDeLoQueNoto(n: number): string {
 }
 
 export const AVISO_TAREAS_LISTAS = "Listas las tareas de la propuesta: revísala arriba del Gantt.";
-/** Las tareas llegaron con la vista previa del modificador en pantalla: la barra no se ve hasta descartarla. */
-export const AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA =
-  "Listas las tareas de la propuesta: descarta la vista previa para revisarla arriba del Gantt.";
 export const AVISO_DETALLE_SIN_CAMBIOS = "La IA terminó y no propone cambios del cronograma.";
 
 /**
@@ -3420,9 +3435,6 @@ export function desenlaceDelSeguimiento(i: {
   lectura: LecturaTrasLaCorrida | null;
   /** Lo que dejó dicho la corrida al terminar sin tareas (`timelineSyncError`). */
   aviso?: string | null;
-  /** En pantalla está la vista previa del modificador: la guardada se LEYÓ sin ponerla (cierre de la
-   *  revisión de E2a: el seguimiento callaba y daba la corrida por avisada). */
-  conVistaPrevia?: boolean;
   /** E2c: la corrida es un recálculo; los nombres de sus fases, tomados al empezar a seguirla. */
   recalculo?: readonly string[] | null;
 }): DesenlaceDelSeguimiento {
@@ -3442,7 +3454,7 @@ export function desenlaceDelSeguimiento(i: {
   if (t !== null && t.corrida === i.corrida) {
     if (t.estado === "armando") return { que: "seguir" };
     if (t.estado === "listas") {
-      return { que: "avisar", ok: true, tono: "exito", texto: i.conVistaPrevia ? AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA : AVISO_TAREAS_LISTAS };
+      return { que: "avisar", ok: true, tono: "exito", texto: AVISO_TAREAS_LISTAS };
     }
     if (t.estado === "fallo") {
       const texto = textoDeLaLineaDeTareas("fallo", null, t.motivo, false, false)?.texto ?? "No se pudieron armar las tareas.";
@@ -3500,12 +3512,6 @@ export function fraseDelCierre(
       : semanas;
   return `El cierre está fijado a mano el ${fmtFull(cierreFijado)} y aplicar no lo cambia; ${calculado}.`;
 }
-
-/** El PUT con motivo respondió 409 PROPUESTA_ABIERTA y en pantalla está la vista previa del
- *  modificador: la propuesta guardada entró mientras la IA trabajaba (otra pantalla regeneró) y no
- *  hay barra que la muestre. Se dice qué hacer, sin tirar el resultado de la IA sin preguntar. */
-export const AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA =
-  "Mientras la IA trabajaba entró una propuesta del cronograma que nadie decidió todavía, y no se aplica nada encima de ella. Descarta esta vista previa para verla arriba del Gantt; cuando la resuelvas, vuelve a pedir el cambio.";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── EL ESTADO DE LA REVISIÓN EN PANTALLA (puro, lo usa el hook) ──────────────

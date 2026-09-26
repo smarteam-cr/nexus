@@ -21,7 +21,6 @@ import {
   avisoDelDetalleSinCambios,
   avisoSinCambiosParaLaCorrida,
   AVISO_TAREAS_LISTAS,
-  AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA,
   ACCION_AHORA_NO,
   BLOQUEO_TAREAS_EN_CURSO,
   BLOQUEO_VERSION_NUEVA,
@@ -37,6 +36,7 @@ import {
   esBorradorV1,
   esVacioEsperandoTareas,
   estadoDeLasTareas,
+  huellaDeTitulo,
   estructuraHipotetica,
   FORMATO_BORRADOR,
   fotoDeTarea,
@@ -1025,24 +1025,9 @@ describe("revisión de E2a · el desenlace del seguimiento, el chip y la oferta"
     expect(perdida).toEqual({ que: "avisar", ok: true, tono: "info", texto: "Lo que armó no se guardó." });
   });
 
-  it("⛔ con la vista previa del modificador abierta, las tareas listas se avisan igual (y dicen cómo verlas)", () => {
-    /* Cierre de la revisión de E2a: con la vista previa en pantalla el seguimiento no leía la guardada,
-       callaba y daba la corrida por avisada: no llegaba «Listas las tareas…» ni el aviso del sistema.
-       Ahora la lee sin ponerla (el cableado, en revision-de-la-propuesta.test.ts) y el aviso dice que hay
-       que descartar la vista previa para ver la barra. La edición que la pone en rojo: callar con la
-       vista previa, o mandar a revisar «arriba del Gantt» una barra que la vista previa tapa. */
-    const listas = desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: guardada("r1", "listas"), conVistaPrevia: true });
-    expect(listas, "con la vista previa abierta, el aviso se pierde").toMatchObject({ que: "avisar", ok: true, tono: "exito" });
-    expect(listas.que === "avisar" ? listas.texto : "").toBe(AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA);
-    expect(AVISO_TAREAS_LISTAS_CON_VISTA_PREVIA).toContain("descarta la vista previa");
-    // Lo demás no cambia con la vista previa: un fallo se dice igual, y lo de otra corrida se calla.
-    expect(
-      desenlaceDelSeguimiento({ corrida: "r1", estado: "ERROR", lectura: guardada("r1", "fallo"), conVistaPrevia: true }),
-    ).toMatchObject({ que: "avisar", tono: "error" });
-    expect(desenlaceDelSeguimiento({ corrida: "r1", estado: "DONE", lectura: guardada("r2", "listas"), conVistaPrevia: true })).toEqual({
-      que: "callar",
-    });
-  });
+  /* Se retiró «Pedir cambio con IA» (E4): se borró «⛔ con la vista previa del modificador abierta, las
+     tareas listas se avisan igual». Sin vista previa en memoria, el seguimiento siempre pone la guardada en
+     pantalla y el aviso es el de siempre (`AVISO_TAREAS_LISTAS`, arriba). */
 
   it("⭐ si el GET falla no se sabe nada: se vuelve a mirar, sin avisar «no propone cambios»", () => {
     /* La edición que la pone en rojo: leer un GET fallido como «no hay propuesta» (avisaba algo falso,
@@ -1073,5 +1058,19 @@ describe("revisión de E2a · el desenlace del seguimiento, el chip y la oferta"
     expect(traeCambiosDeFases({ ...vacio, cambios: [{ tipo: "tarea-nueva" }, { tipo: "ancla" }] })).toBe(true);
     expect(traeCambiosDeFases({ phases: [] }), "el formato viejo es de fases").toBe(true);
     expect(traeCambiosDeFases(null)).toBe(false);
+  });
+});
+
+/**
+ * E4 (2026-09): la huella del título se mudó a borrador.ts desde el diff por ítem de «Pedir cambio con
+ * IA», que se retiró. Es la llave que reconoce una tarea MUDADA o REPETIDA (el detalle, el chat sobre la
+ * propuesta): si deja de quitar un acento, «Configuración» y «Configuracion» pasan a ser dos tareas.
+ */
+describe("E4 · huellaDeTitulo: minúsculas, sin tildes y con un solo espacio", () => {
+  it("normaliza espacios, mayúsculas y los acentos combinantes (también la virgulilla de la ñ)", () => {
+    /* La edición que la pone en rojo: cambiar el rango de los acentos (`/[\u0300-\u036f]/g`). Con uno más
+       corto, la ñ (n + U+0303) o la tilde (U+0301) quedan pegadas y la huella ya no reconoce la tarea. */
+    expect(huellaDeTitulo("  Configuración  DEL   Portal ")).toBe("configuracion del portal");
+    expect(huellaDeTitulo("Ñandú")).toBe("nandu");
   });
 });

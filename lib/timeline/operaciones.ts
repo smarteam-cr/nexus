@@ -25,8 +25,9 @@
  *
  * ── ⭐ Y LO QUE HABILITA, QUE HOY ES IMPOSIBLE ───────────────────────────────────────────────
  * Con el contrato viejo, «el modelo se olvidó de incluir la tarea» y «el humano pidió borrarla»
- * llegan IGUAL: la tarea no está en el payload. Por eso `rescatarProgreso` tiene que asumir
- * accidente y reponerla — asumir intención le haría perder trabajo real a alguien.
+ * llegan IGUAL: la tarea no está en el payload. Por eso el PUT (`idsBorrablesPorOmision`,
+ * rescate-progreso.ts) asume accidente y no borra por omisión lo protegido — asumir intención le
+ * haría perder trabajo real a alguien.
  *
  * Con operaciones son dos cosas distintas por construcción: una OMISIÓN se rescata, y un
  * `tarea.borrar` con nombre y apellido se ejecuta. Eso es lo que deja que el chat pueda borrar lo
@@ -38,10 +39,64 @@
  * segundo camino de escritura sería repetir el error del que salieron las 34 tareas rotas que se
  * encontraron el 2026-08-20 (dos puertas, a las dos les faltaba el mismo guardia).
  */
-import type { FaseActual, PayloadProyectado, Party, TipoDeTarea } from "./assist-items";
-import type { Vivo } from "./borrador"; // solo el tipo: borrador.ts no importa este módulo
+import type { Party, TipoDeTarea, Vivo } from "./borrador"; // solo tipos: sin ciclo en runtime
 import { resolverHandle } from "./handle-de-tarea";
 import { isKept } from "./regen-columnas";
+
+/* ── EL CRONOGRAMA DE HOY Y EL CUERPO DEL PUT ─────────────────────────────────────────────────
+   E4 (2026-09): vivían con el diff por ítem de «Pedir cambio con IA», que se retiró. Se mudaron acá,
+   que es quien los usa. */
+
+export interface TareaActual {
+  id: string;
+  title: string;
+  weekIndex: number;
+  /** Opcional: el canvas lo deriva de la posición del array, y la proyección lo reasigna igual. */
+  order?: number;
+  notes?: string | null;
+  party?: Party | null;
+  type?: TipoDeTarea | null;
+  status?: string;
+  source?: string;
+}
+
+export interface FaseActual {
+  id: string;
+  name: string;
+  /** Opcional: el orden real es la posición en el array, y la proyección lo reasigna. */
+  order?: number;
+  durationWeeks: number;
+  startWeek?: number | null;
+  sessionCount?: number | null;
+  notes?: string | null;
+  activityType?: string | null;
+  tasks: TareaActual[];
+}
+
+/** Salida: exactamente el shape que acepta el PUT del cronograma (`PutBody`). */
+export interface PayloadProyectado {
+  anchorStartDate: string | null;
+  phases: Array<{
+    id?: string;
+    name: string;
+    order: number;
+    durationWeeks: number;
+    startWeek?: number | null;
+    sessionCount?: number | null;
+    notes?: string | null;
+    activityType?: string | null;
+    /** ⚠ undefined = «no tocar las tareas de esta fase». Ver `FaseEnCurso.tocada`. */
+    tasks?: Array<{
+      id?: string;
+      title: string;
+      weekIndex: number;
+      order: number;
+      notes?: string | null;
+      party?: Party | null;
+      type?: TipoDeTarea | null;
+    }>;
+  }>;
+}
 
 /**
  * E3: lo que `describirOperaciones` necesita para decir las líneas de una PROPUESTA abierta. Con esto,
@@ -294,8 +349,8 @@ interface FaseEnCurso {
   /**
    * ⭐ LA MARCA QUE SOSTIENE TODO. Una fase intocada sale del payload SIN `tasks`, que en el
    * contrato del PUT significa «no tocar». Emitir el array siempre convertiría cada operación en
-   * un diff completo de esa fase — y el PUT borra por omisión. Es la misma regla que ya sostiene
-   * `assist-items.ts`, y por el mismo motivo.
+   * un diff completo de esa fase — y el PUT borra por omisión: una fase que se nombró solo por su
+   * nombre o su nota no puede arriesgar ninguna de sus tareas.
    */
   tocada: boolean;
 }

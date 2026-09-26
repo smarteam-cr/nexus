@@ -142,13 +142,12 @@ export default function CronogramaContextSection({
         <p className="text-[11px] text-fg-muted leading-relaxed">
           Con esto —y con las instrucciones adicionales de abajo— la IA revisa las fases y sus tiempos
           al «Regenerar todo el cronograma» (tú revisas la propuesta y decides qué se aplica), arma las tareas de
-          cada fase, decide cuáles son reuniones con el
-          cliente y propone cambios de fases desde «Pedir cambio con IA». Entran{" "}
+          cada fase, decide cuáles son reuniones con el cliente, y el asistente lo lee cuando le pides un
+          cambio. Entran{" "}
           <span className="font-medium text-fg-secondary">solo las reuniones que elijas</span>:
           búscalas entre las del proyecto o en tu calendario. Cada una entra con su resumen completo
           mientras quepa; si eliges muchas, se reparten el espacio. Sacarla de acá no la saca del
-          handoff ni del proyecto. El 💬 Asistente del cronograma también lo lee cuando conversas
-          con él.
+          handoff ni del proyecto.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>

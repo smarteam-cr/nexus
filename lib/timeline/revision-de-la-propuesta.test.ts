@@ -24,7 +24,6 @@ import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import {
-  AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
   AVISO_SUBIR_CON_PROPUESTA,
   borradorVacio,
   debeDescartarseSolo,
@@ -115,8 +114,8 @@ describe("los textos de la barra", () => {
     expect(AVISO_SUBIR_CON_PROPUESTA).toContain("sin aplicar");
     expect(AVISO_SUBIR_CON_PROPUESTA).toContain("si subes ahora");
     expect([TEXTO_VER_ANTES, TEXTO_VER_PROPUESTA]).toEqual(["Ver como estaba antes", "Ver la propuesta"]);
-    expect(AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA).toContain("Descarta esta vista previa");
-    expect(AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA).toContain("vuelve a pedir el cambio");
+    /* Se retiró «Pedir cambio con IA» (E4): salió el aviso de la propuesta que entraba con su vista previa
+       abierta (`AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA`), que se borró con ella. */
   });
 
   it("E2a · la propuesta abierta se nombra «del cronograma»: desde E2a trae también tareas", () => {
@@ -125,7 +124,8 @@ describe("los textos de la barra", () => {
        fases»). Son verdad en los dos mundos: con la propuesta vieja, solo de fases, y con la nueva.
        La edición que la pone en rojo: volver a nombrar la propuesta abierta «de cambios de fases» en
        uno de estos textos, o en el cartel que ve el CSE fuera del cronograma. */
-    for (const texto of [MENSAJE_PROPUESTA_ABIERTA, AVISO_SUBIR_CON_PROPUESTA, AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA]) {
+    // E4: sin el aviso de la vista previa de «Pedir cambio con IA» (se retiró y se borró con ella).
+    for (const texto of [MENSAJE_PROPUESTA_ABIERTA, AVISO_SUBIR_CON_PROPUESTA]) {
       expect(texto).toContain("propuesta del cronograma");
       expect(texto, "volvió a decir que la propuesta es solo de fases").not.toMatch(/cambios de fases/);
     }
@@ -496,7 +496,10 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(aplicar.indexOf("revisionRef.current.olvidar()")).toBeGreaterThan(-1);
     expect(aplicar.indexOf("revisionRef.current.olvidar()")).toBeLessThan(aplicar.indexOf("setProposal(null)"));
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
-    expect(tramo(descartar, "if (!eraDelModificador) {", "proposalMeta.current = { deAssist: false")).toContain(
+    /* ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA» y descartar ya no tiene
+       la rama de su vista previa (`if (!eraDelModificador) {`): el DELETE corre siempre. Lo que se pide es
+       lo mismo: olvidar la foto antes de limpiar la propuesta. */
+    expect(tramo(descartar, 'if (descartandoRef.current) return "fallo";', "proposalMeta.current = { runId: null")).toContain(
       "revisionRef.current.olvidar()",
     );
   });
@@ -521,43 +524,44 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(contiene(CANVAS, "const autoriaEnPantalla = proposal ? (proposalMeta.current.autoria ?? null) : null;")).toBe(true);
   });
 
-  it("⭐ un 409 PROPUESTA_ABIERTA del PUT no deja un callejón: se trae la guardada o se dice qué hacer", () => {
-    /* Mientras corre «Pedir cambio con IA» alguien regenera el handoff: el PUT con motivo responde 409
-       con un texto que habla de una barra que no estaba. La edición que la pone en rojo: volver a
-       mostrar el texto del servidor sin traer la propuesta, o pisar la vista previa del modificador
-       sin preguntar. */
+  it("⭐ un 409 PROPUESTA_ABIERTA del PUT no deja un callejón: se trae la guardada y se dice", () => {
+    /* Mientras el chat acuerda, alguien regenera el handoff: el PUT con motivo responde 409 con un texto
+       que habla de una barra que no estaba. La edición que la pone en rojo: volver a mostrar el texto del
+       servidor sin traer la propuesta.
+       ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA». `anteLaPropuestaGuardada`
+       queda en dos líneas (ya no hay vista previa que no se pueda pisar), salen el tramo de su aplicar
+       (`applyProposal`) y la rama que descartaba su vista previa. El chat sigue igual. */
     const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/route.ts"));
     expect(contiene(ruta, 'code: "PROPUESTA_ABIERTA"')).toBe(true);
     const ante = tramo(CANVAS, "const anteLaPropuestaGuardada = async (", "};");
-    expect(contiene(ante, "if (proposalMeta.current.deAssist) return AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA;")).toBe(true);
-    expect(contiene(ante, "await traerPropuestaPendiente();")).toBe(true);
-    expect(contiene(ante, "return MENSAJE_PROPUESTA_ABIERTA;")).toBe(true);
+    expect(contiene(ante, "=> { await traerPropuestaPendiente(); return MENSAJE_PROPUESTA_ABIERTA;")).toBe(true);
     expect(MENSAJE_PROPUESTA_ABIERTA).toContain("arriba del Gantt");
-    const modificador = tramo(CANVAS, "const applyProposal = async (", "const discardProposal = async (");
-    expect(contiene(modificador, 'res.status === 409 && d?.code === "PROPUESTA_ABIERTA" ? await anteLaPropuestaGuardada()')).toBe(true);
-    const chat = tramo(CANVAS, "const aplicarOperacionesAcordadas = async (", "const applyProposal = async (");
+    const chat = tramo(CANVAS, "const aplicarOperacionesAcordadas = async (", "const discardProposal = async (");
     expect(contiene(chat, 'res.status === 409 && data?.code === "PROPUESTA_ABIERTA" ? await anteLaPropuestaGuardada()')).toBe(true);
-    // Descartar la vista previa del modificador trae la guardada, si hay.
-    // (E3 P5: descartar devuelve cómo terminó: la vista previa en memoria cuenta como «descartada».)
-    const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
-    expect(contiene(tramo(descartar, "if (eraDelModificador) {", 'return "descartada";'), "void refrescarPropuesta();")).toBe(true);
+    expect(CANVAS, "volvió el aplicar de la vista previa del modificador").not.toContain("const applyProposal");
   });
 
   it("con un borrador abierto se puede editar a mano: el autoguardado sigue, y el chat/«IA» siguen frenados", () => {
     /* Respuesta 2 de Elías: se puede seguir editando; lo que choque queda fuera. La edición que la
        pone en rojo: volver a frenar el autoguardado con cualquier propuesta. */
-    expect(contiene(CANVAS, "if (!dirty || (proposal && !hayBorrador) || saving || !canEdit) return;")).toBe(true);
+    /* ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA», cuya vista previa
+       congelaba el Gantt. El autoguardado ya no mira la propuesta (tampoco una que no se sabe leer). */
+    expect(contiene(CANVAS, "if (!dirty || saving || !canEdit) return;")).toBe(true);
     /* ⚠ ACTUALIZADA en E2a P6 (2026-09-25), con esta razón: suma la guarda de «Regenerar todo» /
        «Generar cronograma» (`pedirPropuestaDeDetalle`): con UN borrador por proyecto, pedir otra
        propuesta con una abierta se frena antes del paso 1. Lo que se protege es lo mismo: las guardas
        frenan, el autoguardado no. */
-    expect(CANVAS.match(/if \(hayBorrador\) \{/g)?.length, "las tres guardas (modificador, chat y «Regenerar todo»)").toBe(3);
+    /* ⚠ Y en E4 (2026-09) la cuenta pasa de 3 a 2: la guarda del modificador (`submitAssist`) se fue con él.
+       Quedan el chat y «Regenerar todo». */
+    expect(CANVAS.match(/if \(hayBorrador\) \{/g)?.length, "las dos guardas (chat y «Regenerar todo»)").toBe(2);
   });
 
   it("⭐ «Subir al cliente» queda LIBRE con un borrador abierto, con el aviso (respuesta 4 de Elías)", () => {
     /* La edición que la pone en rojo: volver a esconder el PublishBar con cualquier propuesta, o
        perder el aviso. */
-    expect(contiene(CANVAS, "{canEdit && (!proposal || hayBorrador) && phases.length > 0 && (")).toBe(true);
+    /* ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: la condición perdió `(!proposal || hayBorrador)`, que
+       solo escondía la barra con la vista previa de «Pedir cambio con IA» (se retiró). Subir queda libre. */
+    expect(contiene(CANVAS, "{canEdit && phases.length > 0 && (<PublishBar")).toBe(true);
     const barra = tramo(CANVAS, "<PublishBar", "/>");
     expect(barra.length).toBeGreaterThan(200);
     expect(barra).toContain("AVISO_SUBIR_CON_PROPUESTA");
@@ -577,11 +581,21 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(GANTT).not.toContain("proposalGlobalSlot");
   });
 
-  it("un borrador del formato nuevo no revienta la pantalla: la vista previa del modificador no lo lee", () => {
-    /* `proposal.phases` no existe en `borrador-v1`: leerlo como la del modificador reventaba. */
-    expect(contiene(CANVAS, "const propuestaDelAssist = proposal && !hayBorrador ? proposal : null;")).toBe(true);
-    expect(tramo(CANVAS, "const diffSummary = (() => {", "})();")).toContain("const proposal = propuestaDelAssist;");
+  it("una propuesta que no se sabe leer no traba nada: una línea ofrece descartarla y el Gantt sigue editable", () => {
+    /* ⚠ REESCRITA en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA». Esta guarda pedía que su
+       vista previa no leyera un `borrador-v1` (`proposal.phases` no existe ahí y reventaba). Sin vista previa,
+       lo guardado que no es un borrador (`propuestaIlegible`) se dice en una línea con «Descartarla», el
+       autoguardado no se frena y el Canvas no lee ningún campo de la propuesta a mano. Las ediciones que la
+       ponen en rojo: volver a frenar el autoguardado con una propuesta, sacar la línea, o volver a leer
+       `proposal.phases`. */
     expect(contiene(CANVAS, "const hayBorrador = !!proposal && esBorradorGuardado(proposal);")).toBe(true);
+    expect(contiene(CANVAS, "const propuestaIlegible = !!proposal && !hayBorrador;")).toBe(true);
+    const linea = tramo(CANVAS, "{propuestaIlegible && (", "</div>");
+    expect(linea).toContain("Descartarla");
+    expect(contiene(linea, "onClick={() => void discardProposal()}")).toBe(true);
+    const autoguardado = tramo(CANVAS, "if (!dirty ||", "return;");
+    expect(autoguardado, "el autoguardado volvió a frenarse con una propuesta").not.toContain("proposal &&");
+    expect(CANVAS, "el Canvas volvió a leer las fases de la propuesta a mano").not.toMatch(/proposal\??\.phases/);
   });
 });
 
@@ -642,7 +656,7 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
         "lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas, recalculo: leida.tareas?.recalculo ?? null } : null,",
       ),
     ).toBe(true);
-    // (El marcador ya no cierra el paréntesis: desde el cierre de la revisión de E2a recibe `soloLeer`.)
+    // (El marcador no cierra el paréntesis: desde E3 la firma trae su tipo de retorno.)
     const traer = tramo(CANVAS, "const traerPropuestaPendiente = async (", "const anteLaPropuestaGuardada");
     expect(contiene(traer, "if (!res.ok) return { ok: false };"), "un 5xx se lee como «no hay propuesta»").toBe(true);
     expect(contiene(traer, "} catch { return { ok: false }; }"), "un error de red se lee como «no hay propuesta»").toBe(true);
@@ -675,18 +689,15 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(iPermiso, "se da por avisada antes de mirar el permiso").toBeLessThan(iYaAnunciada);
     expect(contiene(CANVAS, "useEffect(() => { puedeEditarRef.current = canEdit; });")).toBe(true);
     expect(contiene(seguimiento, "}, [corridaQueArma, vueltaDelSeguimiento]);")).toBe(true);
-    /* Con la vista previa del modificador en pantalla, la guardada se LEE sin ponerla (cierre de la
-       revisión de E2a: no se leía nada, el desenlace callaba y la corrida quedaba avisada sin aviso).
-       La edición que la pone en rojo: volver a no leer (`deAssist ? null`), o leerla pisando la vista
-       previa. */
-    expect(seguimiento, "con la vista previa abierta, el aviso de las tareas se pierde").not.toMatch(/\?\s*null\s*:\s*await traerPropuestaPendiente/);
-    expect(
-      contiene(seguimiento, "const leida = conVistaPrevia ? await traerPropuestaPendiente({ soloLeer: true }) : await traerPropuestaPendiente();"),
-    ).toBe(true);
-    expect(contiene(seguimiento, "conVistaPrevia,")).toBe(true);
-    const soloLeer = tramo(traer, "if (!opts?.soloLeer) {", "return { ok: true");
-    expect(contiene(soloLeer, "setProposal(nueva);"), "leer pisa la vista previa").toBe(true);
-    expect(traer.indexOf("setProposal("), "pone la guardada en pantalla aunque solo lea").toBeGreaterThan(traer.indexOf("if (!opts?.soloLeer) {"));
+    /* ⚠ REESCRITA en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA». Con su vista previa en
+       pantalla la guardada se LEÍA sin ponerla (`soloLeer`, `conVistaPrevia`); sin ella, el seguimiento
+       siempre la trae y la pone. Lo que se sigue pidiendo: que se lea siempre (nunca `? null`), y que traer
+       la ponga en pantalla. La edición que la pone en rojo: volver a no leer, o a leer sin ponerla. */
+    expect(seguimiento, "el aviso de las tareas se pierde").not.toMatch(/\?\s*null\s*:\s*await traerPropuestaPendiente/);
+    expect(contiene(seguimiento, "const leida = await traerPropuestaPendiente();")).toBe(true);
+    expect(seguimiento, "volvió la vista previa del modificador al seguimiento").not.toMatch(/conVistaPrevia|soloLeer/);
+    expect(traer, "volvió el leer sin poner").not.toContain("soloLeer");
+    expect(contiene(traer, "setProposal(nueva);"), "traer no pone la guardada en pantalla").toBe(true);
     /* Descartar A MANO mientras se arman las tareas: su corrida termina sin aviso (ni «PROPUESTA_CAMBIO»,
        ni «no propone cambios»). La edición que la pone en rojo: no darla por avisada al descartar. */
     const descartar = tramo(CANVAS, "const discardProposal = async (", "const aplicarBorrador = async (");
@@ -1024,7 +1035,8 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     expect(pedir.indexOf("await flushDocBrief();"), "no manda antes las instrucciones tipeadas").toBeLessThan(pedir.indexOf("await pedirElRecalculo("));
     for (const cable of [
       "token: proposalMeta.current.runId,",
-      "sePuedePedir: !proposalMeta.current.deAssist && !!revisionRef.current.borrador && !descartandoRef.current,",
+      // E4: sin `!proposalMeta.current.deAssist` (se retiró la vista previa de «Pedir cambio con IA»).
+      "sePuedePedir: !!revisionRef.current.borrador && !descartandoRef.current,",
       "esperarQueSeGuarde,",
       "esperarCasillas: () => revisionRef.current.esperarCasillas(),",
       "revision: () => revisionRef.current,",
@@ -1119,7 +1131,7 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     for (const cable of [
       "puedeEditar: canEdit,",
       "hayBorrador,",
-      "vistaPrevia: proposalMeta.current.deAssist,",
+      // E4: sale `vistaPrevia` (se retiró «Pedir cambio con IA»; su freno salió de `puedeLanzarElRecalculo`).
       "armando: armando !== null,",
       "aplicando: aplicandoBorrador,",
       "descartando,",
@@ -1258,23 +1270,25 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
   });
 
   it("⭐ adoptarPropuesta: sin GET, la versión nunca baja, otro token trae la guardada y `proposalMeta` va pegado", () => {
-    /* Las ediciones que la ponen en rojo: pisar la vista previa del modificador, adoptar una versión menor
-       (lo recién desmarcado volvería a verse marcado), poner la propuesta de otro token, poner una propuesta
-       sin su token en `proposalMeta`, o hacer un GET (o `bumpGpsRefresh`) por cada casilla. */
+    /* Las ediciones que la ponen en rojo: adoptar una versión menor (lo recién desmarcado volvería a verse
+       marcado), poner la propuesta de otro token, poner una propuesta sin su token en `proposalMeta`, o hacer
+       un GET (o `bumpGpsRefresh`) por cada casilla.
+       ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA» y sale el freno de su
+       vista previa (`if (proposalMeta.current.deAssist) return;`); lo primero es mirar el token. */
     const adoptar = tramo(CANVAS, "const adoptarPropuesta = (", "const guardarCasillas = async (");
     expect(adoptar.length, "la guarda no está mirando la función").toBeGreaterThan(400);
-    const iAssist = adoptar.indexOf("if (proposalMeta.current.deAssist) return;");
-    expect(iAssist, "la respuesta pisa la vista previa del modificador").toBeGreaterThan(-1);
     const iToken = adoptar.indexOf('if (typeof r.token !== "string" || r.token !== proposalMeta.current.runId) {');
-    expect(iToken).toBeGreaterThan(iAssist);
+    expect(iToken, "adoptar dejó de mirar primero el token").toBeGreaterThan(-1);
+    expect(iToken).toBeLessThan(adoptar.indexOf("setProposal("));
     expect(contiene(tramo(adoptar, 'if (typeof r.token !== "string"', "}"), "void traerPropuestaPendiente(); return;")).toBe(true);
     const actualizar = tramo(adoptar, "setProposal((p) => {", "});");
     expect(contiene(actualizar, "if (p === null || enPantalla === null || version < enPantalla) return p;"), "la versión en pantalla baja").toBe(true);
-    const iMeta = actualizar.indexOf("proposalMeta.current = { ...proposalMeta.current, deAssist: false, runId: token };");
+    // E4: `proposalMeta` ya no lleva `deAssist`, y la propuesta es `PropuestaGuardada` (se fue el tipo de la vista previa).
+    const iMeta = actualizar.indexOf("proposalMeta.current = { ...proposalMeta.current, runId: token };");
     expect(iMeta, "la propuesta se pone sin su token").toBeGreaterThan(-1);
-    expect(iMeta).toBeLessThan(actualizar.indexOf("return r.propuesta as Proposal;"));
+    expect(iMeta).toBeLessThan(actualizar.indexOf("return r.propuesta as PropuestaGuardada;"));
     expect(
-      contiene(actualizar, "return { ...p, version, ...(Array.isArray(r.excluidos) ? { excluidos: r.excluidos } : {}) } as Proposal;"),
+      contiene(actualizar, "return { ...p, version, ...(Array.isArray(r.excluidos) ? { excluidos: r.excluidos } : {}) };"),
     ).toBe(true);
     expect(adoptar, "cada casilla hace un GET").not.toContain("fetch(");
     expect(adoptar).not.toContain("bumpGpsRefresh");
@@ -1345,13 +1359,14 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
 
   it("⭐ al volver a la pestaña se relee la propuesta, y la versión en pantalla nunca baja", () => {
     /* Las ediciones que la ponen en rojo: no escuchar la vuelta (lo que marcó otra computadora no se vería
-       hasta recargar), escucharla sin propuesta o con la vista previa del modificador, no soltar los
-       oyentes, comparar solo la corrida al refrescar, o poner una propuesta más vieja al traerla. */
+       hasta recargar), escucharla sin propuesta, no soltar los oyentes, comparar solo la corrida al
+       refrescar, o poner una propuesta más vieja al traerla. (E4: sale «o con la vista previa del
+       modificador»: se retiró «Pedir cambio con IA».) */
     const volver = tramo(CANVAS, "const alVolver = () => {", "}, [hayBorrador, refrescarPropuesta]);");
     expect(CANVAS.indexOf("if (!hayBorrador) return;", CANVAS.indexOf("const alVolver = () => {") - 80), "escucha sin propuesta").toBeLessThan(
       CANVAS.indexOf("const alVolver = () => {"),
     );
-    expect(contiene(volver, 'if (document.visibilityState !== "visible" || proposalMeta.current.deAssist) return;')).toBe(true);
+    expect(contiene(volver, 'if (document.visibilityState !== "visible") return;')).toBe(true);
     expect(contiene(volver, "void refrescarPropuesta();")).toBe(true);
     expect(contiene(volver, 'document.addEventListener("visibilitychange", alVolver);')).toBe(true);
     expect(contiene(volver, 'window.addEventListener("focus", alVolver);')).toBe(true);
@@ -1456,7 +1471,8 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
   it("⭐ los motivos del botón del chat entran en el botón (≤ 60 caracteres)", () => {
     const bloque = tramo(CANVAS, "const MOTIVOS_DEL_CHAT = {", "} as const;");
     const motivos = [...bloque.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    expect(motivos.length).toBe(6);
+    // E4: 6 → 5 (sale «Descarta la vista previa de «Pedir cambio con IA»»: se retiró).
+    expect(motivos.length).toBe(5);
     for (const m of motivos) expect(m.length, m).toBeLessThanOrEqual(60);
   });
 

@@ -4,7 +4,6 @@ import {
   VENTANA_DE_COPIA,
   avisoDeFronteraEnLaLinea,
   fugaEn,
-  fugasDeLaPropuesta,
   huellasDeFrontera,
   lineasConFrontera,
   marcarFugas,
@@ -153,36 +152,8 @@ describe("marcar tareas y revisar propuestas", () => {
     ]);
   });
 
-  it("en una propuesta, avisa solo lo NUEVO o CAMBIADO — lo que ya estaba no se vuelve a marcar", () => {
-    const actuales = [
-      {
-        name: "Go-live",
-        notes: null,
-        tasks: [{ title: "Activar journeys", notes: "Antes de la fecha límite del 31 de diciembre." }],
-      },
-    ];
-    const propuesta = {
-      phases: [
-        {
-          name: "Go-live",
-          notes: null,
-          tasks: [
-            { title: "Activar journeys", notes: "Antes de la fecha límite del 31 de diciembre." },
-            { title: "Cerrar el proyecto", notes: "Entrega formal el 15 de enero." },
-          ],
-        },
-        { name: "Revisión del 5 de octubre", notes: null, tasks: [] },
-      ],
-    };
-    const avisos = fugasDeLaPropuesta(propuesta, actuales, h);
-    expect(avisos).toEqual([
-      "“Cerrar el proyecto”: la nota trae una fecha — el cliente lee títulos, notas y nombres de fase; " +
-        "corrígela o descarta ese cambio antes de aplicar.",
-      "“Revisión del 5 de octubre”: el nombre de la fase trae una fecha — el cliente lee títulos, notas y " +
-        "nombres de fase; corrígelo o descarta ese cambio antes de aplicar.",
-    ]);
-    expect(fugasDeLaPropuesta(propuesta, actuales, sinMaterial)).toEqual([]);
-  });
+  /* Se retiró «Pedir cambio con IA» (E4): su revisión de la propuesta completa (`fugasDeLaPropuesta`) se
+     borró con él, y su caso con ella. Las líneas del chat siguen pasando por la frontera (abajo). */
 });
 
 describe("⭐ las líneas del acuerdo del CHAT pasan por la frontera (paso C, 2026-09-23)", () => {

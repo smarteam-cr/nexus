@@ -4,13 +4,16 @@
  * Correr: `npx vitest run lib/timeline/capacidades.test.ts --project unit`.
  *
  * ── LA GUARDA QUE JUSTIFICA EL MODULO ────────────────────────────────────────────────────────
- * Las reglas del modificador viven aca para que el chat que conversa pueda decir «eso no se
- * puede» ANTES de proponerlo — que es literalmente lo que Elias pidio. Si el prompt del
- * modificador vuelve a transcribirlas, hay dos copias; dos copias divergen calladas; y la
- * divergencia se manifiesta como el chat prometiendole al CSE algo que el modificador no hace.
+ * Las reglas del cronograma viven aca para que el chat que conversa pueda decir «eso no se
+ * puede» ANTES de proponerlo — que es literalmente lo que Elias pidio. Si alguien las transcribe
+ * al contexto del chat, hay dos copias; dos copias divergen calladas.
  *
- * Nada falla cuando eso pasa: el JSON sigue siendo valido y el documento sale. Por eso la guarda
- * es estructural — que el prompt las INTERPOLE, no que las contenga.
+ * Nada falla cuando eso pasa: el texto sale igual. Por eso la guarda es estructural — que el
+ * contexto las INTERPOLE, no que las contenga.
+ *
+ * E4 (2026-09): se retiró «Pedir cambio con IA». Estas guardas leian el prompt del modificador
+ * (borrado con él); ahora piden lo mismo al contexto del chat del cronograma sin propuesta
+ * (`lib/asistente/contexto.ts`), que es quien las lee hoy.
  */
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
@@ -21,29 +24,39 @@ import {
   ADVERTENCIAS_SOBRE_LA_PROPUESTA,
   advertenciasParaLaInstruccion,
 } from "./capacidades";
-import { PROMPT_ASSIST_CRONOGRAMA } from "@/lib/agents/timeline-assist";
 
-const MODULO_DEL_PROMPT = "lib/agents/timeline-assist.ts";
+/* Reescritas en E4 (se retiró «Pedir cambio con IA»): antes leian el prompt del modificador. */
+const MODULO_DEL_CONTEXTO = "lib/asistente/contexto.ts";
+/** El código sin comentarios: un comentario que nombra la constante no la interpola. */
+const soloCodigo = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " ")).replace(/^\s*\/\/.*$/gm, "");
+const contexto = () => soloCodigo(fs.readFileSync(path.join(process.cwd(), MODULO_DEL_CONTEXTO), "utf8"));
 
 describe("una sola copia de las reglas", () => {
-  it("LA GUARDA: el prompt las INTERPOLA, no las transcribe", () => {
-    /* La edicion que la pone en rojo: pegar el texto de las reglas dentro del template del
-       prompt en vez de interpolar la constante. El prompt sigue saliendo identico —por eso no
-       falla nada— pero a partir de ahi el chat y el modificador pueden decir cosas distintas. */
-    const src = fs.readFileSync(path.join(process.cwd(), MODULO_DEL_PROMPT), "utf8");
-    expect(src, "el prompt dejo de importar las reglas compartidas").toContain(
-      "REGLAS_DURAS_DEL_CRONOGRAMA",
+  it("LA GUARDA: el contexto del chat las INTERPOLA, no las transcribe", () => {
+    /* La edicion que la pone en rojo: pegar el texto de las reglas dentro del contexto en vez de
+       interpolar la constante. El texto sigue saliendo identico —por eso no falla nada— pero a
+       partir de ahi el chat y estas reglas pueden decir cosas distintas. */
+    const src = contexto();
+    expect(src, "el contexto dejo de importar las reglas compartidas").toMatch(
+      /import \{[^}]*\bREGLAS_DURAS_DEL_CRONOGRAMA\b[^}]*\} from "@\/lib\/timeline\/capacidades"/,
     );
     expect(
       src.includes("- Conserva los ids EXACTOS"),
-      "las reglas volvieron a estar transcritas dentro del prompt: son dos copias",
+      "las reglas volvieron a estar transcritas dentro del contexto: son dos copias",
     ).toBe(false);
   });
 
-  it("y el prompt sigue llevandolas de verdad", () => {
-    // Interpolar mal (o interpolar otra constante) dejaria al agente sin reglas y el test de
-    // arriba pasaria igual.
-    expect(PROMPT_ASSIST_CRONOGRAMA).toContain(REGLAS_DURAS_DEL_CRONOGRAMA);
+  it("y el contexto sigue llevandolas de verdad, debajo de su rotulo", () => {
+    /* Importarlas y no ponerlas (o interpolar otra constante) dejaria al chat sin reglas y el test de
+       arriba pasaria igual. La edicion que la pone en rojo: sacar `REGLAS_DURAS_DEL_CRONOGRAMA,` del
+       texto que arma el contexto. */
+    const src = contexto();
+    const iRotulo = src.indexOf('"REGLAS DURAS DEL CRONOGRAMA.');
+    const iFin = src.indexOf('"CONSECUENCIAS QUE HAY QUE DECIR ANTES', iRotulo);
+    expect(iRotulo, "no se encuentra el rotulo de las reglas").toBeGreaterThan(-1);
+    expect(iFin).toBeGreaterThan(iRotulo);
+    expect(src.slice(iRotulo, iFin)).toMatch(/\n\s*REGLAS_DURAS_DEL_CRONOGRAMA,\s*\n/);
     expect(REGLAS_DURAS_DEL_CRONOGRAMA.length).toBeGreaterThan(1000);
   });
 

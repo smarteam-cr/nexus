@@ -21,8 +21,6 @@ export interface EntradaDeLaApertura {
   puedeConversar: boolean;
   /** Hay una propuesta guardada (un borrador) en pantalla. */
   hayBorrador: boolean;
-  /** La vista previa del modificador («Pedir cambio con IA»): no es una propuesta guardada. */
-  deAssist: boolean;
   /** El token de la propuesta en pantalla. */
   token: string | null;
   /** La barra tiene algo que mostrar (el resumen existe). */
@@ -47,7 +45,7 @@ export interface EntradaDeLaApertura {
 
 export function debeAbrirseElChat(e: EntradaDeLaApertura): DecisionDeApertura {
   if (!e.puedeEditar || !e.puedeConversar) return "nada";
-  if (!e.hayBorrador || e.deAssist || !e.token || !e.conCambios || e.nadaQueDecidir) return "nada";
+  if (!e.hayBorrador || !e.token || !e.conCambios || e.nadaQueDecidir) return "nada";
   // Ya se abrió para esta persona (en cualquier computadora): no se abre de nuevo.
   if (e.abiertoEnElServidor) return "nada";
   // Este navegador ya lo abrió, pero el servidor no lo tiene: se vuelve a marcar, sin abrir.

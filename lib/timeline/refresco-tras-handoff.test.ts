@@ -99,14 +99,12 @@ describe("⭐ cuando el servidor guarda propuesta, el cliente la va a buscar", (
 });
 
 describe("qué propuesta gana la pantalla", () => {
-  const base = { hayPropuesta: true, esDeAssist: false, runIdEnPantalla: "r1", runIdNuevo: "r2" };
+  /* Se retiró «Pedir cambio con IA» (E4): sin su vista previa en memoria, `esDeAssist` y su caso («nunca
+     pisa una vista previa del assist») se fueron con ella. */
+  const base = { hayPropuesta: true, runIdEnPantalla: "r1", runIdNuevo: "r2" };
 
   it("sin nada en pantalla, siempre entra la nueva", () => {
     expect(debeReemplazarPropuesta({ ...base, hayPropuesta: false })).toBe(true);
-  });
-
-  it("⛔ NUNCA pisa una vista previa del assist: no está en el servidor, se perdería", () => {
-    expect(debeReemplazarPropuesta({ ...base, esDeAssist: true })).toBe(false);
   });
 
   it("del servidor contra el servidor: gana la corrida nueva", () => {
@@ -130,7 +128,7 @@ describe("qué propuesta gana la pantalla", () => {
  * marcó otra computadora tiene que verse; y un GET que salió antes de una escritura nunca baja la versión.
  */
 describe("E3 · la misma corrida: gana la versión mayor, y la de pantalla nunca baja", () => {
-  const base = { hayPropuesta: true, esDeAssist: false, runIdEnPantalla: "r1", runIdNuevo: "r1" };
+  const base = { hayPropuesta: true, runIdEnPantalla: "r1", runIdNuevo: "r1" };
 
   it("⭐ la misma corrida con una versión MAYOR reemplaza; igual o menor, no", () => {
     /* La edición que la pone en rojo: volver a comparar solo la corrida (lo que marcó otra computadora no
@@ -142,11 +140,6 @@ describe("E3 · la misma corrida: gana la versión mayor, y la de pantalla nunca
     // Sin versiones que comparar (el formato viejo), la regla de antes: la misma corrida no se re-pisa.
     expect(debeReemplazarPropuesta(base)).toBe(false);
     expect(debeReemplazarPropuesta({ ...base, versionEnPantalla: null, versionNueva: 4 })).toBe(false);
-  });
-
-  it("⛔ la vista previa del modificador NUNCA se pisa, aunque llegue una versión mayor", () => {
-    expect(debeReemplazarPropuesta({ ...base, esDeAssist: true, versionEnPantalla: 1, versionNueva: 9 })).toBe(false);
-    expect(debeReemplazarPropuesta({ ...base, esDeAssist: true, runIdNuevo: "r2" })).toBe(false);
   });
 
   it("otra corrida gana siempre, sin mirar versiones (una propuesta nueva arranca en 0)", () => {

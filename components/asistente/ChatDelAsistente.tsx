@@ -937,7 +937,7 @@ export default function ChatDelAsistente({
                   </button>
                 ) : (
                   <p className="mt-2 text-xs text-fg-muted">
-                    Copia esta instrucción y pégala en «Pedir cambio con IA» del documento.
+                    Copia esta instrucción y pégala en «✨ Mejorar con IA» del documento.
                   </p>
                 )}
               </div>
@@ -963,17 +963,19 @@ export default function ChatDelAsistente({
           {error ?? ""}
         </p>
         {pensando && <p className="text-xs text-fg-muted">Pensando…</p>}
-        {/* ⚠ DOS CARRILES, DOS ESPERAS. El de operaciones aplica en ~1 ms; el viejo —una
-            instrucción en prosa que un segundo modelo relee— tarda de dos a cuatro minutos.
+        {/* ⚠ DOS CARRILES, DOS ESPERAS. El de operaciones aplica en ~1 ms; el de una instrucción en
+            prosa —la de un documento, que su editor relee con un modelo— puede tardar minutos.
             Mostrar el cartel de los minutos sobre un cambio instantáneo no es solo impreciso:
-            enseña a desconfiar del único cartel que sí avisa una espera de verdad. */}
+            enseña a desconfiar del único cartel que sí avisa una espera de verdad. E4 (2026-09): el
+            cronograma ya no tiene ese carril («Pedir cambio con IA» se retiró), así que el cartel
+            largo no nombra el cronograma. */}
         {aplicando && (
           <p className="text-xs text-fg-muted">
             {/* E3 P5: lo que va a la propuesta lo dice así («Pasando a la propuesta…»). */}
             {(aplicandoEste ? textoMientrasAplica(aplicandoEste) : null) ??
               (turnos[turnos.length - 1]?.acuerdo?.operaciones?.length
                 ? `Aplicando los cambios al ${nombreDeLaPieza}…`
-                : "El editor está reescribiendo el cronograma completo — suele tardar entre dos y cuatro minutos. Puedes seguir mirando el documento mientras tanto.")}
+                : "Aplicando los cambios… puede tardar unos minutos.")}
           </p>
         )}
         {error && (

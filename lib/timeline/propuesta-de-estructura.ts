@@ -1055,14 +1055,14 @@ export const AVISO_PROPUESTA_PENDIENTE =
    `AVISO_PROPUESTA_PENDIENTE`, y nada sigue solo con las tareas al decidirla. */
 export const AVISO_FALLO_DE_ESTRUCTURA = "Esta vez no se pudieron revisar las fases; sigo con las tareas.";
 /**
- * Por qué NINGÚN otro cambio con IA se aplica mientras haya cambios de fases sin decidir: el chat
- * (sus dos carriles) y «IA» de una fase guardan con un PUT con motivo, que borraba `pendingProposal`
- * en silencio; desde E1 ese PUT responde 409 PROPUESTA_ABIERTA (timeline/route.ts) y la pantalla
- * frena antes, con esta frase. Descartar lo que proponen borraba la guardada. Una sola frase para
- * los dos caminos, y la misma idea le llega al modelo del chat en su contexto.
+ * Por qué NINGÚN otro cambio con IA se aplica ENCIMA de una propuesta sin decidir: un cambio que se
+ * guarda con un PUT con motivo borraba `pendingProposal` en silencio; desde E1 ese PUT responde 409
+ * PROPUESTA_ABIERTA (timeline/route.ts). La misma idea le llega al modelo del chat en su contexto.
  * Desde E2a la propuesta puede traer también tareas: el texto dice «la propuesta del cronograma»;
  * el nombre de la constante se queda (lo citan las guardas de estructura-cronograma.test.ts).
  * E3 P5: con una propuesta abierta, el chat pasa lo acordado a la propuesta: la frase lo ofrece.
+ * E4 (2026-09): la decía la pantalla al frenar «Pedir cambio con IA», que se retiró; el chat frena con
+ * sus propios motivos (`motivoDelChat` del cronograma).
  */
 export const CAMBIOS_DE_FASES_SIN_DECIDIR =
   "Primero decide la propuesta del cronograma (arriba del Gantt), o pídele el cambio al chat: lo pasa a la propuesta.";

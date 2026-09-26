@@ -37,8 +37,7 @@
  */
 import { arrastreAlDesmarcar } from "@/lib/timeline/dependencias-de-operaciones";
 import { resolverHandle } from "@/lib/timeline/handle-de-tarea";
-import type { Operacion, OperacionDelChat } from "@/lib/timeline/operaciones";
-import type { FaseActual } from "@/lib/timeline/assist-items";
+import type { FaseActual, Operacion, OperacionDelChat } from "@/lib/timeline/operaciones";
 import { esAcuerdoDeCierre, leerAcuerdo, leerDesenlace } from "./acuerdo";
 
 /** Lo mínimo que el libro necesita de un turno guardado. */

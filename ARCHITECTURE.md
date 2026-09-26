@@ -207,7 +207,7 @@ corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**396**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**390**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
@@ -405,7 +405,8 @@ editable por UI** (`/team`, solo SUPER_ADMIN), no una tabla estática en código
   registry (`schema.ts`), lectura de Json tolerante.
 - **Generación con IA**: los agentes que ESCRIBEN artefactos piden
   `generate` (artefacto inexistente) o `regenerate` (ya existe) de su sección
-  (`lib/auth/permissions/artifact-gate.ts`, cableado en analyze y timeline/assist).
+  (`lib/auth/permissions/artifact-gate.ts`, cableado en analyze; `agent-timeline-assist` queda
+  en `lib/agents/retirados.ts` y analyze no lo despacha).
 - **UI**: `/api/me` expone `permissions` (mapa EFECTIVO); `useMe()` y el Sidebar
   (vía AppShell server-side) gatean cosméticamente con él. Las viejas whitelists
   (`sales-roles.ts`, `marketing-roles.ts`, `cobranza-roles.ts`) quedaron como

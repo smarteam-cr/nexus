@@ -484,13 +484,18 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
     expect(src).not.toMatch(/timeline(Phase|Task)\.(create|update|updateMany|delete|deleteMany|upsert)\(/);
   });
 
-  it("el paso 1 pide la MISMA vara que el paso 2 y que «Pedir cambio con IA»", () => {
+  it("el paso 1 pide la MISMA vara que el paso 2", () => {
+    /* ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA» y su ruta, que pedía la
+       misma vara; queda solo el paso 2. La vara del paso 2 la pone el gate de artefactos con el mismo
+       predicado de «ya generado» que `guardIaDelCronograma` (tareas AGENT o MODIFIED). La edición que la pone
+       en rojo: sacar el guard del paso 1, o que los dos predicados se separen. */
     const iGate = src.indexOf("await guardIaDelCronograma(tl.id)");
     expect(iGate).toBeGreaterThan(-1);
     expect(iGate).toBeLessThan(iModelo);
     expect(src).toMatch(/if \(iaGate instanceof NextResponse\) return iaGate;/);
     expect(src).toContain("guardTimelineEdit(projectId)");
-    expect(soloCodigo(leer("app/api/projects/[projectId]/timeline/assist/route.ts"))).toContain("guardIaDelCronograma(");
+    expect(soloCodigo(leer("lib/auth/api-guards.ts"))).toContain('source: { in: ["AGENT", "MODIFIED"] }');
+    expect(soloCodigo(leer("lib/auth/permissions/artifact-gate.ts"))).toContain('source: { in: ["AGENT", "MODIFIED"] }');
   });
 
   it("revisa los nombres de fase contra el material que leyó", () => {
@@ -544,8 +549,8 @@ describe("G8 · la ruta: sin material no paga, no pisa, y pide la vara del paso 
   });
 
   it("⛔ la ruta no arma bloques de contexto a mano", () => {
-    /* Mismo molde que el assist (asistente-cronograma.test.ts): un bloque `=== ALGO ===` escrito en
-       la ruta es una fuente fuera del trinquete. Van en lib/contexto/estructura-cronograma.ts. */
+    /* Un bloque `=== ALGO ===` escrito en la ruta es una fuente fuera del trinquete. Van en
+       lib/contexto/estructura-cronograma.ts. (Era el mismo molde que el del modificador, retirado en E4.) */
     const aMano = [...leer(RUTA).matchAll(/=== [^\n=]+ ===/g)].map((m) => m[0]);
     expect(aMano).toEqual([]);
   });
@@ -705,7 +710,8 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
        ve, o mostrar la propuesta del paso 1 sin su token. */
     const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");
     const continuacion = tramoDe(pedir, "if (opts?.saltarEstructura) {", "} else {");
-    expect(continuacion).toContain("if (!proposalMeta.current.deAssist && esBorradorV1(proposal)) {");
+    // E4: sin `!proposalMeta.current.deAssist &&` (se retiró la vista previa de «Pedir cambio con IA»).
+    expect(continuacion).toContain("if (esBorradorV1(proposal)) {");
     expect(continuacion).toContain("token = proposalMeta.current.runId;");
     /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: lo desmarcado se guarda en el servidor y cada
        casilla sube la versión. La continuación primero espera las casillas (`esperarCasillas`) y lee la
@@ -719,9 +725,10 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     const conToken = tramoDe(pedir, "if (paso.token) {", "} else {");
     expect(conToken).toContain("token = paso.token;");
     expect(conToken).toContain("version = 0;");
-    const iMeta = conToken.indexOf("proposalMeta.current = { deAssist: false, runId: paso.token };");
+    // E4: el literal pierde `deAssist` y el tipo pasa a `PropuestaGuardada` (se fue el de la vista previa).
+    const iMeta = conToken.indexOf("proposalMeta.current = { runId: paso.token };");
     expect(iMeta, "la propuesta del paso 1 se muestra sin su token").toBeGreaterThan(-1);
-    expect(iMeta).toBeLessThan(conToken.indexOf("setProposal(estructura.proposal as Proposal)"));
+    expect(iMeta).toBeLessThan(conToken.indexOf("setProposal(estructura.proposal as PropuestaGuardada)"));
     expect(conToken).toContain('setTareasDelBorrador({ estado: "faltan"');
     // Y al volver: la propuesta «armando» se trae (con su corrida) para que la siga el borrador.
     const iPedido = pedir.indexOf("/analyze");
@@ -768,7 +775,8 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
        Las ediciones que la ponen en rojo: volver al pedido síncrono con `preview: true`, no esperar el
        guardado (o esperarlo después del pedido), no mandar el borrador, pedir con una propuesta en
        pantalla o mientras esta pantalla ya pide algo, o no soltar `armando`. */
-    const fase = tramo("const pedirRegenerarFase = async (", "const submitAssist = async (");
+    // E4: el fin del tramo era `submitAssist` (se retiró con «Pedir cambio con IA»); ahora, el carril del chat.
+    const fase = tramo("const pedirRegenerarFase = async (", "const aplicarOperacionesAcordadas = async (");
     expect(fase.length, "la guarda no está mirando la función").toBeGreaterThan(800);
     const iFlush = fase.indexOf("await flushDocBrief();");
     const iFreno = fase.indexOf("if (!phase.id || proposal || armando !== null");
@@ -785,14 +793,16 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     expect(fase, "volvió la vista previa").not.toMatch(/\bpreview\b/);
     // ⚠ ACTUALIZADA en la revisión de E2b (2026-09-25): la espera lleva la fase (`soloFase`) para nombrarla.
     expect(fase.indexOf('setArmando({ paso: 2, modo: "regen", soloFase: phase.id });'), "la espera no se dice").toBeGreaterThan(iGuardado);
-    expect(fase, "no trae la propuesta «armando»").toContain("if (!proposalMeta.current.deAssist) await traerPropuestaPendiente();");
+    // E4: sin el freno de la vista previa del modificador (`!proposalMeta.current.deAssist`).
+    expect(fase, "no trae la propuesta «armando»").toContain("await traerPropuestaPendiente();");
     expect(fase, "`armando` no se suelta al terminar el pedido").toMatch(/finally \{\s*setArmando\(null\);\s*\}/);
   });
 
   it("⛔ el chat no aplica con cambios de fases sin decidir (el PUT borraría la propuesta)", () => {
     /* Hueco 2 de la revisión: el Aplicar del chat hace un PUT con motivo, y ese PUT borra
        `pendingProposal`. La edición que la pone en rojo: sacar la guarda. */
-    const aplicar = tramo("const aplicarOperacionesAcordadas = async (", "const applyProposal");
+    // E4: el fin del tramo era `applyProposal` (se retiró con «Pedir cambio con IA»).
+    const aplicar = tramo("const aplicarOperacionesAcordadas = async (", "const discardProposal = async (");
     // (E1, 2026-09-24: la guarda pregunta si hay un BORRADOR guardado; antes, `structureOnlyProposal`.)
     const iGuarda = aplicar.indexOf("if (hayBorrador) {");
     expect(iGuarda).toBeGreaterThan(-1);
@@ -939,7 +949,8 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     expect(acciones, "«Qué hacer acá» manda a esperar una corrida muerta").toContain(
       'tareasFallaron: estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "fallo",',
     );
-    const chat = tramo("const aplicarOperacionesAcordadas = async (", "const applyProposal");
+    // E4: el fin del tramo era `applyProposal` (se retiró con «Pedir cambio con IA»).
+    const chat = tramo("const aplicarOperacionesAcordadas = async (", "const discardProposal = async (");
     expect(chat).toContain("const vacio = estadoDelVacio(proposal, estadoDeLasTareasEnPantalla);");
     /* ⚠ ACTUALIZADA en E3 P5 (2026-09-25), con esta razón: la tercera rama decía «primero decide la
        propuesta» (`CAMBIOS_DE_FASES_SIN_DECIDIR`). Con E3 el chat pasa lo acordado a la propuesta: un
@@ -1131,7 +1142,7 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     expect(textoDelChipDeEspera(false, true)).toBe("Armando las tareas…");
     expect(textoDelChipDeEspera(true, true, "Diseño"), "el paso 1 no es de una fase").toBe("Revisando fases y tiempos…");
     // La pantalla: el pedido la guarda, y la línea y el chip la leen (del pedido, o del vacío guardado).
-    expect(tramo("const pedirRegenerarFase = async (", "const submitAssist")).toContain(
+    expect(tramo("const pedirRegenerarFase = async (", "const aplicarOperacionesAcordadas")).toContain(
       'setArmando({ paso: 2, modo: "regen", soloFase: phase.id });',
     );
     expect(src).toContain("const idDeLaFaseQueSeArma = armando?.soloFase ?? revision.borrador?.soloFase ?? null;");
@@ -1196,34 +1207,34 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
   });
 
   it("#4 · con cambios de fases sin decidir, ni «IA» de una fase ni el acuerdo viejo del chat reemplazan la propuesta", () => {
-    /* La edición que la pone en rojo: sacar la guarda de `submitAssist`, o volver a abrir «Pedir cambio
-       con IA» desde el «IA» de una fase.
-       ⚠ REESCRITA en E4 P1 (2026-09-25), con esta razón: el «IA» de una fase ya no abre el diálogo del
+    /* ⚠ REESCRITA en E4 P1 (2026-09-25), con esta razón: el «IA» de una fase ya no abre el diálogo del
        modificador (que reemplazaba la propuesta en pantalla): abre el chat con esa fase señalada, y el
        chat, con una propuesta abierta, la EDITA (E3). Por eso ya no se apaga con una propuesta: lo que
-       se pide es que el Canvas no le pase ningún `onAssistPhase` al Gantt y que el Gantt abra el chat. */
-    const assist = tramo("const submitAssist = async (", "const aplicarOperacionesAcordadas");
-    // (E1, 2026-09-24: la guarda pregunta si hay un BORRADOR guardado; antes, `structureOnlyProposal`.)
-    const iGuarda = assist.indexOf("if (hayBorrador) {");
-    expect(iGuarda, "submitAssist no frena").toBeGreaterThan(-1);
-    expect(iGuarda).toBeLessThan(assist.indexOf("/timeline/assist"));
-    expect(assist.slice(iGuarda, iGuarda + 200)).toContain("fallo: CAMBIOS_DE_FASES_SIN_DECIDIR");
+       se pide es que el Canvas no le pase ningún `onAssistPhase` al Gantt y que el Gantt abra el chat.
+       ⚠ REESCRITA en E4 P2 (2026-09), con esta razón: se retiró «Pedir cambio con IA». Ya no hay un pedido
+       del modificador que frenar: lo que se pide es que no vuelva (ni su pedido, ni su diálogo, ni su
+       ruta). Las ediciones que la ponen en rojo: restaurar el diálogo o el pedido, o volver a abrirlo
+       desde el «IA» de una fase. */
+    expect(canvas, "volvió el pedido de «Pedir cambio con IA»").not.toContain("submitAssist(");
+    expect(canvas, "volvió el diálogo de «Pedir cambio con IA»").not.toContain("TimelineAssistDialog");
+    expect(canvas, "volvió la ruta de «Pedir cambio con IA»").not.toContain("/timeline/assist");
     expect(canvas, "el «IA» de una fase volvió a abrir el modificador").not.toContain("onAssistPhase");
     expect(soloCodigo(leer("components/canvas/TimelineGantt.tsx")), "el «IA» de una fase no abre el chat").toContain(
       "chat.abrirCon(",
     );
   });
 
-  it("#4 · descartar la del modificador no toca el servidor, y el DELETE solo borra la que la pantalla tiene enfrente", () => {
+  it("#4 · el DELETE solo borra la que la pantalla tiene enfrente", () => {
     /* ⚠ REESCRITA en la corrección de E1 (2026-09-24), con esta razón: la condición se lee UNA vez en
        `eraDelModificador`, porque ahora también decide traer la propuesta guardada al descartar la
        vista previa del modificador. Pide lo mismo que antes.
-       La edición que la pone en rojo: el DELETE incondicional de antes, o sin `runId`. */
+       ⚠ REESCRITA en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA» y con él la vista previa
+       en memoria que se descartaba sin tocar el servidor (`eraDelModificador`). Queda el DELETE, siempre
+       condicionado a la corrida que se tiene enfrente.
+       La edición que la pone en rojo: el DELETE sin `runId`, o la ruta sin la escritura condicional. */
     const descartar = tramo("const discardProposal = async (", "const aplicarBorrador = async (");
-    expect(descartar).toContain("const eraDelModificador = proposalMeta.current.deAssist;");
-    const iSi = descartar.indexOf("if (!eraDelModificador) {");
-    expect(iSi, "el DELETE ya no depende de dónde vive la propuesta").toBeGreaterThan(-1);
-    expect(iSi).toBeLessThan(descartar.indexOf("/timeline/proposal`"));
+    expect(descartar, "volvió la vista previa del modificador al descarte").not.toContain("eraDelModificador");
+    expect(descartar.indexOf("/timeline/proposal`"), "descartar ya no borra en el servidor").toBeGreaterThan(-1);
     expect(descartar).toContain("runId: proposalMeta.current.runId");
     const ruta = soloCodigo(leer("app/api/projects/[projectId]/timeline/proposal/route.ts"));
     expect(ruta).toContain('if (body && "runId" in body) {');
@@ -1404,8 +1415,11 @@ describe("G15 · la propuesta de fases: nadie la pisa ni la borra de rebote, y e
     expect(franja).toContain("delPaso1: observacionesPaso1,");
     expect(franja, "la franja no lee lo guardado").toContain("guardado: hayBorrador ? proposal : null,");
     // Cerrar la franja del vacío vale también al descartarlo: lo guardado no vuelve a aparecer.
+    /* ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: la propuesta en pantalla ya no tiene el tipo de la vista
+       previa de «Pedir cambio con IA» (se retiró) y el Canvas no lee sus campos a mano: lo notado sale del
+       borrador ya leído (`revision.borrador?.observaciones`). La condición de la franja es la misma. */
     expect(tramo("const discardProposal = async (", "const aplicarBorrador = async ("), "cerrar la franja no dura").toMatch(
-      /franjaCerradaPara === proposalMeta\.current\.runId \? \[\] : \(proposal\?\.observaciones \?\? \[\]\)/,
+      /franjaCerradaPara === proposalMeta\.current\.runId \? \[\] : \(revision\.borrador\?\.observaciones \?\? \[\]\)/,
     );
     // (b) La continuación sin propuesta en pantalla manda lo que muestra la franja.
     const pedir = tramo("const pedirPropuestaDeDetalle = async (", "const pedirRegenerarFase");

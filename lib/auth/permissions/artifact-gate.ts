@@ -13,9 +13,8 @@
  *   - handoff:    Project.handoffGeneratedAt (sello del ciclo de vida)
  *   - kickoff:    canvas "Kickoff" del proyecto con bloques (≈ deriveSetup)
  *   - procesos:   flowcharts con nodos en la sección procesos del cliente (≈ deriveSetup)
- *   - cronograma: tareas source AGENT|MODIFIED (= hasAiDetail, el predicado del
- *     gate v1 de timeline/assist) — para el agente de detalle Y planificación
- *     (que escribe el esqueleto).
+ *   - cronograma: tareas source AGENT|MODIFIED (= hasAiDetail del cronograma) — para
+ *     el agente de detalle Y planificación (que escribe el esqueleto).
  * Sin projectId (corridas legacy a nivel cliente) no hay señal → "generate".
  *
  * ⛔ FAIL-CLOSED (A-18, auditoría 2026-09-03): un `agentGroup` que ESTÁ en el registro de
@@ -25,7 +24,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { esAgenteDeDetalle } from "@/lib/agents/resolver";
-import { ID_ASSIST_CRONOGRAMA } from "@/lib/agents/timeline-assist";
+import { esAgenteRetirado } from "@/lib/agents/retirados";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
@@ -139,21 +138,18 @@ export async function resolveArtifactGate(
       return { section: "entrega", action: aiBlocks > 0 ? "regenerate" : "generate" };
     }
     case "cronograma": {
-      /* Del grupo `cronograma` escriben DOS: el detalle (base O variante por tipo
-         `agent-timeline-detail--<t>`) y el MODIFICADOR (`agent-timeline-assist`, que edita un
-         cronograma ya existente). agent-timeline-progress solo propone → sin gate.
+      /* Del grupo `cronograma` escribe el detalle (base O variante por tipo
+         `agent-timeline-detail--<t>`). agent-timeline-progress solo propone → sin gate.
 
          ⚠ Por la convención y no por el id exacto: con `!== "agent-timeline-detail"` una
          variante de X2 caía al return null y corría SIN celda de permiso (auditoría
-         2026-08-08). El modificador entra por la misma puerta desde que su prompt vive en la
-         tabla `Agent` (2026-08-18): antes NO tenía fila, así que era indespachable desde
-         analyze; ahora la tiene, y sin este `case` bastaba un POST a /analyze con su id para
-         correrlo sin ninguna celda.
+         2026-08-08).
 
-         La señal «ya existe» es la MISMA que usa su propia ruta para elegir entre
-         `regenerateTimeline` y `cronograma.generate` — si divergieran, el mismo agente pediría
-         un permiso por una puerta y otro por la otra. */
-      if (agent.id !== ID_ASSIST_CRONOGRAMA && !esAgenteDeDetalle(agent.id)) return null;
+         E4 (2026-09): el MODIFICADOR (`agent-timeline-assist`, «Pedir cambio con IA») se retiró.
+         /analyze ya no lo despacha (lib/agents/retirados.ts), pero su fila puede seguir activa:
+         su id se sigue gateando acá, como defensa en profundidad, con la misma celda que el
+         detalle. */
+      if (!esAgenteRetirado(agent.id) && !esAgenteDeDetalle(agent.id)) return null;
       return {
         section: "cronograma",
         action: (await hasAiTimelineDetail(projectId)) ? "regenerate" : "generate",

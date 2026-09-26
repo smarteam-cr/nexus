@@ -82,7 +82,8 @@ const CARGADORES_PESADOS = [
   "loadTimelineContext",
   "loadDesarrolloContext",
   "loadCanvasContext",
-  "cargarContextoDelAssist",
+  /* Se retiró «Pedir cambio con IA» (E4): su cargador (`cargarContextoDelAssist`) se borró con él y salió
+     de esta lista. */
   "cargarContextoDelDetalle",
   "renderDetalleDeCronograma",
   "fetchTranscriptContent",
@@ -308,8 +309,9 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
 
        Las dos veces la guarda defendió una línea que el uso corrió. Lo que NO se movió nunca es
        lo que separa la FORMA del cronograma de su CONTENIDO de negocio, y ahí siguen las notas:
-       son texto libre del CSE, no hacen falta para conversar sobre estructura, y el modificador
-       ya las lee cuando ejecuta.
+       son texto libre del CSE, no hacen falta para la estructura y nunca llegan al cliente; la nota
+       de una FASE entra solo al turno en que se la señala (fase-senalada.ts). (Porqué reescrito al
+       retirarse «Pedir cambio con IA» en E4: decía que el modificador ya las leía.)
 
        La edición que la pone en rojo: sumar `notes: true` al select de tareas. */
     /* ⚠ `source` entró el 2026-08-21 y NO es contenido: es la procedencia, un enum de tres
@@ -323,7 +325,7 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     expect(
       srcDeLosDos.includes("notes: true"),
       "el contexto del chat pasó a traer las NOTAS de las tareas: eso es contenido de negocio, " +
-        "no la forma del cronograma — y el modificador ya las lee cuando le toca ejecutar",
+        "no la forma del cronograma, y nunca llega al cliente",
     ).toBe(false);
     /* ⚠ E3 P4: con una propuesta, las notas SÍ se leen —el plan las necesita para saber si alguien editó
        una tarea que se va—, pero por UNA sola puerta: `leerPropuestaParaElChat` (lib/timeline). Ningún
@@ -394,8 +396,7 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     /* Las condiciones son las de CronogramaCanvas.tsx: «Generar cronograma» exige sin tareas de la
        IA y `!hasPublishedOnce`, y una propuesta SOLO de fases no lo esconde; «Regenerar todo el
        cronograma» exige tareas de la IA y ninguna propuesta; publicado sin tareas de la IA no hay
-       ninguno. Lo que el servidor no sabe (el permiso, una vista previa en pantalla) va como
-       condición. Las ediciones que la ponen en rojo: volver al ternario solo por las tareas, decir
+       ninguno. Lo que el servidor no sabe (el permiso) va como condición. Las ediciones que la ponen en rojo: volver al ternario solo por las tareas, decir
        que «Generar» se esconde con cambios de fases pendientes, o perder la frase del permiso. */
     const linea = (conDetalleDeLaIA: boolean, publicadoAlgunaVez: boolean, cambiosDeFasesSinDecidir: boolean) =>
       lineaParaRehacerTodo({ conDetalleDeLaIA, publicadoAlgunaVez, cambiosDeFasesSinDecidir });
@@ -590,6 +591,34 @@ describe("el contexto del cronograma dice lo que el chat necesita para hablar de
     /* E4 P1: el rótulo se reescribió entero y dice que la NOTA de la fase también la lee el cliente
        (`fase.nota`). La edición que la pone en rojo: volver a nombrar solo `titulo` y `nombre`. */
     expect(soloCodigo(src)).toContain("lo que pongas en `titulo`, en `nombre` y en `nota` es lo que ve el cliente.");
+  });
+
+  it("E4 · lo que lee el modelo ya no nombra «Pedir cambio con IA» ni su vista previa", () => {
+    /* Se retiró «Pedir cambio con IA» (E4). Lo que el modelo lee no puede mandar a un botón que no está ni
+       condicionar un botón a una vista previa que ya no existe. Las ediciones que la ponen en rojo: dejar
+       texto viejo en el rótulo de las reglas duras («Pedir cambio con IA», «ese otro» modelo) o volver a
+       decir en la línea «PARA REHACER TODO» que un botón «se esconde mientras haya una vista previa». */
+    const codigo = soloCodigo(src);
+    const iRotulo = codigo.indexOf('"REGLAS DURAS DEL CRONOGRAMA.');
+    const iFin = codigo.indexOf('"CONSECUENCIAS QUE HAY QUE DECIR ANTES', iRotulo);
+    expect(iRotulo, "la guarda no encuentra el rótulo").toBeGreaterThan(-1);
+    expect(iFin).toBeGreaterThan(iRotulo);
+    const rotulo = codigo.slice(iRotulo, iFin);
+    expect(rotulo).not.toContain("Pedir cambio con IA");
+    expect(rotulo).not.toContain("ese otro");
+    for (const d of [false, true]) {
+      for (const p of [false, true]) {
+        for (const c of [false, true]) {
+          for (const armandoTareas of [false, true]) {
+            for (const tareasFallaron of [false, true]) {
+              const l = lineaParaRehacerTodo({ conDetalleDeLaIA: d, publicadoAlgunaVez: p, cambiosDeFasesSinDecidir: c, armandoTareas, tareasFallaron });
+              expect(l, JSON.stringify({ d, p, c, armandoTareas, tareasFallaron })).not.toContain("vista previa");
+              expect(l).not.toContain("Pedir cambio con IA");
+            }
+          }
+        }
+      }
+    }
   });
 });
 

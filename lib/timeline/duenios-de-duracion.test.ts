@@ -11,11 +11,11 @@
  * Medido el 2026-08-20: **34 tareas en 7 fases de 5 proyectos**. Multiquimica tenía 10 tareas en
  * una fase de UNA semana.
  *
- * ⭐ Y el daño no era cosmético. El modificador con IA devuelve el cronograma COMPLETO, así que
- * copia esas semanas inválidas y `validateTimelinePayload` rechaza su propuesta ENTERA: esos 5
- * proyectos **no podían usar «Pedir cambio con IA» en absoluto**. 231 s y $0,29 de modelo
- * quemados por intento, con un error que el CSE no puede accionar. Un apagón total sobre el 10 %
- * de la cartera, invisible durante meses.
+ * ⭐ Y el daño no era cosmético. El modificador con IA devolvía el cronograma COMPLETO, así que
+ * copiaba esas semanas inválidas y `validateTimelinePayload` rechazaba su propuesta ENTERA: esos 5
+ * proyectos **no podían usar «Pedir cambio con IA» en absoluto** (se retiró en E4). 231 s y $0,29 de
+ * modelo quemados por intento, con un error que el CSE no puede accionar. Un apagón total sobre el
+ * 10 % de la cartera, invisible durante meses.
  *
  * ── POR QUÉ UN CENSO Y NO UN TEST POR RUTA ───────────────────────────────────────────────────
  * El agujero apareció DOS VECES, en dos caminos que nadie relacionaba: el PUT del cronograma y el

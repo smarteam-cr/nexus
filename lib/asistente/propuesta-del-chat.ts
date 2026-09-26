@@ -25,6 +25,7 @@
 import type { PorQueSoloLectura, PropuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
 import {
   fraseDelCierre,
+  huellaDeTitulo,
   resumenDeLaConfirmacion,
   textoDeLaConfirmacion,
   type EstadoDelCambio,
@@ -43,7 +44,6 @@ import {
 } from "@/lib/timeline/operar-sobre-el-borrador";
 import { esOperacionSola } from "@/lib/timeline/dependencias-de-operaciones";
 import { resolverHandle } from "@/lib/timeline/handle-de-tarea";
-import { huella as huellaDeTitulo } from "@/lib/timeline/assist-items";
 import { fusionarPendientes } from "./acuerdo-vivo";
 
 /** La propuesta como la tiene el turno (`ctx.propuesta`): lo leído, los identificadores que vio el

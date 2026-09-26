@@ -188,3 +188,58 @@ describe("⭐ E4 P1 · el «IA» de una fase abre el chat del cronograma con esa
     expect(chat).toContain("Dejar de hablar solo de esta fase");
   });
 });
+
+/**
+ * E4 P2 (2026-09): SE RETIRA «PEDIR CAMBIO CON IA». Todo cambio con IA del cronograma pasa por el chat (el
+ * 💬, o el «IA» de una fase). Esta guarda impide que vuelva una segunda forma de pedirlo: el diálogo, la
+ * ruta, su agente, su vista previa y su diff por ítem se borraron enteros.
+ */
+describe("⛔ E4 P2 · no queda una segunda forma de pedirle un cambio al cronograma", () => {
+  const sinComentarios = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " ")).replace(/^\s*\/\/.*$/gm, "");
+
+  it("los nueve archivos del modificador no existen", () => {
+    /* La edición que la pone en rojo: restaurar el diálogo, la ruta o cualquiera de sus piezas. */
+    for (const rel of [
+      "app/api/projects/[projectId]/timeline/assist/route.ts",
+      "components/canvas/TimelineAssistDialog.tsx",
+      "lib/agents/timeline-assist.ts",
+      "scripts/seed-timeline-assist-agent.ts",
+      "lib/timeline/assist-items.ts",
+      "lib/timeline/agrupar-items.ts",
+      "lib/timeline/heredar-omitidos.ts",
+      "lib/timeline/reparar-propuesta.ts",
+      "lib/contexto/asistente-cronograma.ts",
+    ]) {
+      expect(fs.existsSync(path.join(RAIZ, rel)), `volvió ${rel}`).toBe(false);
+    }
+  });
+
+  it("el Canvas no lo pide, no lo muestra ni lo nombra en código", () => {
+    /* La edición que la pone en rojo: volver a cablear el pedido, su estado, su vista previa o su diff. */
+    const canvas = leer(CRONOGRAMA);
+    for (const huella of [
+      "deAssist",
+      "submitAssist",
+      "assisting",
+      "TimelineAssistDialog",
+      "/timeline/assist",
+      "assist-items",
+      "agrupar-items",
+    ]) {
+      expect(canvas, `el Canvas volvió a tener «${huella}»`).not.toContain(huella);
+    }
+  });
+
+  it("el despachador del chat no tiene carril de `instruccion`", () => {
+    /* Un acuerdo viejo (solo una instrucción de texto) se ejecutaba con el modificador. Sin él, el botón
+       dice que se vuelva a pedir. La edición que la pone en rojo: volver a despachar `acuerdo.instruccion`. */
+    const canvas = sinComentarios(leer(CRONOGRAMA));
+    const i = canvas.indexOf("const atenderElAcuerdo = (acuerdo: AcuerdoDelChat)");
+    expect(i, "no encuentro el despachador").toBeGreaterThan(-1);
+    const despachador = canvas.slice(i, canvas.indexOf(": pasarALaPropuesta(acuerdo);", i));
+    expect(despachador.length).toBeGreaterThan(80);
+    expect(despachador).not.toContain("instruccion");
+    expect(despachador).toContain("ACUERDO_DE_OTRA_VERSION");
+  });
+});

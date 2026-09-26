@@ -22,10 +22,10 @@ import {
   OPERACIONES_DE_PROPUESTA,
   OPERACIONES_VALIDAS,
   type DescripcionDeLaPropuesta,
+  type FaseActual,
   type Operacion,
 } from "./operaciones";
 import { validateTimelinePayload } from "./validate";
-import type { FaseActual } from "./assist-items";
 import type { TareaDelVivo } from "./borrador";
 
 const tarea = (id: string, weekIndex: number, extra: Partial<FaseActual["tasks"][number]> = {}) => ({
@@ -62,7 +62,7 @@ describe("⭐ lo que no se nombra, no se toca", () => {
 
   it("⛔ y una fase intocada sale SIN tareas — «no tocar» en el contrato del PUT", () => {
     /* Emitir el array siempre convertiría cada operación en un diff completo de esa fase, y el PUT
-       borra por omisión. Es la misma regla que sostiene assist-items.ts. */
+       borra por omisión. */
     const { payload } = aplicarOperaciones(cronograma(), null, [
       { op: "fase.duracion", phaseId: "f3", semanas: 2 },
     ]);

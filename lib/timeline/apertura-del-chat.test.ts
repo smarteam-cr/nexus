@@ -21,7 +21,6 @@ const BASE: EntradaDeLaApertura = {
   puedeEditar: true,
   puedeConversar: true,
   hayBorrador: true,
-  deAssist: false,
   token: "run-4",
   conCambios: true,
   nadaQueDecidir: false,
@@ -43,12 +42,12 @@ describe("⭐ cuándo se abre solo", () => {
 
   it("⛔ sin permiso, sin propuesta guardada, o sin nada que decidir: nada", () => {
     /* La edición que la pone en rojo: abrirlo a quien no puede editar o no puede conversar (la ruta del chat
-       le respondería 403), sobre la vista previa del modificador, o sobre una propuesta que se descarta sola. */
+       le respondería 403), o sobre una propuesta que se descarta sola. Se retiró «Pedir cambio con IA» (E4): ya no
+       hay vista previa del modificador, y su fila (`deAssist`) salió con ella. */
     for (const c of [
       { puedeEditar: false },
       { puedeConversar: false },
       { hayBorrador: false },
-      { deAssist: true },
       { token: null },
       { conCambios: false },
       { nadaQueDecidir: true },

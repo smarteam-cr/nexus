@@ -3266,3 +3266,38 @@ fabricarla.
 - **Todo el texto para el modelo del cronograma va en tuteo** (el encabezado de las instrucciones y el
   mensaje del detalle estaban en voseo), y la guarda de tuteo caza el voseo por su forma, no por una
   lista cerrada.
+
+## Se retira «Pedir cambio con IA»: todo cambio con IA del cronograma pasa por el chat (2026-09, E4)
+
+> Decisión de Elías (respuesta 3 del 2026-09-24). Convivían dos formas de pedirle un cambio a la IA:
+> el chat, que acuerda operaciones que se leen antes de aplicar, y el modificador, que reescribía el
+> cronograma entero (de 2 a 4 minutos) y se revisaba en una vista previa en memoria. Con una sola
+> propuesta (E1–E3), esa vista previa era una segunda forma de revisar.
+
+- **El chat cubre lo que hacía el modificador:** su vocabulario de operaciones más `fase.nota`, la
+  nota de la fase que lee el cliente, que no tenía otro camino (`updatePhase` no la acepta). Sin
+  propuesta abierta aplica con un clic; con una, lo pasa a la propuesta.
+- **Solo reescribe una nota que leyó entera:** la de la fase señalada con «IA», que le llega completa
+  en ese turno, o la de una fase que no tiene nota. Lo que no cumple no se registra y se dice. Es el
+  mismo criterio que el tope de lectura de las secciones de los documentos.
+- **Lo que queda fuera del chat, a propósito:** las sesiones estimadas (a mano en el Gantt, mientras
+  la fase no arrancó), la nota de una tarea (a mano, no la ve el cliente) y armar tareas a partir de
+  lo vendido («Regenerar» de la fase o «Generar cronograma», que leen el handoff; un enfoque va en
+  «Instrucciones adicionales»). El chat no lee el handoff.
+- **El «IA» de cada fase abre el chat con esa fase señalada** («Sobre la fase «X»»). La línea
+  `[SOBRE LA FASE «X» [id]]` va en el texto; la nota completa se adjunta solo a ese turno, en los
+  mensajes, nunca en el prefijo cacheado. Es una pista, no un límite. El cronograma monta su propio
+  proveedor del chip: el del panel abre el cajón de los documentos, que en el cronograma no está, y
+  dejaba colar el chip de otro documento.
+- **Cambiar la nota por chat pide editar el cronograma**, lo mismo que renombrar una fase y que
+  aplicar una nota que propone el handoff.
+- **Quitar una fase por chat sin propuesta abierta sigue borrando sus tareas**, con doble
+  confirmación y ⚠ en la línea. Con una propuesta abierta, lo hecho se queda (E3). El modificador la
+  devolvía con lo hecho: esa diferencia se pierde.
+- **`agent-timeline-assist` queda retirado por nombre** (`lib/agents/retirados.ts`): /analyze no lo
+  despacha ni por id ni por su respaldo sin paso, aunque su fila siga activa. No se vuelve a sembrar.
+- **Una propuesta guardada que esta versión no sabe leer no traba nada:** una línea arriba del Gantt
+  ofrece «Descartarla» y el cronograma sigue editable (antes, la vista previa lo congelaba).
+- **Lo que se pierde:** la cuenta de cuántas propuestas del modificador se aplicaban (su historia
+  sigue en `AgentRun`), y los acuerdos del chat de antes del 2026-08-20 que traían solo una
+  instrucción: su botón pide que se vuelva a pedir.

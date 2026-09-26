@@ -30,9 +30,9 @@
  * ⚠ Da falsos negativos a propósito (una paráfrasis, un nombre de persona suelto): eso queda para
  * el rótulo y para la mirada del CSE.
  *
- * Lo usan los previews del detalle (`marcarFugas`), «Pedir cambio con IA» (`fugasDeLaPropuesta`),
- * el revisor de fases (`fugaEn` sobre los nombres) y el chat del cronograma (`lineasConFrontera`):
- * un solo detector.
+ * Lo usan los previews del detalle (`marcarFugas`), el revisor de fases (`fugaEn` sobre los
+ * nombres) y el chat del cronograma (`lineasConFrontera`): un solo detector. (E4, 2026-09: «Pedir
+ * cambio con IA», que lo usaba con `fugasDeLaPropuesta`, se retiró.)
  */
 
 export type CampoDeFrontera = "titulo" | "nota";
@@ -209,63 +209,4 @@ export function lineasConFrontera(
     const motivo = typeof texto === "string" ? fugaEn(texto, h, entrada.frontera) : null;
     return motivo ? `${linea}${avisoDeFronteraEnLaLinea(motivo)}` : linea;
   });
-}
-
-interface TareaConTexto {
-  title?: unknown;
-  notes?: unknown;
-}
-interface FaseConTexto {
-  name?: unknown;
-  notes?: unknown;
-  tasks?: readonly TareaConTexto[] | null;
-}
-
-const recortarCita = (s: string) => (s.length > 60 ? `${s.slice(0, 57).trimEnd()}…` : s);
-
-/**
- * Los AVISOS de una propuesta de cambios: revisa solo el texto NUEVO o CAMBIADO (lo que ya estaba
- * en el cronograma, igual tras normalizar, no se vuelve a marcar) — títulos, notas de tarea,
- * nombres de fase y notas de fase.
- */
-export function fugasDeLaPropuesta(
-  propuesta: { phases?: readonly FaseConTexto[] | null } | null | undefined,
-  actuales: readonly FaseConTexto[],
-  h: HuellasDeFrontera,
-): string[] {
-  if (!h.activa || !propuesta?.phases) return [];
-  const yaEstaban = new Set<string>();
-  const anotar = (v: unknown) => {
-    if (typeof v === "string" && v.trim()) yaEstaban.add(normalizarParaFrontera(v));
-  };
-  for (const f of actuales) {
-    anotar(f.name);
-    anotar(f.notes);
-    for (const t of f.tasks ?? []) {
-      anotar(t.title);
-      anotar(t.notes);
-    }
-  }
-
-  const avisos: string[] = [];
-  const revisar = (texto: unknown, campo: CampoDeFrontera, de: unknown, que: string, corrigelo: string) => {
-    if (typeof texto !== "string" || !texto.trim()) return;
-    if (yaEstaban.has(normalizarParaFrontera(texto))) return;
-    const motivo = fugaEn(texto, h, campo);
-    if (!motivo) return;
-    const cita = recortarCita(typeof de === "string" && de.trim() ? de.trim() : texto.trim());
-    avisos.push(
-      `“${cita}”: ${que} ${motivo} — el cliente lee títulos, notas y nombres de fase; ${corrigelo} o descarta ` +
-        `ese cambio antes de aplicar.`,
-    );
-  };
-  for (const f of propuesta.phases) {
-    revisar(f.name, "titulo", f.name, "el nombre de la fase", "corrígelo");
-    revisar(f.notes, "nota", f.name, "la nota de la fase", "corrígela");
-    for (const t of f.tasks ?? []) {
-      revisar(t.title, "titulo", t.title, "el título", "corrígelo");
-      revisar(t.notes, "nota", t.title, "la nota", "corrígela");
-    }
-  }
-  return avisos;
 }

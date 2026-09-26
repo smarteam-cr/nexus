@@ -315,12 +315,16 @@ test("con una propuesta de ESTRUCTURA, el cronograma conserva sus acciones", () 
      (antes `structureOnlyProposal`), el CTA cuenta los cambios del resumen del núcleo (antes
      `proposalDeltas`) y el ancla vive en la barra de revisión (la franja `ProposalGlobalStrip` se
      borró). Lo que se protege es lo mismo: con una propuesta de fases la fila de acciones no queda
-     vacía, y el CTA lleva a la revisión sin aplicar nada. */
+     vacía, y el CTA lleva a la revisión sin aplicar nada.
+     ⚠ ACTUALIZADO en E4 (2026-09), con esta razón: se retiró «Pedir cambio con IA». La condición
+     `(!proposal || hayBorrador)` se llama ahora `!propuestaIlegible` (una propuesta guardada que no es un
+     borrador), que es la misma: el CTA se esconde solo con una propuesta que no se sabe leer. */
   expect(
     src,
     "el CTA de generar/re-chequear volvió a esconderse ante cualquier propuesta: con una de " +
       "estructura el Gantt sigue vivo y la fila de acciones no puede quedar vacía",
-  ).toContain("(!proposal || hayBorrador)");
+  ).toContain("canEdit && phases.length > 0 && !propuestaIlegible && (");
+  expect(src).toContain("const propuestaIlegible = !!proposal && !hayBorrador;");
 
   expect(
     src,

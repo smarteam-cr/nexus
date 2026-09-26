@@ -62,9 +62,10 @@ describe("el chat no escribe el documento", () => {
     expect(
       infracciones,
       "El asistente escribió directo en el documento. El chat EMITE UNA INSTRUCCIÓN: aplicarla " +
-        "pasa por /timeline/assist o /canvas-assist, con su guard de permiso y su vista previa " +
-        "con aceptación por ítem. Sin eso, un pedido de una línea puede reescribir de contrabando " +
-        "lo que nadie revisó.",
+        "pasa por /canvas-assist (un documento, con su guard de permiso y su vista previa con " +
+        "aceptación por ítem) o por el PUT del cronograma con las operaciones acordadas. Sin eso, un " +
+        "pedido de una línea puede reescribir de contrabando lo que nadie revisó. (E4: /timeline/assist " +
+        "se retiró.)",
     ).toEqual([]);
   });
 

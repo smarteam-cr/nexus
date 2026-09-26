@@ -9,14 +9,13 @@
  *   - Tareas: título/nota/semana/agregar/eliminar inline en el Gantt expandido
  *     (dirty + "Guardar" → PUT bulk con diff server-side). El ESTADO se togglea
  *     inmediato vía PATCH (optimista).
- *   - Actualización por IA: barra de instrucción → POST /timeline/assist →
- *     PROPUESTA completa (sin persistir) → preview en el mismo Gantt + resumen
- *     de cambios → Aplicar (PUT normal: diffea, preserva estados) / Descartar.
- *   - ESTRUCTURA de fases (crear/borrar/renombrar/duración/orden/tipo/notas):
- *     SOLO por la barra de IA — no hay editor de formularios aparte. Dos
- *     excepciones directas: la fecha de arranque (date input en el banner del
- *     Gantt, guarda al toque) y el bootstrap con 0 fases (mini-form de primera
- *     fase en el empty state — sin fases la barra de IA no opera).
+ *   - Cambios con IA: el CHAT del cronograma (💬, o el «IA» de una fase) acuerda
+ *     operaciones que se leen antes de aplicar; sin propuesta abierta van al PUT
+ *     normal, con una van a la propuesta. E4 (2026-09): se retiró «Pedir cambio
+ *     con IA», que reescribía el cronograma entero en una vista previa en memoria.
+ *   - La nota de una fase (la que lee el cliente) solo la cambia el chat
+ *     (`fase.nota`); nombre, semanas, arranque y orden también se editan a mano
+ *     en el Gantt.
  *
  * Generación inicial del detalle: agente "agent-timeline-detail" vía
  * POST /api/clients/[clientId]/analyze. Confirmación (gate de la vista
@@ -35,7 +34,6 @@ import {
   currentWeekIndex,
   projectedEnd,
   describeEndShift,
-  endShiftFragment,
 } from "@/lib/timeline/weeks";
 import { createPortal } from "react-dom";
 import ChatDelAsistente, {
@@ -45,7 +43,7 @@ import ChatDelAsistente, {
 } from "@/components/asistente/ChatDelAsistente";
 import { ChatDeSeccionDisponible, ChatDeSeccionProvider } from "@/components/asistente/chat-de-seccion";
 import { debeAbrirseElChat, leerApertura, recordarApertura } from "@/lib/timeline/apertura-del-chat";
-import { claseDeAcuerdo } from "@/lib/asistente/textos-del-acuerdo";
+import { ACUERDO_DE_OTRA_VERSION, claseDeAcuerdo } from "@/lib/asistente/textos-del-acuerdo";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
@@ -57,17 +55,9 @@ import ParticularidadEditModal, { type ParticularidadPatch } from "./Particulari
 import SugerenciasParticularidad, { type SugerenciaItem } from "./SugerenciasParticularidad";
 import ParticularidadToTaskModal, { type ConvertPayload } from "./ParticularidadToTaskModal";
 import TaskDetailDrawer from "./TaskDetailDrawer";
-import TimelineAssistDialog from "./TimelineAssistDialog";
-import {
-  diffAssist,
-  proyectarAceptados,
-  type FaseActual as FaseDelAssist,
-  type ItemDeAssist,
-} from "@/lib/timeline/assist-items";
-import { agruparItems, resumenDeConsecuencias } from "@/lib/timeline/agrupar-items";
-import { aplicarOperaciones, type Operacion } from "@/lib/timeline/operaciones";
-import { AcceptButton, RejectButton } from "@/components/ui/AcceptReject";
-import { cn } from "@/lib/cn";
+/* E4 (2026-09): se fueron el diálogo de «Pedir cambio con IA» y el diff por ítem de su vista previa (con
+   su banner de aceptar/descartar): se retiró ese botón. Todo cambio con IA pasa por el chat. */
+import { aplicarOperaciones, type FaseActual, type Operacion } from "@/lib/timeline/operaciones";
 import PublishBar from "./PublishBar";
 import { useMe } from "@/hooks/useMe";
 import CronogramaProgressButton from "@/components/clients/CronogramaProgressButton";
@@ -89,7 +79,6 @@ import {
 import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
 import {
   abiertoPara,
-  AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA,
   AVISO_SUBIR_CON_PROPUESTA,
   CHAT_CON_EL_VACIO_FALLIDO,
   deDondeViene,
@@ -116,7 +105,6 @@ import { origenDePropuesta } from "@/lib/timeline/proposal-deltas";
 import {
   ACUERDO_PARA_EL_VIGENTE,
   AVISO_PROPUESTA_PENDIENTE,
-  CAMBIOS_DE_FASES_SIN_DECIDIR,
   pasoTrasEstructura,
   pasoTrasResolver,
   type RespuestaDeEstructura,
@@ -154,7 +142,6 @@ const MOTIVO_OTRA_PROPUESTA = "Llegó otra propuesta del cronograma: revísala."
 const MOTIVO_NO_SE_DESCARTO = "No se pudo descartar la propuesta: vuelve a intentar.";
 /** Los motivos del botón del chat (≤ 60 caracteres: van EN el botón). */
 const MOTIVOS_DEL_CHAT = {
-  vistaPrevia: "Descarta la vista previa de «Pedir cambio con IA»",
   hayPropuesta: "Hay una propuesta abierta: pídemelo de nuevo",
   cambio: "La propuesta cambió: pídemelo de nuevo",
   enSuBarra: "Resuelve la propuesta en su barra",
@@ -202,40 +189,11 @@ interface Phase {
   _key: string;
 }
 
-// Propuesta de la IA (shape del PUT, ya saneada por el endpoint assist)
-interface ProposalTask {
-  id?: string;
-  title: string;
-  weekIndex: number;
-  order: number;
-  notes?: string | null;
-  /* Desde que el prompt del modificador vive en la tabla `Agent` (2026-08-18) emite los dos:
-     antes toda tarea que creaba nacía sin dueño y sin tipo. Sin declararlos acá, el diff por
-     ítem no los vería y el CSE los seguiría poniendo a mano. */
-  party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null;
-  type?: "SESSION" | "TASK" | null;
-}
-interface ProposalPhase {
-  id?: string;
-  name: string;
-  order: number;
-  durationWeeks: number;
-  startWeek?: number | null;
-  sessionCount?: number | null;
-  notes?: string | null;
-  activityType?: string | null;
-  tasks?: ProposalTask[];
-  /** Por qué la IA propone cambiar ESTA fase (solo la propuesta de las reuniones; interno). */
-  motivo?: string | null;
-}
-interface Proposal {
-  anchorStartDate: string | null;
-  phases: ProposalPhase[];
-  /** «contexto» = salió de las reuniones y notas elegidas (paso 1 de «Regenerar todo»). Sin él, del handoff. */
-  origen?: "contexto";
-  /** Lo que la IA notó y no se aplica solo (interno). */
-  observaciones?: string[];
-}
+/* La propuesta GUARDADA (`pendingProposal`), tal como llega del servidor. E4 (2026-09): ya no se lee
+   campo por campo acá: la leen los lectores de lib/timeline/borrador.ts y proposal-deltas.ts. Lo que no
+   saben leer se ofrece descartar (`propuestaIlegible`). Antes llevaba la forma de la vista previa de
+   «Pedir cambio con IA», que se retiró. */
+type PropuestaGuardada = Record<string, unknown>;
 
 interface ServerTask {
   id: string;
@@ -506,7 +464,7 @@ export default function CronogramaCanvas({
   // Cambiar el cronograma CON IA una vez generado queda para quien tenga
   // cronograma.regenerate (default CSE, CSL y Super Admin). La PRIMERA pasada con IA pide
   // cronograma.generate (default todo interno). Espeja los gates del server
-  // (timeline/assist + analyze) — la matriz es editable desde /team.
+  // (analyze y el paso 1 de «Regenerar todo») — la matriz es editable desde /team.
   const canRegenerateTimeline = me?.permissions?.sections?.cronograma?.regenerate === true;
   const canGenerateTimeline = me?.permissions?.sections?.cronograma?.generate === true;
   const [lastEditedAt, setLastEditedAt] = useState<string | null>(null);
@@ -518,9 +476,10 @@ export default function CronogramaCanvas({
   // ── Asistente IA ──
   /* El asistente que CONVERSA antes de generar. Vive acá y no en el panel del proyecto porque su
      «Aplicar» escribe sobre el cronograma que este componente tiene en memoria: un acuerdo con
-     operaciones entra por `aplicarOperacionesAcordadas` (PUT directo, sin modelo ni vista previa);
-     `submitAssist` solo atiende los acuerdos viejos, guardados como instrucción de texto. Desde el
-     2026-09-23 el chat lee también las reuniones y notas elegidas en «Contexto del cronograma». */
+     operaciones entra por `aplicarOperacionesAcordadas` (PUT directo, sin modelo ni vista previa).
+     E4 (2026-09): un acuerdo viejo, guardado solo como instrucción de texto, ya no se ejecuta (se
+     retiró «Pedir cambio con IA»): su botón pide que se vuelva a pedir. Desde el 2026-09-23 el chat
+     lee también las reuniones y notas elegidas en «Contexto del cronograma». */
   const [chatAbierto, setChatAbierto] = useState(false);
   /* E3 P5: el chat se abrió SOLO (llegó una propuesta): no toma el foco. El botón 💬 lo apaga. */
   const [aperturaAutomatica, setAperturaAutomatica] = useState(false);
@@ -531,8 +490,6 @@ export default function CronogramaCanvas({
     setAperturaAutomatica(false);
     setChatAbierto(true);
   }, []);
-  const [assistOpen, setAssistOpen] = useState(false);
-  const [assistScopePhaseId, setAssistScopePhaseId] = useState<string | null>(null);
   // Drawer de detalle de tarea: se resuelve la tarea VIVA desde `phases` por _key.
   const [selectedTask, setSelectedTask] = useState<{ phaseKey: string; taskKey: string } | null>(null);
   // Si la tarea seleccionada desaparece (borrada o re-zip de _key tras guardar), cerrar el drawer.
@@ -541,12 +498,10 @@ export default function CronogramaCanvas({
     const ph = phases.find((p) => p._key === selectedTask.phaseKey);
     if (!ph?.tasks.some((t) => t._key === selectedTask.taskKey)) setSelectedTask(null);
   }, [selectedTask, phases]);
-  const [assisting, setAssisting] = useState(false);
-  const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [proposal, setProposal] = useState<PropuestaGuardada | null>(null);
   /* E2a: el estado de las tareas de la propuesta guardada, del GET (lo leen `load`,
      `traerPropuestaPendiente` y `refrescarPropuesta`). null = no espera tareas. */
   const [tareasDelBorrador, setTareasDelBorrador] = useState<TareasDelBorradorEnPantalla | null>(null);
-  const [assistWarnings, setAssistWarnings] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
   /* Aplicando la propuesta de fases (POST /timeline/borrador/aplicar). Bloquea como `applying`: el
      Gantt no puede cambiar mientras el servidor compara lo vivo con lo que viste. */
@@ -556,16 +511,8 @@ export default function CronogramaCanvas({
      «Aplicar» caía en PROPUESTA_CAMBIO. El ref frena la re-entrada; el estado apaga los botones. */
   const [descartando, setDescartando] = useState(false);
   const descartandoRef = useRef(false);
-  // #4 — razón del cambio (TimelineChange/audit). Con el auto-guardado ya NO se pide
-  // tipeada: las ediciones manuales usan una razón automática y la IA usa su instrucción.
-  const [assistInstruction, setAssistInstruction] = useState("");
-  /* ── RESOLUCIÓN POR ÍTEM DE LA PROPUESTA DEL MODIFICADOR ────────────────────────────────
-     Se guarda lo DESCARTADO, no lo aceptado: con el conjunto vacío «Aplicar» hace exactamente
-     lo que hacía antes de esta tanda —el reemplazo completo— y el CSE tiene que sacar algo a
-     propósito para que cambie. Guardar lo aceptado invertiría ese default sin que nadie lo pida
-     y convertiría cada propuesta en un formulario obligatorio. */
-  const [assistDescartados, setAssistDescartados] = useState<Set<string>>(new Set());
-  const [assistRevision, setAssistRevision] = useState(false);
+  /* E4 (2026-09): se fueron la instrucción, lo descartado por ítem y la revisión de la vista previa de
+     «Pedir cambio con IA». La razón de un cambio del chat es su resumen (`aplicarOperacionesAcordadas`). */
   // ── Avance detectado por el agente (D.2) — borrador que el CSE confirma ──
   const [pendingProgress, setPendingProgress] = useState<PendingProgress | null>(null);
   const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
@@ -593,24 +540,16 @@ export default function CronogramaCanvas({
    * viaje; generar las tareas es un agente y tarda. Un cartel genérico haría que las dos se lean
    * igual, y enseña a ignorar el que sí avisa una espera real.
    */
-  const ocupado: { activo: boolean; rotulo: string; detalle: string } = assisting
-    ? {
-        /* ⛔ LA ESPERA MÁS LARGA ERA LA ÚNICA QUE NO BLOQUEABA, y va primera por eso.
-           `assisting` es el modificador viejo —el que reescribe el cronograma entero— y tarda
-           MINUTOS, no milisegundos. Sin él acá, el Gantt quedaba editable durante toda la corrida
-           y el autosave corre igual (`proposal` todavía es null), así que lo que el CSE tipeara
-           en el medio lo pisaba después una propuesta calculada contra la foto ANTERIOR. */
-        activo: true,
-        rotulo: "Reescribiendo el cronograma con IA",
-        detalle: "Suele tardar entre dos y cuatro minutos.",
-      }
-    : /* ⛔ «Regenerar todo» y «Generar cronograma» YA NO van acá (E2a, 2026-09-25). Bloqueaban porque
-         su resultado vivía solo en la memoria de la pantalla (cambiar de pieza lo tiraba, y lo que el
-         CSE tipeara en el medio lo pisaba el acordeón). Ahora queda en el servidor, en la propuesta:
-         lo editado después de la propuesta CHOCA y queda fuera (el núcleo del borrador), y la espera
-         la dicen el chip del encabezado y la línea de arriba del Gantt.
-         E2b (2026-09-25): «Regenerar» de UNA fase tampoco. Su resultado ya no es una vista previa en
-         memoria: es una propuesta guardada, con la misma espera y la misma protección. */
+  const ocupado: { activo: boolean; rotulo: string; detalle: string } =
+    /* ⛔ «Regenerar todo» y «Generar cronograma» YA NO van acá (E2a, 2026-09-25). Bloqueaban porque
+       su resultado vivía solo en la memoria de la pantalla (cambiar de pieza lo tiraba, y lo que el
+       CSE tipeara en el medio lo pisaba el acordeón). Ahora queda en el servidor, en la propuesta:
+       lo editado después de la propuesta CHOCA y queda fuera (el núcleo del borrador), y la espera
+       la dicen el chip del encabezado y la línea de arriba del Gantt.
+       E2b (2026-09-25): «Regenerar» de UNA fase tampoco. Su resultado ya no es una vista previa en
+       memoria: es una propuesta guardada, con la misma espera y la misma protección.
+       E4 (2026-09): se fue también la espera más larga, la de «Pedir cambio con IA» (reescribía el
+       cronograma entero en minutos): se retiró. */
       chainingProgress
           ? { activo: true, rotulo: "Re-evaluando el avance", detalle: "Con el cronograma nuevo." }
           : applying
@@ -642,7 +581,7 @@ export default function CronogramaCanvas({
   /**
    * ⛔ EL HEADER TAMBIÉN, y es LA fuga que hacía parecer que no bloqueaba.
    *
-   * Los botones del cronograma («Generar cronograma», «Pedir cambio con IA», «Regenerar todo»…)
+   * Los botones del cronograma («Generar cronograma», «Regenerar todo», «Aprobar el plan»…)
    * se inyectan en el header del panel POR PORTAL, así que viven en otro nodo del DOM: ni el velo
    * los tapa ni el `inert` del contenido los alcanza. Durante la generación seguían clickeables —
    * que es exactamente lo que Elías vio cuando dijo que «como que se desbloqueó».
@@ -837,17 +776,16 @@ export default function CronogramaCanvas({
           }>) ?? [],
         );
         setLastEditedAt(data.lastEditedByHuman ?? null);
-        // Propuesta de re-generación del agente (re-run con cronograma ya existente):
-        // se muestra como vista previa aplicable, reusando el mismo banner que el assist.
-        // No pisa una propuesta de assist en curso (prev tiene prioridad).
+        // La propuesta guardada (del handoff, de «Regenerar todo», del chat…): se revisa en la barra de
+        // arriba del Gantt. La que ya está en pantalla no se pisa acá (prev tiene prioridad): la
+        // reemplazan `refrescarPropuesta` y `traerPropuestaPendiente`, que comparan token y versión.
         setProposal((prev) => {
           if (prev) return prev;
           proposalMeta.current = {
-            deAssist: false,
             runId: data.pendingProposalRunId ?? null,
             autoria: leerAutoria(data.autoriaDeLaPropuesta),
           };
-          return data.pendingProposal ? (data.pendingProposal as Proposal) : null;
+          return data.pendingProposal ? (data.pendingProposal as PropuestaGuardada) : null;
         });
         /* El estado de las tareas de la GUARDADA, con su token: si en pantalla queda otra (la de arriba
            no se reemplaza), la pantalla no lo usa (`tareasEnPantalla` compara el token). */
@@ -910,12 +848,12 @@ export default function CronogramaCanvas({
   /* De DÓNDE salió la propuesta que está en pantalla. Viaja en un ref y no en estado porque solo
      se lee dentro de callbacks async: no pinta nada, y como estado obligaría a meterlo en las deps
      de `load` —que tiene `[projectId]`— para no leerlo viejo.
-     Hace falta porque `proposal` es UN estado compartido por dos orígenes muy distintos: la del
-     assist vive solo en memoria (pisarla la destruye) y la del handoff está persistida.
+     `runId` es el token de la propuesta en pantalla: lo manda aplicar y descartar, y decide si la del
+     servidor es otra. E4 (2026-09): ya no dice si la propuesta es la vista previa en memoria de «Pedir
+     cambio con IA», que se retiró: la propuesta en pantalla es siempre la guardada.
      E2b P7: `autoria` (de dónde, quién y cuándo) la trae el GET, y solo la escriben los tres sitios
      que ponen la guardada; cualquier otra asignación la deja afuera, así que nunca queda la de otra. */
-  const proposalMeta = useRef<{ deAssist: boolean; runId: string | null; autoria?: AutoriaDeLaPropuesta | null }>({
-    deAssist: false,
+  const proposalMeta = useRef<{ runId: string | null; autoria?: AutoriaDeLaPropuesta | null }>({
     runId: null,
   });
 
@@ -934,12 +872,11 @@ export default function CronogramaCanvas({
       const res = await fetch(`/api/projects/${projectId}/timeline`);
       if (!res.ok) return;
       const data = await res.json();
-      const nueva = data.pendingProposal ? (data.pendingProposal as Proposal) : null;
+      const nueva = data.pendingProposal ? (data.pendingProposal as PropuestaGuardada) : null;
       const runIdNuevo = (data.pendingProposalRunId as string | null) ?? null;
       setProposal((prev) => {
         const reemplaza = debeReemplazarPropuesta({
           hayPropuesta: !!prev,
-          esDeAssist: proposalMeta.current.deAssist,
           runIdEnPantalla: proposalMeta.current.runId,
           runIdNuevo,
           // E3: la misma corrida con una versión mayor también (lo que marcó otra computadora).
@@ -947,7 +884,7 @@ export default function CronogramaCanvas({
           versionNueva: versionDelBorrador(nueva),
         });
         if (!reemplaza) return prev;
-        proposalMeta.current = { deAssist: false, runId: runIdNuevo, autoria: leerAutoria(data.autoriaDeLaPropuesta) };
+        proposalMeta.current = { runId: runIdNuevo, autoria: leerAutoria(data.autoriaDeLaPropuesta) };
         return nueva;
       });
       setTareasDelBorrador(tareasDelGet(data));
@@ -963,40 +900,34 @@ export default function CronogramaCanvas({
    * estado de sus tareas; `ok: false` si el GET falló, que NO es lo mismo que «no hay propuesta»
    * (revisión de E2a: el seguimiento de la corrida avisaba «no propone cambios» por un 5xx, y la
    * pantalla quedaba «armando» sin volver a mirar).
-   * `soloLeer`: lee la guardada SIN ponerla en pantalla. Lo usa el seguimiento con la vista previa del
-   * modificador abierta: pisarla tiraría el resultado de la IA, y sin leer nada el aviso de las tareas
-   * se perdía (cierre de la revisión de E2a).
+   * E4 (2026-09): se fue la opción de leer sin poner en pantalla, que existía para no pisar la vista
+   * previa de «Pedir cambio con IA». Sin ella, lo que se lee siempre se pone.
    */
-  const traerPropuestaPendiente = async (opts?: { soloLeer?: boolean }): Promise<
-    { ok: true; propuesta: Proposal | null; tareas: TareasDelBorradorEnPantalla | null } | { ok: false }
+  const traerPropuestaPendiente = async (): Promise<
+    { ok: true; propuesta: PropuestaGuardada | null; tareas: TareasDelBorradorEnPantalla | null } | { ok: false }
   > => {
     try {
       const res = await fetch(`/api/projects/${projectId}/timeline`);
       if (!res.ok) return { ok: false };
       const data = await res.json();
-      const nueva = data.pendingProposal ? (data.pendingProposal as Proposal) : null;
-      if (!opts?.soloLeer) {
-        const runIdLeido = (data.pendingProposalRunId as string | null) ?? null;
-        /* E3: la versión en pantalla nunca baja. Un GET que salió antes de guardar unas casillas y volvió
-           después de adoptar su respuesta trae la MISMA propuesta, más vieja: ponerla volvería a marcar lo
-           recién desmarcado. */
-        const masVieja =
-          !proposalMeta.current.deAssist &&
-          esLaMismaMasVieja(
-            { runId: proposalMeta.current.runId, version: revisionRef.current.version },
-            { runId: runIdLeido, version: versionDelBorrador(nueva) },
-          );
-        if (!masVieja) {
-          proposalMeta.current = {
-            deAssist: false,
-            runId: runIdLeido,
-            autoria: leerAutoria(data.autoriaDeLaPropuesta),
-          };
-          setProposal(nueva);
-          setTareasDelBorrador(tareasDelGet(data));
-        }
-        bumpGpsRefresh();
+      const nueva = data.pendingProposal ? (data.pendingProposal as PropuestaGuardada) : null;
+      const runIdLeido = (data.pendingProposalRunId as string | null) ?? null;
+      /* E3: la versión en pantalla nunca baja. Un GET que salió antes de guardar unas casillas y volvió
+         después de adoptar su respuesta trae la MISMA propuesta, más vieja: ponerla volvería a marcar lo
+         recién desmarcado. */
+      const masVieja = esLaMismaMasVieja(
+        { runId: proposalMeta.current.runId, version: revisionRef.current.version },
+        { runId: runIdLeido, version: versionDelBorrador(nueva) },
+      );
+      if (!masVieja) {
+        proposalMeta.current = {
+          runId: runIdLeido,
+          autoria: leerAutoria(data.autoriaDeLaPropuesta),
+        };
+        setProposal(nueva);
+        setTareasDelBorrador(tareasDelGet(data));
       }
+      bumpGpsRefresh();
       return { ok: true, propuesta: nueva, tareas: tareasDelGet(data) };
     } catch {
       return { ok: false };
@@ -1005,15 +936,11 @@ export default function CronogramaCanvas({
 
   /**
    * El PUT con motivo respondió 409 PROPUESTA_ABIERTA: hay una propuesta de fases GUARDADA que esta
-   * pantalla no tiene enfrente (entró mientras la IA trabajaba —«Pedir cambio con IA» tarda
-   * minutos— o desde otra pantalla). El texto del servidor dice «arriba del Gantt», y sin esto no
-   * había ninguna barra: un callejón sin salida. Devuelve el mensaje para el CSE.
-   *  · Con la vista previa del modificador en pantalla NO se trae: pisarla tiraría el resultado de
-   *    la IA sin preguntar. Se dice qué hacer, y descartarla trae la guardada (`discardProposal`).
-   *  · Si no, se trae la guardada: su barra aparece arriba del Gantt, como dice el mensaje.
+   * pantalla no tiene enfrente (entró desde otra pantalla u otra persona). El texto del servidor dice
+   * «arriba del Gantt», y sin esto no había ninguna barra: un callejón sin salida. Se trae la guardada
+   * (su barra aparece arriba del Gantt, como dice el mensaje) y se devuelve el mensaje para el CSE.
    */
   const anteLaPropuestaGuardada = async (): Promise<string> => {
-    if (proposalMeta.current.deAssist) return AVISO_PROPUESTA_ABIERTA_CON_VISTA_PREVIA;
     await traerPropuestaPendiente();
     return MENSAJE_PROPUESTA_ABIERTA;
   };
@@ -1432,13 +1359,16 @@ export default function CronogramaCanvas({
     setSaving(false);
   };
 
-  // ── LA PROPUESTA DE FASES GUARDADA (el borrador) vs la propuesta del MODIFICADOR ──────────────
-  // El handoff y el paso 1 de «Regenerar todo» guardan una propuesta SIN `tasks` (o, desde el
-  // formato nuevo, un `borrador-v1`): se revisa en la barra de arriba del Gantt, con un solo botón
-  // que alterna «Ver como estaba antes» ↔ «Ver la propuesta», y el cronograma actual sigue
-  // editable. La del modificador («Pedir cambio con IA») trae tareas, vive solo en memoria y sigue
-  // con su banner y su vista previa de siempre.
+  // ── LA PROPUESTA GUARDADA (el borrador) ────────────────────────────────────────────────────────
+  // El handoff, «Regenerar todo», «Regenerar» de una fase, el recálculo y el chat guardan UNA
+  // propuesta (`borrador-v1`, o el formato viejo sin `tasks`): se revisa en la barra de arriba del
+  // Gantt, con un solo botón que alterna «Ver como estaba antes» ↔ «Ver la propuesta», y el
+  // cronograma actual sigue editable.
   const hayBorrador = !!proposal && esBorradorGuardado(proposal);
+  /* E4 (2026-09): una propuesta guardada que esta versión NO sabe leer (no es un borrador). Antes era
+     la vista previa de «Pedir cambio con IA», que se retiró. No traba nada: una línea ofrece
+     descartarla y el cronograma sigue editable. */
+  const propuestaIlegible = !!proposal && !hayBorrador;
   /* El cronograma de la pantalla en la forma del núcleo del borrador: solo lo GUARDADO (una fase
      o una tarea sin id todavía no existe para la base). Memoizado: de él cuelgan la lista, los
      choques y la vista de la propuesta.
@@ -1515,9 +1445,8 @@ export default function CronogramaCanvas({
      La respuesta de POST /timeline/borrador/operaciones se ADOPTA sin otro GET: con otro token (la
      propuesta cambió) se trae la guardada; una versión menor que la de pantalla se ignora (la versión
      nunca baja); si trae `propuesta` (el servidor tenía otra versión que la que se veía), se pone
-     entera; si no, solo la versión y lo desmarcado. ⛔ La vista previa del modificador nunca se pisa. */
+     entera; si no, solo la versión y lo desmarcado. */
   const adoptarPropuesta = (r: { token?: unknown; version?: unknown; excluidos?: unknown; propuesta?: unknown }) => {
-    if (proposalMeta.current.deAssist) return;
     if (typeof r.token !== "string" || r.token !== proposalMeta.current.runId) {
       void traerPropuestaPendiente();
       return;
@@ -1528,9 +1457,9 @@ export default function CronogramaCanvas({
     setProposal((p) => {
       const enPantalla = versionDelBorrador(p);
       if (p === null || enPantalla === null || version < enPantalla) return p;
-      proposalMeta.current = { ...proposalMeta.current, deAssist: false, runId: token };
-      if (r.propuesta && typeof r.propuesta === "object") return r.propuesta as Proposal;
-      return { ...p, version, ...(Array.isArray(r.excluidos) ? { excluidos: r.excluidos } : {}) } as Proposal;
+      proposalMeta.current = { ...proposalMeta.current, runId: token };
+      if (r.propuesta && typeof r.propuesta === "object") return r.propuesta as PropuestaGuardada;
+      return { ...p, version, ...(Array.isArray(r.excluidos) ? { excluidos: r.excluidos } : {}) };
     });
   };
   /* Las casillas de la barra (las junta y encadena el hook). Un 409 (se aplicó, se descartó o llegó otra
@@ -1589,11 +1518,11 @@ export default function CronogramaCanvas({
   });
   /* E3 P3: al volver a la pestaña (o a la ventana), la propuesta se relee: lo que marcó otra computadora
      o lo que editó el chat sube la versión, y `refrescarPropuesta` la reemplaza solo si es más nueva.
-     Mientras haya una propuesta guardada en pantalla; nunca con la vista previa del modificador. */
+     Mientras haya una propuesta guardada en pantalla. */
   useEffect(() => {
     if (!hayBorrador) return;
     const alVolver = () => {
-      if (document.visibilityState !== "visible" || proposalMeta.current.deAssist) return;
+      if (document.visibilityState !== "visible") return;
       void refrescarPropuesta();
     };
     document.addEventListener("visibilitychange", alVolver);
@@ -1603,8 +1532,9 @@ export default function CronogramaCanvas({
       window.removeEventListener("focus", alVolver);
     };
   }, [hayBorrador, refrescarPropuesta]);
-  /* Las fases actuales CON sus tareas — el diff del modificador es a nivel tarea. */
-  const fasesActualesDelAssist: FaseDelAssist[] = useMemo(
+  /* Las fases actuales CON sus tareas, en la forma que ejecutan las operaciones del chat
+     (`aplicarOperacionesAcordadas`): borrar o mover una tarea mira su estado y su origen. */
+  const fasesParaOperaciones: FaseActual[] = useMemo(
     () =>
       phases
         .filter((p): p is Phase & { id: string } => !!p.id)
@@ -1631,32 +1561,16 @@ export default function CronogramaCanvas({
         })),
     [phases],
   );
-  const assistItems: ItemDeAssist[] = useMemo(
-    () =>
-      proposal && !hayBorrador
-        ? diffAssist(fasesActualesDelAssist, proposal, anchor || null)
-        : [],
-    [proposal, hayBorrador, fasesActualesDelAssist, anchor],
-  );
-  /* ⭐ Agrupada por FASE y partida en decisiones/consecuencias. La lista plana de veinte barras
-     iguales enterraba lo que hay que revisar (una fase que se va con sus 7 tareas) debajo de
-     dieciocho corrimientos de semana, que son la aritmética de esa decisión y no una elección.
-     Reportado por Elías el 2026-08-20 mirando la fusión de dos fases de Wherex. */
-  const gruposDeAssist = useMemo(() => agruparItems(assistItems), [assistItems]);
-
-  const assistDescartadosVivos = useMemo(
-    () => assistItems.filter((i) => assistDescartados.has(i.key)).length,
-    [assistItems, assistDescartados],
-  );
 
   // Debounce: auto-guarda ~1.5 s después de la última edición. Se reinicia con cada
-  // cambio (phases/anchor). No corre con propuesta del ASSIST abierta (el Gantt muestra la
-  // preview, no lo editable), mientras guarda, con el cronograma inválido, ni si el último
-  // intento falló. Con una propuesta de fases guardada SÍ corre: en «Ver como estaba antes» el
-  // cronograma actual sigue editable (el PUT de autosave nunca borra la propuesta, y lo que choque
-  // con ella lo excluye la revisión — ver lib/timeline/borrador.ts).
+  // cambio (phases/anchor). No corre mientras guarda, con el cronograma inválido, ni si el último
+  // intento falló. Con una propuesta guardada SÍ corre: en «Ver como estaba antes» el cronograma
+  // actual sigue editable (el PUT de autosave nunca borra la propuesta, y lo que choque con ella lo
+  // excluye la revisión — ver lib/timeline/borrador.ts). E4 (2026-09): tampoco lo frena una
+  // propuesta que no se sabe leer (antes, la vista previa de «Pedir cambio con IA», que congelaba el
+  // Gantt): el cronograma sigue editable y la línea ofrece descartarla.
   useEffect(() => {
-    if (!dirty || (proposal && !hayBorrador) || saving || !canEdit) return; // el CSE no autosalva (no edita)
+    if (!dirty || saving || !canEdit) return; // el CSE no autosalva (no edita)
     if (validateLocal() !== null) return;
     if (editSeq.current === lastFailedSeqRef.current) return;
     const t = setTimeout(() => { void autoSave(); }, 1500);
@@ -1776,7 +1690,7 @@ export default function CronogramaCanvas({
       /* «Armar las tareas» / «Volver a intentar»: sobre la propuesta de la pantalla, cuyas tareas
          faltan o fallaron. Sin un `borrador-v1` en pantalla (la línea que las ofrece después de
          aplicar o descartar), sobre ninguna. */
-      if (!proposalMeta.current.deAssist && esBorradorV1(proposal)) {
+      if (esBorradorV1(proposal)) {
         /* E3: cada casilla sube la versión: primero que se guarde lo marcado (si no se pudo, ya se dijo),
            y la versión es la de DESPUÉS (la del hook, no la de la closure del clic). */
         if (await revisionRef.current.esperarCasillas()) return;
@@ -1852,8 +1766,8 @@ export default function CronogramaCanvas({
            escribir el paso 1. */
         token = paso.token;
         version = 0;
-        proposalMeta.current = { deAssist: false, runId: paso.token };
-        setProposal(estructura.proposal as Proposal);
+        proposalMeta.current = { runId: paso.token };
+        setProposal(estructura.proposal as PropuestaGuardada);
         setTareasDelBorrador({ estado: "faltan", fase: null, motivo: null, token: paso.token, corrida: null });
         bumpGpsRefresh();
         window.setTimeout(
@@ -1887,11 +1801,11 @@ export default function CronogramaCanvas({
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         // La propuesta quedó «armando», con su corrida: se trae, y el seguimiento la toma.
-        if (!proposalMeta.current.deAssist) await traerPropuestaPendiente();
+        await traerPropuestaPendiente();
       } else if (res.status === 409) {
         /* La propuesta cambió en el medio (se aplicó, se descartó, entró otra, o ya se están armando
            sus tareas): no se lanzó ninguna corrida. Se trae la que está y se dice por qué. */
-        if (!proposalMeta.current.deAssist) await traerPropuestaPendiente();
+        await traerPropuestaPendiente();
         toast.info(data?.message ?? data?.error ?? AVISO_PROPUESTA_PENDIENTE);
       } else {
         const msg = data?.message ?? data?.error ?? "No se pudo armar la propuesta de tareas.";
@@ -1940,7 +1854,7 @@ export default function CronogramaCanvas({
       const data = await res.json().catch(() => ({}));
       if (res.ok || res.status === 409) {
         // La propuesta quedó «armando» (o ya había otra): se trae, y el seguimiento la toma.
-        if (!proposalMeta.current.deAssist) await traerPropuestaPendiente();
+        await traerPropuestaPendiente();
         if (!res.ok) toast.info(data?.message ?? AVISO_PROPUESTA_PENDIENTE);
       } else {
         toast.error(data?.message ?? data?.error ?? "No se pudo pedir la propuesta de esa fase.");
@@ -1961,84 +1875,10 @@ export default function CronogramaCanvas({
   // El detalle (tareas) ya NO se auto-genera en silencio: lo crea el CTA explícito
   // "Generar cronograma" (#2). Ver el portal de acciones más abajo.
 
-  // ── Asistente IA: instrucción → propuesta → aplicar/descartar ─────────────────
-  /* Devuelve el MOTIVO del fallo, o null si anduvo. ⚠ Antes no devolvía nada, así que el
-     chat cerraba su panel aunque el aplicar hubiera fallado y el error aparecía suelto al pie
-     del documento — reportado por Elías en la primera prueba real. */
-  const submitAssist = async (
-    instruction: string,
-    scopePhaseId: string | null,
-  ): Promise<{ fallo: string | null; avisos: string[] }> => {
-    if (instruction.trim().length < 4 || assisting)
-      return { fallo: "El pedido es muy corto o ya hay uno en curso.", avisos: [] };
-    /* ⛔ Tampoco mientras la IA arma otra propuesta: correrían dos agentes a la vez y el segundo
-       pisaría en pantalla al primero (ver `aplicarOperacionesAcordadas`). */
-    if (ocupado.activo) {
-      return { fallo: esperaEnCurso(ocupado.rotulo), avisos: [] };
-    }
-    /* ⛔ Ni mientras ESTA pantalla pide la propuesta de «Regenerar todo» (E2a): esa espera ya no
-       bloquea el cronograma, pero la propuesta que llega se calculó sobre la versión de antes. */
-    if (armando !== null) {
-      return { fallo: esperaEnCurso("armando la propuesta del cronograma"), avisos: [] };
-    }
-    /* ⛔ CON CAMBIOS DE FASES SIN DECIDIR, EL MODIFICADOR TAMPOCO (revisión adversarial,
-       2026-09-24). La guarda vivía solo en el carril rápido del chat. Este camino —«IA» de una fase
-       y el acuerdo viejo del chat— reemplazaba en memoria la propuesta de las reuniones por la suya:
-       aplicarla (PUT con motivo) o descartarla (DELETE) borraba la guardada, con sus sugerencias sin
-       decidir, y la cadena de «Regenerar todo» ofrecía el paso 2 sobre fases que nadie decidió.
-       Desde E1 del borrador la pregunta es «¿hay un borrador guardado?» (`hayBorrador`). */
-    if (hayBorrador) {
-      setError(CAMBIOS_DE_FASES_SIN_DECIDIR);
-      return { fallo: CAMBIOS_DE_FASES_SIN_DECIDIR, avisos: [] };
-    }
-    setAssisting(true);
-    let avisosDelAssist: string[] = [];
-    setError(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/timeline/assist`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction, scopePhaseId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const motivo =
-          data?.details?.[0] ??
-            data?.message ??
-            (data?.error === "assist_invalid_proposal"
-              ? "La IA devolvió una propuesta inválida — prueba reformular la instrucción."
-              : data?.error ?? "Error al pedir la actualización.");
-        setError(motivo);
-        setAssisting(false);
-        return { fallo: motivo, avisos: [] };
-      } else {
-        // Vive SOLO en memoria: `debeReemplazarPropuesta` nunca la pisa con una del servidor.
-        // El `runId` viaja hasta el "Aplicar" para que el PUT pueda cerrarle el desenlace: sin
-        // eso solo se sabe cuántas propuestas se generaron, no cuántas se usaron.
-        proposalMeta.current = { deAssist: true, runId: data.assistRunId ?? null };
-        // Propuesta nueva = revisión limpia: los descartes de la anterior no aplican a ésta.
-        setAssistDescartados(new Set());
-        setAssistRevision(false);
-        setProposal(data.proposal as Proposal);
-        setAssistInstruction(instruction.trim()); // #4 — será la razón al aplicar la propuesta
-        avisosDelAssist = Array.isArray(data.warnings) ? data.warnings : [];
-        setAssistWarnings(avisosDelAssist);
-        setAssistOpen(false); // cerrar el dialog; la propuesta se ve en el Gantt (preview)
-      }
-    } catch {
-      const motivo = "Error de conexión con el asistente.";
-      setError(motivo);
-      setAssisting(false);
-      return { fallo: motivo, avisos: [] };
-    }
-    setAssisting(false);
-    /* ⚠ Los avisos del editor (rescates, semanas acomodadas) suben al chat: son la diferencia
-       entre «se aplicó» y «se aplicó, pero con una parte hizo otra cosa». */
-    return { fallo: null, avisos: avisosDelAssist };
-  };
+  /* E4 (2026-09): acá vivía el pedido de «Pedir cambio con IA» (instrucción → propuesta en memoria →
+     aplicar/descartar desde su banner). Se retiró: todo cambio con IA pasa por el chat, que acuerda
+     operaciones (abajo) o, con una propuesta abierta, la edita (`pasarALaPropuesta`). */
 
-  // Aplicar la propuesta de la IA: PUT directo (sin modal). La razón del audit es la
-  // instrucción que el CSE le dio a la IA (o un genérico). El cliente NO la ve hasta "Subir".
   /**
    * ⭐ EL CAMINO RÁPIDO: las operaciones acordadas en el chat se ejecutan acá, sin volver a
    * llamar a ningún modelo.
@@ -2093,7 +1933,7 @@ export default function CronogramaCanvas({
       return { fallo: esperaEnCurso("armando la propuesta del cronograma"), avisos: [] };
     }
     const { payload, avisos, rechazadas } = aplicarOperaciones(
-      fasesActualesDelAssist,
+      fasesParaOperaciones,
       anchor || null,
       ops,
     );
@@ -2146,66 +1986,7 @@ export default function CronogramaCanvas({
     }
   };
 
-  const applyProposal = async () => {
-    if (!proposal) return;
-    setApplying(true);
-    setError(null);
-    try {
-      /* ⚠ Sin ningún descarte se manda la propuesta TAL CUAL, no la proyección. Las dos dan lo
-         mismo (hay test de que aceptar todo == el reemplazo entero), pero el camino de siempre
-         no puede depender de que ese test siga siendo cierto: si la proyección tuviera un bug,
-         se lo comería el 100% de los usos en vez del que de verdad descartó algo. */
-      const cuerpo =
-        assistDescartadosVivos > 0
-          ? proyectarAceptados(
-              fasesActualesDelAssist,
-              proposal,
-              new Set(assistItems.map((i) => i.key).filter((k) => !assistDescartados.has(k))),
-              anchor || null,
-            )
-          : proposal;
-      const res = await fetch(`/api/projects/${projectId}/timeline`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...cuerpo,
-          reason:
-            (assistInstruction.trim() || "Actualización del cronograma (IA)") +
-            (assistDescartadosVivos > 0
-              ? ` — se aplicaron ${assistItems.length - assistDescartadosVivos} de ${assistItems.length} cambios propuestos`
-              : ""),
-          kind: "AI_ASSIST",
-          instruction: assistInstruction.trim() || null,
-          // Cierra el desenlace de la corrida que produjo esta propuesta (ver el PUT).
-          assistRunId: proposalMeta.current.runId,
-        }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(
-          res.status === 409 && d?.code === "PROPUESTA_ABIERTA"
-            ? await anteLaPropuestaGuardada()
-            : (d?.details?.[0] ?? d?.error ?? "No se pudo aplicar la propuesta."),
-        );
-      } else {
-        proposalMeta.current = { deAssist: false, runId: null };
-        setProposal(null);
-        setAssistWarnings([]);
-        setAssistInstruction("");
-        setAssistDescartados(new Set());
-        setAssistRevision(false);
-        await load();
-        // El cartel del widget se apaga solo: si no, queda ámbar sobre algo ya resuelto.
-        bumpGpsRefresh();
-        clearScope(undoScope); // la propuesta aplicada reemplaza el estado: limpiamos el historial de undo
-      }
-    } catch {
-      setError("Error de conexión al aplicar.");
-    }
-    setApplying(false);
-  };
-
-  /* E3 P5: devuelve cómo terminó: «descartada» (el servidor la borró, o era la vista previa en memoria),
+  /* E3 P5: devuelve cómo terminó: «descartada» (el servidor la borró),
      «otra» (la guardada ya era otra: no se borró nada) o «fallo» (el DELETE no anduvo, o ya había uno en
      curso). El chat da éxito SOLO con «descartada»; la barra no mira el resultado. */
   const discardProposal = async (reason?: string): Promise<"descartada" | "otra" | "fallo"> => {
@@ -2217,8 +1998,9 @@ export default function CronogramaCanvas({
        franja) y lo que decide si se ofrecen las tareas. */
     const origenDescartado = origenDePropuesta(proposal);
     // Lo que el CSE ya cerró en la franja (la de este borrador vacío) no vuelve a aparecer al descartarlo.
+    // E4: se leen del borrador ya leído (`leerBorrador`), no del JSON crudo.
     const observacionesDescartadas =
-      franjaCerradaPara !== null && franjaCerradaPara === proposalMeta.current.runId ? [] : (proposal?.observaciones ?? []);
+      franjaCerradaPara !== null && franjaCerradaPara === proposalMeta.current.runId ? [] : (revision.borrador?.observaciones ?? []);
     // E2a: el estado de las tareas de la que se descarta (null = no esperaba tareas), ANTES de limpiar.
     const tareasDescartadas = tareasEnPantalla?.estado ?? null;
     /* Revisión de E2a: la corrida que armaba sus tareas (su seguimiento sigue vivo: al terminar no
@@ -2230,65 +2012,48 @@ export default function CronogramaCanvas({
     const corridasDescartadas = corridasDeLaPropuesta(tareasEnPantalla);
     const conFasesLaDescartada = traeCambiosDeFases(proposal);
     const soloFaseLaDescartada = !!revision.borrador?.soloFase;
-    // Si la propuesta vino del agente (re-run), está persistida en pendingProposal →
-    // limpiarla en el server para que no reaparezca al recargar. El estado local se limpia pase
-    // lo que pase.
-    /* ⛔ La del modificador vive SOLO en memoria: descartarla no toca el servidor (revisión
-       adversarial, 2026-09-24). El DELETE «no-op inofensivo» no lo era: borraba la propuesta que
-       SÍ estaba guardada —por ejemplo, las sugerencias de fases de las reuniones a medio decidir—.
-       Y la guardada se borra solo si es la misma que esta pantalla tiene enfrente (`runId`: la ruta
-       responde 409 si es otra). */
+    /* La propuesta está persistida en `pendingProposal`: se limpia en el servidor para que no reaparezca
+       al recargar, y solo si es la misma que esta pantalla tiene enfrente (`runId`: la ruta responde 409
+       si es otra). El estado local se limpia pase lo que pase. E4 (2026-09): se fue la rama de la vista
+       previa en memoria de «Pedir cambio con IA» (descartarla no tocaba el servidor). */
     let guardadaEsOtra = false;
     let yaNoEstaGuardada = false;
     let borrada = false;
-    const eraDelModificador = proposalMeta.current.deAssist;
-    if (!eraDelModificador) {
-      // Un doble clic (o el descarte automático encima del manual): el primer DELETE sigue en curso.
-      if (descartandoRef.current) return "fallo";
-      descartandoRef.current = true;
-      setDescartando(true);
-      try {
-        const res = await fetch(`/api/projects/${projectId}/timeline/proposal`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          // Tanda M — `reason` es opcional: solo el auto-descarte silencioso lo manda, para
-          // dejar un log server-side con la corrida que se evaporó (ver la ruta).
-          body: JSON.stringify({ runId: proposalMeta.current.runId, ...(reason ? { reason } : {}) }),
-        });
-        guardadaEsOtra = res.status === 409;
-        borrada = res.ok;
-        /* Solo se olvida la foto si el servidor ya no tiene ESTA propuesta (borrada, o ya era
-           otra). Si el DELETE falló, la propuesta sigue guardada: olvidar la foto haría que al
-           recargar una edición a mano que chocaba pase a «aplica» (revisión de E1). */
-        yaNoEstaGuardada = res.ok || res.status === 409;
-      } catch {
-        /* limpiar local igual */
-      } finally {
-        descartandoRef.current = false;
-        setDescartando(false);
-      }
-      // La que se tenía enfrente ya no está (o ya no era la guardada): su foto recordada no sirve.
-      if (yaNoEstaGuardada) revisionRef.current.olvidar();
-      // Descartada a mano mientras se armaban (o se recalculaban) sus tareas: sus corridas terminan sin aviso.
-      if (yaNoEstaGuardada && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);
+    // Un doble clic (o el descarte automático encima del manual): el primer DELETE sigue en curso.
+    if (descartandoRef.current) return "fallo";
+    descartandoRef.current = true;
+    setDescartando(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/timeline/proposal`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        // Tanda M — `reason` es opcional: solo el auto-descarte silencioso lo manda, para
+        // dejar un log server-side con la corrida que se evaporó (ver la ruta).
+        body: JSON.stringify({ runId: proposalMeta.current.runId, ...(reason ? { reason } : {}) }),
+      });
+      guardadaEsOtra = res.status === 409;
+      borrada = res.ok;
+      /* Solo se olvida la foto si el servidor ya no tiene ESTA propuesta (borrada, o ya era
+         otra). Si el DELETE falló, la propuesta sigue guardada: olvidar la foto haría que al
+         recargar una edición a mano que chocaba pase a «aplica» (revisión de E1). */
+      yaNoEstaGuardada = res.ok || res.status === 409;
+    } catch {
+      /* limpiar local igual */
+    } finally {
+      descartandoRef.current = false;
+      setDescartando(false);
     }
-    proposalMeta.current = { deAssist: false, runId: null };
+    // La que se tenía enfrente ya no está (o ya no era la guardada): su foto recordada no sirve.
+    if (yaNoEstaGuardada) revisionRef.current.olvidar();
+    // Descartada a mano mientras se armaban (o se recalculaban) sus tareas: sus corridas terminan sin aviso.
+    if (yaNoEstaGuardada && !reason) for (const c of corridasDescartadas) CORRIDAS_ANUNCIADAS.add(c);
+    proposalMeta.current = { runId: null };
     setProposal(null);
-    if (!eraDelModificador) setTareasDelBorrador(null);
-    setAssistWarnings([]);
-    setAssistDescartados(new Set());
-    setAssistRevision(false);
+    setTareasDelBorrador(null);
     /* ⚠ Sin esto el cartel ámbar del widget queda encendido sobre una propuesta que ya no existe.
        Con el bug de refresco casi no se veía (la propuesta ni llegaba a cargarse); ahora que
        aparece siempre, un cartel fantasma se leería como que el arreglo no sirvió. */
     bumpGpsRefresh();
-    if (eraDelModificador) {
-      /* Descartar la vista previa del modificador deja ver la propuesta GUARDADA, si hay: pudo entrar
-         mientras la IA trabajaba (el 409 PROPUESTA_ABIERTA lo dice), y sin esto no aparecía hasta
-         recargar. */
-      void refrescarPropuesta();
-      return "descartada";
-    }
     if (guardadaEsOtra) {
       /* La guardada ya no es la que se descartó (otra la reemplazó): no se borró nada, se trae la que
          está y no se ofrece nada por la descartada. */
@@ -2458,7 +2223,7 @@ export default function CronogramaCanvas({
       revisionRef.current.olvidar();
       // Sus corridas no avisan nada de una propuesta que ya se aplicó (ni sobre la próxima que entre).
       for (const c of corridasResueltas) CORRIDAS_ANUNCIADAS.add(c);
-      proposalMeta.current = { deAssist: false, runId: null };
+      proposalMeta.current = { runId: null };
       setProposal(null);
       setTareasDelBorrador(null);
       await load();
@@ -2553,17 +2318,14 @@ export default function CronogramaCanvas({
     void (async () => {
       const r = await track(corrida);
       siguiendoRef.current = null;
-      /* La vista previa del modificador vive solo en memoria: nunca se pisa (la guardada llega al
-         descartarla). Con ella en pantalla, la guardada se LEE sin ponerla: antes no se leía nada, el
-         desenlace callaba y daba la corrida por avisada (cierre de la revisión de E2a). */
-      const conVistaPrevia = proposalMeta.current.deAssist;
-      const leida = conVistaPrevia ? await traerPropuestaPendiente({ soloLeer: true }) : await traerPropuestaPendiente();
+      /* Se trae la guardada y se pone en pantalla. E4 (2026-09): ya no hay una vista previa en memoria
+         que no se pueda pisar («Pedir cambio con IA» se retiró). */
+      const leida = await traerPropuestaPendiente();
       const desenlace = desenlaceDelSeguimiento({
         corrida,
         estado: r.status,
         lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas, recalculo: leida.tareas?.recalculo ?? null } : null,
         aviso: r.timelineSyncError,
-        conVistaPrevia,
         recalculo: recalcula,
       });
       if (desenlace.que === "seguir") {
@@ -2661,7 +2423,7 @@ export default function CronogramaCanvas({
         projectId,
         propuesta: () => ({
           token: proposalMeta.current.runId,
-          sePuedePedir: !proposalMeta.current.deAssist && !!revisionRef.current.borrador && !descartandoRef.current,
+          sePuedePedir: !!revisionRef.current.borrador && !descartandoRef.current,
         }),
         esperarQueSeGuarde,
         esperarCasillas: () => revisionRef.current.esperarCasillas(),
@@ -2677,7 +2439,6 @@ export default function CronogramaCanvas({
   const lanzamientoDelRecalculo = puedeLanzarElRecalculo({
     puedeEditar: canEdit,
     hayBorrador,
-    vistaPrevia: proposalMeta.current.deAssist,
     armando: armando !== null,
     aplicando: aplicandoBorrador,
     descartando,
@@ -2696,8 +2457,9 @@ export default function CronogramaCanvas({
   const recalculoDeLaBarra = recalc.barra;
 
   /* ── E3 P5: EL CHAT CON UNA PROPUESTA ABIERTA ─────────────────────────────────────────────────────
-     Un acuerdo sin propuesta (`borrador` null) va por los dos carriles de siempre: el PUT directo
-     (`aplicarOperacionesAcordadas`) o, un acuerdo viejo de texto, el modificador. Uno acordado para una
+     Un acuerdo sin propuesta (`borrador` null) va por el PUT directo (`aplicarOperacionesAcordadas`).
+     E4 (2026-09): un acuerdo viejo de texto (sin operaciones) ya no tiene carril: «Pedir cambio con IA»
+     se retiró, y su botón dice que se vuelva a pedir (`ACUERDO_DE_OTRA_VERSION`). Uno acordado para una
      propuesta va a ELLA (`pasarALaPropuesta`): la edita (POST /timeline/borrador/operaciones), la aplica
      entera con la lista acordada (el mismo `aplicarBorrador` de la barra) o la descarta. */
   const tareasArmandoEnPantalla =
@@ -2706,7 +2468,8 @@ export default function CronogramaCanvas({
     estadoDelVacio(proposal, estadoDeLasTareasEnPantalla) === "armando";
   /** Por qué el botón del chat no aplica ESTE acuerdo ahora (va en el botón: ≤ 60 caracteres), o null. */
   const motivoDelChat = (a: AcuerdoDelChat): string | null => {
-    if (proposal && proposalMeta.current.deAssist) return MOTIVOS_DEL_CHAT.vistaPrevia;
+    // E4: un acuerdo sin operaciones es de antes del 2026-08-20 (solo una instrucción): ya no tiene carril.
+    if (!Array.isArray(a.operaciones)) return ACUERDO_DE_OTRA_VERSION;
     const enSuBarra = hayBorrador && (!esBorradorV1(proposal) || (revision.borrador?.desconocidos ?? 0) > 0);
     const token = a.borrador ?? null;
     if (token === null) {
@@ -2781,18 +2544,19 @@ export default function CronogramaCanvas({
       return falla("Error de conexión al pasar a la propuesta.");
     }
   };
-  /** El botón del chat: sin propuesta, los carriles de siempre; con una, a la propuesta. */
+  /** El botón del chat: sin propuesta, las operaciones por el PUT; con una, a la propuesta. Sin
+   *  operaciones no hay carril (E4: el acuerdo es de una versión anterior). */
   const atenderElAcuerdo = (acuerdo: AcuerdoDelChat): Promise<ResultadoDeAplicar> =>
     acuerdo.borrador == null
       ? Array.isArray(acuerdo.operaciones) && acuerdo.operaciones.length > 0
         ? aplicarOperacionesAcordadas(acuerdo.operaciones as Operacion[], acuerdo.resumen)
-        : submitAssist(acuerdo.instruccion ?? "", null)
+        : Promise.resolve({ fallo: ACUERDO_DE_OTRA_VERSION, avisos: [] })
       : pasarALaPropuesta(acuerdo);
 
   /* ── E3 P5: EL CHAT SE ABRE SOLO CON UNA PROPUESTA NUEVA ──────────────────────────────────────────
      Una vez por persona y por propuesta (lo recuerdan el servidor y este navegador), sin tomar el foco,
      en pantallas anchas y nunca encima de otra capa. Lo decide `debeAbrirseElChat` (puro). */
-  const tokenParaLaApertura = hayBorrador && !proposalMeta.current.deAssist ? proposalMeta.current.runId : null;
+  const tokenParaLaApertura = hayBorrador ? proposalMeta.current.runId : null;
   const aperturaVistaRef = useRef<string | null>(null);
   useEffect(() => {
     if (!tokenParaLaApertura || aperturaVistaRef.current === tokenParaLaApertura) return;
@@ -2800,7 +2564,6 @@ export default function CronogramaCanvas({
       puedeEditar: canEdit && phases.length > 0,
       puedeConversar: me?.permissions?.sections?.asistente?.read === true,
       hayBorrador,
-      deAssist: proposalMeta.current.deAssist,
       token: tokenParaLaApertura,
       conCambios: !!revision.resumen,
       nadaQueDecidir: revision.nadaQueDecidir,
@@ -3427,112 +3190,10 @@ export default function CronogramaCanvas({
     if (next) setSelectedTask(next);
   };
 
-  /* ── EL PREVIEW MOSTRABA TODO COMO PENDIENTE, Y ERA MENTIRA ─────────────────────────────────
-     ⛔ Hasta el 2026-08-20 esta proyección ponía `status: "PENDING"` en TODAS las tareas. En un
-     cronograma con 13 tareas hechas, la vista previa las pintaba atrasadas — mientras el cartel
-     de arriba promete, con todas las letras, que «los estados de las tareas existentes se
-     conservan al aplicar».
-
-     El texto decía una cosa y la imagen la contraria, que es la peor forma de este defecto: el
-     CSE mira el preview y cree que aplicar le borra el progreso. Reportado por Elías así:
-     «el congelado no representa la realidad».
-
-     El estado NO viaja en la propuesta y está bien que no viaje —el PUT no toca `status`, por eso
-     se conservan— así que se repone desde lo que HAY, por id. Las tareas nuevas (sin id) sí nacen
-     pendientes, que es la verdad. */
-  const estadoActualPorTaskId = new Map<string, TaskDraft["status"]>();
-  for (const p of phases) for (const t of p.tasks) if (t.id) estadoActualPorTaskId.set(t.id, t.status);
-
-  // Propuesta DEL MODIFICADOR → preview del Gantt (read-only) + resumen del diff. ⛔ Nunca la de
-  // fases guardada: esa se proyecta con el núcleo del borrador, y en el formato nuevo ni siquiera
-  // trae `phases` (leerla acá reventaba la pantalla).
-  const propuestaDelAssist = proposal && !hayBorrador ? proposal : null;
-  const proposalGantt: GanttPhase[] | null = propuestaDelAssist
-    ? propuestaDelAssist.phases.map((p, i) => ({
-        key: p.id ?? `prop-${i}`,
-        id: p.id,
-        name: p.name,
-        durationWeeks: p.durationWeeks,
-        startWeek: p.startWeek ?? null,
-        sessionCount: p.sessionCount ?? null,
-        activityType: p.activityType ?? null,
-        tasks: (p.tasks ?? []).map((t, ti) => ({
-          key: t.id ?? `prop-${i}-${ti}`,
-          id: t.id,
-          title: t.title,
-          weekIndex: t.weekIndex,
-          /* Ver el bloque de arriba: sin esto el preview borra visualmente el progreso. */
-          status: (t.id ? (estadoActualPorTaskId.get(t.id) ?? "PENDING") : "PENDING") as TaskDraft["status"],
-          notes: t.notes ?? null,
-          needsValidation: false,
-        })),
-      }))
-    : null;
-
-  const diffSummary = (() => {
-    const proposal = propuestaDelAssist;
-    if (!proposal) return null;
-    const currentTaskById = new Map<string, TaskDraft>();
-    for (const p of phases) for (const t of p.tasks) if (t.id) currentTaskById.set(t.id, t);
-    // Tareas actuales por fase — para la semántica "tasks ausente = no tocar" de abajo.
-    const currentTaskIdsByPhase = new Map<string, string[]>();
-    for (const p of phases) {
-      if (p.id) currentTaskIdsByPhase.set(p.id, p.tasks.filter((t) => t.id).map((t) => t.id as string));
-    }
-    const proposalTaskIds = new Set<string>();
-    let added = 0;
-    let edited = 0;
-    for (const p of proposal.phases) {
-      // Contrato del PUT (timeline/route.ts): `tasks === undefined` = NO tocar las tareas de esa
-      // fase → se CONSERVAN. Contarlas como borradas era el bug del "−70 tareas" tras regenerar el
-      // handoff (cuya propuesta es solo estructura de fases, sin tasks en ninguna).
-      if (p.tasks === undefined) {
-        for (const id of p.id ? (currentTaskIdsByPhase.get(p.id) ?? []) : []) proposalTaskIds.add(id);
-        continue;
-      }
-      for (const t of p.tasks) {
-        if (!t.id) {
-          added++;
-          continue;
-        }
-        proposalTaskIds.add(t.id);
-        const cur = currentTaskById.get(t.id);
-        if (cur && (cur.title !== t.title || cur.weekIndex !== t.weekIndex || (cur.notes ?? null) !== (t.notes ?? null))) {
-          edited++;
-        }
-      }
-    }
-    let removed = 0;
-    for (const id of currentTaskById.keys()) if (!proposalTaskIds.has(id)) removed++;
-
-    const currentPhaseById = new Map(phases.filter((p) => p.id).map((p) => [p.id as string, p]));
-    let phasesChanged = 0;
-    let phasesAdded = 0;
-    for (const p of proposal.phases) {
-      if (!p.id) {
-        phasesAdded++;
-        continue;
-      }
-      const cur = currentPhaseById.get(p.id);
-      if (cur && (cur.name !== p.name || cur.durationWeeks !== p.durationWeeks || (cur.startWeek ?? null) !== (p.startWeek ?? null) || (cur.activityType ?? null) !== (p.activityType ?? null))) {
-        phasesChanged++;
-      }
-    }
-    const proposalPhaseIds = new Set(proposal.phases.filter((p) => p.id).map((p) => p.id as string));
-    const phasesRemoved = [...currentPhaseById.keys()].filter((id) => !proposalPhaseIds.has(id)).length;
-    const anchorChanged =
-      (proposal.anchorStartDate ? proposal.anchorStartDate.slice(0, 10) : "") !== anchor;
-
-    /* La consecuencia que ninguno de los contadores de arriba muestra (Tanda J): con cuántas
-       tareas o fases se toque, lo que el cliente pregunta es CUÁNDO TERMINA. La propuesta del
-       assist es un reemplazo completo, así que se proyecta directo — sin pasar por deltas. */
-    const endShift = endShiftFragment(
-      projectedEnd(anchor || null, phases),
-      projectedEnd(proposal.anchorStartDate ?? anchor ?? null, proposal.phases),
-    );
-
-    return { added, removed, edited, phasesAdded, phasesRemoved, phasesChanged, anchorChanged, endShift };
-  })();
+  /* E4 (2026-09): acá se proyectaba la vista previa de «Pedir cambio con IA» sobre el Gantt (de solo
+     lectura, con el estado de cada tarea repuesto por id) y se contaba su resumen (tareas y fases que
+     cambiaban, y el corrimiento del cierre). Se retiró con el botón: lo que el chat acuerda se lee en su
+     lista numerada, con el corrimiento («LAS FECHAS SE DICEN SIEMPRE», lib/asistente/turno.ts). */
 
   // ¿Hay cambios guardados sin subir? Hay cronograma y: nunca se subió, O se editó
   // (lastEditedByHuman) después de la última subida. Cualquiera de los dos → el
@@ -3729,7 +3390,7 @@ export default function CronogramaCanvas({
               tareas iniciales); ya con tareas o publicado → "Chequear avance" (D.2). El gate
               !hasPublishedOnce evita regenerar sobre un cronograma vivo (borraría fechas/avance),
               aun si se borraron las tareas post-publicación. */}
-          {canEdit && phases.length > 0 && (!proposal || hayBorrador) && (
+          {canEdit && phases.length > 0 && !propuestaIlegible && (
             !hasPublishedOnce && !hasAiDetail ? (
               // Cronograma VIRGEN: "Generar cronograma" solo si tiene el permiso; si no,
               // no mostrar nada (NO caer al botón de avance — no hay avance que chequear
@@ -3749,16 +3410,8 @@ export default function CronogramaCanvas({
               <CronogramaProgressButton projectId={projectId} onDone={load} />
             )
           )}
-          {canEdit && phases.length > 0 && !proposal && (hasAiDetail ? canRegenerateTimeline : canGenerateTimeline) && (
-            <button
-              onClick={() => { setAssistScopePhaseId(null); setAssistOpen(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
-              title="Pídele a la IA un cambio del cronograma — tú revisas antes de aplicar"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-              Pedir cambio con IA
-            </button>
-          )}
+          {/* E4 (2026-09): acá estaba «Pedir cambio con IA». Se retiró: los cambios con IA se piden en
+              el chat (💬, o el «IA» de cada fase). */}
           {/* Tanda N — "Regenerar todo el cronograma": mismo gate que "Regenerar" por fase
               (hasAiDetail && canRegenerateTimeline). Preview de TODAS las fases → curación
               fase por fase en acordeón → aplicar todo en una transacción. */}
@@ -3823,8 +3476,8 @@ export default function CronogramaCanvas({
           es el único paso que publica el snapshot al cliente (también el primer publish).
           ⭐ Con una propuesta de fases abierta queda LIBRE, con aviso (respuesta 4 de Elías,
           2026-09-24): antes se escondía, y el CSE no podía subir un avance porque había una
-          sugerencia sin decidir. Solo la vista previa del modificador la sigue escondiendo. */}
-      {canEdit && (!proposal || hayBorrador) && phases.length > 0 && (
+          sugerencia sin decidir. */}
+      {canEdit && phases.length > 0 && (
         <PublishBar
           hideWhenClean
           saving={saving || (dirty && validationMsg === null)}
@@ -3851,224 +3504,22 @@ export default function CronogramaCanvas({
           `RevisionDeLaPropuesta`): el mismo Gantt alterna «Ver como estaba antes» ↔ «Ver la
           propuesta». Ya no hay recuadros ni filas fantasma dentro del cronograma editable. */}
 
-      {/* ── Banner de propuesta del ASSIST (reemplazo completo con tareas): preview sin guardar ── */}
-      {proposal && !hayBorrador && diffSummary && (
-        // Ancla PROPIA: antes el CTA "Ver la propuesta" apuntaba a #cronograma-borradores, que solo
-        // existe si hay banners de avance o particularidades. Con solo una propuesta pendiente, el
-        // botón no hacía nada.
-        <div id="cronograma-propuesta" className="scroll-mt-24 rounded-2xl border border-brand/40 bg-surface shadow-sm overflow-hidden">
-          {/* ⚠ EL AVISO DE CONGELADO, Y VA PRIMERO. Mientras hay propuesta el Gantt es de solo
-              lectura: nadie puede tocar una tarea hasta resolverla. Eso está bien —lo pidió
-              Elías— pero hasta hoy no se decía en ningún lado, así que el CSE probaba editar y
-              no entendía por qué no respondía. Un estado modal que no se anuncia se lee como una
-              pantalla rota. */}
-          <div className="flex items-start gap-2 px-4 py-2.5 bg-warn-surface border-b border-warn-line">
-            <span className="text-sm leading-none mt-0.5" aria-hidden>⚠</span>
-            <p className="text-xs font-semibold text-warn-ink">
-              El cronograma está congelado mientras revisas esta propuesta.
-              <span className="font-normal"> Acepta o descarta los cambios para volver a editarlo.</span>
-            </p>
-          </div>
-          <div className="px-4 py-3 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-brand">
-              Propuesta de la IA — vista previa, sin guardar
-            </span>
-            <span className="text-[11px] text-fg-muted">
-              {[
-                diffSummary.added > 0 && `+${plural(diffSummary.added, "tarea nueva", "tareas nuevas")}`,
-                diffSummary.removed > 0 && `−${plural(diffSummary.removed, "tarea", "tareas")}`,
-                diffSummary.edited > 0 && `✎ ${plural(diffSummary.edited, "tarea editada", "tareas editadas")}`,
-                diffSummary.phasesAdded > 0 && `+${plural(diffSummary.phasesAdded, "fase", "fases")}`,
-                diffSummary.phasesRemoved > 0 && `−${plural(diffSummary.phasesRemoved, "fase", "fases")}`,
-                diffSummary.phasesChanged > 0 && `${plural(diffSummary.phasesChanged, "fase modificada", "fases modificadas")}`,
-                diffSummary.anchorChanged && "fecha de arranque modificada",
-                // Lo que ninguno de los contadores anteriores dice: cuándo termina el proyecto.
-                diffSummary.endShift,
-              ]
-                .filter(Boolean)
-                .join(" · ") || "sin cambios detectados"}
-            </span>
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={() => applyProposal()}
-                disabled={applying}
-                className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3.5 py-1.5 rounded-lg transition-colors"
-              >
-                {applying
-                  ? "Aplicando…"
-                  : assistDescartadosVivos > 0
-                    ? `Aplicar ${assistItems.length - assistDescartadosVivos} de ${assistItems.length}`
-                    : "Aplicar cambios"}
-              </button>
-              <button
-                onClick={() => void discardProposal()}
-                disabled={applying}
-                className="text-xs font-medium text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-1.5 disabled:opacity-50 transition-colors"
-              >
-                Descartar
-              </button>
-            </div>
-          </div>
-          {assistWarnings.length > 0 && (
-            <ul className="text-[11px] text-amber-300 space-y-0.5">
-              {assistWarnings.map((w, i) => (
-                <li key={i}>⚠ {w}</li>
-              ))}
-            </ul>
+      {/* ── E4 (2026-09): LA PROPUESTA QUE ESTA VERSIÓN NO SABE LEER ─────────────────────────────
+          Acá estaba el banner de la vista previa de «Pedir cambio con IA» (se retiró). Si en el
+          servidor hubiera una propuesta guardada que no es un borrador, no traba nada: se dice en una
+          línea y se ofrece descartarla; el cronograma sigue editable. */}
+      {propuestaIlegible && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs text-warn-ink">
+          <span>Hay una propuesta guardada que esta versión no sabe leer. Si la descartas, el cronograma no cambia.</span>
+          {canEdit && (
+            <button
+              onClick={() => void discardProposal()}
+              disabled={descartando}
+              className="ml-auto rounded-lg border border-line px-2.5 py-1 font-semibold text-fg-muted hover:text-fg hover:bg-surface-hover disabled:opacity-60"
+            >
+              Descartarla
+            </button>
           )}
-          {/* ── LA REVISIÓN POR ÍTEM ──────────────────────────────────────────────────
-                 Antes de esta tanda la propuesta era todo-o-nada: el CSE pedía «atrasá Setup una
-                 semana», el modelo de paso reescribía tres títulos, y la única salida era
-                 tragarse las cuatro cosas o descartar las cuatro. Acá cada cambio se saca solo,
-                 y «Aplicar» escribe únicamente lo que quedó. El default sigue siendo TODO. */}
-          {assistItems.length > 0 && (
-            <div className="pt-2 border-t border-line">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => setAssistRevision((v) => !v)}
-                  className="text-[11px] font-semibold text-brand hover:text-brand-dark underline underline-offset-2"
-                >
-                  {assistRevision
-                    ? "Ocultar el detalle"
-                    : `Revisar uno por uno (${assistItems.length})`}
-                </button>
-                {assistDescartadosVivos > 0 && (
-                  <span className="text-[11px] text-amber-300">
-                    {assistDescartadosVivos === 1
-                      ? "1 cambio descartado — no se va a escribir"
-                      : `${assistDescartadosVivos} cambios descartados — no se van a escribir`}
-                  </span>
-                )}
-                {assistDescartadosVivos > 0 && (
-                  <button
-                    onClick={() => setAssistDescartados(new Set())}
-                    className="text-[11px] text-fg-muted hover:text-fg underline underline-offset-2"
-                  >
-                    Volver a incluir todo
-                  </button>
-                )}
-              </div>
-              {assistRevision && (
-                <div className="mt-2 space-y-2 max-h-96 overflow-y-auto pr-1">
-                  {gruposDeAssist.map((g) => {
-                    const todasFuera = g.claves.every((k) => assistDescartados.has(k));
-                    const resumen = resumenDeConsecuencias(g);
-                    return (
-                      <div
-                        key={g.fase}
-                        className={cn(
-                          "rounded-xl border px-3 py-2",
-                          todasFuera ? "border-line bg-surface-muted opacity-60" : "border-brand/25 bg-surface-muted",
-                        )}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className="flex items-center gap-1 pt-0.5">
-                            <AcceptButton
-                              size="xs"
-                              aria-label={`Incluir todo en ${g.fase}`}
-                              title="Incluir todos los cambios de esta fase"
-                              disabled={!todasFuera || applying}
-                              onClick={() =>
-                                setAssistDescartados((prev) => {
-                                  const n = new Set(prev);
-                                  g.claves.forEach((k) => n.delete(k));
-                                  return n;
-                                })
-                              }
-                            />
-                            <RejectButton
-                              size="xs"
-                              aria-label={`Descartar todo en ${g.fase}`}
-                              title="Dejar afuera todos los cambios de esta fase"
-                              disabled={todasFuera || applying}
-                              onClick={() =>
-                                setAssistDescartados((prev) => {
-                                  const n = new Set(prev);
-                                  g.claves.forEach((k) => n.add(k));
-                                  return n;
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-fg">
-                              {g.pesado && <span className="text-amber-400 mr-1">⚠</span>}
-                              {g.fase}
-                            </p>
-                            {/* Las DECISIONES, abiertas: es lo que hay que leer. */}
-                            <ul className="mt-1 space-y-0.5">
-                              {g.decisiones.map((it) => {
-                                const fuera = assistDescartados.has(it.key);
-                                return (
-                                  <li key={it.key} className="flex items-start gap-1.5">
-                                    <button
-                                      onClick={() =>
-                                        setAssistDescartados((prev) => {
-                                          const n = new Set(prev);
-                                          if (fuera) n.delete(it.key);
-                                          else n.add(it.key);
-                                          return n;
-                                        })
-                                      }
-                                      disabled={applying}
-                                      title={fuera ? "Volver a incluir" : "Dejar este cambio afuera"}
-                                      className="mt-[3px] text-[10px] text-fg-muted hover:text-fg shrink-0"
-                                    >
-                                      {fuera ? "☐" : "☑"}
-                                    </button>
-                                    <p
-                                      className={cn(
-                                        "text-[11px] break-words",
-                                        fuera ? "text-fg-muted line-through" : "text-fg-secondary",
-                                      )}
-                                    >
-                                      {it.titulo}
-                                      {it.detalle && (
-                                        <span className="text-fg-muted"> · {it.detalle}</span>
-                                      )}
-                                    </p>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                            {/* Las CONSECUENCIAS, plegadas: aritmética de lo de arriba, no decisiones. */}
-                            {resumen && (
-                              <details className="mt-1">
-                                <summary className="cursor-pointer text-[11px] text-brand hover:text-brand-dark select-none">
-                                  {resumen}
-                                </summary>
-                                <ul className="mt-1 space-y-0.5 pl-3 border-l border-line">
-                                  {g.consecuencias.map((it) => (
-                                    <li
-                                      key={it.key}
-                                      className={cn(
-                                        "text-[10px] break-words",
-                                        assistDescartados.has(it.key)
-                                          ? "text-fg-muted line-through"
-                                          : "text-fg-muted",
-                                      )}
-                                    >
-                                      {it.pesado && <span className="text-amber-400 mr-1">⚠</span>}
-                                      {it.titulo} · {it.detalle}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </details>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-          <p className="text-[11px] text-fg-muted">
-            Los estados de las tareas existentes se conservan al aplicar. Revisa el Gantt de abajo: es la propuesta.
-          </p>
-          </div>
         </div>
       )}
 
@@ -4317,10 +3768,10 @@ export default function CronogramaCanvas({
           ocupando el lugar del documento. Un aviso crónico deja de leerse a
           la semana; lo que consigue es que tampoco se lean los que sí importan. */}
 
-      {/* ── EL cronograma. Propuesta del ASSIST (con tareas) → preview read-only swapeada.
-             Propuesta de FASES guardada (handoff o reuniones) → su barra fija arriba del Gantt y
-             el MISMO Gantt alterna «Ver la propuesta» (solo lectura, con marcas) ↔ «Ver como
-             estaba antes» (el cronograma actual, editable). ── */}
+      {/* ── EL cronograma. Propuesta guardada → su barra fija arriba del Gantt y el MISMO Gantt
+             alterna «Ver la propuesta» (solo lectura, con marcas) ↔ «Ver como estaba antes» (el
+             cronograma actual, editable). E4 (2026-09): se fue la vista previa de solo lectura de
+             «Pedir cambio con IA». ── */}
       {/* ── INSTRUCCIONES DEL CSE PARA ESTE DOCUMENTO (X1) ─────────────────────
           Texto libre que el agente de detalle recibe como regla dura al generar/regenerar
           las tareas («las fases de QA van al final», «sin capacitaciones»). Vive en la entry
@@ -4419,12 +3870,6 @@ export default function CronogramaCanvas({
             Ir al Handoff del proyecto
           </a>
         </div>
-      ) : proposal && !hayBorrador && proposalGantt ? (
-        <TimelineGantt
-          anchor={proposal.anchorStartDate ? proposal.anchorStartDate.slice(0, 10) : null}
-          phases={proposalGantt}
-          readOnly
-        />
       ) : (
         // `space-y-4` propio: el wrapper existe para que el panel "Qué hacer acá" pueda saltar acá
         // (scrollIntoView), y replica el espaciado que estos hijos tenían sueltos en el contenedor.
@@ -4545,9 +3990,9 @@ export default function CronogramaCanvas({
                vista de la propuesta es de solo lectura (sin `onSetCloseOverride`). */
             closeOverride={closeOverride}
             onSetCloseOverride={verPropuesta ? undefined : setCloseOverrideFromGantt}
-            /* E4 P1: el «IA» de cada fase ya no abre «Pedir cambio con IA»: abre el chat con esa fase
-               señalada (el Gantt lo toma del proveedor del chip de arriba), con y sin propuesta. Con
-               una propuesta abierta, el chat la edita (E3). */
+            /* E4 P1: el «IA» de cada fase abre el chat con esa fase señalada (el Gantt lo toma del
+               proveedor del chip de arriba), con y sin propuesta. Con una propuesta abierta, el chat la
+               edita (E3). */
             onRegeneratePhase={
               // Rehacer una fase solo tiene sentido cuando YA hay detalle IA, y queda para quien puede
               // regenerar (cronograma.regenerate).
@@ -4684,19 +4129,6 @@ export default function CronogramaCanvas({
       })()}
 
 
-      <TimelineAssistDialog
-        open={assistOpen}
-        /* Mismo criterio que el modal de «Subir al cliente»: un clic afuera no cancela una
-           escritura que ya salió. Se cierra solo al terminar. */
-        onClose={() => {
-          if (!assisting) setAssistOpen(false);
-        }}
-        phases={phases.map((p) => ({ id: p.id, name: p.name }))}
-        initialScopePhaseId={assistScopePhaseId}
-        onSubmit={submitAssist}
-        loading={assisting}
-      />
-
       {/* Razón del cambio — SOLO al "Subir al cliente" (no en el auto-guardado). Queda
           registrada con un snapshot de lo publicado (TimelineChange) para D.3 (vendido vs real). */}
       {publishReasonOpen && (
@@ -4755,19 +4187,18 @@ export default function CronogramaCanvas({
       )}
 
       {/* ⭐ Un acuerdo con operaciones entra por `aplicarOperacionesAcordadas`: un PUT directo, sin
-          modelo ni vista previa (lo que se revisa es la lista numerada del chat). `submitAssist`
-          queda para los acuerdos viejos con instrucción de texto. El chat acuerda; escribir sigue
-          siendo de esta pantalla, con su permiso. */}
+          modelo ni vista previa (lo que se revisa es la lista numerada del chat). El chat acuerda;
+          escribir sigue siendo de esta pantalla, con su permiso. */}
       <ChatDelAsistente
         base={`/api/projects/${projectId}`}
         pieza="timeline"
         piezaLabel="Cronograma"
         abierto={chatAbierto}
         onClose={() => setChatAbierto(false)}
-        /* ⭐ DOS CARRILES. Con operaciones se ejecuta acá mismo, en milisegundos. Sin ellas —un
-           acuerdo viejo, guardado como instrucción de texto— cae al modificador de siempre, que
-           tarda minutos. El carril lento no se retira: hace falta cuando hay que ESCRIBIR texto
-           nuevo, que ninguna operación puede hacer.
+        /* ⭐ UN SOLO CARRIL. Con operaciones se ejecuta acá mismo, en milisegundos. E4 (2026-09): el
+           carril lento («Pedir cambio con IA», para los acuerdos viejos de texto) se retiró; escribir
+           texto nuevo en la nota de una fase es `fase.nota`. Un acuerdo viejo pide que se lo vuelva a
+           pedir (`motivoDelChat`).
            E3 P5: un acuerdo hecho para una propuesta va a ELLA (`atenderElAcuerdo`). */
         onAplicar={atenderElAcuerdo}
         motivoParaNoAplicar={motivoDelChat}

@@ -20,13 +20,16 @@
  * hacer — que es exactamente el problema que este archivo viene a resolver, pero peor: ahora con
  * el sistema afirmándolo por escrito.
  *
- * Por eso el prompt del modificador (`lib/agents/timeline-assist.ts`) las INTERPOLA de acá en vez
- * de transcribirlas, y hay una guarda que lo hace cumplir.
+ * Por eso el contexto del chat del cronograma SIN propuesta abierta (`lib/asistente/contexto.ts`) las
+ * INTERPOLA de acá en vez de transcribirlas, y hay una guarda que lo hace cumplir
+ * (capacidades.test.ts). E4 (2026-09): el prompt del modificador («Pedir cambio con IA»), que también
+ * las interpolaba, se retiró con él; el texto no se recortó (recortarlo cambia lo que lee el modelo y
+ * se mide antes con `probar-asistente`).
  */
 
 /**
- * Las reglas duras que el modificador obedece al reescribir un cronograma. Van tal cual dentro de
- * su prompt, y las lee también quien tenga que explicar qué se puede pedir.
+ * Las reglas duras del cronograma. Nacieron para el modificador que reescribía el cronograma entero
+ * (retirado en E4); hoy las lee el chat, tal cual, para explicar qué se puede pedir.
  *
  * ⚠ El texto está redactado PARA UN MODELO (segunda persona, imperativo). Si algún día una
  * pantalla necesita mostrárselo a una persona, la traducción va aparte — reescribir esto para que

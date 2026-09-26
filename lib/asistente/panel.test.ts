@@ -19,6 +19,7 @@ import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
 import { PIEZAS_CON_CHAT, PIEZA_CRONOGRAMA, tieneChat, puedeConversar } from "./piezas";
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
+import { ACUERDO_DE_OTRA_VERSION } from "./textos-del-acuerdo";
 
 /**
  * ⚠ Se blanquean los COMENTARIOS antes de escanear, y hace falta de verdad: el docblock del
@@ -290,9 +291,10 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
        resultado queda en el servidor, en la propuesta (antes vivía solo en memoria, y por eso el Gantt
        no podía cambiar en el medio), y la espera se dice en el chip del encabezado y la línea de
        arriba del Gantt (lib/contexto/estructura-cronograma.test.ts lo pide). Las demás esperas siguen
-       bloqueando igual. */
+       bloqueando igual.
+       ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: sale `assisting` (la espera de «Pedir cambio con IA»,
+       que reescribía el cronograma en minutos): se retiró el botón y su estado con él. */
     for (const estado of [
-      "assisting",
       "chainingProgress",
       "applying",
       /* E1 del borrador (2026-09-24): aplicar la propuesta de fases también bloquea — el servidor
@@ -364,9 +366,12 @@ describe("mientras aplica, el DOCUMENTO se bloquea — no el cajón", () => {
        cronograma y tira la propuesta que se estaba armando (ya pagada). Sin la ventana, las dos
        cosas tienen que estar escritas. La edición que la pone en rojo: sacar el freno de
        `ocupado.activo` de un carril del chat, o dejar de avisarle al panel. */
+    /* ⚠ ACTUALIZADA en E4 (2026-09), con esta razón: sale el carril de `submitAssist` (se retiró «Pedir
+       cambio con IA», que atendía los acuerdos viejos de texto) y entra el de la propuesta abierta
+       (`pasarALaPropuesta`, E3), que escribe en ella y tiene los mismos dos frenos. */
     for (const [carril, fin] of [
-      ["const submitAssist = async (", "setAssisting(true);"],
       ["const aplicarOperacionesAcordadas = async (", "aplicarOperaciones("],
+      ["const pasarALaPropuesta = async (", "/borrador/operaciones"],
     ] as const) {
       const a = CANVAS.indexOf(carril);
       expect(a, `no encuentro ${carril}`).toBeGreaterThan(-1);
@@ -1126,5 +1131,41 @@ describe("⭐ E3 P5: el cajón con una propuesta abierta", () => {
     for (const e of ["«Deja el 2 como estaba»", "«Quita las tareas nuevas de Integraciones»", "«Aplica la propuesta»"]) {
       expect(ejemplos).toContain(e);
     }
+  });
+});
+
+/**
+ * E4 (2026-09): SE RETIRÓ «PEDIR CAMBIO CON IA», y con él el carril de los acuerdos viejos del chat (los de
+ * antes del 2026-08-20, que traían solo una `instruccion` de texto). Ese acuerdo no se ejecuta: su botón
+ * dice por qué, en el botón.
+ */
+describe("E4 · un acuerdo viejo del chat (sin operaciones) no tiene carril", () => {
+  const CANVAS = soloCodigo(fs.readFileSync(path.join(RAIZ, "components/canvas/CronogramaCanvas.tsx"), "utf8"));
+  const tramo = (desde: string, hasta: string) => {
+    const i = CANVAS.indexOf(desde);
+    expect(i, `no encuentro ${desde}`).toBeGreaterThan(-1);
+    return CANVAS.slice(i, CANVAS.indexOf(hasta, i));
+  };
+
+  it("⛔ motivoDelChat: con `operaciones` que no es un array devuelve ACUERDO_DE_OTRA_VERSION, antes que nada", () => {
+    /* La edición que la pone en rojo: volver a despachar la instrucción (un carril que ya no existe), o
+       mirar la propuesta antes (un acuerdo viejo diría «hay una propuesta abierta» y no que es viejo). */
+    const motivo = tramo("const motivoDelChat = (a: AcuerdoDelChat): string | null => {", "const pasarALaPropuesta");
+    const iViejo = motivo.indexOf("if (!Array.isArray(a.operaciones)) return ACUERDO_DE_OTRA_VERSION;");
+    expect(iViejo, "motivoDelChat dejó de frenar el acuerdo viejo").toBeGreaterThan(-1);
+    expect(iViejo, "el freno del acuerdo viejo ya no va primero").toBeLessThan(motivo.indexOf("const enSuBarra"));
+    // El texto va EN el botón (≤ 60 caracteres) y en tuteo.
+    expect(ACUERDO_DE_OTRA_VERSION).toBe("Es de una versión anterior: pídemelo de nuevo");
+    expect(ACUERDO_DE_OTRA_VERSION.length).toBeLessThanOrEqual(60);
+  });
+
+  it("⛔ y el despachador tampoco lo manda a ningún lado: responde con el mismo motivo", () => {
+    /* La edición que la pone en rojo: volver a llamar un carril con `acuerdo.instruccion`. */
+    const atender = tramo("const atenderElAcuerdo = (acuerdo: AcuerdoDelChat)", ": pasarALaPropuesta(acuerdo);");
+    expect(atender.length, "la guarda no está mirando el despachador").toBeGreaterThan(80);
+    expect(atender.length, "el tramo se pasó del despachador").toBeLessThan(600);
+    expect(atender).toContain("{ fallo: ACUERDO_DE_OTRA_VERSION, avisos: [] }");
+    expect(atender, "volvió el carril de la instrucción").not.toContain("instruccion");
+    expect(CANVAS, "volvió el pedido de «Pedir cambio con IA»").not.toContain("submitAssist");
   });
 });

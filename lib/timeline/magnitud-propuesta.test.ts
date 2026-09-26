@@ -339,18 +339,16 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
  * nada falle: el assist, el cambio manual del ancla, y los dos que escribían el arranque sin
  * dejar rastro legible.
  */
-describe("guardas: el corrimiento del cierre viaja por los cuatro caminos", () => {
+describe("guardas: el corrimiento del cierre viaja por los tres caminos", () => {
   const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
-  it("el banner del assist dice cuánto se mueve el cierre", () => {
-    const src = leer("components/canvas/CronogramaCanvas.tsx");
-    const i = src.indexOf("const diffSummary = (() => {");
-    expect(i, "cambió diffSummary; revisar esta guarda").toBeGreaterThan(-1);
-    const tramo = src.slice(i, src.indexOf("})();", i));
-    expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(500);
-    expect(tramo, "diffSummary dejó de calcular el corrimiento").toContain("endShiftFragment(");
-    expect(tramo, "el corrimiento no llega al retorno del diff").toContain("anchorChanged, endShift }");
-    expect(src, "el banner del assist dejó de pintar el corrimiento").toContain("diffSummary.endShift");
+  it("el chat dice el corrimiento", () => {
+    /* Reemplaza a «el banner del assist dice cuánto se mueve el cierre»: se retiró «Pedir cambio con IA»
+       (E4) y su banner con él. Hoy los cambios con IA se acuerdan en el chat, y es el prompt el que exige
+       decir las dos fechas. La edición que la pone en rojo: sacar esa regla del prompt del chat. */
+    const src = leer("lib/asistente/turno.ts");
+    expect(src, "el chat dejó de exigir que se digan las fechas").toContain("LAS FECHAS SE DICEN SIEMPRE");
+    expect(src, "el chat dejó de pedir las dos fechas del cierre").toContain("la de hoy y la nueva");
   });
 
   it("cambiar la fecha de arranque a mano avisa el corrimiento", () => {

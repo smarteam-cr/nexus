@@ -62,12 +62,11 @@ export function decidirRefrescoTrasHandoff(e: EstadoDelCronograma): RefrescoTras
 /**
  * ¿La propuesta que acaba de llegar reemplaza a la que ya está en pantalla?
  *
- * El canvas comparte un solo estado `proposal` entre dos orígenes distintos:
- *  · la del ASSIST — vive SOLO en memoria, es el resultado de una corrida de IA que el CSE pidió
- *    y que no está en el servidor: pisarla la destruye para siempre.
- *  · la del HANDOFF — está persistida en `pendingProposal`, así que siempre se puede recuperar.
+ * La propuesta en pantalla es siempre la guardada en `pendingProposal`, así que siempre se puede
+ * recuperar. (E4, 2026-09: se fue la vista previa de «Pedir cambio con IA», que vivía solo en
+ * memoria y no se pisaba nunca.)
  *
- * Por eso no alcanza con el `prev ?? nueva` que usa la carga completa: con esa regla, una segunda
+ * No alcanza con el `prev ?? nueva` que usa la carga completa: con esa regla, una segunda
  * regeneración dejaba en pantalla la propuesta VIEJA del handoff, que es peor que no mostrar nada
  * (el cartel dice que hay algo nuevo y el canvas muestra lo anterior, sin que nada lo delate).
  *
@@ -79,8 +78,6 @@ export function decidirRefrescoTrasHandoff(e: EstadoDelCronograma): RefrescoTras
 export function debeReemplazarPropuesta(actual: {
   /** Si hay una propuesta en pantalla ahora. */
   hayPropuesta: boolean;
-  /** `true` cuando la de pantalla salió del assist (solo memoria). */
-  esDeAssist: boolean;
   /** La corrida de la propuesta en pantalla, si vino del servidor. */
   runIdEnPantalla: string | null;
   /** La corrida de la propuesta que acaba de traer el servidor. */
@@ -91,8 +88,6 @@ export function debeReemplazarPropuesta(actual: {
   versionNueva?: number | null;
 }): boolean {
   if (!actual.hayPropuesta) return true;
-  // ⛔ Nunca arrancarle al CSE una vista previa del assist que tiene abierta.
-  if (actual.esDeAssist) return false;
   // Del servidor contra el servidor: gana la corrida nueva. Sin runId nuevo no hay nada que traer.
   if (!actual.runIdNuevo) return false;
   if (actual.runIdNuevo !== actual.runIdEnPantalla) return true;

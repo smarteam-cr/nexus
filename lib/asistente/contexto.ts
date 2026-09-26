@@ -10,9 +10,10 @@
  *  · **Plata.** El prefijo se re-arma en CADA turno. Veinte turnos por conversación × quince
  *    conversaciones por día: cada mil tokens de más son ~$0,90/día que salen del mismo tope que
  *    comparten handoff, kickoff, cronograma y briefs.
- *  · **Calidad.** El chat no redacta el cronograma: decide qué INSTRUCCIÓN emitir. El contexto
- *    pesado ya lo tiene el modificador (`lib/contexto/asistente-cronograma.ts`), que es quien lo
- *    va a ejecutar. Dárselo dos veces no lo hace más listo — lo hace más lento y más caro.
+ *  · **Calidad.** El chat no redacta el documento: decide qué INSTRUCCIÓN emitir. El contexto
+ *    pesado ya lo tiene el editor de ese documento, que es quien la va a ejecutar. Dárselo dos
+ *    veces no lo hace más listo — lo hace más lento y más caro. (El cronograma es la excepción de
+ *    abajo; E4, 2026-09: su modificador, «Pedir cambio con IA», se retiró.)
  *
  * Así que acá va lo mínimo para sostener una conversación útil: de qué proyecto hablamos, QUÉ
  * FORMA tiene hoy el documento (nombres, no contenido) y QUÉ SE PUEDE PEDIR. La guarda de al lado
@@ -252,14 +253,15 @@ export interface EstadoParaRehacerTodo {
  * y las notas elegidas, o que hoy no hay ninguno.
  *
  * Sigue las MISMAS condiciones que los botones de arriba del Gantt (CronogramaCanvas.tsx):
- *   · «Generar cronograma»: sin tareas de la IA y NUNCA publicado. Una propuesta solo de fases
- *     (`hayBorrador`) no lo esconde; una vista previa de tareas, sí.
+ *   · «Generar cronograma»: sin tareas de la IA y NUNCA publicado. Una propuesta guardada
+ *     (`hayBorrador`) no lo esconde.
  *   · «Regenerar todo el cronograma»: con tareas de la IA y SIN ninguna propuesta pendiente.
  *   · Publicado y sin tareas de la IA: ninguno de los dos (la pantalla muestra «Chequear avance»).
  * Lo que el servidor no sabe —los permisos de quien mira (editar el cronograma y generarlo o
- * regenerarlo con IA) y una vista previa que vive solo en su pantalla— va dicho como condición: la línea no puede afirmar algo falso. Revisión del paso C
+ * regenerarlo con IA)— va dicho como condición: la línea no puede afirmar algo falso. Revisión del paso C
  * (2026-09-24): recomendaba «Generar cronograma» en un cronograma publicado, donde no se ve, y
- * decía que ninguno se veía con una propuesta pendiente.
+ * decía que ninguno se veía con una propuesta pendiente. E4 (2026-09): salió la cláusula de la vista
+ * previa de «Pedir cambio con IA», que se retiró.
  */
 export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
   const cabeza = "PARA REHACER TODO desde las reuniones y las notas elegidas: ";
@@ -285,8 +287,7 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
     return (
       cabeza +
       "el botón «Generar cronograma», arriba del Gantt. Solo lo ve quien puede editar el cronograma y " +
-      "tiene permiso de generarlo con IA, y se esconde mientras haya en pantalla una vista previa de " +
-      "tareas sin decidir." +
+      "tiene permiso de generarlo con IA." +
       (e.cambiosDeFasesSinDecidir
         ? e.armandoTareas
           ? " Ahora la IA está armando las tareas: hay que esperar a que termine."
@@ -324,8 +325,7 @@ export function lineaParaRehacerTodo(e: EstadoParaRehacerTodo): string {
   return (
     cabeza +
     "el botón «Regenerar todo el cronograma», arriba del Gantt. Solo lo ve quien puede editar el " +
-    "cronograma y tiene permiso de regenerarlo con IA, y se esconde mientras haya en pantalla una " +
-    "vista previa sin decidir."
+    "cronograma y tiene permiso de regenerarlo con IA."
   );
 }
 
@@ -426,7 +426,8 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
                y era la línea entre la FORMA y el CONTENIDO — pero se llevaba puesto el caso de
                uso principal: el CSE pide «pasá la sesión de cierre al final» o «borrá la última
                base» y el chat no tenía con qué nombrarlas. Las NOTAS siguen afuera (son el
-               contenido de verdad, y las lee el modificador). Ver el techo, arriba. */
+               contenido de verdad, no hacen falta para la estructura, y la de una FASE entra solo
+               al turno en que se la señala: fase-senalada.ts). Ver el techo, arriba. */
             tasks: {
               orderBy: [{ weekIndex: "asc" }, { order: "asc" }],
               select: { id: true, title: true, weekIndex: true, status: true, source: true },

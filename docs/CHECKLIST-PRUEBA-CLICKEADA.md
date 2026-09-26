@@ -44,16 +44,15 @@ En el mismo Gantt de Wherex, mirá los nombres de las fases.
 3. Apretá **"Aceptar todo"**, recargá.
    - ✅ La fase quedó **una sola**, con el nombre nuevo y **sus tareas y su progreso intactos**.
 
-### 1.4 Pedir cambio con IA no pierde trabajo hecho **ESCRIBE**
-Sobre un proyecto de prueba (no Wherex):
-1. Marcá una tarea como **hecha** a mano.
-2. **"Pedir cambio con IA"** → algo que reorganice esa fase
-   (ej. *"reordená las tareas de Setup por prioridad"*).
-3. En la propuesta:
-   - ✅ La tarea hecha **sigue estando**.
-   - ✅ Si el modelo se la había olvidado, arriba sale un aviso de que se conservó.
-4. Aplicá.
-   - ✅ Sin error 400. La tarea sigue **hecha**, y **no** aparece duplicada en otra fase.
+### 1.4 El chat no pierde trabajo hecho **ESCRIBE**
+Sobre un proyecto de prueba (no Wherex). «Pedir cambio con IA» se retiró (E4): todo pasa por el chat.
+1. Marca una tarea como **hecha** a mano.
+2. Toca **«IA»** en su fase y pide algo que la reorganice
+   (ej. *"reordena las tareas de Setup por prioridad"*).
+3. En la lista numerada del chat:
+   - ✅ La línea **avisa** lo que tiene avance antes de aplicar.
+4. Con una propuesta abierta (por ejemplo, después de «Regenerar todo»), pide lo mismo:
+   - ✅ Pasa a la propuesta y la tarea hecha **se queda en su fase**.
 
 ### 1.5 Regenerar una sola fase
 1. **"Regenerar"** en una fase que tenga tareas hechas.

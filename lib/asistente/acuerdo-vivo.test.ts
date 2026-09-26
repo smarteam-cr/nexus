@@ -11,8 +11,7 @@
  * Cada `it` de acá es un pedazo de ese hilo, reducido a datos.
  */
 import { describe, it, expect } from "vitest";
-import type { Operacion } from "@/lib/timeline/operaciones";
-import type { FaseActual } from "@/lib/timeline/assist-items";
+import type { FaseActual, Operacion } from "@/lib/timeline/operaciones";
 import { marcaDeAcuerdo, marcaDeDesenlace } from "./acuerdo";
 import {
   acuerdoPendienteDelHilo,

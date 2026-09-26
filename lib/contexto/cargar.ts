@@ -18,10 +18,8 @@ import { resolvePipeline, type ProjectPipelineKey } from "@/lib/projects/kind";
 import type { ContextoDeProyecto } from "./tipos";
 import { fuentesDelDetalle } from "./detalle-cronograma";
 import { renderCronogramaParaAgentes, type EstructuraSupuesta } from "./cronograma-para-agentes";
-import { fuentesDelAssist } from "./asistente-cronograma";
 import { calendarioDeEstructura, fuentesDeEstructura } from "./estructura-cronograma";
 import { claveConVozDeHandoffPropia } from "@/lib/timeline/semana-cero";
-import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 import { getProjectTimelineSessions } from "@/lib/sessions/project-sources";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
@@ -104,75 +102,6 @@ export async function cargarContextoDelDetalle(
       notasCtx: mat.notas,
       // SIN «Hoy»: con él, el detalle vaciaba las semanas pasadas aunque su trabajo no estuviera hecho.
       calendarioCtx: mat.calendario,
-    }),
-    instrucciones: bloqueDeInstruccionesDeDoc(
-      canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
-    ),
-    sesionesUsadas: mat.sesionesUsadas,
-    materialInterno: mat.materialInterno,
-  };
-}
-
-/**
- * El contexto del MODIFICADOR de cronograma (pieza "assist"): el agente que atiende
- * «atrasá Setup una semana» / «agregá tareas de migración en configuración».
- *
- *   · cronograma-vivo        — el cronograma CON ids y CON el estado de cada tarea
- *   · handoff-curado         — SOLO bloques confirmados por el CSE
- *   · requerimiento-tecnico  — el canvas Desarrollo si existe ("" si no)
- *   · operativa-hubspot      — estado / prioridad / motivo de bloqueo, si el equipo los cargó
- *   · instrucciones          — la misma entry `__doc` del canvas del cronograma que lee el detalle
- *   · reuniones / notas      — lo elegido en el «Contexto del cronograma», igual que el detalle
- *   · calendario             — el del plan CON «Hoy» (edita un cronograma vivo); solo con material
- *
- * ⚠ EL CRONOGRAMA LO PASA EL LLAMADOR, no se carga acá. La ruta ya lo trae con su select
- * propio —necesita `status` y `source` para el rescate de progreso del final— y volver a
- * leerlo abriría la puerta a que las dos lecturas se separen: la que el modelo ve y la que el
- * servidor protege tienen que ser LA MISMA.
- *
- * ⚠ Las instrucciones salen del canvas "timeline", no de uno propio: el brief `__doc` es
- * «instrucciones para esta PIEZA», y el modificador edita la misma pieza que el detalle.
- * Si tuvieran cajas separadas, el CSE escribiría una regla y solo la mitad de los agentes
- * la leería.
- */
-export async function cargarContextoDelAssist(
-  projectId: string,
-  cronogramaCtx: string,
-): Promise<ContextoDeProyecto> {
-  const [handoffCtx, desarrolloCtx, canvasCronograma, proyecto, mat] = await Promise.all([
-    loadHandoffContext(projectId, { onlyConfirmed: true }),
-    loadDesarrolloContext(projectId),
-    prisma.projectCanvas.findFirst({
-      where: { projectId, ...canvasOf("timeline") },
-      select: { sections: true },
-    }),
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: {
-        // El tipo sale del pipeline, nunca se guarda (regla del multipipeline).
-        hubspotPipelineId: true,
-        hubspotStatus: true,
-        hubspotPriority: true,
-        hubspotBlockReason: true,
-        hubspotBlockDetail: true,
-        hubspotAdoptionState: true,
-      },
-    }),
-    // ÚLTIMO a propósito, igual que en el detalle: el censo mide la distancia hasta el embudo.
-    cargarMaterialDelCronograma(projectId),
-  ]);
-  return {
-    projectId,
-    pipelineKey: resolvePipeline(proyecto?.hubspotPipelineId ?? null)?.key ?? null,
-    fuentes: fuentesDelAssist({
-      cronogramaCtx,
-      handoffCtx,
-      desarrolloCtx,
-      operativaCtx: proyecto ? bloqueDeOperativa(proyecto, { incluirRotulo: false }) : "",
-      reunionesCtx: mat.reuniones,
-      notasCtx: mat.notas,
-      // CON «Hoy»: este agente edita un cronograma vivo y tiene que saber qué semanas ya pasaron.
-      calendarioCtx: mat.calendarioConHoy,
     }),
     instrucciones: bloqueDeInstruccionesDeDoc(
       canvasCronograma ? docBriefFrom(canvasCronograma.sections) : null,
@@ -276,8 +205,6 @@ export interface MaterialDelCronograma {
   notas: string;
   /** El calendario del plan SIN «Hoy» ("" sin material, sin fases o sin ancla). */
   calendario: string;
-  /** El mismo calendario CON «Hoy». */
-  calendarioConHoy: string;
   /** Qué entró de cada reunión elegida — lo que ve el CSE. Nunca trae texto de reuniones ni notas. */
   informe: InformeDelMaterial;
   /** Ids de las reuniones que le llegan a la IA. */
@@ -291,19 +218,17 @@ export interface MaterialDelCronograma {
  * notas que pegó a mano, ya rotuladas para el agente (ver ./material-cronograma.ts).
  *
  * Lo leen el detalle (tareas, su semana, cuáles son reuniones y quién las hace — NO fases ni
- * duraciones: las tiene prohibidas), «Pedir cambio con IA» (que sí puede tocar fases, pero solo
- * lo que pide la instrucción), el revisor de fases y tiempos de «Regenerar todo»
+ * duraciones: las tiene prohibidas), el revisor de fases y tiempos de «Regenerar todo»
  * (`cargarContextoDeEstructura`: propone cambios de fases que el CSE revisa en la barra de arriba
  * del Gantt y aplica enteros o en parte) y el chat
  * del cronograma (`cargarMaterialParaElChat`, con su propio espacio: decisión de Elías del
  * 2026-09-23). ⚠ NO lo lee el agente de handoff —que arma y re-propone las fases—. Devuelve `""`
  * en lo que no haya, y los armadores omiten la fuente vacía: sin material, sus BLOQUES no suman ni un
  * carácter. ⚠ Pero el prompt de un proyecto sin material NO quedó idéntico al de antes de esta
- * feature (revisión adversarial, 2026-09-24): desde 2c2a439c la regla de frontera de «Pedir cambio
- * con IA» (`REGLA_DE_FRONTERA_DEL_ASSIST`) cambió para todos —no deja fechas, plazos ni nombres de
- * personas en títulos, notas y nombres de fase, ni que el texto diga de dónde salió—, el system del
- * detalle perdió PRIORIDAD DEL CANVAS, y el 2026-09-24 el encabezado de las instrucciones y el mensaje
- * del detalle pasaron a tuteo. Un cambio de conducta en un proyecto sin material se busca ahí.
+ * feature (revisión adversarial, 2026-09-24): el system del detalle perdió PRIORIDAD DEL CANVAS, y
+ * el 2026-09-24 el encabezado de las instrucciones y el mensaje del detalle pasaron a tuteo. Un cambio
+ * de conducta en un proyecto sin material se busca ahí. (E4, 2026-09: «Pedir cambio con IA», que
+ * también lo leía, se retiró.)
  *
  * ── QUÉ SE LEE (lector propio, validación del 2026-09-23) ────────────────────
  * Ya no se usa el lector del handoff (`fetchTranscriptContent`): traía el transcript ENTERO de cada
@@ -320,12 +245,12 @@ export interface MaterialDelCronograma {
  * decir cosas distintas.
  *
  * ── LA FOTO DEL PLAN ─────────────────────────────────────────────────────────
- * Con material, cada reunión lleva el lugar del plan donde cayó y se arman dos calendarios de solo
+ * Con material, cada reunión lleva el lugar del plan donde cayó y se arma el calendario de solo
  * lectura: `calendario` (sin «Hoy», para el detalle: con hoy vaciaría las semanas pasadas aunque su
- * trabajo no esté hecho) y `calendarioConHoy`. Quien ya tiene las fases (el revisor de fases de
- * «Regenerar todo») pasa `opts.fases`, para que el modelo y el armador vean LA MISMA foto; si no, se
- * lee el cronograma (con el cierre fijado a mano, si lo hay). Sin material, los dos calendarios son
- * "". El chat pide `opts.sinUbicacion`: sus reuniones no cambian cuando se mueve una fase. Y pide
+ * trabajo no esté hecho). E4 (2026-09): el que traía «Hoy» se fue con su único lector, «Pedir cambio
+ * con IA». Quien ya tiene las fases (el revisor de fases de «Regenerar todo») pasa `opts.fases`, para
+ * que el modelo y el armador vean LA MISMA foto; si no, se lee el cronograma (con el cierre fijado a
+ * mano, si lo hay). Sin material, el calendario es "". El chat pide `opts.sinUbicacion`: sus reuniones no cambian cuando se mueve una fase. Y pide
  * `opts.lector: "chat"`: los rótulos de sus reuniones y notas no le nombran el handoff.
  *
  * ⚠ Las cinco opciones las fija lib/contexto/cargar-material.test.ts llamando a esta función: una
@@ -382,7 +307,6 @@ export async function cargarMaterialDelCronograma(
     reuniones: bloqueDeReunionesDelCronograma(plan.reuniones, opts.lector),
     notas: bloqueDeNotasDelCronograma(notas, opts.lector),
     calendario: hayMaterial ? calendarioDelCronograma(foto, ahora) : "",
-    calendarioConHoy: hayMaterial ? calendarioDelCronograma(foto, ahora, { conHoy: true }) : "",
     informe: plan.informe,
     sesionesUsadas: plan.sesionesUsadas,
     materialInterno: plan.materialInterno,

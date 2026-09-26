@@ -119,14 +119,14 @@ export function alVencer(i: {
 
 /**
  * ¿Se puede lanzar el recálculo AHORA, y sirve esperar a que se pueda? Se lanza con quien edita, con la
- * propuesta en pantalla (no la vista previa del modificador), sin otro pedido, aplicar ni descartar en
- * curso, con las tareas listas y sin otro recálculo corriendo. Esperar sirve solo con tareas en pantalla:
- * sin ellas (la propuesta se resolvió en otra pestaña) no va a poder nunca.
+ * propuesta en pantalla, sin otro pedido, aplicar ni descartar en curso, con las tareas listas y sin otro
+ * recálculo corriendo. Esperar sirve solo con tareas en pantalla: sin ellas (la propuesta se resolvió en
+ * otra pestaña) no va a poder nunca. (E4, 2026-09: se fue el freno de la vista previa de «Pedir cambio
+ * con IA», que se retiró.)
  */
 export function puedeLanzarElRecalculo(i: {
   puedeEditar: boolean;
   hayBorrador: boolean;
-  vistaPrevia: boolean;
   armando: boolean;
   aplicando: boolean;
   descartando: boolean;
@@ -137,7 +137,6 @@ export function puedeLanzarElRecalculo(i: {
     puedeLanzar:
       i.puedeEditar &&
       i.hayBorrador &&
-      !i.vistaPrevia &&
       !i.armando &&
       !i.aplicando &&
       !i.descartando &&
@@ -231,8 +230,8 @@ export interface RespuestaDelPedido {
 export interface PedidoDelRecalculo {
   clientId: string;
   projectId: string;
-  /** La propuesta en pantalla AHORA: su token y si se puede pedir sobre ella (un borrador, que no es la
-   *  vista previa del modificador ni se está descartando). */
+  /** La propuesta en pantalla AHORA: su token y si se puede pedir sobre ella (un borrador que no se está
+   *  descartando). */
   propuesta: () => { token: string | null; sePuedePedir: boolean };
   /** Lo editado a mano, en la base (el servidor compara contra ella): el motivo si no se pudo. */
   esperarQueSeGuarde: () => Promise<string | null>;

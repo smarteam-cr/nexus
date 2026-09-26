@@ -13,10 +13,11 @@ import { cumple, viola, type Invariante } from "./contrato";
  * mira las tareas que vienen EN el payload. Un cuerpo que solo acorta `durationWeeks` pasa limpio
  * y deja las existentes fuera de rango, sin error y sin aviso.
  *
- * ⭐ Por qué es un invariante y no una curiosidad: el modificador de IA devuelve el cronograma
- * COMPLETO, así que copia esas semanas inválidas y su propuesta se rechaza ENTERA. Esos proyectos
- * no podían usar «Pedir cambio con IA» en absoluto — 231 s y $0,29 de modelo por intento, con un
- * mensaje que nadie puede accionar. El PUT ya no las genera; esto vigila que no vuelvan.
+ * ⭐ Por qué es un invariante y no una curiosidad: el PUT valida las semanas de toda tarea que
+ * viaja, así que un guardado que trae esas tareas en esa semana se rechaza ENTERO, con un mensaje que
+ * nadie puede accionar. Antes lo sufría el modificador de IA (devolvía el cronograma completo: 231 s y
+ * $0,29 por intento perdido; se retiró en E4); hoy, un cambio del chat que toque esa fase. El PUT ya no
+ * las genera; esto vigila que no vuelvan.
  * Remedio: `scripts/sanar-semanas-fuera-de-fase.ts` (dry-run primero).
  */
 export const INV22: Invariante = {
@@ -43,7 +44,7 @@ export const INV22: Invariante = {
       return viola(
         `✗ INV22 VIOLADO: ${tareasDesbordadas} tarea(s) en ${desbordadas.length} fase(s) viven en una semana que su fase no tiene.\n` +
           desbordadas.map((d) => `    · ${d}`).join("\n") +
-          `\n    Efecto: esos cronogramas NO pueden usar «Pedir cambio con IA» — la propuesta se rechaza entera.` +
+          `\n    Efecto: el PUT rechaza cualquier guardado que traiga esas tareas en esa semana, por ejemplo un cambio del chat que toque esa fase.` +
           `\n    Remedio: npx tsx --env-file=.env scripts/sanar-semanas-fuera-de-fase.ts (dry-run primero).`,
       );
     }

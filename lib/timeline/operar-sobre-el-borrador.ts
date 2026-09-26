@@ -32,7 +32,6 @@
  * no se registra nada: se devuelve lo de entrada, con todos los motivos (se siguen evaluando las demás
  * para decirlos juntos).
  */
-import { huella as huellaDeTitulo, type FaseActual, type Party, type TipoDeTarea } from "./assist-items";
 import {
   CAMPOS_DE_TAREA,
   claveAleatoria,
@@ -44,6 +43,7 @@ import {
   claveDeTareaQueSeVa,
   esCambioDeTarea,
   fotoDeTarea,
+  huellaDeTitulo,
   jsonCanonico,
   mismaForma,
   normalizarExcluidos,
@@ -68,9 +68,11 @@ import {
   type FormaDeFase,
   type ItemDelPlan,
   type OperacionDeCasillas,
+  type Party,
   type PlanDeAplicacion,
   type Proyeccion,
   type TareaDelVivo,
+  type TipoDeTarea,
   type ValorDeCampo,
   type Vivo,
 } from "./borrador";
@@ -85,6 +87,7 @@ import {
   OPERACIONES_VALIDAS,
   TIPOS_DE_ACTIVIDAD_VALIDOS,
   TIPOS_DE_TAREA_VALIDOS,
+  type FaseActual,
   type Operacion,
 } from "./operaciones";
 import { esOperacionSola } from "./dependencias-de-operaciones";

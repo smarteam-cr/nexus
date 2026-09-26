@@ -149,19 +149,8 @@ const LECTORES: Lector[] = [
       "el cronograma se publique. Desde el 2026-08-16 también la PRIMERA generación pasa por " +
       "curación (`pedirPropuestaDeDetalle` pide una propuesta; el acordeón la cura antes de escribir)",
   },
-  {
-    archivo: "lib/contexto/cargar.ts",
-    ancla: "cargarContextoDelAssist",
-    pieza: "timeline",
-    exposicion: "por_curacion",
-    porque:
-      "el MODIFICADOR del cronograma (Tramo 1, 2026-08-18): hasta hoy no veía el handoff y por " +
-      "eso no podía atender «agregá las tareas de migración». Emite títulos de tarea, no prosa, " +
-      "y NO persiste: devuelve una propuesta que el CSE mira en el Gantt antes de aplicar. " +
-      "⚠ Es la MISMA pieza que el detalle, así que son dos entradas del mismo archivo y por eso " +
-      "las dos llevan ancla: el censo cuenta LLAMADAS, no archivos — sin ancla, la segunda " +
-      "entraba emparejada por la primera y nadie la miraba.",
-  },
+  /* E4 (2026-09): salió la entrada de `cargarContextoDelAssist` (el MODIFICADOR del cronograma, «Pedir
+     cambio con IA»): se retiró y su llamada al handoff se borró con él. */
   {
     archivo: "lib/contexto/cargar.ts",
     /* ⚠ El ancla va DESPUÉS de la llamada (el armado de sus fuentes, dentro de los 320 caracteres

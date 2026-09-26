@@ -134,7 +134,7 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "contexto",
     motivo:
       "El material del «Contexto del cronograma» (2026-09-23): lee el resumen, la minuta y el inicio del " +
-      "transcript de las reuniones que el CSE eligió, para el detalle y «Pedir cambio con IA». Ya las filtra " +
+      "transcript de las reuniones que el CSE eligió, para el detalle, el revisor de fases y el chat. Ya las filtra " +
       "con soloOcurridas y la consulta vuelve a cortar por fecha: una agendada que el CSE eligió sale en el " +
       "informe de la pantalla («Aún no ocurrió»), nunca en el prompt.",
   },

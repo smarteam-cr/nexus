@@ -6,6 +6,7 @@ import { withClientAccess, apiError } from "@/lib/api";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions/artifact-gate";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
+import { esAgenteRetirado } from "@/lib/agents/retirados";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { guardarPropuestaDelHandoff, timelineSyncErrorDelHandoff } from "@/lib/timeline/borrador-del-handoff";
@@ -223,15 +224,19 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   }
 
   // ── Lookup agente por stage+step+section ─────────────────────────────────
-  const agentCandidates = await prisma.agent.findMany({
-    where: {
-      status: "ACTIVE",
-      OR: [
-        { associatedStages: { isEmpty: true } },
-        { associatedStages: { has: bodyStage } },
-      ],
-    },
-  });
+  /* E4 (2026-09): un agente retirado (lib/agents/retirados.ts) no es candidato aunque su fila siga
+     ACTIVE: ni por id ni por el respaldo `associatedStep === null`. Cae en el 409 de abajo. */
+  const agentCandidates = (
+    await prisma.agent.findMany({
+      where: {
+        status: "ACTIVE",
+        OR: [
+          { associatedStages: { isEmpty: true } },
+          { associatedStages: { has: bodyStage } },
+        ],
+      },
+    })
+  ).filter((a) => !esAgenteRetirado(a.id));
 
   let agent = null;
   if (bodyAgentId) {

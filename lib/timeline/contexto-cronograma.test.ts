@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fuentesDelDetalle, renderDetalleDeCronograma } from "@/lib/contexto/detalle-cronograma";
-import { REGLA_DE_FRONTERA_DEL_ASSIST, fuentesDelAssist } from "@/lib/contexto/asistente-cronograma";
 import { buildProgressUserMessage } from "./regenerate-progress";
 import {
   PRESUPUESTO_DEL_CHAT,
@@ -75,12 +74,11 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
     expect(keys).not.toContain("notas-del-cronograma");
   });
 
-  it("el cargador del detalle y el de «Pedir cambio con IA» cargan el material", () => {
+  it("el cargador del detalle carga el material", () => {
+    /* Se retiró «Pedir cambio con IA» (E4): su cargador (`cargarContextoDelAssist`) se borró con él y
+       este caso queda solo con el detalle. */
     const src = sinComentarios(leer("lib/contexto/cargar.ts"));
-    for (const [nombre, cargador] of [
-      ["detalle", "cargarContextoDelDetalle"],
-      ["assist", "cargarContextoDelAssist"],
-    ] as const) {
+    for (const [nombre, cargador] of [["detalle", "cargarContextoDelDetalle"]] as const) {
       const tramo = tramoDe(src, cargador);
       expect(tramo.length, `la guarda no está mirando el cargador del ${nombre}`).toBeGreaterThan(200);
       expect(tramo, `el ${nombre} dejó de cargar el material`).toContain("cargarMaterialDelCronograma(projectId)");
@@ -134,43 +132,22 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
     );
   });
 
-  it("⭐ el detalle recibe el calendario SIN «Hoy» y «Pedir cambio con IA», CON «Hoy»", () => {
-    /* Con «Hoy», el detalle vaciaba las semanas que ya pasaron aunque su trabajo no estuviera hecho;
-       el modificador edita un cronograma vivo y sí tiene que saberlo. La edición que la pone en
-       rojo: cruzarlos, o dejar de pasar el calendario (cargado y tirado). */
+  it("⭐ el detalle recibe el calendario SIN «Hoy»", () => {
+    /* Con «Hoy», el detalle vaciaba las semanas que ya pasaron aunque su trabajo no estuviera hecho.
+       La edición que la pone en rojo: pasarle el de «Hoy», o dejar de pasar el calendario (cargado y
+       tirado). Se retiró «Pedir cambio con IA» (E4): era el único que recibía el de «Hoy» (y el campo
+       `calendarioConHoy` se borró con él), así que este caso queda solo con el detalle. */
     const src = sinComentarios(leer("lib/contexto/cargar.ts"));
     const detalle = tramoDe(src, "cargarContextoDelDetalle");
-    const assist = tramoDe(src, "cargarContextoDelAssist");
     expect(detalle, "el detalle dejó de recibir el calendario").toContain("calendarioCtx: mat.calendario,");
-    expect(detalle, "el detalle recibe el calendario CON «Hoy»").not.toContain("mat.calendarioConHoy");
-    expect(assist, "«Pedir cambio con IA» dejó de recibir el calendario con «Hoy»").toContain(
-      "calendarioCtx: mat.calendarioConHoy",
-    );
+    expect(detalle, "el detalle recibe el calendario CON «Hoy»").not.toContain("conHoy");
   });
 });
 
-describe("⭐ «Pedir cambio con IA» —que también toca FASES— lo lee igual", () => {
-  const crudas = { cronogramaCtx: "c", handoffCtx: "h", desarrolloCtx: "", operativaCtx: "" };
-
-  it("con material suma las dos fuentes; sin material, las mismas de siempre", () => {
-    expect(fuentesDelAssist({ ...crudas, reunionesCtx: REUNIONES, notasCtx: NOTAS }).map((f) => f.key)).toEqual([
-      "cronograma-vivo",
-      "handoff-curado",
-      "requerimiento-tecnico",
-      "operativa-hubspot",
-      "reuniones-del-cronograma",
-      "notas-del-cronograma",
-    ]);
-    expect(fuentesDelAssist(crudas).map((f) => f.key)).toHaveLength(4);
-  });
-
-  it("la frontera nombra las reuniones y las notas", () => {
-    /* El texto que devuelve este agente lo lee el cliente. Una regla que no nombra el material
-       nuevo deja la puerta abierta a copiar una frase de una transcripción al Gantt. */
-    expect(REGLA_DE_FRONTERA_DEL_ASSIST).toContain("las reuniones");
-    expect(REGLA_DE_FRONTERA_DEL_ASSIST).toContain("las notas del CSE");
-  });
-});
+/* Se retiró «Pedir cambio con IA» (E4): se borró el describe «⭐ «Pedir cambio con IA» —que también toca
+   FASES— lo lee igual» junto con sus fuentes (`fuentesDelAssist`) y su regla de frontera. El chat, que lo
+   reemplaza, lee el material por su propia puerta (`cargarMaterialParaElChat`, más abajo) y sus líneas
+   pasan por la frontera (frontera-del-cronograma.test.ts). */
 
 describe("⭐ el AVANCE lee las notas, y sus reuniones NO dependen de lo elegido", () => {
   const base = {
@@ -323,7 +300,8 @@ describe("⭐ el CHAT del cronograma también lee el material (decisión de Elí
     expect(tramo).toContain(
       'cargarMaterialDelCronograma(projectId, { ...PRESUPUESTO_DEL_CHAT, sinUbicacion: true, lector: "chat" })',
     );
-    for (const agente of ["cargarContextoDelDetalle", "cargarContextoDelAssist", "cargarContextoDeEstructura"]) {
+    // E4: sin «Pedir cambio con IA» (su cargador se borró), quedan los dos agentes que leen el material.
+    for (const agente of ["cargarContextoDelDetalle", "cargarContextoDeEstructura"]) {
       expect(tramoDe(src, agente), `${agente} tomó el presupuesto del chat`).not.toContain("PRESUPUESTO_DEL_CHAT");
     }
   });
@@ -555,7 +533,11 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     /* Cierre de la revisión de E2a: el motivo de una corrida colgada (`MOTIVO_COLGADA`) también llega
        tal cual al centro de corridas («Podés volver a lanzarla» se leía ahí). */
     "lib/agents/run-colgada.ts",
-    "components/canvas/TimelineAssistDialog.tsx",
+    /* E4 (2026-09): sale TimelineAssistDialog.tsx (se retiró «Pedir cambio con IA» y se borró). Entran los
+       dos archivos del chip de fase de P1: la línea que lee el modelo (alcance.ts) y el bloque de la nota
+       de la fase señalada (fase-senalada.ts). */
+    "lib/asistente/alcance.ts",
+    "lib/asistente/fase-senalada.ts",
     "components/canvas/TimelineGantt.tsx",
     "components/clients/FuentesManualesColumn.tsx",
     "components/clients/ProjectCanvasPanel.tsx",
@@ -602,6 +584,8 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "dejé",
     // E3 P5: y de lo que no hizo («No registré…», «No encontré «X» entre las tareas que cambian»).
     "registré", "encontré",
+    // E4: y de la nota que no leyó entera («no leí entera la nota de «X»», fase-senalada.ts).
+    "leí",
   ]);
   const AGUDA = /(?<!\p{L})\p{L}+(?:á|é|í|ás|és|ís)(?!\p{L})/gu;
   const agudasQueNoSonTuteo = (linea: string) =>
@@ -649,5 +633,31 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     ]) {
       expect(caza(texto), texto).toBe(false);
     }
+  });
+});
+
+/**
+ * E4 (2026-09): SE RETIRÓ «PEDIR CAMBIO CON IA». Ningún texto de pantalla ni nada que lea el modelo del
+ * asistente puede mandar a un botón que ya no está. Mira el CÓDIGO (sin comentarios: la historia se
+ * cuenta ahí) de components/** y lib/asistente/**, sin los tests.
+ */
+describe("E4 · nadie manda a «Pedir cambio con IA»", () => {
+  const listar = (dir: string): string[] =>
+    fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true }).flatMap((e) => {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) return listar(rel);
+      return /\.(ts|tsx)$/.test(e.name) && !e.name.endsWith(".test.ts") ? [rel] : [];
+    });
+
+  it("⛔ el código de components/** y lib/asistente/** no contiene «Pedir cambio con IA»", () => {
+    /* La edición que la pone en rojo: dejar el texto viejo en una pantalla (el párrafo del «Contexto del
+       cronograma» decía que «propone cambios de fases desde «Pedir cambio con IA»») o en lo que lee el
+       modelo. Primero se afirma que el escáner leyó archivos: una ruta mal escrita lo dejaría ciego y
+       en verde. */
+    const archivos = [...listar("components"), ...listar("lib/asistente")];
+    expect(archivos.length, "el escáner no está leyendo los archivos").toBeGreaterThanOrEqual(20);
+    expect(archivos, "el escáner no incluye la pantalla del contexto").toContain("components/canvas/CronogramaContextSection.tsx");
+    const conElTexto = archivos.filter((f) => sinComentarios(leer(f)).includes("Pedir cambio con IA"));
+    expect(conElTexto).toEqual([]);
   });
 });

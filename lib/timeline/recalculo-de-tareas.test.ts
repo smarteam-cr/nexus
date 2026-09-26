@@ -720,13 +720,13 @@ describe("9 · la espera antes de lanzar el recálculo", () => {
        ponen en rojo: quitar un freno (lanzaría con otro pedido, aplicando o descartando: el servidor
        rechaza o la corrida queda sin dueño) o esperar sin tareas. */
     const listas = { estado: "listas" as const, recalculo: null };
-    const i = { puedeEditar: true, hayBorrador: true, vistaPrevia: false, armando: false, aplicando: false, descartando: false, tareas: listas };
+    const i = { puedeEditar: true, hayBorrador: true, armando: false, aplicando: false, descartando: false, tareas: listas };
     expect(puedeLanzarElRecalculo(i)).toEqual({ puedeLanzar: true, puedeEsperar: true });
     const corriendo: RecalculoEnElCable = { estado: "armando", corrida: "r", fases: [], nombres: [], fase: null, motivo: null };
     const frenos: Array<[string, Partial<Parameters<typeof puedeLanzarElRecalculo>[0]>]> = [
       ["sin permiso", { puedeEditar: false }],
       ["sin propuesta", { hayBorrador: false }],
-      ["la vista previa del modificador", { vistaPrevia: true }],
+      // Se retiró «Pedir cambio con IA» (E4): sin su vista previa, su freno salió de la función y de esta tabla.
       ["pidiendo otra propuesta", { armando: true }],
       ["aplicando", { aplicando: true }],
       ["descartando", { descartando: true }],

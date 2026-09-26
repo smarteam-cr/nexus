@@ -92,12 +92,12 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/canvas/AnchorDatePicker.tsx": 10,
   "components/canvas/BlockRenderer.tsx": 77,
   "components/canvas/CanvasLinearView.tsx": 11,
-  "components/canvas/CronogramaCanvas.tsx": 30,
+  "components/canvas/CronogramaCanvas.tsx": 20, // E4: −10 con el banner de «Pedir cambio con IA», que se retiró
   "components/canvas/ParticularidadEditModal.tsx": 12,
   "components/canvas/ParticularidadToTaskModal.tsx": 7,
   "components/canvas/SectionBlockList.tsx": 13,
   "components/canvas/TaskDetailDrawer.tsx": 24,
-  "components/canvas/TimelineAssistDialog.tsx": 1,
+  // E4: sale TimelineAssistDialog.tsx (se retiró «Pedir cambio con IA» y se borró).
   "components/charts/EChartRenderer.tsx": 4,
   "components/clients/ActionItemsDialog.tsx": 2,
   "components/clients/CanvasBoundary.tsx": 1,
@@ -222,12 +222,11 @@ const DEUDA_TABBARS: Record<string, number> = {
  * scroll, focus-trap y role="dialog" gratis; un overlay a mano no trae nada de
  * eso. Los 7 diálogos de cobranza ya migraron; estos son los que faltan.
  * components/ui exento (las primitivas SON el overlay). ⚠ CronogramaCanvas y
- * TaskDetailDrawer/TimelineAssistDialog son área de la otra PC.
+ * TaskDetailDrawer son área de la otra PC. E4: salió TimelineAssistDialog (se borró).
  */
 const DEUDA_OVERLAYS: Record<string, number> = {
   "components/canvas/CronogramaCanvas.tsx": 1,
   "components/canvas/TaskDetailDrawer.tsx": 1,
-  "components/canvas/TimelineAssistDialog.tsx": 1,
   "components/clients/ActionItemsDialog.tsx": 1,
   "components/clients/ClientContextCards.tsx": 1,
   "components/clients/ExternalAccessPanel.tsx": 1,

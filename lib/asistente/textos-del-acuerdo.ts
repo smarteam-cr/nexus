@@ -12,6 +12,13 @@ import type { CambioAcordado } from "./acuerdo";
 
 export type ClaseDeAcuerdo = "pasar" | "aplicar" | "descartar";
 
+/**
+ * E4 (2026-09): un acuerdo del cronograma SIN operaciones es de una versión anterior (los hilos de antes
+ * del 2026-08-20 guardaban solo una instrucción de texto, que ejecutaba «Pedir cambio con IA»). Ese
+ * carril se retiró: el botón no aplica y dice esto (≤ 60 caracteres: va EN el botón).
+ */
+export const ACUERDO_DE_OTRA_VERSION = "Es de una versión anterior: pídemelo de nuevo";
+
 /** Qué hace el botón de este acuerdo, o null si es de los de siempre (sin propuesta). */
 export function claseDeAcuerdo(a: Pick<CambioAcordado, "borrador" | "operaciones">): ClaseDeAcuerdo | null {
   if (typeof a.borrador !== "string") return null;
@@ -61,7 +68,7 @@ export function rotuloDelAcuerdoAplicado(a: Pick<CambioAcordado, "borrador" | "o
 /**
  * El desenlace que queda en el hilo cuando lo acordado fue a la PROPUESTA o se descartó la propuesta
  * (tuteo: es la voz del asistente y el modelo lo relee). null = los de siempre (lib/asistente/handler.ts:
- * el cronograma, o la vista previa del modificador).
+ * el cronograma, o la vista previa del editor de un documento).
  */
 export function textoDelDesenlaceDeLaPropuesta(
   destino: "cronograma" | "propuesta" | "descarte" | undefined,
