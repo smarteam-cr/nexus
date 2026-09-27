@@ -14,10 +14,6 @@ import { pctConTranscript, type CoberturaDelCliente } from "@/lib/sessions/cober
 import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import StageBadge from "@/components/lifecycle/StageBadge";
-import AltaTrabada from "@/components/projects/AltaTrabada";
-import { altaEnCurso, parseEstadoDeAlta } from "@/lib/projects/alta";
-import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
-import { leerAutoria } from "@/lib/timeline/autoria-de-la-propuesta";
 import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects/ProjectBriefSection";
 
 
@@ -560,48 +556,14 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
 
   return (
     <div className="mb-6 bg-surface border border-line rounded-xl overflow-hidden">
-      {/* El alta a medio hacer, ARRIBA de todo y en su versión completa: el widget es donde
-          alguien va a averiguar por qué el proyecto se comporta raro, así que acá el cartel
-          tiene que traer el motivo y el último intento, no solo el rótulo. */}
-      {/* ⚠ La condición es «¿hay algo que mostrar?», no «¿hay un estado de alta?». `altaEstado`
-          es "listo" en todo proyecto que se dio de alta bien, así que con la condición vieja este
-          envoltorio se pintaba igual —16 px de padding— mientras `AltaTrabada` devolvía null: un
-          hueco fantasma arriba del resumen, visible en la captura de Elías y en cada ficha. El que
-          decide si se pinta y el que trae el espacio tienen que ser el mismo. */}
-      {data.alta && altaEnCurso(parseEstadoDeAlta(data.alta.estado)) && (
-        <div className="p-4 pb-0">
-          <AltaTrabada
-            projectId={projectId}
-            altaEstado={data.alta.estado}
-            altaError={data.alta.error}
-            altaUltimoIntentoAt={data.alta.ultimoIntentoAt}
-            altaIntentos={data.alta.intentos}
-            altaActorEmail={data.alta.actorEmail}
-            /* El widget guarda su respuesta en caché. Sin invalidar, recargar volvería a
-               pintar el cartel sobre un alta que ya terminó — y el botón parecería no haber
-               hecho nada. */
-            onTermino={() => {
-              invalidateGps(projectId);
-              window.location.reload();
-            }}
-          />
-        </div>
-      )}
-
-      {/* Tanda M — mismo criterio que el alta: completo acá porque el widget es donde se
-          averigua por qué el cronograma no se movió. */}
-      {data.timelineProposalPending && (
-        <div className="p-4 pb-0">
-          <TimelineProposalPendiente
-            variante="completo"
-            projectId={projectId}
-            clientId={clientId}
-            pending
-            autoria={leerAutoria(data.timelineProposalAutoria)}
-          />
-        </div>
-      )}
-
+      {/* ⛔ ACÁ SE PINTABAN OTRA VEZ el alta trabada y la propuesta de cronograma sin decidir,
+          en su versión completa, MIENTRAS el rail de la ficha ya las pintaba compactas arriba.
+          Eran literalmente el mismo aviso dos veces en la misma pantalla, a treinta centímetros
+          — y eso enseña a ignorarlo. Se fueron de acá y no de allá (2026-09-27): el widget vive
+          adentro del Resumen desde esta tanda, así que la copia que sobrevive tiene que ser la
+          que se ve en los NUEVE documentos, no la que solo aparece si entrás a una pestaña.
+          Lo que se pierde es diagnóstico de segundo nivel (el error crudo entero, el conteo de
+          intentos); el compacto ya trae el motivo, el fallo y el botón que resuelve. */}
       {/* El resumen del proyecto va ARRIBA de todo lo demás: es la respuesta a «cómo va esto»,
           que es la pregunta con la que alguien abre este widget. Debajo está el detalle que la
           sostiene. `undefined` (respuesta cacheada vieja) no pinta nada; `null` sí, porque «no

@@ -616,7 +616,6 @@ function ProjectSection({
           key={activeProjectId}
           projectId={activeProjectId}
           tags={activeProject.tags}
-          serviceType={activeProject.serviceType}
           hubspotPipelineId={activeProject.hubspotPipelineId}
           initialCanvases={activeProjectId === initialCanvasesProjectId ? initialCanvases : null}
         />

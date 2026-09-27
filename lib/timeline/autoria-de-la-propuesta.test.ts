@@ -195,8 +195,14 @@ describe("dónde se usa", () => {
     expect(contiene(gps, "const [timelineProposalAutoria] = hayPropuestaParaRevisar(project.timeline?.pendingProposal ?? null) ? await leerAutoriaDeLasPropuestas([")).toBe(true);
     expect(contiene(gps, "timelineProposalAutoria: timelineProposalAutoria ?? null,")).toBe(true);
     expect(contiene(gps, "timeline: { select: { pendingProposal: true, pendingProposalRunId: true } },")).toBe(true);
+    /* ⚠ El WIDGET ya no pinta el cartel (2026-09-27): lo hacía en paralelo con el rail, que lo
+       muestra compacto, y desde que el widget vive adentro de la pestaña «Resumen» esa segunda
+       copia dejó de cubrir los otros documentos. El endpoint sigue devolviendo la autoría —el
+       cálculo cuesta una consulta y solo corre si hay propuesta— para que reponer el cartel ahí
+       no exija volver a cablear el dato. Lo que se cuida es que no vuelva la DUPLICACIÓN, y eso
+       lo sostiene `lib/projects/brief-superficie.test.ts`. */
     const widget = soloCodigo(leer("components/clients/ProjectGPS.tsx"));
-    expect(contiene(widget, "autoria={leerAutoria(data.timelineProposalAutoria)}")).toBe(true);
+    expect(contiene(widget, "<TimelineProposalPendiente")).toBe(false);
   });
 
   it("el cartel: la frase reemplaza la segunda oración del compacto y va entre paréntesis en el completo", () => {

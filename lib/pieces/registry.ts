@@ -84,9 +84,9 @@ export interface PieceDefinition {
 
 /**
  * ⚠ El `label` es el nombre VISIBLE y se cambia acá, en una línea, sin tocar nada más: la
- * identidad de la pieza es el `slug`. Ya se ejerció una vez —"Business Case" → "Propuesta
- * comercial" el 2026-08-03— y salió gratis, que era exactamente la promesa de este registro.
- * Queda pendiente "Desarrollo" → "Requerimientos técnicos".
+ * identidad de la pieza es el `slug`. Ya se ejerció dos veces —"Business Case" → "Propuesta
+ * comercial" el 2026-08-03, y "Desarrollo" → "Integraciones" el 2026-09-27— y las dos salieron
+ * gratis, que era exactamente la promesa de este registro.
  */
 export const PIECES: PieceDefinition[] = [
   {
@@ -197,8 +197,15 @@ export const PIECES: PieceDefinition[] = [
   },
   {
     slug: "tech-requirements",
-    label: "Desarrollo", // F4: → "Requerimientos técnicos"
-    legacyNames: ["Desarrollo"],
+    /* «Desarrollo» hasta el 2026-09-27 (Elías). El rótulo viejo se confundía con el PIPELINE
+       Desarrollo de HubSpot —que es otra cosa: una clase de proyecto entera, ver
+       lib/projects/kind.ts—, así que en una ficha convivían un proyecto «de Desarrollo» y un
+       documento «Desarrollo» que no tenían nada que ver. El contenido siempre fue el
+       requerimiento de las INTEGRACIONES a la medida. */
+    label: "Integraciones",
+    // ⚠ Se AGREGA, nunca se reemplaza: los 58 canvases que ya existen en la base se
+    // llamaron «Desarrollo» y sin esta entrada dejan de resolver (invariante del registro).
+    legacyNames: ["Integraciones", "Desarrollo"],
     scope: "project",
     agentGroup: "desarrollo",
     permissionSection: "desarrollo",

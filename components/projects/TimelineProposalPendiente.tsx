@@ -53,7 +53,12 @@ export default function TimelineProposalPendiente({
 
   if (!pending) return null;
 
-  const href = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}#cronograma-gantt`;
+  /* ⚠ `canvas=timeline` es imprescindible desde el 2026-09-27: sin el parámetro, la ficha
+     del proyecto abre el RESUMEN, y este botón —que promete llevar a la propuesta— dejaba a
+     la persona mirando el widget con un ancla `#cronograma-gantt` que no existe en esa vista.
+     Se apunta por SLUG y no por id porque acá no se conoce el id del canvas: es una fila
+     distinta en cada uno de los proyectos. */
+  const href = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}&canvas=timeline#cronograma-gantt`;
   const boton = puedeRevisar ? (
     <a
       href={href}

@@ -226,14 +226,21 @@ describe("⭐ la sección se colapsa sin perder el aviso", () => {
   });
 });
 
-describe("⭐ el cartel de alta no deja un hueco cuando no tiene nada que decir", () => {
-  it("el widget pregunta si HAY algo que mostrar, no si existe el estado", () => {
-    /* `altaEstado` es "listo" en todo proyecto bien dado de alta, así que la condición vieja
-       pintaba un envoltorio con `p-4` mientras `AltaTrabada` devolvía null: 16 px de aire arriba
-       del resumen, en cada ficha, sin que nada fallara. */
+describe("⭐ los avisos del proyecto se pintan UNA vez", () => {
+  it("el widget ya no monta el cartel de alta ni el de la propuesta de cronograma", () => {
+    /* Los montaba, completos, mientras el rail de la ficha ya los pintaba compactos: el mismo
+       aviso dos veces en la misma pantalla. Se toleraba porque el widget se veía siempre; desde
+       que vive adentro de la pestaña «Resumen» (2026-09-27) la copia de acá ni siquiera cubre
+       los otros nueve documentos, así que era duplicación sin contrapartida.
+
+       Esta guarda reemplaza a la que exigía `altaEnCurso(parseEstadoDeAlta(…))` acá: aquélla
+       cuidaba que el envoltorio del cartel no dejara 16 px de hueco cuando el cartel devolvía
+       null, y sin envoltorio ese defecto no puede volver. Lo que sí puede volver —y es lo que
+       se cuida ahora— es que alguien reponga el cartel "porque falta en el widget". */
     const src = sinComentarios(WIDGET);
-    expect(src, "volvió el envoltorio que se pinta con el cartel vacío").toContain(
-      "altaEnCurso(parseEstadoDeAlta(data.alta.estado))",
+    expect(src, "volvió el cartel de alta duplicado al widget").not.toContain("<AltaTrabada");
+    expect(src, "volvió el aviso de propuesta duplicado al widget").not.toContain(
+      "<TimelineProposalPendiente",
     );
   });
 });

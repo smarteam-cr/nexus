@@ -108,7 +108,7 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/clients/DocumentUpload.tsx": 23,
   "components/clients/ExternalAccessPanel.tsx": 3,
   "components/clients/MinuteDialog.tsx": 44,
-  "components/clients/ProjectCanvasPanel.tsx": 45,
+  "components/clients/ProjectCanvasPanel.tsx": 3,
   "components/clients/ProjectHandoffSection.tsx": 2,
   "components/clients/ProjectSessionsReview.tsx": 1,
   "components/clients/SectionDiscoveryModal.tsx": 37,

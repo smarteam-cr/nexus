@@ -12,19 +12,23 @@ const de = (rows: ReturnType<typeof buildPieceRows>, slug: string) =>
   rows.find((r) => r.slug === slug)!;
 
 describe("el desplegable muestra el FLUJO, no solo lo que existe", () => {
-  it("un proyecto sin ninguna pieza igual lista las 7 del recorrido", () => {
+  it("un proyecto sin ninguna pieza igual lista todo el recorrido", () => {
     // Ésta es la razón de ser del cambio: antes, una pieza que el proyecto no tenía era
     // indistinguible de una que no existe en Nexus. El CSE no podía saber que el
     // Diagnóstico era una opción.
+    //
+    // ⚠ El orden es el de PRESENTACIÓN (lib/flow/orden-de-presentacion.ts), no el narrativo
+    // de las etapas: el cronograma encabeza porque es el documento que se abre todos los
+    // días. Quién es dueño de ese orden se sostiene en `orden-de-presentacion.test.ts`.
     const rows = buildPieceRows([]);
     expect(slugs(rows)).toEqual([
+      "timeline",
       "kickoff",
       "exploration",
       "diagnosis",
-      "timeline",
       "planning",
-      "tech-requirements",
       "implementation",
+      "tech-requirements",
       "delivery",
     ]);
     expect(rows.every((r) => r.state === "por_activar")).toBe(true);
@@ -54,7 +58,7 @@ describe("el desplegable muestra el FLUJO, no solo lo que existe", () => {
     expect(de(rows, "timeline").agent).toBeNull();
   });
 
-  it("respeta el orden del flujo, no el de creación en la base", () => {
+  it("respeta el orden del menú, no el de creación en la base", () => {
     const rows = buildPieceRows([
       c({ slug: "tech-requirements", name: "Desarrollo" }),
       c({ slug: "kickoff", name: "Kickoff" }),

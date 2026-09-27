@@ -226,15 +226,17 @@ export default function AltaTrabada({
 /**
  * ── QUÉ ALTAS ESTÁN CORRIENDO, COMPARTIDO ENTRE LAS DOS INSTANCIAS DEL CARTEL ───────────────
  *
- * El cartel se monta DOS VECES en la misma pantalla, a propósito: compacto en el rail de la
- * ficha del cliente y completo dentro del widget del proyecto. Con el estado de «corriendo»
- * local a cada uno, deshabilitar el primer botón dejaba el segundo clickeable, y dos POST
- * concurrentes sobre un alta en `pendiente_crm` entraban los dos por la rama que CREA en HubSpot:
- * dos records gemelos del mismo proyecto, que después hay que unir a mano allá.
+ * Hasta el 2026-09-27 el cartel se montaba DOS VECES en la misma pantalla —compacto en el rail
+ * y completo dentro del widget— y con el estado de «corriendo» local a cada uno, deshabilitar el
+ * primer botón dejaba el segundo clickeable: dos POST concurrentes sobre un alta en
+ * `pendiente_crm` entraban los dos por la rama que CREA en HubSpot, y quedaban dos records
+ * gemelos del mismo proyecto para unir a mano allá.
  *
- * Vive a nivel de módulo y no en un contexto porque los dos carteles NO comparten un ancestro
- * pensado para esto: el rail lo pinta el layout del cliente y el widget vive dentro de la página.
- * Un contexto nuevo para dos consumidores es más ceremonia que la que el problema pide.
+ * Hoy queda una sola instancia (la del rail; la copia del widget se retiró al mudar el widget
+ * adentro del Resumen), así que esto ya no arbitra entre dos carteles. **No se borra igual**: lo
+ * que de verdad impide son dos POST en vuelo sobre el mismo proyecto, y el doble click sobre un
+ * único botón los produce igual. Y si mañana el cartel vuelve a montarse en dos lados —es lo que
+ * pasó la primera vez— la protección ya está puesta.
  */
 const enVuelo = new Set<string>();
 const oyentes = new Map<string, Set<() => void>>();

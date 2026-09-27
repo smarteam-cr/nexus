@@ -2,8 +2,12 @@
  * lib/flow/dropdown-rows.ts — las filas del desplegable de piezas del proyecto. PURO.
  *
  * El desplegable dejó de ser "la lista de canvases que existen" para pasar a ser **el
- * flujo completo del manejo de clientes**: las 7 piezas en orden narrativo, existan o no
- * en este proyecto. Las que faltan se ven y se pueden activar desde ahí.
+ * flujo completo del manejo de clientes**: las piezas del recorrido, existan o no en este
+ * proyecto. Las que faltan se ven y se pueden activar desde ahí.
+ *
+ * ⚠ El ORDEN sale de `lib/flow/orden-de-presentacion.ts` y NO del orden narrativo de las
+ * etapas: el cronograma se abre todos los días y va adelante, aunque su etapa sea la cuarta.
+ * Las dos listas y por qué son dos están explicadas allá.
  *
  * Por qué importa que estén las que faltan: antes, una pieza que el proyecto no tenía
  * era indistinguible de una que no existe en Nexus. El CSE no podía saber que el
@@ -14,7 +18,7 @@
  * listado — acá queda declarada en un solo lugar y con su motivo.
  */
 import { pieceBySlug } from "@/lib/pieces/registry";
-import { piecesInFlowOrder } from "./stage-pieces";
+import { piezasParaMostrar } from "./orden-de-presentacion";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 
 /** Piezas que NO se listan en el DESPLEGABLE, con su motivo. */
@@ -93,7 +97,7 @@ export function buildPieceRows(
     else custom.push(c);
   }
 
-  const delFlujo: PieceRow[] = piecesInFlowOrder("full")
+  const delFlujo: PieceRow[] = piezasParaMostrar()
     .filter((slug) => opts.incluirHandoff || !FUERA_DEL_DESPLEGABLE.has(slug))
     .map((slug) => {
       const pieza = pieceBySlug(slug);

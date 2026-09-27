@@ -39,12 +39,15 @@ describe("qué chips se listan", () => {
   it("una implementación muestra su recorrido completo, no cuatro señales", () => {
     /* Transcrito: si mañana se agrega una pieza al recorrido, este test obliga a decidir
        si entra al widget en vez de que aparezca sola o quede afuera sin que nadie lo note. */
+    /* Mismo orden que el desplegable, y es a propósito: el checklist y el menú viven a
+       dos centímetros uno del otro dentro del Resumen. Dos órdenes distintos para la misma
+       lista de documentos se lee como un error aunque los dos sean defendibles. */
     expect(slugs()).toEqual([
       "handoff",
+      "timeline",
       "kickoff",
       "exploration",
       "diagnosis",
-      "timeline",
       "planning",
       "implementation",
       // Decidido al agregarla (2026-08-12): la Entrega ENTRA al widget. El widget responde
