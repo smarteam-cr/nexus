@@ -13,6 +13,7 @@
  * medido sobre la propuesta grande anonimizada (__fixtures__/propuesta-grande.json).
  * Desde M2 (2026-09-27, bloque 9): con `hitos`, un kickoff por proyecto, el cierre y la entrega sin duplicados
  * nuevos (R15) y la IA que no repite lo que se queda (R14). Sin `hitos`, los bloques 1-8 quedan como estaban.
+ * Desde M3 (2026-09-27, bloque 10): con `pasado`, lo que ya pasó no se reescribe (R13). Sin `pasado`, todo igual.
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import fs from "node:fs";
@@ -55,6 +56,8 @@ import {
   tareasPropuestasDelDetalle,
   type CambiosDelDetalle,
 } from "./tareas-del-detalle";
+import { semanaVencida } from "./vista-de-la-propuesta";
+import { computePhaseRanges } from "./weeks";
 
 const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
   id,
@@ -1332,5 +1335,166 @@ describe("9 · M2: un kickoff, el cierre y la entrega sin duplicados, y la IA no
     );
     expect(resumen(r)).toEqual(["+Revisión con el sponsor@4", "+Sesión semanal de avance@5"]);
     expect(r.observaciones).toEqual(["No entran 2 tareas de la IA: repiten una que ya está."]);
+  });
+});
+
+describe("10 · M3: lo que ya pasó no se reescribe (R13)", () => {
+  /* Pedido de Elías (2026-09-27, decisión (a)): en «Regenerar todo» lo pendiente de semanas que ya pasaron se avisa, no se
+     reescribe. Ayer la propuesta de Wherex quitaba 50 tareas y sumaba 59 en semanas vencidas. Estos casos pasan `pasado`,
+     como la fusión cuando el borrador trae `hoy` (y `hitos`, como la fusión desde M2). */
+  const FX = leerFixtureGrande();
+  const PASADO = { ancla: FX.ancla, hoy: new Date(FX.hoy) };
+  const HITOS = { recurrente: false, conSemanaCero: true };
+
+  /** El recorrido sobre un vivo propio (la estructura es la del vivo), con `pasado` y los hitos, como la fusión. */
+  function conPasado(
+    vivo: Vivo,
+    fases: Array<{ id: string; tasks: TareaCruda[] }>,
+    opciones: { pasado?: { ancla: string; hoy: Date } | null; hitos?: { recurrente: boolean; conSemanaCero: boolean } | null } = {},
+  ) {
+    const borrador: Borrador = { ...BASE, cambios: [] };
+    const estructura = estructuraHipotetica(vivo, borrador);
+    const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({ estructura, analysisJson: salida(fases), huellas: null, cortado: false });
+    return cambiosDeTareasDelDetalle({
+      estructura,
+      vivo,
+      propuestas,
+      borrador,
+      tags: [],
+      nuevaClave,
+      idsDesconocidos,
+      respetarTerminadas: true,
+      hitos: opciones.hitos === undefined ? HITOS : opciones.hitos,
+      pasado: opciones.pasado === undefined ? PASADO : opciones.pasado,
+    });
+  }
+
+  /** La propuesta grande: su paso 2 fusionado otra vez, con o sin `pasado` (y con los hitos, como la fusión). */
+  function fusionDelFixture(pasado: { ancla: string; hoy: Date } | null | undefined) {
+    const vivo = vivoDelFixture(FX);
+    const borrador = borradorDelFixture(FX);
+    const estructura = estructuraHipotetica(vivo, borrador);
+    const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({ estructura, analysisJson: FX.paso2, huellas: null, cortado: false });
+    let k = 0;
+    const r = cambiosDeTareasDelDetalle({
+      estructura,
+      vivo,
+      propuestas,
+      borrador,
+      tags: [],
+      nuevaClave: () => `fx-${++k}`,
+      idsDesconocidos,
+      respetarTerminadas: true,
+      hitos: HITOS,
+      ...(pasado === undefined ? {} : { pasado }),
+    });
+    return { vivo, estructura, r };
+  }
+
+  /** Los cambios de tareas que caen en una semana que ya pasó (el predicado de la vista, sobre la estructura que vio el agente). */
+  function enSemanasVencidas(vivo: Vivo, estructura: ReturnType<typeof estructuraHipotetica>, r: CambiosDelDetalle) {
+    const rangos = computePhaseRanges(estructura.fases);
+    const inicio = new Map(estructura.fases.map((f, k) => [f.id, rangos[k].start]));
+    const semanaViva = new Map(vivo.fases.flatMap((f) => (f.tareas ?? []).map((t) => [t.id, t.weekIndex] as const)));
+    const vencida = (fase: string, semana: number) => semanaVencida(FX.ancla, inicio.get(fase) ?? 0, semana, PASADO.hoy);
+    return {
+      seVan: r.tareas.filter((c) => c.tipo === "tarea-se-va" && vencida(c.faseId, semanaViva.get(c.tareaId) ?? c.desde.weekIndex)),
+      nuevas: r.tareas.filter((c) => c.tipo === "tarea-nueva" && vencida(c.fase, c.tarea.weekIndex)),
+      cambian: r.tareas.filter(
+        (c) =>
+          c.tipo === "tarea-cambia" &&
+          (vencida(faseDeLaTarea(c), c.a.weekIndex ?? c.desde.weekIndex) || vencida(c.faseId, semanaViva.get(c.tareaId) ?? c.desde.weekIndex)),
+      ),
+    };
+  }
+
+  const cuenta = (r: CambiosDelDetalle) => ({
+    seVan: r.tareas.filter((c) => c.tipo === "tarea-se-va").length,
+    nuevas: r.tareas.filter((c) => c.tipo === "tarea-nueva").length,
+    cambian: r.tareas.filter((c) => c.tipo === "tarea-cambia").length,
+  });
+
+  it("⭐ la propuesta grande: 0 que se van, 0 nuevas y 0 movidas en semanas vencidas; la terminada en 0/0; lo que no entra se dice", () => {
+    /* La edición que la pone en rojo: ignorar `pasado` (sin R13 salen 44 que se van y 44 nuevas en semanas vencidas).
+       Las cuentas son las del código real sobre el fixture (anonimizado: ningún título es un hito, así que no hay kickoff
+       que sobre, y la Semana 0 ya venció: por eso la observación del kickoff que falta). */
+    const { vivo, estructura, r } = fusionDelFixture(PASADO);
+    const pasadas = enSemanasVencidas(vivo, estructura, r);
+    expect(pasadas.seVan.filter((c) => c.tipo === "tarea-se-va" && c.delSistema !== "hito"), "se quita algo de una semana que ya pasó").toEqual([]);
+    expect(pasadas.nuevas, "entra algo nuevo en una semana que ya pasó").toEqual([]);
+    expect(pasadas.cambian, "se mueve algo desde o hacia una semana que ya pasó").toEqual([]);
+    expect(r.tareas.filter((c) => faseDeLaTarea(c) === FASE_TERMINADA), "la fase terminada recibe o pierde tareas").toEqual([]);
+    expect(cuenta(r)).toEqual({ seVan: 5, nuevas: 13, cambian: 2 });
+    expect(r.observaciones).toEqual([
+      "«Fase B» está terminada: la IA no le propone tareas.",
+      "2 tareas vuelven con otra nota: se conserva la nota de hoy.",
+      OBSERVACION_SIN_KICKOFF,
+      "No entran 51 tareas de la IA: caen en semanas que ya pasaron.",
+    ]);
+  });
+
+  it("⛔ sin `pasado` el resultado es el de siempre, byte a byte (con null igual que ausente)", () => {
+    /* La edición que la pone en rojo: activar R13 sin `pasado` (por ejemplo, con el ancla del vivo y la hora de ahora):
+       «Regenerar» de una fase, el recálculo, «primera» y un borrador de antes del deploy se comportarían distinto. */
+    const ausente = fusionDelFixture(undefined);
+    const nulo = fusionDelFixture(null);
+    expect(nulo.r).toEqual(ausente.r);
+    const pasadas = enSemanasVencidas(ausente.vivo, ausente.estructura, ausente.r);
+    expect([pasadas.seVan.length, pasadas.nuevas.length], "sin `pasado`, R13 no corre").toEqual([44, 44]);
+    expect(ausente.r.tareas).toHaveLength(110);
+    expect(ausente.r.observaciones.some((o) => o.includes("semanas que ya pasaron"))).toBe(false);
+  });
+
+  /* Un proyecto chico con fecha: «Semana 0» (S0–S1, ya pasó) y «Diseño» (S2–S21). Con el `hoy` fijo (S18), en «Diseño»
+     vencieron los weekIndex 0 a 15. */
+  const pendiente = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}) => tarea(id, title, weekIndex, extra);
+  const conFecha = (s0: TareaDelVivo[], diseno: TareaDelVivo[]): Vivo => ({
+    ancla: FX.ancla,
+    fases: [fase("s0", "Semana 0", 2, s0, { status: "IN_PROGRESS" }), fase("d", "Diseño", 20, diseno, { status: "IN_PROGRESS" })],
+  });
+  const HECHA_S0 = pendiente("s0h", "Firmar el acta", 0, { status: "DONE" });
+  const KICKOFF_S0 = pendiente("s0k", "Sesión de kickoff: equipo, roles y accesos", 0, { status: "DONE", type: "SESSION" });
+
+  it("⭐ R1 después de R13: una fase a la que la IA solo le propone semanas vencidas conserva sus pendientes futuras", () => {
+    /* La edición que la pone en rojo: calcular `sinPropuesta` con todo lo que propuso la IA, antes de quitar lo del
+       pasado: «Definir pipeline» (S19) se iba y no entraba nada. */
+    const vivo = conFecha([KICKOFF_S0, HECHA_S0], [pendiente("d1", "Mapear procesos", 1), pendiente("d2", "Definir pipeline", 17)]);
+    const r = conPasado(vivo, [{ id: "d", tasks: [{ title: "Relevar el proceso actual", weekIndex: 3 }] }]);
+    expect(resumen(r)).toEqual([]);
+    expect(r.observaciones).toEqual(["No entra 1 tarea de la IA: cae en una semana que ya pasó."]);
+    // Con algo del futuro, R2 sigue como siempre: se va lo pendiente que la IA no repite, pero no lo vencido.
+    const conFuturo = conPasado(vivo, [
+      { id: "d", tasks: [{ title: "Relevar el proceso actual", weekIndex: 3 }, { title: "Validar el pipeline", weekIndex: 17 }] },
+    ]);
+    expect(resumen(conFuturo)).toEqual(["-d2", "+Validar el pipeline@17"]);
+  });
+
+  it("⭐ la IA repite en la S20 lo pendiente de una semana vencida de su fase: no entra (lo vencido se queda y cuenta)", () => {
+    /* La edición que la pone en rojo: no contar lo vencido como algo que se queda en R14: «Mapear procesos» volvía a
+       entrar en la S20 y quedaban las dos. */
+    const vivo = conFecha([KICKOFF_S0, HECHA_S0], [pendiente("d1", "Mapear procesos", 1), pendiente("d2", "Definir pipeline", 17)]);
+    const r = conPasado(vivo, [
+      { id: "d", tasks: [{ title: "Mapear procesos", weekIndex: 18 }, { title: "Definir pipeline", weekIndex: 17 }] },
+    ]);
+    expect(resumen(r), "la vencida se fue, o su repetición entró").toEqual([]);
+    expect(r.observaciones).toEqual(["No entra 1 tarea de la IA: repite una que ya está."]);
+  });
+
+  it("⛔ el kickoff que falta: con `pasado`, solo si la semana 0 de la Semana 0 no venció (si no, se dice)", () => {
+    /* La edición que la pone en rojo: mirar solo si la Semana 0 empezó (lo de M2 sin reloj): el sistema agregaba el
+       kickoff en una semana que ya pasó. */
+    const base = conFecha([pendiente("s0a", "Recolectar accesos", 0)], [pendiente("d2", "Definir pipeline", 17)]);
+    // Una Semana 0 que nunca arrancó (ni ella ni sus tareas): sin reloj, M2 le agrega el kickoff.
+    const sinKickoff: Vivo = { ...base, fases: base.fases.map((f) => (f.id === "s0" ? { ...f, status: "PENDING" } : f)) };
+    const propuesta = [{ id: "d", tasks: [{ title: "Definir pipeline", weekIndex: 17 }] }];
+    const r = conPasado(sinKickoff, propuesta);
+    expect(r.tareas.filter((c) => c.tipo === "tarea-nueva"), "agregó un kickoff en el pasado").toEqual([]);
+    expect(r.observaciones).toEqual([OBSERVACION_SIN_KICKOFF]);
+    // Sin `pasado` (M2, sin reloj): la Semana 0 no empezó, así que lo agrega el sistema.
+    const sinReloj = conPasado(sinKickoff, propuesta, { pasado: null });
+    expect(sinReloj.tareas.filter((c) => c.tipo === "tarea-nueva" && c.delSistema === "hito")).toHaveLength(1);
+    // Con la Semana 0 todavía por delante (el mismo día, un proyecto que arranca la semana que viene), también.
+    const futuro = conPasado(sinKickoff, propuesta, { pasado: { ancla: "2026-09-29", hoy: PASADO.hoy } });
+    expect(futuro.tareas.filter((c) => c.tipo === "tarea-nueva" && c.delSistema === "hito")).toHaveLength(1);
   });
 });

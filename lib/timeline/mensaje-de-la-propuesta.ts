@@ -9,7 +9,10 @@
  *      la propuesta»;
  *   3. qué tareas se rehacen y que las hechas conservan su estado;
  *   4. si la IA no tuvo reuniones ni notas;
- *   5. las atrasadas, «hoy 59 → con la propuesta 67»: el atraso ya existe, la propuesta no lo crea.
+ *   5. las atrasadas, «hoy 59 → con la propuesta 67»: el atraso ya existe, la propuesta no lo crea. M3 (2026-09-27): si
+ *      la propuesta trae su reloj (`borrador.hoy`, solo «Regenerar todo»: R13 no reescribe lo que ya pasó), lo que
+ *      quedó sin hacer: «⚠ Quedaron sin hacer 4 tareas de semanas que ya pasaron, en «Semana 0»: la propuesta no las
+ *      mueve (están en «Más»).», y «Más» las nombra con la acción. Sin reloj, la de siempre («no las mueve» sería falso).
  * Hasta 5 líneas de ≤ 140 caracteres. Lo demás («Más»): dónde se concentran los cambios, una fase terminada que recibe
  * tareas, los atrasos cargados (en una frase APARTE, nunca como causa) y, si es prácticamente otro cronograma, por qué.
  *
@@ -31,6 +34,8 @@ import {
   type Vivo,
 } from "./borrador";
 import { unirFrases } from "./magnitud-propuesta";
+// M3 (D11): solo el TIPO. Los textos se eligen por `borrador.hoy.politica`, nunca por la constante del interruptor.
+import type { PoliticaDePendientesDelPasado } from "./politica-de-atrasos";
 import type { FuentesDeLaPropuesta, PrometidoDeLaPropuesta, ReferenciasDeLaPropuesta } from "./referencias-de-la-propuesta";
 import { semanaVencida } from "./vista-de-la-propuesta";
 import { computePhaseRanges, fmtDay, plural, semanaDelProyecto, type ProjectedEnd } from "./weeks";
@@ -113,6 +118,35 @@ export function textoDeLasSugeridas(n: number): string {
     : `La IA sugiere mudar ${n} tareas hechas a otra fase: vienen sin marcar.`;
 }
 export const FUENTE_INSTRUCCIONES = "Instrucciones adicionales";
+
+/**
+ * M3 (2026-09-27): lo que quedó sin hacer en semanas que ya pasaron, por la política de lo pendiente del pasado con que
+ * se calculó la propuesta (`borrador.hoy.politica`, D11). «avisar» (decisión (a) de Elías): la propuesta no lo mueve y lo
+ * nombra. M5 suma «traer-a-hoy». `donde` ya viene con las fases citadas («en «Semana 0» y «Fase A»»); null = sin
+ * nombrarlas (para que la línea entre en 140 caracteres).
+ */
+export const TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER: Record<
+  PoliticaDePendientesDelPasado,
+  {
+    /** La línea 5 con una sola tarea. */
+    una: (donde: string | null) => string;
+    /** La línea 5 con varias; `conPuntero`: «(están en «Más»)». */
+    varias: (n: number, donde: string | null, conPuntero: boolean) => string;
+    /** «Más»: qué hacer con ellas. */
+    accionUna: string;
+    accionVarias: string;
+  }
+> = {
+  avisar: {
+    una: (donde) => `⚠ Quedó sin hacer 1 tarea de una semana que ya pasó${donde ? `, ${donde}` : ""}: la propuesta no la mueve.`,
+    varias: (n, donde, conPuntero) =>
+      `⚠ Quedaron sin hacer ${n} tareas de semanas que ya pasaron${donde ? `, ${donde}` : ""}: la propuesta no las mueve${conPuntero ? " (están en «Más»)" : ""}.`,
+    accionUna: "Si ya se hizo, márcala hecha; si falta, muévela a esta semana.",
+    accionVarias: "Si ya se hicieron, márcalas hechas; si faltan, muévelas a esta semana.",
+  },
+};
+/** M3: hasta cuántas tareas sin hacer nombra «Más» (con más, las fases y cuántas tiene cada una). */
+export const TOPE_DE_LAS_QUE_SE_NOMBRAN = 5;
 
 const PARTES_DEL_ATRASO: ReadonlyArray<readonly [string, string]> = [
   ["CLIENTE", "cliente"],
@@ -403,6 +437,26 @@ function lineaDeLasTareas(i: EntradaDelMensaje, nivel: NivelDeLaPropuesta): stri
  * proyección que no existen hoy (nuevas) o que cambian de semana, y quedan atrasadas.
  */
 export function atrasadas(vivo: Vivo, r: Pick<ResumenDelBorrador, "proyeccion">, hoy: Date): { hoy: number; despues: number; nacen: number } {
+  const { hoy: antes, despues, nacen } = atrasadasConLoQueQuedo(vivo, r, hoy);
+  return { hoy: antes, despues, nacen };
+}
+
+/** M3: una fase con lo que quedó sin hacer en semanas que ya pasaron (sus títulos, en el orden del Gantt). */
+export interface SinHacerDeLaFase {
+  nombre: string;
+  titulos: string[];
+}
+
+/**
+ * `atrasadas` y, además (M3, 2026-09-27), `sinHacerPorFase`: las de la proyección vencidas que NO nacen (ni nuevas ni
+ * movidas por la propuesta), por fase y en el orden del Gantt. Suman `despues − nacen`: lo que quedó sin hacer y la
+ * propuesta no mueve. Aparte de `atrasadas` para que su forma (y su guarda, que la compara entera) no cambie.
+ */
+export function atrasadasConLoQueQuedo(
+  vivo: Vivo,
+  r: Pick<ResumenDelBorrador, "proyeccion">,
+  hoy: Date,
+): { hoy: number; despues: number; nacen: number; sinHacerPorFase: SinHacerDeLaFase[] } {
   const rangosHoy = computePhaseRanges(vivo.fases);
   const semanaDeHoy = new Map<string, number>();
   let antes = 0;
@@ -416,14 +470,18 @@ export function atrasadas(vivo: Vivo, r: Pick<ResumenDelBorrador, "proyeccion">,
   const rangos = computePhaseRanges(p.fases);
   let despues = 0;
   let nacen = 0;
+  const sinHacerPorFase: SinHacerDeLaFase[] = [];
   p.fases.forEach((f, k) => {
+    const titulos: string[] = [];
     for (const t of f.tareas) {
       if (!semanaVencida(p.ancla, rangos[k].start, t.weekIndex, hoy, t.status)) continue;
       despues++;
       if (t.id === null || (t.cambia && semanaDeHoy.get(t.id) !== rangos[k].start + t.weekIndex)) nacen++;
+      else titulos.push(t.title);
     }
+    if (titulos.length > 0) sinHacerPorFase.push({ nombre: f.name, titulos });
   });
-  return { hoy: antes, despues, nacen };
+  return { hoy: antes, despues, nacen, sinHacerPorFase };
 }
 
 /** Línea 5: «⚠ Atrasadas: hoy 59 → con la propuesta 67: 58 tareas nuevas caen en semanas que ya pasaron.» */
@@ -434,6 +492,60 @@ function lineaDeLasAtrasadas(i: EntradaDelMensaje): string | null {
   const que = i.r.tareas.cambian > 0 ? ["tarea nueva o movida cae", "tareas nuevas o movidas caen"] : ["tarea nueva cae", "tareas nuevas caen"];
   const nacen = a.nacen > 0 ? `: ${plural(a.nacen, que[0], que[1])} en semanas que ya pasaron` : "";
   return `${a.despues > a.hoy ? "⚠ " : ""}Atrasadas: hoy ${a.hoy} → con la propuesta ${a.despues}${nacen}.`;
+}
+
+/** M3: «en «A» y «B»», «en «A», «B» y 3 fases más», «en 5 fases»: hasta `cuantas` fases nombradas. */
+function dondeQuedo(fases: readonly SinHacerDeLaFase[], cuantas: number): string {
+  if (cuantas === 0) return `en ${plural(fases.length, "fase", "fases")}`;
+  const citadas = fases.slice(0, cuantas).map((f) => `«${cortarNombre(f.nombre)}»`);
+  const resto = fases.length - citadas.length;
+  return `en ${unirFrases(resto > 0 ? [...citadas, plural(resto, "fase más", "fases más")] : citadas)}`;
+}
+
+/**
+ * M3 (2026-09-27): la línea 5 cuando la propuesta trae su reloj (`borrador.hoy`): R13 no reescribió lo que ya pasó, así
+ * que lo pendiente de semanas vencidas QUEDÓ SIN HACER y la propuesta no lo mueve. N = `despues − nacen`. Si algo nuevo cae
+ * igual en el pasado (lo movió el chat, o el CSE desmarcó una reprogramación), se suma. Hasta 2 fases nombradas y
+ * después «N fases más», en 140 caracteres. Los textos, por `hoy.politica` (D11). null si no queda nada.
+ */
+function lineaDeLoQueQuedoSinHacer(i: EntradaDelMensaje): string | null {
+  if (!i.hoy || !i.borrador.hoy) return null;
+  const a = atrasadasConLoQueQuedo(i.vivo, i.r, i.hoy);
+  const sinHacer = a.despues - a.nacen;
+  if (sinHacer === 0 && a.nacen === 0) return null;
+  const que = i.r.tareas.cambian > 0 ? ["tarea nueva o movida cae", "tareas nuevas o movidas caen"] : ["tarea nueva cae", "tareas nuevas caen"];
+  const caen = a.nacen > 0 ? `${plural(a.nacen, que[0], que[1])} en semanas que ya pasaron.` : "";
+  if (sinHacer === 0) return `⚠ ${caen}`;
+  const textos = TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER[i.borrador.hoy.politica.pendientesDelPasado];
+  // De la más completa a la más corta: 2, 1 o ninguna fase nombrada; sin las fases; sin «(están en «Más»)».
+  const formas: Array<{ donde: string | null; conPuntero: boolean }> = [
+    ...[2, 1, 0].map((n) => ({ donde: dondeQuedo(a.sinHacerPorFase, Math.min(n, a.sinHacerPorFase.length)), conPuntero: true })),
+    { donde: null, conPuntero: true },
+    { donde: null, conPuntero: false },
+  ];
+  const variantes = formas.map(({ donde, conPuntero }) => {
+    const base = sinHacer === 1 ? textos.una(donde) : textos.varias(sinHacer, donde, conPuntero);
+    return caen ? `${base} ${caen}` : base;
+  });
+  return laQueEntra([...new Set(variantes)]);
+}
+
+/**
+ * M3: la línea de «Más» con lo que quedó sin hacer (solo con el reloj de la propuesta): con 5 o menos, sus títulos por
+ * fase; con más, las fases y cuántas tiene cada una. Siempre con la acción. null si no queda nada.
+ */
+function detalleDeLoQueQuedoSinHacer(i: EntradaDelMensaje): string | null {
+  if (!i.hoy || !i.borrador.hoy) return null;
+  const { sinHacerPorFase } = atrasadasConLoQueQuedo(i.vivo, i.r, i.hoy);
+  const total = sinHacerPorFase.reduce((n, f) => n + f.titulos.length, 0);
+  if (total === 0) return null;
+  const textos = TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER[i.borrador.hoy.politica.pendientesDelPasado];
+  const accion = total === 1 ? textos.accionUna : textos.accionVarias;
+  if (total <= TOPE_DE_LAS_QUE_SE_NOMBRAN) {
+    const porFase = sinHacerPorFase.map((f) => `en «${cortarNombre(f.nombre)}»: ${f.titulos.map((t) => `«${t}»`).join(" · ")}`);
+    return `Sin hacer ${porFase.join("; ")}. ${accion}`;
+  }
+  return `Sin hacer: ${sinHacerPorFase.map((f) => `«${cortarNombre(f.nombre)}» (${f.titulos.length})`).join(" · ")}. ${accion}`;
 }
 
 /**
@@ -455,6 +567,9 @@ export function fuenteDelMotivo(motivo: string, f: FuentesDeLaPropuesta | null):
 function detalleDelMensaje(i: EntradaDelMensaje, porMagnitud: boolean, prometido: PrometidoDeLaPropuesta | null): string[] {
   const { r, vivo, borrador } = i;
   const detalle: string[] = [];
+  // M3: lo que quedó sin hacer en semanas que ya pasaron (la línea 5 dice que está acá), con la acción.
+  const sinHacer = detalleDeLoQueQuedoSinHacer(i);
+  if (sinHacer) detalle.push(sinHacer);
   // Dónde se concentran: los 3 grupos con más cambios (empate: el orden del Gantt), si el mayor tiene 5 o más.
   const orden = ordenCompletoDeLaPropuesta(vivo, borrador.cambios);
   const lugar = (fase: string) => {
@@ -528,7 +643,9 @@ export function mensajeDeLaPropuesta(i: EntradaDelMensaje): MensajeDeLaPropuesta
   if (tareas) lineas.push(tareas);
   // Sin reuniones ni notas en las corridas de la propuesta (con o sin instrucciones, la misma frase).
   if (fuentes && fuentes.reuniones.length === 0 && fuentes.notas.length === 0 && i.borrador.tareas !== null) lineas.push(LINEA_SIN_MATERIAL);
-  const atraso = lineaDeLasAtrasadas(i);
+  /* M3: con el reloj de la propuesta, lo que quedó sin hacer (R13 no lo reescribió); sin él («Regenerar» de una fase,
+     «primera», un borrador de antes), la línea de siempre: ahí decir «no las mueve» sería falso. */
+  const atraso = i.borrador.hoy ? lineaDeLoQueQuedoSinHacer(i) : lineaDeLasAtrasadas(i);
   if (atraso) lineas.push(atraso);
 
   const verificadas = new Map<string, FuenteVerificada>();

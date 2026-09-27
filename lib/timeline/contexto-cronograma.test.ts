@@ -578,6 +578,10 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
        Elías lee los dos tal cual después de cada «Regenerar todo» de la medición. */
     "lib/timeline/medicion-de-la-propuesta.ts",
     "scripts/medir-propuesta.ts",
+    /* M3 (2026-09-27): el interruptor de lo atrasado (su cabecera es lo que lee quien lo voltea: «Para volver: cambia
+       el valor y despliega»). Los textos nuevos de M3 viven en archivos que ya están en la lista (el mensaje, lo que
+       lee el modelo en detalle-cronograma.ts y el motivo de «se queda» en borrador-del-detalle.ts, más arriba). */
+    "lib/timeline/politica-de-atrasos.ts",
   ];
   /* Las formas que aparecieron en estos archivos, más las de uso diario del equipo. Una palabra
      entera: «Revisá» no caza «Revisa», y «vos» no caza «voseo». Las del final son las que la revisión

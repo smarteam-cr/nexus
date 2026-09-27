@@ -16,6 +16,9 @@
  * L6 (§7.4, §7.6): la fusión pide EL PORQUÉ (`extras.explicar`, acá un doble: ningún test llama a la API) antes de su
  * escritura y lo guarda en la MISMA escritura, con la huella de la lista que escribe; con tope de 15 s, sin tirar y
  * una sola vez aunque la escritura necesite otra vuelta.
+ *
+ * M3 (2026-09-27): el reloj de la propuesta (`hoy`) que guarda la marca del paso 2, lo que lee el modelo con él (lo
+ * vencido fuera de «pendiente» y el bloque «LO QUE YA PASÓ») y la fusión real que le pasa `pasado` a R13.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -24,6 +27,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   projectTimeline: { findUnique: vi.fn(), updateMany: vi.fn() },
   agentRun: { update: vi.fn() },
+  // M3: la marca del vacío deduce el pedido de las tareas (`marcarTareasEnCurso`).
+  timelineTask: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 
@@ -42,11 +47,15 @@ import {
 import {
   estructuraParaElDetalle,
   fusionarDetalleEnElBorrador,
+  marcarTareasEnCurso,
+  QUEDO_SIN_HACER,
   SELECT_DE_FASES_CON_TAREAS,
   TOPE_DE_LA_EXPLICACION_MS,
   TOPE_DE_LAS_SUGERIDAS_MS,
   vivoDeLaBase,
 } from "./borrador-del-detalle";
+import { renderLoQueYaHay, TITULO_DE_LO_QUE_YA_PASO } from "@/lib/contexto/detalle-cronograma";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
 import { pipelineByKey } from "@/lib/projects/kind";
 import { tareasTocadas } from "./hechas-fuera-de-lugar";
 import { explicacionEnPantalla, huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
@@ -118,6 +127,7 @@ beforeEach(() => {
   db.projectTimeline.findUnique.mockReset();
   db.projectTimeline.updateMany.mockReset();
   db.agentRun.update.mockReset();
+  db.timelineTask.findMany.mockReset();
 });
 
 describe("L5 · lo que ya hay en cada fase, para el agente de tareas", () => {
@@ -934,5 +944,187 @@ describe("M2 P2f · la medición lee lo que escribe la fusión", () => {
     expect(delScript).toEqual(vivoDeLaBase(ANCLA, conMarca as unknown as Parameters<typeof vivoDeLaBase>[1]));
     expect(delScript.fases[0].tareas![0].marca).toBe("hito:kickoff");
     expect(delScript.fases[0].tareas![3].inicioFijado).toBe("2026-09-15");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── M3 · el reloj de la propuesta y lo que ya pasó, del lado del servidor ─────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * M3 (spec del replanteo §4, 2026-09-27; decisión (a) de Elías: lo que ya pasó no se reescribe). `marcarTareasEnCurso`
+ * guarda EL RELOJ (`hoy`) solo en «Regenerar todo» y con fecha de arranque; lo que lee el modelo saca lo vencido de
+ * «pendiente» y dice desde qué semana se puede proponer; y la fusión real le pasa `pasado` a la regla (R13).
+ */
+describe("M3 · el reloj de la propuesta y lo que ya pasó", () => {
+  const CUSTOMER_SUCCESS = pipelineByKey("customer-success").hubspotPipelineId;
+  /** El `hoy` fijo de las guardas (spec §0.2) y el arranque de Wherex: hoy es la S18. */
+  const HOY = new Date("2026-09-26T12:00:00-06:00");
+  const ANCLA = new Date("2026-05-19T00:00:00.000Z");
+  const RELOJ = { instante: HOY.toISOString(), semana: 18, politica: POLITICA_DE_ATRASOS };
+  /** «Semana 0» (S0–S1, ya pasó) con el kickoff hecho y dos pendientes; «Diseño» (S2–S21): vencieron sus weekIndex 0 a 15. */
+  const FASES_M3 = [
+    faseDB("s0", "Semana 0", 0, 2, "IN_PROGRESS", [
+      tareaDB("k1", "Sesión de kickoff: equipo, roles y accesos", 0, { status: "DONE", type: "SESSION" }),
+      tareaDB("s2", "Confirmar el sponsor", 0, { source: "HUMAN" }),
+      tareaDB("s1", "Recolección de accesos", 1),
+    ]),
+    faseDB("d", "Diseño", 1, 20, "IN_PROGRESS", [
+      tareaDB("d0", "Mapear procesos", 0, { status: "DONE" }),
+      tareaDB("d1", "Definir pipeline", 3),
+      tareaDB("d2", "Configurar integraciones", 17),
+    ]),
+  ];
+  const enLaBaseConFecha = (guardado: unknown, fases: unknown[] = FASES_M3, ancla: Date | null = ANCLA) =>
+    db.projectTimeline.findUnique.mockImplementation(async () => ({
+      pendingProposal: JSON.parse(JSON.stringify(guardado)),
+      pendingProposalRunId: "run-1",
+      anchorStartDate: ancla,
+      closeDateOverride: null,
+      project: { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS },
+      phases: fases,
+    }));
+  const escrito = () => db.projectTimeline.updateMany.mock.calls.at(-1)![0].data.pendingProposal as Record<string, unknown>;
+
+  it("⭐ el reloj: la marca lo escribe en «Regenerar todo» (el vacío y el token) con la política; con una fase, «primera» o sin fecha, no", async () => {
+    /* La edición que la pone en rojo: escribirlo en «Regenerar» de una fase (ahí «lo que ya se hizo va como tarea» manda,
+       D3), o en «Generar cronograma» (vaciaría la Semana 0 de un proyecto nuevo). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const marcar = (pedido: { token: string | null; version: number | null }, soloFase: string | null = null) =>
+      marcarTareasEnCurso({ timelineId: "tl", pedido, corrida: "run-t", soloFase, ahora: HOY });
+
+    // El vacío de «Regenerar todo»: hay tareas de la IA y fecha de arranque.
+    db.timelineTask.findMany.mockResolvedValue([{ source: "HUMAN" }, { source: "AGENT" }]);
+    db.projectTimeline.findUnique.mockResolvedValue({ anchorStartDate: ANCLA });
+    expect(await marcar({ token: null, version: null })).toBeNull();
+    expect(escrito().hoy, "el vacío de «Regenerar todo» sin reloj").toEqual(RELOJ);
+    expect(leerBorrador(JSON.parse(JSON.stringify(escrito())))?.hoy, "el reloj guardado no se lee").toEqual(RELOJ);
+    // «Regenerar» de una fase, «primera» y sin fecha de arranque: sin reloj.
+    await marcar({ token: null, version: null }, "d");
+    expect(escrito(), "«Regenerar» de una fase con reloj").not.toHaveProperty("hoy");
+    expect(escrito().soloFase).toBe("d");
+    db.timelineTask.findMany.mockResolvedValue([{ source: "HUMAN" }]);
+    await marcar({ token: null, version: null });
+    expect(escrito().pedido).toBe("primera");
+    expect(escrito(), "«Generar cronograma» con reloj").not.toHaveProperty("hoy");
+    db.timelineTask.findMany.mockResolvedValue([{ source: "AGENT" }]);
+    db.projectTimeline.findUnique.mockResolvedValue({ anchorStartDate: null });
+    await marcar({ token: null, version: null });
+    expect(escrito(), "sin fecha de arranque con reloj").not.toHaveProperty("hoy");
+
+    // El token (el borrador del paso 1): el reloj de ESTA marca; uno viejo (otra semana) se reemplaza.
+    const delPaso1 = { ...borradorVacio({ pedido: "regenerar", corrida: "run-1" }), version: 3, tareas: { corrida: null, listas: false } };
+    const viejo = { instante: "2026-09-18T15:00:00.000Z", semana: 17, politica: POLITICA_DE_ATRASOS };
+    enLaBaseConFecha({ ...delPaso1, hoy: viejo });
+    expect(await marcar({ token: "run-1", version: 3 })).toBeNull();
+    expect(escrito().hoy, "el token sin el reloj de esta marca").toEqual(RELOJ);
+    expect(escrito().version).toBe(4);
+    // Con `soloFase` guardado, sin reloj (y el viejo se quita); sin fecha de arranque, tampoco.
+    enLaBaseConFecha({ ...delPaso1, soloFase: "d", hoy: viejo });
+    await marcar({ token: "run-1", version: 3 });
+    expect(escrito(), "«Regenerar» de una fase con reloj").not.toHaveProperty("hoy");
+    enLaBaseConFecha(delPaso1, FASES_M3, null);
+    await marcar({ token: "run-1", version: 3 });
+    expect(escrito()).not.toHaveProperty("hoy");
+  });
+
+  it("⭐ leerBorrador lee el reloj solo bien formado; si no, lo ignora sin invalidar la propuesta ni sumar desconocidos", () => {
+    /* La edición que la pone en rojo: aceptar una política que esta versión no conoce (un valor de M5 leído por M3), o
+       tirar la propuesta entera por un reloj mal formado. */
+    const base = borradorVacio({ pedido: "regenerar", corrida: "run-2" });
+    expect(leerBorrador({ ...base, hoy: RELOJ })?.hoy).toEqual(RELOJ);
+    for (const malo of [
+      { ...RELOJ, instante: "ayer" },
+      { ...RELOJ, semana: -1 },
+      { ...RELOJ, semana: 1.5 },
+      { ...RELOJ, politica: { ...POLITICA_DE_ATRASOS, fasesVencidas: "otra" } },
+      { ...RELOJ, politica: { ...POLITICA_DE_ATRASOS, pendientesDelPasado: "traer-a-mañana" } },
+      { ...RELOJ, politica: { ...POLITICA_DE_ATRASOS, casiTerminada: { maxAbiertas: 2, minHecho: 7 } } },
+      { instante: RELOJ.instante, semana: 18 },
+      "2026-09-26",
+    ]) {
+      const leido = leerBorrador({ ...base, hoy: malo });
+      expect(leido, JSON.stringify(malo)).not.toBeNull();
+      expect(leido, JSON.stringify(malo)).not.toHaveProperty("hoy");
+      expect(leido?.desconocidos).toBeUndefined();
+    }
+  });
+
+  it("⭐ lo que lee el modelo con el reloj: lo vencido sale de «pendiente» (va a «se queda») y el bloque «LO QUE YA PASÓ»", async () => {
+    /* La edición que la pone en rojo: dejar lo vencido en `pendientes`: el modelo recibía «repite su título EXACTO y su
+       weekIndex» y «no repitas lo pendiente de esas semanas» a la vez, y R13 y R14 le tiraban la repetición. */
+    enLaBaseConFecha({ ...borradorVacio({ pedido: "regenerar", corrida: "run-2" }), hoy: RELOJ });
+    const l = (await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!;
+    const [s0, diseno] = l.fases;
+    expect(s0.pendientes, "lo vencido sigue en «pendiente»").toEqual([]);
+    expect(s0.seQuedan).toEqual([
+      { titulo: "Confirmar el sponsor", porque: "a mano" },
+      { titulo: "Recolección de accesos", porque: QUEDO_SIN_HACER },
+    ]);
+    expect(diseno.pendientes).toEqual([{ titulo: "Configurar integraciones", semana: 17 }]);
+    expect(diseno.seQuedan).toEqual([{ titulo: "Definir pipeline", porque: QUEDO_SIN_HACER }]);
+    expect(l.pasado).toEqual({
+      semanaDeHoy: 18,
+      porFase: [
+        { id: "s0", desde: 2, entera: true },
+        { id: "d", desde: 16, entera: false },
+      ],
+    });
+    const texto = renderLoQueYaHay(l);
+    expect(texto).toContain(`«Definir pipeline» (${QUEDO_SIN_HACER})`);
+    expect(texto, "lo vencido sigue con su weekIndex").not.toContain("«Definir pipeline» (weekIndex");
+    expect(texto).toContain(
+      `${TITULO_DE_LO_QUE_YA_PASO}\nHoy es la semana 18 del proyecto (contando desde 0). Lo que cae en semanas que ya pasaron no se reescribe: no pongas tareas ahí y no repitas lo pendiente de esas semanas.\n[s0] «Semana 0» — ya pasó entera: inclúyela con "tasks": [].\n[d] «Diseño» — solo weekIndex desde 16.`,
+    );
+
+    // Sin reloj (un borrador de antes) o con alcance («Regenerar» de una fase): como siempre.
+    enLaBaseConFecha(borradorVacio({ pedido: "regenerar", corrida: "run-2" }));
+    const sinReloj = (await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!;
+    expect(sinReloj.pasado).toBeUndefined();
+    expect(sinReloj.fases[1].pendientes.map((p) => p.titulo)).toEqual(["Definir pipeline", "Configurar integraciones"]);
+    enLaBaseConFecha({ ...borradorVacio({ pedido: "regenerar", corrida: "run-2", soloFase: "d" }), hoy: RELOJ });
+    const conAlcance = (await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!;
+    expect(conAlcance.pasado, "lo que ya pasó con alcance").toBeUndefined();
+    expect(renderLoQueYaHay(conAlcance)).not.toContain(TITULO_DE_LO_QUE_YA_PASO);
+
+    // El kickoff que falta: con el reloj, la Semana 0 que ya pasó no lo pide (la misma condición que la fusión).
+    const sinKickoff = [{ ...FASES_M3[0], status: "PENDING", tasks: FASES_M3[0].tasks.filter((t) => (t as { id: string }).id !== "k1") }, FASES_M3[1]];
+    enLaBaseConFecha(borradorVacio({ pedido: "regenerar", corrida: "run-2" }), sinKickoff);
+    expect((await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!.hitos!.faltaKickoff, "sin reloj, M2 lo pide").toBe(true);
+    enLaBaseConFecha({ ...borradorVacio({ pedido: "regenerar", corrida: "run-2" }), hoy: RELOJ }, sinKickoff);
+    expect((await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!.hitos!.faltaKickoff, "pide un kickoff en el pasado").toBe(false);
+  });
+
+  it("⭐ la fusión real con el reloj: nada nuevo en una semana vencida y lo pendiente de ahí se queda; el reloj sigue guardado", async () => {
+    /* La edición que la pone en rojo: no pasarle `pasado` a `cambiosDeTareasDelDetalle` en la fusión de «Regenerar todo»:
+       «Definir pipeline» (S5) se iba y «Relevar el proceso» entraba en la S4. */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    enLaBaseConFecha({ ...borradorVacio({ pedido: "regenerar", corrida: "run-2" }), hoy: RELOJ });
+    const sobre = await estructuraParaElDetalle("tl", "run-2");
+    const t = (title: string, weekIndex: number) => ({ title, weekIndex, notes: null, porValidar: false, party: "SMARTEAM", type: "TASK" });
+    let k = 0;
+    const r = await fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-2",
+      estructura: sobre!.estructura,
+      analysisJson: {
+        timelineDetail: {
+          phases: [
+            { id: "s0", tasks: [] },
+            { id: "d", tasks: [t("Relevar el proceso", 2), t("Configurar integraciones", 17), t("Documentar decisiones", 18)] },
+          ],
+        },
+      },
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `k-${++k}`,
+    });
+    expect(r.estado).toBe("listas");
+    const cambios = escrito().cambios as Cambio[];
+    expect(cambios.map((c) => (c.tipo === "tarea-nueva" ? `+${c.tarea.title}@${c.tarea.weekIndex}` : `${c.tipo}:${c.clave}`))).toEqual([
+      "+Documentar decisiones@18",
+    ]);
+    expect(escrito().observaciones).toContain("No entra 1 tarea de la IA: cae en una semana que ya pasó.");
+    expect(escrito().hoy, "la fusión perdió el reloj").toEqual(RELOJ);
   });
 });

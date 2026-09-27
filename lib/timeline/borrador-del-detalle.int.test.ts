@@ -36,12 +36,16 @@ import {
   vivoDeLaBase,
 } from "./borrador-del-detalle";
 import { explicacionEnPantalla, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { semanaVencida } from "./vista-de-la-propuesta";
+import { computePhaseRanges } from "./weeks";
 
 type DatosDeFase = Prisma.TimelinePhaseUncheckedCreateInput;
 type DatosDeTarea = Prisma.TimelineTaskCreateManyInput;
 
-/** La propuesta grande sembrada, con el borrador del paso 1 esperando las tareas de UNA corrida. */
-async function sembrar() {
+/** La propuesta grande sembrada, con el borrador del paso 1 esperando las tareas de UNA corrida. M3: `extra` se suma al
+ *  borrador guardado (el reloj de la marca, `hoy`). */
+async function sembrar(extra: Record<string, unknown> = {}) {
   const fx = leerFixtureGrande();
   const cliente = await prisma.client.create({ data: { name: "Cliente de la propuesta grande (test)" } });
   const proyecto = await prisma.project.create({ data: { clientId: cliente.id, name: "Implementación grande (test)" } });
@@ -94,6 +98,7 @@ async function sembrar() {
     cambios: crudo.cambios.filter((c) => !c.tipo.startsWith("tarea")),
     tareas: { corrida: corrida.id, listas: false },
     tareasArmadasPara: {},
+    ...extra,
   };
   await prisma.projectTimeline.update({
     where: { id: tl.id },
@@ -240,5 +245,55 @@ describe("L6 · el porqué en la fusión — DB real", () => {
     const output = JSON.parse(run.output!);
     expect(output.fuentesDeLaGeneracion).toEqual(leidas);
     expect(output.timelineSyncError).toBeTruthy();
+  });
+});
+
+describe("M3 · lo que ya pasó no se reescribe — DB real", () => {
+  it("⭐ una fusión real con el reloj de la marca no escribe nada en semanas vencidas (salvo un kickoff que sobra) y lo conserva", async () => {
+    /* Decisión (a) de Elías (2026-09-27). La edición que la pone en rojo: saltar R13 en la fusión real (no pasarle
+       `pasado` a `cambiosDeTareasDelDetalle`): salían 44 que se van y 44 nuevas en semanas que ya pasaron. */
+    const fx = leerFixtureGrande();
+    const hoy = new Date(fx.hoy);
+    const reloj = { instante: hoy.toISOString(), semana: 18, politica: POLITICA_DE_ATRASOS };
+    const { tl, corrida } = await sembrar({ hoy: reloj });
+
+    // Lo que lee el agente: la semana de hoy y desde dónde se puede proponer.
+    const supuesta = await estructuraParaElDetalle(tl.id, corrida.id);
+    expect(supuesta?.loQueYaHay?.pasado?.semanaDeHoy).toBe(18);
+
+    let k = 0;
+    const fusion = await fusionarDetalleEnElBorrador({
+      timelineId: tl.id,
+      corrida: corrida.id,
+      estructura: supuesta!.estructura,
+      analysisJson: fx.paso2,
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `int-${++k}`,
+    });
+    expect(fusion.estado).toBe("listas");
+
+    const leido = await prisma.projectTimeline.findUniqueOrThrow({
+      where: { id: tl.id },
+      select: { pendingProposal: true, anchorStartDate: true, phases: SELECT_DE_FASES_CON_TAREAS },
+    });
+    const borrador = leerBorrador(leido.pendingProposal)!;
+    expect(borrador.hoy, "la fusión perdió el reloj").toEqual(reloj);
+    const vivo = vivoDeLaBase(leido.anchorStartDate, leido.phases);
+    const estructura = supuesta!.estructura;
+    const rangos = computePhaseRanges(estructura.fases);
+    const inicio = new Map(estructura.fases.map((f, i) => [f.id, rangos[i].start]));
+    const semanaViva = new Map(vivo.fases.flatMap((f) => (f.tareas ?? []).map((t) => [t.id, t.weekIndex] as const)));
+    const vencida = (fase: string, semana: number) => semanaVencida(vivo.ancla, inicio.get(fase) ?? 0, semana, hoy);
+    const enElPasado = borrador.cambios.filter(esCambioDeTarea).filter((c) => {
+      if (c.tipo === "tarea-nueva") return vencida(c.fase, c.tarea.weekIndex);
+      if (c.tipo === "tarea-se-va") return c.delSistema !== "hito" && vencida(c.faseId, semanaViva.get(c.tareaId) ?? c.desde.weekIndex);
+      if (c.tipo === "tarea-cambia") return vencida(faseDeLaTarea(c), c.a.weekIndex ?? c.desde.weekIndex) || vencida(c.faseId, semanaViva.get(c.tareaId) ?? c.desde.weekIndex);
+      return false;
+    });
+    expect(enElPasado, "la fusión real escribió cambios en semanas que ya pasaron").toEqual([]);
+    const cuantos = (tipo: string) => borrador.cambios.filter((c) => c.tipo === tipo).length;
+    expect([cuantos("tarea-se-va"), cuantos("tarea-nueva"), cuantos("tarea-cambia")]).toEqual([5, 13, 2]);
+    expect(borrador.observaciones).toContain("No entran 51 tareas de la IA: caen en semanas que ya pasaron.");
   });
 });

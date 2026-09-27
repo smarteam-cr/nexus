@@ -62,8 +62,10 @@ import {
   type EstructuraHipotetica,
   type FaseDesfasada,
   type Cambio,
+  type PedidoDelBorrador,
   type RecalculoDelBorrador,
   type RecalculoEnElCable,
+  type RelojDeLaPropuesta,
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
@@ -73,14 +75,18 @@ import { sugeridasQueEntran, tareasTocadas } from "./hechas-fuera-de-lugar";
 import { AVISO_PROPUESTA_PENDIENTE, faseDeSemanaCero, MENSAJE_ESTRUCTURA_EN_CURSO } from "./propuesta-de-estructura";
 import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
 import { hitosDelProyecto, type GuardianDeHito, type Hito } from "./hitos";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
 import { tieneVozDeHandoffPropia } from "./semana-cero";
 import {
   cambiosDeTareasDelDetalle,
   fusionarDetalle,
   fusionarRecalculo,
-  semanaCeroSinEmpezar,
+  semanaCeroSinPasar,
   tareasPropuestasDelDetalle,
+  type PasadoDeLaPropuesta,
 } from "./tareas-del-detalle";
+import { semanaDeHoy, semanaVencida } from "./vista-de-la-propuesta";
+import { computePhaseRanges } from "./weeks";
 
 export interface EstadoDeLasTareasDelBorrador {
   estado: EstadoDeLasTareas;
@@ -421,6 +427,10 @@ export async function prevalidarPedidoDeTareas(
  *   · E2c, token + `recalcular` → vuelve a calcular las desfasadas (`desfasadasDelGuardado`) y guarda
  *     `recalculo` = { la corrida, esas fases, las claves de ESTRUCTURA de lo desmarcado }, con la
  *     versión + 1 y la misma condición. `tareas` NO se toca (D5: un fallo se leería como «faltan todas»).
+ *   · M3 (2026-09-27, D2): en «Regenerar todo» (pedido «regenerar», sin `soloFase` en el vacío ni en el guardado, sin
+ *     recálculo) y con fecha de arranque, la MISMA escritura guarda EL RELOJ (`hoy`: el instante, la semana de hoy y la
+ *     foto del interruptor, `relojDeLaPropuesta`). En el token se recalcula en cada marca (un reintento otra semana lee
+ *     la semana nueva); si ya no corresponde, el viejo se quita. El recálculo conserva el del guardado (no marca uno).
  * null = marcado. Si la escritura no entra (otra pestaña, otra persona), no se pisa nada.
  */
 export async function marcarTareasEnCurso(i: {
@@ -449,31 +459,51 @@ export async function marcarTareasEnCurso(i: {
     });
     return escrita.count === 0 ? CAMBIO : null;
   }
+  const ahora = i.ahora ?? new Date();
   if (i.pedido.token === null) {
     const tareas = await prisma.timelineTask.findMany({
       where: { phase: { timelineId: i.timelineId } },
       select: { source: true },
     });
+    const pedido = pedidoDelCronograma(tareas);
+    // M3: el ancla se lee solo cuando el reloj puede ir («Regenerar todo»).
+    const reloj =
+      pedido === "regenerar" && !i.soloFase
+        ? relojDeLaPropuesta({ pedido, soloFase: i.soloFase, ancla: await anclaDelCronograma(i.timelineId), ahora })
+        : null;
     const vacio = borradorVacio({
-      pedido: pedidoDelCronograma(tareas),
+      pedido,
       corrida: i.corrida,
       observaciones: i.pedido.observaciones ?? [],
       soloFase: i.soloFase,
     });
     const escrita = await prisma.projectTimeline.updateMany({
       where: { id: i.timelineId, pendingProposal: { equals: Prisma.DbNull } },
-      data: { pendingProposal: vacio as unknown as Prisma.InputJsonValue, pendingProposalRunId: i.corrida },
+      data: {
+        pendingProposal: { ...vacio, ...(reloj ? { hoy: reloj } : {}) } as unknown as Prisma.InputJsonValue,
+        pendingProposalRunId: i.corrida,
+      },
     });
     return escrita.count === 0 ? PENDIENTE : null;
   }
   const tl = await prisma.projectTimeline.findUnique({
     where: { id: i.timelineId },
-    select: { pendingProposal: true, pendingProposalRunId: true },
+    // M3: y el ancla, para el reloj.
+    select: { pendingProposal: true, pendingProposalRunId: true, anchorStartDate: true },
   });
   if (!tl) return CAMBIO;
   const veto = vetoDelGuardado(tl.pendingProposal, tl.pendingProposalRunId, i.pedido);
   if (veto) return veto;
-  const guardado = tl.pendingProposal as Record<string, unknown>;
+  // M3: sin el reloj de una marca anterior; si corresponde, va el de ahora.
+  const { hoy: _relojViejo, ...guardado } = tl.pendingProposal as Record<string, unknown>;
+  void _relojViejo;
+  const leido = leerBorrador(guardado);
+  const reloj = relojDeLaPropuesta({
+    pedido: leido?.pedido ?? null,
+    soloFase: leido?.soloFase ?? i.soloFase,
+    ancla: tl.anchorStartDate?.toISOString() ?? null,
+    ahora,
+  });
   const version = i.pedido.version as number;
   const escrita = await prisma.projectTimeline.updateMany({
     where: { id: i.timelineId, pendingProposalRunId: i.pedido.token, pendingProposal: { path: ["version"], equals: version } },
@@ -482,10 +512,47 @@ export async function marcarTareasEnCurso(i: {
         ...guardado,
         version: version + 1,
         tareas: { corrida: i.corrida, listas: false },
+        ...(reloj ? { hoy: reloj } : {}),
       } as unknown as Prisma.InputJsonValue,
     },
   });
   return escrita.count === 0 ? CAMBIO : null;
+}
+
+/** M3: la fecha de arranque del cronograma (ISO, como `vivoDeLaBase`), o null. */
+async function anclaDelCronograma(timelineId: string): Promise<string | null> {
+  const tl = await prisma.projectTimeline.findUnique({ where: { id: timelineId }, select: { anchorStartDate: true } });
+  return tl?.anchorStartDate?.toISOString() ?? null;
+}
+
+/**
+ * M3 (2026-09-27, D2, D11): EL RELOJ que guarda la marca del paso 2, o null si no corresponde. Solo en «Regenerar todo»
+ * (pedido «regenerar», sin `soloFase`) y con fecha de arranque: «Generar cronograma» ancla en la fecha del kickoff y
+ * vaciaría la Semana 0 de un proyecto nuevo; «Regenerar» de una fase y el recálculo los pide el CSE (D3). ⭐ ÚNICO
+ * lector de `POLITICA_DE_ATRASOS` (D11): su foto viaja en `politica` y todo lo demás lee esa foto, nunca la constante.
+ */
+export function relojDeLaPropuesta(i: {
+  pedido: PedidoDelBorrador | null;
+  soloFase: string | null | undefined;
+  ancla: string | null;
+  ahora: Date;
+}): RelojDeLaPropuesta | null {
+  if (i.pedido !== "regenerar" || i.soloFase || !i.ancla) return null;
+  const semana = semanaDeHoy(i.ancla, i.ahora);
+  if (semana === null) return null;
+  const politica = { ...POLITICA_DE_ATRASOS, casiTerminada: { ...POLITICA_DE_ATRASOS.casiTerminada } };
+  return { instante: i.ahora.toISOString(), semana, politica };
+}
+
+/**
+ * M3 (R13, D3): lo que ya pasó, para la fusión y para lo que lee el modelo. Solo en «Regenerar todo» (pedido «regenerar»,
+ * sin `soloFase`) con el reloj guardado y fecha de arranque; el ancla es la de AHORA y el instante, el de la marca (el
+ * mismo que se le dijo al modelo). El recálculo no lo usa: pasa null (D3). Un borrador de antes del deploy no trae
+ * `hoy`: null, todo como antes.
+ */
+export function pasadoDelBorrador(b: Borrador, vivo: Vivo): PasadoDeLaPropuesta | null {
+  if (!b.hoy || b.soloFase || b.pedido !== "regenerar" || !vivo.ancla) return null;
+  return { ancla: vivo.ancla, hoy: new Date(b.hoy.instante) };
 }
 
 /**
@@ -656,6 +723,9 @@ const SE_QUEDAN_POR_FASE = 15;
 /** L5: un título de hasta 80 caracteres (el resto, «…»). */
 const corta = (t: string) => (t.length > LARGO_DE_UNA_HECHA ? `${t.slice(0, LARGO_DE_UNA_HECHA - 1)}…` : t);
 
+/** M3: por qué se queda lo pendiente de una semana que ya pasó (R13), como lo lee el modelo en «se queda». */
+export const QUEDO_SIN_HACER = "quedó sin hacer";
+
 /** M2: por qué se queda una tarea que no es ni hecha ni pendiente de la IA (R2 no la reemplaza). null = no se queda por eso. */
 function porQueSeQueda(t: TareaDelVivo): string | null {
   if (t.status === "IN_PROGRESS") return "en curso";
@@ -675,6 +745,7 @@ function hitosParaElModelo(
   vivas: ReadonlyMap<string, Vivo["fases"][number]>,
   hitos: { recurrente: boolean; conSemanaCero: boolean },
   soloFases: readonly string[] | null,
+  pasado: PasadoDeLaPropuesta | null,
 ): NonNullable<LoQueYaHay["hitos"]> {
   const { guardianes } = hitosDelProyecto({
     fases: estructura.fases.map((f) => ({ id: f.id, name: f.name, tareas: f.existente ? (vivas.get(f.id)?.tareas ?? []) : [] })),
@@ -687,11 +758,13 @@ function hitosParaElModelo(
       .map((g) => ({ titulo: corta(g.titulo), estado: g.estado }));
   const kickoff = deHito("kickoff");
   const semanaCero = faseDeSemanaCero(estructura.fases, hitos.conSemanaCero);
+  // M3: con lo que ya pasó, «no empezó» es «su semana 0 no venció» (`semanaCeroSinPasar`, la misma de la fusión).
+  const inicioDeLaSemanaCero = semanaCero ? (computePhaseRanges(estructura.fases)[estructura.fases.indexOf(semanaCero)]?.start ?? 0) : 0;
   const faltaKickoff =
     kickoff.length === 0 &&
     semanaCero !== null &&
     (!soloFases || soloFases.length === 0 || soloFases.includes(semanaCero.id)) &&
-    semanaCeroSinEmpezar(semanaCero.existente ? vivas.get(semanaCero.id) : undefined);
+    semanaCeroSinPasar(semanaCero.existente ? vivas.get(semanaCero.id) : undefined, inicioDeLaSemanaCero, pasado);
   return { kickoff, cierre: deHito("cierre"), entrega: deHito("entrega"), recurrente: hitos.recurrente, faltaKickoff };
 }
 
@@ -701,6 +774,10 @@ function hitosParaElModelo(
  * de una fase o el recálculo; ahí no hay fases terminadas que se respeten (D11: R12 solo en «Regenerar todo»).
  * M2 (2026-09-27): cada fase suma lo que se queda aunque la IA no lo repita (en curso, suspendido, a mano) y cuántas
  * hechas no entraron; y el proyecto, sus hitos (`hitosParaElModelo`, con `soloFases`: el alcance).
+ * M3 (2026-09-27): con `pasado` (solo sin alcance: `pasadoDelBorrador`), lo pendiente de una semana que ya venció deja
+ * de estar en `pendientes` (ahí decía «repite su título EXACTO y su weekIndex», y R13 y R14 le tiraban la repetición) y
+ * pasa a `seQuedan` con «quedó sin hacer»; y `pasado` dice, por fase, desde qué weekIndex se puede proponer. Las mismas
+ * fases que R13: con alguna tarea viva (y sin las terminadas, que ya van en «FASES TERMINADAS»).
  */
 function loQueYaHayDe(
   estructura: EstructuraHipotetica,
@@ -708,38 +785,54 @@ function loQueYaHayDe(
   borrador: Borrador,
   soloFases: readonly string[] | null,
   hitos: { recurrente: boolean; conSemanaCero: boolean },
+  pasado: PasadoDeLaPropuesta | null,
 ): LoQueYaHay {
   const conAlcance = !!soloFases && soloFases.length > 0;
   const vivas = new Map(vivo.fases.map((f) => [f.id, f]));
-  const fases = estructura.fases.map((f): LoQueYaHay["fases"][number] => {
+  const conPasado = conAlcance ? null : pasado;
+  const rangos = computePhaseRanges(estructura.fases);
+  const porFase: NonNullable<LoQueYaHay["pasado"]>["porFase"] = [];
+  const fases = estructura.fases.map((f, k): LoQueYaHay["fases"][number] => {
     const viva = f.existente ? vivas.get(f.id) : undefined;
     const estado = !f.existente ? "nueva" : viva?.status === "DONE" ? "terminada" : viva?.status === "IN_PROGRESS" ? "en curso" : "pendiente";
     const tareas = viva?.tareas ?? [];
+    // M3 (R13): las semanas que ya vencieron, en una fase con alguna tarea viva.
+    const inicio = rangos[k]?.start ?? 0;
+    const vencida = (semana: number) => !!conPasado && tareas.length > 0 && semanaVencida(conPasado.ancla, inicio, semana, conPasado.hoy);
+    const deLaIA = (t: TareaDelVivo) => t.status === "PENDING" && t.source !== "HUMAN";
     const hechas = tareas.filter((t) => t.status === "DONE");
     const seQuedan = tareas.flatMap((t) => {
-      const porque = porQueSeQueda(t);
+      const porque = porQueSeQueda(t) ?? (deLaIA(t) && vencida(t.weekIndex) ? QUEDO_SIN_HACER : null);
       return porque ? [{ titulo: corta(t.title), porque }] : [];
     });
+    if (vencida(0) && estado !== "terminada") {
+      let desde = 0;
+      while (desde < f.durationWeeks && vencida(desde)) desde++;
+      porFase.push({ id: f.id, desde, entera: desde >= f.durationWeeks });
+    }
     return {
       id: f.id,
       nombre: f.name,
       estado,
       hechas: hechas.slice(0, HECHAS_POR_FASE).map((t) => corta(t.title)),
-      // Lo que la IA puede conservar: pendiente y no escrito a mano (lo demás se queda igual, R2).
+      // Lo que la IA puede conservar: pendiente y no escrito a mano (lo demás se queda igual, R2). M3: y no vencido.
       pendientes: tareas
-        .filter((t) => t.status === "PENDING" && t.source !== "HUMAN")
+        .filter((t) => deLaIA(t) && !vencida(t.weekIndex))
         .slice(0, PENDIENTES_POR_FASE)
         .map((t) => ({ titulo: t.title, semana: t.weekIndex })),
       ...(seQuedan.length > 0 ? { seQuedan: seQuedan.slice(0, SE_QUEDAN_POR_FASE) } : {}),
       ...(hechas.length > HECHAS_POR_FASE ? { hechasDeMas: hechas.length - HECHAS_POR_FASE } : {}),
     };
   });
+  const semana = conPasado ? semanaDeHoy(conPasado.ancla, conPasado.hoy) : null;
   return {
     fases,
     observaciones: [...borrador.observaciones],
     terminadasQueNoSeTocan: conAlcance ? [] : fases.filter((f) => f.estado === "terminada").map((f) => f.id),
     conAlcance,
-    hitos: hitosParaElModelo(estructura, vivas, hitos, soloFases),
+    hitos: hitosParaElModelo(estructura, vivas, hitos, soloFases, conPasado),
+    // M3: solo si alguna fase tiene semanas que ya pasaron (si no, el modelo no necesita saber la semana de hoy).
+    ...(semana !== null && porFase.length > 0 ? { pasado: { semanaDeHoy: semana, porFase } } : {}),
   };
 }
 
@@ -752,6 +845,7 @@ function supuestaDe(
   vivo: Vivo,
   borrador: Borrador,
   hitos: { recurrente: boolean; conSemanaCero: boolean },
+  pasado: PasadoDeLaPropuesta | null,
 ): EstructuraSupuesta {
   return {
     fases: estructura.fases.map((f) => ({
@@ -769,7 +863,7 @@ function supuestaDe(
     },
     estructura,
     ...(soloFases && soloFases.length > 0 ? { soloFases } : {}),
-    loQueYaHay: loQueYaHayDe(estructura, vivo, borrador, soloFases, hitos),
+    loQueYaHay: loQueYaHayDe(estructura, vivo, borrador, soloFases, hitos, pasado),
   };
 }
 
@@ -806,7 +900,8 @@ export async function estructuraParaElDetalle(
   if (borrador.recalculo?.corrida === corrida) {
     if (!borrador.tareas?.listas) return null;
     const r = borrador.recalculo;
-    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id), vivo, borrador, hitos);
+    // M3 (D3): el recálculo, sin lo que ya pasó (como su fusión).
+    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id), vivo, borrador, hitos, null);
   }
   if (borrador.tareas === null || borrador.tareas.listas || borrador.tareas.corrida !== corrida) return null;
   return supuestaDe(
@@ -816,6 +911,8 @@ export async function estructuraParaElDetalle(
     vivo,
     borrador,
     hitos,
+    // M3: lo que ya pasó, con la MISMA condición que la fusión (`pasadoDelBorrador`).
+    pasadoDelBorrador(borrador, vivo),
   );
 }
 
@@ -1028,6 +1125,8 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean, 
     respetarTerminadas: !borrador.soloFase,
     // M2 (R14, R15): los hitos y lo que ya está, con el tag y el pipeline del proyecto.
     hitos,
+    // M3 (R13): lo que ya pasó no se reescribe, solo en «Regenerar todo» con el reloj de la marca (`pasadoDelBorrador`).
+    pasado: pasadoDelBorrador(borrador, vivo),
   });
   const fusionado = fusionarDetalle(borrador, cambios, i.corrida);
   const donde = {
@@ -1207,6 +1306,10 @@ async function fusionarRecalculoEnElBorrador(
     respetarTerminadas: false,
     // M2: los hitos valen igual (un kickoff nuevo en una fase recalculada tampoco entra), con su alcance.
     hitos: leido.hitos,
+    /* M3 (D3): sin R13 aunque el borrador traiga `hoy`. El recálculo lo pide el CSE sobre fases concretas y su prompt dice
+       «lo que ya se hizo va como tarea» (EXCEPCION_DE_LAS_FASES_A_REGENERAR): tirar en código lo que el modelo pagó por
+       escribir no. */
+    pasado: null,
   });
   const nuevo = fusionarRecalculo(borrador, {
     tareas: cambios.tareas,

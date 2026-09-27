@@ -61,6 +61,7 @@ import {
   prevalidarPedidoDeTareas,
   VUELTAS_DE_LA_FUSION,
 } from "@/lib/timeline/borrador-del-detalle";
+import { POLITICA_DE_ATRASOS } from "@/lib/timeline/politica-de-atrasos";
 import { Prisma } from "@prisma/client";
 
 const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
@@ -286,6 +287,31 @@ describe("3 · marcarTareasEnCurso con `recalcular` — la marca va en `recalcul
     expect(data.pendingProposal.tareas, "la marca reusó `tareas`").toEqual({ corrida: "run-2", listas: true });
   });
 
+  it("⛔ M3 (D3): la marca del recálculo no escribe un reloj nuevo; conserva el de la propuesta", async () => {
+    /* El reloj (`hoy`) es el de «Regenerar todo» y lo escribe su marca; el recálculo lo pide el CSE sobre fases concretas
+       y no corre R13. La edición que la pone en rojo: marcar el reloj también en la rama de `recalcular` (el recálculo
+       diría que lo calculó con un reloj que no usó) o perder el que la propuesta ya tenía. */
+    const conFecha = (guardado: unknown) =>
+      db.projectTimeline.findUnique.mockResolvedValue({
+        id: "tl",
+        pendingProposal: guardado,
+        pendingProposalRunId: "run-1",
+        anchorStartDate: new Date("2026-05-19T00:00:00.000Z"),
+        closeDateOverride: null,
+        project: { tags: [] },
+        phases: fasesDB(),
+      });
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    conFecha(guardadoCon());
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: pedirRecalculo(), corrida: "run-r", ahora: new Date("2026-09-26T18:00:00.000Z") })).toBeNull();
+    expect(db.projectTimeline.updateMany.mock.calls[0][0].data.pendingProposal, "el recálculo marcó un reloj").not.toHaveProperty("hoy");
+    const reloj = { instante: "2026-09-18T15:00:00.000Z", semana: 17, politica: POLITICA_DE_ATRASOS };
+    db.projectTimeline.updateMany.mockClear();
+    conFecha(guardadoCon({ hoy: reloj }));
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: pedirRecalculo(), corrida: "run-r", ahora: new Date("2026-09-26T18:00:00.000Z") });
+    expect(db.projectTimeline.updateMany.mock.calls[0][0].data.pendingProposal.hoy, "el recálculo cambió el reloj de la propuesta").toEqual(reloj);
+  });
+
   it("otra versión, o nada que recalcular: el veto, sin escribir; si la escritura no entra, PROPUESTA_CAMBIO", async () => {
     enLaBase(guardadoCon());
     db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
@@ -463,6 +489,46 @@ describe("5 · fusionarDetalleEnElBorrador con un recálculo — solo cambian su
     expect(r).toEqual({ estado: "recalculadas", escritas: [], fallidas: ["b", "c"] });
     expect(escrito(), "borró el borrador").not.toBe(Prisma.DbNull);
     expect(escrito().recalculo.motivo).toBe(`en «Pruebas», ${MOTIVO_RECALCULO_EDITADA}; en «Diseño», ${MOTIVO_RECALCULO_SIN_TAREAS}`);
+  });
+
+  it("⛔ M3 (D3): el recálculo no corre R13 aunque la propuesta traiga su reloj: lo que la IA escribió en una semana vencida entra", async () => {
+    /* El CSE pidió recalcular «Pruebas» y su prompt dice «lo que ya se hizo va como tarea»
+       (EXCEPCION_DE_LAS_FASES_A_REGENERAR). La edición que la pone en rojo: pasarle `pasado` a `cambiosDeTareasDelDetalle`
+       en la fusión del recálculo: con el arranque del 19 may y hoy en la S18, «Probar con el cliente» (S5) no entraba y
+       «Probar flujos» no se iba: se tiraba en código lo que el modelo pagó por escribir. */
+    const estructura = await loQueVio();
+    const reloj = { instante: "2026-09-26T18:00:00.000Z", semana: 18, politica: POLITICA_DE_ATRASOS };
+    db.projectTimeline.findUnique.mockResolvedValue({
+      id: "tl",
+      pendingProposal: guardadoCon({ recalculo: RECALCULO, hoy: reloj }),
+      pendingProposalRunId: "run-1",
+      anchorStartDate: new Date("2026-05-19T00:00:00.000Z"),
+      closeDateOverride: null,
+      project: { tags: [] },
+      phases: fasesDB(),
+    });
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const r = await fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-r",
+      estructura,
+      analysisJson: DEVUELTO,
+      huellas: null,
+      cortado: false,
+      nuevaClave: claves(),
+    });
+    expect(r).toEqual({ estado: "recalculadas", escritas: ["c"], fallidas: [] });
+    const b = escrito();
+    expect(b.cambios.map((c: { clave: string }) => c.clave), "el recálculo tiró lo que la IA escribió en una semana vencida").toEqual([
+      DUR_C.clave,
+      "tarea:b1:se-va",
+      "t:b-1",
+      "tarea:c1:se-va",
+      "t:clave-1",
+      "t:a-1",
+    ]);
+    expect(b.hoy, "el recálculo perdió el reloj de la propuesta").toEqual(reloj);
+    expect((b.observaciones as string[]).some((o) => o.includes("semanas que ya pasaron"))).toBe(false);
   });
 
   it("⭐ motivoDelRecalculo: una causa, tal cual; causas distintas, cada una con sus fases y en su orden", () => {

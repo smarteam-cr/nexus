@@ -245,6 +245,31 @@ function bloqueDeLosHitos(h: NonNullable<LoQueYaHay["hitos"]>): string {
   return `\n\n${TITULO_DE_LOS_HITOS}\n${[reglaDeLosHitos(h.recurrente), ...lineas].join("\n")}`;
 }
 
+/** M3 (2026-09-27): el rótulo del bloque de lo que ya pasó. */
+export const TITULO_DE_LO_QUE_YA_PASO = "=== LO QUE YA PASÓ ===";
+
+/**
+ * M3 (2026-09-27, decisión (a) de Elías: lo que ya pasó no se reescribe): la regla, en código (no en el prompt guardado).
+ * R13 la hace cumplir igual (lib/timeline/tareas-del-detalle.ts): esto es para que el modelo no gaste tareas que no van a
+ * entrar. La semana va desde 0, como la cabecera del Gantt.
+ */
+export function reglaDeLoQueYaPaso(semanaDeHoy: number): string {
+  return `Hoy es la semana ${semanaDeHoy} del proyecto (contando desde 0). Lo que cae en semanas que ya pasaron no se reescribe: no pongas tareas ahí y no repitas lo pendiente de esas semanas.`;
+}
+
+/**
+ * M3: el bloque «LO QUE YA PASÓ»: la regla y, por fase con semanas vencidas, desde qué `weekIndex` se puede proponer (o
+ * que pasó entera: `"tasks": []`, que R1 lee como «no se toca»).
+ */
+function bloqueDeLoQueYaPaso(p: NonNullable<LoQueYaHay["pasado"]>, fases: LoQueYaHay["fases"]): string {
+  const nombre = new Map(fases.map((f) => [f.id, f.nombre]));
+  const lineas = p.porFase.map((f) => {
+    const cual = `[${f.id}] «${nombre.get(f.id) ?? f.id}»`;
+    return f.entera ? `${cual} — ya pasó entera: inclúyela con "tasks": [].` : `${cual} — solo weekIndex desde ${f.desde}.`;
+  });
+  return `\n\n${TITULO_DE_LO_QUE_YA_PASO}\n${[reglaDeLoQueYaPaso(p.semanaDeHoy), ...lineas].join("\n")}`;
+}
+
 /**
  * L5 (§6.3): lo que ya hay en el cronograma, para el agente de tareas. Tres bloques, cada uno solo si tiene
  * contenido: lo que ya hay en cada fase (estado, hecho y pendiente), las fases terminadas que no se tocan
@@ -253,6 +278,7 @@ function bloqueDeLosHitos(h: NonNullable<LoQueYaHay["hitos"]>): string {
  * La semana va como `weekIndex` (desde 0): el mismo número que el agente devuelve.
  * M2 (2026-09-27): cada fase suma lo que se queda aunque la IA no lo repita y cuántas hechas no entraron; y, al final, el
  * bloque de los hitos del proyecto (`bloqueDeLosHitos`).
+ * M3 (2026-09-27): después de los hitos, «LO QUE YA PASÓ» (`bloqueDeLoQueYaPaso`), solo con `pasado` y nunca con alcance.
  */
 export function renderLoQueYaHay(l: LoQueYaHay): string {
   const citar = (t: string) => `«${t}»`;
@@ -289,6 +315,9 @@ export function renderLoQueYaHay(l: LoQueYaHay): string {
   /* M2 (2026-09-27): los hitos, siempre que vengan (también con alcance: un kickoff nuevo en la fase regenerada tampoco
      entra). Al final de lo que ya hay, así el alcance sigue siendo lo último que lee el modelo. */
   if (l.hitos) texto += bloqueDeLosHitos(l.hitos);
+  /* M3 (2026-09-27): lo que ya pasó, solo en «Regenerar todo» (con alcance, «lo que ya se hizo va como tarea» manda, D3).
+     El calendario sigue sin «Hoy»: la semana de hoy va solo acá, con la regla. */
+  if (l.pasado && !l.conAlcance && l.pasado.porFase.length > 0) texto += bloqueDeLoQueYaPaso(l.pasado, l.fases);
   return texto;
 }
 

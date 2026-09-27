@@ -51,6 +51,16 @@
  *      la IA no haya propuesto nada en su fase; si no hay kickoff, lo agrega el sistema en la Semana 0 mientras
  *      no haya empezado. Lo hecho de más y lo escrito a mano se nombran, nunca se borran.
  *
+ * ── LO QUE YA PASÓ NO SE REESCRIBE (M3, 2026-09-27) ──────────────────────────
+ * Solo con `pasado` (lo pasa la fusión de «Regenerar todo» cuando el borrador trae `hoy`; «Regenerar» de una fase, el
+ * recálculo, «primera» y el handoff no: ahí «lo que ya se hizo va como tarea» manda). Decisión (a) de Elías: lo pendiente
+ * del pasado se avisa, no se reescribe. Ayer la propuesta de Wherex quitaba 50 tareas y sumaba 59 en semanas vencidas.
+ *  R13. En una fase con alguna tarea viva, una semana que ya venció (`semanaVencida`, el predicado de «ya pasó» y
+ *      «Atrasada», sobre la estructura que VIO el agente) no recibe tareas nuevas (del agente ni fijas), y lo pendiente
+ *      que cae ahí se queda como si tuviera avance (fuera de R2; R14 lo cuenta como algo que se queda). Va ANTES de R1:
+ *      una fase a la que la IA solo le propuso cosas del pasado no pierde sus pendientes futuras. El kickoff que sobra
+ *      se quita igual (R15), y el que falta se agrega solo si la semana 0 de la Semana 0 no venció.
+ *
  * ── EL ALCANCE (E2b) ─────────────────────────────────────────────────────────
  * «Regenerar» de una fase pasa `soloFases`: las demás fases se saltan enteras, antes de R8. Así R6
  * (el tipo), R7 (las fijas de la Semana 0, solo si la pedida ES la del arranque) y R8 miran solo la
@@ -120,7 +130,14 @@ import {
 import { faseDeSemanaCero } from "./propuesta-de-estructura";
 import { isKept } from "./regen-columnas";
 import { elegirFaseDeSemanaCero, tareasFijasDeSemanaCero } from "./semana-cero-tareas";
-import { plural } from "./weeks";
+import { semanaVencida } from "./vista-de-la-propuesta";
+import { computePhaseRanges, plural } from "./weeks";
+
+/** M3 (R13): lo que ya pasó, para la fusión de «Regenerar todo»: el ancla del cronograma y el instante de `Borrador.hoy`. */
+export interface PasadoDeLaPropuesta {
+  ancla: string;
+  hoy: Date;
+}
 
 /** El vocabulario cerrado del tipo de actividad que propone el agente de detalle. */
 export const DETAIL_ACTIVITY_TYPES = [
@@ -233,7 +250,8 @@ const identicas = (viva: TareaDelVivo, nueva: ContenidoDeTareaNueva) =>
  * el `desde` es lo que leyó el agente (R2). Ver las reglas R1-R12 arriba. `soloFases`: el alcance
  * de «Regenerar» de una fase (null o ausente = todas). `respetarTerminadas` (R12): solo «Regenerar
  * todo»; «Regenerar» de una fase y el recálculo pasan false (D11). `nuevaClave` genera los ids
- * aleatorios de las claves (los tests inyectan uno determinista). `hitos` (M2): R14 y R15; ver arriba.
+ * aleatorios de las claves (los tests inyectan uno determinista). `hitos` (M2): R14 y R15; ver arriba. `pasado` (M3):
+ * R13; ver arriba. Ausente o null: todo como antes, byte a byte.
  */
 export function cambiosDeTareasDelDetalle(i: {
   estructura: EstructuraHipotetica;
@@ -250,6 +268,11 @@ export function cambiosDeTareasDelDetalle(i: {
    * (Desarrollo y Web, no: ahí el sistema no agrega el kickoff). Ausente o null: R14 y R15 no corren.
    */
   hitos?: { recurrente: boolean; conSemanaCero: boolean } | null;
+  /**
+   * M3 (R13): lo que ya pasó. Solo la fusión de «Regenerar todo» con `Borrador.hoy` y fecha de arranque (el recálculo y
+   * «Regenerar» de una fase pasan null, D3). Ausente o null: R13 no corre.
+   */
+  pasado?: PasadoDeLaPropuesta | null;
 }): CambiosDelDetalle {
   const propuestaDe = new Map(i.propuestas.map((p) => [p.fase, p]));
   const vivas = new Map(i.vivo.fases.map((f) => [f.id, f]));
@@ -303,6 +326,16 @@ export function cambiosDeTareasDelDetalle(i: {
   /** Dónde termina el bloque de la Semana 0 en `tareas` (R9): ahí va el kickoff que agrega el sistema. */
   let finDeLaSemanaCero = -1;
 
+  /* ── M3 (R13): lo que ya pasó, sobre la estructura que VIO el agente (sus inicios de fase, con los cambios del
+     borrador), con el ancla de hoy y el instante de `Borrador.hoy`. */
+  const pasado = i.pasado ?? null;
+  const rangos = pasado ? computePhaseRanges(i.estructura.fases) : [];
+  const inicioDe = new Map(i.estructura.fases.map((f, k) => [f.id, rangos[k]?.start ?? 0]));
+  /** Observación 5: las de la IA que caen en semanas que ya pasaron (R13). */
+  let enElPasado = 0;
+  /** R14 corre con los hitos (M2) o con lo que ya pasó (M3: lo vencido se queda, y la IA no lo repite). */
+  const conR14 = !!conHitos || pasado !== null;
+
   for (const f of i.estructura.fases) {
     /* D8: el ciclo de la entrega se deduce en el recorrido. La fase empieza en `cicloActual`; si en ella queda aceptada
        una entrega (la que ya estaba o una nueva que entra, abajo), la siguiente empieza otro. */
@@ -327,8 +360,15 @@ export function cambiosDeTareasDelDetalle(i: {
       continue;
     }
     procesadas.add(f.id);
-    const delAgente = p?.delAgente ?? [];
     const viva = f.existente ? vivas.get(f.id) : undefined;
+    /* R13 (M3): en una fase con alguna tarea viva, una semana que ya venció no recibe nada nuevo y lo pendiente que cae
+       ahí se queda. ANTES de R1: `sinPropuesta` se cuenta con las que ENTRAN (si la IA solo le propuso cosas del pasado,
+       la fase no pierde sus pendientes futuras). */
+    const conPasado = pasado !== null && (viva?.tareas?.length ?? 0) > 0;
+    const inicio = inicioDe.get(f.id) ?? 0;
+    const vencida = (semana: number) => conPasado && semanaVencida(pasado!.ancla, inicio, semana, pasado!.hoy);
+    const delAgente = (p?.delAgente ?? []).filter((t) => !vencida(t.weekIndex));
+    enElPasado += (p?.delAgente.length ?? 0) - delAgente.length;
 
     // R6: el tipo, solo si la fase no tiene uno.
     if (p?.tipoPropuesto) {
@@ -359,9 +399,12 @@ export function cambiosDeTareasDelDetalle(i: {
     const sinPropuesta = delAgente.length === 0; // R1
     // E3: una tarea que el chat quita o cambia no se reemplaza (tendría dos cambios con la misma clave).
     // M2 (R15): tampoco un guardián de hito (se queda aunque la IA no lo repita) ni un kickoff que sobra (sale aparte).
+    // M3 (R13): ni lo pendiente de una semana que ya venció: se queda como si tuviera avance.
     let reemplazables = sinPropuesta
       ? []
-      : actuales.filter((t) => !isKept(t) && !tocadasPorElChat.has(t.id) && !protegidas.has(t.id)).map((t) => vistas.get(t.id)!);
+      : actuales
+          .filter((t) => !isKept(t) && !tocadasPorElChat.has(t.id) && !protegidas.has(t.id) && !vencida(t.weekIndex))
+          .map((t) => vistas.get(t.id)!);
 
     // R7: las fijas de la Semana 0.
     const fijas: ContenidoDeTareaNueva[] = [];
@@ -384,6 +427,8 @@ export function cambiosDeTareasDelDetalle(i: {
       }
       reemplazables = quedan;
       for (const t of tareasFijasDeSemanaCero(i.tags, base)) {
+        // R13 (M3): una fija va en la semana 0; si ya venció, no entra (no es «de la IA»: no se cuenta).
+        if (vencida(0)) continue;
         fijas.push({
           title: t.title,
           weekIndex: 0,
@@ -401,8 +446,9 @@ export function cambiosDeTareasDelDetalle(i: {
     const nuevas: Array<ContenidoDeTareaNueva | null> = [...delAgente.map(contenidoDelAgente), ...fijas];
     /* R14 (M2): no entra la que repite lo que SE QUEDA en la fase. Se queda lo que R2 no reemplaza (con avance, a mano,
        que el agente no vio, que R7 conservó, un guardián), salvo el kickoff que sobra (se va) y lo que tocó el chat
-       (lo filtra `sinLasQueRepitenLoDelChat` en la fusión). Antes de R4b: lo que se va sí puede volver (R4b, R4c). */
-    if (conHitos) {
+       (lo filtra `sinLasQueRepitenLoDelChat` en la fusión). Antes de R4b: lo que se va sí puede volver (R4b, R4c).
+       M3: corre también con `pasado`: lo pendiente de una semana vencida se queda (R13) y la IA no lo repite en otra. */
+    if (conR14) {
       const seVanPorR2 = new Set(reemplazables.map((t) => t.id));
       const quedan = enLaFase.filter((t) => !seVanPorR2.has(t.id) && !sobrantes.has(t.id) && !tocadasPorElChat.has(t.id));
       for (const j of repitenLoQueSeQueda(nuevas, quedan, enLaFase)) {
@@ -491,10 +537,12 @@ export function cambiosDeTareasDelDetalle(i: {
 
   /* R15: el kickoff que falta. Lo agrega el sistema, UNO, en la Semana 0 del proyecto (solo si el pipeline la tiene),
      si nadie lo guarda (ni uno que ya estaba ni uno que entró), su fase se procesó (alcance, R12, R10) y no empezó.
-     Si falta y la Semana 0 ya empezó, se dice (observación 4): agregarlo ahí sería inventar una fecha. */
+     Si falta y la Semana 0 ya empezó, se dice (observación 4): agregarlo ahí sería inventar una fecha.
+     M3: con `pasado`, «no empezó» es «su semana 0 no venció» (`semanaCeroSinPasar`): si no, caería en el pasado. */
   let faltaElKickoff = false;
   if (conHitos && semanaCeroDelProyecto && !guardianes.has("kickoff") && procesadas.has(semanaCeroDelProyecto.id)) {
-    if (semanaCeroSinEmpezar(vivas.get(semanaCeroDelProyecto.id))) {
+    const inicioDeLaSemanaCero = inicioDe.get(semanaCeroDelProyecto.id) ?? 0;
+    if (semanaCeroSinPasar(vivas.get(semanaCeroDelProyecto.id), inicioDeLaSemanaCero, pasado)) {
       tareas.splice(finDeLaSemanaCero, 0, {
         tipo: "tarea-nueva",
         clave: claveDeTareaNueva(i.nuevaClave),
@@ -531,7 +579,10 @@ export function cambiosDeTareasDelDetalle(i: {
       if (enElAlcance(x.faseId)) observaciones.push(observacionDeKickoffAMano(x.titulo));
     }
     if (faltaElKickoff) observaciones.push(OBSERVACION_SIN_KICKOFF);
-    const noEntran = observacionDeLasQueNoEntran({ repiten });
+  }
+  // Observación 5 (R14 y, desde M3, R13): una sola línea, al final.
+  if (conR14) {
+    const noEntran = observacionDeLasQueNoEntran({ repiten, enElPasado });
     if (noEntran) observaciones.push(noEntran);
   }
   return { tareas, tipos, tiposDeNuevas, tareasArmadasPara, observaciones };
@@ -576,6 +627,16 @@ export function semanaCeroSinEmpezar(viva: FaseViva | undefined): boolean {
   if (!viva) return true;
   if ((viva.status ?? "PENDING") !== "PENDING") return false;
   return (viva.tareas ?? []).every((t) => t.status !== "DONE" && t.status !== "IN_PROGRESS");
+}
+
+/**
+ * R15 con M3: ¿la Semana 0 todavía no pasó, para agregarle el kickoff que falta? Sin `pasado` (sin `Borrador.hoy`), que
+ * no haya empezado (`semanaCeroSinEmpezar`, lo de M2). Con `pasado`, que su semana 0 (la de la fase, que arranca en
+ * `inicio`) no haya vencido: el mismo predicado de R13, así el sistema nunca agrega una tarea en una semana que ya pasó.
+ * La usan la fusión y lo que lee el modelo («Kickoff: no hay; propón uno solo»), con la MISMA condición.
+ */
+export function semanaCeroSinPasar(viva: FaseViva | undefined, inicio: number, pasado: PasadoDeLaPropuesta | null): boolean {
+  return pasado ? !semanaVencida(pasado.ancla, inicio, 0, pasado.hoy) : semanaCeroSinEmpezar(viva);
 }
 
 /** R12: «X» está terminada: la IA no le propone tareas. Con varias, UNA línea (Elías pidió menos texto). */
@@ -777,6 +838,8 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
     tareas: { corrida, listas: true },
     tareasArmadasPara: r.tareasArmadasPara,
     ...(b.soloFase ? { soloFase: b.soloFase } : {}),
+    // M3: el reloj de la propuesta (en la base lo conserva `conLaFusion`, que parte del guardado).
+    ...(b.hoy ? { hoy: b.hoy } : {}),
     ...loDelChat(b, Object.keys(r.tareasArmadasPara)),
   };
 }
@@ -852,6 +915,7 @@ export function fusionarRecalculo(
     tareasArmadasPara: { ...b.tareasArmadasPara, ...armadas },
     ...(b.soloFase ? { soloFase: b.soloFase } : {}),
     ...(recalculo ? { recalculo } : {}),
+    ...(b.hoy ? { hoy: b.hoy } : {}),
     ...loDelChat(b, escritas),
   };
 }

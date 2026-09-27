@@ -73,8 +73,9 @@ export interface LoQueYaHay {
     pendientes: Array<{ titulo: string; semana: number }>;
     /**
      * M2 (2026-09-27): lo que SE QUEDA aunque la IA no lo repita y no es ni hecho ni pendiente de la IA: en curso,
-     * suspendido y pendiente escrito a mano, con su porqué («en curso», «suspendida», «a mano»; M3 y M4 suman los
-     * suyos). Hasta 15, cada título de hasta 80 caracteres. Sin esto el modelo no lo veía y lo volvía a proponer con
+     * suspendido y pendiente escrito a mano, con su porqué («en curso», «suspendida», «a mano»; M3 suma «quedó sin
+     * hacer», lo pendiente de una semana que ya pasó, que deja de estar en `pendientes`; M4 suma el suyo). Hasta 15, cada
+     * título de hasta 80 caracteres. Sin esto el modelo no lo veía y lo volvía a proponer con
      * otras palabras. Opcional: los L5 de antes no lo traen (el texto sale igual).
      */
     seQuedan?: Array<{ titulo: string; porque: string }>;
@@ -99,6 +100,16 @@ export interface LoQueYaHay {
     entrega: TituloConEstado[];
     recurrente: boolean;
     faltaKickoff: boolean;
+  };
+  /**
+   * M3 (2026-09-27): LO QUE YA PASÓ, para el bloque «LO QUE YA PASÓ». Solo en «Regenerar todo» con el reloj de la
+   * propuesta (`Borrador.hoy`) y sin alcance, y solo si alguna fase tiene semanas vencidas. `semanaDeHoy` desde 0 (la
+   * del proyecto); por fase, desde qué `weekIndex` (relativo a la fase) se puede proponer, y si pasó entera. Las mismas
+   * fases que R13 (con alguna tarea viva). Opcional: sin él, el texto sale igual que antes.
+   */
+  pasado?: {
+    semanaDeHoy: number;
+    porFase: Array<{ id: string; desde: number; entera: boolean }>;
   };
 }
 

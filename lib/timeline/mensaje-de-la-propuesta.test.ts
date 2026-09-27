@@ -9,10 +9,15 @@
  * el código real (spec §0.5): 57 de 66 pendientes, 73 nuevas (no 74: una «ya está»), 46 hechas, 13 oct → 10 nov,
  * 9 → 13 semanas contra lo prometido, +8 → +12 contra el handoff y atrasadas 59 → 67 (58 nacen).
  * Cada `it` nombra la edición de producción que lo pone en rojo.
+ * M3 (2026-09-27): con el reloj de la propuesta (`borrador.hoy`), la línea 5 dice lo que quedó sin hacer y «Más» lo
+ * nombra. Los casos de arriba no traen reloj (el borrador del fixture es de antes): siguen diciendo «Atrasadas», sin
+ * reescribirse.
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { borradorDelFixture, FASE_QUE_SE_ALARGA, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
-import { claveDeCampo, resumir, type Borrador, type CambioFaseCambia, type Vivo } from "./borrador";
+import { claveDeCampo, estructuraHipotetica, resumir, type Borrador, type CambioFaseCambia, type CambioTareaNueva, type Vivo } from "./borrador";
 import {
   atrasadas,
   cortarNombre,
@@ -22,11 +27,14 @@ import {
   mensajeDeLaPropuesta,
   nivelDeLaPropuesta,
   TITULOS_DEL_MENSAJE,
+  TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER,
   TOPE_DE_LA_LINEA,
   type EntradaDelMensaje,
   type MensajeDeLaPropuesta,
 } from "./mensaje-de-la-propuesta";
 import type { FuentesDeLaPropuesta, ReferenciasDeLaPropuesta } from "./referencias-de-la-propuesta";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { cambiosDeTareasDelDetalle, fusionarDetalle, tareasPropuestasDelDetalle } from "./tareas-del-detalle";
 import { vistaDeLaPropuesta } from "./vista-de-la-propuesta";
 
 const FIXTURE = leerFixtureGrande();
@@ -386,5 +394,149 @@ describe("L4 · tuteo y largo", () => {
     }
     tiempos.sort((a, b) => a - b);
     expect(tiempos[2]).toBeLessThan(250);
+  });
+});
+
+/**
+ * M3 (2026-09-27, decisión (a) de Elías: lo que ya pasó no se reescribe). Con el reloj de la propuesta (`borrador.hoy`,
+ * solo «Regenerar todo»), la línea 5 dice lo que QUEDÓ SIN HACER y que la propuesta no lo mueve, y «Más» lo nombra con la
+ * acción. Sin reloj («Regenerar» de una fase, «primera», un borrador de antes), la línea de siempre: ahí R13 no corrió y
+ * «no las mueve» sería falso. Los textos se eligen por `hoy.politica` (D11), nunca por la constante del interruptor.
+ */
+describe("M3 · lo que quedó sin hacer", () => {
+  const RELOJ = { instante: HOY.toISOString(), semana: 18, politica: POLITICA_DE_ATRASOS };
+  const CON_RELOJ: Borrador = { ...BORRADOR, hoy: RELOJ };
+  const ACCION = "Si ya se hicieron, márcalas hechas; si faltan, muévelas a esta semana.";
+  const sinHacer = (m: MensajeDeLaPropuesta) => m.lineas.find((l) => /Quedar?on sin hacer|Quedó sin hacer|caen? en semanas que ya pasaron/.test(l));
+
+  it("⭐ la propuesta grande con reloj: N = después − las que nacen, las que nacen van aparte, y cabe en 140", () => {
+    /* Las ediciones que la ponen en rojo: contar como «sin hacer» también las que nacen en el pasado (diría 67, no 9), o
+       callar las que nacen (58 nuevas caen en semanas vencidas: con el reloj, eso solo pasa si alguien las movió). */
+    const m = mensajeDeLaPropuesta(entrada({ borrador: CON_RELOJ }));
+    const a = atrasadas(VIVO, R, HOY);
+    expect(a.despues - a.nacen).toBe(9);
+    const linea = sinHacer(m)!;
+    expect(linea, "la línea 5 no dice lo que quedó sin hacer").toMatch(/^⚠ Quedaron sin hacer 9 tareas de semanas que ya pasaron/);
+    expect(linea).toContain("58 tareas nuevas caen en semanas que ya pasaron.");
+    expect(linea.length).toBeLessThanOrEqual(TOPE_DE_LA_LINEA);
+    expect(m.lineas.join(" ")).not.toContain("Atrasadas");
+    // Son más de 5: «Más» nombra las fases y cuántas tiene cada una, con la acción, primero.
+    expect(m.detalle[0]).toBe(`Sin hacer: «Fase C» (1) · «Fase E» (2) · «Fase I» (5) · «Fase J» (1). ${ACCION}`);
+  });
+
+  it("⭐ con la fusión real (R13): nada nace en el pasado y la línea 5 dice solo lo que quedó sin hacer, con dónde", () => {
+    /* La edición que la pone en rojo: mostrar «Atrasadas: hoy 59 → con la propuesta 59» con el reloj (se leía como si la
+       propuesta no hiciera nada con lo atrasado, cuando lo que hace es no reescribirlo). */
+    const estructura = estructuraHipotetica(VIVO, BORRADOR);
+    const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({ estructura, analysisJson: FIXTURE.paso2, huellas: null, cortado: false });
+    let k = 0;
+    const cambios = cambiosDeTareasDelDetalle({
+      estructura,
+      vivo: VIVO,
+      propuestas,
+      borrador: BORRADOR,
+      tags: [],
+      nuevaClave: () => `m3-${++k}`,
+      idsDesconocidos,
+      respetarTerminadas: true,
+      hitos: { recurrente: false, conSemanaCero: true },
+      pasado: { ancla: FIXTURE.ancla, hoy: HOY },
+    });
+    const b = fusionarDetalle(CON_RELOJ, cambios, "run-m3");
+    expect(b.hoy, "la fusión perdió el reloj").toEqual(RELOJ);
+    const m = mensajeDe(VIVO, b);
+    expect(atrasadas(VIVO, resumir(VIVO, b, [], LISTAS), HOY)).toEqual({ hoy: 59, despues: 59, nacen: 0 });
+    expect(sinHacer(m)).toBe(
+      "⚠ Quedaron sin hacer 59 tareas de semanas que ya pasaron, en «Semana 0», «Fase A» y 8 fases más: la propuesta no las mueve (están en «Más»).",
+    );
+  });
+
+  /* Wherex con M4 (spec §4.1): lo único vencido que queda son 4 tareas de la «Semana 0». Un cronograma chico con los
+     títulos reales: la «Semana 0» (S0–S1, ya pasó) y «Sales Hub», que arranca esta semana (S18). */
+  const TITULOS = [
+    "Recolección de accesos y credenciales",
+    "Confirmación de sponsor y punto de contacto único",
+    "Validación del alcance y redimensionamiento formal",
+    "Entrega del plan de trabajo detallado",
+  ];
+  const t = (id: string, title: string, weekIndex: number, status = "PENDING") => ({
+    id,
+    title,
+    weekIndex,
+    notes: null,
+    party: "AMBOS" as const,
+    type: "TASK" as const,
+    status,
+    source: "AGENT",
+    inicioFijado: null,
+    finFijado: null,
+  });
+  const chico = (pendientes: string[]): Vivo => ({
+    ancla: FIXTURE.ancla,
+    fases: [
+      {
+        id: "s0",
+        name: "Semana 0",
+        durationWeeks: 2,
+        startWeek: null,
+        sessionCount: null,
+        notes: null,
+        activityType: null,
+        status: "IN_PROGRESS",
+        tareas: [t("k1", "Sesión de kickoff: equipo, roles y accesos", 0, "DONE"), ...pendientes.map((x, i) => t(`p${i}`, x, i % 2))],
+      },
+      { id: "sh", name: "Sales Hub", durationWeeks: 4, startWeek: 18, sessionCount: null, notes: null, activityType: null, status: "PENDING", tareas: [t("h1", "Configurar el pipeline", 0)] },
+    ],
+  });
+  const nueva = (fase: string, title: string, weekIndex: number): CambioTareaNueva => ({
+    tipo: "tarea-nueva",
+    clave: `t:${fase}-${weekIndex}`,
+    fase,
+    tarea: { title, weekIndex, notes: null, party: "AMBOS", type: "TASK", needsValidation: false, motivoPorValidar: null, fuga: null },
+  });
+  /** Un borrador con UNA tarea nueva (en el futuro), armada para las dos fases como están. */
+  const conNueva = (o: Partial<Borrador> = {}): Borrador => ({
+    ...BORRADOR,
+    cambios: [nueva("sh", "Documentar el proceso", 2)],
+    tareasArmadasPara: { s0: { nombre: "Semana 0", semanas: 2 }, sh: { nombre: "Sales Hub", semanas: 4 } },
+    ...o,
+  });
+
+  it("⭐ con 5 o menos, «Más» las nombra con su fase y la acción (Wherex: 4 de la Semana 0); con 1, en singular", () => {
+    /* Las ediciones que la ponen en rojo: no nombrarlas (el CSE no sabe cuáles revisar) o decir «están en «Más»» sin
+       que estén. */
+    const m = mensajeDe(chico(TITULOS), conNueva({ hoy: RELOJ }));
+    expect(sinHacer(m)).toBe("⚠ Quedaron sin hacer 4 tareas de semanas que ya pasaron, en «Semana 0»: la propuesta no las mueve (están en «Más»).");
+    expect(m.detalle[0]).toBe(`Sin hacer en «Semana 0»: ${TITULOS.map((x) => `«${x}»`).join(" · ")}. ${ACCION}`);
+    const una = mensajeDe(chico(TITULOS.slice(0, 1)), conNueva({ hoy: RELOJ }));
+    expect(sinHacer(una)).toBe("⚠ Quedó sin hacer 1 tarea de una semana que ya pasó, en «Semana 0»: la propuesta no la mueve.");
+    expect(una.detalle[0]).toBe(`Sin hacer en «Semana 0»: «${TITULOS[0]}». Si ya se hizo, márcala hecha; si falta, muévela a esta semana.`);
+    // Nada vencido: sin línea ni «Más».
+    const alDia = mensajeDe(chico([]), conNueva({ hoy: RELOJ }));
+    expect(sinHacer(alDia)).toBeUndefined();
+    expect(alDia.detalle.join(" ")).not.toContain("Sin hacer");
+  });
+
+  it("⛔ sin el reloj («Regenerar» de una fase, «primera», un borrador de antes): «Atrasadas: hoy X → Y: N tareas nuevas caen…»", () => {
+    /* La edición que la pone en rojo: mostrar la línea nueva sin `hoy` (ahí R13 no corrió: «la propuesta no las mueve»
+       sería falso, porque las que nacen en el pasado sí están). */
+    const deUnaFase = conNueva({ soloFase: "s0", cambios: [nueva("s0", "Relevar el proceso", 0)] });
+    const m = mensajeDe(chico(TITULOS), deUnaFase);
+    expect(sinHacer(m)).toBe("⚠ Atrasadas: hoy 4 → con la propuesta 5: 1 tarea nueva cae en semanas que ya pasaron.");
+    expect(m.detalle.join(" ")).not.toContain("Sin hacer");
+    expect(M.lineas[4], "la propuesta grande sin reloj cambió de línea").toContain("Atrasadas: hoy 59 → con la propuesta 67");
+  });
+
+  it("⛔ los textos salen de la política guardada en la propuesta, nunca del interruptor", () => {
+    /* D11. La edición que la pone en rojo: importar `POLITICA_DE_ATRASOS` en el mensaje (si se voltea el valor, una
+       propuesta abierta diría lo que no calculó). */
+    const src = fs.readFileSync(path.join(process.cwd(), "lib/timeline/mensaje-de-la-propuesta.ts"), "utf8").replace(/\r\n/g, "\n");
+    const codigo = src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+    expect(codigo, "el mensaje lee el interruptor").not.toMatch(/\bPOLITICA_DE_ATRASOS\b/);
+    expect(codigo).toContain("TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER[i.borrador.hoy.politica.pendientesDelPasado]");
+    expect(Object.keys(TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER)).toEqual(["avisar"]);
+    for (const x of Object.values(TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER)) {
+      for (const texto of [x.una("en «A»"), x.varias(3, "en «A»", true), x.accionUna, x.accionVarias]) expect(texto).not.toMatch(VOSEO);
+    }
   });
 });

@@ -106,6 +106,8 @@ import {
 import { evaluarMagnitud, frasesDeCambios, unirFrases, type MagnitudPropuesta } from "./magnitud-propuesta";
 // M2 (2026-09-27): solo el tipo; hitos.ts importa de acá solo tipos (sin ciclo en tiempo de ejecución).
 import type { Hito } from "./hitos";
+// M3 (2026-09-27): la política guardada en `hoy` (el interruptor lo lee solo marcarTareasEnCurso, D11).
+import { leerPolitica, type PoliticaDeAtrasos } from "./politica-de-atrasos";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LOS TIPOS ────────────────────────────────────────────────────────────────
@@ -477,6 +479,21 @@ export interface Borrador {
    * el cambio del chat vuelve a la armada sin recalcular.
    */
   ajustadasPorElChat?: Record<string, FormaDeFase>;
+  /**
+   * M3 (2026-09-27, D2): EL RELOJ de la propuesta. Lo escribe `marcarTareasEnCurso` (borrador-del-detalle.ts) al marcar
+   * el paso 2, solo en «Regenerar todo» (pedido «regenerar», sin `soloFase`, sin recálculo) y con fecha de arranque:
+   * el instante, la semana de hoy (`semanaDeHoy`) y la foto del interruptor con que se calculó (`politica`, D11). Lo
+   * leen la regla R13 de la fusión (lo que ya pasó no se reescribe), lo que lee el modelo, el mensaje y la pantalla.
+   * Ausente (un borrador de antes del deploy, «Regenerar» de una fase, «primera», el handoff) = todo como antes.
+   */
+  hoy?: RelojDeLaPropuesta;
+}
+
+/** M3: `Borrador.hoy`. `instante` ISO; `semana` desde 0 (la primera que no vence); la política con que se calculó. */
+export interface RelojDeLaPropuesta {
+  instante: string;
+  semana: number;
+  politica: PoliticaDeAtrasos;
 }
 
 /**
@@ -1131,6 +1148,18 @@ function leerExcluidos(v: unknown): string[] | null {
 }
 
 /**
+ * M3 (2026-09-27): el reloj guardado (`Borrador.hoy`), validado: un instante ISO que se lee, una semana entera ≥ 0 y
+ * una política que esta versión conoce (`leerPolitica`). Mal formado → ausente (la propuesta se comporta como antes),
+ * y NO cuenta en `desconocidos`: es metadata del servidor, no un cambio que se deje de aplicar.
+ */
+export function leerReloj(v: unknown): RelojDeLaPropuesta | null {
+  if (!esObjeto(v) || !esTextoEntre(v.instante, 1, 64) || Number.isNaN(Date.parse(v.instante))) return null;
+  if (typeof v.semana !== "number" || !Number.isInteger(v.semana) || v.semana < 0) return null;
+  const politica = leerPolitica(v.politica);
+  return politica ? { instante: v.instante, semana: v.semana, politica } : null;
+}
+
+/**
  * Lo guardado en `pendingProposal` como borrador, o null si no hay o no es `borrador-v1`. E4: ya no
  * convierte nada al leer (el formato viejo se convierte una vez, con scripts/propuestas-abiertas.ts):
  * quien recibe null y hay algo guardado lo trata como una propuesta que no sabe leer.
@@ -1154,6 +1183,8 @@ export function leerBorrador(json: unknown): Borrador | null {
     const excluidos = leerExcluidos(json.excluidos);
     // E3 (D9): con la misma validación que la forma armada; lo que no vale, no entra.
     const ajustadas = esObjeto(json.ajustadasPorElChat) ? leerTareasArmadasPara(json.ajustadasPorElChat) : null;
+    // M3: el reloj, solo si viene bien formado.
+    const hoy = leerReloj(json.hoy);
     return {
       formato: FORMATO_BORRADOR,
       version: typeof json.version === "number" && Number.isInteger(json.version) && json.version >= 0 ? json.version : 0,
@@ -1168,6 +1199,7 @@ export function leerBorrador(json: unknown): Borrador | null {
       ...(recalculo ? { recalculo } : {}),
       ...(excluidos ? { excluidos } : {}),
       ...(ajustadas ? { ajustadasPorElChat: ajustadas } : {}),
+      ...(hoy ? { hoy } : {}),
     };
   }
   return null;

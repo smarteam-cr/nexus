@@ -602,6 +602,26 @@ export function semanaVencida(ancla: string | null, inicio: number, semana: numb
   return isOverdueByDate(overduePlannedEnd(ancla, inicio, semana), hoy, status);
 }
 
+const SEMANA_MS = 7 * 86_400_000;
+
+/**
+ * M3 (2026-09-27, D2): LA SEMANA DE HOY del proyecto (desde 0): la primera que NO vence según `semanaVencida`, el mismo
+ * predicado que pinta «ya pasó» y «Atrasada». Así la regla del paso 2 (R13), lo que lee el modelo, el mensaje y la
+ * pantalla nunca discrepan. 0 antes del arranque; null sin ancla o sin `hoy`.
+ * ⚠ No es `semanaDelProyecto` del armador (propuesta-de-estructura.ts), que cuenta por el día de Costa Rica: de noche
+ * (entre las 18:00 y la medianoche del día del arranque) daría una semana menos que «ya pasó».
+ * Se calcula de una vez y se ajusta contra el predicado: el predicado manda.
+ */
+export function semanaDeHoy(ancla: string | null, hoy: Date | null): number | null {
+  if (!ancla || !hoy) return null;
+  const inicio = new Date(ancla).getTime();
+  if (Number.isNaN(inicio) || Number.isNaN(hoy.getTime())) return null;
+  let w = Math.max(0, Math.ceil((hoy.getTime() - inicio) / SEMANA_MS) - 1);
+  while (w > 0 && !semanaVencida(ancla, 0, w - 1, hoy)) w--;
+  while (semanaVencida(ancla, 0, w, hoy)) w++;
+  return w;
+}
+
 /** Lo que notó la IA como se muestra en la barra: sin la jerga del paso 1 y sin las que quedan vacías. */
 export function observacionesParaMostrar(observaciones: readonly string[]): string[] {
   return observaciones.map(observacionParaMostrar).filter((o) => o.length > 0);

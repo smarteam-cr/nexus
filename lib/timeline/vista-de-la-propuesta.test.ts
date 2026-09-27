@@ -48,6 +48,8 @@ import {
   observacionesParaMostrar,
   observacionParaMostrar,
   pasoDelSiguiente,
+  semanaDeHoy,
+  semanaVencida,
   posicionDelSiguiente,
   textoDelAvance,
   textoDeLosChoques,
@@ -789,5 +791,56 @@ describe("M2 P2e · lo que decide el sistema, en la vista", () => {
     expect(f.marca?.titulo).not.toBe(MOTIVO_SE_VA);
     // Su fase lo sigue diciendo arriba: la regla que lo pidió no cambia porque choque.
     expect(v.porFase.get("f01")!.delSistema).toEqual([MOTIVO_SE_VA]);
+  });
+});
+
+describe("M3 P3a · la semana de hoy: el mismo predicado que «ya pasó»", () => {
+  /* Pedido de Elías (2026-09-27): lo que ya pasó no se reescribe. La semana de hoy la leen la regla del paso 2 (R13), el
+     modelo, el mensaje y la pantalla: tiene que ser la MISMA que pinta «ya pasó» y «Atrasada» (`semanaVencida`). */
+  const CASOS: Array<{ ancla: string; instantes: string[] }> = [
+    {
+      // Wherex arranca un martes: la semana cambia el martes a las 00:00 UTC (lunes 18:00 en Costa Rica).
+      ancla: FIXTURE.ancla,
+      instantes: [
+        "2026-09-21T23:59:59.000Z",
+        "2026-09-22T00:00:01.000Z",
+        "2026-09-22T05:59:59.000Z", // lunes 23:59:59 en Costa Rica
+        "2026-09-22T06:00:01.000Z", // martes 00:00:01 en Costa Rica
+        "2026-05-18T12:00:00-06:00", // un día antes del arranque
+        FIXTURE.hoy,
+      ],
+    },
+    {
+      // Un proyecto que arranca un lunes: el borde de domingo a lunes, en UTC y en Costa Rica.
+      ancla: "2026-06-01",
+      instantes: [
+        "2026-09-20T23:59:59.000Z",
+        "2026-09-21T00:00:01.000Z",
+        "2026-09-21T05:59:59.000Z",
+        "2026-09-21T06:00:01.000Z",
+        "2026-05-31T12:00:00-06:00",
+        FIXTURE.hoy,
+      ],
+    },
+  ];
+
+  it("⭐ para cada instante y cada semana de 0 a 40: w < semanaDeHoy ⇔ semanaVencida; con el `hoy` fijo y el ancla de Wherex, 18", () => {
+    /* La edición que la pone en rojo: contar por el día de Costa Rica, como `semanaDelProyecto` del armador
+       (propuesta-de-estructura.ts): entre las 18:00 y la medianoche de Costa Rica del día del arranque daba una semana
+       menos que «ya pasó», y la regla, el mensaje y la pantalla discreparían. */
+    for (const { ancla, instantes } of CASOS) {
+      for (const instante of instantes) {
+        const hoy = new Date(instante);
+        const h = semanaDeHoy(ancla, hoy);
+        expect(h, `${ancla} · ${instante}`).not.toBeNull();
+        for (let w = 0; w <= 40; w++) {
+          expect(w < h!, `${ancla} · ${instante} · semana ${w} (semanaDeHoy ${h})`).toBe(semanaVencida(ancla, 0, w, hoy));
+        }
+      }
+    }
+    expect(semanaDeHoy(FIXTURE.ancla, HOY), "Wherex el 26-09 está en la S18").toBe(18);
+    expect(semanaDeHoy(FIXTURE.ancla, new Date("2026-05-18T12:00:00-06:00")), "antes del arranque").toBe(0);
+    expect(semanaDeHoy(null, HOY), "sin fecha de arranque no hay semana de hoy").toBeNull();
+    expect(semanaDeHoy(FIXTURE.ancla, null), "antes de hidratar").toBeNull();
   });
 });

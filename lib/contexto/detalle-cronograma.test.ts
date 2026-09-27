@@ -764,4 +764,55 @@ describe("M2 · lo que se queda y los hitos (renderLoQueYaHay)", () => {
     void _h;
     expect(renderLoQueYaHay(sinHitos)).not.toContain("HITOS DEL PROYECTO");
   });
+
+  /**
+   * M3 (2026-09-27, decisión (a) de Elías: lo que ya pasó no se reescribe). En «Regenerar todo» con el reloj de la
+   * propuesta, el modelo lee la semana de hoy y desde qué weekIndex puede proponer en cada fase con semanas vencidas. R13
+   * lo hace cumplir igual (tareas-del-detalle.ts); esto es para que no gaste tareas que no van a entrar. En código, no en
+   * el prompt guardado. Los textos, escritos acá a mano.
+   */
+  describe("M3 · lo que ya pasó (renderLoQueYaHay)", () => {
+    const PASADO: NonNullable<LoQueYaHay["pasado"]> = {
+      semanaDeHoy: 18,
+      porFase: [
+        { id: "f1", desde: 2, entera: true },
+        { id: "f2", desde: 16, entera: false },
+      ],
+    };
+    const CON: LoQueYaHay = {
+      ...LO,
+      fases: [{ ...LO.fases[0], seQuedan: [...(LO.fases[0].seQuedan ?? []), { titulo: "Confirmar el sponsor", porque: "quedó sin hacer" }] }, LO.fases[1]],
+      pasado: PASADO,
+    };
+    const BLOQUE =
+      "\n\n=== LO QUE YA PASÓ ===\n" +
+      "Hoy es la semana 18 del proyecto (contando desde 0). Lo que cae en semanas que ya pasaron no se reescribe: no pongas tareas ahí y no repitas lo pendiente de esas semanas.\n" +
+      '[f1] «Semana 0» — ya pasó entera: inclúyela con "tasks": [].\n' +
+      "[f2] «Cierre y entrega» — solo weekIndex desde 16.";
+
+    it("⭐ con `pasado` y sin alcance: el bloque va después de los hitos y es lo último de lo que ya hay", () => {
+      /* Las ediciones que la ponen en rojo: no escribirlo, escribirlo antes de los hitos, o decir la semana desde 1 (el
+         Gantt y el mensaje la cuentan desde 0). */
+      const texto = renderLoQueYaHay(CON);
+      expect(texto.endsWith(BLOQUE), "el bloque no es lo último de lo que ya hay").toBe(true);
+      expect(texto.indexOf("=== HITOS DEL PROYECTO ===")).toBeLessThan(texto.indexOf("=== LO QUE YA PASÓ ==="));
+      expect(texto).toContain("se queda: «Armar reportes» (en curso) · «Revisar con el cliente» (a mano) · «Confirmar el sponsor» (quedó sin hacer)");
+      expect(render(texto), "sin alcance, lo que ya hay (con lo que ya pasó) va al final").toBe(render(undefined) + texto);
+    });
+
+    it("⛔ nunca con alcance, y solo con `pasado` (con alguna fase): sin él, el texto de M2 byte a byte", () => {
+      /* Las ediciones que la ponen en rojo: escribirlo al regenerar una fase o en el recálculo (ahí «lo que ya se hizo va
+         como tarea» manda, D3), o escribir la semana de hoy sin ninguna fase que la necesite. */
+      const conAlcance = render(renderLoQueYaHay({ ...CON, conAlcance: true }), ["f2"]);
+      expect(conAlcance, "lo que ya pasó con alcance").not.toContain("LO QUE YA PASÓ");
+      expect(conAlcance).not.toContain("Hoy es la semana");
+      expect(renderLoQueYaHay(LO)).not.toContain("LO QUE YA PASÓ");
+      expect(renderLoQueYaHay({ ...LO, pasado: PASADO }).replace(BLOQUE, ""), "el resto cambió").toBe(renderLoQueYaHay(LO));
+      expect(renderLoQueYaHay({ ...LO, pasado: { semanaDeHoy: 18, porFase: [] } })).toBe(renderLoQueYaHay(LO));
+    });
+
+    it("en tuteo", () => {
+      expect(renderLoQueYaHay(CON)).not.toMatch(/(?<!\p{L})(poné|incluíla|repetí|proponé|dejá|podés|tenés|querés|incluí)(?!\p{L})/iu);
+    });
+  });
 });
