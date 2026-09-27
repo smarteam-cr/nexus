@@ -352,6 +352,14 @@ describe("⛔ L7 · «recupera el N» no marca las mudanzas SUGERIDAS de su grup
        mudanza cualquiera sin semana, y la tarea cae en la suya). */
     const [linea] = describirSobreLaPropuesta(p)([{ op: "tarea.mover-fase", taskId: "tc2", phaseId: "fb" }]);
     expect(linea).toBe("«Validar las pruebas» se muda de «Pruebas» a «Diseño», semana 2, como sugiere la IA (se marca su casilla) — conserva su estado");
+    /* Revisión 2 de L1–L7 (#1): abrir una semana en «Pruebas» no corre la hecha con sugerencia (el ejecutor la salta), y
+       la cajita no la cuenta entre las que se corren. La edición que la pone en rojo: contar `f.tasks` entero en
+       `describirOperaciones` («2 tareas corren una semana», y se corre una). */
+    const [abrir] = describirSobreLaPropuesta(p)([{ op: "fase.insertar-semana", phaseId: "fc", semana: 0 }]);
+    expect(abrir).toBe(
+      "Se abre una semana vacía en la posición 1 de «Pruebas» (pasa a 4 semanas) — 1 tarea corre una semana; " +
+        "1 hecha con sugerencia de la IA queda en la suya",
+    );
   });
 });
 

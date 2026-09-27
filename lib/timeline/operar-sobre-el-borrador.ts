@@ -200,6 +200,10 @@ export const rechazoTareaConSugerencia = (titulo: string, fase: string): string 
 /** Revisión de L1–L7 (#1, #5): quitar, abrir o repartir semanas no corre una tarea con una mudanza sugerida. */
 export const avisoSugeridaEnSuSemana = (titulo: string, fase: string): string =>
   `«${titulo}» trae una sugerencia de la IA para mudarla a «${fase}»: queda en su semana.`;
+/** Revisión 2 de L1–L7 (#1): si al acortar la fase su semana ya no existe, la vista y aplicar la acotan a la última
+ *  (`acotarSemana`, escribir-estructura.ts): el aviso dice eso, no «queda en su semana». `semana` desde 1. */
+export const avisoSugeridaALaUltima = (titulo: string, fase: string, semana: number): string =>
+  `«${titulo}» trae una sugerencia de la IA para mudarla a «${fase}»: cae en la última semana, la ${semana}.`;
 
 /** Cómo se nombra cada campo en el aviso de lo que se respetó. */
 const NOMBRE_DEL_CAMPO: Record<CampoDeTarea | "fase", string> = {
@@ -902,11 +906,17 @@ export function operarSobreElBorrador(i: {
         const viva = tareaPorId.get(t.id);
         /* Revisión de L1–L7 (#1, #5): una tarea con una mudanza SUGERIDA (L7, una hecha) no se corre de semana.
            Antes pasaba por `upsertTarea`, que la rechaza, y con ella caía la operación de semanas de toda la fase
-           (y el lote entero) hasta aplicar o descartar la propuesta. Queda en su semana (si la fase se acorta,
-           aplicar la acota a la última) y se avisa. */
+           (y el lote entero) hasta aplicar o descartar la propuesta. Queda en su semana y se avisa. Revisión 2 (#1):
+           si la fase se acorta y su semana ya no existe, la vista y aplicar la acotan a la última, y el aviso lo dice
+           (la cajita también: `describirOperaciones`). */
         const sugerida = viva ? cambiaDe(viva.tarea.id) : undefined;
         if (viva && sugerida?.sugerida) {
-          avisos.push(avisoSugeridaEnSuSemana(viva.tarea.title, nombreDeFase(sugerida.a.fase)));
+          const ultima = salida.durationWeeks - 1;
+          avisos.push(
+            t.weekIndex > ultima
+              ? avisoSugeridaALaUltima(viva.tarea.title, nombreDeFase(sugerida.a.fase), ultima + 1)
+              : avisoSugeridaEnSuSemana(viva.tarea.title, nombreDeFase(sugerida.a.fase)),
+          );
           continue;
         }
         const motivo = viva ? upsertTarea(viva.tarea, viva.faseId, { weekIndex: w }, conCambio) : null;

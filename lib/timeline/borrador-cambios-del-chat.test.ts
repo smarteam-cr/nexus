@@ -47,17 +47,19 @@ import {
   type CambioTareaSeVa,
   type ContenidoDeTareaNueva,
   type FaseViva,
+  type Proyeccion,
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
 import {
+  avisoSugeridaALaUltima,
   avisoSugeridaEnSuSemana,
   fasesDeLaPropuesta,
   operarSobreElBorrador,
   rechazoTareaConSugerencia,
   type OperacionSobreLaPropuesta,
 } from "./operar-sobre-el-borrador";
-import { describirOperaciones } from "./operaciones";
+import { describirOperaciones, type Operacion } from "./operaciones";
 
 const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
   id,
@@ -834,7 +836,10 @@ describe("11 · revisión de L1–L7: la mudanza sugerida no bloquea las semanas
     expect(quitar.rechazadas).toEqual([]);
     expect(semanaDe(quitar.borrador, "b2")).toBe(0);
     expect(quitar.borrador.cambios.filter((c) => c.tipo === "tarea-cambia" && c.tareaId === "b3")).toEqual([SUGERIDA]);
-    expect(quitar.avisos).toContain(AVISO);
+    /* Revisión 2 (#1): «Diseño» queda en 1 semana y la sugerida estaba en la 2, que ya no existe: la vista la acota a la
+       1. Este test decía «queda en su semana», y no quedaba: el aviso dice dónde cae. */
+    expect(quitar.avisos).toContain(avisoSugeridaALaUltima("Validar con el cliente", "Pruebas", 1));
+    expect(quitar.avisos).not.toContain(AVISO);
     const repartir = operar([SUGERIDA.clave], [{ op: "fase.insertar-semana", phaseId: "b", semana: 2 }, { op: "fase.redistribuir", phaseId: "b" }]);
     expect(repartir.rechazadas).toEqual([]);
     expect(repartir.borrador.cambios.filter((c) => c.tipo === "tarea-cambia" && c.tareaId === "b3")).toEqual([SUGERIDA]);
@@ -867,5 +872,96 @@ describe("11 · revisión de L1–L7: la mudanza sugerida no bloquea las semanas
     const texto = rechazoTareaConSugerencia("Validar con el cliente", "Pruebas");
     expect(texto, "promete una salida que no existe").not.toContain("mientras la sugerencia siga");
     expect(texto).toContain("márcala o déjala sin marcar");
+  });
+
+  it("⭐ revisión 2 (#1): la cajita no cuenta las hechas con sugerencia entre las que se corren, y dice dónde cae cada una", () => {
+    /* El caso de Wherex: «Sales Hub» de 3 semanas con dos pendientes y tres hechas con mudanza sugerida sin marcar. La
+       cajita decía «5 tareas corren una semana» y se corrían 2, y al quitar la última el aviso decía «queda en su semana»
+       mientras la vista las bajaba a la 2. Cada línea se contrasta con lo que el ejecutor hace de verdad. La edición que
+       la pone en rojo: volver a contar `f.tasks` entero en `describirOperaciones`, o empujar siempre
+       `avisoSugeridaEnSuSemana` en `semanasDeLaFase`. */
+    const P1 = tarea("p1", "Configurar pipeline", 0);
+    const P2 = tarea("p2", "Importar contactos", 1);
+    const H1 = tarea("h1", "Hecha uno", 1, { status: "DONE" });
+    const H2 = tarea("h2", "Hecha dos", 2, { status: "DONE" });
+    const H3 = tarea("h3", "Hecha tres", 2, { status: "DONE" });
+    const vivo: Vivo = {
+      ancla: "2026-10-05",
+      fases: [fase("sh", "Sales Hub", 3, [P1, P2, H1, H2, H3]), fase("mh", "Marketing Hub", 2, [])],
+    };
+    const sugeridas = [H1, H2, H3].map((h): CambioTareaCambia => ({ ...deLaIa(cambia(h, "sh", { fase: "mh" })), sugerida: "otra-fase" }));
+    const borrador = v1(sugeridas);
+    const sinMarcar = sugeridas.map((c) => c.clave);
+    const propuesta = { vivo, tituloDeClave: () => null, confirmacion: "", sugeridaA: (id: string) => (id.startsWith("h") ? "mh" : null) };
+    type DeSemanas = Extract<Operacion, { op: "fase.insertar-semana" | "fase.quitar-semana" | "fase.redistribuir" }>;
+    /** La línea de la cajita, en qué semana queda cada tarea de la fase después de ejecutar, cuáles se corrieron y los avisos. */
+    const correr = (o: DeSemanas, excluidos: string[] = sinMarcar) => {
+      const semanas = (p: Proyeccion) =>
+        Object.fromEntries(p.fases.find((f) => f.clave === o.phaseId)!.tareas.map((t) => [t.id, t.weekIndex]));
+      const base = proyectar(vivo, borrador, excluidos);
+      const [linea] = describirOperaciones(fasesDeLaPropuesta(base), [o], { propuesta });
+      const r = operarSobreElBorrador({ vivo, borrador, excluidos, operaciones: [o], nuevaClave: () => "k" });
+      expect(r.rechazadas).toEqual([]);
+      const despues = semanas(proyectar(vivo, r.borrador, r.excluidos));
+      const corridas = Object.entries(semanas(base))
+        .filter(([id, w]) => despues[id] !== w)
+        .map(([id]) => id);
+      return { linea, despues, corridas, avisos: r.avisos };
+    };
+
+    // Abrir la semana 1: se corren las dos pendientes, no cinco.
+    const abrir = correr({ op: "fase.insertar-semana", phaseId: "sh", semana: 0 });
+    expect(abrir.corridas).toEqual(["p1", "p2"]);
+    expect(abrir.linea).toBe(
+      "Se abre una semana vacía en la posición 1 de «Sales Hub» (pasa a 4 semanas) — 2 tareas corren una semana; " +
+        "3 hechas con sugerencia de la IA quedan en la suya",
+    );
+    // Abrirla donde hay una hecha con sugerencia: se queda ahí, así que la semana nueva no queda vacía.
+    const abrirSobreUna = correr({ op: "fase.insertar-semana", phaseId: "sh", semana: 1 });
+    expect(abrirSobreUna.corridas).toEqual(["p2"]);
+    expect(abrirSobreUna.despues.h1).toBe(1);
+    expect(abrirSobreUna.linea).toBe(
+      "Se abre una semana en la posición 2 de «Sales Hub» (pasa a 4 semanas) — 1 tarea corre una semana; " +
+        "3 hechas con sugerencia de la IA quedan en la suya",
+    );
+
+    // Quitar la última: las dos hechas que estaban ahí caen en la 2 (la vista las acota), y el aviso lo dice.
+    const quitarUltima = correr({ op: "fase.quitar-semana", phaseId: "sh", semana: 2 });
+    expect(quitarUltima.despues).toMatchObject({ h2: 1, h3: 1 });
+    expect(quitarUltima.linea).toBe(
+      "Se quita la semana 3 de «Sales Hub» (queda en 2 semanas) — 2 hechas con sugerencia de la IA caen en la última semana, la 2",
+    );
+    expect(quitarUltima.avisos).toEqual([
+      avisoSugeridaALaUltima("Hecha dos", "Marketing Hub", 2),
+      avisoSugeridaALaUltima("Hecha tres", "Marketing Hub", 2),
+    ]);
+    expect(quitarUltima.avisos.join(" "), "promete que queda donde estaba").not.toContain("queda en su semana");
+
+    // Quitar la del medio: pasa una sola (la pendiente); h1 queda en la suya y las de la 3 caen en la 2.
+    const quitarMedio = correr({ op: "fase.quitar-semana", phaseId: "sh", semana: 1 });
+    expect(quitarMedio.despues).toMatchObject({ p2: 0, h1: 1, h2: 1, h3: 1 });
+    expect(quitarMedio.linea).toBe(
+      "Se quita la semana 2 de «Sales Hub» (queda en 2 semanas) — 1 tarea pasa a la semana 1; " +
+        "1 hecha con sugerencia de la IA queda en la suya; 2 hechas con sugerencia de la IA caen en la última semana, la 2",
+    );
+    expect(quitarMedio.avisos).toEqual([
+      avisoSugeridaEnSuSemana("Hecha uno", "Marketing Hub"),
+      avisoSugeridaALaUltima("Hecha dos", "Marketing Hub", 2),
+      avisoSugeridaALaUltima("Hecha tres", "Marketing Hub", 2),
+    ]);
+
+    // Repartir parejo: las hechas con sugerencia no se reparten.
+    const repartir = correr({ op: "fase.redistribuir", phaseId: "sh" });
+    expect(repartir.corridas.filter((id) => id.startsWith("h")), "se repartió una hecha con sugerencia").toEqual([]);
+    expect(repartir.linea).toBe(
+      "Las tareas de «Sales Hub» se reparten parejo entre sus semanas — 3 hechas con sugerencia de la IA quedan en la suya",
+    );
+
+    // Marcada, la hecha se ve en su destino, y tampoco corre ahí.
+    const marcada = correr({ op: "fase.insertar-semana", phaseId: "mh", semana: 0 }, [sugeridas[1].clave, sugeridas[2].clave]);
+    expect(marcada.corridas).toEqual([]);
+    expect(marcada.linea).toBe(
+      "Se abre una semana vacía en la posición 1 de «Marketing Hub» (pasa a 3 semanas) — 1 hecha con sugerencia de la IA queda en la suya",
+    );
   });
 });

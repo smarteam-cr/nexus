@@ -113,7 +113,8 @@ export interface DescripcionDeLaPropuesta {
   confirmacion: string;
   /** Revisión de L1–L7 (#5): el destino de la mudanza SUGERIDA por la IA (L7) de una tarea viva, o null. Mudarla ahí
    *  sin semana marca su casilla (cae en su semana, acotada al destino); mudarla a su fase de hoy la deja sin marcar
-   *  (operar-sobre-el-borrador.ts, `moverTarea`). */
+   *  (operar-sobre-el-borrador.ts, `moverTarea`). Revisión 2 (#1): quitar, abrir o repartir semanas no la corre, y la
+   *  línea no la cuenta entre las que se corren (`semanasDeLaFase`). */
   sugeridaA?: (tareaId: string) => string | null;
 }
 
@@ -1026,6 +1027,14 @@ export function describirOperaciones(
     };
   };
   const sem = (n: number) => `${n} ${n === 1 ? "semana" : "semanas"}`;
+  /**
+   * Revisión 2 de L1–L7 (#1): una hecha con mudanza SUGERIDA por la IA (L7, marcada o no) no se corre al quitar, abrir
+   * o repartir semanas: el ejecutor la salta (`semanasDeLaFase`). Contarla entre las que se corren era aprobar un número
+   * que no se ejecuta (el caso de Wherex: «5 tareas corren una semana» y se corrían 2). La línea la cuenta aparte.
+   */
+  const conSugerencia = (t: TareaActual) => (propuesta?.sugeridaA?.(t.id) ?? null) !== null;
+  const hechasConSugerencia = (n: number, verbo: string, verboPlural: string) =>
+    `${n} ${n === 1 ? `hecha con sugerencia de la IA ${verbo}` : `hechas con sugerencia de la IA ${verboPlural}`}`;
   /** «N. «título»» de cada clave de la barra (con «con el cambio N» si vuelve con otro). */
   const listaDeClaves = (o: { claves?: string[]; cambios?: string[]; tareas?: string[] }, conPadre: boolean) => {
     const claves = o.claves ?? [...(o.cambios ?? []), ...(o.tareas ?? [])];
@@ -1128,8 +1137,13 @@ export function describirOperaciones(
             : "")
         );
       }
-      case "fase.redistribuir":
-        return `Las tareas de «${nombre(o.phaseId)}» se reparten parejo entre sus semanas`;
+      case "fase.redistribuir": {
+        const quietas = fase(o.phaseId)?.tasks.filter(conSugerencia).length ?? 0;
+        return (
+          `Las tareas de «${nombre(o.phaseId)}» se reparten parejo entre sus semanas` +
+          (quietas > 0 ? ` — ${hechasConSugerencia(quietas, "queda en la suya", "quedan en la suya")}` : "")
+        );
+      }
       case "fase.mover":
         return `«${nombre(o.phaseId)}» se mueve al lugar ${o.posicion + 1}`;
       case "fase.arranque-relativo": {
@@ -1232,24 +1246,44 @@ export function describirOperaciones(
         /* ⭐ El conteo NO es adorno: es la diferencia entre «sacá la semana vacía» y «sacá la
            semana 3, que tiene 4 tareas que se van a mover». Sin él, la persona aprueba un número
            que no vio. Es el mismo estándar que ya cumple `fase.borrar`. */
-        const dentro = f?.tasks.filter((t) => t.weekIndex === o.semana).length ?? 0;
+        const dentro = f?.tasks.filter((t) => t.weekIndex === o.semana) ?? [];
         /* `anotarDuracion` ya descontó esta operación, así que el mapa TIENE el valor final. */
         const queda = duracionDe(o.phaseId) ?? Math.max((f?.durationWeeks ?? 1) - 1, 1);
-        return (
-          `Se quita la semana ${o.semana + 1} de «${nombre(o.phaseId)}» (queda en ${sem(queda)})` +
-          (dentro === 0
-            ? " — estaba vacía"
-            : ` — sus ${dentro} ${dentro === 1 ? "tarea pasa" : "tareas pasan"} a la semana ` +
-              `${Math.max(o.semana, 1)}`)
+        /* Revisión 2 de L1–L7 (#1): las hechas con sugerencia que la regla correría (las de esta semana, salvo la
+           primera, y las de abajo) no se corren: quedan en su semana y, si esa semana ya no existe, la vista y aplicar
+           la acotan a la última (`acotarSemana`, escribir-estructura.ts). La línea dice dónde cae cada una. */
+        const quietas = (f?.tasks ?? []).filter(
+          (t) => conSugerencia(t) && (t.weekIndex > o.semana || (t.weekIndex === o.semana && o.semana > 0)),
         );
+        const pasan = dentro.filter((t) => !quietas.includes(t)).length;
+        const caen = quietas.filter((t) => t.weekIndex > queda - 1).length;
+        const partes = [
+          dentro.length === 0 ? "estaba vacía" : null,
+          pasan > 0
+            ? `${pasan === dentro.length ? "sus " : ""}${pasan} ${pasan === 1 ? "tarea pasa" : "tareas pasan"} a la semana ` +
+              `${Math.max(o.semana, 1)}`
+            : null,
+          quietas.length > caen ? hechasConSugerencia(quietas.length - caen, "queda en la suya", "quedan en la suya") : null,
+          caen > 0 ? `${hechasConSugerencia(caen, "cae", "caen")} en la última semana, la ${queda}` : null,
+        ].filter((x): x is string => x !== null);
+        return `Se quita la semana ${o.semana + 1} de «${nombre(o.phaseId)}» (queda en ${sem(queda)}) — ${partes.join("; ")}`;
       }
       case "fase.insertar-semana": {
         const f = fase(o.phaseId);
-        const corren = f?.tasks.filter((t) => t.weekIndex >= o.semana).length ?? 0;
+        const abajo = f?.tasks.filter((t) => t.weekIndex >= o.semana) ?? [];
+        /* Revisión 2 de L1–L7 (#1): la hecha con sugerencia no corre; si está justo donde se abre la semana, se queda
+           ahí y la semana nueva no queda vacía. */
+        const quietas = abajo.filter(conSugerencia);
+        const corren = abajo.length - quietas.length;
+        const vacia = !quietas.some((t) => t.weekIndex === o.semana);
+        const partes = [
+          corren > 0 ? `${corren} ${corren === 1 ? "tarea corre" : "tareas corren"} una semana` : null,
+          quietas.length > 0 ? hechasConSugerencia(quietas.length, "queda en la suya", "quedan en la suya") : null,
+        ].filter((x): x is string => x !== null);
         return (
-          `Se abre una semana vacía en la posición ${o.semana + 1} de «${nombre(o.phaseId)}» ` +
+          `Se abre una semana ${vacia ? "vacía " : ""}en la posición ${o.semana + 1} de «${nombre(o.phaseId)}» ` +
           `(pasa a ${sem(duracionDe(o.phaseId) ?? (f?.durationWeeks ?? 0) + 1)})` +
-          (corren > 0 ? ` — ${corren} ${corren === 1 ? "tarea corre" : "tareas corren"} una semana` : "")
+          (partes.length > 0 ? ` — ${partes.join("; ")}` : "")
         );
       }
       case "fase.tipo": {
