@@ -569,6 +569,13 @@ export function textoDelAvance(seCruza: boolean): string {
 }
 export const ACCION_REVISAR_AVANCE = "Revisar avance";
 
+/** M1 (2026-09-27, pedido de Elías): «Descartar» vive en la barra fija, al lado de «Aplicar», y SIEMPRE pregunta (está a
+ *  un clic del botón principal y descartar no deja copia). El diálogo, corto: qué pasa con el cronograma y que no hay
+ *  vuelta. */
+export const TEXTO_DESCARTAR = "Descartar";
+export const TITULO_DEL_DESCARTE = "¿Descartar la propuesta?";
+export const TEXTO_DEL_DESCARTE = "El cronograma queda como está y la propuesta no se recupera.";
+
 /**
  * ¿Ya venció la semana `semana` (desde 0) de una fase que arranca en la semana `inicio` del proyecto, para una tarea en
  * `status`? L4: es EL predicado del atraso de la propuesta: rotula «ya pasó» en la semana del Gantt y cuenta las

@@ -4,9 +4,10 @@
  * Correr: `npx vitest run lib/timeline/barra-de-la-propuesta.test.ts --project unit`.
  *
  * Desde L3 cada cambio se decide en su fila del Gantt, y la barra queda en dos partes: LO FIJO, una línea (el título,
- * «Siguiente número», «Ver como estaba antes» y «Aplicar»; debajo de 640 px, solo el título y «Aplicar»), y LO DE
- * ABAJO, que no se fija (el origen, el cierre con lo que ve el cliente, los totales con «Descartar», los choques solo
- * si hay, el avance sin revisar y lo que notó la IA; debajo de 640 px, tras «Detalles»).
+ * «Siguiente número», «Ver como estaba antes», «Descartar» y «Aplicar»; debajo de 640 px, el título, «Descartar» y
+ * «Aplicar»), y LO DE ABAJO, que no se fija (el origen, el cierre con lo que ve el cliente, los totales, los choques
+ * solo si hay, el avance sin revisar y lo que notó la IA; debajo de 640 px, tras «Detalles»).
+ * M1 (2026-09-27): «Descartar» subió de abajo a lo fijo, al lado de «Aplicar», y siempre pregunta (su diálogo).
  *
  * La barra (components/canvas/RevisionDeLaPropuesta.tsx) se PINTA de verdad con react-dom/server sobre la propuesta
  * grande anonimizada (__fixtures__/propuesta-grande.json, leída, nunca importada) y se mira el HTML: qué va en lo fijo,
@@ -14,12 +15,14 @@
  * Cada `it` nombra la edición de producción que lo pone en rojo.
  */
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import RevisionDeLaPropuesta from "@/components/canvas/RevisionDeLaPropuesta";
 import { borradorDelFixture, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import { fraseDelCierre, LINEA_DEL_CLIENTE, resumir, tituloDeLaBarra, TEXTO_VER_ANTES } from "./borrador";
-import { textoDeLosChoques, textoDelSiguiente, TITULO_DEL_SIGUIENTE } from "./vista-de-la-propuesta";
+import { TEXTO_DESCARTAR, textoDeLosChoques, textoDelSiguiente, TITULO_DEL_SIGUIENTE } from "./vista-de-la-propuesta";
 import { mensajeDeLaPropuesta, TEXTO_DE_LAS_FUENTES, type MensajeDeLaPropuesta } from "./mensaje-de-la-propuesta";
 import { huellaDeLosCambios, lineaSinMaterial, TEXTO_DE_CUANDO_SE_GENERO, type ExplicacionEnPantalla } from "./explicacion-de-la-propuesta";
 
@@ -98,9 +101,10 @@ describe("L3 P3d · la barra reducida", () => {
     expect(texto(html)).not.toContain("Tareas de «");
   });
 
-  it("⭐ lo fijo es UNA línea: el título, «Siguiente número», «Ver como estaba antes» y «Aplicar»", () => {
-    /* Las ediciones que la ponen en rojo: volver a meter en lo fijo el cierre, lo que ve el cliente, los totales,
-       «Descartar» o el origen (la barra fija tapaba medio Gantt), o sacar de ahí «Siguiente número». */
+  it("⭐ lo fijo es UNA línea: el título, «Siguiente número», «Ver como estaba antes», «Descartar» y «Aplicar»", () => {
+    /* Las ediciones que la ponen en rojo: volver a meter en lo fijo el cierre, lo que ve el cliente, los totales o el
+       origen (la barra fija tapaba medio Gantt), sacar de ahí «Siguiente número», o dejar «Descartar» abajo o después
+       de «Aplicar». */
     const t = texto(fija);
     /* ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: el título de la barra ya no cuenta cambios
        (`tituloDeLaBarra`, «La IA propone 2 cambios de fases y 130 de tareas»): lo pone el nivel de la propuesta
@@ -111,17 +115,21 @@ describe("L3 P3d · la barra reducida", () => {
     expect(fija).toContain(`title="${TITULO_DEL_SIGUIENTE}"`);
     expect(t).toContain(TEXTO_VER_ANTES);
     expect(t).toContain("Aplicar todo");
+    /* ⚠ ACTUALIZADA el 2026-09-27 (M1), con esta razón: Elías pidió «Descartar» a la par de «Aplicar todo» (abajo, tras
+       el mensaje y «Más», no se encontraba). Esta guarda lo prohibía en lo fijo; ahora pide que esté ahí, justo antes
+       de «Aplicar» (el primario sigue siendo el último). Lo demás sigue fuera. */
+    expect(fija).toMatch(new RegExp(`>${TEXTO_DESCARTAR}</button><button[^>]*>Aplicar todo</button>`));
     // L4: el cierre lo dice ahora la primera línea del mensaje, y tampoco va en lo fijo (ni ninguna otra línea).
-    for (const fuera of ["Aplicas", LINEA_DEL_CLIENTE, ...M.lineas, "Descartar", DESDE, "La IA también notó"]) {
+    for (const fuera of ["Aplicas", LINEA_DEL_CLIENTE, ...M.lineas, DESDE, "La IA también notó"]) {
       expect(t, `lo fijo volvió a decir «${fuera}»`).not.toContain(fuera);
     }
     expect(fija).toMatch(/\bsticky\b/);
     expect(abajo, "lo de abajo también quedó fijo").not.toMatch(/\bsticky\b/);
   });
 
-  it("⭐ lo de abajo: el origen, el cierre con lo que ve el cliente, y los totales en `aria-live` con «Descartar»", () => {
+  it("⭐ lo de abajo: el origen, el cierre con lo que ve el cliente, y los totales en `aria-live`, sin «Descartar»", () => {
     /* Las ediciones que la ponen en rojo: sacar el `aria-live` de los totales (el lector no anuncia lo que cambia al
-       marcar en el Gantt), o perder el origen, el cierre o lo que ve el cliente. */
+       marcar en el Gantt), perder el origen, el cierre o lo que ve el cliente, o volver a pintar «Descartar» abajo. */
     const t = texto(abajo);
     expect(t).toContain(DESDE);
     /* ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: pedía el cierre (`fraseDelCierre`) y lo que ve el cliente en
@@ -130,22 +138,30 @@ describe("L3 P3d · la barra reducida", () => {
     expect(t).toContain(M.lineas[0]);
     expect(abajo).toContain(`<p class="text-xs text-fg-muted">${LINEA_DEL_CLIENTE}</p>`);
     expect(t).not.toContain(fraseDelCierre(R));
-    expect(abajo).toMatch(/<span aria-live="polite"[^>]*>Aplicas 132 de 132 cambios<\/span>/);
-    expect(t).toContain("Descartar");
+    /* ⚠ ACTUALIZADA el 2026-09-27 (M1), con esta razón: Elías pidió «Descartar» a la par de «Aplicar todo». Pedía
+       «Descartar» abajo, junto a los totales; ahora pide lo contrario: abajo quedan los totales solos (en un <p>), y
+       «Descartar» no está (UN solo lugar para esa decisión, en lo fijo). */
+    expect(abajo).toMatch(/<p aria-live="polite"[^>]*>Aplicas 132 de 132 cambios<\/p>/);
+    expect(t, "«Descartar» sigue (o volvió) abajo: dos lugares para la misma decisión").not.toContain(TEXTO_DESCARTAR);
     // Lo que notó la IA, plegado y sin la jerga del paso 1.
     expect(t).toContain("La IA también notó 4 cosas que no se aplican solas");
     expect(abajo).toMatch(/<details[^>]*>\s*<summary/);
     expect(t).not.toMatch(/paso de (las )?tareas/i);
   });
 
-  it("⭐ debajo de 640 px: lo fijo muestra solo el título y «Aplicar»; lo demás, tras «Detalles»", () => {
+  it("⭐ debajo de 640 px: lo fijo muestra el título, «Descartar» y «Aplicar»; lo demás, tras «Detalles»", () => {
     /* La edición que la pone en rojo: dejar «Siguiente número» y «Ver como estaba antes» visibles en pantallas chicas
-       (la línea fija se parte en tres), o dejar lo de abajo siempre abierto en un teléfono. */
+       (la línea fija se parte en tres), dejar lo de abajo siempre abierto en un teléfono, o esconder «Descartar» en un
+       teléfono.
+       ⚠ ACTUALIZADA el 2026-09-27 (M1), con esta razón: Elías pidió «Descartar» a la par de «Aplicar todo»; en un
+       teléfono lo fijo ya no es «solo el título y «Aplicar»»: suma «Descartar», fuera del bloque que se esconde. */
     const envuelto = /<span class="hidden items-center gap-2 sm:inline-flex">([\s\S]*?)<\/span><button/.exec(fija);
     expect(envuelto, "«Siguiente» y «Ver antes» no van en un bloque que se esconde en pantallas chicas").not.toBeNull();
     expect(texto(envuelto![1])).toContain("Recorrer los 14 números");
     expect(texto(envuelto![1])).toContain(TEXTO_VER_ANTES);
     expect(texto(envuelto![1])).not.toContain("Aplicar");
+    expect(texto(envuelto![1]), "«Descartar» quedó en el bloque que se esconde en un teléfono").not.toContain(TEXTO_DESCARTAR);
+    expect(texto(fija)).toContain(TEXTO_DESCARTAR);
     expect(abajo).toMatch(/<button type="button" aria-expanded="false" class="[^"]*sm:hidden[^"]*">Detalles<\/button>/);
     expect(abajo).toMatch(/<div class="[^"]*\bsm:block\b[^"]*\bhidden\b[^"]*">/);
     // En «Detalles», los dos botones, solo en pantallas chicas.
@@ -192,6 +208,55 @@ describe("L3 P3d · la barra reducida", () => {
     for (const h of [html, pintar({ resumen: { ...R, choques: 2 }, avance: { hay: true, seCruza: true }, onRevisarAvance: nada })]) {
       expect(h).not.toMatch(crudo);
     }
+  });
+});
+
+/**
+ * ── M1 · «DESCARTAR» AL LADO DE «APLICAR», Y SIEMPRE PREGUNTA (2026-09-27) ────────────────────────────────────────
+ * Pedido de Elías: abajo no se encontraba. En lo fijo queda a un clic del botón principal, y descartar borra la
+ * propuesta sin copia (DELETE /timeline/proposal): el clic abre SU diálogo y solo el «Descartar» del diálogo descarta.
+ * La CONDUCTA (apretar, cancelar, confirmar, con el estado que cambia) se prueba con el montaje de
+ * recalculo-en-la-pantalla.test.ts (bloque 3, «M1 · «Descartar» abre SU diálogo…»); acá, el HTML y el código.
+ */
+describe("M1 · «Descartar» al lado de «Aplicar», y siempre pregunta", () => {
+  it("⭐ mientras descarta: «Descartando…» y los dos botones apagados; aplicando, «Descartar» también", () => {
+    /* La edición que la pone en rojo: sacarle `disabled={trabajando}` a «Descartar» (un doble clic mandaba dos DELETE,
+       y «Aplicar» durante el descarte caía en un 409). */
+    const boton = (html: string) => /<button([^>]*)>(Descartar|Descartando…)<\/button>/.exec(partes(html).fija);
+    const descartando = boton(pintar({ enCurso: "descartar" }));
+    expect(descartando?.[2]).toBe("Descartando…");
+    expect(descartando?.[1]).toContain('disabled=""');
+    expect(partes(pintar({ enCurso: "descartar" })).fija).toMatch(
+      /<button[^>]*disabled=""[^>]*>Descartando…<\/button><button[^>]*disabled=""[^>]*>Aplicar todo<\/button>/,
+    );
+    expect(boton(pintar({ enCurso: "aplicar" }))?.[1]).toContain('disabled=""');
+    const libre = boton(pintar());
+    expect(libre?.[2]).toBe(TEXTO_DESCARTAR);
+    expect(libre?.[1]).not.toContain('disabled=""');
+  });
+
+  it("⭐ en el código, `onDescartar` solo se llama desde el «confirmar» del diálogo del descarte", () => {
+    /* La edición que la pone en rojo: `onClick={onDescartar}` directo, o cualquier otro camino (un atajo, otro botón)
+       que descarte sin pasar por el diálogo. Mira el código sin comentarios, con los saltos normalizados. */
+    const src = fs
+      .readFileSync(path.join(process.cwd(), "components/canvas/RevisionDeLaPropuesta.tsx"), "utf8")
+      .replace(/\r\n/g, "\n")
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*\/\/.*$/gm, "");
+    const firma = src.indexOf("export default function RevisionDeLaPropuesta(");
+    const finDeLaFirma = src.indexOf("}) {", firma);
+    expect(firma, "no encuentro el componente").toBeGreaterThan(-1);
+    expect(finDeLaFirma, "no encuentro el fin de sus props").toBeGreaterThan(firma);
+    // La prop: una vez en la lista y una en su tipo.
+    expect(src.slice(firma, finDeLaFirma).match(/\bonDescartar\b/g)).toHaveLength(2);
+    const cuerpo = src.slice(finDeLaFirma);
+    const usos = [...cuerpo.matchAll(/\bonDescartar\b/g)].map((m) => m.index!);
+    expect(usos, "`onDescartar` se usa en más (o menos) de un lugar").toHaveLength(1);
+    const dialogo = cuerpo.slice(cuerpo.lastIndexOf("<ConfirmDialog", usos[0]), usos[0]);
+    expect(dialogo, "`onDescartar` no está dentro del diálogo del descarte").toContain("open={confirmarDescarte}");
+    expect(dialogo, "`onDescartar` no está dentro de su `onConfirm`").toMatch(/onConfirm=\{\s*\(\)\s*=>\s*\{[^}]*$/);
+    expect(dialogo, "se cerró el diálogo antes de llegar a `onDescartar`").not.toContain("/>");
   });
 });
 

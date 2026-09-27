@@ -9,7 +9,7 @@
  * «Ver la propuesta» (el mismo Gantt, en el mismo lugar), y el cierre antes → después. Nada se aplica
  * solo: «Aplicar todo» / «Aplicar N de M» o «Descartar».
  *
- * ⛔ DEVUELVE HERMANOS, NO UN CONTENEDOR: la barra fija, el bloque de abajo y el diálogo. Quien la usa los
+ * ⛔ DEVUELVE HERMANOS, NO UN CONTENEDOR: la barra fija, el bloque de abajo y los diálogos. Quien la usa los
  * pone en el MISMO bloque que el Gantt (CronogramaCanvas, `revision.contenedorRef`). Un elemento `sticky`
  * no sale de su bloque padre: envuelta en su propia <section>, la barra se iba con la sección apenas
  * se bajaba al Gantt, y el botón que alterna y «Aplicar» dejaban de estar a mano justo mientras se
@@ -19,11 +19,16 @@
  * grupos de tareas (`TareasDeLaPropuesta`, borrado): cada cambio tiene su casilla en su fila del Gantt. La barra
  * queda en dos partes:
  *   · LO FIJO, una línea: el título, «Siguiente número» (recorre los números del Gantt; atajos n y p), «Ver como
- *     estaba antes» y «Aplicar». Debajo de 640 px, solo el título y «Aplicar»;
+ *     estaba antes», «Descartar» y «Aplicar». Debajo de 640 px, el título, «Descartar» y «Aplicar»;
  *   · LO DE ABAJO, que no se fija: de dónde viene, las líneas de las tareas y del recálculo, el bloqueo, el cierre
- *     con lo que ve el cliente, los totales («Aplicas N de M cambios», en `aria-live`) con «Descartar», el aviso de
- *     «otro cronograma» (hasta L4), los choques (solo si hay), el avance sin revisar y lo que notó la IA. Debajo de
+ *     con lo que ve el cliente, los totales («Aplicas N de M cambios», en `aria-live`), el aviso de «otro
+ *     cronograma» (hasta L4), los choques (solo si hay), el avance sin revisar y lo que notó la IA. Debajo de
  *     640 px, plegado tras «Detalles».
+ *
+ * M1 (2026-09-27) · «DESCARTAR» AL LADO DE «APLICAR». Pedido de Elías: abajo, después del mensaje y de «Más», no se
+ * encontraba. Sube a lo fijo, pegado a «Aplicar» y visible en todos los anchos, y SIEMPRE pregunta con su propio
+ * diálogo: a un clic del botón principal, y descartar borra la propuesta sin copia (DELETE /timeline/proposal). Hay UN
+ * solo lugar para esa decisión: abajo quedan los totales, solos.
  *
  * ⭐ L4 (2026-09-26) · EL MENSAJE DE ARRIBA. El título y el tono salen del NIVEL de la propuesta entera («Rehace casi
  * todas las pendientes», ámbar solo en «casi todo»), no de la magnitud; lo de abajo suma el mensaje: hasta 5 líneas
@@ -76,9 +81,12 @@ import {
   ACCION_REVISAR_AVANCE,
   observacionesParaMostrar,
   textoDelAvance,
+  TEXTO_DEL_DESCARTE,
+  TEXTO_DESCARTAR,
   textoDeLosChoques,
   textoDeLosTotales,
   textoDelSiguiente,
+  TITULO_DEL_DESCARTE,
   TITULO_DEL_SIGUIENTE,
   type PosicionDelSiguiente,
 } from "@/lib/timeline/vista-de-la-propuesta";
@@ -147,9 +155,11 @@ export default function RevisionDeLaPropuesta({
   cierreFijado: string | null;
   barraRef: RefObject<HTMLDivElement | null>;
 }) {
-  /* UN solo diálogo, en dos modos: «aplicar» (lo de siempre) y «forzar» («Aplicar de todos modos», que
+  /* El diálogo de aplicar, UNO en dos modos: «aplicar» (lo de siempre) y «forzar» («Aplicar de todos modos», que
      aplica tareas armadas para otra forma de la fase: siempre confirma). */
   const [confirmar, setConfirmar] = useState<null | "aplicar" | "forzar">(null);
+  /* M1: «Descartar» tiene SU diálogo, que se abre siempre (está a un clic de «Aplicar» y no deja copia). */
+  const [confirmarDescarte, setConfirmarDescarte] = useState(false);
   /* Debajo de 640 px, lo de abajo va plegado tras «Detalles» (en pantallas anchas se ve siempre). */
   const [detalles, setDetalles] = useState(false);
   const { items, marcadas, choques, bloqueo } = resumen;
@@ -196,7 +206,7 @@ export default function RevisionDeLaPropuesta({
 
   return (
     <>
-      {/* ── LO FIJO: una línea. El título, cómo recorrerla y aplicar ──
+      {/* ── LO FIJO: una línea. El título, cómo recorrerla, descartar y aplicar ──
           `id`: el ancla del botón «Revisar la propuesta» del encabezado. */}
       <div
         id="cronograma-propuesta"
@@ -224,6 +234,11 @@ export default function RevisionDeLaPropuesta({
               {botonSiguiente()}
               {botonAlternar()}
             </span>
+            {/* M1: visible en todos los anchos, pegado a «Aplicar». «secondary», no «destructive»: el color fuerte sigue
+                siendo de «Aplicar», y «destructive» pinta un rojo crudo que la barra no usa. El rojo va en el diálogo. */}
+            <Button size="sm" variant="secondary" onClick={() => setConfirmarDescarte(true)} disabled={trabajando}>
+              {enCurso === "descartar" ? "Descartando…" : TEXTO_DESCARTAR}
+            </Button>
             <Button
               size="sm"
               variant="primary"
@@ -339,15 +354,11 @@ export default function RevisionDeLaPropuesta({
           )}
           {/* Lo que ve el cliente, sola: el cierre lo dice el mensaje. */}
           <p className="text-xs text-fg-muted">{LINEA_DEL_CLIENTE}</p>
-          {/* Lo que se aplica, con cada casilla que se toca en el Gantt (el lector lo anuncia). */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span aria-live="polite" className="text-xs font-semibold text-fg-secondary">
-              {textoDeLosTotales(resumen)}
-            </span>
-            <Button size="sm" variant="secondary" onClick={onDescartar} disabled={trabajando}>
-              {enCurso === "descartar" ? "Descartando…" : "Descartar"}
-            </Button>
-          </div>
+          {/* Lo que se aplica, con cada casilla que se toca en el Gantt (el lector lo anuncia). M1: solo; «Descartar»
+              subió a lo fijo, al lado de «Aplicar». */}
+          <p aria-live="polite" className="text-xs font-semibold text-fg-secondary">
+            {textoDeLosTotales(resumen)}
+          </p>
 
           {/* EL AVISO de la Tanda J («Es prácticamente un cronograma nuevo», con sus motivos) se fue en L4: una propuesta
               que rehace el plan ya no llega disfrazada de N cambios sueltos porque lo dice el título («Cronograma casi
@@ -423,6 +434,20 @@ export default function RevisionDeLaPropuesta({
             <span className="block mt-2">{textoDeLaConfirmacion(resumen)}</span>
           </>
         }
+      />
+
+      {/* M1: «Descartar» SIEMPRE confirma. Rojo (el de siempre de `ConfirmDialog`): se borra la propuesta, sin copia. */}
+      <ConfirmDialog
+        open={confirmarDescarte}
+        title={TITULO_DEL_DESCARTE}
+        description={TEXTO_DEL_DESCARTE}
+        confirmLabel={TEXTO_DESCARTAR}
+        loading={enCurso === "descartar"}
+        onCancel={() => setConfirmarDescarte(false)}
+        onConfirm={() => {
+          setConfirmarDescarte(false);
+          onDescartar();
+        }}
       />
     </>
   );

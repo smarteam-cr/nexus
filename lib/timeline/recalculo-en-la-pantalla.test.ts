@@ -191,7 +191,7 @@ import {
   type PedidoDelRecalculo,
   type RespuestaDelPedido,
 } from "./recalculo-de-tareas";
-import { unidadesDelSiguiente, vistaDeLaPropuesta } from "./vista-de-la-propuesta";
+import { TEXTO_DEL_DESCARTE, TEXTO_DESCARTAR, TITULO_DEL_DESCARTE, unidadesDelSiguiente, vistaDeLaPropuesta } from "./vista-de-la-propuesta";
 import { mensajeDeLaPropuesta } from "./mensaje-de-la-propuesta";
 import { leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import { useBorradorDelCronograma } from "@/components/canvas/useBorradorDelCronograma";
@@ -722,6 +722,49 @@ describe("3 · la barra: «Aplicar de todos modos» confirma qué pasa con las t
     const grupo = v.porFase.get("c")!.grupo!;
     expect(grupo.desfasada).toBe(true);
     expect([grupo.marcadas, grupo.marcables], "el grupo cuenta las que esperan como desmarcadas").toEqual([2, 2]);
+  });
+
+  it("⭐ M1 · «Descartar» abre SU diálogo; solo el «Descartar» del diálogo descarta, y «Cancelar» cierra sin descartar", () => {
+    /* M1 (2026-09-27, pedido de Elías): «Descartar» subió a lo fijo, a un clic de «Aplicar», y descartar borra la
+       propuesta sin copia (DELETE /timeline/proposal): siempre pregunta. Las ediciones que la ponen en rojo:
+       `onClick={onDescartar}` directo (borraba al primer clic), un botón que no abre el diálogo, un diálogo que no
+       descarta al confirmar o que descarta al cancelar, o no pasarle `loading` mientras descarta. */
+    const descartar = vi.fn();
+    const h = mini.montar(
+      RevisionDeLaPropuesta,
+      propsCon({ resumen: resumir(VIVO, BORRADOR, [], { tareas: "listas" }), onDescartar: descartar }),
+    );
+    const boton = () => buscar(h.salida, (el) => el.type === Button && el.props.children === TEXTO_DESCARTAR);
+    const delDescarte = () => buscar(h.salida, (el) => el.type === ConfirmDialog && el.props.title === TITULO_DEL_DESCARTE);
+    expect(boton(), "tiene que haber UN «Descartar» en la barra").toHaveLength(1);
+    expect(delDescarte(), "tiene que haber UN diálogo del descarte").toHaveLength(1);
+    expect(boton()[0].props.variant, "«Descartar» no es el primario: el color fuerte es de «Aplicar»").toBe("secondary");
+    expect(delDescarte()[0].props.open, "abierto sin pedirlo").toBe(false);
+    (boton()[0].props.onClick as () => void)();
+    expect(descartar, "el clic en «Descartar» descartó sin preguntar").not.toHaveBeenCalled();
+    expect(delDescarte()[0].props.open, "el clic en «Descartar» no abrió el diálogo").toBe(true);
+    (delDescarte()[0].props.onCancel as () => void)();
+    expect(descartar, "«Cancelar» descartó").not.toHaveBeenCalled();
+    expect(delDescarte()[0].props.open, "«Cancelar» no cerró el diálogo").toBe(false);
+    (boton()[0].props.onClick as () => void)();
+    (delDescarte()[0].props.onConfirm as () => void)();
+    expect(descartar, "confirmar no descartó (o descartó dos veces)").toHaveBeenCalledTimes(1);
+    expect(delDescarte()[0].props.open, "el diálogo sigue abierto después de confirmar").toBe(false);
+    // Lo que dice: corto y en tuteo, con el botón rojo de siempre (sin `variant`, `ConfirmDialog` es rojo).
+    const d = delDescarte()[0].props;
+    expect(TITULO_DEL_DESCARTE).toBe("¿Descartar la propuesta?");
+    expect(d.description).toBe(TEXTO_DEL_DESCARTE);
+    expect(TEXTO_DEL_DESCARTE).toBe("El cronograma queda como está y la propuesta no se recupera.");
+    expect(d.confirmLabel).toBe(TEXTO_DESCARTAR);
+    expect(d.variant ?? "destructive").toBe("destructive");
+    expect(d.loading).toBe(false);
+    // Mientras descarta: «Descartando…», apagado, y el diálogo cargando.
+    h.cambiar({ enCurso: "descartar" });
+    const descartando = buscar(h.salida, (el) => el.type === Button && el.props.children === "Descartando…");
+    expect(descartando).toHaveLength(1);
+    expect(descartando[0].props.disabled).toBe(true);
+    expect(delDescarte()[0].props.loading).toBe(true);
+    h.desmontar();
   });
 });
 

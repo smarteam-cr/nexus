@@ -121,7 +121,7 @@ function buildDetalle(p: PhaseSignalInput, atrasada: boolean, vencidas: number):
   if (atrasada) partes.push("su ventana de calendario ya terminó y sigue abierta");
   if (vencidas > 0) partes.push(plural(vencidas, "tarea vencida", "tareas vencidas"));
   if (p.needsValidation) {
-    partes.push("duración estimada por la IA, sin datos de tiempos en ventas: confirmala");
+    partes.push("duración estimada por la IA, sin datos de tiempos en ventas: confírmala");
   }
   return partes.join(" · ");
 }

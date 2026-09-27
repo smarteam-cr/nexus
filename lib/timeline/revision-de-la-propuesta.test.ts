@@ -186,7 +186,11 @@ describe("la barra: UN botón que alterna, la línea fija, la lista con casillas
        solo «Aplicar» (`textoDelBotonDeAplicar`; su conducta, en recalculo-en-la-pantalla.test.ts). */
     expect(contiene(BARRA, "const textoDelBoton = textoDelBotonDeAplicar(resumen);")).toBe(true);
     expect(contiene(BARRA, 'enCurso === "aplicar" ? "Aplicando…" : textoDelBoton')).toBe(true);
-    expect(contiene(BARRA, "onClick={onDescartar}")).toBe(true);
+    /* ⚠ ACTUALIZADA el 2026-09-27 (M1), con esta razón: Elías pidió «Descartar» a la par de «Aplicar todo», y a un clic
+       del botón principal SIEMPRE pregunta. El botón ya no descarta: abre su diálogo, y `onDescartar` se llama solo desde
+       su «confirmar» (la conducta, en barra-de-la-propuesta.test.ts, bloque M1). */
+    expect(contiene(BARRA, "onClick={() => setConfirmarDescarte(true)}")).toBe(true);
+    expect(contiene(BARRA, "onClick={onDescartar}"), "«Descartar» volvió a borrar al primer clic").toBe(false);
   });
 
   it("⭐ la barra es FIJA sobre el Gantt entero: el `sticky` es hermano del Gantt, no hijo de una sección propia", () => {
@@ -261,8 +265,12 @@ describe("la barra: UN botón que alterna, la línea fija, la lista con casillas
        «Descartar» mandaba dos DELETE, y «Aplicar» durante el descarte caía en un 409). */
     expect(contiene(BARRA, "const trabajando = enCurso !== null;")).toBe(true);
     expect(contiene(BARRA, "disabled={trabajando || marcadas === 0 || bloqueo !== null}")).toBe(true);
-    expect(contiene(BARRA, "onClick={onDescartar} disabled={trabajando}")).toBe(true);
-    expect(contiene(BARRA, 'enCurso === "descartar" ? "Descartando…" : "Descartar"')).toBe(true);
+    /* ⚠ ACTUALIZADA el 2026-09-27 (M1), con esta razón: «Descartar» subió a lo fijo, al lado de «Aplicar», y abre su
+       diálogo en vez de descartar; su texto sale de la vista (`TEXTO_DESCARTAR`). Se sigue pidiendo lo mismo: apagado
+       mientras trabaja y «Descartando…» mientras descarta (y el diálogo, cargando). */
+    expect(contiene(BARRA, "onClick={() => setConfirmarDescarte(true)} disabled={trabajando}")).toBe(true);
+    expect(contiene(BARRA, 'enCurso === "descartar" ? "Descartando…" : TEXTO_DESCARTAR')).toBe(true);
+    expect(contiene(BARRA, 'loading={enCurso === "descartar"}')).toBe(true);
   });
 
   it("el cierre de la barra y de la confirmación sale del núcleo, con el cierre fijado", () => {

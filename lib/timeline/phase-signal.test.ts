@@ -99,9 +99,11 @@ describe("el tooltip trae la lectura completa", () => {
       { status: "PENDING", tasks: [t("PENDING")], vencidas: 3, needsValidation: true, tipoLabel: "Configuración" },
       ctx(9),
     );
+    /* ⚠ ACTUALIZADA el 2026-09-27 (M1), con esta razón: tuteo neutro. Decía «confirmala» (voseo: «confirmá» + «la»);
+       en tuteo es «confírmala». La guarda del voseo (contexto-cronograma.test.ts) ya mira phase-signal.ts. */
     expect(s.detalle).toBe(
       "Configuración · sin empezar · su ventana de calendario ya terminó y sigue abierta · " +
-        "3 tareas vencidas · duración estimada por la IA, sin datos de tiempos en ventas: confirmala",
+        "3 tareas vencidas · duración estimada por la IA, sin datos de tiempos en ventas: confírmala",
     );
   });
 

@@ -568,6 +568,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "lib/timeline/project-actions.ts",
     "lib/contexto/detalle-cronograma.ts",
     "lib/business-cases/section-briefs.ts",
+    /* M1 (2026-09-27): el `title` de la fase en el Gantt («duración estimada por la IA…: confírmala») decía
+       «confirmala», voseo que ni la lista ni la forma veían (es llana: sin tilde). */
+    "lib/timeline/phase-signal.ts",
   ];
   /* Las formas que aparecieron en estos archivos, más las de uso diario del equipo. Una palabra
      entera: «Revisá» no caza «Revisa», y «vos» no caza «voseo». Las del final son las que la revisión
@@ -608,6 +611,10 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
   const AGUDA = /(?<!\p{L})\p{L}+(?:á|é|í|ás|és|ís)(?!\p{L})/gu;
   const agudasQueNoSonTuteo = (linea: string) =>
     [...linea.matchAll(AGUDA)].map((m) => m[0]).filter((w) => !AGUDAS_DE_TUTEO.has(w.toLowerCase()));
+  /* M1 (2026-09-27) · EL VOSEO LLANO. Con un pronombre pegado, el imperativo de voseo pierde la tilde («confirmá» +
+     «la» = «confirmala») y la forma de arriba no lo ve; el tuteo la lleva («confírmala»). Esta regex propia caza el que
+     apareció en phase-signal.ts. */
+  const VOSEO_LLANO = /(?<!\p{L})confirmal[ao]s?(?!\p{L})/iu;
 
   it("ninguna forma de voseo en el código de estos componentes", () => {
     const hallados: string[] = [];
@@ -616,6 +623,8 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
       lineas.forEach((l, i) => {
         for (const v of VOSEO) if (palabra(v).test(l)) hallados.push(`${rel}:${i + 1} «${v}»`);
         for (const w of agudasQueNoSonTuteo(l)) hallados.push(`${rel}:${i + 1} «${w}» (¿voseo? si es tuteo, súmala a AGUDAS_DE_TUTEO)`);
+        const llano = VOSEO_LLANO.exec(l);
+        if (llano) hallados.push(`${rel}:${i + 1} «${llano[0]}» (voseo llano: en tuteo lleva tilde)`);
       });
     }
     expect(hallados, "volvió el voseo a una pantalla del cronograma").toEqual([]);
@@ -633,7 +642,8 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
   });
 
   it("y el detector caza lo que tiene que cazar (si no, la guarda de arriba es decorativa)", () => {
-    const caza = (texto: string) => VOSEO.some((v) => palabra(v).test(texto)) || agudasQueNoSonTuteo(texto).length > 0;
+    const caza = (texto: string) =>
+      VOSEO.some((v) => palabra(v).test(texto)) || agudasQueNoSonTuteo(texto).length > 0 || VOSEO_LLANO.test(texto);
     for (const texto of [
       "Conversá el cambio", "— vos tenés fijado", "Ponele semanas", "entrá y generala",
       // Las de la revisión adversarial: ninguna estaba en la lista.
@@ -642,12 +652,15 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
       "si la dejás", "Describí el cambio", "atrasá la fase", "podá el contexto", "Buscá la reunión",
       // Y otras que ninguna lista nombró: las caza la forma.
       "Cerrá el panel", "Mové la fase", "Pedí el cambio", "Subí la nota",
+      // M1 (2026-09-27): el voseo llano, con el pronombre pegado.
+      "sin datos de tiempos en ventas: confirmala", "Confirmalo antes de aplicar",
     ]) {
       expect(caza(texto), texto).toBe(true);
     }
     for (const texto of [
       "Conversa el cambio", "el voseo", "Revisa el Gantt", "tú tienes fijado", "Ponle semanas",
       "Acepta o descarta cada cambio", "Después se aplicará", "¿Qué más está pendiente?", "Así quedará", "acá y allá",
+      "sin datos de tiempos en ventas: confírmala", "la confirmación",
     ]) {
       expect(caza(texto), texto).toBe(false);
     }
