@@ -141,6 +141,7 @@ import {
 } from "@/lib/timeline/vista-de-la-propuesta";
 import { fraseDeAutoria, leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import { mensajeDeLaPropuesta } from "@/lib/timeline/mensaje-de-la-propuesta";
+import { explicacionEnPantalla } from "@/lib/timeline/explicacion-de-la-propuesta";
 import type { ReferenciasDeLaPropuesta } from "@/lib/timeline/referencias-de-la-propuesta";
 import { origenDePropuesta } from "@/lib/timeline/proposal-deltas";
 import {
@@ -1600,6 +1601,10 @@ export default function CronogramaCanvas({
         : null,
     [revision.resumen, revision.resumenEntero, revision.borrador, vivo, referenciasEnPantalla, particularidades, closeOverride, hydratedNow],
   );
+  /* ⭐ L6 · EL PORQUÉ CON FUENTES NUEVAS: lo escribió la fusión del paso 2 en la propuesta GUARDADA (`explicacion`), con
+     la huella de los cambios que escribió. Si hoy los cambios son otros (el chat los editó), es «de cuando se generó».
+     Lo usan la barra (la frase general y, en «Más», las fases sin material nuevo) y el porqué de cada fase del Gantt. */
+  const explicacionDeLaPropuesta = useMemo(() => (hayBorrador ? explicacionEnPantalla(proposal) : null), [hayBorrador, proposal]);
   /* Lo ÚLTIMO de la revisión, para leerlo desde el aplicar (async): la closure del clic tiene la
      del render en que se apretó, y esperar el guardado puede mover lo vivo. */
   const revisionRef = useRef(revision);
@@ -3454,6 +3459,8 @@ export default function CronogramaCanvas({
           recalculo: recalculoDeLaBarra,
           // L4: el porqué de cada fase muestra su fuente solo si calza con una real (`fuenteDelMotivo`).
           fuentes: referenciasEnPantalla?.fuentes ?? null,
+          // L6: la frase de cada fase, con fuentes nuevas (manda sobre el motivo del paso 1).
+          explicacion: explicacionDeLaPropuesta,
         }
       : null;
   /* El avance sin revisar (el cajón «Lo que detectó el agente»): la barra ofrece revisarlo y, si toca tareas que la
@@ -4370,6 +4377,7 @@ export default function CronogramaCanvas({
             <RevisionDeLaPropuesta
               resumen={revision.resumen}
               mensaje={mensajeDeLaBarra}
+              explicacion={explicacionDeLaPropuesta}
               vista={revision.vista}
               onAlternar={revision.alternar}
               onSiguiente={() => irAlSiguiente(1)}

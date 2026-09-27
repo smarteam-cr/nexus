@@ -32,6 +32,10 @@
  * cierre ya no va en su línea (lo dice el mensaje): lo que ve el cliente queda solo, debajo. El aviso «Es prácticamente
  * un cronograma nuevo» se fue: lo dicen el título («Cronograma casi nuevo») y «Más» (por qué).
  *
+ * L6 (2026-09-26) · EL PORQUÉ CON FUENTES NUEVAS. Debajo de las líneas del mensaje, la frase general de la explicación
+ * con sus chips (si la hay; «(de cuando se generó)» si el chat editó la propuesta después); en «Más», UNA vez, cuántas
+ * fases cambian sin una reunión, nota o instrucción nueva que las nombre (lib/timeline/explicacion-de-la-propuesta.ts).
+ *
  * Solo pinta: los estados y el cierre salen de `resumir` (lib/timeline/borrador.ts); el mensaje, de
  * lib/timeline/mensaje-de-la-propuesta.ts; los textos nuevos, de lib/timeline/vista-de-la-propuesta.ts; el estado de
  * la pantalla, de `useBorradorDelCronograma`. Tokens semánticos SIEMPRE (info = lo que cambia, success = lo nuevo,
@@ -66,6 +70,7 @@ import {
   type ResumenDelBorrador,
   type VistaDelBorrador,
 } from "@/lib/timeline/borrador";
+import { fraseGeneral, lineaSinMaterial, type ExplicacionEnPantalla } from "@/lib/timeline/explicacion-de-la-propuesta";
 import { TEXTO_DE_LAS_FUENTES, type MensajeDeLaPropuesta } from "@/lib/timeline/mensaje-de-la-propuesta";
 import {
   ACCION_REVISAR_AVANCE,
@@ -82,6 +87,7 @@ import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
 export default function RevisionDeLaPropuesta({
   resumen,
   mensaje,
+  explicacion = null,
   vista,
   onAlternar,
   onSiguiente,
@@ -103,6 +109,8 @@ export default function RevisionDeLaPropuesta({
   resumen: ResumenDelBorrador;
   /** L4: el mensaje de arriba (`mensajeDeLaPropuesta`): el título y el tono por el nivel, sus líneas y «Más». */
   mensaje: MensajeDeLaPropuesta;
+  /** L6: el porqué con fuentes nuevas guardado en la propuesta (`explicacionEnPantalla`), o null. */
+  explicacion?: ExplicacionEnPantalla | null;
   vista: VistaDelBorrador;
   onAlternar: () => void;
   /** L3 P3d: «Siguiente número»: despliega la fase del próximo número del Gantt y enfoca su casilla (en la vista
@@ -158,6 +166,9 @@ export default function RevisionDeLaPropuesta({
   /* Lo que notó la IA, como se lee (sin la jerga del paso 1): el título cuenta lo que se muestra. */
   const observaciones = observacionesParaMostrar(resumen.observaciones);
   const textoDelSiguienteBoton = textoDelSiguiente(posicion);
+  /* L6: la frase general (con sus chips) y, en «Más», la línea de las fases sin material nuevo, una vez. */
+  const general = fraseGeneral(explicacion);
+  const sinMaterial = explicacion ? lineaSinMaterial(explicacion.explicacion) : null;
 
   /* Los dos botones que en pantallas chicas pasan a «Detalles»: UNO de cada, pintado donde se ve. */
   const botonSiguiente = () =>
@@ -288,10 +299,22 @@ export default function RevisionDeLaPropuesta({
                 {l}
               </p>
             ))}
+            {general && (
+              <p className="flex flex-wrap items-center gap-1.5 text-fg-secondary">
+                <span>
+                  <span className="font-semibold">Por qué:</span> {general.frase}
+                </span>
+                {general.fuentes.map((f) => (
+                  <span key={f} className="rounded border border-info-line bg-info-surface px-1.5 py-px text-[10px] text-info-ink">
+                    {f}
+                  </span>
+                ))}
+              </p>
+            )}
           </div>
           {/* «Más», plegado: dónde se concentran, la fase terminada que recibe, los atrasos cargados (en su frase aparte)
               y de dónde salen los cambios de fases (solo lo verificado, como chip). */}
-          {(mensaje.detalle.length > 0 || mensaje.fuentes.length > 0) && (
+          {(mensaje.detalle.length > 0 || mensaje.fuentes.length > 0 || sinMaterial) && (
             <details className="text-xs">
               <summary className="cursor-pointer font-semibold text-fg-secondary">Más</summary>
               <div className="mt-1 space-y-0.5">
@@ -300,6 +323,7 @@ export default function RevisionDeLaPropuesta({
                     {d}
                   </p>
                 ))}
+                {sinMaterial && <p className="text-fg-muted">{sinMaterial}</p>}
                 {mensaje.fuentes.length > 0 && (
                   <p className="flex flex-wrap items-center gap-1.5 text-fg-muted">
                     <span>{TEXTO_DE_LAS_FUENTES}</span>

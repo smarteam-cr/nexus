@@ -2219,7 +2219,11 @@ describe("⭐ L4 · el mensaje de arriba: la barra y el canvas", () => {
     expect(CANVAS.match(/setReferencias\(\{ token: [^,]+, valor: data\.referenciasDeLaPropuesta \?\? null \}\)/g)?.length).toBe(3);
     // El porqué de cada fase en el Gantt, con la fuente verificada.
     expect(contiene(CANVAS, "fuentes: referenciasEnPantalla?.fuentes ?? null,")).toBe(true);
-    expect(contiene(GANTT, "const fuente = fuenteDelMotivo(m, fuentes);")).toBe(true);
+    /* Reescrito en L6 (2026-09-26): la verificación del motivo se mudó a `porqueDeLaFase` (lib/timeline/
+       explicacion-de-la-propuesta.ts), que decide la prioridad frase de L6 > motivo verificado > «Según la IA». El Gantt
+       ya no llama a `fuenteDelMotivo` él mismo: la llama `porqueDeLaFase` con las mismas `fuentes`. */
+    expect(contiene(GANTT, "const porque = porqueDeLaFase(fase, motivos, explicacion, fuentes);")).toBe(true);
+    expect(contiene(leer("lib/timeline/explicacion-de-la-propuesta.ts"), "fuenteDelMotivo(motivo, fuentes)")).toBe(true);
     expect(contiene(GANTT, "fuentes={propuesta?.fuentes ?? null}")).toBe(true);
   });
 

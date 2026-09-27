@@ -12,14 +12,24 @@
  *   2. «Regenerar» de una fase y el recálculo van CON alcance: ninguna terminada que respetar (D11: ahí «lo que
  *      ya se hizo va como tarea» manda).
  * Cada `it` nombra la edición que lo pone en rojo.
+ *
+ * L6 (§7.4, §7.6): la fusión pide EL PORQUÉ (`extras.explicar`, acá un doble: ningún test llama a la API) antes de su
+ * escritura y lo guarda en la MISMA escritura, con la huella de la lista que escribe; con tope de 15 s, sin tirar y
+ * una sola vez aunque la escritura necesite otra vuelta.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ projectTimeline: { findUnique: vi.fn() } }));
+const db = vi.hoisted(() => ({
+  projectTimeline: { findUnique: vi.fn(), updateMany: vi.fn() },
+  agentRun: { update: vi.fn() },
+}));
 vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 
-import { borradorVacio } from "./borrador";
-import { estructuraParaElDetalle } from "./borrador-del-detalle";
+import { borradorVacio, type Cambio, type Vivo } from "./borrador";
+import { estructuraParaElDetalle, fusionarDetalleEnElBorrador, TOPE_DE_LA_EXPLICACION_MS } from "./borrador-del-detalle";
+import { explicacionEnPantalla, huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 
 const tareaDB = (id: string, title: string, weekIndex: number, extra: Record<string, unknown> = {}) => ({
   id,
@@ -74,7 +84,11 @@ const enLaBase = (guardado: unknown) =>
     phases: FASES,
   });
 
-beforeEach(() => db.projectTimeline.findUnique.mockReset());
+beforeEach(() => {
+  db.projectTimeline.findUnique.mockReset();
+  db.projectTimeline.updateMany.mockReset();
+  db.agentRun.update.mockReset();
+});
 
 describe("L5 · lo que ya hay en cada fase, para el agente de tareas", () => {
   it("⭐ «Regenerar todo»: estado de cada fase, lo hecho, lo pendiente de la IA con su weekIndex, y las terminadas que no se tocan", async () => {
@@ -124,5 +138,158 @@ describe("L5 · lo que ya hay en cada fase, para el agente de tareas", () => {
     const l = (await estructuraParaElDetalle("tl", "run-r"))?.loQueYaHay;
     expect(l?.conAlcance).toBe(true);
     expect(l?.terminadasQueNoSeTocan).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── L6 · EL PORQUÉ, en la misma escritura de la fusión ───────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("L6 · la fusión guarda el porqué en la MISMA escritura", () => {
+  /** El borrador vacío de «Regenerar todo» esperando las tareas de «run-2», como lo leen la estructura y la fusión. */
+  const GUARDADO = borradorVacio({ pedido: "regenerar", corrida: "run-2" });
+  const enLaBaseParaFusionar = () =>
+    db.projectTimeline.findUnique.mockImplementation(async () => ({
+      pendingProposal: JSON.parse(JSON.stringify(GUARDADO)),
+      pendingProposalRunId: "run-2",
+      anchorStartDate: null,
+      closeDateOverride: null,
+      project: { tags: [] },
+      phases: FASES,
+    }));
+  /** Lo que armó el agente: dos tareas nuevas y lo demás igual. */
+  const tarea = (title: string, weekIndex: number) => ({ title, weekIndex, notes: null, porValidar: false, party: "SMARTEAM", type: "TASK" });
+  const SALIDA = {
+    timelineDetail: {
+      phases: [
+        { id: "a", tasks: [] },
+        { id: "b", tasks: [tarea("Ajustar vistas", 0), tarea("Definir pipeline", 1), tarea("Configurar integraciones", 0)] },
+        { id: "c", tasks: [tarea("Probar flujos", 2), tarea("Capacitar al equipo", 1)] },
+      ],
+    },
+    fuentesDeLaGeneracion: { instrucciones: "", sesiones: [], en: "2026-09-26T18:00:00.000Z" },
+  };
+  const EXPLICACION: ExplicacionSinSello = {
+    general: null,
+    fases: [{ fase: "b", frase: "Se suma porque la reunión nueva pide integrar antes de probar.", fuentes: [{ tipo: "reunion", titulo: "Diseño", fecha: null }] }],
+    sinMaterial: ["c"],
+    desde: "2026-09-25T15:00:00.000Z",
+  };
+  async function fusionar(explicar?: (e: { vivo: Vivo; cambios: readonly Cambio[] }) => Promise<ExplicacionSinSello | null>) {
+    enLaBaseParaFusionar();
+    const sobre = await estructuraParaElDetalle("tl", "run-2");
+    let k = 0;
+    return fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-2",
+      estructura: sobre!.estructura,
+      analysisJson: SALIDA,
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `k-${++k}`,
+      ...(explicar ? { extras: { explicar } } : {}),
+    });
+  }
+  const escrito = (n = 0) => db.projectTimeline.updateMany.mock.calls[n][0].data.pendingProposal as Record<string, unknown>;
+
+  afterEach(() => vi.useRealTimers());
+
+  it("⭐ la explicación va en la MISMA escritura, con la huella de la lista que se escribe (recién fusionada, no es vieja)", async () => {
+    /* Las ediciones que la ponen en rojo: escribirla en otro `update` (una segunda escritura se pierde con las casillas
+       o el chat de por medio), o calcular la huella antes de sumar lo último (la pantalla la diría «de cuando se
+       generó» apenas llega). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const pedidas: Array<readonly Cambio[]> = [];
+    const r = await fusionar(async (e) => {
+      pedidas.push(e.cambios);
+      return EXPLICACION;
+    });
+    expect(r.estado).toBe("listas");
+    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(1);
+    const g = escrito();
+    expect((g.cambios as Cambio[]).length).toBeGreaterThan(0);
+    expect(pedidas, "se explicó otra lista que la que se escribe").toEqual([g.cambios]);
+    expect(g.explicacion).toEqual({ ...EXPLICACION, corrida: "run-2", version: g.version, huellaDeCambios: huellaDeLosCambios(g.cambios as Cambio[]) });
+    expect(explicacionEnPantalla(JSON.parse(JSON.stringify(g)))?.vieja, "recién fusionada ya se ve «de cuando se generó»").toBe(false);
+    // Escaneo: el único lugar que la escribe es el tramo de la escritura de la fusión.
+    const src = fs.readFileSync(path.join(process.cwd(), "lib/timeline/borrador-del-detalle.ts"), "utf8").replace(/\r\n/g, "\n");
+    const i = src.indexOf("pendingProposal: conLaFusion(\n        tl.pendingProposal as Record<string, unknown>,");
+    const tramo = src.slice(i, src.indexOf("if (escrita.count === 0)", i));
+    expect(i).toBeGreaterThan(0);
+    expect(tramo).toContain("cambios: cambiosFinales,");
+    expect(tramo).toContain("explicacion: {");
+    expect(tramo).toContain("huellaDeCambios: huellaDeLosCambios(cambiosFinales),");
+    expect(src.match(/explicacion: \{/g)?.length, "la explicación se escribe en otra escritura").toBe(1);
+  });
+
+  it("⭐ con un doble de 20 s, la fusión escribe SIN explicación en ≤ 16 s", async () => {
+    /* La edición que la pone en rojo: esperar la llamada sin su tope (el paso 2 quedaría colgado de Haiku). */
+    vi.useFakeTimers();
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const t0 = Date.now();
+    let termino = false;
+    const fusion = fusionar(() => new Promise((ok) => setTimeout(() => ok(EXPLICACION), 20_000))).then((r) => {
+      termino = true;
+      return r;
+    });
+    await vi.advanceTimersByTimeAsync(TOPE_DE_LA_EXPLICACION_MS);
+    expect(termino, "la fusión esperó a la IA más de 15 s").toBe(true);
+    expect(Date.now() - t0).toBeLessThanOrEqual(16_000);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect((await fusion).estado).toBe("listas");
+    expect(escrito().explicacion).toBeUndefined();
+    expect(TOPE_DE_LA_EXPLICACION_MS).toBe(15_000);
+  });
+
+  it("⭐ si la llamada tira (el tope diario de IA, la red), la propuesta se escribe igual, sin explicación", async () => {
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const r = await fusionar(async () => {
+      throw new Error("Presupuesto de IA agotado");
+    });
+    expect(r.estado).toBe("listas");
+    expect(escrito().explicacion).toBeUndefined();
+    // Aunque tire antes de dar su promesa.
+    db.projectTimeline.updateMany.mockClear();
+    const r2 = await fusionar(() => {
+      throw new Error("antes de la promesa");
+    });
+    expect(r2.estado).toBe("listas");
+    expect(escrito().explicacion).toBeUndefined();
+  });
+
+  it("⭐ si la escritura no entra, la vuelta siguiente NO vuelve a llamar y escribe la misma explicación", async () => {
+    /* La edición que la pone en rojo: pedirla en cada vuelta (se paga dos veces), o perderla en la segunda. */
+    db.projectTimeline.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+    let llamadas = 0;
+    const r = await fusionar(async () => {
+      llamadas++;
+      return EXPLICACION;
+    });
+    expect(r.estado).toBe("listas");
+    expect(llamadas).toBe(1);
+    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(2);
+    expect(escrito(1).explicacion).toMatchObject({ fases: EXPLICACION.fases, corrida: "run-2" });
+  });
+
+  it("⭐ sin `extras`, la propuesta se escribe como antes (sin la clave)", async () => {
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    await fusionar();
+    expect("explicacion" in escrito()).toBe(false);
+  });
+
+  it("⭐ una fusión PERDIDA deja en la corrida la salida completa (con lo que leyó)", async () => {
+    /* La edición que la pone en rojo: que la ruta pase `analysisJson` sin las fuentes: `avisarEnLaCorrida` pisa el
+       `output` con lo que recibe, y la generación siguiente no sabría qué es nuevo. */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 0 });
+    let llamadas = 0;
+    const r = await fusionar(async () => {
+      llamadas++;
+      return EXPLICACION;
+    });
+    expect(r.estado).toBe("perdido");
+    expect(llamadas).toBe(1);
+    const output = JSON.parse(db.agentRun.update.mock.calls.at(-1)![0].data.output as string);
+    expect(output.fuentesDeLaGeneracion).toEqual(SALIDA.fuentesDeLaGeneracion);
+    expect(output.timelineSyncError).toBeTruthy();
   });
 });

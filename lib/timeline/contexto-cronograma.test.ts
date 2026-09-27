@@ -499,6 +499,10 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     "lib/timeline/mensaje-de-la-propuesta.ts",
     "lib/timeline/referencias-de-la-propuesta.ts",
     "lib/timeline/leer-referencias.ts",
+    /* L6 (2026-09-26): el porqué con fuentes nuevas (el prompt de Haiku, los chips, «(de cuando se generó)» y la línea
+       de las fases sin material nuevo) y su cargador. */
+    "lib/timeline/explicacion-de-la-propuesta.ts",
+    "lib/timeline/fuentes-de-la-explicacion.ts",
     "components/canvas/LineaDeLasTareas.tsx",
     "lib/timeline/borrador.ts",
     /* Revisión de E2a (2026-09-25): los textos del servidor que el CSE lee TAL CUAL también. El 409

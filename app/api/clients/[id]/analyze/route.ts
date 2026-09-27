@@ -53,6 +53,8 @@ import {
   prevalidarPedidoDeTareas,
   type PedidoDeTareas,
 } from "@/lib/timeline/borrador-del-detalle";
+import { fuentesDeLaGeneracion, type FuentesDeLaGeneracion } from "@/lib/timeline/explicacion-de-la-propuesta";
+import { explicarConLasFuentesNuevas } from "@/lib/timeline/fuentes-de-la-explicacion";
 import { MENSAJE_PROPUESTA_CAMBIO } from "@/lib/timeline/escribir-estructura";
 import type { EstructuraSupuesta } from "@/lib/contexto/cronograma-para-agentes";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
@@ -1956,6 +1958,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   let huellasDelDetalle: HuellasDeFrontera | null = null;
   // E2a: si el modelo se cortó por `max_tokens`, la última fase del JSON reparado no genera cambios.
   let detalleCortado = false;
+  // L6: lo que LEYÓ el paso 2 del borrador (instrucciones y reuniones), al armar su mensaje: va en su `output` y dice
+  // qué es nuevo para el porqué de la propuesta (y para la generación siguiente). null fuera del paso 2.
+  let fuentesDelPaso2: FuentesDeLaGeneracion | null = null;
   if (isTimelineDetailAgent && bodyProjectId) {
     // El pipelineKey del contexto sale del PROYECTO, no del agente: la columna del agente
     // es NULL por convención en las variantes X2 (el tipo viaja en su id), así que leerla
@@ -1993,6 +1998,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     });
     sesionesDelDetalle = contexto.sesionesUsadas ?? [];
     huellasDelDetalle = huellasDeFrontera(contexto.materialInterno ?? []);
+    if (pedidoDeTareas) {
+      fuentesDelPaso2 = fuentesDeLaGeneracion({ bloqueDeInstrucciones: contexto.instrucciones, sesiones: sesionesDelDetalle, en: new Date() });
+    }
   }
 
   // ── 10c. Marco breve de relación previa (solo agente Handoff) ────────────────
@@ -2283,11 +2291,14 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // output SIN tocar status (lo pasa a DONE el wrapper detached al final, para que
   // el polling no vea DONE antes de que se persistan las cards/blocks).
   // Modo síncrono: se crea ya en DONE (comportamiento de siempre).
+  // L6: la salida del paso 2 lleva lo que LEYÓ (`fuentesDeLaGeneracion`). La MISMA salida va al `output` y a la
+  // fusión: si la fusión se pierde, `avisarEnLaCorrida` pisa el `output` con esto y lo leído no se pierde.
+  const salidaDeLaCorrida = fuentesDelPaso2 ? { ...analysisJson, fuentesDeLaGeneracion: fuentesDelPaso2 } : analysisJson;
   const run = existingRunId
     ? await prisma.agentRun.update({
         where: { id: existingRunId },
         data: {
-          output:           JSON.stringify(analysisJson),
+          output:           JSON.stringify(salidaDeLaCorrida),
           sourceSessionIds: isTimelineDetailAgent ? sesionesDelDetalle : handoffSourceSessionIds,
           serviceType:      dealProject?.serviceType ?? null,
         },
@@ -2303,7 +2314,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
           sectionLabel: bodySectionLabel ?? agent.sectionLabel ?? null,
           serviceType:  dealProject?.serviceType ?? null,
           status:       "DONE",
-          output:       JSON.stringify(analysisJson),
+          output:       JSON.stringify(salidaDeLaCorrida),
           // Trazabilidad: para el handoff, qué sesiones de ventas se usaron (item de validación);
           // para el detalle del cronograma, qué reuniones elegidas le llegaron.
           sourceSessionIds: isTimelineDetailAgent ? sesionesDelDetalle : handoffSourceSessionIds,
@@ -2351,13 +2362,53 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
        E2b (2026-09-25): es la única salida. Las dos vistas previas en memoria (la de una fase y la de
        todas) se fueron, y un pedido sin `borrador` ni llega acá (el 409 de arriba: la regla). El alcance
        de «Regenerar» de una fase lo lee la fusión del borrador GUARDADO (`soloFase`), no del body. */
+    const leidas = fuentesDelPaso2;
     const tareas = await fusionarDetalleEnElBorrador({
       timelineId: timelineDelBorrador!,
       corrida: run.id,
       estructura: sobreDelDetalle!.estructura,
-      analysisJson,
+      analysisJson: salidaDeLaCorrida,
       huellas: huellasDelDetalle,
       cortado: detalleCortado,
+      /* ⭐ L6: EL PORQUÉ con fuentes NUEVAS. La fusión lo pide antes de escribir la propuesta (tope 15 s) y lo guarda en
+         la misma escritura. Una llamada a Haiku, atribuida en el medidor a su propio agente (bajo el tope diario: con el
+         tope agotado no hay frase y la propuesta se escribe igual). Sin fuentes nuevas no se llama. */
+      extras: leidas
+        ? {
+            explicar: ({ vivo, cambios }) =>
+              explicarConLasFuentesNuevas({
+                projectId: bodyProjectId!,
+                timelineId: timelineDelBorrador!,
+                corrida: run.id,
+                leidas,
+                vivo,
+                cambios,
+                llamar: async (system, mensaje) => {
+                  const respuesta = await conContextoDeIA(
+                    {
+                      agentSlug: "explicacion-de-la-propuesta",
+                      agentRunId: run.id,
+                      clientId,
+                      projectId: bodyProjectId,
+                      origen: "timeline/explicacion",
+                    },
+                    () =>
+                      anthropic.messages.create(
+                        {
+                          model: "claude-haiku-4-5",
+                          max_tokens: 1500,
+                          temperature: 0,
+                          system,
+                          messages: [{ role: "user", content: mensaje }],
+                        },
+                        { timeout: 15_000, maxRetries: 0 },
+                      ),
+                  );
+                  return respuesta.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+                },
+              }),
+          }
+        : undefined,
     });
     return NextResponse.json({
       tareas,

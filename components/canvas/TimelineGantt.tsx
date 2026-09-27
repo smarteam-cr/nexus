@@ -119,7 +119,11 @@ import {
   type VistaDeLaPropuesta,
 } from "@/lib/timeline/vista-de-la-propuesta";
 import { textoDelGrupoDesfasado, type RecalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
-import { fuenteDelMotivo } from "@/lib/timeline/mensaje-de-la-propuesta";
+import {
+  porqueDeLaFase,
+  TEXTO_DE_CUANDO_SE_GENERO,
+  type ExplicacionEnPantalla,
+} from "@/lib/timeline/explicacion-de-la-propuesta";
 import type { FuentesDeLaPropuesta } from "@/lib/timeline/referencias-de-la-propuesta";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
@@ -274,6 +278,9 @@ export interface PropuestaEnElGantt {
   /** L4: con qué material se armó la propuesta (el GET, `referenciasDeLaPropuesta.fuentes`). El porqué de cada fase
    *  dice su fuente con un chip solo si el motivo calza con una real (`fuenteDelMotivo`); si no, «Según la IA: …». */
   fuentes?: FuentesDeLaPropuesta | null;
+  /** L6: el porqué con fuentes NUEVAS, guardado en la propuesta (`explicacionEnPantalla`), y si es de cuando se generó.
+   *  Con él, cada fase dice su frase o, sin frase, solo un motivo verificado; nunca «Según la IA». */
+  explicacion?: ExplicacionEnPantalla | null;
 }
 
 // Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
@@ -818,28 +825,55 @@ function CasillasDeLaFase({
  *  antes y el después (se mudó de la lista de la barra).
  *  L4: el motivo lo escribió la IA. Si calza con una fuente REAL de la corrida (`fuenteDelMotivo`: las instrucciones,
  *  una reunión o una nota que nombra como palabras completas), se ve el chip de esa fuente (el motivo, en su `title`);
- *  si no, el motivo atribuido: «Según la IA: …». */
-function PorQueDeLaFase({ casillas, fuentes }: { casillas: readonly CasillaDeCambio[]; fuentes: FuentesDeLaPropuesta | null }) {
+ *  si no, el motivo atribuido: «Según la IA: …».
+ *  L6: la prioridad la decide `porqueDeLaFase` (lib/timeline/explicacion-de-la-propuesta.ts): la frase de L6 con sus
+ *  chips > el motivo verificado > «Según la IA», este solo sin explicación guardada. Con explicación y sin frase ni
+ *  motivo verificado, no hay línea (lo dice «Más», una vez). */
+function PorQueDeLaFase({
+  fase,
+  casillas,
+  fuentes,
+  explicacion,
+}: {
+  fase: string;
+  casillas: readonly CasillaDeCambio[];
+  fuentes: FuentesDeLaPropuesta | null;
+  explicacion: ExplicacionEnPantalla | null;
+}) {
   const motivos = [...new Set(casillas.flatMap((c) => (c.motivo ? [c.motivo] : [])))];
   const conDetalle = casillas.filter((c) => c.detalle.length > 0);
-  if (motivos.length === 0 && conDetalle.length === 0) return null;
+  const porque = porqueDeLaFase(fase, motivos, explicacion, fuentes);
+  if (!porque && conDetalle.length === 0) return null;
   return (
     <div className="space-y-1 text-xs">
-      {motivos.map((m) => {
-        const fuente = fuenteDelMotivo(m, fuentes);
-        return fuente ? (
-          <p key={m} className="flex flex-wrap items-center gap-1.5 text-fg-muted">
-            <span>Sale de:</span>
-            <span className="rounded border border-info-line bg-info-surface px-1.5 py-px text-[10px] text-info-ink" title={m}>
-              {fuente.texto}
+      {porque?.tipo === "frase" && (
+        <p className="flex flex-wrap items-center gap-1.5 text-fg-secondary">
+          <span>
+            <span className="font-semibold">Por qué:</span> {porque.frase}
+            {porque.vieja && <span className="text-fg-muted"> {TEXTO_DE_CUANDO_SE_GENERO}</span>}
+          </span>
+          {porque.fuentes.map((f) => (
+            <span key={f} className="rounded border border-info-line bg-info-surface px-1.5 py-px text-[10px] text-info-ink">
+              {f}
             </span>
-          </p>
-        ) : (
-          <p key={m} className="text-fg-muted line-clamp-2" title={m}>
-            Según la IA: {m}
-          </p>
-        );
-      })}
+          ))}
+        </p>
+      )}
+      {porque?.tipo === "motivos" &&
+        porque.motivos.map(({ motivo: m, fuente }) =>
+          fuente ? (
+            <p key={m} className="flex flex-wrap items-center gap-1.5 text-fg-muted">
+              <span>Sale de:</span>
+              <span className="rounded border border-info-line bg-info-surface px-1.5 py-px text-[10px] text-info-ink" title={m}>
+                {fuente.texto}
+              </span>
+            </p>
+          ) : (
+            <p key={m} className="text-fg-muted line-clamp-2" title={m}>
+              Según la IA: {m}
+            </p>
+          ),
+        )}
       {conDetalle.map((c) => (
         <details key={c.clave}>
           <summary className="cursor-pointer font-semibold text-info-ink">
@@ -1865,7 +1899,14 @@ export default function TimelineGantt({
                     ]);
                     return (
                       <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
-                        {vistaDeLaFase && <PorQueDeLaFase casillas={vistaDeLaFase.casillas} fuentes={propuesta?.fuentes ?? null} />}
+                        {vistaDeLaFase && (
+                          <PorQueDeLaFase
+                            fase={p.id ?? p.key}
+                            casillas={vistaDeLaFase.casillas}
+                            fuentes={propuesta?.fuentes ?? null}
+                            explicacion={propuesta?.explicacion ?? null}
+                          />
+                        )}
                         {semanas.map((filas, relWeek) => {
                           if (filas.length === 0) return null;
                           const absW = absoluteWeek(range.start, relWeek);

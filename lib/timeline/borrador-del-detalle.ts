@@ -58,11 +58,13 @@ import {
   type EstadoDeLasTareas,
   type EstructuraHipotetica,
   type FaseDesfasada,
+  type Cambio,
   type RecalculoDelBorrador,
   type RecalculoEnElCable,
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
+import { huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 import { MENSAJE_PROPUESTA_CAMBIO, SELECT_DE_FASE, SELECT_DE_TAREA } from "./escribir-estructura";
 import { AVISO_PROPUESTA_PENDIENTE, MENSAJE_ESTRUCTURA_EN_CURSO } from "./propuesta-de-estructura";
 import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
@@ -751,16 +753,49 @@ async function avisarEnLaCorrida(corrida: string, analysisJson: unknown, aviso: 
   }
 }
 
+/**
+ * L6 (§7.4): lo que la ruta le suma a la fusión. `explicar`: el porqué de la propuesta con fuentes NUEVAS (una llamada
+ * a Haiku, medida). Corre ANTES de la escritura y va en la MISMA escritura; los tests pasan un doble.
+ */
+export interface ExtrasDeLaFusion {
+  explicar?: (e: { vivo: Vivo; cambios: readonly Cambio[] }) => Promise<ExplicacionSinSello | null>;
+}
+
+/** L6: cuánto espera la fusión a la explicación. Pasado eso, escribe sin ella (la pantalla cae a lo de L4). */
+export const TOPE_DE_LA_EXPLICACION_MS = 15_000;
+
+/**
+ * L6: `p`, o null si tarda más de `ms` o si tira (también si tira ANTES de dar su promesa). Lo que se espera acá es
+ * opcional: nunca frena ni tumba la escritura de la propuesta.
+ */
+export function conTope<T>(p: () => Promise<T> | null | undefined, ms: number): Promise<T | null> {
+  let reloj: ReturnType<typeof setTimeout> | undefined;
+  const tope = new Promise<null>((resolve) => {
+    reloj = setTimeout(() => resolve(null), ms);
+  });
+  const valor = (async () => (await p()) ?? null)().catch(() => null);
+  return Promise.race([valor, tope]).finally(() => clearTimeout(reloj));
+}
+
 /** Lo que la ruta le pasa a la fusión: la corrida, lo que vio el agente y lo que devolvió. */
 interface EntradaDeLaFusion {
   timelineId: string;
   corrida: string;
   estructura: EstructuraHipotetica;
+  /** L6: la salida de la corrida TAL COMO SE GUARDÓ (`salidaDeLaCorrida`, con `fuentesDeLaGeneracion`): si la fusión se
+   *  pierde, `avisarEnLaCorrida` pisa el `output` con esto y lo leído no se pierde. */
   analysisJson: unknown;
   huellas: HuellasDeFrontera | null;
   cortado: boolean;
   /** Los tests inyectan uno determinista. */
   nuevaClave?: () => string;
+  /** L6: el porqué (la ruta; los tests, un doble). Sin él, la propuesta se escribe sin explicación. */
+  extras?: ExtrasDeLaFusion;
+}
+
+/** L6: lo que una vuelta de la fusión deja para la siguiente: la explicación ya pedida (una sola llamada). */
+interface MemoDeLaFusion {
+  explicacion?: ExplicacionSinSello | null;
 }
 
 /** Cómo termina UNA vuelta de la fusión: escrita, perdida (con su motivo) u otra vuelta (no entró). */
@@ -811,8 +846,9 @@ function conLaFusion(
 export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise<ResultadoDeLaFusion> {
   let motivo = MOTIVO_TAREAS_PERDIDAS;
   let eraRecalculo = false;
+  const memo: MemoDeLaFusion = {};
   for (let vuelta = 0; vuelta < VUELTAS_DE_LA_FUSION; vuelta++) {
-    const r = await unaVueltaDeLaFusion(i, eraRecalculo);
+    const r = await unaVueltaDeLaFusion(i, eraRecalculo, memo);
     if (r.que === "hecho") return r.resultado;
     motivo = r.motivo;
     eraRecalculo = motivo === MOTIVO_RECALCULO_PERDIDO;
@@ -822,8 +858,9 @@ export async function fusionarDetalleEnElBorrador(i: EntradaDeLaFusion): Promise
   return { estado: "perdido" };
 }
 
-/** UNA vuelta: leer, fusionar y escribir condicionado. `eraRecalculo`: la vuelta anterior era el recálculo. */
-async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean): Promise<Vuelta> {
+/** UNA vuelta: leer, fusionar y escribir condicionado. `eraRecalculo`: la vuelta anterior era el recálculo. `memo`: lo
+ *  que ya pidió una vuelta anterior (L6: la explicación, una sola vez). */
+async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean, memo: MemoDeLaFusion): Promise<Vuelta> {
   const tl = await prisma.projectTimeline.findUnique({
     where: { id: i.timelineId },
     select: {
@@ -905,6 +942,16 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean):
     return { que: "hecho", resultado: { estado: "sin-cambios", observaciones: fusionado.observaciones } };
   }
 
+  /* ⭐ L6 (§7.4): EL PORQUÉ, antes de la escritura y en la MISMA escritura (nunca en otra: una segunda escritura se
+     perdería con las casillas o el chat de por medio). La lista que se explica y la que se escribe es UNA
+     (`cambiosFinales`), y la huella sale de ella: así la pantalla sabe si el chat la cambió después. Con tope de 15 s y
+     sin tirar: pasado el tope, con el tope diario de IA agotado o si la llamada falla, se escribe sin explicación.
+     Memoizada: si la escritura no entra, la vuelta siguiente no vuelve a llamar. */
+  const cambiosFinales = fusionado.cambios;
+  if (!("explicacion" in memo)) {
+    memo.explicacion = await conTope(() => i.extras?.explicar?.({ vivo, cambios: cambiosFinales }), TOPE_DE_LA_EXPLICACION_MS);
+  }
+
   const escrita = await prisma.projectTimeline.updateMany({
     where: donde,
     data: {
@@ -913,9 +960,19 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean):
         {
           version: fusionado.version,
           observaciones: fusionado.observaciones,
-          cambios: fusionado.cambios,
+          cambios: cambiosFinales,
           tareas: fusionado.tareas,
           tareasArmadasPara: fusionado.tareasArmadasPara,
+          ...(memo.explicacion
+            ? {
+                explicacion: {
+                  ...memo.explicacion,
+                  corrida: i.corrida,
+                  version: fusionado.version,
+                  huellaDeCambios: huellaDeLosCambios(cambiosFinales),
+                },
+              }
+            : {}),
         },
         fusionado.ajustadasPorElChat,
       ),

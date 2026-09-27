@@ -197,6 +197,13 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "plomeria",
     motivo: "Hidrata los `sourceSessionIds` de las corridas de la propuesta (título y fecha para el chip de su fuente). Lo lee una persona; no le habla a un modelo.",
   },
+  // L6 (2026-09-26): el porqué de la propuesta, con fuentes nuevas.
+  "lib/timeline/fuentes-de-la-explicacion.ts": {
+    clase: "contexto",
+    motivo:
+      "Las reuniones NUEVAS que leyó el paso 2 (resumen y minuta) van a la llamada de Haiku que explica la propuesta. " +
+      "Son ids que el material ya filtró con soloOcurridas, y la consulta vuelve a cortar por fecha (hasta que leyó).",
+  },
 };
 
 /**
@@ -223,6 +230,7 @@ const CORTAN_POR_FECHA = [
   "app/api/projects/[projectId]/process-session/route.ts",
   "app/api/sessions/analyze/route.ts",
   "lib/contexto/cargar.ts",
+  "lib/timeline/fuentes-de-la-explicacion.ts",
 ];
 
 const RAIZ = join(__dirname, "..", "..");

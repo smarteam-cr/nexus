@@ -36,6 +36,7 @@ import TimelineGantt, { estiloDeLaFila, type GanttPhase, type GanttTaskStatus, t
 import { collectClientBlockers } from "./client-blockers";
 import type { RecalculoEnPantalla } from "./recalculo-de-tareas";
 import type { FuentesDeLaPropuesta } from "./referencias-de-la-propuesta";
+import { huellaDeLosCambios, TEXTO_DE_CUANDO_SE_GENERO, type ExplicacionEnPantalla } from "./explicacion-de-la-propuesta";
 import { borradorDelFixture, FASE_NUEVA, FASE_QUE_SE_ALARGA, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import {
   claveDeCampo,
@@ -173,6 +174,8 @@ function pintar(
     ajustar?: (v: VistaDeLaPropuesta) => VistaDeLaPropuesta;
     /** L4: con qué material se armó la propuesta (el porqué de cada fase dice su fuente si calza). */
     fuentes?: FuentesDeLaPropuesta | null;
+    /** L6: el porqué con fuentes nuevas guardado en la propuesta. */
+    explicacion?: ExplicacionEnPantalla | null;
   } = {},
 ): Pintado {
   const r = resumir(VIVO, b, o.sin ?? [], LISTAS);
@@ -195,6 +198,7 @@ function pintar(
     cierre: { antes: "13 oct", despues: "10 nov" },
     recalculo: o.recalculo ?? null,
     fuentes: o.fuentes ?? null,
+    explicacion: o.explicacion ?? null,
   };
   const marcas = new Map(r.proyeccion.fases.flatMap((f) => (f.marca ? [[f.clave, f.marca] as const] : [])));
   const html = renderToStaticMarkup(
@@ -808,5 +812,53 @@ describe("L3 P3d · el Gantt con lo que le arma el canvas", () => {
     const casilla = p.v.porFase.get(f.id)!.casillas.find((c) => c.clave === seVa.clave)!;
     expect(casilla.nota).toBe("Se queda con 2 tareas con avance, cargadas o editadas a mano.");
     expect(filaDeFase(p.html, f.id)).toContain(`>${casilla.nota}</span>`);
+  });
+});
+
+describe("L6 · el porqué de la fase, con fuentes NUEVAS", () => {
+  const desplegado = (html: string, clave: string) => {
+    const i = html.indexOf(`data-fase-key="${clave}"`);
+    const j = html.indexOf("data-fase-key=", i + 1);
+    return html.slice(i, j < 0 ? html.length : j);
+  };
+  const FRASE = "Se alarga porque tus instrucciones nuevas piden probar la integración antes de abrirla.";
+  const CITA = { tipo: "instrucciones" as const, titulo: null, fecha: null };
+  const conFrase = (vieja: boolean, fases = [{ fase: FASE_QUE_SE_ALARGA, frase: FRASE, fuentes: [CITA] }]): ExplicacionEnPantalla => ({
+    explicacion: {
+      corrida: "r-paso2",
+      version: 2,
+      huellaDeCambios: huellaDeLosCambios(BORRADOR.cambios),
+      general: null,
+      fases,
+      sinMaterial: [],
+      desde: "2026-09-25T15:00:00.000Z",
+    },
+    vieja,
+  });
+  const SIN_INSTRUCCIONES: FuentesDeLaPropuesta = { instrucciones: false, reuniones: [], notas: [] };
+
+  it("⭐ con una frase de L6: «Por qué: …» con su chip, y nada de «Según la IA»", () => {
+    /* La edición que la pone en rojo: pintar el motivo del paso 1 aunque haya frase (la frase verificada es la que
+       manda), o no pasarle la explicación a `PorQueDeLaFase`. */
+    const html = desplegado(pintar(BORRADOR, { fuentes: SIN_INSTRUCCIONES, explicacion: conFrase(false) }).html, FASE_QUE_SE_ALARGA);
+    expect(html).toContain(`Por qué:</span> ${FRASE}`);
+    expect(html).toMatch(/<span class="rounded border border-info-line bg-info-surface[^"]*">Instrucciones adicionales · línea nueva<\/span>/);
+    expect(html).not.toContain("Según la IA");
+    expect(html).not.toContain(TEXTO_DE_CUANDO_SE_GENERO);
+  });
+
+  it("⭐ con explicación y SIN frase ni motivo verificado, no hay línea (lo dice «Más», una vez)", () => {
+    /* La edición que la pone en rojo: volver a «Según la IA: …» con una explicación guardada. */
+    const html = desplegado(pintar(BORRADOR, { fuentes: SIN_INSTRUCCIONES, explicacion: conFrase(false, []) }).html, FASE_QUE_SE_ALARGA);
+    expect(html).not.toContain("Según la IA");
+    expect(html).not.toContain("Por qué:");
+    // Sin explicación guardada (antes de L6), lo de L4.
+    expect(desplegado(pintar(BORRADOR, { fuentes: SIN_INSTRUCCIONES }).html, FASE_QUE_SE_ALARGA)).toContain("Según la IA:");
+  });
+
+  it("⭐ si el chat editó la propuesta después, la frase dice «(de cuando se generó)»", () => {
+    const html = desplegado(pintar(BORRADOR, { explicacion: conFrase(true) }).html, FASE_QUE_SE_ALARGA);
+    expect(html).toContain(FRASE);
+    expect(html).toContain(TEXTO_DE_CUANDO_SE_GENERO);
   });
 });

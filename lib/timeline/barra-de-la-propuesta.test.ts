@@ -21,6 +21,7 @@ import { borradorDelFixture, leerFixtureGrande, vivoDelFixture } from "./__fixtu
 import { fraseDelCierre, LINEA_DEL_CLIENTE, resumir, tituloDeLaBarra, TEXTO_VER_ANTES } from "./borrador";
 import { textoDeLosChoques, textoDelSiguiente, TITULO_DEL_SIGUIENTE } from "./vista-de-la-propuesta";
 import { mensajeDeLaPropuesta, TEXTO_DE_LAS_FUENTES, type MensajeDeLaPropuesta } from "./mensaje-de-la-propuesta";
+import { huellaDeLosCambios, lineaSinMaterial, TEXTO_DE_CUANDO_SE_GENERO, type ExplicacionEnPantalla } from "./explicacion-de-la-propuesta";
 
 const FIXTURE = leerFixtureGrande();
 const VIVO = vivoDelFixture(FIXTURE);
@@ -247,5 +248,45 @@ describe("L4 · el mensaje de arriba en la barra", () => {
   it("el aviso «Es prácticamente un cronograma nuevo» se fue: lo dicen el título y «Más»", () => {
     /* La edición que la pone en rojo: volver a pintar el recuadro del aviso además del título (Elías pidió menos texto). */
     expect(texto(html)).not.toContain("prácticamente un cronograma nuevo");
+  });
+});
+
+describe("L6 · el porqué con fuentes nuevas, en la barra", () => {
+  const GENERAL = "Tus instrucciones nuevas alargan la integración y suman un piloto.";
+  const explicacion = (vieja: boolean): ExplicacionEnPantalla => ({
+    explicacion: {
+      corrida: "r-paso2",
+      version: 2,
+      huellaDeCambios: huellaDeLosCambios(BORRADOR.cambios),
+      general: { frase: GENERAL, fuentes: [{ tipo: "instrucciones", titulo: null, fecha: null }] },
+      fases: [],
+      sinMaterial: ["f02", "f03", "f04"],
+      desde: "2026-09-25T15:00:00.000Z",
+    },
+    vieja,
+  });
+
+  it("⭐ la frase general va debajo de las líneas del mensaje, con su chip; «Más» dice UNA vez las fases sin material", () => {
+    /* Las ediciones que la ponen en rojo: no pasarle la explicación a la barra, meter la frase en lo fijo, o dejar la
+       línea de las fases sin material fuera de «Más». */
+    const { fija, abajo } = partes(pintar({ explicacion: explicacion(false) }));
+    expect(fija).not.toContain(GENERAL);
+    const t = texto(abajo);
+    expect(t).toContain(`Por qué: ${GENERAL}`);
+    expect(t.indexOf(GENERAL)).toBeGreaterThan(t.indexOf(M.lineas[M.lineas.length - 1]));
+    expect(abajo).toContain(">Instrucciones adicionales · línea nueva</span>");
+    const linea = lineaSinMaterial(explicacion(false).explicacion)!;
+    expect(linea).toBe("3 fases cambian sin una reunión, nota o instrucción nueva que las nombre (desde la generación del 25 sep).");
+    const mas = abajo.slice(abajo.indexOf("<details"), abajo.indexOf("</details>"));
+    expect(texto(mas)).toContain(linea);
+    expect(texto(abajo).split(linea).length - 1, "la línea sale más de una vez").toBe(1);
+    expect(t).not.toContain(TEXTO_DE_CUANDO_SE_GENERO);
+  });
+
+  it("⭐ vieja: «(de cuando se generó)»; sin explicación, nada de esto", () => {
+    expect(texto(pintar({ explicacion: explicacion(true) }))).toContain(`${GENERAL} ${TEXTO_DE_CUANDO_SE_GENERO}`);
+    const sin = texto(pintar());
+    expect(sin).not.toContain("Por qué:");
+    expect(sin).not.toContain("instrucción nueva que las nombre");
   });
 });
