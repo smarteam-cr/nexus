@@ -14,6 +14,7 @@
  * Desde M2 (2026-09-27, bloque 9): con `hitos`, un kickoff por proyecto, el cierre y la entrega sin duplicados
  * nuevos (R15) y la IA que no repite lo que se queda (R14). Sin `hitos`, los bloques 1-8 quedan como estaban.
  * Desde M3 (2026-09-27, bloque 10): con `pasado`, lo que ya pasó no se reescribe (R13). Sin `pasado`, todo igual.
+ * Desde M4 P4c (2026-09-27, bloque 11): lo que el sistema corrió desde hoy (las movidas) no lo reescribe la IA.
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import fs from "node:fs";
@@ -27,14 +28,19 @@ import {
   vivoDelFixture,
 } from "./__fixtures__/propuesta-grande";
 import {
+  borradorVacio,
+  claveDeCampo,
   claveDeTareaQueCambia,
   estructuraHipotetica,
   faseDeLaTarea,
   FORMATO_BORRADOR,
   fotoDeTarea,
+  leerBorrador,
   planDeAplicacion,
+  proyectar,
   resumir,
   type Borrador,
+  type Cambio,
   type CambioFaseCambia,
   type CambioFaseNueva,
   type CambioTareaCambia,
@@ -45,6 +51,8 @@ import {
   type Vivo,
 } from "./borrador";
 import { MOTIVO_DEL_KICKOFF_QUE_FALTA, OBSERVACION_SIN_KICKOFF, TAREA_DE_KICKOFF } from "./hitos";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "./reprogramar-desde-hoy";
 import {
   activityTypePropuesto,
   cambiosDeTareasDelDetalle,
@@ -1496,5 +1504,131 @@ describe("10 · M3: lo que ya pasó no se reescribe (R13)", () => {
     // Con la Semana 0 todavía por delante (el mismo día, un proyecto que arranca la semana que viene), también.
     const futuro = conPasado(sinKickoff, propuesta, { pasado: { ancla: "2026-09-29", hoy: PASADO.hoy } });
     expect(futuro.tareas.filter((c) => c.tipo === "tarea-nueva" && c.delSistema === "hito")).toHaveLength(1);
+  });
+});
+
+describe("11 · M4 P4c: lo que corrió el código no lo reescribe la IA (D6)", () => {
+  /* Spec del replanteo §5.4 (2026-09-27). La marca del paso 2 reprograma lo atrasado desde hoy (reprogramar-desde-hoy.ts,
+     en el orden del plan, lo que decidió Elías) y el paso 2 llega DESPUÉS, sobre esa estructura. Las abiertas que el
+     sistema corrió con su fase (las MOVIDAS) no las reemplaza la IA, R14 las cuenta en su semana nueva y las fusiones
+     las conservan. Con el `hoy` fijo de las guardas: la S18. */
+  const FX = leerFixtureGrande();
+  const HOY = new Date(FX.hoy);
+  const PASADO = { ancla: FX.ancla, hoy: HOY };
+  const HITOS = { recurrente: false, conSemanaCero: true };
+  /** «Semana 0» (S0–S1, hecha) · «Diseño» (S2–S5, empezó y quedó atrasado): una hecha, una pendiente y una revisión
+   *  semanal · «Pruebas» (S6–S7, no empezó). */
+  const VIVO_M4: Vivo = {
+    ancla: FX.ancla,
+    fases: [
+      fase("s0", "Semana 0", 2, [tarea("k1", "Sesión de kickoff", 0, { status: "DONE", type: "SESSION" })], { status: "DONE" }),
+      fase(
+        "d",
+        "Diseño",
+        4,
+        [
+          tarea("d0", "Mapear procesos", 0, { status: "DONE" }),
+          tarea("d1", "Definir pipeline", 1),
+          tarea("d2", "Revisión semanal", 2, { type: "SESSION" }),
+          tarea("d3", "Revisión semanal", 3, { type: "SESSION" }),
+        ],
+        { status: "IN_PROGRESS", startWeek: 2 },
+      ),
+      fase("p", "Pruebas", 2, [tarea("p1", "Probar flujos", 0)], { status: "PENDING", startWeek: 6 }),
+    ],
+  };
+  /** El borrador que deja la marca: «Diseño» se estira (4 → 19) y sus tres abiertas se corren 15; «Pruebas» arranca en
+   *  la S21, entera. */
+  const REPROGRAMADO = (() => {
+    const vacio = JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+    const r = reprogramarDesdeHoy({ vivo: VIVO_M4, borrador: leerBorrador(vacio)!, hoy: HOY, politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!;
+    return leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio, r))))!;
+  })();
+  const movidas = (cambios: readonly Cambio[]) =>
+    cambios.flatMap((c) => (c.tipo === "tarea-cambia" && c.desdeHoy ? [`${c.tareaId}@${c.a.weekIndex}`] : []));
+
+  /** El paso 2 sobre lo reprogramado. «Regenerar todo»: con `pasado`; el recálculo: sin él y con su alcance (D3). */
+  function paso2(fases: Array<{ id: string; tasks: TareaCruda[] }>, modo: "regenerar-todo" | "recalculo") {
+    const estructura = estructuraHipotetica(VIVO_M4, REPROGRAMADO);
+    const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({ estructura, analysisJson: salida(fases), huellas: null, cortado: false });
+    return cambiosDeTareasDelDetalle({
+      estructura,
+      vivo: VIVO_M4,
+      propuestas,
+      borrador: REPROGRAMADO,
+      tags: [],
+      nuevaClave,
+      idsDesconocidos,
+      soloFases: modo === "recalculo" ? new Set(fases.map((f) => f.id)) : null,
+      respetarTerminadas: modo === "regenerar-todo",
+      hitos: HITOS,
+      pasado: modo === "regenerar-todo" ? PASADO : null,
+    });
+  }
+
+  it("el punto de partida: tres movidas en «Diseño» y «Pruebas» entera en la S21", () => {
+    expect(movidas(REPROGRAMADO.cambios)).toEqual(["d1@16", "d2@17", "d3@18"]);
+    const deFase = REPROGRAMADO.cambios.flatMap((c) => (c.tipo === "fase-cambia" ? [`${c.clave}→${String(c.a)}`] : []));
+    expect(deFase).toEqual([`${claveDeCampo("d", "durationWeeks")}→19`, `${claveDeCampo("p", "startWeek")}→21`]);
+  });
+
+  it("⭐ una movida no sale en R2: ni en «Regenerar todo» ni en el recálculo (sin `pasado`, su semana vieja no la protege)", () => {
+    /* La edición que la pone en rojo: dejarla en `reemplazables` (sin `movidasDesdeHoy`). En el recálculo salían «-d1»,
+       «-d2» y «-d3»: dos cambios de la misma tarea, y «Aplicar» quitaba lo que el sistema acababa de correr. */
+    const propuesta = [{ id: "d", tasks: [{ title: "Documentar decisiones", weekIndex: 18 }] }];
+    expect(resumen(paso2(propuesta, "regenerar-todo"), "d")).toEqual(["+Documentar decisiones@18"]);
+    expect(resumen(paso2(propuesta, "recalculo"), "d"), "el recálculo reemplazó una movida").toEqual(["+Documentar decisiones@18"]);
+    // Una fase sin empezar que se mueve entera no tiene movidas: sus pendientes se reemplazan como en cualquier fase futura.
+    const deLaQueSeMueve = paso2([{ id: "p", tasks: [{ title: "Probar integraciones", weekIndex: 0 }] }], "regenerar-todo");
+    expect(resumen(deLaQueSeMueve, "p")).toEqual(["-p1", "+Probar integraciones@0"]);
+  });
+
+  it("⭐ R14: lo que repite una movida no entra, comparado en su semana NUEVA (también una sesión semanal)", () => {
+    /* Las ediciones que la ponen en rojo: comparar con la semana vieja (sin `enSuSemana`: las revisiones de la S17 y la
+       S18 no se reconocían, la sesión semanal es ambigua en otra semana, y entraban duplicadas), o dejar la movida en
+       `reemplazables` (en el recálculo, «Definir pipeline» volvía como «~d1», un segundo cambio de la misma tarea). */
+    const propuesta = [
+      {
+        id: "d",
+        tasks: [
+          { title: "Definir pipeline", weekIndex: 16 },
+          { title: "Revisión semanal", weekIndex: 17, type: "SESSION" },
+          { title: "Revisión semanal", weekIndex: 18, type: "SESSION" },
+        ],
+      },
+    ];
+    for (const modo of ["regenerar-todo", "recalculo"] as const) {
+      const r = paso2(propuesta, modo);
+      expect(resumen(r, "d"), `${modo}: entró lo que repite una movida`).toEqual([]);
+      expect(r.observaciones, modo).toContain("No entran 3 tareas de la IA: repiten una que ya está.");
+    }
+    // En otra semana y sin ambigüedad, también: «Definir pipeline» en la S12 es la movida de la S16.
+    const otraSemana = paso2([{ id: "d", tasks: [{ title: "Definir pipeline", weekIndex: 12 }] }], "recalculo");
+    expect(resumen(otraSemana, "d")).toEqual([]);
+  });
+
+  it("⭐ la fusión conserva lo que corrió el sistema: `fusionarDetalle` y el recálculo (`mezclarTareasDeFases`)", () => {
+    /* La edición que la pone en rojo: `seConserva` sin `desdeHoy`: la fusión que llega después de la marca borraba las
+       arrastradas con las tareas de la IA de antes, y «Diseño» se estiraba sin que se corriera lo que le falta. */
+    const r = paso2([{ id: "d", tasks: [{ title: "Documentar decisiones", weekIndex: 18 }] }], "regenerar-todo");
+    const fusionado = fusionarDetalle(REPROGRAMADO, r, "run-2");
+    expect(movidas(fusionado.cambios), "la fusión perdió las arrastradas").toEqual(["d1@16", "d2@17", "d3@18"]);
+    const plan = planDeAplicacion(VIVO_M4, fusionado, [], { tareas: "listas" });
+    expect(plan.arrastradas).toEqual({ aplican: 3, choques: 0 });
+    const diseno = proyectar(VIVO_M4, fusionado).fases.find((f) => f.id === "d")!;
+    expect(diseno.tareas.map((t) => `${t.title}@${t.weekIndex}`)).toEqual([
+      "Mapear procesos@0",
+      "Definir pipeline@16",
+      "Revisión semanal@17",
+      "Revisión semanal@18",
+      "Documentar decisiones@18",
+    ]);
+    // El recálculo de «Diseño» reemplaza las tareas de la IA de su fase, no lo que corrió el sistema.
+    const recalculo = paso2([{ id: "d", tasks: [{ title: "Cerrar el diseño", weekIndex: 18 }] }], "recalculo");
+    const mezclados = mezclarTareasDeFases(fusionado.cambios, recalculo.tareas, new Set(["d"]));
+    expect(movidas(mezclados), "el recálculo perdió las arrastradas").toEqual(["d1@16", "d2@17", "d3@18"]);
+    expect(resumen({ ...recalculo, tareas: mezclados.filter((c): c is CambioTareaNueva => c.tipo === "tarea-nueva") })).toEqual([
+      "+Cerrar el diseño@18",
+    ]);
   });
 });

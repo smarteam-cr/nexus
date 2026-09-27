@@ -765,6 +765,8 @@ const corta = (t: string) => (t.length > LARGO_DE_UNA_HECHA ? `${t.slice(0, LARG
 
 /** M3: por qué se queda lo pendiente de una semana que ya pasó (R13), como lo lee el modelo en «se queda». */
 export const QUEDO_SIN_HACER = "quedó sin hacer";
+/** M4 (D6): por qué se queda una abierta que el sistema corrió con su fase (R2 no la reemplaza), en «se queda». */
+export const SE_CORRIO_A_HOY = "se corrió a hoy";
 
 /** M2: por qué se queda una tarea que no es ni hecha ni pendiente de la IA (R2 no la reemplaza). null = no se queda por eso. */
 function porQueSeQueda(t: TareaDelVivo): string | null {
@@ -818,6 +820,9 @@ function hitosParaElModelo(
  * de estar en `pendientes` (ahí decía «repite su título EXACTO y su weekIndex», y R13 y R14 le tiraban la repetición) y
  * pasa a `seQuedan` con «quedó sin hacer»; y `pasado` dice, por fase, desde qué weekIndex se puede proponer. Las mismas
  * fases que R13: con alguna tarea viva (y sin las terminadas, que ya van en «FASES TERMINADAS»).
+ * M4 (2026-09-27, D6): las MOVIDAS (lo que el sistema corrió desde hoy, `desdeHoy` en el borrador) tampoco van en
+ * `pendientes`: R2 no las reemplaza. Van en `seQuedan` con «se corrió a hoy», aunque su semana vieja haya vencido (R13 mira
+ * la nueva), y también con alcance (el recálculo tampoco las reemplaza).
  */
 function loQueYaHayDe(
   estructura: EstructuraHipotetica,
@@ -829,6 +834,7 @@ function loQueYaHayDe(
 ): LoQueYaHay {
   const conAlcance = !!soloFases && soloFases.length > 0;
   const vivas = new Map(vivo.fases.map((f) => [f.id, f]));
+  const movidas = new Set(borrador.cambios.flatMap((c) => (c.tipo === "tarea-cambia" && c.desdeHoy ? [c.tareaId] : [])));
   const conPasado = conAlcance ? null : pasado;
   const rangos = computePhaseRanges(estructura.fases);
   const porFase: NonNullable<LoQueYaHay["pasado"]>["porFase"] = [];
@@ -842,7 +848,9 @@ function loQueYaHayDe(
     const deLaIA = (t: TareaDelVivo) => t.status === "PENDING" && t.source !== "HUMAN";
     const hechas = tareas.filter((t) => t.status === "DONE");
     const seQuedan = tareas.flatMap((t) => {
-      const porque = porQueSeQueda(t) ?? (deLaIA(t) && vencida(t.weekIndex) ? QUEDO_SIN_HACER : null);
+      const porque = movidas.has(t.id)
+        ? SE_CORRIO_A_HOY
+        : (porQueSeQueda(t) ?? (deLaIA(t) && vencida(t.weekIndex) ? QUEDO_SIN_HACER : null));
       return porque ? [{ titulo: corta(t.title), porque }] : [];
     });
     if (vencida(0) && estado !== "terminada") {
@@ -856,8 +864,9 @@ function loQueYaHayDe(
       estado,
       hechas: hechas.slice(0, HECHAS_POR_FASE).map((t) => corta(t.title)),
       // Lo que la IA puede conservar: pendiente y no escrito a mano (lo demás se queda igual, R2). M3: y no vencido.
+      // M4: ni lo que corrió el sistema (se queda, en «se queda»).
       pendientes: tareas
-        .filter((t) => deLaIA(t) && !vencida(t.weekIndex))
+        .filter((t) => deLaIA(t) && !vencida(t.weekIndex) && !movidas.has(t.id))
         .slice(0, PENDIENTES_POR_FASE)
         .map((t) => ({ titulo: t.title, semana: t.weekIndex })),
       ...(seQuedan.length > 0 ? { seQuedan: seQuedan.slice(0, SE_QUEDAN_POR_FASE) } : {}),

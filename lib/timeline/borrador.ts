@@ -1415,6 +1415,14 @@ export interface PlanDeAplicacion {
   forzadas: FaseDesfasada[];
   /** E2c: el bloqueo que manda es el de las desfasadas (no el de una versión nueva ni el de las tareas «armando»). */
   bloqueoPorDesfasadas: boolean;
+  /**
+   * M4 (2026-09-27, D10, D13): las ARRASTRADAS (`esArrastrada`), aparte: `marcadas`, `aplicables`, `total` y `choques`
+   * no las cuentan (no tienen casilla: van con la duración de su fase). `choques`: las que no se corren porque alguien
+   * las cambió a mano después de la propuesta.
+   */
+  arrastradas: { aplican: number; choques: number };
+  /** M4 (D5): los pins que se escriben (`esPin`, «aplica»). Tampoco cuentan en los totales. */
+  fijadas: number;
 }
 
 const CHOQUE_CAMPO = "Lo cambiaste a mano después de la propuesta: queda como lo dejaste.";
@@ -1611,6 +1619,10 @@ function evaluarCambia(c: CambioTareaCambia, ind: IndiceDelVivo): Evaluacion {
   if (fase ? fase.tareas === undefined : !ind.conTareas) return { estado: "choque", choque: CHOQUE_SIN_TAREAS };
   const viva = ind.tareaPorId.get(c.tareaId);
   if (!viva) return { estado: "choque", choque: CHOQUE_TAREA_AUSENTE };
+  /* M4 (2026-09-27, D13): lo que corre el sistema desde hoy protege lo hecho también AL APLICAR. Si la marcaron hecha
+     (o la suspendieron) entre la propuesta y «Aplicar», ya no se corre: queda en su semana, «ya está» (no un choque: no
+     hay nada que decidir). Sin esto, su semana seguía siendo la del `desde` y se movía una tarea con avance. */
+  if (c.desdeHoy && viva.tarea.status !== "PENDING" && viva.tarea.status !== "IN_PROGRESS") return { estado: "ya-esta" };
   let pendientes = 0;
   let editada = false;
   for (const campo of CAMPOS_DE_TAREA) {
@@ -1721,6 +1733,24 @@ const llaveDeTarea = (titulo: string, semana: number) => `${huellaDeTitulo(titul
 export const esMudanzaSugerida = (c: Cambio): c is CambioTareaCambia & { sugerida: "otra-fase" } =>
   c.tipo === "tarea-cambia" && c.sugerida === "otra-fase";
 
+/**
+ * M4 (2026-09-27, D10): ¿es una ARRASTRADA? Una abierta que el SISTEMA corre con el estiramiento de su fase (lo atrasado
+ * se reprograma desde hoy, reprogramar-desde-hoy.ts): va con ese cambio (`conCambio`), no tiene casilla propia, no es una
+ * unidad numerada y no cuenta en los totales del plan (`planDeAplicacion`).
+ */
+export const esArrastrada = (c: Cambio): c is CambioTareaCambia & { desdeHoy: true; conCambio: string } =>
+  c.tipo === "tarea-cambia" && !!c.desdeHoy && c.conCambio !== undefined;
+
+/**
+ * M4 (2026-09-27, D5): ¿es EL PIN? La contigua ya empezada que lo reprogramado correría queda fija donde está hoy. Sin
+ * casilla: aplica si se aplica algo más (`planDeAplicacion`, paso 9), no es una unidad y no cuenta en los totales.
+ */
+export const esPin = (c: Cambio): c is CambioFaseCambia & { desdeHoy: true; fijaInicio: true } =>
+  c.tipo === "fase-cambia" && !!c.desdeHoy && !!c.fijaInicio;
+
+/** M4: lo que el sistema decide sin casilla (las arrastradas y el pin): ni unidades, ni totales, ni «Siguiente número». */
+export const vaSinCasilla = (c: Cambio): boolean => esArrastrada(c) || esPin(c);
+
 /** L3 (D3): el grupo en que se numera y se pinta una tarea: el de su fase (`faseDeLaTarea`). L7: una mudanza
  *  SUGERIDA, el de su ORIGEN: se ve donde está hoy, con su casilla sin marcar, y su número no depende de la marca.
  *  `faseDeLaTarea` sigue dando el destino (lo usa el plan). */
@@ -1754,20 +1784,24 @@ export interface NumeracionDeLaPropuesta {
  *      conoce), en el orden del borrador.
  * Antes (E2a–E3) la estructura iba 1..k en el orden del borrador y las tareas después: el Gantt,
  * ordenado por fase, habría mostrado los números salteados. `ItemDelPlan.numero` NO cambia (la huella).
+ * M4 (2026-09-27, D10): lo que el sistema decide sin casilla (`vaSinCasilla`) NO es una unidad: ni una arrastrada (si
+ * no, `its[0]` de una fase reprogramada era una arrastrada y su grupo tomaba otro número), ni el pin. `porClave` les da
+ * un número para que el chat las nombre: a la arrastrada, el del cambio de duración con que va; al pin, el del primer
+ * cambio `desdeHoy` de su fase (sin ninguno, el primero de la propuesta). «Siguiente número» no se detiene en ellas.
  */
 export function numeracionDeLaPropuesta(vivo: Vivo, cambios: readonly Cambio[]): NumeracionDeLaPropuesta {
   const porClave = new Map<string, number>();
   const orden: UnidadNumerada[] = [];
   const unidadDe = new Map<string, UnidadNumerada>();
   const numerarCambio = (c: Cambio, fase: string | null) => {
-    if (porClave.has(c.clave)) return;
+    if (porClave.has(c.clave) || vaSinCasilla(c)) return;
     const u: UnidadNumerada = { numero: orden.length + 1, tipo: "cambio", clave: c.clave, fase, yaEsta: false };
     orden.push(u);
     porClave.set(c.clave, u.numero);
   };
   const tareasPorGrupo = new Map<string, string[]>();
   for (const c of cambios) {
-    if (!esCambioDeTarea(c)) continue;
+    if (!esCambioDeTarea(c) || vaSinCasilla(c)) continue;
     const g = grupoDeLaTarea(c);
     tareasPorGrupo.set(g, [...(tareasPorGrupo.get(g) ?? []), c.clave]);
   }
@@ -1804,11 +1838,30 @@ export function numeracionDeLaPropuesta(vivo: Vivo, cambios: readonly Cambio[]):
 
   // 3 · Lo que no tiene fase en la propuesta, en el orden del borrador.
   for (const c of cambios) {
+    if (vaSinCasilla(c)) continue;
     if (esCambioDeTarea(c)) numerarGrupo(grupoDeLaTarea(c));
     else {
       const fase = c.tipo === "fase-nueva" ? c.clave : c.tipo === "fase-cambia" || c.tipo === "fase-se-va" ? c.faseId : null;
       numerarCambio(c, fase !== null && enElOrden.has(fase) ? fase : null);
     }
+  }
+
+  // 4 · M4: lo que va sin casilla toma el número de lo que lo explica (no abre una unidad).
+  const delSistema = cambios.filter((c): c is CambioFaseCambia => c.tipo === "fase-cambia" && !!c.desdeHoy && !esPin(c));
+  const primeroDelSistema = (fase: string | null): number | undefined => {
+    const numeros = delSistema
+      .filter((c) => fase === null || c.faseId === fase)
+      .flatMap((c) => (porClave.has(c.clave) ? [porClave.get(c.clave)!] : []));
+    return numeros.length > 0 ? Math.min(...numeros) : undefined;
+  };
+  for (const c of cambios) {
+    if (porClave.has(c.clave)) continue;
+    const numero = esArrastrada(c)
+      ? porClave.get(c.conCambio)
+      : esPin(c)
+        ? (primeroDelSistema(c.faseId) ?? primeroDelSistema(null))
+        : undefined;
+    if (numero !== undefined) porClave.set(c.clave, numero);
   }
   return { porClave, orden };
 }
@@ -1931,7 +1984,10 @@ export function huellaDeTexto(texto: string): string {
  *      la explican las casillas del CSE (una edición a mano) choca; y si la explican, la fase está
  *      DESFASADA (E2c): sus tareas quedan fuera marcadas `recalcula`, salvo que el CSE la fuerce;
  *   8. E3, defensivo: con una fase que se va, choca todo otro cambio marcado cuyo sujeto es ella
- *      (una tarea que SALE de ella no: se muda antes de que se vaya).
+ *      (una tarea que SALE de ella no: se muda antes de que se vaya);
+ *   9. M4 (2026-09-27): EL PIN (`esPin`, sin casilla) aplica si se aplica algo más. Las arrastradas (`esArrastrada`) van
+ *      con la duración de su fase (`conCambio`, paso 3b) y, si su tarea ya no está abierta, «ya está» (D13). Ni unas ni
+ *      otro cuentan en `marcadas`, `aplicables`, `total` ni `choques`: van en `arrastradas` y `fijadas`.
  * `tareas`: el estado de las tareas del borrador (lo deduce quien llama, de la corrida): mientras
  * se arman, no se aplica. `forzar` (E2c): las fases desfasadas cuyas tareas van tal cual
  * («Aplicar de todos modos»); sobre una fase que no está desfasada no hace nada.
@@ -1948,8 +2004,9 @@ export function planDeAplicacion(
     borrador.cambios.filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva").map((c) => [c.clave, c]),
   );
   const ind = indexar(vivo);
+  // M4 (D5): el pin no tiene casilla: su estado lo decide el paso 9, diga lo que diga `sin`.
   const base = (c: Cambio): EstadoDelCambio => (fuera.has(c.clave) ? "excluido" : "aplica");
-  type Estado = { estado: EstadoDelCambio; choque?: string; dependeDe?: string; recalcula?: true; rescate?: string[] };
+  type Estado ={ estado: EstadoDelCambio; choque?: string; dependeDe?: string; recalcula?: true; rescate?: string[] };
   const desdeEvaluacion = (c: Cambio, ev: Evaluacion): Estado =>
     ev.estado === "choque"
       ? { estado: "choque", choque: ev.choque }
@@ -2287,6 +2344,21 @@ export function planDeAplicacion(
     });
   }
 
+  /* 9) M4 (2026-09-27, D5): EL PIN, al final y sin casilla. Una contigua ya empezada que lo reprogramado correría queda
+     fija donde está hoy: «aplica» si se aplica algo más (que no sea otro pin ni una arrastrada, que van con su cambio);
+     si no, «excluido»: no hay nada que la corra. Nunca choca por lo que el CSE marque o desmarque (así ninguna
+     combinación de casillas corre lo empezado); contra lo vivo sí, como cualquier cambio (paso 1: si alguien le fijó el
+     inicio a mano, choca). Si todo lo demás ya está así, él también: si no, un pin sin nada que decidir dejaba la
+     propuesta sin descartarse sola (`debeDescartarseSolo`). */
+  const noEsPin = borrador.cambios.flatMap((c, i) => (esPin(c) ? [] : [{ c, e: estados[i] }]));
+  const algoAplica = noEsPin.some(({ c, e }) => !esArrastrada(c) && e?.estado === "aplica");
+  const todoYaEsta = noEsPin.every(({ e }) => e?.estado === "ya-esta");
+  borrador.cambios.forEach((c, i) => {
+    const e = estados[i];
+    if (!esPin(c) || !e || (e.estado !== "aplica" && e.estado !== "excluido")) return;
+    estados[i] = { estado: todoYaEsta ? "ya-esta" : algoAplica ? "aplica" : "excluido" };
+  });
+
   const items: ItemDelPlan[] = borrador.cambios.map((cambio, i) => {
     const e = estados[i]!;
     return {
@@ -2423,13 +2495,17 @@ export function planDeAplicacion(
         ? BLOQUEO_TAREAS_EN_CURSO
         : null;
   const porDesfasadas = bloqueoPrevio === null && desfasadas.length > 0;
+  /* M4 (D10): los totales cuentan lo que tiene casilla. Las arrastradas y el pin se escriben (están en `aplicadas` y en
+     la huella) pero no son algo que el CSE marque: van aparte, en `arrastradas` y `fijadas`. */
+  const conCasilla = items.filter((it) => !vaSinCasilla(it.cambio));
+  const arrastradas = items.filter((it) => esArrastrada(it.cambio));
   return {
     items,
     aplicadas,
-    marcadas: aplicadas.length,
-    aplicables: items.filter((it) => it.estado === "aplica" || it.estado === "excluido").length,
-    total: items.filter((it) => it.estado !== "ya-esta").length,
-    choques: items.filter((it) => it.estado === "choque").length,
+    marcadas: conCasilla.filter((it) => it.estado === "aplica").length,
+    aplicables: conCasilla.filter((it) => it.estado === "aplica" || it.estado === "excluido").length,
+    total: conCasilla.filter((it) => it.estado !== "ya-esta").length,
+    choques: conCasilla.filter((it) => it.estado === "choque").length,
     sugeridasSinMarcar: items.filter((it) => it.estado === "excluido" && esMudanzaSugerida(it.cambio)).length,
     huella,
     escrituras,
@@ -2438,6 +2514,11 @@ export function planDeAplicacion(
     desfasadas,
     forzadas,
     bloqueoPorDesfasadas: porDesfasadas,
+    arrastradas: {
+      aplican: arrastradas.filter((it) => it.estado === "aplica").length,
+      choques: arrastradas.filter((it) => it.estado === "choque").length,
+    },
+    fijadas: items.filter((it) => esPin(it.cambio) && it.estado === "aplica").length,
   };
 }
 
@@ -3207,7 +3288,9 @@ function gruposDeTareas(
        el grupo dice el nombre que se queda, no aquél para el que se armaron sus tareas. */
     const desfasada = desfasadas.get(fase);
     return {
-      numero: numeroEnLaLista.get(its[0].cambio.clave) ?? 0,
+      /* M4 (D10): el número del grupo es el de su primera tarea que no es una arrastrada: la arrastrada lleva el número
+         del cambio de duración con que va (`numeracionDeLaPropuesta`), no el del grupo. Sacarlas del grupo es de P4e. */
+      numero: numeroEnLaLista.get((its.find((it) => !esArrastrada(it.cambio)) ?? its[0]).cambio.clave) ?? 0,
       fase,
       nombre:
         desfasada?.nombre ?? borrador.tareasArmadasPara[fase]?.nombre ?? vivas.get(fase)?.name ?? fasesNuevas.get(fase) ?? fase,

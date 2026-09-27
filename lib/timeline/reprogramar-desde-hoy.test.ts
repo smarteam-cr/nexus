@@ -273,7 +273,10 @@ function semanas(vivo: Vivo, guardado: Record<string, unknown>, sin: Iterable<st
 
 /**
  * Las invariantes de §5.11 sobre un cronograma. (1), (2) y (3) para TODA combinación de casillas de fase (las del sistema
- * y las de la IA; las de tareas, marcadas). El pin no tiene casilla: aplica si algo aplica (P4d), y se emula así.
+ * y las de la IA; las de tareas, marcadas). El pin no tiene casilla: aplica si algo aplica.
+ * 2026-09-27, M4 P4d: hasta P4d el pin se emulaba acá (se desmarcaba solo con todo desmarcado); desde P4d lo decide el
+ * plan (`planDeAplicacion`, paso 9), así que las combinaciones van tal cual y lo que se prueba es el plan de verdad. Además,
+ * el pin viaja SIEMPRE en `sin` (una pantalla que intentara desmarcarlo): sin casilla, no lo toca.
  */
 function comprobarInvariantes(nombre: string, vivo: Vivo, guardado: Record<string, unknown>, hoy: Date, fases: PoliticaDeFasesVencidas, conSemanaCero: boolean) {
   const b = leer(guardado);
@@ -295,7 +298,7 @@ function comprobarInvariantes(nombre: string, vivo: Vivo, guardado: Record<strin
   expect(conCasilla.length, `${nombre}: demasiadas casillas para recorrerlas todas`).toBeLessThanOrEqual(12);
   for (let m = 0; m < 1 << conCasilla.length; m++) {
     const sin = conCasilla.filter((_, j) => !(m & (1 << j)));
-    const d = semanas(vivo, con, m === 0 ? [...sin, ...delPin] : sin);
+    const d = semanas(vivo, con, [...sin, ...delPin]);
     const combinacion = `${nombre} · marcadas: ${conCasilla.filter((_, j) => m & (1 << j)).join(", ") || "ninguna"}`;
     // (1) ninguna fase empezada cambia de inicio.
     for (const f of empezadas) expect(d.inicio.get(f.id), `${combinacion} · movió el inicio de ${f.id}, que empezó`).toBe(antes.inicio.get(f.id));

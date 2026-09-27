@@ -61,6 +61,13 @@
  *      una fase a la que la IA solo le propuso cosas del pasado no pierde sus pendientes futuras. El kickoff que sobra
  *      se quita igual (R15), y el que falta se agrega solo si la semana 0 de la Semana 0 no venció.
  *
+ * ── LO QUE CORRIÓ EL CÓDIGO NO LO REESCRIBE LA IA (M4, 2026-09-27, D6) ────────
+ * La marca del paso 2 reprograma lo atrasado desde hoy (reprogramar-desde-hoy.ts): las abiertas de una fase empezada y
+ * atrasada se corren con su fase (`tarea-cambia` con `desdeHoy`, las arrastradas). Esas MOVIDAS: R2 no las reemplaza
+ * (como lo que tocó el chat), R14 las cuenta como algo que se queda, en su semana NUEVA, y R13 no las mira (su semana
+ * vieja venció, la nueva no). Las fusiones las conservan (`seConserva`). Las de una fase sin empezar que se mueve entera
+ * no son movidas: viajan con su fase y se pueden reemplazar como en cualquier fase futura.
+ *
  * ── EL ALCANCE (E2b) ─────────────────────────────────────────────────────────
  * «Regenerar» de una fase pasa `soloFases`: las demás fases se saltan enteras, antes de R8. Así R6
  * (el tipo), R7 (las fijas de la Semana 0, solo si la pedida ES la del arranque) y R8 miran solo la
@@ -284,6 +291,15 @@ export function cambiosDeTareasDelDetalle(i: {
   const tocadasPorElChat = new Set(
     i.borrador.cambios.flatMap((c) => ((c.tipo === "tarea-se-va" || c.tipo === "tarea-cambia") && c.porChat ? [c.tareaId] : [])),
   );
+  /** M4 (D6): las MOVIDAS, las abiertas que corrió el sistema desde hoy, con su semana nueva. La IA no las reemplaza (R2). */
+  const movidasDesdeHoy = new Map(
+    i.borrador.cambios.flatMap((c) => (c.tipo === "tarea-cambia" && c.desdeHoy ? [[c.tareaId, c.a.weekIndex] as const] : [])),
+  );
+  /** M4: una tarea viva como queda: una movida, en su semana NUEVA (R14 compara ahí, y ahí no está vencida: R13). */
+  const enSuSemana = (t: TareaDelVivo): TareaDelVivo => {
+    const nueva = movidasDesdeHoy.get(t.id);
+    return nueva === undefined ? t : { ...t, weekIndex: nueva };
+  };
 
   const tareas: CambioDeTarea[] = [];
   const tipos: CambioFaseCambia[] = [];
@@ -400,10 +416,14 @@ export function cambiosDeTareasDelDetalle(i: {
     // E3: una tarea que el chat quita o cambia no se reemplaza (tendría dos cambios con la misma clave).
     // M2 (R15): tampoco un guardián de hito (se queda aunque la IA no lo repita) ni un kickoff que sobra (sale aparte).
     // M3 (R13): ni lo pendiente de una semana que ya venció: se queda como si tuviera avance.
+    // M4 (D6): ni una movida (la corrió el sistema desde hoy: la semana que cuenta es la nueva, y se queda).
     let reemplazables = sinPropuesta
       ? []
       : actuales
-          .filter((t) => !isKept(t) && !tocadasPorElChat.has(t.id) && !protegidas.has(t.id) && !vencida(t.weekIndex))
+          .filter(
+            (t) =>
+              !isKept(t) && !tocadasPorElChat.has(t.id) && !movidasDesdeHoy.has(t.id) && !protegidas.has(t.id) && !vencida(t.weekIndex),
+          )
           .map((t) => vistas.get(t.id)!);
 
     // R7: las fijas de la Semana 0.
@@ -447,11 +467,14 @@ export function cambiosDeTareasDelDetalle(i: {
     /* R14 (M2): no entra la que repite lo que SE QUEDA en la fase. Se queda lo que R2 no reemplaza (con avance, a mano,
        que el agente no vio, que R7 conservó, un guardián), salvo el kickoff que sobra (se va) y lo que tocó el chat
        (lo filtra `sinLasQueRepitenLoDelChat` en la fusión). Antes de R4b: lo que se va sí puede volver (R4b, R4c).
-       M3: corre también con `pasado`: lo pendiente de una semana vencida se queda (R13) y la IA no lo repite en otra. */
+       M3: corre también con `pasado`: lo pendiente de una semana vencida se queda (R13) y la IA no lo repite en otra.
+       M4: una movida se queda y cuenta en su semana NUEVA (la que ve el CSE), como una pendiente. */
     if (conR14) {
       const seVanPorR2 = new Set(reemplazables.map((t) => t.id));
-      const quedan = enLaFase.filter((t) => !seVanPorR2.has(t.id) && !sobrantes.has(t.id) && !tocadasPorElChat.has(t.id));
-      for (const j of repitenLoQueSeQueda(nuevas, quedan, enLaFase)) {
+      const quedan = enLaFase
+        .filter((t) => !seVanPorR2.has(t.id) && !sobrantes.has(t.id) && !tocadasPorElChat.has(t.id))
+        .map(enSuSemana);
+      for (const j of repitenLoQueSeQueda(nuevas, quedan, enLaFase.map(enSuSemana))) {
         if (j < delAgente.length) repiten++; // una fija que ya está no es «de la IA»: no se cuenta
         nuevas[j] = null;
       }
@@ -707,8 +730,12 @@ const loTocoElChat = (c: Cambio): boolean => esCambioDeTarea(c) && (!!c.porChat 
  * SUGIRIÓ la IA (una hecha que parece de otra fase: nace sin marcar y la decide el CSE). Sin esto, el recálculo de su
  * fase la borraba y su clave quedaba huérfana en `excluidos`. Las sugeridas no entran a `sinLasQueRepitenLoDelChat`:
  * el agente no vuelve a proponer una hecha.
+ * M4 (2026-09-27, D6): y lo que corrió el SISTEMA desde hoy (`desdeHoy`, las arrastradas): lo escribe la marca del paso 2,
+ * antes de la IA, y la fusión que llega después lo borraba con las tareas de la IA de antes. Tampoco entra a
+ * `sinLasQueRepitenLoDelChat`: lo que la IA repite de una movida lo frena R14.
  */
-const seConserva = (c: Cambio): boolean => loTocoElChat(c) || (c.tipo === "tarea-cambia" && !!c.sugerida);
+const seConserva = (c: Cambio): boolean =>
+  loTocoElChat(c) || (c.tipo === "tarea-cambia" && (!!c.sugerida || !!c.desdeHoy));
 
 /**
  * La huella del título COMPLETO: sin mayúsculas, tildes ni signos, como `fingerprintFromTitle`, pero SIN su

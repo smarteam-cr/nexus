@@ -21,6 +21,8 @@
  *      no la fase del motor, y la llegada no le cambia el Gantt a quien está escribiendo.
  *   16. (L3) UNA numeración (`numeracionDeLaPropuesta`): cabecera y después fase por fase; no se mueve al
  *      marcar, y la huella es la de antes de L3.
+ *   19. (M4 P4d) Lo que reprogramó el sistema en el plan: las arrastradas y el pin no cuentan ni son unidades, el pin
+ *      aplica si algo aplica, una arrastrada hecha después queda «ya está», y la huella de antes no cambia.
  *
  * ⚠ E4 (2026-09): lo guardado es siempre v1; la conversión quedó para los productores. Por eso §2, §8,
  * §9, §12 y §13 se reescribieron: ya no hay foto contra la que convertir al leer, y la identidad de una
@@ -36,6 +38,7 @@ import {
   alternarVista,
   BLOQUEO_VERSION_NUEVA,
   borradorVacio,
+  claveDeCampo,
   claveDelRecuerdo,
   claveDeRevision,
   claveDeTareaQueCambia,
@@ -44,8 +47,10 @@ import {
   debeDescartarseSolo,
   deDondeViene,
   desdeDeLaPropuesta,
+  esArrastrada,
   esBorradorV1,
   esMudanzaSugerida,
+  esPin,
   FORMATO_BORRADOR,
   fotoDeTarea,
   fraseDelCierre,
@@ -59,6 +64,7 @@ import {
   planDeAplicacion,
   propuestaPorDecidir,
   proyectar,
+  proyectarConPlan,
   recordarRevision,
   recuerdoDeLaRevision,
   resumir,
@@ -73,9 +79,12 @@ import {
   type CambioTareaNueva,
   type CambioTareaSeVa,
   type FaseViva,
+  type PlanDeAplicacion,
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "./reprogramar-desde-hoy";
 import {
   anchorAfterDeltas,
   buildPhaseOrder,
@@ -1286,5 +1295,160 @@ describe("18 · M2: `hito` y `delSistema` sobreviven a guardarse, y la huella no
     expect(items.find((t) => t.clave === SE_VA.clave)?.delSistema).toEqual({ tipo: "hito", texto: MOTIVO_SE_VA });
     expect(items.find((t) => t.clave === NUEVA.clave)?.delSistema).toEqual({ tipo: "hito", texto: MOTIVO_NUEVA });
     expect(items.filter((t) => t.delSistema)).toHaveLength(2);
+  });
+});
+
+/** Calculadas con el código de antes de M4 P4d (fa1ff3d4, `planDeAplicacion` sobre el borrador del fixture grande, listas). */
+const HUELLA_ANTES_DE_P4D = { todo: "10b2a1aa058f51", sinUnaNuevaNiLaDuracion: "10405b5960ba3a" };
+
+/**
+ * 19 · M4 P4d (spec del replanteo §5.5 y §5.11, 2026-09-27): EL PLAN FRENTE A LO QUE REPROGRAMÓ EL SISTEMA. Sobre la
+ * propuesta grande (Wherex anonimizado, S18), reprogramada en el orden del plan (lo que decidió Elías): 8 casillas, el pin
+ * de «Fase I» y 25 arrastradas. Las arrastradas y el pin se escriben, pero no tienen casilla: no cuentan en los totales ni
+ * son unidades numeradas. Cada `it` nombra la edición del código de producción que lo pone en rojo.
+ */
+describe("19 · M4 P4d: el plan cuenta lo que tiene casilla; las arrastradas y el pin van aparte", () => {
+  const FIX = leerFixtureGrande();
+  const VIVO_G = vivoDelFixture(FIX);
+  const LISTAS = { tareas: "listas" as const };
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+  const R = reprogramarDesdeHoy({
+    vivo: VIVO_G,
+    borrador: leerBorrador(vacio())!,
+    hoy: new Date(FIX.hoy),
+    politica: POLITICA_DE_ATRASOS,
+    conSemanaCero: true,
+  })!;
+  const REPROGRAMADO = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), R))))!;
+  const CASILLAS = R.cambios.filter((c) => !c.fijaInicio).map((c) => c.clave);
+  const PIN = claveDeCampo("f10", "startWeek");
+  const DURACION_DE_A = claveDeCampo("f02", "durationWeeks");
+  const estadoDe = (plan: PlanDeAplicacion, clave: string) => plan.items.find((it) => it.cambio.clave === clave)?.estado;
+  const arrastradasDe = (plan: PlanDeAplicacion, fase: string) =>
+    plan.items.filter((it) => esArrastrada(it.cambio) && it.cambio.faseId === fase);
+  /** El vivo con una tarea cambiada después de la propuesta. */
+  const conLaTarea = (id: string, cambio: Partial<TareaDelVivo>): Vivo => ({
+    ...VIVO_G,
+    fases: VIVO_G.fases.map((f) => ({ ...f, tareas: f.tareas?.map((t) => (t.id === id ? { ...t, ...cambio } : t)) })),
+  });
+  const PRIMERA_DE_A = R.tareas.find((t) => t.faseId === "f02")!;
+
+  it("el punto de partida: 8 casillas, el pin y 25 arrastradas", () => {
+    expect(CASILLAS).toHaveLength(8);
+    expect(REPROGRAMADO.cambios.filter(esPin).map((c) => c.clave)).toEqual([PIN]);
+    expect(REPROGRAMADO.cambios.filter(esArrastrada)).toHaveLength(25);
+  });
+
+  it("⭐ las arrastradas y el pin no cuentan en `marcadas`, `aplicables`, `total` ni `choques`, y se escriben igual", () => {
+    /* La edición que la pone en rojo: contarlas (la barra decía «Aplicas 34 de 34 cambios» con 8 casillas). */
+    const plan = planDeAplicacion(VIVO_G, REPROGRAMADO);
+    expect([plan.marcadas, plan.aplicables, plan.total, plan.choques]).toEqual([8, 8, 8, 0]);
+    expect(plan.arrastradas).toEqual({ aplican: 25, choques: 0 });
+    expect(plan.fijadas).toBe(1);
+    expect(plan.aplicadas, "lo que se escribe").toHaveLength(8 + 1 + 25);
+    // Desmarcar la duración de «Fase A»: sus 8 arrastradas quedan fuera con ella (heredadas), sin contar como desmarcadas.
+    const sinA = planDeAplicacion(VIVO_G, REPROGRAMADO, [DURACION_DE_A]);
+    expect([sinA.marcadas, sinA.aplicables, sinA.total]).toEqual([7, 8, 8]);
+    expect(arrastradasDe(sinA, "f02").map((it) => [it.estado, it.dependeDe])).toEqual(Array(8).fill(["excluido", DURACION_DE_A]));
+    expect(sinA.arrastradas).toEqual({ aplican: 17, choques: 0 });
+    // Una arrastrada que alguien movió a mano después de la propuesta no se corre, y su choque no suma a `choques`.
+    const editada = planDeAplicacion(conLaTarea(PRIMERA_DE_A.tareaId, { weekIndex: PRIMERA_DE_A.desde.weekIndex + 1 }), REPROGRAMADO);
+    expect(estadoDe(editada, PRIMERA_DE_A.clave)).toBe("choque");
+    expect([editada.choques, editada.marcadas]).toEqual([0, 8]);
+    expect(editada.arrastradas).toEqual({ aplican: 24, choques: 1 });
+  });
+
+  it("⭐ el pin no tiene casilla: «aplica» si se aplica algo más, «excluido» si nada, y lo que se desmarque no lo toca", () => {
+    /* Las ediciones que la ponen en rojo: darle casilla al pin (`base` con `sin`: desmarcarlo corría «Fase I», que ya
+       empezó), o no decidirlo al final (sin el paso 9: con todo desmarcado, el pin se escribía solo). */
+    expect(estadoDe(planDeAplicacion(VIVO_G, REPROGRAMADO), PIN)).toBe("aplica");
+    expect(estadoDe(planDeAplicacion(VIVO_G, REPROGRAMADO, [PIN]), PIN), "el pin se dejó desmarcar").toBe("aplica");
+    for (const marcada of CASILLAS) {
+      const plan = planDeAplicacion(VIVO_G, REPROGRAMADO, CASILLAS.filter((k) => k !== marcada));
+      expect([estadoDe(plan, PIN), plan.fijadas], `solo ${marcada}`).toEqual(["aplica", 1]);
+    }
+    const nada = planDeAplicacion(VIVO_G, REPROGRAMADO, CASILLAS);
+    expect(estadoDe(nada, PIN), "sin nada que lo corra, el pin se escribió igual").toBe("excluido");
+    expect([nada.marcadas, nada.aplicables, nada.choques, nada.fijadas]).toEqual([0, 8, 0, 0]);
+    expect(nada.aplicadas).toEqual([]);
+    expect(debeDescartarseSolo(nada), "todo desmarcado no es «nada que decidir»").toBe(false);
+
+    // Si todo lo demás ya está así (lo hizo el CSE a mano), el pin también: la propuesta se descarta sola.
+    const x = f("x", "Diseño", 3, { startWeek: 2, status: "IN_PROGRESS" });
+    const y = f("y", "Pruebas", 2, { status: "IN_PROGRESS" });
+    const chico: Borrador = {
+      ...borradorVacio({ pedido: "regenerar", corrida: "run-2" }),
+      cambios: [
+        { tipo: "fase-cambia", clave: claveDeCampo("x", "durationWeeks"), faseId: "x", fase: "Diseño", campo: "durationWeeks", desde: 2, a: 3, desdeHoy: true },
+        { tipo: "fase-cambia", clave: claveDeCampo("y", "startWeek"), faseId: "y", fase: "Pruebas", campo: "startWeek", desde: null, a: 4, desdeHoy: true, fijaInicio: true },
+      ],
+    };
+    const yaEsta = planDeAplicacion({ ancla: FIX.ancla, fases: [x, y] }, chico);
+    expect(yaEsta.items.map((it) => it.estado)).toEqual(["ya-esta", "ya-esta"]);
+    expect(debeDescartarseSolo(yaEsta), "un pin solo, sin nada que decidir, trabó la propuesta").toBe(true);
+  });
+
+  it("⭐ una arrastrada de una tarea que marcaron hecha (o suspendieron) después de la propuesta queda «ya está»: no se mueve", () => {
+    /* La edición que la pone en rojo: evaluarla sin mirar su estado (D13): su semana seguía siendo la del `desde` y
+       «Aplicar» corría una tarea hecha 16 semanas. */
+    for (const status of ["DONE", "SUSPENDED"]) {
+      const vivo = conLaTarea(PRIMERA_DE_A.tareaId, { status });
+      const plan = planDeAplicacion(vivo, REPROGRAMADO);
+      expect(estadoDe(plan, PRIMERA_DE_A.clave), status).toBe("ya-esta");
+      expect(plan.escrituras.tareas.cambian?.some((c) => c.id === PRIMERA_DE_A.tareaId), `${status}: se escribió`).toBe(false);
+      expect(plan.arrastradas).toEqual({ aplican: 24, choques: 0 });
+      const faseA = proyectarConPlan(vivo, plan).fases.find((x) => x.id === "f02")!;
+      expect(faseA.tareas.find((t) => t.id === PRIMERA_DE_A.tareaId)!.weekIndex, `${status}: se movió`).toBe(PRIMERA_DE_A.desde.weekIndex);
+    }
+    // En curso, en cambio, sí se corre: lo que falta sigue abierto.
+    expect(estadoDe(planDeAplicacion(conLaTarea(PRIMERA_DE_A.tareaId, { status: "IN_PROGRESS" }), REPROGRAMADO), PRIMERA_DE_A.clave)).toBe("aplica");
+  });
+
+  it("⭐ la huella de un borrador sin `desdeHoy` no cambia (una pestaña abierta durante el deploy sigue aplicando)", () => {
+    /* La edición que la pone en rojo: meter `arrastradas` o `fijadas` (o cualquier cosa nueva) en la huella. */
+    const B_G = borradorDelFixture(FIX);
+    expect(planDeAplicacion(VIVO_G, B_G, [], LISTAS).huella).toBe(HUELLA_ANTES_DE_P4D.todo);
+    expect(planDeAplicacion(VIVO_G, B_G, ["t:t113", "fase:f12:durationWeeks"], LISTAS).huella).toBe(HUELLA_ANTES_DE_P4D.sinUnaNuevaNiLaDuracion);
+  });
+
+  it("⭐ numeración: ni las arrastradas ni el pin son unidades; el grupo de «Fase A» lleva el número de su unidad «grupo»", () => {
+    /* Las ediciones que la ponen en rojo: numerar el grupo con `its[0]` (la primera de «Fase A» es una arrastrada: el
+       grupo tomaba el número de la duración, dos unidades con el mismo número), hacer de las arrastradas o del pin una
+       unidad (el «Siguiente número» se detenía en 25 filas sin casilla), o no darles número (el chat no podía nombrarlas). */
+    const NUEVA: CambioTareaNueva = {
+      tipo: "tarea-nueva",
+      clave: "t:a-1",
+      fase: "f02",
+      tarea: { title: "Tarea nueva de la IA", weekIndex: 18, notes: null, party: "SMARTEAM", type: "TASK", needsValidation: false, motivoPorValidar: null, fuga: null },
+    };
+    // Como lo deja la fusión: lo del sistema delante (lo conserva) y lo nuevo de la IA detrás.
+    const conLaIA: Borrador = {
+      ...REPROGRAMADO,
+      cambios: [...REPROGRAMADO.cambios, NUEVA],
+      tareas: { corrida: "run-2", listas: true },
+      tareasArmadasPara: { f02: { nombre: "Fase A", semanas: 20 } },
+    };
+    const n = numeracionDeLaPropuesta(VIVO_G, conLaIA.cambios);
+    expect(n.orden.map((u) => (u.tipo === "cambio" ? u.clave : `grupo:${u.fase}`))).toEqual([
+      DURACION_DE_A,
+      "grupo:f02",
+      claveDeCampo("f04", "durationWeeks"),
+      claveDeCampo("f05", "startWeek"),
+      claveDeCampo("f06", "startWeek"),
+      claveDeCampo("f07", "durationWeeks"),
+      claveDeCampo("f08", "startWeek"),
+      claveDeCampo("f10", "durationWeeks"),
+      claveDeCampo("f11", "startWeek"),
+    ]);
+    const grupoDeA = n.orden.find((u) => u.tipo === "grupo" && u.fase === "f02")!;
+    expect(grupoDeA.tipo === "grupo" ? grupoDeA.claves : null, "una arrastrada en el grupo").toEqual([NUEVA.clave]);
+    // El chat las nombra: la arrastrada con el número de la duración de su fase; el pin, con el de su fase.
+    for (const t of R.tareas) expect(n.porClave.get(t.clave), t.clave).toBe(n.porClave.get(t.conCambio!));
+    expect(n.porClave.get(PRIMERA_DE_A.clave)).toBe(1);
+    expect(n.porClave.get(PIN)).toBe(n.porClave.get(claveDeCampo("f10", "durationWeeks")));
+    // La barra: el grupo de «Fase A» con el número de su unidad, y el índice sin filas de más.
+    const r = resumir(VIVO_G, conLaIA, [], LISTAS);
+    expect(r.grupos.find((g) => g.fase === "f02")!.numero, "el grupo tomó el número de su primera arrastrada").toBe(grupoDeA.numero);
+    expect(r.indice).toHaveLength(9);
   });
 });

@@ -19,6 +19,7 @@
  *
  * M3 (2026-09-27): el reloj de la propuesta (`hoy`) que guarda la marca del paso 2, lo que lee el modelo con él (lo
  * vencido fuera de «pendiente» y el bloque «LO QUE YA PASÓ») y la fusión real que le pasa `pasado` a R13.
+ * M4 (2026-09-27): la marca reprograma lo atrasado (P4b) y el paso 2 no reescribe lo que corrió el sistema (P4c).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -52,6 +53,7 @@ import {
   fusionarDetalleEnElBorrador,
   marcarTareasEnCurso,
   QUEDO_SIN_HACER,
+  SE_CORRIO_A_HOY,
   SELECT_DE_FASES_CON_TAREAS,
   TOPE_DE_LA_EXPLICACION_MS,
   TOPE_DE_LAS_SUGERIDAS_MS,
@@ -1320,5 +1322,121 @@ describe("M4 P4b · la marca del paso 2 reprograma lo atrasado", () => {
     db.projectTimeline.findUnique.mockResolvedValue({ ...base, phases: primeraSinEmpezar });
     await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-v", ahora: HOY });
     expect(delSistema(escrito()), "con Semana 0, la primera fase se reprogramó").not.toContain("s0:startWeek:18");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── M4 P4c · el paso 2 frente a lo que corrió el código ──────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * M4 P4c (spec del replanteo §5.4, 2026-09-27, D6): la marca reprograma lo atrasado y el paso 2 llega después. Lo que el
+ * sistema corrió con su fase (las movidas) el modelo lo lee en «se queda», nunca en «pendiente», y la fusión real lo
+ * conserva y no deja entrar lo que lo repite. Con la base simulada, de la marca a la escritura de la fusión.
+ */
+describe("M4 P4c · el paso 2 frente a lo que corrió el código", () => {
+  const CUSTOMER_SUCCESS = pipelineByKey("customer-success").hubspotPipelineId;
+  const HOY = new Date("2026-09-26T12:00:00-06:00"); // S18 con el arranque de Wherex
+  const ANCLA = new Date("2026-05-19T00:00:00.000Z");
+  /** «Diseño» (S2–S5) empezó y quedó atrasado: sus dos pendientes se corren con él. «Pruebas» (S6–S7) se mueve entera. */
+  const FASES_P4C = [
+    faseDB("s0", "Semana 0", 0, 2, "DONE", [tareaDB("k1", "Sesión de kickoff", 0, { status: "DONE", type: "SESSION" })]),
+    {
+      ...faseDB("d", "Diseño", 1, 4, "IN_PROGRESS", [
+        tareaDB("d0", "Mapear procesos", 0, { status: "DONE" }),
+        tareaDB("d1", "Definir pipeline", 1),
+        tareaDB("d2", "Armar reportes", 3),
+      ]),
+      startWeek: 2,
+    },
+    { ...faseDB("p", "Pruebas", 2, 2, "PENDING", [tareaDB("p1", "Probar flujos", 0)]), startWeek: 6 },
+  ];
+  const enLaBaseP4c = (guardado: unknown) =>
+    db.projectTimeline.findUnique.mockImplementation(async () => ({
+      pendingProposal: JSON.parse(JSON.stringify(guardado)),
+      pendingProposalRunId: "run-2",
+      anchorStartDate: ANCLA,
+      closeDateOverride: null,
+      project: { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS },
+      phases: FASES_P4C,
+    }));
+  const escrito = () =>
+    JSON.parse(JSON.stringify(db.projectTimeline.updateMany.mock.calls.at(-1)![0].data.pendingProposal)) as Record<string, unknown>;
+  /** La marca de «Regenerar todo» (el vacío): el reloj y lo reprogramado, como lo deja en la base. */
+  async function marcado(): Promise<Record<string, unknown>> {
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    db.timelineTask.findMany.mockResolvedValue([{ source: "AGENT" }]);
+    db.projectTimeline.findUnique.mockResolvedValue({ anchorStartDate: ANCLA, phases: FASES_P4C, project: { hubspotPipelineId: CUSTOMER_SUCCESS } });
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-2", ahora: HOY })).toBeNull();
+    return escrito();
+  }
+
+  it("⭐ lo que lee el modelo: lo que corrió el sistema va en «se queda» con «se corrió a hoy», nunca en «pendiente»", async () => {
+    /* Las ediciones que la ponen en rojo: mirarla por su semana vieja (R13 la daba «quedó sin hacer»), o dejarla en
+       `pendientes` (sin el reloj salía con «repite su título EXACTO y su weekIndex», y R2 igual no la reemplaza). */
+    const g = await marcado();
+    const comoSeLee = async (guardado: unknown) => {
+      enLaBaseP4c(guardado);
+      return (await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!;
+    };
+    const l = await comoSeLee(g);
+    const diseno = l.fases.find((f) => f.id === "d")!;
+    expect(diseno.pendientes, "una movida en «pendiente»").toEqual([]);
+    expect(diseno.seQuedan, "una movida se lee por su semana vieja («quedó sin hacer»)").toEqual([
+      { titulo: "Definir pipeline", porque: SE_CORRIO_A_HOY },
+      { titulo: "Armar reportes", porque: SE_CORRIO_A_HOY },
+    ]);
+    // «Pruebas» se mueve entera: su pendiente viaja con ella y la IA la puede conservar o reemplazar.
+    expect(l.fases.find((f) => f.id === "p")!.pendientes).toEqual([{ titulo: "Probar flujos", semana: 0 }]);
+    expect(renderLoQueYaHay(l)).toContain(`«Definir pipeline» (${SE_CORRIO_A_HOY}) · «Armar reportes» (${SE_CORRIO_A_HOY})`);
+    // Sin el reloj (como lo lee el recálculo): igual.
+    const { hoy: _reloj, ...sinReloj } = g;
+    void _reloj;
+    const l2 = await comoSeLee(sinReloj);
+    expect(l2.pasado).toBeUndefined();
+    expect(l2.fases.find((f) => f.id === "d")!.pendientes, "sin reloj, una movida en «pendiente»").toEqual([]);
+    expect(l2.fases.find((f) => f.id === "d")!.seQuedan).toEqual(diseno.seQuedan);
+  });
+
+  it("⭐ la fusión real conserva lo que corrió el sistema, no lo reemplaza, y lo que la IA repite de ello no entra", async () => {
+    /* La edición que la pone en rojo: `seConserva` sin `desdeHoy` (la fusión borraba las arrastradas escritas por la
+       marca: «Diseño» quedaba estirado y sus pendientes, vencidas en su semana vieja). */
+    const g = await marcado();
+    enLaBaseP4c(g);
+    const sobre = await estructuraParaElDetalle("tl", "run-2");
+    const t = (title: string, weekIndex: number) => ({ title, weekIndex, notes: null, porValidar: false, party: "SMARTEAM", type: "TASK" });
+    let k = 0;
+    const r = await fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-2",
+      estructura: sobre!.estructura,
+      analysisJson: {
+        timelineDetail: {
+          phases: [
+            { id: "s0", tasks: [] },
+            { id: "d", tasks: [t("Definir pipeline", 16), t("Documentar decisiones", 18)] },
+            { id: "p", tasks: [] },
+          ],
+        },
+      },
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `k-${++k}`,
+    });
+    expect(r.estado).toBe("listas");
+    const cambios = escrito().cambios as Cambio[];
+    expect(
+      cambios.map((c) =>
+        c.tipo === "tarea-nueva"
+          ? `+${c.tarea.title}@${c.tarea.weekIndex}`
+          : c.tipo === "tarea-cambia"
+            ? `~${c.tareaId}@${c.a.weekIndex}`
+            : c.tipo === "tarea-se-va"
+              ? `-${c.tareaId}`
+              : c.clave,
+      ),
+    ).toEqual(["fase:d:durationWeeks", "fase:p:startWeek", "~d1@16", "~d2@18", "+Documentar decisiones@18"]);
+    expect(cambios.filter((c) => c.tipo === "tarea-cambia").every((c) => c.tipo === "tarea-cambia" && c.desdeHoy), "perdió su marca").toBe(true);
+    expect(escrito().observaciones).toContain("No entra 1 tarea de la IA: repite una que ya está.");
   });
 });
