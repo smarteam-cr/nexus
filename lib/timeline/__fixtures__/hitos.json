@@ -1,0 +1,45 @@
+{
+  "_origen": "M2 P2a (2026-09-27). Títulos REALES de la cartera activa, medidos en solo lectura (scratchpad del replanteo: sintesis-hitos-2.out.txt, paso2-hitos.out.txt, paso2-hitos-estricto.out.txt y critico-codigo/kick-todos.cjs), escritos a mano. Clientes → «Cliente», personas → «Ana». Los tests lo LEEN (readFileSync), nunca lo importan.",
+  "kickoff": {
+    "reconoce": [
+      { "title": "Sesión de kick-off del proyecto", "type": "SESSION" },
+      { "title": "Sesión de kick-off oficial del proyecto", "type": "SESSION" },
+      { "title": "Sesión de kick-off oficial", "type": "SESSION" },
+      { "title": "Sesión de kickoff oficial del proyecto", "type": "SESSION" },
+      { "title": "Sesión de arranque técnico del proyecto", "type": "SESSION" },
+      { "title": "Sesión de kickoff: equipo, roles y accesos", "type": "SESSION" },
+      { "title": "Sesión de kick-off formal del proyecto", "type": "SESSION" },
+      { "title": "Sesión de kickoff de relanzamiento", "type": "SESSION" },
+      { "title": "Sesión de Kick-off oficial del proyecto", "type": "SESSION" },
+      { "title": "Sesión de kick-off: equipo, contexto y acuerdos", "type": "SESSION" },
+      { "title": "Sesión de re-arranque formal del proyecto", "type": "SESSION" },
+      { "title": "Sesión de arranque técnico con Ana", "type": "SESSION" }
+    ],
+    "descarta": [
+      { "title": "Kick-off técnico de la integración SAP", "type": "SESSION", "porque": "acota el hito a una parte (PARTE)" },
+      { "title": "Preparar agenda del kickoff", "type": "TASK", "porque": "es una tarea y la prepara (NO_ES_EL_HITO)" },
+      { "title": "Kickoff interno del equipo", "type": "SESSION", "porque": "interno (NO_ES_EL_HITO)" },
+      { "title": "Reunión previa al kickoff", "type": "SESSION", "porque": "previa (NO_ES_EL_HITO)" },
+      { "title": "Seguimiento post kick-off", "type": "SESSION", "porque": "seguimiento, post (NO_ES_EL_HITO)" },
+      { "title": "Minuta del kickoff", "type": "SESSION", "porque": "minuta (NO_ES_EL_HITO)" },
+      { "title": "Sesión de kick-off del proyecto", "type": "TASK", "porque": "el título sirve, pero una TASK no es la sesión" }
+    ]
+  },
+  "cierreYEntrega": [
+    { "title": "Sesión de cierre con junta directiva", "type": "SESSION", "fase": "Cierre con junta directiva", "esUltima": false, "hitos": ["cierre"] },
+    { "title": "Sesión de cierre formal del proyecto", "type": "SESSION", "fase": "Lanzamiento", "esUltima": true, "hitos": ["cierre"] },
+    { "title": "Sesión de cierre formal de la implementación", "type": "SESSION", "fase": "Cierre y go-live", "esUltima": false, "hitos": ["cierre"] },
+    { "title": "Sesión de cierre", "type": "SESSION", "fase": "Capacitación y cierre Service", "esUltima": false, "hitos": [] },
+    { "title": "Reporte de cierre al sponsor del proyecto", "type": "SESSION", "fase": "Entrega y cierre", "esUltima": false, "hitos": [] },
+    { "title": "Revisión de primeros días en producción y cierre formal", "type": "SESSION", "fase": "Go-live y cierre", "esUltima": false, "hitos": [] },
+    { "title": "Sesión de cierre del Caso 1", "type": "SESSION", "fase": "Cierre y entrega", "esUltima": false, "hitos": [] },
+    { "title": "Sesión de cierre formal del proyecto", "type": "SESSION", "fase": "Configuración Marketing Hub", "esUltima": true, "hitos": [] },
+    { "title": "Entrega de documentación del proyecto", "type": "TASK", "fase": "Go-live y cierre", "esUltima": false, "hitos": [] },
+    { "title": "Activación en producción — go-live oficial", "type": "SESSION", "fase": "Cierre y go-live", "esUltima": false, "hitos": [] },
+    { "title": "Entrega formal del proyecto a Cliente", "type": "SESSION", "fase": "Cierre y entrega", "esUltima": false, "hitos": ["entrega"] },
+    { "title": "Sesión de cierre y entrega del proyecto", "type": "SESSION", "fase": "Cierre y entrega", "esUltima": false, "hitos": ["cierre", "entrega"] },
+    { "title": "Sesión de cierre y entrega oficial del proyecto", "type": "SESSION", "fase": "Capacitación & Go Live", "esUltima": true, "hitos": ["cierre", "entrega"] },
+    { "title": "Sesión de entrega del ciclo 1", "type": "SESSION", "fase": "Cierre ciclo 1", "esUltima": false, "hitos": ["entrega"] },
+    { "title": "Sesión de cierre del ciclo 2", "type": "SESSION", "fase": "Cierre ciclo 2", "esUltima": true, "hitos": ["entrega"] }
+  ]
+}

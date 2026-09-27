@@ -11,6 +11,8 @@
  * que VIO el agente (D10) y el alcance de «Regenerar» de una fase (`soloFases`). Desde L5: la fase
  * terminada no se toca en «Regenerar todo» (R12) y la tarea que vuelve no sale como «se va + nueva» (R4c),
  * medido sobre la propuesta grande anonimizada (__fixtures__/propuesta-grande.json).
+ * Desde M2 (2026-09-27, bloque 9): con `hitos`, un kickoff por proyecto, el cierre y la entrega sin duplicados
+ * nuevos (R15) y la IA que no repite lo que se queda (R14). Sin `hitos`, los bloques 1-8 quedan como estaban.
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import fs from "node:fs";
@@ -24,6 +26,7 @@ import {
   vivoDelFixture,
 } from "./__fixtures__/propuesta-grande";
 import {
+  claveDeTareaQueCambia,
   estructuraHipotetica,
   faseDeLaTarea,
   FORMATO_BORRADOR,
@@ -40,6 +43,7 @@ import {
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
+import { MOTIVO_DEL_KICKOFF_QUE_FALTA, OBSERVACION_SIN_KICKOFF, TAREA_DE_KICKOFF } from "./hitos";
 import {
   activityTypePropuesto,
   cambiosDeTareasDelDetalle,
@@ -1043,5 +1047,290 @@ describe("8 · L7: las mudanzas sugeridas sobreviven a las fusiones", () => {
       expect(huerfanas(b)).toEqual([]);
       expect(b.excluidos).toEqual([SUGERIDA.clave]);
     }
+  });
+});
+
+describe("9 · M2: un kickoff, el cierre y la entrega sin duplicados, y la IA no repite lo que se queda (R14, R15)", () => {
+  /* Pedido de Elías (2026-09-27): en Wherex la propuesta sumaba un kickoff con otras palabras (ya había tres) y la IA
+     repetía lo que ya estaba. Estos casos pasan `hitos`, como las fusiones desde M2 P2c. */
+  const SIN_CAMBIOS: Borrador = { ...BASE, cambios: [] };
+  /** El recorrido con `hitos`, sobre un vivo propio (la estructura es la del vivo, sin cambios de fases). */
+  function conHitos(
+    vivo: Vivo,
+    fases: Array<{ id: string; tasks: TareaCruda[] }>,
+    opciones: { recurrente?: boolean; conSemanaCero?: boolean; soloFases?: ReadonlySet<string>; borrador?: Borrador } = {},
+  ) {
+    const borrador = opciones.borrador ?? SIN_CAMBIOS;
+    const estructura = estructuraHipotetica(vivo, borrador);
+    const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({ estructura, analysisJson: salida(fases), huellas: null, cortado: false });
+    return cambiosDeTareasDelDetalle({
+      estructura,
+      vivo,
+      propuestas,
+      borrador,
+      tags: [],
+      nuevaClave,
+      idsDesconocidos,
+      soloFases: opciones.soloFases ?? null,
+      respetarTerminadas: !opciones.soloFases,
+      hitos: { recurrente: opciones.recurrente ?? false, conSemanaCero: opciones.conSemanaCero ?? true },
+    });
+  }
+  const sesion = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}) =>
+    tarea(id, title, weekIndex, { type: "SESSION", ...extra });
+  const nuevasDe = (r: CambiosDelDetalle) => r.tareas.flatMap((c) => (c.tipo === "tarea-nueva" ? [c] : []));
+  const seVanDe = (r: CambiosDelDetalle) => r.tareas.flatMap((c) => (c.tipo === "tarea-se-va" ? [c] : []));
+
+  /** Wherex, con los títulos reales (cliente anonimizado): dos kickoffs hechos y uno pendiente en la Semana 0. */
+  const K1 = sesion("k1", "Sesión de kickoff: equipo, roles y accesos", 0, { status: "DONE" });
+  const K2 = sesion("k2", "Sesión de kick-off formal del proyecto", 0, { status: "DONE" });
+  const K3 = sesion("k3", "Sesión de kick-off del proyecto", 0);
+  const X1 = tarea("x1", "Recolección de accesos y credenciales", 1);
+  const E1 = sesion("e1", "Entrega formal del proyecto a Cliente", 0);
+  const C1 = sesion("cj1", "Sesión de cierre con junta directiva", 0);
+  const WHEREX: Vivo = {
+    ancla: null,
+    fases: [
+      fase("s0", "Semana 0", 2, [K1, K2, K3, X1], { status: "IN_PROGRESS" }),
+      fase("sh", "Sales Hub", 4, [tarea("sh1", "Configurar el pipeline de ventas", 0)]),
+      fase("ce", "Cierre y entrega", 1, [E1]),
+      fase("cj", "Cierre con junta directiva", 1, [C1]),
+    ],
+  };
+  const KICKOFF_CON_OTRAS_PALABRAS = { title: "Sesión de kick-off con el equipo Cliente", type: "SESSION", weekIndex: 0 };
+  const OBS_KICKOFF_REPETIDO =
+    "La IA volvió a proponer el kickoff: no se suma, ya está «Sesión de kickoff: equipo, roles y accesos» (hecho).";
+  const OBS_DOS_HECHOS =
+    "Hay 2 kickoffs hechos en «Semana 0»: «Sesión de kickoff: equipo, roles y accesos» y «Sesión de kick-off formal del proyecto». Si son la misma sesión, borra la segunda desde su fila del cronograma.";
+
+  it("⭐ Wherex: se quita el kickoff pendiente (lo decide el sistema), el de otras palabras no entra y se nombran los dos hechos", () => {
+    /* La edición que la pone en rojo: reconocer el kickoff por `huellaCompleta` contra los que ya están (el de otras
+       palabras entra), o no nombrar los hechos de más (falta la segunda observación). */
+    const r = conHitos(WHEREX, [
+      { id: "s0", tasks: [KICKOFF_CON_OTRAS_PALABRAS, { title: "Recolección de accesos y credenciales", weekIndex: 1 }] },
+    ]);
+    expect(r.tareas).toEqual([
+      {
+        tipo: "tarea-se-va",
+        clave: "tarea:k3:se-va",
+        tareaId: "k3",
+        faseId: "s0",
+        desde: fotoDeTarea(K3),
+        motivo: "Ya hay un kickoff hecho: «Sesión de kickoff: equipo, roles y accesos».",
+        delSistema: "hito",
+      },
+    ]);
+    expect(r.observaciones).toEqual([OBS_KICKOFF_REPETIDO, OBS_DOS_HECHOS]);
+  });
+
+  it("sin `hitos`, como antes: el pendiente se va por R2 como uno más y el de otras palabras entra", () => {
+    const r = cambios(salida([{ id: "s0", tasks: [KICKOFF_CON_OTRAS_PALABRAS] }]), { vivo: WHEREX, visto: WHEREX, borrador: SIN_CAMBIOS });
+    expect(resumen(r, "s0")).toEqual(["-k3", "-x1", "+Sesión de kick-off con el equipo Cliente@0"]);
+    expect(seVanDe(r).every((c) => c.delSistema === undefined && c.motivo === undefined)).toBe(true);
+  });
+
+  it("⛔ el sobrante solo si el guardián también es kickoff: con «Kickoff interno» hecho, el pendiente se queda", () => {
+    /* La edición que la pone en rojo: quitar sin mirar los negativos (sin `NO_ES_EL_HITO`, el interno guarda y el
+       pendiente sobra). */
+    const vivo: Vivo = {
+      ancla: null,
+      fases: [fase("s0", "Semana 0", 1, [sesion("int", "Kickoff interno del equipo", 0, { status: "DONE" }), K3])],
+    };
+    const r = conHitos(vivo, [{ id: "s0", tasks: [{ title: "Revisar el alcance firmado", weekIndex: 0 }] }]);
+    expect(resumen(r)).toEqual(["+Revisar el alcance firmado@0"]);
+    expect(r.observaciones).toEqual([]);
+  });
+
+  it("⛔ el guardián pendiente de la IA que la IA no repite se queda (R2 no lo reemplaza)", () => {
+    /* La edición que la pone en rojo: dejar el guardián en `reemplazables` (se iría como cualquier pendiente). */
+    const vivo: Vivo = { ancla: null, fases: [fase("s0", "Semana 0", 1, [K3]), fase("ce", "Cierre y entrega", 1, [E1])] };
+    const r = conHitos(vivo, [
+      { id: "s0", tasks: [{ title: "Revisar el alcance firmado", weekIndex: 0 }] },
+      { id: "ce", tasks: [{ title: "Preparar el acta de cierre", weekIndex: 0 }] },
+    ]);
+    expect(resumen(r)).toEqual(["+Revisar el alcance firmado@0", "+Preparar el acta de cierre@0"]);
+    expect(r.observaciones).toEqual([]);
+  });
+
+  describe("el kickoff que falta", () => {
+    const SIN_KICKOFF: Vivo = {
+      ancla: null,
+      fases: [fase("s0", "Semana 0", 1, [tarea("r0", "Recolección de accesos", 0)]), fase("d", "Diseño", 2, [])],
+    };
+    const PROPUESTA = [
+      { id: "s0", tasks: [{ title: "Recolección de accesos", weekIndex: 0 }, { title: "Revisar el alcance firmado", weekIndex: 0 }] },
+      { id: "d", tasks: [{ title: "Mapear procesos", weekIndex: 0 }] },
+    ];
+
+    it("⭐ con Semana 0 sin avance: el sistema agrega UNO, al final de la Semana 0, marcado y con su motivo", () => {
+      /* La edición que la pone en rojo: no agregarlo, o agregarlo sin la marca del sistema. */
+      const r = conHitos(SIN_KICKOFF, PROPUESTA);
+      expect(resumen(r)).toEqual(["+Revisar el alcance firmado@0", "+Sesión de kickoff del proyecto@0", "+Mapear procesos@0"]);
+      const kickoff = nuevasDe(r)[1];
+      expect(kickoff).toMatchObject({ fase: "s0", tarea: { ...TAREA_DE_KICKOFF, hito: ["kickoff"] }, motivo: MOTIVO_DEL_KICKOFF_QUE_FALTA, delSistema: "hito" });
+      expect(r.observaciones).toEqual([]);
+    });
+
+    it("⛔ con la Semana 0 empezada no lo agrega: lo dice", () => {
+      /* La edición que la pone en rojo: agregarlo sin mirar si la Semana 0 empezó (inventaría una fecha pasada). */
+      const empezada: Vivo = {
+        ...SIN_KICKOFF,
+        fases: [fase("s0", "Semana 0", 1, [tarea("r0", "Recolección de accesos", 0, { status: "DONE" })]), SIN_KICKOFF.fases[1]],
+      };
+      const r = conHitos(empezada, [
+        { id: "s0", tasks: [{ title: "Revisar el alcance firmado", weekIndex: 0 }] },
+        { id: "d", tasks: [{ title: "Mapear procesos", weekIndex: 0 }] },
+      ]);
+      expect(nuevasDe(r).map((c) => c.tarea.title)).toEqual(["Revisar el alcance firmado", "Mapear procesos"]);
+      expect(r.observaciones).toEqual([OBSERVACION_SIN_KICKOFF]);
+    });
+
+    it("⛔ en un Desarrollo (sin Semana 0) no lo agrega ni lo dice", () => {
+      /* La edición que la pone en rojo: elegir la Semana 0 sin `conSemanaCero` (su primera fase es trabajo real). */
+      const r = conHitos(SIN_KICKOFF, PROPUESTA, { conSemanaCero: false });
+      expect(nuevasDe(r).some((c) => c.delSistema === "hito")).toBe(false);
+      expect(r.observaciones).toEqual([]);
+    });
+
+    it("⭐ dos kickoffs de la IA en fases distintas, sin guardián: entra el primero, marcado; el sistema no agrega otro", () => {
+      /* La edición que la pone en rojo: no sumar el que entra como guardián (entrarían los dos). */
+      const r = conHitos(SIN_KICKOFF, [
+        { id: "s0", tasks: [{ title: "Sesión de kick-off del proyecto", type: "SESSION", weekIndex: 0 }] },
+        { id: "d", tasks: [{ title: "Reunión de arranque con el equipo", type: "SESSION", weekIndex: 0 }] },
+      ]);
+      expect(nuevasDe(r).map((c) => [c.tarea.title, c.tarea.hito])).toEqual([["Sesión de kick-off del proyecto", ["kickoff"]]]);
+      expect(r.observaciones).toEqual(["La IA propuso el kickoff más de una vez: entra solo «Sesión de kick-off del proyecto»."]);
+    });
+  });
+
+  it("⛔ lo escrito a mano se queda y se nombra; un sobrante que tocó el chat no se toca", () => {
+    /* La edición que la pone en rojo: quitar un kickoff pendiente escrito a mano, o quitar el sobrante que el chat ya
+       cambió (tendría dos cambios con la misma tarea). */
+    const aMano = sesion("h1", "Sesión de kick-off del proyecto", 0, { source: "HUMAN" });
+    const vivo: Vivo = { ancla: null, fases: [fase("s0", "Semana 0", 2, [sesion("k0", "Sesión de kickoff oficial", 0, { status: "DONE" }), aMano])] };
+    const r = conHitos(vivo, [{ id: "s0", tasks: [{ title: "Revisar el alcance firmado", weekIndex: 1 }] }]);
+    expect(resumen(r)).toEqual(["+Revisar el alcance firmado@1"]);
+    expect(r.observaciones).toEqual(["«Sesión de kick-off del proyecto» repite el kickoff, pero la escribió una persona: no se quita."]);
+
+    const delChat: CambioTareaCambia = {
+      tipo: "tarea-cambia",
+      clave: claveDeTareaQueCambia("k3"),
+      tareaId: "k3",
+      faseId: "s0",
+      desde: fotoDeTarea(K3),
+      a: { weekIndex: 1 },
+      porChat: true,
+    };
+    const conElChat = conHitos(WHEREX, [{ id: "s0", tasks: [{ title: "Recolección de accesos y credenciales", weekIndex: 1 }] }], {
+      borrador: { ...SIN_CAMBIOS, cambios: [delChat] },
+    });
+    expect(seVanDe(conElChat)).toEqual([]);
+  });
+
+  it("⛔ el alcance: con «Regenerar» de otra fase, el sobrante de la Semana 0 se queda y un kickoff nuevo no entra", () => {
+    /* La edición que la pone en rojo: quitar los sobrantes fuera de las fases del alcance. */
+    const r = conHitos(
+      WHEREX,
+      [{ id: "sh", tasks: [{ title: "Sesión de kickoff oficial del proyecto", type: "SESSION", weekIndex: 0 }, { title: "Configurar el pipeline de ventas", weekIndex: 0 }] }],
+      { soloFases: new Set(["sh"]) },
+    );
+    expect(r.tareas).toEqual([]);
+    expect(r.observaciones).toEqual([OBS_KICKOFF_REPETIDO]); // los dos hechos son de la Semana 0: fuera del alcance
+  });
+
+  it("⛔ «Sesión de cierre y entrega» no entra si ya hay entrega, aunque falte el cierre: la observación dice «la entrega»", () => {
+    /* La edición que la pone en rojo: dejarla entrar porque le falta uno de sus dos hitos. */
+    const vivo: Vivo = { ancla: null, fases: [fase("sh", "Sales Hub", 2, []), fase("ce", "Cierre y entrega", 1, [E1])] };
+    const r = conHitos(vivo, [{ id: "ce", tasks: [{ title: "Sesión de cierre y entrega del proyecto", type: "SESSION", weekIndex: 0 }] }], {
+      conSemanaCero: false,
+    });
+    expect(r.tareas).toEqual([]);
+    expect(r.observaciones).toEqual(["La IA volvió a proponer la entrega: no se suma, ya está «Entrega formal del proyecto a Cliente» (pendiente)."]);
+  });
+
+  describe("D8 · la entrega por ciclo en un recurrente", () => {
+    const ENTREGA_C1 = sesion("ec1", "Sesión de entrega del ciclo 1", 0);
+    const CON_ENTREGA: Vivo = {
+      ancla: null,
+      fases: [
+        fase("f1", "Entrega inicial de accesos", 1, []),
+        fase("c1", "Cierre ciclo 1", 1, [ENTREGA_C1]),
+        fase("f2", "Operación ciclo 2", 2, []),
+        fase("f3", "Fase 3", 1, []),
+      ],
+    };
+    const PROPUESTA = [
+      { id: "f1", tasks: [{ title: "Sesión de entrega formal del proyecto", type: "SESSION", weekIndex: 0 }] },
+      { id: "c1", tasks: [{ title: "Revisar indicadores del ciclo", weekIndex: 0 }] },
+      { id: "f3", tasks: [{ title: "Sesión de entrega del ciclo 2", type: "SESSION", weekIndex: 0 }] },
+    ];
+
+    it("⭐ con una entrega existente: en su ciclo no entra otra, en el siguiente sí; sin el tag, ninguna; y la existente nunca se va", () => {
+      /* La edición que la pone en rojo: calcular el ciclo sin el tag (sin él, la de la Fase 3 entraría), o quitar la
+         entrega existente (que la IA no repitió) por R2. */
+      const rec = conHitos(CON_ENTREGA, PROPUESTA, { recurrente: true, conSemanaCero: false });
+      expect(resumen(rec)).toEqual(["+Revisar indicadores del ciclo@0", "+Sesión de entrega del ciclo 2@0"]);
+      expect(nuevasDe(rec)[1].tarea.hito).toEqual(["entrega"]);
+      expect(rec.observaciones).toEqual(["La IA volvió a proponer la entrega: no se suma, ya está «Sesión de entrega del ciclo 1» (pendiente)."]);
+      const sinTag = conHitos(CON_ENTREGA, PROPUESTA, { conSemanaCero: false });
+      expect(resumen(sinTag)).toEqual(["+Revisar indicadores del ciclo@0"]);
+      expect(seVanDe(rec)).toEqual([]);
+      expect(seVanDe(sinTag)).toEqual([]);
+    });
+
+    it("⭐ sin ninguna entrega, la IA propone la de dos ciclos en la misma corrida: entran las dos", () => {
+      /* La edición que la pone en rojo: tomar el ciclo de lo que YA existe (calculado antes del recorrido): las dos
+         caerían en el ciclo 1 y la segunda no entraría. */
+      const vivo: Vivo = {
+        ancla: null,
+        fases: [fase("f1", "Operación ciclo 1", 2, []), fase("c1", "Cierre ciclo 1", 1, []), fase("f2", "Operación ciclo 2", 2, []), fase("c2", "Cierre ciclo 2", 1, [])],
+      };
+      const r = conHitos(
+        vivo,
+        [
+          { id: "c1", tasks: [{ title: "Sesión de entrega del ciclo 1", type: "SESSION", weekIndex: 0 }] },
+          { id: "c2", tasks: [{ title: "Sesión de entrega del ciclo 2", type: "SESSION", weekIndex: 0 }] },
+        ],
+        { recurrente: true, conSemanaCero: false },
+      );
+      expect(resumen(r)).toEqual(["+Sesión de entrega del ciclo 1@0", "+Sesión de entrega del ciclo 2@0"]);
+      expect(r.observaciones).toEqual([]);
+    });
+  });
+
+  it("⭐ R14 · no entra lo que repite algo que se queda; lo hecho en otra semana y una sesión semanal, sí", () => {
+    /* La edición que la pone en rojo: comparar contra una HECHA en otra semana («Revisión con el sponsor» no entraría)
+       o comparar sin ambigüedad (la S5 de la sesión semanal no entraría). */
+    const semanal = [1, 2, 3, 4].map((w) => tarea(`w${w}`, "Sesión semanal de avance", w, { source: "HUMAN" }));
+    const vivo: Vivo = {
+      ancla: null,
+      fases: [
+        fase("d", "Diseño", 6, [
+          tarea("rs", "Revisión con el sponsor", 1, { status: "DONE" }),
+          tarea("tp", "Taller de procesos", 2, { status: "DONE" }),
+          tarea("vf", "Validar el flujo con ventas", 2, { source: "HUMAN" }),
+          tarea("dd", "Documentar decisiones", 3),
+          ...semanal,
+        ]),
+      ],
+    };
+    const r = conHitos(
+      vivo,
+      [
+        {
+          id: "d",
+          tasks: [
+            { title: "Taller de procesos", weekIndex: 2 }, // la hecha, en su misma semana: no entra
+            { title: "Revisión con el sponsor", weekIndex: 4 }, // la hecha es de otra semana: entra
+            { title: "Sesión semanal de avance", weekIndex: 5 }, // cuatro con ese título: no se adivina, entra
+            { title: "Validar el flujo con ventas", weekIndex: 4 }, // UNA pendiente que se queda, en otra semana: no entra
+            { title: "Documentar decisiones", weekIndex: 3 }, // la que se iría, idéntica (R4b): no emite nada
+          ],
+        },
+      ],
+      { conSemanaCero: false },
+    );
+    expect(resumen(r)).toEqual(["+Revisión con el sponsor@4", "+Sesión semanal de avance@5"]);
+    expect(r.observaciones).toEqual(["No entran 2 tareas de la IA: repiten una que ya está."]);
   });
 });

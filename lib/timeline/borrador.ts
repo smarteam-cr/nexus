@@ -104,6 +104,8 @@ import {
   type ProjectedEnd,
 } from "./weeks";
 import { evaluarMagnitud, frasesDeCambios, unirFrases, type MagnitudPropuesta } from "./magnitud-propuesta";
+// M2 (2026-09-27): solo el tipo; hitos.ts importa de acá solo tipos (sin ciclo en tiempo de ejecución).
+import type { Hito } from "./hitos";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LOS TIPOS ────────────────────────────────────────────────────────────────
@@ -164,6 +166,12 @@ export interface TareaDelVivo {
    * toma como `false`.
    */
   needsValidation?: boolean;
+  /**
+   * M2 (2026-09-27): `originFingerprint`, opcional como `needsValidation`. Solo lo lee el reconocimiento de hitos del
+   * paso 2 (`hito:kickoff` manda sobre el título, lib/timeline/hitos.ts). No entra en la foto ni en el plan: la huella
+   * no cambia. Sin él, se reconoce por el título.
+   */
+  marca?: string | null;
 }
 
 /** Una fase del cronograma vivo (o de lo que leyó un productor, `base`), en su orden. */
@@ -287,6 +295,11 @@ export interface ContenidoDeTareaNueva {
   needsValidation: boolean;
   motivoPorValidar: string | null;
   fuga: { campo: "titulo" | "nota"; motivo: string; motivoDeLaNota?: string } | null;
+  /**
+   * M2 (2026-09-27): los hitos que ES (R15 del paso 2 la marca al dejarla entrar; el kickoff que agrega el sistema
+   * trae `["kickoff"]`). Con «kickoff», aplicar escribe la marca `hito:kickoff`. La huella no lo mira.
+   */
+  hito?: Hito[];
 }
 /** Una tarea que se crea. No guarda `desde`: sería siempre la huella de su título (se calcula al evaluar). */
 export interface CambioTareaNueva extends DelChat {
@@ -304,6 +317,8 @@ export interface CambioTareaNueva extends DelChat {
    * la que se armó (chocaría en una fase sin forma armada). Como lo del chat, solo sigue a su fase.
    */
   mudadaPorElChat?: true;
+  /** M2 (2026-09-27): la agrega el SISTEMA, no la IA (el kickoff que faltaba, R15): nunca se pinta como «Según la IA». */
+  delSistema?: "hito";
 }
 /** Una tarea pendiente de la IA que se quita. Se identifica por su id; su `desde` es la foto que LEYÓ
  *  quien lo produjo (E2b, D10): lo que alguien edite después, aunque sea mientras la IA arma, choca. */
@@ -314,6 +329,8 @@ export interface CambioTareaSeVa extends DelChat {
   faseId: string;
   desde: FotoDeTarea;
   motivo?: string;
+  /** M2 (2026-09-27): la quita el SISTEMA (un kickoff que sobra, R15), con su `motivo`: nunca «Según la IA». */
+  delSistema?: "hito";
 }
 /** E3: los campos de una tarea que el chat puede cambiar (el orden es el de las frases). */
 export type CampoDeTarea = "title" | "weekIndex" | "party" | "type";

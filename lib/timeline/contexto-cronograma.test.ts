@@ -571,6 +571,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     /* M1 (2026-09-27): el `title` de la fase en el Gantt («duración estimada por la IA…: confírmala») decía
        «confirmala», voseo que ni la lista ni la forma veían (es llana: sin tilde). */
     "lib/timeline/phase-signal.ts",
+    /* M2 P2a (2026-09-27): los textos de los hitos (el motivo de la fila que quita el kickoff que sobra, el de la que
+       lo agrega y las observaciones de «La IA también notó…») llegan tal cual a la barra y al Gantt. */
+    "lib/timeline/hitos.ts",
   ];
   /* Las formas que aparecieron en estos archivos, más las de uso diario del equipo. Una palabra
      entera: «Revisá» no caza «Revisa», y «vos» no caza «voseo». Las del final son las que la revisión
