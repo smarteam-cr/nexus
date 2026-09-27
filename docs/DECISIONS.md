@@ -3359,3 +3359,197 @@ fabricarla.
 - **Rutas que se fueron:** `proposal/apply-items`, `phases/[phaseId]/apply` y `detail/apply-all`
   (y sus guards, `guardTimelineDetailApply` y `guardTimelineFullRegen`). /analyze sigue rechazando
   el agente de detalle sin `borrador` antes de crear la corrida.
+
+## La propuesta del cronograma se decide en el Gantt: qué calcula el código y qué dice la IA (2026-09-26, L1–L7)
+
+> Pedido de Elías probando «Regenerar todo» en Wherex (producción en eb42ab0c): parecían dos propuestas
+> y las tareas de la barra no coincidían con las del Gantt; quería ver todos los cambios de una en el
+> Gantt, con colores; un mensaje arriba que dijera cómo estaba, cómo queda y por qué, también contra el
+> handoff; y que el chat dijera al abrirse que cambia la propuesta. Siete entregas, cada una se despliega
+> sola, sin SQL, sin re-siembras y sin tocar prompts guardados en la base: L1 c744ae1c · L2 19453cf3 ·
+> L3 483f6102, b9d1eead, 671e299d y 1eaea657 · L4 d95d5534 · L5 40a9c14a · L6 2046dbaf · L7 15535589 ·
+> revisión de L1–L7 2dfd4656. Las D1–D15 son las de la spec, citadas en esos commits.
+
+- **Las cuatro decisiones de Elías (2026-09-26).** (1) Los cambios se deciden **en el Gantt**, cada fila
+  con su casilla; arriba solo el mensaje, los totales y «Aplicar» (L3). (2) Las tareas HECHAS en la fase
+  equivocada: la IA propone mudarlas **desmarcadas**, con su check y su fecha (L7). (3) Las semanas de más
+  se dicen **contra lo prometido** (la última versión subida al cliente) **y contra el último handoff**
+  (aproximado: sale de su última corrida) (L4). (4) Sin material nuevo para una fase, la IA **conserva las
+  pendientes que sirven** y propone solo lo que cambia (L5).
+- **Defaults tomados (vetables).** Una tarea nueva en una semana que ya pasó: el plan decía un chip ámbar
+  «quedaría atrasada» en la fila; quedó «ya pasó» en rojo, una vez en el rótulo de la semana, y la cuenta
+  «hoy N → con la propuesta M» en el mensaje (el ámbar quedó para «se quita» y «revisa», D13). «Regenerar
+  todo» sigue sin quitar fases: eso es del chat, con doble confirmación. Las mediciones que regeneran
+  Wherex en producción las corre Elías desde la pantalla, después del deploy (3 «Regenerar todo» para L5 y
+  5 para L6, menos de US$0,6). Y tres de la spec: el campo «inicia S» pasa a base 0 (D4), el chat no edita
+  una hecha con una mudanza sugerida abierta (L7) y la propuesta entra plegada si pasa de 40 filas (L3).
+- **Los números los pone el código, nunca la IA.** Las cuentas de la pantalla y del chat salen de
+  `resumir` (lib/timeline/borrador.ts), nunca de contar `borrador.cambios`: contando los cambios crudos, la
+  primera versión de la spec decía 74 tareas nuevas y 186 filas en Wherex, y eran 73 y 185 (una nueva «ya
+  está»). Las dos llamadas nuevas a Haiku (L6 y L7) devuelven ids y, la de L6, una frase sin cifras.
+- **Vuelta atrás sin romper nada.** La versión anterior sabe leer lo que estas escriben: `explicacion` es
+  un campo suelto de la propuesta; `sugerida` se ignora y queda como una mudanza desmarcada; un cambio de
+  semana de la IA (L5) se aplicaría como edición de una persona (`source` MODIFIED), sin riesgo para el
+  avance. La huella de la propuesta no cambió en ninguna entrega.
+- **En producción:** el deploy de siempre (`bash scripts/deploy.sh`), sin SQL ni re-siembra. Antes,
+  `scripts/probar-asistente.ts` con y sin propuesta: L3 cambió la numeración y la base de «S» que lee el
+  modelo, y la revisión cambió el prompt del chat (su caché se rehace una vez).
+
+### L1 · El chat dice qué edita (c744ae1c)
+
+- **Un aviso fijo por estado, visible aunque haya historial** (`estadoParaElChat` y `avisoDelChat`,
+  lib/timeline/apertura-del-chat.ts): editable, armando, recalculando, solo lectura, versión nueva,
+  ilegible, vacía que falló y sin propuesta. Cada variante que no se puede editar dice cómo salir
+  («recarga la página», «descártala arriba del Gantt»). *Por qué:* con una conversación vieja, nada decía
+  que lo nuevo editaba la propuesta y no el cronograma vigente. «Cambia la propuesta» se dice una sola vez,
+  en el aviso. *Lo revertiría:* que el chat vuelva a editar el vigente con una propuesta abierta.
+- **La divisoria y la bienvenida solo se pintan: nunca se guardan como turno ni viajan al POST.**
+  Guardadas, entrarían al contexto del modelo y romperían la caché del prefijo. Los ejemplos de la
+  bienvenida salen de la propuesta de verdad (su primer número, la fase con más nuevas), nunca de un
+  nombre fijo.
+- **«El cliente no ve nada hasta que subas el cronograma» (D15, `LINEA_DEL_CLIENTE`).** Decía «hasta que
+  apliques» y daba a entender que aplicar publica: el cliente ve la foto que se congela al «Subir».
+  *Lo revertiría:* que aplicar pase a publicar.
+- **Con la propuesta vacía que falló, el botón del chat no ofrece un clic que el servidor rechaza**
+  (`MOTIVOS_DEL_CHAT.vacioFallido`, contra el 409 `CHAT_CON_EL_VACIO_FALLIDO`).
+- **«Lo que se acordó» del cronograma va con viñetas**: el único «12.» en pantalla es el número del
+  Gantt. Los documentos siguen numerados.
+
+### L2 · La propuesta aparece entera cuando termina de armarse (19453cf3)
+
+- **Mientras el paso 2 arma las tareas no hay propuesta en pantalla (D10)** (`modoDeLaPropuesta`): el
+  Gantt es el de hoy, editable, con una línea «Armando la propuesta…» y «Descartar». *Por qué:* la barra a
+  medias («Piloto Circle · Sin tareas») mostraba números que se corrían al llegar las tareas. El costo: lo
+  que el CSE edita mientras tanto queda fuera de la propuesta, y el `title` de la línea lo dice. El
+  servidor sigue aceptando casillas; solo la pantalla deja de ofrecerlas. *Lo revertiría:* querer decidir
+  las fases antes de que lleguen las tareas.
+- **El chat no recibe «LOS CAMBIOS» mientras se arma**: no hay números en pantalla que citar.
+- **Si el CSE está escribiendo cuando llega, la barra aparece en «antes»**: el Gantt no cambia bajo el
+  cursor, y el aviso dice cómo verla. Lo decide el hook en el mismo render (revisión: el efecto del canvas
+  corría con el campo ya desmontado).
+- **La espera no repite la fase del motor**: «Analizando sesiones…» mentía con 0 reuniones.
+
+### L3 · Las casillas viven en el Gantt (483f6102 P3a, b9d1eead P3b, 671e299d P3c, 1eaea657 P3d)
+
+- **La lista numerada de la barra se fue** (TareasDeLaPropuesta.tsx, borrado): era la «segunda propuesta»
+  que veía Elías. Lo fijo de la barra es una línea: el título, «Siguiente número» (atajos n y p, nunca
+  mientras se escribe), «Ver como estaba antes» y «Aplicar»; debajo, «Aplicas N de M cambios».
+- **Ninguna fila cambia de lugar al tocar su casilla (D1).** La casilla de cada cambio de tarea vive en
+  una sola fila, la de su lugar de hoy, con un verbo que no cambia al marcar («Crear», «Quitar», «Pasar a
+  Semana 3», «¿Mover a «X»?»). El destino de una mudanza lleva «viene de…» sin casilla: un Tab por cambio.
+  Lo que no va a existir se pinta fantasma en su lugar, y cada semana tiene un orden fijo (las vivas, los
+  destinos, las nuevas). La única excepción: una fase que cambia de duración acota las semanas de sus
+  tareas. *Por qué:* una fila que salta al marcarla hace perder el lugar y el foco.
+- **Las marcas van en un mapa aparte; `proyeccion.fases[].tareas` no cambia (D2).** La leen la guarda «lo
+  escrito es lo que se mostraba», el contexto del chat, sus operaciones y el cierre.
+- **Una sola numeración, que no cambia al marcar (D3)** (`numeracionDeLaPropuesta`): el arranque y el
+  orden; después fase por fase, en el orden completo de la propuesta, sus campos (lo que mueve fechas
+  primero) y al final su grupo de tareas. La usan el Gantt, la barra, los choques del plan y el chat: «deja
+  el 12 como estaba» apunta a lo que se ve. `ItemDelPlan.numero` y la huella no cambian, así una pestaña
+  abierta durante el deploy sigue aplicando. En pantalla, «número» es lo que cita el chat y «cambio», cada
+  casilla.
+- **Una sola base para «S» (D4):** «S3» es la columna S3 de la cabecera del Gantt (S0 = la primera
+  semana), en el chip del inicio, en la vista, en el chat y en el campo «inicia S» (`etiquetaDeSemana`,
+  lib/timeline/weeks.ts). Lo guardado no cambia: `startWeek` ya era base 0. *Por qué:* el mismo cambio se
+  leía «S3 → S5», «S4 → S6» e «inicia S 4». Los textos en palabras para la IA («semana N del proyecto»)
+  siguen desde 1. Guarda: lib/timeline/semana-unica.test.ts.
+- **Qué dice cada tono (D13), nunca el color solo:** verde, lo nuevo; azul, lo que cambia o llega; ámbar,
+  lo que se quita y lo que hay que revisar; rojo, lo atrasado hoy y «ya pasó»; fantasma (cursiva y borde
+  punteado), lo que no va a existir así; normal, lo que queda, **incluidas las hechas, con su check y sin
+  tachar**. Tachado solo en lo que se quita. *Por qué:* la crítica encontró el ámbar con cuatro sentidos y
+  el gris con tres, y el origen de una mudanza tachado se leía como «se borra».
+- **«Atrasada» solo en lo que existe hoy y se queda en su semana.** Una nueva en una semana vencida no la
+  lleva: su semana dice «ya pasó» y la cuenta va en el mensaje (L4).
+- **La propuesta grande entra plegada** (más de 40 filas de tareas; Wherex tiene 185): las filas de fase
+  ya muestran cada número con su casilla. Una chica entra con sus fases con cambios abiertas.
+- **El fixture de la propuesta grande se LEE con fs, nunca se importa**
+  (`lib/timeline/__fixtures__/propuesta-grande.json`, anonimizado y con lista blanca). Con
+  `resolveJsonModule`, un import le haría inferir a `next build` un tipo literal de ~200 KB en la etapa
+  que murió por memoria el 26-sep.
+
+### L4 · El mensaje de arriba, con los números del código (d95d5534)
+
+- **El título dice qué cambia; los totales, qué se aplica (D7).** El nivel se calcula sobre la propuesta
+  ENTERA, así no salta al tocar casillas: «Primer cronograma», «Cronograma casi nuevo», «Rehace casi todas
+  las pendientes» (se quita el 60 % o más de las pendientes), «Cambia parte del cronograma», «Ajuste
+  chico». Ámbar solo en «casi todo». `evaluarMagnitud` y sus umbrales no se tocaron.
+- **El orden: el cierre y su causa, contra lo prometido y el handoff, las tareas, las fuentes, las
+  atrasadas.** Hasta 5 líneas de 140 caracteres, con los nombres de fase cortados a 28. Se descartó el
+  tope de 120: cortaba la causa del cierre, que es lo que Elías pidió ver.
+- **«Lo prometido» es lo último que se subió al cliente (D5):** `publishedSnapshot` validado, con la fecha
+  de `timelinePublishedAt`. No la baseline. Sin publicar, no hay esa comparación.
+- **«El último handoff» es aproximado y siempre lo dice (D6):** las fases de la salida de su última
+  corrida DONE (`whereCorridasDeDocumento(projectId, "handoff")`), validadas con `fasesDelHandoff`, la
+  misma función que usa analyze. En caché por token (50 propuestas, 5 minutos, sin recordar un null):
+  `AgentRun` no tiene índice por proyecto y su `output` pesa hasta ~150 KB. *Lo revertiría:* que el GET
+  pase de 50 ms aun con caché; entonces el cálculo se muda a la creación de la propuesta (un campo
+  suelto), sin tabla nueva.
+- **El atraso se dice como estaba y como queda:** «Atrasadas: hoy 59 → con la propuesta 67». Un solo
+  número («59 quedan atrasadas») se leía como que la propuesta creaba un atraso que ya existía.
+- **Los atrasos cargados van en una frase aparte, nunca como causa**, y cuentan solo los posteriores a lo
+  prometido.
+- **El motivo que escribe la IA en el paso 1 es un chip solo si calza con una fuente real**
+  (`fuenteDelMotivo`); si no, «Según la IA: …». Nunca se copia al mensaje.
+- **«La IA no tuvo reuniones ni notas: armó las tareas sin saber qué pasó en el proyecto»**, solo cuando
+  sus corridas no tuvieron ninguna. No dice «solo leyó tus instrucciones»: el paso 2 lee también el
+  handoff y el cronograma. (La revisión le sacó el «No elegiste…»: no culpa al CSE.)
+
+### L5 · La IA deja quieto lo terminado y no reescribe por reescribir (40a9c14a)
+
+- **R12: en «Regenerar todo», una fase TERMINADA no recibe ni pierde tareas** (`respetarTerminadas`,
+  lib/timeline/tareas-del-detalle.ts). **Solo ahí (D11):** al regenerar una fase y en el recálculo manda
+  «lo que ya se hizo va como tarea» (`EXCEPCION_DE_LA_FASE_A_REGENERAR`), y decir «lo hecho no se vuelve a
+  proponer» chocaría con eso, el mismo conflicto que arregló la revisión del 24-sep. Una fase que el CSE
+  da por terminada pero sigue PENDIENTE (Service Hub en Wherex) no está protegida: depende del modelo.
+- **R4c: una tarea que vuelve con el mismo título completo es la misma tarea** (decisión 4). Primero en
+  su semana; en otra, solo si hay una de cada lado con ese título. Si semana, dueño y tipo son iguales no
+  sale nada; si no, un cambio con solo lo que difiere. Se compara el título entero (`huellaCompleta`), no
+  la huella de 60 caracteres, que emparejaba «…para ventas» con «…para postventa». Wherex, simulado con el
+  código real sobre la misma salida: 130 cambios de tareas → 110, y atrasadas 59 → 59.
+- **Una nota distinta en un par igual se pierde a propósito, y se dice (D12):** se queda la de hoy y una
+  observación cuenta cuántas (Wherex: 8). `tarea-cambia` no lleva nota.
+- **Lo que decide la IA no se hace pasar por una persona (D14):** el escritor y la proyección marcan una
+  tarea como tocada a mano (MODIFIED, sin «por validar») solo con `porChat`. El chat, ante un cambio de la
+  IA, parte de la tarea de hoy y hereda lo de la IA solo si su casilla está marcada; si lo pedido la deja
+  como hoy, la desmarca, no la borra.
+- **El paso 2 lee lo que ya hay** (`loQueYaHay`, en código, no en la base): el estado de cada fase, lo
+  hecho, las pendientes y lo que notó el paso 1. Sin él, el mensaje es byte a byte el de antes. En Wherex
+  suma ~2.000 tokens.
+- *Lo revertiría:* la medición (3 «Regenerar todo» en Wherex): si «Migración Salesforce» recibe tareas o
+  las que cambian pasan de ~10.
+
+### L6 · El porqué, solo con fuentes NUEVAS (2046dbaf)
+
+- **Una fase dice por qué solo si una fuente nueva la nombra.** Nueva contra la última generación
+  APLICADA (D8, `detailGeneratedByAgentRunId`); sin generación aplicada, todo cuenta como nuevo. *Por qué:*
+  con todo el material a mano, el modelo justificaba cualquier cambio después de hecho.
+- **Nombrar es por palabra completa (D9):** huellas sin tildes, con límites de palabra (`\b` de JS no
+  sirve con tildes), así «CS» no calza en «CSV». Un falso negativo cuesta una frase; un falso positivo es
+  una mentira con chip.
+- **La IA devuelve ids y una frase; el código valida y pone títulos, fechas y chips.** Se descarta la
+  frase con cifras, palabras de número, meses, comillas o voseo, o sin una fuente de la lista. Sin fuentes
+  nuevas no se llama al modelo. Sin frase no hay línea en la fase, y «Más» lo dice una vez.
+- **Se pide antes de escribir la fusión y va en la MISMA escritura**, con un tope de 15 s que nunca tira,
+  una sola vez por fusión y bajo el tope diario (agotado, no hay frase y la propuesta se escribe igual).
+  La huella de la explicación sale de la lista que se escribe: si el chat edita la propuesta después, la
+  frase dice «(de cuando se generó)». *Por qué:* escrita aparte, la frase se perdía o no llegaba.
+- **`fuentesDeLaGeneracion` va en el `output` de la corrida**: lo que esa corrida leyó, no lo que hay hoy.
+- *Lo revertiría:* la medición (5 «Regenerar todo»). Si Haiku escribe mal en más de 2 de 5,
+  `claude-sonnet-4-6` (~US$0,016 por llamada).
+
+### L7 · Hechas en la fase equivocada (15535589)
+
+- **La IA sugiere mudar hechas, y nacen DESMARCADAS** (decisión 2): un `tarea-cambia` con
+  `sugerida: "otra-fase"`. Marcada y aplicada, la tarea se muda sin tocar su estado, `statusSource` ni sus
+  fechas.
+  *Por qué:* una tarea con avance nunca cambia de estado ni se mueve sin su casilla.
+- **Se agrupa y se numera en su fase de ORIGEN**, con «¿Mover a «X»?»: el número no depende de la marca.
+  Marcada, queda fantasma sin tachar en el origen y «viene de» en el destino. La casilla del grupo y
+  «recupera el N» del chat no la marcan.
+- **Los totales no la cuentan hasta que se marca** («· 5 mudanzas sugeridas sin marcar»): contada, se
+  leía como 5 cambios desmarcados a mano.
+- **Las fusiones la conservan y el chat no la edita.** El chat sí la marca o la desmarca («muévela a
+  «Y»», «déjala donde está»), y quitar o repartir semanas por chat no se traba por ella (revisión).
+- **Corre en paralelo con el porqué de L6, en el mismo paso 2, solo en «Regenerar todo»**: Haiku, 600
+  tokens, 15 s, sin reintentos, medido como `hechas-fuera-de-lugar`. Sin hechas que mirar no llama.
+- *Lo revertiría:* destinos malos seguidos. El peor caso es un destino malo, que llega desmarcado.
