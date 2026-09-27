@@ -339,8 +339,10 @@ export interface CambioTareaCambia extends DelChat {
   conCambio?: string;
   motivo?: string;
   /**
-   * L7: una mudanza de una tarea HECHA que sugiere la IA (nace sin marcar). L5 solo la declara: el chat no
-   * edita una tarea que la trae (`operar-sobre-el-borrador.ts`, §6.4). La lee `leerCambio` desde L7.
+   * L7: una mudanza de una tarea HECHA que sugiere la IA (hechas-fuera-de-lugar.ts): nace SIN marcar, se ve y se
+   * numera en su fase de ORIGEN (`grupoDeLaTarea`) y no cuenta en los totales hasta que se marca
+   * (`sugeridasSinMarcar`). El chat no edita una tarea que la trae (`operar-sobre-el-borrador.ts`, §6.4) y las
+   * fusiones la conservan (tareas-del-detalle.ts). La lee `leerCambio`; la huella no la mira (`destinoDe`).
    */
   sugerida?: "otra-fase";
 }
@@ -908,7 +910,10 @@ function leerCambioDeTarea(v: unknown): CambioTareaCambia["a"] | null {
 
 /** Un cambio del formato nuevo, validado. null = de un tipo o forma que esta versión no conoce.
  *  E3: `porChat` se lee en los 8 tipos y `retocada` y `mudadaPorElChat` en `tarea-nueva`: si no se
- *  leyeran, una fusión que reescribe `cambios` desde el borrador leído los borraría. */
+ *  leyeran, una fusión que reescribe `cambios` desde el borrador leído los borraría.
+ *  L7: `sugerida` en `tarea-cambia`, solo con su único valor («otra-fase»): sin leerla, la mudanza sugerida de
+ *  una hecha pasaba a ser un cambio cualquiera de la IA (se contaba, se agrupaba en el destino y el chat la
+ *  heredaba). */
 function leerCambio(v: unknown): Cambio | null {
   if (!esObjeto(v) || typeof v.clave !== "string" || !v.clave) return null;
   const motivo = textoOpcional(v.motivo);
@@ -1000,6 +1005,7 @@ function leerCambio(v: unknown): Cambio | null {
         ...(typeof v.conCambio === "string" ? { conCambio: v.conCambio } : {}),
         ...conMotivo,
         ...delChat,
+        ...(v.sugerida === "otra-fase" ? { sugerida: "otra-fase" as const } : {}),
       };
     }
     default:
@@ -1253,6 +1259,10 @@ export interface PlanDeAplicacion {
   /** Los que todavía difieren de lo vivo (todos menos los `ya-esta`), choques incluidos. */
   total: number;
   choques: number;
+  /** L7: las mudanzas SUGERIDAS que siguen sin marcar (`excluido`). Están en `aplicables` (se pueden marcar), pero
+   *  nacen así: no son algo que el CSE desmarcó. «Aplicar todo» y «Aplicas N de M» no las cuentan
+   *  (`aplicablesSinSugeridas`). */
+  sugeridasSinMarcar: number;
   huella: string;
   /** La estructura (sin cambios desde E1) y las tareas. */
   escrituras: EscriturasDeEstructura & { tareas: EscriturasDeTareas };
@@ -1570,9 +1580,14 @@ export const faseDeLaTarea = (c: CambioDeTarea): string =>
   c.tipo === "tarea-nueva" ? c.fase : c.tipo === "tarea-cambia" ? (c.a.fase ?? c.faseId) : c.faseId;
 const llaveDeTarea = (titulo: string, semana: number) => `${huellaDeTitulo(titulo)}|${semana}`;
 
-/** L3 (D3): el grupo en que se numera una tarea: el de su fase (`faseDeLaTarea`). L7 lo cambia para las
- *  mudanzas sugeridas, que se ven en su fase de ORIGEN. */
-export const grupoDeLaTarea = (c: CambioDeTarea): string => faseDeLaTarea(c);
+/** L7: ¿es una mudanza de una tarea hecha que SUGIERE la IA (nace sin marcar)? */
+export const esMudanzaSugerida = (c: Cambio): c is CambioTareaCambia & { sugerida: "otra-fase" } =>
+  c.tipo === "tarea-cambia" && c.sugerida === "otra-fase";
+
+/** L3 (D3): el grupo en que se numera y se pinta una tarea: el de su fase (`faseDeLaTarea`). L7: una mudanza
+ *  SUGERIDA, el de su ORIGEN: se ve donde está hoy, con su casilla sin marcar, y su número no depende de la marca.
+ *  `faseDeLaTarea` sigue dando el destino (lo usa el plan). */
+export const grupoDeLaTarea = (c: CambioDeTarea): string => (esMudanzaSugerida(c) ? c.faseId : faseDeLaTarea(c));
 
 /**
  * L3 (D3): una unidad numerada de la propuesta: un cambio suelto (el arranque, el orden, una fase nueva
@@ -2278,6 +2293,7 @@ export function planDeAplicacion(
     aplicables: items.filter((it) => it.estado === "aplica" || it.estado === "excluido").length,
     total: items.filter((it) => it.estado !== "ya-esta").length,
     choques: items.filter((it) => it.estado === "choque").length,
+    sugeridasSinMarcar: items.filter((it) => it.estado === "excluido" && esMudanzaSugerida(it.cambio)).length,
     huella,
     escrituras,
     bloqueo: porDesfasadas ? bloqueoPorDesfasadas(desfasadas.map((d) => d.nombre)) : bloqueoPrevio,
@@ -2691,11 +2707,15 @@ export interface ItemDeTarea {
   /** E3: cómo la nombra el chat: la clave `t:` de una nueva, el id de una viva en las demás. */
   ref: string;
   estado: EstadoDelCambio;
-  /** «+» se crea, «−» se quita, «~» cambia en su fase, «→» se muda a esta fase (E3). */
-  signo: "+" | "−" | "~" | "→";
+  /** «+» se crea, «−» se quita, «~» cambia en su fase, «→» se muda a esta fase (E3), «?» una hecha que la IA
+   *  sugiere mudar a otra fase (L7: va en el grupo de su ORIGEN, sin marcar). */
+  signo: "+" | "−" | "~" | "→" | "?";
   titulo: string;
-  /** E3: qué le cambia («viene de «Diseño»», «pasa a la Semana 3», «renombrada a «Y»», «la hace el cliente»). */
+  /** E3: qué le cambia («viene de «Diseño»», «pasa a la Semana 3», «renombrada a «Y»», «la hace el cliente»).
+   *  L7: en una sugerida, la pregunta: «¿es de «Migración»?». */
   cambio?: string;
+  /** L7: una mudanza SUGERIDA por la IA (nace sin marcar; solo se aplica si se marca). */
+  sugerida?: true;
   /** La semana dentro de su fase, contando desde 1 (la primera de la fase es la 1). */
   semana: number;
   /** L3 (D4): «Semana 2 · S3» (`etiquetaDeSemana`), con el inicio de su fase en la proyección; sin
@@ -2729,7 +2749,10 @@ export interface GrupoDeTareas {
   /** Las que se crean, las que se quitan y (E3) las que cambian o llegan (sin contar las que ya están así). */
   nuevas: number;
   seVan: number;
+  /** Sin las sugeridas (L7), que van aparte. */
   cambian: number;
+  /** L7: las hechas de ESTA fase que la IA sugiere mudar a otra (marcadas o no, sin las que ya están así). */
+  sugeridas: number;
   marcadas: number;
   aplicables: number;
   estado: "aplica" | "parcial" | "excluido" | "choque" | "ya-esta";
@@ -2747,6 +2770,8 @@ export interface TareasDelResumen {
   seVan: number;
   /** E3: las vivas que cambian (se muden o no). */
   cambian: number;
+  /** L7: de `cambian`, las mudanzas SUGERIDAS marcadas (hechas que se mudan de fase). Solo si hay alguna. */
+  sugeridas?: number;
   /** E3: las fases que se van: su nombre, cuántas tareas pendientes se van con ella y si se queda. */
   fasesSeVan: Array<{ nombre: string; borradas: number; queda: boolean }>;
   /** E3: las tareas que se borran con su fase (todas las fases que se van). */
@@ -2766,10 +2791,13 @@ export interface ResumenDelBorrador {
   indice: UnidadNumerada[];
   /** Todo lo marcado (estructura y tareas). */
   marcadas: number;
-  /** Lo que se puede marcar: `marcadas === aplicables` es «Aplicar todo», con choques o sin ellos. */
+  /** Lo que se puede marcar: `marcadas === aplicables` es «Aplicar todo», con choques o sin ellos. L7: con
+   *  mudanzas sugeridas sin marcar, «todo» es `aplicablesSinSugeridas`. */
   aplicables: number;
   total: number;
   choques: number;
+  /** L7: las del plan (`PlanDeAplicacion.sugeridasSinMarcar`). */
+  sugeridasSinMarcar: number;
   huella: string;
   bloqueo: string | null;
   cierreAntes: ProjectedEnd;
@@ -2923,6 +2951,9 @@ function estadoDelGrupo(its: readonly ItemDelPlan[]): GrupoDeTareas["estado"] {
  * Los grupos de tareas: uno por fase, en el orden en que aparece cada fase en la propuesta.
  * L3: el número sale de `numeracionDeLaPropuesta` (`numeroEnLaLista`, por clave) y la etiqueta de semana
  * del inicio de su fase en la proyección (`inicios`, por clave de fase).
+ * L7: el grupo es el de `grupoDeLaTarea` (una mudanza sugerida, en su ORIGEN), y una sugerida NO pasa por
+ * `textoDelCambioDeTarea(…, "en-su-grupo")`: diría «viene de «origen»», lo contrario de lo que pasa. Va con «?» y
+ * la pregunta «¿es de «destino»?», y cuenta en `sugeridas`, no en `cambian`.
  */
 function gruposDeTareas(
   vivo: Vivo,
@@ -2936,7 +2967,7 @@ function gruposDeTareas(
   const porFase = new Map<string, ItemDelPlan[]>();
   for (const it of plan.items) {
     if (!esCambioDeTarea(it.cambio)) continue;
-    const fase = faseDeLaTarea(it.cambio);
+    const fase = grupoDeLaTarea(it.cambio);
     porFase.set(fase, [...(porFase.get(fase) ?? []), it]);
   }
   const vivas = new Map(vivo.fases.map((f) => [f.id, f]));
@@ -2978,6 +3009,19 @@ function gruposDeTareas(
       };
       if (c.tipo === "tarea-se-va") {
         return { ...comun, signo: "−" as const, titulo: c.desde.title, ...enSuSemana(c.desde.weekIndex) };
+      }
+      if (esMudanzaSugerida(c)) {
+        // L7: en su grupo de ORIGEN, en su semana de hoy, con la pregunta (nunca «viene de»).
+        const destino = destinoDeLaCambia(c);
+        const nombre = destino === null ? null : (nuevasPorClave.get(destino)?.fase.name ?? nombreDeFase(vivo, destino, destino));
+        return {
+          ...comun,
+          signo: "?" as const,
+          titulo: c.desde.title,
+          ...enSuSemana(c.desde.weekIndex),
+          ...(nombre !== null ? { cambio: `¿es de «${nombre}»?` } : {}),
+          sugerida: true as const,
+        };
       }
       if (c.tipo === "tarea-cambia") {
         // E3: «→» si se muda a este grupo (el del destino), «~» si cambia en su fase.
@@ -3023,7 +3067,8 @@ function gruposDeTareas(
         desfasada?.nombre ?? borrador.tareasArmadasPara[fase]?.nombre ?? vivas.get(fase)?.name ?? fasesNuevas.get(fase) ?? fase,
       nuevas: vivos.filter((it) => it.cambio.tipo === "tarea-nueva").length,
       seVan: vivos.filter((it) => it.cambio.tipo === "tarea-se-va").length,
-      cambian: vivos.filter((it) => it.cambio.tipo === "tarea-cambia").length,
+      cambian: vivos.filter((it) => it.cambio.tipo === "tarea-cambia" && !esMudanzaSugerida(it.cambio)).length,
+      sugeridas: vivos.filter((it) => esMudanzaSugerida(it.cambio)).length,
       marcadas: its.filter((it) => it.estado === "aplica").length,
       aplicables: its.filter((it) => it.estado === "aplica" || it.estado === "excluido").length,
       estado: estadoDelGrupo(its),
@@ -3126,6 +3171,8 @@ export function resumir(
     queda: f.queda,
   }));
   const borraDelChat = plan.aplicadas.some((c) => c.tipo === "tarea-se-va" && c.porChat);
+  // L7: de las que cambian, las hechas que se mudan de fase porque el CSE marcó la sugerencia de la IA.
+  const sugeridasMarcadas = plan.aplicadas.filter(esMudanzaSugerida).length;
 
   return {
     origen: borrador.origen,
@@ -3137,6 +3184,7 @@ export function resumir(
     aplicables: plan.aplicables,
     total: plan.total,
     choques: plan.choques,
+    sugeridasSinMarcar: plan.sugeridasSinMarcar,
     huella: plan.huella,
     bloqueo: plan.bloqueo,
     cierreAntes,
@@ -3148,6 +3196,7 @@ export function resumir(
       nuevas: escritas.nuevas.length,
       seVan: escritas.seVan.length,
       cambian: escritas.cambian?.length ?? 0,
+      ...(sugeridasMarcadas > 0 ? { sugeridas: sugeridasMarcadas } : {}),
       fasesSeVan,
       conLaFase: fasesSeVan.reduce((n, f) => n + f.borradas, 0),
     },
@@ -3217,12 +3266,24 @@ export function textoDeAplicar(marcadas: number, aplicables: number): string {
 }
 
 /**
+ * L7: lo que el CSE ve como «todo»: lo que se puede marcar, SIN las mudanzas sugeridas que siguen sin marcar. Nacen
+ * así (la IA las propone desmarcadas); contarlas hacía que una propuesta recién abierta dijera «Aplicar 132 de 137»,
+ * como si el CSE hubiera desmarcado 5. Marcar una suma 1 a los dos lados («Aplicas 133 de 133»).
+ */
+export function aplicablesSinSugeridas(r: { aplicables: number; sugeridasSinMarcar?: number }): number {
+  return r.aplicables - (r.sugeridasSinMarcar ?? 0);
+}
+
+/**
  * El texto del botón de la barra. Revisión de E2c: con fases desfasadas sin forzar, sus tareas se ven
  * marcadas (esperan el recálculo) pero todavía no cuentan, y «Aplicar N de M» parecía decir que el CSE
  * las había quitado. Mientras tanto dice solo «Aplicar»: el botón está apagado y su `title` dice por qué.
+ * L7: M sin las mudanzas sugeridas sin marcar (`aplicablesSinSugeridas`).
  */
-export function textoDelBotonDeAplicar(r: Pick<ResumenDelBorrador, "marcadas" | "aplicables" | "desfasadas">): string {
-  return r.desfasadas.length > 0 ? "Aplicar" : textoDeAplicar(r.marcadas, r.aplicables);
+export function textoDelBotonDeAplicar(
+  r: Pick<ResumenDelBorrador, "marcadas" | "aplicables" | "desfasadas"> & { sugeridasSinMarcar?: number },
+): string {
+  return r.desfasadas.length > 0 ? "Aplicar" : textoDeAplicar(r.marcadas, aplicablesSinSugeridas(r));
 }
 
 /**

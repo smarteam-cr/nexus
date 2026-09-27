@@ -38,12 +38,14 @@ import {
   borradorVacio,
   claveDelRecuerdo,
   claveDeRevision,
+  claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   convertirPropuestaDeFases,
   debeDescartarseSolo,
   deDondeViene,
   desdeDeLaPropuesta,
   esBorradorV1,
+  esMudanzaSugerida,
   FORMATO_BORRADOR,
   fotoDeTarea,
   fraseDelCierre,
@@ -51,6 +53,7 @@ import {
   jsonCanonico,
   leerBorrador,
   marcarCambio,
+  numeracionDeLaPropuesta,
   olvidarRevision,
   pideConfirmacion,
   planDeAplicacion,
@@ -62,9 +65,11 @@ import {
   revisionPara,
   REVISION_VACIA,
   textoDeAplicar,
+  textoDelBotonDeAplicar,
   type AlmacenDeFotos,
   type Borrador,
   type Cambio,
+  type CambioTareaCambia,
   type FaseViva,
   type TareaDelVivo,
   type Vivo,
@@ -76,6 +81,8 @@ import {
   type ProposalLike,
 } from "./proposal-deltas";
 import { medirPropuesta } from "./magnitud-propuesta";
+import { borradorDelFixture, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
+import { textoDeLosTotales } from "./vista-de-la-propuesta";
 
 const f = (id: string, name: string, durationWeeks: number, extra: Partial<FaseViva> = {}): FaseViva => ({
   id,
@@ -1103,3 +1110,97 @@ describe("16 · L3: una sola numeración, la del Gantt", () => {
 
 /** Calculadas con el código de antes de L3 (19453cf3, `planDeAplicacion` sobre `BORRADOR_L3` de §16). */
 const HUELLA_ANTES_DE_L3 = { todo: "19eb2647a3f69f", sinOrdenNiPiloto: "1e179fd64f7812" };
+
+/**
+ * 17 · L7 (spec §8.2): LA MUDANZA QUE SUGIERE LA IA. Una tarea HECHA que parece de otra fase (en la propuesta grande,
+ * las 5 hechas de «Fase A», que la IA quiere mudar a «Fase B») viaja como `tarea-cambia` con `sugerida: "otra-fase"`:
+ * sobrevive a guardarse, se ve y se numera en su fase de ORIGEN (el número no depende de la marca), y nace sin marcar
+ * sin que eso cuente como algo que el CSE desmarcó.
+ */
+describe("17 · L7: la mudanza que sugiere la IA (una hecha en la fase equivocada)", () => {
+  const FIX = leerFixtureGrande();
+  const VIVO_G = vivoDelFixture(FIX);
+  const B_G = borradorDelFixture(FIX);
+  const LISTAS = { tareas: "listas" as const };
+  const ORIGEN = "f02";
+  const DESTINO = "f03";
+  const HECHAS = ["t019", "t020", "t024", "t025", "t026"];
+  const sugerida = (id: string): CambioTareaCambia => {
+    const viva = VIVO_G.fases.find((x) => x.id === ORIGEN)!.tareas!.find((t) => t.id === id)!;
+    return {
+      tipo: "tarea-cambia",
+      clave: claveDeTareaQueCambia(id),
+      tareaId: id,
+      faseId: ORIGEN,
+      desde: fotoDeTarea(viva),
+      a: { fase: DESTINO },
+      motivo: "Parece de «Fase B»",
+      sugerida: "otra-fase",
+    };
+  };
+  const CON_SUGERIDAS: Borrador = { ...B_G, cambios: [...B_G.cambios, ...HECHAS.map(sugerida)] };
+  const CLAVES = HECHAS.map((id) => claveDeTareaQueCambia(id));
+  const numeroDelGrupo = (cambios: readonly Cambio[], fase: string) => {
+    const u = numeracionDeLaPropuesta(VIVO_G, cambios).orden.find((x) => x.tipo === "grupo" && x.fase === fase);
+    return u?.numero ?? null;
+  };
+
+  it("⭐ ida y vuelta: `leerBorrador` conserva `sugerida`; la huella no cambia por la marca; su grupo y su número son los del ORIGEN", () => {
+    /* La edición que la pone en rojo: no leerla en `leerCambio` (una mudanza sugerida guardada volvía como un cambio
+       cualquiera de la IA: agrupada en su DESTINO, contada en los totales y heredable por el chat). */
+    const leido = leerBorrador(JSON.parse(JSON.stringify(CON_SUGERIDAS)))!;
+    expect(leido.cambios.filter(esMudanzaSugerida).map((c) => c.tareaId), "se perdió la marca al leer").toEqual(HECHAS);
+    // La huella no mira la marca: una pestaña de antes de L7 aplica lo mismo.
+    const sinMarca: Borrador = {
+      ...leido,
+      cambios: leido.cambios.map((c) => {
+        if (!esMudanzaSugerida(c)) return c;
+        const { sugerida: _s, ...resto } = c;
+        void _s;
+        return resto;
+      }),
+    };
+    expect(planDeAplicacion(VIVO_G, leido, CLAVES).huella).toBe(planDeAplicacion(VIVO_G, sinMarca, CLAVES).huella);
+    expect(planDeAplicacion(VIVO_G, leido, []).huella).toBe(planDeAplicacion(VIVO_G, sinMarca, []).huella);
+    // Su grupo es el de su ORIGEN, con el número que ese grupo ya tenía, y ninguna unidad nueva.
+    const antes = numeracionDeLaPropuesta(VIVO_G, B_G.cambios);
+    const n = numeracionDeLaPropuesta(VIVO_G, leido.cambios);
+    expect(n.orden.length, "la sugerida abrió un número nuevo (el grupo del destino)").toBe(antes.orden.length);
+    for (const k of CLAVES) expect(n.porClave.get(k), k).toBe(numeroDelGrupo(B_G.cambios, ORIGEN));
+    const r = resumir(VIVO_G, leido, CLAVES, LISTAS);
+    const grupo = r.grupos.find((g) => g.fase === ORIGEN)!;
+    expect(grupo.tareas.filter((t) => t.sugerida).map((t) => [t.clave, t.signo, t.cambio])).toEqual(
+      CLAVES.map((k) => [k, "?", "¿es de «Fase B»?"]),
+    );
+    expect(grupo.sugeridas).toBe(5);
+    expect(grupo.cambian, "las sugeridas no son «cambian»").toBe(resumir(VIVO_G, B_G, [], LISTAS).grupos.find((g) => g.fase === ORIGEN)!.cambian);
+    expect(r.grupos.find((g) => g.fase === DESTINO)?.tareas.some((t) => t.sugerida) ?? false, "se agrupó en el destino").toBe(false);
+    // Marcar una no le cambia el número a nada.
+    const marcada = resumir(VIVO_G, leido, CLAVES.slice(1), LISTAS);
+    expect(marcada.indice.map((u) => u.numero)).toEqual(r.indice.map((u) => u.numero));
+    expect(marcada.grupos.find((g) => g.fase === ORIGEN)!.numero).toBe(grupo.numero);
+  });
+
+  it("⭐ los totales: con 5 sugeridas sin marcar, «Aplicar todo» y «… · 5 mudanzas sugeridas sin marcar»; marcar una suma 1 a los dos lados", () => {
+    /* La edición que la pone en rojo: contarlas en `aplicables` (una propuesta recién abierta decía «Aplicar 132 de
+       137», como si el CSE hubiera desmarcado 5). */
+    const sinSugeridas = resumir(VIVO_G, B_G, [], LISTAS);
+    expect(sinSugeridas.marcadas).toBe(132);
+    const r = resumir(VIVO_G, CON_SUGERIDAS, CLAVES, LISTAS);
+    expect(r.sugeridasSinMarcar).toBe(5);
+    expect(r.marcadas).toBe(132);
+    expect(textoDelBotonDeAplicar(r)).toBe("Aplicar todo");
+    expect(textoDeLosTotales(r)).toBe("Aplicas 132 de 132 cambios · 5 mudanzas sugeridas sin marcar");
+    const una = resumir(VIVO_G, CON_SUGERIDAS, CLAVES.slice(1), LISTAS);
+    expect(una.sugeridasSinMarcar).toBe(4);
+    expect(textoDelBotonDeAplicar(una)).toBe("Aplicar todo");
+    expect(textoDeLosTotales(una)).toBe("Aplicas 133 de 133 cambios · 4 mudanzas sugeridas sin marcar");
+    expect(una.tareas.sugeridas, "la marcada no se cuenta como hecha que se muda").toBe(1);
+    // Todas marcadas: nada que decir de las sugeridas.
+    const todas = resumir(VIVO_G, CON_SUGERIDAS, [], LISTAS);
+    expect(textoDeLosTotales(todas)).toBe("Aplicas 137 de 137 cambios");
+    // Lo que el CSE sí desmarca sigue contando como desmarcado.
+    const otra = B_G.cambios.find((c) => c.tipo === "tarea-nueva")!.clave;
+    expect(textoDelBotonDeAplicar(resumir(VIVO_G, CON_SUGERIDAS, [...CLAVES, otra], LISTAS))).toBe("Aplicar 131 de 132");
+  });
+});

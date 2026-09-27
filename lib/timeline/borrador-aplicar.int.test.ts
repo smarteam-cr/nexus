@@ -880,3 +880,85 @@ describe("lo que dicta el chat — DB real (E3)", () => {
     expect(Object.fromEntries(porSemana.map((g) => [g.weekIndex, g._count]))).toEqual({ 0: 168, 1: 84 });
   }, 60_000);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── L7: la mudanza que SUGIERE la IA (una hecha en la fase equivocada) ───────
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("la mudanza sugerida de una hecha — DB real (L7)", () => {
+  /** La sugerencia de la IA para «Mapear procesos» (hecha, en Diseño): mudarla a «Pruebas». Sin `porChat`. */
+  const sugeridaDe = (vivo: Vivo, m: Awaited<ReturnType<typeof mundoDelChat>>, faseDeHoy: string): CambioTareaCambia => {
+    const { porChat: _porChat, ...deLaIa } = cambiaLa(vivo, m.hecha.id, faseDeHoy, { fase: m.pruebas.id });
+    void _porChat;
+    return { ...deLaIa, motivo: "Parece de «Pruebas»", sugerida: "otra-fase" };
+  };
+
+  it("⭐ marcada y aplicada: el mismo id, HECHA, con su `statusSource`, sus fechas y su `source`, en la fase de destino", async () => {
+    /* La edición que la pone en rojo: escribir el estado al mudar (la hecha volvería a pendiente o perdería quién la
+       cerró y cuándo), o marcarla «tocada a mano» (AGENT → MODIFIED, sin «por validar») por algo que decidió la IA. */
+    const m = await mundoDelChat();
+    const fin = new Date("2026-10-09T00:00:00.000Z");
+    const cambio = new Date("2026-10-09T15:00:00.000Z");
+    await prisma.timelineTask.update({
+      where: { id: m.hecha.id },
+      data: { statusSource: "AI_CONFIRMED", statusChangedAt: cambio, actualEnd: fin, needsValidation: true },
+    });
+    const antes = await prisma.timelineTask.findUniqueOrThrow({ where: { id: m.hecha.id } });
+    const pedido = await pedidoDelChat(m.tl.id, (vivo) => [sugeridaDe(vivo, m, m.diseno.id)]);
+    // Una sugerencia de la IA pide la vara de la IA (`necesitaPermisoDeIa`), como cualquier cambio suyo.
+    const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, { ...pedido, puedeTocarTareas: true }), TECHO);
+    expect(r.tareas).toEqual({ creadas: 0, borradas: 0, cambiadas: 1, mudadas: 1 });
+    const mudada = await prisma.timelineTask.findUniqueOrThrow({ where: { id: m.hecha.id } });
+    expect(mudada.phaseId, "no se mudó").toBe(m.pruebas.id);
+    expect({
+      status: mudada.status,
+      statusSource: mudada.statusSource,
+      statusChangedAt: mudada.statusChangedAt?.toISOString(),
+      actualStart: mudada.actualStart?.toISOString(),
+      actualEnd: mudada.actualEnd?.toISOString(),
+      source: mudada.source,
+      needsValidation: mudada.needsValidation,
+      title: mudada.title,
+    }).toEqual({
+      status: "DONE",
+      statusSource: "AI_CONFIRMED",
+      statusChangedAt: antes.statusChangedAt?.toISOString(),
+      actualStart: antes.actualStart?.toISOString(),
+      actualEnd: antes.actualEnd?.toISOString(),
+      source: "AGENT",
+      needsValidation: true,
+      title: "Mapear procesos",
+    });
+    expect(await prisma.timelineTask.count({ where: { phase: { timelineId: m.tl.id } } }), "se recreó una tarea").toBe(3);
+  });
+
+  it("⛔ desmarcada (como nace) no se aplica; movida a mano entretanto, choca y queda donde la dejaron", async () => {
+    /* Las ediciones que la ponen en rojo: aplicarla sin su casilla, o pisar la mudanza que hizo una persona. */
+    // Con algo más marcado (un renombre del chat): sin nada marcado, aplicar no tiene qué escribir.
+    const renombre = (vivo: Vivo, mm: Awaited<ReturnType<typeof mundoDelChat>>) =>
+      cambiaLa(vivo, mm.deLaIa.id, mm.diseno.id, { title: "Definir el pipeline de ventas" });
+    const m = await mundoDelChat();
+    const pedido = await pedidoDelChat(m.tl.id, (vivo) => [sugeridaDe(vivo, m, m.diseno.id), renombre(vivo, m)]);
+    const clave = claveDeTareaQueCambia(m.hecha.id);
+    const vivo = await vivoDeLaBase(m.tl.id);
+    const desmarcada = { ...pedido, sin: [clave], huella: planDeAplicacion(vivo, leerBorrador(pedido.guardado)!, [clave], { tareas: "listas" }).huella };
+    await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, { ...desmarcada, puedeTocarTareas: true }), TECHO);
+    expect((await prisma.timelineTask.findUniqueOrThrow({ where: { id: m.hecha.id } })).phaseId, "se mudó sin su casilla").toBe(m.diseno.id);
+
+    // Otra propuesta igual, y alguien la mueve a mano a «Cierre» antes de aplicar.
+    const m2 = await mundoDelChat();
+    await prisma.timelineTask.update({ where: { id: m2.hecha.id }, data: { phaseId: m2.cierre.id, weekIndex: 0 } });
+    const pedido2 = await pedidoDelChat(m2.tl.id, (vivo2) => {
+      const s = sugeridaDe(vivo2, m2, m2.diseno.id);
+      // Su foto es la que leyó la IA, en «Diseño».
+      return [{ ...s, desde: { ...s.desde, weekIndex: 1 } }, renombre(vivo2, m2)];
+    });
+    const plan = planDeAplicacion(await vivoDeLaBase(m2.tl.id), leerBorrador(pedido2.guardado)!, [], { tareas: "listas" });
+    const item = plan.items.find((it) => it.cambio.clave === claveDeTareaQueCambia(m2.hecha.id))!;
+    expect(item.estado).toBe("choque");
+    expect(item.choque).toMatch(/^La moviste a otra fase/);
+    await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, { ...pedido2, puedeTocarTareas: true }), TECHO);
+    const queda = await prisma.timelineTask.findUniqueOrThrow({ where: { id: m2.hecha.id } });
+    expect([queda.phaseId, queda.status]).toEqual([m2.cierre.id, "DONE"]);
+  });
+});

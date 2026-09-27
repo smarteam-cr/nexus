@@ -292,6 +292,38 @@ describe("⭐ la traducción: lo que nombra el modelo → las claves de la barra
   });
 });
 
+describe("⛔ L7 · «recupera el N» no marca las mudanzas SUGERIDAS de su grupo", () => {
+  it("⭐ el grupo vuelve sin ellas; nombrada la tarea, sí; y «déjalo como estaba» las desmarca", () => {
+    /* La edición que la pone en rojo: tratar una sugerida como cualquier fila del grupo (el chat marcaba de un número la
+       mudanza de una hecha que el CSE nunca miró: una hecha no se muda sin SU casilla). */
+    const TB3 = tarea("tb3", "Validar la migración", 1, { status: "DONE" });
+    const vivo: Vivo = { ...VIVO, fases: VIVO.fases.map((f) => (f.id === "fb" ? { ...f, tareas: [...(f.tareas ?? []), TB3] } : f)) };
+    const SUGERIDA = {
+      tipo: "tarea-cambia" as const,
+      clave: "tarea:tb3:cambia",
+      tareaId: "tb3",
+      faseId: "fb",
+      desde: fotoDeTarea(TB3),
+      a: { fase: "fc" },
+      motivo: "Parece de «Pruebas»",
+      sugerida: "otra-fase" as const,
+    };
+    const b: Borrador = { ...BORRADOR, cambios: [...BORRADOR.cambios, SUGERIDA] };
+    const delGrupo = [T_REVISAR, claveDeTareaQueSeVa("tb1")];
+    const p = enElTurno({ borrador: b, vivo, excluidos: [...delGrupo, SUGERIDA.clave] });
+    const g = p.resumen!.grupos.find((x) => x.fase === "fb")!;
+    expect(g.tareas.find((t) => t.clave === SUGERIDA.clave)?.sugerida, "la sugerida no está en el grupo de su origen").toBe(true);
+    const grupo = traducirOperaciones([{ op: "propuesta.recuperar", cambios: [String(g.numero)] }], p);
+    expect(grupo.rechazadas).toEqual([]);
+    expect((grupo.canonicas[0].op as { claves: string[] }).claves.sort()).toEqual([...delGrupo].sort());
+    const nombrada = traducirOperaciones([{ op: "propuesta.recuperar", tareas: ["Validar la migración"] }], p);
+    expect(nombrada.canonicas[0].op).toEqual({ op: "propuesta.recuperar", claves: [SUGERIDA.clave] });
+    const marcada = enElTurno({ borrador: b, vivo, excluidos: [] });
+    const dejar = traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: [String(g.numero)] }], marcada);
+    expect((dejar.canonicas[0].op as { claves: string[] }).claves).toContain(SUGERIDA.clave);
+  });
+});
+
 describe("⭐ aplicar y descartar la propuesta entera: SOLAS", () => {
   const P = enElTurno();
   const dejar = { op: "propuesta.dejar-como-estaba" as const, claves: [N_PILOTO] };

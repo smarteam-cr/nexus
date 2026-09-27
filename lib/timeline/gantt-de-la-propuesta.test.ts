@@ -632,6 +632,9 @@ describe("L3 P3c · lo puro que el Gantt pregunta", () => {
       marca({ tipo: "cambia", marcada: false, verbo: "Cambiar", existeHoyYSeQueda: true }),
       marca({ tipo: "choque", seMarca: false, existeHoyYSeQueda: true }),
       marca({ tipo: "espera", verbo: "Quitar", existeHoyYSeQueda: false }),
+      // L7: la mudanza sugerida, desmarcada (normal) y marcada (el fantasma de su origen, sin tachar).
+      marca({ tipo: "sugerida", lugar: "origen", marcada: false, verbo: "¿Mover a «Fase B»?", existeHoyYSeQueda: true }),
+      marca({ tipo: "sugerida", lugar: "origen", fantasma: true, verbo: "¿Mover a «Fase B»?" }),
     ];
     for (const m of casos) {
       const e = estiloDeLaFila(m);
@@ -644,6 +647,11 @@ describe("L3 P3c · lo puro que el Gantt pregunta", () => {
     expect(estiloDeLaFila(marca({})).fila).toBe("bg-success-surface");
     expect(estiloDeLaFila(marca({ tipo: "semana", lugar: "destino" })).fila).toBe("bg-info-surface");
     expect(estiloDeLaFila(marca({ tipo: "cambia", marcada: false })).fila).toBe("");
+    // L7: sin marcar, una hecha sugerida se ve como está hoy; marcada, su origen se pinta como el de toda mudanza.
+    expect(estiloDeLaFila(marca({ tipo: "sugerida", lugar: "origen", marcada: false })).fila).toBe("");
+    expect(estiloDeLaFila(marca({ tipo: "sugerida", lugar: "origen", fantasma: true })).chip).toBe(
+      estiloDeLaFila(marca({ tipo: "sale", lugar: "origen", fantasma: true })).chip,
+    );
   });
 
   it("⭐ etiquetasSinCasilla deja solo «movida», «se queda con N tareas» y «tareas por recalcular»", () => {

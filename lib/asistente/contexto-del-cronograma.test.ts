@@ -31,6 +31,7 @@ vi.mock("@/lib/contexto/cargar", () => ({ cargarMaterialParaElChat: vi.fn() }));
 import {
   armarContextoConPropuesta,
   COMO_SE_LEEN_LAS_SEMANAS,
+  LEYENDA_DE_LA_SUGERIDA,
   LINEA_DE_LA_PROPUESTA_EDITABLE,
   lineaDeSoloLectura,
   RECORTE_NIVEL_1,
@@ -45,6 +46,7 @@ import { resolverHandle } from "@/lib/timeline/handle-de-tarea";
 import { computePhaseRanges } from "@/lib/timeline/weeks";
 import {
   claveDeFaseQueSeVa,
+  claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   FORMATO_BORRADOR,
   fotoDeTarea,
@@ -859,5 +861,67 @@ describe("⛔ L3 · el chat ve los números y las semanas del Gantt", () => {
     const seVan = c.texto.split("\n").find((l) => l.startsWith("   se van: "));
     expect(seVan, "el fixture no tiene tareas que se van").toBeTruthy();
     expect(seVan).toMatch(/^ {3}se van: Semana \d+ · S\d+ /);
+  });
+});
+
+/**
+ * L7 (spec §8.2): una mudanza que SUGIERE la IA (una hecha que parece de otra fase) llega al chat como la ve el CSE: en
+ * el grupo de su fase de HOY (el origen), con «?» y la pregunta «¿es de «X»?», y la leyenda dice qué es «?». Nunca
+ * «viene de»: eso es lo que diría si se agrupara en el destino, y todavía no se mudó.
+ */
+describe("⛔ L7 · la mudanza sugerida, en el contexto del chat", () => {
+  const base = propuestaGrande({ fases: 6, vivas: 120, nuevas: 6, seVan: 4 });
+  const origen = base.vivo.fases[1];
+  const destino = base.vivo.fases[4];
+  const hechas = (origen.tareas ?? []).filter((t) => t.status === "DONE").slice(0, 2);
+  const sugeridas: Cambio[] = hechas.map((t) => ({
+    tipo: "tarea-cambia",
+    clave: claveDeTareaQueCambia(t.id),
+    tareaId: t.id,
+    faseId: origen.id,
+    desde: fotoDeTarea(t),
+    a: { fase: destino.id },
+    motivo: `Parece de «${destino.name}»`,
+    sugerida: "otra-fase",
+  }));
+  const conSugeridas = {
+    vivo: base.vivo,
+    borrador: {
+      ...base.borrador,
+      cambios: [...base.borrador.cambios, ...sugeridas],
+      excluidos: [...(base.borrador.excluidos ?? []), ...sugeridas.map((c) => c.clave)],
+    },
+  };
+
+  it("⭐ sale con «?» y «¿es de «X»?» en el grupo de su ORIGEN, la leyenda explica «?», y ninguna línea suya dice «viene de»", () => {
+    /* La edición que la pone en rojo: pintarla con `textoDelCambioDeTarea(…, "en-su-grupo")` (diría «viene de «origen»»,
+       lo contrario de lo que pasa), agruparla en el destino, o no explicar «?» (el modelo no sabría que viene sin
+       marcar y que solo se aplica si se marca). */
+    expect(hechas, "el fixture no tiene dos hechas en la fase de origen").toHaveLength(2);
+    const p = paraElChat(conSugeridas);
+    const c = armarContextoConPropuesta(entrada(p), { techo: Number.POSITIVE_INFINITY });
+    const lineas = c.texto.split("\n");
+    expect(lineas, "falta la leyenda de «?»").toContain(LEYENDA_DE_LA_SUGERIDA);
+    const grupo = p.resumen.grupos.find((g) => g.fase === origen.id)!;
+    const cabeza = lineas.findIndex((l) => l.startsWith(`${grupo.numero}. `) && l.includes(` Tareas de «${origen.name}»`));
+    expect(cabeza, "no está el grupo del origen").toBeGreaterThan(-1);
+    expect(lineas[cabeza]).toContain("?2 sugeridas");
+    const debajo = lineas.slice(cabeza + 1).filter((_, i, arr) => arr.slice(0, i + 1).every((l) => l.startsWith("   ")));
+    const linea = debajo.find((l) => l.startsWith("   sugeridas: "));
+    expect(linea, "las sugeridas no van debajo de su grupo de origen").toBeTruthy();
+    for (const t of hechas) {
+      const h = c.handles.get(t.id) ?? t.id;
+      expect(linea).toContain(`[${h}] (¿es de «${destino.name}»?)`);
+      const it = grupo.tareas.find((x) => x.ref === t.id)!;
+      expect(it.etiqueta).toMatch(/^Semana \d+ · S\d+$/);
+      expect(linea).toContain(`☐ ? ${it.etiqueta} ${it.titulo} [${h}] (¿es de «${destino.name}»?)`);
+      for (const l of lineas.filter((x) => x.includes(`[${h}]`))) expect(l, "una línea de la sugerida dice «viene de»").not.toContain("viene de");
+    }
+    // El grupo del destino no las nombra.
+    const delDestino = p.resumen.grupos.find((g) => g.fase === destino.id);
+    for (const t of delDestino?.tareas ?? []) expect(hechas.map((x) => x.id)).not.toContain(t.ref);
+    // Sin sugeridas, la leyenda no va (el texto de siempre).
+    const sin = armarContextoConPropuesta(entrada(paraElChat(base)), { techo: Number.POSITIVE_INFINITY });
+    expect(sin.texto).not.toContain(LEYENDA_DE_LA_SUGERIDA);
   });
 });

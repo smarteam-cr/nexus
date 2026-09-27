@@ -766,4 +766,24 @@ describe("10 · L5: un cambio de tarea de la IA frente al chat", () => {
     expect(r.borrador.cambios).toEqual([sugerida]);
     expect(r.excluidos).toEqual([sugerida.clave]);
   });
+
+  it("⛔ L7: la sugerida LEÍDA de la base (como la lee la ruta del chat) tampoco: sigue desmarcada, `sugerida` intacta y sin cambio del chat", () => {
+    /* Las ediciones que la ponen en rojo: heredar el `a.fase` de la IA en `upsertTarea` (sin la rama de la sugerida,
+       el chat marcaba y hacía suya la mudanza de una hecha), o no leer `sugerida` en `leerCambio` (la ruta lee el
+       borrador de la base: la sugerida volvía como un cambio cualquiera de la IA, y «renómbrala» la reescribía). */
+    const sugerida: CambioTareaCambia = { ...deLaIa(cambia(B3, "b", { fase: "c" })), sugerida: "otra-fase" };
+    const leido = leerBorrador(JSON.parse(JSON.stringify(v1([sugerida], { excluidos: [sugerida.clave] }))));
+    expect(leido, "no se deja leer").not.toBeNull();
+    const r = operar(leido!, [sugerida.clave], [{ op: "tarea.renombrar", taskId: "b3", titulo: "Validar con el cliente final" }]);
+    expect(r.rechazadas).toEqual([{ indice: 0, motivo: rechazoTareaConSugerencia("Validar con el cliente", "Pruebas") }]);
+    expect(r.cambio).toBe(false);
+    expect(r.excluidos, "la mudanza sugerida quedó marcada").toEqual([sugerida.clave]);
+    const quedan = r.borrador.cambios.filter((c): c is CambioTareaCambia => c.tipo === "tarea-cambia" && c.tareaId === "b3");
+    expect(quedan).toEqual([sugerida]);
+    expect(quedan[0].porChat, "el chat se apropió de la sugerencia").toBeUndefined();
+    // Mudarla de fase por chat, tampoco (una hecha nunca se mueve sin su casilla).
+    const mudar = operar(leido!, [sugerida.clave], [{ op: "tarea.mover-fase", taskId: "b3", phaseId: "a" }]);
+    expect(mudar.rechazadas.map((x) => x.motivo)).toEqual([rechazoTareaConSugerencia("Validar con el cliente", "Pruebas")]);
+    expect(mudar.excluidos).toEqual([sugerida.clave]);
+  });
 });

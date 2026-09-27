@@ -979,3 +979,69 @@ describe("7 · E3: lo que dictó el chat sobrevive a las fusiones de la IA", () 
     expect(bq.cambios.find((c) => c.clave === DEL_CHAT_SE_VA.clave)).toEqual(DEL_CHAT_SE_VA);
   });
 });
+
+/* L7 (§8.2, 2026-09-26): la mudanza que SUGIERE la IA (una hecha que parece de otra fase) nace sin marcar y la decide el
+   CSE con su casilla. Las fusiones la CONSERVAN (`seConserva`): si no, una vuelta del paso 2 o el recálculo de su fase la
+   borraban, y su clave quedaba huérfana en `excluidos`. */
+describe("8 · L7: las mudanzas sugeridas sobreviven a las fusiones", () => {
+  /** «Firmar el acta» (hecha, en Kick-off) que la IA sugiere mudar a «Pruebas». */
+  const SUGERIDA: CambioTareaCambia = {
+    tipo: "tarea-cambia",
+    clave: "tarea:a2:cambia",
+    tareaId: "a2",
+    faseId: "a",
+    desde: fotoDeTarea(A2),
+    a: { fase: "c" },
+    motivo: "Parece de «Pruebas»",
+    sugerida: "otra-fase",
+  };
+  const CON_SUGERIDA: Borrador = { ...BASE, cambios: [...BASE.cambios, SUGERIDA], excluidos: [SUGERIDA.clave] };
+  const huerfanas = (b: Pick<Borrador, "cambios" | "excluidos">) => {
+    const claves = new Set(b.cambios.map((c) => c.clave));
+    return (b.excluidos ?? []).filter((k) => !claves.has(k));
+  };
+  const deLaIa = (clave: string, fase: string, title: string, weekIndex: number): CambioTareaNueva => ({
+    tipo: "tarea-nueva",
+    clave,
+    fase,
+    tarea: { title, weekIndex, notes: null, party: "SMARTEAM", type: "TASK", needsValidation: false, motivoPorValidar: null, fuga: null },
+  });
+
+  it("⭐ `fusionarDetalle` la conserva, sin clave huérfana en `excluidos`", () => {
+    /* La edición que la pone en rojo: no sumarla a `seConserva` (queda solo `loTocoElChat`): la fusión la borra y
+       «tarea:a2:cambia» queda en `excluidos` sin su cambio. */
+    const r = cambios(
+      salida([
+        { id: "a", tasks: [{ title: "Presentar el equipo", weekIndex: 0 }] },
+        { id: "c", tasks: [{ title: "Pruebas de aceptación", weekIndex: 2 }] },
+      ]),
+      { borrador: CON_SUGERIDA },
+    );
+    const b = fusionarDetalle(CON_SUGERIDA, r, "run-2");
+    expect(b.cambios.find((c) => c.clave === SUGERIDA.clave), "la fusión borró la mudanza sugerida").toEqual(SUGERIDA);
+    expect(b.cambios.filter((c) => c.clave === SUGERIDA.clave)).toHaveLength(1);
+    expect(b.excluidos, "nació desmarcada y tiene que seguir así").toEqual([SUGERIDA.clave]);
+    expect(huerfanas(b)).toEqual([]);
+  });
+
+  it("⭐ `mezclarTareasDeFases` (el recálculo de su fase de origen, de su destino o de las dos) la conserva", () => {
+    /* La edición que la pone en rojo: la misma (sin `seConserva`, el recálculo de «Kick-off» se la lleva). */
+    for (const fases of [["a"], ["c"], ["a", "c"]]) {
+      const recalculadas = [deLaIa("t:ia-a", "a", "Presentar el equipo", 0), deLaIa("t:ia-c", "c", "Pruebas guiadas", 2)].filter((n) =>
+        fases.includes(n.fase),
+      );
+      const mezcla = mezclarTareasDeFases(CON_SUGERIDA.cambios, recalculadas, new Set(fases));
+      expect(mezcla.find((c) => c.clave === SUGERIDA.clave), `el recálculo de ${fases.join("+")} se llevó la sugerida`).toEqual(SUGERIDA);
+      const b = fusionarRecalculo(CON_SUGERIDA, {
+        tareas: recalculadas,
+        armadas: Object.fromEntries(fases.map((f) => [f, { nombre: f, semanas: 3 }])),
+        escritas: fases,
+        fallidas: [],
+        motivo: null,
+        observaciones: [],
+      });
+      expect(huerfanas(b)).toEqual([]);
+      expect(b.excluidos).toEqual([SUGERIDA.clave]);
+    }
+  });
+});

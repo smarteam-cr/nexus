@@ -23,8 +23,10 @@
  */
 import {
   acotarSemana,
+  aplicablesSinSugeridas,
   destinoDeLaCambia,
   esCambioDeTarea,
+  esMudanzaSugerida,
   ordenCompletoDeLaPropuesta,
   type Borrador,
   type Cambio,
@@ -203,6 +205,10 @@ export const VERBO_CAMBIAR = "Cambiar";
 const semanaDeLaFase = (w: number) => etiquetaDeSemana(null, w).deLaFase;
 export const verboPasarA = (semana: number) => `Pasar a ${semanaDeLaFase(semana)}`;
 export const verboMudarA = (fase: string) => `Mudar a «${fase}»`;
+/** L7: el verbo de una mudanza que SUGIERE la IA (una hecha que parece de otra fase): una pregunta, no una orden. */
+export const verboMoverA = (fase: string) => `¿Mover a «${fase}»?`;
+/** L7: la segunda línea de una sugerida sin marcar, en su fase de hoy. */
+export const chipEsDe = (fase: string) => `¿es de «${fase}»?`;
 export const chipVieneDe = (fase: string) => `viene de «${fase}»`;
 export const chipVieneDeLaSemana = (semana: number) => `viene de la ${semanaDeLaFase(semana)}`;
 export const chipSeMuda = (fase: string) => `→ se muda a «${fase}»`;
@@ -224,12 +230,15 @@ const PARTY_DESPUES: Record<Party, string> = {
 const tipoEnPalabras = (t: TipoDeTarea | null) => (t === "SESSION" ? "sesión" : t === "TASK" ? "tarea" : "sin tipo");
 
 /** Lo que dice el grupo después de «Tareas:»: cuántas se crean, cuántas se quitan y cuántas cambian. Se mudó de
- *  TareasDeLaPropuesta.tsx (L3): «se quitan» como el chip de la fila, no «se van». */
-export function cuentaDelGrupo(g: GrupoDeTareas): string {
+ *  TareasDeLaPropuesta.tsx (L3): «se quitan» como el chip de la fila, no «se van». L7: y las hechas que la IA sugiere
+ *  mudar («· 5 sugeridas»), aparte de las que cambian. */
+export function cuentaDelGrupo(g: Pick<GrupoDeTareas, "nuevas" | "seVan" | "cambian"> & { sugeridas?: number }): string {
   const partes: string[] = [];
   if (g.nuevas > 0) partes.push(plural(g.nuevas, "nueva", "nuevas"));
   if (g.seVan > 0) partes.push(`${g.seVan} ${g.seVan === 1 ? "se quita" : "se quitan"}`);
   if (g.cambian > 0) partes.push(`${g.cambian} ${g.cambian === 1 ? "cambia" : "cambian"}`);
+  const sugeridas = g.sugeridas ?? 0;
+  if (sugeridas > 0) partes.push(plural(sugeridas, "sugerida", "sugeridas"));
   return partes.length > 0 ? partes.join(" · ") : "ya está así";
 }
 
@@ -488,10 +497,17 @@ export function atajoDelSiguiente(
 }
 
 /** Los totales de la barra (van en `aria-live`): «Aplicas 132 de 132 cambios». Las tareas que esperan su recálculo
- *  todavía no cuentan, y lo dice. */
-export function textoDeLosTotales(r: Pick<ResumenDelBorrador, "marcadas" | "aplicables" | "desfasadas">): string {
-  const base = `Aplicas ${r.marcadas} de ${plural(r.aplicables, "cambio", "cambios")}`;
-  return r.desfasadas.length > 0 ? `${base}, sin contar las tareas que se recalculan` : base;
+ *  todavía no cuentan, y lo dice. L7: las mudanzas sugeridas sin marcar no cuentan en M (nacen así, no las desmarcó
+ *  el CSE) y se dicen aparte: «Aplicas 132 de 132 cambios · 5 mudanzas sugeridas sin marcar». */
+export function textoDeLosTotales(
+  r: Pick<ResumenDelBorrador, "marcadas" | "aplicables" | "desfasadas"> & { sugeridasSinMarcar?: number },
+): string {
+  const base = `Aplicas ${r.marcadas} de ${plural(aplicablesSinSugeridas(r), "cambio", "cambios")}`;
+  const conRecalculo = r.desfasadas.length > 0 ? `${base}, sin contar las tareas que se recalculan` : base;
+  const sugeridas = r.sugeridasSinMarcar ?? 0;
+  return sugeridas > 0
+    ? `${conRecalculo} · ${plural(sugeridas, "mudanza sugerida sin marcar", "mudanzas sugeridas sin marcar")}`
+    : conRecalculo;
 }
 
 /** Los choques, solo si hay: cada fila dice el suyo con su ⚠ (no siempre es una edición a mano). */
@@ -686,7 +702,18 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
     const destino = destinoDeLaCambia(c);
     const nuevaSemana = c.a.weekIndex !== undefined && c.a.weekIndex !== semanaHoy ? c.a.weekIndex : null;
     const seMueve = destino !== null || nuevaSemana !== null;
-    const verbo = destino !== null ? verboMudarA(nombreFijo(destino)) : nuevaSemana !== null ? verboPasarA(nuevaSemana) : VERBO_CAMBIAR;
+    /* L7: una mudanza SUGERIDA por la IA (una hecha que parece de otra fase) se pinta como la mudanza del chat, con
+       su pregunta de verbo («¿Mover a «Y»?») y su tipo propio: desmarcada, normal en su ORIGEN con «¿es de «Y»?»;
+       marcada, fantasma SIN tachar en el origen y «viene de «X»» en el destino. La hecha conserva su check en los dos. */
+    const sugerida = esMudanzaSugerida(c) && destino !== null;
+    const verbo =
+      destino !== null
+        ? sugerida
+          ? verboMoverA(nombreFijo(destino))
+          : verboMudarA(nombreFijo(destino))
+        : nuevaSemana !== null
+          ? verboPasarA(nuevaSemana)
+          : VERBO_CAMBIAR;
     const { antes, titulo } = antesYDespues(c, semanaHoy, destino !== null ? nombreFijo(destino) : null, nombreFijo(c.faseId));
     const comun = {
       ...base,
@@ -720,8 +747,16 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
       return;
     }
     if (it.estado !== "aplica") {
-      // Desmarcada: la viva sigue en su semana (y su fase), con la casilla.
-      marcarLaViva(c, { ...comun, tipo: "sale", lugar: "origen", conCasilla: true, chip: null, fantasma: false, existeHoyYSeQueda: true });
+      // Desmarcada: la viva sigue en su semana (y su fase), con la casilla. L7: la sugerida, con su pregunta.
+      marcarLaViva(c, {
+        ...comun,
+        tipo: sugerida ? "sugerida" : "sale",
+        lugar: "origen",
+        conCasilla: true,
+        chip: sugerida && destino !== null ? chipEsDe(nombreFijo(destino)) : null,
+        fantasma: false,
+        existeHoyYSeQueda: true,
+      });
       return;
     }
     // Marcada: la viva ya está en su destino (sin casilla) y en su lugar de hoy queda un fantasma SIN tachar.
@@ -739,7 +774,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
     ponerExtra(
       extraEnSuLugar(c, `${c.tareaId}:origen`, {
         ...comun,
-        tipo: "sale",
+        tipo: sugerida ? "sugerida" : "sale",
         lugar: "origen",
         conCasilla: true,
         chip: destino !== null ? chipSeMuda(nombreFijo(destino)) : chipPasaALaSemana(nuevaSemana ?? semanaHoy),
@@ -896,7 +931,9 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
       yaEstaPorFase.set(g.fase, [...(yaEstaPorFase.get(g.fase) ?? []), `${g.numero}. ya está así: tareas`]);
       continue;
     }
-    const marcables = g.tareas.filter((t) => t.seMarca);
+    /* L7: la casilla del grupo no toca las mudanzas sugeridas: una hecha no se mueve sin SU casilla (spec §0.1). Si
+       no, el grupo de su origen nacía «a medias» y marcarlo mudaba todas las hechas sugeridas de un clic. */
+    const marcables = g.tareas.filter((t) => t.seMarca && !t.sugerida);
     grupoPorFase.set(g.fase, {
       numero: g.numero,
       fase: g.fase,

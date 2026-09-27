@@ -1168,7 +1168,10 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
        (`claves: marcables.map((t) => t.clave)`). El canvas le pasa al Gantt las casillas del hook, las mismas que
        suben al servidor. Lo que se pide es lo mismo, donde vive ahora. */
     expect(contiene(CANVAS, "onMarcarVarios: revision.marcarVarios,"), "el Gantt no recibe la casilla del grupo del hook").toBe(true);
-    const grupoDeLaVista = tramo(VISTA, "const marcables = g.tareas.filter((t) => t.seMarca);", "});");
+    /* ⚠ ACTUALIZADA en L7 (2026-09-26), con esta razón: la casilla del grupo ya no marca las mudanzas SUGERIDAS por la
+       IA (una hecha no se muda sin SU casilla, spec §0.1): `marcables` las deja fuera. Lo demás del grupo, igual. La
+       conducta la prueba hechas-fuera-de-lugar.test.ts. */
+    const grupoDeLaVista = tramo(VISTA, "const marcables = g.tareas.filter((t) => t.seMarca && !t.sugerida);", "});");
     expect(contiene(grupoDeLaVista, "claves: marcables.map((t) => t.clave),")).toBe(true);
     const grupo = tramo(GANTT, "function CasillaDelGrupo(", "function CasillasDeLaFase(");
     expect(grupo.length).toBeGreaterThan(1000);

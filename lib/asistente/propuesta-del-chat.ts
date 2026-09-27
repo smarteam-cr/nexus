@@ -196,7 +196,9 @@ function indiceDeLaBarra(r: ResumenDelBorrador, plan: readonly ItemDelPlan[]): I
         quien: `El ${g.numero}`,
         choque: t.estado === "choque" ? (delPlan.get(t.clave)?.choque ?? null) : null,
       };
-      filas.push(fila);
+      /* L7: «recupera el N» no marca las mudanzas SUGERIDAS de su grupo (una hecha no se muda sin su casilla): se
+         marcan nombrando la tarea. «Déjalo como estaba» sí las desmarca. */
+      filas.push(t.sugerida ? { ...fila, recuperable: false } : fila);
       tareas.push({ ...fila, quien: `«${t.titulo}»`, ref: t.ref, titulo: t.titulo, numero: g.numero });
     }
     porNumero.set(g.numero, filas);

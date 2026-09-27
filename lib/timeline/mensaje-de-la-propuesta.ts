@@ -21,6 +21,7 @@
  * mensaje-de-la-propuesta.test.ts, con la propuesta grande anonimizada.
  */
 import {
+  aplicablesSinSugeridas,
   ordenCompletoDeLaPropuesta,
   type Borrador,
   type Cambio,
@@ -103,6 +104,12 @@ export const TITULOS_DEL_MENSAJE = {
 export const LINEA_SIN_MATERIAL = "No elegiste reuniones ni notas: la IA armó las tareas sin saber qué pasó en el proyecto.";
 /** Antes de los chips de «Más». */
 export const TEXTO_DE_LAS_FUENTES = "Los cambios de fases salen de:";
+/** L7, en «Más»: «La IA sugiere mudar 5 tareas hechas a otra fase: vienen sin marcar.» */
+export function textoDeLasSugeridas(n: number): string {
+  return n === 1
+    ? "La IA sugiere mudar 1 tarea hecha a otra fase: viene sin marcar."
+    : `La IA sugiere mudar ${n} tareas hechas a otra fase: vienen sin marcar.`;
+}
 export const FUENTE_INSTRUCCIONES = "Instrucciones adicionales";
 
 const PARTES_DEL_ATRASO: ReadonlyArray<readonly [string, string]> = [
@@ -202,7 +209,8 @@ export function nivelDeLaPropuesta(
   const quitadas = entera.tareas.seVan + entera.tareas.conLaFase;
   if (quitadas / Math.max(pendientes, 1) >= 0.6) return { nivel: "casi-todo", porMagnitud: false };
   const conEstructura = entera.items.some((it) => it.estado === "aplica" || it.estado === "excluido");
-  const tareas = quitadas + entera.tareas.nuevas + entera.tareas.cambian;
+  // L7: una hecha que la IA sugiere mudar de fase no rehace ninguna pendiente: no mide cuánto cambia la propuesta.
+  const tareas = quitadas + entera.tareas.nuevas + entera.tareas.cambian - (entera.tareas.sugeridas ?? 0);
   if (!conEstructura && tareas <= Math.max(2, Math.ceil(0.2 * pendientes))) return { nivel: "casi-igual", porMagnitud: false };
   return { nivel: "mediano", porMagnitud: false };
 }
@@ -346,25 +354,35 @@ function lineaDeLaComparacion(i: EntradaDelMensaje, prometido: PrometidoDeLaProp
   return laQueEntra(variantes);
 }
 
-/** Línea 3: qué tareas se rehacen, con lo marcado, y que las hechas conservan su estado. null sin tareas en la propuesta. */
+/**
+ * Línea 3: qué tareas se rehacen, con lo marcado, y que las hechas conservan su estado. null sin tareas en la propuesta.
+ * L7: las hechas que se mudan de fase (una sugerencia de la IA que el CSE marcó) van aparte, al final («…las 46 hechas
+ * conservan su estado; 1 se muda de fase.»): no «ajustan» ninguna pendiente. Y las sugeridas sin marcar no hacen decir
+ * «Con lo marcado»: nacen así.
+ */
 function lineaDeLasTareas(i: EntradaDelMensaje, nivel: NivelDeLaPropuesta): string | null {
   const { r, entera, vivo } = i;
   const enLaPropuesta = entera.tareas.seVan + entera.tareas.conLaFase + entera.tareas.nuevas + entera.tareas.cambian;
   if (enLaPropuesta === 0) return null;
-  const conLoMarcado = r.marcadas !== r.aplicables;
+  const conLoMarcado = r.marcadas !== aplicablesSinSugeridas(r);
   const quitadas = r.tareas.seVan + r.tareas.conLaFase;
-  const { nuevas, cambian } = r.tareas;
+  const { nuevas } = r.tareas;
+  const mudadas = r.tareas.sugeridas ?? 0;
+  const cambian = r.tareas.cambian - mudadas;
   const hechas = contarVivas(vivo, "DONE");
   const pendientes = contarVivas(vivo, "PENDING");
   const conPrefijo = (s: string) => (conLoMarcado ? `Con lo marcado, ${s}` : mayuscula(s));
-  if (quitadas + nuevas + cambian === 0) return "Con lo marcado, las tareas quedan como están.";
+  const hechasQueSeMudan = mudadas === 0 ? "" : `; ${mudadas} ${mudadas === 1 ? "hecha se muda" : "hechas se mudan"} de fase`;
+  if (quitadas + nuevas + cambian === 0) {
+    return mudadas === 0 ? "Con lo marcado, las tareas quedan como están." : `${conPrefijo("las pendientes quedan como están")}${hechasQueSeMudan}.`;
+  }
   if (nivel === "casi-igual") {
     const fases = r.grupos.filter((g) => g.marcadas > 0).map((g) => `«${cortarNombre(g.nombre)}»`);
     const donde = fases.length > 2 ? unirFrases([...fases.slice(0, 2), plural(fases.length - 2, "fase más", "fases más")]) : unirFrases(fases);
     const n = quitadas + nuevas + cambian;
     return laQueEntra([
-      `${conPrefijo(`cambian ${plural(n, "tarea pendiente", "tareas pendientes")}`)}${donde ? `, en ${donde}` : ""}.`,
-      `${conPrefijo(`cambian ${plural(n, "tarea pendiente", "tareas pendientes")}`)}.`,
+      `${conPrefijo(`cambian ${plural(n, "tarea pendiente", "tareas pendientes")}`)}${donde ? `, en ${donde}` : ""}${hechasQueSeMudan}.`,
+      `${conPrefijo(`cambian ${plural(n, "tarea pendiente", "tareas pendientes")}`)}${hechasQueSeMudan}.`,
     ]);
   }
   const partes: string[] = [];
@@ -373,7 +391,8 @@ function lineaDeLasTareas(i: EntradaDelMensaje, nivel: NivelDeLaPropuesta): stri
   if (nuevas > 0)
     partes.push(partes.length === 0 ? `suma ${plural(nuevas, "tarea nueva", "tareas nuevas")}` : `suma ${nuevas} ${nuevas === 1 ? "nueva" : "nuevas"}`);
   const hechasTxt = hechas === 0 ? "" : hechas === 1 ? "; la hecha conserva su estado" : `; las ${hechas} hechas conservan su estado`;
-  return `${conPrefijo(unirFrases(partes))}${hechasTxt}.`;
+  const seMudan = mudadas === 0 ? "" : `; ${mudadas} ${mudadas === 1 ? "se muda" : "se mudan"} de fase`;
+  return `${conPrefijo(unirFrases(partes))}${hechasTxt}${seMudan}.`;
 }
 
 /**
@@ -454,6 +473,9 @@ function detalleDelMensaje(i: EntradaDelMensaje, porMagnitud: boolean, prometido
       detalle.push(`⚠ «${cortarNombre(g.nombre)}» está terminada y la propuesta le suma ${plural(g.nuevas, "tarea", "tareas")}.`);
     }
   }
+  // L7: las hechas que la IA sugiere mudar a otra fase (nacen sin marcar: cada una se decide con su casilla).
+  const sugeridas = r.grupos.reduce((n, g) => n + g.sugeridas, 0);
+  if (sugeridas > 0) detalle.push(textoDeLasSugeridas(sugeridas));
   // Los atrasos cargados DESDE lo prometido, en una frase aparte: nunca como causa de lo que propone la IA.
   if (prometido?.fecha) {
     const desde = Date.parse(prometido.fecha);

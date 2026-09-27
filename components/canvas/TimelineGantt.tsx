@@ -524,7 +524,13 @@ export function estiloDeLaFila(m: MarcaDeTarea | null | undefined): EstiloDeLaFi
       fila: "italic text-fg-muted border border-dashed border-line",
       titulo: "text-fg-muted",
       signo: null,
-      chip: m.tipo === "choque" ? CHIP_AVISO : m.tipo === "sale" ? "border-info-line text-info-ink" : "border-line text-fg-muted",
+      // L7: el origen de una mudanza sugerida y marcada («→ se muda a «Y»») se pinta como el de cualquier mudanza.
+      chip:
+        m.tipo === "choque"
+          ? CHIP_AVISO
+          : m.tipo === "sale" || m.tipo === "sugerida"
+            ? "border-info-line text-info-ink"
+            : "border-line text-fg-muted",
     };
   }
   if (m.tipo === "choque") return { ...normal, chip: CHIP_AVISO };

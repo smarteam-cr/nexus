@@ -439,6 +439,14 @@ function sinLasRearmadas(
 const loTocoElChat = (c: Cambio): boolean => esCambioDeTarea(c) && (!!c.porChat || (c.tipo === "tarea-nueva" && !!c.retocada));
 
 /**
+ * L7: lo que una fusión CONSERVA de la propuesta de antes: lo que tocó el chat (`loTocoElChat`) y las mudanzas que
+ * SUGIRIÓ la IA (una hecha que parece de otra fase: nace sin marcar y la decide el CSE). Sin esto, el recálculo de su
+ * fase la borraba y su clave quedaba huérfana en `excluidos`. Las sugeridas no entran a `sinLasQueRepitenLoDelChat`:
+ * el agente no vuelve a proponer una hecha.
+ */
+const seConserva = (c: Cambio): boolean => loTocoElChat(c) || (c.tipo === "tarea-cambia" && !!c.sugerida);
+
+/**
  * La huella del título COMPLETO: sin mayúsculas, tildes ni signos, como `fingerprintFromTitle`, pero SIN su
  * corte a 60 caracteres (revisión antes del push). Con el corte, «Configurar las propiedades personalizadas del
  * objeto Negocios para ventas» y «… para postventa» eran la misma tarea. L5: la exporta para R4c (y sus guardas).
@@ -555,7 +563,7 @@ export function fusionarDetalle(b: Borrador, r: CambiosDelDetalle, corrida: stri
         ? { ...c, fase: { ...c.fase, activityType: r.tiposDeNuevas[c.clave] } }
         : c,
     );
-  const delChat = b.cambios.filter(loTocoElChat);
+  const delChat = b.cambios.filter(seConserva);
   return {
     formato: b.formato,
     version: b.version + 1,
@@ -591,7 +599,7 @@ export function mezclarTareasDeFases(
   const puestas = new Set<string>();
   const out: Cambio[] = [];
   for (const c of cambios) {
-    if (!esCambioDeTarea(c) || loTocoElChat(c) || !fases.has(faseDeLaTarea(c))) {
+    if (!esCambioDeTarea(c) || seConserva(c) || !fases.has(faseDeLaTarea(c))) {
       out.push(c);
       continue;
     }

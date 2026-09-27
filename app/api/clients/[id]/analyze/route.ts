@@ -55,6 +55,7 @@ import {
 } from "@/lib/timeline/borrador-del-detalle";
 import { fuentesDeLaGeneracion, type FuentesDeLaGeneracion } from "@/lib/timeline/explicacion-de-la-propuesta";
 import { explicarConLasFuentesNuevas } from "@/lib/timeline/fuentes-de-la-explicacion";
+import { ubicarHechas } from "@/lib/timeline/hechas-fuera-de-lugar";
 import { MENSAJE_PROPUESTA_CAMBIO } from "@/lib/timeline/escribir-estructura";
 import type { EstructuraSupuesta } from "@/lib/contexto/cronograma-para-agentes";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
@@ -2397,6 +2398,38 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
                         {
                           model: "claude-haiku-4-5",
                           max_tokens: 1500,
+                          temperature: 0,
+                          system,
+                          messages: [{ role: "user", content: mensaje }],
+                        },
+                        { timeout: 15_000, maxRetries: 0 },
+                      ),
+                  );
+                  return respuesta.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+                },
+              }),
+            /* ⭐ L7: las HECHAS que parecen de otra fase. La fusión la pide solo en «Regenerar todo», en paralelo con el
+               porqué (tope 15 s cada una) y suma lo que devuelve DESMARCADO. Otra llamada a Haiku, con su propio agente
+               en el medidor y bajo el tope diario; la IA ve ids cortos y devuelve ids (hechas-fuera-de-lugar.ts). Va
+               junto a `explicar`: `leidas` existe siempre que hay un pedido de tareas, el único camino a esta fusión. */
+            ubicarHechas: ({ vivo, tocadas }) =>
+              ubicarHechas({
+                vivo,
+                tocadas,
+                llamar: async (system, mensaje) => {
+                  const respuesta = await conContextoDeIA(
+                    {
+                      agentSlug: "hechas-fuera-de-lugar",
+                      agentRunId: run.id,
+                      clientId,
+                      projectId: bodyProjectId,
+                      origen: "timeline/hechas",
+                    },
+                    () =>
+                      anthropic.messages.create(
+                        {
+                          model: "claude-haiku-4-5",
+                          max_tokens: 600,
                           temperature: 0,
                           system,
                           messages: [{ role: "user", content: mensaje }],

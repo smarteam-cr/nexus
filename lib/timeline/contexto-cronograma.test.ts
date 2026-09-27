@@ -503,6 +503,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
        de las fases sin material nuevo) y su cargador. */
     "lib/timeline/explicacion-de-la-propuesta.ts",
     "lib/timeline/fuentes-de-la-explicacion.ts",
+    /* L7 (2026-09-26): las hechas en la fase equivocada (el prompt de Haiku, el mensaje con ids cortos y el motivo
+       «Parece de «X»» que llega a la fila). */
+    "lib/timeline/hechas-fuera-de-lugar.ts",
     "components/canvas/LineaDeLasTareas.tsx",
     "lib/timeline/borrador.ts",
     /* Revisión de E2a (2026-09-25): los textos del servidor que el CSE lee TAL CUAL también. El 409

@@ -46,14 +46,17 @@ import {
   estadoDeLasTareas,
   estadoDelVacio,
   estructuraHipotetica,
+  excluidosDelGuardado,
   formaEnLaEstructura,
   leerBorrador,
   mismaForma,
   nombresEnTexto,
+  normalizarExcluidos,
   pedidoDelCronograma,
   planDeAplicacion,
   versionDelBorrador,
   type Borrador,
+  type CambioTareaCambia,
   type EstadoDelVacio,
   type EstadoDeLasTareas,
   type EstructuraHipotetica,
@@ -66,6 +69,7 @@ import {
 } from "./borrador";
 import { huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 import { MENSAJE_PROPUESTA_CAMBIO, SELECT_DE_FASE, SELECT_DE_TAREA } from "./escribir-estructura";
+import { sugeridasQueEntran, tareasTocadas } from "./hechas-fuera-de-lugar";
 import { AVISO_PROPUESTA_PENDIENTE, MENSAJE_ESTRUCTURA_EN_CURSO } from "./propuesta-de-estructura";
 import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
 import {
@@ -756,13 +760,20 @@ async function avisarEnLaCorrida(corrida: string, analysisJson: unknown, aviso: 
 /**
  * L6 (§7.4): lo que la ruta le suma a la fusión. `explicar`: el porqué de la propuesta con fuentes NUEVAS (una llamada
  * a Haiku, medida). Corre ANTES de la escritura y va en la MISMA escritura; los tests pasan un doble.
+ * L7 (§8.4): `ubicarHechas`: las HECHAS que parecen de otra fase (otra llamada a Haiku, medida,
+ * hechas-fuera-de-lugar.ts), en PARALELO con `explicar`. Recibe las tareas que ya toca la propuesta (`tocadas`: no se
+ * sugieren) y devuelve mudanzas `sugerida`, que la fusión suma DESMARCADAS. Solo en «Regenerar todo».
  */
 export interface ExtrasDeLaFusion {
   explicar?: (e: { vivo: Vivo; cambios: readonly Cambio[] }) => Promise<ExplicacionSinSello | null>;
+  ubicarHechas?: (e: { vivo: Vivo; tocadas: ReadonlySet<string> }) => Promise<CambioTareaCambia[]>;
 }
 
 /** L6: cuánto espera la fusión a la explicación. Pasado eso, escribe sin ella (la pantalla cae a lo de L4). */
 export const TOPE_DE_LA_EXPLICACION_MS = 15_000;
+/** L7: cuánto espera la fusión a las mudanzas sugeridas (corren a la vez que la explicación: el paso 2 espera 15 s como
+ *  mucho, no 30). Pasado eso, escribe sin ellas. */
+export const TOPE_DE_LAS_SUGERIDAS_MS = 15_000;
 
 /**
  * L6: `p`, o null si tarda más de `ms` o si tira (también si tira ANTES de dar su promesa). Lo que se espera acá es
@@ -793,9 +804,11 @@ interface EntradaDeLaFusion {
   extras?: ExtrasDeLaFusion;
 }
 
-/** L6: lo que una vuelta de la fusión deja para la siguiente: la explicación ya pedida (una sola llamada). */
+/** L6: lo que una vuelta de la fusión deja para la siguiente: la explicación ya pedida (una sola llamada). L7: y las
+ *  mudanzas sugeridas (también una sola llamada; cada vuelta las vuelve a filtrar contra su lista). */
 interface MemoDeLaFusion {
   explicacion?: ExplicacionSinSello | null;
+  sugeridas?: CambioTareaCambia[] | null;
 }
 
 /** Cómo termina UNA vuelta de la fusión: escrita, perdida (con su motivo) u otra vuelta (no entró). */
@@ -943,14 +956,29 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean, 
   }
 
   /* ⭐ L6 (§7.4): EL PORQUÉ, antes de la escritura y en la MISMA escritura (nunca en otra: una segunda escritura se
-     perdería con las casillas o el chat de por medio). La lista que se explica y la que se escribe es UNA
-     (`cambiosFinales`), y la huella sale de ella: así la pantalla sabe si el chat la cambió después. Con tope de 15 s y
+     perdería con las casillas o el chat de por medio). La huella sale de la lista que se escribe (`cambiosFinales`), en
+     la misma función: así la pantalla sabe si el chat la cambió después. Con tope de 15 s y
      sin tirar: pasado el tope, con el tope diario de IA agotado o si la llamada falla, se escribe sin explicación.
-     Memoizada: si la escritura no entra, la vuelta siguiente no vuelve a llamar. */
-  const cambiosFinales = fusionado.cambios;
-  if (!("explicacion" in memo)) {
-    memo.explicacion = await conTope(() => i.extras?.explicar?.({ vivo, cambios: cambiosFinales }), TOPE_DE_LA_EXPLICACION_MS);
-  }
+     Memoizada: si la escritura no entra, la vuelta siguiente no vuelve a llamar.
+     ⭐ L7 (§8.4): en «Regenerar todo» (sin `soloFase` y con pedido «regenerar»), las HECHAS que parecen de otra fase, en
+     PARALELO con el porqué (cada una con su tope de 15 s: el paso 2 espera 15 s como mucho, no 30) y memoizadas igual.
+     Se suman a la lista que se escribe (`cambiosFinales`) las que no chocan con ella, y nacen DESMARCADAS: sus claves
+     van a `excluidos`. La huella de la explicación sale de esa lista, CON las sugeridas: recién fusionada, no es vieja.
+     `explicar` recibe la lista sin ellas: `cambiosParaExplicar` las deja fuera de todos modos (no son un cambio de la
+     propuesta hasta que se marcan), y así las dos llamadas corren a la vez. */
+  const conSugeridas = !borrador.soloFase && borrador.pedido === "regenerar";
+  const [explicacion, sugeridas] = await Promise.all([
+    "explicacion" in memo
+      ? memo.explicacion
+      : conTope(() => i.extras?.explicar?.({ vivo, cambios: fusionado.cambios }), TOPE_DE_LA_EXPLICACION_MS),
+    !conSugeridas || "sugeridas" in memo
+      ? (memo.sugeridas ?? null)
+      : conTope(() => i.extras?.ubicarHechas?.({ vivo, tocadas: tareasTocadas(fusionado.cambios) }), TOPE_DE_LAS_SUGERIDAS_MS),
+  ]);
+  memo.explicacion = explicacion ?? null;
+  if (conSugeridas) memo.sugeridas = sugeridas ?? null;
+  const sugeridasQueVan = conSugeridas ? sugeridasQueEntran(fusionado.cambios, memo.sugeridas ?? []) : [];
+  const cambiosFinales = [...fusionado.cambios, ...sugeridasQueVan];
 
   const escrita = await prisma.projectTimeline.updateMany({
     where: donde,
@@ -963,6 +991,15 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean, 
           cambios: cambiosFinales,
           tareas: fusionado.tareas,
           tareasArmadasPara: fusionado.tareasArmadasPara,
+          // L7: las sugeridas nacen DESMARCADAS (una hecha no se muda sin su casilla).
+          ...(sugeridasQueVan.length > 0
+            ? {
+                excluidos: normalizarExcluidos({ cambios: cambiosFinales }, [
+                  ...(excluidosDelGuardado(tl.pendingProposal) ?? []),
+                  ...sugeridasQueVan.map((c) => c.clave),
+                ]),
+              }
+            : {}),
           ...(memo.explicacion
             ? {
                 explicacion: {

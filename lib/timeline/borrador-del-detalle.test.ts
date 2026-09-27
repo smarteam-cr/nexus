@@ -27,8 +27,15 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 
-import { borradorVacio, type Cambio, type Vivo } from "./borrador";
-import { estructuraParaElDetalle, fusionarDetalleEnElBorrador, TOPE_DE_LA_EXPLICACION_MS } from "./borrador-del-detalle";
+import { borradorVacio, leerBorrador, planDeAplicacion, type Cambio, type CambioTareaCambia, type Vivo } from "./borrador";
+import {
+  estructuraParaElDetalle,
+  fusionarDetalleEnElBorrador,
+  TOPE_DE_LA_EXPLICACION_MS,
+  TOPE_DE_LAS_SUGERIDAS_MS,
+  vivoDeLaBase,
+} from "./borrador-del-detalle";
+import { tareasTocadas } from "./hechas-fuera-de-lugar";
 import { explicacionEnPantalla, huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 
 const tareaDB = (id: string, title: string, weekIndex: number, extra: Record<string, unknown> = {}) => ({
@@ -291,5 +298,189 @@ describe("L6 · la fusión guarda el porqué en la MISMA escritura", () => {
     const output = JSON.parse(db.agentRun.update.mock.calls.at(-1)![0].data.output as string);
     expect(output.fuentesDeLaGeneracion).toEqual(SALIDA.fuentesDeLaGeneracion);
     expect(output.timelineSyncError).toBeTruthy();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── L7 · las HECHAS en la fase equivocada, en la misma escritura ─────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * L7 (§8.4, §8.5): en «Regenerar todo» la fusión pide las hechas que parecen de otra fase (`extras.ubicarHechas`, acá un
+ * doble: ningún test llama a la API) EN PARALELO con el porqué, las suma a la lista que escribe DESMARCADAS (sus claves
+ * en `excluidos`) y la huella de la explicación sale de esa lista, con ellas.
+ */
+describe("L7 · la fusión suma las mudanzas sugeridas, desmarcadas", () => {
+  const tarea = (title: string, weekIndex: number) => ({ title, weekIndex, notes: null, porValidar: false, party: "SMARTEAM", type: "TASK" });
+  const SALIDA = {
+    timelineDetail: {
+      phases: [
+        { id: "a", tasks: [] },
+        // Sin «Definir pipeline» (b2): la propuesta la quita, así que ya la toca un cambio.
+        { id: "b", tasks: [tarea("Ajustar vistas", 0), tarea("Configurar integraciones", 0)] },
+        { id: "c", tasks: [tarea("Probar flujos", 2), tarea("Capacitar al equipo", 1)] },
+      ],
+    },
+    fuentesDeLaGeneracion: { instrucciones: "", sesiones: [], en: "2026-09-26T18:00:00.000Z" },
+  };
+  /** «Mapear procesos» (hecha, en Diseño) que la IA sugiere mudar a «Pruebas». */
+  const SUGERIDA: CambioTareaCambia = {
+    tipo: "tarea-cambia",
+    clave: "tarea:b1:cambia",
+    tareaId: "b1",
+    faseId: "b",
+    desde: { title: "Mapear procesos", weekIndex: 0, notes: null, party: "SMARTEAM", type: "TASK", inicioFijado: null, finFijado: null },
+    a: { fase: "c" },
+    motivo: "Parece de «Pruebas»",
+    sugerida: "otra-fase",
+  };
+  const EXPLICACION: ExplicacionSinSello = { general: null, fases: [], sinMaterial: ["b"], desde: null };
+  type Ubicar = (e: { vivo: Vivo; tocadas: ReadonlySet<string> }) => Promise<CambioTareaCambia[]>;
+  /** Lo desmarcado de antes (una casilla de fase): tiene que sobrevivir a que se sumen las sugeridas. */
+  const DESMARCADO = "fase:c:durationWeeks";
+  async function fusionar(guardado: ReturnType<typeof borradorVacio>, extras: { explicar?: () => Promise<ExplicacionSinSello | null>; ubicarHechas?: Ubicar }) {
+    db.projectTimeline.findUnique.mockImplementation(async () => ({
+      pendingProposal: JSON.parse(JSON.stringify({ ...guardado, excluidos: [DESMARCADO] })),
+      pendingProposalRunId: "run-2",
+      anchorStartDate: null,
+      closeDateOverride: null,
+      project: { tags: [] },
+      phases: FASES,
+    }));
+    const sobre = await estructuraParaElDetalle("tl", "run-2");
+    let k = 0;
+    return fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-2",
+      estructura: sobre!.estructura,
+      analysisJson: SALIDA,
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `k-${++k}`,
+      extras,
+    });
+  }
+  const escrito = (n = 0) => db.projectTimeline.updateMany.mock.calls[n][0].data.pendingProposal as Record<string, unknown>;
+  const cambiosEscritos = (n = 0) => escrito(n).cambios as Cambio[];
+  const conLaSugerida = (n = 0) => cambiosEscritos(n).some((c) => c.clave === SUGERIDA.clave);
+  const REGENERAR = borradorVacio({ pedido: "regenerar", corrida: "run-2" });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("⭐ nacen desmarcadas: la sugerida va en la lista que se escribe, con su clave en `excluidos`, y el plan la da «excluido»", async () => {
+    /* La edición que la pone en rojo: no sumarlas a `excluidos` (una hecha se mudaba con «Aplicar todo» sin que nadie
+       marcara su casilla). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const pedidas: Array<ReadonlySet<string>> = [];
+    const r = await fusionar(REGENERAR, {
+      ubicarHechas: async (e) => {
+        pedidas.push(e.tocadas);
+        return [SUGERIDA];
+      },
+    });
+    expect(r.estado).toBe("listas");
+    expect(pedidas).toHaveLength(1);
+    const cambios = cambiosEscritos();
+    expect(cambios.at(-1), "la sugerida no está en la lista escrita").toEqual(SUGERIDA);
+    expect([...pedidas[0]].sort(), "`tocadas` no son las tareas que ya cambian").toEqual([...tareasTocadas(cambios.slice(0, -1))].sort());
+    expect(escrito().excluidos, "nació marcada (o se perdió lo desmarcado de antes)").toEqual([DESMARCADO, SUGERIDA.clave]);
+    const leido = leerBorrador(JSON.parse(JSON.stringify(escrito())))!;
+    const vivo = vivoDeLaBase(null, FASES as unknown as Parameters<typeof vivoDeLaBase>[1]);
+    const plan = planDeAplicacion(vivo, leido, escrito().excluidos as string[], { tareas: "listas" });
+    expect(plan.items.find((it) => it.cambio.clave === SUGERIDA.clave)?.estado).toBe("excluido");
+    expect(plan.sugeridasSinMarcar).toBe(1);
+  });
+
+  it("⭐ la huella de la explicación sale de la lista CON las sugeridas: recién fusionada, no es vieja", async () => {
+    /* La edición que la pone en rojo: calcular la huella sin las sugeridas (la pantalla diría «(de cuando se generó)»
+       apenas llega la propuesta). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    await fusionar(REGENERAR, { explicar: async () => EXPLICACION, ubicarHechas: async () => [SUGERIDA] });
+    expect(conLaSugerida()).toBe(true);
+    expect((escrito().explicacion as { huellaDeCambios: string }).huellaDeCambios).toBe(huellaDeLosCambios(cambiosEscritos()));
+    expect(explicacionEnPantalla(JSON.parse(JSON.stringify(escrito())))?.vieja).toBe(false);
+  });
+
+  it("⭐ las dos llamadas van EN PARALELO: con dos dobles de 10 s, la fusión escribe a los 10 s, no a los 20; con 20 s, sin ellas", async () => {
+    /* La edición que la pone en rojo: esperar una y después la otra (el paso 2 esperaría hasta 30 s), o esperarlas sin
+       su tope. */
+    vi.useFakeTimers();
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    let termino = false;
+    const fusion = fusionar(REGENERAR, {
+      explicar: () => new Promise((ok) => setTimeout(() => ok(EXPLICACION), 10_000)),
+      ubicarHechas: () => new Promise((ok) => setTimeout(() => ok([SUGERIDA]), 10_000)),
+    }).then((r) => {
+      termino = true;
+      return r;
+    });
+    await vi.advanceTimersByTimeAsync(10_500);
+    expect(termino, "la fusión esperó una llamada después de la otra").toBe(true);
+    expect((await fusion).estado).toBe("listas");
+    expect(escrito().explicacion).toBeDefined();
+    expect(cambiosEscritos().at(-1)).toEqual(SUGERIDA);
+    db.projectTimeline.updateMany.mockClear();
+    termino = false;
+    const lenta = fusionar(REGENERAR, { ubicarHechas: () => new Promise((ok) => setTimeout(() => ok([SUGERIDA]), 20_000)) }).then((r) => {
+      termino = true;
+      return r;
+    });
+    await vi.advanceTimersByTimeAsync(TOPE_DE_LAS_SUGERIDAS_MS + 500);
+    expect(termino, "la fusión esperó las sugeridas más de 15 s").toBe(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect((await lenta).estado).toBe("listas");
+    expect(conLaSugerida()).toBe(false);
+    expect(escrito().excluidos).toEqual([DESMARCADO]);
+    expect(TOPE_DE_LAS_SUGERIDAS_MS).toBe(15_000);
+  });
+
+  it("⛔ solo en «Regenerar todo»: ni en «Regenerar» de una fase ni en «Generar cronograma»; y si tira, sin ellas", async () => {
+    /* La edición que la pone en rojo: pedirlas siempre (en una fase regenerada, una hecha de otra fase se mudaría fuera
+       del alcance que pidió el CSE). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    let llamadas = 0;
+    const ubicarHechas: Ubicar = async () => {
+      llamadas++;
+      return [SUGERIDA];
+    };
+    await fusionar(borradorVacio({ pedido: "regenerar", corrida: "run-2", soloFase: "b" }), { ubicarHechas });
+    await fusionar(borradorVacio({ pedido: "primera", corrida: "run-2" }), { ubicarHechas });
+    expect(llamadas).toBe(0);
+    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(2);
+    for (const n of [0, 1]) expect(conLaSugerida(n)).toBe(false);
+    db.projectTimeline.updateMany.mockClear();
+    const r = await fusionar(REGENERAR, {
+      ubicarHechas: async () => {
+        throw new Error("Presupuesto de IA agotado");
+      },
+    });
+    expect(r.estado).toBe("listas");
+    expect(conLaSugerida()).toBe(false);
+  });
+
+  it("⭐ si la escritura no entra, la vuelta siguiente no vuelve a llamar; y una sugerida de una tarea que ya cambia no entra", async () => {
+    /* Las ediciones que la ponen en rojo: pedirlas en cada vuelta (se paga dos veces), o sumar una sugerida de una tarea
+       que otro cambio ya toca (dos cambios con la misma clave). */
+    db.projectTimeline.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+    let llamadas = 0;
+    const r = await fusionar(REGENERAR, {
+      ubicarHechas: async () => {
+        llamadas++;
+        return [SUGERIDA];
+      },
+    });
+    expect(r.estado).toBe("listas");
+    expect(llamadas).toBe(1);
+    expect(cambiosEscritos(1).at(-1)).toEqual(SUGERIDA);
+    db.projectTimeline.updateMany.mockReset();
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    await fusionar(REGENERAR, {});
+    const otra = [...tareasTocadas(cambiosEscritos())][0];
+    expect(otra, "el escenario no tiene una tarea que ya cambie").toBeTruthy();
+    db.projectTimeline.updateMany.mockClear();
+    await fusionar(REGENERAR, { ubicarHechas: async () => [{ ...SUGERIDA, clave: `tarea:${otra}:cambia`, tareaId: otra }] });
+    const claves = cambiosEscritos().map((c) => c.clave);
+    expect(new Set(claves).size, "dos cambios con la misma clave").toBe(claves.length);
+    expect(cambiosEscritos().filter((c) => c.tipo === "tarea-cambia" && c.sugerida)).toEqual([]);
   });
 });

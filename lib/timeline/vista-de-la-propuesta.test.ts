@@ -575,3 +575,90 @@ describe("L3 P3d · lo puro de la barra y del canvas", () => {
     }
   });
 });
+
+/**
+ * L7 (spec §8.1, §8.5): la mudanza que SUGIERE la IA. Las 5 hechas de Fase A que la IA quiere mudar a «Fase B» (la
+ * terminada): desmarcadas, filas normales en su ORIGEN con su check y la casilla [¿Mover a «Fase B»?]; marcada una,
+ * fantasma SIN tachar en el origen (con la casilla y su check) y «viene de «Fase A»» en el destino, sin casilla.
+ */
+describe("L7 · la mudanza sugerida en el Gantt", () => {
+  const ORIGEN = FASE_A;
+  const DESTINO = "f03";
+  const HECHAS = ["t019", "t020", "t024", "t025", "t026"];
+  const sugerida = (id: string): Cambio => ({
+    tipo: "tarea-cambia",
+    clave: claveDeTareaQueCambia(id),
+    tareaId: id,
+    faseId: ORIGEN,
+    desde: fotoDeTarea(vivaDe(id)),
+    a: { fase: DESTINO },
+    motivo: "Parece de «Fase B»",
+    sugerida: "otra-fase",
+  });
+  const CON_SUGERIDAS: Borrador = { ...BORRADOR, cambios: [...BORRADOR.cambios, ...HECHAS.map(sugerida)] };
+  const CLAVES = HECHAS.map((id) => claveDeTareaQueCambia(id));
+  const deLaClave = (fs: Fila[], clave: string) => fs.filter((f) => f.marca?.clave === clave);
+
+  it("⭐ desmarcadas: en el ORIGEN, filas normales con su check y [¿Mover a «Fase B»?]; «¿es de «Fase B»?» en la segunda línea", () => {
+    /* Las ediciones que la ponen en rojo: agruparla en el destino (la casilla aparecía en «Fase B», lejos de la
+       tarea), tacharla o pintarla fantasma sin marcar (lo hecho se veía como si se fuera). */
+    const { r, v } = vista(CON_SUGERIDAS, CLAVES);
+    const fs = filas(r, v);
+    for (const [i, clave] of CLAVES.entries()) {
+      const suyas = deLaClave(fs, clave);
+      expect(suyas, `${clave}: una sola fila`).toHaveLength(1);
+      const [f] = suyas;
+      expect(f.fase, "se pintó fuera de su fase de hoy").toBe(ORIGEN);
+      expect(f.clave).toBe(HECHAS[i]);
+      expect(f.status).toBe("DONE");
+      expect(f.marca).toMatchObject({
+        tipo: "sugerida",
+        lugar: "origen",
+        conCasilla: true,
+        marcada: false,
+        seMarca: true,
+        verbo: "¿Mover a «Fase B»?",
+        chip: "¿es de «Fase B»?",
+        fantasma: false,
+        tachada: false,
+        existeHoyYSeQueda: true,
+      });
+    }
+    // Ninguna fila del destino las nombra (ni casilla ni «viene de» sin marcar).
+    expect(fs.filter((f) => f.fase === DESTINO && CLAVES.includes(f.marca?.clave ?? ""))).toEqual([]);
+    // El grupo de su origen las cuenta aparte, y su casilla NO las marca (cada hecha, con SU casilla).
+    const grupo = v.porFase.get(ORIGEN)!.grupo!;
+    expect(grupo.texto).toBe("Tareas: 9 nuevas · 8 se quitan · 5 sugeridas");
+    for (const k of CLAVES) expect(grupo.claves, "la casilla del grupo marcaba una hecha sugerida").not.toContain(k);
+    expect(grupo.marcadas).toBe(grupo.marcables);
+  });
+
+  it("⭐ marcada: fantasma SIN tachar en el origen, con la casilla y su check; «viene de «Fase A»» en el destino, sin casilla", () => {
+    /* Las ediciones que la ponen en rojo: tachar el origen (se leía «se quita» una tarea hecha), o poner la casilla
+       en el destino (dos Tab para un cambio). */
+    const [primera, ...resto] = CLAVES;
+    const { r, v } = vista(CON_SUGERIDAS, resto);
+    const suyas = deLaClave(filas(r, v), primera);
+    expect(suyas).toHaveLength(2);
+    const origen = suyas.find((f) => f.fase === ORIGEN)!;
+    const destino = suyas.find((f) => f.fase === DESTINO)!;
+    expect(origen.extra).toBe(true);
+    expect(origen.status, "el fantasma perdió el check").toBe("DONE");
+    expect(origen.marca).toMatchObject({
+      tipo: "sugerida",
+      lugar: "origen",
+      conCasilla: true,
+      marcada: true,
+      verbo: "¿Mover a «Fase B»?",
+      chip: "→ se muda a «Fase B»",
+      fantasma: true,
+      tachada: false,
+      existeHoyYSeQueda: false,
+    });
+    expect(destino.status).toBe("DONE");
+    expect(destino.marca).toMatchObject({ tipo: "llega", lugar: "destino", conCasilla: false, chip: "viene de «Fase A»", tachada: false });
+    // Las otras cuatro siguen desmarcadas en su origen.
+    const fs = filas(r, v);
+    for (const k of resto) expect(deLaClave(fs, k).map((f) => [f.fase, f.marca?.marcada])).toEqual([[ORIGEN, false]]);
+  });
+});

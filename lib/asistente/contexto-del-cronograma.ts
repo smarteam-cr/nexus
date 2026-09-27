@@ -42,6 +42,10 @@ export const COMO_SE_LEEN_LAS_SEMANAS =
   "Las semanas dicen «Semana N · SK»: N es la semana de la fase (en `semana` va N − 1) y SK es la semana " +
   "del proyecto, la de la cabecera del Gantt, desde S0 (en `fase.arranque-relativo` va K).";
 
+/** L7: qué es «?» en la lista de cambios (va solo si la propuesta trae alguna mudanza sugerida). */
+export const LEYENDA_DE_LA_SUGERIDA =
+  "«?» = hecha que la IA sugiere mudar a otra fase; viene sin marcar y solo se aplica si se marca (se marca o se deja, no se edita).";
+
 /** Los estados como los nombra la pantalla. Se omite «pendiente»: es el caso mayoritario. */
 function estadoCorto(status: string): string {
   if (status === "DONE") return "hecha";
@@ -144,7 +148,8 @@ const fecha = (s: string | null | undefined): string | null => (s ? s.slice(0, 1
  * marcar, y una que espera el recálculo cuenta como marcada (E2c).
  */
 function simboloDelGrupo(g: GrupoDeTareas): string {
-  const marcables = g.tareas.filter((t) => t.seMarca);
+  // L7: sin las mudanzas sugeridas, como la casilla del grupo del Gantt (cada una va con SU casilla).
+  const marcables = g.tareas.filter((t) => t.seMarca && !t.sugerida);
   if (marcables.length === 0) return g.estado === "choque" ? "⚠" : g.estado === "ya-esta" ? "=" : "☐";
   const marcadas = marcables.filter((t) => t.estado === "aplica" || t.enEspera).length;
   if (marcadas === marcables.length) return "✓";
@@ -253,6 +258,10 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     "LOS CAMBIOS CONTRA EL CRONOGRAMA DE HOY (los mismos números que en pantalla). ✓ = marcado · ☐ = desmarcado:",
     "queda como está hoy · ◐ = marcado en parte · ⚠ = no se aplica, y dice por qué · = = ya está así. Las tareas",
     "de cada fase van juntas en un número; debajo de cada uno, su detalle.",
+    /* L7: la mudanza que SUGIERE la IA va en el grupo de su fase de hoy (el origen), con la pregunta: el chat no
+       la puede cambiar mientras siga en la propuesta (operar-sobre-el-borrador.ts), solo marcarla o no. La
+       leyenda va solo si hay alguna: sin sugeridas, el texto es el de antes. */
+    ...(r.grupos.some((g) => g.sugeridas > 0) ? [LEYENDA_DE_LA_SUGERIDA] : []),
   ];
   const numerado = (l: string) => {
     indice.push(l);
@@ -297,6 +306,8 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
       ...(g.nuevas > 0 ? [`+${g.nuevas} ${g.nuevas === 1 ? "nueva" : "nuevas"}`] : []),
       ...(g.seVan > 0 ? [`−${g.seVan} ${g.seVan === 1 ? "se va" : "se van"}`] : []),
       ...(g.cambian > 0 ? [`~${g.cambian} ${g.cambian === 1 ? "cambia" : "cambian"}`] : []),
+      // L7: aparte de las que cambian.
+      ...(g.sugeridas > 0 ? [`?${g.sugeridas} ${g.sugeridas === 1 ? "sugerida" : "sugeridas"}`] : []),
     ];
     const extra = [
       ...(g.dependeDe !== null ? [`va con el cambio ${g.dependeDe}`] : []),
@@ -313,7 +324,13 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
       const cambian = g.tareas.filter((t) => (t.signo === "~" || t.signo === "→") && t.estado === "aplica" && t.cambio);
       if (cambian.length > 0) debajo(`cambian: ${lista(cambian.map((t) => `${fila(t, false)} (${t.cambio})`))}`);
     }
-    const desmarcadas = g.tareas.filter((t) => t.estado === "excluido" && !t.enEspera);
+    /* L7: las sugeridas van en su propia línea, marcadas o no, con su pregunta («¿es de «X»?»): no son desmarcadas
+       por el CSE (nacen así) y nunca dicen «viene de». */
+    const sugeridas = g.tareas.filter((t) => t.sugerida && t.estado !== "ya-esta");
+    if (sugeridas.length > 0) {
+      debajo(`sugeridas: ${lista(sugeridas.map((t) => `${SIMBOLO[t.estado]} ${fila(t, true)}${t.cambio ? ` (${t.cambio})` : ""}`))}`);
+    }
+    const desmarcadas = g.tareas.filter((t) => t.estado === "excluido" && !t.enEspera && !t.sugerida);
     if (desmarcadas.length > 0) debajo(`desmarcadas: ${lista(desmarcadas.map((t) => fila(t, true)))}`);
     const enEspera = g.tareas.filter((t) => t.enEspera);
     if (enEspera.length > 0) debajo(`se recalculan: ${lista(enEspera.map((t) => fila(t, true)))}`);
