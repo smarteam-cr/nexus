@@ -586,11 +586,15 @@ describe("L5 · lo que ya hay en cada fase (renderLoQueYaHay)", () => {
     /* La edición que la pone en rojo: pasar la semana desde 1 (el agente devuelve `weekIndex` desde 0 y cada
        pendiente «cambiaría de semana»), o pegar las observaciones con lo que le hablaba al «paso de tareas». */
     const texto = renderLoQueYaHay(LO);
+    /* ⚠ REESCRITA en M2 P2d (2026-09-27), con esta razón (Elías: la IA tampoco repite lo pendiente ni lo que está en
+       curso; la orden anterior contradecía a R2): el cierre decía primero «Lo hecho no se vuelve a proponer, ni con
+       otras palabras.» y después cómo se conserva una pendiente. Ahora va primero cómo se conserva y después «La que no
+       repitas se quita. No agregues otra…» (LO_HECHO_NO_SE_REPITE, con su texto nuevo). Lo demás del bloque, igual. */
     expect(texto).toContain(
       "\n\n=== LO QUE YA HAY EN CADA FASE ===\n[f1] «Kick-off» — terminada · hecho: «Reunión de arranque»\n" +
         "[f2] «Diseño» — en curso · hecho: «Mapear procesos» · pendiente: «Definir pipeline» (weekIndex 1)\n" +
         "[n:1] «Piloto» — nueva\n" +
-        `${LO_HECHO_NO_SE_REPITE} ${LO_PENDIENTE_SE_CONSERVA}`,
+        `${LO_PENDIENTE_SE_CONSERVA} ${LO_HECHO_NO_SE_REPITE}`,
     );
     expect(texto).toContain('\n\n=== FASES TERMINADAS ===\n[f1] «Kick-off»\nEstán terminadas: inclúyelas en el JSON con su id EXACTO y "tasks": [] — no se tocan.');
     expect(texto).toContain(
@@ -606,7 +610,10 @@ describe("L5 · lo que ya hay en cada fase (renderLoQueYaHay)", () => {
        arregló la revisión del 24-sep. */
     const texto = renderLoQueYaHay({ ...LO, conAlcance: true });
     const msg = render(texto, ["f2"]);
-    expect(msg).not.toContain("no se vuelve a proponer");
+    /* ⚠ REESCRITA en M2 P2d (2026-09-27), con esta razón: la orden de no repetir cambió de texto (ver el `it` de
+       arriba). Buscar la frase vieja ya no miraba nada; se busca la nueva, entera y por su comienzo. */
+    expect(msg).not.toContain(LO_HECHO_NO_SE_REPITE);
+    expect(msg).not.toContain("La que no repitas se quita");
     expect(msg).not.toContain("FASES TERMINADAS");
     expect(msg).toContain(LO_PENDIENTE_SE_CONSERVA);
     expect(msg).toContain(EXCEPCION_DE_LA_FASE_A_REGENERAR);
@@ -614,5 +621,147 @@ describe("L5 · lo que ya hay en cada fase (renderLoQueYaHay)", () => {
 
   it("sin nada que decir, no suma nada", () => {
     expect(renderLoQueYaHay({ fases: [], observaciones: ["el paso de tareas lo arma después"], terminadasQueNoSeTocan: [], conAlcance: false })).toBe("");
+  });
+});
+
+/**
+ * ── M2 · LO QUE SE QUEDA Y LOS HITOS (spec del replanteo §3.5, 2026-09-27) ─────
+ * Wherex terminó con tres kickoffs: el modelo no sabía cuáles eran los hitos del proyecto ni veía lo que se queda
+ * aunque no lo repita (en curso, escrito a mano), y lo volvía a proponer con otras palabras. R15 ya no deja entrar otro
+ * kickoff, cierre o entrega (tareas-del-detalle.ts); esto es para que el modelo no gaste tareas que no van a entrar. Va
+ * en código, no en el prompt guardado. Los textos se escriben acá a mano (no se importan): una segunda escritura.
+ */
+describe("M2 · lo que se queda y los hitos (renderLoQueYaHay)", () => {
+  const BRIEF = "=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cúmplelas SIEMPRE) ===\nx\n\n";
+  const HITOS: NonNullable<LoQueYaHay["hitos"]> = {
+    kickoff: [{ titulo: "Sesión de kickoff: equipo, roles y accesos", estado: "hecho" }],
+    cierre: [{ titulo: "Sesión de cierre con junta directiva", estado: "pendiente" }],
+    entrega: [{ titulo: "Entrega formal del proyecto a Cliente", estado: "pendiente" }],
+    recurrente: false,
+    faltaKickoff: false,
+  };
+  const LO: LoQueYaHay = {
+    fases: [
+      {
+        id: "f1",
+        nombre: "Semana 0",
+        estado: "en curso",
+        hechas: ["Sesión de kickoff: equipo, roles y accesos"],
+        hechasDeMas: 3,
+        pendientes: [{ titulo: "Recolección de accesos", semana: 0 }],
+        seQuedan: [
+          { titulo: "Armar reportes", porque: "en curso" },
+          { titulo: "Revisar con el cliente", porque: "a mano" },
+        ],
+      },
+      { id: "f2", nombre: "Cierre y entrega", estado: "pendiente", hechas: [], pendientes: [{ titulo: "Entrega formal del proyecto a Cliente", semana: 0 }] },
+    ],
+    observaciones: [],
+    terminadasQueNoSeTocan: [],
+    conAlcance: false,
+    hitos: HITOS,
+  };
+  const REGLA =
+    "El kickoff y el cierre van UNA vez por proyecto; la entrega, una por proyecto. Los que ya están no se vuelven a proponer con ningún nombre: el sistema no deja pasar otro.";
+  const render = (loQueYaHay: string | undefined, ids: string[] | null = null) =>
+    renderDetalleDeCronograma({
+      instrucciones: BRIEF,
+      encabezado: { companyName: "C", industry: null, serviceTypeLabel: null, classificationLabel: null },
+      fuentes: fuentesDelDetalle({ timelineCtx: "t", handoffCtx: "h", desarrolloCtx: "" }),
+      clasificacion: { esReimplementacion: false, llevaMigracion: false, llevaDesarrollo: false },
+      regenerarFaseIds: ids,
+      loQueYaHay,
+    });
+
+  it("⭐ el bloque de los hitos: los que ya están, con su estado, después de «LO QUE YA HAY» y antes del alcance", () => {
+    /* Las ediciones que la ponen en rojo: no escribir el bloque, sumarlo después del alcance (el alcance dejaría de ser
+       lo último que lee el modelo) o antes de lo que ya hay. */
+    const texto = renderLoQueYaHay(LO);
+    expect(texto).toContain(
+      "\n\n=== HITOS DEL PROYECTO ===\n" +
+        `${REGLA}\n` +
+        "- Kickoff: «Sesión de kickoff: equipo, roles y accesos» (hecho).\n" +
+        "- Entrega: «Entrega formal del proyecto a Cliente» (pendiente).\n" +
+        "- Cierre: «Sesión de cierre con junta directiva» (pendiente).",
+    );
+    expect(render(texto), "sin alcance, lo que ya hay (con los hitos) va al final").toBe(render(undefined) + texto);
+    const msg = render(renderLoQueYaHay({ ...LO, conAlcance: true }), ["f2"]);
+    const iLoQueHay = msg.indexOf("=== LO QUE YA HAY EN CADA FASE ===");
+    const iHitos = msg.indexOf("=== HITOS DEL PROYECTO ===");
+    const iAlcance = msg.indexOf("=== ALCANCE: REGENERAR UNA SOLA FASE ===");
+    expect(iLoQueHay, "falta lo que ya hay").toBeGreaterThan(-1);
+    expect(iLoQueHay < iHitos && iHitos < iAlcance, "el orden no es lo que ya hay → hitos → alcance").toBe(true);
+  });
+
+  it("⭐ sin alcance, el cierre dice primero cómo se conserva y después qué no se repite; con alcance, solo cómo se conserva", () => {
+    /* 2026-09-27, Elías: la IA tampoco repite lo pendiente ni lo que está en curso. Las ediciones que la ponen en rojo:
+       volver a la orden que se contradice («Lo hecho no se vuelve a proponer…» primero, que no nombraba lo pendiente),
+       o decirlo al regenerar una fase (choca con «Lo que ya se hizo va como tarea»). */
+    const conserva = "Si una tarea pendiente sigue sirviendo, repite su título EXACTO y su weekIndex: así se conserva tal cual.";
+    const noRepite =
+      "La que no repitas se quita. No agregues otra que diga con otras palabras lo mismo que una que ya existe (hecha, en curso o pendiente).";
+    const texto = renderLoQueYaHay(LO);
+    expect(texto).toContain(`\n${conserva} ${noRepite}`);
+    expect(texto).not.toContain("Lo hecho no se vuelve a proponer");
+    const conAlcance = render(renderLoQueYaHay({ ...LO, conAlcance: true }), ["f2"]);
+    expect(conAlcance).toContain(conserva);
+    expect(conAlcance).not.toContain("La que no repitas se quita");
+  });
+
+  it("⭐ cada fase dice lo que se queda aunque la IA no lo repita (en curso, a mano) y cuántas hechas no entraron", () => {
+    /* La edición que la pone en rojo: no escribir `seQuedan` (el modelo volvía a proponer lo que estaba en curso con otras
+       palabras) o callar las hechas que pasaron de 15. */
+    const texto = renderLoQueYaHay(LO);
+    expect(texto).toContain(
+      "[f1] «Semana 0» — en curso · hecho: «Sesión de kickoff: equipo, roles y accesos» · (y 3 hechas más) · " +
+        "pendiente: «Recolección de accesos» (weekIndex 0) · se queda: «Armar reportes» (en curso) · «Revisar con el cliente» (a mano)\n",
+    );
+    const una = renderLoQueYaHay({ ...LO, fases: [{ ...LO.fases[0], hechasDeMas: 1, seQuedan: [] }] });
+    expect(una).toContain("· (y 1 hecha más) · pendiente:");
+    expect(una, "sin nada que se quede, sin «se queda»").not.toContain("se queda:");
+  });
+
+  it("⭐ lo que falta: el kickoff solo con `faltaKickoff`; el cierre o la entrega, solo si el otro está", () => {
+    /* Las ediciones que la ponen en rojo: pedir el kickoff aunque su Semana 0 ya empezó o sea un Desarrollo
+       (`faltaKickoff` false), o pedir un cierre y una entrega sueltos cuando no hay ninguno de los dos. */
+    const nada = { kickoff: [], cierre: [], entrega: [], recurrente: false, faltaKickoff: false };
+    const bloque = (h: NonNullable<LoQueYaHay["hitos"]>) => renderLoQueYaHay({ ...LO, hitos: h }).split("=== HITOS DEL PROYECTO ===\n")[1];
+    expect(bloque(nada), "sin hitos ni kickoff que pedir, solo la regla").toBe(REGLA);
+    expect(bloque({ ...nada, faltaKickoff: true })).toBe(`${REGLA}\n- Kickoff: no hay; propón uno solo, en la Semana 0.`);
+    expect(bloque({ ...nada, entrega: HITOS.entrega })).toBe(
+      `${REGLA}\n- Entrega: «Entrega formal del proyecto a Cliente» (pendiente).\n- Cierre: no hay; si hace falta, propón uno solo, que no repita la entrega.`,
+    );
+    expect(bloque({ ...nada, cierre: HITOS.cierre })).toBe(
+      `${REGLA}\n- Entrega: no hay; si hace falta, propón una sola, que no repita el cierre.\n- Cierre: «Sesión de cierre con junta directiva» (pendiente).`,
+    );
+    // Con kickoff, `faltaKickoff` no se mira (no puede faltar lo que está).
+    expect(bloque({ ...nada, kickoff: HITOS.kickoff, faltaKickoff: true })).toBe(`${REGLA}\n- Kickoff: «Sesión de kickoff: equipo, roles y accesos» (hecho).`);
+  });
+
+  it("⭐ en un recurrente la entrega va una por ciclo, y se nombran todas", () => {
+    /* La edición que la pone en rojo: decir «una por proyecto» en un recurrente (el modelo no propondría la entrega del
+       ciclo que sigue) o nombrar solo la primera. */
+    const texto = renderLoQueYaHay({
+      ...LO,
+      hitos: {
+        ...HITOS,
+        recurrente: true,
+        entrega: [
+          { titulo: "Sesión de entrega del ciclo 1", estado: "hecho" },
+          { titulo: "Sesión de entrega del ciclo 2", estado: "pendiente" },
+        ],
+      },
+    });
+    expect(texto).toContain("El kickoff y el cierre van UNA vez por proyecto; la entrega, una por ciclo.");
+    expect(texto).toContain("- Entrega: «Sesión de entrega del ciclo 1» (hecho) · «Sesión de entrega del ciclo 2» (pendiente).");
+  });
+
+  it("en tuteo; y sin `hitos` (un L5 de antes) no se escribe el bloque", () => {
+    const texto = renderLoQueYaHay({ ...LO, hitos: { ...HITOS, kickoff: [], faltaKickoff: true } });
+    expect(texto).not.toMatch(/(?<!\p{L})(proponé|poné|agregá|dejá|repetí|podés|tenés|querés|incluí|sabés)(?!\p{L})/iu);
+    expect(texto).toMatch(/propón uno solo/);
+    const { hitos: _h, ...sinHitos } = LO;
+    void _h;
+    expect(renderLoQueYaHay(sinHitos)).not.toContain("HITOS DEL PROYECTO");
   });
 });

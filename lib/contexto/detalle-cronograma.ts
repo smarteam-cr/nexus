@@ -197,11 +197,53 @@ export interface InsumosDelDetalle {
   loQueYaHay?: string;
 }
 
-/** L5 (§6.3): el cierre del bloque de lo que ya hay. Con alcance (una fase o el recálculo) solo la segunda
- *  oración: ahí «lo que ya se hizo va como tarea» (EXCEPCION_DE_LA_FASE_A_REGENERAR) manda (D11). */
-export const LO_HECHO_NO_SE_REPITE = "Lo hecho no se vuelve a proponer, ni con otras palabras.";
+/**
+ * L5 (§6.3): el cierre del bloque de lo que ya hay. Con alcance (una fase o el recálculo) solo `LO_PENDIENTE_SE_CONSERVA`:
+ * ahí «lo que ya se hizo va como tarea» (EXCEPCION_DE_LA_FASE_A_REGENERAR) manda (D11).
+ * ⚠ M2 (2026-09-27, Elías: la IA tampoco repite lo pendiente ni lo que está en curso): `LO_HECHO_NO_SE_REPITE` decía
+ * «Lo hecho no se vuelve a proponer, ni con otras palabras.» y el cierre la ponía PRIMERO. Contradecía a R2 (la pendiente
+ * que la IA no repite se quita) y solo hablaba de lo hecho: el modelo repetía con otras palabras lo pendiente y lo que
+ * estaba en curso. Ahora va primero cómo se conserva y después qué no se duplica, sin distinguir el estado. El nombre
+ * de la constante se queda (la lee su test).
+ */
+export const LO_HECHO_NO_SE_REPITE =
+  "La que no repitas se quita. No agregues otra que diga con otras palabras lo mismo que una que ya existe (hecha, en curso o pendiente).";
 export const LO_PENDIENTE_SE_CONSERVA =
   "Si una tarea pendiente sigue sirviendo, repite su título EXACTO y su weekIndex: así se conserva tal cual.";
+
+/** M2 (2026-09-27): el rótulo del bloque de los hitos. */
+export const TITULO_DE_LOS_HITOS = "=== HITOS DEL PROYECTO ===";
+
+/**
+ * M2 (2026-09-27): la regla de los hitos, en código (no en el prompt guardado). R15 la hace cumplir igual
+ * (lib/timeline/tareas-del-detalle.ts): esto es para que el modelo no gaste tareas que no van a entrar.
+ */
+export function reglaDeLosHitos(recurrente: boolean): string {
+  const entrega = recurrente ? "una por ciclo" : "una por proyecto";
+  return `El kickoff y el cierre van UNA vez por proyecto; la entrega, ${entrega}. Los que ya están no se vuelven a proponer con ningún nombre: el sistema no deja pasar otro.`;
+}
+/** M2: lo que se dice cuando falta un hito (solo el kickoff lo agrega el sistema; el cierre y la entrega, nunca). */
+export const FALTA_EL_KICKOFF = "- Kickoff: no hay; propón uno solo, en la Semana 0.";
+export const FALTA_EL_CIERRE = "- Cierre: no hay; si hace falta, propón uno solo, que no repita la entrega.";
+export const FALTA_LA_ENTREGA = "- Entrega: no hay; si hace falta, propón una sola, que no repita el cierre.";
+
+/**
+ * M2 (2026-09-27): el bloque «HITOS DEL PROYECTO». Solo se listan los que existen. El kickoff que falta se pide solo con
+ * `faltaKickoff` (la misma condición con que lo agregaría el sistema); el cierre o la entrega que falta, solo si el otro
+ * existe («Sesión de cierre y entrega» no entra si ya hay uno de los dos: el que falta va solo).
+ */
+function bloqueDeLosHitos(h: NonNullable<LoQueYaHay["hitos"]>): string {
+  const citar = (x: { titulo: string; estado: string }) => `«${x.titulo}» (${x.estado})`;
+  const lista = (xs: ReadonlyArray<{ titulo: string; estado: string }>) => xs.map(citar).join(" · ");
+  const lineas: string[] = [];
+  if (h.kickoff.length > 0) lineas.push(`- Kickoff: ${lista(h.kickoff)}.`);
+  else if (h.faltaKickoff) lineas.push(FALTA_EL_KICKOFF);
+  if (h.entrega.length > 0) lineas.push(`- Entrega: ${lista(h.entrega)}.`);
+  else if (h.cierre.length > 0) lineas.push(FALTA_LA_ENTREGA);
+  if (h.cierre.length > 0) lineas.push(`- Cierre: ${lista(h.cierre)}.`);
+  else if (h.entrega.length > 0) lineas.push(FALTA_EL_CIERRE);
+  return `\n\n${TITULO_DE_LOS_HITOS}\n${[reglaDeLosHitos(h.recurrente), ...lineas].join("\n")}`;
+}
 
 /**
  * L5 (§6.3): lo que ya hay en el cronograma, para el agente de tareas. Tres bloques, cada uno solo si tiene
@@ -209,6 +251,8 @@ export const LO_PENDIENTE_SE_CONSERVA =
  * (solo sin alcance) y lo que notó la revisión de fases (el paso 1), sin lo que le hablaba al «paso de
  * tareas» en tercera persona (`observacionParaMostrar`, lo mismo que ve el CSE). "" si no hay nada.
  * La semana va como `weekIndex` (desde 0): el mismo número que el agente devuelve.
+ * M2 (2026-09-27): cada fase suma lo que se queda aunque la IA no lo repita y cuántas hechas no entraron; y, al final, el
+ * bloque de los hitos del proyecto (`bloqueDeLosHitos`).
  */
 export function renderLoQueYaHay(l: LoQueYaHay): string {
   const citar = (t: string) => `«${t}»`;
@@ -217,12 +261,20 @@ export function renderLoQueYaHay(l: LoQueYaHay): string {
     const lineas = l.fases.map((f) => {
       const partes = [`[${f.id}] ${citar(f.nombre)} — ${f.estado}`];
       if (f.hechas.length > 0) partes.push(`hecho: ${f.hechas.map(citar).join(" · ")}`);
+      // M2: lo hecho que no entró en la lista (más de 15), para que el modelo sepa que hay más.
+      if (f.hechasDeMas && f.hechasDeMas > 0) partes.push(`(y ${f.hechasDeMas} ${f.hechasDeMas === 1 ? "hecha más" : "hechas más"})`);
       if (f.pendientes.length > 0) {
         partes.push(`pendiente: ${f.pendientes.map((p) => `${citar(p.titulo)} (weekIndex ${p.semana})`).join(" · ")}`);
       }
+      // M2: lo que se queda aunque la IA no lo repita (en curso, suspendido, a mano): no se vuelve a proponer.
+      if (f.seQuedan && f.seQuedan.length > 0) {
+        partes.push(`se queda: ${f.seQuedan.map((s) => `${citar(s.titulo)} (${s.porque})`).join(" · ")}`);
+      }
       return partes.join(" · ");
     });
-    const cierre = l.conAlcance ? LO_PENDIENTE_SE_CONSERVA : `${LO_HECHO_NO_SE_REPITE} ${LO_PENDIENTE_SE_CONSERVA}`;
+    /* M2 (2026-09-27): primero cómo se conserva y después qué no se duplica (antes, al revés y contradiciendo a R2).
+       Con alcance, solo cómo se conserva (D11 de L5). */
+    const cierre = l.conAlcance ? LO_PENDIENTE_SE_CONSERVA : `${LO_PENDIENTE_SE_CONSERVA} ${LO_HECHO_NO_SE_REPITE}`;
     texto += `\n\n=== LO QUE YA HAY EN CADA FASE ===\n${lineas.join("\n")}\n${cierre}`;
   }
   if (!l.conAlcance && l.terminadasQueNoSeTocan.length > 0) {
@@ -234,6 +286,9 @@ export function renderLoQueYaHay(l: LoQueYaHay): string {
   if (notadas.length > 0) {
     texto += `\n\n=== LO QUE NOTÓ LA REVISIÓN DE FASES ===\n${notadas.map((o) => `- ${o}`).join("\n")}`;
   }
+  /* M2 (2026-09-27): los hitos, siempre que vengan (también con alcance: un kickoff nuevo en la fase regenerada tampoco
+     entra). Al final de lo que ya hay, así el alcance sigue siendo lo último que lee el modelo. */
+  if (l.hitos) texto += bloqueDeLosHitos(l.hitos);
   return texto;
 }
 

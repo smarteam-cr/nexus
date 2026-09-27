@@ -17,6 +17,7 @@
  */
 import type { FotoDelCronograma } from "./material-cronograma";
 import type { EstructuraHipotetica } from "@/lib/timeline/borrador";
+import type { EstadoDelHito } from "@/lib/timeline/hitos";
 
 /** Una fase tal como la lee un agente. `status` y `tasks` solo se escriben con avance. */
 export interface FaseParaAgentes {
@@ -52,6 +53,12 @@ export interface EstructuraSupuesta {
   loQueYaHay?: LoQueYaHay;
 }
 
+/** M2: un hito que ya está, con su estado (el del guardián, lib/timeline/hitos.ts). */
+export interface TituloConEstado {
+  titulo: string;
+  estado: EstadoDelHito;
+}
+
 /** L5 (§6.3): lo que ya hay en el cronograma, como lo lee el agente de tareas. */
 export interface LoQueYaHay {
   fases: Array<{
@@ -64,6 +71,15 @@ export interface LoQueYaHay {
      *  (desde 0, relativo a la fase): el mismo número que el agente devuelve, así «repite su semana» no
      *  se corre en uno. */
     pendientes: Array<{ titulo: string; semana: number }>;
+    /**
+     * M2 (2026-09-27): lo que SE QUEDA aunque la IA no lo repita y no es ni hecho ni pendiente de la IA: en curso,
+     * suspendido y pendiente escrito a mano, con su porqué («en curso», «suspendida», «a mano»; M3 y M4 suman los
+     * suyos). Hasta 15, cada título de hasta 80 caracteres. Sin esto el modelo no lo veía y lo volvía a proponer con
+     * otras palabras. Opcional: los L5 de antes no lo traen (el texto sale igual).
+     */
+    seQuedan?: Array<{ titulo: string; porque: string }>;
+    /** M2: cuántas hechas no entraron en `hechas` (había más de 15). Solo si hay alguna. */
+    hechasDeMas?: number;
   }>;
   /** Las del borrador al pedir el paso 2 (trae lo que notó el paso 1). */
   observaciones: string[];
@@ -71,6 +87,19 @@ export interface LoQueYaHay {
   terminadasQueNoSeTocan: string[];
   /** «Regenerar» de una fase o el recálculo: ahí «lo que ya se hizo va como tarea» manda (D11). */
   conAlcance: boolean;
+  /**
+   * M2 (2026-09-27): los hitos que YA tiene el proyecto (sus guardianes, `hitosDelProyecto`), para el bloque «HITOS DEL
+   * PROYECTO». `entrega` trae una por ciclo en un recurrente. `faltaKickoff`: la misma condición con que el sistema lo
+   * agregaría (R15: con Semana 0, en el alcance y sin empezar). Opcional como `seQuedan`; `estructuraParaElDetalle` lo
+   * trae siempre.
+   */
+  hitos?: {
+    kickoff: TituloConEstado[];
+    cierre: TituloConEstado[];
+    entrega: TituloConEstado[];
+    recurrente: boolean;
+    faltaKickoff: boolean;
+  };
 }
 
 /** El encabezado y los renglones de fase (y de tarea, con avance). `includeProgress` implica ids. */

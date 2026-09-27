@@ -567,8 +567,12 @@ function repitenLoQueSeQueda(
   return [...fuera];
 }
 
-/** R15: ¿la Semana 0 no empezó? Ni ella ni ninguna de sus tareas tiene avance (una fase nueva, sin vivo, tampoco). */
-function semanaCeroSinEmpezar(viva: FaseViva | undefined): boolean {
+/**
+ * R15: ¿la Semana 0 no empezó? Ni ella ni ninguna de sus tareas tiene avance (una fase nueva, sin vivo, tampoco).
+ * M2 P2d: exportada para que lo que lee el modelo («Kickoff: no hay; propón uno solo») use la MISMA condición que el
+ * kickoff que agrega el sistema (`loQueYaHayDe`, borrador-del-detalle.ts).
+ */
+export function semanaCeroSinEmpezar(viva: FaseViva | undefined): boolean {
   if (!viva) return true;
   if ((viva.status ?? "PENDING") !== "PENDING") return false;
   return (viva.tareas ?? []).every((t) => t.status !== "DONE" && t.status !== "IN_PROGRESS");

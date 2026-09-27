@@ -32,7 +32,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { parseRunError } from "@/lib/agents/run-error";
-import { sanitizeTags } from "@/lib/tags/catalog";
+import { isRecurrente, sanitizeTags } from "@/lib/tags/catalog";
 import type { HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import type { EstructuraSupuesta, LoQueYaHay } from "@/lib/contexto/cronograma-para-agentes";
 import {
@@ -70,12 +70,15 @@ import {
 import { huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 import { MENSAJE_PROPUESTA_CAMBIO, SELECT_DE_FASE, SELECT_DE_TAREA } from "./escribir-estructura";
 import { sugeridasQueEntran, tareasTocadas } from "./hechas-fuera-de-lugar";
-import { AVISO_PROPUESTA_PENDIENTE, MENSAJE_ESTRUCTURA_EN_CURSO } from "./propuesta-de-estructura";
+import { AVISO_PROPUESTA_PENDIENTE, faseDeSemanaCero, MENSAJE_ESTRUCTURA_EN_CURSO } from "./propuesta-de-estructura";
 import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
+import { hitosDelProyecto, type GuardianDeHito, type Hito } from "./hitos";
+import { tieneVozDeHandoffPropia } from "./semana-cero";
 import {
   cambiosDeTareasDelDetalle,
   fusionarDetalle,
   fusionarRecalculo,
+  semanaCeroSinEmpezar,
   tareasPropuestasDelDetalle,
 } from "./tareas-del-detalle";
 
@@ -496,8 +499,9 @@ export function cierreDeLaCorridaVetada(veto: VetoDelPedido): { status: "ARCHIVE
   return { status: "ARCHIVED", output: JSON.stringify({ error: veto.message }) };
 }
 
-/** Lo que se lee de cada tarea para el paso 2: lo del plan y «por validar» (las idénticas, R4b). */
-const SELECT_DE_TAREA_DEL_DETALLE = { ...SELECT_DE_TAREA, needsValidation: true } as const;
+/** Lo que se lee de cada tarea para el paso 2: lo del plan y «por validar» (las idénticas, R4b). M2 (2026-09-27): y la
+ *  marca de origen (`hito:kickoff` manda sobre el título al reconocer el kickoff, lib/timeline/hitos.ts). */
+const SELECT_DE_TAREA_DEL_DETALLE = { ...SELECT_DE_TAREA, needsValidation: true, originFingerprint: true } as const;
 /** Las fases con sus tareas, para `vivoDeLaBase`. E3: la usa también la ruta que edita la propuesta. */
 export const SELECT_DE_FASES_CON_TAREAS = {
   orderBy: { order: "asc" as const },
@@ -535,6 +539,8 @@ export interface FaseLeida {
     startDateOverride: Date | null;
     dueDateOverride: Date | null;
     needsValidation: boolean;
+    /** M2: `originFingerprint` (la marca `hito:kickoff`). Opcional: quien no lo lea reconoce el kickoff por el título. */
+    originFingerprint?: string | null;
   }>;
 }
 
@@ -566,11 +572,33 @@ export function vivoDeLaBase(anchorStartDate: Date | null, fases: readonly FaseL
           inicioFijado: diaDe(t.startDateOverride),
           finFijado: diaDe(t.dueDateOverride),
           needsValidation: t.needsValidation,
+          // M2: la marca, solo si la tiene (no entra en la foto ni en el plan: la huella no cambia).
+          ...(t.originFingerprint ? { marca: t.originFingerprint } : {}),
         }),
       ),
     })),
   };
 }
+
+/**
+ * M2 (2026-09-27): lo que el paso 2 necesita del PROYECTO para los hitos (R14, R15 de tareas-del-detalle.ts).
+ *   · `recurrente`: el tag (la entrega va una por ciclo);
+ *   · `conSemanaCero`: el pipeline tiene Semana 0 (Desarrollo y Web tienen voz de handoff propia y no: ahí el sistema
+ *     no agrega el kickoff). Sin pipeline (legacy), sí: la conducta histórica de Customer Success.
+ * Lo usan las dos fusiones y lo que lee el modelo: el mismo dato, de la misma fila.
+ */
+export function hitosDelPaso2(project: { tags?: unknown; hubspotPipelineId?: string | null } | null | undefined): {
+  recurrente: boolean;
+  conSemanaCero: boolean;
+} {
+  return {
+    recurrente: isRecurrente(sanitizeTags(project?.tags ?? [])),
+    conSemanaCero: !tieneVozDeHandoffPropia(project?.hubspotPipelineId ?? null),
+  };
+}
+
+/** M2: lo que se lee del proyecto para `hitosDelPaso2` (y los tags de las fijas de la Semana 0). */
+const SELECT_DEL_PROYECTO_PARA_EL_PASO_2 = { select: { tags: true, hubspotPipelineId: true } } as const;
 
 /** Lo que se recalcula: el JSON guardado (se escribe con `{ ...guardado, … }`), su lectura y las fases. */
 interface LoQueSeRecalcula {
@@ -622,29 +650,88 @@ async function desfasadasDelGuardado(
 const HECHAS_POR_FASE = 15;
 const PENDIENTES_POR_FASE = 30;
 const LARGO_DE_UNA_HECHA = 80;
+/** M2: cuántas de las que se quedan (en curso, suspendidas, a mano) lee el agente por fase. */
+const SE_QUEDAN_POR_FASE = 15;
+
+/** L5: un título de hasta 80 caracteres (el resto, «…»). */
+const corta = (t: string) => (t.length > LARGO_DE_UNA_HECHA ? `${t.slice(0, LARGO_DE_UNA_HECHA - 1)}…` : t);
+
+/** M2: por qué se queda una tarea que no es ni hecha ni pendiente de la IA (R2 no la reemplaza). null = no se queda por eso. */
+function porQueSeQueda(t: TareaDelVivo): string | null {
+  if (t.status === "IN_PROGRESS") return "en curso";
+  if (t.status === "SUSPENDED") return "suspendida";
+  if (t.status === "PENDING" && t.source === "HUMAN") return "a mano";
+  return null;
+}
+
+/**
+ * M2 (2026-09-27): los hitos que ya tiene el proyecto, como los lee el modelo (el bloque «HITOS DEL PROYECTO»). Los
+ * guardianes de `hitosDelProyecto`, con lo vivo de ahora y las fases de la estructura supuesta, igual que R15. El kickoff
+ * que falta se pide con la MISMA condición con que el sistema lo agregaría: el pipeline tiene Semana 0, esa fase está en
+ * el alcance y no empezó (`semanaCeroSinEmpezar`). Si no, no se pide (la observación 4 lo dice al CSE).
+ */
+function hitosParaElModelo(
+  estructura: EstructuraHipotetica,
+  vivas: ReadonlyMap<string, Vivo["fases"][number]>,
+  hitos: { recurrente: boolean; conSemanaCero: boolean },
+  soloFases: readonly string[] | null,
+): NonNullable<LoQueYaHay["hitos"]> {
+  const { guardianes } = hitosDelProyecto({
+    fases: estructura.fases.map((f) => ({ id: f.id, name: f.name, tareas: f.existente ? (vivas.get(f.id)?.tareas ?? []) : [] })),
+    recurrente: hitos.recurrente,
+  });
+  const deHito = (h: Hito) =>
+    [...guardianes.values()]
+      .filter((g) => g.hito === h)
+      .sort((a: GuardianDeHito, b: GuardianDeHito) => (a.ciclo ?? 0) - (b.ciclo ?? 0))
+      .map((g) => ({ titulo: corta(g.titulo), estado: g.estado }));
+  const kickoff = deHito("kickoff");
+  const semanaCero = faseDeSemanaCero(estructura.fases, hitos.conSemanaCero);
+  const faltaKickoff =
+    kickoff.length === 0 &&
+    semanaCero !== null &&
+    (!soloFases || soloFases.length === 0 || soloFases.includes(semanaCero.id)) &&
+    semanaCeroSinEmpezar(semanaCero.existente ? vivas.get(semanaCero.id) : undefined);
+  return { kickoff, cierre: deHito("cierre"), entrega: deHito("entrega"), recurrente: hitos.recurrente, faltaKickoff };
+}
 
 /**
  * L5 (§6.3): lo que ya hay en cada fase, para el agente de tareas. El estado de cada fase y sus tareas son
  * los de AHORA (`vivo`); las fases, las de la estructura supuesta (con las nuevas). `conAlcance`: «Regenerar»
  * de una fase o el recálculo; ahí no hay fases terminadas que se respeten (D11: R12 solo en «Regenerar todo»).
+ * M2 (2026-09-27): cada fase suma lo que se queda aunque la IA no lo repita (en curso, suspendido, a mano) y cuántas
+ * hechas no entraron; y el proyecto, sus hitos (`hitosParaElModelo`, con `soloFases`: el alcance).
  */
-function loQueYaHayDe(estructura: EstructuraHipotetica, vivo: Vivo, borrador: Borrador, conAlcance: boolean): LoQueYaHay {
+function loQueYaHayDe(
+  estructura: EstructuraHipotetica,
+  vivo: Vivo,
+  borrador: Borrador,
+  soloFases: readonly string[] | null,
+  hitos: { recurrente: boolean; conSemanaCero: boolean },
+): LoQueYaHay {
+  const conAlcance = !!soloFases && soloFases.length > 0;
   const vivas = new Map(vivo.fases.map((f) => [f.id, f]));
   const fases = estructura.fases.map((f): LoQueYaHay["fases"][number] => {
     const viva = f.existente ? vivas.get(f.id) : undefined;
     const estado = !f.existente ? "nueva" : viva?.status === "DONE" ? "terminada" : viva?.status === "IN_PROGRESS" ? "en curso" : "pendiente";
     const tareas = viva?.tareas ?? [];
-    const corta = (t: string) => (t.length > LARGO_DE_UNA_HECHA ? `${t.slice(0, LARGO_DE_UNA_HECHA - 1)}…` : t);
+    const hechas = tareas.filter((t) => t.status === "DONE");
+    const seQuedan = tareas.flatMap((t) => {
+      const porque = porQueSeQueda(t);
+      return porque ? [{ titulo: corta(t.title), porque }] : [];
+    });
     return {
       id: f.id,
       nombre: f.name,
       estado,
-      hechas: tareas.filter((t) => t.status === "DONE").slice(0, HECHAS_POR_FASE).map((t) => corta(t.title)),
+      hechas: hechas.slice(0, HECHAS_POR_FASE).map((t) => corta(t.title)),
       // Lo que la IA puede conservar: pendiente y no escrito a mano (lo demás se queda igual, R2).
       pendientes: tareas
         .filter((t) => t.status === "PENDING" && t.source !== "HUMAN")
         .slice(0, PENDIENTES_POR_FASE)
         .map((t) => ({ titulo: t.title, semana: t.weekIndex })),
+      ...(seQuedan.length > 0 ? { seQuedan: seQuedan.slice(0, SE_QUEDAN_POR_FASE) } : {}),
+      ...(hechas.length > HECHAS_POR_FASE ? { hechasDeMas: hechas.length - HECHAS_POR_FASE } : {}),
     };
   });
   return {
@@ -652,19 +739,20 @@ function loQueYaHayDe(estructura: EstructuraHipotetica, vivo: Vivo, borrador: Bo
     observaciones: [...borrador.observaciones],
     terminadasQueNoSeTocan: conAlcance ? [] : fases.filter((f) => f.estado === "terminada").map((f) => f.id),
     conAlcance,
+    hitos: hitosParaElModelo(estructura, vivas, hitos, soloFases),
   };
 }
 
 /** La estructura supuesta como la lee el agente: sus fases para el texto, su foto, el alcance y (L5) lo que
- *  ya hay en cada fase. */
+ *  ya hay en cada fase. M2: `hitos` (del proyecto, `hitosDelPaso2`) para el bloque de los hitos. */
 function supuestaDe(
   estructura: EstructuraHipotetica,
   closeDateOverride: Date | null,
   soloFases: string[] | null,
   vivo: Vivo,
   borrador: Borrador,
+  hitos: { recurrente: boolean; conSemanaCero: boolean },
 ): EstructuraSupuesta {
-  const conAlcance = !!soloFases && soloFases.length > 0;
   return {
     fases: estructura.fases.map((f) => ({
       id: f.id,
@@ -681,7 +769,7 @@ function supuestaDe(
     },
     estructura,
     ...(soloFases && soloFases.length > 0 ? { soloFases } : {}),
-    loQueYaHay: loQueYaHayDe(estructura, vivo, borrador, conAlcance),
+    loQueYaHay: loQueYaHayDe(estructura, vivo, borrador, soloFases, hitos),
   };
 }
 
@@ -704,6 +792,8 @@ export async function estructuraParaElDetalle(
       pendingProposal: true,
       anchorStartDate: true,
       closeDateOverride: true,
+      // M2: los tags y el pipeline, para los hitos que lee el modelo (`hitosDelPaso2`, lo mismo que la fusión).
+      project: SELECT_DEL_PROYECTO_PARA_EL_PASO_2,
       phases: SELECT_DE_FASES_CON_TAREAS,
     },
   });
@@ -711,11 +801,12 @@ export async function estructuraParaElDetalle(
   const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
   const borrador = leerBorrador(tl.pendingProposal);
   if (!borrador || (borrador.desconocidos ?? 0) > 0) return null;
+  const hitos = hitosDelPaso2(tl.project);
   // E2c: esta corrida es el recálculo del borrador (las tareas ya están «listas», de otra corrida).
   if (borrador.recalculo?.corrida === corrida) {
     if (!borrador.tareas?.listas) return null;
     const r = borrador.recalculo;
-    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id), vivo, borrador);
+    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id), vivo, borrador, hitos);
   }
   if (borrador.tareas === null || borrador.tareas.listas || borrador.tareas.corrida !== corrida) return null;
   return supuestaDe(
@@ -724,6 +815,7 @@ export async function estructuraParaElDetalle(
     borrador.soloFase ? [borrador.soloFase] : null,
     vivo,
     borrador,
+    hitos,
   );
 }
 
@@ -841,7 +933,8 @@ function conLaFusion(
  * salida de la corrida (si la fusión falla, lo armado queda en la corrida).
  *   1. Se lee el borrador, el cronograma CON tareas (el de ahora: dice qué sigue en su fase y qué
  *      tiene avance; el `desde` es lo que LEYÓ el agente, así lo editado mientras tanto choca y queda
- *      fuera, E2b D10) y los tags del proyecto (las fijas de la Semana 0).
+ *      fuera, E2b D10) y los tags del proyecto (las fijas de la Semana 0). M2: y su pipeline; con los dos, los
+ *      hitos (`hitosDelPaso2`: R14 y R15 corren en las dos fusiones, esta y la del recálculo).
  *   2. Perdido: ya no hay un v1, la corrida que lo marcó es otra, las tareas ya están, o hay cambios
  *      desconocidos. La corrida lo dice (`timelineSyncError`) y no se escribe nada.
  *   3. Las tareas se calculan sobre la estructura que VIO el agente (`estructura`, en memoria), con el
@@ -880,7 +973,8 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean, 
       pendingProposal: true,
       pendingProposalRunId: true,
       anchorStartDate: true,
-      project: { select: { tags: true } },
+      // M2: y el pipeline (`hitosDelPaso2`: sin Semana 0, el sistema no agrega el kickoff).
+      project: SELECT_DEL_PROYECTO_PARA_EL_PASO_2,
       phases: SELECT_DE_FASES_CON_TAREAS,
     },
   });
@@ -889,6 +983,7 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean, 
   const version = versionDelBorrador(tl.pendingProposal);
   const vivo = vivoDeLaBase(tl.anchorStartDate, tl.phases);
   const borrador = leerBorrador(tl.pendingProposal);
+  const hitos = hitosDelPaso2(tl.project);
   if (borrador?.recalculo?.corrida === i.corrida) {
     return fusionarRecalculoEnElBorrador(i, {
       guardado: tl.pendingProposal,
@@ -897,6 +992,7 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean, 
       vivo,
       borrador,
       tags: sanitizeTags(tl.project?.tags ?? []),
+      hitos,
     });
   }
   if (
@@ -930,6 +1026,8 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean, 
     soloFases,
     // R12 (L5, D11): una fase terminada no se toca solo en «Regenerar todo», nunca en «Regenerar» de una fase.
     respetarTerminadas: !borrador.soloFase,
+    // M2 (R14, R15): los hitos y lo que ya está, con el tag y el pipeline del proyecto.
+    hitos,
   });
   const fusionado = fusionarDetalle(borrador, cambios, i.corrida);
   const donde = {
@@ -1051,6 +1149,8 @@ async function fusionarRecalculoEnElBorrador(
     vivo: Vivo;
     borrador: Borrador;
     tags: string[];
+    /** M2: los del proyecto (`hitosDelPaso2`). */
+    hitos: { recurrente: boolean; conSemanaCero: boolean };
   },
 ): Promise<Vuelta> {
   const { borrador, version, vivo } = leido;
@@ -1105,6 +1205,8 @@ async function fusionarRecalculoEnElBorrador(
     soloFases: new Set(escritas),
     // D11: el recálculo rehace la fase como queda; «lo que ya se hizo va como tarea» manda (sin R12).
     respetarTerminadas: false,
+    // M2: los hitos valen igual (un kickoff nuevo en una fase recalculada tampoco entra), con su alcance.
+    hitos: leido.hitos,
   });
   const nuevo = fusionarRecalculo(borrador, {
     tareas: cambios.tareas,

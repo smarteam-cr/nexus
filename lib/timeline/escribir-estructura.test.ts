@@ -39,7 +39,7 @@ import {
   type PedidoDeAplicar,
   type TxDeEstructura,
 } from "./escribir-estructura";
-import { escribirTareas, TareasQueNoCuadran } from "./escribir-tareas";
+import { escribirTareas, TareasQueNoCuadran, type TxDeTareas } from "./escribir-tareas";
 import {
   BLOQUEO_TAREAS_EN_CURSO,
   BLOQUEO_VERSION_NUEVA,
@@ -1189,6 +1189,56 @@ describe("aplicar lo que dicta el chat (E3)", () => {
     const db2 = baseFalsa({ ancla: null, fases: FASES, tareas: TAREAS, propuesta: sinCierre, token: "run-estructura" });
     await aplicarBorradorEnTx(db2.tx, pedidoConTareas(sinCierre, { fases: FASES, tareas: TAREAS }));
     expect(db2.estado.avance).toBeNull();
+  });
+});
+
+/**
+ * M2 P2c (spec del replanteo §3.4, 2026-09-27): LA MARCA DEL KICKOFF. El kickoff que crea la propuesta (el que agrega el
+ * sistema o uno nuevo que R15 reconoció, con `tarea.hito`) nace con `originFingerprint = "hito:kickoff"`: así se reconoce
+ * aunque después lo renombren. Es la única escritura de la columna. La int (borrador-aplicar.int.test.ts) lo prueba contra
+ * la base; acá, lo que el escritor le pide al `createMany`.
+ */
+describe("M2 · la marca del kickoff al crear", () => {
+  it("⭐ una nueva con `hito: [\"kickoff\"]` nace con la marca; la entrega, el cierre o sin `hito`, sin marca; lo que cambia, nunca", async () => {
+    /* Las ediciones que la ponen en rojo: no escribir la marca, marcar la entrega (o cualquier hito), o escribirla al
+       cambiar una tarea que ya existe. */
+    const creadas: Array<Record<string, unknown>> = [];
+    const cambios: Array<Record<string, unknown>> = [];
+    const tx = {
+      timelineTask: {
+        createMany: async (a: { data: Array<Record<string, unknown>> }) => {
+          creadas.push(...a.data);
+          return { count: a.data.length };
+        },
+        updateMany: async (a: { data: Record<string, unknown> }) => {
+          cambios.push(a.data);
+          return { count: 1 };
+        },
+        deleteMany: async () => ({ count: 0 }),
+      },
+    } as unknown as TxDeTareas;
+    const en = { tipo: "existente" as const, id: "s0" };
+    await escribirTareas(tx, {
+      escrituras: {
+        seVan: [],
+        nuevas: [
+          { clave: "t:k", fase: en, tarea: contenido("Sesión de kickoff del proyecto", 0, { type: "SESSION", hito: ["kickoff"] }) },
+          { clave: "t:e", fase: en, tarea: contenido("Entrega formal del proyecto", 1, { type: "SESSION", hito: ["entrega"] }) },
+          { clave: "t:ce", fase: en, tarea: contenido("Sesión de cierre y entrega del proyecto", 1, { type: "SESSION", hito: ["cierre", "entrega"] }) },
+          { clave: "t:x", fase: en, tarea: contenido("Recolección de accesos", 0) },
+        ],
+        cambian: [{ id: "k-viejo", desdeFase: "s0", campos: { title: "Reunión inicial con el equipo" }, aFase: null }],
+      },
+      existentes: new Map([["s0", { durationWeeks: 2, tareas: [{ id: "k-viejo", weekIndex: 0, order: 0, source: "AGENT" }] }]]),
+      nuevas: new Map(),
+    });
+    expect(creadas.map((d) => [d.title, d.originFingerprint ?? null])).toEqual([
+      ["Sesión de kickoff del proyecto", "hito:kickoff"],
+      ["Entrega formal del proyecto", null],
+      ["Sesión de cierre y entrega del proyecto", null],
+      ["Recolección de accesos", null],
+    ]);
+    expect(cambios, "renombrar una tarea tocó su marca").toEqual([{ title: "Reunión inicial con el equipo" }]);
   });
 });
 

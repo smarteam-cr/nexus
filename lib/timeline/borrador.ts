@@ -865,6 +865,20 @@ function leerFuga(v: unknown): ContenidoDeTareaNueva["fuga"] | undefined {
   return { campo: v.campo, motivo: v.motivo, ...(typeof v.motivoDeLaNota === "string" ? { motivoDeLaNota: v.motivoDeLaNota } : {}) };
 }
 
+/** M2: los hitos que se leen de una tarea nueva guardada (los de lib/timeline/hitos.ts, en su orden). */
+const HITOS_QUE_SE_LEEN: readonly Hito[] = ["kickoff", "cierre", "entrega"];
+
+/**
+ * M2 (2026-09-27): el `hito` de una tarea nueva, SOLO si viene bien formado: un array no vacío de «kickoff», «cierre»
+ * o «entrega», sin repetidos. Cualquier otra forma se IGNORA (undefined) y la tarea sigue valiendo: el hito solo decide
+ * la marca `hito:kickoff` al aplicar, y perderlo es la dirección segura (la tarea se crea igual, sin marca).
+ */
+function leerHitos(v: unknown): Hito[] | undefined {
+  if (!Array.isArray(v) || v.length === 0 || v.length > HITOS_QUE_SE_LEEN.length) return undefined;
+  if (!v.every((h) => typeof h === "string" && (HITOS_QUE_SE_LEEN as readonly string[]).includes(h))) return undefined;
+  return new Set(v).size === v.length ? (v as Hito[]) : undefined;
+}
+
 function leerContenidoDeTarea(v: unknown): ContenidoDeTareaNueva | null {
   if (!esObjeto(v) || !esTitulo(v.title) || !esSemana(v.weekIndex) || typeof v.needsValidation !== "boolean") return null;
   const notes = leerTextoONulo(v.notes);
@@ -875,7 +889,18 @@ function leerContenidoDeTarea(v: unknown): ContenidoDeTareaNueva | null {
   if (notes === undefined || party === undefined || type === undefined || motivoPorValidar === undefined || fuga === undefined) {
     return null;
   }
-  return { title: v.title, weekIndex: v.weekIndex, notes, party, type, needsValidation: v.needsValidation, motivoPorValidar, fuga };
+  const hito = leerHitos(v.hito);
+  return {
+    title: v.title,
+    weekIndex: v.weekIndex,
+    notes,
+    party,
+    type,
+    needsValidation: v.needsValidation,
+    motivoPorValidar,
+    fuga,
+    ...(hito ? { hito } : {}),
+  };
 }
 
 /**
@@ -936,6 +961,10 @@ function leerCambio(v: unknown): Cambio | null {
   const motivo = textoOpcional(v.motivo);
   const conMotivo = motivo ? { motivo: motivo.v } : {};
   const delChat = v.porChat === true ? { porChat: true as const } : {};
+  /* M2 (2026-09-27): lo decide el SISTEMA (el kickoff que sobra o el que faltaba, R15). Se lee como `porChat`, solo con
+     su único valor: sin leerlo, la fusión siguiente (que reescribe `cambios` desde lo leído) lo perdía y la pantalla lo
+     pintaba como de la IA. Solo en `tarea-nueva` y `tarea-se-va`, los dos que lo producen. */
+  const delSistema = v.delSistema === "hito" ? { delSistema: "hito" as const } : {};
   switch (v.tipo) {
     case "ancla":
       if (v.clave !== "ancla" || typeof v.a !== "string" || !(v.desde === null || typeof v.desde === "string")) return null;
@@ -992,6 +1021,7 @@ function leerCambio(v: unknown): Cambio | null {
         ...delChat,
         ...(v.retocada === true ? { retocada: true as const } : {}),
         ...(v.mudadaPorElChat === true ? { mudadaPorElChat: true as const } : {}),
+        ...delSistema,
       };
     }
     case "tarea-se-va": {
@@ -1005,6 +1035,7 @@ function leerCambio(v: unknown): Cambio | null {
         desde,
         ...conMotivo,
         ...delChat,
+        ...delSistema,
       };
     }
     case "tarea-cambia": {
@@ -2753,6 +2784,11 @@ export interface ItemDeTarea {
   /** E2c: su fase está desfasada y el CSE no la desmarcó: solo para pintar la casilla marcada
    *  mientras se recalcula (su estado es «excluido»). */
   enEspera?: boolean;
+  /**
+   * M2 (2026-09-27): la quita o la agrega el SISTEMA (un kickoff que sobra o el que faltaba), nunca la IA: `texto` es su
+   * motivo completo («Ya hay un kickoff hecho: «X».»). La pantalla lo pinta con su chip, no como «Según la IA».
+   */
+  delSistema?: { tipo: "hito"; texto: string };
 }
 
 /** Las tareas de UNA fase, en un solo renglón de la lista (con su casilla de grupo). */
@@ -3023,6 +3059,10 @@ function gruposDeTareas(
         ...(aviso ? { aviso } : {}),
         seMarca: (it.estado === "aplica" || it.estado === "excluido") && !heredada,
         ...(it.recalcula && !sin.has(c.clave) ? { enEspera: true } : {}),
+        // M2: lo que decidió el sistema viaja con su motivo entero (el chip y el `title` son de la vista).
+        ...(c.tipo !== "tarea-cambia" && c.delSistema
+          ? { delSistema: { tipo: c.delSistema, texto: c.motivo ?? "Lo decide el sistema." } }
+          : {}),
       };
       if (c.tipo === "tarea-se-va") {
         return { ...comun, signo: "−" as const, titulo: c.desde.title, ...enSuSemana(c.desde.weekIndex) };

@@ -28,6 +28,7 @@
 import type { Prisma, TaskParty, TimelineTaskType } from "@prisma/client";
 import { PARTY_VALUES, TASK_TYPE_VALUES } from "./validate";
 import type { EscriturasDeTareas, Lugar } from "./borrador";
+import { MARCA_DE_KICKOFF } from "./hitos";
 
 /** Lo que el escritor usa del `tx`. */
 export type TxDeTareas = Pick<Prisma.TransactionClient, "timelineTask">;
@@ -161,6 +162,10 @@ export async function escribirTareas(
   // 4) Las nuevas, al final de su semana: el `order` más alto leído en esa fase y semana + 1 (+ k).
   //    E3: la del chat o la que el chat retocó nace MODIFIED (la dictó una persona), y la del chat
   //    sin «por validar».
+  //    M2 (2026-09-27): el kickoff que CREA la propuesta (el que agrega el sistema o uno nuevo que R15 reconoció, con
+  //    `hito: ["kickoff"]`) nace con la marca `hito:kickoff` en `originFingerprint`. Es la ÚNICA escritura de la marca:
+  //    las que cambian (3b) no la tocan, así sobrevive a renombrar y a mudar. El cierre y la entrega no se marcan
+  //    (lib/timeline/hitos.ts: su título no es lo bastante fiable para una marca que manda para siempre).
   const data: Prisma.TimelineTaskCreateManyInput[] = destinos.map(({ phaseId, duracion, n }) => {
     const semana = acotar(n.tarea.weekIndex, duracion);
     const order = alFinal(phaseId, semana);
@@ -175,6 +180,7 @@ export async function escribirTareas(
       status: "PENDING",
       source: n.porChat || n.retocada ? "MODIFIED" : "AGENT",
       needsValidation: n.tarea.needsValidation === true && !n.porChat,
+      ...(n.tarea.hito?.includes("kickoff") ? { originFingerprint: MARCA_DE_KICKOFF } : {}),
     };
   });
   if (data.length > 0) await tx.timelineTask.createMany({ data });

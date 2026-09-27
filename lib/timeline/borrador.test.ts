@@ -70,6 +70,8 @@ import {
   type Borrador,
   type Cambio,
   type CambioTareaCambia,
+  type CambioTareaNueva,
+  type CambioTareaSeVa,
   type FaseViva,
   type TareaDelVivo,
   type Vivo,
@@ -1202,5 +1204,87 @@ describe("17 · L7: la mudanza que sugiere la IA (una hecha en la fase equivocad
     // Lo que el CSE sí desmarca sigue contando como desmarcado.
     const otra = B_G.cambios.find((c) => c.tipo === "tarea-nueva")!.clave;
     expect(textoDelBotonDeAplicar(resumir(VIVO_G, CON_SUGERIDAS, [...CLAVES, otra], LISTAS))).toBe("Aplicar 131 de 132");
+  });
+});
+
+/**
+ * 18 · M2 P2c (spec del replanteo §3.4, 2026-09-27): LO QUE DECIDE EL SISTEMA Y LOS HITOS. El kickoff que sobra sale como
+ * `tarea-se-va` con `delSistema: "hito"` y el que faltaba entra como `tarea-nueva` con `delSistema` y `tarea.hito`
+ * (R15, tareas-del-detalle.ts). Guardados, se tienen que leer igual: la fusión siguiente reescribe `cambios` desde lo
+ * leído, aplicar escribe la marca `hito:kickoff` con `tarea.hito`, y la barra no los pinta como de la IA.
+ */
+describe("18 · M2: `hito` y `delSistema` sobreviven a guardarse, y la huella no los mira", () => {
+  const FIX = leerFixtureGrande();
+  const VIVO_G = vivoDelFixture(FIX);
+  const B_G = borradorDelFixture(FIX);
+  const LISTAS = { tareas: "listas" as const };
+  const SE_VA = B_G.cambios.find((c): c is CambioTareaSeVa => c.tipo === "tarea-se-va")!;
+  const NUEVA = B_G.cambios.find((c): c is CambioTareaNueva => c.tipo === "tarea-nueva")!;
+  const MOTIVO_SE_VA = "Ya hay un kickoff hecho: «Sesión de kickoff: equipo, roles y accesos».";
+  const MOTIVO_NUEVA = "Faltaba el kickoff: lo agrega el sistema.";
+  const CON_HITOS: Borrador = {
+    ...B_G,
+    cambios: B_G.cambios.map((c): Cambio => {
+      if (c.clave === SE_VA.clave) return { ...SE_VA, motivo: MOTIVO_SE_VA, delSistema: "hito" };
+      if (c.clave === NUEVA.clave) return { ...NUEVA, motivo: MOTIVO_NUEVA, delSistema: "hito", tarea: { ...NUEVA.tarea, hito: ["kickoff"] } };
+      return c;
+    }),
+  };
+  const guardado = (b: Borrador) => JSON.parse(JSON.stringify(b)) as Record<string, unknown> & { cambios: Array<Record<string, unknown>> };
+  const delLeido = <T extends Cambio>(b: Borrador, clave: string) => b.cambios.find((c) => c.clave === clave) as T | undefined;
+
+  it("⭐ ida y vuelta: `delSistema` (en la que se va y en la nueva) y `tarea.hito` se leen, y una segunda vuelta da lo mismo", () => {
+    /* La edición que la pone en rojo: no leerlos en `leerCambio` / `leerContenidoDeTarea` (la fusión siguiente los borraba:
+       el kickoff del sistema se pintaba como de la IA y aplicarlo no dejaba la marca). */
+    const leido = leerBorrador(guardado(CON_HITOS))!;
+    expect(leido.desconocidos ?? 0).toBe(0);
+    const seVa = delLeido<CambioTareaSeVa>(leido, SE_VA.clave)!;
+    expect([seVa.delSistema, seVa.motivo]).toEqual(["hito", MOTIVO_SE_VA]);
+    const nueva = delLeido<CambioTareaNueva>(leido, NUEVA.clave)!;
+    expect([nueva.delSistema, nueva.motivo, nueva.tarea.hito]).toEqual(["hito", MOTIVO_NUEVA, ["kickoff"]]);
+    expect(leerBorrador(JSON.parse(JSON.stringify(leido)))!.cambios, "una segunda vuelta perdió algo").toEqual(leido.cambios);
+    // «Sesión de cierre y entrega del proyecto» es los dos hitos a la vez: se leen los dos, en su orden.
+    const doble = guardado(CON_HITOS);
+    (doble.cambios.find((c) => c.clave === NUEVA.clave)!.tarea as Record<string, unknown>).hito = ["cierre", "entrega"];
+    expect(delLeido<CambioTareaNueva>(leerBorrador(doble)!, NUEVA.clave)!.tarea.hito).toEqual(["cierre", "entrega"]);
+    // Lo que no lo trae, no lo inventa.
+    expect(delLeido<CambioTareaNueva>(leerBorrador(guardado(B_G))!, NUEVA.clave)).not.toHaveProperty("delSistema");
+    expect(delLeido<CambioTareaNueva>(leerBorrador(guardado(B_G))!, NUEVA.clave)!.tarea).not.toHaveProperty("hito");
+  });
+
+  it("⛔ un `hito` mal formado se ignora y la tarea sigue valiendo; un `delSistema` que no conoce, también", () => {
+    /* La edición que la pone en rojo: invalidar la tarea por su `hito` (un JSON raro dejaba la propuesta con un cambio
+       desconocido, que no se aplica a medias: se trababa entera). */
+    for (const malo of [["kickoff", "kickoff"], ["otro"], "kickoff", [], [1], null, { kickoff: true }, ["kickoff", "cierre", "entrega", "kickoff"]]) {
+      const g = guardado(CON_HITOS);
+      (g.cambios.find((c) => c.clave === NUEVA.clave)!.tarea as Record<string, unknown>).hito = malo;
+      const leido = leerBorrador(g)!;
+      expect(leido.desconocidos ?? 0, JSON.stringify(malo)).toBe(0);
+      const nueva = delLeido<CambioTareaNueva>(leido, NUEVA.clave);
+      expect(nueva, `${JSON.stringify(malo)} invalidó la tarea`).toBeDefined();
+      expect(nueva!.tarea, JSON.stringify(malo)).not.toHaveProperty("hito");
+      expect(nueva!.tarea.title).toBe(NUEVA.tarea.title);
+    }
+    const g = guardado(CON_HITOS);
+    g.cambios.find((c) => c.clave === SE_VA.clave)!.delSistema = "otro";
+    const leido = leerBorrador(g)!;
+    expect(leido.desconocidos ?? 0).toBe(0);
+    expect(delLeido<CambioTareaSeVa>(leido, SE_VA.clave)).not.toHaveProperty("delSistema");
+  });
+
+  it("⭐ la huella no mira `hito` ni `delSistema`: con ellos o sin ellos, la misma (una pestaña de antes sigue aplicando)", () => {
+    /* La edición que la pone en rojo: meter `hito` (o `delSistema`) en `destinoDe`: la huella de todo borrador con un
+       kickoff cambiaría y una pestaña abierta durante el deploy chocaría al aplicar. */
+    const leido = leerBorrador(guardado(CON_HITOS))!;
+    expect(planDeAplicacion(VIVO_G, leido, [], LISTAS).huella).toBe(planDeAplicacion(VIVO_G, B_G, [], LISTAS).huella);
+    expect(planDeAplicacion(VIVO_G, leido, [NUEVA.clave], LISTAS).huella).toBe(planDeAplicacion(VIVO_G, B_G, [NUEVA.clave], LISTAS).huella);
+  });
+
+  it("⭐ la barra lleva lo que decidió el sistema, con su motivo entero (y solo eso)", () => {
+    /* La edición que la pone en rojo: no copiarlo en `gruposDeTareas` (la vista no tendría con qué pintar su chip). */
+    const items = resumir(VIVO_G, leerBorrador(guardado(CON_HITOS))!, [], LISTAS).grupos.flatMap((g) => g.tareas);
+    expect(items.find((t) => t.clave === SE_VA.clave)?.delSistema).toEqual({ tipo: "hito", texto: MOTIVO_SE_VA });
+    expect(items.find((t) => t.clave === NUEVA.clave)?.delSistema).toEqual({ tipo: "hito", texto: MOTIVO_NUEVA });
+    expect(items.filter((t) => t.delSistema)).toHaveLength(2);
   });
 });

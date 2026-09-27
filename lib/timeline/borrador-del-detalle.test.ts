@@ -27,14 +27,16 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 
-import { borradorVacio, leerBorrador, planDeAplicacion, type Cambio, type CambioTareaCambia, type Vivo } from "./borrador";
+import { borradorVacio, leerBorrador, planDeAplicacion, type Cambio, type CambioTareaCambia, type CambioTareaNueva, type Vivo } from "./borrador";
 import {
   estructuraParaElDetalle,
   fusionarDetalleEnElBorrador,
+  SELECT_DE_FASES_CON_TAREAS,
   TOPE_DE_LA_EXPLICACION_MS,
   TOPE_DE_LAS_SUGERIDAS_MS,
   vivoDeLaBase,
 } from "./borrador-del-detalle";
+import { pipelineByKey } from "@/lib/projects/kind";
 import { tareasTocadas } from "./hechas-fuera-de-lugar";
 import { explicacionEnPantalla, huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 
@@ -482,5 +484,233 @@ describe("L7 · la fusión suma las mudanzas sugeridas, desmarcadas", () => {
     const claves = cambiosEscritos().map((c) => c.clave);
     expect(new Set(claves).size, "dos cambios con la misma clave").toBe(claves.length);
     expect(cambiosEscritos().filter((c) => c.tipo === "tarea-cambia" && c.sugerida)).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── M2 · los hitos en la vuelta de la fusión y en lo que lee el modelo ───────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * M2 P2c-P2d (spec del replanteo §3.4-§3.5, 2026-09-27). Las reglas de los hitos (R14, R15) viven en
+ * tareas-del-detalle.ts y se prueban ahí; esto prueba que las DOS fusiones se las pasan con el dato real del proyecto (el
+ * tag `recurrente` y el pipeline) y que el modelo lee los mismos hitos. Con la base FALSA: la función real corre contra
+ * esto. Reemplaza a la «guarda de llamadores» del borrador de la spec, que solo buscaba el texto `hitos:`.
+ */
+describe("M2 · los hitos: la fusión los recibe del proyecto y el modelo los lee", () => {
+  const DESARROLLO = pipelineByKey("development").hubspotPipelineId;
+  const CUSTOMER_SUCCESS = pipelineByKey("customer-success").hubspotPipelineId;
+  const sesion = (id: string, title: string, weekIndex: number, extra: Record<string, unknown> = {}) =>
+    tareaDB(id, title, weekIndex, { type: "SESSION", ...extra });
+  /** Un proyecto sin kickoff: la Semana 0 no empezó (nada hecho ni en curso) y «Diseño» tiene lo suyo. */
+  const SIN_KICKOFF = [
+    faseDB("s0", "Semana 0", 0, 2, "PENDING", [tareaDB("s1", "Recolección de accesos", 0), tareaDB("s2", "Entrega del plan de trabajo", 1)]),
+    faseDB("d", "Diseño", 1, 2, "PENDING", [tareaDB("d1", "Mapear procesos", 0)]),
+  ];
+  /** El mismo, con el kickoff HECHO en la Semana 0. */
+  const CON_KICKOFF = [
+    faseDB("s0", "Semana 0", 0, 2, "IN_PROGRESS", [
+      sesion("k1", "Sesión de kickoff: equipo, roles y accesos", 0, { status: "DONE" }),
+      tareaDB("s1", "Recolección de accesos", 0),
+      tareaDB("s2", "Entrega del plan de trabajo", 1),
+    ]),
+    faseDB("d", "Diseño", 1, 2, "PENDING", [tareaDB("d1", "Mapear procesos", 0)]),
+  ];
+  const tarea = (title: string, weekIndex: number, type = "TASK") => ({ title, weekIndex, notes: null, porValidar: false, party: "SMARTEAM", type });
+  /** La IA repite todo y suma UNA en «Diseño» (así la fusión escribe también sin el kickoff del sistema). */
+  const SALIDA = {
+    timelineDetail: {
+      phases: [
+        { id: "s0", tasks: [tarea("Recolección de accesos", 0), tarea("Entrega del plan de trabajo", 1)] },
+        { id: "d", tasks: [tarea("Mapear procesos", 0), tarea("Configurar integraciones", 1)] },
+      ],
+    },
+  };
+  const conProyecto = (guardado: unknown, fases: unknown[], project: Record<string, unknown>) =>
+    db.projectTimeline.findUnique.mockImplementation(async () => ({
+      pendingProposal: JSON.parse(JSON.stringify(guardado)),
+      pendingProposalRunId: "run-2",
+      anchorStartDate: null,
+      closeDateOverride: null,
+      project,
+      phases: fases,
+    }));
+  async function fusionar(corrida: string, analysisJson: unknown) {
+    const sobre = await estructuraParaElDetalle("tl", corrida);
+    let k = 0;
+    return fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida,
+      estructura: sobre!.estructura,
+      analysisJson,
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `k-${++k}`,
+    });
+  }
+  const escrito = () => db.projectTimeline.updateMany.mock.calls.at(-1)![0].data.pendingProposal as Record<string, unknown>;
+  const delSistema = () => (escrito().cambios as Cambio[]).filter((c): c is CambioTareaNueva => c.tipo === "tarea-nueva" && !!c.delSistema);
+
+  it("⭐ la vuelta de la fusión: un Customer Success sin kickoff y con la Semana 0 sin empezar lo recibe del sistema; un Desarrollo, no", async () => {
+    /* Las ediciones que la ponen en rojo: pasar `hitos: null` (o no pasarlo) a `cambiosDeTareasDelDetalle` en la fusión, o
+       calcular `conSemanaCero` al revés (el Desarrollo, que no tiene Semana 0, recibiría un kickoff en su primera fase de
+       trabajo real). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const REGENERAR = borradorVacio({ pedido: "regenerar", corrida: "run-2" });
+
+    conProyecto(REGENERAR, SIN_KICKOFF, { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS });
+    expect((await fusionar("run-2", SALIDA)).estado).toBe("listas");
+    const kickoffs = delSistema();
+    expect(kickoffs.map((c) => [c.fase, c.tarea.title, c.tarea.weekIndex, c.tarea.type, c.tarea.hito, c.delSistema]), "el sistema no agregó el kickoff").toEqual([
+      ["s0", "Sesión de kickoff del proyecto", 0, "SESSION", ["kickoff"], "hito"],
+    ]);
+    // Guardado y leído, sigue siendo del sistema y con su hito (aplicar escribe la marca con eso).
+    const leido = leerBorrador(JSON.parse(JSON.stringify(escrito())))!;
+    expect(leido.cambios.filter((c) => c.tipo === "tarea-nueva" && c.delSistema && c.tarea.hito?.includes("kickoff"))).toHaveLength(1);
+
+    // Sin pipeline (legacy) es Customer Success: la conducta histórica, con Semana 0.
+    conProyecto(REGENERAR, SIN_KICKOFF, { tags: [], hubspotPipelineId: null });
+    await fusionar("run-2", SALIDA);
+    expect(delSistema(), "un proyecto sin pipeline no recibió el kickoff").toHaveLength(1);
+
+    conProyecto(REGENERAR, SIN_KICKOFF, { tags: [], hubspotPipelineId: DESARROLLO });
+    expect((await fusionar("run-2", SALIDA)).estado).toBe("listas");
+    expect(delSistema(), "un Desarrollo recibió un kickoff del sistema").toEqual([]);
+    expect(escrito().observaciones as string[], "en un Desarrollo no se dice que falta").not.toContain(
+      "El cronograma no tiene sesión de kickoff: si ya se hizo, agrégala como hecha.",
+    );
+    expect((escrito().cambios as Cambio[]).map((c) => (c.tipo === "tarea-nueva" ? c.tarea.title : c.clave))).toEqual(["Configurar integraciones"]);
+  });
+
+  it("⭐ la vuelta de la fusión: un kickoff que la IA vuelve a proponer no entra, y se dice", async () => {
+    /* La edición que la pone en rojo: no pasarle los hitos a la fusión (entraría un segundo kickoff). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    conProyecto(borradorVacio({ pedido: "regenerar", corrida: "run-2" }), CON_KICKOFF, { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS });
+    const conOtroKickoff = {
+      timelineDetail: {
+        phases: [
+          { id: "s0", tasks: [tarea("Recolección de accesos", 0), tarea("Entrega del plan de trabajo", 1), tarea("Sesión de kick-off con el equipo Cliente", 1, "SESSION")] },
+          { id: "d", tasks: [tarea("Mapear procesos", 0), tarea("Configurar integraciones", 1)] },
+        ],
+      },
+    };
+    await fusionar("run-2", conOtroKickoff);
+    const titulos = (escrito().cambios as Cambio[]).flatMap((c) => (c.tipo === "tarea-nueva" ? [c.tarea.title] : []));
+    expect(titulos, "entró un segundo kickoff").toEqual(["Configurar integraciones"]);
+    expect(escrito().observaciones).toContain(
+      "La IA volvió a proponer el kickoff: no se suma, ya está «Sesión de kickoff: equipo, roles y accesos» (hecho).",
+    );
+  });
+
+  it("⭐ el dato: un kickoff RENOMBRADO se reconoce por su marca `hito:kickoff` (se lee de la base y llega al paso 2)", async () => {
+    /* Las ediciones que la ponen en rojo: no leer `originFingerprint` en `SELECT_DE_TAREA_DEL_DETALLE`, o no llevarlo a
+       `TareaDelVivo.marca` en `vivoDeLaBase` (el kickoff renombrado no se reconocería: el sistema agregaría otro y el de
+       la IA entraría). */
+    expect(SELECT_DE_FASES_CON_TAREAS.select.tasks.select.originFingerprint, "el paso 2 no lee la marca").toBe(true);
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const RENOMBRADO = [
+      faseDB("s0", "Semana 0", 0, 2, "IN_PROGRESS", [
+        tareaDB("k1", "Reunión inicial con el equipo", 0, { status: "DONE", originFingerprint: "hito:kickoff" }),
+        tareaDB("s1", "Recolección de accesos", 0),
+      ]),
+      faseDB("d", "Diseño", 1, 2, "PENDING", [tareaDB("d1", "Mapear procesos", 0)]),
+    ];
+    conProyecto(borradorVacio({ pedido: "regenerar", corrida: "run-2" }), RENOMBRADO, { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS });
+    expect((await estructuraParaElDetalle("tl", "run-2"))?.loQueYaHay?.hitos?.kickoff).toEqual([
+      { titulo: "Reunión inicial con el equipo", estado: "hecho" },
+    ]);
+    await fusionar("run-2", {
+      timelineDetail: {
+        phases: [
+          { id: "s0", tasks: [tarea("Recolección de accesos", 0), tarea("Sesión de kickoff del proyecto", 0, "SESSION")] },
+          { id: "d", tasks: [tarea("Mapear procesos", 0), tarea("Configurar integraciones", 1)] },
+        ],
+      },
+    });
+    const titulos = (escrito().cambios as Cambio[]).flatMap((c) => (c.tipo === "tarea-nueva" ? [c.tarea.title] : []));
+    expect(titulos, "no reconoció el kickoff renombrado").toEqual(["Configurar integraciones"]);
+    expect(vivoDeLaBase(null, RENOMBRADO as unknown as Parameters<typeof vivoDeLaBase>[1]).fases[0].tareas![0].marca).toBe("hito:kickoff");
+    expect(vivoDeLaBase(null, RENOMBRADO as unknown as Parameters<typeof vivoDeLaBase>[1]).fases[0].tareas![1], "inventó una marca").not.toHaveProperty("marca");
+  });
+
+  it("⭐ el recálculo también los recibe: un kickoff nuevo en la fase que se recalcula no entra", async () => {
+    /* La edición que la pone en rojo: no pasarle `hitos` a `cambiosDeTareasDelDetalle` en `fusionarRecalculoEnElBorrador`. */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    conProyecto(
+      {
+        ...borradorVacio({ pedido: "regenerar", corrida: "run-2" }),
+        tareas: { corrida: "run-2", listas: true },
+        recalculo: { corrida: "run-r", fases: [{ id: "d", nombre: "Diseño" }], sin: [] },
+      },
+      CON_KICKOFF,
+      { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS },
+    );
+    const r = await fusionar("run-r", {
+      timelineDetail: {
+        phases: [{ id: "d", tasks: [tarea("Mapear procesos", 0), tarea("Sesión de kickoff del proyecto", 1, "SESSION"), tarea("Configurar integraciones", 1)] }],
+      },
+    });
+    expect(r).toEqual({ estado: "recalculadas", escritas: ["d"], fallidas: [] });
+    const titulos = (escrito().cambios as Cambio[]).flatMap((c) => (c.tipo === "tarea-nueva" ? [c.tarea.title] : []));
+    expect(titulos, "el recálculo dejó entrar un segundo kickoff").toEqual(["Configurar integraciones"]);
+  });
+
+  it("⭐ lo que lee el modelo: los hitos que ya están, y el kickoff que falta con la MISMA condición del sistema", async () => {
+    /* Las ediciones que la ponen en rojo: no armar `hitos` en `loQueYaHayDe`; pedir el kickoff en un Desarrollo, con la
+       Semana 0 empezada o fuera del alcance (el modelo lo pondría y el sistema no, o al revés). */
+    const hitosDe = async (guardado: unknown, fases: unknown[], project: Record<string, unknown>, corrida = "run-2") => {
+      conProyecto(guardado, fases, project);
+      return (await estructuraParaElDetalle("tl", corrida))?.loQueYaHay?.hitos;
+    };
+    const REGENERAR = borradorVacio({ pedido: "regenerar", corrida: "run-2" });
+    const cs = { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS };
+
+    expect(await hitosDe(REGENERAR, CON_KICKOFF, cs)).toEqual({
+      kickoff: [{ titulo: "Sesión de kickoff: equipo, roles y accesos", estado: "hecho" }],
+      cierre: [],
+      entrega: [],
+      recurrente: false,
+      faltaKickoff: false,
+    });
+    expect((await hitosDe(REGENERAR, SIN_KICKOFF, cs))?.faltaKickoff, "falta el kickoff y no se pide").toBe(true);
+    expect((await hitosDe(REGENERAR, SIN_KICKOFF, { tags: [], hubspotPipelineId: DESARROLLO }))?.faltaKickoff, "se pide en un Desarrollo").toBe(false);
+    const empezada = [{ ...SIN_KICKOFF[0], tasks: [tareaDB("s1", "Recolección de accesos", 0, { status: "DONE" })] }, SIN_KICKOFF[1]];
+    expect((await hitosDe(REGENERAR, empezada, cs))?.faltaKickoff, "se pide con la Semana 0 empezada").toBe(false);
+    const soloDiseno = borradorVacio({ pedido: "regenerar", corrida: "run-2", soloFase: "d" });
+    expect((await hitosDe(soloDiseno, SIN_KICKOFF, cs))?.faltaKickoff, "se pide fuera del alcance").toBe(false);
+    // Un recurrente: la entrega por ciclo, con el tag.
+    const conCiclos = [
+      ...CON_KICKOFF,
+      faseDB("c1", "Cierre ciclo 1", 2, 1, "DONE", [sesion("e1", "Sesión de entrega del ciclo 1", 0, { status: "DONE" })]),
+      faseDB("f2", "Fase 2", 3, 2, "PENDING", []),
+      faseDB("c2", "Cierre ciclo 2", 4, 1, "PENDING", [sesion("e2", "Sesión de entrega del ciclo 2", 0)]),
+    ];
+    const recurrente = await hitosDe(REGENERAR, conCiclos, { tags: ["recurrente"], hubspotPipelineId: CUSTOMER_SUCCESS });
+    expect(recurrente?.recurrente).toBe(true);
+    expect(recurrente?.entrega).toEqual([
+      { titulo: "Sesión de entrega del ciclo 1", estado: "hecho" },
+      { titulo: "Sesión de entrega del ciclo 2", estado: "pendiente" },
+    ]);
+  });
+
+  it("⭐ lo que lee el modelo: lo que se queda aunque la IA no lo repita (en curso, suspendido, a mano) y las hechas de más", async () => {
+    /* La edición que la pone en rojo: no llenar `seQuedan` (el modelo no veía lo que está en curso y lo volvía a proponer
+       con otras palabras) o no contar las hechas que no entran. */
+    enLaBase(borradorVacio({ pedido: "regenerar", corrida: "run-2" }));
+    const diseno = (await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!.fases.find((f) => f.id === "b")!;
+    expect(diseno.seQuedan).toEqual([
+      { titulo: "Revisar con el cliente", porque: "a mano" },
+      { titulo: "Armar reportes", porque: "en curso" },
+    ]);
+    expect(diseno.hechasDeMas).toBeUndefined();
+
+    const muchas = Array.from({ length: 17 }, (_, k) => tareaDB(`h${k}`, `Hecha ${k}`, 0, { status: "DONE" }));
+    conProyecto(borradorVacio({ pedido: "regenerar", corrida: "run-2" }), [
+      faseDB("s0", "Semana 0", 0, 2, "IN_PROGRESS", [...muchas, tareaDB("p1", "Pausada", 1, { status: "SUSPENDED" })]),
+    ], { tags: [] });
+    const s0 = (await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!.fases[0];
+    expect(s0.hechas).toHaveLength(15);
+    expect(s0.hechasDeMas).toBe(2);
+    expect(s0.seQuedan).toEqual([{ titulo: "Pausada", porque: "suspendida" }]);
   });
 });

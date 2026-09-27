@@ -1126,13 +1126,20 @@ describe("estructuraParaElDetalle — la estructura SUPUESTA que lee el agente",
 });
 
 describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO borrador", () => {
+  /* ⚠ ACTUALIZADA en M2 P2c (2026-09-27), con esta razón: desde M2 la fusión pasa `hitos` y, en un proyecto sin kickoff
+     cuya Semana 0 no empezó, el SISTEMA agrega «Sesión de kickoff del proyecto» (R15). La única fase de estas guardas,
+     «Diseño», es su Semana 0 y no tenía kickoff: cada fusión sumaba esa tarea y «sin cambios» dejaba de serlo. Estas
+     guardas miran la mecánica de la fusión (token, versión, alcance, reintento), no los hitos, así que el mundo trae el
+     kickoff ya HECHO (como 25 de los 28 proyectos activos con hitos). Ningún `expect` cambió. Los hitos en la fusión
+     tienen su guarda en borrador-del-detalle.test.ts. */
+  const KICKOFF_HECHO = tareaDB({ id: "t-kickoff", title: "Sesión de kickoff del proyecto", type: "SESSION", status: "DONE" });
   const tlConBorrador = (guardado: unknown, tareas: unknown[] = [tareaDB()]) =>
     db.projectTimeline.findUnique.mockResolvedValue({
       pendingProposal: guardado,
       pendingProposalRunId: "run-1",
       anchorStartDate: null,
       project: { tags: [] },
-      phases: [faseDB({ tasks: tareas })],
+      phases: [faseDB({ tasks: [...tareas, KICKOFF_HECHO] })],
     });
   const fusionar = (extra: Record<string, unknown> = {}) =>
     fusionarDetalleEnElBorrador({
@@ -1270,7 +1277,8 @@ describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO 
         anchorStartDate: null,
         project: { tags: [] },
         phases: [
-          faseDB({ tasks: [tareaDB()] }),
+          // M2 (2026-09-27): con el kickoff hecho, como `tlConBorrador` (ver su porqué arriba).
+          faseDB({ tasks: [tareaDB(), KICKOFF_HECHO] }),
           faseDB({ id: "f2", name: "Pruebas", order: 1, tasks: [tareaDB({ id: "t-f2", title: "Probar lo viejo" })] }),
         ],
       });
@@ -1319,7 +1327,8 @@ describe("fusionarDetalleEnElBorrador — lo que armó el agente entra al MISMO 
       pendingProposalRunId: "run-1",
       anchorStartDate: null,
       project: { tags: [] },
-      phases: [faseDB({ tasks: [tareaDB()] })],
+      // M2 (2026-09-27): con el kickoff hecho, como `tlConBorrador` (ver su porqué arriba).
+      phases: [faseDB({ tasks: [tareaDB(), KICKOFF_HECHO] })],
     });
     db.projectTimeline.findUnique
       .mockResolvedValueOnce(conLa(v1({ tareas: { corrida: "run-t", listas: false } })))

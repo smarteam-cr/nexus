@@ -24,6 +24,7 @@
  *     se va con una protegida se queda, y vacía se borra de verdad (con `tasks: { none: {} }` contra el
  *     Cascade real); AGENT pasa a MODIFIED; y «quitar una semana» en el tamaño de Wherex deja su tiempo.
  *   · (L5, D14) lo que cambia la IA (R4c, sin `porChat`) no pasa a MODIFIED ni pierde su «por validar».
+ *   · (M2) el kickoff que crea la propuesta nace con la marca `hito:kickoff` en `originFingerprint`; nada más la lleva.
  * Corre contra nexus_test (test/setup.integration.ts la trunca antes de cada caso).
  */
 import { describe, expect, it } from "vitest";
@@ -335,6 +336,42 @@ describe("aplicar el borrador CON tareas — DB real (E2a)", () => {
     expect(tl.pendingProposal).toBeNull();
     expect(tl.pendingProgress, "el borrador de avance quedó con ids que ya no están").toBeNull();
     expect(tl.detailGeneratedByAgentRunId).toBe(m.corrida.id);
+  });
+
+  it("⭐ M2 (2026-09-27): el kickoff que crea la propuesta nace con la marca `hito:kickoff`; la entrega y lo demás, sin marca", async () => {
+    /* Spec del replanteo §3.4. La marca deja reconocer el kickoff aunque después lo renombren (lib/timeline/hitos.ts). Las
+       ediciones que la ponen en rojo: no escribir la marca en el `createMany`, o marcar la entrega. */
+    const m = await mundoConTareas();
+    const conHitos: Borrador = {
+      ...m.v1,
+      cambios: m.v1.cambios.map((c) =>
+        c.tipo !== "tarea-nueva"
+          ? c
+          : c.clave === "t:carga"
+            ? { ...c, tarea: { ...c.tarea, hito: ["kickoff"] } }
+            : c.clave === "t:piloto"
+              ? { ...c, tarea: { ...c.tarea, hito: ["entrega"] } }
+              : c,
+      ),
+    };
+    // Como lo deja la fusión: JSON guardado, leído al aplicar.
+    const guardado = JSON.parse(JSON.stringify(conHitos)) as Borrador;
+    await prisma.projectTimeline.update({ where: { id: m.tl.id }, data: { pendingProposal: guardado as unknown as Prisma.InputJsonValue } });
+    const pedido = await pedidoDeLaPantalla(m.tl.id, guardado);
+    await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, pedido), TECHO);
+    const creadas = await prisma.timelineTask.findMany({
+      where: { phase: { timelineId: m.tl.id }, title: { in: ["Pruebas de carga", "Piloto con cinco usuarios"] } },
+      orderBy: { title: "asc" },
+      select: { title: true, originFingerprint: true },
+    });
+    expect(creadas.map((t) => [t.title, t.originFingerprint])).toEqual([
+      ["Piloto con cinco usuarios", null],
+      ["Pruebas de carga", "hito:kickoff"],
+    ]);
+    expect(
+      await prisma.timelineTask.count({ where: { phase: { timelineId: m.tl.id }, originFingerprint: { not: null } } }),
+      "se marcó otra tarea",
+    ).toBe(1);
   });
 
   it("⛔ en un proyecto PUBLICADO con una tarea movida a mano después, la foto publicada queda byte a byte igual", async () => {
