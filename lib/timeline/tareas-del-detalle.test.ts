@@ -8,7 +8,9 @@
  * que nada con avance ni escrito a mano se vaya, que las tareas se armen sobre la estructura que VIO
  * el agente (no la de ahora), las fijas de la Semana 0 sin vaivén, los pares idénticos, el tipo de
  * actividad solo-si-null, la salida cortada, y la fusión en el borrador. Desde E2b: el `desde` es lo
- * que VIO el agente (D10) y el alcance de «Regenerar» de una fase (`soloFases`).
+ * que VIO el agente (D10) y el alcance de «Regenerar» de una fase (`soloFases`). Desde L5: la fase
+ * terminada no se toca en «Regenerar todo» (R12) y la tarea que vuelve no sale como «se va + nueva» (R4c),
+ * medido sobre la propuesta grande anonimizada (__fixtures__/propuesta-grande.json).
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import fs from "node:fs";
@@ -16,10 +18,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { huellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import {
+  borradorDelFixture,
+  FASE_TERMINADA,
+  leerFixtureGrande,
+  vivoDelFixture,
+} from "./__fixtures__/propuesta-grande";
+import {
   estructuraHipotetica,
+  faseDeLaTarea,
   FORMATO_BORRADOR,
   fotoDeTarea,
   planDeAplicacion,
+  resumir,
   type Borrador,
   type CambioFaseCambia,
   type CambioFaseNueva,
@@ -36,8 +46,10 @@ import {
   DETAIL_ACTIVITY_TYPES,
   fusionarDetalle,
   fusionarRecalculo,
+  huellaCompleta,
   mezclarTareasDeFases,
   tareasPropuestasDelDetalle,
+  type CambiosDelDetalle,
 } from "./tareas-del-detalle";
 
 const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
@@ -130,6 +142,8 @@ function cambios(
     borrador?: Borrador;
     huellas?: ReturnType<typeof huellasDeFrontera> | null;
     soloFases?: ReadonlySet<string> | null;
+    /** L5 (R12): como la fusión, «Regenerar todo» respeta las terminadas y «Regenerar» de una fase no. */
+    respetarTerminadas?: boolean;
   } = {},
 ) {
   const estructura = opciones.visto ? estructuraHipotetica(opciones.visto, opciones.borrador ?? BASE) : ESTRUCTURA;
@@ -148,12 +162,22 @@ function cambios(
     nuevaClave,
     idsDesconocidos,
     soloFases: opciones.soloFases,
+    respetarTerminadas: opciones.respetarTerminadas ?? !opciones.soloFases,
   });
 }
+/* ⚠ ACTUALIZADA en L5, con esta razón: desde R4c la IA también produce `tarea-cambia` (una tarea que vuelve en
+   otra semana o con otro dueño o tipo). Se escribe «~id» con lo que cambia; antes caía en «-id» y se leía como
+   una que se va. */
 const resumen = (r: ReturnType<typeof cambios>, faseId?: string) =>
   r.tareas
     .filter((c) => faseId === undefined || (c.tipo === "tarea-nueva" ? c.fase : c.faseId) === faseId)
-    .map((c) => (c.tipo === "tarea-nueva" ? `+${c.tarea.title}@${c.tarea.weekIndex}` : `-${c.tareaId}`));
+    .map((c) =>
+      c.tipo === "tarea-nueva"
+        ? `+${c.tarea.title}@${c.tarea.weekIndex}`
+        : c.tipo === "tarea-cambia"
+          ? `~${c.tareaId}${JSON.stringify(c.a)}`
+          : `-${c.tareaId}`,
+    );
 
 describe("1 · qué se va y qué es nuevo", () => {
   it("⭐ una fase con solo tareas hechas o escritas a mano y propuesta del agente → 0 se van, N nuevas", () => {
@@ -247,9 +271,12 @@ describe("1 · qué se va y qué es nuevo", () => {
 });
 
 describe("2 · R4b: lo idéntico no se borra y se recrea", () => {
-  it("⭐ un par idéntico no emite nada; el mismo título en otra semana se va y es nueva", () => {
+  it("⭐ un par idéntico no emite nada; el mismo título en otra semana CAMBIA de semana (R4c)", () => {
     /* La edición que la pone en rojo: emparejar solo por título (se perdía el cambio de semana) o no
-       emparejar (cada regeneración borraba y recreaba la misma tarea con otro id). */
+       emparejar (cada regeneración borraba y recreaba la misma tarea con otro id).
+       ⚠ ACTUALIZADA en L5, con esta razón (decisión 4 de Elías: conservar lo que sirve): «Definir pipeline»
+       vuelve en la semana 0. Antes salía «se va + nueva» (otro id, y se perdía su historia); desde R4c es la
+       misma tarea que cambia de semana: un solo cambio, «~b2», con su id. */
     const r = cambios(
       salida([
         {
@@ -261,18 +288,150 @@ describe("2 · R4b: lo idéntico no se borra y se recrea", () => {
         },
       ]),
     );
-    expect(resumen(r, "b")).toEqual(["-b2", "+Definir pipeline@0"]);
+    expect(resumen(r, "b")).toEqual(['~b2{"weekIndex":0}']);
   });
 
-  it("con otras notas, otro dueño o «por validar», no son la misma tarea", () => {
-    for (const cruda of [
-      { title: "Mapear procesos", weekIndex: 0, notes: "con ventas" },
-      { title: "Mapear procesos", weekIndex: 0, party: "CLIENTE" },
-      { title: "Mapear procesos", weekIndex: 0, porValidar: true },
-    ]) {
+  it("con otras notas, otro dueño o «por validar», R4b no las junta; R4c sí, y solo cambia el dueño", () => {
+    /* ⚠ ACTUALIZADA en L5, con esta razón (decisión 4 de Elías: conservar lo que sirve): pedía «-b1 +Mapear
+       procesos» en los tres casos, o sea borrar y recrear la misma tarea. Desde R4c vuelve la MISMA: con otra
+       nota o con «por validar» no se toca (la nota de hoy se conserva y se cuenta, D12); con otro dueño, un
+       solo cambio de la IA con lo que difiere. La edición que la pone en rojo: volver a «se va + nueva». */
+    const casos: Array<[TareaCruda, string[]]> = [
+      [{ title: "Mapear procesos", weekIndex: 0, notes: "con ventas" }, ["-b2"]],
+      [{ title: "Mapear procesos", weekIndex: 0, party: "CLIENTE" }, ["-b2", '~b1{"party":"CLIENTE"}']],
+      [{ title: "Mapear procesos", weekIndex: 0, porValidar: true }, ["-b2"]],
+    ];
+    for (const [cruda, esperado] of casos) {
       const r = cambios(salida([{ id: "b", tasks: [cruda] }]));
-      expect(resumen(r, "b"), JSON.stringify(cruda)).toEqual(["-b1", "-b2", "+Mapear procesos@0"]);
+      expect(resumen(r, "b"), JSON.stringify(cruda)).toEqual(esperado);
     }
+    const conNota = cambios(salida([{ id: "b", tasks: [casos[0][0]] }]));
+    expect(conNota.observaciones).toContain("1 tarea vuelve con otra nota: se conserva la nota de hoy.");
+  });
+});
+
+describe("2b · L5: la IA deja quieto lo terminado y no reescribe por reescribir (R12, R4c)", () => {
+  /** La propuesta grande (anonimizada): su paso 2 fusionado otra vez con el código de hoy. */
+  const fusionDelFixture = (respetarTerminadas: boolean) => {
+    const fx = leerFixtureGrande();
+    const vivo = vivoDelFixture(fx);
+    const borrador = borradorDelFixture(fx);
+    const estructura = estructuraHipotetica(vivo, borrador);
+    const { propuestas, idsDesconocidos } = tareasPropuestasDelDetalle({ estructura, analysisJson: fx.paso2, huellas: null, cortado: false });
+    let k = 0;
+    const r = cambiosDeTareasDelDetalle({
+      estructura,
+      vivo,
+      propuestas,
+      borrador,
+      tags: [],
+      nuevaClave: () => `fx-${++k}`,
+      idsDesconocidos,
+      respetarTerminadas,
+    });
+    return { vivo, r, fusionado: fusionarDetalle(borrador, r, "r-paso2") };
+  };
+  const deLaFase = (r: CambiosDelDetalle, fase: string) => r.tareas.filter((c) => faseDeLaTarea(c) === fase);
+
+  it("⭐ R12 · en «Regenerar todo», la fase terminada no recibe ni pierde tareas, y se dice", () => {
+    /* La edición que la pone en rojo: leer `respetarTerminadas` al revés (o no mirarlo): la fase terminada
+       recibía 8 tareas nuevas en la propuesta de Wherex. */
+    const { r } = fusionDelFixture(true);
+    expect(deLaFase(r, FASE_TERMINADA), "la fase terminada recibe o pierde tareas").toEqual([]);
+    expect(r.observaciones).toContain("«Fase B» está terminada: la IA no le propone tareas.");
+    // Sin R12 («Regenerar» de una fase, el recálculo), sus 8 nuevas vuelven.
+    const sin = fusionDelFixture(false).r;
+    expect(deLaFase(sin, FASE_TERMINADA).map((c) => c.tipo)).toEqual(Array(8).fill("tarea-nueva"));
+    expect(sin.observaciones.some((o) => o.includes("está terminada"))).toBe(false);
+  });
+
+  it("⭐ R4c · Wherex: 110 cambios de tareas (49 se van, 57 nuevas, 4 cambian), ningún par entre fases, y 8 con otra nota", () => {
+    /* Las ediciones que la ponen en rojo: contar la nota distinta solo en los pares de la misma semana (dice
+       4, no 8), o no emparejar en otra semana (salen 114, sin «~»). Los números salen de `resumir`, lo mismo
+       que pinta el Gantt, sin lo «ya está». */
+    const { vivo, fusionado } = fusionDelFixture(true);
+    const r = resumir(vivo, fusionado, [], { tareas: "listas" });
+    const signos: Record<string, number> = {};
+    for (const g of r.grupos) for (const t of g.tareas) if (t.estado !== "ya-esta") signos[t.signo] = (signos[t.signo] ?? 0) + 1;
+    expect(signos).toEqual({ "−": 49, "+": 57, "~": 4 });
+    expect(r.grupos.filter((g) => g.cambian > 0).map((g) => [g.nombre, g.cambian])).toEqual([
+      ["Fase D", 2],
+      ["Fase K", 2],
+    ]);
+    const cambian = fusionado.cambios.filter((c): c is CambioTareaCambia => c.tipo === "tarea-cambia");
+    expect(cambian.every((c) => c.a.fase === undefined && !c.porChat), "un par entre fases, o dictado por el chat").toBe(true);
+    expect(fusionado.observaciones).toContain("8 tareas vuelven con otra nota: se conserva la nota de hoy.");
+  });
+
+  it("⭐ una sesión semanal: 3 pares en su semana y 1 que cambia; con dos sobrantes a cada lado, no se adivina", () => {
+    /* La edición que la pone en rojo: pasar al paso 2 (otra semana) sin mirar que quede UNA de cada lado:
+       con dos sobrantes, emparejaba la de la semana 0 con la 4 y la 1 con la 5. */
+    const sesion = (id: string, w: number) => tarea(id, "Sesión de seguimiento", w, { type: "SESSION", notes: `Semana ${w}` });
+    const conSesiones = (semanas: number[]): Vivo => ({
+      ...VIVO,
+      fases: VIVO.fases.map((f) => (f.id === "c" ? { ...f, durationWeeks: 6, tareas: semanas.map((w) => sesion(`s${w}`, w)) } : f)),
+    });
+    const nuevas = (semanas: number[]) =>
+      salida([{ id: "c", tasks: semanas.map((w) => ({ title: "Sesión de seguimiento", weekIndex: w, type: "SESSION" })) }]);
+    const seis: Borrador = { ...BASE, cambios: [] }; // «Pruebas» con sus 6 semanas de hoy
+    // Se van las de las semanas 1 a 4 y llegan las de 2 a 5: 2, 3 y 4 vuelven en su semana; la 1 pasa a la 5.
+    const uno = cambios(nuevas([2, 3, 4, 5]), { visto: conSesiones([1, 2, 3, 4]), vivo: conSesiones([1, 2, 3, 4]), borrador: seis });
+    expect(resumen(uno, "c")).toEqual(['~s1{"weekIndex":5}']);
+    expect(uno.observaciones).toContain("4 tareas vuelven con otra nota: se conserva la nota de hoy.");
+    // Se van las de 0 a 3 y llegan las de 2 a 5: sobran dos de cada lado (0 y 1, 4 y 5). No se empareja nada más.
+    const dos = cambios(nuevas([2, 3, 4, 5]), { visto: conSesiones([0, 1, 2, 3]), vivo: conSesiones([0, 1, 2, 3]), borrador: seis });
+    expect(resumen(dos, "c")).toEqual([
+      "-s0",
+      "-s1",
+      "+Sesión de seguimiento@4",
+      "+Sesión de seguimiento@5",
+    ]);
+  });
+
+  it("⛔ nunca con avance: una hecha con el mismo título que una nueva no se toca", () => {
+    /* La edición que la pone en rojo: emparejar también las que tienen avance (`isKept`): la hecha «cambiaba
+       de semana» y su nueva desaparecía. Una hecha nunca se mueve sin su casilla. */
+    const conHecha: Vivo = {
+      ...VIVO,
+      fases: VIVO.fases.map((f) => (f.id === "b" ? { ...f, tareas: [...(f.tareas ?? []), tarea("b3", "Capacitar usuarios", 0, { status: "DONE" })] } : f)),
+    };
+    const r = cambios(
+      salida([{ id: "b", tasks: [{ title: "Mapear procesos", weekIndex: 0 }, { title: "Capacitar usuarios", weekIndex: 1 }] }]),
+      { visto: conHecha, vivo: conHecha },
+    );
+    expect(resumen(r, "b")).toEqual(["-b2", "+Capacitar usuarios@1"]);
+  });
+
+  it("⛔ título largo: «… para ventas» y «… para postventa» no son la misma tarea", () => {
+    /* La edición que la pone en rojo: emparejar con la huella cortada a 60 caracteres (`fingerprintFromTitle`):
+       las dos eran «la misma» y la de postventa no se creaba. */
+    const largo: Vivo = {
+      ...VIVO,
+      fases: VIVO.fases.map((f) =>
+        f.id === "b" ? { ...f, tareas: [tarea("b1", "Configurar las propiedades personalizadas del objeto Negocios para ventas", 0)] } : f,
+      ),
+    };
+    const r = cambios(
+      salida([{ id: "b", tasks: [{ title: "Configurar las propiedades personalizadas del objeto Negocios para postventa", weekIndex: 1 }] }]),
+      { visto: largo, vivo: largo },
+    );
+    expect(resumen(r, "b")).toEqual(["-b1", "+Configurar las propiedades personalizadas del objeto Negocios para postventa@1"]);
+    expect(huellaCompleta("Configurar las propiedades personalizadas del objeto Negocios para ventas")).not.toBe(
+      huellaCompleta("Configurar las propiedades personalizadas del objeto Negocios para postventa"),
+    );
+  });
+
+  it("R9 · las que se van, después las que cambian y al final las nuevas; nunca un par entre fases", () => {
+    /* La edición que la pone en rojo: emparejar con una nueva de OTRA fase («Probar flujos» vuelve en Diseño:
+       es otra tarea, no una mudanza), o poner las que cambian después de las nuevas. */
+    const r = cambios(
+      salida([
+        { id: "b", tasks: [{ title: "Probar flujos", weekIndex: 0 }] },
+        { id: "c", tasks: [{ title: "Pruebas de aceptación", weekIndex: 0 }, { title: "Probar flujos", weekIndex: 0 }] },
+      ]),
+    );
+    expect(resumen(r, "b")).toEqual(["-b1", "-b2", "+Probar flujos@0"]);
+    expect(resumen(r, "c")).toEqual(["-c2", '~c1{"weekIndex":0}', "+Pruebas de aceptación@0"]);
   });
 });
 

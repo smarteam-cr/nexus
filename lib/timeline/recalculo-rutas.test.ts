@@ -393,6 +393,36 @@ describe("5 · fusionarDetalleEnElBorrador con un recálculo — solo cambian su
     expect(db.agentRun.update, "una fusión que entra no deja aviso en la corrida").not.toHaveBeenCalled();
   });
 
+  it("⛔ L5 (D11): el recálculo rehace también una fase TERMINADA (R12 es solo de «Regenerar todo»)", async () => {
+    /* La edición que la pone en rojo: pasar `respetarTerminadas: true` en la fusión del recálculo. La fase que el
+       CSE pidió recalcular se quedaba sin sus tareas (las viejas salían y no entraba ninguna) y el recálculo se
+       cerraba igual. Ahí «lo que ya se hizo va como tarea» manda. */
+    const estructura = await loQueVio();
+    db.projectTimeline.findUnique.mockResolvedValue({
+      id: "tl",
+      pendingProposal: guardadoCon({ recalculo: RECALCULO }),
+      pendingProposalRunId: "run-1",
+      anchorStartDate: null,
+      closeDateOverride: null,
+      project: { tags: [] },
+      phases: fasesDB().map((f) => (f.id === "c" ? { ...f, status: "DONE" } : f)),
+    });
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    const r = await fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-r",
+      estructura,
+      analysisJson: DEVUELTO,
+      huellas: null,
+      cortado: false,
+      nuevaClave: claves(),
+    });
+    expect(r).toEqual({ estado: "recalculadas", escritas: ["c"], fallidas: [] });
+    const b = escrito();
+    expect(b.cambios.map((c: { clave: string }) => c.clave), "la fase terminada se quedó sin sus tareas").toContain("t:clave-1");
+    expect(b.observaciones.some((o: string) => o.includes("está terminada"))).toBe(false);
+  });
+
   it("⛔ «Pruebas» editada a mano mientras corría: NO se escribe, conserva sus tareas y queda con su motivo", async () => {
     /* [D11] La corrida escribe una fase solo si conserva la forma con que arrancó. La edición que la
        pone en rojo: no comparar la forma (se escribirían tareas armadas para 3 semanas en una fase de

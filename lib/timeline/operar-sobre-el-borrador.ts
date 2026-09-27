@@ -20,7 +20,9 @@
  *     cambio: gana la edición a mano, y se avisa;
  *   · si `v` es lo vivo, el cambio sobra: se quita si es del chat, se deja fuera si es de la IA;
  *   · toda edición lo vuelve a marcar y lo deja como del chat (`porChat`).
- * Así aplicar nunca pisa una edición a mano que el chat no nombró.
+ * Así aplicar nunca pisa una edición a mano que el chat no nombró. L5 (D14): una tarea que cambia la IA
+ * (R4c) se edita desde lo que se ve: su cambio se hereda solo si está marcado, y una mudanza sugerida
+ * (L7) no se toca (`upsertTarea`).
  *
  * ── LA FORMA DE UNA FASE ARMADA (D9) ─────────────────────────────────────────
  * Si el chat cambia el nombre o las semanas de una fase cuyas tareas armó la IA, la forma nueva va en
@@ -189,6 +191,10 @@ export const RECHAZO_TAREA_REPETIDA = "ya hay una tarea igual en esa semana";
 export const RECHAZO_LUGAR = "no pude ubicar la fase en ese lugar";
 export const RECHAZO_CLAVE_NO_ESTA = "ese cambio ya no está en la propuesta";
 export const rechazoNombreRepetido = (nombre: string): string => `ya hay una fase «${nombre}» en la propuesta`;
+/** L5 (§6.4): una tarea con una mudanza SUGERIDA por la IA (L7) no la edita el chat: una hecha nunca se mueve
+ *  ni se marca sin su casilla. */
+export const rechazoTareaConSugerencia = (titulo: string, fase: string): string =>
+  `«${titulo}» trae una sugerencia de la IA para mudarla a «${fase}»: el chat no la cambia mientras la sugerencia siga en la propuesta`;
 
 /** Cómo se nombra cada campo en el aviso de lo que se respetó. */
 const NOMBRE_DEL_CAMPO: Record<CampoDeTarea | "fase", string> = {
@@ -456,16 +462,30 @@ export function operarSobreElBorrador(i: {
     void _vieja;
     ajustadas = mismaForma(ajustada, armada) ? otras : { ...otras, [clave]: ajustada };
   };
+  /** El nombre de una fase de la propuesta (viva o nueva), para decirla. */
+  const nombreDeFase = (clave: string | undefined): string =>
+    clave === undefined ? "otra fase" : (fasePorId.get(clave)?.name ?? faseNuevaDe(clave)?.fase.name ?? clave);
   /**
    * D8 para una tarea VIVA: la fila única de su `tarea-cambia`. `edicion` lleva lo que se escribe (y `fase`
-   * al mudarla). `conCambio` (D17): la clave del cambio de duración con el que va la semana.
+   * al mudarla). `conCambio` (D17): la clave del cambio de duración con el que va la semana. Devuelve el
+   * motivo si no se puede.
+   * L5 (D14, §6.4): frente a un cambio de la IA, el chat edita lo que se ve y no se apropia de lo que el CSE
+   * no marcó. Hasta L4 todo `tarea-cambia` era del chat, y esto heredaba su `a`, lo marcaba y lo hacía suyo.
+   *   · una mudanza SUGERIDA (L7): no se toca, se rechaza con el porqué;
+   *   · un cambio de la IA (R4c): se parte de la tarea como está HOY y se hereda su `a` solo si su casilla
+   *     está marcada. Lo que queda es del chat e incluido; si no queda nada, el de la IA queda fuera
+   *     (desmarcado) y sigue en la propuesta: no se borra.
    */
-  const upsertTarea = (t: TareaDelVivo, faseViva: string, edicion: EdicionDeTarea, conCambio?: string) => {
-    const c = cambiaDe(t.id);
+  const upsertTarea = (t: TareaDelVivo, faseViva: string, edicion: EdicionDeTarea, conCambio?: string): string | null => {
+    const existente = cambiaDe(t.id);
+    if (existente?.sugerida) return rechazoTareaConSugerencia(t.title, nombreDeFase(existente.a.fase));
+    const deLaIa = !!existente && !existente.porChat;
+    // Lo que se hereda: lo del chat siempre; lo de la IA, solo si el CSE lo tiene marcado (se ve).
+    const c = deLaIa && !marcado(mirar().items.get(existente.clave)) ? undefined : existente;
     const escritos = Object.keys(edicion) as Array<keyof EdicionDeTarea>;
     const a: CambioTareaCambia["a"] = c ? { ...c.a } : {};
-    let desde = c ? { ...c.desde } : fotoDeTarea(t);
-    let faseId = c ? c.faseId : faseViva;
+    let desde = c && !deLaIa ? { ...c.desde } : fotoDeTarea(t);
+    let faseId = c && !deLaIa ? c.faseId : faseViva;
     if (c) {
       // Lo que alguien editó a mano después, en un campo que el chat no está escribiendo: gana la mano.
       for (const g of CAMPOS_DE_TAREA) {
@@ -502,12 +522,16 @@ export function operarSobreElBorrador(i: {
     // D17: `conCambio` solo tiene sentido con una semana pedida; una semana pedida a mano no va con nada.
     const conQue = a.weekIndex === undefined ? undefined : escritos.includes("weekIndex") ? conCambio : c?.conCambio;
     if (Object.keys(a).length === 0) {
-      if (c) quitar(c); // las tareas que cambian son siempre del chat: sobra, se quita
-      return;
+      /* Queda todo como hoy. Hasta L4 decía «las tareas que cambian son siempre del chat: sobra, se quita»;
+         desde L5 la IA también las propone (R4c). La del chat sobra y se quita; la de la IA queda FUERA
+         (desmarcada) y sigue a la vista: «déjala en su semana» no borra lo que propuso la IA. */
+      if (existente && deLaIa) excluir(existente.clave);
+      else if (existente) quitar(existente);
+      return null;
     }
     const nuevo: CambioTareaCambia = {
       tipo: "tarea-cambia",
-      clave: c?.clave ?? claveDeTareaQueCambia(t.id),
+      clave: existente?.clave ?? claveDeTareaQueCambia(t.id),
       tareaId: t.id,
       faseId,
       desde,
@@ -515,12 +539,14 @@ export function operarSobreElBorrador(i: {
       ...(conQue ? { conCambio: conQue } : {}),
       porChat: true,
     };
-    if (c) {
-      reemplazar(c, nuevo);
-      incluir(c.clave);
+    if (existente) {
+      // La misma clave: una sola fila por tarea (el de la IA, heredado o no, pasa a ser el del chat).
+      reemplazar(existente, nuevo);
+      incluir(existente.clave);
     } else {
       agregarTarea(nuevo);
     }
+    return null;
   };
   /**
    * Una mudanza del chat cuya fase de destino se quita: la tarea se queda en su origen. Sale la mudanza
@@ -563,8 +589,7 @@ export function operarSobreElBorrador(i: {
       const veto = vetoDeTareaViva(r, m, false);
       if (veto) return veto;
       const dur = duracionEnLaPropuesta(faseEnLaPropuesta(r.tarea.id, r.faseId, m), m) ?? fasePorId.get(r.faseId)?.durationWeeks ?? 1;
-      upsertTarea(r.tarea, r.faseId, { [campo]: valor(dur) } as EdicionDeTarea);
-      return null;
+      return upsertTarea(r.tarea, r.faseId, { [campo]: valor(dur) } as EdicionDeTarea);
     }
     const veto = vetoDeTareaNueva(r.cambio, m);
     if (veto) return veto;
@@ -870,7 +895,8 @@ export function operarSobreElBorrador(i: {
       if (w === undefined || w === t.weekIndex) continue;
       if (t.id !== null) {
         const viva = tareaPorId.get(t.id);
-        if (viva) upsertTarea(viva.tarea, viva.faseId, { weekIndex: w }, conCambio);
+        const motivo = viva ? upsertTarea(viva.tarea, viva.faseId, { weekIndex: w }, conCambio) : null;
+        if (motivo) return motivo;
       } else {
         const nueva = tareaNuevaDe(t.clave);
         if (nueva) editarTareaNueva(nueva, { weekIndex: w }, false);
@@ -895,8 +921,7 @@ export function operarSobreElBorrador(i: {
       if (veto) return veto;
       // Vuelve a su fase: sin mudanza, y sin semana si no la pidió (queda en la suya).
       const vuelve = destino === r.faseId;
-      upsertTarea(r.tarea, r.faseId, { fase: destino, weekIndex: vuelve && o.semana === undefined ? r.tarea.weekIndex : semana });
-      return null;
+      return upsertTarea(r.tarea, r.faseId, { fase: destino, weekIndex: vuelve && o.semana === undefined ? r.tarea.weekIndex : semana });
     }
     const veto = vetoDeTareaNueva(r.cambio, m);
     if (veto) return veto;

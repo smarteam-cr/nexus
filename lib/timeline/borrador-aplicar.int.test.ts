@@ -23,6 +23,7 @@
  *   · (E3) lo que dicta el chat: una tarea HECHA que se muda conserva su id y su estado; la fase que
  *     se va con una protegida se queda, y vacía se borra de verdad (con `tasks: { none: {} }` contra el
  *     Cascade real); AGENT pasa a MODIFIED; y «quitar una semana» en el tamaño de Wherex deja su tiempo.
+ *   · (L5, D14) lo que cambia la IA (R4c, sin `porChat`) no pasa a MODIFIED ni pierde su «por validar».
  * Corre contra nexus_test (test/setup.integration.ts la trunca antes de cada caso).
  */
 import { describe, expect, it } from "vitest";
@@ -800,6 +801,23 @@ describe("lo que dicta el chat — DB real (E3)", () => {
     const renombrada = await prisma.timelineTask.findUniqueOrThrow({ where: { id: m.deLaIa.id } });
     expect([renombrada.title, renombrada.source, renombrada.phaseId]).toEqual(["Definir el pipeline de ventas", "MODIFIED", m.diseno.id]);
     expect(await prisma.timelineTask.count({ where: { phase: { timelineId: m.tl.id } } }), "se recreó una tarea").toBe(3);
+  });
+
+  it("⭐ L5 (D14): la que cambia LA IA (R4c, sin `porChat`) solo cambia de semana: sigue AGENT y «por validar»", async () => {
+    /* La edición que la pone en rojo: marcar «tocada a mano» todo `tarea-cambia` (AGENT → MODIFIED y sin «por
+       validar»), como hasta L4, cuando solo los dictaba el chat. Lo que decidió la IA no se disfraza de persona. */
+    const m = await mundoDelChat();
+    await prisma.timelineTask.update({ where: { id: m.deLaIa.id }, data: { needsValidation: true } });
+    const pedido = await pedidoDelChat(m.tl.id, (vivo) => {
+      const { porChat: _porChat, ...deLaIa } = cambiaLa(vivo, m.deLaIa.id, m.diseno.id, { weekIndex: 1 });
+      void _porChat;
+      return [deLaIa];
+    });
+    // Un cambio de la IA pide la vara de la IA (`necesitaPermisoDeIa`).
+    const r = await prisma.$transaction((tx) => aplicarBorradorEnTx(tx, { ...pedido, puedeTocarTareas: true }), TECHO);
+    expect(r.tareas).toEqual({ creadas: 0, borradas: 0, cambiadas: 1, mudadas: 0 });
+    const movida = await prisma.timelineTask.findUniqueOrThrow({ where: { id: m.deLaIa.id } });
+    expect([movida.weekIndex, movida.source, movida.needsValidation, movida.phaseId]).toEqual([1, "AGENT", true, m.diseno.id]);
   });
 
   it("⭐ la fase que se va con una protegida se queda con ella; vacía, se borra de verdad (el Cascade no se lleva nada)", async () => {

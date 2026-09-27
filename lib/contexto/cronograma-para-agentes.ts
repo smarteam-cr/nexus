@@ -44,6 +44,33 @@ export interface EstructuraSupuesta {
    * guardado: `soloFase` («Regenerar» de una fase, E2b) o las fases del recálculo (E2c).
    */
   soloFases?: string[];
+  /**
+   * L5: lo que ya hay en cada fase, para que el agente de tareas no reescriba por reescribir: qué fases
+   * están terminadas o en curso, qué se hizo, qué está pendiente y lo que notó el paso 1. Lo arma
+   * `estructuraParaElDetalle` y lo escribe `renderLoQueYaHay` (lib/contexto/detalle-cronograma.ts).
+   */
+  loQueYaHay?: LoQueYaHay;
+}
+
+/** L5 (§6.3): lo que ya hay en el cronograma, como lo lee el agente de tareas. */
+export interface LoQueYaHay {
+  fases: Array<{
+    id: string;
+    nombre: string;
+    estado: "terminada" | "en curso" | "pendiente" | "nueva";
+    /** Los títulos de lo hecho (hasta 15 por fase, cada uno hasta 80 caracteres). */
+    hechas: string[];
+    /** Lo pendiente de la IA (PENDING y no escrito a mano), hasta 30 por fase. `semana` es el `weekIndex`
+     *  (desde 0, relativo a la fase): el mismo número que el agente devuelve, así «repite su semana» no
+     *  se corre en uno. */
+    pendientes: Array<{ titulo: string; semana: number }>;
+  }>;
+  /** Las del borrador al pedir el paso 2 (trae lo que notó el paso 1). */
+  observaciones: string[];
+  /** Los ids de las fases terminadas que no se tocan (R12 activo). */
+  terminadasQueNoSeTocan: string[];
+  /** «Regenerar» de una fase o el recálculo: ahí «lo que ya se hizo va como tarea» manda (D11). */
+  conAlcance: boolean;
 }
 
 /** El encabezado y los renglones de fase (y de tarea, con avance). `includeProgress` implica ids. */

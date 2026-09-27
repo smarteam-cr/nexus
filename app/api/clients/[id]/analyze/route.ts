@@ -35,7 +35,7 @@ import { runImplementacionGeneration } from "@/lib/canvas/implementacion-generat
 import { runEntregaGeneration } from "@/lib/canvas/entrega-generate";
 import { loadCanvasContext, loadHandoffContext, loadHandoffDelHermanoMayorContext, loadTimelineContext, loadPriorRelationshipContext, loadCiclosAnterioresContext } from "@/lib/canvas/load-canvas-context";
 import { cargarContextoDelDetalle } from "@/lib/contexto/cargar";
-import { renderDetalleDeCronograma, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
+import { renderDetalleDeCronograma, renderLoQueYaHay, clasificacionDeTags } from "@/lib/contexto/detalle-cronograma";
 import { huellasDeFrontera, type HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
 import { vetoSiElHandoffEsDeOtro, componerExclusiones, exclusionDelSistema } from "@/lib/handoff/duenio";
 import { DETALLE_CRONOGRAMA_ID, idDeVarianteDetalle, esAgenteDeDetalle, pipelineKeyDeProyecto, tipoExigidoPorAgente, elegirAgente, GRUPOS_RESUELTOS_POR_TIPO } from "@/lib/agents/resolver";
@@ -1988,6 +1988,8 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       },
       clasificacion: clasificacionDeTags(sanitizeTags(dealProject?.tags ?? [])),
       regenerarFaseIds: sobreDelDetalle?.soloFases ?? null,
+      // L5: lo que ya hay en cada fase (estado, hecho, pendiente y lo que notó el paso 1), solo en el paso 2.
+      loQueYaHay: sobreDelDetalle?.loQueYaHay ? renderLoQueYaHay(sobreDelDetalle.loQueYaHay) : undefined,
     });
     sesionesDelDetalle = contexto.sesionesUsadas ?? [];
     huellasDelDetalle = huellasDeFrontera(contexto.materialInterno ?? []);

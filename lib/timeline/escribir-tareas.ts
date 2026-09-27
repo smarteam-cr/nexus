@@ -9,7 +9,9 @@
  *
  * ── LO QUE HACE, Y LO QUE NO ─────────────────────────────────────────────────
  *   · CREA y BORRA y, desde E3, ACTUALIZA las que cambian por el chat (renombre, semana, dueño, tipo
- *     o mudanza): conservan su id, su estado y sus fechas.
+ *     o mudanza): conservan su id, su estado y sus fechas. Desde L5 también las que cambia la IA (R4c:
+ *     vuelve en otra semana o con otro dueño o tipo): esas conservan además su `source` y su «por
+ *     validar» (D14). Solo lo que dictó el chat (`porChat`) queda como tocado por una persona.
  *   · Borra con la regla de siempre en el `where` (pendiente y no escrita a mano): el plan ya dejó
  *     afuera lo que tiene avance, y esta es la segunda red. Si se borra otra cantidad que la que se
  *     vio, no se aplica nada (PLAN_CAMBIO): nunca se borra otra cosa de la que el CSE revisó.
@@ -19,8 +21,9 @@
  *   · ⛔ NUNCA parchea la foto publicada (`patchBaselinePhaseTasks`): el parche absorbería en la
  *     promesa los movimientos que el CSE hizo a mano a las que quedan (foto-del-plan.ts). Una tarea
  *     nueva no entra en la foto y una borrada se queda en ella, que es lo correcto.
- *   · Pocas llamadas: 1 `deleteMany` + 1 `createMany` + 1 `updateMany` por tarea que CAMBIA (solo las
- *     dicta el chat, de a pocas), nunca una por tarea creada o borrada (Wherex ronda las 300).
+ *   · Pocas llamadas: 1 `deleteMany` + 1 `createMany` + 1 `updateMany` por tarea que CAMBIA (las dicta
+ *     el chat, de a pocas, o las propone la IA cuando una vuelve distinta: 4 en Wherex), nunca una por
+ *     tarea creada o borrada (Wherex ronda las 300).
  */
 import type { Prisma, TaskParty, TimelineTaskType } from "@prisma/client";
 import { PARTY_VALUES, TASK_TYPE_VALUES } from "./validate";
@@ -131,12 +134,13 @@ export async function escribirTareas(
   };
 
   /* 3b) E3: las que cambian, una por una y condicionadas a su fase de origen. Lo que se pidió
-     (`campos`), la semana acotada a la duración final del destino, la fase y el lugar si se muda, y la
-     marca de «la tocó una persona» (AGENT → MODIFIED, sin «por validar»), como el PUT. */
+     (`campos`), la semana acotada a la duración final del destino, la fase y el lugar si se muda, y, si
+     la dictó el chat, la marca de «la tocó una persona» (AGENT → MODIFIED, sin «por validar»), como el
+     PUT. L5 (D14): una de la IA (sin `porChat`) no se hace pasar por una persona: conserva los dos. */
   let mudadas = 0;
   for (const { c, leida, destino } of cambios) {
     const seMuda = c.aFase !== null;
-    const edicion: Prisma.TimelineTaskUncheckedUpdateManyInput = { needsValidation: false };
+    const edicion: Prisma.TimelineTaskUncheckedUpdateManyInput = c.porChat ? { needsValidation: false } : {};
     if (c.campos.title !== undefined) edicion.title = c.campos.title;
     if (c.campos.party !== undefined) edicion.party = esParty(c.campos.party) ? c.campos.party : null;
     if (c.campos.type !== undefined) edicion.type = esTipo(c.campos.type) ? c.campos.type : null;
@@ -148,7 +152,7 @@ export async function escribirTareas(
         edicion.order = alFinal(destino.phaseId, semana);
       }
     }
-    if (leida.source === "AGENT") edicion.source = "MODIFIED";
+    if (c.porChat && leida.source === "AGENT") edicion.source = "MODIFIED";
     const r = await tx.timelineTask.updateMany({ where: { id: c.id, phaseId: c.desdeFase }, data: edicion });
     if (r.count !== 1) throw new TareasQueNoCuadran(`La tarea ${c.id} cambió mientras se aplicaba.`);
     if (seMuda) mudadas++;

@@ -34,7 +34,7 @@ import { prisma } from "@/lib/db/prisma";
 import { parseRunError } from "@/lib/agents/run-error";
 import { sanitizeTags } from "@/lib/tags/catalog";
 import type { HuellasDeFrontera } from "@/lib/contexto/frontera-del-cronograma";
-import type { EstructuraSupuesta } from "@/lib/contexto/cronograma-para-agentes";
+import type { EstructuraSupuesta, LoQueYaHay } from "@/lib/contexto/cronograma-para-agentes";
 import {
   avisoSinCambiosParaLaCorrida,
   BLOQUEO_VERSION_NUEVA,
@@ -612,12 +612,53 @@ async function desfasadasDelGuardado(
   return { guardado: tl.pendingProposal, borrador, desfasadas };
 }
 
-/** La estructura supuesta como la lee el agente: sus fases para el texto, su foto y el alcance. */
+/** L5 (§6.3): cuántas hechas y cuántas pendientes lee el agente por fase, y el largo de una hecha. */
+const HECHAS_POR_FASE = 15;
+const PENDIENTES_POR_FASE = 30;
+const LARGO_DE_UNA_HECHA = 80;
+
+/**
+ * L5 (§6.3): lo que ya hay en cada fase, para el agente de tareas. El estado de cada fase y sus tareas son
+ * los de AHORA (`vivo`); las fases, las de la estructura supuesta (con las nuevas). `conAlcance`: «Regenerar»
+ * de una fase o el recálculo; ahí no hay fases terminadas que se respeten (D11: R12 solo en «Regenerar todo»).
+ */
+function loQueYaHayDe(estructura: EstructuraHipotetica, vivo: Vivo, borrador: Borrador, conAlcance: boolean): LoQueYaHay {
+  const vivas = new Map(vivo.fases.map((f) => [f.id, f]));
+  const fases = estructura.fases.map((f): LoQueYaHay["fases"][number] => {
+    const viva = f.existente ? vivas.get(f.id) : undefined;
+    const estado = !f.existente ? "nueva" : viva?.status === "DONE" ? "terminada" : viva?.status === "IN_PROGRESS" ? "en curso" : "pendiente";
+    const tareas = viva?.tareas ?? [];
+    const corta = (t: string) => (t.length > LARGO_DE_UNA_HECHA ? `${t.slice(0, LARGO_DE_UNA_HECHA - 1)}…` : t);
+    return {
+      id: f.id,
+      nombre: f.name,
+      estado,
+      hechas: tareas.filter((t) => t.status === "DONE").slice(0, HECHAS_POR_FASE).map((t) => corta(t.title)),
+      // Lo que la IA puede conservar: pendiente y no escrito a mano (lo demás se queda igual, R2).
+      pendientes: tareas
+        .filter((t) => t.status === "PENDING" && t.source !== "HUMAN")
+        .slice(0, PENDIENTES_POR_FASE)
+        .map((t) => ({ titulo: t.title, semana: t.weekIndex })),
+    };
+  });
+  return {
+    fases,
+    observaciones: [...borrador.observaciones],
+    terminadasQueNoSeTocan: conAlcance ? [] : fases.filter((f) => f.estado === "terminada").map((f) => f.id),
+    conAlcance,
+  };
+}
+
+/** La estructura supuesta como la lee el agente: sus fases para el texto, su foto, el alcance y (L5) lo que
+ *  ya hay en cada fase. */
 function supuestaDe(
   estructura: EstructuraHipotetica,
   closeDateOverride: Date | null,
   soloFases: string[] | null,
+  vivo: Vivo,
+  borrador: Borrador,
 ): EstructuraSupuesta {
+  const conAlcance = !!soloFases && soloFases.length > 0;
   return {
     fases: estructura.fases.map((f) => ({
       id: f.id,
@@ -634,6 +675,7 @@ function supuestaDe(
     },
     estructura,
     ...(soloFases && soloFases.length > 0 ? { soloFases } : {}),
+    loQueYaHay: loQueYaHayDe(estructura, vivo, borrador, conAlcance),
   };
 }
 
@@ -667,10 +709,16 @@ export async function estructuraParaElDetalle(
   if (borrador.recalculo?.corrida === corrida) {
     if (!borrador.tareas?.listas) return null;
     const r = borrador.recalculo;
-    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id));
+    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id), vivo, borrador);
   }
   if (borrador.tareas === null || borrador.tareas.listas || borrador.tareas.corrida !== corrida) return null;
-  return supuestaDe(estructuraHipotetica(vivo, borrador), tl.closeDateOverride, borrador.soloFase ? [borrador.soloFase] : null);
+  return supuestaDe(
+    estructuraHipotetica(vivo, borrador),
+    tl.closeDateOverride,
+    borrador.soloFase ? [borrador.soloFase] : null,
+    vivo,
+    borrador,
+  );
 }
 
 export type ResultadoDeLaFusion =
@@ -830,6 +878,8 @@ async function unaVueltaDeLaFusion(i: EntradaDeLaFusion, eraRecalculo: boolean):
     nuevaClave: i.nuevaClave ?? claveAleatoria,
     idsDesconocidos,
     soloFases,
+    // R12 (L5, D11): una fase terminada no se toca solo en «Regenerar todo», nunca en «Regenerar» de una fase.
+    respetarTerminadas: !borrador.soloFase,
   });
   const fusionado = fusionarDetalle(borrador, cambios, i.corrida);
   const donde = {
@@ -959,6 +1009,8 @@ async function fusionarRecalculoEnElBorrador(
     nuevaClave: i.nuevaClave ?? claveAleatoria,
     idsDesconocidos,
     soloFases: new Set(escritas),
+    // D11: el recálculo rehace la fase como queda; «lo que ya se hizo va como tarea» manda (sin R12).
+    respetarTerminadas: false,
   });
   const nuevo = fusionarRecalculo(borrador, {
     tareas: cambios.tareas,

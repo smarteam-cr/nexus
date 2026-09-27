@@ -21,6 +21,8 @@
  * su `=== RÓTULO ===` pegado al contenido — no existe el estado "texto sin etiqueta".
  */
 import { esReimplementacion } from "@/lib/tags/catalog";
+import { observacionParaMostrar } from "@/lib/timeline/vista-de-la-propuesta";
+import type { LoQueYaHay } from "./cronograma-para-agentes";
 import type { FuenteDeContexto } from "./tipos";
 
 /* El fallback cuando no hay handoff confirmado. En tuteo desde la revisión adversarial del
@@ -188,6 +190,51 @@ export interface InsumosDelDetalle {
    * fases desfasadas (E2c, uno o varios). Con un solo id, el texto es byte a byte el de siempre.
    */
   regenerarFaseIds?: readonly string[] | null;
+  /**
+   * L5: lo que ya hay en cada fase, YA escrito (`renderLoQueYaHay`). Va después de la válvula de las fases
+   * resueltas y antes del alcance. Sin él, el texto es byte a byte el de siempre (los goldens).
+   */
+  loQueYaHay?: string;
+}
+
+/** L5 (§6.3): el cierre del bloque de lo que ya hay. Con alcance (una fase o el recálculo) solo la segunda
+ *  oración: ahí «lo que ya se hizo va como tarea» (EXCEPCION_DE_LA_FASE_A_REGENERAR) manda (D11). */
+export const LO_HECHO_NO_SE_REPITE = "Lo hecho no se vuelve a proponer, ni con otras palabras.";
+export const LO_PENDIENTE_SE_CONSERVA =
+  "Si una tarea pendiente sigue sirviendo, repite su título EXACTO y su weekIndex: así se conserva tal cual.";
+
+/**
+ * L5 (§6.3): lo que ya hay en el cronograma, para el agente de tareas. Tres bloques, cada uno solo si tiene
+ * contenido: lo que ya hay en cada fase (estado, hecho y pendiente), las fases terminadas que no se tocan
+ * (solo sin alcance) y lo que notó la revisión de fases (el paso 1), sin lo que le hablaba al «paso de
+ * tareas» en tercera persona (`observacionParaMostrar`, lo mismo que ve el CSE). "" si no hay nada.
+ * La semana va como `weekIndex` (desde 0): el mismo número que el agente devuelve.
+ */
+export function renderLoQueYaHay(l: LoQueYaHay): string {
+  const citar = (t: string) => `«${t}»`;
+  let texto = "";
+  if (l.fases.length > 0) {
+    const lineas = l.fases.map((f) => {
+      const partes = [`[${f.id}] ${citar(f.nombre)} — ${f.estado}`];
+      if (f.hechas.length > 0) partes.push(`hecho: ${f.hechas.map(citar).join(" · ")}`);
+      if (f.pendientes.length > 0) {
+        partes.push(`pendiente: ${f.pendientes.map((p) => `${citar(p.titulo)} (weekIndex ${p.semana})`).join(" · ")}`);
+      }
+      return partes.join(" · ");
+    });
+    const cierre = l.conAlcance ? LO_PENDIENTE_SE_CONSERVA : `${LO_HECHO_NO_SE_REPITE} ${LO_PENDIENTE_SE_CONSERVA}`;
+    texto += `\n\n=== LO QUE YA HAY EN CADA FASE ===\n${lineas.join("\n")}\n${cierre}`;
+  }
+  if (!l.conAlcance && l.terminadasQueNoSeTocan.length > 0) {
+    const nombre = new Map(l.fases.map((f) => [f.id, f.nombre]));
+    const lista = l.terminadasQueNoSeTocan.map((id) => `[${id}] ${citar(nombre.get(id) ?? id)}`).join(" · ");
+    texto += `\n\n=== FASES TERMINADAS ===\n${lista}\nEstán terminadas: inclúyelas en el JSON con su id EXACTO y "tasks": [] — no se tocan.`;
+  }
+  const notadas = l.observaciones.map(observacionParaMostrar).filter((o) => o.length > 0);
+  if (notadas.length > 0) {
+    texto += `\n\n=== LO QUE NOTÓ LA REVISIÓN DE FASES ===\n${notadas.map((o) => `- ${o}`).join("\n")}`;
+  }
+  return texto;
 }
 
 /**
@@ -238,6 +285,11 @@ Detalla el cronograma siguiendo tus instrucciones: asigna un activityType a cada
   } else if (i.instrucciones) {
     msg += FASES_RESUELTAS_POR_INSTRUCCIONES;
   }
+
+  /* L5: lo que ya hay en cada fase (estado, hecho, pendiente y lo que notó el paso 1). Después de la
+     válvula (que dice qué dejar quieto) y antes del alcance (que acota a qué fases): así el alcance sigue
+     siendo lo último que lee el modelo. Sin él, ni un carácter (los goldens). */
+  if (i.loQueYaHay) msg += i.loQueYaHay;
 
   // Regen por fase: acota la salida a las fases target (las demás van con tasks:[]) — baja el
   // costo/latencia y el riesgo de truncación. La persistencia igual filtra por el alcance guardado.

@@ -1139,6 +1139,26 @@ describe("aplicar lo que dicta el chat (E3)", () => {
     expect(db.cambiadas[0].data).toEqual({ title: "Pruebas con usuarios clave", source: "MODIFIED", needsValidation: false });
   });
 
+  it("⛔ L5 (D14): una que cambia LA IA (R4c, sin `porChat`) no se escribe como tocada por una persona", async () => {
+    /* La edición que la pone en rojo: marcar «tocada a mano» lo que decidió la IA (AGENT → MODIFIED y sin «por
+       validar» con cualquier `tarea-cambia`, como hasta L4, cuando solo las dictaba el chat). La tarea perdía
+       su procedencia y su «por validar» sin que nadie la tocara. Con `porChat`, como siempre. */
+    const conValidar = TAREAS.map((t) => (t.id === "t2" ? { ...t, needsValidation: true } : t));
+    const t2 = conValidar.find((t) => t.id === "t2")!;
+    const deLaIa = v1DelChat([cambiaLaTarea(t2, { weekIndex: 1 }, { porChat: undefined })]);
+    const db = baseFalsa({ ancla: null, fases: FASES, tareas: conValidar, propuesta: deLaIa, token: "run-estructura" });
+    await aplicarBorradorEnTx(db.tx, pedidoConTareas(deLaIa, { fases: FASES, tareas: conValidar }));
+    expect(db.cambiadas[0].data, "la IA escribió como una persona").toEqual({ weekIndex: 1 });
+    const movida = db.estado.tareas.find((t) => t.id === "t2")!;
+    expect([movida.weekIndex, movida.source, movida.needsValidation]).toEqual([1, "AGENT", true]);
+
+    const delChat = v1DelChat([cambiaLaTarea(t2, { weekIndex: 1 })]);
+    const db2 = baseFalsa({ ancla: null, fases: FASES, tareas: conValidar, propuesta: delChat, token: "run-estructura" });
+    await aplicarBorradorEnTx(db2.tx, pedidoConTareas(delChat, { fases: FASES, tareas: conValidar }));
+    const delCse = db2.estado.tareas.find((t) => t.id === "t2")!;
+    expect([delCse.weekIndex, delCse.source, delCse.needsValidation]).toEqual([1, "MODIFIED", false]);
+  });
+
   it("⛔ el permiso: lo del chat pide la vara de editar (la de la ruta), no la de la IA; una tarea de la IA sí la pide", async () => {
     /* D4. La edición que la pone en rojo: volver a `plan.aplicadas.some(esCambioDeTarea)` (el CSE que
        no puede regenerar tampoco podría aplicar lo que pidió por chat, que hoy escribe directo). */

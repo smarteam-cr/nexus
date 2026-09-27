@@ -64,7 +64,9 @@
  * Dos tipos más, que solo produce el chat:
  *   · `tarea-cambia`: renombra, cambia de semana, de dueño o de tipo, o MUDA una tarea (`a.fase`) y
  *     conserva su id, su estado y sus fechas. Una sola fila por tarea: mudarla y renombrarla es UN
- *     cambio (aplicar solo la mitad dejaría estados a medias).
+ *     cambio (aplicar solo la mitad dejaría estados a medias). Desde L5 también lo produce la IA (R4c:
+ *     una tarea que vuelve en otra semana, o con otro dueño o tipo), SIN `porChat`: no se escribe
+ *     como tocada por una persona (D14).
  *   · `fase-se-va`: quita una fase. Lo que tiene avance, se cargó a mano, se creó o se editó después
  *     del cambio (la foto por tarea) se queda, y la fase con ello (`ItemDelPlan.rescate`).
  * `porChat` marca lo que dictó el chat (en los 8 tipos) y `retocada` una tarea nueva de la IA que el
@@ -317,9 +319,11 @@ export interface CambioTareaSeVa extends DelChat {
 export type CampoDeTarea = "title" | "weekIndex" | "party" | "type";
 export const CAMPOS_DE_TAREA: readonly CampoDeTarea[] = ["weekIndex", "title", "party", "type"];
 /**
- * E3: una tarea viva que cambia (solo la produce el chat). Renombrarla, cambiarle la semana, el dueño
- * o el tipo, o mudarla (`a.fase`): conserva su id, su estado y sus fechas. Se comparan SOLO los campos
- * de `a` (y la fase): lo que nadie pidió cambiar puede editarse a mano sin chocar.
+ * E3: una tarea viva que cambia. Renombrarla, cambiarle la semana, el dueño o el tipo, o mudarla
+ * (`a.fase`): conserva su id, su estado y sus fechas. Se comparan SOLO los campos de `a` (y la fase):
+ * lo que nadie pidió cambiar puede editarse a mano sin chocar. La produce el chat (`porChat`) y, desde
+ * L5, la IA (R4c, lib/timeline/tareas-del-detalle.ts): la de la IA no se escribe como de una persona
+ * (D14: conserva `source` y «por validar»).
  */
 export interface CambioTareaCambia extends DelChat {
   tipo: "tarea-cambia";
@@ -334,6 +338,11 @@ export interface CambioTareaCambia extends DelChat {
    *  queda fuera, esta tarea también. */
   conCambio?: string;
   motivo?: string;
+  /**
+   * L7: una mudanza de una tarea HECHA que sugiere la IA (nace sin marcar). L5 solo la declara: el chat no
+   * edita una tarea que la trae (`operar-sobre-el-borrador.ts`, §6.4). La lee `leerCambio` desde L7.
+   */
+  sugerida?: "otra-fase";
 }
 export type CambioDeTarea = CambioTareaNueva | CambioTareaSeVa | CambioTareaCambia;
 export type CambioDeEstructura = CambioDeAncla | CambioDeOrden | CambioFaseNueva | CambioFaseCambia | CambioFaseSeVa;
@@ -1213,6 +1222,9 @@ export interface EscriturasDeTareas {
     desdeFase: string;
     campos: { title?: string; weekIndex?: number; party?: Party | null; type?: TipoDeTarea | null };
     aFase: Lugar | null;
+    /** L5 (D14): la dictó el chat. Solo entonces el escritor la marca «tocada por una persona»
+     *  (AGENT → MODIFIED, sin «por validar»); una de la IA (R4c) conserva los dos. La huella no lo mira. */
+    porChat?: true;
   }>;
 }
 
@@ -2205,7 +2217,15 @@ export function planDeAplicacion(
       const destino = destinoDeLaCambia(c);
       // Una mudanza lleva siempre su semana: la pedida o la viva (el escritor la acota al destino).
       if (destino !== null && campos.weekIndex === undefined) campos.weekIndex = t.weekIndex;
-      return [{ id: t.id, desdeFase: c.faseId, campos, aFase: destino === null ? null : lugarDe(destino) }];
+      return [
+        {
+          id: t.id,
+          desdeFase: c.faseId,
+          campos,
+          aFase: destino === null ? null : lugarDe(destino),
+          ...(c.porChat ? { porChat: true as const } : {}),
+        },
+      ];
     }),
   );
   const escrituras: EscriturasDeEstructura & { tareas: EscriturasDeTareas } = {
@@ -2484,7 +2504,8 @@ export function proyectarConPlan(vivo: Vivo, plan: PlanDeAplicacion): Proyeccion
       type: campos.type !== undefined ? campos.type : (t.type ?? null),
       status: t.status,
       source: t.source,
-      needsValidation: c ? false : (t.needsValidation ?? false),
+      // L5 (D14): solo lo que tocó una persona deja de estar «por validar»; un cambio de la IA (R4c) no.
+      needsValidation: c?.porChat ? false : (t.needsValidation ?? false),
       ...(c ? { cambia: true as const } : {}),
       ...(llega ? { llega: true as const } : {}),
     };

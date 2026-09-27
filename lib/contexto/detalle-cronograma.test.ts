@@ -11,9 +11,13 @@ import {
   FASES_RESUELTAS_POR_INSTRUCCIONES,
   EXCEPCION_DE_LA_FASE_A_REGENERAR,
   EXCEPCION_DE_LAS_FASES_A_REGENERAR,
+  LO_HECHO_NO_SE_REPITE,
+  LO_PENDIENTE_SE_CONSERVA,
+  renderLoQueYaHay,
   type ClasificacionDelDetalle,
   type EncabezadoDelDetalle,
 } from "./detalle-cronograma";
+import type { LoQueYaHay } from "./cronograma-para-agentes";
 import { PIEZAS_CON_CONTEXTO_NOMBRADO, renderFuentes } from "./tipos";
 
 /**
@@ -335,6 +339,11 @@ describe("trinquete: el detalle del cronograma consume el contexto NOMBRADO", ()
     expect(tramo, "las fuentes dejaron de venir del cargador TAL CUAL — alguien las re-armó o decoró en la ruta").toContain(
       "fuentes: contexto.fuentes,",
     );
+    /* L5 (§6.3): el paso 2 lee lo que ya hay en cada fase, armado por el servidor (`estructuraParaElDetalle`) y
+       escrito por el módulo. La edición que la pone en rojo: no pasarlo (el agente vuelve a reescribir todo). */
+    expect(tramo, "el paso 2 dejó de leer lo que ya hay en cada fase").toContain(
+      "loQueYaHay: sobreDelDetalle?.loQueYaHay ? renderLoQueYaHay(sobreDelDetalle.loQueYaHay) : undefined,",
+    );
   });
 
   it("el template tiene UN dueño: el rótulo del cronograma no puede volver a la ruta", () => {
@@ -519,5 +528,91 @@ describe("⛔ analyze: PRIORIDAD DEL CANVAS, trazabilidad y frontera del detalle
     expect(iFusion, "analyze ya no fusiona el detalle").toBeGreaterThan(-1);
     expect(codigo.slice(iFusion, codigo.indexOf("});", iFusion))).toContain("huellas: huellasDelDetalle,");
     expect(codigo, "volvió una vista previa del detalle").not.toMatch(/computeTimelineDetailPreview|fijasDeSemanaCeroParaPreview/);
+  });
+});
+
+/**
+ * ── L5 · LO QUE YA HAY EN CADA FASE (§6.3) ─────────────────────────────────────
+ * El agente de tareas leía solo las fases: no sabía qué estaba terminado, qué se hizo ni qué estaba
+ * pendiente, y reescribía todo (Wherex: 57 de 66 pendientes rehechas). Ahora lee lo que ya hay, en código
+ * (no en el prompt guardado). Sin él, el texto es byte a byte el de siempre: los goldens de arriba.
+ */
+describe("L5 · lo que ya hay en cada fase (renderLoQueYaHay)", () => {
+  const BRIEF = "=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cúmplelas SIEMPRE) ===\nx\n\n";
+  const LO: LoQueYaHay = {
+    fases: [
+      { id: "f1", nombre: "Kick-off", estado: "terminada", hechas: ["Reunión de arranque"], pendientes: [] },
+      {
+        id: "f2",
+        nombre: "Diseño",
+        estado: "en curso",
+        hechas: ["Mapear procesos"],
+        pendientes: [{ titulo: "Definir pipeline", semana: 1 }],
+      },
+      { id: "n:1", nombre: "Piloto", estado: "nueva", hechas: [], pendientes: [] },
+    ],
+    observaciones: [
+      "Diseño sigue en curso con dos sesiones; el paso de tareas debe contemplarlas dentro de la fase.",
+      "El piloto va al final.",
+    ],
+    terminadasQueNoSeTocan: ["f1"],
+    conAlcance: false,
+  };
+  const render = (loQueYaHay: string | undefined, ids: string[] | null = null) =>
+    renderDetalleDeCronograma({
+      instrucciones: BRIEF,
+      encabezado: { companyName: "C", industry: null, serviceTypeLabel: null, classificationLabel: null },
+      fuentes: fuentesDelDetalle({ timelineCtx: "t", handoffCtx: "h", desarrolloCtx: "" }),
+      clasificacion: { esReimplementacion: false, llevaMigracion: false, llevaDesarrollo: false },
+      regenerarFaseIds: ids,
+      loQueYaHay,
+    });
+
+  it("⭐ va después de la válvula y antes del alcance; sin él, ni un carácter", () => {
+    /* La edición que la pone en rojo: sumarlo después del alcance (el alcance dejaría de ser lo último que lee
+       el modelo) o antes de la válvula. */
+    const texto = renderLoQueYaHay(LO);
+    expect(render(texto), "sin alcance, va al final, detrás de la válvula").toBe(render(undefined) + texto);
+    expect(render(undefined).endsWith(FASES_RESUELTAS_POR_INSTRUCCIONES)).toBe(true);
+    const conAlcance = render(renderLoQueYaHay({ ...LO, conAlcance: true }), ["f2"]);
+    const iValvula = conAlcance.indexOf(FASES_RESUELTAS_POR_INSTRUCCIONES);
+    const iLoQueHay = conAlcance.indexOf("=== LO QUE YA HAY EN CADA FASE ===");
+    const iAlcance = conAlcance.indexOf("=== ALCANCE: REGENERAR UNA SOLA FASE ===");
+    expect(iValvula).toBeGreaterThan(-1);
+    expect(iValvula < iLoQueHay && iLoQueHay < iAlcance, "el orden no es válvula → lo que ya hay → alcance").toBe(true);
+  });
+
+  it("⭐ «Regenerar todo»: estado, hecho y pendiente (con su weekIndex), las terminadas con tasks: [] y lo que notó el paso 1", () => {
+    /* La edición que la pone en rojo: pasar la semana desde 1 (el agente devuelve `weekIndex` desde 0 y cada
+       pendiente «cambiaría de semana»), o pegar las observaciones con lo que le hablaba al «paso de tareas». */
+    const texto = renderLoQueYaHay(LO);
+    expect(texto).toContain(
+      "\n\n=== LO QUE YA HAY EN CADA FASE ===\n[f1] «Kick-off» — terminada · hecho: «Reunión de arranque»\n" +
+        "[f2] «Diseño» — en curso · hecho: «Mapear procesos» · pendiente: «Definir pipeline» (weekIndex 1)\n" +
+        "[n:1] «Piloto» — nueva\n" +
+        `${LO_HECHO_NO_SE_REPITE} ${LO_PENDIENTE_SE_CONSERVA}`,
+    );
+    expect(texto).toContain('\n\n=== FASES TERMINADAS ===\n[f1] «Kick-off»\nEstán terminadas: inclúyelas en el JSON con su id EXACTO y "tasks": [] — no se tocan.');
+    expect(texto).toContain(
+      "\n\n=== LO QUE NOTÓ LA REVISIÓN DE FASES ===\n- Diseño sigue en curso con dos sesiones.\n- El piloto va al final.",
+    );
+    expect(texto, "le habla al «paso de tareas» en tercera persona").not.toMatch(/paso de (las )?tareas/i);
+    expect(texto).not.toMatch(/\b(podés|querés|tenés|decime|decímelo|fijate|mirá|revisá|sabés|elegí|aplicá|incluí)\b/i);
+  });
+
+  it("⛔ con alcance (una fase o el recálculo): ni «no se vuelve a proponer» ni «FASES TERMINADAS»", () => {
+    /* D11. La edición que la pone en rojo: decir «lo hecho no se vuelve a proponer» al regenerar una fase:
+       chocaría con EXCEPCION_DE_LA_FASE_A_REGENERAR («Lo que ya se hizo va como tarea»), el mismo conflicto que
+       arregló la revisión del 24-sep. */
+    const texto = renderLoQueYaHay({ ...LO, conAlcance: true });
+    const msg = render(texto, ["f2"]);
+    expect(msg).not.toContain("no se vuelve a proponer");
+    expect(msg).not.toContain("FASES TERMINADAS");
+    expect(msg).toContain(LO_PENDIENTE_SE_CONSERVA);
+    expect(msg).toContain(EXCEPCION_DE_LA_FASE_A_REGENERAR);
+  });
+
+  it("sin nada que decir, no suma nada", () => {
+    expect(renderLoQueYaHay({ fases: [], observaciones: ["el paso de tareas lo arma después"], terminadasQueNoSeTocan: [], conAlcance: false })).toBe("");
   });
 });

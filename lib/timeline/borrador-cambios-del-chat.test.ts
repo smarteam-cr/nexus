@@ -14,7 +14,8 @@
  *   6. la huella de todo lo anterior no cambia;
  *   7. las escrituras, la proyección, la lista de la barra y la confirmación;
  *   8. el permiso (`necesitaPermisoDeIa`, `traeCambiosDeTareas`);
- *   9. (L3) los choques citan el número del Gantt (`numeracionDeLaPropuesta`).
+ *   9. (L3) los choques citan el número del Gantt (`numeracionDeLaPropuesta`);
+ *  10. (L5) un cambio de tarea de la IA: la proyección no le quita el «por validar» y el chat no lo pisa.
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import { describe, expect, it } from "vitest";
@@ -48,6 +49,7 @@ import {
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
+import { operarSobreElBorrador, rechazoTareaConSugerencia, type OperacionSobreLaPropuesta } from "./operar-sobre-el-borrador";
 
 const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
   id,
@@ -395,7 +397,11 @@ describe("4 · la fase que se va: el rescate", () => {
       expect(itemDe(plan, clave), clave).toMatchObject({ estado: "choque", choque: "Su fase se quita con el cambio 1." });
     }
     expect(plan.escrituras.fasesQueSeVan).toEqual([{ id: "b", borrar: ["b2"], queda: true }]);
-    expect(plan.escrituras.tareas.cambian).toEqual([{ id: "b1", desdeFase: "b", campos: { weekIndex: 0 }, aFase: { tipo: "existente", id: "c" } }]);
+    /* ⚠ ACTUALIZADA en L5 (D14), con esta razón: la escritura de una que cambia lleva `porChat` cuando la dictó el
+       chat, para que el escritor la marque «tocada por una persona» solo entonces (la IA también cambia tareas). */
+    expect(plan.escrituras.tareas.cambian).toEqual([
+      { id: "b1", desdeFase: "b", campos: { weekIndex: 0 }, aFase: { tipo: "existente", id: "c" }, porChat: true },
+    ]);
   });
 });
 
@@ -504,10 +510,12 @@ describe("7 · lo que se escribe, lo que se ve y lo que se confirma", () => {
       cambia(C1, "c", { party: "CLIENTE", type: "SESSION" }),
     ]);
     const plan = planDeAplicacion(VIVO, b);
+    /* ⚠ ACTUALIZADA en L5 (D14), con esta razón: cada escritura lleva `porChat` si la dictó el chat (todas las de
+       acá). El escritor solo marca «tocada por una persona» lo que la trae; lo que cambia la IA (R4c) no. */
     expect(plan.escrituras.tareas.cambian).toEqual([
-      { id: "b2", desdeFase: "b", campos: { weekIndex: 1 }, aFase: { tipo: "nueva", clave: PILOTO.clave } },
-      { id: "c1", desdeFase: "c", campos: { party: "CLIENTE", type: "SESSION" }, aFase: null },
-      { id: "c2", desdeFase: "c", campos: { weekIndex: 2 }, aFase: null },
+      { id: "b2", desdeFase: "b", campos: { weekIndex: 1 }, aFase: { tipo: "nueva", clave: PILOTO.clave }, porChat: true },
+      { id: "c1", desdeFase: "c", campos: { party: "CLIENTE", type: "SESSION" }, aFase: null, porChat: true },
+      { id: "c2", desdeFase: "c", campos: { weekIndex: 2 }, aFase: null, porChat: true },
     ]);
     const nuevas = planDeAplicacion(VIVO, v1([PILOTO, { ...PILOTO, clave: "n:chat", porChat: true, fase: { ...PILOTO.fase, name: "Soporte" } }]));
     expect(nuevas.escrituras.nuevas.map((n) => [n.clave, n.porChat ?? false])).toEqual([
@@ -685,5 +693,77 @@ describe("9 · L3: los choques citan el número del Gantt", () => {
     // El ⚠ del grupo en la lista y el del chat dicen lo mismo que el plan.
     const grupoDeDiseno = r.grupos.find((g) => g.fase === "b")!;
     expect(grupoDeDiseno.tareas[0].aviso).toBe("⚠ La fase de destino se quita con el cambio 1.");
+  });
+});
+
+/**
+ * L5 (D14, §6.4): desde R4c la IA también produce `tarea-cambia` (una tarea que vuelve en otra semana, o con
+ * otro dueño o tipo), sin `porChat`. Lo que decide la IA no se hace pasar por una persona: la proyección no le
+ * quita el «por validar», y el chat no hereda ni pisa un cambio de la IA que el CSE no ve marcado.
+ */
+describe("10 · L5: un cambio de tarea de la IA frente al chat", () => {
+  /** Un cambio de la IA (R4c): sin `porChat`. */
+  const deLaIa = (c: CambioTareaCambia): CambioTareaCambia => {
+    const { porChat: _porChat, ...resto } = c;
+    void _porChat;
+    return resto;
+  };
+  const R4C = deLaIa(cambia(B2, "b", { weekIndex: 0 }));
+  const operar = (b: Borrador, excluidos: string[], operaciones: OperacionSobreLaPropuesta[]) =>
+    operarSobreElBorrador({ vivo: VIVO, borrador: b, excluidos, operaciones, nuevaClave: () => "k" });
+  const cambiaDeB2 = (b: Borrador) => b.cambios.filter((c): c is CambioTareaCambia => c.tipo === "tarea-cambia" && c.tareaId === "b2");
+
+  it("⭐ la proyección: lo que cambia la IA conserva su «por validar»; lo que dicta el chat lo saca", () => {
+    /* La edición que la pone en rojo: `needsValidation: c ? false : …` en `proyectarConPlan` (lo de antes de L5):
+       la pantalla mostraba validada una tarea que nadie miró. */
+    const vivo = conTarea("b2", { needsValidation: true });
+    const conIa = proyectar(vivo, v1([R4C]));
+    expect(conIa.fases.find((f) => f.clave === "b")!.tareas.find((t) => t.id === "b2")).toMatchObject({
+      weekIndex: 0,
+      cambia: true,
+      needsValidation: true,
+    });
+    const conChat = proyectar(vivo, v1([cambia(B2, "b", { weekIndex: 0 })]));
+    expect(conChat.fases.find((f) => f.clave === "b")!.tareas.find((t) => t.id === "b2")?.needsValidation).toBe(false);
+  });
+
+  it("⭐ con el cambio de la IA DESMARCADO, «renómbrala» parte de hoy: no hereda su semana, y queda del chat", () => {
+    /* La edición que la pone en rojo: heredar el `a` de la IA sin mirar la casilla (el chat marcaba y aplicaba
+       «Pasar a Semana 0», que el CSE había dejado fuera). */
+    const r = operar(v1([R4C]), [R4C.clave], [{ op: "tarea.renombrar", taskId: "b2", titulo: "Definir el pipeline" }]);
+    expect(r.rechazadas).toEqual([]);
+    const [c, ...otros] = cambiaDeB2(r.borrador);
+    expect(otros, "dos cambios de la misma tarea").toEqual([]);
+    expect(c).toMatchObject({ clave: R4C.clave, porChat: true, a: { title: "Definir el pipeline" } });
+    expect(c.a.weekIndex, "heredó la semana de la IA desmarcada").toBeUndefined();
+    expect(r.excluidos).not.toContain(R4C.clave);
+  });
+
+  it("⭐ con el cambio de la IA MARCADO, «renómbrala» lo hereda: se ve y se aplica todo junto", () => {
+    const r = operar(v1([R4C]), [], [{ op: "tarea.renombrar", taskId: "b2", titulo: "Definir el pipeline" }]);
+    expect(cambiaDeB2(r.borrador)).toEqual([
+      expect.objectContaining({ clave: R4C.clave, porChat: true, a: { weekIndex: 0, title: "Definir el pipeline" } }),
+    ]);
+  });
+
+  it("⭐ «déjala en su semana» sobre un cambio de la IA lo deja FUERA, no lo borra", () => {
+    /* La edición que la pone en rojo: `quitar` en vez de `excluir` (la sugerencia de la IA desaparecía y el CSE
+       no podía volver a marcarla). */
+    const r = operar(v1([R4C]), [], [{ op: "tarea.mover-semana", taskId: "b2", semana: 1 }]);
+    expect(r.rechazadas).toEqual([]);
+    expect(r.excluidos).toContain(R4C.clave);
+    expect(cambiaDeB2(r.borrador)).toEqual([R4C]);
+  });
+
+  it("⛔ una tarea con una mudanza SUGERIDA por la IA no la cambia el chat: se rechaza y nada se registra", () => {
+    /* La edición que la pone en rojo: tratar la sugerida como cualquier cambio de la IA (el chat la heredaba o
+       la reescribía, y una hecha se movía sin su casilla). La produce L7; la rama existe desde L5. */
+    const sugerida: CambioTareaCambia = { ...deLaIa(cambia(B3, "b", { fase: "c" })), sugerida: "otra-fase" };
+    const b = v1([sugerida]);
+    const r = operar(b, [sugerida.clave], [{ op: "tarea.renombrar", taskId: "b3", titulo: "Validar con el cliente final" }]);
+    expect(r.rechazadas).toEqual([{ indice: 0, motivo: rechazoTareaConSugerencia("Validar con el cliente", "Pruebas") }]);
+    expect(r.cambio).toBe(false);
+    expect(r.borrador.cambios).toEqual([sugerida]);
+    expect(r.excluidos).toEqual([sugerida.clave]);
   });
 });

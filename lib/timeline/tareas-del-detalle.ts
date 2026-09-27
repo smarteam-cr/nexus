@@ -16,6 +16,12 @@
  *  R4. No se empareja por título para conservar ids. R4b: una que se iría y una propuesta IDÉNTICAS
  *      (huella del título, semana, notas, dueño, tipo y «por validar») no emiten nada: no se borra
  *      y se recrea lo mismo.
+ *  R4c (L5). Una que se iría y una propuesta con el MISMO título completo (`huellaCompleta`, sin el
+ *      corte a 60) son la misma tarea que vuelve: primero en su misma semana; en otra, solo si en la
+ *      fase queda UNA de cada lado con ese título (una sesión semanal no se cruza). Si vuelve igual en
+ *      semana, dueño y tipo, no emite nada; si no, un `tarea-cambia` DE LA IA (sin `porChat`) con solo
+ *      lo que difiere. La nota de hoy se conserva (`tarea-cambia` no lleva nota) y se dice cuántas
+ *      volvieron con otra (D12). Nunca toca una con avance: solo empareja las que se irían.
  *  R5. La semana ya viene acotada a la duración de la fase que vio el agente.
  *  R6. El tipo de actividad: solo si la fase no tiene uno (el elegido a mano manda).
  *  R7. Las fijas de la Semana 0: una viva que coincide con una fija (o con su gemela) no se va, y
@@ -23,10 +29,13 @@
  *  R8. `tareasArmadasPara` de TODAS las fases del alcance: el cierre del plan las usa si la fase
  *      cambia después. Desde E2c P3 es la forma completa (`formaEnLaEstructura`): también las
  *      sesiones y si la fase es la primera, la de la Semana 0.
- *  R9. Orden: fase por fase; primero las que se van (por semana y orden del vivo), después las nuevas
- *      (en el orden del agente, con las fijas al final).
+ *  R9. Orden: fase por fase; primero las que se van (por semana y orden del vivo), después las que
+ *      cambian (R4c, igual) y al final las nuevas (en el orden del agente, con las fijas al final).
  *  R10. Si el modelo se cortó (`max_tokens`), la última fase no genera nada y se avisa.
  *  R11. Se avisa de una fase nueva sin tareas y de las fases que el agente nombró y no existen.
+ *  R12 (L5). En «Regenerar todo» (`respetarTerminadas`), una fase TERMINADA hoy no recibe ni pierde
+ *      tareas, y se dice. No en «Regenerar» de una fase ni en el recálculo (D11): ahí «lo que ya se hizo
+ *      va como tarea» (EXCEPCION_DE_LA_FASE_A_REGENERAR) manda.
  *
  * ── EL ALCANCE (E2b) ─────────────────────────────────────────────────────────
  * «Regenerar» de una fase pasa `soloFases`: las demás fases se saltan enteras, antes de R8. Así R6
@@ -57,6 +66,7 @@ import {
 import {
   claveDeCampo,
   claveDeTareaNueva,
+  claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   esCambioDeTarea,
   faseDeLaTarea,
@@ -67,6 +77,7 @@ import {
   type Cambio,
   type CambioDeTarea,
   type CambioFaseCambia,
+  type CambioTareaCambia,
   type ContenidoDeTareaNueva,
   type EstructuraHipotetica,
   type FormaDeFase,
@@ -187,9 +198,10 @@ const identicas = (viva: TareaDelVivo, nueva: ContenidoDeTareaNueva) =>
 /**
  * Los cambios de tareas del paso 2, sobre la estructura que vio el agente (con las tareas que LEYÓ)
  * y el vivo de AHORA (al fusionar, con tareas): el vivo dice qué sigue en la fase y qué tiene avance;
- * el `desde` es lo que leyó el agente (R2). Ver las reglas R1-R11 arriba. `soloFases`: el alcance
- * de «Regenerar» de una fase (null o ausente = todas). `nuevaClave` genera los ids aleatorios de las
- * claves (los tests inyectan uno determinista).
+ * el `desde` es lo que leyó el agente (R2). Ver las reglas R1-R12 arriba. `soloFases`: el alcance
+ * de «Regenerar» de una fase (null o ausente = todas). `respetarTerminadas` (R12): solo «Regenerar
+ * todo»; «Regenerar» de una fase y el recálculo pasan false (D11). `nuevaClave` genera los ids
+ * aleatorios de las claves (los tests inyectan uno determinista).
  */
 export function cambiosDeTareasDelDetalle(i: {
   estructura: EstructuraHipotetica;
@@ -200,6 +212,7 @@ export function cambiosDeTareasDelDetalle(i: {
   nuevaClave: () => string;
   idsDesconocidos: number;
   soloFases?: ReadonlySet<string> | null;
+  respetarTerminadas: boolean;
 }): CambiosDelDetalle {
   const propuestaDe = new Map(i.propuestas.map((p) => [p.fase, p]));
   const vivas = new Map(i.vivo.fases.map((f) => [f.id, f]));
@@ -217,12 +230,22 @@ export function cambiosDeTareasDelDetalle(i: {
   const tiposDeNuevas: Record<string, string> = {};
   const tareasArmadasPara: Record<string, FormaDeFase> = {};
   const observaciones: string[] = [];
+  /** R12: las fases terminadas que no se tocaron (una sola observación, al final). */
+  const terminadas: string[] = [];
+  /** R4c (D12): las que vuelven con otra nota, en todas las fases (una sola observación, al final). */
+  let conOtraNota = 0;
 
   for (const f of i.estructura.fases) {
     // El alcance (E2b): una fase fuera de él no emite nada. `semanaCero` ya se eligió sobre todas.
     if (i.soloFases && !i.soloFases.has(f.id)) continue;
     // R8. La forma COMPLETA (E2c P3): nombre, semanas, sesiones y si es la primera (la de la Semana 0).
     tareasArmadasPara[f.id] = formaEnLaEstructura(i.estructura, f.id)!;
+    /* R12 (L5): en «Regenerar todo», una fase terminada hoy no recibe ni pierde tareas (sin R6 ni R7).
+       Se mira lo vivo de AHORA: si la cerraron mientras la IA armaba, tampoco se toca. */
+    if (i.respetarTerminadas && f.existente && vivas.get(f.id)?.status === "DONE") {
+      terminadas.push(f.name);
+      continue;
+    }
     const p = propuestaDe.get(f.id);
     if (p?.cortada) {
       // R10
@@ -309,12 +332,32 @@ export function cambiosDeTareasDelDetalle(i: {
       else seVan.push(r);
     }
 
-    // R9: primero las que se van (por semana, en el orden del vivo), después las nuevas.
+    /* R4c (L5): la misma tarea que vuelve (el mismo título completo) no sale como «se va + nueva». Solo
+       empareja las que se irían (nunca una con avance: esas no están en `seVan`) con las nuevas de ESTA
+       fase. Lo que difiere en semana, dueño o tipo va como un cambio de la IA; la nota, no (D12). */
+    const cambian: CambioTareaCambia[] = [];
+    const emparejadas = new Set<string>();
+    for (const [r, j] of parejasQueVuelven(seVan, nuevas)) {
+      const n = nuevas[j]!;
+      nuevas[j] = null;
+      emparejadas.add(r.id);
+      if ((r.notes ?? null) !== n.notes) conOtraNota++;
+      const a: CambioTareaCambia["a"] = {};
+      if (n.weekIndex !== r.weekIndex) a.weekIndex = n.weekIndex;
+      if (n.party !== (r.party ?? null)) a.party = n.party;
+      if (n.type !== (r.type ?? null)) a.type = n.type;
+      if (Object.keys(a).length === 0) continue;
+      cambian.push({ tipo: "tarea-cambia", clave: claveDeTareaQueCambia(r.id), tareaId: r.id, faseId: f.id, desde: fotoDeTarea(r), a });
+    }
+
+    // R9: primero las que se van (por semana, en el orden del vivo), después las que cambian (igual) y las nuevas.
     const orden = new Map(actuales.map((t, k) => [t.id, k]));
-    seVan.sort((a, b) => a.weekIndex - b.weekIndex || (orden.get(a.id) ?? 0) - (orden.get(b.id) ?? 0));
-    for (const r of seVan) {
+    const porLugar = (a: TareaDelVivo, b: TareaDelVivo) => a.weekIndex - b.weekIndex || (orden.get(a.id) ?? 0) - (orden.get(b.id) ?? 0);
+    for (const r of seVan.filter((x) => !emparejadas.has(x.id)).sort(porLugar)) {
       tareas.push({ tipo: "tarea-se-va", clave: claveDeTareaQueSeVa(r.id), tareaId: r.id, faseId: f.id, desde: fotoDeTarea(r) });
     }
+    const vistaDe = new Map(seVan.map((r) => [r.id, r]));
+    tareas.push(...cambian.sort((x, y) => porLugar(vistaDe.get(x.tareaId)!, vistaDe.get(y.tareaId)!)));
     for (const n of nuevas) {
       if (n) tareas.push({ tipo: "tarea-nueva", clave: claveDeTareaNueva(i.nuevaClave), fase: f.id, tarea: n });
     }
@@ -325,7 +368,56 @@ export function cambiosDeTareasDelDetalle(i: {
       `La IA devolvió tareas para ${plural(i.idsDesconocidos, "fase", "fases")} que no reconoció: se ignoraron.`,
     );
   }
+  if (terminadas.length > 0) observaciones.push(observacionDeTerminadas(terminadas));
+  if (conOtraNota > 0) {
+    observaciones.push(`${plural(conOtraNota, "tarea vuelve", "tareas vuelven")} con otra nota: se conserva la nota de hoy.`);
+  }
   return { tareas, tipos, tiposDeNuevas, tareasArmadasPara, observaciones };
+}
+
+/** R12: «X» está terminada: la IA no le propone tareas. Con varias, UNA línea (Elías pidió menos texto). */
+function observacionDeTerminadas(nombres: readonly string[]): string {
+  const citados = nombres.map((n) => `«${n}»`);
+  if (citados.length === 1) return `${citados[0]} está terminada: la IA no le propone tareas.`;
+  return `${citados.slice(0, -1).join(", ")} y ${citados[citados.length - 1]} están terminadas: la IA no les propone tareas.`;
+}
+
+/**
+ * R4c (L5): los pares [la que se iría, el índice de la nueva] que son la MISMA tarea, por el título completo
+ * (`huellaCompleta`: con el corte a 60 de `fingerprintFromTitle`, «… para ventas» y «… para postventa» eran una).
+ *   1. En su misma semana: para cada una que se iría, en orden, la primera nueva libre con su título y su semana.
+ *   2. En otra semana, sin ambigüedad: entre las que quedan, solo si hay UNA nueva y UNA que se iría con ese
+ *      título. Con dos o más de algún lado (una sesión de todas las semanas) no se adivina: se van y son nuevas.
+ */
+function parejasQueVuelven(
+  seVan: readonly TareaDelVivo[],
+  nuevas: ReadonlyArray<ContenidoDeTareaNueva | null>,
+): Array<[TareaDelVivo, number]> {
+  const huellaNueva = nuevas.map((n) => (n === null ? null : huellaCompleta(n.title)));
+  const huellaVieja = seVan.map((r) => huellaCompleta(r.title));
+  const usadas = new Set<number>();
+  const pares: Array<[TareaDelVivo, number]> = [];
+  const libres: number[] = [];
+  seVan.forEach((r, k) => {
+    const h = huellaVieja[k];
+    const j = h === "" ? -1 : nuevas.findIndex((n, x) => n !== null && !usadas.has(x) && huellaNueva[x] === h && n.weekIndex === r.weekIndex);
+    if (j >= 0) {
+      usadas.add(j);
+      pares.push([r, j]);
+    } else {
+      libres.push(k);
+    }
+  });
+  for (const k of libres) {
+    const h = huellaVieja[k];
+    if (h === "") continue;
+    const candidatas = nuevas.flatMap((n, x) => (n !== null && !usadas.has(x) && huellaNueva[x] === h ? [x] : []));
+    const mismas = libres.filter((y) => huellaVieja[y] === h);
+    if (candidatas.length !== 1 || mismas.length !== 1) continue;
+    usadas.add(candidatas[0]);
+    pares.push([seVan[k], candidatas[0]]);
+  }
+  return pares;
 }
 
 /** E3 (D9): la forma que le dio el chat a cada fase, sin las que se vuelven a armar. undefined = ninguna. */
@@ -349,9 +441,9 @@ const loTocoElChat = (c: Cambio): boolean => esCambioDeTarea(c) && (!!c.porChat 
 /**
  * La huella del título COMPLETO: sin mayúsculas, tildes ni signos, como `fingerprintFromTitle`, pero SIN su
  * corte a 60 caracteres (revisión antes del push). Con el corte, «Configurar las propiedades personalizadas del
- * objeto Negocios para ventas» y «… para postventa» eran la misma tarea.
+ * objeto Negocios para ventas» y «… para postventa» eran la misma tarea. L5: la exporta para R4c (y sus guardas).
  */
-function huellaCompleta(titulo: string): string {
+export function huellaCompleta(titulo: string): string {
   return titulo
     .toLowerCase()
     .normalize("NFD")
