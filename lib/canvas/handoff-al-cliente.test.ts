@@ -118,6 +118,19 @@ const LECTORES: Lector[] = [
     porque: "el documento de cierre: se comparte al cliente igual que el kickoff",
   },
   {
+    archivo: "lib/handoff/resumen.ts",
+    pieza: null, // no escribe una pieza: escribe `Project.handoffResumen`, un campo de cabecera
+    exposicion: "interno",
+    porque:
+      "«¿qué se vendió?» en tres frases, para la cabecera de la sección de handoff. Lee el " +
+      "documento ENTERO a propósito —incluida «Se conversó y no se vendió»—: es lo que le " +
+      "permite no confundir lo vendido con lo que quedó afuera, que es justo el error que un " +
+      "resumen de tres frases puede cometer. No lleva allowlist porque el resultado no sale de " +
+      "Smarteam: vive en la ficha interna del proyecto y no entra a ningún documento del cliente. " +
+      "⚠ SI ALGÚN DÍA ESTE TEXTO SE MUESTRA AFUERA —un portal, un correo automático— hay que " +
+      "filtrar el contexto ANTES: el prompt no es la defensa",
+  },
+  {
     archivo: "lib/canvas/diagnostico-generate.ts",
     pieza: "diagnosis",
     exposicion: "directo",

@@ -266,6 +266,22 @@ model Project {
   // la etapa solo son confiables cuando esto != null. Lo sella persistTimelineFromAgentOutput.
   handoffGeneratedAt DateTime?
 
+  // ── «¿Qué se vendió?», en tres frases ────────────────────────────────────────
+  // El handoff son 12 secciones: la respuesta corta a «¿qué vendimos acá?» existía solo
+  // dentro del documento, así que para saberlo había que abrirlo y leerlo. Esto es esa
+  // respuesta, escrita por IA a partir del documento entero y guardada para poder mostrarla
+  // en la cabecera de la sección.
+  //
+  // Se regenera con CADA corrida del handoff (el documento cambió ⇒ el resumen también), y
+  // hay un botón para escribirlo a mano sobre los handoffs que ya existían — sin eso, los
+  // ~75 handoffs viejos se quedaban sin resumen para siempre.
+  //
+  // `handoffResumenAt` NO es redundante con `handoffGeneratedAt`: comparar los dos es lo que
+  // deja decir «el handoff se regeneró después de este resumen» en vez de mostrar un texto
+  // viejo como si describiera el documento de hoy.
+  handoffResumen     String?   @db.Text
+  handoffResumenAt   DateTime?
+
   // Fase C — publish del Kickoff al cliente externo. Acción SEPARADA del acceso:
   // null = no publicado (el cliente, aunque tenga credenciales, no ve el Kickoff);
   // fecha = publicado. El chokepoint externo (lib/external/kickoff-view.ts) exige

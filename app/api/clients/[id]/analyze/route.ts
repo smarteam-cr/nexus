@@ -26,6 +26,7 @@ import { postProcessCards } from "@/lib/canvas/post-process";
 import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
+import { generarResumenDeHandoff } from "@/lib/handoff/resumen";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
@@ -3130,6 +3131,19 @@ async function persistTimelineFromAgentOutput(
       await prisma.project
         .update({ where: { id: bodyProjectId }, data: { handoffGeneratedAt: new Date() } })
         .catch((e) => console.warn("[analyze] handoffGeneratedAt no guardado:", e instanceof Error ? e.message : e));
+
+      /* «¿Qué se vendió?» en tres frases, para la cabecera de la sección — el documento son 12
+         secciones y esa pregunta solo se contestaba abriéndolo entero (lib/handoff/resumen.ts).
+         Se reescribe en CADA corrida a propósito: el documento cambió, así que un resumen viejo
+         describiría una versión anterior con la misma cara que uno de hoy.
+
+         FIRE-AND-FORGET, igual que el auto-desarrollo de abajo y por la misma razón: el handoff
+         —que es el trabajo— ya está escrito y guardado. Que el resumen no salga no puede tumbar
+         la corrida ni dejar al CSE sin su documento. El botón manual de la sección queda de
+         respaldo, y `generarResumenDeHandoff` no tira nunca: devuelve su estado. */
+      void generarResumenDeHandoff(bodyProjectId).then((r) => {
+        if (r.status === "error") console.warn(`[analyze] resumen del handoff no escrito: ${r.error}`);
+      });
 
       // AUTO-CHAIN: si el handoff detectó trabajo técnico (tag custom_dev/insider_one),
       // crear el canvas "Desarrollo" y escribir el requerimiento técnico con IA —

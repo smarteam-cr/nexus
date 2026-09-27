@@ -11,6 +11,7 @@ import { createHandoffCanvas, reconcileHandoffCanvasSections } from "@/lib/canva
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { elegirAgente, pipelineKeyDeProyecto, AGENTES_DEL_GRUPO } from "@/lib/agents/resolver";
 import { whereCorridasDeDocumento } from "@/lib/agents/historial-corridas";
+import { resumenDesactualizado } from "@/lib/handoff/resumen";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -67,6 +68,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
       // Para resolver QUÉ agente de handoff le toca a este tipo de proyecto.
       hubspotPipelineId: true,
       handoff: { select: { id: true, contextExclusions: true } },
+      /* El resumen corto y las dos fechas que deciden si quedó viejo (lib/handoff/resumen.ts). */
+      handoffResumen: true,
+      handoffResumenAt: true,
+      handoffGeneratedAt: true,
       canvases: { where: canvasOf("handoff"), select: { id: true }, take: 1 },
       /* De quién cuelga, si cuelga. ⚠ Es un PUNTERO BLANDO (String, sin clave foránea), así
          que no se puede pedir por relación: se resuelve abajo con su propia lectura, tolerando
@@ -171,7 +176,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
     sourceSessions,
     projectSessionCount,
     handoffReadiness,
-    contextExclusions: project.handoff?.contextExclusions ?? null,
+    /* «¿Qué se vendió?» en tres frases. Viaja con su vejez YA RESUELTA —y no las dos fechas
+       crudas— porque la pregunta que la pantalla hace es «¿muestro el aviso?», y resolverla del
+       lado del browser deja el criterio en dos lugares: acá y en el próximo consumidor. */
+    handoffResumen: project.handoffResumen ?? null,
+    handoffResumenViejo: resumenDesactualizado(project),
     /* La exclusión que pone LA APP, calculada en vivo — no vive en ninguna columna. La pantalla
        la pinta en gris sobre el textarea del CSE: si no se mostrara, el encargado creería que
        este proyecto no tiene ninguna exclusión y escribiría de nuevo lo que la app ya dice. */

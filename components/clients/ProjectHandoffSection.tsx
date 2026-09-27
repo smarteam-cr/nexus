@@ -67,6 +67,10 @@ interface HandoffStatus {
   contextExclusions: string | null;
   /** La exclusión que pone LA APP, calculada en vivo. No se guarda y no se puede borrar. */
   exclusionAutomatica?: string | null;
+  /** «¿Qué se vendió?» en tres frases (lib/handoff/resumen.ts). `null` = todavía no se escribió. */
+  handoffResumen?: string | null;
+  /** El handoff se regeneró DESPUÉS del resumen: lo que dice describe una versión anterior. */
+  handoffResumenViejo?: boolean;
 }
 
 function fmtDate(d: string): string {
@@ -227,6 +231,9 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   const [exclusions, setExclusions] = useState("");
   const [exclusionsDirty, setExclusionsDirty] = useState(false);
   const [savingExcl, setSavingExcl] = useState(false);
+  /** Corriendo el resumen del handoff (la puerta manual). Aparte de `generating`: no es lo mismo
+   *  reescribir el documento que redactar tres frases sobre el que ya está. */
+  const [resumiendo, setResumiendo] = useState(false);
   const [showExcl, setShowExcl] = useState(false);
 
   const fetchStatus = useCallback(async () => {
@@ -294,6 +301,32 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     }
     setSavingExcl(false);
   }, [projectId, exclusions, fetchStatus]);
+
+  /**
+   * Escribir el resumen a mano — la puerta RETROACTIVA.
+   *
+   * No dispara el agente de handoff: llama a su propio endpoint, que solo lee el documento ya
+   * escrito y redacta tres frases. Es la diferencia entera con «Regenerar»: eso reescribe el
+   * documento (y pisa lo editado a mano); esto no lo toca.
+   */
+  const handleResumen = useCallback(async () => {
+    setResumiendo(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/projects/${projectId}/handoff/resumen`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) setError(d.error ?? "No se pudo escribir el resumen.");
+      else {
+        // El status guarda caché de módulo: sin invalidar, cambiar de pestaña y volver
+        // repintaría la versión sin resumen y el botón parecería no haber hecho nada.
+        invalidateHandoffStatus(projectId);
+        fetchStatus();
+      }
+    } catch {
+      setError("Error de conexión al escribir el resumen.");
+    }
+    setResumiendo(false);
+  }, [projectId, fetchStatus]);
 
   const handleGenerate = useCallback(async () => {
     const agentId = status?.agentId;
@@ -412,7 +445,21 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     ? <span className="text-[10px] font-bold uppercase tracking-wider text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">Generado</span>
     : <span className="text-[10px] font-bold uppercase tracking-wider text-fg-muted bg-surface-muted border border-line rounded-full px-2 py-0.5">No generado</span>;
 
+  const esVenta = status.pipelineKey !== "development" && status.pipelineKey !== "web";
+
   return (
+    <div className="space-y-2">
+      {/* ── EL TÍTULO DE LA SECCIÓN (pedido de Elías, 2026-09-27) ──────────────────
+          «Handoff Sales→CS» nombra el PROCESO que produjo el documento, no lo que el
+          documento contiene. Quien abre un proyecto no busca un traspaso: busca qué se
+          vendió. El rótulo del proceso se queda —es como el equipo lo llama, y cambiarlo
+          rompería la conversación— pero deja de ser lo primero que se lee.
+
+          Para un Desarrollo o un Sitio web no hubo traspaso de Ventas a CS, así que tampoco
+          se titula como una venta: mismo criterio que ya usa el rótulo de la tarjeta. */}
+      <h2 className="text-sm font-semibold text-fg-secondary px-1">
+        {esVenta ? "Información de la venta" : "Información del proyecto"}
+      </h2>
     <section className="rounded-2xl border border-line bg-surface">
       <div className="flex items-center gap-3 px-5 py-3.5">
         <svg className="w-4 h-4 text-brand flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -426,9 +473,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
                 flujo que no ocurre. El requisito duro de la tanda es que la Implementación se
                 vea EXACTAMENTE como antes, y por eso el default es el rótulo viejo. */}
             <h3 className="text-sm font-bold text-fg">
-              {status.pipelineKey === "development" || status.pipelineKey === "web"
-                ? "Handoff del proyecto"
-                : "Handoff Sales→CS"}
+              {esVenta ? "Handoff Sales→CS" : "Handoff del proyecto"}
             </h3>
             {badge}
           </div>
@@ -458,6 +503,44 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
               </a>
               {" "}— ver su handoff
             </p>
+          )}
+          {/* ── «¿QUÉ SE VENDIÓ?», EN TRES FRASES ────────────────────────────────
+              El documento son 12 secciones y esa pregunta —la única con la que todo el
+              mundo lo abre— solo se contestaba leyéndolo entero, o sea que en la práctica no
+              se contestaba. Lo escribe la IA a partir del documento ya generado; el criterio
+              y el tope de caracteres viven en `lib/handoff/resumen.ts`.
+
+              El botón de al lado existe para lo RETROACTIVO: los handoffs que ya estaban
+              generados no pasan por la puerta automática, y regenerarlos entero solo por el
+              resumen cuesta una corrida y pisa lo editado a mano. */}
+          {generated && status.handoffResumen && (
+            <div className="mt-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
+              <p className="text-xs text-fg-secondary leading-relaxed">{status.handoffResumen}</p>
+              {status.handoffResumenViejo && (
+                <p className="text-[11px] text-warn-ink mt-1.5">
+                  El handoff se regeneró después de este resumen.{" "}
+                  {canGenerateHandoff && (
+                    <button
+                      onClick={handleResumen}
+                      disabled={resumiendo}
+                      className="font-semibold underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
+                    >
+                      {resumiendo ? "Actualizando…" : "Actualizarlo"}
+                    </button>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+          {generated && !status.handoffResumen && canGenerateHandoff && (
+            <button
+              onClick={handleResumen}
+              disabled={resumiendo}
+              className="mt-2 text-xs font-semibold text-brand hover:opacity-80 disabled:opacity-50"
+              title="Escribe con IA un resumen de tres frases de lo que se vendió, a partir de este handoff."
+            >
+              {resumiendo ? "Escribiendo el resumen…" : "Resumir qué se vendió"}
+            </button>
           )}
           {noMaterial && !generated && (
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5 inline-block">
@@ -629,5 +712,6 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         <HistorialHandoffModal projectId={projectId} onClose={() => setShowHistorial(false)} />
       )}
     </section>
+    </div>
   );
 }
