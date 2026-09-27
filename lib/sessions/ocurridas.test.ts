@@ -192,6 +192,11 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   "app/api/clients/[id]/handoffs/route.ts": { clase: "plomeria", motivo: "Listado de handoffs; toca sesiones solo de refilón." },
   "app/api/projects/[projectId]/handoff/route.ts": { clase: "plomeria", motivo: "Hidrata los `sourceSessionIds` de una corrida ya hecha." },
   "app/api/projects/[projectId]/agent-runs/[runId]/route.ts": { clase: "plomeria", motivo: "Ídem, para el historial de corridas." },
+  // L4 (2026-09-26): el mensaje de arriba de la propuesta del cronograma.
+  "lib/timeline/leer-referencias.ts": {
+    clase: "plomeria",
+    motivo: "Hidrata los `sourceSessionIds` de las corridas de la propuesta (título y fecha para el chip de su fuente). Lo lee una persona; no le habla a un modelo.",
+  },
 };
 
 /**

@@ -859,7 +859,9 @@ describe("G12 · la pantalla: la oferta de las tareas y lo que no puede perderse
     const iLinea = src.indexOf("<LineaDeLasTareas");
     /* ⚠ ACTUALIZADA en L2 (2026-09-26), con esta razón: la barra se monta con `modo === "barra"` (mientras se
        arma la propuesta no hay barra) y la línea suelta también sale con cambios mientras se arma. */
-    const iBarra = src.indexOf('{canEdit && modo === "barra" && revision.resumen && (');
+    /* ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: la barra pinta el mensaje de arriba (`mensajeDeLaBarra`, que
+       existe siempre que hay resumen) y la condición lo nombra para pasárselo. */
+    const iBarra = src.indexOf('{canEdit && modo === "barra" && revision.resumen && mensajeDeLaBarra && (');
     expect(iBarra, "la guarda no encuentra la barra").toBeGreaterThan(-1);
     expect(iLinea).toBeGreaterThan(src.indexOf("<div ref={revision.contenedorRef}"));
     expect(iLinea, "la línea suelta no va antes de la barra").toBeLessThan(iBarra);

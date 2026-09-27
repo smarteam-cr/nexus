@@ -51,6 +51,9 @@
  *     cada casilla del Gantt pasa por `marcar`/`marcarVarios` (la misma cola que sube al servidor);
  *   · «Siguiente número» (`siguiente`, `posicion`): recorre `resumen.indice` sin lo «ya está» y da la vuelta; el
  *     cursor es de la propuesta (otra propuesta arranca de cero).
+ *
+ * L4 (2026-09-26): suma `resumenEntero`, la propuesta ENTERA (nada desmarcado), que decide el nivel del mensaje de
+ * arriba (lib/timeline/mensaje-de-la-propuesta.ts). Va por la huella del borrador sin las casillas: tocar una no la rehace.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { claveDeDesfasadas } from "@/lib/timeline/recalculo-de-tareas";
@@ -74,6 +77,7 @@ import {
   debeDescartarseSolo,
   esBorradorV1,
   excluidosDelGuardado,
+  huellaDeTexto,
   leerBorrador,
   marcarCambios,
   olvidarRevision,
@@ -233,6 +237,9 @@ export interface BorradorEnPantalla {
   siguiente: (dir: 1 | -1) => UnidadNumerada | null;
   /** L3 P3d: dónde está el cursor de «Siguiente número» (el texto del botón). */
   posicion: PosicionDelSiguiente;
+  /** L4: la propuesta ENTERA (`resumir` sin nada desmarcado): el nivel del mensaje de arriba. No se rehace al tocar
+   *  casillas (va por la huella del borrador sin `excluidos`). null cuando no hay resumen. */
+  resumenEntero: ResumenDelBorrador | null;
 }
 
 export function useBorradorDelCronograma(entrada: {
@@ -390,6 +397,27 @@ export function useBorradorDelCronograma(entrada: {
     [vivo, borrador, sin, tareas, forzadas],
   );
   const proyeccion = resumen?.proyeccion ?? null;
+  /* ── L4 · LA PROPUESTA ENTERA ─────────────────────────────────────────────────────────────────────
+     El nivel del mensaje de arriba (su título y su tono) mira la propuesta ENTERA: no salta al tocar casillas. Es otra
+     evaluación del plan, así que se rehace solo si cambió algo que no son las casillas: cada clic adopta un borrador
+     nuevo (otro objeto, otra `version`, otro `excluidos`) con los mismos cambios. La identidad es la huella del borrador
+     sin `excluidos` ni `version` (§4.6); se ajusta en el render, como la revisión de arriba. */
+  const huellaDelBorrador = useMemo(
+    () => (borrador ? huellaDeTexto(JSON.stringify({ ...borrador, excluidos: undefined, version: undefined })) : null),
+    [borrador],
+  );
+  const [borradorEntero, setBorradorEntero] = useState<{ huella: string | null; borrador: Borrador | null }>({ huella: null, borrador: null });
+  let entero = borradorEntero;
+  if (entero.huella !== huellaDelBorrador) {
+    entero = { huella: huellaDelBorrador, borrador };
+    setBorradorEntero(entero);
+  }
+  const borradorDeLaEntera = entero.borrador;
+  const resumenEntero = useMemo(
+    () =>
+      borradorDeLaEntera && borradorDeLaEntera.cambios.length > 0 ? resumir(vivo, borradorDeLaEntera, [], { tareas }) : null,
+    [vivo, borradorDeLaEntera, tareas],
+  );
   /* «Nada que decidir» sale del PLAN aunque no haya cambios: `debeDescartarseSolo` sabe que uno
      vacío que espera tareas («faltan», «armando») no se descarta, y uno vacío cuya corrida falló sí. */
   const nadaQueDecidir = useMemo(() => {
@@ -499,5 +527,6 @@ export function useBorradorDelCronograma(entrada: {
     vistaDelGantt,
     siguiente,
     posicion,
+    resumenEntero,
   };
 }

@@ -35,6 +35,7 @@ vi.mock("@dnd-kit/sortable", async (importOriginal) => {
 import TimelineGantt, { estiloDeLaFila, type GanttPhase, type GanttTaskStatus, type PropuestaEnElGantt } from "@/components/canvas/TimelineGantt";
 import { collectClientBlockers } from "./client-blockers";
 import type { RecalculoEnPantalla } from "./recalculo-de-tareas";
+import type { FuentesDeLaPropuesta } from "./referencias-de-la-propuesta";
 import { borradorDelFixture, FASE_NUEVA, FASE_QUE_SE_ALARGA, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import {
   claveDeCampo,
@@ -170,6 +171,8 @@ function pintar(
     recalculo?: RecalculoEnPantalla | null;
     /** L3 P3d: retoca la vista antes de pintar (un escenario que el fixture no trae). */
     ajustar?: (v: VistaDeLaPropuesta) => VistaDeLaPropuesta;
+    /** L4: con qué material se armó la propuesta (el porqué de cada fase dice su fuente si calza). */
+    fuentes?: FuentesDeLaPropuesta | null;
   } = {},
 ): Pintado {
   const r = resumir(VIVO, b, o.sin ?? [], LISTAS);
@@ -191,6 +194,7 @@ function pintar(
     desplegarAlEntrar: desplegar === null ? null : { clave: "token-1", fases: desplegar },
     cierre: { antes: "13 oct", despues: "10 nov" },
     recalculo: o.recalculo ?? null,
+    fuentes: o.fuentes ?? null,
   };
   const marcas = new Map(r.proyeccion.fases.flatMap((f) => (f.marca ? [[f.clave, f.marca] as const] : [])));
   const html = renderToStaticMarkup(
@@ -448,6 +452,25 @@ describe("L3 P3c · las filas de fase: sus casillas, sus etiquetas y sus celdas"
     const html = desplegado(p.html, "f06");
     expect(html).toContain(`${casilla.numero}. Ver el antes y el después`);
     expect(html).toContain(">Nota nueva<");
+  });
+
+  it("⭐ L4 · el porqué de la fase dice su fuente con un chip solo si el motivo calza con una REAL; si no, «Según la IA»", () => {
+    /* Las ediciones que la ponen en rojo: pintar siempre «Según la IA» (sin mirar las fuentes), o dar el chip de las
+       instrucciones sin instrucciones (el motivo de la IA disfrazado de fuente). */
+    const desplegado = (html: string, clave: string) => {
+      const i = html.indexOf(`data-fase-key="${clave}"`);
+      const j = html.indexOf("data-fase-key=", i + 1);
+      return html.slice(i, j < 0 ? html.length : j);
+    };
+    const motivo = P.v.porFase.get(FASE_QUE_SE_ALARGA)!.casillas.find((c) => c.motivo)!.motivo!;
+    expect(motivo).toMatch(/^Instrucciones del CSE: /);
+    const conInstrucciones = desplegado(pintar(BORRADOR, { fuentes: { instrucciones: true, reuniones: [], notas: [] } }).html, FASE_QUE_SE_ALARGA);
+    expect(conInstrucciones).toContain("Sale de:");
+    expect(conInstrucciones).toMatch(/<span class="rounded border border-info-line bg-info-surface[^"]*" title="[^"]*">Instrucciones adicionales<\/span>/);
+    expect(conInstrucciones).not.toContain("Según la IA");
+    const sinInstrucciones = desplegado(pintar(BORRADOR, { fuentes: { instrucciones: false, reuniones: [], notas: [] } }).html, FASE_QUE_SE_ALARGA);
+    expect(sinInstrucciones).toContain("Según la IA:");
+    expect(sinInstrucciones).not.toContain("Instrucciones adicionales");
   });
 
   it("⭐ las semanas que suma una duración que crece, en verde y con su nombre", () => {

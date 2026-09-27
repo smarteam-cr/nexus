@@ -10,6 +10,7 @@ import { esAgenteRetirado } from "@/lib/agents/retirados";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { guardarPropuestaDelHandoff, timelineSyncErrorDelHandoff } from "@/lib/timeline/borrador-del-handoff";
+import { fasesDelHandoff } from "@/lib/timeline/referencias-de-la-propuesta";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -3110,36 +3111,13 @@ async function persistTimelineFromAgentOutput(
       }
     }
 
-    const timelineRaw = (analysisJson as { timeline?: { phases?: unknown } } | null)
-      ?.timeline?.phases;
-    if (!bodyProjectId || !Array.isArray(timelineRaw) || timelineRaw.length === 0) return { timelineSyncError: null };
+    if (!bodyProjectId) return { timelineSyncError: null };
 
-    // Validador inline (sin Zod, consistente con el resto del codebase)
-    const validPhases = timelineRaw
-      .filter((p: unknown): p is { name: string; durationWeeks: number; sessionCount?: number; notes?: string; estimated?: boolean; startWeek?: number } => {
-        if (!p || typeof p !== "object") return false;
-        const obj = p as Record<string, unknown>;
-        return typeof obj.name === "string"
-          && obj.name.trim().length > 0
-          && typeof obj.durationWeeks === "number"
-          && obj.durationWeeks > 0;
-      })
-      .map((p, i) => ({
-        name: p.name.trim(),
-        order: i,
-        durationWeeks: Math.floor(p.durationWeeks),
-        // startWeek: inicio explícito (paralelo) si el agente lo dio; null = contigua tras la anterior.
-        startWeek: typeof p.startWeek === "number" && p.startWeek >= 0 ? Math.floor(p.startWeek) : null,
-        sessionCount: typeof p.sessionCount === "number" && p.sessionCount > 0
-          ? Math.floor(p.sessionCount)
-          : null,
-        notes: typeof p.notes === "string" && p.notes.trim().length > 0
-          ? p.notes.trim()
-          : null,
-        // El agente marca "estimated" cuando no tuvo datos de tiempos en ventas → badge "estimada".
-        needsValidation: p.estimated === true,
-        source: "AGENT" as const,
-      }));
+    /* Validador sin Zod (consistente con el resto del codebase). L4 (2026-09-26): se extrajo tal cual a
+       `fasesDelHandoff` (lib/timeline/referencias-de-la-propuesta.ts): el mensaje de la propuesta compara contra
+       las fases del último handoff, y tiene que leerlas con ESTA misma regla. Sin `timeline.phases`, vacío o sin
+       ninguna válida: [] (antes, dos salidas tempranas con el mismo resultado). */
+    const validPhases = fasesDelHandoff(analysisJson);
 
     if (validPhases.length === 0) return { timelineSyncError: null };
 

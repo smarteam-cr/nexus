@@ -63,6 +63,8 @@ import { mensajeDeLaPropuestaAbierta } from "@/lib/timeline/borrador";
 import { leerEstadoDeLasTareas, type EstadoDeLasTareasDelBorrador } from "@/lib/timeline/borrador-del-detalle";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 import type { AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
+import { leerReferenciasDeLaPropuesta } from "@/lib/timeline/leer-referencias";
+import type { ReferenciasDeLaPropuesta } from "@/lib/timeline/referencias-de-la-propuesta";
 import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 
@@ -189,6 +191,10 @@ interface TimelineResponse {
   /** E2b P7: de dónde viene la propuesta guardada, quién la dejó y cuándo (la corrida del token).
    *  null = no hay propuesta. La barra lo dice en su línea de origen. */
   autoriaDeLaPropuesta: AutoriaDeLaPropuesta | null;
+  /** L4 (2026-09-26): contra qué se compara la propuesta abierta —lo último que se subió al cliente, el último
+   *  handoff (aproximado) y con qué material se armó— para el mensaje de arriba del Gantt. Solo con un borrador-v1
+   *  guardado; si no (o si falla la lectura), null. Lo arma lib/timeline/leer-referencias.ts. */
+  referenciasDeLaPropuesta: ReferenciasDeLaPropuesta | null;
   // D.2 — borrador de avance (separado de pendingProposal; no es status real).
   pendingProgress: PendingProgress | null;
   pendingProgressRunId: string | null;
@@ -358,13 +364,22 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
   if (!tl) return { exists: false };
   // El summary alimenta el panel "Qué hacer acá". Va en try/catch a propósito: es contexto de apoyo,
   // y si falla no puede tumbar el cronograma en sí.
-  const [kickoffDate, summary] = await Promise.all([
+  const [kickoffDate, summary, referenciasDeLaPropuesta] = await Promise.all([
     getKickoffSessionDate(projectId),
     // C-17: el summary sale del árbol que ya se leyó arriba; el único viaje extra es el ciclo de vida.
     loadProjectSummaryDesdeArbol(projectId, {
       status: tl.project.status,
       healthStatusOverride: tl.project.healthStatusOverride,
       timeline: tl,
+    }).catch(() => null),
+    /* L4: contra qué se compara la propuesta (solo con un borrador-v1). También es contexto de apoyo: si falla,
+       el mensaje dice menos, pero el cronograma carga. El handoff va con caché por token (una lectura por propuesta). */
+    leerReferenciasDeLaPropuesta({
+      projectId,
+      guardado: tl.pendingProposal,
+      token: tl.pendingProposalRunId,
+      publishedSnapshot: tl.publishedSnapshot,
+      publicadoEn: tl.project.timelinePublishedAt,
     }).catch(() => null),
   ]);
   // Sesiones de entrega reales por fase (calculado, no persistido). null por fase
@@ -399,6 +414,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     tareasDelBorrador: await leerEstadoDeLasTareas(tl.pendingProposal),
     autoriaDeLaPropuesta:
       (await leerAutoriaDeLasPropuestas([{ token: tl.pendingProposalRunId, guardado: tl.pendingProposal }]))[0] ?? null,
+    referenciasDeLaPropuesta,
     pendingProgress: (tl.pendingProgress as PendingProgress | null) ?? null,
     pendingProgressRunId: tl.pendingProgressRunId,
     pendingParticularidades: (tl.pendingParticularidades as PendingParticularidad[] | null) ?? null,

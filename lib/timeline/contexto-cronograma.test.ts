@@ -494,6 +494,11 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     /* L3 P3b (2026-09-26): los textos de la propuesta en el Gantt (verbos, chips, casillas de fase, la cuenta del
        grupo y los títulos de la fuga y la repetida) viven en lib/, en la vista pura. */
     "lib/timeline/vista-de-la-propuesta.ts",
+    /* L4 (2026-09-26): el mensaje de arriba (sus líneas, «Más», el título del nivel y el chip de la fuente) y las
+       referencias que lo alimentan («Nota sin título» llega tal cual al chip). */
+    "lib/timeline/mensaje-de-la-propuesta.ts",
+    "lib/timeline/referencias-de-la-propuesta.ts",
+    "lib/timeline/leer-referencias.ts",
     "components/canvas/LineaDeLasTareas.tsx",
     "lib/timeline/borrador.ts",
     /* Revisión de E2a (2026-09-25): los textos del servidor que el CSE lee TAL CUAL también. El 409

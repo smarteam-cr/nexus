@@ -119,6 +119,8 @@ import {
   type VistaDeLaPropuesta,
 } from "@/lib/timeline/vista-de-la-propuesta";
 import { textoDelGrupoDesfasado, type RecalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
+import { fuenteDelMotivo } from "@/lib/timeline/mensaje-de-la-propuesta";
+import type { FuentesDeLaPropuesta } from "@/lib/timeline/referencias-de-la-propuesta";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
@@ -269,6 +271,9 @@ export interface PropuestaEnElGantt {
   /** P3d: en qué está el recálculo de las fases desfasadas (E2c). Con dos o más, el grupo de cada una lo dice al lado
    *  de su casilla (con una sola lo dice la línea de la barra: no dos veces). Se mudó de TareasDeLaPropuesta. */
   recalculo?: RecalculoEnPantalla | null;
+  /** L4: con qué material se armó la propuesta (el GET, `referenciasDeLaPropuesta.fuentes`). El porqué de cada fase
+   *  dice su fuente con un chip solo si el motivo calza con una real (`fuenteDelMotivo`); si no, «Según la IA: …». */
+  fuentes?: FuentesDeLaPropuesta | null;
 }
 
 // Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
@@ -810,18 +815,31 @@ function CasillasDeLaFase({
 }
 
 /** Al desplegar una fase con cambios: por qué los propone la IA y, si cambió la nota, el nombre o el tipo, el
- *  antes y el después (se mudó de la lista de la barra). */
-function PorQueDeLaFase({ casillas }: { casillas: readonly CasillaDeCambio[] }) {
+ *  antes y el después (se mudó de la lista de la barra).
+ *  L4: el motivo lo escribió la IA. Si calza con una fuente REAL de la corrida (`fuenteDelMotivo`: las instrucciones,
+ *  una reunión o una nota que nombra como palabras completas), se ve el chip de esa fuente (el motivo, en su `title`);
+ *  si no, el motivo atribuido: «Según la IA: …». */
+function PorQueDeLaFase({ casillas, fuentes }: { casillas: readonly CasillaDeCambio[]; fuentes: FuentesDeLaPropuesta | null }) {
   const motivos = [...new Set(casillas.flatMap((c) => (c.motivo ? [c.motivo] : [])))];
   const conDetalle = casillas.filter((c) => c.detalle.length > 0);
   if (motivos.length === 0 && conDetalle.length === 0) return null;
   return (
     <div className="space-y-1 text-xs">
-      {motivos.map((m) => (
-        <p key={m} className="text-fg-muted line-clamp-2" title={m}>
-          Según la IA: {m}
-        </p>
-      ))}
+      {motivos.map((m) => {
+        const fuente = fuenteDelMotivo(m, fuentes);
+        return fuente ? (
+          <p key={m} className="flex flex-wrap items-center gap-1.5 text-fg-muted">
+            <span>Sale de:</span>
+            <span className="rounded border border-info-line bg-info-surface px-1.5 py-px text-[10px] text-info-ink" title={m}>
+              {fuente.texto}
+            </span>
+          </p>
+        ) : (
+          <p key={m} className="text-fg-muted line-clamp-2" title={m}>
+            Según la IA: {m}
+          </p>
+        );
+      })}
       {conDetalle.map((c) => (
         <details key={c.clave}>
           <summary className="cursor-pointer font-semibold text-info-ink">
@@ -1847,7 +1865,7 @@ export default function TimelineGantt({
                     ]);
                     return (
                       <div className="ml-7 mr-2 mb-3 mt-1 border-l-2 border-line pl-4 space-y-3">
-                        {vistaDeLaFase && <PorQueDeLaFase casillas={vistaDeLaFase.casillas} />}
+                        {vistaDeLaFase && <PorQueDeLaFase casillas={vistaDeLaFase.casillas} fuentes={propuesta?.fuentes ?? null} />}
                         {semanas.map((filas, relWeek) => {
                           if (filas.length === 0) return null;
                           const absW = absoluteWeek(range.start, relWeek);

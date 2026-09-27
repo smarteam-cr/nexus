@@ -190,6 +190,7 @@ import {
   type RespuestaDelPedido,
 } from "./recalculo-de-tareas";
 import { unidadesDelSiguiente, vistaDeLaPropuesta } from "./vista-de-la-propuesta";
+import { mensajeDeLaPropuesta } from "./mensaje-de-la-propuesta";
 import { leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import { useBorradorDelCronograma } from "@/components/canvas/useBorradorDelCronograma";
 
@@ -610,6 +611,17 @@ describe("3 · la barra: «Aplicar de todos modos» confirma qué pasa con las t
   const noop = () => {};
   const propsCon = (o: Partial<Props>): Props => ({
     resumen: resumir(VIVO, BORRADOR, SIN, { tareas: "listas" }),
+    // L4: la barra pinta el mensaje de arriba (su título y su tono salen del nivel de la propuesta ENTERA).
+    mensaje: mensajeDeLaPropuesta({
+      vivo: VIVO,
+      borrador: BORRADOR,
+      r: resumir(VIVO, BORRADOR, SIN, { tareas: "listas" }),
+      entera: resumir(VIVO, BORRADOR, [], { tareas: "listas" }),
+      referencias: null,
+      atrasos: [],
+      cierreFijado: null,
+      hoy: null,
+    }),
     vista: "antes",
     onAlternar: noop,
     // L3 P3d: la barra ya no tiene casillas (viven en el Gantt): sin `onMarcar`/`onMarcarVarios`; suma «Siguiente número».

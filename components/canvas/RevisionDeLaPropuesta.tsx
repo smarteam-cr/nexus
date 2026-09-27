@@ -22,12 +22,20 @@
  *     estaba antes» y «Aplicar». Debajo de 640 px, solo el título y «Aplicar»;
  *   · LO DE ABAJO, que no se fija: de dónde viene, las líneas de las tareas y del recálculo, el bloqueo, el cierre
  *     con lo que ve el cliente, los totales («Aplicas N de M cambios», en `aria-live`) con «Descartar», el aviso de
- *     «otro cronograma», los choques (solo si hay), el avance sin revisar y lo que notó la IA. Debajo de 640 px,
- *     plegado tras «Detalles».
+ *     «otro cronograma» (hasta L4), los choques (solo si hay), el avance sin revisar y lo que notó la IA. Debajo de
+ *     640 px, plegado tras «Detalles».
  *
- * Solo pinta: los estados, el cierre y la magnitud salen de `resumir` (lib/timeline/borrador.ts); los textos
- * nuevos, de lib/timeline/vista-de-la-propuesta.ts; el estado de la pantalla, de `useBorradorDelCronograma`.
- * Tokens semánticos SIEMPRE (info = lo que cambia, success = lo nuevo, warn = lo que choca).
+ * ⭐ L4 (2026-09-26) · EL MENSAJE DE ARRIBA. El título y el tono salen del NIVEL de la propuesta entera («Rehace casi
+ * todas las pendientes», ámbar solo en «casi todo»), no de la magnitud; lo de abajo suma el mensaje: hasta 5 líneas
+ * (el cierre y su causa, contra lo prometido y el handoff, las tareas, el material, las atrasadas) y «Más» (dónde se
+ * concentran, la fase terminada que recibe, los atrasos cargados aparte, de dónde salen los cambios de fases). El
+ * cierre ya no va en su línea (lo dice el mensaje): lo que ve el cliente queda solo, debajo. El aviso «Es prácticamente
+ * un cronograma nuevo» se fue: lo dicen el título («Cronograma casi nuevo») y «Más» (por qué).
+ *
+ * Solo pinta: los estados y el cierre salen de `resumir` (lib/timeline/borrador.ts); el mensaje, de
+ * lib/timeline/mensaje-de-la-propuesta.ts; los textos nuevos, de lib/timeline/vista-de-la-propuesta.ts; el estado de
+ * la pantalla, de `useBorradorDelCronograma`. Tokens semánticos SIEMPRE (info = lo que cambia, success = lo nuevo,
+ * warn = lo que choca).
  *
  * E2a (2026-09-25): la barra suma la línea del estado de la corrida que arma las tareas (`LineaDeLasTareas`):
  * «Faltan…» / «No se pudieron armar…» con el botón para pedirlas. Si aplicar QUITA tareas, se confirma y el
@@ -54,11 +62,11 @@ import {
   TEXTO_VER_PROPUESTA,
   textoDelBotonDeAplicar,
   textoDeLaConfirmacion,
-  tituloDeLaBarra,
   tituloDeLoQueNoto,
   type ResumenDelBorrador,
   type VistaDelBorrador,
 } from "@/lib/timeline/borrador";
+import { TEXTO_DE_LAS_FUENTES, type MensajeDeLaPropuesta } from "@/lib/timeline/mensaje-de-la-propuesta";
 import {
   ACCION_REVISAR_AVANCE,
   observacionesParaMostrar,
@@ -73,6 +81,7 @@ import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
 
 export default function RevisionDeLaPropuesta({
   resumen,
+  mensaje,
   vista,
   onAlternar,
   onSiguiente,
@@ -92,6 +101,8 @@ export default function RevisionDeLaPropuesta({
   barraRef,
 }: {
   resumen: ResumenDelBorrador;
+  /** L4: el mensaje de arriba (`mensajeDeLaPropuesta`): el título y el tono por el nivel, sus líneas y «Más». */
+  mensaje: MensajeDeLaPropuesta;
   vista: VistaDelBorrador;
   onAlternar: () => void;
   /** L3 P3d: «Siguiente número»: despliega la fase del próximo número del Gantt y enfoca su casilla (en la vista
@@ -133,8 +144,10 @@ export default function RevisionDeLaPropuesta({
   const [confirmar, setConfirmar] = useState<null | "aplicar" | "forzar">(null);
   /* Debajo de 640 px, lo de abajo va plegado tras «Detalles» (en pantallas anchas se ve siempre). */
   const [detalles, setDetalles] = useState(false);
-  const { items, marcadas, choques, magnitud, bloqueo } = resumen;
-  const otroCronograma = magnitud.esCronogramaNuevo;
+  const { items, marcadas, choques, bloqueo } = resumen;
+  /* L4: ámbar = «esto merece tu atención» (el nivel «casi todo» de la propuesta ENTERA), nunca rojo. Lo decide el
+     mensaje, no la magnitud: una propuesta que quita casi todas las pendientes también lo merece. */
+  const atencion = mensaje.tono === "warn";
   const trabajando = enCurso !== null;
   // Revisión de E2c: con tareas que esperan su recálculo, sin «N de M» (todavía no cuentan).
   const textoDelBoton = textoDelBotonDeAplicar(resumen);
@@ -181,19 +194,19 @@ export default function RevisionDeLaPropuesta({
         aria-label="Propuesta de cambios del cronograma"
         className={cn(
           "sticky top-0 z-20 scroll-mt-24 rounded-xl border px-3 py-2 shadow-sm",
-          /* Ámbar = «esto merece tu atención», nunca rojo: el modelo es aditivo, no se borra nada. */
-          otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface",
+          atencion ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface",
         )}
       >
         <div className="flex flex-wrap items-center gap-2">
+          {/* L4: el título dice QUÉ cambia, sin cuentas (lo que se aplica lo dicen los totales, abajo). */}
           <span
             className={cn(
               "min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wider",
-              otroCronograma ? "text-warn-ink" : "text-info-ink",
+              atencion ? "text-warn-ink" : "text-info-ink",
             )}
-            title={tituloDeLaBarra(resumen)}
+            title={mensaje.titulo}
           >
-            {tituloDeLaBarra(resumen)}
+            {mensaje.titulo}
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <span className="hidden items-center gap-2 sm:inline-flex">
@@ -267,9 +280,41 @@ export default function RevisionDeLaPropuesta({
           )}
           {/* El de las desfasadas ya lo dice la línea del recálculo: no dos veces. Los demás, sí. */}
           {bloqueo && !(recalculo && resumen.bloqueoPorDesfasadas) && <p className="text-xs font-semibold text-warn-ink">{bloqueo}</p>}
-          <p className="text-xs text-fg-secondary">
-            {cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>
-          </p>
+          {/* L4 · EL MENSAJE: hasta 5 líneas, en su orden (el cierre y su causa primero), completas: sin recorte. Lo que
+              pide atención (⚠) va en ámbar, con su palabra. */}
+          <div className="space-y-0.5 text-xs">
+            {mensaje.lineas.map((l, k) => (
+              <p key={l} className={k === 0 ? "font-semibold text-fg" : l.startsWith("⚠") ? "text-warn-ink" : "text-fg-secondary"}>
+                {l}
+              </p>
+            ))}
+          </div>
+          {/* «Más», plegado: dónde se concentran, la fase terminada que recibe, los atrasos cargados (en su frase aparte)
+              y de dónde salen los cambios de fases (solo lo verificado, como chip). */}
+          {(mensaje.detalle.length > 0 || mensaje.fuentes.length > 0) && (
+            <details className="text-xs">
+              <summary className="cursor-pointer font-semibold text-fg-secondary">Más</summary>
+              <div className="mt-1 space-y-0.5">
+                {mensaje.detalle.map((d) => (
+                  <p key={d} className={d.startsWith("⚠") ? "text-warn-ink" : "text-fg-muted"}>
+                    {d}
+                  </p>
+                ))}
+                {mensaje.fuentes.length > 0 && (
+                  <p className="flex flex-wrap items-center gap-1.5 text-fg-muted">
+                    <span>{TEXTO_DE_LAS_FUENTES}</span>
+                    {mensaje.fuentes.map((f) => (
+                      <span key={f.texto} className="rounded border border-info-line bg-info-surface px-1.5 py-px text-[10px] text-info-ink">
+                        {f.texto}
+                      </span>
+                    ))}
+                  </p>
+                )}
+              </div>
+            </details>
+          )}
+          {/* Lo que ve el cliente, sola: el cierre lo dice el mensaje. */}
+          <p className="text-xs text-fg-muted">{LINEA_DEL_CLIENTE}</p>
           {/* Lo que se aplica, con cada casilla que se toca en el Gantt (el lector lo anuncia). */}
           <div className="flex flex-wrap items-center gap-2">
             <span aria-live="polite" className="text-xs font-semibold text-fg-secondary">
@@ -280,23 +325,9 @@ export default function RevisionDeLaPropuesta({
             </Button>
           </div>
 
-          {/* EL AVISO (Tanda J): una propuesta que rehace el plan no puede llegar disfrazada de N
-              cambios sueltos. Corto a propósito: los motivos son la parte que se lee. */}
-          {otroCronograma && (
-            <div className="space-y-1 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2">
-              <p className="text-xs font-semibold text-fg-secondary">Es prácticamente un cronograma nuevo:</p>
-              <ul className="text-xs text-fg-secondary space-y-0.5">
-                {magnitud.motivos.map((m) => (
-                  <li key={m}>· {m}</li>
-                ))}
-              </ul>
-              <p className="text-xs text-fg-muted">
-                {resumen.borraAlgo
-                  ? "Aplicar quita solo las tareas que se nombran acá; lo que tiene avance o escribiste a mano no se toca."
-                  : "Aplicar no borra nada: las fases y las tareas que no se nombran quedan como están."}
-              </p>
-            </div>
-          )}
+          {/* EL AVISO de la Tanda J («Es prácticamente un cronograma nuevo», con sus motivos) se fue en L4: una propuesta
+              que rehace el plan ya no llega disfrazada de N cambios sueltos porque lo dice el título («Cronograma casi
+              nuevo», en ámbar), sus motivos van en «Más» y qué se quita lo dicen el mensaje y la confirmación. */}
 
           {choques > 0 && <p className="text-xs text-warn-ink">{textoDeLosChoques(choques)}</p>}
 

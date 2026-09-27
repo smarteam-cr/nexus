@@ -3218,17 +3218,19 @@ export function pideConfirmacion(
 }
 
 /**
- * El título de la barra: «La IA propone 3 cambios de fases y 41 de tareas», solo tareas, o el de E1
- * cuando no hay tareas. Cuenta lo que todavía difiere de lo vivo (sin lo que ya está así).
+ * «La IA propone 3 cambios de fases y 41 de tareas», solo tareas, o el de E1 cuando no hay tareas. Cuenta lo
+ * que todavía difiere de lo vivo (sin lo que ya está así).
+ * L4 (2026-09-26): deja de ser el título de la barra (lo pone el nivel de la propuesta, `mensajeDeLaPropuesta`:
+ * «Rehace casi todas las pendientes») y pierde su «otro cronograma · »: eso lo dice ahora el título «Cronograma
+ * casi nuevo». Queda como la cuenta en palabras de lo que propone.
  */
-export function tituloDeLaBarra(r: Pick<ResumenDelBorrador, "items" | "grupos" | "magnitud">): string {
+export function tituloDeLaBarra(r: Pick<ResumenDelBorrador, "items" | "grupos">): string {
   const fases = r.items.filter((it) => it.estado !== "ya-esta").length;
   // E3: también las que cambian o se mudan.
   const tareas = r.grupos.reduce((n, g) => n + g.nuevas + g.seVan + (g.cambian ?? 0), 0);
-  const otro = r.magnitud.esCronogramaNuevo ? "otro cronograma · " : "";
-  if (tareas === 0) return `La IA propone ${otro}${plural(fases, "cambio", "cambios")}`;
-  if (fases === 0) return `La IA propone ${otro}${plural(tareas, "cambio de tareas", "cambios de tareas")}`;
-  return `La IA propone ${otro}${plural(fases, "cambio de fases", "cambios de fases")} y ${tareas} de tareas`;
+  if (tareas === 0) return `La IA propone ${plural(fases, "cambio", "cambios")}`;
+  if (fases === 0) return `La IA propone ${plural(tareas, "cambio de tareas", "cambios de tareas")}`;
+  return `La IA propone ${plural(fases, "cambio de fases", "cambios de fases")} y ${tareas} de tareas`;
 }
 
 /** Lo que dice la confirmación de aplicar, después del resumen de lo marcado. */

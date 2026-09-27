@@ -506,6 +506,15 @@ export function textoDelAvance(seCruza: boolean): string {
 }
 export const ACCION_REVISAR_AVANCE = "Revisar avance";
 
+/**
+ * ¿Ya venció la semana `semana` (desde 0) de una fase que arranca en la semana `inicio` del proyecto, para una tarea en
+ * `status`? L4: es EL predicado del atraso de la propuesta: rotula «ya pasó» en la semana del Gantt y cuenta las
+ * atrasadas del mensaje (`atrasadas`, mensaje-de-la-propuesta.ts). Sin ancla o sin `hoy` (antes de hidratar), nunca.
+ */
+export function semanaVencida(ancla: string | null, inicio: number, semana: number, hoy: Date | null, status = "PENDING"): boolean {
+  return isOverdueByDate(overduePlannedEnd(ancla, inicio, semana), hoy, status);
+}
+
 /** Lo que notó la IA como se muestra en la barra: sin la jerga del paso 1 y sin las que quedan vacías. */
 export function observacionesParaMostrar(observaciones: readonly string[]): string[] {
   return observaciones.map(observacionParaMostrar).filter((o) => o.length > 0);
@@ -928,7 +937,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
     const ancla = r.proyeccion.ancla;
     if (hoy && ancla) {
       semanas.forEach((filasDeLaSemana, w) => {
-        if (!isOverdueByDate(overduePlannedEnd(ancla, inicio, w), hoy, "PENDING")) return;
+        if (!semanaVencida(ancla, inicio, w, hoy)) return;
         const recibe = filasDeLaSemana.some((x) => {
           const m = x.extra?.marca ?? marcas.get(x.clave);
           return !!m && m.marcada && !m.fantasma && (m.tipo === "nueva" || m.lugar === "destino");

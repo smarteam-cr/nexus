@@ -140,6 +140,8 @@ import {
   vistaEnLasFilas,
 } from "@/lib/timeline/vista-de-la-propuesta";
 import { fraseDeAutoria, leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
+import { mensajeDeLaPropuesta } from "@/lib/timeline/mensaje-de-la-propuesta";
+import type { ReferenciasDeLaPropuesta } from "@/lib/timeline/referencias-de-la-propuesta";
 import { origenDePropuesta } from "@/lib/timeline/proposal-deltas";
 import {
   ACUERDO_PARA_EL_VIGENTE,
@@ -552,6 +554,13 @@ export default function CronogramaCanvas({
   /* E2a: el estado de las tareas de la propuesta guardada, del GET (lo leen `load`,
      `traerPropuestaPendiente` y `refrescarPropuesta`). null = no espera tareas. */
   const [tareasDelBorrador, setTareasDelBorrador] = useState<TareasDelBorradorEnPantalla | null>(null);
+  /* L4: contra qué se compara la propuesta guardada (lo prometido, el último handoff, con qué material se armó), del
+     GET, con el token de la propuesta a la que pertenece: `load` no reemplaza la de la pantalla, y el GET pudo traer las
+     de otra (como `tareasDelBorrador`). */
+  const [referencias, setReferencias] = useState<{ token: string | null; valor: ReferenciasDeLaPropuesta | null }>({
+    token: null,
+    valor: null,
+  });
   const [applying, setApplying] = useState(false);
   /* Aplicando la propuesta de fases (POST /timeline/borrador/aplicar). Bloquea como `applying`: el
      Gantt no puede cambiar mientras el servidor compara lo vivo con lo que viste. */
@@ -842,6 +851,8 @@ export default function CronogramaCanvas({
         /* El estado de las tareas de la GUARDADA, con su token: si en pantalla queda otra (la de arriba
            no se reemplaza), la pantalla no lo usa (`tareasEnPantalla` compara el token). */
         setTareasDelBorrador(tareasDelGet(data));
+        // L4: contra qué se compara la GUARDADA, con su token (en pantalla se usa solo si es la misma propuesta).
+        setReferencias({ token: data.pendingProposalRunId ?? null, valor: data.referenciasDeLaPropuesta ?? null });
         /* E2b (2026-09-25): `load` ya no ofrece las tareas. Lo hacía la cadena vieja de dos pasos
            cuando su propuesta desaparecía sin pasar por esta pantalla; se fue con ella. Ofrecer lo
            deciden solo aplicar y descartar (`pasoTrasResolver`), con lo que se resolvió enfrente. */
@@ -871,6 +882,7 @@ export default function CronogramaCanvas({
         setAnchor("");
         setKickoffDate("");
         setTareasDelBorrador(null);
+        setReferencias({ token: null, valor: null });
         setPendingProgress(null);
         setPendingParticularidades(null);
         setPublishedAt(null);
@@ -940,6 +952,7 @@ export default function CronogramaCanvas({
         return nueva;
       });
       setTareasDelBorrador(tareasDelGet(data));
+      setReferencias({ token: runIdNuevo, valor: data.referenciasDeLaPropuesta ?? null });
     } catch {
       /* refresco oportunista: el cartel del widget ya avisa que hay algo sin revisar */
     }
@@ -978,6 +991,7 @@ export default function CronogramaCanvas({
         };
         setProposal(nueva);
         setTareasDelBorrador(tareasDelGet(data));
+        setReferencias({ token: runIdLeido, valor: data.referenciasDeLaPropuesta ?? null });
       }
       bumpGpsRefresh();
       return { ok: true, propuesta: nueva, tareas: tareasDelGet(data) };
@@ -1466,6 +1480,9 @@ export default function CronogramaCanvas({
      no reemplaza la de la pantalla, y el GET pudo traer el de otra. */
   const tareasEnPantalla: TareasDelBorradorEnPantalla | null =
     hayBorrador && tareasDelBorrador && tareasDelBorrador.token === proposalMeta.current.runId ? tareasDelBorrador : null;
+  /* L4: lo mismo con las referencias del mensaje (lo prometido, el handoff, el material): solo las de ESTA propuesta. */
+  const referenciasEnPantalla: ReferenciasDeLaPropuesta | null =
+    hayBorrador && referencias.token !== null && referencias.token === proposalMeta.current.runId ? referencias.valor : null;
   /* E2b P7: de dónde viene la propuesta EN PANTALLA, quién la dejó y cuándo. Viaja con su token en
      `proposalMeta` (misma invariante: todo `setProposal` lo escribe). null = no se sabe, y la barra
      dice solo de dónde viene. */
@@ -1564,6 +1581,25 @@ export default function CronogramaCanvas({
   /* Solo quien edita ve la vista de la propuesta: la barra que la explica (y la alterna) es suya. Quien
      solo mira ve el cronograma actual, que es el que rige hasta que alguien aplique. */
   const verPropuesta = canEdit && hayBorrador && modo === "barra" && !!revision.proyeccion && revision.vista === "propuesta";
+  /* ⭐ L4 · EL MENSAJE DE ARRIBA, con los números del código (lib/timeline/mensaje-de-la-propuesta.ts): el título y el
+     tono por el nivel de la propuesta ENTERA (`resumenEntero`), el cierre y su causa, lo prometido y el handoff, las
+     tareas, el material y las atrasadas con lo marcado. `hoy` recién después de hidratar (sin él, sin atrasadas). */
+  const mensajeDeLaBarra = useMemo(
+    () =>
+      revision.resumen && revision.resumenEntero && revision.borrador
+        ? mensajeDeLaPropuesta({
+            vivo,
+            borrador: revision.borrador,
+            r: revision.resumen,
+            entera: revision.resumenEntero,
+            referencias: referenciasEnPantalla,
+            atrasos: particularidades,
+            cierreFijado: closeOverride || null,
+            hoy: hydratedNow,
+          })
+        : null,
+    [revision.resumen, revision.resumenEntero, revision.borrador, vivo, referenciasEnPantalla, particularidades, closeOverride, hydratedNow],
+  );
   /* Lo ÚLTIMO de la revisión, para leerlo desde el aplicar (async): la closure del clic tiene la
      del render en que se apretó, y esperar el guardado puede mover lo vivo. */
   const revisionRef = useRef(revision);
@@ -3416,6 +3452,8 @@ export default function CronogramaCanvas({
           desplegarAlEntrar,
           cierre: revision.resumen ? cierreParaElGantt(revision.resumen) : null,
           recalculo: recalculoDeLaBarra,
+          // L4: el porqué de cada fase muestra su fuente solo si calza con una real (`fuenteDelMotivo`).
+          fuentes: referenciasEnPantalla?.fuentes ?? null,
         }
       : null;
   /* El avance sin revisar (el cajón «Lo que detectó el agente»): la barra ofrece revisarlo y, si toca tareas que la
@@ -4328,9 +4366,10 @@ export default function CronogramaCanvas({
               id={modo === "barra" ? undefined : "cronograma-propuesta"}
             />
           )}
-          {canEdit && modo === "barra" && revision.resumen && (
+          {canEdit && modo === "barra" && revision.resumen && mensajeDeLaBarra && (
             <RevisionDeLaPropuesta
               resumen={revision.resumen}
+              mensaje={mensajeDeLaBarra}
               vista={revision.vista}
               onAlternar={revision.alternar}
               onSiguiente={() => irAlSiguiente(1)}

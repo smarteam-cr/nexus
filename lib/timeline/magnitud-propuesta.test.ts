@@ -10,7 +10,8 @@ import {
 } from "./magnitud-propuesta";
 import type { CurrentPhaseLike, ProposalLike } from "./proposal-deltas";
 import { totalWeeks } from "./weeks";
-import { textoDeLaConfirmacion, tituloDeLaBarra } from "./borrador";
+import { textoDeLaConfirmacion, tituloDeLaBarra, type Vivo } from "./borrador";
+import { nivelDeLaPropuesta } from "./mensaje-de-la-propuesta";
 
 /**
  * lib/timeline/magnitud-propuesta.test.ts — EL UMBRAL, COMO TABLA.
@@ -219,30 +220,34 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
   );
 
   it("el aviso nombra la diferencia, sus motivos y el corrimiento del cierre", () => {
-    /* La edición que la pone en rojo: borrar el bloque del aviso, o la línea del cierre. */
-    const i = src.indexOf("{otroCronograma && (");
-    expect(i, "desapareció el aviso de cronograma nuevo; revisar esta guarda").toBeGreaterThan(-1);
-    const tramo = src.slice(i, src.indexOf("{choques > 0 && (", i));
-    expect(tramo.length, "la guarda no está mirando nada").toBeGreaterThan(300);
-    expect(tramo, "el aviso dejó de nombrar la diferencia").toContain(
-      "prácticamente un cronograma nuevo",
+    /* ⚠ REESCRITA en L4 (2026-09-26), con esta razón: el recuadro «Es prácticamente un cronograma nuevo» (con
+       `magnitud.motivos` y «Aplicar no borra nada») se fue de la barra: repetía lo que ahora dice el mensaje de arriba
+       (lib/timeline/mensaje-de-la-propuesta.ts; Elías pidió menos texto). Se sigue pidiendo lo mismo: que un cronograma
+       rehecho NO llegue disfrazado de N cambios sueltos. Ahora lo dicen el título del NIVEL («Cronograma casi nuevo»,
+       en ámbar, con ESTA magnitud), «Más» (sus motivos, probados en mensaje-de-la-propuesta.test.ts) y la primera línea
+       del mensaje (el cierre y su causa). Que no se borra nada lo sigue diciendo la confirmación (abajo).
+       Las ediciones que la ponen en rojo: que el nivel deje de mirar la magnitud, o que la barra deje de pintar el
+       título del mensaje, sus líneas o «Más». */
+    const vivo: Vivo = { ancla: null, fases: [] };
+    const sinTareas = { nuevas: 0, seVan: 0, cambian: 0, fasesSeVan: [], conLaFase: 0 };
+    const nuevo = medirPropuesta(
+      cronograma(6),
+      proponer(cronograma(6), { 0: { name: "A" }, 1: { name: "B" }, 2: { name: "C" }, 3: { name: "D" } }),
+      ANCLA,
     );
-    expect(tramo, "el aviso dejó de listar POR QUÉ es distinto").toContain("magnitud.motivos");
-    expect(tramo, "el aviso dejó de aclarar que no se borra nada").toContain("Aplicar no borra nada");
-    /* El corrimiento del cierre va en la barra FIJA, siempre a la vista (no solo en el aviso).
-       ⚠ REAPUNTADA en la corrección de E1 (2026-09-24), con esta razón: la frase salió del componente
-       a `fraseDelCierre` (lib/timeline/borrador.ts) para decir también el cierre fijado a mano, y su
-       contenido (el corrimiento, o las semanas) se prueba ahí, llamándola. Acá se pide que la barra
-       la pinte, con el cierre fijado. */
-    expect(src, "la barra dejó de decir cuánto se mueve la fecha de fin").toContain(
-      "const cierre = fraseDelCierre(resumen, cierreFijado);",
-    );
-    /* ⚠ ACTUALIZADA el 2026-09-24 con esta razón: Elías pidió menos texto y la línea del cliente se
-       sumó a la MISMA línea que el cierre. Se sigue pidiendo lo mismo: que la barra fija pinte el
-       cierre (ahora seguido de la línea del cliente, en un solo <p>). */
-    expect(src.replace(/\s+/g, " ")).toContain(
-      '<p className="text-xs text-fg-secondary"> {cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>',
-    );
+    expect(nuevo.esCronogramaNuevo).toBe(true);
+    expect(nivelDeLaPropuesta({ items: [], tareas: sinTareas, magnitud: nuevo }, vivo, "regenerar")).toEqual({
+      nivel: "casi-todo",
+      porMagnitud: true,
+    });
+    const chico = medirPropuesta(cronograma(6), proponer(cronograma(6), { 0: { durationWeeks: 3 } }), ANCLA);
+    expect(nivelDeLaPropuesta({ items: [], tareas: sinTareas, magnitud: chico }, vivo, "regenerar").porMagnitud).toBe(false);
+    const plano = src.replace(/\s+/g, " ");
+    expect(plano, "la barra dejó de pintar el título del nivel").toContain("{mensaje.titulo}");
+    expect(plano, "la barra dejó de pintar las líneas del mensaje (el cierre y su causa)").toContain("{mensaje.lineas.map(");
+    expect(plano, "la barra dejó de pintar «Más» (los motivos)").toContain("{mensaje.detalle.map(");
+    // El cierre de la confirmación sigue saliendo del núcleo, con el cierre fijado.
+    expect(src).toContain("const cierre = fraseDelCierre(resumen, cierreFijado);");
   });
 
   it("el botón grande abre confirmación y el confirm dice la verdad sobre lo que pasa", () => {
@@ -316,17 +321,21 @@ describe("guardas: el aviso y el botón se pintan, y el botón no puede mentir",
        ⚠ REAPUNTADA en E2a P5 (2026-09-25), con esta razón: el título salió del componente a
        `tituloDeLaBarra` (lib/timeline/borrador.ts), que cuenta también las tareas («3 cambios de
        fases y 41 de tareas»). Se pide lo mismo de antes: que la barra lo pinte y que el caso chico
-       diga «La IA propone N cambios», sin «otro cronograma». */
-    expect(src).toContain("{tituloDeLaBarra(resumen)}");
+       diga «La IA propone N cambios», sin «otro cronograma».
+       ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: el título y el tono de la barra salen del nivel de la
+       propuesta (`mensaje.titulo`, `mensaje.tono`; lo pintado, en barra-de-la-propuesta.test.ts) y `tituloDeLaBarra`
+       perdió su «otro cronograma · ». Se sigue pidiendo que el caso chico no se pinte como advertencia: el ámbar
+       depende del tono del mensaje, que solo es `warn` en «casi todo». */
+    expect(src).toContain("{mensaje.titulo}");
     const chico = {
       items: [{ estado: "aplica" as const }, { estado: "excluido" as const }],
       grupos: [],
-      magnitud: { esCronogramaNuevo: false },
     } as unknown as Parameters<typeof tituloDeLaBarra>[0];
     expect(tituloDeLaBarra(chico)).toBe("La IA propone 2 cambios");
     expect(src).toContain("border-info-line bg-info-surface");
+    expect(src, "el ámbar ya no depende del tono del mensaje").toContain('const atencion = mensaje.tono === "warn";');
     expect(src, "el caso chico pasó a pintarse como advertencia").toContain(
-      'otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface"',
+      'atencion ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface"',
     );
     expect(src, "el caso chico perdió su camino directo").toContain(": onAplicar()");
   });

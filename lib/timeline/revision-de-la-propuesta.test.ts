@@ -293,8 +293,12 @@ describe("la barra: UN botón que alterna, la línea fija, la lista con casillas
        línea suelta las ofrece después. La edición que la pone en rojo: volver a pintar la chapa. */
     expect(BARRA, "volvió la chapa de la cadena vieja").not.toContain("Paso 1 de 2");
     expect(BARRA).not.toContain("después, las tareas");
-    // La línea del cliente va junto al cierre, en UNA línea.
-    expect(contiene(BARRA, '{cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>')).toBe(true);
+    /* ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: pedía la línea del cliente junto al cierre, en UNA línea. El
+       cierre pasó al mensaje de arriba (su primera línea, con su causa) y lo que ve el cliente queda solo, debajo del
+       mensaje (spec §5.4). Se sigue pidiendo que la barra diga las dos cosas; lo pintado, en barra-de-la-propuesta.test.ts. */
+    expect(contiene(BARRA, '<p className="text-xs text-fg-muted">{LINEA_DEL_CLIENTE}</p>')).toBe(true);
+    expect(contiene(BARRA, "{mensaje.lineas.map(")).toBe(true);
+    expect(BARRA, "el cierre volvió a su línea fuera del mensaje").not.toContain('{cierre} <span className="text-fg-muted">');
   });
 });
 
@@ -590,7 +594,11 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     expect(iBarra).toBeLessThan(rama.indexOf("<TimelineGantt"));
     /* ⚠ ACTUALIZADA en L2 (2026-09-26), con esta razón: la barra se monta con `modo === "barra"`: mientras se
        arma la propuesta no hay barra (aparece entera al llegar las tareas). La guarda de L2, abajo. */
-    expect(contiene(rama.slice(Math.max(0, iBarra - 160), iBarra), 'canEdit && modo === "barra" && revision.resumen && (')).toBe(true);
+    /* ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: la barra pinta el mensaje de arriba, que se calcula con el
+       resumen (`mensajeDeLaBarra`): existe siempre que hay resumen, y la condición lo nombra para pasárselo. */
+    expect(
+      contiene(rama.slice(Math.max(0, iBarra - 160), iBarra), 'canEdit && modo === "barra" && revision.resumen && mensajeDeLaBarra && ('),
+    ).toBe(true);
     expect(contiene(rama, "onAplicar={() => void aplicarBorrador()}")).toBe(true);
     expect(contiene(rama, "onDescartar={() => void discardProposal()}")).toBe(true);
     expect(contiene(rama, 'enCurso={aplicandoBorrador ? "aplicar" : descartando ? "descartar" : null}')).toBe(true);
@@ -1049,8 +1057,12 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
        confirmación, que promete no borrar ninguna tarea justo cuando aplicar QUITA tareas.
        ⚠ REESCRITA AL REVÉS en E2b P4 (2026-09-25), con esta razón: pedía la chapa de la cadena vieja
        (`encadenado && delContexto && !esV1`), que solo iba en una propuesta vieja de las reuniones. La
-       cadena se fue con su prop: la barra no sabe de `encadenado` ni pinta la chapa. */
-    expect(contiene(BARRA, "{tituloDeLaBarra(resumen)}")).toBe(true);
+       cadena se fue con su prop: la barra no sabe de `encadenado` ni pinta la chapa.
+       ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: el título ya no cuenta cambios (`tituloDeLaBarra`): dice QUÉ
+       cambia, por el nivel de la propuesta entera (`mensaje.titulo`, «Rehace casi todas las pendientes»); lo que se
+       aplica lo dicen los totales. La guarda del título y el tono, en «L4 · la barra y el canvas», abajo. */
+    expect(contiene(BARRA, "{mensaje.titulo}")).toBe(true);
+    expect(BARRA, "volvió el título que cuenta cambios").not.toContain("tituloDeLaBarra(");
     /* E2b P5a (2026-09-25): de dónde viene lo dice `desde`, con UNA clasificación (`deDondeViene`, que
        se prueba en borrador.test.ts). La barra decía «desde el último handoff» para todo lo que no era
        «contexto»: ya era falso con la regla del handoff, y lo sería para «Regenerar» de una fase. La
@@ -2165,5 +2177,58 @@ describe("⛔ L2 · mientras se arma la propuesta no hay barra, y la línea suel
       contiene(seguimiento, "escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),"),
       "el aviso de la llegada no sabe si el CSE está escribiendo",
     ).toBe(true);
+  });
+});
+
+describe("⭐ L4 · el mensaje de arriba: la barra y el canvas", () => {
+  /* Lo pintado (el título, el tono, las líneas y «Más» sobre la propuesta grande) está en barra-de-la-propuesta.test.ts;
+     lo que dice, en mensaje-de-la-propuesta.test.ts. Esto mira el cableado que solo existe en los componentes. */
+  it("⭐ la barra toma el tono de `mensaje.tono` y el título de `mensaje.titulo`, sin `magnitud.esCronogramaNuevo`", () => {
+    /* La edición que la pone en rojo: volver al tono de la magnitud (una propuesta que quita 57 de 66 pendientes sin
+       ser «otro cronograma» quedaba azul), o al título que cuenta cambios. */
+    expect(contiene(BARRA, 'const atencion = mensaje.tono === "warn";')).toBe(true);
+    expect(BARRA, "el tono volvió a la magnitud").not.toContain("esCronogramaNuevo");
+    expect(BARRA, "volvió el aviso de «otro cronograma»").not.toContain("otroCronograma");
+    const fijo = tramo(BARRA, 'id="cronograma-propuesta"', 'className="rounded-xl border border-line bg-surface px-3 py-2"');
+    expect(contiene(fijo, 'atencion ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface"')).toBe(true);
+    expect(contiene(fijo, 'atencion ? "text-warn-ink" : "text-info-ink"')).toBe(true);
+    expect(contiene(fijo, "title={mensaje.titulo}")).toBe(true);
+    expect(fijo, "el mensaje se metió en lo fijo").not.toContain("mensaje.lineas");
+  });
+
+  it("⭐ el canvas arma el mensaje con la propuesta ENTERA, las referencias de ESTA propuesta y `hoy` hidratado", () => {
+    /* Las ediciones que la ponen en rojo: pasar el resumen con lo marcado como `entera` (el título saltaría al tocar
+       casillas), usar las referencias de otra propuesta, calcular `hoy` en el render (hidratación) o no pasarle el
+       mensaje a la barra. */
+    const mensaje = tramo(CANVAS, "const mensajeDeLaBarra = useMemo(", "const revisionRef = useRef(revision);");
+    expect(contiene(mensaje, "mensajeDeLaPropuesta({")).toBe(true);
+    expect(contiene(mensaje, "entera: revision.resumenEntero,")).toBe(true);
+    expect(contiene(mensaje, "r: revision.resumen,")).toBe(true);
+    expect(contiene(mensaje, "referencias: referenciasEnPantalla,")).toBe(true);
+    expect(contiene(mensaje, "cierreFijado: closeOverride || null,")).toBe(true);
+    expect(contiene(mensaje, "hoy: hydratedNow,")).toBe(true);
+    expect(contiene(mensaje, "atrasos: particularidades,")).toBe(true);
+    expect(contiene(CANVAS, "mensaje={mensajeDeLaBarra}")).toBe(true);
+    // Las referencias: del GET, atadas al token de la propuesta en pantalla (como el estado de sus tareas).
+    expect(
+      contiene(
+        CANVAS,
+        "hayBorrador && referencias.token !== null && referencias.token === proposalMeta.current.runId ? referencias.valor : null",
+      ),
+    ).toBe(true);
+    expect(CANVAS.match(/setReferencias\(\{ token: [^,]+, valor: data\.referenciasDeLaPropuesta \?\? null \}\)/g)?.length).toBe(3);
+    // El porqué de cada fase en el Gantt, con la fuente verificada.
+    expect(contiene(CANVAS, "fuentes: referenciasEnPantalla?.fuentes ?? null,")).toBe(true);
+    expect(contiene(GANTT, "const fuente = fuenteDelMotivo(m, fuentes);")).toBe(true);
+    expect(contiene(GANTT, "fuentes={propuesta?.fuentes ?? null}")).toBe(true);
+  });
+
+  it("⭐ el hook calcula la propuesta ENTERA por la huella del borrador sin las casillas", () => {
+    /* La edición que la pone en rojo: rehacer la propuesta entera en cada clic (el objeto del borrador cambia con cada
+       casilla), o calcularla con lo desmarcado. */
+    const entera = tramo(HOOK, "const huellaDelBorrador = useMemo(", "const nadaQueDecidir = useMemo(");
+    expect(contiene(entera, "huellaDeTexto(JSON.stringify({ ...borrador, excluidos: undefined, version: undefined }))")).toBe(true);
+    expect(contiene(entera, "resumir(vivo, borradorDeLaEntera, [], { tareas })")).toBe(true);
+    expect(contiene(entera, "[vivo, borradorDeLaEntera, tareas]")).toBe(true);
   });
 });

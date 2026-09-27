@@ -20,18 +20,39 @@ import RevisionDeLaPropuesta from "@/components/canvas/RevisionDeLaPropuesta";
 import { borradorDelFixture, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import { fraseDelCierre, LINEA_DEL_CLIENTE, resumir, tituloDeLaBarra, TEXTO_VER_ANTES } from "./borrador";
 import { textoDeLosChoques, textoDelSiguiente, TITULO_DEL_SIGUIENTE } from "./vista-de-la-propuesta";
+import { mensajeDeLaPropuesta, TEXTO_DE_LAS_FUENTES, type MensajeDeLaPropuesta } from "./mensaje-de-la-propuesta";
 
 const FIXTURE = leerFixtureGrande();
 const VIVO = vivoDelFixture(FIXTURE);
 const BORRADOR = borradorDelFixture(FIXTURE);
 const R = resumir(VIVO, BORRADOR, [], { tareas: "listas" });
 const DESDE = "desde «Regenerar todo» · la dejó Persona 1 el 26 sep";
+/* L4: el mensaje de arriba, con las referencias sintéticas del fixture y el `hoy` fijo (con zona). */
+const REFERENCIAS = {
+  prometido: FIXTURE.prometido,
+  handoff: FIXTURE.handoff,
+  fuentes: { instrucciones: true, reuniones: [], notas: [] },
+};
+const mensajeCon = (o: Partial<Parameters<typeof mensajeDeLaPropuesta>[0]> = {}): MensajeDeLaPropuesta =>
+  mensajeDeLaPropuesta({
+    vivo: VIVO,
+    borrador: BORRADOR,
+    r: R,
+    entera: R,
+    referencias: REFERENCIAS,
+    atrasos: FIXTURE.particularidades,
+    cierreFijado: null,
+    hoy: new Date(FIXTURE.hoy),
+    ...o,
+  });
+const M = mensajeCon();
 
 type Props = Parameters<typeof RevisionDeLaPropuesta>[0];
 const nada = () => {};
 function pintar(o: Partial<Props> = {}): string {
   const props: Props = {
     resumen: R,
+    mensaje: M,
     vista: "propuesta",
     onAlternar: nada,
     onSiguiente: nada,
@@ -80,12 +101,17 @@ describe("L3 P3d · la barra reducida", () => {
     /* Las ediciones que la ponen en rojo: volver a meter en lo fijo el cierre, lo que ve el cliente, los totales,
        «Descartar» o el origen (la barra fija tapaba medio Gantt), o sacar de ahí «Siguiente número». */
     const t = texto(fija);
-    expect(t).toContain(tituloDeLaBarra(R));
+    /* ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: el título de la barra ya no cuenta cambios
+       (`tituloDeLaBarra`, «La IA propone 2 cambios de fases y 130 de tareas»): lo pone el nivel de la propuesta
+       (`mensaje.titulo`, «Rehace casi todas las pendientes»); lo que se aplica lo dicen los totales, abajo. */
+    expect(t).toContain(M.titulo);
+    expect(t).not.toContain(tituloDeLaBarra(R));
     expect(t).toContain("Recorrer los 14 números");
     expect(fija).toContain(`title="${TITULO_DEL_SIGUIENTE}"`);
     expect(t).toContain(TEXTO_VER_ANTES);
     expect(t).toContain("Aplicar todo");
-    for (const fuera of ["Aplicas", LINEA_DEL_CLIENTE, fraseDelCierre(R), "Descartar", DESDE, "La IA también notó"]) {
+    // L4: el cierre lo dice ahora la primera línea del mensaje, y tampoco va en lo fijo (ni ninguna otra línea).
+    for (const fuera of ["Aplicas", LINEA_DEL_CLIENTE, ...M.lineas, "Descartar", DESDE, "La IA también notó"]) {
       expect(t, `lo fijo volvió a decir «${fuera}»`).not.toContain(fuera);
     }
     expect(fija).toMatch(/\bsticky\b/);
@@ -97,7 +123,12 @@ describe("L3 P3d · la barra reducida", () => {
        marcar en el Gantt), o perder el origen, el cierre o lo que ve el cliente. */
     const t = texto(abajo);
     expect(t).toContain(DESDE);
-    expect(t).toContain(`${fraseDelCierre(R)} ${LINEA_DEL_CLIENTE}`);
+    /* ⚠ ACTUALIZADA en L4 (2026-09-26), con esta razón: pedía el cierre (`fraseDelCierre`) y lo que ve el cliente en
+       UNA línea. El cierre pasó al mensaje (su primera línea, con su causa) y lo que ve el cliente queda solo, debajo.
+       Se sigue pidiendo lo mismo: que abajo se diga cómo se mueve el cierre y que el cliente no ve nada todavía. */
+    expect(t).toContain(M.lineas[0]);
+    expect(abajo).toContain(`<p class="text-xs text-fg-muted">${LINEA_DEL_CLIENTE}</p>`);
+    expect(t).not.toContain(fraseDelCierre(R));
     expect(abajo).toMatch(/<span aria-live="polite"[^>]*>Aplicas 132 de 132 cambios<\/span>/);
     expect(t).toContain("Descartar");
     // Lo que notó la IA, plegado y sin la jerga del paso 1.
@@ -160,5 +191,61 @@ describe("L3 P3d · la barra reducida", () => {
     for (const h of [html, pintar({ resumen: { ...R, choques: 2 }, avance: { hay: true, seCruza: true }, onRevisarAvance: nada })]) {
       expect(h).not.toMatch(crudo);
     }
+  });
+});
+
+/**
+ * ── L4 · EL MENSAJE DE ARRIBA (spec §5.4) ──────────────────────────────────────────────────────────────────────────
+ * El título y el tono de la barra salen del NIVEL de la propuesta entera (`mensaje`), no de la magnitud; lo de abajo
+ * pinta sus líneas completas y en su orden, y «Más» (plegado) con lo de detalle y los chips de las fuentes verificadas.
+ */
+describe("L4 · el mensaje de arriba en la barra", () => {
+  const html = pintar();
+  const { fija, abajo } = partes(html);
+
+  it("⭐ el título y el tono salen del mensaje (el nivel), no de la magnitud", () => {
+    /* La edición que la pone en rojo: volver al tono de `magnitud.esCronogramaNuevo` (con la propuesta grande es
+       false: la barra quedaba azul aunque quita 57 de las 66 pendientes), o al título que cuenta cambios. */
+    expect(R.magnitud.esCronogramaNuevo, "el fixture ya no prueba esto").toBe(false);
+    expect(M.tono).toBe("warn");
+    expect(texto(fija)).toContain("Rehace casi todas las pendientes");
+    expect(fija).toMatch(/class="[^"]*\bborder-warn-line bg-warn-surface\b/);
+    expect(fija).toContain("text-warn-ink");
+    const azul = partes(pintar({ mensaje: { ...M, tono: "info", titulo: "Ajuste chico" } })).fija;
+    expect(azul).toMatch(/class="[^"]*\bborder-info-line bg-info-surface\b/);
+    expect(texto(azul)).toContain("Ajuste chico");
+    expect(azul).not.toContain("warn");
+  });
+
+  it("⭐ las líneas del mensaje van abajo, completas y en su orden; la primera resaltada y lo que pide atención en ámbar", () => {
+    /* Las ediciones que la ponen en rojo: no pintar las líneas, recortarlas, cambiarles el orden o pintarlas en lo fijo. */
+    const t = texto(abajo);
+    let desde = 0;
+    for (const l of M.lineas) {
+      const k = t.indexOf(l, desde);
+      expect(k, `falta (o está fuera de orden) «${l}»`).toBeGreaterThan(-1);
+      desde = k + l.length;
+    }
+    expect(abajo).toContain(`<p class="font-semibold text-fg">${M.lineas[0]}</p>`);
+    const atrasadas = M.lineas.find((l) => l.startsWith("⚠"))!;
+    expect(abajo).toContain(`<p class="text-warn-ink">${atrasadas}</p>`);
+  });
+
+  it("⭐ «Más» va plegado, con lo de detalle y los chips de las fuentes verificadas", () => {
+    /* Las ediciones que la ponen en rojo: desplegar «Más», no pintar lo de detalle, o pintar un chip de fuente que el
+       mensaje no verificó. */
+    const mas = /<details class="text-xs"><summary[^>]*>Más<\/summary>([\s\S]*?)<\/details>/.exec(abajo);
+    expect(mas, "no hay «Más» plegado").not.toBeNull();
+    for (const d of M.detalle) expect(texto(mas![1])).toContain(d);
+    expect(texto(mas![1])).toContain(TEXTO_DE_LAS_FUENTES);
+    expect(mas![1]).toMatch(/<span class="rounded border border-info-line bg-info-surface[^"]*">Instrucciones adicionales<\/span>/);
+    const sinFuentes = pintar({ mensaje: mensajeCon({ referencias: { ...REFERENCIAS, fuentes: null } }) });
+    expect(texto(sinFuentes)).not.toContain(TEXTO_DE_LAS_FUENTES);
+    expect(sinFuentes).not.toContain(">Instrucciones adicionales<");
+  });
+
+  it("el aviso «Es prácticamente un cronograma nuevo» se fue: lo dicen el título y «Más»", () => {
+    /* La edición que la pone en rojo: volver a pintar el recuadro del aviso además del título (Elías pidió menos texto). */
+    expect(texto(html)).not.toContain("prácticamente un cronograma nuevo");
   });
 });
