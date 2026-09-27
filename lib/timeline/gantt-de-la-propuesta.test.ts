@@ -53,7 +53,11 @@ import {
   type ResumenDelBorrador,
   type TareaDelVivo,
 } from "./borrador";
+import { MOTIVO_DEL_KICKOFF_QUE_FALTA, TAREA_DE_KICKOFF } from "./hitos";
 import {
+  CHIP_DEL_SISTEMA,
+  CHIP_FALTABA_EL_KICKOFF,
+  CHIP_YA_HAY_KICKOFF,
   cierreParaElGantt,
   etiquetaDeLaCasilla,
   etiquetasSinCasilla,
@@ -876,5 +880,76 @@ describe("L6 · el porqué de la fase, con fuentes NUEVAS", () => {
     const html = desplegado(pintar(BORRADOR, { explicacion: conFrase(true) }).html, FASE_QUE_SE_ALARGA);
     expect(html).toContain(FRASE);
     expect(html).toContain(TEXTO_DE_CUANDO_SE_GENERO);
+  });
+});
+
+/**
+ * M2 P2e (2026-09-27, spec del replanteo §3.6 y D9): lo que decide el SISTEMA se pinta como del sistema. El fixture más
+ * lo que M2 escribe: una pendiente de «Fase K» (la que se alarga, con su motivo de la IA) sale como el kickoff que sobra
+ * y el sistema agrega el kickoff que faltaba en «Fase I» (que no tenía cambios ni porqué).
+ */
+describe("M2 P2e · lo que decide el sistema, en el Gantt", () => {
+  const desplegado = (html: string, clave: string) => {
+    const i = html.indexOf(`data-fase-key="${clave}"`);
+    const j = html.indexOf("data-fase-key=", i + 1);
+    return html.slice(i, j < 0 ? html.length : j);
+  };
+  const MOTIVO_SE_VA = "Ya hay un kickoff hecho: «Tarea 001».";
+  const SOBRANTE = BORRADOR.cambios.find((c) => c.tipo === "tarea-se-va" && c.faseId === FASE_QUE_SE_ALARGA)!;
+  const FASE_DEL_KICKOFF = "f10";
+  const KICKOFF: CambioTareaNueva = {
+    tipo: "tarea-nueva",
+    clave: "t:0f0f0f0f-0000-4000-a000-000000000001",
+    fase: FASE_DEL_KICKOFF,
+    tarea: { ...TAREA_DE_KICKOFF, hito: ["kickoff"] },
+    motivo: MOTIVO_DEL_KICKOFF_QUE_FALTA,
+    delSistema: "hito",
+  };
+  const CON_SISTEMA: Borrador = {
+    ...BORRADOR,
+    cambios: [...BORRADOR.cambios.map((c): Cambio => (c === SOBRANTE && c.tipo === "tarea-se-va" ? { ...c, motivo: MOTIVO_SE_VA, delSistema: "hito" } : c)), KICKOFF],
+  };
+  const LINEA_DEL_SISTEMA = (texto: string) => `>${CHIP_DEL_SISTEMA}</span><span>${texto}</span>`;
+
+  it("⭐ al desplegar la fase, lo del sistema va PRIMERO, con su chip; después el porqué de la IA (el de L4 o la frase de L6)", () => {
+    /* Las ediciones que la ponen en rojo: no pintar `delSistema` en `PorQueDeLaFase` (o no pasárselo), o pintarlo
+       después del porqué de la IA (el CSE leería primero «Según la IA» sobre lo que decidió una regla). */
+    expect(SOBRANTE, "el fixture ya no quita nada en «Fase K»").toBeTruthy();
+    const html = desplegado(pintar(CON_SISTEMA).html, FASE_QUE_SE_ALARGA);
+    const sistema = html.indexOf(LINEA_DEL_SISTEMA(MOTIVO_SE_VA));
+    expect(sistema, "falta la línea del sistema").toBeGreaterThan(-1);
+    expect(html.indexOf("Según la IA:"), "el porqué de la IA va antes que lo del sistema").toBeGreaterThan(sistema);
+    const frase = "Se alarga porque tus instrucciones nuevas piden probar la integración antes de abrirla.";
+    const conFrase: ExplicacionEnPantalla = {
+      explicacion: {
+        corrida: "r-paso2",
+        version: 2,
+        huellaDeCambios: huellaDeLosCambios(CON_SISTEMA.cambios),
+        general: null,
+        fases: [{ fase: FASE_QUE_SE_ALARGA, frase, fuentes: [{ tipo: "instrucciones", titulo: null, fecha: null }] }],
+        sinMaterial: [],
+        desde: "2026-09-25T15:00:00.000Z",
+      },
+      vieja: false,
+    };
+    const l6 = desplegado(pintar(CON_SISTEMA, { explicacion: conFrase }).html, FASE_QUE_SE_ALARGA);
+    expect(l6.indexOf("Por qué:"), "la frase de L6 va antes que lo del sistema").toBeGreaterThan(l6.indexOf(LINEA_DEL_SISTEMA(MOTIVO_SE_VA)));
+    expect(l6.indexOf(LINEA_DEL_SISTEMA(MOTIVO_SE_VA))).toBeGreaterThan(-1);
+    // Una fase que solo tiene lo del sistema también lo dice; sin el sistema, ninguna fase.
+    expect(desplegado(pintar(CON_SISTEMA).html, FASE_DEL_KICKOFF)).toContain(LINEA_DEL_SISTEMA(MOTIVO_DEL_KICKOFF_QUE_FALTA));
+    expect(pintar(BORRADOR).html).not.toContain(CHIP_DEL_SISTEMA);
+  });
+
+  it("⭐ las filas: «ya hay kickoff» y «faltaba el kickoff» con su motivo en el `title`; su motivo nunca como «Según la IA»", () => {
+    /* La edición que la pone en rojo: pintar la fila del sistema con el chip de siempre («se quita», «nueva»). */
+    const P = pintar(CON_SISTEMA);
+    const pintadas = filasPintadas(P.html);
+    const seVa = pintadas.find((x) => x.key === (SOBRANTE as Extract<Cambio, { tipo: "tarea-se-va" }>).tareaId)!;
+    expect(seVa.html).toContain(`title="${MOTIVO_SE_VA}">${CHIP_YA_HAY_KICKOFF}</span>`);
+    expect(seVa.html).toContain("line-through");
+    const nueva = pintadas.find((x) => x.key === KICKOFF.clave)!;
+    expect(nueva.html).toContain(`title="${MOTIVO_DEL_KICKOFF_QUE_FALTA}">${CHIP_FALTABA_EL_KICKOFF}</span>`);
+    expect(P.html).not.toContain(`Según la IA: ${MOTIVO_SE_VA}`);
+    expect(P.html).not.toContain(`Según la IA: ${MOTIVO_DEL_KICKOFF_QUE_FALTA}`);
   });
 });

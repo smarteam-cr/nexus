@@ -574,6 +574,10 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     /* M2 P2a (2026-09-27): los textos de los hitos (el motivo de la fila que quita el kickoff que sobra, el de la que
        lo agrega y las observaciones de «La IA también notó…») llegan tal cual a la barra y al Gantt. */
     "lib/timeline/hitos.ts",
+    /* M2 P2f (2026-09-27): la medición de la propuesta (PASA / NO PASA, con lo que se vio) y su script de solo lectura:
+       Elías lee los dos tal cual después de cada «Regenerar todo» de la medición. */
+    "lib/timeline/medicion-de-la-propuesta.ts",
+    "scripts/medir-propuesta.ts",
   ];
   /* Las formas que aparecieron en estos archivos, más las de uso diario del equipo. Una palabra
      entera: «Revisá» no caza «Revisa», y «vos» no caza «voseo». Las del final son las que la revisión

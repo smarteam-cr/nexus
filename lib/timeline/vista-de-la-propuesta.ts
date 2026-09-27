@@ -164,6 +164,12 @@ export interface VistaDeFase {
   semanasQueSeSuman: number[];
   /** Las semanas vencidas que reciben una nueva o un destino marcados («ya pasó»). Sin `hoy`, vacía. */
   semanasQueYaPasaron: number[];
+  /**
+   * M2 (2026-09-27, D9): lo que decide el SISTEMA en esta fase, una vez cada texto (el motivo completo de cada fila del
+   * sistema: «Ya hay un kickoff hecho: «X».»). El Gantt lo pinta PRIMERO al desplegar la fase, con su chip, y después
+   * el porqué de la IA: lo del sistema nunca se lee como «Según la IA».
+   */
+  delSistema: string[];
 }
 
 /** Una fase fuera del calendario: la nueva desmarcada (o en choque) y la que se va entera. */
@@ -214,6 +220,17 @@ export const chipVieneDeLaSemana = (semana: number) => `viene de la ${semanaDeLa
 export const chipSeMuda = (fase: string) => `→ se muda a «${fase}»`;
 export const chipPasaALaSemana = (semana: number) => `→ pasa a la ${semanaDeLaFase(semana)}`;
 export const TITULO_SEMANA_QUE_SE_SUMA = "Semana que suma la propuesta";
+/**
+ * M2 (2026-09-27, D9 de la spec del replanteo): la fila que decide el SISTEMA (`ItemDeTarea.delSistema`) lleva su chip
+ * en vez de «se quita» / «nueva» / «no se crea», y su `title` es el motivo completo. Hoy el sistema solo toca el
+ * kickoff (quita el que sobra, agrega el que faltaba); el cierre y la entrega nunca se quitan ni se agregan (D7).
+ */
+export const CHIP_YA_HAY_KICKOFF = "ya hay kickoff";
+export const CHIP_FALTABA_EL_KICKOFF = "faltaba el kickoff";
+/** El chip de la línea del sistema al desplegar la fase (va antes del porqué de la IA). */
+export const CHIP_DEL_SISTEMA = "Lo decide el sistema";
+/** El chip de una fila del sistema: se quita («ya hay kickoff») o se crea («faltaba el kickoff»). */
+export const chipDelSistema = (seQuita: boolean) => (seQuita ? CHIP_YA_HAY_KICKOFF : CHIP_FALTABA_EL_KICKOFF);
 
 const PARTY_ANTES: Record<Party, string> = {
   CLIENTE: "la hacía el cliente",
@@ -690,6 +707,8 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
   type Base = Pick<MarcaDeTarea, "clave" | "numero" | "marcada" | "seMarca" | "tachada" | "porValidar" | "fuga" | "repetida" | "titulo">;
 
   function tareaNueva(c: CambioTareaNueva, it: ItemDeTarea, base: Base, choque: string | null) {
+    // M2: la que agrega el sistema dice por qué («faltaba el kickoff»), marcada o no; un choque o la espera, lo suyo.
+    const delSistema = it.delSistema ? chipDelSistema(false) : null;
     if (choque === null && it.estado === "aplica") {
       // Está en la proyección: la fila real, en verde.
       if (tareaProyectada.has(c.clave)) {
@@ -699,7 +718,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
           lugar: "tarea",
           conCasilla: true,
           verbo: VERBO_CREAR,
-          chip: CHIP_NUEVA,
+          chip: delSistema ?? CHIP_NUEVA,
           fantasma: false,
           existeHoyYSeQueda: false,
         });
@@ -724,7 +743,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
           lugar: "tarea",
           conCasilla: true,
           verbo: VERBO_CREAR,
-          chip: choque !== null ? chipDelChoque(choque) : it.enEspera ? CHIP_ESPERA : CHIP_NO_SE_CREA,
+          chip: choque !== null ? chipDelChoque(choque) : it.enEspera ? CHIP_ESPERA : (delSistema ?? CHIP_NO_SE_CREA),
           fantasma: true,
           existeHoyYSeQueda: false,
         },
@@ -736,6 +755,8 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
 
   function tareaSeVa(c: CambioTareaSeVa, it: ItemDeTarea, base: Base, choque: string | null) {
     const comun = { ...base, lugar: "tarea" as const, conCasilla: true, verbo: VERBO_QUITAR, fantasma: false };
+    // M2: la que quita el sistema (el kickoff que sobra) dice por qué, marcada o no.
+    const delSistema = it.delSistema ? chipDelSistema(true) : null;
     if (choque !== null) {
       marcarLaViva(c, { ...comun, tipo: "choque", chip: chipDelChoque(choque), existeHoyYSeQueda: true });
     } else if (it.enEspera) {
@@ -743,10 +764,12 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
       // misma key quedaría dos veces en la semana).
       marcarLaViva(c, { ...comun, tipo: "espera", chip: CHIP_ESPERA, existeHoyYSeQueda: false });
     } else if (it.estado === "aplica") {
-      ponerExtra(extraEnSuLugar(c, c.tareaId, { ...comun, tipo: "se-va", chip: CHIP_SE_QUITA, tachada: true, existeHoyYSeQueda: false }));
+      ponerExtra(
+        extraEnSuLugar(c, c.tareaId, { ...comun, tipo: "se-va", chip: delSistema ?? CHIP_SE_QUITA, tachada: true, existeHoyYSeQueda: false }),
+      );
     } else {
-      // Desmarcada: se queda, normal y sin chip.
-      marcarLaViva(c, { ...comun, tipo: "se-va", chip: null, existeHoyYSeQueda: true });
+      // Desmarcada: se queda, normal y sin chip (la del sistema, con el suyo).
+      marcarLaViva(c, { ...comun, tipo: "se-va", chip: delSistema, existeHoyYSeQueda: true });
     }
   }
 
@@ -840,9 +863,15 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
 
   /* Cada `ItemDeTarea` (sin lo «ya está», que no tiene casilla): UNA fila con su casilla, en su lugar de hoy. */
   const tocadas = new Set<string>();
+  /** M2: lo que decide el sistema, por fase (su grupo), sin repetir el texto. */
+  const delSistemaPorFase = new Map<string, string[]>();
   for (const g of r.grupos) {
     for (const it of g.tareas) {
       if (it.estado === "ya-esta") continue;
+      if (it.delSistema) {
+        const ya = delSistemaPorFase.get(g.fase) ?? [];
+        if (!ya.includes(it.delSistema.texto)) delSistemaPorFase.set(g.fase, [...ya, it.delSistema.texto]);
+      }
       const c = cambioPorClave.get(it.clave);
       if (!c || !esCambioDeTarea(c)) continue;
       if (c.tipo !== "tarea-nueva") tocadas.add(c.tareaId);
@@ -856,7 +885,8 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
         ...(it.porValidar ? { porValidar: it.porValidar } : {}),
         ...(it.fuga ? { fuga: it.fuga } : {}),
         ...(it.repetida ? { repetida: it.repetida } : {}),
-        ...(choque !== null ? { titulo: choque } : {}),
+        // M2: la del sistema lleva su motivo completo en el `title` (el choque, si lo hay, manda).
+        ...(choque !== null ? { titulo: choque } : it.delSistema ? { titulo: it.delSistema.texto } : {}),
       };
       if (c.tipo === "tarea-nueva") tareaNueva(c, it, base, choque);
       else if (c.tipo === "tarea-se-va") tareaSeVa(c, it, base, choque);
@@ -1043,6 +1073,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
       semanas,
       semanasQueSeSuman: sumadasPorFase.get(f.clave) ?? [],
       semanasQueYaPasaron,
+      delSistema: delSistemaPorFase.get(f.clave) ?? [],
     });
   }
 
@@ -1064,6 +1095,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
       semanas: [],
       semanasQueSeSuman: [],
       semanasQueYaPasaron: [],
+      delSistema: delSistemaPorFase.get(x.key) ?? [],
     });
   }
 

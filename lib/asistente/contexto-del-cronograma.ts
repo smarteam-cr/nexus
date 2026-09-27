@@ -46,6 +46,15 @@ export const COMO_SE_LEEN_LAS_SEMANAS =
 export const LEYENDA_DE_LA_SUGERIDA =
   "«?» = hecha que la IA sugiere mudar a otra fase; viene sin marcar y solo se aplica si se marca (se marca o se deja, no se edita).";
 
+/**
+ * M2 (2026-09-27, D9 de la spec del replanteo): la fila que decide el SISTEMA (el kickoff que sobra o el que faltaba)
+ * lo dice entre paréntesis, para que el chat no la explique como una idea de la IA ni prometa que la IA la cambia.
+ */
+export const DEL_SISTEMA_SE_QUITA = "(lo decide el sistema: ya hay un kickoff)";
+export const DEL_SISTEMA_SE_CREA = "(lo decide el sistema: faltaba el kickoff)";
+const delSistema = (t: Pick<ItemDeTarea, "delSistema" | "signo">): string =>
+  t.delSistema ? ` ${t.signo === "+" ? DEL_SISTEMA_SE_CREA : DEL_SISTEMA_SE_QUITA}` : "";
+
 /** Los estados como los nombra la pantalla. Se omite «pendiente»: es el caso mayoritario. */
 function estadoCorto(status: string): string {
   if (status === "DONE") return "hecha";
@@ -204,6 +213,8 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     COMO_SE_LEEN_LAS_SEMANAS,
   ];
   const rangos = computePhaseRanges(r.proyeccion.fases);
+  // M2: las filas del sistema, por ref (el id de la viva o la clave `t:` de la nueva), para decirlo también acá.
+  const delSistemaPorRef = new Map(r.grupos.flatMap((g) => g.tareas.filter((t) => t.delSistema).map((t) => [t.ref, t] as const)));
   r.proyeccion.fases.forEach((f, i) => {
     const inicio = rangos[i].start;
     const semanas = Math.max(f.durationWeeks, 1);
@@ -226,7 +237,8 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     const renglon = (t: (typeof f.tareas)[number]) => {
       const signo = t.id === null ? "+" : t.llega ? "→" : t.cambia ? "~" : "";
       const marca = marcaDe(t);
-      return `${signo}${titulo(t.title)} [${h(t.clave)}]${marca ? ` (${marca})` : ""}`;
+      const sistema = delSistemaPorRef.get(t.clave);
+      return `${signo}${titulo(t.title)} [${h(t.clave)}]${marca ? ` (${marca})` : ""}${sistema ? delSistema(sistema) : ""}`;
     };
     const semana = (w: number) => etiquetaDeSemana(inicio, w).corta;
     for (let w = 0; w < semanas; w++) {
@@ -300,7 +312,7 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     }
   };
   const fila = (t: ItemDeTarea, conSigno: boolean) =>
-    `${conSigno ? `${t.signo} ` : ""}${t.etiqueta} ${titulo(t.titulo)} [${h(t.ref)}]`;
+    `${conSigno ? `${t.signo} ` : ""}${t.etiqueta} ${titulo(t.titulo)} [${h(t.ref)}]${delSistema(t)}`;
   const delGrupo = (g: GrupoDeTareas) => {
     const partes = [
       ...(g.nuevas > 0 ? [`+${g.nuevas} ${g.nuevas === 1 ? "nueva" : "nuevas"}`] : []),

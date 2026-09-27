@@ -27,7 +27,18 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 
-import { borradorVacio, leerBorrador, planDeAplicacion, type Cambio, type CambioTareaCambia, type CambioTareaNueva, type Vivo } from "./borrador";
+import {
+  borradorVacio,
+  claveDeTareaQueSeVa,
+  fotoDeTarea,
+  leerBorrador,
+  planDeAplicacion,
+  type Borrador,
+  type Cambio,
+  type CambioTareaCambia,
+  type CambioTareaNueva,
+  type Vivo,
+} from "./borrador";
 import {
   estructuraParaElDetalle,
   fusionarDetalleEnElBorrador,
@@ -39,6 +50,16 @@ import {
 import { pipelineByKey } from "@/lib/projects/kind";
 import { tareasTocadas } from "./hechas-fuera-de-lugar";
 import { explicacionEnPantalla, huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
+import { observacionDeLasQueNoEntran } from "./hitos";
+import {
+  avisosDeLaMedicion,
+  medirM2,
+  renglonDeLaCondicion,
+  repitenDeLasObservaciones,
+  vivoDeLasFilas,
+  type FilaDeFase,
+  type FilaDeTarea,
+} from "./medicion-de-la-propuesta";
 
 const tareaDB = (id: string, title: string, weekIndex: number, extra: Record<string, unknown> = {}) => ({
   id,
@@ -712,5 +733,206 @@ describe("M2 · los hitos: la fusión los recibe del proyecto y el modelo los le
     expect(s0.hechas).toHaveLength(15);
     expect(s0.hechasDeMas).toBe(2);
     expect(s0.seQuedan).toEqual([{ titulo: "Pausada", porque: "suspendida" }]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── M2 P2f · la medición lee lo que escribe la fusión ────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * M2 P2f (spec del replanteo §3.7, 2026-09-27): `scripts/medir-propuesta.ts` dice PASA / NO PASA sobre la propuesta
+ * abierta de Wherex después de cada «Regenerar todo» de la medición. Acá, un Wherex en chico pasa por la fusión REAL
+ * (con la base falsa) y la medición lee lo que la fusión escribió: las 4 pasan. Después se rompe la propuesta a mano, una
+ * falla por condición, y cada una tiene que dar NO PASA: si no, el script diría «pasa» sobre una propuesta mala.
+ */
+describe("M2 P2f · la medición lee lo que escribe la fusión", () => {
+  const CUSTOMER_SUCCESS = pipelineByKey("customer-success").hubspotPipelineId;
+  /** El `hoy` fijo de las guardas (spec §0.2). */
+  const HOY = new Date("2026-09-26T12:00:00-06:00");
+  /** La Semana 0 (S0–S1) ya pasó; «Diseño» arranca en la S2 (21–27 sep), la de hoy. */
+  const ANCLA = new Date("2026-09-07T00:00:00.000Z");
+  const sesion = (id: string, title: string, weekIndex: number, extra: Record<string, unknown> = {}) =>
+    tareaDB(id, title, weekIndex, { type: "SESSION", ...extra });
+  /** Dos kickoffs hechos y uno pendiente de la IA; la entrega y el cierre, pendientes en la última fase. */
+  const WHEREX = [
+    faseDB("s0", "Semana 0", 0, 2, "IN_PROGRESS", [
+      sesion("k1", "Sesión de kickoff: equipo, roles y accesos", 0, { status: "DONE" }),
+      sesion("k2", "Sesión de kick-off formal del proyecto", 0, { status: "DONE" }),
+      sesion("k3", "Sesión de kick-off del proyecto", 1),
+      tareaDB("s1", "Recolección de accesos", 1, { startDateOverride: new Date("2026-09-15T00:00:00.000Z") }),
+    ]),
+    faseDB("d", "Diseño", 1, 3, "PENDING", [
+      tareaDB("d1", "Mapear procesos", 0),
+      tareaDB("d2", "Taller con el cliente", 0, { source: "HUMAN" }),
+      tareaDB("d3", "Revisar con el sponsor", 2),
+    ]),
+    faseDB("c", "Cierre y entrega", 2, 1, "PENDING", [
+      sesion("e1", "Entrega formal del proyecto a Cliente", 0),
+      sesion("c1", "Sesión de cierre con junta directiva", 0),
+    ]),
+  ];
+  const tarea = (title: string, weekIndex: number, type = "TASK") => ({ title, weekIndex, notes: null, porValidar: false, party: "SMARTEAM", type });
+  /** La IA: repite lo que sirve, vuelve a proponer el kickoff con otras palabras, repite «Taller con el cliente» (a mano)
+   *  y propone una «Sesión de cierre y entrega»; no repite «Revisar con el sponsor» (se quita: futura). */
+  const SALIDA = {
+    timelineDetail: {
+      phases: [
+        { id: "s0", tasks: [tarea("Recolección de accesos", 1), tarea("Sesión de kick-off con el equipo Cliente", 1, "SESSION")] },
+        { id: "d", tasks: [tarea("Mapear procesos", 0), tarea("Taller con el cliente", 0), tarea("Configurar integraciones", 1)] },
+        { id: "c", tasks: [tarea("Sesión de cierre y entrega del proyecto", 0, "SESSION")] },
+      ],
+    },
+  };
+  const vivo = () => vivoDeLaBase(ANCLA, WHEREX as unknown as Parameters<typeof vivoDeLaBase>[1]);
+  const medir = (b: Borrador, v: Vivo = vivo()) => medirM2({ vivo: v, borrador: b, recurrente: false, hoy: HOY });
+  async function loQueEscribeLaFusion(): Promise<Borrador> {
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    db.projectTimeline.findUnique.mockImplementation(async () => ({
+      pendingProposal: JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))),
+      pendingProposalRunId: "run-2",
+      anchorStartDate: ANCLA,
+      closeDateOverride: null,
+      project: { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS },
+      phases: WHEREX,
+    }));
+    const sobre = await estructuraParaElDetalle("tl", "run-2");
+    let k = 0;
+    const r = await fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-2",
+      estructura: sobre!.estructura,
+      analysisJson: SALIDA,
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `k-${++k}`,
+    });
+    expect(r.estado).toBe("listas");
+    // Como lo lee el script: el JSON guardado, por `leerBorrador`.
+    return leerBorrador(JSON.parse(JSON.stringify(db.projectTimeline.updateMany.mock.calls.at(-1)![0].data.pendingProposal)))!;
+  }
+  const nueva = (fase: string, title: string, type: "SESSION" | "TASK", hito?: CambioTareaNueva["tarea"]["hito"]): CambioTareaNueva => ({
+    tipo: "tarea-nueva",
+    clave: `t:0f0f0f0f-0000-4000-a000-00000000000${fase.length}`,
+    fase,
+    tarea: { title, weekIndex: 0, notes: null, party: "AMBOS", type, needsValidation: false, motivoPorValidar: null, fuga: null, ...(hito ? { hito } : {}) },
+  });
+
+  it("⭐ con lo que escribe la fusión real, las 4 condiciones PASAN, con lo que se vio", async () => {
+    /* Las ediciones que la ponen en rojo: que la medición no reconozca lo que escribe la fusión (otra clave, otro texto
+       de la observación de R14, el `delSistema` leído de otro lado): el script diría NO PASA sobre una propuesta buena. */
+    const b = await loQueEscribeLaFusion();
+    expect(avisosDeLaMedicion(b)).toEqual([]);
+    expect(medir(b).map((c) => [c.numero, c.pasa, c.detalle])).toEqual([
+      [1, true, "Sale del sistema: «Sesión de kick-off del proyecto»."],
+      [2, true, "Ninguno."],
+      [3, true, "1 repite una que ya está."],
+      [4, true, "1 de 1 que quita la IA."],
+    ]);
+    expect(renglonDeLaCondicion(medir(b)[0])).toBe(
+      "1. PASA · El kickoff que sobra sale para quitar, del sistema — Sale del sistema: «Sesión de kick-off del proyecto».",
+    );
+  });
+
+  it("⭐ cada falla da NO PASA en su condición: el kickoff como de la IA o sin quitar, un hito que ya estaba, 6 que repiten", async () => {
+    /* Las ediciones que la ponen en rojo (en medicion-de-la-propuesta.ts): no mirar `delSistema` en la 1; mirar solo la
+       marca de R15 (o solo el título) en la 2; leer el total de la observación en vez de «K repiten» en la 3. */
+    const b = await loQueEscribeLaFusion();
+    const conCambios = (cambios: Cambio[]): Borrador => ({ ...b, cambios });
+    const esElSobrante = (c: Cambio) => c.tipo === "tarea-se-va" && c.tareaId === "k3";
+    expect(medir(conCambios(b.cambios.map((c) => (esElSobrante(c) ? { ...c, delSistema: undefined } : c))))[0]).toMatchObject({
+      pasa: false,
+      detalle: "«Sesión de kick-off del proyecto» sale, pero como de la IA.",
+    });
+    expect(medir(conCambios(b.cambios.filter((c) => !esElSobrante(c))))[0]).toMatchObject({
+      pasa: false,
+      detalle: "«Sesión de kick-off del proyecto» no sale.",
+    });
+    // Un kickoff que entró sin la marca de R15 (lo reconoce el título) y una entrega con la marca y un título que no.
+    const porTitulo = medir(conCambios([...b.cambios, nueva("s0", "Sesión de kick-off con el equipo Cliente", "SESSION")]))[1];
+    expect(porTitulo.pasa).toBe(false);
+    expect(porTitulo.detalle).toBe("Entran igual: «Sesión de kick-off con el equipo Cliente» (kickoff; ya está «Sesión de kickoff: equipo, roles y accesos»).");
+    const porMarca = medir(conCambios([...b.cambios, nueva("d", "Revisión final", "TASK", ["entrega"])]))[1];
+    expect(porMarca).toMatchObject({ pasa: false, detalle: "Entran igual: «Revisión final» (entrega; ya está «Entrega formal del proyecto a Cliente»)." });
+    // Lo que dictó el chat no cuenta: lo pidió una persona.
+    expect(medir(conCambios([...b.cambios, { ...nueva("s0", "Sesión de kick-off con el equipo Cliente", "SESSION"), porChat: true }]))[1].pasa).toBe(true);
+    const seis = observacionDeLasQueNoEntran({ repiten: 6, enElPasado: 3 })!;
+    expect(medir({ ...b, observaciones: [...b.observaciones.filter((o) => !o.startsWith("No entra")), seis] })[2]).toMatchObject({
+      pasa: false,
+      detalle: "6 repiten una que ya está.",
+    });
+  });
+
+  it("⭐ la 4 cuenta solo las pendientes de semanas que no pasaron, sin las del sistema: 8 futuras NO PASA", () => {
+    /* Las ediciones que la ponen en rojo: contar todas las que se quitan (sin `semanaVencida`), o contar la del sistema. */
+    const muchas = Array.from({ length: 9 }, (_, k) => tareaDB(`p${k}`, `Pendiente ${k}`, 2));
+    const fases = [WHEREX[0], { ...WHEREX[1], tasks: [...WHEREX[1].tasks, ...muchas] }, WHEREX[2]];
+    const v = vivoDeLaBase(ANCLA, fases as unknown as Parameters<typeof vivoDeLaBase>[1]);
+    const seVa = (id: string, faseId: string, extra: Partial<Extract<Cambio, { tipo: "tarea-se-va" }>> = {}): Cambio => {
+      const t = v.fases.flatMap((f) => f.tareas ?? []).find((x) => x.id === id)!;
+      return { tipo: "tarea-se-va", clave: claveDeTareaQueSeVa(id), tareaId: id, faseId, desde: fotoDeTarea(t), ...extra };
+    };
+    const base = borradorVacio({ pedido: "regenerar", corrida: "run-2" });
+    const ocho = muchas.slice(0, 8).map((t) => seVa(t.id, "d"));
+    // «Recolección de accesos» (S1, ya pasó) no cuenta; el kickoff que quita el sistema, tampoco.
+    const conOcho: Borrador = { ...base, tareas: { corrida: "run-2", listas: true }, cambios: [...ocho, seVa("s1", "s0"), seVa("k3", "s0", { delSistema: "hito" })] };
+    expect(medir(conOcho, v)[3]).toMatchObject({ pasa: false });
+    expect(medir(conOcho, v)[3].detalle).toMatch(/^8 de 9 que quita la IA\. «Pendiente 0», /);
+    const conSiete: Borrador = { ...conOcho, cambios: conOcho.cambios.slice(1) };
+    expect(medir(conSiete, v)[3]).toMatchObject({ pasa: true, detalle: "7 de 8 que quita la IA." });
+    // Sin fecha de arranque nada venció: todas cuentan como futuras, y se dice.
+    expect(medir(conSiete, { ...v, ancla: null })[3]).toMatchObject({ pasa: false, detalle: expect.stringContaining("Sin fecha de arranque") });
+  });
+
+  it("⭐ las piezas: «K repiten» de la observación real, los avisos y el vivo del script igual al de la fusión", () => {
+    /* Las ediciones que la ponen en rojo: leer mal la observación de R14; no avisar que no es «Regenerar todo»; o armar
+       el vivo del script distinto del de `vivoDeLaBase` (sin la marca, con otra fecha). */
+    expect(repitenDeLasObservaciones([observacionDeLasQueNoEntran({ repiten: 1 })!])).toBe(1);
+    expect(repitenDeLasObservaciones([observacionDeLasQueNoEntran({ repiten: 4 })!])).toBe(4);
+    expect(repitenDeLasObservaciones(["otra", observacionDeLasQueNoEntran({ repiten: 2, enElPasado: 5 })!])).toBe(2);
+    expect(repitenDeLasObservaciones([observacionDeLasQueNoEntran({ repiten: 0, enElPasado: 3 })!])).toBe(0);
+    expect(repitenDeLasObservaciones([])).toBe(0);
+    expect(avisosDeLaMedicion(borradorVacio({ pedido: "regenerar", corrida: "r", soloFase: "d" }))).toEqual([
+      "No es «Regenerar todo»: la medición es para esa propuesta.",
+      "Las tareas de la IA todavía no llegaron: mide cuando lleguen.",
+    ]);
+    // El vivo del script (SQL) y el de la fusión (Prisma), iguales: con la marca, las fechas fijadas y el ancla.
+    const tareasDeS0 = WHEREX[0].tasks as Array<ReturnType<typeof tareaDB>>;
+    const conMarca = [{ ...WHEREX[0], tasks: tareasDeS0.map((t) => (t.id === "k1" ? { ...t, originFingerprint: "hito:kickoff" } : t)) }, ...WHEREX.slice(1)];
+    const dia = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : null);
+    const filasDeFase: FilaDeFase[] = conMarca.map((f) => ({
+      id: f.id,
+      name: f.name,
+      durationWeeks: f.durationWeeks,
+      startWeek: f.startWeek,
+      sessionCount: f.sessionCount,
+      notes: f.notes,
+      activityType: f.activityType,
+      status: f.status,
+    }));
+    const filasDeTarea: FilaDeTarea[] = conMarca.flatMap((f) =>
+      f.tasks.map((t) => {
+        const x = t as ReturnType<typeof tareaDB> & { originFingerprint?: string | null; startDateOverride: unknown; dueDateOverride: unknown };
+        return {
+          id: x.id,
+          phaseId: f.id,
+          title: x.title,
+          weekIndex: x.weekIndex,
+          notes: x.notes,
+          party: x.party,
+          type: x.type,
+          status: x.status,
+          source: x.source,
+          needsValidation: x.needsValidation,
+          originFingerprint: x.originFingerprint ?? null,
+          inicioFijado: dia(x.startDateOverride),
+          finFijado: dia(x.dueDateOverride),
+        };
+      }),
+    );
+    const delScript = vivoDeLasFilas(ANCLA.toISOString(), filasDeFase, filasDeTarea);
+    expect(delScript).toEqual(vivoDeLaBase(ANCLA, conMarca as unknown as Parameters<typeof vivoDeLaBase>[1]));
+    expect(delScript.fases[0].tareas![0].marca).toBe("hito:kickoff");
+    expect(delScript.fases[0].tareas![3].inicioFijado).toBe("2026-09-15");
   });
 });

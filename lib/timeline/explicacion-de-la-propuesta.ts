@@ -297,8 +297,9 @@ interface Grupo {
 }
 
 /**
- * Las fases con cambios, como las lee la IA. Sin lo que dictó el chat (no lo pidió ninguna fuente: lo pidió el CSE) ni
- * las mudanzas que SUGIERE la IA (L7: nacen sin marcar, no son un cambio de la propuesta todavía). Hasta 15, las de más
+ * Las fases con cambios, como las lee la IA. Sin lo que dictó el chat (no lo pidió ninguna fuente: lo pidió el CSE), ni
+ * las mudanzas que SUGIERE la IA (L7: nacen sin marcar, no son un cambio de la propuesta todavía), ni lo que decide el
+ * SISTEMA (M2, D9: el kickoff que sobra o el que faltaba; su porqué es la regla, no una reunión). Hasta 15, las de más
  * cambios primero (empate: el orden del Gantt), con ids F1….
  */
 export function cambiosParaExplicar(vivo: Vivo, cambios: readonly Cambio[]): CambioDeFaseParaExplicar[] {
@@ -315,6 +316,10 @@ export function cambiosParaExplicar(vivo: Vivo, cambios: readonly Cambio[]): Cam
     if (c.porChat) continue;
     if (c.tipo === "ancla" || c.tipo === "orden") continue;
     if (c.tipo === "tarea-cambia" && c.sugerida) continue;
+    /* M2 (2026-09-27, D9 de la spec del replanteo): lo que decide el sistema no pasa por la explicación. Si pasara,
+       Haiku le buscaría una reunión a una regla, contaría para el tope de 15 fases y «Más» lo sumaría a «cambian sin
+       material nuevo». Su porqué ya lo dice su fila («ya hay kickoff») y la línea del sistema en el Gantt. */
+    if ((c.tipo === "tarea-nueva" || c.tipo === "tarea-se-va") && c.delSistema) continue;
     const clave = c.tipo === "fase-nueva" ? c.clave : c.tipo === "fase-cambia" || c.tipo === "fase-se-va" ? c.faseId : faseDeLaTarea(c);
     const g = grupo(clave);
     g.total++;

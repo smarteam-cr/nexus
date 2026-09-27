@@ -31,6 +31,8 @@ vi.mock("@/lib/contexto/cargar", () => ({ cargarMaterialParaElChat: vi.fn() }));
 import {
   armarContextoConPropuesta,
   COMO_SE_LEEN_LAS_SEMANAS,
+  DEL_SISTEMA_SE_CREA,
+  DEL_SISTEMA_SE_QUITA,
   LEYENDA_DE_LA_SUGERIDA,
   LINEA_DE_LA_PROPUESTA_EDITABLE,
   lineaDeSoloLectura,
@@ -53,10 +55,12 @@ import {
   type Borrador,
   type Cambio,
   type CambioTareaNueva,
+  type CambioTareaSeVa,
   type FaseViva,
   type TareaDelVivo,
   type Vivo,
 } from "@/lib/timeline/borrador";
+import { MOTIVO_DEL_KICKOFF_QUE_FALTA, TAREA_DE_KICKOFF } from "@/lib/timeline/hitos";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Los fixtures: un cronograma con la forma de Wherex y una propuesta de «Regenerar todo» ──────
@@ -923,5 +927,60 @@ describe("⛔ L7 · la mudanza sugerida, en el contexto del chat", () => {
     // Sin sugeridas, la leyenda no va (el texto de siempre).
     const sin = armarContextoConPropuesta(entrada(paraElChat(base)), { techo: Number.POSITIVE_INFINITY });
     expect(sin.texto).not.toContain(LEYENDA_DE_LA_SUGERIDA);
+  });
+});
+
+describe("⛔ M2 P2e · lo que decide el sistema, en el contexto del chat", () => {
+  /* Spec del replanteo §3.6 y D9 (2026-09-27): el kickoff que sobra y el que faltaba los decide el SISTEMA. Si el chat
+     no lo supiera, los explicaría como una idea de la IA («la IA propone quitar…») o prometería que la IA los cambia. */
+  const base = propuestaGrande({ fases: 6, vivas: 60, nuevas: 6, seVan: 4 });
+  const seVa = base.borrador.cambios.find((c): c is CambioTareaSeVa => c.tipo === "tarea-se-va")!;
+  const kickoff: CambioTareaNueva = {
+    tipo: "tarea-nueva",
+    clave: "t:0f0f0f0f-0000-4000-a000-000000000001",
+    fase: base.vivo.fases[0].id,
+    tarea: { ...TAREA_DE_KICKOFF, hito: ["kickoff"] },
+    motivo: MOTIVO_DEL_KICKOFF_QUE_FALTA,
+    delSistema: "hito",
+  };
+  const conSistema = (excluidos: string[] = []) => ({
+    vivo: base.vivo,
+    borrador: {
+      ...base.borrador,
+      cambios: [
+        ...base.borrador.cambios.map((c): Cambio => (c === seVa ? { ...seVa, motivo: "Ya hay un kickoff hecho: «X».", delSistema: "hito" } : c)),
+        kickoff,
+      ],
+      ...(excluidos.length > 0 ? { excluidos } : {}),
+    },
+  });
+  const veces = (texto: string, sub: string) => texto.split(sub).length - 1;
+
+  it("⭐ la que quita dice «(lo decide el sistema: ya hay un kickoff)» y la que agrega «(… faltaba el kickoff)»; nada más lo dice", () => {
+    /* Las ediciones que la ponen en rojo: no sumar `delSistema` a `fila` (la lista «se van») o a `renglon` (la fila
+       «+» de LA PROPUESTA), o sumarlo a cualquier fila. */
+    const c = armarContextoConPropuesta(entrada(paraElChat(conSistema())), { techo: Number.POSITIVE_INFINITY });
+    const hSeVa = c.handles.get(seVa.tareaId) ?? seVa.tareaId;
+    const hNueva = c.handles.get(kickoff.clave) ?? kickoff.clave;
+    const seVanLinea = c.texto.split("\n").find((l) => l.startsWith("   se van: ") && l.includes(`[${hSeVa}]`));
+    expect(seVanLinea, "la que quita el sistema no dice que es del sistema").toContain(`[${hSeVa}] ${DEL_SISTEMA_SE_QUITA}`);
+    expect(c.texto).toContain(`+${TAREA_DE_KICKOFF.title} [${hNueva}] ${DEL_SISTEMA_SE_CREA}`);
+    expect(veces(c.texto, "(lo decide el sistema")).toBe(2);
+    // Sin lo del sistema, el texto de siempre.
+    const sin = armarContextoConPropuesta(entrada(paraElChat(base)), { techo: Number.POSITIVE_INFINITY });
+    expect(sin.texto).not.toContain("lo decide el sistema");
+  });
+
+  it("⭐ desmarcada, la que quita el sistema lo sigue diciendo (en su fila y en «desmarcadas»), también recortado", () => {
+    /* La edición que la pone en rojo: decirlo solo en «se van» (desmarcada se leería como una pendiente cualquiera). */
+    const c = armarContextoConPropuesta(entrada(paraElChat(conSistema([seVa.clave]))), { techo: Number.POSITIVE_INFINITY });
+    const h = c.handles.get(seVa.tareaId) ?? seVa.tareaId;
+    const lineas = c.texto.split("\n");
+    expect(lineas.find((l) => l.startsWith("   desmarcadas: "))).toContain(`[${h}] ${DEL_SISTEMA_SE_QUITA}`);
+    expect(lineas.some((l) => !l.startsWith("   desmarcadas: ") && l.includes(`[${h}] ${DEL_SISTEMA_SE_QUITA}`)), "su fila de LA PROPUESTA no lo dice").toBe(true);
+    const recortado = armarContextoConPropuesta(entrada(paraElChat(conSistema([seVa.clave]))), { techo: 1_000 });
+    expect(recortado.nivel).toBe(2);
+    expect(veces(recortado.texto, DEL_SISTEMA_SE_QUITA)).toBe(2);
+    expect(veces(recortado.texto, DEL_SISTEMA_SE_CREA)).toBe(1);
   });
 });

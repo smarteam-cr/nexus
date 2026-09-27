@@ -20,7 +20,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { bloqueDeInstruccionesDeDoc } from "@/lib/business-cases/section-briefs";
 import { borradorDelFixture, FASE_NUEVA, FASE_QUE_SE_ALARGA, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
-import { claveDeTareaQueCambia, fotoDeTarea, leerBorrador, type Cambio } from "./borrador";
+import { claveDeTareaQueCambia, fotoDeTarea, leerBorrador, type Cambio, type CambioTareaNueva, type CambioTareaSeVa } from "./borrador";
+import { MOTIVO_DEL_KICKOFF_QUE_FALTA, TAREA_DE_KICKOFF } from "./hitos";
 import {
   anteriorDeLaCorrida,
   cambiosParaExplicar,
@@ -426,5 +427,33 @@ describe("L6 · la ruta del paso 2 (escaneo)", () => {
     }
     // Lo puro no arrastra Prisma (lo importa la pantalla).
     expect(leerFuente("lib/timeline/explicacion-de-la-propuesta.ts")).not.toMatch(/@\/lib\/db\/prisma|@prisma\/client/);
+  });
+});
+
+describe("M2 P2e · lo que decide el sistema no pasa por la explicación (D9)", () => {
+  it("⭐ el kickoff que sobra y el que faltaba dan 0 fases para explicar; en la propuesta grande, su fase no lo cuenta", () => {
+    /* La edición que la pone en rojo: quitar el filtro de `delSistema` en `cambiosParaExplicar` (Haiku le buscaría una
+       reunión a una regla, la fase contaría para el tope de 15 y «Más» la sumaría a «cambian sin material nuevo»). */
+    const seVa = BORRADOR.cambios.find((c): c is CambioTareaSeVa => c.tipo === "tarea-se-va" && c.faseId === "f01")!;
+    const sobrante: CambioTareaSeVa = { ...seVa, motivo: "Ya hay un kickoff hecho: «Tarea 001».", delSistema: "hito" };
+    const kickoff: CambioTareaNueva = {
+      tipo: "tarea-nueva",
+      clave: "t:0f0f0f0f-0000-4000-a000-000000000001",
+      fase: "f10",
+      tarea: { ...TAREA_DE_KICKOFF, hito: ["kickoff"] },
+      motivo: MOTIVO_DEL_KICKOFF_QUE_FALTA,
+      delSistema: "hito",
+    };
+    expect(cambiosParaExplicar(VIVO, [sobrante, kickoff])).toEqual([]);
+    // Sin la marca, las dos fases se explicarían: la guarda distingue.
+    const sinMarca: Cambio[] = [{ ...sobrante, delSistema: undefined }, { ...kickoff, delSistema: undefined }];
+    expect(cambiosParaExplicar(VIVO, sinMarca).map((c) => c.clave)).toEqual(["f01", "f10"]);
+    // En la propuesta grande, «Semana 0» sigue (la IA también la cambia), pero sin la que quita el sistema.
+    const antes = CAMBIOS.find((c) => c.clave === "f01")!;
+    const despues = cambiosParaExplicar(VIVO, BORRADOR.cambios.map((c) => (c === seVa ? sobrante : c))).find((c) => c.clave === "f01")!;
+    expect(antes.resumen).toContain(`"${seVa.desde.title}"`);
+    expect(antes.resumen).toContain("5 se quitan");
+    expect(despues.resumen).not.toContain(`"${seVa.desde.title}"`);
+    expect(despues.resumen).toContain("4 se quitan");
   });
 });

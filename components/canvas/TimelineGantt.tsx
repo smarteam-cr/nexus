@@ -102,6 +102,7 @@ import { buildPhaseSignal, type SignalTone } from "@/lib/timeline/phase-signal";
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import type { MarcaDeFase, UnidadNumerada } from "@/lib/timeline/borrador";
 import {
+  CHIP_DEL_SISTEMA,
   chipDelChoque,
   etiquetaDeLaCasilla,
   etiquetasSinCasilla,
@@ -836,24 +837,37 @@ function CasillasDeLaFase({
  *  si no, el motivo atribuido: «Según la IA: …».
  *  L6: la prioridad la decide `porqueDeLaFase` (lib/timeline/explicacion-de-la-propuesta.ts): la frase de L6 con sus
  *  chips > el motivo verificado > «Según la IA», este solo sin explicación guardada. Con explicación y sin frase ni
- *  motivo verificado, no hay línea (lo dice «Más», una vez). */
+ *  motivo verificado, no hay línea (lo dice «Más», una vez).
+ *  M2 (2026-09-27, D9): lo que decide el SISTEMA en la fase (`VistaDeFase.delSistema`: el kickoff que sobra o el que
+ *  faltaba) va PRIMERO, con el chip «Lo decide el sistema»; después, el porqué de la IA como siempre. Nunca pasa por
+ *  «Según la IA» ni por la frase de L6. */
 function PorQueDeLaFase({
   fase,
   casillas,
+  delSistema,
   fuentes,
   explicacion,
 }: {
   fase: string;
   casillas: readonly CasillaDeCambio[];
+  delSistema: readonly string[];
   fuentes: FuentesDeLaPropuesta | null;
   explicacion: ExplicacionEnPantalla | null;
 }) {
   const motivos = [...new Set(casillas.flatMap((c) => (c.motivo ? [c.motivo] : [])))];
   const conDetalle = casillas.filter((c) => c.detalle.length > 0);
   const porque = porqueDeLaFase(fase, motivos, explicacion, fuentes);
-  if (!porque && conDetalle.length === 0) return null;
+  if (delSistema.length === 0 && !porque && conDetalle.length === 0) return null;
   return (
     <div className="space-y-1 text-xs">
+      {delSistema.map((texto) => (
+        <p key={texto} data-del-sistema="" className="flex flex-wrap items-center gap-1.5 text-fg-secondary">
+          <span className="rounded border border-line bg-surface px-1.5 py-px text-[10px] font-semibold text-fg-secondary">
+            {CHIP_DEL_SISTEMA}
+          </span>
+          <span>{texto}</span>
+        </p>
+      ))}
       {porque?.tipo === "frase" && (
         <p className="flex flex-wrap items-center gap-1.5 text-fg-secondary">
           <span>
@@ -1902,6 +1916,7 @@ export default function TimelineGantt({
                           <PorQueDeLaFase
                             fase={p.id ?? p.key}
                             casillas={vistaDeLaFase.casillas}
+                            delSistema={vistaDeLaFase.delSistema}
                             fuentes={propuesta?.fuentes ?? null}
                             explicacion={propuesta?.explicacion ?? null}
                           />

@@ -30,12 +30,16 @@ import {
   resumir,
   type Borrador,
   type Cambio,
+  type CambioTareaNueva,
   type ResumenDelBorrador,
   type TareaDelVivo,
 } from "./borrador";
+import { MOTIVO_DEL_KICKOFF_QUE_FALTA, TAREA_DE_KICKOFF } from "./hitos";
 import {
   atajoDelSiguiente,
   avanceQueSeCruza,
+  CHIP_FALTABA_EL_KICKOFF,
+  CHIP_YA_HAY_KICKOFF,
   chipDelChoque,
   cierreParaElGantt,
   cuentaDelGrupo,
@@ -702,5 +706,88 @@ describe("L7 · la mudanza sugerida en el Gantt", () => {
     // Las otras cuatro siguen desmarcadas en su origen.
     const fs = filas(r, v);
     for (const k of resto) expect(deLaClave(fs, k).map((f) => [f.fase, f.marca?.marcada])).toEqual([[ORIGEN, false]]);
+  });
+});
+
+/**
+ * M2 P2e (2026-09-27, spec del replanteo §3.6 y D9): lo que decide el SISTEMA no se pinta como de la IA. El fixture más
+ * lo que M2 escribe: la pendiente «t014» de «Semana 0» sale como el kickoff que sobra (`delSistema`, con su motivo) y el
+ * sistema agrega el kickoff que faltaba en «Fase I» (que no tenía cambios).
+ */
+describe("M2 P2e · lo que decide el sistema, en la vista", () => {
+  const MOTIVO_SE_VA = "Ya hay un kickoff hecho: «Tarea 001».";
+  const SOBRANTE = claveDeTareaQueSeVa("t014");
+  const FASE_DEL_KICKOFF = "f10";
+  const KICKOFF: CambioTareaNueva = {
+    tipo: "tarea-nueva",
+    clave: "t:0f0f0f0f-0000-4000-a000-000000000001",
+    fase: FASE_DEL_KICKOFF,
+    tarea: { ...TAREA_DE_KICKOFF, hito: ["kickoff"] },
+    motivo: MOTIVO_DEL_KICKOFF_QUE_FALTA,
+    delSistema: "hito",
+  };
+  const conSistema = (cambiar: (c: Cambio) => Cambio = (c) => c): Borrador => ({
+    ...BORRADOR,
+    cambios: [
+      ...BORRADOR.cambios.map((c) => cambiar(c.clave === SOBRANTE && c.tipo === "tarea-se-va" ? { ...c, motivo: MOTIVO_SE_VA, delSistema: "hito" } : c)),
+      KICKOFF,
+    ],
+  });
+  const CON_SISTEMA = conSistema();
+  const deLaClave = (fs: Fila[], clave: string) => fs.filter((f) => f.marca?.clave === clave);
+
+  it("⭐ la que quita el sistema: «ya hay kickoff» con su motivo en el `title`, tachada si se marca y con su chip si no", () => {
+    /* Las ediciones que la ponen en rojo: pintarla con «se quita» (`chip: CHIP_SE_QUITA` en `tareaSeVa`), no pasarle
+       el motivo al `title`, o dejarla sin chip al desmarcarla (se leería como una idea más de la IA). */
+    expect(BORRADOR.cambios.some((c) => c.clave === SOBRANTE), "el fixture ya no quita «t014»").toBe(true);
+    const { r, v } = vista(CON_SISTEMA);
+    const [marcada] = deLaClave(filas(r, v), SOBRANTE);
+    expect(marcada.fase).toBe("f01");
+    expect(marcada.marca).toMatchObject({ tipo: "se-va", tachada: true, chip: CHIP_YA_HAY_KICKOFF, titulo: MOTIVO_SE_VA, verbo: "Quitar" });
+    const d = vista(CON_SISTEMA, [SOBRANTE]);
+    const desmarcadas = deLaClave(filas(d.r, d.v), SOBRANTE);
+    expect(desmarcadas).toHaveLength(1);
+    expect(desmarcadas[0].marca).toMatchObject({ tipo: "se-va", tachada: false, marcada: false, chip: CHIP_YA_HAY_KICKOFF, titulo: MOTIVO_SE_VA, existeHoyYSeQueda: true });
+  });
+
+  it("⭐ la que agrega el sistema: «faltaba el kickoff» con su motivo en el `title`, marcada o no", () => {
+    /* La edición que la pone en rojo: `chip: CHIP_NUEVA` (o «no se crea» desmarcada) en `tareaNueva`. */
+    const { r, v } = vista(CON_SISTEMA);
+    expect(r.proyeccion.fases.find((f) => f.clave === FASE_DEL_KICKOFF)!.tareas.some((t) => t.clave === KICKOFF.clave)).toBe(true);
+    expect(v.marcas.get(KICKOFF.clave)).toMatchObject({ tipo: "nueva", chip: CHIP_FALTABA_EL_KICKOFF, titulo: MOTIVO_DEL_KICKOFF_QUE_FALTA, fantasma: false });
+    const d = vista(CON_SISTEMA, [KICKOFF.clave]);
+    const [fantasma] = deLaClave(filas(d.r, d.v), KICKOFF.clave);
+    expect(fantasma.marca).toMatchObject({ tipo: "nueva", marcada: false, fantasma: true, chip: CHIP_FALTABA_EL_KICKOFF, titulo: MOTIVO_DEL_KICKOFF_QUE_FALTA });
+  });
+
+  it("⭐ `delSistema` de la fase: su motivo una vez, solo en su fase; las demás filas, igual que sin el sistema", () => {
+    /* Las ediciones que la ponen en rojo: no llenar `VistaDeFase.delSistema` (el Gantt no tendría qué decir antes del
+       porqué de la IA), o que el chip del sistema se cuele en una fila que no es suya. */
+    const { r, v } = vista(CON_SISTEMA);
+    const conLinea = [...v.porFase].filter(([, f]) => f.delSistema.length > 0).map(([k, f]) => [k, f.delSistema]);
+    expect(conLinea).toEqual([
+      ["f01", [MOTIVO_SE_VA]],
+      [FASE_DEL_KICKOFF, [MOTIVO_DEL_KICKOFF_QUE_FALTA]],
+    ]);
+    const sinNumero = (m: MarcaDeTarea | null) => (m ? { ...m, numero: 0 } : null);
+    const base = vista(BORRADOR);
+    const antes = new Map(filas(base.r, base.v).map((f) => [`${f.fase}|${f.clave}`, sinNumero(f.marca)]));
+    const despues = filas(r, v).filter((f) => f.marca?.clave !== SOBRANTE && f.marca?.clave !== KICKOFF.clave);
+    expect(despues).toHaveLength(antes.size - 1);
+    for (const f of despues) expect(sinNumero(f.marca), `${f.fase} · ${f.clave}`).toEqual(antes.get(`${f.fase}|${f.clave}`));
+    expect(filas(r, v).filter((f) => f.marca?.chip === CHIP_YA_HAY_KICKOFF || f.marca?.chip === CHIP_FALTABA_EL_KICKOFF)).toHaveLength(2);
+  });
+
+  it("⭐ si la del sistema choca, manda el choque (su chip y su motivo)", () => {
+    /* La edición que la pone en rojo: poner el chip del sistema por encima del choque (el CSE no vería por qué no se
+       aplica). */
+    const editada = conSistema((c) => (c.clave === SOBRANTE && c.tipo === "tarea-se-va" ? { ...c, desde: { ...c.desde, title: "Otro título" } } : c));
+    const { r, v } = vista(editada);
+    const [f] = deLaClave(filas(r, v), SOBRANTE);
+    expect(f.marca?.tipo).toBe("choque");
+    expect(f.marca?.chip).toMatch(/^⚠/);
+    expect(f.marca?.titulo).not.toBe(MOTIVO_SE_VA);
+    // Su fase lo sigue diciendo arriba: la regla que lo pidió no cambia porque choque.
+    expect(v.porFase.get("f01")!.delSistema).toEqual([MOTIVO_SE_VA]);
   });
 });
