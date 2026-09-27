@@ -122,14 +122,10 @@ describe("⛔ la rama de base de datos: TRES estados, no dos", () => {
     expect(borrador, "el renglón dejó de preguntar el motivo de su tarea").toContain(
       "porValidar: motivoDePorValidar(c.tarea)",
     );
-    const renglon = fs
-      .readFileSync(path.join(process.cwd(), "components/canvas/TareasDeLaPropuesta.tsx"), "utf8")
-      .replace(/\r\n/g, "\n");
-    expect(renglon, "el chip «por validar» dejó de decir el motivo").toContain("title={t.porValidar}");
-    expect(renglon, "volvió el tooltip fijo de «la típica»").not.toContain('title="La IA no la sacó del handoff');
-    /* L3 P3c (2026-09-26): el chip se mudó también a la fila de la tarea en el Gantt. TareasDeLaPropuesta.tsx sigue
-       hasta que P3d lo borre (ahí se quitan los asserts de arriba). La edición que la pone en rojo: el chip del
-       Gantt sin el motivo de SU tarea, o con el tooltip fijo. */
+    /* ⚠ REAPUNTADA en L3 P3d (2026-09-26), con esta razón: TareasDeLaPropuesta.tsx se BORRÓ (las casillas de las
+       tareas viven en el Gantt). El chip «por validar» vive en la fila de la tarea del Gantt (desde P3c; lo que se
+       pinta, de verdad, en gantt-de-la-propuesta.test.ts). La edición que la pone en rojo: el chip del Gantt sin
+       el motivo de SU tarea, o con el tooltip fijo. */
     const gantt = fs.readFileSync(path.join(process.cwd(), "components/canvas/TimelineGantt.tsx"), "utf8").replace(/\r\n/g, "\n");
     expect(gantt, "el chip «por validar» del Gantt dejó de decir el motivo").toContain("title={marca.porValidar}");
     expect(gantt, "volvió el tooltip fijo de «la típica» al Gantt").not.toContain('title="La IA no la sacó del handoff');

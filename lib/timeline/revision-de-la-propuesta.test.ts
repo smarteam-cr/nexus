@@ -57,11 +57,15 @@ const CANVAS = soloCodigo(leer(RUTA_CANVAS));
 const BARRA = soloCodigo(leer(RUTA_BARRA));
 const GANTT = soloCodigo(leer("components/canvas/TimelineGantt.tsx"));
 const HOOK = soloCodigo(leer("components/canvas/useBorradorDelCronograma.ts"));
-// E2a P5: las tareas de la propuesta (la lista agrupada por fase y la línea de la corrida).
-const RUTA_TAREAS = "components/canvas/TareasDeLaPropuesta.tsx";
+// E2a P5: la línea de la corrida que arma las tareas.
+/* ⚠ L3 P3d (2026-09-26): sale `TAREAS` (components/canvas/TareasDeLaPropuesta.tsx, la lista de las tareas agrupada
+   por fase), que se BORRÓ: las casillas de las tareas viven en el Gantt. Lo que se miraba ahí se mira ahora en la
+   parte de la propuesta del Gantt (`GANTT_DE_LA_PROPUESTA`, abajo) y en la vista pura (`VISTA`); lo que se pinta, de
+   verdad, en gantt-de-la-propuesta.test.ts y barra-de-la-propuesta.test.ts. */
 const RUTA_LINEA = "components/canvas/LineaDeLasTareas.tsx";
-const TAREAS = soloCodigo(leer(RUTA_TAREAS));
 const LINEA = soloCodigo(leer(RUTA_LINEA));
+const RUTA_VISTA = "lib/timeline/vista-de-la-propuesta.ts";
+const VISTA = soloCodigo(leer(RUTA_VISTA));
 
 /** El código entre dos marcadores. TIRA si falta alguno: nunca un tramo vacío ni hasta el final. */
 const tramo = (src: string, desde: string, hasta: string) => {
@@ -71,6 +75,9 @@ const tramo = (src: string, desde: string, hasta: string) => {
   if (j < 0) throw new Error(`no encuentro el fin del tramo: «${hasta}» (después de «${desde}»)`);
   return src.slice(i, j);
 };
+/** L3 P3d: la parte del Gantt que pinta la propuesta (las filas, las casillas de fase y de grupo, el porqué). El resto
+ *  del Gantt tiene colores crudos viejos (el chip «Hoy»), fuera de esta guarda. */
+const GANTT_DE_LA_PROPUESTA = tramo(GANTT, "const CHIP_ATRASADA =", "export default function TimelineGantt(");
 
 // ── EL PARSER: la estructura del JSX ────────────────────────────────────────────────────────
 const arbol = (rel: string) => ts.createSourceFile(rel, leer(rel), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -211,15 +218,21 @@ describe("la barra: UN botón que alterna, la línea fija, la lista con casillas
 
   it("las casillas: lo que choca o ya está así no se puede marcar, y el número es el del núcleo", () => {
     /* La edición que la pone en rojo: dejar marcar un choque (aplicarlo pisaría lo que editaste) o
-       numerar en la pantalla en vez de usar `it.numero` (los números se correrían al marcar). */
-    const lista = tramo(BARRA, "{items.map((it) => {", "</ol>");
-    expect(lista.length).toBeGreaterThan(500);
-    expect(lista).toContain('type="checkbox"');
-    expect(contiene(lista, 'const sePuedeMarcar = it.estado === "aplica" || it.estado === "excluido";')).toBe(true);
-    expect(contiene(lista, "disabled={trabajando || !sePuedeMarcar}")).toBe(true);
-    expect(contiene(lista, "onChange={(e) => onMarcar(it.clave, e.target.checked)}")).toBe(true);
-    expect(lista).toContain("{it.numero}.");
-    expect(lista, "la pantalla numera por su cuenta").not.toMatch(/\bindex\s*\+\s*1\b|\bi\s*\+\s*1\b/);
+       numerar en la pantalla en vez de usar `it.numero` (los números se correrían al marcar).
+       ⚠ REAPUNTADA en L3 P3d (2026-09-26), con esta razón: la lista con casillas de la barra se fue; la casilla de
+       cada cambio de fase vive en la fila de su fase del Gantt (`CasillaDeLaFase`) y lo que se puede marcar y su
+       número salen de la vista pura (`casillaDe`). Lo que se pide es lo mismo, donde vive ahora. */
+    expect(BARRA, "la barra volvió a tener casillas").not.toContain('type="checkbox"');
+    const casilla = tramo(GANTT, "function CasillaDeLaFase(", "function CasillaDelGrupo(");
+    expect(casilla.length).toBeGreaterThan(500);
+    expect(casilla).toContain('type="checkbox"');
+    expect(contiene(casilla, "disabled={trabajando || !c.seMarca}")).toBe(true);
+    expect(contiene(casilla, "onChange={(e) => onMarcar(c.clave, e.target.checked)}")).toBe(true);
+    expect(casilla).toContain("{c.numero}.");
+    const deLaVista = tramo(VISTA, "const casillaDe = (it: ItemDeLaLista, c: Cambio): CasillaDeCambio => ({", "});");
+    expect(contiene(deLaVista, "numero: it.numero,")).toBe(true);
+    expect(contiene(deLaVista, 'seMarca: it.estado === "aplica" || it.estado === "excluido",')).toBe(true);
+    expect(GANTT_DE_LA_PROPUESTA, "la pantalla numera por su cuenta").not.toMatch(/\bindex\s*\+\s*1\b|\bi\s*\+\s*1\b/);
   });
 
   it("aplicando o descartando, los dos botones y las casillas se apagan", () => {
@@ -266,7 +279,9 @@ describe("la barra: UN botón que alterna, la línea fija, la lista con casillas
     // Qué vista es y si se puede editar: en el `title` del botón que alterna, no en oraciones de la barra.
     const alternar = tramo(BARRA, "onClick={onAlternar}", "</Button>");
     expect(alternar, "el botón que alterna perdió su explicación").toContain("title={");
-    expect(alternar).toContain("Estás viendo la propuesta, solo para leer");
+    /* ⚠ ACTUALIZADA en L3 P3d (2026-09-26), con esta razón: decía «Estás viendo la propuesta, solo para leer», y
+       desde L3 la propuesta se decide en el Gantt: cada cambio se marca o se desmarca en su fila. */
+    expect(alternar).toContain("Estás viendo la propuesta: cada cambio se marca o se desmarca en su fila.");
     expect(alternar).toContain("Estás viendo el cronograma actual y puedes editarlo");
     // TODAS las veces que la barra dice «Estás viendo» están en ese botón: ninguna volvió a un <p>.
     expect(BARRA.match(/Estás viendo/g)?.length, "las oraciones de la vista volvieron a la barra").toBe(
@@ -428,6 +443,97 @@ describe("L3 P3c · el Gantt: lo que no se ve sin clics (el teclado, el foco, la
   });
 });
 
+describe("L3 P3d · el canvas conecta el Gantt de la propuesta: sus casillas, «Siguiente número», el avance", () => {
+  /* Lo que se PINTA con lo que arma el canvas (las keys de la pantalla, 185 filas, 130 casillas) se mira de verdad en
+     gantt-de-la-propuesta.test.ts; la barra, en barra-de-la-propuesta.test.ts; el cursor del hook, en
+     recalculo-en-la-pantalla.test.ts. Esto mira el cableado del canvas, que solo existe acá. */
+  const rama = tramo(CANVAS, '<div id="cronograma-gantt"', "<TaskDetailDrawer");
+
+  it("⭐ `ganttPhases`, `fasesDeLaPropuesta` y lo que arma la vista van en `useMemo` (cada casilla recalcula el resumen)", () => {
+    /* La edición que la pone en rojo: dejar `ganttPhases` sin memo (se rearma en cada render y todo memo que depende
+       de él es decorativo: cada clic en una casilla rearmaba las 13 fases y sus 185 filas). */
+    expect(CANVAS).toMatch(/const ganttPhases: GanttPhase\[\] = useMemo\(\(\) => phases\.map\(/);
+    expect(contiene(CANVAS, "})), [phases]);"), "`ganttPhases` depende de otra cosa que `phases`").toBe(true);
+    expect(CANVAS).toMatch(/const fasesDeLaPropuesta: GanttPhase\[\] = useMemo\(\(\) => \(revision\.proyeccion\?\.fases \?\? \[\]\)/);
+    expect(contiene(CANVAS, "}), [revision.proyeccion, ganttPorId, filaPorId]);")).toBe(true);
+    expect(CANVAS).toMatch(/const filaPorId = useMemo\(/);
+    expect(CANVAS).toMatch(/const marcasDeLaPropuesta = useMemo\(/);
+    expect(CANVAS).toMatch(/const filasDeLaPropuesta = useMemo\(/);
+  });
+
+  it("⭐ el Gantt recibe la propuesta solo en su vista, con las keys de la pantalla (`filaPorId`) y las casillas del hook", () => {
+    /* Las ediciones que la ponen en rojo: pasarle la propuesta en la vista «antes» (el Gantt de hoy con casillas),
+       armar las marcas con las claves de la vista en vez de las keys de las filas (`filaPorId`), o darle al Gantt otras
+       casillas que las del hook (lo marcado no subiría al servidor). */
+    expect(contiene(rama, "propuesta={verPropuesta ? (propuestaEnElGantt ?? undefined) : undefined}")).toBe(true);
+    const filas = tramo(CANVAS, "const filasDeLaPropuesta = useMemo(", "const desplegarAlEntrar =");
+    expect(contiene(filas, "revision.proyeccion.fases.map((f, i) => ({ clave: f.clave, key: fasesDeLaPropuesta[i].key })),")).toBe(true);
+    expect(contiene(filas, "(id) => filaPorId.get(id)?.key,"), "las marcas no salen de `filaPorId`").toBe(true);
+    const enElGantt = tramo(CANVAS, "const propuestaEnElGantt =", "const avanceDeLaBarra =");
+    for (const cable of [
+      "marcasPorKey: filasDeLaPropuesta.marcasPorKey,",
+      "semanasPorKey: filasDeLaPropuesta.semanasPorKey,",
+      "onMarcar: revision.marcar,",
+      "onMarcarVarios: revision.marcarVarios,",
+      "trabajando: aplicandoBorrador || descartando,",
+      "irA,",
+      "desplegarAlEntrar,",
+      "cierre: revision.resumen ? cierreParaElGantt(revision.resumen) : null,",
+      "recalculo: recalculoDeLaBarra,",
+    ]) {
+      expect(contiene(enElGantt, cable), cable).toBe(true);
+    }
+    // Desplegar al entrar: una vez por propuesta (su token), con la regla de las 40 filas.
+    expect(
+      contiene(
+        CANVAS,
+        'verPropuesta && revision.vistaDelGantt ? { clave: proposalMeta.current.runId ?? "propuesta", fases: fasesADesplegarAlEntrar(revision.vistaDelGantt) } : null;',
+      ),
+    ).toBe(true);
+    // El hook arma la vista con el «hoy» de la pantalla (las semanas que «ya pasaron»).
+    expect(contiene(tramo(CANVAS, "const revision = useBorradorDelCronograma({", "});"), "hoy: hydratedNow,")).toBe(true);
+    expect(contiene(HOOK, "() => (resumen && borrador ? vistaDeLaPropuesta(vivo, borrador, resumen, hoy) : null), [resumen, borrador, vivo, hoy],")).toBe(
+      true,
+    );
+  });
+
+  it("⭐ «Siguiente número»: en la vista «antes» pasa a la propuesta; los atajos, solo en ella y nunca mientras se escribe", () => {
+    /* Las ediciones que la ponen en rojo: ir al número sin pasar a la propuesta (desde «antes» no hay casilla que
+       enfocar), escuchar `n`/`p` fuera de la vista de la propuesta, o tomarlas dentro de un campo de escritura. */
+    const ir = tramo(CANVAS, "const irAlSiguiente = (dir: 1 | -1) => {", "const irAlSiguienteRef");
+    expect(contiene(ir, "const unidad = revision.siguiente(dir); if (!unidad) return;")).toBe(true);
+    expect(contiene(ir, 'if (revision.vista !== "propuesta") revision.alternar();')).toBe(true);
+    expect(contiene(ir, "setIrA((prev) => ({ unidad, nonce: (prev?.nonce ?? 0) + 1 }));"), "el mismo número dos veces no vuelve a ir").toBe(true);
+    const atajos = tramo(CANVAS, "const alTeclear = (e: KeyboardEvent) => {", "}, [verPropuesta]);");
+    expect(
+      contiene(CANVAS, "if (!verPropuesta) return; const alTeclear = (e: KeyboardEvent) => {"),
+      "los atajos escuchan fuera de la vista de la propuesta",
+    ).toBe(true);
+    expect(atajos).toContain("esCampoDeEscritura(");
+    expect(contiene(atajos, "const dir = atajoDelSiguiente(e, escribiendo);")).toBe(true);
+    expect(
+      contiene(atajos, `if (e.defaultPrevented || document.querySelector('[aria-modal="true"]')) return;`),
+      "con un diálogo abierto, «n» salta de número detrás",
+    ).toBe(true);
+    expect(contiene(atajos, 'document.removeEventListener("keydown", alTeclear);'), "el oyente no se suelta").toBe(true);
+    expect(contiene(rama, "onSiguiente={() => irAlSiguiente(1)}")).toBe(true);
+    expect(contiene(rama, "posicion={revision.posicion}")).toBe(true);
+  });
+
+  it("⭐ el avance sin revisar: la barra lo ofrece, abre su cajón y sabe si toca lo que la propuesta quita o cambia", () => {
+    /* Las ediciones que la ponen en rojo: no pasarle el avance a la barra, abrir otra cosa, o cruzarlo con todo el
+       avance (y no con lo que la propuesta quita o cambia). */
+    expect(
+      contiene(
+        CANVAS,
+        "const avanceDeLaBarra = showProgressBanner && pendingProgress ? { hay: true, seCruza: avanceQueSeCruza(pendingProgress.tasks.map((t) => t.id), revision.borrador?.cambios ?? []) > 0 } : null;",
+      ),
+    ).toBe(true);
+    expect(contiene(rama, "avance={avanceDeLaBarra}")).toBe(true);
+    expect(contiene(rama, "onRevisarAvance={() => setDraftsOpen(true)}")).toBe(true);
+  });
+});
+
 describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa por el guardado", () => {
   const rama = tramo(CANVAS, '<div id="cronograma-gantt"', "<TaskDetailDrawer");
 
@@ -452,8 +558,10 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
   it("⭐ una fase existente conserva la MISMA key en la vista de la propuesta (sigue abierta al alternar)", () => {
     /* La `key` de una fase creada en esta sesión es su `_key`, no su id: si la vista de la propuesta
        usara el id (o la clave del núcleo), esa fila se remontaría cerrada al alternar. La edición que
-       la pone en rojo: `key: f.clave`, o buscar la fila actual por otra cosa que el id. */
-    const vista = tramo(CANVAS, "const ganttPorId = new Map(", "const marcasDeLaPropuesta");
+       la pone en rojo: `key: f.clave`, o buscar la fila actual por otra cosa que el id.
+       ⚠ ACTUALIZADA en L3 P3d (2026-09-26), con esta razón: `ganttPorId`, `filaPorId` y `fasesDeLaPropuesta` pasan a
+       `useMemo` (spec §4.5): el marcador de inicio es ahora `const ganttPorId = useMemo(`. Lo que se pide no cambia. */
+    const vista = tramo(CANVAS, "const ganttPorId = useMemo(", "const marcasDeLaPropuesta");
     expect(contiene(vista, "ganttPhases.filter((g) => g.id).map((g) => [g.id as string, g])")).toBe(true);
     expect(contiene(vista, "const actual = f.id ? ganttPorId.get(f.id) : undefined;")).toBe(true);
     expect(contiene(vista, "key: actual?.key ?? f.clave,")).toBe(true);
@@ -463,8 +571,10 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
 
   it("⛔ la proyección es SOLO LECTURA: nunca pasa por setPhases ni por el guardado (plan §3.4)", () => {
     /* La edición que la pone en rojo: meter las fases proyectadas en el estado editable (el
-       autoguardado las mandaría como si el CSE las hubiera escrito). */
-    expect(contiene(CANVAS, "const fasesDeLaPropuesta: GanttPhase[] = (revision.proyeccion?.fases ?? [])")).toBe(true);
+       autoguardado las mandaría como si el CSE las hubiera escrito).
+       ⚠ ACTUALIZADA en L3 P3d (2026-09-26), con esta razón: `fasesDeLaPropuesta` pasa a `useMemo` (spec §4.5); sigue
+       saliendo de la proyección, y nunca del estado editable. */
+    expect(contiene(CANVAS, "const fasesDeLaPropuesta: GanttPhase[] = useMemo(() => (revision.proyeccion?.fases ?? [])")).toBe(true);
     const llamadas = CANVAS.match(/setPhases\([^;]*;/g) ?? [];
     expect(llamadas.length).toBeGreaterThan(3);
     for (const llamada of llamadas) {
@@ -910,8 +1020,10 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
 
   it("⭐ en «Ver la propuesta» se ven las tareas nuevas, y una que ya existe es la MISMA fila (misma key)", () => {
     /* La edición que la pone en rojo: volver a pintar las tareas del cronograma actual (sin las nuevas
-       y con las que se van), o darle a una existente otra `key` (se remontaría al alternar). */
-    const vista = tramo(CANVAS, "const ganttPorId = new Map(", "const marcasDeLaPropuesta");
+       y con las que se van), o darle a una existente otra `key` (se remontaría al alternar).
+       ⚠ ACTUALIZADA en L3 P3d (2026-09-26), con esta razón: `ganttPorId` y `filaPorId` pasan a `useMemo` sobre
+       `ganttPhases` (spec §4.5): cambian el marcador de inicio y la línea de `filaPorId`. Lo que se pide no cambia. */
+    const vista = tramo(CANVAS, "const ganttPorId = useMemo(", "const marcasDeLaPropuesta");
     expect(contiene(vista, "const tasks: GanttTask[] = f.tareas.map((t) => {")).toBe(true);
     /* ⚠ ACTUALIZADA en E3 P3 (2026-09-25), con esta razón: una tarea que ya existe puede CAMBIAR (título,
        semana, dueño, tipo) o MUDARSE de fase conservando su estado (`tarea-cambia`). Su fila se busca en
@@ -919,7 +1031,10 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
        su avance) y se ve con lo que propone. Buscarla solo en su fase, o pintarla con el título de hoy, la
        pone en rojo. */
     expect(
-      contiene(vista, "const filaPorId = new Map(ganttPhases.flatMap((g) => g.tasks).filter((t) => t.id).map((t) => [t.id as string, t]));"),
+      contiene(
+        vista,
+        "const filaPorId = useMemo( () => new Map(ganttPhases.flatMap((g) => g.tasks).filter((t) => t.id).map((t) => [t.id as string, t])), [ganttPhases], );",
+      ),
       "la fila de una tarea que se muda se busca solo en su fase",
     ).toBe(true);
     expect(contiene(vista, "if (fila) return { ...fila, title: t.title, weekIndex: t.weekIndex, party: t.party, type: t.type };")).toBe(true);
@@ -965,8 +1080,11 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(contiene(confirmacion, "{resumenDeLaConfirmacion(resumen)} {cierre}"), "la confirmación no cuenta las tareas").toBe(true);
     expect(BARRA, "la confirmación volvió a contar solo las fases").not.toContain("redactarResumenDeCambios");
     expect(BARRA).toContain('aria-label="Propuesta de cambios del cronograma"');
-    // Las tareas van debajo de la lista de fases.
-    expect(BARRA.indexOf("<TareasDeLaPropuesta")).toBeGreaterThan(BARRA.indexOf("</ol>"));
+    /* ⚠ REESCRITA en L3 P3d (2026-09-26), con esta razón: pedía las tareas debajo de la lista de fases, en la
+       barra. Las dos listas se fueron: cada cambio (de fase o de tarea) tiene su casilla en su fila del Gantt. La
+       edición que la pone en rojo: volver a pintar una lista o los grupos de tareas en la barra. */
+    expect(BARRA, "volvieron los grupos de tareas a la barra").not.toContain("TareasDeLaPropuesta");
+    expect(BARRA, "volvió una lista a la barra").not.toMatch(/<ol\b/);
     // Y el Canvas le pasa el estado de la propuesta en pantalla, y el botón pide el paso 2 sobre ella.
     expect(contiene(rama, "tareas={tareasDeLaBarra}")).toBe(true);
     /* ⚠ ACTUALIZADA en la revisión de E2a (2026-09-25), con esta razón: la acción se define UNA vez
@@ -1033,18 +1151,19 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     expect(contiene(tocar, "const cola = paraEnviarRef.current.compartidas ? colaDeAhora() : null;")).toBe(true);
     expect(contiene(tocar, "if (cola) cola.clic(claves, incluir);")).toBe(true);
     expect(contiene(tocar, "else setRevision((r) => marcarCambios(r, claves, incluir));")).toBe(true);
-    expect(contiene(rama, "onMarcarVarios={revision.marcarVarios}")).toBe(true);
-    expect(
-      contiene(
-        BARRA,
-        "<TareasDeLaPropuesta grupos={grupos} onMarcar={onMarcar} onMarcarVarios={onMarcarVarios} trabajando={trabajando} recalculo={recalculo} />",
-      ),
-    ).toBe(true);
-    expect(TAREAS.length).toBeGreaterThan(2000);
-    expect(contiene(TAREAS, "const marcables = g.tareas.filter((t) => t.seMarca);")).toBe(true);
-    expect(contiene(TAREAS, "onMarcarVarios( marcables.map((t) => t.clave), e.target.checked, )")).toBe(true);
-    expect(contiene(TAREAS, "disabled={trabajando || !t.seMarca}")).toBe(true);
-    expect(contiene(TAREAS, "disabled={trabajando || marcables.length === 0}")).toBe(true);
+    /* ⚠ REAPUNTADA en L3 P3d (2026-09-26), con esta razón: la casilla del grupo se mudó de TareasDeLaPropuesta.tsx
+       (se BORRÓ) a la fila de su fase en el Gantt (`CasillaDelGrupo`), y las claves que marca salen de la vista pura
+       (`claves: marcables.map((t) => t.clave)`). El canvas le pasa al Gantt las casillas del hook, las mismas que
+       suben al servidor. Lo que se pide es lo mismo, donde vive ahora. */
+    expect(contiene(CANVAS, "onMarcarVarios: revision.marcarVarios,"), "el Gantt no recibe la casilla del grupo del hook").toBe(true);
+    const grupoDeLaVista = tramo(VISTA, "const marcables = g.tareas.filter((t) => t.seMarca);", "});");
+    expect(contiene(grupoDeLaVista, "claves: marcables.map((t) => t.clave),")).toBe(true);
+    const grupo = tramo(GANTT, "function CasillaDelGrupo(", "function CasillasDeLaFase(");
+    expect(grupo.length).toBeGreaterThan(1000);
+    expect(contiene(grupo, "onChange={(e) => onMarcarVarios(g.claves, e.target.checked)}")).toBe(true);
+    expect(contiene(grupo, "disabled={trabajando || g.marcables === 0}")).toBe(true);
+    const fila = tramo(GANTT, "function FilaDeLaPropuesta(", "function CasillaDeLaFase(");
+    expect(contiene(fila, "disabled={trabajando || !marca.seMarca}")).toBe(true);
   });
 
   it("⭐ el hook: sin cambios no hay barra, pero «nada que decidir» sale igual del plan [D11]", () => {
@@ -1147,8 +1266,11 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
        edición que la pone en rojo: un color crudo de Tailwind (gris, blanco, o de familia) en uno de
        los dos componentes. */
     const CRUDO = /\b(bg|text|border|ring)-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d/;
+    /* ⚠ REAPUNTADA en L3 P3d (2026-09-26), con esta razón: TareasDeLaPropuesta.tsx se BORRÓ; las tareas de la
+       propuesta se pintan en la parte de la propuesta del Gantt (`GANTT_DE_LA_PROPUESTA`: el resto del Gantt tiene
+       un chip «Hoy» crudo viejo, fuera de esta guarda). */
     for (const [rel, src] of [
-      [RUTA_TAREAS, TAREAS],
+      ["components/canvas/TimelineGantt.tsx (la propuesta)", GANTT_DE_LA_PROPUESTA],
       [RUTA_LINEA, LINEA],
     ] as const) {
       expect(src.length, `${rel}: la guarda no está mirando nada`).toBeGreaterThan(1000);
@@ -1157,8 +1279,8 @@ describe("E2a P5 · la pantalla revisa las tareas de la propuesta", () => {
     }
     expect(LINEA).toContain("text-info-ink");
     expect(LINEA).toContain("text-warn-ink");
-    expect(TAREAS).toContain("text-success-ink");
-    expect(TAREAS).toContain("text-warn-ink");
+    expect(GANTT_DE_LA_PROPUESTA).toContain("text-success-ink");
+    expect(GANTT_DE_LA_PROPUESTA).toContain("text-warn-ink");
   });
 });
 
@@ -1343,21 +1465,33 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
     /* Las ediciones que la ponen en rojo: pintarlas desmarcadas (parecería que se quitaron), contarlas
        fuera de la casilla del grupo (quedaría a medias), trabarlas mientras corre, o no decir en el grupo
        en qué está el recálculo. */
-    expect(contiene(TAREAS, "checked={seAplica || !!t.enEspera}")).toBe(true);
-    expect(contiene(TAREAS, 'const marcadas = marcables.filter((t) => t.estado === "aplica" || t.enEspera).length;')).toBe(true);
-    expect(contiene(TAREAS, "disabled={trabajando || !t.seMarca}"), "mientras corre se traba").toBe(true);
+    /* ⚠ REAPUNTADA en L3 P3d (2026-09-26), con esta razón: TareasDeLaPropuesta.tsx se BORRÓ. La casilla de cada tarea
+       vive en su fila del Gantt y se marca con `marca.marcada` (la vista la da marcada cuando espera: su conducta,
+       en recalculo-en-la-pantalla.test.ts); el grupo las cuenta en la vista; lo que dice cada grupo desfasado se
+       pinta al lado de su casilla, en el Gantt (su conducta, con dos y con una, en gantt-de-la-propuesta.test.ts). */
+    const fila = tramo(GANTT, "function FilaDeLaPropuesta(", "function CasillaDeLaFase(");
+    expect(contiene(fila, "checked={marca.marcada}")).toBe(true);
+    expect(contiene(fila, "disabled={trabajando || !marca.seMarca}"), "mientras corre se traba").toBe(true);
+    expect(contiene(VISTA, 'marcadas: marcables.filter((t) => t.estado === "aplica" || t.enEspera).length,')).toBe(true);
     /* ⚠ ACTUALIZADA en la revisión de E2c (2026-09-25), con esta razón: con una sola fase desfasada el grupo no repite la
-       línea: recibe cuántas hay (su conducta, en recalculo-en-la-pantalla.test.ts). */
-    expect(contiene(TAREAS, "const desfase = g.desfasada ? textoDelGrupoDesfasado(g.fase, recalculo, desfasadas) : null;")).toBe(true);
-    expect(contiene(TAREAS, "const desfasadas = grupos.filter((g) => g.desfasada).length;")).toBe(true);
+       línea: recibe cuántas hay. */
+    const casillas = tramo(GANTT, "function CasillasDeLaFase(", "function PorQueDeLaFase(");
+    expect(
+      contiene(casillas, "const desfase = vf.grupo?.desfasada ? textoDelGrupoDesfasado(vf.grupo.fase, propuesta.recalculo ?? null, desfasadas) : null;"),
+    ).toBe(true);
+    expect(contiene(casillas, "const desfasadas = [...propuesta.vista.porFase.values()].filter((f) => f.grupo?.desfasada).length;")).toBe(true);
+    // Y el canvas le pasa al Gantt el recálculo que ve la barra.
+    expect(contiene(CANVAS, "recalculo: recalculoDeLaBarra,")).toBe(true);
   });
 
   it("los componentes del recálculo: solo tokens del tema (info = en curso, warn = falta o falló)", () => {
     /* La edición que la pone en rojo: un color crudo de Tailwind en la barra, la línea, el grupo o el hook. */
     const CRUDO = /\b(bg|text|border|ring)-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d/;
+    /* ⚠ REAPUNTADA en L3 P3d (2026-09-26), con esta razón: TareasDeLaPropuesta.tsx se BORRÓ; el grupo desfasado se
+       pinta en la parte de la propuesta del Gantt (`GANTT_DE_LA_PROPUESTA`). */
     for (const [rel, src] of [
       [RUTA_BARRA, BARRA],
-      [RUTA_TAREAS, TAREAS],
+      ["components/canvas/TimelineGantt.tsx (la propuesta)", GANTT_DE_LA_PROPUESTA],
       [RUTA_LINEA, LINEA],
       [RUTA_ESPERA, ESPERA],
     ] as const) {
@@ -1365,7 +1499,7 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
       expect(src, `${rel}: color crudo de familia`).not.toMatch(CRUDO);
       expect(src, `${rel}: gris, blanco o negro crudo`).not.toMatch(new RegExp(RAW_NEUTRAL_RE));
     }
-    const grupo = tramo(TAREAS, "{desfase && (", "{desfase.texto}");
+    const grupo = tramo(GANTT_DE_LA_PROPUESTA, "{desfase && (", "{desfase.texto}");
     expect(grupo).toContain("text-info-ink");
     expect(grupo).toContain("text-warn-ink");
   });
@@ -1378,8 +1512,7 @@ describe("E2c P3 · el interruptor: las tareas de una fase desfasada se recalcul
  * en rojo.
  */
 describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
-  const rama = tramo(CANVAS, '<div id="cronograma-gantt"', "<TaskDetailDrawer");
-
+  // L3 P3d: sale `rama` (el único que la leía, «onMarcar={revision.marcar}», mira ahora el objeto que va al Gantt).
   it("⭐ el hook: con un v1 y quien edita, lo desmarcado es lo del servidor con lo pendiente encima", () => {
     /* Las ediciones que la ponen en rojo: seguir leyendo la memoria de la pantalla con un v1 (lo que marcó
        otra computadora no se vería), compartir sin `guardarCasillas` (quien solo mira mandaría POST que la
@@ -1571,16 +1704,27 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
 
   it("la lista pinta lo que cambia y lo que llega (con qué le cambia), y la barra la nota de una fase que se queda", () => {
     /* Las ediciones que la ponen en rojo: pintar «~» o «→» como si se quitaran (warn), no decir qué le
-       cambia, no contar las que cambian en el grupo, o esconder la nota de la fase que se queda. */
-    expect(contiene(TAREAS, '"~": "text-info-ink",')).toBe(true);
-    expect(contiene(TAREAS, '"→": "text-info-ink",')).toBe(true);
-    expect(contiene(TAREAS, '<span className={cn("font-semibold", COLOR_DEL_SIGNO[t.signo])}>{t.signo}</span>')).toBe(true);
-    expect(contiene(TAREAS, '{t.cambio && <span className="text-fg-muted">{t.cambio}</span>}')).toBe(true);
-    expect(contiene(TAREAS, 'if (g.cambian > 0) partes.push(`${g.cambian} ${g.cambian === 1 ? "cambia" : "cambian"}`);')).toBe(true);
-    expect(contiene(TAREAS, "aria-label={`${ACCION_DEL_SIGNO[t.signo]} la tarea «${t.titulo}»`}")).toBe(true);
-    expect(contiene(BARRA, '{it.nota && <p className="text-xs text-fg-muted">{it.nota}</p>}')).toBe(true);
-    // Las casillas siguen llegando por la misma prop (el hook decide si suben).
-    expect(contiene(rama, "onMarcar={revision.marcar}")).toBe(true);
+       cambia, no contar las que cambian en el grupo, o esconder la nota de la fase que se queda.
+       ⚠ REAPUNTADA en L3 P3d (2026-09-26), con esta razón: la lista de la barra y TareasDeLaPropuesta.tsx se fueron;
+       lo que cambia o llega se pinta en su fila del Gantt (`estiloDeLaFila`: azul, «~»; el antes, en la segunda
+       línea), la cuenta del grupo sale de la vista (`cuentaDelGrupo`), la casilla dice su verbo a quien no la ve
+       (`etiquetaDeLaCasilla`) y la nota de la fase que se queda va al lado de su casilla. Lo que se pinta, de
+       verdad, en gantt-de-la-propuesta.test.ts. */
+    const estilo = tramo(GANTT, "export function estiloDeLaFila(", "interface SeguirElFoco");
+    expect(
+      contiene(estilo, 'if ((m.tipo === "cambia" && m.marcada) || m.lugar === "destino") { return { fila: "bg-info-surface", titulo: "text-fg-secondary", signo: { texto: "~", clase: "text-info-ink" }, chip: "border-info-line text-info-ink" };'),
+      "lo que cambia o llega se pinta como si se quitara",
+    ).toBe(true);
+    const fila = tramo(GANTT, "function FilaDeLaPropuesta(", "function CasillaDeLaFase(");
+    expect(contiene(fila, "{marca.antes && (")).toBe(true);
+    expect(contiene(fila, "aria-label={etiquetaDeLaCasilla(marca, title)}")).toBe(true);
+    expect(contiene(VISTA, 'if (g.cambian > 0) partes.push(`${g.cambian} ${g.cambian === 1 ? "cambia" : "cambian"}`);')).toBe(true);
+    expect(contiene(VISTA, "...(it.nota ? { nota: it.nota } : {}),"), "la vista perdió la nota de la fase que se queda").toBe(true);
+    expect(contiene(tramo(GANTT, "function CasillaDeLaFase(", "function CasillaDelGrupo("), '{c.nota && <span className="text-[10px] text-fg-muted">{c.nota}</span>}')).toBe(
+      true,
+    );
+    // Las casillas siguen llegando del hook (que decide si suben), ahora al Gantt.
+    expect(contiene(CANVAS, "onMarcar: revision.marcar,")).toBe(true);
   });
 });
 
@@ -1739,8 +1883,11 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
        un cajón que se abrió solo en medio de su clic (`abiertoTrasTocarElChat`, su tabla en apertura-del-chat.test.ts).
        Abierto a mano sigue sin ser automático (toma el foco). */
     expect(contiene(CANVAS, "onClick={(e) => { setAperturaAutomatica(false);"), "abierto a mano no toma el foco").toBe(true);
-    expect(CANVAS.match(/xl:pr-\[400px\]/g)?.length).toBe(1);
-    expect(contiene(CANVAS, '<div className={chatAbierto && hayBorrador ? "relative xl:pr-[400px]" : "relative"}>')).toBe(true);
+    /* ⚠ ACTUALIZADA en L3 P3d (2026-09-26), con esta razón: el cronograma deja lugar al chat desde `lg` (1024 px), no
+       desde `xl`: entre 1024 y 1280 px el cajón tapaba «Aplicar» (spec §4.1). Volver a `xl:` la pone en rojo. */
+    expect(CANVAS, "volvió el xl: el cajón tapa «Aplicar» entre 1024 y 1280 px").not.toMatch(/xl:pr-\[400px\]/);
+    expect(CANVAS.match(/lg:pr-\[400px\]/g)?.length).toBe(1);
+    expect(contiene(CANVAS, '<div className={chatAbierto && hayBorrador ? "relative lg:pr-[400px]" : "relative"}>')).toBe(true);
     expect(contiene(CANVAS, "motivoParaNoAplicar={motivoDelChat}")).toBe(true);
     /* ⚠ REESCRITA en L1 (2026-09-26), con esta razón: la referencia (solo con una propuesta editable) pasó a ser
        un AVISO por estado: `estadoParaElChat` + `avisoDelChat` (puros, con su tabla en apertura-del-chat.test.ts).

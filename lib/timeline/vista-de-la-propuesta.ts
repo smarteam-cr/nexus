@@ -129,6 +129,9 @@ export interface CasillaDeCambio {
   aviso?: string;
   /** Por qué lo propone la IA (el Gantt lo atribuye: «Según la IA: …»). */
   motivo?: string;
+  /** P3d: una fase que se quita y se queda con lo que tiene avance («Se queda con 3 tareas con avance…»). Antes lo
+   *  decía la lista de la barra (`it.nota`); ahora va al lado de su casilla. */
+  nota?: string;
   detalle: ItemDeLaLista["detalle"];
 }
 
@@ -391,6 +394,121 @@ export function etiquetaDeLaCasilla(m: MarcaDeTarea, titulo: string): string {
                 ? `Mover ${t} a ${sugerida[1]}`
                 : `${m.verbo} ${t}`;
   return `${accion}${m.tipo === "sugerida" ? " (sugerida)" : ""} · número ${m.numero}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── LA BARRA Y EL CANVAS (L3 P3d) ────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Una fila de una semana como la pinta el Gantt: la `key` de su `GanttTask`, o la de la fila extra. */
+export interface FilaDelGantt {
+  key: string;
+  extra: FilaExtra | null;
+}
+
+/** Lo que el Gantt busca por `key` (`PropuestaEnElGantt.marcasPorKey` y `semanasPorKey`). */
+export interface VistaEnLasFilas {
+  marcasPorKey: Map<string, MarcaDeTarea>;
+  semanasPorKey: Map<string, FilaDelGantt[][]>;
+}
+
+/**
+ * La vista con sus claves pasadas a las `key` de la pantalla. La vista habla de `TareaProyectada.clave` (el id de la
+ * viva, o `t:…`) y el Gantt de la `key` de cada `GanttTask`: la de una viva es la de su fila de hoy (así React
+ * conserva el nodo al alternar), que no siempre es su id. `keyDeLaViva(id)` la da (undefined: no tiene fila, queda la
+ * clave). Una fila extra cuya key es el id de una viva (la que se quita, marcada) toma la key de esa fila: marcarla o
+ * desmarcarla no cambia la key. Las fases, por la `key` de su fila del Gantt.
+ */
+export function vistaEnLasFilas(
+  v: VistaDeLaPropuesta,
+  fases: ReadonlyArray<{ clave: string; key: string }>,
+  keyDeLaViva: (id: string) => string | undefined,
+): VistaEnLasFilas {
+  const key = (clave: string) => keyDeLaViva(clave) ?? clave;
+  const marcasPorKey = new Map<string, MarcaDeTarea>();
+  for (const [clave, m] of v.marcas) marcasPorKey.set(key(clave), m);
+  const semanasPorKey = new Map<string, FilaDelGantt[][]>();
+  for (const f of fases) {
+    const vf = v.porFase.get(f.clave);
+    if (!vf) continue;
+    semanasPorKey.set(
+      f.key,
+      vf.semanas.map((s) => s.map((x) => ({ key: key(x.clave), extra: x.extra }))),
+    );
+  }
+  return { marcasPorKey, semanasPorKey };
+}
+
+/** El chip «Cierre: 13 oct → 10 nov» de la cabecera del Gantt: el cierre de hoy y con lo marcado. null sin fechas. */
+export function cierreParaElGantt(
+  r: Pick<ResumenDelBorrador, "cierreAntes" | "cierreDespues">,
+): { antes: string; despues: string } | null {
+  if (!r.cierreAntes.date || !r.cierreDespues.date) return null;
+  return { antes: fmtDay(r.cierreAntes.date), despues: fmtDay(r.cierreDespues.date) };
+}
+
+/** Lo que recorre «Siguiente número»: todo menos lo «ya está» (se numera, pero no hay nada que decidir). */
+export function unidadesDelSiguiente(orden: readonly UnidadNumerada[]): UnidadNumerada[] {
+  return orden.filter((u) => !u.yaEsta);
+}
+
+/** A qué unidad va «Siguiente» (`dir` 1) o «anterior» (−1) desde `actual` (índice desde 0, o null antes del primer
+ *  clic). Da la vuelta. null si no hay ninguna. */
+export function pasoDelSiguiente(total: number, actual: number | null, dir: 1 | -1): number | null {
+  if (total <= 0) return null;
+  if (actual === null || actual < 0 || actual >= total) return dir === 1 ? 0 : total - 1;
+  return (actual + dir + total) % total;
+}
+
+export interface PosicionDelSiguiente {
+  /** En cuál está (desde 1), o null antes del primer clic. */
+  actual: number | null;
+  total: number;
+  /** El número de la primera unidad (el de «Volver al N»), o null sin unidades. */
+  primero: number | null;
+}
+
+export const TITULO_DEL_SIGUIENTE = "Atajos: n (siguiente) y p (anterior)";
+
+/** «Recorrer los 14 números» → «Siguiente número · 3 de 14» → «Volver al 1 · 14 de 14». null sin números. */
+export function textoDelSiguiente(p: PosicionDelSiguiente): string | null {
+  if (p.total <= 0 || p.primero === null) return null;
+  if (p.actual === null) return p.total === 1 ? `Ir al número ${p.primero}` : `Recorrer los ${p.total} números`;
+  if (p.actual >= p.total) return `Volver al ${p.primero} · ${p.total} de ${p.total}`;
+  return `Siguiente número · ${p.actual} de ${p.total}`;
+}
+
+/** La tecla de «Siguiente número»: `n` (1) o `p` (−1), sin modificadores y fuera de un campo de escritura. */
+export function atajoDelSiguiente(
+  e: { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean },
+  escribiendo: boolean,
+): 1 | -1 | null {
+  if (escribiendo || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return null;
+  return e.key === "n" ? 1 : e.key === "p" ? -1 : null;
+}
+
+/** Los totales de la barra (van en `aria-live`): «Aplicas 132 de 132 cambios». Las tareas que esperan su recálculo
+ *  todavía no cuentan, y lo dice. */
+export function textoDeLosTotales(r: Pick<ResumenDelBorrador, "marcadas" | "aplicables" | "desfasadas">): string {
+  const base = `Aplicas ${r.marcadas} de ${plural(r.aplicables, "cambio", "cambios")}`;
+  return r.desfasadas.length > 0 ? `${base}, sin contar las tareas que se recalculan` : base;
+}
+
+/** Los choques, solo si hay: cada fila dice el suyo con su ⚠ (no siempre es una edición a mano). */
+export function textoDeLosChoques(n: number): string {
+  return n === 1 ? "⚠ 1 cambio choca y queda fuera: su ⚠ dice por qué." : `⚠ ${n} cambios chocan y quedan fuera: cada ⚠ dice por qué.`;
+}
+
+/** El avance sin revisar (el cajón «Lo que detectó el agente»): si toca tareas que la propuesta quita o cambia, pide
+ *  revisarlo antes de aplicar. */
+export function textoDelAvance(seCruza: boolean): string {
+  return seCruza ? "Hay un avance detectado sin revisar. Revísalo antes de aplicar." : "Hay un avance detectado sin revisar.";
+}
+export const ACCION_REVISAR_AVANCE = "Revisar avance";
+
+/** Lo que notó la IA como se muestra en la barra: sin la jerga del paso 1 y sin las que quedan vacías. */
+export function observacionesParaMostrar(observaciones: readonly string[]): string[] {
+  return observaciones.map(observacionParaMostrar).filter((o) => o.length > 0);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -658,6 +776,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
     seMarca: it.estado === "aplica" || it.estado === "excluido",
     ...(it.aviso ? { aviso: it.aviso } : {}),
     ...(it.motivo ? { motivo: it.motivo } : {}),
+    ...(it.nota ? { nota: it.nota } : {}),
     detalle: it.detalle,
   });
   const ordenCompleto = ordenCompletoDeLaPropuesta(vivo, borrador.cambios);

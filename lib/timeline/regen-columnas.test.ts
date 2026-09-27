@@ -79,18 +79,12 @@ describe("⭐ la fuga se va al corregir SU campo, no otro (curación, 2026-09-23
        pone en rojo: que `resumir` deje de pasar la fuga, o que el chip deje de explicarla. */
     const borrador = fs.readFileSync(path.join(process.cwd(), "lib/timeline/borrador.ts"), "utf8");
     expect(borrador, "la propuesta dejó de llevar la fuga a su renglón").toContain("fuga: c.tarea.fuga");
-    const renglon = fs
-      .readFileSync(path.join(process.cwd(), "components/canvas/TareasDeLaPropuesta.tsx"), "utf8")
-      .replace(/\r\n/g, "\n");
-    expect(renglon, "el chip desapareció").toContain("{t.fuga && (");
-    expect(renglon, "el chip dejó de explicar la fuga").toContain("title={tituloDeLaFuga(t.fuga)}");
-    expect(renglon, "el chip del título dejó de decir que la nota también cruza").toContain(
-      "f.motivoDeLaNota ? ` La nota también ${f.motivoDeLaNota}.`",
-    );
-    /* L3 P3c (2026-09-26): el chip se mudó también a la fila de la tarea en el Gantt, y su texto a
-       lib/timeline/vista-de-la-propuesta.ts. TareasDeLaPropuesta.tsx sigue hasta que P3d lo borre (ahí se quitan
-       los asserts de arriba). La edición que la pone en rojo: que el chip del Gantt deje de explicar la fuga. */
+    /* ⚠ REAPUNTADA en L3 P3d (2026-09-26), con esta razón: TareasDeLaPropuesta.tsx se BORRÓ (las casillas de las
+       tareas viven en el Gantt). El chip vive en la fila de la tarea del Gantt (desde P3c) y su texto en
+       lib/timeline/vista-de-la-propuesta.ts; lo que se pinta, de verdad, en gantt-de-la-propuesta.test.ts. La
+       edición que la pone en rojo: que el chip del Gantt desaparezca o deje de explicar la fuga. */
     const gantt = fs.readFileSync(path.join(process.cwd(), "components/canvas/TimelineGantt.tsx"), "utf8").replace(/\r\n/g, "\n");
+    expect(gantt, "el chip desapareció").toContain("{marca.fuga && (");
     expect(gantt, "el chip del Gantt dejó de explicar la fuga").toContain("title={tituloDeLaFuga(marca.fuga)}");
     const vista = fs.readFileSync(path.join(process.cwd(), "lib/timeline/vista-de-la-propuesta.ts"), "utf8").replace(/\r\n/g, "\n");
     expect(vista, "el título del chip dejó de decir que la nota también cruza").toContain(

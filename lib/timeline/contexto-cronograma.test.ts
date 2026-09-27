@@ -485,13 +485,14 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
     /* E1 del borrador (2026-09-24): la franja `ProposalGlobalStrip` se borró; su texto vive ahora en
        la barra de revisión. La guarda sigue mirando el mismo texto, en su archivo nuevo. */
     "components/canvas/RevisionDeLaPropuesta.tsx",
-    /* E2a P5 (2026-09-25): las tareas de la propuesta (la lista por fase y la línea de la corrida que
-       las arma) y el núcleo que les da los textos (el título de la barra, la línea, la confirmación de
-       quitar tareas, los choques): todo lo lee el CSE tal cual. */
-    "components/canvas/TareasDeLaPropuesta.tsx",
+    /* E2a P5 (2026-09-25): las tareas de la propuesta (la línea de la corrida que las arma) y el núcleo que les
+       da los textos (el título de la barra, la línea, la confirmación de quitar tareas, los choques): todo lo lee
+       el CSE tal cual.
+       ⚠ L3 P3d (2026-09-26): sale TareasDeLaPropuesta.tsx, que se BORRÓ: las casillas de las tareas viven en el
+       Gantt (TimelineGantt.tsx, que pinta) y sus textos en la vista pura (vista-de-la-propuesta.ts, abajo), que
+       suma los de la barra nueva («Siguiente número», los totales, el avance, los choques). */
     /* L3 P3b (2026-09-26): los textos de la propuesta en el Gantt (verbos, chips, casillas de fase, la cuenta del
-       grupo y los títulos de la fuga y la repetida) viven en lib/, en la vista pura. TareasDeLaPropuesta.tsx sale
-       de esta lista cuando P3d lo borre. */
+       grupo y los títulos de la fuga y la repetida) viven en lib/, en la vista pura. */
     "lib/timeline/vista-de-la-propuesta.ts",
     "components/canvas/LineaDeLasTareas.tsx",
     "lib/timeline/borrador.ts",

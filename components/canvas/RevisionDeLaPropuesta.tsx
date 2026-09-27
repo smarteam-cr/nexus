@@ -1,42 +1,43 @@
 "use client";
 
 /**
- * components/canvas/RevisionDeLaPropuesta.tsx — LA BARRA DE REVISIÓN de la propuesta de fases.
+ * components/canvas/RevisionDeLaPropuesta.tsx — LA BARRA DE REVISIÓN de la propuesta del cronograma.
  *
  * E1 del plan «una sola propuesta del cronograma» (2026-09-24). Reemplaza a la franja
  * `ProposalGlobalStrip` y a los recuadros «Sugerencia» / filas fantasma que vivían DENTRO del Gantt:
  * la propuesta se revisa en UN solo modo, con UN botón que alterna «Ver como estaba antes» ↔
- * «Ver la propuesta» (el mismo Gantt, en el mismo lugar), una lista numerada con casillas y el
- * cierre antes → después. Nada se aplica solo: «Aplicar todo» / «Aplicar N de M» o «Descartar».
+ * «Ver la propuesta» (el mismo Gantt, en el mismo lugar), y el cierre antes → después. Nada se aplica
+ * solo: «Aplicar todo» / «Aplicar N de M» o «Descartar».
  *
- * ⛔ DEVUELVE HERMANOS, NO UN CONTENEDOR: la barra fija, la lista y el diálogo. Quien la usa los pone
- * en el MISMO bloque que el Gantt (CronogramaCanvas, `revision.contenedorRef`). Un elemento `sticky`
+ * ⛔ DEVUELVE HERMANOS, NO UN CONTENEDOR: la barra fija, el bloque de abajo y el diálogo. Quien la usa los
+ * pone en el MISMO bloque que el Gantt (CronogramaCanvas, `revision.contenedorRef`). Un elemento `sticky`
  * no sale de su bloque padre: envuelta en su propia <section>, la barra se iba con la sección apenas
  * se bajaba al Gantt, y el botón que alterna y «Aplicar» dejaban de estar a mano justo mientras se
  * miraban las filas de abajo (revisión de E1, 2026-09-24).
  *
- * Solo pinta: la lista, los estados, el cierre y la magnitud salen de `resumir`
- * (lib/timeline/borrador.ts) y el estado de la pantalla, de `useBorradorDelCronograma`.
+ * ⭐ L3 P3d (2026-09-26) · LA PROPUESTA SE DECIDE EN EL GANTT. Se fueron la lista numerada con casillas y los
+ * grupos de tareas (`TareasDeLaPropuesta`, borrado): cada cambio tiene su casilla en su fila del Gantt. La barra
+ * queda en dos partes:
+ *   · LO FIJO, una línea: el título, «Siguiente número» (recorre los números del Gantt; atajos n y p), «Ver como
+ *     estaba antes» y «Aplicar». Debajo de 640 px, solo el título y «Aplicar»;
+ *   · LO DE ABAJO, que no se fija: de dónde viene, las líneas de las tareas y del recálculo, el bloqueo, el cierre
+ *     con lo que ve el cliente, los totales («Aplicas N de M cambios», en `aria-live`) con «Descartar», el aviso de
+ *     «otro cronograma», los choques (solo si hay), el avance sin revisar y lo que notó la IA. Debajo de 640 px,
+ *     plegado tras «Detalles».
+ *
+ * Solo pinta: los estados, el cierre y la magnitud salen de `resumir` (lib/timeline/borrador.ts); los textos
+ * nuevos, de lib/timeline/vista-de-la-propuesta.ts; el estado de la pantalla, de `useBorradorDelCronograma`.
  * Tokens semánticos SIEMPRE (info = lo que cambia, success = lo nuevo, warn = lo que choca).
  *
- * E2a (2026-09-25): la propuesta de «Regenerar todo» trae también TAREAS (las que se crean y las
- * pendientes de la IA que se quitan). Van debajo de la lista de fases, agrupadas por fase
- * (`TareasDeLaPropuesta`), y la barra suma una segunda línea con el estado de la corrida que las arma
- * (`LineaDeLasTareas`): «Armando las tareas…», o «Faltan…» / «No se pudieron armar…» con el botón
- * para pedirlas. Si aplicar QUITA tareas, se confirma y el diálogo lo dice.
- * L2 (2026-09-26): mientras se arman las tareas la barra no se monta (`modoDeLaPropuesta`): la espera va
- * en la línea suelta, y acá solo quedan «Faltan…» y «No se pudieron armar…».
+ * E2a (2026-09-25): la barra suma la línea del estado de la corrida que arma las tareas (`LineaDeLasTareas`):
+ * «Faltan…» / «No se pudieron armar…» con el botón para pedirlas. Si aplicar QUITA tareas, se confirma y el
+ * diálogo lo dice. L2 (2026-09-26): mientras se arman las tareas la barra no se monta (`modoDeLaPropuesta`).
  *
  * E2c P3 (2026-09-25): si el CSE quita un cambio de fase, las tareas de esa fase se recalculan solas.
- * La barra suma la línea del RECÁLCULO (`recalculo`), debajo de la de las tareas: en qué está, y con
- * permiso «Recalcular las tareas» / «Volver a intentar» (`onRecalcular`) y, si falló, «Aplicar de todos
- * modos» (`onForzar`), que SIEMPRE confirma con el mismo diálogo en otro modo. Aplicar espera mientras
- * haya fases desfasadas sin forzar (el bloqueo lo dice la línea, no dos veces) y, mientras tanto, dice
- * solo «Aplicar»: sus tareas se ven marcadas pero todavía no cuentan (revisión de E2c).
- *
- * E3 P3 (2026-09-25): lo que se marca y desmarca se guarda en el servidor y se ve en cualquier
- * computadora (lo hace el hook: la barra solo llama `onMarcar`). Una fase que se quita y se queda con lo
- * que tiene avance lo dice debajo (`it.nota`).
+ * La barra suma la línea del RECÁLCULO (`recalculo`): en qué está, y con permiso «Recalcular las tareas» /
+ * «Volver a intentar» (`onRecalcular`) y, si falló, «Aplicar de todos modos» (`onForzar`), que SIEMPRE
+ * confirma con el mismo diálogo en otro modo. Aplicar espera mientras haya fases desfasadas sin forzar (el
+ * bloqueo lo dice la línea, no dos veces) y, mientras tanto, dice solo «Aplicar».
  */
 import { useState, type RefObject } from "react";
 import { Button } from "@/components/ui/Button";
@@ -58,15 +59,24 @@ import {
   type ResumenDelBorrador,
   type VistaDelBorrador,
 } from "@/lib/timeline/borrador";
+import {
+  ACCION_REVISAR_AVANCE,
+  observacionesParaMostrar,
+  textoDelAvance,
+  textoDeLosChoques,
+  textoDeLosTotales,
+  textoDelSiguiente,
+  TITULO_DEL_SIGUIENTE,
+  type PosicionDelSiguiente,
+} from "@/lib/timeline/vista-de-la-propuesta";
 import LineaDeLasTareas, { type TareasEnPantalla } from "./LineaDeLasTareas";
-import TareasDeLaPropuesta from "./TareasDeLaPropuesta";
 
 export default function RevisionDeLaPropuesta({
   resumen,
   vista,
   onAlternar,
-  onMarcar,
-  onMarcarVarios,
+  onSiguiente,
+  posicion,
   onAplicar,
   onDescartar,
   desde,
@@ -75,6 +85,8 @@ export default function RevisionDeLaPropuesta({
   recalculo = null,
   onRecalcular,
   onForzar,
+  avance = null,
+  onRevisarAvance,
   enCurso,
   cierreFijado,
   barraRef,
@@ -82,9 +94,11 @@ export default function RevisionDeLaPropuesta({
   resumen: ResumenDelBorrador;
   vista: VistaDelBorrador;
   onAlternar: () => void;
-  onMarcar: (clave: string, incluir: boolean) => void;
-  /** La casilla de un grupo de tareas: todas las de una fase de una vez. */
-  onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
+  /** L3 P3d: «Siguiente número»: despliega la fase del próximo número del Gantt y enfoca su casilla (en la vista
+   *  «antes», primero pasa a la propuesta). */
+  onSiguiente: () => void;
+  /** L3 P3d: dónde está «Siguiente número» (el texto del botón). */
+  posicion: PosicionDelSiguiente;
   onAplicar: () => void;
   onDescartar: () => void;
   /** De dónde salió la propuesta, en palabras («desde el handoff», «desde «Regenerar» en «X»»…).
@@ -104,7 +118,11 @@ export default function RevisionDeLaPropuesta({
   onRecalcular?: () => void;
   /** E2c: fuerza esas fases desfasadas («Aplicar de todos modos»); `[]` las suelta. */
   onForzar?: (fases: readonly string[]) => void;
-  /** Aplicando o descartando: los dos botones y las casillas se apagan hasta que termine. */
+  /** L3 P3d: hay un avance detectado sin revisar (y si toca tareas que la propuesta quita o cambia), o null. */
+  avance?: { hay: boolean; seCruza: boolean } | null;
+  /** L3 P3d: abre el cajón «Lo que detectó el agente». */
+  onRevisarAvance?: () => void;
+  /** Aplicando o descartando: los botones se apagan hasta que termine (las casillas del Gantt también). */
   enCurso: "aplicar" | "descartar" | null;
   /** El cierre fijado a mano (Tanda K), YYYY-MM-DD, o null: aplicar no lo toca. */
   cierreFijado: string | null;
@@ -113,10 +131,9 @@ export default function RevisionDeLaPropuesta({
   /* UN solo diálogo, en dos modos: «aplicar» (lo de siempre) y «forzar» («Aplicar de todos modos», que
      aplica tareas armadas para otra forma de la fase: siempre confirma). */
   const [confirmar, setConfirmar] = useState<null | "aplicar" | "forzar">(null);
-  const { items, grupos, marcadas, choques, magnitud, bloqueo, observaciones } = resumen;
-  /* E2b (2026-09-25): se fue la chapa «Paso 1 de 2 · después, las tareas» (y la prop `encadenado`).
-     Era de la cadena vieja de dos pasos, que ya no existe: aplicar o descartar nunca sigue solo con
-     las tareas (si no llegaron, la línea suelta las ofrece después). */
+  /* Debajo de 640 px, lo de abajo va plegado tras «Detalles» (en pantallas anchas se ve siempre). */
+  const [detalles, setDetalles] = useState(false);
+  const { items, marcadas, choques, magnitud, bloqueo } = resumen;
   const otroCronograma = magnitud.esCronogramaNuevo;
   const trabajando = enCurso !== null;
   // Revisión de E2c: con tareas que esperan su recálculo, sin «N de M» (todavía no cuentan).
@@ -125,49 +142,64 @@ export default function RevisionDeLaPropuesta({
   const forzando = confirmar === "forzar";
   const cierre = fraseDelCierre(resumen, cierreFijado);
   const lineaDeTareas = tareas && tareas.estado !== "listas" ? tareas : null;
+  /* Lo que notó la IA, como se lee (sin la jerga del paso 1): el título cuenta lo que se muestra. */
+  const observaciones = observacionesParaMostrar(resumen.observaciones);
+  const textoDelSiguienteBoton = textoDelSiguiente(posicion);
+
+  /* Los dos botones que en pantallas chicas pasan a «Detalles»: UNO de cada, pintado donde se ve. */
+  const botonSiguiente = () =>
+    textoDelSiguienteBoton && (
+      <Button size="sm" variant="secondary" onClick={onSiguiente} title={TITULO_DEL_SIGUIENTE}>
+        {textoDelSiguienteBoton}
+      </Button>
+    );
+  /* UN botón, con el texto de lo que vas a ver al apretarlo. Sin `aria-pressed`: con un texto que cambia, el lector
+     anunciaría «Ver la propuesta, presionado». */
+  const botonAlternar = () => (
+    <Button
+      size="sm"
+      variant="secondary"
+      onClick={onAlternar}
+      title={
+        vista === "propuesta"
+          ? "Estás viendo la propuesta: cada cambio se marca o se desmarca en su fila."
+          : "Estás viendo el cronograma actual y puedes editarlo. Si cambias algo que la propuesta también cambia, ese cambio queda fuera (⚠)."
+      }
+    >
+      {vista === "propuesta" ? TEXTO_VER_ANTES : TEXTO_VER_PROPUESTA}
+    </Button>
+  );
 
   return (
     <>
-      {/* ── LA BARRA FIJA: qué es, cómo mirarla, qué pasa con el cliente y los botones ──
-          `id`: el ancla del botón «Revisar N cambios» del encabezado. */}
+      {/* ── LO FIJO: una línea. El título, cómo recorrerla y aplicar ──
+          `id`: el ancla del botón «Revisar la propuesta» del encabezado. */}
       <div
         id="cronograma-propuesta"
         ref={barraRef}
         role="region"
         aria-label="Propuesta de cambios del cronograma"
         className={cn(
-          "sticky top-0 z-20 scroll-mt-24 rounded-xl border px-3 py-2 space-y-1 shadow-sm",
+          "sticky top-0 z-20 scroll-mt-24 rounded-xl border px-3 py-2 shadow-sm",
           /* Ámbar = «esto merece tu atención», nunca rojo: el modelo es aditivo, no se borra nada. */
           otroCronograma ? "border-warn-line bg-warn-surface" : "border-info-line bg-info-surface",
         )}
       >
-        {/* ⭐ MENOS TEXTO (Elías, 2026-09-24: «creo que hay mucho texto»). La barra dice tres cosas:
-            qué propone y de dónde salió, cuánto se corre el cierre, y que el cliente no ve nada
-            todavía. Lo demás se dice solo cuando hace falta: qué vista es y si se puede editar va en
-            el `title` del botón que alterna (el texto del botón ya dice a cuál vas), que las tareas
-            no se tocan va en la confirmación. */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className={cn("text-xs font-bold uppercase tracking-wider", otroCronograma ? "text-warn-ink" : "text-info-ink")}>
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wider",
+              otroCronograma ? "text-warn-ink" : "text-info-ink",
+            )}
+            title={tituloDeLaBarra(resumen)}
+          >
             {tituloDeLaBarra(resumen)}
           </span>
-          {/* El origen, sin afirmar de qué: «las reuniones y notas que elegiste» mentía cuando lo único
-              que había eran las instrucciones adicionales. */}
-          <span className="text-xs text-fg-muted">{desde}</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            {/* UN botón, con el texto de lo que vas a ver al apretarlo. Sin `aria-pressed`: con un
-                texto que cambia, el lector anunciaría «Ver la propuesta, presionado». */}
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onAlternar}
-              title={
-                vista === "propuesta"
-                  ? "Estás viendo la propuesta, solo para leer: las filas marcadas son las que cambian."
-                  : "Estás viendo el cronograma actual y puedes editarlo. Si cambias algo que la propuesta también cambia, ese cambio queda fuera (⚠)."
-              }
-            >
-              {vista === "propuesta" ? TEXTO_VER_ANTES : TEXTO_VER_PROPUESTA}
-            </Button>
+            <span className="hidden items-center gap-2 sm:inline-flex">
+              {botonSiguiente()}
+              {botonAlternar()}
+            </span>
             <Button
               size="sm"
               variant="primary"
@@ -177,166 +209,127 @@ export default function RevisionDeLaPropuesta({
             >
               {enCurso === "aplicar" ? "Aplicando…" : textoDelBoton}
             </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── LO DE ABAJO: no es fijo (no tapa el Gantt). Debajo de 640 px, tras «Detalles». ── */}
+      <div className="rounded-xl border border-line bg-surface px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setDetalles((d) => !d)}
+          aria-expanded={detalles}
+          className="text-xs font-semibold text-fg-secondary sm:hidden"
+        >
+          Detalles
+        </button>
+        <div className={cn("space-y-1.5 sm:block", detalles ? "mt-1.5 block" : "hidden")}>
+          <div className="flex flex-wrap items-center gap-2 sm:hidden">
+            {botonSiguiente()}
+            {botonAlternar()}
+          </div>
+          {/* El origen, sin afirmar de qué: «las reuniones y notas que elegiste» mentía cuando lo único
+              que había eran las instrucciones adicionales. */}
+          <p>
+            <span className="text-xs text-fg-muted">{desde}</span>
+          </p>
+          {/* En qué están las tareas de esta propuesta (faltan o fallaron). Con las tareas listas, o sin tareas que
+              esperar, no hay línea. */}
+          {lineaDeTareas && (
+            <LineaDeLasTareas
+              estado={lineaDeTareas.estado}
+              fase={lineaDeTareas.fase}
+              motivo={lineaDeTareas.motivo}
+              onAccion={onArmarTareas}
+              conCambiosDeFases={hayCambiosDeFasesAplicables(items)}
+              trabajando={trabajando}
+            />
+          )}
+          {/* E2c: la línea del recálculo de las fases desfasadas. ⛔ Nunca con `onArmarTareas`: armaría las
+              tareas de TODAS las fases. «Aplicar de todos modos» fuerza las que fallaron y confirma. */}
+          {recalculo && (
+            <LineaDeLasTareas
+              estado={null}
+              fase={null}
+              motivo={null}
+              recalculo={recalculo}
+              onAccion={onRecalcular}
+              onSecundaria={
+                onForzar && recalculo.que === "fallo"
+                  ? () => {
+                      onForzar(recalculo.fases.map((f) => f.id));
+                      setConfirmar("forzar");
+                    }
+                  : undefined
+              }
+              trabajando={trabajando}
+            />
+          )}
+          {/* El de las desfasadas ya lo dice la línea del recálculo: no dos veces. Los demás, sí. */}
+          {bloqueo && !(recalculo && resumen.bloqueoPorDesfasadas) && <p className="text-xs font-semibold text-warn-ink">{bloqueo}</p>}
+          <p className="text-xs text-fg-secondary">
+            {cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>
+          </p>
+          {/* Lo que se aplica, con cada casilla que se toca en el Gantt (el lector lo anuncia). */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span aria-live="polite" className="text-xs font-semibold text-fg-secondary">
+              {textoDeLosTotales(resumen)}
+            </span>
             <Button size="sm" variant="secondary" onClick={onDescartar} disabled={trabajando}>
               {enCurso === "descartar" ? "Descartando…" : "Descartar"}
             </Button>
           </div>
-        </div>
-        {/* La segunda línea: en qué están las tareas de esta propuesta (armándose, faltan o fallaron).
-            Con las tareas listas, o sin tareas que esperar, no hay línea. */}
-        {lineaDeTareas && (
-          <LineaDeLasTareas
-            estado={lineaDeTareas.estado}
-            fase={lineaDeTareas.fase}
-            motivo={lineaDeTareas.motivo}
-            onAccion={onArmarTareas}
-            conCambiosDeFases={hayCambiosDeFasesAplicables(items)}
-            trabajando={trabajando}
-          />
-        )}
-        {/* E2c: la línea del recálculo de las fases desfasadas. ⛔ Nunca con `onArmarTareas`: armaría las
-            tareas de TODAS las fases. «Aplicar de todos modos» fuerza las que fallaron y confirma. */}
-        {recalculo && (
-          <LineaDeLasTareas
-            estado={null}
-            fase={null}
-            motivo={null}
-            recalculo={recalculo}
-            onAccion={onRecalcular}
-            onSecundaria={
-              onForzar && recalculo.que === "fallo"
-                ? () => {
-                    onForzar(recalculo.fases.map((f) => f.id));
-                    setConfirmar("forzar");
-                  }
-                : undefined
-            }
-            trabajando={trabajando}
-          />
-        )}
-        <p className="text-xs text-fg-secondary">
-          {cierre} <span className="text-fg-muted">{LINEA_DEL_CLIENTE}</span>
-        </p>
-      </div>
 
-      {/* ── LA LISTA: numerada, con casillas, lo que la IA notó y el aviso de «otro cronograma».
-          No es fija: una lista larga no puede tapar el Gantt. ── */}
-      <section aria-label="Cambios propuestos" className="rounded-xl border border-line bg-surface px-3 py-2 space-y-2">
-        {/* El de las desfasadas ya lo dice la línea del recálculo: no dos veces. Los demás, sí. */}
-        {bloqueo && !(recalculo && resumen.bloqueoPorDesfasadas) && <p className="text-xs font-semibold text-warn-ink">{bloqueo}</p>}
+          {/* EL AVISO (Tanda J): una propuesta que rehace el plan no puede llegar disfrazada de N
+              cambios sueltos. Corto a propósito: los motivos son la parte que se lee. */}
+          {otroCronograma && (
+            <div className="space-y-1 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2">
+              <p className="text-xs font-semibold text-fg-secondary">Es prácticamente un cronograma nuevo:</p>
+              <ul className="text-xs text-fg-secondary space-y-0.5">
+                {magnitud.motivos.map((m) => (
+                  <li key={m}>· {m}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-fg-muted">
+                {resumen.borraAlgo
+                  ? "Aplicar quita solo las tareas que se nombran acá; lo que tiene avance o escribiste a mano no se toca."
+                  : "Aplicar no borra nada: las fases y las tareas que no se nombran quedan como están."}
+              </p>
+            </div>
+          )}
 
-        {/* EL AVISO (Tanda J): una propuesta que rehace el plan no puede llegar disfrazada de N
-            cambios sueltos. Corto a propósito: los motivos son la parte que se lee. */}
-        {otroCronograma && (
-          <div className="space-y-1 rounded-lg border border-warn-line bg-warn-surface px-2.5 py-2">
-            <p className="text-xs font-semibold text-fg-secondary">Es prácticamente un cronograma nuevo:</p>
-            <ul className="text-xs text-fg-secondary space-y-0.5">
-              {magnitud.motivos.map((m) => (
-                <li key={m}>· {m}</li>
-              ))}
-            </ul>
-            <p className="text-xs text-fg-muted">
-              {resumen.borraAlgo
-                ? "Aplicar quita solo las tareas que se nombran acá; lo que tiene avance o escribiste a mano no se toca."
-                : "Aplicar no borra nada: las fases y las tareas que no se nombran quedan como están."}
+          {choques > 0 && <p className="text-xs text-warn-ink">{textoDeLosChoques(choques)}</p>}
+
+          {/* El avance sin revisar: se revisa en su cajón («Lo que detectó el agente»), no «más abajo». */}
+          {avance?.hay && (
+            <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-secondary">
+              <span>{textoDelAvance(avance.seCruza)}</span>
+              {onRevisarAvance && (
+                <button
+                  type="button"
+                  onClick={onRevisarAvance}
+                  className="font-semibold text-info-ink underline underline-offset-2 hover:opacity-80"
+                >
+                  {ACCION_REVISAR_AVANCE}
+                </button>
+              )}
             </p>
-          </div>
-        )}
+          )}
 
-        {choques > 0 && (
-          <p className="text-xs text-warn-ink">
-            ⚠ {choques === 1 ? "1 cambio choca" : `${choques} cambios chocan`} con lo que editaste a mano:{" "}
-            {choques === 1 ? "queda fuera" : "quedan fuera"}.
-          </p>
-        )}
-
-        <ol className="max-h-80 overflow-y-auto space-y-1.5 pr-1">
-          {items.map((it) => {
-            const seAplica = it.estado === "aplica";
-            const sePuedeMarcar = it.estado === "aplica" || it.estado === "excluido";
-            return (
-              <li key={it.clave} className="flex items-start gap-2">
-                <span className="w-6 flex-shrink-0 pt-0.5 text-right text-xs font-semibold tabular-nums text-fg-muted">
-                  {it.numero}.
-                </span>
-                <input
-                  type="checkbox"
-                  className="mt-0.5 flex-shrink-0 accent-brand"
-                  checked={seAplica}
-                  disabled={trabajando || !sePuedeMarcar}
-                  onChange={(e) => onMarcar(it.clave, e.target.checked)}
-                  aria-label={`Incluir el cambio ${it.numero}`}
-                />
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <p
-                    className={cn(
-                      "text-xs break-words",
-                      seAplica ? "text-fg" : "text-fg-muted",
-                      it.estado === "ya-esta" && "line-through",
-                    )}
-                  >
-                    {it.titulo}
-                  </p>
-                  {it.aviso && (
-                    <p className={cn("text-xs", it.estado === "choque" ? "text-warn-ink" : "text-success-ink")}>{it.aviso}</p>
-                  )}
-                  {/* E3: una fase que se quita y se queda con lo que tiene avance o se cargó a mano. */}
-                  {it.nota && <p className="text-xs text-fg-muted">{it.nota}</p>}
-                  {/* El motivo es interno (cita la reunión o la nota): nunca llega a la fase ni al cliente.
-                      Hasta dos líneas, sin rótulo: el texto completo queda en el `title`. */}
-                  {it.motivo && (
-                    <p className="text-xs text-fg-muted line-clamp-2" title={it.motivo}>
-                      {it.motivo}
-                    </p>
-                  )}
-                  {it.detalle.length > 0 && (
-                    <details className="text-xs">
-                      <summary className="cursor-pointer font-semibold text-info-ink">Ver el antes y el después</summary>
-                      <dl className="mt-1 space-y-1 rounded border border-line bg-surface px-2 py-1.5">
-                        {it.detalle.map((f) => (
-                          <div key={f.etiqueta} className="grid grid-cols-[5rem_1fr] gap-x-2">
-                            <dt className="font-semibold text-fg-muted">{f.etiqueta}</dt>
-                            <dd className="min-w-0 break-words text-fg-secondary">
-                              <span className="text-fg-muted line-through">{f.antes}</span>
-                              <span className="mx-1 text-fg-muted">→</span>
-                              <span className="text-fg">{f.despues}</span>
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </details>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-
-        {/* Las tareas, un renglón por fase (siguen la numeración de arriba), plegadas. */}
-        <TareasDeLaPropuesta
-          grupos={grupos}
-          onMarcar={onMarcar}
-          onMarcarVarios={onMarcarVarios}
-          trabajando={trabajando}
-          recalculo={recalculo}
-        />
-
-        {/* Lo que la IA notó y NO puede aplicar sola: se lee y se decide a mano. Interno. Plegado: son
-            notas para quien quiera leerlas, no parte de lo que se aplica (y con 5 ocupaban más que la
-            propuesta). */}
-        {observaciones.length > 0 && (
-          <details className="border-t border-line pt-1.5 text-xs">
-            <summary className="cursor-pointer font-semibold text-fg-secondary">
-              {tituloDeLoQueNoto(observaciones.length)}
-            </summary>
-            <ul className="mt-1 text-fg-muted space-y-0.5">
-              {observaciones.map((o, i) => (
-                <li key={i}>· {o}</li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </section>
+          {/* Lo que la IA notó y NO puede aplicar sola: se lee y se decide a mano. Interno. Plegado, y sin la
+              jerga del paso 1 (`observacionesParaMostrar`). */}
+          {observaciones.length > 0 && (
+            <details className="border-t border-line pt-1.5 text-xs">
+              <summary className="cursor-pointer font-semibold text-fg-secondary">{tituloDeLoQueNoto(observaciones.length)}</summary>
+              <ul className="mt-1 text-fg-muted space-y-0.5">
+                {observaciones.map((o, i) => (
+                  <li key={i}>· {o}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      </div>
 
       {/* Cuando lo MARCADO es otro cronograma, cuando QUITA tareas o cuando las tareas no llegaron
           (`pideConfirmacion`), marcado entero o no: para un ajuste chico, confirmar sería la fricción

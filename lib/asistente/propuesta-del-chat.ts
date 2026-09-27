@@ -102,12 +102,12 @@ export const AVISO_SIN_PROPUESTA_ABIERTA =
 export const rechazoFueraDeRango = (pedido: string, ultimo: number): string =>
   ultimo > 0 ? `No hay un cambio ${pedido}: la lista llega hasta el ${ultimo}.` : `No hay un cambio ${pedido}: la propuesta no tiene cambios.`;
 export const rechazoYaFuera = (quien: string): string => `${quien} ya está fuera.`;
-/** Revisión de E3 (#13): con el porqué del choque (el de la barra); no todo choque es una edición a mano. */
+/** Revisión de E3 (#13): con el porqué del choque (el de su fila en el Gantt, L3); no todo choque es una edición a mano. */
 export const rechazoChoca = (quien: string, porques: readonly string[]): string =>
   porques.length === 1
     ? `${quien} no se aplica igual. ${porques[0]}`
     : porques.length > 1
-      ? `${quien} no se aplica igual: sus tareas chocan con el cronograma de hoy, cada una por lo que dice la barra.`
+      ? `${quien} no se aplica igual: sus tareas chocan con el cronograma de hoy, cada una por lo que dice su ⚠ en el Gantt.`
       : `${quien} no se aplica igual: el cronograma cambió desde la propuesta.`;
 export const rechazoYaEsta = (quien: string): string => `${quien} ya está así en el cronograma.`;
 export const rechazoYaMarcado = (quien: string): string => `${quien} ya está en la propuesta.`;

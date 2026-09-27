@@ -7,6 +7,9 @@
  * nunca importada): 133 cambios crudos, 130 casillas de tareas, 185 filas con todo desplegado. Y sobre un
  * ESCENARIO que le suma lo que el fixture no trae: lo que dicta el chat (una tarea que cambia de semana, una
  * que se muda de fase, una que cambia en su lugar) y una hecha que la IA quiere quitar (choca).
+ * L3 P3d suma lo puro de la barra y del canvas: las claves de la vista pasadas a las `key` de la pantalla
+ * (`vistaEnLasFilas`), el chip del cierre, «Siguiente número» (qué recorre, a dónde va, qué dice, sus atajos) y los
+ * textos de la barra (los totales, los choques, el avance y lo que notó la IA).
  * Cada `it` nombra la edición de producción que lo pone en rojo.
  */
 import { describe, expect, it } from "vitest";
@@ -31,15 +34,25 @@ import {
   type TareaDelVivo,
 } from "./borrador";
 import {
+  atajoDelSiguiente,
   avanceQueSeCruza,
   chipDelChoque,
+  cierreParaElGantt,
   cuentaDelGrupo,
   etiquetaCortaDelCambio,
   fasesADesplegarAlEntrar,
+  observacionesParaMostrar,
   observacionParaMostrar,
+  pasoDelSiguiente,
+  textoDelAvance,
+  textoDeLosChoques,
+  textoDeLosTotales,
+  textoDelSiguiente,
   tituloDeLaFuga,
   tituloDeLaRepetida,
+  unidadesDelSiguiente,
   vistaDeLaPropuesta,
+  vistaEnLasFilas,
   type MarcaDeTarea,
   type VistaDeLaPropuesta,
 } from "./vista-de-la-propuesta";
@@ -461,5 +474,104 @@ describe("L3 P3b · al entrar, el avance y el tiempo", () => {
     }
     tiempos.sort((a, b) => a - b);
     expect(tiempos[2]).toBeLessThan(250);
+  });
+});
+
+describe("L3 P3d · lo puro de la barra y del canvas", () => {
+  it("⭐ vistaEnLasFilas: cada marca y cada fila con la key de su fila de hoy; lo que no es una viva, con su clave", () => {
+    /* La edición que la pone en rojo: dejar las claves de la vista (el id) cuando la `key` de la fila de hoy es otra
+       (el Gantt no encuentra las vivas), o no pasar la de la fila extra de la que se quita (marcarla la remonta). */
+    const { r, v } = vista(escenario());
+    const keyDe = (id: string) => `k-${id}`;
+    const vivas = new Set(VIVO.fases.flatMap((f) => (f.tareas ?? []).map((t) => t.id)));
+    const fases = r.proyeccion.fases.map((f) => ({ clave: f.clave, key: `fk-${f.clave}` }));
+    const e = vistaEnLasFilas(v, fases, (id) => (vivas.has(id) ? keyDe(id) : undefined));
+    // Las marcas: una por marca de la vista, bajo la key de su fila.
+    expect(e.marcasPorKey.size).toBe(v.marcas.size);
+    for (const [clave, m] of v.marcas) expect(e.marcasPorKey.get(vivas.has(clave) ? keyDe(clave) : clave), clave).toBe(m);
+    // Las semanas: por la key de la fase, las mismas filas en el mismo orden, con la key de la pantalla.
+    expect([...e.semanasPorKey.keys()]).toEqual(fases.map((f) => f.key));
+    for (const f of r.proyeccion.fases) {
+      const semanas = v.porFase.get(f.clave)!.semanas;
+      const pasadas = e.semanasPorKey.get(`fk-${f.clave}`)!;
+      expect(pasadas.map((s) => s.map((x) => x.key))).toEqual(semanas.map((s) => s.map((x) => (vivas.has(x.clave) ? keyDe(x.clave) : x.clave))));
+      expect(pasadas.map((s) => s.map((x) => x.extra))).toEqual(semanas.map((s) => s.map((x) => x.extra)));
+    }
+    // La que se quita (marcada: fila extra con key = su id) toma la key de su fila; el origen de lo que se mueve no.
+    const todas = [...e.semanasPorKey.values()].flat(2);
+    const seVa = todas.find((x) => x.extra?.marca.tipo === "se-va" && x.extra.marca.tachada)!;
+    expect(seVa.key).toBe(keyDe(seVa.extra!.key));
+    expect(todas.find((x) => x.extra?.key === "t074:origen")?.key).toBe("t074:origen");
+    // Ninguna key repetida en una semana.
+    for (const s of [...e.semanasPorKey.values()].flat()) expect(new Set(s.map((x) => x.key)).size).toBe(s.length);
+  });
+
+  it("⭐ el chip del cierre: el de hoy y el de lo marcado, en días cortos; sin fechas, nada", () => {
+    /* La edición que la pone en rojo: el chip con las etiquetas largas, o con el cierre de hoy en los dos lados. */
+    const r = resumir(VIVO, BORRADOR, [], LISTAS);
+    expect(cierreParaElGantt(r)).toEqual({ antes: "13 oct", despues: "10 nov" });
+    expect(cierreParaElGantt({ ...r, cierreAntes: { ...r.cierreAntes, date: null } })).toBeNull();
+  });
+
+  it("⭐ «Siguiente número» recorre los 14 números, salta lo «ya está», da la vuelta y dice dónde está", () => {
+    /* Las ediciones que la ponen en rojo: recorrer también lo «ya está» (no hay nada que decidir), no dar la vuelta,
+       o contar la posición desde 0. */
+    const r = resumir(VIVO, BORRADOR, [], LISTAS);
+    const unidades = unidadesDelSiguiente(r.indice);
+    expect(unidades).toHaveLength(14);
+    expect(unidades.map((u) => u.numero)).toEqual(r.indice.filter((u) => !u.yaEsta).map((u) => u.numero));
+    const conYaEsta = [{ ...r.indice[0], yaEsta: true }, ...r.indice.slice(1)];
+    expect(unidadesDelSiguiente(conYaEsta).map((u) => u.numero), "recorre lo «ya está»").not.toContain(r.indice[0].numero);
+    // Adelante desde el principio, la vuelta, y atrás.
+    expect(pasoDelSiguiente(14, null, 1)).toBe(0);
+    expect(pasoDelSiguiente(14, 2, 1)).toBe(3);
+    expect(pasoDelSiguiente(14, 13, 1)).toBe(0);
+    expect(pasoDelSiguiente(14, null, -1)).toBe(13);
+    expect(pasoDelSiguiente(14, 0, -1)).toBe(13);
+    expect(pasoDelSiguiente(14, 20, 1), "un índice que ya no está vuelve al principio").toBe(0);
+    expect(pasoDelSiguiente(0, null, 1)).toBeNull();
+    // Lo que dice el botón.
+    const primero = unidades[0].numero;
+    expect(textoDelSiguiente({ actual: null, total: 14, primero })).toBe("Recorrer los 14 números");
+    expect(textoDelSiguiente({ actual: 3, total: 14, primero })).toBe("Siguiente número · 3 de 14");
+    expect(textoDelSiguiente({ actual: 14, total: 14, primero })).toBe(`Volver al ${primero} · 14 de 14`);
+    expect(textoDelSiguiente({ actual: null, total: 1, primero: 7 })).toBe("Ir al número 7");
+    expect(textoDelSiguiente({ actual: null, total: 0, primero: null })).toBeNull();
+  });
+
+  it("⭐ los atajos: n y p, sin modificadores y nunca mientras se escribe", () => {
+    /* La edición que la pone en rojo: tomar la tecla dentro de un campo (el CSE escribe «n» y salta de número), o
+       con Ctrl/Cmd/Alt (pisa atajos del navegador). */
+    expect(atajoDelSiguiente({ key: "n" }, false)).toBe(1);
+    expect(atajoDelSiguiente({ key: "p" }, false)).toBe(-1);
+    expect(atajoDelSiguiente({ key: "n" }, true), "salta mientras se escribe").toBeNull();
+    for (const mod of ["ctrlKey", "metaKey", "altKey", "shiftKey"] as const) {
+      expect(atajoDelSiguiente({ key: "n", [mod]: true }, false), mod).toBeNull();
+    }
+    expect(atajoDelSiguiente({ key: "N" }, false)).toBeNull();
+    expect(atajoDelSiguiente({ key: "x" }, false)).toBeNull();
+  });
+
+  it("⭐ los textos de la barra: los totales, los choques, el avance y lo que notó la IA", () => {
+    /* Las ediciones que la ponen en rojo: contar como aplicadas las tareas que esperan su recálculo, afirmar que todo
+       choque es una edición a mano, o mostrar la jerga del paso 1. */
+    const r = resumir(VIVO, BORRADOR, [], LISTAS);
+    expect(textoDeLosTotales(r)).toBe("Aplicas 132 de 132 cambios");
+    expect(textoDeLosTotales({ marcadas: 1, aplicables: 1, desfasadas: [] })).toBe("Aplicas 1 de 1 cambio");
+    const conEspera = resumir(VIVO, BORRADOR, [`fase:${FASE_QUE_SE_ALARGA}:durationWeeks`], LISTAS);
+    expect(conEspera.desfasadas.length).toBeGreaterThan(0);
+    expect(textoDeLosTotales(conEspera)).toMatch(/^Aplicas \d+ de \d+ cambios, sin contar las tareas que se recalculan$/);
+    expect(textoDeLosChoques(1)).toBe("⚠ 1 cambio choca y queda fuera: su ⚠ dice por qué.");
+    expect(textoDeLosChoques(3)).toBe("⚠ 3 cambios chocan y quedan fuera: cada ⚠ dice por qué.");
+    expect(textoDeLosChoques(3)).not.toMatch(/a mano/);
+    expect(textoDelAvance(false)).toBe("Hay un avance detectado sin revisar.");
+    expect(textoDelAvance(true)).toBe("Hay un avance detectado sin revisar. Revísalo antes de aplicar.");
+    const notadas = observacionesParaMostrar([...BORRADOR.observaciones, "el paso de tareas lo arma después"]);
+    expect(notadas).toHaveLength(4);
+    for (const o of notadas) expect(o).not.toMatch(/paso de (las )?tareas/i);
+    for (const t of [textoDeLosTotales(r), textoDeLosChoques(2), textoDelAvance(true), textoDelSiguiente({ actual: 2, total: 14, primero: 1 })!]) {
+      expect(t.length).toBeLessThanOrEqual(140);
+      expect(t).not.toMatch(/\b(podés|querés|tenés|decime|decímelo|fijate|mirá|revisá|sabés|elegí|aplicá)\b/i);
+    }
   });
 });

@@ -118,6 +118,7 @@ import {
   type VistaDeFase,
   type VistaDeLaPropuesta,
 } from "@/lib/timeline/vista-de-la-propuesta";
+import { textoDelGrupoDesfasado, type RecalculoEnPantalla } from "@/lib/timeline/recalculo-de-tareas";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
@@ -265,6 +266,9 @@ export interface PropuestaEnElGantt {
   desplegarAlEntrar: { clave: string; fases: string[] } | null;
   /** El cierre de hoy y con lo marcado, para el chip de la cabecera. */
   cierre: { antes: string; despues: string } | null;
+  /** P3d: en qué está el recálculo de las fases desfasadas (E2c). Con dos o más, el grupo de cada una lo dice al lado
+   *  de su casilla (con una sola lo dice la línea de la barra: no dos veces). Se mudó de TareasDeLaPropuesta. */
+  recalculo?: RecalculoEnPantalla | null;
 }
 
 // Forma mínima de una particularidad para el resumen + bitácora del Gantt interno.
@@ -698,6 +702,8 @@ function CasillaDeLaFase({
         <span className="font-semibold tabular-nums">{c.numero}.</span> {texto}
       </span>
       {choque && c.aviso && <span className={`rounded border px-1 py-px text-[10px] font-semibold ${CHIP_AVISO}`}>{chipDelChoque(c.aviso)}</span>}
+      {/* P3d: la fase que se quita y se queda con lo que tiene avance lo dice al lado (antes, la lista de la barra). */}
+      {c.nota && <span className="text-[10px] text-fg-muted">{c.nota}</span>}
     </label>
   );
 }
@@ -709,12 +715,15 @@ function CasillaDelGrupo({
   trabajando,
   onMarcarVarios,
   foco,
+  desfase,
 }: {
   g: CasillaDeGrupo;
   donde: string;
   trabajando: boolean;
   onMarcarVarios: (claves: readonly string[], incluir: boolean) => void;
   foco: SeguirElFoco;
+  /** E2c (se mudó de TareasDeLaPropuesta en P3d): en qué está el recálculo de esta fase desfasada, o null. */
+  desfase: { texto: string; enCurso: boolean } | null;
 }) {
   const todas = g.marcables > 0 && g.marcadas === g.marcables;
   const aMedias = g.marcadas > 0 && g.marcadas < g.marcables;
@@ -744,6 +753,18 @@ function CasillaDelGrupo({
       {g.dependeDe !== null && (
         <span className="rounded border border-line px-1 py-px text-[10px] text-fg-muted">va con el {g.dependeDe}</span>
       )}
+      {/* E2c: en qué está el recálculo de ESTA fase. Info con el spinner mientras corre; warn si falta o falló. */}
+      {desfase && (
+        <span className={`text-[10px] ${desfase.enCurso ? "text-info-ink" : "text-warn-ink"}`}>
+          {desfase.enCurso && (
+            <span
+              aria-hidden="true"
+              className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-info-line border-t-info-ink align-middle"
+            />
+          )}
+          {desfase.texto}
+        </span>
+      )}
     </label>
   );
 }
@@ -761,13 +782,23 @@ function CasillasDeLaFase({
   foco: SeguirElFoco;
 }) {
   if (vf.casillas.length === 0 && !vf.grupo && vf.yaEsta.length === 0) return null;
+  // E2c: con una sola fase desfasada lo dice la línea del recálculo de la barra; con dos o más, cada grupo el suyo.
+  const desfasadas = [...propuesta.vista.porFase.values()].filter((f) => f.grupo?.desfasada).length;
+  const desfase = vf.grupo?.desfasada ? textoDelGrupoDesfasado(vf.grupo.fase, propuesta.recalculo ?? null, desfasadas) : null;
   return (
     <div className="ml-[18px] mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
       {vf.casillas.map((c) => (
         <CasillaDeLaFase key={c.clave} c={c} texto={c.texto} donde={donde} trabajando={propuesta.trabajando} onMarcar={propuesta.onMarcar} foco={foco} />
       ))}
       {vf.grupo && (
-        <CasillaDelGrupo g={vf.grupo} donde={donde} trabajando={propuesta.trabajando} onMarcarVarios={propuesta.onMarcarVarios} foco={foco} />
+        <CasillaDelGrupo
+          g={vf.grupo}
+          donde={donde}
+          trabajando={propuesta.trabajando}
+          onMarcarVarios={propuesta.onMarcarVarios}
+          foco={foco}
+          desfase={desfase}
+        />
       )}
       {vf.yaEsta.map((y) => (
         <span key={y} className="rounded border border-line px-1.5 py-0.5 text-[10px] text-fg-muted" title="Ya está así: no hay nada que aplicar">

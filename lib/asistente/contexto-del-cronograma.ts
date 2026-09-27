@@ -5,8 +5,8 @@
  * devuelve el texto que va al prefijo cacheado del turno (`contextoDeCronograma`, contexto.ts).
  *
  * ── POR QUÉ REEMPLAZA AL CRONOGRAMA DE HOY ───────────────────────────────────────────────────
- * Con una propuesta abierta, lo que el CSE tiene enfrente es la PROPUESTA (arriba del Gantt) y su
- * lista numerada. Si el chat viera solo el cronograma de hoy, no podría explicar «el 3», ni nombrar una
+ * Con una propuesta abierta, lo que el CSE tiene enfrente es la PROPUESTA en el Gantt, con cada número y su
+ * casilla en su fila (L3 P3d). Si el chat viera solo el cronograma de hoy, no podría explicar «el 3», ni nombrar una
  * tarea que la propuesta crea. Así que van las dos cosas que ve la pantalla:
  *   · LA PROPUESTA: el cronograma como quedaría con lo marcado (`resumen.proyeccion`), con los ids de
  *     las fases (`n:…` las nuevas) y las tareas por semana con su identificador;
@@ -19,9 +19,9 @@
  * ── EL TECHO, Y QUÉ SE RECORTA ───────────────────────────────────────────────────────────────
  * Una propuesta de «Regenerar todo» puede pasar el techo del prefijo (`TECHO_DEL_PREFIJO_CHARS`). Si
  * pasa, se recorta en dos niveles, y cada nivel lo dice con una línea «RECORTADO POR ESPACIO»:
- *   1. fuera los «antes → después» y los motivos (están en la barra);
+ *   1. fuera los «antes → después» y los motivos (se ven en el Gantt, al desplegar la fase);
  *   2. los títulos de las tareas se cortan a 32 caracteres con «…», con su identificador ENTERO.
- * ⛔ EL ÍNDICE NUNCA SE RECORTA: cada número de la barra aparece una vez, igual con o sin recorte. Sin
+ * ⛔ EL ÍNDICE NUNCA SE RECORTA: cada número del Gantt aparece una vez, igual con o sin recorte. Sin
  * él, «deja el 3 como estaba» sería adivinar. Si aun así no entra, va igual y avisa (`excede`): cuesta
  * más caché, no falla. Ninguna fila sale.
  *
@@ -99,7 +99,7 @@ export function lineaDeSoloLectura(porQue: "tareas-armando" | "recalculando"): s
 }
 
 export const RECORTE_NIVEL_1 =
-  "RECORTADO POR ESPACIO: la lista de cambios va sin los «antes → después» ni los motivos (están en la barra).";
+  "RECORTADO POR ESPACIO: la lista de cambios va sin los «antes → después» ni los motivos (se ven en el Gantt).";
 export const RECORTE_NIVEL_2 =
   `RECORTADO POR ESPACIO: los títulos de las tareas van cortados a ${LARGO_DEL_TITULO_RECORTADO} caracteres («…»); ` +
   "su identificador va entero.";
@@ -140,7 +140,7 @@ function acortar(titulo: string): string {
 const fecha = (s: string | null | undefined): string | null => (s ? s.slice(0, 10) : null);
 
 /**
- * La casilla del grupo como la pinta la barra (TareasDeLaPropuesta.tsx): cuenta solo las que se pueden
+ * La casilla del grupo como la pinta el Gantt (`CasillaDeGrupo` de la vista, L3 P3d): cuenta solo las que se pueden
  * marcar, y una que espera el recálculo cuenta como marcada (E2c).
  */
 function simboloDelGrupo(g: GrupoDeTareas): string {

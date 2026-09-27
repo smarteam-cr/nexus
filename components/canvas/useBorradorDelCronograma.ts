@@ -45,6 +45,12 @@
  *   · Lo que se recuerda en el navegador es lo desmarcado EFECTIVO: si se vuelve a E2c, la pantalla vieja
  *     arranca con lo mismo que se veía.
  * Quien solo mira sigue como en E1: lo desmarcado vive en la memoria de la pantalla.
+ *
+ * L3 P3d (2026-09-26): LA PROPUESTA SE DECIDE EN EL GANTT. El hook suma lo que el Gantt pinta y cómo se recorre:
+ *   · `vistaDelGantt`: `vistaDeLaPropuesta` (lib/timeline/vista-de-la-propuesta.ts) sobre el resumen con lo marcado;
+ *     cada casilla del Gantt pasa por `marcar`/`marcarVarios` (la misma cola que sube al servidor);
+ *   · «Siguiente número» (`siguiente`, `posicion`): recorre `resumen.indice` sin lo «ya está» y da la vuelta; el
+ *     cursor es de la propuesta (otra propuesta arranca de cero).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { claveDeDesfasadas } from "@/lib/timeline/recalculo-de-tareas";
@@ -54,6 +60,13 @@ import {
   type ColaEnMarcha,
   type ResultadoDeGuardarCasillas,
 } from "@/lib/timeline/cola-de-casillas";
+import {
+  pasoDelSiguiente,
+  unidadesDelSiguiente,
+  vistaDeLaPropuesta,
+  type PosicionDelSiguiente,
+  type VistaDeLaPropuesta,
+} from "@/lib/timeline/vista-de-la-propuesta";
 import {
   almacenEnMemoria,
   alternarVista,
@@ -81,6 +94,7 @@ import {
   type Proyeccion,
   type RecuerdoDeLaRevision,
   type ResumenDelBorrador,
+  type UnidadNumerada,
   type VistaDelBorrador,
   type Vivo,
 } from "@/lib/timeline/borrador";
@@ -213,6 +227,12 @@ export interface BorradorEnPantalla {
   contenedorRef: RefObject<HTMLDivElement | null>;
   /** La barra fija: lo que queda debajo de ella es lo que se está mirando. */
   barraRef: RefObject<HTMLDivElement | null>;
+  /** L3 P3d: lo que pinta el Gantt en la vista de la propuesta (null sin resumen). */
+  vistaDelGantt: VistaDeLaPropuesta | null;
+  /** L3 P3d: «Siguiente número» (1) o el anterior (−1): mueve el cursor y devuelve a qué unidad ir (null si no hay). */
+  siguiente: (dir: 1 | -1) => UnidadNumerada | null;
+  /** L3 P3d: dónde está el cursor de «Siguiente número» (el texto del botón). */
+  posicion: PosicionDelSiguiente;
 }
 
 export function useBorradorDelCronograma(entrada: {
@@ -231,6 +251,8 @@ export function useBorradorDelCronograma(entrada: {
    *  responde 409 y nada cae sobre la nueva). Sin él (quien solo mira), lo desmarcado queda en la memoria
    *  de la pantalla, como en E1. */
   guardarCasillas?: (ops: OperacionDeCasillas[], token: string) => Promise<ResultadoDeGuardarCasillas>;
+  /** L3 P3d: hoy (null antes de hidratar): decide las semanas que «ya pasaron» en la vista de la propuesta. */
+  hoy?: Date | null;
 }): BorradorEnPantalla {
   const { projectId, propuesta, token, vivo, tareas } = entrada;
   const clave = useMemo(() => claveDeRevision(propuesta, token), [propuesta, token]);
@@ -379,6 +401,36 @@ export function useBorradorDelCronograma(entrada: {
   const clavePorDesfasadas = useMemo(() => claveDeDesfasadas(desfasadas), [desfasadas]);
   const version = useMemo(() => versionDelBorrador(propuesta), [propuesta]);
 
+  /* ── L3 P3d · LA VISTA DEL GANTT Y «SIGUIENTE NÚMERO» ───────────────────────────────────────────
+     La vista sale del mismo resumen (lo marcado): no se vuelve a evaluar el plan. */
+  const hoy = entrada.hoy ?? null;
+  const vistaDelGantt = useMemo(
+    () => (resumen && borrador ? vistaDeLaPropuesta(vivo, borrador, resumen, hoy) : null),
+    [resumen, borrador, vivo, hoy],
+  );
+  const unidades = useMemo(() => unidadesDelSiguiente(resumen?.indice ?? []), [resumen]);
+  /* El cursor es de ESTA propuesta: con otra (otra `clave`) arranca de cero. Si el índice se acortó (el chat
+     cambió la propuesta), vuelve al principio. */
+  const [cursor, setCursor] = useState<{ clave: string | null; i: number | null }>({ clave: null, i: null });
+  const iActual = cursor.clave === clave && cursor.i !== null && cursor.i < unidades.length ? cursor.i : null;
+  const cursorRef = useRef({ clave, unidades, i: iActual });
+  useEffect(() => {
+    cursorRef.current = { clave, unidades, i: iActual };
+  });
+  const siguiente = useCallback((dir: 1 | -1): UnidadNumerada | null => {
+    const { clave: k, unidades: us, i } = cursorRef.current;
+    const j = pasoDelSiguiente(us.length, i, dir);
+    if (j === null) return null;
+    // Dos atajos seguidos antes de volver a pintar avanzan dos.
+    cursorRef.current = { clave: k, unidades: us, i: j };
+    setCursor({ clave: k, i: j });
+    return us[j];
+  }, []);
+  const posicion: PosicionDelSiguiente = useMemo(
+    () => ({ actual: iActual === null ? null : iActual + 1, total: unidades.length, primero: unidades[0]?.numero ?? null }),
+    [iActual, unidades],
+  );
+
   const contenedorRef = useRef<HTMLDivElement | null>(null);
   const barraRef = useRef<HTMLDivElement | null>(null);
   const anclaRef = useRef<AnclaDeScroll | null>(null);
@@ -444,5 +496,8 @@ export function useBorradorDelCronograma(entrada: {
     claveDeDesfasadas: clavePorDesfasadas,
     contenedorRef,
     barraRef,
+    vistaDelGantt,
+    siguiente,
+    posicion,
   };
 }

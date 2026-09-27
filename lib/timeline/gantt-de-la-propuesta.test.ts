@@ -34,9 +34,11 @@ vi.mock("@dnd-kit/sortable", async (importOriginal) => {
 
 import TimelineGantt, { estiloDeLaFila, type GanttPhase, type GanttTaskStatus, type PropuestaEnElGantt } from "@/components/canvas/TimelineGantt";
 import { collectClientBlockers } from "./client-blockers";
+import type { RecalculoEnPantalla } from "./recalculo-de-tareas";
 import { borradorDelFixture, FASE_NUEVA, FASE_QUE_SE_ALARGA, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import {
   claveDeCampo,
+  claveDeFaseQueSeVa,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   ETIQUETA_POR_RECALCULAR,
@@ -44,6 +46,7 @@ import {
   resumir,
   type Borrador,
   type Cambio,
+  type CambioFaseSeVa,
   type CambioTareaNueva,
   type ResumenDelBorrador,
   type TareaDelVivo,
@@ -55,6 +58,7 @@ import {
   tituloDeLaFuga,
   tituloDeLaRepetida,
   vistaDeLaPropuesta,
+  vistaEnLasFilas,
   type MarcaDeTarea,
   type VistaDeLaPropuesta,
 } from "./vista-de-la-propuesta";
@@ -157,10 +161,20 @@ function fasesDelGantt(r: ResumenDelBorrador): GanttPhase[] {
 /** Pinta el Gantt de la propuesta. `desplegar`: las fases (por clave) que abre al entrar; por defecto, todas. */
 function pintar(
   b: Borrador,
-  o: { sin?: readonly string[]; desplegar?: string[] | null; irA?: PropuestaEnElGantt["irA"]; sinPropuesta?: boolean } = {},
+  o: {
+    sin?: readonly string[];
+    desplegar?: string[] | null;
+    irA?: PropuestaEnElGantt["irA"];
+    sinPropuesta?: boolean;
+    /** L3 P3d: el recálculo que ve la barra (el grupo de cada fase desfasada lo dice con dos o más). */
+    recalculo?: RecalculoEnPantalla | null;
+    /** L3 P3d: retoca la vista antes de pintar (un escenario que el fixture no trae). */
+    ajustar?: (v: VistaDeLaPropuesta) => VistaDeLaPropuesta;
+  } = {},
 ): Pintado {
   const r = resumir(VIVO, b, o.sin ?? [], LISTAS);
-  const v = vistaDeLaPropuesta(VIVO, b, r, HOY);
+  const v0 = vistaDeLaPropuesta(VIVO, b, r, HOY);
+  const v = o.ajustar ? o.ajustar(v0) : v0;
   const phases = fasesDelGantt(r);
   const semanasPorKey = new Map(
     r.proyeccion.fases.map((f) => [f.clave, v.porFase.get(f.clave)!.semanas.map((s) => s.map((x) => ({ key: x.clave, extra: x.extra })))] as const),
@@ -176,6 +190,7 @@ function pintar(
     irA: o.irA ?? null,
     desplegarAlEntrar: desplegar === null ? null : { clave: "token-1", fases: desplegar },
     cierre: { antes: "13 oct", despues: "10 nov" },
+    recalculo: o.recalculo ?? null,
   };
   const marcas = new Map(r.proyeccion.fases.flatMap((f) => (f.marca ? [[f.clave, f.marca] as const] : [])));
   const html = renderToStaticMarkup(
@@ -645,5 +660,130 @@ describe("L3 P3c · lo puro que el Gantt pregunta", () => {
     expect(etiquetaDeLaCasilla(marca({ verbo: "Mudar a «Fase C»", tipo: "sale" }), "T")).toBe("Mudar «T» a «Fase C» · número 12");
     expect(etiquetaDeLaCasilla(marca({ verbo: "¿Mover a «Fase C»?", tipo: "sugerida" }), "T")).toBe("Mover «T» a «Fase C» (sugerida) · número 12");
     expect(etiquetaDeLaCasilla(marca({}), "  ")).toBe("Crear la tarea «Sin título» · número 12");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("L3 P3d · el Gantt con lo que le arma el canvas", () => {
+  it("⭐ con las keys de la pantalla (no el id): `vistaEnLasFilas` las pasa y se pintan las 185 filas y las 130 casillas", () => {
+    /* En el canvas la `key` de una fila es la de su fila de hoy (`_key`), que no siempre es el id: una tarea creada en
+       esta sesión la conserva después de guardarse, y una fase también. El canvas pasa las marcas y las semanas de
+       la vista a esas keys con `vistaEnLasFilas` (y `filaPorId`, todas las vivas del Gantt de hoy). La edición que la
+       pone en rojo: dejar las claves de la vista tal cual (las filas vivas no se encuentran y desaparecen, o pierden
+       su casilla), o darle a la que se quita, marcada, otra key que desmarcada (React la remonta y pierde el foco). */
+    const keyDe = (id: string) => `k-${id}`;
+    const vivas = new Map(VIVO.fases.flatMap((f) => (f.tareas ?? []).map((t) => [t.id, keyDe(t.id)] as const)));
+    const conKeys = (sin: readonly string[]) => {
+      const r = resumir(VIVO, BORRADOR, sin, LISTAS);
+      const v = vistaDeLaPropuesta(VIVO, BORRADOR, r, HOY);
+      // Como el canvas: una fase guardada con su `_key` (acá, distinta de su id); la nueva, con su clave.
+      const phases = fasesDelGantt(r).map((p) => ({
+        ...p,
+        key: p.id ? `fk-${p.id}` : p.key,
+        tasks: p.tasks.map((t) => (t.id ? { ...t, key: keyDe(t.id) } : t)),
+      }));
+      const filas = vistaEnLasFilas(
+        v,
+        r.proyeccion.fases.map((f, i) => ({ clave: f.clave, key: phases[i].key })),
+        (id) => vivas.get(id),
+      );
+      const html = renderToStaticMarkup(
+        createElement(TimelineGantt, {
+          anchor: r.proyeccion.ancla,
+          phases,
+          readOnly: true,
+          propuesta: {
+            vista: v,
+            marcasPorKey: filas.marcasPorKey,
+            semanasPorKey: filas.semanasPorKey,
+            onMarcar: () => {},
+            onMarcarVarios: () => {},
+            trabajando: false,
+            irA: null,
+            desplegarAlEntrar: { clave: "token-1", fases: [...v.porFase.keys()] },
+            cierre: null,
+          },
+        }),
+      );
+      return { v, html };
+    };
+    const { v, html } = conKeys([]);
+    const pintadas = filasPintadas(html);
+    expect(pintadas).toHaveLength(185);
+    expect(casillasDeTarea(html)).toBe(130);
+    // Cada fila con la key de la pantalla: las vivas y la que se quita, por su fila de hoy; lo demás, su clave.
+    const esperadas = [...v.porFase.values()].flatMap((f) => f.semanas.flat().map((x) => vivas.get(x.clave) ?? x.clave));
+    expect(pintadas.map((x) => x.key)).toEqual(esperadas);
+    expect(pintadas.filter((x) => x.key.startsWith("k-")).length, "la guarda no está mirando filas vivas").toBeGreaterThan(100);
+    // Marcada o desmarcada, la que se quita es la MISMA fila (misma key).
+    const seVa = [...v.marcas.values(), ...[...v.porFase.values()].flatMap((f) => f.semanas.flat().flatMap((x) => (x.extra ? [x.extra.marca] : [])))].find(
+      (m) => m.tipo === "se-va" && m.tachada,
+    )!;
+    const id = seVa.clave.replace(/^tarea:|:se-va$/g, "");
+    expect(pintadas.some((x) => x.key === keyDe(id)), "la que se quita, marcada, no usa la key de su fila").toBe(true);
+    const desmarcada = filasPintadas(conKeys([seVa.clave]).html);
+    expect(desmarcada.some((x) => x.key === keyDe(id)), "la que se quita, desmarcada, cambió de key").toBe(true);
+  });
+
+  it("⭐ el grupo de una fase desfasada dice en qué está el recálculo solo si hay dos o más (con una, lo dice la barra)", () => {
+    /* Se mudó de TareasDeLaPropuesta.tsx (se BORRÓ) al lado de la casilla del grupo. Revisión de E2c (texto de más):
+       con una sola fase desfasada, la línea del recálculo y el grupo decían lo mismo con dos spinners. Las ediciones
+       que la ponen en rojo: pintar el texto del grupo con una sola desfasada, o no pintarlo con dos. */
+    const sinDuracion = [claveDeCampo(FASE_QUE_SE_ALARGA, "durationWeeks")];
+    const r = resumir(VIVO, BORRADOR, sinDuracion, LISTAS);
+    expect(r.desfasadas.map((d) => d.fase)).toEqual([FASE_QUE_SE_ALARGA]);
+    const recalculo: RecalculoEnPantalla = {
+      que: "esperando",
+      fases: [{ id: FASE_QUE_SE_ALARGA, nombre: "Fase K" }],
+      despues: [],
+      fase: null,
+      motivo: null,
+    };
+    const una = pintar(BORRADOR, { sin: sinDuracion, desplegar: null, recalculo });
+    expect(una.v.porFase.get(FASE_QUE_SE_ALARGA)!.grupo!.desfasada).toBe(true);
+    expect(una.html, "el grupo repite «recalculando…» con una sola desfasada").not.toContain("recalculando…");
+    // Dos desfasadas (el fixture trae una: se le suma la de «Fase A»): cada grupo dice la suya.
+    const conDos = (v: VistaDeLaPropuesta): VistaDeLaPropuesta => {
+      const porFase = new Map(v.porFase);
+      const a = porFase.get(FASE_A)!;
+      porFase.set(FASE_A, { ...a, grupo: { ...a.grupo!, desfasada: true } });
+      return { ...v, porFase };
+    };
+    const r2: RecalculoEnPantalla = { ...recalculo, fases: [...recalculo.fases, { id: FASE_A, nombre: "Fase A" }] };
+    const dos = pintar(BORRADOR, { sin: sinDuracion, desplegar: null, recalculo: r2, ajustar: conDos });
+    expect(cuenta(dos.html, "recalculando…")).toBe(2);
+    expect(filaDeFase(dos.html, FASE_A)).toContain("recalculando…");
+    expect(filaDeFase(dos.html, FASE_QUE_SE_ALARGA)).toContain("recalculando…");
+    // Falló: lo dice en ámbar, sin spinner.
+    const fallo = pintar(BORRADOR, { sin: sinDuracion, desplegar: null, recalculo: { ...r2, que: "fallo", motivo: "se cortó" }, ajustar: conDos });
+    expect(cuenta(fallo.html, /text-warn-ink">no se pudieron recalcular</g)).toBe(2);
+  });
+
+  it("⭐ la fase que se quita y se queda con lo que tiene avance lo dice al lado de su casilla", () => {
+    /* La lista de la barra lo decía en su renglón (`it.nota`); se fue con ella. La edición que la pone en rojo: no
+       pasar la nota a la casilla (la vista) o no pintarla (el Gantt): el CSE marcaría «Se quita la fase» sin saber
+       que la fase se queda. */
+    const f = VIVO.fases.find((x) => x.id === "f06")!;
+    const seVa: CambioFaseSeVa = {
+      tipo: "fase-se-va",
+      clave: claveDeFaseQueSeVa(f.id),
+      faseId: f.id,
+      desde: {
+        name: f.name,
+        durationWeeks: f.durationWeeks,
+        startWeek: f.startWeek,
+        sessionCount: f.sessionCount,
+        notes: f.notes,
+        activityType: f.activityType,
+        status: f.status!,
+        tareas: (f.tareas ?? []).map((t) => ({ id: t.id, foto: fotoDeTarea(t) })),
+      },
+      porChat: true,
+    };
+    const p = pintar({ ...BORRADOR, cambios: [...BORRADOR.cambios, seVa] }, { desplegar: null });
+    const casilla = p.v.porFase.get(f.id)!.casillas.find((c) => c.clave === seVa.clave)!;
+    expect(casilla.nota).toBe("Se queda con 2 tareas con avance, cargadas o editadas a mano.");
+    expect(filaDeFase(p.html, f.id)).toContain(`>${casilla.nota}</span>`);
   });
 });

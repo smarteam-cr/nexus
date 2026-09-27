@@ -12,7 +12,10 @@
  *      cómo llega el recálculo del GET a la barra, cuándo arranca la espera, qué se relanza y qué no;
  *   3. la barra (`RevisionDeLaPropuesta`), llamada como función con el mismo React mínimo: «Aplicar de
  *      todos modos» confirma diciendo qué pasa con las tareas, y el botón no cuenta como quitadas las que
- *      esperan; y el grupo de tareas (`TareasDeLaPropuesta`), pintado con react-dom/server.
+ *      esperan; y (L3 P3d, desde que las casillas de las tareas viven en el Gantt) la casilla de espera en la
+ *      vista pura (`vistaDeLaPropuesta`);
+ *   4. (L3 P3d) el hook de la propuesta (`useBorradorDelCronograma`) con el mismo React mínimo: el cursor de
+ *      «Siguiente número» es de la propuesta en pantalla.
  * El repo no tiene jsdom ni @testing-library: el React mínimo (abajo) lleva el estado, los efectos, las
  * refs y los callbacks de UN componente, y vuelve a pintar cuando cambia el estado. Alcanza para estos
  * dos, que no usan contexto ni DOM.
@@ -163,7 +166,6 @@ vi.mock("react", async (importOriginal) => {
 
 import { useRecalculoDeLasTareas, type EntradaDelRecalculo } from "@/components/canvas/useRecalculoDeLasTareas";
 import RevisionDeLaPropuesta from "@/components/canvas/RevisionDeLaPropuesta";
-import TareasDeLaPropuesta from "@/components/canvas/TareasDeLaPropuesta";
 import LineaDeLasTareas from "@/components/canvas/LineaDeLasTareas";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Button } from "@/components/ui/Button";
@@ -187,6 +189,9 @@ import {
   type PedidoDelRecalculo,
   type RespuestaDelPedido,
 } from "./recalculo-de-tareas";
+import { unidadesDelSiguiente, vistaDeLaPropuesta } from "./vista-de-la-propuesta";
+import { leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
+import { useBorradorDelCronograma } from "@/components/canvas/useBorradorDelCronograma";
 
 // ── Lo común ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -607,8 +612,9 @@ describe("3 · la barra: «Aplicar de todos modos» confirma qué pasa con las t
     resumen: resumir(VIVO, BORRADOR, SIN, { tareas: "listas" }),
     vista: "antes",
     onAlternar: noop,
-    onMarcar: noop,
-    onMarcarVarios: noop,
+    // L3 P3d: la barra ya no tiene casillas (viven en el Gantt): sin `onMarcar`/`onMarcarVarios`; suma «Siguiente número».
+    onSiguiente: noop,
+    posicion: { actual: null, total: 0, primero: null },
     onAplicar: noop,
     onDescartar: noop,
     desde: "desde el handoff",
@@ -667,19 +673,89 @@ describe("3 · la barra: «Aplicar de todos modos» confirma qué pasa con las t
     h.desmontar();
   });
 
-  it("⭐ el grupo de una fase desfasada no repite la línea si es la única; con dos, cada grupo dice en qué está", () => {
-    /* Revisión de E2c (texto de más, punto a): con una sola fase, la línea y el grupo decían lo mismo con dos
-       spinners. La edición que la pone en rojo: volver a pintar el texto del grupo con una sola desfasada. */
+  it("⭐ las tareas en espera se ven marcadas en su fila del Gantt y se pueden desmarcar; el grupo las cuenta", () => {
+    /* ⚠ REESCRITA en L3 P3d (2026-09-26), con esta razón: pintaba el grupo de TareasDeLaPropuesta.tsx, que se
+       BORRÓ: las casillas de las tareas viven en el Gantt y lo que pintan sale de la vista pura
+       (`vistaDeLaPropuesta`). Pasa a probar la casilla de espera en la vista (spec §4.7): la que se quita sigue en
+       su fila de hoy con la marca «espera» (sin tachar: todavía no se aplica); la nueva, fantasma con «espera el
+       recálculo»; las dos marcadas y desmarcables, y el grupo las cuenta como marcadas. Lo que decía el grupo de
+       cada fase desfasada («recalculando…», solo con dos o más) se pinta ahora al lado de la casilla del grupo, en
+       el Gantt: su guarda, en gantt-de-la-propuesta.test.ts. Las ediciones que la ponen en rojo: pintar las que
+       esperan desmarcadas (parecería que el CSE las quitó), trabarlas, tachar la que todavía no se quita, o
+       contarlas fuera del grupo (quedaría a medias). */
     const resumen = resumir(VIVO, BORRADOR, SIN, { tareas: "listas" });
-    const recalculo = recalculoEnPantalla({ desfasadas: resumen.desfasadas, esperando: true, servidor: null, faseDeLaCorrida: null });
-    const pintado = (r: typeof recalculo, grupos = resumen.grupos) =>
-      textoDe(createElement(TareasDeLaPropuesta, { grupos, onMarcar: noop, onMarcarVarios: noop, trabajando: false, recalculo: r }));
-    expect(resumen.grupos.filter((g) => g.desfasada)).toHaveLength(1);
-    expect(pintado(recalculo), "el grupo repite «recalculando…»").not.toContain("recalculando…");
-    // Dos desfasadas (el mismo grupo dos veces, con otra fase): cada una lo dice.
-    const otro = { ...resumen.grupos.find((g) => g.desfasada)!, fase: "d", nombre: "Diseño" };
-    const dos = [...resumen.grupos, otro];
-    const r2 = { ...recalculo!, fases: [...recalculo!.fases, { id: "d", nombre: "Diseño" }] };
-    expect(pintado(r2, dos).match(/recalculando…/g)?.length).toBe(2);
+    const v = vistaDeLaPropuesta(VIVO, BORRADOR, resumen, null);
+    expect(resumen.desfasadas.map((d) => d.fase)).toEqual(["c"]);
+    const seVa = v.marcas.get(C1.id);
+    expect(seVa, "la que se quita en espera no tiene su marca en su fila de hoy").toMatchObject({
+      tipo: "espera",
+      marcada: true,
+      seMarca: true,
+      tachada: false,
+      conCasilla: true,
+    });
+    const semanasDeC = v.porFase.get("c")!.semanas.flat();
+    expect(semanasDeC.filter((x) => x.clave === C1.id), "la que se quita en espera aparece dos veces").toHaveLength(1);
+    const nueva = semanasDeC.find((x) => x.extra?.clave === "t:c-1")?.extra;
+    expect(nueva?.marca, "la nueva en espera no es un fantasma marcado").toMatchObject({
+      tipo: "espera",
+      marcada: true,
+      seMarca: true,
+      fantasma: true,
+      chip: "espera el recálculo",
+    });
+    const grupo = v.porFase.get("c")!.grupo!;
+    expect(grupo.desfasada).toBe(true);
+    expect([grupo.marcadas, grupo.marcables], "el grupo cuenta las que esperan como desmarcadas").toEqual([2, 2]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// 4 · «SIGUIENTE NÚMERO» EN EL HOOK DE LA PROPUESTA (L3 P3d)
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("4 · «Siguiente número»: el hook recorre los números del Gantt de ESTA propuesta", () => {
+  /* El hook de la propuesta (`useBorradorDelCronograma`), montado con el mismo React mínimo, sobre la propuesta grande
+     anonimizada (__fixtures__/propuesta-grande.json, leída, nunca importada). Lo puro (qué recorre, a dónde va, qué
+     dice) se prueba en vista-de-la-propuesta.test.ts; acá, el cursor del hook: de qué propuesta es y cuándo vuelve a
+     cero. */
+  const F = leerFixtureGrande();
+  const VIVO_G = vivoDelFixture(F);
+  type Entrada = Parameters<typeof useBorradorDelCronograma>[0];
+  const entrada: Entrada = { projectId: "p-siguiente", propuesta: F.borrador, token: "tok-1", vivo: VIVO_G, tareas: "listas", hoy: null };
+
+  it("⭐ recorre los 14 números en orden, da la vuelta y va atrás; otra propuesta arranca de cero", () => {
+    /* Las ediciones que la ponen en rojo: un cursor que no es de la propuesta (con otra propuesta, «Siguiente» seguiría
+       en el 7 de la anterior), que no avance su posición (el botón diría siempre «Recorrer…»), o que recorra lo que la
+       vista no numera. */
+    const h = mini.montar(useBorradorDelCronograma, entrada);
+    const esperados = unidadesDelSiguiente(h.salida.resumen!.indice).map((u) => u.numero);
+    expect(esperados).toHaveLength(14);
+    expect(h.salida.vistaDelGantt, "sin la vista del Gantt").not.toBeNull();
+    expect(h.salida.posicion).toEqual({ actual: null, total: 14, primero: esperados[0] });
+    const recorridos: number[] = [];
+    for (let i = 0; i < 14; i++) {
+      recorridos.push(h.salida.siguiente(1)!.numero);
+      expect(h.salida.posicion.actual, `después del clic ${i + 1}`).toBe(i + 1);
+    }
+    expect(recorridos).toEqual(esperados);
+    // La vuelta, y atrás.
+    expect(h.salida.siguiente(1)!.numero).toBe(esperados[0]);
+    expect(h.salida.posicion.actual).toBe(1);
+    expect(h.salida.siguiente(-1)!.numero).toBe(esperados[13]);
+    expect(h.salida.posicion.actual).toBe(14);
+    // Otra propuesta (otro token): el cursor vuelve a cero.
+    h.cambiar({ token: "tok-2" });
+    expect(h.salida.posicion.actual, "el cursor de la otra propuesta sigue puesto").toBeNull();
+    expect(h.salida.siguiente(1)!.numero).toBe(esperados[0]);
+    h.desmontar();
+  });
+
+  it("sin propuesta no hay números: «Siguiente» no va a ningún lado", () => {
+    const h = mini.montar(useBorradorDelCronograma, { ...entrada, propuesta: null, token: null });
+    expect(h.salida.vistaDelGantt).toBeNull();
+    expect(h.salida.posicion).toEqual({ actual: null, total: 0, primero: null });
+    expect(h.salida.siguiente(1)).toBeNull();
+    h.desmontar();
   });
 });

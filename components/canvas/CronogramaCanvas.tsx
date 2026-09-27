@@ -129,8 +129,16 @@ import {
   versionDelBorrador,
   type EstadoDeLasTareas,
   type OperacionDeCasillas,
+  type UnidadNumerada,
   type Vivo,
 } from "@/lib/timeline/borrador";
+import {
+  atajoDelSiguiente,
+  avanceQueSeCruza,
+  cierreParaElGantt,
+  fasesADesplegarAlEntrar,
+  vistaEnLasFilas,
+} from "@/lib/timeline/vista-de-la-propuesta";
 import { fraseDeAutoria, leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import { origenDePropuesta } from "@/lib/timeline/proposal-deltas";
 import {
@@ -1546,6 +1554,8 @@ export default function CronogramaCanvas({
     tareas: estadoDeLasTareasEnPantalla,
     // E3: solo quien edita guarda lo que marca (la misma vara que la ruta); quien mira no ve la barra.
     guardarCasillas: canEdit ? guardarCasillas : undefined,
+    // L3 P3d: las semanas que «ya pasaron» en la vista de la propuesta (null antes de hidratar).
+    hoy: hydratedNow,
   });
   /* L2 (2026-09-26): qué muestra la pantalla de la propuesta. Mientras el paso 2 arma sus tareas
      («armandose») NO hay propuesta en pantalla: ni barra ni vista de la propuesta; el Gantt es el de hoy,
@@ -1573,6 +1583,37 @@ export default function CronogramaCanvas({
     const escribiendo = esCampoDeEscritura(document.activeElement as HTMLElement | null);
     if (pasarAAntesAlLlegar({ antes, ahora: modo, escribiendo, vista: r.vista })) r.alternar();
   }, [modo]);
+  /* L3 P3d · «SIGUIENTE NÚMERO»: despliega la fase del próximo número del Gantt, la centra y enfoca su casilla (lo
+     hace el Gantt con `irA`; el `nonce` repite el pedido aunque sea el mismo número). En la vista «antes», primero
+     pasa a la propuesta. Los atajos `n` y `p`, en la vista de la propuesta, sin modificadores y fuera de un campo
+     de escritura (`atajoDelSiguiente`). */
+  const [irA, setIrA] = useState<{ unidad: UnidadNumerada; nonce: number } | null>(null);
+  const irAlSiguiente = (dir: 1 | -1) => {
+    const unidad = revision.siguiente(dir);
+    if (!unidad) return;
+    if (revision.vista !== "propuesta") revision.alternar();
+    setIrA((prev) => ({ unidad, nonce: (prev?.nonce ?? 0) + 1 }));
+  };
+  const irAlSiguienteRef = useRef(irAlSiguiente);
+  useEffect(() => {
+    irAlSiguienteRef.current = irAlSiguiente;
+  });
+  useEffect(() => {
+    if (!verPropuesta) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      // Con un diálogo abierto (la confirmación de aplicar, una tarea), la tecla es de él: no se salta detrás.
+      if (e.defaultPrevented || document.querySelector('[aria-modal="true"]')) return;
+      const escribiendo =
+        esCampoDeEscritura(e.target instanceof HTMLElement ? e.target : null) ||
+        esCampoDeEscritura(document.activeElement as HTMLElement | null);
+      const dir = atajoDelSiguiente(e, escribiendo);
+      if (dir === null) return;
+      e.preventDefault();
+      irAlSiguienteRef.current(dir);
+    };
+    document.addEventListener("keydown", alTeclear);
+    return () => document.removeEventListener("keydown", alTeclear);
+  }, [verPropuesta]);
   /* E3 P5: la propuesta de AHORA, para leer lo desmarcado del servidor desde un callback async (el
      aplicar del chat, después de esperar el guardado y las casillas). */
   const proposalRef = useRef(proposal);
@@ -3243,7 +3284,10 @@ export default function CronogramaCanvas({
     }
   };
 
-  const ganttPhases: GanttPhase[] = phases.map((p) => ({
+  /* L3 P3d: memoizado. Se rearmaba en cada render, y todo memo que dependía de él (la vista de la propuesta, la
+     lista de acciones) era decorativo: cada casilla del Gantt rearmaba todo. `phases` cambia solo cuando cambia
+     el cronograma. */
+  const ganttPhases: GanttPhase[] = useMemo(() => phases.map((p) => ({
     key: p._key,
     id: p.id,
     name: p.name || "(sin nombre)",
@@ -3272,7 +3316,7 @@ export default function CronogramaCanvas({
       startDateOverride: t.startDateOverride ?? null,
       dueDateOverride: t.dueDateOverride ?? null,
     })),
-  }));
+  })), [phases]);
 
   /* ── LA VISTA «VER LA PROPUESTA» ─────────────────────────────────────────────
      Las fases como quedarían (`proyectar`, lib/timeline/borrador.ts) con sus tareas: las que
@@ -3280,13 +3324,18 @@ export default function CronogramaCanvas({
      fase existente es la MISMA que en el cronograma actual —así las fases abiertas siguen abiertas al
      alternar— y una fase nueva usa su clave (`nueva:<i>` o `n:…`). Lo mismo con las tareas: una que
      ya existe reusa su fila (misma `key`); una nueva usa la clave de su cambio (`t:…`). Las semanas ya
-     vienen acotadas a la duración final (el acotado vive en `proyectar`, igual que en el servidor). */
-  const ganttPorId = new Map(ganttPhases.filter((g) => g.id).map((g) => [g.id as string, g]));
+     vienen acotadas a la duración final (el acotado vive en `proyectar`, igual que en el servidor).
+     L3 P3d: todo memoizado sobre la proyección y `ganttPhases` (cada casilla recalcula el resumen: lo que no
+     cambió no se rearma). */
+  const ganttPorId = useMemo(() => new Map(ganttPhases.filter((g) => g.id).map((g) => [g.id as string, g])), [ganttPhases]);
   /* E3: la fila de una tarea que ya existe se busca en TODO el Gantt: una que se muda llega de otra fase
      con su misma fila (su avance y su key), y una que cambia se ve con su título, semana, dueño y tipo
      de la propuesta. */
-  const filaPorId = new Map(ganttPhases.flatMap((g) => g.tasks).filter((t) => t.id).map((t) => [t.id as string, t]));
-  const fasesDeLaPropuesta: GanttPhase[] = (revision.proyeccion?.fases ?? []).map((f) => {
+  const filaPorId = useMemo(
+    () => new Map(ganttPhases.flatMap((g) => g.tasks).filter((t) => t.id).map((t) => [t.id as string, t])),
+    [ganttPhases],
+  );
+  const fasesDeLaPropuesta: GanttPhase[] = useMemo(() => (revision.proyeccion?.fases ?? []).map((f) => {
     const actual = f.id ? ganttPorId.get(f.id) : undefined;
     const tasks: GanttTask[] = f.tareas.map((t) => {
       const fila = t.id ? filaPorId.get(t.id) : undefined;
@@ -3321,12 +3370,60 @@ export default function CronogramaCanvas({
       needsValidation: actual?.needsValidation,
       tasks,
     };
-  });
-  const marcasDeLaPropuesta = new Map(
-    (revision.proyeccion?.fases ?? []).flatMap((f, i) =>
-      f.marca ? [[fasesDeLaPropuesta[i].key, f.marca] as const] : [],
-    ),
+  }), [revision.proyeccion, ganttPorId, filaPorId]);
+  const marcasDeLaPropuesta = useMemo(
+    () =>
+      new Map(
+        (revision.proyeccion?.fases ?? []).flatMap((f, i) =>
+          f.marca ? [[fasesDeLaPropuesta[i].key, f.marca] as const] : [],
+        ),
+      ),
+    [revision.proyeccion, fasesDeLaPropuesta],
   );
+  /* ⭐ L3 P3d · LA PROPUESTA SE DECIDE EN EL GANTT. La vista (`revision.vistaDelGantt`) habla de claves (el id de
+     la viva, o `t:…`); el Gantt, de las `key` de sus filas. `vistaEnLasFilas` las pasa con `filaPorId`: una viva
+     usa la key de su fila de hoy, y la fila extra de la que se quita (key = su id) también, así marcarla o
+     desmarcarla no cambia la key (React conserva el nodo y el foco). */
+  const filasDeLaPropuesta = useMemo(
+    () =>
+      revision.vistaDelGantt && revision.proyeccion
+        ? vistaEnLasFilas(
+            revision.vistaDelGantt,
+            revision.proyeccion.fases.map((f, i) => ({ clave: f.clave, key: fasesDeLaPropuesta[i].key })),
+            (id) => filaPorId.get(id)?.key,
+          )
+        : null,
+    [revision.vistaDelGantt, revision.proyeccion, fasesDeLaPropuesta, filaPorId],
+  );
+  /* Al entrar, UNA vez por propuesta (su token): si las filas de las fases con cambios suman 40 o menos, esas fases
+     se despliegan; si pasan (la propuesta grande), todo plegado: las filas de fase ya muestran cada número. */
+  const desplegarAlEntrar =
+    verPropuesta && revision.vistaDelGantt
+      ? { clave: proposalMeta.current.runId ?? "propuesta", fases: fasesADesplegarAlEntrar(revision.vistaDelGantt) }
+      : null;
+  /* Lo que el Gantt necesita para pintar la propuesta y decidirla en sus filas: cada casilla va por la misma cola
+     que sube al servidor (`revision.marcar`/`marcarVarios`: lo desmarcado es el `excluidos` de la propuesta). */
+  const propuestaEnElGantt =
+    revision.vistaDelGantt && filasDeLaPropuesta
+      ? {
+          vista: revision.vistaDelGantt,
+          marcasPorKey: filasDeLaPropuesta.marcasPorKey,
+          semanasPorKey: filasDeLaPropuesta.semanasPorKey,
+          onMarcar: revision.marcar,
+          onMarcarVarios: revision.marcarVarios,
+          trabajando: aplicandoBorrador || descartando,
+          irA,
+          desplegarAlEntrar,
+          cierre: revision.resumen ? cierreParaElGantt(revision.resumen) : null,
+          recalculo: recalculoDeLaBarra,
+        }
+      : null;
+  /* El avance sin revisar (el cajón «Lo que detectó el agente»): la barra ofrece revisarlo y, si toca tareas que la
+     propuesta quita o cambia, pide hacerlo antes de aplicar. */
+  const avanceDeLaBarra =
+    showProgressBanner && pendingProgress
+      ? { hay: true, seCruza: avanceQueSeCruza(pendingProgress.tasks.map((t) => t.id), revision.borrador?.cambios ?? []) > 0 }
+      : null;
   /* En «Ver la propuesta» el Gantt es de solo lectura también en lo que no es estructura
      (particularidades, sugerencias del equipo): lo que se mira ahí todavía no existe. */
   const puedeEditarElGantt = canEdit && !verPropuesta;
@@ -3476,8 +3573,8 @@ export default function CronogramaCanvas({
     <ChatDeSeccionDisponible cuando={canEdit && phases.length > 0} />
     {/* E3 P5: con el chat abierto sobre una propuesta, el cronograma se corre (en pantallas anchas): el
         cajón tapaba «Aplicar» y «Descartar» de la barra. Sin propuesta sigue tapando, a propósito
-        (ChatDelAsistente.tsx). */}
-    <div className={chatAbierto && hayBorrador ? "relative xl:pr-[400px]" : "relative"}>
+        (ChatDelAsistente.tsx). L3 P3d: desde `lg` (1024 px), no `xl`: entre 1024 y 1280 el cajón tapaba «Aplicar». */}
+    <div className={chatAbierto && hayBorrador ? "relative lg:pr-[400px]" : "relative"}>
       {/* ⭐ EL CRONOGRAMA SE BLOQUEA MIENTRAS SE APLICA UN CAMBIO.
 
           Con las operaciones aplicar tarda ~1 ms más el viaje al servidor, así que la ventana es
@@ -4236,8 +4333,8 @@ export default function CronogramaCanvas({
               resumen={revision.resumen}
               vista={revision.vista}
               onAlternar={revision.alternar}
-              onMarcar={revision.marcar}
-              onMarcarVarios={revision.marcarVarios}
+              onSiguiente={() => irAlSiguiente(1)}
+              posicion={revision.posicion}
               onAplicar={() => void aplicarBorrador()}
               onDescartar={() => void discardProposal()}
               desde={autoriaEnPantalla ? fraseDeAutoria(autoriaEnPantalla) : desdeDeLaPropuesta(deDondeViene(proposal))}
@@ -4246,6 +4343,8 @@ export default function CronogramaCanvas({
               recalculo={recalculoDeLaBarra}
               onRecalcular={canEdit && puedeArmarTareas ? recalc.lanzarYa : undefined}
               onForzar={canEdit && puedeArmarTareas ? revision.forzar : undefined}
+              avance={avanceDeLaBarra}
+              onRevisarAvance={() => setDraftsOpen(true)}
               enCurso={aplicandoBorrador ? "aplicar" : descartando ? "descartar" : null}
               cierreFijado={closeOverride || null}
               barraRef={revision.barraRef}
@@ -4258,6 +4357,8 @@ export default function CronogramaCanvas({
             phases={verPropuesta ? fasesDeLaPropuesta : ganttPhases}
             readOnly={verPropuesta || !canEdit}
             marcas={verPropuesta ? marcasDeLaPropuesta : undefined}
+            /* L3 P3d: la propuesta se decide acá, en las filas (sus casillas, «Siguiente número», el cierre). */
+            propuesta={verPropuesta ? (propuestaEnElGantt ?? undefined) : undefined}
             canDelete={canDelete}
             onToggleStatus={toggleStatus}
             onUpdateTask={(phaseKey, taskKey, patch) => updateTask(phaseKey, taskKey, patch)}
