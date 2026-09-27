@@ -306,6 +306,18 @@ export function absoluteWeek(phaseStart: number, weekIndex: number): number {
 export const semanaDelProyecto = (w: number): string => `S${w}`;
 
 /**
+ * Revisión de L1–L7 (#11): el rango de una fase en el GANTT, pegado al campo «inicia S» (base 0, la de la cabecera).
+ * Con fecha de arranque, las fechas (`fmtPhaseRange`); sin ella, las columnas de la cabecera: «S2–S3». Con
+ * `fmtPhaseRange` la fila decía «inicia S 2 · Semana 3–4». La vista del cliente (TimelineSection) sigue con
+ * `fmtPhaseRange`: ahí no hay cabecera en S.
+ */
+export function rangoEnElGantt(anchor: string | null | undefined, range: PhaseRange): string {
+  if (anchor) return fmtPhaseRange(anchor, range);
+  const ultima = Math.max(range.end - 1, range.start);
+  return ultima > range.start ? `${semanaDelProyecto(range.start)}–${semanaDelProyecto(ultima)}` : semanaDelProyecto(range.start);
+}
+
+/**
  * L3 (D4): la ÚNICA etiqueta de una semana de una fase: «Semana 2 · S3» = la semana 2 de la fase (desde
  * 1) es la S3 del proyecto (desde 0, la de la cabecera). Sin el inicio de la fase (sin rango), solo
  * «Semana 2». `semana` es el `weekIndex` de la tarea (desde 0).

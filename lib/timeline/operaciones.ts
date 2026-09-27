@@ -42,6 +42,7 @@
 import type { Party, TipoDeTarea, Vivo } from "./borrador"; // solo tipos: sin ciclo en runtime
 import { resolverHandle } from "./handle-de-tarea";
 import { isKept } from "./regen-columnas";
+import { semanaDelProyecto } from "./weeks";
 
 /* ── EL CRONOGRAMA DE HOY Y EL CUERPO DEL PUT ─────────────────────────────────────────────────
    E4 (2026-09): vivían con el diff por ítem de «Pedir cambio con IA», que se retiró. Se mudaron acá,
@@ -110,6 +111,10 @@ export interface DescripcionDeLaPropuesta {
   tituloDeClave: (clave: string) => { numero: number; titulo: string; conElCambio?: number } | null;
   /** Lo que dice la confirmación de aplicar (la de la barra). */
   confirmacion: string;
+  /** Revisión de L1–L7 (#5): el destino de la mudanza SUGERIDA por la IA (L7) de una tarea viva, o null. Mudarla ahí
+   *  sin semana marca su casilla (cae en su semana, acotada al destino); mudarla a su fase de hoy la deja sin marcar
+   *  (operar-sobre-el-borrador.ts, `moverTarea`). */
+  sugeridaA?: (tareaId: string) => string | null;
 }
 
 /**
@@ -1128,12 +1133,15 @@ export function describirOperaciones(
       case "fase.mover":
         return `«${nombre(o.phaseId)}» se mueve al lugar ${o.posicion + 1}`;
       case "fase.arranque-relativo": {
+        /* Revisión de L1–L7 (#4): la semana del PROYECTO desde 0, como la cabecera del Gantt, el campo «inicia S» y el
+           contexto del chat («en `fase.arranque-relativo` va K»). Sumaba 1: el chat pedía la S12, la cajita decía
+           «semana 13» y el modelo, al releerla en lo pendiente, corregía a la 11. */
         const viva = faseViva(o.phaseId);
-        const inicio = (s: number | null | undefined) => (s === null || s === undefined ? "tras la anterior" : `semana ${s + 1}`);
+        const inicio = (s: number | null | undefined) => (s === null || s === undefined ? "tras la anterior" : semanaDelProyecto(s));
         return (
           (o.semana === null
             ? `«${nombre(o.phaseId)}» arranca cuando termina la anterior`
-            : `«${nombre(o.phaseId)}» arranca en la semana ${o.semana + 1} del proyecto`) +
+            : `«${nombre(o.phaseId)}» arranca en la ${semanaDelProyecto(o.semana)} del proyecto`) +
           hoy(fase(o.phaseId)?.startWeek ?? null, viva ? viva.startWeek : undefined, inicio(viva?.startWeek))
         );
       }
@@ -1168,6 +1176,21 @@ export function describirOperaciones(
            la 4); y sin semana a su propia fase, se queda en la suya. */
         const viva = t ? tareaViva(t.id) : undefined;
         const suFase = viva ? propuesta.vivo.fases.find((f) => (f.tareas ?? []).some((x) => x.id === viva.id))?.id : t?.phaseId;
+        /* Revisión de L1–L7 (#5): con una mudanza SUGERIDA por la IA y sin semana pedida, mudarla a su destino es marcar
+           su casilla (cae en SU semana, acotada al destino) y mudarla a su fase es dejarla sin marcar. La línea dice eso. */
+        const sugeridaA = viva && o.semana === undefined ? (propuesta.sugeridaA?.(viva.id) ?? null) : null;
+        if (viva && sugeridaA !== null && (o.phaseId === sugeridaA || o.phaseId === suFase)) {
+          const deHoy = propuesta.vivo.fases.find((f) => f.id === suFase)?.name ?? t?.fase ?? "?";
+          if (o.phaseId === suFase) {
+            return `«${t?.titulo ?? o.taskId}» se queda en «${deHoy}»: la sugerencia de la IA de mudarla a «${nombre(sugeridaA)}» queda sin marcar`;
+          }
+          const durDestino = duracionDe(o.phaseId);
+          const cae = durDestino === undefined ? viva.weekIndex : Math.min(viva.weekIndex, Math.max(durDestino - 1, 0));
+          return (
+            `«${t?.titulo ?? o.taskId}» se muda de «${deHoy}» a «${nombre(o.phaseId)}», semana ${cae + 1}, como sugiere la IA ` +
+            "(se marca su casilla) — conserva su estado"
+          );
+        }
         const pedida = typeof o.semana === "number" && Number.isFinite(o.semana) ? Math.max(Math.floor(o.semana), 0) : 0;
         const creada = operaciones.find(
           (x): x is Extract<Operacion, { op: "fase.crear" }> => x.op === "fase.crear" && x.ref?.trim() === o.phaseId,

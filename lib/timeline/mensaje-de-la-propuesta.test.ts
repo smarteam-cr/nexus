@@ -99,6 +99,18 @@ describe("L4 · el mensaje con la propuesta grande", () => {
     expect(sinInstrucciones.lineas).toContain(LINEA_SIN_MATERIAL);
   });
 
+  it("⭐ revisión de L1–L7 (#8): con una reunión ELEGIDA que no le llegó a la IA (futura), la línea habla de la IA, no del CSE", () => {
+    /* La edición que la pone en rojo: volver a «No elegiste reuniones ni notas». Las fuentes son lo que le LLEGÓ a la IA
+       (`sourceSessionIds` = `sesionesUsadas`): la reunión de la semana que viene que el CSE eligió no está, y el texto le
+       decía que no había elegido nada. */
+    const elegidaFutura: FuentesDeLaPropuesta = { instrucciones: false, reuniones: [], notas: [] };
+    const m = mensajeDeLaPropuesta(entrada({ referencias: { ...REFERENCIAS, fuentes: elegidaFutura } }));
+    const linea = m.lineas.find((l) => l === LINEA_SIN_MATERIAL);
+    expect(linea, "la línea del material no va").toBeDefined();
+    expect(linea).toMatch(/^La IA no tuvo reuniones ni notas/);
+    expect(linea, "culpa al CSE de no elegir").not.toMatch(/elegiste/i);
+  });
+
   it("⭐ las cuentas son las de `r` (73, no 74): la línea de tareas más los cambios de fases da lo que se aplica", () => {
     /* La edición que la pone en rojo: contar `borrador.cambios` (74 tareas nuevas crudas: una ya está). */
     expect(BORRADOR.cambios.filter((c) => c.tipo === "tarea-nueva")).toHaveLength(74);

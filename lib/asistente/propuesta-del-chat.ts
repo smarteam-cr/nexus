@@ -24,6 +24,7 @@
  */
 import type { PorQueSoloLectura, PropuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
 import {
+  esMudanzaSugerida,
   fraseDelCierre,
   huellaDeTitulo,
   resumenDeLaConfirmacion,
@@ -111,6 +112,10 @@ export const rechazoChoca = (quien: string, porques: readonly string[]): string 
       : `${quien} no se aplica igual: el cronograma cambió desde la propuesta.`;
 export const rechazoYaEsta = (quien: string): string => `${quien} ya está así en el cronograma.`;
 export const rechazoYaMarcado = (quien: string): string => `${quien} ya está en la propuesta.`;
+/** Revisión de L1–L7 (#5): «recupera el N» sobre un grupo que solo trae mudanzas SUGERIDAS sin marcar (L7). Antes
+ *  decía «ya está así en el cronograma», que es falso. */
+export const rechazoSoloSugeridas = (quien: string): string =>
+  `${quien} trae mudanzas sugeridas por la IA: se marcan de a una, nombrando la tarea.`;
 export const rechazoTareaNoEsta = (pedido: string): string => `No encontré «${pedido}» entre las tareas que cambian.`;
 export const rechazoTareaAmbigua = (pedido: string, n: number): string =>
   `Hay ${n} tareas «${pedido}» entre las que cambian: nómbrala por su identificador.`;
@@ -145,6 +150,8 @@ interface Fila {
   quien: string;
   /** Por qué choca (el texto del plan), solo en un choque. */
   choque: string | null;
+  /** L7: una mudanza sugerida en la fila de un grupo (el número no la marca). */
+  sugerida?: true;
 }
 
 interface IndiceDeLaBarra {
@@ -198,7 +205,7 @@ function indiceDeLaBarra(r: ResumenDelBorrador, plan: readonly ItemDelPlan[]): I
       };
       /* L7: «recupera el N» no marca las mudanzas SUGERIDAS de su grupo (una hecha no se muda sin su casilla): se
          marcan nombrando la tarea. «Déjalo como estaba» sí las desmarca. */
-      filas.push(t.sugerida ? { ...fila, recuperable: false } : fila);
+      filas.push(t.sugerida ? { ...fila, recuperable: false, sugerida: true } : fila);
       tareas.push({ ...fila, quien: `«${t.titulo}»`, ref: t.ref, titulo: t.titulo, numero: g.numero });
     }
     porNumero.set(g.numero, filas);
@@ -217,6 +224,8 @@ function clavesDe(filas: readonly Fila[], dejar: boolean, quien: string): string
       ];
   if (claves.length > 0) return [...new Set(claves)];
   if (dejar && filas.some((f) => f.recuperable || f.padre !== null)) return { motivo: rechazoYaFuera(quien) };
+  // Lo que falta marcar del grupo son mudanzas sugeridas: se marcan nombrando la tarea (no «ya está así»).
+  if (!dejar && filas.some((f) => f.sugerida && f.estado === "excluido")) return { motivo: rechazoSoloSugeridas(quien) };
   if (!dejar && filas.some((f) => f.marcado)) return { motivo: rechazoYaMarcado(quien) };
   const choques = filas.filter((f) => f.estado === "choque");
   if (choques.length > 0) {
@@ -379,8 +388,13 @@ export function describirSobreLaPropuesta(p: PropuestaEnElTurno): (ops: readonly
       ...(conElCambio !== undefined ? { conElCambio } : {}),
     };
   };
+  // Revisión de L1–L7 (#5): las mudanzas sugeridas, para decir que mudarla a su destino es marcar su casilla.
+  const sugeridas = new Map(
+    (p.borrador?.cambios ?? []).flatMap((c) => (esMudanzaSugerida(c) && c.a.fase !== undefined ? [[c.tareaId, c.a.fase] as const] : [])),
+  );
+  const sugeridaA = (tareaId: string) => sugeridas.get(tareaId) ?? null;
   return (ops) =>
-    ops.length === 0 ? [] : describirOperaciones(actuales, ops, { propuesta: { vivo: p.vivo, tituloDeClave, confirmacion } });
+    ops.length === 0 ? [] : describirOperaciones(actuales, ops, { propuesta: { vivo: p.vivo, tituloDeClave, confirmacion, sugeridaA } });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

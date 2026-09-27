@@ -53,7 +53,6 @@
 
 import {
   Fragment,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -86,7 +85,7 @@ import {
   plural,
   computePhaseRanges,
   timelineSpan,
-  fmtPhaseRange,
+  rangoEnElGantt,
   currentWeekIndex,
   absoluteWeek,
   overduePlannedEnd,
@@ -112,6 +111,7 @@ import {
   TITULO_SEMANA_QUE_SE_SUMA,
   type CasillaDeCambio,
   type CasillaDeGrupo,
+  type CierreEnElGantt,
   type FaseFuera,
   type FilaExtra,
   type MarcaDeTarea,
@@ -128,6 +128,7 @@ import type { FuentesDeLaPropuesta } from "@/lib/timeline/referencias-de-la-prop
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import AnchorDatePicker from "@/components/canvas/AnchorDatePicker";
 import DatePickerField from "@/components/ui/DatePickerField";
+import { useIrALaCasilla } from "@/components/canvas/useIrALaCasilla";
 import { hayPendienteDeSubir } from "@/lib/timeline/pendiente-de-subir";
 import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
 
@@ -270,8 +271,9 @@ export interface PropuestaEnElGantt {
   irA: { unidad: UnidadNumerada; nonce: number } | null;
   /** Las fases (por clave de fase: id o `n:…`) a desplegar UNA vez por `clave` (el token de la propuesta). */
   desplegarAlEntrar: { clave: string; fases: string[] } | null;
-  /** El cierre de hoy y con lo marcado, para el chip de la cabecera. */
-  cierre: { antes: string; despues: string } | null;
+  /** El cierre de hoy y con lo marcado, para el chip de la cabecera (`cierreParaElGantt`: con un cierre fijado a mano,
+   *  dice que lo que se mueve es el plan calculado). */
+  cierre: CierreEnElGantt | null;
   /** P3d: en qué está el recálculo de las fases desfasadas (E2c). Con dos o más, el grupo de cada una lo dice al lado
    *  de su casilla (con una sola lo dice la línea de la barra: no dos veces). Se mudó de TareasDeLaPropuesta. */
   recalculo?: RecalculoEnPantalla | null;
@@ -1197,24 +1199,17 @@ export default function TimelineGantt({
     const fase = irA.unidad.fase;
     if (fase !== null) setExpanded((prev) => (prev.has(keyDe(fase)) ? prev : new Set(prev).add(keyDe(fase))));
   }
-  /* El efecto depende del nonce y de la casilla (primitivos), no del objeto: si llegara armado en cada render, no
-     volvería a centrar ni a robar el foco en cada tecla. */
+  /* Va por el nonce y la casilla (primitivos), no por el objeto: si llegara armado en cada render, no volvería a
+     centrar ni a robar el foco en cada tecla. Revisión de L1–L7 (#3): cada nonce se atiende UNA vez
+     (`useIrALaCasilla`): al volver de «Ver como estaba antes», o con otra propuesta en la misma pantalla, el último
+     salto no se repite. */
   const irANonce = irA?.nonce ?? null;
   const irACasilla = irA
     ? irA.unidad.tipo === "grupo"
       ? `[data-casilla="${escaparSelector(casillaDeGrupo(irA.unidad.fase))}"][data-lugar="grupo"]`
       : `[data-casilla="${escaparSelector(irA.unidad.clave)}"][data-lugar="fase"]`
     : null;
-  useEffect(() => {
-    if (irANonce === null || irACasilla === null) return;
-    const frame = requestAnimationFrame(() => {
-      const el = document.querySelector<HTMLElement>(irACasilla);
-      if (!el) return;
-      el.scrollIntoView({ block: "center" });
-      el.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [irANonce, irACasilla]);
+  useIrALaCasilla(irANonce, irACasilla);
   /* El foco: cuando una fila cambia de nodo al marcar (fantasma ↔ real, o de semana), el `<input>` que tenía el
      foco desaparece y el foco cae al body. Se recuerda la última casilla y se le devuelve el foco a la que la
      reemplaza (misma clave y mismo lugar; si no está, la primera con esa clave). */
@@ -1442,9 +1437,7 @@ export default function TimelineGantt({
             ))}
             {propuesta.cierre && (
               <span className="rounded-lg border border-info-line bg-info-surface px-2.5 py-1 text-[11px] font-semibold text-info-ink">
-                {propuesta.cierre.antes === propuesta.cierre.despues
-                  ? `Cierre: ${propuesta.cierre.despues} (no cambia)`
-                  : `Cierre: ${propuesta.cierre.antes} → ${propuesta.cierre.despues}`}
+                {propuesta.cierre.texto}
               </span>
             )}
             <button
@@ -1787,11 +1780,11 @@ export default function TimelineGantt({
                               className="w-10 bg-surface-hover border border-line rounded px-1 py-0.5 text-fg-secondary focus:outline-none focus:border-blue-500"
                               title="Semana del proyecto en que arranca (S0 = la primera, como la cabecera). Vacío = tras la anterior."
                             />
-                            <span className="text-fg-muted ml-1">{fmtPhaseRange(anchor, range)}</span>
+                            <span className="text-fg-muted ml-1">{rangoEnElGantt(anchor, range)}</span>
                           </span>
                         ) : (
                           <span className="text-[10px] text-fg-muted">
-                            {fmtPhaseRange(anchor, range)}
+                            {rangoEnElGantt(anchor, range)}
                             {p.actualSessionCount != null && ` · ${plural(p.actualSessionCount, "sesión", "sesiones")}`}
                             {p.tasks.length > 0 && ` · ${plural(p.tasks.length, "tarea", "tareas")}`}
                           </span>

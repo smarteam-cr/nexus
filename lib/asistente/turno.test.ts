@@ -17,7 +17,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
-import { leerAcuerdo, marcaDeAcuerdo, MODELO_DEL_ASISTENTE, MARCA_DE_ACUERDO } from "./turno";
+import { leerAcuerdo, marcaDeAcuerdo, MODELO_DEL_ASISTENTE, MARCA_DE_ACUERDO, promptDelAsistente } from "./turno";
 import { OPERACIONES_DE_PROPUESTA, OPERACIONES_VALIDAS } from "@/lib/timeline/operaciones";
 
 /* Revisión de E3 (#29): el fuente se lee con los saltos normalizados. Con `core.autocrlf=true` un checkout
@@ -1010,5 +1010,19 @@ describe("⭐ E3 P5: el chat con una propuesta abierta", () => {
        leyó enteras; su prueba, en loop-de-operaciones.test.ts). Sin propuesta, lo de ella sigue sin entrar. */
     expect(FUENTE).toContain("opsQueSeRegistran.filter((o) => !esOperacionDePropuesta(o)),");
     expect(FUENTE).toContain("AVISO_SIN_PROPUESTA_ABIERTA");
+  });
+});
+
+describe("revisión de L1–L7 (#12) · el prompt nombra la lista que el CSE ve", () => {
+  it("⭐ lo que se revisa es «Lo que se acordó» (viñetas en el cronograma desde L1), no «la lista numerada»", () => {
+    /* La edición que la pone en rojo: volver a «lo que se revisa es la lista numerada» (en el cronograma ya no hay
+       lista numerada: el único número en pantalla es el del Gantt). */
+    const chat = fs.readFileSync(path.join(RAIZ, "components/asistente/ChatDelAsistente.tsx"), "utf8");
+    expect(chat, "el cajón ya no titula la lista «Lo que se acordó»").toContain("Lo que se acordó");
+    for (const esCronograma of [true, false]) {
+      const prompt = promptDelAsistente(esCronograma);
+      expect(prompt).toContain("lo que se revisa es la lista de «Lo que se acordó», antes del botón");
+      expect(prompt).not.toContain("lo que se revisa es la lista numerada");
+    }
   });
 });

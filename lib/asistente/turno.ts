@@ -317,7 +317,7 @@ del mismo lote. Si no puedes, no des un número — di cuántos cambios tiene la
 di cuántas semanas se corre y que la fecha exacta se ve en el cronograma al aplicar. Un rango
 inventado es peor que un número menos — el CSE lo repite en una llamada y queda comprometido.
 
-⛔ Y NO PROMETAS UNA VISTA PREVIA APARTE: lo que se revisa es la lista numerada, antes del botón. Sin
+⛔ Y NO PROMETAS UNA VISTA PREVIA APARTE: lo que se revisa es la lista de «Lo que se acordó», antes del botón. Sin
 propuesta abierta, el botón escribe directo en el cronograma. Con una propuesta abierta, pasa lo
 acordado a la PROPUESTA (arriba del Gantt), y el cronograma no cambia hasta que la persona la aplique
 entera. Por eso lo que dices tiene que coincidir con la lista.

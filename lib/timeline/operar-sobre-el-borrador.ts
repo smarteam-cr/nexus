@@ -22,7 +22,8 @@
  *   · toda edición lo vuelve a marcar y lo deja como del chat (`porChat`).
  * Así aplicar nunca pisa una edición a mano que el chat no nombró. L5 (D14): una tarea que cambia la IA
  * (R4c) se edita desde lo que se ve: su cambio se hereda solo si está marcado, y una mudanza sugerida
- * (L7) no se toca (`upsertTarea`).
+ * (L7) no se toca (`upsertTarea`): quitar, abrir o repartir semanas la dejan en la suya (`semanasDeLaFase`), y
+ * mudarla a su destino o dejarla donde está es su casilla (`moverTarea`).
  *
  * ── LA FORMA DE UNA FASE ARMADA (D9) ─────────────────────────────────────────
  * Si el chat cambia el nombre o las semanas de una fase cuyas tareas armó la IA, la forma nueva va en
@@ -192,9 +193,13 @@ export const RECHAZO_LUGAR = "no pude ubicar la fase en ese lugar";
 export const RECHAZO_CLAVE_NO_ESTA = "ese cambio ya no está en la propuesta";
 export const rechazoNombreRepetido = (nombre: string): string => `ya hay una fase «${nombre}» en la propuesta`;
 /** L5 (§6.4): una tarea con una mudanza SUGERIDA por la IA (L7) no la edita el chat: una hecha nunca se mueve
- *  ni se marca sin su casilla. */
+ *  ni se marca sin su casilla. Revisión de L1–L7 (#1, #5): el texto dice la salida real. Antes decía «mientras la
+ *  sugerencia siga en la propuesta», y la sugerencia no sale nunca de la propuesta (desmarcarla solo la deja fuera). */
 export const rechazoTareaConSugerencia = (titulo: string, fase: string): string =>
-  `«${titulo}» trae una sugerencia de la IA para mudarla a «${fase}»: el chat no la cambia mientras la sugerencia siga en la propuesta`;
+  `«${titulo}» trae una sugerencia de la IA para mudarla a «${fase}»: se decide con su casilla (márcala o déjala sin marcar); para cambiarle otra cosa, primero aplica la propuesta`;
+/** Revisión de L1–L7 (#1, #5): quitar, abrir o repartir semanas no corre una tarea con una mudanza sugerida. */
+export const avisoSugeridaEnSuSemana = (titulo: string, fase: string): string =>
+  `«${titulo}» trae una sugerencia de la IA para mudarla a «${fase}»: queda en su semana.`;
 
 /** Cómo se nombra cada campo en el aviso de lo que se respetó. */
 const NOMBRE_DEL_CAMPO: Record<CampoDeTarea | "fase", string> = {
@@ -895,6 +900,15 @@ export function operarSobreElBorrador(i: {
       if (w === undefined || w === t.weekIndex) continue;
       if (t.id !== null) {
         const viva = tareaPorId.get(t.id);
+        /* Revisión de L1–L7 (#1, #5): una tarea con una mudanza SUGERIDA (L7, una hecha) no se corre de semana.
+           Antes pasaba por `upsertTarea`, que la rechaza, y con ella caía la operación de semanas de toda la fase
+           (y el lote entero) hasta aplicar o descartar la propuesta. Queda en su semana (si la fase se acorta,
+           aplicar la acota a la última) y se avisa. */
+        const sugerida = viva ? cambiaDe(viva.tarea.id) : undefined;
+        if (viva && sugerida?.sugerida) {
+          avisos.push(avisoSugeridaEnSuSemana(viva.tarea.title, nombreDeFase(sugerida.a.fase)));
+          continue;
+        }
         const motivo = viva ? upsertTarea(viva.tarea, viva.faseId, { weekIndex: w }, conCambio) : null;
         if (motivo) return motivo;
       } else {
@@ -919,6 +933,20 @@ export function operarSobreElBorrador(i: {
     if (r.tipo === "viva") {
       const veto = vetoDeTareaViva(r, m, true);
       if (veto) return veto;
+      /* Revisión de L1–L7 (#5): con una mudanza SUGERIDA, «sí, muévela a «Y»» (su destino, sin semana) es marcar su
+         casilla, y «déjala en «X»» (donde está) es desmarcarla: lo mismo que `propuesta.recuperar` / `dejar-como-estaba`
+         nombrando la tarea. Cualquier otra mudanza sigue rechazada (`upsertTarea`). */
+      const sugerida = cambiaDe(r.tarea.id);
+      if (sugerida?.sugerida && o.semana === undefined) {
+        if (destino === sugerida.a.fase) {
+          incluir(sugerida.clave);
+          return null;
+        }
+        if (destino === r.faseId) {
+          excluir(sugerida.clave);
+          return null;
+        }
+      }
       // Vuelve a su fase: sin mudanza, y sin semana si no la pidió (queda en la suya).
       const vuelve = destino === r.faseId;
       return upsertTarea(r.tarea, r.faseId, { fase: destino, weekIndex: vuelve && o.semana === undefined ? r.tarea.weekIndex : semana });

@@ -43,7 +43,10 @@ import { motivoParaElAcuerdo, MOTIVOS_DEL_CHAT } from "../asistente/textos-del-a
 
 const RUTA_CANVAS = "components/canvas/CronogramaCanvas.tsx";
 const RUTA_BARRA = "components/canvas/RevisionDeLaPropuesta.tsx";
-const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+/* Revisión de L1–L7 (#6): la fuente se lee con los saltos normalizados. Con `core.autocrlf=true` (Git for Windows) un
+   checkout, un pull o un stash escriben los componentes en CRLF, y un marcador con "\n" no aparecía: `tramo` tiraba y la
+   suite quedaba en rojo en la otra PC sin que el código cambiara. */
+const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8").replace(/\r\n/g, "\n");
 const soloCodigo = (s: string) =>
   s
     .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
@@ -103,6 +106,24 @@ const hijos = (el: ts.JsxElement | ts.JsxFragment) =>
   el.children.filter((c) => !(ts.isJsxText(c) && c.containsOnlyTriviaWhiteSpaces));
 /** Una clase que vuelve a un elemento contenedor de scroll: un `sticky` adentro se pega a ÉL, no a la ventana. */
 const CLASE_DE_SCROLL = /\boverflow-(?!visible\b)[a-z-]+/;
+
+describe("revisión de L1–L7 (#6) · la fuente se lee igual con CRLF", () => {
+  it("⭐ ningún archivo que miran estas guardas trae «\\r»: un checkout con CRLF no cambia ningún tramo", () => {
+    /* La edición que la pone en rojo: volver a leer sin normalizar (`leer` sin el replace). CronogramaCanvas.tsx ya es
+       CRLF en este árbol, y cualquier checkout con `core.autocrlf=true` escribe así los demás: un marcador con "\n"
+       dejaba de aparecer y `tramo` tiraba. */
+    for (const [nombre, src] of [
+      ["canvas", CANVAS],
+      ["barra", BARRA],
+      ["gantt", GANTT],
+      ["hook", HOOK],
+      ["línea", LINEA],
+      ["vista", VISTA],
+    ] as const) {
+      expect(src.includes("\r"), `${nombre}: la fuente trae «\\r»`).toBe(false);
+    }
+  });
+});
 
 describe("los textos de la barra", () => {
   it("«Aplicar todo» si va todo lo que se puede marcar; si no, «Aplicar N de M»", () => {
@@ -439,11 +460,18 @@ describe("L3 P3c · el Gantt: lo que no se ve sin clics (el teclado, el foco, la
     expect(foco).toContain("[data-casilla=");
     expect(foco).toContain("[data-lugar=");
     expect(contiene(foco, "el?.focus({ preventScroll: true });")).toBe(true);
-    const irA = tramo(GANTT, "useEffect(() => {\n    if (irANonce === null || irACasilla === null) return;", "}, [irANonce, irACasilla]);");
+    /* ⚠ ACTUALIZADA en la revisión de L1–L7 (#3), con esta razón: centrar y enfocar pasó a `useIrALaCasilla` (atiende
+       cada nonce UNA vez; el efecto de antes repetía el último salto al volver de «antes»). Su conducta (alternar dos
+       veces no vuelve a centrar) se prueba montándolo, en recalculo-en-la-pantalla.test.ts; acá, que el Gantt lo use
+       con los primitivos. */
+    expect(contiene(GANTT, "useIrALaCasilla(irANonce, irACasilla);")).toBe(true);
+    const irA = soloCodigo(leer("components/canvas/useIrALaCasilla.ts"));
     expect(contiene(irA, 'el.scrollIntoView({ block: "center" });')).toBe(true);
     expect(contiene(irA, "el.focus(")).toBe(true);
+    expect(contiene(irA, "nonce === atendido.current"), "el mismo nonce se vuelve a atender").toBe(true);
     // Depende de primitivos: un `irA` armado en cada render no vuelve a centrar ni roba el foco en cada tecla.
     expect(GANTT).not.toMatch(/\}, \[irA\]\);/);
+    expect(irA).not.toMatch(/\}, \[irA\]\);/);
   });
 });
 
@@ -480,9 +508,11 @@ describe("L3 P3d · el canvas conecta el Gantt de la propuesta: sus casillas, «
       "onMarcar: revision.marcar,",
       "onMarcarVarios: revision.marcarVarios,",
       "trabajando: aplicandoBorrador || descartando,",
-      "irA,",
+      // ⚠ ACTUALIZADA en la revisión de L1–L7 (#3), con esta razón: el pedido va atado a la propuesta en que se hizo.
+      "irA: irAEnElGantt,",
       "desplegarAlEntrar,",
-      "cierre: revision.resumen ? cierreParaElGantt(revision.resumen) : null,",
+      // ⚠ ACTUALIZADA en la revisión de L1–L7 (#9), con esta razón: el chip mira el cierre fijado a mano.
+      "cierre: revision.resumen ? cierreParaElGantt(revision.resumen, closeOverride || null) : null,",
       "recalculo: recalculoDeLaBarra,",
     ]) {
       expect(contiene(enElGantt, cable), cable).toBe(true);
@@ -507,7 +537,16 @@ describe("L3 P3d · el canvas conecta el Gantt de la propuesta: sus casillas, «
     const ir = tramo(CANVAS, "const irAlSiguiente = (dir: 1 | -1) => {", "const irAlSiguienteRef");
     expect(contiene(ir, "const unidad = revision.siguiente(dir); if (!unidad) return;")).toBe(true);
     expect(contiene(ir, 'if (revision.vista !== "propuesta") revision.alternar();')).toBe(true);
-    expect(contiene(ir, "setIrA((prev) => ({ unidad, nonce: (prev?.nonce ?? 0) + 1 }));"), "el mismo número dos veces no vuelve a ir").toBe(true);
+    /* ⚠ ACTUALIZADA en la revisión de L1–L7 (#3), con esta razón: el pedido lleva el token de su propuesta, y el Gantt
+       solo lo recibe si es el de la propuesta en pantalla (con otra, el salto viejo no se repite). */
+    expect(
+      contiene(ir, "const token = proposalMeta.current.runId; setIrA((prev) => ({ token, unidad, nonce: (prev?.nonce ?? 0) + 1 }));"),
+      "el mismo número dos veces no vuelve a ir",
+    ).toBe(true);
+    expect(contiene(ir, "const irAEnElGantt = irA && irA.token === proposalMeta.current.runId ? { unidad: irA.unidad, nonce: irA.nonce } : null;")).toBe(
+      true,
+    );
+    expect(CANVAS, "el pedido vuelve a empezar su nonce (el Gantt ya atendió los primeros)").not.toMatch(/setIrA\(null\)/);
     const atajos = tramo(CANVAS, "const alTeclear = (e: KeyboardEvent) => {", "}, [verPropuesta]);");
     expect(
       contiene(CANVAS, "if (!verPropuesta) return; const alTeclear = (e: KeyboardEvent) => {"),
@@ -556,7 +595,10 @@ describe("el Canvas: el MISMO Gantt en las dos vistas, y la propuesta nunca pasa
     // El lugar del scroll: la fila que se mira, medida contra la barra.
     expect(GANTT).toContain("data-fase-key={p.key}");
     expect(HOOK).toContain('querySelectorAll<HTMLElement>("[data-fase-key]")');
-    expect(HOOK).toMatch(/useLayoutEffect\(\(\) => \{[\s\S]*?restaurarAncla\([\s\S]*?\}, \[actual\.vista\]\);/);
+    /* ⚠ ACTUALIZADA en la revisión de L1–L7 (#2), con esta razón: la vista del render es `vista` (la de la llegada, si
+       la hubo, o la del estado); restaurar el lugar sigue atado a ella. */
+    expect(HOOK).toMatch(/useLayoutEffect\(\(\) => \{[\s\S]*?restaurarAncla\([\s\S]*?\}, \[vista\]\);/);
+    expect(contiene(HOOK, "const vista = vistaDeLaLlegada ?? actual.vista;")).toBe(true);
   });
 
   it("⭐ una fase existente conserva la MISMA key en la vista de la propuesta (sigue abierta al alternar)", () => {
@@ -1541,7 +1583,8 @@ describe("E3 P3 · lo que desmarcas se ve en otra computadora", () => {
     // Los clics pendientes son de ESTA propuesta: los de otra no se superponen.
     expect(contiene(HOOK, "const pendientes = pendientesDe.clave === clave ? pendientesDe.ops : SIN_PENDIENTES.ops;")).toBe(true);
     // E4: sin `foto` en lo que devuelve el hook.
-    expect(contiene(HOOK, "vista: actual.vista, sin, esperarCasillas, version,")).toBe(true);
+    // ⚠ ACTUALIZADA en la revisión de L1–L7 (#2), con esta razón: devuelve `vista` (la de este render, con la llegada).
+    expect(contiene(HOOK, "vista, sin, esperarCasillas, version,")).toBe(true);
     // La cola: una por propuesta; la de otra se suelta.
     const cola = tramo(HOOK, "const colaDeAhora = useCallback(", "const esperarCasillas = useCallback(");
     expect(contiene(cola, "if (colaRef.current?.clave === k) return colaRef.current.cola;")).toBe(true);
@@ -2107,9 +2150,14 @@ describe("⛔ L2 · mientras se arma la propuesta no hay barra, y la línea suel
        una propuesta que no se ve). */
     const modo = todos(fuente, (x) => ts.isVariableDeclaration(x) && x.name.getText() === "modo") as ts.VariableDeclaration[];
     expect(modo.length, "no hay un `const modo`").toBe(1);
-    expect(sinEspacios(modo[0].initializer?.getText() ?? "")).toBe(
-      sinEspacios("modoDeLaPropuesta({ hayBorrador, conCambios: !!revision.resumen, tareas: estadoDeLasTareasEnPantalla })"),
-    );
+    /* ⚠ ACTUALIZADA en la revisión de L1–L7 (#2), con esta razón: el modo lo calcula el hook (que decide la vista de la
+       llegada en el mismo render), con lo mismo que usaba el canvas: la propuesta que le pasa (`hayBorrador ? proposal :
+       null`), su resumen y el estado de las tareas en pantalla. */
+    expect(sinEspacios(modo[0].initializer?.getText() ?? "")).toBe("revision.modo");
+    expect(contiene(HOOK, "const modo = modoDeLaPropuesta({ hayBorrador: esBorradorV1(propuesta), conCambios: resumen !== null, tareas });")).toBe(true);
+    const alHook = tramo(canvas, "const revision = useBorradorDelCronograma({", "});");
+    expect(contiene(alHook, "propuesta: hayBorrador ? proposal : null,")).toBe(true);
+    expect(contiene(alHook, "tareas: estadoDeLasTareasEnPantalla,")).toBe(true);
     const barras = elementos("RevisionDeLaPropuesta");
     expect(barras.length, "tiene que haber UNA barra").toBe(1);
     expect(condicionesDe(barras[0]), "la barra se monta sin mirar el modo").toContain(sinEspacios('modo === "barra"'));
@@ -2156,25 +2204,34 @@ describe("⛔ L2 · mientras se arma la propuesta no hay barra, y la línea suel
     ).toBe(true);
   });
 
-  it("⭐ la llegada: un efecto sobre `modo` que mira el foco y pasa la revisión a «antes»", () => {
-    /* Las ediciones que la ponen en rojo: sacar el efecto, que no mire si el CSE está escribiendo
-       (`esCampoDeEscritura(`), o que no alterne; o que el seguimiento no le pase el foco al aviso. */
+  it("⭐ la llegada: la decide el hook EN EL RENDER, con el foco que le pasa el canvas; ningún efecto sobre `modo`", () => {
+    /* ⚠ REESCRITA en la revisión de L1–L7 (#2), con esta razón: pedía un efecto sobre `modo` en el canvas, y ese efecto
+       corre después de pintar: el Gantt ya había pasado a la propuesta de solo lectura, el campo donde se escribía ya no
+       estaba y el foco había caído al body. La guarda nunca protegía el caso para el que existe. La conducta (el primer
+       render de la llegada ya está en «antes») se prueba montando el hook, en recalculo-en-la-pantalla.test.ts; acá, el
+       cableado del canvas.
+       Las ediciones que la ponen en rojo: volver a un efecto sobre `modo`, no pasarle al hook cómo mirar el foco, o que
+       el seguimiento no le pase el foco al aviso. */
     const efectos = todos(
       fuente,
       (x) =>
         ts.isCallExpression(x) &&
         x.expression.getText() === "useEffect" &&
         x.arguments.length === 2 &&
-        sinEspacios(x.arguments[1].getText()) === "[modo]",
+        sinEspacios(x.arguments[1].getText()).includes("modo"),
     ) as ts.CallExpression[];
-    expect(efectos.length, "no hay un efecto sobre `modo`").toBe(1);
-    const cuerpo = sinEspacios(efectos[0].arguments[0].getText());
-    expect(cuerpo, "la llegada no mira si el CSE está escribiendo").toContain(
-      sinEspacios("esCampoDeEscritura(document.activeElement as HTMLElement | null)"),
-    );
-    expect(cuerpo).toContain(sinEspacios("pasarAAntesAlLlegar({ antes, ahora: modo, escribiendo, vista: r.vista })"));
-    expect(cuerpo, "la llegada no alterna la vista").toContain(sinEspacios("r.alternar()"));
-    expect(cuerpo).toContain(sinEspacios("modoAnteriorRef.current = modo;"));
+    expect(efectos.length, "volvió un efecto sobre `modo` (llega después de pintar)").toBe(0);
+    expect(canvas, "el canvas volvió a decidir la llegada").not.toContain("pasarAAntesAlLlegar(");
+    const alHook = tramo(canvas, "const revision = useBorradorDelCronograma({", "});");
+    expect(
+      contiene(alHook, 'escribiendo: () => typeof document !== "undefined" && esCampoDeEscritura(document.activeElement as HTMLElement | null),'),
+      "el hook no sabe si el CSE está escribiendo",
+    ).toBe(true);
+    // En el hook: en el render (no en un efecto), antes de devolver la vista.
+    const llegada = tramo(HOOK, "const [modoVisto, setModoVisto] = useState<ModoDeLaPropuesta>(modo);", "const huellaDelBorrador");
+    expect(contiene(llegada, "pasarAAntesAlLlegar({ antes: modoVisto, ahora: modo, escribiendo, vista: actual.vista })")).toBe(true);
+    expect(contiene(llegada, "const alternada = alternarVista(actual); setRevision(alternada); vistaDeLaLlegada = alternada.vista;")).toBe(true);
+    expect(llegada, "la llegada volvió a un efecto").not.toMatch(/use(Layout)?Effect\(/);
     const seguimiento = tramo(canvas, "const desenlace = desenlaceDelSeguimiento({", "});");
     expect(
       contiene(seguimiento, "escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),"),

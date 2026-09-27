@@ -448,12 +448,31 @@ export function vistaEnLasFilas(
   return { marcasPorKey, semanasPorKey };
 }
 
-/** El chip «Cierre: 13 oct → 10 nov» de la cabecera del Gantt: el cierre de hoy y con lo marcado. null sin fechas. */
+/** El chip del cierre en la cabecera del Gantt (`texto`) y las fechas con que se arma. */
+export interface CierreEnElGantt {
+  antes: string;
+  despues: string;
+  texto: string;
+}
+
+/**
+ * El chip «Cierre: 13 oct → 10 nov» de la cabecera del Gantt: el cierre de hoy y con lo marcado. null sin fechas.
+ * Revisión de L1–L7 (#9): con un cierre FIJADO a mano (Tanda K, `cierreFijado`), aplicar no lo cambia: el chip dice que
+ * lo que se mueve es el plan calculado («Plan calculado: 13 oct → 10 nov · el cierre fijado no cambia»), como la barra y
+ * la confirmación (`fraseDelCierre`). Decía «Cierre: 13 oct → 10 nov» al lado de la fecha fijada.
+ */
 export function cierreParaElGantt(
   r: Pick<ResumenDelBorrador, "cierreAntes" | "cierreDespues">,
-): { antes: string; despues: string } | null {
+  cierreFijado: string | null = null,
+): CierreEnElGantt | null {
   if (!r.cierreAntes.date || !r.cierreDespues.date) return null;
-  return { antes: fmtDay(r.cierreAntes.date), despues: fmtDay(r.cierreDespues.date) };
+  const antes = fmtDay(r.cierreAntes.date);
+  const despues = fmtDay(r.cierreDespues.date);
+  const tramo = antes === despues ? `${despues} (no cambia)` : `${antes} → ${despues}`;
+  const texto = cierreFijado
+    ? `Plan calculado: ${antes === despues ? despues : tramo} · el cierre fijado no cambia`
+    : `Cierre: ${tramo}`;
+  return { antes, despues, texto };
 }
 
 /** Lo que recorre «Siguiente número»: todo menos lo «ya está» (se numera, pero no hay nada que decidir). */
@@ -475,16 +494,44 @@ export interface PosicionDelSiguiente {
   total: number;
   /** El número de la primera unidad (el de «Volver al N»), o null sin unidades. */
   primero: number | null;
+  /** Revisión de L1–L7 (#10): el número del Gantt de la unidad en la que está (el de su casilla), o null. */
+  numero?: number | null;
+  /** Revisión de L1–L7 (#10): cuántos números «ya está» se saltan (tienen número, pero no hay nada que decidir). */
+  saltados?: number;
+}
+
+/** Dónde está «Siguiente número» (`iActual`: el índice en `unidadesDelSiguiente(indice)`, o null antes del primer clic).
+ *  Revisión de L1–L7 (#10): con el número del Gantt de esa unidad y cuántos «ya está» se saltan. */
+export function posicionDelSiguiente(indice: readonly UnidadNumerada[], iActual: number | null): PosicionDelSiguiente {
+  const unidades = unidadesDelSiguiente(indice);
+  const i = iActual !== null && iActual >= 0 && iActual < unidades.length ? iActual : null;
+  return {
+    actual: i === null ? null : i + 1,
+    total: unidades.length,
+    primero: unidades[0]?.numero ?? null,
+    numero: i === null ? null : unidades[i].numero,
+    saltados: indice.length - unidades.length,
+  };
 }
 
 export const TITULO_DEL_SIGUIENTE = "Atajos: n (siguiente) y p (anterior)";
 
-/** «Recorrer los 14 números» → «Siguiente número · 3 de 14» → «Volver al 1 · 14 de 14». null sin números. */
+/**
+ * «Recorrer los 14 números» → «Siguiente número · 3 de 14» → «Volver al 1 · 14 de 14». null sin números.
+ * Revisión de L1–L7 (#10): «k de N» es la posición en el recorrido, que salta lo «ya está». Desde el primer «ya está» ya
+ * no es el número de la casilla enfocada (ni el que cita el chat): entonces el texto nombra también el número real
+ * («Siguiente número · el 11 (10 de 14)»), y el recorrido dice que cuenta solo lo que falta decidir.
+ */
 export function textoDelSiguiente(p: PosicionDelSiguiente): string | null {
   if (p.total <= 0 || p.primero === null) return null;
-  if (p.actual === null) return p.total === 1 ? `Ir al número ${p.primero}` : `Recorrer los ${p.total} números`;
-  if (p.actual >= p.total) return `Volver al ${p.primero} · ${p.total} de ${p.total}`;
-  return `Siguiente número · ${p.actual} de ${p.total}`;
+  if (p.actual === null) {
+    if (p.total === 1) return `Ir al número ${p.primero}`;
+    return (p.saltados ?? 0) > 0 ? `Recorrer los ${p.total} números por decidir` : `Recorrer los ${p.total} números`;
+  }
+  const numero = p.numero ?? null;
+  const donde = numero !== null && numero !== p.actual ? `el ${numero} (${p.actual} de ${p.total})` : `${p.actual} de ${p.total}`;
+  if (p.actual >= p.total) return `Volver al ${p.primero} · ${donde}`;
+  return `Siguiente número · ${donde}`;
 }
 
 /** La tecla de «Siguiente número»: `n` (1) o `p` (−1), sin modificadores y fuera de un campo de escritura. */

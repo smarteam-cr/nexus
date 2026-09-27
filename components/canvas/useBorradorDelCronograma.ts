@@ -54,6 +54,9 @@
  *
  * L4 (2026-09-26): suma `resumenEntero`, la propuesta ENTERA (nada desmarcado), que decide el nivel del mensaje de
  * arriba (lib/timeline/mensaje-de-la-propuesta.ts). Va por la huella del borrador sin las casillas: tocar una no la rehace.
+ *
+ * Revisión de L1–L7 (2026-09-26): el hook calcula el `modo` y decide la vista de la LLEGADA en el mismo render (#2: el
+ * efecto del canvas llegaba tarde), y `posicion` trae el número del Gantt de la unidad en la que está (#10).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { claveDeDesfasadas } from "@/lib/timeline/recalculo-de-tareas";
@@ -65,6 +68,7 @@ import {
 } from "@/lib/timeline/cola-de-casillas";
 import {
   pasoDelSiguiente,
+  posicionDelSiguiente,
   unidadesDelSiguiente,
   vistaDeLaPropuesta,
   type PosicionDelSiguiente,
@@ -80,7 +84,9 @@ import {
   huellaDeTexto,
   leerBorrador,
   marcarCambios,
+  modoDeLaPropuesta,
   olvidarRevision,
+  pasarAAntesAlLlegar,
   planDeAplicacion,
   recordarRevision,
   recuerdoDeLaRevision,
@@ -94,6 +100,7 @@ import {
   type EstadoDeLasTareas,
   type EstadoDeRevision,
   type FaseDesfasada,
+  type ModoDeLaPropuesta,
   type OperacionDeCasillas,
   type Proyeccion,
   type RecuerdoDeLaRevision,
@@ -240,6 +247,9 @@ export interface BorradorEnPantalla {
   /** L4: la propuesta ENTERA (`resumir` sin nada desmarcado): el nivel del mensaje de arriba. No se rehace al tocar
    *  casillas (va por la huella del borrador sin `excluidos`). null cuando no hay resumen. */
   resumenEntero: ResumenDelBorrador | null;
+  /** L2: qué muestra la pantalla de la propuesta (`modoDeLaPropuesta`). Revisión de L1–L7 (#2): lo calcula el hook, que
+   *  decide la vista de la llegada en el mismo render. */
+  modo: ModoDeLaPropuesta;
 }
 
 export function useBorradorDelCronograma(entrada: {
@@ -260,6 +270,9 @@ export function useBorradorDelCronograma(entrada: {
   guardarCasillas?: (ops: OperacionDeCasillas[], token: string) => Promise<ResultadoDeGuardarCasillas>;
   /** L3 P3d: hoy (null antes de hidratar): decide las semanas que «ya pasaron» en la vista de la propuesta. */
   hoy?: Date | null;
+  /** L2 · LA LLEGADA (revisión de L1–L7, #2): ¿el CSE está escribiendo en un campo? Se mira en el render en que la
+   *  propuesta termina de armarse, ANTES de que el Gantt pase a la propuesta (y desmonte el campo). */
+  escribiendo?: () => boolean;
 }): BorradorEnPantalla {
   const { projectId, propuesta, token, vivo, tareas } = entrada;
   const clave = useMemo(() => claveDeRevision(propuesta, token), [propuesta, token]);
@@ -397,6 +410,26 @@ export function useBorradorDelCronograma(entrada: {
     [vivo, borrador, sin, tareas, forzadas],
   );
   const proyeccion = resumen?.proyeccion ?? null;
+  /* ── L2 · LA LLEGADA (revisión de L1–L7, #2) ─────────────────────────────────────────────────────────
+     El modo de la propuesta en pantalla (`modoDeLaPropuesta`) y, cuando pasa de «armandose» a «barra» con el CSE
+     escribiendo, la vista «antes» en ESTE MISMO render: se ajusta el estado en el render (como la clave, arriba). Antes lo
+     hacía un efecto del canvas, que corre después de pintar: en ese commit el Gantt ya había pasado a la propuesta, de
+     solo lectura, el campo donde se escribía ya no estaba y el foco había caído al body. La guarda no protegía nunca el
+     caso para el que existe, y las teclas que seguían iban a los atajos `n`/`p`. */
+  const modo = modoDeLaPropuesta({ hayBorrador: esBorradorV1(propuesta), conCambios: resumen !== null, tareas });
+  const [modoVisto, setModoVisto] = useState<ModoDeLaPropuesta>(modo);
+  let vistaDeLaLlegada: VistaDelBorrador | null = null;
+  if (modoVisto !== modo) {
+    setModoVisto(modo);
+    const escribiendo = entrada.escribiendo?.() ?? false;
+    if (pasarAAntesAlLlegar({ antes: modoVisto, ahora: modo, escribiendo, vista: actual.vista })) {
+      const alternada = alternarVista(actual);
+      setRevision(alternada);
+      vistaDeLaLlegada = alternada.vista;
+    }
+  }
+  /* La vista de ESTE render: la de la llegada, si la hubo (el estado la toma en el render que sigue). */
+  const vista = vistaDeLaLlegada ?? actual.vista;
   /* ── L4 · LA PROPUESTA ENTERA ─────────────────────────────────────────────────────────────────────
      El nivel del mensaje de arriba (su título y su tono) mira la propuesta ENTERA: no salta al tocar casillas. Es otra
      evaluación del plan, así que se rehace solo si cambió algo que no son las casillas: cada clic adopta un borrador
@@ -454,10 +487,9 @@ export function useBorradorDelCronograma(entrada: {
     setCursor({ clave: k, i: j });
     return us[j];
   }, []);
-  const posicion: PosicionDelSiguiente = useMemo(
-    () => ({ actual: iActual === null ? null : iActual + 1, total: unidades.length, primero: unidades[0]?.numero ?? null }),
-    [iActual, unidades],
-  );
+  /* Revisión de L1–L7 (#10): con el número del Gantt de la unidad (el de su casilla) y cuántos «ya está» se saltan: la
+     posición en el recorrido deja de ser ese número desde el primer «ya está». */
+  const posicion: PosicionDelSiguiente = useMemo(() => posicionDelSiguiente(resumen?.indice ?? [], iActual), [resumen, iActual]);
 
   const contenedorRef = useRef<HTMLDivElement | null>(null);
   const barraRef = useRef<HTMLDivElement | null>(null);
@@ -471,7 +503,7 @@ export function useBorradorDelCronograma(entrada: {
     const a = anclaRef.current;
     anclaRef.current = null;
     if (a) restaurarAncla(contenedorRef.current, barraRef.current, a);
-  }, [actual.vista]);
+  }, [vista]);
 
   /* E3: con las casillas compartidas el clic va a la cola (se ve al instante y sube al servidor); si no,
      queda en la memoria de la pantalla, como en E1. */
@@ -507,7 +539,7 @@ export function useBorradorDelCronograma(entrada: {
     borrador,
     resumen,
     proyeccion,
-    vista: actual.vista,
+    vista,
     sin,
     esperarCasillas,
     version,
@@ -528,5 +560,6 @@ export function useBorradorDelCronograma(entrada: {
     siguiente,
     posicion,
     resumenEntero,
+    modo,
   };
 }

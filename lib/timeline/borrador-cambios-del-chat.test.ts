@@ -15,7 +15,8 @@
  *   7. las escrituras, la proyección, la lista de la barra y la confirmación;
  *   8. el permiso (`necesitaPermisoDeIa`, `traeCambiosDeTareas`);
  *   9. (L3) los choques citan el número del Gantt (`numeracionDeLaPropuesta`);
- *  10. (L5) un cambio de tarea de la IA: la proyección no le quita el «por validar» y el chat no lo pisa.
+ *  10. (L5) un cambio de tarea de la IA: la proyección no le quita el «por validar» y el chat no lo pisa;
+ *  11. (revisión de L1–L7) una mudanza sugerida no bloquea las semanas de su fase, y moverla a su destino la marca.
  * Cada `it` nombra la edición que lo pone en rojo.
  */
 import { describe, expect, it } from "vitest";
@@ -49,7 +50,14 @@ import {
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
-import { operarSobreElBorrador, rechazoTareaConSugerencia, type OperacionSobreLaPropuesta } from "./operar-sobre-el-borrador";
+import {
+  avisoSugeridaEnSuSemana,
+  fasesDeLaPropuesta,
+  operarSobreElBorrador,
+  rechazoTareaConSugerencia,
+  type OperacionSobreLaPropuesta,
+} from "./operar-sobre-el-borrador";
+import { describirOperaciones } from "./operaciones";
 
 const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
   id,
@@ -785,5 +793,79 @@ describe("10 · L5: un cambio de tarea de la IA frente al chat", () => {
     const mudar = operar(leido!, [sugerida.clave], [{ op: "tarea.mover-fase", taskId: "b3", phaseId: "a" }]);
     expect(mudar.rechazadas.map((x) => x.motivo)).toEqual([rechazoTareaConSugerencia("Validar con el cliente", "Pruebas")]);
     expect(mudar.excluidos).toEqual([sugerida.clave]);
+  });
+});
+
+/**
+ * Revisión de L1–L7 (#1, #5): una mudanza SUGERIDA (L7) en una fase no bloquea las operaciones de semanas de esa fase.
+ * Quitar, abrir o repartir semanas corre TODAS las tareas de la fase; la sugerida (una hecha, desmarcada, en su origen)
+ * pasaba por `upsertTarea`, que la rechaza, y con ella caía todo el lote. Tampoco había salida: la sugerida no sale de la
+ * propuesta. Ahora queda en su semana, con un aviso; y «sí, muévela a «Y»» es marcar su casilla.
+ */
+describe("11 · revisión de L1–L7: la mudanza sugerida no bloquea las semanas de su fase", () => {
+  const deLaIa = (c: CambioTareaCambia): CambioTareaCambia => {
+    const { porChat: _porChat, ...resto } = c;
+    void _porChat;
+    return resto;
+  };
+  const SUGERIDA: CambioTareaCambia = { ...deLaIa(cambia(B3, "b", { fase: "c" })), sugerida: "otra-fase" };
+  const operar = (excluidos: string[], operaciones: OperacionSobreLaPropuesta[]) =>
+    operarSobreElBorrador({ vivo: VIVO, borrador: v1([SUGERIDA]), excluidos, operaciones, nuevaClave: () => "k" });
+  const semanaDe = (b: Borrador, id: string) =>
+    b.cambios.find((c): c is CambioTareaCambia => c.tipo === "tarea-cambia" && c.tareaId === id)?.a.weekIndex;
+  const AVISO = avisoSugeridaEnSuSemana("Validar con el cliente", "Pruebas");
+
+  it("⭐ abrir una semana al inicio de la fase: las demás se corren, la sugerida queda en la suya y se avisa", () => {
+    /* La edición que la pone en rojo: volver a pasar la sugerida por `upsertTarea` en `semanasDeLaFase` (el lote volvía
+       422 con el motivo de una tarea que el CSE no nombró). */
+    const r = operar([SUGERIDA.clave], [{ op: "fase.insertar-semana", phaseId: "b", semana: 0 }]);
+    expect(r.rechazadas).toEqual([]);
+    expect(r.cambio).toBe(true);
+    expect(semanaDe(r.borrador, "b1")).toBe(1);
+    expect(semanaDe(r.borrador, "b2")).toBe(2);
+    expect(r.borrador.cambios.filter((c) => c.tipo === "tarea-cambia" && c.tareaId === "b3"), "la sugerida cambió").toEqual([SUGERIDA]);
+    expect(r.excluidos, "la sugerida quedó marcada").toContain(SUGERIDA.clave);
+    expect(r.avisos).toContain(AVISO);
+  });
+
+  it("⭐ quitar una semana y repartir parejo, tampoco se rechazan", () => {
+    /* La edición que la pone en rojo: la misma (quitar y repartir también corren la sugerida). */
+    const quitar = operar([SUGERIDA.clave], [{ op: "fase.quitar-semana", phaseId: "b", semana: 0 }]);
+    expect(quitar.rechazadas).toEqual([]);
+    expect(semanaDe(quitar.borrador, "b2")).toBe(0);
+    expect(quitar.borrador.cambios.filter((c) => c.tipo === "tarea-cambia" && c.tareaId === "b3")).toEqual([SUGERIDA]);
+    expect(quitar.avisos).toContain(AVISO);
+    const repartir = operar([SUGERIDA.clave], [{ op: "fase.insertar-semana", phaseId: "b", semana: 2 }, { op: "fase.redistribuir", phaseId: "b" }]);
+    expect(repartir.rechazadas).toEqual([]);
+    expect(repartir.borrador.cambios.filter((c) => c.tipo === "tarea-cambia" && c.tareaId === "b3")).toEqual([SUGERIDA]);
+  });
+
+  it("⭐ «sí, muévela a su destino» la marca y «déjala donde está» la desmarca; otra mudanza sigue rechazada, con la salida real", () => {
+    /* La edición que la pone en rojo: sacar la rama de la sugerida en `moverTarea` (el chat respondía con un rechazo a lo
+       mismo que hace la casilla), o volver al texto que prometía una salida que no existe. */
+    const marcar = operar([SUGERIDA.clave], [{ op: "tarea.mover-fase", taskId: "b3", phaseId: "c" }]);
+    expect(marcar.rechazadas).toEqual([]);
+    expect(marcar.excluidos, "no se marcó").not.toContain(SUGERIDA.clave);
+    expect(marcar.borrador.cambios, "la sugerida cambió al marcarse").toEqual([SUGERIDA]);
+    const dejar = operar([], [{ op: "tarea.mover-fase", taskId: "b3", phaseId: "b" }]);
+    expect(dejar.rechazadas).toEqual([]);
+    expect(dejar.excluidos).toContain(SUGERIDA.clave);
+    expect(dejar.borrador.cambios).toEqual([SUGERIDA]);
+    /* La cajita dice lo que pasa (lo que se lee es lo que se ejecuta): se marca su casilla y cae en SU semana (la 2),
+       no en la 1 de una mudanza sin semana. La edición que la pone en rojo: describirla como cualquier mudanza. */
+    const propuesta = { vivo: VIVO, tituloDeClave: () => null, confirmacion: "", sugeridaA: (id: string) => (id === "b3" ? "c" : null) };
+    const antes = fasesDeLaPropuesta(proyectar(VIVO, v1([SUGERIDA]), [SUGERIDA.clave]));
+    const [linea] = describirOperaciones(antes, [{ op: "tarea.mover-fase", taskId: "b3", phaseId: "c" }], { propuesta });
+    const donde = proyectar(VIVO, marcar.borrador, marcar.excluidos).fases.find((f) => f.clave === "c")!.tareas.find((t) => t.id === "b3")!;
+    expect(linea).toBe(
+      `«Validar con el cliente» se muda de «Diseño» a «Pruebas», semana ${donde.weekIndex + 1}, como sugiere la IA (se marca su casilla) — conserva su estado`,
+    );
+    const [queda] = describirOperaciones(antes, [{ op: "tarea.mover-fase", taskId: "b3", phaseId: "b" }], { propuesta });
+    expect(queda).toBe("«Validar con el cliente» se queda en «Diseño»: la sugerencia de la IA de mudarla a «Pruebas» queda sin marcar");
+    const conSemana = operar([SUGERIDA.clave], [{ op: "tarea.mover-fase", taskId: "b3", phaseId: "c", semana: 2 }]);
+    expect(conSemana.rechazadas.map((x) => x.motivo)).toEqual([rechazoTareaConSugerencia("Validar con el cliente", "Pruebas")]);
+    const texto = rechazoTareaConSugerencia("Validar con el cliente", "Pruebas");
+    expect(texto, "promete una salida que no existe").not.toContain("mientras la sugerencia siga");
+    expect(texto).toContain("márcala o déjala sin marcar");
   });
 });

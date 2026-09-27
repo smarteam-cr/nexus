@@ -6,8 +6,8 @@
  * referencias-de-la-propuesta.ts. Acá:
  *   · lo prometido: sale del snapshot que el GET ya leyó (ninguna consulta nueva);
  *   · el handoff: la última corrida DONE del grupo `handoff` (`whereCorridasDeDocumento`, el ÚNICO `where` de las
- *     corridas de un documento), con una caché de 50 propuestas por token: `AgentRun` no tiene índice por proyecto y
- *     su salida pesa. No con una propuesta que ES del handoff (compararla consigo misma no dice nada);
+ *     corridas de un documento), con una caché de 50 propuestas por token que dura 5 minutos: `AgentRun` no tiene índice
+ *     por proyecto y su salida pesa. No con una propuesta que ES del handoff (compararla consigo misma no dice nada);
  *   · las fuentes: las reuniones de las corridas de la propuesta (la del paso 1, si la hubo, y la del paso 2), las notas
  *     que había cuando corrió la más nueva y si hay instrucciones adicionales.
  * Es contexto de apoyo: quien llama lo envuelve en `.catch(() => null)`, y una tabla que falta no tumba el GET.
@@ -23,24 +23,29 @@ import {
   cacheAcotada,
   handoffDeLaSalida,
   prometidoDelSnapshot,
+  TOPE_DE_LA_CACHE,
+  VIDA_DEL_HANDOFF_MS,
   type FuentesDeLaPropuesta,
   type HandoffDeLaPropuesta,
   type ReferenciasDeLaPropuesta,
 } from "./referencias-de-la-propuesta";
 
-/** El handoff de cada propuesta abierta, por su token (null también se recuerda: no hay handoff que leer). */
-const HANDOFF_POR_TOKEN = cacheAcotada<HandoffDeLaPropuesta | null>();
+/** El handoff de cada propuesta abierta, por su token, por `VIDA_DEL_HANDOFF_MS`. Revisión de L1–L7 (#7): no se
+ *  recordaba para siempre (un handoff regenerado con la propuesta abierta no se veía hasta reiniciar), y null ya no se
+ *  recuerda (sin handoff en el primer GET, la comparación no aparecía nunca para esa propuesta). */
+const HANDOFF_POR_TOKEN = cacheAcotada<HandoffDeLaPropuesta>(TOPE_DE_LA_CACHE, VIDA_DEL_HANDOFF_MS);
 
 async function leerElHandoff(projectId: string, token: string | null): Promise<HandoffDeLaPropuesta | null> {
   const clave = token ? `${projectId}:${token}` : null;
-  if (clave && HANDOFF_POR_TOKEN.has(clave)) return HANDOFF_POR_TOKEN.get(clave) ?? null;
+  const recordado = clave ? HANDOFF_POR_TOKEN.get(clave) : undefined;
+  if (recordado) return recordado;
   const corrida = await prisma.agentRun.findFirst({
     where: { ...whereCorridasDeDocumento(projectId, "handoff"), status: "DONE" },
     orderBy: { createdAt: "desc" },
     select: { id: true, output: true, createdAt: true },
   });
   const handoff = corrida ? handoffDeLaSalida(corrida.output, corrida.createdAt) : null;
-  if (clave) HANDOFF_POR_TOKEN.set(clave, handoff);
+  if (clave && handoff) HANDOFF_POR_TOKEN.set(clave, handoff);
   return handoff;
 }
 

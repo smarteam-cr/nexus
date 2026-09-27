@@ -44,6 +44,7 @@ import {
   observacionesParaMostrar,
   observacionParaMostrar,
   pasoDelSiguiente,
+  posicionDelSiguiente,
   textoDelAvance,
   textoDeLosChoques,
   textoDeLosTotales,
@@ -507,10 +508,25 @@ describe("L3 P3d · lo puro de la barra y del canvas", () => {
   });
 
   it("⭐ el chip del cierre: el de hoy y el de lo marcado, en días cortos; sin fechas, nada", () => {
-    /* La edición que la pone en rojo: el chip con las etiquetas largas, o con el cierre de hoy en los dos lados. */
+    /* La edición que la pone en rojo: el chip con las etiquetas largas, o con el cierre de hoy en los dos lados.
+       ⚠ ACTUALIZADA en la revisión de L1–L7 (#9), con esta razón: el chip trae su `texto` (con un cierre fijado a mano
+       dice otra cosa); las fechas son las mismas. */
     const r = resumir(VIVO, BORRADOR, [], LISTAS);
-    expect(cierreParaElGantt(r)).toEqual({ antes: "13 oct", despues: "10 nov" });
+    expect(cierreParaElGantt(r)).toEqual({ antes: "13 oct", despues: "10 nov", texto: "Cierre: 13 oct → 10 nov" });
     expect(cierreParaElGantt({ ...r, cierreAntes: { ...r.cierreAntes, date: null } })).toBeNull();
+    expect(cierreParaElGantt({ ...r, cierreAntes: r.cierreDespues })?.texto).toBe("Cierre: 10 nov (no cambia)");
+  });
+
+  it("⭐ revisión de L1–L7 (#9): con el cierre fijado a mano, el chip dice que lo que se mueve es el plan calculado", () => {
+    /* La edición que la pone en rojo: armar el chip sin mirar el cierre fijado («Cierre: 13 oct → 10 nov» al lado de la
+       fecha fijada, que aplicar no toca: la barra y la confirmación dicen lo contrario). */
+    const r = resumir(VIVO, BORRADOR, [], LISTAS);
+    const fijado = cierreParaElGantt(r, "2026-11-30");
+    expect(fijado?.texto).toBe("Plan calculado: 13 oct → 10 nov · el cierre fijado no cambia");
+    expect(fijado?.texto).not.toMatch(/^Cierre:/);
+    expect(cierreParaElGantt({ ...r, cierreAntes: r.cierreDespues }, "2026-11-30")?.texto).toBe(
+      "Plan calculado: 10 nov · el cierre fijado no cambia",
+    );
   });
 
   it("⭐ «Siguiente número» recorre los 14 números, salta lo «ya está», da la vuelta y dice dónde está", () => {
@@ -537,6 +553,32 @@ describe("L3 P3d · lo puro de la barra y del canvas", () => {
     expect(textoDelSiguiente({ actual: 14, total: 14, primero })).toBe(`Volver al ${primero} · 14 de 14`);
     expect(textoDelSiguiente({ actual: null, total: 1, primero: 7 })).toBe("Ir al número 7");
     expect(textoDelSiguiente({ actual: null, total: 0, primero: null })).toBeNull();
+  });
+
+  it("⭐ revisión de L1–L7 (#10): con algo «ya está», el botón nombra el número de la casilla, no solo la posición", () => {
+    /* La edición que la pone en rojo: decir solo «k de N» (desde el primer «ya está», «Siguiente número · 3 de 13»
+       enfocaba la casilla «4.»: el CSE le citaba al chat un número que no era el del Gantt). */
+    const r = resumir(VIVO, BORRADOR, [], LISTAS);
+    const tercero = r.indice.filter((u) => !u.yaEsta)[2];
+    const conYaEsta = r.indice.map((u) => (u.numero === tercero.numero ? { ...u, yaEsta: true } : u));
+    const n = unidadesDelSiguiente(conYaEsta).length;
+    expect(n).toBe(13);
+    const antes = posicionDelSiguiente(conYaEsta, null);
+    expect(antes).toMatchObject({ actual: null, total: 13, numero: null, saltados: 1 });
+    expect(textoDelSiguiente(antes)).toBe("Recorrer los 13 números por decidir");
+    // Antes del «ya está», la posición y el número coinciden: el texto de siempre.
+    const segundo = posicionDelSiguiente(conYaEsta, 1);
+    expect(segundo.numero).toBe(r.indice.filter((u) => !u.yaEsta)[1].numero);
+    // En el que sigue al «ya está»: la posición 3 es el número del cuarto.
+    const pos = posicionDelSiguiente(conYaEsta, 2);
+    const cuarto = r.indice.filter((u) => !u.yaEsta)[3].numero;
+    expect(pos).toMatchObject({ actual: 3, total: 13, numero: cuarto });
+    expect(cuarto).not.toBe(3);
+    expect(textoDelSiguiente(pos)).toBe(`Siguiente número · el ${cuarto} (3 de 13)`);
+    // Sin «ya está», el texto de siempre.
+    const sinYaEsta = posicionDelSiguiente(r.indice, 2);
+    if (sinYaEsta.numero === 3) expect(textoDelSiguiente(sinYaEsta)).toBe("Siguiente número · 3 de 14");
+    expect(textoDelSiguiente(posicionDelSiguiente(r.indice, null))).toBe("Recorrer los 14 números");
   });
 
   it("⭐ los atajos: n y p, sin modificadores y nunca mientras se escribe", () => {

@@ -54,6 +54,7 @@ import {
   type TareaDelVivo,
 } from "./borrador";
 import {
+  cierreParaElGantt,
   etiquetaDeLaCasilla,
   etiquetasSinCasilla,
   tareasQueExistenHoy,
@@ -176,6 +177,8 @@ function pintar(
     fuentes?: FuentesDeLaPropuesta | null;
     /** L6: el porqué con fuentes nuevas guardado en la propuesta. */
     explicacion?: ExplicacionEnPantalla | null;
+    /** Revisión de L1–L7 (#9): el cierre fijado a mano (Tanda K), yyyy-mm-dd. */
+    cierreFijado?: string | null;
   } = {},
 ): Pintado {
   const r = resumir(VIVO, b, o.sin ?? [], LISTAS);
@@ -195,7 +198,7 @@ function pintar(
     trabajando: false,
     irA: o.irA ?? null,
     desplegarAlEntrar: desplegar === null ? null : { clave: "token-1", fases: desplegar },
-    cierre: { antes: "13 oct", despues: "10 nov" },
+    cierre: cierreParaElGantt(r, o.cierreFijado ?? null),
     recalculo: o.recalculo ?? null,
     fuentes: o.fuentes ?? null,
     explicacion: o.explicacion ?? null,
@@ -207,6 +210,7 @@ function pintar(
       phases,
       readOnly: true,
       marcas,
+      ...(o.cierreFijado ? { closeOverride: o.cierreFijado } : {}),
       ...(o.sinPropuesta ? {} : { propuesta }),
     }),
   );
@@ -495,6 +499,10 @@ describe("L3 P3c · las filas de fase: sus casillas, sus etiquetas y sus celdas"
   it("⭐ la cabecera: el cierre con lo marcado, desplegar o plegar todo, y la casilla del arranque si la propuesta lo mueve", () => {
     /* La edición que la pone en rojo: no pintar la cabecera de la propuesta. */
     expect(P.html).toContain("Cierre: 13 oct → 10 nov");
+    // Revisión de L1–L7 (#9): con el cierre fijado a mano, el chip no dice que aplicar lo mueve.
+    const fijado = pintar(BORRADOR, { cierreFijado: "2026-11-30", desplegar: null });
+    expect(fijado.html).not.toContain("Cierre: 13 oct → 10 nov");
+    expect(fijado.html).toContain("Plan calculado: 13 oct → 10 nov · el cierre fijado no cambia");
     expect(P.html).toContain(">Desplegar todo<");
     expect(P.html).toContain(">Plegar todo<");
     const conAncla: Borrador = { ...BORRADOR, cambios: [{ tipo: "ancla", clave: "ancla", desde: "2026-05-19", a: "2026-06-02" }, ...BORRADOR.cambios] };

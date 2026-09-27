@@ -47,6 +47,7 @@ import {
   describirSobreLaPropuesta,
   libroSobreLaPropuesta,
   motivoDeCaidaPorToken,
+  rechazoSoloSugeridas,
   traducirOperaciones,
   type PropuestaEnElTurno,
 } from "./propuesta-del-chat";
@@ -321,6 +322,36 @@ describe("⛔ L7 · «recupera el N» no marca las mudanzas SUGERIDAS de su grup
     const marcada = enElTurno({ borrador: b, vivo, excluidos: [] });
     const dejar = traducirOperaciones([{ op: "propuesta.dejar-como-estaba", cambios: [String(g.numero)] }], marcada);
     expect((dejar.canonicas[0].op as { claves: string[] }).claves).toContain(SUGERIDA.clave);
+  });
+
+  it("⭐ revisión de L1–L7 (#5): un grupo con SOLO sugeridas sin marcar no dice «ya está así»: dice cómo se marcan", () => {
+    /* La edición que la pone en rojo: sacar la rama de las sugeridas en `clavesDe` (caía en «El N ya está así en el
+       cronograma», que es falso: la mudanza sigue sin aplicar). */
+    const TC2 = tarea("tc2", "Validar las pruebas", 1, { status: "DONE" });
+    const vivo: Vivo = { ...VIVO, fases: VIVO.fases.map((f) => (f.id === "fc" ? { ...f, tareas: [...(f.tareas ?? []), TC2] } : f)) };
+    const SUGERIDA = {
+      tipo: "tarea-cambia" as const,
+      clave: "tarea:tc2:cambia",
+      tareaId: "tc2",
+      faseId: "fc",
+      desde: fotoDeTarea(TC2),
+      a: { fase: "fb" },
+      motivo: "Parece de «Diseño»",
+      sugerida: "otra-fase" as const,
+    };
+    const b: Borrador = { ...BORRADOR, cambios: [...BORRADOR.cambios, SUGERIDA] };
+    const p = enElTurno({ borrador: b, vivo, excluidos: [SUGERIDA.clave] });
+    const g = p.resumen!.grupos.find((x) => x.fase === "fc")!;
+    expect(g.tareas.map((t) => t.clave), "el grupo de «Pruebas» trae algo más que la sugerida").toEqual([SUGERIDA.clave]);
+    const r = traducirOperaciones([{ op: "propuesta.recuperar", cambios: [String(g.numero)] }], p);
+    expect(r.canonicas).toEqual([]);
+    expect(r.rechazadas.map((x) => x.motivo)).toEqual([rechazoSoloSugeridas(`El ${g.numero}`)]);
+    expect(r.rechazadas[0].motivo).not.toContain("ya está así");
+    /* «Sí, muévela a «Diseño»» la marca: la cajita (y lo pendiente que relee el modelo) lo dice, con la semana en que cae.
+       La edición que la pone en rojo: no pasarle las sugeridas a `describirOperaciones` (diría «semana 1», como una
+       mudanza cualquiera sin semana, y la tarea cae en la suya). */
+    const [linea] = describirSobreLaPropuesta(p)([{ op: "tarea.mover-fase", taskId: "tc2", phaseId: "fb" }]);
+    expect(linea).toBe("«Validar las pruebas» se muda de «Pruebas» a «Diseño», semana 2, como sugiere la IA (se marca su casilla) — conserva su estado");
   });
 });
 

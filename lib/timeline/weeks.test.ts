@@ -29,6 +29,8 @@ import {
   fmtFull,
   etiquetaDeSemana,
   semanaDelProyecto,
+  fmtPhaseRange,
+  rangoEnElGantt,
   type PhaseSpanLike,
 } from "./weeks";
 
@@ -357,5 +359,22 @@ describe("L3 · etiquetaDeSemana: «Semana N · SK»", () => {
 
   it("sin el inicio de la fase (sin rango) dice solo la semana de la fase", () => {
     expect(etiquetaDeSemana(null, 1)).toEqual({ deLaFase: "Semana 2", delProyecto: null, corta: "Semana 2" });
+  });
+});
+
+/**
+ * Revisión de L1–L7 (#11): el rango de la fila de una fase en el Gantt va pegado al campo «inicia S» (base 0, la de la
+ * cabecera). Sin fecha de arranque decía «inicia S 2 · Semana 3–4»: la misma semana, en dos bases, en la misma fila.
+ */
+describe("revisión de L1–L7 · rangoEnElGantt: sin fecha de arranque, las columnas de la cabecera", () => {
+  it("⭐ una fase que arranca en S2 y dura 2 semanas se lee «S2–S3», no «Semana 3–4»", () => {
+    /* La edición que la pone en rojo: volver a `fmtPhaseRange` sin ancla (desde 1) en la fila del Gantt. */
+    const [f] = computePhaseRanges([{ durationWeeks: 2, startWeek: 2 }]);
+    expect(rangoEnElGantt(null, f)).toBe("S2–S3");
+    expect(rangoEnElGantt(null, { start: 5, end: 6 })).toBe("S5");
+    // Con fecha de arranque, las fechas de siempre.
+    expect(rangoEnElGantt(ANCHOR, f)).toBe(fmtPhaseRange(ANCHOR, f));
+    // La vista del cliente no cambia (fmtPhaseRange sigue desde 1).
+    expect(fmtPhaseRange(null, f)).toBe("Semana 3–4");
   });
 });

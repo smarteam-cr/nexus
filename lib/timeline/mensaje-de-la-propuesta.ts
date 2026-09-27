@@ -100,8 +100,10 @@ export const TITULOS_DEL_MENSAJE = {
   casiIgual: "Ajuste chico",
 } as const;
 
-/** La línea 4: lo verificable es que no tuvo reuniones ni notas (el paso 2 lee también el handoff y el cronograma). */
-export const LINEA_SIN_MATERIAL = "No elegiste reuniones ni notas: la IA armó las tareas sin saber qué pasó en el proyecto.";
+/** La línea 4: lo verificable es que no tuvo reuniones ni notas (el paso 2 lee también el handoff y el cronograma).
+ *  Revisión de L1–L7 (#8): habla de la IA, no del CSE. Decía «No elegiste reuniones ni notas», y una reunión elegida
+ *  que no le llegó (futura, o sin contenido todavía) no entra en las fuentes: el texto afirmaba algo falso. */
+export const LINEA_SIN_MATERIAL = "La IA no tuvo reuniones ni notas: armó las tareas sin saber qué pasó en el proyecto.";
 /** Antes de los chips de «Más». */
 export const TEXTO_DE_LAS_FUENTES = "Los cambios de fases salen de:";
 /** L7, en «Más»: «La IA sugiere mudar 5 tareas hechas a otra fase: vienen sin marcar.» */

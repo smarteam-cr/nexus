@@ -14,6 +14,8 @@
  * escribir una «S» que suma 1 en los archivos que arman lo que leen el CSE y el chat, y que el campo
  * «inicia S» del Gantt siga en la base de su cabecera.
  * P3b sumó `lib/timeline/vista-de-la-propuesta.ts`: sus chips y verbos («Pasar a Semana 3», «viene de la Semana 1»).
+ * La revisión de L1–L7 sumó `lib/timeline/operaciones.ts` (la cajita del chat, también «semana N del proyecto» en
+ * palabras) y el rango pegado al campo «inicia S» del Gantt (`rangoEnElGantt`).
  * La fuente se lee normalizada (`\r\n` → `\n`: hay archivos CRLF) y sin comentarios.
  */
 import fs from "node:fs";
@@ -49,6 +51,8 @@ describe("L3 (D4) · «S» con número es la semana del proyecto desde 0, en tod
       "lib/timeline/proposal-deltas.ts",
       // L3 P3b: la vista de la propuesta (los chips, los verbos y las casillas de fase del Gantt).
       "lib/timeline/vista-de-la-propuesta.ts",
+      // Revisión de L1–L7 (#4): la cajita del acuerdo y lo pendiente que relee el modelo (`describirOperaciones`).
+      "lib/timeline/operaciones.ts",
     ];
     for (const rel of archivos) {
       const src = soloCodigo(leerFuente(rel));
@@ -66,6 +70,23 @@ describe("L3 (D4) · «S» con número es la semana del proyecto desde 0, en tod
       expect(cuerpo.match(S_MAS_UNO) ?? [], nombre).toEqual([]);
       expect(cuerpo, `${nombre}: una «S» con número a mano (usa semanaDelProyecto o etiquetaDeSemana)`).not.toMatch(/`[^`]*\bS\$\{/);
     }
+  });
+
+  it("⛔ revisión de L1–L7: la semana del PROYECTO en palabras tampoco suma 1, y el rango de la fila del Gantt va en S", () => {
+    /* Las ediciones que la ponen en rojo: volver a «arranca en la semana ${o.semana + 1} del proyecto» en la cajita del
+       chat (#4: el chat decía «semana 13» con el Gantt en S12), o volver a `fmtPhaseRange` en el Gantt (#11: la fila sin
+       fecha de arranque decía «inicia S 2 · Semana 3–4»). */
+    for (const rel of ["lib/timeline/operaciones.ts", "lib/asistente/contexto-del-cronograma.ts", "lib/timeline/proposal-deltas.ts"]) {
+      const src = soloCodigo(leerFuente(rel));
+      expect(src.match(/semana \$\{[^}]*\+\s*1\s*\}[^`\n]*del proyecto/g) ?? [], rel).toEqual([]);
+    }
+    expect(soloCodigo(leerFuente("lib/timeline/operaciones.ts"))).toContain("semanaDelProyecto(o.semana)");
+    const gantt = soloCodigo(leerFuente("components/canvas/TimelineGantt.tsx"));
+    expect(gantt, "el Gantt pinta el rango de la fase desde 1 (usa rangoEnElGantt)").not.toContain("fmtPhaseRange(");
+    const desde = gantt.indexOf(">inicia S<");
+    expect(desde, "no encuentro el campo «inicia S»").toBeGreaterThan(-1);
+    const fila = gantt.slice(desde, gantt.indexOf("</span>", gantt.indexOf("/>", desde)));
+    expect(fila, "el rango pegado al campo no va en la base de su cabecera").toContain("rangoEnElGantt(anchor, range)");
   });
 
   it("⛔ el campo «inicia S» del Gantt cuenta como su cabecera (S0 = la primera columna)", () => {

@@ -36,6 +36,7 @@ import {
   handoffDeLaSalida,
   prometidoDelSnapshot,
   TOPE_DE_LA_CACHE,
+  VIDA_DEL_HANDOFF_MS,
 } from "./referencias-de-la-propuesta";
 import { leerReferenciasDeLaPropuesta } from "./leer-referencias";
 import { ID_ESTRUCTURA_CRONOGRAMA } from "@/lib/agents/estructura-cronograma";
@@ -147,6 +148,20 @@ describe("la caché acotada", () => {
     expect(c.has("t11")).toBe(false);
     expect(c.size).toBe(50);
   });
+
+  it("⭐ revisión de L1–L7 (#7): con `vidaMs`, una entrada vieja ya no está", () => {
+    /* La edición que la pone en rojo: una caché sin tiempo de vida (el handoff de la propuesta abierta quedaba el del
+       primer GET hasta reiniciar el proceso). */
+    expect(VIDA_DEL_HANDOFF_MS).toBe(5 * 60_000);
+    let t = 1_000;
+    const c = cacheAcotada<string>(TOPE_DE_LA_CACHE, VIDA_DEL_HANDOFF_MS, () => t);
+    c.set("p1:run", "10 semanas");
+    t += VIDA_DEL_HANDOFF_MS - 1;
+    expect(c.get("p1:run")).toBe("10 semanas");
+    t += 1;
+    expect(c.has("p1:run"), "la entrada vieja sigue").toBe(false);
+    expect(c.get("p1:run")).toBeUndefined();
+  });
 });
 
 describe("la lectura (leer-referencias.ts) y el GET", () => {
@@ -194,6 +209,33 @@ describe("la lectura (leer-referencias.ts) y el GET", () => {
       await leer("otro-token");
       expect(db.agentRunFindFirst, "otra propuesta, otra lectura").toHaveBeenCalledTimes(2);
     })();
+  });
+
+  it("⭐ revisión de L1–L7 (#7): sin handoff no se recuerda nada, y un handoff regenerado se ve pasados 5 minutos", async () => {
+    /* Las ediciones que la ponen en rojo: volver a guardar null (sin handoff en el primer GET, la comparación no aparecía
+       nunca para esa propuesta), o sacarle el tiempo de vida a la caché (el de 10 semanas quedaba aunque el agente
+       propusiera 14). */
+    db.agentRunFindFirst.mockResolvedValueOnce(null);
+    expect((await leer("run-sin-handoff"))?.handoff).toBeNull();
+    expect((await leer("run-sin-handoff"))?.handoff, "no se volvió a leer").toEqual({ semanas: 13, fecha: "2026-08-12T10:00:00.000Z" });
+    expect(db.agentRunFindFirst).toHaveBeenCalledTimes(2);
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-09-26T12:00:00.000Z"));
+      expect((await leer("run-regenerado"))?.handoff?.semanas).toBe(13);
+      db.agentRunFindFirst.mockResolvedValue({
+        id: "h2",
+        output: JSON.stringify({ timeline: { phases: [{ name: "A", durationWeeks: 14 }] } }),
+        createdAt: new Date("2026-09-26T12:01:00.000Z"),
+      });
+      vi.setSystemTime(new Date("2026-09-26T12:04:00.000Z"));
+      expect((await leer("run-regenerado"))?.handoff?.semanas, "dentro de los 5 minutos, el recordado").toBe(13);
+      vi.setSystemTime(new Date("2026-09-26T12:05:00.000Z"));
+      expect((await leer("run-regenerado"))?.handoff?.semanas, "pasados 5 minutos sigue el handoff viejo").toBe(14);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("⭐ con una propuesta del handoff no se compara contra el handoff (ni se lee)", async () => {

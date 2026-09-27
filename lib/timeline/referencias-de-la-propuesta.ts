@@ -166,6 +166,12 @@ export function handoffDeLaSalida(output: string | null | undefined, corrioEn: D
 
 /** Cuántas propuestas recuerda la caché del handoff (una entrada por token). */
 export const TOPE_DE_LA_CACHE = 50;
+/**
+ * Revisión de L1–L7 (#7): cuánto vive el handoff recordado de una propuesta. Sin esto, regenerar el handoff con una
+ * propuesta abierta no cambiaba «Contra el último handoff» hasta reiniciar el proceso (el token de la propuesta no
+ * cambia: `guardarPropuestaDelHandoff` no pisa una sin decidir).
+ */
+export const VIDA_DEL_HANDOFF_MS = 5 * 60_000;
 
 export interface CacheAcotada<V> {
   has(clave: string): boolean;
@@ -178,15 +184,30 @@ export interface CacheAcotada<V> {
  * Un `Map` que no pasa de `tope` entradas: al llenarse expulsa la más vieja (la primera que entró). La lectura del
  * handoff es una fila de `AgentRun` sin índice por proyecto y con una salida de hasta ~150 KB: se lee una vez por
  * propuesta abierta, no en cada GET. Vive en el proceso web; reiniciar la vacía, y eso está bien.
+ * Revisión de L1–L7 (#7): con `vidaMs`, una entrada más vieja que eso ya no está (`has` da false y se vuelve a leer).
+ * `ahora` lo inyectan los tests.
  */
-export function cacheAcotada<V>(tope: number = TOPE_DE_LA_CACHE): CacheAcotada<V> {
-  const m = new Map<string, V>();
+export function cacheAcotada<V>(
+  tope: number = TOPE_DE_LA_CACHE,
+  vidaMs: number | null = null,
+  ahora: () => number = () => Date.now(),
+): CacheAcotada<V> {
+  const m = new Map<string, { valor: V; en: number }>();
+  const viva = (clave: string): { valor: V } | null => {
+    const e = m.get(clave);
+    if (!e) return null;
+    if (vidaMs !== null && ahora() - e.en >= vidaMs) {
+      m.delete(clave);
+      return null;
+    }
+    return e;
+  };
   return {
-    has: (clave) => m.has(clave),
-    get: (clave) => m.get(clave),
+    has: (clave) => viva(clave) !== null,
+    get: (clave) => viva(clave)?.valor,
     set(clave, valor) {
       if (m.has(clave)) m.delete(clave);
-      m.set(clave, valor);
+      m.set(clave, { valor, en: ahora() });
       while (m.size > tope) {
         const vieja = m.keys().next();
         if (vieja.done) break;

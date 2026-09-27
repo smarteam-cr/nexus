@@ -15,7 +15,9 @@
  *      esperan; y (L3 P3d, desde que las casillas de las tareas viven en el Gantt) la casilla de espera en la
  *      vista pura (`vistaDeLaPropuesta`);
  *   4. (L3 P3d) el hook de la propuesta (`useBorradorDelCronograma`) con el mismo React mínimo: el cursor de
- *      «Siguiente número» es de la propuesta en pantalla.
+ *      «Siguiente número» es de la propuesta en pantalla;
+ *   5. (revisión de L1–L7, #2) la llegada: con el CSE escribiendo, el primer render de la propuesta ya está en «antes»;
+ *   6. (revisión de L1–L7, #3) «Siguiente número» (`useIrALaCasilla`) atiende cada pedido una sola vez.
  * El repo no tiene jsdom ni @testing-library: el React mínimo (abajo) lleva el estado, los efectos, las
  * refs y los callbacks de UN componente, y vuelve a pintar cuando cambia el estado. Alcanza para estos
  * dos, que no usan contexto ni DOM.
@@ -193,6 +195,7 @@ import { unidadesDelSiguiente, vistaDeLaPropuesta } from "./vista-de-la-propuest
 import { mensajeDeLaPropuesta } from "./mensaje-de-la-propuesta";
 import { leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import { useBorradorDelCronograma } from "@/components/canvas/useBorradorDelCronograma";
+import { useIrALaCasilla } from "@/components/canvas/useIrALaCasilla";
 
 // ── Lo común ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -744,11 +747,14 @@ describe("4 · «Siguiente número»: el hook recorre los números del Gantt de 
     const esperados = unidadesDelSiguiente(h.salida.resumen!.indice).map((u) => u.numero);
     expect(esperados).toHaveLength(14);
     expect(h.salida.vistaDelGantt, "sin la vista del Gantt").not.toBeNull();
-    expect(h.salida.posicion).toEqual({ actual: null, total: 14, primero: esperados[0] });
+    /* ⚠ ACTUALIZADA en la revisión de L1–L7 (#10), con esta razón: la posición trae el número del Gantt de la unidad y
+       cuántos «ya está» se saltan (el botón nombra el número real cuando no coincide con la posición). */
+    expect(h.salida.posicion).toEqual({ actual: null, total: 14, primero: esperados[0], numero: null, saltados: 0 });
     const recorridos: number[] = [];
     for (let i = 0; i < 14; i++) {
       recorridos.push(h.salida.siguiente(1)!.numero);
       expect(h.salida.posicion.actual, `después del clic ${i + 1}`).toBe(i + 1);
+      expect(h.salida.posicion.numero, `el número del clic ${i + 1}`).toBe(esperados[i]);
     }
     expect(recorridos).toEqual(esperados);
     // La vuelta, y atrás.
@@ -766,8 +772,116 @@ describe("4 · «Siguiente número»: el hook recorre los números del Gantt de 
   it("sin propuesta no hay números: «Siguiente» no va a ningún lado", () => {
     const h = mini.montar(useBorradorDelCronograma, { ...entrada, propuesta: null, token: null });
     expect(h.salida.vistaDelGantt).toBeNull();
-    expect(h.salida.posicion).toEqual({ actual: null, total: 0, primero: null });
+    expect(h.salida.posicion).toEqual({ actual: null, total: 0, primero: null, numero: null, saltados: 0 });
     expect(h.salida.siguiente(1)).toBeNull();
     h.desmontar();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// 5 · LA LLEGADA (L2), EN EL HOOK DE LA PROPUESTA (revisión de L1–L7, #2)
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("5 · la llegada: con el CSE escribiendo, el PRIMER render de la propuesta ya está en «antes»", () => {
+  /* Hasta la revisión, la llegada la decidía un efecto del canvas. Un efecto corre después de pintar: en ese commit el
+     Gantt ya había pasado a la propuesta (de solo lectura), el campo donde se escribía ya no estaba y el foco había caído
+     al body, así que «escribiendo» daba false y la guarda no protegía nunca. Acá se cuenta lo que devuelve CADA render:
+     el de la llegada tiene que salir en «antes», antes de cualquier efecto. */
+  const F = leerFixtureGrande();
+  const VIVO_G = vivoDelFixture(F);
+  type Entrada = Parameters<typeof useBorradorDelCronograma>[0];
+  const base: Entrada = { projectId: "p-llegada", propuesta: F.borrador, token: "tok-llegada", vivo: VIVO_G, tareas: "armando", hoy: null };
+  /** El hook, anotando el modo y la vista de cada render (lo que ve el canvas al pintar). */
+  const conRenders = (renders: string[]) => (p: Entrada) => {
+    const r = useBorradorDelCronograma(p);
+    renders.push(`${r.modo}:${r.vista}`);
+    return r;
+  };
+
+  it("⭐ escribiendo al llegar: el render de la llegada devuelve «barra:antes» y el foco se mira UNA vez", () => {
+    /* Las ediciones que la ponen en rojo: decidir la llegada en un efecto (el primer render de la llegada saldría en
+       «propuesta»: el Gantt de solo lectura desmonta el campo), o no mirar el foco. */
+    const renders: string[] = [];
+    let miradas = 0;
+    const h = mini.montar(conRenders(renders), { ...base, escribiendo: () => (miradas++, true) });
+    expect(h.salida.modo).toBe("armandose");
+    expect(miradas, "el foco se mira fuera de la llegada").toBe(0);
+    renders.length = 0;
+    h.cambiar({ tareas: "listas" });
+    expect(renders[0], "el primer render de la llegada muestra la propuesta").toBe("barra:antes");
+    expect(renders.every((x) => x === "barra:antes"), renders.join(" · ")).toBe(true);
+    expect(h.salida.vista).toBe("antes");
+    expect(miradas, "el foco se mira más de una vez").toBe(1);
+    // Una vez llegada, lo que pase con el foco ya no la cambia: alternar sigue siendo del CSE.
+    h.cambiar({ tareas: "listas", hoy: null });
+    expect(h.salida.vista).toBe("antes");
+    h.desmontar();
+  });
+
+  it("⭐ sin escribir, la propuesta llega a la vista; y si la barra ya estaba, no es una llegada", () => {
+    /* La edición que la pone en rojo: pasar a «antes» sin mirar el foco, o en cada cambio de modo. */
+    const renders: string[] = [];
+    const h = mini.montar(conRenders(renders), { ...base, projectId: "p-llegada-2", escribiendo: () => false });
+    renders.length = 0;
+    h.cambiar({ tareas: "listas" });
+    expect(renders[0]).toBe("barra:propuesta");
+    h.desmontar();
+    const yaEstaba = mini.montar(conRenders([]), { ...base, projectId: "p-llegada-3", tareas: "listas", escribiendo: () => true });
+    expect(yaEstaba.salida.vista, "montar con la barra no es una llegada").toBe("propuesta");
+    yaEstaba.desmontar();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// 6 · «SIGUIENTE NÚMERO» CENTRA SU CASILLA UNA VEZ POR PEDIDO (revisión de L1–L7, #3)
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("6 · `useIrALaCasilla`: alternar después de un «Siguiente» no vuelve a centrar ni roba el foco", () => {
+  /* El Gantt le pasa el nonce y el selector del pedido; en la vista «antes» los dos son null. Con el efecto de antes
+     (dependencias `[nonce, selector]`), volver a «Ver la propuesta» recuperaba el nonce viejo y centraba otra vez. */
+  it("⭐ un pedido se atiende una vez: volver de «antes» (dos veces) no centra ni enfoca otra vez; el pedido siguiente, sí", () => {
+    /* La edición que la pone en rojo: atender el pedido cada vez que cambian las dependencias (sin la ref del último
+       nonce atendido). */
+    const frames: Array<() => void> = [];
+    const centrar = vi.fn();
+    const enfocar = vi.fn();
+    const casilla = { scrollIntoView: centrar, focus: enfocar };
+    vi.stubGlobal("requestAnimationFrame", (f: () => void) => frames.push(f));
+    vi.stubGlobal("cancelAnimationFrame", (k: number) => {
+      frames[k - 1] = () => {};
+    });
+    vi.stubGlobal("document", { querySelector: vi.fn(() => casilla) });
+    const correrFrames = () => {
+      for (const f of frames.splice(0)) f();
+    };
+    try {
+      type Pedido = { nonce: number | null; selector: string | null };
+      const inicial: Pedido = { nonce: null, selector: null };
+      const h = mini.montar((p: Pedido) => useIrALaCasilla(p.nonce, p.selector), inicial);
+      correrFrames();
+      expect(centrar).not.toHaveBeenCalled();
+      // «Siguiente número»: centra y enfoca.
+      h.cambiar({ nonce: 1, selector: '[data-casilla="grupo:f02"][data-lugar="grupo"]' });
+      correrFrames();
+      expect(centrar).toHaveBeenCalledTimes(1);
+      expect(centrar).toHaveBeenCalledWith({ block: "center" });
+      expect(enfocar).toHaveBeenCalledWith({ preventScroll: true });
+      // «Ver como estaba antes» y «Ver la propuesta», dos veces.
+      for (let i = 0; i < 2; i++) {
+        h.cambiar({ nonce: null, selector: null });
+        correrFrames();
+        h.cambiar({ nonce: 1, selector: '[data-casilla="grupo:f02"][data-lugar="grupo"]' });
+        correrFrames();
+      }
+      expect(centrar, "al volver de «antes» centró otra vez la última casilla").toHaveBeenCalledTimes(1);
+      expect(enfocar, "al volver de «antes» robó el foco").toHaveBeenCalledTimes(1);
+      // El otro pedido (otro nonce), sí.
+      h.cambiar({ nonce: 2, selector: '[data-casilla="fase:f03:durationWeeks"][data-lugar="fase"]' });
+      correrFrames();
+      expect(centrar).toHaveBeenCalledTimes(2);
+      h.desmontar();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

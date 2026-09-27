@@ -120,10 +120,8 @@ import {
   juntarObservaciones,
   MENSAJE_PROPUESTA_ABIERTA,
   mensajeDeLaPropuestaAbierta,
-  modoDeLaPropuesta,
   observacionesDeLaFranja,
   observacionesParaElPaso2,
-  pasarAAntesAlLlegar,
   textoDelChipDeEspera,
   traeCambiosDeFases,
   versionDelBorrador,
@@ -1574,11 +1572,16 @@ export default function CronogramaCanvas({
     guardarCasillas: canEdit ? guardarCasillas : undefined,
     // L3 P3d: las semanas que «ya pasaron» en la vista de la propuesta (null antes de hidratar).
     hoy: hydratedNow,
+    /* L2 · LA LLEGADA (revisión de L1–L7, #2): el hook mira el foco en el render en que la propuesta termina de armarse,
+       ANTES de que el Gantt pase a la propuesta y desmonte el campo donde se escribía. */
+    escribiendo: () => typeof document !== "undefined" && esCampoDeEscritura(document.activeElement as HTMLElement | null),
   });
   /* L2 (2026-09-26): qué muestra la pantalla de la propuesta. Mientras el paso 2 arma sus tareas
      («armandose») NO hay propuesta en pantalla: ni barra ni vista de la propuesta; el Gantt es el de hoy,
-     editable, con la línea «Armando la propuesta…». Aparece entera cuando llegan las tareas. */
-  const modo = modoDeLaPropuesta({ hayBorrador, conCambios: !!revision.resumen, tareas: estadoDeLasTareasEnPantalla });
+     editable, con la línea «Armando la propuesta…». Aparece entera cuando llegan las tareas.
+     Revisión de L1–L7 (#2): lo calcula el hook (`modoDeLaPropuesta`, con lo mismo), que decide la vista de la llegada
+     en el mismo render. */
+  const modo = revision.modo;
   /* Solo quien edita ve la vista de la propuesta: la barra que la explica (y la alterna) es suya. Quien
      solo mira ve el cronograma actual, que es el que rige hasta que alguien aplique. */
   const verPropuesta = canEdit && hayBorrador && modo === "barra" && !!revision.proyeccion && revision.vista === "propuesta";
@@ -1612,29 +1615,26 @@ export default function CronogramaCanvas({
     revisionRef.current = revision;
   });
   /* L2 · LA LLEGADA: la propuesta terminó de armarse (el modo pasa de «armandose» a «barra»). Si el CSE está
-     escribiendo en un campo, el Gantt no se le cambia bajo el cursor: la barra aparece en la vista «antes». El
-     aviso lo da el seguimiento de la corrida, con la misma mirada al foco (`desenlaceDelSeguimiento` con
-     `escribiendo`): «Llegó la propuesta: la ves con «Ver la propuesta».». Va después del efecto de
-     `revisionRef`: lee la revisión de este render. */
-  const modoAnteriorRef = useRef(modo);
-  useEffect(() => {
-    const antes = modoAnteriorRef.current;
-    modoAnteriorRef.current = modo;
-    const r = revisionRef.current;
-    const escribiendo = esCampoDeEscritura(document.activeElement as HTMLElement | null);
-    if (pasarAAntesAlLlegar({ antes, ahora: modo, escribiendo, vista: r.vista })) r.alternar();
-  }, [modo]);
+     escribiendo en un campo, el Gantt no se le cambia bajo el cursor: la barra aparece en la vista «antes». Lo decide
+     el hook en el MISMO render (`escribiendo`, arriba): un efecto acá corría después de pintar, con el campo ya
+     desmontado (revisión de L1–L7, #2). El aviso lo da el seguimiento de la corrida, con la misma mirada al foco
+     (`desenlaceDelSeguimiento` con `escribiendo`), que corre antes de ese render: «Llegó la propuesta: la ves con
+     «Ver la propuesta».». */
   /* L3 P3d · «SIGUIENTE NÚMERO»: despliega la fase del próximo número del Gantt, la centra y enfoca su casilla (lo
      hace el Gantt con `irA`; el `nonce` repite el pedido aunque sea el mismo número). En la vista «antes», primero
      pasa a la propuesta. Los atajos `n` y `p`, en la vista de la propuesta, sin modificadores y fuera de un campo
      de escritura (`atajoDelSiguiente`). */
-  const [irA, setIrA] = useState<{ unidad: UnidadNumerada; nonce: number } | null>(null);
+  /* Revisión de L1–L7 (#3): el pedido va atado a la propuesta en la que se hizo (`token`): con otra propuesta en la misma
+     pantalla, el Gantt no lo recibe. El `nonce` nunca vuelve a empezar (el Gantt atiende cada uno una sola vez). */
+  const [irA, setIrA] = useState<{ token: string | null; unidad: UnidadNumerada; nonce: number } | null>(null);
   const irAlSiguiente = (dir: 1 | -1) => {
     const unidad = revision.siguiente(dir);
     if (!unidad) return;
     if (revision.vista !== "propuesta") revision.alternar();
-    setIrA((prev) => ({ unidad, nonce: (prev?.nonce ?? 0) + 1 }));
+    const token = proposalMeta.current.runId;
+    setIrA((prev) => ({ token, unidad, nonce: (prev?.nonce ?? 0) + 1 }));
   };
+  const irAEnElGantt = irA && irA.token === proposalMeta.current.runId ? { unidad: irA.unidad, nonce: irA.nonce } : null;
   const irAlSiguienteRef = useRef(irAlSiguiente);
   useEffect(() => {
     irAlSiguienteRef.current = irAlSiguiente;
@@ -2502,7 +2502,7 @@ export default function CronogramaCanvas({
         lectura: leida.ok ? { hayPropuesta: leida.propuesta !== null, tareas: leida.tareas, recalculo: leida.tareas?.recalculo ?? null } : null,
         aviso: r.timelineSyncError,
         recalculo: recalcula,
-        // L2: si el CSE está escribiendo, la barra llega en «antes» (el efecto de la llegada) y el aviso lo dice.
+        // L2: si el CSE está escribiendo, la barra llega en «antes» (el hook, en el render de la llegada) y el aviso lo dice.
         escribiendo: esCampoDeEscritura(document.activeElement as HTMLElement | null),
       });
       if (desenlace.que === "seguir") {
@@ -3453,9 +3453,10 @@ export default function CronogramaCanvas({
           onMarcar: revision.marcar,
           onMarcarVarios: revision.marcarVarios,
           trabajando: aplicandoBorrador || descartando,
-          irA,
+          irA: irAEnElGantt,
           desplegarAlEntrar,
-          cierre: revision.resumen ? cierreParaElGantt(revision.resumen) : null,
+          // Revisión de L1–L7 (#9): con el cierre fijado a mano, el chip dice que aplicar no lo cambia.
+          cierre: revision.resumen ? cierreParaElGantt(revision.resumen, closeOverride || null) : null,
           recalculo: recalculoDeLaBarra,
           // L4: el porqué de cada fase muestra su fuente solo si calza con una real (`fuenteDelMotivo`).
           fuentes: referenciasEnPantalla?.fuentes ?? null,

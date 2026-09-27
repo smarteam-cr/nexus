@@ -376,20 +376,26 @@ describe("L6 · la ruta del paso 2 (escaneo)", () => {
 
   it("⭐ `explicar` llama medido (su agente, su corrida), con Haiku, 1500 tokens, 15 s y sin reintentos", () => {
     /* La edición que la pone en rojo: llamar sin el contexto (el gasto quedaría sin dueño, cargado al paso 2), sin
-       tope de tiempo o con reintentos (la fusión esperaría más de 15 s). */
+       tope de tiempo o con reintentos (la fusión esperaría más de 15 s), o con otro modelo.
+       ⚠ ACTUALIZADA en la revisión de L1–L7 (#13), con esta razón: miraba todo el tramo de la fusión, y L7 metió ahí la
+       llamada de `ubicarHechas` con el mismo modelo, temperatura, opciones, contexto y corrida: esas cinco aserciones
+       las cumplía la otra llamada aunque `explicar` no las tuviera. Ahora miran SOLO el bloque de `explicar` (`suya`),
+       como hace la guarda de L7 con el suyo (hechas-fuera-de-lugar.test.ts). */
     const fusion = tramo(RUTA, "await fusionarDetalleEnElBorrador({", "return NextResponse.json({");
-    expect(contiene(fusion, "explicar: ({ vivo, cambios }) =>")).toBe(true);
-    expect(contiene(fusion, "explicarConLasFuentesNuevas({")).toBe(true);
-    expect(contiene(fusion, "conContextoDeIA(")).toBe(true);
-    expect(contiene(fusion, 'agentSlug: "explicacion-de-la-propuesta",')).toBe(true);
-    expect(contiene(fusion, "agentRunId: run.id,")).toBe(true);
-    expect(contiene(fusion, 'origen: "timeline/explicacion",')).toBe(true);
-    expect(contiene(fusion, 'model: "claude-haiku-4-5",')).toBe(true);
-    expect(contiene(fusion, "max_tokens: 1500,")).toBe(true);
-    expect(contiene(fusion, "temperature: 0,")).toBe(true);
-    expect(contiene(fusion, "{ timeout: 15_000, maxRetries: 0 }")).toBe(true);
+    const suya = tramo(fusion, "explicar: ({ vivo, cambios }) =>", "ubicarHechas: ({ vivo, tocadas }) =>");
+    expect(contiene(suya, "explicarConLasFuentesNuevas({")).toBe(true);
+    expect(contiene(suya, "conContextoDeIA(")).toBe(true);
+    expect(contiene(suya, 'agentSlug: "explicacion-de-la-propuesta",')).toBe(true);
+    expect(contiene(suya, "agentRunId: run.id,")).toBe(true);
+    expect(contiene(suya, 'origen: "timeline/explicacion",')).toBe(true);
+    expect(contiene(suya, 'model: "claude-haiku-4-5",')).toBe(true);
+    expect(contiene(suya, "max_tokens: 1500,")).toBe(true);
+    expect(contiene(suya, "temperature: 0,")).toBe(true);
+    expect(contiene(suya, "{ timeout: 15_000, maxRetries: 0 }")).toBe(true);
+    // Una sola llamada al modelo en el bloque: lo de arriba es de ESTA llamada.
+    expect(suya.match(/anthropic\.messages\.create\(/g)?.length, "el bloque de `explicar` no es el de una sola llamada").toBe(1);
     // Sin `triggeredByEmail: undefined`: pisaría el de la corrida (el contexto anidado se SUMA al de afuera).
-    expect(tramo(fusion, "conContextoDeIA(", "anthropic.messages.create(")).not.toContain("triggeredByEmail");
+    expect(tramo(suya, "conContextoDeIA(", "anthropic.messages.create(")).not.toContain("triggeredByEmail");
   });
 
   it("⭐ ningún seed ni script nombra el agente (vive en código, no en la base)", () => {

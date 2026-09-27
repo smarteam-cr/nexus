@@ -1049,3 +1049,27 @@ describe("E4 P1 · `fase.nota`: la nota de la fase que lee el cliente", () => {
     expect(linea).toBe("La nota de «Sales Hub», la que lee el cliente, pasa a: «Otra.» (hoy: «La de hoy.»)");
   });
 });
+
+/**
+ * Revisión de L1–L7 (#4): la línea de `fase.arranque-relativo` (la cajita que aprueba el CSE y lo que el modelo relee en
+ * [LO QUE SIGUE PENDIENTE]) cuenta la semana del PROYECTO desde 0, como la cabecera del Gantt, el campo «inicia S» y el
+ * contexto del chat. Sumaba 1: el modelo emitía `semana: 12`, la cajita decía «semana 13» y el Gantt, «S12».
+ */
+describe("⭐ revisión de L1–L7 · el arranque de una fase, en la semana del proyecto", () => {
+  it("⭐ `semana: 12` se lee «S12» (hoy: S8), nunca «semana 13»", () => {
+    /* La edición que la pone en rojo: volver a `semana ${o.semana + 1}` (o a sumar 1 en «hoy»). */
+    const vivo = {
+      ancla: null,
+      fases: [{ id: "f3", name: "Integraciones", durationWeeks: 6, startWeek: 8, sessionCount: null, notes: null, activityType: null }],
+    };
+    const [conPropuesta] = describirOperaciones(cronograma(), [{ op: "fase.arranque-relativo", phaseId: "f3", semana: 12 }], {
+      propuesta: { vivo, tituloDeClave: () => null, confirmacion: "" },
+    });
+    expect(conPropuesta).toBe("«Integraciones» arranca en la S12 del proyecto (hoy: S8)");
+    const [sinPropuesta] = describirOperaciones(cronograma(), [{ op: "fase.arranque-relativo", phaseId: "f3", semana: 12 }]);
+    expect(sinPropuesta).toContain("S12");
+    expect(sinPropuesta).not.toMatch(/\b13\b/);
+    const [tras] = describirOperaciones(cronograma(), [{ op: "fase.arranque-relativo", phaseId: "f3", semana: null }]);
+    expect(tras).toBe("«Integraciones» arranca cuando termina la anterior");
+  });
+});
