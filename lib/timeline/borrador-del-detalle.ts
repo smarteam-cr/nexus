@@ -76,6 +76,7 @@ import { AVISO_PROPUESTA_PENDIENTE, faseDeSemanaCero, MENSAJE_ESTRUCTURA_EN_CURS
 import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
 import { hitosDelProyecto, type GuardianDeHito, type Hito } from "./hitos";
 import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy, sinReprogramacion } from "./reprogramar-desde-hoy";
 import { tieneVozDeHandoffPropia } from "./semana-cero";
 import {
   cambiosDeTareasDelDetalle,
@@ -431,6 +432,11 @@ export async function prevalidarPedidoDeTareas(
  *     recálculo) y con fecha de arranque, la MISMA escritura guarda EL RELOJ (`hoy`: el instante, la semana de hoy y la
  *     foto del interruptor, `relojDeLaPropuesta`). En el token se recalcula en cada marca (un reintento otra semana lee
  *     la semana nueva); si ya no corresponde, el viejo se quita. El recálculo conserva el del guardado (no marca uno).
+ *   · M4 (2026-09-27, D4): con el reloj, la MISMA escritura lleva LA REPROGRAMACIÓN de lo atrasado
+ *     (lib/timeline/reprogramar-desde-hoy.ts), en las dos ramas: así corre aunque el paso 1 no haya propuesto nada, y el
+ *     paso 2 ve la estructura ya reprogramada. En el token, la de una marca anterior se quita primero
+ *     (`sinReprogramacion`) y se calcula de nuevo desde hoy. El recálculo, «Regenerar» de una fase y «primera» no
+ *     reprograman.
  * null = marcado. Si la escritura no entra (otra pestaña, otra persona), no se pisa nada.
  */
 export async function marcarTareasEnCurso(i: {
@@ -466,21 +472,23 @@ export async function marcarTareasEnCurso(i: {
       select: { source: true },
     });
     const pedido = pedidoDelCronograma(tareas);
-    // M3: el ancla se lee solo cuando el reloj puede ir («Regenerar todo»).
-    const reloj =
-      pedido === "regenerar" && !i.soloFase
-        ? relojDeLaPropuesta({ pedido, soloFase: i.soloFase, ancla: await anclaDelCronograma(i.timelineId), ahora })
-        : null;
     const vacio = borradorVacio({
       pedido,
       corrida: i.corrida,
       observaciones: i.pedido.observaciones ?? [],
       soloFase: i.soloFase,
-    });
+    }) as unknown as Record<string, unknown>;
+    /* M3 + M4: el cronograma (el ancla, las fases con sus tareas y el pipeline) se lee solo cuando el reloj puede ir
+       («Regenerar todo»). Con cambios de la reprogramación, el vacío deja de ser «el vacío» (D4): nace con cambios de
+       fases, como cuando el paso 1 propone algo. */
+    const escrito =
+      pedido === "regenerar" && !i.soloFase
+        ? conElReloj(vacio, await cronogramaParaElReloj(i.timelineId), { pedido, soloFase: i.soloFase, ahora })
+        : vacio;
     const escrita = await prisma.projectTimeline.updateMany({
       where: { id: i.timelineId, pendingProposal: { equals: Prisma.DbNull } },
       data: {
-        pendingProposal: { ...vacio, ...(reloj ? { hoy: reloj } : {}) } as unknown as Prisma.InputJsonValue,
+        pendingProposal: escrito as unknown as Prisma.InputJsonValue,
         pendingProposalRunId: i.corrida,
       },
     });
@@ -488,41 +496,65 @@ export async function marcarTareasEnCurso(i: {
   }
   const tl = await prisma.projectTimeline.findUnique({
     where: { id: i.timelineId },
-    // M3: y el ancla, para el reloj.
-    select: { pendingProposal: true, pendingProposalRunId: true, anchorStartDate: true },
+    // M3: y el ancla, para el reloj. M4: y las fases con sus tareas y el pipeline, para la reprogramación.
+    select: { pendingProposal: true, pendingProposalRunId: true, ...SELECT_DEL_CRONOGRAMA_PARA_EL_RELOJ },
   });
   if (!tl) return CAMBIO;
   const veto = vetoDelGuardado(tl.pendingProposal, tl.pendingProposalRunId, i.pedido);
   if (veto) return veto;
-  // M3: sin el reloj de una marca anterior; si corresponde, va el de ahora.
-  const { hoy: _relojViejo, ...guardado } = tl.pendingProposal as Record<string, unknown>;
-  void _relojViejo;
+  /* M3 + M4: sin el reloj ni la reprogramación de una marca anterior (un reintento otra semana se recalcula desde lo vivo
+     más lo de la IA, nunca encima de lo reprogramado); si corresponde, van los de ahora, en esta misma escritura. */
+  const guardado = sinReprogramacion(tl.pendingProposal as Record<string, unknown>);
   const leido = leerBorrador(guardado);
-  const reloj = relojDeLaPropuesta({
-    pedido: leido?.pedido ?? null,
-    soloFase: leido?.soloFase ?? i.soloFase,
-    ancla: tl.anchorStartDate?.toISOString() ?? null,
-    ahora,
-  });
   const version = i.pedido.version as number;
   const escrita = await prisma.projectTimeline.updateMany({
     where: { id: i.timelineId, pendingProposalRunId: i.pedido.token, pendingProposal: { path: ["version"], equals: version } },
     data: {
       pendingProposal: {
-        ...guardado,
+        ...conElReloj(guardado, tl, { pedido: leido?.pedido ?? null, soloFase: leido?.soloFase ?? i.soloFase, ahora }),
         version: version + 1,
         tareas: { corrida: i.corrida, listas: false },
-        ...(reloj ? { hoy: reloj } : {}),
       } as unknown as Prisma.InputJsonValue,
     },
   });
   return escrita.count === 0 ? CAMBIO : null;
 }
 
-/** M3: la fecha de arranque del cronograma (ISO, como `vivoDeLaBase`), o null. */
-async function anclaDelCronograma(timelineId: string): Promise<string | null> {
-  const tl = await prisma.projectTimeline.findUnique({ where: { id: timelineId }, select: { anchorStartDate: true } });
-  return tl?.anchorStartDate?.toISOString() ?? null;
+interface CronogramaParaElReloj {
+  anchorStartDate: Date | null;
+  phases: FaseLeida[];
+  project: { hubspotPipelineId: string | null } | null;
+}
+
+/** M3 + M4: el cronograma para el reloj del vacío, o null si ya no está. */
+async function cronogramaParaElReloj(timelineId: string): Promise<CronogramaParaElReloj | null> {
+  return prisma.projectTimeline.findUnique({ where: { id: timelineId }, select: SELECT_DEL_CRONOGRAMA_PARA_EL_RELOJ });
+}
+
+/**
+ * M3 + M4 (2026-09-27, D2, D4, D11): el JSON que escribe la marca, con EL RELOJ y LA REPROGRAMACIÓN de lo atrasado si
+ * corresponde («Regenerar todo» con fecha de arranque, `relojDeLaPropuesta`); si no, tal cual. La reprogramación se calcula
+ * con la política del reloj (la foto de `POLITICA_DE_ATRASOS` que hace `relojDeLaPropuesta`, su único lector) sobre lo
+ * vivo de ahora y lo que ya trae el borrador (lo de la IA del paso 1); con «avisar» no cambia nada y el reloj va igual.
+ * `guardado` llega sin reprogramación ni reloj (`sinReprogramacion`, o el vacío recién nacido). La versión la pone quien
+ * escribe.
+ */
+function conElReloj(
+  guardado: Record<string, unknown>,
+  tl: CronogramaParaElReloj | null,
+  i: { pedido: PedidoDelBorrador | null; soloFase: string | null | undefined; ahora: Date },
+): Record<string, unknown> {
+  const reloj = relojDeLaPropuesta({ ...i, ancla: tl?.anchorStartDate?.toISOString() ?? null });
+  const borrador = reloj ? leerBorrador(guardado) : null;
+  if (!reloj || !tl || !borrador) return guardado;
+  const r = reprogramarDesdeHoy({
+    vivo: vivoDeLaBase(tl.anchorStartDate, tl.phases),
+    borrador,
+    hoy: i.ahora,
+    politica: reloj.politica,
+    conSemanaCero: !tieneVozDeHandoffPropia(tl.project?.hubspotPipelineId ?? null),
+  });
+  return r ? conLaReprogramacion(guardado, r) : { ...guardado, hoy: reloj };
 }
 
 /**
@@ -580,6 +612,14 @@ export const SELECT_DE_FASES_CON_TAREAS = {
     },
   },
 };
+
+/** M3 + M4: lo que se lee del cronograma para el reloj y la reprogramación (`marcarTareasEnCurso`): el ancla, las fases
+ *  con sus tareas (como `vivoDeLaBase`) y el pipeline (la Semana 0, D1). */
+const SELECT_DEL_CRONOGRAMA_PARA_EL_RELOJ = {
+  anchorStartDate: true,
+  phases: SELECT_DE_FASES_CON_TAREAS,
+  project: { select: { hubspotPipelineId: true } },
+} as const;
 
 /** YYYY-MM-DD de una fecha fijada a mano, igual que la ve la pantalla en el cable (ISO → día). */
 const diaDe = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);

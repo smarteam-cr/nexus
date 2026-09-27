@@ -35,9 +35,12 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 import {
   borradorVacio,
   claveDeTareaQueSeVa,
+  esVacioEsperandoTareas,
   fotoDeTarea,
   leerBorrador,
+  modoDeLaPropuesta,
   planDeAplicacion,
+  traeCambiosDeFases,
   type Borrador,
   type Cambio,
   type CambioTareaCambia,
@@ -60,6 +63,8 @@ import { pipelineByKey } from "@/lib/projects/kind";
 import { tareasTocadas } from "./hechas-fuera-de-lugar";
 import { explicacionEnPantalla, huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 import { observacionDeLasQueNoEntran } from "./hitos";
+import { porQueDeSoloLectura } from "./propuesta-para-el-chat";
+import { leerFixtureGrande } from "./__fixtures__/propuesta-grande";
 import {
   avisosDeLaMedicion,
   medirM2,
@@ -995,7 +1000,10 @@ describe("M3 · el reloj de la propuesta y lo que ya pasó", () => {
 
     // El vacío de «Regenerar todo»: hay tareas de la IA y fecha de arranque.
     db.timelineTask.findMany.mockResolvedValue([{ source: "HUMAN" }, { source: "AGENT" }]);
-    db.projectTimeline.findUnique.mockResolvedValue({ anchorStartDate: ANCLA });
+    /* 2026-09-27, M4 P4b: la marca del vacío ya no lee solo la fecha de arranque: lee el cronograma entero (las fases con
+       sus tareas y el pipeline) para reprogramar lo atrasado en la misma escritura. FASES_M3 está al día (nada que
+       reprogramar): lo que se mira acá sigue siendo el reloj. */
+    db.projectTimeline.findUnique.mockResolvedValue({ anchorStartDate: ANCLA, phases: FASES_M3, project: { hubspotPipelineId: CUSTOMER_SUCCESS } });
     expect(await marcar({ token: null, version: null })).toBeNull();
     expect(escrito().hoy, "el vacío de «Regenerar todo» sin reloj").toEqual(RELOJ);
     expect(leerBorrador(JSON.parse(JSON.stringify(escrito())))?.hoy, "el reloj guardado no se lee").toEqual(RELOJ);
@@ -1126,5 +1134,191 @@ describe("M3 · el reloj de la propuesta y lo que ya pasó", () => {
     ]);
     expect(escrito().observaciones).toContain("No entra 1 tarea de la IA: cae en una semana que ya pasó.");
     expect(escrito().hoy, "la fusión perdió el reloj").toEqual(RELOJ);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── M4 P4b · la marca del paso 2 reprograma lo atrasado ──────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * M4 P4b (spec del replanteo §5.3, 2026-09-27; en el orden del plan, lo que decidió Elías). `marcarTareasEnCurso` corre la
+ * reprogramación (lib/timeline/reprogramar-desde-hoy.ts) en «Regenerar todo», en sus dos ramas y en la MISMA escritura que
+ * el reloj: el paso 2 ve la estructura ya reprogramada. Un reintento otra semana se recalcula desde lo vivo más lo de la
+ * IA, nunca encima de lo reprogramado.
+ */
+describe("M4 P4b · la marca del paso 2 reprograma lo atrasado", () => {
+  const CUSTOMER_SUCCESS = pipelineByKey("customer-success").hubspotPipelineId;
+  const HOY = new Date("2026-09-26T12:00:00-06:00"); // S18 con el arranque de Wherex
+  const LA_SEMANA_QUE_VIENE = new Date("2026-10-03T12:00:00-06:00"); // S19
+  const ANCLA = new Date("2026-05-19T00:00:00.000Z");
+  const conInicio = (f: ReturnType<typeof faseDB>, startWeek: number) => ({ ...f, startWeek });
+  /** «Diseño» (S2–S5) empezó y quedó atrasado; «Pruebas» (S6–S7) ni empezó; «Cierre» va detrás, contiguo. */
+  const FASES_M4 = [
+    faseDB("s0", "Semana 0", 0, 2, "DONE", [tareaDB("k1", "Sesión de kickoff", 0, { status: "DONE", type: "SESSION" })]),
+    conInicio(
+      faseDB("d", "Diseño", 1, 4, "IN_PROGRESS", [
+        tareaDB("d0", "Mapear procesos", 0, { status: "DONE" }),
+        tareaDB("d1", "Definir pipeline", 1),
+        tareaDB("d2", "Armar reportes", 3),
+      ]),
+      2,
+    ),
+    conInicio(faseDB("p", "Pruebas", 2, 2, "PENDING", [tareaDB("p1", "Probar flujos", 0)]), 6),
+    faseDB("c", "Cierre", 3, 1, "PENDING", [tareaDB("c1", "Sesión de cierre", 0, { type: "SESSION" })]),
+  ];
+  /** Lo que la IA propuso en el paso 1: «Pruebas» de 2 a 3 semanas (una sin empezar: se queda). */
+  const DE_LA_IA = {
+    tipo: "fase-cambia",
+    clave: "fase:p:durationWeeks",
+    faseId: "p",
+    fase: "Pruebas",
+    campo: "durationWeeks",
+    desde: 2,
+    a: 3,
+    motivo: "Tus instrucciones piden más pruebas.",
+  };
+  const delPaso1 = () => ({
+    ...borradorVacio({ pedido: "regenerar", corrida: "run-1" }),
+    version: 3,
+    tareas: { corrida: null, listas: false },
+    cambios: [DE_LA_IA],
+  });
+  const enLaBaseM4 = (guardado: unknown) =>
+    db.projectTimeline.findUnique.mockImplementation(async () => ({
+      pendingProposal: JSON.parse(JSON.stringify(guardado)),
+      pendingProposalRunId: "run-1",
+      anchorStartDate: ANCLA,
+      project: { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS },
+      phases: FASES_M4,
+    }));
+  const escrito = () =>
+    JSON.parse(JSON.stringify(db.projectTimeline.updateMany.mock.calls.at(-1)![0].data.pendingProposal)) as Record<string, unknown>;
+  const delSistema = (g: Record<string, unknown>) =>
+    (g.cambios as Cambio[]).flatMap((c) =>
+      c.tipo === "fase-cambia" && c.desdeHoy
+        ? [`${c.faseId}:${c.campo}:${String(c.a)}`]
+        : c.tipo === "tarea-cambia" && c.desdeHoy
+          ? [`${c.tareaId}@${c.a.weekIndex}`]
+          : [],
+    );
+
+  it("⭐ reintento: marcada en la S18 y otra vez en la S19, la segunda se reprograma desde la S19, sin nada de la primera", async () => {
+    /* La edición que la pone en rojo: reprogramar sobre la reprogramación vieja (en el token, quitar solo el reloj y no
+       `sinReprogramacion`): la estructura supuesta ya traía lo reprogramado, las claves se repetían y la IA quedaba
+       reemplazada por el sistema. */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    enLaBaseM4(delPaso1());
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: "run-1", version: 3 }, corrida: "run-t", ahora: HOY })).toBeNull();
+    expect(db.projectTimeline.updateMany, "el reloj y la reprogramación en dos escrituras").toHaveBeenCalledTimes(1);
+    const primera = escrito();
+    expect((primera.hoy as { semana: number }).semana).toBe(18);
+    // «Diseño»: lo que falta arranca en la S18 ((18 − 2) + 3); «Pruebas» espera a que termine (S21).
+    expect(delSistema(primera)).toEqual(["d:durationWeeks:19", "p:startWeek:21", "d1@16", "d2@18"]);
+    expect(primera.version).toBe(4);
+
+    // La corrida falla y el CSE vuelve a intentar la semana siguiente, sobre lo que quedó guardado.
+    enLaBaseM4(primera);
+    expect(
+      await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: "run-1", version: 4 }, corrida: "run-t", ahora: LA_SEMANA_QUE_VIENE }),
+    ).toBeNull();
+    const segunda = escrito();
+    expect((segunda.hoy as { semana: number }).semana).toBe(19);
+    expect(delSistema(segunda), "la segunda se reprogramó encima de la primera").toEqual([
+      "d:durationWeeks:20",
+      "p:startWeek:22",
+      "d1@17",
+      "d2@19",
+    ]);
+    const claves = (segunda.cambios as Cambio[]).map((c) => c.clave);
+    expect(new Set(claves).size, "claves repetidas").toBe(claves.length);
+    expect((segunda.cambios as Cambio[]).filter((c) => c.clave === DE_LA_IA.clave), "lo de la IA").toEqual([DE_LA_IA]);
+    // Lo mismo que una primera marca en la S19.
+    enLaBaseM4(delPaso1());
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: "run-1", version: 3 }, corrida: "run-t", ahora: LA_SEMANA_QUE_VIENE });
+    expect({ ...segunda, version: 0 }).toEqual({ ...escrito(), version: 0 });
+  });
+
+  it("⭐ el vacío con lo reprogramado deja de ser «el vacío»: con la corrida fallida hay barra y el chat no queda en solo lectura", async () => {
+    /* La edición que la pone en rojo: reprogramar solo en la rama del token (el vacío nacía sin cambios y, si el paso 2
+       fallaba, quedaba en «vacio-fallido»: solo descartar, y lo atrasado sin reprogramar). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    db.timelineTask.findMany.mockResolvedValue([{ source: "AGENT" }]);
+    db.projectTimeline.findUnique.mockResolvedValue({ anchorStartDate: ANCLA, phases: FASES_M4, project: { hubspotPipelineId: CUSTOMER_SUCCESS } });
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-v", ahora: HOY })).toBeNull();
+    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(1);
+    const vacio = escrito();
+    expect(delSistema(vacio)).toEqual(["d:durationWeeks:19", "p:startWeek:21", "d1@16", "d2@18"]);
+    expect(vacio.version, "el vacío nace en la versión 0").toBe(0);
+    expect((vacio.hoy as { semana: number }).semana).toBe(18);
+    expect(esVacioEsperandoTareas(vacio), "sigue siendo «el vacío»").toBe(false);
+    const leido = leerBorrador(vacio)!;
+    expect(modoDeLaPropuesta({ hayBorrador: true, conCambios: leido.cambios.length > 0, tareas: "fallo" })).toBe("barra");
+    expect(porQueDeSoloLectura({ guardado: vacio, borrador: leido, tareas: { estado: "fallo", fase: null, motivo: null } })).toBeNull();
+    // D4: sin las tareas, descartar no las ofrece (se armaron para la estructura reprogramada).
+    expect(traeCambiosDeFases(vacio)).toBe(true);
+  });
+
+  it("⭐ el fixture grande en la base simulada: UNA escritura con las 8 casillas, el pin, las 25 arrastradas y el reloj", async () => {
+    /* La misma guarda que borrador-del-detalle.int.test.ts (M4), en memoria: la base local de :5433 no tiene hoy todas las
+       columnas del esquema y la de integración no corre. La edición que la pone en rojo: escribir la reprogramación en
+       otra escritura que el reloj, o no leer las fases con sus tareas. */
+    const fx = leerFixtureGrande();
+    const crudo = JSON.parse(JSON.stringify(fx.borrador)) as { cambios: Array<{ tipo: string }>; version: number } & Record<string, unknown>;
+    const guardado = { ...crudo, cambios: crudo.cambios.filter((c) => !c.tipo.startsWith("tarea")), tareas: { corrida: "run-1", listas: false }, tareasArmadasPara: {} };
+    const fases = fx.vivo.fases.map((f) => ({
+      ...f,
+      tasks: f.tareas.map((t) => ({ ...t, startDateOverride: null, dueDateOverride: null })),
+    }));
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    db.projectTimeline.findUnique.mockResolvedValue({
+      pendingProposal: guardado,
+      pendingProposalRunId: "run-1",
+      anchorStartDate: new Date(`${fx.ancla}T00:00:00.000Z`),
+      project: { hubspotPipelineId: null },
+      phases: fases,
+    });
+    const hoy = new Date(fx.hoy);
+    expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: "run-1", version: crudo.version }, corrida: "run-2", ahora: hoy })).toBeNull();
+    expect(db.projectTimeline.updateMany, "dos escrituras").toHaveBeenCalledTimes(1);
+    const g = escrito();
+    expect(g.version).toBe(crudo.version + 1);
+    expect(g.hoy).toEqual({ instante: hoy.toISOString(), semana: 18, politica: POLITICA_DE_ATRASOS });
+    const cambios = g.cambios as Cambio[];
+    const deFase = cambios.filter((c): c is Extract<Cambio, { tipo: "fase-cambia" }> => c.tipo === "fase-cambia" && !!c.desdeHoy);
+    expect(deFase.filter((c) => !c.fijaInicio)).toHaveLength(8);
+    expect(deFase.filter((c) => c.fijaInicio).map((c) => c.clave)).toEqual(["fase:f10:startWeek"]);
+    expect(cambios.filter((c) => c.tipo === "tarea-cambia" && c.desdeHoy)).toHaveLength(25);
+    expect(cambios.filter((c) => (c.tipo === "fase-cambia" && !c.desdeHoy) || c.tipo === "fase-nueva").map((c) => c.clave)).toEqual([
+      "fase:f12:durationWeeks",
+      "n:p01",
+    ]);
+  });
+
+  it("⭐ «Regenerar» de una fase y «primera» no reprograman; en un Desarrollo la primera fase no es la Semana 0", async () => {
+    /* La edición que la pone en rojo: reprogramar en «Regenerar» de una fase (lo pidió el CSE, D3), o calcular
+       `conSemanaCero` sin el pipeline (la primera fase de un Desarrollo, trabajo real, quedaba quieta). */
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    db.timelineTask.findMany.mockResolvedValue([{ source: "AGENT" }]);
+    const base = { anchorStartDate: ANCLA, phases: FASES_M4, project: { hubspotPipelineId: CUSTOMER_SUCCESS } };
+    db.projectTimeline.findUnique.mockResolvedValue(base);
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-v", soloFase: "d", ahora: HOY });
+    expect(delSistema(escrito()), "«Regenerar» de una fase reprogramó").toEqual([]);
+    db.timelineTask.findMany.mockResolvedValue([{ source: "HUMAN" }]);
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-v", ahora: HOY });
+    expect(delSistema(escrito()), "«Generar cronograma» reprogramó").toEqual([]);
+    // La primera fase sin empezar y atrasada: en un Desarrollo se reprograma; con Semana 0 (Customer Success), no.
+    db.timelineTask.findMany.mockResolvedValue([{ source: "AGENT" }]);
+    const primeraSinEmpezar = [
+      { ...FASES_M4[0], name: "Relevamiento técnico", status: "PENDING", tasks: [tareaDB("r1", "Relevar el proceso", 1)] },
+      ...FASES_M4.slice(1),
+    ];
+    const DESARROLLO = pipelineByKey("development").hubspotPipelineId;
+    db.projectTimeline.findUnique.mockResolvedValue({ ...base, phases: primeraSinEmpezar, project: { hubspotPipelineId: DESARROLLO } });
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-v", ahora: HOY });
+    expect(delSistema(escrito()), "en un Desarrollo, la primera fase quedó quieta").toContain("s0:startWeek:18");
+    db.projectTimeline.findUnique.mockResolvedValue({ ...base, phases: primeraSinEmpezar });
+    await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-v", ahora: HOY });
+    expect(delSistema(escrito()), "con Semana 0, la primera fase se reprogramó").not.toContain("s0:startWeek:18");
   });
 });

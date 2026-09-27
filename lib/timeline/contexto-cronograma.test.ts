@@ -582,6 +582,9 @@ describe("⛔ las pantallas del cronograma hablan en tuteo, nunca en voseo", () 
        el valor y despliega»). Los textos nuevos de M3 viven en archivos que ya están en la lista (el mensaje, lo que
        lee el modelo en detalle-cronograma.ts y el motivo de «se queda» en borrador-del-detalle.ts, más arriba). */
     "lib/timeline/politica-de-atrasos.ts",
+    /* M4 P4a (2026-09-27): lo que dice la reprogramación de lo atrasado (las observaciones de «La IA también notó…»:
+       «Desmarcaste la duración que proponía la IA…», «…tiene fecha fijada: no se mueve.»). */
+    "lib/timeline/reprogramar-desde-hoy.ts",
   ];
   /* Las formas que aparecieron en estos archivos, más las de uso diario del equipo. Una palabra
      entera: «Revisá» no caza «Revisa», y «vos» no caza «voseo». Las del final son las que la revisión

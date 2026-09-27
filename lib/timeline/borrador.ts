@@ -252,6 +252,29 @@ export interface CambioFaseCambia extends DelChat {
   desde: ValorDeCampo;
   a: ValorDeCampo;
   motivo?: string;
+  /**
+   * M4 (2026-09-27, D4, D9): lo reprograma el SISTEMA desde hoy (lib/timeline/reprogramar-desde-hoy.ts), no la IA: nunca
+   * lleva un `motivo` que se pinte «Según la IA». Solo en `durationWeeks` (una fase empezada que se estira) y `startWeek`
+   * (una sin empezar que se mueve entera, la que va después de lo que la precedía, o el pin).
+   */
+  desdeHoy?: true;
+  /** M4 (D5): EL PIN. Una contigua ya empezada que se correría de rebote queda fija donde está hoy. Sin casilla: aplica
+   *  siempre que se aplique algo, y como la deja donde ya está no mueve nada por sí sola. Solo con `desdeHoy`. */
+  fijaInicio?: true;
+  /** M4: el cambio de la IA (misma fase y campo) que éste reemplaza, para poder restaurarlo (`sinReprogramacion`). */
+  deLaIA?: CambioDeLaIAReemplazado;
+}
+
+/**
+ * M4 (2026-09-27): lo que se guarda del cambio de la IA que reemplaza uno del sistema (misma clave). `a` y `motivo`, los
+ * de la IA. `desde`, solo si el de la IA no era el del sistema (lo vivo cambió entre el paso 1 y la marca). `desmarcada`,
+ * si el CSE lo había desmarcado: al restaurarlo vuelve desmarcado.
+ */
+export interface CambioDeLaIAReemplazado {
+  a: number | null;
+  motivo?: string;
+  desde?: number | null;
+  desmarcada?: true;
 }
 
 /** E3: cómo estaba una fase que se va cuando se armó el cambio (los 6 campos y su estado). */
@@ -364,6 +387,12 @@ export interface CambioTareaCambia extends DelChat {
    * fusiones la conservan (tareas-del-detalle.ts). La lee `leerCambio`; la huella no la mira (`destinoDe`).
    */
   sugerida?: "otra-fase";
+  /**
+   * M4 (2026-09-27, D10): una ARRASTRADA. Una abierta de una fase empezada y atrasada que el sistema corre con el
+   * estiramiento de su fase (`conCambio` = la clave de esa duración): no la escribe la IA ni el chat. La lee `leerCambio`;
+   * la huella no la mira.
+   */
+  desdeHoy?: true;
 }
 export type CambioDeTarea = CambioTareaNueva | CambioTareaSeVa | CambioTareaCambia;
 export type CambioDeEstructura = CambioDeAncla | CambioDeOrden | CambioFaseNueva | CambioFaseCambia | CambioFaseSeVa;
@@ -999,9 +1028,13 @@ function leerCambio(v: unknown): Cambio | null {
       if (!fase || !(v.despuesDe === null || typeof v.despuesDe === "string")) return null;
       return { tipo: "fase-nueva", clave: v.clave, fase, despuesDe: v.despuesDe, ...conMotivo, ...delChat };
     }
-    case "fase-cambia":
+    case "fase-cambia": {
       if (typeof v.faseId !== "string" || typeof v.fase !== "string" || !esCampo(v.campo)) return null;
       if (!esValor(v.desde) || !esValor(v.a)) return null;
+      /* M4 (2026-09-27): lo del sistema, solo con su único valor. Sin leerlo, cualquier reescritura de `cambios` desde lo
+         leído (el chat, la fusión) lo volvía un cambio de la IA, y un reintento reprogramaba encima de lo reprogramado. */
+      const desdeHoy = v.desdeHoy === true;
+      const deLaIA = desdeHoy ? leerDeLaIA(v.deLaIA) : null;
       return {
         tipo: "fase-cambia",
         clave: v.clave,
@@ -1012,7 +1045,11 @@ function leerCambio(v: unknown): Cambio | null {
         a: v.a,
         ...conMotivo,
         ...delChat,
+        ...(desdeHoy ? { desdeHoy: true as const } : {}),
+        ...(desdeHoy && v.fijaInicio === true ? { fijaInicio: true as const } : {}),
+        ...(deLaIA ? { deLaIA } : {}),
       };
+    }
     case "fase-se-va": {
       if (!esTextoEntre(v.faseId, 1, 200) || !esObjeto(v.desde)) return null;
       const foto = leerFotoDeFase(v.desde);
@@ -1071,11 +1108,31 @@ function leerCambio(v: unknown): Cambio | null {
         ...conMotivo,
         ...delChat,
         ...(v.sugerida === "otra-fase" ? { sugerida: "otra-fase" as const } : {}),
+        // M4: la arrastrada (la corre el sistema con su fase).
+        ...(v.desdeHoy === true ? { desdeHoy: true as const } : {}),
       };
     }
     default:
       return null;
   }
+}
+
+/**
+ * M4 (2026-09-27): el cambio de la IA guardado dentro del del sistema (`deLaIA`), SOLO si viene bien formado. Otra forma se
+ * ignora y el cambio del sistema sigue valiendo: se pierde solo la vuelta atrás a lo de la IA.
+ */
+function leerDeLaIA(v: unknown): CambioDeLaIAReemplazado | null {
+  if (!esObjeto(v)) return null;
+  const esSemanaONula = (x: unknown): x is number | null => x === null || (typeof x === "number" && Number.isFinite(x));
+  if (!esSemanaONula(v.a)) return null;
+  if (!(v.motivo === undefined || typeof v.motivo === "string")) return null;
+  if (!(v.desde === undefined || esSemanaONula(v.desde))) return null;
+  return {
+    a: v.a,
+    ...(typeof v.motivo === "string" && v.motivo.length > 0 ? { motivo: v.motivo } : {}),
+    ...(v.desde !== undefined ? { desde: v.desde as number | null } : {}),
+    ...(v.desmarcada === true ? { desmarcada: true as const } : {}),
+  };
 }
 
 function leerTareasDelBorrador(v: unknown): TareasDelBorrador | null {

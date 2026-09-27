@@ -17,6 +17,9 @@
  * prueba: la explicación sale de la MISMA escritura, sigue sin ser «vieja» después de pasar por jsonb (que reordena
  * las claves), la conservan las casillas y la apertura del chat (la ruta de operaciones), y una fusión perdida deja en
  * la corrida lo que leyó.
+ *
+ * M4 P4b (2026-09-27): la marca del paso 2 (`marcarTareasEnCurso`) sobre el fixture sembrado guarda la reprogramación de
+ * lo atrasado y el reloj en una sola escritura.
  */
 import { describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
@@ -28,10 +31,11 @@ vi.mock("@/lib/auth/api-guards", () => guards);
 import { prisma } from "@/lib/db/prisma";
 import { POST as operaciones } from "@/app/api/projects/[projectId]/timeline/borrador/operaciones/route";
 import { FASE_QUE_SE_ALARGA, FASE_TERMINADA, leerFixtureGrande } from "./__fixtures__/propuesta-grande";
-import { esCambioDeTarea, faseDeLaTarea, leerBorrador, resumir } from "./borrador";
+import { claveDeCampo, esCambioDeTarea, faseDeLaTarea, leerBorrador, resumir } from "./borrador";
 import {
   estructuraParaElDetalle,
   fusionarDetalleEnElBorrador,
+  marcarTareasEnCurso,
   SELECT_DE_FASES_CON_TAREAS,
   vivoDeLaBase,
 } from "./borrador-del-detalle";
@@ -295,5 +299,37 @@ describe("M3 · lo que ya pasó no se reescribe — DB real", () => {
     const cuantos = (tipo: string) => borrador.cambios.filter((c) => c.tipo === tipo).length;
     expect([cuantos("tarea-se-va"), cuantos("tarea-nueva"), cuantos("tarea-cambia")]).toEqual([5, 13, 2]);
     expect(borrador.observaciones).toContain("No entran 51 tareas de la IA: caen en semanas que ya pasaron.");
+  });
+});
+
+describe("M4 P4b · la marca del paso 2 reprograma lo atrasado — DB real", () => {
+  it("⭐ la marca sobre el fixture sembrado guarda las 8 casillas, el pin, las 25 arrastradas y el reloj en UNA escritura", async () => {
+    /* Spec §5.11 (en el orden del plan, lo que decidió Elías el 2026-09-27). La edición que la pone en rojo: escribir la
+       reprogramación en otra escritura que el reloj (la versión subiría dos veces, o el paso 2 podía leer la estructura
+       sin reprogramar), o no leer del cronograma las fases con sus tareas (sin ellas no hay nada que reprogramar). */
+    const fx = leerFixtureGrande();
+    const { tl } = await sembrar();
+    const antes = (await prisma.projectTimeline.findUniqueOrThrow({ where: { id: tl.id }, select: { pendingProposal: true } }))
+      .pendingProposal as { version: number };
+    const veto = await marcarTareasEnCurso({
+      timelineId: tl.id,
+      pedido: { token: "run-paso1", version: antes.version },
+      corrida: "run-paso2",
+      ahora: new Date(fx.hoy),
+    });
+    expect(veto).toBeNull();
+    const guardado = (await prisma.projectTimeline.findUniqueOrThrow({ where: { id: tl.id }, select: { pendingProposal: true } }))
+      .pendingProposal as Record<string, unknown>;
+    expect(guardado.version, "la versión subió más de una vez").toBe(antes.version + 1);
+    expect(guardado.hoy).toEqual({ instante: new Date(fx.hoy).toISOString(), semana: 18, politica: POLITICA_DE_ATRASOS });
+    const borrador = leerBorrador(guardado)!;
+    const delSistema = borrador.cambios.filter((c) => c.tipo === "fase-cambia" && c.desdeHoy);
+    expect(delSistema.filter((c) => c.tipo === "fase-cambia" && !c.fijaInicio)).toHaveLength(8);
+    expect(delSistema.filter((c) => c.tipo === "fase-cambia" && c.fijaInicio).map((c) => c.clave)).toEqual(["fase:f10:startWeek"]);
+    expect(borrador.cambios.filter((c) => c.tipo === "tarea-cambia" && c.desdeHoy)).toHaveLength(25);
+    // Lo de la IA del paso 1 se queda (Fase K de 3 a 5 y la fase nueva).
+    const deLaIA = borrador.cambios.filter((c) => (c.tipo === "fase-cambia" && !c.desdeHoy) || c.tipo === "fase-nueva");
+    expect(deLaIA.map((c) => c.clave)).toEqual([claveDeCampo(FASE_QUE_SE_ALARGA, "durationWeeks"), "n:p01"]);
+    expect(borrador.tareas).toEqual({ corrida: "run-paso2", listas: false });
   });
 });
