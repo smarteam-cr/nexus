@@ -6,19 +6,19 @@
  * Panel "Información del cliente" (ex Canvas de Estrategia + ex drawer Contexto).
  *
  * Sub-tabs horizontales:
- *   - Documentos    → DocumentUpload (Supabase Storage del proyecto strategy)
- *   - Stakeholders  → SectionBlockList filtrado por key="stakeholders"
- *   - Retos         → idem key="retos_estrategicos"
- *   - Oportunidades → idem key="oportunidades"
+ *   - Ficha      → FichaDelCliente (lib/clients/ficha.ts): LA información del cliente, una sola,
+ *                  que leen los agentes y se guarda en la empresa de HubSpot al confirmarla.
+ *   - Documentos → DocumentUpload (Supabase Storage del proyecto strategy)
+ *   - Marca      → logo del cliente
  *
- * Internamente sigue siendo el Project con serviceType=__strategy__; cambian
- * los nombres de UI y las secciones del canvas se reducen a 3 (las otras 2
- * — handoff_ventas y perfil_cliente — se eliminaron en la migración).
+ * Stakeholders, Retos y Oportunidades eran sub-tabs sueltas sobre bloques del canvas client-info
+ * y se fueron el 2026-09-27: los tres son campos de la ficha. En prod había 1 bloque (vacío)
+ * entre los 188 clientes, así que no hubo nada que migrar.
  */
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import DocumentUpload from "./DocumentUpload";
+import FichaDelCliente from "./FichaDelCliente";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
 import {
@@ -26,14 +26,12 @@ import {
   logoHeightCalc, logoScaleStyle, resolveLogoScale,
 } from "@/lib/ui/logo-scale";
 
-type SubTab = "docs" | "stakeholders" | "retos" | "oportunidades" | "marca";
+type SubTab = "ficha" | "docs" | "marca";
 
 const TABS: { key: SubTab; label: string }[] = [
-  { key: "docs",          label: "Documentos" },
-  { key: "stakeholders",  label: "Stakeholders" },
-  { key: "retos",         label: "Retos estratégicos" },
-  { key: "oportunidades", label: "Oportunidades" },
-  { key: "marca",         label: "Marca" },
+  { key: "ficha", label: "Ficha" },
+  { key: "docs",  label: "Documentos" },
+  { key: "marca", label: "Marca" },
 ];
 
 export default function ClientInfoPanel({
@@ -49,16 +47,16 @@ export default function ClientInfoPanel({
 }) {
   const params = useParams();
   const clientId = (params?.id as string) ?? "";
-  const [tab, setTab] = useState<SubTab>("docs");
+  const [tab, setTab] = useState<SubTab>("ficha");
 
   return (
     <div className="px-6 py-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Información del cliente</h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            Documentos y contexto estratégico del cliente.
+          <h2 className="text-xl font-bold text-fg">Información del cliente</h2>
+          <p className="text-sm text-fg-muted mt-0.5">
+            La ficha que leen los agentes, los documentos y la marca del cliente.
           </p>
         </div>
         {clientId && (
@@ -78,15 +76,15 @@ export default function ClientInfoPanel({
       </div>
 
       {/* Sub-tabs horizontales */}
-      <div className="flex gap-0 border-b border-gray-800">
+      <div className="flex gap-0 border-b border-line">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
-                ? "border-brand text-white"
-                : "border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-700"
+                ? "border-brand text-fg"
+                : "border-transparent text-fg-muted hover:text-fg-secondary hover:border-line"
             }`}
           >
             {t.label}
@@ -96,19 +94,9 @@ export default function ClientInfoPanel({
 
       {/* Contenido del sub-tab activo */}
       <div className="pt-2">
+        {tab === "ficha" && clientId && <FichaDelCliente clientId={clientId} />}
+
         {tab === "docs" && <DocumentUpload projectId={projectId} />}
-
-        {tab === "stakeholders" && (
-          <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="stakeholders" />
-        )}
-
-        {tab === "retos" && (
-          <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="retos_estrategicos" />
-        )}
-
-        {tab === "oportunidades" && (
-          <CanvasLinearView projectId={projectId} canvasId={canvasId} onlyKey="oportunidades" />
-        )}
 
         {tab === "marca" && <ClientLogoSection clientId={clientId} projectId={projectId} />}
       </div>
@@ -222,8 +210,8 @@ function ClientLogoSection({ clientId, projectId }: { clientId: string; projectI
             </div>
             {!logoDarkUrl && (
               <p className="text-[11px] text-fg-muted mt-2">
-                Sobre fondo oscuro el logo se pinta en blanco y pierde sus colores. Subí una
-                versión para fondo oscuro si querés conservarlos.
+                Sobre fondo oscuro el logo se pinta en blanco y pierde sus colores. Sube una
+                versión para fondo oscuro si quieres conservarlos.
               </p>
             )}
           </div>
@@ -232,7 +220,7 @@ function ClientLogoSection({ clientId, projectId }: { clientId: string; projectI
             <h4 className="text-xs font-semibold text-fg mt-4 mb-1">Versión para fondo oscuro</h4>
             <p className="text-[11px] text-fg-muted mb-3">
               Opcional. Se usa en la portada de los documentos, que va sobre azul oscuro. Si no
-              la subís, Nexus pinta el logo principal en blanco.
+              la subes, Nexus pinta el logo principal en blanco.
             </p>
             <LogoUploader
               currentUrl={logoDarkUrl}

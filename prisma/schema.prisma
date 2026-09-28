@@ -181,6 +181,11 @@ model Client {
 
   canvas           Json? // Client Canvas — conocimiento a nivel empresa
   canvasConfidence Json? // { section: "confirmed" | "inferred" } per section
+  // LA ficha del cliente (lib/clients/ficha.ts): una sola por empresa, la leen los agentes y al
+  // confirmarla el CSE se escribe en la empresa de HubSpot (propiedades + nota). Reemplaza a
+  // `canvas` y a las secciones stakeholders/retos/oportunidades del canvas client-info, que
+  // estaban vacías en prod (0/188 al 2026-09-27). Nullable = todavía sin ficha.
+  ficha            Json?
 
   hubspotAccount         HubspotAccount?
   audits                 Audit[]
