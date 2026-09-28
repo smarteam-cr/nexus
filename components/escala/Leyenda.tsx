@@ -91,8 +91,8 @@ export default function Leyenda({ datos }: { datos: DatosDeLaVista }) {
             </section>
           )}
           <p className="border-t border-line pt-3 text-xs text-fg-muted">
-            Dónde se cuenta cada evidencia dudosa («Regla de asignación») aparece en la vista Por dimensión, junto a la dimensión que toca. El
-            documento completo está en la vista Guía.
+            Dónde se cuenta cada evidencia dudosa («Regla de asignación») aparece en la vista Por dimensión, junto a la dimensión que toca. Los
+            documentos completos se bajan con «Descargar .md».
           </p>
         </div>
       </Modal>

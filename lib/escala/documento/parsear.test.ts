@@ -288,7 +288,7 @@ describe("el archivo real (docs/escala/escala_rendimiento_smarteam.md)", () => {
     expect(e.asignacion).toHaveLength((seccion.match(/^- /gm) ?? []).length);
     const ids = new Set(dimensiones.map((d) => d.id));
     for (const r of e.asignacion) for (const id of r.dimensiones) expect(ids.has(id), id).toBe(true);
-    // La mayoría de los casos se ubican; los que no, se leen igual en la Guía.
+    // La mayoría de los casos se ubican; los que no, quedan en el documento que se descarga.
     expect(e.asignacion.filter((r) => r.dimensiones.length > 0).length).toBeGreaterThan(e.asignacion.length / 2);
     const frontera = e.asignacion.find((r) => r.texto.includes("Marketing ↔ Ventas"));
     if (frontera) expect(frontera.dimensiones.filter((id) => id.startsWith("3."))).toEqual([]);

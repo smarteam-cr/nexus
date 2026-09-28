@@ -24,13 +24,11 @@ const COLUMNAS = "grid-cols-[minmax(210px,1.15fr)_repeat(5,minmax(170px,1fr))]";
 interface Props {
   datos: DatosDeLaVista;
   perfil: Perfil;
-  compacta: boolean;
-  panoramica: boolean;
   anclaAbierta: string | null;
   onLeerDimension: (dimension: string) => void;
 }
 
-export default function Matriz({ datos, perfil, compacta, panoramica, anclaAbierta, onLeerDimension }: Props) {
+export default function Matriz({ datos, perfil, anclaAbierta, onLeerDimension }: Props) {
   const { area, niveles, capas } = datos;
   return (
     <div
@@ -43,7 +41,12 @@ export default function Matriz({ datos, perfil, compacta, panoramica, anclaAbier
             Dimensión
           </div>
           {niveles.map((n) => (
-            <div key={n.letra} className={cn("border-l border-line px-3 py-2.5", n.letra === "F" ? "bg-success-surface" : "bg-surface")}>
+            <div
+              key={n.letra}
+              // Cómo se ve el área entera en ese nivel («Los cinco niveles de un vistazo»), al pasar el cursor.
+              title={area.panoramica[n.letra] ? `Así se ve ${area.nombre} en ${n.nombre}: ${area.panoramica[n.letra]}` : undefined}
+              className={cn("border-l border-line px-3 py-2.5", n.letra === "F" ? "bg-success-surface" : "bg-surface")}
+            >
               <div className="flex items-center gap-1.5">
                 <span className={cn("h-2 w-2 flex-shrink-0 rounded-sm", PUNTO_DE_NIVEL[n.letra])} aria-hidden />
                 <span className="text-sm font-semibold text-fg">{n.nombre}</span>
@@ -53,9 +56,6 @@ export default function Matriz({ datos, perfil, compacta, panoramica, anclaAbier
                   </span>
                 )}
               </div>
-              {panoramica && area.panoramica[n.letra] && (
-                <p className="mt-1.5 text-xs font-normal leading-snug text-fg-secondary">{area.panoramica[n.letra]}</p>
-              )}
             </div>
           ))}
         </div>
@@ -77,7 +77,6 @@ export default function Matriz({ datos, perfil, compacta, panoramica, anclaAbier
                   d={d}
                   datos={datos}
                   perfil={perfil}
-                  compacta={compacta}
                   anclaAbierta={anclaAbierta}
                   onLeerDimension={onLeerDimension}
                 />
@@ -93,14 +92,12 @@ function FilaDeDimension({
   d,
   datos,
   perfil,
-  compacta,
   anclaAbierta,
   onLeerDimension,
 }: {
   d: Dimension;
   datos: DatosDeLaVista;
   perfil: Perfil;
-  compacta: boolean;
   anclaAbierta: string | null;
   onLeerDimension: (dimension: string) => void;
 }) {
@@ -138,7 +135,7 @@ function FilaDeDimension({
 
       {aplicaAca ? (
         d.niveles.map((n) => (
-          <CeldaDeNivel key={n.id} d={d} n={n} datos={datos} perfil={perfil} compacta={compacta} anclaAbierta={anclaAbierta} />
+          <CeldaDeNivel key={n.id} d={d} n={n} datos={datos} perfil={perfil} anclaAbierta={anclaAbierta} />
         ))
       ) : (
         <div className="col-span-5 flex items-center gap-3 bg-surface-muted px-5 py-4 text-sm text-fg-secondary">
@@ -161,14 +158,12 @@ function CeldaDeNivel({
   n,
   datos,
   perfil,
-  compacta,
   anclaAbierta,
 }: {
   d: Dimension;
   n: Nivel;
   datos: DatosDeLaVista;
   perfil: Perfil;
-  compacta: boolean;
   anclaAbierta: string | null;
 }) {
   const { conteos, abrirComentarios } = useEscala();
@@ -195,7 +190,7 @@ function CeldaDeNivel({
         </p>
       )}
 
-      {!compacta && visibles.length > 0 && (
+      {visibles.length > 0 && (
         <ul className="-mx-1.5 flex flex-col">
           {visibles.map((c) => (
             <li key={c.id}>
@@ -218,11 +213,6 @@ function CeldaDeNivel({
             </li>
           ))}
         </ul>
-      )}
-      {compacta && visibles.length > 0 && (
-        <span className="text-2xs text-fg-muted">
-          {visibles.length} {visibles.length === 1 ? "criterio" : "criterios"}
-        </span>
       )}
 
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">

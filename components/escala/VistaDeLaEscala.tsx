@@ -15,7 +15,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, InfoHint, Menu, Tabs } from "@/components/ui";
+import { Alert, Menu, Tabs } from "@/components/ui";
 import {
   aplica,
   CIERRES,
@@ -36,7 +36,6 @@ import { almacenDeLaApi, type AlmacenDeLaEscala } from "./comentarios/almacen";
 import PanelDeComentarios from "./comentarios/PanelDeComentarios";
 import { ProveedorDeLaEscala } from "./contexto";
 import Escalera from "./Escalera";
-import Guia from "./Guia";
 import Leyenda from "./Leyenda";
 import Mapa, { type SeleccionDelMapa } from "./Mapa";
 import Matriz from "./Matriz";
@@ -158,8 +157,6 @@ export default function VistaDeLaEscala({
   );
   const [seleccion, setSeleccion] = useState<SeleccionDelMapa>(seleccionDesde(inicial.celda));
   const [ancla, setAncla] = useState<string | null>(inicial.ancla);
-  const [compacta, setCompacta] = useState(false);
-  const [panoramica, setPanoramica] = useState(false);
 
   // Lo que se mira, en la URL: sin recargar ni volver a pedir la página (history nativo).
   useEffect(() => {
@@ -326,69 +323,32 @@ export default function VistaDeLaEscala({
           items={datos.areas.map((a) => ({ key: a.slug, label: a.nombre, count: porArea[a.id]?.total || undefined }))}
         />
 
-        <div className="rounded-xl border border-line bg-surface">
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-3 px-4 py-3">
-            <GrupoDeControl nombre="Vista" ayuda="Cuatro formas de recorrer la escala: tres sobre el área que elegiste arriba y la guía con los documentos completos.">
-              <Segmentado<Vista>
-                etiqueta="Vista"
-                valor={vista}
-                onCambio={setVista}
-                opciones={[
-                  { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
-                  { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
-                  { clave: "mapa", etiqueta: "Mapa", title: "El área como radar: cada eje una dimensión, cada anillo un nivel. Para recorrerla y ver dónde se concentran comentarios, hábitos o riesgos." },
-                  { clave: "guia", etiqueta: "Guía", title: "Los documentos completos, tal cual se publicaron: por qué existe la escala, cómo se aplica, la referencia, la especificación y el manual." },
-                ]}
-              />
+        <div className="rounded-xl border border-line bg-surface px-4 py-3">
+          <div className="flex flex-wrap items-start gap-x-10 gap-y-3">
+            <GrupoDeControl
+              nombre="Vista"
+              ayuda="Tres formas de recorrer el área que elegiste arriba: la matriz para comparar, una dimensión como escalera para leerla entera y el mapa para ver dónde se concentran los comentarios, los hábitos o los riesgos."
+            >
+              <div className="flex flex-col gap-1">
+                <span className="text-2xs text-fg-secondary">Cómo la quieres recorrer</span>
+                <Segmentado<Vista>
+                  etiqueta="Vista"
+                  valor={vista}
+                  onCambio={setVista}
+                  opciones={[
+                    { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
+                    { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
+                    { clave: "mapa", etiqueta: "Mapa", title: "El área como radar: cada eje una dimensión, cada anillo un nivel. Para recorrerla y ver dónde se concentran comentarios, hábitos o riesgos." },
+                  ]}
+                />
+              </div>
             </GrupoDeControl>
 
-            {vista === "matriz" && (
-              <GrupoDeControl nombre="Mostrar" ayuda="Qué se ve en cada celda de la matriz." className="sm:border-l sm:border-line sm:pl-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={panoramica}
-                    onClick={() => setPanoramica((v) => !v)}
-                    title="Agrega, arriba de cada nivel, cómo se ve el área entera en ese nivel («Los cinco niveles de un vistazo»)."
-                    className={
-                      panoramica
-                        ? "rounded-lg border border-info-line bg-info-surface px-3 py-1.5 text-xs text-info-ink"
-                        : "rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover"
-                    }
-                  >
-                    El área en cada nivel
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={compacta}
-                    onClick={() => setCompacta((v) => !v)}
-                    title={
-                      compacta
-                        ? "Vuelve a mostrar los criterios de cada nivel."
-                        : "Esconde los criterios y deja la descripción y el resultado de cada nivel: la escala de un vistazo."
-                    }
-                    className={
-                      compacta
-                        ? "rounded-lg border border-info-line bg-info-surface px-3 py-1.5 text-xs text-info-ink"
-                        : "rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover"
-                    }
-                  >
-                    Solo las descripciones
-                  </button>
-                </div>
-              </GrupoDeControl>
-            )}
-          </div>
-
-          {vista !== "guia" && (
-            <section aria-label="Perfil de negocio" className="border-t border-line px-4 py-3">
-              <span className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
-                Perfil de negocio
-                <InfoHint
-                  text={`${datos.perfilDeNegocio.introduccion ?? "El perfil de negocio decide qué criterios aplican."} Elegir un perfil esconde los criterios que no le aplican, con la misma regla de la escala; «Sin filtrar» los muestra todos, cada uno con su marca.`}
-                />
-              </span>
-              <div className="mt-1 flex flex-wrap items-end gap-x-6 gap-y-2">
+            <GrupoDeControl
+              nombre="Perfil de negocio"
+              ayuda={`${datos.perfilDeNegocio.introduccion ?? "El perfil de negocio decide qué criterios aplican."} Elegir un perfil esconde los criterios que no le aplican, con la misma regla de la escala; «Sin filtrar» los muestra todos, cada uno con su marca.`}
+            >
+              <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
                 <div className="flex flex-col gap-1">
                   <span className="text-2xs text-fg-secondary">{datos.perfilDeNegocio.cierre?.pregunta ?? "Cómo se cierra la venta"}</span>
                   <Segmentado<"todas" | Cierre>
@@ -422,16 +382,12 @@ export default function VistaDeLaEscala({
                   />
                 </div>
               </div>
-              {(perfil.cierre || perfil.despues) && <ResumenDelPerfil datos={datos} perfil={perfil} />}
-            </section>
-          )}
+            </GrupoDeControl>
+          </div>
+          {(perfil.cierre || perfil.despues) && <ResumenDelPerfil datos={datos} perfil={perfil} />}
         </div>
 
-        {vista === "guia" && <Guia documentos={datos.documentos} />}
-
-        {vista === "matriz" && (
-          <Matriz datos={datos} perfil={perfil} compacta={compacta} panoramica={panoramica} anclaAbierta={ancla} onLeerDimension={leerDimension} />
-        )}
+        {vista === "matriz" && <Matriz datos={datos} perfil={perfil} anclaAbierta={ancla} onLeerDimension={leerDimension} />}
         {vista === "dimension" && (
           <Escalera datos={datos} perfil={perfil} dimension={dimension} onElegirDimension={setDimension} anclaAbierta={ancla} />
         )}

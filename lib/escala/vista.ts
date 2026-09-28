@@ -179,9 +179,10 @@ export function partirPorPalabras(texto: string, palabras: PalabraConValorFijo[]
 
 // ── El estado de la pantalla en la URL ───────────────────────────────────────
 
-export type Vista = "matriz" | "dimension" | "mapa" | "guia";
-export const VISTAS: readonly Vista[] = ["matriz", "dimension", "mapa", "guia"];
+export type Vista = "matriz" | "dimension" | "mapa";
+export const VISTAS: readonly Vista[] = ["matriz", "dimension", "mapa"];
 
+/** Una vista que ya no existe (`?vista=guia`, de un enlace viejo) abre la matriz. */
 export function vistaDesdeUrl(v: string | null | undefined): Vista {
   return (VISTAS as readonly string[]).includes(v ?? "") ? (v as Vista) : "matriz";
 }
