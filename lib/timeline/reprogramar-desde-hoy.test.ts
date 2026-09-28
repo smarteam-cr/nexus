@@ -399,6 +399,89 @@ describe("M4 P4a · las invariantes", { timeout: 30_000 }, () => {
   });
 });
 
+/**
+ * Revisión de M1–M5 (2026-09-27, hallazgos 1, 2 y 8): las invariantes (1) y (2) sobre un vivo que marca hechas DESPUÉS de
+ * calcular la propuesta, entre la propuesta y «Aplicar» (el Gantt se sigue editando con «Ver como estaba antes»). La
+ * propuesta se calcula con `vivo`; se proyecta con `despues`. Hasta la revisión, las invariantes miraban solo el vivo del
+ * cálculo y D13 cubría solo las arrastradas: una fase que se movía entera o de rebote se llevaba lo que marcaron hecho.
+ * Devuelve cuántas veces actuó la protección (con todo marcado): choques por «empezó después» y fijadas al aplicar.
+ */
+function comprobarLoEmpezadoDespues(
+  nombre: string,
+  vivo: Vivo,
+  guardado: Record<string, unknown>,
+  hoy: Date,
+  fases: PoliticaDeFasesVencidas,
+  conSemanaCero: boolean,
+  hechasDespues: ReadonlySet<string>,
+): number {
+  const r = reprogramarDesdeHoy({ vivo, borrador: leer(guardado), hoy, politica: politica(fases), conSemanaCero });
+  if (!r) throw new Error(`${nombre}: sin semana de hoy`);
+  const con = conLaReprogramacion(guardado, r);
+  const despues: Vivo = {
+    ...vivo,
+    fases: vivo.fases.map((f) => ({ ...f, tareas: f.tareas?.map((t) => (hechasDespues.has(t.id) ? { ...t, status: "DONE" } : t)) })),
+  };
+  const antes = semanas(despues, guardado, []);
+  const empezadas = despues.fases.filter((f) => f.status !== "PENDING" || (f.tareas ?? []).some((t) => t.status !== "PENDING"));
+  const conAvance = despues.fases.flatMap((f) => (f.tareas ?? []).filter((t) => t.status === "DONE" || t.status === "SUSPENDED"));
+  const deFase = leer(con).cambios.filter((c) => c.tipo === "fase-cambia" || c.tipo === "fase-nueva");
+  const conCasilla = deFase.filter((c) => !(c.tipo === "fase-cambia" && c.fijaInicio)).map((c) => c.clave);
+  const delPin = deFase.filter((c) => c.tipo === "fase-cambia" && c.fijaInicio).map((c) => c.clave);
+  for (let m = 0; m < 1 << conCasilla.length; m++) {
+    const sin = conCasilla.filter((_, j) => !(m & (1 << j)));
+    const d = semanas(despues, con, [...sin, ...delPin]);
+    const combinacion = `${nombre} · marcadas: ${conCasilla.filter((_, j) => m & (1 << j)).join(", ") || "ninguna"}`;
+    for (const f of empezadas) expect(d.inicio.get(f.id), `${combinacion} · movió el inicio de ${f.id}, que empezó`).toBe(antes.inicio.get(f.id));
+    for (const t of conAvance) expect(d.tarea.get(t.id), `${combinacion} · movió ${t.id} (${t.status})`).toBe(antes.tarea.get(t.id));
+  }
+  const plan = planDeAplicacion(despues, leer(con));
+  return plan.items.filter((it) => it.choque === "Empezó después de la propuesta: no se mueve.").length + plan.fijadasAlAplicar.length;
+}
+
+describe("Revisión de M1–M5 · las invariantes cuando marcan hecha una tarea DESPUÉS de la propuesta", { timeout: 30_000 }, () => {
+  /** La primera pendiente de la fase, dentro de su duración (el validador no deja una hecha fuera de su fase). */
+  const primeraPendiente = (vivo: Vivo, id: string) => {
+    const f = vivo.fases.find((x) => x.id === id)!;
+    return f.tareas!.find((t) => t.status === "PENDING" && t.weekIndex < f.durationWeeks)!.id;
+  };
+
+  it("⭐ sobre el fixture: una de cada fase que se mueve entera («Fase D», «E», «G», «J») o de rebote («Fase H», «K»)", () => {
+    /* Las ediciones que la ponen en rojo: quitar el choque de `evaluar` (el inicio del sistema sobre una fase que hoy está
+       empezada: «Fase D» pasaba de S5 a S20 con su hecha) o quitar el paso 10 de `planDeAplicacion` (la contigua que empezó
+       después se corría de rebote: «Fase K» de S18 a S30, «Fase H» de S12 a S25). */
+    let actuo = 0;
+    for (const grupo of [["f05", "f09", "f12"], ["f06", "f08", "f11"]]) {
+      const hechas = new Set(grupo.map((id) => primeraPendiente(VIVO, id)));
+      actuo += comprobarLoEmpezadoDespues(`fixture sin la IA · ${grupo}`, VIVO, SIN_LA_IA(), HOY, "en-el-orden-del-plan", true, hechas);
+      actuo += comprobarLoEmpezadoDespues(`fixture con la IA · ${grupo}`, VIVO, guardadoDelPaso1(), HOY, "en-el-orden-del-plan", true, hechas);
+    }
+    const todas = new Set(["f05", "f06", "f08", "f09", "f11", "f12"].map((id) => primeraPendiente(VIVO, id)));
+    actuo += comprobarLoEmpezadoDespues("fixture · todo desde hoy", VIVO, SIN_LA_IA(), HOY, "todo-desde-hoy", true, todas);
+    expect(actuo, "la protección no actuó: el fixture no ejercita el caso").toBeGreaterThanOrEqual(12);
+  });
+
+  it("⭐ sobre 50 cronogramas al azar (semilla fija): una pendiente al azar de una fase sin empezar, marcada hecha después", () => {
+    let actuo = 0;
+    for (let semilla = 1; semilla <= 50; semilla++) {
+      const c = cronogramaAlAzar(semilla);
+      const r = azar(semilla + 1000);
+      const candidatas = c.vivo.fases.flatMap((f) =>
+        f.status === "PENDING" && !(f.tareas ?? []).some((t) => t.status !== "PENDING")
+          ? (f.tareas ?? []).filter((t) => t.weekIndex < f.durationWeeks).map((t) => t.id)
+          : [],
+      );
+      if (candidatas.length === 0) continue;
+      const hechas = new Set([r.uno(candidatas)]);
+      for (const fases of ["en-el-orden-del-plan", "todo-desde-hoy"] as const) {
+        actuo += comprobarLoEmpezadoDespues(`al azar ${semilla} · ${fases}`, c.vivo, c.guardado, c.hoy, fases, c.conSemanaCero, hechas);
+      }
+    }
+    // Que el generador de verdad ejercite lo que cuida (si no, las invariantes pasarían en vacío).
+    expect(actuo, "casi nunca actuó la protección en los cronogramas al azar").toBeGreaterThanOrEqual(20);
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Los casos ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
@@ -447,6 +530,30 @@ describe("M4 P4a · los casos", () => {
       { faseId: "r", motivo: "semana-0" },
       { faseId: "d", motivo: "en-curso" },
     ]);
+  });
+
+  it("⭐ la Semana 0 por su nombre: en un Desarrollo o un Web cuya primera fase se llama «Semana 0», queda quieta y se avisa", () => {
+    /* Revisión de M1–M5 (2026-09-27, hallazgo 3). La edición que la pone en rojo: volver a `faseDeSemanaCero` sola (null
+       siempre sin Semana 0 en el pipeline): JUDESUR estiraba su «Semana 0» de 1 a 10 semanas y corría a hoy sus 10
+       pendientes, incluidas las de arranque; RC Inmobiliaria DocuSign le ponía inicio a una «Semana 0» vacía. */
+    const pendientes = Array.from({ length: 10 }, (_, k) => tarea(`s${k}`, 0));
+    const judesur = conVivo([
+      fase("s0", "Semana 0", 1, null, "IN_PROGRESS", [tarea("k", 0, "DONE"), ...pendientes]),
+      fase("r", "Relevamiento técnico", 2, null, "PENDING", [tarea("r1", 0), tarea("r2", 1)]),
+      fase("d", "Desarrollo", 20, null, "PENDING", [tarea("d1", 3)]),
+    ]);
+    const r = reprogramar(SIN_LA_IA(), "en-el-orden-del-plan", judesur, HOY, false);
+    expect(r.cambios.some((c) => c.faseId === "s0"), "se reprogramó la Semana 0").toBe(false);
+    expect(r.tareas.some((t) => t.faseId === "s0"), "se corrieron las pendientes de la Semana 0").toBe(false);
+    expect(r.sinHacer).toContainEqual({ faseId: "s0", motivo: "semana-0" });
+    // Lo que sigue es trabajo y se reprograma como siempre (espera a nada: la Semana 0 no es antecesora).
+    expect(casillas(r).map(comoTexto)).toEqual(["r:startWeek:null→18"]);
+    // «Semana cero», sin tildes ni mayúsculas, también; una «Semana 0» vacía (RC Inmobiliaria DocuSign) no recibe inicio.
+    const web = conVivo([fase("s0", "SEMANA CERO · arranque", 1, null, "PENDING", []), fase("w", "Diseño web", 2, null, "PENDING", [tarea("w1", 0)])]);
+    expect(reprogramar(SIN_LA_IA(), "en-el-orden-del-plan", web, HOY, false).cambios.map(comoTexto)).toEqual(["w:startWeek:null→18"]);
+    // Solo la PRIMERA fase y solo por el nombre: una «Semana 0» que no es la primera se reprograma como cualquiera.
+    const segunda = conVivo([fase("r", "Relevamiento técnico", 2, null, "PENDING", [tarea("r1", 0)]), fase("s0", "Semana 0", 1, 3, "PENDING", [tarea("x", 0)])]);
+    expect(casillas(reprogramar(SIN_LA_IA(), "en-el-orden-del-plan", segunda, HOY, false)).map((c) => c.faseId)).toEqual(["r", "s0"]);
   });
 
   it("⭐ casi terminada: empezada, 1 abierta de 12 y la ventana cerrada → no se estira, se nombra", () => {
@@ -793,10 +900,16 @@ describe("M5 · lo que «traer a hoy» no toca", () => {
     expect(r.semana).toBe(1);
     expect(r.traidas, "trajo lo de la Semana 0").toEqual([]);
     expect(r.sinHacer).toEqual([{ faseId: "f01", motivo: "semana-0" }]);
-    // El mismo cronograma en un Desarrollo: su primera fase es trabajo real, en curso, y lo vencido se trae.
-    const desarrollo = reprogramarCon(SIN_LA_IA(), "en-el-orden-del-plan", "traer-a-hoy", VIVO, enLaS1, false);
+    /* El mismo cronograma en un Desarrollo: su primera fase es trabajo real, en curso, y lo vencido se trae.
+       2026-09-27, revisión de M1–M5 (hallazgo 3): la primera fase del fixture se llama «Semana 0», y desde la revisión una
+       primera fase con ese nombre es la Semana 0 también en Desarrollo y Web (se queda quieta). Para seguir probando que la
+       primera fase de un Desarrollo es trabajo real, acá se llama «Relevamiento técnico», como en la cartera. */
+    const vivoDeDesarrollo: Vivo = { ...VIVO, fases: VIVO.fases.map((f) => (f.id === "f01" ? { ...f, name: "Relevamiento técnico" } : f)) };
+    const desarrollo = reprogramarCon(SIN_LA_IA(), "en-el-orden-del-plan", "traer-a-hoy", vivoDeDesarrollo, enLaS1, false);
     expect(desarrollo.traidas.map((t) => t.faseId)).toEqual(["f01", "f01", "f01"]);
     expect(desarrollo.traidas.every((t) => t.a.weekIndex === 1)).toBe(true);
+    // Con su nombre de siempre («Semana 0»), el Desarrollo también la deja quieta.
+    expect(reprogramarCon(SIN_LA_IA(), "en-el-orden-del-plan", "traer-a-hoy", VIVO, enLaS1, false).traidas).toEqual([]);
   });
 
   it("⭐ no se trae lo que tiene fecha fijada ni lo que tocó el chat (se nombra), ni nada de una fase hecha o suspendida", () => {

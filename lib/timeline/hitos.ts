@@ -180,8 +180,16 @@ const ESTADO_POR_RANGO: readonly EstadoDelHito[] = ["hecho", "en curso", "pendie
  * única que puede ser de hito sin llamarse «Cierre…». Guardián de cada hito: el mejor por `rangoDe` y, entre iguales,
  * el primero en el orden (fase, semana, orden). Con `recurrente`, la entrega va por ciclo: una fase con una entrega
  * cierra su ciclo y la siguiente empieza otro (acá, solo con lo que YA existe; R15 lo sigue en el recorrido).
+ * `ultimaViva` (revisión de M1–M5, 2026-09-27, hallazgo 4): el id de la última fase del cronograma VIVO. Cuando `fases`
+ * es la estructura supuesta y el paso 1 agregó una fase detrás de la última (o cambió el orden), la que era última dejaba
+ * de ser fase de hito: su cierre o su entrega perdían al guardián y entraba un duplicado en la agregada. Una fase es de
+ * hito si es la última de `fases` o la última de lo vivo.
  */
-export function hitosDelProyecto(i: { fases: ReadonlyArray<FaseConTareas>; recurrente: boolean }): HitosDelProyecto {
+export function hitosDelProyecto(i: {
+  fases: ReadonlyArray<FaseConTareas>;
+  recurrente: boolean;
+  ultimaViva?: string | null;
+}): HitosDelProyecto {
   interface Candidata {
     hito: Hito;
     ciclo: number | null;
@@ -200,7 +208,8 @@ export function hitosDelProyecto(i: { fases: ReadonlyArray<FaseConTareas>; recur
     for (const t of enOrden) {
       const rango = rangoDe(t);
       if (rango === null) continue;
-      for (const hito of hitosDeLaTarea(t, { name: f.name, esUltima: k === i.fases.length - 1 })) {
+      const esUltima = k === i.fases.length - 1 || (!!i.ultimaViva && f.id === i.ultimaViva);
+      for (const hito of hitosDeLaTarea(t, { name: f.name, esUltima })) {
         candidatas.push({ hito, ciclo: hito === "entrega" && i.recurrente ? ciclo : null, tarea: t, fase: f, rango });
         if (hito === "entrega") conEntrega = true;
       }

@@ -99,8 +99,12 @@ describe("⭐ el agente que arma las TAREAS lee el material", () => {
     expect(detalle, "con `sobre`, el detalle dejó de leer la estructura supuesta").toContain(
       "renderCronogramaParaAgentes(sobre.fases, { includeIds: true })",
     );
+    /* 2026-09-27, revisión de M1–M5 (hallazgo 11): el material sigue armando su calendario con la foto supuesta, pero
+       ubica cada reunión con `sobre.fotoParaUbicar` (el plan sin lo reprogramado desde hoy, el vigente cuando ocurrió).
+       Antes el literal era «{ fases: sobre.foto }»; la edición que la pone en rojo sigue siendo la misma, más dejar de
+       pasar la foto para ubicar. */
     expect(detalle, "con `sobre`, el material dejó de ubicarse en el calendario supuesto").toContain(
-      "cargarMaterialDelCronograma(projectId, { fases: sobre.foto })",
+      "cargarMaterialDelCronograma(projectId, { fases: sobre.foto, ubicarSobre: sobre.fotoParaUbicar ?? null })",
     );
   });
 
@@ -271,9 +275,12 @@ describe("⭐ el reparto: justo, nunca pasa el tope, y el cargador lee con su pr
     expect(iPlan, "arma el plan antes de saber qué tiene contenido").toBeGreaterThan(iLeer);
     // Sin material, ni calendario ni ubicación: el mensaje de un proyecto sin material no cambia.
     expect(tramo, "el calendario dejó de depender de que haya material").toContain("calendario: hayMaterial ?");
+    /* 2026-09-27, revisión de M1–M5 (hallazgo 11): la ubicación usa `fotoParaUbicar` (la de `opts.ubicarSobre`, o la del
+       calendario si no viene). Antes el literal decía `foto`. */
     expect(tramo, "la ubicación dejó de depender de que haya material").toContain(
-      "hayMaterial ? ubicarEnElCronograma(foto, ms)",
+      "hayMaterial ? ubicarEnElCronograma(fotoParaUbicar, ms)",
     );
+    expect(tramo, "la ubicación dejó de caer en la foto del calendario sin `ubicarSobre`").toContain("const fotoParaUbicar = opts.ubicarSobre ?? foto;");
     // Y las reuniones salen del chokepoint, nunca de una lectura directa de vínculos.
     expect(tramo).toContain("getProjectTimelineSessions(projectId)");
     expect(tramo).not.toContain("prisma.sessionProject");

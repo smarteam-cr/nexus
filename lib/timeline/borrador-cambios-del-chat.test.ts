@@ -60,6 +60,7 @@ import {
   type OperacionSobreLaPropuesta,
 } from "./operar-sobre-el-borrador";
 import { describirOperaciones, type Operacion } from "./operaciones";
+import { sinReprogramacion } from "./reprogramar-desde-hoy";
 
 const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
   id,
@@ -1017,5 +1018,90 @@ describe("12 · M4 P4e: una arrastrada frente al chat", () => {
     expect(c).toMatchObject({ porChat: true, a: { title: "Definir el pipeline" } });
     expect(c.a.weekIndex).toBeUndefined();
     expect(c.conCambio).toBeUndefined();
+  });
+});
+
+/**
+ * Revisión de M1–M5 (2026-09-27, hallazgos 5 y 6): una casilla del SISTEMA (lo reprogramado desde hoy) o su pin frente al
+ * chat. Lo que pide el chat pasa a ser del chat: con casilla y número, sin la marca del sistema (`desdeHoy`, `fijaInicio`,
+ * `deLaIA`), igual que `upsertTarea` con una arrastrada (§12).
+ */
+describe("13 · revisión de M1–M5: una casilla del sistema, o el pin, frente al chat", () => {
+  /** «Diseño» empezó y se estira desde hoy; «Pruebas», contigua y ya empezada, lleva el pin donde está hoy (S3). */
+  const VIVO_M4: Vivo = conFase("c", (f) => ({ ...f, status: "IN_PROGRESS", tareas: [{ ...C1, status: "DONE" }, C2] }), conFase("b", (f) => ({ ...f, status: "IN_PROGRESS" })));
+  const DUR_B: CambioFaseCambia = {
+    tipo: "fase-cambia",
+    clave: "fase:b:durationWeeks",
+    faseId: "b",
+    fase: "Diseño",
+    campo: "durationWeeks",
+    desde: 2,
+    a: 6,
+    desdeHoy: true,
+    deLaIA: { a: 3, motivo: "La IA la alargaba." },
+  };
+  const PIN_C: CambioFaseCambia = {
+    tipo: "fase-cambia",
+    clave: "fase:c:startWeek",
+    faseId: "c",
+    fase: "Pruebas",
+    campo: "startWeek",
+    desde: null,
+    a: 3,
+    desdeHoy: true,
+    fijaInicio: true,
+  };
+  const BORRADOR = v1([DUR_B, PIN_C], { tareasArmadasPara: {} });
+  const operar = (b: Borrador, operaciones: OperacionSobreLaPropuesta[], excluidos: string[] = []) =>
+    operarSobreElBorrador({ vivo: VIVO_M4, borrador: b, excluidos, operaciones, nuevaClave: () => "k" });
+  const deLaClave = (b: Borrador, clave: string) => b.cambios.find((c): c is CambioFaseCambia => c.tipo === "fase-cambia" && c.clave === clave);
+  const sinMarcaDelSistema = (c: CambioFaseCambia | undefined) => [c?.desdeHoy, c?.fijaInicio, c?.deLaIA];
+
+  it("⭐ «que Pruebas arranque en S5» sobre el pin: queda un cambio del chat con su casilla y su número, no un pin escondido", () => {
+    /* La edición que la pone en rojo: heredar `desdeHoy` y `fijaInicio` al reemplazar (`upsertCampoDeFase`). Seguía siendo
+       un pin: sin casilla ni número, fuera de «Aplicas N de M», y se aplicaba con cualquier otra cosa marcada, moviendo una
+       fase empezada con lo hecho, mientras la fase decía «Se fija su inicio…». */
+    const r = operar(BORRADOR, [{ op: "fase.arranque-relativo", phaseId: "c", semana: 5 }]);
+    expect(r.rechazadas).toEqual([]);
+    const c = deLaClave(r.borrador, PIN_C.clave);
+    expect(c).toMatchObject({ desde: null, a: 5, porChat: true });
+    expect(sinMarcaDelSistema(c), "le quedó la marca del sistema").toEqual([undefined, undefined, undefined]);
+    const resumen = resumir(VIVO_M4, r.borrador);
+    expect(resumen.fijadas.filter((p) => !p.alAplicar), "sigue siendo un pin").toEqual([]);
+    const item = resumen.items.find((it) => it.clave === PIN_C.clave);
+    expect(item?.numero, "no tiene casilla ni número").toBeGreaterThan(0);
+    expect(item?.desdeHoy, "se lee «lo decide el sistema»").toBeUndefined();
+    const plan = planDeAplicacion(VIVO_M4, r.borrador, [PIN_C.clave]);
+    expect(itemDe(plan, PIN_C.clave).estado, "no se puede desmarcar").toBe("excluido");
+  });
+
+  it("⭐ «Diseño, que dure 4 semanas» sobre una casilla del sistema: queda del chat, no se lee «lo decide el sistema», y un reintento no lo pierde", () => {
+    /* La edición que la pone en rojo: heredar `desdeHoy` y `deLaIA`. La duración que pidió el CSE seguía como decisión del
+       sistema (su chip, su «Está atrasada…», y el chat la contaba como «lo decide el sistema»), y `sinReprogramacion` la
+       borraba en un «Volver a intentar» del paso 2 (o restauraba lo de la IA) sin avisar. */
+    const r = operar(BORRADOR, [{ op: "fase.duracion", phaseId: "b", semanas: 4 }]);
+    const c = deLaClave(r.borrador, DUR_B.clave);
+    expect(c).toMatchObject({ desde: 2, a: 4, porChat: true });
+    expect(sinMarcaDelSistema(c)).toEqual([undefined, undefined, undefined]);
+    expect(resumir(VIVO_M4, r.borrador).items.find((it) => it.clave === DUR_B.clave)?.desdeHoy).toBeUndefined();
+    const guardado = JSON.parse(JSON.stringify(r.borrador)) as Record<string, unknown>;
+    expect((sinReprogramacion(guardado).cambios as Cambio[]).find((x) => x.clave === DUR_B.clave), "el reintento lo perdió").toMatchObject({
+      a: 4,
+      porChat: true,
+    });
+  });
+
+  it("⭐ y si después pide «déjala contigua», la fase empezada no se corre: sin el pin, se fija al aplicar", () => {
+    /* La edición que la pone en rojo: quitar el paso 10 de `planDeAplicacion`. Con el pin vuelto del chat y después quitado
+       («déjala contigua»), el estiramiento de «Diseño» corría «Pruebas», que ya empezó, con su hecha. */
+    const delChat = operar(BORRADOR, [{ op: "fase.arranque-relativo", phaseId: "c", semana: 5 }]).borrador;
+    const r = operar(delChat, [{ op: "fase.arranque-relativo", phaseId: "c", semana: null }]);
+    expect(deLaClave(r.borrador, PIN_C.clave), "se quedó el cambio del chat").toBeUndefined();
+    const plan = planDeAplicacion(VIVO_M4, r.borrador);
+    expect(plan.fijadasAlAplicar).toEqual([{ faseId: "c", semana: 3 }]);
+    expect(plan.escrituras.fases.find((f) => f.id === "c")?.campos).toEqual({ startWeek: 3 });
+    // Sobre el pin del sistema, «déjala donde está» no lo borra.
+    const sobreElPin = operar(BORRADOR, [{ op: "fase.arranque-relativo", phaseId: "c", semana: null }]);
+    expect(deLaClave(sobreElPin.borrador, PIN_C.clave), "se borró el pin").toMatchObject({ fijaInicio: true, desdeHoy: true });
   });
 });

@@ -38,6 +38,7 @@ import {
   claveDeTareaQueSeVa,
   esArrastrada,
   esVacioEsperandoTareas,
+  estructuraHipotetica,
   fotoDeTarea,
   leerBorrador,
   modoDeLaPropuesta,
@@ -51,7 +52,9 @@ import {
   type Vivo,
 } from "./borrador";
 import {
+  ES_UN_HITO,
   estructuraParaElDetalle,
+  fotoParaUbicarLasReuniones,
   fusionarDetalleEnElBorrador,
   marcarTareasEnCurso,
   QUEDO_SIN_HACER,
@@ -70,7 +73,8 @@ import { tareasTocadas } from "./hechas-fuera-de-lugar";
 import { explicacionEnPantalla, huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 import { observacionDeLasQueNoEntran } from "./hitos";
 import { porQueDeSoloLectura } from "./propuesta-para-el-chat";
-import { leerFixtureGrande } from "./__fixtures__/propuesta-grande";
+import { leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
+import { ubicarEnElCronograma } from "@/lib/contexto/material-cronograma";
 import {
   avisosDeLaMedicion,
   medirM2,
@@ -757,6 +761,52 @@ describe("M2 · los hitos: la fusión los recibe del proyecto y el modelo los le
     expect(s0.hechasDeMas).toBe(2);
     expect(s0.seQuedan).toEqual([{ titulo: "Pausada", porque: "suspendida" }]);
   });
+
+  it("⭐ revisión de M1–M5: un hito pendiente va en «se queda» (hito) y no en «pendiente», el kickoff que sobra en ninguna, y con una fase nueva al final el cierre de la que era la última sigue siendo el hito", async () => {
+    /* Hallazgos 4, 9 y 12 (2026-09-27). Las ediciones que la ponen en rojo: dejar los guardianes en `pendientes` (el
+       modelo leía «repite su título EXACTO» y «los que ya están no se vuelven a proponer»; si los repetía, R14 tiraba la
+       copia y el CSE leía «No entran 2 tareas de la IA: repiten una que ya está»), o medir la última fase solo sobre la
+       estructura supuesta (con «Soporte post-lanzamiento» detrás, el bloque HITOS dejaba de nombrar el cierre y la
+       entrega de «Capacitación & Go Live», y el modelo los volvía a proponer). */
+    const FASES_CON_HITOS = [
+      faseDB("s0", "Semana 0", 0, 2, "IN_PROGRESS", [
+        sesion("k1", "Sesión de kickoff: equipo, roles y accesos", 0, { status: "DONE" }),
+        sesion("k3", "Sesión de kick-off del proyecto", 0),
+        tareaDB("s1", "Recolección de accesos", 1),
+      ]),
+      faseDB("d", "Diseño", 1, 2, "PENDING", [tareaDB("d1", "Mapear procesos", 0)]),
+      faseDB("go", "Capacitación & Go Live", 2, 2, "PENDING", [
+        sesion("e1", "Entrega formal del proyecto a Cliente", 0),
+        sesion("ci", "Sesión de cierre del proyecto", 1),
+      ]),
+    ];
+    const SOPORTE = {
+      tipo: "fase-nueva",
+      clave: "n:0000soporte",
+      fase: { name: "Soporte post-lanzamiento", durationWeeks: 2, startWeek: null, sessionCount: null, notes: null, activityType: null },
+      despuesDe: "go",
+    };
+    for (const cambios of [[], [SOPORTE]]) {
+      conProyecto({ ...borradorVacio({ pedido: "regenerar", corrida: "run-2" }), cambios }, FASES_CON_HITOS, { tags: [], hubspotPipelineId: CUSTOMER_SUCCESS });
+      const l = (await estructuraParaElDetalle("tl", "run-2"))!.loQueYaHay!;
+      const como = cambios.length === 0 ? "sin fase nueva" : "con una fase nueva al final";
+      const [s0, , go] = l.fases;
+      expect(go.pendientes, `${como}: un hito quedó en «pendiente»`).toEqual([]);
+      expect(go.seQuedan, como).toEqual([
+        { titulo: "Entrega formal del proyecto a Cliente", porque: ES_UN_HITO },
+        { titulo: "Sesión de cierre del proyecto", porque: ES_UN_HITO },
+      ]);
+      expect(s0.pendientes, `${como}: el kickoff que sobra quedó en «pendiente»`).toEqual([{ titulo: "Recolección de accesos", semana: 1 }]);
+      expect(s0.seQuedan ?? [], como).toEqual([]);
+      expect([l.hitos!.cierre, l.hitos!.entrega], como).toEqual([
+        [{ titulo: "Sesión de cierre del proyecto", estado: "pendiente" }],
+        [{ titulo: "Entrega formal del proyecto a Cliente", estado: "pendiente" }],
+      ]);
+      const texto = renderLoQueYaHay(l);
+      expect(texto).toContain(`«Sesión de cierre del proyecto» (${ES_UN_HITO})`);
+      expect(texto, `${como}: le pidió repetir un hito`).not.toContain("«Sesión de cierre del proyecto» (weekIndex");
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1420,6 +1470,16 @@ describe("M4 P4c · el paso 2 frente a lo que corrió el código", () => {
     expect(l2.fases.find((f) => f.id === "d")!.seQuedan).toEqual(diseno.seQuedan);
   });
 
+  it("⭐ revisión de M1–M5: el paso 2 lleva la foto para ubicar las reuniones SIN lo reprogramado (el calendario, con ello)", async () => {
+    /* Hallazgo 11 (2026-09-27). La edición que la pone en rojo: no poner `fotoParaUbicar` en `supuestaDe` (las reuniones
+       se ubicaban en «Diseño» estirado hasta hoy y no en «Pruebas», que ocupaba esas semanas cuando ocurrieron). */
+    enLaBaseP4c(await marcado());
+    const sobre = (await estructuraParaElDetalle("tl", "run-2"))!;
+    const fases = (f: typeof sobre.foto | undefined) => f?.phases.map((x) => [x.id, x.startWeek ?? null, x.durationWeeks]);
+    expect(fases(sobre.foto), "el calendario, con lo reprogramado").toEqual([["s0", null, 2], ["d", 2, 19], ["p", 21, 2]]);
+    expect(fases(sobre.fotoParaUbicar), "sin foto para ubicar las reuniones").toEqual([["s0", null, 2], ["d", 2, 4], ["p", 6, 2]]);
+  });
+
   it("⭐ la fusión real conserva lo que corrió el sistema, no lo reemplaza, y lo que la IA repite de ello no entra", async () => {
     /* La edición que la pone en rojo: `seConserva` sin `desdeHoy` (la fusión borraba las arrastradas escritas por la
        marca: «Diseño» quedaba estirado y sus pendientes, vencidas en su semana vieja). */
@@ -1724,5 +1784,31 @@ describe("M4 P4h · la medición de M3 y M4 lee lo que escribe la fusión", () =
     const conTodo = medir(todo, vivoG(conCierre));
     expect(pasan(conTodo), "contó lo del cierre desmarcado").toEqual([[5, true], [6, true], [7, true], [8, true]]);
     expect(conTodo[1].detalle).toBe("7 casillas, 1 fase fija y 25 tareas que se corren con su fase, desde la S18 (todo desde hoy).");
+  });
+});
+
+describe("Revisión de M1–M5 · las reuniones se ubican en el plan vigente cuando ocurrieron", () => {
+  it("⭐ con el fixture reprogramado, la reunión de la S6 sigue en «Fase D» y «Fase E», no en «Fase A» estirada hasta hoy", () => {
+    /* Hallazgo 11 (2026-09-27). La edición que la pone en rojo: ubicar con la estructura supuesta (con lo `desdeHoy`):
+       «Fase A» (Sales Hub) estirada hasta hoy cubría la S6 y «Fase D» y «Fase E» (Service y Marketing Hub), movidas
+       enteras a la S20, desaparecían de ella. Lo acordado sobre Service Hub quedaba apuntado a Sales Hub. */
+    const fx = leerFixtureGrande();
+    const vivo = vivoDelFixture(fx);
+    const vacio = JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+    const r = reprogramarDesdeHoy({ vivo, borrador: leerBorrador(vacio)!, hoy: new Date(fx.hoy), politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!;
+    const reprogramado = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio, r))))!;
+    const enLaS6 = Date.parse("2026-07-02T15:00:00Z");
+    const foto = fotoParaUbicarLasReuniones(vivo, reprogramado, null)!;
+    expect(foto, "sin foto propia para ubicar").toBeDefined();
+    const dondeCae = ubicarEnElCronograma(foto, enLaS6);
+    expect(dondeCae).toContain("«Fase D»");
+    expect(dondeCae).toContain("«Fase E»");
+    expect(dondeCae, "la ubicó en la fase estirada").not.toContain("«Fase A»");
+    // La foto del calendario (la supuesta, con lo reprogramado) sí la pondría en «Fase A»: por eso van separadas.
+    const supuesta = estructuraHipotetica(vivo, reprogramado);
+    const conLoDeHoy = { anchorStartDate: supuesta.ancla, phases: supuesta.fases.map((f) => ({ id: f.id, name: f.name, durationWeeks: f.durationWeeks, startWeek: f.startWeek })) };
+    expect(ubicarEnElCronograma(conLoDeHoy, enLaS6)).toContain("«Fase A»");
+    // Sin nada del sistema, no hace falta otra foto.
+    expect(fotoParaUbicarLasReuniones(vivo, leerBorrador(vacio)!, null)).toBeUndefined();
   });
 });

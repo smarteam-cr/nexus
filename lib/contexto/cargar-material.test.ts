@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resumenDelInforme, type FotoDelCronograma } from "./material-cronograma";
+import type { EstructuraSupuesta } from "./cronograma-para-agentes";
 
 /**
  * lib/contexto/cargar-material.test.ts — LAS OPCIONES DEL CARGADOR DEL MATERIAL LLEGAN.
@@ -48,7 +49,9 @@ vi.mock("@/lib/canvas/load-canvas-context", () => ({ loadHandoffContext: vi.fn()
 vi.mock("@/lib/canvas/desarrollo-context", () => ({ loadDesarrolloContext: vi.fn() }));
 vi.mock("@/lib/cs/hubspot-ops-block", () => ({ bloqueDeOperativa: vi.fn(() => "") }));
 
-const { cargarMaterialDelCronograma, cargarMaterialParaElChat } = await import("./cargar");
+const { cargarContextoDelDetalle, cargarMaterialDelCronograma, cargarMaterialParaElChat } = await import("./cargar");
+const { loadHandoffContext } = await import("@/lib/canvas/load-canvas-context");
+const { loadDesarrolloContext } = await import("@/lib/canvas/desarrollo-context");
 
 const DIA = 86_400_000;
 const AHORA = Date.UTC(2026, 8, 23, 18);
@@ -75,6 +78,11 @@ function sembrar() {
 const FOTO_DE_QUIEN_LLAMA: FotoDelCronograma = {
   anchorStartDate: "2026-09-14T00:00:00.000Z",
   phases: [{ id: "f1", name: "Fase de quien llama", durationWeeks: 4, startWeek: null }],
+};
+/** Revisión de M1–M5: la del plan vigente cuando ocurrieron las reuniones (el paso 2, sin lo reprogramado desde hoy). */
+const FOTO_PARA_UBICAR: FotoDelCronograma = {
+  anchorStartDate: "2026-09-14T00:00:00.000Z",
+  phases: [{ id: "f1", name: "Fase del plan vigente", durationWeeks: 4, startWeek: null }],
 };
 
 beforeAll(() => {
@@ -122,6 +130,33 @@ describe("⭐ las opciones del cargador del material llegan", () => {
     expect(m.calendario).toContain("Fase de quien llama");
     expect(m.calendario).not.toContain("Fase de la base");
     expect(m.reuniones).toContain("«Fase de quien llama», su semana");
+  });
+
+  it("`ubicarSobre`: cada reunión se ubica en ESA foto; el calendario sigue en la de `fases`", async () => {
+    /* Revisión de M1–M5 (2026-09-27, hallazgo 11). La edición que la pone en rojo: ignorar `ubicarSobre` (ubicar con la foto
+       del calendario). En el paso 2, la foto del calendario trae lo reprogramado desde hoy: una reunión de la S6 sobre
+       Service Hub se leía en «Sales Hub», estirada hasta hoy. */
+    const m = await cargarMaterialDelCronograma("p1", { fases: FOTO_DE_QUIEN_LLAMA, ubicarSobre: FOTO_PARA_UBICAR });
+    expect(m.calendario).toContain("Fase de quien llama");
+    expect(m.calendario).not.toContain("Fase del plan vigente");
+    expect(m.reuniones).toContain("«Fase del plan vigente», su semana");
+    expect(m.reuniones).not.toContain("«Fase de quien llama», su semana");
+  });
+
+  it("el paso 2 pasa su `fotoParaUbicar` al cargador (`cargarContextoDelDetalle` con `sobre`)", async () => {
+    /* Revisión de M1–M5 (hallazgo 11). La edición que la pone en rojo: no pasar `sobre.fotoParaUbicar` como `ubicarSobre`. */
+    vi.mocked(loadHandoffContext).mockResolvedValue("");
+    vi.mocked(loadDesarrolloContext).mockResolvedValue("");
+    const sobre: EstructuraSupuesta = {
+      fases: [{ id: "f1", name: "Fase de quien llama", durationWeeks: 4, sessionCount: null, notes: null, activityType: null }],
+      foto: FOTO_DE_QUIEN_LLAMA,
+      fotoParaUbicar: FOTO_PARA_UBICAR,
+      estructura: { ancla: null, fases: [] } as unknown as EstructuraSupuesta["estructura"],
+    };
+    const ctx = await cargarContextoDelDetalle("p1", { sobre });
+    const texto = (key: string) => ctx.fuentes.find((f) => f.key === key)?.texto ?? "";
+    expect(texto("reuniones-del-cronograma")).toContain("«Fase del plan vigente», su semana");
+    expect(texto("calendario-del-cronograma")).toContain("Fase de quien llama");
   });
 
   it("`sinUbicacion`: las reuniones van sin su lugar en el plan (la caché del chat), el calendario sigue", async () => {

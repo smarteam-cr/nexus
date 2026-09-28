@@ -448,10 +448,18 @@ export function operarSobreElBorrador(i: {
       return;
     }
     /* Se re-ancla SOLO este campo (si lo vivo ya no era su `desde`). El motivo de la IA no explica el
-       valor que pidió el chat: sale. */
-    const { motivo: _motivo, ...sinMotivo } = c;
+       valor que pidió el chat: sale.
+       Revisión de M1–M5 (2026-09-27, hallazgos 5 y 6): tampoco la marca del SISTEMA (`desdeHoy`, `fijaInicio`, `deLaIA`),
+       como hace `upsertTarea` con una arrastrada. Lo que pide el chat es del CSE: con su casilla y su número, contado en
+       «Aplicas N de M», y un reintento del paso 2 lo respeta (`sinReprogramacion` solo quita lo `desdeHoy`). Si la
+       heredaba, sobre el pin seguía siendo un pin (sin casilla, y se aplicaba con cualquier otra cosa, moviendo una fase
+       empezada), sobre una casilla del sistema se leía «lo decide el sistema», y un reintento la perdía sin avisar. */
+    const { motivo: _motivo, desdeHoy: _desdeHoy, fijaInicio: _fijaInicio, deLaIA: _deLaIA, ...base } = c;
     void _motivo;
-    reemplazar(c, { ...sinMotivo, desde: hoy, a: v, porChat: true });
+    void _desdeHoy;
+    void _fijaInicio;
+    void _deLaIA;
+    reemplazar(c, { ...base, desde: hoy, a: v, porChat: true });
     incluir(c.clave);
   };
   /** El contenido de una fase nueva (sin `desde`: se edita tal cual). */

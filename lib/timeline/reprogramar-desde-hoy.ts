@@ -131,12 +131,35 @@ export function esObservacionDeLaReprogramacion(texto: string): boolean {
 const abierta = (t: TareaDelVivo) => t.status === "PENDING" || t.status === "IN_PROGRESS";
 const quieta = (status: string | undefined) => status === "DONE" || status === "SUSPENDED";
 
+/** Un nombre que dice que la fase ES la Semana 0: empieza con «Semana 0» o «Semana cero» (sin tildes ni mayúsculas). */
+const SE_LLAMA_SEMANA_CERO = /^semana\s*(0|cero)\b/;
+
+/**
+ * La Semana 0 de la reprogramación (D1: nunca se reprograma, de ella solo se avisa). La del pipeline (`faseDeSemanaCero`)
+ * y, en Desarrollo y Web (sin Semana 0 en el pipeline), la PRIMERA fase si se llama «Semana 0» o «Semana cero».
+ * Revisión de M1–M5 (2026-09-27, hallazgo 3): la premisa «en Desarrollo y Web no hay Semana 0» no se cumple en los datos
+ * (5 de sus 14 cronogramas activos empiezan con una «Semana 0»: JUDESUR, SmartAgro, AMVAC, Grupo Printer y RC Inmobiliaria
+ * DocuSign) y la reprogramación la estiraba (JUDESUR: de 1 a 10 semanas, con sus 10 pendientes corridas a hoy). Solo por el
+ * nombre exacto y solo la primera: en Desarrollo la primera suele ser «Relevamiento técnico», que es trabajo y se
+ * reprograma. No es la del kickoff que agrega el sistema (R15 sigue con la del pipeline).
+ */
+export function semanaCeroDeLaReprogramacion<T extends { id: string; name: string }>(
+  fasesEnOrden: readonly T[],
+  conSemanaCero: boolean,
+): T | null {
+  const delPipeline = faseDeSemanaCero(fasesEnOrden, conSemanaCero);
+  if (delPipeline || conSemanaCero) return delPipeline;
+  const primera = fasesEnOrden[0];
+  const nombre = (primera?.name ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  return primera && SE_LLAMA_SEMANA_CERO.test(nombre) ? primera : null;
+}
+
 /**
  * La reprogramación de lo atrasado, o null sin fecha de arranque (no hay semana de hoy). Con «avisar», sin cambios ni
  * tareas: solo lo que quedó sin hacer. `borrador` llega SIN cambios del sistema de una marca anterior (`sinReprogramacion`)
  * y sus cambios de estructura son la estructura supuesta (`estructuraHipotetica`, la que después ve el paso 2).
  * `conSemanaCero`: el pipeline tiene Semana 0 (`!tieneVozDeHandoffPropia`); en Desarrollo y Web la primera fase es trabajo
- * real y se reprograma como cualquiera.
+ * real y se reprograma como cualquiera, salvo que se llame «Semana 0» (`semanaCeroDeLaReprogramacion`).
  */
 export function reprogramarDesdeHoy(i: {
   vivo: Vivo;
@@ -155,7 +178,7 @@ export function reprogramarDesdeHoy(i: {
   const rangosVivos = computePhaseRanges(i.vivo.fases);
   const inicioVivo = new Map(i.vivo.fases.map((f, k) => [f.id, rangosVivos[k].start]));
   const vivaPorId = new Map<string, FaseViva>(i.vivo.fases.map((f) => [f.id, f]));
-  const cero = faseDeSemanaCero(E.fases, i.conSemanaCero)?.id ?? null;
+  const cero = semanaCeroDeLaReprogramacion(E.fases, i.conSemanaCero)?.id ?? null;
 
   /* Lo que ya tiene un cambio en el borrador no se corre: lo del chat (D6) y, por las dudas, cualquier otro cambio de
      esa tarea (dos cambios con la misma clave no pueden convivir). */

@@ -42,6 +42,7 @@ import {
   claveAleatoria,
   esBorradorV1,
   esCambioDeTarea,
+  esDesdeHoy,
   esVacioEsperandoTareas,
   estadoDeLasTareas,
   estadoDelVacio,
@@ -74,7 +75,7 @@ import { MENSAJE_PROPUESTA_CAMBIO, SELECT_DE_FASE, SELECT_DE_TAREA } from "./esc
 import { sugeridasQueEntran, tareasTocadas } from "./hechas-fuera-de-lugar";
 import { AVISO_PROPUESTA_PENDIENTE, faseDeSemanaCero, MENSAJE_ESTRUCTURA_EN_CURSO } from "./propuesta-de-estructura";
 import { ID_ESTRUCTURA_CRONOGRAMA, VENTANA_DEL_PASO_1_EN_CURSO_MS } from "@/lib/agents/estructura-cronograma";
-import { hitosDelProyecto, type GuardianDeHito, type Hito } from "./hitos";
+import { hitosDelProyecto, type GuardianDeHito, type Hito, type HitosDelProyecto } from "./hitos";
 import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
 import { conLaReprogramacion, reprogramarDesdeHoy, sinReprogramacion } from "./reprogramar-desde-hoy";
 import { tieneVozDeHandoffPropia } from "./semana-cero";
@@ -767,6 +768,8 @@ const corta = (t: string) => (t.length > LARGO_DE_UNA_HECHA ? `${t.slice(0, LARG
 export const QUEDO_SIN_HACER = "quedó sin hacer";
 /** M4 (D6): por qué se queda una abierta que el sistema corrió con su fase (R2 no la reemplaza), en «se queda». */
 export const SE_CORRIO_A_HOY = "se corrió a hoy";
+/** Revisión de M1–M5 (hallazgos 9 y 12): el porqué de un hito que ya está (el guardián): se queda aunque la IA no lo repita. */
+export const ES_UN_HITO = "hito";
 
 /** M2: por qué se queda una tarea que no es ni hecha ni pendiente de la IA (R2 no la reemplaza). null = no se queda por eso. */
 function porQueSeQueda(t: TareaDelVivo): string | null {
@@ -785,14 +788,11 @@ function porQueSeQueda(t: TareaDelVivo): string | null {
 function hitosParaElModelo(
   estructura: EstructuraHipotetica,
   vivas: ReadonlyMap<string, Vivo["fases"][number]>,
+  guardianes: HitosDelProyecto["guardianes"],
   hitos: { recurrente: boolean; conSemanaCero: boolean },
   soloFases: readonly string[] | null,
   pasado: PasadoDeLaPropuesta | null,
 ): NonNullable<LoQueYaHay["hitos"]> {
-  const { guardianes } = hitosDelProyecto({
-    fases: estructura.fases.map((f) => ({ id: f.id, name: f.name, tareas: f.existente ? (vivas.get(f.id)?.tareas ?? []) : [] })),
-    recurrente: hitos.recurrente,
-  });
   const deHito = (h: Hito) =>
     [...guardianes.values()]
       .filter((g) => g.hito === h)
@@ -823,6 +823,11 @@ function hitosParaElModelo(
  * M4 (2026-09-27, D6): las MOVIDAS (lo que el sistema corrió desde hoy, `desdeHoy` en el borrador) tampoco van en
  * `pendientes`: R2 no las reemplaza. Van en `seQuedan` con «se corrió a hoy», aunque su semana vieja haya vencido (R13 mira
  * la nueva), y también con alcance (el recálculo tampoco las reemplaza).
+ * Revisión de M1–M5 (2026-09-27, hallazgos 9 y 12): tampoco van en `pendientes` los HITOS que ya están (los guardianes de
+ * `hitosDelProyecto`) ni el kickoff que sobra. Ahí el modelo leía «repite su título EXACTO y su weekIndex» y, en el bloque
+ * de los hitos, «los que ya están no se vuelven a proponer»; si los repetía, R14 tiraba la copia y el CSE leía «No entran
+ * 2 tareas de la IA: repiten una que ya está». El guardián va en `seQuedan` con «hito» (R2 no lo reemplaza); el sobrante,
+ * en ninguna lista (el sistema lo quita, con su motivo).
  */
 function loQueYaHayDe(
   estructura: EstructuraHipotetica,
@@ -835,6 +840,14 @@ function loQueYaHayDe(
   const conAlcance = !!soloFases && soloFases.length > 0;
   const vivas = new Map(vivo.fases.map((f) => [f.id, f]));
   const movidas = new Set(borrador.cambios.flatMap((c) => (c.tipo === "tarea-cambia" && c.desdeHoy ? [c.tareaId] : [])));
+  // Los hitos del proyecto, igual que R15: las fases de la estructura supuesta con lo vivo de ahora, y la última de lo vivo.
+  const delProyecto = hitosDelProyecto({
+    fases: estructura.fases.map((f) => ({ id: f.id, name: f.name, tareas: f.existente ? (vivas.get(f.id)?.tareas ?? []) : [] })),
+    recurrente: hitos.recurrente,
+    ultimaViva: vivo.fases[vivo.fases.length - 1]?.id ?? null,
+  });
+  const guardianes = new Set([...delProyecto.guardianes.values()].flatMap((g) => (g.tareaId !== null ? [g.tareaId] : [])));
+  const sobrantes = new Set(delProyecto.sobrantes.map((s) => s.tareaId));
   const conPasado = conAlcance ? null : pasado;
   const rangos = computePhaseRanges(estructura.fases);
   const porFase: NonNullable<LoQueYaHay["pasado"]>["porFase"] = [];
@@ -850,7 +863,8 @@ function loQueYaHayDe(
     const seQuedan = tareas.flatMap((t) => {
       const porque = movidas.has(t.id)
         ? SE_CORRIO_A_HOY
-        : (porQueSeQueda(t) ?? (deLaIA(t) && vencida(t.weekIndex) ? QUEDO_SIN_HACER : null));
+        : (porQueSeQueda(t) ??
+          (deLaIA(t) && vencida(t.weekIndex) ? QUEDO_SIN_HACER : deLaIA(t) && guardianes.has(t.id) ? ES_UN_HITO : null));
       return porque ? [{ titulo: corta(t.title), porque }] : [];
     });
     if (vencida(0) && estado !== "terminada") {
@@ -865,8 +879,9 @@ function loQueYaHayDe(
       hechas: hechas.slice(0, HECHAS_POR_FASE).map((t) => corta(t.title)),
       // Lo que la IA puede conservar: pendiente y no escrito a mano (lo demás se queda igual, R2). M3: y no vencido.
       // M4: ni lo que corrió el sistema (se queda, en «se queda»).
+      // Revisión de M1–M5: ni un hito que ya está (va en «se queda») ni el kickoff que sobra (lo quita el sistema).
       pendientes: tareas
-        .filter((t) => deLaIA(t) && !vencida(t.weekIndex) && !movidas.has(t.id))
+        .filter((t) => deLaIA(t) && !vencida(t.weekIndex) && !movidas.has(t.id) && !guardianes.has(t.id) && !sobrantes.has(t.id))
         .slice(0, PENDIENTES_POR_FASE)
         .map((t) => ({ titulo: t.title, semana: t.weekIndex })),
       ...(seQuedan.length > 0 ? { seQuedan: seQuedan.slice(0, SE_QUEDAN_POR_FASE) } : {}),
@@ -879,14 +894,42 @@ function loQueYaHayDe(
     observaciones: [...borrador.observaciones],
     terminadasQueNoSeTocan: conAlcance ? [] : fases.filter((f) => f.estado === "terminada").map((f) => f.id),
     conAlcance,
-    hitos: hitosParaElModelo(estructura, vivas, hitos, soloFases, conPasado),
+    hitos: hitosParaElModelo(estructura, vivas, delProyecto.guardianes, hitos, soloFases, conPasado),
     // M3: solo si alguna fase tiene semanas que ya pasaron (si no, el modelo no necesita saber la semana de hoy).
     ...(semana !== null && porFase.length > 0 ? { pasado: { semanaDeHoy: semana, porFase } } : {}),
   };
 }
 
+/** La foto del plan de una estructura (el ancla, el cierre fijado a mano y las fases en orden). */
+function fotoDeLaEstructura(estructura: EstructuraHipotetica, closeDateOverride: Date | null): EstructuraSupuesta["foto"] {
+  return {
+    anchorStartDate: estructura.ancla,
+    closeDateOverride,
+    phases: estructura.fases.map((f) => ({ id: f.id, name: f.name, durationWeeks: f.durationWeeks, startWeek: f.startWeek })),
+  };
+}
+
+/**
+ * Revisión de M1–M5 (2026-09-27, hallazgo 11): la foto con que se UBICAN las reuniones del material del paso 2: la
+ * estructura supuesta SIN lo que el sistema reprogramó desde hoy (`esDesdeHoy`), que es el plan vigente cuando ocurrieron.
+ * Lo mismo que `antes` en `lecturaDelSistema`. undefined si el borrador no trae nada del sistema (se ubica con la de
+ * siempre). Antes de M4 ningún cambio movía el pasado y daba igual; con M4 una fase estirada cubre semanas vencidas y una
+ * movida entera desaparece de ellas: una reunión de la S6 sobre «Service Hub» se leía en «Sales Hub», semana 5 de 20.
+ */
+export function fotoParaUbicarLasReuniones(
+  vivo: Vivo,
+  borrador: Borrador,
+  closeDateOverride: Date | null,
+  sin: readonly string[] = [],
+): EstructuraSupuesta["foto"] | undefined {
+  if (!borrador.cambios.some(esDesdeHoy)) return undefined;
+  const sinLoDeHoy = estructuraHipotetica(vivo, { ...borrador, cambios: borrador.cambios.filter((c) => !esDesdeHoy(c)) }, sin);
+  return fotoDeLaEstructura(sinLoDeHoy, closeDateOverride);
+}
+
 /** La estructura supuesta como la lee el agente: sus fases para el texto, su foto, el alcance y (L5) lo que
- *  ya hay en cada fase. M2: `hitos` (del proyecto, `hitosDelPaso2`) para el bloque de los hitos. */
+ *  ya hay en cada fase. M2: `hitos` (del proyecto, `hitosDelPaso2`) para el bloque de los hitos.
+ *  `sin`: lo desmarcado con que se armó `estructura` (el recálculo), para la foto con que se ubican las reuniones. */
 function supuestaDe(
   estructura: EstructuraHipotetica,
   closeDateOverride: Date | null,
@@ -895,7 +938,9 @@ function supuestaDe(
   borrador: Borrador,
   hitos: { recurrente: boolean; conSemanaCero: boolean },
   pasado: PasadoDeLaPropuesta | null,
+  sin: readonly string[] = [],
 ): EstructuraSupuesta {
+  const paraUbicar = fotoParaUbicarLasReuniones(vivo, borrador, closeDateOverride, sin);
   return {
     fases: estructura.fases.map((f) => ({
       id: f.id,
@@ -905,11 +950,8 @@ function supuestaDe(
       notes: f.notes,
       activityType: f.activityType,
     })),
-    foto: {
-      anchorStartDate: estructura.ancla,
-      closeDateOverride,
-      phases: estructura.fases.map((f) => ({ id: f.id, name: f.name, durationWeeks: f.durationWeeks, startWeek: f.startWeek })),
-    },
+    foto: fotoDeLaEstructura(estructura, closeDateOverride),
+    ...(paraUbicar ? { fotoParaUbicar: paraUbicar } : {}),
     estructura,
     ...(soloFases && soloFases.length > 0 ? { soloFases } : {}),
     loQueYaHay: loQueYaHayDe(estructura, vivo, borrador, soloFases, hitos, pasado),
@@ -950,7 +992,7 @@ export async function estructuraParaElDetalle(
     if (!borrador.tareas?.listas) return null;
     const r = borrador.recalculo;
     // M3 (D3): el recálculo, sin lo que ya pasó (como su fusión).
-    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id), vivo, borrador, hitos, null);
+    return supuestaDe(estructuraHipotetica(vivo, borrador, r.sin), tl.closeDateOverride, r.fases.map((f) => f.id), vivo, borrador, hitos, null, r.sin);
   }
   if (borrador.tareas === null || borrador.tareas.listas || borrador.tareas.corrida !== corrida) return null;
   return supuestaDe(

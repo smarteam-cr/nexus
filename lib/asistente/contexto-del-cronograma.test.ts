@@ -35,6 +35,7 @@ import {
   DEL_SISTEMA_SE_CREA,
   DEL_SISTEMA_SE_QUITA,
   DEL_SISTEMA_TRAIDA,
+  DEL_SISTEMA_VA_DESPUES,
   LEYENDA_DE_LA_SUGERIDA,
   LINEA_DE_LA_PROPUESTA_EDITABLE,
   lineaDeSoloLectura,
@@ -1009,7 +1010,13 @@ describe("⛔ M4 P4e · lo que reprogramó el sistema desde hoy, en el contexto 
     const c = armarContextoConPropuesta(entrada(paraElChat({ vivo: VIVO_G, borrador: REPROGRAMADO })), { techo: Number.POSITIVE_INFINITY });
     const indice = indiceDe(c.texto);
     expect(indice).toHaveLength(8);
-    expect(indice.every((l) => l.includes(DEL_SISTEMA_DESDE_HOY)), "un número del sistema sin su marca").toBe(true);
+    /* 2026-09-27, revisión de M1–M5 (hallazgo 10): la nota sale de `lecturaDelSistema`, lo mismo que dice el Gantt. Antes
+       las 8 decían «está atrasada»; el 8 («Fase J») el Gantt lo lee «va después de lo que la precedía en el plan» (el
+       rebote de «Fase I» la deja detrás), y el chat ahora dice lo mismo. */
+    expect(indice.slice(0, 7).every((l) => l.includes(DEL_SISTEMA_DESDE_HOY)), "un número del sistema sin su marca").toBe(true);
+    expect(indice[7]).toContain("Fase J");
+    expect(indice[7]).toContain(DEL_SISTEMA_VA_DESPUES);
+    expect(indice[7]).not.toContain(DEL_SISTEMA_DESDE_HOY);
     const lineas = c.texto.split("\n");
     const deA = lineas.findIndex((l) => /^1\. /.test(l));
     expect(lineas[deA + 1]).toBe(`   ${pendientesQueSeCorren(8, 1)}`);
@@ -1018,6 +1025,44 @@ describe("⛔ M4 P4e · lo que reprogramó el sistema desde hoy, en el contexto 
     // «Fase D» se mueve entera: no arrastra nada (sus tareas van con ella).
     const deD = lineas.findIndex((l) => l.startsWith("3. ") && l.includes("Fase D"));
     expect(lineas[deD + 1]).not.toMatch(/se corren? con el cambio/);
+  });
+
+  it("⭐ una fase NO atrasada que va detrás de lo que la precedía dice «va después», no «está atrasada»", () => {
+    /* Revisión de M1–M5 (2026-09-27, hallazgo 10). La edición que la pone en rojo: ponerle a todo `desdeHoy` la nota de la
+       atrasada (`DEL_SISTEMA_DESDE_HOY`). «Pruebas» (S18–S20) no venció: se corre porque «Diseño», que se estira desde hoy,
+       ahora termina en la S21. Si el CSE preguntaba por qué, el chat contestaba que estaba atrasada. */
+    const t = (id: string, weekIndex: number, status = "PENDING"): TareaDelVivo => ({
+      id,
+      title: `Tarea ${id}`,
+      weekIndex,
+      notes: null,
+      party: "SMARTEAM",
+      type: "TASK",
+      status,
+      source: "AGENT",
+      inicioFijado: null,
+      finFijado: null,
+    });
+    const f = (id: string, name: string, startWeek: number, durationWeeks: number, status: string, tareas: TareaDelVivo[]): FaseViva => ({
+      id,
+      name,
+      durationWeeks,
+      startWeek,
+      sessionCount: null,
+      notes: null,
+      activityType: null,
+      status,
+      tareas,
+    });
+    const vivo: Vivo = { ancla: FIX.ancla, fases: [f("x", "Diseño", 2, 4, "IN_PROGRESS", [t("x1", 0, "DONE"), t("x2", 1)]), f("y", "Pruebas", 18, 3, "PENDING", [t("y1", 0)])] };
+    const r = reprogramarDesdeHoy({ vivo, borrador: leerBorrador(vacio())!, hoy: new Date(FIX.hoy), politica: POLITICA_DE_ATRASOS, conSemanaCero: false })!;
+    expect(r.cambios.map((c) => `${c.faseId}:${c.campo}:${String(c.desde)}→${String(c.a)}`), "el escenario").toEqual(["x:durationWeeks:4→19", "y:startWeek:18→21"]);
+    const borrador = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), r))))!;
+    const indice = indiceDe(armarContextoConPropuesta(entrada(paraElChat({ vivo, borrador })), { techo: Number.POSITIVE_INFINITY }).texto);
+    expect(indice).toHaveLength(2);
+    expect(indice[0]).toContain(DEL_SISTEMA_DESDE_HOY);
+    expect(indice[1], "«Pruebas» no está atrasada").toContain(DEL_SISTEMA_VA_DESPUES);
+    expect(indice[1]).not.toContain(DEL_SISTEMA_DESDE_HOY);
   });
 
   it("⛔ las arrastradas no se listan de a una en LOS CAMBIOS (no tienen casilla)", () => {

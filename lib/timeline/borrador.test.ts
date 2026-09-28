@@ -40,6 +40,7 @@ import {
   alternarVista,
   BLOQUEO_VERSION_NUEVA,
   borradorVacio,
+  CHOQUE_EMPEZO_DESPUES,
   claveDeCampo,
   claveDelRecuerdo,
   claveDeRevision,
@@ -96,7 +97,7 @@ import {
 } from "./proposal-deltas";
 import { medirPropuesta } from "./magnitud-propuesta";
 import { borradorDelFixture, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
-import { textoDeLosTotales } from "./vista-de-la-propuesta";
+import { lecturaDelSistema, textoDeLosTotales, vistaDeLaPropuesta } from "./vista-de-la-propuesta";
 import { computePhaseRanges } from "./weeks";
 
 const f = (id: string, name: string, durationWeeks: number, extra: Partial<FaseViva> = {}): FaseViva => ({
@@ -1428,6 +1429,76 @@ describe("19 · M4 P4d: el plan cuenta lo que tiene casilla; las arrastradas y e
     }
     // En curso, en cambio, sí se corre: lo que falta sigue abierto.
     expect(estadoDe(planDeAplicacion(conLaTarea(PRIMERA_DE_A.tareaId, { status: "IN_PROGRESS" }), REPROGRAMADO), PRIMERA_DE_A.clave)).toBe("aplica");
+  });
+
+  /*
+   * Revisión de M1–M5 (2026-09-27, hallazgos 1, 2 y 8): D13 protegía solo las arrastradas. Qué fase «no empezó» y cuál
+   * lleva pin se decidía al CALCULAR; al aplicar, el inicio que el sistema le daba a una fase sin empezar se evaluaba como
+   * cualquier campo y la contigua que empezaba después no tenía pin. La propia propuesta empuja al caso: «Si ya se hizo,
+   * márcala hecha y desmarca su casilla».
+   */
+  describe("D13 al aplicar: lo que empezó después de la propuesta no se mueve, entero ni de rebote", () => {
+    const inicioDe = (vivo: Vivo, plan: PlanDeAplicacion, id: string) => {
+      const p = proyectarConPlan(vivo, plan);
+      return computePhaseRanges(p.fases)[p.fases.findIndex((x) => x.clave === id)].start;
+    };
+    /** La semana absoluta de cada tarea hecha o suspendida, como la pinta la proyección. */
+    const semanasConAvance = (vivo: Vivo, plan: PlanDeAplicacion) => {
+      const p = proyectarConPlan(vivo, plan);
+      const r = computePhaseRanges(p.fases);
+      return new Map(
+        p.fases.flatMap((x, k) =>
+          x.tareas.filter((t) => t.id && (t.status === "DONE" || t.status === "SUSPENDED")).map((t) => [t.id!, r[k].start + t.weekIndex] as const),
+        ),
+      );
+    };
+    const conLaFase = (id: string, cambio: (x: FaseViva) => FaseViva): Vivo => ({ ...VIVO_G, fases: VIVO_G.fases.map((x) => (x.id === id ? cambio(x) : x)) });
+    const primeraDe = (id: string) => VIVO_G.fases.find((x) => x.id === id)!.tareas![0].id;
+    const INICIO_DE_D = claveDeCampo("f05", "startWeek");
+
+    it("⭐ «Fase D» (Service Hub) marcada hecha después de la propuesta: su casilla choca y la fase se queda en S5 con lo hecho", () => {
+      /* La edición que la pone en rojo: quitar el choque de `evaluar` («fase-cambia» con `desdeHoy` y `startWeek` sobre una
+         fase empezada). «Aplicar todo» escribía startWeek 5→20 y sus 8 hechas pasaban de S5–S8 a S20–S23. */
+      const hecha = conLaFase("f05", (x) => ({ ...x, status: "DONE", tareas: x.tareas!.map((t) => ({ ...t, status: "DONE" })) }));
+      const plan = planDeAplicacion(hecha, REPROGRAMADO);
+      expect(plan.items.find((it) => it.cambio.clave === INICIO_DE_D)).toMatchObject({ estado: "choque", choque: CHOQUE_EMPEZO_DESPUES });
+      expect(inicioDe(hecha, plan, "f05"), "se movió una fase hecha").toBe(5);
+      const antes = semanasConAvance(hecha, planDeAplicacion(hecha, REPROGRAMADO, REPROGRAMADO.cambios.map((c) => c.clave)));
+      const despues = semanasConAvance(hecha, plan);
+      for (const [id, semana] of antes) expect(despues.get(id), `${id} cambió de semana`).toBe(semana);
+      // El choque se cuenta como tal, y la casilla deja de decir «no empezó» o «márcala hecha y desmarca».
+      expect([plan.marcadas, plan.choques]).toEqual([7, 1]);
+      const lectura = lecturaDelSistema(hecha, REPROGRAMADO).get(INICIO_DE_D)!;
+      expect(lectura).toMatchObject({ titulo: CHOQUE_EMPEZO_DESPUES, sinNadaMarcado: false });
+      // Una sola tarea en curso ya la empieza.
+      expect(estadoDe(planDeAplicacion(conLaTarea(primeraDe("f05"), { status: "IN_PROGRESS" }), REPROGRAMADO), INICIO_DE_D)).toBe("choque");
+      // Sin avance, se mueve como siempre.
+      expect(estadoDe(planDeAplicacion(VIVO_G, REPROGRAMADO), INICIO_DE_D)).toBe("aplica");
+    });
+
+    it("⭐ una contigua que empezó después y que lo marcado corre de rebote queda fija donde está hoy: «Fase K» en S18, «Fase H» en S12", () => {
+      /* La edición que la pone en rojo: quitar el paso 10 de `planDeAplicacion` (las fijadas al aplicar). «Fase K»
+         (Integración Circle, la de esta semana) se corría a S30 con su tarea hecha detrás de «Fase J», y «Fase H»
+         (Configuración Marketing Hub) de S12 a S25; ninguna casilla lo mostraba ni lo dejaba evitar. */
+      expect(planDeAplicacion(VIVO_G, REPROGRAMADO).fijadasAlAplicar, "sin nada empezado después, no se fija nada").toEqual([]);
+      for (const [id, semana] of [["f12", 18], ["f09", 12]] as const) {
+        const vivo = conLaTarea(primeraDe(id), { status: "DONE" });
+        const plan = planDeAplicacion(vivo, REPROGRAMADO);
+        expect(plan.fijadasAlAplicar, id).toEqual([{ faseId: id, semana }]);
+        expect(inicioDe(vivo, plan, id), `${id} se corrió de rebote`).toBe(semana);
+        expect(plan.escrituras.fases.find((x) => x.id === id)?.campos, `${id}: no se escribe su inicio`).toEqual({ startWeek: semana });
+        expect([plan.marcadas, plan.fijadas], "no es una casilla: va con el pin").toEqual([8, 2]);
+        // La huella cambia: si la empezaron entre lo que vio el CSE y la escritura, se escribe otra cosa (409).
+        expect(plan.huella).not.toBe(planDeAplicacion(VIVO_G, REPROGRAMADO).huella);
+        // La pantalla lo dice en la fase, como el pin.
+        const r = resumir(vivo, REPROGRAMADO);
+        expect(r.fijadas.find((x) => x.fase === id)).toEqual({ clave: `fija:${id}`, fase: id, semana, estado: "aplica", alAplicar: true });
+        const v = vistaDeLaPropuesta(vivo, REPROGRAMADO, r, new Date(FIX.hoy));
+        expect(v.porFase.get(id)!.delSistema.join(" ")).toContain(`Empezó después de la propuesta: se fija su inicio en S${semana}`);
+      }
+      // Con nada del sistema marcado y nada más que aplique, no hay nada que la corra: no se fija.
+      expect(planDeAplicacion(conLaTarea(primeraDe("f12"), { status: "DONE" }), REPROGRAMADO, CASILLAS).fijadasAlAplicar).toEqual([]);
+    });
   });
 
   it("⭐ la huella de un borrador sin `desdeHoy` no cambia (una pestaña abierta durante el deploy sigue aplicando)", () => {

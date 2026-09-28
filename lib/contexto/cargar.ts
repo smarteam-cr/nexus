@@ -89,7 +89,10 @@ export async function cargarContextoDelDetalle(
       select: { sections: true },
     }),
     // ÚLTIMO a propósito: el censo de handoff-al-cliente mide la distancia hasta el embudo.
-    sobre ? cargarMaterialDelCronograma(projectId, { fases: sobre.foto }) : cargarMaterialDelCronograma(projectId),
+    // Revisión de M1–M5: las reuniones se ubican en el plan vigente cuando ocurrieron (sin lo reprogramado desde hoy).
+    sobre
+      ? cargarMaterialDelCronograma(projectId, { fases: sobre.foto, ubicarSobre: sobre.fotoParaUbicar ?? null })
+      : cargarMaterialDelCronograma(projectId),
   ]);
   return {
     projectId,
@@ -186,6 +189,12 @@ export interface OpcionesDelMaterial {
   /** La foto del plan que ya tiene quien llama (ancla + fases en orden). Sin esto se lee el cronograma. */
   fases?: FotoDelCronograma | null;
   /**
+   * Revisión de M1–M5 (2026-09-27, hallazgo 11): otra foto SOLO para ubicar cada reunión en el plan (el paso 2 de
+   * «Regenerar todo» pasa la de antes de lo reprogramado desde hoy: el plan vigente cuando ocurrió). El calendario sigue
+   * sobre `fases`. Sin esto, se ubica con la misma foto del calendario.
+   */
+  ubicarSobre?: FotoDelCronograma | null;
+  /**
    * Las reuniones SIN su lugar en el plan (el chat): con la ubicación, cada cambio de fases cambia
    * el bloque y la caché del chat se vuelve a cobrar, aunque el CSE no haya tocado lo elegido. Los
    * calendarios se arman igual.
@@ -251,9 +260,10 @@ export interface MaterialDelCronograma {
  * con IA». Quien ya tiene las fases (el revisor de fases de «Regenerar todo») pasa `opts.fases`, para
  * que el modelo y el armador vean LA MISMA foto; si no, se lee el cronograma (con el cierre fijado a
  * mano, si lo hay). Sin material, el calendario es "". El chat pide `opts.sinUbicacion`: sus reuniones no cambian cuando se mueve una fase. Y pide
- * `opts.lector: "chat"`: los rótulos de sus reuniones y notas no le nombran el handoff.
+ * `opts.lector: "chat"`: los rótulos de sus reuniones y notas no le nombran el handoff. El paso 2 de «Regenerar todo»
+ * pasa `opts.ubicarSobre` (revisión de M1–M5): las reuniones se ubican en el plan de antes de lo reprogramado desde hoy.
  *
- * ⚠ Las cinco opciones las fija lib/contexto/cargar-material.test.ts llamando a esta función: una
+ * ⚠ Las seis opciones las fija lib/contexto/cargar-material.test.ts llamando a esta función: una
  * opción que se ignora en silencio le da al chat el tope de 48.000 o al revisor de fases otra foto.
  *
  * ⚠ Las reuniones salen del chokepoint (`getProjectTimelineSessions` → `getProjectMemberSessions`):
@@ -286,7 +296,8 @@ export async function cargarMaterialDelCronograma(
 
   const hayMaterial =
     [...contenidos.values()].some((c) => c.texto.trim()) || notas.some((n) => n.content.trim());
-  const ubicar = (ms: number) => (!opts.sinUbicacion && hayMaterial ? ubicarEnElCronograma(foto, ms) : "");
+  const fotoParaUbicar = opts.ubicarSobre ?? foto;
+  const ubicar = (ms: number) => (!opts.sinUbicacion && hayMaterial ? ubicarEnElCronograma(fotoParaUbicar, ms) : "");
 
   const leidas = new Set(aLeer.map((s) => s.id));
   const elegidas: ReunionElegida[] = sessions.map((s) => ({

@@ -33,7 +33,9 @@
 import {
   acotarSemana,
   aplicablesSinSugeridas,
+  CHOQUE_EMPEZO_DESPUES,
   destinoDeLaCambia,
+  faseEmpezada,
   esArrastrada,
   esCambioDeTarea,
   esDesdeHoy,
@@ -426,6 +428,10 @@ interface TextosDeLoDeHoy {
   atrasada: (arranca: number, tras: string | null, estaSemana: boolean) => string;
   despues: (arranca: number) => string;
   pin: (semana: number) => string;
+  /** Revisión de M1–M5 (D13): la fase que el sistema movía entera y alguien empezó después de la propuesta. */
+  empezoDespues: string;
+  /** Revisión de M1–M5 (D5): la contigua que empezó después de la propuesta y se fija al aplicar. */
+  fijadaAlAplicar: (semana: number) => string;
   sinNadaMarcado: string;
   cierreAntesDelTrabajo: string | null;
   noSeCorren: (n: number) => string;
@@ -439,6 +445,9 @@ const TEXTOS_DEL_ORDEN_DEL_PLAN: TextosDeLoDeHoy = {
     }.`,
   despues: (arranca) => `Va después de lo que la precedía en el plan: arranca en ${semanaDelProyecto(arranca)}.`,
   pin: (semana) => `Se fija su inicio en ${semanaDelProyecto(semana)}: ya empezó y lo que se reprograma no la corre.`,
+  empezoDespues: CHOQUE_EMPEZO_DESPUES,
+  fijadaAlAplicar: (semana) =>
+    `Empezó después de la propuesta: se fija su inicio en ${semanaDelProyecto(semana)} y lo que se reprograma no la corre.`,
   sinNadaMarcado: "No tiene ninguna tarea marcada: si ya se hizo, márcala hecha y desmarca esta casilla.",
   cierreAntesDelTrabajo: null,
   noSeCorren: (n) => (n === 1 ? "1 tarea no se corre: la cambiaron a mano." : `${n} tareas no se corren: las cambiaron a mano.`),
@@ -515,6 +524,13 @@ export function lecturaDelSistema(
     const propio = c.deLaIA ? c.deLaIA.a : typeof c.desde === "number" ? c.desde : null;
     const inicioCalculado = propio !== null ? propio : k1 > 0 ? R1[k1 - 1].end : 0;
     const atrasada = H !== null && inicioCalculado + (despues.fases[k1].durationWeeks || 1) <= H;
+    /* Revisión de M1–M5 (D13): si alguien la empezó después de la propuesta, el plan hace chocar este cambio (no se mueve).
+       Decir «no empezó: arranca en S20» o «márcala hecha y desmarca» ya sería falso. */
+    const suViva = viva.get(c.faseId);
+    if (suViva && faseEmpezada(suViva)) {
+      out.set(c.clave, { tipo: atrasada ? "atrasada" : "despues", fase: c.faseId, titulo: textos.empezoDespues, sinNadaMarcado: false });
+      continue;
+    }
     if (!atrasada) {
       out.set(c.clave, { tipo: "despues", fase: c.faseId, titulo: textos.despues(a), sinNadaMarcado: false });
       continue;
@@ -1183,6 +1199,8 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
   for (const p of r.fijadas) {
     const l = lectura.get(p.clave);
     if (l && p.estado === "aplica") sumarLinea(p.fase, l.titulo);
+    // Revisión de M1–M5: la que se fija al aplicar no es un cambio (no tiene lectura): lo dice con su propio texto.
+    else if (p.alAplicar) sumarLinea(p.fase, TEXTOS_DE_LO_DE_HOY[fasesVencidasDeLosTextos(borrador.hoy?.politica)].fijadaAlAplicar(p.semana));
   }
   for (const it of r.items) {
     const l = lectura.get(it.clave);

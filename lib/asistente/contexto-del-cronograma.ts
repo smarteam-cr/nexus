@@ -30,6 +30,7 @@
 import { ADVERTENCIAS_SOBRE_LA_PROPUESTA } from "@/lib/timeline/capacidades";
 import { fraseDelCierre, type EstadoDelCambio, type GrupoDeTareas, type ItemDeTarea, type ResumenDelBorrador } from "@/lib/timeline/borrador";
 import { handlesSinChoque } from "@/lib/timeline/handle-de-tarea";
+import { lecturaDelSistema, type TipoDeLoDeHoy } from "@/lib/timeline/vista-de-la-propuesta";
 import type { PropuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
 import { computePhaseRanges, etiquetaDeSemana, plural } from "@/lib/timeline/weeks";
 
@@ -57,6 +58,12 @@ export const DEL_SISTEMA_SE_CREA = "(lo decide el sistema: faltaba el kickoff)";
  * con cuántas pendientes se corren con él. Las arrastradas no se listan de a una: no tienen casilla, van con ese número.
  */
 export const DEL_SISTEMA_DESDE_HOY = "(lo decide el sistema: está atrasada y se reprograma desde hoy)";
+/**
+ * Revisión de M1–M5 (2026-09-27, hallazgo 10): la casilla del sistema que corre una fase NO atrasada detrás de lo que la
+ * precedía (tipo «despues» de `lecturaDelSistema`, lo mismo que dice el Gantt). Antes decía «está atrasada» también acá.
+ */
+export const DEL_SISTEMA_VA_DESPUES = "(lo decide el sistema: va después de lo que la precedía en el plan)";
+const notaDelSistema = (tipo: TipoDeLoDeHoy | undefined): string => (tipo === "despues" ? DEL_SISTEMA_VA_DESPUES : DEL_SISTEMA_DESDE_HOY);
 export const pendientesQueSeCorren = (n: number, numero: number) =>
   `${plural(n, "pendiente se corre", "pendientes se corren")} con el cambio ${numero} (desde hoy)`;
 /**
@@ -305,12 +312,14 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
   );
   const itemPorClave = new Map(r.items.map((it) => [it.clave, it]));
   const grupoPorFase = new Map(r.grupos.map((g) => [g.fase, g]));
+  // Revisión de M1–M5: qué es cada casilla del sistema, con la misma lectura que el Gantt (atrasada, estirada o «va después»).
+  const lectura = p.borrador ? lecturaDelSistema(p.vivo, p.borrador, r) : new Map<string, { tipo: TipoDeLoDeHoy }>();
   const delCambio = (it: (typeof r.items)[number]) => {
     const c = porClave.get(it.clave);
     const id =
       c?.tipo === "fase-se-va" ? c.faseId : c?.tipo === "fase-nueva" && it.estado === "excluido" ? c.clave : null;
     const choque = it.estado === "choque" && it.aviso ? ` · ${it.aviso}` : "";
-    const sistema = it.desdeHoy ? ` ${DEL_SISTEMA_DESDE_HOY}` : "";
+    const sistema = it.desdeHoy ? ` ${notaDelSistema(lectura.get(it.clave)?.tipo)}` : "";
     numerado(`${it.numero}. ${SIMBOLO[it.estado]} ${it.titulo}${id ? ` [${id}]` : ""}${sistema}${choque}`);
     // M4 P4e: las que se corren con esta casilla, contadas (nunca de a una).
     const corren = r.arrastradas.filter((a) => a.conCambio === it.clave).length;

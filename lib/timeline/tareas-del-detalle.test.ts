@@ -1259,6 +1259,35 @@ describe("9 · M2: un kickoff, el cierre y la entrega sin duplicados, y la IA no
     expect(r.observaciones).toEqual(["La IA volvió a proponer la entrega: no se suma, ya está «Entrega formal del proyecto a Cliente» (pendiente)."]);
   });
 
+  it("⛔ el paso 1 agrega una fase al final: el cierre de la que ERA la última sigue de guardián y uno nuevo en la agregada no entra", () => {
+    /* Revisión de M1–M5 (2026-09-27, hallazgo 4). La edición que la pone en rojo: medir la «última fase» solo sobre la
+       estructura supuesta (sin `ultimaViva`): con «Soporte post-lanzamiento» detrás, «Capacitación & Go Live» dejaba de
+       ser fase de hito, su cierre perdía al guardián y «Sesión de cierre y entrega del proyecto» entraba en la agregada
+       (Metzger, SICOP y Spectrum: un segundo cierre y una segunda entrega). */
+    const CIERRE = sesion("ci", "Sesión de cierre del proyecto", 1);
+    const vivo: Vivo = {
+      ancla: null,
+      fases: [fase("on", "Onboarding", 2, [tarea("on1", "Configurar portal", 0)]), fase("go", "Capacitación & Go Live", 2, [CIERRE])],
+    };
+    const SOPORTE: CambioFaseNueva = {
+      tipo: "fase-nueva",
+      clave: "n:0000soporte",
+      fase: { name: "Soporte post-lanzamiento", durationWeeks: 2, startWeek: null, sessionCount: null, notes: null, activityType: null },
+      despuesDe: "go",
+    };
+    const r = conHitos(vivo, [{ id: "n:0000soporte", tasks: [{ title: "Sesión de cierre y entrega del proyecto", type: "SESSION", weekIndex: 1 }] }], {
+      conSemanaCero: false,
+      borrador: { ...SIN_CAMBIOS, cambios: [SOPORTE] },
+    });
+    expect(nuevasDe(r), "entró un segundo cierre en la fase agregada").toEqual([]);
+    expect(r.observaciones).toEqual(["La IA volvió a proponer el cierre: no se suma, ya está «Sesión de cierre del proyecto» (pendiente)."]);
+    // Sin la fase agregada, lo mismo (como siempre).
+    const sinFase = conHitos(vivo, [{ id: "go", tasks: [{ title: "Sesión de cierre del proyecto", type: "SESSION", weekIndex: 1 }, { title: "Sesión de cierre y entrega del proyecto", type: "SESSION", weekIndex: 1 }] }], {
+      conSemanaCero: false,
+    });
+    expect(nuevasDe(sinFase)).toEqual([]);
+  });
+
   describe("D8 · la entrega por ciclo en un recurrente", () => {
     const ENTREGA_C1 = sesion("ec1", "Sesión de entrega del ciclo 1", 0);
     const CON_ENTREGA: Vivo = {

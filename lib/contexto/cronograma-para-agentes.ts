@@ -39,6 +39,13 @@ export interface FaseParaAgentes {
 export interface EstructuraSupuesta {
   fases: FaseParaAgentes[];
   foto: FotoDelCronograma;
+  /**
+   * Revisión de M1–M5 (2026-09-27, hallazgo 11): la foto con que se UBICAN las reuniones, si no es `foto`: el plan sin lo
+   * que el sistema reprogramó desde hoy (el vigente cuando ocurrieron). Con `foto`, una reunión de la S6 sobre Service
+   * Hub se leía en «Sales Hub», estirada hasta hoy: lo que ya pasó se reescribía en lo que lee la IA. El calendario sigue
+   * sobre `foto` (la estructura que se propone). Ausente: se ubica con `foto`, como siempre.
+   */
+  fotoParaUbicar?: FotoDelCronograma;
   estructura: EstructuraHipotetica;
   /**
    * El alcance del prompt: las fases que se piden (ausente = todas). Sale SIEMPRE del borrador

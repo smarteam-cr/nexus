@@ -3559,9 +3559,18 @@ fabricarla.
 > Pedido de Elías probando «Regenerar todo» en Wherex: la propuesta reescribía el pasado (quitaba 50
 > tareas y sumaba 59 en semanas vencidas), repetía el kickoff y no decía qué hacer con lo atrasado.
 > Cuatro deploys: M1 b9609283 · M2 64b667ad, 9743b2ac y 2ba6a389 · **M3 + M4 juntas** (a0ee2e89,
-> fa1ff3d4, 5a24a71d, 77f08a57 y P4g–P4h) · M5. Ninguno trae SQL, re-siembra ni cambios de
+> fa1ff3d4, 5a24a71d, 77f08a57 y P4g–P4h) · M5. Ninguno trae SQL **propio**, re-siembra ni cambios de
 > infraestructura, y ninguno toca un prompt guardado en la base. Las D1–D13 son las de la spec del
 > replanteo, citadas en esos commits.
+>
+> ⚠ **Pero el deploy SÍ lleva SQL** (revisión de M1–M5, 2026-09-27). La historia es lineal y
+> `scripts/deploy.sh` despliega la punta de `origin/main`: **desde 2ba6a389 (la última parte de M2),
+> cada deploy arrastra 21f50c23** (otra sesión: `Project.handoffResumen` y `handoffResumenAt`). Antes
+> del deploy va `ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/2026-09-27-handoff-resumen.sql`;
+> si no, la sección de handoff de todos los proyectos falla con «column … does not exist», y el
+> healthcheck no lo ve (dice «DEPLOY OK»). Y desde d996cb39 (Escala, otra sesión), también
+> `scripts/sql/2026-09-27-escala-lector-y-comentarios.sql`, antes del deploy. M1 se despliega sin SQL
+> solo empujando exactamente b9609283.
 
 - **Lo que decidió Elías.** (a) Lo pendiente de semanas que ya pasaron se **avisa**, no se reescribe:
   «revisar solamente que no haya quedado algo importante sin hacer». (b) Una fase atrasada se
@@ -3600,11 +3609,26 @@ fabricarla.
 - **Vuelta atrás sin romper nada.** `hoy`, `desdeHoy`, `fijaInicio`, `deLaIA`, `delSistema` e `hito`
   son campos sueltos que la versión anterior ignora; lo del sistema se vería con casilla y aplicaría bien.
   La huella de una propuesta sin campos nuevos no cambió.
+- **Revisión de M1–M5 (2026-09-27), lo que cambió después de la revisión:**
+  - **Lo que empezó después de la propuesta tampoco se mueve (D13 al aplicar).** Si entre la propuesta y
+    «Aplicar» alguien marca hecha o en curso una tarea de una fase que el sistema movía entera, su casilla
+    choca («Empezó después de la propuesta: no se mueve.»). Si la empezada es una contigua que lo marcado
+    correría de rebote, se fija donde está hoy al aplicar, como el pin (`fijadasAlAplicar`). Decisión
+    conservadora: se fija, no choca la casilla que la corre (el resto de lo marcado se aplica igual).
+  - **La Semana 0 por su nombre en Desarrollo y Web.** Si la primera fase se llama «Semana 0» o «Semana
+    cero», no se reprograma (5 de los 14 cronogramas activos de esos pipelines la tienen). «Relevamiento
+    técnico» sigue reprogramándose. Solo el nombre exacto: un «Kick-off» no cuenta.
+  - **Los hitos miran la última fase de lo vivo.** Si el paso 1 agrega una fase al final, el cierre y la
+    entrega de la que era la última siguen siendo el hito y uno nuevo no entra. Y el modelo ya no recibe
+    un hito que ya está como «pendiente: repite su título» (va en «se queda», con «hito»).
+  - **Lo que el chat edita de una casilla del sistema pasa a ser del chat**, con su casilla y su número.
+  - **Las reuniones se ubican en el plan vigente cuando ocurrieron** (sin lo reprogramado desde hoy).
 
 ### Para volver (el interruptor)
 
 - **Cambia el valor en `lib/timeline/politica-de-atrasos.ts` (`POLITICA_DE_ATRASOS`) y despliega con
-  `bash scripts/deploy.sh`.** No hay SQL ni re-siembra.
+  `bash scripts/deploy.sh`.** El interruptor no trae SQL ni re-siembra (si ese deploy es el primero
+  después de 2ba6a389, antes van los SQL del aviso de arriba).
 - **Las propuestas abiertas no cambian:** cada una guarda la política con que se calculó
   (`Borrador.hoy.politica`) y la pantalla dice lo que calculó. Para verla con el valor nuevo, vuelve a
   generarla.

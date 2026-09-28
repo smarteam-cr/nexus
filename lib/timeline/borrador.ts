@@ -1423,8 +1423,15 @@ export interface PlanDeAplicacion {
    * las cambió a mano después de la propuesta.
    */
   arrastradas: { aplican: number; choques: number };
-  /** M4 (D5): los pins que se escriben (`esPin`, «aplica»). Tampoco cuentan en los totales. */
+  /** M4 (D5): los pins que se escriben (`esPin`, «aplica»), más los que se fijan al aplicar (`fijadasAlAplicar`).
+   *  Tampoco cuentan en los totales. */
   fijadas: number;
+  /**
+   * Revisión de M1–M5 (2026-09-27, D5 y D13): las contiguas que EMPEZARON después de la propuesta y que lo marcado correría
+   * (de rebote): al aplicar se fijan donde están hoy, como el pin, aunque no tengan uno. Sus ids, en el orden final. No
+   * son un cambio (no tienen casilla ni número): se escriben en `escrituras.fases` y entran en la huella solo si hay.
+   */
+  fijadasAlAplicar: Array<{ faseId: string; semana: number }>;
 }
 
 const CHOQUE_CAMPO = "Lo cambiaste a mano después de la propuesta: queda como lo dejaste.";
@@ -1449,6 +1456,8 @@ const choqueNombreRepetido = (nombre: string) => `Ya hay una fase «${nombre}» 
 const CHOQUE_SIN_TAREAS_DE_LA_FASE = "No se leyeron las tareas de esta fase: la fase queda como está.";
 const CHOQUE_FASE_EDITADA = "La cambiaste a mano después de la propuesta: la fase se queda.";
 const CHOQUE_FASE_EN_CURSO = "La fase ya arrancó: se queda.";
+/** Revisión de M1–M5 (D13): el inicio que el sistema le daba a una fase sin empezar, si alguien la empezó después. */
+export const CHOQUE_EMPEZO_DESPUES = "Empezó después de la propuesta: no se mueve.";
 const CHOQUE_FASE_TODO_PROTEGIDO = "Todas sus tareas tienen avance o las escribiste a mano: la fase se queda.";
 const CHOQUE_TAREA_AUSENTE = "Ya no está en el cronograma: este cambio queda fuera.";
 const CHOQUE_DESTINO_FUERA = "Su fase de destino queda fuera.";
@@ -1533,6 +1542,12 @@ function evaluar(c: CambioDeEstructura, vivo: Vivo, nuevas: ReadonlyMap<string, 
       if (!f) return { estado: "choque", choque: CHOQUE_FASE_BORRADA };
       const hoy = valorDe(f, c.campo);
       if (hoy === c.a) return { estado: "ya-esta" };
+      /* Revisión de M1–M5 (2026-09-27, D13): el sistema mueve entera solo una fase SIN EMPEZAR (su inicio, `startWeek`;
+         el pin no: fija, no mueve). Si alguien la empezó entre la propuesta y «Aplicar» (una tarea marcada hecha o en curso,
+         o la fase), moverla se llevaba lo hecho al futuro: choca, como la fase que se va y ya arrancó. */
+      if (c.desdeHoy && !c.fijaInicio && c.campo === "startWeek" && faseEmpezada(f)) {
+        return { estado: "choque", choque: CHOQUE_EMPEZO_DESPUES };
+      }
       if (hoy !== c.desde) return { estado: "choque", choque: CHOQUE_CAMPO };
       return { estado: "pendiente" };
     }
@@ -1749,6 +1764,13 @@ export const esArrastrada = (c: Cambio): c is CambioTareaCambia & { desdeHoy: tr
  */
 export const esPin = (c: Cambio): c is CambioFaseCambia & { desdeHoy: true; fijaInicio: true } =>
   c.tipo === "fase-cambia" && !!c.desdeHoy && !!c.fijaInicio;
+
+/**
+ * Revisión de M1–M5 (2026-09-27): ¿la fase viva ya EMPEZÓ? Ella o alguna de sus tareas no está PENDING: la misma regla con
+ * que la reprogramación decide qué no se mueve (`reprogramarDesdeHoy`), pero sobre lo vivo de AHORA, al aplicar (D13).
+ */
+export const faseEmpezada = (f: Pick<FaseViva, "status" | "tareas">): boolean =>
+  (f.status !== undefined && f.status !== "PENDING") || (f.tareas ?? []).some((t) => t.status !== "PENDING");
 
 /** M4: lo que el sistema decide sin casilla (las arrastradas y el pin): ni unidades, ni totales, ni «Siguiente número». */
 export const vaSinCasilla = (c: Cambio): boolean => esArrastrada(c) || esPin(c);
@@ -2004,6 +2026,9 @@ export function huellaDeTexto(texto: string): string {
  *   9. M4 (2026-09-27): EL PIN (`esPin`, sin casilla) aplica si se aplica algo más. Las arrastradas (`esArrastrada`) van
  *      con la duración de su fase (`conCambio`, paso 3b) y, si su tarea ya no está abierta, «ya está» (D13). Ni unas ni
  *      otro cuentan en `marcadas`, `aplicables`, `total` ni `choques`: van en `arrastradas` y `fijadas`.
+ *  10. Revisión de M1–M5 (2026-09-27, D13 al aplicar): lo EMPEZADO DESPUÉS de la propuesta tampoco se mueve. El inicio
+ *      que el sistema le daba a una fase sin empezar choca si hoy está empezada (`evaluar`, paso 1), y la contigua que
+ *      empezó después y que lo marcado correría de rebote queda fija donde está hoy (`fijadasAlAplicar`).
  * `tareas`: el estado de las tareas del borrador (lo deduce quien llama, de la corrida): mientras
  * se arman, no se aplica. `forzar` (E2c): las fases desfasadas cuyas tareas van tal cual
  * («Aplicar de todos modos»); sobre una fase que no está desfasada no hace nada.
@@ -2444,6 +2469,39 @@ export function planDeAplicacion(
     return [{ id: f.id, borrar, queda: quedan.size > 0 }];
   });
   const seVanEnteras = new Set(fasesQueSeVanEscritas.filter((f) => !f.queda).map((f) => f.id));
+  const ordenEscrito = ordenFinal(vivo, aplicadas, nuevas, seVanEnteras);
+
+  /* 10) Revisión de M1–M5 (2026-09-27, D5 y D13): EL PIN AL APLICAR. El pin se decide al calcular la propuesta: una
+     contigua que EMPEZÓ después (le marcaron una tarea hecha o en curso entre la propuesta y «Aplicar») no lo tiene, y lo
+     marcado la corría de rebote con lo hecho. Con la misma regla que el pin y solo donde el pin existe (una propuesta con
+     algo reprogramado desde hoy, y algo más que se aplica), cada contigua viva que hoy está empezada y que lo que se
+     aplica movería de inicio queda FIJA donde está hoy. Se recorre el orden final con el cursor de `computePhaseRanges`,
+     así fijar una no corre a las que siguen. Lo que el CSE pidió para su inicio (una casilla que aplica) manda. */
+  const fijadasAlAplicar: Array<{ faseId: string; semana: number }> = [];
+  if (algoAplica && borrador.cambios.some((c) => c.tipo === "fase-cambia" && !!c.desdeHoy)) {
+    const rangosVivos = computePhaseRanges(vivo.fases);
+    const inicioVivo = new Map(vivo.fases.map((f, k) => [f.id, rangosVivos[k].start]));
+    let cursor = 0;
+    for (const l of ordenEscrito) {
+      if (l.tipo === "nueva") {
+        const n = nuevas.get(l.clave)!.fase;
+        cursor = (n.startWeek ?? cursor) + (n.durationWeeks || 1);
+        continue;
+      }
+      const f = ind.fasePorId.get(l.id)!;
+      const campos = porFase.get(l.id) ?? {};
+      const inicioPropio = "startWeek" in campos ? campos.startWeek : f.startWeek;
+      const dur = Number("durationWeeks" in campos ? campos.durationWeeks : f.durationWeeks) || 1;
+      let inicio = inicioPropio === null || inicioPropio === undefined ? cursor : Number(inicioPropio);
+      const dondeEsta = inicioVivo.get(l.id) ?? inicio;
+      if ((inicioPropio === null || inicioPropio === undefined) && faseEmpezada(f) && inicio !== dondeEsta) {
+        porFase.set(l.id, { ...campos, startWeek: dondeEsta });
+        fijadasAlAplicar.push({ faseId: l.id, semana: dondeEsta });
+        inicio = dondeEsta;
+      }
+      cursor = inicio + dur;
+    }
+  }
   type Cambian = NonNullable<EscriturasDeTareas["cambian"]>;
   const cambian: Cambian = vivo.fases.flatMap((f) =>
     (f.tareas ?? []).flatMap((t): Cambian => {
@@ -2475,7 +2533,7 @@ export function planDeAplicacion(
     nuevas: aplicadas
       .filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva")
       .map((c) => ({ clave: c.clave, fase: c.fase, ...(c.porChat ? { porChat: true as const } : {}) })),
-    orden: ordenFinal(vivo, aplicadas, nuevas, seVanEnteras),
+    orden: ordenEscrito,
     fasesQueSeVan: fasesQueSeVanEscritas,
     tareas: {
       seVan: vivo.fases.flatMap((f) => (f.tareas ?? []).filter((t) => seVanAplicadas.has(t.id)).map((t) => t.id)),
@@ -2494,12 +2552,17 @@ export function planDeAplicacion(
 
   /* La huella: número, clave, estado y destino de cada cambio. E3: el rescate de una fase que se va
      entra SOLO si existe, así las huellas de todo lo anterior no cambian (una pestaña abierta durante
-     el deploy sigue aplicando). */
-  const huella = huellaDeTexto(
-    JSON.stringify(
-      items.map((it) => [it.numero, it.cambio.clave, it.estado, destinoDe(it.cambio), ...(it.rescate ? [it.rescate] : [])]),
-    ),
-  );
+     el deploy sigue aplicando). Revisión de M1–M5: lo mismo las fijadas al aplicar (si alguien empezó una fase entre
+     lo que vio el CSE y la escritura, se escribe otra cosa: 409, no una lista distinta de la que vio). */
+  const filasDeLaHuella: unknown[] = items.map((it) => [
+    it.numero,
+    it.cambio.clave,
+    it.estado,
+    destinoDe(it.cambio),
+    ...(it.rescate ? [it.rescate] : []),
+  ]);
+  if (fijadasAlAplicar.length > 0) filasDeLaHuella.push(["fijadas-al-aplicar", fijadasAlAplicar.map((x) => [x.faseId, x.semana])]);
+  const huella = huellaDeTexto(JSON.stringify(filasDeLaHuella));
   /* El bloqueo, en este orden: una versión nueva, las tareas «armando» y (E2c P3) las fases
      desfasadas sin forzar. Aplicar espera a que se recalculen; la salida está siempre a mano:
      desmarcar sus tareas, o «Aplicar de todos modos» si el recálculo falló. `bloqueoPorDesfasadas`
@@ -2534,7 +2597,8 @@ export function planDeAplicacion(
       aplican: arrastradas.filter((it) => it.estado === "aplica").length,
       choques: arrastradas.filter((it) => it.estado === "choque").length,
     },
-    fijadas: items.filter((it) => esPin(it.cambio) && it.estado === "aplica").length,
+    fijadas: items.filter((it) => esPin(it.cambio) && it.estado === "aplica").length + fijadasAlAplicar.length,
+    fijadasAlAplicar,
   };
 }
 
@@ -2966,6 +3030,9 @@ export interface FijadaDelResumen {
   fase: string;
   semana: number;
   estado: EstadoDelCambio;
+  /** Revisión de M1–M5: se fija al aplicar (`PlanDeAplicacion.fijadasAlAplicar`): empezó después de la propuesta. No
+   *  es un cambio del borrador: su `clave` es `fija:<faseId>`. */
+  alAplicar?: true;
 }
 
 /** Una tarea de la lista de la barra (un renglón dentro de su grupo). */
@@ -3441,9 +3508,13 @@ export function resumir(
     ];
   });
   // M4 P4e (D5, D10): lo que el sistema decide sin casilla, aparte: los pins y las arrastradas.
-  const fijadas: FijadaDelResumen[] = plan.items.flatMap((it) =>
-    esPin(it.cambio) ? [{ clave: it.cambio.clave, fase: it.cambio.faseId, semana: Number(it.cambio.a), estado: it.estado }] : [],
-  );
+  const fijadas: FijadaDelResumen[] = [
+    ...plan.items.flatMap((it) =>
+      esPin(it.cambio) ? [{ clave: it.cambio.clave, fase: it.cambio.faseId, semana: Number(it.cambio.a), estado: it.estado }] : [],
+    ),
+    // Revisión de M1–M5: y las que se fijan al aplicar porque empezaron después de la propuesta.
+    ...plan.fijadasAlAplicar.map((x) => ({ clave: `fija:${x.faseId}`, fase: x.faseId, semana: x.semana, estado: "aplica" as const, alAplicar: true as const })),
+  ];
   const arrastradas: ArrastradaDelResumen[] = plan.items.flatMap((it) => {
     const c = it.cambio;
     if (!esArrastrada(c)) return [];

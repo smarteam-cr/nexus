@@ -315,10 +315,15 @@ export function cambiosDeTareasDelDetalle(i: {
      con lo vivo de AHORA (un kickoff marcado hecho mientras la IA armaba ya cuenta). */
   const conHitos = i.hitos ?? null;
   const ultimaFase = i.estructura.fases[i.estructura.fases.length - 1]?.id ?? null;
+  /* Revisión de M1–M5 (2026-09-27, hallazgo 4): y la última de lo VIVO. Si el paso 1 agrega una fase detrás de la última
+     (o cambia el orden), la que era última sigue siendo fase de hito: su cierre o su entrega siguen de guardianes y uno
+     nuevo en la fase agregada no entra. */
+  const ultimaViva = i.vivo.fases[i.vivo.fases.length - 1]?.id ?? null;
   const delProyecto = conHitos
     ? hitosDelProyecto({
         fases: i.estructura.fases.map((f) => ({ id: f.id, name: f.name, tareas: f.existente ? (vivas.get(f.id)?.tareas ?? []) : [] })),
         recurrente: conHitos.recurrente,
+        ultimaViva,
       })
     : null;
   /** Los guardianes; R15 suma los que entran en esta propuesta. */
@@ -510,7 +515,7 @@ export function cambiosDeTareasDelDetalle(i: {
     let entraUnaEntrega = false;
     if (conHitos) {
       const cicloDeLaEntrega = conHitos.recurrente ? ciclo : null;
-      const faseDelHito = { name: f.name, esUltima: f.id === ultimaFase };
+      const faseDelHito = { name: f.name, esUltima: f.id === ultimaFase || f.id === ultimaViva };
       nuevas.forEach((n, j) => {
         if (n === null) return;
         const hs = hitosDeLaTarea({ title: n.title, type: n.type }, faseDelHito);
