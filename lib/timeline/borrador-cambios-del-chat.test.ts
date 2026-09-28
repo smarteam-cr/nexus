@@ -965,3 +965,57 @@ describe("11 · revisión de L1–L7: la mudanza sugerida no bloquea las semanas
     );
   });
 });
+
+/**
+ * M4 P4e (2026-09-27, spec del replanteo §5.6): una ARRASTRADA (una pendiente que el sistema corre con el estiramiento de
+ * su fase, `desdeHoy` con `conCambio`) frente al chat. El chat hace lo que con un cambio de la IA (R4c): parte de la foto
+ * de hoy, hereda su semana si su fase está marcada, y la vuelve DEL CHAT, sin el `conCambio` del sistema.
+ */
+describe("12 · M4 P4e: una arrastrada frente al chat", () => {
+  const DUR_B: CambioFaseCambia = {
+    tipo: "fase-cambia",
+    clave: "fase:b:durationWeeks",
+    faseId: "b",
+    fase: "Diseño",
+    campo: "durationWeeks",
+    desde: 2,
+    a: 6,
+    desdeHoy: true,
+  };
+  const ARRASTRADA: CambioTareaCambia = {
+    tipo: "tarea-cambia",
+    clave: claveDeTareaQueCambia("b2"),
+    tareaId: "b2",
+    faseId: "b",
+    desde: fotoDeTarea(B2),
+    a: { weekIndex: 5 },
+    conCambio: DUR_B.clave,
+    desdeHoy: true,
+  };
+  const operar = (excluidos: string[], operaciones: OperacionSobreLaPropuesta[]) =>
+    operarSobreElBorrador({ vivo: VIVO, borrador: v1([DUR_B, ARRASTRADA]), excluidos, operaciones, nuevaClave: () => "k" });
+  const deB2 = (b: Borrador) => b.cambios.filter((c): c is CambioTareaCambia => c.tipo === "tarea-cambia" && c.tareaId === "b2");
+
+  it("⭐ «renómbrala» con su fase marcada: hereda la semana nueva, queda del chat y SIN el `conCambio` del sistema", () => {
+    /* La edición que la pone en rojo: heredar el `conCambio` de la arrastrada (el cambio del chat seguía colgado de una
+       casilla del sistema, sin su marca: ni arrastrada ni del chat del todo). */
+    const r = operar([], [{ op: "tarea.renombrar", taskId: "b2", titulo: "Definir el pipeline" }]);
+    expect(r.rechazadas).toEqual([]);
+    const [c, ...otros] = deB2(r.borrador);
+    expect(otros, "dos cambios de la misma tarea").toEqual([]);
+    expect(c).toMatchObject({ clave: ARRASTRADA.clave, porChat: true, a: { weekIndex: 5, title: "Definir el pipeline" } });
+    expect(c.conCambio, "heredó el `conCambio` del sistema").toBeUndefined();
+    expect(c.desdeHoy, "sigue marcada como del sistema").toBeUndefined();
+    expect(c.desde).toEqual(fotoDeTarea(B2));
+  });
+
+  it("⭐ con su fase desmarcada, parte de hoy: no hereda la semana del sistema", () => {
+    /* La edición que la pone en rojo: heredar el `a` sin mirar si se ve marcado (la arrastrada de una fase desmarcada
+       volvía a correrse, ahora como del chat). */
+    const r = operar([DUR_B.clave], [{ op: "tarea.renombrar", taskId: "b2", titulo: "Definir el pipeline" }]);
+    const [c] = deB2(r.borrador);
+    expect(c).toMatchObject({ porChat: true, a: { title: "Definir el pipeline" } });
+    expect(c.a.weekIndex).toBeUndefined();
+    expect(c.conCambio).toBeUndefined();
+  });
+});

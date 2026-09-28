@@ -21,11 +21,14 @@ import {
   vivoDelFixture,
 } from "./__fixtures__/propuesta-grande";
 import {
+  borradorVacio,
+  claveDeCampo,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   esCambioDeTarea,
   faseDeLaTarea,
   fotoDeTarea,
+  leerBorrador,
   planDeAplicacion,
   resumir,
   type Borrador,
@@ -35,6 +38,8 @@ import {
   type TareaDelVivo,
 } from "./borrador";
 import { MOTIVO_DEL_KICKOFF_QUE_FALTA, TAREA_DE_KICKOFF } from "./hitos";
+import { POLITICA_DE_ATRASOS, type PoliticaDeFasesVencidas } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "./reprogramar-desde-hoy";
 import {
   atajoDelSiguiente,
   avanceQueSeCruza,
@@ -52,6 +57,7 @@ import {
   semanaVencida,
   posicionDelSiguiente,
   textoDelAvance,
+  textoDeLaSemanaQueCambio,
   textoDeLosChoques,
   textoDeLosTotales,
   textoDelSiguiente,
@@ -842,5 +848,130 @@ describe("M3 P3a · la semana de hoy: el mismo predicado que «ya pasó»", () =
     expect(semanaDeHoy(FIXTURE.ancla, new Date("2026-05-18T12:00:00-06:00")), "antes del arranque").toBe(0);
     expect(semanaDeHoy(null, HOY), "sin fecha de arranque no hay semana de hoy").toBeNull();
     expect(semanaDeHoy(FIXTURE.ancla, null), "antes de hidratar").toBeNull();
+  });
+});
+
+/**
+ * M4 P4e (2026-09-27, spec del replanteo §5.1, §5.6 y §5.11): LO QUE REPROGRAMÓ EL SISTEMA, EN LA VISTA. La propuesta
+ * grande reprogramada desde hoy (S18) en el orden del plan (lo que decidió Elías): 8 casillas, el pin de «Fase I» y 25
+ * arrastradas. Lo del sistema dice qué pasa y por qué, nunca «Según la IA»; lo que no tiene casilla no se pinta como si
+ * la tuviera.
+ */
+describe("M4 P4e · lo que reprogramó el sistema, en la vista", () => {
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+  const reprogramado = (fasesVencidas: PoliticaDeFasesVencidas = "en-el-orden-del-plan") => {
+    const R = reprogramarDesdeHoy({
+      vivo: VIVO,
+      borrador: leerBorrador(vacio())!,
+      hoy: HOY,
+      politica: { ...POLITICA_DE_ATRASOS, fasesVencidas },
+      conSemanaCero: true,
+    })!;
+    return { R, b: leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), R))))! };
+  };
+  const { R, b: REPROGRAMADO } = reprogramado();
+  const CASILLAS = R.cambios.filter((c) => !c.fijaInicio).map((c) => c.clave);
+  const PIN = "Se fija su inicio en S16: ya empezó y lo que se reprograma no la corre.";
+  const DE_I = "Está atrasada: lo que falta (5 tareas) arranca en S18. Lo hecho se queda en S16.";
+  const SIN_MARCAR = "No tiene ninguna tarea marcada: si ya se hizo, márcala hecha y desmarca esta casilla.";
+
+  it("⭐ cada casilla del sistema dice qué pasa, corto: «Lo que falta arranca hoy: S18–S21», «Arranca en S20 (antes S5)»", () => {
+    /* La edición que la pone en rojo: sin la rama del sistema en `etiquetaCortaDelCambio` («4 → 20 semanas» parecía decir
+       que lo hecho también se estiraba). */
+    const { v } = vista(REPROGRAMADO);
+    const textos = (fase: string) => v.porFase.get(fase)!.casillas.map((c) => c.texto);
+    expect(textos("f02")).toEqual(["Lo que falta arranca hoy: S18–S21"]);
+    expect(textos("f04")).toEqual(["Lo que falta arranca hoy: S18–S19"]);
+    expect(textos("f05")).toEqual(["Arranca en S20 (antes S5)"]);
+    expect(textos("f07")).toEqual(["Lo que falta arranca hoy: S18–S19"]);
+    expect(textos("f08")).toEqual(["Arranca en S24 (antes S11)"]);
+    expect(textos("f10"), "el pin con casilla, o la semana sola sin su forma").toEqual(["Lo que falta arranca hoy: S18"]);
+    expect(textos("f11")).toEqual(["Arranca en S29 (antes S17)"]);
+    // Sin reloj no hay «hoy» que decir: el texto de siempre.
+    expect(etiquetaCortaDelCambio(R.cambios.find((c) => c.clave === claveDeCampo("f02", "durationWeeks"))!, VIVO)).toBe("4 → 20 semanas");
+  });
+
+  it("⭐ su porqué va en el `title` de la casilla y en la línea del sistema de su fase; el pin, solo en la línea", () => {
+    /* Las ediciones que la ponen en rojo: decidir «atrasada» por la ventana de HOY, sin lo que la precedía ya
+       reprogramado («Fase J», que arranca detrás de «Fase I» en la S19, decía «Está atrasada…» y no «Va después…»); no
+       nombrar a las antecesoras que la hacen esperar; no decir que no tiene nada marcado; dejar la línea del pin fuera. */
+    const { v } = vista(REPROGRAMADO);
+    const porque = (fase: string) => v.porFase.get(fase)!.casillas.map((c) => c.delSistema);
+    expect(porque("f02")).toEqual(["Está atrasada: lo que falta (8 tareas) arranca en S18. Lo hecho se queda en S2–S5."]);
+    expect(porque("f05"), "«Fase D»: sus antecesoras o que no tiene nada marcado").toEqual([
+      `Está atrasada y no empezó: arranca en S20, cuando termina lo que le falta a «Fase C». ${SIN_MARCAR}`,
+    ]);
+    expect(porque("f08"), "«Fase G»: las dos antecesoras que la hacen esperar").toEqual([
+      `Está atrasada y no empezó: arranca en S24, cuando termina lo que le falta a «Fase D» y «Fase E». ${SIN_MARCAR}`,
+    ]);
+    expect(porque("f11"), "«Fase J» no estaba atrasada: va después de lo que la precedía").toEqual(["Va después de lo que la precedía en el plan: arranca en S29."]);
+    expect(v.porFase.get("f10")!.delSistema, "el pin y el porqué de su casilla, en ese orden").toEqual([PIN, DE_I]);
+    expect(v.porFase.get("f02")!.delSistema).toEqual(porque("f02"));
+    // Nada de esto es un motivo de la IA («Según la IA»).
+    expect([...v.porFase.values()].flatMap((f) => f.casillas).filter((c) => c.motivo !== undefined)).toEqual([]);
+    // Todo desmarcado, el pin no se escribe y su línea se va; la del porqué de la casilla sigue (se decide con ella).
+    expect(vista(REPROGRAMADO, CASILLAS).v.porFase.get("f10")!.delSistema).toEqual([DE_I]);
+  });
+
+  it("⭐ una arrastrada no tiene marca (ni casilla, ni chip, ni fila de más): marcada, en su semana nueva; desmarcada, en la de hoy", () => {
+    /* La edición que la pone en rojo: dejarlas en los grupos (cada una pintaba «viene de la Semana M» en su destino y un
+       fantasma en su lugar de hoy: 25 filas de más, sin nada que decidir en ellas). */
+    const semanaDe = (v: VistaDeLaPropuesta, fase: string, key: string) =>
+      v.porFase.get(fase)!.semanas.findIndex((s) => s.some((x) => x.clave === key));
+    const { v } = vista(REPROGRAMADO);
+    const conExtra = new Set([...v.porFase.values()].flatMap((f) => f.semanas.flat().flatMap((x) => (x.extra ? [x.clave] : []))));
+    for (const t of R.tareas) {
+      expect(v.marcas.has(t.tareaId), `${t.tareaId} con marca`).toBe(false);
+      expect(conExtra.has(t.tareaId) || conExtra.has(`${t.tareaId}:origen`) || conExtra.has(t.clave), `${t.tareaId} con fila de más`).toBe(false);
+      expect(semanaDe(v, t.faseId, t.tareaId), `${t.tareaId} no está en su semana nueva`).toBe(t.a.weekIndex);
+    }
+    const DURACION_DE_A = claveDeCampo("f02", "durationWeeks");
+    const sinA = vista(REPROGRAMADO, [DURACION_DE_A]).v;
+    for (const t of R.tareas.filter((x) => x.conCambio === DURACION_DE_A)) {
+      expect(sinA.marcas.has(t.tareaId)).toBe(false);
+      expect(semanaDe(sinA, "f02", t.tareaId), `${t.tareaId} desmarcada no volvió a su semana`).toBe(t.desde.weekIndex);
+    }
+  });
+
+  it("⭐ «todo desde hoy»: la fase de cierre dice que queda antes del trabajo que la precedía (nace desmarcada)", () => {
+    /* La edición que la pone en rojo: no sumar el aviso de D5 al porqué de una fase de cierre en «todo desde hoy». */
+    // «Fase G» es «Cierre y entrega» en Wherex (el fixture anonimiza el nombre).
+    const conCierre = { ...VIVO, fases: VIVO.fases.map((f) => (f.id === "f08" ? { ...f, name: "Cierre y entrega" } : f)) };
+    const R2 = reprogramarDesdeHoy({
+      vivo: conCierre,
+      borrador: leerBorrador(vacio())!,
+      hoy: HOY,
+      politica: { ...POLITICA_DE_ATRASOS, fasesVencidas: "todo-desde-hoy" },
+      conSemanaCero: true,
+    })!;
+    const b = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), R2))))!;
+    const cierre = claveDeCampo("f08", "startWeek");
+    const r = resumir(conCierre, b, b.excluidos ?? [], LISTAS);
+    const casilla = vistaDeLaPropuesta(conCierre, b, r, HOY).porFase.get("f08")!.casillas.find((c) => c.clave === cierre)!;
+    expect(b.excluidos).toContain(cierre);
+    expect(casilla.marcada).toBe(false);
+    expect(casilla.texto).toBe("Arranca en S18 (antes S11)");
+    expect(casilla.delSistema).toBe(
+      `Está atrasada y no empezó: arranca en S18, esta semana. ${SIN_MARCAR} Queda antes de que termine el trabajo que la precedía: márcala solo si el cierre va en paralelo.`,
+    );
+    // En el orden del plan no hace falta: el cierre ya queda después de lo que lo precedía.
+    expect(vista(REPROGRAMADO).v.porFase.get("f08")!.casillas[0].delSistema).not.toContain("Queda antes");
+  });
+
+  it("⭐ la semana que cambió: nada en la S18; en la S19, el aviso para volver a generarla", () => {
+    /* La edición que la pone en rojo: no comparar la semana del reloj con la de hoy (el aviso salía el mismo día en que
+       se reprogramó). */
+    expect(textoDeLaSemanaQueCambio(REPROGRAMADO, 18)).toBeNull();
+    expect(textoDeLaSemanaQueCambio(REPROGRAMADO, 19)).toBe(
+      "⚠ Se reprogramó desde la S18 y hoy es la S19: vuelve a generarla para que lo atrasado arranque esta semana.",
+    );
+    expect(textoDeLaSemanaQueCambio(REPROGRAMADO, null), "antes de hidratar").toBeNull();
+    expect(textoDeLaSemanaQueCambio({ ...REPROGRAMADO, cambios: [] }, 19), "sin nada del sistema no hay qué volver a generar").toBeNull();
+    expect(textoDeLaSemanaQueCambio({ ...REPROGRAMADO, hoy: undefined }, 19), "sin reloj").toBeNull();
+    const conAvisar = {
+      ...REPROGRAMADO,
+      hoy: { ...REPROGRAMADO.hoy!, politica: { ...REPROGRAMADO.hoy!.politica, fasesVencidas: "avisar" as const } },
+    };
+    expect(textoDeLaSemanaQueCambio(conAvisar, 19), "con «avisar» no se reprograma").toBeNull();
   });
 });

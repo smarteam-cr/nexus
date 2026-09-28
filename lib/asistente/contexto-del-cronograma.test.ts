@@ -31,6 +31,7 @@ vi.mock("@/lib/contexto/cargar", () => ({ cargarMaterialParaElChat: vi.fn() }));
 import {
   armarContextoConPropuesta,
   COMO_SE_LEEN_LAS_SEMANAS,
+  DEL_SISTEMA_DESDE_HOY,
   DEL_SISTEMA_SE_CREA,
   DEL_SISTEMA_SE_QUITA,
   LEYENDA_DE_LA_SUGERIDA,
@@ -38,6 +39,7 @@ import {
   lineaDeSoloLectura,
   RECORTE_NIVEL_1,
   RECORTE_NIVEL_2,
+  pendientesQueSeCorren,
   type ContextoConPropuesta,
   type EntradaDelContextoConPropuesta,
 } from "./contexto-del-cronograma";
@@ -47,11 +49,13 @@ import { propuestaParaElChat } from "@/lib/timeline/propuesta-para-el-chat";
 import { resolverHandle } from "@/lib/timeline/handle-de-tarea";
 import { computePhaseRanges } from "@/lib/timeline/weeks";
 import {
+  borradorVacio,
   claveDeFaseQueSeVa,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   FORMATO_BORRADOR,
   fotoDeTarea,
+  leerBorrador,
   type Borrador,
   type Cambio,
   type CambioTareaNueva,
@@ -61,6 +65,9 @@ import {
   type Vivo,
 } from "@/lib/timeline/borrador";
 import { MOTIVO_DEL_KICKOFF_QUE_FALTA, TAREA_DE_KICKOFF } from "@/lib/timeline/hitos";
+import { leerFixtureGrande, vivoDelFixture } from "@/lib/timeline/__fixtures__/propuesta-grande";
+import { POLITICA_DE_ATRASOS } from "@/lib/timeline/politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "@/lib/timeline/reprogramar-desde-hoy";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Los fixtures: un cronograma con la forma de Wherex y una propuesta de «Regenerar todo» ──────
@@ -982,5 +989,45 @@ describe("⛔ M2 P2e · lo que decide el sistema, en el contexto del chat", () =
     expect(recortado.nivel).toBe(2);
     expect(veces(recortado.texto, DEL_SISTEMA_SE_QUITA)).toBe(2);
     expect(veces(recortado.texto, DEL_SISTEMA_SE_CREA)).toBe(1);
+  });
+});
+
+describe("⛔ M4 P4e · lo que reprogramó el sistema desde hoy, en el contexto del chat", () => {
+  /* Spec del replanteo §5.6 y D9-D10 (2026-09-27): las casillas del sistema lo dicen, y las 25 arrastradas no se listan
+     de a una: una línea por fase dice cuántas pendientes se corren con su número. Si no, el chat las explicaba como
+     decisiones de la IA, o gastaba el contexto en 25 filas que el CSE no ve (no tienen casilla). */
+  const FIX = leerFixtureGrande();
+  const VIVO_G = vivoDelFixture(FIX);
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-grande" }))) as Record<string, unknown>;
+  const R = reprogramarDesdeHoy({ vivo: VIVO_G, borrador: leerBorrador(vacio())!, hoy: new Date(FIX.hoy), politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!;
+  const REPROGRAMADO = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), R))))!;
+
+  it("⭐ cada casilla del sistema dice que lo decide el sistema, y debajo cuántas pendientes se corren con ella", () => {
+    /* Las ediciones que la ponen en rojo: no sumar la línea de las que se corren (el chat no sabía que «el 1» mueve 8
+       tareas), o no marcar el número como del sistema. */
+    const c = armarContextoConPropuesta(entrada(paraElChat({ vivo: VIVO_G, borrador: REPROGRAMADO })), { techo: Number.POSITIVE_INFINITY });
+    const indice = indiceDe(c.texto);
+    expect(indice).toHaveLength(8);
+    expect(indice.every((l) => l.includes(DEL_SISTEMA_DESDE_HOY)), "un número del sistema sin su marca").toBe(true);
+    const lineas = c.texto.split("\n");
+    const deA = lineas.findIndex((l) => /^1\. /.test(l));
+    expect(lineas[deA + 1]).toBe(`   ${pendientesQueSeCorren(8, 1)}`);
+    expect(pendientesQueSeCorren(8, 1)).toBe("8 pendientes se corren con el cambio 1 (desde hoy)");
+    expect(lineas.filter((l) => / se corren? con el cambio \d+ \(desde hoy\)$/.test(l))).toHaveLength(4);
+    // «Fase D» se mueve entera: no arrastra nada (sus tareas van con ella).
+    const deD = lineas.findIndex((l) => l.startsWith("3. ") && l.includes("Fase D"));
+    expect(lineas[deD + 1]).not.toMatch(/se corren? con el cambio/);
+  });
+
+  it("⛔ las arrastradas no se listan de a una en LOS CAMBIOS (no tienen casilla)", () => {
+    /* La edición que la pone en rojo: listarlas de a una debajo del número de su fase, en vez de contarlas (25 filas que
+       el CSE no puede decidir, y el chat las ofrecía como si pudiera). */
+    const c = armarContextoConPropuesta(entrada(paraElChat({ vivo: VIVO_G, borrador: REPROGRAMADO })), { techo: Number.POSITIVE_INFINITY });
+    const cambios = c.texto.slice(c.texto.indexOf("LOS CAMBIOS CONTRA EL CRONOGRAMA DE HOY"), c.texto.indexOf("PARA REHACER TODO"));
+    expect(cambios).not.toMatch(/Tareas de «/);
+    expect(cambios).not.toContain("   cambian: ");
+    const handle = (id: string) => c.handles.get(id) ?? id;
+    for (const t of R.tareas) expect(cambios, `${t.tareaId} listada`).not.toContain(`[${handle(t.tareaId)}]`);
+    expect(indiceDe(c.texto).map((l) => l.slice(0, l.indexOf(".")))).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
   });
 });

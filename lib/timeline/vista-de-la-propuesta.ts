@@ -20,16 +20,29 @@
  *
  * Los textos que ve el CSE viven acá (entra en la lista de tuteo de contexto-cronograma.test.ts). La guarda:
  * vista-de-la-propuesta.test.ts, con la propuesta grande anonimizada (__fixtures__/propuesta-grande.json).
+ *
+ * M4 P4e (2026-09-27, spec del replanteo §5.6, D9, D10) · LO QUE REPROGRAMÓ EL SISTEMA DESDE HOY:
+ *   · cada casilla del sistema dice lo que pasa en corto («Lo que falta arranca hoy: S18–S21», «Arranca en S20 (antes
+ *     S5)») y su porqué en el `title` y en la línea del sistema de su fase (`lecturaDelSistema`), nunca «Según la IA»;
+ *   · el pin no tiene casilla: su fase lo dice en la línea del sistema («Se fija su inicio en S16…»);
+ *   · las ARRASTRADAS no tienen marca: sin casilla, sin chip y sin fila de más. Marcada su fase, se ven en su semana
+ *     nueva (sin «Atrasada»); desmarcada, en la de hoy (con su «Atrasada»);
+ *   · si la semana cambió desde que se calculó, el aviso para volver a generarla (`textoDeLaSemanaQueCambio`).
+ * Los textos salen de la política con que se calculó la propuesta (`borrador.hoy.politica`, D11), nunca del interruptor.
  */
 import {
   acotarSemana,
   aplicablesSinSugeridas,
   destinoDeLaCambia,
+  esArrastrada,
   esCambioDeTarea,
+  esDesdeHoy,
   esMudanzaSugerida,
+  estructuraHipotetica,
   ordenCompletoDeLaPropuesta,
   type Borrador,
   type Cambio,
+  type CambioFaseCambia,
   type CambioFaseNueva,
   type CambioTareaCambia,
   type CambioTareaNueva,
@@ -47,9 +60,21 @@ import {
   type UnidadNumerada,
   type Vivo,
 } from "./borrador";
+import { esFaseDeCierre } from "./hitos";
+import { unirFrases } from "./magnitud-propuesta";
+// M4 P4e (D11): solo el TIPO. Los textos se eligen por `borrador.hoy.politica`, nunca por la constante del interruptor.
+import type { PoliticaDeFasesVencidas } from "./politica-de-atrasos";
 import { describeChange } from "./proposal-deltas";
 import { filasDeDetalle } from "./sugerencia-detalle";
-import { computePhaseRanges, etiquetaDeSemana, fmtDay, isOverdueByDate, overduePlannedEnd, plural } from "./weeks";
+import {
+  computePhaseRanges,
+  etiquetaDeSemana,
+  fmtDay,
+  isOverdueByDate,
+  overduePlannedEnd,
+  plural,
+  semanaDelProyecto,
+} from "./weeks";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LOS TIPOS ────────────────────────────────────────────────────────────────
@@ -135,6 +160,8 @@ export interface CasillaDeCambio {
    *  decía la lista de la barra (`it.nota`); ahora va al lado de su casilla. */
   nota?: string;
   detalle: ItemDeLaLista["detalle"];
+  /** M4 P4e (D9): una casilla del SISTEMA (lo atrasado se reprograma desde hoy): su porqué, el `title` de la casilla. */
+  delSistema?: string;
 }
 
 /** La casilla de tres estados del grupo de tareas de una fase. */
@@ -168,6 +195,7 @@ export interface VistaDeFase {
    * M2 (2026-09-27, D9): lo que decide el SISTEMA en esta fase, una vez cada texto (el motivo completo de cada fila del
    * sistema: «Ya hay un kickoff hecho: «X».»). El Gantt lo pinta PRIMERO al desplegar la fase, con su chip, y después
    * el porqué de la IA: lo del sistema nunca se lee como «Según la IA».
+   * M4 P4e: primero lo que reprogramó el sistema en la fase (el pin y el porqué de su casilla), después sus filas.
    */
   delSistema: string[];
 }
@@ -292,8 +320,16 @@ export function chipDelChoque(motivo: string): string {
  * El texto corto y FIJO de la casilla de un cambio: «3 → 5 semanas», «pasa a llamarse «Y»», «inicio S2 → S4»
  * (la semana del proyecto desde 0, D4), «sesiones 3 → 4», «cambia la nota», «tipo: Configuración → Adopción»,
  * «Fase nueva · 2 semanas», «Se quita la fase», «Arranque: 19 may → 2 jun», «Reordenar las fases».
+ * M4 P4e (2026-09-27): lo que reprogramó el SISTEMA desde hoy dice qué pasa, no el número crudo («4 → 20 semanas»
+ * engañaba: lo hecho no se estira). Una empezada: «Lo que falta arranca hoy: S18–S21» (una semana: «…: S18»); una que
+ * se mueve entera o va después de lo que la precedía: «Arranca en S20 (antes S5)». `semanaDeHoy`: la del reloj de la
+ * propuesta (`borrador.hoy.semana`); sin ella, el texto de siempre.
  */
-export function etiquetaCortaDelCambio(c: Cambio, vivo: Vivo): string {
+export function etiquetaCortaDelCambio(c: Cambio, vivo: Vivo, semanaDeHoy: number | null = null): string {
+  if (c.tipo === "fase-cambia" && c.desdeHoy) {
+    const texto = etiquetaDeLoDeHoy(c, vivo, semanaDeHoy);
+    if (texto) return texto;
+  }
   switch (c.tipo) {
     case "ancla": {
       const hoy = vivo.ancla ?? c.desde;
@@ -328,6 +364,186 @@ export function etiquetaCortaDelCambio(c: Cambio, vivo: Vivo): string {
       return _;
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── M4 P4e · LO QUE REPROGRAMÓ EL SISTEMA DESDE HOY ─────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** «S2–S5», o «S16» si es una sola semana. */
+const tramo = (desde: number, hasta: number) =>
+  hasta > desde ? `${semanaDelProyecto(desde)}–${semanaDelProyecto(hasta)}` : semanaDelProyecto(desde);
+
+/** Dónde arranca una fase HOY (su inicio en el cronograma vivo), o null si ya no está. */
+function inicioVivoDe(vivo: Vivo, faseId: string): number | null {
+  const k = vivo.fases.findIndex((f) => f.id === faseId);
+  return k < 0 ? null : computePhaseRanges(vivo.fases)[k].start;
+}
+
+/** El texto corto de una casilla del sistema, o null si no hay con qué armarlo (el de siempre). */
+function etiquetaDeLoDeHoy(c: CambioFaseCambia, vivo: Vivo, semanaDeHoy: number | null): string | null {
+  const inicio = inicioVivoDe(vivo, c.faseId);
+  if (inicio === null || typeof c.a !== "number") return null;
+  if (c.campo === "durationWeeks") {
+    if (semanaDeHoy === null) return null;
+    return `Lo que falta arranca hoy: ${tramo(semanaDeHoy, inicio + c.a - 1)}`;
+  }
+  if (c.campo === "startWeek") {
+    if (c.fijaInicio) return `Se fija su inicio en ${semanaDelProyecto(c.a)}`;
+    return `Arranca en ${semanaDelProyecto(c.a)} (antes ${semanaDelProyecto(inicio)})`;
+  }
+  return null;
+}
+
+/** Qué es cada cambio del sistema: la empezada que se estira, la atrasada que no empezó, la que va después de lo que la
+ *  precedía, o el pin. */
+export type TipoDeLoDeHoy = "estirada" | "atrasada" | "despues" | "pin";
+
+export interface LecturaDelSistema {
+  tipo: TipoDeLoDeHoy;
+  fase: string;
+  /** El porqué completo (el `title` de la casilla y la línea del sistema de su fase). */
+  titulo: string;
+  /** Una atrasada que no empezó y no tiene ninguna tarea marcada: si ya se hizo, conviene marcarla y desmarcar. */
+  sinNadaMarcado: boolean;
+}
+
+/**
+ * M4 P4e: los textos de lo que reprogramó el sistema, por la política con que se calculó (D11). La de «avisar» no
+ * reprograma, así que nunca se usa: lleva los de «en el orden del plan».
+ */
+interface TextosDeLoDeHoy {
+  estirada: (tareas: number, arranca: number, hecho: string) => string;
+  atrasada: (arranca: number, tras: string | null, estaSemana: boolean) => string;
+  despues: (arranca: number) => string;
+  pin: (semana: number) => string;
+  sinNadaMarcado: string;
+  cierreAntesDelTrabajo: string | null;
+  noSeCorren: (n: number) => string;
+}
+const TEXTOS_DEL_ORDEN_DEL_PLAN: TextosDeLoDeHoy = {
+  estirada: (tareas, arranca, hecho) =>
+    `Está atrasada: lo que falta (${plural(tareas, "tarea", "tareas")}) arranca en ${semanaDelProyecto(arranca)}. Lo hecho se queda en ${hecho}.`,
+  atrasada: (arranca, tras, estaSemana) =>
+    `Está atrasada y no empezó: arranca en ${semanaDelProyecto(arranca)}${
+      tras ? `, cuando termina lo que le falta a ${tras}` : estaSemana ? ", esta semana" : ""
+    }.`,
+  despues: (arranca) => `Va después de lo que la precedía en el plan: arranca en ${semanaDelProyecto(arranca)}.`,
+  pin: (semana) => `Se fija su inicio en ${semanaDelProyecto(semana)}: ya empezó y lo que se reprograma no la corre.`,
+  sinNadaMarcado: "No tiene ninguna tarea marcada: si ya se hizo, márcala hecha y desmarca esta casilla.",
+  cierreAntesDelTrabajo: null,
+  noSeCorren: (n) => (n === 1 ? "1 tarea no se corre: la cambiaron a mano." : `${n} tareas no se corren: las cambiaron a mano.`),
+};
+export const TEXTOS_DE_LO_DE_HOY: Record<PoliticaDeFasesVencidas, TextosDeLoDeHoy> = {
+  "en-el-orden-del-plan": TEXTOS_DEL_ORDEN_DEL_PLAN,
+  // D5: todo arranca hoy, y una fase de cierre quedaría antes del trabajo que la precedía (su casilla nace desmarcada).
+  "todo-desde-hoy": {
+    ...TEXTOS_DEL_ORDEN_DEL_PLAN,
+    cierreAntesDelTrabajo: "Queda antes de que termine el trabajo que la precedía: márcala solo si el cierre va en paralelo.",
+  },
+  avisar: TEXTOS_DEL_ORDEN_DEL_PLAN,
+};
+
+/**
+ * ⭐ M4 P4e: QUÉ ES y POR QUÉ cada cambio del sistema (`desdeHoy`), por clave. Puro. Los números salen de los cambios, del
+ * vivo y del reloj de la propuesta (`borrador.hoy`); ninguno de la IA.
+ *   · empezada que se estira (`durationWeeks`): cuántas tareas se corren, desde qué semana y dónde queda lo hecho (la
+ *     ventana de hoy). Con arrastradas en choque (`r.arrastradas`), cuántas no se corren;
+ *   · sin empezar (`startWeek`): «atrasada» si su ventana (con lo que la precedía ya reprogramado, como la calculó el
+ *     sistema) cerró antes de hoy; si no, «va después de lo que la precedía». La atrasada nombra a las antecesoras que la
+ *     hacen esperar: las anteriores que en el plan terminaban antes o justo cuando ésta empezaba y que ahora terminan
+ *     justo donde ella arranca;
+ *   · el pin: dónde queda fijo.
+ * Vacío si la propuesta no trae nada del sistema.
+ */
+export function lecturaDelSistema(
+  vivo: Vivo,
+  borrador: Borrador,
+  r: Pick<ResumenDelBorrador, "arrastradas"> | null = null,
+): Map<string, LecturaDelSistema> {
+  const out = new Map<string, LecturaDelSistema>();
+  const delSistema = borrador.cambios.filter((c): c is CambioFaseCambia => c.tipo === "fase-cambia" && !!c.desdeHoy);
+  if (delSistema.length === 0) return out;
+  const textos = TEXTOS_DE_LO_DE_HOY[borrador.hoy?.politica.fasesVencidas ?? "en-el-orden-del-plan"];
+  const H = borrador.hoy?.semana ?? null;
+  const viva = new Map(vivo.fases.map((f) => [f.id, f]));
+  const nombre = (id: string, respaldo: string) => viva.get(id)?.name ?? respaldo;
+  // El plan que vio el sistema (sin lo suyo) y cómo queda con todo lo que propone.
+  const antes = estructuraHipotetica(vivo, { ...borrador, cambios: borrador.cambios.filter((c) => !esDesdeHoy(c)) });
+  const despues = estructuraHipotetica(vivo, borrador);
+  const R0 = computePhaseRanges(antes.fases);
+  const R1 = computePhaseRanges(despues.fases);
+  const k0De = new Map(antes.fases.map((f, k) => [f.id, k]));
+  const k1De = new Map(despues.fases.map((f, k) => [f.id, k]));
+  const arrastradas = borrador.cambios.filter(esArrastrada);
+
+  for (const c of delSistema) {
+    const a = typeof c.a === "number" ? c.a : null;
+    const inicio = inicioVivoDe(vivo, c.faseId);
+    if (a === null || inicio === null) continue;
+    if (c.fijaInicio) {
+      out.set(c.clave, { tipo: "pin", fase: c.faseId, titulo: textos.pin(a), sinNadaMarcado: false });
+      continue;
+    }
+    if (c.campo === "durationWeeks") {
+      const suyas = arrastradas.filter((t) => t.conCambio === c.clave);
+      const arranca = H ?? Math.min(...suyas.map((t) => inicio + (t.a.weekIndex ?? t.desde.weekIndex)), inicio);
+      const antesDur = typeof c.desde === "number" ? c.desde : 1;
+      const choques = (r?.arrastradas ?? []).filter((t) => t.conCambio === c.clave && t.estado === "choque").length;
+      const titulo = [
+        textos.estirada(suyas.length, arranca, tramo(inicio, inicio + antesDur - 1)),
+        // D13: la que alguien cambió a mano después de la propuesta no se corre; lo dice acá (no es un choque de la barra).
+        ...(choques > 0 ? [textos.noSeCorren(choques)] : []),
+      ];
+      out.set(c.clave, { tipo: "estirada", fase: c.faseId, titulo: titulo.join(" "), sinNadaMarcado: false });
+      continue;
+    }
+    if (c.campo !== "startWeek") continue;
+    const k1 = k1De.get(c.faseId);
+    const k0 = k0De.get(c.faseId);
+    if (k1 === undefined || k0 === undefined) continue;
+    // Donde la calculó el sistema: su inicio propio (el de la IA, si lo reemplazó) o detrás de la anterior ya reprogramada.
+    const propio = c.deLaIA ? c.deLaIA.a : typeof c.desde === "number" ? c.desde : null;
+    const inicioCalculado = propio !== null ? propio : k1 > 0 ? R1[k1 - 1].end : 0;
+    const atrasada = H !== null && inicioCalculado + (despues.fases[k1].durationWeeks || 1) <= H;
+    if (!atrasada) {
+      out.set(c.clave, { tipo: "despues", fase: c.faseId, titulo: textos.despues(a), sinNadaMarcado: false });
+      continue;
+    }
+    const tras = antes.fases.flatMap((f, j) => {
+      const j1 = k1De.get(f.id);
+      return j < k0 && R0[j].end <= R0[k0].start && j1 !== undefined && R1[j1].end === a ? [`«${nombre(f.id, f.name)}»`] : [];
+    });
+    const sinNadaMarcado = !(viva.get(c.faseId)?.tareas ?? []).some((t) => t.status !== "PENDING");
+    const partes = [
+      textos.atrasada(a, H !== null && a > H && tras.length > 0 ? unirFrases(tras) : null, a === H),
+      ...(sinNadaMarcado ? [textos.sinNadaMarcado] : []),
+      ...(textos.cierreAntesDelTrabajo && esFaseDeCierre(nombre(c.faseId, c.fase)) ? [textos.cierreAntesDelTrabajo] : []),
+    ];
+    out.set(c.clave, { tipo: "atrasada", fase: c.faseId, titulo: partes.join(" "), sinNadaMarcado });
+  }
+  return out;
+}
+
+/**
+ * M4 P4e (§5.1): si la propuesta se reprogramó en otra semana, el aviso para volver a generarla. No se recalcula sola:
+ * cambiar duraciones obliga a rehacer tareas con IA, que se paga. `semanaActual`: `semanaDeHoy(vivo.ancla, hoy)`. null
+ * si no hay reloj, no hay nada del sistema, o es la misma semana (o una anterior). El texto, por `hoy.politica` (D11).
+ */
+export const TEXTOS_DE_LA_SEMANA_QUE_CAMBIO: Record<PoliticaDeFasesVencidas, ((desde: number, hoy: number) => string) | null> = {
+  "en-el-orden-del-plan": (desde, hoy) =>
+    `⚠ Se reprogramó desde la ${semanaDelProyecto(desde)} y hoy es la ${semanaDelProyecto(hoy)}: vuelve a generarla para que lo atrasado arranque esta semana.`,
+  "todo-desde-hoy": (desde, hoy) =>
+    `⚠ Se reprogramó desde la ${semanaDelProyecto(desde)} y hoy es la ${semanaDelProyecto(hoy)}: vuelve a generarla para que lo atrasado arranque esta semana.`,
+  // Con «avisar» no se reprograma nada: no hay qué volver a generar.
+  avisar: null,
+};
+export function textoDeLaSemanaQueCambio(guardada: Pick<Borrador, "hoy" | "cambios">, semanaActual: number | null): string | null {
+  const reloj = guardada.hoy;
+  if (!reloj || semanaActual === null || semanaActual <= reloj.semana) return null;
+  if (!guardada.cambios.some(esDesdeHoy)) return null;
+  const texto = TEXTOS_DE_LA_SEMANA_QUE_CAMBIO[reloj.politica.fasesVencidas];
+  return texto ? texto(reloj.semana, semanaActual) : null;
 }
 
 /**
@@ -793,6 +1009,8 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
     }
   }
 
+  /* M4 P4e (D10): una ARRASTRADA nunca llega acá: `gruposDeTareas` no las trae. Sin marca, no tiene casilla, chip ni fila
+     de más, y la proyección ya la pone donde queda (marcada su fase, en su semana nueva; desmarcada, en la de hoy). */
   function tareaCambia(c: CambioTareaCambia, it: ItemDeTarea, base: Base, choque: string | null) {
     const viva = vivaPorId.get(c.tareaId)?.tarea;
     const semanaHoy = viva?.weekIndex ?? c.desde.weekIndex;
@@ -915,18 +1133,38 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
   }
 
   // ── La estructura: la cabecera, las casillas de cada fase y las fases fuera del calendario ──
+  /* M4 P4e: lo que reprogramó el sistema, con su porqué (el `title` de su casilla y la línea del sistema de su fase). */
+  const lectura = lecturaDelSistema(vivo, borrador, r);
+  const semanaDelReloj = borrador.hoy?.semana ?? null;
   const casillaDe = (it: ItemDeLaLista, c: Cambio): CasillaDeCambio => ({
     clave: it.clave,
     numero: it.numero,
-    texto: etiquetaCortaDelCambio(c, vivo),
+    texto: etiquetaCortaDelCambio(c, vivo, semanaDelReloj),
     estado: it.estado,
     marcada: it.estado === "aplica",
     seMarca: it.estado === "aplica" || it.estado === "excluido",
     ...(it.aviso ? { aviso: it.aviso } : {}),
     ...(it.motivo ? { motivo: it.motivo } : {}),
     ...(it.nota ? { nota: it.nota } : {}),
+    ...(lectura.has(it.clave) ? { delSistema: lectura.get(it.clave)!.titulo } : {}),
     detalle: it.detalle,
   });
+  /** M4 P4e (D9): las líneas del sistema de cada fase que vienen de su ESTRUCTURA (el pin que se escribe y el porqué de
+   *  cada casilla del sistema que no está «ya está»), antes de las de sus filas (M2). */
+  const delSistemaDeLaEstructura = new Map<string, string[]>();
+  const sumarLinea = (fase: string, texto: string) => {
+    const ya = delSistemaDeLaEstructura.get(fase) ?? [];
+    if (!ya.includes(texto)) delSistemaDeLaEstructura.set(fase, [...ya, texto]);
+  };
+  for (const p of r.fijadas) {
+    const l = lectura.get(p.clave);
+    if (l && p.estado === "aplica") sumarLinea(p.fase, l.titulo);
+  }
+  for (const it of r.items) {
+    const l = lectura.get(it.clave);
+    if (l && it.estado !== "ya-esta") sumarLinea(l.fase, l.titulo);
+  }
+  const lineasDelSistema = (fase: string) => [...(delSistemaDeLaEstructura.get(fase) ?? []), ...(delSistemaPorFase.get(fase) ?? [])];
   const ordenCompleto = ordenCompletoDeLaPropuesta(vivo, borrador.cambios);
   const despuesDe = (key: string): string | null => {
     const i = ordenCompleto.indexOf(key);
@@ -1093,7 +1331,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
       semanas,
       semanasQueSeSuman: sumadasPorFase.get(f.clave) ?? [],
       semanasQueYaPasaron,
-      delSistema: delSistemaPorFase.get(f.clave) ?? [],
+      delSistema: lineasDelSistema(f.clave),
     });
   }
 
@@ -1115,7 +1353,7 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
       semanas: [],
       semanasQueSeSuman: [],
       semanasQueYaPasaron: [],
-      delSistema: delSistemaPorFase.get(x.key) ?? [],
+      delSistema: lineasDelSistema(x.key),
     });
   }
 

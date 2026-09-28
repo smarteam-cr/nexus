@@ -37,6 +37,9 @@
  * cierre ya no va en su línea (lo dice el mensaje): lo que ve el cliente queda solo, debajo. El aviso «Es prácticamente
  * un cronograma nuevo» se fue: lo dicen el título («Cronograma casi nuevo») y «Más» (por qué).
  *
+ * M4 P4e (2026-09-27) · LA SEMANA QUE CAMBIÓ. Si lo atrasado se reprogramó desde una semana que ya pasó, abajo, antes de
+ * los choques, el aviso para volver a generarla (`mensaje.avisoDeLaSemana`, en ámbar).
+ *
  * L6 (2026-09-26) · EL PORQUÉ CON FUENTES NUEVAS. Debajo de las líneas del mensaje, la frase general de la explicación
  * con sus chips (si la hay; «(de cuando se generó)» si el chat editó la propuesta después); en «Más», UNA vez, cuántas
  * fases cambian sin una reunión, nota o instrucción nueva que las nombre (lib/timeline/explicacion-de-la-propuesta.ts).
@@ -364,6 +367,9 @@ export default function RevisionDeLaPropuesta({
               que rehace el plan ya no llega disfrazada de N cambios sueltos porque lo dice el título («Cronograma casi
               nuevo», en ámbar), sus motivos van en «Más» y qué se quita lo dicen el mensaje y la confirmación. */}
 
+          {/* M4 P4e: la propuesta se reprogramó otra semana: vuelve a generarla (no se recalcula sola, rehacer tareas se
+              paga). Antes de los choques. */}
+          {mensaje.avisoDeLaSemana && <p className="text-xs text-warn-ink">{mensaje.avisoDeLaSemana}</p>}
           {choques > 0 && <p className="text-xs text-warn-ink">{textoDeLosChoques(choques)}</p>}
 
           {/* El avance sin revisar: se revisa en su cajón («Lo que detectó el agente»), no «más abajo». */}

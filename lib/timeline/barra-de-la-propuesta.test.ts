@@ -355,3 +355,18 @@ describe("L6 · el porqué con fuentes nuevas, en la barra", () => {
     expect(sin).not.toContain("instrucción nueva que las nombre");
   });
 });
+
+describe("M4 P4e · la semana que cambió, en la barra", () => {
+  const AVISO = "⚠ Se reprogramó desde la S18 y hoy es la S19: vuelve a generarla para que lo atrasado arranque esta semana.";
+
+  it("⭐ el aviso va abajo, en ámbar y antes de los choques; sin aviso, nada", () => {
+    /* Las ediciones que la ponen en rojo: no pintar `mensaje.avisoDeLaSemana` (el CSE aplicaba una reprogramación de
+       la semana pasada sin enterarse), pintarlo en lo fijo o después de los choques. */
+    const { fija, abajo } = partes(pintar({ mensaje: { ...M, avisoDeLaSemana: AVISO }, resumen: { ...R, choques: 2 } }));
+    expect(abajo).toContain(`<p class="text-xs text-warn-ink">${AVISO}</p>`);
+    expect(texto(abajo).indexOf(AVISO), "después de los choques").toBeLessThan(texto(abajo).indexOf(textoDeLosChoques(2)));
+    expect(texto(fija)).not.toContain("Se reprogramó");
+    expect(M.avisoDeLaSemana, "el fixture no trae reloj").toBeNull();
+    expect(texto(pintar())).not.toContain("Se reprogramó");
+  });
+});

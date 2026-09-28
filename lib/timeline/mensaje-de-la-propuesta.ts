@@ -16,6 +16,15 @@
  * Hasta 5 líneas de ≤ 140 caracteres. Lo demás («Más»): dónde se concentran los cambios, una fase terminada que recibe
  * tareas, los atrasos cargados (en una frase APARTE, nunca como causa) y, si es prácticamente otro cronograma, por qué.
  *
+ * M4 P4f (2026-09-27, spec del replanteo §5.7, D10, D11) · LO QUE REPROGRAMÓ EL SISTEMA DESDE HOY:
+ *   · en la línea 1 es UNA causa, la primera: «8 fases se reprograman desde hoy, en el orden del plan» (con otras causas,
+ *     cuánto corre el cierre por sí sola: «(+12 semanas)»). El pin no cuenta;
+ *   · las arrastradas no cuentan en ninguna parte: ni en el nivel, ni en «ajusta N» (línea 3), ni en «se concentran»
+ *     (las saca el resumen: `TareasDelResumen.cambian` y `gruposDeTareas`);
+ *   · «Más» nombra las fases que vuelven a arrancar sin ninguna tarea marcada (si ya se hicieron, conviene marcarlas);
+ *   · `avisoDeLaSemana`: si la semana cambió desde que se reprogramó, el aviso para volver a generarla.
+ * Todo por `borrador.hoy.politica`, nunca por el interruptor.
+ *
  * ⛔ LOS NÚMEROS LOS PONE EL CÓDIGO (spec §0.1): todo sale de `resumir` (`r` con lo marcado; `entera`, la propuesta
  * entera, para el nivel), del vivo y de las referencias del GET. Nunca de contar `borrador.cambios`, y nunca del
  * `motivo` que escribió la IA: el motivo solo decide si hay un chip de su fuente (`fuenteDelMotivo`), y se muestra solo
@@ -35,9 +44,9 @@ import {
 } from "./borrador";
 import { unirFrases } from "./magnitud-propuesta";
 // M3 (D11): solo el TIPO. Los textos se eligen por `borrador.hoy.politica`, nunca por la constante del interruptor.
-import type { PoliticaDePendientesDelPasado } from "./politica-de-atrasos";
+import type { PoliticaDeFasesVencidas, PoliticaDePendientesDelPasado } from "./politica-de-atrasos";
 import type { FuentesDeLaPropuesta, PrometidoDeLaPropuesta, ReferenciasDeLaPropuesta } from "./referencias-de-la-propuesta";
-import { semanaVencida } from "./vista-de-la-propuesta";
+import { lecturaDelSistema, semanaDeHoy, semanaVencida, textoDeLaSemanaQueCambio } from "./vista-de-la-propuesta";
 import { computePhaseRanges, fmtDay, plural, semanaDelProyecto, type ProjectedEnd } from "./weeks";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +96,9 @@ export interface MensajeDeLaPropuesta {
   detalle: string[];
   /** De dónde salen los cambios de fases, solo lo verificado (chips). */
   fuentes: FuenteVerificada[];
+  /** M4 P4f: «⚠ Se reprogramó desde la S18 y hoy es la S19: vuelve a generarla…», o null (misma semana, sin reloj o sin
+   *  nada del sistema). La barra lo pinta abajo, antes de los choques. */
+  avisoDeLaSemana: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,6 +159,37 @@ export const TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER: Record<
 };
 /** M3: hasta cuántas tareas sin hacer nombra «Más» (con más, las fases y cuántas tiene cada una). */
 export const TOPE_DE_LAS_QUE_SE_NOMBRAN = 5;
+
+/**
+ * M4 P4f (2026-09-27): lo que reprogramó el sistema, en el mensaje, por la política de las fases vencidas con que se
+ * calculó (`borrador.hoy.politica`, D11). `una` y `varias`: la causa de la línea 1 (una fase, por su nombre; varias,
+ * cuántas); `solas`: no hay otras causas; `corre`: con otras causas, cuánto corre el cierre lo de hoy solo («+12
+ * semanas»). `sinNadaMarcado…`: «Más», las que vuelven a arrancar sin ninguna tarea marcada. «avisar» no reprograma:
+ * lleva los del orden del plan.
+ */
+interface TextosDeLoDeHoyEnElMensaje {
+  una: (fase: string, corre: string | null) => string;
+  varias: (n: number, solas: boolean, corre: string | null) => string;
+  sinNadaMarcadoUna: (fase: string) => string;
+  sinNadaMarcadoVarias: (n: number, fases: string) => string;
+}
+const conCorrimiento = (s: string, corre: string | null) => (corre ? `${s} (${corre})` : s);
+const TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN: TextosDeLoDeHoyEnElMensaje = {
+  una: (fase, corre) => conCorrimiento(`«${fase}» se reprograma desde hoy`, corre),
+  varias: (n, solas, corre) => conCorrimiento(`${n} fases se reprograman desde hoy${solas ? ", en el orden del plan" : ""}`, corre),
+  sinNadaMarcadoUna: (fase) => `«${fase}» se reprograma y no tiene ninguna tarea marcada: si ya se hizo, márcala hecha y desmarca su casilla.`,
+  sinNadaMarcadoVarias: (n, fases) =>
+    `${n} de las fases que se reprograman no tienen ninguna tarea marcada: ${fases}. Si ya se hicieron, márcalas hechas y desmarca su casilla.`,
+};
+export const TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE: Record<PoliticaDeFasesVencidas, TextosDeLoDeHoyEnElMensaje> = {
+  "en-el-orden-del-plan": TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
+  "todo-desde-hoy": {
+    ...TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
+    una: (fase, corre) => conCorrimiento(`«${fase}» arranca desde hoy`, corre),
+    varias: (n, _solas, corre) => conCorrimiento(`${n} fases atrasadas arrancan desde hoy`, corre),
+  },
+  avisar: TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
+};
 
 const PARTES_DEL_ATRASO: ReadonlyArray<readonly [string, string]> = [
   ["CLIENTE", "cliente"],
@@ -290,12 +333,25 @@ export function etiquetaLargaDelCambio(c: CambioDeEstructura, vivo: Vivo): strin
   }
 }
 
-/** Los cambios de estructura MARCADOS que mueven el cierre, en el orden de sus números. */
+/**
+ * Los cambios de estructura MARCADOS que mueven el cierre, en el orden de sus números.
+ * M4 P4f (2026-09-27): lo que reprogramó el sistema desde hoy (sus casillas marcadas; el pin no es un renglón) va junto,
+ * en UNA causa y primero: «8 fases se reprograman desde hoy, en el orden del plan». Con otras causas dice cuánto corre el
+ * cierre por sí solo: las semanas del cierre con solo lo de hoy (`magnitudDeLoMarcado.finAntes`) menos las de hoy.
+ */
 function causasDelCierre(i: EntradaDelMensaje): string[] {
   const porClave = new Map<string, Cambio>(i.borrador.cambios.map((c) => [c.clave, c]));
-  return [...i.r.items]
-    .filter((it) => it.estado === "aplica")
-    .sort((a, b) => a.numero - b.numero)
+  const marcados = [...i.r.items].filter((it) => it.estado === "aplica").sort((a, b) => a.numero - b.numero);
+  const deHoy = new Set<string>();
+  for (const it of marcados) {
+    const c = porClave.get(it.clave);
+    if (c?.tipo === "fase-cambia" && c.desdeHoy) deHoy.add(c.faseId);
+  }
+  const otras = marcados
+    .filter((it) => {
+      const c = porClave.get(it.clave);
+      return !(c?.tipo === "fase-cambia" && c.desdeHoy);
+    })
     .flatMap((it) => {
       const c = porClave.get(it.clave);
       if (!c) return [];
@@ -307,6 +363,22 @@ function causasDelCierre(i: EntradaDelMensaje): string[] {
         c.tipo === "orden";
       return mueve ? [etiquetaLargaDelCambio(c as CambioDeEstructura, i.vivo)] : [];
     });
+  if (deHoy.size === 0) return otras;
+  const textos = TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE[i.borrador.hoy?.politica.fasesVencidas ?? "en-el-orden-del-plan"];
+  // Cuánto corre el cierre lo de hoy solo: solo se dice si hay otras causas (si no, es el corrimiento de la línea).
+  let corre: string | null = null;
+  if (otras.length > 0) {
+    const antes = i.r.cierreAntes;
+    const conLoDeHoy = i.r.magnitudDeLoMarcado.finAntes;
+    const dias = antes.date && conLoDeHoy.date ? diasEntre(antes.date, conLoDeHoy.date) : (conLoDeHoy.spanWeeks - antes.spanWeeks) * 7;
+    corre = dias === 0 ? null : corrimiento(dias);
+  }
+  const [unaFase] = [...deHoy];
+  const causa =
+    deHoy.size === 1
+      ? textos.una(cortarNombre(i.vivo.fases.find((f) => f.id === unaFase)?.name ?? unaFase), corre)
+      : textos.varias(deHoy.size, otras.length === 0, corre);
+  return [causa, ...otras];
 }
 
 /** «A y B», o «A, B y 3 cambios más» si no entran todas. */
@@ -563,10 +635,31 @@ export function fuenteDelMotivo(motivo: string, f: FuentesDeLaPropuesta | null):
   return null;
 }
 
+/**
+ * M4 P4f (§5.1): las fases que el sistema reprograma (su casilla marcada), que no empezaron y no tienen ninguna tarea
+ * marcada: en Wherex, «Service Hub», «Marketing Hub» y «Cierre y entrega». Si ya se hicieron, la propuesta las vuelve a
+ * arrancar: conviene marcarlas hechas y desmarcar su casilla. En el orden del cronograma. null si no hay ninguna.
+ */
+function detalleDeLasSinNadaMarcado(i: EntradaDelMensaje): string | null {
+  const lectura = lecturaDelSistema(i.vivo, i.borrador);
+  if (lectura.size === 0) return null;
+  const marcadas = new Set(i.r.items.filter((it) => it.estado === "aplica").map((it) => it.clave));
+  const fases = new Set([...lectura.entries()].filter(([clave, l]) => l.sinNadaMarcado && marcadas.has(clave)).map(([, l]) => l.fase));
+  const nombres = i.vivo.fases.filter((f) => fases.has(f.id)).map((f) => cortarNombre(f.name));
+  if (nombres.length === 0) return null;
+  const textos = TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE[i.borrador.hoy?.politica.fasesVencidas ?? "en-el-orden-del-plan"];
+  return nombres.length === 1
+    ? textos.sinNadaMarcadoUna(nombres[0])
+    : textos.sinNadaMarcadoVarias(nombres.length, unirFrases(nombres.map((n) => `«${n}»`)));
+}
+
 /** «Más»: dónde se concentran, la fase terminada que recibe, los atrasos (APARTE) y por qué es otro cronograma. */
 function detalleDelMensaje(i: EntradaDelMensaje, porMagnitud: boolean, prometido: PrometidoDeLaPropuesta | null): string[] {
   const { r, vivo, borrador } = i;
   const detalle: string[] = [];
+  // M4 P4f: las que el sistema vuelve a arrancar sin ninguna tarea marcada (quizás ya se hicieron y nadie las marcó).
+  const sinNadaMarcado = detalleDeLasSinNadaMarcado(i);
+  if (sinNadaMarcado) detalle.push(sinNadaMarcado);
   // M3: lo que quedó sin hacer en semanas que ya pasaron (la línea 5 dice que está acá), con la acción.
   const sinHacer = detalleDeLoQueQuedoSinHacer(i);
   if (sinHacer) detalle.push(sinHacer);
@@ -660,5 +753,7 @@ export function mensajeDeLaPropuesta(i: EntradaDelMensaje): MensajeDeLaPropuesta
     lineas: lineas.slice(0, 5),
     detalle: detalleDelMensaje(i, porMagnitud, prometido),
     fuentes: [...verificadas.values()],
+    // M4 P4f: la semana del reloj de la propuesta contra la de hoy (el mismo predicado que «ya pasó»).
+    avisoDeLaSemana: textoDeLaSemanaQueCambio(i.borrador, semanaDeHoy(i.vivo.ancla, i.hoy)),
   };
 }

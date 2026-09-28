@@ -23,6 +23,8 @@
  *      marcar, y la huella es la de antes de L3.
  *   19. (M4 P4d) Lo que reprogramó el sistema en el plan: las arrastradas y el pin no cuentan ni son unidades, el pin
  *      aplica si algo aplica, una arrastrada hecha después queda «ya está», y la huella de antes no cambia.
+ *   20. (M4 P4e) El resumen: las arrastradas van aparte (ni en los grupos ni en «cambian»), el pin no es un renglón, la
+ *      propuesta con arrastradas pendientes no se descarta sola y la confirmación dice lo que se reprograma.
  *
  * ⚠ E4 (2026-09): lo guardado es siempre v1; la conversión quedó para los productores. Por eso §2, §8,
  * §9, §12 y §13 se reescribieron: ya no hay foto contra la que convertir al leer, y la identidad de una
@@ -67,6 +69,7 @@ import {
   proyectarConPlan,
   recordarRevision,
   recuerdoDeLaRevision,
+  resumenDeLaConfirmacion,
   resumir,
   revisionPara,
   REVISION_VACIA,
@@ -1450,5 +1453,110 @@ describe("19 · M4 P4d: el plan cuenta lo que tiene casilla; las arrastradas y e
     const r = resumir(VIVO_G, conLaIA, [], LISTAS);
     expect(r.grupos.find((g) => g.fase === "f02")!.numero, "el grupo tomó el número de su primera arrastrada").toBe(grupoDeA.numero);
     expect(r.indice).toHaveLength(9);
+  });
+});
+
+/**
+ * 20 · M4 P4e (spec del replanteo §5.6 y §5.11, 2026-09-27): EL RESUMEN FRENTE A LO QUE REPROGRAMÓ EL SISTEMA. Sobre la
+ * propuesta grande reprogramada en el orden del plan (8 casillas, el pin de «Fase I», 25 arrastradas). Lo que el sistema
+ * decide sin casilla va aparte: las arrastradas no entran en ningún grupo ni en «cambian», y el pin no es un renglón.
+ * Cada `it` nombra la edición del código de producción que lo pone en rojo.
+ */
+describe("20 · M4 P4e: el resumen lleva aparte lo que el sistema decide sin casilla", () => {
+  const FIX = leerFixtureGrande();
+  const VIVO_G = vivoDelFixture(FIX);
+  const LISTAS = { tareas: "listas" as const };
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+  const R = reprogramarDesdeHoy({
+    vivo: VIVO_G,
+    borrador: leerBorrador(vacio())!,
+    hoy: new Date(FIX.hoy),
+    politica: POLITICA_DE_ATRASOS,
+    conSemanaCero: true,
+  })!;
+  const REPROGRAMADO = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), R))))!;
+  const PIN = claveDeCampo("f10", "startWeek");
+  const DURACION_DE_A = claveDeCampo("f02", "durationWeeks");
+  const NUEVA: CambioTareaNueva = {
+    tipo: "tarea-nueva",
+    clave: "t:a-1",
+    fase: "f02",
+    tarea: { title: "Tarea nueva de la IA", weekIndex: 18, notes: null, party: "SMARTEAM", type: "TASK", needsValidation: false, motivoPorValidar: null, fuga: null },
+  };
+  const CON_LA_IA: Borrador = {
+    ...REPROGRAMADO,
+    cambios: [...REPROGRAMADO.cambios, NUEVA],
+    tareas: { corrida: "run-2", listas: true },
+    tareasArmadasPara: { f02: { nombre: "Fase A", semanas: 20 } },
+  };
+
+  it("⭐ las arrastradas no entran en ningún grupo ni en «cambian»: van aparte, con el número de la duración de su fase", () => {
+    /* Las ediciones que la ponen en rojo: sacar el filtro de `gruposDeTareas` (el grupo de «Fase A» decía «8 cambian»
+       por lo que decidió el sistema, y el Gantt pintaba 25 filas con «viene de la Semana M»), o contar `cambian` con
+       ellas (la línea 3 del mensaje decía «ajusta 25 tareas»). */
+    const r = resumir(VIVO_G, REPROGRAMADO, [], LISTAS);
+    expect(r.grupos, "un grupo hecho de arrastradas").toEqual([]);
+    expect(r.tareas).toMatchObject({ nuevas: 0, seVan: 0, cambian: 0, arrastradas: 25 });
+    expect(r.arrastradas).toHaveLength(25);
+    const numeroDeA = r.items.find((it) => it.clave === DURACION_DE_A)!.numero;
+    const deA = r.arrastradas.filter((a) => a.conCambio === DURACION_DE_A);
+    expect(deA.map((a) => [a.fase, a.numero, a.estado, a.aplica, a.a - a.de])).toEqual(Array(8).fill(["f02", numeroDeA, "aplica", true, 16]));
+    // Con la IA, el grupo de «Fase A» trae solo lo de la IA.
+    const grupoDeA = resumir(VIVO_G, CON_LA_IA, [], LISTAS).grupos.find((g) => g.fase === "f02")!;
+    expect(grupoDeA.tareas.map((t) => t.clave), "una arrastrada en el grupo").toEqual([NUEVA.clave]);
+    expect([grupoDeA.nuevas, grupoDeA.cambian, grupoDeA.marcadas, grupoDeA.aplicables]).toEqual([1, 0, 1, 1]);
+    // Desmarcada la duración de «Fase A», sus 8 quedan fuera con ella y no se escriben.
+    const sinA = resumir(VIVO_G, REPROGRAMADO, [DURACION_DE_A], LISTAS);
+    expect(sinA.tareas.arrastradas).toBe(17);
+    expect(sinA.arrastradas.filter((a) => a.fase === "f02").map((a) => a.estado)).toEqual(Array(8).fill("excluido"));
+  });
+
+  it("⭐ el pin no es un renglón de la lista: va en `fijadas`, con su estado", () => {
+    /* La edición que la pone en rojo: dejarlo en `items` (la vista le daba casilla a lo que no se puede desmarcar, y el
+       chat lo leía con el número de la duración de su fase). */
+    const r = resumir(VIVO_G, REPROGRAMADO, [], LISTAS);
+    expect(r.items.map((it) => it.clave), "el pin como renglón").not.toContain(PIN);
+    expect(r.items).toHaveLength(8);
+    expect(r.items.every((it) => it.desdeHoy), "una casilla del sistema sin su marca").toBe(true);
+    expect(r.fijadas).toEqual([{ clave: PIN, fase: "f10", semana: 16, estado: "aplica" }]);
+    const nada = resumir(VIVO_G, REPROGRAMADO, r.items.map((it) => it.clave), LISTAS);
+    expect(nada.fijadas.map((p) => p.estado)).toEqual(["excluido"]);
+  });
+
+  it("⭐ con las fases ya cambiadas a mano y lo que falta sin correr, la propuesta NO se descarta sola", () => {
+    /* La edición que la pone en rojo: no mirar las arrastradas en `debeDescartarseSolo` (la pantalla lo pregunta con el
+       resumen, que ya no las trae en los grupos): la propuesta se descartaba y lo que falta quedaba en el pasado. */
+    const fasesAMano: Vivo = {
+      ...VIVO_G,
+      fases: VIVO_G.fases.map((x) => R.cambios.filter((c) => c.faseId === x.id).reduce((y, c) => ({ ...y, [c.campo]: c.a }), x)),
+    };
+    const r = resumir(fasesAMano, REPROGRAMADO, [], LISTAS);
+    expect(r.items.map((it) => it.estado)).toEqual(Array(8).fill("ya-esta"));
+    expect([r.grupos.length, r.arrastradas.filter((a) => a.estado === "aplica").length]).toEqual([0, 25]);
+    expect(debeDescartarseSolo(r), "el resumen la descartó con lo que falta sin correr").toBe(false);
+    expect(debeDescartarseSolo(planDeAplicacion(fasesAMano, REPROGRAMADO))).toBe(false);
+    // Con las tareas también corridas a mano, no queda nada que decidir: sí se descarta.
+    const todoAMano: Vivo = {
+      ...fasesAMano,
+      fases: fasesAMano.fases.map((x) => ({
+        ...x,
+        tareas: x.tareas?.map((t) => {
+          const a = R.tareas.find((c) => c.tareaId === t.id);
+          return a ? { ...t, weekIndex: a.a.weekIndex! } : t;
+        }),
+      })),
+    };
+    expect(debeDescartarseSolo(resumir(todoAMano, REPROGRAMADO, [], LISTAS))).toBe(true);
+  });
+
+  it("⭐ la confirmación dice cuántas fases se reprograman (la magnitud ya no las cuenta) y no «cambian 25 tareas»", () => {
+    /* La edición que la pone en rojo: no sumar la frase de lo reprogramado (desde P4f la magnitud no cuenta lo del
+       sistema: la confirmación decía solo «Se aplican los 8 cambios marcados de una sola vez.»). */
+    expect(resumenDeLaConfirmacion(resumir(VIVO_G, REPROGRAMADO, [], LISTAS))).toBe(
+      "Se aplican los 8 cambios marcados de una sola vez: 8 fases se reprograman desde hoy.",
+    );
+    expect(resumenDeLaConfirmacion(resumir(VIVO_G, REPROGRAMADO, [DURACION_DE_A], LISTAS))).toBe(
+      "Se aplican los 7 cambios marcados de una sola vez: 7 fases se reprograman desde hoy.",
+    );
   });
 });

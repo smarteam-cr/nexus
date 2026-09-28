@@ -52,6 +52,13 @@ export const LEYENDA_DE_LA_SUGERIDA =
  */
 export const DEL_SISTEMA_SE_QUITA = "(lo decide el sistema: ya hay un kickoff)";
 export const DEL_SISTEMA_SE_CREA = "(lo decide el sistema: faltaba el kickoff)";
+/**
+ * M4 P4e (2026-09-27, D9, D10): el número de una casilla que reprogramó el SISTEMA lo dice, y debajo, una línea por fase
+ * con cuántas pendientes se corren con él. Las arrastradas no se listan de a una: no tienen casilla, van con ese número.
+ */
+export const DEL_SISTEMA_DESDE_HOY = "(lo decide el sistema: está atrasada y se reprograma desde hoy)";
+export const pendientesQueSeCorren = (n: number, numero: number) =>
+  `${plural(n, "pendiente se corre", "pendientes se corren")} con el cambio ${numero} (desde hoy)`;
 const delSistema = (t: Pick<ItemDeTarea, "delSistema" | "signo">): string =>
   t.delSistema ? ` ${t.signo === "+" ? DEL_SISTEMA_SE_CREA : DEL_SISTEMA_SE_QUITA}` : "";
 
@@ -296,7 +303,11 @@ function renderizar(d: EntradaDelContextoConPropuesta, handles: ReadonlyMap<stri
     const id =
       c?.tipo === "fase-se-va" ? c.faseId : c?.tipo === "fase-nueva" && it.estado === "excluido" ? c.clave : null;
     const choque = it.estado === "choque" && it.aviso ? ` · ${it.aviso}` : "";
-    numerado(`${it.numero}. ${SIMBOLO[it.estado]} ${it.titulo}${id ? ` [${id}]` : ""}${choque}`);
+    const sistema = it.desdeHoy ? ` ${DEL_SISTEMA_DESDE_HOY}` : "";
+    numerado(`${it.numero}. ${SIMBOLO[it.estado]} ${it.titulo}${id ? ` [${id}]` : ""}${sistema}${choque}`);
+    // M4 P4e: las que se corren con esta casilla, contadas (nunca de a una).
+    const corren = r.arrastradas.filter((a) => a.conCambio === it.clave).length;
+    if (corren > 0) debajo(pendientesQueSeCorren(corren, it.numero));
     if (nivel === 0) {
       if (it.motivo) debajo(`motivo: ${it.motivo}`);
       for (const f of it.detalle) debajo(`${f.etiqueta}: «${f.antes}» → «${f.despues}»`);

@@ -1751,6 +1751,9 @@ export const esPin = (c: Cambio): c is CambioFaseCambia & { desdeHoy: true; fija
 /** M4: lo que el sistema decide sin casilla (las arrastradas y el pin): ni unidades, ni totales, ni «Siguiente número». */
 export const vaSinCasilla = (c: Cambio): boolean => esArrastrada(c) || esPin(c);
 
+/** M4 P4e (2026-09-27, D9): ¿lo reprogramó el SISTEMA desde hoy? Sus casillas, el pin y las arrastradas. */
+export const esDesdeHoy = (c: Cambio): boolean => (c.tipo === "fase-cambia" || c.tipo === "tarea-cambia") && !!c.desdeHoy;
+
 /** L3 (D3): el grupo en que se numera y se pinta una tarea: el de su fase (`faseDeLaTarea`). L7: una mudanza
  *  SUGERIDA, el de su ORIGEN: se ve donde está hoy, con su casilla sin marcar, y su número no depende de la marca.
  *  `faseDeLaTarea` sigue dando el destino (lo usa el plan). */
@@ -2529,18 +2532,24 @@ export function planDeAplicacion(
  * ⚠ Y uno que ESPERA tareas («faltan» o «armando») tampoco: vacío todavía, pero se va a llenar. Uno
  * vacío cuya corrida falló sí (no queda nada que esperar).
  * Acepta el plan o el resumen: el resumen lista la estructura en `items` y las tareas en `grupos`.
+ * M4 P4e (2026-09-27): y las arrastradas aparte (`ResumenDelBorrador.arrastradas`, fuera de los grupos). Con la fase ya
+ * estirada a mano, una arrastrada que falta correr sigue siendo algo que aplicar: sin mirarla, la propuesta se descartaba
+ * sola y lo que falta quedaba en semanas que ya pasaron. En el plan ya están en `items` (su `arrastradas` es una cuenta).
  */
 export function debeDescartarseSolo(plan: {
   bloqueo: string | null;
   items: ReadonlyArray<{ estado: EstadoDelCambio }>;
   estadoDeTareas?: EstadoDeLasTareas | null;
   grupos?: ReadonlyArray<{ estado: string }>;
+  arrastradas?: ReadonlyArray<{ estado: EstadoDelCambio }> | PlanDeAplicacion["arrastradas"];
 }): boolean {
   if (plan.estadoDeTareas === "faltan" || plan.estadoDeTareas === "armando") return false;
+  const arrastradas = Array.isArray(plan.arrastradas) ? (plan.arrastradas as ReadonlyArray<{ estado: EstadoDelCambio }>) : [];
   return (
     plan.bloqueo === null &&
     plan.items.every((it) => it.estado === "ya-esta") &&
-    (plan.grupos ?? []).every((g) => g.estado === "ya-esta")
+    (plan.grupos ?? []).every((g) => g.estado === "ya-esta") &&
+    arrastradas.every((a) => a.estado === "ya-esta")
   );
 }
 
@@ -2917,6 +2926,33 @@ export interface ItemDeLaLista {
   aviso?: string;
   /** E3: una fase que se va y se queda con tareas: «Se queda con N tareas con avance, …». */
   nota?: string;
+  /** M4 P4e (2026-09-27, D9): una casilla del SISTEMA (lo atrasado se reprograma desde hoy), nunca de la IA. */
+  desdeHoy?: true;
+}
+
+/**
+ * M4 P4e (2026-09-27, D10): una ARRASTRADA en el resumen. No va en ningún grupo ni tiene casilla: va con la duración de
+ * su fase (`conCambio`, el número `numero`). `de` y `a`: su semana dentro de la fase (desde 0) hoy y con la propuesta.
+ */
+export interface ArrastradaDelResumen {
+  clave: string;
+  tareaId: string;
+  fase: string;
+  titulo: string;
+  de: number;
+  a: number;
+  conCambio: string;
+  numero: number;
+  estado: EstadoDelCambio;
+  aplica: boolean;
+}
+
+/** M4 P4e (D5): EL PIN en el resumen. Sin casilla ni número propio: no va en `items`. `semana`: donde queda fijo. */
+export interface FijadaDelResumen {
+  clave: string;
+  fase: string;
+  semana: number;
+  estado: EstadoDelCambio;
 }
 
 /** Una tarea de la lista de la barra (un renglón dentro de su grupo). */
@@ -2995,6 +3031,11 @@ export interface TareasDelResumen {
   cambian: number;
   /** L7: de `cambian`, las mudanzas SUGERIDAS marcadas (hechas que se mudan de fase). Solo si hay alguna. */
   sugeridas?: number;
+  /**
+   * M4 P4e (2026-09-27, D10): las ARRASTRADAS que se escriben (las corre el sistema con su fase), FUERA de `cambian`: no
+   * las decidió nadie tarea por tarea, y contarlas hacía decir «ajusta 25». Solo si hay alguna.
+   */
+  arrastradas?: number;
   /** E3: las fases que se van: su nombre, cuántas tareas pendientes se van con ella y si se queda. */
   fasesSeVan: Array<{ nombre: string; borradas: number; queda: boolean }>;
   /** E3: las tareas que se borran con su fase (todas las fases que se van). */
@@ -3048,6 +3089,10 @@ export interface ResumenDelBorrador {
   desfasadas: FaseDesfasada[];
   forzadas: FaseDesfasada[];
   bloqueoPorDesfasadas: boolean;
+  /** M4 P4e (D10): las arrastradas, aparte de los grupos (en el orden del borrador). */
+  arrastradas: ArrastradaDelResumen[];
+  /** M4 P4e (D5): los pins, aparte de `items` (no tienen casilla). */
+  fijadas: FijadaDelResumen[];
 }
 
 function nombreDeFase(vivo: Vivo, id: string, respaldo: string): string {
@@ -3177,6 +3222,10 @@ function estadoDelGrupo(its: readonly ItemDelPlan[]): GrupoDeTareas["estado"] {
  * L7: el grupo es el de `grupoDeLaTarea` (una mudanza sugerida, en su ORIGEN), y una sugerida NO pasa por
  * `textoDelCambioDeTarea(…, "en-su-grupo")`: diría «viene de «origen»», lo contrario de lo que pasa. Va con «?» y
  * la pregunta «¿es de «destino»?», y cuenta en `sugeridas`, no en `cambian`.
+ * M4 P4e (2026-09-27, D10): las ARRASTRADAS (`esArrastrada`) NO entran en ningún grupo: no tienen casilla (van con la
+ * duración de su fase), no son filas de más en el Gantt y no suman a las cuentas del grupo. Van aparte, en
+ * `ResumenDelBorrador.arrastradas`. Si entraban, el grupo de una fase reprogramada decía «8 cambian» por lo que decidió
+ * el sistema y el Gantt pintaba 25 filas con «viene de la Semana M».
  */
 function gruposDeTareas(
   vivo: Vivo,
@@ -3189,7 +3238,7 @@ function gruposDeTareas(
   const desfasadas = new Map(plan.desfasadas.map((d) => [d.fase, d]));
   const porFase = new Map<string, ItemDelPlan[]>();
   for (const it of plan.items) {
-    if (!esCambioDeTarea(it.cambio)) continue;
+    if (!esCambioDeTarea(it.cambio) || esArrastrada(it.cambio)) continue;
     const fase = grupoDeLaTarea(it.cambio);
     porFase.set(fase, [...(porFase.get(fase) ?? []), it]);
   }
@@ -3288,8 +3337,8 @@ function gruposDeTareas(
        el grupo dice el nombre que se queda, no aquél para el que se armaron sus tareas. */
     const desfasada = desfasadas.get(fase);
     return {
-      /* M4 (D10): el número del grupo es el de su primera tarea que no es una arrastrada: la arrastrada lleva el número
-         del cambio de duración con que va (`numeracionDeLaPropuesta`), no el del grupo. Sacarlas del grupo es de P4e. */
+      /* M4 (D10): el número del grupo es el de su unidad «grupo». Desde P4e las arrastradas ya no entran (arriba); la
+         búsqueda queda por si una llega igual: la arrastrada lleva el número del cambio de duración con que va. */
       numero: numeroEnLaLista.get((its.find((it) => !esArrastrada(it.cambio)) ?? its[0]).cambio.clave) ?? 0,
       fase,
       nombre:
@@ -3338,7 +3387,8 @@ export function resumir(
   const numeroEnLaLista = numeracion.porClave;
   const items: ItemDeLaLista[] = plan.items.flatMap((it) => {
     const c = it.cambio;
-    if (esCambioDeTarea(c)) return [];
+    // M4 P4e (D5): el pin no es un renglón (no tiene casilla ni número propio): va en `fijadas`.
+    if (esCambioDeTarea(c) || esPin(c)) return [];
     const numero = numeroEnLaLista.get(c.clave) ?? 0;
     const detalle =
       c.tipo === "fase-cambia" && (c.campo === "notes" || c.campo === "activityType" || c.campo === "name")
@@ -3366,6 +3416,29 @@ export function resumir(
         ...(motivo ? { motivo } : {}),
         ...(aviso ? { aviso } : {}),
         ...(nota ? { nota } : {}),
+        ...(c.tipo === "fase-cambia" && c.desdeHoy ? { desdeHoy: true as const } : {}),
+      },
+    ];
+  });
+  // M4 P4e (D5, D10): lo que el sistema decide sin casilla, aparte: los pins y las arrastradas.
+  const fijadas: FijadaDelResumen[] = plan.items.flatMap((it) =>
+    esPin(it.cambio) ? [{ clave: it.cambio.clave, fase: it.cambio.faseId, semana: Number(it.cambio.a), estado: it.estado }] : [],
+  );
+  const arrastradas: ArrastradaDelResumen[] = plan.items.flatMap((it) => {
+    const c = it.cambio;
+    if (!esArrastrada(c)) return [];
+    return [
+      {
+        clave: c.clave,
+        tareaId: c.tareaId,
+        fase: c.faseId,
+        titulo: c.desde.title,
+        de: c.desde.weekIndex,
+        a: c.a.weekIndex ?? c.desde.weekIndex,
+        conCambio: c.conCambio,
+        numero: numeroEnLaLista.get(c.clave) ?? 0,
+        estado: it.estado,
+        aplica: it.estado === "aplica",
       },
     ];
   });
@@ -3388,10 +3461,27 @@ export function resumir(
      · la de lo MARCADO —lo que el botón va a escribir—: decide si se confirma. Antes la confirmación
        pedía «todo marcado», y con un solo choque (justo el caso de E1: el CSE editó un campo) o una
        nota desmarcada, un cronograma prácticamente nuevo se aplicaba con un clic. */
-  const aplicables = plan.items.filter((it) => it.estado === "aplica" || it.estado === "excluido").map((it) => it.cambio);
+  /* M4 P4f (2026-09-27, D10): las dos miden lo que propone la IA (o el chat), NO lo que el sistema reprogramó desde hoy:
+     sin los cambios `desdeHoy`, y contra el cierre con SOLO lo de hoy aplicado (`finAntes`; el de lo marcado, con lo de
+     hoy que quedó marcado). Si no, una reprogramación sola, que alarga varias fases y corre el cierre, se leía «Cronograma
+     casi nuevo» y pedía confirmación como si la IA hubiera rehecho el plan. Sin `desdeHoy`, todo como antes. */
+  const conDesdeHoy = borrador.cambios.some(esDesdeHoy);
+  const deOtros = borrador.cambios.filter((c) => !esDesdeHoy(c)).map((c) => c.clave);
+  const conSoloLoDeHoy = (fuera: readonly string[]): ProjectedEnd => {
+    const p = proyectar(vivo, borrador, [...fuera, ...deOtros]);
+    return projectedEnd(p.ancla, p.fases);
+  };
+  const aplicables = plan.items
+    .filter((it) => (it.estado === "aplica" || it.estado === "excluido") && !esDesdeHoy(it.cambio))
+    .map((it) => it.cambio);
   const entera = proyectar(vivo, borrador, []);
-  const magnitud = magnitudDe(vivo, aplicables, cierreAntes, projectedEnd(entera.ancla, entera.fases));
-  const magnitudDeLoMarcado = magnitudDe(vivo, plan.aplicadas, cierreAntes, cierreDespues);
+  const magnitud = magnitudDe(vivo, aplicables, conDesdeHoy ? conSoloLoDeHoy([]) : cierreAntes, projectedEnd(entera.ancla, entera.fases));
+  const magnitudDeLoMarcado = magnitudDe(
+    vivo,
+    plan.aplicadas.filter((c) => !esDesdeHoy(c)),
+    conDesdeHoy ? conSoloLoDeHoy(sinLista) : cierreAntes,
+    cierreDespues,
+  );
   const escritas = plan.escrituras.tareas;
   // E3: las fases que se van (con cuántas pendientes se van con ella) y lo que dictó el chat.
   const fasesSeVan = (plan.escrituras.fasesQueSeVan ?? []).map((f) => ({
@@ -3402,6 +3492,10 @@ export function resumir(
   const borraDelChat = plan.aplicadas.some((c) => c.tipo === "tarea-se-va" && c.porChat);
   // L7: de las que cambian, las hechas que se mudan de fase porque el CSE marcó la sugerencia de la IA.
   const sugeridasMarcadas = plan.aplicadas.filter(esMudanzaSugerida).length;
+  // M4 P4e (D10): las arrastradas que se escriben van aparte de las que cambian (nadie las decidió una por una).
+  const arrastradasEscritas = new Set(plan.aplicadas.flatMap((c) => (esArrastrada(c) ? [c.tareaId] : [])));
+  const cambianSinArrastradas = (escritas.cambian ?? []).filter((c) => !arrastradasEscritas.has(c.id)).length;
+  const arrastradasQueSeEscriben = (escritas.cambian ?? []).length - cambianSinArrastradas;
 
   return {
     origen: borrador.origen,
@@ -3424,8 +3518,9 @@ export function resumir(
     tareas: {
       nuevas: escritas.nuevas.length,
       seVan: escritas.seVan.length,
-      cambian: escritas.cambian?.length ?? 0,
+      cambian: cambianSinArrastradas,
       ...(sugeridasMarcadas > 0 ? { sugeridas: sugeridasMarcadas } : {}),
+      ...(arrastradasQueSeEscriben > 0 ? { arrastradas: arrastradasQueSeEscriben } : {}),
       fasesSeVan,
       conLaFase: fasesSeVan.reduce((n, f) => n + f.borradas, 0),
     },
@@ -3438,6 +3533,8 @@ export function resumir(
     desfasadas: plan.desfasadas,
     forzadas: plan.forzadas,
     bloqueoPorDesfasadas: plan.bloqueoPorDesfasadas,
+    arrastradas,
+    fijadas,
   };
 }
 
@@ -3584,9 +3681,16 @@ export function textoDeLaConfirmacion(
 export function resumenDeLaConfirmacion(
   r: Pick<ResumenDelBorrador, "marcadas" | "magnitudDeLoMarcado"> & {
     tareas: Pick<TareasDelResumen, "nuevas" | "seVan"> & Partial<TareasDelResumen>;
+    items?: ReadonlyArray<Pick<ItemDeLaLista, "estado" | "desdeHoy">>;
   },
 ): string {
-  const frases = frasesDeCambios(r.magnitudDeLoMarcado);
+  /* M4 P4f (2026-09-27): la magnitud ya no cuenta lo que reprogramó el sistema (`magnitudDe`); lo dice su propia frase,
+     primero, con las casillas del sistema que van marcadas (una por fase). */
+  const reprogramadas = (r.items ?? []).filter((it) => it.desdeHoy && it.estado === "aplica").length;
+  const frases = [
+    ...(reprogramadas > 0 ? [`${plural(reprogramadas, "fase se reprograma", "fases se reprograman")} desde hoy`] : []),
+    ...frasesDeCambios(r.magnitudDeLoMarcado),
+  ];
   const { nuevas, seVan, cambian = 0, fasesSeVan = [] } = r.tareas;
   if (nuevas > 0) frases.push(`se ${nuevas === 1 ? "crea" : "crean"} ${plural(nuevas, "tarea", "tareas")}`);
   if (seVan > 0) {

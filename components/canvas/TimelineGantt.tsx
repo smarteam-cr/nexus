@@ -705,7 +705,8 @@ function CasillaDeLaFase({
   return (
     <label
       onClick={(e) => e.stopPropagation()}
-      title={c.aviso ?? c.motivo}
+      /* M4 P4e (D9): una casilla del sistema dice SU porqué («Está atrasada: lo que falta…»), nunca un motivo de la IA. */
+      title={c.aviso ?? c.delSistema ?? c.motivo}
       className={`inline-flex items-center gap-1.5 text-[11px] not-italic ${c.marcada ? "text-fg" : "text-fg-muted"} ${c.seMarca ? "cursor-pointer" : ""}`}
     >
       <input
@@ -840,7 +841,8 @@ function CasillasDeLaFase({
  *  motivo verificado, no hay línea (lo dice «Más», una vez).
  *  M2 (2026-09-27, D9): lo que decide el SISTEMA en la fase (`VistaDeFase.delSistema`: el kickoff que sobra o el que
  *  faltaba) va PRIMERO, con el chip «Lo decide el sistema»; después, el porqué de la IA como siempre. Nunca pasa por
- *  «Según la IA» ni por la frase de L6. */
+ *  «Según la IA» ni por la frase de L6.
+ *  M4 P4e: también lo reprogramado desde hoy (el porqué de su casilla y el pin), en la misma línea del sistema. */
 function PorQueDeLaFase({
   fase,
   casillas,

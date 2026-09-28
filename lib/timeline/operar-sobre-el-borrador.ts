@@ -44,6 +44,7 @@ import {
   claveDeTareaNueva,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
+  esArrastrada,
   esCambioDeTarea,
   fotoDeTarea,
   huellaDeTitulo,
@@ -528,8 +529,12 @@ export function operarSobreElBorrador(i: {
       if (desde[campo] !== hoy) desde = { ...desde, [campo]: hoy };
     }
     if (a.fase !== undefined && a.fase === faseId) delete a.fase;
-    // D17: `conCambio` solo tiene sentido con una semana pedida; una semana pedida a mano no va con nada.
-    const conQue = a.weekIndex === undefined ? undefined : escritos.includes("weekIndex") ? conCambio : c?.conCambio;
+    /* D17: `conCambio` solo tiene sentido con una semana pedida; una semana pedida a mano no va con nada.
+       M4 P4e (2026-09-27, §5.6): sobre una ARRASTRADA (la corrió el sistema con su fase) el chat hace lo que con un R4c:
+       parte de la foto de hoy, hereda su semana si su fase está marcada y la vuelve DEL CHAT, sin el `conCambio` del
+       sistema. Si no, seguía colgada de una casilla del sistema y sin su marca (dejaba de ser arrastrada a medias). */
+    const heredado = existente && esArrastrada(existente) ? undefined : c?.conCambio;
+    const conQue = a.weekIndex === undefined ? undefined : escritos.includes("weekIndex") ? conCambio : heredado;
     if (Object.keys(a).length === 0) {
       /* Queda todo como hoy. Hasta L4 decía «las tareas que cambian son siempre del chat: sobra, se quita»;
          desde L5 la IA también las propone (R4c). La del chat sobra y se quita; la de la IA queda FUERA

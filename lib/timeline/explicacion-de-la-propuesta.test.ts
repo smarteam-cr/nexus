@@ -20,8 +20,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { bloqueDeInstruccionesDeDoc } from "@/lib/business-cases/section-briefs";
 import { borradorDelFixture, FASE_NUEVA, FASE_QUE_SE_ALARGA, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
-import { claveDeTareaQueCambia, fotoDeTarea, leerBorrador, type Cambio, type CambioTareaNueva, type CambioTareaSeVa } from "./borrador";
+import {
+  borradorVacio,
+  claveDeTareaQueCambia,
+  fotoDeTarea,
+  leerBorrador,
+  type Cambio,
+  type CambioTareaNueva,
+  type CambioTareaSeVa,
+} from "./borrador";
 import { MOTIVO_DEL_KICKOFF_QUE_FALTA, TAREA_DE_KICKOFF } from "./hitos";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "./reprogramar-desde-hoy";
 import {
   anteriorDeLaCorrida,
   cambiosParaExplicar,
@@ -455,5 +465,23 @@ describe("M2 P2e · lo que decide el sistema no pasa por la explicación (D9)", 
     expect(antes.resumen).toContain("5 se quitan");
     expect(despues.resumen).not.toContain(`"${seVa.desde.title}"`);
     expect(despues.resumen).toContain("4 se quitan");
+  });
+});
+
+describe("M4 P4e · lo que reprogramó el sistema desde hoy no pasa por la explicación (D9)", () => {
+  it("⭐ las casillas del sistema, el pin y las arrastradas (con un sobrante de hito) dan 0 fases para explicar", () => {
+    /* La edición que la pone en rojo: quitar el filtro de `desdeHoy` en `cambiosParaExplicar` (Haiku le buscaría una
+       reunión a «está atrasada», 8 fases contarían para el tope de 15 y «Más» las sumaría a «cambian sin material
+       nuevo»). */
+    const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+    const r = reprogramarDesdeHoy({ vivo: VIVO, borrador: leerBorrador(vacio())!, hoy: new Date(FIXTURE.hoy), politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!;
+    const reprogramado = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), r))))!;
+    expect(reprogramado.cambios.filter((c) => (c.tipo === "fase-cambia" || c.tipo === "tarea-cambia") && c.desdeHoy)).toHaveLength(8 + 1 + 25);
+    const seVa = BORRADOR.cambios.find((c): c is CambioTareaSeVa => c.tipo === "tarea-se-va" && c.faseId === "f01")!;
+    const sobrante: CambioTareaSeVa = { ...seVa, motivo: "Ya hay un kickoff hecho: «Tarea 001».", delSistema: "hito" };
+    expect(cambiosParaExplicar(VIVO, [...reprogramado.cambios, sobrante])).toEqual([]);
+    // Con lo de la IA al lado, solo lo de la IA: «Fase K» (su duración) y la fase nueva, no las 8 del sistema.
+    const conLaIA = [...reprogramado.cambios, ...BORRADOR.cambios.filter((c) => c.tipo === "fase-cambia" || c.tipo === "fase-nueva")];
+    expect(cambiosParaExplicar(VIVO, conLaIA).map((c) => c.clave).sort()).toEqual([FASE_NUEVA, FASE_QUE_SE_ALARGA].sort());
   });
 });

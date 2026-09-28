@@ -320,6 +320,9 @@ export function cambiosParaExplicar(vivo: Vivo, cambios: readonly Cambio[]): Cam
        Haiku le buscaría una reunión a una regla, contaría para el tope de 15 fases y «Más» lo sumaría a «cambian sin
        material nuevo». Su porqué ya lo dice su fila («ya hay kickoff») y la línea del sistema en el Gantt. */
     if ((c.tipo === "tarea-nueva" || c.tipo === "tarea-se-va") && c.delSistema) continue;
+    /* M4 P4e (D9): tampoco lo que reprogramó el sistema desde hoy (sus casillas, el pin y las arrastradas): su porqué es
+       «está atrasada», lo dice su casilla, y la IA no tiene reunión que lo explique. */
+    if ((c.tipo === "fase-cambia" || c.tipo === "tarea-cambia") && c.desdeHoy) continue;
     const clave = c.tipo === "fase-nueva" ? c.clave : c.tipo === "fase-cambia" || c.tipo === "fase-se-va" ? c.faseId : faseDeLaTarea(c);
     const g = grupo(clave);
     g.total++;

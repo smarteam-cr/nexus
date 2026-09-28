@@ -39,12 +39,14 @@ import type { FuentesDeLaPropuesta } from "./referencias-de-la-propuesta";
 import { huellaDeLosCambios, TEXTO_DE_CUANDO_SE_GENERO, type ExplicacionEnPantalla } from "./explicacion-de-la-propuesta";
 import { borradorDelFixture, FASE_NUEVA, FASE_QUE_SE_ALARGA, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import {
+  borradorVacio,
   claveDeCampo,
   claveDeFaseQueSeVa,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
   ETIQUETA_POR_RECALCULAR,
   fotoDeTarea,
+  leerBorrador,
   resumir,
   type Borrador,
   type Cambio,
@@ -52,8 +54,11 @@ import {
   type CambioTareaNueva,
   type ResumenDelBorrador,
   type TareaDelVivo,
+  type Vivo,
 } from "./borrador";
 import { MOTIVO_DEL_KICKOFF_QUE_FALTA, TAREA_DE_KICKOFF } from "./hitos";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "./reprogramar-desde-hoy";
 import {
   CHIP_DEL_SISTEMA,
   CHIP_FALTABA_EL_KICKOFF,
@@ -183,10 +188,12 @@ function pintar(
     explicacion?: ExplicacionEnPantalla | null;
     /** Revisión de L1–L7 (#9): el cierre fijado a mano (Tanda K), yyyy-mm-dd. */
     cierreFijado?: string | null;
+    /** M4 P4e: el cronograma de hoy, si no es el del fixture (una tarea editada a mano después de la propuesta). */
+    vivo?: Vivo;
   } = {},
 ): Pintado {
-  const r = resumir(VIVO, b, o.sin ?? [], LISTAS);
-  const v0 = vistaDeLaPropuesta(VIVO, b, r, HOY);
+  const r = resumir(o.vivo ?? VIVO, b, o.sin ?? [], LISTAS);
+  const v0 = vistaDeLaPropuesta(o.vivo ?? VIVO, b, r, HOY);
   const v = o.ajustar ? o.ajustar(v0) : v0;
   const phases = fasesDelGantt(r);
   const semanasPorKey = new Map(
@@ -951,5 +958,86 @@ describe("M2 P2e · lo que decide el sistema, en el Gantt", () => {
     expect(nueva.html).toContain(`title="${MOTIVO_DEL_KICKOFF_QUE_FALTA}">${CHIP_FALTABA_EL_KICKOFF}</span>`);
     expect(P.html).not.toContain(`Según la IA: ${MOTIVO_SE_VA}`);
     expect(P.html).not.toContain(`Según la IA: ${MOTIVO_DEL_KICKOFF_QUE_FALTA}`);
+  });
+});
+
+/**
+ * M4 P4e (2026-09-27, spec del replanteo §5.1, §5.6 y §5.11): LO QUE REPROGRAMÓ EL SISTEMA, PINTADO. La propuesta grande
+ * reprogramada desde hoy (S18) en el orden del plan: 8 casillas, el pin de «Fase I» y 25 arrastradas. Las arrastradas no
+ * tienen casilla, chip ni fila de más; la casilla dice qué pasa y su `title` por qué; el pin va en la línea del sistema.
+ */
+describe("M4 P4e · lo que reprogramó el sistema, en el Gantt", () => {
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+  const R = reprogramarDesdeHoy({ vivo: VIVO, borrador: leerBorrador(vacio())!, hoy: HOY, politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!;
+  const REPROGRAMADO = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), R))))!;
+  const DE_A = "Está atrasada: lo que falta (8 tareas) arranca en S18. Lo hecho se queda en S2–S5.";
+  const PIN = "Se fija su inicio en S16: ya empezó y lo que se reprograma no la corre.";
+  const DE_I = "Está atrasada: lo que falta (5 tareas) arranca en S18. Lo hecho se queda en S16.";
+  const LINEA_DEL_SISTEMA = (texto: string) => `>${CHIP_DEL_SISTEMA}</span><span>${texto}</span>`;
+  const desplegado = (html: string, clave: string) => {
+    const i = html.indexOf(`data-fase-key="${clave}"`);
+    const j = html.indexOf("data-fase-key=", i + 1);
+    return html.slice(i, j < 0 ? html.length : j);
+  };
+  /** El HTML de la casilla de un cambio de fase: su `<label …>` entero. */
+  const casillaDeFase = (html: string, clave: string) => {
+    const i = html.indexOf(`data-casilla="${clave}"`);
+    const desde = html.lastIndexOf("<label", i);
+    return html.slice(desde, html.indexOf("</label>", i) + "</label>".length);
+  };
+
+  it("⭐ las 25 arrastradas no tienen casilla, chip ni fila de más: se ven en su semana nueva, sin «Atrasada»", () => {
+    /* La edición que la pone en rojo: pintarlas como un cambio de tarea (dejarlas en los grupos): cada una llevaba su
+       casilla y «viene de la Semana M» en su destino, y un fantasma en su semana de hoy. */
+    const P = pintar(REPROGRAMADO);
+    expect(casillasDeTarea(P.html), "una fila de tarea con casilla").toBe(0);
+    expect(P.html).not.toContain("viene de la Semana");
+    const pintadas = new Map(filasPintadas(P.html).map((x) => [x.key, x.html]));
+    for (const t of R.tareas) {
+      expect(pintadas.has(`${t.tareaId}:origen`), `${t.tareaId}: fantasma en su semana de hoy`).toBe(false);
+      expect(pintadas.get(t.tareaId), `${t.tareaId} no se pintó`).toBeDefined();
+      expect(pintadas.get(t.tareaId), `${t.tareaId} sigue «Atrasada» en su semana nueva`).not.toContain("La fecha de esta tarea ya pasó");
+    }
+    // Y cada una, en la semana nueva de su fase.
+    for (const t of R.tareas) {
+      const semanas = P.v.porFase.get(t.faseId)!.semanas;
+      expect(semanas[t.a.weekIndex!].some((x) => x.clave === t.tareaId), t.tareaId).toBe(true);
+    }
+  });
+
+  it("⭐ la casilla dice «Lo que falta arranca hoy: S18–S21» y su `title` el porqué del sistema, nunca un motivo de la IA", () => {
+    /* La edición que la pone en rojo: el `title` de la casilla sin `delSistema` (`c.aviso ?? c.motivo`): pasar el mouse
+       no decía nada, o decía un motivo de la IA. */
+    const html = pintar(REPROGRAMADO).html;
+    const deA = casillaDeFase(html, claveDeCampo("f02", "durationWeeks"));
+    expect(deA).toContain(`title="${DE_A}"`);
+    expect(deA).toContain("Lo que falta arranca hoy: S18–S21");
+    expect(casillaDeFase(html, claveDeCampo("f11", "startWeek"))).toContain('title="Va después de lo que la precedía en el plan: arranca en S29."');
+    expect(html).not.toContain("Según la IA");
+    // El pin no tiene casilla; su fase lo dice PRIMERO en la línea del sistema, y después el porqué de su casilla.
+    expect(html).not.toContain(`data-casilla="${claveDeCampo("f10", "startWeek")}"`);
+    const deI = desplegado(html, "f10");
+    expect(deI.indexOf(LINEA_DEL_SISTEMA(PIN)), "falta la línea del pin").toBeGreaterThan(-1);
+    expect(deI.indexOf(LINEA_DEL_SISTEMA(DE_I))).toBeGreaterThan(deI.indexOf(LINEA_DEL_SISTEMA(PIN)));
+  });
+
+  it("⭐ una arrastrada que cambiaron a mano no se corre: lo dice el `title` de la casilla de su fase, y no cuenta como choque", () => {
+    /* Las ediciones que la ponen en rojo: no sumar «N tareas no se corren: las cambiaron a mano.» al porqué de la casilla
+       (el CSE no se enteraba), o contarla en los choques de la barra (P4d: una fila sin casilla que no se ve). */
+    const primera = R.tareas.find((t) => t.faseId === "f02")!;
+    const vivo: Vivo = {
+      ...VIVO,
+      fases: VIVO.fases.map((f) => ({
+        ...f,
+        tareas: f.tareas?.map((t) => (t.id === primera.tareaId ? { ...t, weekIndex: primera.desde.weekIndex + 1 } : t)),
+      })),
+    };
+    const P = pintar(REPROGRAMADO, { vivo });
+    expect(P.r.choques, "la arrastrada editada contó como choque").toBe(0);
+    expect(P.r.arrastradas.filter((a) => a.estado === "choque").map((a) => a.tareaId)).toEqual([primera.tareaId]);
+    expect(casillaDeFase(P.html, claveDeCampo("f02", "durationWeeks"))).toContain(
+      `title="${DE_A} 1 tarea no se corre: la cambiaron a mano."`,
+    );
+    expect(casillasDeTarea(P.html)).toBe(0);
   });
 });

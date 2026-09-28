@@ -12,12 +12,27 @@
  * M3 (2026-09-27): con el reloj de la propuesta (`borrador.hoy`), la línea 5 dice lo que quedó sin hacer y «Más» lo
  * nombra. Los casos de arriba no traen reloj (el borrador del fixture es de antes): siguen diciendo «Atrasadas», sin
  * reescribirse.
+ * M4 P4f (2026-09-27): lo que reprogramó el sistema desde hoy, en la línea 1 (una causa), en «Más» y en el aviso de la
+ * semana; ni la línea 3 ni la magnitud lo cuentan.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { borradorDelFixture, FASE_QUE_SE_ALARGA, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
-import { claveDeCampo, estructuraHipotetica, resumir, type Borrador, type CambioFaseCambia, type CambioTareaNueva, type Vivo } from "./borrador";
+import {
+  borradorVacio,
+  claveDeCampo,
+  estructuraHipotetica,
+  leerBorrador,
+  pideConfirmacion,
+  resumir,
+  type Borrador,
+  type CambioFaseCambia,
+  type CambioTareaNueva,
+  type FaseViva,
+  type TareaDelVivo,
+  type Vivo,
+} from "./borrador";
 import {
   atrasadas,
   cortarNombre,
@@ -33,7 +48,8 @@ import {
   type MensajeDeLaPropuesta,
 } from "./mensaje-de-la-propuesta";
 import type { FuentesDeLaPropuesta, ReferenciasDeLaPropuesta } from "./referencias-de-la-propuesta";
-import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { POLITICA_DE_ATRASOS, type PoliticaDeFasesVencidas } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "./reprogramar-desde-hoy";
 import { cambiosDeTareasDelDetalle, fusionarDetalle, tareasPropuestasDelDetalle } from "./tareas-del-detalle";
 import { vistaDeLaPropuesta } from "./vista-de-la-propuesta";
 
@@ -538,5 +554,124 @@ describe("M3 · lo que quedó sin hacer", () => {
     for (const x of Object.values(TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER)) {
       for (const texto of [x.una("en «A»"), x.varias(3, "en «A»", true), x.accionUna, x.accionVarias]) expect(texto).not.toMatch(VOSEO);
     }
+  });
+});
+
+/**
+ * M4 P4f (2026-09-27, spec del replanteo §5.1, §5.7 y §5.11): LO QUE REPROGRAMÓ EL SISTEMA, EN EL MENSAJE. La propuesta
+ * grande reprogramada desde hoy (S18) en el orden del plan (lo que decidió Elías): 8 casillas, el pin de «Fase I» y 25
+ * arrastradas; sin la IA y con los cambios de fases de la IA de ayer («Fase K» de 3 a 5 y una fase nueva). Los textos
+ * salen de `borrador.hoy.politica`, nunca del interruptor.
+ */
+describe("M4 P4f · lo que reprogramó el sistema, en el mensaje", () => {
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+  /** El borrador del paso 1 del fixture (solo los cambios de fases de la IA), con sus tareas listas. */
+  const delPaso1 = (): Record<string, unknown> => {
+    const crudo = JSON.parse(JSON.stringify(FIXTURE.borrador)) as { cambios: Array<{ tipo: string }> } & Record<string, unknown>;
+    return { ...crudo, cambios: crudo.cambios.filter((c) => !c.tipo.startsWith("tarea")), tareas: { corrida: "run-2", listas: true }, tareasArmadasPara: {} };
+  };
+  const reprogramar = (vivo: Vivo, guardado: Record<string, unknown>, fasesVencidas: PoliticaDeFasesVencidas = "en-el-orden-del-plan", conSemanaCero = true) => {
+    const r = reprogramarDesdeHoy({ vivo, borrador: leerBorrador(guardado)!, hoy: HOY, politica: { ...POLITICA_DE_ATRASOS, fasesVencidas }, conSemanaCero })!;
+    return leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(guardado, r))))!;
+  };
+  const SIN_LA_IA = reprogramar(VIVO, vacio());
+  const CON_LA_IA = reprogramar(VIVO, delPaso1());
+  const casillasDelSistema = (b: Borrador) => b.cambios.filter((c): c is CambioFaseCambia => c.tipo === "fase-cambia" && !!c.desdeHoy && !c.fijaInicio).map((c) => c.clave);
+
+  it("⭐ la línea 1: lo del sistema es UNA causa, la primera, con cuánto corre el cierre por sí sola si hay otras", () => {
+    /* La edición que la pone en rojo: contar cada casilla del sistema como su propia causa («El cierre pasa del 13 oct
+       al 5 ene (+12 semanas): «Fase A» pasa de 4 a 20 semanas, «Fase C» pasa de 2 a 18 semanas y 6 cambios más.»: el
+       CSE leía 8 decisiones sueltas de la IA). */
+    const sinIa = mensajeDe(VIVO, SIN_LA_IA);
+    expect(sinIa.lineas[0]).toBe("El cierre pasa del 13 oct al 5 ene (+12 semanas): 8 fases se reprograman desde hoy, en el orden del plan.");
+    const conIa = mensajeDe(VIVO, CON_LA_IA);
+    expect(conIa.lineas[0]).toBe("El cierre pasa del 13 oct al 2 feb (+16 semanas): 8 fases se reprograman desde hoy (+12 semanas) y 2 cambios más.");
+    for (const l of [sinIa.lineas[0], conIa.lineas[0]]) expect(l.length).toBeLessThanOrEqual(TOPE_DE_LA_LINEA);
+    // Una sola fase marcada: por su nombre. El pin nunca es una causa.
+    const soloA = mensajeDe(VIVO, SIN_LA_IA, { sin: casillasDelSistema(SIN_LA_IA).filter((k) => k !== claveDeCampo("f02", "durationWeeks")) });
+    expect(soloA.lineas[0]).toMatch(/: «Fase A» se reprograma desde hoy\.$/);
+    expect(sinIa.lineas[0]).not.toContain("Fase I");
+  });
+
+  it("⭐ la línea 3 no cuenta las 25 arrastradas; y con solo lo de hoy, el título no es «Cronograma casi nuevo»", () => {
+    /* Las ediciones que la ponen en rojo: contar las arrastradas en `cambian` («Ajusta 25 tareas; las 46 hechas…»: nadie
+       las decidió una por una), o medir lo de hoy en la magnitud (un proyecto con la mitad de las fases estiradas se
+       leía «Cronograma casi nuevo» y pedía confirmación, como si la IA hubiera rehecho el plan). */
+    const m = mensajeDe(VIVO, SIN_LA_IA);
+    expect(m.lineas.filter((l) => /\bajusta\b|\bcambian\b/i.test(l)), "la línea 3 contó las arrastradas").toEqual([]);
+    expect(nivelDeLaPropuesta(resumir(VIVO, SIN_LA_IA, [], LISTAS), VIVO, "regenerar").nivel).toBe("mediano");
+    // Un proyecto chico con la mitad de sus fases empezadas y atrasadas: se estiran dos de cuatro y el plan pasa de 7 a 22.
+    const t = (id: string, weekIndex: number, status = "PENDING"): TareaDelVivo => ({
+      id,
+      title: `Tarea ${id}`,
+      weekIndex,
+      notes: null,
+      party: "SMARTEAM",
+      type: "TASK",
+      status,
+      source: "AGENT",
+      inicioFijado: null,
+      finFijado: null,
+    });
+    const fase = (id: string, name: string, durationWeeks: number, status: string, tareas: TareaDelVivo[], startWeek: number | null = null): FaseViva => ({
+      id,
+      name,
+      durationWeeks,
+      startWeek,
+      sessionCount: null,
+      notes: null,
+      activityType: null,
+      status,
+      tareas,
+    });
+    const chico: Vivo = {
+      ancla: FIXTURE.ancla,
+      fases: [
+        fase("a", "Diseño", 2, "IN_PROGRESS", [t("a1", 0, "DONE"), t("a2", 0, "DONE"), t("a3", 1), t("a4", 1)], 0),
+        fase("b", "Construcción", 2, "IN_PROGRESS", [t("b1", 0, "DONE"), t("b2", 1), t("b3", 1)]),
+        fase("c", "Pruebas", 2, "PENDING", [t("c1", 0)]),
+        fase("d", "Salida", 1, "PENDING", [t("d1", 0)]),
+      ],
+    };
+    // Un Desarrollo (sin Semana 0): la primera fase es trabajo real y se reprograma.
+    const b = reprogramar(chico, vacio(), "en-el-orden-del-plan", false);
+    expect(casillasDelSistema(b), "el escenario").toEqual([claveDeCampo("a", "durationWeeks"), claveDeCampo("b", "durationWeeks")]);
+    const r = resumir(chico, b, [], LISTAS);
+    expect([r.cierreAntes.spanWeeks, r.cierreDespues.spanWeeks]).toEqual([7, 22]);
+    expect(r.magnitud.esCronogramaNuevo, "lo de hoy contó en la magnitud").toBe(false);
+    expect(r.magnitudDeLoMarcado.motivos).toEqual([]);
+    expect(pideConfirmacion(r), "una reprogramación sola pidió confirmación").toBe(false);
+    expect(mensajeDe(chico, b).titulo).not.toBe(TITULOS_DEL_MENSAJE.casiNuevo);
+  });
+
+  it("⭐ «Más» nombra las que vuelven a arrancar sin ninguna tarea marcada, primero", () => {
+    /* Las ediciones que la ponen en rojo: no decirlo (Service Hub, «prácticamente finalizado» según el CSE, volvía a
+       arrancar sin aviso), o nombrar también las que el CSE ya desmarcó. */
+    expect(mensajeDe(VIVO, SIN_LA_IA).detalle[0]).toBe(
+      "3 de las fases que se reprograman no tienen ninguna tarea marcada: «Fase D», «Fase E» y «Fase G». Si ya se hicieron, márcalas hechas y desmarca su casilla.",
+    );
+    const sinDyE = mensajeDe(VIVO, SIN_LA_IA, { sin: [claveDeCampo("f05", "startWeek"), claveDeCampo("f06", "startWeek")] });
+    expect(sinDyE.detalle[0]).toBe("«Fase G» se reprograma y no tiene ninguna tarea marcada: si ya se hizo, márcala hecha y desmarca su casilla.");
+    // Sin nada del sistema, nada de esto.
+    expect(M.detalle.join(" ")).not.toContain("ninguna tarea marcada");
+  });
+
+  it("⭐ el aviso de la semana: el 26-09 (S18) no hay; el 29-09 (S19), sí", () => {
+    /* La edición que la pone en rojo: no calcularlo contra la semana de hoy (salía siempre, o nunca). */
+    expect(mensajeDe(VIVO, SIN_LA_IA).avisoDeLaSemana).toBeNull();
+    expect(mensajeDe(VIVO, SIN_LA_IA, { hoy: new Date("2026-09-29T12:00:00-06:00") }).avisoDeLaSemana).toBe(
+      "⚠ Se reprogramó desde la S18 y hoy es la S19: vuelve a generarla para que lo atrasado arranque esta semana.",
+    );
+    expect(M.avisoDeLaSemana, "un borrador sin reloj").toBeNull();
+  });
+
+  it("⭐ los textos salen de la política con que se calculó (`hoy.politica`), no del interruptor", () => {
+    /* La edición que la pone en rojo: elegir los textos por una política fija (o por la constante): una propuesta
+       calculada con «todo desde hoy» decía «en el orden del plan». */
+    const todoDesdeHoy = reprogramar(VIVO, vacio(), "todo-desde-hoy");
+    expect(mensajeDe(VIVO, todoDesdeHoy).lineas[0]).toMatch(/: 7 fases atrasadas arrancan desde hoy\.$/);
+    // La misma reprogramación, leída con otra política guardada: el texto sigue a lo guardado.
+    const releida: Borrador = { ...SIN_LA_IA, hoy: { ...SIN_LA_IA.hoy!, politica: { ...SIN_LA_IA.hoy!.politica, fasesVencidas: "todo-desde-hoy" } } };
+    expect(mensajeDe(VIVO, releida).lineas[0]).toMatch(/: 8 fases atrasadas arrancan desde hoy\.$/);
   });
 });
