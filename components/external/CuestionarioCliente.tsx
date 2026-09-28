@@ -32,6 +32,8 @@ const ROYAL = "#0B58D3";
 const ACENTO = "#E8481C";
 
 const AUTOGUARDADO_MS = 2500;
+/** El mismo tope que el servidor (MAX_FILE_SIZE, lib/storage/client.ts). */
+const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024;
 
 interface Borrador {
   respuestas: Respuestas;
@@ -827,7 +829,19 @@ function Adjuntos({
             ref={input}
             type="file"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg,.webp"
-            onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              // Se avisa ANTES de mandarlo: subir 40 MB para enterarse al final de que no entran es
+              // tiempo perdido, y el servidor corta antes de poder explicarlo.
+              if (f && f.size > MAX_ADJUNTO_BYTES) {
+                setError(`«${f.name}» pesa ${tamano(f.size)} y el máximo es 10 MB. Prueba con uno más liviano o compártelo por enlace en «¿Algo más que debamos saber?».`);
+                setArchivo(null);
+                e.target.value = "";
+                return;
+              }
+              setError(null);
+              setArchivo(f);
+            }}
           />
           {archivo && (
             <>

@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { leerGuardado } from "@/lib/cuestionario/avance";
-import { enviarPestana, guardarPestana, pedirCambio } from "@/lib/cuestionario/externo";
+import { TOKEN_RE, enviarPestana, guardarPestana, pedirCambio } from "@/lib/cuestionario/externo";
 import { checkExternalWriteRate } from "@/lib/external/write-rate-limit";
 
 export async function POST(req: NextRequest) {
@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Solicitud inválida" }, { status: 400 });
   }
   const token = typeof body?.token === "string" ? body.token : "";
+  // Primero la forma: un token inventado no llega ni a ocupar un lugar en el tope de escrituras.
+  if (!TOKEN_RE.test(token)) {
+    return NextResponse.json({ ok: false, error: "Este enlace ya no está disponible." }, { status: 404 });
+  }
   // El autoguardado corre cada pocos segundos mientras se escribe: el tope es para el martilleo
   // accidental (una pestaña en bucle), no para quien contesta rápido.
   if (!checkExternalWriteRate(`cuestionario:${token}`)) {

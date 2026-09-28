@@ -107,7 +107,7 @@ export async function runPlanificacionGeneration(opts: {
         },
       }),
       // Las etapas que el cliente describió en el cuestionario previo = las filas del proceso.
-      loadCuestionarioContext(projectId),
+      loadCuestionarioContext(projectId).catch(() => ""),
     ]);
 
   const [procesosCtx, portalCtx, adopcion] = await Promise.all([

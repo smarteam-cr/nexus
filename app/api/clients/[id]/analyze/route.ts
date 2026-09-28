@@ -699,6 +699,9 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
           clientId,
           AND: [
             soloDeEsteProyecto,
+            // Los documentos que el cliente subió en el cuestionario previo ya entran por su propio
+            // bloque (lib/cuestionario/contexto.ts), CON su «qué es». Acá entrarían otra vez, sin él.
+            { cuestionarioPestanaId: null },
             {
               OR: [
                 { content: { not: null } }, // Docs with text content

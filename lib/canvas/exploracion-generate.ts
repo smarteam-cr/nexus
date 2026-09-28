@@ -91,7 +91,8 @@ export async function runExploracionGeneration(opts: {
       },
     }),
     // Lo que el cliente contestó por escrito en el cuestionario previo (lib/cuestionario/).
-    loadCuestionarioContext(projectId),
+    // Fuente complementaria: si no se puede leer, la exploración sale igual (como en Diagnóstico).
+    loadCuestionarioContext(projectId).catch(() => ""),
   ]);
 
   // Depende de `project.clientId` → va en una segunda tanda (también en paralelo).

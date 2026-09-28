@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { adjuntoBorrable, destinoDeAdjunto } from "@/lib/cuestionario/externo";
+import { TOKEN_RE, adjuntoBorrable, destinoDeAdjunto } from "@/lib/cuestionario/externo";
 import { extractText } from "@/lib/documents/extract-text";
 import { checkExternalWriteRate } from "@/lib/external/write-rate-limit";
 import {
@@ -38,7 +38,10 @@ export async function POST(req: NextRequest) {
     .trim()
     .slice(0, 1000);
 
-  if (typeof token !== "string" || !checkExternalWriteRate(`cuestionario:${token}`)) {
+  if (typeof token !== "string" || !TOKEN_RE.test(token)) {
+    return NextResponse.json({ ok: false, error: "Este enlace ya no está disponible." }, { status: 404 });
+  }
+  if (!checkExternalWriteRate(`cuestionario:${token}`)) {
     return NextResponse.json({ ok: false, error: "Demasiados cambios seguidos. Espera unos segundos." }, { status: 429 });
   }
   if (!(file instanceof File)) {
