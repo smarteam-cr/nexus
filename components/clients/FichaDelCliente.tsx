@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CAMPOS_DE_LA_FICHA,
+  EVENTO_FICHA_CAMBIO,
   GRUPOS_DE_FICHA,
   OPCIONES_DE_APERTURA,
   camposQueCambiaron,
@@ -43,13 +44,45 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [leyendo, setLeyendo] = useState(false);
 
-  const aplicar = useCallback((r: Respuesta) => {
+  const aplicar = useCallback((r: { ficha: FichaGuardada; hubspotUrl?: string | null }) => {
     setFicha(r.ficha);
-    setHubspotUrl(r.hubspotUrl);
+    if (r.hubspotUrl !== undefined) setHubspotUrl(r.hubspotUrl);
     setBorrador(r.ficha.valores);
     setDescartadas(new Set());
-  }, []);
+    // El aviso de la pestaña «Información del cliente» cuenta los campos por revisar.
+    window.dispatchEvent(new CustomEvent(EVENTO_FICHA_CAMBIO, { detail: { clientId } }));
+  }, [clientId]);
+
+  async function actualizarConIA() {
+    setLeyendo(true);
+    setError(null);
+    setAviso(null);
+    try {
+      const r = await fetch(`/api/clients/${clientId}/ficha/proponer`, { method: "POST" });
+      const j = (await r.json().catch(() => ({}))) as { ficha?: FichaGuardada; cambiados?: number; sinFuentes?: boolean; error?: string };
+      if (!r.ok || !j.ficha) {
+        setError(j.error ?? "No se pudo actualizar la ficha con IA.");
+        return;
+      }
+      // Lo que el CSE estaba escribiendo sin confirmar no se pierde: se conserva sobre la ficha nueva.
+      const enCurso = ficha ? camposQueCambiaron(ficha.valores, borrador) : [];
+      aplicar({ ficha: j.ficha });
+      if (enCurso.length) setBorrador((b) => ({ ...b, ...Object.fromEntries(enCurso.map((k) => [k, borrador[k]])) }));
+      setAviso(
+        j.sinFuentes
+          ? "No hay handoff, encuestas ni sesiones de dónde sacar información."
+          : j.cambiados
+            ? `La IA propone cambios en ${j.cambiados} ${j.cambiados === 1 ? "campo" : "campos"}. Revísalos abajo.`
+            : "La IA leyó todo y no encontró nada nuevo para la ficha.",
+      );
+    } catch {
+      setError("No se pudo actualizar la ficha con IA. Revisa tu conexión y vuelve a intentar.");
+    } finally {
+      setLeyendo(false);
+    }
+  }
 
   useEffect(() => {
     let vivo = true;
@@ -118,20 +151,33 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-5 pb-24">
       <EstadoDeLaFicha ficha={ficha} hubspotUrl={hubspotUrl} />
-      <p className="text-xs text-fg-muted -mt-2">
-        En los textos, «- » al inicio de la línea arma viñetas y **así** queda en negrita: en HubSpot se ve con formato.
-      </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap -mt-2">
+        <p className="text-xs text-fg-muted min-w-0 flex-1">
+          Se alimenta sola con el handoff y con cada sesión con el cliente; tú confirmas. En los textos, «- » al
+          inicio de la línea arma viñetas y **así** queda en negrita.
+        </p>
+        <button
+          type="button"
+          disabled={leyendo || guardando}
+          onClick={() => void actualizarConIA()}
+          title="Lee los handoffs, las encuestas y las últimas sesiones del cliente y propone lo que falte en la ficha"
+          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 bg-brand/15 text-brand hover:bg-brand/25 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {leyendo ? "Leyendo handoff y sesiones… (hasta un minuto)" : "Actualizar con IA"}
+        </button>
+      </div>
 
       {propuestas.length > 0 && ficha.propuesta && (
         <div className="rounded-xl border border-info-line bg-info-surface px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <p className="text-sm font-medium text-info-ink">
-              {ficha.propuesta.origen || "La IA"} propone cambios en {propuestas.length}{" "}
+              La IA propone cambios en {propuestas.length}{" "}
               {propuestas.length === 1 ? "campo" : "campos"}
             </p>
             <p className="text-xs text-fg-muted mt-0.5">
               Revísalos abajo. Nada llega a HubSpot hasta que confirmes la ficha.
-              {ficha.propuesta.fuentes.length > 0 && ` Fuentes: ${ficha.propuesta.fuentes.join(" · ")}.`}
+              {ficha.propuesta.fuentes.length > 0 &&
+                ` Sale de ${ficha.propuesta.fuentes.length === 1 ? ficha.propuesta.fuentes[0] : `${ficha.propuesta.fuentes.length} fuentes`}; cada campo dice cuáles.`}
             </p>
           </div>
           <div className="flex gap-2 flex-shrink-0">
@@ -174,6 +220,7 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
               valor={borrador[c.clave]}
               cambiado={cambios.includes(c.clave)}
               propuesta={propuestas.includes(c.clave) ? ficha.propuesta!.valores[c.clave]! : null}
+              fuentes={ficha.propuesta?.fuentesPorCampo[c.clave] ?? []}
               onChange={(v) => set(c.clave, v)}
               onUsar={() => set(c.clave, ficha.propuesta!.valores[c.clave]!)}
               onDescartar={() => setDescartadas((d) => new Set(d).add(c.clave))}
@@ -261,6 +308,7 @@ function Campo({
   valor,
   cambiado,
   propuesta,
+  fuentes,
   onChange,
   onUsar,
   onDescartar,
@@ -269,6 +317,7 @@ function Campo({
   valor: string;
   cambiado: boolean;
   propuesta: string | null;
+  fuentes: string[];
   onChange: (v: string) => void;
   onUsar: () => void;
   onDescartar: () => void;
@@ -308,6 +357,7 @@ function Campo({
           <p className="text-sm text-fg whitespace-pre-wrap">
             {campo.destino.tipo === "lista" ? etiquetaDeApertura(propuesta) : propuesta}
           </p>
+          {fuentes.length > 0 && <p className="text-[11px] text-fg-muted">De: {fuentes.join(" · ")}</p>}
           <div className="flex gap-2">
             <button
               type="button"
@@ -333,14 +383,30 @@ function Campo({
 /** Crece con el contenido: una ficha con 10 campos no puede tener 10 barras de scroll. */
 function AreaDeTexto({ id, valor, onChange }: { id: string; valor: string; onChange: (v: string) => void }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
+  const ajustar = useCallback(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
     // + el borde: scrollHeight no lo cuenta y, sin él, cada campo muestra una barra de 2 px.
     const borde = el.offsetHeight - el.clientHeight;
     el.style.height = `${Math.max(el.scrollHeight + borde, 64)}px`;
-  }, [valor]);
+  }, []);
+  useEffect(ajustar, [valor, ajustar]);
+  // El alto depende del ANCHO: medido en una ventana angosta, al ensancharla quedaba un campo de una
+  // línea con 1.400 px de alto. Se re-mide cuando cambia el ancho del propio campo.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let ancho = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth !== ancho) {
+        ancho = el.clientWidth;
+        ajustar();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ajustar]);
   return (
     <textarea
       id={id}

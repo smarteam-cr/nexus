@@ -198,8 +198,10 @@ export interface PropuestaDeFicha {
   valores: Partial<ValoresDeFicha>;
   /** De dónde salió cada cosa, en palabras: «Sesión de exploración del 12-sep», «Encuesta: Ventas». */
   fuentes: string[];
+  /** Las fuentes de CADA campo propuesto: la pantalla las muestra debajo de la propuesta. */
+  fuentesPorCampo: Partial<Record<ClaveDeFicha, string[]>>;
   at: string;
-  /** Quién la propuso: «Diagnóstico», «Exploración»… */
+  /** Quién la propuso: «Handoff», «Sesiones», «Actualizar con IA»… */
   origen: string;
 }
 
@@ -229,6 +231,15 @@ function soloValoresConocidos(bruto: unknown): Partial<ValoresDeFicha> {
   return out;
 }
 
+function leerFuentesPorCampo(bruto: unknown): Partial<Record<ClaveDeFicha, string[]>> {
+  const out: Partial<Record<ClaveDeFicha, string[]>> = {};
+  if (!bruto || typeof bruto !== "object") return out;
+  for (const [k, v] of Object.entries(bruto as Record<string, unknown>)) {
+    if (CLAVES.has(k) && Array.isArray(v)) out[k as ClaveDeFicha] = v.filter((x): x is string => typeof x === "string");
+  }
+  return out;
+}
+
 /** Lee `Client.ficha` tal como venga (null, viejo, a medias) y devuelve SIEMPRE una ficha completa. */
 export function leerFicha(bruto: unknown): FichaGuardada {
   const base = fichaVacia();
@@ -245,6 +256,7 @@ export function leerFicha(bruto: unknown): FichaGuardada {
         ? {
             valores: soloValoresConocidos(p.valores),
             fuentes: Array.isArray(p.fuentes) ? p.fuentes.filter((x): x is string => typeof x === "string") : [],
+            fuentesPorCampo: leerFuentesPorCampo(p.fuentesPorCampo),
             at: typeof p.at === "string" ? p.at : "",
             origen: typeof p.origen === "string" ? p.origen : "",
           }
@@ -282,6 +294,76 @@ export function camposQueCambiaron(antes: ValoresDeFicha, despues: ValoresDeFich
   return CAMPOS_DE_LA_FICHA.filter((c) => (antes[c.clave] ?? "").trim() !== (despues[c.clave] ?? "").trim()).map(
     (c) => c.clave,
   );
+}
+
+/** Evento de ventana que avisa «la ficha de este cliente cambió» (detail: { clientId }). */
+export const EVENTO_FICHA_CAMBIO = "nexus:ficha-cliente-cambio";
+
+/** Los campos que la propuesta pendiente cambiaría respecto de lo confirmado (el número del aviso). */
+export function camposPropuestos(ficha: FichaGuardada): ClaveDeFicha[] {
+  const p = ficha.propuesta?.valores ?? {};
+  return CAMPOS_DE_LA_FICHA.filter((c) => {
+    const v = p[c.clave];
+    return typeof v === "string" && v.trim() && v.trim() !== ficha.valores[c.clave].trim();
+  }).map((c) => c.clave);
+}
+
+/** Lo que el agente toma como punto de partida de un campo: lo propuesto si hay, si no lo confirmado. */
+export function valorVigente(ficha: FichaGuardada, clave: ClaveDeFicha): string {
+  const propuesto = ficha.propuesta?.valores[clave];
+  return typeof propuesto === "string" && propuesto.trim() ? propuesto : ficha.valores[clave];
+}
+
+const MAX_FUENTES = 30;
+
+/**
+ * Suma lo que trajo una fuente nueva a la propuesta pendiente. ACUMULA: si el CSE no revisó en
+ * dos semanas, ve UNA propuesta con todo lo que entró, y cada campo dice de dónde salió.
+ *
+ * El agente devuelve el texto COMPLETO de cada campo (lo que había + lo nuevo), así que acá se
+ * reemplaza el valor propuesto y se suman las fuentes. Lo que no mejora nada se descarta: un valor
+ * igual a lo confirmado, una apertura fuera de la lista, un texto vacío.
+ */
+export function fusionarPropuesta(
+  ficha: FichaGuardada,
+  nuevos: ReadonlyArray<{ clave: string; valor: string; fuentes: readonly string[] }>,
+  origen: string,
+  ahora: Date = new Date(),
+): { ficha: FichaGuardada; cambiados: ClaveDeFicha[] } {
+  const base = ficha.propuesta ?? { valores: {}, fuentes: [], fuentesPorCampo: {}, at: "", origen: "" };
+  const valores = { ...base.valores };
+  const fuentesPorCampo = { ...base.fuentesPorCampo };
+  const fuentesNuevas: string[] = [];
+  const cambiados: ClaveDeFicha[] = [];
+  for (const n of nuevos) {
+    if (!CLAVES.has(n.clave) || typeof n.valor !== "string") continue;
+    const clave = n.clave as ClaveDeFicha;
+    const campo = campoDeFicha(clave);
+    const valor = n.valor.replace(/\r\n?/g, "\n").trim().slice(0, MAX_CARACTERES_POR_CAMPO);
+    if (!valor) continue;
+    if (campo.destino.tipo === "lista" && !OPCIONES_DE_APERTURA.some((o) => o.valor === valor)) continue;
+    if (valor === valorVigente(ficha, clave).trim()) continue;
+    const fuentes = n.fuentes.filter((f) => typeof f === "string" && f.trim());
+    valores[clave] = valor;
+    fuentesPorCampo[clave] = [...new Set([...(fuentesPorCampo[clave] ?? []), ...fuentes])].slice(-MAX_FUENTES);
+    fuentesNuevas.push(...fuentes);
+    cambiados.push(clave);
+  }
+  if (!cambiados.length) return { ficha, cambiados };
+  return {
+    ficha: {
+      ...ficha,
+      propuesta: {
+        valores,
+        fuentesPorCampo,
+        fuentes: [...new Set([...base.fuentes, ...fuentesNuevas])].slice(-MAX_FUENTES),
+        at: ahora.toISOString(),
+        // Si ya había una propuesta de otra procedencia, el rótulo dice que viene de varias.
+        origen: base.origen && base.origen !== origen ? "Varias fuentes" : origen,
+      },
+    },
+    cambiados,
+  };
 }
 
 export function fichaTieneContenido(valores: ValoresDeFicha): boolean {

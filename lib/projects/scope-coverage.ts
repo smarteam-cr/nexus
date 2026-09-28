@@ -42,6 +42,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/cobranza/queries.ts": { modo: "criterio", criterio: "facturable" },
   // C-20: las consultas de /sessions viven en el cargador compartido con /api/sessions/grupo.
   "lib/sessions/cargar-sesiones-categorizadas.ts": { modo: "criterio", criterio: "clasificable" },
+  // «Actualizar con IA» de la ficha del cliente: los handoffs y encuestas de sus proyectos vivos.
+  "lib/clients/ficha-propuesta.ts": { modo: "criterio", criterio: "clasificable" },
   "app/(shell)/sessions/[id]/page.tsx": { modo: "criterio", criterio: "clasificable" },
   "app/api/projects/[projectId]/project-sessions/route.ts": { modo: "criterio", criterio: "clasificable" },
   "app/api/clients/[id]/analyze/route.ts": { modo: "criterio", criterio: "clasificable" },

@@ -131,6 +131,24 @@ const LECTORES: Lector[] = [
       "filtrar el contexto ANTES: el prompt no es la defensa",
   },
   {
+    archivo: "lib/clients/ficha-propuesta.ts",
+    ancla: 'origen: "Handoff"',
+    pieza: "client-info",
+    exposicion: "por_curacion",
+    porque:
+      "propone la FICHA del cliente al generarse un handoff. La ficha es interna y lleva a " +
+      "propósito la motivación de compra; lo que la IA escribe queda como PROPUESTA que el CSE " +
+      "confirma campo por campo. Hacia un documento del cliente solo sale lo confirmado y por " +
+      "`fichaParaPrompt({ paraDocumentoDelCliente: true })`, que corta los campos internos",
+  },
+  {
+    archivo: "lib/clients/ficha-propuesta.ts",
+    ancla: "loadCuestionarioContext(p.id)",
+    pieza: "client-info",
+    exposicion: "por_curacion",
+    porque: "«Actualizar con IA» de la ficha: los handoffs de todos los proyectos del cliente, misma curación",
+  },
+  {
     archivo: "lib/canvas/diagnostico-generate.ts",
     pieza: "diagnosis",
     exposicion: "directo",

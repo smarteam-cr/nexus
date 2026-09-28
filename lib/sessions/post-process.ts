@@ -363,6 +363,18 @@ export async function postProcessSession(
     }
   }
 
+  // Ficha del cliente: igual que el avance del cronograma, cada sesión puede sumarle algo (un
+  // stakeholder nuevo, un dato duro, un reto). Queda como PROPUESTA que el CSE confirma; con Haiku,
+  // porque corre con cada reunión. Best-effort: nunca tumba el post-proceso.
+  try {
+    const { proponerFichaDesdeSesion } = await import("@/lib/clients/ficha-propuesta");
+    const r = await proponerFichaDesdeSesion(sessionId, client.id, project?.id ?? null);
+    if (r.status === "ok" && r.cambiados) console.log(`[post-session] ✓ ficha del cliente: ${r.cambiados} campos propuestos`);
+    if (r.status === "error") console.error(`[post-session] ficha del cliente falló (no bloqueante): ${r.error}`);
+  } catch (e) {
+    console.error(`[post-session] ficha del cliente falló (no bloqueante):`, e instanceof Error ? e.message : e);
+  }
+
   console.log(
     `[post-session] ✓ "${session.title}" (cliente=${client.name}) — minuta DRAFT + ${created} action items`,
   );

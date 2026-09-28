@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { invalidateGps } from "@/lib/clients/gps-cache";
 import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
+import AvisoDeFicha from "@/components/clients/AvisoDeFicha";
 import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 import AltaTrabada from "@/components/projects/AltaTrabada";
@@ -524,6 +525,7 @@ function ProjectSection({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           Información del cliente
+          <AvisoDeFicha clientId={clientId} />
         </button>
       </div>
 

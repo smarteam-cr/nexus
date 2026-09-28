@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   CAMPOS_DE_LA_FICHA,
   PREFIJO_PROPIEDAD,
+  camposPropuestos,
   camposQueCambiaron,
   cuerpoDeLaNota,
+  fusionarPropuesta,
   fichaParaPrompt,
   fichaVacia,
   leerFicha,
@@ -129,8 +131,66 @@ describe("fichaParaPrompt", () => {
   });
 
   it("sin confirmar, el agente no recibe nada (ni una propuesta)", () => {
-    const sin: FichaGuardada = { ...fichaVacia(), propuesta: { valores: { dolorPrincipal: "x" }, fuentes: [], at: "", origen: "" } };
+    const sin: FichaGuardada = {
+      ...fichaVacia(),
+      propuesta: { valores: { dolorPrincipal: "x" }, fuentes: [], fuentesPorCampo: {}, at: "", origen: "" },
+    };
     expect(fichaParaPrompt(sin, { paraDocumentoDelCliente: false })).toBe("");
+  });
+});
+
+describe("fusionarPropuesta: la propuesta ACUMULA", () => {
+  const confirmada = fichaConfirmada({ dolorPrincipal: "- pierde leads" });
+
+  it("la primera fuente crea la propuesta con sus fuentes por campo", () => {
+    const r = fusionarPropuesta(
+      confirmada,
+      [{ clave: "retosEstrategicos", valor: "- crecer 20 %", fuentes: ["Sesión «A» del 1 sept"] }],
+      "Sesiones",
+    );
+    expect(r.cambiados).toEqual(["retosEstrategicos"]);
+    expect(r.ficha.propuesta?.valores.retosEstrategicos).toBe("- crecer 20 %");
+    expect(r.ficha.propuesta?.fuentesPorCampo.retosEstrategicos).toEqual(["Sesión «A» del 1 sept"]);
+    expect(r.ficha.propuesta?.origen).toBe("Sesiones");
+    // Lo confirmado no se toca: solo la propuesta.
+    expect(r.ficha.valores).toEqual(confirmada.valores);
+  });
+
+  it("una segunda fuente suma sin borrar lo que propuso la primera", () => {
+    const a = fusionarPropuesta(confirmada, [{ clave: "retosEstrategicos", valor: "- crecer", fuentes: ["S-A"] }], "Sesiones").ficha;
+    const b = fusionarPropuesta(
+      a,
+      [
+        { clave: "retosEstrategicos", valor: "- crecer\n- abrir Panamá", fuentes: ["S-B"] },
+        { clave: "stakeholders", valor: "- Ana — CEO", fuentes: ["S-B"] },
+      ],
+      "Handoff",
+    );
+    expect(b.ficha.propuesta?.valores).toEqual({ retosEstrategicos: "- crecer\n- abrir Panamá", stakeholders: "- Ana — CEO" });
+    expect(b.ficha.propuesta?.fuentesPorCampo.retosEstrategicos).toEqual(["S-A", "S-B"]);
+    expect(b.ficha.propuesta?.fuentes).toEqual(["S-A", "S-B"]);
+    expect(b.ficha.propuesta?.origen).toBe("Varias fuentes");
+  });
+
+  it("descarta lo que no aporta: igual a lo vigente, vacío, clave inventada o apertura fuera de lista", () => {
+    const r = fusionarPropuesta(
+      confirmada,
+      [
+        { clave: "dolorPrincipal", valor: "- pierde leads  ", fuentes: ["x"] },
+        { clave: "stakeholders", valor: "   ", fuentes: ["x"] },
+        { clave: "presupuesto", valor: "mucho", fuentes: ["x"] },
+        { clave: "aperturaAsesoria", valor: "altísima", fuentes: ["x"] },
+      ],
+      "Sesiones",
+    );
+    expect(r.cambiados).toEqual([]);
+    expect(r.ficha).toBe(confirmada);
+  });
+
+  it("camposPropuestos cuenta solo lo que cambiaría algo confirmado", () => {
+    const r = fusionarPropuesta(confirmada, [{ clave: "aperturaAsesoria", valor: "alta", fuentes: ["x"] }], "Sesiones");
+    expect(camposPropuestos(r.ficha)).toEqual(["aperturaAsesoria"]);
+    expect(camposPropuestos(confirmada)).toEqual([]);
   });
 });
 

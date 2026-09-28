@@ -27,6 +27,7 @@ import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { generarResumenDeHandoff } from "@/lib/handoff/resumen";
+import { proponerFichaDesdeHandoff } from "@/lib/clients/ficha-propuesta";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
@@ -3143,6 +3144,13 @@ async function persistTimelineFromAgentOutput(
          respaldo, y `generarResumenDeHandoff` no tira nunca: devuelve su estado. */
       void generarResumenDeHandoff(bodyProjectId).then((r) => {
         if (r.status === "error") console.warn(`[analyze] resumen del handoff no escrito: ${r.error}`);
+      });
+
+      /* La venta ya dice mucho del cliente (dolor, stakeholders, motivación, resultados): la ficha
+         del cliente arranca de acá como PROPUESTA — el CSE la confirma (lib/clients/ficha-propuesta).
+         Fire-and-forget por la misma razón que el resumen: el handoff ya está guardado. */
+      void proponerFichaDesdeHandoff(bodyProjectId).then((r) => {
+        if (r.status === "error") console.warn(`[analyze] ficha del cliente no propuesta: ${r.error}`);
       });
 
       // AUTO-CHAIN: si el handoff detectó trabajo técnico (tag custom_dev/insider_one),
