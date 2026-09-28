@@ -75,3 +75,29 @@ describe("los enlaces que apuntan a un DOCUMENTO llevan el parámetro", () => {
     ).toContain("&canvas=timeline#cronograma-gantt");
   });
 });
+
+describe("cambiar de documento no deja el panel en el esqueleto", () => {
+  /* Visto en producción el 2026-09-28: al elegir otro documento en el desplegable, la pantalla se
+     quedaba en el esqueleto hasta recargar. `switchCanvas` hacía `setLoading(true)` y lo único que
+     lo apagaba era el fetch de las tarjetas del Resumen viejo, retirado en 14b8c920. Ahora el efecto
+     que apaga `loading` depende SOLO de `listLoaded`, que no vuelve a cambiar después de la primera
+     carga: cualquier `setLoading(true)` posterior cuelga la pantalla. La edición que la pone en rojo:
+     volver a poner `setLoading(true)` en `switchCanvas` (o en cualquier otro lado del panel). */
+  const CODIGO = PANEL.replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(/\r?\n/)
+    .filter((l) => !l.trimStart().startsWith("//"))
+    .join("\n");
+
+  it("el panel nunca vuelve a prender su esqueleto después de montar", () => {
+    expect(CODIGO, "el esqueleto del panel se prende otra vez y nada lo apaga").not.toContain("setLoading(true)");
+  });
+
+  it("lo apaga que vuelva la lista, y nada más", () => {
+    expect(CODIGO).toContain("if (listLoaded) setLoading(false);");
+    const i = CODIGO.indexOf("const switchCanvas = useCallback(");
+    expect(i, "cambió la forma de switchCanvas; revisar esta guarda").toBeGreaterThan(-1);
+    const cuerpo = CODIGO.slice(i, CODIGO.indexOf("}, [", i));
+    expect(cuerpo.length, "la guarda no está mirando switchCanvas").toBeGreaterThan(200);
+    expect(cuerpo).not.toContain("setLoading(");
+  });
+});

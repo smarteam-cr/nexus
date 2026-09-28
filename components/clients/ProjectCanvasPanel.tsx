@@ -223,18 +223,18 @@ export default function ProjectCanvasPanel({
   // Update URL when canvas changes (no page reload)
   const switchCanvas = useCallback((canvasId: string) => {
     if (cronogramaOcupado) return;
-    // Clickear el canvas que YA está activo colgaba la pantalla: `setActiveCanvasId`
-    // hace bail-out con el mismo valor, pero `setLoading(true)` sí re-renderiza, y el
-    // efecto que apaga el loading no vuelve a correr porque ninguna de sus deps cambió
-    // → esqueleto hasta desmontar. El dropdown no filtra el activo, así que es un click
-    // a un dedo de distancia.
+    /* ⛔ Cambiar de documento NO prende el esqueleto del panel. `loading` significa una sola cosa:
+       «la lista de documentos todavía no volvió», y lo apaga un efecto que depende SOLO de
+       `listLoaded`, que después de la primera carga ya no cambia. Un `setLoading(true)` acá dejaba
+       la pantalla en el esqueleto para siempre (visto en producción el 2026-09-28, tras 14b8c920:
+       antes lo apagaba el fetch de las tarjetas del Resumen viejo, que se retiró). Cada documento
+       pinta su propio esqueleto mientras carga. Guarda: lib/flow/resumen-del-proyecto.test.ts. */
     /* ⚠ El bail-out temprano mira TAMBIÉN de dónde se viene: volver al mismo documento
        desde el resumen es un cambio de vista aunque el id no cambie, y con el `return`
        viejo el click no hacía nada. */
     if (canvasId === activeCanvasId && !enResumen) return;
     setEnResumen(false);
     setActiveCanvasId(canvasId);
-    setLoading(true);
     const url = new URL(window.location.href);
     /* SIEMPRE se escribe el `?canvas=`, incluso para el canvas por defecto: la URL sin el
        parámetro ya significa otra cosa —el resumen—, así que omitirlo mandaría al kickoff
