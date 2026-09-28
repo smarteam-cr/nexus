@@ -279,6 +279,31 @@ CREATE POLICY deny_all_non_superuser ON "EgresoMensual"
   TO PUBLIC
   USING (false);
 
+-- La Escala de Rendimiento en Nexus (2026-09-27, scripts/sql/2026-09-27-escala-lector-y-comentarios.sql):
+-- los comentarios internos del equipo (casos de clientes con nombre) y la versión publicada.
+-- Nada de esto se lee desde el navegador: `scripts/verificar-escala-anon.ts` lo prueba por efecto.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "EscalaDocumento";
+CREATE POLICY deny_all_non_superuser ON "EscalaDocumento"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "EscalaComentario";
+CREATE POLICY deny_all_non_superuser ON "EscalaComentario"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "EscalaRespuesta";
+CREATE POLICY deny_all_non_superuser ON "EscalaRespuesta"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (el runner con --apply ya la corre):
 --   SELECT tablename FROM pg_tables

@@ -206,6 +206,7 @@ model Client {
   ventasGanadas          VentaGanada[]           @relation("VentasDelCliente") // los tratos ganados en HubSpot (el espejo de lo VENDIDO)
   reglasComisionVendedor ReglaComisionVendedor[] @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas   ImportacionFila[] // Cobranza: trazabilidad del importador
+  escalaComentarios      EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -4960,6 +4961,103 @@ model ComentarioDoc {
   createdAt DateTime @default(now())
 
   @@index([hiloId, createdAt])
+}
+
+// ── Escala de Rendimiento: la versión publicada y los comentarios (2026-09-27) ──────
+// SQL: scripts/sql/2026-09-27-escala-lector-y-comentarios.sql (⛔ nunca `db push`).
+// La escala NO se edita desde Nexus: se publica con `scripts/publicar-escala.ts` y se comenta.
+// Tipos y estados son String y no enum (INV4): los valores los fija lib/escala/comentarios/reglas.ts.
+
+/// Una versión PUBLICADA de un documento de la escala, con su texto exacto. Solo se inserta.
+/// La app lee la última de `documento = "escala"`; la descarga devuelve `texto` tal cual.
+model EscalaDocumento {
+  id String @id @default(cuid())
+
+  /// escala · especificacion · manual
+  documento     String
+  /// La versión del documento (la del encabezado).
+  version       String
+  /// Con qué versión de la escala va (para la escala, la misma).
+  escalaVersion String
+  /// El nombre fijo del archivo: con él se descarga.
+  archivo       String
+  texto         String
+  /// sha256 del texto: una versión publicada no puede cambiar de contenido.
+  huella        String
+
+  publicadaEn       DateTime @default(now())
+  publicadaPorEmail String?
+
+  @@unique([documento, version])
+  @@index([documento, publicadaEn])
+}
+
+/// Un comentario del equipo anclado a un identificador ESTABLE de la escala: la dimensión (`1.7`),
+/// el nivel (`1.7.F`) o el criterio (`1.7.F1`). Guarda la versión y el texto de ese momento para
+/// mostrar, en una versión nueva, si el texto cambió. El estado lo cambia solo el responsable.
+model EscalaComentario {
+  id String @id @default(cuid())
+
+  ancla         String
+  /// dimension · nivel · criterio
+  tipoDeAncla   String
+  /// `1`, y `1.7`: los contadores de la pantalla no parsean el ancla.
+  area          String
+  dimension     String
+  versionEscala String
+  /// El texto del ancla cuando se comentó (lo congela el servidor, nunca lo manda el navegador).
+  textoAnclado  String
+
+  /// no_se_entiende · no_calza · propuesta
+  tipo                 String
+  cuerpo               String
+  decisionQueCambiaria String?
+
+  /// «No calza con un cliente»: el de Nexus (si está) y su nombre congelado, o un nombre suelto.
+  clienteId     String?
+  cliente       Client? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  clienteNombre String?
+  /// El perfil de negocio que se estaba mirando (o el del cliente): `con equipo`, `única`…
+  perfilCierre  String?
+  perfilDespues String?
+
+  autorEmail String
+
+  /// abierto · respondido · cambio_pendiente · descartado
+  estado                 String    @default("abierto")
+  estadoCambiadoAt       DateTime?
+  estadoCambiadoPorEmail String?
+  /// La fila de «Cambios pendientes» del manual (la llena el responsable al pasarlo).
+  cambioQue              String?
+  cambioCaso             String?
+  cambioDecision         String?
+  motivoDescarte         String?
+
+  editadoAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  respuestas EscalaRespuesta[]
+
+  @@index([area, estado])
+  @@index([ancla])
+  @@index([estado, createdAt])
+}
+
+/// Una respuesta a un comentario de la escala.
+model EscalaRespuesta {
+  id String @id @default(cuid())
+
+  comentarioId String
+  comentario   EscalaComentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
+
+  autorEmail String
+  cuerpo     String
+  editadoAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([comentarioId, createdAt])
 }
 
 // ── Cuestionario previo (2026-09-25) ────────────────────────────────────────────
