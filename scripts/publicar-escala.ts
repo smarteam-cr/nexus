@@ -12,6 +12,8 @@
  *      (salvo que la versión nueva traiga un formato que este lector no conoce: eso lo avisa acá).
  *
  * ── LO QUE CUIDA ─────────────────────────────────────────────────────────────
+ * · El texto se guarda con saltos de línea LF, venga de la máquina que venga: la huella (sha256)
+ *   es del contenido, no de si el archivo salió de Windows.
  * · SOLO INSERTA. Una versión publicada no se pisa: si el archivo dice la misma versión que una
  *   publicada y el texto es otro, se frena («sube la versión»). Si es idéntico, no escribe nada.
  * · Nada se publica si falla una prueba: las de Nexus (lo que la pantalla necesita, con la misma
@@ -86,7 +88,9 @@ async function main() {
   const textos = {} as Record<DocumentoDeLaEscala, string>;
   for (const d of DOCUMENTOS_DE_LA_ESCALA) {
     try {
-      textos[d.clave] = leerArchivoDeLaEscala(d.clave);
+      // Saltos de línea LF: la misma versión tiene que dar la misma huella en Windows (CRLF), en
+      // la otra PC o en Linux. Si no, republicar la misma versión «cambiaría el texto».
+      textos[d.clave] = leerArchivoDeLaEscala(d.clave).replace(/\r\n?/g, "\n");
     } catch {
       console.error(`⛔ Falta ${rutaDelArchivo(d.clave)}.`);
       process.exit(1);
