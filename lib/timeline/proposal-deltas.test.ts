@@ -348,10 +348,13 @@ test("el cronograma sin fases ofrece una salida, no solo una instrucción", () =
   const bloque = src.slice(i, src.indexOf(") : proposal", i));
   expect(bloque.length, "la guarda no está mirando nada").toBeGreaterThan(300);
 
+  /* 2026-09-28: la salida va al RESUMEN (donde vive el handoff). `cronogramaUrl` pasó a llevar
+     `&canvas=timeline`, y con él el botón volvía al mismo cronograma vacío. */
   expect(
     bloque,
     "el cronograma vacío volvió a ser un callejón: dice qué hacer y no da forma de hacerlo",
-  ).toContain("cronogramaUrl");
+  ).toContain("href={resumenUrl}");
+  expect(bloque, "la salida volvió a apuntar al mismo cronograma").not.toContain("href={cronogramaUrl}");
   expect(bloque).toMatch(/Ir al Handoff/);
 });
 

@@ -21,13 +21,38 @@
  * medio, con el mismo token), responde 409 y no borra: la pantalla trae la convertida.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardTimelineEdit } from "@/lib/auth/api-guards";
+import { guardAccessToProject, guardTimelineEdit } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { leerEstadoDeLasTareas } from "@/lib/timeline/borrador-del-detalle";
 /* La razón del registro que guarda la copia de lo descartado sin poder leerlo vive en lib (una ruta de Next solo
    exporta sus métodos): la cartera la excluye del porqué de un atraso (revisión de los arreglos). */
-import { esBorradorV1, RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+import { esBorradorV1, hayPropuestaParaRevisar, RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
+
+/**
+ * GET — ¿hay una propuesta del cronograma para revisar, y quién la dejó? (2026-09-28) Lo lee el aviso
+ * del rail (WorkspaceClient) cuando el cronograma o el handoff avisan que algo cambió. Mismo criterio que
+ * la página (`hayPropuestaParaRevisar` + `leerAutoriaDeLasPropuestas`), sin recargar la página entera, que
+ * además consulta HubSpot. Solo lectura: alcanza con tener acceso al proyecto.
+ */
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> },
+) {
+  const { projectId } = await params;
+  const guard = await guardAccessToProject(projectId);
+  if (guard instanceof NextResponse) return guard;
+  const t = await prisma.projectTimeline.findUnique({
+    where: { projectId },
+    select: { pendingProposal: true, pendingProposalRunId: true },
+  });
+  const pending = hayPropuestaParaRevisar(t?.pendingProposal ?? null);
+  const [autoria] = pending
+    ? await leerAutoriaDeLasPropuestas([{ token: t?.pendingProposalRunId ?? null, guardado: t?.pendingProposal ?? null }])
+    : [null];
+  return NextResponse.json({ pending, autoria: autoria ?? null });
+}
 
 export async function DELETE(
   req: NextRequest,

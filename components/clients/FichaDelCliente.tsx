@@ -46,6 +46,9 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [leyendo, setLeyendo] = useState(false);
+  /* Los campos descartados que ya se mandaron. Cada «Descartar» manda TODOS: si dos pedidos se cruzan
+     en el servidor (cada uno lee la ficha y la guarda entera), el último igual lleva los dos. */
+  const descartesEnviados = useRef<Set<ClaveDeFicha>>(new Set());
   /* Lo que hay en pantalla AHORA, para los callbacks que vuelven tarde (la IA tarda hasta un minuto):
      el `borrador` del closure es el del clic y se perdía lo escrito mientras se esperaba. */
   const borradorRef = useRef(borrador);
@@ -58,6 +61,7 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
     if (r.hubspotUrl !== undefined) setHubspotUrl(r.hubspotUrl);
     setBorrador(r.ficha.valores);
     setDescartadas(new Set());
+    descartesEnviados.current = new Set();
     // El aviso de la pestaña «Información del cliente» cuenta los campos por revisar.
     window.dispatchEvent(new CustomEvent(EVENTO_FICHA_CAMBIO, { detail: { clientId } }));
   }, [clientId]);
@@ -152,17 +156,23 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
      escribió en otros campos sigue ahí. */
   async function descartarCampo(clave: ClaveDeFicha) {
     setDescartadas((d) => new Set(d).add(clave));
+    descartesEnviados.current.add(clave);
+    const todos = [...descartesEnviados.current];
     try {
       const r = await fetch(`/api/clients/${clientId}/ficha`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ descartarCampos: [clave] }),
+        body: JSON.stringify({ descartarCampos: todos }),
       });
       const j = (await r.json().catch(() => ({}))) as Respuesta;
       if (!r.ok || !j.ficha) throw new Error(j.error ?? "");
-      setFicha(j.ficha);
+      /* Solo la propuesta: si alguien confirmó valores desde otro lado, tomarlos acá sin re-sembrar el
+         borrador los mostraría como «cambios» del CSE. Eso lo resuelve la próxima carga. */
+      const propuesta = j.ficha.propuesta;
+      setFicha((f) => (f ? { ...f, propuesta } : j.ficha));
       window.dispatchEvent(new CustomEvent(EVENTO_FICHA_CAMBIO, { detail: { clientId } }));
     } catch {
+      descartesEnviados.current.delete(clave);
       setDescartadas((d) => {
         const n = new Set(d);
         n.delete(clave);

@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
     projectId: true,
     businessCaseId: true,
     stepLabel: true,
+    agentSlug: true,
     // C-13 (2026-09-04): sin `output`. En una corrida DONE es el documento entero (decenas de
     // KB) y el feed no lo muestra; solo lo usa para el motivo de las que están en ERROR, y ese
     // se pide aparte, abajo, para esas filas nada más. Hasta 25 filas por tick, cada 4-60 s.
@@ -147,6 +148,7 @@ export async function GET(req: NextRequest) {
         canvasId: r.blocks[0]?.section.canvasId ?? null,
         canvasSlug: r.blocks[0] ? slugForCanvas(r.blocks[0].section.canvas) : null,
         agentGroup: r.agent?.agentGroup ?? null,
+        agentSlug: r.agentSlug,
       }),
     }),
     };

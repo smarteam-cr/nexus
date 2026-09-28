@@ -189,7 +189,13 @@ describe("dónde se usa", () => {
     expect(contiene(ficha, "await leerAutoriaDeLasPropuestas( conPropuesta.map(")).toBe(true);
     expect(contiene(ficha, "timeline: { select: { pendingProposal: true, pendingProposalRunId: true } },")).toBe(true);
     const workspace = soloCodigo(leer("app/(shell)/clients/[id]/WorkspaceClient.tsx"));
-    expect(contiene(workspace, "autoria={activeProject.timelineProposalAutoria ?? null}")).toBe(true);
+    /* 2026-09-28: el aviso del rail se relee cuando el cronograma o el handoff avisan
+       (GET /timeline/proposal). La relectura manda; sin relectura, lo de la página. La del cable se
+       valida con `leerAutoria`, y el GET la lee solo si hay propuesta. */
+    expect(contiene(workspace, "autoria={propuestaViva[activeProject.id] ? propuestaViva[activeProject.id].autoria : (activeProject.timelineProposalAutoria ?? null)}")).toBe(true);
+    expect(contiene(workspace, "autoria: leerAutoria(j.autoria)")).toBe(true);
+    const propuesta = soloCodigo(leer("app/api/projects/[projectId]/timeline/proposal/route.ts"));
+    expect(contiene(propuesta, "const [autoria] = pending ? await leerAutoriaDeLasPropuestas([")).toBe(true);
 
     const gps = soloCodigo(leer("app/api/projects/[projectId]/gps/route.ts"));
     expect(contiene(gps, "const [timelineProposalAutoria] = hayPropuestaParaRevisar(project.timeline?.pendingProposal ?? null) ? await leerAutoriaDeLasPropuestas([")).toBe(true);

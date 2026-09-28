@@ -107,6 +107,13 @@ export default function ProjectCanvasPanel({
   const searchParams = useSearchParams();
   const router = useRouter();
   const canvasFromUrl = searchParams.get("canvas");
+  /* ¿La URL es de OTRO proyecto? Pasa al cambiar de pestaña (este panel se monta antes de que la URL
+     cambie) y con el «Ver» de una corrida de otro proyecto del mismo cliente: ese `?canvas=` no es de
+     este proyecto y no se aplica acá (la pestaña correcta se monta con su propio panel). */
+  const urlDeOtroProyecto = (() => {
+    const tab = searchParams.get("tab");
+    return !!tab && tab !== projectId;
+  })();
 
   // Siembra del primer paint: props del server (carga inicial) o cache de módulo
   // (revisitas al cambiar de tab). Con siembra, el panel NO pinta el WorkspaceSkeleton
@@ -143,7 +150,7 @@ export default function ProjectCanvasPanel({
   const [canvases, setCanvases] = useState<CanvasMeta[]>(seeded ?? []);
   const [activeCanvasId, setActiveCanvasId] = useState<string | null>(() => {
     if (!seeded) return null;
-    const fromUrl = buscarCanvasDeLaUrl(seeded, canvasFromUrl);
+    const fromUrl = buscarCanvasDeLaUrl(seeded, urlDeOtroProyecto ? null : canvasFromUrl);
     return (fromUrl ?? seeded[0])?.id ?? null;
   });
   // Se incrementa al terminar una corrida de agente desde el CTA → remonta el canvas
@@ -174,7 +181,7 @@ export default function ProjectCanvasPanel({
      la URL al cambiar de pestaña. Antes bastaba con que el parámetro existiera para caer en el
      primer documento, con la URL diciendo otra cosa. */
   const [enResumen, setEnResumen] = useState(
-    () => vistaDeLaUrl(seeded ?? [], canvasFromUrl, seeded !== null).tipo === "resumen",
+    () => vistaDeLaUrl(seeded ?? [], urlDeOtroProyecto ? null : canvasFromUrl, seeded !== null).tipo === "resumen",
   );
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
   /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
@@ -365,7 +372,7 @@ export default function ProjectCanvasPanel({
   const canvasesRef = useRef(canvases);
   useEffect(() => { canvasesRef.current = canvases; }, [canvases]);
   useEffect(() => {
-    if (cronogramaOcupado) return;
+    if (cronogramaOcupado || urlDeOtroProyecto) return;
     const vista = vistaDeLaUrl(canvasesRef.current, canvasFromUrl, listLoaded);
     if (vista.tipo === "esperar") return;
     if (vista.tipo === "resumen") {
@@ -374,7 +381,7 @@ export default function ProjectCanvasPanel({
     }
     setEnResumen(false);
     setActiveCanvasId(vista.canvasId);
-  }, [canvasFromUrl, listLoaded, cronogramaOcupado]);
+  }, [canvasFromUrl, listLoaded, cronogramaOcupado, urlDeOtroProyecto]);
 
   // La MISMA pieza que pinta app/(shell)/clients/[id]/loading.tsx: el RSC y este gate
   // client-side se ven uno tras otro, así que tienen que hablar el mismo vocabulario.
@@ -675,7 +682,7 @@ export default function ProjectCanvasPanel({
           lib/flow/resumen-del-proyecto.test.ts. */}
       <div hidden={!enResumen} className="space-y-6">
         <ProjectGPS projectId={projectId} clientId={clientId} />
-        <ProjectHandoffSection projectId={projectId} clientId={clientId} />
+        <ProjectHandoffSection projectId={projectId} clientId={clientId} visible={enResumen} />
       </div>
 
       {/* Handoff: vista lineal (lectura/curación del CSE, sin grilla) */}

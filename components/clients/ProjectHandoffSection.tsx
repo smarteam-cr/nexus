@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import { useAgentRun } from "@/hooks/useAgentRun";
+import { pollAgentRun, type PolledRun } from "@/lib/clients/poll-agent-run";
 import { useToast } from "@/components/ui/Toast";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useWorkspace } from "./WorkspaceContext";
@@ -94,6 +95,9 @@ function fmtDate(d: string): string {
  * produciría dos documentos del mismo trato. Fingir lo contrario sería vender una seguridad
  * que no existe.
  */
+/** Las corridas del handoff que esta pestaña ya está siguiendo (ver «RETOMAR LA CORRIDA EN CURSO»). */
+const SEGUIMIENTOS_DEL_HANDOFF = new Map<string, Promise<PolledRun>>();
+
 function HandoffDelHermano({
   canvasId,
   generated,
@@ -176,7 +180,19 @@ function HandoffDelHermano({
   );
 }
 
-export default function ProjectHandoffSection({ projectId, clientId }: { projectId: string; clientId: string }) {
+export default function ProjectHandoffSection({
+  projectId,
+  clientId,
+  visible = true,
+}: {
+  projectId: string;
+  clientId: string;
+  /** ¿Se ve el Resumen? La sección queda MONTADA aunque no se vea (conserva «Generando…» y las
+   *  exclusiones sin guardar), pero el DOCUMENTO se desmonta: montado y oculto, sus entradas de
+   *  deshacer seguían en la pila y un Ctrl+Z en otro documento revertía, sin que se viera, un cambio
+   *  del handoff (y consultaba cada 5 s). Guarda: lib/flow/resumen-del-proyecto.test.ts. */
+  visible?: boolean;
+}) {
   // Siembra desde el cache de módulo: al volver a un tab ya visitado, la sección pinta
   // su estado real AL INSTANTE con la altura correcta (sin skeleton ni empujón).
   const cached = readHandoffStatusCache<HandoffStatus>(projectId);
@@ -333,19 +349,54 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
   /* RETOMAR LA CORRIDA EN CURSO (2026-09-28). Recargar, abrir el proyecto en otra pestaña o volver
      al Resumen a mitad de una generación dejaba «Generar» habilitado: un segundo clic lanzaba otra
      corrida pagada sobre el mismo documento, y al terminar la primera nadie refrescaba esta
-     pantalla. Si el servidor dice que hay una corrida viva, la sección la sigue como si la hubiera
-     lanzado ella: «Generando…», botón deshabilitado y, al terminar, el estado nuevo. */
+     pantalla. Si el servidor dice que hay una corrida viva, la sección la sigue: «Generando…», botón
+     deshabilitado y, al terminar, el estado nuevo.
+     · Se sigue con `pollAgentRun` y NO con `track`: `track` marca la corrida como anunciada y el
+       centro de corridas se callaba el «Listo / Falló» (la sección, oculta, no avisa nada).
+     · Un solo seguimiento por corrida en la pestaña (SEGUIMIENTOS_DEL_HANDOFF): cambiar de proyecto
+       y volver remonta la sección, y la seguía dos veces. Los pasos de cierre (sincronizar con
+       HubSpot, el aviso del cronograma sin sincronizar) los hace solo quien la sigue primero. */
   const retomadaRef = useRef<string | null>(null);
   const runIdEnCurso = status?.corridaEnCurso?.runId ?? null;
+  const handoffIdEnCurso = status?.handoffId ?? null;
   useEffect(() => {
     if (!runIdEnCurso || generating || retomadaRef.current === runIdEnCurso) return;
     retomadaRef.current = runIdEnCurso;
     setGenerating(true);
+    let seguimiento = SEGUIMIENTOS_DEL_HANDOFF.get(runIdEnCurso);
+    const propio = !seguimiento;
+    if (!seguimiento) {
+      seguimiento = pollAgentRun(clientId, runIdEnCurso);
+      SEGUIMIENTOS_DEL_HANDOFF.set(runIdEnCurso, seguimiento);
+      const id = runIdEnCurso;
+      void seguimiento.finally(() => SEGUIMIENTOS_DEL_HANDOFF.delete(id));
+    }
+    const enCurso = seguimiento;
     void (async () => {
       try {
-        const result = await track(runIdEnCurso);
-        if (result.status === "ERROR") setError(result.error ?? "El handoff falló durante la generación. Vuelve a intentarlo.");
-        else if (result.status === "TIMEOUT") setError("La generación está tardando más de lo normal. Revisa en unos minutos.");
+        const result = await enCurso;
+        if (result.status === "ERROR") {
+          setError(
+            canGenerateHandoff
+              ? (result.error ?? "La generación del handoff falló. Vuelve a intentarlo.")
+              : "La última generación del handoff falló.",
+          );
+        } else if (result.status === "TIMEOUT") {
+          setError("La generación está tardando más de lo normal. Revisa en unos minutos.");
+        } else if (propio && result.status === "DONE") {
+          if (result.timelineSyncError) {
+            toast.error(`El handoff se generó, pero el cronograma no se actualizó: ${result.timelineSyncError}`, {
+              action: { label: "Entendido", onClick: () => {} },
+            });
+          }
+          if (handoffIdEnCurso) {
+            fetch("/api/handoffs/sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ handoffId: handoffIdEnCurso }),
+            }).catch(() => {});
+          }
+        }
         await fetchStatus();
         fetchTags();
         bumpTimelineRefresh();
@@ -357,7 +408,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         setGenerating(false);
       }
     })();
-  }, [runIdEnCurso, generating, track, fetchStatus, fetchTags, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
+  }, [runIdEnCurso, handoffIdEnCurso, generating, clientId, canGenerateHandoff, toast, fetchStatus, fetchTags, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
 
   const handleGenerate = useCallback(async () => {
     const agentId = status?.agentId;
@@ -369,6 +420,20 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     // A la pestaña del proyecto, no a la home del cliente (el handoff vive ahí).
     const notifyUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
     try {
+      /* -1. ¿Ya hay una corrida en curso? (2026-09-28) Una pestaña abierta ANTES de que otra (o
+         alguien más) lanzara el handoff sigue mostrando «Regenerar», y el servidor no frena corridas
+         paralelas: sin esta consulta, el clic pagaba una segunda. Si hay una viva, se la sigue en vez
+         de lanzar otra (el efecto «RETOMAR» la toma apenas llega el estado). */
+      const fresco = await fetch(`/api/projects/${projectId}/handoff`)
+        .then((r) => (r.ok ? (r.json() as Promise<HandoffStatus>) : null))
+        .catch(() => null);
+      if (fresco?.corridaEnCurso?.runId) {
+        writeHandoffStatusCache(projectId, fresco);
+        setStatus(fresco);
+        toast.info("Ya hay una generación del handoff en curso: la sigo en vez de lanzar otra.");
+        return;
+      }
+
       // 0. Guardar exclusiones PENDIENTES del textarea: escribir y regenerar directo
       //    (sin apretar "Guardar") perdía el texto en silencio y el prompt corría sin
       //    la regla (visto en RC). Best-effort: si falla, la generación sigue igual.
@@ -402,7 +467,14 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         return;
       }
       if (data.runId) {
-        const result = await track(data.runId);
+        /* La corrida es de esta sección: el retomar no la vuelve a seguir, y una sección remontada
+           en esta pestaña (cambiar de proyecto y volver) espera este mismo seguimiento. */
+        retomadaRef.current = data.runId;
+        const seguimiento = track(data.runId);
+        SEGUIMIENTOS_DEL_HANDOFF.set(data.runId, seguimiento);
+        const id = data.runId as string;
+        void seguimiento.finally(() => SEGUIMIENTOS_DEL_HANDOFF.delete(id)).catch(() => {});
+        const result = await seguimiento;
         if (result.status === "ERROR") {
           // result.error viene humanizado desde AgentRun.output.error (créditos/429/timeout…).
           setError(result.error ?? "El handoff falló durante la generación. Reintentá.");
@@ -456,7 +528,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         canvasId={status.canvasId}
         generated={status.generated}
         duenio={status.duenio}
-        showDoc={showDoc}
+        showDoc={showDoc && visible}
         onToggleDoc={() => setShowDoc((v) => !v)}
         canEdit={canEdit}
       />
@@ -733,7 +805,7 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
         </div>
       )}
 
-      {generated && showDoc && status.canvasId && (
+      {generated && showDoc && visible && status.canvasId && (
         <div className="border-t border-line px-4 py-4">
           <CanvasLinearView projectId={projectId} canvasId={status.canvasId} canEdit={canEdit} destacarKey={HANDOFF_SECCION_PRINCIPAL} />
         </div>

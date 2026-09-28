@@ -52,16 +52,19 @@ export interface RunUrlInput {
  *  · el handoff vive en el Resumen (no es un documento del desplegable): su enlace va SIN canvas;
  *    con el id de su canvas, el panel no lo encontraba y abría el Cronograma, sin handoff a la vista;
  *  · el cronograma no escribe bloques, así que su corrida no trae canvas: va por el slug `timeline`
- *    (el panel acepta slug), o el aviso de «Listo» dejaba a la persona en el widget.
+ *    (el panel acepta slug), o el aviso de «Listo» dejaba a la persona en el widget. Se reconoce por
+ *    el grupo del agente o, si la corrida no tiene agente (el paso de estructura, `agentId` null),
+ *    por su `agentSlug` (`agent-timeline-*`).
  */
 export function canvasDelResultado(r: {
   canvasId: string | null;
   canvasSlug: string | null;
   agentGroup: string | null;
+  agentSlug?: string | null;
 }): string | null {
   if (r.canvasSlug === "handoff") return null;
   if (r.canvasId) return r.canvasId;
-  if (r.agentGroup === "cronograma") return "timeline";
+  if (r.agentGroup === "cronograma" || (r.agentSlug ?? "").startsWith("agent-timeline")) return "timeline";
   return null;
 }
 

@@ -13,7 +13,7 @@ import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
-import type { AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
+import { leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import {
   SENTINEL_SERVICE_TYPE,
   hechosDeProyecto,
@@ -433,19 +433,41 @@ function ProjectSection({
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
-  /* EL AVISO DE PROPUESTA DEL RAIL ES UN DATO DEL SERVIDOR (2026-09-28). `timelineProposalPending`
-     llega con la página y nada lo renovaba: al aplicar o descartar la propuesta seguía diciendo que
-     había una, y al regenerar el handoff no aparecía. La copia del widget, que sí escuchaba estas
-     señales, se fue con 14b8c920. Cuando el cronograma o el handoff avisan que algo cambió, se
-     refresca la página del servidor (una vez, con una espera corta para juntar avisos seguidos). */
+  /* EL AVISO DE PROPUESTA DEL RAIL, VIVO (2026-09-28). `timelineProposalPending` llega con la página y
+     nada lo renovaba: al aplicar o descartar la propuesta seguía diciendo que había una, y al regenerar
+     el handoff no aparecía. La copia del widget, que sí escuchaba estas señales, se fue con 14b8c920.
+     Cuando el cronograma o el handoff avisan que algo cambió, se relee SOLO eso
+     (GET /api/projects/[id]/timeline/proposal), con una espera corta para juntar avisos seguidos. No
+     `router.refresh()`: recarga la página entera, que además consulta HubSpot, por cada aviso. */
+  const [propuestaViva, setPropuestaViva] = useState<
+    Record<string, { pending: boolean; autoria: AutoriaDeLaPropuesta | null }>
+  >({});
   const senalesVistas = useRef({ gps: gpsRefreshSignal, timeline: timelineRefreshSignal });
   useEffect(() => {
     const vistas = senalesVistas.current;
     if (vistas.gps === gpsRefreshSignal && vistas.timeline === timelineRefreshSignal) return;
     senalesVistas.current = { gps: gpsRefreshSignal, timeline: timelineRefreshSignal };
-    const t = setTimeout(() => router.refresh(), 600);
-    return () => clearTimeout(t);
-  }, [gpsRefreshSignal, timelineRefreshSignal, router]);
+    const id = activeProjectId;
+    if (!id || id === STRATEGY_TAB_ID || id === PROCESOS_TAB_ID) return;
+    let vivo = true;
+    const t = setTimeout(() => {
+      fetch(`/api/projects/${encodeURIComponent(id)}/timeline/proposal`)
+        .then((r) => (r.ok ? (r.json() as Promise<{ pending?: boolean; autoria?: unknown }>) : null))
+        .then((j) => {
+          // La autoría del cable se VALIDA (leerAutoria), igual que la del GPS y la del cronograma.
+          if (vivo && j) setPropuestaViva((p) => ({ ...p, [id]: { pending: !!j.pending, autoria: leerAutoria(j.autoria) } }));
+        })
+        .catch(() => {});
+    }, 600);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+  }, [gpsRefreshSignal, timelineRefreshSignal, activeProjectId]);
+  // Datos nuevos del servidor (el sync de HubSpot hace router.refresh): mandan sobre lo releído.
+  useEffect(() => {
+    setPropuestaViva({});
+  }, [projects]);
 
   // Persistencia del tab activo en la URL (?tab=) — el canvas ya usa ?canvas=. Así
   // al recargar se restaura el proyecto y su canvas. selectTab escribe ?tab y, si
@@ -479,6 +501,22 @@ function ProjectSection({
     if (valid && tab !== activeProjectId) setActiveProjectId(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* LA PESTAÑA SIGUE A `?tab=` DESPUÉS DE MONTAR (2026-09-28). El «Ver» de una corrida de otro
+     proyecto del mismo cliente (centro de corridas, aviso de «Listo») navega a `?tab=P2&canvas=…`
+     sin recargar: la pestaña se quedaba en P1 y su panel aplicaba el documento de P2. Solo cambia
+     con un id válido y distinto; `selectTab` escribe la URL después de fijar la pestaña, así que
+     cuando la URL llega ya coincide y esto no hace nada. */
+  const tabDeLaUrl = searchParams.get("tab");
+  useEffect(() => {
+    if (!tabRestoredRef.current || !tabDeLaUrl || tabDeLaUrl === activeProjectId) return;
+    const valida =
+      tabDeLaUrl === STRATEGY_TAB_ID || tabDeLaUrl === PROCESOS_TAB_ID || projects.some((p) => p.id === tabDeLaUrl);
+    if (valida) setActiveProjectId(tabDeLaUrl);
+    // Solo cuando cambia la URL: si dependiera de `activeProjectId`, un clic en una pestaña (que
+    // fija la pestaña ANTES de escribir la URL) volvería a la anterior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabDeLaUrl]);
 
   const isStrategy = activeProjectId === STRATEGY_TAB_ID;
   const isProcesos = activeProjectId === PROCESOS_TAB_ID;
@@ -608,8 +646,8 @@ function ProjectSection({
           variante="compacto"
           projectId={activeProject.id}
           clientId={clientId}
-          pending={activeProject.timelineProposalPending ?? false}
-          autoria={activeProject.timelineProposalAutoria ?? null}
+          pending={propuestaViva[activeProject.id]?.pending ?? activeProject.timelineProposalPending ?? false}
+          autoria={propuestaViva[activeProject.id] ? propuestaViva[activeProject.id].autoria : (activeProject.timelineProposalAutoria ?? null)}
         />
       )}
 

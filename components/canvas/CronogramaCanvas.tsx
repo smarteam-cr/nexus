@@ -333,6 +333,9 @@ export default function CronogramaCanvas({
   /* Con `&canvas=timeline`: la URL sin `canvas` es el Resumen desde 14b8c920, así que el aviso de
      «Listo: cronograma» dejaba a la persona en el widget y no en el Gantt. */
   const cronogramaUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}&canvas=timeline`;
+  /* El Resumen del proyecto, donde vive el handoff: el «Ir al Handoff» del cronograma vacío. Con
+     `cronogramaUrl` (que ahora lleva `&canvas=timeline`) el botón volvía al mismo cronograma vacío. */
+  const resumenUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
 
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
@@ -4291,7 +4294,7 @@ export default function CronogramaCanvas({
             Genera el <span className="font-medium text-gray-300">Handoff</span> para ver el cronograma inicial — las fases salen de ahí.
           </p>
           <a
-            href={cronogramaUrl}
+            href={resumenUrl}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand text-primary-fg text-sm font-medium hover:opacity-90 transition-opacity"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

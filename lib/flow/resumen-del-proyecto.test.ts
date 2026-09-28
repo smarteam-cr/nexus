@@ -33,6 +33,8 @@ const WORKSPACE = leer("app/(shell)/clients/[id]/WorkspaceClient.tsx");
 const HANDOFF_UI = leer("components/clients/ProjectHandoffSection.tsx");
 const HANDOFF_GET = leer("app/api/projects/[projectId]/handoff/route.ts");
 const CORRIDAS = leer("app/api/agent-runs/route.ts");
+const PROPUESTA = leer("app/api/projects/[projectId]/timeline/proposal/route.ts");
+const FICHA_UI = leer("components/clients/FichaDelCliente.tsx");
 
 describe("el Resumen es la vista por defecto del proyecto", () => {
   it("se define por la AUSENCIA del parámetro, no por un estado suelto", () => {
@@ -40,7 +42,7 @@ describe("el Resumen es la vista por defecto del proyecto", () => {
        pegó. Con un `useState(true)` a secas, recargar en un documento te devolvía al resumen. */
     /* 2026-09-28: sale de la URL a través de `vistaDeLaUrl`, que además manda al Resumen un
        `?canvas=` que no es de este proyecto. Sigue sin ser un estado suelto. */
-    expect(PANEL).toContain("vistaDeLaUrl(seeded ?? [], canvasFromUrl, seeded !== null)");
+    expect(PANEL).toContain("vistaDeLaUrl(seeded ?? [], urlDeOtroProyecto ? null : canvasFromUrl, seeded !== null)");
     expect(PANEL, "volvió un estado suelto para el Resumen").not.toMatch(/setEnResumen\] = useState\((true|false)\)/);
   });
 
@@ -166,10 +168,10 @@ describe("la pantalla sigue a la URL", () => {
   });
   it("el panel la usa al montar Y cada vez que cambia la URL", () => {
     const codigo = sinComentarios(PANEL);
-    expect(codigo).toContain('vistaDeLaUrl(seeded ?? [], canvasFromUrl, seeded !== null).tipo === "resumen"');
+    expect(codigo).toContain('vistaDeLaUrl(seeded ?? [], urlDeOtroProyecto ? null : canvasFromUrl, seeded !== null).tipo === "resumen"');
     const i = codigo.indexOf("const vista = vistaDeLaUrl(canvasesRef.current, canvasFromUrl, listLoaded);");
     expect(i, "el panel dejó de seguir a la URL después de montar").toBeGreaterThan(-1);
-    expect(codigo.slice(i, i + 500)).toContain("}, [canvasFromUrl, listLoaded, cronogramaOcupado]);");
+    expect(codigo.slice(i, i + 500)).toContain("}, [canvasFromUrl, listLoaded, cronogramaOcupado, urlDeOtroProyecto]);");
   });
 });
 
@@ -202,13 +204,19 @@ describe("«Ir a la etapa» cambia al Resumen antes de hacer scroll", () => {
 describe("el aviso de propuesta del rail se entera de los cambios", () => {
   /* Era un dato del servidor que nada renovaba: al aplicar o descartar seguía encendido y al
      regenerar el handoff no aparecía. La edición que la pone en rojo: sacar el refresh. */
-  it("refresca la página cuando el cronograma o el handoff avisan", () => {
+  it("relee la propuesta cuando el cronograma o el handoff avisan (sin recargar la página)", () => {
+    /* Revisión de 3897d105: `router.refresh()` recargaba la página entera —que consulta HubSpot— por
+       cada aviso. Se relee solo la propuesta. La edición que la pone en rojo: sacar el fetch, o que el
+       aviso deje de leer `propuestaViva`. */
     const codigo = sinComentarios(WORKSPACE);
     const i = codigo.indexOf("const senalesVistas = useRef(");
-    expect(i, "se fue el refresco del aviso del rail").toBeGreaterThan(-1);
-    const tramo = codigo.slice(i, i + 600);
-    expect(tramo).toContain("router.refresh()");
-    expect(tramo).toContain("[gpsRefreshSignal, timelineRefreshSignal, router]");
+    expect(i, "se fue la relectura del aviso del rail").toBeGreaterThan(-1);
+    const tramo = codigo.slice(i, i + 1200);
+    expect(tramo).toContain("/timeline/proposal`)");
+    expect(tramo).not.toContain("router.refresh()");
+    expect(codigo).toContain("pending={propuestaViva[activeProject.id]?.pending ?? activeProject.timelineProposalPending ?? false}");
+    expect(sinComentarios(PROPUESTA)).toContain("export async function GET(");
+    expect(sinComentarios(PROPUESTA)).toContain("guardAccessToProject(projectId)");
   });
 });
 
@@ -222,6 +230,63 @@ describe("el handoff retoma la corrida que sigue en curso", () => {
     expect(get).toContain("!estaColgada(lastRun)");
     const ui = sinComentarios(HANDOFF_UI);
     expect(ui).toContain("const runIdEnCurso = status?.corridaEnCurso?.runId ?? null;");
-    expect(ui).toContain("await track(runIdEnCurso);");
+    /* Revisión de 3897d105: con `track`, la corrida quedaba «anunciada» y el centro de corridas se
+       callaba el «Listo / Falló». La edición que la pone en rojo: volver a `track(runIdEnCurso)`. */
+    expect(ui).toContain("seguimiento = pollAgentRun(clientId, runIdEnCurso);");
+    expect(ui).not.toContain("track(runIdEnCurso)");
+    // Un solo seguimiento por corrida en la pestaña, y el lanzamiento se registra ahí también.
+    expect(ui).toContain("SEGUIMIENTOS_DEL_HANDOFF.get(runIdEnCurso)");
+    expect(ui).toContain("SEGUIMIENTOS_DEL_HANDOFF.set(data.runId, seguimiento);");
+  });
+
+  it("antes de lanzar, si ya hay una corrida viva la sigue en vez de pagar otra", () => {
+    /* Dos pestañas abiertas: la que cargó antes seguía ofreciendo «Regenerar». La edición que la pone
+       en rojo: sacar la consulta previa de handleGenerate. */
+    const ui = sinComentarios(HANDOFF_UI);
+    const i = ui.indexOf("const handleGenerate = useCallback(");
+    const j = ui.indexOf("/api/clients/${clientId}/analyze", i);
+    const antesDeLanzar = ui.slice(i, j);
+    expect(antesDeLanzar.length, "la guarda no está mirando handleGenerate").toBeGreaterThan(300);
+    expect(antesDeLanzar).toContain("if (fresco?.corridaEnCurso?.runId) {");
+  });
+});
+
+describe("revisión de 3897d105", () => {
+  /* Hallazgos de la revisión adversarial del commit (dos verificadores por hallazgo). */
+  it("el documento del handoff se desmonta cuando el Resumen no se ve (Ctrl+Z no deshace a ciegas)", () => {
+    /* Montado y oculto, sus entradas de deshacer seguían en la pila: un Ctrl+Z en el Cronograma
+       revertía, sin que se viera, un bloque del handoff. La edición que la pone en rojo: sacar
+       `visible` de la condición, o no pasarlo desde el panel. */
+    expect(sinComentarios(HANDOFF_UI)).toContain("{generated && showDoc && visible && status.canvasId && (");
+    expect(sinComentarios(PANEL)).toContain("<ProjectHandoffSection projectId={projectId} clientId={clientId} visible={enResumen} />");
+  });
+
+  it("un `?canvas=` de OTRO proyecto no se aplica al abierto, y la pestaña sigue a `?tab=`", () => {
+    /* El «Ver» de una corrida de otro proyecto del mismo cliente mostraba el documento de ese
+       proyecto en la pestaña equivocada. La edición que la pone en rojo: sacar `urlDeOtroProyecto`
+       del efecto, o el efecto de la pestaña en WorkspaceClient. */
+    const panel = sinComentarios(PANEL);
+    expect(panel).toContain("if (cronogramaOcupado || urlDeOtroProyecto) return;");
+    expect(panel).toContain("vistaDeLaUrl(seeded ?? [], urlDeOtroProyecto ? null : canvasFromUrl, seeded !== null)");
+    const ws = sinComentarios(WORKSPACE);
+    const i = ws.indexOf('const tabDeLaUrl = searchParams.get("tab");');
+    expect(i, "la pestaña dejó de seguir a ?tab=").toBeGreaterThan(-1);
+    expect(ws.slice(i, i + 700)).toContain("if (valida) setActiveProjectId(tabDeLaUrl);");
+  });
+
+  it("«Ir al Handoff» del cronograma vacío va al Resumen, no al mismo cronograma", () => {
+    expect(CRONOGRAMA).toContain("href={resumenUrl}");
+    expect(CRONOGRAMA).not.toContain("href={cronogramaUrl}");
+  });
+
+  it("la corrida del paso de estructura (sin agente) también lleva al Gantt", () => {
+    expect(canvasDelResultado({ canvasId: null, canvasSlug: null, agentGroup: null, agentSlug: "agent-timeline-structure" })).toBe("timeline");
+    expect(sinComentarios(CORRIDAS)).toContain("agentSlug: r.agentSlug,");
+  });
+
+  it("cada «Descartar» de la ficha manda todos los descartes (dos pedidos cruzados no pierden uno)", () => {
+    const ui = sinComentarios(FICHA_UI);
+    expect(ui).toContain("body: JSON.stringify({ descartarCampos: todos }),");
+    expect(ui).toContain("setFicha((f) => (f ? { ...f, propuesta } : j.ficha));");
   });
 });
