@@ -59,8 +59,15 @@ export const DEL_SISTEMA_SE_CREA = "(lo decide el sistema: faltaba el kickoff)";
 export const DEL_SISTEMA_DESDE_HOY = "(lo decide el sistema: está atrasada y se reprograma desde hoy)";
 export const pendientesQueSeCorren = (n: number, numero: number) =>
   `${plural(n, "pendiente se corre", "pendientes se corren")} con el cambio ${numero} (desde hoy)`;
+/**
+ * M5 (2026-09-27, D9): la que el sistema pasa a la semana de hoy («traer-a-hoy», apagada) lo dice, para que el chat no la
+ * explique como una idea de la IA. Se edita como cualquier cambio: el chat la vuelve suya (operar-sobre-el-borrador.ts).
+ */
+export const DEL_SISTEMA_TRAIDA = "(lo decide el sistema: quedó sin hacer y pasa a esta semana)";
 const delSistema = (t: Pick<ItemDeTarea, "delSistema" | "signo">): string =>
-  t.delSistema ? ` ${t.signo === "+" ? DEL_SISTEMA_SE_CREA : DEL_SISTEMA_SE_QUITA}` : "";
+  !t.delSistema
+    ? ""
+    : ` ${t.delSistema.tipo === "traida" ? DEL_SISTEMA_TRAIDA : t.signo === "+" ? DEL_SISTEMA_SE_CREA : DEL_SISTEMA_SE_QUITA}`;
 
 /** Los estados como los nombra la pantalla. Se omite «pendiente»: es el caso mayoritario. */
 function estadoCorto(status: string): string {

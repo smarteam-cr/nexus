@@ -3574,7 +3574,7 @@ fabricarla.
   | La fase | Regla | Qué hace la propuesta |
   |---|---|---|
   | Semana 0 (solo si el pipeline la tiene) | (a) avisar | nada; nombra lo que quedó sin hacer |
-  | En curso (su ventana incluye hoy) | (a) avisar | nada con lo vencido |
+  | En curso (su ventana incluye hoy) | (a) avisar | nada con lo vencido (M5: `traer-a-hoy`, apagada) |
   | Casi terminada (≤ 2 abiertas y ≥ 70 % hecha) con la ventana cerrada | (a) avisar | nada; nombra lo que falta |
   | Ventana cerrada y sigue abierta | (b) reprogramar desde hoy | una casilla por fase |
   | Hecha o suspendida | — | nada |
@@ -3618,5 +3618,12 @@ fabricarla.
 
 - **`casiTerminada`** (`maxAbiertas: 2`, `minHecho: 0.7`) se cambia igual: una fase con esas abiertas o
   menos y esa parte hecha o más no se estira, se avisa.
-- **`pendientesDelPasado`** hoy solo tiene «avisar»; «traer a hoy» (pasar lo vencido de una fase en curso a
-  esta semana, con casilla) llega con M5.
+- **`pendientesDelPasado`** (M5): `avisar` (**el de hoy**, la decisión (a) de Elías) o `traer-a-hoy`,
+  hecha y apagada. Con `traer-a-hoy`, en una fase en curso cada pendiente de una semana que ya pasó pasa
+  a esta semana, con su casilla («Pasar a Semana N», «viene de la Semana M») y el porqué «Lo decide el
+  sistema». La Semana 0 sigue avisando siempre. La línea 5 lo suma: «⚠ Quedaron sin hacer 4 tareas de
+  semanas que ya pasaron, en «Semana 0»: la propuesta no las mueve; 3 más pasan a esta semana.» En
+  Wherex (S18) no cambia nada: lo único vencido fuera de las fases atrasadas es de la Semana 0.
+- **Los nombres de las opciones se escriben solo en `politica-de-atrasos.ts`**; el resto pregunta con sus
+  predicados (`esperaAlPlan`, `traeLoPendienteAHoy`…). Lo cuida `lib/timeline/politica-de-atrasos.test.ts`.
+  Una versión de antes de M5 lee una propuesta calculada con `traer-a-hoy` como si no tuviera reloj.

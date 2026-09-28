@@ -38,6 +38,7 @@ import {
   esCambioDeTarea,
   esDesdeHoy,
   esMudanzaSugerida,
+  esTraidaAHoy,
   estructuraHipotetica,
   ordenCompletoDeLaPropuesta,
   type Borrador,
@@ -62,8 +63,16 @@ import {
 } from "./borrador";
 import { esFaseDeCierre } from "./hitos";
 import { unirFrases } from "./magnitud-propuesta";
-// M4 P4e (D11): solo el TIPO. Los textos se eligen por `borrador.hoy.politica`, nunca por la constante del interruptor.
-import type { PoliticaDeFasesVencidas } from "./politica-de-atrasos";
+/* M4 P4e (D11): los textos se eligen por `borrador.hoy.politica`, nunca por la constante del interruptor. M5 (2026-09-27):
+   las tablas por opción se arman con `porCadaFasesVencidas` / `porCadaPendientesDelPasado` (los nombres de las opciones
+   se escriben solo en politica-de-atrasos.ts). */
+import {
+  fasesVencidasDeLosTextos,
+  porCadaFasesVencidas,
+  porCadaPendientesDelPasado,
+  type PoliticaDeFasesVencidas,
+  type PoliticaDePendientesDelPasado,
+} from "./politica-de-atrasos";
 import { describeChange } from "./proposal-deltas";
 import { filasDeDetalle } from "./sugerencia-detalle";
 import {
@@ -434,15 +443,15 @@ const TEXTOS_DEL_ORDEN_DEL_PLAN: TextosDeLoDeHoy = {
   cierreAntesDelTrabajo: null,
   noSeCorren: (n) => (n === 1 ? "1 tarea no se corre: la cambiaron a mano." : `${n} tareas no se corren: las cambiaron a mano.`),
 };
-export const TEXTOS_DE_LO_DE_HOY: Record<PoliticaDeFasesVencidas, TextosDeLoDeHoy> = {
-  "en-el-orden-del-plan": TEXTOS_DEL_ORDEN_DEL_PLAN,
+export const TEXTOS_DE_LO_DE_HOY: Record<PoliticaDeFasesVencidas, TextosDeLoDeHoy> = porCadaFasesVencidas({
+  enElOrdenDelPlan: TEXTOS_DEL_ORDEN_DEL_PLAN,
   // D5: todo arranca hoy, y una fase de cierre quedaría antes del trabajo que la precedía (su casilla nace desmarcada).
-  "todo-desde-hoy": {
+  todoDesdeHoy: {
     ...TEXTOS_DEL_ORDEN_DEL_PLAN,
     cierreAntesDelTrabajo: "Queda antes de que termine el trabajo que la precedía: márcala solo si el cierre va en paralelo.",
   },
   avisar: TEXTOS_DEL_ORDEN_DEL_PLAN,
-};
+});
 
 /**
  * ⭐ M4 P4e: QUÉ ES y POR QUÉ cada cambio del sistema (`desdeHoy`), por clave. Puro. Los números salen de los cambios, del
@@ -464,7 +473,7 @@ export function lecturaDelSistema(
   const out = new Map<string, LecturaDelSistema>();
   const delSistema = borrador.cambios.filter((c): c is CambioFaseCambia => c.tipo === "fase-cambia" && !!c.desdeHoy);
   if (delSistema.length === 0) return out;
-  const textos = TEXTOS_DE_LO_DE_HOY[borrador.hoy?.politica.fasesVencidas ?? "en-el-orden-del-plan"];
+  const textos = TEXTOS_DE_LO_DE_HOY[fasesVencidasDeLosTextos(borrador.hoy?.politica)];
   const H = borrador.hoy?.semana ?? null;
   const viva = new Map(vivo.fases.map((f) => [f.id, f]));
   const nombre = (id: string, respaldo: string) => viva.get(id)?.name ?? respaldo;
@@ -529,20 +538,35 @@ export function lecturaDelSistema(
  * M4 P4e (§5.1): si la propuesta se reprogramó en otra semana, el aviso para volver a generarla. No se recalcula sola:
  * cambiar duraciones obliga a rehacer tareas con IA, que se paga. `semanaActual`: `semanaDeHoy(vivo.ancla, hoy)`. null
  * si no hay reloj, no hay nada del sistema, o es la misma semana (o una anterior). El texto, por `hoy.politica` (D11).
+ * M5 (2026-09-27): lo que el sistema pasó a la semana de hoy («traer-a-hoy», `esTraidaAHoy`) también envejece. Si la
+ * propuesta no reprogramó fases (con «avisar» en las fases vencidas) pero trae traídas, el aviso es el de lo pendiente.
  */
-export const TEXTOS_DE_LA_SEMANA_QUE_CAMBIO: Record<PoliticaDeFasesVencidas, ((desde: number, hoy: number) => string) | null> = {
-  "en-el-orden-del-plan": (desde, hoy) =>
-    `⚠ Se reprogramó desde la ${semanaDelProyecto(desde)} y hoy es la ${semanaDelProyecto(hoy)}: vuelve a generarla para que lo atrasado arranque esta semana.`,
-  "todo-desde-hoy": (desde, hoy) =>
-    `⚠ Se reprogramó desde la ${semanaDelProyecto(desde)} y hoy es la ${semanaDelProyecto(hoy)}: vuelve a generarla para que lo atrasado arranque esta semana.`,
-  // Con «avisar» no se reprograma nada: no hay qué volver a generar.
+const reprogramadaEnOtraSemana = (desde: number, hoy: number) =>
+  `⚠ Se reprogramó desde la ${semanaDelProyecto(desde)} y hoy es la ${semanaDelProyecto(hoy)}: vuelve a generarla para que lo atrasado arranque esta semana.`;
+export const TEXTOS_DE_LA_SEMANA_QUE_CAMBIO: Record<PoliticaDeFasesVencidas, ((desde: number, hoy: number) => string) | null> =
+  porCadaFasesVencidas<((desde: number, hoy: number) => string) | null>({
+    enElOrdenDelPlan: reprogramadaEnOtraSemana,
+    todoDesdeHoy: reprogramadaEnOtraSemana,
+    // Con «avisar» no se reprograma ninguna fase: no hay qué volver a generar por ellas.
+    avisar: null,
+  });
+/** M5: el aviso de lo pendiente que se pasó a la semana de hoy («traer-a-hoy»); con «avisar» no se pasa nada. */
+export const TEXTOS_DE_LA_SEMANA_QUE_CAMBIO_DE_LO_PENDIENTE: Record<
+  PoliticaDePendientesDelPasado,
+  ((desde: number, hoy: number) => string) | null
+> = porCadaPendientesDelPasado<((desde: number, hoy: number) => string) | null>({
   avisar: null,
-};
+  traerAHoy: (desde, hoy) =>
+    `⚠ Lo pendiente se pasó a la ${semanaDelProyecto(desde)} y hoy es la ${semanaDelProyecto(hoy)}: vuelve a generarla para que pase a esta semana.`,
+});
 export function textoDeLaSemanaQueCambio(guardada: Pick<Borrador, "hoy" | "cambios">, semanaActual: number | null): string | null {
   const reloj = guardada.hoy;
   if (!reloj || semanaActual === null || semanaActual <= reloj.semana) return null;
-  if (!guardada.cambios.some(esDesdeHoy)) return null;
-  const texto = TEXTOS_DE_LA_SEMANA_QUE_CAMBIO[reloj.politica.fasesVencidas];
+  const deFases = guardada.cambios.some((c) => esDesdeHoy(c) && !esTraidaAHoy(c));
+  const traidas = guardada.cambios.some(esTraidaAHoy);
+  const texto =
+    (deFases ? TEXTOS_DE_LA_SEMANA_QUE_CAMBIO[reloj.politica.fasesVencidas] : null) ??
+    (traidas ? TEXTOS_DE_LA_SEMANA_QUE_CAMBIO_DE_LO_PENDIENTE[reloj.politica.pendientesDelPasado] : null);
   return texto ? texto(reloj.semana, semanaActual) : null;
 }
 

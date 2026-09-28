@@ -25,7 +25,8 @@
  *  6. Lo que reprogramó el sistema es lo que calcula el código: las casillas `desdeHoy`, el pin y las arrastradas de la
  *     propuesta, contra `reprogramarDesdeHoy` sobre el cronograma de hoy, el borrador sin la reprogramación ni las tareas
  *     del paso 2, el instante y la política del reloj. Wherex en la S18: 8 casillas, 1 pin y 25 arrastradas. Si la
- *     fusión perdiera una arrastrada, o la reprogramación no hubiera corrido, no pasa.
+ *     fusión perdiera una arrastrada, o la reprogramación no hubiera corrido, no pasa. M5 (2026-09-27): con «traer-a-hoy»
+ *     también las traídas a hoy (`esTraidaAHoy`), una por una.
  *  7. La línea 5 dice solo lo que quedó sin hacer donde la regla no reprograma: con la propuesta entera, ninguna tarea
  *     nueva o movida cae en el pasado, y, con lo marcado por defecto, ninguna de las que nombra es una abierta movible de
  *     una fase que el sistema reprogramó con su casilla marcada. Wherex: «Quedaron sin hacer 4 tareas…, en «Semana 0»».
@@ -40,6 +41,7 @@ import {
   esArrastrada,
   esMudanzaSugerida,
   esPin,
+  esTraidaAHoy,
   estructuraHipotetica,
   leerBorrador,
   ordenCompletoDeLaPropuesta,
@@ -343,22 +345,29 @@ export function medirM3yM4(i: { vivo: Vivo; guardado: Record<string, unknown>; b
     ? reprogramarDesdeHoy({ vivo, borrador: alMarcar, hoy: instante, politica: reloj.politica, conSemanaCero: i.conSemanaCero })
     : null;
   const deFase = (c: CambioFaseCambia) => `${c.fase} ${c.campo === "startWeek" ? "arranca en" : "dura"} ${String(c.a)}`;
-  const delSistema = (cambios: readonly CambioFaseCambia[], tareas: ReadonlyArray<{ tareaId: string; a: { weekIndex?: number } }>) => ({
+  type TareaMovida = { tareaId: string; a: { weekIndex?: number } };
+  const aLaSemana = (t: TareaMovida) => `${titulo(t.tareaId)} a la semana ${String(t.a.weekIndex)}`;
+  const delSistema = (cambios: readonly CambioFaseCambia[], tareas: readonly TareaMovida[], traidas: readonly TareaMovida[]) => ({
     casillas: cambios.filter((c) => !c.fijaInicio).map(deFase),
     pins: cambios.filter((c) => !!c.fijaInicio).map(deFase),
-    arrastradas: tareas.map((t) => `${titulo(t.tareaId)} a la semana ${String(t.a.weekIndex)}`),
+    arrastradas: tareas.map(aLaSemana),
+    // M5: las traídas a hoy («traer-a-hoy»), con su semana nueva.
+    traidas: traidas.map(aLaSemana),
   });
   const visto = delSistema(
     b.cambios.filter((c): c is CambioFaseCambia => c.tipo === "fase-cambia" && !!c.desdeHoy),
     b.cambios.filter(esArrastrada),
+    b.cambios.filter(esTraidaAHoy),
   );
-  const calculado = delSistema(esperado?.cambios ?? [], esperado?.tareas ?? []);
-  const diferencias = (["casillas", "pins", "arrastradas"] as const).flatMap((k) => {
+  const calculado = delSistema(esperado?.cambios ?? [], esperado?.tareas ?? [], esperado?.traidas ?? []);
+  const diferencias = (["casillas", "pins", "arrastradas", "traidas"] as const).flatMap((k) => {
     const faltan = calculado[k].filter((x) => !visto[k].includes(x));
     const sobran = visto[k].filter((x) => !calculado[k].includes(x));
     return [...(faltan.length > 0 ? [`faltan ${algunos(faltan, 3)}`] : []), ...(sobran.length > 0 ? [`sobran ${algunos(sobran, 3)}`] : [])];
   });
-  const cuenta = `${plural(visto.casillas.length, "casilla", "casillas")}, ${plural(visto.pins.length, "fase fija", "fases fijas")} y ${plural(visto.arrastradas.length, "tarea que se corre", "tareas que se corren")} con su fase`;
+  const cuenta =
+    `${plural(visto.casillas.length, "casilla", "casillas")}, ${plural(visto.pins.length, "fase fija", "fases fijas")} y ${plural(visto.arrastradas.length, "tarea que se corre", "tareas que se corren")} con su fase` +
+    (visto.traidas.length > 0 ? `; ${plural(visto.traidas.length, "pendiente pasa", "pendientes pasan")} a esta semana` : "");
   const seis: CondicionMedida = {
     numero: 6,
     nombre: nombres[1][1],
@@ -402,7 +411,7 @@ export function medirM3yM4(i: { vivo: Vivo; guardado: Record<string, unknown>; b
       atrasos: [],
       cierreFijado: null,
       hoy: instante,
-    }).lineas.find((l) => /^⚠ (Quedar?on sin hacer|Quedó sin hacer)|caen? en semanas que ya pasaron/.test(l)) ?? null;
+    }).lineas.find((l) => /^⚠ (Quedar?on sin hacer|Quedó sin hacer)|caen? en semanas que ya pasaron|pasan? a esta semana\.$/.test(l)) ?? null;
   const siete: CondicionMedida = {
     numero: 7,
     nombre: nombres[2][1],

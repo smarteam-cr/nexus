@@ -31,6 +31,7 @@ import {
   leerBorrador,
   planDeAplicacion,
   resumir,
+  TEXTO_DE_LA_TRAIDA_A_HOY,
   type Borrador,
   type Cambio,
   type CambioTareaNueva,
@@ -46,6 +47,8 @@ import {
   CHIP_FALTABA_EL_KICKOFF,
   CHIP_YA_HAY_KICKOFF,
   chipDelChoque,
+  chipPasaALaSemana,
+  chipVieneDeLaSemana,
   cierreParaElGantt,
   cuentaDelGrupo,
   etiquetaCortaDelCambio,
@@ -64,6 +67,7 @@ import {
   tituloDeLaFuga,
   tituloDeLaRepetida,
   unidadesDelSiguiente,
+  verboPasarA,
   vistaDeLaPropuesta,
   vistaEnLasFilas,
   type MarcaDeTarea,
@@ -973,5 +977,48 @@ describe("M4 P4e · lo que reprogramó el sistema, en la vista", () => {
       hoy: { ...REPROGRAMADO.hoy!, politica: { ...REPROGRAMADO.hoy!.politica, fasesVencidas: "avisar" as const } },
     };
     expect(textoDeLaSemanaQueCambio(conAvisar, 19), "con «avisar» no se reprograma").toBeNull();
+  });
+});
+
+/**
+ * M5 (2026-09-27, spec del replanteo §6.1): «TRAER A HOY» en la vista (implementada y apagada: lo vigente es «avisar»).
+ * Cada traída tiene su casilla, con «Pasar a Semana N» y «viene de la Semana M» de siempre, y dice que lo decide el
+ * sistema (D9): su `title` y la línea del sistema de su fase, nunca «Según la IA». El fixture en la S5: las 8 pendientes
+ * de S2 y S3 de «Fase A» pasan a su semana 3.
+ */
+describe("M5 · las traídas a hoy en la vista", () => {
+  const EN_LA_S5 = new Date("2026-06-24T12:00:00-06:00");
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+  const R5 = reprogramarDesdeHoy({
+    vivo: VIVO,
+    borrador: leerBorrador(vacio())!,
+    hoy: EN_LA_S5,
+    politica: { ...POLITICA_DE_ATRASOS, fasesVencidas: "avisar", pendientesDelPasado: "traer-a-hoy" },
+    conSemanaCero: true,
+  })!;
+  const TRAIDO = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), R5))))!;
+
+  it("⭐ cada traída: su casilla en su lugar de hoy («Pasar a Semana 4»), «viene de la Semana 1» en su destino y el porqué del sistema", () => {
+    /* Las ediciones que la ponen en rojo: pintarla como arrastrada (sin casilla), o no marcarla como del sistema (su
+       `title` era el «Hoy: … Con la propuesta: …» de un cambio cualquiera y la fase no decía que lo decide el sistema). */
+    expect(R5.traidas).toHaveLength(8);
+    const r = resumir(VIVO, TRAIDO, [], LISTAS);
+    const v = vistaDeLaPropuesta(VIVO, TRAIDO, r, EN_LA_S5);
+    const t = R5.traidas[0];
+    expect([t.tareaId, t.desde.weekIndex, t.a.weekIndex]).toEqual(["t021", 0, 3]);
+    expect(v.marcas.get("t021")).toMatchObject({
+      lugar: "destino",
+      conCasilla: false,
+      chip: chipVieneDeLaSemana(0),
+      verbo: verboPasarA(3),
+      titulo: TEXTO_DE_LA_TRAIDA_A_HOY,
+    });
+    const origen = v.porFase.get("f02")!.semanas[0].find((x) => x.clave === "t021:origen")!;
+    expect(origen.extra!.marca).toMatchObject({ lugar: "origen", conCasilla: true, fantasma: true, chip: chipPasaALaSemana(3), titulo: TEXTO_DE_LA_TRAIDA_A_HOY });
+    expect(v.porFase.get("f02")!.delSistema, "la fase no dice que lo decide el sistema").toEqual([TEXTO_DE_LA_TRAIDA_A_HOY]);
+    expect(v.porFase.get("f02")!.grupo).toMatchObject({ marcadas: 8, marcables: 8 });
+    // Desmarcada: la viva sigue en su semana de hoy, con su casilla y el mismo porqué.
+    const sinUna = vistaDeLaPropuesta(VIVO, TRAIDO, resumir(VIVO, TRAIDO, [t.clave], LISTAS), EN_LA_S5);
+    expect(sinUna.marcas.get("t021")).toMatchObject({ lugar: "origen", conCasilla: true, fantasma: false, titulo: TEXTO_DE_LA_TRAIDA_A_HOY });
   });
 });

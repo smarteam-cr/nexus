@@ -25,6 +25,12 @@
  *   · `avisoDeLaSemana`: si la semana cambió desde que se reprogramó, el aviso para volver a generarla.
  * Todo por `borrador.hoy.politica`, nunca por el interruptor.
  *
+ * M5 (2026-09-27, spec del replanteo §6.1) · «TRAER A HOY» (implementado y APAGADO: lo vigente es «avisar»): con esa
+ * política, lo pendiente de semanas vencidas de una fase en curso pasa a la semana de hoy, cada una con su casilla
+ * (`esTraidaAHoy`). La línea 5 lo suma: «⚠ Quedaron sin hacer 4 tareas de semanas que ya pasaron, en «Semana 0»: la
+ * propuesta no las mueve; 3 más pasan a esta semana.» Solo las marcadas que quedan en esta semana; desmarcada, una vuelve
+ * a ser «sin hacer». La tabla de «avisar» no las nombra: si el mensaje leyera el interruptor, se notaría.
+ *
  * ⛔ LOS NÚMEROS LOS PONE EL CÓDIGO (spec §0.1): todo sale de `resumir` (`r` con lo marcado; `entera`, la propuesta
  * entera, para el nivel), del vivo y de las referencias del GET. Nunca de contar `borrador.cambios`, y nunca del
  * `motivo` que escribió la IA: el motivo solo decide si hay un chip de su fuente (`fuenteDelMotivo`), y se muestra solo
@@ -34,6 +40,7 @@
  */
 import {
   aplicablesSinSugeridas,
+  esTraidaAHoy,
   ordenCompletoDeLaPropuesta,
   type Borrador,
   type Cambio,
@@ -43,8 +50,16 @@ import {
   type Vivo,
 } from "./borrador";
 import { unirFrases } from "./magnitud-propuesta";
-// M3 (D11): solo el TIPO. Los textos se eligen por `borrador.hoy.politica`, nunca por la constante del interruptor.
-import type { PoliticaDeFasesVencidas, PoliticaDePendientesDelPasado } from "./politica-de-atrasos";
+/* M3 (D11): los textos se eligen por `borrador.hoy.politica`, nunca por la constante del interruptor. M5 (2026-09-27): las
+   tablas por opción se arman con `porCadaFasesVencidas` / `porCadaPendientesDelPasado` (los nombres de las opciones se
+   escriben solo en politica-de-atrasos.ts). */
+import {
+  fasesVencidasDeLosTextos,
+  porCadaFasesVencidas,
+  porCadaPendientesDelPasado,
+  type PoliticaDeFasesVencidas,
+  type PoliticaDePendientesDelPasado,
+} from "./politica-de-atrasos";
 import type { FuentesDeLaPropuesta, PrometidoDeLaPropuesta, ReferenciasDeLaPropuesta } from "./referencias-de-la-propuesta";
 import { lecturaDelSistema, semanaDeHoy, semanaVencida, textoDeLaSemanaQueCambio } from "./vista-de-la-propuesta";
 import { computePhaseRanges, fmtDay, plural, semanaDelProyecto, type ProjectedEnd } from "./weeks";
@@ -134,29 +149,50 @@ export const FUENTE_INSTRUCCIONES = "Instrucciones adicionales";
 /**
  * M3 (2026-09-27): lo que quedó sin hacer en semanas que ya pasaron, por la política de lo pendiente del pasado con que
  * se calculó la propuesta (`borrador.hoy.politica`, D11). «avisar» (decisión (a) de Elías): la propuesta no lo mueve y lo
- * nombra. M5 suma «traer-a-hoy». `donde` ya viene con las fases citadas («en «Semana 0» y «Fase A»»); null = sin
- * nombrarlas (para que la línea entre en 140 caracteres).
+ * nombra. `donde` ya viene con las fases citadas («en «Semana 0» y «Fase A»»); null = sin nombrarlas (para que la línea
+ * entre en 140 caracteres).
+ * M5 (2026-09-27): «traer-a-hoy» suma lo que el sistema pasó a esta semana (`traidas`, las marcadas): «…: la propuesta
+ * no las mueve; 3 más pasan a esta semana.» (sin «(están en «Más»)»: dos «más» seguidos se leían mal). `solas`: sin nada
+ * sin hacer. «avisar» nunca las trae y no las nombra.
  */
-export const TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER: Record<
-  PoliticaDePendientesDelPasado,
-  {
-    /** La línea 5 con una sola tarea. */
-    una: (donde: string | null) => string;
-    /** La línea 5 con varias; `conPuntero`: «(están en «Más»)». */
-    varias: (n: number, donde: string | null, conPuntero: boolean) => string;
-    /** «Más»: qué hacer con ellas. */
-    accionUna: string;
-    accionVarias: string;
-  }
-> = {
-  avisar: {
-    una: (donde) => `⚠ Quedó sin hacer 1 tarea de una semana que ya pasó${donde ? `, ${donde}` : ""}: la propuesta no la mueve.`,
-    varias: (n, donde, conPuntero) =>
-      `⚠ Quedaron sin hacer ${n} tareas de semanas que ya pasaron${donde ? `, ${donde}` : ""}: la propuesta no las mueve${conPuntero ? " (están en «Más»)" : ""}.`,
-    accionUna: "Si ya se hizo, márcala hecha; si falta, muévela a esta semana.",
-    accionVarias: "Si ya se hicieron, márcalas hechas; si faltan, muévelas a esta semana.",
-  },
+interface TextosDeLoQueQuedoSinHacer {
+  /** La línea 5 con una sola tarea sin hacer; `traidas`: las que pasan a esta semana. */
+  una: (donde: string | null, traidas?: number) => string;
+  /** La línea 5 con varias; `conPuntero`: «(están en «Más»)». */
+  varias: (n: number, donde: string | null, conPuntero: boolean, traidas?: number) => string;
+  /** M5: la línea 5 sin nada sin hacer y con traídas; null si la política no trae nada a hoy. */
+  solas: ((traidas: number) => string) | null;
+  /** «Más»: qué hacer con ellas. */
+  accionUna: string;
+  accionVarias: string;
+}
+const LO_QUE_QUEDO_AVISANDO: TextosDeLoQueQuedoSinHacer = {
+  una: (donde) => `⚠ Quedó sin hacer 1 tarea de una semana que ya pasó${donde ? `, ${donde}` : ""}: la propuesta no la mueve.`,
+  varias: (n, donde, conPuntero) =>
+    `⚠ Quedaron sin hacer ${n} tareas de semanas que ya pasaron${donde ? `, ${donde}` : ""}: la propuesta no las mueve${conPuntero ? " (están en «Más»)" : ""}.`,
+  solas: null,
+  accionUna: "Si ya se hizo, márcala hecha; si falta, muévela a esta semana.",
+  accionVarias: "Si ya se hicieron, márcalas hechas; si faltan, muévelas a esta semana.",
 };
+/** M5: «; 3 más pasan a esta semana», o nada. */
+const yMasPasan = (traidas = 0) => (traidas > 0 ? `; ${traidas} más ${traidas === 1 ? "pasa" : "pasan"} a esta semana` : "");
+export const TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER: Record<PoliticaDePendientesDelPasado, TextosDeLoQueQuedoSinHacer> =
+  porCadaPendientesDelPasado<TextosDeLoQueQuedoSinHacer>({
+    avisar: LO_QUE_QUEDO_AVISANDO,
+    traerAHoy: {
+      ...LO_QUE_QUEDO_AVISANDO,
+      una: (donde, traidas) =>
+        `⚠ Quedó sin hacer 1 tarea de una semana que ya pasó${donde ? `, ${donde}` : ""}: la propuesta no la mueve${yMasPasan(traidas)}.`,
+      varias: (n, donde, conPuntero, traidas = 0) =>
+        `⚠ Quedaron sin hacer ${n} tareas de semanas que ya pasaron${donde ? `, ${donde}` : ""}: la propuesta no las mueve${
+          conPuntero && traidas === 0 ? " (están en «Más»)" : ""
+        }${yMasPasan(traidas)}.`,
+      solas: (traidas) =>
+        traidas === 1
+          ? "1 tarea de una semana que ya pasó pasa a esta semana."
+          : `${traidas} tareas de semanas que ya pasaron pasan a esta semana.`,
+    },
+  });
 /** M3: hasta cuántas tareas sin hacer nombra «Más» (con más, las fases y cuántas tiene cada una). */
 export const TOPE_DE_LAS_QUE_SE_NOMBRAN = 5;
 
@@ -181,15 +217,16 @@ const TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN: TextosDeLoDeHoyEnElMensaje = {
   sinNadaMarcadoVarias: (n, fases) =>
     `${n} de las fases que se reprograman no tienen ninguna tarea marcada: ${fases}. Si ya se hicieron, márcalas hechas y desmarca su casilla.`,
 };
-export const TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE: Record<PoliticaDeFasesVencidas, TextosDeLoDeHoyEnElMensaje> = {
-  "en-el-orden-del-plan": TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
-  "todo-desde-hoy": {
-    ...TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
-    una: (fase, corre) => conCorrimiento(`«${fase}» arranca desde hoy`, corre),
-    varias: (n, _solas, corre) => conCorrimiento(`${n} fases atrasadas arrancan desde hoy`, corre),
-  },
-  avisar: TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
-};
+export const TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE: Record<PoliticaDeFasesVencidas, TextosDeLoDeHoyEnElMensaje> =
+  porCadaFasesVencidas<TextosDeLoDeHoyEnElMensaje>({
+    enElOrdenDelPlan: TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
+    todoDesdeHoy: {
+      ...TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
+      una: (fase, corre) => conCorrimiento(`«${fase}» arranca desde hoy`, corre),
+      varias: (n, _solas, corre) => conCorrimiento(`${n} fases atrasadas arrancan desde hoy`, corre),
+    },
+    avisar: TEXTOS_DE_HOY_EN_EL_ORDEN_DEL_PLAN,
+  });
 
 const PARTES_DEL_ATRASO: ReadonlyArray<readonly [string, string]> = [
   ["CLIENTE", "cliente"],
@@ -367,7 +404,7 @@ function causasDelCierre(i: EntradaDelMensaje): { causas: string[]; cambios: num
       return mueve ? [etiquetaLargaDelCambio(c as CambioDeEstructura, i.vivo)] : [];
     });
   if (deHoy.size === 0) return { causas: otras, cambios: otras.length };
-  const textos = TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE[i.borrador.hoy?.politica.fasesVencidas ?? "en-el-orden-del-plan"];
+  const textos = TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE[fasesVencidasDeLosTextos(i.borrador.hoy?.politica)];
   // Cuánto corre el cierre lo de hoy solo: solo se dice si hay otras causas (si no, es el corrimiento de la línea).
   let corre: string | null = null;
   if (otras.length > 0) {
@@ -526,12 +563,15 @@ export interface SinHacerDeLaFase {
  * `atrasadas` y, además (M3, 2026-09-27), `sinHacerPorFase`: las de la proyección vencidas que NO nacen (ni nuevas ni
  * movidas por la propuesta), por fase y en el orden del Gantt. Suman `despues − nacen`: lo que quedó sin hacer y la
  * propuesta no mueve. Aparte de `atrasadas` para que su forma (y su guarda, que la compara entera) no cambie.
+ * M5 (2026-09-27): `pasanAHoy`, de las `traidas` (los ids de las traídas a hoy, `esTraidaAHoy`), las que la proyección
+ * cambia de lugar y ya no vencen: las marcadas. Una desmarcada queda en su semana vencida y cuenta como sin hacer.
  */
 export function atrasadasConLoQueQuedo(
   vivo: Vivo,
   r: Pick<ResumenDelBorrador, "proyeccion">,
   hoy: Date,
-): { hoy: number; despues: number; nacen: number; sinHacerPorFase: SinHacerDeLaFase[] } {
+  traidas: ReadonlySet<string> = new Set(),
+): { hoy: number; despues: number; nacen: number; sinHacerPorFase: SinHacerDeLaFase[]; pasanAHoy: number } {
   const rangosHoy = computePhaseRanges(vivo.fases);
   const semanaDeHoy = new Map<string, number>();
   let antes = 0;
@@ -545,18 +585,22 @@ export function atrasadasConLoQueQuedo(
   const rangos = computePhaseRanges(p.fases);
   let despues = 0;
   let nacen = 0;
+  let pasanAHoy = 0;
   const sinHacerPorFase: SinHacerDeLaFase[] = [];
   p.fases.forEach((f, k) => {
     const titulos: string[] = [];
     for (const t of f.tareas) {
-      if (!semanaVencida(p.ancla, rangos[k].start, t.weekIndex, hoy, t.status)) continue;
+      if (!semanaVencida(p.ancla, rangos[k].start, t.weekIndex, hoy, t.status)) {
+        if (t.id !== null && t.cambia && traidas.has(t.id)) pasanAHoy++;
+        continue;
+      }
       despues++;
       if (t.id === null || (t.cambia && semanaDeHoy.get(t.id) !== rangos[k].start + t.weekIndex)) nacen++;
       else titulos.push(t.title);
     }
     if (titulos.length > 0) sinHacerPorFase.push({ nombre: f.name, titulos });
   });
-  return { hoy: antes, despues, nacen, sinHacerPorFase };
+  return { hoy: antes, despues, nacen, sinHacerPorFase, pasanAHoy };
 }
 
 /** Línea 5: «⚠ Atrasadas: hoy 59 → con la propuesta 67: 58 tareas nuevas caen en semanas que ya pasaron.» */
@@ -585,13 +629,19 @@ function dondeQuedo(fases: readonly SinHacerDeLaFase[], cuantas: number): string
  */
 function lineaDeLoQueQuedoSinHacer(i: EntradaDelMensaje): string | null {
   if (!i.hoy || !i.borrador.hoy) return null;
-  const a = atrasadasConLoQueQuedo(i.vivo, i.r, i.hoy);
+  const traidas = new Set(i.borrador.cambios.filter(esTraidaAHoy).map((c) => c.tareaId));
+  const a = atrasadasConLoQueQuedo(i.vivo, i.r, i.hoy, traidas);
   const sinHacer = a.despues - a.nacen;
-  if (sinHacer === 0 && a.nacen === 0) return null;
+  const textos = TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER[i.borrador.hoy.politica.pendientesDelPasado];
+  // M5: las traídas a esta semana solo se nombran si la política con que se calculó las trae (la de «avisar» no).
+  const pasan = textos.solas ? a.pasanAHoy : 0;
+  if (sinHacer === 0 && a.nacen === 0 && pasan === 0) return null;
   const que = i.r.tareas.cambian > 0 ? ["tarea nueva o movida cae", "tareas nuevas o movidas caen"] : ["tarea nueva cae", "tareas nuevas caen"];
   const caen = a.nacen > 0 ? `${plural(a.nacen, que[0], que[1])} en semanas que ya pasaron.` : "";
-  if (sinHacer === 0) return `⚠ ${caen}`;
-  const textos = TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER[i.borrador.hoy.politica.pendientesDelPasado];
+  if (sinHacer === 0) {
+    const solas = pasan > 0 && textos.solas ? textos.solas(pasan) : "";
+    return [caen ? `⚠ ${caen}` : "", solas].filter(Boolean).join(" ");
+  }
   // De la más completa a la más corta: 2, 1 o ninguna fase nombrada; sin las fases; sin «(están en «Más»)».
   const formas: Array<{ donde: string | null; conPuntero: boolean }> = [
     ...[2, 1, 0].map((n) => ({ donde: dondeQuedo(a.sinHacerPorFase, Math.min(n, a.sinHacerPorFase.length)), conPuntero: true })),
@@ -599,7 +649,7 @@ function lineaDeLoQueQuedoSinHacer(i: EntradaDelMensaje): string | null {
     { donde: null, conPuntero: false },
   ];
   const variantes = formas.map(({ donde, conPuntero }) => {
-    const base = sinHacer === 1 ? textos.una(donde) : textos.varias(sinHacer, donde, conPuntero);
+    const base = sinHacer === 1 ? textos.una(donde, pasan) : textos.varias(sinHacer, donde, conPuntero, pasan);
     return caen ? `${base} ${caen}` : base;
   });
   return laQueEntra([...new Set(variantes)]);
@@ -650,7 +700,7 @@ function detalleDeLasSinNadaMarcado(i: EntradaDelMensaje): string | null {
   const fases = new Set([...lectura.entries()].filter(([clave, l]) => l.sinNadaMarcado && marcadas.has(clave)).map(([, l]) => l.fase));
   const nombres = i.vivo.fases.filter((f) => fases.has(f.id)).map((f) => cortarNombre(f.name));
   if (nombres.length === 0) return null;
-  const textos = TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE[i.borrador.hoy?.politica.fasesVencidas ?? "en-el-orden-del-plan"];
+  const textos = TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE[fasesVencidasDeLosTextos(i.borrador.hoy?.politica)];
   return nombres.length === 1
     ? textos.sinNadaMarcadoUna(nombres[0])
     : textos.sinNadaMarcadoVarias(nombres.length, unirFrases(nombres.map((n) => `«${n}»`)));

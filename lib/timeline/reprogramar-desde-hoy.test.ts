@@ -17,16 +17,23 @@ import {
   acotarSemana,
   borradorVacio,
   claveDeCampo,
+  claveDeTareaQueCambia,
   leerBorrador,
   planDeAplicacion,
   proyectar,
+  resumir,
   type Borrador,
   type CambioFaseCambia,
   type FaseViva,
   type TareaDelVivo,
   type Vivo,
 } from "./borrador";
-import { POLITICA_DE_ATRASOS, type PoliticaDeAtrasos, type PoliticaDeFasesVencidas } from "./politica-de-atrasos";
+import {
+  POLITICA_DE_ATRASOS,
+  type PoliticaDeAtrasos,
+  type PoliticaDeFasesVencidas,
+  type PoliticaDePendientesDelPasado,
+} from "./politica-de-atrasos";
 import {
   conLaReprogramacion,
   esObservacionDeLaReprogramacion,
@@ -36,6 +43,8 @@ import {
   type ReprogramacionDesdeHoy,
 } from "./reprogramar-desde-hoy";
 import { computePhaseRanges, timelineSpan } from "./weeks";
+import { medirM3yM4 } from "./medicion-de-la-propuesta";
+import { mensajeDeLaPropuesta } from "./mensaje-de-la-propuesta";
 
 const fx: FixtureGrande = leerFixtureGrande();
 const VIVO: Vivo = vivoDelFixture(fx);
@@ -278,12 +287,22 @@ function semanas(vivo: Vivo, guardado: Record<string, unknown>, sin: Iterable<st
  * plan (`planDeAplicacion`, paso 9), así que las combinaciones van tal cual y lo que se prueba es el plan de verdad. Además,
  * el pin viaja SIEMPRE en `sin` (una pantalla que intentara desmarcarlo): sin casilla, no lo toca.
  */
-function comprobarInvariantes(nombre: string, vivo: Vivo, guardado: Record<string, unknown>, hoy: Date, fases: PoliticaDeFasesVencidas, conSemanaCero: boolean) {
+function comprobarInvariantes(
+  nombre: string,
+  vivo: Vivo,
+  guardado: Record<string, unknown>,
+  hoy: Date,
+  fases: PoliticaDeFasesVencidas,
+  conSemanaCero: boolean,
+  // M5 (2026-09-27): la opción de lo pendiente del pasado; con «traer-a-hoy» se mira también (4b).
+  pendientesDelPasado: PoliticaDePendientesDelPasado = "avisar",
+) {
   const b = leer(guardado);
-  const r = reprogramarDesdeHoy({ vivo, borrador: b, hoy, politica: politica(fases), conSemanaCero });
+  const conPolitica = { ...politica(fases), pendientesDelPasado };
+  const r = reprogramarDesdeHoy({ vivo, borrador: b, hoy, politica: conPolitica, conSemanaCero });
   if (!r) throw new Error(`${nombre}: sin semana de hoy`);
   // (6) determinista.
-  expect(reprogramarDesdeHoy({ vivo, borrador: leer(guardado), hoy, politica: politica(fases), conSemanaCero }), `${nombre}: no es determinista`).toEqual(r);
+  expect(reprogramarDesdeHoy({ vivo, borrador: leer(guardado), hoy, politica: conPolitica, conSemanaCero }), `${nombre}: no es determinista`).toEqual(r);
   const con = conLaReprogramacion(guardado, r);
   const H = r.semana;
 
@@ -315,6 +334,20 @@ function comprobarInvariantes(nombre: string, vivo: Vivo, guardado: Record<strin
   const todo = semanas(vivo, con, []);
   // (4) ninguna abierta movible de una fase reprogramada queda vencida.
   for (const t of r.tareas) expect(todo.tarea.get(t.tareaId)!, `${nombre} · ${t.tareaId} quedó vencida`).toBeGreaterThanOrEqual(H);
+  /* (4b) M5: cada traída a hoy queda EN la semana de hoy, es una abierta sin fecha fijada, no es de la Semana 0 ni de una
+     fase hecha o suspendida, y no es a la vez una arrastrada. */
+  const viva = new Map(vivo.fases.flatMap((f) => (f.tareas ?? []).map((t) => [t.id, { t, f }] as const)));
+  const arrastradas = new Set(r.tareas.map((t) => t.tareaId));
+  for (const t of r.traidas) {
+    const v = viva.get(t.tareaId)!;
+    expect(todo.tarea.get(t.tareaId), `${nombre} · ${t.tareaId} traída no quedó en la semana de hoy`).toBe(H);
+    expect(["PENDING", "IN_PROGRESS"], `${nombre} · ${t.tareaId} traída con avance`).toContain(v.t.status);
+    expect(v.t.inicioFijado ?? v.t.finFijado, `${nombre} · ${t.tareaId} traída con fecha fijada`).toBeNull();
+    expect(t.faseId === cero || v.f.status === "DONE" || v.f.status === "SUSPENDED", `${nombre} · ${t.tareaId} traída de una fase quieta`).toBe(false);
+    expect(arrastradas.has(t.tareaId), `${nombre} · ${t.tareaId} traída y arrastrada`).toBe(false);
+    expect(t.conCambio, `${nombre} · ${t.tareaId} traída colgada de un cambio de fase`).toBeUndefined();
+  }
+  if (pendientesDelPasado === "avisar") expect(r.traidas, `${nombre} · trajo algo con «avisar»`).toEqual([]);
   for (const c of r.cambios.filter((x) => x.campo === "startWeek" && !x.fijaInicio)) {
     expect(todo.inicio.get(c.faseId)!, `${nombre} · ${c.faseId} arranca en el pasado`).toBeGreaterThanOrEqual(H);
   }
@@ -632,5 +665,244 @@ describe("M4 P4a · el tope de la semana de cada arrastrada", () => {
     const abs = semanas(vivo, conLaReprogramacion(SIN_LA_IA(), r), []);
     expect([abs.tarea.get("a1"), abs.tarea.get("a2")]).toEqual([18, 18]);
     expect(acotarSemana(3 + 15, 17)).toBe(16);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── M5 · «traer a hoy» (implementada y APAGADA: lo vigente es «avisar») ───────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/* M5 (spec del replanteo §6, 2026-09-27). Decisión de Elías: lo pendiente del pasado se AVISA (lo vigente); «traer a
+   hoy» queda hecha y probada en el interruptor. Con ella, en una fase EN CURSO (no la Semana 0, ni hecha, suspendida o
+   casi terminada), cada abierta movible de una semana vencida pasa a la semana de hoy de su fase, con su casilla. */
+const conLasDos = (fasesVencidas: PoliticaDeFasesVencidas, pendientesDelPasado: PoliticaDePendientesDelPasado): PoliticaDeAtrasos => ({
+  ...POLITICA_DE_ATRASOS,
+  fasesVencidas,
+  pendientesDelPasado,
+});
+const reprogramarCon = (
+  guardado: Record<string, unknown>,
+  fasesVencidas: PoliticaDeFasesVencidas,
+  pendientesDelPasado: PoliticaDePendientesDelPasado,
+  vivo: Vivo = VIVO,
+  hoy = HOY,
+  conSemanaCero = true,
+) => reprogramarDesdeHoy({ vivo, borrador: leer(guardado), hoy, politica: conLasDos(fasesVencidas, pendientesDelPasado), conSemanaCero })!;
+
+/** La línea 5 del mensaje de la propuesta reprogramada, con lo marcado por defecto. */
+function lineaCinco(vivo: Vivo, guardado: Record<string, unknown>, hoy: Date): string | null {
+  const b = leer(guardado);
+  const L = { tareas: "listas" as const };
+  const m = mensajeDeLaPropuesta({
+    vivo,
+    borrador: b,
+    r: resumir(vivo, b, b.excluidos ?? [], L),
+    entera: resumir(vivo, b, [], L),
+    referencias: null,
+    atrasos: [],
+    cierreFijado: null,
+    hoy,
+  });
+  return m.lineas.find((l) => /sin hacer|pasan? a esta semana|caen? en semanas/.test(l)) ?? null;
+}
+
+/** La S5 del fixture: «Fase A» (S2–S5, empezada) está EN CURSO con 8 pendientes de S2 y S3; «Fase C» (S2–S3) venció. */
+const EN_LA_S5 = new Date("2026-06-24T12:00:00-06:00");
+const SIN_HACER_13 = "⚠ Quedaron sin hacer 13 tareas de semanas que ya pasaron, en «Semana 0» y «Fase A»: la propuesta no las mueve (están en «Más»).";
+const SIN_HACER_5_Y_8 = "⚠ Quedaron sin hacer 5 tareas de semanas que ya pasaron, en «Semana 0»: la propuesta no las mueve; 8 más pasan a esta semana.";
+
+describe("M5 · las 6 combinaciones del interruptor sobre el fixture", () => {
+  it("⭐ en la S5: casillas, pins, arrastradas, traídas y la línea 5 de cada una", () => {
+    /* La edición que la pone en rojo: implementar una sola rama (ignorar `pendientesDelPasado`: las tres de «traer-a-hoy»
+       daban 0 traídas y la línea de «avisar»), o traer también lo de una fase atrasada que el sistema no reprograma
+       («avisar» en las fases vencidas: «Fase C» es de (b), no de (a)). */
+    const esperado: Array<[PoliticaDeFasesVencidas, PoliticaDePendientesDelPasado, number, number, number, number, string]> = [
+      ["en-el-orden-del-plan", "avisar", 3, 0, 9, 0, SIN_HACER_13],
+      ["en-el-orden-del-plan", "traer-a-hoy", 3, 0, 9, 8, SIN_HACER_5_Y_8],
+      ["todo-desde-hoy", "avisar", 1, 0, 9, 0, SIN_HACER_13],
+      ["todo-desde-hoy", "traer-a-hoy", 1, 0, 9, 8, SIN_HACER_5_Y_8],
+      [
+        "avisar",
+        "avisar",
+        0,
+        0,
+        0,
+        0,
+        "⚠ Quedaron sin hacer 22 tareas de semanas que ya pasaron, en «Semana 0», «Fase A» y 1 fase más: la propuesta no las mueve (están en «Más»).",
+      ],
+      [
+        "avisar",
+        "traer-a-hoy",
+        0,
+        0,
+        0,
+        8,
+        "⚠ Quedaron sin hacer 14 tareas de semanas que ya pasaron, en «Semana 0» y «Fase C»: la propuesta no las mueve; 8 más pasan a esta semana.",
+      ],
+    ];
+    const visto = esperado.map(([f, p]) => {
+      const g = SIN_LA_IA();
+      const r = reprogramarCon(g, f, p, VIVO, EN_LA_S5);
+      expect(r.semana).toBe(5);
+      return [f, p, casillas(r).length, pins(r).length, r.tareas.length, r.traidas.length, lineaCinco(VIVO, conLaReprogramacion(g, r), EN_LA_S5)];
+    });
+    expect(visto).toEqual(esperado);
+    for (const l of esperado.map((x) => x[6])) expect(l.length).toBeLessThanOrEqual(140);
+    // Las 8 traídas son las pendientes de S2 y S3 de «Fase A»: pasan a su semana 3 (la S5), cada una con su casilla.
+    const r = reprogramarCon(SIN_LA_IA(), "en-el-orden-del-plan", "traer-a-hoy", VIVO, EN_LA_S5);
+    expect(r.traidas.map((t) => `${t.tareaId}:${t.desde.weekIndex}→${t.a.weekIndex}`)).toEqual([
+      "t021:0→3",
+      "t022:0→3",
+      "t023:0→3",
+      "t027:1→3",
+      "t028:1→3",
+      "t029:1→3",
+      "t030:1→3",
+      "t031:1→3",
+    ]);
+    for (const t of r.traidas) {
+      expect(t).toMatchObject({ tipo: "tarea-cambia", faseId: "f02", desdeHoy: true, clave: claveDeTareaQueCambia(t.tareaId) });
+      expect(t.conCambio, "una traída colgada de un cambio de fase (no tendría casilla)").toBeUndefined();
+    }
+    expect(r.sinHacer, "lo que se trae ya no se nombra; la Semana 0, sí").toEqual([{ faseId: "f01", motivo: "semana-0" }]);
+  });
+
+  it("⭐ en la S18 (Wherex), «traer a hoy» no cambia nada: la Semana 0 avisa y la única fase en curso no tiene nada vencido", () => {
+    /* La edición que la pone en rojo: traer lo de una fase que el sistema reprogramó (sus abiertas ya se corrieron) o lo
+       de la Semana 0. Los números de M4 (8 casillas, 1 pin y 25 arrastradas) no se mueven con la otra opción de (a). */
+    for (const f of ["en-el-orden-del-plan", "todo-desde-hoy", "avisar"] as const) {
+      const g = SIN_LA_IA();
+      const avisando = reprogramarCon(g, f, "avisar");
+      const trayendo = reprogramarCon(g, f, "traer-a-hoy");
+      expect(trayendo.traidas, f).toEqual([]);
+      expect({ ...trayendo, reloj: null }, f).toEqual({ ...avisando, reloj: null });
+      expect(lineaCinco(VIVO, conLaReprogramacion(g, trayendo), HOY), f).toBe(lineaCinco(VIVO, conLaReprogramacion(g, avisando), HOY));
+    }
+    expect(lineaCinco(VIVO, conLaReprogramacion(SIN_LA_IA(), reprogramarCon(SIN_LA_IA(), "en-el-orden-del-plan", "traer-a-hoy")), HOY)).toBe(
+      "⚠ Quedaron sin hacer 5 tareas de semanas que ya pasaron, en «Semana 0»: la propuesta no las mueve (están en «Más»).",
+    );
+  });
+});
+
+describe("M5 · lo que «traer a hoy» no toca", () => {
+  it("⭐ la Semana 0 sigue quieta aunque esté en curso; en un Desarrollo (sin Semana 0) la primera fase sí se trae", () => {
+    /* La edición que la pone en rojo: traer también la Semana 0 (quitar `!esCero`): Elías pidió «revisar solamente que no
+       haya quedado algo importante sin hacer» (D1). */
+    const enLaS1 = new Date("2026-05-28T12:00:00-06:00");
+    const r = reprogramarCon(SIN_LA_IA(), "en-el-orden-del-plan", "traer-a-hoy", VIVO, enLaS1);
+    expect(r.semana).toBe(1);
+    expect(r.traidas, "trajo lo de la Semana 0").toEqual([]);
+    expect(r.sinHacer).toEqual([{ faseId: "f01", motivo: "semana-0" }]);
+    // El mismo cronograma en un Desarrollo: su primera fase es trabajo real, en curso, y lo vencido se trae.
+    const desarrollo = reprogramarCon(SIN_LA_IA(), "en-el-orden-del-plan", "traer-a-hoy", VIVO, enLaS1, false);
+    expect(desarrollo.traidas.map((t) => t.faseId)).toEqual(["f01", "f01", "f01"]);
+    expect(desarrollo.traidas.every((t) => t.a.weekIndex === 1)).toBe(true);
+  });
+
+  it("⭐ no se trae lo que tiene fecha fijada ni lo que tocó el chat (se nombra), ni nada de una fase hecha o suspendida", () => {
+    /* Las ediciones que la ponen en rojo: traer lo que tiene fecha fijada o lo que el chat ya cambió (D6), o mirar solo
+       las tareas y no el estado de la fase. */
+    const vivo = conVivo([
+      fase("s0", "Semana 0", 2, null, "DONE", [tarea("k", 0, "DONE")]),
+      fase("a", "Fase A", 20, 2, "IN_PROGRESS", [
+        tarea("a0", 0, "DONE"),
+        tarea("a1", 1),
+        tarea("a2", 2, "IN_PROGRESS"),
+        tarea("a3", 3, "PENDING", { inicioFijado: "2026-06-15" }),
+        tarea("a4", 4),
+        tarea("a5", 16),
+      ]),
+      fase("h", "Hecha", 20, 2, "DONE", [tarea("h0", 0, "DONE"), tarea("h1", 1)]),
+      fase("su", "Suspendida", 20, 2, "SUSPENDED", [tarea("su1", 1)]),
+    ]);
+    const guardado = SIN_LA_IA();
+    const a4 = vivo.fases[1].tareas![4];
+    guardado.cambios = [
+      {
+        tipo: "tarea-cambia",
+        clave: claveDeTareaQueCambia("a4"),
+        tareaId: "a4",
+        faseId: "a",
+        desde: { title: a4.title, weekIndex: 4, notes: null, party: "SMARTEAM", type: "TASK", inicioFijado: null, finFijado: null },
+        a: { title: "Otra" },
+        porChat: true,
+      },
+    ];
+    const r = reprogramarCon(guardado, "en-el-orden-del-plan", "traer-a-hoy", vivo);
+    // Hoy es la S18: «Fase A» (S2–S21) está en curso; a1 (S3) y a2 (S4) se traen a su semana 16; a5 ya es de esta semana.
+    expect(r.traidas.map((t) => `${t.tareaId}→${t.a.weekIndex}`)).toEqual(["a1→16", "a2→16"]);
+    expect(r.sinHacer, "lo que no se mueve sigue nombrado").toEqual([{ faseId: "a", motivo: "en-curso" }]);
+    expect(r.cambios).toEqual([]);
+    expect(r.tareas).toEqual([]);
+  });
+});
+
+describe("M5 · las invariantes con «traer a hoy»", { timeout: 30_000 }, () => {
+  it("⭐ sobre el fixture en la S5 y la S18, y sobre 150 cronogramas al azar: cada traída queda en la semana de hoy y nada con avance se mueve", () => {
+    /* Las ediciones que la ponen en rojo: traerla a `hoy − inicio − 1` (queda vencida), traer una con fecha fijada o de
+       una fase quieta, o colgarla del cambio de su fase (`conCambio`: perdería su casilla). */
+    for (const fases of ["en-el-orden-del-plan", "todo-desde-hoy", "avisar"] as const) {
+      comprobarInvariantes(`fixture S5 · ${fases} · traer`, VIVO, SIN_LA_IA(), EN_LA_S5, fases, true, "traer-a-hoy");
+    }
+    comprobarInvariantes("fixture S18 · con la IA · traer", VIVO, guardadoDelPaso1(), HOY, "en-el-orden-del-plan", true, "traer-a-hoy");
+    /* 150 semillas (no 50): con fases de 1 a 4 semanas, una fase EN CURSO con algo vencido es rara (con 50 salían 6). */
+    let conTraidas = 0;
+    for (let semilla = 1; semilla <= 150; semilla++) {
+      const c = cronogramaAlAzar(semilla);
+      for (const fases of ["en-el-orden-del-plan", "avisar"] as const) {
+        const r = comprobarInvariantes(`al azar ${semilla} · ${fases} · traer`, c.vivo, c.guardado, c.hoy, fases, c.conSemanaCero, "traer-a-hoy");
+        if (r.traidas.length > 0) conTraidas++;
+      }
+    }
+    expect(conTraidas, "casi ningún cronograma al azar trae algo a hoy").toBeGreaterThanOrEqual(10);
+  });
+
+  it("⭐ la vuelta atrás es exacta con las traídas: sin(con(g, r)) = g", () => {
+    /* La edición que la pone en rojo: no quitar las traídas en `sinReprogramacion` (un reintento en otra semana las
+       sumaba dos veces, con dos cambios con la misma clave). */
+    for (const fases of ["en-el-orden-del-plan", "todo-desde-hoy", "avisar"] as const) {
+      for (const g of [SIN_LA_IA(), guardadoDelPaso1()]) {
+        const r = reprogramarCon(g, fases, "traer-a-hoy", VIVO, EN_LA_S5);
+        expect(r.traidas.length, fases).toBe(8);
+        const con = conLaReprogramacion(g, r);
+        expect((con.cambios as unknown[]).slice(-8), "las traídas van al final").toEqual(r.traidas);
+        expect(sinReprogramacion(con), fases).toEqual(g);
+      }
+    }
+  });
+});
+
+describe("M5 · las traídas en el plan", () => {
+  const g = SIN_LA_IA();
+  const r = reprogramarCon(g, "avisar", "traer-a-hoy", VIVO, EN_LA_S5);
+  const b = leer(conLaReprogramacion(g, r));
+
+  it("⭐ cada traída tiene su casilla: cuenta en «Aplicas N de M», se desmarca sola y la marcan hecha antes de aplicar → «ya está»", () => {
+    /* Las ediciones que la ponen en rojo: tratarlas como arrastradas (`vaSinCasilla`: no contaban y no se podían
+       desmarcar), o no mirar su estado al aplicar (D13: se movía una tarea que alguien marcó hecha entre la propuesta y
+       «Aplicar»). */
+    const plan = planDeAplicacion(VIVO, b);
+    expect([plan.marcadas, plan.aplicables, plan.arrastradas.aplican, plan.fijadas]).toEqual([8, 8, 0, 0]);
+    const una = r.traidas[0];
+    const sinUna = planDeAplicacion(VIVO, b, [una.clave]);
+    expect(sinUna.marcadas).toBe(7);
+    expect(sinUna.items.find((it) => it.cambio.clave === una.clave)!.estado).toBe("excluido");
+    const hecha: Vivo = {
+      ...VIVO,
+      fases: VIVO.fases.map((f) => (f.id === una.faseId ? { ...f, tareas: f.tareas!.map((t) => (t.id === una.tareaId ? { ...t, status: "DONE" } : t)) } : f)),
+    };
+    expect(planDeAplicacion(hecha, b).items.find((it) => it.cambio.clave === una.clave)!.estado, "se movía una hecha").toBe("ya-esta");
+  });
+
+  it("⭐ la medición (condición 6) compara las traídas: si falta una, NO PASA", () => {
+    /* La edición que la pone en rojo: no comparar las traídas en `medirM3yM4` (una fusión que perdiera una pasaba). */
+    const guardado = conLaReprogramacion(g, r);
+    const seis = (x: Record<string, unknown>) =>
+      medirM3yM4({ vivo: VIVO, guardado: x, borrador: leer(x), conSemanaCero: true }).find((c) => c.numero === 6)!;
+    expect(seis(guardado)).toMatchObject({ pasa: true });
+    expect(seis(guardado).detalle).toContain("8 pendientes pasan a esta semana");
+    const sinUna = { ...guardado, cambios: (guardado.cambios as Array<{ clave: string }>).filter((c) => c.clave !== r.traidas[0].clave) };
+    expect(seis(sinUna), "se perdió una traída y la medición no lo vio").toMatchObject({ pasa: false });
+    expect(seis(sinUna).detalle).toContain("faltan");
   });
 });

@@ -34,6 +34,7 @@ import {
   DEL_SISTEMA_DESDE_HOY,
   DEL_SISTEMA_SE_CREA,
   DEL_SISTEMA_SE_QUITA,
+  DEL_SISTEMA_TRAIDA,
   LEYENDA_DE_LA_SUGERIDA,
   LINEA_DE_LA_PROPUESTA_EDITABLE,
   lineaDeSoloLectura,
@@ -1029,5 +1030,36 @@ describe("⛔ M4 P4e · lo que reprogramó el sistema desde hoy, en el contexto 
     const handle = (id: string) => c.handles.get(id) ?? id;
     for (const t of R.tareas) expect(cambios, `${t.tareaId} listada`).not.toContain(`[${handle(t.tareaId)}]`);
     expect(indiceDe(c.texto).map((l) => l.slice(0, l.indexOf(".")))).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
+  });
+});
+
+describe("⛔ M5 · lo que el sistema pasa a esta semana («traer a hoy»), en el contexto del chat", () => {
+  /* Spec del replanteo §6.1 y D9 (2026-09-27): con «traer a hoy» (implementada y apagada), cada pendiente de una semana
+     vencida de una fase en curso pasa a esta semana con su casilla. El chat la ve como una fila más de su grupo, pero
+     dice que lo decide el sistema: si no, la explicaba como una idea de la IA. El fixture en la S5: 8 de «Fase A». */
+  const FIX = leerFixtureGrande();
+  const VIVO_G = vivoDelFixture(FIX);
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-grande" }))) as Record<string, unknown>;
+  const R = reprogramarDesdeHoy({
+    vivo: VIVO_G,
+    borrador: leerBorrador(vacio())!,
+    hoy: new Date("2026-06-24T12:00:00-06:00"),
+    politica: { ...POLITICA_DE_ATRASOS, fasesVencidas: "avisar", pendientesDelPasado: "traer-a-hoy" },
+    conSemanaCero: true,
+  })!;
+  const TRAIDO = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), R))))!;
+
+  it("⭐ cada traída dice «lo decide el sistema: quedó sin hacer y pasa a esta semana», nunca lo del kickoff", () => {
+    /* La edición que la pone en rojo: decidir la marca del sistema solo por el signo (una traída, «~», decía «ya hay un
+       kickoff») o no marcarla (el chat la contaba como un cambio de la IA). */
+    expect(R.traidas).toHaveLength(8);
+    const c = armarContextoConPropuesta(entrada(paraElChat({ vivo: VIVO_G, borrador: TRAIDO })), { techo: Number.POSITIVE_INFINITY });
+    const handle = (id: string) => c.handles.get(id) ?? id;
+    for (const t of R.traidas) {
+      const lineas = c.texto.split("\n").filter((l) => l.includes(`[${handle(t.tareaId)}]`));
+      expect(lineas.some((l) => l.includes(DEL_SISTEMA_TRAIDA)), `${t.tareaId} sin la marca del sistema`).toBe(true);
+      expect(lineas.some((l) => l.includes(DEL_SISTEMA_SE_QUITA) || l.includes(DEL_SISTEMA_SE_CREA)), `${t.tareaId} con la marca del kickoff`).toBe(false);
+    }
+    expect(c.texto).not.toContain(DEL_SISTEMA_SE_QUITA);
   });
 });

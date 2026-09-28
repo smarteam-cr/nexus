@@ -20,6 +20,11 @@
  *  · En el orden del plan, una sin empezar y no atrasada cuya antecesora ahora termina después se corre detrás de ella.
  *  · Las contiguas sin avance se corren de rebote, sin casilla. Las fases nuevas de la IA no se tocan.
  *  · Una tarea con fecha fijada a mano, o que ya tiene un cambio en el borrador (el del chat), no se corre.
+ *  · M5 (2026-09-27, spec §6.1) · «TRAER A HOY» (política `pendientesDelPasado`, implementada y APAGADA: lo vigente es
+ *    «avisar»): en una fase EN CURSO (su ventana, ya reprogramada, incluye hoy) que no es la Semana 0 ni está hecha o
+ *    suspendida, cada abierta movible de una semana vencida pasa a la semana de hoy de la fase (`hoy − inicio`): una
+ *    TRAÍDA (`traidas`, `tarea-cambia` con `desdeHoy` y SIN `conCambio`), con su propia casilla. La Semana 0 sigue en
+ *    «avisar» siempre (D1). Con «avisar», lo vencido de una fase en curso se nombra (`sinHacer`, «en-curso»).
  *
  * ── LO QUE NUNCA HACE ─────────────────────────────────────────────────────────
  * Nada con avance cambia de estado ni de semana: una tarea hecha o suspendida nunca cambia de semana absoluta, con
@@ -49,7 +54,14 @@ import {
   type Vivo,
 } from "./borrador";
 import { esFaseDeCierre } from "./hitos";
-import type { PoliticaDeAtrasos } from "./politica-de-atrasos";
+// M5 (2026-09-27): la política se pregunta con sus predicados; los nombres de las opciones viven solo en el módulo.
+import {
+  arrancaTodoHoy,
+  esperaAlPlan,
+  soloAvisaLasFasesVencidas,
+  traeLoPendienteAHoy,
+  type PoliticaDeAtrasos,
+} from "./politica-de-atrasos";
 import { faseDeSemanaCero } from "./propuesta-de-estructura";
 import { semanaDeHoy } from "./vista-de-la-propuesta";
 import { computePhaseRanges } from "./weeks";
@@ -67,6 +79,9 @@ export interface ReprogramacionDesdeHoy {
   cambios: CambioFaseCambia[];
   /** Las arrastradas (`desdeHoy`, `a.weekIndex`, `conCambio` = la clave de la duración de su fase). */
   tareas: CambioTareaCambia[];
+  /** M5: las TRAÍDAS a hoy (solo con «traer-a-hoy»): `desdeHoy`, `a.weekIndex` = la semana de hoy de su fase, SIN
+   *  `conCambio` (cada una con su casilla). En el orden de las fases y, dentro de cada una, en el de sus tareas. */
+  traidas: CambioTareaCambia[];
   /** Las claves de la IA (misma fase y campo) que se reemplazan. */
   reemplazadas: string[];
   /** Solo con «todo-desde-hoy»: las casillas de las fases de cierre, que nacen desmarcadas (D5). */
@@ -155,6 +170,7 @@ export function reprogramarDesdeHoy(i: {
 
   const cambios: Array<{ cambio: CambioFaseCambia; reemplaza: string | null; casilla: boolean }> = [];
   const tareas: CambioTareaCambia[] = [];
+  const traidas: CambioTareaCambia[] = [];
   const sinHacer: ReprogramacionDesdeHoy["sinHacer"] = [];
   const sinNadaMarcado: string[] = [];
   const observaciones: string[] = [];
@@ -234,7 +250,7 @@ export function reprogramarDesdeHoy(i: {
       sinHacer.push({ faseId: f.id, motivo: "casi-terminada" });
     }
 
-    const enElOrdenDelPlan = politica.fasesVencidas === "en-el-orden-del-plan";
+    const enElOrdenDelPlan = esperaAlPlan(politica);
     /* Lo que no empezó espera a lo que le falta a sus antecesoras: las anteriores en el orden, sin la Semana 0, que en el
        plan terminaban antes o justo cuando ésta empezaba. */
     let espera = -Infinity;
@@ -246,7 +262,7 @@ export function reprogramarDesdeHoy(i: {
     }
     const desde = Math.max(H, espera);
 
-    if (atrasada && politica.fasesVencidas === "avisar") {
+    if (atrasada && soloAvisaLasFasesVencidas(politica)) {
       sinHacer.push({ faseId: f.id, motivo: "atrasada" });
     } else if (atrasada && !empezo) {
       if (delChat(f.id, "startWeek")) observaciones.push(PLANTILLAS.semanasDelChat(viva.name));
@@ -291,11 +307,33 @@ export function reprogramarDesdeHoy(i: {
 
     // Lo que quedó sin hacer en semanas que ya pasaron, en una fase que no se reprogramó (se nombra, no se mueve).
     const movidas = new Set(tareas.filter((t) => t.faseId === f.id).map((t) => t.tareaId));
-    const vencidaSinHacer = abiertas.some((t) => !movidas.has(t.id) && inicio + acotarSemana(t.weekIndex, dur) < H);
+    const vencidas = abiertas.filter((t) => !movidas.has(t.id) && inicio + acotarSemana(t.weekIndex, dur) < H);
     const yaNombrada = sinHacer.some((s) => s.faseId === f.id);
+    const enCurso = inicio <= H && H < inicio + dur;
+    /* M5 · traer a hoy: en una fase en curso (no la Semana 0, que siempre avisa; ni hecha, suspendida o casi terminada,
+       que ya está nombrada), cada abierta MOVIBLE vencida pasa a la semana de hoy de su fase, con su casilla. Lo que no se
+       mueve (fecha fijada, lo tocó el chat) sigue nombrándose. */
+    const traidasDeLaFase = new Set<string>();
+    if (traeLoPendienteAHoy(politica) && !esCero && !yaNombrada && enCurso && !quieta(status)) {
+      const aHoy = H - inicio;
+      for (const t of vencidas) {
+        if (!movibles.includes(t)) continue;
+        traidasDeLaFase.add(t.id);
+        traidas.push({
+          tipo: "tarea-cambia",
+          clave: claveDeTareaQueCambia(t.id),
+          tareaId: t.id,
+          faseId: f.id,
+          desde: fotoDeTarea(t),
+          a: { weekIndex: aHoy },
+          desdeHoy: true,
+        });
+      }
+    }
+    const vencidaSinHacer = vencidas.some((t) => !traidasDeLaFase.has(t.id));
     if (!yaNombrada && vencidaSinHacer && !quieta(status)) {
       if (esCero) sinHacer.push({ faseId: f.id, motivo: "semana-0" });
-      else if (inicio <= H && H < inicio + dur) sinHacer.push({ faseId: f.id, motivo: "en-curso" });
+      else if (enCurso) sinHacer.push({ faseId: f.id, motivo: "en-curso" });
     }
 
     cursor = inicio + dur;
@@ -311,10 +349,12 @@ export function reprogramarDesdeHoy(i: {
     reloj,
     cambios: quedan.map((c) => c.cambio),
     tareas: conCasilla ? tareas : [],
+    // M5: cada traída tiene su casilla: van aunque no se reprograme ninguna fase.
+    traidas,
     reemplazadas: quedan.flatMap((c) => (c.reemplaza ? [c.reemplaza] : [])),
     // D5: con todo desde hoy, el cierre quedaría antes del trabajo que lo precedía: su casilla nace desmarcada.
     nacenDesmarcadas:
-      politica.fasesVencidas === "todo-desde-hoy"
+      arrancaTodoHoy(politica)
         ? quedan.filter((c) => c.casilla && cierres.has(c.cambio.faseId)).map((c) => c.cambio.clave)
         : [],
     sinHacer,
@@ -334,7 +374,7 @@ const textos = (v: unknown): string[] => (Array.isArray(v) ? v.filter((o): o is 
 
 /**
  * El JSON guardado CON la reprogramación. Puro. Los cambios del sistema van detrás de los de estructura (el que reemplaza
- * uno de la IA, en su lugar) y las arrastradas detrás de todo. Lo reemplazado sale de `cambios` y de `excluidos`: si el
+ * uno de la IA, en su lugar) y las arrastradas detrás de todo (M5: y detrás de ellas, las traídas a hoy). Lo reemplazado sale de `cambios` y de `excluidos`: si el
  * CSE había desmarcado lo de la IA, el del sistema nace MARCADO y se dice (la casilla era de la IA, no de esto). Las de
  * `nacenDesmarcadas` entran a `excluidos`. Suma las observaciones (sin repetir) y pone el reloj (`hoy`).
  * ⚠ No toca la versión: la sube quien escribe, una sola vez, en la misma escritura (`marcarTareasEnCurso`).
@@ -368,7 +408,7 @@ export function conLaReprogramacion(guardado: Record<string, unknown>, r: Reprog
     }
     (esCambioDeTareaCrudo(c) ? deTareas : estructura).push(c);
   }
-  const cambios = [...estructura, ...delSistema.filter((c) => !puestos.has(c.clave)), ...deTareas, ...r.tareas];
+  const cambios = [...estructura, ...delSistema.filter((c) => !puestos.has(c.clave)), ...deTareas, ...r.tareas, ...r.traidas];
 
   const excluidos = [
     ...(excluidosAntes ?? []).filter((k) => !reemplazadas.has(k)),
@@ -387,7 +427,8 @@ export function conLaReprogramacion(guardado: Record<string, unknown>, r: Reprog
 }
 
 /**
- * El JSON guardado SIN la reprogramación (ni su reloj). Puro. Quita los cambios del sistema y sus arrastradas, restaura
+ * El JSON guardado SIN la reprogramación (ni su reloj). Puro. Quita los cambios del sistema, sus arrastradas y (M5) las
+ * traídas a hoy (todo lo que lleva `desdeHoy`), restaura
  * cada cambio de la IA que se había reemplazado (en su lugar, desmarcado si lo estaba), quita las observaciones de la
  * reprogramación y saca de `excluidos` las claves que ya no existen. Sobre uno sin reprogramación, solo quita el reloj.
  */

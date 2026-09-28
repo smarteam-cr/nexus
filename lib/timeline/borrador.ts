@@ -391,6 +391,8 @@ export interface CambioTareaCambia extends DelChat {
    * M4 (2026-09-27, D10): una ARRASTRADA. Una abierta de una fase empezada y atrasada que el sistema corre con el
    * estiramiento de su fase (`conCambio` = la clave de esa duración): no la escribe la IA ni el chat. La lee `leerCambio`;
    * la huella no la mira.
+   * M5 (2026-09-27): SIN `conCambio` es una TRAÍDA A HOY (`esTraidaAHoy`, política «traer-a-hoy», apagada): una abierta de
+   * una semana vencida de una fase en curso que el sistema pasa a la semana de hoy, con su propia casilla.
    */
   desdeHoy?: true;
 }
@@ -1751,8 +1753,19 @@ export const esPin = (c: Cambio): c is CambioFaseCambia & { desdeHoy: true; fija
 /** M4: lo que el sistema decide sin casilla (las arrastradas y el pin): ni unidades, ni totales, ni «Siguiente número». */
 export const vaSinCasilla = (c: Cambio): boolean => esArrastrada(c) || esPin(c);
 
-/** M4 P4e (2026-09-27, D9): ¿lo reprogramó el SISTEMA desde hoy? Sus casillas, el pin y las arrastradas. */
+/** M4 P4e (2026-09-27, D9): ¿lo reprogramó el SISTEMA desde hoy? Sus casillas, el pin y las arrastradas (M5: y las traídas). */
 export const esDesdeHoy = (c: Cambio): boolean => (c.tipo === "fase-cambia" || c.tipo === "tarea-cambia") && !!c.desdeHoy;
+
+/**
+ * M5 (2026-09-27, spec del replanteo §6.1): ¿es una TRAÍDA A HOY? Con la política «traer-a-hoy» (implementada y apagada:
+ * lo vigente es «avisar»), una abierta movible de una semana vencida de una fase EN CURSO que el sistema pasa a la semana
+ * de hoy (reprogramar-desde-hoy.ts). A diferencia de una arrastrada, no va con ningún cambio de fase (sin `conCambio`):
+ * TIENE SU CASILLA, se numera en el grupo de su fase y cuenta en los totales, con «Pasar a semana N» y «viene de la
+ * semana M» de siempre. Lo protege lo mismo que a lo del sistema: «ya está» si la marcan hecha antes de aplicar (D13), la
+ * IA no la reemplaza (D6) y no se explica como de la IA (D9).
+ */
+export const esTraidaAHoy = (c: Cambio): c is CambioTareaCambia & { desdeHoy: true } =>
+  c.tipo === "tarea-cambia" && !!c.desdeHoy && c.conCambio === undefined;
 
 /** L3 (D3): el grupo en que se numera y se pinta una tarea: el de su fase (`faseDeLaTarea`). L7: una mudanza
  *  SUGERIDA, el de su ORIGEN: se ve donde está hoy, con su casilla sin marcar, y su número no depende de la marca.
@@ -2993,9 +3006,14 @@ export interface ItemDeTarea {
   /**
    * M2 (2026-09-27): la quita o la agrega el SISTEMA (un kickoff que sobra o el que faltaba), nunca la IA: `texto` es su
    * motivo completo («Ya hay un kickoff hecho: «X».»). La pantalla lo pinta con su chip, no como «Según la IA».
+   * M5 (2026-09-27): «traida», la que el sistema pasa a la semana de hoy (`esTraidaAHoy`): su `texto` va en el `title` de
+   * la fila y en la línea del sistema de su fase; conserva «viene de la semana M» como chip.
    */
-  delSistema?: { tipo: "hito"; texto: string };
+  delSistema?: { tipo: "hito" | "traida"; texto: string };
 }
+
+/** M5 (2026-09-27, D9): el porqué de una traída a hoy (el `title` de su fila y la línea del sistema de su fase). */
+export const TEXTO_DE_LA_TRAIDA_A_HOY = "Lo pendiente de semanas que ya pasaron pasa a esta semana.";
 
 /** Las tareas de UNA fase, en un solo renglón de la lista (con su casilla de grupo). */
 export interface GrupoDeTareas {
@@ -3282,6 +3300,8 @@ function gruposDeTareas(
         ...(c.tipo !== "tarea-cambia" && c.delSistema
           ? { delSistema: { tipo: c.delSistema, texto: c.motivo ?? "Lo decide el sistema." } }
           : {}),
+        // M5 (D9): la que el sistema pasa a la semana de hoy lo dice (nunca «Según la IA»).
+        ...(esTraidaAHoy(c) ? { delSistema: { tipo: "traida" as const, texto: TEXTO_DE_LA_TRAIDA_A_HOY } } : {}),
       };
       if (c.tipo === "tarea-se-va") {
         return { ...comun, signo: "−" as const, titulo: c.desde.title, ...enSuSemana(c.desde.weekIndex) };

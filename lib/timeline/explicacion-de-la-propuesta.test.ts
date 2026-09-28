@@ -485,3 +485,21 @@ describe("M4 P4e · lo que reprogramó el sistema desde hoy no pasa por la expli
     expect(cambiosParaExplicar(VIVO, conLaIA).map((c) => c.clave).sort()).toEqual([FASE_NUEVA, FASE_QUE_SE_ALARGA].sort());
   });
 });
+
+describe("M5 · lo que el sistema pasa a esta semana tampoco pasa por la explicación (D9)", () => {
+  it("⭐ las traídas a hoy («traer a hoy», apagada) dan 0 fases para explicar", () => {
+    /* La edición que la pone en rojo: filtrar solo las arrastradas (`conCambio`) en `cambiosParaExplicar`: las 8 traídas
+       de «Fase A» le pedían a Haiku el porqué de algo que decidió el sistema. */
+    const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+    const r = reprogramarDesdeHoy({
+      vivo: VIVO,
+      borrador: leerBorrador(vacio())!,
+      hoy: new Date("2026-06-24T12:00:00-06:00"),
+      politica: { ...POLITICA_DE_ATRASOS, fasesVencidas: "avisar", pendientesDelPasado: "traer-a-hoy" },
+      conSemanaCero: true,
+    })!;
+    expect(r.traidas).toHaveLength(8);
+    const traido = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio(), r))))!;
+    expect(cambiosParaExplicar(VIVO, traido.cambios)).toEqual([]);
+  });
+});

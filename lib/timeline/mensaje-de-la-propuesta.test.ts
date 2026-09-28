@@ -550,9 +550,13 @@ describe("M3 · lo que quedó sin hacer", () => {
     const codigo = src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
     expect(codigo, "el mensaje lee el interruptor").not.toMatch(/\bPOLITICA_DE_ATRASOS\b/);
     expect(codigo).toContain("TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER[i.borrador.hoy.politica.pendientesDelPasado]");
-    expect(Object.keys(TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER)).toEqual(["avisar"]);
+    /* 2026-09-27, M5 (spec §6.1): la tabla suma «traer-a-hoy» (implementada y apagada; lo vigente sigue siendo «avisar»).
+       Decía `["avisar"]` porque en M3 era la única opción; el voseo se mira también en los textos nuevos. */
+    expect(Object.keys(TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER)).toEqual(["avisar", "traer-a-hoy"]);
     for (const x of Object.values(TEXTOS_DE_LO_QUE_QUEDO_SIN_HACER)) {
-      for (const texto of [x.una("en «A»"), x.varias(3, "en «A»", true), x.accionUna, x.accionVarias]) expect(texto).not.toMatch(VOSEO);
+      for (const texto of [x.una("en «A»", 2), x.varias(3, "en «A»", true, 2), x.solas?.(3) ?? "", x.solas?.(1) ?? "", x.accionUna, x.accionVarias]) {
+        expect(texto).not.toMatch(VOSEO);
+      }
     }
   });
 });
@@ -688,5 +692,114 @@ describe("M4 P4f · lo que reprogramó el sistema, en el mensaje", () => {
     // La misma reprogramación, leída con otra política guardada: el texto sigue a lo guardado.
     const releida: Borrador = { ...SIN_LA_IA, hoy: { ...SIN_LA_IA.hoy!, politica: { ...SIN_LA_IA.hoy!.politica, fasesVencidas: "todo-desde-hoy" } } };
     expect(mensajeDe(VIVO, releida).lineas[0]).toMatch(/: 8 fases atrasadas arrancan desde hoy\.$/);
+  });
+});
+
+/**
+ * M5 (2026-09-27, spec del replanteo §6): «TRAER A HOY», la otra opción de (a), implementada y APAGADA (Elías decidió
+ * «solo avisar»). Con ella, lo pendiente de semanas vencidas de una fase en curso pasa a esta semana, cada una con su
+ * casilla, y la línea 5 lo suma. Un cronograma chico: la «Semana 0» (S0–S1, ya pasó) con 2 pendientes y «Sales Hub»
+ * (S16–S19, en curso) con 2 pendientes de S16 y S17. Hoy es la S18.
+ */
+describe("M5 · «traer a hoy» en el mensaje", () => {
+  const t = (id: string, weekIndex: number, status = "PENDING"): TareaDelVivo => ({
+    id,
+    title: `Tarea ${id}`,
+    weekIndex,
+    notes: null,
+    party: "SMARTEAM",
+    type: "TASK",
+    status,
+    source: "AGENT",
+    inicioFijado: null,
+    finFijado: null,
+  });
+  const fase = (id: string, name: string, durationWeeks: number, startWeek: number | null, status: string, tareas: TareaDelVivo[]): FaseViva => ({
+    id,
+    name,
+    durationWeeks,
+    startWeek,
+    sessionCount: null,
+    notes: null,
+    activityType: null,
+    status,
+    tareas,
+  });
+  const cronograma = (pendientesDeLaSemana0: boolean): Vivo => ({
+    ancla: FIXTURE.ancla,
+    fases: [
+      fase("s0", "Semana 0", 2, null, "IN_PROGRESS", [t("k", 0, "DONE"), ...(pendientesDeLaSemana0 ? [t("s1", 0), t("s2", 1)] : [])]),
+      fase("sh", "Sales Hub", 4, 16, "IN_PROGRESS", [t("h0", 0, "DONE"), t("h1", 0), t("h2", 1), t("h3", 2)]),
+    ],
+  });
+  const vacio = () => JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-m5" }))) as Record<string, unknown>;
+  const calculada = (vivo: Vivo, pendientesDelPasado: "avisar" | "traer-a-hoy"): Borrador => {
+    const g = vacio();
+    const r = reprogramarDesdeHoy({ vivo, borrador: leerBorrador(g)!, hoy: HOY, politica: { ...POLITICA_DE_ATRASOS, pendientesDelPasado }, conSemanaCero: true })!;
+    return leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(g, r))))!;
+  };
+  const lineaCinco = (m: MensajeDeLaPropuesta) => m.lineas.find((l) => /sin hacer|pasan? a esta semana|caen? en semanas/.test(l));
+  const VIVO_M5 = cronograma(true);
+  const AVISANDO = calculada(VIVO_M5, "avisar");
+  const TRAYENDO = calculada(VIVO_M5, "traer-a-hoy");
+  const traidas = (b: Borrador) => b.cambios.filter((c) => c.tipo === "tarea-cambia" && c.desdeHoy).map((c) => c.clave);
+
+  it("⭐ los textos salen de la política con que se calculó: «avisar» aunque el interruptor diga «traer-a-hoy», y al revés", () => {
+    /* La edición que la pone en rojo: elegir los textos por el interruptor (`POLITICA_DE_ATRASOS.pendientesDelPasado`)
+       en vez de `borrador.hoy.politica`: con el interruptor en «avisar», la propuesta calculada con «traer-a-hoy» dejaba
+       de decir que 2 pasan a esta semana (y al voltearlo, las abiertas dirían lo que no calcularon). */
+    expect(traidas(AVISANDO)).toEqual([]);
+    expect(traidas(TRAYENDO)).toHaveLength(2);
+    const antes = POLITICA_DE_ATRASOS.pendientesDelPasado;
+    try {
+      POLITICA_DE_ATRASOS.pendientesDelPasado = "traer-a-hoy";
+      expect(lineaCinco(mensajeDe(VIVO_M5, AVISANDO))).toBe(
+        "⚠ Quedaron sin hacer 4 tareas de semanas que ya pasaron, en «Semana 0» y «Sales Hub»: la propuesta no las mueve (están en «Más»).",
+      );
+      POLITICA_DE_ATRASOS.pendientesDelPasado = "avisar";
+      expect(lineaCinco(mensajeDe(VIVO_M5, TRAYENDO))).toBe(
+        "⚠ Quedaron sin hacer 2 tareas de semanas que ya pasaron, en «Semana 0»: la propuesta no las mueve; 2 más pasan a esta semana.",
+      );
+    } finally {
+      POLITICA_DE_ATRASOS.pendientesDelPasado = antes;
+    }
+    // «Más» nombra lo que quedó sin hacer, no lo que pasa a esta semana (eso ya tiene su casilla).
+    expect(mensajeDe(VIVO_M5, TRAYENDO).detalle[0]).toBe(
+      "Sin hacer en «Semana 0»: «Tarea s1» · «Tarea s2». Si ya se hicieron, márcalas hechas; si faltan, muévelas a esta semana.",
+    );
+  });
+
+  it("⭐ solo cuentan las traídas marcadas: desmarcada, vuelve a lo sin hacer; sin nada sin hacer, la línea dice solo lo que pasa", () => {
+    /* La edición que la pone en rojo: contar las traídas por los cambios del borrador y no por lo que queda en esta semana
+       (con una desmarcada decía «2 más pasan» y la dejaba también como sin hacer). */
+    const [una] = traidas(TRAYENDO);
+    expect(lineaCinco(mensajeDe(VIVO_M5, TRAYENDO, { sin: [una] }))).toBe(
+      "⚠ Quedaron sin hacer 3 tareas de semanas que ya pasaron, en «Semana 0» y «Sales Hub»: la propuesta no las mueve; 1 más pasa a esta semana.",
+    );
+    const sinSemana0 = cronograma(false);
+    const soloTraidas = calculada(sinSemana0, "traer-a-hoy");
+    expect(lineaCinco(mensajeDe(sinSemana0, soloTraidas))).toBe("2 tareas de semanas que ya pasaron pasan a esta semana.");
+    expect(lineaCinco(mensajeDe(sinSemana0, soloTraidas, { sin: [traidas(soloTraidas)[0]] }))).toBe(
+      "⚠ Quedó sin hacer 1 tarea de una semana que ya pasó, en «Sales Hub»: la propuesta no la mueve; 1 más pasa a esta semana.",
+    );
+    expect(lineaCinco(mensajeDe(sinSemana0, soloTraidas, { sin: traidas(soloTraidas) }))).toBe(
+      "⚠ Quedaron sin hacer 2 tareas de semanas que ya pasaron, en «Sales Hub»: la propuesta no las mueve (están en «Más»).",
+    );
+    // Con «avisar», lo mismo que antes de M5.
+    expect(lineaCinco(mensajeDe(sinSemana0, calculada(sinSemana0, "avisar")))).toBe(
+      "⚠ Quedaron sin hacer 2 tareas de semanas que ya pasaron, en «Sales Hub»: la propuesta no las mueve (están en «Más»).",
+    );
+  });
+
+  it("⭐ la semana que cambió: con solo traídas (fases en «avisar»), el aviso de lo pendiente", () => {
+    /* La edición que la pone en rojo: decidir el aviso solo por las fases (con «avisar» en las fases vencidas no había
+       aviso, y las traídas quedaban en una semana que ya pasó sin que nadie lo dijera). */
+    const conFasesAvisando: Borrador = { ...TRAYENDO, hoy: { ...TRAYENDO.hoy!, politica: { ...TRAYENDO.hoy!.politica, fasesVencidas: "avisar" } } };
+    const enLaS19 = new Date("2026-09-29T12:00:00-06:00");
+    expect(mensajeDe(VIVO_M5, conFasesAvisando).avisoDeLaSemana).toBeNull();
+    expect(mensajeDe(VIVO_M5, conFasesAvisando, { hoy: enLaS19 }).avisoDeLaSemana).toBe(
+      "⚠ Lo pendiente se pasó a la S18 y hoy es la S19: vuelve a generarla para que pase a esta semana.",
+    );
+    expect(mensajeDe(VIVO_M5, AVISANDO, { hoy: enLaS19 }).avisoDeLaSemana, "sin nada del sistema no hay qué volver a generar").toBeNull();
   });
 });
