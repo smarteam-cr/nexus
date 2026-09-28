@@ -151,12 +151,17 @@ export default function SessionSelectionReview({
   materialDelCronograma?: InformeDelMaterial | null;
 }) {
   const esCronograma = destino === "cronograma";
+  /* El DIAGNÓSTICO (2026-09-28) se ve como el handoff —arranca con reuniones que ya alimentan, la X
+     las deja como «Excluida» y el buscador ofrece las del cliente— pero lee y escribe en lo suyo. */
+  const esDiagnostico = destino === "diagnostico";
   /* Cada destino lee su lista y escribe en SU puerta: la X del cronograma nunca toca el handoff. */
-  const urlCandidatas = `/api/projects/${projectId}/session-candidates${esCronograma ? "?para=cronograma" : ""}`;
+  const urlCandidatas = `/api/projects/${projectId}/session-candidates${destino === "handoff" ? "" : `?para=${destino}`}`;
   const urlPuerta = esCronograma
     ? `/api/projects/${projectId}/timeline/sessions`
-    : `/api/projects/${projectId}/handoff-sessions`;
-  const documento = esCronograma ? "cronograma" : "handoff";
+    : esDiagnostico
+      ? `/api/projects/${projectId}/contexto/diagnosis/sessions`
+      : `/api/projects/${projectId}/handoff-sessions`;
+  const documento = esCronograma ? "cronograma" : esDiagnostico ? "diagnóstico" : "handoff";
   /* El cronograma no tiene regla de relevancia: ninguna reunión se destaca ni se atenúa por su
      título (el chip «aplica» es del handoff). */
   const conRegla = usaReglaDeRelevancia(destino);
@@ -591,7 +596,9 @@ export default function SessionSelectionReview({
               ? `No se pudo cargar la lista de reuniones del ${documento}: recarga la página. Lo que elegiste sigue elegido.`
               : esCronograma
                 ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
-                : `Ninguna sesión alimenta este ${documento}. Agrégala con “Buscar más sesiones”.`
+                : esDiagnostico
+                  ? "Todavía no hay reuniones con el cliente en este proyecto. Agrégalas con “Buscar más sesiones”."
+                  : `Ninguna sesión alimenta este ${documento}. Agrégala con “Buscar más sesiones”.`
           }
         >
           {feeding.map((s) => (

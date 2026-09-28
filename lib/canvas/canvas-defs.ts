@@ -242,21 +242,23 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     name: "Diagnóstico",
     isDefault: false,
     order: 2,
-    // 2026-07-25 — el Diagnóstico pasó al motor de landings (informe de cara al
-    // cliente). Se SUMAN hero/escala/cierre; las 8 keys legacy SE CONSERVAN para que el
-    // contenido markdown viejo siga visible (tres quedan solo-lectura en las defs:
-    // estado_deseado, impacto_gap, proximos_pasos). Orden = el del informe.
+    // 2026-09-28 — EL HILO: la estructura del diagnóstico de referencia (FUNDAUNA), todo unido
+    // con códigos S / F / OBJ. Orden = el del informe. Las secciones que salieron (escala,
+    // causa_raiz, recomendaciones y las tres legacy) ya NO están acá, así que un canvas nuevo no
+    // las crea; un diagnóstico viejo las conserva (sus defs quedan solo-lectura) hasta que se
+    // regenera, y ahí el runner las retira (SECCIONES_RETIRADAS_DEL_DIAGNOSTICO).
     sections: [
-      { key: "diagnostico", label: "Diagnóstico de rendimiento" },
+      { key: "diagnostico", label: "Diagnóstico" },
       { key: "contexto_alcance", label: "Qué miramos y con qué fuentes" },
-      { key: "estado_actual", label: "Cómo operás hoy — y cómo vas a operar" },
-      { key: "estado_deseado", label: "Estado deseado" },
-      { key: "escala", label: "Dónde estás en la escala" },
-      { key: "causa_raiz", label: "Qué explica estos resultados" },
-      { key: "gap_analysis", label: "Qué te separa del siguiente nivel" },
-      { key: "impacto_gap", label: "Impacto del gap" },
-      { key: "recomendaciones", label: "Qué hacemos con esto" },
-      { key: "proximos_pasos", label: "Próximos pasos" },
+      { key: "situacion_actual", label: "Situación actual" },
+      { key: "objetivos", label: "Objetivos" },
+      { key: "problema", label: "Explicación del problema" },
+      { key: "desafio", label: "Desafío principal" },
+      { key: "estado_actual", label: "Cómo operas hoy" },
+      { key: "fortalezas", label: "Fortalezas" },
+      { key: "gap_analysis", label: "La brecha y lo que cuesta hoy" },
+      { key: "preguntas", label: "Preguntas que hoy no puedes responder" },
+      { key: "quienes", label: "Quiénes participan" },
       { key: "cierre", label: "El siguiente paso", defaultData: { ...DIAGNOSTICO_CIERRE_DEFAULT } },
     ],
   },

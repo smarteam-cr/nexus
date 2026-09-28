@@ -24,6 +24,10 @@ import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildDiagnosticoConfig, buildDiagnosticoSections } from "./diagnostico-landing-adapter";
 import DocumentAssist from "@/components/ai/DocumentAssist";
+import DocumentoContextSection from "./DocumentoContextSection";
+import { documentoConContexto } from "@/lib/contexto/documento";
+
+const DOC_CONTEXTO = documentoConContexto("diagnosis")!;
 
 const MAXW = 860;
 
@@ -39,7 +43,7 @@ interface TargetSection {
 
 const SIN_SECCION =
   "No se pudo guardar ese cambio: esta sección todavía no existe en este documento y no se pudo crear. " +
-  "Copiá el texto, recargá la página y volvé a intentarlo.";
+  "Copia el texto, recarga la página y vuelve a intentarlo.";
 
 export default function DiagnosticoWorkspace({
   projectId,
@@ -151,6 +155,10 @@ export default function DiagnosticoWorkspace({
   }
 
   return (
+    <>
+    {/* El «Contexto del diagnóstico» va FUERA de `.stl`: el documento usa la paleta de marca del
+        cliente, y esto es del equipo (tokens del tema). */}
+    <DocumentoContextSection projectId={projectId} doc={DOC_CONTEXTO} generado={hasGeneratedContent} />
     <div className="stl">
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
@@ -170,8 +178,8 @@ export default function DiagnosticoWorkspace({
       {!hasGeneratedContent && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", fontSize: 13, color: "var(--text-2)" }}>
           <span>
-            Todavía sin generar. Usá <strong>Generar diagnóstico</strong> arriba, junto al nombre
-            del canvas — la corrida aparece en el centro de corridas y podés seguir navegando.
+            Todavía sin generar. Revisa el contexto de arriba y usa <strong>Generar diagnóstico</strong>, junto
+            al nombre del canvas — la corrida aparece en el centro de corridas y puedes seguir navegando.
           </span>
         </div>
       )}
@@ -183,8 +191,8 @@ export default function DiagnosticoWorkspace({
           url={`/api/projects/${projectId}/canvas-assist`}
           extraBody={{ canvasId }}
           dialogTitle="Mejorar el diagnóstico con IA"
-          chips={["Hazlo más directo y menos técnico", "Ancla los hallazgos a los procesos mapeados", "Resume las secciones largas"]}
-          placeholder='Ej: "sé más concreto en la causa raíz de cada dolor"'
+          chips={["Hazlo más directo y menos técnico", "Ancla los síntomas a datos de las sesiones", "Resume las secciones largas"]}
+          placeholder='Ej: "sé más concreto en las causas de la Explicación del problema"'
           labelFor={(key) => cs.sections.find((s) => s.key === key)?.label ?? key}
           onApplySection={(key, data) => {
             const s = cs.sections.find((x) => x.key === key);
@@ -238,5 +246,6 @@ export default function DiagnosticoWorkspace({
         }}
       />
     </div>
+    </>
   );
 }

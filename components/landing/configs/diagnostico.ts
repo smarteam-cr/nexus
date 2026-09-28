@@ -5,8 +5,9 @@
  * `landingConfigForDiagnostico()`. Espeja `configs/exploracion.ts`. Las defs server-safe
  * viven en `diagnostico.defs.ts`.
  *
- * CERO componentes nuevos: las 8 secciones activas se rinden con renderers YA
- * construidos del motor —
+ * Tres componentes PROPIOS desde el 2026-09-28 (sections-diagnostico.tsx): los del hilo con
+ * códigos — objetivos, explicación del problema y preguntas —, que ningún renderer tenía. El resto
+ * se rinde con renderers YA construidos del motor —
  *   · `hero` del Business Case (de cara al cliente: brand row + portada),
  *   · `process_mapping` para el "cómo operás hoy vs cómo vas a operar",
  *   · `escala_posicion` para la Escala 5.2 por capa (compartido con Propuesta, Kickoff y Entrega),
@@ -23,6 +24,11 @@ import { WebDiagnosisSection } from "../sections-website";
 import { ProcessMappingSection } from "../sections-shared";
 import { EscalaPosicionSection } from "../sections-escala";
 import { KickoffProseSection, KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffSections";
+import {
+  ObjetivosDiagnosticoSection,
+  ProblemaDiagnosticoSection,
+  PreguntasDiagnosticoSection,
+} from "../sections-diagnostico";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const DIAGNOSTICO_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
@@ -35,6 +41,10 @@ export const DIAGNOSTICO_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>
   pain: PainSection,
   web_diagnosis: WebDiagnosisSection,
   kickoff_cta: KickoffCtaSection,
+  // El HILO (2026-09-28): objetivos OBJ, síntomas S → causas F → consecuencias, y las preguntas.
+  diagnostico_objetivos: ObjetivosDiagnosticoSection,
+  diagnostico_problema: ProblemaDiagnosticoSection,
+  diagnostico_preguntas: PreguntasDiagnosticoSection,
 };
 
 const DIAGNOSTICO_LANDING_CONFIG: LandingConfig = {

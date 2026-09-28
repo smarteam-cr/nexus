@@ -19,6 +19,10 @@
 import { prisma } from "@/lib/db/prisma";
 import { asignarDuenioManual } from "./duenio-manual";
 import { linkFeedsTimeline } from "@/lib/timeline/session-feeding";
+import { linkFeedsDiagnosis } from "./destinos-de-contexto";
+import { etiquetaDeSala } from "./etiqueta-de-sala";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
+import { getSessionCategories } from "@/lib/cache/session-categories";
 
 /** Compatible con `RawTranscript` de analyze (date en epoch ms). */
 export interface ProjectSourceSession {
@@ -29,6 +33,8 @@ export interface ProjectSourceSession {
   handoffOverride: boolean | null; // solo significativo en getProjectHandoffSessions
   /** El afinado del CRONOGRAMA (la X / «Agregar» de su Contexto). Ver lib/timeline/session-feeding. */
   timelineOverride: boolean | null;
+  /** El afinado del «Contexto del diagnóstico» (null = sugerida). Ver destinos-de-contexto.ts. */
+  diagnosisOverride: boolean | null;
   /** Link primario de la sesión en ESTE proyecto (política linkFeedsHandoff aguas abajo). */
   isPrimary: boolean;
   /** Confianza del clasificador para este link (null si manual/legacy). */
@@ -149,6 +155,7 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
     select: {
       handoffOverride: true,
       timelineOverride: true,
+      diagnosisOverride: true,
       isPrimary: true,
       confidence: true,
       session: {
@@ -180,6 +187,7 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
       participants: foldOrganizer(s.participants, s.organizerEmail),
       handoffOverride: l.handoffOverride,
       timelineOverride: l.timelineOverride,
+      diagnosisOverride: l.diagnosisOverride,
       isPrimary: l.isPrimary,
       confidence: l.confidence,
     });
@@ -227,6 +235,27 @@ export async function getProjectTimelineSessions(projectId: string): Promise<Pro
 }
 
 /**
+ * Sesiones que alimentan al DIAGNÓSTICO (2026-09-28, «Contexto del diagnóstico»): de la membresía
+ * del proyecto, las SUGERIDAS (reuniones con el cliente que nadie sacó) más las agregadas a mano.
+ * Mismo chokepoint que el resto, y la regla es la del panel (`linkFeedsDiagnosis`): lo que la
+ * pantalla muestra como «alimenta» es exactamente lo que lee el runner. Las futuras NO se cortan
+ * acá: eso lo hace quien arma el material.
+ */
+export async function getProjectDiagnosisSessions(projectId: string): Promise<ProjectSourcesResult> {
+  const [r, categorias] = await Promise.all([getProjectMemberSessions(projectId), getSessionCategories()]);
+  const dominiosPropios = buildInternalDomainsSet(categorias);
+  return {
+    sessions: r.sessions.filter((s) =>
+      linkFeedsDiagnosis(
+        { included: true, diagnosisOverride: s.diagnosisOverride },
+        etiquetaDeSala({ participants: s.participants }, dominiosPropios) === "CON EL CLIENTE",
+      ),
+    ),
+    dropped: r.dropped,
+  };
+}
+
+/**
  * Todas las sesiones de un CLIENTE (client-wide), por la misma regla de pertenencia.
  * Para los caminos que arman contexto a nivel cliente (no proyecto), ej. análisis y
  * el handoff legacy sin proyecto. Reemplaza los queries por título/dominio sin filtro.
@@ -263,6 +292,7 @@ export async function getClientSessions(
     // primario/confianza; estos campos existen solo para satisfacer la interface.
     handoffOverride: null,
     timelineOverride: null,
+    diagnosisOverride: null,
     isPrimary: false,
     confidence: null,
   }));

@@ -11,6 +11,8 @@
  *   - included === false         → tombstone: un humano EXCLUYÓ este proyecto
  *   - handoffOverride !== null   → la "X"/"Agregar" del panel de handoff lo tocó
  *   - timelineOverride === true  → el CSE eligió la reunión en el Contexto del CRONOGRAMA (2026-09-23)
+ *   - diagnosisOverride === true → el CSE la agregó en el Contexto del DIAGNÓSTICO (2026-09-28). La X
+ *                                  (`false`) no lockea, por la misma razón que la del cronograma.
  *
  * Desde la segunda versión (2026-09-23, entra solo lo elegido) la X escribe `null`; un `false` solo
  * queda de la primera. Ninguno de los dos lockea, y el motivo sigue siendo el de abajo.
@@ -37,6 +39,7 @@ export interface SessionProjectLockFields {
   included: boolean;
   handoffOverride: boolean | null;
   timelineOverride: boolean | null;
+  diagnosisOverride: boolean | null;
 }
 
 /** ¿Un humano tocó este link? Entonces el clasificador no lo modifica ni lo borra. */
@@ -46,7 +49,8 @@ export function isLockedLink(l: SessionProjectLockFields): boolean {
     l.reviewedAt !== null ||
     !l.included ||
     l.handoffOverride !== null ||
-    l.timelineOverride === true
+    l.timelineOverride === true ||
+    l.diagnosisOverride === true
   );
 }
 
@@ -67,5 +71,10 @@ export const WHERE_VINCULO_VIRGEN = {
   reviewedAt: null,
   included: true,
   handoffOverride: null,
-  OR: [{ timelineOverride: null }, { timelineOverride: false }],
+  // Dos OR con la misma regla (null o false) y un AND que los junta: un segundo `OR:` suelto en el
+  // mismo objeto pisaría al primero, y el vínculo elegido para el cronograma volvería a borrarse.
+  AND: [
+    { OR: [{ timelineOverride: null }, { timelineOverride: false }] },
+    { OR: [{ diagnosisOverride: null }, { diagnosisOverride: false }] },
+  ],
 };

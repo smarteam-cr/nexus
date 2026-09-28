@@ -333,6 +333,23 @@ export async function guardTimelineEdit(
 }
 
 /**
+ * Curar el «Contexto» de un DOCUMENTO (qué reuniones lo alimentan y sus notas): acceso al proyecto
+ * + la celda de GENERAR ese documento. Quien puede escribir el diagnóstico con IA puede elegir con qué
+ * se escribe; no hace falta una celda nueva. Curar no llama a la IA. Hoy solo el diagnóstico
+ * (lib/contexto/documento.ts); planificación e implementación entran sumando su fila allá.
+ */
+export async function guardContextoDelDocumento(
+  projectId: string,
+  seccion: "diagnostico",
+): Promise<(Awaited<ReturnType<typeof requirePermission>> & { clientId: string }) | NextResponse> {
+  const access = await guardAccessToProject(projectId);
+  if (access instanceof NextResponse) return access;
+  const guard = await guardPermission(seccion, "generate");
+  if (guard instanceof NextResponse) return guard;
+  return { ...guard, clientId: access.clientId };
+}
+
+/**
  * BORRAR del cronograma (tareas/fases/cronograma entero): acceso al CLIENTE del proyecto
  * (igual scope que la edición) + capacidad `deleteTimeline` (todos menos el CSE — el CSE
  * suspende, no borra). 404 si el proyecto no existe; 401/403 si falta acceso o capacidad.

@@ -54,6 +54,8 @@ export const NO_LABEL_KEYS = new Set([
 
 /** Traducciones de las claves de schema que humanizadas quedarían mal (acentos, jerga). */
 export const KEY_LABELS: Record<string, string> = {
+  /* El código del hilo del diagnóstico (OBJ-01, S1, F3). `humanize` lo imprimiría «Id». */
+  id: "Código",
   /* Titulares del mapeo de procesos de la Entrega. Sin entrada acá, `humanize()` los imprime
      como «Resumen hoy» / «Resumen sera» — sin tilde, porque humanize no la puede inventar. */
   resumenHoy: "El antes, en una línea",

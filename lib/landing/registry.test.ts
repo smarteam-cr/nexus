@@ -34,7 +34,11 @@ import { DESARROLLO_SECTION_DEFS } from "@/components/landing/configs/desarrollo
 import { DESARROLLO_SECTION_COMPONENTS, landingConfigForDesarrollo } from "@/components/landing/configs/desarrollo";
 import { EXPLORACION_SECTION_DEFS } from "@/components/landing/configs/exploracion.defs";
 import { EXPLORACION_SECTION_COMPONENTS, landingConfigForExploracion } from "@/components/landing/configs/exploracion";
-import { DIAGNOSTICO_SECTION_DEFS, DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
+import {
+  DIAGNOSTICO_SECTION_DEFS,
+  DIAGNOSTICO_DEF_BY_KEY,
+  SECCIONES_RETIRADAS_DEL_DIAGNOSTICO,
+} from "@/components/landing/configs/diagnostico.defs";
 import { DIAGNOSTICO_SECTION_COMPONENTS, landingConfigForDiagnostico } from "@/components/landing/configs/diagnostico";
 import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS, IMPLEMENTACION_CANVAS, ENTREGA_CANVAS } from "@/lib/canvas/canvas-defs";
 import { ENTREGA_SECTION_DEFS, ENTREGA_DEF_BY_KEY } from "@/components/landing/configs/entrega.defs";
@@ -432,6 +436,10 @@ describe("un renderer, un contrato de datos", () => {
     cta: "modulo",
     partner: "modulo",
     use_cases: "modulo",
+    // El HILO del diagnóstico (2026-09-28): los códigos S / F / OBJ son propios de ese documento.
+    diagnostico_objetivos: "modulo",
+    diagnostico_problema: "modulo",
+    diagnostico_preguntas: "modulo",
     site_architecture: "modulo",
     web_methodology: "modulo",
     web_scope: "modulo",
@@ -754,13 +762,13 @@ describe("Diagnóstico: registry completo + keys congeladas", () => {
     );
   });
 
-  it("snapshot de keys: hero abre, cierre cierra, las legacy se conservan", () => {
-    // Las 8 keys legacy SIGUEN acá a propósito: el contenido markdown viejo (Teamnet)
-    // se rinde vía __legacyMd. Tres son solo-lectura (el agente nuevo no las escribe).
+  it("snapshot de keys: el hilo en orden, cierre cierra, y las retiradas al final solo-lectura", () => {
+    /* 2026-09-28 — EL HILO. Las retiradas SIGUEN como defs a propósito: un diagnóstico viejo se ve
+       igual hasta que se regenera (y ahí el runner las borra). No están en el canon del canvas. */
     expect(DIAGNOSTICO_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "diagnostico", "contexto_alcance", "estado_actual", "estado_deseado",
-      "escala", "causa_raiz", "gap_analysis", "impacto_gap",
-      "recomendaciones", "proximos_pasos", "cierre",
+      "diagnostico", "contexto_alcance", "situacion_actual", "objetivos", "problema", "desafio",
+      "estado_actual", "fortalezas", "gap_analysis", "preguntas", "quienes", "cierre",
+      ...SECCIONES_RETIRADAS_DEL_DIAGNOSTICO,
     ]);
   });
 
@@ -776,14 +784,20 @@ describe("Diagnóstico: registry completo + keys congeladas", () => {
     // Es literalmente el bug que tenía el diagnóstico viejo (prompt de 6 secciones
     // contra canvas de 8): el agente emitía keys sin sección y no se escribía nada.
     const canvasKeys = new Set(DIAGNOSTICO_CANVAS.sections.map((s) => s.key));
+    const retiradas = new Set<string>(SECCIONES_RETIRADAS_DEL_DIAGNOSTICO);
     for (const d of DIAGNOSTICO_SECTION_DEFS) {
+      if (retiradas.has(d.key)) {
+        // Una retirada en el canon se volvería a crear en cada canvas nuevo.
+        expect(canvasKeys.has(d.key), `la retirada "${d.key}" volvió al canon del canvas`).toBe(false);
+        continue;
+      }
       expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
     }
-    expect(DIAGNOSTICO_CANVAS.sections.length).toBe(DIAGNOSTICO_SECTION_DEFS.length);
+    expect(DIAGNOSTICO_CANVAS.sections.length).toBe(DIAGNOSTICO_SECTION_DEFS.length - retiradas.size);
   });
 
-  it("las solo-lectura legacy y el cierre NO las escribe el agente", () => {
-    for (const key of ["estado_deseado", "impacto_gap", "proximos_pasos", "cierre"]) {
+  it("las retiradas y el cierre NO las escribe el agente", () => {
+    for (const key of [...SECCIONES_RETIRADAS_DEL_DIAGNOSTICO, "cierre"]) {
       expect(DIAGNOSTICO_DEF_BY_KEY[key].agentGenerated, `${key} debería ser agentGenerated:false`).toBe(false);
     }
   });
@@ -1045,7 +1059,15 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
     }
   });
 
-  it("solo la Entrega cambia los rótulos; los otros cuatro miran hacia adelante", () => {
+  it("solo la Entrega y el Diagnóstico cambian los rótulos; los otros miran hacia adelante", () => {
+    /* El Diagnóstico mira SOLO el hoy desde el 2026-09-28 (decisión de Elías: «cómo va a operar»
+       es enfoque y vive en Planificación): su columna derecha dice dónde se traba ese hoy, nunca
+       «Con la implementación». */
+    expect(DIAGNOSTICO_DEF_BY_KEY["estado_actual"].compara).toEqual({
+      izquierda: "hoy",
+      derecha: "dondeSeTraba",
+      phDerecha: "dondeSeTrabaPh",
+    });
     /* «Con la implementación» en un documento de cierre convierte un hecho en una promesa.
        Y al revés: «Ahora» en un diagnóstico afirmaría algo que todavía no pasó. */
     expect(ENTREGA_DEF_BY_KEY["resumen"].compara).toEqual({
@@ -1061,7 +1083,6 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
        template— así que enumerar los tres arrays dejaba fuera justo la propuesta comercial,
        donde rotular «Antes/Ahora» sobre un proyecto que todavía no se vendió es lo más caro. */
     const otros = [
-      ...DIAGNOSTICO_SECTION_DEFS,
       ...PLANIFICACION_SECTION_DEFS,
       ...IMPLEMENTACION_SECTION_DEFS,
       ...Object.values(BC_TEMPLATES).flatMap((t) => t.sections),

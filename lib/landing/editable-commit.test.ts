@@ -75,8 +75,11 @@ describe("🔒 el conocimiento se mide por CANTIDAD, no por si trae texto", () =
       src.includes("escala.count > 0"),
       "el Diagnóstico volvió a decidir por `escala.text`: puede puntuar al cliente sin la vara",
     ).toBe(true);
+    /* ⚠ Desde el 2026-09-28 el Diagnóstico NO ubica en la Escala (decisión de Elías: llega la 7.0 y
+       se arma aparte). Si vuelve, tiene que volver por el armado compartido y no por su cuenta:
+       esta assert se da vuelta ese día. */
     const runner = fs.readFileSync(path.join(process.cwd(), "lib/canvas/diagnostico-generate.ts"), "utf8");
-    expect(runner.includes("escalaParaElDiagnostico("), "el runner dejó de pasar por el armado compartido").toBe(true);
+    expect(runner.includes("loadKnowledgeByTags("), "el Diagnóstico volvió a cargar la Escala por su cuenta").toBe(false);
   });
 
   it("Implementación sigue usando el mismo criterio", () => {

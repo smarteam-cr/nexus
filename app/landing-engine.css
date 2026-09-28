@@ -2426,3 +2426,44 @@
 @media (max-width: 640px) {
   .stl-embed-row { grid-template-columns: 1fr; }
 }
+
+/* ── El HILO del diagnóstico (components/landing/sections-diagnostico.tsx) ───────────────────
+   Códigos que unen objetivos (OBJ), síntomas (S) y causas (F). La plaquita es la misma en las
+   tres secciones: el CSE aprende a leerla una vez. */
+.stl .stl-codigo {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dark-bg);
+  color: var(--dark-text);
+  margin-bottom: 8px;
+  min-width: 28px;
+}
+.stl .stl-refs { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.stl .stl-refs > span:first-child { font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10.5px; }
+.stl .stl-obj-grupos { align-items: start; }
+.stl .stl-obj-titulo { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin-bottom: 12px; }
+.stl .stl-obj-lista { display: grid; gap: 12px; margin-bottom: 12px; }
+.stl .stl-obj-medida { font-weight: 600; color: var(--text); }
+.stl .stl-hilo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+.stl .stl-hilo-col { display: grid; gap: 12px; }
+.stl .stl-hilo-titulo { font-size: 14px; font-weight: 700; color: var(--text); }
+.stl .stl-hilo-titulo span { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.stl .stl-hilo-card {
+  position: relative;
+  border-radius: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.stl .stl-hilo-sintomas .stl-hilo-card { border-left: 4px solid #D97706; }
+.stl .stl-hilo-causas .stl-hilo-card { border-left: 4px solid var(--blue); }
+.stl .stl-hilo-consecuencias .stl-hilo-card { border-left: 4px solid #C2400F; background: var(--teal-soft); border-color: var(--cream-line); }
+.stl .stl-hilo-card-titulo { font-size: 14.5px; font-weight: 700; color: var(--text); line-height: 1.35; }
+.stl .stl-hilo-card-detalle { font-size: 13.5px; color: var(--text-2); margin-top: 4px; line-height: 1.5; }
+@media (max-width: 880px) {
+  .stl .stl-hilo { grid-template-columns: 1fr; }
+}

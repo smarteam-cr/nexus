@@ -109,6 +109,8 @@ const GUARDAS = [
   "guardProjectCanvasDelete(",
   "guardTimelineEdit(",
   "guardTimelineDelete(",
+  // `guardAccessToProject` + la celda de generar el documento (2026-09-28, contexto del diagnóstico).
+  "guardContextoDelDocumento(",
   // E4 (2026-09): salieron `guardTimelineFullRegen(` y `guardTimelineDetailApply(`, borrados de
   // api-guards.ts sin usos (los pedían apply-all y la vista previa de una fase, que se fueron en E2b).
   "withProjectAccess",

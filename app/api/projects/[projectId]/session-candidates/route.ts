@@ -16,8 +16,10 @@ import {
   forzadaAMano,
   origenDelVinculo,
   parseDestino,
+  sugiereConElCliente,
   usaReglaDeRelevancia,
 } from "@/lib/sessions/destinos-de-contexto";
+import { etiquetaDeSala } from "@/lib/sessions/etiqueta-de-sala";
 
 /**
  * GET /api/projects/[projectId]/session-candidates
@@ -38,6 +40,12 @@ import {
  * del PROYECTO, sin la regla de relevancia del handoff. Las de su calendario las trae
  * .../timeline/calendario. Lo que cambia entre los dos destinos vive en
  * `lib/sessions/destinos-de-contexto.ts`; elegir/sacar va por POST .../timeline/sessions.
+ *
+ * ── `?para=diagnostico` (2026-09-28, «Contexto del diagnóstico») ──────────────
+ * Arranca SUGERIDO: `feeding` son las reuniones del proyecto CON EL CLIENTE que nadie sacó, más las
+ * agregadas a mano; `excluded` son las que el CSE sacó (la X). Las candidatas son las del cliente,
+ * como en el handoff, y `applies` marca las que son con el cliente. Sacar/agregar va por POST
+ * .../contexto/diagnosis/sessions.
  */
 export async function GET(
   req: NextRequest,
@@ -61,6 +69,7 @@ export async function GET(
       rationale: true,
       handoffOverride: true,
       timelineOverride: true,
+      diagnosisOverride: true,
       included: true,
       reviewedAt: true,
       isPrimary: true,
@@ -86,11 +95,23 @@ export async function GET(
   // (included=false, tombstone humano) no alimenta NADA; si es miembro, aplica la
   // política de link (primario / confianza alta / forzada) + la regla de relevancia.
   //   El cronograma no tiene regla de relevancia: `alimenta` ni la consulta en ese destino.
+  //   El diagnóstico tiene la suya: la reunión fue con el cliente (la sugerencia).
+  const esCronograma = destino === "cronograma";
+  const sugiere = sugiereConElCliente(destino);
+  const dominiosPropios = (guard.interno && !esCronograma) || sugiere
+    ? buildInternalDomainsSet(
+        await prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
+      )
+    : new Set<string>();
+  const conElCliente = (s: { participants: string[]; organizerEmail: string | null }) =>
+    etiquetaDeSala(s, dominiosPropios) === "CON EL CLIENTE";
   const feeds = (r: (typeof linkedRows)[number]): boolean =>
     alimenta(
       destino,
       r,
-      usaReglaDeRelevancia(destino) && applies(r.session.title, r.session.participants, r.session.organizerEmail),
+      usaReglaDeRelevancia(destino)
+        ? applies(r.session.title, r.session.participants, r.session.organizerEmail)
+        : sugiere && conElCliente(r.session),
     );
 
   // Atribución multi-proyecto: nombres de los OTROS proyectos donde también está
@@ -160,7 +181,6 @@ export async function GET(
   /* El cronograma no ofrece las demás reuniones del cliente: sus candidatas son las del PROYECTO
      (abajo) y las del calendario de quien busca (.../timeline/calendario), que es lo que pidió
      Elías. Por eso ni se consultan. */
-  const esCronograma = destino === "cronograma";
   const clientSessions = esCronograma ? [] : await prisma.firefliesSession.findMany({
     where: {
       ...whereBelongsToClient(clientId),
@@ -221,11 +241,6 @@ export async function GET(
       })
     : [];
 
-  const dominiosPropios = guard.interno && !esCronograma
-    ? buildInternalDomainsSet(
-        await prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
-      )
-    : new Set<string>();
   /* El tope va acá, ya filtrado. 300 es lo que una persona puede recorrer con el buscador sin
      que la respuesta pese; si alguna vez no alcanza, el síntoma es "no la encuentro" y no un
      documento mal armado. */
@@ -295,7 +310,11 @@ export async function GET(
          así que ninguna se destaca ni se atenúa por el título. */
       const cls = usaReglaDeRelevancia(destino)
         ? classifyHandoffSession(s.title, s.participants, s.organizerEmail, salesEmails)
-        : { include: true, reason: "" };
+        : sugiere
+          ? conElCliente(s)
+            ? { include: true, reason: "reunión con el cliente" }
+            : { include: false, reason: "puertas adentro o sin participantes registrados" }
+          : { include: true, reason: "" };
       return {
         sessionId: s.id,
         title: s.title,

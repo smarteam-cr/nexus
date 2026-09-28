@@ -27,6 +27,7 @@ function virginLink(overrides: Partial<SessionProjectLockFields> = {}): SessionP
     included: true,
     handoffOverride: null,
     timelineOverride: null,
+    diagnosisOverride: null,
     ...overrides,
   };
 }
@@ -68,14 +69,23 @@ test("E — el «Agregar» del cronograma lockea; la X NO (y así la reunión si
   expect(isLockedLink(virginLink({ timelineOverride: false }))).toBe(false);
 });
 
+test("E2 — el «Agregar» del diagnóstico lockea; su X NO (misma razón que el cronograma)", () => {
+  /* 2026-09-28. El diagnóstico arranca SUGERIDO: su X (`false`) dice «no la uses para ESTE
+     diagnóstico», no «esta reunión es de este proyecto» — no puede congelar la clasificación. */
+  expect(isLockedLink(virginLink({ diagnosisOverride: true }))).toBe(true);
+  expect(isLockedLink(virginLink({ diagnosisOverride: false }))).toBe(false);
+});
+
 /** Evaluador mínimo del where compartido, con la semántica de SQL para NULL. */
 function coincideConVirgen(l: SessionProjectLockFields): boolean {
   const w = WHERE_VINCULO_VIRGEN;
+  const campo = (c: object): keyof SessionProjectLockFields => Object.keys(c)[0] as keyof SessionProjectLockFields;
   return (
     l.reviewedAt === w.reviewedAt &&
     l.included === w.included &&
     l.handoffOverride === w.handoffOverride &&
-    w.OR.some((c) => c.timelineOverride === l.timelineOverride)
+    // Cada grupo del AND es un OR sobre UNA columna: la fila entra si esa columna vale alguna opción.
+    w.AND.every((g) => g.OR.some((c) => l[campo(c)] === (c as Record<string, unknown>)[campo(c)]))
   );
 }
 
@@ -89,7 +99,8 @@ test("F — el where del vínculo virgen es el negativo EXACTO del candado", () 
     for (const included of [true, false])
       for (const handoffOverride of [null, true, false])
         for (const timelineOverride of [null, true, false])
-          casos.push(virginLink({ reviewedAt, included, handoffOverride, timelineOverride }));
+          for (const diagnosisOverride of [null, true, false])
+            casos.push(virginLink({ reviewedAt, included, handoffOverride, timelineOverride, diagnosisOverride }));
   for (const c of casos) {
     expect(coincideConVirgen(c), JSON.stringify(c)).toBe(!isLockedLink(c));
   }

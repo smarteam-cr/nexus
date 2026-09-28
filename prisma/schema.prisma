@@ -490,6 +490,7 @@ model Project {
   handoff             Handoff?
   handoffSources      HandoffSource[]
   timelineSources     TimelineSource[]
+  notasDeContexto     NotaDeContexto[]
   timelineEvents      TimelineEvent[] // Éxito del cliente: eventos crudos del cronograma
   csAlerts            CsAlert[] // Éxito del cliente: alertas del watchdog
   serviciosCobranza   ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
@@ -666,6 +667,26 @@ model TimelineSource {
   deletedAt      DateTime?
 
   @@index([projectId, createdAt])
+}
+
+// Notas que el CSE pega en el «Contexto» de un DOCUMENTO (diagnóstico hoy; planificación e
+// implementación después): una por pieza del registro (`pieza` = slug: "diagnosis"…). Tabla genérica
+// a propósito — el cronograma tiene la suya (TimelineSource) por historia, y sumar una tabla por
+// documento sería repetir el SQL, el RLS y las rutas cada vez. La lee SOLO el runner de su pieza.
+// RLS encendida en su SQL (2026-09-28-contexto-diagnostico.sql).
+model NotaDeContexto {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pieza          String
+  title          String?
+  content        String    @db.Text
+  createdByEmail String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  @@index([projectId, pieza, createdAt])
 }
 
 // ─── ProjectTimeline + TimelinePhase ──────────────────────────────────────────
@@ -2083,6 +2104,11 @@ model SessionProject {
   // Entrega ni de las minutas. La regla vive en lib/timeline/session-feeding.ts. ⚠ true lockea el
   // link contra el clasificador (session-project-locks.ts); null y false no.
   timelineOverride Boolean?
+  // «Contexto del diagnóstico» (2026-09-28). A diferencia del cronograma, arranca SUGERIDO: null =
+  // alimenta si es una reunión CON EL CLIENTE · true = agregada a mano · false = la X (sale SOLO del
+  // diagnóstico). La regla vive en lib/sessions/destinos-de-contexto.ts. ⚠ true lockea el link contra
+  // el clasificador (session-project-locks.ts); null y false no, por la misma razón que el cronograma.
+  diagnosisOverride Boolean?
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador
   createdAt             DateTime @default(now())

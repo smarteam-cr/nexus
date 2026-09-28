@@ -6,8 +6,10 @@ import {
   alimenta,
   excluidaAMano,
   forzadaAMano,
+  linkFeedsDiagnosis,
   origenDelVinculo,
   parseDestino,
+  sugiereConElCliente,
   usaReglaDeRelevancia,
   type VinculoDelPanel,
 } from "./destinos-de-contexto";
@@ -28,6 +30,7 @@ const base: VinculoDelPanel = {
   confidence: null,
   handoffOverride: null,
   timelineOverride: null,
+  diagnosisOverride: null,
 };
 
 /** Todas las combinaciones que importan, para comparar contra la regla ORIGINAL del handoff. */
@@ -37,10 +40,11 @@ for (const included of [true, false])
     for (const confidence of [null, 0.2, 0.9])
       for (const handoffOverride of [null, true, false])
         for (const timelineOverride of [null, true, false])
-          COMBINACIONES.push({ included, isPrimary, confidence, handoffOverride, timelineOverride });
+          for (const diagnosisOverride of [null, true, false])
+            COMBINACIONES.push({ included, isPrimary, confidence, handoffOverride, timelineOverride, diagnosisOverride });
 
 describe("el HANDOFF no cambia ni una coma", () => {
-  it("alimenta igual que la regla original, en las 108 combinaciones × aplica/no aplica", () => {
+  it("alimenta igual que la regla original, en las 324 combinaciones × aplica/no aplica", () => {
     for (const v of COMBINACIONES) {
       for (const aplica of [true, false]) {
         const original =
@@ -100,12 +104,51 @@ describe("el CRONOGRAMA tiene su propia regla", () => {
   });
 });
 
+describe("el DIAGNÓSTICO arranca sugerido", () => {
+  it("sin tocar, entra si fue con el cliente — y no entra si fue puertas adentro", () => {
+    /* Decisión de Elías (2026-09-28): si arrancara vacío como el cronograma, el primer diagnóstico
+       saldría sin reuniones cada vez que el CSE se olvida de elegir. */
+    expect(alimenta("diagnostico", base, true)).toBe(true);
+    expect(alimenta("diagnostico", base, false)).toBe(false);
+  });
+
+  it("la X saca aunque sea con el cliente; «Agregar» mete aunque no lo sea; el tombstone manda", () => {
+    expect(alimenta("diagnostico", { ...base, diagnosisOverride: false }, true)).toBe(false);
+    expect(alimenta("diagnostico", { ...base, diagnosisOverride: true }, false)).toBe(true);
+    expect(alimenta("diagnostico", { ...base, included: false, diagnosisOverride: true }, true)).toBe(false);
+    expect(excluidaAMano("diagnostico", { ...base, diagnosisOverride: false })).toBe(true);
+    expect(forzadaAMano("diagnostico", { ...base, diagnosisOverride: true })).toBe(true);
+  });
+
+  it("no lo mueven el afinado del handoff ni el del cronograma — ni el suyo mueve a los otros", () => {
+    expect(alimenta("diagnostico", { ...base, handoffOverride: false, timelineOverride: false }, true)).toBe(true);
+    expect(alimenta("diagnostico", { ...base, handoffOverride: true, timelineOverride: true }, false)).toBe(false);
+    expect(alimenta("cronograma", { ...base, diagnosisOverride: true }, true)).toBe(false);
+    expect(excluidaAMano("handoff", { ...base, diagnosisOverride: false })).toBe(false);
+  });
+
+  it("dice por qué alimenta con sus palabras", () => {
+    expect(origenDelVinculo("diagnostico", base)).toBe("sugerida: reunión con el cliente");
+    expect(origenDelVinculo("diagnostico", { ...base, diagnosisOverride: true })).toBe("agregada a mano");
+    expect(sugiereConElCliente("diagnostico")).toBe(true);
+    expect(sugiereConElCliente("handoff")).toBe(false);
+    expect(usaReglaDeRelevancia("diagnostico")).toBe(false);
+  });
+
+  it("linkFeedsDiagnosis es la misma regla que el panel (la que lee el runner)", () => {
+    for (const v of COMBINACIONES)
+      for (const conCliente of [true, false])
+        expect(linkFeedsDiagnosis(v, conCliente)).toBe(alimenta("diagnostico", v, conCliente));
+  });
+});
+
 describe("el destino por defecto es el histórico", () => {
   it("sin `?para=` o con basura, es el handoff", () => {
     expect(parseDestino(null)).toBe("handoff");
     expect(parseDestino("")).toBe("handoff");
     expect(parseDestino("otra-cosa")).toBe("handoff");
     expect(parseDestino("cronograma")).toBe("cronograma");
+    expect(parseDestino("diagnostico")).toBe("diagnostico");
   });
 });
 

@@ -227,7 +227,11 @@ describe("⭐ las puertas son las del CRONOGRAMA, no las del handoff", () => {
   it("la pantalla escribe en la puerta de SU destino", () => {
     const panel = leer("components/clients/SessionSelectionReview.tsx");
     expect(panel).toContain("`/api/projects/${projectId}/timeline/sessions`");
-    expect(panel, "el cronograma pide la lista con la regla del handoff").toContain("?para=cronograma");
+    /* Desde el 2026-09-28 (tercer destino, el diagnóstico) el `?para=` se arma con el destino: todo
+       destino que no es el handoff lo manda, y solo el handoff va sin él. */
+    expect(panel, "el cronograma pide la lista con la regla del handoff").toContain(
+      'destino === "handoff" ? "" : `?para=${destino}`',
+    );
     const seccion = leer("components/canvas/CronogramaContextSection.tsx");
     expect(seccion).toContain('destino="cronograma"');
     expect(seccion).toContain("/timeline/sources");
