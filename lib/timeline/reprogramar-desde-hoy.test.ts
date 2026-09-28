@@ -43,6 +43,7 @@ import {
   type ReprogramacionDesdeHoy,
 } from "./reprogramar-desde-hoy";
 import { computePhaseRanges, timelineSpan } from "./weeks";
+import { esFaseDeHito } from "./hitos";
 import { medirM3yM4 } from "./medicion-de-la-propuesta";
 import { mensajeDeLaPropuesta } from "./mensaje-de-la-propuesta";
 
@@ -435,7 +436,37 @@ function comprobarLoEmpezadoDespues(
     for (const f of empezadas) expect(d.inicio.get(f.id), `${combinacion} · movió el inicio de ${f.id}, que empezó`).toBe(antes.inicio.get(f.id));
     for (const t of conAvance) expect(d.tarea.get(t.id), `${combinacion} · movió ${t.id} (${t.status})`).toBe(antes.tarea.get(t.id));
   }
+  /* Revisión 2 de M1–M5 (hallazgo 1), con todo marcado: lo que venía DETRÁS de una fase que se queda (por su choque o
+     porque se fija al aplicar) no vuelve a su lugar viejo. (a) Ninguna fase sin empezar que la propuesta corrió termina en
+     una semana que ya pasó, si en la propuesta no terminaba ahí. (b) En el orden del plan, el cierre (la fase de cierre o
+     la última: `esFaseDeHito`) sin empezar no arranca antes de que termine lo que lo precedía, como en (5). Solo si se
+     aplica algo: con todo en choque no se escribe nada (ni el pin ni las seguidoras) y el cronograma queda como está. */
   const plan = planDeAplicacion(despues, leer(con));
+  const H = r.semana;
+  const propuesta = semanas(vivo, con, []);
+  const aplicado = semanas(despues, con, []);
+  const fin = (s: ReturnType<typeof semanas>, clave: string) => s.inicio.get(clave)! + s.duracion.get(clave)!;
+  const idsEmpezadas = new Set(empezadas.map((f) => f.id));
+  const sinEmpezar = [...propuesta.inicio.keys()].filter((clave) => !idsEmpezadas.has(clave) && aplicado.inicio.has(clave));
+  for (const clave of plan.marcadas > 0 ? sinEmpezar : []) {
+    const laCorrio = propuesta.inicio.get(clave) !== antes.inicio.get(clave) || propuesta.duracion.get(clave) !== antes.duracion.get(clave);
+    if (!laCorrio || fin(propuesta, clave) <= H) continue;
+    expect(fin(aplicado, clave), `${nombre} · ${clave}, sin empezar y reprogramada, vuelve a semanas que ya pasaron`).toBeGreaterThan(H);
+  }
+  if (plan.marcadas > 0 && fases === "en-el-orden-del-plan") {
+    const e = proyectar(vivo, leer(guardado)).fases;
+    const r0 = computePhaseRanges(e);
+    const cero = conSemanaCero ? vivo.fases[0]?.id : undefined;
+    e.forEach((f, i) => {
+      if (idsEmpezadas.has(f.clave) || !aplicado.inicio.has(f.clave) || !esFaseDeHito(f.name, i === e.length - 1)) return;
+      for (let j = 0; j < i; j++) {
+        if (e[j].clave === cero || r0[j].end > r0[i].start || !aplicado.inicio.has(e[j].clave)) continue;
+        expect(aplicado.inicio.get(f.clave)!, `${nombre} · el cierre ${f.clave} arranca antes de que termine ${e[j].clave}`).toBeGreaterThanOrEqual(
+          fin(aplicado, e[j].clave),
+        );
+      }
+    });
+  }
   return plan.items.filter((it) => it.choque === "Empezó después de la propuesta: no se mueve.").length + plan.fijadasAlAplicar.length;
 }
 
@@ -512,6 +543,66 @@ const fase = (id: string, name: string, durationWeeks: number, startWeek: number
 });
 /** Wherex: el arranque y el `hoy` del fixture (S18). */
 const conVivo = (fases: FaseViva[]): Vivo => ({ ancla: fx.ancla, fases });
+
+/**
+ * Revisión 2 de M1–M5 (2026-09-27, hallazgo 1): la revisión dejó quieta la fase que empezó después de la propuesta, pero
+ * lo que venía DETRÁS de ella sin empezar, corrido de rebote y sin casilla, volvía a su lugar viejo: pendientes en semanas
+ * que ya pasaron, sin línea, y un cierre antes del trabajo que el mismo «Aplicar» estira. Ahora se queda donde lo puso la
+ * propuesta (`seguidorasAlAplicar`). Las ediciones que la ponen en rojo: quitar las seguidoras del paso 10 de
+ * `planDeAplicacion` (o seguir el cursor sin mirar dónde las ponía la propuesta).
+ */
+describe("Revisión 2 de M1–M5 · lo que venía detrás de una fase que se queda al aplicar", { timeout: 30_000 }, () => {
+  const marcarHechas = (vivo: Vivo, hechas: ReadonlySet<string>): Vivo => ({
+    ...vivo,
+    fases: vivo.fases.map((f) => ({ ...f, tareas: f.tareas?.map((t) => (hechas.has(t.id) ? { ...t, status: "DONE" } : t)) })),
+  });
+
+  it("⭐ la sonda p1: marcas hecha una tarea de «Integración»; se queda en S11, y «Capacitación» y el cierre siguen en S30 y S33", () => {
+    // Hoy es la S20. «Configuración» (empezada) se estira hasta la S25 y lo demás iba de rebote detrás.
+    const hoy = new Date("2026-09-27T12:00:00-06:00");
+    const vivo: Vivo = {
+      ancla: new Date(hoy.getTime() - (20 * 7 + 2) * 86_400_000).toISOString(),
+      fases: [
+        fase("S0", "Semana 0", 1, null, "DONE", [tarea("s0", 0, "DONE")]),
+        fase("W", "Configuración", 10, null, "IN_PROGRESS", [tarea("w0", 0, "DONE"), tarea("w1", 2, "DONE"), tarea("w2", 4), tarea("w3", 8)]),
+        fase("X", "Integración", 4, null, "PENDING", [tarea("x0", 0), tarea("x1", 2)]),
+        fase("Y", "Capacitación", 3, null, "PENDING", [tarea("y0", 0), tarea("y1", 2)]),
+        fase("C", "Cierre", 1, null, "PENDING", [tarea("c0", 0, "PENDING", { title: "Reunión de cierre" })]),
+      ],
+    };
+    const hechas = new Set(["x0"]);
+    for (const fases of ["en-el-orden-del-plan", "todo-desde-hoy"] as const) {
+      expect(comprobarLoEmpezadoDespues(`p1 · ${fases}`, vivo, SIN_LA_IA(), hoy, fases, true, hechas), fases).toBe(1);
+    }
+    const r = reprogramar(SIN_LA_IA(), "en-el-orden-del-plan", vivo, hoy);
+    expect(r.semana).toBe(20);
+    const con = conLaReprogramacion(SIN_LA_IA(), r);
+    const inicios = (v: Vivo) => Object.fromEntries(semanas(v, con, []).inicio);
+    expect(inicios(vivo), "la propuesta").toEqual({ S0: 0, W: 1, X: 26, Y: 30, C: 33 });
+    const despues = marcarHechas(vivo, hechas);
+    expect(inicios(despues), "al aplicar").toEqual({ S0: 0, W: 1, X: 11, Y: 30, C: 33 });
+    const plan = planDeAplicacion(despues, leer(con));
+    expect(plan.fijadasAlAplicar).toEqual([{ faseId: "X", semana: 11 }]);
+    expect(plan.seguidorasAlAplicar).toEqual([{ fase: "Y", semana: 30 }]);
+    expect(plan.escrituras.fases.find((f) => f.id === "Y")?.campos, "no se escribe su inicio").toEqual({ startWeek: 30 });
+    expect(plan.escrituras.fases.some((f) => f.id === "C"), "el cierre va contiguo detrás").toBe(false);
+  });
+
+  it("⭐ Wherex: marcas hecha una tarea de «Cierre y entrega» («Fase G»): su casilla choca y «Configuración Marketing Hub» («Fase H») sigue en S25", () => {
+    const g = VIVO.fases.find((f) => f.id === "f08")!;
+    const hechas = new Set([g.tareas!.find((t) => t.status === "PENDING" && t.weekIndex < g.durationWeeks)!.id]);
+    let actuo = 0;
+    actuo += comprobarLoEmpezadoDespues("fixture sin la IA · f08", VIVO, SIN_LA_IA(), HOY, "en-el-orden-del-plan", true, hechas);
+    actuo += comprobarLoEmpezadoDespues("fixture con la IA · f08", VIVO, guardadoDelPaso1(), HOY, "en-el-orden-del-plan", true, hechas);
+    actuo += comprobarLoEmpezadoDespues("fixture · todo desde hoy · f08", VIVO, SIN_LA_IA(), HOY, "todo-desde-hoy", true, hechas);
+    expect(actuo, "el choque de «Fase G» no actuó").toBe(3);
+    const con = conLaReprogramacion(SIN_LA_IA(), reprogramar(SIN_LA_IA(), "en-el-orden-del-plan"));
+    const despues = marcarHechas(VIVO, hechas);
+    const s = semanas(despues, con, []);
+    expect([s.inicio.get("f08"), s.inicio.get("f09")], "«Fase G» se queda en S11 y «Fase H» sigue en S25").toEqual([11, 25]);
+    expect(planDeAplicacion(despues, leer(con)).seguidorasAlAplicar).toEqual([{ fase: "f09", semana: 25 }]);
+  });
+});
 
 describe("M4 P4a · los casos", () => {
   it("⭐ la Semana 0: en un Desarrollo (sin Semana 0) la primera fase atrasada se reprograma; con Semana 0, no", () => {

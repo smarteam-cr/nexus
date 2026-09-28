@@ -21,6 +21,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  borradorVacio,
   claveDeFaseQueSeVa,
   claveDeTareaQueCambia,
   claveDeTareaQueSeVa,
@@ -53,6 +54,7 @@ import {
 } from "./borrador";
 import {
   avisoSugeridaALaUltima,
+  avisoYaEmpezo,
   avisoSugeridaEnSuSemana,
   fasesDeLaPropuesta,
   operarSobreElBorrador,
@@ -60,7 +62,9 @@ import {
   type OperacionSobreLaPropuesta,
 } from "./operar-sobre-el-borrador";
 import { describirOperaciones, type Operacion } from "./operaciones";
-import { sinReprogramacion } from "./reprogramar-desde-hoy";
+import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy, sinReprogramacion } from "./reprogramar-desde-hoy";
+import { vistaDeLaPropuesta } from "./vista-de-la-propuesta";
 
 const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
   id,
@@ -1103,5 +1107,50 @@ describe("13 · revisión de M1–M5: una casilla del sistema, o el pin, frente 
     // Sobre el pin del sistema, «déjala donde está» no lo borra.
     const sobreElPin = operar(BORRADOR, [{ op: "fase.arranque-relativo", phaseId: "c", semana: null }]);
     expect(deLaClave(sobreElPin.borrador, PIN_C.clave), "se borró el pin").toMatchObject({ fijaInicio: true, desdeHoy: true });
+  });
+});
+
+/**
+ * Revisión 2 de M1–M5 (2026-09-27, hallazgo 2): el paso 10 de `planDeAplicacion` fija CUALQUIER contigua empezada que lo
+ * que se aplica correría, también una que ya estaba empezada al calcular y que corre un pedido del chat (§0.1: una fase
+ * empezada no cambia de inicio). La línea decía «Empezó después de la propuesta… lo que se reprograma no la corre», falso
+ * dos veces, y el chat no se enteraba de que su pedido no se cumplía entero.
+ */
+describe("14 · revisión 2 de M1–M5: lo que pide el chat no corre una fase que ya empezó, y se dice", () => {
+  // La sonda p4: hoy es la S20. «Implementación» ya estaba empezada al calcular y nada la corría: el sistema mueve «Soporte».
+  const HOY = new Date("2026-09-27T12:00:00-06:00");
+  const VIVO_P4: Vivo = {
+    ancla: new Date(HOY.getTime() - (20 * 7 + 2) * 86_400_000).toISOString(),
+    fases: [
+      fase("s0", "Semana 0", 1, [tarea("s01", "Kickoff", 0, { status: "DONE" })], { status: "DONE" }),
+      fase("a", "Relevamiento", 3, [tarea("a0", "Relevar procesos", 0, { status: "DONE" })], { status: "DONE" }),
+      fase("x", "Implementación", 20, [tarea("x0", "Configurar", 0, { status: "DONE" }), tarea("x1", "Probar", 18)], { status: "IN_PROGRESS" }),
+      fase("z", "Soporte", 2, [tarea("z0", "Acompañar", 0)], { startWeek: 2 }),
+    ],
+  };
+  const vacio = borradorVacio({ pedido: "regenerar", corrida: "r" }) as unknown as Record<string, unknown>;
+  const R = reprogramarDesdeHoy({ vivo: VIVO_P4, borrador: leerBorrador(vacio)!, hoy: HOY, politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!;
+  const PROPUESTA = leerBorrador(conLaReprogramacion(vacio, R))!;
+  const operar = (operaciones: OperacionSobreLaPropuesta[]) =>
+    operarSobreElBorrador({ vivo: VIVO_P4, borrador: PROPUESTA, excluidos: [], operaciones, nuevaClave: () => "k" });
+  const YA_EMPEZO = "Ya empezó: se fija su inicio en S4 y lo que se aplica no la corre.";
+
+  it("⭐ «Relevamiento dura 5»: «Implementación» se queda en S4, su línea dice «Ya empezó…» y el chat recibe el aviso", () => {
+    /* Las ediciones que la ponen en rojo: volver al texto «Empezó después de la propuesta… lo que se reprograma no la
+       corre» (`fijadaAlAplicar`, vista-de-la-propuesta.ts), o quitar el aviso de `operarSobreElBorrador`. */
+    expect(PROPUESTA.cambios.filter((c) => c.tipo === "fase-cambia").map((c) => c.clave), "el sistema solo mueve «Soporte»").toEqual([
+      "fase:z:startWeek",
+    ]);
+    expect(planDeAplicacion(VIVO_P4, PROPUESTA).fijadasAlAplicar, "nada la corría").toEqual([]);
+    const r = operar([{ op: "fase.duracion", phaseId: "a", semanas: 5 }]);
+    expect(r.rechazadas).toEqual([]);
+    expect(r.avisos).toEqual([avisoYaEmpezo("Implementación", 4)]);
+    expect(r.avisos[0]).toBe("«Implementación» ya empezó: se fija su inicio en S4 y lo que se aplica no la corre.");
+    const plan = planDeAplicacion(VIVO_P4, r.borrador, r.excluidos);
+    expect(plan.fijadasAlAplicar).toEqual([{ faseId: "x", semana: 4 }]);
+    const v = vistaDeLaPropuesta(VIVO_P4, r.borrador, resumir(VIVO_P4, r.borrador, r.excluidos), HOY);
+    expect(v.porFase.get("x")!.delSistema).toEqual([YA_EMPEZO]);
+    // Un pedido que no la corre no avisa.
+    expect(operar([{ op: "fase.renombrar", phaseId: "z", nombre: "Soporte y acompañamiento" }]).avisos).toEqual([]);
   });
 });

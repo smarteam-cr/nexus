@@ -430,8 +430,11 @@ interface TextosDeLoDeHoy {
   pin: (semana: number) => string;
   /** Revisión de M1–M5 (D13): la fase que el sistema movía entera y alguien empezó después de la propuesta. */
   empezoDespues: string;
-  /** Revisión de M1–M5 (D5): la contigua que empezó después de la propuesta y se fija al aplicar. */
+  /** Revisión de M1–M5 (D5): la contigua que ya empezó y se fija al aplicar. Revisión 2 (hallazgo 2): no dice cuándo
+   *  empezó ni qué la corría (pudo empezar antes, y correrla el chat). */
   fijadaAlAplicar: (semana: number) => string;
+  /** Revisión 2 (hallazgo 1): la sin empezar que seguía a una fase que se queda: donde la ponía la propuesta. */
+  sigueAlAplicar: (semana: number) => string;
   sinNadaMarcado: string;
   cierreAntesDelTrabajo: string | null;
   noSeCorren: (n: number) => string;
@@ -446,8 +449,9 @@ const TEXTOS_DEL_ORDEN_DEL_PLAN: TextosDeLoDeHoy = {
   despues: (arranca) => `Va después de lo que la precedía en el plan: arranca en ${semanaDelProyecto(arranca)}.`,
   pin: (semana) => `Se fija su inicio en ${semanaDelProyecto(semana)}: ya empezó y lo que se reprograma no la corre.`,
   empezoDespues: CHOQUE_EMPEZO_DESPUES,
-  fijadaAlAplicar: (semana) =>
-    `Empezó después de la propuesta: se fija su inicio en ${semanaDelProyecto(semana)} y lo que se reprograma no la corre.`,
+  fijadaAlAplicar: (semana) => `Ya empezó: se fija su inicio en ${semanaDelProyecto(semana)} y lo que se aplica no la corre.`,
+  sigueAlAplicar: (semana) =>
+    `Se fija su inicio en ${semanaDelProyecto(semana)}, como en la propuesta: lo que la precedía ya empezó y no se mueve.`,
   sinNadaMarcado: "No tiene ninguna tarea marcada: si ya se hizo, márcala hecha y desmarca esta casilla.",
   cierreAntesDelTrabajo: null,
   noSeCorren: (n) => (n === 1 ? "1 tarea no se corre: la cambiaron a mano." : `${n} tareas no se corren: las cambiaron a mano.`),
@@ -1200,7 +1204,10 @@ export function vistaDeLaPropuesta(vivo: Vivo, borrador: Borrador, r: ResumenDel
     const l = lectura.get(p.clave);
     if (l && p.estado === "aplica") sumarLinea(p.fase, l.titulo);
     // Revisión de M1–M5: la que se fija al aplicar no es un cambio (no tiene lectura): lo dice con su propio texto.
-    else if (p.alAplicar) sumarLinea(p.fase, TEXTOS_DE_LO_DE_HOY[fasesVencidasDeLosTextos(borrador.hoy?.politica)].fijadaAlAplicar(p.semana));
+    else if (p.alAplicar) {
+      const textos = TEXTOS_DE_LO_DE_HOY[fasesVencidasDeLosTextos(borrador.hoy?.politica)];
+      sumarLinea(p.fase, p.sigue ? textos.sigueAlAplicar(p.semana) : textos.fijadaAlAplicar(p.semana));
+    }
   }
   for (const it of r.items) {
     const l = lectura.get(it.clave);

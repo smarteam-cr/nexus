@@ -1423,15 +1423,22 @@ export interface PlanDeAplicacion {
    * las cambió a mano después de la propuesta.
    */
   arrastradas: { aplican: number; choques: number };
-  /** M4 (D5): los pins que se escriben (`esPin`, «aplica»), más los que se fijan al aplicar (`fijadasAlAplicar`).
-   *  Tampoco cuentan en los totales. */
+  /** M4 (D5): los pins que se escriben (`esPin`, «aplica»), más los que se fijan al aplicar (`fijadasAlAplicar` y
+   *  `seguidorasAlAplicar`). Tampoco cuentan en los totales. */
   fijadas: number;
   /**
-   * Revisión de M1–M5 (2026-09-27, D5 y D13): las contiguas que EMPEZARON después de la propuesta y que lo marcado correría
-   * (de rebote): al aplicar se fijan donde están hoy, como el pin, aunque no tengan uno. Sus ids, en el orden final. No
-   * son un cambio (no tienen casilla ni número): se escriben en `escrituras.fases` y entran en la huella solo si hay.
+   * Revisión de M1–M5 (2026-09-27, D5 y D13): las contiguas que YA EMPEZARON (antes o después de la propuesta) y que lo que
+   * se aplica correría: al aplicar se fijan donde están hoy, como el pin, aunque no tengan uno. Sus ids, en el orden final.
+   * No son un cambio (no tienen casilla ni número): se escriben en `escrituras.fases` y entran en la huella solo si hay.
    */
   fijadasAlAplicar: Array<{ faseId: string; semana: number }>;
+  /**
+   * Revisión 2 de M1–M5 (2026-09-27, hallazgo 1): las contiguas SIN EMPEZAR que venían detrás de una fase que se queda
+   * (fijada al aplicar, o con su inicio del sistema en choque): se fijan en el inicio que les daba la propuesta, así no
+   * vuelven a semanas que ya pasaron. `fase`: el id vivo o la clave de la nueva (`escrituras.nuevas` lleva ese inicio).
+   * Como las fijadas: sin casilla, en la huella solo si hay.
+   */
+  seguidorasAlAplicar: Array<{ fase: string; semana: number }>;
 }
 
 const CHOQUE_CAMPO = "Lo cambiaste a mano después de la propuesta: queda como lo dejaste.";
@@ -2028,7 +2035,8 @@ export function huellaDeTexto(texto: string): string {
  *      otro cuentan en `marcadas`, `aplicables`, `total` ni `choques`: van en `arrastradas` y `fijadas`.
  *  10. Revisión de M1–M5 (2026-09-27, D13 al aplicar): lo EMPEZADO DESPUÉS de la propuesta tampoco se mueve. El inicio
  *      que el sistema le daba a una fase sin empezar choca si hoy está empezada (`evaluar`, paso 1), y la contigua que
- *      empezó después y que lo marcado correría de rebote queda fija donde está hoy (`fijadasAlAplicar`).
+ *      ya empezó y que lo marcado correría de rebote queda fija donde está hoy (`fijadasAlAplicar`). Revisión 2: lo que
+ *      venía detrás sin empezar se queda donde lo puso la propuesta (`seguidorasAlAplicar`), no vuelve atrás.
  * `tareas`: el estado de las tareas del borrador (lo deduce quien llama, de la corrida): mientras
  * se arman, no se aplica. `forzar` (E2c): las fases desfasadas cuyas tareas van tal cual
  * («Aplicar de todos modos»); sobre una fase que no está desfasada no hace nada.
@@ -2476,30 +2484,63 @@ export function planDeAplicacion(
      marcado la corría de rebote con lo hecho. Con la misma regla que el pin y solo donde el pin existe (una propuesta con
      algo reprogramado desde hoy, y algo más que se aplica), cada contigua viva que hoy está empezada y que lo que se
      aplica movería de inicio queda FIJA donde está hoy. Se recorre el orden final con el cursor de `computePhaseRanges`,
-     así fijar una no corre a las que siguen. Lo que el CSE pidió para su inicio (una casilla que aplica) manda. */
+     así fijar una no corre a las que siguen. Lo que el CSE pidió para su inicio (una casilla que aplica) manda.
+     Revisión 2 (2026-09-27, hallazgo 1): LO QUE LA SEGUÍA. Una fase que se queda (fijada acá, o porque su inicio del
+     sistema choca: «Empezó después de la propuesta») ya no empuja a las contiguas SIN EMPEZAR que venían detrás, y el
+     cursor las devolvía a su lugar viejo: pendientes en semanas que ya pasaron y un cierre antes del trabajo que este
+     mismo «Aplicar» estira. Un segundo cursor recorre la propuesta sin esas dos protecciones (dónde las puso la propuesta
+     que vio el CSE); una seguidora que quedaría ANTES de eso se fija ahí (`seguidorasAlAplicar`), viva o nueva. Más tarde
+     no: detrás de una fase que se queda más tarde, se corre como siempre. */
   const fijadasAlAplicar: Array<{ faseId: string; semana: number }> = [];
+  const seguidorasAlAplicar: Array<{ fase: string; semana: number }> = [];
+  const inicioDeLaNueva = new Map<string, number>();
   if (algoAplica && borrador.cambios.some((c) => c.tipo === "fase-cambia" && !!c.desdeHoy)) {
     const rangosVivos = computePhaseRanges(vivo.fases);
     const inicioVivo = new Map(vivo.fases.map((f, k) => [f.id, rangosVivos[k].start]));
+    // El inicio que la propuesta le daba a una fase que empezó después (su casilla choca en el paso 1), si está marcada.
+    const inicioQueChoca = new Map<string, number>();
+    for (const it of items) {
+      const c = it.cambio;
+      if (it.choque === CHOQUE_EMPEZO_DESPUES && c.tipo === "fase-cambia" && typeof c.a === "number" && !fuera.has(c.clave)) {
+        inicioQueChoca.set(c.faseId, c.a);
+      }
+    }
     let cursor = 0;
+    let cursorDeLaPropuesta = 0;
     for (const l of ordenEscrito) {
       if (l.tipo === "nueva") {
         const n = nuevas.get(l.clave)!.fase;
-        cursor = (n.startWeek ?? cursor) + (n.durationWeeks || 1);
+        const dur = n.durationWeeks || 1;
+        const enLaPropuesta = n.startWeek ?? cursorDeLaPropuesta;
+        let inicio = n.startWeek ?? cursor;
+        if ((n.startWeek === null || n.startWeek === undefined) && inicio < enLaPropuesta) {
+          inicioDeLaNueva.set(l.clave, enLaPropuesta);
+          seguidorasAlAplicar.push({ fase: l.clave, semana: enLaPropuesta });
+          inicio = enLaPropuesta;
+        }
+        cursor = inicio + dur;
+        cursorDeLaPropuesta = enLaPropuesta + dur;
         continue;
       }
       const f = ind.fasePorId.get(l.id)!;
       const campos = porFase.get(l.id) ?? {};
       const inicioPropio = "startWeek" in campos ? campos.startWeek : f.startWeek;
       const dur = Number("durationWeeks" in campos ? campos.durationWeeks : f.durationWeeks) || 1;
-      let inicio = inicioPropio === null || inicioPropio === undefined ? cursor : Number(inicioPropio);
+      const contigua = inicioPropio === null || inicioPropio === undefined;
+      let inicio = contigua ? cursor : Number(inicioPropio);
+      const enLaPropuesta = inicioQueChoca.get(l.id) ?? (contigua ? cursorDeLaPropuesta : Number(inicioPropio));
       const dondeEsta = inicioVivo.get(l.id) ?? inicio;
-      if ((inicioPropio === null || inicioPropio === undefined) && faseEmpezada(f) && inicio !== dondeEsta) {
+      if (contigua && faseEmpezada(f) && inicio !== dondeEsta) {
         porFase.set(l.id, { ...campos, startWeek: dondeEsta });
         fijadasAlAplicar.push({ faseId: l.id, semana: dondeEsta });
         inicio = dondeEsta;
+      } else if (contigua && !faseEmpezada(f) && inicio < enLaPropuesta) {
+        porFase.set(l.id, { ...campos, startWeek: enLaPropuesta });
+        seguidorasAlAplicar.push({ fase: l.id, semana: enLaPropuesta });
+        inicio = enLaPropuesta;
       }
       cursor = inicio + dur;
+      cursorDeLaPropuesta = enLaPropuesta + dur;
     }
   }
   type Cambian = NonNullable<EscriturasDeTareas["cambian"]>;
@@ -2532,7 +2573,12 @@ export function planDeAplicacion(
     fases: vivo.fases.filter((f) => porFase.has(f.id)).map((f) => ({ id: f.id, campos: porFase.get(f.id)! })),
     nuevas: aplicadas
       .filter((c): c is CambioFaseNueva => c.tipo === "fase-nueva")
-      .map((c) => ({ clave: c.clave, fase: c.fase, ...(c.porChat ? { porChat: true as const } : {}) })),
+      .map((c) => {
+        // Revisión 2 (paso 10): una nueva contigua que seguía a una fase que se queda, con el inicio de la propuesta.
+        const inicio = inicioDeLaNueva.get(c.clave);
+        const fase = inicio === undefined ? c.fase : { ...c.fase, startWeek: inicio };
+        return { clave: c.clave, fase, ...(c.porChat ? { porChat: true as const } : {}) };
+      }),
     orden: ordenEscrito,
     fasesQueSeVan: fasesQueSeVanEscritas,
     tareas: {
@@ -2562,6 +2608,7 @@ export function planDeAplicacion(
     ...(it.rescate ? [it.rescate] : []),
   ]);
   if (fijadasAlAplicar.length > 0) filasDeLaHuella.push(["fijadas-al-aplicar", fijadasAlAplicar.map((x) => [x.faseId, x.semana])]);
+  if (seguidorasAlAplicar.length > 0) filasDeLaHuella.push(["seguidoras-al-aplicar", seguidorasAlAplicar.map((x) => [x.fase, x.semana])]);
   const huella = huellaDeTexto(JSON.stringify(filasDeLaHuella));
   /* El bloqueo, en este orden: una versión nueva, las tareas «armando» y (E2c P3) las fases
      desfasadas sin forzar. Aplicar espera a que se recalculen; la salida está siempre a mano:
@@ -2597,8 +2644,9 @@ export function planDeAplicacion(
       aplican: arrastradas.filter((it) => it.estado === "aplica").length,
       choques: arrastradas.filter((it) => it.estado === "choque").length,
     },
-    fijadas: items.filter((it) => esPin(it.cambio) && it.estado === "aplica").length + fijadasAlAplicar.length,
+    fijadas: items.filter((it) => esPin(it.cambio) && it.estado === "aplica").length + fijadasAlAplicar.length + seguidorasAlAplicar.length,
     fijadasAlAplicar,
+    seguidorasAlAplicar,
   };
 }
 
@@ -3030,9 +3078,12 @@ export interface FijadaDelResumen {
   fase: string;
   semana: number;
   estado: EstadoDelCambio;
-  /** Revisión de M1–M5: se fija al aplicar (`PlanDeAplicacion.fijadasAlAplicar`): empezó después de la propuesta. No
-   *  es un cambio del borrador: su `clave` es `fija:<faseId>`. */
+  /** Revisión de M1–M5: se fija al aplicar (`PlanDeAplicacion.fijadasAlAplicar`): ya empezó. No es un cambio del
+   *  borrador: su `clave` es `fija:<faseId>`. */
   alAplicar?: true;
+  /** Revisión 2: la sin empezar que seguía a una fase que se queda (`PlanDeAplicacion.seguidorasAlAplicar`), con
+   *  `alAplicar`. Su `clave` es `sigue:<fase>`. */
+  sigue?: true;
 }
 
 /** Una tarea de la lista de la barra (un renglón dentro de su grupo). */
@@ -3512,8 +3563,17 @@ export function resumir(
     ...plan.items.flatMap((it) =>
       esPin(it.cambio) ? [{ clave: it.cambio.clave, fase: it.cambio.faseId, semana: Number(it.cambio.a), estado: it.estado }] : [],
     ),
-    // Revisión de M1–M5: y las que se fijan al aplicar porque empezaron después de la propuesta.
+    // Revisión de M1–M5: y las que se fijan al aplicar porque ya empezaron.
     ...plan.fijadasAlAplicar.map((x) => ({ clave: `fija:${x.faseId}`, fase: x.faseId, semana: x.semana, estado: "aplica" as const, alAplicar: true as const })),
+    // Revisión 2: y las sin empezar que las seguían, donde las ponía la propuesta.
+    ...plan.seguidorasAlAplicar.map((x) => ({
+      clave: `sigue:${x.fase}`,
+      fase: x.fase,
+      semana: x.semana,
+      estado: "aplica" as const,
+      alAplicar: true as const,
+      sigue: true as const,
+    })),
   ];
   const arrastradas: ArrastradaDelResumen[] = plan.items.flatMap((it) => {
     const c = it.cambio;

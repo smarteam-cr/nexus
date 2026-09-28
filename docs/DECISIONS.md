@@ -3615,6 +3615,14 @@ fabricarla.
     choca («Empezó después de la propuesta: no se mueve.»). Si la empezada es una contigua que lo marcado
     correría de rebote, se fija donde está hoy al aplicar, como el pin (`fijadasAlAplicar`). Decisión
     conservadora: se fija, no choca la casilla que la corre (el resto de lo marcado se aplica igual).
+  - **Revisión 2: lo que venía detrás no vuelve atrás.** Las contiguas sin empezar que seguían a una fase
+    que se queda (por su choque o fijada al aplicar) se fijan en el inicio que les daba la propuesta
+    (`seguidorasAlAplicar`, sin casilla, en la huella solo si hay), con su línea: «Se fija su inicio en
+    SN, como en la propuesta: lo que la precedía ya empezó y no se mueve.» Antes volvían a su lugar viejo:
+    pendientes en semanas vencidas y un cierre antes del trabajo que el mismo «Aplicar» estira. Se eligió
+    esto y no bloquear «Aplicar» hasta recalcular: recalcular es volver a generar la propuesta con la IA.
+    La fijada dice «Ya empezó: se fija su inicio en SN y lo que se aplica no la corre.» (pudo empezar
+    antes y correrla un pedido del chat), y el chat recibe ese aviso cuando lo que pidió no la corre.
   - **La Semana 0 por su nombre en Desarrollo y Web.** Si la primera fase se llama «Semana 0» o «Semana
     cero», no se reprograma (5 de los 14 cronogramas activos de esos pipelines la tienen). «Relevamiento
     técnico» sigue reprogramándose. Solo el nombre exacto: un «Kick-off» no cuenta.

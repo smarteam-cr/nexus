@@ -1493,11 +1493,33 @@ describe("19 · M4 P4d: el plan cuenta lo que tiene casilla; las arrastradas y e
         // La pantalla lo dice en la fase, como el pin.
         const r = resumir(vivo, REPROGRAMADO);
         expect(r.fijadas.find((x) => x.fase === id)).toEqual({ clave: `fija:${id}`, fase: id, semana, estado: "aplica", alAplicar: true });
+        /* Revisión 2 (hallazgo 2): la línea no dice «Empezó después de la propuesta… lo que se reprograma»: pudo empezar
+           antes y correrla un pedido del chat. Se reescribe con motivo. */
         const v = vistaDeLaPropuesta(vivo, REPROGRAMADO, r, new Date(FIX.hoy));
-        expect(v.porFase.get(id)!.delSistema.join(" ")).toContain(`Empezó después de la propuesta: se fija su inicio en S${semana}`);
+        expect(v.porFase.get(id)!.delSistema.join(" ")).toContain(`Ya empezó: se fija su inicio en S${semana} y lo que se aplica no la corre.`);
       }
       // Con nada del sistema marcado y nada más que aplique, no hay nada que la corra: no se fija.
       expect(planDeAplicacion(conLaTarea(primeraDe("f12"), { status: "DONE" }), REPROGRAMADO, CASILLAS).fijadasAlAplicar).toEqual([]);
+    });
+
+    it("⭐ «Cierre y entrega» («Fase G») marcada después: se queda, y «Configuración Marketing Hub» («Fase H») sigue en S25 y lo dice", () => {
+      /* Revisión 2 (hallazgo 1). La edición que la pone en rojo: quitar las seguidoras del paso 10 de `planDeAplicacion`.
+         «Fase H», sin empezar y contigua detrás de «Fase G», volvía de S25–S28 a S12–S15 (hoy es la S18), con sus 7
+         pendientes en semanas que ya pasaron, sin línea y fuera de la escritura. */
+      const vivo = conLaTarea(primeraDe("f08"), { status: "DONE" });
+      const plan = planDeAplicacion(vivo, REPROGRAMADO);
+      expect(plan.items.find((it) => it.cambio.clave === claveDeCampo("f08", "startWeek"))).toMatchObject({ choque: CHOQUE_EMPEZO_DESPUES });
+      expect([inicioDe(vivo, plan, "f08"), inicioDe(vivo, plan, "f09")]).toEqual([11, 25]);
+      expect(plan.seguidorasAlAplicar).toEqual([{ fase: "f09", semana: 25 }]);
+      expect(plan.escrituras.fases.find((x) => x.id === "f09")?.campos, "no se escribe su inicio").toEqual({ startWeek: 25 });
+      expect([plan.marcadas, plan.choques, plan.fijadas], "no es una casilla: va con el pin").toEqual([7, 1, 2]);
+      expect(plan.huella, "la huella no la ve").not.toBe(planDeAplicacion(VIVO_G, REPROGRAMADO).huella);
+      const r = resumir(vivo, REPROGRAMADO);
+      expect(r.fijadas.find((x) => x.fase === "f09")).toEqual({ clave: "sigue:f09", fase: "f09", semana: 25, estado: "aplica", alAplicar: true, sigue: true });
+      const v = vistaDeLaPropuesta(vivo, REPROGRAMADO, r, new Date(FIX.hoy));
+      expect(v.porFase.get("f09")!.delSistema).toEqual(["Se fija su inicio en S25, como en la propuesta: lo que la precedía ya empezó y no se mueve."]);
+      // Sin nada que se quede, lo de rebote sigue al cursor: no hay seguidoras.
+      expect(planDeAplicacion(VIVO_G, REPROGRAMADO).seguidorasAlAplicar).toEqual([]);
     });
   });
 

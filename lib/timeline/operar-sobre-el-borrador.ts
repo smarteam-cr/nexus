@@ -97,6 +97,7 @@ import {
 } from "./operaciones";
 import { esOperacionSola } from "./dependencias-de-operaciones";
 import { fugaTrasEditar, isKept } from "./regen-columnas";
+import { semanaDelProyecto } from "./weeks";
 
 /** Lo que se puede pedir sobre la propuesta: el vocabulario de siempre y las casillas, ya con sus claves. */
 export type OperacionSobreLaPropuesta =
@@ -216,6 +217,9 @@ const NOMBRE_DEL_CAMPO: Record<CampoDeTarea | "fase", string> = {
 };
 const avisoEditadaAMano = (titulo: string, campo: CampoDeTarea | "fase") =>
   `Dejé lo que editaste a mano en «${NOMBRE_DEL_CAMPO[campo]}» de «${titulo}».`;
+/** Revisión 2 de M1–M5 (hallazgo 2): lo pedido correría una fase que ya empezó; al aplicar se fija (paso 10 del plan). */
+export const avisoYaEmpezo = (fase: string, semana: number): string =>
+  `«${fase}» ya empezó: se fija su inicio en ${semanaDelProyecto(semana)} y lo que se aplica no la corre.`;
 
 /** Una fase de la propuesta como la ve el ejecutor de operaciones: ids = los de la barra (vivo o `n:…`,
  *  y el de la tarea viva o `t:…`). La usan las semanas (se reusa `aplicarOperaciones`) y el chat. */
@@ -1083,5 +1087,14 @@ export function operarSobreElBorrador(i: {
   const cambio =
     firma(i.borrador.cambios, i.borrador.ajustadasPorElChat, normalizarExcluidos(i.borrador, i.excluidos)) !==
     firma(cambios, ajustadas, excluidos);
+  /* Revisión 2 de M1–M5 (hallazgo 2): si lo pedido correría una fase que ya empezó, al aplicar se fija donde está (paso
+     10 de `planDeAplicacion`, §0.1) y lo pedido no se cumple entero. La fase lo dice en su línea; el chat, con este aviso
+     (viaja al hilo: el modelo lo lee en el turno siguiente). Solo las que se fijan por lo de este pedido. */
+  if (cambio) {
+    const antes = new Set(planDeAplicacion(vivo, i.borrador, i.excluidos).fijadasAlAplicar.map((x) => `${x.faseId}@${x.semana}`));
+    for (const x of planDeAplicacion(vivo, borrador, excluidos).fijadasAlAplicar) {
+      if (!antes.has(`${x.faseId}@${x.semana}`)) avisos.push(avisoYaEmpezo(fasePorId.get(x.faseId)?.name ?? x.faseId, x.semana));
+    }
+  }
   return { borrador, excluidos, rechazadas: [], avisos: [...new Set(avisos)], cambio };
 }
