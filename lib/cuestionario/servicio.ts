@@ -368,7 +368,7 @@ export async function asignarPestana(
 export async function publicar(projectId: string, publicado: boolean): Promise<CuestionarioVista> {
   const c = await exigir(projectId);
   if (publicado && !c.pestanas.some((p) => p.responsableId)) {
-    throw new ErrorDeCuestionario("Asigna al menos una pestaña a un responsable antes de enviarlo.", 409);
+    throw new ErrorDeCuestionario("Elige al menos una pestaña para algún responsable antes de publicarlo.", 409);
   }
   await prisma.cuestionario.update({
     where: { id: c.id },

@@ -15,7 +15,8 @@
  *   3. SEGUIRLO: avance por pestaña, lo que contestó cada uno (con su origen), sus documentos y el
  *      registro de envíos, cambios pedidos y reaperturas.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useToast } from "@/components/ui/Toast";
 import { porcentaje } from "@/lib/cuestionario/avance";
 import type { OperacionCuestionario } from "@/lib/cuestionario/operaciones";
@@ -34,6 +35,9 @@ const BTN =
   "px-2.5 py-1 rounded-lg text-xs font-semibold border border-line text-fg-secondary hover:text-fg hover:bg-surface-hover transition-colors disabled:opacity-50";
 const BTN_PRIMARIO =
   "px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-fg hover:bg-primary-hover transition-colors disabled:opacity-50";
+/** Publicar / Ocultar: el mismo botón de borde que las superficies de «Acceso del cliente». */
+const BTN_PUBLICAR =
+  "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 const INPUT =
   "w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:border-brand";
 
@@ -186,6 +190,8 @@ export default function CuestionarioPanel({ projectId }: { projectId: string }) 
         pestanas={c.pestanas}
         ocupado={ocupado}
         publicado={!!c.publicadoAt}
+        cerrado={!!c.cerradoAt}
+        publicable={estado.publicable !== false}
         onAccion={accion}
       />
 
@@ -258,12 +264,14 @@ function Encabezado({
   avance: number;
   onAccion: (b: Record<string, unknown>, ok?: string) => Promise<boolean>;
 }) {
-  const estado = c.cerradoAt ? "Cerrado" : c.publicadoAt ? "Enviado al cliente" : "Borrador";
+  // Mismos tonos que publicar/ocultar en «Acceso del cliente» (ExternalAccessPanel): verde = publicado
+  // o «Publicar», ámbar = sin publicar u «Ocultar». Un solo idioma visual para «esto lo ve el cliente».
+  const estado = c.cerradoAt ? "cerrado" : c.publicadoAt ? "publicado" : "sin publicar";
   const tono = c.cerradoAt
     ? "bg-surface-muted text-fg-muted border-line"
     : c.publicadoAt
-      ? "bg-success-surface text-success-ink border-success-line"
-      : "bg-warn-surface text-warn-ink border-warn-line";
+      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+      : "bg-amber-500/10 text-amber-600 border-amber-500/20";
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3">
       <div>
@@ -274,23 +282,28 @@ function Encabezado({
         <p className="mt-0.5 text-xs text-fg-muted">
           {c.publicadoAt
             ? `Contestado al ${avance}%. Los enlaces abren solo las pestañas de cada persona.`
-            : "Mientras está en borrador, los enlaces no abren nada. Ajústalo y envíalo cuando esté listo."}
+            : "Mientras no esté publicado, los enlaces no abren nada. Ajústalo y publícalo cuando esté listo."}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
         {!c.cerradoAt &&
           (c.publicadoAt ? (
-            <button className={BTN} disabled={ocupado} onClick={() => onAccion({ accion: "publicar", publicado: false }, "Los enlaces quedaron en pausa.")}>
-              Pausar enlaces
+            <button
+              className={`${BTN_PUBLICAR} border-amber-500/30 text-amber-600 hover:bg-amber-500/10`}
+              disabled={ocupado}
+              title="Los enlaces dejan de abrir el cuestionario hasta que lo vuelvas a publicar"
+              onClick={() => onAccion({ accion: "publicar", publicado: false }, "Cuestionario oculto: los enlaces no abren nada.")}
+            >
+              Ocultar
             </button>
           ) : (
             <button
-              className={BTN_PRIMARIO}
+              className={`${BTN_PUBLICAR} border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10`}
               disabled={ocupado || !publicable}
               title={publicable ? "Activa los enlaces de los responsables" : (motivo ?? undefined)}
-              onClick={() => onAccion({ accion: "publicar", publicado: true }, "Listo: los enlaces ya abren el cuestionario.")}
+              onClick={() => onAccion({ accion: "publicar", publicado: true }, "Publicado: los enlaces ya abren el cuestionario.")}
             >
-              Enviar al cliente
+              Publicar
             </button>
           ))}
         {c.publicadoAt && (
@@ -366,12 +379,16 @@ function Responsables({
   pestanas,
   ocupado,
   publicado,
+  cerrado,
+  publicable,
   onAccion,
 }: {
   responsables: ResponsableVista[];
   pestanas: PestanaVista[];
   ocupado: boolean;
   publicado: boolean;
+  cerrado: boolean;
+  publicable: boolean;
   onAccion: (b: Record<string, unknown>, ok?: string) => Promise<boolean>;
 }) {
   const toast = useToast();
@@ -379,12 +396,13 @@ function Responsables({
   const [cargo, setCargo] = useState("");
   const [email, setEmail] = useState("");
   const activos = responsables.filter((r) => !r.revocado);
+  const [editando, setEditando] = useState<string | null>(null);
 
   const copiar = async (r: ResponsableVista) => {
     const url = `${window.location.origin}${r.ruta}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.success(publicado ? `Enlace de ${r.nombre} copiado.` : `Enlace de ${r.nombre} copiado. Recuerda enviar el cuestionario para activarlo.`);
+      toast.success(`Enlace de ${r.nombre} copiado.`);
     } catch {
       toast.info(url, { duration: 0 });
     }
@@ -394,7 +412,7 @@ function Responsables({
     <section className="rounded-2xl border border-line bg-surface p-4">
       <h4 className="text-sm font-semibold text-fg">Responsables del cliente</h4>
       <p className="mt-0.5 text-xs text-fg-muted">
-        Cada persona recibe su propio enlace y solo ve las pestañas que le asignes.
+        Cada persona recibe su propio enlace y solo ve las pestañas que le elijas.
       </p>
       {activos.length > 0 && (
         <ul className="mt-3 divide-y divide-line">
@@ -413,9 +431,17 @@ function Responsables({
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button className={BTN} onClick={() => copiar(r)}>
-                    Copiar enlace
+                  <button className={BTN} disabled={cerrado} onClick={() => setEditando(editando === r.id ? null : r.id)}>
+                    {editando === r.id ? "Listo" : "Elegir pestañas"}
                   </button>
+                  <CopiarEnlace
+                    r={r}
+                    publicado={publicado}
+                    sinPestanas={suyas.length === 0}
+                    puedePublicar={publicable && !ocupado && pestanas.some((p) => p.responsableId)}
+                    onCopiar={() => copiar(r)}
+                    onPublicar={() => onAccion({ accion: "publicar", publicado: true }, "Publicado: los enlaces ya abren el cuestionario.")}
+                  />
                   <button
                     className={BTN}
                     disabled={ocupado}
@@ -428,6 +454,9 @@ function Responsables({
                     Revocar
                   </button>
                 </div>
+                {editando === r.id && (
+                  <ElegirPestanas r={r} responsables={activos} pestanas={pestanas} ocupado={ocupado} onAccion={onAccion} />
+                )}
               </li>
             );
           })}
@@ -454,6 +483,151 @@ function Responsables({
         </button>
       </form>
     </section>
+  );
+}
+
+/**
+ * Las pestañas que ve ESTA persona, marcadas desde su fila. Cada pestaña la contesta una sola
+ * persona (la que la envía y la bloquea), así que marcar una que ya es de otro se la pasa: lo dice
+ * al lado para que no sea una sorpresa. Una pestaña ya enviada no cambia de manos.
+ */
+function ElegirPestanas({
+  r,
+  responsables,
+  pestanas,
+  ocupado,
+  onAccion,
+}: {
+  r: ResponsableVista;
+  responsables: ResponsableVista[];
+  pestanas: PestanaVista[];
+  ocupado: boolean;
+  onAccion: (b: Record<string, unknown>, ok?: string) => Promise<boolean>;
+}) {
+  return (
+    <div className="w-full rounded-xl border border-line bg-surface-muted p-3">
+      <p className="text-xs text-fg-secondary">Pestañas que le aparecen a {r.nombre}:</p>
+      <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+        {pestanas.map((p) => {
+          const suya = p.responsableId === r.id;
+          const otro = !suya && p.responsableId ? responsables.find((x) => x.id === p.responsableId) : null;
+          return (
+            <li key={p.id}>
+              <label className={`flex items-center gap-2 text-sm ${p.enviadaAt ? "text-fg-muted" : "text-fg"}`}>
+                <input
+                  type="checkbox"
+                  checked={suya}
+                  disabled={ocupado || !!p.enviadaAt}
+                  onChange={(e) =>
+                    onAccion({ accion: "asignar", pestanaId: p.id, responsableId: e.target.checked ? r.id : null })
+                  }
+                />
+                <span className="truncate">{p.titulo}</span>
+                {p.enviadaAt ? (
+                  <span className="text-[10px] text-fg-muted">enviada</span>
+                ) : otro ? (
+                  <span className="text-[10px] text-warn-ink" title={`Marcarla se la pasa a ${r.nombre}`}>
+                    hoy la tiene {otro.nombre}
+                  </span>
+                ) : null}
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * «Copiar enlace» solo funciona si el enlace va a abrir algo. Sin publicar (o sin pestañas) el
+ * botón se ve apagado y, al tocarlo, explica por qué en un aviso — un botón muerto que no dice nada
+ * se lee como un error. El aviso va por portal a <body>: el panel del proyecto recorta lo que flota.
+ */
+function CopiarEnlace({
+  r,
+  publicado,
+  sinPestanas,
+  puedePublicar,
+  onCopiar,
+  onPublicar,
+}: {
+  r: ResponsableVista;
+  publicado: boolean;
+  sinPestanas: boolean;
+  puedePublicar: boolean;
+  onCopiar: () => void;
+  onPublicar: () => Promise<boolean>;
+}) {
+  const boton = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const bloqueado = !publicado || sinPestanas;
+
+  useEffect(() => {
+    if (!pos) return;
+    const cerrar = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest("[data-aviso-enlace]")) setPos(null);
+    };
+    const alMover = () => setPos(null);
+    document.addEventListener("mousedown", cerrar);
+    window.addEventListener("scroll", alMover, true);
+    return () => {
+      document.removeEventListener("mousedown", cerrar);
+      window.removeEventListener("scroll", alMover, true);
+    };
+  }, [pos]);
+
+  return (
+    <>
+      <button
+        ref={boton}
+        className={`${BTN} ${bloqueado ? "cursor-not-allowed opacity-50" : ""}`}
+        aria-disabled={bloqueado}
+        data-aviso-enlace
+        onClick={() => {
+          if (!bloqueado) return onCopiar();
+          const b = boton.current?.getBoundingClientRect();
+          if (b) setPos(pos ? null : { top: b.bottom + 6, left: Math.max(8, b.right - 288) });
+        }}
+      >
+        Copiar enlace
+      </button>
+      {pos &&
+        createPortal(
+          <div
+            data-aviso-enlace
+            role="dialog"
+            className="fixed z-[90] w-72 rounded-xl border border-line bg-surface p-3 shadow-xl"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            {sinPestanas ? (
+              <>
+                <p className="text-sm font-semibold text-fg">{r.nombre} no tiene pestañas</p>
+                <p className="mt-1 text-xs text-fg-secondary">
+                  Elige qué pestañas le aparecen antes de compartirle el enlace: sin ninguna, no tendría nada que contestar.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-fg">Primero publica el cuestionario</p>
+                <p className="mt-1 text-xs text-fg-secondary">
+                  Mientras no esté publicado, el enlace de {r.nombre} no abre nada.
+                </p>
+                <button
+                  className={`${BTN_PUBLICAR} mt-2 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10`}
+                  disabled={!puedePublicar}
+                  onClick={async () => {
+                    if (await onPublicar()) setPos(null);
+                  }}
+                >
+                  Publicar
+                </button>
+              </>
+            )}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
