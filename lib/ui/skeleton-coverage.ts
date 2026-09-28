@@ -96,6 +96,11 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   documentacion: { modo: "own" },
   // Forma PROPIA: una página de lectura (ícono + título + cuerpo), no el índice del módulo.
   "documentacion/[slug]": { modo: "own" },
+  // La escala: cada área tiene la forma de su matriz; la entrada redirige a un área (reusa su
+  // skeleton) y la bandeja es una lista con su detalle.
+  escala: { modo: "own" },
+  "escala/[area]": { modo: "own" },
+  "escala/comentarios": { modo: "own" },
   roles: { modo: "own" },
   "roles/[id]": { modo: "inherits", de: "roles" },
   team: { modo: "own" },

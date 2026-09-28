@@ -311,6 +311,16 @@ export const APP_NAV: readonly NavItemConfig[] = [
     ),
   },
   {
+    // La Escala de Rendimiento, para leerla y comentarla (2026-09-27). SIN gate, como
+    // Documentación: la usa todo el equipo para interiorizarla. Es de solo lectura; lo único que
+    // se escribe son comentarios, y su estado lo cambia solo el responsable de la escala.
+    key: "escala",
+    label: "Escala",
+    href: "/escala",
+    group: "operacion",
+    icon: icon("M3 20h5v-5h5v-5h5V5h3"),
+  },
+  {
     key: "agents",
     label: "Agentes",
     href: "/agents",

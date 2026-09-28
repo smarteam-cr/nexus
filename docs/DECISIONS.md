@@ -3627,3 +3627,40 @@ fabricarla.
 - **Los nombres de las opciones se escriben solo en `politica-de-atrasos.ts`**; el resto pregunta con sus
   predicados (`esperaAlPlan`, `traeLoPendienteAHoy`…). Lo cuida `lib/timeline/politica-de-atrasos.test.ts`.
   Una versión de antes de M5 lee una propuesta calculada con `traer-a-hoy` como si no tuviera reloj.
+
+## La Escala de Rendimiento se lee y se comenta en Nexus (2026-09-27)
+
+Elías pidió una sección para que el equipo interiorice la escala (7.0.0, congelada hasta usarla con
+cinco a diez clientes) y deje comentarios donde algo no se entiende o no calza con un cliente real:
+la materia prima para cuando se descongele. Tres vistas del mismo dato (matriz, una dimensión como
+escalera, mapa radial), filtro por perfil de negocio y comentarios anclados.
+
+- **Nexus es la fuente, y la escala se PUBLICA, no se copia.** La imagen de producción no lleva
+  ningún `.md` (`.dockerignore` + `output: standalone`), así que la app no puede leer
+  `docs/escala/`. `scripts/publicar-escala.ts` lee los tres documentos del repo, los valida (las
+  pruebas de `pruebas_escala.py` que tocan lo que Nexus lee, en TS, MÁS el propio Python que llega
+  con cada versión) y los guarda tal cual en `EscalaDocumento`. Versión nueva = reemplazar los
+  archivos y publicar: sin deploy, salvo que el formato cambie. Solo inserta: una versión publicada
+  no se pisa (misma versión con otro texto → se frena). La descarga devuelve esos bytes, con el
+  nombre de archivo fijo.
+- **Un solo lector** (`lib/escala/documento/parsear.ts`), estricto con la matriz (una línea que no
+  entiende es un error con su número: el lector de Python la saltaría en silencio) y tolerante con
+  la prosa. Está pensado para reemplazar después la rúbrica del Diagnóstico escrita a mano y el
+  documento de los agentes (hoy en 5.2). `lib/escala/guardas.test.ts` impide que un texto de la
+  escala aparezca escrito en el código de la sección.
+- **El filtro de perfil es el `aplica()` de `pruebas_escala.py`, portado.** `perfil.test.ts` corre
+  la función DEL ARCHIVO de Python sobre la escala real y compara los nueve perfiles, uno por uno.
+- **El comentario se ancla a un identificador estable** (`1.7`, `1.7.F`, `1.7.F1`) y congela la
+  versión y el texto de ese momento: si una versión nueva lo cambia, se ve al lado (palabra por
+  palabra), y si el identificador se retira, el comentario sigue visible en su nivel y en la bandeja.
+- **El estado lo cambia SOLO el responsable de la escala, por correo** (`RESPONSABLES_DE_LA_ESCALA`
+  en `lib/escala/comentarios/reglas.ts`), no por rol ni por la matriz de /team: SUPER_ADMIN también
+  lo son otras personas y la matriz es delegable. Leer y comentar: todo el equipo interno, sin
+  sección en el registro de permisos (como Documentación).
+- **Tipos y estados como texto, no enum** (INV4): sumar uno no exige un ALTER TYPE.
+- **Interno, probado por efecto**: RLS + política RESTRICTIVE en las tres tablas, y
+  `scripts/verificar-escala-anon.ts` consulta con la clave pública por la API de Supabase y, con
+  `--centinela`, inserta un comentario dentro de una transacción, mira como `anon` y
+  `authenticated`, y hace ROLLBACK. Se probó que falla si la tabla queda abierta.
+- **Fuera de alcance, a pedido**: votos, notificaciones y análisis con IA. Los agentes no leen los
+  comentarios (guardia en `guardas.test.ts`).

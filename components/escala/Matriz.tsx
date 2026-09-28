@@ -1,0 +1,237 @@
+"use client";
+
+/**
+ * components/escala/Matriz.tsx — un área de la escala como matriz: sus dimensiones, agrupadas en
+ * base operativa y producción, frente a los cinco niveles.
+ *
+ * Cada dimensión muestra su pregunta y su costo de quedarse; cada nivel, su descripción y, desde
+ * Funcional, su línea de resultado; cada criterio, primero su texto y en chico su identificador,
+ * cómo se verifica y sus marcas. Todo es clickeable: abre los comentarios de ESE identificador.
+ *
+ * La matriz tiene su propio scroll (alto de la ventana) para que el encabezado de los niveles y la
+ * columna de las dimensiones queden fijos en los dos sentidos.
+ */
+import { cn } from "@/lib/cn";
+import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
+import type { Dimension, Nivel } from "@/lib/escala/documento/tipos";
+import type { DatosDeLaVista } from "@/lib/escala/vista";
+import { conteoDe, conteoDeCelda, useEscala } from "./contexto";
+import { PUNTO_DE_NIVEL } from "./niveles";
+import { Contador, MetaDelCriterio } from "./piezas";
+
+const COLUMNAS = "grid-cols-[minmax(210px,1.15fr)_repeat(5,minmax(170px,1fr))]";
+
+interface Props {
+  datos: DatosDeLaVista;
+  perfil: Perfil;
+  compacta: boolean;
+  panoramica: boolean;
+  anclaAbierta: string | null;
+  onLeerDimension: (dimension: string) => void;
+}
+
+export default function Matriz({ datos, perfil, compacta, panoramica, anclaAbierta, onLeerDimension }: Props) {
+  const { area, niveles, capas } = datos;
+  return (
+    <div
+      className="relative overflow-auto rounded-xl border border-line bg-surface"
+      style={{ maxHeight: "calc(100vh - 15rem)", minHeight: "26rem" }}
+    >
+      <div className="min-w-[1090px]">
+        <div className={cn("sticky top-0 z-20 grid border-b border-line bg-surface", COLUMNAS)}>
+          <div className="sticky left-0 z-10 flex items-end bg-surface px-4 py-2.5 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
+            Dimensión
+          </div>
+          {niveles.map((n) => (
+            <div key={n.letra} className={cn("border-l border-line px-3 py-2.5", n.letra === "F" ? "bg-success-surface" : "bg-surface")}>
+              <div className="flex items-center gap-1.5">
+                <span className={cn("h-2 w-2 flex-shrink-0 rounded-sm", PUNTO_DE_NIVEL[n.letra])} aria-hidden />
+                <span className="text-sm font-semibold text-fg">{n.nombre}</span>
+                {n.letra === "F" && (
+                  <span className="rounded-full border border-dashed border-success-line px-1.5 text-2xs font-semibold text-success-ink">
+                    La base
+                  </span>
+                )}
+              </div>
+              {panoramica && area.panoramica[n.letra] && (
+                <p className="mt-1.5 text-xs font-normal leading-snug text-fg-secondary">{area.panoramica[n.letra]}</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {capas.map((capa) => (
+          <section key={capa.clave} aria-label={capa.nombre}>
+            <div className="flex border-b border-line bg-surface-muted">
+              <div className="sticky left-0 flex items-baseline gap-2 px-4 py-2">
+                <h3 className="text-2xs font-bold uppercase tracking-wide text-info-ink">{capa.nombre}</h3>
+                {capa.descripcion && <span className="text-xs text-fg-muted">{capa.descripcion}</span>}
+              </div>
+            </div>
+            {area.dimensiones
+              .filter((d) => d.capa === capa.clave)
+              .map((d) => (
+                <FilaDeDimension
+                  key={d.id}
+                  d={d}
+                  datos={datos}
+                  perfil={perfil}
+                  compacta={compacta}
+                  anclaAbierta={anclaAbierta}
+                  onLeerDimension={onLeerDimension}
+                />
+              ))}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FilaDeDimension({
+  d,
+  datos,
+  perfil,
+  compacta,
+  anclaAbierta,
+  onLeerDimension,
+}: {
+  d: Dimension;
+  datos: DatosDeLaVista;
+  perfil: Perfil;
+  compacta: boolean;
+  anclaAbierta: string | null;
+  onLeerDimension: (dimension: string) => void;
+}) {
+  const { conteos, abrirComentarios } = useEscala();
+  const aplicaAca = dimensionAplica(d, perfil);
+  return (
+    <div className={cn("grid border-b border-line", COLUMNAS)}>
+      <div className="sticky left-0 z-10 flex flex-col gap-2 border-r border-line bg-surface px-4 py-3">
+        <button
+          type="button"
+          onClick={() => abrirComentarios(d.id)}
+          title="Ver y dejar comentarios sobre la dimensión"
+          className={cn(
+            "-mx-1.5 -my-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover",
+            anclaAbierta === d.id && "bg-info-surface",
+          )}
+        >
+          <span className="flex items-baseline gap-1.5">
+            <span className="font-mono text-2xs text-fg-muted">{d.id}</span>
+            <span className="text-sm font-semibold leading-tight text-fg">{d.nombre}</span>
+          </span>
+          <span className="mt-1 block text-xs leading-snug text-fg-secondary">{d.pregunta}</span>
+        </button>
+        <p className="text-2xs leading-snug text-fg-muted">
+          <span className="font-semibold text-warn-ink">Costo de quedarse · </span>
+          {d.costoDeQuedarse}
+        </p>
+        <div className="mt-auto flex flex-wrap items-center gap-2">
+          <Contador conteo={conteoDe(conteos, d.id)} />
+          <button type="button" onClick={() => onLeerDimension(d.id)} className="text-2xs font-medium text-info-ink hover:underline">
+            Leer la dimensión →
+          </button>
+        </div>
+      </div>
+
+      {aplicaAca ? (
+        d.niveles.map((n) => (
+          <CeldaDeNivel key={n.id} d={d} n={n} datos={datos} perfil={perfil} compacta={compacta} anclaAbierta={anclaAbierta} />
+        ))
+      ) : (
+        <div className="col-span-5 flex items-center gap-3 bg-surface-muted px-5 py-4 text-sm text-fg-secondary">
+          <svg className="h-4 w-4 flex-shrink-0 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+            <circle cx="12" cy="12" r="9" strokeWidth={2} />
+            <path strokeLinecap="round" strokeWidth={2} d="M5.6 5.6l12.8 12.8" />
+          </svg>
+          <span>
+            <strong className="font-semibold text-fg">No aplica a este perfil</strong> ({describirPerfil(perfil)}): se queda sin criterios de
+            Funcional que apliquen, así que no entra en el nivel ni en el puntaje de su capa.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CeldaDeNivel({
+  d,
+  n,
+  datos,
+  perfil,
+  compacta,
+  anclaAbierta,
+}: {
+  d: Dimension;
+  n: Nivel;
+  datos: DatosDeLaVista;
+  perfil: Perfil;
+  compacta: boolean;
+  anclaAbierta: string | null;
+}) {
+  const { conteos, abrirComentarios } = useEscala();
+  const visibles = n.criterios.filter((c) => aplica(c, perfil));
+  const ocultos = n.criterios.length - visibles.length;
+  return (
+    <div className={cn("flex min-w-0 flex-col gap-2 border-l border-line px-3 py-3", n.letra === "F" && "bg-success-surface/40")}>
+      <button
+        type="button"
+        onClick={() => abrirComentarios(n.id)}
+        title="Ver y dejar comentarios sobre el nivel"
+        className={cn(
+          "-mx-1 rounded-md px-1 py-0.5 text-left text-xs font-semibold leading-snug text-fg transition-colors hover:bg-surface-hover",
+          anclaAbierta === n.id && "bg-info-surface",
+        )}
+      >
+        {n.descripcion}
+      </button>
+
+      {n.resultado && (
+        <p className="rounded-md bg-success-surface px-2 py-1.5 text-2xs leading-snug text-success-ink">
+          <span className="font-bold">Resultado · </span>
+          {n.resultado}
+        </p>
+      )}
+
+      {!compacta && visibles.length > 0 && (
+        <ul className="-mx-1.5 flex flex-col">
+          {visibles.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => abrirComentarios(c.id)}
+                className={cn(
+                  "w-full rounded-md border px-1.5 py-1.5 text-left transition-colors hover:bg-surface-hover",
+                  anclaAbierta === c.id ? "border-info-line bg-info-surface" : "border-transparent",
+                )}
+              >
+                <span className="block text-xs leading-snug text-fg">{c.texto}</span>
+                <span className="mt-1.5 flex items-start justify-between gap-2">
+                  <MetaDelCriterio criterio={c} datos={datos} />
+                  <Contador conteo={conteoDe(conteos, c.id)} />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {compacta && visibles.length > 0 && (
+        <span className="text-2xs text-fg-muted">
+          {visibles.length} {visibles.length === 1 ? "criterio" : "criterios"}
+        </span>
+      )}
+
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
+        {ocultos > 0 ? (
+          <span className="text-2xs text-fg-muted">
+            {ocultos} {ocultos === 1 ? "no aplica" : "no aplican"} a este perfil
+          </span>
+        ) : (
+          <span />
+        )}
+        <Contador conteo={conteoDeCelda(conteos, d.id, n.letra)} conTexto />
+      </div>
+    </div>
+  );
+}

@@ -29,12 +29,13 @@ const visibles = (c: NavContext) =>
   APP_NAV.filter((it) => canSeeNavItem(it, c)).map((it) => it.key);
 
 /* Los que ve TODO rol interno. `documentacion` se sumó el 2026-08-02: explicar la herramienta
-   no es un privilegio, y un manual que solo ven algunos no cumple su función.
+   no es un privilegio, y un manual que solo ven algunos no cumple su función. `escala` se sumó el
+   2026-09-27 por la misma razón: la escala la interioriza todo el equipo.
    ⚠ El orden importa: `visibles()` respeta el orden de APP_NAV. */
-const UNIVERSALES = ["clients", "marketing", "sessions", "knowledge", "documentacion"];
+const UNIVERSALES = ["clients", "marketing", "sessions", "knowledge", "documentacion", "escala"];
 
 describe("gates del sidebar congelados (espejo de los booleanos pre-migración)", () => {
-  it("SUPER_ADMIN ve los 13 ítems", () => {
+  it("SUPER_ADMIN ve los 14 ítems", () => {
     const c = ctx(true, {
       clientes: { viewAll: true },
       customerSuccess: { read: true },
@@ -54,6 +55,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "sessions",
       "knowledge",
       "documentacion",
+      "escala",
       "agents",
       "team",
       "roles",
@@ -84,6 +86,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "sessions",
       "knowledge",
       "documentacion",
+      "escala",
       "agents",
       "config",
     ]);
@@ -104,6 +107,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "sessions",
       "knowledge",
       "documentacion",
+      "escala",
     ]);
   });
 
@@ -116,6 +120,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "sessions",
       "knowledge",
       "documentacion",
+      "escala",
     ]);
   });
 
