@@ -1,8 +1,9 @@
 /**
  * lib/timeline/hitos.ts — LOS HITOS DEL PROYECTO: EL KICKOFF, EL CIERRE Y LA ENTREGA (M2 P2a, 2026-09-27).
  *
- * Puro y client-safe: sin Prisma, sin servidor, y de `borrador.ts` solo tipos (`borrador.ts` importa de acá solo
- * `type Hito`: no hay ciclo en tiempo de ejecución).
+ * Puro y client-safe: sin Prisma, sin servidor, y de `borrador.ts` solo tipos (`borrador.ts` importa de acá `type Hito`
+ * y, desde la revisión 3 de M1–M5, `esFaseDeHito`: como este módulo no importa nada de `borrador.ts` en tiempo de
+ * ejecución, no hay ciclo).
  *
  * Pedido de Elías (27-09): «Regenerar todo» sumaba otro kickoff con otras palabras (Wherex terminó con tres: dos hechos
  * y uno pendiente) y nada impedía un segundo cierre o una segunda entrega. Este módulo RECONOCE los hitos por el título

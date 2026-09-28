@@ -220,6 +220,9 @@ const avisoEditadaAMano = (titulo: string, campo: CampoDeTarea | "fase") =>
 /** Revisión 2 de M1–M5 (hallazgo 2): lo pedido correría una fase que ya empezó; al aplicar se fija (paso 10 del plan). */
 export const avisoYaEmpezo = (fase: string, semana: number): string =>
   `«${fase}» ya empezó: se fija su inicio en ${semanaDelProyecto(semana)} y lo que se aplica no la corre.`;
+/** Revisión 3 de M1–M5: lo pedido fija una fase sin empezar que va detrás de una que ya empezó (`seguidorasAlAplicar`). */
+export const avisoSeFijaDetras = (fase: string, semana: number): string =>
+  `«${fase}» no empezó y va detrás de una fase que ya empezó: se fija su inicio en ${semanaDelProyecto(semana)} para que no vuelva a semanas que ya pasaron.`;
 
 /** Una fase de la propuesta como la ve el ejecutor de operaciones: ids = los de la barra (vivo o `n:…`,
  *  y el de la tarea viva o `t:…`). La usan las semanas (se reusa `aplicarOperaciones`) y el chat. */
@@ -1089,11 +1092,19 @@ export function operarSobreElBorrador(i: {
     firma(cambios, ajustadas, excluidos);
   /* Revisión 2 de M1–M5 (hallazgo 2): si lo pedido correría una fase que ya empezó, al aplicar se fija donde está (paso
      10 de `planDeAplicacion`, §0.1) y lo pedido no se cumple entero. La fase lo dice en su línea; el chat, con este aviso
-     (viaja al hilo: el modelo lo lee en el turno siguiente). Solo las que se fijan por lo de este pedido. */
+     (viaja al hilo: el modelo lo lee en el turno siguiente). Solo las que se fijan por lo de este pedido.
+     Revisión 3: y la sin empezar que por lo pedido se fija detrás de una que ya empezó (`seguidorasAlAplicar`), con su
+     nombre: si no, el chat solo se enteraba de la fase empezada y no de lo que se fijaba detrás. */
   if (cambio) {
-    const antes = new Set(planDeAplicacion(vivo, i.borrador, i.excluidos).fijadasAlAplicar.map((x) => `${x.faseId}@${x.semana}`));
-    for (const x of planDeAplicacion(vivo, borrador, excluidos).fijadasAlAplicar) {
+    const planAntes = planDeAplicacion(vivo, i.borrador, i.excluidos);
+    const planDespues = planDeAplicacion(vivo, borrador, excluidos);
+    const antes = new Set(planAntes.fijadasAlAplicar.map((x) => `${x.faseId}@${x.semana}`));
+    for (const x of planDespues.fijadasAlAplicar) {
       if (!antes.has(`${x.faseId}@${x.semana}`)) avisos.push(avisoYaEmpezo(fasePorId.get(x.faseId)?.name ?? x.faseId, x.semana));
+    }
+    const seguianAntes = new Set(planAntes.seguidorasAlAplicar.map((x) => `${x.fase}@${x.semana}`));
+    for (const x of planDespues.seguidorasAlAplicar) {
+      if (!seguianAntes.has(`${x.fase}@${x.semana}`)) avisos.push(avisoSeFijaDetras(nombreDeFase(x.fase), x.semana));
     }
   }
   return { borrador, excluidos, rechazadas: [], avisos: [...new Set(avisos)], cambio };

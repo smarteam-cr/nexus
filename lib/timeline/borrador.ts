@@ -104,8 +104,9 @@ import {
   type ProjectedEnd,
 } from "./weeks";
 import { evaluarMagnitud, frasesDeCambios, unirFrases, type MagnitudPropuesta } from "./magnitud-propuesta";
-// M2 (2026-09-27): solo el tipo; hitos.ts importa de acá solo tipos (sin ciclo en tiempo de ejecución).
-import type { Hito } from "./hitos";
+// M2 (2026-09-27): el tipo; revisión 3 de M1–M5: y `esFaseDeHito` (el paso 10 del plan reconoce el cierre). hitos.ts
+// importa de acá solo tipos: sin ciclo en tiempo de ejecución.
+import { esFaseDeHito, type Hito } from "./hitos";
 // M3 (2026-09-27): la política guardada en `hoy` (el interruptor lo lee solo marcarTareasEnCurso, D11).
 import { leerPolitica, type PoliticaDeAtrasos } from "./politica-de-atrasos";
 
@@ -1437,6 +1438,9 @@ export interface PlanDeAplicacion {
    * (fijada al aplicar, o con su inicio del sistema en choque): se fijan en el inicio que les daba la propuesta, así no
    * vuelven a semanas que ya pasaron. `fase`: el id vivo o la clave de la nueva (`escrituras.nuevas` lleva ese inicio).
    * Como las fijadas: sin casilla, en la huella solo si hay.
+   * Revisión 3: SOLO si hace falta: pegada a lo que la precede terminaría en una semana vencida (antes de
+   * `borrador.hoy.semana`) y donde la ponía la propuesta, no; o es el cierre y pegada arrancaría antes de que termine lo
+   * que lo precede. Si no, sigue contigua (como antes de la revisión 2).
    */
   seguidorasAlAplicar: Array<{ fase: string; semana: number }>;
 }
@@ -2036,7 +2040,9 @@ export function huellaDeTexto(texto: string): string {
  *  10. Revisión de M1–M5 (2026-09-27, D13 al aplicar): lo EMPEZADO DESPUÉS de la propuesta tampoco se mueve. El inicio
  *      que el sistema le daba a una fase sin empezar choca si hoy está empezada (`evaluar`, paso 1), y la contigua que
  *      ya empezó y que lo marcado correría de rebote queda fija donde está hoy (`fijadasAlAplicar`). Revisión 2: lo que
- *      venía detrás sin empezar se queda donde lo puso la propuesta (`seguidorasAlAplicar`), no vuelve atrás.
+ *      venía detrás sin empezar se queda donde lo puso la propuesta (`seguidorasAlAplicar`), no vuelve atrás. Revisión 3:
+ *      solo si pegada a lo que la precede terminaría en una semana vencida y en la propuesta no, o es el cierre y
+ *      arrancaría antes de que termine lo que lo precede; si no, sigue contigua.
  * `tareas`: el estado de las tareas del borrador (lo deduce quien llama, de la corrida): mientras
  * se arman, no se aplica. `forzar` (E2c): las fases desfasadas cuyas tareas van tal cual
  * («Aplicar de todos modos»); sobre una fase que no está desfasada no hace nada.
@@ -2490,10 +2496,30 @@ export function planDeAplicacion(
      cursor las devolvía a su lugar viejo: pendientes en semanas que ya pasaron y un cierre antes del trabajo que este
      mismo «Aplicar» estira. Un segundo cursor recorre la propuesta sin esas dos protecciones (dónde las puso la propuesta
      que vio el CSE); una seguidora que quedaría ANTES de eso se fija ahí (`seguidorasAlAplicar`), viva o nueva. Más tarde
-     no: detrás de una fase que se queda más tarde, se corre como siempre. */
+     no: detrás de una fase que se queda más tarde, se corre como siempre.
+     Revisión 3 (2026-09-27): SOLO CUANDO HACE FALTA. El segundo cursor da por hecho que la fase que se queda estaba en otra
+     semana en la propuesta, y eso solo es cierto si empezó DESPUÉS de ella. Una que ya estaba empezada y que corre algo que
+     el CSE cambió luego (un pedido del chat, una casilla que desmarca) se ve fija al instante: el CSE nunca la vio «sin
+     protección», y la seguidora se corría más tarde que en pantalla, con un hueco, escribiendo su inicio. Ahora la
+     seguidora se fija solo si, pegada a lo que la precede, terminaría en una semana vencida (antes de la semana de hoy
+     del reloj, `borrador.hoy`) y donde la ponía la propuesta no, o si es el cierre (`esFaseDeHito`) y pegada arrancaría
+     antes de que termine lo que lo precede (el otro motivo de la revisión 2); en cualquier otro caso sigue contigua. Sin
+     reloj, solo el cierre.
+     Y la fijada al aplicar corre el segundo cursor solo si la propuesta TAL COMO SE CALCULÓ (todo marcado y sin lo que
+     pidió el chat después) ya la movía: si no la movía, o estaba empezada al calcular (el cálculo le habría puesto el pin)
+     o nada de la propuesta la corría; en los dos casos la pantalla la mostró siempre fija, y lo que la sigue no tuvo otro
+     lugar «en la propuesta» que detrás de ella. */
   const fijadasAlAplicar: Array<{ faseId: string; semana: number }> = [];
   const seguidorasAlAplicar: Array<{ fase: string; semana: number }> = [];
   const inicioDeLaNueva = new Map<string, number>();
+  const semanaDelReloj = borrador.hoy?.semana;
+  /** Termina antes de la semana de hoy: su última semana ya pasó (el fin de `computePhaseRanges` es exclusivo). */
+  const terminaVencida = (inicio: number, dur: number) => semanaDelReloj !== undefined && inicio + dur <= semanaDelReloj;
+  /** La seguidora se fija en `enLaPropuesta` solo si hace falta: pegada terminaría vencida y ahí no; o es el cierre
+   *  (`esFaseDeHito`) y pegada arrancaría antes de que termine lo que lo precede (el trabajo que este «Aplicar» estira). */
+  const haceFaltaFijarla = (inicio: number, enLaPropuesta: number, dur: number, cierre: boolean, finDeLoAnterior: number) =>
+    inicio < enLaPropuesta &&
+    ((terminaVencida(inicio, dur) && !terminaVencida(enLaPropuesta, dur)) || (cierre && inicio < finDeLoAnterior));
   if (algoAplica && borrador.cambios.some((c) => c.tipo === "fase-cambia" && !!c.desdeHoy)) {
     const rangosVivos = computePhaseRanges(vivo.fases);
     const inicioVivo = new Map(vivo.fases.map((f, k) => [f.id, rangosVivos[k].start]));
@@ -2505,21 +2531,37 @@ export function planDeAplicacion(
         inicioQueChoca.set(c.faseId, c.a);
       }
     }
+    /* Revisión 3: los campos de la propuesta como se calculó: los cambios de fase de la IA y del sistema, marcados o no,
+       con choque o sin él (el pin incluido), sin los del chat. El tercer cursor recorre con ellos el mismo orden (las
+       fases nuevas del chat no cuentan). Mismo criterio que el pin del cálculo (`reprogramarDesdeHoy`). */
+    const delCalculo = new Map<string, Partial<Record<CampoDeFase, ValorDeCampo>>>();
+    for (const c of borrador.cambios) {
+      if (c.tipo === "fase-cambia" && !c.porChat) delCalculo.set(c.faseId, { ...delCalculo.get(c.faseId), [c.campo]: c.a });
+    }
     let cursor = 0;
     let cursorDeLaPropuesta = 0;
-    for (const l of ordenEscrito) {
+    let cursorDelCalculo = 0;
+    let finDeLoAnterior = 0;
+    for (const [k, l] of ordenEscrito.entries()) {
+      const esUltima = k === ordenEscrito.length - 1;
       if (l.tipo === "nueva") {
-        const n = nuevas.get(l.clave)!.fase;
+        const nueva = nuevas.get(l.clave)!;
+        const n = nueva.fase;
         const dur = n.durationWeeks || 1;
+        if (!nueva.porChat) cursorDelCalculo = (n.startWeek ?? cursorDelCalculo) + dur;
         const enLaPropuesta = n.startWeek ?? cursorDeLaPropuesta;
         let inicio = n.startWeek ?? cursor;
-        if ((n.startWeek === null || n.startWeek === undefined) && inicio < enLaPropuesta) {
+        if (
+          (n.startWeek === null || n.startWeek === undefined) &&
+          haceFaltaFijarla(inicio, enLaPropuesta, dur, esFaseDeHito(n.name, esUltima), finDeLoAnterior)
+        ) {
           inicioDeLaNueva.set(l.clave, enLaPropuesta);
           seguidorasAlAplicar.push({ fase: l.clave, semana: enLaPropuesta });
           inicio = enLaPropuesta;
         }
         cursor = inicio + dur;
         cursorDeLaPropuesta = enLaPropuesta + dur;
+        finDeLoAnterior = Math.max(finDeLoAnterior, cursor);
         continue;
       }
       const f = ind.fasePorId.get(l.id)!;
@@ -2528,19 +2570,31 @@ export function planDeAplicacion(
       const dur = Number("durationWeeks" in campos ? campos.durationWeeks : f.durationWeeks) || 1;
       const contigua = inicioPropio === null || inicioPropio === undefined;
       let inicio = contigua ? cursor : Number(inicioPropio);
-      const enLaPropuesta = inicioQueChoca.get(l.id) ?? (contigua ? cursorDeLaPropuesta : Number(inicioPropio));
+      let enLaPropuesta = inicioQueChoca.get(l.id) ?? (contigua ? cursorDeLaPropuesta : Number(inicioPropio));
       const dondeEsta = inicioVivo.get(l.id) ?? inicio;
+      const calculo = delCalculo.get(l.id) ?? {};
+      const inicioDelCalculo = "startWeek" in calculo ? calculo.startWeek : f.startWeek;
+      const enElCalculo = inicioDelCalculo === null || inicioDelCalculo === undefined ? cursorDelCalculo : Number(inicioDelCalculo);
+      cursorDelCalculo = enElCalculo + (Number("durationWeeks" in calculo ? calculo.durationWeeks : f.durationWeeks) || 1);
       if (contigua && faseEmpezada(f) && inicio !== dondeEsta) {
         porFase.set(l.id, { ...campos, startWeek: dondeEsta });
         fijadasAlAplicar.push({ faseId: l.id, semana: dondeEsta });
         inicio = dondeEsta;
-      } else if (contigua && !faseEmpezada(f) && inicio < enLaPropuesta) {
+        // Revisión 3: si la propuesta como se calculó no la movía, la pantalla la mostró siempre acá: el segundo cursor
+        // sigue desde acá, no desde donde la llevaría lo que el CSE cambió después (el chat, una casilla).
+        if (enElCalculo === dondeEsta) enLaPropuesta = dondeEsta;
+      } else if (
+        contigua &&
+        !faseEmpezada(f) &&
+        haceFaltaFijarla(inicio, enLaPropuesta, dur, esFaseDeHito(f.name, esUltima), finDeLoAnterior)
+      ) {
         porFase.set(l.id, { ...campos, startWeek: enLaPropuesta });
         seguidorasAlAplicar.push({ fase: l.id, semana: enLaPropuesta });
         inicio = enLaPropuesta;
       }
       cursor = inicio + dur;
       cursorDeLaPropuesta = enLaPropuesta + dur;
+      finDeLoAnterior = Math.max(finDeLoAnterior, cursor);
     }
   }
   type Cambian = NonNullable<EscriturasDeTareas["cambian"]>;

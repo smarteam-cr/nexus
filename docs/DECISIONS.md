@@ -3623,6 +3623,15 @@ fabricarla.
     esto y no bloquear «Aplicar» hasta recalcular: recalcular es volver a generar la propuesta con la IA.
     La fijada dice «Ya empezó: se fija su inicio en SN y lo que se aplica no la corre.» (pudo empezar
     antes y correrla un pedido del chat), y el chat recibe ese aviso cuando lo que pidió no la corre.
+  - **Revisión 3: la seguidora se fija solo cuando hace falta.** El «dónde la ponía la propuesta» da por
+    hecho que la fase que se queda empezó DESPUÉS de la propuesta. Si ya estaba empezada y la corre algo
+    que el CSE cambió luego (un pedido del chat, una casilla que desmarca), la pantalla la mostró siempre
+    fija: la seguidora se corría más tarde, con un hueco, se escribía su inicio y su línea decía «como en
+    la propuesta» sin serlo. Ahora: (1) la fijada al aplicar solo cuenta como «corrida en la propuesta» si
+    la propuesta como se calculó (todo marcado, sin lo del chat) ya la movía; (2) la seguidora se fija
+    solo si pegada a lo que la precede terminaría en una semana vencida y en la propuesta no, o si es el
+    cierre y pegada arrancaría antes de que termine lo que lo precede. En cualquier otro caso sigue
+    contigua, como antes de la revisión 2. Si un pedido del chat fija una seguidora, el aviso la nombra.
   - **La Semana 0 por su nombre en Desarrollo y Web.** Si la primera fase se llama «Semana 0» o «Semana
     cero», no se reprograma (5 de los 14 cronogramas activos de esos pipelines la tienen). «Relevamiento
     técnico» sigue reprogramándose. Solo el nombre exacto: un «Kick-off» no cuenta.

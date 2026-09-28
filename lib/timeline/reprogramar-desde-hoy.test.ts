@@ -604,6 +604,88 @@ describe("Revisión 2 de M1–M5 · lo que venía detrás de una fase que se que
   });
 });
 
+/**
+ * Revisión 3 de M1–M5 (2026-09-27): la seguidora se fija SOLO CUANDO HACE FALTA. La revisión 2 la fijaba siempre que
+ * quedaría antes que en un segundo cursor que da por hecho que la fase que se queda empezó después de la propuesta; con
+ * una que ya estaba empezada y que corre algo que el CSE cambió luego (acá, una casilla que desmarca) la corría más tarde
+ * que en pantalla y escribía su inicio. Y aunque algo haya empezado después, una seguidora que pegada no queda en el
+ * pasado sigue contigua, como antes de la revisión 2 (el cierre, si arrancaría antes del trabajo que lo precede, no).
+ */
+describe("Revisión 3 de M1–M5 · la seguidora se fija solo cuando hace falta", { timeout: 30_000 }, () => {
+  it("⭐ la sonda C, solo casillas: desmarcas el acortamiento de la IA en «Fase 0» y «Fase 2» sigue en S8, sin escribirse", () => {
+    /* La edición que la pone en rojo: volver a la regla de la revisión 2 (la fijada al aplicar corre el segundo cursor
+       aunque la propuesta como se calculó no la moviera, y toda seguidora que quedaría antes se fija). «Fase 2» pasaba a
+       S10 «como en la propuesta», solapada entera con «Fase 3», y se escribía su inicio. */
+    const vivo: Vivo = {
+      ancla: "2026-05-04T00:00:00.000Z",
+      fases: [
+        fase("f0", "Fase 0", 4, null, "PENDING", [tarea("a0", 4), tarea("a1", 2), tarea("a2", 3)]),
+        fase("f1", "Fase 1", 2, null, "DONE", [tarea("b0", 0, "DONE")]),
+        fase("f2", "Fase 2", 4, null, "PENDING", [tarea("c0", 3), tarea("c1", 3)]),
+        fase("f3", "Fase 3", 4, null, "DONE", [tarea("d0", 2, "DONE"), tarea("d1", 0, "DONE")]),
+      ],
+    };
+    const hoy = new Date("2026-05-18T12:00:00.000Z");
+    const deLaIA = (id: string, desde: number, a: number) => ({
+      tipo: "fase-cambia",
+      clave: claveDeCampo(id, "durationWeeks"),
+      faseId: id,
+      fase: `Fase ${id.slice(1)}`,
+      campo: "durationWeeks",
+      desde,
+      a,
+      motivo: "IA",
+    });
+    const guardado = { ...SIN_LA_IA(), cambios: [deLaIA("f0", 4, 2), deLaIA("f1", 2, 4)] };
+    const r = reprogramar(guardado, "en-el-orden-del-plan", vivo, hoy, false);
+    expect(r.semana).toBe(2);
+    const con = conLaReprogramacion(guardado, r);
+    const inicios = (sin: string[]) => Object.fromEntries(semanas(vivo, con, sin).inicio);
+    expect(inicios([]), "todo marcado").toEqual({ f0: 2, f1: 4, f2: 8, f3: 10 });
+    const SIN = [claveDeCampo("f0", "durationWeeks")];
+    const plan = planDeAplicacion(vivo, leer(con), SIN);
+    expect(plan.fijadasAlAplicar, "«Fase 1» ya estaba hecha al calcular").toEqual([{ faseId: "f1", semana: 4 }]);
+    expect(plan.seguidorasAlAplicar).toEqual([]);
+    expect(inicios(SIN), "«Fase 2» sigue pegada a «Fase 1»").toEqual({ f0: 2, f1: 4, f2: 8, f3: 10 });
+    expect(plan.escrituras.fases.map((f) => f.id), "no se escribe su inicio").not.toContain("f2");
+  });
+
+  it("⭐ la sonda p1 con hoy en la S16: «Capacitación» pegada no queda en el pasado y sigue contigua; el cierre sí se queda en S29", () => {
+    /* Las ediciones que la ponen en rojo: fijar toda seguidora que quedaría antes que en la propuesta (sin «terminaría
+       vencida»: «Capacitación» se escribía en S26), o quitar la excepción del cierre (volvía a S18, antes de que termine
+       «Configuración», estirada hasta la S21). */
+    const hoy = new Date("2026-09-27T12:00:00-06:00");
+    const vivo: Vivo = {
+      ancla: new Date(hoy.getTime() - (16 * 7 + 2) * 86_400_000).toISOString(),
+      fases: [
+        fase("S0", "Semana 0", 1, null, "DONE", [tarea("s0", 0, "DONE")]),
+        fase("W", "Configuración", 10, null, "IN_PROGRESS", [tarea("w0", 0, "DONE"), tarea("w1", 2, "DONE"), tarea("w2", 4), tarea("w3", 8)]),
+        fase("X", "Integración", 4, null, "PENDING", [tarea("x0", 0), tarea("x1", 2)]),
+        fase("Y", "Capacitación", 3, null, "PENDING", [tarea("y0", 0), tarea("y1", 2)]),
+        fase("C", "Cierre", 1, null, "PENDING", [tarea("c0", 0, "PENDING", { title: "Reunión de cierre" })]),
+      ],
+    };
+    const hechas = new Set(["x0"]);
+    for (const fases of ["en-el-orden-del-plan", "todo-desde-hoy"] as const) {
+      expect(comprobarLoEmpezadoDespues(`p1 en S16 · ${fases}`, vivo, SIN_LA_IA(), hoy, fases, true, hechas), fases).toBe(1);
+    }
+    const r = reprogramar(SIN_LA_IA(), "en-el-orden-del-plan", vivo, hoy);
+    expect(r.semana).toBe(16);
+    const con = conLaReprogramacion(SIN_LA_IA(), r);
+    const inicios = (v: Vivo) => Object.fromEntries(semanas(v, con, []).inicio);
+    expect(inicios(vivo), "la propuesta").toEqual({ S0: 0, W: 1, X: 22, Y: 26, C: 29 });
+    const despues: Vivo = {
+      ...vivo,
+      fases: vivo.fases.map((f) => ({ ...f, tareas: f.tareas?.map((t) => (hechas.has(t.id) ? { ...t, status: "DONE" } : t)) })),
+    };
+    expect(inicios(despues), "al aplicar").toEqual({ S0: 0, W: 1, X: 11, Y: 15, C: 29 });
+    const plan = planDeAplicacion(despues, leer(con));
+    expect(plan.fijadasAlAplicar).toEqual([{ faseId: "X", semana: 11 }]);
+    expect(plan.seguidorasAlAplicar).toEqual([{ fase: "C", semana: 29 }]);
+    expect(plan.escrituras.fases.map((f) => f.id), "no se escribe el inicio de «Capacitación»").not.toContain("Y");
+  });
+});
+
 describe("M4 P4a · los casos", () => {
   it("⭐ la Semana 0: en un Desarrollo (sin Semana 0) la primera fase atrasada se reprograma; con Semana 0, no", () => {
     /* La edición que la pone en rojo: elegir la Semana 0 con `elegirFaseDeSemanaCero` (sin mirar el pipeline): en

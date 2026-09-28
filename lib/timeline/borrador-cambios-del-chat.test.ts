@@ -53,6 +53,7 @@ import {
   type Vivo,
 } from "./borrador";
 import {
+  avisoSeFijaDetras,
   avisoSugeridaALaUltima,
   avisoYaEmpezo,
   avisoSugeridaEnSuSemana,
@@ -65,8 +66,9 @@ import { describirOperaciones, type Operacion } from "./operaciones";
 import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
 import { conLaReprogramacion, reprogramarDesdeHoy, sinReprogramacion } from "./reprogramar-desde-hoy";
 import { vistaDeLaPropuesta } from "./vista-de-la-propuesta";
+import { computePhaseRanges } from "./weeks";
 
-const tarea = (id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
+const tarea =(id: string, title: string, weekIndex: number, extra: Partial<TareaDelVivo> = {}): TareaDelVivo => ({
   id,
   title,
   weekIndex,
@@ -1152,5 +1154,133 @@ describe("14 · revisión 2 de M1–M5: lo que pide el chat no corre una fase qu
     expect(v.porFase.get("x")!.delSistema).toEqual([YA_EMPEZO]);
     // Un pedido que no la corre no avisa.
     expect(operar([{ op: "fase.renombrar", phaseId: "z", nombre: "Soporte y acompañamiento" }]).avisos).toEqual([]);
+  });
+});
+
+/**
+ * Revisión 3 de M1–M5 (2026-09-27): la revisión 2 fijaba la contigua SIN EMPEZAR que seguía a una fase que se queda en
+ * «donde la ponía la propuesta», un segundo cursor que da por hecho que la fase que se queda empezó DESPUÉS de la
+ * propuesta. Una que ya estaba empezada y que corre un pedido del chat se ve fija al instante: la seguidora se corría más
+ * tarde que en pantalla, con un hueco, se escribía su inicio con la línea «como en la propuesta» y el chat solo se enteraba
+ * de la fase empezada. Ahora esa fijada no corre el segundo cursor (la propuesta como se calculó no la movía) y la
+ * seguidora se fija solo cuando hace falta (terminaría en una semana vencida y en la propuesta no, o es el cierre y
+ * arrancaría antes de que termine lo que lo precede). Si un pedido del chat fija una, el aviso la nombra.
+ */
+describe("15 · revisión 3 de M1–M5: lo que pide el chat no corre lo que sigue a una fase que ya empezó", () => {
+  const HOY = new Date("2026-09-27T12:00:00-06:00");
+  const ANCLA = new Date(HOY.getTime() - (20 * 7 + 2) * 86_400_000).toISOString(); // hoy es la S20
+  const vacio = () => borradorVacio({ pedido: "regenerar", corrida: "r" }) as unknown as Record<string, unknown>;
+  const reprogramado = (vivo: Vivo): Borrador =>
+    leerBorrador(
+      conLaReprogramacion(
+        vacio(),
+        reprogramarDesdeHoy({ vivo, borrador: leerBorrador(vacio())!, hoy: HOY, politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!,
+      ),
+    )!;
+  /** El inicio de cada fase en la pantalla (la proyección del plan). */
+  const inicios = (vivo: Vivo, b: Borrador, sin: readonly string[]) => {
+    const p = proyectar(vivo, b, sin);
+    const r = computePhaseRanges(p.fases);
+    return Object.fromEntries(p.fases.map((f, i) => [f.clave, r[i].start]));
+  };
+  const lineas = (vivo: Vivo, b: Borrador, sin: readonly string[], id: string) =>
+    vistaDeLaPropuesta(vivo, b, resumir(vivo, b, [...sin]), HOY).porFase.get(id)?.delSistema ?? [];
+
+  it("⭐ la sonda A: «Relevamiento dura 5»; «Implementación» se fija en S4 y «Capacitación» y el cierre siguen pegados, en S24 y S26", () => {
+    /* La edición que la pone en rojo: volver a la regla de la revisión 2 (fijar toda seguidora que quedaría antes que en
+       el segundo cursor, y que la fijada al aplicar lo corra aunque la propuesta como se calculó no la moviera). Con ella,
+       «Capacitación» y el cierre pasaban a S26 y S28 con un hueco en S24–S25, se escribía el inicio de «Capacitación» con
+       «como en la propuesta» y el chat solo se enteraba de «Implementación». */
+    const vivo: Vivo = {
+      ancla: ANCLA,
+      fases: [
+        fase("s0", "Semana 0", 1, [tarea("s01", "Kickoff", 0, { status: "DONE" })], { status: "DONE" }),
+        fase("a", "Relevamiento", 3, [tarea("a0", "Relevar procesos", 0, { status: "DONE" })], { status: "DONE" }),
+        fase("x", "Implementación", 20, [tarea("x0", "Configurar", 0, { status: "DONE" }), tarea("x1", "Probar", 18)], { status: "IN_PROGRESS" }),
+        fase("y", "Capacitación", 2, [tarea("y0", "Capacitar", 0), tarea("y1", "Evaluar", 1)]),
+        fase("c", "Cierre", 1, [tarea("c0", "Reunión de cierre", 0)]),
+        fase("z", "Soporte", 2, [tarea("z0", "Acompañar", 0)], { startWeek: 2 }),
+      ],
+    };
+    const propuesta = reprogramado(vivo);
+    expect(inicios(vivo, propuesta, []), "la propuesta").toMatchObject({ x: 4, y: 24, c: 26 });
+    const r = operarSobreElBorrador({ vivo, borrador: propuesta, excluidos: [], operaciones: [{ op: "fase.duracion", phaseId: "a", semanas: 5 }], nuevaClave: () => "k" });
+    expect(r.rechazadas).toEqual([]);
+    const plan = planDeAplicacion(vivo, r.borrador, r.excluidos);
+    expect(plan.fijadasAlAplicar).toEqual([{ faseId: "x", semana: 4 }]);
+    expect(plan.seguidorasAlAplicar, "nada se fija detrás").toEqual([]);
+    expect(inicios(vivo, r.borrador, r.excluidos), "siguen pegadas a «Implementación», sin hueco").toMatchObject({ x: 4, y: 24, c: 26 });
+    expect(plan.escrituras.fases.map((f) => f.id), "no se escribe su inicio").not.toContain("y");
+    expect(plan.escrituras.fases.map((f) => f.id)).not.toContain("c");
+    expect(r.avisos).toEqual([avisoYaEmpezo("Implementación", 4)]);
+    for (const id of ["y", "c"]) expect(lineas(vivo, r.borrador, r.excluidos, id), id).toEqual([]);
+  });
+
+  it("⭐ la sonda B: desmarcas la casilla de «Capacitación» y pides «Diseño dura 6»: nada se corre ni se escribe detrás de «Implementación»", () => {
+    /* La edición que la pone en rojo: que la fijada al aplicar corra el segundo cursor aunque la propuesta como se calculó
+       no la moviera (sin la condición `enElCalculo === dondeEsta` del paso 10). Con solo «terminaría vencida», el cierre
+       (S18, vencida desde que desmarcaste «Capacitación») pasaba a S20 «como en la propuesta» y se escribía su inicio; con
+       la regla de la revisión 2, además, «Capacitación» se escribía en S17–S19, vencida y con su casilla desmarcada. */
+    const vivo: Vivo = {
+      ancla: ANCLA,
+      fases: [
+        fase("s0", "Semana 0", 1, [tarea("s01", "Kickoff", 0, { status: "DONE" })], { status: "DONE" }),
+        fase("w", "Diseño", 4, [tarea("w0", "Diseñar", 0, { status: "DONE" })], { status: "DONE" }),
+        fase("x", "Implementación", 10, [tarea("x0", "Configurar", 0, { status: "DONE" }), tarea("x1", "Probar", 5, { status: "DONE" })], {
+          status: "IN_PROGRESS",
+        }),
+        fase("y", "Capacitación", 3, [tarea("y0", "Capacitar", 0), tarea("y1", "Evaluar", 2)]),
+        fase("c", "Cierre", 1, [tarea("c0", "Reunión de cierre", 0)]),
+      ],
+    };
+    const propuesta = reprogramado(vivo);
+    const SIN = ["fase:y:startWeek"];
+    expect(propuesta.cambios.map((c) => c.clave), "el sistema solo mueve «Capacitación»").toEqual(SIN);
+    expect(inicios(vivo, propuesta, SIN), "con su casilla desmarcada").toEqual({ s0: 0, w: 1, x: 5, y: 15, c: 18 });
+    const r = operarSobreElBorrador({ vivo, borrador: propuesta, excluidos: SIN, operaciones: [{ op: "fase.duracion", phaseId: "w", semanas: 6 }], nuevaClave: () => "k" });
+    expect(r.rechazadas).toEqual([]);
+    expect(r.excluidos).toEqual(SIN);
+    const plan = planDeAplicacion(vivo, r.borrador, r.excluidos);
+    expect(plan.fijadasAlAplicar).toEqual([{ faseId: "x", semana: 5 }]);
+    expect(plan.seguidorasAlAplicar).toEqual([]);
+    expect(inicios(vivo, r.borrador, r.excluidos), "«Capacitación» y el cierre donde estaban").toEqual({ s0: 0, w: 1, x: 5, y: 15, c: 18 });
+    expect(plan.escrituras.fases.map((f) => f.id)).toEqual(["w", "x"]);
+    expect(r.avisos).toEqual([avisoYaEmpezo("Implementación", 5)]);
+    for (const id of ["y", "c"]) expect(lineas(vivo, r.borrador, r.excluidos, id).join(" "), id).not.toContain("Se fija su inicio");
+  });
+
+  it("⭐ si lo pedido fija una seguidora, el aviso la nombra: «Integración» empezó después y el chat la acorta", () => {
+    /* La sonda p1 (reprogramar-desde-hoy.test.ts): «Integración» empezó después de la propuesta, se queda en S11, y
+       «Capacitación» se fija en S30, donde la ponía la propuesta. Si el chat acorta «Integración» a 2 semanas, la propuesta
+       la pone en S28: se fija ahí y el chat se entera. La edición que la pone en rojo: quitar de `operarSobreElBorrador`
+       el aviso de las seguidoras (el chat solo recibía el de las fases empezadas, y esta no lo es). */
+    const vivo: Vivo = {
+      ancla: ANCLA,
+      fases: [
+        fase("s0", "Semana 0", 1, [tarea("s01", "Kickoff", 0, { status: "DONE" })], { status: "DONE" }),
+        fase(
+          "w",
+          "Configuración",
+          10,
+          [tarea("w0", "Portal", 0, { status: "DONE" }), tarea("w1", "Usuarios", 2, { status: "DONE" }), tarea("w2", "Flujos", 4), tarea("w3", "Reportes", 8)],
+          { status: "IN_PROGRESS" },
+        ),
+        fase("x", "Integración", 4, [tarea("x0", "Conectar el ERP", 0), tarea("x1", "Probar la sincronización", 2)]),
+        fase("y", "Capacitación", 3, [tarea("y0", "Capacitar", 0), tarea("y1", "Evaluar", 2)]),
+        fase("c", "Cierre", 1, [tarea("c0", "Reunión de cierre", 0)]),
+      ],
+    };
+    const propuesta = reprogramado(vivo);
+    expect(inicios(vivo, propuesta, []), "la propuesta").toEqual({ s0: 0, w: 1, x: 26, y: 30, c: 33 });
+    // Después de la propuesta marcan hecha una tarea de «Integración».
+    const despues: Vivo = { ...vivo, fases: vivo.fases.map((f) => ({ ...f, tareas: f.tareas?.map((t) => (t.id === "x0" ? { ...t, status: "DONE" } : t)) })) };
+    expect(planDeAplicacion(despues, propuesta).seguidorasAlAplicar).toEqual([{ fase: "y", semana: 30 }]);
+    const r = operarSobreElBorrador({ vivo: despues, borrador: propuesta, excluidos: [], operaciones: [{ op: "fase.duracion", phaseId: "x", semanas: 2 }], nuevaClave: () => "k" });
+    expect(r.rechazadas).toEqual([]);
+    expect(planDeAplicacion(despues, r.borrador, r.excluidos).seguidorasAlAplicar).toEqual([{ fase: "y", semana: 28 }]);
+    expect(r.avisos).toEqual([avisoSeFijaDetras("Capacitación", 28)]);
+    expect(r.avisos[0]).toBe(
+      "«Capacitación» no empezó y va detrás de una fase que ya empezó: se fija su inicio en S28 para que no vuelva a semanas que ya pasaron.",
+    );
   });
 });
