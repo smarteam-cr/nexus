@@ -24,7 +24,7 @@ import { LETRAS, type Dimension, type Letra, type Nivel } from "@/lib/escala/doc
 import type { DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, conteoDeDimension, useEscala } from "./contexto";
 import { COLOR_DE_NIVEL, PUNTO_DE_NIVEL } from "./niveles";
-import { BotonComentar, Contador, MetaDelCriterio, Segmentado } from "./piezas";
+import { BotonComentar, Contador, GrupoDeControl, MetaDelCriterio, Segmentado, TextoConPalabras } from "./piezas";
 
 type CapaDeDatos = "comentarios" | "criterios" | "habitos" | "riesgos" | "perfil";
 
@@ -35,12 +35,35 @@ export type SeleccionDelMapa =
   | null;
 
 const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
-  { clave: "comentarios", etiqueta: "Comentarios", title: "Dónde comentó el equipo (en azul, si hay abiertos)" },
-  { clave: "criterios", etiqueta: "Criterios", title: "Cuántos criterios tiene cada celda con el perfil elegido" },
-  { clave: "habitos", etiqueta: "Hábitos", title: "Los criterios que solo se confirman con el tiempo" },
-  { clave: "riesgos", etiqueta: "Riesgos", title: "Los criterios que no deciden el nivel, pero frenan el paso a Eficiente" },
-  { clave: "perfil", etiqueta: "Cambia con el perfil", title: "Cuántos criterios esconde el perfil elegido en cada celda" },
+  {
+    clave: "comentarios",
+    etiqueta: "Comentarios",
+    title: "El tamaño de cada punto es cuántos comentarios tiene esa celda. En azul si alguno sigue abierto; en gris si ya se cerraron todos.",
+  },
+  {
+    clave: "criterios",
+    etiqueta: "Criterios",
+    title: "El tamaño de cada punto es cuántos criterios tiene esa celda (con el perfil de negocio elegido, si hay uno).",
+  },
+  {
+    clave: "habitos",
+    etiqueta: "Hábitos",
+    title: "Cuántos criterios de cada celda son hábitos: algo que el equipo repite y que solo se confirma después de operar un tiempo.",
+  },
+  {
+    clave: "riesgos",
+    etiqueta: "Riesgos",
+    title: "Cuántos criterios de cada celda son de riesgo: no deciden el nivel, pero hay que cumplirlos para pasar a Eficiente.",
+  },
+  {
+    clave: "perfil",
+    etiqueta: "Escondidos por el perfil",
+    title: "Cuántos criterios de cada celda NO aplican al perfil de negocio elegido y quedan escondidos. Sirve para ver dónde cambia la escala según cómo vende la empresa.",
+  },
 ];
+
+/** «1 criterio», «3 criterios». */
+const cuantos = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
 // ── Geometría (unidades del viewBox) ──────────────────────────────────────────
 const W = 920;
@@ -187,10 +210,23 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               base Funcional. Toca un punto para abrir esa celda; usa las flechas para recorrerlo.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-2xs font-medium text-fg-muted">Qué muestran los puntos</span>
-            <Segmentado etiqueta="Qué muestran los puntos" valor={capa} onCambio={setCapa} opciones={CAPAS} className="flex-wrap" />
-          </div>
+          <GrupoDeControl
+            nombre="Qué muestran los puntos"
+            ayuda="Cada punto es una celda (una dimensión en un nivel). Su tamaño dice cuánto hay ahí de lo que elijas: comentarios, criterios, hábitos, riesgos o criterios escondidos por el perfil."
+            className="items-end"
+          >
+            <Segmentado
+              etiqueta="Qué muestran los puntos"
+              valor={capa}
+              onCambio={setCapa}
+              className="flex-wrap"
+              opciones={CAPAS.map((c) =>
+                c.clave === "perfil" && !hayPerfil
+                  ? { ...c, deshabilitada: true, title: "Elige primero un perfil de negocio (arriba): esta capa muestra cuántos criterios esconde en cada celda." }
+                  : c,
+              )}
+            />
+          </GrupoDeControl>
         </div>
         {capa === "perfil" && !hayPerfil && (
           <p className="mt-2 rounded-lg bg-info-surface px-3 py-1.5 text-xs text-info-ink">Elige un perfil de negocio arriba para ver qué criterios esconde en cada celda.</p>
@@ -234,9 +270,12 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   points={vertices(radio(k)).map(par).join(" ")}
                   style={{
                     fill: "none",
+                    // Resaltado SUAVE a propósito: un anillo azul fuerte se lee como el polígono de un
+                    // resultado (el radar del diagnóstico), y acá no hay ningún resultado.
                     stroke: iluminado ? "var(--color-brand)" : nv.letra === "F" ? "var(--color-success)" : "var(--color-line)",
-                    strokeWidth: iluminado ? 2.2 : nv.letra === "F" ? 2 : 1,
-                    strokeDasharray: nv.letra === "F" && !iluminado ? "6 5" : undefined,
+                    strokeOpacity: iluminado ? 0.5 : 1,
+                    strokeWidth: iluminado ? 1.6 : nv.letra === "F" ? 2 : 1,
+                    strokeDasharray: nv.letra === "F" ? "6 5" : iluminado ? "2 4" : undefined,
                     transition: "stroke 160ms, stroke-width 160ms",
                   }}
                 />
@@ -257,7 +296,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   y2={y}
                   style={{
                     stroke: iluminado ? "var(--color-brand)" : "var(--color-line)",
-                    strokeWidth: iluminado ? 2.2 : 1,
+                    strokeOpacity: iluminado ? 0.6 : 1,
+                    strokeWidth: iluminado ? 1.6 : 1,
                     strokeDasharray: aplicaD ? undefined : "3 4",
                     transition: "stroke 160ms",
                   }}
@@ -440,8 +480,15 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               <p className="text-xs font-semibold text-fg">{encimaD.nombre}</p>
               <p className="mt-1 line-clamp-3 text-xs leading-snug text-fg-secondary">{encimaN.descripcion}</p>
               <p className="mt-1 text-2xs text-fg-muted">
-                {encimaN.criterios.filter((c) => aplica(c, perfil)).length} criterios ·{" "}
-                {conteoDeCelda(conteos, encimaD.id, encimaN.letra).total} comentarios
+                {[
+                  cuantos(encimaN.criterios.filter((c) => aplica(c, perfil)).length, "criterio", "criterios"),
+                  hayPerfil && encimaN.criterios.some((c) => !aplica(c, perfil))
+                    ? `${cuantos(encimaN.criterios.filter((c) => !aplica(c, perfil)).length, "escondido", "escondidos")} por el perfil`
+                    : null,
+                  cuantos(conteoDeCelda(conteos, encimaD.id, encimaN.letra).total, "comentario", "comentarios"),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
           )}
@@ -679,7 +726,9 @@ function DetalleDeCelda({
           {visibles.map((c) => (
             <li key={c.id} className="flex items-start gap-2 py-2">
               <div className="min-w-0 flex-1">
-                <p className="text-sm leading-snug text-fg">{c.texto}</p>
+                <p className="text-sm leading-snug text-fg">
+                  <TextoConPalabras texto={c.texto} palabras={datos.palabrasConValorFijo} />
+                </p>
                 <MetaDelCriterio criterio={c} datos={datos} className="mt-1" />
               </div>
               <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => abrirComentarios(c.id)} etiqueta={`Comentarios de ${c.id}`} />

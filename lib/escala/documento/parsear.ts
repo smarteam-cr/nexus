@@ -23,6 +23,7 @@ import {
   LETRAS_CON_RESULTADO,
   VERIFICACIONES,
   type Area,
+  type BloqueDeTexto,
   type CapaDeLaEscala,
   type ClaveDeCapa,
   type Criterio,
@@ -76,7 +77,7 @@ export function leerEncabezado(texto: string): Record<string, string> {
 }
 
 /** Las líneas de una sección: desde su encabezado hasta el siguiente del mismo nivel o más alto. */
-function seccion(lineas: string[], encabezado: RegExp): string[] {
+export function seccion(lineas: string[], encabezado: RegExp): string[] {
   const i = lineas.findIndex((l) => encabezado.test(l));
   if (i === -1) return [];
   const nivel = /^(#+)/.exec(lineas[i])?.[1].length ?? 2;
@@ -89,7 +90,7 @@ function seccion(lineas: string[], encabezado: RegExp): string[] {
 }
 
 /** Los párrafos de un bloque de líneas (separados por líneas en blanco). */
-function parrafos(lineas: string[]): string[] {
+export function parrafos(lineas: string[]): string[] {
   const out: string[] = [];
   let actual: string[] = [];
   for (const l of lineas) {
@@ -101,6 +102,38 @@ function parrafos(lineas: string[]): string[] {
     }
   }
   if (actual.length) out.push(actual.join(" "));
+  return out;
+}
+
+/**
+ * Los párrafos y los puntos de lista de un bloque de líneas, en orden (sin encabezados, tablas ni
+ * `---`). Una línea pegada a un punto, sin línea en blanco en medio, lo continúa.
+ */
+export function bloquesDe(lineas: string[]): BloqueDeTexto[] {
+  const out: BloqueDeTexto[] = [];
+  let actual: string[] = [];
+  let enPunto = false;
+  const cerrar = () => {
+    if (actual.length) out.push({ tipo: "parrafo", texto: actual.join(" ") });
+    actual = [];
+  };
+  for (const l of lineas) {
+    const t = l.trim();
+    const punto = /^- (.+)$/.exec(t);
+    if (!t || t.startsWith("#") || t.startsWith("|") || /^-{3,}$/.test(t)) {
+      cerrar();
+      enPunto = false;
+    } else if (punto) {
+      cerrar();
+      out.push({ tipo: "punto", texto: punto[1].trim() });
+      enPunto = true;
+    } else if (enPunto) {
+      out[out.length - 1].texto += ` ${t}`;
+    } else {
+      actual.push(t);
+    }
+  }
+  cerrar();
   return out;
 }
 
@@ -467,6 +500,99 @@ function leerHistorial(lineas: string[]): Escala["historial"] {
   return out;
 }
 
+/**
+ * «Cómo se leen los criterios»: el párrafo de las palabras con valor fijo. Cada oración que trae
+ * términos entre «» los define: «X» quiere decir …; «X» y «Y» quieren decir …; Y «X», … .
+ */
+function leerPalabrasConValorFijo(lineas: string[]): Escala["palabrasConValorFijo"] {
+  const p = parrafos(seccion(lineas, /^## Cómo se leen los criterios\s*$/)).find((x) => x.includes("«"));
+  if (!p) return [];
+  const out: Escala["palabrasConValorFijo"] = [];
+  for (const oracion of p.split(/(?<=\.)\s+/)) {
+    const terminos = [...oracion.matchAll(/«([^»]+)»/g)].map((m) => m[1].trim());
+    if (terminos.length === 0) continue;
+    let significado: string | null = null;
+    const m = /\bquieren? decir (.+?)\.?$/.exec(oracion);
+    if (m) significado = m[1];
+    else {
+      const i = oracion.lastIndexOf("», ");
+      if (i !== -1) significado = oracion.slice(i + 3).replace(/\.$/, "");
+    }
+    if (!significado) continue;
+    for (const termino of terminos) out.push({ termino, significado: significado.trim() });
+  }
+  return out;
+}
+
+/** Una pregunta del perfil: `**Cómo se cierra la venta.** Con equipo, cuando …; transaccional, cuando …; o mixta, cuando …`. */
+function leerPreguntaDelPerfil(parrafo: string | undefined): Escala["perfilDeNegocio"]["cierre"] {
+  const m = parrafo ? /^\*\*(.+?)\.\*\* (.+)$/.exec(parrafo) : null;
+  if (!m) return null;
+  const opciones = m[2]
+    .replace(/\.$/, "")
+    .split(/;\s+/)
+    .map((c) => c.replace(/^o\s+/, "").trim())
+    .map((c) => {
+      const i = c.indexOf(", ");
+      return i === -1 ? null : { nombre: c.slice(0, i).trim(), definicion: c.slice(i + 2).trim() };
+    })
+    .filter((x): x is { nombre: string; definicion: string } => !!x);
+  return opciones.length ? { pregunta: m[1].trim(), opciones } : null;
+}
+
+function leerPerfilDeNegocio(lineas: string[]): Escala["perfilDeNegocio"] {
+  const ps = parrafos(seccion(lineas, /^## El perfil de negocio\s*$/));
+  const introduccion = ps[0] && !ps[0].startsWith("**") ? ps[0] : null;
+  const cierre = ps.find((p) => p.startsWith("**Cómo se cierra la venta.**"));
+  const despues = ps.find((p) => p.startsWith("**Qué pasa después de la venta.**"));
+  return {
+    introduccion,
+    cierre: leerPreguntaDelPerfil(cierre),
+    despues: leerPreguntaDelPerfil(despues),
+    notas: ps.filter((p) => p !== introduccion && p !== cierre && p !== despues),
+  };
+}
+
+/**
+ * «Cómo se leen los criterios», lo que no son las palabras con valor fijo: los casos que se leen
+ * distinto, cada uno con su título en negrita («**Departamentos de una o dos personas.** …»).
+ */
+function leerCasosDeLectura(lineas: string[]): Escala["casosDeLectura"] {
+  return bloquesDe(seccion(lineas, /^## Cómo se leen los criterios\s*$/)).filter((b) => b.texto.startsWith("**"));
+}
+
+/**
+ * «Regla de asignación»: cada caso dudoso y a qué dimensiones toca. Toca a las que nombra por id
+ * («Datos de Ventas (1.3)», «(1.2, 2.2 o 3.2)») y, además, a las de base que nombra en negrita por
+ * su nombre genérico («**Equipo y Gobierno**», «**Tecnología**»), en las tres áreas.
+ */
+function leerAsignacion(lineas: string[], areas: Area[]): Escala["asignacion"] {
+  const bloque = seccion(lineas, /^## Regla de asignación\s*$/);
+  const todas = areas.flatMap((a) => a.dimensiones);
+  const ids = new Set(todas.map((d) => d.id));
+  const out: Escala["asignacion"] = [];
+  for (const l of bloque) {
+    const m = /^- (.+)$/.exec(l.trim());
+    if (!m) continue;
+    const texto = m[1].trim();
+    const dims = new Set<string>();
+    for (const x of texto.matchAll(/\b(\d+\.\d+)\b/g)) if (ids.has(x[1])) dims.add(x[1]);
+    // El nombre genérico vale en las áreas que la regla nombra; si no nombra ninguna, en las tres
+    // («la frontera Marketing ↔ Ventas» no es de Servicio).
+    const areasNombradas = new Set([...dims].map((id) => id.split(".")[0]));
+    for (const negrita of texto.matchAll(/\*\*([^*]+)\*\*/g)) {
+      const b = negrita[1].trim();
+      for (const d of todas) {
+        const g = d.generica?.nombre;
+        const enArea = areasNombradas.size === 0 || areasNombradas.has(d.area);
+        if (d.capa === "base" && g && enArea && (g === b || g.startsWith(`${b} `))) dims.add(d.id);
+      }
+    }
+    out.push({ texto, dimensiones: [...dims].sort((a, b) => a.localeCompare(b, "es", { numeric: true })) });
+  }
+  return out;
+}
+
 // ── La entrada ────────────────────────────────────────────────────────────────
 
 /**
@@ -485,6 +611,10 @@ export function parsearEscala(texto: string): Escala {
   leerPanoramicas(lineas, areas, ctx);
   leerGenericas(lineas, areas);
   const evaluar = seccion(lineas, /^## Cómo se evalúa cada dimensión\s*$/);
+  // Lo que va antes de la primera negrita («**Criterios de riesgo.**»): la regla de evaluación.
+  const regla = parrafos(evaluar);
+  const hastaNegrita = regla.findIndex((p) => p.startsWith("**"));
+  const evaluacion = hastaNegrita === -1 ? regla : regla.slice(0, hastaNegrita);
   const perfil = parrafos(seccion(lineas, /^## El perfil de negocio\s*$/));
 
   return {
@@ -498,12 +628,18 @@ export function parsearEscala(texto: string): Escala {
     glosario: leerGlosario(lineas),
     verificacion: leerVerificacion(lineas),
     explicaciones: {
+      evaluacion: evaluacion.length ? evaluacion.join("\n\n") : null,
       riesgo: bloqueEnNegrita(evaluar, "Criterios de riesgo"),
       habito: bloqueEnNegrita(evaluar, "Niveles por confirmar"),
       perfil: perfil.length ? perfil.join("\n\n") : null,
     },
     dependencias: leerDependencias(lineas),
     historial: leerHistorial(lineas),
+    palabrasConValorFijo: leerPalabrasConValorFijo(lineas),
+    casosDeLectura: leerCasosDeLectura(lineas),
+    perfilDeNegocio: leerPerfilDeNegocio(lineas),
+    automatizacion: bloquesDe(seccion(lineas, /^## Regla de automatización\s*$/)),
+    asignacion: leerAsignacion(lineas, areas),
   };
 }
 

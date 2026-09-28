@@ -68,15 +68,51 @@ Tres estados.
 
 **Evaluado.** Lo observa alguien.
 
+## Cómo se leen los criterios
+
+Algunas palabras valen fijo. «La mayoría» quiere decir al menos 80%. «Se sostiene» y «de forma consistente» quieren decir en 4 de 5 veces. Y «sin pensarlo», sin mirar el papel.
+
+**Equipos chicos.** Los roles se leen como la función escrita.
+
 ## El perfil de negocio
 
-**Cómo se cierra la venta.** Con equipo o no.
+Cada empresa vende distinto.
+
+**Cómo se cierra la venta.** Con equipo, cuando una persona trabaja cada oportunidad; transaccional, cuando nadie la trabaja —en caja o en la web—; o mixta, cuando conviven las dos.
+
+**Qué pasa después de la venta.** Relación única, cuando compra una vez; recompra, cuando vuelve sin contrato; o relación continua, cuando hay contrato.
+
+Las marcas deciden. En la venta mixta aplican todos. Lo demás igual.
+
+En la venta transaccional el negocio es el pedido.
+Y el vendedor es el canal.
 
 ## Qué se trabaja primero
 
 | Capa | Cuándo | Orden | Por qué |
 |:--|:--|:--|:--|
 | Base operativa | Ventas | Procesos y Rutinas → Datos | Porque sí. |
+
+## Regla de automatización
+
+El gradiente **manual → autónomo** desempata:
+
+- **Funcional — simple.** Un disparador.
+- **Óptimo — la IA ejecuta.** La persona
+  valida.
+
+La IA sola no define Óptimo.
+
+## Regla de asignación
+
+Cada evidencia va a una sola dimensión:
+
+- La **reunión recurrente** se asigna a **Procesos**.
+- El **forecast** se asigna a **Datos de Ventas (1.3)**, no a Procesos (1.1).
+- La **respuesta a un deal que se enfría** se asigna a **Tracción del Deal (1.2)**.
+- El **uso de lo que produce otra área** se asigna a la producción.
+
+---
 
 # Parte 3 — La matriz
 

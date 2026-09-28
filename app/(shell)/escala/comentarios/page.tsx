@@ -10,7 +10,8 @@ import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { resolverAncla } from "@/lib/escala/documento/anclas";
-import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
+import { leerDocumentoPublicado, leerEscalaVigente } from "@/lib/escala/documento/vigente";
+import { leerCongelamiento } from "@/lib/escala/documento/manual";
 import { comentariosDisponibles, listarComentarios } from "@/lib/escala/comentarios/consultas";
 import { esResponsable } from "@/lib/escala/comentarios/reglas";
 import Bandeja, { type AnclaEnLaBandeja } from "@/components/escala/Bandeja";
@@ -32,7 +33,7 @@ export default async function BandejaDeLaEscala() {
     );
   }
 
-  const comentarios = await listarComentarios({});
+  const [comentarios, manual] = await Promise.all([listarComentarios({}), leerDocumentoPublicado("manual")]);
   const anclas: Record<string, AnclaEnLaBandeja> = {};
   for (const id of new Set(comentarios.flatMap((c) => [c.ancla, c.dimension]))) {
     const r = resolverAncla(vigente.escala, id);
@@ -48,6 +49,7 @@ export default async function BandejaDeLaEscala() {
         version={vigente.escala.version}
         yo={{ email: ctx.user.email, nombre: ctx.teamMember.name, foto: ctx.teamMember.photoUrl }}
         esResponsable={responsable}
+        congelamiento={leerCongelamiento(manual?.texto)}
       />
     </div>
   );

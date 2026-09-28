@@ -99,6 +99,34 @@ export interface EntradaDelHistorial {
   texto: string;
 }
 
+/** Una palabra de los criterios con valor fijo («la mayoría» = al menos 80%). */
+export interface PalabraConValorFijo {
+  /** Como la escribe la escala, sin comillas: «La mayoría». */
+  termino: string;
+  significado: string;
+}
+
+/** Una de las dos preguntas del perfil de negocio, con la definición de cada respuesta. */
+export interface PreguntaDelPerfil {
+  /** «Cómo se cierra la venta». */
+  pregunta: string;
+  opciones: { nombre: string; definicion: string }[];
+}
+
+/** Un párrafo o un punto de lista de la prosa de la escala, con sus negritas de markdown. */
+export interface BloqueDeTexto {
+  tipo: "parrafo" | "punto";
+  texto: string;
+}
+
+/** Una regla de asignación («el forecast se asigna a Datos de Ventas (1.3)…») y a qué dimensiones toca. */
+export interface ReglaDeAsignacion {
+  /** Con sus negritas de markdown (`**…**`). */
+  texto: string;
+  /** Ids de dimensión que la regla nombra (o, sin ids, por su nombre genérico en negrita). */
+  dimensiones: string[];
+}
+
 export interface Escala {
   version: string;
   fecha: string | null;
@@ -113,9 +141,31 @@ export interface Escala {
   /** Qué quiere decir cada forma de verificación, con las palabras de la escala. */
   verificacion: Partial<Record<Verificacion, string>>;
   /** Los párrafos que explican las marcas riesgo y hábito, para la leyenda. */
-  explicaciones: { riesgo: string | null; habito: string | null; perfil: string | null };
+  /**
+   * La prosa de la Parte 2 que explica las marcas. `evaluacion`: cómo se evalúa una dimensión (la
+   * regla estricta, «por lo que busca, no por su letra», los criterios condicionados).
+   */
+  explicaciones: { evaluacion: string | null; riesgo: string | null; habito: string | null; perfil: string | null };
   dependencias: OrdenDeDependencias[];
   historial: EntradaDelHistorial[];
+  /** «Cómo se leen los criterios»: las palabras con valor fijo. */
+  palabrasConValorFijo: PalabraConValorFijo[];
+  /** «Cómo se leen los criterios»: los casos que se leen distinto (departamentos de una o dos personas…). */
+  casosDeLectura: BloqueDeTexto[];
+  /**
+   * «El perfil de negocio»: la introducción, las dos preguntas con sus respuestas y el resto de sus
+   * párrafos (cómo se lee la venta transaccional, qué unidad se diagnostica…).
+   */
+  perfilDeNegocio: {
+    introduccion: string | null;
+    cierre: PreguntaDelPerfil | null;
+    despues: PreguntaDelPerfil | null;
+    notas: string[];
+  };
+  /** «Regla de automatización»: manual → con lógica → autónomo, el desempate entre niveles. */
+  automatizacion: BloqueDeTexto[];
+  /** «Regla de asignación»: dónde se cuenta cada evidencia dudosa. */
+  asignacion: ReglaDeAsignacion[];
 }
 
 /** El documento de la escala tenía algo que el lector no entiende. Lleva la línea (desde 1). */

@@ -16,7 +16,7 @@ import type { Perfil } from "@/lib/escala/documento/perfil";
 import type { ComentarioVisto } from "@/lib/escala/comentarios/reglas";
 import type { DatosDeLaVista } from "@/lib/escala/vista";
 import { useEscala } from "../contexto";
-import { MetaDelCriterio } from "../piezas";
+import { MetaDelCriterio, TextoConPalabras } from "../piezas";
 import CompositorDeComentario from "./CompositorDeComentario";
 import TarjetaDeComentario, { type AccionesDeComentario } from "./TarjetaDeComentario";
 
@@ -131,7 +131,9 @@ export default function PanelDeComentarios({
             <span className="rounded bg-info-surface px-1.5 py-0.5 font-mono text-xs text-info-ink">{resuelta.id}</span>
             {resuelta.tipo === "criterio" && resuelta.criterio ? (
               <>
-                <p className="text-sm leading-relaxed text-fg">{resuelta.criterio.texto}</p>
+                <p className="text-sm leading-relaxed text-fg">
+                  <TextoConPalabras texto={resuelta.criterio.texto} palabras={datos.palabrasConValorFijo} />
+                </p>
                 <MetaDelCriterio criterio={resuelta.criterio} datos={datos} />
                 {resuelta.criterio.riesgo && datos.riesgos[resuelta.id] && (
                   <p className="rounded-lg border border-warn-line bg-warn-surface px-2.5 py-1.5 text-xs text-warn-ink">

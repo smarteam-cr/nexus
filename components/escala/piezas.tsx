@@ -10,11 +10,12 @@
  *   · `BotonComentar`: el globito que abre el panel de comentarios de un ancla.
  */
 import { useRef } from "react";
+import { InfoHint } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { explicarMarca } from "@/lib/escala/documento/perfil";
-import type { Criterio } from "@/lib/escala/documento/tipos";
+import type { BloqueDeTexto, Criterio, PalabraConValorFijo } from "@/lib/escala/documento/tipos";
 import type { Conteo } from "@/lib/escala/comentarios/reglas";
-import type { DatosDeLaVista } from "@/lib/escala/vista";
+import { partirPorPalabras, type DatosDeLaVista } from "@/lib/escala/vista";
 
 export function IconoComentario({ className }: { className?: string }) {
   return (
@@ -113,6 +114,8 @@ export interface OpcionSegmentada<K extends string> {
   clave: K;
   etiqueta: string;
   title?: string;
+  /** Se ve pero no se elige (con su `title` explicando por qué). */
+  deshabilitada?: boolean;
 }
 
 /** Opciones excluyentes: role="radiogroup", flechas para moverse, la selección sigue al foco. */
@@ -131,8 +134,10 @@ export function Segmentado<K extends string>({
 }) {
   const refs = useRef(new Map<K, HTMLButtonElement>());
   const mover = (paso: 1 | -1) => {
-    const i = opciones.findIndex((o) => o.clave === valor);
-    const sig = opciones[(i + paso + opciones.length) % opciones.length];
+    const activas = opciones.filter((o) => !o.deshabilitada);
+    if (activas.length === 0) return;
+    const i = activas.findIndex((o) => o.clave === valor);
+    const sig = activas[(i + paso + activas.length) % activas.length];
     onCambio(sig.clave);
     refs.current.get(sig.clave)?.focus();
   };
@@ -140,7 +145,7 @@ export function Segmentado<K extends string>({
     <div
       role="radiogroup"
       aria-label={etiqueta}
-      className={cn("inline-flex rounded-lg border border-line bg-surface-muted p-0.5", className)}
+      className={cn("inline-flex max-w-full flex-wrap rounded-lg border border-line bg-surface-muted p-0.5", className)}
       onKeyDown={(e) => {
         if (e.key === "ArrowRight" || e.key === "ArrowDown") {
           e.preventDefault();
@@ -165,10 +170,15 @@ export function Segmentado<K extends string>({
             aria-checked={activo}
             tabIndex={activo ? 0 : -1}
             title={o.title}
-            onClick={() => onCambio(o.clave)}
+            aria-disabled={o.deshabilitada || undefined}
+            onClick={() => !o.deshabilitada && onCambio(o.clave)}
             className={cn(
               "whitespace-nowrap rounded-md px-2.5 py-1 text-xs transition-colors",
-              activo ? "bg-surface font-semibold text-fg shadow-sm" : "text-fg-muted hover:text-fg-secondary",
+              activo
+                ? "bg-surface font-semibold text-fg shadow-sm"
+                : o.deshabilitada
+                  ? "cursor-not-allowed text-fg-muted opacity-50"
+                  : "text-fg-muted hover:text-fg-secondary",
             )}
           >
             {o.etiqueta}
@@ -194,5 +204,82 @@ export function ParrafoDeLaEscala({ texto, className }: { texto: string; classNa
         ),
       )}
     </p>
+  );
+}
+
+/** Párrafos y puntos de lista de la escala, en su orden (los puntos, como lista). */
+export function BloquesDeLaEscala({ bloques, className }: { bloques: BloqueDeTexto[]; className?: string }) {
+  const grupos: BloqueDeTexto[][] = [];
+  for (const b of bloques) {
+    const ultimo = grupos[grupos.length - 1];
+    if (b.tipo === "punto" && ultimo?.[0].tipo === "punto") ultimo.push(b);
+    else grupos.push([b]);
+  }
+  return (
+    <div className={cn("space-y-2", className)}>
+      {grupos.map((g, i) =>
+        g[0].tipo === "punto" ? (
+          <ul key={i} className="flex flex-col gap-1.5">
+            {g.map((b, j) => (
+              <li key={j} className="flex gap-2">
+                <span className="mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-fg-muted" aria-hidden />
+                <ParrafoDeLaEscala texto={b.texto} className="text-sm leading-relaxed text-fg-secondary" />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ParrafoDeLaEscala key={i} texto={g[0].texto} className="text-sm leading-relaxed text-fg-secondary" />
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Un grupo de controles con su nombre arriba (y, si hace falta, un (i) que lo explica). */
+export function GrupoDeControl({
+  nombre,
+  ayuda,
+  children,
+  className,
+}: {
+  nombre: string;
+  ayuda?: string | null;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-1", className)}>
+      <span className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
+        {nombre}
+        {ayuda && <InfoHint text={ayuda} />}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Un texto de la escala con sus palabras de valor fijo subrayadas («la mayoría» = al menos 80%):
+ * la escala las define para que dos personas decidan igual, y así se leen sin ir a buscarlas.
+ */
+export function TextoConPalabras({ texto, palabras }: { texto: string; palabras: PalabraConValorFijo[] }) {
+  const trozos = partirPorPalabras(texto, palabras);
+  if (trozos.length === 1 && !trozos[0].palabra) return <>{texto}</>;
+  return (
+    <>
+      {trozos.map((t, i) =>
+        t.palabra ? (
+          <abbr
+            key={i}
+            title={`«${t.texto}» tiene un valor fijo en la escala: ${t.palabra.significado}.`}
+            className="cursor-help underline decoration-info-ink decoration-dotted underline-offset-2 [text-decoration-thickness:1.5px]"
+          >
+            {t.texto}
+          </abbr>
+        ) : (
+          <span key={i}>{t.texto}</span>
+        ),
+      )}
+    </>
   );
 }

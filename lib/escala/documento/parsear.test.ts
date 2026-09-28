@@ -76,13 +76,70 @@ describe("la escala de juguete", () => {
       declarado: "Lo dice el cliente.",
       evaluado: "Lo observa alguien.",
     });
+    expect(e.explicaciones.evaluacion).toBe("Regla estricta.");
     expect(e.explicaciones.riesgo).toBe("Protegen algo.\n\nNo impiden llegar a Funcional.");
     expect(e.explicaciones.habito).toBe("Hábitos.\n\nTres estados.");
-    expect(e.explicaciones.perfil).toContain("Con equipo o no.");
+    expect(e.explicaciones.perfil).toContain("Cada empresa vende distinto.");
     expect(e.dependencias).toEqual([
       { capa: "Base operativa", cuando: "Ventas", orden: ["Procesos y Rutinas", "Datos"], porQue: "Porque sí." },
     ]);
     expect(e.historial).toEqual([{ version: "9.9.9", fecha: "2030-01-01", texto: "Primera de juguete." }]);
+  });
+
+  it("lee las palabras con valor fijo, una por término (dos términos pueden compartir valor)", () => {
+    expect(e.palabrasConValorFijo).toEqual([
+      { termino: "La mayoría", significado: "al menos 80%" },
+      { termino: "Se sostiene", significado: "en 4 de 5 veces" },
+      { termino: "de forma consistente", significado: "en 4 de 5 veces" },
+      { termino: "sin pensarlo", significado: "sin mirar el papel" },
+    ]);
+    expect(e.casosDeLectura).toEqual([{ tipo: "parrafo", texto: "**Equipos chicos.** Los roles se leen como la función escrita." }]);
+  });
+
+  it("lee el perfil de negocio: las dos preguntas con la definición de cada respuesta, y el resto como notas", () => {
+    expect(e.perfilDeNegocio.introduccion).toBe("Cada empresa vende distinto.");
+    expect(e.perfilDeNegocio.cierre).toEqual({
+      pregunta: "Cómo se cierra la venta",
+      opciones: [
+        { nombre: "Con equipo", definicion: "cuando una persona trabaja cada oportunidad" },
+        { nombre: "transaccional", definicion: "cuando nadie la trabaja —en caja o en la web—" },
+        { nombre: "mixta", definicion: "cuando conviven las dos" },
+      ],
+    });
+    expect(e.perfilDeNegocio.despues?.opciones.map((o) => o.nombre)).toEqual(["Relación única", "recompra", "relación continua"]);
+    expect(e.perfilDeNegocio.despues?.opciones[2].definicion).toBe("cuando hay contrato");
+    expect(e.perfilDeNegocio.notas).toEqual([
+      "Las marcas deciden. En la venta mixta aplican todos. Lo demás igual.",
+      "En la venta transaccional el negocio es el pedido. Y el vendedor es el canal.",
+    ]);
+  });
+
+  it("lee la regla de automatización como párrafos y puntos (un punto partido en dos líneas es uno)", () => {
+    expect(e.automatizacion).toEqual([
+      { tipo: "parrafo", texto: "El gradiente **manual → autónomo** desempata:" },
+      { tipo: "punto", texto: "**Funcional — simple.** Un disparador." },
+      { tipo: "punto", texto: "**Óptimo — la IA ejecuta.** La persona valida." },
+      { tipo: "parrafo", texto: "La IA sola no define Óptimo." },
+    ]);
+  });
+
+  it("lee la regla de asignación: a qué dimensiones toca cada caso, por id o por nombre genérico en negrita", () => {
+    expect(e.asignacion.map((r) => r.dimensiones)).toEqual([["1.1"], ["1.1"], ["1.2"], []]);
+    // Un id que la escala no tiene (1.3) no se inventa; el texto queda entero, con sus negritas.
+    expect(e.asignacion[1].texto).toBe("El **forecast** se asigna a **Datos de Ventas (1.3)**, no a Procesos (1.1).");
+  });
+
+  it("sin esas secciones, la prosa queda vacía y la matriz se lee igual", () => {
+    const sinProsa = MINI_ESCALA.replace(/## Cómo se leen los criterios[\s\S]*?(?=## El perfil de negocio)/, "")
+      .replace(/## El perfil de negocio[\s\S]*?(?=## Qué se trabaja primero)/, "")
+      .replace(/## Regla de automatización[\s\S]*?(?=---\n\n# Parte 3)/, "");
+    const x = parsearEscala(sinProsa);
+    expect(x.palabrasConValorFijo).toEqual([]);
+    expect(x.casosDeLectura).toEqual([]);
+    expect(x.perfilDeNegocio).toEqual({ introduccion: null, cierre: null, despues: null, notas: [] });
+    expect(x.automatizacion).toEqual([]);
+    expect(x.asignacion).toEqual([]);
+    expect(todosLosCriterios(x)).toHaveLength(todosLosCriterios(e).length);
   });
 
   it("con CRLF lee exactamente lo mismo (los archivos llegan así desde Windows)", () => {
@@ -202,12 +259,39 @@ describe("el archivo real (docs/escala/escala_rendimiento_smarteam.md)", () => {
 
   it("trae la prosa que la pantalla usa", () => {
     expect(Object.keys(e.verificacion).sort()).toEqual(["comprobable", "declarado", "evaluado"]);
+    expect(e.explicaciones.evaluacion).toBeTruthy();
+    expect(e.explicaciones.evaluacion).not.toContain("**");
     expect(e.explicaciones.riesgo).toBeTruthy();
     expect(e.explicaciones.habito).toBeTruthy();
     expect(e.explicaciones.perfil).toBeTruthy();
     expect(e.capas.every((c) => c.descripcion)).toBe(true);
     expect(e.glosario.length).toBeGreaterThan(10);
     expect(e.historial[0]?.version).toBe(e.version);
+  });
+
+  it("trae las reglas de lectura que la pantalla muestra", () => {
+    const criterios = todosLosCriterios(e).map((c) => c.texto.toLowerCase());
+    expect(e.palabrasConValorFijo.length).toBeGreaterThan(2);
+    for (const p of e.palabrasConValorFijo) expect(p.significado.length, p.termino).toBeGreaterThan(5);
+    // Las palabras se subrayan en los criterios: que al menos una aparezca en ellos.
+    expect(e.palabrasConValorFijo.some((p) => criterios.some((c) => c.includes(p.termino.toLowerCase())))).toBe(true);
+    expect(e.casosDeLectura.length).toBeGreaterThan(0);
+    expect(e.perfilDeNegocio.introduccion).toBeTruthy();
+    expect(e.perfilDeNegocio.cierre?.opciones).toHaveLength(3);
+    expect(e.perfilDeNegocio.despues?.opciones).toHaveLength(3);
+    expect(e.perfilDeNegocio.notas.length).toBeGreaterThan(0);
+    expect(e.automatizacion.filter((b) => b.tipo === "punto").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("la regla de asignación: un caso por punto de la lista, y un área que la regla no nombra no se toca", () => {
+    const seccion = texto.split(/^## Regla de asignación\s*$/m)[1]?.split(/^#+ /m)[0] ?? "";
+    expect(e.asignacion).toHaveLength((seccion.match(/^- /gm) ?? []).length);
+    const ids = new Set(dimensiones.map((d) => d.id));
+    for (const r of e.asignacion) for (const id of r.dimensiones) expect(ids.has(id), id).toBe(true);
+    // La mayoría de los casos se ubican; los que no, se leen igual en la Guía.
+    expect(e.asignacion.filter((r) => r.dimensiones.length > 0).length).toBeGreaterThan(e.asignacion.length / 2);
+    const frontera = e.asignacion.find((r) => r.texto.includes("Marketing ↔ Ventas"));
+    if (frontera) expect(frontera.dimensiones.filter((id) => id.startsWith("3."))).toEqual([]);
   });
 
   it("cada criterio de riesgo tiene el mensaje que ve el cliente", () => {

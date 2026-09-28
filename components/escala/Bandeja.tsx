@@ -24,10 +24,11 @@ import {
   type ComentarioVisto,
   type EstadoDeComentario,
 } from "@/lib/escala/comentarios/reglas";
+import type { Congelamiento } from "@/lib/escala/documento/manual";
 import { almacenDeLaApi, type AlmacenDeLaEscala } from "./comentarios/almacen";
 import { EtiquetaDeEstado } from "./comentarios/ControlDeEstado";
 import TarjetaDeComentario, { type AccionesDeComentario } from "./comentarios/TarjetaDeComentario";
-import { Segmentado } from "./piezas";
+import { ParrafoDeLaEscala, Segmentado } from "./piezas";
 
 /** Lo que el servidor sabe de cada ancla en la versión vigente. */
 export interface AnclaEnLaBandeja {
@@ -50,6 +51,7 @@ export default function Bandeja({
   esResponsable,
   almacen = almacenDeLaApi,
   hrefDeLaEscala = (slug, ancla) => `/escala/${slug}?c=${encodeURIComponent(ancla)}`,
+  congelamiento = null,
 }: {
   comentarios: ComentarioVisto[];
   anclas: Record<string, AnclaEnLaBandeja>;
@@ -59,6 +61,8 @@ export default function Bandeja({
   esResponsable: boolean;
   almacen?: AlmacenDeLaEscala;
   hrefDeLaEscala?: (slug: string, ancla: string) => string;
+  /** Por qué está congelada y cuándo se descongela (del manual publicado). */
+  congelamiento?: Congelamiento | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -156,6 +160,19 @@ export default function Bandeja({
           <p className="mt-1 text-sm text-fg-secondary">
             Todo el equipo ve todos los comentarios. {esResponsable ? "Tú cambias el estado y decides qué pasa a cambio pendiente." : "El estado lo cambia el responsable de la escala."}
           </p>
+          {congelamiento && congelamiento.reglas.length > 0 && (
+            <details className="mt-2 max-w-3xl text-xs text-fg-secondary">
+              <summary className="cursor-pointer text-fg-muted hover:text-fg">Para qué sirven: la escala está congelada (qué se corrige ya y cuándo se descongela)</summary>
+              <p className="mt-2 leading-relaxed">{congelamiento.resumen}</p>
+              <ul className="mt-1.5 flex flex-col gap-1">
+                {congelamiento.reglas.map((r, i) => (
+                  <li key={i}>
+                    <ParrafoDeLaEscala texto={r} className="leading-relaxed" />
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
         {esResponsable && (
           <Button variant="primary" size="sm" onClick={() => void exportar()}>

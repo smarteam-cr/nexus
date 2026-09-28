@@ -9,7 +9,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-import { leerEscalaVigente, versionesPublicadas } from "@/lib/escala/documento/vigente";
+import { leerDocumentoPublicado, leerEscalaVigente, versionesPublicadas } from "@/lib/escala/documento/vigente";
+import { leerCongelamiento } from "@/lib/escala/documento/manual";
 import { perfilDesdeUrl } from "@/lib/escala/documento/perfil";
 import { comentariosDisponibles, contarPorAncla, contarPorArea } from "@/lib/escala/comentarios/consultas";
 import { esResponsable } from "@/lib/escala/comentarios/reglas";
@@ -45,7 +46,12 @@ export default async function PaginaDeLaEscala({
   const area = vigente.escala.areas.find((a) => a.slug === slug);
   if (!area) redirect(`/escala/${vigente.escala.areas[0].slug}`);
 
-  const [conteos, porArea, versiones] = await Promise.all([contarPorAncla(area.id), contarPorArea(), versionesPublicadas()]);
+  const [conteos, porArea, versiones, manual] = await Promise.all([
+    contarPorAncla(area.id),
+    contarPorArea(),
+    versionesPublicadas(),
+    leerDocumentoPublicado("manual"),
+  ]);
   const abiertosEnTotal = Object.values(porArea).reduce((s, c) => s + c.abiertos, 0);
 
   return (
@@ -54,7 +60,14 @@ export default async function PaginaDeLaEscala({
           elegidas son de ESA área); la vista y el perfil viajan en la URL. */}
       <VistaDeLaEscala
         key={area.id}
-        datos={datosDeLaVista({ escala: vigente.escala, area, publicadaEn: vigente.publicadaEn, aviso: vigente.aviso, versiones })}
+        datos={datosDeLaVista({
+          escala: vigente.escala,
+          area,
+          publicadaEn: vigente.publicadaEn,
+          aviso: vigente.aviso,
+          versiones,
+          congelamiento: leerCongelamiento(manual?.texto),
+        })}
         conteos={conteos}
         porArea={porArea}
         abiertosEnTotal={abiertosEnTotal}

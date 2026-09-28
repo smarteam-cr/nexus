@@ -14,10 +14,10 @@
 import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
 import type { Dimension, Nivel } from "@/lib/escala/documento/tipos";
-import type { DatosDeLaVista } from "@/lib/escala/vista";
+import { ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, useEscala } from "./contexto";
 import { PUNTO_DE_NIVEL } from "./niveles";
-import { Contador, MetaDelCriterio } from "./piezas";
+import { Contador, MetaDelCriterio, TextoConPalabras } from "./piezas";
 
 const COLUMNAS = "grid-cols-[minmax(210px,1.15fr)_repeat(5,minmax(170px,1fr))]";
 
@@ -63,9 +63,10 @@ export default function Matriz({ datos, perfil, compacta, panoramica, anclaAbier
         {capas.map((capa) => (
           <section key={capa.clave} aria-label={capa.nombre}>
             <div className="flex border-b border-line bg-surface-muted">
-              <div className="sticky left-0 flex items-baseline gap-2 px-4 py-2">
+              <div className="sticky left-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 px-4 py-2">
                 <h3 className="text-2xs font-bold uppercase tracking-wide text-info-ink">{capa.nombre}</h3>
                 {capa.descripcion && <span className="text-xs text-fg-muted">{capa.descripcion}</span>}
+                <OrdenDeLaCapa datos={datos} capa={capa.nombre} perfil={perfil} />
               </div>
             </div>
             {area.dimensiones
@@ -184,7 +185,7 @@ function CeldaDeNivel({
           anclaAbierta === n.id && "bg-info-surface",
         )}
       >
-        {n.descripcion}
+        <TextoConPalabras texto={n.descripcion} palabras={datos.palabrasConValorFijo} />
       </button>
 
       {n.resultado && (
@@ -206,7 +207,9 @@ function CeldaDeNivel({
                   anclaAbierta === c.id ? "border-info-line bg-info-surface" : "border-transparent",
                 )}
               >
-                <span className="block text-xs leading-snug text-fg">{c.texto}</span>
+                <span className="block text-xs leading-snug text-fg">
+                  <TextoConPalabras texto={c.texto} palabras={datos.palabrasConValorFijo} />
+                </span>
                 <span className="mt-1.5 flex items-start justify-between gap-2">
                   <MetaDelCriterio criterio={c} datos={datos} />
                   <Contador conteo={conteoDe(conteos, c.id)} />
@@ -233,5 +236,31 @@ function CeldaDeNivel({
         <Contador conteo={conteoDeCelda(conteos, d.id, n.letra)} conTexto />
       </div>
     </div>
+  );
+}
+
+/**
+ * «Qué se trabaja primero»: el orden de dependencias de la capa en esta área. En la base de Ventas
+ * depende de cómo se cierra la venta; sin ese filtro se dice que cambia, con las tres variantes en
+ * el tooltip.
+ */
+function OrdenDeLaCapa({ datos, capa, perfil }: { datos: DatosDeLaVista; capa: string; perfil: Perfil }) {
+  const filas = ordenDeDependencias(datos.dependencias, datos.area.nombre, capa, perfil.cierre);
+  if (filas.length === 0) return null;
+  if (filas.length === 1) {
+    const f = filas[0];
+    return (
+      <span className="text-2xs text-fg-secondary" title={`Por qué este orden: ${f.porQue}`}>
+        · <span className="font-semibold">Orden de dependencias:</span> {f.orden.join(" → ")}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="cursor-help text-2xs text-fg-secondary underline decoration-dotted underline-offset-2"
+      title={filas.map((f) => `${f.cuando}: ${f.orden.join(" → ")}`).join("\n")}
+    >
+      · <span className="font-semibold">Orden de dependencias:</span> depende de cómo se cierra la venta (elige un perfil)
+    </span>
   );
 }

@@ -11,10 +11,10 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import type { DatosDeLaVista } from "@/lib/escala/vista";
+import { ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeDimension, useEscala } from "./contexto";
 import { PUNTO_DE_NIVEL } from "./niveles";
-import { BotonComentar, Contador, MetaDelCriterio, Segmentado } from "./piezas";
+import { BotonComentar, Contador, MetaDelCriterio, ParrafoDeLaEscala, Segmentado, TextoConPalabras } from "./piezas";
 
 interface Props {
   datos: DatosDeLaVista;
@@ -34,6 +34,10 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
   const aplicaAca = dimensionAplica(d, perfil);
   const capa = capas.find((c) => c.clave === d.capa);
   const nivelEnfocado = niveles.find((n) => n.letra === enfocado)!;
+  /** «Regla de asignación»: los casos dudosos que tocan a esta dimensión. */
+  const reglas = datos.asignacion.filter((r) => r.dimensiones.includes(d.id));
+  /** «Qué se trabaja primero»: el orden de su capa en esta área (y el perfil elegido). */
+  const ordenes = capa ? ordenDeDependencias(datos.dependencias, area.nombre, capa.nombre, perfil.cierre) : [];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[230px_minmax(0,1fr)_270px]">
@@ -151,7 +155,9 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                       />
                     </div>
                   </div>
-                  <p className="text-sm font-medium leading-relaxed text-fg">{n.descripcion}</p>
+                  <p className="text-sm font-medium leading-relaxed text-fg">
+                    <TextoConPalabras texto={n.descripcion} palabras={datos.palabrasConValorFijo} />
+                  </p>
                   {n.resultado && (
                     <p className="rounded-lg bg-success-surface px-3 py-2 text-sm leading-relaxed text-success-ink">
                       <span className="font-bold">Resultado · </span>
@@ -164,7 +170,9 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                         <li key={c.id} className={cn("flex items-start gap-3 rounded-lg px-1 py-0.5", anclaAbierta === c.id && "bg-info-surface")}>
                           <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-fg-muted" aria-hidden />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm leading-relaxed text-fg">{c.texto}</p>
+                            <p className="text-sm leading-relaxed text-fg">
+                              <TextoConPalabras texto={c.texto} palabras={datos.palabrasConValorFijo} />
+                            </p>
                             <MetaDelCriterio criterio={c} datos={datos} className="mt-1.5" />
                           </div>
                           <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => abrirComentarios(c.id)} etiqueta={`Comentarios de ${c.id}`} />
@@ -182,6 +190,23 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
             );
           })}
         </ol>
+
+        {reglas.length > 0 && (
+          <section aria-label="Dónde se cuenta la evidencia" className="mb-5 rounded-xl border border-line bg-surface px-4 py-4">
+            <h3 className="text-sm font-bold text-fg">Dónde se cuenta la evidencia</h3>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              De la regla de asignación: cada evidencia cuenta en una sola dimensión. Los casos dudosos que tocan a esta:
+            </p>
+            <ul className="mt-3 flex flex-col gap-2.5">
+              {reglas.map((r, k) => (
+                <li key={k} className="flex gap-2.5">
+                  <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-info-ink" aria-hidden />
+                  <ParrafoDeLaEscala texto={r.texto} className="text-sm leading-relaxed text-fg-secondary" />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <div className="flex flex-wrap justify-between gap-3 pt-1">
           <button
@@ -221,6 +246,27 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
           <p className="mt-4 border-t border-line pt-3 text-xs leading-relaxed text-fg-muted">
             <span className="font-semibold text-fg-secondary">{d.generica.nombre}</span> — {d.generica.descripcion}
           </p>
+        )}
+        {ordenes.length > 0 && (
+          <div className="mt-4 border-t border-line pt-3">
+            <p className="text-2xs font-bold uppercase tracking-wide text-fg-muted">Qué se trabaja primero en {capa?.nombre.toLowerCase()}</p>
+            {ordenes.map((o) => (
+              <div key={o.cuando} className="mt-2">
+                {ordenes.length > 1 && <p className="text-2xs font-semibold text-fg-secondary">{o.cuando}</p>}
+                <ol className="mt-1 flex flex-col gap-0.5">
+                  {o.orden.map((nombre, k) => (
+                    <li
+                      key={nombre}
+                      className={cn("text-xs", nombre === d.nombre ? "font-bold text-info-ink" : "text-fg-secondary")}
+                    >
+                      {k + 1}. {nombre}
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-1 text-2xs leading-relaxed text-fg-muted">{o.porQue}</p>
+              </div>
+            ))}
+          </div>
         )}
       </aside>
     </div>

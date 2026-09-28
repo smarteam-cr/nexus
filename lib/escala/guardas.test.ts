@@ -91,11 +91,20 @@ describe("el SQL deja todo cerrado para anon", () => {
 
 describe("fuente única: la escala no está escrita en el código", () => {
   const escala = parsearEscala(leerArchivoDeLaEscala("escala"));
-  // Textos largos y propios de la escala: criterios, descripciones de nivel, preguntas y costos.
+  // Textos largos y propios de la escala: criterios, descripciones de nivel, preguntas y costos, y
+  // la prosa que la pantalla muestra (reglas de lectura, perfil, asignación, dependencias).
+  const perfil = escala.perfilDeNegocio;
   const textos = [
     ...todosLosCriterios(escala).map((c) => c.texto),
     ...todasLasDimensiones(escala).flatMap((d) => [d.pregunta, d.costoDeQuedarse, ...d.niveles.map((n) => n.descripcion)]),
     ...Object.values(escala.riesgos),
+    ...(escala.explicaciones.evaluacion?.split("\n\n") ?? []),
+    ...escala.casosDeLectura.map((b) => b.texto),
+    ...escala.automatizacion.map((b) => b.texto),
+    ...escala.asignacion.map((r) => r.texto),
+    ...escala.dependencias.map((d) => d.porQue),
+    ...[perfil.introduccion ?? "", ...perfil.notas],
+    ...[perfil.cierre, perfil.despues].flatMap((p) => p?.opciones.map((o) => o.definicion) ?? []),
   ].filter((t) => t.length >= 40);
 
   const codigo = [
