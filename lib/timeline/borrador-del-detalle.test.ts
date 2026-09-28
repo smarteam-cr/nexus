@@ -36,6 +36,7 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 import {
   borradorVacio,
   claveDeTareaQueSeVa,
+  esArrastrada,
   esVacioEsperandoTareas,
   fotoDeTarea,
   leerBorrador,
@@ -46,6 +47,7 @@ import {
   type Cambio,
   type CambioTareaCambia,
   type CambioTareaNueva,
+  type TareaDelVivo,
   type Vivo,
 } from "./borrador";
 import {
@@ -60,8 +62,10 @@ import {
   vivoDeLaBase,
 } from "./borrador-del-detalle";
 import { renderLoQueYaHay, TITULO_DE_LO_QUE_YA_PASO } from "@/lib/contexto/detalle-cronograma";
-import { POLITICA_DE_ATRASOS } from "./politica-de-atrasos";
+import { POLITICA_DE_ATRASOS, type PoliticaDeFasesVencidas } from "./politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "./reprogramar-desde-hoy";
 import { pipelineByKey } from "@/lib/projects/kind";
+import { RECURRENTE_TAG } from "@/lib/tags/catalog";
 import { tareasTocadas } from "./hechas-fuera-de-lugar";
 import { explicacionEnPantalla, huellaDeLosCambios, type ExplicacionSinSello } from "./explicacion-de-la-propuesta";
 import { observacionDeLasQueNoEntran } from "./hitos";
@@ -70,8 +74,10 @@ import { leerFixtureGrande } from "./__fixtures__/propuesta-grande";
 import {
   avisosDeLaMedicion,
   medirM2,
+  medirM3yM4,
   renglonDeLaCondicion,
   repitenDeLasObservaciones,
+  SIN_RELOJ,
   vivoDeLasFilas,
   type FilaDeFase,
   type FilaDeTarea,
@@ -1297,6 +1303,22 @@ describe("M4 P4b · la marca del paso 2 reprograma lo atrasado", () => {
     ]);
   });
 
+  it("⭐ §5.10: un proyecto recurrente se reprograma con la misma regla (la entrega por ciclo es de M2)", async () => {
+    /* Caso borde de la spec (§5.10, 2026-09-27). La edición que la pone en rojo: saltar o cambiar la reprogramación por el
+       tag `recurrente` (sus ciclos no cambian qué fase está atrasada). */
+    const correr = async (tags: string[]) => {
+      db.projectTimeline.updateMany.mockReset();
+      db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+      db.timelineTask.findMany.mockResolvedValue([{ source: "AGENT" }]);
+      db.projectTimeline.findUnique.mockResolvedValue({ anchorStartDate: ANCLA, phases: FASES_M4, project: { tags, hubspotPipelineId: CUSTOMER_SUCCESS } });
+      expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: null, version: null }, corrida: "run-v", ahora: HOY })).toBeNull();
+      return escrito();
+    };
+    const recurrente = await correr([RECURRENTE_TAG]);
+    expect(delSistema(recurrente), "un recurrente no se reprogramó igual").toEqual(["d:durationWeeks:19", "p:startWeek:21", "d1@16", "d2@18"]);
+    expect(recurrente).toEqual(await correr([]));
+  });
+
   it("⭐ «Regenerar» de una fase y «primera» no reprograman; en un Desarrollo la primera fase no es la Semana 0", async () => {
     /* La edición que la pone en rojo: reprogramar en «Regenerar» de una fase (lo pidió el CSE, D3), o calcular
        `conSemanaCero` sin el pipeline (la primera fase de un Desarrollo, trabajo real, quedaba quieta). */
@@ -1438,5 +1460,269 @@ describe("M4 P4c · el paso 2 frente a lo que corrió el código", () => {
     ).toEqual(["fase:d:durationWeeks", "fase:p:startWeek", "~d1@16", "~d2@18", "+Documentar decisiones@18"]);
     expect(cambios.filter((c) => c.tipo === "tarea-cambia").every((c) => c.tipo === "tarea-cambia" && c.desdeHoy), "perdió su marca").toBe(true);
     expect(escrito().observaciones).toContain("No entra 1 tarea de la IA: repite una que ya está.");
+  });
+
+  it("⭐ §5.10: desmarcar el estiramiento deja la fase desfasada y el recálculo no reprograma; desmarcar un inicio no desfasa", async () => {
+    /* Casos borde de la spec (§5.10, 2026-09-27). Las ediciones que la ponen en rojo: que el paso 2 arme las tareas para
+       la estructura SIN lo reprogramado (`estructuraHipotetica` sin los `desdeHoy`: desmarcar el estiramiento no pedía
+       recalcular, y marcado quedaba desfasado), o que el recálculo pase por la reprogramación (lo pide el CSE sobre fases
+       concretas, D3: el reloj de la propuesta se reescribía con la semana del recálculo). */
+    const g = await marcado();
+    enLaBaseP4c(g);
+    const sobre = await estructuraParaElDetalle("tl", "run-2");
+    const t = (title: string, weekIndex: number) => ({ title, weekIndex, notes: null, porValidar: false, party: "SMARTEAM", type: "TASK" });
+    let k = 0;
+    await fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-2",
+      estructura: sobre!.estructura,
+      analysisJson: {
+        timelineDetail: {
+          phases: [
+            { id: "s0", tasks: [] },
+            { id: "d", tasks: [t("Documentar decisiones", 18)] },
+            { id: "p", tasks: [t("Probar integraciones", 1)] },
+          ],
+        },
+      },
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `k-${++k}`,
+    });
+    const fusionado = escrito();
+    const vivo = vivoDeLaBase(ANCLA, FASES_P4C as unknown as Parameters<typeof vivoDeLaBase>[1]);
+    const b = leerBorrador(fusionado)!;
+    const desfasadas = (sin: string[]) => planDeAplicacion(vivo, b, sin, { tareas: "listas" }).desfasadas.map((f) => f.fase);
+    expect(desfasadas([]), "con todo marcado").toEqual([]);
+    expect(desfasadas(["fase:d:durationWeeks"]), "desmarcar el estiramiento no pidió recalcular").toEqual(["d"]);
+    expect(desfasadas(["fase:p:startWeek"]), "desmarcar un inicio desfasó la fase").toEqual([]);
+
+    // El recálculo (lo pide el CSE, una semana después): recalcula «Diseño» y no toca el reloj ni lo reprogramado.
+    enLaBaseP4c(fusionado);
+    const semanaQueViene = new Date("2026-10-03T12:00:00-06:00");
+    expect(
+      await marcarTareasEnCurso({
+        timelineId: "tl",
+        pedido: { token: "run-2", version: fusionado.version as number, recalcular: { sin: ["fase:d:durationWeeks"] } },
+        corrida: "run-3",
+        ahora: semanaQueViene,
+      }),
+    ).toBeNull();
+    const recalculo = escrito();
+    expect(recalculo.recalculo).toMatchObject({ corrida: "run-3", fases: [{ id: "d", nombre: "Diseño" }], sin: ["fase:d:durationWeeks"] });
+    expect(recalculo.hoy, "el recálculo reescribió el reloj").toEqual(fusionado.hoy);
+    const delSistema = (x: Record<string, unknown>) => (x.cambios as Cambio[]).filter((c) => (c.tipo === "fase-cambia" || c.tipo === "tarea-cambia") && c.desdeHoy);
+    expect(delSistema(recalculo), "el recálculo reprogramó").toEqual(delSistema(fusionado));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── M4 P4h · la medición de M3 y M4 lee lo que escribe la fusión ─────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * M4 P4h (spec del replanteo §5.9, 2026-09-27): después del deploy de M3 + M4, `scripts/medir-propuesta.ts` suma las
+ * condiciones 5 a 8 sobre la propuesta abierta de Wherex. Acá, la propuesta grande (Wherex anonimizado, S18) pasa por la
+ * marca REAL del paso 2 (reprograma lo atrasado en el orden del plan, lo que decidió Elías) y por la fusión REAL con la
+ * salida del paso 2 del fixture, con la base simulada; la medición lee el JSON que quedó escrito, como el script. Después
+ * se rompe la propuesta a mano, una falla por condición, y cada una tiene que dar NO PASA.
+ */
+describe("M4 P4h · la medición de M3 y M4 lee lo que escribe la fusión", () => {
+  const fx = leerFixtureGrande();
+  const HOY = new Date(fx.hoy); // S18
+  const ANCLA = new Date(`${fx.ancla}T00:00:00.000Z`);
+  /* Los títulos del fixture están anonimizados («Tarea 001»): sin los de los kickoffs, M2 no reconoce el que sobra y la
+     «Semana 0» queda con 5 pendientes. Con los títulos reales de Wherex en sus sesiones (dos hechas y una pendiente), la
+     fusión quita la pendiente (del sistema, aunque sea del pasado) y quedan 4, como en producción (spec §5.1). */
+  const KICKOFFS: Record<string, string> = {
+    t001: "Sesión de kickoff: equipo, roles y accesos",
+    t004: "Sesión de kick-off formal del proyecto",
+    t014: "Sesión de kick-off del proyecto",
+  };
+  const FASES_G = fx.vivo.fases.map((f) => ({
+    ...f,
+    tasks: f.tareas.map((t) => ({ ...t, title: KICKOFFS[t.id] ?? t.title, startDateOverride: null, dueDateOverride: null })),
+  }));
+  type FasesG = typeof FASES_G;
+  const vivoG = (fases: FasesG = FASES_G) => vivoDeLaBase(ANCLA, fases as unknown as Parameters<typeof vivoDeLaBase>[1]);
+  const escrito = () =>
+    JSON.parse(JSON.stringify(db.projectTimeline.updateMany.mock.calls.at(-1)![0].data.pendingProposal)) as Record<string, unknown>;
+  /** El borrador del paso 1 del fixture (los cambios de fases de la IA), como lo encuentra la marca del paso 2. */
+  const delPaso1 = () => {
+    const crudo = JSON.parse(JSON.stringify(fx.borrador)) as { cambios: Array<{ tipo: string }>; version: number } & Record<string, unknown>;
+    return { ...crudo, cambios: crudo.cambios.filter((c) => !c.tipo.startsWith("tarea")), tareas: { corrida: "run-1", listas: false }, tareasArmadasPara: {} };
+  };
+  const enLaBaseG = (guardado: unknown, fases: FasesG = FASES_G) =>
+    db.projectTimeline.findUnique.mockImplementation(async () => ({
+      pendingProposal: JSON.parse(JSON.stringify(guardado)),
+      pendingProposalRunId: "run-1",
+      anchorStartDate: ANCLA,
+      closeDateOverride: null,
+      project: { tags: [], hubspotPipelineId: null },
+      phases: fases,
+    }));
+  /** La marca real del paso 2 (o la que se le pasa) y la fusión real con la salida del paso 2 del fixture: el JSON que
+   *  lee el script. */
+  async function loQueQuedaEscrito(marcado?: Record<string, unknown>, fases: FasesG = FASES_G): Promise<Record<string, unknown>> {
+    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    if (!marcado) {
+      const g = delPaso1();
+      enLaBaseG(g);
+      expect(await marcarTareasEnCurso({ timelineId: "tl", pedido: { token: "run-1", version: g.version }, corrida: "run-2", ahora: HOY })).toBeNull();
+      marcado = escrito();
+    }
+    enLaBaseG(marcado, fases);
+    const sobre = await estructuraParaElDetalle("tl", "run-2");
+    let k = 0;
+    const r = await fusionarDetalleEnElBorrador({
+      timelineId: "tl",
+      corrida: "run-2",
+      estructura: sobre!.estructura,
+      analysisJson: fx.paso2,
+      huellas: null,
+      cortado: false,
+      nuevaClave: () => `k-${String(++k).padStart(3, "0")}`,
+    });
+    expect(r.estado).toBe("listas");
+    return escrito();
+  }
+  const medir = (guardado: Record<string, unknown>, v: Vivo = vivoG()) =>
+    medirM3yM4({ vivo: v, guardado, borrador: leerBorrador(guardado)!, conSemanaCero: true });
+  const pasan = (m: ReturnType<typeof medir>) => m.map((c) => [c.numero, c.pasa]);
+  const conCambios = (g: Record<string, unknown>, cambios: Cambio[]) => ({ ...g, cambios: JSON.parse(JSON.stringify(cambios)) }) as Record<string, unknown>;
+  const cambiosDe = (g: Record<string, unknown>) => leerBorrador(g)!.cambios;
+  const LA_LINEA_5 = "Dice: ⚠ Quedaron sin hacer 4 tareas de semanas que ya pasaron, en «Semana 0»: la propuesta no las mueve (están en «Más»).";
+
+  it("⭐ Wherex de la marca a la fusión real: 5 a 8 PASAN, con 8 casillas, 1 fija, 25 que se corren y «Quedaron sin hacer 4» en la «Semana 0»", async () => {
+    /* Las ediciones que la ponen en rojo: que la medición no reconozca lo que escriben la marca y la fusión (recalcular
+       sobre lo ya reprogramado, sin `sinReprogramacion`: «faltan» todas; medir con la hora de la medición en vez del
+       reloj de la propuesta; contar como vencida una arrastrada por su semana vieja). */
+    const g = await loQueQuedaEscrito();
+    const m = medir(g);
+    expect(pasan(m)).toEqual([[5, true], [6, true], [7, true], [8, true]]);
+    expect(m[0].detalle).toBe("0 nuevas y 0 que se quitan en semanas vencidas.");
+    // El kickoff que sobra (M2) lo quita el sistema aunque su semana ya pasó: la 5 no lo cuenta.
+    expect(cambiosDe(g).flatMap((c) => (c.tipo === "tarea-se-va" && c.delSistema === "hito" ? [c.tareaId] : []))).toEqual(["t014"]);
+    expect(m[1].detalle).toBe("8 casillas, 1 fase fija y 25 tareas que se corren con su fase, desde la S18 (en el orden del plan).");
+    expect(m[2].detalle).toBe(LA_LINEA_5);
+    expect(m[3].detalle).toMatch(/^Las \d+ hechas o suspendidas quedan en su semana\.$/);
+    expect(renglonDeLaCondicion(m[1])).toBe(
+      "6. PASA · Lo que reprogramó el sistema es lo que calcula el código — 8 casillas, 1 fase fija y 25 tareas que se corren con su fase, desde la S18 (en el orden del plan).",
+    );
+  });
+
+  it("⭐ cada falla da NO PASA en su condición: algo en el pasado, una arrastrada perdida, una vencida que quedó, una hecha que se mueve", async () => {
+    /* Las ediciones que la ponen en rojo (en medicion-de-la-propuesta.ts): no mirar la semana vencida en la 5 (o contar el
+       kickoff que quita el sistema); comparar solo cuántas en la 6; no buscar las vencidas de las fases reprogramadas en la
+       7; no mirar el plan en la 8. */
+    const g = await loQueQuedaEscrito();
+    const cambios = cambiosDe(g);
+    const v = vivoG();
+    const viva = (id: string) => v.fases.flatMap((f) => f.tareas ?? []).find((t) => t.id === id)!;
+    const s0 = v.fases[0];
+    const pendienteDeS0 = (s0.tareas ?? []).find((t) => t.status === "PENDING")!;
+    const nuevaEn = (fase: string, title: string, weekIndex: number, extra: Partial<CambioTareaNueva> = {}): CambioTareaNueva => ({
+      tipo: "tarea-nueva",
+      clave: `t:0f0f0f0f-0000-4000-a000-0000000000${String(weekIndex).padStart(2, "0")}`,
+      fase,
+      tarea: { title, weekIndex, notes: null, party: "SMARTEAM", type: "TASK", needsValidation: false, motivoPorValidar: null, fuga: null },
+      ...extra,
+    });
+    const seVa = (t: TareaDelVivo, faseId: string, extra: Record<string, unknown> = {}): Cambio =>
+      ({ tipo: "tarea-se-va", clave: claveDeTareaQueSeVa(t.id), tareaId: t.id, faseId, desde: fotoDeTarea(t), ...extra }) as Cambio;
+
+    // 5 · una nueva de la IA en la S2 de «Fase A» (ya pasó) y una pendiente de la «Semana 0» que la IA quita.
+    const nuevaEnElPasado = medir(conCambios(g, [...cambios, nuevaEn("f02", "Tarea en el pasado", 0)]));
+    expect(nuevaEnElPasado[0]).toMatchObject({ pasa: false, detalle: "1 nueva: «Tarea en el pasado»." });
+    const quitadaDelPasado = medir(conCambios(g, [...cambios, seVa(pendienteDeS0, s0.id)]));
+    expect(quitadaDelPasado[0]).toMatchObject({ pasa: false, detalle: `1 que se quita: «${pendienteDeS0.title}».` });
+    // El kickoff que quita el sistema (aunque sea del pasado) y lo que dictó el chat no cuentan.
+    expect(medir(conCambios(g, [...cambios, seVa(pendienteDeS0, s0.id, { delSistema: "hito" })]))[0].pasa).toBe(true);
+    expect(medir(conCambios(g, [...cambios, nuevaEn("f02", "Del chat", 0, { porChat: true })]))[0].pasa).toBe(true);
+
+    // 6 y 7 · una arrastrada que la fusión perdió: faltan en la 6, y su tarea queda vencida en «Fase A» (reprogramada).
+    const perdida = cambios.find((c) => esArrastrada(c) && c.faseId === "f02") as CambioTareaCambia;
+    const sinUna = medir(conCambios(g, cambios.filter((c) => c !== perdida)));
+    expect(sinUna[1].pasa).toBe(false);
+    expect(sinUna[1].detalle).toBe(
+      `8 casillas, 1 fase fija y 24 tareas que se corren con su fase; contra lo que calcula el código: faltan «${viva(perdida.tareaId).title}» a la semana ${perdida.a.weekIndex}.`,
+    );
+    expect(sinUna[2].pasa, "una vencida en una fase que el sistema reprogramó no se vio").toBe(false);
+    expect(sinUna[2].detalle).toBe(`${LA_LINEA_5.replace("4 tareas", "5 tareas").replace("en «Semana 0»", "en «Semana 0» y «Fase A»")} Quedan vencidas en fases que el sistema reprogramó: «${viva(perdida.tareaId).title}» (Fase A).`);
+    // Sin nada de lo del sistema (la marca no reprogramó): la 6 no pasa.
+    const sinSistema = medir(conCambios(g, cambios.filter((c) => !((c.tipo === "fase-cambia" || c.tipo === "tarea-cambia") && c.desdeHoy))));
+    expect(sinSistema[1]).toMatchObject({ pasa: false, detalle: expect.stringMatching(/^0 casillas, 0 fases fijas y 0 tareas que se corren con su fase; contra lo que calcula el código: faltan /) });
+    // 7 · la IA corre una pendiente del futuro a una semana que ya pasó: nace en el pasado.
+    const conCambio = new Set(cambios.flatMap((c) => (c.tipo === "tarea-cambia" || c.tipo === "tarea-se-va" ? [c.tareaId] : [])));
+    const [deLaFase, futura] = v.fases
+      .filter((f) => f.id !== s0.id && f.id !== "f02")
+      .flatMap((f) => (f.tareas ?? []).map((t) => [f.id, t] as const))
+      .find(([, t]) => t.status === "PENDING" && !conCambio.has(t.id))!;
+    const alPasado: Cambio = { tipo: "tarea-cambia", clave: `tarea:${futura.id}:cambia`, tareaId: futura.id, faseId: deLaFase, desde: fotoDeTarea(futura), a: { fase: "f02", weekIndex: 0 } };
+    const m7 = medir(conCambios(g, [...cambios, alPasado]));
+    expect(m7[2]).toMatchObject({ pasa: false, detalle: expect.stringContaining(" 1 nueva o movida cae en el pasado.") });
+
+    // 8 · una hecha que la IA corre de semana; como mudanza sugerida (L7, desmarcada), no cuenta.
+    const hecha = v.fases.find((f) => f.id === "f02")!.tareas!.find((t) => t.status === "DONE")!;
+    const corrida: Cambio = { tipo: "tarea-cambia", clave: `tarea:${hecha.id}:cambia`, tareaId: hecha.id, faseId: "f02", desde: fotoDeTarea(hecha), a: { weekIndex: hecha.weekIndex + 1 } };
+    const m8 = medir(conCambios(g, [...cambios, corrida]));
+    expect(m8[3]).toMatchObject({ pasa: false, detalle: `Se mueve 1: «${hecha.title}»; con un cambio: «${hecha.title}».` });
+    const sugerida = { ...corrida, a: { fase: "f04" }, sugerida: "otra-fase" as const };
+    expect(medir({ ...conCambios(g, [...cambios, sugerida]), excluidos: [corrida.clave] })[3].pasa, "contó la mudanza sugerida").toBe(true);
+
+    // Sin el reloj (un borrador de antes del deploy, o no es «Regenerar todo»): las cuatro NO PASAN, con el porqué.
+    const { hoy: _reloj, ...sinReloj } = g;
+    void _reloj;
+    expect(medir(sinReloj).map((c) => [c.pasa, c.detalle])).toEqual(Array(4).fill([false, SIN_RELOJ]));
+  });
+
+  it("⭐ sigue lo que guardó la propuesta: la casilla que el CSE desmarcó y lo que marcaron hecho después", async () => {
+    /* Las ediciones que la ponen en rojo: contar en la 7 una fase cuya casilla el CSE desmarcó (sus pendientes vuelven a
+       su semana: están donde él decidió), o contar en la 8 una arrastrada que el plan da «ya está» (D13). */
+    const g = await loQueQuedaEscrito();
+    const DURACION_DE_A = "fase:f02:durationWeeks";
+    const desmarcada = medir({ ...g, excluidos: [DURACION_DE_A] });
+    expect(pasan(desmarcada), "contó lo de una casilla que el CSE desmarcó").toEqual([[5, true], [6, true], [7, true], [8, true]]);
+    expect(desmarcada[2].detalle).toMatch(/^Dice: ⚠ Quedaron sin hacer 12 tareas de semanas que ya pasaron, en «Semana 0» y «Fase A»/);
+    // Una tarea que se corría con «Fase A» la marcaron hecha después de la propuesta: la 8 pasa (queda «ya está»); la 6
+    // lo dice como diferencia (se mide recién regenerada, sin tocar el cronograma).
+    const arrastrada = cambiosDe(g).find((c) => esArrastrada(c) && c.faseId === "f02") as CambioTareaCambia;
+    const conUnaHecha: Vivo = {
+      ...vivoG(),
+      fases: vivoG().fases.map((f) => ({ ...f, tareas: f.tareas?.map((t) => (t.id === arrastrada.tareaId ? { ...t, status: "DONE" } : t)) })),
+    };
+    const despues = medir(g, conUnaHecha);
+    expect(despues[3].pasa, "una arrastrada «ya está» contó como cambio sobre una hecha").toBe(true);
+    expect(despues[1]).toMatchObject({ pasa: false, detalle: expect.stringContaining("sobran") });
+  });
+
+  it("⭐ sigue la política guardada: con «avisar» no hay nada del sistema y pasa; con «todo desde hoy», el cierre nace desmarcado y pasa", async () => {
+    /* La marca lee el interruptor (en el orden del plan); acá la propuesta se calcula con las otras dos opciones, como
+       quedaría si Elías lo voltea (D11). Las ediciones que la ponen en rojo: medir con el interruptor y no con
+       `hoy.politica` (la 6 esperaba 8 casillas donde el sistema no reprogramó nada), o contar como nacido en el pasado lo
+       que se armó para la casilla del cierre que nace desmarcada (D5: lo decide el CSE, no R13). */
+    const marcadoCon = (fasesVencidas: PoliticaDeFasesVencidas, fases: FasesG) => {
+      const g = { ...delPaso1(), tareas: { corrida: "run-2", listas: false } };
+      const r = reprogramarDesdeHoy({
+        vivo: vivoG(fases),
+        borrador: leerBorrador(g)!,
+        hoy: HOY,
+        politica: { ...POLITICA_DE_ATRASOS, fasesVencidas },
+        conSemanaCero: true,
+      })!;
+      return { ...conLaReprogramacion(g, r), version: g.version + 1 };
+    };
+    const avisar = await loQueQuedaEscrito(marcadoCon("avisar", FASES_G));
+    const conAvisar = medir(avisar);
+    expect(pasan(conAvisar)).toEqual([[5, true], [6, true], [7, true], [8, true]]);
+    expect(conAvisar[1].detalle).toBe("0 casillas, 0 fases fijas y 0 tareas que se corren con su fase, desde la S18 (avisar).");
+    expect(conAvisar[2].detalle).toMatch(/^Dice: ⚠ Quedaron sin hacer 58 tareas de semanas que ya pasaron/);
+
+    const conCierre = FASES_G.map((f) => (f.id === "f08" ? { ...f, name: "Cierre y entrega" } : f));
+    const todo = await loQueQuedaEscrito(marcadoCon("todo-desde-hoy", conCierre), conCierre);
+    expect(todo.excluidos, "el cierre no nació desmarcado").toEqual(["fase:f08:startWeek"]);
+    const conTodo = medir(todo, vivoG(conCierre));
+    expect(pasan(conTodo), "contó lo del cierre desmarcado").toEqual([[5, true], [6, true], [7, true], [8, true]]);
+    expect(conTodo[1].detalle).toBe("7 casillas, 1 fase fija y 25 tareas que se corren con su fase, desde la S18 (todo desde hoy).");
   });
 });

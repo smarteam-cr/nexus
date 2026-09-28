@@ -338,8 +338,11 @@ export function etiquetaLargaDelCambio(c: CambioDeEstructura, vivo: Vivo): strin
  * M4 P4f (2026-09-27): lo que reprogramó el sistema desde hoy (sus casillas marcadas; el pin no es un renglón) va junto,
  * en UNA causa y primero: «8 fases se reprograman desde hoy, en el orden del plan». Con otras causas dice cuánto corre el
  * cierre por sí solo: las semanas del cierre con solo lo de hoy (`magnitudDeLoMarcado.finAntes`) menos las de hoy.
+ * `cambios` cuenta las casillas (la causa del sistema vale lo que sus fases): lo usa la variante más corta de la línea
+ * («: 8 cambios de fases.»). P4h (2026-09-27, §5.10): con el cierre fijado a mano la causa entera no entra en 140 y esa
+ * variante contaba causas («1 cambio de fases» por 8 casillas).
  */
-function causasDelCierre(i: EntradaDelMensaje): string[] {
+function causasDelCierre(i: EntradaDelMensaje): { causas: string[]; cambios: number } {
   const porClave = new Map<string, Cambio>(i.borrador.cambios.map((c) => [c.clave, c]));
   const marcados = [...i.r.items].filter((it) => it.estado === "aplica").sort((a, b) => a.numero - b.numero);
   const deHoy = new Set<string>();
@@ -363,7 +366,7 @@ function causasDelCierre(i: EntradaDelMensaje): string[] {
         c.tipo === "orden";
       return mueve ? [etiquetaLargaDelCambio(c as CambioDeEstructura, i.vivo)] : [];
     });
-  if (deHoy.size === 0) return otras;
+  if (deHoy.size === 0) return { causas: otras, cambios: otras.length };
   const textos = TEXTOS_DE_LO_DE_HOY_EN_EL_MENSAJE[i.borrador.hoy?.politica.fasesVencidas ?? "en-el-orden-del-plan"];
   // Cuánto corre el cierre lo de hoy solo: solo se dice si hay otras causas (si no, es el corrimiento de la línea).
   let corre: string | null = null;
@@ -378,7 +381,7 @@ function causasDelCierre(i: EntradaDelMensaje): string[] {
     deHoy.size === 1
       ? textos.una(cortarNombre(i.vivo.fases.find((f) => f.id === unaFase)?.name ?? unaFase), corre)
       : textos.varias(deHoy.size, otras.length === 0, corre);
-  return [causa, ...otras];
+  return { causas: [causa, ...otras], cambios: deHoy.size + otras.length };
 }
 
 /** «A y B», o «A, B y 3 cambios más» si no entran todas. */
@@ -427,10 +430,10 @@ function lineaDelCierre(i: EntradaDelMensaje, nivel: NivelDeLaPropuesta): string
   } else {
     base = `${mayuscula(sujeto)} ${frase}`;
   }
-  const causas = mueve ? causasDelCierre(i) : [];
+  const { causas, cambios } = mueve ? causasDelCierre(i) : { causas: [], cambios: 0 };
   const variantes = [2, 1, 0]
     .filter((n) => n <= causas.length)
-    .map((n) => (causas.length === 0 ? `${base}.` : n === 0 ? `${base}: ${plural(causas.length, "cambio de fases", "cambios de fases")}.` : `${base}: ${lasCausas(causas, n)}.`));
+    .map((n) => (causas.length === 0 ? `${base}.` : n === 0 ? `${base}: ${plural(cambios, "cambio de fases", "cambios de fases")}.` : `${base}: ${lasCausas(causas, n)}.`));
   return laQueEntra(variantes.length > 0 ? variantes : [`${base}.`]);
 }
 

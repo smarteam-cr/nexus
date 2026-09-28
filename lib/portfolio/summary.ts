@@ -268,10 +268,15 @@ export function computeProjectSummary(input: SummaryInput): ProjectSummary {
     const baseTaskIds = new Set(basePhases.flatMap((p) => (Array.isArray(p.tasks) ? p.tasks.map((t) => t.id) : [])));
     const addedPhases = phases.filter((p) => !basePhaseIds.has(p.id)).length;
     const addedTasks = allTasks.filter((t) => !baseTaskIds.has(t.id)).length;
-    /* ⚠ `totalWeeks` (ESFUERZO) a propósito, y NO `timelineSpan`: acá se mide ALCANCE —cuánto
-       más trabajo que lo vendido— no calendario. El cierre proyectado de abajo sí usa span.
-       Son dos preguntas distintas; unificarlas haría que una de las dos mienta. */
-    const weeksDelta = totalWeeks(phases) - totalWeeks(basePhases);
+    /* ⚠ ALCANCE, no calendario: las semanas de las fases AGREGADAS menos las de las QUITADAS contra la línea base
+       (D12 del replanteo, 2026-09-27). Alargar una fase ya vendida es calendario y lo mide el cierre contra lo
+       prometido (`closing`, abajo, con span); un alargue por atraso (M4: «Regenerar todo» estira lo que quedó atrasado
+       desde hoy) no es trabajo agregado. Con la suma de duraciones de antes, aplicar M4 en Wherex subía su alcance de
+       +8 a +50 semanas y el vigilante de riesgo lo leía como trabajo agregado; con esta, +1 (lo que sí se agregó).
+       Tampoco `timelineSpan`: una fase agregada en paralelo es alcance aunque el cierre no se mueva. */
+    const liveIds = new Set(phases.map((p) => p.id));
+    const weeksDelta =
+      totalWeeks(phases.filter((p) => !basePhaseIds.has(p.id))) - totalWeeks(basePhases.filter((p) => !liveIds.has(p.id)));
     const exceeded = addedPhases > 0 || addedTasks > 0 || weeksDelta > 0;
     scope = { measurable: true, addedPhases, addedTasks, weeksDelta, attenuated: weakBaseline, exceeded };
   }

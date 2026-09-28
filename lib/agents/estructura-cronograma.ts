@@ -18,7 +18,11 @@
  *
  * ── LAS DECISIONES DE NEGOCIO QUE ESTE TEXTO FIJA (Elías, 2026-09-23) ────────
  *  1. El plan cambia SOLO por lo que se acordó de acá en adelante. Un atraso que ya pasó no alarga
- *     la fase: queda como desviación (va a «observaciones»).
+ *     la fase: queda como desviación (va a «observaciones»). ⭐ Vale para la IA. Desde el 2026-09-27
+ *     (M4 del replanteo) lo atrasado lo reprograma el CÓDIGO en «Regenerar todo», antes del paso 2 y
+ *     fuera de este paso (lib/timeline/reprogramar-desde-hoy.ts, con el interruptor de
+ *     lib/timeline/politica-de-atrasos.ts): este texto no cambió ni un carácter (su sha vive en la
+ *     guarda G9 de lib/timeline/propuesta-de-estructura.test.ts).
  *  2. La IA nunca quita fases ni mueve la fecha de arranque del proyecto: lo avisa en
  *     «observaciones» y lo decide una persona.
  *  3. Un plazo total sin detalle por fase («son 12 semanas») no se reparte: solo se compara el

@@ -97,6 +97,7 @@ import {
 import { medirPropuesta } from "./magnitud-propuesta";
 import { borradorDelFixture, leerFixtureGrande, vivoDelFixture } from "./__fixtures__/propuesta-grande";
 import { textoDeLosTotales } from "./vista-de-la-propuesta";
+import { computePhaseRanges } from "./weeks";
 
 const f = (id: string, name: string, durationWeeks: number, extra: Partial<FaseViva> = {}): FaseViva => ({
   id,
@@ -1389,6 +1390,28 @@ describe("19 · M4 P4d: el plan cuenta lo que tiene casilla; las arrastradas y e
     const yaEsta = planDeAplicacion({ ancla: FIX.ancla, fases: [x, y] }, chico);
     expect(yaEsta.items.map((it) => it.estado)).toEqual(["ya-esta", "ya-esta"]);
     expect(debeDescartarseSolo(yaEsta), "un pin solo, sin nada que decidir, trabó la propuesta").toBe(true);
+  });
+
+  it("⭐ §5.10: con todo lo del sistema desmarcado y un cambio de la IA marcado, el pin aplica igual (lo empezado no se corre)", () => {
+    /* Caso borde de la spec (§5.10, 2026-09-27). La edición que la pone en rojo: decidir el pin solo por los `desdeHoy`
+       (aplica si aplica otro cambio del sistema): con solo lo de la IA, «Fase K» de 3 a 5 semanas y la fase nueva, el pin
+       quedaba fuera y «Fase I», que ya empezó, se corría de rebote detrás de lo de la IA. */
+    const crudo = JSON.parse(JSON.stringify(FIX.borrador)) as { cambios: Array<{ tipo: string }> } & Record<string, unknown>;
+    const delPaso1 = { ...crudo, cambios: crudo.cambios.filter((c) => !c.tipo.startsWith("tarea")), tareas: { corrida: "run-2", listas: false }, tareasArmadasPara: {} };
+    const r = reprogramarDesdeHoy({ vivo: VIVO_G, borrador: leerBorrador(delPaso1)!, hoy: new Date(FIX.hoy), politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!;
+    const conLaIA = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(delPaso1, r))))!;
+    const delSistema = conLaIA.cambios.filter((c) => c.tipo === "fase-cambia" && c.desdeHoy && !c.fijaInicio).map((c) => c.clave);
+    const deLaIA = conLaIA.cambios.filter((c) => (c.tipo === "fase-cambia" && !c.desdeHoy) || c.tipo === "fase-nueva").map((c) => c.clave);
+    expect(deLaIA, "el escenario").toEqual(["fase:f12:durationWeeks", "n:p01"]);
+    const plan = planDeAplicacion(VIVO_G, conLaIA, delSistema);
+    expect(deLaIA.map((k) => estadoDe(plan, k))).toEqual(["aplica", "aplica"]);
+    expect(estadoDe(plan, PIN), "con solo lo de la IA, el pin quedó fuera").toBe("aplica");
+    // Lo empezado no se corre: «Fase I» sigue arrancando donde arranca hoy.
+    const inicioDe = (p: ReturnType<typeof proyectarConPlan>, id: string) => {
+      const k = p.fases.findIndex((f) => f.clave === id);
+      return computePhaseRanges(p.fases)[k].start;
+    };
+    expect(inicioDe(proyectarConPlan(VIVO_G, plan), "f10")).toBe(inicioDe(proyectarConPlan(VIVO_G, planDeAplicacion(VIVO_G, conLaIA, [...delSistema, ...deLaIA, PIN])), "f10"));
   });
 
   it("⭐ una arrastrada de una tarea que marcaron hecha (o suspendieron) después de la propuesta queda «ya está»: no se mueve", () => {

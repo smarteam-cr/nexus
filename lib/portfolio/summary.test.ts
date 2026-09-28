@@ -52,7 +52,11 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 
 import { summaryDesdeArbol, ultimasRazonesHumanas, type ArbolDeSummary } from "./load";
-import { RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+import { borradorVacio, leerBorrador, planDeAplicacion, proyectarConPlan, RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+import { leerFixtureGrande, vivoDelFixture } from "@/lib/timeline/__fixtures__/propuesta-grande";
+import { POLITICA_DE_ATRASOS } from "@/lib/timeline/politica-de-atrasos";
+import { conLaReprogramacion, reprogramarDesdeHoy } from "@/lib/timeline/reprogramar-desde-hoy";
+import { addWeeks, computePhaseRanges } from "@/lib/timeline/weeks";
 
 const NOW = new Date("2026-06-21T00:00:00Z");
 const d = (s: string) => new Date(s);
@@ -98,7 +102,10 @@ test("A — baseline + agregados: diff de alcance y avance correctos", () => {
   expect(s.scope.measurable).toBe(true);
   expect(s.scope.addedTasks).toBe(2); // t3, t4
   expect(s.scope.addedPhases).toBe(1); // p2
-  expect(s.scope.weeksDelta).toBe(1); // 3 - 2
+  /* 2026-09-27, D12 del replanteo (M4 P4g): el número no cambia, cambia por qué da eso. Antes era la suma de duraciones
+     (3 − 2); ahora son las semanas de la fase agregada (p2, 1) menos las de las quitadas (ninguna): alargar una fase
+     ya vendida es calendario, no alcance. La guarda de la regla nueva es «P4g», al final. */
+  expect(s.scope.weeksDelta).toBe(1); // p2, la agregada
   expect(s.scope.exceeded).toBe(true);
   expect(Math.abs(s.progress.pct - 0.25) < 1e-9).toBeTruthy(); // 1/4 tareas DONE
 });
@@ -479,4 +486,91 @@ test("⛔ revisión de los arreglos · la copia de una propuesta ilegible descar
     ["tl-inve", "El cliente pidió posponer la migración"],
     ["tl-otro", "Se sumó una fase de pruebas"],
   ]);
+});
+
+// ── M4 P4g (2026-09-27, D12 del replanteo): alargar una fase no es alcance ──────────────────────────────
+/* «Regenerar todo» reprograma lo atrasado desde hoy (M4): estira las fases empezadas y corre las que no empezaron. Con
+   `weeksDelta` = la suma de duraciones, el primer «Aplicar» en Wherex pasaba su alcance de +8 a +50 semanas y el
+   vigilante de riesgo lo leía como trabajo agregado. Alcance en semanas = las fases AGREGADAS menos las QUITADAS; el
+   alargue lo mide el cierre contra lo prometido (`closing`). */
+
+const fase = (id: string, durationWeeks: number, order: number, tareas: string[] = [], startWeek: number | null = null) => ({
+  id, name: `Fase ${id}`, status: "PENDING", order, durationWeeks, startWeek, actualStart: null, actualEnd: null,
+  tasks: tareas.map((t, i) => ({ id: t, status: "PENDING", weekIndex: i, actualStart: null, actualEnd: null, needsValidation: false })),
+});
+/** La línea base de un plan: sus fases con sus tareas y el fin prometido de cada una (ancla 2026-06-01). */
+function lineaBase(fases: Array<ReturnType<typeof fase>>) {
+  const ranges = computePhaseRanges(fases);
+  return {
+    snapshot: {
+      anchorStartDate: "2026-06-01",
+      phases: fases.map((p, i) => ({
+        id: p.id,
+        durationWeeks: p.durationWeeks,
+        plannedEnd: addWeeks("2026-06-01", ranges[i].end).toISOString(),
+        tasks: p.tasks.map((t) => ({ id: t.id })),
+      })),
+    } as unknown as BaselineSnapshot,
+    firmnessLabel: "FIRM",
+  };
+}
+const conPlan = (phases: Array<ReturnType<typeof fase>>, baseline: ReturnType<typeof lineaBase>) =>
+  computeProjectSummary({ status: "active", anchorStartDate: d("2026-06-01"), phases, baseline, lastProgressAt: null, healthOverride: null, now: NOW });
+
+test("⭐ P4g — una fase de la base alargada 16 semanas, sin tareas ni fases nuevas: alcance 0 y no excedido; el cierre lo dice", () => {
+  /* La edición que la pone en rojo: volver a la suma de duraciones (`totalWeeks(phases) − totalWeeks(basePhases)`): el
+     alargue salía como «+16 semanas» de alcance, «excedido», y la cartera lo pintaba como trabajo agregado. */
+  const base = lineaBase([fase("a", 4, 0, ["a1", "a2"]), fase("b", 2, 1, ["b1"])]);
+  const s = conPlan([fase("a", 20, 0, ["a1", "a2"]), fase("b", 2, 1, ["b1"])], base);
+  expect(s.scope).toMatchObject({ measurable: true, addedPhases: 0, addedTasks: 0, weeksDelta: 0, exceeded: false });
+  // El alargue no se pierde: es calendario, y lo mide el cierre contra lo prometido (16 semanas tarde).
+  expect(s.closing.driftDays).toBe(16 * 7);
+});
+
+test("⭐ P4g — una fase agregada de 2 semanas: +2; una quitada resta sus semanas; alargar lo que ya estaba no suma", () => {
+  /* La edición que la pone en rojo: medir solo el cierre (span) o contar el alargue: una fase agregada en paralelo, que
+     no mueve el cierre, sigue siendo alcance. */
+  const base = lineaBase([fase("a", 4, 0, ["a1"]), fase("b", 2, 1, ["b1"])]);
+  const agregada = conPlan([fase("a", 4, 0, ["a1"]), fase("b", 2, 1, ["b1"]), fase("n", 2, 2, [], 0)], base);
+  expect(agregada.scope).toMatchObject({ addedPhases: 1, addedTasks: 0, weeksDelta: 2, exceeded: true });
+  expect(agregada.closing.driftDays, "en paralelo, el cierre no se mueve").toBe(0);
+  // Quitar «b» (2) y agregar «n» (3), con «a» alargada 5: 3 − 2 = 1.
+  const mezcla = conPlan([fase("a", 9, 0, ["a1"]), fase("n", 3, 1)], base);
+  expect(mezcla.scope.weeksDelta).toBe(1);
+  const quitada = conPlan([fase("a", 4, 0, ["a1"])], base);
+  expect(quitada.scope).toMatchObject({ weeksDelta: -2, exceeded: false });
+});
+
+test("⭐ P4g — Wherex (la propuesta grande) con la reprogramación de M4 aplicada: el alcance sigue en 0 y el cierre se corre 12 semanas", () => {
+  /* La edición que la pone en rojo: volver a la suma de duraciones: M4 estira «Fase A» 4 → 20, «Fase C» 2 → 18,
+     «Fase F» 3 → 11 e «Fase I» 1 → 3 (+42 semanas) y la cartera las contaba como alcance. */
+  const fx = leerFixtureGrande();
+  const vivo = vivoDelFixture(fx);
+  const aSummary = (fases: ReadonlyArray<{ id: string | null; clave: string; durationWeeks: number; startWeek?: number | null; tareas: ReadonlyArray<{ id: string | null; status: string; weekIndex: number }> }>) =>
+    fases.map((f, i) => ({
+      id: f.id ?? f.clave, name: f.clave, status: "PENDING", order: i, durationWeeks: f.durationWeeks, startWeek: f.startWeek ?? null,
+      actualStart: null, actualEnd: null,
+      tasks: f.tareas.map((t) => ({ id: t.id ?? "", status: t.status, weekIndex: t.weekIndex, actualStart: null, actualEnd: null, needsValidation: false })),
+    }));
+  const antes = aSummary(vivo.fases.map((f) => ({ ...f, clave: f.id, tareas: f.tareas ?? [] })));
+  const ranges = computePhaseRanges(antes);
+  const baseline = {
+    snapshot: {
+      anchorStartDate: fx.ancla,
+      phases: antes.map((p, i) => ({ id: p.id, durationWeeks: p.durationWeeks, plannedEnd: addWeeks(fx.ancla, ranges[i].end).toISOString(), tasks: p.tasks.map((t) => ({ id: t.id })) })),
+    } as unknown as BaselineSnapshot,
+    firmnessLabel: "FIRM",
+  };
+  const vacio = JSON.parse(JSON.stringify(borradorVacio({ pedido: "regenerar", corrida: "run-2" }))) as Record<string, unknown>;
+  const r = reprogramarDesdeHoy({ vivo, borrador: leerBorrador(vacio)!, hoy: new Date(fx.hoy), politica: POLITICA_DE_ATRASOS, conSemanaCero: true })!;
+  const reprogramado = leerBorrador(JSON.parse(JSON.stringify(conLaReprogramacion(vacio, r))))!;
+  const despues = aSummary(proyectarConPlan(vivo, planDeAplicacion(vivo, reprogramado)).fases);
+  const resumen = (phases: typeof antes) =>
+    computeProjectSummary({ status: "active", anchorStartDate: new Date(`${fx.ancla}T00:00:00.000Z`), phases, baseline, lastProgressAt: null, healthOverride: null, now: new Date(fx.hoy) });
+  const suma = (fases: typeof antes) => fases.reduce((n, f) => n + f.durationWeeks, 0);
+  expect(suma(despues) - suma(antes), "el escenario: M4 estira 42 semanas de fases que ya estaban").toBe(42);
+  expect(resumen(antes).scope).toMatchObject({ weeksDelta: 0, exceeded: false });
+  expect(resumen(despues).scope, "el alargue de M4 contó como alcance").toMatchObject({ addedPhases: 0, addedTasks: 0, weeksDelta: 0, exceeded: false });
+  // El plan pasa de 21 a 33 semanas: lo dice el cierre contra lo prometido, no el alcance.
+  expect((resumen(despues).closing.driftDays ?? 0) - (resumen(antes).closing.driftDays ?? 0)).toBe(12 * 7);
 });

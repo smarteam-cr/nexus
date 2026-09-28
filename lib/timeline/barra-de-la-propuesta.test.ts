@@ -369,4 +369,15 @@ describe("M4 P4e · la semana que cambió, en la barra", () => {
     expect(M.avisoDeLaSemana, "el fixture no trae reloj").toBeNull();
     expect(texto(pintar())).not.toContain("Se reprogramó");
   });
+
+  it("⭐ §5.10: con la semana cambiada, aplicar sigue permitido (el aviso no traba «Aplicar todo»)", () => {
+    /* Caso borde de la spec (§5.10, 2026-09-27): no se recalcula sola (cambiar duraciones obliga a rehacer tareas con IA,
+       que se paga) y tampoco se traba: el CSE decide si la aplica o la vuelve a generar. La edición que la pone en rojo:
+       apagar «Aplicar todo» por el aviso (`disabled={… || !!mensaje.avisoDeLaSemana}`). */
+    const aplicar = (html: string) => /<button([^>]*)>Aplicar todo<\/button>/.exec(partes(html).fija)?.[1];
+    const conAviso = aplicar(pintar({ mensaje: { ...M, avisoDeLaSemana: AVISO } }));
+    expect(conAviso, "no está «Aplicar todo»").toBeDefined();
+    expect(conAviso, "el aviso de la semana trabó «Aplicar todo»").not.toContain('disabled=""');
+    expect(conAviso).toBe(aplicar(pintar()));
+  });
 });

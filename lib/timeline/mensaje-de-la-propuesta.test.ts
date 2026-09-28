@@ -665,6 +665,21 @@ describe("M4 P4f · lo que reprogramó el sistema, en el mensaje", () => {
     expect(M.avisoDeLaSemana, "un borrador sin reloj").toBeNull();
   });
 
+  it("⭐ §5.10: con el cierre fijado a mano, la reprogramación no lo toca y la línea 1 dice cómo queda el plan calculado", () => {
+    /* Caso borde de la spec (§5.10, 2026-09-27; Tanda K). Las ediciones que la ponen en rojo: que la variante corta cuente
+       causas y no casillas (decía «: 1 cambio de fases.» por las 8 fases que reprograma el sistema: la encontró esta
+       guarda), que lo del sistema salte la rama del cierre fijado (diría «El cierre pasa del 13 oct al 5 ene» como si
+       aplicar moviera el 15 dic), o que la reprogramación toque otro campo que las semanas (el cierre no está en sus
+       cambios ni en lo que escribe aplicar). */
+    const m = mensajeDe(VIVO, SIN_LA_IA, { cierreFijado: "2026-12-15" });
+    // Con la causa entera no entra en 140: la variante corta cuenta las 8 casillas del sistema, no «1 cambio» (su causa).
+    expect(m.lineas[0]).toBe(
+      "El cierre está fijado a mano el 15 dic y aplicar no lo cambia; el plan calculado pasa del 13 oct al 5 ene (+12 semanas): 8 cambios de fases.",
+    );
+    expect(m.lineas[0].length).toBeLessThanOrEqual(TOPE_DE_LA_LINEA);
+    expect(SIN_LA_IA.cambios.some((c) => c.tipo === "fase-cambia" && !["durationWeeks", "startWeek"].includes(c.campo)), "lo del sistema toca otra cosa").toBe(false);
+  });
+
   it("⭐ los textos salen de la política con que se calculó (`hoy.politica`), no del interruptor", () => {
     /* La edición que la pone en rojo: elegir los textos por una política fija (o por la constante): una propuesta
        calculada con «todo desde hoy» decía «en el orden del plan». */

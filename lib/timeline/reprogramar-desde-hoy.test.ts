@@ -335,7 +335,10 @@ function comprobarInvariantes(nombre: string, vivo: Vivo, guardado: Record<strin
   return r;
 }
 
-describe("M4 P4a · las invariantes", () => {
+/* 2026-09-27, P4h: el tope de tiempo del bloque sube a 30 s, como el de eslint-guards.test.ts. Recorre TODA combinación de
+   casillas sobre el fixture (2^9 proyecciones por caso): tarda ~3 s solo y pasaba de los 5 s por defecto con la suite
+   entera en la máquina cargada (se cortaba por tiempo, no por una invariante). Las aserciones no cambian. */
+describe("M4 P4a · las invariantes", { timeout: 30_000 }, () => {
   it("⭐ sobre el fixture, con y sin la IA, en las dos opciones que reprograman", () => {
     /* Las ediciones que la ponen en rojo: mover el inicio de una empezada (sin el pin, o `startWeek → desde` también en
        una empezada), darle casilla al pin (sin `fijaInicio`: desmarcarlo corre «Fase I», que ya empezó), o usar
@@ -499,6 +502,42 @@ describe("M4 P4a · los casos", () => {
     expect(casillas(r).map(comoTexto)).toEqual(["b:durationWeeks:3→17"]);
     expect(r.tareas.map((t) => t.tareaId), "corrió la fijada o la del chat").toEqual(["b2"]);
     expect(r.observaciones).toEqual([OBSERVACIONES_DE_LA_REPROGRAMACION.fechaFijada("Fase A")]);
+  });
+});
+
+describe("M4 · los casos borde de §5.10", () => {
+  /* 2026-09-27, P4h: lo que la tabla de casos borde de la spec pedía y no tenía un caso propio. «Fase A» empezó en la S2 y
+     quedó atrasada (se estira desde hoy); «En paralelo» y «Paralela empezada» arrancaron antes de que «Fase A» termine
+     (no son sus sucesoras) y su ventana incluye hoy; «Hecha» y «Suspendida» cerraron su ventana con algo abierto; «Después»
+     arrancaba en la S20, cuando «Fase A» ya había terminado en el plan. */
+  const vivo = conVivo([
+    fase("s0", "Semana 0", 2, null, "DONE", [tarea("k", 0, "DONE")]),
+    fase("a", "Fase A", 4, 2, "IN_PROGRESS", [tarea("a0", 0, "DONE"), tarea("a1", 1), tarea("a2", 3)]),
+    fase("p", "En paralelo", 20, 4, "PENDING", [tarea("p1", 5)]),
+    fase("q", "Paralela empezada", 20, 3, "IN_PROGRESS", [tarea("q0", 0, "DONE"), tarea("q1", 2)]),
+    fase("h", "Hecha", 2, 2, "DONE", [tarea("h0", 0, "DONE"), tarea("h1", 1)]),
+    fase("su", "Suspendida", 3, 2, "SUSPENDED", [tarea("su0", 0, "SUSPENDED"), tarea("su1", 1)]),
+    fase("x", "Después", 2, 20, "PENDING", [tarea("x1", 0)]),
+  ]);
+
+  it("⭐ las fases en paralelo no atrasadas quedan quietas, salvo (en el orden del plan) la que iba después de la que se estira", () => {
+    /* Las ediciones que la ponen en rojo: dar por antecesora a una fase en paralelo (una que arrancó antes de que la otra
+       terminara: «En paralelo» esperaba a «Fase A» y se corría a la S21), o no correr la que iba después en el plan. */
+    const r = reprogramar(SIN_LA_IA(), "en-el-orden-del-plan", vivo);
+    expect(casillas(r).map(comoTexto)).toEqual(["a:durationWeeks:4→19", "x:startWeek:20→21"]);
+    expect(pins(r)).toEqual([]);
+    // Con «todo desde hoy» no hay «va después»: «Después» no estaba atrasada y se queda.
+    expect(casillas(reprogramar(SIN_LA_IA(), "todo-desde-hoy", vivo)).map(comoTexto)).toEqual(["a:durationWeeks:4→19"]);
+  });
+
+  it("⭐ una fase hecha o suspendida con la ventana cerrada y algo abierto queda quieta, y nada con avance cambia de semana", () => {
+    /* Las ediciones que la ponen en rojo: estirar una fase hecha o suspendida (mirar solo sus tareas abiertas y no su
+       estado), o correr su abierta. Las invariantes (1)–(6) de §5.11, sobre este cronograma. */
+    for (const politicaDeFases of ["en-el-orden-del-plan", "todo-desde-hoy"] as const) {
+      const r = comprobarInvariantes(`casos borde · ${politicaDeFases}`, vivo, SIN_LA_IA(), HOY, politicaDeFases, true);
+      expect(r.cambios.filter((c) => ["h", "su", "p", "q"].includes(c.faseId)), politicaDeFases).toEqual([]);
+      expect(r.tareas.map((t) => t.tareaId), politicaDeFases).toEqual(["a1", "a2"]);
+    }
   });
 });
 

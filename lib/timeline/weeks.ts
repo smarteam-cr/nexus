@@ -133,6 +133,10 @@ export function fmtPhaseRange(anchor: string | null | undefined, range: PhaseRan
  * usa las dos a propósito: `lib/portfolio/summary.ts` mide ALCANCE contra la línea base con
  * esfuerzo (su `weeksDelta`), y `lib/timeline/progress-model.ts` ya dejó escrito ese reparto.
  * Unificarlas haría que el próximo consumidor tome el esfuerzo creyendo que pide calendario.
+ * Desde el 2026-09-27 (D12 del replanteo) ese esfuerzo es solo el de las fases AGREGADAS menos
+ * las QUITADAS: alargar una fase ya vendida es calendario (lo mide este cierre contra lo
+ * prometido), y un alargue por atraso («Regenerar todo» reprograma lo atrasado desde hoy) no
+ * es trabajo agregado.
  *
  * ⚠ NUNCA es input de cobranza. La plata factura con `ServicioContratado.fechaInicioFacturacion`
  * + `duracionMeses` (un número contractual). Un cierre PROYECTADO se mueve solo cada vez que

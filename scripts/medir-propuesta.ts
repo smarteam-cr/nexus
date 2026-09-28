@@ -13,14 +13,21 @@
  * Las 4 condiciones tienen que pasar las 3 veces. El argumento es el id del proyecto o un pedazo de su nombre o del de
  * su cliente; si calza con más de uno, los lista y no mide. Las condiciones (y su porqué) viven en
  * lib/timeline/medicion-de-la-propuesta.ts, probadas contra lo que escribe la fusión de verdad.
+ *
+ * M3 y M4 (P4h, spec §5.9): después del deploy de M3 + M4, las condiciones 5 a 8 (nada en semanas que ya pasaron, lo que
+ * reprogramó el sistema contra lo que calcula el código, la línea 5 y nada hecho que se mueva), con el reloj que guardó la
+ * propuesta. Las mismas 3 regeneraciones, el mismo comando: tienen que pasar las 8. Antes de ese deploy, la propuesta
+ * no trae reloj y las 5 a 8 dicen NO PASA con el porqué.
  */
 import "dotenv/config";
 import { createScriptPool } from "./lib/db";
 import { esBorradorV1, leerBorrador } from "../lib/timeline/borrador";
 import { isRecurrente } from "../lib/tags/catalog";
+import { tieneVozDeHandoffPropia } from "../lib/timeline/semana-cero";
 import {
   avisosDeLaMedicion,
   medirM2,
+  medirM3yM4,
   renglonDeLaCondicion,
   vivoDeLasFilas,
   type FilaDeFase,
@@ -35,6 +42,8 @@ interface Proyecto {
   name: string;
   cliente: string;
   tags: string[];
+  /** El pipeline de HubSpot: decide si el proyecto tiene Semana 0 (Desarrollo y Web no). */
+  hubspotPipelineId: string | null;
   timelineId: string | null;
   ancla: string | null;
   pendingProposal: unknown;
@@ -54,7 +63,7 @@ async function main(): Promise<number> {
     await db.query("BEGIN TRANSACTION READ ONLY");
 
     const { rows: proyectos } = await db.query<Proyecto>(
-      `SELECT p.id, p.name, c.name AS cliente, p.tags, t.id AS "timelineId",
+      `SELECT p.id, p.name, c.name AS cliente, p.tags, p."hubspotPipelineId", t.id AS "timelineId",
               to_char(t."anchorStartDate", ${COMO_ISO}) AS ancla, t."pendingProposal"
          FROM "Project" p
          JOIN "Client" c ON c.id = p."clientId"
@@ -116,10 +125,20 @@ async function main(): Promise<number> {
     console.log(`Medida el ${hoy.toISOString().slice(0, 16).replace("T", " ")} UTC, contra el cronograma de hoy.\n`);
     for (const aviso of avisosDeLaMedicion(borrador)) console.log(`⚠ ${aviso}`);
 
-    const condiciones = medirM2({ vivo, borrador, recurrente: isRecurrente(elegido.tags ?? []), hoy });
+    const condiciones = [
+      ...medirM2({ vivo, borrador, recurrente: isRecurrente(elegido.tags ?? []), hoy }),
+      // M3 y M4: con el reloj que guardó la propuesta (no con `hoy`): lo mismo que usaron R13 y la reprogramación.
+      ...medirM3yM4({
+        vivo,
+        guardado: elegido.pendingProposal as Record<string, unknown>,
+        borrador,
+        conSemanaCero: !tieneVozDeHandoffPropia(elegido.hubspotPipelineId),
+      }),
+    ];
+    if (borrador.hoy) console.log(`Reloj de la propuesta: ${borrador.hoy.instante.slice(0, 16).replace("T", " ")} UTC, S${borrador.hoy.semana}.\n`);
     for (const c of condiciones) console.log(renglonDeLaCondicion(c));
     const fallan = condiciones.filter((c) => !c.pasa).length;
-    console.log(fallan === 0 ? "\nPASAN las 4." : `\nNO PASAN ${fallan} de ${condiciones.length}.`);
+    console.log(fallan === 0 ? `\nPASAN las ${condiciones.length}.` : `\nNO PASAN ${fallan} de ${condiciones.length}.`);
     return fallan === 0 ? 0 : 2;
   } catch (e) {
     await db.query("ROLLBACK").catch(() => {});

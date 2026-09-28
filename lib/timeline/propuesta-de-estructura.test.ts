@@ -10,6 +10,7 @@
  * las decisiones de negocio de Elías (2026-09-23) sin voseo y sin fila en `Agent`.
  */
 import { describe, it, expect } from "vitest";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -1614,6 +1615,10 @@ describe("G7b · lo que midió la prueba en vivo del revisor (A3, 2026-09-24)", 
   });
 });
 
+/** El sha256 de `PROMPT_ESTRUCTURA_CRONOGRAMA` en producción (368c0515, 2026-09-26), con sus constantes interpoladas
+ *  (5717 caracteres). Calculado dos veces: con el módulo y con `git show 368c0515:` de los cuatro archivos que lo arman. */
+const SHA_DEL_PROMPT_DEL_PASO_1 = "bed429ead87b35d71a8a5513a03cd7f7a40a99e74e6a2432721e48776ec4187b";
+
 describe("G9 · el revisor NO es despachable: sin fila en `Agent`", () => {
   it("ningún script lo nombra (ni seed, ni re-siembra)", () => {
     /* Con fila, `/analyze` podría despacharlo y `resolveArtifactGate` lo correría sin celda de
@@ -1636,6 +1641,20 @@ describe("G9 · el revisor NO es despachable: sin fila en `Agent`", () => {
       if (fs.existsSync(abs)) rec(abs);
     }
     expect(hallados).toEqual([]);
+  });
+
+  it("⭐ M4 (2026-09-27): el prompt del paso 1 no cambia ni un carácter; lo atrasado lo reprograma el código", () => {
+    /* Spec del replanteo §0.1 y §5.11: la reprogramación de lo atrasado la hace el CÓDIGO antes del paso 2
+       (lib/timeline/reprogramar-desde-hoy.ts); la IA sigue sin proponer cambios por atraso («Un atraso que YA pasó […] NO
+       alarga la fase») y su texto queda byte a byte el de producción (368c0515), así no hay nada nuevo que medir en el
+       paso 1. Solo cambió el comentario de cabecera de estructura-cronograma.ts. La edición que la pone en rojo:
+       «arreglar» el texto del paso 1 (o una de las constantes que interpola) para que pida la reprogramación. */
+    const sha = createHash("sha256").update(PROMPT_ESTRUCTURA_CRONOGRAMA, "utf8").digest("hex");
+    expect(sha, "el prompt del paso 1 cambió: la reprogramación es del código, no de la IA").toBe(SHA_DEL_PROMPT_DEL_PASO_1);
+    expect(PROMPT_ESTRUCTURA_CRONOGRAMA).toContain("Un atraso que YA pasó (una fase que tardó más, una semana que se perdió) NO alarga la fase");
+    // La cabecera sí lo dice: la regla 1 de 2026-09-23 vale para la IA; el sistema reprograma aparte.
+    const cabecera = fs.readFileSync(path.join(process.cwd(), "lib/agents/estructura-cronograma.ts"), "utf8").replace(/\r\n/g, "\n");
+    expect(cabecera.slice(0, cabecera.indexOf("export const PROMPT_ESTRUCTURA_CRONOGRAMA"))).toContain("reprogramar-desde-hoy.ts");
   });
 
   it("la corrida nace sin agente: el slug es solo del medidor", () => {

@@ -3553,3 +3553,70 @@ fabricarla.
 - **Corre en paralelo con el porqué de L6, en el mismo paso 2, solo en «Regenerar todo»**: Haiku, 600
   tokens, 15 s, sin reintentos, medido como `hechas-fuera-de-lugar`. Sin hechas que mirar no llama.
 - *Lo revertiría:* destinos malos seguidos. El peor caso es un destino malo, que llega desmarcado.
+
+## Lo que ya pasó y lo atrasado en «Regenerar todo» (2026-09-27, M1–M5)
+
+> Pedido de Elías probando «Regenerar todo» en Wherex: la propuesta reescribía el pasado (quitaba 50
+> tareas y sumaba 59 en semanas vencidas), repetía el kickoff y no decía qué hacer con lo atrasado.
+> Cuatro deploys: M1 b9609283 · M2 64b667ad, 9743b2ac y 2ba6a389 · **M3 + M4 juntas** (a0ee2e89,
+> fa1ff3d4, 5a24a71d, 77f08a57 y P4g–P4h) · M5. Ninguno trae SQL, re-siembra ni cambios de
+> infraestructura, y ninguno toca un prompt guardado en la base. Las D1–D13 son las de la spec del
+> replanteo, citadas en esos commits.
+
+- **Lo que decidió Elías.** (a) Lo pendiente de semanas que ya pasaron se **avisa**, no se reescribe:
+  «revisar solamente que no haya quedado algo importante sin hacer». (b) Una fase atrasada se
+  **reprograma desde hoy**: «lo que falta arranca en la semana actual»; el 27-09 eligió que lo que no
+  empezó arranque **en el orden del plan** (espera a lo que le falta a la fase que iba antes). (c) **Un
+  interruptor** para volver: «la práctica nos lo dirá». (d) **Hitos únicos**: un kickoff por proyecto;
+  cierre y entrega, una vez (la entrega, una por ciclo en un recurrente).
+- **Cada fase cae en una sola regla (D1):**
+
+  | La fase | Regla | Qué hace la propuesta |
+  |---|---|---|
+  | Semana 0 (solo si el pipeline la tiene) | (a) avisar | nada; nombra lo que quedó sin hacer |
+  | En curso (su ventana incluye hoy) | (a) avisar | nada con lo vencido |
+  | Casi terminada (≤ 2 abiertas y ≥ 70 % hecha) con la ventana cerrada | (a) avisar | nada; nombra lo que falta |
+  | Ventana cerrada y sigue abierta | (b) reprogramar desde hoy | una casilla por fase |
+  | Hecha o suspendida | — | nada |
+
+- **Lo empezado no cambia de inicio ni lleva lo hecho al futuro:** se estira y lo que le falta arranca
+  hoy. Lo que no empezó se mueve entero. Una tarea hecha o suspendida nunca cambia de semana, con
+  cualquier combinación de casillas (lo prueban las invariantes de `reprogramar-desde-hoy.test.ts`).
+- **Revierte la decisión del 23-09 («un atraso no alarga la fase») solo para el sistema.** La
+  reprogramación la hace el código (`lib/timeline/reprogramar-desde-hoy.ts`) antes del paso 2; el prompt
+  del paso 1 no cambió ni un carácter (su sha vive en la guarda G9 de
+  `lib/timeline/propuesta-de-estructura.test.ts`). Lo del sistema lleva su marca (`desdeHoy`,
+  `delSistema`) y nunca se presenta como de la IA.
+- **Alargar una fase no es alcance (D12).** `weeksDelta` de la cartera (`lib/portfolio/summary.ts`) son
+  las semanas de las fases agregadas menos las de las quitadas; el alargue lo mide el cierre contra lo
+  prometido. Sin esto, el primer «Aplicar» en Wherex subía su alcance de +8 a +50 semanas y el vigilante
+  de riesgo lo leía como trabajo agregado. No está en el interruptor: volver a contarlo es una línea de
+  `summary.ts`. *Lo revertiría:* que Elías quiera ver el alargue como alcance.
+- **La medición** (Elías, después del deploy de M3 + M4, desde la pantalla y sin aplicar): 3 «Regenerar
+  todo» en Wherex y, después de cada uno, `npx tsx scripts/medir-propuesta.ts Wherex` (solo lectura).
+  Tienen que pasar las 8 condiciones: las 4 de M2 y, con el reloj de la propuesta, nada nuevo ni quitado
+  en semanas vencidas, lo del sistema igual a lo que calcula el código, la línea 5 y nada hecho que se
+  mueva.
+- **Vuelta atrás sin romper nada.** `hoy`, `desdeHoy`, `fijaInicio`, `deLaIA`, `delSistema` e `hito`
+  son campos sueltos que la versión anterior ignora; lo del sistema se vería con casilla y aplicaría bien.
+  La huella de una propuesta sin campos nuevos no cambió.
+
+### Para volver (el interruptor)
+
+- **Cambia el valor en `lib/timeline/politica-de-atrasos.ts` (`POLITICA_DE_ATRASOS`) y despliega con
+  `bash scripts/deploy.sh`.** No hay SQL ni re-siembra.
+- **Las propuestas abiertas no cambian:** cada una guarda la política con que se calculó
+  (`Borrador.hoy.politica`) y la pantalla dice lo que calculó. Para verla con el valor nuevo, vuelve a
+  generarla.
+- **Qué ve el CSE con cada valor de `fasesVencidas`** (Wherex, S18, sin los cambios de la IA):
+
+  | Valor | Casillas | Línea 1 | Línea 5 |
+  |---|---|---|---|
+  | `en-el-orden-del-plan` (**el de hoy**) | 8, más «Capacitación y cierre Service» fija sin casilla; 25 tareas se corren con su fase | «El cierre pasa del 13 oct al 5 ene (+12 semanas): 8 fases se reprograman desde hoy, en el orden del plan.» | «⚠ Quedaron sin hacer 4 tareas de semanas que ya pasaron, en «Semana 0»…» |
+  | `todo-desde-hoy` | 7 y la fija; «Cierre y entrega» nace desmarcada (quedaría antes del trabajo) | «El cierre pasa del 13 oct al 27 oct (+2 semanas): 6 fases atrasadas arrancan desde hoy.» (7 si la marcas) | la misma; con el cierre desmarcado, sus tareas vuelven a la S11 |
+  | `avisar` | ninguna | la de siempre: lo atrasado no mueve el cierre | «⚠ Quedaron sin hacer 58 tareas de semanas que ya pasaron, en «Semana 0», «Sales Hub» y 8 fases más…» |
+
+- **`casiTerminada`** (`maxAbiertas: 2`, `minHecho: 0.7`) se cambia igual: una fase con esas abiertas o
+  menos y esa parte hecha o más no se estira, se avisa.
+- **`pendientesDelPasado`** hoy solo tiene «avisar»; «traer a hoy» (pasar lo vencido de una fase en curso a
+  esta semana, con casilla) llega con M5.
