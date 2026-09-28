@@ -296,6 +296,29 @@ export function camposQueCambiaron(antes: ValoresDeFicha, despues: ValoresDeFich
   );
 }
 
+/** Los campos que viajan como propiedad de la empresa (los internos van solo en la nota). */
+export const CAMPOS_EN_PROPIEDAD: readonly ClaveDeFicha[] = CAMPOS_DE_LA_FICHA.filter(
+  (c) => c.destino.tipo !== "nota",
+).map((c) => c.clave);
+
+/**
+ * Qué viaja a HubSpot al confirmar la ficha. La última escritura «quedó al día» si terminó entera, o
+ * si no hay empresa a la cual escribir. Si NO quedó al día (falló, quedó a medias o la empresa se
+ * vinculó después), viajan todas las propiedades y también la nota. Esa nota nunca llegó: con
+ * «fallo» ni se intenta, y sin ella «Por qué esa apertura» y «Motivación de compra» no quedan en
+ * ningún lado de HubSpot. Al día y sin cambios, no hay nada que escribir.
+ */
+export function escrituraEnHubspot(opts: {
+  primeraVez: boolean;
+  cambios: readonly ClaveDeFicha[];
+  estadoPrevio: EstadoEnHubspot | null | undefined;
+  hayEmpresa: boolean;
+}): { alDia: boolean; aEscribir: readonly ClaveDeFicha[]; conNota: boolean } {
+  const alDia = opts.estadoPrevio === "sincronizada" || (opts.estadoPrevio === "sin_empresa" && !opts.hayEmpresa);
+  const todo = opts.primeraVez || !alDia;
+  return { alDia, aEscribir: todo ? CAMPOS_EN_PROPIEDAD : opts.cambios, conNota: todo || opts.cambios.length > 0 };
+}
+
 /** Evento de ventana que avisa «la ficha de este cliente cambió» (detail: { clientId }). */
 export const EVENTO_FICHA_CAMBIO = "nexus:ficha-cliente-cambio";
 
@@ -441,6 +464,19 @@ export function propiedadesParaHubspot(valores: ValoresDeFicha, claves: readonly
   return props;
 }
 
+/** Cómo empieza la nota que Nexus deja en la empresa al confirmar. Lo lee `esNotaDeLaFicha`. */
+export const ENCABEZADO_DE_LA_NOTA = "Ficha del cliente confirmada en Nexus";
+
+/**
+ * ¿Este texto (HTML o ya limpio) es una nota de la ficha? La nota lleva los campos internos
+ * (apertura, su porqué, motivación de compra) y queda en el timeline de la empresa, que alimenta la
+ * propuesta que abre el cliente. Por LA REGLA de arriba, esa nota no puede entrar a ninguna fuente:
+ * lib/hubspot/company-timeline.ts la saca en el único lugar que lee ese timeline.
+ */
+export function esNotaDeLaFicha(texto: string): boolean {
+  return texto.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trimStart().startsWith(ENCABEZADO_DE_LA_NOTA);
+}
+
 /** El cuerpo HTML de la nota que se crea en la empresa en cada confirmación. */
 export function cuerpoDeLaNota(opts: {
   autor: string;
@@ -450,7 +486,7 @@ export function cuerpoDeLaNota(opts: {
   fuentes: readonly string[];
 }): string {
   const { autor, cambios, primeraVez, valores, fuentes } = opts;
-  const partes: string[] = [`<p><strong>Ficha del cliente confirmada en Nexus</strong> por ${escaparHtml(autor)}.</p>`];
+  const partes: string[] = [`<p><strong>${ENCABEZADO_DE_LA_NOTA}</strong> por ${escaparHtml(autor)}.</p>`];
   if (primeraVez) partes.push("<p>Primera versión de la ficha.</p>");
   else if (cambios.length) {
     partes.push("<p><strong>Qué cambió:</strong></p>");

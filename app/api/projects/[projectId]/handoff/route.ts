@@ -176,6 +176,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     sourceSessions,
     projectSessionCount,
     handoffReadiness,
+    /* Las exclusiones que escribió el CSE. La pantalla llena el textarea con esto y el PATCH
+       reemplaza el texto entero: si no viajara, la exclusión guardada se vería vacía y la próxima
+       edición la borraría (pasó en 21f50c23; guarda en lib/handoff/duenio.test.ts). */
+    contextExclusions: project.handoff?.contextExclusions ?? null,
     /* «¿Qué se vendió?» en tres frases. Viaja con su vejez YA RESUELTA —y no las dos fechas
        crudas— porque la pregunta que la pantalla hace es «¿muestro el aviso?», y resolverla del
        lado del browser deja el criterio en dos lugares: acá y en el próximo consumidor. */

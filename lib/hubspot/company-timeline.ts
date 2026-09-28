@@ -20,6 +20,7 @@
  */
 import type { Client } from "@hubspot/api-client";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
+import { esNotaDeLaFicha } from "@/lib/clients/ficha";
 
 type V1Engagement = {
   engagement?: { id?: number | string; type?: string; timestamp?: number };
@@ -110,6 +111,10 @@ async function fetchAllTimelineItems(hsClient: Client, companyId: string): Promi
       const type = (e.engagement?.type ?? "") as TimelineItem["type"];
       const { title, body } = engagementText(type, e.metadata ?? {});
       if (!body) return null;
+      /* La nota que deja Nexus al confirmar la ficha del cliente lleva campos internos (apertura,
+         su porqué, motivación de compra). Este timeline alimenta la propuesta que abre el cliente:
+         la nota no entra a ninguna fuente (lib/clients/ficha.ts › esNotaDeLaFicha). */
+      if (type === "NOTE" && esNotaDeLaFicha(body)) return null;
       const id = e.engagement?.id != null ? String(e.engagement.id) : "";
       if (!id) return null; // sin id estable no se puede excluir/promover el ítem con seguridad
       return { id, type, title, body, date: fmtDate(e.engagement?.timestamp), ts: e.engagement?.timestamp ?? 0 };

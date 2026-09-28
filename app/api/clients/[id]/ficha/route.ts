@@ -3,12 +3,11 @@ import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { hubspotCompanyUrl } from "@/lib/hubspot/urls";
 import {
-  CAMPOS_DE_LA_FICHA,
   camposQueCambiaron,
+  escrituraEnHubspot,
   fichaTieneContenido,
   leerFicha,
   validarValores,
-  type ClaveDeFicha,
   type FichaGuardada,
 } from "@/lib/clients/ficha";
 import { sincronizarFichaConHubspot } from "@/lib/clients/ficha-hubspot";
@@ -27,10 +26,6 @@ import { sincronizarFichaConHubspot } from "@/lib/clients/ficha-hubspot";
  */
 
 type Params = { params: Promise<{ id: string }> };
-
-const CAMPOS_EN_PROPIEDAD: ClaveDeFicha[] = CAMPOS_DE_LA_FICHA.filter((c) => c.destino.tipo !== "nota").map(
-  (c) => c.clave,
-);
 
 async function cargar(clientId: string) {
   return prisma.client.findUnique({
@@ -93,12 +88,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const primeraVez = !actual.confirmadaAt;
   const cambios = camposQueCambiaron(actual.valores, v.valores);
-  const estadoPrevio = actual.hubspot?.estado;
-  const hubspotAlDia = estadoPrevio === "sincronizada" || (estadoPrevio === "sin_empresa" && !companyId);
+  const escritura = escrituraEnHubspot({
+    primeraVez,
+    cambios,
+    estadoPrevio: actual.hubspot?.estado,
+    hayEmpresa: Boolean(companyId),
+  });
 
   // Nada nuevo que escribir: si había una propuesta, confirmar sin cambios es «la revisé y me quedo
   // con lo que está», así que la propuesta se descarta.
-  if (!primeraVez && !cambios.length && hubspotAlDia) {
+  if (!primeraVez && !cambios.length && escritura.alDia) {
     if (!actual.propuesta) return responder(actual, companyId, { sinCambios: true });
     const nueva: FichaGuardada = { ...actual, propuesta: null };
     await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
@@ -116,16 +115,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // 1) Nexus primero: lo confirmado no depende de que HubSpot conteste.
   await prisma.client.update({ where: { id }, data: { ficha: confirmada as object } });
 
-  // 2) HubSpot. Si la última vez quedó al día, solo viaja lo que cambió; si no (primera vez, falla
-  //    anterior, empresa recién vinculada) viajan todas las propiedades, así queda alineado.
-  const aEscribir = hubspotAlDia && !primeraVez ? cambios : CAMPOS_EN_PROPIEDAD;
+  // 2) HubSpot. Si la última vez quedó al día, solo viaja lo que cambió (y la nota, si hubo cambios).
+  //    Si no (primera vez, falla anterior, empresa recién vinculada), viajan todas las propiedades y
+  //    la nota que nunca llegó (lib/clients/ficha.ts › escrituraEnHubspot).
   const resultado = await sincronizarFichaConHubspot({
     hubspotCompanyId: companyId,
     valores: v.valores,
-    aEscribir,
-    // La nota es la evidencia de un cambio: sin cambios (reintento puro) no se duplica, salvo que
-    // la vez anterior justo la nota fue lo que falló.
-    conNota: primeraVez || cambios.length > 0 || estadoPrevio === "parcial",
+    aEscribir: escritura.aEscribir,
+    conNota: escritura.conNota,
     cambios,
     primeraVez,
     autor,

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   CAMPOS_DE_LA_FICHA,
+  CAMPOS_EN_PROPIEDAD,
   PREFIJO_PROPIEDAD,
   camposPropuestos,
   camposQueCambiaron,
   cuerpoDeLaNota,
+  escrituraEnHubspot,
   fusionarPropuesta,
   fichaParaPrompt,
   fichaVacia,
@@ -85,6 +87,43 @@ describe("camposQueCambiaron", () => {
     const a = valoresVacios();
     const b = { ...a, stakeholders: "Ana", aQueSeDedica: "x ", dolorPrincipal: "" };
     expect(camposQueCambiaron(a, b)).toEqual(["aQueSeDedica", "stakeholders"]);
+  });
+});
+
+describe("escrituraEnHubspot: qué viaja al confirmar", () => {
+  const base = { primeraVez: false, cambios: [] as const, hayEmpresa: true };
+  it("la primera vez viaja todo, con nota", () => {
+    expect(escrituraEnHubspot({ ...base, primeraVez: true, estadoPrevio: null })).toEqual({
+      alDia: false,
+      aEscribir: CAMPOS_EN_PROPIEDAD,
+      conNota: true,
+    });
+  });
+  it("al día y sin cambios no hay nada que escribir", () => {
+    expect(escrituraEnHubspot({ ...base, estadoPrevio: "sincronizada" })).toMatchObject({ alDia: true, conNota: false });
+  });
+  it("al día con cambios viaja solo lo que cambió, con nota", () => {
+    expect(escrituraEnHubspot({ ...base, cambios: ["dolorPrincipal"], estadoPrevio: "sincronizada" })).toEqual({
+      alDia: true,
+      aEscribir: ["dolorPrincipal"],
+      conNota: true,
+    });
+  });
+  /* El caso que se perdía: la primera confirmación falla en HubSpot (sin propiedades creadas) y se
+     reintenta sin cambios. La nota ni se intentó, así que «Por qué esa apertura» y «Motivación de
+     compra» no quedaban en ningún lado de HubSpot aunque el estado dijera «sincronizada». La
+     edición que la pone en rojo: volver a `conNota: primeraVez || cambios > 0 || previo === "parcial"`. */
+  it.each(["fallo", "parcial"] as const)("reintento sin cambios tras «%s»: viaja todo Y la nota", (estadoPrevio) => {
+    expect(escrituraEnHubspot({ ...base, estadoPrevio })).toEqual({ alDia: false, aEscribir: CAMPOS_EN_PROPIEDAD, conNota: true });
+  });
+  it("la empresa se vinculó después: viaja todo y la nota", () => {
+    expect(escrituraEnHubspot({ ...base, estadoPrevio: "sin_empresa", hayEmpresa: true })).toMatchObject({ alDia: false, conNota: true });
+    expect(escrituraEnHubspot({ ...base, estadoPrevio: "sin_empresa", hayEmpresa: false })).toMatchObject({ alDia: true, conNota: false });
+  });
+  it("las propiedades no llevan los campos internos (esos van solo en la nota)", () => {
+    const internos = CAMPOS_DE_LA_FICHA.filter((c) => c.destino.tipo === "nota").map((c) => c.clave);
+    expect(internos.length).toBeGreaterThan(0);
+    for (const k of internos) expect(CAMPOS_EN_PROPIEDAD).not.toContain(k);
   });
 });
 

@@ -439,6 +439,22 @@ describe("candado: la exclusion del sistema se RECALCULA, no se persiste", () =>
     }
   });
 
+  it("el GET del handoff devuelve la nota del CSE (la pantalla la edita y el PATCH la reemplaza entera)", () => {
+    /* 21f50c23 la saco de la respuesta al sumar el resumen: el textarea se llenaba con
+       `d.contextExclusions ?? ""` -> vacio, sin la etiqueta «activa», y el siguiente guardado
+       mandaba el texto nuevo pisando lo que el CSE habia escrito. No rompe tipos ni build. La
+       edicion que la pone en rojo: borrar `contextExclusions` del NextResponse.json final del GET. */
+    const src = sinComentarios("app/api/projects/[projectId]/handoff/route.ts");
+    const get = src.slice(src.indexOf("export async function GET"), src.indexOf("export async function PATCH"));
+    expect(get.length, "cambio la forma del GET; revisar esta guarda").toBeGreaterThan(500);
+    const i = get.lastIndexOf("NextResponse.json({");
+    const respuesta = get.slice(i, get.indexOf("});", i));
+    expect(respuesta, "la guarda no esta mirando la respuesta completa").toContain("handoffReadiness");
+    expect(respuesta, "el GET dejo de devolver la nota del CSE: la pantalla la muestra vacia y la pisa").toContain(
+      "contextExclusions: project.handoff?.contextExclusions",
+    );
+  });
+
   it("LA guarda de la generacion: analyze recalcula y COMPONE con lo del CSE", () => {
     /* Es la otra mitad: sin esta llamada, dejar de persistir habria dejado a TODOS los hermanos
        menores sin ninguna exclusion. La edicion que la pone en rojo: volver a leer solo

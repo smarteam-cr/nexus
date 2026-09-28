@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/hubspot/client", () => ({ getSystemHubspotClient: vi.fn() }));
+vi.mock("@/lib/hubspot/client", () => ({ getSystemHubspotClient: vi.fn(), forceRefreshSystemToken: vi.fn() }));
 
 import type { Client as HsClient } from "@hubspot/api-client";
 import { sincronizarFichaConHubspot } from "./ficha-hubspot";
-import { valoresVacios } from "./ficha";
+import { cuerpoDeLaNota, esNotaDeLaFicha, valoresVacios } from "./ficha";
+import { fetchCompanyTimelineItems } from "@/lib/hubspot/company-timeline";
 
 type Llamada = { method: string; path: string; body?: Record<string, unknown> };
 
@@ -82,5 +83,37 @@ describe("sincronizarFichaConHubspot", () => {
     const r = await sincronizarFichaConHubspot({ ...base, conNota: false, hubspotCompanyId: "123", hubspot: hs });
     expect(r.estado).toBe("sincronizada");
     expect(llamadas.map((l) => l.method)).toEqual(["PATCH"]);
+  });
+});
+
+/* LA REGLA de lib/clients/ficha.ts: los campos internos nunca llegan a un documento del cliente. La
+   nota de la ficha los lleva y queda en el timeline de la empresa, que la propuesta lee sin filtro.
+   La edición que la pone en rojo: sacar el `esNotaDeLaFicha` de lib/hubspot/company-timeline.ts. */
+describe("la nota de la ficha no entra al timeline de la empresa", () => {
+  const nota = cuerpoDeLaNota({
+    autor: "Ana",
+    cambios: [],
+    primeraVez: true,
+    valores: { ...valoresVacios(), aperturaAsesoria: "baja", motivacionCompra: "solo precio" },
+    fuentes: [],
+  });
+
+  it("se reconoce en HTML y ya limpia; una nota cualquiera no", () => {
+    expect(esNotaDeLaFicha(nota)).toBe(true);
+    expect(esNotaDeLaFicha(nota.replace(/<[^>]+>/g, " "))).toBe(true);
+    expect(esNotaDeLaFicha("<p>Llamó para pedir precio de la Ficha del cliente</p>")).toBe(false);
+  });
+
+  it("fetchCompanyTimelineItems la saca y deja las demás", async () => {
+    const results = [
+      { engagement: { id: 11, type: "NOTE", timestamp: 3000 }, metadata: { body: nota } },
+      { engagement: { id: 12, type: "NOTE", timestamp: 2000 }, metadata: { body: "<p>Pidió cotización del Sales Hub</p>" } },
+      { engagement: { id: 13, type: "MEETING", timestamp: 1000 }, metadata: { title: "Kickoff", body: "Arranque" } },
+    ];
+    const hs = {
+      apiRequest: vi.fn(async () => ({ status: 200, json: async () => ({ results }) })),
+    } as unknown as HsClient;
+    const items = await fetchCompanyTimelineItems(hs, "123");
+    expect(items.map((i) => i.id)).toEqual(["12", "13"]);
   });
 });
