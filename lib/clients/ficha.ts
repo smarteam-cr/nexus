@@ -296,6 +296,23 @@ export function camposQueCambiaron(antes: ValoresDeFicha, despues: ValoresDeFich
   );
 }
 
+/**
+ * Al volver «Actualizar con IA» (tarda hasta un minuto), lo que el CSE escribió sin confirmar se
+ * conserva sobre la ficha nueva: los campos que difieren entre la ficha del momento del clic y lo que
+ * hay en pantalla AHORA, escritos antes del clic o mientras esperaba. `base` es el borrador ya
+ * re-sembrado con la ficha nueva. Antes se comparaba contra el borrador del clic y lo escrito durante
+ * la espera se perdía.
+ */
+export function conservarLoEscrito(
+  alClic: ValoresDeFicha | null,
+  enPantalla: ValoresDeFicha,
+  base: ValoresDeFicha,
+): ValoresDeFicha {
+  if (!alClic) return base;
+  const escritos = camposQueCambiaron(alClic, enPantalla);
+  return escritos.length ? { ...base, ...Object.fromEntries(escritos.map((k) => [k, enPantalla[k]])) } : base;
+}
+
 /** Los campos que viajan como propiedad de la empresa (los internos van solo en la nota). */
 export const CAMPOS_EN_PROPIEDAD: readonly ClaveDeFicha[] = CAMPOS_DE_LA_FICHA.filter(
   (c) => c.destino.tipo !== "nota",
@@ -329,6 +346,23 @@ export function camposPropuestos(ficha: FichaGuardada): ClaveDeFicha[] {
     const v = p[c.clave];
     return typeof v === "string" && v.trim() && v.trim() !== ficha.valores[c.clave].trim();
   }).map((c) => c.clave);
+}
+
+/**
+ * Quita campos de lo que propone la IA (el «Descartar» de cada campo). Sin campos propuestos, la
+ * propuesta se va entera. Antes el descarte por campo vivía solo en la pantalla: el número de la
+ * pestaña «Información del cliente» no se apagaba nunca y al volver las propuestas reaparecían.
+ */
+export function quitarDeLaPropuesta(ficha: FichaGuardada, claves: readonly ClaveDeFicha[]): FichaGuardada {
+  if (!ficha.propuesta || !claves.length) return ficha;
+  const valores = { ...ficha.propuesta.valores };
+  const fuentesPorCampo = { ...ficha.propuesta.fuentesPorCampo };
+  for (const k of claves) {
+    delete valores[k];
+    delete fuentesPorCampo[k];
+  }
+  const quedan = CAMPOS_DE_LA_FICHA.some((c) => typeof valores[c.clave] === "string" && valores[c.clave]!.trim());
+  return { ...ficha, propuesta: quedan ? { ...ficha.propuesta, valores, fuentesPorCampo } : null };
 }
 
 /** Lo que el agente toma como punto de partida de un campo: lo propuesto si hay, si no lo confirmado. */

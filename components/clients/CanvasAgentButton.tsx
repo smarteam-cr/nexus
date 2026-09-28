@@ -14,6 +14,7 @@ import { useAgentRun } from "@/hooks/useAgentRun";
 import { useToast } from "@/components/ui/Toast";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useMe } from "@/hooks/useMe";
+import { urlDeProyecto } from "@/lib/agents/run-url";
 
 // Gating COSMÉTICO por sección de permisos (PERM-F5): agentes que ESCRIBEN un
 // artefacto → si el usuario no puede NI generar NI regenerar esa sección, el CTA
@@ -45,9 +46,13 @@ export default function CanvasAgentButton({
   disabled,
   busy,
   alreadyGenerated,
+  canvasId,
 }: {
   clientId: string;
   projectId: string;
+  /** El documento donde aterriza lo generado: el aviso de «listo» lleva ahí. Sin él, la URL del
+   *  proyecto abre el Resumen (desde 14b8c920), no el documento que se acaba de generar. */
+  canvasId?: string | null;
   agentId: string;
   label: string;
   runningLabel?: string;
@@ -101,7 +106,7 @@ export default function CanvasAgentButton({
   // qué proyecto está parado. El canvas exacto lo agrega el centro de corridas, que
   // lo resuelve server-side desde los bloques que escribió el agente
   // (lib/agents/run-url.ts) — acá todavía no existen.
-  const notifyUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
+  const notifyUrl = urlDeProyecto(clientId, projectId, canvasId);
 
   const run = async (forzar = false) => {
     if (running || disabled || busy) return;

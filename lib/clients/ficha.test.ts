@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   CAMPOS_DE_LA_FICHA,
   CAMPOS_EN_PROPIEDAD,
   PREFIJO_PROPIEDAD,
   camposPropuestos,
   camposQueCambiaron,
+  conservarLoEscrito,
   cuerpoDeLaNota,
   escrituraEnHubspot,
   fusionarPropuesta,
@@ -12,6 +15,7 @@ import {
   fichaVacia,
   leerFicha,
   propiedadesParaHubspot,
+  quitarDeLaPropuesta,
   textoAHtml,
   validarValores,
   valoresVacios,
@@ -242,5 +246,57 @@ describe("leerFicha", () => {
     expect((f.valores as Record<string, unknown>).otra).toBeUndefined();
     expect(f.valores.stakeholders).toBe("");
     expect(f.confirmadaAt).toBe("2026-01-01");
+  });
+});
+
+/* 2026-09-28 — auditoría de estados colgados tras el deploy. */
+describe("quitarDeLaPropuesta: el «Descartar» de un campo se guarda", () => {
+  /* Vivía solo en la pantalla: el número de la pestaña no se apagaba nunca y la propuesta
+     reaparecía al volver. La edición que la pone en rojo: no borrar la clave de `valores`. */
+  const conPropuesta = (): FichaGuardada => ({
+    ...fichaConfirmada({}),
+    propuesta: {
+      valores: { dolorPrincipal: "- pierde leads", stakeholders: "Ana" },
+      fuentes: ["Sesión del 12-sep"],
+      fuentesPorCampo: { dolorPrincipal: ["Sesión del 12-sep"], stakeholders: ["Encuesta"] },
+      at: "2026-09-27T12:00:00.000Z",
+      origen: "Sesiones",
+    },
+  });
+  it("quita el campo y sus fuentes, y deja los demás", () => {
+    const f = quitarDeLaPropuesta(conPropuesta(), ["dolorPrincipal"]);
+    expect(f.propuesta?.valores).toEqual({ stakeholders: "Ana" });
+    expect(f.propuesta?.fuentesPorCampo).toEqual({ stakeholders: ["Encuesta"] });
+    expect(camposPropuestos(f)).toEqual(["stakeholders"]);
+  });
+  it("sin campos propuestos, la propuesta se va entera (el número se apaga)", () => {
+    const f = quitarDeLaPropuesta(conPropuesta(), ["dolorPrincipal", "stakeholders"]);
+    expect(f.propuesta).toBeNull();
+    expect(camposPropuestos(f)).toEqual([]);
+  });
+  it("la ruta lo acepta y lo guarda", () => {
+    const ruta = fs.readFileSync(path.join(__dirname, "..", "..", "app", "api", "clients", "[id]", "ficha", "route.ts"), "utf8");
+    expect(ruta).toContain("Array.isArray(body?.descartarCampos)");
+    expect(ruta).toContain("quitarDeLaPropuesta(actual, claves)");
+  });
+});
+
+describe("conservarLoEscrito: «Actualizar con IA» no pisa lo que escribiste mientras esperabas", () => {
+  /* Se comparaba contra el borrador del momento del clic, así que lo escrito durante la espera (hasta
+     un minuto) desaparecía. La edición que la pone en rojo: comparar contra `alClic` en vez de
+     `enPantalla`, o devolver `base` sin mezclar. */
+  it("lo escrito antes o durante la espera gana sobre la ficha nueva; lo demás viene de la IA", () => {
+    const alClic = { ...valoresVacios(), dolorPrincipal: "viejo" };
+    const enPantalla = { ...alClic, stakeholders: "Ana (escrito mientras esperaba)" };
+    const base = { ...valoresVacios(), dolorPrincipal: "nuevo de la IA", stakeholders: "", aQueSeDedica: "de la IA" };
+    const r = conservarLoEscrito(alClic, enPantalla, base);
+    expect(r.stakeholders).toBe("Ana (escrito mientras esperaba)");
+    expect(r.dolorPrincipal).toBe("nuevo de la IA");
+    expect(r.aQueSeDedica).toBe("de la IA");
+  });
+  it("sin nada escrito, queda la ficha nueva tal cual", () => {
+    const v = valoresVacios();
+    const base = { ...v, dolorPrincipal: "de la IA" };
+    expect(conservarLoEscrito(v, v, base)).toBe(base);
   });
 });

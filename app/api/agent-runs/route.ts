@@ -6,7 +6,8 @@ import { accessibleClientWhere } from "@/lib/auth/access";
 import { can } from "@/lib/auth/permissions/engine";
 import { parseRunError } from "@/lib/agents/run-error";
 import { MOTIVO_COLGADA, cortePorLatido, estaColgada } from "@/lib/agents/run-colgada";
-import { resolveRunResultUrl } from "@/lib/agents/run-url";
+import { canvasDelResultado, resolveRunResultUrl } from "@/lib/agents/run-url";
+import { slugForCanvas } from "@/lib/pieces/registry";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 /**
@@ -60,13 +61,16 @@ export async function GET(req: NextRequest) {
     // KB) y el feed no lo muestra; solo lo usa para el motivo de las que están en ERROR, y ese
     // se pide aparte, abajo, para esas filas nada más. Hasta 25 filas por tick, cada 4-60 s.
     triggeredByEmail: true,
-    agent: { select: { name: true } },
+    agent: { select: { name: true, agentGroup: true } },
     client: { select: { name: true } },
     // Un solo bloque alcanza para saber EN QUÉ CANVAS aterrizó lo generado — es lo
     // que convierte el aviso de "listo" en un enlace al resultado y no a la home
     // del cliente. Las corridas que no escriben bloques (cronograma, análisis) caen
     // solas al deep-link de proyecto.
-    blocks: { take: 1, select: { section: { select: { canvasId: true } } } },
+    blocks: {
+      take: 1,
+      select: { section: { select: { canvasId: true, canvas: { select: { slug: true, name: true, businessCaseId: true } } } } },
+    },
   } satisfies Prisma.AgentRunSelect;
 
   /* ── UNA CORRIDA `RUNNING` NO ALCANZA PARA CREERLE ──────────────────────────
@@ -138,7 +142,12 @@ export async function GET(req: NextRequest) {
       clientId: r.clientId,
       projectId: r.projectId,
       businessCaseId: r.businessCaseId,
-      canvasId: r.blocks[0]?.section.canvasId ?? null,
+      /* El handoff vive en el Resumen y el cronograma no escribe bloques: ver `canvasDelResultado`. */
+      canvasId: canvasDelResultado({
+        canvasId: r.blocks[0]?.section.canvasId ?? null,
+        canvasSlug: r.blocks[0] ? slugForCanvas(r.blocks[0].section.canvas) : null,
+        agentGroup: r.agent?.agentGroup ?? null,
+      }),
     }),
     };
   };

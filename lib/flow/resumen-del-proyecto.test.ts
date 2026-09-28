@@ -20,18 +20,28 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { vistaDeLaUrl } from "./vista-de-la-url";
+import { canvasDelResultado } from "@/lib/agents/run-url";
 
 const RAIZ = join(__dirname, "..", "..");
 const leer = (p: string) => readFileSync(join(RAIZ, p), "utf8");
 
 const PANEL = leer("components/clients/ProjectCanvasPanel.tsx");
 const AVISO = leer("components/projects/TimelineProposalPendiente.tsx");
+const CRONOGRAMA = leer("components/canvas/CronogramaCanvas.tsx");
+const WORKSPACE = leer("app/(shell)/clients/[id]/WorkspaceClient.tsx");
+const HANDOFF_UI = leer("components/clients/ProjectHandoffSection.tsx");
+const HANDOFF_GET = leer("app/api/projects/[projectId]/handoff/route.ts");
+const CORRIDAS = leer("app/api/agent-runs/route.ts");
 
 describe("el Resumen es la vista por defecto del proyecto", () => {
   it("se define por la AUSENCIA del parámetro, no por un estado suelto", () => {
     /* Que salga de la URL es lo que hace que un enlace pegado abra lo mismo que veía quien lo
        pegó. Con un `useState(true)` a secas, recargar en un documento te devolvía al resumen. */
-    expect(PANEL).toContain("useState(() => !canvasFromUrl)");
+    /* 2026-09-28: sale de la URL a través de `vistaDeLaUrl`, que además manda al Resumen un
+       `?canvas=` que no es de este proyecto. Sigue sin ser un estado suelto. */
+    expect(PANEL).toContain("vistaDeLaUrl(seeded ?? [], canvasFromUrl, seeded !== null)");
+    expect(PANEL, "volvió un estado suelto para el Resumen").not.toMatch(/setEnResumen\] = useState\((true|false)\)/);
   });
 
   it("elegir un documento SIEMPRE escribe el parámetro, incluso el que es `isDefault`", () => {
@@ -49,7 +59,9 @@ describe("el widget y el handoff se pintan UNA vez, adentro del Resumen", () => 
   it("no vuelven arriba de todos los documentos", () => {
     /* Es el motivo entero de la tanda: montados fuera del gate, el brief, el widget y el
        handoff se repiten en las nueve piezas y empujan el desplegable fuera de vista. */
-    const i = PANEL.indexOf("{enResumen && (");
+    /* 2026-09-28: el gate pasó de `{enResumen && …}` (desmontaba) a `hidden` (oculta). Sigue siendo
+       un gate: se ven SOLO en el Resumen. Ver el describe «el Resumen se oculta, no se desmonta». */
+    const i = PANEL.indexOf("<div hidden={!enResumen}");
     expect(i, "desapareció el gate del Resumen").toBeGreaterThan(-1);
     const bloque = PANEL.slice(i, i + 400);
     expect(bloque).toContain("<ProjectGPS");
@@ -64,8 +76,11 @@ describe("los enlaces que apuntan a un DOCUMENTO llevan el parámetro", () => {
   it("el panel resuelve `?canvas=` por id o por SLUG", () => {
     /* Sin la resolución por slug, un enlace externo tendría que conocer el id del canvas —que
        es una fila distinta en cada proyecto—, o sea que no podría existir. */
-    expect(PANEL).toContain("buscarCanvasDeLaUrl");
-    expect(PANEL).toContain("lista.find((c) => slugForCanvas(c) === pedido)");
+    /* 2026-09-28: la búsqueda se mudó a lib/flow/vista-de-la-url.ts (una sola regla para el primer
+       paint y los cambios de URL). Se prueba por comportamiento: «por id o por slug es ese
+       documento», más abajo. Acá, que el panel la use. */
+    expect(PANEL).toContain("buscarDocumento(lista, pedido)");
+    expect(leer("lib/flow/vista-de-la-url.ts")).toContain("lista.find((c) => slugForCanvas(c) === pedido)");
   });
 
   it("el «Revisar» de la propuesta de cronograma abre el Cronograma, no el Resumen", () => {
@@ -99,5 +114,114 @@ describe("cambiar de documento no deja el panel en el esqueleto", () => {
     const cuerpo = CODIGO.slice(i, CODIGO.indexOf("}, [", i));
     expect(cuerpo.length, "la guarda no está mirando switchCanvas").toBeGreaterThan(200);
     expect(cuerpo).not.toContain("setLoading(");
+  });
+});
+
+/* ── 2026-09-28: lo que dejó 14b8c920 al llevar el widget y el handoff al Resumen ──────────────
+   Auditoría de estados colgados tras el deploy (workflow, dos verificadores por hallazgo). Cada
+   guarda nombra la edición que la pone en rojo. */
+const sinComentarios = (s: string) =>
+  s
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(/\r?\n/)
+    .filter((l) => !l.trimStart().startsWith("//"))
+    .join("\n");
+
+describe("el Resumen se oculta, no se desmonta", () => {
+  /* Con `{enResumen && …}`, ir a un documento desmontaba el widget y el handoff: se perdía el
+     «Generando…» (y un segundo clic lanzaba otra corrida pagada), el widget quedaba viejo porque los
+     avisos de refrescar llegaban desmontado, y las exclusiones sin guardar desaparecían. La edición
+     que la pone en rojo: volver a `{enResumen && (` alrededor de ProjectGPS / ProjectHandoffSection. */
+  it("el widget y el handoff viven dentro de `hidden`, nunca de un `&&`", () => {
+    const codigo = sinComentarios(PANEL);
+    const i = codigo.indexOf("<ProjectGPS");
+    const antes = codigo.slice(Math.max(0, i - 200), i);
+    expect(antes, "el widget volvió a montarse con un && (se desmonta al ir a un documento)").not.toContain(
+      "enResumen && (",
+    );
+    expect(antes).toContain("hidden={!enResumen}");
+  });
+});
+
+describe("la pantalla sigue a la URL", () => {
+  const lista = [
+    { id: "c-crono", slug: "timeline", name: "Cronograma" },
+    { id: "c-kick", slug: "kickoff", name: "Kickoff" },
+  ];
+  it("sin parámetro es el Resumen", () => {
+    expect(vistaDeLaUrl(lista, null, true)).toEqual({ tipo: "resumen" });
+  });
+  it("por id o por slug es ese documento", () => {
+    expect(vistaDeLaUrl(lista, "c-kick", true)).toEqual({ tipo: "documento", canvasId: "c-kick" });
+    expect(vistaDeLaUrl(lista, "timeline", true)).toEqual({ tipo: "documento", canvasId: "c-crono" });
+  });
+  /* El caso de producción: el `?canvas=` del proyecto anterior al cambiar de pestaña, o el del
+     handoff (que no está en el desplegable), abría el PRIMER documento. La edición que la pone en
+     rojo: devolver `lista[0]` cuando el pedido no resuelve. */
+  it("un canvas que no es de este proyecto abre el Resumen, no el primer documento", () => {
+    expect(vistaDeLaUrl(lista, "c-de-otro-proyecto", true)).toEqual({ tipo: "resumen" });
+  });
+  it("sin la lista todavía, no decide", () => {
+    expect(vistaDeLaUrl([], "c-kick", false)).toEqual({ tipo: "esperar" });
+  });
+  it("el panel la usa al montar Y cada vez que cambia la URL", () => {
+    const codigo = sinComentarios(PANEL);
+    expect(codigo).toContain('vistaDeLaUrl(seeded ?? [], canvasFromUrl, seeded !== null).tipo === "resumen"');
+    const i = codigo.indexOf("const vista = vistaDeLaUrl(canvasesRef.current, canvasFromUrl, listLoaded);");
+    expect(i, "el panel dejó de seguir a la URL después de montar").toBeGreaterThan(-1);
+    expect(codigo.slice(i, i + 500)).toContain("}, [canvasFromUrl, listLoaded, cronogramaOcupado]);");
+  });
+});
+
+describe("los enlaces a un resultado llevan a donde está", () => {
+  it("el handoff vive en el Resumen: su enlace va sin canvas", () => {
+    expect(canvasDelResultado({ canvasId: "c-handoff", canvasSlug: "handoff", agentGroup: "handoff" })).toBeNull();
+  });
+  it("el cronograma no escribe bloques: va por el slug", () => {
+    expect(canvasDelResultado({ canvasId: null, canvasSlug: null, agentGroup: "cronograma" })).toBe("timeline");
+  });
+  it("cualquier otro documento, por su id", () => {
+    expect(canvasDelResultado({ canvasId: "c-kick", canvasSlug: "kickoff", agentGroup: "kickoff" })).toBe("c-kick");
+  });
+  it("el centro de corridas y el aviso del cronograma la usan", () => {
+    expect(sinComentarios(CORRIDAS)).toContain("canvasId: canvasDelResultado({");
+    expect(CRONOGRAMA).toContain("?tab=${encodeURIComponent(projectId)}&canvas=timeline`");
+  });
+});
+
+describe("«Ir a la etapa» cambia al Resumen antes de hacer scroll", () => {
+  /* El bloque «Etapa» vive en el widget, oculto mientras se mira el cronograma: el scroll no hacía
+     nada. La edición que la pone en rojo: sacar la rama de ANCHORS.etapa, o no pasarle
+     `onIrAlResumen` al cronograma. */
+  it("el cronograma deriva la etapa al panel, y el panel se la pasa", () => {
+    expect(sinComentarios(CRONOGRAMA)).toContain("if (target.anchor === ANCHORS.etapa && onIrAlResumen) return onIrAlResumen(target.anchor);");
+    expect(sinComentarios(PANEL)).toContain("onIrAlResumen={irAlResumenEn}");
+  });
+});
+
+describe("el aviso de propuesta del rail se entera de los cambios", () => {
+  /* Era un dato del servidor que nada renovaba: al aplicar o descartar seguía encendido y al
+     regenerar el handoff no aparecía. La edición que la pone en rojo: sacar el refresh. */
+  it("refresca la página cuando el cronograma o el handoff avisan", () => {
+    const codigo = sinComentarios(WORKSPACE);
+    const i = codigo.indexOf("const senalesVistas = useRef(");
+    expect(i, "se fue el refresco del aviso del rail").toBeGreaterThan(-1);
+    const tramo = codigo.slice(i, i + 600);
+    expect(tramo).toContain("router.refresh()");
+    expect(tramo).toContain("[gpsRefreshSignal, timelineRefreshSignal, router]");
+  });
+});
+
+describe("el handoff retoma la corrida que sigue en curso", () => {
+  /* Recargar a mitad de una generación dejaba «Generar» habilitado: un segundo clic lanzaba otra
+     corrida pagada. La edición que la pone en rojo: dejar de mandar `corridaEnCurso`, o que la
+     sección no la siga. */
+  it("el GET la manda (solo si no está colgada) y la sección la sigue", () => {
+    const get = sinComentarios(HANDOFF_GET);
+    expect(get).toContain("corridaEnCurso:");
+    expect(get).toContain("!estaColgada(lastRun)");
+    const ui = sinComentarios(HANDOFF_UI);
+    expect(ui).toContain("const runIdEnCurso = status?.corridaEnCurso?.runId ?? null;");
+    expect(ui).toContain("await track(runIdEnCurso);");
   });
 });

@@ -15,6 +15,7 @@ import {
   GRUPOS_DE_FICHA,
   OPCIONES_DE_APERTURA,
   camposQueCambiaron,
+  conservarLoEscrito,
   etiquetaDeApertura,
   valoresVacios,
   type CampoDeFicha,
@@ -45,6 +46,12 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [leyendo, setLeyendo] = useState(false);
+  /* Lo que hay en pantalla AHORA, para los callbacks que vuelven tarde (la IA tarda hasta un minuto):
+     el `borrador` del closure es el del clic y se perdía lo escrito mientras se esperaba. */
+  const borradorRef = useRef(borrador);
+  useEffect(() => {
+    borradorRef.current = borrador;
+  }, [borrador]);
 
   const aplicar = useCallback((r: { ficha: FichaGuardada; hubspotUrl?: string | null }) => {
     setFicha(r.ficha);
@@ -56,6 +63,7 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   }, [clientId]);
 
   async function actualizarConIA() {
+    const valoresAlClic = ficha?.valores ?? null;
     setLeyendo(true);
     setError(null);
     setAviso(null);
@@ -66,10 +74,12 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
         setError(j.error ?? "No se pudo actualizar la ficha con IA.");
         return;
       }
-      // Lo que el CSE estaba escribiendo sin confirmar no se pierde: se conserva sobre la ficha nueva.
-      const enCurso = ficha ? camposQueCambiaron(ficha.valores, borrador) : [];
+      /* Lo que el CSE escribió sin confirmar —antes del clic o MIENTRAS esperaba— no se pierde: se
+         compara lo que hay en pantalla ahora contra la ficha del momento del clic y eso se conserva
+         sobre la ficha nueva. Guarda: lib/clients/ficha.test.ts › conservarLoEscrito. */
+      const actual = borradorRef.current;
       aplicar({ ficha: j.ficha });
-      if (enCurso.length) setBorrador((b) => ({ ...b, ...Object.fromEntries(enCurso.map((k) => [k, borrador[k]])) }));
+      setBorrador((b) => conservarLoEscrito(valoresAlClic, actual, b));
       setAviso(
         j.sinFuentes
           ? "No hay handoff, encuestas ni sesiones de dónde sacar información."
@@ -134,6 +144,31 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
       setError("No se pudo guardar la ficha. Revisa tu conexión y vuelve a intentar.");
     } finally {
       setGuardando(false);
+    }
+  }
+
+  /* «Descartar» de UN campo: se ve al instante y se guarda. Sin guardarlo, el número de la pestaña
+     no se apagaba nunca y la propuesta reaparecía al volver. No toca el borrador: lo que el CSE
+     escribió en otros campos sigue ahí. */
+  async function descartarCampo(clave: ClaveDeFicha) {
+    setDescartadas((d) => new Set(d).add(clave));
+    try {
+      const r = await fetch(`/api/clients/${clientId}/ficha`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ descartarCampos: [clave] }),
+      });
+      const j = (await r.json().catch(() => ({}))) as Respuesta;
+      if (!r.ok || !j.ficha) throw new Error(j.error ?? "");
+      setFicha(j.ficha);
+      window.dispatchEvent(new CustomEvent(EVENTO_FICHA_CAMBIO, { detail: { clientId } }));
+    } catch {
+      setDescartadas((d) => {
+        const n = new Set(d);
+        n.delete(clave);
+        return n;
+      });
+      setError("No se pudo descartar la propuesta de ese campo. Vuelve a intentar.");
     }
   }
 
@@ -223,7 +258,7 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
               fuentes={ficha.propuesta?.fuentesPorCampo[c.clave] ?? []}
               onChange={(v) => set(c.clave, v)}
               onUsar={() => set(c.clave, ficha.propuesta!.valores[c.clave]!)}
-              onDescartar={() => setDescartadas((d) => new Set(d).add(c.clave))}
+              onDescartar={() => void descartarCampo(c.clave)}
             />
           ))}
         </section>

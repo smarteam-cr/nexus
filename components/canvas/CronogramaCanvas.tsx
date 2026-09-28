@@ -312,6 +312,7 @@ export default function CronogramaCanvas({
   clientId,
   headerSlot,
   onOcupado,
+  onIrAlResumen,
 }: {
   projectId: string;
   clientId: string;
@@ -319,6 +320,9 @@ export default function CronogramaCanvas({
   /** Avisa al panel cuando el cronograma espera a la IA o aplica algo: el panel no deja cambiar de
    *  pieza en ese rato (desmontar el cronograma tiraría la propuesta que se está armando). */
   onOcupado?: (ocupado: boolean) => void;
+  /** Lleva al Resumen del proyecto y hace scroll al ancla. Lo usa «Ir a la etapa»: el bloque «Etapa»
+   *  vive en el widget, que desde 14b8c920 solo se ve en el Resumen. Sin esto el botón no hacía nada. */
+  onIrAlResumen?: (ancla: string) => void;
 }) {
   const toast = useToast();
   const { pushUndo, clearScope } = useUndo();
@@ -326,7 +330,9 @@ export default function CronogramaCanvas({
   useUndoScope(undoScope); // purga el historial de undo al desmontar (no aplica a otro proyecto)
   // Destino del click en la notificación: la pestaña del proyecto (donde vive el
   // cronograma), no la home del cliente.
-  const cronogramaUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
+  /* Con `&canvas=timeline`: la URL sin `canvas` es el Resumen desde 14b8c920, así que el aviso de
+     «Listo: cronograma» dejaba a la persona en el widget y no en el Gantt. */
+  const cronogramaUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}&canvas=timeline`;
 
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
@@ -3540,6 +3546,9 @@ export default function CronogramaCanvas({
           .getElementById(ANCHORS.particularidades)
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       case "anchor":
+        /* El ancla de la etapa está en el widget del Resumen, oculto mientras se mira el cronograma:
+           hay que cambiar de vista antes de hacer scroll (con el widget oculto no se mueve nada). */
+        if (target.anchor === ANCHORS.etapa && onIrAlResumen) return onIrAlResumen(target.anchor);
         return void document
           .getElementById(target.anchor)
           ?.scrollIntoView({ behavior: "smooth", block: "start" });

@@ -9,7 +9,7 @@
  * canvas "Handoff"). La generación corre el agente scopeado a las sesiones de ESTE
  * proyecto (SessionProject) — async + polling.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import { useAgentRun } from "@/hooks/useAgentRun";
@@ -56,6 +56,8 @@ interface HandoffStatus {
   blockCount: number;
   lastRunAt: string | null;
   lastRunStatus: string | null;
+  /** La corrida del handoff que sigue en curso (no colgada). La sección la retoma al montar. */
+  corridaEnCurso?: { runId: string } | null;
   /** Cuántas corridas del agente de handoff existen — decide si se ofrece "Ver historial".
    *  Opcional: una entrada del cache de módulo anterior al deploy no lo trae. */
   handoffRunCount?: number;
@@ -327,6 +329,35 @@ export default function ProjectHandoffSection({ projectId, clientId }: { project
     }
     setResumiendo(false);
   }, [projectId, fetchStatus]);
+
+  /* RETOMAR LA CORRIDA EN CURSO (2026-09-28). Recargar, abrir el proyecto en otra pestaña o volver
+     al Resumen a mitad de una generación dejaba «Generar» habilitado: un segundo clic lanzaba otra
+     corrida pagada sobre el mismo documento, y al terminar la primera nadie refrescaba esta
+     pantalla. Si el servidor dice que hay una corrida viva, la sección la sigue como si la hubiera
+     lanzado ella: «Generando…», botón deshabilitado y, al terminar, el estado nuevo. */
+  const retomadaRef = useRef<string | null>(null);
+  const runIdEnCurso = status?.corridaEnCurso?.runId ?? null;
+  useEffect(() => {
+    if (!runIdEnCurso || generating || retomadaRef.current === runIdEnCurso) return;
+    retomadaRef.current = runIdEnCurso;
+    setGenerating(true);
+    void (async () => {
+      try {
+        const result = await track(runIdEnCurso);
+        if (result.status === "ERROR") setError(result.error ?? "El handoff falló durante la generación. Vuelve a intentarlo.");
+        else if (result.status === "TIMEOUT") setError("La generación está tardando más de lo normal. Revisa en unos minutos.");
+        await fetchStatus();
+        fetchTags();
+        bumpTimelineRefresh();
+        bumpGpsRefresh();
+        bumpCanvasRefresh();
+      } catch {
+        /* sin red: el próximo GET dirá cómo quedó */
+      } finally {
+        setGenerating(false);
+      }
+    })();
+  }, [runIdEnCurso, generating, track, fetchStatus, fetchTags, bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh]);
 
   const handleGenerate = useCallback(async () => {
     const agentId = status?.agentId;

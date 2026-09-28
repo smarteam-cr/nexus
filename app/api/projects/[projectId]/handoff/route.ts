@@ -12,6 +12,7 @@ import { canvasOf } from "@/lib/pieces/canvas-query";
 import { elegirAgente, pipelineKeyDeProyecto, AGENTES_DEL_GRUPO } from "@/lib/agents/resolver";
 import { whereCorridasDeDocumento } from "@/lib/agents/historial-corridas";
 import { resumenDesactualizado } from "@/lib/handoff/resumen";
+import { estaColgada } from "@/lib/agents/run-colgada";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -107,7 +108,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     prisma.agentRun.findFirst({
       where: whereCorridas,
       orderBy: { createdAt: "desc" },
-      select: { createdAt: true, status: true, sourceSessionIds: true },
+      select: { id: true, createdAt: true, updatedAt: true, status: true, sourceSessionIds: true },
     }),
     prisma.agentRun.count({ where: whereCorridas }),
   ]);
@@ -171,6 +172,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
     blockCount,
     lastRunAt: lastRun?.createdAt ?? null,
     lastRunStatus: lastRun?.status ?? null,
+    /* La corrida que SIGUE en curso (no colgada): la sección la retoma al montar —recargar o abrir el
+       proyecto en otra pestaña— en vez de ofrecer «Generar» encima y lanzar otra corrida pagada. */
+    corridaEnCurso:
+      lastRun && (lastRun.status === "RUNNING" || lastRun.status === "PENDING") && !estaColgada(lastRun)
+        ? { runId: lastRun.id }
+        : null,
     /* Cuántas corridas hay: decide si se ofrece "Ver historial" (ver `debeVerHistorial`). */
     handoffRunCount,
     sourceSessions,

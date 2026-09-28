@@ -428,10 +428,24 @@ function ProjectSection({
   sincronizando: boolean;
   onSync: () => void;
 }) {
-  const { activeProjectId, setActiveProjectId } = useWorkspace();
+  const { activeProjectId, setActiveProjectId, gpsRefreshSignal, timelineRefreshSignal } = useWorkspace();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+
+  /* EL AVISO DE PROPUESTA DEL RAIL ES UN DATO DEL SERVIDOR (2026-09-28). `timelineProposalPending`
+     llega con la página y nada lo renovaba: al aplicar o descartar la propuesta seguía diciendo que
+     había una, y al regenerar el handoff no aparecía. La copia del widget, que sí escuchaba estas
+     señales, se fue con 14b8c920. Cuando el cronograma o el handoff avisan que algo cambió, se
+     refresca la página del servidor (una vez, con una espera corta para juntar avisos seguidos). */
+  const senalesVistas = useRef({ gps: gpsRefreshSignal, timeline: timelineRefreshSignal });
+  useEffect(() => {
+    const vistas = senalesVistas.current;
+    if (vistas.gps === gpsRefreshSignal && vistas.timeline === timelineRefreshSignal) return;
+    senalesVistas.current = { gps: gpsRefreshSignal, timeline: timelineRefreshSignal };
+    const t = setTimeout(() => router.refresh(), 600);
+    return () => clearTimeout(t);
+  }, [gpsRefreshSignal, timelineRefreshSignal, router]);
 
   // Persistencia del tab activo en la URL (?tab=) — el canvas ya usa ?canvas=. Así
   // al recargar se restaura el proyecto y su canvas. selectTab escribe ?tab y, si

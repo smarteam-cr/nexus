@@ -3,11 +3,14 @@ import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { hubspotCompanyUrl } from "@/lib/hubspot/urls";
 import {
+  CAMPOS_DE_LA_FICHA,
   camposQueCambiaron,
   escrituraEnHubspot,
   fichaTieneContenido,
   leerFicha,
+  quitarDeLaPropuesta,
   validarValores,
+  type ClaveDeFicha,
   type FichaGuardada,
 } from "@/lib/clients/ficha";
 import { sincronizarFichaConHubspot } from "@/lib/clients/ficha-hubspot";
@@ -68,7 +71,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const guard = await guardAccessToClient(id);
   if (guard instanceof NextResponse) return guard;
 
-  const body = (await req.json().catch(() => null)) as { valores?: unknown; descartarPropuesta?: boolean } | null;
+  const body = (await req.json().catch(() => null)) as {
+    valores?: unknown;
+    descartarPropuesta?: boolean;
+    descartarCampos?: unknown;
+  } | null;
   const client = await cargar(id);
   if (!client) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
   const companyId = empresaDelSistema(client);
@@ -76,6 +83,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   if (body?.descartarPropuesta) {
     const nueva: FichaGuardada = { ...actual, propuesta: null };
+    await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
+    return responder(nueva, companyId);
+  }
+
+  // El «Descartar» de un campo: se guarda, para que el número de la pestaña se apague y la
+  // propuesta no reaparezca al volver. Solo claves de la ficha; lo demás se ignora.
+  if (Array.isArray(body?.descartarCampos)) {
+    const validas = new Set<string>(CAMPOS_DE_LA_FICHA.map((c) => c.clave));
+    const claves = (body.descartarCampos as unknown[]).filter(
+      (k): k is ClaveDeFicha => typeof k === "string" && validas.has(k),
+    );
+    if (!claves.length) return NextResponse.json({ error: "No hay campos para descartar." }, { status: 400 });
+    const nueva = quitarDeLaPropuesta(actual, claves);
     await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
     return responder(nueva, companyId);
   }

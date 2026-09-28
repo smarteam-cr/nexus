@@ -46,6 +46,25 @@ export interface RunUrlInput {
  * navegable. Con dos o más, la pestaña por defecto es «Información del cliente» y el canvas se
  * ignora. Por eso el tab siempre viaja.
  */
+/**
+ * El `?canvas=` que lleva al resultado de una corrida (2026-09-28). Desde 14b8c920 la URL de un
+ * proyecto SIN `canvas` abre el Resumen, así que:
+ *  · el handoff vive en el Resumen (no es un documento del desplegable): su enlace va SIN canvas;
+ *    con el id de su canvas, el panel no lo encontraba y abría el Cronograma, sin handoff a la vista;
+ *  · el cronograma no escribe bloques, así que su corrida no trae canvas: va por el slug `timeline`
+ *    (el panel acepta slug), o el aviso de «Listo» dejaba a la persona en el widget.
+ */
+export function canvasDelResultado(r: {
+  canvasId: string | null;
+  canvasSlug: string | null;
+  agentGroup: string | null;
+}): string | null {
+  if (r.canvasSlug === "handoff") return null;
+  if (r.canvasId) return r.canvasId;
+  if (r.agentGroup === "cronograma") return "timeline";
+  return null;
+}
+
 export function urlDeProyecto(clientId: string, projectId: string, canvasId?: string | null): string {
   const qs = new URLSearchParams({ tab: projectId });
   if (canvasId) qs.set("canvas", canvasId);

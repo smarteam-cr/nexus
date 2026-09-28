@@ -23,6 +23,7 @@ import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
+import { buscarDocumento, vistaDeLaUrl } from "@/lib/flow/vista-de-la-url";
 // La dirección de la ficha del documento dentro del manual — un solo lugar que sabe dónde vive.
 import { urlDeDocumentoEnManual } from "@/lib/manual/anclas";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
@@ -123,14 +124,7 @@ export default function ProjectCanvasPanel({
    * para los 111 cronogramas.
    */
   const buscarCanvasDeLaUrl = useCallback(
-    (lista: CanvasMeta[], pedido: string | null): CanvasMeta | null => {
-      if (!pedido) return null;
-      return (
-        lista.find((c) => c.id === pedido) ??
-        lista.find((c) => slugForCanvas(c) === pedido) ??
-        null
-      );
-    },
+    (lista: CanvasMeta[], pedido: string | null): CanvasMeta | null => buscarDocumento(lista, pedido),
     [],
   );
 
@@ -175,7 +169,13 @@ export default function ProjectCanvasPanel({
    * desplegable —que es el control principal de la pantalla— quedaba empujado fuera de vista.
    * Ahora son una parada más del mismo desplegable, y la primera.
    */
-  const [enResumen, setEnResumen] = useState(() => !canvasFromUrl);
+  /* Un `?canvas=` que no RESUELVE a un documento de este proyecto abre el Resumen: el del handoff
+     (que no está en la lista: vive en el Resumen), uno borrado o el de OTRO proyecto que quedó en
+     la URL al cambiar de pestaña. Antes bastaba con que el parámetro existiera para caer en el
+     primer documento, con la URL diciendo otra cosa. */
+  const [enResumen, setEnResumen] = useState(
+    () => vistaDeLaUrl(seeded ?? [], canvasFromUrl, seeded !== null).tipo === "resumen",
+  );
   const canvasDropdownRef = useRef<HTMLDivElement>(null);
   /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
      qué botón mostrar. El canvas los renderiza acá por portal y quedan junto al nombre, en
@@ -252,6 +252,20 @@ export default function ProjectCanvasPanel({
     url.searchParams.delete("canvas");
     router.replace(url.pathname + url.search, { scroll: false });
   }, [router, cronogramaOcupado]);
+
+  /* Ir al Resumen Y bajar a un ancla que vive ahí (el bloque «Etapa» del widget). El scroll espera a
+     que el Resumen se vea: con el widget oculto, `scrollIntoView` no mueve nada. */
+  const [anclaPendiente, setAnclaPendiente] = useState<string | null>(null);
+  const irAlResumenEn = useCallback((ancla: string) => {
+    if (cronogramaOcupado) return;
+    setAnclaPendiente(ancla);
+    irAlResumen();
+  }, [irAlResumen, cronogramaOcupado]);
+  useEffect(() => {
+    if (!enResumen || !anclaPendiente) return;
+    document.getElementById(anclaPendiente)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setAnclaPendiente(null);
+  }, [enResumen, anclaPendiente]);
 
   // `canvasFromUrl` en un ref (no en las deps de `refetchCanvases`): `switchCanvas`
   // reescribe el `?canvas=` en cada click de tab, así que si el callback dependiera
@@ -340,6 +354,27 @@ export default function ProjectCanvasPanel({
   useEffect(() => {
     if (listLoaded) setLoading(false);
   }, [listLoaded]);
+
+  /* LA PANTALLA SIGUE A LA URL (2026-09-28). `enResumen` y el documento activo se calculaban una
+     sola vez al montar, así que un cambio de URL que no pasaba por el desplegable (la pestaña de
+     otro proyecto, que monta este panel con el `?canvas=` del anterior todavía puesto, o un enlace
+     del centro de corridas) dejaba la pantalla en un documento con la URL diciendo «Resumen».
+     Corre cuando cambia el parámetro y cuando llega la lista; la lista se lee por ref para que un
+     refetch de fondo no vuelva a aplicar la URL encima de un clic que todavía no la escribió.
+     Mientras el cronograma espera a la IA no se mueve, igual que el desplegable. */
+  const canvasesRef = useRef(canvases);
+  useEffect(() => { canvasesRef.current = canvases; }, [canvases]);
+  useEffect(() => {
+    if (cronogramaOcupado) return;
+    const vista = vistaDeLaUrl(canvasesRef.current, canvasFromUrl, listLoaded);
+    if (vista.tipo === "esperar") return;
+    if (vista.tipo === "resumen") {
+      setEnResumen(true);
+      return;
+    }
+    setEnResumen(false);
+    setActiveCanvasId(vista.canvasId);
+  }, [canvasFromUrl, listLoaded, cronogramaOcupado]);
 
   // La MISMA pieza que pinta app/(shell)/clients/[id]/loading.tsx: el RSC y este gate
   // client-side se ven uno tras otro, así que tienen que hablar el mismo vocabulario.
@@ -516,6 +551,7 @@ export default function ProjectCanvasPanel({
                             clientId={clientId}
                             projectId={projectId}
                             agentId={row.agent.agentId}
+                            canvasId={row.canvasId}
                             label={row.state === "generada" ? "Regenerar" : "Generar"}
                             async={row.agent.async}
                             appearance={row.state === "generada" ? "ghost" : "primary"}
@@ -548,6 +584,7 @@ export default function ProjectCanvasPanel({
                 clientId={clientId}
                 projectId={projectId}
                 agentId={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].agentId}
+                canvasId={activeCanvasId}
                 label={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].label}
                 async={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].async}
                 /* Mismo cierre que el CTA de la fila del desplegable, incluido el refetch:
@@ -629,12 +666,17 @@ export default function ProjectCanvasPanel({
           Cómo va el proyecto (el brief con fuentes y el widget de la cuenta) y el handoff
           del que sale todo lo demás. Vivía ARRIBA de los nueve documentos y por eso se
           repetía en los nueve; acá es una parada del mismo desplegable. */}
-      {enResumen && (
-        <>
-          <ProjectGPS projectId={projectId} clientId={clientId} />
-          <ProjectHandoffSection projectId={projectId} clientId={clientId} />
-        </>
-      )}
+      {/* ⛔ OCULTO, NO DESMONTADO (2026-09-28). Con `{enResumen && …}`, ir a un documento
+          desmontaba el widget y el handoff: se perdía el «Generando…» del handoff (y un segundo
+          clic lanzaba otra corrida pagada), el widget se quedaba con datos viejos porque los
+          avisos de refrescar llegaban cuando no estaba montado, «Generar resumen» se rehabilitaba
+          a mitad de la corrida y las exclusiones sin guardar desaparecían. Con `hidden` siguen
+          vivos y vuelven como quedaron; se pintan UNA vez, solo en el Resumen. Guarda:
+          lib/flow/resumen-del-proyecto.test.ts. */}
+      <div hidden={!enResumen} className="space-y-6">
+        <ProjectGPS projectId={projectId} clientId={clientId} />
+        <ProjectHandoffSection projectId={projectId} clientId={clientId} />
+      </div>
 
       {/* Handoff: vista lineal (lectura/curación del CSE, sin grilla) */}
       {activeSlug === "handoff" && activeCanvasId && (
@@ -740,6 +782,7 @@ export default function ProjectCanvasPanel({
             clientId={clientId}
             headerSlot={canvasHeaderSlot}
             onOcupado={setCronogramaOcupado}
+            onIrAlResumen={irAlResumenEn}
           />
         </CanvasBoundary>
       )}
