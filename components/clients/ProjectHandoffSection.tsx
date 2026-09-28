@@ -420,21 +420,8 @@ export default function ProjectHandoffSection({
     // A la pestaña del proyecto, no a la home del cliente (el handoff vive ahí).
     const notifyUrl = `/clients/${clientId}?tab=${encodeURIComponent(projectId)}`;
     try {
-      /* -1. ¿Ya hay una corrida en curso? (2026-09-28) Una pestaña abierta ANTES de que otra (o
-         alguien más) lanzara el handoff sigue mostrando «Regenerar», y el servidor no frena corridas
-         paralelas: sin esta consulta, el clic pagaba una segunda. Si hay una viva, se la sigue en vez
-         de lanzar otra (el efecto «RETOMAR» la toma apenas llega el estado). */
-      const fresco = await fetch(`/api/projects/${projectId}/handoff`)
-        .then((r) => (r.ok ? (r.json() as Promise<HandoffStatus>) : null))
-        .catch(() => null);
-      if (fresco?.corridaEnCurso?.runId) {
-        writeHandoffStatusCache(projectId, fresco);
-        setStatus(fresco);
-        toast.info("Ya hay una generación del handoff en curso: la sigo en vez de lanzar otra.");
-        return;
-      }
-
-      // 0. Guardar exclusiones PENDIENTES del textarea: escribir y regenerar directo
+      // 0. (Va antes de mirar si hay una corrida viva: si termina en «la sigo», lo escrito no se pierde.)
+      //    Guardar exclusiones PENDIENTES del textarea: escribir y regenerar directo
       //    (sin apretar "Guardar") perdía el texto en silencio y el prompt corría sin
       //    la regla (visto en RC). Best-effort: si falla, la generación sigue igual.
       const pendingExcl = exclusions.trim() || null;
@@ -446,6 +433,24 @@ export default function ProjectHandoffSection({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ contextExclusions: pendingExcl }),
         }).catch(() => {});
+      }
+
+      /* -1. ¿Ya hay una corrida en curso? (2026-09-28) Una pestaña abierta ANTES de que otra (o
+         alguien más) lanzara el handoff sigue mostrando «Regenerar», y el servidor no frena corridas
+         paralelas: sin esta consulta, el clic pagaba una segunda. Si hay una viva, se la sigue en vez
+         de lanzar otra (el efecto «RETOMAR» la toma apenas llega el estado). */
+      const fresco = await fetch(`/api/projects/${projectId}/handoff`)
+        .then((r) => (r.ok ? (r.json() as Promise<HandoffStatus>) : null))
+        .catch(() => null);
+      if (fresco?.corridaEnCurso?.runId) {
+        /* Si esta sección ya la había seguido y se rindió (TIMEOUT a los ~6 min), el retomar no la
+           volvía a tomar (`retomadaRef` seguía con ese id): el aviso decía «la sigo» y no seguía
+           nada, hasta 30 min. Se suelta el ref para que el efecto la retome de verdad. */
+        if (retomadaRef.current === fresco.corridaEnCurso.runId) retomadaRef.current = null;
+        writeHandoffStatusCache(projectId, fresco);
+        setStatus(fresco);
+        toast.info("Ya hay una generación del handoff en curso: la sigo en vez de lanzar otra.");
+        return;
       }
 
       // 1. Asegurar entidad Handoff + canvas

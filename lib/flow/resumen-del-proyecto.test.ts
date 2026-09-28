@@ -248,6 +248,13 @@ describe("el handoff retoma la corrida que sigue en curso", () => {
     const antesDeLanzar = ui.slice(i, j);
     expect(antesDeLanzar.length, "la guarda no está mirando handleGenerate").toBeGreaterThan(300);
     expect(antesDeLanzar).toContain("if (fresco?.corridaEnCurso?.runId) {");
+    /* Revisión de 4ddc67d6: tras un TIMEOUT el ref seguía con esa corrida y el aviso decía «la sigo»
+       sin seguir nada; y las exclusiones escritas se perdían en ese camino. La edición que la pone en
+       rojo: sacar la línea que suelta el ref, o volver a guardar las exclusiones DESPUÉS de la consulta. */
+    expect(antesDeLanzar).toContain("if (retomadaRef.current === fresco.corridaEnCurso.runId) retomadaRef.current = null;");
+    expect(antesDeLanzar.indexOf("contextExclusions: pendingExcl"), "las exclusiones se guardan antes de mirar la corrida viva").toBeLessThan(
+      antesDeLanzar.indexOf("const fresco = await fetch("),
+    );
   });
 });
 
