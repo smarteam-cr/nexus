@@ -745,7 +745,7 @@ export default function ProjectCanvasPanel({
           y el cierre —que llevan fondo propio— quedan recortados con calles a los lados. */}
       {activeSlug === "implementation" && activeCanvasId && (
         <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
-          <CanvasBoundary label="la implementación">
+          <CanvasBoundary label="la ejecución">
             <ImplementacionWorkspace key={`implementacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
           </CanvasBoundary>
         </div>

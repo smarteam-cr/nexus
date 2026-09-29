@@ -15,6 +15,7 @@ import { PropsTableSection } from "@/components/canvas/desarrollo-sections/Props
 import { KickoffProseSection, KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffSections";
 import { ProcessMappingSection } from "../sections-shared";
 import { PromptsBreezeSection } from "@/components/canvas/implementacion-sections/PromptsBreezeSection";
+import { AccionesEjecucionSection, HerramientasEjecucionSection } from "../sections-ejecucion";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const IMPLEMENTACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
@@ -25,6 +26,9 @@ export const IMPLEMENTACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<a
   kickoff_prose: KickoffProseSection,
   // El único propio.
   prompts_breeze: PromptsBreezeSection,
+  // El plan de acción que cierra el hilo del diagnóstico (2026-09-28).
+  ejecucion_acciones: AccionesEjecucionSection,
+  ejecucion_herramientas: HerramientasEjecucionSection,
 };
 
 const IMPLEMENTACION_LANDING_CONFIG: LandingConfig = {

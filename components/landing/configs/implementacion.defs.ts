@@ -46,7 +46,7 @@ export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
   {
     key: "implementacion",
     label: "Guía de construcción",
-    eyebrow: "Implementación",
+    eyebrow: "Ejecución",
     theme: "dark",
     backdrop: true,
     selfTitled: true,
@@ -68,6 +68,54 @@ export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
        `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
        pintaba como texto pelado. Las dos puertas cerradas a la vez. */
     schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
+  },
+  {
+    /* 2026-09-28 — LAS ACCIONES cierran el hilo del diagnóstico: cada AC ataca causas (F) y mueve
+       objetivos (OBJ). Vienen de las «Acciones coherentes» del diagnóstico de FUNDAUNA, que Elías
+       ubicó acá (Ejecución) y no en el diagnóstico. Van ANTES de la arquitectura: son el QUÉ; la
+       arquitectura y los prompts son el CÓMO. */
+    key: "acciones",
+    label: "Acciones",
+    eyebrow: "Qué nos hace falta",
+    theme: "light",
+    sectionType: "ejecucion_acciones",
+    agentGenerated: true,
+    avisoDelChat:
+      "cada acción cita causas (F) y objetivos (OBJ) del diagnóstico: si cambias uno, que siga existiendo allá; códigos AC nuevos, correlativos.",
+    empty: { intro: "", acciones: [] },
+    agentHint: "AC-01…: la acción, su grupo, qué causas (F) ataca, qué objetivos (OBJ) mueve, hub, quick win y si está dentro del alcance.",
+    brief:
+      "El plan de acción que cierra el diagnóstico. `acciones` (5-10), en orden de dependencia: `id` = 'AC-01', 'AC-02'… correlativos; `accion` = la acción en 4-10 palabras ('Captación conectada: formularios nativos, Meta, LinkedIn y Google Ads'); `detalle` = UNA línea con qué destraba para el cliente; " +
+      "`grupo` = UNO de: Planeación · Configuración · Integración · Reportería · Adopción; `ataca` = las causas del DIAGNÓSTICO que ataca ('F1, F2'); `mueve` = los objetivos del DIAGNÓSTICO que mueve ('OBJ-01, OBJ-04'); `hub` = el hub o herramienta ('Sales Hub', 'Smart CRM', 'Breeze'); " +
+      "`quickWin` = 'si' si da resultado en semanas, si no 'no'; `alcance` = 'dentro' si el alcance contratado la cubre, 'fuera' si no (una acción fuera de alcance se lista igual: es la conversación de la siguiente etapa). " +
+      "⛔ Cita SOLO códigos F y OBJ que existan en el diagnóstico; si el diagnóstico no tiene códigos, deja `ataca` y `mueve` vacíos. `intro`: vacío.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        acciones: arrayOf(
+          { id: str, accion: str, detalle: str, grupo: str, ataca: str, mueve: str, hub: str, quickWin: str, alcance: str },
+          ["id", "accion"],
+        ),
+      },
+    },
+  },
+  {
+    key: "herramientas",
+    label: "Herramientas de HubSpot y para qué",
+    eyebrow: "Con qué se construye",
+    theme: "light",
+    sectionType: "ejecucion_herramientas",
+    agentGenerated: true,
+    empty: { intro: "", herramientas: [] },
+    agentHint: "Una fila por herramienta de HubSpot: para qué se usa en este proyecto y en qué acciones (AC).",
+    brief:
+      "Las herramientas de HubSpot que usa este proyecto. `herramientas` (5-12): `herramienta` = el nombre en HubSpot ('Equipos, permisos y propietarios', 'Pipelines de leads y de negocios', 'Customer Agent (Breeze)', 'Help Desk y SLA'); " +
+      "`paraQue` = UNA línea con para qué se usa en ESTE cliente; `acciones` = las AC de arriba que la usan ('AC-02, AC-05'). Solo herramientas que alguna acción usa. `intro`: vacío.",
+    schema: {
+      type: "object",
+      properties: { intro: str, herramientas: arrayOf({ herramienta: str, paraQue: str, acciones: str }, ["herramienta"]) },
+    },
   },
   {
     key: "arquitectura_propiedades",
@@ -198,14 +246,15 @@ export const IMPLEMENTACION_SECTION_DEFS: BCSectionDef[] = [
 /** Template del canvas Implementación para el agente tipado. */
 export const IMPLEMENTACION_TEMPLATE: BcTemplateDef = {
   id: "implementacion_v1",
-  caseLabel: "Implementación",
+  caseLabel: "Ejecución",
   // La tabla de propiedades + pipelines + prompts literales es lo más denso del motor.
   maxTokens: 18000,
   brandVoice: false, // guía INTERNA de trabajo
   features: { useCaseChecklist: false },
   agentIntro:
     "Eres el arquitecto de implementación de Smarteam que escribe la GUÍA DE CONSTRUCCIÓN de un portal de HubSpot: el documento con el que el CSE construye. Lo lee gente que va a ejecutar — precisión sobre prosa.\n\n" +
-    "TU MÉTODO (el orden es la doctrina): PRIMERO la arquitectura — qué propiedades, qué pipelines con qué etapas, qué activos de marketing — derivada de la PLANIFICACIÓN aprobada y del REQUERIMIENTO TÉCNICO. RECIÉN DESPUÉS los prompts para Breeze: cada prompt construye algo decidido arriba, y un prompt que construye algo no decidido, sobra. Pedirle a Breeze que construya sin arquitectura es pedirle que la invente.\n\n" +
+    "EL HILO: el DIAGNÓSTICO une el problema con códigos — síntomas S1…, causas F1…, objetivos OBJ-01…. Esta guía lo cierra: cada ACCIÓN (AC-01…) dice qué causas ataca y qué objetivos mueve, y las herramientas dicen en qué acciones se usan. Cita solo los códigos que existen en el diagnóstico.\n\n" +
+    "TU MÉTODO (el orden es la doctrina): PRIMERO las acciones y después la arquitectura — qué propiedades, qué pipelines con qué etapas, qué activos de marketing — derivada de la PLANIFICACIÓN aprobada y del REQUERIMIENTO TÉCNICO. RECIÉN DESPUÉS los prompts para Breeze: cada prompt construye algo decidido arriba, y un prompt que construye algo no decidido, sobra. Pedirle a Breeze que construya sin arquitectura es pedirle que la invente.\n\n" +
     "LA SPEC DE BREEZE: si el contexto trae la spec (qué puede y qué no puede crear Breeze), respetala al derivar los prompts y marcá `estado: 'listo'`. Si NO hay spec, generá igual con capacidades CONSERVADORAS (propiedades, listas, workflows básicos, formularios — pipelines, objetos custom y permisos NO) y marcá TODO `estado: 'sin_verificar'`: el CSE valida antes de pegar.\n\n" +
     "NO DUPLIQUES el requerimiento técnico: si el canvas de Desarrollo ya definió las propiedades de la integración, referencialas — dos fuentes de verdad divergen y alguien construye la vieja.\n\n" +
     "DISCIPLINA ANTI-ALUCINACIÓN: NUNCA inventes internal names del portal del cliente, ni etapas de pipeline que el plan no justifique. Lo no decidido va con `⚠️ Por validar`. El portal real (si viene en el contexto) manda sobre cualquier supuesto.\n\n" +

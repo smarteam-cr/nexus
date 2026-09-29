@@ -440,6 +440,9 @@ describe("un renderer, un contrato de datos", () => {
     diagnostico_objetivos: "modulo",
     diagnostico_problema: "modulo",
     diagnostico_preguntas: "modulo",
+    // Las acciones AC y sus herramientas: propias de la Ejecución (2026-09-28).
+    ejecucion_acciones: "modulo",
+    ejecucion_herramientas: "modulo",
     site_architecture: "modulo",
     web_methodology: "modulo",
     web_scope: "modulo",
@@ -849,9 +852,11 @@ describe("Implementación: registry completo + keys congeladas", () => {
     // Decisión de negocio 2026-07-25: primero se decide la arquitectura (propiedades,
     // pipelines, marketing) y RECIÉN AHÍ valen los prompts para Breeze. Pedirle a
     // Breeze que construya sin arquitectura decidida es pedirle que la invente.
+    // 2026-09-28: las ACCIONES (el qué, atado a F y OBJ del diagnóstico) y sus herramientas van
+    // primero; la arquitectura y los prompts son el cómo, en el mismo orden de siempre.
     const keys = IMPLEMENTACION_SECTION_DEFS.map((d) => d.key);
     expect(keys).toEqual([
-      "implementacion", "arquitectura_propiedades", "pipelines",
+      "implementacion", "acciones", "herramientas", "arquitectura_propiedades", "pipelines",
       "procesos_marketing", "prompts_breeze", "a_mano", "cierre",
     ]);
     expect(keys.indexOf("prompts_breeze")).toBeGreaterThan(keys.indexOf("arquitectura_propiedades"));

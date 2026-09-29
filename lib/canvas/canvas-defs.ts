@@ -473,11 +473,15 @@ export function exploracionSectionSequence(existingKeys: string[]): string[] {
  */
 export const IMPLEMENTACION_CANVAS: CanvasDefinition = {
   slug: "implementation",
-  name: "Implementación",
+  // «Ejecución» desde el 2026-09-28 (Elías). El slug NO cambia: es la identidad de la pieza.
+  name: "Ejecución",
   isDefault: false,
   order: 5,
   sections: [
     { key: "implementacion",           label: "Guía de construcción" },
+    // El plan de acción que cierra el hilo del diagnóstico (AC → F / OBJ), 2026-09-28.
+    { key: "acciones",                 label: "Acciones" },
+    { key: "herramientas",             label: "Herramientas de HubSpot y para qué" },
     { key: "arquitectura_propiedades", label: "Arquitectura de propiedades" },
     { key: "pipelines",                label: "Pipelines y objetos" },
     { key: "procesos_marketing",       label: "Procesos de marketing" },

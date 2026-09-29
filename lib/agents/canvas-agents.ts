@@ -29,7 +29,7 @@ export const CANVAS_PRIMARY_AGENT: Record<string, CanvasAgentDef> = {
   // canvas igual que el kickoff. `async` porque el runner corre detached (lee handoff +
   // historial + canvases y escribe 6 secciones — no entra en una request corta).
   exploration: { agentId: "agent-exploracion-canvas", label: "Generar exploración", async: true },
-  implementation: { agentId: "agent-implementacion-canvas", label: "Generar implementación", async: true },
+  implementation: { agentId: "agent-implementacion-canvas", label: "Generar ejecución", async: true },
   /* Entrega: el documento de cierre. `async` como los demás — el runner lee handoff,
      kickoff, requerimiento técnico, procesos y las últimas 12 reuniones con transcripción,
      y escribe 9 secciones. No entra en una request corta. */

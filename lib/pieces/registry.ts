@@ -219,7 +219,9 @@ export const PIECES: PieceDefinition[] = [
   },
   {
     slug: "implementation",
-    label: "Implementación",
+    // «Ejecución» desde el 2026-09-28 (Elías): es donde el plan se ejecuta, con sus acciones AC.
+    // El nombre viejo queda en legacyNames para las filas que se crearon con él.
+    label: "Ejecución",
     legacyNames: ["Implementación"],
     scope: "project",
     agentGroup: "implementacion",
