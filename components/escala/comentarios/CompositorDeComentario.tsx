@@ -5,7 +5,7 @@
  *
  * Primero el tipo, porque cambia lo que se pregunta: «no se entiende» pide qué; «no calza con un
  * cliente» pide con qué cliente y qué pasó; «propuesta», qué cambiarías y —si se sabe— qué
- * decisión con el cliente cambiaría (la columna que el manual usa para decidir al descongelar).
+ * decisión con el cliente cambiaría (la columna del manual con la que se decide qué cambia).
  * El perfil de negocio que se está mirando se guarda con el comentario; se puede corregir.
  */
 import { useState } from "react";

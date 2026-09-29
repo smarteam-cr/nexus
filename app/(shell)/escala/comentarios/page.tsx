@@ -11,7 +11,7 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { resolverAncla } from "@/lib/escala/documento/anclas";
 import { leerDocumentoPublicado, leerEscalaVigente } from "@/lib/escala/documento/vigente";
-import { leerCongelamiento } from "@/lib/escala/documento/manual";
+import { leerComoCambia } from "@/lib/escala/documento/manual";
 import { comentariosDisponibles, listarComentarios } from "@/lib/escala/comentarios/consultas";
 import { esResponsable } from "@/lib/escala/comentarios/reglas";
 import Bandeja, { type AnclaEnLaBandeja } from "@/components/escala/Bandeja";
@@ -49,7 +49,7 @@ export default async function BandejaDeLaEscala() {
         version={vigente.escala.version}
         yo={{ email: ctx.user.email, nombre: ctx.teamMember.name, foto: ctx.teamMember.photoUrl }}
         esResponsable={responsable}
-        congelamiento={leerCongelamiento(manual?.texto)}
+        comoCambia={leerComoCambia(manual?.texto)}
       />
     </div>
   );

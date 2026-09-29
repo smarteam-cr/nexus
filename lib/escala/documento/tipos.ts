@@ -130,7 +130,7 @@ export interface ReglaDeAsignacion {
 export interface Escala {
   version: string;
   fecha: string | null;
-  /** «Congelada hasta usarla con cinco a diez clientes reales». */
+  /** El estado del encabezado, tal cual: «En revisión: cambia con el feedback de su responsable…». */
   estado: string | null;
   niveles: NivelDeLaEscala[];
   capas: CapaDeLaEscala[];

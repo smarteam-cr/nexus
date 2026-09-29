@@ -152,10 +152,10 @@ describe("datosDeLaVista", () => {
     }
   });
 
-  it("las novedades son la entrada del historial de ESTA versión; sin manual, sin congelamiento", () => {
+  it("las novedades son la entrada del historial de ESTA versión; sin manual, sin «cómo cambia»", () => {
     const d = datosDeLaVista({ escala: real, area: real.areas[0], ...base });
     expect(d.novedades?.version).toBe(real.version);
-    expect(d.congelamiento).toBeNull();
+    expect(d.comoCambia).toBeNull();
     expect(d.documentos.find((x) => x.clave === "escala")?.version).toBe(real.version);
     expect(d.documentos.find((x) => x.clave === "manual")?.version).toBeNull();
   });

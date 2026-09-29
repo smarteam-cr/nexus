@@ -6,7 +6,7 @@
  */
 import { sinTildes } from "./documento/parsear";
 import type { Cierre, Despues } from "./documento/perfil";
-import type { Congelamiento } from "./documento/manual";
+import type { ComoCambiaLaEscala } from "./documento/manual";
 import { DOCUMENTOS_DE_LA_ESCALA, type DocumentoDeLaEscala } from "./documento/documentos";
 import type {
   Area,
@@ -56,8 +56,8 @@ export interface DatosDeLaVista {
   dependencias: OrdenDeDependencias[];
   /** Qué cambió en esta versión (su entrada del historial). */
   novedades: EntradaDelHistorial | null;
-  /** Por qué está congelada y cuándo se descongela (del manual publicado). */
-  congelamiento: Congelamiento | null;
+  /** Cómo cambia la escala y quién decide (del manual publicado). */
+  comoCambia: ComoCambiaLaEscala | null;
 }
 
 export function datosDeLaVista(args: {
@@ -66,7 +66,7 @@ export function datosDeLaVista(args: {
   publicadaEn: Date;
   aviso: string | null;
   versiones: { documento: string; version: string }[];
-  congelamiento?: Congelamiento | null;
+  comoCambia?: ComoCambiaLaEscala | null;
 }): DatosDeLaVista {
   const { escala, area } = args;
   const prefijo = `${area.id}.`;
@@ -99,7 +99,7 @@ export function datosDeLaVista(args: {
     asignacion: escala.asignacion.filter((r) => r.dimensiones.some((id) => id.startsWith(prefijo))),
     dependencias: escala.dependencias,
     novedades: escala.historial.find((h) => h.version === escala.version) ?? null,
-    congelamiento: args.congelamiento ?? null,
+    comoCambia: args.comoCambia ?? null,
   };
 }
 

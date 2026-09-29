@@ -198,6 +198,8 @@ export default function VistaDeLaEscala({
   };
 
   const congelada = datos.estado?.toLowerCase().includes("congelada");
+  /** «En revisión: cambia con…» → «En revisión»: el estado corto, tal cual lo dice la escala. */
+  const estadoCorto = datos.estado?.split(":")[0].trim() || null;
   const [infoAbierta, setInfoAbierta] = useState(false);
   const publicadaEl = new Date(datos.publicadaEn).toLocaleDateString("es-CR", { day: "numeric", month: "long", year: "numeric" });
 
@@ -217,21 +219,25 @@ export default function VistaDeLaEscala({
               >
                 Versión {datos.version} {infoAbierta ? "▴" : "▾"}
               </button>
-              {congelada && (
+              {estadoCorto && (
                 <button
                   type="button"
                   aria-expanded={infoAbierta}
                   onClick={() => setInfoAbierta((v) => !v)}
-                  className="rounded-full border border-warn-line bg-warn-surface px-2 py-0.5 text-xs font-semibold text-warn-ink hover:brightness-95"
-                  title={`${datos.estado ?? "Congelada"}. Toca para ver qué quiere decir y cuándo se descongela.`}
+                  className={
+                    congelada
+                      ? "rounded-full border border-warn-line bg-warn-surface px-2 py-0.5 text-xs font-semibold text-warn-ink hover:brightness-95"
+                      : "rounded-full border border-line bg-surface-muted px-2 py-0.5 text-xs font-semibold text-fg-secondary hover:bg-surface-hover"
+                  }
+                  title={`${datos.estado}. Toca para ver cómo cambia la escala.`}
                 >
-                  Congelada · solo lectura {infoAbierta ? "▴" : "▾"}
+                  {congelada ? "Congelada · solo lectura" : estadoCorto} {infoAbierta ? "▴" : "▾"}
                 </button>
               )}
             </div>
             <p className="mt-1 text-sm text-fg-secondary">
               Recórrela por área, dimensión y nivel. Si algo no se entiende o no calza con un cliente real, coméntalo ahí mismo: es la
-              materia prima para cuando se descongele.
+              materia prima para mejorarla.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -294,14 +300,14 @@ export default function VistaDeLaEscala({
                 <p className="mt-2 text-sm text-fg-muted">El historial de la escala no trae una entrada para esta versión.</p>
               )}
             </section>
-            {datos.congelamiento && (
-              <section aria-label="Por qué está congelada">
-                <h2 className="text-sm font-semibold text-fg">Por qué está congelada</h2>
-                <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{datos.congelamiento.resumen}</p>
+            {datos.comoCambia && (
+              <section aria-label={datos.comoCambia.titulo}>
+                <h2 className="text-sm font-semibold text-fg">{datos.comoCambia.titulo}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{datos.comoCambia.resumen}</p>
                 <ul className="mt-2 flex flex-col gap-1.5">
-                  {datos.congelamiento.reglas.map((r, i) => (
+                  {datos.comoCambia.reglas.map((r, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-warn-ink" aria-hidden />
+                      <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-fg-muted" aria-hidden />
                       <ParrafoDeLaEscala texto={r} className="text-sm leading-relaxed text-fg-secondary" />
                     </li>
                   ))}

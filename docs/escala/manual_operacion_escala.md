@@ -1,23 +1,20 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.0.0
-escala: 7.0.0
-fecha: 2026-09-26
+version: 1.1.0
+escala: 7.0.1
+fecha: 2026-09-29
 ---
 
 # Manual de operación de la Escala de Rendimiento
 
 Este manual dice cómo trabaja el equipo de Smarteam con la Escala de Rendimiento: quién la aplica y cuándo, cómo se reparte el trabajo entre la IA y el CSE, cómo se sabe que la escala funciona y qué reglas esperan hasta que hagan falta. No define niveles ni criterios —eso lo hace la escala, `escala_rendimiento_smarteam.md`— ni el cálculo —eso lo hace la especificación, `especificacion_calculo_escala.md`—. Si algo de aquí contradice a la escala, manda la escala.
 
-## La escala está congelada
+## Cómo cambia la escala
 
-La versión 7.0.0 de la escala no cambia hasta que se haya usado con cinco a diez clientes reales, y lo mismo vale para la especificación y para las reglas de este manual. Congelarla no es dejar de mejorarla: es juntar evidencia antes de cambiarla, para que cada cambio salga de un caso real y no de una revisión en papel.
+La escala cambia con el uso, y lo mismo vale para la especificación y para las reglas de este manual. Cambia por dos vías: el feedback de su responsable, hoy Elías González, que la revisa en la sección «Escala» de Nexus, y los comentarios del equipo en esa misma sección, donde cada comentario queda anclado al criterio, al nivel o a la dimensión que comenta.
 
-Mientras esté congelada:
-
-- **Solo se corrige lo que impide usarla:** un cálculo que da un resultado absurdo, dos criterios que se contradicen, un texto que el cliente no entiende. La corrección sube el último número de la versión del documento que cambia —por ejemplo, de 7.0.0 a 7.0.1— y se anota en su historial.
-- **Todo lo demás se anota** en Cambios pendientes, al final de este manual, con el caso que lo originó y la decisión que cambiaría. No se aplica, y anotarlo no cambia ninguna versión.
-- **Se descongela** cuando haya al menos cinco clientes con diagnóstico y alguno ya tenga su primera remedición, o al llegar a diez, lo que pase primero. Lo decide el responsable de la escala, hoy Elías González. Ahí se revisan juntos los cambios pendientes: entran los que se repiten en varios casos o cambian una decisión con el cliente.
+- **El equipo comenta; el responsable decide.** Lo que no se entiende, lo que no calza con un cliente y las propuestas se comentan en Nexus. El responsable responde, descarta o pasa cada comentario a cambio pendiente.
+- **Cada cambio es una versión nueva:** se publica en Nexus y se anota en el historial del documento que cambia. Una versión publicada no se reescribe, y un comentario hecho sobre un texto que después cambió se sigue viendo junto al texto nuevo.
 
 ## Quién aplica la escala y cuándo
 
@@ -37,7 +34,7 @@ La guía de exploración —a quién entrevistar, qué pedir y qué observar en 
 
 El diagnóstico puede asistirse con IA: dado el material de la exploración, la IA ubica cada dimensión en su nivel, cita la evidencia que lo sustenta y señala qué tan cerca está del siguiente. Pero la IA propone y un humano confirma. El nivel vale lo que valga la exploración que lo alimenta, y algunas señales son de juicio —"usan el CRM por convicción"— que no se verifican solas desde una entrevista. Cada nivel asignado se acompaña de su evidencia, nunca como caja negra: "Datos en Inicial porque falta X y falta Y".
 
-La regla estricta calcula un nivel, y el CSE lo puede ajustar, o marcar un criterio como que no aplica por la industria o el momento del cliente, siempre con una justificación escrita. Se guardan los dos niveles, el calculado y el ajustado: así el cálculo sigue siendo repetible y el juicio del CSE queda a la vista. Si distintos CSE ajustan una y otra vez el mismo criterio, es la señal de que está mal escrito y hay que corregirlo en la escala. Mientras la escala esté congelada, eso se anota en Cambios pendientes.
+La regla estricta calcula un nivel, y el CSE lo puede ajustar, o marcar un criterio como que no aplica por la industria o el momento del cliente, siempre con una justificación escrita. Se guardan los dos niveles, el calculado y el ajustado: así el cálculo sigue siendo repetible y el juicio del CSE queda a la vista. Si distintos CSE ajustan una y otra vez el mismo criterio, es la señal de que está mal escrito y hay que corregirlo en la escala. Eso se anota en Cambios pendientes.
 
 ## El diagnóstico nunca evalúa al CSE
 
@@ -49,13 +46,13 @@ La escala mide madurez, no resultados, y eso es a propósito. Pero hace falta co
 
 Esa comprobación se hace con clientes, no con prospectos, y con datos que ya existen: el resultado que persigue cada cliente, que se registra en el handoff; el criterio de aceptación de cada caso de uso; y el nivel de cada remedición. Cada cierto tiempo se cruzan esas tres cosas para ver si los clientes que suben de nivel logran sus resultados, y el criterio que no acompaña ese avance se revisa. El momento más claro es cuando un departamento llega a su nivel objetivo: el cliente debería estar viendo el resultado que perseguía, y si no lo ve, se revisa el objetivo o el criterio. Junto con los ajustes del CSE, que señalan criterios mal escritos, es lo que mantiene la escala honesta.
 
-Mientras la escala esté congelada, lo que salga de ese cruce se anota en Cambios pendientes, y es la mejor evidencia para decidir qué cambia al descongelarla.
+Lo que salga de ese cruce se anota en Cambios pendientes, y es la mejor evidencia para decidir qué cambia en la escala.
 
 ## Reglas en espera
 
 Estas reglas estaban en la escala y salieron porque todavía no hay con qué aplicarlas: no hay casos de referencia, ni cuentas con un año de historia, ni suficientes diagnósticos. No se borraron: cada una dice qué la activa y qué se hace mientras tanto.
 
-Una regla se activa cuando pasa su condición y, además, las tres condiciones que se usan en Nexus para cualquier rutina nueva: una persona con nombre que la va a usar, una rutina que ya existe donde vive, y algo nombrado que tiene que mover. Al activarla, vuelve a la escala o a la especificación en la siguiente versión; si no cambia el cálculo, se aplica desde este manual. Si se activa mientras la escala está congelada, se anota como cambio pendiente y entra al descongelar, salvo que sin ella no se pueda seguir usando la escala: entonces entra como corrección.
+Una regla se activa cuando pasa su condición y, además, las tres condiciones que se usan en Nexus para cualquier rutina nueva: una persona con nombre que la va a usar, una rutina que ya existe donde vive, y algo nombrado que tiene que mover. Al activarla, vuelve a la escala o a la especificación en la siguiente versión; si no cambia el cálculo, se aplica desde este manual.
 
 ### Calibración de los CSE
 
@@ -99,7 +96,7 @@ Una regla se activa cuando pasa su condición y, además, las tres condiciones q
 
 ## Cambios pendientes
 
-Aquí se anota toda idea de cambio a la escala mientras está congelada. La anota quien la detecte —consultor, CSE o quien implementa un sistema—, con el caso concreto: qué cliente, qué dimensión y qué pasó. No se aplica: se decide al descongelar, con los casos a la vista.
+Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entró en una versión: la bandeja de comentarios de Nexus lo exporta con estas mismas columnas. Va con el caso concreto cuando lo hay —qué cliente, qué dimensión y qué pasó— y con la decisión que cambiaría.
 
 | Fecha | Qué cambiaría | Quién lo propone | Caso que lo originó | Qué decisión cambiaría |
 |:--|:--|:--|:--|:--|
@@ -107,5 +104,7 @@ Aquí se anota toda idea de cambio a la escala mientras está congelada. La anot
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.1.0 (2026-09-29).** La escala deja de estar congelada: cambia con el feedback de su responsable y con los comentarios del equipo en Nexus («Cómo cambia la escala»). Cambios pendientes pasa a ser la lista de lo aprobado que todavía no entró en una versión. Acompaña a la escala 7.0.1.
 
 **1.0.0 (2026-09-26).** Primera versión, con la escala 7.0.0. Reúne lo que antes estaba en la Parte 2 de la escala sobre el rol de la IA y del CSE y la validación, y agrega el congelamiento, quién aplica la escala y cuándo, las reglas en espera y los cambios pendientes.

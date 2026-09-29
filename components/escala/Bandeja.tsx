@@ -5,8 +5,8 @@
  *
  * Todo el equipo la ve (se evita comentar dos veces lo mismo); el responsable de la escala,
  * además, cambia estados y exporta los cambios pendientes con las columnas del manual.
- * «Agrupar por dimensión» muestra lo que se repite: al descongelar entran, dice el manual, los
- * cambios que se repiten en varios casos o que cambian una decisión con el cliente.
+ * «Agrupar por dimensión» muestra lo que se repite en varios casos: lo que más pesa para decidir
+ * qué cambia en la escala.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,7 +24,7 @@ import {
   type ComentarioVisto,
   type EstadoDeComentario,
 } from "@/lib/escala/comentarios/reglas";
-import type { Congelamiento } from "@/lib/escala/documento/manual";
+import type { ComoCambiaLaEscala } from "@/lib/escala/documento/manual";
 import { almacenDeLaApi, type AlmacenDeLaEscala } from "./comentarios/almacen";
 import { EtiquetaDeEstado } from "./comentarios/ControlDeEstado";
 import TarjetaDeComentario, { type AccionesDeComentario } from "./comentarios/TarjetaDeComentario";
@@ -51,7 +51,7 @@ export default function Bandeja({
   esResponsable,
   almacen = almacenDeLaApi,
   hrefDeLaEscala = (slug, ancla) => `/escala/${slug}?c=${encodeURIComponent(ancla)}`,
-  congelamiento = null,
+  comoCambia = null,
 }: {
   comentarios: ComentarioVisto[];
   anclas: Record<string, AnclaEnLaBandeja>;
@@ -61,8 +61,8 @@ export default function Bandeja({
   esResponsable: boolean;
   almacen?: AlmacenDeLaEscala;
   hrefDeLaEscala?: (slug: string, ancla: string) => string;
-  /** Por qué está congelada y cuándo se descongela (del manual publicado). */
-  congelamiento?: Congelamiento | null;
+  /** Cómo cambia la escala y quién decide (del manual publicado). */
+  comoCambia?: ComoCambiaLaEscala | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -160,12 +160,12 @@ export default function Bandeja({
           <p className="mt-1 text-sm text-fg-secondary">
             Todo el equipo ve todos los comentarios. {esResponsable ? "Tú cambias el estado y decides qué pasa a cambio pendiente." : "El estado lo cambia el responsable de la escala."}
           </p>
-          {congelamiento && congelamiento.reglas.length > 0 && (
+          {comoCambia && comoCambia.reglas.length > 0 && (
             <details className="mt-2 max-w-3xl text-xs text-fg-secondary">
-              <summary className="cursor-pointer text-fg-muted hover:text-fg">Para qué sirven: la escala está congelada (qué se corrige ya y cuándo se descongela)</summary>
-              <p className="mt-2 leading-relaxed">{congelamiento.resumen}</p>
+              <summary className="cursor-pointer text-fg-muted hover:text-fg">Para qué sirven: {comoCambia.titulo.toLowerCase()}</summary>
+              <p className="mt-2 leading-relaxed">{comoCambia.resumen}</p>
               <ul className="mt-1.5 flex flex-col gap-1">
-                {congelamiento.reglas.map((r, i) => (
+                {comoCambia.reglas.map((r, i) => (
                   <li key={i}>
                     <ParrafoDeLaEscala texto={r} className="leading-relaxed" />
                   </li>

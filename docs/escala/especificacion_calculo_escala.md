@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.0.0
-escala: 7.0.0
-fecha: 2026-09-26
+version: 1.0.1
+escala: 7.0.1
+fecha: 2026-09-29
 ---
 
 # Especificación del cálculo de la Escala de Rendimiento
@@ -110,5 +110,7 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.0.1 (2026-09-29).** Acompaña a la escala 7.0.1. No cambia el cálculo.
 
 **1.0.0 (2026-09-26).** Primera versión, con la escala 7.0.0. Reúne lo que antes estaba en la Parte 4 de la escala —identificadores, cálculo, salida, datos y pruebas— y agrega el cálculo del chequeo. El diagnóstico ya no toma resultados de un diagnóstico anterior, qué se trabaja primero queda en dos pasos, y la posición dentro del tramo se redondea hacia abajo.

@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.0.0
-fecha: 2026-09-26
-estado: Congelada hasta usarla con cinco a diez clientes reales
+version: 7.0.1
+fecha: 2026-09-29
+estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
 ---
 
@@ -18,7 +18,7 @@ Las partes dos, tres y cuatro son normativas y se aplican al pie de la letra. Si
 
 Cada criterio de la matriz termina con una etiqueta entre corchetes: su identificador, cómo se verifica y sus marcas. Es para los sistemas y para quien diagnostica; para entender la escala, se puede saltar.
 
-**Versión congelada.** Esta versión no cambia hasta que se haya usado con cinco a diez clientes reales. Solo se corrige lo que impida usarla. Cualquier otra mejora se anota como cambio pendiente en el manual de operación, con el caso que la originó, y se decide al descongelar.
+**Cómo cambia.** La escala cambia con el feedback de su responsable y con los comentarios del equipo en Nexus. Cada cambio sale como una versión nueva y queda en el historial; cómo se decide está en el manual de operación.
 
 ---
 
@@ -537,7 +537,13 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 **Deficiente.** El cliente recibe mensajes y propuestas distintos según el vendedor; la calidad depende de cada uno.
 
+- El mensaje que recibe el cliente cambia según quién lo atienda. `[1.5.D1 · evaluado]`
+- La calidad de la propuesta que recibe el cliente depende del vendedor que le toque. `[1.5.D2 · evaluado · venta con equipo]`
+
 **Inicial.** Hay coherencia incipiente pero no confiable; el mensaje y la propuesta todavía varían notablemente entre reps.
+
+- Hay un mensaje común incipiente, pero todavía no se sostiene en cada punto de contacto. `[1.5.I1 · evaluado]`
+- Dos vendedores todavía presentan la propuesta de forma notablemente distinta. `[1.5.I2 · evaluado · venta con equipo]`
 
 **Funcional.** Hay un ICP escrito y coherencia básica en mensaje y propuesta.
 
@@ -923,6 +929,9 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 **Deficiente.** Sin segmentación; todos reciben el mismo mensaje. La personalización no existe o se limita al nombre en el saludo.
 
+- No hay segmentos: las campañas salen a toda la base con el mismo mensaje. `[2.6.D1 · comprobable]`
+- Los correos no usan más datos del contacto que su nombre. `[2.6.D2 · comprobable]`
+
 **Inicial.** Segmentación rudimentaria y personalización mínima.
 
 - Se segmenta apenas por geografía o demografía. `[2.6.I1 · comprobable]`
@@ -1005,6 +1014,10 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 *Costo de quedarse:* Repites lo que no funciona porque nadie mide qué funcionó: el presupuesto se reparte por costumbre, no por retorno.
 
 **Deficiente.** Las campañas corren hasta agotar presupuesto, sin aprendizaje ni medición de ROI.
+
+- Las campañas se dejan correr hasta que se acaba el presupuesto, sin revisarlas en el camino. `[2.8.D1 · evaluado]`
+- No se mide el retorno de las campañas. `[2.8.D2 · comprobable]`
+- Lo que dejó una campaña no se usa para planear la siguiente. `[2.8.D3 · evaluado]`
 
 **Inicial.** Se analiza solo al cerrar la campaña, tarde.
 
@@ -1140,6 +1153,9 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 - Es imposible reconstruir el viaje del cliente. `[3.3.D2 · comprobable]`
 
 **Inicial.** Datos básicos centralizados pero incompletos; el análisis sigue siendo manual.
+
+- Los datos básicos del cliente y de sus tickets están en un solo sistema, pero incompletos. `[3.3.I1 · comprobable]`
+- Los reportes de servicio se arman a mano, fuera del sistema. `[3.3.I2 · comprobable]`
 
 **Funcional.** El histórico y el contexto del cliente están accesibles, con tickets categorizados.
 
@@ -1496,6 +1512,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.0.1 (2026-09-29).** Ninguna celda de la matriz queda sin criterios: los cinco niveles que solo tenían su descripción —Deficiente e Inicial de Propuesta y Coherencia, Deficiente de Segmentación y de Medición y Aprendizaje, e Inicial de Datos en Servicio— suman como criterios las señales que su descripción ya traía. No cambia el cálculo: Deficiente e Inicial se siguen asignando por la descripción que mejor calza. La escala deja de estar congelada: cambia con el feedback de su responsable y con los comentarios del equipo en Nexus, como dice el manual de operación.
 
 **7.0.0 (2026-09-26).** La escala se separa en tres documentos, sin perder contenido: la escala, para personas; la especificación del cálculo, para los sistemas; y el manual de operación, para el equipo. Queda congelada hasta usarla con cinco a diez clientes reales: solo se corrige lo que impida usarla, y lo demás se anota como cambio pendiente. El test de prospectos pasa a ser el chequeo, que estima el nivel de cada dimensión con una o dos preguntas y lo muestra como estimado; el cálculo criterio por criterio queda para el diagnóstico del CSE, que deja de tener una versión simple y otra profunda. Un criterio sin información ya no deja el nivel por confirmar: el CSE lo busca, y si no lo consigue, cuenta como no cumplido. Qué se trabaja primero se reduce a dos pasos —la capa más baja y, dentro de ella, la dimensión más baja según el orden de dependencias—; el resultado del cliente entra por el nivel objetivo y por el criterio del CSE, que puede cambiar el orden dentro de la capa con la razón escrita. Pasan a reglas en espera, en el manual, la calibración de los CSE, la revisión anual por alguien que no lleva la cuenta, la muestra en equipos grandes, las comparaciones entre empresas y el arrastre de lo evaluado. Ningún criterio ni identificador cambia.
 
