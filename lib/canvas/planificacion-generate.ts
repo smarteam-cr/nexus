@@ -22,6 +22,8 @@
  * prompt ya tenía la regla "sin fechas"; ahora el código la acompaña).
  */
 import { prisma } from "@/lib/db/prisma";
+import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
+import { documentoConContexto } from "@/lib/contexto/documento";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { Prisma } from "@prisma/client";
@@ -117,6 +119,9 @@ export async function runPlanificacionGeneration(opts: {
     adoptionBlock(projectId, project?.clientId ?? null),
   ]);
 
+  // El «Contexto» de este documento (lib/contexto/material-del-documento.ts): sus reuniones y notas.
+  const material = await cargarMaterialDelDocumento(projectId, documentoConContexto("planning")!);
+
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
 
@@ -139,6 +144,10 @@ export async function runPlanificacionGeneration(opts: {
     desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (objetos, dedup, triggers) ===\n${desarrolloCtx}` : "",
     portalCtx ? `\n=== EL PORTAL HOY ===\n${portalCtx}` : "",
     timelineCtx ? `\n${timelineCtx}` : "",
+    material.reuniones
+      ? `\n=== LAS SESIONES DEL CONTEXTO DE LA PLANIFICACIÓN (las reuniones del proyecto con el cliente, curadas por el equipo; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n${material.reuniones}`
+      : "",
+    material.notas ? `\n=== NOTAS DEL EQUIPO PARA LA PLANIFICACIÓN ===\n${material.notas}` : "",
     "",
     "Escribí el plan siguiendo tus instrucciones: rediseño anclado a los procesos reales, ciclo de vida partiendo del portal, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
   ]

@@ -20,18 +20,41 @@
  *    agrega otras (`true`). Si arrancara vacío como el cronograma, el primer diagnóstico saldría sin
  *    reuniones cada vez que el CSE se olvida de elegir. «Con el cliente» es la misma etiqueta que
  *    usan los agentes (`etiquetaDeSala`); una reunión sin participantes registrados no se sugiere.
+ *  · PLANIFICACIÓN y EJECUCIÓN (2026-09-29): la misma regla sugerida que el diagnóstico, cada una
+ *    con su propia columna — sacar una reunión de un documento no la saca de los otros.
  */
 import { linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { linkFeedsTimeline } from "@/lib/timeline/session-feeding";
 
-export type DestinoDeContexto = "handoff" | "cronograma" | "diagnostico";
+export type DestinoDeContexto = "handoff" | "cronograma" | "diagnostico" | "planificacion" | "ejecucion";
+
+/**
+ * Los destinos que arrancan SUGERIDOS (diagnóstico desde el 2026-09-28; planificación y ejecución
+ * desde el 2026-09-29): toda reunión del proyecto con el cliente alimenta sin que nadie la elija, y
+ * cada uno guarda su propio afinado en su columna de `SessionProject`.
+ */
+export const DESTINOS_SUGERIDOS = ["diagnostico", "planificacion", "ejecucion"] as const;
+export type DestinoSugerido = (typeof DESTINOS_SUGERIDOS)[number];
+
+export function esDestinoSugerido(d: DestinoDeContexto): d is DestinoSugerido {
+  return (DESTINOS_SUGERIDOS as readonly string[]).includes(d);
+}
+
+/** La columna de `SessionProject` donde cada destino sugerido guarda la X o el «Agregar». */
+export const COLUMNA_DEL_DESTINO = {
+  diagnostico: "diagnosisOverride",
+  planificacion: "planningOverride",
+  ejecucion: "implementationOverride",
+} as const satisfies Record<DestinoSugerido, string>;
 
 /** `?para=` de la ruta. Cualquier otra cosa es el handoff: es el destino histórico. */
 export function parseDestino(v: string | null | undefined): DestinoDeContexto {
-  return v === "cronograma" || v === "diagnostico" ? v : "handoff";
+  return v === "cronograma" || (v != null && (DESTINOS_SUGERIDOS as readonly string[]).includes(v))
+    ? (v as DestinoDeContexto)
+    : "handoff";
 }
 
-/** Lo mínimo del vínculo sesión↔proyecto que miran las reglas de los tres destinos. */
+/** Lo mínimo del vínculo sesión↔proyecto que miran las reglas de los destinos. */
 export interface VinculoDelPanel {
   included: boolean;
   isPrimary: boolean;
@@ -39,37 +62,46 @@ export interface VinculoDelPanel {
   handoffOverride: boolean | null;
   timelineOverride: boolean | null;
   diagnosisOverride: boolean | null;
+  planningOverride: boolean | null;
+  implementationOverride: boolean | null;
 }
 
 /** El afinado humano del destino: la X (`false`) o «Agregar» (`true`). */
 function afinado(destino: DestinoDeContexto, v: VinculoDelPanel): boolean | null {
   if (destino === "cronograma") return v.timelineOverride;
-  if (destino === "diagnostico") return v.diagnosisOverride;
+  if (esDestinoSugerido(destino)) return v[COLUMNA_DEL_DESTINO[destino]];
   return v.handoffOverride;
 }
 
 /**
- * La regla del DIAGNÓSTICO, sola: agregada a mano entra, sacada no, y sin tocar entra si es con el
- * cliente. La usan el panel (vía `alimenta`) y el runner (vía `getProjectDiagnosisSessions`).
+ * La regla de los destinos SUGERIDOS, sola: agregada a mano entra, sacada no, y sin tocar entra si
+ * es con el cliente. La usan el panel (vía `alimenta`) y los runners (vía `getProjectDocumentSessions`).
  */
+export function linkFeedsDocumento(v: { included: boolean; override: boolean | null }, conElCliente: boolean): boolean {
+  if (!v.included) return false;
+  if (v.override !== null) return v.override;
+  return conElCliente;
+}
+
+/** La del diagnóstico, con su nombre de siempre (mismo resultado que `linkFeedsDocumento`). */
 export function linkFeedsDiagnosis(
   v: { included: boolean; diagnosisOverride: boolean | null },
   conElCliente: boolean,
 ): boolean {
-  if (!v.included) return false;
-  if (v.diagnosisOverride !== null) return v.diagnosisOverride;
-  return conElCliente;
+  return linkFeedsDocumento({ included: v.included, override: v.diagnosisOverride }, conElCliente);
 }
 
 /**
  * ¿Este vínculo alimenta el documento del destino?
  *
  * @param aplica el veredicto de la regla PROPIA del destino para esa reunión: en el HANDOFF,
- *   `classifyHandoffSession`; en el DIAGNÓSTICO, «¿fue con el cliente?». El cronograma no tiene regla.
+ *   `classifyHandoffSession`; en los SUGERIDOS, «¿fue con el cliente?». El cronograma no tiene regla.
  */
 export function alimenta(destino: DestinoDeContexto, v: VinculoDelPanel, aplica: boolean): boolean {
   if (destino === "cronograma") return linkFeedsTimeline(v);
-  if (destino === "diagnostico") return linkFeedsDiagnosis(v, aplica);
+  if (esDestinoSugerido(destino)) {
+    return linkFeedsDocumento({ included: v.included, override: v[COLUMNA_DEL_DESTINO[destino]] }, aplica);
+  }
   // Excluida de la membresía del proyecto (tombstone humano) no alimenta NADA.
   return (
     v.included &&
@@ -101,7 +133,7 @@ export function forzadaAMano(destino: DestinoDeContexto, v: VinculoDelPanel): bo
 export function origenDelVinculo(destino: DestinoDeContexto, v: VinculoDelPanel): string {
   // En el cronograma solo alimenta la elegida, así que el porqué es siempre el mismo.
   if (destino === "cronograma") return "elegida para el cronograma";
-  if (destino === "diagnostico") return forzadaAMano(destino, v) ? "agregada a mano" : "sugerida: reunión con el cliente";
+  if (esDestinoSugerido(destino)) return forzadaAMano(destino, v) ? "agregada a mano" : "sugerida: reunión con el cliente";
   if (forzadaAMano(destino, v)) return "forzada a mano";
   return v.isPrimary ? "primaria" : "confianza alta";
 }
@@ -113,5 +145,5 @@ export function usaReglaDeRelevancia(destino: DestinoDeContexto): boolean {
 
 /** ¿El destino sugiere solo, por «reunión con el cliente»? */
 export function sugiereConElCliente(destino: DestinoDeContexto): boolean {
-  return destino === "diagnostico";
+  return esDestinoSugerido(destino);
 }

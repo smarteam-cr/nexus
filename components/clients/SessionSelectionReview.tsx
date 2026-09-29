@@ -25,6 +25,7 @@ import {
 } from "@/lib/sessions/candidatas-internas";
 import { resumirSala, textoDeSala } from "@/lib/sessions/participantes";
 import { usaReglaDeRelevancia, type DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
+import { documentoDelDestino } from "@/lib/contexto/documento";
 import {
   avisoDelMaterial,
   insigniaDelMaterial,
@@ -153,15 +154,22 @@ export default function SessionSelectionReview({
   const esCronograma = destino === "cronograma";
   /* El DIAGNÓSTICO (2026-09-28) se ve como el handoff —arranca con reuniones que ya alimentan, la X
      las deja como «Excluida» y el buscador ofrece las del cliente— pero lee y escribe en lo suyo. */
-  const esDiagnostico = destino === "diagnostico";
+  /* Diagnóstico, planificación y ejecución (lib/contexto/documento.ts) comparten la regla sugerida y
+     escriben cada uno en SU columna, por la puerta de su pieza. */
+  const docConContexto = documentoDelDestino(destino);
+  const esSugerido = docConContexto !== null;
   /* Cada destino lee su lista y escribe en SU puerta: la X del cronograma nunca toca el handoff. */
   const urlCandidatas = `/api/projects/${projectId}/session-candidates${destino === "handoff" ? "" : `?para=${destino}`}`;
   const urlPuerta = esCronograma
     ? `/api/projects/${projectId}/timeline/sessions`
-    : esDiagnostico
-      ? `/api/projects/${projectId}/contexto/diagnosis/sessions`
+    : docConContexto
+      ? `/api/projects/${projectId}/contexto/${docConContexto.pieza}/sessions`
       : `/api/projects/${projectId}/handoff-sessions`;
-  const documento = esCronograma ? "cronograma" : esDiagnostico ? "diagnóstico" : "handoff";
+  const documento = esCronograma ? "cronograma" : docConContexto ? docConContexto.elDocumento.replace(/^(el|la) /, "") : "handoff";
+  // «del diagnóstico» / «de la planificación», «este diagnóstico» / «esta ejecución»: con género.
+  const esFemenino = docConContexto?.elDocumento.startsWith("la ") ?? false;
+  const delDocumento = `${esFemenino ? "de la" : "del"} ${documento}`;
+  const esteDocumento = `${esFemenino ? "esta" : "este"} ${documento}`;
   /* El cronograma no tiene regla de relevancia: ninguna reunión se destaca ni se atenúa por su
      título (el chip «aplica» es del handoff). */
   const conRegla = usaReglaDeRelevancia(destino);
@@ -585,7 +593,7 @@ export default function SessionSelectionReview({
             <strong>
               {alimentanVacias} {alimentanVacias === 1 ? "reunión alimenta" : "reuniones alimentan"}
             </strong>{" "}
-            este {documento} sin transcripción ni resumen. El documento se va a escribir sobre ese
+            {esteDocumento} sin transcripción ni resumen. El documento se va a escribir sobre ese
             hueco — si tienes las notas, pégalas en <em>Fuentes manuales</em>.
           </p>
         )}
@@ -593,12 +601,12 @@ export default function SessionSelectionReview({
           loading={loading}
           empty={
             errorDeCarga
-              ? `No se pudo cargar la lista de reuniones del ${documento}: recarga la página. Lo que elegiste sigue elegido.`
+              ? `No se pudo cargar la lista de reuniones ${delDocumento}: recarga la página. Lo que elegiste sigue elegido.`
               : esCronograma
                 ? "Todavía no elegiste reuniones para el cronograma. Búscalas en tu calendario o entre las del proyecto."
-                : esDiagnostico
+                : esSugerido
                   ? "Todavía no hay reuniones con el cliente en este proyecto. Agrégalas con “Buscar más sesiones”."
-                  : `Ninguna sesión alimenta este ${documento}. Agrégala con “Buscar más sesiones”.`
+                  : `Ninguna sesión alimenta ${esteDocumento}. Agrégala con “Buscar más sesiones”.`
           }
         >
           {feeding.map((s) => (
@@ -618,7 +626,7 @@ export default function SessionSelectionReview({
               removeTitle={
                 esCronograma
                   ? "Sacar del cronograma (sigue siendo reunión del proyecto)"
-                  : `Excluir del ${documento} (no la desvincula del proyecto)`
+                  : `Excluir ${delDocumento} (no la desvincula del proyecto)`
               }
             />
           ))}

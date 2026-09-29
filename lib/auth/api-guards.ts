@@ -340,7 +340,7 @@ export async function guardTimelineEdit(
  */
 export async function guardContextoDelDocumento(
   projectId: string,
-  seccion: "diagnostico",
+  seccion: "diagnostico" | "planificacion" | "implementacion",
 ): Promise<(Awaited<ReturnType<typeof requirePermission>> & { clientId: string }) | NextResponse> {
   const access = await guardAccessToProject(projectId);
   if (access instanceof NextResponse) return access;

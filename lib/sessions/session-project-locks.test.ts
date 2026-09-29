@@ -28,6 +28,8 @@ function virginLink(overrides: Partial<SessionProjectLockFields> = {}): SessionP
     handoffOverride: null,
     timelineOverride: null,
     diagnosisOverride: null,
+    planningOverride: null,
+    implementationOverride: null,
     ...overrides,
   };
 }
@@ -74,6 +76,11 @@ test("E2 — el «Agregar» del diagnóstico lockea; su X NO (misma razón que e
      diagnóstico», no «esta reunión es de este proyecto» — no puede congelar la clasificación. */
   expect(isLockedLink(virginLink({ diagnosisOverride: true }))).toBe(true);
   expect(isLockedLink(virginLink({ diagnosisOverride: false }))).toBe(false);
+  // Planificación y ejecución (2026-09-29): la misma regla.
+  expect(isLockedLink(virginLink({ planningOverride: true }))).toBe(true);
+  expect(isLockedLink(virginLink({ planningOverride: false }))).toBe(false);
+  expect(isLockedLink(virginLink({ implementationOverride: true }))).toBe(true);
+  expect(isLockedLink(virginLink({ implementationOverride: false }))).toBe(false);
 });
 
 /** Evaluador mínimo del where compartido, con la semántica de SQL para NULL. */
@@ -100,7 +107,11 @@ test("F — el where del vínculo virgen es el negativo EXACTO del candado", () 
       for (const handoffOverride of [null, true, false])
         for (const timelineOverride of [null, true, false])
           for (const diagnosisOverride of [null, true, false])
-            casos.push(virginLink({ reviewedAt, included, handoffOverride, timelineOverride, diagnosisOverride }));
+            for (const planningOverride of [null, true, false])
+              for (const implementationOverride of [null, true, false])
+                casos.push(
+                  virginLink({ reviewedAt, included, handoffOverride, timelineOverride, diagnosisOverride, planningOverride, implementationOverride }),
+                );
   for (const c of casos) {
     expect(coincideConVirgen(c), JSON.stringify(c)).toBe(!isLockedLink(c));
   }

@@ -7,7 +7,7 @@
  * calendario, solo necesita LEERLAS.
  *
  * ── LAS REGLAS QUE NO SE NEGOCIAN ────────────────────────────────────────────
- *  · Las reuniones salen del chokepoint (`getProjectDiagnosisSessions` → `getProjectMemberSessions`):
+ *  · Las reuniones salen del chokepoint (`getProjectDocumentSessions` → `getProjectMemberSessions`):
  *    lo que el panel dice que alimenta es EXACTAMENTE lo que se lee. Pertenencia al cliente y
  *    tombstone no se re-implementan.
  *  · Solo las que YA ocurrieron (`soloOcurridas`): la agenda vive en la misma tabla y una reunión
@@ -18,7 +18,7 @@
  *    nunca se corta el bloque entero a la mitad.
  */
 import { prisma } from "@/lib/db/prisma";
-import { getProjectDiagnosisSessions } from "@/lib/sessions/project-sources";
+import { getProjectDocumentSessions } from "@/lib/sessions/project-sources";
 import { soloOcurridas } from "@/lib/sessions/ocurridas";
 import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
@@ -50,7 +50,7 @@ export async function cargarMaterialDelDocumento(
   doc: DocumentoConContexto,
 ): Promise<MaterialDelDocumento> {
   const [{ sessions }, categorias, notas] = await Promise.all([
-    getProjectDiagnosisSessions(projectId),
+    getProjectDocumentSessions(projectId, doc.destino),
     getSessionCategories(),
     leerNotas(projectId, doc.pieza),
   ]);

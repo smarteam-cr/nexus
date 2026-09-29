@@ -3,6 +3,7 @@ import { guardContextoDelDocumento } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { prepararVinculoManual } from "@/lib/sessions/agregar-sesion";
 import { documentoConContexto } from "@/lib/contexto/documento";
+import { COLUMNA_DEL_DESTINO } from "@/lib/sessions/destinos-de-contexto";
 
 /**
  * POST /api/projects/[projectId]/contexto/[pieza]/sessions — «Contexto» de un DOCUMENTO (2026-09-28).
@@ -50,21 +51,24 @@ export async function POST(
   });
   if (!prep.ok) return NextResponse.json({ error: prep.error }, { status: prep.status });
 
+  // La columna de ESTE documento (diagnosisOverride, planningOverride, implementationOverride).
+  const columna = COLUMNA_DEL_DESTINO[doc.destino];
+
   if (!body.feeds) {
     // `updateMany` por si el clasificador borró el vínculo entre medio: sacar lo que ya no está no es error.
     await prisma.sessionProject.updateMany({
       where: { sessionId, projectId },
-      data: { diagnosisOverride: false },
+      data: { [columna]: false },
     });
     return NextResponse.json({ ok: true });
   }
 
   await prisma.sessionProject.upsert({
     where: { sessionId_projectId: { sessionId, projectId } },
-    create: { sessionId, projectId, source: "manual", diagnosisOverride: true },
-    /* Solo el afinado del DIAGNÓSTICO: el del handoff y el del cronograma no se tocan. Agregarla
-       resucita un tombstone (`included=false`) — sin eso quedaría agregada y sin alimentar nada. */
-    update: { diagnosisOverride: true, included: true },
+    create: { sessionId, projectId, source: "manual", [columna]: true },
+    /* Solo el afinado de ESTE documento: los demás no se tocan. Agregarla resucita un tombstone
+       (`included=false`) — sin eso quedaría agregada y sin alimentar nada. */
+    update: { [columna]: true, included: true },
   });
   return NextResponse.json({ ok: true });
 }

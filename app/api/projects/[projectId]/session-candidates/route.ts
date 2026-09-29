@@ -70,6 +70,8 @@ export async function GET(
       handoffOverride: true,
       timelineOverride: true,
       diagnosisOverride: true,
+      planningOverride: true,
+      implementationOverride: true,
       included: true,
       reviewedAt: true,
       isPrimary: true,

@@ -4,31 +4,39 @@
  *
  * Pedido de Elías (2026-09-28): «así como el cronograma, cada canvas (diagnóstico, planificación,
  * implementación) tenga su espacio para agregar contexto — así queda claro qué sesiones lo están
- * alimentando». Empieza por el diagnóstico. Sumar uno es sumar su fila acá, su columna de afinado en
- * `SessionProject` (una por documento, como `timelineOverride`) y su regla en
+ * alimentando». El diagnóstico entró el 2026-09-28; planificación y ejecución el 2026-09-29. Sumar
+ * uno es sumar su fila acá, su columna de afinado en `SessionProject` y su destino en
  * lib/sessions/destinos-de-contexto.ts. Las notas ya son genéricas (`NotaDeContexto.pieza`).
  *
- * Módulo PURO: lo usan las rutas, el panel y el runner.
+ * Módulo PURO: lo usan las rutas, el panel y los runners.
  */
-import type { DestinoDeContexto } from "@/lib/sessions/destinos-de-contexto";
+import type { DestinoSugerido } from "@/lib/sessions/destinos-de-contexto";
 
 export interface DocumentoConContexto {
   /** Slug de la pieza (lib/pieces/registry.ts): va en la URL y en `NotaDeContexto.pieza`. */
-  pieza: "diagnosis";
+  pieza: "diagnosis" | "planning" | "implementation";
   /** El destino de las reglas del panel. */
-  destino: DestinoDeContexto;
+  destino: DestinoSugerido;
   /** La celda de permisos que habilita curarlo (la de generarlo). */
-  seccion: "diagnostico";
-  /** Cómo se nombra en la pantalla: «Contexto del diagnóstico». */
-  nombre: string;
+  seccion: "diagnostico" | "planificacion" | "implementacion";
+  /** «Contexto del diagnóstico», «Contexto de la planificación». */
+  titulo: string;
+  /** Cómo se nombra en una frase: «el diagnóstico», «la planificación». */
+  elDocumento: string;
 }
 
 export const DOCUMENTOS_CON_CONTEXTO: readonly DocumentoConContexto[] = [
-  { pieza: "diagnosis", destino: "diagnostico", seccion: "diagnostico", nombre: "diagnóstico" },
+  { pieza: "diagnosis", destino: "diagnostico", seccion: "diagnostico", titulo: "Contexto del diagnóstico", elDocumento: "el diagnóstico" },
+  { pieza: "planning", destino: "planificacion", seccion: "planificacion", titulo: "Contexto de la planificación", elDocumento: "la planificación" },
+  { pieza: "implementation", destino: "ejecucion", seccion: "implementacion", titulo: "Contexto de la ejecución", elDocumento: "la ejecución" },
 ];
 
 export function documentoConContexto(pieza: string | null | undefined): DocumentoConContexto | null {
   return DOCUMENTOS_CON_CONTEXTO.find((d) => d.pieza === pieza) ?? null;
+}
+
+export function documentoDelDestino(destino: string): DocumentoConContexto | null {
+  return DOCUMENTOS_CON_CONTEXTO.find((d) => d.destino === destino) ?? null;
 }
 
 /** Tope TOTAL de las notas de un documento: el mismo del cronograma. Una nota sola más larga se rechaza. */

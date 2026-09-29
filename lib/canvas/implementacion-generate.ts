@@ -15,6 +15,8 @@
  * Nunca bloquea — el CSE valida antes de pegar.
  */
 import { prisma } from "@/lib/db/prisma";
+import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
+import { documentoConContexto } from "@/lib/contexto/documento";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { Prisma } from "@prisma/client";
 import { IMPLEMENTACION_CANVAS, implementacionSectionSequence } from "@/lib/canvas/canvas-defs";
@@ -72,6 +74,9 @@ export async function runImplementacionGeneration(opts: {
     project?.clientId ? loadPortalLifecycleContext(project.clientId) : Promise.resolve(""),
   ]);
 
+  // El «Contexto» de este documento (lib/contexto/material-del-documento.ts): sus reuniones y notas.
+  const material = await cargarMaterialDelDocumento(projectId, documentoConContexto("implementation")!);
+
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
 
@@ -92,12 +97,16 @@ export async function runImplementacionGeneration(opts: {
       : "",
     procesosCtx ? `\n=== PROCESOS REALES DEL CLIENTE ===\n${procesosCtx}` : "",
     portalCtx ? `\n=== EL PORTAL HOY ===\n${portalCtx}` : "",
+    material.reuniones
+      ? `\n=== LAS SESIONES DEL CONTEXTO DE LA EJECUCIÓN (las reuniones del proyecto con el cliente, curadas por el equipo; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n${material.reuniones}`
+      : "",
+    material.notas ? `\n=== NOTAS DEL EQUIPO PARA LA EJECUCIÓN ===\n${material.notas}` : "",
     "",
     breeze.count > 0
       ? `=== SPEC DE BREEZE (qué puede y qué no puede crear) ===\n${breeze.text}`
       : "=== SPEC DE BREEZE: NO HAY DOCUMENTOS PUBLICADOS ===\nGenerá los prompts igual con capacidades CONSERVADORAS (propiedades, listas, workflows básicos, formularios; pipelines/objetos custom/permisos NO) y marcá TODOS con estado \"sin_verificar\".",
     "",
-    "Escribí la guía siguiendo tus instrucciones: PRIMERO la arquitectura (propiedades, pipelines, marketing), y los prompts derivados de lo decidido arriba — un prompt que construye algo no decidido, sobra.",
+    "Escribe la guía siguiendo tus instrucciones: PRIMERO las acciones (AC, atadas a las causas F y los objetivos OBJ del diagnóstico) y sus herramientas, después la arquitectura (propiedades, pipelines, marketing), y los prompts derivados de lo decidido arriba — un prompt que construye algo no decidido, sobra.",
   ]
     .filter((x) => x !== "")
     .join("\n");

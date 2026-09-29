@@ -16,6 +16,8 @@ import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-o
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
 import { useMemo, useState } from "react";
+import DocumentoContextSection from "./DocumentoContextSection";
+import { documentoConContexto } from "@/lib/contexto/documento";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
@@ -37,6 +39,8 @@ interface TargetSection {
 const SIN_SECCION =
   "No se pudo guardar ese cambio: esta sección todavía no existe en este documento y no se pudo crear. " +
   "Copiá el texto, recargá la página y volvé a intentarlo.";
+
+const DOC_CONTEXTO = documentoConContexto("planning")!;
 
 export default function PlanificacionWorkspace({
   projectId,
@@ -148,6 +152,10 @@ export default function PlanificacionWorkspace({
   }
 
   return (
+    <>
+    {/* El «Contexto» de este documento (2026-09-29): sus reuniones y notas. FUERA de `.stl`, con
+        los tokens del tema: es del equipo, no del documento. */}
+    <DocumentoContextSection projectId={projectId} doc={DOC_CONTEXTO} generado={hasGeneratedContent} />
     <div className="stl stl-internal">
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
@@ -240,5 +248,6 @@ export default function PlanificacionWorkspace({
         }}
       />
     </div>
+    </>
   );
 }

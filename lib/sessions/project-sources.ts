@@ -19,7 +19,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { asignarDuenioManual } from "./duenio-manual";
 import { linkFeedsTimeline } from "@/lib/timeline/session-feeding";
-import { linkFeedsDiagnosis } from "./destinos-de-contexto";
+import { COLUMNA_DEL_DESTINO, linkFeedsDocumento, type DestinoSugerido } from "./destinos-de-contexto";
 import { etiquetaDeSala } from "./etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
@@ -35,6 +35,8 @@ export interface ProjectSourceSession {
   timelineOverride: boolean | null;
   /** El afinado del «Contexto del diagnóstico» (null = sugerida). Ver destinos-de-contexto.ts. */
   diagnosisOverride: boolean | null;
+  planningOverride: boolean | null;
+  implementationOverride: boolean | null;
   /** Link primario de la sesión en ESTE proyecto (política linkFeedsHandoff aguas abajo). */
   isPrimary: boolean;
   /** Confianza del clasificador para este link (null si manual/legacy). */
@@ -156,6 +158,8 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
       handoffOverride: true,
       timelineOverride: true,
       diagnosisOverride: true,
+      planningOverride: true,
+      implementationOverride: true,
       isPrimary: true,
       confidence: true,
       session: {
@@ -188,6 +192,8 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
       handoffOverride: l.handoffOverride,
       timelineOverride: l.timelineOverride,
       diagnosisOverride: l.diagnosisOverride,
+      planningOverride: l.planningOverride,
+      implementationOverride: l.implementationOverride,
       isPrimary: l.isPrimary,
       confidence: l.confidence,
     });
@@ -242,12 +248,24 @@ export async function getProjectTimelineSessions(projectId: string): Promise<Pro
  * acá: eso lo hace quien arma el material.
  */
 export async function getProjectDiagnosisSessions(projectId: string): Promise<ProjectSourcesResult> {
+  return getProjectDocumentSessions(projectId, "diagnostico");
+}
+
+/**
+ * Lo mismo para cualquier documento con contexto SUGERIDO (diagnóstico, planificación, ejecución —
+ * 2026-09-29): cada uno con su propia columna de afinado, la misma regla que muestra su panel.
+ */
+export async function getProjectDocumentSessions(
+  projectId: string,
+  destino: DestinoSugerido,
+): Promise<ProjectSourcesResult> {
   const [r, categorias] = await Promise.all([getProjectMemberSessions(projectId), getSessionCategories()]);
   const dominiosPropios = buildInternalDomainsSet(categorias);
+  const columna = COLUMNA_DEL_DESTINO[destino];
   return {
     sessions: r.sessions.filter((s) =>
-      linkFeedsDiagnosis(
-        { included: true, diagnosisOverride: s.diagnosisOverride },
+      linkFeedsDocumento(
+        { included: true, override: s[columna] },
         etiquetaDeSala({ participants: s.participants }, dominiosPropios) === "CON EL CLIENTE",
       ),
     ),
@@ -293,6 +311,8 @@ export async function getClientSessions(
     handoffOverride: null,
     timelineOverride: null,
     diagnosisOverride: null,
+    planningOverride: null,
+    implementationOverride: null,
     isPrimary: false,
     confidence: null,
   }));

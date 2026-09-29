@@ -468,7 +468,8 @@ describe("#23 · una lista de reuniones que no cargó no es «0 reuniones elegid
     const panel = sinComentarios(leer("components/clients/SessionSelectionReview.tsx"));
     expect(panel).toContain("if (!cancelled) setErrorDeCarga(true);");
     expect(panel, "un fallo vuelve a contarse como 0").toContain("if (!loading && !errorDeCarga) {");
-    expect(panel).toContain("No se pudo cargar la lista de reuniones del ${documento}: recarga la página.");
+    // Con género desde el 2026-09-29 («del cronograma», «de la planificación»).
+    expect(panel).toContain("No se pudo cargar la lista de reuniones ${delDocumento}: recarga la página.");
     const seccion = sinComentarios(leer("components/canvas/CronogramaContextSection.tsx"));
     expect(seccion).toContain("onErrorDeCarga={setReunionesIlegibles}");
     expect(seccion).toContain('"no se pudieron cargar las reuniones elegidas"');

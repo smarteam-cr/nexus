@@ -98,6 +98,8 @@ export async function classifySessionToProjects(
       handoffOverride: true,
       timelineOverride: true,
       diagnosisOverride: true,
+      planningOverride: true,
+      implementationOverride: true,
     },
   });
   const lockedByProject = new Map(existing.filter(isLockedLink).map((e) => [e.projectId, e]));

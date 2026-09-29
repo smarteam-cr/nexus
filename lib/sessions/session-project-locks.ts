@@ -13,6 +13,8 @@
  *   - timelineOverride === true  → el CSE eligió la reunión en el Contexto del CRONOGRAMA (2026-09-23)
  *   - diagnosisOverride === true → el CSE la agregó en el Contexto del DIAGNÓSTICO (2026-09-28). La X
  *                                  (`false`) no lockea, por la misma razón que la del cronograma.
+ *   - planningOverride / implementationOverride === true → lo mismo en la PLANIFICACIÓN y la
+ *                                  EJECUCIÓN (2026-09-29).
  *
  * Desde la segunda versión (2026-09-23, entra solo lo elegido) la X escribe `null`; un `false` solo
  * queda de la primera. Ninguno de los dos lockea, y el motivo sigue siendo el de abajo.
@@ -40,6 +42,8 @@ export interface SessionProjectLockFields {
   handoffOverride: boolean | null;
   timelineOverride: boolean | null;
   diagnosisOverride: boolean | null;
+  planningOverride: boolean | null;
+  implementationOverride: boolean | null;
 }
 
 /** ¿Un humano tocó este link? Entonces el clasificador no lo modifica ni lo borra. */
@@ -50,7 +54,9 @@ export function isLockedLink(l: SessionProjectLockFields): boolean {
     !l.included ||
     l.handoffOverride !== null ||
     l.timelineOverride === true ||
-    l.diagnosisOverride === true
+    l.diagnosisOverride === true ||
+    l.planningOverride === true ||
+    l.implementationOverride === true
   );
 }
 
@@ -76,5 +82,7 @@ export const WHERE_VINCULO_VIRGEN = {
   AND: [
     { OR: [{ timelineOverride: null }, { timelineOverride: false }] },
     { OR: [{ diagnosisOverride: null }, { diagnosisOverride: false }] },
+    { OR: [{ planningOverride: null }, { planningOverride: false }] },
+    { OR: [{ implementationOverride: null }, { implementationOverride: false }] },
   ],
 };

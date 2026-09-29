@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * components/canvas/DocumentoContextSection.tsx — «CONTEXTO DEL DIAGNÓSTICO» (2026-09-28).
+ * components/canvas/DocumentoContextSection.tsx — el «CONTEXTO» de un documento: diagnóstico
+ * (2026-09-28), planificación y ejecución (2026-09-29).
  *
  * Pedido de Elías: «así como el cronograma, cada canvas tenga su espacio para agregar contexto — así
  * queda más claro cuáles sesiones lo están alimentando». El gemelo de CronogramaContextSection, para
@@ -56,7 +57,7 @@ export default function DocumentoContextSection({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
-        <span className="text-xs font-semibold text-fg">Contexto del {doc.nombre}</span>
+        <span className="text-xs font-semibold text-fg">{doc.titulo}</span>
         {/* Cerrada se sigue leyendo con qué se va a generar. */}
         <span className="text-[11px] text-fg-muted truncate">
           {reunionesIlegibles
@@ -70,11 +71,10 @@ export default function DocumentoContextSection({
       {/* Siempre montado: los contadores de la línea cerrada salen de las columnas. */}
       <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
         <p className="text-[11px] text-fg-muted leading-relaxed">
-          Con esto —más las respuestas a la encuesta, la ficha del cliente, lo que se conversó al vender y la
-          exploración— la IA escribe el {doc.nombre}. Arranca con{" "}
+          Con esto —más las demás fuentes del documento— la IA escribe {doc.elDocumento}. Arranca con{" "}
           <span className="font-medium text-fg-secondary">todas las reuniones del proyecto con el cliente</span>: saca
           las que no sirven y busca las que falten. Si son muchas, se reparten el espacio. Sacarla de acá no la saca
-          del handoff, del cronograma ni del proyecto.
+          de los otros documentos ni del proyecto.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>

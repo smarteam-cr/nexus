@@ -31,6 +31,8 @@ const base: VinculoDelPanel = {
   handoffOverride: null,
   timelineOverride: null,
   diagnosisOverride: null,
+  planningOverride: null,
+  implementationOverride: null,
 };
 
 /** Todas las combinaciones que importan, para comparar contra la regla ORIGINAL del handoff. */
@@ -41,10 +43,14 @@ for (const included of [true, false])
       for (const handoffOverride of [null, true, false])
         for (const timelineOverride of [null, true, false])
           for (const diagnosisOverride of [null, true, false])
-            COMBINACIONES.push({ included, isPrimary, confidence, handoffOverride, timelineOverride, diagnosisOverride });
+            for (const planningOverride of [null, true, false])
+              COMBINACIONES.push({
+                included, isPrimary, confidence, handoffOverride, timelineOverride, diagnosisOverride,
+                planningOverride, implementationOverride: planningOverride === null ? null : !planningOverride,
+              });
 
 describe("el HANDOFF no cambia ni una coma", () => {
-  it("alimenta igual que la regla original, en las 324 combinaciones × aplica/no aplica", () => {
+  it("alimenta igual que la regla original, en las 972 combinaciones × aplica/no aplica", () => {
     for (const v of COMBINACIONES) {
       for (const aplica of [true, false]) {
         const original =
@@ -139,6 +145,33 @@ describe("el DIAGNÓSTICO arranca sugerido", () => {
     for (const v of COMBINACIONES)
       for (const conCliente of [true, false])
         expect(linkFeedsDiagnosis(v, conCliente)).toBe(alimenta("diagnostico", v, conCliente));
+  });
+});
+
+describe("PLANIFICACIÓN y EJECUCIÓN: la misma regla sugerida, cada una en su columna", () => {
+  it("sin tocar, entra si fue con el cliente", () => {
+    for (const d of ["planificacion", "ejecucion"] as const) {
+      expect(alimenta(d, base, true)).toBe(true);
+      expect(alimenta(d, base, false)).toBe(false);
+      expect(sugiereConElCliente(d)).toBe(true);
+      expect(origenDelVinculo(d, base)).toBe("sugerida: reunión con el cliente");
+    }
+  });
+
+  it("⛔ sacar de un documento NO saca de los otros", () => {
+    const sacadaDeLaPlanificacion = { ...base, planningOverride: false };
+    expect(alimenta("planificacion", sacadaDeLaPlanificacion, true)).toBe(false);
+    expect(alimenta("ejecucion", sacadaDeLaPlanificacion, true)).toBe(true);
+    expect(alimenta("diagnostico", sacadaDeLaPlanificacion, true)).toBe(true);
+    const sacadaDelDiagnostico = { ...base, diagnosisOverride: false };
+    expect(alimenta("planificacion", sacadaDelDiagnostico, true)).toBe(true);
+    expect(excluidaAMano("ejecucion", { ...base, implementationOverride: false })).toBe(true);
+    expect(forzadaAMano("ejecucion", { ...base, implementationOverride: true })).toBe(true);
+  });
+
+  it("parseDestino los reconoce", () => {
+    expect(parseDestino("planificacion")).toBe("planificacion");
+    expect(parseDestino("ejecucion")).toBe("ejecucion");
   });
 });
 

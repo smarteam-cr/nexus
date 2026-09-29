@@ -2132,6 +2132,10 @@ model SessionProject {
   // diagnóstico). La regla vive en lib/sessions/destinos-de-contexto.ts. ⚠ true lockea el link contra
   // el clasificador (session-project-locks.ts); null y false no, por la misma razón que el cronograma.
   diagnosisOverride Boolean?
+  // Lo mismo para la PLANIFICACIÓN y la EJECUCIÓN (2026-09-29): cada documento su propio afinado,
+  // con la misma regla sugerida. Sacar una reunión de uno no la saca del otro.
+  planningOverride       Boolean?
+  implementationOverride Boolean?
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador
   createdAt             DateTime @default(now())
