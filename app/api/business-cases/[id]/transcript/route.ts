@@ -3,20 +3,15 @@
  *   GET  → lista los transcripts del caso
  *   POST → adjunta un transcript:
  *           - JSON { source:"PASTED", rawText, fileName? } → texto pegado
- *           - multipart/form-data (file) → sube a Storage + extrae texto
+ *           - JSON { accion:"preparar" | "confirmar", … } → archivo subido DIRECTO a Storage
+ *             desde el navegador (lib/storage/subir-directo.ts) + extracción de texto
  *
  * El transcript alimenta la generación. Gateado con guardSalesAccess.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import {
-  getStorageClient,
-  BUCKET_NAME,
-  MAX_FILE_SIZE,
-  ensureBucket,
-} from "@/lib/storage/client";
-import { extractText } from "@/lib/documents/extract-text";
+import { confirmarDocumento, prepararDocumento } from "@/lib/documents/subida-de-documento";
 import {
   addPastedTranscript,
   addUploadedTranscript,
@@ -67,51 +62,38 @@ export async function POST(
     return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   }
 
-  const contentType = req.headers.get("content-type") ?? "";
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+  const accion = (body as { accion?: unknown })?.accion;
 
-  // ── Archivo adjunto (multipart) → Storage + extracción ─────────────────────
-  if (contentType.includes("multipart/form-data")) {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    if (!file) {
-      return NextResponse.json({ error: "No se adjuntó archivo" }, { status: 400 });
+  // ── Archivo: directo del navegador a Storage (el VPS corta en 1 MB) ─────────
+  // `preparar` da el permiso firmado; `confirmar` valida lo real, extrae el texto y lo registra.
+  // El porqué, en lib/storage/subida-directa.ts.
+  const carpeta = `business-cases/${id}`;
+  if (accion === "preparar") {
+    const permiso = await prepararDocumento(carpeta, body as Record<string, unknown>);
+    if (!permiso.ok) return NextResponse.json({ error: permiso.error }, { status: permiso.status });
+    return NextResponse.json({ signedUrl: permiso.signedUrl, path: permiso.path });
+  }
+  if (accion === "confirmar") {
+    const { path, nombre } = body as { path?: unknown; nombre?: unknown };
+    if (typeof path === "string" && (await prisma.businessCaseTranscript.findFirst({ where: { fileUrl: path }, select: { id: true } }))) {
+      return NextResponse.json({ error: "Ese archivo ya estaba registrado." }, { status: 409 });
     }
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: `Archivo muy grande (máx ${MAX_FILE_SIZE / 1024 / 1024}MB)` },
-        { status: 400 },
-      );
-    }
-    const storage = getStorageClient();
-    if (!storage) {
-      return NextResponse.json(
-        { error: "El almacenamiento de archivos no está configurado." },
-        { status: 503 },
-      );
-    }
-    await ensureBucket();
-
-    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `business-cases/${id}/${Date.now()}_${safe}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const { error: uploadError } = await storage.storage
-      .from(BUCKET_NAME)
-      .upload(path, buffer, { contentType: file.type, upsert: false });
-    if (uploadError) {
-      return NextResponse.json(
-        { error: "Subida falló: " + uploadError.message },
-        { status: 500 },
-      );
-    }
-
-    const rawText = (await extractText(buffer, file.type)) ?? "";
+    const subido = await confirmarDocumento(carpeta, path, nombre);
+    if (!subido.ok) return NextResponse.json({ error: subido.error }, { status: subido.status });
+    const rawText = subido.contenido ?? "";
     const created = await addUploadedTranscript({
       businessCaseId: id,
       rawText,
-      fileName: file.name,
-      fileUrl: path,
-      fileSize: file.size,
-      mimeType: file.type,
+      fileName: subido.nombre,
+      fileUrl: subido.path,
+      fileSize: subido.tamano,
+      mimeType: subido.tipo,
     });
     return NextResponse.json(
       {
@@ -127,12 +109,6 @@ export async function POST(
   }
 
   // ── Texto pegado (JSON) ────────────────────────────────────────────────────
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    body = {};
-  }
   const parsed = PastedTranscriptBody.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

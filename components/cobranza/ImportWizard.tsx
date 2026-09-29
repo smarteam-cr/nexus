@@ -40,6 +40,7 @@ import {
 import { FUENTE_LIBRO_ALEX } from "@/lib/cobranza/libro-alex-lectura";
 import { INPUT_CLS, SELECT_CLS, LABEL_CLS, FILTER_SELECT_CLS, VIA_COBRO_LABEL, TERMINOS_PAGO_LABEL } from "./format";
 import LibroAlexPanel from "./LibroAlexPanel";
+import { subirDirecto } from "@/lib/storage/subir-directo";
 
 // ── Tipos DTO (espejo de las responses de /api/cobranza/import/**) ──────────────
 
@@ -191,14 +192,17 @@ export default function ImportWizard() {
     }
     setBusy(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      if (esLibro) {
-        const subido = await fetchJson<{ libro: { id: string } }>("/api/cobranza/import", { method: "POST", body: fd });
-        setLibroId(subido.libro.id);
+      // Directo a Supabase: el VPS corta todo cuerpo de más de 1 MB (lib/storage/subida-directa.ts).
+      const r = await subirDirecto<{ libro?: { id: string }; batch?: BatchDTO }>({ ruta: "/api/cobranza/import", archivo: file });
+      if (!r.ok) {
+        toast.error(r.error);
         return;
       }
-      const data = await fetchJson<{ batch: BatchDTO }>("/api/cobranza/import", { method: "POST", body: fd });
+      if (esLibro) {
+        if (r.data.libro) setLibroId(r.data.libro.id);
+        return;
+      }
+      const data = r.data as { batch: BatchDTO };
       adoptarBatch(data.batch);
       setAvisoResolver([]);
       setStep("mapear");

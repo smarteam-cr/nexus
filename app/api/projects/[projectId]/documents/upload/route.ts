@@ -1,105 +1,63 @@
+/**
+ * POST /api/projects/[projectId]/documents/upload — subir un documento al proyecto.
+ *
+ * DESDE EL 2026-09-28 EL ARCHIVO NO PASA POR ACÁ: va del navegador directo a Supabase (el nginx del
+ * VPS corta en 1 MB y la pantalla prometía 10). Esta ruta hace los dos pasos que sí son del servidor:
+ *   · `{ accion: "preparar", nombre, tipo, tamano }` → valida lo declarado y da un permiso firmado.
+ *   · `{ accion: "confirmar", path, nombre }` → valida lo REAL, extrae el texto y crea la fila.
+ * El porqué y el flujo, en lib/storage/subida-directa.ts.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
-import {
-  getStorageClient,
-  BUCKET_NAME,
-  MAX_FILE_SIZE,
-  ensureBucket,
-  storagePath,
-  isDocumentMimeAllowed,
-} from "@/lib/storage/client";
-import { extractText } from "@/lib/documents/extract-text";
+import { isDocumentMimeAllowed } from "@/lib/storage/client";
+import { confirmarDocumento, prepararDocumento } from "@/lib/documents/subida-de-documento";
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
-) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  // Verificar que el proyecto existe y obtener clientId
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { id: true, clientId: true },
-  });
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, clientId: true } });
+  if (!project) return NextResponse.json({ error: "Proyecto no existe" }, { status: 404 });
 
-  if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
+  }
+  const carpeta = `${project.clientId}/${projectId}`;
+
+  if (body.accion === "preparar") {
+    // A-17: el tipo se mira ANTES de dar el permiso de subida (y de nuevo, contra lo real, al confirmar).
+    if (!isDocumentMimeAllowed(typeof body.tipo === "string" ? body.tipo : "")) {
+      return NextResponse.json(
+        { error: `Tipo de archivo no permitido (${body.tipo || "desconocido"}). Se aceptan PDF, Office, texto/CSV e imágenes.` },
+        { status: 415 },
+      );
+    }
+    const permiso = await prepararDocumento(carpeta, body);
+    if (!permiso.ok) return NextResponse.json({ error: permiso.error }, { status: permiso.status });
+    return NextResponse.json({ signedUrl: permiso.signedUrl, path: permiso.path });
   }
 
-  const formData = await req.formData();
-  const file = formData.get("file") as File | null;
+  if (body.accion !== "confirmar") return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
 
-  if (!file) {
-    return NextResponse.json({ error: "No file provided" }, { status: 400 });
-  }
+  const subido = await confirmarDocumento(carpeta, body.path, body.nombre);
+  if (!subido.ok) return NextResponse.json({ error: subido.error }, { status: subido.status });
 
-  if (file.size > MAX_FILE_SIZE) {
-    return NextResponse.json({ error: `File too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)` }, { status: 400 });
-  }
-
-  // A-17: el tipo lo decide la allowlist del bucket, ANTES de subir y de intentar extraer
-  // texto. `file.type` lo declara el navegador (se puede mentir), pero cierra el caso común:
-  // un .exe, un .html o un .svg con script guardados como «documento» del cliente.
-  if (!isDocumentMimeAllowed(file.type)) {
-    return NextResponse.json(
-      {
-        error: `Tipo de archivo no permitido (${file.type || "desconocido"}). Se aceptan PDF, Office, texto/CSV e imágenes.`,
-      },
-      { status: 415 },
-    );
-  }
-
-  // Storage debe estar configurado para subir archivos. Si no, error claro
-  // (en vez de explotar al importar el módulo, como pasaba antes).
-  const storage = getStorageClient();
-  if (!storage) {
-    return NextResponse.json(
-      {
-        error:
-          "El almacenamiento de archivos no está configurado (faltan credenciales de Supabase Storage). " +
-          "Mientras tanto, podés agregar documentos por enlace de Google Drive.",
-      },
-      { status: 503 },
-    );
-  }
-
-  // Ensure bucket exists
-  await ensureBucket();
-
-  // Upload to Supabase Storage
-  const path = storagePath(project.clientId, projectId, file.name);
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  const { error: uploadError } = await storage.storage
-    .from(BUCKET_NAME)
-    .upload(path, buffer, {
-      contentType: file.type,
-      upsert: false,
-    });
-
-  if (uploadError) {
-    console.error("[file-upload] Supabase error:", uploadError);
-    return NextResponse.json({ error: "Upload failed: " + uploadError.message }, { status: 500 });
-  }
-
-  // Extract text when possible (TXT, CSV, PDF)
-  const extractedContent = await extractText(buffer, file.type);
-
-  // Create ClientDocument record
   const doc = await prisma.clientDocument.create({
     data: {
       clientId: project.clientId,
       projectId,
-      title: file.name,
+      title: subido.nombre,
       type: "FILE",
-      url: path, // Storage path (not public URL — use signed URLs to access)
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
-      content: extractedContent,
+      url: subido.path, // path de Storage (bucket privado: se lee con enlace firmado)
+      fileName: subido.nombre,
+      fileSize: subido.tamano,
+      mimeType: subido.tipo,
+      content: subido.contenido,
     },
   });
 

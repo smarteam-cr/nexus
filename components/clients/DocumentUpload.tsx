@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { IconCheck } from "@/components/ui";
+import { subirDirecto } from "@/lib/storage/subir-directo";
 
 interface ProjectDocument {
   id: string;
@@ -79,22 +80,9 @@ export default function DocumentUpload({ projectId }: { projectId: string }) {
     for (const file of Array.from(files)) {
       setUploadProgress(`Subiendo ${file.name}...`);
 
-      const formData = new FormData();
-      formData.append("file", file);
-
-      try {
-        const res = await fetch(`/api/projects/${projectId}/documents/upload`, {
-          method: "POST",
-          body: formData,
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error ?? "Error al subir archivo");
-        }
-      } catch {
-        setError("Error de conexión");
-      }
+      // Directo a Supabase: el VPS corta todo cuerpo de más de 1 MB (lib/storage/subida-directa.ts).
+      const r = await subirDirecto({ ruta: `/api/projects/${projectId}/documents/upload`, archivo: file });
+      if (!r.ok) setError(`${file.name}: ${r.error}`);
     }
 
     setUploadProgress(null);

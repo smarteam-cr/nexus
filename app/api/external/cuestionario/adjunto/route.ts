@@ -6,105 +6,76 @@
  * tope y misma extracción de texto que la subida interna), atado a la pestaña. Así el CSE lo ve
  * en los documentos del proyecto y los agentes lo leen con su descripción.
  *
+ * DESDE EL 2026-09-28 el archivo va del navegador DIRECTO a Supabase (el nginx del VPS corta en
+ * 1 MB): `{ accion: "preparar", token, key, descripcion, nombre, tipo, tamano }` → permiso firmado;
+ * `{ accion: "confirmar", token, key, descripcion, path, nombre }` → valida lo real y crea la fila.
+ * Las dos vuelven a resolver el token. Ver lib/storage/subida-directa.ts.
+ *
  * Pública: el token viaja en el body y lo resuelve `lib/cuestionario/externo.ts` en cada llamada.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { TOKEN_RE, adjuntoBorrable, destinoDeAdjunto } from "@/lib/cuestionario/externo";
-import { extractText } from "@/lib/documents/extract-text";
+import { confirmarDocumento, prepararDocumento } from "@/lib/documents/subida-de-documento";
 import { checkExternalWriteRate } from "@/lib/external/write-rate-limit";
-import {
-  BUCKET_NAME,
-  MAX_FILE_SIZE,
-  ensureBucket,
-  getStorageClient,
-  isDocumentMimeAllowed,
-  storagePath,
-} from "@/lib/storage/client";
+import { BUCKET_NAME, getStorageClient } from "@/lib/storage/client";
 
 const MAX_ADJUNTOS_POR_PESTANA = 15;
 
 export async function POST(req: NextRequest) {
-  let form: FormData;
+  let body: Record<string, unknown>;
   try {
-    form = await req.formData();
+    body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Solicitud inválida" }, { status: 400 });
   }
-  const token = form.get("token");
-  const key = form.get("key");
-  const file = form.get("file");
-  const descripcion = (typeof form.get("descripcion") === "string" ? (form.get("descripcion") as string) : "")
-    .trim()
-    .slice(0, 1000);
-
-  if (typeof token !== "string" || !TOKEN_RE.test(token)) {
+  const token = typeof body.token === "string" ? body.token : "";
+  if (!TOKEN_RE.test(token)) {
     return NextResponse.json({ ok: false, error: "Este enlace ya no está disponible." }, { status: 404 });
   }
   if (!checkExternalWriteRate(`cuestionario:${token}`)) {
     return NextResponse.json({ ok: false, error: "Demasiados cambios seguidos. Espera unos segundos." }, { status: 429 });
   }
-  if (!(file instanceof File)) {
-    return NextResponse.json({ ok: false, error: "Elige un archivo." }, { status: 400 });
-  }
+  const descripcion = (typeof body.descripcion === "string" ? body.descripcion : "").trim().slice(0, 1000);
   if (!descripcion) {
     return NextResponse.json({ ok: false, error: "Cuéntanos qué es este documento." }, { status: 400 });
   }
-  if (file.size > MAX_FILE_SIZE) {
-    return NextResponse.json(
-      { ok: false, error: `El archivo pesa más de ${MAX_FILE_SIZE / 1024 / 1024} MB. Prueba con uno más liviano o compártelo por enlace en el contexto.` },
-      { status: 400 },
-    );
-  }
-  // Allowlist ANTES de subir (A-17): `file.type` lo declara el navegador, pero cierra el caso común.
-  if (!isDocumentMimeAllowed(file.type)) {
-    return NextResponse.json(
-      { ok: false, error: "Ese tipo de archivo no se acepta. Puedes subir PDF, Word, Excel, PowerPoint, texto, CSV o imágenes." },
-      { status: 415 },
-    );
-  }
 
-  const destino = await destinoDeAdjunto(token, key);
+  const destino = await destinoDeAdjunto(token, body.key);
   if ("error" in destino) return NextResponse.json(destino.error, { status: destino.error.status });
+  const carpeta = `${destino.clientId}/${destino.projectId}/cuestionario`;
 
-  const ya = await prisma.clientDocument.count({ where: { cuestionarioPestanaId: destino.pestanaId } });
-  if (ya >= MAX_ADJUNTOS_POR_PESTANA) {
-    return NextResponse.json(
-      { ok: false, error: `Esta pestaña ya tiene ${MAX_ADJUNTOS_POR_PESTANA} documentos.` },
-      { status: 409 },
-    );
+  if (body.accion === "preparar") {
+    const ya = await prisma.clientDocument.count({ where: { cuestionarioPestanaId: destino.pestanaId } });
+    if (ya >= MAX_ADJUNTOS_POR_PESTANA) {
+      return NextResponse.json(
+        { ok: false, error: `Esta pestaña ya tiene ${MAX_ADJUNTOS_POR_PESTANA} documentos.` },
+        { status: 409 },
+      );
+    }
+    const permiso = await prepararDocumento(carpeta, body);
+    if (!permiso.ok) return NextResponse.json({ ok: false, error: permiso.error }, { status: permiso.status });
+    return NextResponse.json({ ok: true, signedUrl: permiso.signedUrl, path: permiso.path });
   }
 
-  const storage = getStorageClient();
-  if (!storage) {
-    return NextResponse.json(
-      { ok: false, error: "No podemos recibir archivos en este momento. Compártelo por enlace en el contexto de la pestaña." },
-      { status: 503 },
-    );
-  }
-  await ensureBucket();
-  const path = storagePath(destino.clientId, destino.projectId, file.name);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error } = await storage.storage.from(BUCKET_NAME).upload(path, buffer, { contentType: file.type, upsert: false });
-  if (error) {
-    console.error("[cuestionario] subida falló:", error.message);
-    return NextResponse.json({ ok: false, error: `No se pudo subir el archivo: ${error.message}` }, { status: 500 });
-  }
+  if (body.accion !== "confirmar") return NextResponse.json({ ok: false, error: "Solicitud inválida" }, { status: 400 });
 
-  const content = await extractText(buffer, file.type);
+  const subido = await confirmarDocumento(carpeta, body.path, body.nombre);
+  if (!subido.ok) return NextResponse.json({ ok: false, error: subido.error }, { status: subido.status });
+
   const doc = await prisma.clientDocument.create({
     data: {
       clientId: destino.clientId,
       projectId: destino.projectId,
       cuestionarioPestanaId: destino.pestanaId,
-      title: file.name.slice(0, 200),
+      title: subido.nombre,
       descripcion,
       type: "FILE",
-      url: path,
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
-      content,
+      url: subido.path,
+      fileName: subido.nombre,
+      fileSize: subido.tamano,
+      mimeType: subido.tipo,
+      content: subido.contenido,
     },
     select: { id: true, title: true, descripcion: true, fileSize: true },
   });

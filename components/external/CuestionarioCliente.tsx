@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avanceDePestana, porcentaje } from "@/lib/cuestionario/avance";
 import type { CuestionarioDelCliente, PestanaDelCliente } from "@/lib/cuestionario/externo";
 import { PREGUNTAS_DE_ETAPA } from "@/lib/cuestionario/plantilla";
+import { subirDirecto } from "@/lib/storage/subir-directo";
 import type { Etapa, Pregunta, Respuesta, Respuestas } from "@/lib/cuestionario/tipos";
 
 const TINTA = "#0f1b3d";
@@ -760,18 +761,18 @@ function Adjuntos({
     setSubiendo(true);
     setError(null);
     try {
-      const form = new FormData();
-      form.set("token", token);
-      form.set("key", p.key);
-      form.set("descripcion", descripcion);
-      form.set("file", archivo);
-      const res = await fetch("/api/external/cuestionario/adjunto", { method: "POST", body: form });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.ok) {
-        setError(data?.error ?? "No pudimos subir el archivo. Inténtalo de nuevo.");
+      // El archivo va directo al almacenamiento, sin pasar por nuestro servidor: así no lo corta el
+      // tope de 1 MB del VPS (lib/storage/subida-directa.ts).
+      const r = await subirDirecto<{ adjunto: PestanaDelCliente["adjuntos"][number] }>({
+        ruta: "/api/external/cuestionario/adjunto",
+        archivo,
+        extra: { token, key: p.key, descripcion },
+      });
+      if (!r.ok) {
+        setError(r.error);
         return;
       }
-      onActualizar({ ...p, adjuntos: [...p.adjuntos, data.adjunto] });
+      onActualizar({ ...p, adjuntos: [...p.adjuntos, r.data.adjunto] });
       setArchivo(null);
       setDescripcion("");
       if (input.current) input.current.value = "";

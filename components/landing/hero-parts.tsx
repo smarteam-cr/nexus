@@ -27,6 +27,7 @@ import { IconX } from "@/components/ui/AcceptReject";
 import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 import { LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP, logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
 import type { LandingContext } from "./types";
+import { subirDirecto } from "@/lib/storage/subir-directo";
 
 /** Píldora translúcida sobre el hero oscuro (Portada / Logo del cliente). */
 const PILL: React.CSSProperties = {
@@ -46,14 +47,10 @@ export function CoverButton({
   const upload = async (file: File) => {
     setBusy(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(uploadUrl, { method: "POST", body: fd });
-      const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (res.ok && body.url) onSet(body.url);
-      else toast.error(body.error ?? "No se pudo subir la imagen.");
-    } catch {
-      toast.error("No se pudo subir la imagen (error de red).");
+      // Directo a Supabase: el VPS corta todo cuerpo de más de 1 MB (lib/storage/subida-directa.ts).
+      const r = await subirDirecto<{ url?: string }>({ ruta: uploadUrl, archivo: file });
+      if (r.ok && r.data.url) onSet(r.data.url);
+      else toast.error(r.ok ? "No se pudo subir la imagen." : r.error);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";

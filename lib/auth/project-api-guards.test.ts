@@ -568,14 +568,21 @@ describe("⛔ subir un documento exige un MIME de la allowlist, la extracción t
    */
   const lee = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
 
-  it("el handler de subida rechaza el MIME ANTES de subir", () => {
-    /* La edicion que lo pone en rojo: sacar el if, o moverlo después del .upload( */
+  it("el handler de subida rechaza el MIME ANTES de dar permiso de subir, y de nuevo contra lo real", () => {
+    /* Desde el 2026-09-28 el archivo va del navegador DIRECTO a Supabase (lib/storage/subida-directa.ts):
+       el handler ya no sube nada, da un PERMISO. La allowlist tiene que mirarse antes de darlo, y el
+       confirmar tiene que volver a mirarla sobre el tipo que guardó Storage (el bucket no filtra tipos).
+       La edición que lo pone en rojo: sacar el if, moverlo después del permiso, o confirmar sin validar. */
     const src = lee("app/api/projects/[projectId]/documents/upload/route.ts");
-    const gate = src.indexOf("isDocumentMimeAllowed(file.type)");
-    const subida = src.indexOf(".upload(");
+    const gate = src.indexOf("isDocumentMimeAllowed(");
+    const permiso = src.indexOf("prepararDocumento(");
     expect(gate, "el handler no consulta la allowlist").toBeGreaterThan(-1);
-    expect(subida).toBeGreaterThan(-1);
-    expect(gate, "la allowlist se consulta DESPUÉS de subir").toBeLessThan(subida);
+    expect(permiso).toBeGreaterThan(-1);
+    expect(gate, "la allowlist se consulta DESPUÉS de dar el permiso").toBeLessThan(permiso);
+    expect(src, "el confirmar tiene que pasar por la validación de lo real").toContain("confirmarDocumento(");
+    const comun = lee("lib/documents/subida-de-documento.ts");
+    expect(comun.indexOf("validarSubido("), "confirmarDocumento no valida lo que quedó en Storage").toBeGreaterThan(-1);
+    expect(comun.indexOf("validarSubido("), "se extrae texto ANTES de validar el tipo real").toBeLessThan(comun.indexOf("extractText("));
     expect(isDocumentMimeAllowed("application/pdf")).toBe(true);
     expect(isDocumentMimeAllowed("text/html")).toBe(false);
     expect(isDocumentMimeAllowed("image/svg+xml"), "un SVG puede llevar script").toBe(false);
@@ -803,7 +810,7 @@ describe("C-22: el logo tiene tope de 300 KB, con el porqué, en TODAS las rutas
     }
   });
 
-  it("⛔ el error del almacenamiento NO se tira: las seis rutas propagan el motivo", () => {
+  it("⛔ el error del almacenamiento NO se tira: las rutas de logos y fotos propagan el motivo", () => {
     /**
      * `uploadPublicAsset` hacía `if (error) return null` y las seis rutas contestaban «No se pudo
      * subir…». El error real de Supabase —el ÚNICO dato que sirve para arreglarlo— no llegaba ni a
@@ -822,8 +829,6 @@ describe("C-22: el logo tiene tope de 300 KB, con el porqué, en TODAS las rutas
       "app/api/clients/[id]/logo/route.ts",
       "app/api/system/brand-logos/[brand]/route.ts",
       "app/api/system/smarteam-logo/route.ts",
-      "app/api/business-cases/[id]/images/route.ts",
-      "app/api/projects/[projectId]/images/route.ts",
     ];
     for (const rel of RUTAS) {
       const src = sinComentariosC22(leeC22(rel));
