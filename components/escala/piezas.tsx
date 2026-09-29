@@ -258,9 +258,12 @@ export function GrupoDeControl({
   );
 }
 
-/** «al menos 80%» → «Al menos 80%.»: el significado solo, como una frase. */
+/**
+ * «al menos 80%» → «Al menos 80%.»: el significado solo, como una frase. La escala lo escribe para
+ * seguir a «quiere decir» («que se revisa…»): suelto, sin ese «que».
+ */
 function comoFrase(s: string): string {
-  const t = s.trim();
+  const t = s.trim().replace(/^que\s+/i, "");
   return `${t.charAt(0).toUpperCase()}${t.slice(1)}${/[.!?]$/.test(t) ? "" : "."}`;
 }
 

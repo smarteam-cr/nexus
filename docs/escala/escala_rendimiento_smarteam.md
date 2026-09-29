@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.1.0
+version: 7.2.0
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -220,7 +220,7 @@ Que un criterio sea comprobable no significa que se confirme el día de la entre
 
 ## Cómo se leen los criterios
 
-Para que dos personas decidan igual, algunas palabras de los criterios tienen un valor fijo. «La mayoría» quiere decir al menos 80%. «Se sostiene» y «de forma consistente» quieren decir en al menos 4 de las últimas 5 veces que correspondía. «A tiempo» quiere decir dentro del plazo que define el propio proceso del cliente. Y «sin pensarlo», sin consultar el documento.
+Para que dos personas decidan igual, algunas palabras de los criterios tienen un valor fijo. «La mayoría» quiere decir al menos 80%. «Se sostiene» y «de forma consistente» quieren decir en al menos 4 de las últimas 5 veces que correspondía. «A tiempo» quiere decir dentro del plazo que define el propio proceso del cliente. «No se deja envejecer» quiere decir que se revisa y se actualiza al menos una vez por trimestre. Y «sin pensarlo», sin consultar el documento.
 
 **Departamentos de una o dos personas.** Varios criterios suponen un equipo o un líder aparte: roles por escrito, reuniones, que cualquiera explique igual el proceso. En un departamento de una o dos personas se leen como lo que haría falta para que otra persona pudiera tomar el puesto mañana: los roles por escrito son la función escrita; las reuniones del equipo, la revisión periódica con quien supervisa; y que cualquiera explique igual el proceso, que esté documentado de forma que alguien nuevo lo explique igual. Así se conserva lo que Funcional pide —no depender de una persona— aunque el equipo sea de una sola persona.
 
@@ -453,11 +453,14 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 - Hay contactos duplicados o incompletos. `[1.3.D1 · comprobable]`
 - No hay trazabilidad por canal o vendedor; sacar un reporte confiable es imposible. `[1.3.D2 · comprobable]`
+- La información de los compradores está en hojas de cálculo. `[1.3.D3 · evaluado]`
+- No hay registro de las compras de los clientes. `[1.3.D4 · comprobable]`
 
 **Inicial.** Data parcialmente limpia.
 
-- Empieza la depuración pero persisten vacíos (emails, teléfonos). `[1.3.I1 · comprobable]`
-- Hay un traceo básico de qué canal trae cada lead, sin detalle. `[1.3.I2 · comprobable]`
+- Los registros se intentan depurar, pero persisten los vacíos de información. `[1.3.I1 · comprobable]`
+- Hay dificultades para determinar desde qué canal viene cada lead. `[1.3.I2 · comprobable]`
+- No se está guardando toda la información necesaria de los compradores. `[1.3.I3 · comprobable]`
 
 **Funcional.** El reporte de pipeline describe el estado actual con confianza, sin reconstrucción.
 
@@ -467,7 +470,9 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Los duplicados están bajo control, a mano o de forma automática, y no distorsionan los reportes. `[1.3.F2 · comprobable · riesgo]`
 - Todo deal tiene rastreable la fuente del contacto original. `[1.3.F3 · comprobable]`
 - El reporte de pipeline se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4 · comprobable]`
-- El contexto que el área documentó —a quién le vende, qué cuenta como oportunidad calificada, qué ofrece— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[1.3.F5 · declarado · riesgo · hábito]`
+- La información sobre el ICP no se deja envejecer. `[1.3.F5 · declarado · riesgo · hábito]`
+- La definición de oportunidad calificada no se deja envejecer. `[1.3.F6 · declarado · riesgo · hábito]`
+- La documentación sobre las soluciones ofrecidas no se deja envejecer. `[1.3.F7 · declarado · riesgo · hábito]`
 
 **Eficiente.** Aparece el forecast con precisión y la integración operativa.
 
@@ -1448,7 +1453,7 @@ Cuando un criterio de riesgo no se cumple, se le muestra al cliente con estos me
 | Identificador | Criterio | Mensaje cuando no se cumple |
 |:--|:--|:--|
 | `1.3.F2`, `2.3.F3` | Los duplicados están bajo control | Tus reportes pueden estar inflados: hay contactos repetidos sin control. |
-| `1.3.F5`, `2.3.F6`, `3.3.F6` | El contexto se revisa y actualiza cada trimestre | Lo que la IA sabe de tu negocio puede estar desactualizado: tu contexto no se revisa hace más de un trimestre. |
+| `1.3.F5`, `1.3.F6`, `1.3.F7`, `2.3.F6`, `3.3.F6` | El contexto se revisa y actualiza cada trimestre | Lo que la IA sabe de tu negocio puede estar desactualizado: tu contexto no se revisa hace más de un trimestre. |
 | `2.3.F7` | Las personas aceptaron que les escriban | Puedes estar escribiéndole a personas que no te dieron permiso: el número de WhatsApp se puede bloquear y tus correos terminan en spam. |
 
 ## Glosario
@@ -1513,6 +1518,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.2.0 (2026-09-29).** Revisión de Datos de Ventas con su responsable. Deficiente suma que la información de los compradores está en hojas de cálculo y que no hay registro de sus compras; Inicial se dice más simple y suma que no se guarda toda la información necesaria de los compradores. En Funcional, el criterio de riesgo del contexto documentado se parte en tres —el ICP, la definición de oportunidad calificada y la documentación de las soluciones ofrecidas—, cada uno de riesgo y con el mismo mensaje. «No se deja envejecer» pasa a ser una palabra con valor fijo: se revisa y se actualiza al menos una vez por trimestre. Cambia lo que pide Eficiente en Datos de Ventas: dos criterios de riesgo más.
 
 **7.1.0 (2026-09-29).** Primera revisión de Ventas con su responsable, en Procesos y Rutinas y en Tecnología y Automatización. Que cualquier vendedor abra el CRM como herramienta de trabajo pasa de Tecnología a Procesos y Rutinas, con identificador nuevo; el de Tecnología queda retirado. Tecnología pide además en Funcional que la IA utilizada tenga como contexto la información básica de clientes y prospectos, y en Deficiente e Inicial pasa a describir cómo se aplica la IA. El resultado de Funcional en Procesos y Rutinas se reescribe para que sea lo que se logra al cumplir todos sus criterios, y varios criterios se dicen más simple. Cambia lo que pide Funcional en las dos dimensiones.
 
