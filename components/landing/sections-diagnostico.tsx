@@ -79,11 +79,15 @@ export interface PreguntasDiagnosticoData {
 
 const arr = <T,>(v: T[] | undefined): T[] => (Array.isArray(v) ? v : []);
 
-/** La plaquita del código (OBJ-01, F3, S2). Editable como cualquier texto. */
-function Codigo({ value, editable, onCommit, placeholder }: { value: string; editable?: boolean; onCommit: (v: string) => void; placeholder: string }) {
+/**
+ * La plaquita del código (OBJ-01, F3, S2). Editable como cualquier texto. `hueco` = con borde y sin
+ * relleno: los objetivos CUALITATIVOS, para que el tipo se reconozca también cuando el código
+ * aparece suelto (no hace falta un color por objetivo: ya van agrupados).
+ */
+function Codigo({ value, editable, onCommit, placeholder, hueco }: { value: string; editable?: boolean; onCommit: (v: string) => void; placeholder: string; hueco?: boolean }) {
   if (!editable && !value) return null;
   return (
-    <Editable as="span" className="stl-codigo" editable={editable} value={value} placeholder={placeholder} onCommit={onCommit} />
+    <Editable as="span" className={hueco ? "stl-codigo stl-codigo-hueco" : "stl-codigo"} editable={editable} value={value} placeholder={placeholder} onCommit={onCommit} />
   );
 }
 
@@ -127,18 +131,21 @@ export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoDa
   return (
     <>
       <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca los objetivos (opcional)…" />
-      <div className="stl-grid stl-grid-2 stl-obj-grupos">
+      {/* Un grupo por FILA y no dos columnas: con 2 cuantitativos y 6 cualitativos, las columnas
+          dejaban un hueco del alto de cuatro tarjetas (FUNDAUNA, 2026-09-28). */}
+      <div className="stl-obj-grupos">
         {grupos.map((g) => {
           const delGrupo = objetivos.map((o, i) => ({ o, i })).filter(({ o }) => esCualitativo(o.tipo) === g.cuali);
           if (!editable && !delGrupo.length) return null;
           return (
             <div key={g.titulo}>
               <h3 className="stl-obj-titulo">{g.titulo}</h3>
-              <div className="stl-obj-lista">
+              <div className="stl-grid stl-grid-3 stl-obj-lista">
                 {delGrupo.map(({ o, i }) => (
                   <div key={i} className="stl-item stl-card stl-obj">
                     {editable && <RemoveBtn onClick={() => set({ objetivos: removeAt(objetivos, i) })} />}
-                    <Codigo value={o.id} editable={editable} placeholder="OBJ-01" onCommit={(v) => set({ objetivos: replaceAt(objetivos, i, { ...o, id: v }) })} />
+                    <Codigo value={o.id} editable={editable} placeholder="OBJ-01" hueco={g.cuali}
+                      onCommit={(v) => set({ objetivos: replaceAt(objetivos, i, { ...o, id: v }) })} />
                     <Editable as="h3" className="stl-card-title" editable={editable} value={o.titulo} placeholder="Qué se quiere lograr…"
                       onCommit={(v) => set({ objetivos: replaceAt(objetivos, i, { ...o, titulo: v }) })} />
                     <Editable as="p" className="stl-card-detail stl-obj-medida" editable={editable} value={o.medida} placeholder="Cómo se mide y cuál es la meta…"

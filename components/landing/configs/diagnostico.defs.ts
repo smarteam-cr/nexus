@@ -145,7 +145,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     empty: { intro: "", objetivos: [] },
     agentHint: "OBJ-01…: cuantitativos y cualitativos, cada uno con cómo se mide y su meta (o «meta por validar»).",
     brief:
-      "Lo que el cliente quiere lograr, con código. Parten de los RESULTADOS QUE PERSIGUE (el handoff y la ficha del cliente) y de sus respuestas a la encuesta. `objetivos` (5-9): `id` = 'OBJ-01', 'OBJ-02'… correlativos; `tipo` = 'cuantitativo' (se mide con un número) o 'cualitativo' (cambia cómo se trabaja); `titulo` = el objetivo en una frase ('Conocer la tasa de conversión de lead a matrícula por proyecto'); `medida` = cómo se mide y la meta ('Línea base tras el primer ciclo de matrícula; meta numérica por validar'). " +
+      "Lo que el cliente quiere lograr, con código. Parten de los RESULTADOS QUE PERSIGUE (el handoff y la ficha del cliente) y de sus respuestas a la encuesta. `objetivos` (5-9): primero TODOS los cuantitativos y después los cualitativos; `id` = 'OBJ-01', 'OBJ-02'… correlativos en ese orden (Nexus igual los renumera así al guardar); `tipo` = 'cuantitativo' (se mide con un número) o 'cualitativo' (cambia cómo se trabaja); `titulo` = el objetivo en una frase ('Conocer la tasa de conversión de lead a matrícula por proyecto'); `medida` = cómo se mide y la meta ('Línea base tras el primer ciclo de matrícula; meta numérica por validar'). " +
       "⛔ Nunca inventes una meta numérica: si ninguna fuente la da, la medida dice 'meta por validar'. `intro`: vacío salvo que haga falta una frase.",
     schema: obj({
       intro: str,

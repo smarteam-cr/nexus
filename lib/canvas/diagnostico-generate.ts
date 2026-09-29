@@ -48,6 +48,7 @@ import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { fichaParaPrompt, leerFicha } from "@/lib/clients/ficha";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
+import { ordenarObjetivosDelDiagnostico } from "@/lib/canvas/diagnostico-hilo";
 
 /** Asegura el canvas "Diagnóstico" del proyecto + reconcilia sus secciones. Idempotente. */
 export async function ensureDiagnosticoCanvas(projectId: string): Promise<string> {
@@ -143,7 +144,10 @@ export async function runDiagnosticoGeneration(opts: {
     if (d && typeof d === "object") prevDataByKey[s.key] = d;
   }
 
-  const gen = await generateSectionsForTemplate(DIAGNOSTICO_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+  const generado = await generateSectionsForTemplate(DIAGNOSTICO_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+  // Los OBJ en orden (cuantitativos primero, seguidos) y sus menciones reescritas: no se le pide al
+  // modelo, se ordena acá (lib/canvas/diagnostico-hilo.ts).
+  const gen = { ...generado, sections: ordenarObjetivosDelDiagnostico(generado.sections) };
 
   // Persistir 1 CARD/sección EN EL LUGAR. Las solo-lectura y el `cierre` (agentGenerated:false)
   // no vienen en gen.sections → sus bloques quedan intactos hasta el retiro de abajo.
