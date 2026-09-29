@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.3.0
+version: 7.3.1
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -416,7 +416,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Los reportes son manuales y muy básicos. `[1.2.I1 · comprobable]`
 - La aplicación de la IA es básica y depende de las personas. `[1.2.I2 · evaluado]`
 
-**Funcional.** El CRM se usa por convicción y hay automatización simple en producción.
+**Funcional.** Hay automatización simple en producción y la IA trabaja con el contexto de los clientes.
 
 *Resultado:* Ningún lead se pierde por no saber a quién le toca, lo que el vendedor habla con cada prospecto queda en el sistema, y deja de depender de su memoria para dar seguimiento.
 
@@ -471,7 +471,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Todo deal tiene rastreable la fuente del contacto original. `[1.3.F3 · comprobable]`
 - El reporte de pipeline se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4 · comprobable]`
 - La información sobre el ICP no se deja envejecer. `[1.3.F5 · declarado · riesgo · hábito]`
-- La definición de oportunidad calificada no se deja envejecer. `[1.3.F6 · declarado · riesgo · hábito]`
+- La definición de lead calificado no se deja envejecer. `[1.3.F6 · declarado · riesgo · hábito]`
 - La documentación sobre las soluciones ofrecidas no se deja envejecer. `[1.3.F7 · declarado · riesgo · hábito]`
 
 **Eficiente.** Aparece el forecast con precisión y la integración operativa.
@@ -1519,6 +1519,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.3.1 (2026-09-29).** En Datos de Ventas, el criterio de riesgo que no deja envejecer una definición habla de la de lead calificado, no de la de oportunidad calificada. La descripción de Funcional en Tecnología de Ventas deja de decir que el CRM se usa por convicción —ese criterio pasó a Procesos y Rutinas— y dice que hay automatización simple en producción y que la IA trabaja con el contexto de los clientes. No cambia el cálculo.
 
 **7.3.0 (2026-09-29).** Revisión de Equipo y Gobierno de Ventas con su responsable. Deficiente e Inicial se dicen más simple, y Funcional suma que el líder ve en reportes automáticos qué tareas cumplió cada vendedor y cuáles tiene pendientes. Cambia lo que pide Funcional en Equipo y Gobierno de Ventas.
 
