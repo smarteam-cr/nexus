@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.2.0
+version: 7.3.0
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -500,13 +500,13 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 **Deficiente.** Equipo sin estructura formal.
 
-- Cada asesor opera sobre la marcha, sin dueño fijo. `[1.4.D1 · evaluado]`
+- Cada asesor opera sobre la marcha, sin un rol ni responsabilidades claras. `[1.4.D1 · evaluado]`
 - El liderazgo apaga incendios; no hay métricas ni rendición de cuentas. `[1.4.D2 · evaluado]`
 
 **Inicial.** Estructura básica con asignación por proyecto o segmento.
 
-- El liderazgo revisa números básicos en hojas manuales. `[1.4.I1 · declarado]`
-- Los informes son rudimentarios. `[1.4.I2 · comprobable]`
+- El liderazgo revisa números básicos en hojas de cálculo. `[1.4.I1 · declarado]`
+- Los informes de cómo opera el equipo se generan de forma manual. `[1.4.I2 · comprobable]`
 
 **Funcional.** Roles claros y rendición de cuentas en cadencia, con dashboard descriptivo.
 
@@ -516,6 +516,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (valor del pipeline, deals creados, tasa de cierre, volumen) y lo consulta al menos semanalmente. `[1.4.F2 · evaluado · hábito]`
 - Se sostiene la cadencia de revisión (la misma pipeline review) y en ella se rinde cuentas. `[1.4.F3 · evaluado · hábito]`
 - Cada rep tiene una meta clara y reporta avance en cadencia fija. `[1.4.F4 · declarado · hábito]`
+- El líder ve en reportes automáticos qué tareas cumplió cada vendedor y cuáles tiene pendientes. `[1.4.F5 · comprobable · venta con equipo]`
 
 **Eficiente.** El liderazgo monitorea con alertas y orquesta con Marketing.
 
@@ -1518,6 +1519,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.3.0 (2026-09-29).** Revisión de Equipo y Gobierno de Ventas con su responsable. Deficiente e Inicial se dicen más simple, y Funcional suma que el líder ve en reportes automáticos qué tareas cumplió cada vendedor y cuáles tiene pendientes. Cambia lo que pide Funcional en Equipo y Gobierno de Ventas.
 
 **7.2.0 (2026-09-29).** Revisión de Datos de Ventas con su responsable. Deficiente suma que la información de los compradores está en hojas de cálculo y que no hay registro de sus compras; Inicial se dice más simple y suma que no se guarda toda la información necesaria de los compradores. En Funcional, el criterio de riesgo del contexto documentado se parte en tres —el ICP, la definición de oportunidad calificada y la documentación de las soluciones ofrecidas—, cada uno de riesgo y con el mismo mensaje. «No se deja envejecer» pasa a ser una palabra con valor fijo: se revisa y se actualiza al menos una vez por trimestre. Cambia lo que pide Eficiente en Datos de Ventas: dos criterios de riesgo más.
 

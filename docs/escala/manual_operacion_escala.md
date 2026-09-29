@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.1.2
-escala: 7.2.0
+version: 1.1.3
+escala: 7.3.0
 fecha: 2026-09-29
 ---
 
@@ -104,6 +104,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.1.3 (2026-09-29).** Acompaña a la escala 7.3.0. Sin otros cambios.
 
 **1.1.2 (2026-09-29).** Acompaña a la escala 7.2.0. Sin otros cambios.
 
