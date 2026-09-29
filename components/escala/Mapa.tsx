@@ -13,7 +13,10 @@
  *   · Qué muestran las celdas: criterios (al entrar), hábitos, riesgos, los que esconde el perfil
  *     o los comentarios del equipo. Cuanto más hay, más intenso el color.
  *   · Pasar el cursor por una celda la levanta, apaga lo que no es su dimensión ni su nivel y lo
- *     cuenta en el centro (nada tapa la rueda); tocarla la abre al costado, con sus criterios.
+ *     cuenta en el centro (nada tapa la rueda); tocarla la abre al costado, con sus criterios, y
+ *     tocarla de nuevo (o la X del panel) la cierra. Lo que se levanta es solo el dibujo: dónde se
+ *     apunta queda quieto, para que el cursor en un borde no la haga temblar.
+ *   · Pasar el cursor por el nombre de una capa (base operativa, producción) enciende sus dimensiones.
  *   · Tocar una dimensión la abre entera; tocar un nivel enciende los anillos de adentro hasta él:
  *     la escala se sube de a un nivel.
  *   · ▶ en el centro recorre la escala de Deficiente a Óptimo, un nivel a la vez.
@@ -36,6 +39,31 @@ export type SeleccionDelMapa =
   | { tipo: "dimension"; dim: string }
   | { tipo: "nivel"; letra: Letra }
   | null;
+
+/** Lo que está bajo el cursor: lo mismo que se puede elegir, más una capa entera (por su nombre). */
+type FocoDelMapa = SeleccionDelMapa | { tipo: "capa"; clave: ClaveDeCapa };
+
+/** ¿Es lo mismo? Tocar de nuevo lo elegido lo suelta. */
+function mismaSeleccion(a: SeleccionDelMapa, b: SeleccionDelMapa): boolean {
+  if (!a || !b) return a === b;
+  if (a.tipo === "celda") return b.tipo === "celda" && a.dim === b.dim && a.letra === b.letra;
+  if (a.tipo === "dimension") return b.tipo === "dimension" && a.dim === b.dim;
+  return b.tipo === "nivel" && a.letra === b.letra;
+}
+
+/** Un texto partido en líneas de hasta `max` caracteres, sin cortar palabras (el SVG no parte solo). */
+function partirEnLineas(texto: string, max: number): string[] {
+  const out: string[] = [];
+  let linea = "";
+  for (const palabra of texto.split(/\s+/).filter(Boolean)) {
+    if (linea && `${linea} ${palabra}`.length > max) {
+      out.push(linea);
+      linea = palabra;
+    } else linea = linea ? `${linea} ${palabra}` : palabra;
+  }
+  if (linea) out.push(linea);
+  return out;
+}
 
 /** Lo que dice la escala primero (criterios, por defecto); lo que dice el equipo, al final. */
 const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
@@ -194,7 +222,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const [capa, setCapa] = useState<CapaDeDatos>("criterios");
   /** Lo que está bajo el cursor: manda sobre lo elegido mientras dure. */
-  const [encima, setEncima] = useState<SeleccionDelMapa>(null);
+  const [encima, setEncima] = useState<FocoDelMapa>(null);
   const [recorriendo, setRecorriendo] = useState(false);
   const [anuncio, setAnuncio] = useState("");
   /** El contorno de «acá estás» solo se ve navegando con el teclado. */
@@ -238,6 +266,9 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
     onSeleccion(s);
   };
 
+  /** Tocar de nuevo lo elegido lo suelta (lo mismo que la X del panel). */
+  const alternar = (s: SeleccionDelMapa) => elegir(mismaSeleccion(s, seleccion) ? null : s);
+
   /** Desde el nivel elegido (si no es el último) o desde el centro. */
   const recorrer = () => {
     const desde = seleccion?.tipo === "nivel" && seleccion.letra !== LETRAS[LETRAS.length - 1] ? seleccion.letra : LETRAS[0];
@@ -245,8 +276,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
     setRecorriendo(true);
   };
 
-  // El cursor cruza el aire entre celdas: soltar con un respiro evita que el centro parpadee.
-  const ponerEncima = (s: SeleccionDelMapa) => {
+  // Al salir de algo, soltar con un respiro: si el cursor entra enseguida a otra cosa, no parpadea.
+  const ponerEncima = (s: FocoDelMapa) => {
     if (soltarRef.current) {
       window.clearTimeout(soltarRef.current);
       soltarRef.current = null;
@@ -352,19 +383,22 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   };
 
   /** Lo que está en foco: lo que está bajo el cursor o, si no, lo elegido. */
-  const foco = encima ?? seleccion;
+  const foco: FocoDelMapa = encima ?? seleccion;
   /** Apagar lo que no es el foco: fuerte bajo el cursor, suave con algo elegido. */
   const opacidadDe = (d: Dimension, k: number): number => {
     if (!foco) return 1;
     const tenue = encima ? 0.26 : 0.5;
+    if (foco.tipo === "capa") return d.capa === foco.clave ? 1 : tenue;
     if (foco.tipo === "celda") return foco.dim === d.id || LETRAS[k] === foco.letra ? 1 : tenue;
     if (foco.tipo === "dimension") return foco.dim === d.id ? 1 : tenue;
     // Un nivel: encendidos todos los anillos hasta él. La escala se sube de a uno.
     return k <= LETRAS.indexOf(foco.letra) ? 1 : 0.2;
   };
 
-  const focoDim = foco && foco.tipo !== "nivel" ? dims.find((x) => x.id === foco.dim) : undefined;
-  const focoNivel = foco && foco.tipo !== "dimension" ? foco.letra : null;
+  const focoDim = foco && (foco.tipo === "celda" || foco.tipo === "dimension") ? dims.find((x) => x.id === foco.dim) : undefined;
+  const focoNivel = foco && (foco.tipo === "celda" || foco.tipo === "nivel") ? foco.letra : null;
+  /** La capa en foco: la que se nombra o la de la dimensión en foco. */
+  const focoCapa = foco?.tipo === "capa" ? foco.clave : (focoDim?.capa ?? null);
 
   /** El centro de la rueda: lo que se mira, dicho corto. */
   const centro = (() => {
@@ -420,6 +454,22 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         </>
       );
     }
+    if (foco.tipo === "capa") {
+      const c = capas.find((x) => x.clave === foco.clave);
+      return (
+        <>
+          <p className="font-semibold uppercase tracking-wide text-fg-muted" style={{ fontSize: 13 }}>
+            Capa
+          </p>
+          <p className="mt-0.5 font-bold leading-tight text-fg" style={{ fontSize: 24 }}>
+            {c?.nombre}
+          </p>
+          <p className="mt-1 text-fg-muted" style={{ fontSize: 15 }}>
+            {cuantos(dims.filter((d) => d.capa === foco.clave).length, "dimensión", "dimensiones")}
+          </p>
+        </>
+      );
+    }
     if (!focoDim) return null;
     if (foco.tipo === "dimension") {
       const visibles = focoDim.niveles.flatMap((x) => x.criterios).filter((c) => aplica(c, perfil)).length;
@@ -464,8 +514,9 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           <div>
             <h2 className="text-base font-semibold text-fg">Mapa de {area.nombre}</h2>
             <p className="mt-0.5 max-w-xl text-xs text-fg-muted">
-              Cada porción es una dimensión y cada anillo un nivel: Deficiente al centro, Óptimo en el borde. La línea punteada marca la
-              base, Funcional. Toca una celda para abrirla, o «Recorrer», en el centro, para subir la escala de Deficiente a Óptimo.
+              Cada porción es una dimensión y cada anillo un nivel, de Deficiente al centro a Óptimo en el borde. Cada celda es una
+              dimensión en un nivel ({dims[0].id}.F es {dims[0].nombre} en {nombreNivel("F")}) y su número dice cuántos criterios tiene. Tócala
+              para ver sus criterios y otra vez para cerrarla; «Recorrer», en el centro, sube la escala de Deficiente a Óptimo.
             </p>
           </div>
           <GrupoDeControl
@@ -510,21 +561,47 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
             {/* El halo de fondo */}
             <circle cx={CX} cy={CY} r={R_FUERA + 70} style={{ fill: `url(#${uid}-halo)` }} />
 
-            {/* Las dos capas: su nombre en su esquina y una banda en el borde, con el orden en que se trabajan */}
+            {/* Las dos capas, bien a la vista: su nombre al costado de su mitad y una banda en el borde, con el
+                orden en que se trabajan. Pasar el cursor por el nombre enciende sus dimensiones. */}
             {capas.map((c) => {
               const derecha = c.clave === "base";
-              const x = derecha ? W - 14 : 14;
-              const ancla = derecha ? "end" : "start";
+              const x = derecha ? CX + R_BANDA + 26 : CX - R_BANDA - 26;
+              const ancla = derecha ? "start" : "end";
+              const nombre = partirEnLineas(c.nombre.toUpperCase(), 10);
+              const descripcion = c.descripcion ? partirEnLineas(c.descripcion, 25) : [];
+              const alto = nombre.length * 34 + descripcion.length * 21;
+              const y0 = CY - alto / 2 + 24;
+              const activa = focoCapa === c.clave;
               return (
-                <g key={c.clave} style={{ pointerEvents: "none" }}>
-                  <text x={x} y={derecha ? 34 : H - 40} style={{ fill: "var(--color-fg-muted)", fontSize: 15, fontWeight: 700, letterSpacing: "0.08em", textAnchor: ancla }}>
-                    {c.nombre.toUpperCase()}
-                  </text>
-                  {c.descripcion && (
-                    <text x={x} y={derecha ? 56 : H - 18} style={{ fill: "var(--color-fg-muted)", fontSize: 14, textAnchor: ancla }}>
-                      {c.descripcion}
+                <g
+                  key={c.clave}
+                  onMouseEnter={() => ponerEncima({ tipo: "capa", clave: c.clave })}
+                  onMouseLeave={soltarEncima}
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <rect x={derecha ? x - 8 : x - 232} y={y0 - 32} width={240} height={alto + 22} style={{ fill: "transparent" }} />
+                  {nombre.map((linea, j) => (
+                    <text
+                      key={linea}
+                      x={x}
+                      y={y0 + j * 34}
+                      style={{
+                        fill: activa ? "var(--color-brand)" : "var(--color-fg)",
+                        fontSize: 30,
+                        fontWeight: 800,
+                        letterSpacing: "0.02em",
+                        textAnchor: ancla,
+                        transition: "fill 160ms",
+                      }}
+                    >
+                      {linea}
                     </text>
-                  )}
+                  ))}
+                  {descripcion.map((linea, j) => (
+                    <text key={linea} x={x} y={y0 + nombre.length * 34 - 6 + j * 21} style={{ fill: "var(--color-fg-muted)", fontSize: 16, textAnchor: ancla }}>
+                      {linea}
+                    </text>
+                  ))}
                 </g>
               );
             })}
@@ -532,9 +609,21 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               const [g0, g1] = MITAD[c.clave];
               const filas = ordenes.get(c.clave) ?? [];
               const orden = filas.length === 1 ? filas[0] : null;
+              const activa = focoCapa === c.clave;
               return (
                 <g key={c.clave}>
-                  <path d={arco(R_BANDA, g0 + 1, g1 - 1)} style={{ fill: "none", stroke: "var(--color-line)", strokeWidth: 6, strokeLinecap: "round" }} />
+                  <path
+                    d={arco(R_BANDA, g0 + 1, g1 - 1)}
+                    style={{
+                      fill: "none",
+                      stroke: activa ? "var(--color-brand)" : "var(--color-fg-muted)",
+                      strokeOpacity: activa ? 0.85 : 0.3,
+                      strokeWidth: 10,
+                      strokeLinecap: "round",
+                      pointerEvents: "none",
+                      transition: "stroke 160ms, stroke-opacity 160ms",
+                    }}
+                  />
                   {orden &&
                     dims
                       .filter((d) => d.capa === c.clave)
@@ -566,7 +655,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               ref={grupoRef}
               tabIndex={0}
               role="group"
-              aria-label="Celdas de la rueda. Flechas para moverte, Enter para comentar."
+              aria-label="Celdas de la rueda. Flechas para moverte, Enter para comentar, Escape para cerrar."
               onKeyDown={alTeclado}
               onFocus={() => setConFoco(true)}
               onBlur={() => setConFoco(false)}
@@ -579,7 +668,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                 return d.niveles.map((nv, k) => {
                   const [r0, r1] = anillo(k);
                   const v = valores.get(nv.id)!;
-                  const elegido = seleccion?.tipo === "celda" && seleccion.dim === d.id && seleccion.letra === nv.letra;
+                  const esta = { tipo: "celda" as const, dim: d.id, letra: nv.letra };
+                  const elegido = mismaSeleccion(esta, seleccion);
                   const enfocado = conFoco && activa.dim === d.id && activa.letra === nv.letra;
                   const levantado = elegido || (encima?.tipo === "celda" && encima.dim === d.id && encima.letra === nv.letra);
                   const [tx, ty] = polar(medio, (r0 + r1) / 2);
@@ -590,50 +680,54 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                     <g
                       key={nv.id}
                       className="cursor-pointer"
-                      style={{
-                        opacity: opacidadDe(d, k),
-                        transform: `translate(${f(px)}px, ${f(py)}px)`,
-                        transition: "opacity 180ms ease, transform 180ms ease",
-                      }}
-                      onMouseEnter={() => ponerEncima({ tipo: "celda", dim: d.id, letra: nv.letra })}
+                      style={{ opacity: opacidadDe(d, k), transition: "opacity 180ms ease" }}
+                      onMouseEnter={() => ponerEncima(esta)}
                       onMouseLeave={soltarEncima}
                       onClick={() => {
-                        elegir({ tipo: "celda", dim: d.id, letra: nv.letra });
+                        alternar(esta);
                         grupoRef.current?.focus({ preventScroll: true });
                       }}
                     >
-                      <path
-                        className="escala-rueda-celda"
-                        d={sectorDeAnillo(r0, r1, g0, g1)}
-                        style={{
-                          animationDelay: `${k * 90 + i * 25}ms`,
-                          fill: rayada ? `url(#${uid}-rayado)` : v.valor === 0 ? "var(--color-surface-muted)" : colorDe(nv.letra, v),
-                          fillOpacity: rayada || v.valor === 0 ? 1 : 0.16 + 0.64 * (v.valor / maximo),
-                          stroke: elegido ? "var(--color-fg)" : enfocado ? "var(--color-brand)" : v.valor === 0 || rayada ? "var(--color-line)" : "none",
-                          strokeWidth: elegido ? 3 : enfocado ? 2.5 : 1,
-                          strokeDasharray: enfocado && !elegido ? "5 4" : undefined,
-                          transition: "fill 240ms ease, fill-opacity 240ms ease",
-                        }}
-                      />
-                      {v.valor > 0 && !rayada && (
-                        <text
-                          x={f(tx)}
-                          y={f(ty + 6)}
+                      {/* Lo que se ve: se levanta hacia afuera. No recibe el cursor. */}
+                      <g style={{ transform: `translate(${f(px)}px, ${f(py)}px)`, transition: "transform 180ms ease", pointerEvents: "none" }}>
+                        <path
+                          className="escala-rueda-celda"
+                          d={sectorDeAnillo(r0, r1, g0, g1)}
                           style={{
-                            fill: "var(--color-fg)",
-                            fontSize: 17,
-                            fontWeight: 700,
-                            textAnchor: "middle",
-                            stroke: "var(--color-surface)",
-                            strokeWidth: 3.5,
-                            paintOrder: "stroke",
-                            strokeLinejoin: "round",
-                            pointerEvents: "none",
+                            animationDelay: `${k * 90 + i * 25}ms`,
+                            fill: rayada ? `url(#${uid}-rayado)` : v.valor === 0 ? "var(--color-surface-muted)" : colorDe(nv.letra, v),
+                            fillOpacity: rayada || v.valor === 0 ? 1 : 0.16 + 0.64 * (v.valor / maximo),
+                            stroke: elegido ? "var(--color-fg)" : enfocado ? "var(--color-brand)" : v.valor === 0 || rayada ? "var(--color-line)" : "none",
+                            strokeWidth: elegido ? 3 : enfocado ? 2.5 : 1,
+                            strokeDasharray: enfocado && !elegido ? "5 4" : undefined,
+                            transition: "fill 240ms ease, fill-opacity 240ms ease",
                           }}
-                        >
-                          {v.valor}
-                        </text>
-                      )}
+                        />
+                        {v.valor > 0 && !rayada && (
+                          <text
+                            x={f(tx)}
+                            y={f(ty + 6)}
+                            style={{
+                              fill: "var(--color-fg)",
+                              fontSize: 17,
+                              fontWeight: 700,
+                              textAnchor: "middle",
+                              stroke: "var(--color-surface)",
+                              strokeWidth: 3.5,
+                              paintOrder: "stroke",
+                              strokeLinejoin: "round",
+                            }}
+                          >
+                            {v.valor}
+                          </text>
+                        )}
+                      </g>
+                      {/* Dónde se apunta: quieta y sin aire entre celdas. Si se levantara con la celda, el cursor
+                          en el borde la haría entrar y salir sin parar (temblaba). */}
+                      <path
+                        d={sectorDeAnillo(r0 - AIRE_RADIAL / 2, r1 + AIRE_RADIAL / 2, g0 - AIRE_ANGULAR / 2, g1 + AIRE_ANGULAR / 2)}
+                        style={{ fill: "transparent", pointerEvents: "all" }}
+                      />
                     </g>
                   );
                 });
@@ -695,7 +789,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   onMouseDown={(e) => e.preventDefault()}
                   onMouseEnter={() => ponerEncima({ tipo: "nivel", letra: nv.letra })}
                   onMouseLeave={soltarEncima}
-                  onClick={() => elegir({ tipo: "nivel", letra: nv.letra })}
+                  onClick={() => alternar({ tipo: "nivel", letra: nv.letra })}
                 >
                   <rect x={CX - 44} y={y - 20} width={88} height={28} style={{ fill: "transparent" }} />
                   <text
@@ -743,7 +837,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   onMouseDown={(e) => e.preventDefault()}
                   onMouseEnter={() => ponerEncima({ tipo: "dimension", dim: d.id })}
                   onMouseLeave={soltarEncima}
-                  onClick={() => elegir({ tipo: "dimension", dim: d.id })}
+                  onClick={() => alternar({ tipo: "dimension", dim: d.id })}
                 >
                   <text x={f(x)} y={f(y0)} style={{ textAnchor: ancla, fontSize: 14, fill: "var(--color-fg-muted)", fontFamily: "var(--font-geist-mono), monospace" }}>
                     {d.id}
@@ -845,6 +939,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         perfil={perfil}
         seleccion={seleccion}
         onSeleccion={elegir}
+        onCerrar={() => elegir(null)}
         onLeerDimension={onLeerDimension}
         onVerEnLaMatriz={onVerEnLaMatriz}
       />
@@ -854,11 +949,29 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
 
 // ── El panel del costado: lo elegido en la rueda ──────────────────────────────
 
+/** La X del panel: suelta lo elegido (lo mismo que tocarlo de nuevo en la rueda, o Escape). */
+function BotonCerrar({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Cerrar"
+      title="Cerrar (también: tocarlo de nuevo en la rueda, o Escape)"
+      className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+    >
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+  );
+}
+
 function DetalleDelMapa({
   datos,
   perfil,
   seleccion,
   onSeleccion,
+  onCerrar,
   onLeerDimension,
   onVerEnLaMatriz,
 }: {
@@ -866,6 +979,7 @@ function DetalleDelMapa({
   perfil: Perfil;
   seleccion: SeleccionDelMapa;
   onSeleccion: (s: SeleccionDelMapa) => void;
+  onCerrar: () => void;
   onLeerDimension: (dim: string) => void;
   onVerEnLaMatriz: () => void;
 }) {
@@ -873,7 +987,7 @@ function DetalleDelMapa({
   const { area, niveles } = datos;
   const dims = area.dimensiones;
   const nombreNivel = (l: Letra) => niveles.find((x) => x.letra === l)!.nombre;
-  const caja = "self-start rounded-2xl border border-line bg-surface p-5 xl:sticky xl:top-4";
+  const caja = "relative self-start rounded-2xl border border-line bg-surface p-5 xl:sticky xl:top-4";
 
   if (!seleccion) {
     const total = dims.reduce((s, d) => s + conteoDeDimension(conteos, d.id).total, 0);
@@ -886,7 +1000,7 @@ function DetalleDelMapa({
           <span className="text-2xl font-bold tabular-nums">{total}</span> comentarios · <span className="font-semibold">{abiertos}</span> abiertos
         </p>
         <ul className="mt-4 space-y-1.5 text-xs text-fg-muted">
-          <li>Toca una celda para abrirla, con sus criterios.</li>
+          <li>Toca una celda para ver sus criterios; tócala otra vez (o la X) para cerrarla.</li>
           <li>Toca el nombre de una dimensión para verla entera.</li>
           <li>Toca el nombre de un nivel (arriba, en la rueda) para ver el área en ese nivel.</li>
           <li>«Recorrer», en el centro, sube la escala de Deficiente a Óptimo, un nivel a la vez.</li>
@@ -900,7 +1014,8 @@ function DetalleDelMapa({
     const k = LETRAS.indexOf(seleccion.letra);
     return (
       <aside aria-label="Detalle del nivel" className={caja}>
-        <p className="text-2xs font-bold uppercase tracking-wide text-fg-muted">Así se ve {area.nombre} en</p>
+        <BotonCerrar onClick={onCerrar} />
+        <p className="pr-8 text-2xs font-bold uppercase tracking-wide text-fg-muted">Así se ve {area.nombre} en</p>
         <div className="mt-1 flex items-center gap-2">
           <span className={cn("h-3 w-3 rounded-sm", PUNTO_DE_NIVEL[seleccion.letra])} aria-hidden />
           <h3 className="text-lg font-bold text-fg">{nombreNivel(seleccion.letra)}</h3>
@@ -956,7 +1071,8 @@ function DetalleDelMapa({
     const i = dims.indexOf(d);
     return (
       <aside aria-label="Detalle de la dimensión" className={caja}>
-        <p className="text-2xs text-fg-muted">
+        <BotonCerrar onClick={onCerrar} />
+        <p className="pr-8 text-2xs text-fg-muted">
           <span className="font-mono">{d.id}</span>
           {d.generica && d.generica.nombre !== d.nombre ? ` · ${d.generica.nombre}` : ""}
         </p>
@@ -1003,7 +1119,18 @@ function DetalleDelMapa({
   }
 
   const nv = d.niveles.find((x) => x.letra === seleccion.letra)!;
-  return <DetalleDeCelda datos={datos} perfil={perfil} d={d} nv={nv} onLeerDimension={onLeerDimension} onVerEnLaMatriz={onVerEnLaMatriz} caja={caja} />;
+  return (
+    <DetalleDeCelda
+      datos={datos}
+      perfil={perfil}
+      d={d}
+      nv={nv}
+      onCerrar={onCerrar}
+      onLeerDimension={onLeerDimension}
+      onVerEnLaMatriz={onVerEnLaMatriz}
+      caja={caja}
+    />
+  );
 }
 
 function DetalleDeCelda({
@@ -1011,6 +1138,7 @@ function DetalleDeCelda({
   perfil,
   d,
   nv,
+  onCerrar,
   onLeerDimension,
   onVerEnLaMatriz,
   caja,
@@ -1019,6 +1147,7 @@ function DetalleDeCelda({
   perfil: Perfil;
   d: Dimension;
   nv: Nivel;
+  onCerrar: () => void;
   onLeerDimension: (dim: string) => void;
   onVerEnLaMatriz: () => void;
   caja: string;
@@ -1029,7 +1158,8 @@ function DetalleDeCelda({
   const ocultos = nv.criterios.length - visibles.length;
   return (
     <aside aria-label="Detalle de la celda" className={caja}>
-      <p className="text-2xs text-fg-muted">
+      <BotonCerrar onClick={onCerrar} />
+      <p className="pr-8 text-2xs text-fg-muted">
         <span className="font-mono">{nv.id}</span> · {datos.capas.find((c) => c.clave === d.capa)?.nombre}
       </p>
       <h3 className="mt-0.5 text-lg font-bold leading-tight text-fg">
