@@ -8,8 +8,8 @@
  * este mapa puede llevar encima el nivel de un cliente). Cada cruce es una celda de la matriz.
  *
  * Interactivo a propósito, para recorrer la escala en vez de leerla de corrido:
- *   · Qué muestran los puntos: comentarios, criterios, hábitos, riesgos o lo que cambia con el
- *     perfil elegido. El tamaño es cuántos hay en esa celda.
+ *   · Qué muestran los puntos: criterios (lo que se ve al entrar), hábitos, riesgos, los que
+ *     esconde el perfil elegido o los comentarios del equipo. El tamaño es cuántos hay en esa celda.
  *   · Pasar el cursor por un punto ilumina su dimensión y su nivel y dice qué es; tocarlo abre la
  *     celda al costado, con sus criterios y sus comentarios.
  *   · Tocar el nombre de una dimensión la abre entera; tocar el nombre de un nivel recorre el área
@@ -34,16 +34,12 @@ export type SeleccionDelMapa =
   | { tipo: "nivel"; letra: Letra }
   | null;
 
+/** Lo que dice la escala primero (criterios, por defecto); lo que dice el equipo, al final. */
 const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
-  {
-    clave: "comentarios",
-    etiqueta: "Comentarios",
-    title: "El tamaño de cada punto es cuántos comentarios tiene esa celda. En azul si alguno sigue abierto; en gris si ya se cerraron todos.",
-  },
   {
     clave: "criterios",
     etiqueta: "Criterios",
-    title: "El tamaño de cada punto es cuántos criterios tiene esa celda (con el perfil de negocio elegido, si hay uno).",
+    title: "El tamaño de cada punto es cuántos criterios tiene esa celda (con el perfil de negocio elegido, si hay uno). El color es el del nivel.",
   },
   {
     clave: "habitos",
@@ -60,7 +56,19 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
     etiqueta: "Escondidos por el perfil",
     title: "Cuántos criterios de cada celda NO aplican al perfil de negocio elegido y quedan escondidos. Sirve para ver dónde cambia la escala según cómo vende la empresa.",
   },
+  {
+    clave: "comentarios",
+    etiqueta: "Comentarios del equipo",
+    title: "Cuántos comentarios dejó el equipo en cada celda: lo que no se entiende, lo que no calza con un cliente y las propuestas. En azul si alguno sigue abierto; en gris si ya se cerraron todos.",
+  },
 ];
+
+/** El color y el texto de la leyenda en las capas que pintan los puntos de un solo color. */
+const MUESTRA_DE_CAPA: Record<"habitos" | "riesgos" | "perfil", { color: string; texto: string }> = {
+  habitos: { color: "var(--color-secondary)", texto: "cuantos más hábitos, más grande" },
+  riesgos: { color: "var(--color-warning)", texto: "cuantos más riesgos, más grande" },
+  perfil: { color: "var(--color-info)", texto: "cuantos más escondidos, más grande" },
+};
 
 /** «1 criterio», «3 criterios». */
 const cuantos = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
@@ -99,7 +107,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const { area, niveles, capas } = datos;
   const dims = area.dimensiones;
   const n = dims.length;
-  const [capa, setCapa] = useState<CapaDeDatos>("comentarios");
+  const [capa, setCapa] = useState<CapaDeDatos>("criterios");
   const [encima, setEncima] = useState<{ dim: string; letra: Letra } | null>(null);
   const [anuncio, setAnuncio] = useState("");
   /** El anillo punteado de «acá estás» solo se ve navegando con el teclado. */
@@ -212,7 +220,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           </div>
           <GrupoDeControl
             nombre="Qué muestran los puntos"
-            ayuda="Cada punto es una celda (una dimensión en un nivel). Su tamaño dice cuánto hay ahí de lo que elijas: comentarios, criterios, hábitos, riesgos o criterios escondidos por el perfil."
+            ayuda="Cada punto es una celda (una dimensión en un nivel). Su tamaño dice cuánto hay ahí de lo que elijas: criterios, hábitos, riesgos, criterios escondidos por el perfil o comentarios del equipo."
             className="items-end"
           >
             <Segmentado
@@ -495,12 +503,27 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-fg-muted">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-brand" aria-hidden /> {capa === "comentarios" ? "con comentarios abiertos" : "cuantos más, más grande"}
-          </span>
-          {capa === "comentarios" && (
+          {capa === "comentarios" ? (
+            <>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-full bg-brand" aria-hidden /> con comentarios abiertos
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-full bg-fg-muted" aria-hidden /> solo cerrados
+              </span>
+            </>
+          ) : capa === "criterios" ? (
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-fg-muted" aria-hidden /> solo cerrados
+              <span className="inline-flex gap-0.5" aria-hidden>
+                {LETRAS.map((l) => (
+                  <span key={l} className={cn("h-2.5 w-2.5 rounded-full", PUNTO_DE_NIVEL[l])} />
+                ))}
+              </span>
+              el color es el nivel; cuantos más criterios, más grande
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded-full" style={{ background: MUESTRA_DE_CAPA[capa].color }} aria-hidden /> {MUESTRA_DE_CAPA[capa].texto}
             </span>
           )}
           <span className="inline-flex items-center gap-1.5">
