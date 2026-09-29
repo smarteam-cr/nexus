@@ -80,9 +80,16 @@ export async function subirDirecto<T = Record<string, unknown>>(opts: {
     return { ok: false, error: "Se cortó la conexión mientras se subía el archivo. Inténtalo de nuevo." };
   }
 
-  // 3 · confirmar
+  // 3 · confirmar. ⛔ Con el NOMBRE original (2026-09-28): las rutas lo leen al confirmar —el import de
+  //   cobranza exige la extensión y respondía 415 siempre (y el archivo quedaba en el bucket); los
+  //   documentos lo usan como título, que sin él quedaba «saneado» (sin tildes ni espacios).
+  //   Guarda: lib/storage/subida-directa.test.ts.
   try {
-    const res = await fetch(ruta, { method: "POST", headers, body: JSON.stringify({ ...extra, accion: "confirmar", path }) });
+    const res = await fetch(ruta, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...extra, accion: "confirmar", path, nombre: archivo.name }),
+    });
     const data = await leerJson(res);
     if (!res.ok) return { ok: false, error: mensaje(data, res, "El archivo subió pero no se pudo registrar") };
     return { ok: true, data: (data ?? {}) as T };

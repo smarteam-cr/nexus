@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -88,3 +88,39 @@ describe("⛔ ningún archivo sube a través del VPS", () => {
     expect(/apikey|authorization|ANON_KEY|SECRET/i.test(sinComentarios(src)), "el PUT no lleva claves: el permiso ES la llave").toBe(false);
   });
 });
+
+describe("el confirmar lleva el nombre original del archivo", () => {
+  /* Visto en la auditoría previa al push (2026-09-28): el confirmar iba sin `nombre`. El import de
+     cobranza lo exige (extensión .csv/.xlsx) y respondía 415 SIEMPRE, dejando el archivo en el bucket;
+     los documentos quedaban con el título «saneado». La edición que la pone en rojo: sacar
+     `nombre: archivo.name` del cuerpo del confirmar. */
+  const fetchOriginal = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = fetchOriginal;
+  });
+
+  it("preparar y confirmar mandan el mismo nombre, con tildes y espacios", async () => {
+    const cuerpos: Array<Record<string, unknown>> = [];
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.startsWith("https://almacen.test/")) return new Response("{}", { status: 200 });
+      const cuerpo = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      cuerpos.push(cuerpo);
+      if (cuerpo.accion === "preparar") {
+        return new Response(JSON.stringify({ signedUrl: "https://almacen.test/subir", path: "imports/1_x.xlsx" }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+    const { subirDirecto } = await import("./subir-directo");
+    const archivo = new File(["contenido"], "Libro de Alex — Diagnóstico Q3.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const r = await subirDirecto({ ruta: "/api/cobranza/import", archivo });
+    expect(r.ok).toBe(true);
+    const confirmar = cuerpos.find((c) => c.accion === "confirmar");
+    expect(confirmar, "no hubo confirmar").toBeTruthy();
+    expect(confirmar?.path).toBe("imports/1_x.xlsx");
+    expect(confirmar?.nombre, "el confirmar no lleva el nombre original").toBe("Libro de Alex — Diagnóstico Q3.xlsx");
+  });
+});
+
