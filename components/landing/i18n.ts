@@ -39,9 +39,10 @@ const STRINGS = {
   comoFuncionabaAntes: { es: "Cómo funcionaba antes…", en: "How it used to work…" },
   comoFuncionaAhora: { es: "Cómo funciona ahora…", en: "How it works now…" },
   /* El DIAGNÓSTICO mira solo el hoy: «cómo va a operar» es enfoque y vive en Planificación
-     (decisión de Elías, 2026-09-27). La columna derecha pasa a ser dónde se traba ese hoy. */
-  dondeSeTraba: { es: "Dónde se traba", en: "Where it gets stuck" },
-  dondeSeTrabaPh: { es: "Qué se pierde, se atrasa o depende de una persona…", en: "What gets lost, delayed or depends on one person…" },
+     (decisión de Elías, 2026-09-27). La columna derecha pasa a ser los puntos de fricción de ese
+     hoy. Era «Dónde se traba»; Elías pidió algo más ejecutivo (2026-09-28). */
+  puntosDeFriccion: { es: "Puntos de fricción", en: "Friction points" },
+  puntosDeFriccionPh: { es: "Qué se pierde, se atrasa o depende de una persona…", en: "What gets lost, delayed or depends on one person…" },
   conHubspotSmarteam: { es: "Con HubSpot + Smarteam", en: "With HubSpot + Smarteam" },
   // Las 3 métricas de la portada del kickoff y del cronograma. Estaban escritas a mano en los
   // DOS renderers: el mismo rótulo en dos lugares es uno que puede divergir, y además dejaba

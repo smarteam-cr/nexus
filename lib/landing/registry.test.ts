@@ -1061,12 +1061,12 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
 
   it("solo la Entrega y el Diagnóstico cambian los rótulos; los otros miran hacia adelante", () => {
     /* El Diagnóstico mira SOLO el hoy desde el 2026-09-28 (decisión de Elías: «cómo va a operar»
-       es enfoque y vive en Planificación): su columna derecha dice dónde se traba ese hoy, nunca
+       es enfoque y vive en Planificación): su columna derecha son los puntos de fricción de ese hoy, nunca
        «Con la implementación». */
     expect(DIAGNOSTICO_DEF_BY_KEY["estado_actual"].compara).toEqual({
       izquierda: "hoy",
-      derecha: "dondeSeTraba",
-      phDerecha: "dondeSeTrabaPh",
+      derecha: "puntosDeFriccion",
+      phDerecha: "puntosDeFriccionPh",
     });
     /* «Con la implementación» en un documento de cierre convierte un hecho en una promesa.
        Y al revés: «Ahora» en un diagnóstico afirmaría algo que todavía no pasó. */

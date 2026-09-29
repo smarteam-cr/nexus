@@ -173,9 +173,13 @@ describe("el chat no ve campos que este documento no pinta", () => {
 
   it("⭐ y el renderer los pinta editables, con el rótulo del documento de respaldo", () => {
     const src = leer("components/landing/sections-website.tsx");
-    expect(src).toContain("onCommit={(v) => set({ rotuloPanel: v })}");
-    expect(src).toContain("onCommit={(v) => set({ rotuloRetos: v })}");
+    expect(src).toMatch(/onCommit=\{\(v\) => set\(\{ rotuloPanel: /);
+    expect(src).toMatch(/onCommit=\{\(v\) => set\(\{ rotuloRetos: /);
     /* El orden importa: lo que escribió una persona manda sobre el rótulo del documento. */
-    expect(src).toContain("placeholder={sectionChips?.panel ?? \"\"}");
+    expect(src).toContain("data.rotuloPanel?.trim() || (sectionChips?.panel ?? \"\")");
+    expect(src).toContain("data.rotuloRetos?.trim() || rotuloRetosPorDefecto");
+    /* ⛔ Y el rótulo por defecto va como VALOR, no solo como placeholder (2026-09-28): el
+       placeholder se pinta tenue y sobre la pastilla oscura quedaba ilegible — y vacío en el PDF. */
+    expect(src).not.toMatch(/value=\{data\.rotulo(Panel|Retos) \?\? ""\}/);
   });
 });

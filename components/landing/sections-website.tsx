@@ -65,6 +65,7 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
   // Escribir bullets LIMPIA el legacy: si no, al borrar el último bullet el render
   // re-deriva de `porQuePlataforma` y el bullet "resucita" (imposible vaciar la lista).
   const setBullets = (list: { title: string; detail: string }[]) => set({ porQueBullets: list, porQuePlataforma: "" });
+  const rotuloRetosPorDefecto = sectionChips?.retos ?? t(lang, "retosActuales");
   return (
     <>
       {(data.intro || editable) && (
@@ -75,10 +76,15 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
         {/* Izquierda: retos actuales (cards de una línea) */}
         <div>
           {/* Ídem que el chip del panel: el override de una persona manda. */}
+          {/* ⚠ El rótulo por defecto va como VALOR, no como placeholder (2026-09-28): el placeholder
+              se pinta tenue —«escribe aquí»— y sobre el fondo oscuro de la pastilla quedaba ilegible
+              en edición, y vacío en lectura y en el PDF. Escribir el mismo rótulo por defecto no
+              guarda nada: sigue mandando el del documento. */}
           <span className="stl-diag-chip">
-            <Editable as="span" editable={editable} value={data.rotuloRetos ?? ""}
-              placeholder={sectionChips?.retos ?? t(lang, "retosActuales")}
-              onCommit={(v) => set({ rotuloRetos: v })} />
+            <Editable as="span" editable={editable}
+              value={data.rotuloRetos?.trim() || rotuloRetosPorDefecto}
+              placeholder={rotuloRetosPorDefecto}
+              onCommit={(v) => set({ rotuloRetos: v.trim() === rotuloRetosPorDefecto ? "" : v })} />
           </span>
           <SortableItems items={retos} disabled={!editable} onReorder={(next) => set({ retos: next })}
             container={(nodes) => <div className="stl-diag-retos">{nodes}</div>}>
@@ -111,9 +117,10 @@ export const WebDiagnosisSection: FC<SectionProps<WebDiagnosisData>> = ({ data, 
                 del esquema del AGENTE, así que `preserveNonSchemaKeys` lo acarrea y ninguna
                 regeneración lo pisa. */}
             {sectionChips?.panel || data.rotuloPanel?.trim() ? (
-              <Editable as="span" editable={editable} value={data.rotuloPanel ?? ""}
+              <Editable as="span" editable={editable}
+                value={data.rotuloPanel?.trim() || (sectionChips?.panel ?? "")}
                 placeholder={sectionChips?.panel ?? ""}
-                onCommit={(v) => set({ rotuloPanel: v })} />
+                onCommit={(v) => set({ rotuloPanel: v.trim() === (sectionChips?.panel ?? "") ? "" : v })} />
             ) : (
               <>
                 {`${t(lang, "porQue")} `}

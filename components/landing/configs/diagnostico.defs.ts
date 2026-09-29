@@ -195,17 +195,17 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     theme: "light",
     sectionType: "process_mapping",
     /* Solo el HOY: «cómo vas a operar» es enfoque y vive en Planificación (Elías, 2026-09-27). La
-       columna derecha, que en el renderer compartido es «Con la implementación», acá dice dónde se
-       traba ese hoy. Los diagnósticos viejos que la traen escrita como futuro se siguen viendo;
+       columna derecha, que en el renderer compartido es «Con la implementación», acá son los
+       puntos de fricción de ese hoy. Los diagnósticos viejos que la traen escrita como futuro se siguen viendo;
        al regenerar se reescriben. */
-    compara: { izquierda: "hoy", derecha: "dondeSeTraba", phDerecha: "dondeSeTrabaPh" },
+    compara: { izquierda: "hoy", derecha: "puntosDeFriccion", phDerecha: "puntosDeFriccionPh" },
     agentGenerated: true,
     empty: PROCESS_MAPPING_EMPTY,
-    agentHint: "UN proceso por frente: cómo funciona HOY y dónde se traba, con las herramientas que usa.",
+    agentHint: "UN proceso por frente: cómo funciona HOY y sus puntos de fricción, con las herramientas que usa.",
     brief:
       "Cómo opera hoy, por proceso. `procesos`: UNO por frente que el proyecto toca ('Marketing y captación', 'Ventas y matrícula', 'Mesa de ayuda'). Por proceso: " +
       "`nombre` = en lenguaje del cliente; `resumenHoy` = titular de media línea que se lee solo ('La visibilidad termina en el clic'); `comoEsHoy` = 2-4 frases con la operación REAL, con quién la hace y con qué; " +
-      "`resumenSera` = titular de media línea con DÓNDE SE TRABA ('El dato queda en una libreta'); `comoSera` = 1-3 frases con la fricción concreta — qué se pierde, qué se atrasa, qué depende de una persona —, respaldada por los procesos mapeados (los dolores marcados ⚠) y las sesiones; " +
+      "`resumenSera` = titular de media línea con el PUNTO DE FRICCIÓN ('El dato queda en una libreta'); `comoSera` = 1-3 frases con la fricción concreta — qué se pierde, qué se atrasa, qué depende de una persona —, respaldada por los procesos mapeados (los dolores marcados ⚠) y las sesiones; " +
       "`sistemas` = las herramientas que usa hoy ('WordPress, Meta Business, WhatsApp en el celular, Excel'). " +
       "⛔ No describas cómo va a operar con el proyecto: eso no es este informe.",
     schema: asSchema(PROCESS_MAPPING_SCHEMA),
