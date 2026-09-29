@@ -124,6 +124,22 @@ export function ordenDeDependencias(
 }
 
 /**
+ * En qué lugar del orden de su capa va una dimensión (1, 2…), o null si el orden no la nombra. El
+ * orden de la base nombra las dimensiones por su nombre genérico («Datos»); el de la producción,
+ * por el del área («Tracción del Deal»): vale cualquiera de los dos.
+ */
+export function lugarEnElOrden(
+  orden: Pick<OrdenDeDependencias, "orden"> | null,
+  d: { nombre: string; generica: { nombre: string } | null },
+): number | null {
+  if (!orden) return null;
+  const norm = (s: string) => sinTildes(s).toLowerCase().trim();
+  const nombres = [d.nombre, d.generica?.nombre].filter((x): x is string => !!x).map(norm);
+  const i = orden.orden.findIndex((paso) => nombres.includes(norm(paso)));
+  return i === -1 ? null : i + 1;
+}
+
+/**
  * Cómo se lee la escala con este cierre, dicho por la propia escala: el párrafo de «El perfil de
  * negocio» que empieza «En la venta transaccional…», o la oración que empieza «En la venta
  * mixta…». Si una versión lo dice de otra forma, no hay nota (y la pantalla sigue igual).

@@ -5,7 +5,7 @@
  *
  *   · Matriz: las dimensiones frente a los cinco niveles (para comparar).
  *   · Por dimensión: una dimensión como escalera (para leer e interiorizar).
- *   · Mapa: el área como radar (para recorrerla y ver dónde se concentran los comentarios).
+ *   · Mapa: el área como rueda (para recorrerla nivel por nivel y ver dónde se concentra cada cosa).
  *
  * El perfil de negocio filtra las tres igual (la regla de `pruebas_escala.py`). La escala es de
  * SOLO LECTURA: lo único que se escribe son comentarios, anclados a un identificador estable.
@@ -338,7 +338,7 @@ export default function VistaDeLaEscala({
                   opciones={[
                     { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
                     { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
-                    { clave: "mapa", etiqueta: "Mapa", title: "El área como radar: cada eje una dimensión, cada anillo un nivel. Para recorrerla y ver dónde se concentran comentarios, hábitos o riesgos." },
+                    { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos, riesgos o comentarios." },
                   ]}
                 />
               </div>

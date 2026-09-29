@@ -10,7 +10,7 @@ import { leerArchivoDeLaEscala } from "./documento/archivos";
 import { MINI_ESCALA } from "./documento/mini-escala.fixture";
 import { parsearEscala } from "./documento/parsear";
 import { CIERRES, DESPUES } from "./documento/perfil";
-import { datosDeLaVista, definicionDeOpcion, notaDelCierre, ordenDeDependencias, partirPorPalabras } from "./vista";
+import { datosDeLaVista, definicionDeOpcion, lugarEnElOrden, notaDelCierre, ordenDeDependencias, partirPorPalabras } from "./vista";
 
 const mini = parsearEscala(MINI_ESCALA);
 const real = parsearEscala(leerArchivoDeLaEscala("escala"));
@@ -88,6 +88,28 @@ describe("ordenDeDependencias", () => {
   it("sin tildes ni mayúsculas en la comparación", () => {
     expect(ordenDeDependencias(mini.dependencias, "VENTAS", "base operativa", null)).toEqual(mini.dependencias);
     expect(ordenDeDependencias(mini.dependencias, "Marketing", "Base operativa", null)).toEqual([]);
+  });
+});
+
+describe("lugarEnElOrden", () => {
+  it("cada dimensión del archivo real tiene un lugar distinto en el orden de su capa", () => {
+    for (const a of real.areas) {
+      for (const capa of real.capas) {
+        const [orden] = ordenDeDependencias(real.dependencias, a.nombre, capa.nombre, "con equipo");
+        const deLaCapa = a.dimensiones.filter((d) => d.capa === capa.clave);
+        const lugares = deLaCapa.map((d) => lugarEnElOrden(orden, d));
+        expect(lugares.every((l) => l !== null), `${a.nombre} · ${capa.nombre}`).toBe(true);
+        expect([...lugares].sort(), `${a.nombre} · ${capa.nombre}`).toEqual(deLaCapa.map((_, j) => j + 1));
+      }
+    }
+  });
+
+  it("por el nombre del área o por el genérico, sin tildes ni mayúsculas; null si no está o no hay orden", () => {
+    const orden = { orden: ["Tecnología y Automatización", "Datos"] };
+    expect(lugarEnElOrden(orden, { nombre: "DATOS", generica: null })).toBe(2);
+    expect(lugarEnElOrden(orden, { nombre: "Stack", generica: { nombre: "Tecnologia y automatizacion" } })).toBe(1);
+    expect(lugarEnElOrden(orden, { nombre: "Equipo", generica: null })).toBeNull();
+    expect(lugarEnElOrden(null, { nombre: "Datos", generica: null })).toBeNull();
   });
 });
 

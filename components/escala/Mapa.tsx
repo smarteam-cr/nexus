@@ -1,27 +1,30 @@
 "use client";
 
 /**
- * components/escala/Mapa.tsx — un área de la escala como mapa radial.
+ * components/escala/Mapa.tsx — un área de la escala como rueda.
  *
- * Cada eje es una dimensión y cada anillo un nivel: Deficiente en el centro, Óptimo en el borde.
- * El anillo punteado es la base Funcional (el mismo lenguaje del radar del diagnóstico: después
- * este mapa puede llevar encima el nivel de un cliente). Cada cruce es una celda de la matriz.
+ * Cada porción es una dimensión y cada anillo un nivel: Deficiente al centro, Óptimo en el borde.
+ * La base operativa ocupa la mitad derecha y la producción la izquierda, separadas por un hueco:
+ * arriba, en ese hueco, van los nombres de los niveles. La línea punteada es la base (Funcional) y,
+ * en el borde de cada capa, el número dice en qué orden se trabaja («Qué se trabaja primero»).
+ * Cada celda de la rueda es una celda de la matriz.
  *
- * Interactivo a propósito, para recorrer la escala en vez de leerla de corrido:
- *   · Qué muestran los puntos: criterios (lo que se ve al entrar), hábitos, riesgos, los que
- *     esconde el perfil elegido o los comentarios del equipo. El tamaño es cuántos hay en esa celda.
- *   · Pasar el cursor por un punto ilumina su dimensión y su nivel y dice qué es; tocarlo abre la
- *     celda al costado, con sus criterios y sus comentarios.
- *   · Tocar el nombre de una dimensión la abre entera; tocar el nombre de un nivel recorre el área
- *     en ese nivel (con anterior / siguiente: el camino de Deficiente a Óptimo).
- *   · Con el teclado: flechas ←/→ cambian de dimensión, ↑/↓ de nivel, Enter abre los comentarios,
- *     Escape vuelve al área.
+ * Interactiva a propósito, para recorrer la escala en vez de leerla de corrido:
+ *   · Qué muestran las celdas: criterios (al entrar), hábitos, riesgos, los que esconde el perfil
+ *     o los comentarios del equipo. Cuanto más hay, más intenso el color.
+ *   · Pasar el cursor por una celda la levanta, apaga lo que no es su dimensión ni su nivel y lo
+ *     cuenta en el centro (nada tapa la rueda); tocarla la abre al costado, con sus criterios.
+ *   · Tocar una dimensión la abre entera; tocar un nivel enciende los anillos de adentro hasta él:
+ *     la escala se sube de a un nivel.
+ *   · ▶ en el centro recorre la escala de Deficiente a Óptimo, un nivel a la vez.
+ *   · Con el teclado: ←/→ cambian de dimensión, ↑/↓ de nivel, Enter abre los comentarios, Escape
+ *     vuelve al área.
  */
-import { useMemo, useRef, useState } from "react";
+import { createElement, useEffect, useId, useMemo, useRef, useState, type SVGProps } from "react";
 import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
-import { LETRAS, type Dimension, type Letra, type Nivel } from "@/lib/escala/documento/tipos";
-import type { DatosDeLaVista } from "@/lib/escala/vista";
+import { LETRAS, type ClaveDeCapa, type Dimension, type Letra, type Nivel } from "@/lib/escala/documento/tipos";
+import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, conteoDeDimension, useEscala } from "./contexto";
 import { COLOR_DE_NIVEL, PUNTO_DE_NIVEL } from "./niveles";
 import { BotonComentar, Contador, GrupoDeControl, MetaDelCriterio, Segmentado, TextoConPalabras } from "./piezas";
@@ -39,7 +42,7 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
   {
     clave: "criterios",
     etiqueta: "Criterios",
-    title: "El tamaño de cada punto es cuántos criterios tiene esa celda (con el perfil de negocio elegido, si hay uno). El color es el del nivel.",
+    title: "Cuántos criterios tiene cada celda (con el perfil de negocio elegido, si hay uno): más intenso, más criterios. El color es el del nivel.",
   },
   {
     clave: "habitos",
@@ -63,35 +66,115 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
   },
 ];
 
-/** El color y el texto de la leyenda en las capas que pintan los puntos de un solo color. */
+/** El color y el texto de la leyenda en las capas que pintan las celdas de un solo color. */
 const MUESTRA_DE_CAPA: Record<"habitos" | "riesgos" | "perfil", { color: string; texto: string }> = {
-  habitos: { color: "var(--color-secondary)", texto: "cuantos más hábitos, más grande" },
-  riesgos: { color: "var(--color-warning)", texto: "cuantos más riesgos, más grande" },
-  perfil: { color: "var(--color-info)", texto: "cuantos más escondidos, más grande" },
+  habitos: { color: "var(--color-secondary)", texto: "más intenso, más hábitos" },
+  riesgos: { color: "var(--color-warning)", texto: "más intenso, más criterios de riesgo" },
+  perfil: { color: "var(--color-info)", texto: "más intenso, más escondidos" },
 };
 
 /** «1 criterio», «3 criterios». */
 const cuantos = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
 // ── Geometría (unidades del viewBox) ──────────────────────────────────────────
-const W = 920;
-const H = 650;
-const CX = 460;
-const CY = 322;
-const R0 = 58;
-const PASO = 48; // anillos en 58, 106, 154, 202, 250
-const R_BORDE = R0 + PASO * 4;
-const R_ETIQUETA = R_BORDE + 28;
+const W = 1300;
+const H = 900;
+const CX = 650;
+const CY = 450;
+/** El círculo del centro, donde se cuenta lo que se mira. */
+const R_CENTRO = 104;
+/** Donde empieza Deficiente y cuánto mide cada anillo. */
+const R_DENTRO = 114;
+const ANCHO = 52;
+const R_FUERA = R_DENTRO + ANCHO * 5;
+/** La línea de la base: el borde de adentro de Funcional. */
+const R_BASE = R_DENTRO + ANCHO * 2;
+/** La banda de cada capa, con el orden en que se trabaja. */
+const R_BANDA = R_FUERA + 16;
+const R_ETIQUETA = R_FUERA + 50;
+/** Grados libres arriba y abajo: separan las dos capas, y arriba van los nombres de los niveles. */
+const HUECO = 34;
+/** Aire entre celdas: grados entre porciones y unidades entre anillos. */
+const AIRE_ANGULAR = 1.4;
+const AIRE_RADIAL = 3;
+/** Cuánto dura cada nivel en «Recorrer». */
+const PASO_DEL_RECORRIDO_MS = 3200;
 
-const radio = (k: number) => R0 + PASO * k;
+/** Las celdas entran girando desde el centro, anillo por anillo (sin animación si se pidió menos movimiento). */
+const ESTILOS = `
+@keyframes escala-rueda-entra { from { opacity: 0; transform: scale(0.55) rotate(-10deg); } to { opacity: 1; transform: none; } }
+@keyframes escala-rueda-pulso { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.3; } }
+.escala-rueda-celda { transform-box: view-box; transform-origin: ${CX}px ${CY}px; animation: escala-rueda-entra 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.escala-rueda-pulso { animation: escala-rueda-pulso 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .escala-rueda-celda, .escala-rueda-pulso { animation: none; } }
+`;
 
-function punto(i: number, n: number, r: number): [number, number] {
-  const a = ((-90 + (360 / n) * i) * Math.PI) / 180;
-  return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+const f = (v: number) => v.toFixed(1);
+const aRadianes = (g: number) => (g * Math.PI) / 180;
+
+/** Grados de reloj (0 = arriba, en el sentido de las agujas) → coordenadas. */
+function polar(grados: number, r: number): [number, number] {
+  return [CX + r * Math.sin(aRadianes(grados)), CY - r * Math.cos(aRadianes(grados))];
 }
 
-const par = ([x, y]: [number, number]) => `${x.toFixed(1)},${y.toFixed(1)}`;
-const medio = (a: [number, number], b: [number, number]): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+/** Un sector de anillo: entre dos radios y dos ángulos. */
+function sectorDeAnillo(r0: number, r1: number, g0: number, g1: number): string {
+  const [ax, ay] = polar(g0, r1);
+  const [bx, by] = polar(g1, r1);
+  const [cx, cy] = polar(g1, r0);
+  const [dx, dy] = polar(g0, r0);
+  const grande = g1 - g0 > 180 ? 1 : 0;
+  return `M${f(ax)} ${f(ay)}A${r1} ${r1} 0 ${grande} 1 ${f(bx)} ${f(by)}L${f(cx)} ${f(cy)}A${r0} ${r0} 0 ${grande} 0 ${f(dx)} ${f(dy)}Z`;
+}
+
+/** Un arco suelto (la banda de una capa). */
+function arco(r: number, g0: number, g1: number): string {
+  const [ax, ay] = polar(g0, r);
+  const [bx, by] = polar(g1, r);
+  return `M${f(ax)} ${f(ay)}A${r} ${r} 0 ${g1 - g0 > 180 ? 1 : 0} 1 ${f(bx)} ${f(by)}`;
+}
+
+/** Los radios de un anillo (k = 0 es Deficiente), con aire entre anillos. */
+const anillo = (k: number): [number, number] => [R_DENTRO + ANCHO * k + AIRE_RADIAL / 2, R_DENTRO + ANCHO * (k + 1) - AIRE_RADIAL / 2];
+
+/** La mitad de cada capa: la base a la derecha, la producción a la izquierda. */
+const MITAD: Record<ClaveDeCapa, [number, number]> = {
+  base: [HUECO / 2, 180 - HUECO / 2],
+  produccion: [180 + HUECO / 2, 360 - HUECO / 2],
+};
+
+/** Los ángulos de la porción de cada dimensión, repartidos dentro de la mitad de su capa. */
+function porciones(dims: Dimension[]): Map<string, [number, number]> {
+  const out = new Map<string, [number, number]>();
+  for (const clave of Object.keys(MITAD) as ClaveDeCapa[]) {
+    const [inicio, fin] = MITAD[clave];
+    const deLaCapa = dims.filter((d) => d.capa === clave);
+    const paso = (fin - inicio) / Math.max(1, deLaCapa.length);
+    deLaCapa.forEach((d, j) => out.set(d.id, [inicio + paso * j + AIRE_ANGULAR / 2, inicio + paso * (j + 1) - AIRE_ANGULAR / 2]));
+  }
+  return out;
+}
+
+/**
+ * Un `<g>` con `title`: los tipos de React no lo admiten en SVG, pero el navegador sí y la capa
+ * global de tooltips lo lee igual que en HTML.
+ */
+function GrupoConTitulo({ titulo, children, ...resto }: SVGProps<SVGGElement> & { titulo: string }) {
+  return createElement("g", { ...resto, title: titulo }, children);
+}
+
+const IconoPlay = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden>
+    <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" />
+  </svg>
+);
+
+const IconoPausa = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden>
+    <rect x="6" y="5" width="4.5" height="14" rx="1.2" />
+    <rect x="13.5" y="5" width="4.5" height="14" rx="1.2" />
+  </svg>
+);
 
 interface Props {
   datos: DatosDeLaVista;
@@ -107,18 +190,81 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const { area, niveles, capas } = datos;
   const dims = area.dimensiones;
   const n = dims.length;
+  /** Para los `id` del SVG (el rayado, el halo): únicos aunque haya dos mapas. */
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const [capa, setCapa] = useState<CapaDeDatos>("criterios");
-  const [encima, setEncima] = useState<{ dim: string; letra: Letra } | null>(null);
+  /** Lo que está bajo el cursor: manda sobre lo elegido mientras dure. */
+  const [encima, setEncima] = useState<SeleccionDelMapa>(null);
+  const [recorriendo, setRecorriendo] = useState(false);
   const [anuncio, setAnuncio] = useState("");
-  /** El anillo punteado de «acá estás» solo se ve navegando con el teclado. */
+  /** El contorno de «acá estás» solo se ve navegando con el teclado. */
   const [conFoco, setConFoco] = useState(false);
   const grupoRef = useRef<SVGGElement>(null);
+  const seleccionRef = useRef(seleccion);
+  const soltarRef = useRef<number | null>(null);
   const hayPerfil = !!(perfil.cierre || perfil.despues);
+
+  useEffect(() => {
+    seleccionRef.current = seleccion;
+  }, [seleccion]);
+
+  // ▶: un nivel a la vez, de adentro hacia afuera. Se detiene en Óptimo o si se elige otra cosa.
+  useEffect(() => {
+    if (!recorriendo) return;
+    const t = window.setInterval(() => {
+      const s = seleccionRef.current;
+      const k = s?.tipo === "nivel" ? LETRAS.indexOf(s.letra) : -1;
+      if (k < 0 || k >= LETRAS.length - 1) {
+        setRecorriendo(false);
+        return;
+      }
+      const siguiente = LETRAS[k + 1];
+      onSeleccion({ tipo: "nivel", letra: siguiente });
+      setAnuncio(`${area.nombre} en ${niveles.find((x) => x.letra === siguiente)?.nombre ?? siguiente}`);
+    }, PASO_DEL_RECORRIDO_MS);
+    return () => window.clearInterval(t);
+  }, [recorriendo, onSeleccion, area.nombre, niveles]);
+
+  useEffect(
+    () => () => {
+      if (soltarRef.current) window.clearTimeout(soltarRef.current);
+    },
+    [],
+  );
+
+  /** Elegir algo a mano detiene el recorrido. */
+  const elegir = (s: SeleccionDelMapa) => {
+    setRecorriendo(false);
+    onSeleccion(s);
+  };
+
+  /** Desde el nivel elegido (si no es el último) o desde el centro. */
+  const recorrer = () => {
+    const desde = seleccion?.tipo === "nivel" && seleccion.letra !== LETRAS[LETRAS.length - 1] ? seleccion.letra : LETRAS[0];
+    onSeleccion({ tipo: "nivel", letra: desde });
+    setRecorriendo(true);
+  };
+
+  // El cursor cruza el aire entre celdas: soltar con un respiro evita que el centro parpadee.
+  const ponerEncima = (s: SeleccionDelMapa) => {
+    if (soltarRef.current) {
+      window.clearTimeout(soltarRef.current);
+      soltarRef.current = null;
+    }
+    setEncima(s);
+  };
+  const soltarEncima = () => {
+    if (soltarRef.current) window.clearTimeout(soltarRef.current);
+    soltarRef.current = window.setTimeout(() => {
+      soltarRef.current = null;
+      setEncima(null);
+    }, 80);
+  };
 
   // La celda «activa» para el teclado: la elegida, o la primera Funcional.
   const activa = seleccion?.tipo === "celda" ? seleccion : { dim: dims[0].id, letra: "F" as Letra };
 
-  /** El valor de cada celda según la capa elegida. */
+  /** El valor de cada celda según lo que se eligió mostrar. */
   const valores = useMemo(() => {
     const out = new Map<string, { valor: number; abiertos: number }>();
     for (const d of dims) {
@@ -141,37 +287,56 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   }, [dims, perfil, capa, conteos]);
 
   const maximo = Math.max(1, ...[...valores.values()].map((v) => v.valor));
+  const angulos = useMemo(() => porciones(dims), [dims]);
 
-  const colorDelPunto = (letra: Letra, v: { valor: number; abiertos: number }) => {
-    if (v.valor === 0) return "var(--color-surface)";
+  /** «Qué se trabaja primero»: el orden de cada capa en esta área, con el cierre elegido. */
+  const ordenes = useMemo(
+    () => new Map(capas.map((c) => [c.clave, ordenDeDependencias(datos.dependencias, area.nombre, c.nombre, perfil.cierre)])),
+    [capas, datos.dependencias, area.nombre, perfil.cierre],
+  );
+  const hayOrden = [...ordenes.values()].some((filas) => filas.length === 1);
+  /** La base de Ventas cambia de orden según cómo se cierra la venta: sin perfil, no hay uno solo. */
+  const ordenSegunElCierre = [...ordenes.values()].some((filas) => filas.length > 1);
+  const algunaNoAplica = dims.some((d) => !dimensionAplica(d, perfil));
+
+  const colorDe = (letra: Letra, v: { valor: number; abiertos: number }) => {
     if (capa === "comentarios") return v.abiertos ? "var(--color-brand)" : "var(--color-fg-muted)";
-    if (capa === "habitos") return "var(--color-secondary)";
-    if (capa === "riesgos") return "var(--color-warning)";
-    if (capa === "perfil") return "var(--color-info)";
-    return COLOR_DE_NIVEL[letra];
+    if (capa === "criterios") return COLOR_DE_NIVEL[letra];
+    return MUESTRA_DE_CAPA[capa].color;
   };
 
-  const radioDelPunto = (v: number) => (v === 0 ? 4.5 : 7 + 9 * Math.sqrt(v / maximo));
+  const enPalabras = (v: { valor: number; abiertos: number }): string => {
+    switch (capa) {
+      case "criterios":
+        return cuantos(v.valor, "criterio", "criterios");
+      case "habitos":
+        return cuantos(v.valor, "hábito", "hábitos");
+      case "riesgos":
+        return cuantos(v.valor, "criterio de riesgo", "criterios de riesgo");
+      case "perfil":
+        return `${cuantos(v.valor, "escondido", "escondidos")} por el perfil`;
+      case "comentarios":
+        return `${cuantos(v.valor, "comentario", "comentarios")}${v.abiertos ? ` · ${cuantos(v.abiertos, "abierto", "abiertos")}` : ""}`;
+    }
+  };
 
-  // Anunciar la celda activa a los lectores de pantalla (y en el borde inferior del mapa).
+  const nombreNivel = (l: Letra) => niveles.find((x) => x.letra === l)?.nombre ?? l;
+
+  // Anunciar la celda activa a los lectores de pantalla.
   const describir = (dimId: string, letra: Letra) => {
     const d = dims.find((x) => x.id === dimId)!;
-    const nombre = niveles.find((x) => x.letra === letra)!.nombre;
-    const v = valores.get(`${dimId}.${letra}`)!;
-    return `${d.id} ${d.nombre}, ${nombre}: ${v.valor} ${CAPAS.find((c) => c.clave === capa)!.etiqueta.toLowerCase()}`;
+    return `${d.id} ${d.nombre}, ${nombreNivel(letra)}: ${enPalabras(valores.get(`${dimId}.${letra}`)!)}`;
   };
 
   const mover = (dDim: number, dNivel: number) => {
     const i = dims.findIndex((x) => x.id === activa.dim);
     const k = LETRAS.indexOf(activa.letra);
-    const ni = (i + dDim + n) % n;
-    const nk = Math.min(4, Math.max(0, k + dNivel));
-    const sig = { tipo: "celda" as const, dim: dims[ni].id, letra: LETRAS[nk] };
-    onSeleccion(sig);
+    const sig = { tipo: "celda" as const, dim: dims[(i + dDim + n) % n].id, letra: LETRAS[Math.min(4, Math.max(0, k + dNivel))] };
+    elegir(sig);
     setAnuncio(describir(sig.dim, sig.letra));
   };
 
-  // El teclado, sobre el mapa entero.
+  // El teclado, sobre la rueda entera.
   const alTeclado = (e: React.KeyboardEvent) => {
     const t: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
     if (t[e.key]) {
@@ -182,30 +347,115 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
       if (seleccion?.tipo === "celda") abrirComentarios(`${seleccion.dim}.${seleccion.letra}`);
       else mover(0, 0);
     } else if (e.key === "Escape") {
-      onSeleccion(null);
+      elegir(null);
     }
   };
 
-  const vertices = (r: number) => dims.map((_, i) => punto(i, n, r));
-  const bordes = vertices(R_BORDE + 14);
-  const iBase = dims.map((d, i) => (d.capa === "base" ? i : -1)).filter((i) => i >= 0);
-  const iProd = dims.map((d, i) => (d.capa === "produccion" ? i : -1)).filter((i) => i >= 0);
-  const cuna = (idx: number[]) => {
-    if (idx.length === 0) return "";
-    const primero = idx[0];
-    const ultimo = idx[idx.length - 1];
-    const antes = medio(bordes[(primero - 1 + n) % n], bordes[primero]);
-    const despues = medio(bordes[ultimo], bordes[(ultimo + 1) % n]);
-    return [par([CX, CY]), par(antes), ...idx.map((i) => par(bordes[i])), par(despues)].join(" ");
+  /** Lo que está en foco: lo que está bajo el cursor o, si no, lo elegido. */
+  const foco = encima ?? seleccion;
+  /** Apagar lo que no es el foco: fuerte bajo el cursor, suave con algo elegido. */
+  const opacidadDe = (d: Dimension, k: number): number => {
+    if (!foco) return 1;
+    const tenue = encima ? 0.26 : 0.5;
+    if (foco.tipo === "celda") return foco.dim === d.id || LETRAS[k] === foco.letra ? 1 : tenue;
+    if (foco.tipo === "dimension") return foco.dim === d.id ? 1 : tenue;
+    // Un nivel: encendidos todos los anillos hasta él. La escala se sube de a uno.
+    return k <= LETRAS.indexOf(foco.letra) ? 1 : 0.2;
   };
 
-  const iluminadaDim = encima?.dim ?? (seleccion?.tipo === "celda" || seleccion?.tipo === "dimension" ? seleccion.dim : null);
-  const iluminadaLetra = encima?.letra ?? (seleccion?.tipo === "celda" || seleccion?.tipo === "nivel" ? seleccion.letra : null);
+  const focoDim = foco && foco.tipo !== "nivel" ? dims.find((x) => x.id === foco.dim) : undefined;
+  const focoNivel = foco && foco.tipo !== "dimension" ? foco.letra : null;
 
-  const encimaD = encima ? dims.find((x) => x.id === encima.dim) : null;
-  const encimaN = encimaD?.niveles.find((x) => x.letra === encima!.letra) ?? null;
-  const encimaI = encimaD ? dims.indexOf(encimaD) : -1;
-  const encimaPos = encima ? punto(encimaI, n, radio(LETRAS.indexOf(encima.letra))) : null;
+  /** El centro de la rueda: lo que se mira, dicho corto. */
+  const centro = (() => {
+    const boton = (etiqueta: string, alTocar: () => void, pausa = false) => (
+      <button
+        type="button"
+        onClick={alTocar}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary font-semibold text-primary-fg shadow-sm transition-colors hover:bg-primary-hover"
+        style={{ fontSize: 15, padding: "6px 14px" }}
+      >
+        {pausa ? <IconoPausa /> : <IconoPlay />}
+        {etiqueta}
+      </button>
+    );
+    if (!foco) {
+      return (
+        <>
+          <p className="font-bold leading-none text-fg" style={{ fontSize: 30 }}>
+            {area.nombre}
+          </p>
+          <p className="mt-1.5 text-fg-muted" style={{ fontSize: 15 }}>
+            {n} dimensiones · {niveles.length} niveles
+          </p>
+          {boton("Recorrer", recorrer)}
+        </>
+      );
+    }
+    if (foco.tipo === "nivel") {
+      const k = LETRAS.indexOf(foco.letra);
+      const elegido = seleccion?.tipo === "nivel" && seleccion.letra === foco.letra;
+      return (
+        <>
+          <p className="font-semibold uppercase tracking-wide text-fg-muted" style={{ fontSize: 13 }}>
+            Nivel {k + 1} de {LETRAS.length}
+          </p>
+          <p className="mt-0.5 font-bold leading-tight text-fg" style={{ fontSize: 27 }}>
+            {nombreNivel(foco.letra)}
+          </p>
+          <span className="mt-1.5 flex gap-1" aria-hidden>
+            {LETRAS.map((l, j) => (
+              <span key={l} className={cn("rounded-full", j <= k ? PUNTO_DE_NIVEL[l] : "bg-surface-hover")} style={{ width: 10, height: 10 }} />
+            ))}
+          </span>
+          {elegido
+            ? recorriendo
+              ? boton("Pausar", () => setRecorriendo(false), true)
+              : boton(k < LETRAS.length - 1 ? "Seguir subiendo" : "Otra vez", recorrer)
+            : (
+              <p className="mt-1.5 text-fg-muted" style={{ fontSize: 14 }}>
+                Toca para ver {area.nombre} en este nivel
+              </p>
+            )}
+        </>
+      );
+    }
+    if (!focoDim) return null;
+    if (foco.tipo === "dimension") {
+      const visibles = focoDim.niveles.flatMap((x) => x.criterios).filter((c) => aplica(c, perfil)).length;
+      return (
+        <>
+          <p className="font-mono text-fg-muted" style={{ fontSize: 15 }}>
+            {focoDim.id}
+          </p>
+          <p className="mt-0.5 line-clamp-3 font-bold leading-tight text-fg" style={{ fontSize: 21 }}>
+            {focoDim.nombre}
+          </p>
+          <p className="mt-1 text-fg-muted" style={{ fontSize: 15 }}>
+            {dimensionAplica(focoDim, perfil) ? cuantos(visibles, "criterio", "criterios") : "no aplica a este perfil"}
+          </p>
+        </>
+      );
+    }
+    const nv = focoDim.niveles.find((x) => x.letra === foco.letra)!;
+    return (
+      <>
+        <p className="font-mono text-fg-muted" style={{ fontSize: 15 }}>
+          {nv.id}
+        </p>
+        <p className="mt-0.5 flex items-center justify-center gap-1.5 font-bold text-fg" style={{ fontSize: 20 }}>
+          <span className={cn("rounded-sm", PUNTO_DE_NIVEL[nv.letra])} style={{ width: 10, height: 10 }} aria-hidden />
+          {nombreNivel(nv.letra)}
+        </p>
+        <p className="mt-0.5 line-clamp-2 leading-tight text-fg-secondary" style={{ fontSize: 18 }}>
+          {focoDim.nombre}
+        </p>
+        <p className="mt-1 text-fg-muted" style={{ fontSize: 15 }}>
+          {dimensionAplica(focoDim, perfil) || capa === "perfil" ? enPalabras(valores.get(nv.id)!) : "no aplica a este perfil"}
+        </p>
+      </>
+    );
+  })();
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -214,17 +464,17 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           <div>
             <h2 className="text-base font-semibold text-fg">Mapa de {area.nombre}</h2>
             <p className="mt-0.5 max-w-xl text-xs text-fg-muted">
-              Cada eje es una dimensión y cada anillo un nivel, de Deficiente en el centro a Óptimo en el borde. El anillo punteado marca la
-              base Funcional. Toca un punto para abrir esa celda; usa las flechas para recorrerlo.
+              Cada porción es una dimensión y cada anillo un nivel: Deficiente al centro, Óptimo en el borde. La línea punteada marca la
+              base, Funcional. Toca una celda para abrirla, o «Recorrer», en el centro, para subir la escala de Deficiente a Óptimo.
             </p>
           </div>
           <GrupoDeControl
-            nombre="Qué muestran los puntos"
-            ayuda="Cada punto es una celda (una dimensión en un nivel). Su tamaño dice cuánto hay ahí de lo que elijas: criterios, hábitos, riesgos, criterios escondidos por el perfil o comentarios del equipo."
+            nombre="Qué muestran las celdas"
+            ayuda="Cada celda es una dimensión en un nivel. Su color se intensifica cuanto más hay ahí de lo que elijas: criterios, hábitos, riesgos, criterios escondidos por el perfil o comentarios del equipo."
             className="items-end"
           >
             <Segmentado
-              etiqueta="Qué muestran los puntos"
+              etiqueta="Qué muestran las celdas"
               valor={capa}
               onCambio={setCapa}
               className="flex-wrap"
@@ -236,227 +486,146 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
             />
           </GrupoDeControl>
         </div>
-        {capa === "perfil" && !hayPerfil && (
-          <p className="mt-2 rounded-lg bg-info-surface px-3 py-1.5 text-xs text-info-ink">Elige un perfil de negocio arriba para ver qué criterios esconde en cada celda.</p>
-        )}
 
-        <div className="relative mt-2">
+        <div className="relative mt-2" onMouseLeave={soltarEncima}>
           <svg
             key={area.id}
             viewBox={`0 0 ${W} ${H}`}
-            className="h-auto w-full animate-in fade-in zoom-in-95 duration-300"
+            className="mx-auto block h-auto max-h-[calc(100vh-11rem)] w-full"
             role="img"
-            aria-label={`Mapa radial de las ${n} dimensiones de ${area.nombre} por nivel`}
+            aria-label={`Rueda de las ${n} dimensiones de ${area.nombre} por nivel`}
           >
-            {/* Las dos capas, como dos cuñas suaves */}
-            <polygon points={cuna(iBase)} style={{ fill: "var(--color-info)", opacity: 0.045 }} />
-            <polygon points={cuna(iProd)} style={{ fill: "var(--color-secondary)", opacity: 0.045 }} />
-            {/* La base queda a la derecha (x.1 arriba, en sentido horario) y la producción a la izquierda. */}
-            {capas.map((c) => (
-              <text
-                key={c.clave}
-                x={c.clave === "base" ? W - 18 : 18}
-                y={c.clave === "base" ? 26 : H - 14}
-                style={{
-                  fill: "var(--color-fg-muted)",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: "0.06em",
-                  textAnchor: c.clave === "base" ? "end" : "start",
-                }}
-              >
-                {c.nombre.toUpperCase()}
-              </text>
-            ))}
+            <style>{ESTILOS}</style>
+            <defs>
+              <radialGradient id={`${uid}-halo`}>
+                <stop offset="0%" style={{ stopColor: "var(--color-brand)", stopOpacity: 0.13 }} />
+                <stop offset="100%" style={{ stopColor: "var(--color-brand)", stopOpacity: 0 }} />
+              </radialGradient>
+              <pattern id={`${uid}-rayado`} width={9} height={9} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width={9} height={9} style={{ fill: "var(--color-surface-muted)" }} />
+                <line x1={0} y1={0} x2={0} y2={9} style={{ stroke: "var(--color-line)", strokeWidth: 4 }} />
+              </pattern>
+            </defs>
 
-            {/* Anillos: uno por nivel. Funcional, punteado. */}
-            {niveles.map((nv, k) => {
-              const iluminado = iluminadaLetra === nv.letra;
-              return (
-                <polygon
-                  key={nv.letra}
-                  points={vertices(radio(k)).map(par).join(" ")}
-                  style={{
-                    fill: "none",
-                    // Resaltado SUAVE a propósito: un anillo azul fuerte se lee como el polígono de un
-                    // resultado (el radar del diagnóstico), y acá no hay ningún resultado.
-                    stroke: iluminado ? "var(--color-brand)" : nv.letra === "F" ? "var(--color-success)" : "var(--color-line)",
-                    strokeOpacity: iluminado ? 0.5 : 1,
-                    strokeWidth: iluminado ? 1.6 : nv.letra === "F" ? 2 : 1,
-                    strokeDasharray: nv.letra === "F" ? "6 5" : iluminado ? "2 4" : undefined,
-                    transition: "stroke 160ms, stroke-width 160ms",
-                  }}
-                />
-              );
-            })}
+            {/* El halo de fondo */}
+            <circle cx={CX} cy={CY} r={R_FUERA + 70} style={{ fill: `url(#${uid}-halo)` }} />
 
-            {/* Ejes: uno por dimensión */}
-            {dims.map((d, i) => {
-              const [x, y] = punto(i, n, R_BORDE);
-              const aplicaD = dimensionAplica(d, perfil);
-              const iluminado = iluminadaDim === d.id;
+            {/* Las dos capas: su nombre en su esquina y una banda en el borde, con el orden en que se trabajan */}
+            {capas.map((c) => {
+              const derecha = c.clave === "base";
+              const x = derecha ? W - 14 : 14;
+              const ancla = derecha ? "end" : "start";
               return (
-                <line
-                  key={d.id}
-                  x1={CX}
-                  y1={CY}
-                  x2={x}
-                  y2={y}
-                  style={{
-                    stroke: iluminado ? "var(--color-brand)" : "var(--color-line)",
-                    strokeOpacity: iluminado ? 0.6 : 1,
-                    strokeWidth: iluminado ? 1.6 : 1,
-                    strokeDasharray: aplicaD ? undefined : "3 4",
-                    transition: "stroke 160ms",
-                  }}
-                />
-              );
-            })}
-
-            {/* Nombres de los niveles, a la derecha del eje de arriba y bajo cada anillo (Deficiente, en
-                el centro): tocarlos recorre el área en ese nivel. Con halo para leerse sobre las líneas. */}
-            {niveles.map((nv, k) => {
-              const centro = k === 0;
-              return (
-                <g
-                  key={nv.letra}
-                  role="button"
-                  tabIndex={-1}
-                  aria-label={`Ver ${area.nombre} en ${nv.nombre}`}
-                  className="cursor-pointer"
-                  onClick={() => onSeleccion({ tipo: "nivel", letra: nv.letra })}
-                >
-                  <text
-                    x={centro ? CX : CX + 7}
-                    y={centro ? CY + 4 : CY - radio(k) + 15}
-                    style={{
-                      fill: iluminadaLetra === nv.letra ? "var(--color-brand)" : "var(--color-fg-muted)",
-                      fontSize: 10.5,
-                      fontWeight: iluminadaLetra === nv.letra ? 700 : 500,
-                      textAnchor: centro ? "middle" : "start",
-                      stroke: "var(--color-surface)",
-                      strokeWidth: 3.5,
-                      paintOrder: "stroke",
-                      strokeLinejoin: "round",
-                    }}
-                  >
-                    {nv.nombre}
+                <g key={c.clave} style={{ pointerEvents: "none" }}>
+                  <text x={x} y={derecha ? 34 : H - 40} style={{ fill: "var(--color-fg-muted)", fontSize: 15, fontWeight: 700, letterSpacing: "0.08em", textAnchor: ancla }}>
+                    {c.nombre.toUpperCase()}
                   </text>
+                  {c.descripcion && (
+                    <text x={x} y={derecha ? 56 : H - 18} style={{ fill: "var(--color-fg-muted)", fontSize: 14, textAnchor: ancla }}>
+                      {c.descripcion}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+            {capas.map((c) => {
+              const [g0, g1] = MITAD[c.clave];
+              const filas = ordenes.get(c.clave) ?? [];
+              const orden = filas.length === 1 ? filas[0] : null;
+              return (
+                <g key={c.clave}>
+                  <path d={arco(R_BANDA, g0 + 1, g1 - 1)} style={{ fill: "none", stroke: "var(--color-line)", strokeWidth: 6, strokeLinecap: "round" }} />
+                  {orden &&
+                    dims
+                      .filter((d) => d.capa === c.clave)
+                      .map((d) => {
+                        const lugar = lugarEnElOrden(orden, d);
+                        const [a0, a1] = angulos.get(d.id)!;
+                        if (!lugar) return null;
+                        const [x, y] = polar((a0 + a1) / 2, R_BANDA);
+                        return (
+                          <GrupoConTitulo
+                            key={d.id}
+                            titulo={`${lugar}.º en el orden de ${c.nombre.toLowerCase()}: ${orden.orden.join(" → ")}. ${orden.porQue}`}
+                            transform={`translate(${f(x)} ${f(y)})`}
+                            className="cursor-help"
+                          >
+                            <circle r={14} style={{ fill: "var(--color-surface)", stroke: "var(--color-fg-muted)", strokeWidth: 1.5 }} />
+                            <text y={5} style={{ fill: "var(--color-fg)", fontSize: 14, fontWeight: 700, textAnchor: "middle" }}>
+                              {lugar}
+                            </text>
+                          </GrupoConTitulo>
+                        );
+                      })}
                 </g>
               );
             })}
 
-            {/* Nombres de las dimensiones: tocarlos abre la dimensión */}
-            {dims.map((d, i) => {
-              const [x, y] = punto(i, n, R_ETIQUETA);
-              const ancla = x > CX + 8 ? "start" : x < CX - 8 ? "end" : "middle";
-              const aplicaD = dimensionAplica(d, perfil);
-              const iluminado = iluminadaDim === d.id;
-              const c = conteoDeDimension(conteos, d.id);
-              return (
-                <g
-                  key={d.id}
-                  role="button"
-                  tabIndex={-1}
-                  aria-label={`Abrir ${d.id} ${d.nombre}`}
-                  className="cursor-pointer"
-                  onClick={() => onSeleccion({ tipo: "dimension", dim: d.id })}
-                  onMouseEnter={() => setEncima(null)}
-                >
-                  <text x={x} y={y - 3} style={{ textAnchor: ancla, fontSize: 11, fill: "var(--color-fg-muted)", fontFamily: "var(--font-geist-mono), monospace" }}>
-                    {d.id}
-                    {c.total > 0 ? ` · ${c.total}` : ""}
-                  </text>
-                  <text
-                    x={x}
-                    y={y + 13}
-                    style={{
-                      textAnchor: ancla,
-                      fontSize: 14,
-                      fontWeight: iluminado ? 700 : 600,
-                      fill: iluminado ? "var(--color-brand)" : aplicaD ? "var(--color-fg)" : "var(--color-fg-muted)",
-                      opacity: aplicaD ? 1 : 0.7,
-                      transition: "fill 160ms",
-                    }}
-                  >
-                    {d.nombre}
-                    {aplicaD ? "" : " · no aplica"}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Los puntos: una celda por cruce */}
+            {/* Las celdas: una por dimensión y nivel */}
             <g
               ref={grupoRef}
               tabIndex={0}
               role="group"
-              aria-label="Celdas del mapa. Flechas para moverte, Enter para comentar."
+              aria-label="Celdas de la rueda. Flechas para moverte, Enter para comentar."
               onKeyDown={alTeclado}
               onFocus={() => setConFoco(true)}
               onBlur={() => setConFoco(false)}
               className="outline-none"
             >
-              {dims.map((d, i) =>
-                d.niveles.map((nv, k) => {
-                  const [x, y] = punto(i, n, radio(k));
+              {dims.map((d, i) => {
+                const [g0, g1] = angulos.get(d.id)!;
+                const medio = (g0 + g1) / 2;
+                const aplicaD = dimensionAplica(d, perfil);
+                return d.niveles.map((nv, k) => {
+                  const [r0, r1] = anillo(k);
                   const v = valores.get(nv.id)!;
-                  const r = radioDelPunto(v.valor);
                   const elegido = seleccion?.tipo === "celda" && seleccion.dim === d.id && seleccion.letra === nv.letra;
-                  const activo = conFoco && activa.dim === d.id && activa.letra === nv.letra;
-                  const aplicaD = dimensionAplica(d, perfil);
+                  const enfocado = conFoco && activa.dim === d.id && activa.letra === nv.letra;
+                  const levantado = elegido || (encima?.tipo === "celda" && encima.dim === d.id && encima.letra === nv.letra);
+                  const [tx, ty] = polar(medio, (r0 + r1) / 2);
+                  const px = levantado ? 7 * Math.sin(aRadianes(medio)) : 0;
+                  const py = levantado ? -7 * Math.cos(aRadianes(medio)) : 0;
+                  const rayada = !aplicaD && capa !== "perfil";
                   return (
                     <g
                       key={nv.id}
-                      transform={`translate(${x.toFixed(1)} ${y.toFixed(1)})`}
                       className="cursor-pointer"
-                      style={{ opacity: aplicaD ? 1 : 0.35, transition: "opacity 200ms" }}
-                      onMouseEnter={() => setEncima({ dim: d.id, letra: nv.letra })}
-                      onMouseLeave={() => setEncima((e) => (e?.dim === d.id && e.letra === nv.letra ? null : e))}
+                      style={{
+                        opacity: opacidadDe(d, k),
+                        transform: `translate(${f(px)}px, ${f(py)}px)`,
+                        transition: "opacity 180ms ease, transform 180ms ease",
+                      }}
+                      onMouseEnter={() => ponerEncima({ tipo: "celda", dim: d.id, letra: nv.letra })}
+                      onMouseLeave={soltarEncima}
                       onClick={() => {
-                        onSeleccion({ tipo: "celda", dim: d.id, letra: nv.letra });
+                        elegir({ tipo: "celda", dim: d.id, letra: nv.letra });
                         grupoRef.current?.focus({ preventScroll: true });
                       }}
                     >
-                      <circle r={18} style={{ fill: "transparent" }} />
-                      {(elegido || activo) && (
-                        <circle
-                          r={1}
-                          vectorEffect="non-scaling-stroke"
-                          style={{
-                            transform: `scale(${r + 5})`,
-                            fill: "none",
-                            stroke: elegido ? "var(--color-fg)" : "var(--color-brand)",
-                            strokeWidth: 2,
-                            strokeDasharray: elegido ? undefined : "3 3",
-                            transition: "transform 200ms ease",
-                          }}
-                        />
-                      )}
-                      <circle
-                        r={1}
-                        vectorEffect="non-scaling-stroke"
+                      <path
+                        className="escala-rueda-celda"
+                        d={sectorDeAnillo(r0, r1, g0, g1)}
                         style={{
-                          transform: `scale(${r})`,
-                          fill: colorDelPunto(nv.letra, v),
-                          stroke: v.valor === 0 ? "var(--color-fg-muted)" : "var(--color-surface)",
-                          strokeWidth: v.valor === 0 ? 1.5 : 2,
-                          transition: "transform 220ms ease, fill 220ms ease",
+                          animationDelay: `${k * 90 + i * 25}ms`,
+                          fill: rayada ? `url(#${uid}-rayado)` : v.valor === 0 ? "var(--color-surface-muted)" : colorDe(nv.letra, v),
+                          fillOpacity: rayada || v.valor === 0 ? 1 : 0.16 + 0.64 * (v.valor / maximo),
+                          stroke: elegido ? "var(--color-fg)" : enfocado ? "var(--color-brand)" : v.valor === 0 || rayada ? "var(--color-line)" : "none",
+                          strokeWidth: elegido ? 3 : enfocado ? 2.5 : 1,
+                          strokeDasharray: enfocado && !elegido ? "5 4" : undefined,
+                          transition: "fill 240ms ease, fill-opacity 240ms ease",
                         }}
                       />
-                      {/* El número va AFUERA del punto, con el color del texto y halo: dentro, sobre ámbar o
-                          gris, no se leía en los dos temas. */}
-                      {v.valor > 0 && (
+                      {v.valor > 0 && !rayada && (
                         <text
-                          x={r * 0.72 + 3}
-                          y={-r * 0.72 + 1}
+                          x={f(tx)}
+                          y={f(ty + 6)}
                           style={{
                             fill: "var(--color-fg)",
-                            fontSize: 11,
+                            fontSize: 17,
                             fontWeight: 700,
-                            textAnchor: "start",
+                            textAnchor: "middle",
                             stroke: "var(--color-surface)",
-                            strokeWidth: 3,
+                            strokeWidth: 3.5,
                             paintOrder: "stroke",
                             strokeLinejoin: "round",
                             pointerEvents: "none",
@@ -467,71 +636,203 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                       )}
                     </g>
                   );
-                }),
-              )}
+                });
+              })}
             </g>
-          </svg>
 
-          {/* Lo que hay bajo el cursor */}
-          {encimaD && encimaN && encimaPos && (
-            <div
-              className="pointer-events-none absolute z-10 w-64 -translate-x-1/2 rounded-lg border border-line bg-surface px-3 py-2 shadow-lg"
+            {/* La base: el borde de adentro de Funcional */}
+            <circle cx={CX} cy={CY} r={R_BASE} style={{ fill: "none", stroke: "var(--color-success)", strokeWidth: 2.5, strokeDasharray: "8 7", pointerEvents: "none" }} />
+            <text
+              x={CX}
+              y={CY + R_BASE + 21}
               style={{
-                left: `${Math.min(88, Math.max(12, (encimaPos[0] / W) * 100))}%`,
-                top: `${(encimaPos[1] / H) * 100}%`,
-                transform: `translate(-50%, ${encimaPos[1] > H * 0.6 ? "calc(-100% - 22px)" : "22px"})`,
+                fill: "var(--color-success)",
+                fontSize: 14,
+                fontWeight: 700,
+                textAnchor: "middle",
+                stroke: "var(--color-surface)",
+                strokeWidth: 4,
+                paintOrder: "stroke",
+                pointerEvents: "none",
               }}
             >
-              <p className="text-2xs text-fg-muted">
-                <span className="font-mono">{encimaN.id}</span> · {niveles.find((x) => x.letra === encimaN.letra)?.nombre}
-              </p>
-              <p className="text-xs font-semibold text-fg">{encimaD.nombre}</p>
-              <p className="mt-1 line-clamp-3 text-xs leading-snug text-fg-secondary">{encimaN.descripcion}</p>
-              <p className="mt-1 text-2xs text-fg-muted">
-                {[
-                  cuantos(encimaN.criterios.filter((c) => aplica(c, perfil)).length, "criterio", "criterios"),
-                  hayPerfil && encimaN.criterios.some((c) => !aplica(c, perfil))
-                    ? `${cuantos(encimaN.criterios.filter((c) => !aplica(c, perfil)).length, "escondido", "escondidos")} por el perfil`
-                    : null,
-                  cuantos(conteoDeCelda(conteos, encimaD.id, encimaN.letra).total, "comentario", "comentarios"),
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-          )}
+              la base
+            </text>
+
+            {/* El contorno de lo que está en foco: una dimensión entera o un nivel (latiendo al recorrer) */}
+            {focoDim && foco?.tipo === "dimension" && (
+              <path
+                d={sectorDeAnillo(R_DENTRO, R_FUERA, ...(angulos.get(focoDim.id) ?? [0, 0]))}
+                style={{ fill: "none", stroke: "var(--color-fg)", strokeWidth: 2.2, pointerEvents: "none" }}
+              />
+            )}
+            {focoNivel &&
+              foco?.tipo === "nivel" &&
+              Object.values(MITAD).map(([g0, g1], j) => {
+                const [r0, r1] = anillo(LETRAS.indexOf(focoNivel));
+                return (
+                  <path
+                    key={j}
+                    className={recorriendo ? "escala-rueda-pulso" : undefined}
+                    d={sectorDeAnillo(r0 - 1, r1 + 1, g0, g1)}
+                    style={{ fill: "none", stroke: "var(--color-fg)", strokeWidth: 2.2, pointerEvents: "none" }}
+                  />
+                );
+              })}
+
+            {/* Los nombres de los niveles, en el hueco de arriba: tocarlos enciende la escala hasta ahí */}
+            {niveles.map((nv, k) => {
+              const [r0, r1] = anillo(k);
+              const y = CY - (r0 + r1) / 2 + 5;
+              const activo = focoNivel === nv.letra;
+              return (
+                <g
+                  key={nv.letra}
+                  role="button"
+                  tabIndex={-1}
+                  aria-label={`Ver ${area.nombre} en ${nv.nombre}`}
+                  className="cursor-pointer outline-none"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => ponerEncima({ tipo: "nivel", letra: nv.letra })}
+                  onMouseLeave={soltarEncima}
+                  onClick={() => elegir({ tipo: "nivel", letra: nv.letra })}
+                >
+                  <rect x={CX - 44} y={y - 20} width={88} height={28} style={{ fill: "transparent" }} />
+                  <text
+                    x={CX}
+                    y={y}
+                    style={{
+                      fill: activo ? "var(--color-fg)" : "var(--color-fg-muted)",
+                      fontSize: 14,
+                      fontWeight: activo ? 700 : 600,
+                      textAnchor: "middle",
+                      stroke: "var(--color-surface)",
+                      strokeWidth: 4,
+                      paintOrder: "stroke",
+                      strokeLinejoin: "round",
+                      transition: "fill 160ms",
+                    }}
+                  >
+                    {nv.nombre}
+                  </text>
+                  {activo && <rect x={CX - 14} y={y + 5} width={28} height={3} rx={1.5} style={{ fill: COLOR_DE_NIVEL[nv.letra] }} />}
+                </g>
+              );
+            })}
+
+            {/* Los nombres de las dimensiones, afuera: tocarlos abre la dimensión */}
+            {dims.map((d) => {
+              const [g0, g1] = angulos.get(d.id)!;
+              const medio = (g0 + g1) / 2;
+              const [x, y] = polar(medio, R_ETIQUETA);
+              const s = Math.sin(aRadianes(medio));
+              const c = Math.cos(aRadianes(medio));
+              const ancla = s > 0.15 ? "start" : s < -0.15 ? "end" : "middle";
+              // Arriba el bloque crece hacia arriba; abajo, hacia abajo; a los costados, centrado.
+              const y0 = c > 0.35 ? y - 24 : c < -0.35 ? y + 10 : y - 8;
+              const aplicaD = dimensionAplica(d, perfil);
+              const activo = focoDim?.id === d.id;
+              const comentarios = conteoDeDimension(conteos, d.id).total;
+              return (
+                <g
+                  key={d.id}
+                  role="button"
+                  tabIndex={-1}
+                  aria-label={`Abrir ${d.id} ${d.nombre}`}
+                  className="cursor-pointer outline-none"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => ponerEncima({ tipo: "dimension", dim: d.id })}
+                  onMouseLeave={soltarEncima}
+                  onClick={() => elegir({ tipo: "dimension", dim: d.id })}
+                >
+                  <text x={f(x)} y={f(y0)} style={{ textAnchor: ancla, fontSize: 14, fill: "var(--color-fg-muted)", fontFamily: "var(--font-geist-mono), monospace" }}>
+                    {d.id}
+                    {comentarios > 0 ? ` · ${cuantos(comentarios, "comentario", "comentarios")}` : ""}
+                  </text>
+                  <text
+                    x={f(x)}
+                    y={f(y0 + 22)}
+                    style={{
+                      textAnchor: ancla,
+                      fontSize: 18,
+                      fontWeight: activo ? 700 : 600,
+                      fill: activo ? "var(--color-brand)" : aplicaD ? "var(--color-fg)" : "var(--color-fg-muted)",
+                      transition: "fill 160ms",
+                    }}
+                  >
+                    {d.nombre}
+                  </text>
+                  {!aplicaD && (
+                    <text x={f(x)} y={f(y0 + 42)} style={{ textAnchor: ancla, fontSize: 13, fill: "var(--color-fg-muted)" }}>
+                      no aplica a este perfil
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* El centro */}
+            <circle
+              cx={CX}
+              cy={CY}
+              r={R_CENTRO}
+              style={{ fill: "var(--color-surface)", stroke: "var(--color-line)", strokeWidth: 1.5, filter: "drop-shadow(0 6px 18px rgb(0 0 0 / 0.10))" }}
+            />
+            <foreignObject x={CX - 88} y={CY - 88} width={176} height={176}>
+              <div className="flex h-full w-full flex-col items-center justify-center text-center">{centro}</div>
+            </foreignObject>
+          </svg>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-fg-muted">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-2xs text-fg-muted">
           {capa === "comentarios" ? (
             <>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-brand" aria-hidden /> con comentarios abiertos
+                <span className="h-3 w-3 rounded-sm bg-brand" aria-hidden /> con comentarios abiertos
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-fg-muted" aria-hidden /> solo cerrados
+                <span className="h-3 w-3 rounded-sm bg-fg-muted" aria-hidden /> solo cerrados
               </span>
             </>
           ) : capa === "criterios" ? (
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-flex gap-0.5" aria-hidden>
                 {LETRAS.map((l) => (
-                  <span key={l} className={cn("h-2.5 w-2.5 rounded-full", PUNTO_DE_NIVEL[l])} />
+                  <span key={l} className={cn("h-3 w-3 rounded-sm", PUNTO_DE_NIVEL[l])} />
                 ))}
               </span>
-              el color es el nivel; cuantos más criterios, más grande
+              el color es el nivel; más intenso, más criterios
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full" style={{ background: MUESTRA_DE_CAPA[capa].color }} aria-hidden /> {MUESTRA_DE_CAPA[capa].texto}
+              <span className="h-3 w-3 rounded-sm" style={{ background: MUESTRA_DE_CAPA[capa].color }} aria-hidden /> {MUESTRA_DE_CAPA[capa].texto}
             </span>
           )}
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full border border-fg-muted bg-surface" aria-hidden /> nada
+            <span className="h-3 w-3 rounded-sm border border-line bg-surface-muted" aria-hidden /> vacía
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-5 border-t-2 border-dashed border-success-line" aria-hidden /> base Funcional
+            <span className="w-5 border-t-2 border-dashed border-success" aria-hidden /> la base: Funcional
           </span>
+          {hayOrden && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-fg-muted text-[9px] font-bold text-fg" aria-hidden>
+                1
+              </span>
+              qué se trabaja primero en cada capa
+            </span>
+          )}
+          {ordenSegunElCierre && <span>El orden de la base depende de cómo se cierra la venta: elige un perfil para verlo.</span>}
+          {algunaNoAplica && (
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="h-3 w-3 rounded-sm border border-line"
+                style={{ background: "repeating-linear-gradient(45deg, var(--color-line) 0 2px, var(--color-surface-muted) 2px 5px)" }}
+                aria-hidden
+              />
+              no aplica a este perfil
+            </span>
+          )}
           {hayPerfil && <span>Perfil: {describirPerfil(perfil)}</span>}
         </div>
         <p className="sr-only" aria-live="polite">
@@ -543,7 +844,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         datos={datos}
         perfil={perfil}
         seleccion={seleccion}
-        onSeleccion={onSeleccion}
+        onSeleccion={elegir}
         onLeerDimension={onLeerDimension}
         onVerEnLaMatriz={onVerEnLaMatriz}
       />
@@ -551,7 +852,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   );
 }
 
-// ── El panel del costado: lo elegido en el mapa ───────────────────────────────
+// ── El panel del costado: lo elegido en la rueda ──────────────────────────────
 
 function DetalleDelMapa({
   datos,
@@ -585,9 +886,10 @@ function DetalleDelMapa({
           <span className="text-2xl font-bold tabular-nums">{total}</span> comentarios · <span className="font-semibold">{abiertos}</span> abiertos
         </p>
         <ul className="mt-4 space-y-1.5 text-xs text-fg-muted">
-          <li>Toca un punto para abrir esa celda.</li>
+          <li>Toca una celda para abrirla, con sus criterios.</li>
           <li>Toca el nombre de una dimensión para verla entera.</li>
-          <li>Toca el nombre de un nivel para recorrer el área en ese nivel.</li>
+          <li>Toca el nombre de un nivel (arriba, en la rueda) para ver el área en ese nivel.</li>
+          <li>«Recorrer», en el centro, sube la escala de Deficiente a Óptimo, un nivel a la vez.</li>
           <li>Con el teclado: flechas para moverte, Enter para comentar, Escape para volver.</li>
         </ul>
       </aside>
