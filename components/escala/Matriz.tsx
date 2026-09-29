@@ -180,7 +180,7 @@ function CeldaDeNivel({
           anclaAbierta === n.id && "bg-info-surface",
         )}
       >
-        <TextoConPalabras texto={n.descripcion} palabras={datos.palabrasConValorFijo} />
+        <TextoConPalabras texto={n.descripcion} palabras={datos.terminos} />
       </button>
 
       {n.resultado && (
@@ -203,7 +203,7 @@ function CeldaDeNivel({
                 )}
               >
                 <span className="block text-xs leading-snug text-fg">
-                  <TextoConPalabras texto={c.texto} palabras={datos.palabrasConValorFijo} />
+                  <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                 </span>
                 <span className="mt-1.5 flex items-start justify-between gap-2">
                   <MetaDelCriterio criterio={c} datos={datos} />

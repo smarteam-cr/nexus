@@ -126,8 +126,10 @@ function identificadoresEstables(escala: Escala, opts: OpcionesDeValidacion): Re
   for (const id of retirados) if (vistos.has(id)) fallas.push(`${id} está retirado y se volvió a usar.`);
   if (opts.anterior) {
     const ahora = new Set(identificadores(escala));
+    // Un retirado puede desaparecer: se retiró o cambió de dimensión (y entró con un número nuevo).
+    const retiradosAhora = new Set(retirados);
     for (const id of identificadores(opts.anterior)) {
-      if (!ahora.has(id)) fallas.push(`${id} estaba en la ${opts.anterior.version} y desapareció.`);
+      if (!ahora.has(id) && !retiradosAhora.has(id)) fallas.push(`${id} estaba en la ${opts.anterior.version} y desapareció.`);
     }
   }
   return prueba("5 · Identificadores estables", fallas);

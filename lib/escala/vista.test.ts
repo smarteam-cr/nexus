@@ -10,7 +10,15 @@ import { leerArchivoDeLaEscala } from "./documento/archivos";
 import { MINI_ESCALA } from "./documento/mini-escala.fixture";
 import { parsearEscala } from "./documento/parsear";
 import { CIERRES, DESPUES } from "./documento/perfil";
-import { datosDeLaVista, definicionDeOpcion, lugarEnElOrden, notaDelCierre, ordenDeDependencias, partirPorPalabras } from "./vista";
+import {
+  datosDeLaVista,
+  definicionDeOpcion,
+  lugarEnElOrden,
+  notaDelCierre,
+  ordenDeDependencias,
+  partirPorPalabras,
+  terminosParaSubrayar,
+} from "./vista";
 
 const mini = parsearEscala(MINI_ESCALA);
 const real = parsearEscala(leerArchivoDeLaEscala("escala"));
@@ -48,6 +56,41 @@ describe("partirPorPalabras", () => {
   it("un término con signos de expresión regular no rompe el patrón", () => {
     const raras = [{ termino: "(sí)", significado: "x" }];
     expect(partirPorPalabras("Dice (sí) a todo.", raras).map((t) => t.texto)).toEqual(["Dice ", "(sí)", " a todo."]);
+  });
+
+  it("los términos del glosario: también en plural, el más largo primero y sin partir palabras", () => {
+    const terminos = terminosParaSubrayar({
+      palabrasConValorFijo: [],
+      glosario: [
+        { termino: "Pipeline", significado: "Las etapas de un negocio." },
+        { termino: "Pipeline review", significado: "Reunión que revisa el pipeline." },
+        { termino: "Deal", significado: "Negocio en curso." },
+        { termino: "BANT, MEDDIC, SPIN", significado: "Metodologías de venta." },
+        { termino: "Macros y snippets", significado: "Respuestas guardadas." },
+      ],
+    });
+    expect(terminos.map((t) => t.termino)).toEqual(["Pipeline", "Pipeline review", "Deal", "BANT", "MEDDIC", "SPIN", "Macros", "snippets"]);
+    const t = partirPorPalabras("Las pipeline reviews miran cada deal del pipeline; no es un ideal. Usan MEDDIC.", terminos);
+    expect(t.filter((x) => x.palabra).map((x) => `${x.texto} → ${x.palabra!.significado}`)).toEqual([
+      "pipeline reviews → Reunión que revisa el pipeline.",
+      "deal → Negocio en curso.",
+      "pipeline → Las etapas de un negocio.",
+      "MEDDIC → Metodologías de venta.",
+    ]);
+  });
+
+  it("las de valor fijo no toman plural: «la mayorías» no es «la mayoría»", () => {
+    expect(partirPorPalabras("En la mayorías.", [{ termino: "La mayoría", significado: "al menos 80%", tipo: "valor" }])).toEqual([
+      { texto: "En la mayorías.", palabra: null },
+    ]);
+  });
+
+  it("en el archivo real, «pipeline reviews» se marca con su significado del glosario", () => {
+    const terminos = terminosParaSubrayar(real);
+    const i3 = real.areas[0].dimensiones[0].niveles.find((n) => n.letra === "I")!.criterios.find((c) => /pipeline reviews/i.test(c.texto));
+    expect(i3, "hay un criterio de Inicial que habla de pipeline reviews").toBeTruthy();
+    const marcado = partirPorPalabras(i3!.texto, terminos).find((x) => x.palabra && /pipeline reviews/i.test(x.texto));
+    expect(marcado?.palabra?.tipo).toBe("glosario");
   });
 
   it("en el archivo real, alguna palabra se marca en algún criterio", () => {

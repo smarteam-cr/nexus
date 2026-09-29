@@ -38,6 +38,21 @@ describe("la escala de juguete", () => {
     expect(r.find((x) => x.nombre.startsWith("5"))!.detalle).toEqual(["1.1.O2 estaba en la 9.9.9 y desapareció."]);
   });
 
+  it("5 · un criterio que cambia de dimensión: el viejo se retira en la especificación y puede desaparecer", () => {
+    // 1.1.O2 pasa a 1.2 como 1.2.O2: el viejo queda retirado; ningún otro puede faltar.
+    const movido = MINI_ESCALA.replace("- El sistema señala desviaciones. `[1.1.O2 · comprobable]`\n", "").replace(
+      "- La distribución se autoajusta. `[1.2.O1 · comprobable]`",
+      "- La distribución se autoajusta. `[1.2.O1 · comprobable]`\n- El sistema señala desviaciones. `[1.2.O2 · comprobable]`",
+    );
+    const especificacion = MINI_ESPECIFICACION.replace("`1.1.F9` y `1.2.E9`", "`1.1.F9`, `1.1.O2` y `1.2.E9`");
+    const prueba5 = (r: ResultadoDePrueba[]) => r.find((x) => x.nombre.startsWith("5"))!;
+    expect(prueba5(validarEscala(parsearEscala(movido), { ...opts, especificacion, anterior: base })).ok).toBe(true);
+    // Sin anotarlo como retirado, sí falla.
+    expect(prueba5(validarEscala(parsearEscala(movido), { ...opts, anterior: base })).detalle).toEqual([
+      "1.1.O2 estaba en la 9.9.9 y desapareció.",
+    ]);
+  });
+
   it("4 · un identificador a la vista del cliente", () => {
     const e = parsearEscala(MINI_ESCALA.replace("Hay un pipeline configurado.", "Hay un pipeline, como pide 1.2."));
     expect(fallidas(validarEscala(e, opts))).toEqual(["4 · Sin identificadores a la vista"]);

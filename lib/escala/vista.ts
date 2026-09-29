@@ -48,6 +48,8 @@ export interface DatosDeLaVista {
   glosario: Escala["glosario"];
   documentos: DocumentoParaDescargar[];
   palabrasConValorFijo: PalabraConValorFijo[];
+  /** Lo que se subraya en los textos: las palabras con valor fijo y los términos del glosario. */
+  terminos: TerminoSubrayado[];
   casosDeLectura: Escala["casosDeLectura"];
   perfilDeNegocio: Escala["perfilDeNegocio"];
   automatizacion: Escala["automatizacion"];
@@ -93,6 +95,7 @@ export function datosDeLaVista(args: {
       version: args.versiones.find((v) => v.documento === d.clave)?.version ?? null,
     })),
     palabrasConValorFijo: escala.palabrasConValorFijo,
+    terminos: terminosParaSubrayar(escala),
     casosDeLectura: escala.casosDeLectura,
     perfilDeNegocio: escala.perfilDeNegocio,
     automatizacion: escala.automatizacion,
@@ -167,26 +170,60 @@ export function definicionDeOpcion(pregunta: PreguntaDelPerfil | null, valor: Ci
   return pregunta?.opciones.find((o) => norm(o.nombre).endsWith(norm(valor)))?.definicion ?? null;
 }
 
-export type Trozo = { texto: string; palabra: PalabraConValorFijo | null };
+/**
+ * Una palabra que se subraya en los textos de la escala, con su significado al pasar el cursor: una
+ * de valor fijo («la mayoría» = al menos 80%) o un término del glosario («pipeline review»).
+ */
+export interface TerminoSubrayado extends PalabraConValorFijo {
+  tipo?: "valor" | "glosario";
+}
 
 /**
- * Parte un texto en trozos, marcando las palabras con valor fijo («la mayoría», «a tiempo»…) para
- * mostrarlas con su significado. Sin distinguir mayúsculas, y solo palabras enteras.
+ * Las palabras que se subrayan: las de valor fijo y los términos del glosario, todo sacado de la
+ * escala. Una fila del glosario que nombra varios («BANT, MEDDIC, SPIN», «Macros y snippets»)
+ * cuenta como uno por nombre.
  */
-export function partirPorPalabras(texto: string, palabras: PalabraConValorFijo[]): Trozo[] {
+export function terminosParaSubrayar(escala: Pick<Escala, "palabrasConValorFijo" | "glosario">): TerminoSubrayado[] {
+  const valor = escala.palabrasConValorFijo.map((p) => ({ ...p, tipo: "valor" as const }));
+  const glosario = escala.glosario.flatMap((g) =>
+    g.termino
+      .split(/,\s*|\s+y\s+/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((termino) => ({ termino, significado: g.significado, tipo: "glosario" as const })),
+  );
+  return [...valor, ...glosario];
+}
+
+export type Trozo = { texto: string; palabra: TerminoSubrayado | null };
+
+/**
+ * Parte un texto en trozos, marcando las palabras con valor fijo («la mayoría», «a tiempo»…) y los
+ * términos del glosario para mostrarlos con su significado. Sin distinguir mayúsculas, solo palabras
+ * enteras, la más larga primero («pipeline review» antes que «pipeline») y, las del glosario, también
+ * en plural («pipeline reviews», «deals»).
+ */
+export function partirPorPalabras(texto: string, palabras: TerminoSubrayado[]): Trozo[] {
   if (!palabras.length || !texto) return [{ texto, palabra: null }];
   const escapar = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const patron = new RegExp(
-    `(?<![\\p{L}\\p{N}])(${palabras.map((p) => escapar(p.termino)).join("|")})(?![\\p{L}\\p{N}])`,
-    "giu",
-  );
+  const orden = [...palabras].sort((a, b) => b.termino.length - a.termino.length);
+  const alternativa = (p: TerminoSubrayado) => escapar(p.termino) + (p.tipo === "glosario" ? "(?:es|s)?" : "");
+  const patron = new RegExp(`(?<![\\p{L}\\p{N}])(${orden.map(alternativa).join("|")})(?![\\p{L}\\p{N}])`, "giu");
+  const cual = (hallado: string) => {
+    const h = hallado.toLowerCase();
+    return (
+      orden.find((p) => {
+        const t = p.termino.toLowerCase();
+        return h === t || (p.tipo === "glosario" && (h === `${t}s` || h === `${t}es`));
+      }) ?? null
+    );
+  };
   const out: Trozo[] = [];
   let desde = 0;
   for (const m of texto.matchAll(patron)) {
     const i = m.index ?? 0;
     if (i > desde) out.push({ texto: texto.slice(desde, i), palabra: null });
-    const palabra = palabras.find((p) => p.termino.toLowerCase() === m[1].toLowerCase()) ?? null;
-    out.push({ texto: m[1], palabra });
+    out.push({ texto: m[1], palabra: cual(m[1]) });
     desde = i + m[1].length;
   }
   if (desde < texto.length) out.push({ texto: texto.slice(desde), palabra: null });

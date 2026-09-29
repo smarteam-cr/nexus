@@ -1182,7 +1182,7 @@ function DetalleDeCelda({
             <li key={c.id} className="flex items-start gap-2 py-2">
               <div className="min-w-0 flex-1">
                 <p className="text-sm leading-snug text-fg">
-                  <TextoConPalabras texto={c.texto} palabras={datos.palabrasConValorFijo} />
+                  <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                 </p>
                 <MetaDelCriterio criterio={c} datos={datos} className="mt-1" />
               </div>

@@ -23,7 +23,6 @@ ESCALA, ESPEC = sys.argv[1], sys.argv[2]
 ANTERIOR = sys.argv[3] if len(sys.argv) > 3 else None
 MANUAL = os.path.join(os.path.dirname(os.path.abspath(ESPEC)), "manual_operacion_escala.md")
 
-RETIRADOS = {"1.2.F5", "2.2.F6", "2.2.F7", "3.2.F7"}
 PERFILES = list(product(["con equipo", "transaccional", "mixta"], ["única", "recompra", "continua"]))
 PAT = re.compile(r"(?m)^- (.*) `\[(\d\.\d\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · cliente recurrente| · relación continua)?)\]`$")
 
@@ -86,6 +85,9 @@ def puntaje(nivel_base, avance):
 
 s, matriz, crit = leer(ESCALA)
 espec = open(ESPEC, encoding="utf-8").read()
+# Los identificadores retirados se leen de la especificación («Identificadores retirados…»): una sola lista.
+_linea_retirados = next((l for l in espec.split("\n") if "Identificadores retirados" in l), "")
+RETIRADOS = set(re.findall(r"`(\d\.\d\.[DIFEO]\d+)`", _linea_retirados))
 dims = sorted({c["dim"] for c in crit})
 REGLA_INICIADO = "solo le faltan hábitos iniciados" in s
 print(f"{ESCALA} {encabezado(s, 'version')}: {len(crit)} criterios, {len(dims)} dimensiones")
@@ -143,7 +145,8 @@ reusados = sorted(RETIRADOS & set(ids))
 perdidos = []
 if ANTERIOR:
     _, _, viejos = leer(ANTERIOR)
-    perdidos = sorted({c["id"] for c in viejos} - set(ids))
+    # Un identificador retirado puede desaparecer (se retiró o cambió de dimensión); cualquier otro, no.
+    perdidos = sorted({c["id"] for c in viejos} - set(ids) - RETIRADOS)
 prueba("5 · Identificadores estables", not (repetidos or reusados or perdidos),
        f"repetidos={repetidos} reusados={reusados} desaparecidos={perdidos}")
 

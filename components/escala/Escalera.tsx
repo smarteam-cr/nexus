@@ -156,7 +156,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                     </div>
                   </div>
                   <p className="text-sm font-medium leading-relaxed text-fg">
-                    <TextoConPalabras texto={n.descripcion} palabras={datos.palabrasConValorFijo} />
+                    <TextoConPalabras texto={n.descripcion} palabras={datos.terminos} />
                   </p>
                   {n.resultado && (
                     <p className="rounded-lg bg-success-surface px-3 py-2 text-sm leading-relaxed text-success-ink">
@@ -171,7 +171,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                           <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-fg-muted" aria-hidden />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm leading-relaxed text-fg">
-                              <TextoConPalabras texto={c.texto} palabras={datos.palabrasConValorFijo} />
+                              <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                             </p>
                             <MetaDelCriterio criterio={c} datos={datos} className="mt-1.5" />
                           </div>

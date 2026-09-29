@@ -132,7 +132,7 @@ export default function PanelDeComentarios({
             {resuelta.tipo === "criterio" && resuelta.criterio ? (
               <>
                 <p className="text-sm leading-relaxed text-fg">
-                  <TextoConPalabras texto={resuelta.criterio.texto} palabras={datos.palabrasConValorFijo} />
+                  <TextoConPalabras texto={resuelta.criterio.texto} palabras={datos.terminos} />
                 </p>
                 <MetaDelCriterio criterio={resuelta.criterio} datos={datos} />
                 {resuelta.criterio.riesgo && datos.riesgos[resuelta.id] && (

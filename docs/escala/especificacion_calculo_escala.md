@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.0.1
-escala: 7.0.1
+version: 1.0.2
+escala: 7.1.0
 fecha: 2026-09-29
 ---
 
@@ -19,7 +19,9 @@ Junto al identificador va la forma de verificación: comprobable, declarado o ev
 
 Los identificadores son estables. Se asignaron desde cero en la versión 6.0.0, y desde entonces no se reasignan ni se renumeran. Si un criterio se retira, su número queda vacío y no se reutiliza; si se agrega uno, toma el siguiente número libre de su nivel. Eso permite que el chequeo, el cotizador y los agentes apunten siempre al mismo criterio, aunque cambie su redacción.
 
-Identificadores retirados, que no se vuelven a usar: `1.2.F5`, `2.2.F6`, `2.2.F7` y `3.2.F7`.
+Identificadores retirados, que no se vuelven a usar: `1.2.F1`, `1.2.F5`, `2.2.F6`, `2.2.F7` y `3.2.F7`.
+
+Un criterio que cambia de dimensión se retira y entra con el siguiente número libre de su nueva dimensión: `1.2.F1` es hoy `1.1.F6`.
 
 La etiqueta de cada criterio sigue siempre el mismo orden: identificador, forma de verificación y, solo si corresponden, las marcas riesgo, hábito y de perfil, separadas por « · ». Por ejemplo: `[1.1.F3 · evaluado · hábito · venta con equipo]`.
 
@@ -110,6 +112,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.0.2 (2026-09-29).** Acompaña a la escala 7.1.0: `1.2.F1` queda retirado al pasar a Procesos y Rutinas como `1.1.F6`, y se dice cómo se mueve un criterio de dimensión. No cambia el cálculo.
 
 **1.0.1 (2026-09-29).** Acompaña a la escala 7.0.1. No cambia el cálculo.
 

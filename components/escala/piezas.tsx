@@ -13,9 +13,9 @@ import { useRef } from "react";
 import { InfoHint } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { explicarMarca } from "@/lib/escala/documento/perfil";
-import type { BloqueDeTexto, Criterio, PalabraConValorFijo } from "@/lib/escala/documento/tipos";
+import type { BloqueDeTexto, Criterio } from "@/lib/escala/documento/tipos";
 import type { Conteo } from "@/lib/escala/comentarios/reglas";
-import { partirPorPalabras, type DatosDeLaVista } from "@/lib/escala/vista";
+import { partirPorPalabras, type DatosDeLaVista, type TerminoSubrayado } from "@/lib/escala/vista";
 
 export function IconoComentario({ className }: { className?: string }) {
   return (
@@ -258,11 +258,18 @@ export function GrupoDeControl({
   );
 }
 
+/** «al menos 80%» → «Al menos 80%.»: el significado solo, como una frase. */
+function comoFrase(s: string): string {
+  const t = s.trim();
+  return `${t.charAt(0).toUpperCase()}${t.slice(1)}${/[.!?]$/.test(t) ? "" : "."}`;
+}
+
 /**
- * Un texto de la escala con sus palabras de valor fijo subrayadas («la mayoría» = al menos 80%):
- * la escala las define para que dos personas decidan igual, y así se leen sin ir a buscarlas.
+ * Un texto de la escala con sus palabras subrayadas y su significado al pasar el cursor: las de
+ * valor fijo («la mayoría» = al menos 80%), para que dos personas decidan igual, y los términos del
+ * glosario («pipeline review»), para no tener que ir a buscarlos. El tooltip dice solo el significado.
  */
-export function TextoConPalabras({ texto, palabras }: { texto: string; palabras: PalabraConValorFijo[] }) {
+export function TextoConPalabras({ texto, palabras }: { texto: string; palabras: TerminoSubrayado[] }) {
   const trozos = partirPorPalabras(texto, palabras);
   if (trozos.length === 1 && !trozos[0].palabra) return <>{texto}</>;
   return (
@@ -271,8 +278,13 @@ export function TextoConPalabras({ texto, palabras }: { texto: string; palabras:
         t.palabra ? (
           <abbr
             key={i}
-            title={`«${t.texto}» tiene un valor fijo en la escala: ${t.palabra.significado}.`}
-            className="cursor-help underline decoration-info-ink decoration-dotted underline-offset-2 [text-decoration-thickness:1.5px]"
+            title={comoFrase(t.palabra.significado)}
+            className={cn(
+              "cursor-help underline decoration-dotted underline-offset-2",
+              t.palabra.tipo === "glosario"
+                ? "decoration-fg-muted [text-decoration-thickness:1px]"
+                : "decoration-info-ink [text-decoration-thickness:1.5px]",
+            )}
           >
             {t.texto}
           </abbr>

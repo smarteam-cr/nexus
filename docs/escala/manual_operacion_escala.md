@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.1.0
-escala: 7.0.1
+version: 1.1.1
+escala: 7.1.0
 fecha: 2026-09-29
 ---
 
@@ -104,6 +104,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.1.1 (2026-09-29).** Acompaña a la escala 7.1.0. Sin otros cambios.
 
 **1.1.0 (2026-09-29).** La escala deja de estar congelada: cambia con el feedback de su responsable y con los comentarios del equipo en Nexus («Cómo cambia la escala»). Cambios pendientes pasa a ser la lista de lo aprobado que todavía no entró en una versión. Acompaña a la escala 7.0.1.
 

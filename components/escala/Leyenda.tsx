@@ -66,7 +66,8 @@ export default function Leyenda({ datos }: { datos: DatosDeLaVista }) {
               <h3 className="text-sm font-semibold text-fg">Palabras con valor fijo</h3>
               <p className="text-sm leading-relaxed text-fg-secondary">
                 Para que dos personas decidan igual, estas palabras de los criterios valen siempre lo mismo. En la escala se ven subrayadas con
-                puntos: pasa el cursor para ver su valor.
+                puntos azules: pasa el cursor para ver su valor. Los términos del glosario (pipeline review, deal, SQL…) se subrayan con puntos
+                grises: pasa el cursor para ver qué significan.
               </p>
               <ul className="flex flex-col gap-1">
                 {datos.palabrasConValorFijo.map((p) => (

@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.0.1
+version: 7.1.0
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -361,26 +361,27 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 **Deficiente.** Sin proceso. Cada asesor vende a su manera y la información clave vive en cabezas o libretas.
 
 - No existe ningún documento del proceso ni de las etapas; cada rep usa su criterio. `[1.1.D1 · declarado]`
-- Los leads se reparten a ojo o por orden de llegada, sin regla. `[1.1.D2 · comprobable]`
-- Las reuniones, si ocurren, no dejan acuerdos ni cadencia. `[1.1.D3 · declarado]`
-- Si rotan dos personas clave, nadie reconstruye el estado del pipeline. `[1.1.D4 · evaluado]`
+- Los leads se reparten sin ninguna regla (a ojo o por orden de llegada). `[1.1.D2 · comprobable]`
+- Las reuniones internas, si ocurren, no dejan acuerdos ni cadencia. `[1.1.D3 · declarado]`
+- Si se van dos personas clave, nadie sabe en qué quedó cada negocio. `[1.1.D4 · evaluado]`
 
 **Inicial.** Hay intención de estructura, pero la ejecución es despareja.
 
 - Existen etapas de palabra o en un borrador, pero cada rep las interpreta distinto. `[1.1.I1 · evaluado]`
 - Hay un intento de pitch común que la mayoría no usa. `[1.1.I2 · evaluado]`
 - Las pipeline reviews ocurren a cadencia irregular y sin estructura fija. `[1.1.I3 · declarado]`
-- Que un deal quede bien registrado depende de la voluntad del rep, no de una regla. `[1.1.I4 · comprobable]`
+- Que un deal quede bien registrado depende de la voluntad del rep, no de un proceso o rutina. `[1.1.I4 · comprobable]`
 
 **Funcional.** Maquinaria base: una fuente de verdad, pipeline estructurado y previsibilidad operativa.
 
-*Resultado:* La operación comercial ya no depende de quién esté: si rota un vendedor, el siguiente sigue el mismo proceso y sabe en qué va cada negocio.
+*Resultado:* Todo el equipo trabaja el mismo proceso en el CRM: los negocios avanzan y se califican con los mismos criterios, se contactan con la cadencia acordada y se revisan en cada pipeline review, así que si rota un vendedor, el siguiente sabe en qué va cada negocio.
 
 - Existe al menos un pipeline de ventas configurado con sus etapas y criterios de avance, y cualquier rep los explica igual. `[1.1.F1 · evaluado]`
-- Si el negocio tiene más de un proceso de venta, cada pipeline cumple lo mismo. Lo mismo aplica a los procesos de atención o prospección de leads: la cantidad refleja el negocio, no el nivel de madurez. `[1.1.F2 · comprobable]`
+- Cada proceso de ventas o prospección tiene su pipeline respectivo configurado con sus criterios de avance y aceptación. `[1.1.F2 · comprobable]`
 - Existe una definición escrita de "oportunidad calificada" que el equipo aplica de forma consistente. `[1.1.F3 · evaluado · hábito · venta con equipo]`
 - Hay proceso de venta documentado y cadencia de contacto definida (X intentos en Y días) que se cumple la mayoría del tiempo. `[1.1.F4 · comprobable · hábito]`
 - La pipeline review corre en cadencia formal, semanal o quincenal. `[1.1.F5 · declarado · hábito]`
+- Cualquier rep abre el CRM como herramienta de trabajo, no por obligación. `[1.1.F6 · evaluado · hábito · venta con equipo]`
 
 **Eficiente.** El proceso deja de ser solo etapas y se vuelve método con disciplina medida.
 
@@ -408,22 +409,22 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 **Deficiente.** Sin CRM o uso mínimo.
 
 - Los leads viven en listas o agendas personales. `[1.2.D1 · evaluado]`
-- No hay automatizaciones ni integraciones; hay rechazo a la IA. `[1.2.D2 · comprobable]`
+- No hay automatizaciones ni aplicación de inteligencia artificial. `[1.2.D2 · comprobable]`
 
 **Inicial.** CRM en funciones básicas con carga manual.
 
-- Los reportes son mensuales y básicos. `[1.2.I1 · comprobable]`
-- La adopción es desigual: unos lo usan, otros siguen con sus hojas. `[1.2.I2 · evaluado]`
+- Los reportes son manuales y muy básicos. `[1.2.I1 · comprobable]`
+- La aplicación de la IA es básica y depende de las personas. `[1.2.I2 · evaluado]`
 
 **Funcional.** El CRM se usa por convicción y hay automatización simple en producción.
 
 *Resultado:* Ningún lead se pierde por no saber a quién le toca, lo que el vendedor habla con cada prospecto queda en el sistema, y deja de depender de su memoria para dar seguimiento.
 
-- Cualquier rep abre el CRM como herramienta de trabajo, no por obligación. `[1.2.F1 · evaluado · hábito · venta con equipo]`
 - Los leads entrantes llegan a una bandeja o cola y se asignan por una regla simple (round-robin, territorio o fuente). `[1.2.F2 · comprobable · venta con equipo]`
 - Cuando un deal requiere acción, el sistema le notifica al rep sin que el líder se lo recuerde. `[1.2.F3 · comprobable · venta con equipo]`
 - No hay reps trabajando con hojas ni conversaciones paralelas al CRM: lo que cada uno habla con un prospecto por el canal conversacional, como WhatsApp, queda en el sistema aunque responda desde su teléfono. `[1.2.F4 · evaluado · hábito · venta con equipo]`
 - Si la empresa vende sin vendedor —en tienda, en el sitio web o por autoservicio—, esas ventas entran solas al sistema como negocios, con su monto, su canal y su cliente. `[1.2.F6 · comprobable]`
+- La IA utilizada tiene como contexto la información básica de los clientes y prospectos. `[1.2.F7 · comprobable]`
 
 **Eficiente.** La automatización tiene lógica y el stack está integrado.
 
@@ -542,7 +543,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 **Inicial.** Hay coherencia incipiente pero no confiable; el mensaje y la propuesta todavía varían notablemente entre reps.
 
-- Hay un mensaje común incipiente, pero todavía no se sostiene en cada punto de contacto. `[1.5.I1 · evaluado]`
+- Hay un mensaje común incipiente, pero todavía no llega igual a cada punto de contacto. `[1.5.I1 · evaluado]`
 - Dos vendedores todavía presentan la propuesta de forma notablemente distinta. `[1.5.I2 · evaluado · venta con equipo]`
 
 **Funcional.** Hay un ICP escrito y coherencia básica en mensaje y propuesta.
@@ -1512,6 +1513,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.1.0 (2026-09-29).** Primera revisión de Ventas con su responsable, en Procesos y Rutinas y en Tecnología y Automatización. Que cualquier vendedor abra el CRM como herramienta de trabajo pasa de Tecnología a Procesos y Rutinas, con identificador nuevo; el de Tecnología queda retirado. Tecnología pide además en Funcional que la IA utilizada tenga como contexto la información básica de clientes y prospectos, y en Deficiente e Inicial pasa a describir cómo se aplica la IA. El resultado de Funcional en Procesos y Rutinas se reescribe para que sea lo que se logra al cumplir todos sus criterios, y varios criterios se dicen más simple. Cambia lo que pide Funcional en las dos dimensiones.
 
 **7.0.1 (2026-09-29).** Ninguna celda de la matriz queda sin criterios: los cinco niveles que solo tenían su descripción —Deficiente e Inicial de Propuesta y Coherencia, Deficiente de Segmentación y de Medición y Aprendizaje, e Inicial de Datos en Servicio— suman como criterios las señales que su descripción ya traía. No cambia el cálculo: Deficiente e Inicial se siguen asignando por la descripción que mejor calza. La escala deja de estar congelada: cambia con el feedback de su responsable y con los comentarios del equipo en Nexus, como dice el manual de operación.
 
