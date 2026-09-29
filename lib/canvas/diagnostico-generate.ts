@@ -22,8 +22,9 @@
  *
  * ── LO QUE YA NO HACE ────────────────────────────────────────────────────────────
  * No ubica en la Escala (llega la 7.0), no describe cómo va a operar (Planificación) y no recomienda
- * (Ejecución). Al regenerar, RETIRA esas secciones de un diagnóstico viejo
- * (SECCIONES_RETIRADAS_DEL_DIAGNOSTICO): el documento regenerado tiene solo la estructura nueva.
+ * (Ejecución). Al regenerar, OCULTA esas secciones de un diagnóstico viejo
+ * (SECCIONES_RETIRADAS_DEL_DIAGNOSTICO) sin borrar sus datos — la Entrega lee de ahí la Escala —,
+ * y antes guarda una versión del documento entero (lib/canvas/versiones.ts).
  *
  * Lo dispara el botón del header (CANVAS_PRIMARY_AGENT, async) vía POST /analyze.
  */
@@ -49,6 +50,8 @@ import { fichaParaPrompt, leerFicha } from "@/lib/clients/ficha";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { ordenarObjetivosDelDiagnostico } from "@/lib/canvas/diagnostico-hilo";
+import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
+import { patchSectionEntry } from "@/lib/business-cases/section-briefs";
 
 /** Asegura el canvas "Diagnóstico" del proyecto + reconcilia sus secciones. Idempotente. */
 export async function ensureDiagnosticoCanvas(projectId: string): Promise<string> {
@@ -149,6 +152,10 @@ export async function runDiagnosticoGeneration(opts: {
   // modelo, se ordena acá (lib/canvas/diagnostico-hilo.ts).
   const gen = { ...generado, sections: ordenarObjetivosDelDiagnostico(generado.sections) };
 
+  // La foto ANTES de tocar nada (lib/canvas/versiones.ts): la IA ya respondió bien, y lo que había
+  // queda consultable, se puede traer por sección o restaurar entero.
+  await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });
+
   // Persistir 1 CARD/sección EN EL LUGAR. Las solo-lectura y el `cierre` (agentGenerated:false)
   // no vienen en gen.sections → sus bloques quedan intactos hasta el retiro de abajo.
   const sectionMap = new Map(prevSecs.map((s) => [s.key, s.id]));
@@ -174,14 +181,24 @@ export async function runDiagnosticoGeneration(opts: {
     sectionCount++;
   }
 
-  /* El retiro: un diagnóstico regenerado con la estructura nueva no puede seguir mostrando la escala,
-     las causas sueltas o las recomendaciones de la versión anterior — se contradicen con el hilo. Se
-     borran las SECCIONES (los bloques caen en cascada) y no se re-crean: ya no están en el canon de
-     canvas-defs. Solo si la generación escribió algo: un fallo no puede dejar el documento vacío. */
+  /* El retiro: un diagnóstico regenerado con la estructura nueva no puede seguir MOSTRANDO la escala,
+     las causas sueltas o las recomendaciones de la versión anterior — se contradicen con el hilo.
+     ⛔ Pero se OCULTAN, no se borran (Elías, 2026-09-28): la Entrega lee de la sección `escala` el
+     punto de partida del cliente, y borrarla lo dejaba sin él. Ocultas no salen al cliente ni al PDF,
+     y sus datos siguen ahí. Solo si la generación escribió algo. */
   if (sectionCount > 0) {
-    await prisma.canvasSection.deleteMany({
-      where: { canvasId, key: { in: [...SECCIONES_RETIRADAS_DEL_DIAGNOSTICO] } },
-    });
+    const retiradas = prevSecs
+      .filter((s) => (SECCIONES_RETIRADAS_DEL_DIAGNOSTICO as readonly string[]).includes(s.key))
+      .map((s) => s.key);
+    if (retiradas.length) {
+      const c = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
+      let entradas: unknown = c?.sections;
+      for (const key of retiradas) entradas = patchSectionEntry(entradas, key, { hidden: true });
+      await prisma.projectCanvas.update({
+        where: { id: canvasId },
+        data: { sections: entradas as Prisma.InputJsonValue, contentUpdatedAt: new Date() },
+      });
+    }
   }
   return { canvasId, sectionCount };
 }

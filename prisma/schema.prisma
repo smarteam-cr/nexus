@@ -1107,6 +1107,7 @@ model ProjectCanvas {
 
   cards          ClientContextCard[]
   canvasSections CanvasSection[]
+  versiones      VersionDeDocumento[]
   // OJO — en la base hay además un índice ÚNICO PARCIAL que Prisma no sabe declarar:
   //   ProjectCanvas_projectId_slug_key ON ("projectId", slug)
   //   WHERE "projectId" IS NOT NULL AND slug IS NOT NULL
@@ -1145,6 +1146,28 @@ model CanvasSection {
 }
 
 // Bloque de contenido dentro de una sección (text, heading, table, metric, callout, etc.)
+// La FOTO de un documento antes de que algo lo reescriba (lib/canvas/versiones.ts, 2026-09-28).
+// Regenerar un documento con IA pisaba sus bloques sin dejar rastro: el diagnóstico viejo perdía su
+// Escala —el punto de partida que lee la Entrega— sin forma de volver. Cada foto guarda TODAS las
+// secciones con sus bloques tal como estaban, para consultarla, traer una sección al documento
+// actual o restaurarla entera. RLS encendida en su SQL (2026-09-28-versiones-de-documento.sql).
+model VersionDeDocumento {
+  id        String        @id @default(cuid())
+  canvasId  String
+  canvas    ProjectCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  pieza     String? // slug de la pieza (null en canvases custom)
+  /// Por qué se tomó: «Antes de regenerar», «Antes de restaurar», «Respaldo inicial».
+  origen    String
+  creadaPor String? // correo; null = la tomó el sistema (una corrida en segundo plano)
+  /// Huella del contenido: dos fotos iguales seguidas no se guardan dos veces.
+  huella    String
+  /// [{ key, label, order, titleOverride, eyebrowOverride, blocks: [{ blockType, content, data, … }] }]
+  secciones Json
+  createdAt DateTime      @default(now())
+
+  @@index([canvasId, createdAt])
+}
+
 model CanvasBlock {
   id              String        @id @default(cuid())
   sectionId       String

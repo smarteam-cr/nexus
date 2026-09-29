@@ -24,6 +24,7 @@
  * cuándo el kickoff ya pasó.
  */
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { Prisma } from "@prisma/client";
 import { EXPLORACION_CANVAS } from "@/lib/canvas/canvas-defs";
@@ -153,6 +154,9 @@ export async function runExploracionGeneration(opts: {
     undefined,
     prevDataByKey,
   );
+
+  // La foto ANTES de escribir (lib/canvas/versiones.ts): la IA ya respondió y todavía no se tocó nada.
+  await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });
 
   // Persistir 1 CARD/sección EN EL LUGAR. `gen.sections` solo trae las que el agente
   // genera (hero + 5 de contenido); `cierre` (agentGenerated:false, curada) NO viene →

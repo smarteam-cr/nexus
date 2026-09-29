@@ -28,6 +28,7 @@ import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/can
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { generarResumenDeHandoff } from "@/lib/handoff/resumen";
 import { proponerFichaDesdeHandoff } from "@/lib/clients/ficha-propuesta";
+import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { runExploracionGeneration } from "@/lib/canvas/exploracion-generate";
@@ -2103,6 +2104,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
         sinEscala ? new Set([SECCION_DE_ESCALA.kickoff]) : undefined,
         prevDataByKey,
       );
+      // La foto del kickoff ANTES de tocar nada (lib/canvas/versiones.ts): acá la IA ya respondió, y
+      // lo de abajo —vaciar la Escala, sincronizar horarios, reescribir bloques— ya cambia el documento.
+      if (targetCanvasId) await guardarVersionDelDocumento(targetCanvasId, { origen: "Antes de regenerar" });
       /* La persistencia de abajo solo reescribe las secciones que el agente devolvió: la de la
          Escala, salteada con el trato «Sin Escala», conservaría lo de una corrida anterior. Se
          vacía acá — un kickoff sin Escala que muestra niveles se contradice solo. */
@@ -2535,6 +2539,9 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   // ── 13a2. Si es block format, guardar CanvasBlock records ─────────────────────
   const isBlockFormat = useBlockFormat && analysisJson?.sections && Array.isArray(analysisJson.sections);
   if (isBlockFormat && targetCanvasId) {
+    // La foto ANTES de reescribir (el handoff y cualquier otro grupo de bloques). El kickoff ya la
+    // tomó arriba, antes de sus propios cambios; repetirla acá fotografiaría un documento a medias.
+    if (!isKickoffAgent) await guardarVersionDelDocumento(targetCanvasId, { origen: "Antes de regenerar" });
     // Resolve CanvasSection IDs
     const dbSections = await prisma.canvasSection.findMany({
       where: { canvasId: targetCanvasId },

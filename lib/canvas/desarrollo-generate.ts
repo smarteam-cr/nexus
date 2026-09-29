@@ -14,6 +14,7 @@
  * sin lookup de agente. El botón manual sí pasa por /analyze (gating + AgentRun).
  */
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { Prisma } from "@prisma/client";
 import { DESARROLLO_CANVAS } from "@/lib/canvas/canvas-defs";
 import { createDesarrolloCanvas, reconcileDesarrolloCanvasSections } from "@/lib/canvas/default-canvases";
@@ -94,6 +95,9 @@ Generá el requerimiento técnico siguiendo tus instrucciones: preciso y técnic
   }
 
   const gen = await generateSectionsForTemplate(DESARROLLO_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+
+  // La foto ANTES de escribir (lib/canvas/versiones.ts): la IA ya respondió y todavía no se tocó nada.
+  await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });
 
   // Persistir 1 CARD/sección EN EL LUGAR. `gen.sections` solo trae las secciones que el
   // agente genera (hero + 5 de contenido); `cierre` (agentGenerated:false, curada) NO

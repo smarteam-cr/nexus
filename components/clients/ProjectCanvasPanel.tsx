@@ -21,6 +21,7 @@ import CanvasBoundary from "./CanvasBoundary";
 import PrintDocButton from "@/components/print/PrintDocButton";
 import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
+import VersionesDelDocumento from "@/components/canvas/VersionesDelDocumento";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
 import { buscarDocumento, vistaDeLaUrl } from "@/lib/flow/vista-de-la-url";
@@ -599,6 +600,19 @@ export default function ProjectCanvasPanel({
                    piezas siguientes avisando "Antes: …" sobre algo que ya estaba hecho.
                    El documento se veía bien y el mapa del flujo mentía hasta recargar. */
                 onDone={() => {
+                  setAgentNonce((n) => n + 1);
+                  bumpGpsRefresh();
+                  void refetchCanvases();
+                }}
+              />
+            )}
+            {/* Las fotos que se toman antes de cada regeneración (lib/canvas/versiones.ts): en todo
+                documento que la IA reescribe, incluido Desarrollo (su CTA viene por portal). */}
+            {activeCanvas && activeCanvasId && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff") && (
+              <VersionesDelDocumento
+                projectId={projectId}
+                canvasId={activeCanvasId}
+                onCambio={() => {
                   setAgentNonce((n) => n + 1);
                   bumpGpsRefresh();
                   void refetchCanvases();

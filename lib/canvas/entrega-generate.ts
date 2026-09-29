@@ -23,6 +23,7 @@
  * para esas keys —no puede, pero si el template cambiara— este paso lo pisa igual.
  */
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { Prisma } from "@prisma/client";
 import { ENTREGA_CANVAS, entregaSectionSequence } from "@/lib/canvas/canvas-defs";
 import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/canvas/default-canvases";
@@ -200,6 +201,9 @@ export async function runEntregaGeneration(opts: {
   }
 
   const gen = await generateSectionsForTemplate(ENTREGA_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+
+  // La foto ANTES de escribir (lib/canvas/versiones.ts): la IA ya respondió y todavía no se tocó nada.
+  await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });
 
   const sectionMap = new Map(prevSecs.map((s) => [s.key, s.id]));
   const escribir = async (key: string, data: unknown) => {

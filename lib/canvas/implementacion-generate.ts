@@ -15,6 +15,7 @@
  * Nunca bloquea — el CSE valida antes de pegar.
  */
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { Prisma } from "@prisma/client";
 import { IMPLEMENTACION_CANVAS, implementacionSectionSequence } from "@/lib/canvas/canvas-defs";
 import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/canvas/default-canvases";
@@ -118,6 +119,9 @@ export async function runImplementacionGeneration(opts: {
     undefined,
     prevDataByKey,
   );
+
+  // La foto ANTES de escribir (lib/canvas/versiones.ts): la IA ya respondió y todavía no se tocó nada.
+  await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });
 
   const sectionMap = new Map(prevSecs.map((s) => [s.key, s.id]));
   let sectionCount = 0;

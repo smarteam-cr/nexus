@@ -22,6 +22,7 @@
  * prompt ya tenía la regla "sin fechas"; ahora el código la acompaña).
  */
 import { prisma } from "@/lib/db/prisma";
+import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { Prisma } from "@prisma/client";
 import { PLANIFICACION_CANVAS, planificacionSectionSequence } from "@/lib/canvas/canvas-defs";
@@ -161,6 +162,9 @@ export async function runPlanificacionGeneration(opts: {
     undefined,
     prevDataByKey,
   );
+
+  // La foto ANTES de escribir (lib/canvas/versiones.ts): la IA ya respondió y todavía no se tocó nada.
+  await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });
 
   const sectionMap = new Map(prevSecs.map((s) => [s.key, s.id]));
   let sectionCount = 0;
