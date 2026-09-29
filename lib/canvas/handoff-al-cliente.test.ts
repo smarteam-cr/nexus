@@ -149,7 +149,8 @@ const LECTORES: Lector[] = [
     porque: "«Actualizar con IA» de la ficha: los handoffs de todos los proyectos del cliente, misma curación",
   },
   {
-    archivo: "lib/canvas/diagnostico-generate.ts",
+    // Desde el 2026-09-28 lo arma una sola función que usan la generación Y «Mejorar con IA».
+    archivo: "lib/canvas/diagnostico-fuentes.ts",
     pieza: "diagnosis",
     exposicion: "directo",
     porque: "el diagnóstico se le presenta al cliente",

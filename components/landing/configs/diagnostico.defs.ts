@@ -141,6 +141,9 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Lo que queremos lograr",
     theme: "soft",
     sectionType: "diagnostico_objetivos",
+    avisoDelChat:
+      "los códigos (S1, F1, OBJ-01) unen secciones: si borras o renumeras uno, actualiza también donde se cita " +
+      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
     agentGenerated: true,
     empty: { intro: "", objetivos: [] },
     agentHint: "OBJ-01…: cuantitativos y cualitativos, cada uno con cómo se mide y su meta (o «meta por validar»).",
@@ -158,6 +161,9 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Síntomas, causas y lo que cuestan",
     theme: "light",
     sectionType: "diagnostico_problema",
+    avisoDelChat:
+      "los códigos (S1, F1, OBJ-01) unen secciones: si borras o renumeras uno, actualiza también donde se cita " +
+      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
     agentGenerated: true,
     empty: { intro: "", sintomas: [], causas: [], consecuencias: [] },
     agentHint: "Síntomas S1… (lo que se ve, con datos) → causas F1… (por qué pasa) → qué le cuesta al cliente.",
@@ -249,6 +255,9 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     eyebrow: "Preguntas de negocio",
     theme: "light",
     sectionType: "diagnostico_preguntas",
+    avisoDelChat:
+      "los códigos (S1, F1, OBJ-01) unen secciones: si borras o renumeras uno, actualiza también donde se cita " +
+      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
     agentGenerated: true,
     empty: { intro: "", preguntas: [] },
     agentHint: "Las preguntas de negocio que hoy no tienen respuesta, cada una atada a su OBJ.",

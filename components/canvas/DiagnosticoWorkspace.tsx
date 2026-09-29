@@ -26,6 +26,7 @@ import { buildDiagnosticoConfig, buildDiagnosticoSections } from "./diagnostico-
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import DocumentoContextSection from "./DocumentoContextSection";
 import { documentoConContexto } from "@/lib/contexto/documento";
+import { revisarHilo } from "@/lib/canvas/revisar-hilo";
 
 const DOC_CONTEXTO = documentoConContexto("diagnosis")!;
 
@@ -80,6 +81,18 @@ export default function DiagnosticoWorkspace({
   }, [cs.sections]);
 
   const ctx: LandingContext = useMemo(() => ({ clientName: "" }), []);
+
+  /* Los cabos sueltos del hilo (lib/canvas/revisar-hilo.ts): una causa que no explica nada, un código
+     citado que ya no existe. Se AVISAN, no se corrigen solos: decide la persona (o se lo pide al chat). */
+  const cabos = useMemo(() => {
+    const dataDe = (key: string) => {
+      const s = cs.sections.find((x) => x.key === key);
+      const card = s?.blocks.find((b) => b.blockType === "CARD");
+      return (card?.data ?? undefined) as Record<string, unknown> | undefined;
+    };
+    return revisarHilo({ objetivos: dataDe("objetivos"), problema: dataDe("problema"), preguntas: dataDe("preguntas") });
+  }, [cs.sections]);
+  const [verCabos, setVerCabos] = useState(false);
 
   // Aviso propio del workspace (separado de `cs.error`, que es del hook): lo usamos cuando
   // ni siquiera pudimos llegar a guardar porque la sección no existe.
@@ -181,6 +194,26 @@ export default function DiagnosticoWorkspace({
             Todavía sin generar. Revisa el contexto de arriba y usa <strong>Generar diagnóstico</strong>, junto
             al nombre del canvas — la corrida aparece en el centro de corridas y puedes seguir navegando.
           </span>
+        </div>
+      )}
+
+      {hasGeneratedContent && cabos.length > 0 && (
+        <div style={{ padding: "10px 16px", background: "#FFF7ED", borderBottom: "1px solid #FED7AA", color: "#9A3412", fontSize: 13 }}>
+          <button
+            type="button"
+            onClick={() => setVerCabos((v) => !v)}
+            style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", padding: 0, font: "inherit", fontWeight: 600 }}
+          >
+            El hilo tiene {cabos.length} {cabos.length === 1 ? "cabo suelto" : "cabos sueltos"} {verCabos ? "▾" : "▸"}
+          </button>
+          <span> — códigos que no se conectan. Puedes corregirlos a mano o pedírselo al 💬 Asistente.</span>
+          {verCabos && (
+            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+              {cabos.map((c, i) => (
+                <li key={i}>{c.texto}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

@@ -49,6 +49,7 @@ import {
 } from "@/lib/canvas/capacidades-de-documento";
 import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
 import { DOC } from "@/lib/canvas/assist-de-documento";
+import { cabosParaElChat, revisarHilo } from "@/lib/canvas/revisar-hilo";
 import { EXPLORACION_DEF_BY_KEY } from "@/components/landing/configs/exploracion.defs";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
@@ -739,6 +740,21 @@ export async function materialDelCronograma(
  * generado son ~20.000 caracteres, y el chat no los necesita para entender «reescribí el alcance
  * en dos párrafos»: los necesita el assist del documento, que ya los carga.
  */
+/** Los cabos sueltos del hilo del diagnóstico, como líneas del contexto ("" si no hay ninguno). */
+function lineasDelHilo(
+  secciones: ReadonlyArray<{ key: string; blocks: { data: unknown; blockType: string }[] }>,
+  cardDe: (bloques: { data: unknown; blockType: string }[]) => { data: unknown } | undefined,
+): string[] {
+  const dataDe = (key: string) => {
+    const s = secciones.find((x) => x.key === key);
+    return (s ? cardDe(s.blocks)?.data : undefined) as Record<string, unknown> | undefined;
+  };
+  const texto = cabosParaElChat(
+    revisarHilo({ objetivos: dataDe("objetivos"), problema: dataDe("problema"), preguntas: dataDe("preguntas") }),
+  );
+  return texto ? ["", texto] : [];
+}
+
 export async function contextoDeDocumento(
   dueno: Dueno,
   pieza: string,
@@ -987,6 +1003,10 @@ export async function contextoDeDocumento(
             .join(" · "),
         ]
       : []),
+    /* ⭐ EL HILO DEL DIAGNÓSTICO (2026-09-28): los códigos S / F / OBJ unen secciones, y el modelo
+       no puede ver un cabo suelto que cruza dos. Se le dice cuáles hay, calculados con la MISMA
+       regla que el aviso de la pantalla (lib/canvas/revisar-hilo.ts). */
+    ...(pieza === "diagnosis" ? lineasDelHilo(canvas.canvasSections, cardDe) : []),
     "",
     /* ⛔ INTERPOLADAS, NO TRANSCRITAS. Hasta el 2026-08-22 acá había un párrafo escrito a mano que
        decía lo mismo que el prompt del chat — dos copias de la misma regla, y una de las dos ya

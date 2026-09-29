@@ -23,6 +23,7 @@ import { loadHandoffContext, loadTimelineContext } from "@/lib/canvas/load-canva
 import { pieceForCanvas } from "@/lib/pieces/registry";
 import { DOC } from "@/lib/canvas/assist-de-documento";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
+import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
 
 const bodySchema = z.object({
   canvasId: z.string().min(1),
@@ -126,13 +127,19 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     .filter(Boolean)
     .join("\n\n");
 
-  const context = [
-    `Empresa: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "No especificada"}`,
-    handoffCtx ? `=== HANDOFF CURADO (única fuente de datos del proyecto; no inventes) ===\n${handoffCtx}` : "",
-    timelineCtx,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  /* El DIAGNÓSTICO lee exactamente lo mismo que su generación (2026-09-28): sesiones del contexto,
+     notas, encuesta, ficha, handoff cliente-safe, exploración y procesos. Con solo el handoff, el
+     assist no podía anclar un síntoma a una reunión que nunca vio. */
+  const context =
+    pieza.slug === "diagnosis"
+      ? await fuentesDelDiagnostico(projectId)
+      : [
+          `Empresa: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "No especificada"}`,
+          handoffCtx ? `=== HANDOFF CURADO (única fuente de datos del proyecto; no inventes) ===\n${handoffCtx}` : "",
+          timelineCtx,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
 
   const run = await prisma.agentRun.create({
     data: {
