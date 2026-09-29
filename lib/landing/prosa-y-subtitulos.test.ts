@@ -57,9 +57,10 @@ describe("los tags ya funcionaban — esto lo comprueba, no lo agrega", () => {
 
 describe("una sola forma de prosa, y con subtítulo para el chat", () => {
   it("la guarda está mirando las veinte, no una", () => {
-    /* 24 desde el 2026-09-28: el hilo del diagnóstico suma cuatro (situación actual, desafío,
-       fortalezas y quiénes participan), todas con la MISMA constante. */
-    expect(PROSA.length, "se movió el sectionType de las secciones de prosa").toBe(24);
+    /* 25 desde el 2026-09-28: el hilo del diagnóstico suma cuatro (situación actual, desafío,
+       fortalezas y quiénes participan) y Planificación su política rectora, todas con la MISMA
+       constante. */
+    expect(PROSA.length, "se movió el sectionType de las secciones de prosa").toBe(25);
   });
 
   it("⭐ las VEINTE comparten la MISMA constante — cero copias inline", () => {

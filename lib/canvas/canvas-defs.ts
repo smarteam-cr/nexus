@@ -273,6 +273,8 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // CONSERVAN para que el contenido viejo siga visible.
     sections: [
       { key: "planificacion", label: "Plan de implementación" },
+      // 2026-09-28 — el enfoque del proyecto; vino del diagnóstico de referencia (FUNDAUNA).
+      { key: "politica_rectora", label: "Política rectora" },
       { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
       { key: "roadmap", label: "Hoja de ruta" },
       { key: "definicion_procesos", label: "Procesos rediseñados" },

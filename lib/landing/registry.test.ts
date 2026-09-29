@@ -813,8 +813,9 @@ describe("Planificación: registry completo + keys congeladas", () => {
   });
 
   it("snapshot de keys: hero abre, cierre cierra, las 4 legacy se conservan", () => {
+    // `politica_rectora` desde el 2026-09-28: el enfoque, que salió del diagnóstico.
     expect(PLANIFICACION_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "planificacion", "arquitectura_solucion", "roadmap", "definicion_procesos",
+      "planificacion", "politica_rectora", "arquitectura_solucion", "roadmap", "definicion_procesos",
       "ciclo_vida_crm", "rutinas_adopcion", "plan_despliegue", "metricas_exito", "cierre",
     ]);
   });
