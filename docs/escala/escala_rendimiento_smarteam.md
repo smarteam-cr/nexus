@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.3.1
+version: 7.4.0
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -416,7 +416,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Los reportes son manuales y muy básicos. `[1.2.I1 · comprobable]`
 - La aplicación de la IA es básica y depende de las personas. `[1.2.I2 · evaluado]`
 
-**Funcional.** Hay automatización simple en producción y la IA trabaja con el contexto de los clientes.
+**Funcional.** Hay automatización simple en producción y, si se usa IA, trabaja con el contexto de los clientes.
 
 *Resultado:* Ningún lead se pierde por no saber a quién le toca, lo que el vendedor habla con cada prospecto queda en el sistema, y deja de depender de su memoria para dar seguimiento.
 
@@ -424,9 +424,9 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Cuando un deal requiere acción, el sistema le notifica al rep sin que el líder se lo recuerde. `[1.2.F3 · comprobable · venta con equipo]`
 - No hay reps trabajando con hojas ni conversaciones paralelas al CRM: lo que cada uno habla con un prospecto por el canal conversacional, como WhatsApp, queda en el sistema aunque responda desde su teléfono. `[1.2.F4 · evaluado · hábito · venta con equipo]`
 - Si la empresa vende sin vendedor —en tienda, en el sitio web o por autoservicio—, esas ventas entran solas al sistema como negocios, con su monto, su canal y su cliente. `[1.2.F6 · comprobable]`
-- La IA utilizada tiene como contexto la información básica de los clientes y prospectos. `[1.2.F7 · comprobable]`
+- Si el equipo usa IA, esta tiene como contexto la información básica de los clientes y prospectos. `[1.2.F7 · comprobable]`
 
-**Eficiente.** La automatización tiene lógica y el stack está integrado.
+**Eficiente.** La automatización tiene lógica, el stack está integrado y la IA asiste al equipo en su trabajo diario.
 
 *Resultado:* El vendedor recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué etapa se caen los negocios.
 
@@ -434,6 +434,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Hay secuencias de contacto de varios pasos que cambian según cómo responde el prospecto —si leyó, hizo clic o contestó—, y los leads y las conversaciones se asignan por múltiples condiciones o por capacidad, con control de quién ve y responde cada conversación. `[1.2.E2 · comprobable]`
 - Hay integración con ERP u otros sistemas operativos cuando aplica. `[1.2.E3 · comprobable]`
 - Hay paneles en tiempo real de conversión y de conversaciones: cuánto tarda la primera respuesta y cuántas quedan sin seguimiento. `[1.2.E4 · comprobable]`
+- El equipo usa la IA en su trabajo diario —para redactar, resumir conversaciones o sugerir el siguiente paso—, y la IA trabaja con el contexto de los clientes y prospectos. `[1.2.E5 · evaluado · hábito]`
 
 **Óptimo.** Agentes de IA califican y agendan; el rep trabaja con predicción de cierre y la siguiente mejor acción.
 
@@ -1519,6 +1520,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.4.0 (2026-09-29).** La IA en Tecnología de Ventas. En Funcional no es requisito: si el equipo la usa, tiene que tener como contexto la información básica de clientes y prospectos. En Eficiente sí lo es: el equipo la usa en su trabajo diario, con ese contexto, como asistente —redactar, resumir conversaciones, sugerir el siguiente paso—, que es lo que dice la regla de automatización. Cambia lo que piden Funcional y Eficiente en Tecnología de Ventas.
 
 **7.3.1 (2026-09-29).** En Datos de Ventas, el criterio de riesgo que no deja envejecer una definición habla de la de lead calificado, no de la de oportunidad calificada. La descripción de Funcional en Tecnología de Ventas deja de decir que el CRM se usa por convicción —ese criterio pasó a Procesos y Rutinas— y dice que hay automatización simple en producción y que la IA trabaja con el contexto de los clientes. No cambia el cálculo.
 
