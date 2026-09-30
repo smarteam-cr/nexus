@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.3.4
-escala: 8.5.0
+version: 1.3.5
+escala: 8.6.0
 fecha: 2026-09-30
 ---
 
@@ -21,7 +21,7 @@ La escala cambia con el uso, y lo mismo vale para la especificación y para las 
 La escala tiene una matriz general y, en su Parte 5, ediciones por industria: la misma escala dicha para una tienda, un banco, una universidad o una inmobiliaria. No son escalas aparte: comparten dimensiones, niveles, reglas, cálculo e identificadores.
 
 - **Con cuál se mide.** Cada unidad se mide con la edición de su industria, si existe, y con la escala general si no. Se decide al arrancar y se escribe en el diagnóstico. Si más adelante la unidad pasa a una edición, esa medición es una línea base nueva: no se compara contra la anterior.
-- **Cuándo se hace una edición.** Cuando hay clientes o prospectos de esa industria a quienes medir, y alguien que la va a usar con ellos. Una edición sale primero con Ventas, que es con lo que se abre la conversación con un prospecto; Marketing y Servicio se adaptan después de usarla con dos o tres prospectos o clientes, y mientras tanto se miden con la escala general.
+- **Cuándo se hace una edición.** Cuando hay clientes o prospectos de esa industria a quienes medir, y alguien que la va a usar con ellos. Una edición puede salir primero con Ventas, que es con lo que se abre la conversación con un prospecto, y sumar Marketing y Servicio después; mientras tanto, esas áreas se miden con la escala general. Las cuatro primeras salieron con las tres áreas antes de usarse con clientes: su responsable prefirió revisarlas completas y después probarlas con dos o tres.
 - **Qué puede cambiar una edición.** Lo que de verdad es de su industria: los nombres de las dimensiones de producción, las preguntas, los costos, las palabras de un criterio y los criterios que solo tienen sentido ahí. La base operativa se toca lo menos posible: si una edición empieza a reescribirla, se está volviendo otra escala.
 - **Cómo se mantiene.** Un cambio en la matriz obliga a cada edición a decidir: si la matriz suma un criterio en una dimensión que la edición ya adaptó, la edición lo reescribe, lo saca o lo deja como está, y la versión no se publica hasta que lo diga. Y si el texto general de un criterio cambia, lo que la edición decía con sus palabras se vuelve a mirar antes de publicar.
 - **Los comentarios.** Un comentario hecho leyendo una edición queda anclado a esa edición: guarda el texto que la persona leyó. El responsable decide, como con cualquier otro, si el cambio es de la edición o de la matriz.
@@ -123,6 +123,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.3.5 (2026-09-30).** Acompaña a la escala 8.6.0. En «Las ediciones por industria», cuándo se escriben Marketing y Servicio de una edición: las cuatro primeras salieron con las tres áreas antes de probarse con clientes.
 
 **1.3.4 (2026-09-30).** Acompaña a la escala 8.5.0. Sin otros cambios.
 

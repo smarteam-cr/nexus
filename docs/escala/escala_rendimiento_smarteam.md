@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 8.5.0
+version: 8.6.0
 fecha: 2026-09-30
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -112,7 +112,7 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 
 **Ventas.** Tu proceso dejó de ser etapas y se volvió método con disciplina medida. Mides conversión y velocidad por etapa, la automatización tiene lógica, el stack está integrado, la IA asiste al equipo en su trabajo diario y aparece un forecast confiable. Hacia afuera hay lead scoring por reglas, cuentas objetivo, contacto multicanal y análisis estructurado de ganadas y perdidas.
 
-**Marketing.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la siguiente campaña. Los datos están unificados, enriquecidos y atribuidos; la segmentación y el scoring se automatizan; la IA asiste al equipo en su trabajo diario; y la presencia se optimiza tanto para buscadores como para motores generativos. El presupuesto se distribuye entre canales con criterio y tu presencia en la conversación del mercado es medible.
+**Marketing.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la siguiente campaña. Los datos están unificados, enriquecidos y atribuidos; la segmentación y el scoring se automatizan; la IA asiste al equipo en su trabajo diario; y la presencia se optimiza tanto para buscadores como para motores generativos. El presupuesto se distribuye entre canales con criterio.
 
 **Servicio.** El servicio empieza a adelantarse al problema. Tienes SLAs, escalación automática y autoservicio, y la IA asiste a tus agentes en su trabajo diario; mides tiempos de resolución y satisfacción, y la data se unifica con Ventas. Identificas riesgos y oportunidades antes de que el cliente levante la mano, ninguna solicitud se pierde entre áreas, y las cuentas clave tienen un responsable dedicado. La retención se vuelve predecible.
 
@@ -299,8 +299,8 @@ El resultado que persigue el cliente entra por dos lados. Por el nivel objetivo,
 | Base operativa | Ventas transaccional | Tecnología y Automatización → Datos → Procesos y Rutinas → Equipo y Gobierno | La venta ocurre en el sistema: si no entra sola, no hay datos para nada más. |
 | Base operativa | Ventas mixta | Tecnología y Automatización → Procesos y Rutinas → Datos → Equipo y Gobierno | El sistema es lo único que sirve a los dos canales; después va el proceso del canal con personas, que es el que genera los datos. |
 | Producción | Ventas | Propuesta y Coherencia → Priorización de Leads → Tracción del Deal → Aprendizaje de Ganadas y Perdidas | Sin cliente ideal y mensaje común no se puede priorizar; sin prioridad, el seguimiento se dispersa; sin seguimiento, no hay de qué aprender. |
-| Producción | Marketing | Marca y Presencia → Segmentación → Canales y Alcance → Medición y Aprendizaje | Los buyer personas se definen en Marca y Presencia: sin ellos no hay segmentos, sin segmentos no se sabe a quién llegar, y sin canales no hay qué medir. |
-| Producción | Servicio | Consistencia de Atención → Priorización de Clientes → Proactividad → Escalabilidad del Servicio | Los tipos de cliente se definen en Consistencia de Atención: sin ellos no hay niveles de atención, sin niveles no se sabe a quién adelantarse, y solo se escala lo que ya se hace bien. |
+| Producción | Marketing | Marca y Presencia → Segmentación → Canales y Alcance → Medición y Aprendizaje | Los buyer personas se definen primero, junto con la marca: sin ellos no hay segmentos, sin segmentos no se sabe a quién llegar, y sin canales no hay qué medir. |
+| Producción | Servicio | Consistencia de Atención → Priorización de Clientes → Proactividad → Escalabilidad del Servicio | Los tipos de cliente se definen primero: sin ellos no hay niveles de atención, sin niveles no se sabe a quién adelantarse, y solo se escala lo que ya se hace bien. |
 
 La producción gana el empate porque es lo que el cliente ve y lo que mueve su resultado. Pero con esta regla nunca queda más de un nivel adelante de la base, porque producir sobre una base más débil es producir a pulso, sostenido por personas y no por sistema. Una base tan rota que impide producir no necesita una excepción: ya es la capa más baja.
 
@@ -1087,7 +1087,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 ¿Cada campaña enseña algo, o se repite el ciclo desde cero?
 
-*Descripción:* Mide si cada campaña se mide y deja un aprendizaje, para no repetir lo que no funcionó.
+*Descripción:* Mide si cada campaña deja sus resultados a la vista y un aprendizaje, para no repetir lo que no funcionó.
 
 *Costo de quedarse:* Repites lo que no funciona porque nadie mide qué funcionó: el presupuesto se reparte por costumbre, no por retorno.
 
@@ -1255,7 +1255,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* La empresa sabe qué tan rápido y qué tan bien atiende, cuánto tarda un cliente nuevo en ver valor y qué tan sano está cada cliente, con la satisfacción medida y no supuesta.
 
 - Se mide el tiempo de primera respuesta y de resolución, y el cumplimiento de los SLA, en todos los canales. `[3.3.E1 · comprobable · requiere 3.1.E1]`
-- Se trackean NPS o CSAT con cadencia. `[3.3.E2 · comprobable · hábito]`
+- Se mide el NPS o el CSAT con cadencia. `[3.3.E2 · comprobable · hábito]`
 - La data del cliente está unificada entre Servicio y Ventas. `[3.3.E3 · comprobable]`
 - Se mide cuánto tarda cada cliente nuevo en obtener valor: el tiempo desde que empieza hasta su primer resultado. `[3.3.E4 · comprobable · requiere 3.5.F2]`
 - Hay un indicador de salud por reglas para cada cliente, que combina su uso, sus casos abiertos y su satisfacción. `[3.3.E5 · comprobable · cliente recurrente]`
@@ -1297,7 +1297,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 **Eficiente.** El equipo rinde cuentas contra los SLA, y el liderazgo prepara a quien entra y orquesta con otras áreas.
 
-*Resultado:* El equipo responde por sus tiempos de atención, un agente nuevo rinde rápido, y Servicio avisa a Ventas cuando hay riesgo u oportunidad.
+*Resultado:* El equipo responde por sus tiempos de atención, un agente nuevo rinde rápido, y Servicio le avisa a Ventas cuando un cliente se puede ir.
 
 - Hay rendición de cuentas explícita contra SLA. `[3.4.E1 · evaluado · hábito · requiere 3.3.E1]`
 - Cuando entra alguien nuevo al equipo, hay un plan de onboarding con sus pasos y materiales; no se le entrena de memoria. `[3.4.E2 · declarado]`
@@ -1422,7 +1422,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* Las solicitudes del cliente no se pierden entre áreas, sabe lo que necesita antes de preguntarlo y los problemas se atienden antes de que escalen; la empresa retiene clientes que antes se perdían sin aviso, encuentra oportunidades en su propia cartera y, donde la relación es continua, sus clientes clave ven qué lograron.
 
 - Hay alertas tempranas, a partir del indicador de salud, de riesgo de churn o de oportunidad de upsell. `[3.7.E1 · comprobable · cliente recurrente · requiere 3.3.E5]`
-- Los clientes en riesgo reciben una acción de retención antes de decidir irse, y los que tienen potencial reciben una propuesta de expansión. `[3.7.E2 · comprobable · hábito · cliente recurrente]`
+- Los clientes en riesgo reciben una acción de retención antes de decidir irse, y los que tienen potencial reciben una propuesta de expansión. `[3.7.E2 · comprobable · hábito · relación continua]`
 - Los clientes clave tienen registrado el resultado que persiguen y lo revisan con la empresa en una cadencia fija: qué se logró y qué sigue. `[3.7.E3 · declarado · hábito · relación continua]`
 - Ninguna solicitud o molestia del cliente se pierde entre áreas: quedan en el sistema aunque las resuelva otra área —administración, cobros, entregas—, y hay alertas automáticas cuando una se atrasa, cuando un cliente califica mal o cuando se acerca una fecha crítica —una entrega, una garantía, un vencimiento—, que le llegan a quien tiene que actuar. `[3.7.E4 · comprobable]`
 - Cada cliente recibe, sin tener que pedirla, la información que necesita antes de los momentos clave de su relación —una entrega, un trámite, un vencimiento—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5 · comprobable]`
@@ -1607,6 +1607,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 
 ## Historial de versiones
 
+**8.6.0 (2026-09-30).** Las cuatro ediciones suman Marketing y Servicio, escritos con el mismo cuidado que Ventas: cada área con su vistazo por nivel, y cada dimensión con su pregunta, su descripción, su costo, sus niveles, sus resultados y sus criterios dichos con las palabras de la industria. Entran 54 criterios propios en esas dos áreas y 467 criterios de la matriz se dicen con otras palabras. Ecommerce y retail completa lo que ya traía y suma, entre otros, el catálogo que alimenta los anuncios de producto, las ventas que vuelven a las plataformas de anuncios, los locales en los mapas, los creadores con su código, cada caso ligado a su pedido, las mismas condiciones de cambio y devolución para todos, el pedido atrasado avisado antes del reclamo y la retención de los suscriptores. Banca y servicios financieros suma la revisión de cumplimiento normativo antes de publicar, el costo total a la vista en cada anuncio, las campañas que no le ofrecen a un cliente lo que ya tiene y que respetan su permiso, los plazos del regulador para cada reclamo, la verificación de identidad antes de atender una gestión, el bloqueo inmediato de la tarjeta y, en Eficiente, las gestiones más comunes en la app. Educación suma la campaña de cada período desde las fechas de admisión, la familia como audiencia, la reputación a la vista, el costo por matrícula, el calendario de atención de cada período y la permanencia del estudiante. Inmobiliaria suma el plan de marketing por etapa del proyecto, la página de cada proyecto, anunciar solo lo disponible, el costo por visita y por reserva, la garantía escrita, el aviso de un cambio en la fecha de entrega, el avance de obra hasta la entrega y, donde hay condominio, el traspaso a su administración. Dentro de cada edición, cada cosa se pide una vez: en Banca, Ventas pide la autorización para consultar el historial y Marketing el permiso para las ofertas; en Educación, Admisiones pide el permiso del responsable de un menor, su recordatorio habla del curso siguiente —la rematrícula es de Servicio— y suma la matrícula que no llega a clases; en Ecommerce, las secuencias de Ventas son las del carrito y las de después de la compra, y las de Marketing, las de quien todavía no compra. Cinco criterios de la matriz no aplican en su edición: el responsable dedicado, la retención con propuesta de expansión y las revisiones de resultado en una tienda, y la retención con expansión en Banca, donde ofrecer un producto más es del área comercial. En la escala general, la retención y la propuesta de expansión de Proactividad pasan a aplicar solo donde la relación es continua: donde el cliente vuelve sin contrato, reactivarlo es de Tracción del Deal. También cambian textos sin cambiar lo que se mide: el orden de dependencias ya no nombra una dimensión que las ediciones renombran, el vistazo de Marketing en Eficiente deja de prometer una presencia medible que ningún criterio pide, el resultado de Eficiente en Equipo y Gobierno de Servicio deja de prometer que se avisan las oportunidades, y se retocan la descripción de Medición y Aprendizaje y un criterio de Datos de Servicio. Cambia lo que piden Marketing y Servicio en las cuatro ediciones, y Eficiente de Proactividad para el perfil de recompra.
+
 **8.5.0 (2026-09-30).** Marketing y Servicio dejan de pedir lo mismo en dos dimensiones, con el criterio con que se limpió Ventas en la 8.2.0, y quedan iguales a Ventas en cuatro cosas que ya estaban decididas para ella. En Marketing, cada cosa queda en un solo lugar: probar y ajustar las campañas, y que lo aprendido corrija la planificación, en Medición y Aprendizaje; la reunión del equipo, en Procesos, y Equipo y Gobierno pide que en ella se rinda cuentas por las metas; el tablero del líder y el reporte mensual a la dirección, en Equipo y Gobierno, y Medición pide los resultados de cada campaña a la vista; que las campañas salgan distintas por segmento y segmentar por comportamiento, en Segmentación; la definición de lead calificado para Ventas, en Ventas, y Marketing define hasta el MQL; la presencia en los asistentes de IA, en Marca y Presencia; y la limpieza de los datos, en Datos. En Servicio: el pipeline de servicio y quién responde por cada cliente, en Procesos; la ficha del cliente, en Datos, y Priorización de Clientes pide que el agente la use; la prioridad de cada ticket, en Priorización de Clientes; la escalación automática, en Tecnología; adelantarse al cliente, en Proactividad; alimentar la base de conocimiento y buscar patrones, en Escalabilidad del Servicio; el traspaso desde Ventas, en Equipo y Gobierno; y mantener vigentes las respuestas publicadas queda como riesgo, con su propio mensaje, y deja de decidir el nivel. Las cuatro cosas que se igualan a Ventas: trabajar en el sistema central es una rutina y pasa a Procesos, y con ella la señal de Inicial de los agentes que siguen con sus canales personales; la IA como asistente del equipo es de Eficiente, y en Funcional solo se pide que, si se usa, trabaje con un contexto básico; Procesos mide en Eficiente y en Óptimo que el proceso se cumpla, y en Servicio eso es que cada caso siga las etapas y los pasos del proceso, no que se cumplan los plazos; y los paneles en tiempo real son de Eficiente, en Tecnología. En «Los cinco niveles de un vistazo», Eficiente dice en las tres áreas que la IA asiste al equipo. Salen 29 criterios —18 de Marketing y 11 de Servicio—, entran 19 y 29 se dicen de nuevo; el que cambia de dimensión, de nivel o de lo que mide lleva identificador nuevo, y el anterior queda retirado. Las revisiones de resultado de Óptimo en Proactividad pasan a aplicar solo donde la relación es continua: lo que ese criterio pedía para todos queda en el de las acciones proactivas que se ajustan con IA. Dicen lo que requieren 35 criterios de Marketing y de Servicio. En Ventas, el análisis de Eficiente en Aprendizaje de Ganadas y Perdidas revisa los negocios ganados además de los perdidos, y las cuatro ediciones lo dicen con sus palabras. La regla de asignación lleva a las tres áreas dos casos que solo hablaban de Ventas, suma cuatro y precisa otros tres. El glosario cambia «Costo de adquisición» por «CAC», que es como aparece en la matriz, dice que un MQL todavía no es un lead calificado y retira «Retención neta de ingresos». En la edición Ecommerce y retail, la descripción de Tecnología de Servicio deja de decir si quien atiende ve los pedidos, que es de Datos. Cambia lo que piden Funcional, Eficiente y Óptimo en varias dimensiones de Marketing y de Servicio, y Eficiente en Aprendizaje de Ganadas y Perdidas.
 
 **8.4.2 (2026-09-30).** Revisión de las cuatro ediciones antes de publicarlas, con el mismo criterio con que se limpió Ventas: cada cosa se pide una vez. En Banca, la oferta se valida contra la política de crédito vigente y ya no contra las condiciones del cliente, que es la precalificación; el documento del cliente objetivo dice a quién va dirigido cada producto y qué busca. En Inmobiliaria, la disponibilidad queda en Tecnología: el estado de cada unidad la requiere, y los cambios que llegan el mismo día son los de precio y de avance de obra. En Ecommerce y retail, la invitación a volver después de cada compra pasa a ser un criterio propio, y el de los clientes que ya deberían haber vuelto se lee como en la escala general; las devoluciones por «no era lo que esperaba» se miden, y corregir la ficha queda en Embudo de compra; la ficha del producto deja de pedir la disponibilidad, y la meta por canal, un responsable. En Educación, los criterios y los textos que todavía hablaban de venta o de lo comercial se dicen con las palabras de admisiones. Salen dos requeridos que no eran estrictos —uno de Banca y uno de Inmobiliaria— y entran tres que sí lo son. En la escala general, el ejemplo de la IA en el trabajo diario deja de ser sugerir el siguiente paso, que es de Priorización de Leads, y la regla de asignación dice que probar una técnica nueva en un piloto sigue en Procesos. No cambia ningún identificador de la matriz ni su cálculo.
@@ -1698,7 +1700,7 @@ Una unidad se mide con la escala general o con una sola edición, la de su indus
 
 Una edición puede darle criterios a una dimensión que en la escala general no aplica a un perfil. Pasa en la de ecommerce y retail: en la venta transaccional, la dimensión de personalización de Ventas no aplica en la escala general, y en la edición mide la oferta que la tienda le hace a cada comprador. Y pasa en la de banca, donde esa dimensión mide también a quién se le ofrece cada producto cuando el cliente lo contrata solo.
 
-Una edición se escribe por áreas. Ecommerce y retail trae Ventas entera y, en Marketing y Servicio, sus preguntas y sus costos. Banca y servicios financieros, Educación e Inmobiliaria traen por ahora solo Ventas: en ellas, Marketing y Servicio se miden con la escala general.
+Una edición se escribe por áreas, y un área que la edición no escribe se mide con la escala general. Las cuatro ediciones de hoy —Ecommerce y retail, Banca y servicios financieros, Educación e Inmobiliaria— traen las tres áreas enteras.
 
 ## Cómo se escribe una edición
 
@@ -1725,7 +1727,6 @@ Para quien vende productos al consumidor final en una tienda en línea, en tiend
 | Propuesta | La ficha del producto y su oferta |
 | Razón de pérdida | El paso donde se abandonó la compra |
 | Ticket | Caso de posventa: una consulta, un cambio o una devolución |
-| Renovación | La próxima compra |
 
 ### Área 1 — Ventas
 
@@ -1816,7 +1817,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 *Resultado:* El equipo recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué paso se cae la compra.
 
-- Hay secuencias de varios pasos que cambian según lo que hace el comprador —si abrió, hizo clic o compró—, y las conversaciones se asignan por múltiples condiciones, con control de quién ve y responde cada una. `[1.2.E2]`
+- Hay secuencias de varios pasos para el carrito y para después de la compra, que cambian según lo que hace el comprador —si abrió, hizo clic o compró—, y las conversaciones se asignan por múltiples condiciones, con control de quién ve y responde cada una. `[1.2.E2]`
 - La tienda está integrada con el sistema de inventario y de facturación. `[1.2.E3]`
 
 **Óptimo.** Agentes de IA atienden y venden en el canal conversacional, y la tienda se ajusta sola con lo que aprende de cada compra.
@@ -2074,6 +2075,18 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 ### Área 2 — Marketing
 
+Mide el rendimiento del marketing de la tienda: cómo está montado por dentro y qué produce en visitas, compradores nuevos y ventas de cada campaña.
+
+**Deficiente.** Lo que la gente piensa de tu tienda no lo decides tú. Cada pieza sale con otro tono y otra imagen, las herramientas no se hablan entre sí, y la pauta corre hasta que se acaba el presupuesto sin que nadie mida cuánto vendió. Los compradores que llegan, llegan por casualidad.
+
+**Inicial.** Tienes logo, colores y redes, pero ningún plan detrás. Pagas herramientas que se usan a medias y cada una por su lado, las promociones se anuncian cuando alguien se acuerda, y sabes cómo le fue a una campaña solo cuando ya terminó. Las ventas que trae el marketing suben y bajan, y no sabes de dónde viene cada comprador.
+
+**Funcional.** Tu marketing ya no depende de una persona. Tienes por escrito tu marca y tus perfiles de comprador, las herramientas que pagas se usan de verdad, y cada promoción del calendario sale coordinada por correo, pauta, redes y WhatsApp, sabiendo cuánto te cuesta cada venta en cada canal. Los reportes salen del sistema, sin armarlos a mano. Las ventas que trae el marketing son previsibles, aunque todavía no se afinan con pruebas.
+
+**Eficiente.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la próxima temporada. Sabes cuánto vendió cada canal y cada campaña, no solo cuál trajo el primer clic; las campañas se adaptan solas a cada segmento; la IA asiste a tu equipo en su trabajo diario, y la tienda aparece cuando alguien busca lo que vendes, también en los asistentes de IA. La pauta se mueve hacia donde más vende, y tus reseñas juegan a tu favor.
+
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido se genera y se afina en ciclo continuo, cada comprador recibe el mensaje que corresponde a lo que hizo antes, la pauta se reparte sola entre canales mientras la campaña corre, y los compradores contentos traen compradores nuevos. El equipo decide la estrategia y valida lo que sale.
+
 #### 2.1 Procesos y Rutinas
 
 Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos siguen saliendo igual?
@@ -2081,6 +2094,28 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 *Descripción:* Mide si las campañas de la tienda salen de un calendario y un proceso compartidos, sin depender de nadie.
 
 *Costo de quedarse:* Cada promoción depende de quien la arma: si esa persona falta, la campaña de la temporada sale tarde o no sale.
+
+**Deficiente.** Cada quien arma las campañas a su criterio; no hay calendario ni reuniones.
+
+- No hay calendario de campañas: las piezas de cada promoción se improvisan a última hora. `[2.1.D1]`
+
+**Inicial.**
+
+- Las indicaciones de cada pieza se dan de palabra, y el calendario de campañas se llena a medias. `[2.1.I1]`
+
+**Funcional.**
+
+*Resultado:* Las promociones y los lanzamientos siguen saliendo aunque cambie una persona: el calendario de campañas y el proceso no viven en la cabeza de nadie, todo el equipo trabaja en el mismo sistema y el líder sabe en qué va cada campaña sin tener que preguntar.
+
+- Existe un calendario de campañas visible para el equipo —qué pieza sale, por qué canal y en qué fecha—, con horizonte de al menos un trimestre. `[2.1.F1]`
+- Existe un proceso documentado para armar cada campaña —qué se pide, quién la produce, cómo se publica y cómo se cierra— que el equipo aplica de forma consistente. `[2.1.F2]`
+- Hay una reunión de resultados de las campañas con cadencia fija (semanal o quincenal) que se sostiene. `[2.1.F3]`
+
+**Eficiente.**
+
+- Existe un proceso de aprobación antes de publicar cada pieza —un correo, un anuncio, una publicación—: alguien la revisa y la aprueba, y queda guardada su versión. `[2.1.E2]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I2`, `2.1.I3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
 
 #### 2.2 Tecnología y Automatización
 
@@ -2090,6 +2125,48 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 
 *Costo de quedarse:* Haces a mano los envíos que podrían salir solos y pagas herramientas que no usas, mientras quien te escribe por WhatsApp espera respuesta.
 
+**Deficiente.**
+
+- Las listas para las campañas —suscriptores, compradores— se arman en hojas de cálculo. `[2.2.D1]`
+- No hay un sistema central de marketing: cada canal se maneja en su propia herramienta. `[2.2.D2]`
+
+**Inicial.**
+
+- La tienda paga herramientas de marketing —de correo, de mensajería o de anuncios— cuyas funciones casi no usa. `[2.2.I1]`
+- Las herramientas de marketing no están conectadas con la tienda ni entre sí. `[2.2.I2]`
+- Las automatizaciones son elementales, como un correo de bienvenida; la IA se usa a prueba, de vez en cuando. `[2.2.I3]`
+
+**Funcional.**
+
+*Resultado:* Todo lo que entra por la tienda en línea y por WhatsApp llega al sistema y recibe respuesta, y los anuncios de producto salen del catálogo de la tienda y se miden por lo que venden.
+
+- Los puntos de captura de la tienda en línea —la suscripción al boletín, la ventana con un descuento de bienvenida, el aviso de disponibilidad— están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
+- Hay al menos un canal conversacional conectado —WhatsApp, el chat de la tienda o los mensajes de Instagram— con una bandeja básica donde el equipo atiende lo que entra. `[2.2.F4]`
+- Quien se suscribe o deja sus datos en la tienda recibe una respuesta automática —la bienvenida o el cupón prometido—, y el sistema avisa a quien corresponde. `[2.2.F5]`
+- Si el equipo usa IA, esta tiene como contexto la voz de la tienda y sus perfiles de comprador. `[2.2.F9]`
+- Si la tienda hace anuncios de producto —en Google Shopping o con el catálogo de Meta—, se alimentan solos del catálogo de la tienda, sin cargas a mano. `[2.2.F101 · comprobable]`
+- Si la tienda vende en línea y hace pauta, sus compras vuelven solas a las plataformas de anuncios, para que la pauta se mida y se optimice por ventas y no por clics. `[2.2.F102 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* Quien se suscribe recibe una bienvenida que avanza sola hasta que compra, las conversaciones que abre cada promoción no dependen de que alguien se acuerde de contestar, y el líder ve en tiempo real cuáles esperan respuesta.
+
+- Hay secuencias de varios pasos, con ramificación y tiempos de espera, para quien se suscribió y todavía no compra: la bienvenida cambia según lo que abre y en qué hace clic. `[2.2.E1]`
+- Las campañas por el canal conversacional —una promoción o un lanzamiento por WhatsApp— están automatizadas, con segmentación y con ramificación según la interacción: si la persona leyó, hizo clic o respondió. `[2.2.E2]`
+- El traspaso de leads a los vendedores está automatizado. `[2.2.E3]`
+- Varios canales conversacionales —por ejemplo WhatsApp, el chat de la tienda y los mensajes de Instagram— llegan a una sola bandeja. `[2.2.E4]`
+- Las páginas de cada campaña —la de una promoción o la de una temporada— se publican desde la misma plataforma de la tienda, no desde herramientas sueltas. `[2.2.E5]`
+- El equipo usa la IA en su trabajo diario —para redactar correos y anuncios, adaptar una pieza a cada canal o resumir cómo le fue a una promoción—, y la IA trabaja con el contexto del área: los perfiles de comprador, los segmentos y la voz de la tienda. `[2.2.E6]`
+
+**Óptimo.**
+
+*Resultado:* Cada persona vive un recorrido pensado para ella: la IA decide el siguiente mensaje y conversa en el momento, con lo que la tienda sabe de cada cliente.
+
+- Agentes de IA atienden el canal conversacional: responden a quien contesta una campaña y mantienen la conversación con quien todavía no está listo para comprar. `[2.2.O2]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven a las herramientas de marketing: las audiencias de los correos y de la pauta usan, por ejemplo, cuánto vale cada cliente en el tiempo, calculado afuera. `[2.2.O3]`
+
+*Se leen igual:* `2.2.D3`, `2.2.F2`, `2.2.E7`, `2.2.O1`.
+
 #### 2.3 Datos
 
 ¿Sabes qué canal te trae compradores y cuánto compran, o mueves el presupuesto a ojo?
@@ -2098,13 +2175,79 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 
 *Costo de quedarse:* No sabes qué canal trae ventas y cuál solo gasta: mueves la pauta a ciegas y le escribes a gente que no te dio permiso.
 
+**Deficiente.**
+
+- No se registra de dónde llega cada suscriptor o comprador: si de la pauta, de las redes o de un correo. `[2.3.D1]`
+
+**Inicial.**
+
+- Hay primeras conexiones: la tienda en línea le pasa al CRM sus suscriptores o sus compradores. `[2.3.I1]`
+
+**Funcional.**
+
+*Resultado:* El líder sabe de dónde llega cada suscriptor y cada comprador, con reportes que salen del sistema y no de una planilla armada a mano.
+
+- Todo contacto nuevo —entre por una suscripción, un formulario, una conversación o una compra— tiene poblados la etapa del ciclo de vida y su origen. `[2.3.F1]`
+- Los datos que describen al cliente ideal de la tienda —lo que define a cada segmento, como su zona o las categorías que le interesan— están en los formularios críticos y se capturan en la mayoría de los registros. `[2.3.F2]`
+- Los duplicados —el mismo comprador registrado dos veces, con otro correo o como invitado— están bajo control, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3]`
+- Los reportes básicos —visitas, conversión a compra y de dónde llega cada comprador— salen del sistema sin reconstrucción manual. `[2.3.F5]`
+- El contexto que el área documentó —los perfiles de comprador, los segmentos y la voz de la tienda— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[2.3.F6]`
+- Cuando la tienda pide un correo o un teléfono —al suscribirse o al comprar—, pregunta si la persona acepta que la tienda le escriba por ese canal —correo, SMS o WhatsApp—, y su respuesta queda registrada. `[2.3.F7]`
+
+**Eficiente.** Los datos están unificados y atribuidos: se sabe cuánto vende cada canal.
+
+*Resultado:* Marketing puede demostrar cuánto vendió cada canal y cada campaña, no solo cuál trajo el primer clic.
+
+- La atribución reparte el mérito de cada venta entre todos los puntos de contacto, no solo el primero o el último, y en todos los canales, también el conversacional: se sabe cuánto vende cada uno —la pauta, el correo, las redes, WhatsApp—. `[2.3.E2]`
+- La deduplicación es automática: el sistema fusiona por reglas los registros del mismo comprador. `[2.3.E3]`
+
+**Óptimo.**
+
+*Resultado:* La atribución cruza todos los canales de venta que tenga la tienda, no solo lo que ve Marketing, y los datos se mantienen confiables sin que el equipo tenga que cuidarlos.
+
+- Marketing se apoya en el almacén central de datos de la empresa —donde se juntan los canales de venta que tenga la tienda y las herramientas de marketing— y atribuye las ventas con esa vista completa. `[2.3.O1]`
+- Los datos de cada comprador se completan solos, con IA: por ejemplo, las categorías que le interesan o su talla. `[2.3.O3]`
+
+*Se leen igual:* `2.3.D2`, `2.3.I2`, `2.3.E1`, `2.3.O4`.
+
 #### 2.4 Equipo y Gobierno
 
-¿Quién decide qué se promociona, cuánto se invierte y en qué canal, con qué datos y con qué cadencia?
+¿Quién decide qué campañas salen, cuánto se invierte en pauta y en qué canal, con qué datos y con qué cadencia?
 
-*Descripción:* Mide quién decide qué se promociona y dónde se invierte, con qué datos y con qué cadencia de revisión.
+*Descripción:* Mide quién decide qué campañas salen y dónde va la pauta, con qué datos y con qué cadencia.
 
-*Costo de quedarse:* Las promociones se deciden por costumbre o por quien insiste más, y nadie puede demostrar si la pauta se paga sola.
+*Costo de quedarse:* Las campañas se deciden por costumbre o por quien insiste más, y nadie puede demostrar si la pauta se paga sola.
+
+**Deficiente.**
+
+- El marketing de la tienda lo hace una agencia, o una sola persona que además atiende los pedidos, la tienda y las redes. `[2.4.D1]`
+
+**Inicial.**
+
+- Las decisiones del día a día —subir un anuncio, cambiar una pieza— esperan al dueño o a la gerencia. `[2.4.I1]`
+
+**Funcional.**
+
+*Resultado:* El equipo sabe qué se espera de cada uno, las decisiones de pauta se defienden con números y no con opiniones, y la dirección recibe cada mes cómo le fue al marketing de la tienda sin tener que pedirlo.
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (suscriptores nuevos, visitas por canal, conversión a compra, costo por venta) y lo consulta al menos semanalmente. `[2.4.F2]`
+- El equipo tiene metas mensuales o trimestrales, y en la reunión de resultados de las campañas rinde cuentas por ellas. `[2.4.F3]`
+- Las decisiones de pauta y de qué promoción empujar citan datos del sistema, no opiniones. `[2.4.F4]`
+
+**Eficiente.**
+
+*Resultado:* Una persona nueva se integra rápido, y Marketing, Ventas y Servicio preparan juntos cada promoción en vez de enterarse cuando ya salió.
+
+- Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales; no se le entrena de memoria. `[2.4.E2]`
+- El liderazgo orquesta con Ventas —el calendario de promociones, una cadencia conjunta y, donde hay vendedores, el traspaso de leads y sus tiempos— y con Servicio, por ejemplo para que sepa qué promoción viene. `[2.4.E3]`
+
+**Óptimo.**
+
+*Resultado:* La dirección sabe cuánto dejan en el tiempo los compradores que trae cada canal frente a lo que cuesta traerlos, y decide dónde invertir con esa cuenta, con un equipo capaz de sostener la IA.
+
+- Las decisiones usan analítica avanzada, como lo que deja cada canal de adquisición —cuánto compran en el tiempo los clientes que trae, no solo su primera compra— frente a lo que cuesta. `[2.4.O4]`
+
+*Se leen igual:* `2.4.D2`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
 
 #### 2.5 Marca y Presencia
 
@@ -2112,15 +2255,85 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 
 *Descripción:* Mide si quien busca lo que vendes encuentra la tienda, la reconoce y confía en ella por sus reseñas.
 
-*Costo de quedarse:* Quien busca lo que vendes encuentra primero a otro, o te encuentra y no ve reseñas que le den confianza para comprar.
+*Costo de quedarse:* Quien busca lo que vendes encuentra primero a otro, o te encuentra y no te distingue de las demás tiendas.
+
+**Deficiente.**
+
+- No hay una guía de cómo se ve y cómo habla la tienda, ni una historia que la explique: cada pieza sale con su propio estilo. `[2.5.D1]`
+- No están identificados los perfiles de comprador: quién compra en la tienda y por qué. `[2.5.D2]`
+- La tienda no aparece en los buscadores cuando alguien busca lo que vende, o aparece por casualidad. `[2.5.D3]`
+
+**Inicial.**
+
+- Hay logo, colores y plantillas, pero el perfil de comprador es muy general: «gente que compra en línea». `[2.5.I1]`
+- La tienda en línea tiene meta tags simples y un contenido que apenas cumple. `[2.5.I2]`
+
+**Funcional.**
+
+*Resultado:* La tienda se ve y suena igual en todo lo que publica, y quien la busca la encuentra en los buscadores y, si tiene locales, en los mapas, con lo básico bien resuelto.
+
+- Existe una guía corta de la voz de la tienda —cómo habla en sus correos, sus anuncios y sus publicaciones—, escrita y aplicada a piezas recientes. `[2.5.F2]`
+- Hay 2 o 3 perfiles de comprador escritos, cada uno con su recorrido básico por etapa: cómo descubre la tienda, cómo compara y qué lo hace comprar. `[2.5.F3]`
+- Se publica contenido propio al menos una vez por mes, con cadencia previsible: guías de compra, ideas de uso o de regalo, videos o el formato que use la tienda. `[2.5.F5]`
+- Si la tienda tiene locales, cada uno aparece en los mapas y en los buscadores con su información completa: dirección, horario, teléfono y fotos. `[2.5.F101 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* La tienda aparece cuando alguien busca lo que vende, en los buscadores y en los asistentes de IA, con contenido pensado para cada tipo de comprador que importa, y sus reseñas juegan a su favor.
+
+- Los perfiles de comprador están detallados para los segmentos de más valor para la tienda. `[2.5.E1]`
+- El contenido está organizado por temas: una página central por tema —por ejemplo, una guía para elegir un producto— y contenido de apoyo que la refuerza. `[2.5.E2]`
+- El AEO está implementado para que la tienda y sus productos aparezcan en las respuestas de los asistentes de IA, con resultados medibles. `[2.5.E3]`
+- El recorrido del comprador está mapeado con sus puntos de contacto definidos: dónde conoce la tienda, dónde compara, dónde compra y qué recibe después. `[2.5.E4]`
+- Las reseñas y calificaciones públicas —de los productos, en Google y en los marketplaces— se piden a los clientes satisfechos y se responden con una cadencia fija. `[2.5.E5]`
+
+**Óptimo.**
+
+- Los perfiles de comprador están tan segmentados que se acercan a cada cliente individual. `[2.5.O1]`
+- La IA produce y optimiza el contenido de la tienda de forma continua —guías, publicaciones y textos para los buscadores y los asistentes de IA—, y el equipo valida lo que se publica. `[2.5.O2]`
+
+*Se leen igual:* `2.5.I3`, `2.5.F1`, `2.5.F4`.
 
 #### 2.6 Segmentación
 
-¿Cada cliente recibe campañas según lo que compra, o todos reciben la misma promoción?
+¿Cada grupo de compradores recibe campañas pensadas para él, o todos reciben la misma promoción?
 
-*Descripción:* Mide si las campañas se arman según lo que compra cada cliente, o si todos reciben lo mismo.
+*Descripción:* Mide si cada grupo de compradores recibe campañas pensadas para él, o si todos reciben la misma promoción.
 
-*Costo de quedarse:* Le mandas la misma promoción a todos: el que ya compró ese producto se cansa, y el que compraría otro nunca se entera.
+*Costo de quedarse:* Le mandas la misma promoción a todos: el mensaje no le habla a ningún grupo, y cada envío cansa a quien no le interesa.
+
+**Deficiente.**
+
+- No hay segmentos: cada promoción sale a toda la base con el mismo mensaje. `[2.6.D1]`
+
+**Inicial.**
+
+- Se segmenta apenas por zona, edad o género. `[2.6.I1]`
+
+**Funcional.** Hay segmentos de compradores definidos y piezas adaptadas a mano para cada uno.
+
+*Resultado:* Cada grupo de compradores recibe promociones y mensajes pensados para él, en vez de la misma pieza para toda la base.
+
+- Existen al menos 2 segmentos de compradores definidos con criterios escritos, por ejemplo por categoría de interés o por zona. `[2.6.F1]`
+- Las campañas recientes salieron con piezas distintas para cada segmento: otro producto, otra imagen u otro mensaje. `[2.6.F3]`
+
+**Eficiente.** La segmentación y el puntaje de cada suscriptor se automatizan.
+
+*Resultado:* El mensaje se adapta solo a quién lo recibe y a lo que hizo antes, y quien está más cerca de comprar recibe primero el empujón que le falta.
+
+- Las secuencias de bienvenida y de nutrición cambian según el segmento o la etapa del recorrido de cada persona. `[2.6.E1]`
+- El contenido de las campañas se adapta solo a cada segmento: por ejemplo, el mismo correo muestra otros productos según quién lo recibe. `[2.6.E2]`
+- Hay un puntaje por reglas de qué tan cerca de comprar está cada suscriptor: suma puntos por varios atributos —lo que abre, lo que mira, cuántas veces vuelve a la tienda— y, al pasar un umbral, dispara la secuencia de nutrición que le corresponde. No basta con una regla sobre un solo dato. `[2.6.E3]`
+- La segmentación usa lo que hace cada persona —qué correos abrió, qué miró en la tienda, qué compró y hace cuánto—, no solo lo que declaró. `[2.6.E4]`
+
+**Óptimo.**
+
+*Resultado:* Cada comprador recibe los mensajes y ve el contenido que le corresponde según lo que hizo antes, sin que nadie arme un segmento para él.
+
+- La IA identifica micro-segmentos y comportamientos de compra: por ejemplo, quien solo compra con descuento o quien compra para regalar. `[2.6.O1]`
+- Hay personalización uno a uno: lo que ve cada persona en los mensajes y en las páginas de campaña de la tienda en línea cambia en tiempo real según lo que hizo antes. `[2.6.O3]`
+
+*Se leen igual:* `2.6.D2`, `2.6.I2`, `2.6.F4`.
 
 #### 2.7 Canales y Alcance
 
@@ -2130,15 +2343,99 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 
 *Costo de quedarse:* Tu alcance depende de la última promoción: los canales salen sueltos y no sabes cuánto te cuesta cada venta.
 
+**Deficiente.**
+
+- No hay un plan de canales: cada promoción sale por donde se pueda. `[2.7.D2]`
+
+**Inicial.**
+
+- La pauta son publicaciones impulsadas o campañas sueltas, sin optimizarlas; los correos salen de vez en cuando. `[2.7.I2]`
+
+**Funcional.**
+
+*Resultado:* Cada promoción sale coordinada por correo, pauta, redes y WhatsApp en vez de cuatro esfuerzos sueltos, y el líder sabe cuánto le cuesta cada venta según el canal que la trajo.
+
+- Los correos a la base de suscriptores y clientes salen con cadencia regular (al menos mensual), y se cumple. `[2.7.F1]`
+- Hay al menos una red social —Instagram, TikTok o Facebook— gestionada y calendarizada, con publicaciones recurrentes. `[2.7.F2]`
+- Hay al menos una campaña de pauta corriendo con presupuesto definido: en Google, en Meta, en el marketplace donde vende la tienda o en el canal que le corresponda. `[2.7.F3]`
+- WhatsApp u otro canal conversacional se usa para salir con cadencia definida —lanzamientos, promociones, novedades—, no solo para responder lo que entra. `[2.7.F4]`
+- Los cuatro canales siguen el mismo calendario y la misma campaña: una promoción —el Black Friday, el Día de la Madre— sale coordinada en correo, pauta, redes y WhatsApp, no como cuatro esfuerzos sueltos. `[2.7.F5]`
+- El líder puede decir cuánto costó cada venta el último mes —o cada lead, donde vende un equipo—, al menos por canal. `[2.7.F6]`
+
+**Eficiente.**
+
+*Resultado:* La pauta se mueve hacia el canal que más vende, los canales se refuerzan entre sí en vez de competir por el mismo comprador, y los clientes y los creadores traen compradores que se pueden contar.
+
+- Los canales, incluido el conversacional, comparten datos y se alimentan entre sí: una campaña que empieza en la pauta sigue en el correo, hay remarketing activo y las audiencias de la pauta se arman desde el CRM, por ejemplo para no mostrarle un anuncio de captación a quien ya compró. `[2.7.E1]`
+- Hay eventos como canal recurrente: lanzamientos en la tienda, ventas en vivo por las redes o talleres. `[2.7.E2]`
+- La pauta se reparte y se ajusta con frecuencia según las ventas que deja cada canal y cada campaña. `[2.7.E3]`
+- Hay un programa de referidos activo: los clientes saben cómo recomendar la tienda —con su enlace o su código—, y cada comprador nuevo que llega referido queda registrado con quién lo trajo. `[2.7.E4]`
+- Hay un programa de creadores o influencers activo, con colaboraciones recurrentes: cada uno tiene su código o su enlace, y cada venta que trae queda registrada con quién la trajo. `[2.7.E101 · comprobable · hábito]`
+
+**Óptimo.**
+
+*Resultado:* La pauta se reparte sola donde más vende, los compradores contentos traen compradores nuevos, y la tienda llega antes que su competencia a los canales nuevos.
+
+- Los canales nuevos —una red que empieza a vender, un marketplace nuevo, comunidades o formatos nuevos— se prueban en ciclos cortos. `[2.7.O1]`
+- La IA reasigna sola la pauta entre canales mientras las campañas corren, para sacarle el mayor retorno a lo invertido. `[2.7.O2]`
+- Los compradores que Servicio identifica como promotores se vuelven un canal de referidos y de contenido —sus fotos y videos con el producto—, sin pedírselo a mano. `[2.7.O4]`
+
+*Se leen igual:* `2.7.D1`, `2.7.I1`, `2.7.I3`.
+
 #### 2.8 Medición y Aprendizaje
 
 ¿Cada campaña te enseña qué vende, o repites la promoción del año pasado?
 
-*Descripción:* Mide si cada campaña se mide por las ventas que dejó y si deja un aprendizaje para la siguiente.
+*Descripción:* Mide si cada campaña se evalúa por las ventas que dejó y si deja un aprendizaje para la siguiente.
 
-*Costo de quedarse:* Repites las promociones de siempre sin saber cuáles dejaron margen: el presupuesto se reparte por costumbre, no por retorno.
+*Costo de quedarse:* Repites la campaña del año pasado sin saber qué parte funcionó: los mismos errores vuelven en cada temporada.
+
+**Deficiente.** Las campañas corren hasta agotar el presupuesto, sin medir cuánto vendieron ni aprender de ellas.
+
+- La pauta de una promoción se deja correr hasta que se acaba el presupuesto, sin revisarla en el camino. `[2.8.D1]`
+- No se mide cuánto vendió cada campaña frente a lo que costó. `[2.8.D2]`
+- Cada temporada se arma desde cero, sin mirar lo que dejó la anterior. `[2.8.D3]`
+
+**Inicial.**
+
+- Se miran los clics y los «me gusta», pero no cuánto cuesta conseguir cada comprador. `[2.8.I1]`
+
+**Funcional.**
+
+*Resultado:* El equipo ve cuánto vendió cada campaña sin armar el número a mano, y cada temporada deja una lección escrita para la siguiente.
+
+- Cada campaña significativa —una temporada alta, un lanzamiento— tiene una revisión de cierre documentada: qué canales, piezas y audiencias funcionaron y cuáles no. `[2.8.F3]`
+- Los resultados de cada campaña —las ventas que trajo o los leads que pasó a un vendedor, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
+
+**Eficiente.** Se prueba con regularidad y se ajusta con los datos.
+
+*Resultado:* El equipo sabe qué piezas y audiencias venden porque lo probó, no porque lo intuye, y lo aprendido cambia cómo se arma la próxima temporada.
+
+- Hay pruebas A/B regulares en las campañas —un asunto de correo, una imagen, una audiencia—, al menos una activa por mes. `[2.8.E1]`
+- Hay un proceso formal para decidir, con los resultados de campañas y temporadas anteriores, qué piezas y audiencias funcionan. `[2.8.E2]`
+- El proceso de campaña y el plan de las próximas campañas y temporadas se ajustan con lo aprendido. `[2.8.E3]`
+
+**Óptimo.**
+
+*Resultado:* Las campañas mejoran mientras están corriendo, no cuando la temporada ya pasó.
+
+- La IA aplica lo aprendido mientras la campaña corre: cambia las piezas, las audiencias o el mensaje según lo que vende. `[2.8.O2]`
+
+*Se leen igual:* `2.8.I2`.
 
 ### Área 3 — Servicio
+
+Mide el rendimiento de la posventa de la tienda, que cubre todo lo que pasa después del pago: desde el seguimiento del pedido y cada consulta, cambio o devolución, hasta que el comprador queda conforme con lo que compró. Mira cómo está montada por dentro y qué produce hacia el comprador.
+
+**Deficiente.** Tu posventa se improvisa pedido por pedido. Cada quien resuelve un cambio o una devolución a su manera, las consultas llegan por correo, WhatsApp y redes sin un lugar común, y todo depende de que la persona que sabe esté disponible. Te enteras de que un comprador quedó mal cuando ya lo contó en público.
+
+**Inicial.** Una sola persona sabe cómo se resuelve cada caso, y si falta, la posventa se traba. Hay un sistema para los casos, pero parte del equipo sigue atendiendo desde su teléfono; hay respuestas guardadas para lo más frecuente y una forma de resolver los cambios que nadie escribió. La posventa es frágil.
+
+**Funcional.** Tu posventa es consistente y ya no depende de una persona. Sabes qué tipos de cliente atiendes y qué espera cada uno. Cada consulta, cambio o devolución sigue el mismo recorrido en un solo sistema, ligada a su pedido y con su tipo y su motivo, y se resuelve igual lo atienda quien lo atienda. Lo urgente va primero, tienes respuestas guardadas para lo repetitivo y detectas a mano los atrasos antes de que el comprador reclame. Todavía no hay alertas automáticas, pero ya no esperas a que el comprador se queje.
+
+**Eficiente.** Tu posventa empieza a adelantarse al problema. Los plazos de atención se vigilan solos, el comprador puede iniciar un cambio sin escribirle a nadie y la IA asiste a tu equipo en su trabajo diario; mides tiempos de respuesta y satisfacción, y la posventa y la venta ven los mismos datos de cada comprador. Ninguna molestia se pierde entre la posventa, la bodega y el despacho, y quien tuvo un problema recibe algo para recuperarlo. Dejas de perder compradores por un mal momento que nadie vio.
+
+**Óptimo.** Un agente de IA resuelve las consultas de los compradores —dónde está un pedido, cómo hacer un cambio— y le pasa a una persona, con todo el contexto, lo que no puede resolver. Las rutinas de la posventa corren solas mientras el equipo supervisa y gestiona las excepciones; muchos problemas con un pedido se resuelven antes de que el comprador los note, y cada comprador se atiende sabiendo qué le prometió la tienda y recibe detalles pensados para deleitarlo. Atender un pedido más casi no cuesta.
 
 #### 3.1 Procesos y Rutinas
 
@@ -2148,13 +2445,81 @@ Si mañana falta quien más sabe de cambios y devoluciones, ¿la atención se ma
 
 *Costo de quedarse:* Un cambio o una devolución se resuelve distinto según quién atienda: el comprador no sabe a qué atenerse y reclama en público.
 
+**Deficiente.**
+
+- Cada quien resuelve los cambios, las devoluciones y los reclamos a su manera. `[3.1.D1]`
+- No hay rutinas ni traspasos definidos —con la bodega, con quien despacha—; la posventa es 100% reactiva. `[3.1.D2]`
+
+**Inicial.**
+
+- Hay un plazo de respuesta conocido —«te contestamos en un día hábil»—, pero nadie lo mide. `[3.1.I1]`
+- Unos atienden en el sistema; otros responden desde el WhatsApp de su teléfono o desde la cuenta de la tienda en las redes, por fuera. `[3.1.I3]`
+
+**Funcional.** El equipo atiende en un mismo sistema, con el recorrido de los casos configurado y alguien que responde por cada comprador.
+
+*Resultado:* Todo el equipo atiende en el mismo sistema, cada comprador tiene a alguien que responde por él, y un cambio o una devolución sigue los mismos pasos sin importar quién lo tome.
+
+- El recorrido de los casos de posventa está configurado con sus etapas —por ejemplo, recibido, en revisión, esperando el producto devuelto y resuelto— y cubre la atención de la recepción al cierre. `[3.1.F1]`
+- Cada comprador tiene quién responda por él —una persona o, si son muchos, un equipo con un seguimiento automático— y un seguimiento mínimo más allá de los casos que abre, como confirmar que su pedido llegó bien. `[3.1.F2]`
+- Existe un proceso básico documentado para los reclamos críticos —un pedido que no llegó, un producto dañado, un reclamo público— y para escalarlos. `[3.1.F4]`
+- Cualquiera del equipo explica igual cómo se atiende un cambio o una devolución, paso a paso. `[3.1.F5]`
+- Cualquiera del equipo atiende en el sistema central, no desde su teléfono ni desde la aplicación de cada red: es su herramienta de trabajo, no algo que se llena después de resolver por otro lado. `[3.1.F6]`
+
+**Eficiente.** Aparecen los plazos de atención, las guías de acción y el recorrido del comprador, y el líder vigila con datos que el proceso se cumpla.
+
+*Resultado:* El comprador sabe cuánto va a tardar la respuesta a su caso, cada momento después de su compra tiene un dueño, y el líder sabe dónde se desvía la atención y corrige con datos, no de memoria.
+
+- Hay plazos de respuesta y de resolución definidos por tipo de caso —una consulta, un cambio, una devolución, un reclamo— o por prioridad. `[3.1.E1]`
+- Hay guías de acción para prevenir problemas —un atraso, un producto que se agotó después de pagado—, para recuperar a un comprador que quedó mal y para ofrecerle algo más a quien quedó contento. `[3.1.E3]`
+- El recorrido del comprador después de pagar está definido de punta a punta —la confirmación, la espera, la entrega, el uso y, si la hay, la próxima compra—, con un responsable y un estándar para cada momento. `[3.1.E4]`
+
+**Óptimo.**
+
+- Muchas rutinas de la posventa corren solas —generar la guía de devolución, avisarle a la bodega, emitir el reembolso—; el equipo supervisa, entrena la IA y gestiona las excepciones. `[3.1.O1]`
+
+*Se leen igual:* `3.1.I2`, `3.1.F3`, `3.1.E5`, `3.1.O3`, `3.1.O4`.
+
 #### 3.2 Tecnología y Automatización
 
-¿Cuántas consultas sobre pedidos necesitan a una persona cuando podrían resolverse solas?
+¿Cuánto del trabajo de la posventa hace el sistema —repartir los casos, avisar, escalar—, y cuánto de lo que pagas se aprovecha?
 
-*Descripción:* Mide cuántas consultas sobre pedidos se resuelven solas o por autoservicio, y cuánto se aprovecha el sistema de atención.
+*Descripción:* Mide si los canales de atención llegan al sistema y cuánto del trabajo repetitivo de la posventa sale solo.
 
-*Costo de quedarse:* Tu equipo contesta a mano «¿dónde está mi pedido?» decenas de veces al día, y las consultas se pierden entre el correo, WhatsApp y las redes.
+*Costo de quedarse:* Los casos se pierden entre el correo, WhatsApp y las redes, y alguien tiene que repartirlos y perseguirlos a mano: el comprador insiste para que lo atiendan.
+
+**Deficiente.**
+
+- Los casos se atienden desde el celular o el correo personal de cada quien. `[3.2.D2]`
+
+**Inicial.** Hay un sistema para los casos, con automatización mínima y herramientas sin conectar.
+
+- Hay respuestas automáticas de recepción, sin IA; la tienda, el correo y WhatsApp no están conectados entre sí. `[3.2.I2]`
+
+**Funcional.**
+
+*Resultado:* Lo que entra por los canales conectados —WhatsApp, el chat o el correo— llega al sistema y se le asigna a alguien sin que nadie lo reparta, y quien lo necesita se entera de cada cambio del caso.
+
+- Hay al menos un canal conversacional —WhatsApp, el chat de la tienda o los mensajes de las redes— conectado a una bandeja básica donde el equipo atiende lo que entra. `[3.2.F4]`
+- Al entrar un caso, el sistema lo asigna solo según una regla simple —por ejemplo, por tipo: consulta, cambio o devolución—, y los avisos de cada cambio de estado del caso llegan a quien los necesita. `[3.2.F5]`
+- Si hay un chatbot, resuelve las consultas frecuentes —horarios, costos de envío, cómo pedir un cambio— con un árbol de decisión. `[3.2.F6]`
+
+**Eficiente.**
+
+*Resultado:* Los plazos se vigilan solos y los casos urgentes llegan solos a quien los tiene que resolver; el comprador puede ver sus casos e iniciar un cambio o una devolución sin esperar a nadie, y el líder ve en tiempo real cuánto hay abierto y qué quedó sin atender.
+
+- Hay automatización de los plazos —alertas antes de que venzan y escalación automática, con reglas de cuándo se escala y a quién—, y los casos y las conversaciones se reparten por varias condiciones, como el tipo de caso, el canal o el marketplace de donde vienen. `[3.2.E1]`
+- Hay un portal de autoservicio donde el comprador ve sus casos y abre uno nuevo —por ejemplo, inicia un cambio o una devolución sin escribirle a nadie—, y hay base de conocimiento interna y pública. `[3.2.E2]`
+- Los canales de atención —correo, WhatsApp, chat, redes y los mensajes de los marketplaces— llegan a una sola bandeja. `[3.2.E3]`
+- El equipo usa la IA en su trabajo diario —para redactar respuestas, resumir un caso o buscar en la política de cambios—, y la IA trabaja con el contexto del área: los tipos de cliente, los niveles de atención y las respuestas a las consultas frecuentes. `[3.2.E4]`
+
+**Óptimo.**
+
+*Resultado:* Buena parte de las consultas se resuelve sin una persona, y cuando un caso pasa a alguien del equipo, llega con el pedido, la conversación y lo que la tienda sabe de ese comprador a la vista.
+
+- Hay un agente de IA en producción que resuelve consultas en todos los canales sin intervención humana —dónde está un pedido, cómo hacer un cambio— y le pasa a una persona, con el contexto completo, lo que no puede resolver; hay automatización de flujos de trabajo. `[3.2.O1]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de atención: quien atiende ve en la ficha del comprador, por ejemplo, cuánto vale en el tiempo o si está por dejar de comprar. `[3.2.O4]`
+
+*Se leen igual:* `3.2.D1`, `3.2.F8`, `3.2.E5`.
 
 #### 3.3 Datos
 
@@ -2164,13 +2529,76 @@ Si mañana falta quien más sabe de cambios y devoluciones, ¿la atención se ma
 
 *Costo de quedarse:* Cada vez que el comprador escribe tiene que dar su número de pedido y volver a explicar todo, porque nadie ve su historia.
 
+**Deficiente.**
+
+- Es imposible reconstruir qué pasó con un comprador: qué pidió, qué le llegó y qué reclamó. `[3.3.D2]`
+
+**Funcional.** La historia del comprador y el pedido de cada caso están a la vista, con los casos clasificados.
+
+*Resultado:* El líder sabe qué tipo de casos llegan y cuántos, y cualquiera del equipo ve en segundos la historia del comprador y en qué va el pedido del que habla.
+
+- Cualquiera del equipo ve el historial de casos de un comprador en menos de 10 segundos. `[3.3.F1]`
+- La ficha del comprador muestra sus pedidos, lo que ha pagado y su valor para la tienda, no solo sus casos. `[3.3.F2]`
+- Los datos clave del comprador —qué compró y desde cuándo compra en la tienda— están poblados en la mayoría de los registros. `[3.3.F3]`
+- Cada caso tiene su tipo y su motivo, de una lista definida: por ejemplo, una consulta por el estado del pedido, un cambio de talla o un reclamo por un atraso. `[3.3.F4]`
+- El líder saca reportes de cuántos casos hay de cada tipo sin reconstrucción. `[3.3.F5]`
+- Cada caso queda ligado al pedido del que habla, y quien atiende ve en qué va ese pedido —preparado, enviado, entregado— sin salir del sistema. `[3.3.F101 · comprobable · requiere 1.1.F2]`
+
+**Eficiente.** Se miden los tiempos y la satisfacción, y la posventa ve los mismos datos que la venta.
+
+*Resultado:* La tienda sabe qué tan rápido y qué tan bien atiende, cuánto tarda un comprador nuevo en tener lo que compró y, donde se vuelve a comprar, qué tan sano está cada cliente, con la satisfacción medida y no supuesta.
+
+- Se mide el tiempo de primera respuesta y de resolución, y el cumplimiento de los plazos acordados, en todos los canales, también en las redes y en los marketplaces. `[3.3.E1]`
+- Se mide la satisfacción con cadencia, con el NPS o el CSAT: por ejemplo, una encuesta después de la entrega o al cerrar cada caso. `[3.3.E2]`
+- Los datos de cada comprador están unificados entre la posventa y la venta: los mismos pedidos, casos y datos de contacto en los dos lados. `[3.3.E3]`
+- Se mide cuánto tarda cada comprador nuevo en alcanzar el resultado de su primera compra: desde que paga hasta que lo recibe y lo usa sin problemas, sin abrir un caso ni devolverlo. `[3.3.E4]`
+- Hay un indicador de salud por reglas para cada cliente, que combina cómo viene comprando, sus casos abiertos y su satisfacción. `[3.3.E5]`
+
+**Óptimo.** Un modelo de salud de cada cliente anticipa el riesgo antes de que el cliente lo manifieste.
+
+*Resultado:* La tienda sabe qué clientes pueden dejar de comprar por una mala experiencia antes de que lo digan, y cuántos casos va a traer cada temporada, con datos que se mantienen al día solos.
+
+- Hay un modelo de salud de cada cliente, activo, predictivo y en uso, que mide tanto su experiencia con la tienda —entregas, casos y devoluciones— como si lo que compra le está sirviendo: lo sigue comprando y no lo devuelve. `[3.3.O1]`
+- Hay modelos predictivos y prescriptivos alimentando cuadros de mando: por ejemplo, cuántos casos traerá la próxima promoción y cuánta gente hará falta para atenderlos. `[3.3.O3]`
+
+*Se leen igual:* `3.3.D1`, `3.3.I1`, `3.3.I2`, `3.3.F6`, `3.3.O2`, `3.3.O4`.
+
 #### 3.4 Equipo y Gobierno
 
-¿Quién decide qué se atiende primero y cómo se mejora la posventa, y con qué información?
+¿Quién responde por la posventa, con qué números decide y con qué cadencia la revisa?
 
-*Descripción:* Mide quién decide qué se atiende primero, con qué información, y cómo se revisa y mejora la posventa.
+*Descripción:* Mide si alguien responde por la posventa: roles claros, un tablero con sus números y una revisión con cadencia.
 
-*Costo de quedarse:* Se atiende primero al que más reclama, y los mismos problemas de entrega y devolución se repiten porque nadie los revisa.
+*Costo de quedarse:* Nadie responde por la posventa: sus números no se miran, y los atrasos y los reclamos se descubren cuando ya estallaron.
+
+**Deficiente.**
+
+- No hay coordinación entre quienes atienden las consultas, los cambios y los reclamos. `[3.4.D1]`
+
+**Inicial.** Roles a grandes rasgos y traspasos informales.
+
+**Funcional.**
+
+*Resultado:* Cada persona sabe qué le toca, y el líder ve cada semana si la posventa va al día o se está atrasando.
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (casos abiertos, casos por tipo, pedidos atrasados, cambios y devoluciones en curso) y lo consulta al menos semanalmente. `[3.4.F2]`
+
+**Eficiente.** El equipo rinde cuentas por los plazos de atención, y el liderazgo prepara a quien entra y orquesta con otras áreas.
+
+*Resultado:* El equipo responde por sus plazos de atención, una persona nueva atiende bien desde el principio, y la tienda sabe por la posventa quién puede dejar de comprar y qué producto falla.
+
+- El equipo rinde cuentas explícitamente por los plazos de atención acordados. `[3.4.E1]`
+- Cuando entra alguien nuevo a la posventa, hay un plan de inducción con sus pasos y materiales —la política de cambios, los casos frecuentes, el sistema—; no se le entrena de memoria. `[3.4.E2]`
+- El liderazgo orquesta con Ventas y con Marketing: la posventa le devuelve a la tienda los compradores que pueden dejar de comprar y lo que se repite en los casos, como un producto que falla. `[3.4.E4]`
+
+**Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento, y la posventa se mide también por los compradores que vuelven.
+
+*Resultado:* La posventa se mide por los compradores que vuelven, no solo por los casos que cierra, y decide con lo que cuesta atender a cada tipo de cliente.
+
+- El equipo de posventa se mide por cuántos de los compradores que atendió vuelven a comprar y cuánto compran, no solo por los casos que cierra. `[3.4.O3]`
+- Las decisiones usan analítica avanzada, como cuánto cuesta atender a cada tipo de cliente —sus consultas, sus cambios, sus devoluciones— frente a lo que deja. `[3.4.O4]`
+
+*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.O1`, `3.4.O2`.
 
 #### 3.5 Consistencia de Atención
 
@@ -2180,13 +2608,68 @@ Si mañana falta quien más sabe de cambios y devoluciones, ¿la atención se ma
 
 *Costo de quedarse:* La misma devolución se acepta o se rechaza según quién atienda: el comprador lo nota y lo cuenta.
 
+**Deficiente.**
+
+- La misma devolución se acepta con una persona y se rechaza con otra. `[3.5.D1]`
+
+**Inicial.**
+
+- No hay guía de tono; cada quien usa las respuestas guardadas cuando quiere. `[3.5.I1]`
+
+**Funcional.** Hay tipos de cliente definidos, respuestas guardadas para lo frecuente, los mismos criterios para cambios y devoluciones, y un acompañamiento definido para el comprador nuevo.
+
+*Resultado:* El equipo sabe qué tipos de cliente atiende y qué espera cada uno, un comprador nuevo sabe cómo usar lo que compró, y un cambio o una devolución se resuelve igual lo atienda quien lo atienda.
+
+- Hay al menos algunas respuestas guardadas —el estado de un pedido, cómo pedir un cambio, cuánto tarda un reembolso— disponibles para el equipo. `[3.5.F1]`
+- Existe un proceso documentado para el comprador nuevo después de su primera compra —lo que recibe para usar bien lo que compró: instrucciones, cuidados o armado—, con un resultado definido: que lo reciba y lo use sin problemas. `[3.5.F2]`
+- Existe un documento simple con los tipos de cliente que atiende la posventa —por ejemplo, quien compra en línea, en la tienda física o en un marketplace— y qué necesita y espera cada uno, consultable por cualquiera del equipo. `[3.5.F4]`
+- Los cambios, las devoluciones y las garantías se resuelven aplicando las condiciones de la tienda igual para todos, lo atienda quien lo atienda y entre por el canal que entre; las excepciones las aprueba una persona definida. `[3.5.F101 · evaluado · hábito]`
+
+**Eficiente.**
+
+*Resultado:* El comprador reconoce la voz de la tienda en cada respuesta, lo atienda quien lo atienda.
+
+- Las respuestas suenan a la tienda —su tono y su voz—, no al estilo de cada persona. `[3.5.E2]`
+
+*Se leen igual:* `3.5.F3`, `3.5.E1`, `3.5.E3`, `3.5.O1`.
+
 #### 3.6 Priorización de Clientes
 
-¿Tus mejores clientes y los casos urgentes se atienden primero, o todos hacen la misma fila?
+¿Lo urgente se atiende primero y cada comprador recibe la atención que le corresponde, o todos hacen la misma fila?
 
-*Descripción:* Mide si la atención se prioriza por la urgencia del caso y el valor del cliente, no por quién insiste.
+*Descripción:* Mide si la atención se prioriza por la urgencia del caso y el contexto del comprador, no por quién insiste.
 
-*Costo de quedarse:* Tu mejor cliente espera en la misma fila que todos, y un pedido que no llegó se atiende después que una consulta simple.
+*Costo de quedarse:* Un pedido que no llegó espera detrás de una consulta simple, y quien atiende responde sin saber qué compró esa persona ni qué le pasó antes.
+
+**Deficiente.**
+
+- Los casos se atienden por orden de llegada o como le parezca a quien atiende, sin mirar qué pedido está en juego. `[3.6.D1]`
+
+**Funcional.**
+
+*Resultado:* Lo urgente se atiende primero —un pedido que no llegó antes que una consulta de talla—, cada tipo de cliente recibe la atención que le corresponde, y quien atiende no tiene que reconstruir la historia del comprador.
+
+- Cada caso tiene una prioridad asignada —por ejemplo, un pedido que no llegó va antes que una consulta de talla— y el equipo la respeta. `[3.6.F1]`
+- La atención se diferencia según los tipos de cliente: cada tipo tiene claro qué atención recibe —por qué canal y quién lo atiende—. `[3.6.F2]`
+- Quien atiende usa la ficha del comprador —sus pedidos, lo que ha pagado y sus casos abiertos— para responder con contexto, sin pedirle sus datos otra vez ni reconstruirlo a mano. `[3.6.F3]`
+
+**Eficiente.** Los compradores se segmentan según su momento, para actuar distinto con cada grupo.
+
+*Resultado:* La atención cambia según el momento de cada comprador: con un pedido en camino, dentro de su plazo de cambio o con un problema abierto.
+
+- Los compradores se segmentan para acciones de posventa según su momento: con un pedido en camino, dentro de su plazo de cambio o de garantía, con un problema abierto o listos para recomendar; y, donde vuelven a comprar, sanos o en riesgo. `[3.6.E2]`
+
+**Óptimo.**
+
+*Resultado:* Cada comprador recibe una atención a su medida en cualquier canal, incluso cuando se atiende solo, y nunca tiene que volver a explicar qué compró ni qué le prometieron.
+
+- La atención se personaliza también en el autoservicio: el portal y el chat le muestran a cada comprador lo que corresponde a sus pedidos y a su tipo de cliente. `[3.6.O1]`
+- La atención se personaliza uno a uno en tiempo real: la respuesta, el canal y la solución se ajustan a cada comprador y a lo que está pasando con su pedido. `[3.6.O2]`
+- Cada comprador se atiende con el contexto de su compra —lo que le prometieron la ficha del producto y la promoción con la que compró, y la campaña de la que viene—, sin volver a preguntarlo. `[3.6.O3]`
+
+*No aplican:* `3.6.E1`.
+
+*Se leen igual:* `3.6.I1`.
 
 #### 3.7 Seguimiento del pedido
 
@@ -2196,6 +2679,44 @@ Si mañana falta quien más sabe de cambios y devoluciones, ¿la atención se ma
 
 *Costo de quedarse:* El comprador se entera de un atraso cuando ya reclamó, y tú te enteras de que quedó mal cuando deja una mala reseña.
 
+**Deficiente.** La posventa espera el reclamo: nadie mira los pedidos hasta que el comprador escribe.
+
+- Los problemas con un pedido se atienden cuando el comprador ya reclamó. `[3.7.D1]`
+- La posventa espera a que el comprador escriba, por un solo canal. `[3.7.D2]`
+
+**Inicial.** La posventa responde ordenada, pero siempre después del reclamo.
+
+**Funcional.** Los atrasos y los problemas evidentes se detectan a mano antes de que el comprador reclame.
+
+*Resultado:* Los atrasos, los reclamos y las malas calificaciones ya no toman al equipo por sorpresa: el comprador se entera de un atraso antes de tener que reclamar, alguien actúa antes de que un problema escale y, donde hay suscripción, se sabe por qué cancela cada cliente.
+
+- Un comprador con casos repetidos del mismo problema, un reclamo sin resolver —también uno público, en las redes— o una mala calificación se identifica, y alguien lo contacta antes de que escale. `[3.7.F1]`
+- Los mejores clientes reciben contacto antes de un vencimiento importante —el fin de su garantía o, donde hay suscripción, su renovación—, no después. `[3.7.F2]`
+- Cada cliente que cancela su suscripción deja registrada la razón. `[3.7.F3]`
+- Los pedidos que se van a atrasar se detectan antes de la fecha prometida, y el comprador recibe un aviso con la nueva fecha antes de tener que reclamar. `[3.7.F101 · comprobable · hábito]`
+
+**Eficiente.** Los atrasos y las solicitudes pendientes se ven venir, las resuelva quien las resuelva, y el comprador recibe lo que necesita saber antes de pedirlo.
+
+*Resultado:* Ninguna molestia del comprador se pierde entre la posventa, la bodega y el despacho, el comprador sabe lo que necesita antes de preguntarlo, quien tuvo un problema recibe algo para recuperarlo antes de irse con una mala impresión y, donde hay suscripción, quien está por cancelar recibe una razón para quedarse.
+
+- Hay alertas tempranas, a partir del indicador de salud, de un cliente que puede dejar de comprar o que está listo para comprar más. `[3.7.E1]`
+- Ninguna solicitud o molestia del comprador se pierde entre áreas: quedan en el sistema aunque las resuelva otra área —la bodega, el despacho o administración—, y hay alertas automáticas cuando una se atrasa, cuando un comprador califica mal o cuando se acerca una fecha crítica —una entrega, el fin de un plazo de cambio, una garantía—, que le llegan a quien tiene que actuar. `[3.7.E4]`
+- Cada comprador recibe, sin tener que pedirla, la información que necesita antes de los momentos clave —lo que necesita para retirar o recibir su pedido, el fin de su plazo de cambio, el vencimiento de una garantía—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
+- Cada comprador con un pedido atrasado o que llegó mal recibe, sin tener que pedirla, una acción para recuperarlo: una disculpa, una compensación o una atención especial. `[3.7.E101 · comprobable · hábito]`
+- Los suscriptores que dan señales de cancelar —pausan, se saltan entregas, reclaman— reciben una acción para quedarse antes de decidir irse. `[3.7.E102 · comprobable · hábito · relación continua]`
+
+**Óptimo.**
+
+*Resultado:* Muchos problemas con un pedido se resuelven antes de que el comprador los note, y cada comprador siente que la tienda se adelanta a lo que necesita y lo sorprende para bien.
+
+- Muchos problemas se resuelven antes de que el comprador los note: por ejemplo, un pedido que se iba a atrasar sale desde otra bodega o con otro transportista. `[3.7.O2]`
+- Los avisos y las acciones de la posventa —qué recibe cada comprador, cuándo y por qué canal— se ajustan solos con IA según su historia y sus señales. `[3.7.O3]`
+- Los compradores reciben, sin pedirlos, detalles pensados para deleitarlos —una nota escrita a mano, una muestra en el paquete, un regalo en su cumpleaños—, elegidos según su historia y el momento de su relación. `[3.7.O4]`
+
+*No aplican:* `3.7.E2`, `3.7.E3`, `3.7.O1`.
+
+*Se leen igual:* `3.7.I1`.
+
 #### 3.8 Autoservicio
 
 ¿El comprador resuelve solo lo simple —dónde está su pedido, cómo cambiarlo—, o cada consulta necesita a una persona?
@@ -2203,6 +2724,38 @@ Si mañana falta quien más sabe de cambios y devoluciones, ¿la atención se ma
 *Descripción:* Mide si el comprador resuelve solo lo simple: el estado de su pedido, un cambio o una pregunta frecuente.
 
 *Costo de quedarse:* Cada consulta necesita a una persona: en temporada alta las respuestas se atrasan, y para vender más tienes que contratar al mismo ritmo.
+
+**Deficiente.** Toda la posventa pasa por una persona.
+
+- El comprador no puede ver solo en qué va su pedido ni encontrar respuestas publicadas. `[3.8.D1]`
+- Cada temporada alta obliga a sumar gente para atender, en la misma proporción en que suben los pedidos. `[3.8.D2]`
+
+**Inicial.** Hay preguntas frecuentes sueltas, pero lo que más se consulta —dónde está mi pedido— todavía necesita a una persona.
+
+**Funcional.** El comprador ve solo en qué va su pedido, y las consultas más frecuentes tienen respuesta publicada.
+
+*Resultado:* Las preguntas de siempre dejan de consumir al equipo: el comprador ve solo dónde está su pedido o encuentra la respuesta publicada, y nadie la vuelve a escribir.
+
+- Las consultas que más se repiten —dónde está mi pedido, cuánto cuesta el envío, cómo pido un cambio— tienen una respuesta que el comprador puede consultar por su cuenta: el seguimiento de su pedido y las preguntas frecuentes publicadas. `[3.8.F1]`
+- Cuando entra una consulta que ya tiene respuesta publicada, el equipo envía el enlace —al seguimiento del pedido o a la pregunta frecuente— en vez de volver a redactarla. `[3.8.F2]`
+
+**Eficiente.**
+
+*Resultado:* La tienda puede vender más, también en temporada alta, sin sumar gente en la misma proporción, porque buena parte de la posventa se resuelve sola.
+
+- Cada caso nuevo que se resuelve deja su solución escrita en la base de conocimiento: un producto que falla de una forma nueva, una duda de envío que no estaba. `[3.8.E1]`
+- Se revisan periódicamente los casos que se repiten —por ejemplo, un producto que genera muchas consultas— y, donde hay suscripción, las razones por las que se cancela, para encontrar patrones y mejorar. `[3.8.E2]`
+- El autoservicio es efectivo: el comprador resuelve sin abrir un caso —ve dónde está su pedido o encuentra cómo hacer un cambio— y la tienda crece sin sumar gente al mismo ritmo que los pedidos. `[3.8.E3]`
+
+**Óptimo.**
+
+*Resultado:* Atender un pedido más casi no cuesta: las respuestas se generan solas a medida que aparecen consultas nuevas.
+
+- La IA detecta las consultas nuevas —un producto recién lanzado, un cambio en los envíos— y genera sola la respuesta publicada. `[3.8.O1]`
+- La capacidad de atención se ajusta sola a la demanda en tiempo real, también en temporada alta, y atender a un comprador más casi no cuesta. `[3.8.O2]`
+- Lo que se aprende de cada caso vuelve solo a las respuestas del equipo, a cómo se prioriza cada caso y a los avisos al comprador. `[3.8.O3]`
+
+*Se leen igual:* `3.8.I1`, `3.8.I2`.
 
 ## Edición — Banca y servicios financieros
 
@@ -2230,6 +2783,7 @@ Para el área comercial de un banco, una cooperativa de ahorro y crédito o una 
 | Razón de pérdida | Por qué no se concretó la solicitud: rechazo, desistimiento o abandono |
 | ICP | El cliente objetivo de cada producto |
 | Forecast | Proyección de colocación |
+| Ticket | Caso: un reclamo, una consulta o una gestión sobre un producto |
 
 ### Área 1 — Ventas
 
@@ -2239,7 +2793,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 **Inicial.** Tienes un CRM y un proceso a medias. Las solicitudes se registran cuando el ejecutivo se acuerda, cada sucursal explica las condiciones a su manera y el seguimiento depende de quién lleve el caso.
 
-**Funcional.** Tu área comercial opera como una maquinaria base. Cada solicitud —de sucursal, de ejecutivo o digital— entra al mismo recorrido, las condiciones de cada producto se dicen igual en todos los canales, el permiso del cliente queda registrado y ninguna solicitud se enfría sin que alguien reaccione.
+**Funcional.** Tu área comercial opera como una maquinaria base. Cada solicitud —de sucursal, de ejecutivo o digital— entra al mismo recorrido, las condiciones de cada producto se dicen igual en todos los canales, la autorización del cliente para consultar su historial queda registrada y ninguna solicitud se enfría sin que alguien reaccione.
 
 **Eficiente.** La colocación deja de depender del empuje de cada ejecutivo. Mides en qué etapa se cae cada solicitud, la precalificación sale sola, les ofreces a los clientes que ya califican sin esperar a que pregunten y proyectas la colocación con confianza.
 
@@ -2314,7 +2868,7 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 
 ¿Confías en tus números de solicitudes, de aprobación y de colocación, o los validas antes de usarlos?
 
-*Descripción:* Mide si los datos comerciales son confiables: solicitudes completas, su origen, el permiso del cliente y reportes sin reconstruir.
+*Descripción:* Mide si los datos comerciales son confiables: solicitudes completas, su origen, la autorización del cliente y reportes sin reconstruir.
 
 *Costo de quedarse:* Decides con números que no cuadran: el reporte de colocación se arma a mano cruzando el CRM con el sistema de crédito, y nadie sabe cuántas solicitudes hay de verdad en curso.
 
@@ -2323,7 +2877,7 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 - La información de los prospectos está en hojas de cálculo o en la libreta de cada ejecutivo. `[1.3.D3]`
 - No hay registro de qué productos pidió cada cliente ni de cuáles se le ofrecieron. `[1.3.D4]`
 
-**Funcional.** El reporte de solicitudes describe el estado actual con confianza, y el permiso de cada cliente está registrado.
+**Funcional.** El reporte de solicitudes describe el estado actual con confianza, y la autorización de cada cliente para consultar su historial está registrada.
 
 *Resultado:* El líder ve cuántas solicitudes hay en cada etapa cuando lo necesita, sin armar el reporte a mano, sabe por qué canal llegó cada una y puede demostrar que cada cliente autorizó que lo consultaran y lo contactaran.
 
@@ -2333,7 +2887,7 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 - La documentación sobre el cliente objetivo de cada producto no se deja envejecer. `[1.3.F5]`
 - La definición de prospecto precalificado no se deja envejecer. `[1.3.F6]`
 - La documentación sobre los productos —tasas, costos, requisitos y condiciones— no se deja envejecer. `[1.3.F7]`
-- Todo prospecto con el que se trabaja tiene registrada su autorización para consultar su historial crediticio y para contactarlo, con su fecha. `[1.3.F201 · comprobable]`
+- Todo prospecto con el que se trabaja tiene registrada su autorización para consultar su historial crediticio, con su fecha. `[1.3.F201 · comprobable]`
 
 **Eficiente.** Aparece la proyección de colocación, y la ficha del cliente reúne sus productos, sus solicitudes y sus conversaciones.
 
@@ -2524,6 +3078,507 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 
 *Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
 
+### Área 2 — Marketing
+
+Mide el rendimiento del marketing de la entidad: cómo está montado por dentro y qué produce en prospectos, solicitudes y confianza en la marca.
+
+**Deficiente.** Tu marca no la defines tú, la define el mercado. Cada producto se anuncia con su propia voz, las piezas salen sin pasar por cumplimiento normativo, las herramientas están sueltas y las campañas corren hasta agotar el presupuesto sin que nadie sepa cuántas solicitudes dejaron. Los prospectos llegan por casualidad.
+
+**Inicial.** Tienes marca y campañas por producto, pero sin estrategia detrás. Las herramientas se usan a medias y cada una por su lado, el contenido sale cuando se puede, cumplimiento normativo revisa a última hora y la campaña se atrasa, y el análisis llega tarde: cuando la campaña ya cerró. No sabes de dónde vienen tus prospectos.
+
+**Funcional.** El área dejó de depender de héroes. Tienes marca, buyer personas y presencia digital documentadas, y las herramientas que pagas se usan de verdad. Cada pieza pasa por cumplimiento normativo y dice cuánto cuesta el producto, y tus clientes saben por dónde les escribes y qué nunca les vas a pedir. Tus campañas salen por segmento y coordinadas —correo, pauta, redes, WhatsApp y tus propios canales, como la app o la sucursal—, solo a quien aceptó recibirlas y con el costo por prospecto a la vista. Todavía no optimizas fino, pero la demanda ya es predecible.
+
+**Eficiente.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la siguiente campaña. Los datos están unificados y atribuidos, sabes cuánto te cuesta cada producto colocado sumando la sucursal y lo digital, la segmentación y el puntaje de prospectos se automatizan, y la IA asiste al equipo en su trabajo diario. Cumplimiento normativo responde en un plazo que se mide, te encuentran también en los asistentes de IA, y el presupuesto se mueve hacia el canal que más coloca.
+
+**Óptimo.** La IA produce y ajusta; el equipo dirige. El contenido se genera y se optimiza en ciclo continuo, la IA encuentra micro-segmentos y adapta el mensaje a lo que hace cada persona, los modelos mueven el presupuesto entre canales sobre la marcha, y los clientes que Servicio vuelve promotores traen clientes nuevos. El equipo define la estrategia y valida lo que sale.
+
+#### 2.1 Procesos y Rutinas
+
+Si mañana se va quien arma las campañas, ¿las de cada producto siguen saliendo a tiempo y con la revisión de cumplimiento normativo hecha?
+
+*Descripción:* Mide si las campañas salen de un calendario y un proceso compartidos, con la revisión de cumplimiento normativo incluida.
+
+*Costo de quedarse:* Cada campaña depende de quien la arma: si esa persona falta, la del producto se atrasa o sale sin la revisión de cumplimiento normativo, y una pieza sin revisar puede costarte una sanción.
+
+**Inicial.**
+
+- Cumplimiento normativo revisa las piezas sin un paso ni un plazo acordados: la campaña se atrasa esperando su visto bueno, o sale sin él. `[2.1.I201 · declarado]`
+
+**Funcional.** El área tiene estructura y previsibilidad, y cada pieza pasa por cumplimiento normativo antes de salir; deja de depender de héroes.
+
+*Resultado:* Todo el equipo trabaja en el mismo sistema, y las campañas de cada producto siguen saliendo aunque cambie una persona, con la revisión de cumplimiento normativo hecha: el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada una sin tener que preguntar.
+
+- Toda pieza que habla de un producto pasa por la revisión de cumplimiento normativo antes de publicarse, y su aprobación queda registrada. `[2.1.F201 · declarado · hábito]`
+
+**Eficiente.**
+
+*Resultado:* Cada pieza sale revisada en su calidad, no solo aprobada por cumplimiento normativo, y el líder sabe dónde se desvía el proceso y corrige con datos, no de memoria.
+
+- Existe un proceso de aprobación de contenido antes de publicar, con control de versiones y de calidad, aparte de la revisión de cumplimiento normativo. `[2.1.E2]`
+
+*Se leen igual:* `2.1.D1`, `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+
+#### 2.2 Tecnología y Automatización
+
+¿Cuánto del trabajo de las campañas hace el sistema, y cuánto se aprovecha lo que ya pagas: la herramienta de marketing, el CRM y WhatsApp?
+
+*Descripción:* Mide cuánto del marketing hacen los flujos automáticos y la IA, y cuánto se aprovechan las herramientas contratadas.
+
+*Costo de quedarse:* Haces a mano lo que podría salir solo y pagas herramientas que no usas, mientras quien pidió información de un crédito espera respuesta por WhatsApp.
+
+**Inicial.**
+
+- La entidad paga licencias cuyo valor no aprovecha. `[2.2.I1]`
+
+**Funcional.**
+
+*Resultado:* Quien pide información de un producto en el sitio o escribe por WhatsApp entra al sistema y recibe respuesta.
+
+- Los formularios del sitio —pedir información de un producto, pedir que llame un ejecutivo— están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
+
+**Eficiente.**
+
+*Resultado:* Los prospectos se nutren solos hasta estar listos para hablar con un ejecutivo, la conversación con cada contacto no depende de que alguien se acuerde de escribirle, y el líder ve en tiempo real qué conversaciones esperan respuesta.
+
+- El traspaso de prospectos al ejecutivo o a la sucursal que les corresponde está automatizado. `[2.2.E3]`
+
+**Óptimo.**
+
+*Resultado:* Cada contacto vive un recorrido pensado para él: la IA decide el siguiente paso y conversa en el momento, con información que se calcula en toda la entidad.
+
+- Agentes de IA atienden el canal conversacional: responden lo que generan las campañas y mantienen la conversación con quien todavía no está listo para hablar con un ejecutivo. `[2.2.O2]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven a las herramientas de marketing: la segmentación usa, por ejemplo, la rentabilidad real de cada cliente, calculada afuera. `[2.2.O3]`
+
+*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.F5`, `2.2.F9`, `2.2.E1`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`.
+
+#### 2.3 Datos
+
+¿Sabes qué canal y qué campaña te traen prospectos y solicitudes, y quién aceptó recibir tus ofertas, o lo validas a mano?
+
+*Descripción:* Mide si los datos dicen qué canal trae prospectos y solicitudes, y si cada persona aceptó recibir ofertas.
+
+*Costo de quedarse:* No sabes qué campaña trae solicitudes y cuál solo gasta, y le escribes ofertas a quien no te dio permiso: mueves el presupuesto a ciegas y te expones a una sanción.
+
+**Funcional.**
+
+*Resultado:* El líder sabe de dónde viene cada prospecto, con reportes que salen del sistema y no de una hoja armada a mano.
+
+- Todo contacto nuevo —entre por un formulario, una conversación, la app o la contratación de un producto— tiene poblados la etapa del ciclo de vida y su origen. `[2.3.F1]`
+- Las propiedades que describen al cliente objetivo de cada producto —en personas, ingreso, tipo de empleo o zona; en pymes, actividad, antigüedad o ventas— están en los formularios críticos y se capturan en la mayoría de los registros. `[2.3.F2]`
+- Los duplicados —la misma persona como cliente y como prospecto, o con dos correos— están bajo control, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3]`
+- Los reportes básicos —prospectos, conversión a solicitud y origen— salen del sistema sin reconstrucción manual. `[2.3.F5]`
+- Cuando se pide un teléfono u otro dato de contacto, se pregunta si la persona acepta que le escriban por ese canal para ofrecerle productos, y su respuesta queda registrada. `[2.3.F7]`
+
+**Eficiente.**
+
+*Resultado:* Marketing puede demostrar qué canal y qué contenido contribuyeron a cada producto colocado, no solo cuál trajo el primer clic.
+
+**Óptimo.**
+
+*Resultado:* La atribución toma en cuenta todo lo que pasa en la entidad, no solo lo que ve Marketing, y los datos se mantienen confiables sin que el equipo tenga que cuidarlos.
+
+- Marketing se apoya en el almacén central de datos de la entidad, donde se junta la información de todas las herramientas, y atribuye resultados con esa vista completa. `[2.3.O1]`
+
+*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F6`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.O3`, `2.3.O4`.
+
+#### 2.4 Equipo y Gobierno
+
+¿Quién decide qué producto se promueve, cuánto se invierte y en qué canal, con qué datos y con qué cadencia?
+
+*Descripción:* Mide quién decide qué producto se promueve y dónde se invierte, con qué datos y con qué cadencia de revisión.
+
+*Costo de quedarse:* Se promueve el producto del área que más presiona, no el que más conviene, las campañas esperan días a cumplimiento normativo y nadie puede demostrar qué dejó la inversión.
+
+**Inicial.**
+
+- Las decisiones operativas escalan a la gerencia general o a la jefatura de mercadeo. `[2.4.I1]`
+
+**Funcional.**
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (prospectos, prospectos listos para un ejecutivo, origen y conversión a solicitud) y lo consulta al menos semanalmente. `[2.4.F2]`
+
+**Eficiente.** El liderazgo prepara a quien entra, acuerda reglas con el área comercial y con cumplimiento normativo, y escucha al equipo.
+
+*Resultado:* Una persona nueva se integra rápido, Marketing y el área comercial trabajan con reglas acordadas en vez de reclamarse los prospectos, y ninguna campaña se queda esperando a cumplimiento normativo sin que se sepa por qué.
+
+- Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —productos, marca y lo que la regulación exige en una pieza—; no se le entrena de memoria. `[2.4.E2]`
+- El liderazgo orquesta con el área comercial —el traspaso de prospectos a los ejecutivos y a las sucursales, sus plazos y una cadencia conjunta— y con Servicio. `[2.4.E3]`
+- El acuerdo con cumplimiento normativo está escrito y se mide: qué piezas revisa, en cuánto tiempo responde y por qué devuelve una. `[2.4.E201 · comprobable]`
+
+**Óptimo.**
+
+*Resultado:* La dirección sabe cuánto deja cada canal frente a lo que cuesta y decide dónde invertir con ese número, con un equipo capaz de sostener la IA.
+
+- Las decisiones usan analítica avanzada, como lo que deja cada canal —la rentabilidad en el tiempo de los clientes que trae— frente a lo que cuesta. `[2.4.O4]`
+
+*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F4`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
+
+#### 2.5 Marca y confianza
+
+¿El mercado te encuentra, entiende qué ofreces y confía en tu marca lo suficiente para darte sus datos y su dinero?
+
+*Descripción:* Mide si el mercado encuentra a la entidad, entiende qué ofrece y confía en su marca.
+
+*Costo de quedarse:* El mercado no distingue tu marca de la de otra entidad —ni de un fraude que la imita—, y un anuncio que esconde el costo te trae reclamos y una sanción.
+
+**Funcional.** Marca, personas y presencia digital documentadas y consistentes, con el costo a la vista y el cliente advertido contra el fraude.
+
+*Resultado:* La marca se ve y suena igual en todo lo que sale, cada anuncio dice cuánto cuesta el producto, el cliente sabe reconocer cuándo le escribe la entidad y cuándo es un fraude, y el sitio es encontrable en buscadores con lo básico bien resuelto.
+
+- Hay 2-3 buyer personas escritos —por ejemplo, el asalariado que busca su primera tarjeta o el dueño de una pyme que necesita capital de trabajo—, con su recorrido básico por etapa. `[2.5.F3]`
+- Se publica contenido propio al menos una vez por mes, con cadencia previsible —por ejemplo, de educación financiera, de seguridad o de historias de clientes—, en el blog, en la app o en el formato que use la entidad. `[2.5.F5]`
+- La entidad le dice al cliente, en su sitio y en los demás canales que tenga, desde qué números, perfiles y correos le escribe, y qué nunca le va a pedir, como su clave o un código de verificación. `[2.5.F201 · comprobable]`
+- Toda pieza que anuncia una tasa, una cuota o un beneficio muestra también el costo total, los requisitos y las condiciones que exige la regulación, o enlaza a donde están. `[2.5.F202 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* La entidad aparece cuando la gente busca cómo ahorrar, usar bien el crédito o financiar su pyme, tanto en buscadores como en asistentes de IA, con contenido pensado para cada segmento que importa, y lo que dicen de ella sus clientes juega a su favor.
+
+- Los buyer personas están detallados a nivel de segmento de alto valor, como la banca preferente o las pymes. `[2.5.E1]`
+- El contenido está organizado por temas —por ejemplo, ahorrar, usar bien el crédito o financiar una pyme—: una página central por tema y contenido de apoyo que la refuerza. `[2.5.E2]`
+- Las reseñas y calificaciones públicas —por ejemplo, las de la app en las tiendas o las de las sucursales— se piden a los clientes satisfechos y se responden con una cadencia fija. `[2.5.E5]`
+
+**Óptimo.**
+
+- Los buyer personas están hiper-segmentados, casi al nivel de cada cliente. `[2.5.O1]`
+
+*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I1`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E3`, `2.5.E4`, `2.5.O2`.
+
+#### 2.6 Segmentación
+
+¿Cada segmento —personas, pymes, clientes de planilla o nómina— recibe la campaña del producto que le sirve, o todos reciben la misma oferta?
+
+*Descripción:* Mide si cada segmento recibe campañas del producto que le sirve, o si todos reciben la misma oferta.
+
+*Costo de quedarse:* Le ofreces la tarjeta a quien ya la tiene y el crédito de pyme a un asalariado: gastas en campañas que nadie aprovecha y cansas a tus clientes.
+
+**Inicial.**
+
+- Las campañas le ofrecen un producto a quien ya lo tiene. `[2.6.I201 · comprobable]`
+
+**Funcional.**
+
+*Resultado:* Cada segmento recibe la campaña del producto que le sirve, nadie recibe la oferta de lo que ya tiene, y los ejecutivos reciben prospectos que Marketing ya clasificó con criterios claros.
+
+- Existen al menos 2 segmentos definidos con criterios escritos —por ejemplo, personas, pymes y clientes de planilla o nómina—. `[2.6.F1]`
+- Existen criterios documentados de qué es un suscriptor, un prospecto y un prospecto listo para pasar a un ejecutivo, y marketing clasifica según ellos, a mano o con una automatización simple sobre las propiedades de calificación. `[2.6.F4]`
+- Las campañas de un producto no le llegan a quien ya lo tiene, salvo que sean para él —un aumento de límite, un segundo crédito—: la lista se cruza con los productos de cada cliente antes de enviar. `[2.6.F201 · comprobable]`
+
+**Eficiente.** La segmentación y el puntaje de prospectos se automatizan.
+
+*Resultado:* El mensaje se adapta solo a quién lo recibe y en qué etapa está, y los ejecutivos reciben primero a los prospectos con más probabilidad de hacer una solicitud.
+
+- Hay un puntaje de prospectos por reglas —distinto del puntaje de crédito—: un modelo que suma puntos por varios atributos y califica al pasar un umbral, cuyo puntaje dispara las secuencias de nutrición. Se distingue de la calificación de Funcional, que responde a un valor de propiedad sin modelo de puntaje detrás. `[2.6.E3]`
+- La segmentación usa datos de comportamiento —qué abrió, qué visitó, cómo usa sus productos—, no solo lo que la persona declaró. `[2.6.E4]`
+
+*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.F3`, `2.6.E1`, `2.6.E2`, `2.6.O1`, `2.6.O3`.
+
+#### 2.7 Canales y Alcance
+
+¿Llegas a quien necesitas por los canales que usa —también la app y la sucursal—, con su permiso y con un costo que conoces?
+
+*Descripción:* Mide si los canales llegan a quien corresponde, con su permiso, bajo un mismo plan y con un costo conocido.
+
+*Costo de quedarse:* Tus campañas salen sueltas y a veces a quien no dio permiso: no sabes cuánto te cuesta cada prospecto, y te expones a una sanción.
+
+**Inicial.**
+
+- Cada canal va por su lado: no hay calendario común ni campaña que los atraviese. `[2.7.I3]`
+
+**Funcional.** Los canales principales —también los propios de la entidad— operan con cadencia, bajo un mismo plan y con el permiso de cada persona.
+
+*Resultado:* La campaña de un producto sale coordinada por todos los canales —también los propios, como la app o la sucursal—, solo a quien aceptó recibirla, y el líder sabe cuánto le cuesta cada prospecto según de dónde venga.
+
+- Hay al menos una campaña de pauta pagada corriendo con presupuesto definido (Google, Meta o el canal que corresponda a la entidad). `[2.7.F3]`
+- Los cuatro canales siguen el mismo calendario y la misma campaña: la de un producto sale coordinada en correo, pauta, orgánico y el canal conversacional, no como cuatro esfuerzos sueltos. `[2.7.F5]`
+- El líder puede decir cuánto costó cada prospecto —o cada producto colocado, donde el cliente lo contrata solo en los canales digitales— el último mes, al menos por canal. `[2.7.F6]`
+- Las campañas solo le llegan a quien aceptó recibir ofertas por ese canal, y quien pide no recibir más deja de recibirlas. `[2.7.F201 · comprobable · requiere 2.3.F7]`
+- Las campañas dirigidas a clientes salen también por los canales propios que tenga la entidad —la app, la banca en línea, las sucursales—, con el mismo mensaje y en las mismas fechas. `[2.7.F202 · declarado · hábito]`
+
+**Eficiente.**
+
+*Resultado:* La inversión se mueve hacia el canal que mejor rinde —medido por los productos que coloca, no solo por los prospectos que trae—, y los canales se refuerzan entre sí en vez de competir por el mismo contacto.
+
+- Hay charlas en línea o eventos como canal recurrente, por ejemplo de educación financiera para pymes o para los empleados de una empresa que paga su planilla con la entidad. `[2.7.E2]`
+- Hay un programa de referidos activo: los clientes saben cómo recomendar un producto —una tarjeta, una cuenta—, y cada referido queda registrado con quién lo trajo. `[2.7.E4]`
+- Se sabe, por canal, cuánto costó cada producto colocado, contando también lo que se colocó en la sucursal o con un ejecutivo, no solo en los canales digitales. `[2.7.E201 · comprobable · requiere 1.3.F3]`
+
+**Óptimo.**
+
+*Resultado:* La inversión se reparte sola donde más retorna, los clientes satisfechos traen clientes nuevos, y la entidad llega antes que otras a los canales nuevos.
+
+*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E1`, `2.7.E3`, `2.7.O1`, `2.7.O2`, `2.7.O4`.
+
+#### 2.8 Medición y Aprendizaje
+
+¿Cada campaña te enseña qué coloca y con qué mensaje, o repites la del año pasado?
+
+*Descripción:* Mide si cada campaña se evalúa por las solicitudes y los productos colocados que dejó, y si deja un aprendizaje.
+
+*Costo de quedarse:* Repites las campañas de siempre sin saber cuáles colocaron productos: el presupuesto se reparte por costumbre, no por retorno.
+
+**Funcional.**
+
+- Los resultados de cada campaña —los prospectos, las solicitudes o los productos colocados que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.F3`, `2.8.E1`, `2.8.E2`, `2.8.E3`, `2.8.O2`.
+
+### Área 3 — Servicio
+
+Mide el rendimiento del servicio de la entidad, que cubre todo lo que pasa después de que el cliente contrata un producto: cómo está montado por dentro y qué produce en reclamos resueltos, productos en uso y clientes que se quedan.
+
+**Deficiente.** El servicio se improvisa cliente por cliente. Cada sucursal y cada persona que atiende resuelve los reclamos a su manera, nadie sabe si se respondieron en el plazo que fija el regulador, y todo depende de que la persona correcta esté disponible. Te enteras de que un cliente se fue cuando ya cerró su cuenta.
+
+**Inicial.** El conocimiento vive en una o dos personas que saben cómo se resuelve cada gestión, y eso te deja con un punto único de fallo. Hay un sistema de casos, pero parte del equipo sigue atendiendo por fuera, en su correo o su teléfono; hay respuestas guardadas para lo más frecuente y procesos que nadie escribió. La atención es frágil: para bloquear una tarjeta, el cliente tiene que esperar a que lo atiendan.
+
+**Funcional.** Tu atención es consistente y ya no depende de quién atienda. Sabes qué tipos de cliente atiendes —personas, pymes, banca preferente— y qué espera cada uno. Cada caso sigue un mismo recorrido en el sistema, con la ficha del cliente a la vista; cada reclamo lleva el plazo que fija el regulador y sabes cuántos se respondieron dentro de ese plazo, y nadie atiende una gestión sin verificar quién es el cliente. Un fraude va primero, el cliente bloquea su tarjeta al instante, y recibe aviso antes de cada cobro y ayuda para activar lo que contrató. Todavía no hay alertas automáticas de quién se puede ir, pero quien pide cancelar ya recibe una razón para quedarse.
+
+**Eficiente.** El servicio empieza a adelantarse al problema. Cada tipo de caso tiene su plazo, con alertas y escalación automática; el cliente sigue sus casos y hace sus gestiones más comunes en la app, y la IA asiste a tu equipo en su trabajo diario. Mides tiempos y satisfacción, y la información del cliente se une con la del área comercial. Ves venir a quien se quiere ir antes de que lo pida, ninguna gestión se pierde entre tarjetas, operaciones y Servicio, y tus clientes de banca preferente y tus pymes más importantes tienen un responsable dedicado. La retención se vuelve predecible.
+
+**Óptimo.** Un agente de IA resuelve consultas en producción y le pasa a una persona, con todo el contexto, lo que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y gestiona las excepciones; un modelo anticipa qué cliente se puede ir antes de que lo diga, y cada cliente se atiende sabiendo lo que se le ofreció al contratar y recibe detalles pensados para él. Atender un cliente más casi no cuesta.
+
+#### 3.1 Procesos y Rutinas
+
+Si mañana rotan las dos personas que más saben de reclamos y gestiones, ¿la atención sigue igual y dentro de los plazos?
+
+*Descripción:* Mide si los reclamos y las gestiones siguen un proceso definido, sin depender de quién los atienda.
+
+*Costo de quedarse:* Un reclamo se resuelve distinto según quién lo tome: el cliente no sabe a qué atenerse, y un plazo del regulador que se vence termina en una sanción.
+
+**Deficiente.**
+
+- Cada agente maneja los reclamos, las consultas y las gestiones a su manera. `[3.1.D1]`
+
+**Inicial.**
+
+- Se conocen los plazos que fija el regulador para los reclamos, pero nadie mide si se cumplen. `[3.1.I1]`
+
+**Funcional.** El equipo atiende en un mismo sistema, con el recorrido de atención configurado, los plazos del regulador escritos y la identidad del cliente verificada.
+
+*Resultado:* Todo el equipo atiende en el mismo sistema, cada cliente tiene a alguien que responde por él, cada reclamo lleva escrito el plazo que fija el regulador, y nadie atiende una gestión sin verificar antes quién es el cliente.
+
+- El recorrido de atención está configurado con sus etapas y cubre cada caso —reclamo, consulta o gestión—, de la recepción al cierre. `[3.1.F1]`
+- Cada cliente tiene quién responda por él —una persona o, en la banca masiva, un equipo con un seguimiento automático— y un seguimiento mínimo más allá de los casos que abre. `[3.1.F2]`
+- Existe un proceso básico documentado para los reclamos críticos —un fraude, un cargo no reconocido— o para escalar un caso. `[3.1.F4]`
+- Cada tipo de reclamo tiene escrito en el proceso el plazo de respuesta que fija el regulador. `[3.1.F201 · declarado]`
+- Antes de atender una gestión sobre un producto, se verifica la identidad del cliente con los pasos que define el proceso, en cualquier canal, y queda registrado en el caso. `[3.1.F202 · comprobable · hábito]`
+
+**Eficiente.**
+
+*Resultado:* El cliente sabe cuánto va a tardar la respuesta, cada momento clave de su relación con la entidad tiene un dueño, y el líder sabe dónde se desvía la atención y corrige con datos, no de memoria.
+
+- Hay SLAs definidos por tipo de caso o prioridad, también para lo que el regulador no fija: las consultas y las gestiones. `[3.1.E1]`
+- Hay playbooks de prevención, retención y expansión: qué hacer cuando un cliente deja de usar su tarjeta, cuando pide cancelar un producto o cuando está listo para uno más y hay que pasárselo al área comercial. `[3.1.E3]`
+- El recorrido del cliente está definido de punta a punta, con sus momentos clave —la activación, el primer uso y, si los hay, la renovación o el vencimiento— y un responsable y un estándar para cada uno. `[3.1.E4]`
+
+*Se leen igual:* `3.1.D2`, `3.1.I2`, `3.1.I3`, `3.1.F3`, `3.1.F5`, `3.1.F6`, `3.1.E5`, `3.1.O1`, `3.1.O3`, `3.1.O4`.
+
+#### 3.2 Tecnología y Automatización
+
+¿Qué parte del trabajo con los casos hace el sistema —repartirlos, avisar, escalar— y cuánto de lo que ya pagas se aprovecha?
+
+*Descripción:* Mide cuánto del trabajo con los casos hace el sistema —repartir, avisar, escalar— y cuánto se aprovecha lo contratado.
+
+*Costo de quedarse:* Tu equipo reparte y sigue los casos a mano, y se pierden entre la sucursal, el teléfono y WhatsApp: el cliente tiene que insistir para que lo atiendan.
+
+**Funcional.**
+
+- Al entrar un caso, el sistema lo asigna solo según una regla simple —por tipo, por producto o por sucursal—; los avisos de cambio de estado llegan a quien los necesita. `[3.2.F5]`
+
+**Eficiente.**
+
+*Resultado:* Los plazos se vigilan solos y los casos críticos llegan solos a quien los tiene que resolver; el cliente ve y abre sus casos y hace sus gestiones más comunes en la app, sin esperar a que lo atienda una persona, y el líder ve en tiempo real cuánto hay abierto y qué quedó sin atender.
+
+- Hay automatización de SLA —alertas antes del vencimiento y escalación automática, con reglas de cuándo se escala y a quién—, y las conversaciones y los casos se enrutan por múltiples condiciones, como el tipo de caso, el producto o el segmento del cliente. `[3.2.E1]`
+- En la app o la banca en línea, el cliente ve sus casos y abre uno nuevo —un reclamo, una consulta—, y hay base de conocimiento interna y pública. `[3.2.E2]`
+- El cliente hace solo, en la app o la banca en línea, las gestiones más comunes —descargar su estado de cuenta, pedir una constancia—, sin ir a la sucursal ni llamar. `[3.2.E201 · comprobable]`
+
+**Óptimo.** Un agente de IA resuelve consultas en producción, y lo que se calcula en toda la entidad llega a la ficha del cliente.
+
+*Resultado:* Una parte importante de las consultas se resuelve sin intervención humana, y cuando un caso pasa a una persona, llega con el contexto completo y con lo que la entidad sabe de ese cliente a la vista.
+
+- Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de servicio: el agente ve en la ficha, por ejemplo, qué tan probable es que el cliente se vaya. `[3.2.O4]`
+
+*Se leen igual:* `3.2.D1`, `3.2.D2`, `3.2.I2`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E3`, `3.2.E4`, `3.2.E5`, `3.2.O1`.
+
+#### 3.3 Datos
+
+¿Quien atiende ve al instante los productos del cliente y sus casos anteriores, o se los tiene que preguntar?
+
+*Descripción:* Mide si quien atiende ve al instante los productos y los casos del cliente, sin pedirle que repita su historia.
+
+*Costo de quedarse:* Cada vez que el cliente llama tiene que volver a explicar qué producto tiene y qué pasó, y no puedes demostrarle al regulador cuántos reclamos respondiste dentro del plazo.
+
+**Funcional.**
+
+*Resultado:* El líder sabe qué tipo de casos llegan y cuántos, y cuántos reclamos se respondieron dentro del plazo que fija el regulador; quien atiende tiene la historia del cliente en segundos.
+
+- La ficha del cliente muestra los productos que tiene contratados, lo que ha pagado y su valor para la entidad, no solo sus casos. `[3.3.F2]`
+- Las propiedades clave del cliente —qué productos tiene y desde cuándo es cliente— están pobladas en la mayoría de los registros. `[3.3.F3]`
+- Cada caso tiene tipo y motivo —reclamo, consulta o gestión, y por qué—, con una taxonomía definida. `[3.3.F4]`
+- Se sabe, con un reporte que sale del sistema, cuántos reclamos se respondieron dentro del plazo que fija el regulador y cuáles se vencieron. `[3.3.F201 · comprobable · requiere 3.1.F201]`
+
+**Eficiente.** Se miden tiempos y satisfacción, y la información del cliente se une con la del área comercial.
+
+*Resultado:* La entidad sabe qué tan rápido y qué tan bien atiende, cuánto tarda un cliente nuevo en usar lo que contrató y qué tan sano está cada cliente, con la satisfacción medida y no supuesta.
+
+- La información del cliente está unificada entre Servicio y el área comercial. `[3.3.E3]`
+- Se mide cuánto tarda cada cliente nuevo en usar lo que contrató: el tiempo desde la apertura hasta su primer uso, como la primera compra con su tarjeta o el primer depósito en su cuenta. `[3.3.E4]`
+- Hay un indicador de salud por reglas para cada cliente —distinto de su riesgo de crédito—, que combina cómo usa sus productos, sus casos abiertos y su satisfacción. `[3.3.E5]`
+
+**Óptimo.** Un modelo de salud de los clientes anticipa quién se puede ir antes de que lo manifieste.
+
+*Resultado:* La entidad sabe qué clientes se pueden ir y cuáles están logrando lo que buscaban, antes de que ellos mismos lo digan, con datos que se mantienen al día solos.
+
+- Hay un modelo de salud de los clientes, activo, predictivo y en uso —distinto de su riesgo de crédito—, que mide tanto su experiencia como si están logrando lo que buscaban con sus productos. `[3.3.O1]`
+- Servicio se apoya en el almacén central de datos de la entidad, con reglas claras de quién accede y cómo se mantiene, para anticipar qué clientes se pueden ir. `[3.3.O2]`
+
+*Se leen igual:* `3.3.D1`, `3.3.D2`, `3.3.I1`, `3.3.I2`, `3.3.F1`, `3.3.F5`, `3.3.F6`, `3.3.E1`, `3.3.E2`, `3.3.O3`, `3.3.O4`.
+
+#### 3.4 Equipo y Gobierno
+
+¿Quién decide qué se atiende primero, con qué información, y quién responde por los reclamos y sus plazos?
+
+*Descripción:* Mide quién decide qué se atiende primero, con qué información, y cómo se revisan el servicio y sus reclamos.
+
+*Costo de quedarse:* Se atiende primero al que más insiste, los mismos reclamos se repiten porque nadie los revisa, y el regulador se entera antes que la gerencia.
+
+**Deficiente.**
+
+- No hay coordinación entre quien da la bienvenida a los clientes nuevos, quien atiende los casos y quienes acompañan a los clientes clave. `[3.4.D1]`
+
+**Funcional.**
+
+*Resultado:* Cada persona sabe qué le toca, y el líder ve cada semana si el equipo va al día o si hay reclamos cerca de vencer su plazo.
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (casos abiertos, reclamos cerca del plazo que fija el regulador, volumen, casos por tipo) y lo consulta al menos semanalmente. `[3.4.F2]`
+
+**Eficiente.**
+
+*Resultado:* El equipo responde por sus tiempos de atención, una persona nueva rinde rápido, Servicio le avisa al área comercial cuando un cliente se puede ir, y las áreas que resuelven parte de los casos cumplen lo acordado.
+
+- Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —productos, procedimientos de seguridad y reclamos—; no se le entrena de memoria. `[3.4.E2]`
+- El liderazgo orquesta con el área comercial —cada cliente nuevo llega con lo que busca con su producto, y las alertas de que un cliente se puede ir vuelven al área comercial— y con Marketing. `[3.4.E4]`
+- El acuerdo con las áreas que resuelven parte de los casos —tarjetas, fraude, operaciones— está escrito y se mide: qué reciben, en cuánto tiempo lo resuelven y por qué devuelven un caso. `[3.4.E201 · comprobable]`
+
+*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`, `3.4.O3`, `3.4.O4`.
+
+#### 3.5 Consistencia de Atención
+
+¿El cliente recibe la misma respuesta y la misma solución en la sucursal, por teléfono o en la app, lo atienda quien lo atienda?
+
+*Descripción:* Mide si el cliente recibe la misma respuesta en cualquier sucursal o canal, lo atienda quien lo atienda.
+
+*Costo de quedarse:* El mismo reclamo se acepta en una sucursal y se rechaza en otra: el cliente lo nota, desconfía y lo cuenta.
+
+**Funcional.** Hay tipos de cliente definidos, respuestas guardadas, una bienvenida estructurada para el cliente nuevo y criterios escritos para resolver cada reclamo.
+
+*Resultado:* El equipo sabe qué tipos de cliente atiende y qué espera cada uno, el cliente nuevo arranca con una bienvenida clara hasta activar y usar su producto, y un reclamo se resuelve igual en cualquier sucursal o canal.
+
+- Existe un proceso documentado de bienvenida del cliente nuevo, con un resultado definido que debe alcanzar al terminarlo: por ejemplo, que active su tarjeta y la use por primera vez. `[3.5.F2]`
+- Existe un documento simple con los tipos de cliente que atiende el área —por ejemplo, personas, pymes y banca preferente—, qué necesita cada uno y qué espera del servicio, consultable por cualquier agente. `[3.5.F4]`
+- Cada tipo de reclamo tiene escritos sus criterios de resolución —cuándo se devuelve un cobro, cuándo procede un cargo no reconocido—, consultables por quien atiende, en la sucursal o en el centro de contacto. `[3.5.F201 · declarado]`
+
+*Se leen igual:* `3.5.D1`, `3.5.I1`, `3.5.F1`, `3.5.F3`, `3.5.E1`, `3.5.E2`, `3.5.E3`, `3.5.O1`.
+
+#### 3.6 Priorización de Clientes
+
+¿Un fraude, un cliente preferente y una consulta simple se atienden en el orden que corresponde, o todos hacen la misma fila?
+
+*Descripción:* Mide si un fraude se atiende antes que una consulta, y si cada cliente recibe la atención que le corresponde.
+
+*Costo de quedarse:* Tu cliente preferente espera en la misma fila que todos, y un cargo no reconocido se atiende después de una consulta simple.
+
+**Funcional.**
+
+*Resultado:* Un fraude o un cargo no reconocido se atiende primero, los clientes más importantes reciben una atención acorde, y quien atiende no tiene que reconstruir su historia.
+
+- Cada caso tiene una prioridad asignada —urgente, alta, normal o baja; un fraude o un cargo no reconocido, por ejemplo, es urgente— y los agentes la respetan. `[3.6.F1]`
+- La atención se diferencia según los tipos de cliente —por ejemplo, banca preferente, pymes y personas—: cada tipo tiene claro qué nivel de atención recibe. `[3.6.F2]`
+- El agente usa la ficha del cliente —sus productos, lo que ha pagado y sus casos abiertos— para dar contexto, sin reconstruirlo a mano. `[3.6.F3]`
+
+**Eficiente.**
+
+*Resultado:* Cada cliente de banca preferente y cada pyme importante tiene un responsable que lo conoce, el resto de la cartera no queda sola, y la atención cambia según el momento en que está cada cliente.
+
+- Hay un modelo de atención por segmento: cada cliente clave —por ejemplo, de banca preferente o una pyme importante— tiene un responsable dedicado que lo conoce, y el resto de la cartera recibe acompañamiento automatizado, de uno a muchos. `[3.6.E1]`
+- Los clientes se segmentan para acciones diferenciadas según el momento de su relación: los que siguen con la entidad, sanos, en riesgo de irse o con potencial para un producto más; los de una sola operación, recién desembolsados, en su primer pago o listos para recomendar. `[3.6.E2]`
+
+**Óptimo.**
+
+*Resultado:* Cada cliente recibe una atención a su medida en cualquier canal, incluso cuando se atiende solo, y nunca tiene que volver a explicar lo que ya habló al contratar.
+
+- La atención se personaliza incluso en el autoservicio de la app o la banca en línea. `[3.6.O1]`
+- Cada cliente se atiende con el contexto de cómo llegó —lo que se le ofreció al contratar y el segmento del que viene—, sin volver a preguntarlo. `[3.6.O3]`
+
+*Se leen igual:* `3.6.D1`, `3.6.I1`, `3.6.O2`.
+
+#### 3.7 Proactividad
+
+¿Te adelantas a lo que necesita el cliente —un aviso antes de un cobro, ayuda para activar su tarjeta— y te enteras de que se quiere ir antes de que cancele?
+
+*Descripción:* Mide si el servicio avisa antes de cada cobro o vencimiento y actúa antes de que el cliente se vaya.
+
+*Costo de quedarse:* Te enteras de que un cliente se quiere ir cuando ya pidió cancelar o se llevó su dinero a otra entidad, y un cobro sin aviso te trae un reclamo.
+
+**Funcional.** Lo evidente se atiende antes de que estalle: problemas repetidos, cobros por venir, productos sin activar y pedidos de cancelación.
+
+*Resultado:* Los problemas evidentes y las fechas críticas ya no toman al equipo por sorpresa: el cliente sabe antes cuánto y cuándo se le va a cobrar, quien no activó su producto recibe ayuda, quien pide cancelar recibe una razón para quedarse, y cuando alguno se va, se sabe por qué.
+
+- Un cliente con casos repetidos del mismo problema, un reclamo sin resolver o una mala calificación se identifica, y alguien lo contacta antes de que escale. `[3.7.F1]`
+- Los clientes clave reciben contacto antes de una renovación o un vencimiento importante —un certificado a plazo, una línea de crédito, su tarjeta—, no después. `[3.7.F2]`
+- Cada cliente que se va de la entidad —cierra sus cuentas o cancela sus productos— deja registrada la razón de su salida. `[3.7.F3]`
+- Quien contrató una tarjeta o una cuenta y no llega al resultado que define la bienvenida —activarla y usarla por primera vez— recibe un contacto para ayudarlo a empezar. `[3.7.F201 · comprobable · hábito · relación continua · requiere 3.5.F2]`
+- Quien pide cancelar una tarjeta o una cuenta recibe, antes de que se la cierren, una razón para quedarse —una mejor condición, un beneficio—, no solo el trámite del cierre. `[3.7.F202 · comprobable · hábito · relación continua]`
+- Antes de cada cobro programado o fecha de pago —la cuota de un crédito, el pago de la tarjeta, una comisión anual—, el cliente recibe un aviso automático con el monto y la fecha. `[3.7.F203 · comprobable · relación continua]`
+
+**Eficiente.** Los clientes que se pueden ir y las gestiones pendientes se ven venir, las atienda el área que sea, y el cliente recibe lo que necesita saber antes de pedirlo.
+
+*Resultado:* Las gestiones del cliente no se pierden entre áreas, sabe lo que necesita antes de preguntarlo y los problemas se atienden antes de que escalen; la entidad retiene clientes que antes se iban sin aviso, ve quién está listo para un producto más y sus clientes clave ven qué lograron.
+
+- Hay alertas tempranas, a partir del indicador de salud, de que un cliente se puede ir o de que está listo para un producto más. `[3.7.E1]`
+- Los clientes clave tienen registrado lo que buscan con sus productos y lo revisan con la entidad en una cadencia fija: qué se logró y qué sigue. `[3.7.E3]`
+- Ninguna gestión o molestia del cliente se pierde entre áreas: queda en el sistema aunque la resuelva otra área —tarjetas, operaciones, cobranza—, y hay alertas automáticas cuando una se atrasa, cuando un cliente califica mal o cuando se acerca una fecha crítica —un vencimiento, un cobro, la renovación de una tarjeta—, que le llegan a quien tiene que actuar. `[3.7.E4]`
+- Cada cliente recibe, sin tener que pedirla, la información que necesita antes de los momentos clave de su relación —un cobro, el vencimiento de un certificado, la renovación de su tarjeta, un cambio en las condiciones de su producto—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
+- Los clientes que dan señales de irse —dejan de usar su tarjeta, bajan su saldo, reclaman más— reciben una acción de retención antes de decidir irse. `[3.7.E201 · comprobable · hábito · relación continua]`
+
+**Óptimo.**
+
+*Resultado:* La mayoría de los problemas se resuelven antes de que el cliente los note, y cada cliente siente que la entidad se adelanta a lo que necesita y lo sorprende para bien.
+
+- Los clientes reciben, sin pedirlos, detalles pensados para deleitarlos —la exoneración de una comisión, un beneficio en su aniversario como cliente—, elegidos según su historia y el momento de su relación. `[3.7.O4]`
+
+*No aplican:* `3.7.E2`.
+
+*Se leen igual:* `3.7.D1`, `3.7.D2`, `3.7.I1`, `3.7.O1`, `3.7.O2`, `3.7.O3`.
+
+#### 3.8 Autoservicio
+
+¿El cliente resuelve solo lo simple —un estado de cuenta, una constancia, bloquear o reponer su tarjeta—, o cada gestión necesita a una persona?
+
+*Descripción:* Mide si el cliente resuelve solo lo simple —un estado de cuenta, una constancia, bloquear su tarjeta— sin llamar.
+
+*Costo de quedarse:* Las mismas preguntas pasan siempre por una persona y quien perdió su tarjeta espera en la línea para bloquearla: para crecer tienes que contratar al mismo ritmo.
+
+**Inicial.**
+
+- Para bloquear una tarjeta, el cliente tiene que llamar y esperar a que lo atienda una persona. `[3.8.I201 · comprobable]`
+
+**Funcional.** Las consultas más frecuentes tienen respuesta publicada y, si la entidad emite tarjetas, el cliente bloquea la suya sin esperar a nadie.
+
+*Resultado:* Las preguntas de siempre dejan de consumir al equipo: el cliente encuentra la respuesta publicada y, si tiene tarjeta, la bloquea al instante, a cualquier hora.
+
+- Las consultas que más se repiten —cómo activar una tarjeta, cuánto cuesta una gestión, qué hacer si pierde su tarjeta— tienen una respuesta publicada que el cliente puede leer solo. `[3.8.F1]`
+- Si la entidad emite tarjetas, el cliente puede bloquear la suya al instante y a cualquier hora —en la app o por teléfono—, sin esperar a que lo atienda una persona. `[3.8.F202 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* La entidad puede sumar clientes sin sumar personas en la misma proporción, porque buena parte se resuelve sola.
+
+- Se revisan periódicamente los casos y los reclamos recurrentes y, donde la relación es continua, las razones por las que se van los clientes, para encontrar patrones y mejorar. `[3.8.E2]`
+
+*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O3`.
+
 ## Edición — Educación
 
 Para el área de admisiones de una universidad, un instituto o un centro de formación: parte de los aspirantes se matricula con el acompañamiento de un asesor y parte lo hace sola en línea, y después de la matrícula la relación sigue período tras período.
@@ -2549,6 +3604,9 @@ Para el área de admisiones de una universidad, un instituto o un centro de form
 | Razón de pérdida | Por qué el aspirante no se matriculó |
 | ICP | El perfil de estudiante al que va dirigido cada programa |
 | Forecast | Proyección de matrícula |
+| MQL | Interesado que Marketing considera listo para pasar a Admisiones, según los criterios que Marketing definió; todavía no es un aspirante calificado: eso lo decide Admisiones |
+| Buyer persona | Retrato escrito de un tipo de aspirante, o de la familia que decide o paga con él: quién es, qué le preocupa y cómo decide |
+| Ticket | Caso de un estudiante: una consulta, un trámite o un reclamo |
 
 ### Área 1 — Admisiones
 
@@ -2654,7 +3712,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 - La documentación sobre el perfil de estudiante de cada programa no se deja envejecer. `[1.3.F5]`
 - La definición de aspirante calificado no se deja envejecer. `[1.3.F6]`
 - La documentación sobre los programas —plan de estudios, costos, becas y requisitos— no se deja envejecer. `[1.3.F7]`
-- Todo aspirante tiene registrado su permiso para que lo contacten y, si es menor de edad, el de su responsable. `[1.3.F301 · comprobable]`
+- Si el aspirante es menor de edad, queda registrado el permiso de su responsable para que lo contacten. `[1.3.F301 · comprobable]`
 
 **Eficiente.** Aparece la proyección de matrícula por programa, y la ficha del aspirante reúne lo académico y lo financiero.
 
@@ -2803,7 +3861,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 - Los aspirantes detenidos —sin respuesta, sin documentos o sin pago— se reconocen a tiempo y tienen un paso acordado para retomarlos, no la improvisación de cada asesor. `[1.7.F1]`
 - El seguimiento usa al menos dos canales, por ejemplo llamada y el canal conversacional, como WhatsApp. `[1.7.F2]`
 - Hay materiales estandarizados que ayudan a decidir la matrícula: plan de estudios, testimonios y simulador de costos. `[1.7.F4]`
-- Los estudiantes que ya deberían haberse matriculado de nuevo —en el siguiente curso o en el siguiente período— se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5]`
+- Los estudiantes que ya deberían haberse inscrito en un curso siguiente se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5]`
 - Todo aspirante admitido que no se ha matriculado recibe seguimiento hasta que se matricula o dice que no. `[1.7.F301 · comprobable · hábito]`
 - Las solicitudes que el aspirante deja a medias en línea reciben un recordatorio o una llamada dentro del plazo acordado. `[1.7.F302 · comprobable · hábito · venta sin vendedor · requiere 1.2.F302]`
 
@@ -2839,12 +3897,13 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 
 **Funcional.**
 
-*Resultado:* El líder sabe por qué no se matriculan los aspirantes —y cuántos eligieron otra institución—, con datos del período y no con impresiones.
+*Resultado:* El líder sabe por qué no se matriculan los aspirantes —y cuántos eligieron otra institución— y por qué no empiezan clases algunos de los que se matricularon, con datos del período y no con impresiones.
 
 - Todo aspirante que no se matriculó tiene registrada su razón. `[1.8.F1]`
 - Las razones por las que un aspirante no se matricula usan una lista definida, no texto libre. `[1.8.F2]`
 - El líder puede sacar un reporte del período de por qué no se matricularon los aspirantes, sin reconstruir. `[1.8.F3]`
 - Cuando el aspirante eligió otra institución, queda registrado cuál. `[1.8.F301 · comprobable]`
+- Cada matrícula que no llega a clases —quien se matriculó y no empezó— deja registrada su razón. `[1.8.F302 · comprobable]`
 
 **Eficiente.** Se revisa con cadencia por qué se ganan y por qué se pierden las matrículas, y lo aprendido vuelve al proceso y a la capacitación.
 
@@ -2860,6 +3919,600 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 - La IA detecta en qué paso y por qué se caen los aspirantes, y propone el cambio. `[1.8.O301 · comprobable]`
 
 *Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.O1`, `1.8.O2`.
+
+### Área 2 — Marketing
+
+Mide el rendimiento del área de marketing de la institución: cómo está montada por dentro y qué produce en interesados y aspirantes para cada período de admisión.
+
+**Deficiente.** Tu institución no controla su marca: la define lo que se comenta de ella. Cada facultad y cada programa se comunican a su manera, las herramientas están sueltas y sin conectar, y las campañas de admisión corren hasta agotar el presupuesto sin que nadie mida qué dejaron. Los interesados llegan por casualidad.
+
+**Inicial.** Tienes logo, colores y plantillas, pero sin estrategia detrás. Las herramientas existen, subutilizadas y en silos; el contenido sale de forma reactiva, cuando se acerca la matrícula, y el análisis llega tarde: cuando el período ya cerró. Los interesados llegan de forma irregular y no sabes de dónde vienen.
+
+**Funcional.** El área dejó de depender de héroes. Tienes documentados la marca, los perfiles de tus aspirantes y tu presencia digital; las herramientas que pagas se usan de verdad, y la campaña de cada período arranca antes de que abran las solicitudes y sale coordinada por correo, pauta, redes y el canal conversacional, como WhatsApp, bajo un mismo calendario y sabiendo cuánto cuesta cada interesado en cada canal. Los números salen del sistema sin armarlos a mano. Los interesados llegan calificados y en cantidades que puedes prever, aunque la optimización fina todavía no existe.
+
+**Eficiente.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la campaña del siguiente período. Los datos están unificados, enriquecidos y atribuidos hasta la matrícula; la segmentación y el puntaje de los interesados se automatizan; la IA asiste al equipo en su trabajo diario; y cuando alguien busca qué estudiar, tu institución aparece tanto en buscadores como en asistentes de IA. El presupuesto se reparte entre canales sabiendo cuánto cuesta cada matrícula.
+
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada programa se genera y se optimiza en ciclo continuo, la IA identifica micro-segmentos y adapta el mensaje a lo que hace cada interesado, los modelos mueven el presupuesto entre canales sobre la marcha, y los estudiantes y egresados que Servicio vuelve promotores traen aspirantes nuevos. El equipo define la estrategia y valida lo que sale.
+
+#### 2.1 Procesos y Rutinas
+
+Si mañana se va quien arma las campañas, ¿la campaña de admisión del próximo período sale a tiempo?
+
+*Descripción:* Mide si las campañas de cada período salen de un calendario y un proceso compartidos, sin depender de nadie.
+
+*Costo de quedarse:* Cada campaña depende de quien la arma: si esa persona se va antes de la temporada, la campaña del período sale tarde y los interesados llegan cuando la matrícula ya cerró.
+
+**Deficiente.** Cada quien arma las campañas a su criterio; no hay calendario ni reuniones.
+
+- No existe un calendario de campañas: las de cada período se improvisan cuando se acerca la matrícula. `[2.1.D1]`
+
+**Inicial.**
+
+- Existen briefs informales y un calendario de campañas irregular. `[2.1.I1]`
+
+**Funcional.**
+
+*Resultado:* Todo el equipo trabaja en el mismo sistema, y la campaña de cada período sale aunque cambie una persona: arranca antes de que abran las solicitudes, el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
+
+- Existe un calendario de campañas y contenidos visible para el equipo, con horizonte de al menos un trimestre. `[2.1.F1]`
+- La campaña de cada período se planea desde las fechas de admisión: arranca antes de que abran las solicitudes y sigue hasta que cierra la matrícula. `[2.1.F301 · declarado · hábito]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I2`, `2.1.I3`, `2.1.F2`, `2.1.F3`, `2.1.F4`, `2.1.F5`, `2.1.F6`, `2.1.E2`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+
+#### 2.2 Tecnología y Automatización
+
+¿Cuánto del trabajo de las campañas hacen los flujos automáticos y la IA, y cuánto de las herramientas que pagas se aprovecha?
+
+*Descripción:* Mide cuánto del marketing de la institución hacen los flujos automáticos y la IA, y cuánto se aprovechan las herramientas.
+
+*Costo de quedarse:* Pagas herramientas que no usas y haces a mano los envíos de cada campaña, mientras los interesados que llegan de una feria o de la web esperan días por una respuesta.
+
+**Inicial.**
+
+- La institución paga licencias cuyo valor no extrae. `[2.2.I1]`
+
+**Funcional.**
+
+*Resultado:* Todo interesado que llega por el sitio, por una feria o una charla, o por el canal conversacional, como WhatsApp, entra al sistema y recibe respuesta.
+
+- Los formularios del sitio —los de cada programa y los de las páginas de campaña— están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
+- Si la institución capta en ferias, charlas en colegios o visitas al campus, quien se registra ahí entra solo al sistema —por un formulario o un código QR—, no en listas que alguien digita después. `[2.2.F301 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* Los interesados reciben solos lo que necesitan hasta estar listos para hablar con un asesor de admisiones, la conversación con cada uno no depende de que alguien se acuerde de escribirle, y el líder ve en tiempo real qué conversaciones esperan respuesta.
+
+- Hay secuencias de nutrición de varios pasos, con ramificación y tiempos de espera. `[2.2.E1]`
+- El traspaso de los interesados a Admisiones está automatizado. `[2.2.E3]`
+
+**Óptimo.** La IA orquesta el recorrido completo y conversa con cada interesado de forma automatizada.
+
+*Resultado:* Cada interesado vive un recorrido pensado para él: la IA decide el siguiente paso y conversa en el momento, con información que se calcula en toda la institución.
+
+- Agentes de IA atienden el canal conversacional: responden lo que generan las campañas y siguen la conversación con quien todavía no está listo para hablar con un asesor de admisiones. `[2.2.O2]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven a las herramientas de marketing: la segmentación usa, por ejemplo, cuánto permanece cada perfil de estudiante, calculado con lo académico y lo financiero. `[2.2.O3]`
+
+*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.F5`, `2.2.F9`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`.
+
+#### 2.3 Datos
+
+¿Sabes qué canal te trae aspirantes que se matriculan, o mueves el presupuesto con reportes que hay que validar a mano?
+
+*Descripción:* Mide si los datos de marketing dicen qué canal trae aspirantes que se matriculan, para mover el presupuesto con confianza.
+
+*Costo de quedarse:* No sabes qué canal trae matrículas y cuál solo trae interesados que nunca se inscriben: mueves el presupuesto a ciegas, porque cada reporte hay que validarlo antes de creerle.
+
+**Funcional.**
+
+*Resultado:* El líder sabe de dónde viene cada interesado —la feria, el colegio, la campaña o la web—, con reportes que salen del sistema y no de una planilla armada a mano.
+
+- Todo contacto nuevo —entre por un formulario, una conversación, una feria, una charla en un colegio o una solicitud en línea— tiene poblados la etapa del ciclo de vida y su origen. `[2.3.F1]`
+- Las propiedades que describen el perfil de estudiante de cada programa —programa de interés, nivel de estudios, colegio o empresa de donde viene y modalidad que busca— están en los formularios críticos y se capturan en la mayoría de los registros. `[2.3.F2]`
+- Los duplicados —el mismo interesado que se registra en varias ferias o formularios— están bajo control, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3]`
+
+**Eficiente.**
+
+*Resultado:* Marketing puede demostrar qué canal y qué contenido contribuyeron a cada matrícula, no solo cuál trajo el primer clic.
+
+- La atribución está configurada para repartir el mérito entre todos los puntos de contacto, no solo el primero o el último, e incluye todos los canales —también el conversacional, las ferias y las visitas—: se sabe cuánto ingreso deja cada uno en matrículas. `[2.3.E2]`
+
+**Óptimo.**
+
+*Resultado:* La atribución toma en cuenta todo lo que pasa en la institución —admisiones, lo académico y los pagos—, no solo lo que ve Marketing, y los datos se mantienen confiables sin que el equipo tenga que cuidarlos.
+
+- Marketing se apoya en el almacén central de datos de la institución, donde se junta la información de todos sus sistemas —admisiones, lo académico y los pagos—, y atribuye resultados con esa vista completa. `[2.3.O1]`
+
+*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F5`, `2.3.F6`, `2.3.F7`, `2.3.E1`, `2.3.E3`, `2.3.O3`, `2.3.O4`.
+
+#### 2.4 Equipo y Gobierno
+
+¿Quién decide qué programas se promocionan, cuánto se invierte y en qué canal, con qué datos y con qué cadencia?
+
+*Descripción:* Mide quién decide qué programas se promocionan y dónde se invierte, con qué datos y con qué cadencia de revisión.
+
+*Costo de quedarse:* Qué programa se empuja y cuánto se invierte se decide por costumbre o por quien insiste más, y nadie puede demostrar qué inversión trajo matrículas.
+
+**Inicial.**
+
+- Las decisiones operativas escalan a la rectoría, a la dirección general o a quien dirige marketing. `[2.4.I1]`
+
+**Funcional.**
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (interesados por programa, origen, tasa de MQL, conversión a solicitud) y lo consulta al menos semanalmente. `[2.4.F2]`
+- El equipo tiene metas mensuales o trimestrales —interesados y solicitudes por programa—, y en la reunión de performance rinde cuentas por ellas. `[2.4.F3]`
+- Las decisiones de presupuesto y de qué programas empujar citan datos del sistema, no opiniones. `[2.4.F4]`
+
+**Eficiente.** El liderazgo prepara a quien entra, acuerda reglas con Admisiones y escucha al equipo.
+
+*Resultado:* Una persona nueva se integra rápido, y Marketing y Admisiones trabajan con reglas acordadas en vez de reclamarse los aspirantes.
+
+- Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —la marca, los programas y las herramientas—; no se le entrena de memoria. `[2.4.E2]`
+- El liderazgo orquesta con Admisiones —el traspaso de interesados, los SLA y una cadencia conjunta en cada período— y con Servicio. `[2.4.E3]`
+
+**Óptimo.**
+
+- Las decisiones usan analítica avanzada, como lo que deja cada canal —lo que pagan en toda su carrera los estudiantes que trae— frente a lo que cuesta. `[2.4.O4]`
+
+*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
+
+#### 2.5 Marca y reputación
+
+¿Los aspirantes y sus familias te encuentran cuando buscan qué estudiar, entienden qué te hace distinto y confían en ti?
+
+*Descripción:* Mide si aspirantes y familias encuentran la institución, entienden qué la distingue y confían en ella por su reputación.
+
+*Costo de quedarse:* Quien busca qué estudiar encuentra primero a otra institución, o te encuentra y no entiende qué la hace distinta, ni él ni su familia.
+
+**Deficiente.** Cada facultad y cada programa se comunican a su manera: no hay una voz de la institución y los mensajes cambian de una pieza a otra.
+
+- Cada facultad o programa se comunica con su propia marca y su propio estilo. `[2.5.D301 · evaluado]`
+
+**Inicial.**
+
+- Hay logo, colores y plantillas, pero el buyer persona es muy general, como «jóvenes que salen del colegio». `[2.5.I1]`
+
+**Funcional.**
+
+*Resultado:* La institución se ve y suena igual en todo lo que sale, venga de la facultad que venga, y el sitio es encontrable en buscadores con lo básico bien resuelto.
+
+- Existe una guía corta de la voz de la institución, escrita y aplicada a piezas recientes, también a las de las facultades y los programas. `[2.5.F2]`
+- Hay 2-3 buyer personas escritos —por ejemplo, el joven que sale del colegio, el adulto que estudia mientras trabaja y la familia que decide o paga— con journey básico por etapa. `[2.5.F3]`
+- Se publica contenido propio al menos una vez por mes, con cadencia previsible: en el blog o en el formato que use la institución, como videos de sus programas, historias de estudiantes o guías para elegir carrera. `[2.5.F5]`
+
+**Eficiente.**
+
+*Resultado:* La institución aparece cuando los aspirantes y sus familias buscan qué y dónde estudiar, tanto en buscadores como en asistentes de IA, con contenido pensado para cada programa y cada perfil que importan, y lo que dicen de ella sus estudiantes y egresados juega a su favor.
+
+- Los buyer personas están detallados para cada segmento de alto valor: por ejemplo, un posgrado o una carrera que la institución quiere hacer crecer. `[2.5.E1]`
+- El contenido está organizado por temas —por ejemplo, un área de estudio o una carrera—: una página central por tema y contenido de apoyo que la refuerza. `[2.5.E2]`
+- El recorrido del aspirante —de la primera búsqueda a la matrícula, con sus ferias, visitas y conversaciones— está mapeado con puntos de contacto definidos. `[2.5.E4]`
+- Las reseñas y calificaciones públicas se piden a estudiantes y egresados satisfechos y se responden con una cadencia fija. `[2.5.E5]`
+- Las pruebas de la reputación de la institución —las acreditaciones y los rankings que tenga, y lo que logran sus egresados— están a la vista en el sitio y en las campañas, y se actualizan cada período. `[2.5.E301 · comprobable · hábito]`
+
+**Óptimo.**
+
+*Resultado:* La presencia se mantiene vigente sola: el contenido se produce y se ajusta de forma continua para cada perfil de aspirante y cada forma de buscar.
+
+- Los buyer personas están hiper-segmentados, casi al nivel de cada aspirante. `[2.5.O1]`
+
+*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F4`, `2.5.E3`, `2.5.O2`.
+
+#### 2.6 Segmentación
+
+¿Cada interesado recibe lo que corresponde a su programa, su nivel y su momento, o todos reciben la misma campaña?
+
+*Descripción:* Mide si cada interesado y su familia reciben mensajes pensados para su programa, su nivel y su modalidad.
+
+*Costo de quedarse:* Le mandas la misma campaña a quien busca un técnico que a quien busca un posgrado: el mensaje no le habla a nadie, y la familia que paga nunca recibe lo que necesita saber.
+
+**Inicial.**
+
+- Las campañas se diseñan para la masa: la misma pieza sirve para todos los programas. `[2.6.I2]`
+
+**Funcional.**
+
+*Resultado:* Cada programa y cada perfil reciben un mensaje pensado para ellos, la familia recibe lo que necesita saber para decidir, y Admisiones recibe interesados que Marketing ya clasificó con criterios claros.
+
+- Existen al menos 2 segmentos definidos con criterios escritos, por ejemplo por nivel, programa o modalidad. `[2.6.F1]`
+- Existen criterios documentados de qué es un suscriptor, un interesado y un MQL, y Marketing clasifica según ellos, a mano o con una automatización simple sobre las propiedades de calificación. `[2.6.F4]`
+- Si la familia participa en la decisión —porque decide, acompaña o paga—, las campañas también le hablan a ella, con piezas propias y distintas de las del aspirante. `[2.6.F301 · comprobable · hábito]`
+
+**Eficiente.**
+
+*Resultado:* El mensaje se adapta solo a quién lo recibe y en qué etapa está, y Admisiones recibe primero a los interesados con más probabilidad de matricularse.
+
+- Hay un puntaje de interesados por reglas: un modelo que suma puntos por varios atributos —programa de interés, interacción, asistencia a eventos— y califica al pasar un umbral, cuyo puntaje dispara las secuencias de nutrición. Se distingue de la clasificación de Funcional, que responde a un valor de propiedad sin modelo de puntaje detrás. `[2.6.E3]`
+- La segmentación usa datos de comportamiento —qué abrió, qué páginas de programas visitó, a qué evento fue—, no solo lo que la persona declaró. `[2.6.E4]`
+
+*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.F3`, `2.6.E1`, `2.6.E2`, `2.6.O1`, `2.6.O3`.
+
+#### 2.7 Canales y captación
+
+¿Llegas a los aspirantes que cada programa necesita, por los canales correctos y con un costo que conoces?
+
+*Descripción:* Mide si los canales —digitales, ferias y colegios— traen aspirantes con cadencia, bajo un mismo plan y con costo conocido.
+
+*Costo de quedarse:* Tu captación depende de la feria de siempre y de la pauta que alguien se acuerda de activar: los canales salen sueltos y no sabes cuánto te cuesta cada aspirante.
+
+**Inicial.**
+
+- Cada canal va por su cuenta —las ferias por un lado, la pauta por otro—: no hay calendario común ni campaña que los atraviese. `[2.7.I3]`
+
+**Funcional.**
+
+*Resultado:* La campaña de cada período sale coordinada por los cuatro canales en vez de cuatro esfuerzos sueltos, y el líder sabe cuánto le cuesta cada interesado según de dónde venga.
+
+- Hay al menos una campaña de pauta pagada corriendo con presupuesto definido (Google, Meta o el canal que usen sus aspirantes). `[2.7.F3]`
+- Los cuatro canales siguen el mismo calendario y la misma campaña: la de admisión de cada período sale coordinada en email, pauta, orgánico y el canal conversacional, no como cuatro esfuerzos sueltos. `[2.7.F5]`
+- El líder puede decir cuánto costó cada interesado —o cada matrícula, donde el estudiante se matricula solo en línea— el último mes, al menos por canal. `[2.7.F6]`
+
+**Eficiente.**
+
+*Resultado:* La inversión se mueve hacia el canal que trae matrículas al menor costo, los canales se refuerzan entre sí en vez de competir por el mismo interesado, y los estudiantes y egresados recomiendan la institución.
+
+- Los canales, incluido el conversacional, comparten datos y se alimentan entre sí: uno continúa lo que empezó otro —quien fue a una feria ve después la pauta de su programa—, hay remarketing activo y las audiencias se construyen desde el CRM. `[2.7.E1]`
+- Hay ferias, charlas en colegios, visitas al campus, días de puertas abiertas o webinars como canal recurrente. `[2.7.E2]`
+- Hay un programa de embajadores activo: estudiantes y egresados saben cómo recomendar la institución, y cada aspirante referido queda registrado con quién lo trajo. `[2.7.E4]`
+- El líder sabe cuánto costó cada matrícula del último período en cada canal —pauta, ferias, colegios, referidos—, no solo cada interesado. `[2.7.E301 · comprobable · requiere 1.3.F3]`
+
+**Óptimo.**
+
+*Resultado:* La inversión se reparte sola donde más matrículas deja, los estudiantes y egresados satisfechos traen aspirantes nuevos, y la institución llega antes que las demás a los canales nuevos.
+
+- Los estudiantes y egresados que Servicio identifica como promotores se vuelven embajadores y testimonios de la institución, sin pedirlos a mano. `[2.7.O4]`
+
+*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E3`, `2.7.O1`, `2.7.O2`.
+
+#### 2.8 Medición y Aprendizaje
+
+¿Cada período de admisión te enseña qué campaña trajo matrículas, o repites la del año pasado?
+
+*Descripción:* Mide si cada campaña se evalúa por las matrículas que dejó y si deja un aprendizaje para el siguiente período.
+
+*Costo de quedarse:* Repites cada período la campaña de siempre sin saber cuál trajo matrículas: el presupuesto se reparte por costumbre, no por retorno.
+
+**Deficiente.**
+
+- Lo que dejó la campaña de un período no se usa para planear la del siguiente. `[2.8.D3]`
+
+**Inicial.** Se analiza solo cuando cierra la matrícula, cuando ya no hay nada que corregir.
+
+- Las métricas son básicas (clics, likes) sin conexión clara con lo que cuesta cada matrícula. `[2.8.I1]`
+
+**Funcional.**
+
+*Resultado:* El equipo ve cuántos aspirantes y matrículas dejó cada campaña sin armar el número a mano, y cada período deja una lección escrita para el siguiente.
+
+- Cada campaña significativa —como la de admisión de cada período— tiene una revisión de cierre documentada (qué funcionó, qué no). `[2.8.F3]`
+- Los resultados de cada campaña —los aspirantes o las matrículas que trajo, no solo los clics o los asistentes— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
+
+**Eficiente.**
+
+- El proceso de campaña y la planificación del siguiente período se refinan con base en lo aprendido. `[2.8.E3]`
+
+**Óptimo.**
+
+*Resultado:* Las campañas mejoran mientras están corriendo, no recién cuando cierra la matrícula.
+
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.I2`, `2.8.E1`, `2.8.E2`, `2.8.O2`.
+
+### Área 3 — Servicio
+
+Mide el rendimiento del área de servicio al estudiante, que cubre todo lo que pasa después de la matrícula: desde los trámites y las consultas de cada período hasta que el estudiante termina lo que vino a estudiar. Mira cómo está montada por dentro y qué produce en atención, permanencia y rematrícula.
+
+**Deficiente.** La atención se improvisa estudiante por estudiante. No hay un proceso ni respuestas comunes —cada persona responde con su propio criterio—, los datos del estudiante están repartidos entre oficinas y todo depende de que la persona correcta esté disponible. La deserción te toma por sorpresa.
+
+**Inicial.** El conocimiento y la coordinación viven en una sola persona, y eso te deja con un punto único de fallo. Hay un sistema para los casos de los estudiantes, pero pocos lo usan; hay plantillas para los trámites más frecuentes y procesos que nadie formalizó. La atención es frágil.
+
+**Funcional.** Tu atención al estudiante es consistente y ya no depende de una persona. Sabes qué tipos de estudiante atiendes y qué espera cada uno. Cada caso sigue un recorrido configurado, cada período arranca con su calendario de trámites, el equipo atiende en el sistema central con la ficha del estudiante a la vista, los casos están clasificados y la inducción del estudiante nuevo es estructurada. Priorizas por urgencia, tienes respuestas guardadas para lo repetitivo y detectas a mano al estudiante en riesgo de dejar antes de que se vaya. Todavía no hay alertas automáticas, pero ya no esperas a que el estudiante deje de venir.
+
+**Eficiente.** La atención empieza a adelantarse al problema. Tienes plazos de respuesta, escalación automática y trámites en línea, y la IA asiste a tu equipo en su trabajo diario; mides tiempos de respuesta y satisfacción, y los datos del estudiante se unifican con los de Admisiones. Ves venir el riesgo de deserción antes de que el estudiante lo diga, ningún trámite se pierde entre oficinas, y los estudiantes de los grupos clave tienen un consejero que los conoce. La permanencia se vuelve predecible.
+
+**Óptimo.** Un agente de IA resuelve las consultas de los estudiantes y le pasa a una persona, con todo el contexto, lo que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y atiende las excepciones; un modelo anticipa qué estudiante puede dejar antes de que lo manifieste, y cada estudiante se atiende sabiendo lo que se le prometió en su admisión y recibe detalles pensados para deleitarlo. Atender a un estudiante más casi no cuesta.
+
+#### 3.1 Procesos y Rutinas
+
+Si mañana se van las dos personas que más saben de trámites, ¿la atención al estudiante sigue igual?
+
+*Descripción:* Mide si la atención al estudiante sigue un proceso y rutinas definidas, para que no dependa de quién sabe.
+
+*Costo de quedarse:* La atención depende de quién sabe: si esa persona falta en plena rematrícula, las filas crecen y cada ventanilla da una respuesta distinta.
+
+**Deficiente.**
+
+- Cada persona que atiende maneja los trámites y las consultas a su manera. `[3.1.D1]`
+- No hay rutinas regulares ni traspasos entre oficinas; la atención es 100% reactiva. `[3.1.D2]`
+
+**Inicial.**
+
+- Hay algún plazo de respuesta conocido —por ejemplo, para entregar una constancia— pero no medido. `[3.1.I1]`
+- Unas personas u oficinas atienden en el sistema; otras siguen con su correo, su teléfono o su propia planilla. `[3.1.I3]`
+
+**Funcional.** El equipo atiende en un mismo sistema, cada caso sigue un recorrido configurado y cada estudiante tiene quién responda por él.
+
+*Resultado:* Todo el equipo atiende en el mismo sistema, cada estudiante tiene a alguien que responde por él, cada período arranca con sus picos de trabajo previstos, y un caso se atiende igual sin importar quién lo tome.
+
+- Los casos de los estudiantes siguen un recorrido configurado en el sistema, con sus etapas, de la recepción al cierre. `[3.1.F1]`
+- Cada estudiante tiene quién responda por él —una persona o, si son muchos, un equipo con un seguimiento automático— y un seguimiento mínimo más allá de los casos que abre. `[3.1.F2]`
+- Existe un proceso básico documentado para quejas críticas o escalaciones, como un cobro que el estudiante no reconoce o una nota en disputa. `[3.1.F4]`
+- Cualquier persona del equipo explica cómo se atiende un trámite típico —una constancia, un cambio de horario— siguiendo el mismo flujo. `[3.1.F5]`
+- Cualquier persona del equipo atiende en el sistema central, no por fuera: es su herramienta de trabajo, no algo que se llena después de resolver por correo o en ventanilla. `[3.1.F6]`
+- Cada período tiene su calendario de atención escrito antes de empezar: en qué semanas llegan la rematrícula, los pagos, el inicio de clases y los exámenes, y qué tiene que preparar el equipo para cada una. `[3.1.F301 · declarado · hábito]`
+
+**Eficiente.** Aparecen los plazos de respuesta, los playbooks y el recorrido del estudiante, y el líder vigila con datos que el proceso se cumpla.
+
+*Resultado:* El estudiante sabe cuánto va a tardar la respuesta a su trámite, cada momento clave de su paso por la institución tiene un dueño, y el líder sabe dónde se desvía la atención y corrige con datos, no de memoria.
+
+- Hay SLA definidos por tipo de trámite o prioridad: cuánto puede tardar una constancia, una revisión de nota o un cambio de carrera. `[3.1.E1]`
+- Hay playbooks de prevención, retención y expansión: qué hacer ante un estudiante en riesgo de dejar y cómo ofrecerle un siguiente programa al que está por terminar. `[3.1.E3]`
+- El recorrido del estudiante está definido de punta a punta, con sus momentos clave —la inducción, el primer período, cada rematrícula y la graduación— y un responsable y un estándar para cada uno. `[3.1.E4]`
+
+**Óptimo.**
+
+- El sistema detecta las desviaciones del proceso de atención y se las señala al líder y a quien atiende el caso, sin intervención. `[3.1.O3]`
+
+*Se leen igual:* `3.1.I2`, `3.1.F3`, `3.1.E5`, `3.1.O1`, `3.1.O4`.
+
+#### 3.2 Tecnología y Automatización
+
+¿Cuántos trámites necesitan a una persona cuando podrían resolverse solos, y cuánto del sistema de atención se aprovecha?
+
+*Descripción:* Mide cuántos trámites y consultas se resuelven solos o por autoservicio, y cuánto del sistema de atención se aprovecha.
+
+*Costo de quedarse:* Tu equipo contesta a mano las mismas preguntas en cada rematrícula, y los casos se pierden entre correos, ventanillas y chats: el estudiante tiene que insistir para que lo atiendan.
+
+**Funcional.** Hay al menos un canal conversacional conectado, automatización simple en producción y, si se usa IA, trabaja con el contexto de los estudiantes.
+
+*Resultado:* Lo que el estudiante escribe por los canales conectados llega al sistema y se le asigna a alguien sin que nadie lo reparta, y quien lo necesita se entera de cada cambio.
+
+- Si el equipo usa IA, esta tiene como contexto la información básica de los estudiantes. `[3.2.F8]`
+
+**Eficiente.**
+
+*Resultado:* Los plazos se vigilan solos y los casos críticos llegan solos a quien los tiene que resolver; el estudiante puede ver y abrir sus casos y hacer en línea sus trámites de siempre sin esperar a nadie, y el líder ve en tiempo real cuánto hay abierto y qué quedó sin atender.
+
+- Hay automatización de SLA —alertas antes del vencimiento y escalación automática, con reglas de cuándo se escala y a quién—, y las conversaciones y los casos se enrutan por múltiples condiciones, como el tema, la sede o el programa del estudiante. `[3.2.E1]`
+- Hay un portal de autoservicio donde el estudiante ve y abre sus casos, y base de conocimiento interna y pública. `[3.2.E2]`
+- El equipo usa la IA en su trabajo diario —para redactar respuestas, resumir casos o buscar en la base de conocimiento—, y la IA trabaja con el contexto del área: los tipos de estudiante, los niveles de atención y las respuestas a las consultas frecuentes. `[3.2.E4]`
+- Los trámites más frecuentes —constancias, rematrícula, pagos y cambios de horario— se hacen en línea de principio a fin, sin ir a una ventanilla. `[3.2.E301 · comprobable]`
+
+**Óptimo.** Un agente de IA resuelve consultas en producción, y lo que se calcula en toda la institución llega a la ficha del estudiante.
+
+*Resultado:* Una parte importante de las consultas se resuelve sin intervención humana, y cuando un caso pasa a una persona, llega con el contexto completo y con lo que la institución sabe de ese estudiante a la vista.
+
+- Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de servicio: quien atiende ve en la ficha, por ejemplo, el riesgo de deserción del estudiante. `[3.2.O4]`
+
+*Se leen igual:* `3.2.D1`, `3.2.D2`, `3.2.I2`, `3.2.F4`, `3.2.F5`, `3.2.F6`, `3.2.E3`, `3.2.E5`, `3.2.O1`.
+
+#### 3.3 Datos
+
+¿Quien atiende al estudiante ve su historia completa al instante, o se la tiene que preguntar?
+
+*Descripción:* Mide si quien atiende ve al instante la historia completa del estudiante, sin pedirle que la repita en cada oficina.
+
+*Costo de quedarse:* Cada vez que el estudiante pregunta, tiene que volver a explicar quién es, en qué va su trámite y qué le dijeron en la otra oficina.
+
+**Deficiente.**
+
+- Es imposible reconstruir el paso del estudiante por la institución. `[3.3.D2]`
+
+**Inicial.**
+
+- Los datos básicos del estudiante y de sus casos están en un solo sistema, pero incompletos. `[3.3.I1]`
+
+**Funcional.** El histórico y el contexto del estudiante están accesibles, con los casos clasificados.
+
+*Resultado:* El líder sabe qué trámites y qué problemas llegan y cuántos, y cualquiera que atiende tiene la historia del estudiante en segundos.
+
+- Cualquier persona que atiende ve el histórico de casos de un estudiante en menos de 10 segundos. `[3.3.F1]`
+- La ficha del estudiante muestra su programa y en qué período va, lo que ha pagado, cuánto paga por período y su beca, no solo sus casos. `[3.3.F2]`
+- Las propiedades clave del estudiante —su programa, su modalidad y desde qué período estudia— están pobladas en la mayoría de los registros. `[3.3.F3]`
+- Cada caso tiene tipo y motivo, con una lista definida: constancias, pagos, notas, cambios de carrera, reclamos. `[3.3.F4]`
+- El contexto que el área documentó —tipos de estudiante, niveles de atención, respuestas a consultas frecuentes— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[3.3.F6]`
+
+**Eficiente.** Se miden tiempos y satisfacción, y los datos del estudiante se unifican con los de Admisiones.
+
+*Resultado:* La institución sabe qué tan rápido y qué tan bien atiende, cuánto tarda un estudiante nuevo en completar su inducción y cómo va cada estudiante, con la satisfacción medida y no supuesta.
+
+- Se miden el NPS o el CSAT de los estudiantes con cadencia. `[3.3.E2]`
+- Los datos del estudiante están unificados entre Servicio y Admisiones. `[3.3.E3]`
+- Se mide cuánto tarda cada estudiante nuevo en alcanzar el resultado de su inducción: el tiempo desde que se matricula hasta que lo logra. `[3.3.E4]`
+- Hay un indicador de salud por reglas para cada estudiante, que combina su asistencia y su avance académico, sus casos abiertos y su satisfacción. `[3.3.E5]`
+
+**Óptimo.** Un modelo anticipa el riesgo de que cada estudiante deje sus estudios antes de que lo manifieste.
+
+*Resultado:* La institución sabe qué estudiantes están en riesgo de dejar y cuáles van logrando lo que vinieron a buscar, antes de que ellos mismos lo digan, con datos que se mantienen al día solos.
+
+- Hay un modelo predictivo de la salud de cada estudiante, activo y en uso, que mide tanto su experiencia como si va logrando lo que vino a estudiar. `[3.3.O1]`
+- Servicio se apoya en el almacén central de datos de la institución —donde se juntan lo académico, los pagos y la atención—, con reglas claras de quién accede y cómo se mantiene, para anticipar el riesgo de cada estudiante. `[3.3.O2]`
+
+*Se leen igual:* `3.3.D1`, `3.3.I2`, `3.3.F5`, `3.3.E1`, `3.3.O3`, `3.3.O4`.
+
+#### 3.4 Equipo y Gobierno
+
+¿Quién decide qué se atiende primero en cada período, con qué información, y cómo se mejora la atención al estudiante?
+
+*Descripción:* Mide quién decide qué se atiende primero, con qué información, y cómo se revisa y mejora la atención al estudiante.
+
+*Costo de quedarse:* Se atiende primero al que más insiste, no al que más lo necesita, y los mismos problemas se repiten cada período porque nadie los revisa.
+
+**Deficiente.**
+
+- No hay coordinación entre quien recibe a los estudiantes nuevos, quien atiende los trámites y quien los acompaña. `[3.4.D1]`
+
+**Inicial.** Roles a grandes rasgos y traspasos informales entre oficinas.
+
+**Funcional.**
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (casos abiertos, volumen, casos atrasados, casos por tipo de trámite) y lo consulta al menos semanalmente. `[3.4.F2]`
+
+**Eficiente.**
+
+*Resultado:* El equipo responde por sus tiempos de atención, una persona nueva rinde rápido, las áreas académica y financiera resuelven en el plazo acordado, y Servicio le avisa a Admisiones de los estudiantes en riesgo de dejar.
+
+- Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —trámites, reglamentos y sistemas—; no se le entrena de memoria. `[3.4.E2]`
+- El liderazgo orquesta con Admisiones —cada estudiante nuevo llega con lo que busca en su programa, y las alertas de deserción vuelven a Admisiones— y con Marketing. `[3.4.E4]`
+- El acuerdo con las áreas académica y financiera está escrito y es trazable: en cuánto tiempo resuelven lo que les pasa Servicio, como una revisión de nota, un cambio de carrera o un arreglo de pago. `[3.4.E301 · comprobable]`
+
+**Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento, y el servicio se mide por los estudiantes que permanecen y siguen estudiando con la institución.
+
+*Resultado:* Servicio se mide por los estudiantes que permanecen, se rematriculan y siguen estudiando con la institución, no solo por los casos que cierra.
+
+- El equipo de servicio se mide por la permanencia de sus estudiantes y por cuántos siguen estudiando con la institución, no solo por los casos que cierra. `[3.4.O3]`
+- Las decisiones usan analítica avanzada, como cuánto cuesta atender a cada tipo de estudiante frente a lo que deja. `[3.4.O4]`
+
+*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`.
+
+#### 3.5 Consistencia de Atención
+
+¿El estudiante recibe la misma respuesta a su trámite, lo atienda quien lo atienda y por el canal que sea?
+
+*Descripción:* Mide si cada estudiante recibe la misma atención y las mismas respuestas, lo atienda quien lo atienda.
+
+*Costo de quedarse:* La misma pregunta sobre un trámite tiene una respuesta en ventanilla y otra por WhatsApp: el estudiante no sabe a quién creerle y termina haciendo fila para preguntar en persona.
+
+**Deficiente.** Sin estandarización; cada persona responde a su criterio.
+
+**Inicial.**
+
+- No hay guía de tono; cada quien usa las plantillas a discreción. `[3.5.I1]`
+
+**Funcional.** Hay tipos de estudiante definidos, respuestas guardadas básicas y una inducción estructurada para el estudiante nuevo.
+
+*Resultado:* El equipo sabe qué tipos de estudiante atiende y qué espera cada uno, un estudiante nuevo arranca con una inducción clara y un resultado definido, y las respuestas a lo frecuente salen iguales sin importar quién atienda.
+
+- Hay al menos algunas respuestas guardadas básicas —macros— disponibles para quien atiende. `[3.5.F1]`
+- Existe un proceso documentado de inducción del estudiante nuevo, con un resultado definido que debe alcanzar al terminarla: por ejemplo, tener sus accesos y su horario, y saber a quién acudir. `[3.5.F2]`
+- Cualquier persona nueva del equipo recibe el conjunto de respuestas guardadas en su capacitación inicial. `[3.5.F3]`
+- Existe un documento simple con los tipos de estudiante que atiende el área —por ejemplo, de primer ingreso, regular, becado, de posgrado o a distancia—, con qué necesita cada uno y qué espera del servicio, consultable por cualquiera del equipo. `[3.5.F4]`
+
+**Eficiente.**
+
+*Resultado:* El estudiante reconoce la misma voz de la institución en cada respuesta, lo atienda quien lo atienda.
+
+- El tono y la voz de la institución se aplican a las respuestas, no cada persona con su estilo. `[3.5.E2]`
+
+*Se leen igual:* `3.5.D1`, `3.5.E1`, `3.5.E3`, `3.5.O1`.
+
+#### 3.6 Priorización de estudiantes
+
+¿Cada estudiante recibe la atención que corresponde a su situación, o todos hacen la misma fila?
+
+*Descripción:* Mide si la atención se prioriza por la urgencia del caso y la situación del estudiante, no por quién insiste.
+
+*Costo de quedarse:* El estudiante que está por dejar hace la misma fila que el que pide una constancia, y nadie nota que su caso era urgente.
+
+**Deficiente.**
+
+- Los casos se atienden por orden de llegada o por preferencia de quien atiende, sin contexto del estudiante. `[3.6.D1]`
+
+**Inicial.**
+
+- No hay criterios formales; la información del estudiante existe, pero no está a la vista en el momento de atenderlo. `[3.6.I1]`
+
+**Funcional.**
+
+*Resultado:* Lo urgente se atiende primero y cada tipo de estudiante recibe la atención que le corresponde, sin que quien atiende tenga que reconstruir su historia.
+
+- Cada caso tiene una prioridad asignada —urgente, alta, normal o baja— y el equipo la respeta. `[3.6.F1]`
+- La atención se diferencia según los tipos de estudiante: cada tipo tiene claro qué nivel de atención recibe. `[3.6.F2]`
+- Quien atiende usa la ficha del estudiante —su programa, sus pagos y sus casos abiertos— para dar contexto, sin reconstruirlo a mano. `[3.6.F3]`
+
+**Eficiente.** Los estudiantes de los grupos clave tienen un consejero dedicado, y hay segmentación para acciones diferenciadas.
+
+*Resultado:* Cada estudiante de los grupos clave tiene un consejero que lo conoce, el resto no queda solo, y la atención cambia según el momento en que está cada estudiante.
+
+- Hay un modelo de atención por segmento: cada estudiante de los grupos que la institución define como clave —por ejemplo, los de primer ingreso o los becados— tiene un consejero dedicado que lo conoce, y el resto recibe acompañamiento automatizado, de uno a muchos. `[3.6.E1]`
+- Los estudiantes se segmentan para acciones diferenciadas según el momento de su paso por la institución: donde siguen un programa período tras período, de primer ingreso, al día, en riesgo o con opción de seguir otro programa; donde toman un solo curso, por empezar, cursando o listos para recomendar. `[3.6.E2]`
+
+**Óptimo.** El estudiante recibe el mismo contexto lo atienda una persona o la IA, incluso cuando hace sus trámites solo.
+
+*Resultado:* Cada estudiante recibe una atención a su medida en cualquier canal, incluso cuando hace sus trámites solo, y nunca tiene que volver a explicar lo que ya habló con Admisiones.
+
+- Cada estudiante se atiende con el contexto de cómo llegó —lo que se le prometió en su admisión y el perfil con que entró—, sin volver a preguntarlo. `[3.6.O3]`
+
+*Se leen igual:* `3.6.O1`, `3.6.O2`.
+
+#### 3.7 Permanencia
+
+¿Te enteras de que un estudiante está por dejar cuando todavía puedes ayudarlo, o cuando ya no se rematriculó?
+
+*Descripción:* Mide si el servicio se adelanta a la deserción y a lo que necesita cada estudiante, o solo reacciona tarde.
+
+*Costo de quedarse:* Te enteras de que un estudiante dejó cuando no se rematricula, y cada período pierdes estudiantes que con una llamada a tiempo se habrían quedado.
+
+**Deficiente.**
+
+- Hay un solo canal, esperando que el estudiante se acerque. `[3.7.D2]`
+
+**Inicial.**
+
+- Cuántos estudiantes dejaron se sabe recién cuando cierra la rematrícula, no antes. `[3.7.I301 · comprobable · relación continua]`
+
+**Funcional.** Los riesgos evidentes —también el de dejar los estudios— se detectan a mano antes de que estallen.
+
+*Resultado:* Los estudiantes con señales de riesgo, las quejas y las fechas críticas —como la rematrícula— ya no toman al equipo por sorpresa: se actúa antes de que el estudiante deje, y cuando alguno deja, se sabe por qué.
+
+- Un estudiante con casos repetidos del mismo problema, una queja sin resolver o una mala calificación de la atención se identifica, y alguien lo contacta antes de que escale. `[3.7.F1]`
+- Los estudiantes de los grupos clave reciben contacto antes de su rematrícula en el programa o de un vencimiento importante —un pago, la renovación de su beca—, no después. `[3.7.F2]`
+- Cada estudiante que deja sus estudios —porque abandona o porque no se rematricula— deja registrada la razón de su salida. `[3.7.F3]`
+- Los estudiantes con señales de que pueden dejar —notas bajas, ausencias o atraso en el pago— se identifican durante el período, y alguien los contacta para acompañarlos. `[3.7.F301 · comprobable · hábito]`
+
+**Eficiente.** El riesgo de deserción y los trámites pendientes se ven venir, los resuelva la oficina que sea, y el estudiante recibe lo que necesita saber antes de pedirlo.
+
+*Resultado:* Los trámites del estudiante no se pierden entre oficinas, sabe lo que necesita antes de preguntarlo y los problemas se atienden antes de que escalen; la institución retiene estudiantes que antes dejaban sin aviso, sabe quiénes pueden seguir estudiando con ella y, donde la relación es continua, sus estudiantes clave revisan qué lograron.
+
+- Hay alertas tempranas, a partir del indicador de salud, de riesgo de deserción o de la oportunidad de que el estudiante siga con otro programa. `[3.7.E1]`
+- Los estudiantes en riesgo reciben una acción de permanencia —una tutoría, un arreglo de pago, un cambio de horario— antes de decidir dejar, y los que pueden seguir estudiando reciben la propuesta de un siguiente programa. `[3.7.E2]`
+- Los estudiantes de los grupos clave tienen registrada la meta que persiguen —por ejemplo, terminar en el plazo de su programa o mantener su beca— y la revisan con la institución en una cadencia fija: qué se logró y qué sigue. `[3.7.E3]`
+- Ningún trámite o molestia del estudiante se pierde entre oficinas: quedan en el sistema aunque los resuelva otra área —registro, cobros, la dirección de su carrera—, y hay alertas automáticas cuando uno se atrasa, cuando un estudiante califica mal la atención o cuando se acerca una fecha crítica —la rematrícula, un pago, un examen—, que le llegan a quien tiene que actuar. `[3.7.E4]`
+- Cada estudiante recibe, sin tener que pedirla, la información que necesita antes de los momentos clave de su período —la rematrícula, los pagos, los exámenes, la graduación—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
+
+**Óptimo.** Los problemas se resuelven antes de que el estudiante los note, con acciones que la IA ajusta, y el estudiante recibe detalles que lo hacen sentirse parte de la institución.
+
+*Resultado:* La mayoría de los problemas se resuelven antes de que el estudiante los note, y cada estudiante siente que la institución se adelanta a lo que necesita y lo sorprende para bien.
+
+- Las revisiones de avance llegan a todos los estudiantes: a los de los grupos clave en persona y al resto de forma automatizada, con los datos que prepara el sistema. `[3.7.O1]`
+- Muchos problemas se resuelven antes de que el estudiante los note. `[3.7.O2]`
+- Las acciones proactivas —qué recibe cada estudiante, cuándo y por qué canal— se autoajustan con IA según su historia y sus señales. `[3.7.O3]`
+- Los estudiantes reciben, sin pedirlos, detalles pensados para deleitarlos —un reconocimiento por su avance, beneficios o experiencias en el campus—, elegidos según su historia y el momento de su paso por la institución. `[3.7.O4]`
+
+*Se leen igual:* `3.7.D1`, `3.7.I1`.
+
+#### 3.8 Autoservicio y aprendizaje
+
+¿Atender a más estudiantes cuesta cada vez menos, o cada rematrícula necesita más gente en las ventanillas?
+
+*Descripción:* Mide si atender a más estudiantes cuesta menos cada vez, gracias al autoservicio y a lo que se aprende.
+
+*Costo de quedarse:* Cada período necesitas más gente en las ventanillas para contestar lo mismo: para crecer en matrícula, tienes que contratar al mismo ritmo.
+
+**Deficiente.** La atención depende 100% de personas: todo trámite pasa por una ventanilla, un correo o una llamada.
+
+- El costo crece linealmente con cada estudiante nuevo. `[3.8.D2]`
+
+**Funcional.**
+
+*Resultado:* Las preguntas de cada período dejan de consumir al equipo: el estudiante encuentra la respuesta publicada y nadie la vuelve a escribir.
+
+- Las consultas que más se repiten —cómo rematricularse, cómo pedir una constancia, cómo pagar— tienen una respuesta que el estudiante puede consultar por su cuenta. `[3.8.F1]`
+
+**Eficiente.**
+
+*Resultado:* La institución puede sumar estudiantes sin sumar personal de atención en la misma proporción, porque buena parte se resuelve sola, y cada período se prepara con lo que dejó el anterior.
+
+- Se revisan periódicamente los casos recurrentes y, donde la relación es continua, las razones por las que los estudiantes dejan sus estudios, para encontrar patrones y mejorar. `[3.8.E2]`
+- El autoservicio es efectivo: el estudiante resuelve sin abrir un caso, y la institución crece sin contratar linealmente. `[3.8.E3]`
+- Cada período se prepara con lo que dejó el anterior: cuántos casos llegaron, de qué tipo y en qué semanas; con eso se ajustan el equipo y las respuestas publicadas antes del pico. `[3.8.E301 · declarado · hábito · requiere 3.3.F4]`
+
+**Óptimo.** La IA detecta consultas nuevas y genera el contenido; atender a un estudiante más casi no cuesta.
+
+*Resultado:* Atender a un estudiante más casi no cuesta: el conocimiento se genera solo a medida que aparecen consultas nuevas.
+
+- La capacidad se ajusta a la demanda en tiempo real, también en los picos de cada período; el costo marginal de un estudiante nuevo es cercano a cero. `[3.8.O2]`
+- Los aprendizajes retroalimentan automáticamente la consistencia de la atención, la priorización de estudiantes y la permanencia. `[3.8.O3]`
+
+*Se leen igual:* `3.8.D1`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.O1`.
 
 ## Edición — Inmobiliaria
 
@@ -2886,6 +4539,9 @@ Para el equipo comercial de una desarrolladora o una inmobiliaria que vende las 
 | Razón de pérdida | Por qué el interesado no compró, o por qué desistió de su reserva |
 | ICP | El comprador objetivo de cada proyecto |
 | Forecast | Proyección de ventas del proyecto |
+| Ticket | Caso de posventa: una consulta, un trámite o un reclamo de obra |
+| Buyer persona | Perfil de comprador: quién es, qué busca y cómo decide, como la familia que compra su primera vivienda o el inversionista |
+| Handoff | Traspaso: el de un interesado de Marketing a un asesor, o el de un comprador de Ventas a la posventa |
 
 ### Área 1 — Ventas
 
@@ -3151,3 +4807,542 @@ Si mañana rotan dos asesores clave, ¿las oportunidades en curso siguen avanzan
 - Cuando el cliente compró en otro proyecto, queda registrado en cuál y por qué. `[1.8.E401 · comprobable]`
 
 *Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
+
+### Área 2 — Marketing
+
+Mide el rendimiento del área de marketing de la inmobiliaria: cómo está montada por dentro y qué produce en presencia, interesados y visitas para cada proyecto.
+
+**Deficiente.** Tus proyectos no los presentas tú: los presenta el mercado. Cada anuncio dice algo distinto, las herramientas están sueltas y sin conectar, y la pauta corre hasta agotar el presupuesto sin que nadie mida qué dejó. Los interesados llegan por accidente.
+
+**Inicial.** Cada proyecto tiene su logo y su brochure, pero no hay una estrategia detrás. Pagas portales y herramientas que usas a medias, publicas cuando hay algo que mostrar y revisas los resultados cuando el lanzamiento ya pasó. Llegan consultas, pero no sabes de dónde vienen.
+
+**Funcional.** El marketing de tus proyectos dejó de depender de una persona. Cada proyecto tiene su plan y su página, la marca y los perfiles de comprador están escritos, y tus canales —portales, pauta, redes, correo y WhatsApp— salen coordinados bajo un mismo calendario y anuncian solo lo que está disponible, y sabes cuánto te cuesta cada interesado. Los datos describen la operación sin reconstruirlos a mano. Los interesados llegan de forma predecible, aunque la optimización fina todavía no existe.
+
+**Eficiente.** Probar y ajustar ya es rutina, y lo que aprendes de un lanzamiento cambia cómo armas el siguiente. Sabes cuánto te cuesta cada visita y cada reserva en cada canal y en cada proyecto, el mensaje se adapta solo a cada tipo de comprador, la IA asiste a tu equipo en su trabajo diario y tus proyectos aparecen cuando alguien busca vivienda, en buscadores y en asistentes de IA. La pauta se mueve con evidencia, y quienes ya compraron recomiendan con un programa de referidos.
+
+**Óptimo.** La IA produce y ajusta; tu equipo dirige. El contenido de cada proyecto se genera y se optimiza en ciclo continuo, la IA adapta el mensaje a lo que hizo cada interesado, los modelos mueven la pauta entre canales sobre la marcha, y los compradores satisfechos que identifica Servicio traen compradores nuevos. El equipo define la estrategia y valida lo que sale.
+
+#### 2.1 Procesos y Rutinas
+
+Si mañana se va quien arma las campañas, ¿los lanzamientos y la promoción de cada proyecto siguen saliendo en tiempo y forma?
+
+*Descripción:* Mide si la promoción de cada proyecto sale de un plan y un calendario compartidos, sin depender de nadie.
+
+*Costo de quedarse:* Cada lanzamiento depende de quien lo arma: si esa persona se va, la preventa del próximo proyecto sale tarde o sin plan.
+
+**Deficiente.**
+
+- No hay calendario de campañas: cada lanzamiento y cada promoción se improvisan. `[2.1.D1]`
+
+**Funcional.** El marketing de cada proyecto sigue un plan y un calendario compartidos; deja de depender de héroes.
+
+*Resultado:* Todo el equipo trabaja en el mismo sistema, y la promoción de cada proyecto sigue saliendo aunque cambie una persona: el plan de cada lanzamiento y el calendario no viven en la cabeza de nadie, y el líder sabe en qué va cada campaña sin tener que preguntar.
+
+- El líder puede explicar qué campañas corren para cada proyecto y en qué etapa van, sin preguntarle al equipo. `[2.1.F4]`
+- El equipo interno gestiona el grueso del trabajo; la agencia y quienes producen los renders o los videos son apoyo puntual. `[2.1.F5]`
+- Cada proyecto tiene su plan de marketing escrito para cada etapa de la venta —preventa, lanzamiento, venta durante la obra y últimas unidades—, con sus campañas y sus fechas. `[2.1.F401 · declarado]`
+
+**Eficiente.**
+
+- Existe un proceso de aprobación antes de publicar cada pieza —un anuncio, un render o un video—, con sus versiones y su revisión de calidad. `[2.1.E2]`
+
+*Se leen igual:* `2.1.D2`, `2.1.D3`, `2.1.I1`, `2.1.I2`, `2.1.I3`, `2.1.F1`, `2.1.F2`, `2.1.F3`, `2.1.F6`, `2.1.E4`, `2.1.O1`, `2.1.O4`, `2.1.O5`.
+
+#### 2.2 Tecnología y Automatización
+
+¿Cuánto del marketing de tus proyectos hacen los flujos automáticos, y cuánto de lo que pagas —CRM, portales y herramientas— se aprovecha?
+
+*Descripción:* Mide cuánto trabajo repetitivo del marketing inmobiliario hacen los flujos y la IA, y cuánto se aprovechan las herramientas contratadas.
+
+*Costo de quedarse:* Haces a mano los envíos que podrían salir solos y pagas herramientas que no usas, mientras quien pregunta por un proyecto espera respuesta en WhatsApp.
+
+**Inicial.**
+
+- La inmobiliaria paga licencias cuyo valor no extrae. `[2.2.I1]`
+
+**Funcional.**
+
+*Resultado:* Todo lo que entra por el sitio, por la página de cada proyecto y por WhatsApp llega al sistema y recibe respuesta.
+
+- Los formularios del sitio y de la página de cada proyecto están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3]`
+- Después de enviar un formulario, el sistema le responde automáticamente al interesado —por ejemplo, con el brochure del proyecto— y notifica a quien corresponde. `[2.2.F5]`
+- Si el equipo usa IA, esta tiene como contexto la voz de marca y los perfiles de comprador. `[2.2.F9]`
+
+**Eficiente.**
+
+*Resultado:* Los interesados se nutren solos hasta estar listos para un asesor, la conversación con cada uno no depende de que alguien se acuerde de escribirle, y el líder ve en tiempo real qué conversaciones esperan respuesta.
+
+- Hay secuencias de nurturing de varios pasos, con ramificación y tiempos de espera, que acompañan al interesado mientras decide. `[2.2.E1]`
+- El traspaso de interesados de Marketing a los asesores está automatizado. `[2.2.E3]`
+
+**Óptimo.**
+
+- Agentes de IA atienden el canal conversacional, como WhatsApp: responden lo que generan las campañas de cada proyecto y mantienen la conversación con quien todavía no está listo para un asesor. `[2.2.O2]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven a las herramientas de marketing: la segmentación usa, por ejemplo, qué tan cerca de comprar está cada interesado, calculado afuera. `[2.2.O3]`
+
+*Se leen igual:* `2.2.D1`, `2.2.D2`, `2.2.D3`, `2.2.I2`, `2.2.I3`, `2.2.F2`, `2.2.F4`, `2.2.E2`, `2.2.E4`, `2.2.E5`, `2.2.E6`, `2.2.E7`, `2.2.O1`.
+
+#### 2.3 Datos
+
+¿Confías en tus datos de origen, conversión y atribución para mover la pauta entre portales, redes y buscadores, o los validas a mano antes de usarlos?
+
+*Descripción:* Mide si los datos de marketing dicen de dónde llega cada interesado y permiten mover la pauta con confianza.
+
+*Costo de quedarse:* No sabes qué portal o qué anuncio te trae compradores y cuál solo consultas: mueves la pauta a ciegas, porque cada reporte hay que validarlo antes de creerle.
+
+**Funcional.**
+
+*Resultado:* El líder sabe de dónde llega cada interesado —un portal, la pauta, las redes, una feria o un referido—, con reportes que salen del sistema y no de una planilla armada a mano.
+
+- Todo interesado nuevo —entre por un formulario, WhatsApp, un portal, una feria o la sala de ventas— tiene poblados la etapa del ciclo de vida y su origen. `[2.3.F1]`
+- Las propiedades que describen a cada tipo de comprador —como si compra para vivir o para invertir, o la zona que busca— están en los formularios críticos y se capturan en la mayoría de los registros. `[2.3.F2]`
+- Los reportes básicos —interesados por proyecto, conversión y origen— salen del sistema sin reconstrucción manual. `[2.3.F5]`
+- Cuando se pide un teléfono u otro dato de contacto —en un formulario o en una feria—, se pregunta si la persona acepta que le escriban por ese canal, y su respuesta queda registrada. `[2.3.F7]`
+
+**Eficiente.**
+
+*Resultado:* Marketing puede demostrar qué canal y qué contenido contribuyeron a cada venta de una unidad, no solo cuál trajo el primer clic.
+
+- La atribución reparte el mérito de cada venta entre todos los puntos de contacto —portales, pauta, redes y ferias—, no solo el primero o el último, e incluye todos los canales, también el conversacional, como WhatsApp: se sabe cuánto ingreso deja cada uno. `[2.3.E2]`
+
+*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F3`, `2.3.F6`, `2.3.E1`, `2.3.E3`, `2.3.O1`, `2.3.O3`, `2.3.O4`.
+
+#### 2.4 Equipo y Gobierno
+
+¿Quién decide qué proyecto se promociona, cuánto se invierte y en qué canal, con qué datos y con qué cadencia?
+
+*Descripción:* Mide quién decide qué se promociona y dónde se invierte en cada proyecto, con qué datos y cadencia.
+
+*Costo de quedarse:* La pauta se reparte entre proyectos por costumbre o por quien insiste más, y nadie puede demostrar con datos si la inversión trae compradores.
+
+**Inicial.**
+
+- Las decisiones operativas escalan al gerente general o a la gerencia de marketing. `[2.4.I1]`
+
+**Funcional.**
+
+*Resultado:* El equipo sabe qué se espera de cada uno, el presupuesto de cada proyecto se defiende con números y no con opiniones, y la dirección recibe cada mes cómo le fue a Marketing sin tener que pedirlo.
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (interesados nuevos por proyecto, cuántos pasan a un asesor, de dónde llegan, cuántos llegan a visita) y lo consulta al menos semanalmente. `[2.4.F2]`
+- Las decisiones de presupuesto —cuánto va a cada proyecto y a cada canal— citan datos del sistema, no opiniones. `[2.4.F4]`
+
+**Eficiente.**
+
+*Resultado:* Una persona nueva se integra rápido, y Marketing y Ventas trabajan con reglas acordadas en vez de reclamarse los interesados.
+
+- Cuando entra alguien nuevo al equipo, hay un plan de inducción con sus pasos y materiales —los proyectos, la marca y las herramientas—; no se le entrena de memoria. `[2.4.E2]`
+- El liderazgo orquesta con Ventas —traspaso de interesados, tiempos de respuesta y una reunión conjunta con cadencia fija— y con Servicio. `[2.4.E3]`
+
+**Óptimo.**
+
+*Resultado:* La dirección sabe cuánto deja cada canal frente a lo que cuesta —en unidades vendidas y en margen— y decide dónde invertir con esa cuenta, con un equipo capaz de sostener la IA.
+
+- Las decisiones usan analítica avanzada, como lo que deja cada canal —el margen de las unidades que vende— frente a lo que cuesta. `[2.4.O4]`
+
+*Se leen igual:* `2.4.D1`, `2.4.D2`, `2.4.D3`, `2.4.I2`, `2.4.F1`, `2.4.F3`, `2.4.F5`, `2.4.F6`, `2.4.E4`, `2.4.O1`, `2.4.O2`.
+
+#### 2.5 Marca y Presencia
+
+¿Quien busca vivienda en tu zona encuentra tus proyectos, entiende qué ofrece cada uno y confía en tu marca?
+
+*Descripción:* Mide si quien busca vivienda encuentra los proyectos, entiende qué ofrece cada uno y confía en la marca.
+
+*Costo de quedarse:* Quien busca vivienda encuentra primero los proyectos de otro, o encuentra el tuyo y no entiende qué lo hace distinto.
+
+**Funcional.** La marca, los perfiles de comprador y la presencia de cada proyecto están documentados y son consistentes.
+
+*Resultado:* La marca y cada proyecto se ven y suenan igual en todo lo que sale, cada proyecto tiene dónde mostrarse completo, y el sitio es encontrable en buscadores con lo básico bien resuelto.
+
+- Hay 2-3 perfiles de comprador escritos —por ejemplo, la familia que busca su primera vivienda o el inversionista—, cada uno con su recorrido básico por etapa. `[2.5.F3]`
+- Se publica contenido propio al menos una vez por mes, con cadencia previsible: videos del avance de obra, recorridos virtuales, guías para comprar o artículos del blog. `[2.5.F5]`
+- Cada proyecto en venta tiene su propia página en el sitio, con renders, planos, ubicación, amenidades y fecha de entrega. `[2.5.F401 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* Los proyectos aparecen cuando alguien busca vivienda en su zona, tanto en buscadores como en asistentes de IA, con contenido pensado para cada tipo de comprador que importa, y lo que dicen quienes ya compraron juega a su favor.
+
+- Los perfiles de comprador están detallados para los segmentos de más valor, como el inversionista o quien compra desde el exterior. `[2.5.E1]`
+- El contenido está organizado por temas —cada proyecto, cada zona, cómo comprar con crédito—: una página central por tema y contenido de apoyo que la refuerza. `[2.5.E2]`
+- El recorrido del comprador está mapeado con sus puntos de contacto definidos: portales, redes, sala de ventas, visita y reserva. `[2.5.E4]`
+- Las reseñas y calificaciones públicas —en buscadores, en los portales y en redes— se piden a los compradores satisfechos y se responden con una cadencia fija. `[2.5.E5]`
+
+**Óptimo.**
+
+*Resultado:* La presencia de cada proyecto se mantiene vigente sola: el contenido se produce y se ajusta de forma continua para cada tipo de comprador y cada forma de buscar.
+
+- Los perfiles de comprador están hiper-segmentados, casi al nivel de cada comprador. `[2.5.O1]`
+
+*Se leen igual:* `2.5.D1`, `2.5.D2`, `2.5.D3`, `2.5.I1`, `2.5.I2`, `2.5.I3`, `2.5.F1`, `2.5.F2`, `2.5.F4`, `2.5.E3`, `2.5.O2`.
+
+#### 2.6 Segmentación
+
+¿Cada interesado recibe lo que corresponde a su proyecto y a su tipo de comprador, o todos reciben la misma promoción?
+
+*Descripción:* Mide si cada interesado recibe un mensaje pensado para su tipo de comprador y el proyecto que busca.
+
+*Costo de quedarse:* Le mandas la misma promoción a todos: el inversionista recibe el mensaje pensado para la familia que busca su primera casa, y ninguno de los dos se siente hablado.
+
+**Funcional.** Hay tipos de comprador definidos, piezas adaptadas a mano y criterios escritos para pasarle un interesado a un asesor.
+
+*Resultado:* Cada tipo de comprador recibe un mensaje pensado para él, y los asesores reciben interesados que Marketing ya clasificó con criterios claros.
+
+- Existen al menos 2 segmentos definidos con criterios escritos: por ejemplo, quien compra para vivir y quien compra para invertir, o quien paga con crédito y quien paga de contado. `[2.6.F1]`
+- Las campañas recientes muestran piezas distintas por segmento: no le hablan igual a la familia que busca su primera vivienda que al inversionista. `[2.6.F3]`
+- Existen criterios escritos de qué es un suscriptor, un interesado y uno listo para pasar a un asesor —por ejemplo, porque pidió precios o una visita—, y Marketing los clasifica según ellos, a mano o con una automatización simple sobre las propiedades de calificación. `[2.6.F4]`
+
+**Eficiente.**
+
+*Resultado:* El mensaje se adapta solo a quién lo recibe y a la etapa de su búsqueda, y los asesores reciben primero a los interesados con más probabilidad de comprar.
+
+- Hay secuencias diferenciadas por segmento o por etapa del recorrido: no recibe lo mismo quien recién mira proyectos que quien ya visitó uno. `[2.6.E1]`
+- La segmentación usa datos de comportamiento —qué proyecto miró, qué recorrido virtual vio, qué correo abrió—, no solo lo que la persona declaró. `[2.6.E4]`
+
+**Óptimo.**
+
+*Resultado:* Cada interesado ve los proyectos y las unidades que le corresponden según lo que hizo antes, sin que nadie tenga que armar un segmento para él.
+
+- Hay personalización uno a uno: lo que ve cada persona —en los mensajes y en el sitio— cambia en tiempo real según lo que hizo antes, como los proyectos y las unidades que miró. `[2.6.O3]`
+
+*Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.E2`, `2.6.E3`, `2.6.O1`.
+
+#### 2.7 Canales y Alcance
+
+¿Llegas a quien puede comprar en cada proyecto, por los canales correctos y con un costo por interesado que conoces?
+
+*Descripción:* Mide si los canales llevan cada proyecto a quien puede comprarlo, con cadencia, bajo un plan y con costo conocido.
+
+*Costo de quedarse:* Tu alcance depende del último anuncio: los portales, la pauta y las redes salen sueltos, anuncias unidades que ya se vendieron y no sabes cuánto te cuesta cada interesado.
+
+**Funcional.**
+
+*Resultado:* Una campaña sale coordinada por todos los canales en vez de esfuerzos sueltos, lo que se anuncia está disponible, y el líder sabe cuánto le cuesta cada interesado según de dónde venga.
+
+- Hay al menos una campaña de pauta pagada corriendo con presupuesto definido: en buscadores, en redes o en los portales inmobiliarios. `[2.7.F3]`
+- El canal conversacional, como WhatsApp, se usa para salir con cadencia definida —el lanzamiento de un proyecto, una feria, una promoción—, no solo para responder lo que entra. `[2.7.F4]`
+- Los cuatro canales siguen el mismo calendario y la misma campaña: el lanzamiento de un proyecto sale coordinado en correo, pauta, redes y el canal conversacional, no como cuatro esfuerzos sueltos. `[2.7.F5]`
+- El líder puede decir cuánto costó cada interesado —o cada venta, donde se compra sin vendedor— el último mes, al menos por canal: cada portal, la pauta y las redes. `[2.7.F6]`
+- Los portales, la pauta y el sitio anuncian solo unidades disponibles: la que se reserva o se vende deja de promocionarse dentro del plazo acordado. `[2.7.F401 · comprobable · hábito]`
+
+**Eficiente.**
+
+*Resultado:* La inversión se mueve hacia el canal y el proyecto que traen visitas y reservas, los canales se refuerzan entre sí en vez de competir por el mismo interesado, y quienes ya compraron traen compradores nuevos.
+
+- Los canales, incluido el conversacional, comparten datos y se alimentan entre sí: uno continúa lo que empezó otro, hay remarketing activo a quien miró un proyecto y las audiencias se construyen desde el CRM. `[2.7.E1]`
+- Hay ferias inmobiliarias, eventos de lanzamiento, jornadas de puertas abiertas en el proyecto o webinars —por ejemplo, para inversionistas— como canal recurrente. `[2.7.E2]`
+- El presupuesto de pauta de cada proyecto se reparte y se ajusta con frecuencia entre canales según los datos. `[2.7.E3]`
+- Hay un programa de referidos activo: quienes ya compraron saben cómo recomendar el proyecto a un conocido, y cada referido queda registrado con quién lo trajo. `[2.7.E4]`
+- Se sabe cuánto cuesta cada visita y cada reserva en cada canal y en cada proyecto, no solo cada interesado. `[2.7.E401 · comprobable · requiere 1.3.F3]`
+
+**Óptimo.**
+
+*Resultado:* La inversión se reparte sola donde más reservas trae, los compradores satisfechos traen compradores nuevos, y la empresa llega antes que su competencia a los canales nuevos.
+
+- Los compradores que Servicio identifica como promotores se vuelven un canal de referidos y de testimonios, sin pedirlos a mano. `[2.7.O4]`
+
+*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.O1`, `2.7.O2`.
+
+#### 2.8 Medición y Aprendizaje
+
+¿Cada lanzamiento y cada campaña te enseñan qué trae compradores, o el próximo proyecto se promociona igual que el anterior?
+
+*Descripción:* Mide si cada campaña se evalúa por los interesados y las reservas que trajo, y deja un aprendizaje.
+
+*Costo de quedarse:* Repites en cada proyecto la pauta y los mensajes de siempre sin saber cuáles trajeron compradores: el presupuesto se reparte por costumbre, no por retorno.
+
+**Funcional.**
+
+*Resultado:* El equipo ve cómo le fue a cada campaña —los interesados o las reservas que trajo— sin armar el número a mano, y cada una deja una lección escrita para la siguiente.
+
+- Cada campaña significativa —un lanzamiento, una preventa o una feria— tiene una revisión de cierre documentada: qué funcionó y qué no. `[2.8.F3]`
+- Los resultados de cada campaña —los interesados o las reservas que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
+
+**Eficiente.**
+
+*Resultado:* El equipo sabe qué renders, mensajes y audiencias funcionan porque lo probó, no porque lo intuye, y lo aprendido cambia cómo se arma el lanzamiento siguiente.
+
+- Hay tests A/B regulares (al menos uno activo por mes): por ejemplo, dos renders o dos mensajes para el mismo proyecto. `[2.8.E1]`
+- El proceso de campaña y la planificación de las campañas siguientes —también el lanzamiento del próximo proyecto— se refinan con base en lo aprendido. `[2.8.E3]`
+
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.E2`, `2.8.O2`.
+
+### Área 3 — Servicio
+
+Mide el rendimiento de la posventa de la inmobiliaria, que acompaña al comprador de la firma a la entrega de su unidad y durante la garantía: cómo está montada por dentro y qué produce en entregas sin pendientes, reclamos resueltos y compradores que recomiendan.
+
+**Deficiente.** La posventa se improvisa comprador por comprador. No hay un proceso —cada quien responde a su criterio—, los reclamos llegan al teléfono de quien vendió y todo depende de que la persona correcta esté disponible. Los reclamos en redes te toman por sorpresa.
+
+**Inicial.** Lo que pasa con cada comprador lo sabe una sola persona, y eso te deja con un punto único de falla. Hay un sistema para registrar los casos, pero pocos lo usan; hay algunas respuestas guardadas para lo más frecuente y una forma de entregar que nadie escribió. La entrega es frágil.
+
+**Funcional.** Tu posventa es consistente y ya no depende de una persona. Sabes qué tipos de comprador atiendes y qué espera cada uno. Cada caso —una consulta, un trámite o un reclamo de obra— entra al mismo sistema y sigue las mismas etapas, el equipo atiende con la ficha del comprador a la vista, los casos están categorizados y la entrega sigue un proceso escrito. Atiendes primero lo urgente, tienes respuestas guardadas para lo repetitivo, avisas a tiempo cuando cambia la fecha de entrega y detectas a mano los problemas evidentes antes de que estallen. Todavía no hay alertas automáticas, pero ya no esperas a que el comprador reclame.
+
+**Eficiente.** La posventa empieza a adelantarse al problema. Tienes plazos por tipo de caso que se vigilan solos, un portal donde el comprador ve y abre sus casos, y la IA asiste a tu equipo en su trabajo diario; mides tiempos de respuesta y satisfacción, y la información del comprador se une con la de Ventas. Cada comprador sabe cómo va su obra sin tener que preguntar, ninguna solicitud se pierde entre la obra, legal y cobros, y, donde hay condominio, el paso a su administración está acordado. La entrega deja de ser una sorpresa.
+
+**Óptimo.** Un agente de IA responde las consultas de los compradores a toda hora y le pasa a una persona, con todo el contexto, lo que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y atiende las excepciones; muchos problemas de la entrega y de la garantía se resuelven antes de que el comprador los note, y cada comprador se atiende sabiendo lo que se le prometió en la venta y recibe detalles pensados para él. Atender a un comprador más casi no cuesta.
+
+#### 3.1 Procesos y Rutinas
+
+Si mañana se va quien lleva la posventa, ¿cada comprador sigue sabiendo cómo va su unidad, su entrega y sus reclamos?
+
+*Descripción:* Mide si la posventa sigue un proceso y rutinas definidas, para que atender al comprador no dependa de quién sabe.
+
+*Costo de quedarse:* La posventa depende de quien conoce cada caso: si esa persona falta, los reclamos de obra se quedan sin respuesta y los compradores lo notan de inmediato.
+
+**Deficiente.**
+
+- Cada persona de la posventa atiende las consultas y los reclamos a su manera. `[3.1.D1]`
+
+**Inicial.**
+
+- Unos atienden en el sistema; otros siguen con su WhatsApp personal. `[3.1.I3]`
+
+**Funcional.** El equipo atiende en un mismo sistema, cada caso sigue las mismas etapas y cada comprador tiene quien responda por él.
+
+*Resultado:* Todo el equipo atiende en el mismo sistema, cada comprador tiene a alguien que responde por él, y un reclamo se atiende igual sin importar quién lo tome.
+
+- El pipeline de servicio está configurado con sus etapas y cubre la atención de cada caso —una consulta, un trámite o un reclamo de obra—, de la recepción al cierre. `[3.1.F1]`
+- Cada comprador tiene quién responda por él —una persona o, si son muchos, un equipo con un seguimiento automático— y un seguimiento mínimo más allá de los casos que abre. `[3.1.F2]`
+- Hay reuniones del equipo de posventa con cadencia fija (al menos quincenal) que se sostienen. `[3.1.F3]`
+- Existe un proceso básico documentado para quejas críticas o escalaciones: por ejemplo, una filtración o un defecto que impide habitar la unidad. `[3.1.F4]`
+- Cualquier persona de la posventa explica cómo se atiende un caso típico —un reclamo de obra, una consulta sobre la escritura— siguiendo el mismo flujo. `[3.1.F5]`
+- Cualquier persona de la posventa atiende en el sistema central, no por fuera: es su herramienta de trabajo, no algo que se llena después de resolver por WhatsApp o por teléfono. `[3.1.F6]`
+- El proceso de garantía está escrito: qué cubre cada garantía, cuánto dura y cómo se reporta y se atiende un reclamo de obra. `[3.1.F401 · declarado]`
+
+**Eficiente.**
+
+*Resultado:* El comprador sabe cuánto va a tardar la respuesta, cada momento clave —la escritura, la entrega, la garantía— tiene un dueño, y el líder sabe dónde se desvía la atención y corrige con datos, no de memoria.
+
+- Hay SLAs definidos por tipo de caso o prioridad: no se atiende en el mismo plazo una consulta que un reclamo que impide habitar la unidad. `[3.1.E1]`
+- El recorrido del comprador está definido de punta a punta, con sus momentos clave —la firma, el avance de la obra, la escritura, la entrega, la garantía y, si la hay, una renovación o una recompra— y un responsable y un estándar para cada uno. `[3.1.E4]`
+- Hay guías escritas para los momentos difíciles de la posventa: un atraso en la entrega, un reclamo de obra que se repite o una escritura que se traba. `[3.1.E401 · declarado]`
+
+**Óptimo.**
+
+- El sistema detecta las desviaciones del proceso de atención y se las señala al líder y a quien atiende el caso, sin intervención. `[3.1.O3]`
+
+*Se leen igual:* `3.1.D2`, `3.1.I1`, `3.1.I2`, `3.1.E3`, `3.1.E5`, `3.1.O1`, `3.1.O4`.
+
+#### 3.2 Tecnología y Automatización
+
+¿Cuántas consultas de los compradores —cómo va la obra, cuándo se firma la escritura, cómo reportar un pendiente— necesitan a una persona cuando podrían resolverse solas?
+
+*Descripción:* Mide cuántas consultas de los compradores se resuelven solas o por autoservicio, y cuánto se aprovecha el sistema de posventa.
+
+*Costo de quedarse:* Tu equipo contesta a mano las mismas preguntas sobre la obra y la entrega, y los reclamos se pierden entre el WhatsApp de quien vendió, el correo y las llamadas.
+
+**Deficiente.**
+
+- Los reclamos y las consultas llegan al celular de quien vendió o al correo de cada persona. `[3.2.D2]`
+
+**Funcional.**
+
+*Resultado:* Cada consulta o reclamo que llega por los canales conectados entra al sistema y se le asigna a alguien sin que nadie lo reparta, y quien lo necesita se entera de cada cambio.
+
+- Al entrar un caso, el sistema lo asigna automáticamente según una regla simple —por proyecto o por tipo de caso—; las notificaciones de cambio de estado llegan a quien las necesita. `[3.2.F5]`
+
+**Eficiente.**
+
+*Resultado:* Los plazos se vigilan solos y los reclamos críticos llegan solos a quien los tiene que resolver; el comprador puede ver y abrir sus casos y resolver lo simple sin esperar a nadie, y el líder ve en tiempo real cuánto hay abierto y qué quedó sin atender.
+
+- Hay automatización de SLA —alertas antes del vencimiento y escalación automática, con reglas de cuándo se escala y a quién—, y las conversaciones y los casos se enrutan por múltiples condiciones, como el proyecto, el tipo de reclamo o el idioma. `[3.2.E1]`
+- Hay un portal donde el comprador ve y abre sus casos —un reclamo de obra, un trámite—, y una base de conocimiento interna y pública. `[3.2.E2]`
+
+**Óptimo.**
+
+- Hay un agente de IA en producción que resuelve las consultas de los compradores en todos los canales sin intervención humana y pasa a una persona, con el contexto completo, cuando hace falta; hay automatización de flujos de trabajo. `[3.2.O1]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de posventa: quien atiende ve en la ficha, por ejemplo, el riesgo de que un comprador desista antes de la escritura. `[3.2.O4]`
+
+*Se leen igual:* `3.2.D1`, `3.2.I2`, `3.2.F4`, `3.2.F6`, `3.2.F8`, `3.2.E3`, `3.2.E4`, `3.2.E5`.
+
+#### 3.3 Datos
+
+¿Quien atiende ve al instante qué unidad compró cada comprador, qué ha pagado y qué reclamos tiene abiertos, o se lo pregunta?
+
+*Descripción:* Mide si quien atiende ve al instante la unidad, los pagos y los casos anteriores de cada comprador.
+
+*Costo de quedarse:* Cada vez que el comprador escribe tiene que decir qué unidad compró y volver a explicar su reclamo, porque nadie ve su historia completa.
+
+**Funcional.**
+
+*Resultado:* El líder sabe qué tipo de reclamos y consultas llegan y cuántos, y quien atiende tiene la historia de cada comprador en segundos.
+
+- Cualquier persona de la posventa ve el histórico de casos de un comprador en menos de 10 segundos. `[3.3.F1]`
+- La ficha del comprador muestra la unidad que compró, lo que ha pagado y su valor, no solo sus casos. `[3.3.F2]`
+- Las propiedades clave del comprador —qué unidad compró y cuándo firmó— están pobladas en la mayoría de los registros. `[3.3.F3]`
+- Cada caso tiene tipo y motivo, con una taxonomía definida: por ejemplo, un reclamo de obra por humedad, por acabados o por instalaciones. `[3.3.F4]`
+
+**Eficiente.**
+
+*Resultado:* La empresa sabe qué tan rápido y qué tan bien atiende a sus compradores, cuánto tarda cada uno en tener su unidad sin pendientes y qué tan satisfechos quedan, con la satisfacción medida y no supuesta.
+
+- Se mide el tiempo de primera respuesta y de resolución, y el cumplimiento de los SLA, en todos los canales, también en los reclamos de garantía. `[3.3.E1]`
+- Se mide la satisfacción del comprador con NPS o CSAT con cadencia: por ejemplo, después de la entrega y al cerrar cada reclamo. `[3.3.E2]`
+- Se mide cuánto tarda cada comprador en tener su unidad sin pendientes: el tiempo desde que empieza su entrega hasta que se cierra su último pendiente. `[3.3.E4]`
+
+**Óptimo.** Los modelos anticipan los problemas de cada comprador antes de que los manifieste, con datos que se mantienen al día solos.
+
+*Resultado:* La empresa sabe qué compradores están en riesgo de quedar mal con su entrega antes de que lo digan y, donde el cliente vuelve, cuáles están logrando lo que buscaban, con datos que se mantienen al día solos.
+
+*Se leen igual:* `3.3.D1`, `3.3.D2`, `3.3.I1`, `3.3.I2`, `3.3.F5`, `3.3.F6`, `3.3.E3`, `3.3.E5`, `3.3.O1`, `3.3.O2`, `3.3.O3`, `3.3.O4`.
+
+#### 3.4 Equipo y Gobierno
+
+¿Quién decide qué se atiende primero en la posventa, con qué información, y cómo se mejora?
+
+*Descripción:* Mide quién decide qué se atiende primero en la posventa, con qué información, y cómo se revisa y mejora.
+
+*Costo de quedarse:* Se atiende primero al comprador que más insiste, no al que tiene el problema más grave, y los mismos reclamos se repiten en cada proyecto porque nadie los revisa.
+
+**Deficiente.**
+
+- No hay coordinación entre quien acompaña la escritura, quien hace la entrega y quien atiende los reclamos. `[3.4.D1]`
+
+**Funcional.**
+
+*Resultado:* Cada persona sabe qué le toca, y el líder ve cada semana si la posventa va al día o se está atrasando.
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (casos abiertos, reclamos por proyecto, pendientes de entrega, casos por tipo) y lo consulta al menos semanalmente. `[3.4.F2]`
+
+**Eficiente.**
+
+*Resultado:* El equipo responde por sus tiempos de atención, una persona nueva rinde rápido, cada comprador llega de Ventas con lo que se le prometió y, donde hay condominio, el paso a su administración no deja al propietario sin saber a quién acudir.
+
+- Cuando entra alguien nuevo a la posventa, hay un plan de inducción con sus pasos y materiales —los proyectos, las garantías y los sistemas—; no se le entrena de memoria. `[3.4.E2]`
+- El liderazgo orquesta con Ventas —cada comprador llega a la posventa con lo que busca y lo que se le prometió al vender, y lo que pone en riesgo una venta vuelve a Ventas— y con Marketing. `[3.4.E4]`
+- Si el proyecto queda en condominio, el traspaso a su administración está acordado por escrito: qué se entrega, cuándo y a quién acude el propietario desde ese día para cada cosa. `[3.4.E401 · declarado]`
+
+**Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento, y la posventa se mide por cómo reciben su unidad los compradores.
+
+*Resultado:* La posventa se mide por cómo reciben su unidad los compradores y por su disposición a recomendar —y, donde el cliente vuelve, por lo que retiene—, no solo por los casos que cierra.
+
+- Las decisiones usan analítica avanzada, como cuánto cuestan la posventa y las garantías de cada proyecto frente a lo que deja. `[3.4.O4]`
+- El equipo de posventa se mide por cómo reciben su unidad los compradores —entregas sin pendientes y su satisfacción— y por su disposición a recomendar, no solo por los casos que cierra. `[3.4.O401 · declarado · hábito · requiere 3.3.E2]`
+
+*Se leen igual:* `3.4.D2`, `3.4.I1`, `3.4.I2`, `3.4.F1`, `3.4.F3`, `3.4.E1`, `3.4.O1`, `3.4.O2`, `3.4.O3`.
+
+#### 3.5 Consistencia de la posventa
+
+¿Cada comprador recibe la misma respuesta y la misma entrega, lo atienda quien lo atienda?
+
+*Descripción:* Mide si cada comprador recibe la misma atención, las mismas respuestas y la misma entrega, lo atienda quien lo atienda.
+
+*Costo de quedarse:* El mismo reclamo se acepta o se rechaza según quién atienda, y cada entrega se hace a su manera: el comprador lo nota y se lo cuenta a sus vecinos.
+
+**Deficiente.** Sin estandarización; cada persona responde y entrega a su criterio.
+
+**Inicial.**
+
+- No hay guía de tono; cada quien usa las plantillas a su discreción. `[3.5.I1]`
+
+**Funcional.** Hay tipos de comprador definidos, respuestas guardadas y una entrega estructurada.
+
+*Resultado:* El equipo sabe qué tipos de comprador atiende y qué espera cada uno, cada unidad se entrega con el mismo proceso y un resultado definido, y las respuestas a lo frecuente salen iguales sin importar quién atienda.
+
+- Hay al menos algunas respuestas guardadas disponibles para quien atiende la posventa. `[3.5.F1]`
+- Existe un proceso documentado de entrega de la unidad —inspección previa, acta de entrega y lista de pendientes—, con un resultado definido que el comprador debe alcanzar al terminarlo: recibir su unidad sin pendientes abiertos. `[3.5.F2]`
+- Cualquier persona nueva de la posventa recibe las respuestas guardadas en su capacitación inicial. `[3.5.F3]`
+- Existe un documento simple con los tipos de comprador que atiende la posventa —por ejemplo, quien va a vivir la unidad y quien la compró para alquilarla—, qué necesita cada uno y qué espera del servicio, consultable por cualquiera del equipo. `[3.5.F4]`
+
+**Eficiente.**
+
+*Resultado:* El comprador reconoce la misma voz en cada respuesta, sea quien sea quien lo atienda.
+
+- Hay plantillas de respuesta a los casos frecuentes —cómo reportar un pendiente, qué cubre la garantía— cargadas como respuestas guardadas, en uso. `[3.5.E1]`
+- El tono y la voz de marca se aplican a las respuestas, no cada persona con su estilo. `[3.5.E2]`
+
+*Se leen igual:* `3.5.D1`, `3.5.E3`, `3.5.O1`.
+
+#### 3.6 Priorización de compradores
+
+¿Un reclamo que impide habitar la unidad se atiende antes que una consulta, y cada comprador recibe la atención que le corresponde?
+
+*Descripción:* Mide si la atención se prioriza por la gravedad del caso y el momento del comprador, no por quién insiste.
+
+*Costo de quedarse:* Una filtración espera en la misma fila que una consulta sobre la escritura, y nadie nota que el comprador que recibe su unidad la próxima semana sigue con pendientes.
+
+**Deficiente.**
+
+- Los casos se atienden por orden de llegada o según quién los toma, sin contexto del comprador. `[3.6.D1]`
+
+**Funcional.**
+
+*Resultado:* Lo urgente se atiende primero y cada tipo de comprador recibe una atención acorde, sin que quien atiende tenga que reconstruir su historia.
+
+- Cada caso tiene una prioridad asignada —urgente, alta, normal o baja— y el equipo la respeta: una filtración va antes que una consulta. `[3.6.F1]`
+- La atención se diferencia según los tipos de comprador: cada tipo tiene claro qué nivel de atención recibe. `[3.6.F2]`
+- Quien atiende usa la ficha del comprador —la unidad que compró, lo que ha pagado y sus casos abiertos— para dar contexto, sin reconstruirlo a mano. `[3.6.F3]`
+
+**Eficiente.** La atención cambia según el momento de cada comprador y, donde el cliente vuelve, cada cliente clave tiene un responsable dedicado.
+
+*Resultado:* La atención cambia según el momento en que está cada comprador —por escriturar, por recibir su unidad, en garantía o listo para recomendar— y, donde el cliente vuelve, cada cliente clave tiene un dueño que lo conoce.
+
+- Los compradores se segmentan para acciones diferenciadas según el momento de su relación: por escriturar, por recibir su unidad, en garantía o listos para recomendar; donde el cliente vuelve, sanos, en riesgo o con potencial de crecer. `[3.6.E2]`
+
+**Óptimo.**
+
+*Resultado:* Cada comprador recibe una atención a su medida en cualquier canal, incluso cuando se atiende solo, y nunca tiene que volver a explicar lo que se le prometió al vender.
+
+- Cada comprador se atiende con el contexto de cómo llegó —lo que se le prometió en la venta: acabados, amenidades y fecha de entrega—, sin volver a preguntarlo. `[3.6.O3]`
+
+*Se leen igual:* `3.6.I1`, `3.6.E1`, `3.6.O1`, `3.6.O2`.
+
+#### 3.7 Acompañamiento del comprador
+
+¿El comprador sabe cómo va su unidad y cuándo se la entregan sin tener que preguntar, y te enteras de un problema antes de que reclame?
+
+*Descripción:* Mide si el comprador sabe cómo va su unidad sin preguntar y si los problemas se atienden antes del reclamo.
+
+*Costo de quedarse:* El comprador se entera del atraso de su entrega por un vecino o por la prensa, y tú te enteras de que quedó mal cuando lo publica en redes.
+
+**Funcional.**
+
+*Resultado:* Los reclamos que se repiten, las malas calificaciones, los cambios en la fecha de entrega y los vencimientos importantes ya no toman al equipo por sorpresa: se actúa antes de que el comprador reclame en público.
+
+- Un comprador con reclamos repetidos del mismo problema, una queja sin resolver o una mala calificación se identifica, y alguien lo contacta antes de que escale. `[3.7.F1]`
+- Los compradores clave —por ejemplo, quien compró varias unidades— reciben contacto antes de un vencimiento importante —la escritura, el fin de una garantía o, si la hay, una renovación—, no después. `[3.7.F2]`
+- Cuando cambia la fecha de entrega, cada comprador afectado recibe el aviso de la empresa —con la fecha nueva y la razón— antes de que se cumpla la fecha anterior. `[3.7.F401 · comprobable · hábito]`
+
+**Eficiente.** Los problemas y las solicitudes pendientes se ven venir, las atienda el área que sea, y el comprador recibe lo que necesita saber antes de pedirlo.
+
+*Resultado:* Las solicitudes del comprador no se pierden entre la posventa, la obra, legal y cobros, cada comprador sabe cómo va su unidad antes de preguntarlo y los problemas se atienden antes de que escalen; donde el cliente vuelve, la empresa retiene clientes que antes se perdían sin aviso.
+
+- Ninguna solicitud o molestia del comprador se pierde entre áreas: quedan en el sistema aunque las resuelva otra área —la obra, legal, cobros—, y hay alertas automáticas cuando una se atrasa, cuando un comprador califica mal o cuando se acerca una fecha crítica —una entrega, el fin de una garantía, una escritura—, que le llegan a quien tiene que actuar. `[3.7.E4]`
+- Cada comprador recibe, sin tener que pedirla, la información que necesita antes de los momentos clave —la escritura, la inspección previa, la entrega—, y sale de forma automática, no cuando alguien se acuerda. `[3.7.E5]`
+- Si la unidad se vende antes de terminarse, de la firma a la entrega cada comprador recibe en una cadencia fija cómo va la obra de su proyecto y la fecha de entrega vigente, sin tener que pedirlo. `[3.7.E401 · comprobable · hábito]`
+
+**Óptimo.**
+
+*Resultado:* La mayoría de los problemas de la entrega y de la garantía se resuelven antes de que el comprador los note, y cada comprador siente que la empresa se adelanta a lo que necesita y lo sorprende para bien.
+
+- Muchos problemas —de la entrega, de la garantía o de un trámite— se resuelven antes de que el comprador los note. `[3.7.O2]`
+- Los compradores reciben, sin pedirlos, detalles pensados para deleitarlos —un regalo al recibir la unidad, un beneficio en el aniversario de la entrega—, elegidos según su historia y el momento de su relación. `[3.7.O4]`
+
+*Se leen igual:* `3.7.D1`, `3.7.D2`, `3.7.I1`, `3.7.F3`, `3.7.E1`, `3.7.E2`, `3.7.E3`, `3.7.O1`, `3.7.O3`.
+
+#### 3.8 Escalabilidad de la posventa
+
+¿Cada proyecto que entregas multiplica las mismas preguntas y los mismos reclamos, o atender a un comprador más cuesta cada vez menos?
+
+*Descripción:* Mide si atender a más compradores cuesta menos cada vez, gracias al autoservicio y al conocimiento documentado.
+
+*Costo de quedarse:* Las mismas preguntas y los mismos reclamos vuelven con cada proyecto: para entregar más unidades, tienes que contratar al mismo ritmo.
+
+**Deficiente.** La posventa depende por completo de personas.
+
+**Funcional.**
+
+*Resultado:* Las preguntas de siempre dejan de consumir al equipo: el comprador encuentra la respuesta publicada y nadie la vuelve a escribir.
+
+- Las consultas que más se repiten —cómo usar la garantía, cómo reportar un pendiente, qué documentos pide la escritura— tienen una respuesta que el comprador puede consultar por su cuenta, como el manual del propietario o las preguntas frecuentes. `[3.8.F1]`
+
+**Eficiente.**
+
+*Resultado:* La empresa puede entregar más unidades sin sumar personas en la misma proporción, porque buena parte se resuelve sola, y lo que enseñan los reclamos llega a quien construye el próximo proyecto.
+
+- Se revisan periódicamente los reclamos que se repiten —por ejemplo, la misma falla en varias unidades de un proyecto— y, donde la relación es continua, las razones por las que se van los clientes, para encontrar patrones y mejorar. `[3.8.E2]`
+- Los patrones de los reclamos de garantía se comparten con quien diseña y construye, para que el próximo proyecto no repita las mismas fallas. `[3.8.E401 · declarado · hábito]`
+
+**Óptimo.**
+
+- Los aprendizajes retroalimentan automáticamente la consistencia de la posventa, la priorización de los compradores y el acompañamiento de cada uno. `[3.8.O3]`
+
+*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`.

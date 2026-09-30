@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.3.4
-escala: 8.5.0
+version: 1.3.5
+escala: 8.6.0
 fecha: 2026-09-30
 ---
 
@@ -132,6 +132,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.3.5 (2026-09-30).** Acompaña a la escala 8.6.0, en la que las cuatro ediciones suman Marketing y Servicio. No cambia el cálculo.
 
 **1.3.4 (2026-09-30).** Acompaña a la escala 8.5.0, que deja cada cosa de Marketing y de Servicio en una sola dimensión y las iguala a Ventas: quedan retirados 29 identificadores, 18 de Marketing y 11 de Servicio. Se dice que un criterio que cambia de nivel o de lo que mide también deja su identificador, y cuándo un criterio que cambia de texto conserva el suyo. No cambia el cálculo.
 

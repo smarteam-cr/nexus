@@ -4012,3 +4012,55 @@ que las pruebas no ven; lo que encontraron está incluido.
   perfil; en Ecommerce, Tecnología y Autoservicio de Servicio hacen casi la misma pregunta; la cola de
   `3.2.O1`; partir en tres el contexto que no se deja envejecer, como en Ventas; el glosario
   (sobra «QBR»; faltan «ROI», «ERP» y «CSE»); y Marketing y Servicio de cada edición.
+
+## Marketing y Servicio de las cuatro ediciones, antes de probarlas: se revisan completas en producción (2026-09-30)
+
+**Contexto.** La decisión anterior era que una edición salía con Ventas y que Marketing y Servicio se
+adaptaban después de usarla con dos o tres clientes. Con Marketing y Servicio generales ya limpios
+(8.5.0), el responsable cambió el orden: «Avancemos y reviso todo al final. Creemos la de marketing y
+servicio de cada industria. La subimos a producción y justo ahí lo reviso. Luego… toca probarla». Es
+la escala 8.6.0: las cuatro ediciones traen las tres áreas enteras.
+
+**Decisiones.**
+
+- **Se escriben las cuatro a la vez, con un mismo encargo.** Cuatro redactores en paralelo, uno por
+  edición, con las mismas reglas —las de la Parte 5 de la escala más lo aprendido al escribir Ventas:
+  los resultados no tienen tooltip, un área renombrada obliga a reescribir lo que la nombra, la
+  prueba 1 corre con los nueve perfiles— y validando cada uno su copia con las dos pruebas. Después, dos revisores cruzados —uno por área, leyendo las cuatro ediciones a la vez—
+  buscaron lo que las pruebas no ven. La revisión por área encontró lo que la de una sola edición no
+  puede: la misma situación decidida distinto sin razón de industria.
+- **Los nombres de las áreas no cambian** («Marketing», «Servicio»); sí los de las dimensiones de
+  producción cuando la industria los dice de otra forma (Autoservicio, Permanencia, Marca y confianza,
+  Acompañamiento del comprador…). En Educación, lo que nombra al área de ventas dice «Admisiones».
+- **Cada cosa se pide una vez también entre las áreas de una edición.** Tres choques que venían de
+  la época en que las ediciones traían solo Ventas: el permiso de contacto (Banca y Educación lo
+  pedían en Ventas y la general lo pide en Marketing), la rematrícula (Educación la ponía como
+  recompra en Admisiones, y es renovación de Servicio) y las secuencias en una tienda (las de Ventas
+  son las del carrito y las de después de la compra; las de Marketing, las de quien todavía no compra).
+- **Un reescrito mide lo mismo que el general, y se nota en los detalles.** La revisión cruzada sacó
+  reescritos que pedían más (dos canales donde el general pide uno, un contenido fijo en la respuesta
+  automática, un plazo en Priorización que es de Procesos) o menos («los demás momentos» para no
+  contar dos veces un propio). Cuando la industria pide más, es un criterio propio y el general queda
+  como está.
+- **El costo de quedarse se arregla en Funcional.** El chequeo lo muestra junto al resultado de
+  Funcional: un costo que habla de reseñas, de costo por producto colocado o de pruebas de reputación
+  prometía algo de Eficiente.
+- **Lo que depende de algo que no todos tienen abre con la condición** («Si la entidad emite
+  tarjetas…», «Si el proyecto queda en condominio…», «Si la institución capta en ferias…»): así el
+  CSE sabe cuándo el criterio no cuenta.
+- **El autoservicio transaccional es de Tecnología en Eficiente**, como el portal en la escala
+  general: las gestiones en la app de Banca y los trámites en línea de Educación quedan ahí. Pedir
+  el seguimiento del pedido en Autoservicio de Ecommerce se deja en Funcional: es la respuesta a la
+  consulta que más se repite en una tienda, y la dimensión lo pregunta así desde la 8.0.0.
+- **La retención con propuesta de expansión (`3.7.E2`) es de relación continua** en la escala general:
+  donde el cliente vuelve sin contrato, reactivarlo es de Tracción del Deal. Ecommerce y Banca la
+  sacan (ofrecer más es de Ventas) y suman su propia retención; Educación e Inmobiliaria la leen con
+  sus palabras o igual.
+- **En espera** (lo dijeron los redactores o los revisores, y lo decide el responsable): la vara de
+  Funcional en Banca (plazos del regulador, cumplimiento normativo, identidad, bloqueo de tarjeta,
+  aviso de cobro); dónde queda la atención preferente a los mejores clientes en una tienda (hoy en
+  Ventas `1.6.E102`); «grupos clave» de estudiantes por necesidad y no por valor; el avance de obra
+  en Ventas y en Servicio de Inmobiliaria; y, de la escala general, respetar el permiso al enviar
+  (solo se pide registrarlo), las herramientas que se piden dos veces en la venta sin vendedor, el
+  acuerdo con las áreas que resuelven parte de los casos en Equipo de Servicio, los criterios de
+  resolución escritos, y la presencia en mapas para sucursales, sedes y salas de ventas.
