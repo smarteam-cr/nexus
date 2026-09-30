@@ -68,6 +68,8 @@ export interface Dimension {
   nombre: string;
   capa: ClaveDeCapa;
   pregunta: string;
+  /** «*Qué mide:*», opcional: una explicación más larga de la dimensión, entre la pregunta y el costo. */
+  queMide: string | null;
   costoDeQuedarse: string;
   /** El nombre genérico que la dimensión comparte en las tres áreas («Presentación», «Datos»…). */
   generica: { nombre: string; descripcion: string | null } | null;

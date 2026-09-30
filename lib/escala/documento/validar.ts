@@ -96,6 +96,7 @@ function sinIdentificadoresALaVista(escala: Escala): ResultadoDePrueba {
   for (const a of escala.areas) {
     for (const d of a.dimensiones) {
       revisar(`costo de ${d.id}`, d.costoDeQuedarse);
+      revisar(`qué mide ${d.id}`, d.queMide);
       for (const n of d.niveles) {
         revisar(n.id, n.descripcion);
         revisar(`resultado de ${n.id}`, n.resultado);

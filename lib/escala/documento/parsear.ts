@@ -290,6 +290,7 @@ function leerMatriz(lineas: string[], ctx: Contexto): { areas: Area[]; nombresDe
         nombre: m[3].trim(),
         capa,
         pregunta: "",
+        queMide: null,
         costoDeQuedarse: "",
         generica: null,
         niveles: [],
@@ -301,6 +302,15 @@ function leerMatriz(lineas: string[], ctx: Contexto): { areas: Area[]; nombresDe
       };
       // La primera línea de texto después del título es la pregunta: se abre el párrafo vacío.
       anteriorEnBlanco = true;
+      continue;
+    }
+
+    if ((m = /^\*Qué mide:\* (.+)$/.exec(linea))) {
+      if (!dim || nivel) throw new ErrorDeFormato("«Qué mide» fuera de lugar: va antes de los niveles.", n);
+      dim.queMide = m[1].trim();
+      parrafo = (l) => {
+        dim!.queMide += ` ${l}`;
+      };
       continue;
     }
 

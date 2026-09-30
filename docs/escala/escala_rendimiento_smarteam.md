@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.5.0
+version: 7.6.0
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -580,6 +580,8 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 ¿El equipo trabaja los leads correctos, o todos por igual?
 
+*Qué mide:* Cómo decide el equipo a qué leads dedicar su tiempo primero: si los separa con criterios escritos que salen del cliente ideal, y si el CRM ayuda a aplicarlos. En la venta transaccional no aplica, porque nadie elige a quién atender.
+
 *Costo de quedarse:* Tu equipo le dedica el mismo esfuerzo a quien nunca va a comprar que a quien está listo, y los mejores leads esperan su turno.
 
 **Deficiente.** Se atienden leads por orden de llegada o preferencia.
@@ -621,25 +623,32 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 ¿Qué pasa cuando un deal se enfría?
 
+*Qué mide:* Qué pasa con un deal abierto mientras no se cierra: si alguien se da cuenta cuando deja de avanzar, si hay una respuesta acordada para reactivarlo —por más de un canal, con assets y con ayuda del líder— y si esa respuesta llega a tiempo. En la venta transaccional, el deal es el carrito o el pedido: mide si los carritos abandonados se recuperan.
+
 *Costo de quedarse:* Los negocios se enfrían en silencio: nadie ve cuándo dejaron de avanzar, y los pierdes sin saber por qué.
 
 **Deficiente.** El vendedor está solo y contacta por un solo canal.
 
-- No hay apoyo de Marketing ni de liderazgo. `[1.7.D1 · evaluado]`
-- Los deals se enfrían y mueren sin acción correctiva. `[1.7.D2 · comprobable]`
+- No hay apoyo del liderazgo. `[1.7.D1 · evaluado]`
+- Nadie se da cuenta de que los deals no avanzan. `[1.7.D2 · comprobable]`
+- No hay un registro adecuado de los deals. `[1.7.D3 · comprobable]`
+- No hay assets para presentar a los prospectos y apoyar visualmente la venta. `[1.7.D4 · declarado · venta con equipo]`
 
 **Inicial.** Apoyo esporádico cuando el vendedor lo pide.
 
 - Marketing envía materiales genéricos. `[1.7.I1 · evaluado]`
-- El liderazgo interviene solo al final del trimestre, a menudo tarde. `[1.7.I2 · evaluado]`
+- El liderazgo ayuda a destrabar deals, pero no se anticipa: interviene cuando ya están en problemas. `[1.7.I2 · evaluado]`
+- Cada vendedor tiene sus propios assets para ayudarse en la venta. `[1.7.I3 · declarado · venta con equipo]`
+- Todos los intentos de hacer avanzar un deal se hacen por el mismo canal. `[1.7.I4 · comprobable]`
 
 **Funcional.** Ningún deal se enfría en silencio: hay una respuesta acordada.
 
-*Resultado:* Los negocios que se enfrían se rescatan a tiempo en vez de perderse en silencio, y el líder actúa mientras todavía hay margen.
+*Resultado:* Los negocios que se traban se detectan a tiempo y se reactivan por más de un canal, con assets estandarizados y con el líder actuando mientras todavía hay margen.
 
 - Los deals estancados se reconocen a tiempo y tienen un paso de reactivación acordado, no la improvisación de cada vendedor. `[1.7.F1 · evaluado · hábito]`
 - La reactivación usa al menos dos canales, por ejemplo correo y llamada. `[1.7.F2 · comprobable · hábito]`
 - El liderazgo interviene sobre los deals estancados durante el período, no al cierre del trimestre cuando ya se perdieron. `[1.7.F3 · evaluado · hábito · venta con equipo]`
+- Hay assets estandarizados que ayudan a cerrar las ventas. `[1.7.F4 · declarado · venta con equipo]`
 
 **Eficiente.** Hay contacto multicanal y los leads llegan nutridos desde Marketing.
 
@@ -1469,6 +1478,7 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | AEO | Optimización para motores de respuesta: que el contenido aparezca como respuesta en asistentes de IA y en buscadores que contestan preguntas. |
 | Almacén central de datos | Base donde la empresa junta la información de todas sus herramientas para analizarla en conjunto. En inglés, data warehouse. |
 | Arquitectura de CRM | Cómo está armado el CRM por dentro: sus propiedades, pipelines, listas y formularios. |
+| Asset | Material de apoyo para vender: una presentación, un caso de éxito, una demo o un video. |
 | Backlog | Trabajo pendiente acumulado, como los tickets sin resolver. |
 | BANT, MEDDIC, SPIN | Metodologías de venta con pasos definidos para calificar y conducir una oportunidad. |
 | Buyer persona | Retrato escrito de un tipo de comprador: quién es, qué le preocupa y cómo decide. |
@@ -1523,6 +1533,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.6.0 (2026-09-29).** Revisión de Tracción del Deal de Ventas con su responsable. Deficiente e Inicial se dicen más simple y suman señales sobre el registro de los deals, los assets de venta y el canal único; en Funcional se suma que hay assets estandarizados que ayudan a cerrar, y el resultado pasa a ser lo que se logra al cumplir todos sus criterios. Una dimensión puede traer, entre su pregunta y su costo, qué mide; la escriben Priorización de Leads y Tracción del Deal, con cómo se leen en la venta transaccional. El glosario suma «Asset». Cambia lo que pide Funcional en Tracción del Deal.
 
 **7.5.0 (2026-09-29).** Revisión de Priorización de Leads de Ventas con su responsable. Inicial se dice más simple y suma que el líder puede nombrar el ICP pero el CRM no tiene cómo segmentarlo. En Funcional, el criterio del SQL se queda con lo esencial —criterios escritos que se aplican de forma consistente— y se suma que la documentación del ICP se usa en la arquitectura de CRM y en los formularios. El glosario suma «Arquitectura de CRM». Cambia lo que pide Funcional en Priorización de Leads, que sigue sin aplicar a la venta transaccional.
 

@@ -87,6 +87,12 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
             <h2 className="text-2xl font-bold tracking-tight text-fg">{d.nombre}</h2>
           </div>
           <p className="text-lg leading-snug text-fg">{d.pregunta}</p>
+          {d.queMide && (
+            <p className="text-sm leading-relaxed text-fg-secondary">
+              <span className="font-semibold text-fg">Qué mide. </span>
+              <TextoConPalabras texto={d.queMide} palabras={datos.terminos} />
+            </p>
+          )}
           <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-sm leading-relaxed text-warn-ink">
             <span className="font-semibold">Costo de quedarse. </span>
             {d.costoDeQuedarse}

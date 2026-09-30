@@ -45,6 +45,11 @@ describe("la escala de juguete", () => {
     expect(t).toMatchObject({ id: "1.2", capa: "produccion", generica: { nombre: "Alcance" } });
   });
 
+  it("«Qué mide» es opcional: se lee entero (aunque venga en dos líneas) y, si falta, queda vacío", () => {
+    expect(t.queMide).toBe("Si alguien ve cuando un negocio deja de avanzar.");
+    expect(p.queMide).toBeNull();
+  });
+
   it("cada dimensión trae los cinco niveles, con resultado solo desde Funcional", () => {
     expect(p.niveles.map((n) => n.id)).toEqual(["1.1.D", "1.1.I", "1.1.F", "1.1.E", "1.1.O"]);
     expect(p.niveles.map((n) => n.resultado !== null)).toEqual([false, false, true, true, true]);
@@ -186,6 +191,12 @@ describe("lo que el lector rechaza, con su línea", () => {
   it("una línea de resultado en Deficiente", () => {
     expect(falla(MINI_ESCALA.replace("**Deficiente.** Sin proceso.", "**Deficiente.** Sin proceso.\n\n*Resultado:* Nada."))).toMatch(
       /desde Funcional/,
+    );
+  });
+
+  it("«Qué mide» después de los niveles", () => {
+    expect(falla(MINI_ESCALA.replace("**Óptimo.** El sistema vigila.", "**Óptimo.** El sistema vigila.\n\n*Qué mide:* Tarde."))).toMatch(
+      /«Qué mide» fuera de lugar/,
     );
   });
 

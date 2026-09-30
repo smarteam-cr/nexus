@@ -1078,6 +1078,12 @@ function DetalleDelMapa({
         </p>
         <h3 className="mt-0.5 text-lg font-bold text-fg">{d.nombre}</h3>
         <p className="mt-2 text-sm leading-snug text-fg">{d.pregunta}</p>
+        {d.queMide && (
+          <p className="mt-2 text-xs leading-relaxed text-fg-secondary">
+            <span className="font-semibold text-fg">Qué mide. </span>
+            <TextoConPalabras texto={d.queMide} palabras={datos.terminos} />
+          </p>
+        )}
         <p className="mt-3 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs leading-relaxed text-warn-ink">
           <span className="font-semibold">Costo de quedarse. </span>
           {d.costoDeQuedarse}
