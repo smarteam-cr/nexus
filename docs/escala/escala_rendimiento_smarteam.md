@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.4.0
+version: 7.4.1
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -471,7 +471,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Los duplicados están bajo control, a mano o de forma automática, y no distorsionan los reportes. `[1.3.F2 · comprobable · riesgo]`
 - Todo deal tiene rastreable la fuente del contacto original. `[1.3.F3 · comprobable]`
 - El reporte de pipeline se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4 · comprobable]`
-- La información sobre el ICP no se deja envejecer. `[1.3.F5 · declarado · riesgo · hábito]`
+- La documentación sobre el ICP no se deja envejecer. `[1.3.F5 · declarado · riesgo · hábito]`
 - La definición de lead calificado no se deja envejecer. `[1.3.F6 · declarado · riesgo · hábito]`
 - La documentación sobre las soluciones ofrecidas no se deja envejecer. `[1.3.F7 · declarado · riesgo · hábito]`
 
@@ -550,17 +550,17 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 **Inicial.** Hay coherencia incipiente pero no confiable; el mensaje y la propuesta todavía varían notablemente entre reps.
 
-- Hay un mensaje común incipiente, pero todavía no llega igual a cada punto de contacto. `[1.5.I1 · evaluado]`
-- Dos vendedores todavía presentan la propuesta de forma notablemente distinta. `[1.5.I2 · evaluado · venta con equipo]`
+- Empieza a haber un mensaje común, pero todavía no llega igual a cada punto de contacto. `[1.5.I1 · evaluado]`
+- Las propuestas todavía no están estandarizadas: cada vendedor las presenta a su manera. `[1.5.I2 · evaluado · venta con equipo]`
 
 **Funcional.** Hay un ICP escrito y coherencia básica en mensaje y propuesta.
 
 *Resultado:* Dos prospectos parecidos reciben el mismo mensaje y una propuesta igual de sólida, sin importar qué vendedor les toque.
 
 - Existe un documento con la definición del ICP / a quién sirve el equipo, consultable por cualquier rep. `[1.5.F1 · declarado]`
-- El líder puede explicar quién es el cliente ideal sin pensarlo. `[1.5.F2 · evaluado]`
+- El líder puede explicar quién es el cliente ideal sin consultar su documentación. `[1.5.F2 · evaluado]`
 - Un cliente que habla con dos reps recibe el mismo mensaje de valor base. `[1.5.F3 · evaluado · hábito · venta con equipo]`
-- Las propuestas tienen una estructura común reconocible, no armada desde cero cada vez. `[1.5.F4 · declarado · venta con equipo]`
+- Las propuestas están estandarizadas: tienen una estructura común reconocible, no armada desde cero cada vez. `[1.5.F4 · declarado · venta con equipo]`
 
 **Eficiente.** El equipo se presenta como una unidad metodológicamente disciplinada.
 
@@ -1520,6 +1520,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.4.1 (2026-09-29).** Revisión de Propuesta y Coherencia de Ventas con su responsable: Inicial se dice más simple —el mensaje común apenas empieza, las propuestas todavía no están estandarizadas—, y en Funcional el líder explica el cliente ideal sin consultar su documentación y las propuestas están estandarizadas. En Datos de Ventas, lo que no se deja envejecer es la documentación sobre el ICP. No cambia el cálculo.
 
 **7.4.0 (2026-09-29).** La IA en Tecnología de Ventas. En Funcional no es requisito: si el equipo la usa, tiene que tener como contexto la información básica de clientes y prospectos. En Eficiente sí lo es: el equipo la usa en su trabajo diario, con ese contexto, como asistente —redactar, resumir conversaciones, sugerir el siguiente paso—, que es lo que dice la regla de automatización. Cambia lo que piden Funcional y Eficiente en Tecnología de Ventas.
 
