@@ -34,6 +34,7 @@ import type { MesEfectivo } from "@/lib/cobranza/equilibrio-escenario";
 export type SerieKey =
   | "egresos"
   | "vendido"
+  | "porFacturar"
   | "facturado"
   | "cobrado"
   | "ingresosTotales"
@@ -70,6 +71,7 @@ function tramos(meses: readonly MesEfectivo[], pred: (m: MesEfectivo) => boolean
 export const FORMA_SERIE: Record<SerieKey, "linea" | "punteada" | "barra"> = {
   egresos: "linea",
   vendido: "punteada",
+  porFacturar: "punteada",
   facturado: "linea",
   cobrado: "linea",
   ingresosTotales: "punteada",
@@ -94,6 +96,10 @@ export const FORMA_SERIE: Record<SerieKey, "linea" | "punteada" | "barra"> = {
 export const LABEL_SERIE: Record<SerieKey, string> = {
   egresos: "Egresos",
   vendido: "Vendido",
+  // ⭐ 2026-09-29: lo que ya está pactado con fecha en ese mes y todavía no tiene factura (los cobros programados).
+  // Hasta ese día solo salía en el tooltip, así que de octubre en adelante el gráfico se veía en cero aunque las
+  // mensualidades de esos meses ya estuvieran cargadas: «la línea se cae después de octubre».
+  porFacturar: "Por facturar",
   facturado: "Facturado",
   cobrado: "Cobrado",
   partnership: "Partnership",
@@ -105,6 +111,7 @@ export const LABEL_SERIE: Record<SerieKey, string> = {
 const ORDEN_LEYENDA: readonly SerieKey[] = [
   "egresos",
   "vendido",
+  "porFacturar",
   "facturado",
   "cobrado",
   "partnership",
@@ -165,6 +172,9 @@ export default function CurvaEquilibrio({
       // Lo vendido es el eje de ORIGEN, no de plata movida: color propio para que no se
       // lea como una variante de lo facturado.
       vendido: SERIES_PALETTE[4]!,
+      // Lo programado sin factura: el único índice de la paleta que quedaba libre, para que no se confunda con
+      // ninguna de las otras punteadas.
+      porFacturar: SERIES_PALETTE[5]!,
     }),
     [colors],
   );
@@ -292,6 +302,9 @@ export default function CurvaEquilibrio({
             // la línea y deja el número donde estaba.
             vive("egresos") ? fila("Egresos", m.egresos, COLOR.egresos) : "",
             vive("vendido") && m.vendido > 0 ? fila("Vendido", m.vendido, COLOR.vendido, "punteada") : "",
+            vive("porFacturar") && m.pendienteFacturar > 0
+              ? fila("Por facturar", m.pendienteFacturar, COLOR.porFacturar, "punteada")
+              : "",
             vive("facturado") ? fila("Facturado", m.facturadoEfectivo, COLOR.facturado) : "",
             vive("cobrado") ? fila("Cobrado", m.cobrado, COLOR.cobrado) : "",
             vive("partnership") && m.partnership > 0
@@ -308,7 +321,8 @@ export default function CurvaEquilibrio({
             // contra esta línea que se lee si el mes se sostiene, y tenerla que buscar
             // en el eje mientras el tooltip tapa el gráfico no ayuda a nadie.
             vive("equilibrio") ? fila("Punto de equilibrio", equilibrio, COLOR.equilibrio, "punteada") : "",
-            m.pendienteFacturar > 0 ? `${sep}${fila("Pendiente de facturar", m.pendienteFacturar)}` : "",
+            // «Pendiente de facturar» iba acá, suelto y sin línea. Desde el 2026-09-29 es la serie «Por facturar»,
+            // arriba: una sola fila para el mismo número.
             // ⚠ El desglose por servicio es el FACTURADO desarmado en sus partes. Con
             // Facturado fuera del reporte desaparecía la fila del total pero quedaban
             // las partes, y la suma de lo que seguía a la vista era exactamente el
@@ -392,6 +406,11 @@ export default function CurvaEquilibrio({
         vive("egresos") ? linea("Egresos", "egresos", meses.map((m) => m.egresos)) : null,
         // Punteada porque NO es plata movida: es el compromiso que después se factura.
         vive("vendido") ? linea("Vendido", "vendido", meses.map((m) => m.vendido), { punteada: true }) : null,
+        // Punteada por lo mismo: está pactado y con fecha, pero todavía no hay factura. En los meses que vienen es
+        // lo que ya se sabe que se va a facturar; en los que ya pasaron, lo que quedó sin facturar.
+        vive("porFacturar")
+          ? linea("Por facturar", "porFacturar", meses.map((m) => m.pendienteFacturar), { punteada: true })
+          : null,
         // Punteada mientras haya escenario: el conjunto ya no es el real.
         vive("facturado")
           ? linea("Facturado", "facturado", meses.map((m) => m.facturadoEfectivo), { punteada: haySimulacion })

@@ -216,6 +216,13 @@ export interface EstadoParaAuditar {
    * null = la base todavía no tiene la columna de la categoría: falta el SQL de la etapa 10.
    */
   ingresosSinCategoria: { cuantas: number; monto: number; items: ItemInconsistencia[] } | null;
+  /**
+   * Lo que Odoo facturó en el año a clientes SIN cuenta en Nexus (`facturadoEnOdooSinCuenta`, 2026-09-29). No tienen
+   * cobros, así que el tablero no las cuenta: el facturado real del año es mayor por este monto. `monto` en la moneda
+   * del reporte; `sinTasa` = las que no se pudieron convertir y no están sumadas.
+   * Ausente = no se midió (la copia de Odoo no entra en este cálculo).
+   */
+  facturadoEnOdooSinCuenta?: { cuantas: number; clientes: number; monto: number; sinTasa: number; items: ItemInconsistencia[] };
   /** Hoy, "YYYY-MM-DD". Entra por parámetro: este módulo no lee el reloj. */
   hoyISO: string;
 }
@@ -250,6 +257,37 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
         "Revisar una por una: cargar la cuenta y el plan de cobro donde falte, o marcar la venta como que no genera facturación (continuidad, add-on, renovación).",
       resuelve: "COBRANZA",
       items: e.ventas.descubiertas,
+    });
+  }
+
+  // ── Facturado en Odoo que el tablero no cuenta ──────────────────────────────
+  // El tablero se arma con los cobros de Nexus. Un cliente al que se le factura en Odoo sin tener cuenta en Nexus
+  // no tiene cobros: sus facturas no entran a «Facturado» ni a «Cobrado», y el año se ve más chico de lo que es.
+  const fuera = e.facturadoEnOdooSinCuenta;
+  if (fuera && fuera.cuantas > 0) {
+    out.push({
+      codigo: "ODOO_FACTURADO_SIN_CUENTA",
+      severidad: "ALTA",
+      titulo: `${fuera.cuantas === 1 ? "1 factura" : `${fuera.cuantas} facturas`} de Odoo que este tablero no cuenta: ${
+        fuera.clientes === 1 ? "es de 1 cliente" : `son de ${fuera.clientes} clientes`
+      } sin cuenta en Nexus`,
+      detalle:
+        `Odoo las emitió este año, pero su cliente no tiene cuenta en Nexus, así que no tienen cobros y no entran a ` +
+        `«Facturado» ni a «Cobrado» de este tablero. Arriba dice ${money(e.facturadoTotal)} facturados; con estas ` +
+        `facturas serían ${money(round2(e.facturadoTotal + fuera.monto))}, sin IVA.` +
+        (fuera.sinTasa > 0
+          ? ` ⚠ ${fuera.sinTasa} de esas facturas no están sumadas: falta el tipo de cambio de su mes.`
+          : "") +
+        (descubierto > 0
+          ? " Buena parte es la misma plata que «Ventas ganadas que no están en cobranza», vista desde la factura: por eso no se suma otra vez al total de esta lista."
+          : ""),
+      montoEnJuego: fuera.monto,
+      // La venta de esos clientes ya figura descubierta en la línea de ventas: es el mismo negocio desde otro ángulo.
+      ...(descubierto > 0 ? { yaContadoEn: "VENTAS_SIN_COBRANZA" } : {}),
+      queHacer:
+        "En Cobranza › Odoo › Emparejar, vincular cada cliente de Odoo a su cuenta de Nexus. Si la empresa todavía no tiene cuenta, crearla en Cobranza con sus servicios y sus cobros: desde ahí entra a este tablero.",
+      resuelve: "COBRANZA",
+      items: fuera.items,
     });
   }
 

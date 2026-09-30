@@ -277,6 +277,11 @@ export async function syncVentasGanadas(opciones: {
 
     // ── 5. Upsert + bitácora ──────────────────────────────────────────────────
     const previas = new Map(yaExistentes.map((v) => [v.hubspotDealId, v]));
+    /* ⚠ Las que no cambiaron se estampan JUNTAS al final, no de a una (2026-09-29). Casi todas las ventas de una
+       corrida son «sin cambio», y escribirlas de a una eran ~90 idas y vueltas a la base para estampar una fecha: lo
+       mismo que se midió en la copia de Odoo (347 escrituras, 63 s). Importa desde que la corrida también la pide
+       una persona con «Actualizar» en el punto de equilibrio, mirando la pantalla. */
+    const sinCambio: string[] = [];
     for (const d of crudos) {
       const nombre = (d.p.dealname ?? "").trim() || `(trato ${d.id})`;
       const fecha = fechaOrNull(d.p.closedate);
@@ -361,9 +366,7 @@ export async function syncVentasGanadas(opciones: {
 
       if (deltas.length === 0) {
         res.sinCambio++;
-        if (!opciones.dryRun) {
-          await prisma.ventaGanada.update({ where: { id: previa.id }, data: { sincronizadoEn: now } });
-        }
+        if (!opciones.dryRun) sinCambio.push(previa.id);
         continue;
       }
       res.actualizadas++;
@@ -376,6 +379,10 @@ export async function syncVentasGanadas(opciones: {
           });
         }
       }
+    }
+
+    if (sinCambio.length > 0) {
+      await prisma.ventaGanada.updateMany({ where: { id: { in: sinCambio } }, data: { sincronizadoEn: now } });
     }
 
     // ── 6. Los que ya no volvieron ────────────────────────────────────────────

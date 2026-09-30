@@ -19,7 +19,10 @@
  * mismo — hay un test que lo verifica al centavo.
  */
 import { useMemo, useState } from "react";
-import { PageHeader, Alert, EmptyState } from "@/components/ui";
+import { PageHeader, Alert, Button, EmptyState } from "@/components/ui";
+import { useToast } from "@/components/ui/Toast";
+import { ApiError, fetchJson } from "@/lib/api/fetch-json";
+import { avisoDeActualizacion, type FuenteActualizada } from "@/lib/finanzas/actualizar-tablero";
 import { fmtMonto, etiquetaMes, etiquetaMesCorta } from "@/components/cobranza/format";
 import {
   aplicarEscenario,
@@ -45,7 +48,29 @@ const pct = (x: number | null) =>
   x === null ? "—" : `${(x * 100).toLocaleString("es-CR", { maximumFractionDigits: 1 })} %`;
 
 export default function EquilibrioClient({ initialReporte }: { initialReporte: ReporteAnualDTO }) {
-  const r = initialReporte;
+  /* ⭐ «Actualizar» (2026-09-29): el reporte pasa a estado. El botón vuelve a copiar las ventas de HubSpot y las
+     facturas de Odoo —las dos copias que se hacen una vez por día— y trae el reporte recién armado, para verlo al
+     día en una reunión sin recargar la página. El escenario simulado no se toca: es una pregunta de quien mira. */
+  const toast = useToast();
+  const [r, setReporte] = useState(initialReporte);
+  const [actualizando, setActualizando] = useState(false);
+  const actualizar = async () => {
+    setActualizando(true);
+    try {
+      const d = await fetchJson<{ reporte: ReporteAnualDTO; fuentes: FuenteActualizada[] }>(
+        "/api/cobranza/costos/equilibrio/actualizar",
+        { method: "POST" },
+      );
+      setReporte(d.reporte);
+      const aviso = avisoDeActualizacion(d.fuentes);
+      if (aviso.todoBien) toast.success(`Tablero al día. ${aviso.texto}`);
+      else toast.error(`El tablero se recargó, pero no todo se pudo actualizar. ${aviso.texto}`);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar el tablero.");
+    } finally {
+      setActualizando(false);
+    }
+  };
   const [escenario, setEscenario] = useState<OverrideEscenario>({});
   const [pin, setPin] = useState<SerieKey | null>(null);
   const [hover, setHover] = useState<SerieKey | null>(null);
@@ -154,6 +179,14 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
         }`;
   const proyectado = r.indicadores.partnershipProyectadoTotal;
   const cubreElPiso = r.criterios.partnershipCubreElPiso;
+  /* ⭐ Lo programado que todavía no tiene factura (la línea «Por facturar»), partido en lo que viene y lo que quedó
+     sin facturar de meses que ya pasaron: son dos cosas distintas. Sale de los meses REALES: simular mueve lo
+     facturado, no lo que está pactado. */
+  const porFacturarPorVenir = round2(r.meses.filter((m) => m.futuro).reduce((n, m) => n + m.pendienteFacturar, 0));
+  const porFacturarAtrasado = round2(r.meses.filter((m) => !m.futuro).reduce((n, m) => n + m.pendienteFacturar, 0));
+  const mesesPorVenir = r.meses.filter((m) => m.futuro && m.pendienteFacturar > 0).map((m) => etiquetaMesCorta(m.periodo));
+  const rangoPorVenir =
+    mesesPorVenir.length === 0 ? "" : mesesPorVenir.length === 1 ? mesesPorVenir[0]! : `${mesesPorVenir[0]} a ${mesesPorVenir[mesesPorVenir.length - 1]}`;
 
   const TILES: Array<{
     key: string;
@@ -192,6 +225,12 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       label: "Facturado del año",
       valor: fmtMonto(ind.facturadoTotal, moneda),
       nota: "Servicios, sin IVA",
+      // Lo que ya está programado y todavía no tiene factura no es facturado, pero es lo que explica por qué la
+      // línea baja en los meses que vienen: se dice acá, y se dibuja como «Por facturar».
+      detalle:
+        porFacturarPorVenir > 0
+          ? `+ ${fmtMonto(porFacturarPorVenir, moneda)} programados de ${rangoPorVenir}, sin factura todavía`
+          : undefined,
       serie: "facturado",
       simulado: hayEscenario,
     },
@@ -290,6 +329,17 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       <PageHeader
         title="Punto de equilibrio"
         description={`La curva mensual de la operación en ${r.anio}: qué entra, qué sale y cuánto hay que facturar para no perder plata.`}
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void actualizar()}
+            disabled={actualizando}
+            title="Vuelve a traer ahora las ventas ganadas de HubSpot y las facturas de Odoo, que normalmente se copian una vez por día, y recarga el tablero. Los cobros, el gasto y la planilla ya se leen al abrir."
+          >
+            {actualizando ? "Actualizando…" : "Actualizar"}
+          </Button>
+        }
       />
 
       {/* La tasa se declara arriba Y al pie del gráfico: el chart es lo que se saca por
@@ -490,6 +540,21 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
                 </>
               )}
               {r.fx.tasas.length > 0 && <> Todo en {moneda}, convertido con la tasa de cada mes.</>}
+              {/* Qué es la línea «Por facturar», al pie del gráfico: es lo que se saca por captura. */}
+              {(porFacturarPorVenir > 0 || porFacturarAtrasado > 0) && (
+                <>
+                  {" "}
+                  «Por facturar» son los cobros ya programados que todavía no tienen factura
+                  {porFacturarPorVenir > 0 && <>: {fmtMonto(porFacturarPorVenir, moneda)} de {rangoPorVenir}</>}
+                  {porFacturarAtrasado > 0 && (
+                    <>
+                      {porFacturarPorVenir > 0 ? " y " : ": "}
+                      {fmtMonto(porFacturarAtrasado, moneda)} de meses que ya pasaron o del mes en curso
+                    </>
+                  )}
+                  . No suman a lo facturado ni al margen.
+                </>
+              )}
             </p>
           </div>
 

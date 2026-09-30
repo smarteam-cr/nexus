@@ -103,6 +103,7 @@ import {
 } from "./partners";
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
+import { facturadoEnOdooSinCuenta } from "@/lib/finanzas/facturado-sin-cuenta";
 import type { ComparacionConExcel } from "@/lib/finanzas/cobranza-contra-excel";
 import { cargarEnLaCalleContraExcel, type PorCobrarParaExcel } from "@/lib/finanzas/cobranza-contra-excel-server";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
@@ -2878,6 +2879,30 @@ async function armarEstadoParaAuditar(
         [{ etiqueta: "Ingresos variables", url: "/finanzas/ingresos-variables" }],
       );
 
+  // ⭐ Lo que Odoo facturó en el año a clientes sin cuenta en Nexus (2026-09-29). El tablero se arma con los cobros
+  // de Nexus, así que esas facturas no entran a «Facturado»: acá se miden para que la lista lo diga con su monto.
+  // Cada factura con la tasa de SU mes. ⚠ No puede tumbar el reporte: si la copia de Odoo no se puede leer, la
+  // línea no sale y queda dicho en el log.
+  const facturasSinCuenta = await prisma.facturaOdoo
+    .findMany({
+      where: { estadoEspejo: "VIGENTE", cuentaId: null, moveType: "out_invoice", invoiceDate: { gte: desde, lt: inicioDelOtroAnio } },
+      select: { odooPartnerId: true, odooPartnerNombre: true, invoiceDate: true, montoNeto: true, moneda: true, moveType: true, state: true, paymentState: true },
+    })
+    .catch((e: unknown) => {
+      console.error("[equilibrio] no se pudo leer la copia de Odoo para medir lo facturado sin cuenta:", e);
+      return null;
+    });
+  const facturadoSinCuenta = facturasSinCuenta
+    ? facturadoEnOdooSinCuenta(
+        facturasSinCuenta.map((f) => ({ ...f, invoiceDate: isoDay(f.invoiceDate)!, montoNeto: num(f.montoNeto)! })),
+        anio,
+        (monto, moneda, periodo) =>
+          moneda === "CRC" || moneda === "USD"
+            ? (convertir(monto, moneda, reporte.monedaPresentacion, tasaDeMes.get(periodo) ?? null)?.monto ?? null)
+            : null,
+      )
+    : undefined;
+
   // Servicios sin cuotas por delante (etapa 14). El monto va en la moneda del reporte con la tasa del
   // mes en curso; sin tasa no se inventa una: el ítem sale sin monto y no suma. En un recurrente es
   // lo de UN mes, que es lo que se deja de facturar cada mes.
@@ -3009,6 +3034,7 @@ async function armarEstadoParaAuditar(
           }
         : null,
     ingresosSinCategoria,
+    facturadoEnOdooSinCuenta: facturadoSinCuenta,
   };
 }
 
