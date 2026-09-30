@@ -129,11 +129,11 @@ const QUE_CUENTA: Record<CapaDeDatos, string> = {
 /**
  * Cómo se ve cada celda según lo que está en foco. Tres alturas, para que lo elegido se note:
  * lo elegido y lo que se relaciona con ello, enteros; su dimensión y su nivel, a media luz (para
- * ubicarse); lo demás, apagado en gris. Apagar es quitar el color, no aclararlo: aclarar ya dice
- * «pocos criterios».
+ * ubicarse); lo demás, más claro. Apagar es aclarar conservando el color del nivel (un tinte
+ * blanco): en gris la rueda se sentía apagada de más (pedido del responsable de la escala).
  */
 type Luz = "entera" | "media" | "apagada";
-const OPACIDAD: Record<Luz, number> = { entera: 1, media: 0.5, apagada: 0.14 };
+const OPACIDAD: Record<Luz, number> = { entera: 1, media: 0.6, apagada: 0.3 };
 
 /** «1 criterio», «3 criterios». */
 const cuantos = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
@@ -758,8 +758,6 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                       data-luz={luz}
                       style={{
                         opacity: OPACIDAD[luz],
-                        // Apagada = sin color: así no se confunde con una celda clara, que tiene pocos criterios.
-                        filter: luz === "apagada" ? "grayscale(1)" : undefined,
                         transition: "opacity 180ms ease",
                       }}
                       onMouseEnter={() => ponerEncima(esta)}
@@ -1137,12 +1135,12 @@ function LeyendaDeLaRueda({
             <ItemDeLeyenda
               muestra={
                 <span className="flex gap-0.5" aria-hidden>
-                  <span className={cn("h-3.5 w-2.5 rounded-sm opacity-50", PUNTO_DE_NIVEL.E)} />
-                  <span className="h-3.5 w-2.5 rounded-sm bg-fg-muted opacity-25" />
+                  <span className={cn("h-3.5 w-2.5 rounded-sm opacity-60", PUNTO_DE_NIVEL.E)} />
+                  <span className={cn("h-3.5 w-2.5 rounded-sm opacity-30", PUNTO_DE_NIVEL.E)} />
                 </span>
               }
             >
-              A media luz, su dimensión y su nivel; en gris, lo demás
+              A media luz, su dimensión y su nivel; más claro, lo demás
             </ItemDeLeyenda>
           </ul>
         </div>
