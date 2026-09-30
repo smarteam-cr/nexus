@@ -27,6 +27,7 @@ import { CLIENT_KIND_META } from "@/lib/clients/kind";
 import type { EmpresaParecida } from "@/lib/cobranza/empresas-parecidas";
 import { VIA_COBRO_LABEL, INPUT_CLS, SELECT_CLS, LABEL_CLS } from "./format";
 import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
+import { viaSegunTipo } from "@/lib/cobranza/via-por-tipo";
 
 /** La lista que manda el 409, validada: un payload inesperado no puede romper el modal. */
 function parecidasDe(payload: unknown): EmpresaParecida[] | null {
@@ -63,7 +64,11 @@ export default function NuevaEmpresaModal({
   const [dominio, setDominio] = useState("");
   const [correoCobro, setCorreoCobro] = useState("");
   const [tipo, setTipo] = useState(inicial?.tipo ?? "NACIONAL");
-  const [viaCobro, setViaCobro] = useState(inicial?.viaCobro ?? "ODOO");
+  /* ⭐ La clasificación propone la vía (2026-09-29): nacional → Odoo, internacional → Mercury. Hasta ese día toda
+     cuenta nueva nacía en Odoo, y una internacional quedaba esperando en «Emparejar» un cliente de Odoo que no tiene.
+     La vía sigue al tipo hasta que la persona elige una a mano (o ya venía elegida): desde ahí manda la suya. */
+  const [viaCobro, setViaCobro] = useState(inicial?.viaCobro ?? viaSegunTipo(inicial?.tipo ?? "NACIONAL"));
+  const [viaElegida, setViaElegida] = useState(inicial?.viaCobro !== undefined);
   const [moneda, setMoneda] = useState(inicial?.moneda ?? "CRC");
   const [diaCobroAncla, setDiaCobroAncla] = useState("");
   const [creditoDias, setCreditoDias] = useState("");
@@ -76,7 +81,8 @@ export default function NuevaEmpresaModal({
     setDominio("");
     setCorreoCobro("");
     setTipo("NACIONAL");
-    setViaCobro("ODOO");
+    setViaCobro(viaSegunTipo("NACIONAL"));
+    setViaElegida(false);
     setMoneda("CRC");
     setDiaCobroAncla("");
     setCreditoDias("");
@@ -244,7 +250,14 @@ export default function NuevaEmpresaModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={LABEL_CLS}>Tipo</label>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={SELECT_CLS}>
+            <select
+              value={tipo}
+              onChange={(e) => {
+                setTipo(e.target.value);
+                if (!viaElegida) setViaCobro(viaSegunTipo(e.target.value));
+              }}
+              className={SELECT_CLS}
+            >
               {COBRANZA_TIPOS_CUENTA.map((t) => (
                 <option key={t} value={t}>{TIPO_CUENTA_LABEL[t] ?? t}</option>
               ))}
@@ -252,11 +265,23 @@ export default function NuevaEmpresaModal({
           </div>
           <div>
             <label className={LABEL_CLS}>Vía de cobro</label>
-            <select value={viaCobro} onChange={(e) => setViaCobro(e.target.value)} className={SELECT_CLS}>
+            <select
+              value={viaCobro}
+              onChange={(e) => {
+                setViaCobro(e.target.value);
+                setViaElegida(true);
+              }}
+              className={SELECT_CLS}
+            >
               {COBRANZA_VIAS_COBRO.map((t) => (
                 <option key={t} value={t}>{VIA_COBRO_LABEL[t] ?? t}</option>
               ))}
             </select>
+            <p className="mt-1 text-[10px] text-fg-muted">
+              {viaCobro === "ODOO"
+                ? "Se empareja con su cliente de Odoo, en Cobranza › Odoo."
+                : "No se empareja con Odoo: Nexus no le busca facturas ahí."}
+            </p>
           </div>
           <div>
             <label className={LABEL_CLS}>Moneda</label>

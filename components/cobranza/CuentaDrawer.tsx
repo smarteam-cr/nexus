@@ -37,6 +37,7 @@ import {
 } from "./format";
 import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
 import { BLOQUEO_LABEL, planDeCambios } from "@/lib/cobranza/plan-vs-cobros";
+import { viaSegunTipo } from "@/lib/cobranza/via-por-tipo";
 import { materializeCobros, ultimaCuotaCargada } from "@/lib/cobranza/engine";
 import ServicioForm from "./ServicioForm";
 import CronogramaCobros from "./CronogramaCobros";
@@ -51,7 +52,15 @@ interface GenerateResult {
 }
 
 interface CuentaForm {
+  /**
+   * El nombre de la EMPRESA, el de todo Nexus (2026-09-29, pedido de Alex: Finanzas no tenía dónde corregirlo). Se
+   * manda solo si cambió, como la vía: guardar la ficha por otra cosa no lo toca.
+   */
+  nombre: string;
+  nombreInicial: string;
   tipo: string;
+  /** El tipo con que se abrió el formulario: con él se sabe si la vía era la que proponía su clasificación. */
+  tipoInicial: string;
   viaCobro: string;
   /**
    * La vía con que se abrió el formulario. ⚠ La vía se manda SOLO si la persona la cambió (2026-09-25): si
@@ -73,7 +82,10 @@ interface CuentaForm {
 
 function formFrom(c: CuentaDetailDTO): CuentaForm {
   return {
+    nombre: c.clienteNombre,
+    nombreInicial: c.clienteNombre,
     tipo: c.tipo,
+    tipoInicial: c.tipo,
     viaCobro: c.viaCobro,
     viaCobroInicial: c.viaCobro,
     moneda: c.moneda,
@@ -184,6 +196,7 @@ export default function CuentaDrawer({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(form.nombre.trim() !== form.nombreInicial ? { nombre: form.nombre.trim() } : {}),
           tipo: form.tipo,
           ...(form.viaCobro !== form.viaCobroInicial ? { viaCobro: form.viaCobro } : {}),
           moneda: form.moneda,
@@ -364,6 +377,26 @@ export default function CuentaDrawer({
             {/* ── Datos de la cuenta (configuración: se toca al dar de alta) ── */}
             <section className="space-y-3">
               <h3 className={SECTION_TITLE_CLS}>Datos de la cuenta</h3>
+              {/* ⭐ El nombre de la empresa, editable desde acá (2026-09-29). Es el de todo Nexus, y por eso se dice:
+                  no es una etiqueta de Cobranza. */}
+              <div>
+                <label className={LABEL_CLS}>Nombre de la empresa</label>
+                <input
+                  value={form.nombre}
+                  onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                  placeholder="Nombre comercial"
+                  maxLength={200}
+                  disabled={!puedeEditar}
+                  className={INPUT_CLS}
+                />
+                <p className="mt-1 text-[10px] text-fg-muted">
+                  Es el nombre con que la empresa aparece en todo Nexus: cartera, proyectos y reuniones. La razón social
+                  y la cédula, las de la factura, van abajo.
+                  {form.nombre.trim() !== form.nombreInicial && form.nombre.trim().length >= 2 && (
+                    <span className="text-warn-ink"> Al guardar pasa de «{form.nombreInicial}» a «{form.nombre.trim()}», y queda anotado en la bitácora.</span>
+                  )}
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL_CLS}>Razón social</label>
@@ -406,6 +439,23 @@ export default function CuentaDrawer({
                       <option key={t} value={t}>{VIA_COBRO_LABEL[t] ?? t}</option>
                     ))}
                   </select>
+                  {/* ⭐ La clasificación PROPONE la vía (2026-09-29): nacional → Odoo, internacional → Mercury. En una
+                      cuenta que ya existe no se cambia sola —puede tener cobros y su cliente de Odoo vinculado—: se
+                      avisa al cambiarle el tipo, y la persona decide con un clic. Una cuenta nueva sí nace con la vía
+                      de su tipo (via-por-tipo.ts). */}
+                  {form.tipo !== form.tipoInicial && form.viaCobro !== viaSegunTipo(form.tipo) && (
+                    <p className="mt-1 text-[10px] text-warn-ink">
+                      Una cuenta {(TIPO_CUENTA_LABEL[form.tipo] ?? form.tipo).toLowerCase()} normalmente factura por{" "}
+                      {VIA_COBRO_LABEL[viaSegunTipo(form.tipo)]}, y esta dice {VIA_COBRO_LABEL[form.viaCobro] ?? form.viaCobro}.{" "}
+                      <button
+                        type="button"
+                        className="underline hover:no-underline"
+                        onClick={() => setForm({ ...form, viaCobro: viaSegunTipo(form.tipo) })}
+                      >
+                        Pasarla a {VIA_COBRO_LABEL[viaSegunTipo(form.tipo)]}
+                      </button>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Moneda</label>

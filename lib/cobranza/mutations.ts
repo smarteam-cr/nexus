@@ -32,6 +32,8 @@ import { decidirReversion } from "./reversion-cobro";
 import { decidirNumeroFactura, mensajeNumeroEnOtraCuenta, normalizarNumeroFactura } from "./numero-factura";
 import { resolverSociedad, type DecisionDeSociedad } from "./sociedades";
 import { cambiarViaCobroTx } from "./via-cobro";
+import { viaDeLaCuentaNueva } from "./via-por-tipo";
+import { decidirCambioDeNombre } from "./nombre-de-empresa";
 import { mensajeReferenciaYaEsCobro, normalizarReferenciaExterna } from "./ingresos-no-venta";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { FAMILIA_DEL_COBRO, filasQueLeImportan, resolverMergeAlerta } from "./alertas-merge";
@@ -110,7 +112,8 @@ export async function createCuenta(
       data: {
         clientId: data.clientId,
         tipo: data.tipo,
-        viaCobro: data.viaCobro,
+        /* Si no viene, la propone la clasificación: nacional → Odoo, internacional → Mercury (2026-09-29). */
+        viaCobro: viaDeLaCuentaNueva(data.tipo, data.viaCobro),
         moneda: data.moneda,
         terminosPago: data.terminosPago,
         diaCobroAncla: data.diaCobroAncla ?? null,
@@ -137,8 +140,9 @@ export async function updateCuenta(
   const tocaEstado = data.estadoCuenta !== undefined;
   /* ⚠ La vía de cobro va por su chokepoint y no con el resto: la ficha la manda en CADA guardado
      (CuentaDrawer), y escribirla tal cual pisaba quién la había marcado «Está en Mercury» cada vez que
-     alguien corregía un correo. */
-  const { viaCobro, ...resto } = data;
+     alguien corregía un correo.
+     ⚠ Y el nombre tampoco va con el resto: es de la EMPRESA (`Client.name`), no de la cuenta. */
+  const { viaCobro, nombre, ...resto } = data;
   return prisma.$transaction(async (tx) => {
     const cuenta = await tx.cuentaFinanciera.update({
       where: { id: cuentaId },
@@ -151,8 +155,44 @@ export async function updateCuenta(
     if (viaCobro !== undefined) {
       await cambiarViaCobroTx(tx, { cuentaId, nueva: viaCobro, actor: byEmail, motivo: "la cambió en la ficha de la cuenta." });
     }
-    return cuenta;
+    const nombreCambio = nombre === undefined ? false : await cambiarNombreDeLaEmpresaTx(tx, { cuentaId, nombre, actor: byEmail });
+    return { ...cuenta, nombreCambio };
   });
+}
+
+/**
+ * Corregir el nombre de la empresa desde la ficha de su cuenta (revisión con Alex, 2026-09-29). Qué se puede lo
+ * decide `decidirCambioDeNombre` (pura); acá se lee, se escribe y se anota, en la transacción que guarda la ficha.
+ *
+ * ⚠ Es `Client.name`: cambia en todo Nexus —cartera, proyectos, reuniones, propuestas—, no solo en Cobranza. Por eso
+ * queda en la bitácora de la cuenta con quién lo cambió y cuál era el anterior. Devuelve si cambió: la ruta avisa al
+ * menú de clientes y vuelve a repartir las reuniones, que se atribuyen por el nombre.
+ * ⛔ HubSpot no lo pisa: ninguna copia de HubSpot escribe `Client.name` (medido el 2026-09-29).
+ */
+async function cambiarNombreDeLaEmpresaTx(
+  tx: Prisma.TransactionClient,
+  input: { cuentaId: string; nombre: string; actor: string },
+): Promise<boolean> {
+  const cuenta = await tx.cuentaFinanciera.findUnique({
+    where: { id: input.cuentaId },
+    select: { clientId: true, client: { select: { name: true } } },
+  });
+  if (!cuenta) throw new CobranzaError("La cuenta no existe", 404);
+  const otras = await tx.client.findMany({ where: { id: { not: cuenta.clientId } }, select: { name: true } });
+  const d = decidirCambioDeNombre(cuenta.client.name, input.nombre, otras.map((o) => o.name));
+  if (d.tipo === "RECHAZO") throw new CobranzaError(d.motivo, 409);
+  if (d.tipo === "IGUAL") return false;
+  await tx.client.update({ where: { id: cuenta.clientId }, data: { name: d.nombre }, select: { id: true } });
+  /* `ACTUALIZACION_IA` («Sistema» en la ficha), como el cambio de vía: es un dato de configuración. */
+  await tx.bitacoraCobro.create({
+    data: {
+      cuentaId: input.cuentaId,
+      tipo: "ACTUALIZACION_IA",
+      contenido: `Nombre de la empresa cambiado de «${d.anterior}» a «${d.nombre}» por ${input.actor}, en la ficha de la cuenta.`,
+      usuarioEmail: input.actor,
+    },
+  });
+  return true;
 }
 
 // ── Servicio ────────────────────────────────────────────────────────────────────

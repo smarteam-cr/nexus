@@ -176,7 +176,9 @@ const dominio = z
 export const cuentaCreateSchema = z.object({
   clientId: idDeBase,
   tipo: z.enum(COBRANZA_TIPOS_CUENTA).default("NACIONAL"),
-  viaCobro: z.enum(COBRANZA_VIAS_COBRO).default("ODOO"),
+  // ⚠ Sin default (2026-09-29): si no viene, la propone la clasificación —nacional → Odoo, internacional →
+  // Mercury— en `viaDeLaCuentaNueva` (via-por-tipo.ts). Con `.default("ODOO")` toda internacional nacía en Odoo.
+  viaCobro: z.enum(COBRANZA_VIAS_COBRO).optional(),
   moneda: z.enum(COBRANZA_MONEDAS).default("CRC"),
   terminosPago: z.enum(COBRANZA_TERMINOS_PAGO).default("ANTICIPADO"),
   diaCobroAncla: z.number().int().min(1).max(31).nullish(),
@@ -202,6 +204,14 @@ export const cuentaPatchSchema = z
     razonSocial: z.string().max(200).nullable(),
     cedulaJuridica: z.string().max(200).nullable(),
     notas: z.string().max(4000).nullable(),
+    // ⭐ El nombre de la EMPRESA (`Client.name`), no una columna de la cuenta (2026-09-29): Finanzas lo corrige
+    // desde la ficha de la cuenta. `updateCuenta` lo saca del resto y lo escribe por su propio camino, con su regla
+    // (lib/cobranza/nombre-de-empresa.ts) y su línea en la bitácora.
+    nombre: z
+      .string()
+      .trim()
+      .min(2, "Escribe el nombre de la empresa (al menos dos letras)")
+      .max(200, "El nombre es demasiado largo (máximo 200 letras)"),
   })
   .partial();
 
@@ -791,7 +801,8 @@ export const crearEmpresaSchema = z.object({
   dominio: dominio.nullish(),
   correoCobro: z.string().email("Correo inválido").max(200).nullish(),
   tipo: z.enum(COBRANZA_TIPOS_CUENTA).default("NACIONAL"),
-  viaCobro: z.enum(COBRANZA_VIAS_COBRO).default("ODOO"),
+  // ⚠ Sin default, igual que `cuentaCreateSchema`: la vía que no viene la propone el tipo (via-por-tipo.ts).
+  viaCobro: z.enum(COBRANZA_VIAS_COBRO).optional(),
   moneda: z.enum(COBRANZA_MONEDAS).default("CRC"),
   terminosPago: z.enum(COBRANZA_TERMINOS_PAGO).default("ANTICIPADO"),
   diaCobroAncla: z.number().int().min(1).max(31).nullish(),

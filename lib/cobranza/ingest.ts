@@ -16,6 +16,7 @@ import { prisma } from "@/lib/db/prisma";
 import { effectiveDomainsForClient } from "@/lib/sessions/categorize";
 import type { CuentaEntrante, IngestResultado } from "./ports";
 import { clampInicioCicloCorriente, esDominioCompartido, nombreEnSkipList } from "./import-core";
+import { viaDeLaCuentaNueva } from "./via-por-tipo";
 import { CLIENT_KIND_META, CS_CLIENT_WHERE } from "@/lib/clients/kind";
 
 const dayUTC = (isoDate: string) => new Date(`${isoDate}T00:00:00.000Z`);
@@ -159,7 +160,9 @@ export async function ingestCuentasEntrantes(
           data: {
             clientId,
             tipo: cta.tipo ?? "NACIONAL",
-            viaCobro: cta.viaCobro ?? "ODOO",
+            /* La vía que no viene la propone la clasificación (2026-09-29): una internacional nace en Mercury y
+               no queda esperando en «Emparejar» un cliente de Odoo que no tiene. */
+            viaCobro: viaDeLaCuentaNueva(cta.tipo ?? "NACIONAL", cta.viaCobro),
             moneda: cta.moneda ?? "CRC",
             terminosPago: cta.terminosPago ?? "ANTICIPADO",
             diaCobroAncla: cta.diaCobroAncla ?? null,
