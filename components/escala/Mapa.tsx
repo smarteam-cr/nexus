@@ -112,13 +112,28 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
   },
 ];
 
-/** El color y el texto de la leyenda en las capas que pintan las celdas de un solo color. */
-const MUESTRA_DE_CAPA: Record<"habitos" | "riesgos" | "requeridos" | "perfil", { color: string; texto: string }> = {
-  habitos: { color: "var(--color-secondary)", texto: "más intenso, más hábitos" },
-  riesgos: { color: "var(--color-warning)", texto: "más intenso, más criterios de riesgo" },
-  requeridos: { color: "var(--color-success)", texto: "más intenso, más criterios que otros requieren" },
-  perfil: { color: "var(--color-info)", texto: "más intenso, más escondidos" },
+/**
+ * Qué cuenta la intensidad del color en cada capa. El color es SIEMPRE el del nivel: si una capa
+ * pintara con su propio color (el naranja de los riesgos es el de Inicial), una celda de Funcional
+ * parecería de otro nivel.
+ */
+const QUE_CUENTA: Record<CapaDeDatos, string> = {
+  criterios: "criterios",
+  habitos: "hábitos",
+  riesgos: "criterios de riesgo",
+  requeridos: "criterios que otros requieren",
+  perfil: "criterios escondidos por el perfil",
+  comentarios: "comentarios",
 };
+
+/**
+ * Cómo se ve cada celda según lo que está en foco. Tres alturas, para que lo elegido se note:
+ * lo elegido y lo que se relaciona con ello, enteros; su dimensión y su nivel, a media luz (para
+ * ubicarse); lo demás, apagado en gris. Apagar es quitar el color, no aclararlo: aclarar ya dice
+ * «pocos criterios».
+ */
+type Luz = "entera" | "media" | "apagada";
+const OPACIDAD: Record<Luz, number> = { entera: 1, media: 0.5, apagada: 0.14 };
 
 /** «1 criterio», «3 criterios». */
 const cuantos = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
@@ -350,11 +365,9 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const ordenSegunElCierre = [...ordenes.values()].some((filas) => filas.length > 1);
   const algunaNoAplica = dims.some((d) => !dimensionAplica(d, perfil));
 
-  const colorDe = (letra: Letra, v: { valor: number; abiertos: number }) => {
-    if (capa === "comentarios") return v.abiertos ? "var(--color-brand)" : "var(--color-fg-muted)";
-    if (capa === "criterios") return COLOR_DE_NIVEL[letra];
-    return MUESTRA_DE_CAPA[capa].color;
-  };
+  /** El color es el del nivel; en los comentarios, gris si ya se cerraron todos. */
+  const colorDe = (letra: Letra, v: { valor: number; abiertos: number }) =>
+    capa === "comentarios" && !v.abiertos ? "var(--color-fg-muted)" : COLOR_DE_NIVEL[letra];
 
   const enPalabras = (v: { valor: number; abiertos: number }): string => {
     switch (capa) {
@@ -406,20 +419,19 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
 
   /** Lo que está en foco: lo que está bajo el cursor o, si no, lo elegido. */
   const foco: FocoDelMapa = encima ?? seleccion;
-  /** Apagar lo que no es el foco: fuerte bajo el cursor, suave con algo elegido. */
-  const opacidadDe = (d: Dimension, k: number): number => {
-    if (!foco) return 1;
-    const tenue = encima ? 0.26 : 0.5;
-    if (foco.tipo === "capa") return d.capa === foco.clave ? 1 : tenue;
+  /** Cuánta luz tiene cada celda con lo que está en foco (lo mismo bajo el cursor que elegido). */
+  const luzDe = (d: Dimension, k: number): Luz => {
+    if (!foco) return "entera";
+    if (foco.tipo === "capa") return d.capa === foco.clave ? "entera" : "apagada";
     if (foco.tipo === "celda") {
-      // Su dimensión, su nivel y las celdas con las que se relaciona por sus requeridos.
+      // La celda y las que se relacionan con ella por sus requeridos; su dimensión y su nivel, para ubicarse.
       const celda = `${d.id}.${LETRAS[k]}`;
-      const relacionada = relacionDelFoco.requeridas.has(celda) || relacionDelFoco.dependientes.has(celda);
-      return foco.dim === d.id || LETRAS[k] === foco.letra || relacionada ? 1 : tenue;
+      if (celda === `${foco.dim}.${foco.letra}` || relacionDelFoco.requeridas.has(celda) || relacionDelFoco.dependientes.has(celda)) return "entera";
+      return foco.dim === d.id || LETRAS[k] === foco.letra ? "media" : "apagada";
     }
-    if (foco.tipo === "dimension") return foco.dim === d.id ? 1 : tenue;
+    if (foco.tipo === "dimension") return foco.dim === d.id ? "entera" : "apagada";
     // Un nivel: encendidos todos los anillos hasta él. La escala se sube de a uno.
-    return k <= LETRAS.indexOf(foco.letra) ? 1 : 0.2;
+    return k <= LETRAS.indexOf(foco.letra) ? "entera" : "apagada";
   };
 
   const focoDim = foco && (foco.tipo === "celda" || foco.tipo === "dimension") ? dims.find((x) => x.id === foco.dim) : undefined;
@@ -444,6 +456,16 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
     relacionDelFoco.requeridas.delete(celda);
     relacionDelFoco.dependientes.delete(celda);
   }
+  /** Las dimensiones que tienen alguna celda relacionada con la celda en foco. */
+  const dimsRelacionadas = new Set([...relacionDelFoco.requeridas, ...relacionDelFoco.dependientes].map((c) => c.slice(0, c.lastIndexOf("."))));
+  /** El nombre de una dimensión se apaga si no tiene nada que ver con lo que está en foco. */
+  const nombreApagado = (d: Dimension): boolean => {
+    if (!foco) return false;
+    if (foco.tipo === "capa") return d.capa !== foco.clave;
+    if (foco.tipo === "dimension") return d.id !== foco.dim;
+    if (foco.tipo === "celda") return d.id !== foco.dim && !dimsRelacionadas.has(d.id);
+    return false;
+  };
 
   /** El centro de la rueda: lo que se mira, dicho corto. */
   const centro = (() => {
@@ -583,6 +605,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           </GrupoDeControl>
         </div>
 
+        <LeyendaDeLaRueda capa={capa} nombreNivel={nombreNivel} conOrden={hayOrden} conNoAplica={algunaNoAplica} />
+
         <div className="relative mt-2" onMouseLeave={soltarEncima}>
           <svg
             key={area.id}
@@ -631,7 +655,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                       x={x}
                       y={y0 + j * 34}
                       style={{
-                        fill: activa ? "var(--color-brand)" : "var(--color-fg)",
+                        fill: focoCapa && !activa ? "var(--color-fg-muted)" : "var(--color-fg)",
                         fontSize: 30,
                         fontWeight: 800,
                         letterSpacing: "0.02em",
@@ -661,8 +685,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                     d={arco(R_BANDA, g0 + 1, g1 - 1)}
                     style={{
                       fill: "none",
-                      stroke: activa ? "var(--color-brand)" : "var(--color-fg-muted)",
-                      strokeOpacity: activa ? 0.85 : 0.3,
+                      stroke: activa ? "var(--color-fg)" : "var(--color-fg-muted)",
+                      strokeOpacity: activa ? 0.55 : 0.25,
                       strokeWidth: 10,
                       strokeLinecap: "round",
                       pointerEvents: "none",
@@ -715,7 +739,9 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   const v = valores.get(nv.id)!;
                   const esta = { tipo: "celda" as const, dim: d.id, letra: nv.letra };
                   const elegido = mismaSeleccion(esta, seleccion);
-                  const enfocado = conFoco && activa.dim === d.id && activa.letra === nv.letra;
+                  // El «acá estás» del teclado: solo mientras se recorre por celdas (con una dimensión o un
+                  // nivel elegidos, un borde en otra celda confundiría).
+                  const enfocado = conFoco && (!seleccion || seleccion.tipo === "celda") && activa.dim === d.id && activa.letra === nv.letra;
                   const levantado = elegido || (encima?.tipo === "celda" && encima.dim === d.id && encima.letra === nv.letra);
                   const [tx, ty] = polar(medio, (r0 + r1) / 2);
                   const px = levantado ? 7 * Math.sin(aRadianes(medio)) : 0;
@@ -724,11 +750,18 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   // Relacionada con la celda en foco por sus requeridos: se marca con un borde.
                   const requerida = relacionDelFoco.requeridas.has(nv.id);
                   const dependiente = relacionDelFoco.dependientes.has(nv.id);
+                  const luz = luzDe(d, k);
                   return (
                     <g
                       key={nv.id}
                       className="cursor-pointer"
-                      style={{ opacity: opacidadDe(d, k), transition: "opacity 180ms ease" }}
+                      data-luz={luz}
+                      style={{
+                        opacity: OPACIDAD[luz],
+                        // Apagada = sin color: así no se confunde con una celda clara, que tiene pocos criterios.
+                        filter: luz === "apagada" ? "grayscale(1)" : undefined,
+                        transition: "opacity 180ms ease",
+                      }}
                       onMouseEnter={() => ponerEncima(esta)}
                       onMouseLeave={soltarEncima}
                       onClick={() => {
@@ -744,20 +777,22 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                           style={{
                             animationDelay: `${k * 90 + i * 25}ms`,
                             fill: rayada ? `url(#${uid}-rayado)` : v.valor === 0 ? "var(--color-surface-muted)" : colorDe(nv.letra, v),
-                            fillOpacity: rayada || v.valor === 0 ? 1 : 0.16 + 0.64 * (v.valor / maximo),
+                            // Desde un piso visible: una celda con pocos criterios no parece apagada.
+                            fillOpacity: rayada || v.valor === 0 ? 1 : 0.3 + 0.6 * (v.valor / maximo),
+                            // Los bordes son de un color neutro: el azul y el verde ya son niveles.
                             stroke: elegido
                               ? "var(--color-fg)"
                               : enfocado
                                 ? "var(--color-brand)"
-                                : requerida
-                                  ? "var(--color-brand)"
-                                  : dependiente
-                                    ? "var(--color-fg-muted)"
-                                    : v.valor === 0 || rayada
-                                      ? "var(--color-line)"
-                                      : "none",
-                            strokeWidth: elegido ? 3 : enfocado || requerida || dependiente ? 2.5 : 1,
-                            strokeDasharray: enfocado && !elegido ? "5 4" : requerida && !elegido ? "9 5" : dependiente && !elegido ? "2 5" : undefined,
+                                : requerida || dependiente
+                                  ? "var(--color-fg)"
+                                  : v.valor === 0 || rayada
+                                    ? "var(--color-line)"
+                                    : "none",
+                            strokeWidth: elegido ? 3.5 : requerida || dependiente ? 3 : enfocado ? 2.5 : 1,
+                            // Rayas: la elegida necesita algo de aquí. Puntos: esta necesita algo de la elegida.
+                            strokeDasharray: elegido ? undefined : enfocado ? "5 4" : requerida ? "10 6" : dependiente ? "0.1 7" : undefined,
+                            strokeLinecap: dependiente && !elegido ? "round" : undefined,
                             transition: "fill 240ms ease, fill-opacity 240ms ease",
                           }}
                         />
@@ -914,8 +949,9 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                         textAnchor: ancla,
                         fontSize: 18,
                         fontWeight: activo ? 700 : 600,
-                        fill: activo ? "var(--color-brand)" : aplicaD ? "var(--color-fg)" : "var(--color-fg-muted)",
-                        transition: "fill 160ms",
+                        fill: activo ? "var(--color-fg)" : aplicaD && !nombreApagado(d) ? "var(--color-fg)" : "var(--color-fg-muted)",
+                        opacity: nombreApagado(d) ? 0.55 : 1,
+                        transition: "fill 160ms, opacity 160ms",
                       }}
                     >
                       {linea}
@@ -943,67 +979,12 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           </svg>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-2xs text-fg-muted">
-          {capa === "comentarios" ? (
-            <>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-sm bg-brand" aria-hidden /> con comentarios abiertos
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-sm bg-fg-muted" aria-hidden /> solo cerrados
-              </span>
-            </>
-          ) : capa === "criterios" ? (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-flex gap-0.5" aria-hidden>
-                {LETRAS.map((l) => (
-                  <span key={l} className={cn("h-3 w-3 rounded-sm", PUNTO_DE_NIVEL[l])} />
-                ))}
-              </span>
-              el color es el nivel; más intenso, más criterios
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-sm" style={{ background: MUESTRA_DE_CAPA[capa].color }} aria-hidden /> {MUESTRA_DE_CAPA[capa].texto}
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-sm border border-line bg-surface-muted" aria-hidden /> vacía
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-5 border-t-2 border-dashed border-success" aria-hidden /> la base: Funcional
-          </span>
-          {relacionDelFoco.requeridas.size > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-5" style={{ borderTop: "2px dashed var(--color-brand)" }} aria-hidden /> la celda que miras requiere algo de estas
-            </span>
-          )}
-          {relacionDelFoco.dependientes.size > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-5" style={{ borderTop: "2px dotted var(--color-fg-muted)" }} aria-hidden /> estas requieren algo de la que miras
-            </span>
-          )}
-          {hayOrden && (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-fg-muted text-[9px] font-bold text-fg" aria-hidden>
-                1
-              </span>
-              qué se trabaja primero en cada capa
-            </span>
-          )}
-          {ordenSegunElCierre && <span>El orden de la base depende de cómo se cierra la venta: elige un perfil para verlo.</span>}
-          {algunaNoAplica && (
-            <span className="inline-flex items-center gap-1.5">
-              <span
-                className="h-3 w-3 rounded-sm border border-line"
-                style={{ background: "repeating-linear-gradient(45deg, var(--color-line) 0 2px, var(--color-surface-muted) 2px 5px)" }}
-                aria-hidden
-              />
-              no aplica a este perfil
-            </span>
-          )}
-          {hayPerfil && <span>Perfil: {describirPerfil(perfil)}</span>}
-        </div>
+        {(ordenSegunElCierre || hayPerfil) && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-2xs text-fg-muted">
+            {ordenSegunElCierre && <span>El orden de la base depende de cómo se cierra la venta: elige un perfil para verlo.</span>}
+            {hayPerfil && <span>Perfil: {describirPerfil(perfil)}</span>}
+          </div>
+        )}
         <p className="sr-only" aria-live="polite">
           {anuncio}
         </p>
@@ -1019,6 +1000,154 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         onVerEnLaMatriz={onVerEnLaMatriz}
       />
     </div>
+  );
+}
+
+// ── La leyenda: qué es cada color, cada borde y cada guía de la rueda ─────────
+
+/** Una muestra de borde, dibujada igual que en la rueda. */
+function MuestraDeBorde({ patron }: { patron: "entero" | "rayas" | "puntos" }) {
+  return (
+    <svg width={22} height={14} viewBox="0 0 22 14" className="flex-shrink-0" aria-hidden>
+      <rect
+        x={2}
+        y={2}
+        width={18}
+        height={10}
+        rx={1.5}
+        style={{
+          fill: "var(--color-surface-muted)",
+          stroke: "var(--color-fg)",
+          strokeWidth: patron === "entero" ? 2.5 : 2,
+          strokeDasharray: patron === "rayas" ? "5 3" : patron === "puntos" ? "0.1 3.6" : undefined,
+          strokeLinecap: patron === "puntos" ? "round" : undefined,
+        }}
+      />
+    </svg>
+  );
+}
+
+function ItemDeLeyenda({ muestra, children }: { muestra: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <li className="flex items-center gap-2">
+      <span className="flex w-6 flex-shrink-0 justify-center">{muestra}</span>
+      <span>{children}</span>
+    </li>
+  );
+}
+
+/**
+ * Siempre a la vista, arriba de la rueda: quien la abre por primera vez no tiene que adivinar qué
+ * dice cada color. Tres grupos: el color de las celdas, lo que pasa al tocar una, y las guías fijas.
+ */
+function LeyendaDeLaRueda({
+  capa,
+  nombreNivel,
+  conOrden,
+  conNoAplica,
+}: {
+  capa: CapaDeDatos;
+  nombreNivel: (l: Letra) => string;
+  conOrden: boolean;
+  conNoAplica: boolean;
+}) {
+  const titulo = "mb-1.5 text-2xs font-bold uppercase tracking-wide text-fg-muted";
+  return (
+    // Abierta de entrada; quien ya la conoce la cierra (y vuelve a abrirse al recargar: es ayuda, no un ajuste).
+    <details open className="group mt-3 rounded-xl border border-line text-xs text-fg-secondary">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-2 text-2xs font-bold uppercase tracking-wide text-fg-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+        <svg className="h-3 w-3 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="currentColor" aria-hidden>
+          <path d="M4 2.5 8 6l-4 3.5z" />
+        </svg>
+        Cómo leer la rueda
+      </summary>
+      <div className="grid gap-x-6 gap-y-3 border-t border-line px-4 py-3 md:grid-cols-3">
+        <div>
+          <p className={titulo}>El color es el nivel</p>
+          <ul className="space-y-1">
+            <li className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              {LETRAS.map((l) => (
+                <span key={l} className="inline-flex items-center gap-1.5">
+                  <span className={cn("h-3.5 w-3.5 rounded-sm", PUNTO_DE_NIVEL[l])} aria-hidden />
+                  {nombreNivel(l)}
+                </span>
+              ))}
+            </li>
+            <ItemDeLeyenda
+              muestra={
+                <span className="flex gap-0.5" aria-hidden>
+                  {[0.3, 0.6, 0.9].map((o) => (
+                    <span key={o} className={cn("h-3.5 w-1.5 rounded-sm", PUNTO_DE_NIVEL.F)} style={{ opacity: o }} />
+                  ))}
+                </span>
+              }
+            >
+              Más intenso, más {QUE_CUENTA[capa]}; el número dice cuántos
+            </ItemDeLeyenda>
+            {capa === "comentarios" && (
+              <ItemDeLeyenda muestra={<span className="h-3.5 w-3.5 rounded-sm bg-fg-muted" aria-hidden />}>Gris: sus comentarios ya se cerraron</ItemDeLeyenda>
+            )}
+          </ul>
+        </div>
+        <div>
+          <p className={titulo}>En la rueda</p>
+          <ul className="space-y-1">
+            <ItemDeLeyenda muestra={<span className="h-3.5 w-3.5 rounded-sm border border-line bg-surface-muted" aria-hidden />}>Vacía: no hay ninguno</ItemDeLeyenda>
+            {conNoAplica && (
+              <ItemDeLeyenda
+                muestra={
+                  <span
+                    className="h-3.5 w-3.5 rounded-sm border border-line"
+                    style={{ background: "repeating-linear-gradient(45deg, var(--color-line) 0 2px, var(--color-surface-muted) 2px 5px)" }}
+                    aria-hidden
+                  />
+                }
+              >
+                Rayada: no aplica al perfil elegido
+              </ItemDeLeyenda>
+            )}
+            <ItemDeLeyenda
+              muestra={
+                <svg width={22} height={8} viewBox="0 0 22 8" aria-hidden>
+                  <line x1={1} y1={4} x2={21} y2={4} style={{ stroke: "var(--color-success)", strokeWidth: 2, strokeDasharray: "4 3" }} />
+                </svg>
+              }
+            >
+              Círculo verde: la base, el nivel {nombreNivel("F")}
+            </ItemDeLeyenda>
+            {conOrden && (
+              <ItemDeLeyenda
+                muestra={
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-fg-muted text-[9px] font-bold text-fg" aria-hidden>
+                    1
+                  </span>
+                }
+              >
+                Por fuera: en qué orden se trabaja cada capa
+              </ItemDeLeyenda>
+            )}
+          </ul>
+        </div>
+        <div>
+          <p className={titulo}>Al tocar una celda</p>
+          <ul className="space-y-1">
+            <ItemDeLeyenda muestra={<MuestraDeBorde patron="entero" />}>La que elegiste</ItemDeLeyenda>
+            <ItemDeLeyenda muestra={<MuestraDeBorde patron="rayas" />}>La elegida necesita algo de esta</ItemDeLeyenda>
+            <ItemDeLeyenda muestra={<MuestraDeBorde patron="puntos" />}>Esta necesita algo de la elegida</ItemDeLeyenda>
+            <ItemDeLeyenda
+              muestra={
+                <span className="flex gap-0.5" aria-hidden>
+                  <span className={cn("h-3.5 w-2.5 rounded-sm opacity-50", PUNTO_DE_NIVEL.E)} />
+                  <span className="h-3.5 w-2.5 rounded-sm bg-fg-muted opacity-25" />
+                </span>
+              }
+            >
+              A media luz, su dimensión y su nivel; en gris, lo demás
+            </ItemDeLeyenda>
+          </ul>
+        </div>
+      </div>
+    </details>
   );
 }
 

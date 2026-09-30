@@ -4064,3 +4064,31 @@ la escala 8.6.0: las cuatro ediciones traen las tres áreas enteras.
   (solo se pide registrarlo), las herramientas que se piden dos veces en la venta sin vendedor, el
   acuerdo con las áreas que resuelven parte de los casos en Equipo de Servicio, los criterios de
   resolución escritos, y la presencia en mapas para sucursales, sedes y salas de ventas.
+
+## La rueda de la escala: el color siempre es el nivel, y lo que no está en foco se apaga en gris (2026-09-30)
+
+**Contexto.** Mirando la rueda, el responsable de la escala no entendía por qué, al elegir una celda,
+otras se aclaraban, por qué no todas tenían el mismo color ni qué eran la línea azul a rayas y el
+borde negro. Pidió que al elegir algo lo demás se note menos, una leyenda, y revisar colores y
+usabilidad.
+
+**Decisiones.**
+
+- **El color es siempre el nivel.** Las capas de datos (hábitos, riesgos, requeridos, escondidos por
+  el perfil) pintaban con su propio color, que era el de otro nivel: el naranja de los riesgos es el
+  de Inicial, el verde de los requeridos el de Funcional. Una celda de Funcional con criterios de
+  riesgo parecía de Inicial. Ahora todas pintan con el color del nivel y la intensidad cuenta lo que
+  se eligió mostrar; los comentarios ya cerrados, en gris.
+- **Apagar es quitar el color, no aclararlo.** Aclarar ya decía «pocos criterios»: el mismo recurso
+  con dos significados. Con algo en foco hay tres alturas: lo elegido y lo que se relaciona con ello
+  por sus requeridos, enteros; su dimensión y su nivel, a media luz, para ubicarse; lo demás, en gris
+  y casi transparente. Igual bajo el cursor que elegido (antes, lo elegido apagaba a medias). La
+  intensidad de una celda con pocos criterios arranca más alto, para que no parezca apagada.
+- **Los bordes y los acentos son neutros.** El azul de los bordes de los requeridos, del arco de la
+  capa y del nombre en foco era el mismo de Eficiente. Ahora: borde grueso, la elegida; rayas, «la
+  elegida necesita algo de esta»; puntos, «esta necesita algo de la elegida»; los tres en el color
+  del texto. El «acá estás» del teclado solo aparece mientras se recorren celdas.
+- **La leyenda, arriba de la rueda y completa** («Cómo leer la rueda», plegable): el color, la
+  intensidad, las guías (vacía, rayada, la base, el orden en que se trabaja) y lo que pasa al tocar
+  una celda. La anterior estaba debajo, en letra chica, y los bordes de los requeridos solo aparecían
+  en ella cuando había alguno: justo cuando hacía falta entenderlos, no estaban.
