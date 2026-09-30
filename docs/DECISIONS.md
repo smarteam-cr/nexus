@@ -3883,3 +3883,76 @@ prueba lo note.
 - **En espera** (lo dijo la revisión y no se hizo): unas veinte ramas de error del lector de ediciones
   no tienen test propio (frenan bien, corridas a mano); y `1.8.E1` de la escala general revisa solo lo
   perdido aunque su nivel dice «ganadas y perdidas» — es de la 7.0.0 y lo decide el responsable.
+
+## Lo que se decide para un área de la escala se decide para las tres: Marketing y Servicio con la vara de Ventas (2026-09-30)
+
+**Contexto.** Ventas se limpió primero (8.2.0: cada cosa se pide una vez; 8.3.0: quien depende de
+ella la requiere). El mismo análisis sobre Marketing y Servicio encontró 37 cosas que se pedían más
+de una vez —20 y 17—, y dos revisores lo intentaron refutar aplicándolo a una copia. Además, al
+revisar Ventas su responsable había tomado cuatro decisiones que dejaron a las otras dos áreas
+distintas sin que nadie lo decidiera. Su respuesta fue una línea: «Aplica los arreglos. Iguálalas.
+Súmalas». Es la escala 8.5.0. Antes del commit, otros dos revisores leyeron el resultado buscando lo
+que las pruebas no ven; lo que encontraron está incluido.
+
+**Decisiones.**
+
+- **Una decisión sobre un área es una decisión de la escala.** Las cuatro que se tomaron para Ventas
+  valen para las tres, en la misma dimensión y el mismo nivel: trabajar en el sistema central es una
+  rutina (Procesos, Funcional: `1.1.F6`, `2.1.F6`, `3.1.F6`); la IA como asistente del equipo es de
+  Eficiente y, en Funcional, solo se pide que si se usa tenga un contexto básico (`1.2.F7`/`1.2.E5`,
+  `2.2.F9`/`2.2.E6`, `3.2.F8`/`3.2.E4`); Procesos mide en Eficiente y Óptimo que el proceso se cumpla
+  (`1.1.E3`/`O1`/`O2`, `2.1.E4`/`O4`/`O5`, `3.1.E5`/`O3`/`O4`); y los paneles en tiempo real son de
+  Tecnología, en Eficiente (`1.2.E4`, `2.2.E7`, `3.2.E5`). La «Regla de asignación» lo dice para las
+  tres áreas, no solo para Ventas.
+- **Cuando un criterio se muda, se mudan también sus señales de Deficiente e Inicial.** Pasar la
+  adopción del sistema a Procesos dejaba en Tecnología de Servicio la descripción de Inicial «baja
+  adopción» y su señal: una unidad podía estar en Funcional en Tecnología con una descripción que la
+  retrataba en Inicial. La señal pasa a Procesos (`3.2.I1` → `3.1.I3`), como hizo Ventas en la 7.1.0.
+- **Sacar un repetido no deja un hueco: lo llena el espejo de Ventas.** Quitar los repetidos dejaba a
+  Procesos de Marketing con un criterio en Eficiente y uno en Óptimo, y a Procesos de Servicio con
+  uno en Óptimo. No se inventó contenido para rellenar: entró lo que Ventas ya medía ahí.
+- **En Servicio, vigilar el proceso no es vigilar los plazos.** Los SLA se cuentan en cuatro lugares
+  —se definen en Procesos, se avisan y escalan en Tecnología (o en Proactividad si la solicitud es de
+  otra área), se miden en Datos y se rinde cuentas por ellos en Equipo—; si «el proceso se cumple»
+  se probara con ese mismo reporte de plazos, la misma evidencia contaría dos veces. Lo que Procesos
+  vigila es que cada caso siga las etapas y los pasos del proceso. Por lo mismo, el panel en tiempo
+  real de Servicio no repite el tiempo de primera respuesta, que ya mide Datos.
+- **El identificador cambia cuando cambia la dimensión, el nivel o lo que se mide; se conserva al
+  acotar o precisar** (especificación 1.3.4), también cuando el criterio suma lo que pedía otro que se
+  retira en la misma versión o lo que ya decía la descripción de su nivel. Si con eso cambia a qué
+  perfiles aplica, lo dice el historial: `3.7.O1` se quedó con las revisiones de resultado y lleva la
+  marca `relación continua`, que su texto ya decía. `2.8.F1` pedía un tablero y `2.8.F5` pide los
+  resultados de cada campaña: id nuevo. Quedan 29 retirados más.
+- **El reporte a la dirección no es la rendición de cuentas del equipo.** Se mudó a Equipo y Gobierno
+  como criterio propio (`2.4.F6`) en vez de fundirlo con la reunión de performance (`2.4.F3`): uno es
+  el equipo ante su líder; el otro, el líder ante la dirección.
+- **«Tiempo real» es una capacidad del sistema, no un nivel de autonomía.** Por eso baja de Óptimo a
+  Eficiente, y el panel pide lo que ningún tablero de Funcional da: las conversaciones que esperan
+  respuesta. La consecuencia se acepta a la vista: Óptimo de Medición y Aprendizaje (`2.8.O`) queda
+  con un solo criterio, igual que Óptimo de Consistencia de Atención (`3.5.O`), que perdió el tono
+  personalizado (es personalización, y ya está en `3.6.O2`).
+- **En Óptimo, la IA hace y la persona valida, y el criterio lo dice.** «Con IA» se lee como IA que
+  asiste, que es Eficiente: `2.1.O1` y `2.5.O2` dicen quién ejecuta.
+- **Mantener vigente lo publicado es un riesgo, no un escalón.** `3.8.F1` pide tener la respuesta
+  publicada; que no envejezca lo cuida el riesgo de contexto (`3.3.F6`), que la requiere y tiene su
+  propio mensaje: el cliente puede estar leyendo respuestas viejas. Inicial de Escalabilidad deja de
+  decir «sin actualizar».
+- **Un criterio sin marca de perfil no pide algo que un perfil no tiene.** `3.8.E2` revisa las razones
+  de salida «donde la relación es continua»: en relación única nadie las registra (`3.7.F3`).
+- **`1.8.E1` revisa lo ganado y lo perdido, y conserva el id.** El nivel ya decía «ganadas y
+  perdidas»; el criterio estaba incompleto. Las cuatro ediciones lo dicen con sus palabras; se publicó
+  con `--ediciones-revisadas` porque el resultado de Educación ya hablaba de los que sí ingresaron y
+  los vistazos de las ediciones son resúmenes propios, no una copia del general.
+- **El glosario define lo que aparece.** «Costo de adquisición» dejó de aparecer y en la matriz está
+  «CAC»; «Retención neta de ingresos» sale; y un MQL «todavía no es un lead calificado», porque el
+  glosario decía que lead calificado es lo mismo que SQL.
+- **En espera** (lo dijeron el análisis o la revisión, y no se tocó): la pregunta y el costo de
+  Equipo y Gobierno de Servicio hablan de priorizar y de revisar los problemas, que son de 3.6 y 3.8;
+  la descripción de 1.8 dice que se registra por qué se gana, y ningún criterio de la general lo pide
+  (Educación sí, `1.8.E301`); «lo que ha pagado» en la ficha es Funcional en Servicio (`3.3.F2`) y
+  Eficiente con integración en Ventas (`1.3.E3`); una señal de Inicial que choca con un criterio de
+  Funcional (`3.8.I1` con `3.2.F6`; `2.2.I3` con `2.2.F5`); el presupuesto aparece en el costo de
+  Medición aunque la regla lo deja en Canales; `2.4.E3` habla del handoff de leads sin marca de
+  perfil; en Ecommerce, Tecnología y Autoservicio de Servicio hacen casi la misma pregunta; la cola de
+  `3.2.O1`; partir en tres el contexto que no se deja envejecer, como en Ventas; el glosario
+  (sobra «QBR»; faltan «ROI», «ERP» y «CSE»); y Marketing y Servicio de cada edición.

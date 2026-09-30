@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.3.3
-escala: 8.4.2
+version: 1.3.4
+escala: 8.5.0
 fecha: 2026-09-30
 ---
 
@@ -123,6 +123,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.3.4 (2026-09-30).** Acompaña a la escala 8.5.0. Sin otros cambios.
 
 **1.3.3 (2026-09-30).** Acompaña a la escala 8.4.2. En «Los criterios requeridos», el ejemplo de un criterio del que dependen varios pasa a ser la definición de lead calificado: a la pipeline review la requiere uno solo.
 

@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.3.3
-escala: 8.4.2
+version: 1.3.4
+escala: 8.5.0
 fecha: 2026-09-30
 ---
 
@@ -19,9 +19,9 @@ Junto al identificador va la forma de verificación: comprobable, declarado o ev
 
 Los identificadores son estables. Se asignaron desde cero en la versión 6.0.0, y desde entonces no se reasignan ni se renumeran. Si un criterio se retira, su número queda vacío y no se reutiliza; si se agrega uno, toma el siguiente número libre de su nivel. Eso permite que el chequeo, el cotizador y los agentes apunten siempre al mismo criterio, aunque cambie su redacción.
 
-Identificadores retirados, que no se vuelven a usar: `1.1.E4`, `1.1.F3`, `1.2.F1`, `1.2.F5`, `1.4.E1`, `1.5.E1`, `1.8.F4`, `2.2.F6`, `2.2.F7` y `3.2.F7`.
+Identificadores retirados, que no se vuelven a usar: `1.1.E4`, `1.1.F3`, `1.2.F1`, `1.2.F5`, `1.4.E1`, `1.5.E1`, `1.8.F4`, `2.1.E1`, `2.1.E3`, `2.1.O2`, `2.1.O3`, `2.2.F1`, `2.2.F6`, `2.2.F7`, `2.2.F8`, `2.3.F4`, `2.3.O2`, `2.4.E1`, `2.4.O3`, `2.5.O3`, `2.6.F2`, `2.6.O2`, `2.7.O3`, `2.8.F1`, `2.8.F2`, `2.8.F4`, `2.8.O1`, `3.1.E2`, `3.1.O2`, `3.2.F1`, `3.2.F2`, `3.2.F3`, `3.2.F7`, `3.2.I1`, `3.2.O2`, `3.2.O3`, `3.4.E3`, `3.5.O2` y `3.6.E3`.
 
-Un criterio que cambia de dimensión se retira y entra con el siguiente número libre de su nueva dimensión: `1.2.F1` es hoy `1.1.F6`.
+Un criterio que cambia de dimensión se retira y entra con el siguiente número libre de su nueva dimensión: `1.2.F1` es hoy `1.1.F6`, `2.2.F1` es `2.1.F6`, `3.2.F1` es `3.1.F6` y `2.8.F2` es `2.4.F6`. Lo mismo vale para el que cambia de nivel o de lo que mide: deja su identificador y entra con otro. Conserva su identificador el criterio que se acota o se precisa, también cuando suma lo que pedía otro que se retira en la misma versión o lo que ya decía la descripción de su nivel; si con eso cambia a qué perfiles aplica, lo dice el historial de la escala.
 
 La etiqueta de cada criterio sigue siempre el mismo orden: identificador, forma de verificación y, solo si corresponden, las marcas riesgo, hábito y de perfil, separadas por « · ». Por ejemplo: `[1.1.F6 · evaluado · hábito · venta con equipo]`. Si el criterio requiere otros, van al final, separados por comas: `[1.6.F3 · evaluado · hábito · venta con equipo · requiere 1.5.F1]`.
 
@@ -132,6 +132,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.3.4 (2026-09-30).** Acompaña a la escala 8.5.0, que deja cada cosa de Marketing y de Servicio en una sola dimensión y las iguala a Ventas: quedan retirados 29 identificadores, 18 de Marketing y 11 de Servicio. Se dice que un criterio que cambia de nivel o de lo que mide también deja su identificador, y cuándo un criterio que cambia de texto conserva el suyo. No cambia el cálculo.
 
 **1.3.3 (2026-09-30).** Acompaña a la escala 8.4.2. La prueba 8 dice dos cosas que ya revisaba Nexus y ahora también `pruebas_escala.py`: que un criterio reescrito no repita el texto de la matriz, y que el título de la parte de las ediciones y el de cada edición estén bien escritos. Y aclara que una palabra con valor fijo en plural es la misma palabra. No cambia el cálculo.
 

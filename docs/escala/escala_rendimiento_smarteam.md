@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 8.4.2
+version: 8.5.0
 fecha: 2026-09-30
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -106,15 +106,15 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 
 **Marketing.** El área dejó de depender de héroes. Tienes marca, buyer personas y presencia digital documentadas, el stack contratado se usa de verdad, y tus canales —email, pauta, orgánico y el conversacional, como WhatsApp— salen coordinados bajo un mismo calendario, con visibilidad de costo por canal. La información describe la operación con confianza, sin reconstruirla a mano. La demanda es calificada y predecible, aunque la optimización fina todavía no existe.
 
-**Servicio.** Tu entrega es consistente y ya no depende del individuo. Sabes qué tipos de cliente atiendes y qué espera cada uno. Hay un pipeline de servicio configurado, el sistema central se usa con vista unificada del cliente, los tickets están categorizados y el onboarding es estructurado. Priorizas por severidad, tienes macros para lo repetitivo y detectas a mano los riesgos evidentes antes de que estallen. Todavía no hay alertas automáticas, pero ya no esperas a que el cliente se queje.
+**Servicio.** Tu entrega es consistente y ya no depende del individuo. Sabes qué tipos de cliente atiendes y qué espera cada uno. Hay un pipeline de servicio configurado, el equipo atiende en el sistema central con la ficha del cliente a la vista, los tickets están categorizados y el onboarding es estructurado. Priorizas por severidad, tienes macros para lo repetitivo y detectas a mano los riesgos evidentes antes de que estallen. Todavía no hay alertas automáticas, pero ya no esperas a que el cliente se queje.
 
 ### Eficiente
 
-**Ventas.** Tu proceso dejó de ser etapas y se volvió método con disciplina medida. Mides conversión y velocidad por etapa, la automatización tiene lógica, el stack está integrado y aparece un forecast confiable. Hacia afuera hay lead scoring por reglas, cuentas objetivo, contacto multicanal y análisis estructurado de ganadas y perdidas.
+**Ventas.** Tu proceso dejó de ser etapas y se volvió método con disciplina medida. Mides conversión y velocidad por etapa, la automatización tiene lógica, el stack está integrado, la IA asiste al equipo en su trabajo diario y aparece un forecast confiable. Hacia afuera hay lead scoring por reglas, cuentas objetivo, contacto multicanal y análisis estructurado de ganadas y perdidas.
 
-**Marketing.** Los ciclos cortos de prueba y ajuste ya son parte del proceso. Los datos están unificados, enriquecidos y atribuidos; la segmentación y el scoring se automatizan; y la presencia se optimiza tanto para buscadores como para motores generativos. El presupuesto se distribuye entre canales con criterio y tu presencia en la conversación del mercado es medible.
+**Marketing.** Probar y ajustar ya es rutina, y lo aprendido cambia cómo se arma la siguiente campaña. Los datos están unificados, enriquecidos y atribuidos; la segmentación y el scoring se automatizan; la IA asiste al equipo en su trabajo diario; y la presencia se optimiza tanto para buscadores como para motores generativos. El presupuesto se distribuye entre canales con criterio y tu presencia en la conversación del mercado es medible.
 
-**Servicio.** El servicio empieza a adelantarse al problema. Tienes SLAs, reglas de escalación y autoservicio; mides tiempos de resolución y satisfacción, y la data se unifica con Ventas. Identificas riesgos y oportunidades antes de que el cliente levante la mano, ninguna solicitud se pierde entre áreas, y las cuentas clave tienen un responsable asignado. La retención se vuelve predecible.
+**Servicio.** El servicio empieza a adelantarse al problema. Tienes SLAs, escalación automática y autoservicio, y la IA asiste a tus agentes en su trabajo diario; mides tiempos de resolución y satisfacción, y la data se unifica con Ventas. Identificas riesgos y oportunidades antes de que el cliente levante la mano, ninguna solicitud se pierde entre áreas, y las cuentas clave tienen un responsable dedicado. La retención se vuelve predecible.
 
 ### Óptimo
 
@@ -122,7 +122,7 @@ Cada descripción resume cómo se ve el departamento en ese nivel: cómo está m
 
 **Marketing.** La IA produce y ajusta; el equipo dirige. El contenido se genera y optimiza en ciclo continuo, la IA identifica micro-segmentos y adapta el mensaje al comportamiento de cada persona, los modelos reasignan presupuesto entre canales sobre la marcha, y los clientes que Servicio vuelve promotores traen clientes nuevos. El equipo define la estrategia y valida lo que sale.
 
-**Servicio.** Un agente de IA resuelve consultas en producción y tus agentes trabajan con asistentes de IA. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y gestiona excepciones; un modelo de salud de cuenta anticipa el riesgo antes de que el cliente lo manifieste, y cada cliente se atiende sabiendo lo que se le prometió en la venta y recibe detalles pensados para deleitarlo. Atender un cliente más casi no cuesta.
+**Servicio.** Un agente de IA resuelve consultas en producción y le pasa a una persona, con todo el contexto, las que no puede resolver. Las rutinas corren solas mientras el equipo supervisa, entrena la IA y gestiona excepciones; un modelo de salud de cuenta anticipa el riesgo antes de que el cliente lo manifieste, y cada cliente se atiende sabiendo lo que se le prometió en la venta y recibe detalles pensados para deleitarlo. Atender un cliente más casi no cuesta.
 
 ## Cómo avanza un departamento: de la disciplina al sistema
 
@@ -335,11 +335,14 @@ La IA no define Óptimo por sí sola. Ya aparece en Eficiente como asistente que
 Cada evidencia observada se asigna a una sola dimensión —la que responde su pregunta—, nunca a dos. Los casos que no son obvios:
 
 - Los **artefactos de ejecución de venta** (playbook, criterios de etapa, cadencia, metodología) se asignan a **Procesos de Ventas (1.1)**. Lo que recibe el cliente —el mensaje y la propuesta, con su estructura— se mide en **Propuesta y Coherencia (1.5)**, y la definición de lead calificado, en **Priorización de Leads (1.6)**. Cada uno se cuenta una sola vez.
-- Que el equipo **trabaje en el CRM** y no en hojas aparte es una rutina, y se asigna a **Procesos (1.1)**, igual que vigilar que el proceso se cumpla; que las **conversaciones con los prospectos** queden en el sistema se asigna a **Tecnología (1.2)**.
-- **Mejorar el proceso con lo aprendido** se asigna a **Aprendizaje de Ganadas y Perdidas (1.8)**: Procesos (1.1) mide que el proceso exista y se siga, no cómo cambia. Lo único que Procesos conserva, en Óptimo, es la disciplina de probar una técnica nueva en un piloto antes de sumarla al proceso.
+- Que el equipo **trabaje en el sistema central** y no por fuera —el CRM en Ventas, el sistema de marketing, el de atención en Servicio— es una rutina, y se asigna a **Procesos** de cada área (**1.1, 2.1 o 3.1**), igual que vigilar que el proceso se cumpla; que las **conversaciones con los prospectos** queden en el sistema se asigna a **Tecnología (1.2)**.
+- **Mejorar el proceso con lo aprendido** se asigna a la dimensión de aprendizaje de cada área —**Aprendizaje de Ganadas y Perdidas (1.8)**, **Medición y Aprendizaje (2.8)** o **Escalabilidad del Servicio (3.8)**—: Procesos mide que el proceso exista y se siga, no cómo cambia. Lo único que Procesos de Ventas conserva, en Óptimo, es la disciplina de probar una técnica nueva en un piloto antes de sumarla al proceso. Los **tests** de Marketing —de creatividades y de audiencias— también son aprendizaje, y van en **2.8**; probar un canal nuevo es alcance, y sigue en **Canales y Alcance (2.7)**.
+- La **IA como asistente del equipo** —redactar, resumir, preparar— se asigna a **Tecnología** de cada área (**1.2, 2.2 o 3.2**) y es Eficiente. En Funcional no es requisito: solo se pide que, si el equipo usa IA, esta trabaje con un contexto básico. Los **paneles en tiempo real** también son de **Tecnología**, en Eficiente: ver lo que pasa mientras pasa es una capacidad del sistema, no un nivel de autonomía.
 - El **forecast** se asigna a **Datos de Ventas (1.3)**, no a Procesos (1.1) ni a 1.5.
 - En la **frontera Marketing ↔ Ventas**, cada pieza se asigna por quién la ejecuta: la definición de a quién sirve el equipo comercial (ICP) en **1.5 (Ventas)**; la segmentación y personalización del mensaje de marketing en **2.6 (Marketing)**; marcar MQL (lo califica marketing) en **2.6 (Marketing)**; aceptar SQL (criterio del lado de Ventas) en **1.6 (Ventas)**; poblar el campo de etapa del ciclo de vida, como higiene de dato, en **Datos** del área que lo captura (1.3 o 2.3); el pipeline de ventas, con sus etapas y sus criterios de avance, en **Procesos (1.1)**. La definición de lead calificado es una sola y vive en 1.6; los criterios de avance de cada etapa del pipeline son otra cosa, y siguen en 1.1.
 - En **Servicio**, la definición de los tipos de cliente que atiende el área —qué necesita cada uno y qué espera— se asigna a **Consistencia de Atención (3.5)**, como el ICP a 1.5 y los buyer personas a 2.5; la diferenciación de la atención según esos tipos, a **Priorización de Clientes (3.6)**.
+- También en **Servicio**, el **pipeline de servicio**, con sus etapas, se asigna a **Procesos (3.1)**, igual que **quién responde por cada cliente**. La **ficha del cliente** —lo que compró, lo que ha pagado y su valor— se asigna a **Datos (3.3)**, y que el agente la use al atender, a **Priorización de Clientes (3.6)**. La **prioridad de cada ticket** es de **Priorización de Clientes (3.6)**; Datos pide su tipo y su motivo. La **escalación automática** es de **Tecnología (3.2)**. **Alimentar la base de conocimiento** y **buscar patrones** en el historial son de **Escalabilidad del Servicio (3.8)**, y **adelantarse al cliente**, de **Proactividad (3.7)**.
+- Los **plazos de atención** se reparten así: definirlos es de **Procesos (3.1)**; avisar y escalar cuando están por vencer, de **Tecnología (3.2)** —si la solicitud la resuelve otra área, de **Proactividad (3.7)**—; medir cuánto se tarda y cuánto se cumplen, de **Datos (3.3)**; y rendir cuentas por ellos, de **Equipo y Gobierno (3.4)**. Lo que Procesos vigila en Eficiente y en Óptimo es que cada caso siga las etapas y los pasos del proceso: un plazo que vence no cuenta ahí.
 - El **lead scoring por reglas** se asigna a la dimensión de segmentación o priorización de cada área (**1.6 en Ventas, 2.6 en Marketing**), y es nivel Eficiente. No se confunde con la calificación de Funcional: ahí basta aplicar criterios escritos, sea a mano o con una automatización simple sobre una propiedad; el scoring de Eficiente es un modelo de puntaje con varios atributos.
 - El **canal conversacional y la bandeja** se asignan a **Tecnología** del área correspondiente (1.2, 2.2 o 3.2): un canal con bandeja básica es Funcional; varios canales en una bandeja unificada es Eficiente. Usar ese mismo canal para **salir** con cadencia —WhatsApp como canal de campaña— se asigna a Canales (2.7), no a Tecnología: una cosa es tenerlo conectado y otra es usarlo para llegar.
 - El **análisis automático de conversaciones** se asigna a **1.8 (Ventas)**, no a Tecnología: es aprendizaje, no infraestructura. Lo que sale de ese análisis para mejorar el playbook es de 1.8; señalar a quien se sale del proceso es adherencia, y sigue en Procesos (1.1).
@@ -356,12 +359,13 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 - Las **reseñas y calificaciones públicas** —pedirlas y responderlas— se asignan a **Marca y Presencia (2.5)**, porque son parte de cómo el mercado ve a la empresa; la mala calificación de un cliente puntual se atiende en **Proactividad (3.7)**. El **programa de referidos** se asigna a **Canales y Alcance (2.7)**.
 - La **detección de riesgos y fechas críticas del cliente** —también las solicitudes que resuelve otra área, como administración o cobros— se asigna a **Proactividad (3.7)**; el seguimiento de cada cliente por su responsable sigue en Procesos (3.1), y los acuerdos entre los líderes de esas áreas, en Equipo y Gobierno.
 - Los **detalles para deleitar a los clientes actuales** —regalías, beneficios, promociones de fidelización— se asignan a **Proactividad (3.7)**; las campañas hacia el mercado, a **Canales y Alcance (2.7)**.
-- La **respuesta publicada para el cliente** a las consultas frecuentes se asigna a **Escalabilidad del Servicio (3.8)**; las plantillas internas para los agentes siguen en Consistencia de Atención (3.5), y el portal con base de conocimiento en Tecnología (3.2), en Eficiente.
+- La **respuesta publicada para el cliente** a las consultas frecuentes se asigna a **Escalabilidad del Servicio (3.8)**; las plantillas internas para los agentes siguen en Consistencia de Atención (3.5), y el portal con base de conocimiento en Tecnología (3.2), en Eficiente. Mantener vigentes esas respuestas no decide el nivel: es el riesgo de contexto, en **Datos (3.3)**.
 - La **distribución y el ajuste del presupuesto** entre canales se asignan a **Canales y Alcance (2.7)**, porque su pregunta incluye llegar con el costo correcto; Medición y Aprendizaje (2.8) mide cómo se aprende de cada campaña, no dónde se invierte.
-- La **personalización del contenido** según el segmento o la persona se asigna a **Segmentación (2.6)**, y el **enriquecimiento de datos** a **Datos (2.3)**; ninguno de los dos se cuenta en Tecnología (2.2).
+- La **personalización del contenido** según el segmento o la persona se asigna a **Segmentación (2.6)**, y el **enriquecimiento de datos** a **Datos (2.3)**; ninguno de los dos se cuenta en Tecnología (2.2). **Segmentar por comportamiento** —qué abrió, qué visitó, qué compró— también es de **Segmentación (2.6)**: Datos (2.3) mide que el dato esté limpio y trazado, no cómo se usa.
+- La **presencia en buscadores y en asistentes de IA** se asigna a **Marca y Presencia (2.5)**; Canales y Alcance (2.7) no la cuenta como un canal nuevo.
 - Los **playbooks de servicio** —prevención, retención y expansión— se asignan a **Procesos (3.1)**, igual que los artefactos de venta en Ventas; Proactividad (3.7) mide que los riesgos y las oportunidades se atiendan a tiempo.
 - El **uso de lo que produce otra área** —las señales de Servicio en la priorización de Ventas, los promotores de Servicio como canal de Marketing, el contexto de la venta en la atención de Servicio— se asigna, en Óptimo, a la dimensión de producción del área que lo recibe. No es orquestación: la coordinación entre líderes sigue en Equipo y Gobierno.
-- La **rendición de cuentas contra meta** se asigna a **Equipo y Gobierno**.
+- La **rendición de cuentas contra meta** se asigna a **Equipo y Gobierno**, y con ella el tablero que consulta el líder y el reporte periódico a la dirección. Los **resultados de cada campaña** a la vista, en cambio, son de **Medición y Aprendizaje (2.8)**.
 - La **reunión recurrente** es una sola: se asigna a **Procesos**, que es donde vive la rutina; **Equipo y Gobierno** solo dice que en ella se rinde cuentas.
 
 ---
@@ -732,9 +736,9 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 **Eficiente.** Hay análisis estructurado de ganadas y perdidas, y capacitación comercial formal.
 
-*Resultado:* Los mismos errores dejan de repetirse: lo que se aprende de cada pérdida vuelve al proceso y a la capacitación del equipo.
+*Resultado:* Los mismos errores dejan de repetirse y lo que funciona se repite: lo que se aprende de cada negocio ganado y de cada pérdida vuelve al proceso y a la capacitación del equipo.
 
-- Se revisan periódicamente los deals perdidos para identificar patrones. `[1.8.E1 · declarado · hábito]`
+- Se revisan periódicamente los deals ganados y perdidos para identificar patrones. `[1.8.E1 · declarado · hábito]`
 - El proceso o playbook se refina con base en lo aprendido. `[1.8.E2 · declarado · hábito · requiere 1.1.F4]`
 - Hay capacitación comercial recurrente y formal para el equipo. `[1.8.E3 · declarado · hábito · venta con equipo]`
 
@@ -776,29 +780,29 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 **Funcional.** El área tiene estructura y previsibilidad; deja de depender de héroes.
 
-*Resultado:* Las campañas siguen saliendo aunque cambie una persona, porque el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada una sin tener que preguntar.
+*Resultado:* Todo el equipo trabaja en el mismo sistema, y las campañas siguen saliendo aunque cambie una persona: el calendario y el proceso no viven en la cabeza de nadie, y el líder sabe en qué va cada una sin tener que preguntar.
 
 - Existe un calendario editorial visible para el equipo con horizonte de al menos un trimestre. `[2.1.F1 · declarado]`
 - Existe un proceso de campaña documentado (briefing → ejecución → cierre) que el equipo aplica de forma consistente. `[2.1.F2 · evaluado · hábito]`
 - Hay una reunión de performance con cadencia fija (semanal o quincenal) que se sostiene. `[2.1.F3 · declarado · hábito]`
 - El líder puede explicar qué campañas corren y en qué etapa sin preguntarle al equipo. `[2.1.F4 · evaluado]`
 - El equipo interno gestiona el grueso del trabajo; las agencias son apoyo puntual. `[2.1.F5 · declarado]`
+- Cualquier persona del equipo trabaja las campañas y los contactos en el sistema central, no en hojas ni en herramientas paralelas: lo abre como herramienta de trabajo, no por obligación. `[2.1.F6 · evaluado · hábito]`
 
-**Eficiente.** Los procesos incorporan ciclos cortos de prueba y ajuste, y control de calidad.
+**Eficiente.** Cada pieza pasa por control de calidad y el líder vigila con datos que el proceso se cumpla.
 
-*Resultado:* Cada pieza sale revisada, y el equipo prueba y ajusta como parte de su rutina en vez de publicar y olvidar.
+*Resultado:* Cada pieza sale revisada antes de publicarse, y el líder sabe dónde se desvía el proceso y corrige con datos, no de memoria.
 
-- Hay ciclos regulares de testing y ajuste incorporados a la rutina. `[2.1.E1 · declarado · hábito]`
 - Existe un proceso de aprobación de contenido antes de publicar (versionado, QA). `[2.1.E2 · declarado]`
-- Hay retroalimentación permanente entre planificación y ejecución. `[2.1.E3 · evaluado · hábito]`
+- El líder monitorea con datos del sistema, no de memoria, que el proceso de campaña se cumpla. `[2.1.E4 · evaluado · hábito]`
 
-**Óptimo.** La IA ajusta los flujos de trabajo y el equipo queda libre de tareas repetitivas.
+**Óptimo.** El sistema vigila que el proceso se cumpla y la IA se encarga de lo repetitivo; el equipo decide los ajustes.
 
-*Resultado:* El equipo dedica su tiempo a la estrategia: la IA se encarga de lo repetitivo y los ajustes se hacen sobre la marcha, sin depender de agencias.
+*Resultado:* El equipo dedica su tiempo a la estrategia: la IA se encarga de lo repetitivo, y el sistema señala lo que se sale del proceso sin que nadie lo vigile.
 
-- Los flujos de trabajo se ajustan con apoyo de IA, sin tareas manuales repetitivas. `[2.1.O1 · comprobable]`
-- El monitoreo es en tiempo real con ajustes automáticos. `[2.1.O2 · comprobable]`
-- La dependencia externa es muy baja. `[2.1.O3 · declarado]`
+- La IA se encarga de las tareas repetitivas del proceso de campaña, y al equipo no le queda trabajo manual repetitivo. `[2.1.O1 · comprobable]`
+- El sistema detecta las desviaciones del proceso de campaña y se las señala al líder y a quien corresponde, sin intervención. `[2.1.O4 · comprobable]`
+- El proceso de campaña se cumple sin que nadie lo vigile a mano. `[2.1.O5 · comprobable · hábito]`
 
 #### 2.2 Tecnología y Automatización
 
@@ -820,26 +824,27 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - El stack está fragmentado, sin integración. `[2.2.I2 · comprobable]`
 - Las automatizaciones son elementales (un email de bienvenida); la IA es exploratoria. `[2.2.I3 · comprobable]`
 
-**Funcional.** El stack contratado se usa de verdad y hay automatización simple en producción.
+**Funcional.** El stack contratado se usa de verdad, hay automatización simple en producción y, si se usa IA, trabaja con el contexto del área.
 
-*Resultado:* Todo lo que entra por el sitio y por el canal conversacional, como WhatsApp, llega al sistema y recibe respuesta, y el equipo lanza sus propios envíos sin depender de nadie.
+*Resultado:* Todo lo que entra por el sitio y por el canal conversacional, como WhatsApp, llega al sistema y recibe respuesta.
 
-- El equipo usa el sistema operativo central como herramienta principal, no como obligación administrativa. `[2.2.F1 · evaluado · hábito]`
 - Los módulos contratados están en uso, sin licencias ociosas relevantes. `[2.2.F2 · comprobable]`
-- Los puntos de captura del sitio (forms) están conectados al CRM con datos limpios. `[2.2.F3 · comprobable]`
+- Los puntos de captura del sitio (forms) están conectados al CRM: lo que una persona llena entra solo como contacto. `[2.2.F3 · comprobable]`
 - Hay al menos un canal conversacional conectado (WhatsApp, chat del sitio) con una bandeja básica donde el equipo atiende lo entrante. `[2.2.F4 · comprobable]`
 - Después de enviar un formulario, el sistema responde automáticamente y notifica a quien corresponde. `[2.2.F5 · comprobable]`
-- El equipo puede mandar un email a un segmento sin pedir ayuda a IT. `[2.2.F8 · evaluado]`
+- Si el equipo usa IA, esta tiene como contexto la voz de marca y los buyer personas. `[2.2.F9 · comprobable · requiere 2.5.F2, 2.5.F3]`
 
-**Eficiente.** El stack está integrado y la automatización tiene lógica.
+**Eficiente.** El stack está integrado, la automatización tiene lógica y la IA asiste al equipo en su trabajo diario.
 
-*Resultado:* Los leads se nutren solos hasta estar listos para Ventas, y la conversación con cada contacto no depende de que alguien se acuerde de escribirle.
+*Resultado:* Los leads se nutren solos hasta estar listos para Ventas, la conversación con cada contacto no depende de que alguien se acuerde de escribirle, y el líder ve en tiempo real qué conversaciones esperan respuesta.
 
 - Hay secuencias de nurturing multi-paso con ramificación y tiempos de espera. `[2.2.E1 · comprobable]`
-- Las campañas por el canal conversacional, como WhatsApp, están automatizadas, con segmentación y con ramificación según la interacción: si la persona leyó, hizo clic o respondió. `[2.2.E2 · comprobable]`
+- Las campañas por el canal conversacional, como WhatsApp, están automatizadas, con segmentación y con ramificación según la interacción: si la persona leyó, hizo clic o respondió. `[2.2.E2 · comprobable · requiere 2.6.F1]`
 - El handoff de leads a Ventas está automatizado. `[2.2.E3 · comprobable · venta con equipo]`
 - Varios canales conversacionales se consolidan en una bandeja unificada. `[2.2.E4 · comprobable]`
 - Las landing pages viven en el CMS central. `[2.2.E5 · comprobable]`
+- El equipo usa la IA en su trabajo diario —para redactar piezas, resumir resultados o preparar una campaña—, y la IA trabaja con el contexto del área: los buyer personas, los segmentos y la voz de marca. `[2.2.E6 · evaluado · hábito · requiere 2.3.F6]`
+- Hay paneles en tiempo real de las conversaciones que generan las campañas: cuánto tarda la primera respuesta y cuántas quedan sin respuesta. `[2.2.E7 · comprobable]`
 
 **Óptimo.** La IA orquesta el recorrido completo y conversa con el cliente de forma automatizada.
 
@@ -847,7 +852,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 - La IA predictiva y generativa orquesta el recorrido completo. `[2.2.O1 · comprobable]`
 - Agentes de IA atienden el canal conversacional: responden lo que generan las campañas y mantienen la conversación con quien todavía no está listo para Ventas. `[2.2.O2 · comprobable]`
-- Las conclusiones que se calculan en el almacén central de datos vuelven a las herramientas de marketing: la segmentación usa, por ejemplo, el valor real de cada cliente calculado afuera. `[2.2.O3 · comprobable]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven a las herramientas de marketing: la segmentación usa, por ejemplo, el valor real de cada cliente calculado afuera. `[2.2.O3 · comprobable · requiere 2.3.O1]`
 
 #### 2.3 Datos
 
@@ -869,14 +874,13 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 **Funcional.** La información describe la operación con confianza, sin reconstrucción.
 
-*Resultado:* El líder sabe de dónde vienen los leads y cuáles terminan en venta, con reportes que salen del sistema y no de una planilla armada a mano.
+*Resultado:* El líder sabe de dónde viene cada lead, con reportes que salen del sistema y no de una planilla armada a mano.
 
 - Todo contacto nuevo —entre por un formulario, una conversación, un portal o una compra— tiene poblados la etapa del ciclo de vida y su origen. `[2.3.F1 · comprobable]`
-- Las propiedades que describen al cliente ideal —en empresas, industria, empresa y rol; en personas, lo que define a cada segmento— están en los formularios críticos y se capturan en la mayoría de los registros. `[2.3.F2 · comprobable]`
+- Las propiedades que describen al cliente ideal —en empresas, industria, empresa y rol; en personas, lo que define a cada segmento— están en los formularios críticos y se capturan en la mayoría de los registros. `[2.3.F2 · comprobable · requiere 2.2.F3]`
 - Los duplicados están bajo control, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3 · comprobable · riesgo]`
-- Cualquier deal ganado tiene rastreable el origen del contacto. `[2.3.F4 · comprobable]`
 - Los reportes básicos (volumen, conversión, fuente) salen del sistema sin reconstrucción manual. `[2.3.F5 · comprobable]`
-- El contexto que el área documentó —buyer personas, segmentos, voz de marca— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[2.3.F6 · declarado · riesgo · hábito]`
+- El contexto que el área documentó —buyer personas, segmentos, voz de marca— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[2.3.F6 · declarado · riesgo · hábito · requiere 2.5.F2, 2.5.F3, 2.6.F1]`
 - Cuando se pide un teléfono u otro dato de contacto, se pregunta si la persona acepta que le escriban por ese canal, y su respuesta queda registrada. `[2.3.F7 · comprobable · riesgo]`
 
 **Eficiente.** Los datos están unificados, enriquecidos y atribuidos.
@@ -884,15 +888,14 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 *Resultado:* Marketing puede demostrar qué canal y qué contenido contribuyeron a cada venta, no solo cuál trajo el primer clic.
 
 - Hay enriquecimiento de datos activo con servicios de terceros. `[2.3.E1 · comprobable]`
-- La atribución está configurada para repartir el mérito entre todos los puntos de contacto, no solo el primero o el último, e incluye todos los canales, también el conversacional: se sabe cuánto ingreso deja cada uno. `[2.3.E2 · comprobable]`
-- La segmentación usa datos de comportamiento; la deduplicación es automática por reglas. `[2.3.E3 · comprobable]`
+- La atribución está configurada para repartir el mérito entre todos los puntos de contacto, no solo el primero o el último, e incluye todos los canales, también el conversacional: se sabe cuánto ingreso deja cada uno. `[2.3.E2 · comprobable · requiere 2.2.F4]`
+- La deduplicación es automática por reglas o merge del sistema. `[2.3.E3 · comprobable]`
 
 **Óptimo.** Los datos entran de forma continua, limpios y trazados de punta a punta.
 
 *Resultado:* La atribución toma en cuenta todo lo que pasa en la empresa, no solo lo que ve Marketing, y los datos se mantienen confiables sin que el equipo tenga que cuidarlos.
 
 - Marketing se apoya en el almacén central de datos de la empresa, donde se junta la información de todas las herramientas, y atribuye resultados con esa vista completa. `[2.3.O1 · comprobable]`
-- Los datos están limpios y trazados de punta a punta. `[2.3.O2 · comprobable]`
 - El enriquecimiento de datos es automático, con IA. `[2.3.O3 · comprobable]`
 - Los datos se mantienen al día sin depender de que alguien se acuerde de actualizarlos: se capturan y se corrigen solos, y las personas solo validan las excepciones. `[2.3.O4 · comprobable]`
 
@@ -917,31 +920,30 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 **Funcional.** Roles claros, decisiones con datos descriptivos y rendición de cuentas en cadencia.
 
-*Resultado:* El equipo sabe qué se espera de cada uno, y las decisiones de presupuesto se defienden con números, no con opiniones.
+*Resultado:* El equipo sabe qué se espera de cada uno, las decisiones de presupuesto se defienden con números y no con opiniones, y la dirección recibe cada mes cómo le fue a Marketing sin tener que pedirlo.
 
 - Cada persona del equipo tiene rol definido por escrito. `[2.4.F1 · declarado]`
-- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (volumen de leads, tasa de MQL, fuente, conversión) y lo consulta al menos semanalmente. `[2.4.F2 · evaluado · hábito]`
-- Hay metas mensuales o trimestrales por las que el equipo rinde cuentas en cadencia fija. `[2.4.F3 · evaluado · hábito]`
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (volumen de leads, tasa de MQL, fuente, conversión) y lo consulta al menos semanalmente. `[2.4.F2 · evaluado · hábito · requiere 2.3.F5]`
+- El equipo tiene metas mensuales o trimestrales, y en la reunión de performance rinde cuentas por ellas. `[2.4.F3 · evaluado · hábito · requiere 2.1.F3]`
 - Las decisiones de presupuesto o priorización citan datos del sistema, no opiniones. `[2.4.F4 · evaluado]`
 - Cualquier persona del equipo opera el sistema sin ayuda externa para tareas estándar. `[2.4.F5 · evaluado]`
+- El líder le envía a la dirección, cada mes, un reporte de cómo le fue a Marketing. `[2.4.F6 · declarado · hábito]`
 
-**Eficiente.** El equipo tiene autonomía y el líder orquesta con otras áreas.
+**Eficiente.** El liderazgo prepara a quien entra, acuerda reglas con Ventas y escucha al equipo.
 
 *Resultado:* Una persona nueva se integra rápido, y Marketing y Ventas trabajan con reglas acordadas en vez de reclamarse los leads.
 
-- La rendición de cuentas es explícita y la cultura se basa en datos. `[2.4.E1 · evaluado · hábito]`
 - Cuando entra alguien nuevo al equipo, hay un plan de onboarding con sus pasos y materiales; no se le entrena de memoria. `[2.4.E2 · declarado]`
-- El liderazgo orquesta con Ventas (handoff de leads, SLAs, cadencia conjunta) y con Servicio. `[2.4.E3 · declarado · hábito]`
+- El liderazgo orquesta con Ventas (handoff de leads, SLAs, cadencia conjunta) y con Servicio. `[2.4.E3 · declarado · hábito · requiere 2.6.F4]`
 - El equipo da retroalimentación sobre el sistema y pide que evolucione. `[2.4.E4 · evaluado · hábito]`
 
 **Óptimo.** Hay responsables de validar la IA y de cuidar los datos, y la gobernanza de datos e IA es parte de las decisiones.
 
-*Resultado:* La dirección sabe cuánto cuesta conseguir cada cliente por canal y decide dónde invertir con esa cuenta, con un equipo capaz de sostener la IA.
+*Resultado:* La dirección sabe cuánto deja cada canal frente a lo que cuesta y decide dónde invertir con esa cuenta, con un equipo capaz de sostener la IA.
 
-- Hay responsables definidos de validar lo que produce la IA y de mantener la calidad de los datos. `[2.4.O1 · declarado]`
+- Hay responsables definidos de validar lo que produce la IA y de mantener la calidad de los datos, y esa gobernanza es parte de cómo se decide. `[2.4.O1 · declarado]`
 - El liderazgo se enfoca en estrategia y en mejorar el sistema. `[2.4.O2 · evaluado · hábito]`
-- La gobernanza de datos e IA es parte del marco de decisión. `[2.4.O3 · declarado · hábito]`
-- Las decisiones usan analítica avanzada, como el costo de adquisición de cliente por canal. `[2.4.O4 · evaluado · hábito]`
+- Las decisiones usan analítica avanzada, como lo que deja cada canal —el valor de vida de los clientes que trae— frente a lo que cuesta. `[2.4.O4 · evaluado · hábito]`
 
 ### Producción
 
@@ -990,8 +992,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 *Resultado:* La presencia se mantiene vigente sola: el contenido se produce y se ajusta de forma continua para cada tipo de cliente y cada forma de buscar.
 
 - Los buyer personas están hiper-segmentados, próximos a cuentas individuales. `[2.5.O1 · declarado]`
-- El contenido se produce y optimiza con IA de forma continua. `[2.5.O2 · comprobable]`
-- El SEO y el AEO están optimizados para búsqueda conversacional y entornos generativos. `[2.5.O3 · comprobable]`
+- La IA produce y optimiza el contenido de forma continua —también para la búsqueda conversacional y los asistentes de IA—, y el equipo valida lo que se publica. `[2.5.O2 · comprobable]`
 
 #### 2.6 Segmentación
 
@@ -1016,25 +1017,24 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 *Resultado:* Cada segmento recibe un mensaje pensado para él, y Ventas recibe leads que Marketing ya clasificó con criterios claros.
 
 - Existen al menos 2 segmentos definidos con criterios escritos. `[2.6.F1 · declarado]`
-- El equipo puede seleccionar un segmento y enviarle un email distinto del resto. `[2.6.F2 · comprobable]`
 - Las campañas recientes muestran piezas distintas por segmento. `[2.6.F3 · comprobable · hábito]`
-- Existen criterios documentados de qué es un suscriptor, lead, MQL y SQL, y marketing clasifica hasta MQL según ellos, a mano o con una automatización simple sobre las propiedades de calificación. `[2.6.F4 · comprobable · venta con equipo]`
+- Existen criterios documentados de qué es un suscriptor, un lead y un MQL, y marketing clasifica según ellos, a mano o con una automatización simple sobre las propiedades de calificación. `[2.6.F4 · comprobable · venta con equipo]`
 
 **Eficiente.** La segmentación y el scoring se automatizan.
 
 *Resultado:* El mensaje se adapta solo a quién lo recibe y en qué etapa está, y Ventas recibe primero los leads con más probabilidad de comprar.
 
-- Hay secuencias diferenciadas por segmento o etapa del journey. `[2.6.E1 · comprobable]`
+- Hay secuencias diferenciadas por segmento o etapa del journey. `[2.6.E1 · comprobable · requiere 2.2.E1]`
 - El contenido se adapta por segmento de forma automática. `[2.6.E2 · comprobable]`
-- Hay lead scoring por reglas: un modelo que suma puntos por varios atributos y califica al pasar un umbral, cuyo score dispara las secuencias de nurturing. Se distingue de la calificación de Funcional, que responde a un valor de propiedad sin modelo de puntaje detrás. `[2.6.E3 · comprobable]`
+- Hay lead scoring por reglas: un modelo que suma puntos por varios atributos y califica al pasar un umbral, cuyo score dispara las secuencias de nurturing. Se distingue de la calificación de Funcional, que responde a un valor de propiedad sin modelo de puntaje detrás. `[2.6.E3 · comprobable · requiere 2.2.E1]`
+- La segmentación usa datos de comportamiento —qué abrió, qué visitó, qué compró—, no solo lo que la persona declaró. `[2.6.E4 · comprobable]`
 
 **Óptimo.** La IA identifica micro-segmentos y el contenido cambia según el comportamiento de cada persona.
 
 *Resultado:* Cada persona ve el contenido que le corresponde según lo que hizo antes, sin que nadie tenga que armar un segmento para ella.
 
 - La IA identifica micro-segmentos y comportamientos. `[2.6.O1 · comprobable]`
-- El contenido cambia en tiempo real según el comportamiento histórico. `[2.6.O2 · comprobable]`
-- Hay personalización uno a uno, también en el sitio web. `[2.6.O3 · comprobable]`
+- Hay personalización uno a uno: lo que ve cada persona —en los mensajes y en el sitio web— cambia en tiempo real según lo que hizo antes. `[2.6.O3 · comprobable]`
 
 #### 2.7 Canales y Alcance
 
@@ -1062,9 +1062,9 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - El email marketing tiene cadencia regular (al menos mensual) y se cumple. `[2.7.F1 · comprobable · hábito]`
 - Hay al menos un canal social orgánico gestionado y calendarizado con publicaciones recurrentes. `[2.7.F2 · comprobable]`
 - Hay al menos una campaña de pauta pagada corriendo con presupuesto definido (Google, Meta o el canal que corresponda al negocio). `[2.7.F3 · comprobable]`
-- El canal conversacional, como WhatsApp, se usa para salir con cadencia definida, no solo para responder lo que entra. `[2.7.F4 · comprobable · hábito]`
-- Los cuatro canales siguen el mismo calendario y la misma campaña: una promoción sale coordinada en email, pauta, orgánico y el canal conversacional, no como cuatro esfuerzos sueltos. `[2.7.F5 · declarado · hábito]`
-- El líder puede decir cuánto costó cada lead —o cada venta, donde se compra sin vendedor— el último mes, al menos por canal. `[2.7.F6 · comprobable]`
+- El canal conversacional, como WhatsApp, se usa para salir con cadencia definida, no solo para responder lo que entra. `[2.7.F4 · comprobable · hábito · requiere 2.2.F4]`
+- Los cuatro canales siguen el mismo calendario y la misma campaña: una promoción sale coordinada en email, pauta, orgánico y el canal conversacional, no como cuatro esfuerzos sueltos. `[2.7.F5 · declarado · hábito · requiere 2.1.F1]`
+- El líder puede decir cuánto costó cada lead —o cada venta, donde se compra sin vendedor— el último mes, al menos por canal. `[2.7.F6 · comprobable · requiere 2.3.F1]`
 
 **Eficiente.** Los canales se integran con datos y el presupuesto se mueve con evidencia.
 
@@ -1079,9 +1079,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 *Resultado:* La inversión se reparte sola donde más retorna, los clientes satisfechos traen clientes nuevos, y la empresa llega antes que su competencia a los canales nuevos.
 
-- Se exploran canales emergentes (influencers, búsqueda conversacional, asistentes de IA). `[2.7.O1 · declarado · hábito]`
-- La IA reasigna presupuestos automáticamente para maximizar ROI. `[2.7.O2 · comprobable]`
-- Los canales nuevos se prueban en ciclos cortos. `[2.7.O3 · declarado · hábito]`
+- Los canales emergentes —influencers, comunidades, formatos nuevos— se prueban en ciclos cortos. `[2.7.O1 · declarado · hábito]`
+- La IA reasigna presupuestos automáticamente para maximizar ROI. `[2.7.O2 · comprobable · requiere 2.3.E2]`
 - Los clientes que Servicio identifica como promotores se vuelven un canal de referidos y casos de éxito, sin pedirlos a mano. `[2.7.O4 · comprobable]`
 
 #### 2.8 Medición y Aprendizaje
@@ -1103,27 +1102,25 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - Las métricas son básicas (clics, likes) sin conexión clara con el CAC. `[2.8.I1 · comprobable]`
 - La optimización es lenta y reactiva. `[2.8.I2 · evaluado]`
 
-**Funcional.** Hay reporting descriptivo vivo y revisión post-campaña.
+**Funcional.** Los resultados de cada campaña están a la vista, y cada una deja una revisión de cierre.
 
-*Resultado:* La dirección recibe cada mes cómo le fue a Marketing sin tener que pedirlo, y cada campaña deja una lección escrita para la siguiente.
+*Resultado:* El equipo ve cómo le fue a cada campaña sin armar el número a mano, y cada una deja una lección escrita para la siguiente.
 
-- Hay un dashboard de marketing con indicadores descriptivos clave que se actualiza solo. `[2.8.F1 · comprobable]`
-- El líder envía un reporte mensual a liderazgo con cadencia fija. `[2.8.F2 · declarado · hábito]`
 - Cada campaña significativa tiene una revisión de cierre documentada (qué funcionó, qué no). `[2.8.F3 · declarado]`
-- El equipo puede señalar qué aprende de una campaña a la siguiente. `[2.8.F4 · evaluado]`
+- Los resultados de cada campaña —los leads o las ventas que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5 · comprobable · requiere 2.3.F1]`
 
 **Eficiente.** Hay testing regular y ajustes basados en data.
 
-*Resultado:* El equipo sabe qué creatividades y audiencias funcionan porque lo probó, no porque lo intuye.
+*Resultado:* El equipo sabe qué creatividades y audiencias funcionan porque lo probó, no porque lo intuye, y lo aprendido cambia cómo se arma la siguiente campaña.
 
 - Hay tests A/B regulares (al menos uno activo por mes). `[2.8.E1 · comprobable · hábito]`
 - Hay un proceso formal para validar qué creatividades y audiencias funcionan con métricas históricas. `[2.8.E2 · declarado]`
+- El proceso de campaña y la planificación de las campañas siguientes se refinan con base en lo aprendido. `[2.8.E3 · declarado · hábito · requiere 2.1.F2]`
 
 **Óptimo.** Modelos de predicción ajustan las campañas sobre la marcha, sin esperar al cierre.
 
 *Resultado:* Las campañas mejoran mientras están corriendo, no recién cuando terminan.
 
-- Todas las campañas se monitorean en tiempo real. `[2.8.O1 · comprobable]`
 - La IA aplica aprendizajes en tiempo real. `[2.8.O2 · comprobable]`
 
 ---
@@ -1151,32 +1148,35 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 - Hay algún SLA conocido pero no medido. `[3.1.I1 · declarado]`
 - Los roles están definidos a grandes rasgos; todavía se depende de héroes. `[3.1.I2 · evaluado]`
+- Unos agentes atienden en el sistema; otros siguen con sus canales personales. `[3.1.I3 · evaluado]`
 
-**Funcional.** Hay un pipeline de servicio configurado y gestión básica de cartera.
+**Funcional.** El equipo atiende en un mismo sistema, con un pipeline de servicio configurado y gestión básica de cartera.
 
-*Resultado:* Cada cliente tiene a alguien que responde por él, y un caso se atiende igual sin importar qué agente lo tome.
+*Resultado:* Todo el equipo atiende en el mismo sistema, cada cliente tiene a alguien que responde por él, y un caso se atiende igual sin importar qué agente lo tome.
 
-- El pipeline de servicio cubre el flujo de atención de recepción a cierre. `[3.1.F1 · comprobable]`
+- El pipeline de servicio está configurado con sus etapas y cubre el flujo de atención, de la recepción al cierre. `[3.1.F1 · comprobable]`
 - Cada cliente tiene quién responda por él —una persona o, si la cartera es masiva, un equipo con un seguimiento automático— y un seguimiento mínimo más allá de los tickets que abre. `[3.1.F2 · comprobable]`
 - Hay reuniones de equipo de Servicio con cadencia fija (al menos quincenal) que se sostienen. `[3.1.F3 · declarado · hábito]`
 - Existe un proceso básico documentado para quejas críticas o escalaciones. `[3.1.F4 · declarado]`
 - Cualquier agente explica cómo se atiende un caso típico siguiendo el mismo flujo. `[3.1.F5 · evaluado]`
+- Cualquier agente atiende en el sistema central, no por fuera: es su herramienta de trabajo, no algo que se llena después de resolver por otro canal. `[3.1.F6 · evaluado · hábito]`
 
-**Eficiente.** Aparecen SLAs, reglas de escalación y prevención.
+**Eficiente.** Aparecen los SLA, los playbooks y el recorrido del cliente, y el líder vigila con datos que el proceso se cumpla.
 
-*Resultado:* El cliente sabe cuánto va a tardar la respuesta y se cumple, los casos críticos llegan solos a quien los tiene que resolver, y cada momento clave de su relación con la empresa tiene un dueño.
+*Resultado:* El cliente sabe cuánto va a tardar la respuesta, cada momento clave de su relación con la empresa tiene un dueño, y el líder sabe dónde se desvía la atención y corrige con datos, no de memoria.
 
 - Hay SLAs definidos por tipo de caso o prioridad. `[3.1.E1 · comprobable]`
-- Las reglas de escalación están configuradas como automatización (cuándo y a quién). `[3.1.E2 · comprobable]`
 - Hay playbooks de prevención, retención y expansión. `[3.1.E3 · declarado · cliente recurrente]`
-- El recorrido del cliente está definido de punta a punta, con sus momentos clave —el traspaso desde Ventas, el inicio, la entrega o el primer valor y, si la hay, la renovación o la recompra— y un responsable y un estándar para cada uno. `[3.1.E4 · declarado]`
+- El recorrido del cliente está definido de punta a punta, con sus momentos clave —el inicio, la entrega o el primer valor y, si la hay, la renovación o la recompra— y un responsable y un estándar para cada uno. `[3.1.E4 · declarado · requiere 3.5.F2]`
+- El líder monitorea con datos del sistema, no de memoria, que el proceso de atención se cumpla. `[3.1.E5 · evaluado · hábito]`
 
-**Óptimo.** Las rutinas corren automáticas y el equipo supervisa, entrena la IA y gestiona excepciones.
+**Óptimo.** Las rutinas corren automáticas y el sistema vigila que el proceso se cumpla; el equipo supervisa, entrena la IA y gestiona excepciones.
 
-*Resultado:* El equipo deja de ejecutar rutinas y pasa a supervisarlas: la IA hace lo repetitivo, y las personas se ocupan de las excepciones y de mejorar el sistema.
+*Resultado:* El equipo deja de ejecutar rutinas y pasa a supervisarlas: la IA hace lo repetitivo, el sistema señala lo que se sale del proceso, y las personas se ocupan de las excepciones y de mejorar el sistema.
 
 - Muchas rutinas son automáticas; el equipo supervisa, entrena la IA y gestiona excepciones. `[3.1.O1 · evaluado · hábito]`
-- Las rutinas incluyen refinar la base de conocimiento. `[3.1.O2 · declarado · hábito]`
+- El sistema detecta las desviaciones del proceso de atención y se las señala al líder y al agente, sin intervención. `[3.1.O3 · comprobable]`
+- El proceso de atención se cumple sin que nadie lo vigile a mano. `[3.1.O4 · comprobable · hábito]`
 
 #### 3.2 Tecnología y Automatización
 
@@ -1191,38 +1191,35 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 - No hay plataforma central de tickets. `[3.2.D1 · declarado]`
 - Los casos se manejan en celulares personales o emails individuales. `[3.2.D2 · evaluado]`
 
-**Inicial.** Plataforma de tickets activa pero con baja adopción.
+**Inicial.** Plataforma de tickets activa, con automatización mínima y el stack fragmentado.
 
-- Unos agentes la usan, otros siguen con sus canales personales. `[3.2.I1 · evaluado]`
 - Hay automatizaciones simples de recepción, sin IA; el stack está fragmentado. `[3.2.I2 · comprobable]`
 
-**Funcional.** El sistema central se usa de verdad y ofrece vista unificada del cliente.
+**Funcional.** Hay al menos un canal conversacional conectado, automatización simple en producción y, si se usa IA, trabaja con el contexto de los clientes.
 
-*Resultado:* Ningún caso se pierde entre canales, y el agente atiende sabiendo quién es el cliente y qué tiene contratado.
+*Resultado:* Lo que entra por los canales conectados llega al sistema y se le asigna a alguien sin que nadie lo reparta, y quien lo necesita se entera de cada cambio.
 
-- El sistema central es la herramienta principal, no algo que se llena después de resolver por otro canal. `[3.2.F1 · evaluado · hábito]`
-- Al abrir un cliente, el agente ve su relación completa —lo que compró o tiene contratado, lo que ha pagado y el soporte abierto—, no solo el ticket puntual. `[3.2.F2 · comprobable]`
-- Hay pipelines de servicio configurados con etapas y prioridades. `[3.2.F3 · comprobable]`
 - Hay al menos un canal conversacional conectado con bandeja básica donde el equipo atiende lo entrante. `[3.2.F4 · comprobable]`
 - Al entrar un ticket, el sistema lo asigna automáticamente según una regla simple; las notificaciones de cambio de estado llegan a quien las necesita. `[3.2.F5 · comprobable]`
 - Si hay chatbot, resuelve consultas frecuentes con árbol de decisión. `[3.2.F6 · comprobable]`
+- Si el equipo usa IA, esta tiene como contexto la información básica de los clientes. `[3.2.F8 · comprobable]`
 
-**Eficiente.** La automatización tiene lógica y aparece el autoservicio.
+**Eficiente.** La automatización tiene lógica, aparece el autoservicio y la IA asiste al equipo en su trabajo diario.
 
-*Resultado:* Los plazos se vigilan solos, y el cliente puede ver y abrir sus casos y resolver lo simple sin esperar a un agente.
+*Resultado:* Los plazos se vigilan solos y los casos críticos llegan solos a quien los tiene que resolver; el cliente puede ver y abrir sus casos y resolver lo simple sin esperar a un agente, y el líder ve en tiempo real cuánto hay abierto y qué quedó sin atender.
 
-- Hay automatización de SLA —alertas antes del vencimiento y escalación automática—, y las conversaciones y los tickets se enrutan por múltiples condiciones, como idioma, tema o habilidad del agente. `[3.2.E1 · comprobable]`
+- Hay automatización de SLA —alertas antes del vencimiento y escalación automática, con reglas de cuándo se escala y a quién—, y las conversaciones y los tickets se enrutan por múltiples condiciones, como idioma, tema o habilidad del agente. `[3.2.E1 · comprobable · requiere 3.1.E1]`
 - Hay portal de autoservicio donde el cliente ve y crea tickets, y base de conocimiento interna y pública. `[3.2.E2 · comprobable]`
-- Los canales se consolidan en una bandeja unificada; el agente de servicio con IA está en exploración. `[3.2.E3 · comprobable]`
+- Los canales se consolidan en una bandeja unificada. `[3.2.E3 · comprobable]`
+- El equipo usa la IA en su trabajo diario —para redactar respuestas, resumir casos o buscar en la base de conocimiento—, y la IA trabaja con el contexto del área: los tipos de cliente, los niveles de atención y las respuestas a las consultas frecuentes. `[3.2.E4 · evaluado · hábito · requiere 3.3.F6]`
+- Hay paneles en tiempo real de la atención: los casos abiertos, quién los tiene y cuántas conversaciones quedan sin atender. `[3.2.E5 · comprobable]`
 
-**Óptimo.** Un agente de IA resuelve consultas en producción y los agentes humanos trabajan con asistentes de IA.
+**Óptimo.** Un agente de IA resuelve consultas en producción, y lo que se calcula en toda la empresa llega a la ficha del cliente.
 
-*Resultado:* Una parte importante de las consultas se resuelve sin intervención humana, y los agentes trabajan asistidos por IA en las que sí la necesitan.
+*Resultado:* Una parte importante de las consultas se resuelve sin intervención humana, y cuando un caso pasa a una persona, llega con el contexto completo y con lo que la empresa sabe de ese cliente a la vista.
 
 - Hay un agente de servicio con IA en producción que resuelve consultas en todos los canales sin intervención humana y pasa a una persona, con el contexto completo, cuando hace falta; hay automatización de flujos de trabajo. `[3.2.O1 · comprobable]`
-- Hay asistentes de IA que apoyan a los agentes humanos. `[3.2.O2 · comprobable]`
-- Hay IA generativa para contenido de ayuda y analytics en tiempo real. `[3.2.O3 · comprobable]`
-- Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de servicio: el agente ve en la ficha, por ejemplo, el riesgo de fuga del cliente. `[3.2.O4 · comprobable]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven al sistema de servicio: el agente ve en la ficha, por ejemplo, el riesgo de fuga del cliente. `[3.2.O4 · comprobable · requiere 3.3.O2]`
 
 #### 3.3 Datos
 
@@ -1247,20 +1244,20 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* El líder sabe qué tipo de problemas llegan y cuántos, y cualquier agente tiene la historia del cliente en segundos.
 
 - Cualquier agente ve el histórico de tickets de un cliente en menos de 10 segundos. `[3.3.F1 · comprobable]`
-- La ficha del cliente muestra lo que compró o tiene contratado y su valor económico, no solo sus tickets. `[3.3.F2 · comprobable]`
-- Las propiedades clave del cliente —qué compró o qué plan tiene, desde cuándo es cliente y quién responde por él— están pobladas en la mayoría de los registros. `[3.3.F3 · comprobable]`
-- Cada ticket tiene tipo, motivo y prioridad con taxonomía definida. `[3.3.F4 · comprobable]`
+- La ficha del cliente muestra lo que compró o tiene contratado, lo que ha pagado y su valor económico, no solo sus tickets. `[3.3.F2 · comprobable]`
+- Las propiedades clave del cliente —qué compró o qué plan tiene y desde cuándo es cliente— están pobladas en la mayoría de los registros. `[3.3.F3 · comprobable]`
+- Cada ticket tiene tipo y motivo, con una taxonomía definida. `[3.3.F4 · comprobable]`
 - El líder saca reportes de volumen por tipo de ticket sin reconstrucción. `[3.3.F5 · comprobable]`
-- El contexto que el área documentó —tipos de cliente, niveles de atención, respuestas a consultas frecuentes— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[3.3.F6 · declarado · riesgo · hábito]`
+- El contexto que el área documentó —tipos de cliente, niveles de atención, respuestas a consultas frecuentes— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[3.3.F6 · declarado · riesgo · hábito · requiere 3.5.F4, 3.6.F2, 3.8.F1]`
 
 **Eficiente.** Se miden tiempos y satisfacción, y la data se unifica con Ventas.
 
 *Resultado:* La empresa sabe qué tan rápido y qué tan bien atiende, cuánto tarda un cliente nuevo en ver valor y qué tan sano está cada cliente, con la satisfacción medida y no supuesta.
 
-- Se mide el tiempo de primera respuesta y de resolución, y el cumplimiento de los SLA, en todos los canales. `[3.3.E1 · comprobable]`
+- Se mide el tiempo de primera respuesta y de resolución, y el cumplimiento de los SLA, en todos los canales. `[3.3.E1 · comprobable · requiere 3.1.E1]`
 - Se trackean NPS o CSAT con cadencia. `[3.3.E2 · comprobable · hábito]`
-- La data del cliente está unificada entre Servicio y Ventas; se usan los históricos para identificar patrones. `[3.3.E3 · comprobable]`
-- Se mide cuánto tarda cada cliente nuevo en obtener valor: el tiempo desde que empieza hasta su primer resultado. `[3.3.E4 · comprobable]`
+- La data del cliente está unificada entre Servicio y Ventas. `[3.3.E3 · comprobable]`
+- Se mide cuánto tarda cada cliente nuevo en obtener valor: el tiempo desde que empieza hasta su primer resultado. `[3.3.E4 · comprobable · requiere 3.5.F2]`
 - Hay un indicador de salud por reglas para cada cliente, que combina su uso, sus casos abiertos y su satisfacción. `[3.3.E5 · comprobable · cliente recurrente]`
 
 **Óptimo.** Un modelo de salud de cuenta anticipa el riesgo antes de que el cliente lo manifieste.
@@ -1295,16 +1292,15 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* Cada persona sabe qué le toca, y el líder ve cada semana si el equipo va al día o se está atrasando.
 
 - Cada persona del equipo tiene rol definido por escrito. `[3.4.F1 · declarado]`
-- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (tickets abiertos, volumen, backlog, tickets por tipo) y lo consulta al menos semanalmente. `[3.4.F2 · evaluado · hábito]`
-- Hay reuniones de equipo en cadencia formal (las mismas de Procesos y Rutinas), usadas para rendir cuentas. `[3.4.F3 · evaluado · hábito]`
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (tickets abiertos, volumen, backlog, tickets por tipo) y lo consulta al menos semanalmente. `[3.4.F2 · evaluado · hábito · requiere 3.3.F5]`
+- En las reuniones del equipo se rinde cuentas: cada quien responde por lo que se comprometió en la anterior. `[3.4.F3 · evaluado · hábito · requiere 3.1.F3]`
 
-**Eficiente.** El equipo tiene autonomía, cultura preventiva y orquesta con otras áreas.
+**Eficiente.** El equipo rinde cuentas contra los SLA, y el liderazgo prepara a quien entra y orquesta con otras áreas.
 
-*Resultado:* Un agente nuevo rinde rápido, el equipo se adelanta en vez de apagar incendios, y Servicio avisa a Ventas cuando hay riesgo u oportunidad.
+*Resultado:* El equipo responde por sus tiempos de atención, un agente nuevo rinde rápido, y Servicio avisa a Ventas cuando hay riesgo u oportunidad.
 
-- Hay rendición de cuentas explícita contra SLA. `[3.4.E1 · evaluado · hábito]`
+- Hay rendición de cuentas explícita contra SLA. `[3.4.E1 · evaluado · hábito · requiere 3.3.E1]`
 - Cuando entra alguien nuevo al equipo, hay un plan de onboarding con sus pasos y materiales; no se le entrena de memoria. `[3.4.E2 · declarado]`
-- La cultura es preventiva: contactar al cliente antes de que pida ayuda. `[3.4.E3 · evaluado · hábito]`
 - El liderazgo orquesta con Ventas —cada cliente nuevo llega con el resultado que persigue, y las alertas de churn vuelven a Ventas— y con Marketing. `[3.4.E4 · declarado · hábito]`
 
 **Óptimo.** Hay responsables de validar la IA y de cuidar el conocimiento, y el servicio se mide por los ingresos que retiene y hace crecer.
@@ -1314,7 +1310,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 - Hay responsables definidos de validar lo que responde la IA y de mantener la base de conocimiento al día. `[3.4.O1 · declarado]`
 - El liderazgo se enfoca en estrategia. `[3.4.O2 · evaluado · hábito]`
 - El equipo de servicio se mide por la retención y el crecimiento de sus clientes, no solo por los casos que cierra. `[3.4.O3 · declarado · hábito · cliente recurrente]`
-- Las decisiones usan analítica avanzada, como la retención neta de ingresos. `[3.4.O4 · evaluado · hábito]`
+- Las decisiones usan analítica avanzada, como cuánto cuesta atender a cada tipo de cliente frente a lo que deja. `[3.4.O4 · evaluado · hábito]`
 
 ### Producción
 
@@ -1351,12 +1347,11 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 - El tono y la voz de marca se aplican a las respuestas, no cada agente con su estilo. `[3.5.E2 · evaluado · hábito]`
 - Existe una guía de estilo de servicio documentada. `[3.5.E3 · declarado]`
 
-**Óptimo.** La IA aplica el tono de marca en las interacciones automatizadas y lo adapta al contexto.
+**Óptimo.** La IA aplica el tono de marca en las interacciones automatizadas.
 
-*Resultado:* La experiencia se siente igual de cuidada con una persona o con la IA, y se ajusta a cada cliente.
+*Resultado:* La experiencia se siente igual de cuidada con una persona o con la IA.
 
 - La IA aplica tono de marca consistente en interacciones automatizadas. `[3.5.O1 · comprobable]`
-- El tono se personaliza según el contexto del cliente. `[3.5.O2 · comprobable]`
 
 #### 3.6 Priorización de Clientes
 
@@ -1379,24 +1374,23 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* Lo urgente se atiende primero y los clientes más importantes reciben una atención acorde, sin que el agente tenga que reconstruir su historia.
 
 - Cada ticket tiene una prioridad asignada (urgent / high / normal / low) y los agentes la respetan. `[3.6.F1 · comprobable · hábito]`
-- La atención se diferencia según los tipos de cliente definidos en Consistencia de Atención: cada tipo tiene claro qué nivel de atención recibe. `[3.6.F2 · declarado]`
-- El agente usa la vista unificada del cliente —lo que compró, lo que ha pagado y el soporte abierto— para dar contexto, sin reconstruirlo a mano. `[3.6.F3 · evaluado · hábito]`
+- La atención se diferencia según los tipos de cliente: cada tipo tiene claro qué nivel de atención recibe. `[3.6.F2 · declarado · requiere 3.5.F4]`
+- El agente usa la ficha del cliente —lo que compró, lo que ha pagado y el soporte abierto— para dar contexto, sin reconstruirlo a mano. `[3.6.F3 · evaluado · hábito · requiere 3.3.F2]`
 
-**Eficiente.** Hay un responsable por cliente clave y segmentación para acciones diferenciadas.
+**Eficiente.** Hay un responsable dedicado por cliente clave y segmentación para acciones diferenciadas.
 
 *Resultado:* Cada cliente clave tiene un dueño que lo conoce, el resto de la cartera no queda sola, y la atención cambia según el momento en que está cada cliente.
 
-- Hay un modelo de atención por segmento: cada cliente clave tiene un CSM o responsable asignado, y el resto de la cartera recibe acompañamiento automatizado, de uno a muchos. `[3.6.E1 · comprobable · cliente recurrente]`
+- Hay un modelo de atención por segmento: cada cliente clave tiene un responsable dedicado —un CSM— que lo conoce, y el resto de la cartera recibe acompañamiento automatizado, de uno a muchos. `[3.6.E1 · comprobable · cliente recurrente · requiere 3.1.F2]`
 - Los clientes se segmentan para acciones diferenciadas según el momento de su relación: donde el cliente vuelve, sanos, en riesgo o con potencial de crecer; donde compra una vez, por entregar, en garantía o listos para recomendar. `[3.6.E2 · comprobable]`
-- El contexto del cliente se usa activamente para personalizar respuestas. `[3.6.E3 · evaluado · hábito]`
 
 **Óptimo.** El cliente recibe el mismo contexto lo atienda un humano o la IA, incluso en autoservicio.
 
 *Resultado:* Cada cliente recibe una atención a su medida en cualquier canal, incluso cuando se atiende solo, y nunca tiene que volver a explicar lo que ya habló con Ventas.
 
-- La personalización se aplica incluso en autoservicio. `[3.6.O1 · comprobable]`
+- La personalización se aplica incluso en autoservicio. `[3.6.O1 · comprobable · requiere 3.2.E2]`
 - Hay personalización uno a uno en tiempo real. `[3.6.O2 · comprobable]`
-- Cada cliente se atiende con el contexto de cómo llegó —lo que se le prometió en la venta y el segmento del que viene—, sin volver a preguntarlo. `[3.6.O3 · comprobable]`
+- Cada cliente se atiende con el contexto de cómo llegó —lo que se le prometió en la venta y el segmento del que viene—, sin volver a preguntarlo. `[3.6.O3 · comprobable · requiere 3.3.E3]`
 
 #### 3.7 Proactividad
 
@@ -1427,7 +1421,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 *Resultado:* Las solicitudes del cliente no se pierden entre áreas, sabe lo que necesita antes de preguntarlo y los problemas se atienden antes de que escalen; la empresa retiene clientes que antes se perdían sin aviso, encuentra oportunidades en su propia cartera y, donde la relación es continua, sus clientes clave ven qué lograron.
 
-- Hay alertas tempranas de churn, baja salud u oportunidad de upsell. `[3.7.E1 · comprobable · cliente recurrente]`
+- Hay alertas tempranas, a partir del indicador de salud, de riesgo de churn o de oportunidad de upsell. `[3.7.E1 · comprobable · cliente recurrente · requiere 3.3.E5]`
 - Los clientes en riesgo reciben una acción de retención antes de decidir irse, y los que tienen potencial reciben una propuesta de expansión. `[3.7.E2 · comprobable · hábito · cliente recurrente]`
 - Los clientes clave tienen registrado el resultado que persiguen y lo revisan con la empresa en una cadencia fija: qué se logró y qué sigue. `[3.7.E3 · declarado · hábito · relación continua]`
 - Ninguna solicitud o molestia del cliente se pierde entre áreas: quedan en el sistema aunque las resuelva otra área —administración, cobros, entregas—, y hay alertas automáticas cuando una se atrasa, cuando un cliente califica mal o cuando se acerca una fecha crítica —una entrega, una garantía, un vencimiento—, que le llegan a quien tiene que actuar. `[3.7.E4 · comprobable]`
@@ -1437,9 +1431,9 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 *Resultado:* La mayoría de los problemas se resuelven antes de que el cliente los note, y cada cliente siente que la empresa se adelanta a lo que necesita y lo sorprende para bien.
 
-- La comunicación proactiva se adapta a cada cliente —qué recibe, cuándo y por qué canal— según su historia y sus señales; y donde la relación es continua, las revisiones de resultado llegan a todos: a los clave en persona y al resto de forma automatizada, con los datos que prepara el sistema. `[3.7.O1 · declarado · hábito]`
+- Las revisiones de resultado llegan a todos los clientes: a los clave en persona y al resto de forma automatizada, con los datos que prepara el sistema. `[3.7.O1 · declarado · hábito · relación continua]`
 - Muchos problemas se resuelven antes de que el cliente los note. `[3.7.O2 · comprobable · hábito]`
-- La distribución de acciones proactivas se autoajusta por IA según señales del cliente. `[3.7.O3 · comprobable]`
+- Las acciones proactivas —qué recibe cada cliente, cuándo y por qué canal— se autoajustan con IA según su historia y sus señales. `[3.7.O3 · comprobable]`
 - Los clientes reciben, sin pedirlos, detalles pensados para deleitarlos —regalías, promociones, beneficios o amenidades—, elegidos según su historia y el momento de su relación. `[3.7.O4 · comprobable]`
 
 #### 3.8 Escalabilidad del Servicio
@@ -1455,16 +1449,16 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 - No hay autoservicio ni base de conocimiento pública. `[3.8.D1 · comprobable]`
 - El costo crece linealmente con cada cliente nuevo. `[3.8.D2 · declarado]`
 
-**Inicial.** FAQs básicas o portal simple sin actualizar.
+**Inicial.** Hay FAQs sueltas o un portal simple, pero lo que más se consulta todavía no tiene respuesta publicada.
 
 - Hay chatbots de menú fijo rígidos. `[3.8.I1 · comprobable]`
 - El conocimiento existe pero está disperso; escalar exige mucho esfuerzo manual. `[3.8.I2 · evaluado]`
 
-**Funcional.** Las consultas más frecuentes tienen respuesta publicada y al día.
+**Funcional.** Las consultas más frecuentes tienen respuesta publicada.
 
 *Resultado:* Las preguntas de siempre dejan de consumir al equipo: el cliente encuentra la respuesta publicada y el agente no la vuelve a escribir.
 
-- Las consultas que más se repiten tienen una respuesta que el cliente puede consultar por su cuenta, y se mantiene al día. `[3.8.F1 · comprobable]`
+- Las consultas que más se repiten tienen una respuesta que el cliente puede consultar por su cuenta. `[3.8.F1 · comprobable]`
 - Cuando entra una consulta que ya tiene respuesta publicada, el equipo remite a ella en vez de volver a redactarla. `[3.8.F2 · comprobable · hábito]`
 
 **Eficiente.** Se documenta el aprendizaje y el autoservicio empieza a liberar al equipo.
@@ -1472,7 +1466,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* La empresa puede sumar clientes sin sumar agentes en la misma proporción, porque buena parte se resuelve sola.
 
 - Se documentan las soluciones a casos nuevos (se alimenta la base de conocimiento). `[3.8.E1 · comprobable · hábito]`
-- Se revisan periódicamente los tickets recurrentes y las razones por las que se van los clientes, para encontrar patrones y mejorar. `[3.8.E2 · declarado · hábito]`
+- Se revisan periódicamente los tickets recurrentes y, donde la relación es continua, las razones por las que se van los clientes, para encontrar patrones y mejorar. `[3.8.E2 · declarado · hábito · requiere 3.7.F3]`
 - El autoservicio es efectivo: el cliente resuelve sin abrir ticket, y se escala sin contratar linealmente. `[3.8.E3 · comprobable · hábito]`
 
 **Óptimo.** La IA detecta consultas nuevas y genera el contenido; atender un cliente más casi no cuesta.
@@ -1542,7 +1536,8 @@ Cuando un criterio de riesgo no se cumple, se le muestra al cliente con estos me
 | Identificador | Criterio | Mensaje cuando no se cumple |
 |:--|:--|:--|
 | `1.3.F2`, `2.3.F3` | Los duplicados están bajo control | Tus reportes pueden estar inflados: hay contactos repetidos sin control. |
-| `1.3.F5`, `1.3.F6`, `1.3.F7`, `2.3.F6`, `3.3.F6` | El contexto se revisa y actualiza cada trimestre | Lo que la IA sabe de tu negocio puede estar desactualizado: tu contexto no se revisa hace más de un trimestre. |
+| `1.3.F5`, `1.3.F6`, `1.3.F7`, `2.3.F6` | El contexto se revisa y actualiza cada trimestre | Lo que la IA sabe de tu negocio puede estar desactualizado: tu contexto no se revisa hace más de un trimestre. |
+| `3.3.F6` | El contexto y las respuestas publicadas se revisan y actualizan cada trimestre | Tus clientes pueden estar leyendo respuestas viejas, y la IA, trabajando con un contexto desactualizado: no se revisa hace más de un trimestre. |
 | `2.3.F7` | Las personas aceptaron que les escriban | Puedes estar escribiéndole a personas que no te dieron permiso: el número de WhatsApp se puede bloquear y tus correos terminan en spam. |
 
 ## Glosario
@@ -1558,13 +1553,13 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Backlog | Trabajo pendiente acumulado, como los tickets sin resolver. |
 | BANT, MEDDIC, SPIN | Metodologías de venta con pasos definidos para calificar y conducir una oportunidad. |
 | Buyer persona | Retrato escrito de un tipo de comprador: quién es, qué le preocupa y cómo decide. |
+| CAC | Costo de adquisición de cliente: lo que cuesta en marketing y ventas conseguir un cliente nuevo. |
 | Calibración | Práctica en la que un CSE puntúa casos de referencia con respuesta conocida, para comprobar que diagnostica igual que los demás. Por ahora es una regla en espera, en el manual de operación. |
 | Canal conversacional | Canal donde el cliente conversa con la empresa en tiempo real o casi: la mensajería —en la región, sobre todo WhatsApp— o el chat del sitio. |
 | Chatbot | Programa que responde conversaciones de forma automática, desde menús fijos hasta IA. |
 | Chequeo | Versión corta del diagnóstico, para prospectos: una o dos preguntas por dimensión, con las que se estima el nivel sin recorrer los criterios. Todo lo que muestra es estimado. |
 | Churn | Pérdida de clientes: los que dejan de comprar o cancelan. |
 | CMS | Sistema donde se crean y publican las páginas del sitio web. |
-| Costo de adquisición | Lo que cuesta en marketing y ventas conseguir un cliente nuevo. |
 | CRM | Sistema central donde el equipo registra contactos, empresas, negocios y actividades. |
 | CSAT | Encuesta de satisfacción que se le hace al cliente después de una atención. |
 | CSM | Responsable del éxito de un cliente: la persona que lo acompaña para que logre resultados. |
@@ -1584,7 +1579,7 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | LTV | Valor de vida del cliente: cuánto ingreso deja durante toda la relación. |
 | Macros y snippets | Respuestas guardadas que un agente inserta con un clic en vez de redactarlas cada vez. |
 | Meta tags | Etiquetas del sitio que les dicen a los buscadores de qué trata cada página. |
-| MQL | Lead calificado por Marketing: cumple los criterios que Marketing definió para pasarlo a Ventas. |
+| MQL | Lead que Marketing considera listo para pasar a Ventas, según los criterios que Marketing definió. Todavía no es un lead calificado: eso lo decide Ventas. |
 | Nivel objetivo | El nivel hasta el que conviene llevar un departamento, acordado con el cliente según el resultado que persigue. Por defecto, Funcional. |
 | NPS | Encuesta que mide qué tan dispuesto está un cliente a recomendar a la empresa. |
 | Nurturing | Secuencia de mensajes que acompaña a un lead hasta que está listo para hablar con Ventas. |
@@ -1599,7 +1594,6 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Referido | Cliente nuevo que llega por la recomendación de otro cliente. |
 | Remarketing | Volver a mostrarle anuncios a quien ya tuvo contacto con la empresa. |
 | Rep | Vendedor. |
-| Retención neta de ingresos | De lo que pagaban los clientes actuales hace un tiempo, cuánto pagan hoy, sumando ampliaciones y restando cancelaciones. |
 | Round-robin | Asignación por turnos: uno a cada persona, en orden. |
 | Routing | Regla que decide a quién se asigna automáticamente un lead o un caso. |
 | SEO | Optimización para buscadores: que el sitio aparezca cuando alguien busca lo que la empresa ofrece. |
@@ -1612,6 +1606,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**8.5.0 (2026-09-30).** Marketing y Servicio dejan de pedir lo mismo en dos dimensiones, con el criterio con que se limpió Ventas en la 8.2.0, y quedan iguales a Ventas en cuatro cosas que ya estaban decididas para ella. En Marketing, cada cosa queda en un solo lugar: probar y ajustar las campañas, y que lo aprendido corrija la planificación, en Medición y Aprendizaje; la reunión del equipo, en Procesos, y Equipo y Gobierno pide que en ella se rinda cuentas por las metas; el tablero del líder y el reporte mensual a la dirección, en Equipo y Gobierno, y Medición pide los resultados de cada campaña a la vista; que las campañas salgan distintas por segmento y segmentar por comportamiento, en Segmentación; la definición de lead calificado para Ventas, en Ventas, y Marketing define hasta el MQL; la presencia en los asistentes de IA, en Marca y Presencia; y la limpieza de los datos, en Datos. En Servicio: el pipeline de servicio y quién responde por cada cliente, en Procesos; la ficha del cliente, en Datos, y Priorización de Clientes pide que el agente la use; la prioridad de cada ticket, en Priorización de Clientes; la escalación automática, en Tecnología; adelantarse al cliente, en Proactividad; alimentar la base de conocimiento y buscar patrones, en Escalabilidad del Servicio; el traspaso desde Ventas, en Equipo y Gobierno; y mantener vigentes las respuestas publicadas queda como riesgo, con su propio mensaje, y deja de decidir el nivel. Las cuatro cosas que se igualan a Ventas: trabajar en el sistema central es una rutina y pasa a Procesos, y con ella la señal de Inicial de los agentes que siguen con sus canales personales; la IA como asistente del equipo es de Eficiente, y en Funcional solo se pide que, si se usa, trabaje con un contexto básico; Procesos mide en Eficiente y en Óptimo que el proceso se cumpla, y en Servicio eso es que cada caso siga las etapas y los pasos del proceso, no que se cumplan los plazos; y los paneles en tiempo real son de Eficiente, en Tecnología. En «Los cinco niveles de un vistazo», Eficiente dice en las tres áreas que la IA asiste al equipo. Salen 29 criterios —18 de Marketing y 11 de Servicio—, entran 19 y 29 se dicen de nuevo; el que cambia de dimensión, de nivel o de lo que mide lleva identificador nuevo, y el anterior queda retirado. Las revisiones de resultado de Óptimo en Proactividad pasan a aplicar solo donde la relación es continua: lo que ese criterio pedía para todos queda en el de las acciones proactivas que se ajustan con IA. Dicen lo que requieren 35 criterios de Marketing y de Servicio. En Ventas, el análisis de Eficiente en Aprendizaje de Ganadas y Perdidas revisa los negocios ganados además de los perdidos, y las cuatro ediciones lo dicen con sus palabras. La regla de asignación lleva a las tres áreas dos casos que solo hablaban de Ventas, suma cuatro y precisa otros tres. El glosario cambia «Costo de adquisición» por «CAC», que es como aparece en la matriz, dice que un MQL todavía no es un lead calificado y retira «Retención neta de ingresos». En la edición Ecommerce y retail, la descripción de Tecnología de Servicio deja de decir si quien atiende ve los pedidos, que es de Datos. Cambia lo que piden Funcional, Eficiente y Óptimo en varias dimensiones de Marketing y de Servicio, y Eficiente en Aprendizaje de Ganadas y Perdidas.
 
 **8.4.2 (2026-09-30).** Revisión de las cuatro ediciones antes de publicarlas, con el mismo criterio con que se limpió Ventas: cada cosa se pide una vez. En Banca, la oferta se valida contra la política de crédito vigente y ya no contra las condiciones del cliente, que es la precalificación; el documento del cliente objetivo dice a quién va dirigido cada producto y qué busca. En Inmobiliaria, la disponibilidad queda en Tecnología: el estado de cada unidad la requiere, y los cambios que llegan el mismo día son los de precio y de avance de obra. En Ecommerce y retail, la invitación a volver después de cada compra pasa a ser un criterio propio, y el de los clientes que ya deberían haber vuelto se lee como en la escala general; las devoluciones por «no era lo que esperaba» se miden, y corregir la ficha queda en Embudo de compra; la ficha del producto deja de pedir la disponibilidad, y la meta por canal, un responsable. En Educación, los criterios y los textos que todavía hablaban de venta o de lo comercial se dicen con las palabras de admisiones. Salen dos requeridos que no eran estrictos —uno de Banca y uno de Inmobiliaria— y entran tres que sí lo son. En la escala general, el ejemplo de la IA en el trabajo diario deja de ser sugerir el siguiente paso, que es de Priorización de Leads, y la regla de asignación dice que probar una técnica nueva en un piloto sigue en Procesos. No cambia ningún identificador de la matriz ni su cálculo.
 
@@ -2062,9 +2058,9 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 **Eficiente.** El embudo se revisa con cadencia y la tienda prueba cambios para mejorarlo.
 
-*Resultado:* Los mismos abandonos dejan de repetirse: lo que se aprende de cada caída vuelve a la tienda como un cambio probado.
+*Resultado:* Los mismos abandonos dejan de repetirse: lo que se aprende de cada compra que se cae, y de las que sí se concretan, vuelve a la tienda como un cambio probado.
 
-- Se revisan periódicamente los abandonos, las cancelaciones y las devoluciones para identificar patrones. `[1.8.E1]`
+- Se revisan periódicamente las compras que se concretan y las que no —abandonos, cancelaciones y devoluciones— para identificar patrones. `[1.8.E1]`
 - La tienda —fichas, precios y pasos del pago— se ajusta con base en lo aprendido. `[1.8.E2]`
 - Hay pruebas regulares en la tienda, al menos una activa por mes: una ficha, un precio o un paso del pago. `[1.8.E101 · comprobable · hábito]`
 
@@ -2156,7 +2152,7 @@ Si mañana falta quien más sabe de cambios y devoluciones, ¿la atención se ma
 
 ¿Cuántas consultas sobre pedidos necesitan a una persona cuando podrían resolverse solas?
 
-*Descripción:* Mide cuántas consultas se resuelven solas o por autoservicio, y si quien atiende ve los pedidos del cliente.
+*Descripción:* Mide cuántas consultas sobre pedidos se resuelven solas o por autoservicio, y cuánto se aprovecha el sistema de atención.
 
 *Costo de quedarse:* Tu equipo contesta a mano «¿dónde está mi pedido?» decenas de veces al día, y las consultas se pierden entre el correo, WhatsApp y las redes.
 
@@ -2515,11 +2511,11 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 - El líder puede sacar un reporte del trimestre de por qué no se concretaron las solicitudes, sin reconstruir. `[1.8.F3]`
 - Las razones separan lo que rechazó la entidad —política, capacidad de pago, historial— de lo que dejó el cliente —tasa, demora, requisitos, otra entidad—. `[1.8.F201 · comprobable]`
 
-**Eficiente.** Las solicitudes que no se concretan se revisan con cadencia, y lo aprendido vuelve al proceso y a la precalificación.
+**Eficiente.** Se revisa con cadencia por qué se concretan y por qué no se concretan las solicitudes, y lo aprendido vuelve al proceso y a la precalificación.
 
-*Resultado:* Los mismos motivos dejan de repetirse: lo que se aprende de cada rechazo y de cada desistimiento vuelve al proceso, a la precalificación y a la capacitación del equipo.
+*Resultado:* Los mismos motivos dejan de repetirse: lo que se aprende de cada rechazo y de cada desistimiento, y de las solicitudes que sí se concretaron, vuelve al proceso, a la precalificación y a la capacitación del equipo.
 
-- Se revisan periódicamente las solicitudes rechazadas, desistidas y abandonadas para identificar patrones. `[1.8.E1]`
+- Se revisan periódicamente las solicitudes que se concretaron y las que no —rechazadas, desistidas y abandonadas— para identificar patrones. `[1.8.E1]`
 - Las razones de rechazo se revisan con el área de crédito, para ajustar a quién se le ofrece cada producto. `[1.8.E201 · declarado · hábito]`
 
 **Óptimo.**
@@ -2854,7 +2850,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 
 *Resultado:* Los mismos motivos dejan de repetirse: lo que se aprende de cada aspirante que no ingresó, y de por qué sí ingresaron los demás, vuelve al proceso y a la capacitación del equipo.
 
-- Se revisan periódicamente los aspirantes que no se matricularon para identificar patrones. `[1.8.E1]`
+- Se revisan periódicamente los aspirantes que se matricularon y los que no para identificar patrones. `[1.8.E1]`
 - Hay capacitación recurrente y formal para el equipo de admisiones. `[1.8.E3]`
 - También se registra por qué se matricularon los que sí: qué pesó en su decisión. `[1.8.E301 · comprobable]`
 
@@ -3147,11 +3143,11 @@ Si mañana rotan dos asesores clave, ¿las oportunidades en curso siguen avanzan
 - Toda oportunidad perdida tiene registrada su razón. `[1.8.F1]`
 - Cada reserva que se desiste o se vence deja registrada su razón: el crédito no salió, cambió de opinión o encontró otro proyecto. `[1.8.F401 · comprobable]`
 
-**Eficiente.** Las ventas perdidas y las reservas caídas se revisan con cadencia, y lo aprendido vuelve al proceso y a la capacitación.
+**Eficiente.** Las ventas cerradas, las perdidas y las reservas caídas se revisan con cadencia, y lo aprendido vuelve al proceso y a la capacitación.
 
-*Resultado:* Los mismos errores dejan de repetirse: lo que se aprende de cada venta perdida y de cada reserva caída vuelve al proceso y a la capacitación del equipo, y se sabe contra qué proyectos se pierde.
+*Resultado:* Los mismos errores dejan de repetirse: lo que se aprende de cada venta cerrada, de cada venta perdida y de cada reserva caída vuelve al proceso y a la capacitación del equipo, y se sabe contra qué proyectos se pierde.
 
-- Se revisan periódicamente las oportunidades perdidas y las reservas caídas para identificar patrones. `[1.8.E1]`
+- Se revisan periódicamente las ventas cerradas, las oportunidades perdidas y las reservas caídas para identificar patrones. `[1.8.E1]`
 - Cuando el cliente compró en otro proyecto, queda registrado en cuál y por qué. `[1.8.E401 · comprobable]`
 
 *Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
