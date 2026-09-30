@@ -76,6 +76,9 @@ describe("la escala de juguete", () => {
     expect(f[2]).toMatchObject({ id: "1.1.F3", riesgo: true, habito: false, perfil: null });
     expect(p.niveles[3].criterios[0].perfil).toBe("cliente recurrente");
     expect(p.niveles[4].criterios[0].perfil).toBe("relación continua");
+    // Las dos marcas de la 7.7.0.
+    expect(t.niveles[2].criterios[0]).toMatchObject({ id: "1.2.F1", perfil: "venta sin vendedor" });
+    expect(t.niveles[3].criterios[1]).toMatchObject({ id: "1.2.E2", habito: true, perfil: "recompra" });
   });
 
   it("lee la prosa: riesgos, glosario, verificación, explicaciones, dependencias e historial", () => {

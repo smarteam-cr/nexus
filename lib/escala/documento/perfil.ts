@@ -3,8 +3,9 @@
  *
  * El perfil responde dos preguntas de la escala («El perfil de negocio», Parte 2): cómo se cierra
  * la venta y qué pasa después. `aplica` es el PORT EXACTO de `aplica()` en
- * `docs/escala/pruebas_escala.py` —incluida su regla de texto para «vende sin vendedor»— y
- * `perfil.test.ts` lo compara contra el Python sobre el archivo real, perfil por perfil.
+ * `docs/escala/pruebas_escala.py` y `perfil.test.ts` lo compara contra el Python sobre el archivo
+ * real, perfil por perfil. Hasta la 7.6.1 «vende sin vendedor» era una regla de TEXTO; desde la
+ * 7.7.0 es una marca más («venta sin vendedor»), como «recompra».
  *
  * En la pantalla cada pregunta puede quedar SIN elegir («Todas»): esa pregunta no filtra. Con las
  * dos elegidas el resultado es idéntico al del Python.
@@ -26,12 +27,13 @@ export interface Perfil {
 export const SIN_PERFIL: Perfil = { cierre: null, despues: null };
 
 /** ¿Este criterio cuenta para este perfil? Port de `aplica(c, venta, rel)`. */
-export function aplica(c: Pick<Criterio, "perfil" | "texto">, perfil: Perfil): boolean {
+export function aplica(c: Pick<Criterio, "perfil">, perfil: Perfil): boolean {
   const { cierre, despues } = perfil;
   if (c.perfil === "venta con equipo" && cierre === "transaccional") return false;
+  if (c.perfil === "venta sin vendedor" && cierre === "con equipo") return false;
   if (c.perfil === "cliente recurrente" && despues === "única") return false;
+  if (c.perfil === "recompra" && despues !== null && despues !== "recompra") return false;
   if (c.perfil === "relación continua" && despues !== null && despues !== "continua") return false;
-  if (c.texto.includes("vende sin vendedor") && cierre === "con equipo") return false;
   return true;
 }
 
@@ -98,8 +100,12 @@ export function explicarMarca(marca: Criterio["perfil"]): string | null {
   switch (marca) {
     case "venta con equipo":
       return "Solo aplica donde una persona trabaja la venta: no cuenta en la venta transaccional.";
+    case "venta sin vendedor":
+      return "Solo aplica donde la venta se cierra sin que una persona la trabaje (transaccional o mixta): no cuenta en la venta con equipo.";
     case "cliente recurrente":
       return "Solo aplica si el cliente vuelve (recompra o relación continua): no cuenta en la relación única.";
+    case "recompra":
+      return "Solo aplica si el cliente vuelve a comprar sin contrato: no cuenta en la relación única ni en la continua.";
     case "relación continua":
       return "Solo aplica a la relación continua: suscripción, contrato o servicio.";
     default:

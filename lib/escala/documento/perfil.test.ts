@@ -20,7 +20,7 @@ import {
   type Perfil,
 } from "./perfil";
 import { PERFILES_COMPLETOS } from "./validar";
-import type { Criterio } from "./tipos";
+import { MARCAS_DE_PERFIL, type Criterio } from "./tipos";
 
 const criterio = (perfil: Criterio["perfil"], texto = "Algo."): Pick<Criterio, "perfil" | "texto"> => ({ perfil, texto });
 const P = (cierre: Perfil["cierre"], despues: Perfil["despues"]): Perfil => ({ cierre, despues });
@@ -44,19 +44,32 @@ describe("aplica — cada rama", () => {
     expect(aplica(criterio("relación continua"), P("mixta", "continua"))).toBe(true);
   });
 
-  it("«vende sin vendedor» (regla de TEXTO, como en el Python) no cuenta en la venta con equipo", () => {
+  it("«venta sin vendedor» no cuenta en la venta con equipo", () => {
+    expect(aplica(criterio("venta sin vendedor"), P("con equipo", "única"))).toBe(false);
+    expect(aplica(criterio("venta sin vendedor"), P("transaccional", "única"))).toBe(true);
+    expect(aplica(criterio("venta sin vendedor"), P("mixta", "única"))).toBe(true);
+  });
+
+  it("desde la 7.7.0 la regla es la MARCA: el texto «vende sin vendedor» ya no decide nada", () => {
     const c = criterio(null, "Si la empresa vende sin vendedor —en tienda—, esas ventas entran solas.");
-    expect(aplica(c, P("con equipo", "única"))).toBe(false);
-    expect(aplica(c, P("transaccional", "única"))).toBe(true);
-    expect(aplica(c, P("mixta", "única"))).toBe(true);
+    expect(aplica(c, P("con equipo", "única"))).toBe(true);
+  });
+
+  it("«recompra» solo cuenta cuando el cliente vuelve a comprar sin contrato", () => {
+    expect(aplica(criterio("recompra"), P("transaccional", "única"))).toBe(false);
+    expect(aplica(criterio("recompra"), P("transaccional", "recompra"))).toBe(true);
+    expect(aplica(criterio("recompra"), P("transaccional", "continua"))).toBe(false);
   });
 
   it("sin perfil elegido todo aplica; con una sola pregunta, filtra solo esa", () => {
-    for (const marca of ["venta con equipo", "cliente recurrente", "relación continua", null] as const) {
+    for (const marca of [...MARCAS_DE_PERFIL, null]) {
       expect(aplica(criterio(marca), SIN_PERFIL)).toBe(true);
     }
     expect(aplica(criterio("relación continua"), P(null, "recompra"))).toBe(false);
+    expect(aplica(criterio("recompra"), P(null, "continua"))).toBe(false);
+    expect(aplica(criterio("recompra"), P("con equipo", null))).toBe(true);
     expect(aplica(criterio("venta con equipo"), P("transaccional", null))).toBe(false);
+    expect(aplica(criterio("venta sin vendedor"), P(null, "única"))).toBe(true);
     expect(aplica(criterio("cliente recurrente"), P("transaccional", null))).toBe(true);
   });
 });

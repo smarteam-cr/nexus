@@ -38,7 +38,7 @@ import {
 
 /** La etiqueta de un criterio. Espejo exacto de `PAT` en `pruebas_escala.py`. */
 export const ETIQUETA_DE_CRITERIO =
-  /^- (.*) `\[(\d+\.\d+\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · cliente recurrente| · relación continua)?)\]`$/;
+  /^- (.*) `\[(\d+\.\d+\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · venta sin vendedor| · cliente recurrente| · recompra| · relación continua)?)\]`$/;
 
 /** Una línea que PARECE un criterio: se reconoce por la etiqueta al final, bien formada o no. */
 const PARECE_CRITERIO = /`\[[^\]]*\]`\s*$/;

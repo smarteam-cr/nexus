@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.0.10
-escala: 7.6.1
+version: 1.1.0
+escala: 7.7.0
 fecha: 2026-09-29
 ---
 
@@ -15,7 +15,7 @@ Precisa las reglas de la escala, `escala_rendimiento_smarteam.md`, donde ella no
 
 Cada criterio de la matriz tiene un identificador con la forma dimensión, letra del nivel y número. La letra es D para Deficiente, I para Inicial, F para Funcional, E para Eficiente y O para Óptimo. Así, `1.7.F1` es el primer criterio de Funcional en Tracción del Deal. Sin número, `1.7.F` se refiere al nivel completo.
 
-Junto al identificador va la forma de verificación: comprobable, declarado o evaluado. Si el criterio es de riesgo, lleva además la marca riesgo: no decide el nivel en que está, pero es requisito para pasar a Eficiente. Si describe un hábito, lleva la marca hábito: no se confirma el día que se entrega, solo después de que el equipo operó un tiempo. Y si solo aplica a ciertos perfiles de negocio, lleva la marca de ese perfil: venta con equipo, cliente recurrente o relación continua. Los identificadores son para los sistemas y el equipo: ningún texto que ve el cliente —criterios, resultados, costos o mensajes— los cita.
+Junto al identificador va la forma de verificación: comprobable, declarado o evaluado. Si el criterio es de riesgo, lleva además la marca riesgo: no decide el nivel en que está, pero es requisito para pasar a Eficiente. Si describe un hábito, lleva la marca hábito: no se confirma el día que se entrega, solo después de que el equipo operó un tiempo. Y si solo aplica a ciertos perfiles de negocio, lleva la marca de ese perfil: venta con equipo, venta sin vendedor, cliente recurrente, recompra o relación continua. Un criterio lleva una sola marca de perfil. Los identificadores son para los sistemas y el equipo: ningún texto que ve el cliente —criterios, resultados, costos o mensajes— los cita.
 
 Los identificadores son estables. Se asignaron desde cero en la versión 6.0.0, y desde entonces no se reasignan ni se renumeran. Si un criterio se retira, su número queda vacío y no se reutiliza; si se agrega uno, toma el siguiente número libre de su nivel. Eso permite que el chequeo, el cotizador y los agentes apunten siempre al mismo criterio, aunque cambie su redacción.
 
@@ -44,7 +44,7 @@ La escala se aplica de dos formas, como dice su Parte 2, y cada una tiene su cá
 
 Este paso a paso es la versión exacta de las reglas de la Parte 2 de la escala.
 
-1. **Qué criterios cuentan.** Un criterio no cuenta cuando está condicionado y no aplica —los que abren con una condición, como «si hay» o «si la empresa vende»—, cuando lleva una marca de perfil que no corresponde al perfil de la unidad, o cuando el CSE lo marcó como que no aplica, con su justificación. Los que no cuentan salen de toda la cuenta: del nivel y del puntaje. El CSE no marca así el único criterio que decide un nivel: si no corresponde, ajusta el nivel, con su justificación.
+1. **Qué criterios cuentan.** Un criterio no cuenta cuando está condicionado y no aplica —los que abren con una condición, como «si hay» o «si lo que se vende es limitado»—, cuando lleva una marca de perfil que no corresponde al perfil de la unidad, o cuando el CSE lo marcó como que no aplica, con su justificación. Las marcas valen así: venta con equipo, cuando la venta es con equipo o mixta; venta sin vendedor, cuando es transaccional o mixta; cliente recurrente, cuando después hay recompra o relación continua; recompra, solo cuando hay recompra; y relación continua, solo cuando la relación es continua. Los que no cuentan salen de toda la cuenta: del nivel y del puntaje. El CSE no marca así el único criterio que decide un nivel: si no corresponde, ajusta el nivel, con su justificación.
 2. **Cuándo se cumple un criterio.** Según su redacción, leída con los valores de Cómo se leen los criterios, en la escala. Se da por cumplido si la dimensión lo resuelve de una forma más avanzada. Cada diagnóstico revisa todos los criterios que cuentan: no se toma nada de un diagnóstico anterior ni del chequeo, que solo orienta la exploración. Si de un criterio no hay información, el CSE la busca antes de cerrar el diagnóstico; si no la consigue, cuenta como no cumplido y el informe dice cuántos quedaron así.
 3. **Nivel de una dimensión.** Es el nivel más alto, de Funcional para arriba, en el que la dimensión cumple todos los criterios de decisión de ese nivel, y además todos los criterios —de decisión y de riesgo— de los niveles anteriores desde Funcional. Si no llega a Funcional, se asigna Deficiente o Inicial según cuál describe mejor su situación; si los dos calzan igual, Deficiente. Un nivel que no tiene criterios de decisión que apliquen al perfil no se alcanza.
 4. **Por confirmar.** Un hábito puede estar cumplido, iniciado o no cumplido, como dice Niveles por confirmar, en la escala. Si para alcanzar un nivel solo le faltan hábitos iniciados, ese nivel queda por confirmar: cuenta como alcanzado en todo el cálculo, y en la siguiente remedición se confirma o baja. Un hábito que no se hace cuenta como no cumplido.
@@ -112,6 +112,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.1.0 (2026-09-29).** Acompaña a la escala 7.7.0. Hay dos marcas de perfil nuevas, venta sin vendedor y recompra, y se dice para qué perfiles vale cada marca. La regla que leía la frase «vende sin vendedor» en el texto del criterio deja de existir: la reemplaza la marca. No cambia el cálculo del nivel ni del puntaje.
 
 **1.0.10 (2026-09-29).** Acompaña a la escala 7.6.1. No cambia el cálculo.
 

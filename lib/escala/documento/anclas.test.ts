@@ -78,7 +78,7 @@ describe("las piezas de un ancla", () => {
     expect(t.get("1.1")).toContain("Procesos y Rutinas");
     expect(t.get("1.2.O")).toBe("El sistema detecta fricción.\nResultado: Ayuda justo a tiempo.");
     expect(t.get("1.2.O1")).toBe("La distribución se autoajusta.");
-    // 2 dimensiones + 10 niveles + 15 criterios (9 en 1.1, 6 en 1.2)
-    expect(t.size).toBe(2 + 10 + 15);
+    // 2 dimensiones + 10 niveles + 16 criterios (9 en 1.1, 7 en 1.2)
+    expect(t.size).toBe(2 + 10 + 16);
   });
 });

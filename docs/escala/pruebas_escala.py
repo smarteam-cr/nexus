@@ -24,7 +24,7 @@ ANTERIOR = sys.argv[3] if len(sys.argv) > 3 else None
 MANUAL = os.path.join(os.path.dirname(os.path.abspath(ESPEC)), "manual_operacion_escala.md")
 
 PERFILES = list(product(["con equipo", "transaccional", "mixta"], ["única", "recompra", "continua"]))
-PAT = re.compile(r"(?m)^- (.*) `\[(\d\.\d\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · cliente recurrente| · relación continua)?)\]`$")
+PAT = re.compile(r"(?m)^- (.*) `\[(\d\.\d\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · venta sin vendedor| · cliente recurrente| · recompra| · relación continua)?)\]`$")
 
 fallas = []
 def prueba(nombre, ok, detalle=""):
@@ -47,11 +47,13 @@ def encabezado(texto, campo):
 def aplica(c, venta, rel):
     if c["perfil"] == "venta con equipo" and venta == "transaccional":
         return False
+    if c["perfil"] == "venta sin vendedor" and venta == "con equipo":
+        return False
     if c["perfil"] == "cliente recurrente" and rel == "única":
         return False
-    if c["perfil"] == "relación continua" and rel != "continua":
+    if c["perfil"] == "recompra" and rel != "recompra":
         return False
-    if "vende sin vendedor" in c["txt"] and venta == "con equipo":
+    if c["perfil"] == "relación continua" and rel != "continua":
         return False
     return True
 

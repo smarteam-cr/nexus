@@ -46,15 +46,15 @@ import { GrupoDeControl, IconoComentario, ParrafoDeLaEscala, Segmentado } from "
  * si cambia la regla, cambia esto.
  */
 const EFECTO_DEL_CIERRE: Record<Cierre, string> = {
-  "con equipo": "Esconde los criterios que solo cuentan si la empresa vende sin vendedor.",
+  "con equipo": "Esconde los criterios marcados «venta sin vendedor».",
   transaccional: "Esconde los criterios marcados «venta con equipo».",
   mixta: "No esconde ninguno.",
 };
 
 const EFECTO_DEL_DESPUES: Record<Despues, string> = {
-  única: "Esconde los criterios marcados «cliente recurrente» y «relación continua».",
+  única: "Esconde los criterios marcados «cliente recurrente», «recompra» y «relación continua».",
   recompra: "Esconde los criterios marcados «relación continua».",
-  continua: "No esconde ninguno por lo que pasa después de la venta.",
+  continua: "Esconde los criterios marcados «recompra».",
 };
 
 /** «Transaccional: cuando la venta se cierra sin que nadie la trabaje… Esconde…» (la definición sale de la escala). */

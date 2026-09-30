@@ -19,8 +19,15 @@ export const LETRAS_CON_RESULTADO: readonly Letra[] = ["F", "E", "O"];
 export type Verificacion = "comprobable" | "declarado" | "evaluado";
 export const VERIFICACIONES: readonly Verificacion[] = ["comprobable", "declarado", "evaluado"];
 
-/** Las marcas de perfil que admite la etiqueta de un criterio. */
-export type MarcaDePerfil = "venta con equipo" | "cliente recurrente" | "relación continua";
+/** Las marcas de perfil que admite la etiqueta de un criterio («venta sin vendedor» y «recompra», desde la 7.7.0). */
+export type MarcaDePerfil = "venta con equipo" | "venta sin vendedor" | "cliente recurrente" | "recompra" | "relación continua";
+export const MARCAS_DE_PERFIL: readonly MarcaDePerfil[] = [
+  "venta con equipo",
+  "venta sin vendedor",
+  "cliente recurrente",
+  "recompra",
+  "relación continua",
+];
 
 /** Las dos capas de cada área, por su lugar en la matriz: la primera es la base. */
 export type ClaveDeCapa = "base" | "produccion";

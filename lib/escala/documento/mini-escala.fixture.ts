@@ -2,8 +2,8 @@
  * lib/escala/documento/mini-escala.fixture.ts — una escala de juguete para los tests del lector.
  *
  * Una sola área con dos dimensiones (una por capa), con todas las combinaciones de marcas que
- * admite la etiqueta, un criterio condicionado por «vende sin vendedor» y la prosa que el lector
- * busca. Los textos son inventados: los tests del archivo real van aparte.
+ * admite la etiqueta (las cinco de perfil incluidas) y la prosa que el lector busca. Los textos
+ * son inventados: los tests del archivo real van aparte.
  */
 export const MINI_ESCALA = `---
 documento: Escala de prueba
@@ -183,7 +183,7 @@ deja de avanzar.
 
 *Resultado:* Se rescatan a tiempo.
 
-- Si la empresa vende sin vendedor, esas ventas entran solas al sistema. \`[1.2.F1 · comprobable]\`
+- Las ventas sin vendedor entran solas al sistema. \`[1.2.F1 · comprobable · venta sin vendedor]\`
 - El líder interviene durante el período. \`[1.2.F2 · evaluado · venta con equipo]\`
 
 **Eficiente.** Multicanal.
@@ -191,6 +191,7 @@ deja de avanzar.
 *Resultado:* Esfuerzo coordinado.
 
 - El contacto está orquestado en cadencias. \`[1.2.E1 · comprobable]\`
+- La próxima compra se recuerda cuando toca. \`[1.2.E2 · comprobable · hábito · recompra]\`
 
 **Óptimo.** El sistema detecta fricción.
 

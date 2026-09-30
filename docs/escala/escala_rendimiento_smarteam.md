@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.6.1
+version: 7.7.0
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -184,7 +184,7 @@ Lo que no cambia es esta regla: se pueden diagnosticar menos departamentos, pero
 
 Se diagnostica un departamento a la vez, recorriendo sus ocho dimensiones una por una. El nivel del departamento no se juzga de un vistazo: se construye a partir de esas ocho lecturas.
 
-Para cada dimensión se contrasta la evidencia contra los criterios de cada nivel, y la regla cambia según el nivel. Deficiente e Inicial describen lo que falta, así que entre esos dos se asigna el que mejor calza con la evidencia. De Funcional para arriba los criterios describen lo que ya está en su lugar, y la regla es estricta: una dimensión está en un nivel cuando cumple todos los criterios que deciden ese nivel y los de los anteriores desde Funcional. Si le falta uno, queda en el nivel anterior; si no cumple todos los de Funcional, se asigna Deficiente o Inicial según lo que mejor calce. Los criterios que la escala condiciona —los que abren con una condición, como «si hay» o «si la empresa vende»— solo cuentan cuando aplican, igual que los que dependen del perfil de negocio.
+Para cada dimensión se contrasta la evidencia contra los criterios de cada nivel, y la regla cambia según el nivel. Deficiente e Inicial describen lo que falta, así que entre esos dos se asigna el que mejor calza con la evidencia. De Funcional para arriba los criterios describen lo que ya está en su lugar, y la regla es estricta: una dimensión está en un nivel cuando cumple todos los criterios que deciden ese nivel y los de los anteriores desde Funcional. Si le falta uno, queda en el nivel anterior; si no cumple todos los de Funcional, se asigna Deficiente o Inicial según lo que mejor calce. Los criterios que la escala condiciona —los que abren con una condición, como «si hay» o «si lo que se vende es limitado»— solo cuentan cuando aplican, igual que los que dependen del perfil de negocio.
 
 Un criterio se cumple por lo que busca, no por su letra. Si la dimensión lo resuelve de una forma más avanzada —por ejemplo, con un criterio de un nivel superior que hace lo mismo mejor—, cuenta como cumplido.
 
@@ -234,13 +234,15 @@ No todas las empresas venden igual, y la escala no cambia de estructura por eso:
 
 **Qué pasa después de la venta.** Relación única, cuando el cliente compra una vez; recompra, cuando vuelve a comprar sin contrato; o relación continua, cuando hay suscripción, contrato o servicio.
 
-Los criterios que dependen del perfil llevan una marca: venta con equipo, cliente recurrente —que vale para recompra y relación continua— o relación continua. Si la marca no corresponde al perfil de la unidad, el criterio no aplica y sale de la cuenta. En la venta mixta aplican todos, y los de venta con equipo se evalúan sobre el canal que vende con personas.
+Los criterios que dependen del perfil llevan una marca: venta con equipo; venta sin vendedor, que vale para la venta transaccional y la mixta; cliente recurrente, que vale para recompra y relación continua; recompra; o relación continua. Si la marca no corresponde al perfil de la unidad, el criterio no aplica y sale de la cuenta. En la venta mixta aplican todos los que dependen de cómo se cierra la venta: los de venta con equipo se evalúan sobre el canal que vende con personas, y los de venta sin vendedor, sobre el que vende solo.
 
 En la venta transaccional también hay pipeline y negocios: se crean solos, desde la tienda o el sitio web, y dan la reportería. Por eso los demás criterios de Ventas se leen sobre esa venta automática: el negocio es el pedido o el carrito, el vendedor es el canal, y la razón de pérdida es el punto donde se abandona la compra. Lo que un criterio dice de lo que hace un vendedor, y no tiene equivalente, no aplica. Si una dimensión se queda sin criterios que apliquen en Funcional —como Priorización de Leads en una venta transaccional—, la dimensión no aplica a ese perfil: se reporta así y no entra en el nivel ni en el puntaje de su capa.
 
+**La próxima compra.** Donde el cliente vuelve a comprar sin contrato, la próxima compra se trata como un negocio más, se venda con equipo o sin vendedor: si no llega cuando se esperaba, es un negocio que se enfrió, y reactivarlo es trabajo de Ventas. La renovación de un contrato, en cambio, es de Servicio.
+
 El perfil decide qué criterios aplican; la industria decide las palabras con que se muestran. Una universidad y una inmobiliaria venden las dos con equipo, pero una habla de matrícula y la otra de reserva. Las palabras de cada industria viven en un documento aparte, y la escala sigue siendo neutral.
 
-**Qué unidad se diagnostica.** La unidad es el equipo que se atiende. En empresas grandes no se atiende a toda la empresa, sino a subequipos —la venta a empresas de una telco, una unidad de un grupo, una facultad—, y cada uno se diagnostica por separado, con su propio perfil. Cuando se atiende a varios, se puede armar una vista que los junte.
+**Qué unidad se diagnostica.** La unidad es el equipo que se atiende. En empresas grandes no se atiende a toda la empresa, sino a subequipos —la venta a empresas de una telco, una unidad de un grupo, una facultad—, y cada uno se diagnostica por separado, con su propio perfil. Lo mismo vale cuando dos ventas distintas las atienden equipos distintos: la tienda de una cadena y su venta a empresas o a proveedores son dos unidades; si las atiende el mismo equipo, es una sola, de venta mixta. Cuando se atiende a varios, se puede armar una vista que los junte.
 
 ## El nivel: de la dimensión al departamento
 
@@ -326,6 +328,11 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 - La **integración con ERP** u otros sistemas se asigna a **Tecnología** del área que la implementa; **Datos** solo declara el resultado (registros completos y trazables).
 - La **orquestación entre áreas** (SLAs, handoffs, rutinas conjuntas) se asigna a **Equipo y Gobierno** del área cuyo liderazgo sostiene la coordinación, y nunca es Funcional: su piso es Eficiente. El workflow técnico que la habilita se asigna a Tecnología. Las dimensiones 1.7, 2.7 y 3.7 miden el alcance hacia el destinatario final, no la coordinación entre departamentos.
 - La **respuesta a un deal que se enfría** se asigna a **Tracción del Deal (1.7)**; la cadencia general de contacto sigue en Procesos (1.1).
+- La **próxima compra de un cliente que vuelve sin contrato** —recordarle la recompra, reactivar a quien dejó de comprar— se asigna a **Tracción del Deal (1.7)**; retener a quien está por cancelar un contrato y atender sus quejas sigue en **Proactividad (3.7)**, y las campañas hacia el mercado, en **Canales y Alcance (2.7)**.
+- La **venta ganada que se cae antes de la entrega** —una reserva que se desiste, una matrícula que no llega a clases, un pedido que se cancela— se asigna a **Aprendizaje de Ganadas y Perdidas (1.8)**, igual que una pérdida; la salida de un cliente que ya recibía el servicio sigue en **Proactividad (3.7)**.
+- La **coherencia de la oferta entre canales** —precios, promociones y condiciones— se asigna a **Propuesta y Coherencia (1.5)**; la coordinación de una campaña entre canales sigue en **Canales y Alcance (2.7)**.
+- La **disponibilidad de lo que se vende** —unidades, cupos o existencias, a la vista de quien vende— se asigna a **Tecnología de Ventas (1.2)**, y que cada venta quede asociada a un **cliente identificado**, a **Datos de Ventas (1.3)**.
+- Las **reseñas y calificaciones públicas** —pedirlas y responderlas— se asignan a **Marca y Presencia (2.5)**, porque son parte de cómo el mercado ve a la empresa; la mala calificación de un cliente puntual se atiende en **Proactividad (3.7)**. El **programa de referidos** se asigna a **Canales y Alcance (2.7)**.
 - La **detección de riesgos y fechas críticas del cliente** —también las solicitudes que resuelve otra área, como administración o cobros— se asigna a **Proactividad (3.7)**; el seguimiento de cada cliente por su responsable sigue en Procesos (3.1), y los acuerdos entre los líderes de esas áreas, en Equipo y Gobierno.
 - Los **detalles para deleitar a los clientes actuales** —regalías, beneficios, promociones de fidelización— se asignan a **Proactividad (3.7)**; las campañas hacia el mercado, a **Canales y Alcance (2.7)**.
 - La **respuesta publicada para el cliente** a las consultas frecuentes se asigna a **Escalabilidad del Servicio (3.8)**; las plantillas internas para los agentes siguen en Consistencia de Atención (3.5), y el portal con base de conocimiento en Tecnología (3.2), en Eficiente.
@@ -427,8 +434,9 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Los leads entrantes llegan a una bandeja o cola y se asignan por una regla simple (round-robin, territorio o fuente). `[1.2.F2 · comprobable · venta con equipo]`
 - Cuando un deal requiere acción, el sistema le notifica al rep sin que el líder se lo recuerde. `[1.2.F3 · comprobable · venta con equipo]`
 - No hay reps trabajando con hojas ni conversaciones paralelas al CRM: lo que cada uno habla con un prospecto por el canal conversacional, como WhatsApp, queda en el sistema aunque responda desde su teléfono. `[1.2.F4 · evaluado · hábito · venta con equipo]`
-- Si la empresa vende sin vendedor —en tienda, en el sitio web o por autoservicio—, esas ventas entran solas al sistema como negocios, con su monto, su canal y su cliente. `[1.2.F6 · comprobable]`
+- Las ventas sin vendedor —en tienda, en el sitio web o por autoservicio— entran solas al sistema como negocios, con su monto, su canal y su cliente. `[1.2.F6 · comprobable · venta sin vendedor]`
 - Si el equipo usa IA, esta tiene como contexto la información básica de los clientes y prospectos. `[1.2.F7 · comprobable]`
+- Si lo que se vende es limitado —unidades de un proyecto, cupos de un programa o existencias—, quien vende ve en el sistema qué está disponible antes de ofrecerlo. `[1.2.F8 · comprobable]`
 
 **Eficiente.** La automatización tiene lógica, el stack está integrado y la IA asiste al equipo en su trabajo diario.
 
@@ -478,8 +486,9 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Todo deal tiene rastreable la fuente del contacto original. `[1.3.F3 · comprobable]`
 - El reporte de pipeline se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4 · comprobable]`
 - La documentación sobre el ICP no se deja envejecer. `[1.3.F5 · declarado · riesgo · hábito]`
-- La definición de lead calificado no se deja envejecer. `[1.3.F6 · declarado · riesgo · hábito]`
+- La definición de lead calificado no se deja envejecer. `[1.3.F6 · declarado · riesgo · hábito · venta con equipo]`
 - La documentación sobre las soluciones ofrecidas no se deja envejecer. `[1.3.F7 · declarado · riesgo · hábito]`
+- Se sabe qué parte de las ventas sin vendedor queda asociada a un cliente identificado, y ese número se revisa. `[1.3.F8 · comprobable · venta sin vendedor]`
 
 **Eficiente.** Aparece el forecast con precisión y la integración operativa.
 
@@ -488,6 +497,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Hay forecast con cadencia fija (semanal o quincenal) y precisión alta. `[1.3.E1 · comprobable · hábito]`
 - La deduplicación es automática por reglas o merge del sistema. `[1.3.E2 · comprobable]`
 - El CRM está integrado a sistemas operativos (ERP, facturación) cuando aplica; la vista 360° empieza a tomar forma, con el historial de conversaciones incluido. `[1.3.E3 · comprobable]`
+- La mayoría de las ventas sin vendedor quedan asociadas a un cliente identificado, no a un cliente genérico. `[1.3.E4 · comprobable · venta sin vendedor]`
 
 **Óptimo.** El forecast lo calcula un modelo y la vista 360° del cliente está operativa.
 
@@ -524,7 +534,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Cada persona del equipo tiene rol definido por escrito. `[1.4.F1 · declarado]`
 - El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (valor del pipeline, deals creados, tasa de cierre, volumen) y lo consulta al menos semanalmente. `[1.4.F2 · evaluado · hábito]`
 - Se sostiene la cadencia de revisión (la misma pipeline review) y en ella se rinde cuentas. `[1.4.F3 · evaluado · hábito]`
-- Cada rep tiene una meta clara y reporta avance en cadencia fija. `[1.4.F4 · declarado · hábito]`
+- Cada vendedor —o cada canal, donde se compra sin vendedor— tiene una meta clara, y su avance se reporta en cadencia fija. `[1.4.F4 · declarado · hábito]`
 - El líder ve en reportes automáticos qué tareas cumplió cada vendedor y cuáles tiene pendientes. `[1.4.F5 · comprobable · venta con equipo]`
 
 **Eficiente.** El liderazgo monitorea con alertas y orquesta con Marketing.
@@ -565,12 +575,13 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 **Funcional.** Hay un ICP escrito y coherencia básica en mensaje y propuesta.
 
-*Resultado:* Dos prospectos parecidos reciben el mismo mensaje y una propuesta igual de sólida, sin importar qué vendedor les toque.
+*Resultado:* Dos prospectos parecidos reciben el mismo mensaje y una propuesta igual de sólida, sin importar qué vendedor les toque ni por qué canal lleguen.
 
 - Existe un documento con la definición del ICP / a quién sirve el equipo, consultable por cualquier rep. `[1.5.F1 · declarado]`
 - El líder puede explicar quién es el cliente ideal sin consultar su documentación. `[1.5.F2 · evaluado]`
 - Un cliente que habla con dos reps recibe el mismo mensaje de valor base. `[1.5.F3 · evaluado · hábito · venta con equipo]`
 - Las propuestas están estandarizadas: tienen una estructura común reconocible, no armada desde cero cada vez. `[1.5.F4 · declarado · venta con equipo]`
+- Si se vende por más de un canal, los precios, las promociones y las condiciones son los mismos en todos, o la diferencia es a propósito y está escrita. `[1.5.F5 · comprobable · venta sin vendedor]`
 
 **Eficiente.** El equipo se presenta como una unidad metodológicamente disciplinada.
 
@@ -607,7 +618,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 *Resultado:* El equipo deja de perder tiempo con prospectos que no van a comprar y concentra el esfuerzo en los que encajan con el cliente ideal.
 
-- El equipo segmenta los leads al menos por tamaño, industria o geografía antes de trabajarlos. `[1.6.F1 · comprobable · venta con equipo]`
+- El equipo segmenta los leads por los atributos del cliente ideal antes de trabajarlos: en empresas, tamaño, industria o geografía; en personas, presupuesto, zona o lo que buscan. `[1.6.F1 · comprobable · venta con equipo]`
 - Hay criterios escritos para aceptar un lead como SQL y se aplican de forma consistente. `[1.6.F2 · comprobable · hábito · venta con equipo]`
 - El esfuerzo se enfoca en los leads que encajan con el ICP (definido en Propuesta y Coherencia). `[1.6.F3 · evaluado · hábito · venta con equipo]`
 - La documentación de ICP se usa en la arquitectura de CRM y en los formularios. `[1.6.F4 · comprobable · venta con equipo]`
@@ -617,7 +628,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 *Resultado:* Cada vendedor sabe cada mañana a quién llamar primero, y las cuentas que más importan se trabajan de forma deliberada.
 
 - Hay lead scoring por reglas activo: un modelo que suma puntos por varios atributos, no una regla sobre una propiedad. `[1.6.E1 · comprobable · venta con equipo]`
-- Las cuentas objetivo están identificadas formalmente. `[1.6.E2 · comprobable · venta con equipo]`
+- Las cuentas o los segmentos prioritarios están identificados formalmente. `[1.6.E2 · comprobable · venta con equipo]`
 - El contacto con prospectos usa mensajes personalizados por segmento; la priorización empieza a ser proactiva por data. `[1.6.E3 · comprobable · venta con equipo]`
 
 **Óptimo.** Agentes de IA priorizan sobre contexto completo y proponen la siguiente acción.
@@ -653,12 +664,13 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 **Funcional.** Ningún deal se enfría en silencio: hay una respuesta acordada.
 
-*Resultado:* Los negocios que se traban se detectan a tiempo y se reactivan por más de un canal, con assets estandarizados y con el líder actuando mientras todavía hay margen.
+*Resultado:* Los negocios que se traban se detectan a tiempo y se reactivan por más de un canal, con assets estandarizados y con el líder actuando mientras todavía hay margen. Donde el cliente vuelve a comprar, la próxima compra tampoco se deja al azar.
 
 - Los deals estancados se reconocen a tiempo y tienen un paso de reactivación acordado, no la improvisación de cada vendedor. `[1.7.F1 · evaluado · hábito]`
 - La reactivación usa al menos dos canales, por ejemplo correo y llamada. `[1.7.F2 · comprobable · hábito]`
 - El liderazgo interviene sobre los deals estancados durante el período, no al cierre del trimestre cuando ya se perdieron. `[1.7.F3 · evaluado · hábito · venta con equipo]`
 - Hay assets estandarizados que ayudan a cerrar las ventas. `[1.7.F4 · declarado · venta con equipo]`
+- Los clientes que ya deberían haber vuelto a comprar se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5 · comprobable · hábito · recompra]`
 
 **Eficiente.** Hay contacto multicanal y los leads llegan nutridos desde Marketing.
 
@@ -699,6 +711,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Todo deal cerrado-perdido tiene razón de pérdida poblada. `[1.8.F1 · comprobable]`
 - Las razones de pérdida usan una taxonomía definida, no texto libre. `[1.8.F2 · comprobable]`
 - El líder puede sacar un reporte de razones de pérdida del trimestre sin reconstruir. `[1.8.F3 · comprobable]`
+- Si una venta ganada puede caerse antes de la entrega —una reserva que se desiste, una matrícula que no llega a clases, un pedido que se cancela—, cada caída deja registrada su razón, igual que una pérdida. `[1.8.F4 · comprobable]`
 
 **Eficiente.** Hay análisis estructurado de ganadas y perdidas, y capacitación comercial formal.
 
@@ -841,8 +854,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 *Resultado:* El líder sabe de dónde vienen los leads y cuáles terminan en venta, con reportes que salen del sistema y no de una planilla armada a mano.
 
-- Todo contacto nuevo creado por un form tiene etapa de ciclo de vida y origen del lead poblados. `[2.3.F1 · comprobable]`
-- Las propiedades básicas (industria, empresa, rol) están en los forms críticos y se capturan en la mayoría de los registros. `[2.3.F2 · comprobable]`
+- Todo contacto nuevo —entre por un formulario, una conversación, un portal o una compra— tiene poblados la etapa del ciclo de vida y su origen. `[2.3.F1 · comprobable]`
+- Las propiedades que describen al cliente ideal —en empresas, industria, empresa y rol; en personas, lo que define a cada segmento— están en los formularios críticos y se capturan en la mayoría de los registros. `[2.3.F2 · comprobable]`
 - Los duplicados están bajo control, a mano o de forma automática, y no distorsionan los reportes. `[2.3.F3 · comprobable · riesgo]`
 - Cualquier deal ganado tiene rastreable el origen del contacto. `[2.3.F4 · comprobable]`
 - Los reportes básicos (volumen, conversión, fuente) salen del sistema sin reconstrucción manual. `[2.3.F5 · comprobable]`
@@ -943,16 +956,17 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - Existe una guía corta de voz de marca escrita y aplicada a piezas recientes. `[2.5.F2 · declarado]`
 - Hay 2-3 buyer personas escritos con journey básico por etapa. `[2.5.F3 · declarado]`
 - El sitio tiene meta tags configurados y SEO técnico básico verificable. `[2.5.F4 · comprobable]`
-- El blog publica al menos un post por mes con cadencia previsible. `[2.5.F5 · comprobable · hábito]`
+- Se publica contenido propio al menos una vez por mes, con cadencia previsible: en el blog o en el formato que use el negocio, como video, fichas o guías. `[2.5.F5 · comprobable · hábito]`
 
 **Eficiente.** La presencia se refina por segmento y se optimiza para buscadores y motores generativos.
 
-*Resultado:* La empresa aparece cuando sus clientes buscan lo que ofrece, tanto en buscadores como en asistentes de IA, con contenido pensado para cada segmento que importa.
+*Resultado:* La empresa aparece cuando sus clientes buscan lo que ofrece, tanto en buscadores como en asistentes de IA, con contenido pensado para cada segmento que importa, y lo que dicen de ella sus clientes juega a su favor.
 
 - Los buyer personas están detallados a nivel de segmento de alto valor. `[2.5.E1 · declarado]`
 - El contenido está organizado por temas: una página central por tema y contenido de apoyo que la refuerza. `[2.5.E2 · comprobable]`
 - El AEO está implementado con resultados medibles. `[2.5.E3 · comprobable]`
 - El journey está mapeado con puntos de contacto definidos. `[2.5.E4 · declarado]`
+- Las reseñas y calificaciones públicas se piden a los clientes satisfechos y se responden con una cadencia fija. `[2.5.E5 · comprobable · hábito]`
 
 **Óptimo.** La IA produce y optimiza el contenido en ciclo continuo, incluido para búsqueda conversacional.
 
@@ -1033,7 +1047,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - Hay al menos una campaña de pauta pagada corriendo con presupuesto definido (Google, Meta o el canal que corresponda al negocio). `[2.7.F3 · comprobable]`
 - El canal conversacional, como WhatsApp, se usa para salir con cadencia definida, no solo para responder lo que entra. `[2.7.F4 · comprobable · hábito]`
 - Los cuatro canales siguen el mismo calendario y la misma campaña: una promoción sale coordinada en email, pauta, orgánico y el canal conversacional, no como cuatro esfuerzos sueltos. `[2.7.F5 · declarado · hábito]`
-- El líder puede decir cuánto costó cada lead el último mes, al menos por canal. `[2.7.F6 · comprobable]`
+- El líder puede decir cuánto costó cada lead —o cada venta, donde se compra sin vendedor— el último mes, al menos por canal. `[2.7.F6 · comprobable]`
 
 **Eficiente.** Los canales se integran con datos y el presupuesto se mueve con evidencia.
 
@@ -1042,6 +1056,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - Los canales, incluido el conversacional, comparten datos y se alimentan entre sí: uno continúa lo que empezó otro, hay remarketing activo y las audiencias se construyen desde el CRM. `[2.7.E1 · comprobable]`
 - Hay webinars o eventos como canal recurrente. `[2.7.E2 · declarado · hábito]`
 - Los presupuestos se optimizan con frecuencia según data. `[2.7.E3 · comprobable · hábito]`
+- Hay un programa de referidos activo: los clientes saben cómo recomendar, y cada referido queda registrado con quién lo trajo. `[2.7.E4 · comprobable]`
 
 **Óptimo.** La IA reasigna presupuesto entre canales y se prueban canales emergentes en ciclos cortos.
 
@@ -1125,7 +1140,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* Cada cliente tiene a alguien que responde por él, y un caso se atiende igual sin importar qué agente lo tome.
 
 - El pipeline de servicio cubre el flujo de atención de recepción a cierre. `[3.1.F1 · comprobable]`
-- Cada cliente tiene un responsable y un seguimiento mínimo más allá de los tickets que abre. `[3.1.F2 · comprobable]`
+- Cada cliente tiene quién responda por él —una persona o, si la cartera es masiva, un equipo con un seguimiento automático— y un seguimiento mínimo más allá de los tickets que abre. `[3.1.F2 · comprobable]`
 - Hay reuniones de equipo de Servicio con cadencia fija (al menos quincenal) que se sostienen. `[3.1.F3 · declarado · hábito]`
 - Existe un proceso básico documentado para quejas críticas o escalaciones. `[3.1.F4 · declarado]`
 - Cualquier agente explica cómo se atiende un caso típico siguiendo el mismo flujo. `[3.1.F5 · evaluado]`
@@ -1137,7 +1152,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 - Hay SLAs definidos por tipo de caso o prioridad. `[3.1.E1 · comprobable]`
 - Las reglas de escalación están configuradas como automatización (cuándo y a quién). `[3.1.E2 · comprobable]`
 - Hay playbooks de prevención, retención y expansión. `[3.1.E3 · declarado · cliente recurrente]`
-- El recorrido del cliente está definido de punta a punta, con sus momentos clave —el traspaso desde Ventas, el inicio, el primer valor, la renovación— y un responsable y un estándar para cada uno. `[3.1.E4 · declarado]`
+- El recorrido del cliente está definido de punta a punta, con sus momentos clave —el traspaso desde Ventas, el inicio, la entrega o el primer valor y, si la hay, la renovación o la recompra— y un responsable y un estándar para cada uno. `[3.1.E4 · declarado]`
 
 **Óptimo.** Las rutinas corren automáticas y el equipo supervisa, entrena la IA y gestiona excepciones.
 
@@ -1169,7 +1184,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* Ningún caso se pierde entre canales, y el agente atiende sabiendo quién es el cliente y qué tiene contratado.
 
 - El sistema central es la herramienta principal, no algo que se llena después de resolver por otro canal. `[3.2.F1 · evaluado · hábito]`
-- Al abrir un cliente, el agente ve su cartera completa (proyectos, ingresos, soporte abierto), no solo el ticket puntual. `[3.2.F2 · comprobable]`
+- Al abrir un cliente, el agente ve su relación completa —lo que compró o tiene contratado, lo que ha pagado y el soporte abierto—, no solo el ticket puntual. `[3.2.F2 · comprobable]`
 - Hay pipelines de servicio configurados con etapas y prioridades. `[3.2.F3 · comprobable]`
 - Hay al menos un canal conversacional conectado con bandeja básica donde el equipo atiende lo entrante. `[3.2.F4 · comprobable]`
 - Al entrar un ticket, el sistema lo asigna automáticamente según una regla simple; las notificaciones de cambio de estado llegan a quien las necesita. `[3.2.F5 · comprobable]`
@@ -1215,8 +1230,8 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 *Resultado:* El líder sabe qué tipo de problemas llegan y cuántos, y cualquier agente tiene la historia del cliente en segundos.
 
 - Cualquier agente ve el histórico de tickets de un cliente en menos de 10 segundos. `[3.3.F1 · comprobable]`
-- La ficha del cliente muestra sus proyectos activos y el valor económico, no solo sus tickets. `[3.3.F2 · comprobable]`
-- Las propiedades clave del cliente (tipo de plan, antigüedad, responsable) están pobladas en la mayoría de los registros. `[3.3.F3 · comprobable]`
+- La ficha del cliente muestra lo que compró o tiene contratado y su valor económico, no solo sus tickets. `[3.3.F2 · comprobable]`
+- Las propiedades clave del cliente —qué compró o qué plan tiene, desde cuándo es cliente y quién responde por él— están pobladas en la mayoría de los registros. `[3.3.F3 · comprobable]`
 - Cada ticket tiene tipo, motivo y prioridad con taxonomía definida. `[3.3.F4 · comprobable]`
 - El líder saca reportes de volumen por tipo de ticket sin reconstrucción. `[3.3.F5 · comprobable]`
 - El contexto que el área documentó —tipos de cliente, niveles de atención, respuestas a consultas frecuentes— se revisa y se actualiza al menos una vez por trimestre; no se deja envejecer. `[3.3.F6 · declarado · riesgo · hábito]`
@@ -1348,14 +1363,14 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 - Cada ticket tiene una prioridad asignada (urgent / high / normal / low) y los agentes la respetan. `[3.6.F1 · comprobable · hábito]`
 - La atención se diferencia según los tipos de cliente definidos en Consistencia de Atención: cada tipo tiene claro qué nivel de atención recibe. `[3.6.F2 · declarado]`
-- El agente usa la vista unificada del cliente (proyectos, ingresos, soporte abierto) para dar contexto, sin reconstruirlo a mano. `[3.6.F3 · evaluado · hábito]`
+- El agente usa la vista unificada del cliente —lo que compró, lo que ha pagado y el soporte abierto— para dar contexto, sin reconstruirlo a mano. `[3.6.F3 · evaluado · hábito]`
 
 **Eficiente.** Hay un responsable por cliente clave y segmentación para acciones diferenciadas.
 
-*Resultado:* Cada cliente clave tiene un dueño que lo conoce, el resto de la cartera no queda sola, y la atención cambia según si el cliente está sano, en riesgo o listo para crecer.
+*Resultado:* Cada cliente clave tiene un dueño que lo conoce, el resto de la cartera no queda sola, y la atención cambia según el momento en que está cada cliente.
 
 - Hay un modelo de atención por segmento: cada cliente clave tiene un CSM o responsable asignado, y el resto de la cartera recibe acompañamiento automatizado, de uno a muchos. `[3.6.E1 · comprobable · cliente recurrente]`
-- Los clientes se segmentan para acciones diferenciadas (sanos, en riesgo, con potencial de crecer). `[3.6.E2 · comprobable · cliente recurrente]`
+- Los clientes se segmentan para acciones diferenciadas según el momento de su relación: donde el cliente vuelve, sanos, en riesgo o con potencial de crecer; donde compra una vez, por entregar, en garantía o listos para recomendar. `[3.6.E2 · comprobable]`
 - El contexto del cliente se usa activamente para personalizar respuestas. `[3.6.E3 · evaluado · hábito]`
 
 **Óptimo.** El cliente recibe el mismo contexto lo atienda un humano o la IA, incluso en autoservicio.
@@ -1543,7 +1558,7 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Handoff | Traspaso de un contacto o cliente de un área a otra, por ejemplo de Marketing a Ventas. |
 | Health Score | Puntaje de salud de un cliente que anticipa si está en riesgo o tiene potencial de crecer. |
 | Hábito | Criterio que describe algo que el equipo repite. Puede estar cumplido, iniciado —la rutina existe pero todavía no tiene historia— o no cumplido. |
-| ICP | Perfil de cliente ideal: el tipo de empresa al que mejor le sirve lo que se vende. |
+| ICP | Perfil de cliente ideal: el tipo de empresa o de persona al que mejor le sirve lo que se vende. |
 | Journey | Recorrido que hace un cliente desde que conoce la empresa hasta que compra, y después. |
 | Landing page | Página creada para una campaña, con un objetivo concreto como captar datos. |
 | Lead | Persona o empresa que mostró interés y todavía no es cliente. |
@@ -1562,6 +1577,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Playbook | Guía práctica que dice cómo actuar en una situación concreta, paso a paso. |
 | Por confirmar | Nivel del diagnóstico al que solo le faltan hábitos iniciados: cuenta como alcanzado, y en la siguiente remedición se confirma o baja. |
 | QBR | Revisión trimestral con un cliente clave sobre sus resultados y los próximos pasos. |
+| Recompra | Que un cliente vuelva a comprar sin tener un contrato que lo obligue. |
+| Referido | Cliente nuevo que llega por la recomendación de otro cliente. |
 | Remarketing | Volver a mostrarle anuncios a quien ya tuvo contacto con la empresa. |
 | Rep | Vendedor. |
 | Retención neta de ingresos | De lo que pagaban los clientes actuales hace un tiempo, cuánto pagan hoy, sumando ampliaciones y restando cancelaciones. |
@@ -1577,6 +1594,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.7.0 (2026-09-29).** La escala general se prepara para servir a cualquier perfil de negocio, antes de sumar ediciones por industria. Hay dos marcas de perfil nuevas: venta sin vendedor, que reemplaza la regla que leía la frase del criterio, y recompra. La próxima compra de un cliente que vuelve sin contrato se trata como un negocio más, y reactivarla entra en Tracción del Deal. Se suman criterios para la venta sin vendedor —qué parte de las ventas queda con un cliente identificado y la misma oferta en todos los canales—, uno para cuando lo que se vende es limitado, uno para las ventas ganadas que se caen antes de la entrega y, en Eficiente de Marketing, las reseñas públicas y el programa de referidos. La definición de lead calificado deja de pedirse donde se vende sin vendedor, el responsable de cada cliente admite un seguimiento automático en carteras masivas, y la segmentación de clientes de Eficiente vale también para la relación única. Una docena de criterios se dicen de forma que sirva tanto para quien le vende a empresas como para quien le vende a personas. La regla de asignación suma cinco casos y el glosario, «Recompra» y «Referido». Se suman ocho criterios; ningún identificador existente cambia. Cambia lo que piden Funcional y Eficiente en varias dimensiones.
 
 **7.6.1 (2026-09-29).** Cada dimensión trae, entre su pregunta y su costo de quedarse, una descripción de 15 a 20 palabras que dice qué mide. Reemplaza el «qué mide» de la 7.6.0, que tenían solo dos dimensiones y era más largo; cómo se leen en la venta transaccional queda donde ya estaba, en «El perfil de negocio». No cambia el cálculo.
 
