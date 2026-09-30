@@ -239,10 +239,13 @@ function CeldaDeNivel({
                   onClick={() => abrirComentarios(c.id)}
                   onMouseEnter={conEnlaces ? () => relacion.alEntrar(c.id) : undefined}
                   onMouseLeave={conEnlaces ? relacion.alSalir : undefined}
-                  onFocus={conEnlaces ? () => relacion.alEntrar(c.id) : undefined}
+                  // Con el teclado se marca al LLEGAR con Tab (la tecla se suelta sobre el criterio al que
+                  // se llegó), no con cualquier foco: al cerrar el panel de comentarios el foco vuelve
+                  // solo al criterio, y con `onFocus` la marca quedaba puesta sin cursor ni panel.
+                  onKeyUp={conEnlaces ? (e) => e.key === "Tab" && relacion.alEntrar(c.id) : undefined}
                   onBlur={conEnlaces ? relacion.alSalir : undefined}
                   className={cn(
-                    "w-full rounded-md border px-1.5 py-1.5 text-left transition-colors hover:bg-surface-hover",
+                    "relative w-full rounded-md border px-1.5 py-1.5 text-left transition-colors hover:bg-surface-hover",
                     anclaAbierta === c.id
                       ? "border-info-line bg-info-surface"
                       : requerido
@@ -252,8 +255,16 @@ function CeldaDeNivel({
                           : "border-transparent",
                   )}
                 >
+                  {/* El rótulo va SOBRE el borde, sin ocupar lugar: como una línea más hacía crecer la
+                      celda, la matriz se corría bajo el cursor, el criterio dejaba de estar debajo y el
+                      rótulo aparecía y desaparecía varias veces por segundo. */}
                   {(requerido || dependiente) && relacion.foco && (
-                    <span className={cn("mb-1 block text-2xs font-semibold", requerido ? "text-info-ink" : "text-fg-secondary")}>
+                    <span
+                      className={cn(
+                        "pointer-events-none absolute right-1.5 top-0 z-10 -translate-y-1/2 whitespace-nowrap rounded border bg-surface px-1 text-2xs font-semibold",
+                        requerido ? "border-info-line text-info-ink" : "border-line text-fg-secondary",
+                      )}
+                    >
                       {requerido ? "Lo requiere " : "Requiere a "}
                       <span className="font-mono">{relacion.foco}</span>
                     </span>

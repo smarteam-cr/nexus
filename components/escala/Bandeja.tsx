@@ -124,13 +124,19 @@ export default function Bandeja({
     return [...porClave.entries()].sort(([, a], [, b]) => a.localeCompare(b, "es"));
   }, [comentarios]);
 
+  // Un filtro cuya opción desapareció (se borró el último comentario de ese cliente o de esa edición)
+  // deja de filtrar: si no, el selector mostraría «Toda industria» y la lista seguiría filtrada por
+  // algo que ya no se ve ni se puede quitar.
+  const clienteVigente = clientes.includes(cliente) ? cliente : "";
+  const edicionVigente = ediciones.length > 0 && (edicion === "general" || ediciones.some(([clave]) => clave === edicion)) ? edicion : "";
+
   const filtrados = comentarios.filter(
     (c) =>
       (estado === "todos" || c.estado === estado) &&
       (!tipo || c.tipo === tipo) &&
       (!area || c.area === area) &&
-      (!cliente || c.cliente?.nombre === cliente) &&
-      (!edicion || (edicion === "general" ? !c.edicion : c.edicion?.slug === edicion)) &&
+      (!clienteVigente || c.cliente?.nombre === clienteVigente) &&
+      (!edicionVigente || (edicionVigente === "general" ? !c.edicion : c.edicion?.slug === edicionVigente)) &&
       (!busqueda.trim() ||
         coincideBusqueda(`${c.ancla} ${c.cuerpo} ${c.cliente?.nombre ?? ""} ${c.autor.nombre} ${c.ruta ?? ""} ${c.edicion?.nombre ?? ""}`, busqueda)),
   );
@@ -218,7 +224,7 @@ export default function Bandeja({
           ))}
         </select>
         {clientes.length > 0 && (
-          <select aria-label="Cliente" value={cliente} onChange={(e) => setCliente(e.target.value)} className={selectCls}>
+          <select aria-label="Cliente" value={clienteVigente} onChange={(e) => setCliente(e.target.value)} className={selectCls}>
             <option value="">Todo cliente</option>
             {clientes.map((c) => (
               <option key={c} value={c}>
@@ -231,7 +237,7 @@ export default function Bandeja({
           <select
             aria-label="Industria"
             title="Desde qué edición de la escala se hizo el comentario: la general o la de una industria."
-            value={edicion}
+            value={edicionVigente}
             onChange={(e) => setEdicion(e.target.value)}
             className={selectCls}
           >

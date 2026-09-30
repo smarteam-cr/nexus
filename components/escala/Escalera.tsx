@@ -59,6 +59,14 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
     onElegirDimension(e.dimension);
     setLlegada(e.id);
   };
+  /**
+   * Cambiar de dimensión a mano (el menú, anterior o siguiente) olvida la llegada: si no, al volver
+   * a esa dimensión la página bajaría sola hasta el criterio, cada vez.
+   */
+  const elegirDimension = (id: string) => {
+    setLlegada(null);
+    onElegirDimension(id);
+  };
   useEffect(() => {
     if (!llegada) return;
     document.getElementById(`criterio-${llegada}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -80,7 +88,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                     key={x.id}
                     type="button"
                     aria-current={activo ? "true" : undefined}
-                    onClick={() => onElegirDimension(x.id)}
+                    onClick={() => elegirDimension(x.id)}
                     className={cn(
                       "flex w-full items-start gap-2 px-3 py-1.5 text-left text-sm transition-colors",
                       activo
@@ -252,7 +260,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
           <button
             type="button"
             disabled={i === 0}
-            onClick={() => onElegirDimension(dims[i - 1].id)}
+            onClick={() => elegirDimension(dims[i - 1].id)}
             className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
           >
             ← {i > 0 ? `${dims[i - 1].id} ${dims[i - 1].nombre}` : "Inicio del área"}
@@ -260,7 +268,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
           <button
             type="button"
             disabled={i === dims.length - 1}
-            onClick={() => onElegirDimension(dims[i + 1].id)}
+            onClick={() => elegirDimension(dims[i + 1].id)}
             className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
           >
             {i < dims.length - 1 ? `${dims[i + 1].id} ${dims[i + 1].nombre}` : "Fin del área"} →
