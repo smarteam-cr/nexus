@@ -16,7 +16,8 @@
     "db:policies": "npx tsx scripts/apply-policies.ts --apply",
     "db:local": "npx tsx scripts/local-db.ts",
     "db:local:pull": "npx tsx scripts/local-pull-context.ts",
-    "check:invariants": "npx tsx scripts/check-invariants.ts"
+    "check:invariants": "npx tsx scripts/check-invariants.ts",
+    "check:esquema": "npx tsx scripts/check-esquema.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

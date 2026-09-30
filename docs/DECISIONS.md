@@ -3884,6 +3884,62 @@ prueba lo note.
   no tienen test propio (frenan bien, corridas a mano); y `1.8.E1` de la escala general revisa solo lo
   perdido aunque su nivel dice «ganadas y perdidas» — es de la 7.0.0 y lo decide el responsable.
 
+## `/api/health` mira si la base está atrás del código (2026-09-30)
+
+**Contexto.** Los cambios de esquema son SQL a mano que se corren antes del deploy. Si alguien se
+olvidaba, la salud solo probaba `SELECT 1` y el canario `roleProfile.count()`: `deploy.sh` decía
+«DEPLOY OK» y las pantallas que leían la columna nueva reventaban con P2022. El caso del día: el
+commit `e4fd8594` trae dos columnas en `SessionProject` que `lib/sessions/project-sources.ts`
+selecciona en cada lectura; sin su SQL se caían la ficha del cliente, el cronograma y el
+clasificador. Medido ese mismo día, en solo lectura: a producción le faltaban 3 columnas (2 SQL).
+
+**Decisiones.**
+
+- **La red va en la salud, no en una lista de pasos.** INV4 e INV7 (`check:invariants`) ya miraban
+  lo mismo desde una PC y el hueco existió igual: depende de acordarse. Con la salud en 503,
+  `deploy.sh` revierte solo, como con cualquier otro fallo, sin tocar `deploy.sh`, el Dockerfile ni
+  el compose. `npm run check:esquema` queda como el aviso ANTES: la misma comparación en un par de
+  segundos, con el archivo de `scripts/sql/` que crea cada cosa que falta.
+- **Lo que espera el código sale del cliente GENERADO** (`Prisma.dmmf.datamodel.models` y `$Enums`),
+  no del texto del schema: es lo que corre en la imagen. El dmmf de Prisma 7.4.2 trae los modelos y
+  `enums: []` (lo que INV4 anotaba como «viene vacío»), así que los valores salen de `$Enums`. Lo
+  que el dmmf no dice lo congelan tests contra el schema: ningún enum con `@map`, ningún modelo
+  fuera de `public` (`@@schema`), y las tablas pivote de las N:N implícitas —que no son un modelo—
+  en `PIVOTES_IMPLICITAS` (hoy una).
+- **`check:esquema` avisa si el checkout no es lo que se despliega**: el schema con cambios sin
+  commitear (el árbol se comparte con otra sesión), u `origin/main` con cambios del schema que acá no
+  están. Sin eso, podía pedir un SQL de código que no sale, o decir «✓» y que el deploy se revierta.
+- **Solo lo que FALTA.** Lo que la base tiene de más (`KnowledgeEmbedding.embedding`, índices creados
+  por SQL, las tablas de la tanda siguiente) no se reporta; tampoco el tipo ni la nulabilidad (el
+  esquema es solo aditivo).
+- **Barata.** UNA consulta a `pg_catalog` (columnas y enums en el mismo viaje) por el pool de
+  siempre; en verde queda guardada toda la vida del proceso; atrasada se relee cada 30 s (correr el
+  SQL la pone en verde sola); nunca dos a la vez; quien pregunta espera como mucho 3 s, contados
+  desde que la consulta ARRANCÓ (una colgada no se vuelve a esperar en cada healthcheck ni se lanza
+  otra al lado, que dejaría otra conexión tomada). Los plazos van con el reloj monótono: si NTP
+  atrasa la hora, no se congelan. `pg_catalog` y no `information_schema`, que esconde lo que el
+  rol no puede ver: un permiso de menos se leería como una tabla que falta.
+- **Solo falla con prueba.** Una lectura que falló o tardó es «sin verificar» y no apaga la salud:
+  un corte de red no revierte un deploy. Y un atraso probado no lo levanta un error posterior; si
+  parpadeara a verde, un solo healthcheck bueno le alcanzaría a Docker para dar por sano el
+  contenedor.
+- **El endpoint es público**: `checks.esquema` nombra hasta 8 faltantes y nunca el error crudo de la
+  base (trae el host). La lista entera y el error van al log con `[esquema]`, que es lo que
+  `deploy.sh` imprime antes de revertir.
+- **`ESQUEMA_NO_BLOQUEA=1`** en el `.env` del VPS deja el chequeo en aviso, para el día en que se
+  equivoque: se puede desplegar sin esperar un arreglo de código. Mientras está puesta, cada salud
+  lo dice.
+
+**Lo que no se hizo, a propósito.**
+
+- **Probar la imagen nueva ANTES del cambio de contenedor** (una instancia de prueba en otro puerto;
+  recién con su salud en verde, cambiar). Evitaría el rato en que el contenedor nuevo atiende con la
+  base atrasada —entre 75 y 90 s, hasta que Docker lo marca y `deploy.sh` revierte—, pero cambia
+  `deploy.sh` (que se reescribe a sí mismo), duplica la memoria de Nexus en un VPS compartido
+  mientras dura y corre dos instancias a la vez (RUNBOOK, invariante #1). Si ese rato molesta, es el
+  paso siguiente; mientras tanto, el chequeo previo lo evita.
+- Comparar tipos, nulabilidad, índices o policies.
+
 ## Lo que se decide para un área de la escala se decide para las tres: Marketing y Servicio con la vara de Ventas (2026-09-30)
 
 **Contexto.** Ventas se limpió primero (8.2.0: cada cosa se pide una vez; 8.3.0: quien depende de

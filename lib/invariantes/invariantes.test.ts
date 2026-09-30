@@ -670,8 +670,12 @@ describe("/api/health expone UN booleano de invariantes, y nada más (B-09)", ()
     const src = soloCodigoDe("app/api/health/route.ts");
     expect(src).toContain('from "@/lib/invariantes/salud"');
     expect(src).toContain("invariantesOk,");
-    expect(src, "el health sigue decidiendo el 503 solo por db y cliente Prisma").toContain("status: ok ? 200 : 503");
-    expect((src.match(/ok = false/g) ?? []).length, "solo los dos checks de infraestructura apagan el ok").toBe(2);
+    expect(src, "el 503 lo decide solo el `ok`").toContain("status: ok ? 200 : 503");
+    /* Tres cosas apagan el `ok`, y las tres son «este contenedor no puede atender»: la base no
+       responde, el cliente Prisma es de otra imagen, o a la base le falta algo que este código usa
+       (2026-09-30: el esquema atrasado, con sus propias guardas en lib/db/salud-del-esquema.test.ts).
+       Un invariante en rojo no es ninguna de las tres. */
+    expect((src.match(/ok = false/g) ?? []).length, "solo los tres checks de infraestructura apagan el ok").toBe(3);
     expect(src).not.toMatch(/invariantesOk\s*(&&|\|\||\?)/);
     expect(src).not.toMatch(/\.(lineas|error|resultados)\b/);
   });

@@ -2,11 +2,17 @@
  * lib/db/esquema.ts — ¿la base está ATRÁS del código?
  *
  * ── EL HUECO QUE ESTO TAPA ───────────────────────────────────────────────────
- * En este repo las migraciones son SQL a mano que aplica una persona DESPUÉS del deploy
- * (ARCHITECTURE Parte 0 · cap. D). O sea que siempre hay una ventana —minutos u horas— en la
- * que el código ya pide una tabla o una columna que la base todavía no tiene. Sin una guarda,
- * esa ventana es un 500 en la cara del usuario, y un 500 no se lee como «falta correr un
- * script»: se lee como «el módulo está roto», que manda a arreglar lo que no está roto.
+ * En este repo las migraciones son SQL a mano que corre una persona (ARCHITECTURE Parte 0 ·
+ * cap. D), así que puede haber una ventana en la que el código ya pide una tabla o una columna
+ * que la base todavía no tiene. Sin una guarda, esa ventana es un 500 en la cara del usuario, y
+ * un 500 no se lee como «falta correr un script»: se lee como «el módulo está roto», que manda
+ * a arreglar lo que no está roto.
+ *
+ * ⚠ En PRODUCCIÓN esa ventana ya no queda abierta (2026-09-30): `/api/health` compara el
+ * esquema entero y un deploy con la base atrasada se revierte solo, en lo que tarda Docker en
+ * marcar el contenedor (75–90 s; lib/db/salud-del-esquema.ts). Esto sigue
+ * siendo la red de cada pantalla: en dev, con la base local atrasada, y para el otro lado —un
+ * dev server que sigue con el cliente Prisma de antes del modelo—.
  *
  * ⚠ SON DOS CÓDIGOS, NO UNO. Se descubrió el 2026-08-23: el módulo SICOP ya se cuidaba de
  * P2021 (tabla ausente) y aun así la pantalla reventaba, porque la segunda migración agregaba

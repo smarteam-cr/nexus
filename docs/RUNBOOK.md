@@ -79,7 +79,9 @@ swap esperando healthy (healthcheck del compose = `/api/health`) → smoke
 (`ok:true` **y** el SHA corriendo == HEAD del checkout). Si algo falla, el
 contenedor viejo queda intacto (build fallido) o el script **EJECUTA el rollback**: vuelve a
 la imagen anterior (`nexus:prev`), re-verifica `/api/health` y dice si quedó healthy (B-04,
-2026-09-04). Antes solo imprimía el comando para que alguien lo copiara.
+2026-09-04). Antes solo imprimía el comando para que alguien lo copiara. Desde el
+2026-09-30 eso incluye el **esquema atrasado**: código que usa una columna cuyo SQL no se
+corrió ya no queda arriba (ver «Esquema atrasado», abajo).
 
 ⚠️ **`deploy.sh` se reescribe a sí mismo** (`git merge --ff-only` en su paso 1): el deploy
 que trae un cambio en `deploy.sh` corre con la versión VIEJA del script. Para ese deploy,
@@ -110,7 +112,9 @@ dos pasos manuales distintos que se olvidan por separado.
   `scripts/sql/AAAA-MM-DD-*.sql` y se corren **contra la base compartida, ANTES de deployar
   el código que los necesita** — si el código llega primero, la app queda pidiendo una
   columna que no existe. `db push` está prohibido: la base tiene objetos que el schema no
-  declara y los dropea (ya se llevó `RoleProfile` una vez).
+  declara y los dropea (ya se llevó `RoleProfile` una vez). Qué falta correr lo dice
+  `npm run check:esquema` desde la PC, en un par de segundos y en solo lectura; si igual se
+  escapa, el deploy se revierte solo (ver «Esquema atrasado»).
 - **Seeds de agentes (`scripts/seed-*.ts`) se corren DESDE UNA PC DE DESARROLLO, no desde
   el VPS.** El checkout del servidor **no tiene `node_modules`** —la app vive en Docker—,
   así que ahí `npx tsx scripts/seed-*.ts` falla con `Cannot find module 'pg'`. Como la base
@@ -128,6 +132,9 @@ Checklist corto para un deploy que trae los tres (el guard anti-prod exige
 `$env:ALLOW_PROD_WRITE="1"`):
 
 ```bash
+npm run check:esquema                                          # 0) desde dev: ¿qué SQL falta? (solo lectura)
+```
+```bash
 ALLOW_PROD_WRITE=1 npx prisma db execute --file scripts/sql/AAAA-MM-DD-loquesea.sql  # 1) desde dev, ANTES
 ```
 ```bash
@@ -140,6 +147,41 @@ ALLOW_PROD_WRITE=1 npx tsx scripts/seed-EL-AGENTE.ts           # 3) desde dev, d
 (El `psql "$DATABASE_URL" -f` que estaba acá se retiró a propósito: era el único camino de
 escritura que ningún guard podía interceptar. `db execute` pasa por `prisma.config.ts`, que
 es donde vive el guard del CLI.)
+
+### Esquema atrasado: el deploy se revierte solo (2026-09-30)
+
+Hasta ese día, desplegar código cuyo SQL no se había corrido daba «DEPLOY OK»: `/api/health`
+solo probaba `SELECT 1` y el canario, y las pantallas que leían la columna nueva reventaban
+con P2022. Ahora la salud compara lo que espera el cliente Prisma de la imagen (tablas,
+columnas y valores de enum) contra el catálogo de la base (`lib/db/salud-del-esquema.ts`) y,
+si falta algo, responde 503 con `checks.esquema: "faltan N en la base: …"`.
+
+Lo que se ve en el deploy: el contenedor nuevo no llega a healthy, `deploy.sh` imprime «El
+contenedor nuevo NO llego a healthy en 120s», los últimos 80 logs —ahí está la lista entera,
+en las líneas `[esquema]`— y vuelve a la imagen anterior (ROLLBACK OK). Qué hacer: correr
+desde la PC los SQL que faltan (`npm run check:esquema` dice cuáles) y volver a desplegar.
+
+⚠ Hay un camino en el que el motivo NO se imprime: si el primer chequeo no pudo leer el
+catálogo («sin verificar», da 200), Docker da por sano el contenedor, y el atraso aparece recién
+en el smoke. Ahí `deploy.sh` dice «SMOKE FALLO: … no responde» (el `curl -f` descarta el cuerpo
+del 503) y la reversión recrea el contenedor, con lo que sus logs se pierden. Ante un SMOKE
+FALLO sin otra explicación, `npm run check:esquema` desde la PC dice si fue el esquema.
+
+- ⚠ Mientras Docker decide (entre 75 y 90 s: cuatro chequeos fallidos después del arranque),
+  el contenedor nuevo YA atiende, con las pantallas que usan lo que falta en error. Por eso
+  el chequeo va antes del deploy: la reversión es la red, no el paso.
+- En verde no vuelve a consultar el catálogo en toda la vida del proceso. Con la base
+  atrasada vuelve a mirar cada 30 s: si el SQL se corre con el contenedor arriba, la salud se
+  pone en verde sola.
+- Solo falla con prueba: si el catálogo no se pudo leer o tardó más de 3 s dice «sin
+  verificar» y NO apaga la salud (un corte de red no revierte un deploy).
+- No cuenta lo que la base tiene de más (`KnowledgeEmbedding.embedding`, los índices creados
+  por SQL, las tablas de una tanda cuyo código todavía no salió), ni el tipo ni si una columna
+  admite nulos.
+- **Si alguna vez frena un deploy sin razón** (dice que falta algo que está): cargar
+  `ESQUEMA_NO_BLOQUEA=1` en el `.env` del VPS y volver a desplegar; la salud lo sigue
+  diciendo en `checks.esquema`, pero no bloquea. Sacarla en el deploy siguiente. La salida
+  definitiva es revertir el commit que trajo el chequeo; no hay SQL ni datos que deshacer.
 
 ## Sentry (observabilidad)
 

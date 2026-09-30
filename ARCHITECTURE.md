@@ -182,14 +182,17 @@ No copia Cobranza/Timeline/Canvas — la generación crea los suyos.
      `ALTER TYPE ... ADD VALUE`: one-liner `npx tsx -e` llamando `assertProdWriteAllowed()` a
      mano (ver el header de `scripts/lib/guard.ts`).
   4. `npx prisma generate` + reiniciar el dev server.
-  5. Deploy (cap. E) — **el SQL siempre ANTES del código que lo necesita**.
+  5. Deploy (cap. E) — **el SQL siempre ANTES del código que lo necesita**. `npm run
+     check:esquema` (`scripts/check-esquema.ts`, solo lectura, un par de segundos) dice si a la
+     base le falta algo de este código y qué `.sql` lo crea; si igual se escapa, `/api/health`
+     responde 503 y `deploy.sh` revierte solo (RUNBOOK › Esquema atrasado).
   6. `npm run check:invariants` — INV4/INV7 prueban que el DDL aterrizó; INV12 vigila el guard.
 - **Baseline**: `prisma/migrations/0_init/` representa el schema COMPLETO (re-baseline del
   2026-08-01; las 5 migraciones de marzo 2026 están en `prisma/migrations-archive/`).
   `0_init/after.sql` (extensión vector + columna embedding + CHECK) y `prisma/policies.sql`
   (RLS + policies, `ALLOW_PROD_WRITE=1 npm run db:policies`) cubren lo que Prisma no
-  representa. ⚠ No hay tabla de control de qué `.sql` ya corrió — el registro es INV4/INV7 o
-  mirar la base (limitación conocida; se resuelve con la base local, plan aparte).
+  representa. ⚠ No hay tabla de control de qué `.sql` ya corrió — el registro es mirar la base:
+  `npm run check:esquema` (lo que le falta, con el archivo que lo crea) o INV4/INV7.
 - El schema tiene **cero `@map`/`@@map`** (verificado 2026-08-01): el bug de enums mapeados de
   Prisma 7 no nos aplica, y `migrate diff` es fiel nombre-a-nombre.
 
@@ -201,13 +204,15 @@ cd /opt/smartflow/Nexus && bash scripts/deploy.sh
 
 UNA línea: ff-only → **rebuild SIEMPRE** → swap esperando healthy → smoke (el `sha` de
 `/api/health` debe ser el HEAD). PROD es `nexus.smarteamcr.com`; `/api/health` es público y
-dice qué commit corre. Todo lo demás —rollback, `.env` del VPS, scheduler/jobs, PDF/Chromium,
+dice qué commit corre, y desde el 2026-09-30 responde 503 si a la base le falta una tabla,
+columna o valor de enum que el código usa (`lib/db/salud-del-esquema.ts`): el deploy con el
+SQL sin correr se revierte solo. Todo lo demás —rollback, `.env` del VPS, scheduler/jobs, PDF/Chromium,
 las 3 invariantes de infra— vive en **`docs/RUNBOOK.md`** y acá NO se duplica. El deploy no
 corre migraciones ni seeds (cap. D + RUNBOOK).
 
 ### F. Los tests: cinco familias que se rompen por razones distintas
 
-**429**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
+**431**<!-- sync:test-files --> archivos `*.test.ts` (unit), todos bajo `lib/` — el project
 `unit` de vitest solo incluye `lib/**`, así que un test puesto en otra carpeta NO corre y
 nada avisa. `npm test` es la suite unit. Desde el 2026-08-01 (F4) el project `integration`
 está VIVO: `npm run test:int` corre los `*.int.test.ts` contra la base LOCAL `nexus_test`
