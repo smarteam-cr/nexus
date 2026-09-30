@@ -242,6 +242,75 @@ deja de avanzar.
 **9.9.9 (2030-01-01).** Primera de juguete.
 `;
 
+/**
+ * Una edición de juguete, para pegar al final de MINI_ESCALA: renombra la dimensión de producción,
+ * le cambia pregunta, descripción y costo, reescribe dos criterios, trae dos propios, saca uno y
+ * deja el resto como está (cubre TODOS los criterios de la dimensión que toca).
+ */
+export const MINI_EDICION = `
+# Parte 5 — Ediciones por industria
+
+Una edición es la misma escala dicha para una industria.
+
+## Qué cambia una edición y qué no
+
+- Lo que no dice, vale como está en la matriz.
+
+## Edición — Tiendas de juguete
+
+Para quien vende en una tienda,
+sin vendedores.
+
+*Clave:* tiendas
+
+*Perfil habitual:* transaccional · recompra.
+
+*Criterios propios:* desde el 101.
+
+### Palabras de esta edición
+
+| En la escala general | En esta edición |
+|:--|:--|
+| Negocio | Pedido o carrito |
+| Hábito | Rutina de la tienda |
+
+### Área 1 — Ventas
+
+Mide la venta de la tienda.
+
+**Funcional.** La tienda vende sola.
+
+#### 1.2 Carrito y recompra
+
+¿Qué pasa con quien no terminó
+de comprar?
+
+*Descripción:* Si la tienda recupera los carritos.
+
+*Costo de quedarse:* Los carritos se pierden.
+
+**Deficiente.**
+
+- Nadie mira los carritos. \`[1.2.D1]\`
+
+**Funcional.** Ningún carrito se pierde en silencio.
+
+*Resultado:* Los carritos se recuperan.
+
+- Cada venta de la tienda entra sola al sistema. \`[1.2.F1]\`
+- El carrito abandonado recibe un recordatorio. \`[1.2.F101 · comprobable · hábito]\`
+
+**Eficiente.**
+
+- El recordatorio sale cuando toca a cada producto. \`[1.2.E101 · comprobable · recompra]\`
+
+*No aplican:* \`1.2.I1\`.
+
+*Se leen igual:* \`1.2.F2\`, \`1.2.E1\`, \`1.2.E2\`, \`1.2.O1\`.
+`;
+
+export const MINI_ESCALA_CON_EDICION = MINI_ESCALA + MINI_EDICION;
+
 /** La especificación de juguete que acompaña a MINI_ESCALA. */
 export const MINI_ESPECIFICACION = `---
 documento: Especificación de prueba

@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
     estado: q.get("estado") ?? undefined,
   });
   if (!parsed.success) return errorDeValidacion(parsed.error.issues);
-  return NextResponse.json({ comentarios: await listarComentarios(parsed.data) });
+  // La versión publicada, para decir qué dice HOY el ancla de cada comentario (leída con su edición).
+  const vigente = await leerEscalaVigente();
+  return NextResponse.json({ comentarios: await listarComentarios(parsed.data, vigente.estado === "ok" ? vigente.escala : null) });
 }
 
 export async function POST(req: NextRequest) {

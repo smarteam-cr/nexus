@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala } from "./archivos";
-import { MINI_ESCALA } from "./mini-escala.fixture";
-import { leerEncabezado, parsearEscala, slugDe, todosLosCriterios } from "./parsear";
+import { MINI_EDICION, MINI_ESCALA, MINI_ESCALA_CON_EDICION } from "./mini-escala.fixture";
+import { criteriosPropios, leerEncabezado, parsearEscala, slugDe, todosLosCriterios } from "./parsear";
 import { ErrorDeFormato, LETRAS } from "./tipos";
 
 describe("la escala de juguete", () => {
@@ -228,6 +228,139 @@ describe("lo que el lector rechaza, con su línea", () => {
   });
 });
 
+describe("una versión anterior a la 7.7.0 se lee como cuando se publicó", () => {
+  const vieja = MINI_ESCALA.replace("version: 9.9.9", "version: 7.6.1").replace(
+    "- Las ventas sin vendedor entran solas al sistema. `[1.2.F1 · comprobable · venta sin vendedor]`",
+    "- Si la empresa vende sin vendedor, esas ventas entran solas al sistema. `[1.2.F1 · comprobable]`",
+  );
+
+  it("«vende sin vendedor» era una regla de texto: se lee como la marca «venta sin vendedor»", () => {
+    expect(vieja).toContain("Si la empresa vende sin vendedor");
+    expect(parsearEscala(vieja).areas[0].dimensiones[1].niveles[2].criterios[0]).toMatchObject({ id: "1.2.F1", perfil: "venta sin vendedor" });
+  });
+
+  it("desde la 7.7.0 la frase sola ya no marca nada", () => {
+    const nueva = vieja.replace("version: 7.6.1", "version: 7.7.0");
+    expect(parsearEscala(nueva).areas[0].dimensiones[1].niveles[2].criterios[0].perfil).toBeNull();
+  });
+});
+
+describe("las ediciones por industria", () => {
+  const falla = (texto: string) => {
+    try {
+      parsearEscala(texto);
+    } catch (err) {
+      expect(err).toBeInstanceOf(ErrorDeFormato);
+      return (err as ErrorDeFormato).message;
+    }
+    throw new Error("se esperaba un ErrorDeFormato");
+  };
+  const con = (cambio: (s: string) => string) => MINI_ESCALA + cambio(MINI_EDICION);
+
+  it("no cambian nada de la escala general: la matriz y la prosa se leen igual con ediciones que sin ellas", () => {
+    const sin = parsearEscala(MINI_ESCALA);
+    const e = parsearEscala(MINI_ESCALA_CON_EDICION);
+    expect({ ...e, ediciones: [], edicionesIntro: null }).toEqual(sin);
+  });
+
+  it("lee lo que la edición cambia de una dimensión, y nada más", () => {
+    const d = parsearEscala(MINI_ESCALA_CON_EDICION).ediciones[0].areas[0].dimensiones[0];
+    expect(d).toEqual({
+      id: "1.2",
+      nombre: "Carrito y recompra",
+      pregunta: "¿Qué pasa con quien no terminó de comprar?",
+      descripcion: "Si la tienda recupera los carritos.",
+      costoDeQuedarse: "Los carritos se pierden.",
+      niveles: {
+        D: { descripcion: null, resultado: null },
+        F: { descripcion: "Ningún carrito se pierde en silencio.", resultado: "Los carritos se recuperan." },
+        E: { descripcion: null, resultado: null },
+      },
+      textos: { "1.2.D1": "Nadie mira los carritos.", "1.2.F1": "Cada venta de la tienda entra sola al sistema." },
+      propios: [
+        { id: "1.2.F101", texto: "El carrito abandonado recibe un recordatorio.", verificacion: "comprobable", riesgo: false, habito: true, perfil: null },
+        { id: "1.2.E101", texto: "El recordatorio sale cuando toca a cada producto.", verificacion: "comprobable", riesgo: false, habito: false, perfil: "recompra" },
+      ],
+      noAplican: ["1.2.I1"],
+      seLeenIgual: ["1.2.F2", "1.2.E1", "1.2.E2", "1.2.O1"],
+    });
+  });
+
+  it("con CRLF lee exactamente lo mismo", () => {
+    expect(parsearEscala(MINI_ESCALA_CON_EDICION.replace(/\n/g, "\r\n"))).toEqual(parsearEscala(MINI_ESCALA_CON_EDICION));
+  });
+
+  it("una edición sin «Clave» no tiene identidad", () => {
+    expect(falla(con((s) => s.replace("*Clave:* tiendas\n", "")))).toMatch(/no dice su «Clave»/);
+  });
+
+  it("una clave con mayúsculas o espacios", () => {
+    expect(falla(con((s) => s.replace("*Clave:* tiendas", "*Clave:* Tiendas de Juguete")))).toMatch(/va en minúsculas/);
+  });
+
+  it("una marca mal escrita no termina, en silencio, como parte de la descripción", () => {
+    expect(falla(con((s) => s.replace("*Perfil habitual:*", "*Perfil habitual :*")))).toMatch(/^Línea \d+: una edición no admite esta línea/);
+  });
+
+  it("un perfil habitual que no es un perfil", () => {
+    expect(falla(con((s) => s.replace("transaccional · recompra.", "tiendas chicas.")))).toMatch(/«Perfil habitual» tiene que decir/);
+  });
+
+  it("un criterio propio con el id de uno de la matriz", () => {
+    expect(falla(con((s) => s.replace("`[1.2.F101 · comprobable · hábito]`", "`[1.2.F2 · comprobable · hábito]`")))).toMatch(
+      /1\.2\.F2 ya es un criterio de la escala general/,
+    );
+  });
+
+  it("un criterio propio fuera del bloque de su edición, o sin que la edición haya dicho su bloque", () => {
+    expect(falla(con((s) => s.replace("`[1.2.F101 · comprobable · hábito]`", "`[1.2.F7 · comprobable · hábito]`")))).toMatch(/los numera del 101 al 199/);
+    expect(falla(con((s) => s.replace("*Criterios propios:* desde el 101.\n", "")))).toMatch(/sin haber dicho desde qué número van/);
+    expect(falla(con((s) => s.replace("desde el 101.", "desde el 50.")))).toMatch(/en bloques de cien/);
+  });
+
+  it("un criterio reescrito que la matriz no tiene, o que está en otro nivel", () => {
+    expect(falla(con((s) => s.replace("`[1.2.D1]`", "`[1.2.D9]`")))).toMatch(/1\.2\.D9 no es un criterio de 1\.2\.D en la escala general/);
+    expect(falla(con((s) => s.replace("`[1.2.D1]`", "`[1.2.F1]`")))).toMatch(/1\.2\.F1 no es un criterio de 1\.2\.D/);
+  });
+
+  it("un criterio propio repetido", () => {
+    const dos = con((s) =>
+      s.replace("- El carrito abandonado recibe un recordatorio. `[1.2.F101 · comprobable · hábito]`", "- Uno. `[1.2.F101 · comprobable]`\n- Otro. `[1.2.F101 · comprobable]`"),
+    );
+    expect(falla(dos)).toMatch(/1\.2\.F101 ya es un criterio propio de la edición «Tiendas de juguete»/);
+  });
+
+  it("un área o una dimensión que la escala no tiene", () => {
+    expect(falla(con((s) => s.replace("### Área 1 — Ventas", "### Área 7 — Logística")))).toMatch(/no tiene un área 7/);
+    expect(falla(con((s) => s.replace("#### 1.2 Carrito y recompra", "#### 1.9 Carrito y recompra")))).toMatch(/no tiene una dimensión 1\.9/);
+  });
+
+  it("«No aplican» y «Se leen igual» solo nombran criterios de su dimensión", () => {
+    expect(falla(con((s) => s.replace("*No aplican:* `1.2.I1`.", "*No aplican:* `1.1.I1`.")))).toMatch(/«No aplican» nombra 1\.1\.I1/);
+    expect(falla(con((s) => s.replace("*Se leen igual:* `1.2.F2`", "*Se leen igual:* `1.2.F9`")))).toMatch(/«Se leen igual» nombra 1\.2\.F9/);
+  });
+
+  it("después de las ediciones no puede venir otra parte, ni otra sección después de una edición", () => {
+    expect(falla(MINI_ESCALA_CON_EDICION + "\n# Parte 6 — Anexos\n")).toMatch(/van al final del documento/);
+    expect(falla(MINI_ESCALA_CON_EDICION + "\n## Notas sueltas\n")).toMatch(/solo puede venir otra edición/);
+  });
+
+  it("dos ediciones conviven: cada una con su clave y su bloque", () => {
+    const otra = MINI_EDICION.split("## Edición — Tiendas de juguete")[1]
+      .replace("*Clave:* tiendas", "*Clave:* colegios")
+      .replace("desde el 101.", "desde el 201.")
+      .replace("1.2.F101", "1.2.F201")
+      .replace("1.2.E101", "1.2.E201");
+    const e = parsearEscala(MINI_ESCALA_CON_EDICION + "\n## Edición — Colegios de juguete" + otra);
+    expect(e.ediciones.map((x) => `${x.slug}:${x.bloque}`)).toEqual(["tiendas:101", "colegios:201"]);
+    expect(criteriosPropios(e).map((p) => p.criterio.id)).toEqual(["1.2.F101", "1.2.E101", "1.2.F201", "1.2.E201"]);
+    // La misma clave dos veces, no.
+    expect(falla(MINI_ESCALA_CON_EDICION + "\n## Edición — Colegios de juguete" + otra.replace("*Clave:* colegios", "*Clave:* tiendas"))).toMatch(
+      /dos ediciones tienen la clave «tiendas»/,
+    );
+  });
+});
+
 describe("utilidades", () => {
   it("slug sin tildes ni espacios", () => {
     expect(slugDe("Servicio")).toBe("servicio");
@@ -240,14 +373,27 @@ describe("utilidades", () => {
 });
 
 describe("el archivo real (docs/escala/escala_rendimiento_smarteam.md)", () => {
-  const texto = leerArchivoDeLaEscala("escala");
-  const e = parsearEscala(texto);
+  const entero = leerArchivoDeLaEscala("escala").replace(/\r\n?/g, "\n");
+  const e = parsearEscala(entero);
+  // La escala general es todo lo que va antes de las ediciones por industria, que van al final.
+  const texto = entero.split(/^# Parte \d+ — Ediciones/m)[0];
+  const ediciones = entero.slice(texto.length);
   const dimensiones = e.areas.flatMap((a) => a.dimensiones);
 
   it("no lee de menos: tantos criterios como etiquetas tiene el texto", () => {
     const etiquetas = texto.match(/`\[\d+\.\d+\.[DIFEO]\d+ · /g) ?? [];
     expect(etiquetas.length).toBeGreaterThan(0);
     expect(todosLosCriterios(e)).toHaveLength(etiquetas.length);
+  });
+
+  it("en las ediciones tampoco: tantos criterios propios como etiquetas completas, y tantos reescritos como etiquetas de solo el id", () => {
+    const propias = ediciones.match(/`\[\d+\.\d+\.[DIFEO]\d+ · /g) ?? [];
+    const reescritas = ediciones.match(/`\[\d+\.\d+\.[DIFEO]\d+\]`$/gm) ?? [];
+    const dims = e.ediciones.flatMap((ed) => ed.areas.flatMap((a) => a.dimensiones));
+    expect(e.ediciones).toHaveLength((ediciones.match(/^## Edición — /gm) ?? []).length);
+    expect(criteriosPropios(e)).toHaveLength(propias.length);
+    expect(dims.flatMap((d) => Object.keys(d.textos))).toHaveLength(reescritas.length);
+    expect(dims).toHaveLength((ediciones.match(/^#### \d+\.\d+ /gm) ?? []).length);
   });
 
   it("tantas dimensiones como títulos de dimensión tiene la matriz", () => {

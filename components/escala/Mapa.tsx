@@ -30,7 +30,16 @@ import { LETRAS, type ClaveDeCapa, type Dimension, type Letra, type Nivel } from
 import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, conteoDeDimension, useEscala } from "./contexto";
 import { COLOR_DE_NIVEL, PUNTO_DE_NIVEL } from "./niveles";
-import { BotonComentar, Contador, GrupoDeControl, MetaDelCriterio, Segmentado, TextoConPalabras } from "./piezas";
+import {
+  BotonComentar,
+  Contador,
+  GrupoDeControl,
+  MetaDelCriterio,
+  NoAplicanEnLaEdicion,
+  NombreGeneral,
+  Segmentado,
+  TextoConPalabras,
+} from "./piezas";
 
 type CapaDeDatos = "comentarios" | "criterios" | "habitos" | "riesgos" | "perfil";
 
@@ -1077,6 +1086,7 @@ function DetalleDelMapa({
           {d.generica && d.generica.nombre !== d.nombre ? ` · ${d.generica.nombre}` : ""}
         </p>
         <h3 className="mt-0.5 text-lg font-bold text-fg">{d.nombre}</h3>
+        <NombreGeneral nombre={d.nombreGeneral} />
         <p className="mt-2 text-sm leading-snug text-fg">{d.pregunta}</p>
         {d.descripcion && (
           <p className="mt-2 text-xs leading-relaxed text-fg-secondary">
@@ -1201,6 +1211,7 @@ function DetalleDeCelda({
           {ocultos} {ocultos === 1 ? "criterio no aplica" : "criterios no aplican"} a este perfil.
         </p>
       )}
+      <NoAplicanEnLaEdicion nivel={nv} className="mt-2 block text-xs" />
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <BotonComentar conteo={conteoDe(conteos, nv.id)} onClick={() => abrirComentarios(nv.id)} etiqueta={`Comentarios del nivel ${nombre}`} />
         <button type="button" onClick={() => onLeerDimension(d.id)} className="rounded-lg border border-line px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover">

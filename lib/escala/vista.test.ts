@@ -7,10 +7,13 @@
  */
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala } from "./documento/archivos";
-import { MINI_ESCALA } from "./documento/mini-escala.fixture";
+import { aplicarEdicion } from "./documento/edicion";
+import { MINI_ESCALA, MINI_ESCALA_CON_EDICION } from "./documento/mini-escala.fixture";
 import { parsearEscala } from "./documento/parsear";
 import { CIERRES, DESPUES } from "./documento/perfil";
 import {
+  consultaDeLaEscala,
+  conteosQueSeVen,
   datosDeLaVista,
   definicionDeOpcion,
   lugarEnElOrden,
@@ -181,6 +184,83 @@ describe("definicionDeOpcion", () => {
     expect(definicionDeOpcion(mini.perfilDeNegocio.despues, "única")).toBe("cuando compra una vez");
     expect(definicionDeOpcion(mini.perfilDeNegocio.despues, "continua")).toBe("cuando hay contrato");
     expect(definicionDeOpcion(null, "recompra")).toBeNull();
+  });
+});
+
+describe("con una edición por industria", () => {
+  const general = parsearEscala(MINI_ESCALA_CON_EDICION);
+  const edicion = aplicarEdicion(general, "tiendas");
+  const base = { publicadaEn: new Date("2030-01-01T00:00:00Z"), aviso: null, versiones: [] };
+
+  it("los datos dicen qué ediciones hay, con cuál se está viendo y cuánto cambió de esta área", () => {
+    const d = datosDeLaVista({ escala: edicion, area: edicion.areas[0], ...base });
+    expect(d.ediciones).toEqual([
+      { slug: "tiendas", nombre: "Tiendas de juguete", descripcion: "Para quien vende en una tienda, sin vendedores.", perfilHabitual: { cierre: "transaccional", despues: "recompra" } },
+    ]);
+    expect(d.edicion).toMatchObject({ slug: "tiendas", nombre: "Tiendas de juguete", resumen: { propios: 2, reescritos: 2, noAplican: 1, renombradas: 1 } });
+    expect(d.edicionesIntro).toBe("Una edición es la misma escala dicha para una industria.");
+    expect(d.area.dimensiones[1].nombre).toBe("Carrito y recompra");
+    // La escala general también dice qué ediciones hay (para ofrecerlas), y que no se ve con ninguna.
+    const g = datosDeLaVista({ escala: general, area: general.areas[0], ...base });
+    expect(g.ediciones).toHaveLength(1);
+    expect(g.edicion).toBeNull();
+  });
+
+  it("las palabras de la edición: una que ya está en el glosario se dice junto a su significado; una nueva, sola", () => {
+    const terminos = terminosParaSubrayar(edicion);
+    expect(terminos.find((t) => t.termino === "Hábito")?.significado).toBe(
+      "En esta edición: rutina de la tienda. En la escala general: algo que el equipo repite.",
+    );
+    expect(terminos.find((t) => t.termino === "Negocio")).toEqual({ termino: "Negocio", significado: "En esta edición: pedido o carrito.", tipo: "glosario" });
+    // En la escala general, el glosario de siempre.
+    expect(terminosParaSubrayar(general).find((t) => t.termino === "Hábito")?.significado).toBe("Algo que el equipo repite.");
+    expect(terminosParaSubrayar(general).some((t) => t.termino === "Negocio")).toBe(false);
+    // Y se subraya en un texto que sigue con su redacción general, también en plural.
+    const marcado = partirPorPalabras("Los negocios mueren en silencio.", terminos).find((x) => x.palabra);
+    expect(marcado).toMatchObject({ texto: "negocios", palabra: { significado: "En esta edición: pedido o carrito." } });
+  });
+
+  it("el orden de dependencias se sigue encontrando con los nombres de la edición", () => {
+    const [orden] = ordenDeDependencias(edicion.dependencias, edicion.areas[0].nombre, "Base operativa", null);
+    expect(lugarEnElOrden(orden, edicion.areas[0].dimensiones[0])).toBe(1);
+  });
+
+  it("los contadores de comentarios: solo lo que se ve con esa edición", () => {
+    const conteos = { "1.2": 1, "1.2.F1": 2, "1.2.F101": 3, "1.2.I1": 4, "1.2.F": 5 };
+    // En la general no existe el criterio propio de la edición; en la edición, el que ella sacó.
+    expect(conteosQueSeVen(conteos, general.areas[0])).toEqual({ "1.2": 1, "1.2.F1": 2, "1.2.I1": 4, "1.2.F": 5 });
+    expect(conteosQueSeVen(conteos, edicion.areas[0])).toEqual({ "1.2": 1, "1.2.F1": 2, "1.2.F101": 3, "1.2.F": 5 });
+  });
+});
+
+describe("consultaDeLaEscala: lo que se mira, en la URL", () => {
+  const sinPerfil = { cierre: null, despues: null };
+
+  it("lo de siempre no va; la industria va primero y nunca se pierde", () => {
+    expect(consultaDeLaEscala({ vista: "matriz", perfil: sinPerfil, industria: null })).toBe("");
+    expect(consultaDeLaEscala({ vista: "matriz", perfil: sinPerfil, industria: "ecommerce-retail" })).toBe("?industria=ecommerce-retail");
+    expect(consultaDeLaEscala({ vista: "mapa", perfil: { cierre: "transaccional", despues: "recompra" }, industria: "ecommerce-retail", celda: "1.7.F", ancla: "1.7.F1" })).toBe(
+      "?industria=ecommerce-retail&vista=mapa&cierre=transaccional&despues=recompra&celda=1.7.F&c=1.7.F1",
+    );
+  });
+
+  it("la dimensión solo viaja en «Por dimensión» y la celda solo en el mapa", () => {
+    expect(consultaDeLaEscala({ vista: "dimension", perfil: sinPerfil, industria: null, dimension: "1.7", celda: "1.7.F" })).toBe("?vista=dimension&dim=1.7");
+    expect(consultaDeLaEscala({ vista: "matriz", perfil: sinPerfil, industria: null, dimension: "1.7", celda: "1.7.F" })).toBe("");
+  });
+
+  it("con las ediciones del archivo real: cada dimensión sigue teniendo su lugar en el orden de su capa", () => {
+    for (const ed of real.ediciones) {
+      const e = aplicarEdicion(real, ed.slug);
+      for (const a of e.areas) {
+        for (const capa of e.capas) {
+          const [orden] = ordenDeDependencias(e.dependencias, a.nombre, capa.nombre, "con equipo");
+          const deLaCapa = a.dimensiones.filter((d) => d.capa === capa.clave);
+          const lugares = deLaCapa.map((d) => lugarEnElOrden(orden, d));
+          expect([...lugares].sort(), `${ed.nombre} · ${a.nombre} · ${capa.nombre}`).toEqual(deLaCapa.map((_, j) => j + 1));
+        }
+      }
+    }
   });
 });
 

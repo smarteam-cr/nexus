@@ -30,7 +30,10 @@ import { EtiquetaDeEstado } from "./comentarios/ControlDeEstado";
 import TarjetaDeComentario, { type AccionesDeComentario } from "./comentarios/TarjetaDeComentario";
 import { ParrafoDeLaEscala, Segmentado } from "./piezas";
 
-/** Lo que el servidor sabe de cada ancla en la versión vigente. */
+/**
+ * Lo que el servidor sabe de cada DIMENSIÓN en la versión vigente (la escala general), para agrupar.
+ * Lo de cada comentario —qué dice hoy su ancla y cómo se llama, con su edición— viene en él.
+ */
 export interface AnclaEnLaBandeja {
   /** «Ventas · Tracción del Deal · Funcional», o null si ya no existe. */
   ruta: string | null;
@@ -50,7 +53,9 @@ export default function Bandeja({
   yo,
   esResponsable,
   almacen = almacenDeLaApi,
-  hrefDeLaEscala = (slug, ancla) => `/escala/${slug}?c=${encodeURIComponent(ancla)}`,
+  // Con la industria del comentario: un criterio propio de una edición no existe en la general.
+  hrefDeLaEscala = (slug, ancla, edicion) =>
+    `/escala/${slug}?${edicion ? `industria=${encodeURIComponent(edicion)}&` : ""}c=${encodeURIComponent(ancla)}`,
   comoCambia = null,
 }: {
   comentarios: ComentarioVisto[];
@@ -60,7 +65,7 @@ export default function Bandeja({
   yo: Autor;
   esResponsable: boolean;
   almacen?: AlmacenDeLaEscala;
-  hrefDeLaEscala?: (slug: string, ancla: string) => string;
+  hrefDeLaEscala?: (slug: string, ancla: string, edicion: string | null) => string;
   /** Cómo cambia la escala y quién decide (del manual publicado). */
   comoCambia?: ComoCambiaLaEscala | null;
 }) {
@@ -71,6 +76,8 @@ export default function Bandeja({
   const [tipo, setTipo] = useState<string>("");
   const [area, setArea] = useState<string>("");
   const [cliente, setCliente] = useState<string>("");
+  /** "" = todas · "general" = la escala general · o la clave de una edición por industria. */
+  const [edicion, setEdicion] = useState<string>("");
   const [busqueda, setBusqueda] = useState("");
   const [agrupar, setAgrupar] = useState(true);
   const [elegido, setElegido] = useState<string | null>(iniciales[0]?.id ?? null);
@@ -110,13 +117,22 @@ export default function Bandeja({
     [comentarios],
   );
 
+  /** Las ediciones desde las que hay algún comentario (para el filtro: sin ninguna, no se muestra). */
+  const ediciones = useMemo(() => {
+    const porClave = new Map<string, string>();
+    for (const c of comentarios) if (c.edicion) porClave.set(c.edicion.slug, c.edicion.nombre);
+    return [...porClave.entries()].sort(([, a], [, b]) => a.localeCompare(b, "es"));
+  }, [comentarios]);
+
   const filtrados = comentarios.filter(
     (c) =>
       (estado === "todos" || c.estado === estado) &&
       (!tipo || c.tipo === tipo) &&
       (!area || c.area === area) &&
       (!cliente || c.cliente?.nombre === cliente) &&
-      (!busqueda.trim() || coincideBusqueda(`${c.ancla} ${c.cuerpo} ${c.cliente?.nombre ?? ""} ${c.autor.nombre} ${anclas[c.ancla]?.ruta ?? ""}`, busqueda)),
+      (!edicion || (edicion === "general" ? !c.edicion : c.edicion?.slug === edicion)) &&
+      (!busqueda.trim() ||
+        coincideBusqueda(`${c.ancla} ${c.cuerpo} ${c.cliente?.nombre ?? ""} ${c.autor.nombre} ${c.ruta ?? ""} ${c.edicion?.nombre ?? ""}`, busqueda)),
   );
 
   const grupos = useMemo(() => {
@@ -129,6 +145,8 @@ export default function Bandeja({
   }, [agrupar, filtrados, anclas]);
 
   const seleccionado = comentarios.find((c) => c.id === elegido) ?? null;
+  /** El slug del área de un comentario (`1` → `ventas`), para el enlace a la escala. */
+  const areaDe = (id: string) => areas.find((a) => a.id === id)?.slug ?? null;
   const nPendientes = comentarios.filter((c) => c.estado === "cambio_pendiente").length;
 
   const exportar = async () => {
@@ -209,6 +227,23 @@ export default function Bandeja({
             ))}
           </select>
         )}
+        {ediciones.length > 0 && (
+          <select
+            aria-label="Industria"
+            title="Desde qué edición de la escala se hizo el comentario: la general o la de una industria."
+            value={edicion}
+            onChange={(e) => setEdicion(e.target.value)}
+            className={selectCls}
+          >
+            <option value="">Toda industria</option>
+            <option value="general">Escala general</option>
+            {ediciones.map(([clave, nombre]) => (
+              <option key={clave} value={clave}>
+                {nombre}
+              </option>
+            ))}
+          </select>
+        )}
         <input
           type="search"
           value={busqueda}
@@ -245,9 +280,9 @@ export default function Bandeja({
                   )}
                   <ul className="divide-y divide-line">
                     {g.filas.map((c) => {
-                      const a = anclas[c.ancla];
-                      const retirado = !a || a.texto === null;
-                      const cambio = !retirado && a.texto !== c.textoAnclado;
+                      // Contra lo que dice hoy SU ancla, leída con la edición desde la que se comentó.
+                      const retirado = c.textoDeHoy === null;
+                      const cambio = !retirado && c.textoDeHoy !== c.textoAnclado;
                       return (
                         <li key={c.id}>
                           <button
@@ -261,11 +296,16 @@ export default function Bandeja({
                           >
                             <span className="w-40 flex-shrink-0">
                               <span className="block font-mono text-xs text-info-ink">{c.ancla}</span>
-                              <span className="mt-0.5 block text-2xs leading-snug text-fg-muted">{a?.ruta ?? "ya no existe en esta versión"}</span>
+                              <span className="mt-0.5 block text-2xs leading-snug text-fg-muted">{c.ruta ?? "ya no existe en esta versión"}</span>
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="flex flex-wrap items-center gap-1.5 text-2xs">
                                 <span className="font-semibold text-fg-secondary">{etiquetaDeTipo(c.tipo)}</span>
+                                {c.edicion && (
+                                  <span className="rounded bg-success-surface px-1 text-success-ink" title="Se comentó desde esta edición de la escala">
+                                    {c.edicion.nombre}
+                                  </span>
+                                )}
                                 {c.cliente && <span className="text-fg-muted">· {c.cliente.nombre}</span>}
                                 {cambio && <span className="rounded bg-warn-surface px-1 text-warn-ink">el texto cambió</span>}
                                 {retirado && <span className="rounded bg-surface-hover px-1 text-fg-secondary">ya no existe</span>}
@@ -293,9 +333,12 @@ export default function Bandeja({
             {seleccionado ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-fg-muted">{anclas[seleccionado.ancla]?.ruta ?? seleccionado.ancla}</p>
-                  {anclas[seleccionado.ancla]?.area && (
-                    <Link href={hrefDeLaEscala(anclas[seleccionado.ancla]!.area!, seleccionado.ancla)} className="text-xs font-medium text-info-ink hover:underline">
+                  <p className="text-xs text-fg-muted">{seleccionado.ruta ?? seleccionado.ancla}</p>
+                  {seleccionado.textoDeHoy !== null && areaDe(seleccionado.area) && (
+                    <Link
+                      href={hrefDeLaEscala(areaDe(seleccionado.area)!, seleccionado.ancla, seleccionado.edicion?.slug ?? null)}
+                      className="text-xs font-medium text-info-ink hover:underline"
+                    >
                       Ver en la escala →
                     </Link>
                   )}
@@ -305,7 +348,7 @@ export default function Bandeja({
                   c={seleccionado}
                   yoEmail={yo.email}
                   esResponsable={esResponsable}
-                  textoDeHoy={anclas[seleccionado.ancla]?.texto ?? null}
+                  textoDeHoy={seleccionado.textoDeHoy}
                   versionVigente={version}
                   acciones={acciones}
                   conAncla

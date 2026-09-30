@@ -6,12 +6,39 @@
  * muestra su texto de entonces al lado del de hoy, palabra por palabra.
  */
 import { textosPorAncla } from "./anclas";
+import { aplicarEdicion } from "./edicion";
 import type { Escala } from "./tipos";
+
+export interface CambiosDeUnaEdicion {
+  slug: string;
+  nombre: string;
+  /** La edición no estaba en la versión anterior. */
+  nueva: boolean;
+  /** Lo que la edición dice distinto de la escala general, hoy (nombres, preguntas, criterios…). */
+  propiosDeLaEdicion: number;
+  /** Identificadores cuyo texto, leído con esta edición, cambia de una versión a la otra. */
+  cambiados: { id: string; antes: string; despues: string }[];
+  /**
+   * Lo que la edición dice con sus palabras y quedó VIEJO: el texto general cambió de una versión a
+   * la otra y el de la edición no se tocó. No es un error (puede seguir diciendo lo mismo), pero
+   * hay que mirarlo: es la forma en que una edición se aleja de la escala sin que nadie lo decida.
+   */
+  viejos: string[];
+}
 
 export interface CambiosEntreVersiones {
   nuevos: string[];
   retirados: string[];
   cambiados: { id: string; antes: string; despues: string }[];
+  ediciones: CambiosDeUnaEdicion[];
+  /** Ediciones que estaban en la versión anterior y ya no. */
+  edicionesRetiradas: string[];
+}
+
+function cambiosDeTexto(a: Map<string, string>, b: Map<string, string>): CambiosEntreVersiones["cambiados"] {
+  return [...b.entries()]
+    .filter(([id, texto]) => a.has(id) && a.get(id) !== texto)
+    .map(([id, despues]) => ({ id, antes: a.get(id)!, despues }));
 }
 
 export function compararEscalas(anterior: Escala, nueva: Escala): CambiosEntreVersiones {
@@ -19,10 +46,31 @@ export function compararEscalas(anterior: Escala, nueva: Escala): CambiosEntreVe
   const b = textosPorAncla(nueva);
   const nuevos = [...b.keys()].filter((id) => !a.has(id));
   const retirados = [...a.keys()].filter((id) => !b.has(id));
-  const cambiados = [...b.entries()]
-    .filter(([id, texto]) => a.has(id) && a.get(id) !== texto)
-    .map(([id, despues]) => ({ id, antes: a.get(id)!, despues }));
-  return { nuevos, retirados, cambiados };
+
+  const ediciones = nueva.ediciones.map((ed): CambiosDeUnaEdicion => {
+    const existia = anterior.ediciones.some((e) => e.slug === ed.slug);
+    const antes = textosPorAncla(aplicarEdicion(anterior, ed.slug));
+    const ahora = textosPorAncla(aplicarEdicion(nueva, ed.slug));
+    const distintos = [...ahora.entries()].filter(([id, texto]) => b.get(id) !== texto);
+    return {
+      slug: ed.slug,
+      nombre: ed.nombre,
+      nueva: !existia,
+      propiosDeLaEdicion: distintos.length,
+      cambiados: existia ? cambiosDeTexto(antes, ahora) : [],
+      viejos: existia
+        ? distintos.filter(([id, texto]) => a.has(id) && b.has(id) && a.get(id) !== b.get(id) && antes.get(id) === texto).map(([id]) => id)
+        : [],
+    };
+  });
+
+  return {
+    nuevos,
+    retirados,
+    cambiados: cambiosDeTexto(a, b),
+    ediciones,
+    edicionesRetiradas: anterior.ediciones.filter((e) => !nueva.ediciones.some((x) => x.slug === e.slug)).map((e) => e.nombre),
+  };
 }
 
 export type Tramo = { tipo: "igual" | "quitado" | "agregado"; texto: string };

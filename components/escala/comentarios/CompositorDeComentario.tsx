@@ -27,12 +27,15 @@ import SelectorDeCliente, { type ClienteElegido } from "./SelectorDeCliente";
 export default function CompositorDeComentario({
   ancla,
   version,
+  edicion = null,
   perfilDeLaPantalla,
   onEnviar,
   cargarClientes,
 }: {
   ancla: string;
   version: string;
+  /** La edición por industria con que se está leyendo la escala (null = la general): se guarda con el comentario. */
+  edicion?: { slug: string; nombre: string } | null;
   perfilDeLaPantalla: Perfil;
   onEnviar: (nuevo: NuevoComentario) => Promise<boolean>;
   cargarClientes: () => Promise<ClienteParaElegir[]>;
@@ -59,6 +62,7 @@ export default function CompositorDeComentario({
       clienteNombre: tipo === "no_calza" ? cliente?.nombre ?? null : null,
       perfilCierre: cierre,
       perfilDespues: despues,
+      edicion: edicion?.slug ?? null,
     });
     setEnviando(false);
     if (ok) {
@@ -155,7 +159,8 @@ export default function CompositorDeComentario({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-2xs text-fg-muted">
-          Queda anclado a <span className="font-mono">{ancla}</span> y a la versión {version}.
+          Queda anclado a <span className="font-mono">{ancla}</span> y a la versión {version}
+          {edicion ? `, edición ${edicion.nombre}` : ""}.
         </span>
         <Button type="submit" size="sm" variant="primary" loading={enviando} disabled={falta}>
           Comentar

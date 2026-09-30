@@ -97,8 +97,16 @@ export default function TarjetaDeComentario({
 
       <CambioDeTexto antes={c.textoAnclado} hoy={textoDeHoy} versionComentada={c.versionEscala} versionVigente={versionVigente} />
 
-      {(c.cliente || perfil) && (
+      {(c.cliente || perfil || c.edicion) && (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-secondary">
+          {c.edicion && (
+            <span
+              className="rounded bg-success-surface px-1.5 py-0.5 text-2xs text-success-ink"
+              title="Se comentó leyendo la escala con esta edición: el texto comentado es el de esa edición."
+            >
+              Edición {c.edicion.nombre}
+            </span>
+          )}
           {c.cliente && (
             <span>
               <span className="text-fg-muted">Cliente · </span>

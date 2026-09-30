@@ -3705,3 +3705,53 @@ escalera, mapa radial), filtro por perfil de negocio y comentarios anclados.
   `authenticated`, y hace ROLLBACK. Se probó que falla si la tabla queda abierta.
 - **Fuera de alcance, a pedido**: votos, notificaciones y análisis con IA. Los agentes no leen los
   comentarios (guardia en `guardas.test.ts`).
+
+## La escala tiene ediciones por industria, no una escala por industria (2026-09-29)
+
+Elías sentía que la escala era un asset demasiado general para su ICP (inmobiliarias, educación,
+ecommerce y retail): «Tracción del Deal» no le dice nada a una tienda. Planteó una escala por
+industria. Se decidió UNA escala con EDICIONES (8.0.0): lo que queda fijo es el esqueleto —3 áreas,
+las 8 preguntas de fondo por área, 5 niveles, reglas, cálculo e identificadores— y cada edición
+cambia lo que ve el cliente. Primera edición: «Ecommerce y retail», con Ventas escrita entera.
+
+- **Por qué no tres escalas.** Tres copias de la base operativa se mantienen tres veces y se
+  separan sin querer; cada una necesitaría sus propios clientes para validarse; los casos de uso y
+  el diagnóstico cuelgan de las mismas dimensiones; y los clientes de otras industrias igual
+  necesitan la general. De los cambios que pedían las tres industrias, casi todos dependían del
+  PERFIL de negocio y no de la industria: por eso primero salió la 7.7.0 (marcas «venta sin
+  vendedor» y «recompra», lenguaje para empresas y personas) y después las ediciones.
+- **Las ediciones viven DENTRO del documento de la escala, al final** («Parte 5»). Una sola
+  versión, una sola publicación, ningún documento nuevo en `EscalaDocumento`: la general y sus
+  ediciones no pueden quedar en versiones distintas. La escala general es todo lo de antes (un
+  prefijo del archivo): el lector viejo y `pruebas_escala.py` la siguen leyendo igual.
+- **Una edición dice solo lo que cambia**, con la misma gramática de la matriz: nombre (solo en
+  producción), pregunta, descripción y costo de una dimensión; descripción y resultado de un nivel;
+  un criterio REESCRITO (etiqueta con solo el id, `[1.7.F1]`: mismo criterio, mismas marcas);
+  criterios PROPIOS (etiqueta completa, en el bloque de la edición: 101–199 la primera, 201–299 la
+  segunda, así un id dice de quién es y no choca con la matriz); y «No aplican».
+- **`aplicarEdicion(escala, clave)` devuelve otra `Escala` del mismo tipo** (`lib/escala/documento/
+  edicion.ts`). La pantalla, los comentarios y las pruebas leen esa escala sin saber que hay
+  ediciones. La edición decide QUÉ criterios existen y cómo se dicen; el perfil sigue decidiendo
+  cuáles aplican. ⛔ Nunca muta la escala general: se cachea por huella y la comparten todos.
+- **Lo que impide que una edición se vuelva otra escala** (prueba «8 · Ediciones coherentes», en TS
+  y en el Python): COBERTURA —si una edición toca los criterios de una dimensión, dice algo de
+  todos los de la matriz (reescrito, «No aplican» o «Se leen igual»), así un criterio nuevo de la
+  matriz no entra a una edición sin que alguien lo decida—; un criterio reescrito conserva las
+  palabras con valor fijo («la mayoría», «a tiempo»…); la base operativa no cambia de nombre; una
+  edición no saca una dimensión. Y al publicar, lo que una edición dice con sus palabras y cuyo
+  texto general cambió FRENA la publicación hasta mirarlo (`--ediciones-revisadas`).
+- **La clave de la edición es estable** (`*Clave:* ecommerce-retail`), no sale del nombre: va en la
+  URL (`?industria=`) y se guarda con cada comentario.
+- **Un comentario recuerda desde qué edición se hizo** (`EscalaComentario.edicion`, SQL
+  `2026-09-29-escala-comentario-edicion.sql`). El texto que congela es el de esa edición, y «el
+  texto cambió» se compara contra ella: lo calcula el servidor. La columna puede faltar en la
+  ventana entre el deploy y el SQL: toda escritura pide de vuelta solo el id, y las lecturas caen a
+  los campos de antes.
+- **Cambiar de industria en la pantalla vuelve a pedir la página** y monta la vista de nuevo desde
+  la URL (`key` por área e industria). ⚠ No tocar el estado antes de navegar: el efecto que escribe
+  la dirección con `replaceState` le gana a la navegación y deja la industria vieja.
+- **Las versiones anteriores a la 7.7.0 se leen como cuando se publicaron**: la frase «vende sin
+  vendedor», que era una regla de texto, se lee como la marca.
+- **En espera**: la tercera pregunta del perfil (¿le vende a empresas o a personas?), hasta que un
+  criterio la necesite; el chequeo de prospectos por edición; guardar con qué edición se midió
+  (llega con la integración de la escala a los diagnósticos).

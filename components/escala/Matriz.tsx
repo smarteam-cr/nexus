@@ -17,7 +17,7 @@ import type { Dimension, Nivel } from "@/lib/escala/documento/tipos";
 import { ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, useEscala } from "./contexto";
 import { PUNTO_DE_NIVEL } from "./niveles";
-import { Contador, MetaDelCriterio, TextoConPalabras } from "./piezas";
+import { Contador, MetaDelCriterio, NoAplicanEnLaEdicion, NombreGeneral, TextoConPalabras } from "./piezas";
 
 const COLUMNAS = "grid-cols-[minmax(210px,1.15fr)_repeat(5,minmax(170px,1fr))]";
 
@@ -119,6 +119,7 @@ function FilaDeDimension({
             <span className="font-mono text-2xs text-fg-muted">{d.id}</span>
             <span className="text-sm font-semibold leading-tight text-fg">{d.nombre}</span>
           </span>
+          <NombreGeneral nombre={d.nombreGeneral} className="mt-0.5" />
           <span className="mt-1 block text-xs leading-snug text-fg-secondary">{d.pregunta}</span>
         </button>
         {d.descripcion && (
@@ -221,13 +222,14 @@ function CeldaDeNivel({
       )}
 
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-        {ocultos > 0 ? (
-          <span className="text-2xs text-fg-muted">
-            {ocultos} {ocultos === 1 ? "no aplica" : "no aplican"} a este perfil
-          </span>
-        ) : (
-          <span />
-        )}
+        <span className="flex flex-col gap-0.5">
+          {ocultos > 0 && (
+            <span className="text-2xs text-fg-muted">
+              {ocultos} {ocultos === 1 ? "no aplica" : "no aplican"} a este perfil
+            </span>
+          )}
+          <NoAplicanEnLaEdicion nivel={n} />
+        </span>
         <Contador conteo={conteoDeCelda(conteos, d.id, n.letra)} conTexto />
       </div>
     </div>

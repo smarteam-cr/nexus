@@ -33,9 +33,11 @@ export default async function BandejaDeLaEscala() {
     );
   }
 
-  const [comentarios, manual] = await Promise.all([listarComentarios({}), leerDocumentoPublicado("manual")]);
+  // Cada comentario ya trae lo que dice hoy SU ancla, leída con la edición desde la que se hizo
+  // (`textoDeHoy`, `ruta`). Acá solo hacen falta las dimensiones, para agrupar: con su nombre general.
+  const [comentarios, manual] = await Promise.all([listarComentarios({}, vigente.escala), leerDocumentoPublicado("manual")]);
   const anclas: Record<string, AnclaEnLaBandeja> = {};
-  for (const id of new Set(comentarios.flatMap((c) => [c.ancla, c.dimension]))) {
+  for (const id of new Set(comentarios.map((c) => c.dimension))) {
     const r = resolverAncla(vigente.escala, id);
     anclas[id] = r ? { ruta: r.ruta, texto: r.texto, area: r.area.slug } : { ruta: null, texto: null, area: null };
   }

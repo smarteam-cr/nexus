@@ -3,7 +3,8 @@
  *
  * FORMA REAL (page.tsx → VistaDeLaEscala): `px-6 py-8` (SHELL_DEFAULT) > `space-y-4` con el
  * encabezado (título + chips a la izquierda, tres botones a la derecha), las pestañas de las áreas,
- * la fila de controles (vista + perfil) y la matriz: una caja delineada con su fila de niveles.
+ * la fila de controles (vista + industria + perfil) y la matriz: una caja delineada con su fila de
+ * niveles.
  */
 import { PageHeaderSkeleton, Skeleton, SkeletonPanel, SkeletonTabs } from "@/components/ui";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -16,8 +17,9 @@ export default function EscalaLoading() {
         <SkeletonTabs count={3} />
         <div className="flex flex-wrap gap-3">
           <Skeleton className="h-[30px] w-64" rounded="lg" />
-          <Skeleton className="h-[30px] w-80" rounded="lg" delay={40} />
-          <Skeleton className="h-[30px] w-72" rounded="lg" delay={80} />
+          <Skeleton className="h-[30px] w-56" rounded="lg" delay={30} />
+          <Skeleton className="h-[30px] w-80" rounded="lg" delay={60} />
+          <Skeleton className="h-[30px] w-72" rounded="lg" delay={90} />
         </div>
         <SkeletonPanel minH="min-h-[26rem]" bodyClassName="p-0">
           <div className="grid grid-cols-6 gap-px border-b border-line">

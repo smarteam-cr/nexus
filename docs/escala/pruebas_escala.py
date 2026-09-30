@@ -9,6 +9,10 @@ La escala trae la matriz y las reglas; la especificación, el cálculo y sus eje
 versión anterior de la escala, la prueba 5 revisa que ningún identificador haya desaparecido. Si el
 manual de operación está en la misma carpeta que la especificación, la prueba 7 revisa también su
 encabezado.
+
+Desde la 8.0.0 la escala trae ediciones por industria, al final del documento. Las pruebas 1, 2, 4
+y 5 corren sobre la escala general y sobre la escala vista por cada edición, y la 8 mira lo que es
+propio de una edición. La prueba 3 —los ejemplos de la especificación— es solo de la escala general.
 """
 import math
 import os
@@ -39,6 +43,37 @@ def leer(ruta):
     for t, i, tipo, rk, hb, pf in PAT.findall(matriz):
         crit.append(dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·")))
     return s, matriz, crit
+
+REESCRITO = re.compile(r"(?m)^- .* `\[(\d\.\d\.[DIFEO]\d+)\]`$")
+ID = re.compile(r"`(\d\.\d\.[DIFEO]\d+)`")
+
+def leer_ediciones(s):
+    """Las ediciones por industria (desde la 8.0.0): la misma escala dicha para una industria.
+
+    De cada una: sus criterios propios (etiqueta completa), los de la matriz que reescribe (etiqueta
+    con solo el identificador) y los que dice que no aplican.
+    """
+    m = re.search(r"(?m)^# Parte \d+ — Ediciones", s)
+    if not m:
+        return []
+    resto = s[m.start():]
+    fin = re.search(r"(?m)^# Parte ", resto[1:])
+    parte = resto[:fin.start() + 1] if fin else resto
+    ediciones = []
+    for bloque in re.split(r"(?m)^## Edición — ", parte)[1:]:
+        nombre = bloque.split("\n", 1)[0].strip()
+        propios = [dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·"))
+                   for t, i, tipo, rk, hb, pf in PAT.findall(bloque)]
+        no_aplican = [i for linea in re.findall(r"(?m)^\*No aplican:\* (.+)$", bloque) for i in ID.findall(linea)]
+        ediciones.append(dict(nombre=nombre, propios=propios, reescritos=REESCRITO.findall(bloque), no_aplican=no_aplican, texto=bloque))
+    return ediciones
+
+def criterios_de(crit, edicion):
+    """Los criterios que valen en una edición: los de la matriz que no sacó, más los propios."""
+    if edicion is None:
+        return crit
+    fuera = set(edicion["no_aplican"])
+    return [c for c in crit if c["id"] not in fuera] + edicion["propios"]
 
 def encabezado(texto, campo):
     m = re.search(rf"(?m)^{campo}: *(\S+)", texto.split("\n---", 1)[0])
@@ -91,34 +126,41 @@ espec = open(ESPEC, encoding="utf-8").read()
 _linea_retirados = next((l for l in espec.split("\n") if "Identificadores retirados" in l), "")
 RETIRADOS = set(re.findall(r"`(\d\.\d\.[DIFEO]\d+)`", _linea_retirados))
 dims = sorted({c["dim"] for c in crit})
+ediciones = leer_ediciones(s)
+# La escala general y, después, la escala vista por cada edición: las pruebas 1 y 2 corren sobre todas.
+VISTAS = [("", crit)] + [(f"[{e['nombre']}] ", criterios_de(crit, e)) for e in ediciones]
 REGLA_INICIADO = "solo le faltan hábitos iniciados" in s
 print(f"{ESCALA} {encabezado(s, 'version')}: {len(crit)} criterios, {len(dims)} dimensiones")
+for e in ediciones:
+    print(f"  Edición «{e['nombre']}»: {len(e['propios'])} criterios propios, {len(e['reescritos'])} reescritos, {len(e['no_aplican'])} que no aplican")
 print(f"{ESPEC} {encabezado(espec, 'version')}, para la escala {encabezado(espec, 'escala')}")
 print(f"Regla de «por confirmar» escrita en esta versión: {'solo hábitos iniciados' if REGLA_INICIADO else 'cualquier hábito que falte'}\n")
 
 # 1 · Ningún nivel vacío
 vacios = []
-for venta, rel in PERFILES:
-    for d in dims:
-        if not [c for c in crit if c["dim"] == d and c["lv"] == "F" and not c["riesgo"] and aplica(c, venta, rel)]:
-            continue  # la dimensión no aplica a ese perfil
-        for lv in "FEO":
-            if not [c for c in crit if c["dim"] == d and c["lv"] == lv and not c["riesgo"] and aplica(c, venta, rel)]:
-                vacios.append(f"{d} {lv} ({venta}/{rel})")
+for donde, cs in VISTAS:
+    for venta, rel in PERFILES:
+        for d in dims:
+            if not [c for c in cs if c["dim"] == d and c["lv"] == "F" and not c["riesgo"] and aplica(c, venta, rel)]:
+                continue  # la dimensión no aplica a ese perfil
+            for lv in "FEO":
+                if not [c for c in cs if c["dim"] == d and c["lv"] == lv and not c["riesgo"] and aplica(c, venta, rel)]:
+                    vacios.append(f"{donde}{d} {lv} ({venta}/{rel})")
 prueba("1 · Ningún nivel vacío", not vacios, ", ".join(vacios))
 
 # 2 · Nada se regala
 regalos = []
-for venta, rel in PERFILES:
-    for d in dims:
-        if not [c for c in crit if c["dim"] == d and c["lv"] == "F" and not c["riesgo"] and aplica(c, venta, rel)]:
-            continue
-        lv, _ = nivel(crit, d, venta, rel, lambda c: "no", REGLA_INICIADO)
-        if lv:
-            regalos.append(f"{d} llega a {lv} sin cumplir nada ({venta}/{rel})")
-        lv, pc = nivel(crit, d, venta, rel, lambda c: "no" if c["habito"] else "cumplido", REGLA_INICIADO)
-        if pc:
-            regalos.append(f"{d} queda por confirmar con hábitos que no se hacen ({venta}/{rel})")
+for donde, cs in VISTAS:
+    for venta, rel in PERFILES:
+        for d in dims:
+            if not [c for c in cs if c["dim"] == d and c["lv"] == "F" and not c["riesgo"] and aplica(c, venta, rel)]:
+                continue
+            lv, _ = nivel(cs, d, venta, rel, lambda c: "no", REGLA_INICIADO)
+            if lv:
+                regalos.append(f"{donde}{d} llega a {lv} sin cumplir nada ({venta}/{rel})")
+            lv, pc = nivel(cs, d, venta, rel, lambda c: "no" if c["habito"] else "cumplido", REGLA_INICIADO)
+            if pc:
+                regalos.append(f"{donde}{d} queda por confirmar con hábitos que no se hacen ({venta}/{rel})")
 prueba("2 · Nada se regala", not regalos, "; ".join(regalos[:6]))
 
 # 3 · Los ejemplos cuadran (los ejemplos viven en la especificación)
@@ -132,21 +174,28 @@ prueba("3 · Los ejemplos cuadran",
        f"capa={capa}, chequeo={chequeo}, dimensión={dim_65}, criterios de Óptimo={len(optimo_16)}, "
        f"textos que faltan en la especificación={[t for t in textos if t not in espec]}")
 
-# 4 · Sin identificadores a la vista (criterios, resultados, costos y mensajes de riesgo)
-visibles = [l for l in matriz.split("\n") if l.startswith(("- ", "*Resultado", "*Costo", "*Descripción", "**"))]
+# 4 · Sin identificadores a la vista (criterios, resultados, costos y mensajes de riesgo; también en las ediciones)
+VISIBLE = ("- ", "*Resultado", "*Costo", "*Descripción", "**")
+visibles = [l for l in matriz.split("\n") if l.startswith(VISIBLE)]
+for e in ediciones:
+    # En una edición también se ven las preguntas y las descripciones, que son texto corrido. Las líneas
+    # «No aplican» y «Se leen igual» nombran identificadores a propósito, y no las ve el cliente.
+    visibles += [l for l in e["texto"].split("\n") if l.startswith(VISIBLE) or (l.strip() and not l.startswith(("#", "*", "|", "-")))]
 fugas = [re.sub(r" `\[[^]]*\]`$", "", l)[:80] for l in visibles if re.search(r"\b[123]\.[1-8]\b", re.sub(r" `\[[^]]*\]`$", "", l))]
 ini = s.index("## Riesgos")
 riesgos = s[ini:s.index("\n## ", ini + 1)]
 fugas += [l[:80] for l in riesgos.split("\n") if l.startswith("| `") and re.search(r"\b[123]\.[1-8]\b", l.split("|")[3])]
 prueba("4 · Sin identificadores a la vista", not fugas, "; ".join(fugas))
 
-# 5 · Identificadores estables
-ids = [c["id"] for c in crit]
+# 5 · Identificadores estables (los de la matriz y los propios de cada edición son una sola lista)
+propios = [c for e in ediciones for c in e["propios"]]
+ids = [c["id"] for c in crit + propios]
 repetidos = sorted({i for i in ids if ids.count(i) > 1})
 reusados = sorted(RETIRADOS & set(ids))
 perdidos = []
 if ANTERIOR:
-    _, _, viejos = leer(ANTERIOR)
+    s_anterior, _, viejos = leer(ANTERIOR)
+    viejos = viejos + [c for e in leer_ediciones(s_anterior) for c in e["propios"]]
     # Un identificador retirado puede desaparecer (se retiró o cambió de dimensión); cualquier otro, no.
     perdidos = sorted({c["id"] for c in viejos} - set(ids) - RETIRADOS)
 prueba("5 · Identificadores estables", not (repetidos or reusados or perdidos),
@@ -164,6 +213,20 @@ if os.path.exists(MANUAL):
     if man != vigente:
         desalineados.append(f"manual para {man}")
 prueba("7 · Documentos alineados", not desalineados, f"escala {vigente}; " + ", ".join(desalineados))
+
+# 8 · Ediciones coherentes (solo si la versión trae ediciones)
+if ediciones:
+    incoherencias = []
+    de_la_matriz = {c["id"] for c in crit}
+    numero = lambda i: int(i[5:])
+    incoherencias += [f"{i} está en la matriz con un número de edición" for i in sorted(de_la_matriz) if numero(i) >= 100]
+    for e in ediciones:
+        n = e["nombre"]
+        incoherencias += [f"[{n}] {i} no está en la matriz" for i in e["reescritos"] + e["no_aplican"] if i not in de_la_matriz]
+        incoherencias += [f"[{n}] {i} está reescrito y en «No aplican»" for i in sorted(set(e["reescritos"]) & set(e["no_aplican"]))]
+        incoherencias += [f"[{n}] {c['id']} ya está en la matriz" for c in e["propios"] if c["id"] in de_la_matriz]
+        incoherencias += [f"[{n}] {c['id']} no está en el bloque de una edición (desde el 101)" for c in e["propios"] if numero(c["id"]) <= 100]
+    prueba("8 · Ediciones coherentes", not incoherencias, "; ".join(incoherencias[:8]))
 
 print("\nRESULTADO:", "todas pasan" if not fallas else f"fallan {len(fallas)}: {fallas}")
 sys.exit(1 if fallas else 0)

@@ -87,6 +87,30 @@ describe("el SQL deja todo cerrado para anon", () => {
     const politicas = leer(path.join("prisma", "policies.sql"));
     for (const t of tablas) expect(politicas, t).toContain(`CREATE POLICY deny_all_non_superuser ON "${t}"`);
   });
+
+  it("el SQL de la edición del comentario solo SUMA una columna a una tabla que ya estaba cerrada", () => {
+    const edicion = leer(path.join("scripts", "sql", "2026-09-29-escala-comentario-edicion.sql"))
+      .split("\n")
+      .filter((l) => l.trim() && !l.trim().startsWith("--"))
+      .join("\n");
+    expect(edicion).toBe('ALTER TABLE "EscalaComentario" ADD COLUMN IF NOT EXISTS "edicion" TEXT;');
+  });
+});
+
+describe("la columna de la edición puede faltar (la ventana entre el deploy y su SQL)", () => {
+  const consultas = soloCodigo(leer(path.join("lib", "escala", "comentarios", "consultas.ts")));
+
+  it("toda escritura de un comentario pide de vuelta solo el id: sin `select`, Prisma pide todas las columnas", () => {
+    // Sentencia por sentencia: crear, editar, borrar y los tres cambios de estado.
+    const escrituras = consultas.split(/;\s*\n/).filter((s) => /escalaComentario\.(create|update|delete)\(/.test(s));
+    expect(escrituras.length).toBeGreaterThanOrEqual(6);
+    for (const e of escrituras) expect(e, e.trim().slice(0, 80)).toMatch(/select: (\{ id: true \}|soloId)/);
+  });
+
+  it("las lecturas caen a los campos de antes si la columna no está", () => {
+    expect(consultas).toMatch(/select: CAMPOS_CON_EDICION/);
+    expect(consultas).toMatch(/esquemaDesactualizado\(e\)[\s\S]*?select: CAMPOS \}/);
+  });
 });
 
 describe("fuente única: la escala no está escrita en el código", () => {
@@ -105,6 +129,23 @@ describe("fuente única: la escala no está escrita en el código", () => {
     ...escala.dependencias.map((d) => d.porQue),
     ...[perfil.introduccion ?? "", ...perfil.notas],
     ...[perfil.cierre, perfil.despues].flatMap((p) => p?.opciones.map((o) => o.definicion) ?? []),
+    // Las ediciones por industria también son la escala: sus preguntas, costos, niveles y criterios.
+    escala.edicionesIntro ?? "",
+    ...escala.ediciones.flatMap((ed) => [
+      ed.descripcion ?? "",
+      ...ed.areas.flatMap((a) => [
+        a.descripcion ?? "",
+        ...Object.values(a.panoramica),
+        ...a.dimensiones.flatMap((d) => [
+          d.pregunta ?? "",
+          d.descripcion ?? "",
+          d.costoDeQuedarse ?? "",
+          ...Object.values(d.niveles).flatMap((n) => [n.descripcion ?? "", n.resultado ?? ""]),
+          ...Object.values(d.textos),
+          ...d.propios.map((c) => c.texto),
+        ]),
+      ]),
+    ]),
   ].filter((t) => t.length >= 40);
 
   const codigo = [

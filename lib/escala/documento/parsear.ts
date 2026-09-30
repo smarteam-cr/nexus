@@ -14,10 +14,16 @@
  * · La prosa que acompaña (panorámicas, definiciones, glosario, historial) es opcional: si una
  *   versión la reescribe, esa parte queda vacía y la pantalla sigue. Los tests del archivo real
  *   dicen si falta algo que la versión vigente sí tiene.
+ * · Las EDICIONES por industria (desde la 8.0.0, al final del documento) se leen con la misma
+ *   gramática y la misma exigencia que la matriz (`leerEdiciones`). La escala general es todo lo
+ *   que va antes de ellas: se lee exactamente igual con ediciones que sin ellas. Cómo se ve la
+ *   escala con una edición lo arma `edicion.ts` (`aplicarEdicion`).
  *
  * La etiqueta de cada criterio se lee con la MISMA expresión que `docs/escala/pruebas_escala.py`.
  */
 import {
+  CIERRES,
+  DESPUES,
   ErrorDeFormato,
   LETRAS,
   LETRAS_CON_RESULTADO,
@@ -28,6 +34,10 @@ import {
   type ClaveDeCapa,
   type Criterio,
   type Dimension,
+  type Edicion,
+  type EdicionDeArea,
+  type EdicionDeDimension,
+  type EdicionDeNivel,
   type Escala,
   type Letra,
   type MarcaDePerfil,
@@ -190,7 +200,7 @@ function leerNiveles(lineas: string[]): Contexto {
   const letras = niveles.map((n) => n.letra).join("");
   if (letras !== LETRAS.join("")) {
     throw new ErrorDeFormato(
-      `la tabla «Niveles» de la Parte 4 tiene que traer los cinco niveles en orden (${LETRAS.join(", ")}); trae «${letras || "nada"}».`,
+      `la tabla «Niveles» de la Referencia tiene que traer los cinco niveles en orden (${LETRAS.join(", ")}); trae «${letras || "nada"}».`,
     );
   }
   return { niveles, nivelPorNombre: new Map(niveles.map((n) => [n.nombre, n])) };
@@ -200,7 +210,22 @@ function escaparRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function leerMatriz(lineas: string[], ctx: Contexto): { areas: Area[]; nombresDeCapa: string[] } {
+/** 7.6.1 < 7.7.0: por números, no por texto. */
+function esAnteriorA(version: string, otra: string): boolean {
+  const a = version.split(".").map(Number);
+  const b = otra.split(".").map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d !== 0) return d < 0;
+  }
+  return false;
+}
+
+function leerMatriz(lineas: string[], ctx: Contexto, version: string): { areas: Area[]; nombresDeCapa: string[] } {
+  // Hasta la 7.6.1, «vende sin vendedor» era una regla de TEXTO: el criterio que traía esa frase no
+  // contaba en la venta con equipo. Desde la 7.7.0 es la marca «venta sin vendedor». Una versión
+  // vieja se sigue leyendo igual que cuando se publicó: la frase se lee como la marca.
+  const reglaDeTexto = esAnteriorA(version, "7.7.0");
   const inicio = lineas.findIndex((l) => /^## Área \d+ — /.test(l));
   if (inicio === -1) throw new ErrorDeFormato("no encontré la matriz: falta «## Área 1 — …».");
   const finRel = lineas.slice(inicio + 1).findIndex((l) => /^# /.test(l));
@@ -365,13 +390,14 @@ function leerMatriz(lineas: string[], ctx: Contexto): { areas: Area[]; nombresDe
       if (!id.startsWith(`${nivel.id}`) || !/^\d+$/.test(id.slice(nivel.id.length))) {
         throw new ErrorDeFormato(`el criterio ${id} está en ${nivel.id}.`, n);
       }
+      const marca = (perfil.replace(/^ · /, "") || null) as MarcaDePerfil | null;
       const criterio: Criterio = {
         id,
         texto: texto.trim(),
         verificacion: verif as Verificacion,
         riesgo: !!riesgo,
         habito: !!habito,
-        perfil: (perfil.replace(/^ · /, "") || null) as MarcaDePerfil | null,
+        perfil: marca ?? (reglaDeTexto && texto.includes("vende sin vendedor") ? "venta sin vendedor" : null),
       };
       nivel.criterios.push(criterio);
       parrafo = null;
@@ -408,6 +434,387 @@ function leerMatriz(lineas: string[], ctx: Contexto): { areas: Area[]; nombresDe
 
   if (areas.length === 0) throw new ErrorDeFormato("la matriz no tiene áreas.");
   return { areas, nombresDeCapa };
+}
+
+// ── Las ediciones por industria ───────────────────────────────────────────────
+// Se leen con la MISMA gramática de la matriz y con la misma exigencia: una línea que el lector no
+// reconoce es un error con su número. Todo lo que una edición no dice vale como está en la matriz,
+// así que acá todo es opcional; lo que se exige es que lo que nombra EXISTA (un área, una dimensión,
+// el criterio que reescribe o que saca) y que un criterio propio no pise un identificador.
+
+/** El título de la parte de las ediciones, lleve el número que lleve: «# Parte 5 — Ediciones por industria». */
+const ES_LA_PARTE_DE_EDICIONES = /^# Parte \d+ — Ediciones/;
+
+/** `[1.7.F1]`: un criterio de la escala general dicho con las palabras de la edición (solo el id). */
+const ETIQUETA_DE_REESCRITO = /^- (.*) `\[(\d+\.\d+\.[DIFEO]\d+)\]`$/;
+
+/** La «Clave» de una edición: `ecommerce-retail` (minúsculas, números y guiones). */
+export const FORMA_DE_EDICION = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Los criterios propios de una edición se numeran en un bloque de cien: si empieza en 101, van del
+ * 101 al 199. La matriz usa los números de abajo de 100.
+ */
+export const PRIMER_NUMERO_DE_EDICION = 100;
+export const TAMANO_DEL_BLOQUE = 99;
+
+/** Los ids que nombra una línea como «*No aplican:* `1.7.D1`, `1.7.I2`.». */
+function idsDeLaLinea(texto: string): string[] {
+  return [...texto.matchAll(/`(\d+\.\d+\.[DIFEO]\d+)`/g)].map((x) => x[1]);
+}
+
+/** «transaccional · recompra.» → el perfil con que arranca quien elige la edición. */
+function leerPerfilHabitual(texto: string, n: number): NonNullable<Edicion["perfilHabitual"]> {
+  const norm = (s: string) => sinTildes(s).toLowerCase().replace(/\.$/, "").trim();
+  const partes = texto.split("·").map(norm);
+  const cierre = CIERRES.find((c) => partes.includes(norm(c)));
+  const despues = DESPUES.find((d) => partes.some((p) => p === norm(d) || p === `relacion ${norm(d)}`));
+  if (!cierre || !despues || partes.length !== 2) {
+    throw new ErrorDeFormato(
+      `«Perfil habitual» tiene que decir cómo se cierra la venta y qué pasa después («transaccional · recompra»); dice «${texto}».`,
+      n,
+    );
+  }
+  return { cierre, despues };
+}
+
+function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { ediciones: Edicion[]; intro: string | null } {
+  const inicio = lineas.findIndex((l) => ES_LA_PARTE_DE_EDICIONES.test(l));
+  if (inicio === -1) return { ediciones: [], intro: null };
+  // Las ediciones van al FINAL del documento: la escala general es todo lo de antes, entero.
+  const finRel = lineas.slice(inicio + 1).findIndex((l) => /^# /.test(l));
+  if (finRel !== -1) {
+    throw new ErrorDeFormato("las ediciones por industria van al final del documento: después de ellas no puede venir otra parte.", inicio + 2 + finRel);
+  }
+  const fin = lineas.length;
+  const primeraRel = lineas.slice(inicio + 1, fin).findIndex((l) => /^## Edición — /.test(l));
+  const primera = primeraRel === -1 ? fin : inicio + 1 + primeraRel;
+  // Antes de la primera edición va la prosa que dice qué es una edición: su primer párrafo.
+  const intro = parrafos(lineas.slice(inicio + 1, primera).map((l) => (l.startsWith("#") ? "" : l)))[0] ?? null;
+
+  const encabezadoDeNivel = new RegExp(`^\\*\\*(${ctx.niveles.map((n) => escaparRegex(n.nombre)).join("|")})\\.\\*\\*(?: (.+))?$`);
+  const generales = new Map(areas.flatMap((a) => a.dimensiones.map((d) => [d.id, d] as const)));
+  const idsGenerales = new Set(areas.flatMap((a) => a.dimensiones.flatMap((d) => d.niveles.flatMap((x) => x.criterios.map((c) => c.id)))));
+  /** Id de un criterio propio → la edición que lo trae (no se repite entre ediciones). */
+  const propiosVistos = new Map<string, string>();
+
+  const ediciones: Edicion[] = [];
+  let ed: Edicion | null = null;
+  let area: EdicionDeArea | null = null;
+  let dim: EdicionDeDimension | null = null;
+  let letra: Letra | null = null;
+  let enPalabras = false;
+  let tablaDePalabras: string[] = [];
+  let parrafo: ((linea: string) => void) | null = null;
+  let anteriorEnBlanco = true;
+
+  const cerrarPalabras = () => {
+    if (ed && tablaDePalabras.length) {
+      ed.palabras = filasDeTabla(tablaDePalabras)
+        .filter((c) => c[0] && c[1])
+        .map(([general, edicion]) => ({ general, edicion }));
+    }
+    tablaDePalabras = [];
+    enPalabras = false;
+  };
+  /** Al terminar una edición: sin «Clave» no tiene identidad (la URL y los comentarios la usan). */
+  let lineaDeLaEdicion = 0;
+  const cerrarEdicion = () => {
+    cerrarPalabras();
+    if (ed && !ed.slug) throw new ErrorDeFormato(`la edición «${ed.nombre}» no dice su «Clave» («*Clave:* ecommerce-retail»).`, lineaDeLaEdicion);
+  };
+
+  for (let i = primera; i < fin; i++) {
+    const n = i + 1;
+    const linea = lineas[i].trimEnd();
+    if (!linea.trim() || linea.trim() === "---") {
+      parrafo = null;
+      anteriorEnBlanco = true;
+      continue;
+    }
+    const continuacion = !anteriorEnBlanco && parrafo !== null;
+    anteriorEnBlanco = false;
+
+    let m: RegExpExecArray | null;
+    if ((m = /^## Edición — (.+)$/.exec(linea))) {
+      cerrarEdicion();
+      const nombre = m[1].trim();
+      if (ediciones.some((e) => e.nombre === nombre)) throw new ErrorDeFormato(`la edición «${nombre}» aparece dos veces.`, n);
+      ed = { slug: "", nombre, descripcion: null, perfilHabitual: null, bloque: null, palabras: [], areas: [] };
+      lineaDeLaEdicion = n;
+      ediciones.push(ed);
+      area = null;
+      dim = null;
+      letra = null;
+      parrafo = null;
+      anteriorEnBlanco = true;
+      continue;
+    }
+    if (!ed) throw new ErrorDeFormato("hay texto antes de la primera edición.", n);
+    if (/^## /.test(linea)) {
+      throw new ErrorDeFormato(`después de una edición solo puede venir otra edición («## Edición — …»): ${linea.slice(0, 80)}`, n);
+    }
+
+    if (/^### Palabras de esta edición\s*$/.test(linea)) {
+      cerrarPalabras();
+      enPalabras = true;
+      area = null;
+      dim = null;
+      letra = null;
+      parrafo = null;
+      continue;
+    }
+    if ((m = /^### Área (\d+) — (.+)$/.exec(linea))) {
+      cerrarPalabras();
+      if (!areas.some((a) => a.id === m![1])) throw new ErrorDeFormato(`la escala no tiene un área ${m[1]}.`, n);
+      if (ed.areas.some((a) => a.id === m![1])) throw new ErrorDeFormato(`el área ${m[1]} aparece dos veces en la edición «${ed.nombre}».`, n);
+      area = { id: m[1], nombre: m[2].trim(), descripcion: null, panoramica: {}, dimensiones: [] };
+      ed.areas.push(area);
+      dim = null;
+      letra = null;
+      parrafo = null;
+      anteriorEnBlanco = true;
+      continue;
+    }
+    if (/^### /.test(linea)) {
+      throw new ErrorDeFormato(`una edición se divide en «### Palabras de esta edición» y «### Área N — Nombre»: ${linea.slice(0, 80)}`, n);
+    }
+
+    if ((m = /^#### (\d+)\.(\d+) (.+)$/.exec(linea))) {
+      const id = `${m[1]}.${m[2]}`;
+      if (!area) throw new ErrorDeFormato(`la dimensión ${id} está fuera de un área.`, n);
+      if (m[1] !== area.id) throw new ErrorDeFormato(`la dimensión ${id} está en el área ${area.id}.`, n);
+      if (!generales.has(id)) throw new ErrorDeFormato(`la escala no tiene una dimensión ${id}.`, n);
+      if (area.dimensiones.some((d) => d.id === id)) throw new ErrorDeFormato(`la dimensión ${id} aparece dos veces en la edición «${ed.nombre}».`, n);
+      dim = {
+        id,
+        nombre: m[3].trim(),
+        pregunta: null,
+        descripcion: null,
+        costoDeQuedarse: null,
+        niveles: {},
+        textos: {},
+        propios: [],
+        noAplican: [],
+        seLeenIgual: [],
+      };
+      area.dimensiones.push(dim);
+      letra = null;
+      parrafo = null;
+      anteriorEnBlanco = true;
+      continue;
+    }
+
+    if (enPalabras) {
+      if (!linea.startsWith("|")) throw new ErrorDeFormato(`«Palabras de esta edición» es una tabla: ${linea.slice(0, 80)}`, n);
+      tablaDePalabras.push(linea);
+      continue;
+    }
+
+    if ((m = /^\*Clave:\* (.+)$/.exec(linea))) {
+      if (area) throw new ErrorDeFormato("«Clave» va al principio de la edición, antes de sus áreas.", n);
+      const clave = m[1].trim().replace(/\.$/, "");
+      if (!FORMA_DE_EDICION.test(clave)) {
+        throw new ErrorDeFormato(`la «Clave» de una edición va en minúsculas, con números y guiones («ecommerce-retail»); dice «${clave}».`, n);
+      }
+      if (ediciones.some((e) => e !== ed && e.slug === clave)) throw new ErrorDeFormato(`dos ediciones tienen la clave «${clave}».`, n);
+      ed.slug = clave;
+      parrafo = null;
+      continue;
+    }
+
+    if ((m = /^\*Perfil habitual:\* (.+)$/.exec(linea))) {
+      if (area) throw new ErrorDeFormato("«Perfil habitual» va al principio de la edición, antes de sus áreas.", n);
+      ed.perfilHabitual = leerPerfilHabitual(m[1], n);
+      parrafo = null;
+      continue;
+    }
+
+    if ((m = /^\*Criterios propios:\* (.+)$/.exec(linea))) {
+      if (area) throw new ErrorDeFormato("«Criterios propios» va al principio de la edición, antes de sus áreas.", n);
+      const desde = Number(/\d+/.exec(m[1])?.[0]);
+      if (!Number.isInteger(desde) || desde <= PRIMER_NUMERO_DE_EDICION || desde % 100 !== 1) {
+        throw new ErrorDeFormato(`«Criterios propios» dice desde qué número van los de la edición, en bloques de cien («desde el 101»); dice «${m[1]}».`, n);
+      }
+      ed.bloque = desde;
+      parrafo = null;
+      continue;
+    }
+
+    if ((m = /^\*Descripción:\* (.+)$/.exec(linea))) {
+      if (!dim || letra) throw new ErrorDeFormato("la descripción de la dimensión está fuera de lugar: va antes de los niveles.", n);
+      dim.descripcion = m[1].trim();
+      parrafo = (l) => {
+        dim!.descripcion += ` ${l}`;
+      };
+      continue;
+    }
+
+    if ((m = /^\*Costo de quedarse:\* (.+)$/.exec(linea))) {
+      if (!dim || letra) throw new ErrorDeFormato("«Costo de quedarse» fuera de lugar: va antes de los niveles.", n);
+      dim.costoDeQuedarse = m[1].trim();
+      parrafo = (l) => {
+        dim!.costoDeQuedarse += ` ${l}`;
+      };
+      continue;
+    }
+
+    // «No aplican» (los de la matriz que la edición saca) y «Se leen igual» (los que deja como están).
+    if ((m = /^\*(No aplican|Se leen igual):\* (.+)$/.exec(linea))) {
+      const marca = m[1];
+      if (!dim) throw new ErrorDeFormato(`«${marca}» va dentro de una dimensión.`, n);
+      const ids = idsDeLaLinea(m[2]);
+      if (ids.length === 0) throw new ErrorDeFormato(`«${marca}» no nombra ningún criterio (van entre comillas invertidas).`, n);
+      const general = generales.get(dim.id)!;
+      const lista = marca === "No aplican" ? dim.noAplican : dim.seLeenIgual;
+      for (const id of ids) {
+        if (!general.niveles.some((x) => x.criterios.some((c) => c.id === id))) {
+          throw new ErrorDeFormato(`«${marca}» nombra ${id}, que no es un criterio de ${dim.id} en la escala general.`, n);
+        }
+        if (lista.includes(id)) throw new ErrorDeFormato(`«${marca}» nombra ${id} dos veces.`, n);
+        lista.push(id);
+      }
+      parrafo = null;
+      continue;
+    }
+
+    if ((m = encabezadoDeNivel.exec(linea))) {
+      const nivel = ctx.nivelPorNombre.get(m[1])!.letra;
+      const texto = m[2]?.trim() ?? null;
+      if (dim) {
+        if (dim.niveles[nivel]) throw new ErrorDeFormato(`el nivel «${m[1]}» aparece dos veces en ${dim.id}.`, n);
+        const x: EdicionDeNivel = { descripcion: texto, resultado: null };
+        dim.niveles[nivel] = x;
+        letra = nivel;
+        parrafo = texto
+          ? (l) => {
+              x.descripcion += ` ${l}`;
+            }
+          : null;
+        continue;
+      }
+      if (area) {
+        if (!texto) throw new ErrorDeFormato(`el vistazo de «${m[1]}» no dice nada.`, n);
+        area.panoramica[nivel] = texto;
+        const a = area;
+        parrafo = (l) => {
+          a.panoramica[nivel] += ` ${l}`;
+        };
+        continue;
+      }
+      throw new ErrorDeFormato(`el nivel «${m[1]}» está fuera de un área.`, n);
+    }
+
+    if ((m = /^\*Resultado:\* (.+)$/.exec(linea))) {
+      if (!dim || !letra) throw new ErrorDeFormato("«Resultado» fuera de un nivel.", n);
+      if (!LETRAS_CON_RESULTADO.includes(letra)) {
+        throw new ErrorDeFormato(`el nivel ${dim.id}.${letra} tiene «Resultado», y la escala los pone desde Funcional.`, n);
+      }
+      const x = dim.niveles[letra]!;
+      x.resultado = m[1].trim();
+      parrafo = (l) => {
+        x.resultado += ` ${l}`;
+      };
+      continue;
+    }
+
+    if (linea.startsWith("- ")) {
+      if (!dim || !letra) throw new ErrorDeFormato("un criterio fuera de un nivel.", n);
+      const nivelId = `${dim.id}.${letra}`;
+      if ((m = ETIQUETA_DE_CRITERIO.exec(linea))) {
+        const [, texto, id, verif, riesgo, habito, perfil] = m;
+        if (!(VERIFICACIONES as readonly string[]).includes(verif)) {
+          throw new ErrorDeFormato(`«${verif}» no es una forma de verificación (${VERIFICACIONES.join(", ")}).`, n);
+        }
+        if (!id.startsWith(nivelId) || !/^\d+$/.test(id.slice(nivelId.length))) throw new ErrorDeFormato(`el criterio ${id} está en ${nivelId}.`, n);
+        if (idsGenerales.has(id)) {
+          throw new ErrorDeFormato(`${id} ya es un criterio de la escala general: para decirlo con otras palabras, la etiqueta lleva solo el id («[${id}]»).`, n);
+        }
+        const otra = propiosVistos.get(id);
+        if (otra) throw new ErrorDeFormato(`${id} ya es un criterio propio de la edición «${otra}».`, n);
+        const numero = Number(id.slice(nivelId.length));
+        if (ed.bloque === null) {
+          throw new ErrorDeFormato(`la edición «${ed.nombre}» trae un criterio propio (${id}) sin haber dicho desde qué número van («*Criterios propios:* desde el 101»).`, n);
+        }
+        if (numero < ed.bloque || numero >= ed.bloque + TAMANO_DEL_BLOQUE) {
+          throw new ErrorDeFormato(
+            `${id} es un criterio propio de «${ed.nombre}», que los numera del ${ed.bloque} al ${ed.bloque + TAMANO_DEL_BLOQUE - 1}.`,
+            n,
+          );
+        }
+        propiosVistos.set(id, ed.nombre);
+        dim.propios.push({
+          id,
+          texto: texto.trim(),
+          verificacion: verif as Verificacion,
+          riesgo: !!riesgo,
+          habito: !!habito,
+          perfil: (perfil.replace(/^ · /, "") || null) as MarcaDePerfil | null,
+        });
+      } else if ((m = ETIQUETA_DE_REESCRITO.exec(linea))) {
+        const [, texto, id] = m;
+        const general = generales.get(dim.id)!.niveles.find((x) => x.letra === letra);
+        if (!general?.criterios.some((c) => c.id === id)) {
+          throw new ErrorDeFormato(`${id} no es un criterio de ${nivelId} en la escala general: un criterio propio lleva la etiqueta completa.`, n);
+        }
+        if (dim.textos[id]) throw new ErrorDeFormato(`${id} está reescrito dos veces en la edición «${ed.nombre}».`, n);
+        dim.textos[id] = texto.trim();
+      } else {
+        throw new ErrorDeFormato(
+          PARECE_CRITERIO.test(linea)
+            ? `la etiqueta de este criterio no sigue la forma «[id]» (reescrito) ni «[id · verificación · riesgo · hábito · perfil]» (propio): ${linea.slice(0, 120)}`
+            : `un punto de la lista sin etiqueta: ${linea.slice(0, 120)}`,
+          n,
+        );
+      }
+      parrafo = null;
+      continue;
+    }
+
+    // Todo lo que empieza como una marca y no es ninguna de las de arriba es un error: «*Perfil
+    // habitual :*» mal escrito no puede terminar, en silencio, como parte de una descripción.
+    if (/^(#|>|\||\d+\. |\*)/.test(linea)) {
+      throw new ErrorDeFormato(`una edición no admite esta línea: ${linea.slice(0, 120)}`, n);
+    }
+
+    // Texto corrido: continúa el párrafo abierto, o es la pregunta de una dimensión recién abierta,
+    // la descripción de un área antes de su primera dimensión, o para quién es la edición.
+    if (continuacion && parrafo) {
+      parrafo(linea.trim());
+      continue;
+    }
+    if (dim) {
+      if (letra || dim.pregunta !== null || dim.descripcion !== null || dim.costoDeQuedarse !== null) {
+        throw new ErrorDeFormato(`no sé qué es esta línea de la edición: ${linea.slice(0, 120)}`, n);
+      }
+      dim.pregunta = linea.trim();
+      parrafo = (l) => {
+        dim!.pregunta += ` ${l}`;
+      };
+      continue;
+    }
+    if (area) {
+      if (area.descripcion !== null || Object.keys(area.panoramica).length) {
+        throw new ErrorDeFormato(`no sé qué es esta línea de la edición: ${linea.slice(0, 120)}`, n);
+      }
+      area.descripcion = linea.trim();
+      const a = area;
+      parrafo = (l) => {
+        a.descripcion += ` ${l}`;
+      };
+      continue;
+    }
+    if (ed.descripcion !== null || ed.perfilHabitual) {
+      throw new ErrorDeFormato(`no sé qué es esta línea de la edición: ${linea.slice(0, 120)}`, n);
+    }
+    ed.descripcion = linea.trim();
+    const e = ed;
+    parrafo = (l) => {
+      e.descripcion += ` ${l}`;
+    };
+  }
+  cerrarEdicion();
+  return { ediciones, intro };
 }
 
 // ── La prosa (opcional) ───────────────────────────────────────────────────────
@@ -611,14 +1018,19 @@ function leerAsignacion(lineas: string[], areas: Area[]): Escala["asignacion"] {
  * falta lo que la escala no puede no tener (la versión, la tabla de niveles, la matriz).
  */
 export function parsearEscala(texto: string): Escala {
-  const lineas = lineasDe(texto);
+  const todas = lineasDe(texto);
+  // Las ediciones por industria van al final. La escala general es todo lo de antes: la matriz y la
+  // prosa se leen solo de ahí (los números de línea no cambian: es el principio del documento).
+  const corte = todas.findIndex((l) => ES_LA_PARTE_DE_EDICIONES.test(l));
+  const lineas = corte === -1 ? todas : todas.slice(0, corte);
   const cabecera = leerEncabezado(texto);
   const version = cabecera.version;
   if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
     throw new ErrorDeFormato("el encabezado no dice la versión (`version: 7.0.0`).");
   }
   const ctx = leerNiveles(lineas);
-  const { areas, nombresDeCapa } = leerMatriz(lineas, ctx);
+  const { areas, nombresDeCapa } = leerMatriz(lineas, ctx, version);
+  const { ediciones, intro: edicionesIntro } = leerEdiciones(todas, areas, ctx);
   leerPanoramicas(lineas, areas, ctx);
   leerGenericas(lineas, areas);
   const evaluar = seccion(lineas, /^## Cómo se evalúa cada dimensión\s*$/);
@@ -651,6 +1063,9 @@ export function parsearEscala(texto: string): Escala {
     perfilDeNegocio: leerPerfilDeNegocio(lineas),
     automatizacion: bloquesDe(seccion(lineas, /^## Regla de automatización\s*$/)),
     asignacion: leerAsignacion(lineas, areas),
+    ediciones,
+    edicionesIntro,
+    edicion: null,
   };
 }
 
@@ -663,9 +1078,19 @@ export function leerRetirados(especificacion: string): string[] {
 
 // ── Recorridos ────────────────────────────────────────────────────────────────
 
-/** Todos los criterios, en el orden de la matriz. */
-export function todosLosCriterios(escala: Escala): Criterio[] {
+/**
+ * Todos los criterios, en el orden de la matriz. En la escala general son los de la matriz; en una
+ * escala vista por una edición (`aplicarEdicion`), los que valen en esa edición.
+ */
+export function todosLosCriterios(escala: Pick<Escala, "areas">): Criterio[] {
   return escala.areas.flatMap((a) => a.dimensiones.flatMap((d) => d.niveles.flatMap((n) => n.criterios)));
+}
+
+/** Los criterios que solo existen en alguna edición, con la edición que los trae. */
+export function criteriosPropios(escala: Pick<Escala, "ediciones">): { edicion: Edicion; criterio: Criterio }[] {
+  return escala.ediciones.flatMap((edicion) =>
+    edicion.areas.flatMap((a) => a.dimensiones.flatMap((d) => d.propios.map((criterio) => ({ edicion, criterio })))),
+  );
 }
 
 /** Todas las dimensiones, en el orden de la matriz. */

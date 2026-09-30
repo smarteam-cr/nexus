@@ -188,7 +188,10 @@ export default function PanelDeComentarios({
                   c={c}
                   yoEmail={yo.email}
                   esResponsable={esResponsable}
-                  textoDeHoy={c.ancla === resuelta.id ? resuelta.texto : (resolverAncla(escalaDelArea, c.ancla)?.texto ?? null)}
+                  // Lo que dice hoy su ancla leída con la edición desde la que se comentó: lo manda el
+                  // servidor. Comparar contra lo que se ve ACÁ marcaría como «cambió» un comentario
+                  // hecho desde otra edición, que solo lee el mismo criterio con otras palabras.
+                  textoDeHoy={c.textoDeHoy}
                   versionVigente={datos.version}
                   acciones={acciones}
                   conAncla={c.ancla !== resuelta.id}
@@ -203,6 +206,7 @@ export default function PanelDeComentarios({
                 key={ancla}
                 ancla={resuelta.id}
                 version={datos.version}
+                edicion={datos.edicion ? { slug: datos.edicion.slug, nombre: datos.edicion.nombre } : null}
                 perfilDeLaPantalla={perfil}
                 cargarClientes={() => almacen.clientes()}
                 onEnviar={(nuevo) => hacer(() => almacen.crear(nuevo), "Comentario guardado.")}

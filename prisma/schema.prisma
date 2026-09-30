@@ -5078,6 +5078,9 @@ model EscalaComentario {
   /// El perfil de negocio que se estaba mirando (o el del cliente): `con equipo`, `única`…
   perfilCierre  String?
   perfilDespues String?
+  /// Desde qué edición por industria se comentó (`ecommerce-retail`); null = la escala general.
+  /// El `textoAnclado` es el de ESA edición. SQL: scripts/sql/2026-09-29-escala-comentario-edicion.sql
+  edicion       String?
 
   autorEmail String
 

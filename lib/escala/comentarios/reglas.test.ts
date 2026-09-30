@@ -64,6 +64,9 @@ const comentario = (extra: Partial<ComentarioVisto>): ComentarioVisto => ({
   decisionQueCambiaria: null,
   cliente: { id: "cl1", nombre: "Inmobiliaria X" },
   perfil: { cierre: "con equipo", despues: "única" },
+  edicion: null,
+  textoDeHoy: "Texto",
+  ruta: "Ventas · Tracción del Deal · Funcional",
   autor: { email: CSE, nombre: "Ana Pérez", foto: null },
   estado: "abierto",
   estadoCambiado: null,
@@ -87,6 +90,11 @@ describe("la fila del manual", () => {
       caso: "",
       decision: "El nivel.",
     });
+  });
+
+  it("si se comentó desde una edición, la fila dice de cuál (las columnas del manual son fijas)", () => {
+    const desdeLaEdicion = comentario({ tipo: "propuesta", cliente: null, cuerpo: "Medirlo por producto.", edicion: { slug: "ecommerce-retail", nombre: "Ecommerce y retail" } });
+    expect(filaSugerida(desdeLaEdicion).que).toBe("`1.7.F1` (edición Ecommerce y retail) — Medirlo por producto.");
   });
 
   it("la fecha es la de Costa Rica, no la de UTC", () => {

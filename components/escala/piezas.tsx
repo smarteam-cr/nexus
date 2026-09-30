@@ -13,7 +13,7 @@ import { useRef } from "react";
 import { InfoHint } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { explicarMarca } from "@/lib/escala/documento/perfil";
-import type { BloqueDeTexto, Criterio } from "@/lib/escala/documento/tipos";
+import type { BloqueDeTexto, Criterio, Nivel } from "@/lib/escala/documento/tipos";
 import type { Conteo } from "@/lib/escala/comentarios/reglas";
 import { partirPorPalabras, type DatosDeLaVista, type TerminoSubrayado } from "@/lib/escala/vista";
 
@@ -55,6 +55,45 @@ export function MetaDelCriterio({ criterio: c, datos, className }: { criterio: C
           {c.perfil}
         </span>
       )}
+      {c.propio && (
+        <span
+          className="rounded bg-success-surface px-1 py-0.5 font-medium text-success-ink"
+          title={`Solo existe en la edición ${datos.edicion?.nombre ?? ""}: la escala general no lo tiene.`}
+        >
+          de la edición
+        </span>
+      )}
+      {c.textoGeneral !== undefined && (
+        <span
+          className="cursor-help rounded border border-line px-1 py-0.5 text-fg-secondary"
+          title={`Es el mismo criterio de la escala general, dicho con las palabras de la edición. En la general dice: «${c.textoGeneral}»`}
+        >
+          con sus palabras
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** «En la escala general: Tracción del Deal», cuando una edición le cambió el nombre a una dimensión. */
+export function NombreGeneral({ nombre, className }: { nombre: string | undefined; className?: string }) {
+  if (!nombre) return null;
+  return <span className={cn("block text-2xs font-normal text-fg-muted", className)}>En la escala general: {nombre}</span>;
+}
+
+/**
+ * Los criterios de la escala general que la edición sacó de un nivel: se dice cuántos, y cuáles al
+ * pasar el cursor (no desaparecen en silencio).
+ */
+export function NoAplicanEnLaEdicion({ nivel, className }: { nivel: Nivel; className?: string }) {
+  const fuera = nivel.noAplican ?? [];
+  if (fuera.length === 0) return null;
+  return (
+    <span
+      className={cn("cursor-help text-2xs text-fg-muted underline decoration-dotted underline-offset-2", className)}
+      title={fuera.map((c) => `${c.id} · ${c.texto}`).join("\n")}
+    >
+      {fuera.length} de la escala general {fuera.length === 1 ? "no aplica" : "no aplican"} en esta edición
     </span>
   );
 }

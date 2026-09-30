@@ -18,6 +18,8 @@ export interface NuevoComentario {
   clienteNombre?: string | null;
   perfilCierre?: Cierre | null;
   perfilDespues?: Despues | null;
+  /** La clave de la edición por industria desde la que se comenta (null = la escala general). */
+  edicion?: string | null;
 }
 
 export type NuevoEstado =

@@ -14,7 +14,16 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import { ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeDimension, useEscala } from "./contexto";
 import { PUNTO_DE_NIVEL } from "./niveles";
-import { BotonComentar, Contador, MetaDelCriterio, ParrafoDeLaEscala, Segmentado, TextoConPalabras } from "./piezas";
+import {
+  BotonComentar,
+  Contador,
+  MetaDelCriterio,
+  NoAplicanEnLaEdicion,
+  NombreGeneral,
+  ParrafoDeLaEscala,
+  Segmentado,
+  TextoConPalabras,
+} from "./piezas";
 
 interface Props {
   datos: DatosDeLaVista;
@@ -86,6 +95,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
             <span className="font-mono text-base text-fg-muted">{d.id}</span>
             <h2 className="text-2xl font-bold tracking-tight text-fg">{d.nombre}</h2>
           </div>
+          <NombreGeneral nombre={d.nombreGeneral} className="-mt-2 text-xs" />
           <p className="text-lg leading-snug text-fg">{d.pregunta}</p>
           {d.descripcion && (
             <p className="text-sm leading-relaxed text-fg-secondary">
@@ -190,6 +200,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                       {ocultos} {ocultos === 1 ? "criterio no aplica" : "criterios no aplican"} a este perfil y {ocultos === 1 ? "está escondido" : "están escondidos"}.
                     </p>
                   )}
+                  <NoAplicanEnLaEdicion nivel={n} className="text-xs" />
                 </section>
               </li>
             );

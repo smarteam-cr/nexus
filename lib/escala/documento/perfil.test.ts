@@ -9,6 +9,7 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala, rutaDelArchivo, RUTA_DE_LAS_PRUEBAS } from "./archivos";
+import { aplicarEdicion } from "./edicion";
 import { parsearEscala, todosLosCriterios } from "./parsear";
 import {
   aplica,
@@ -110,12 +111,19 @@ from itertools import product
 src = open(sys.argv[1], encoding="utf-8").read()
 arbol = ast.parse(src)
 ns = {"re": re, "product": product}
-partes = [n for n in arbol.body if (isinstance(n, ast.FunctionDef) and n.name in ("aplica", "leer")) or (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in ("PAT", "PERFILES") for t in n.targets))]
+FUNCIONES = ("aplica", "leer", "leer_ediciones", "criterios_de")
+NOMBRES = ("PAT", "PERFILES", "REESCRITO", "ID")
+partes = [n for n in arbol.body if (isinstance(n, ast.FunctionDef) and n.name in FUNCIONES) or (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in NOMBRES for t in n.targets))]
 exec(compile(ast.Module(body=partes, type_ignores=[]), "pruebas_escala.py", "exec"), ns)
-_, _, crit = ns["leer"](sys.argv[2])
+s, _, crit = ns["leer"](sys.argv[2])
 salida = {}
 for venta, rel in ns["PERFILES"]:
     salida[venta + "|" + rel] = [c["id"] for c in crit if ns["aplica"](c, venta, rel)]
+# Y lo mismo con la escala vista por cada edición (desde la 8.0.0).
+for e in ns["leer_ediciones"](s):
+    cs = ns["criterios_de"](crit, e)
+    for venta, rel in ns["PERFILES"]:
+        salida[e["nombre"] + "|" + venta + "|" + rel] = [c["id"] for c in cs if ns["aplica"](c, venta, rel)]
 print(json.dumps(salida))
 `;
 
@@ -124,9 +132,23 @@ describe.skipIf(!PYTHON)("aplica es la misma regla que pruebas_escala.py (sobre 
   const r = spawnSync(PYTHON!, ["-c", PUENTE, RUTA_DE_LAS_PRUEBAS, rutaDelArchivo("escala")], { encoding: "utf8" });
   const python = JSON.parse(r.stdout || "{}") as Record<string, string[]>;
 
-  it("el Python corrió", () => {
+  it("el Python corrió, sobre la escala general y sobre cada edición", () => {
     expect(r.status, r.stderr).toBe(0);
-    expect(Object.keys(python)).toHaveLength(PERFILES_COMPLETOS.length);
+    expect(Object.keys(python)).toHaveLength(PERFILES_COMPLETOS.length * (1 + escala.ediciones.length));
+  });
+
+  it("con cada edición: los mismos criterios, por perfil (el Python pone los propios al final; acá van en su nivel)", () => {
+    for (const ed of escala.ediciones) {
+      const vista = aplicarEdicion(escala, ed.slug);
+      for (const perfil of PERFILES_COMPLETOS) {
+        const nuestro = todosLosCriterios(vista)
+          .filter((c) => aplica(c, perfil))
+          .map((c) => c.id)
+          .sort();
+        const suyo = [...(python[`${ed.nombre}|${perfil.cierre}|${perfil.despues}`] ?? [])].sort();
+        expect(nuestro, `${ed.nombre} · ${perfil.cierre}/${perfil.despues}`).toEqual(suyo);
+      }
+    }
   });
 
   it.each(PERFILES_COMPLETOS.map((p) => [`${p.cierre} / ${p.despues}`, p] as const))(

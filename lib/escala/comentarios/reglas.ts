@@ -105,6 +105,18 @@ export interface ComentarioVisto {
   decisionQueCambiaria: string | null;
   cliente: { id: string | null; nombre: string } | null;
   perfil: { cierre: Cierre | null; despues: Despues | null };
+  /**
+   * Desde qué edición por industria se comentó (null = la escala general). Un mismo identificador
+   * se lee con un texto en la general y con otro en una edición: `textoAnclado` es el de ESTA.
+   */
+  edicion: { slug: string; nombre: string } | null;
+  /**
+   * Lo que dice HOY su ancla, leída como la leyó quien comentó (con su edición); null = ahí ya no
+   * existe. Lo calcula el servidor contra la versión publicada: la pantalla solo lo compara.
+   */
+  textoDeHoy: string | null;
+  /** «Ventas · Carrito y recompra · Funcional», con los nombres de su edición; null si ya no existe. */
+  ruta: string | null;
   autor: Autor;
   estado: EstadoDeComentario;
   estadoCambiado: { at: string; por: Autor | null } | null;
@@ -159,14 +171,19 @@ export function puedeBorrarRespuesta(autorEmail: string, miEmail: string): boole
  * Lo que se propone para la fila de «Cambios pendientes» al pasar un comentario: el responsable la
  * revisa y la completa (sobre todo «qué decisión cambiaría», que es obligatoria).
  */
-export function filaSugerida(c: Pick<ComentarioVisto, "ancla" | "tipo" | "cuerpo" | "cliente" | "decisionQueCambiaria" | "cambio">): {
+export function filaSugerida(
+  c: Pick<ComentarioVisto, "ancla" | "tipo" | "cuerpo" | "cliente" | "decisionQueCambiaria" | "cambio"> & Partial<Pick<ComentarioVisto, "edicion">>,
+): {
   que: string;
   caso: string;
   decision: string;
 } {
   if (c.cambio) return c.cambio;
+  // Si se comentó desde una edición, el cambio es de esa edición: se dice junto al identificador
+  // (las columnas del manual son fijas, así que va dentro de «Qué cambiaría»).
+  const donde = c.edicion ? `\`${c.ancla}\` (edición ${c.edicion.nombre})` : `\`${c.ancla}\``;
   return {
-    que: c.tipo === "propuesta" ? `\`${c.ancla}\` — ${c.cuerpo}` : `\`${c.ancla}\` — `,
+    que: c.tipo === "propuesta" ? `${donde} — ${c.cuerpo}` : `${donde} — `,
     caso: c.tipo === "no_calza" && c.cliente ? `${c.cliente.nombre}: ${c.cuerpo}` : "",
     decision: c.decisionQueCambiaria ?? "",
   };

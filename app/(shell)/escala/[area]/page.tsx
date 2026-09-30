@@ -14,7 +14,8 @@ import { leerComoCambia } from "@/lib/escala/documento/manual";
 import { perfilDesdeUrl } from "@/lib/escala/documento/perfil";
 import { comentariosDisponibles, contarPorAncla, contarPorArea } from "@/lib/escala/comentarios/consultas";
 import { esResponsable } from "@/lib/escala/comentarios/reglas";
-import { datosDeLaVista, vistaDesdeUrl } from "@/lib/escala/vista";
+import { aplicarEdicion } from "@/lib/escala/documento/edicion";
+import { conteosQueSeVen, datosDeLaVista, vistaDesdeUrl } from "@/lib/escala/vista";
 import VistaDeLaEscala from "@/components/escala/VistaDeLaEscala";
 import EscalaSinPublicar from "@/components/escala/EscalaSinPublicar";
 
@@ -43,8 +44,11 @@ export default async function PaginaDeLaEscala({
     );
   }
 
-  const area = vigente.escala.areas.find((a) => a.slug === slug);
-  if (!area) redirect(`/escala/${vigente.escala.areas[0].slug}`);
+  // La industria elegida (`?industria=ecommerce-retail`): la misma escala, dicha con su edición. Una
+  // clave que la escala no tiene se ignora: se ve la general.
+  const escala = aplicarEdicion(vigente.escala, uno(sp, "industria"));
+  const area = escala.areas.find((a) => a.slug === slug);
+  if (!area) redirect(`/escala/${escala.areas[0].slug}`);
 
   const [conteos, porArea, versiones, manual] = await Promise.all([
     contarPorAncla(area.id),
@@ -56,19 +60,20 @@ export default async function PaginaDeLaEscala({
 
   return (
     <div className={SHELL_DEFAULT}>
-      {/* `key` por área: al cambiar de área la pantalla arranca de nuevo (la dimensión o la celda
-          elegidas son de ESA área); la vista y el perfil viajan en la URL. */}
+      {/* `key` por área y por industria: al cambiar cualquiera de las dos la pantalla arranca de
+          nuevo desde la URL (la dimensión o la celda elegidas son de ESA área, y una edición trae
+          su perfil habitual); la vista y el perfil viajan en la URL. */}
       <VistaDeLaEscala
-        key={area.id}
+        key={`${area.id}:${escala.edicion?.slug ?? "general"}`}
         datos={datosDeLaVista({
-          escala: vigente.escala,
+          escala,
           area,
           publicadaEn: vigente.publicadaEn,
           aviso: vigente.aviso,
           versiones,
           comoCambia: leerComoCambia(manual?.texto),
         })}
-        conteos={conteos}
+        conteos={conteosQueSeVen(conteos, area)}
         porArea={porArea}
         abiertosEnTotal={abiertosEnTotal}
         yo={{ email: ctx.user.email, nombre: ctx.teamMember.name, foto: ctx.teamMember.photoUrl }}

@@ -28,7 +28,9 @@
  * `pg_dump`; con `pg_dump` en el PATH se puede omitir y el guard respalda antes de escribir.
  *
  * Opciones: `--sin-python` (no corre pruebas_escala.py: solo si de verdad no hay Python),
- *           `--por correo@smarteamcr.com` (quién publica; por defecto, el correo de git).
+ *           `--por correo@smarteamcr.com` (quién publica; por defecto, el correo de git),
+ *           `--ediciones-revisadas` (una edición dice con sus palabras algo cuyo texto general
+ *           cambió en esta versión y el suyo no: se miró y sigue diciendo lo mismo).
  */
 import "dotenv/config";
 import { spawnSync } from "node:child_process";
@@ -47,6 +49,8 @@ import { huellaDe } from "@/lib/escala/documento/huella";
 
 const APPLY = resolverApply({ tablas: ["EscalaDocumento"] });
 const SIN_PYTHON = process.argv.includes("--sin-python");
+/** Lo que una edición dice con sus palabras y quedó viejo frena la publicación, salvo que se haya mirado. */
+const EDICIONES_REVISADAS = process.argv.includes("--ediciones-revisadas");
 
 function argumento(nombre: string): string | null {
   const i = process.argv.indexOf(nombre);
@@ -111,6 +115,13 @@ async function main() {
     `${escala.areas.length} áreas · ${escala.areas.flatMap((a) => a.dimensiones).length} dimensiones · ${criterios.length} criterios` +
       ` (${criterios.filter((c) => c.riesgo).length} de riesgo, ${criterios.filter((c) => c.habito).length} hábitos, ${criterios.filter((c) => c.perfil).length} con perfil)`,
   );
+  for (const ed of escala.ediciones) {
+    const dims = ed.areas.flatMap((a) => a.dimensiones);
+    console.log(
+      `Edición «${ed.nombre}»: ${dims.length} dimensiones con texto propio · ${dims.reduce((s, d) => s + d.propios.length, 0)} criterios propios · ` +
+        `${dims.reduce((s, d) => s + Object.keys(d.textos).length, 0)} reescritos · ${dims.reduce((s, d) => s + d.noAplican.length, 0)} que no aplican`,
+    );
+  }
 
   const { prisma, close } = createScriptDb();
   try {
@@ -126,8 +137,18 @@ async function main() {
       process.exit(1);
     }
     const anteriorFila = publicadas.find((p) => p.documento === "escala" && p.version !== escala.version) ?? null;
-    const anterior = anteriorFila ? parsearEscala(anteriorFila.texto) : null;
-    console.log(anterior ? `Publicada hoy en Nexus: la ${anterior.version}.` : "Todavía no hay ninguna versión publicada en Nexus.");
+    let anterior: Escala | null = null;
+    if (anteriorFila) {
+      try {
+        anterior = parsearEscala(anteriorFila.texto);
+      } catch (e) {
+        // Una versión publicada que este lector ya no entiende no frena la publicación de la nueva:
+        // se pierde la comparación (y la prueba 5 de Nexus), y se dice.
+        console.log(`⚠ La versión publicada (${anteriorFila.version}) no se puede leer con este lector: ${e instanceof Error ? e.message : String(e)}`);
+        console.log("  No se compara contra ella. La prueba 5 de pruebas_escala.py sí corre contra su texto.");
+      }
+    }
+    console.log(anterior ? `Publicada hoy en Nexus: la ${anterior.version}.` : "Todavía no hay ninguna versión publicada en Nexus (o no se puede leer).");
 
     // 3 · Las pruebas de Nexus
     titulo("Pruebas de Nexus");
@@ -162,6 +183,12 @@ async function main() {
           console.error((r.stderr ?? "").trim());
           fallas.push("pruebas_escala.py");
         }
+        // El Python viaja con cada versión: si uno viejo no sabe de ediciones, «pasaría» sin mirarlas.
+        const sinMirar = escala.ediciones.filter((ed) => !(r.stdout ?? "").includes(`Edición «${ed.nombre}»`));
+        if (sinMirar.length) {
+          console.error(`⛔ pruebas_escala.py no dijo nada de ${sinMirar.map((ed) => `«${ed.nombre}»`).join(", ")}: no está leyendo las ediciones.`);
+          fallas.push("pruebas_escala.py (no lee las ediciones)");
+        }
       }
     }
 
@@ -178,6 +205,27 @@ async function main() {
         const comentarios = await prisma.escalaComentario.count({ where: { ancla: { in: tocados } } });
         console.log(`${comentarios} comentario(s) van a mostrar que su texto cambió (o que ya no existe).`);
       }
+      // Las ediciones: qué cambia leído con cada una, y lo que una edición dice con sus palabras y
+      // quedó atrás porque el texto general cambió y el suyo no.
+      for (const ed of c.ediciones) {
+        if (ed.nueva) {
+          console.log(`Edición «${ed.nombre}»: nueva (${ed.propiosDeLaEdicion} textos propios).`);
+          continue;
+        }
+        console.log(`Edición «${ed.nombre}»: ${ed.cambiados.length} con otro texto.`);
+        for (const x of ed.cambiados.slice(0, 20)) console.log(`  ~ ${x.id}`);
+        if (ed.viejos.length) {
+          console.log(`  ⚠ ${ed.viejos.length} que la edición dice con sus palabras y cuyo texto general cambió sin que el suyo se tocara:`);
+          for (const id of ed.viejos) console.log(`    ? ${id}`);
+          if (EDICIONES_REVISADAS) {
+            console.log("    Revisados a mano (--ediciones-revisadas): siguen diciendo lo mismo.");
+          } else {
+            console.error("    Míralos: si siguen diciendo lo mismo, publica con --ediciones-revisadas; si no, actualiza la edición.");
+            fallas.push(`edición «${ed.nombre}» con textos que quedaron viejos`);
+          }
+        }
+      }
+      for (const nombre of c.edicionesRetiradas) console.log(`Edición «${nombre}»: ya no está.`);
     }
 
     // 6 · Qué se escribe

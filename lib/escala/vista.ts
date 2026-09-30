@@ -4,13 +4,16 @@
  * El servidor parsea la versión publicada y baja SOLO el área que se mira (más lo poco que es de
  * toda la escala: niveles, capas, definiciones, reglas). Así una página no carga las tres áreas.
  */
+import { resumenDeLaEdicion, type ResumenDeLaEdicion } from "./documento/edicion";
 import { sinTildes } from "./documento/parsear";
-import type { Cierre, Despues } from "./documento/perfil";
+import { perfilParaUrl, type Cierre, type Despues, type Perfil } from "./documento/perfil";
 import type { ComoCambiaLaEscala } from "./documento/manual";
 import { DOCUMENTOS_DE_LA_ESCALA, type DocumentoDeLaEscala } from "./documento/documentos";
 import type {
   Area,
   CapaDeLaEscala,
+  Edicion,
+  EdicionAplicada,
   EntradaDelHistorial,
   Escala,
   NivelDeLaEscala,
@@ -19,6 +22,9 @@ import type {
   PreguntaDelPerfil,
   Verificacion,
 } from "./documento/tipos";
+
+/** Una edición por industria, para elegirla en el filtro. */
+export type EdicionParaElegir = Pick<Edicion, "slug" | "nombre" | "descripcion" | "perfilHabitual">;
 
 export interface DocumentoParaDescargar {
   clave: DocumentoDeLaEscala;
@@ -60,8 +66,18 @@ export interface DatosDeLaVista {
   novedades: EntradaDelHistorial | null;
   /** Cómo cambia la escala y quién decide (del manual publicado). */
   comoCambia: ComoCambiaLaEscala | null;
+  /** Las ediciones por industria que trae la escala (el filtro «Industria»). */
+  ediciones: EdicionParaElegir[];
+  /** Qué es una edición, con las palabras de la escala. */
+  edicionesIntro: string | null;
+  /** La edición con que se está viendo (null = la escala general) y cuánto cambió de ESTA área. */
+  edicion: (EdicionAplicada & { resumen: ResumenDeLaEdicion }) | null;
 }
 
+/**
+ * `escala` es la que se MUESTRA: la general, o la que devuelve `aplicarEdicion` cuando se eligió una
+ * industria (y `area`, la suya). Todo lo que sigue la trata igual.
+ */
 export function datosDeLaVista(args: {
   escala: Escala;
   area: Area;
@@ -103,7 +119,25 @@ export function datosDeLaVista(args: {
     dependencias: escala.dependencias,
     novedades: escala.historial.find((h) => h.version === escala.version) ?? null,
     comoCambia: args.comoCambia ?? null,
+    ediciones: escala.ediciones.map((e) => ({ slug: e.slug, nombre: e.nombre, descripcion: e.descripcion, perfilHabitual: e.perfilHabitual })),
+    edicionesIntro: escala.edicionesIntro,
+    edicion: escala.edicion ? { ...escala.edicion, resumen: resumenDeLaEdicion(area.dimensiones) } : null,
   };
+}
+
+/** Los identificadores que existen en un área, como se ve con la edición elegida. */
+export function anclasDelArea(area: Area): Set<string> {
+  return new Set(area.dimensiones.flatMap((d) => [d.id, ...d.niveles.flatMap((n) => [n.id, ...n.criterios.map((c) => c.id)])]));
+}
+
+/**
+ * Los contadores de comentarios de lo que SE VE. Un comentario hecho sobre un criterio propio de una
+ * edición no se cuenta en la escala general (ahí ese criterio no existe), ni uno sobre un criterio
+ * que la edición sacó se cuenta en ella: si no, una celda diría «3 comentarios» y no mostraría dónde.
+ */
+export function conteosQueSeVen<T>(conteos: Record<string, T>, area: Area): Record<string, T> {
+  const existen = anclasDelArea(area);
+  return Object.fromEntries(Object.entries(conteos).filter(([ancla]) => existen.has(ancla)));
 }
 
 // ── Reglas que la pantalla aplica ─────────────────────────────────────────────
@@ -183,7 +217,9 @@ export interface TerminoSubrayado extends PalabraConValorFijo {
  * escala. Una fila del glosario que nombra varios («BANT, MEDDIC, SPIN», «Macros y snippets»)
  * cuenta como uno por nombre.
  */
-export function terminosParaSubrayar(escala: Pick<Escala, "palabrasConValorFijo" | "glosario">): TerminoSubrayado[] {
+export function terminosParaSubrayar(
+  escala: Pick<Escala, "palabrasConValorFijo" | "glosario"> & { edicion?: Pick<EdicionAplicada, "palabras"> | null },
+): TerminoSubrayado[] {
   const valor = escala.palabrasConValorFijo.map((p) => ({ ...p, tipo: "valor" as const }));
   const glosario = escala.glosario.flatMap((g) =>
     g.termino
@@ -192,7 +228,25 @@ export function terminosParaSubrayar(escala: Pick<Escala, "palabrasConValorFijo"
       .filter(Boolean)
       .map((termino) => ({ termino, significado: g.significado, tipo: "glosario" as const })),
   );
-  return [...valor, ...glosario];
+  const palabras = escala.edicion?.palabras ?? [];
+  if (palabras.length === 0) return [...valor, ...glosario];
+
+  // Con una edición: lo que todavía se lee con el texto general dice, al pasar el cursor, cómo se
+  // llama eso en la industria («Deal» → «En esta edición: pedido o carrito»). Si el término ya está
+  // en el glosario, las dos cosas van juntas en un solo subrayado.
+  const norm = (s: string) => s.toLowerCase().trim();
+  const enMinuscula = (s: string) => `${s.charAt(0).toLowerCase()}${s.slice(1)}`.replace(/\.$/, "");
+  const usadas = new Set<string>();
+  const conEdicion = glosario.map((g) => {
+    const p = palabras.find((x) => norm(x.general) === norm(g.termino));
+    if (!p) return g;
+    usadas.add(norm(p.general));
+    return { ...g, significado: `En esta edición: ${enMinuscula(p.edicion)}. En la escala general: ${enMinuscula(g.significado)}.` };
+  });
+  const soloDeLaEdicion = palabras
+    .filter((p) => !usadas.has(norm(p.general)))
+    .map((p) => ({ termino: p.general, significado: `En esta edición: ${enMinuscula(p.edicion)}.`, tipo: "glosario" as const }));
+  return [...valor, ...conEdicion, ...soloDeLaEdicion];
 }
 
 export type Trozo = { texto: string; palabra: TerminoSubrayado | null };
@@ -238,4 +292,36 @@ export const VISTAS: readonly Vista[] = ["matriz", "dimension", "mapa"];
 /** Una vista que ya no existe (`?vista=guia`, de un enlace viejo) abre la matriz. */
 export function vistaDesdeUrl(v: string | null | undefined): Vista {
   return (VISTAS as readonly string[]).includes(v ?? "") ? (v as Vista) : "matriz";
+}
+
+export interface EstadoEnLaUrl {
+  vista: Vista;
+  perfil: Perfil;
+  /** La clave de la edición por industria, o null para la escala general. */
+  industria: string | null;
+  /** Solo en «Por dimensión». */
+  dimension?: string | null;
+  /** Solo en el mapa: `1.7.F`, `1.7` o `F`. */
+  celda?: string | null;
+  /** El identificador con el panel de comentarios abierto. */
+  ancla?: string | null;
+}
+
+/**
+ * Lo que se mira, como consulta de la URL (`?industria=…&cierre=…`, o vacío). Un solo lugar arma la
+ * dirección: si cada quien la armara a su modo, alguno se olvidaría de la industria y un refresco
+ * devolvería a la escala general.
+ */
+export function consultaDeLaEscala(e: EstadoEnLaUrl): string {
+  const p = new URLSearchParams();
+  if (e.industria) p.set("industria", e.industria);
+  if (e.vista !== "matriz") p.set("vista", e.vista);
+  const u = perfilParaUrl(e.perfil);
+  if (u.cierre) p.set("cierre", u.cierre);
+  if (u.despues) p.set("despues", u.despues);
+  if (e.vista === "dimension" && e.dimension) p.set("dim", e.dimension);
+  if (e.vista === "mapa" && e.celda) p.set("celda", e.celda);
+  if (e.ancla) p.set("c", e.ancla);
+  const qs = p.toString();
+  return qs ? `?${qs}` : "";
 }

@@ -10,13 +10,12 @@
  * En la pantalla cada pregunta puede quedar SIN elegir («Todas»): esa pregunta no filtra. Con las
  * dos elegidas el resultado es idéntico al del Python.
  */
-import type { Criterio, Dimension, Nivel } from "./tipos";
+import { CIERRES, DESPUES, type Cierre, type Criterio, type Despues, type Dimension, type Nivel } from "./tipos";
 
-export type Cierre = "con equipo" | "transaccional" | "mixta";
-export type Despues = "única" | "recompra" | "continua";
-
-export const CIERRES: readonly Cierre[] = ["con equipo", "transaccional", "mixta"];
-export const DESPUES: readonly Despues[] = ["única", "recompra", "continua"];
+// Las respuestas del perfil son gramática del documento (una edición trae su «perfil habitual»):
+// viven en `tipos.ts` y se reexportan acá, que es de donde las importa la pantalla.
+export { CIERRES, DESPUES };
+export type { Cierre, Despues };
 
 /** Un perfil, con cada pregunta opcional: `null` = «Todas», no filtra. */
 export interface Perfil {

@@ -24,14 +24,13 @@ import {
   dimensionAplica,
   ETIQUETA_DE_CIERRE,
   ETIQUETA_DE_DESPUES,
-  perfilParaUrl,
   type Cierre,
   type Despues,
   type Perfil,
 } from "@/lib/escala/documento/perfil";
 import { LETRAS, type Letra, type PreguntaDelPerfil } from "@/lib/escala/documento/tipos";
 import type { Autor, ConteosPorClave } from "@/lib/escala/comentarios/reglas";
-import { definicionDeOpcion, notaDelCierre, type DatosDeLaVista, type Vista } from "@/lib/escala/vista";
+import { consultaDeLaEscala, definicionDeOpcion, notaDelCierre, type DatosDeLaVista, type Vista } from "@/lib/escala/vista";
 import { almacenDeLaApi, type AlmacenDeLaEscala } from "./comentarios/almacen";
 import PanelDeComentarios from "./comentarios/PanelDeComentarios";
 import { ProveedorDeLaEscala } from "./contexto";
@@ -71,7 +70,9 @@ function ResumenDelPerfil({ datos, perfil }: { datos: DatosDeLaVista; perfil: Pe
   const criterios = datos.area.dimensiones.flatMap((d) => d.niveles.flatMap((n) => n.criterios));
   const escondidos = criterios.filter((c) => !aplica(c, perfil)).length;
   const noAplican = datos.area.dimensiones.filter((d) => !dimensionAplica(d, perfil));
-  const nota = notaDelCierre(datos.perfilDeNegocio, perfil.cierre);
+  // La nota de la escala general («En la venta transaccional…») habla de la matriz general: con una
+  // edición puede no valer (ahí una dimensión puede aplicar donde en la general no), así que no va.
+  const nota = datos.edicion ? null : notaDelCierre(datos.perfilDeNegocio, perfil.cierre);
   return (
     <div className="mt-3 space-y-1.5 border-t border-line pt-2 text-xs text-fg-secondary">
       <p>
@@ -90,6 +91,47 @@ function ResumenDelPerfil({ datos, perfil }: { datos: DatosDeLaVista; perfil: Pe
         <p className="rounded-md bg-info-surface px-2 py-1.5 leading-relaxed text-info-ink">
           <span className="font-semibold">Cómo se lee con este perfil: </span>
           {nota}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Con una industria elegida: cuánto cambió la edición de ESTA área. Si de un área solo cambió los
+ * nombres, las preguntas y los costos, se dice: sus criterios se siguen leyendo con el texto general.
+ */
+function ResumenDeLaEdicion({ datos }: { datos: DatosDeLaVista }) {
+  const ed = datos.edicion;
+  if (!ed) return null;
+  const { propios, reescritos, noAplican, renombradas } = ed.resumen;
+  const tocaCriterios = propios + reescritos + noAplican > 0;
+  const n = (cuantos: number, uno: string, varios: string) => `${cuantos} ${cuantos === 1 ? uno : varios}`;
+  return (
+    <div className="mt-3 space-y-1.5 border-t border-line pt-2 text-xs text-fg-secondary">
+      <p>
+        <span className="font-semibold text-fg">Edición {ed.nombre}</span> en {datos.area.nombre}:{" "}
+        {tocaCriterios ? (
+          <>
+            <span className="font-semibold tabular-nums text-fg">{propios}</span> {propios === 1 ? "criterio es" : "criterios son"} solo de esta edición,{" "}
+            <span className="font-semibold tabular-nums text-fg">{reescritos}</span> {reescritos === 1 ? "está dicho" : "están dichos"} con sus palabras y{" "}
+            <span className="font-semibold tabular-nums text-fg">{noAplican}</span> de la escala general no {noAplican === 1 ? "aplica" : "aplican"}
+            {renombradas > 0 && <> ({n(renombradas, "dimensión cambia", "dimensiones cambian")} de nombre)</>}. Los identificadores son los mismos.
+          </>
+        ) : (
+          <>
+            la edición le pone sus preguntas, sus descripciones y sus costos
+            {renombradas > 0 && <> y les cambia el nombre a {n(renombradas, "dimensión", "dimensiones")}</>}, pero los criterios de esta área todavía se leen con el
+            texto de la escala general.
+          </>
+        )}
+      </p>
+      {ed.palabras.length > 0 && (
+        <p className="rounded-md bg-info-surface px-2 py-1.5 leading-relaxed text-info-ink">
+          <span className="font-semibold">Las palabras de esta edición: </span>
+          lo que sigue con el texto general trae subrayado cómo se llama en esta industria. Por ejemplo, «{ed.palabras[0].general}» es «
+          {ed.palabras[0].edicion.charAt(0).toLowerCase()}
+          {ed.palabras[0].edicion.slice(1)}».
         </p>
       )}
     </div>
@@ -158,21 +200,15 @@ export default function VistaDeLaEscala({
   const [seleccion, setSeleccion] = useState<SeleccionDelMapa>(seleccionDesde(inicial.celda));
   const [ancla, setAncla] = useState<string | null>(inicial.ancla);
 
-  // Lo que se mira, en la URL: sin recargar ni volver a pedir la página (history nativo).
+  /** La edición por industria con que se está viendo (la decide el servidor: viene en los datos). */
+  const industria = datos.edicion?.slug ?? null;
+
+  // Lo que se mira, en la URL: sin recargar ni volver a pedir la página (history nativo). La
+  // industria va siempre: un refresco (después de comentar, por ejemplo) no devuelve a la general.
   useEffect(() => {
-    const p = new URLSearchParams();
-    if (vista !== "matriz") p.set("vista", vista);
-    const u = perfilParaUrl(perfil);
-    if (u.cierre) p.set("cierre", u.cierre);
-    if (u.despues) p.set("despues", u.despues);
-    if (vista === "dimension") p.set("dim", dimension);
-    const celda = vista === "mapa" ? seleccionHacia(seleccion) : null;
-    if (celda) p.set("celda", celda);
-    if (ancla) p.set("c", ancla);
-    const qs = p.toString();
-    const url = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+    const url = `${window.location.pathname}${consultaDeLaEscala({ vista, perfil, industria, dimension, celda: seleccionHacia(seleccion), ancla })}`;
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
-  }, [vista, perfil, dimension, seleccion, ancla]);
+  }, [vista, perfil, industria, dimension, seleccion, ancla]);
 
   const abrirComentarios = useCallback((a: string) => setAncla(a), []);
   const contexto = useMemo(
@@ -180,15 +216,28 @@ export default function VistaDeLaEscala({
     [yo, esResponsable, almacen, conteos, comentariosDisponibles, abrirComentarios],
   );
 
-  /** Cambiar de área conserva la vista y el perfil (no la dimensión ni la celda, que son del área). */
+  /** Cambiar de área conserva la vista, la industria y el perfil (no la dimensión ni la celda, que son del área). */
   const irAlArea = (slug: string) => {
-    const p = new URLSearchParams();
-    if (vista !== "matriz") p.set("vista", vista);
-    const u = perfilParaUrl(perfil);
-    if (u.cierre) p.set("cierre", u.cierre);
-    if (u.despues) p.set("despues", u.despues);
-    const qs = p.toString();
-    router.push(`${hrefDeArea(slug)}${qs ? `?${qs}` : ""}`);
+    router.push(`${hrefDeArea(slug)}${consultaDeLaEscala({ vista, perfil, industria })}`);
+  };
+
+  /**
+   * Cambiar de industria vuelve a pedir la página (los textos y los criterios son otros) y, si la
+   * edición dice su perfil habitual, lo deja elegido: quien abre «Ecommerce y retail» quiere ver
+   * lo que le aplica a una tienda. Volver a «General» no toca el perfil.
+   *
+   * ⚠ Todo viaja en la DIRECCIÓN y acá no se toca el estado: la página monta la pantalla de nuevo
+   * con la industria (`key`), y el estado arranca de la URL. Cambiar el estado antes de navegar
+   * dispararía el efecto de arriba, que reescribe la dirección con la industria VIEJA y le gana
+   * a la navegación.
+   */
+  const elegirIndustria = (clave: string) => {
+    const nueva = clave === "general" ? null : clave;
+    if (nueva === industria) return;
+    const habitual = datos.ediciones.find((e) => e.slug === nueva)?.perfilHabitual ?? null;
+    router.push(
+      `${hrefDeArea(area.slug)}${consultaDeLaEscala({ vista, perfil: habitual ?? perfil, industria: nueva, dimension, celda: seleccionHacia(seleccion) })}`,
+    );
   };
 
   const leerDimension = (d: string) => {
@@ -350,6 +399,30 @@ export default function VistaDeLaEscala({
               </div>
             </GrupoDeControl>
 
+            {datos.ediciones.length > 0 && (
+              <GrupoDeControl
+                nombre="Industria"
+                ayuda={`${datos.edicionesIntro ?? "Cada edición dice la misma escala con las palabras de una industria."} «General» es la escala como está escrita, sin las palabras de ninguna industria. Al elegir una, quedan marcados los criterios que son solo de esa edición y los que dice con sus palabras.`}
+              >
+                <div className="flex flex-col gap-1">
+                  <span className="text-2xs text-fg-secondary">Con qué edición la lees</span>
+                  <Segmentado<string>
+                    etiqueta="Industria"
+                    valor={industria ?? "general"}
+                    onCambio={elegirIndustria}
+                    opciones={[
+                      { clave: "general", etiqueta: "General", title: "General: la escala como está escrita, para cualquier empresa. Es la que se usa cuando una industria todavía no tiene su edición." },
+                      ...datos.ediciones.map((e) => ({
+                        clave: e.slug,
+                        etiqueta: e.nombre,
+                        title: `${e.nombre}: ${e.descripcion ?? "la escala dicha para esta industria."}${e.perfilHabitual ? ` Al elegirla queda su perfil habitual: ${describirPerfil(e.perfilHabitual)}.` : ""}`,
+                      })),
+                    ]}
+                  />
+                </div>
+              </GrupoDeControl>
+            )}
+
             <GrupoDeControl
               nombre="Perfil de negocio"
               ayuda={`${datos.perfilDeNegocio.introduccion ?? "El perfil de negocio decide qué criterios aplican."} Elegir un perfil esconde los criterios que no le aplican, con la misma regla de la escala; «Sin filtrar» los muestra todos, cada uno con su marca.`}
@@ -390,6 +463,7 @@ export default function VistaDeLaEscala({
               </div>
             </GrupoDeControl>
           </div>
+          {datos.edicion && <ResumenDeLaEdicion datos={datos} />}
           {(perfil.cierre || perfil.despues) && <ResumenDelPerfil datos={datos} perfil={perfil} />}
         </div>
 

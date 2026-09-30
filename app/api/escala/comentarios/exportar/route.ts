@@ -19,7 +19,9 @@ export async function GET(req: NextRequest) {
   const faltan = sinTablas();
   if (faltan) return faltan;
 
-  const [pendientes, manual] = await Promise.all([cambiosPendientes(), leerDocumentoPublicado("manual")]);
+  // La fila del manual ya trae lo que hace falta (el responsable la llenó al pasarlo): no se necesita
+  // la escala para decir qué dice hoy cada ancla.
+  const [pendientes, manual] = await Promise.all([cambiosPendientes(null), leerDocumentoPublicado("manual")]);
   const columnas = columnasDelManual(manual?.texto) ?? [...COLUMNAS_DEL_MANUAL_DE_HOY];
   const filas = filasDelManual(pendientes);
   const hoy = new Date().toISOString().slice(0, 10);

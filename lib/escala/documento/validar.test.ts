@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala } from "./archivos";
 import { compararEscalas, diferenciaPorPalabras } from "./diferencias";
-import { MINI_ESCALA, MINI_ESPECIFICACION, MINI_MANUAL } from "./mini-escala.fixture";
+import { MINI_EDICION, MINI_ESCALA, MINI_ESCALA_CON_EDICION, MINI_ESPECIFICACION, MINI_MANUAL } from "./mini-escala.fixture";
 import { leerRetirados, parsearEscala } from "./parsear";
 import { validarEscala, type ResultadoDePrueba } from "./validar";
 
@@ -77,6 +77,101 @@ describe("la escala de juguete", () => {
   });
 });
 
+describe("la escala de juguete con una edición", () => {
+  const opts = { especificacion: MINI_ESPECIFICACION, manual: MINI_MANUAL };
+  const con = (cambio: (s: string) => string) => validarEscala(parsearEscala(cambio(MINI_ESCALA_CON_EDICION)), opts);
+  const prueba8 = (r: ResultadoDePrueba[]) => r.find((x) => x.nombre.startsWith("8"))!;
+
+  it("pasa todas, y la prueba 8 solo corre si hay ediciones", () => {
+    const r = con((s) => s);
+    expect(fallidas(r)).toEqual([]);
+    expect(r.map((x) => x.nombre)).toContain("8 · Ediciones coherentes");
+    expect(validarEscala(parsearEscala(MINI_ESCALA), opts).map((x) => x.nombre)).not.toContain("8 · Ediciones coherentes");
+  });
+
+  it("8 · cobertura: un criterio de la matriz del que la edición no dice nada", () => {
+    // Llega un criterio nuevo a la matriz, en una dimensión que la edición ya adaptó.
+    const r = con((s) =>
+      s.replace("- La distribución se autoajusta. `[1.2.O1 · comprobable]`", "- La distribución se autoajusta. `[1.2.O1 · comprobable]`\n- Aprende sola. `[1.2.O2 · comprobable]`"),
+    );
+    expect(fallidas(r)).toEqual(["8 · Ediciones coherentes"]);
+    expect(prueba8(r).detalle).toEqual([
+      "[Tiendas de juguete] 1.2.O2 es de la matriz y la edición no dice nada de él: se reescribe, va en «No aplican» o va en «Se leen igual».",
+    ]);
+  });
+
+  it("8 · cobertura: una dimensión de la que la edición solo cambia el nombre y la pregunta no tiene que cubrir nada", () => {
+    const soloTextos = MINI_EDICION.replace(/\*\*Deficiente\.\*\*\n[\s\S]*$/, "");
+    expect(soloTextos).toContain("*Costo de quedarse:* Los carritos se pierden.");
+    expect(fallidas(validarEscala(parsearEscala(MINI_ESCALA + soloTextos), opts))).toEqual([]);
+  });
+
+  it("8 · un criterio en dos lugares", () => {
+    const r = con((s) => s.replace("*No aplican:* `1.2.I1`.", "*No aplican:* `1.2.I1`, `1.2.F1`."));
+    expect(prueba8(r).detalle).toEqual(["[Tiendas de juguete] 1.2.F1 está reescrito y «No aplican»: va en un solo lugar."]);
+  });
+
+  it("8 · reescribir con el mismo texto de la matriz sobra", () => {
+    const r = con((s) => s.replace("- Nadie mira los carritos. `[1.2.D1]`", "- Nadie ayuda. `[1.2.D1]`"));
+    expect(prueba8(r).detalle).toEqual(["[Tiendas de juguete] 1.2.D1 está reescrito con el mismo texto de la escala general: sobra."]);
+  });
+
+  it("8 · reescribir no puede cambiar una palabra con valor fijo", () => {
+    const r = con((s) => s.replace("- Nadie mira los carritos. `[1.2.D1]`", "- La mayoría de los carritos no los mira nadie. `[1.2.D1]`"));
+    expect(prueba8(r).ok).toBe(false);
+    expect(prueba8(r).detalle[0]).toMatch(/^\[Tiendas de juguete\] 1\.2\.D1 cambia las palabras con valor fijo/);
+  });
+
+  it("8 · una dimensión de base no cambia de nombre", () => {
+    const r = con((s) => s + "\n#### 1.1 Rutinas de la tienda\n\n¿La tienda sigue sin la persona clave?\n");
+    expect(prueba8(r).detalle).toEqual([
+      "[Tiendas de juguete] 1.1 es de base operativa y se llama «Procesos y Rutinas» en toda la escala; la edición la llama «Rutinas de la tienda».",
+    ]);
+  });
+
+  it("8 · sin perfil habitual", () => {
+    const r = con((s) => s.replace("*Perfil habitual:* transaccional · recompra.\n", ""));
+    expect(prueba8(r).detalle).toEqual(["[Tiendas de juguete] no dice su «Perfil habitual»."]);
+  });
+
+  it("8 · una edición no saca una dimensión", () => {
+    // Saca los dos criterios de decisión de Funcional que aplican con equipo y deja solo el propio, que es de recompra.
+    const r = con((s) =>
+      s
+        .replace("- Cada venta de la tienda entra sola al sistema. `[1.2.F1]`\n", "")
+        .replace("`[1.2.F101 · comprobable · hábito]`", "`[1.2.F101 · comprobable · hábito · recompra]`")
+        .replace("*No aplican:* `1.2.I1`.", "*No aplican:* `1.2.I1`, `1.2.F1`, `1.2.F2`.")
+        .replace("*Se leen igual:* `1.2.F2`, ", "*Se leen igual:* "),
+    );
+    expect(prueba8(r).detalle).toContain("[Tiendas de juguete] 1.2 deja de aplicar a con equipo/única: una edición no saca una dimensión.");
+  });
+
+  it("1 · un nivel que queda vacío SOLO dentro de la edición", () => {
+    // Primero sale de «Se leen igual» y después entra a «No aplican» (en ese orden: el segundo reemplazo pisaría al primero).
+    const r = con((s) => s.replace(", `1.2.O1`.\n", ".\n").replace("*No aplican:* `1.2.I1`.", "*No aplican:* `1.2.I1`, `1.2.O1`."));
+    const vacios = r.find((x) => x.nombre.startsWith("1"))!.detalle;
+    expect(vacios).toContain("[Tiendas de juguete] 1.2 O (con equipo/única)");
+    expect(vacios.every((v) => v.startsWith("[Tiendas de juguete]"))).toBe(true);
+  });
+
+  it("4 · un identificador a la vista en un texto de la edición", () => {
+    const r = con((s) => s.replace("Los carritos se pierden.", "Los carritos se pierden, como dice 1.1."));
+    expect(fallidas(r)).toEqual(["4 · Sin identificadores a la vista"]);
+  });
+
+  it("5 · los criterios propios también son identificadores: no pueden desaparecer", () => {
+    const antes = parsearEscala(MINI_ESCALA_CON_EDICION);
+    const sin = parsearEscala(MINI_ESCALA_CON_EDICION.replace("- El recordatorio sale cuando toca a cada producto. `[1.2.E101 · comprobable · recompra]`\n", ""));
+    const r = validarEscala(sin, { ...opts, anterior: antes });
+    expect(r.find((x) => x.nombre.startsWith("5"))!.detalle).toEqual(["1.2.E101 estaba en la 9.9.9 y desapareció."]);
+  });
+
+  it("estructura · un criterio propio de riesgo también necesita su mensaje", () => {
+    const r = con((s) => s.replace("`[1.2.F101 · comprobable · hábito]`", "`[1.2.F101 · comprobable · riesgo · hábito]`"));
+    expect(fallidas(r)).toContain("Estructura");
+  });
+});
+
 describe("el archivo real pasa todas, con su especificación y su manual", () => {
   it("todas en verde", () => {
     const r = validarEscala(parsearEscala(leerArchivoDeLaEscala("escala")), {
@@ -101,6 +196,34 @@ describe("qué cambió entre versiones", () => {
     expect(c.cambiados).toEqual([
       { id: "1.1.F1", antes: "Hay un pipeline configurado.", despues: "Hay un pipeline configurado y documentado." },
     ]);
+  });
+
+  it("con ediciones: qué cambia leído con cada una, y lo que la edición dice con sus palabras y quedó viejo", () => {
+    const a = parsearEscala(MINI_ESCALA_CON_EDICION);
+    // Cambia el texto GENERAL de un criterio que la edición reescribe (sin tocar el suyo): quedó viejo.
+    // Y cambia el de uno que la edición deja como está: leído con la edición, también cambia.
+    const b = parsearEscala(
+      MINI_ESCALA_CON_EDICION.replace("- Las ventas sin vendedor entran solas al sistema.", "- Las ventas sin vendedor entran solas y completas al sistema.").replace(
+        "- El contacto está orquestado en cadencias.",
+        "- El contacto está orquestado en cadencias fijas.",
+      ),
+    );
+    const c = compararEscalas(a, b);
+    expect(c.cambiados.map((x) => x.id)).toEqual(["1.2.F1", "1.2.E1"]);
+    expect(c.ediciones).toHaveLength(1);
+    expect(c.ediciones[0]).toMatchObject({ slug: "tiendas", nueva: false, viejos: ["1.2.F1"] });
+    expect(c.ediciones[0].cambiados.map((x) => x.id)).toEqual(["1.2.E1"]);
+    expect(c.edicionesRetiradas).toEqual([]);
+  });
+
+  it("una edición que llega en esta versión es nueva y no tiene nada viejo; una que se va, se dice", () => {
+    const sin = parsearEscala(MINI_ESCALA);
+    const con = parsearEscala(MINI_ESCALA_CON_EDICION);
+    const c = compararEscalas(sin, con);
+    expect(c.nuevos).toEqual([]);
+    expect(c.ediciones[0]).toMatchObject({ slug: "tiendas", nueva: true, cambiados: [], viejos: [] });
+    expect(c.ediciones[0].propiosDeLaEdicion).toBeGreaterThan(0);
+    expect(compararEscalas(con, sin).edicionesRetiradas).toEqual(["Tiendas de juguete"]);
   });
 
   it("la diferencia palabra por palabra se vuelve a pegar tal cual", () => {

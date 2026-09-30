@@ -1,0 +1,27 @@
+-- 2026-09-29 · Comentarios de la escala: desde qué edición por industria se comentó.
+--
+-- Por qué: desde la 8.0.0 la Escala de Rendimiento trae EDICIONES por industria (la misma escala
+-- dicha para ecommerce y retail, inmobiliaria, educación…). Un mismo criterio —el mismo
+-- identificador— se lee con un texto en la escala general y con otro en una edición. Para que un
+-- comentario se entienda después, hay que saber con cuál de los dos lo leyó quien lo escribió:
+-- el texto que se congela con el comentario es el de ESA edición, y «el texto cambió» se compara
+-- contra ella.
+--
+--   · "EscalaComentario"."edicion" — la clave de la edición (`ecommerce-retail`), o NULL si se
+--     comentó desde la escala general. Texto libre, como el resto (INV4): las claves válidas son
+--     las de la versión publicada y las valida la API.
+--
+-- ADITIVO: una columna nueva, que admite NULL. Nada se dropea, nada se renombra, ningún dato
+-- existente cambia (los comentarios que ya hay quedan en NULL = escala general, que es de donde
+-- se hicieron). RLS no cambia: la tabla ya está cerrada para `anon` y `authenticated`.
+--
+-- ⚠ ORDEN: este SQL va ANTES del deploy. El código tolera que falte (lee y escribe los comentarios
+-- de la escala general igual; comentar desde una edición avisa que falta este archivo), pero la
+-- columna es lo que deja comentar desde una edición.
+--
+-- Correr (PowerShell):  $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-09-29-escala-comentario-edicion.sql
+-- Después: npx prisma generate  +  reiniciar el dev server.
+-- ⚠ SIN --schema: con Prisma 7 esa opción ya no existe.
+-- ⛔ NUNCA `prisma db push`: droppearía columnas (regla dual-PC, schema.prisma).
+
+ALTER TABLE "EscalaComentario" ADD COLUMN IF NOT EXISTS "edicion" TEXT;

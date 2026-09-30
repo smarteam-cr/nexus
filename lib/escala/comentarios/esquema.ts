@@ -9,6 +9,7 @@
  */
 import { z } from "zod";
 import { FORMA_DE_ANCLA } from "@/lib/escala/documento/anclas";
+import { FORMA_DE_EDICION } from "@/lib/escala/documento/parsear";
 import { CIERRES, DESPUES } from "@/lib/escala/documento/perfil";
 
 const id = z.string().min(1).max(64);
@@ -34,6 +35,15 @@ export const CrearComentario = z
     clienteNombre: opcional(200),
     perfilCierre: z.enum(CIERRES as unknown as [string, ...string[]]).nullish(),
     perfilDespues: z.enum(DESPUES as unknown as [string, ...string[]]).nullish(),
+    // La clave de la edición por industria desde la que se comenta (o nada: la escala general). Que
+    // esa edición exista en la versión publicada lo mira `crearComentario`.
+    edicion: z
+      .string()
+      .trim()
+      .max(80)
+      .regex(FORMA_DE_EDICION, "Esa no es la clave de una edición.")
+      .nullish()
+      .transform((v) => (v ? v : null)),
   })
   .refine((v) => v.tipo !== "no_calza" || !!v.clienteId || !!v.clienteNombre, {
     message: "Di con qué cliente no calza.",
