@@ -449,8 +449,11 @@ export function estaPorCobrar(f: Pick<FacturaParaCruzar, "moveType" | "state" | 
   return esDocumentoVivo(f) && (f.paymentState === "not_paid" || f.paymentState === "partial");
 }
 
-/** Lo que falta cobrar de una factura, sin IVA como todo Nexus. Pago parcial: la parte del neto que queda. */
-function netoPorCobrar(f: Pick<FacturaParaCruzar, "paymentState" | "montoTotal" | "montoNeto" | "montoResidual">): number {
+/**
+ * Lo que falta cobrar de una factura, sin IVA como todo Nexus. Pago parcial: la parte del neto que queda. Exportada
+ * para «Facturación por cliente» (facturacion-por-cliente.ts): la misma cifra en las tres vistas.
+ */
+export function netoPorCobrar(f: Pick<FacturaParaCruzar, "paymentState" | "montoTotal" | "montoNeto" | "montoResidual">): number {
   if (f.paymentState === "partial" && f.montoTotal > 0) return round2((f.montoNeto * f.montoResidual) / f.montoTotal);
   return f.montoNeto;
 }
@@ -1814,8 +1817,10 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       const infladas = porCobrar.filter((f) => f.moneda === "USD" && tieneGemela(f));
       const partes: string[] = [];
       if (porCobrar.length) {
+        /* ⚠ Dice que son FACTURAS y qué pasa con ellas en Nexus (revisión con Alex, 2026-09-29): se leía como una lista
+           de clientes que había que aprobar. */
         partes.push(
-          `Odoo las emitió, siguen sin pagar y Nexus no sabe de qué cuenta son: su cliente de Odoo no está emparejado. Hasta que se emparejen, el semáforo de cobranza no las ve. Suman ${textoDeMontos(montos)} sin IVA.`,
+          `Son facturas que Odoo emitió y siguen sin pagar, pero su cliente de Odoo no está vinculado a ninguna cuenta de Nexus: hasta que se vincule, no cuentan en la cobranza de Nexus ni en el semáforo. Suman ${textoDeMontos(montos)} sin IVA.`,
         );
       } else if (!porCobrarSinCuenta.length && sinCuenta.length) {
         /* ⚠ Solo si de verdad no hay ninguna por cobrar: con todas marcadas, «ninguna está por cobrar» sería falso. */
@@ -1861,7 +1866,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         severidad: porCobrar.length ? "ALTA" : "MEDIA",
         /* El título nombra lo que muestran las filas: primero las facturas; si solo quedan cuentas, los cobros. */
         titulo: porCobrar.length
-          ? `${porCobrar.length} facturas por cobrar de clientes de Odoo que Nexus no tiene emparejados`
+          ? `${porCobrar.length === 1 ? "1 factura de Odoo por cobrar que no está" : `${porCobrar.length} facturas de Odoo por cobrar que no están`} en ninguna cuenta de Nexus`
           : cobrosSinVerificar.length
             ? `${cobrosSinVerificar.length} cobros facturados no se pueden verificar: su cuenta no está emparejada`
             : sinCuenta.length
@@ -1879,13 +1884,13 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         atajo: { etiqueta: "Ir a emparejar", tab: "emparejar" },
         pasos: [
           "Ve a la pestaña «Emparejar» de esta misma pantalla.",
-          "Para cada cuenta, confirma el cliente de Odoo que le corresponde. Las que ya tienen candidato traen la evidencia a la vista; el resto se busca por nombre o cédula.",
-          "Si una cuenta factura por Mercury, márcala «Está en Mercury» en su tarjeta: sale de la lista y deja de contar como «falta emparejar».",
-          "Si un cliente de Odoo no es cliente nuestro, márcalo como ajeno para que deje de aparecer.",
-          "Al confirmar, las facturas de ese cliente pasan a su cuenta en el acto y sus cobros facturados empiezan a verificarse.",
+          "Arriba están estos clientes de Odoo, con lo que tienen por cobrar. Si la empresa ya tiene cuenta en Nexus, aprieta «Es de una cuenta de Nexus» y elígela: sus facturas pasan a esa cuenta en el momento.",
+          "Si todavía no tiene cuenta, créala en Cobranza con «Nueva empresa» y vuelve acá a vincularlo.",
+          "Las cuentas de Nexus sin cliente de Odoo están en tarjetas: confirma el que les corresponde, o búscalo por nombre o cédula. Si una factura por Mercury, márcala «Está en Mercury».",
+          "Si un cliente de Odoo no es cliente nuestro, márcalo «No es cliente nuestro»: deja de aparecer.",
         ],
         queSignificaAceptar:
-          "Que estas facturas pueden quedar sin atribuir y esos cobros sin verificar. Casi nunca es lo correcto: lo que corresponde es emparejar.",
+          "«Está bien así» solo quita estas filas de la lista: no vincula el cliente, no crea la cuenta ni carga cobros, y las facturas siguen fuera de la cobranza de Nexus. Casi nunca es lo correcto: lo que corresponde es vincular.",
         queHacer: "Emparejar los clientes de Odoo con las cuentas de Nexus en /cobranza/odoo.",
         resuelve: "COBRANZA",
         items: [...agruparPorPartner(porCobrar, netoPorCobrar, { sufijo }), ...cuentasSinEmparejar.map(itemDeCuentaPorEmparejar)],

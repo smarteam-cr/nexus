@@ -3,7 +3,8 @@
 /**
  * components/cobranza/OdooClient.tsx
  *
- * Las tres pestañas de la integración con Odoo: **qué es**, **emparejar**, **lo que no cuadra**.
+ * Las pestañas de la integración con Odoo: **qué es**, **emparejar**, **lo que no cuadra** y, desde el 2026-09-30,
+ * **facturación por cliente** (lo facturado y cobrado de cada cliente por año, al lado de las ventas cerradas).
  *
  * ── POR QUÉ HAY UNA PESTAÑA QUE SOLO EXPLICA ────────────────────────────────────
  * Esta pantalla la abre alguien que no la construyó, cada varias semanas, para hacer un
@@ -37,6 +38,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import EmparejadoOdoo from "./EmparejadoOdoo";
 import DiferenciasOdoo from "./DiferenciasOdoo";
+import FacturacionOdoo from "./FacturacionOdoo";
 // ⚠ Viven en un módulo neutral: la página (servidor) también las lee, y de un "use client" no podría.
 import type { Pestana } from "@/lib/cobranza/odoo/pestanas";
 import { horaDeCostaRica } from "@/lib/cobranza/odoo/espejo";
@@ -175,18 +177,23 @@ export default function OdooClient({
         value={tab}
         onChange={(k) => setTab(k as Pestana)}
         items={[
-          { key: "que-es", label: "Cómo funciona" },
+          { key: "que-es", label: "Cómo funciona", title: "Qué hace esta integración y qué no hace. Solo explica." },
           {
             key: "emparejar",
             label: "Emparejar",
             count: vivos.porEmparejar,
-            title: "Decirle a Nexus qué cliente de Odoo corresponde a cada cuenta",
+            title: "Decir qué cliente de Odoo es de cada cuenta de Nexus: así sus facturas caen en esa cuenta.",
           },
           {
             key: "no-cuadra",
             label: "Lo que no cuadra",
             count: vivos.diferencias,
-            title: "Diferencias entre lo que Nexus planificó y lo que Odoo facturó",
+            title: "Diferencias entre lo que Nexus planificó y lo que Odoo facturó, con dónde se arregla cada una.",
+          },
+          {
+            key: "facturacion",
+            label: "Facturación por cliente",
+            title: "Lo facturado y cobrado de cada cliente por año, al lado de las ventas cerradas. Solo mira.",
           },
         ]}
       />
@@ -213,7 +220,7 @@ export default function OdooClient({
           className="shrink-0"
           onClick={() => void actualizar()}
           disabled={actualizando}
-          title="Vuelve a copiar ahora las facturas y los clientes de Odoo, sin esperar la copia de la mañana, y recarga esta pantalla. Solo lee Odoo: no cambia ningún cobro."
+          title="Trae ya las facturas y los clientes de Odoo, sin esperar a mañana. Solo lee Odoo: no cambia ningún cobro."
         >
           {actualizando ? "Leyendo Odoo…" : "Actualizar desde Odoo"}
         </Button>
@@ -231,6 +238,7 @@ export default function OdooClient({
           onPendientes={alContarDiferencias}
         />
       )}
+      {tab === "facturacion" && <FacturacionOdoo recarga={recarga} />}
     </div>
   );
 }
@@ -427,14 +435,15 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           «Lo que no cuadra» mandaba a emparejar a Publimark y a McCann, y en «Emparejar» no aparecían por ningún lado. */}
       <Bloque titulo="Los clientes de Odoo que todavía no tienen cuenta en Nexus">
         <li>
-          · «Emparejar» los muestra aparte, con lo que Odoo les tiene por cobrar. Son los mismos que «Lo que no cuadra»
-          llama «clientes de Odoo que Nexus no tiene emparejados», con la misma cifra.
+          · «Emparejar» los muestra aparte, con lo que Odoo les tiene por cobrar. Son los de la línea de «Lo que no
+          cuadra» de las facturas de Odoo por cobrar que no están en ninguna cuenta de Nexus, con la misma cifra.
         </li>
         <li>
           · Cada uno tiene dos salidas: <strong className="text-fg">«Es de una cuenta de Nexus»</strong> lo vincula a
           una cuenta que ya existe, y sus facturas pasan a ella en el momento;{" "}
-          <strong className="text-fg">«No es cliente nuestro»</strong> lo saca de la lista. Si la empresa todavía no
-          tiene cuenta, se crea en Cobranza, con «Nueva empresa».
+          <strong className="text-fg">«No es cliente nuestro»</strong> lo saca de la lista y lo deja en «Marcados como
+          no clientes», al final, donde «Sí es cliente» lo devuelve. Si la empresa todavía no tiene cuenta, se crea en
+          Cobranza, con «Nueva empresa».
         </li>
         <li>
           · Un cliente de Odoo va en una sola cuenta, y una cuenta puede tener varios. Si la empresa ya tiene su cuenta
@@ -454,7 +463,25 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         </li>
       </Bloque>
 
+      {/* ⭐ 2026-09-30, punto 8 de la revisión con Alex: la historia de facturación por cliente. */}
+      <Bloque titulo="Facturación por cliente">
+        <li>
+          · Lo facturado, lo cobrado y lo por cobrar de cada cliente en el año que elijas, de la copia de Odoo, con la
+          factura más reciente arriba. La copia trae todos los años que tiene Odoo, también los que vinieron de Factum.
+        </li>
+        <li>
+          · Al lado, las ventas cerradas en HubSpot ese año, de la empresa de cada cuenta. Es una guía y no un cuadre:
+          una venta de diciembre se factura en enero. Un cliente de Odoo sin cuenta en Nexus no tiene con qué cruzarse.
+        </li>
+        <li>· Solo mira: no cambia nada, ni en Nexus ni en Odoo.</li>
+      </Bloque>
+
       <Bloque titulo="«Está bien así», fila por fila">
+        <li>
+          · <strong className="text-fg">«Está bien así» solo quita la fila de la lista.</strong> No cambia cobros,
+          cuentas ni facturas, ni en Nexus ni en Odoo: si lo que la fila acusa hay que arreglarlo, se arregla donde dice
+          su línea.
+        </li>
         <li>
           · Cada fila de «Lo que no cuadra» tiene su «Está bien así», con motivo, y te propone el último motivo que
           usaste. El botón de la línea marca una por una las filas que ves, con el mismo motivo.

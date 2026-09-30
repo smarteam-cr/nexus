@@ -32,6 +32,11 @@
  * · «En Mercury» se pliega: 24 cuentas ya resueltas debajo de una sola tarjeta pendiente se leían como trabajo.
  * · El buscador dice de qué cuenta es cada cliente de Odoo ANTES del clic, y puede buscar directamente en Odoo: un
  *   cliente nuevo al que todavía no se le facturó se empareja igual.
+ *
+ * ── 2026-09-30 ──────────────────────────────────────────────────────────────────
+ * · Cada botón dice en su `title` qué hace y qué cambia en Nexus, en una frase (la capa global de tooltips lo dibuja).
+ * · «Marcados como no clientes»: los que alguien marcó «No es cliente nuestro», uno por uno, con quién y cuándo, y su
+ *   «Sí es cliente». Reemplaza a «Devolver el primero a la lista», que devolvía uno sin decir cuál.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, EmptyState, Input, Spinner } from "@/components/ui";
@@ -65,7 +70,9 @@ interface Vinculo {
   cuentaNombre: string | null;
   via: string | null;
   ignorado: boolean;
+  /** Quién lo vinculó o lo marcó «No es cliente nuestro», y cuándo. */
   confirmadoPor: string | null;
+  confirmadoEn: string | null;
   /** Documentos en la copia de Odoo. 0 = todavía no se le facturó. */
   facturas: number;
   ultimaFactura: string | null;
@@ -159,6 +166,11 @@ const VIA_LABEL: Record<string, string> = {
   MANUAL: "a mano",
 };
 
+/* La ayuda de cada botón que vincula (2026-09-30, pedido de Elías: qué hace y qué cambia en Nexus, en poco texto).
+   Es la misma acción desde cuatro lugares, así que dice lo mismo en los cuatro. */
+const TIP_ES_ESTE = "Lo vincula a esta cuenta: sus facturas de Odoo pasan a ella en Nexus. Odoo no cambia.";
+const TIP_ES_ESTA = "Vincula el cliente de Odoo a esta cuenta: sus facturas de Odoo pasan a ella en Nexus. Odoo no cambia.";
+
 /** Quién dejó la cuenta en esa vía, o de dónde venía si nadie la firmó. */
 function origenDeLaVia(c: CuentaFueraDeOdoo): string {
   if (c.marcadaPor) return `Marcada por ${c.marcadaPor} el ${fmtFecha(c.marcadaEn)}`;
@@ -196,6 +208,7 @@ export default function EmparejadoOdoo({
   const [verVinculados, setVerVinculados] = useState(false);
   const [verSinUsar, setVerSinUsar] = useState(false);
   const [verEnMercury, setVerEnMercury] = useState(false);
+  const [verNoClientes, setVerNoClientes] = useState(false);
   /** El vínculo desde cuya fila se busca otra ficha para la misma cuenta. */
   const [sumandoA, setSumandoA] = useState<number | null>(null);
   /** El cliente de Odoo sin cuenta al que se le está eligiendo una cuenta de Nexus. */
@@ -337,7 +350,18 @@ export default function EmparejadoOdoo({
       `«${v.odooPartnerNombre}» quedó vinculado a ${cuenta.nombre}.`,
     );
   const ignorar = (v: Vinculo) =>
-    accion({ accion: "ignorar", odooPartnerId: v.odooPartnerId, ignorado: true }, `p${v.odooPartnerId}`, "Marcado como ajeno.");
+    accion(
+      { accion: "ignorar", odooPartnerId: v.odooPartnerId, ignorado: true },
+      `p${v.odooPartnerId}`,
+      `«${v.odooPartnerNombre}» quedó en «Marcados como no clientes», al final.`,
+    );
+  /* El camino de vuelta, uno por uno (punto 7 de la revisión con Alex, 2026-09-30). */
+  const esCliente = (v: Vinculo) =>
+    accion(
+      { accion: "ignorar", odooPartnerId: v.odooPartnerId, ignorado: false },
+      `p${v.odooPartnerId}`,
+      `«${v.odooPartnerNombre}» vuelve a la lista de clientes de Odoo sin cuenta.`,
+    );
 
   if (cargando && !estado) {
     return (
@@ -361,7 +385,7 @@ export default function EmparejadoOdoo({
           {conteos.enOtra > 0 && <span className="text-fg-muted"> · {conteos.enOtra} en QuickBooks</span>}
         </span>
         <span className="text-fg-muted">
-          {conteos.partners} clientes en Odoo · {conteos.partnersIgnorados} marcados como ajenos
+          {conteos.partners} clientes en Odoo · {conteos.partnersIgnorados} marcados como no clientes
         </span>
         {conteos.facturasLeidas > 0 && (
           <span className="text-fg-muted">{conteos.facturasLeidas} facturas de la copia de Odoo para proponer</span>
@@ -575,6 +599,7 @@ export default function EmparejadoOdoo({
                   variant="ghost"
                   size="sm"
                   onClick={() => setSumandoA(sumandoA === v.odooPartnerId ? null : v.odooPartnerId)}
+                  title="Vincula otro cliente de Odoo a esta misma cuenta, sin soltar este: sus facturas también caen en ella."
                 >
                   {sumandoA === v.odooPartnerId ? "Cerrar" : "Sumar otra ficha"}
                 </Button>
@@ -585,6 +610,7 @@ export default function EmparejadoOdoo({
                   onClick={() =>
                     accion({ accion: "desvincular", odooPartnerId: v.odooPartnerId }, `p${v.odooPartnerId}`, "Desvinculado.")
                   }
+                  title="Separa este cliente de Odoo de la cuenta: sus facturas quedan sin cuenta en Nexus. Los cobros no cambian."
                 >
                   Desvincular
                 </Button>
@@ -606,23 +632,42 @@ export default function EmparejadoOdoo({
         })}
       </Seccion>
 
+      {/* ⭐ Punto 7 de la revisión con Alex (2026-09-30): los marcados «No es cliente nuestro», uno por uno, con quién
+          los marcó y su «Sí es cliente». Hasta ese día solo se podía devolver «el primero» de la lista, sin ver cuál era,
+          y una empresa marcada por error no tenía forma de volver. */}
       {ignorados.length > 0 && (
-        <p className="text-xs text-fg-muted">
-          {ignorados.length} clientes de Odoo están marcados como ajenos.{" "}
-          <button
-            type="button"
-            className="underline hover:text-fg"
-            onClick={() =>
-              accion(
-                { accion: "ignorar", odooPartnerId: ignorados[0]!.odooPartnerId, ignorado: false },
-                `p${ignorados[0]!.odooPartnerId}`,
-                `«${ignorados[0]!.odooPartnerNombre}» vuelve a la lista.`,
-              )
-            }
-          >
-            Devolver el primero a la lista
-          </button>
-        </p>
+        <Seccion
+          titulo={`Marcados como no clientes (${ignorados.length})`}
+          abierta={verNoClientes}
+          onToggle={() => setVerNoClientes((v) => !v)}
+          nota="No aparecen en las listas ni en las propuestas. Sus facturas siguen en la copia de Odoo: no se borró nada. «Sí es cliente» lo devuelve a la lista de clientes de Odoo sin cuenta, para vincularlo."
+        >
+          {ignorados.map((v) => (
+            <div
+              key={v.odooPartnerId}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2 last:border-0"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm text-fg" title={v.odooPartnerNombre}>
+                  {v.odooPartnerNombre}
+                </div>
+                <div className={`text-xs ${v.porCobrar.length > 0 ? "text-warn-ink" : "text-fg-muted"}`}>
+                  {loQueTieneEnOdoo(v)}
+                  {v.confirmadoPor && ` · lo marcó ${v.confirmadoPor}${v.confirmadoEn ? ` el ${fmtFecha(v.confirmadoEn)}` : ""}`}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={ocupado === `p${v.odooPartnerId}`}
+                onClick={() => esCliente(v)}
+                title="Vuelve a la lista de clientes de Odoo sin cuenta, para vincularlo. No cambia nada más."
+              >
+                {ocupado === `p${v.odooPartnerId}` ? "Guardando…" : "Sí es cliente"}
+              </Button>
+            </div>
+          ))}
+        </Seccion>
       )}
     </div>
   );
@@ -671,13 +716,18 @@ function FilaCuenta({
               onClick={mercury.onMarcar}
               title={
                 mercury.titulo ??
-                "Factura por Mercury, no por Odoo: su vía de cobro pasa a Mercury en todo Cobranza y sale de esta lista. Se deshace desde «En Mercury»."
+                "Factura por Mercury, no por Odoo: su vía de cobro pasa a Mercury en Cobranza y sale de esta lista. Se deshace en «En Mercury»."
               }
             >
               {mercury.ocupado ? "Guardando…" : "Está en Mercury"}
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={onBuscar}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBuscar}
+            title="Busca a mano, por nombre o cédula, el cliente de Odoo de esta cuenta. Buscar no cambia nada."
+          >
             {buscando ? "Cerrar" : "Buscar en Odoo"}
           </Button>
         </div>
@@ -699,6 +749,7 @@ function FilaCuenta({
             size="sm"
             disabled={ocupado}
             onClick={() => onConfirmar(principal.odooPartnerId, principal.via)}
+            title={TIP_ES_ESTE}
           >
             {ocupado ? "Guardando…" : "Es este"}
           </Button>
@@ -712,7 +763,13 @@ function FilaCuenta({
               <span className="min-w-0 flex-1 truncate text-fg-secondary" title={c.evidencia}>
                 {c.nombre}
               </span>
-              <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => onConfirmar(c.odooPartnerId, c.via)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={ocupado}
+                onClick={() => onConfirmar(c.odooPartnerId, c.via)}
+                title={TIP_ES_ESTE}
+              >
                 Es este
               </Button>
             </div>
@@ -770,7 +827,13 @@ function FilaDeClienteDeOdoo({
             {cliente.odooVat && <span className="font-mono"> · {cliente.odooVat}</span>}
           </div>
         </div>
-        <Button variant="ghost" size="sm" disabled={ocupado} onClick={onElegir}>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={ocupado}
+          onClick={onElegir}
+          title="Elige la cuenta de Nexus de este cliente: sus facturas de Odoo pasan a esa cuenta."
+        >
           {eligiendo ? "Cerrar" : "Es de una cuenta de Nexus"}
         </Button>
         <Button
@@ -778,7 +841,7 @@ function FilaDeClienteDeOdoo({
           size="sm"
           disabled={ocupado}
           onClick={onIgnorar}
-          title="Deja de aparecer acá y en las propuestas. Sus facturas siguen en la copia de Odoo: no se borra nada."
+          title="Deja de aparecer en esta lista y en las propuestas. No borra nada: se devuelve desde «Marcados como no clientes»."
         >
           No es cliente nuestro
         </Button>
@@ -826,7 +889,7 @@ function SelectorDeCuenta({
             {c.via !== "ODOO" && (
               <span className="shrink-0 text-xs text-fg-muted">factura por {c.via === "MERCURY" ? "Mercury" : "QuickBooks"}</span>
             )}
-            <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => onElegir(c)}>
+            <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => onElegir(c)} title={TIP_ES_ESTA}>
               {ocupado ? "Guardando…" : "Es esta"}
             </Button>
           </div>
@@ -911,7 +974,7 @@ function Buscador({ ocupado, onElegir }: { ocupado: boolean; onElegir: (odooPart
         title={
           p.vinculadaA
             ? `Un cliente de Odoo va en una sola cuenta, y este ya es de «${p.vinculadaA}». Si es la misma empresa, el servicio nuevo se agrega en esa cuenta.`
-            : undefined
+            : TIP_ES_ESTE
         }
         onClick={() => onElegir(p.odooPartnerId)}
       >
@@ -941,7 +1004,13 @@ function Buscador({ ocupado, onElegir }: { ocupado: boolean; onElegir: (odooPart
       {q.trim().length >= 3 && (
         <div className="mt-2 border-t border-line pt-2">
           {deOdoo?.para !== q.trim() && (
-            <Button variant="ghost" size="sm" disabled={buscandoEnOdoo} onClick={() => void buscarEnOdoo()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={buscandoEnOdoo}
+              onClick={() => void buscarEnOdoo()}
+              title="Pregunta a Odoo ahora, por si el cliente es nuevo y todavía no está en la lista. Solo lee Odoo."
+            >
               {buscandoEnOdoo ? "Consultando Odoo…" : `Buscar «${q.trim()}» directamente en Odoo`}
             </Button>
           )}

@@ -10,9 +10,10 @@
  * pueden usar los dos lados.
  */
 
-export type Pestana = "que-es" | "emparejar" | "no-cuadra";
+/* `facturacion` (2026-09-30): lo facturado y cobrado de cada cliente por año, al lado de las ventas cerradas. */
+export type Pestana = "que-es" | "emparejar" | "no-cuadra" | "facturacion";
 
-export const PESTANAS: readonly Pestana[] = ["que-es", "emparejar", "no-cuadra"];
+export const PESTANAS: readonly Pestana[] = ["que-es", "emparejar", "no-cuadra", "facturacion"];
 
 /** La pestaña que pidió el enlace, o `undefined` si no pidió ninguna o pidió una que no existe. */
 export function pestanaDe(valor: string | undefined): Pestana | undefined {

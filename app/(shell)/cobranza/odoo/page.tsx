@@ -1,6 +1,6 @@
 /**
- * /cobranza/odoo — la integración con el ERP, en tres pestañas: qué es, emparejar, y lo que
- * no cuadra.
+ * /cobranza/odoo — la integración con el ERP, en cuatro pestañas: qué es, emparejar, lo que no
+ * cuadra y facturación por cliente (2026-09-30).
  *
  * Mismo gate que /cobranza (`cobranza.read`); el enforcement real vive en guardCobranzaAccess,
  * en /api/cobranza/odoo/**.

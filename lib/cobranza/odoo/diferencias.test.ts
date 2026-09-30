@@ -858,7 +858,7 @@ describe("⭐ una sola regla de documento vivo", () => {
       ],
     });
     const l = lista.find((i) => i.codigo === "ODOO-SIN-CUENTA");
-    expect(l?.titulo).toMatch(/^1 facturas por cobrar de clientes de Odoo/);
+    expect(l?.titulo).toBe("1 factura de Odoo por cobrar que no está en ninguna cuenta de Nexus");
     expect(l?.montoEnJuego).toBe(1000);
     expect(l?.detalle).toContain("1 nota(s) de crédito");
     expect(l?.detalle).toContain("1 documento(s) anulados o revertidos");
@@ -2307,15 +2307,16 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     const despues = detectarDiferenciasOdoo({ ...todas, marcas });
     const a = lineaDe(antes, "ODOO-SIN-CUENTA")!;
     const d = lineaDe(despues, "ODOO-SIN-CUENTA")!;
-    expect(a.titulo).toBe("3 facturas por cobrar de clientes de Odoo que Nexus no tiene emparejados");
-    expect(d.titulo, "cuenta la que queda, no las tres").toMatch(/^1 facturas? por cobrar de clientes de Odoo/);
+    /* El título dice que son FACTURAS y que no están en ninguna cuenta (revisión con Alex, 2026-09-29). */
+    expect(a.titulo).toBe("3 facturas de Odoo por cobrar que no están en ninguna cuenta de Nexus");
+    expect(d.titulo, "cuenta la que queda, no las tres").toBe("1 factura de Odoo por cobrar que no está en ninguna cuenta de Nexus");
     expect(d.items.map((i) => i.fila.clave)).toEqual(["cliente:90|CRC", "cuenta:sinv"]);
     expect(d.montos, "los US$3.000 marcados ya no son de esta línea").toEqual([{ moneda: "CRC", monto: 50000 }]);
     expect(d.detalle).toContain("Suman ₡50.000 sin IVA");
     expect(clavesDePlata(d)).toEqual(["f:sc3"]);
     expect(d.aceptada).toBe(false);
     /* Lo marcado va aparte, con su propio título; y la línea sigue siendo la casa de todo. */
-    expect(d.tituloDeMarcadas).toBe("2 facturas por cobrar de clientes de Odoo que Nexus no tiene emparejados");
+    expect(d.tituloDeMarcadas).toBe("2 facturas de Odoo por cobrar que no están en ninguna cuenta de Nexus");
     expect([...d.documentos].sort()).toEqual([...a.documentos].sort());
     /* El encabezado: una fila menos y US$3.000 menos. */
     const [ra, rd] = [resumenDeDiferencias(antes), resumenDeDiferencias(despues)];

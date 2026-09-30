@@ -61,7 +61,9 @@ import {
 } from "./marcas";
 import { documentosDelUltimoLibro, leerServiciosDeVenta } from "../libro-alex-server";
 import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
+import { facturacionPorCliente, type FacturacionDelAnio } from "./facturacion-por-cliente";
 import { sincronizarOdoo, ultimaCorrida, ultimaCorridaOk } from "./sync";
+import { crDateParts } from "@/lib/jobs/time";
 import type {
   OdooCuentaVia,
   OdooDeshacerMarcas,
@@ -1205,5 +1207,98 @@ export async function candidatasParaCobro(cobroId: string): Promise<CandidatasDe
       new Set(tomados.flatMap((t) => (t.numeroFactura ? [t.numeroFactura] : []))),
     ).map((c) => ({ ...c, sociedadId: sociedadDe(c.numero) })),
     espejoAl,
+  };
+}
+
+/* ── 6. Facturación por cliente ─────────────────────────────────────────────────── */
+
+export interface FacturacionPorCliente extends FacturacionDelAnio {
+  /** false = quien mira no tiene acceso a Ventas: los tratos ni se leen. */
+  conVentas: boolean;
+  /** El día de la última copia buena de Odoo: de cuándo son los números. */
+  copiaAl: string | null;
+}
+
+/**
+ * Lo facturado y lo cobrado de cada cliente en un año, de la copia de Odoo, al lado de las ventas cerradas en HubSpot
+ * (punto 8 de la revisión con Alex, 2026-09-30). La regla es `facturacionPorCliente` (pura). ⛔ No llama al ERP: sale de
+ * la copia, igual que «Emparejar». Sin `anio`, el año anterior al de hoy en Costa Rica: el último año completo.
+ */
+export async function cargarFacturacionPorCliente(opts: {
+  anio?: number | null;
+  /** El permiso de Ventas de quien mira: lo decide la ruta. */
+  conVentas: boolean;
+  ahora?: Date;
+}): Promise<FacturacionPorCliente> {
+  const anio = opts.anio ?? Number(crDateParts(opts.ahora ?? new Date()).dateKey.slice(0, 4)) - 1;
+  const dia = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+  /* `select` explícito: una columna nueva no tumba la vista si el código llega antes que su SQL. */
+  const [documentos, cuentas, ventas, corridaOk] = await Promise.all([
+    prisma.facturaOdoo.findMany({
+      where: { estadoEspejo: "VIGENTE" },
+      select: {
+        numero: true,
+        moveType: true,
+        state: true,
+        paymentState: true,
+        invoiceDate: true,
+        montoNeto: true,
+        montoTotal: true,
+        montoResidual: true,
+        moneda: true,
+        odooPartnerId: true,
+        odooPartnerNombre: true,
+        cuentaId: true,
+      },
+    }),
+    prisma.cuentaFinanciera.findMany({ select: { id: true, clientId: true, viaCobro: true, client: { select: { name: true } } } }),
+    opts.conVentas
+      ? prisma.ventaGanada.findMany({
+          where: { fechaCierre: { gte: dia(`${anio}-01-01`), lt: dia(`${anio + 1}-01-01`) } },
+          select: {
+            clientId: true,
+            fechaCierre: true,
+            monto: true,
+            moneda: true,
+            estado: true,
+            excluida: true,
+            pipelineId: true,
+            client: { select: { name: true } },
+          },
+        })
+      : Promise.resolve([]),
+    ultimaCorridaOk(),
+  ]);
+  const r = facturacionPorCliente(
+    documentos.map((d) => ({
+      ...d,
+      invoiceDate: d.invoiceDate.toISOString().slice(0, 10),
+      montoNeto: Number(d.montoNeto),
+      montoTotal: Number(d.montoTotal),
+      montoResidual: Number(d.montoResidual),
+    })),
+    cuentas.map((c) => ({ cuentaId: c.id, clientId: c.clientId, nombre: c.client.name, viaCobro: c.viaCobro })),
+    ventas.map((v) => ({
+      clientId: v.clientId,
+      clienteNombre: v.client?.name ?? null,
+      fechaCierre: v.fechaCierre.toISOString().slice(0, 10),
+      monto: v.monto === null ? null : Number(v.monto),
+      moneda: v.moneda,
+      estado: v.estado,
+      excluida: v.excluida,
+      pipelineId: v.pipelineId,
+    })),
+    anio,
+  );
+  const copiaAl = corridaOk ? corridaOk.toISOString().slice(0, 10) : null;
+  if (opts.conVentas) return { ...r, conVentas: true, copiaAl };
+  /* Sin permiso de Ventas, ni un número de ventas viaja: «0 tratos» diría algo que no se miró. */
+  return {
+    ...r,
+    filas: r.filas.map((f) => ({ ...f, ventas: null })),
+    totales: { ...r.totales, ventas: { tratos: 0, sinMonto: 0, montos: [] } },
+    ventasSinFacturas: [],
+    conVentas: false,
+    copiaAl,
   };
 }

@@ -77,6 +77,11 @@ interface ResultadoDeMarcar {
 /** El motivo tiene que decir algo: el servidor exige lo mismo. */
 const MOTIVO_MINIMO = 5;
 
+/* ⚠ «Está bien así» solo saca filas de la lista (revisión con Alex, 2026-09-29: se leía como «aprobar» o «corregir»).
+   El botón lo dice en su ayuda, en una frase, en la línea y en cada fila. */
+const TIP_BIEN_ASI =
+  "Solo quita de esta lista, con tu nombre y un motivo. No cambia cobros, cuentas ni facturas; si un número cambia, vuelve a aparecer.";
+
 /** Dónde se arregla, en palabras de quien lo va a hacer. El pie recibe el día de la última copia buena de Odoo. */
 const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: (espejoAl: string | null) => string }> = {
   /* ⚠ Decía «al día siguiente el sync trae el cambio»: la copia de Odoo estuvo sin actualizarse del 2 al
@@ -443,11 +448,20 @@ function Linea({
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {inc.atajo && onIrAEmparejar && (
-            <Button size="sm" onClick={onIrAEmparejar}>
+            <Button
+              size="sm"
+              onClick={onIrAEmparejar}
+              title="Abre «Emparejar», donde cada cliente de Odoo se vincula con su cuenta de Nexus."
+            >
               {inc.atajo.etiqueta}
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => setVerDetalle((v) => !v)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setVerDetalle((v) => !v)}
+            title={verDetalle ? undefined : "Muestra cada fila de esta línea, con su monto. Solo mira."}
+          >
             {verDetalle ? "Ocultar" : `Ver las ${n}`}
           </Button>
           {inc.marcadas.length > 0 && (
@@ -463,6 +477,7 @@ function Linea({
               className="ml-auto"
               disabled={ocupado !== null}
               onClick={() => setEditando({ tipo: "grupo" })}
+              title={TIP_BIEN_ASI}
             >
               {n === 1 ? "Está bien así" : `Las ${n} están bien así`}
             </Button>
@@ -526,7 +541,7 @@ function Linea({
                         variant="ghost"
                         size="sm"
                         disabled={ocupado !== null}
-                        title="Sale de esta línea con sus números de hoy. Si alguno cambia, vuelve sola."
+                        title={TIP_BIEN_ASI}
                         onClick={() => setEditando({ tipo: "fila", clave })}
                         className="shrink-0"
                       >
@@ -615,7 +630,12 @@ function FormularioDeMotivo({
           placeholder={placeholder}
           className="min-w-64 flex-1 text-sm"
         />
-        <Button size="sm" disabled={deshabilitado || !valido} onClick={confirmar}>
+        <Button
+          size="sm"
+          disabled={deshabilitado || !valido}
+          onClick={confirmar}
+          title="Guarda la marca con tu nombre y este motivo. Se puede deshacer en «Marcadas»."
+        >
           {guardando ? "Guardando…" : "Confirmar"}
         </Button>
         <Button variant="ghost" size="sm" onClick={onCancelar}>
