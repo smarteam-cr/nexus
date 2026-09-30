@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.2.0
-escala: 8.0.0
-fecha: 2026-09-29
+version: 1.2.1
+escala: 8.1.0
+fecha: 2026-09-30
 ---
 
 # Manual de operación de la Escala de Rendimiento
@@ -114,6 +114,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.2.1 (2026-09-30).** Acompaña a la escala 8.1.0. Sin otros cambios.
 
 **1.2.0 (2026-09-29).** Acompaña a la escala 8.0.0. Se suma «Las ediciones por industria»: con cuál se mide cada unidad, cuándo se hace una edición, qué puede cambiar, cómo se mantiene cuando cambia la matriz y cómo quedan los comentarios hechos desde una edición.
 

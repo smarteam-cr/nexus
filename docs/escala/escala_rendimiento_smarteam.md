@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 8.0.0
-fecha: 2026-09-29
+version: 8.1.0
+fecha: 2026-09-30
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
 ---
@@ -329,7 +329,7 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 - La **orquestación entre áreas** (SLAs, handoffs, rutinas conjuntas) se asigna a **Equipo y Gobierno** del área cuyo liderazgo sostiene la coordinación, y nunca es Funcional: su piso es Eficiente. El workflow técnico que la habilita se asigna a Tecnología. Las dimensiones 1.7, 2.7 y 3.7 miden el alcance hacia el destinatario final, no la coordinación entre departamentos.
 - La **respuesta a un deal que se enfría** se asigna a **Tracción del Deal (1.7)**; la cadencia general de contacto sigue en Procesos (1.1).
 - La **próxima compra de un cliente que vuelve sin contrato** —recordarle la recompra, reactivar a quien dejó de comprar— se asigna a **Tracción del Deal (1.7)**; retener a quien está por cancelar un contrato y atender sus quejas sigue en **Proactividad (3.7)**, y las campañas hacia el mercado, en **Canales y Alcance (2.7)**.
-- La **venta ganada que se cae antes de la entrega** —una reserva que se desiste, una matrícula que no llega a clases, un pedido que se cancela— se asigna a **Aprendizaje de Ganadas y Perdidas (1.8)**, igual que una pérdida; la salida de un cliente que ya recibía el servicio sigue en **Proactividad (3.7)**.
+- La **venta ganada que se cae antes de la entrega** —un pedido que se cancela o se devuelve, una reserva que se desiste, una matrícula que no llega a clases— no se mide en la escala general: es de las ediciones que la traen como criterio propio, y ahí se asigna a **Aprendizaje de Ganadas y Perdidas (1.8)**, igual que una pérdida. La salida de un cliente que ya recibía el servicio sigue en **Proactividad (3.7)**.
 - La **coherencia de la oferta entre canales** —precios, promociones y condiciones— se asigna a **Propuesta y Coherencia (1.5)**; la coordinación de una campaña entre canales sigue en **Canales y Alcance (2.7)**.
 - Donde se vende sin vendedor, **lo que la tienda le muestra a cada comprador** —sugerencias, oferta, trato a sus mejores clientes— se asigna a la **personalización de Ventas (1.6)**; el mensaje de las campañas para cada segmento sigue en **Segmentación (2.6)**.
 - La **disponibilidad de lo que se vende** —unidades, cupos o existencias, a la vista de quien vende— se asigna a **Tecnología de Ventas (1.2)**, y que cada venta quede asociada a un **cliente identificado**, a **Datos de Ventas (1.3)**.
@@ -712,7 +712,6 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Todo deal cerrado-perdido tiene razón de pérdida poblada. `[1.8.F1 · comprobable]`
 - Las razones de pérdida usan una taxonomía definida, no texto libre. `[1.8.F2 · comprobable]`
 - El líder puede sacar un reporte de razones de pérdida del trimestre sin reconstruir. `[1.8.F3 · comprobable]`
-- Si una venta ganada puede caerse antes de la entrega —una reserva que se desiste, una matrícula que no llega a clases, un pedido que se cancela—, cada caída deja registrada su razón, igual que una pérdida. `[1.8.F4 · comprobable]`
 
 **Eficiente.** Hay análisis estructurado de ganadas y perdidas, y capacitación comercial formal.
 
@@ -1596,6 +1595,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 
 ## Historial de versiones
 
+**8.1.0 (2026-09-30).** Revisión de Aprendizaje de Ganadas y Perdidas de Ventas con su responsable, con un solo cambio: sale de Funcional el criterio de las ventas ganadas que se caen antes de la entrega, que había entrado en la 7.7.0. Su identificador queda retirado, y la regla de asignación dice que eso se mide solo en las ediciones que lo traen como criterio propio. En la edición Ecommerce y retail, que cada pedido cancelado o devuelto deje su razón pasa a ser un criterio propio. Cambia lo que pide Funcional en Aprendizaje de Ganadas y Perdidas.
+
 **8.0.0 (2026-09-29).** La escala suma ediciones por industria, en una parte nueva al final del documento. Una edición es la misma escala dicha para una industria: comparte áreas, dimensiones, niveles, reglas, cálculo e identificadores, y cambia los nombres de las dimensiones de producción, las preguntas, los costos y los criterios, que puede decir con sus palabras, sumar como propios o sacar cuando no aplican. La matriz pasa a ser la escala general, con la que se mide a quien no tiene edición. La primera edición es Ecommerce y retail: trae Ventas escrita entera para una tienda —Catálogo y oferta, Oferta por cliente, Carrito y recompra y Embudo de compra en producción— y, en Marketing y Servicio, nombre, pregunta y costo propios, con criterios que todavía se leen con el texto general. En esa edición, la personalización de Ventas aplica también a la venta transaccional, y en Eficiente se pide que cada producto que se acaba o caduca tenga medido cada cuánto se vuelve a comprar. La regla de asignación suma un caso. No cambia ningún criterio de la matriz ni su cálculo.
 
 **7.7.0 (2026-09-29).** La escala general se prepara para servir a cualquier perfil de negocio, antes de sumar ediciones por industria. Hay dos marcas de perfil nuevas: venta sin vendedor, que reemplaza la regla que leía la frase del criterio, y recompra. La próxima compra de un cliente que vuelve sin contrato se trata como un negocio más, y reactivarla entra en Tracción del Deal. Se suman criterios para la venta sin vendedor —qué parte de las ventas queda con un cliente identificado y la misma oferta en todos los canales—, uno para cuando lo que se vende es limitado, uno para las ventas ganadas que se caen antes de la entrega y, en Eficiente de Marketing, las reseñas públicas y el programa de referidos. La definición de lead calificado deja de pedirse donde se vende sin vendedor, el responsable de cada cliente admite un seguimiento automático en carteras masivas, y la segmentación de clientes de Eficiente vale también para la relación única. Una docena de criterios se dicen de forma que sirva tanto para quien le vende a empresas como para quien le vende a personas. La regla de asignación suma cinco casos y el glosario, «Recompra» y «Referido». Se suman ocho criterios; ningún identificador existente cambia. Cambia lo que piden Funcional y Eficiente en varias dimensiones.
@@ -2026,7 +2027,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 - Toda compra abandonada queda con el paso donde se abandonó. `[1.8.F1]`
 - Los pasos de la compra y los motivos de cancelación y devolución usan una lista definida, no texto libre. `[1.8.F2]`
 - El líder puede sacar un reporte del trimestre de dónde se abandona la compra, sin reconstruir. `[1.8.F3]`
-- Cada pedido cancelado o devuelto deja registrada su razón. `[1.8.F4]`
+- Cada pedido cancelado o devuelto deja registrada su razón. `[1.8.F101 · comprobable]`
 
 **Eficiente.** El embudo se revisa con cadencia y la tienda prueba cambios para mejorarlo.
 

@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.2.0
-escala: 8.0.0
-fecha: 2026-09-29
+version: 1.2.1
+escala: 8.1.0
+fecha: 2026-09-30
 ---
 
 # Especificación del cálculo de la Escala de Rendimiento
@@ -19,7 +19,7 @@ Junto al identificador va la forma de verificación: comprobable, declarado o ev
 
 Los identificadores son estables. Se asignaron desde cero en la versión 6.0.0, y desde entonces no se reasignan ni se renumeran. Si un criterio se retira, su número queda vacío y no se reutiliza; si se agrega uno, toma el siguiente número libre de su nivel. Eso permite que el chequeo, el cotizador y los agentes apunten siempre al mismo criterio, aunque cambie su redacción.
 
-Identificadores retirados, que no se vuelven a usar: `1.2.F1`, `1.2.F5`, `2.2.F6`, `2.2.F7` y `3.2.F7`.
+Identificadores retirados, que no se vuelven a usar: `1.2.F1`, `1.2.F5`, `1.8.F4`, `2.2.F6`, `2.2.F7` y `3.2.F7`.
 
 Un criterio que cambia de dimensión se retira y entra con el siguiente número libre de su nueva dimensión: `1.2.F1` es hoy `1.1.F6`.
 
@@ -120,6 +120,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.2.1 (2026-09-30).** Acompaña a la escala 8.1.0: `1.8.F4` queda retirado. No cambia el cálculo.
 
 **1.2.0 (2026-09-29).** Acompaña a la escala 8.0.0, que suma las ediciones por industria. Se dice cómo se identifican y etiquetan los criterios de una edición —los reescritos, con solo su identificador; los propios, en el bloque de números de su edición—, qué criterios cuentan cuando una unidad se mide con una edición, que cada medición guarda con qué se midió y que cambiar de edición fija una línea base nueva. Se suma la prueba 8 y las pruebas 1, 2, 4 y 5 corren también sobre cada edición. No cambia el cálculo del nivel ni del puntaje.
 
