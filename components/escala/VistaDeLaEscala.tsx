@@ -107,6 +107,18 @@ function ResumenDeLaEdicion({ datos }: { datos: DatosDeLaVista }) {
   const { propios, reescritos, noAplican, renombradas } = ed.resumen;
   const tocaCriterios = propios + reescritos + noAplican > 0;
   const n = (cuantos: number, uno: string, varios: string) => `${cuantos} ${cuantos === 1 ? uno : varios}`;
+  // Una edición se escribe por áreas: de esta puede no haber dicho nada todavía.
+  if (!ed.adaptaElArea) {
+    return (
+      <div className="mt-3 border-t border-line pt-2 text-xs text-fg-secondary">
+        <p>
+          <span className="font-semibold text-fg">Edición {ed.nombre}</span> en {datos.area.nombre}: esta edición todavía no adapta esta área, así que se lee
+          entera con la escala general. Lo que sí trae son sus palabras: aparecen subrayadas donde el texto general nombra algo que en esta industria se
+          llama distinto.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="mt-3 space-y-1.5 border-t border-line pt-2 text-xs text-fg-secondary">
       <p>

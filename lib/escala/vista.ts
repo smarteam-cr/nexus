@@ -71,8 +71,12 @@ export interface DatosDeLaVista {
   ediciones: EdicionParaElegir[];
   /** Qué es una edición, con las palabras de la escala. */
   edicionesIntro: string | null;
-  /** La edición con que se está viendo (null = la escala general) y cuánto cambió de ESTA área. */
-  edicion: (EdicionAplicada & { resumen: ResumenDeLaEdicion }) | null;
+  /**
+   * La edición con que se está viendo (null = la escala general) y cuánto cambió de ESTA área.
+   * `adaptaElArea`: una edición se escribe por áreas, y puede no decir nada de esta todavía (ahí se
+   * lee entera con la escala general).
+   */
+  edicion: (EdicionAplicada & { resumen: ResumenDeLaEdicion; adaptaElArea: boolean }) | null;
   /** Los requeridos de los criterios de ESTA área, en los dos sentidos (el otro lado puede ser de otra área). */
   requeridos: RequeridosDelArea;
 }
@@ -149,7 +153,13 @@ export function datosDeLaVista(args: {
     comoCambia: args.comoCambia ?? null,
     ediciones: escala.ediciones.map((e) => ({ slug: e.slug, nombre: e.nombre, descripcion: e.descripcion, perfilHabitual: e.perfilHabitual })),
     edicionesIntro: escala.edicionesIntro,
-    edicion: escala.edicion ? { ...escala.edicion, resumen: resumenDeLaEdicion(area.dimensiones) } : null,
+    edicion: escala.edicion
+      ? {
+          ...escala.edicion,
+          resumen: resumenDeLaEdicion(area.dimensiones),
+          adaptaElArea: !!escala.ediciones.find((e) => e.slug === escala.edicion?.slug)?.areas.some((a) => a.id === area.id && a.dimensiones.length > 0),
+        }
+      : null,
     requeridos: requeridosDelArea(escala, area),
   };
 }

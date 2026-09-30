@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.3.0
-escala: 8.3.0
+version: 1.3.2
+escala: 8.4.1
 fecha: 2026-09-30
 ---
 
@@ -25,7 +25,7 @@ Un criterio que cambia de dimensión se retira y entra con el siguiente número 
 
 La etiqueta de cada criterio sigue siempre el mismo orden: identificador, forma de verificación y, solo si corresponden, las marcas riesgo, hábito y de perfil, separadas por « · ». Por ejemplo: `[1.1.F6 · evaluado · hábito · venta con equipo]`. Si el criterio requiere otros, van al final, separados por comas: `[1.6.F3 · evaluado · hábito · venta con equipo · requiere 1.5.F1]`.
 
-Las ediciones por industria, en la Parte 5 de la escala, usan los mismos identificadores. Un criterio de la matriz que una edición dice con sus palabras sigue siendo el mismo criterio: en la edición lleva en la etiqueta solo su identificador, `[1.7.F1]`, y conserva la forma de verificación, las marcas y los requeridos que tiene en la matriz. Un criterio propio de una edición lleva la etiqueta completa y un número del bloque de su edición —del 101 al 199 en la primera, del 201 al 299 en la segunda—: `1.7.E101` solo existe en la primera edición. La matriz numera siempre por debajo de 100, así que un identificador dice por sí solo si el criterio es de la matriz o de una edición, y de cuál. Los criterios propios también son estables: no se reasignan ni se renumeran.
+Las ediciones por industria, en la Parte 5 de la escala, usan los mismos identificadores. Un criterio de la matriz que una edición dice con sus palabras sigue siendo el mismo criterio: en la edición lleva en la etiqueta solo su identificador, `[1.7.F1]`, y conserva la forma de verificación, las marcas y los requeridos que tiene en la matriz. Un criterio propio de una edición lleva la etiqueta completa y un número del bloque de su edición —del 101 al 199 en la primera, del 201 al 299 en la segunda, y así con cada una—: `1.7.E101` solo existe en la primera edición. La matriz numera siempre por debajo de 100, así que un identificador dice por sí solo si el criterio es de la matriz o de una edición, y de cuál. Los criterios propios también son estables: no se reasignan ni se renumeran.
 
 Cada nivel tiene un código del 1 al 5: Deficiente 1, Inicial 2, Funcional 3, Eficiente 4, Óptimo 5. Sirve para que los sistemas comparen niveles, no para graficar. Lo que se grafica es el puntaje de 0 a 100, que tampoco es una nota inventada aparte: su tramo lo pone el nivel, y dentro del tramo solo dice cuánto se avanzó hacia el siguiente.
 
@@ -132,6 +132,10 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.3.2 (2026-09-30).** Acompaña a la escala 8.4.1. No cambia el cálculo.
+
+**1.3.1 (2026-09-30).** Acompaña a la escala 8.4.0, que suma tres ediciones: Banca y servicios financieros, Educación e Inmobiliaria, cada una con su bloque de números. No cambia el cálculo.
 
 **1.3.0 (2026-09-30).** Acompaña a la escala 8.3.0, en la que un criterio puede decir cuáles otros requiere. Se dice cómo va en la etiqueta, que no entra en el cálculo y qué hacen los sistemas con eso —avisar cuando algo se marca cumplido sin lo que requiere, ordenar lo que falta y dejar de lado lo que no cuenta—, y se suma la prueba 9. No cambia el cálculo del nivel ni del puntaje.
 

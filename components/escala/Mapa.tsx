@@ -880,8 +880,12 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               const s = Math.sin(aRadianes(medio));
               const c = Math.cos(aRadianes(medio));
               const ancla = s > 0.15 ? "start" : s < -0.15 ? "end" : "middle";
+              // A los costados hay poco ancho: un nombre largo (los de una edición suelen serlo) va en dos
+              // líneas, para que no se salga del dibujo.
+              const nombre = Math.abs(s) > 0.8 ? partirEnLineas(d.nombre, 27) : [d.nombre];
+              const extra = (nombre.length - 1) * 21;
               // Arriba el bloque crece hacia arriba; abajo, hacia abajo; a los costados, centrado.
-              const y0 = c > 0.35 ? y - 24 : c < -0.35 ? y + 10 : y - 8;
+              const y0 = c > 0.35 ? y - 24 - extra : c < -0.35 ? y + 10 : y - 8 - extra / 2;
               const aplicaD = dimensionAplica(d, perfil);
               const activo = focoDim?.id === d.id;
               const comentarios = conteoDeDimension(conteos, d.id).total;
@@ -901,21 +905,24 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                     {d.id}
                     {comentarios > 0 ? ` · ${cuantos(comentarios, "comentario", "comentarios")}` : ""}
                   </text>
-                  <text
-                    x={f(x)}
-                    y={f(y0 + 22)}
-                    style={{
-                      textAnchor: ancla,
-                      fontSize: 18,
-                      fontWeight: activo ? 700 : 600,
-                      fill: activo ? "var(--color-brand)" : aplicaD ? "var(--color-fg)" : "var(--color-fg-muted)",
-                      transition: "fill 160ms",
-                    }}
-                  >
-                    {d.nombre}
-                  </text>
+                  {nombre.map((linea, j) => (
+                    <text
+                      key={linea}
+                      x={f(x)}
+                      y={f(y0 + 22 + j * 21)}
+                      style={{
+                        textAnchor: ancla,
+                        fontSize: 18,
+                        fontWeight: activo ? 700 : 600,
+                        fill: activo ? "var(--color-brand)" : aplicaD ? "var(--color-fg)" : "var(--color-fg-muted)",
+                        transition: "fill 160ms",
+                      }}
+                    >
+                      {linea}
+                    </text>
+                  ))}
                   {!aplicaD && (
-                    <text x={f(x)} y={f(y0 + 42)} style={{ textAnchor: ancla, fontSize: 13, fill: "var(--color-fg-muted)" }}>
+                    <text x={f(x)} y={f(y0 + 42 + extra)} style={{ textAnchor: ancla, fontSize: 13, fill: "var(--color-fg-muted)" }}>
                       no aplica a este perfil
                     </text>
                   )}

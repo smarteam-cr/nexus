@@ -208,6 +208,18 @@ describe("con una edición por industria", () => {
     expect(g.edicion).toBeNull();
   });
 
+  it("dice si la edición adapta el área que se mira: una edición se escribe por áreas", () => {
+    expect(datosDeLaVista({ escala: edicion, area: edicion.areas[0], ...base }).edicion?.adaptaElArea).toBe(true);
+    // En el archivo real hay ediciones que por ahora solo traen un área: las otras se leen con la general.
+    for (const ed of real.ediciones) {
+      const e = aplicarEdicion(real, ed.slug);
+      const adaptadas = new Set(ed.areas.filter((a) => a.dimensiones.length > 0).map((a) => a.id));
+      for (const a of e.areas) {
+        expect(datosDeLaVista({ escala: e, area: a, ...base }).edicion?.adaptaElArea, `${ed.nombre} · ${a.nombre}`).toBe(adaptadas.has(a.id));
+      }
+    }
+  });
+
   it("las palabras de la edición: una que ya está en el glosario se dice junto a su significado; una nueva, sola", () => {
     const terminos = terminosParaSubrayar(edicion);
     expect(terminos.find((t) => t.termino === "Hábito")?.significado).toBe(

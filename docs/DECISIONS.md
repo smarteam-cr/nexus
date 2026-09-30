@@ -3796,3 +3796,33 @@ dimensiones y el cliente leía dos pendientes donde había uno.
 - **En espera**: que el diagnóstico avise cuando un criterio se marca cumplido sin lo que requiere
   (llega con la integración de la escala a los diagnósticos); los requeridos de Marketing y Servicio
   (después de sus ediciones de Ventas).
+
+## Una edición sale primero con Ventas; Marketing y Servicio, después (2026-09-30)
+
+**Contexto.** Con la edición Ecommerce y retail hecha, Elías cambió el orden: en vez de terminar una
+industria entera antes de empezar otra, primero Ventas de todas —Banca, Educación, Inmobiliaria—,
+porque con Ventas se abre la conversación con un prospecto y eso le sirve para priorizarlos. Después,
+Marketing y Servicio de cada industria.
+
+**Decisiones.**
+
+- **Una edición se escribe por áreas.** Las tres nuevas (escala 8.4.0 y 8.4.1) traen solo el área 1.
+  En las áreas que una edición no toca, todo se lee con la escala general, y la pantalla lo dice
+  (`DatosDeLaVista.edicion.adaptaElArea`): no promete «sus preguntas y sus costos» donde no los hay.
+- **El área puede cambiar de nombre, y solo donde el nombre general estorba.** Educación llama
+  «Admisiones» al área 1 (nadie en una universidad dice «Ventas»); Banca e Inmobiliaria la dejan como
+  «Ventas». ⚠ Al renombrar un área hay que reescribir los criterios que la nombran (`1.3.O4`,
+  `1.7.E2`): la tabla de palabras no sirve para eso, porque «ventas» también es un sustantivo común.
+- **Los resultados de cada nivel no tienen tooltip de palabras**: si el resultado general dice
+  «vendedor» o «negocio», la edición lo tiene que decir entero con las suyas.
+- **Una dimensión que en la general no aplica a un perfil puede aplicar en una edición** solo si la
+  edición le da criterios sin marca en Funcional, Eficiente y Óptimo (prueba 1). Banca lo hace con la
+  personalización de Ventas (a quién se le ofrece cada producto también vale para lo que el cliente
+  contrata solo); Educación e Inmobiliaria no: ahí sus criterios propios llevan «venta con equipo».
+- **Lo que se cae después de ganarse** se mide en las ediciones que lo traen, en Aprendizaje (como
+  dice la regla de asignación desde la 8.1.0): los pedidos cancelados en Ecommerce y las reservas
+  desistidas en Inmobiliaria.
+- **En la rueda, un nombre largo de dimensión va en dos líneas** a los costados: los nombres de una
+  edición suelen ser más largos que los generales y se salían del dibujo.
+- **Pendiente**: Marketing y Servicio generales (revisión de Elías, repetidos y requeridos) y,
+  después, su versión en cada edición.
