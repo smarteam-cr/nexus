@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.1.10
-escala: 7.7.0
+version: 1.2.0
+escala: 8.0.0
 fecha: 2026-09-29
 ---
 
@@ -15,6 +15,16 @@ La escala cambia con el uso, y lo mismo vale para la especificación y para las 
 
 - **El equipo comenta; el responsable decide.** Lo que no se entiende, lo que no calza con un cliente y las propuestas se comentan en Nexus. El responsable responde, descarta o pasa cada comentario a cambio pendiente.
 - **Cada cambio es una versión nueva:** se publica en Nexus y se anota en el historial del documento que cambia. Una versión publicada no se reescribe, y un comentario hecho sobre un texto que después cambió se sigue viendo junto al texto nuevo.
+
+## Las ediciones por industria
+
+La escala tiene una matriz general y, en su Parte 5, ediciones por industria: la misma escala dicha para una tienda, una inmobiliaria o una universidad. No son escalas aparte: comparten dimensiones, niveles, reglas, cálculo e identificadores.
+
+- **Con cuál se mide.** Cada unidad se mide con la edición de su industria, si existe, y con la escala general si no. Se decide al arrancar y se escribe en el diagnóstico. Si más adelante la unidad pasa a una edición, esa medición es una línea base nueva: no se compara contra la anterior.
+- **Cuándo se hace una edición.** Cuando hay clientes o prospectos de esa industria a quienes medir, y alguien que la va a usar con ellos. Una edición se prueba con dos o tres clientes antes de hacer la siguiente.
+- **Qué puede cambiar una edición.** Lo que de verdad es de su industria: los nombres de las dimensiones de producción, las preguntas, los costos, las palabras de un criterio y los criterios que solo tienen sentido ahí. La base operativa se toca lo menos posible: si una edición empieza a reescribirla, se está volviendo otra escala.
+- **Cómo se mantiene.** Un cambio en la matriz obliga a cada edición a decidir: si la matriz suma un criterio en una dimensión que la edición ya adaptó, la edición lo reescribe, lo saca o lo deja como está, y la versión no se publica hasta que lo diga. Y si el texto general de un criterio cambia, lo que la edición decía con sus palabras se vuelve a mirar antes de publicar.
+- **Los comentarios.** Un comentario hecho leyendo una edición queda anclado a esa edición: guarda el texto que la persona leyó. El responsable decide, como con cualquier otro, si el cambio es de la edición o de la matriz.
 
 ## Quién aplica la escala y cuándo
 
@@ -104,6 +114,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.2.0 (2026-09-29).** Acompaña a la escala 8.0.0. Se suma «Las ediciones por industria»: con cuál se mide cada unidad, cuándo se hace una edición, qué puede cambiar, cómo se mantiene cuando cambia la matriz y cómo quedan los comentarios hechos desde una edición.
 
 **1.1.10 (2026-09-29).** Acompaña a la escala 7.7.0. Sin otros cambios.
 

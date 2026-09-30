@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.7.0
+version: 8.0.0
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -12,9 +12,9 @@ Este documento es la Escala de Rendimiento: define qué significa cada nivel y c
 
 La escala va con dos documentos más. La **especificación del cálculo** (`especificacion_calculo_escala.md`) convierte sus reglas en pasos exactos para los sistemas: cómo se calculan el nivel y el puntaje, qué se muestra y qué se guarda. El **manual de operación** (`manual_operacion_escala.md`) dice cómo trabaja el equipo con ella: quién la aplica y cuándo, cómo se comprueba que funciona y qué reglas esperan hasta que hagan falta. Los dos precisan lo que dice la escala, pero no lo cambian: si alguno la contradice, manda la escala y se corrige el otro.
 
-Tiene cuatro partes. La primera explica qué es la escala y cómo pensarla: es contexto, no regla, y sirve para entender y para enseñar. La segunda dice cómo se aplica: las dos formas de aplicarla, cómo se evalúa, cómo se llega al nivel y al puntaje, qué se trabaja primero y dónde se cuenta cada evidencia. La tercera es la matriz: cada dimensión de cada área con sus cinco niveles y sus criterios. La cuarta es la referencia: nombres, riesgos, glosario e historial.
+Tiene cinco partes. La primera explica qué es la escala y cómo pensarla: es contexto, no regla, y sirve para entender y para enseñar. La segunda dice cómo se aplica: las dos formas de aplicarla, cómo se evalúa, cómo se llega al nivel y al puntaje, qué se trabaja primero y dónde se cuenta cada evidencia. La tercera es la matriz: cada dimensión de cada área con sus cinco niveles y sus criterios. La cuarta es la referencia: nombres, riesgos, glosario e historial. La quinta trae las ediciones por industria: la misma escala, dicha para una industria.
 
-Las partes dos, tres y cuatro son normativas y se aplican al pie de la letra. Si algo de la primera parte parece contradecirlas, mandan ellas. Cualquier material derivado —una página teórica, una presentación, las preguntas del chequeo— respeta la matriz y las reglas sin reinterpretarlas.
+Las partes dos, tres, cuatro y cinco son normativas y se aplican al pie de la letra. Si algo de la primera parte parece contradecirlas, mandan ellas. Cualquier material derivado —una página teórica, una presentación, las preguntas del chequeo— respeta la matriz y las reglas sin reinterpretarlas.
 
 Cada criterio de la matriz termina con una etiqueta entre corchetes: su identificador, cómo se verifica y sus marcas. Es para los sistemas y para quien diagnostica; para entender la escala, se puede saltar.
 
@@ -240,7 +240,7 @@ En la venta transaccional también hay pipeline y negocios: se crean solos, desd
 
 **La próxima compra.** Donde el cliente vuelve a comprar sin contrato, la próxima compra se trata como un negocio más, se venda con equipo o sin vendedor: si no llega cuando se esperaba, es un negocio que se enfrió, y reactivarlo es trabajo de Ventas. La renovación de un contrato, en cambio, es de Servicio.
 
-El perfil decide qué criterios aplican; la industria decide las palabras con que se muestran. Una universidad y una inmobiliaria venden las dos con equipo, pero una habla de matrícula y la otra de reserva. Las palabras de cada industria viven en un documento aparte, y la escala sigue siendo neutral.
+El perfil decide qué criterios aplican; la industria decide con qué edición se lee la escala. Una universidad y una inmobiliaria venden las dos con equipo, pero una habla de matrícula y la otra de reserva, y a cada una le importan cosas que a la otra no. Eso vive en las ediciones por industria, en la Parte 5: cada edición dice la escala con las palabras de su industria y le suma los criterios que solo tienen sentido ahí. La matriz de la Parte 3 es la escala general: con ella se mide a quien todavía no tiene una edición.
 
 **Qué unidad se diagnostica.** La unidad es el equipo que se atiende. En empresas grandes no se atiende a toda la empresa, sino a subequipos —la venta a empresas de una telco, una unidad de un grupo, una facultad—, y cada uno se diagnostica por separado, con su propio perfil. Lo mismo vale cuando dos ventas distintas las atienden equipos distintos: la tienda de una cadena y su venta a empresas o a proveedores son dos unidades; si las atiende el mismo equipo, es una sola, de venta mixta. Cuando se atiende a varios, se puede armar una vista que los junte.
 
@@ -331,6 +331,7 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 - La **próxima compra de un cliente que vuelve sin contrato** —recordarle la recompra, reactivar a quien dejó de comprar— se asigna a **Tracción del Deal (1.7)**; retener a quien está por cancelar un contrato y atender sus quejas sigue en **Proactividad (3.7)**, y las campañas hacia el mercado, en **Canales y Alcance (2.7)**.
 - La **venta ganada que se cae antes de la entrega** —una reserva que se desiste, una matrícula que no llega a clases, un pedido que se cancela— se asigna a **Aprendizaje de Ganadas y Perdidas (1.8)**, igual que una pérdida; la salida de un cliente que ya recibía el servicio sigue en **Proactividad (3.7)**.
 - La **coherencia de la oferta entre canales** —precios, promociones y condiciones— se asigna a **Propuesta y Coherencia (1.5)**; la coordinación de una campaña entre canales sigue en **Canales y Alcance (2.7)**.
+- Donde se vende sin vendedor, **lo que la tienda le muestra a cada comprador** —sugerencias, oferta, trato a sus mejores clientes— se asigna a la **personalización de Ventas (1.6)**; el mensaje de las campañas para cada segmento sigue en **Segmentación (2.6)**.
 - La **disponibilidad de lo que se vende** —unidades, cupos o existencias, a la vista de quien vende— se asigna a **Tecnología de Ventas (1.2)**, y que cada venta quede asociada a un **cliente identificado**, a **Datos de Ventas (1.3)**.
 - Las **reseñas y calificaciones públicas** —pedirlas y responderlas— se asignan a **Marca y Presencia (2.5)**, porque son parte de cómo el mercado ve a la empresa; la mala calificación de un cliente puntual se atiende en **Proactividad (3.7)**. El **programa de referidos** se asigna a **Canales y Alcance (2.7)**.
 - La **detección de riesgos y fechas críticas del cliente** —también las solicitudes que resuelve otra área, como administración o cobros— se asigna a **Proactividad (3.7)**; el seguimiento de cada cliente por su responsable sigue en Procesos (3.1), y los acuerdos entre los líderes de esas áreas, en Equipo y Gobierno.
@@ -1595,6 +1596,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 
 ## Historial de versiones
 
+**8.0.0 (2026-09-29).** La escala suma ediciones por industria, en una parte nueva al final del documento. Una edición es la misma escala dicha para una industria: comparte áreas, dimensiones, niveles, reglas, cálculo e identificadores, y cambia los nombres de las dimensiones de producción, las preguntas, los costos y los criterios, que puede decir con sus palabras, sumar como propios o sacar cuando no aplican. La matriz pasa a ser la escala general, con la que se mide a quien no tiene edición. La primera edición es Ecommerce y retail: trae Ventas escrita entera para una tienda —Catálogo y oferta, Oferta por cliente, Carrito y recompra y Embudo de compra en producción— y, en Marketing y Servicio, nombre, pregunta y costo propios, con criterios que todavía se leen con el texto general. En esa edición, la personalización de Ventas aplica también a la venta transaccional, y en Eficiente se pide que cada producto que se acaba o caduca tenga medido cada cuánto se vuelve a comprar. La regla de asignación suma un caso. No cambia ningún criterio de la matriz ni su cálculo.
+
 **7.7.0 (2026-09-29).** La escala general se prepara para servir a cualquier perfil de negocio, antes de sumar ediciones por industria. Hay dos marcas de perfil nuevas: venta sin vendedor, que reemplaza la regla que leía la frase del criterio, y recompra. La próxima compra de un cliente que vuelve sin contrato se trata como un negocio más, y reactivarla entra en Tracción del Deal. Se suman criterios para la venta sin vendedor —qué parte de las ventas queda con un cliente identificado y la misma oferta en todos los canales—, uno para cuando lo que se vende es limitado, uno para las ventas ganadas que se caen antes de la entrega y, en Eficiente de Marketing, las reseñas públicas y el programa de referidos. La definición de lead calificado deja de pedirse donde se vende sin vendedor, el responsable de cada cliente admite un seguimiento automático en carteras masivas, y la segmentación de clientes de Eficiente vale también para la relación única. Una docena de criterios se dicen de forma que sirva tanto para quien le vende a empresas como para quien le vende a personas. La regla de asignación suma cinco casos y el glosario, «Recompra» y «Referido». Se suman ocho criterios; ningún identificador existente cambia. Cambia lo que piden Funcional y Eficiente en varias dimensiones.
 
 **7.6.1 (2026-09-29).** Cada dimensión trae, entre su pregunta y su costo de quedarse, una descripción de 15 a 20 palabras que dice qué mide. Reemplaza el «qué mide» de la 7.6.0, que tenían solo dos dimensiones y era más largo; cómo se leen en la venta transaccional queda donde ya estaba, en «El perfil de negocio». No cambia el cálculo.
@@ -1646,3 +1649,529 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 **6.1.0 (2026-09-24).** El nivel del departamento pasa a ser el de su capa más baja, sin ponderaciones. De Funcional para arriba, una dimensión alcanza un nivel cuando cumple todos sus criterios que aplican; Deficiente e Inicial se asignan por mejor ajuste. Se definen el diagnóstico simple y el profundo, con arrastre de lo evaluado para que sean comparables. Se agrega la regla de qué se trabaja primero y la lectura del avance en dos alturas. Se evalúan siempre las ocho dimensiones, también antes de un caso de uso. El archivo pasa a tener nombre fijo. No cambia ningún criterio ni ningún identificador.
 
 **6.0.0 (2026-09-24).** Reorganización en cuatro partes. Todas las dimensiones tienen los cinco niveles. Identificadores estables y tipo de verificación en cada criterio. Líneas de resultado desde Funcional. Glosario.
+
+---
+
+# Parte 5 — Ediciones por industria
+
+Una edición es la misma escala dicha para una industria: comparte las áreas, las ocho preguntas de fondo de cada área, los cinco niveles, las reglas y el cálculo, y cambia lo que ve quien la lee.
+
+La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Una tienda, una inmobiliaria o una universidad se reconocen mejor en una escala que habla de lo suyo: por eso cada edición les pone a las dimensiones de producción el nombre que tienen en esa industria, hace las preguntas y dice los costos con sus palabras, y suma los criterios que solo tienen sentido ahí.
+
+## Qué cambia una edición y qué no
+
+- **Lo que no cambia.** Las áreas, las dimensiones y sus identificadores; los cinco niveles; las marcas de cada criterio; las reglas de la Parte 2 y el cálculo de la especificación. Las dimensiones de base operativa conservan su nombre, que es el mismo en las tres áreas.
+- **Decir lo mismo con otras palabras.** Una edición puede reescribir un criterio de la matriz. El criterio conserva su identificador y sus marcas, y tiene que medir lo mismo y aplicar a los mismos, con los mismos umbrales: si cambia lo que se pide, no es una reescritura.
+- **Criterios propios.** Lo que solo tiene sentido en la industria entra como un criterio propio de la edición. Lleva un identificador del bloque de su edición —del 101 al 199 en la primera, del 201 al 299 en la segunda—, para que no se cruce con la numeración de la matriz ni con la de otra edición.
+- **Criterios que no aplican.** Una edición puede decir que un criterio de la matriz no aplica a su industria. Sale de la cuenta, igual que uno que no corresponde al perfil de negocio. Lo que no puede hacer es sacar una dimensión entera.
+- **Todo criterio queda decidido.** Si una edición toca los criterios de una dimensión, dice algo de todos los de la matriz: lo reescribe, lo saca o lo deja como está. Así, cuando la matriz suma un criterio, cada edición tiene que decidir qué hace con él.
+- **Lo que una edición no dice, vale como está en la matriz.** Una dimensión de la que la edición solo cambia el nombre, la pregunta o el costo se sigue midiendo con los criterios generales, y la tabla de palabras de la edición dice cómo se llama cada cosa en la industria.
+
+## Cómo se mide con una edición
+
+Una unidad se mide con la escala general o con una sola edición, la de su industria. El perfil de negocio sigue decidiendo qué criterios aplican dentro de la edición. El avance se compara entre mediciones hechas con la misma edición: si una unidad pasa de la escala general a una edición, o de una edición a otra, esa medición es una línea base nueva.
+
+Una edición puede darle criterios a una dimensión que en la escala general no aplica a un perfil. Pasa en la de ecommerce y retail: en la venta transaccional, la dimensión de personalización de Ventas no aplica en la escala general, y en la edición mide la oferta que la tienda le hace a cada comprador.
+
+## Cómo se escribe una edición
+
+Igual que la matriz, y solo lo que cambia. Abre con para quién es, su clave —que no cambia aunque la edición cambie de nombre—, su perfil habitual y desde qué número van sus criterios propios. Siguen la tabla de palabras y, después, cada área y cada dimensión que cambia. Un criterio reescrito lleva en la etiqueta solo su identificador; uno propio lleva la etiqueta completa. Al final de cada dimensión van los criterios de la matriz que no aplican y los que se leen igual.
+
+## Edición — Ecommerce y retail
+
+Para quien vende productos al consumidor final en una tienda en línea, en tiendas físicas o en las dos: el cliente compra solo, sin que un vendedor trabaje cada venta, y lo que se busca es que vuelva.
+
+*Clave:* ecommerce-retail
+
+*Perfil habitual:* transaccional · recompra.
+
+*Criterios propios:* desde el 101.
+
+### Palabras de esta edición
+
+| En la escala general | En esta edición |
+|:--|:--|
+| Deal | Pedido o carrito |
+| Lead | Visitante o comprador que todavía no compra |
+| Pipeline | El recorrido de la compra: carrito, pago y entrega |
+| Pipeline review | Revisión de ventas |
+| Propuesta | La ficha del producto y su oferta |
+| Razón de pérdida | El paso donde se abandonó la compra |
+| Ticket | Caso de posventa: una consulta, un cambio o una devolución |
+| Renovación | La próxima compra |
+
+### Área 1 — Ventas
+
+Mide el rendimiento de la venta de la tienda: cómo está montada por dentro y qué produce en pedidos, valor por pedido y recompra.
+
+**Deficiente.** Tu tienda vende, pero nadie sabe bien cómo. Los pedidos viven en la plataforma o en la caja y no llegan a un sistema común, los precios cambian según el canal y los carritos abandonados se pierden sin que nadie los vea.
+
+**Inicial.** Tienes la tienda armada, pero cada canal va por su cuenta. Los pedidos entran a medias al sistema, los reportes se arman a mano y los recordatorios, si salen, son los mismos para todos.
+
+**Funcional.** Tu tienda opera como una maquinaria base. Cada venta entra sola al sistema con su cliente, su monto y su canal; la oferta es la misma en todos los canales; ningún carrito se abandona sin un recordatorio, y quien compró recibe una invitación a volver.
+
+**Eficiente.** La tienda deja de tratar igual a todos. Mides la conversión paso a paso, sabes cada cuánto se recompra cada producto y el recordatorio sale en ese momento, tus mejores clientes tienen un trato distinto y las pruebas son parte de la rutina.
+
+**Óptimo.** La IA hace el trabajo fino y tu equipo decide dónde crecer. Cada comprador ve una tienda pensada para él, el sistema calcula cuándo le toca volver y con qué oferta, y detecta dónde se cae la compra antes de que alguien lo note.
+
+#### 1.1 Procesos y Rutinas
+
+Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
+
+*Descripción:* Mide si la tienda opera con un proceso escrito y un calendario comercial, no con la memoria de una persona.
+
+*Costo de quedarse:* Si se va quien administra la tienda, se lleva cómo se publica, cómo se cambia un precio y cuándo toca cada promoción: todo se vuelve a improvisar.
+
+**Deficiente.** Sin proceso. La tienda se maneja de memoria: nadie escribió cómo se publica, cómo se cambia un precio ni cuándo toca cada promoción.
+
+- No existe ningún documento de cómo se opera la tienda; cada quien resuelve a su criterio. `[1.1.D1]`
+- Si se va quien administra la tienda, nadie sabe cómo seguir operándola. `[1.1.D4]`
+- Las promociones se deciden sobre la marcha, sin calendario. `[1.1.D101 · declarado]`
+
+**Inicial.**
+
+- Hay pasos acordados de palabra para publicar y para armar una promoción, pero cada quien los hace distinto. `[1.1.I1]`
+- Las ventas se revisan a cadencia irregular y sin una estructura fija. `[1.1.I3]`
+- Que un pedido quede bien registrado depende de quién lo cargue, no de un proceso o rutina. `[1.1.I4]`
+
+**Funcional.** Maquinaria base: la operación de la tienda está escrita, el recorrido del pedido es uno solo y las ventas se revisan con cadencia.
+
+*Resultado:* Todo el equipo opera la tienda igual: los pedidos siguen el mismo recorrido en todos los canales, las promociones salen de un calendario y las ventas se revisan cada semana, así que si se va una persona, la tienda sigue vendiendo.
+
+- El recorrido de un pedido —carrito, pago, preparación y entrega— está configurado con sus etapas, y cualquiera del equipo lo explica igual. `[1.1.F1]`
+- Cada canal de venta —tienda en línea, tienda física o marketplace— registra sus pedidos con ese mismo recorrido. `[1.1.F2]`
+- La revisión de ventas corre en cadencia formal, semanal o quincenal. `[1.1.F5]`
+- La operación de la tienda está documentada: cómo se publica un producto, cómo se cambia un precio y cómo se arma una promoción. `[1.1.F101 · declarado]`
+- Hay un calendario comercial —temporadas, promociones y lanzamientos— con al menos un trimestre de horizonte, y se cumple la mayoría del tiempo. `[1.1.F102 · declarado · hábito]`
+
+**Eficiente.** La operación deja de ser una lista de pasos y se vuelve un método que se mide.
+
+*Resultado:* Las promociones se planifican con un objetivo y se revisan al cerrar, y la operación de la tienda mejora ciclo a ciclo en vez de repetirse igual.
+
+- Cada promoción sale con un objetivo escrito y se revisa al cerrar: qué vendió, a quién y qué margen dejó. `[1.1.E101 · declarado · hábito]`
+- Hay una lista de revisión antes de publicar un producto o una promoción, y se usa. `[1.1.E102 · evaluado · hábito]`
+
+**Óptimo.** El sistema vigila la operación y señala lo que se sale de lo normal; el equipo decide los ajustes.
+
+- El sistema detecta lo que se sale de lo normal —una caída de la conversión, un producto sin existencias, un precio distinto entre canales— y avisa a quien tiene que actuar. `[1.1.O1]`
+
+*No aplican:* `1.1.D2`, `1.1.I2`, `1.1.F4`.
+
+*Se leen igual:* `1.1.D3`, `1.1.F3`, `1.1.F6`, `1.1.E1`, `1.1.E2`, `1.1.E3`, `1.1.E4`, `1.1.O2`, `1.1.O3`.
+
+#### 1.2 Tecnología y Automatización
+
+¿Cuánto del trabajo de la tienda hace el sistema, y cuánto de las plataformas que pagas se está aprovechando?
+
+*Descripción:* Mide si la tienda, la caja y el CRM trabajan como un solo sistema, y cuánto trabajo repetitivo se automatiza.
+
+*Costo de quedarse:* Pasas datos a mano entre la tienda, la caja y el CRM, pagas funciones que no usas y el comprador espera respuestas que podrían salir solas.
+
+**Deficiente.** La tienda y la caja venden, pero sus datos no llegan a ningún sistema común.
+
+- Los datos de los compradores viven en la plataforma de la tienda, en la caja o en hojas sueltas. `[1.2.D1]`
+
+**Inicial.** La tienda está conectada a medias: parte de los datos se pasa a mano.
+
+- Los pedidos de algún canal se cargan a mano en el sistema, o no se cargan. `[1.2.I101 · comprobable]`
+
+**Funcional.** La tienda, la caja y el CRM están conectados, y lo básico que espera el comprador sale solo.
+
+*Resultado:* Cada venta llega sola al sistema sin que nadie la pase a mano, y el comprador recibe la confirmación de su pedido y los avisos de su estado sin que alguien tenga que escribirle.
+
+- Cada venta de la tienda en línea y de la caja entra sola al sistema como un pedido, con su monto, su canal y su cliente. `[1.2.F6]`
+- El comprador y el equipo ven las existencias reales de cada producto antes de la compra. `[1.2.F8]`
+- El comprador recibe sola la confirmación de su pedido y los avisos de cada cambio de estado. `[1.2.F101 · comprobable]`
+- El catálogo —productos, precios y existencias— se administra en un solo lugar, y de ahí sale a todos los canales. `[1.2.F102 · comprobable]`
+
+**Eficiente.**
+
+*Resultado:* El equipo recupera el tiempo que se le iba en tareas repetitivas, y el líder ve en tiempo real en qué paso se cae la compra.
+
+- Hay secuencias de varios pasos que cambian según lo que hace el comprador —si abrió, hizo clic o compró—, y las conversaciones se asignan por múltiples condiciones, con control de quién ve y responde cada una. `[1.2.E2]`
+- La tienda está integrada con el sistema de inventario y de facturación. `[1.2.E3]`
+
+**Óptimo.** Agentes de IA atienden y venden en el canal conversacional, y la tienda se ajusta sola con lo que aprende de cada compra.
+
+*Resultado:* La tienda vende a toda hora sin que el equipo tenga que estar: los agentes responden y cierran las compras simples, y el sistema ajusta lo que muestra con lo que aprende.
+
+- Hay predicción de compra por cliente y sugerencias de la siguiente mejor oferta. `[1.2.O1]`
+- Agentes de IA atienden 24/7 en el canal conversacional: responden dudas de producto, ayudan a terminar la compra y le pasan a una persona, con el contexto, lo que no pueden resolver. `[1.2.O2]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven a la tienda y al CRM: por ejemplo, el valor esperado de cada cliente decide qué oferta ve. `[1.2.O3]`
+
+*Se leen igual:* `1.2.D2`, `1.2.I1`, `1.2.I2`, `1.2.F2`, `1.2.F3`, `1.2.F4`, `1.2.F7`, `1.2.E1`, `1.2.E4`, `1.2.E5`.
+
+#### 1.3 Datos
+
+¿Confías en tus números de ventas, conversión y clientes, o los validas antes de usarlos?
+
+*Descripción:* Mide si los datos de la tienda son confiables para decidir: pedidos completos, clientes identificados y reportes sin reconstruir.
+
+*Costo de quedarse:* Decides con números que no cuadran: la plataforma dice una cosa, la caja otra, y no sabes cuántos de tus compradores son los mismos.
+
+**Deficiente.**
+
+- No se sabe cuánto vende cada canal; sacar un reporte confiable es imposible. `[1.3.D2]`
+
+**Inicial.**
+
+- Hay dificultades para determinar de dónde llegó cada comprador. `[1.3.I2]`
+
+**Funcional.** El reporte de ventas describe el estado actual con confianza, sin reconstrucción.
+
+*Resultado:* El líder ve cuánto vendió cada canal cuando lo necesita, sin armar el reporte a mano, y sabe de dónde llegó cada pedido y qué parte de sus compradores puede volver a contactar.
+
+- Todo pedido tiene fecha, monto y canal poblados. `[1.3.F1]`
+- Todo pedido tiene rastreable de dónde llegó el comprador. `[1.3.F3]`
+- El reporte de ventas se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4]`
+- La información del catálogo —fichas, precios y condiciones— no se deja envejecer. `[1.3.F7]`
+- Se sabe qué parte de las ventas, en línea y en caja, queda asociada a un cliente identificado, y ese número se revisa. `[1.3.F8]`
+
+**Eficiente.** Aparece el pronóstico de ventas, y los compradores dejan de ser anónimos.
+
+*Resultado:* La empresa puede comprometer un número de ventas y planear sus existencias con confianza, y sabe quiénes son sus compradores.
+
+- Hay un pronóstico de ventas con cadencia fija (semanal o quincenal) y precisión alta. `[1.3.E1]`
+- La mayoría de las ventas quedan asociadas a un cliente identificado, no a un cliente genérico. `[1.3.E4]`
+- Cada cliente tiene calculado cuánto compra, cada cuánto y cuándo fue su última compra. `[1.3.E101 · comprobable]`
+
+**Óptimo.**
+
+- Cada visita, cliente y pedido está enlazado en tiempo real. `[1.3.O1]`
+
+*Se leen igual:* `1.3.D1`, `1.3.D3`, `1.3.D4`, `1.3.I1`, `1.3.I3`, `1.3.F2`, `1.3.F5`, `1.3.F6`, `1.3.E2`, `1.3.E3`, `1.3.O2`, `1.3.O3`, `1.3.O4`, `1.3.O5`.
+
+#### 1.4 Equipo y Gobierno
+
+¿Quién decide precios, promociones y prioridades de la tienda, con qué datos y con qué cadencia?
+
+*Descripción:* Mide si alguien responde por la venta de la tienda, con metas por canal, datos y una revisión fija.
+
+*Costo de quedarse:* Nadie responde por el número de la tienda: los precios y las promociones se deciden por costumbre, y los problemas aparecen cuando el mes ya cerró.
+
+**Deficiente.**
+
+- Quienes llevan la tienda operan sobre la marcha, sin un rol ni responsabilidades claras. `[1.4.D1]`
+
+**Funcional.**
+
+*Resultado:* Cada persona sabe qué parte de la tienda le toca, y el líder sabe cada semana qué canal va bien y cuál necesita ayuda, antes de que termine el mes.
+
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (ventas, pedidos, valor promedio del pedido, conversión, carritos abandonados) y lo consulta al menos semanalmente. `[1.4.F2]`
+- Se sostiene la cadencia de revisión (la misma revisión de ventas) y en ella se rinde cuentas. `[1.4.F3]`
+- Cada canal de venta tiene una meta clara y un responsable, y su avance se reporta en cadencia fija. `[1.4.F4]`
+
+**Eficiente.**
+
+*Resultado:* Una persona nueva opera la tienda más rápido, y el líder se entera de los riesgos por una alerta y no al cierre del mes.
+
+- Las ventas de cada canal se monitorean con alertas automáticas: una caída, un producto sin existencias o una meta en riesgo. `[1.4.E1]`
+
+**Óptimo.**
+
+*Resultado:* La dirección decide dónde invertir con números de fondo: qué canal y qué producto dejan más margen, y cuánto vale cada cliente en el tiempo.
+
+- Las decisiones usan analítica avanzada (LTV, rentabilidad por canal y por producto). `[1.4.O1]`
+
+*Se leen igual:* `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F5`, `1.4.E2`, `1.4.E3`, `1.4.E4`, `1.4.O2`.
+
+#### 1.5 Catálogo y oferta
+
+¿El comprador encuentra lo que busca y ve la misma oferta, igual de clara, en cada canal donde vendes?
+
+*Descripción:* Mide si el catálogo está completo y ordenado, y si precios, promociones y condiciones coinciden en todos los canales.
+
+*Costo de quedarse:* El comprador no encuentra lo que busca o ve un precio en la web y otro en la tienda: duda, compara y se va con quien se lo muestra más claro.
+
+**Deficiente.** El comprador ve una tienda distinta según por dónde entre; las fichas están incompletas y cada una se armó a su manera.
+
+- Lo que el comprador ve de un producto cambia según el canal por donde entre. `[1.5.D1]`
+- Hay productos publicados sin foto, sin descripción o sin precio. `[1.5.D101 · comprobable]`
+
+**Inicial.** Hay un intento de orden, pero las fichas y los precios todavía varían entre productos y entre canales.
+
+- Las fichas de los productos más vendidos están completas; las del resto, a medias. `[1.5.I101 · comprobable]`
+
+**Funcional.** El catálogo está completo, la oferta es la misma en todos los canales y el equipo sabe a quién le vende.
+
+*Resultado:* El comprador encuentra cada producto con la misma ficha, el mismo precio y las mismas condiciones, entre por donde entre.
+
+- Existe un documento con la definición del cliente ideal de la tienda —a quién le vende y qué busca—, consultable por cualquiera del equipo. `[1.5.F1]`
+- Cada producto publicado tiene su ficha completa —fotos, descripción, precio y disponibilidad— con una misma estructura. `[1.5.F101 · comprobable]`
+- Las condiciones de compra —envío, cambios, devoluciones y garantía— están escritas y a la vista antes de pagar. `[1.5.F102 · comprobable]`
+
+**Eficiente.** La tienda se ordena como compra el cliente y promete solo lo que entrega.
+
+*Resultado:* El comprador reconoce la tienda por algo concreto, encuentra rápido lo que busca y recibe lo que la ficha le prometió.
+
+- El catálogo está organizado como busca el cliente —categorías, filtros y buscador—, y se revisa con los datos de qué se busca y no se encuentra. `[1.5.E101 · comprobable · hábito]`
+- Lo que promete la ficha es lo que llega: las devoluciones por «no era lo que esperaba» se miden y se corrige la ficha. `[1.5.E102 · comprobable · hábito]`
+
+**Óptimo.**
+
+*Resultado:* La coherencia se mantiene sola con cualquier tamaño de catálogo: se pueden sumar productos y canales sin que la oferta se desordene.
+
+- La IA mantiene fichas, precios y mensajes coherentes en todos los canales en tiempo real, sin trabajo manual. `[1.5.O1]`
+
+*Se leen igual:* `1.5.D2`, `1.5.I1`, `1.5.I2`, `1.5.F2`, `1.5.F3`, `1.5.F4`, `1.5.F5`, `1.5.E1`, `1.5.E2`, `1.5.E3`.
+
+#### 1.6 Oferta por cliente
+
+¿Cada comprador ve lo que le conviene a él, o todos ven la misma tienda?
+
+*Descripción:* Mide si la tienda distingue a sus compradores y le ofrece a cada uno lo que le conviene.
+
+*Costo de quedarse:* Le muestras lo mismo a quien compra cada mes que a quien entra por primera vez: el valor de cada pedido no sube y tus mejores clientes no se sienten distintos.
+
+**Deficiente.** Todos los compradores ven la misma tienda y la misma oferta.
+
+- La tienda no distingue a quien compra por primera vez de quien compra seguido. `[1.6.D101 · comprobable]`
+
+**Inicial.** Se sabe quiénes son los mejores clientes, pero la tienda no hace nada distinto con ellos.
+
+- La segmentación de compradores es rudimentaria y no hay datos para decidir a quién ofrecerle qué. `[1.6.I1]`
+- El líder puede nombrar a sus mejores clientes, pero el sistema no tiene cómo separarlos. `[1.6.I2]`
+
+**Funcional.** La tienda distingue a sus compradores y le sugiere a cada uno algo más que lo que vino a buscar.
+
+*Resultado:* Quien compra por primera vez y quien compra seguido reciben ofertas distintas, y cada compra trae una sugerencia que tiene sentido.
+
+- Los compradores se separan al menos en nuevos y recurrentes, y cada grupo recibe en la tienda una oferta distinta. `[1.6.F101 · comprobable]`
+- Al ver un producto o el carrito, el comprador recibe sugerencias de productos relacionados. `[1.6.F102 · comprobable]`
+
+**Eficiente.** Las ofertas salen de la historia de compra, y los mejores clientes tienen un trato propio.
+
+*Resultado:* Cada comprador ve ofertas que salen de lo que él compra, el valor promedio del pedido sube con la venta cruzada, y los mejores clientes lo notan.
+
+- Las sugerencias y las ofertas salen de la historia de compra de cada cliente: qué compró, cuánto y cada cuánto. `[1.6.E101 · comprobable]`
+- Los mejores clientes están identificados y tienen un trato distinto: acceso anticipado, beneficios o atención preferente. `[1.6.E102 · comprobable]`
+- Se mide el valor promedio del pedido y cuánto de la venta viene de sugerencias, paquetes y venta cruzada. `[1.6.E103 · comprobable]`
+
+**Óptimo.** La IA arma la tienda para cada comprador en tiempo real.
+
+*Resultado:* Cada comprador ve una tienda pensada para él —qué productos, en qué orden y con qué oferta—, sin que nadie arme un segmento a mano.
+
+- La IA decide qué mostrarle a cada comprador —productos, orden y oferta— en tiempo real, según su comportamiento. `[1.6.O101 · comprobable]`
+- Las ofertas usan lo que saben Servicio y Marketing de cada cliente: sus reclamos, sus devoluciones y las campañas que ya recibió. `[1.6.O102 · comprobable]`
+
+*No aplican:* `1.6.D1`.
+
+*Se leen igual:* `1.6.F1`, `1.6.F2`, `1.6.F3`, `1.6.F4`, `1.6.E1`, `1.6.E2`, `1.6.E3`, `1.6.O1`, `1.6.O2`, `1.6.O3`, `1.6.O4`.
+
+#### 1.7 Carrito y recompra
+
+¿Qué pasa con quien no terminó de comprar, o con quien ya debería haber vuelto?
+
+*Descripción:* Mide si la tienda recupera las compras que quedaron a medias y si le recuerda a cada cliente cuándo volver.
+
+*Costo de quedarse:* Los carritos se abandonan en silencio y quien compró una vez no vuelve a saber de ti: pagas por traer compradores nuevos y pierdes los que ya tenías.
+
+**Deficiente.** Nadie ve los carritos que se abandonan ni a los clientes que dejaron de comprar.
+
+- Nadie se da cuenta de los carritos que se abandonan. `[1.7.D2]`
+- Los carritos abandonados no quedan registrados. `[1.7.D3]`
+- Quien compró no vuelve a recibir nada de la tienda, salvo promociones generales. `[1.7.D101 · comprobable]`
+
+**Inicial.** Hay recordatorios, pero son los mismos para todos y salen por un solo canal.
+
+- Todos los intentos de recuperar una compra se hacen por el mismo canal. `[1.7.I4]`
+- Los recordatorios son genéricos: el mismo mensaje para cualquier carrito y cualquier cliente. `[1.7.I101 · evaluado]`
+
+**Funcional.** Ningún carrito se abandona en silencio, y quien compró recibe una invitación a volver.
+
+*Resultado:* Las compras que quedaron a medias se recuperan por más de un canal, y cada cliente recibe un recordatorio para volver a comprar, sin depender de que alguien se acuerde.
+
+- Los carritos y los pedidos que quedaron a medias se reconocen a tiempo y reciben un recordatorio acordado, no uno improvisado. `[1.7.F1]`
+- La recuperación usa al menos dos canales, por ejemplo correo y el canal conversacional, como WhatsApp. `[1.7.F2]`
+- Después de cada compra, el cliente recibe solo un recordatorio o un incentivo para volver a comprar, y el que dejó de comprar se reconoce a tiempo. `[1.7.F5]`
+
+**Eficiente.** El recordatorio llega cuando toca: cada producto tiene medido su momento de recompra.
+
+*Resultado:* La tienda sabe cuándo le toca volver a cada cliente y se lo recuerda en ese momento, y mide cuánto recupera.
+
+- La recuperación y la recompra están orquestadas en cadencias por varios canales —correo, canal conversacional, notificaciones y anuncios—. `[1.7.E1]`
+- Cada producto que se acaba o caduca tiene medido cada cuánto se vuelve a comprar, y el recordatorio sale en ese momento. `[1.7.E101 · comprobable · recompra]`
+- Se mide cuántos carritos se recuperan y cuántos clientes vuelven a comprar, y con qué mensaje. `[1.7.E102 · comprobable]`
+
+**Óptimo.** El sistema sabe cuándo le toca volver a cada cliente, y con qué oferta.
+
+*Resultado:* Cada cliente recibe su recordatorio en el momento y por el canal en que más le sirve, sin que nadie lo programe.
+
+- El sistema detecta dónde se traba una compra y responde en el momento: una ayuda, una oferta o el aviso a una persona. `[1.7.O1]`
+- El canal y el momento de cada recordatorio se autoajustan según el comportamiento del comprador. `[1.7.O2]`
+- La IA calcula cuándo le toca volver a comprar a cada cliente según su propio consumo, y ajusta la oferta. `[1.7.O101 · comprobable · recompra]`
+
+*No aplican:* `1.7.D1`, `1.7.I1`, `1.7.I2`.
+
+*Se leen igual:* `1.7.D4`, `1.7.I3`, `1.7.F3`, `1.7.F4`, `1.7.E2`, `1.7.E3`.
+
+#### 1.8 Embudo de compra
+
+¿Sabes en qué paso se cae la compra, y lo corriges?
+
+*Descripción:* Mide si la tienda sabe en qué paso se abandona la compra y si usa eso para probar y mejorar.
+
+*Costo de quedarse:* Pierdes compras en el mismo paso una y otra vez, porque nadie mira dónde se abandona ni por qué se devuelve.
+
+**Deficiente.** Nadie mira dónde se cae la compra ni por qué se devuelve.
+
+- Las razones por las que el comprador no termina o devuelve se pierden. `[1.8.D2]`
+
+**Inicial.** Se comenta de vez en cuando por qué no se vende, sin números.
+
+**Funcional.**
+
+*Resultado:* El líder sabe en qué paso se abandona la compra y por qué se cancelan o se devuelven los pedidos, con datos del trimestre y no con impresiones.
+
+- Toda compra abandonada queda con el paso donde se abandonó. `[1.8.F1]`
+- Los pasos de la compra y los motivos de cancelación y devolución usan una lista definida, no texto libre. `[1.8.F2]`
+- El líder puede sacar un reporte del trimestre de dónde se abandona la compra, sin reconstruir. `[1.8.F3]`
+- Cada pedido cancelado o devuelto deja registrada su razón. `[1.8.F4]`
+
+**Eficiente.** El embudo se revisa con cadencia y la tienda prueba cambios para mejorarlo.
+
+*Resultado:* Los mismos abandonos dejan de repetirse: lo que se aprende de cada caída vuelve a la tienda como un cambio probado.
+
+- Se revisan periódicamente los abandonos, las cancelaciones y las devoluciones para identificar patrones. `[1.8.E1]`
+- La tienda —fichas, precios y pasos del pago— se ajusta con base en lo aprendido. `[1.8.E2]`
+- Hay pruebas regulares en la tienda, al menos una activa por mes: una ficha, un precio o un paso del pago. `[1.8.E101 · comprobable · hábito]`
+
+**Óptimo.** La IA detecta dónde se cae la compra y propone el cambio.
+
+*Resultado:* La tienda mejora mientras vende: el sistema señala dónde se cae la compra y qué cambio probar, y la estrategia se ajusta con esa evidencia.
+
+- La IA detecta dónde y por qué se abandona la compra, y propone o aplica el cambio. `[1.8.O101 · comprobable]`
+
+*Se leen igual:* `1.8.D1`, `1.8.I1`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
+
+### Área 2 — Marketing
+
+#### 2.1 Procesos y Rutinas
+
+Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos siguen saliendo igual?
+
+*Descripción:* Mide si las campañas de la tienda salen de un calendario y un proceso compartidos, sin depender de nadie.
+
+*Costo de quedarse:* Cada promoción depende de quien la arma: si esa persona falta, la campaña de la temporada sale tarde o no sale.
+
+#### 2.2 Tecnología y Automatización
+
+¿Cuánto del marketing de la tienda sale solo, y cuánto de las herramientas que pagas se está aprovechando?
+
+*Descripción:* Mide cuánto del marketing de la tienda hacen los flujos automáticos y cuánto se aprovechan las herramientas contratadas.
+
+*Costo de quedarse:* Haces a mano los envíos que podrían salir solos y pagas herramientas que no usas, mientras quien te escribe por WhatsApp espera respuesta.
+
+#### 2.3 Datos
+
+¿Sabes qué canal te trae compradores y cuánto compran, o mueves el presupuesto a ojo?
+
+*Descripción:* Mide si los datos dicen qué canal trae compradores, cuánto compran y si aceptaron que les escribas.
+
+*Costo de quedarse:* No sabes qué canal trae ventas y cuál solo gasta: mueves la pauta a ciegas y le escribes a gente que no te dio permiso.
+
+#### 2.4 Equipo y Gobierno
+
+¿Quién decide qué se promociona, cuánto se invierte y en qué canal, con qué datos y con qué cadencia?
+
+*Descripción:* Mide quién decide qué se promociona y dónde se invierte, con qué datos y con qué cadencia de revisión.
+
+*Costo de quedarse:* Las promociones se deciden por costumbre o por quien insiste más, y nadie puede demostrar si la pauta se paga sola.
+
+#### 2.5 Marca y Presencia
+
+¿Quien busca lo que vendes te encuentra, te reconoce y confía en ti?
+
+*Descripción:* Mide si quien busca lo que vendes encuentra la tienda, la reconoce y confía en ella por sus reseñas.
+
+*Costo de quedarse:* Quien busca lo que vendes encuentra primero a otro, o te encuentra y no ve reseñas que le den confianza para comprar.
+
+#### 2.6 Segmentación
+
+¿Cada cliente recibe campañas según lo que compra, o todos reciben la misma promoción?
+
+*Descripción:* Mide si las campañas se arman según lo que compra cada cliente, o si todos reciben lo mismo.
+
+*Costo de quedarse:* Le mandas la misma promoción a todos: el que ya compró ese producto se cansa, y el que compraría otro nunca se entera.
+
+#### 2.7 Canales y Alcance
+
+¿Llegas a compradores nuevos y a los que ya tienes, con un costo por venta que conoces?
+
+*Descripción:* Mide si los canales traen compradores con cadencia, bajo un mismo plan y con un costo por venta conocido.
+
+*Costo de quedarse:* Tu alcance depende de la última promoción: los canales salen sueltos y no sabes cuánto te cuesta cada venta.
+
+#### 2.8 Medición y Aprendizaje
+
+¿Cada campaña te enseña qué vende, o repites la promoción del año pasado?
+
+*Descripción:* Mide si cada campaña se mide por las ventas que dejó y si deja un aprendizaje para la siguiente.
+
+*Costo de quedarse:* Repites las promociones de siempre sin saber cuáles dejaron margen: el presupuesto se reparte por costumbre, no por retorno.
+
+### Área 3 — Servicio
+
+#### 3.1 Procesos y Rutinas
+
+Si mañana falta quien más sabe de cambios y devoluciones, ¿la atención se mantiene?
+
+*Descripción:* Mide si las consultas, los cambios y las devoluciones siguen un proceso definido, sin depender de quién atiende.
+
+*Costo de quedarse:* Un cambio o una devolución se resuelve distinto según quién atienda: el comprador no sabe a qué atenerse y reclama en público.
+
+#### 3.2 Tecnología y Automatización
+
+¿Cuántas consultas sobre pedidos necesitan a una persona cuando podrían resolverse solas?
+
+*Descripción:* Mide cuántas consultas se resuelven solas o por autoservicio, y si quien atiende ve los pedidos del cliente.
+
+*Costo de quedarse:* Tu equipo contesta a mano «¿dónde está mi pedido?» decenas de veces al día, y las consultas se pierden entre el correo, WhatsApp y las redes.
+
+#### 3.3 Datos
+
+¿Quien atiende ve qué compró el cliente y en qué va su pedido, o tiene que preguntárselo?
+
+*Descripción:* Mide si quien atiende ve al instante las compras, los pedidos en curso y los casos anteriores del cliente.
+
+*Costo de quedarse:* Cada vez que el comprador escribe tiene que dar su número de pedido y volver a explicar todo, porque nadie ve su historia.
+
+#### 3.4 Equipo y Gobierno
+
+¿Quién decide qué se atiende primero y cómo se mejora la posventa, y con qué información?
+
+*Descripción:* Mide quién decide qué se atiende primero, con qué información, y cómo se revisa y mejora la posventa.
+
+*Costo de quedarse:* Se atiende primero al que más reclama, y los mismos problemas de entrega y devolución se repiten porque nadie los revisa.
+
+#### 3.5 Consistencia de Atención
+
+¿El comprador recibe la misma respuesta y la misma solución, lo atienda quien lo atienda?
+
+*Descripción:* Mide si cada comprador recibe la misma respuesta y la misma solución ante un cambio, una devolución o una garantía.
+
+*Costo de quedarse:* La misma devolución se acepta o se rechaza según quién atienda: el comprador lo nota y lo cuenta.
+
+#### 3.6 Priorización de Clientes
+
+¿Tus mejores clientes y los casos urgentes se atienden primero, o todos hacen la misma fila?
+
+*Descripción:* Mide si la atención se prioriza por la urgencia del caso y el valor del cliente, no por quién insiste.
+
+*Costo de quedarse:* Tu mejor cliente espera en la misma fila que todos, y un pedido que no llegó se atiende después que una consulta simple.
+
+#### 3.7 Seguimiento del pedido
+
+¿El comprador sabe en qué va su pedido antes de preguntar, y te enteras de un problema antes de que reclame?
+
+*Descripción:* Mide si el comprador sabe cómo va su pedido sin preguntar y si los problemas se atienden antes del reclamo.
+
+*Costo de quedarse:* El comprador se entera de un atraso cuando ya reclamó, y tú te enteras de que quedó mal cuando deja una mala reseña.
+
+#### 3.8 Autoservicio
+
+¿El comprador resuelve solo lo simple —dónde está su pedido, cómo cambiarlo—, o cada consulta necesita a una persona?
+
+*Descripción:* Mide si el comprador resuelve solo lo simple: el estado de su pedido, un cambio o una pregunta frecuente.
+
+*Costo de quedarse:* Cada consulta necesita a una persona: en temporada alta las respuestas se atrasan, y para vender más tienes que contratar al mismo ritmo.
