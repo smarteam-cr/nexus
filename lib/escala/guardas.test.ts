@@ -89,8 +89,9 @@ describe("el SQL deja todo cerrado para anon", () => {
   });
 
   it("el SQL de la edición del comentario solo SUMA una columna a una tabla que ya estaba cerrada", () => {
+    // Con autocrlf, el archivo puede llegar con CRLF a esta PC: se compara el texto, no el fin de línea.
     const edicion = leer(path.join("scripts", "sql", "2026-09-29-escala-comentario-edicion.sql"))
-      .split("\n")
+      .split(/\r?\n/)
       .filter((l) => l.trim() && !l.trim().startsWith("--"))
       .join("\n");
     expect(edicion).toBe('ALTER TABLE "EscalaComentario" ADD COLUMN IF NOT EXISTS "edicion" TEXT;');
