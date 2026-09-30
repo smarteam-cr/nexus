@@ -1246,3 +1246,50 @@ marcados «no es cliente nuestro».
 Que la lista viaje con la copia, que leer `res.partner` empiece a fallar por permisos y tumbe la copia de facturas:
 ahí conviene que falle sola y avise, en vez de arrastrar a la otra. La regla de los correos, que aparezca un cliente
 de verdad cuyo nombre en Odoo sea un correo: tendría cédula o facturas, y la regla ya lo deja pasar.
+
+## 2026-09-30 · Revisión con Alex, segunda parte: ayuda en cada botón, «no clientes» con vuelta atrás, la facturación por cliente y la carga de kölbi
+
+**Qué se decidió.**
+- **Cada botón de la integración dice en su `title` qué hace y qué cambia en Nexus**, en una frase (pedido de Elías:
+  «que sea poco texto»). La capa global de tooltips los dibuja; no se envuelve nada. Los que vinculan dicen lo mismo
+  desde los cuatro lugares (`TIP_ES_ESTE`, `TIP_ES_ESTA`), y los dos «Está bien así» también (`TIP_BIEN_ASI`).
+- **«Está bien así» dice que solo quita filas de la lista** —en su ayuda, en el formulario de la línea de facturas sin
+  cuenta y en «Cómo funciona»—: no vincula, no crea la cuenta ni carga cobros. La línea de facturas sin cuenta pasa a
+  llamarse «N facturas de Odoo por cobrar que no están en ninguna cuenta de Nexus», y sus pasos nombran los botones
+  que existen hoy («Es de una cuenta de Nexus», «Nueva empresa», «No es cliente nuestro»).
+- **«Marcados como no clientes»**, al final de «Emparejar»: cada ficha marcada «No es cliente nuestro», con quién y
+  cuándo, lo que tiene en Odoo y su «Sí es cliente». Reemplaza a «Devolver el primero a la lista», que devolvía una
+  sin decir cuál. Es la misma acción del servidor (`ignorar` con `ignorado: false`).
+- **«Facturación por cliente»**, cuarta pestaña (`facturacionPorCliente`, pura, y `GET /api/cobranza/odoo/facturacion`):
+  por año, lo facturado, lo cobrado y lo por cobrar de cada cliente según la copia, con la factura más reciente
+  arriba, y al lado las ventas cerradas en HubSpot de la empresa de esa cuenta. Sin año, el anterior al de hoy: el
+  último completo. Facturado = facturas vivas menos las notas del año que no revierten una factura; cobrado = lo que
+  Odoo ya no da por cobrar menos la parte aplicada de esas notas; por cobrar, la regla de siempre (`netoPorCobrar`,
+  ahora exportada). Las ventas son las del punto de equilibrio (ganadas, sin excluir, de un pipeline de venta propia)
+  y viajan solo con `ventas.read`. No llama al ERP.
+- **La carga de kölbi** (Publimark y McCann, sus sociedades) va por un script con simulacro: `scripts/cargar-cuenta-desde-odoo.ts`,
+  con la regla pura `planDeCargaDesdeOdoo` (lib/cobranza/carga-desde-odoo.ts). Abre la cuenta (nacional, Odoo, dólares),
+  vincula las tres fichas sin aprender cédula y carga un cobro por factura viva de 2026 por los chokepoints de siempre;
+  las pagadas entran cobradas con el día del banco que tiene la conciliación de Odoo y la firma de quien carga.
+  Además del pg_dump del guard, deja un respaldo propio en JSON (lo único que ya existía y se modifica: los vínculos
+  de esas fichas y la cuenta de sus facturas; y al final los ids de lo creado, con cómo deshacerlo).
+
+**Por qué.** Alex no sabía qué hacía cada botón ni que «Está bien así» no arreglaba nada: lo usaba como «aprobar».
+La lista de marcados no tenía vuelta atrás visible. Marco quiere comparar la plata que entró de cada cliente con lo
+que ventas cerró, al menos en 2025, y esa facturación ya estaba en la copia (la copia nunca filtró por año) pero
+ninguna pantalla la mostraba por cliente: solo se cruzaba con los cobros de Nexus, que empiezan en 2026. Y kölbi no
+tenía cuenta: el punto de equilibrio no veía US$121.275 + ₡69,2 millones facturados en 2026.
+
+Medido el 2026-09-30 contra Odoo en vivo (solo lectura): **Odoo no tiene nada de 2023 ni de enero a marzo de 2025.**
+2025 empieza en abril (71 facturas de abril a diciembre, 32 clientes). Esa facturación, si existe, vive fuera de Odoo.
+
+⚠ La FAC/2026/0210 de Publimark (US$13.475) no se carga: su nota de crédito FAC/2026/0246, del mismo día y el mismo
+total, parece anularla y nadie las concilió en Odoo. Se lista aparte para conciliarla allá.
+⚠ En 2025 hay notas de crédito sin aplicar (US$5.235,66 + ₡889) en clientes cuyas facturas están pagadas: ahí
+«cobrado» supera a «facturado», y la fila lo dice. Es algo por conciliar en Odoo, no un error de la cuenta.
+⚠ En esta PC no hay pg_dump: el guard no respalda y la carga solo corre con `SIN_RESPALDO=1`, decisión de quien la
+corre; el respaldo JSON del script cubre lo que se modifica.
+
+**Qué la revertiría.** Los tooltips, nada. «Facturación por cliente», que Odoo empiece a registrar pagos que no pasan
+por la factura (anticipos): «cobrado» saldría de los pagos, no de las facturas. La carga de kölbi, que Alex decida
+que esa cuenta no va en Nexus: el respaldo JSON dice qué borrar y qué devolver.

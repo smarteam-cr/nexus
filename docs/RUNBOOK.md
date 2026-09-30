@@ -465,6 +465,39 @@ factura reabierta se vuelve a cerrar con «Ya está anulada», que ahora pide mo
 `DiferenciaOdooAceptada`, como historia. Los respaldos quedan en `backups/<fecha>-<script>/`: el `pg_dump` del guard y
 un JSON con lo que había y lo que se escribió.
 
+### Cargar una empresa con lo que Odoo ya le facturó (kölbi, 2026-09-30)
+
+Para una empresa que factura por Odoo y no tiene cuenta en Nexus (o no tiene sus facturas del año como cobros):
+abre la cuenta si falta, vincula sus clientes de Odoo y carga un cobro por cada factura viva del año. Qué entra lo
+decide `lib/cobranza/carga-desde-odoo.ts` (puro, con pruebas); el porqué, en `docs/odoo-decisiones.md`. ⛔ No escribe en
+Odoo. **En tu PC**, PowerShell, en `D:\Proyectos\nexus`, con `git pull` hecho. Primero el simulacro (solo lee):
+
+```powershell
+npx tsx scripts/cargar-cuenta-desde-odoo.ts --empresa=kölbi "--fichas=75,168,44" --anio=2026 --firma=egonzalez@smarteamcr.com --cobrar-con-firma=egonzalez@smarteamcr.com
+```
+
+⚠ `--fichas` va entre comillas: sin ellas PowerShell parte la lista por las comas y el script dice que falta.
+
+**Qué tiene que decir el simulacro para kölbi** (medido el 2026-09-30): «Cobros que se cargan: 16 · US$121 275 +
+₡69 247 499,8», 9 cobrados con el día del banco y 7 por cobrar (0211, 0223, 0308, 0320 en dólares; 0343, 0344, 0345 en
+colones); aparte, la **FAC/2026/0210** «parece anulada por la nota FAC/2026/0246» (hay que conciliarlas en Odoo); y no
+entran las 3 de 2025 ni las revertidas 0229 y 0232.
+
+Después, el mismo comando con `--apply`. En esta PC no hay `pg_dump`, así que el guard pide decidir a sabiendas que
+se escribe sin su respaldo (`SIN_RESPALDO=1`); el script deja igual su respaldo propio en
+`backups/<fecha>-cargar-cuenta-desde-odoo/`:
+
+```powershell
+$env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/cargar-cuenta-desde-odoo.ts --empresa=kölbi "--fichas=75,168,44" --anio=2026 --firma=egonzalez@smarteamcr.com --cobrar-con-firma=egonzalez@smarteamcr.com --apply; Remove-Item Env:ALLOW_PROD_WRITE; Remove-Item Env:SIN_RESPALDO
+```
+
+Tiene que terminar en «✓ Aplicado. Correrlo de nuevo no cambia nada.» Correrlo dos veces no duplica: un número que ya
+tiene cobro no se vuelve a cargar.
+
+**Deshacer.** El JSON «antes» tiene los vínculos de esas fichas y la cuenta de cada una de sus facturas; el «despues»,
+la cuenta y los cobros creados. Si la cuenta la creó la carga, borrarla se lleva sus servicios, cobros, alertas y
+bitácora; los vínculos y `FacturaOdoo.cuentaId` vuelven a lo que dice «antes».
+
 ## Respaldo y restauración (Supabase)
 
 La base de Nexus es UNA Supabase Postgres (plan Pro) compartida por producción y las dos PCs
