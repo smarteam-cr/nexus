@@ -73,7 +73,7 @@ export default async function PaginaDeLaEscala({
           versiones,
           comoCambia: leerComoCambia(manual?.texto),
         })}
-        conteos={conteosQueSeVen(conteos, area)}
+        conteos={conteosQueSeVen(conteos, escala, area)}
         porArea={porArea}
         abiertosEnTotal={abiertosEnTotal}
         yo={{ email: ctx.user.email, nombre: ctx.teamMember.name, foto: ctx.teamMember.photoUrl }}

@@ -455,6 +455,19 @@ function leerMatriz(lineas: string[], ctx: Contexto, version: string): { areas: 
 /** El título de la parte de las ediciones, lleve el número que lleve: «# Parte 5 — Ediciones por industria». */
 const ES_LA_PARTE_DE_EDICIONES = /^# Parte \d+ — Ediciones/;
 
+/**
+ * Un título que HABLA de ediciones, esté bien escrito o no. Lo que va antes de la primera edición
+ * es prosa, y la prosa se lee con tolerancia: un título con guion en vez de raya («## Edición - …»)
+ * pasaría por prosa y la edición entera —sus criterios propios, sus reescritos— desaparecería sin
+ * que ninguna prueba lo notara. Por eso lo que PARECE el título de la parte o el de una edición
+ * tiene que serlo, o es un error con su línea.
+ */
+const PARECE_LA_PARTE_DE_EDICIONES = /^# .*Edici/i;
+const ES_UNA_EDICION = /^## Edición — \S/;
+const PARECE_UNA_EDICION = /^#{1,6} *Edici[oó]n(?![\p{L}])/iu;
+/** Lo que solo puede estar DENTRO de una edición: si aparece antes de la primera, le falta su título. */
+const ES_DE_UNA_EDICION = /^(?:#{3,6} |\*(?:Clave|Perfil habitual|Criterios propios|No aplican|Se leen igual):\*)/;
+
 /** `[1.7.F1]`: un criterio de la escala general dicho con las palabras de la edición (solo el id). */
 const ETIQUETA_DE_REESCRITO = /^- (.*) `\[(\d+\.\d+\.[DIFEO]\d+)\]`$/;
 
@@ -497,9 +510,19 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
     throw new ErrorDeFormato("las ediciones por industria van al final del documento: después de ellas no puede venir otra parte.", inicio + 2 + finRel);
   }
   const fin = lineas.length;
-  const primeraRel = lineas.slice(inicio + 1, fin).findIndex((l) => /^## Edición — /.test(l));
+  const primeraRel = lineas.slice(inicio + 1, fin).findIndex((l) => ES_UNA_EDICION.test(l));
   const primera = primeraRel === -1 ? fin : inicio + 1 + primeraRel;
-  // Antes de la primera edición va la prosa que dice qué es una edición: su primer párrafo.
+  // Antes de la primera edición va la prosa que dice qué es una edición: su primer párrafo. Es
+  // prosa, pero no cualquier cosa: nada de lo que solo una edición puede traer.
+  for (let i = inicio + 1; i < primera; i++) {
+    const linea = lineas[i].trimEnd();
+    if (PARECE_UNA_EDICION.test(linea)) {
+      throw new ErrorDeFormato(`el título de una edición va como «## Edición — Nombre», con raya: ${linea.slice(0, 80)}`, i + 1);
+    }
+    if (ES_DE_UNA_EDICION.test(linea) || (linea.startsWith("- ") && PARECE_CRITERIO.test(linea))) {
+      throw new ErrorDeFormato(`esto es de una edición y está antes de su título («## Edición — Nombre»): ${linea.slice(0, 80)}`, i + 1);
+    }
+  }
   const intro = parrafos(lineas.slice(inicio + 1, primera).map((l) => (l.startsWith("#") ? "" : l)))[0] ?? null;
 
   const encabezadoDeNivel = new RegExp(`^\\*\\*(${ctx.niveles.map((n) => escaparRegex(n.nombre)).join("|")})\\.\\*\\*(?: (.+))?$`);
@@ -546,7 +569,7 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
     anteriorEnBlanco = false;
 
     let m: RegExpExecArray | null;
-    if ((m = /^## Edición — (.+)$/.exec(linea))) {
+    if ((m = /^## Edición — (\S.*)$/.exec(linea))) {
       cerrarEdicion();
       const nombre = m[1].trim();
       if (ediciones.some((e) => e.nombre === nombre)) throw new ErrorDeFormato(`la edición «${nombre}» aparece dos veces.`, n);
@@ -623,6 +646,7 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
 
     if ((m = /^\*Clave:\* (.+)$/.exec(linea))) {
       if (area) throw new ErrorDeFormato("«Clave» va al principio de la edición, antes de sus áreas.", n);
+      if (ed.slug) throw new ErrorDeFormato(`la edición «${ed.nombre}» dice su «Clave» dos veces.`, n);
       const clave = m[1].trim().replace(/\.$/, "");
       if (!FORMA_DE_EDICION.test(clave)) {
         throw new ErrorDeFormato(`la «Clave» de una edición va en minúsculas, con números y guiones («ecommerce-retail»); dice «${clave}».`, n);
@@ -635,6 +659,7 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
 
     if ((m = /^\*Perfil habitual:\* (.+)$/.exec(linea))) {
       if (area) throw new ErrorDeFormato("«Perfil habitual» va al principio de la edición, antes de sus áreas.", n);
+      if (ed.perfilHabitual) throw new ErrorDeFormato(`la edición «${ed.nombre}» dice su «Perfil habitual» dos veces.`, n);
       ed.perfilHabitual = leerPerfilHabitual(m[1], n);
       parrafo = null;
       continue;
@@ -642,6 +667,7 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
 
     if ((m = /^\*Criterios propios:\* (.+)$/.exec(linea))) {
       if (area) throw new ErrorDeFormato("«Criterios propios» va al principio de la edición, antes de sus áreas.", n);
+      if (ed.bloque !== null) throw new ErrorDeFormato(`la edición «${ed.nombre}» dice sus «Criterios propios» dos veces.`, n);
       const desde = Number(/\d+/.exec(m[1])?.[0]);
       if (!Number.isInteger(desde) || desde <= PRIMER_NUMERO_DE_EDICION || desde % 100 !== 1) {
         throw new ErrorDeFormato(`«Criterios propios» dice desde qué número van los de la edición, en bloques de cien («desde el 101»); dice «${m[1]}».`, n);
@@ -705,6 +731,7 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
       }
       if (area) {
         if (!texto) throw new ErrorDeFormato(`el vistazo de «${m[1]}» no dice nada.`, n);
+        if (area.panoramica[nivel]) throw new ErrorDeFormato(`el vistazo de «${m[1]}» aparece dos veces en el área ${area.id}.`, n);
         area.panoramica[nivel] = texto;
         const a = area;
         parrafo = (l) => {
@@ -933,10 +960,11 @@ function leerHistorial(lineas: string[]): Escala["historial"] {
  * «Cómo se leen los criterios»: el párrafo de las palabras con valor fijo. Cada oración que trae
  * términos entre «» los define: «X» quiere decir …; «X» y «Y» quieren decir …; Y «X», … .
  */
-function leerPalabrasConValorFijo(lineas: string[]): Escala["palabrasConValorFijo"] {
+function leerPalabrasConValorFijo(lineas: string[]): { palabras: Escala["palabrasConValorFijo"]; sinValor: string[] } {
   const p = parrafos(seccion(lineas, /^## Cómo se leen los criterios\s*$/)).find((x) => x.includes("«"));
-  if (!p) return [];
-  const out: Escala["palabrasConValorFijo"] = [];
+  if (!p) return { palabras: [], sinValor: [] };
+  const palabras: Escala["palabrasConValorFijo"] = [];
+  const sinValor: string[] = [];
   for (const oracion of p.split(/(?<=\.)\s+/)) {
     const terminos = [...oracion.matchAll(/«([^»]+)»/g)].map((m) => m[1].trim());
     if (terminos.length === 0) continue;
@@ -947,10 +975,15 @@ function leerPalabrasConValorFijo(lineas: string[]): Escala["palabrasConValorFij
       const i = oracion.lastIndexOf("», ");
       if (i !== -1) significado = oracion.slice(i + 3).replace(/\.$/, "");
     }
-    if (!significado) continue;
-    for (const termino of terminos) out.push({ termino, significado: significado.trim() });
+    if (!significado) {
+      // «La mayoría» significa…: la oración nombra una palabra y no dice su valor de una forma que
+      // se entienda. No se inventa: se avisa, para que quien publica la escriba como las demás.
+      sinValor.push(...terminos);
+      continue;
+    }
+    for (const termino of terminos) palabras.push({ termino, significado: significado.trim() });
   }
-  return out;
+  return { palabras, sinValor };
 }
 
 /** Una pregunta del perfil: `**Cómo se cierra la venta.** Con equipo, cuando …; transaccional, cuando …; o mixta, cuando …`. */
@@ -1034,6 +1067,17 @@ export function parsearEscala(texto: string): Escala {
   // prosa se leen solo de ahí (los números de línea no cambian: es el principio del documento).
   const corte = todas.findIndex((l) => ES_LA_PARTE_DE_EDICIONES.test(l));
   const lineas = corte === -1 ? todas : todas.slice(0, corte);
+  // Fuera de su parte no hay ediciones. Un título de la parte mal escrito («# Parte 5 - Ediciones»)
+  // o una edición suelta se leerían como prosa de la escala general, y desaparecerían en silencio.
+  todas.forEach((l, i) => {
+    const linea = l.trimEnd();
+    if (PARECE_LA_PARTE_DE_EDICIONES.test(linea) && !ES_LA_PARTE_DE_EDICIONES.test(linea)) {
+      throw new ErrorDeFormato(`el título de la parte de las ediciones va como «# Parte 5 — Ediciones por industria», con raya: ${linea.slice(0, 80)}`, i + 1);
+    }
+    if ((corte === -1 || i < corte) && PARECE_UNA_EDICION.test(linea)) {
+      throw new ErrorDeFormato(`una edición va dentro de la parte de las ediciones («# Parte 5 — Ediciones por industria»): ${linea.slice(0, 80)}`, i + 1);
+    }
+  });
   const cabecera = leerEncabezado(texto);
   const version = cabecera.version;
   if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
@@ -1051,6 +1095,7 @@ export function parsearEscala(texto: string): Escala {
   const evaluacion = hastaNegrita === -1 ? regla : regla.slice(0, hastaNegrita);
   const perfil = parrafos(seccion(lineas, /^## El perfil de negocio\s*$/));
   const requeridos = parrafos(seccion(lineas, /^## Criterios requeridos\s*$/));
+  const valorFijo = leerPalabrasConValorFijo(lineas);
 
   return {
     version,
@@ -1071,7 +1116,10 @@ export function parsearEscala(texto: string): Escala {
     },
     dependencias: leerDependencias(lineas),
     historial: leerHistorial(lineas),
-    palabrasConValorFijo: leerPalabrasConValorFijo(lineas),
+    palabrasConValorFijo: valorFijo.palabras,
+    avisosDeLectura: valorFijo.sinValor.map(
+      (t) => `«${t}» está entre comillas en «Cómo se leen los criterios» y no se le encuentra su valor: la oración tiene que decir «quiere decir …», como las demás.`,
+    ),
     casosDeLectura: leerCasosDeLectura(lineas),
     perfilDeNegocio: leerPerfilDeNegocio(lineas),
     automatizacion: bloquesDe(seccion(lineas, /^## Regla de automatización\s*$/)),

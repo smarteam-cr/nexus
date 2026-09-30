@@ -111,9 +111,9 @@ from itertools import product
 src = open(sys.argv[1], encoding="utf-8").read()
 arbol = ast.parse(src)
 ns = {"re": re, "product": product}
-FUNCIONES = ("aplica", "leer", "leer_ediciones", "criterios_de")
-NOMBRES = ("PAT", "PERFILES", "REESCRITO", "ID")
-partes = [n for n in arbol.body if (isinstance(n, ast.FunctionDef) and n.name in FUNCIONES) or (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in NOMBRES for t in n.targets))]
+# Todas las funciones del archivo (las que leen se apoyan unas en otras) y las constantes con que leen.
+NOMBRES = ("PAT", "PERFILES", "REESCRITO", "ID", "PARTE_DE_EDICIONES", "LETRA")
+partes = [n for n in arbol.body if isinstance(n, ast.FunctionDef) or (isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in NOMBRES for t in n.targets))]
 exec(compile(ast.Module(body=partes, type_ignores=[]), "pruebas_escala.py", "exec"), ns)
 s, _, crit = ns["leer"](sys.argv[2])
 salida = {}

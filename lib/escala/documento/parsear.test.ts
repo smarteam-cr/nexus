@@ -359,6 +359,73 @@ describe("las ediciones por industria", () => {
       /dos ediciones tienen la clave «tiendas»/,
     );
   });
+
+  // Lo que va antes de la primera edición es prosa, y la prosa se lee con tolerancia. Un título con
+  // guion en vez de raya pasaba por prosa: la edición entera desaparecía y todas las pruebas daban
+  // verde (la única red era la prueba 5, y solo si la versión publicada ya traía sus criterios).
+  describe("una edición no puede desaparecer en silencio", () => {
+    it("el título de la PRIMERA edición con guion, sin tilde o pegado a la raya", () => {
+      for (const titulo of ["## Edición - Tiendas de juguete", "## Edicion — Tiendas de juguete", "## Edición —Tiendas de juguete", "### Edición — Tiendas de juguete", "## edición – Tiendas de juguete"]) {
+        expect(falla(con((s) => s.replace("## Edición — Tiendas de juguete", titulo)))).toMatch(/^Línea \d+: el título de una edición va como «## Edición — Nombre»/);
+      }
+    });
+
+    it("el título de la parte con guion: sin él no hay ediciones, y todo lo demás se leería como prosa", () => {
+      for (const titulo of ["# Parte 5 - Ediciones por industria", "# Parte 5 – Ediciones por industria", "# Parte cinco — Ediciones por industria", "# Ediciones por industria"]) {
+        expect(falla(con((s) => s.replace("# Parte 5 — Ediciones por industria", titulo)))).toMatch(/^Línea \d+: el título de la parte de las ediciones va como/);
+      }
+    });
+
+    it("una edición fuera de la parte de las ediciones", () => {
+      const suelta = MINI_ESCALA + MINI_EDICION.replace("# Parte 5 — Ediciones por industria", "# Parte 5 — Industrias");
+      expect(falla(suelta)).toMatch(/^Línea \d+: una edición va dentro de la parte de las ediciones/);
+    });
+
+    it("un título que no se parece a nada: lo delata lo que solo una edición puede traer", () => {
+      const sinTitulo = con((s) => s.replace("## Edición — Tiendas de juguete", "## Tiendas de juguete"));
+      expect(falla(sinTitulo)).toMatch(/^Línea \d+: esto es de una edición y está antes de su título/);
+      // Y un criterio suelto en la prosa de la parte, igual.
+      const criterioSuelto = con((s) => s.replace("- Lo que no dice, vale como está en la matriz.", "- Lo que no dice, vale como está en la matriz. `[1.2.F1]`"));
+      expect(falla(criterioSuelto)).toMatch(/esto es de una edición y está antes de su título/);
+    });
+
+    it("la prosa de la parte sí admite sus títulos y sus puntos", () => {
+      const e = parsearEscala(con((s) => s.replace("## Qué cambia una edición y qué no", "## Qué cambia una edición y qué no\n\n- **Criterios propios.** Del 101 al 199.\n\n## Cómo se escribe una edición")));
+      expect(e.ediciones.map((x) => x.slug)).toEqual(["tiendas"]);
+    });
+  });
+
+  it("lo que una edición dice una sola vez: su clave, su perfil, su bloque y cada nivel del vistazo", () => {
+    expect(falla(con((s) => s.replace("*Clave:* tiendas\n", "*Clave:* tiendas\n\n*Clave:* otras\n")))).toMatch(/dice su «Clave» dos veces/);
+    expect(falla(con((s) => s.replace("*Perfil habitual:* transaccional · recompra.\n", "*Perfil habitual:* transaccional · recompra.\n\n*Perfil habitual:* mixta · única.\n")))).toMatch(
+      /dice su «Perfil habitual» dos veces/,
+    );
+    expect(falla(con((s) => s.replace("*Criterios propios:* desde el 101.\n", "*Criterios propios:* desde el 101.\n\n*Criterios propios:* desde el 201.\n")))).toMatch(
+      /dice sus «Criterios propios» dos veces/,
+    );
+    expect(falla(con((s) => s.replace("**Funcional.** La tienda vende sola.\n", "**Funcional.** La tienda vende sola.\n\n**Funcional.** La tienda vende más.\n")))).toMatch(
+      /el vistazo de «Funcional» aparece dos veces en el área 1/,
+    );
+  });
+
+  it("el último número del bloque es el 199: el 200 ya es de otra edición", () => {
+    expect(parsearEscala(con((s) => s.replace("1.2.E101", "1.2.E199"))).ediciones[0].areas[0].dimensiones[0].propios.map((c) => c.id)).toContain("1.2.E199");
+    expect(falla(con((s) => s.replace("1.2.E101", "1.2.E200")))).toMatch(/los numera del 101 al 199/);
+  });
+});
+
+describe("lo que el lector tolera en la prosa, y avisa", () => {
+  it("una palabra entre «» en «Cómo se leen los criterios» sin su valor: se lee, y queda el aviso", () => {
+    const e = parsearEscala(MINI_ESCALA.replace("«La mayoría» quiere decir al menos 80%.", "«La mayoría» significa al menos 80%."));
+    expect(e.palabrasConValorFijo.map((p) => p.termino)).toEqual(["Se sostiene", "de forma consistente", "sin pensarlo"]);
+    expect(e.avisosDeLectura).toHaveLength(1);
+    expect(e.avisosDeLectura[0]).toMatch(/«La mayoría» está entre comillas .* no se le encuentra su valor/);
+  });
+
+  it("con la prosa como la escala la escribe no hay avisos", () => {
+    expect(parsearEscala(MINI_ESCALA).avisosDeLectura).toEqual([]);
+    expect(parsearEscala(leerArchivoDeLaEscala("escala")).avisosDeLectura).toEqual([]);
+  });
 });
 
 describe("utilidades", () => {

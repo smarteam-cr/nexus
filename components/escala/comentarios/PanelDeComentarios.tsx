@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Drawer, EmptyState, useToast } from "@/components/ui";
 import { ApiError } from "@/lib/api/fetch-json";
-import { estaEnLaCelda, resolverAncla } from "@/lib/escala/documento/anclas";
+import { esDelPanelDelNivel, resolverAncla } from "@/lib/escala/documento/anclas";
 import type { Perfil } from "@/lib/escala/documento/perfil";
 import type { ComentarioVisto } from "@/lib/escala/comentarios/reglas";
 import type { DatosDeLaVista } from "@/lib/escala/vista";
@@ -46,22 +46,25 @@ export default function PanelDeComentarios({
   const [error, setError] = useState<{ ancla: string; mensaje: string } | null>(null);
 
   const escalaDelArea = useMemo(() => ({ areas: [datos.area], niveles: datos.niveles }), [datos.area, datos.niveles]);
+  const deOtraLectura = useMemo(() => new Set(datos.anclasDeOtraLectura), [datos.anclasDeOtraLectura]);
   const resuelta = ancla ? resolverAncla(escalaDelArea, ancla) : null;
 
   /**
-   * Qué se pide. Un NIVEL trae además los comentarios de sus criterios que ya no existen en esta
-   * versión (retirados): en la matriz no tienen fila, y la evidencia no puede quedar invisible.
+   * Qué se pide. Un NIVEL trae además los comentarios de sus criterios RETIRADOS: en la matriz no
+   * tienen fila, y la evidencia no puede quedar invisible. Los de un criterio de otra lectura —de
+   * otra edición, o uno que esta edición sacó— no: se ven donde ese criterio existe. El contador de
+   * la celda sigue la misma regla (`conteosQueSeVen`).
    */
   const pedir = useCallback(
     async (a: string): Promise<ComentarioVisto[]> => {
       const r = resolverAncla(escalaDelArea, a);
       if (r?.tipo !== "nivel" || !r.nivel) return almacen.listar({ ancla: a });
+      const nivel = { id: a, dimension: r.dimension.id, letra: r.nivel.letra };
+      const lectura = { seVe: (x: string) => !!resolverAncla(escalaDelArea, x), deOtraLectura };
       const delArea = await almacen.listar({ area: r.area.id });
-      return delArea.filter(
-        (c) => c.ancla === a || (estaEnLaCelda(c.ancla, r.dimension.id, r.nivel!.letra) && !resolverAncla(escalaDelArea, c.ancla)),
-      );
+      return delArea.filter((c) => esDelPanelDelNivel(c.ancla, nivel, lectura));
     },
-    [almacen, escalaDelArea],
+    [almacen, escalaDelArea, deOtraLectura],
   );
 
   /** Después de un cambio: la lista de nuevo (el error lo avisa quien corrió el cambio). */

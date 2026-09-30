@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.3.2
-escala: 8.4.1
+version: 1.3.3
+escala: 8.4.2
 fecha: 2026-09-30
 ---
 
@@ -117,7 +117,7 @@ Cada versión de la escala y de esta especificación, y cada sistema que las imp
 5. **Identificadores estables.** Ninguno se repite, ninguno retirado se reusa, y ninguno existente cambia de dimensión ni de nivel.
 6. **Casos de referencia.** En espera, igual que la calibración: cuando existan los casos de referencia validados, el cálculo reproduce el diagnóstico correcto de cada uno.
 7. **Documentos alineados.** Esta especificación y el manual de operación dicen en su encabezado con qué versión de la escala van, y es la vigente.
-8. **Ediciones coherentes.** Cada edición tiene su clave, su perfil habitual y su bloque de números. Lo que reescribe o saca existe en la matriz, y un criterio propio no usa un identificador de la matriz ni de otra edición. Si toca los criterios de una dimensión, dice algo de todos los de la matriz: lo reescribe, lo saca o lo deja como está, y una sola de las tres. Un criterio reescrito conserva las palabras con valor fijo que tiene en la matriz. Una edición no le cambia el nombre a una dimensión de base operativa ni saca una dimensión que en la escala general aplica.
+8. **Ediciones coherentes.** Cada edición tiene su clave, su perfil habitual y su bloque de números. Lo que reescribe o saca existe en la matriz, y un criterio propio no usa un identificador de la matriz ni de otra edición. Si toca los criterios de una dimensión, dice algo de todos los de la matriz: lo reescribe, lo saca o lo deja como está, y una sola de las tres. Un criterio reescrito dice algo distinto de la matriz y conserva las palabras con valor fijo que tiene en ella; la misma palabra con el verbo en plural —«no se dejan envejecer»— es la misma. Una edición no le cambia el nombre a una dimensión de base operativa ni saca una dimensión que en la escala general aplica. Y el título de la parte de las ediciones y el de cada edición tienen que estar escritos con su forma exacta: uno mal escrito haría que la edición se leyera como prosa y desapareciera sin aviso.
 
 9. **Requeridos coherentes.** Lo que un criterio requiere existe, no es él mismo y no se repite. Los dos son de Funcional para arriba. Lo requerido es de un nivel igual o anterior y, si es de la misma dimensión, de un nivel anterior. Hay al menos un perfil de negocio en que los dos aplican. No hay ciclos. En una edición, un criterio propio no requiere algo que esa edición no tiene.
 
@@ -132,6 +132,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.3.3 (2026-09-30).** Acompaña a la escala 8.4.2. La prueba 8 dice dos cosas que ya revisaba Nexus y ahora también `pruebas_escala.py`: que un criterio reescrito no repita el texto de la matriz, y que el título de la parte de las ediciones y el de cada edición estén bien escritos. Y aclara que una palabra con valor fijo en plural es la misma palabra. No cambia el cálculo.
 
 **1.3.2 (2026-09-30).** Acompaña a la escala 8.4.1. No cambia el cálculo.
 

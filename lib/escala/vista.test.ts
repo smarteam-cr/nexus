@@ -6,12 +6,14 @@
  * y contra el archivo real (que la versión vigente las tenga todas).
  */
 import { describe, expect, it } from "vitest";
+import { esDelPanelDelNivel, resolverAncla } from "./documento/anclas";
 import { leerArchivoDeLaEscala } from "./documento/archivos";
 import { aplicarEdicion } from "./documento/edicion";
 import { MINI_ESCALA, MINI_ESCALA_CON_EDICION } from "./documento/mini-escala.fixture";
-import { parsearEscala } from "./documento/parsear";
+import { parsearEscala, todosLosCriterios } from "./documento/parsear";
 import { CIERRES, DESPUES } from "./documento/perfil";
 import {
+  anclasDeOtraLectura,
   consultaDeLaEscala,
   conteosQueSeVen,
   datosDeLaVista,
@@ -239,11 +241,36 @@ describe("con una edición por industria", () => {
     expect(lugarEnElOrden(orden, edicion.areas[0].dimensiones[0])).toBe(1);
   });
 
-  it("los contadores de comentarios: solo lo que se ve con esa edición", () => {
-    const conteos = { "1.2": 1, "1.2.F1": 2, "1.2.F101": 3, "1.2.I1": 4, "1.2.F": 5 };
-    // En la general no existe el criterio propio de la edición; en la edición, el que ella sacó.
-    expect(conteosQueSeVen(conteos, general.areas[0])).toEqual({ "1.2": 1, "1.2.F1": 2, "1.2.I1": 4, "1.2.F": 5 });
-    expect(conteosQueSeVen(conteos, edicion.areas[0])).toEqual({ "1.2": 1, "1.2.F1": 2, "1.2.F101": 3, "1.2.F": 5 });
+  it("los contadores de comentarios: lo que se ve con esa edición, y lo RETIRADO", () => {
+    // 1.2.F9 no existe en ninguna lectura de la escala: es un criterio retirado.
+    const conteos = { "1.2": 1, "1.2.F1": 2, "1.2.F101": 3, "1.2.I1": 4, "1.2.F": 5, "1.2.F9": 6 };
+    // En la general no se cuenta el criterio propio de la edición; en la edición, el que ella sacó.
+    expect(anclasDeOtraLectura(general, general.areas[0])).toEqual(["1.2.F101", "1.2.E101"]);
+    expect(anclasDeOtraLectura(edicion, edicion.areas[0])).toEqual(["1.2.I1"]);
+    expect(conteosQueSeVen(conteos, general, general.areas[0])).toEqual({ "1.2": 1, "1.2.F1": 2, "1.2.I1": 4, "1.2.F": 5, "1.2.F9": 6 });
+    expect(conteosQueSeVen(conteos, edicion, edicion.areas[0])).toEqual({ "1.2": 1, "1.2.F1": 2, "1.2.F101": 3, "1.2.F": 5, "1.2.F9": 6 });
+    // El retirado se sigue sumando a su celda, en las dos lecturas: el panel de ese nivel lo lista,
+    // y sin el número nada en la matriz avisaría que el comentario está (era así antes de las ediciones).
+    expect(datosDeLaVista({ escala: edicion, area: edicion.areas[0], publicadaEn: new Date(0), aviso: null, versiones: [] }).anclasDeOtraLectura).toEqual(["1.2.I1"]);
+  });
+
+  it("el panel de un nivel lista lo suyo y lo retirado, con la misma regla que cuenta la celda", () => {
+    const panel = (escala: typeof general, ancla: string) =>
+      esDelPanelDelNivel(
+        ancla,
+        { id: "1.2.F", dimension: "1.2", letra: "F" },
+        { seVe: (x) => !!resolverAncla(escala, x), deOtraLectura: new Set(anclasDeOtraLectura(escala, escala.areas[0])) },
+      );
+    for (const escala of [general, edicion]) {
+      expect(panel(escala, "1.2.F")).toBe(true); // el nivel mismo
+      expect(panel(escala, "1.2.F9")).toBe(true); // un criterio retirado de esa celda
+      expect(panel(escala, "1.2.F1")).toBe(false); // existe: tiene su propio panel
+      expect(panel(escala, "1.2.E9")).toBe(false); // retirado, pero de otra celda
+      expect(panel(escala, "1.2")).toBe(false);
+    }
+    // El propio de la edición: en la general es de otra lectura (no va); en la edición se ve (tiene su panel).
+    expect(panel(general, "1.2.F101")).toBe(false);
+    expect(panel(edicion, "1.2.F101")).toBe(false);
   });
 });
 
@@ -311,18 +338,25 @@ describe("los requeridos, como los recibe la pantalla", () => {
     }
   });
 
-  it("en el archivo real, los enlaces de cada área apuntan a criterios que existen", () => {
-    const existen = new Set(real.areas.flatMap((a) => a.dimensiones.flatMap((x) => x.niveles.flatMap((n) => n.criterios.map((c) => c.id)))));
+  it("en el archivo real no se pierde ningún enlace: la pantalla recibe lo que dicen las etiquetas", () => {
+    // `requeridosDe` salta un requerido que la escala no tiene (eso lo frena la validación). Por eso
+    // no alcanza con mirar lo que devuelve: se compara contra lo que cada criterio DICE que requiere.
     let enlaces = 0;
-    for (const a of real.areas) {
-      const r = requeridosDelArea(real, a);
-      for (const [id, lista] of [...Object.entries(r.requiere), ...Object.entries(r.loRequieren)]) {
-        expect(id.startsWith(`${a.id}.`), id).toBe(true);
-        for (const e of lista) expect(existen.has(e.id), `${id} → ${e.id}`).toBe(true);
-        enlaces += lista.length;
+    for (const escala of [real, ...real.ediciones.map((ed) => aplicarEdicion(real, ed.slug))]) {
+      for (const a of escala.areas) {
+        const r = requeridosDelArea(escala, a);
+        for (const c of todosLosCriterios({ areas: [a] })) {
+          expect((r.requiere[c.id] ?? []).map((e) => e.id), `${escala.edicion?.nombre ?? "general"} · ${c.id}`).toEqual(c.requiere ?? []);
+          enlaces += c.requiere?.length ?? 0;
+        }
+        for (const id of [...Object.keys(r.requiere), ...Object.keys(r.loRequieren)]) expect(id.startsWith(`${a.id}.`), id).toBe(true);
       }
     }
     expect(enlaces).toBeGreaterThan(0);
+    // Y la comparación frena de verdad: con un requerido que no existe, deja de coincidir.
+    const roto = parsearEscala(MINI_ESCALA.replace("`[1.2.E1 · comprobable]`", "`[1.2.E1 · comprobable · requiere 1.1.O9]`"));
+    expect(requeridosDelArea(roto, roto.areas[0]).requiere["1.2.E1"]).toBeUndefined();
+    expect(todosLosCriterios(roto).find((c) => c.id === "1.2.E1")?.requiere).toEqual(["1.1.O9"]);
   });
 });
 

@@ -96,6 +96,23 @@ export function estaEnLaCelda(ancla: string, dimension: string, letra: Letra): b
   return ancla === celda || (ancla.startsWith(celda) && /^\d+$/.test(ancla.slice(celda.length)));
 }
 
+/**
+ * ¿El comentario de `ancla` se lista en el panel de un NIVEL? Los del nivel mismo y los de sus
+ * criterios RETIRADOS: los que ya no existen en ninguna lectura de la escala (en la matriz no
+ * tienen fila, y la evidencia no puede quedar invisible). Los de un criterio que sí existe no van
+ * acá: si se ve, tiene su propio panel; si es de otra lectura —propio de otra edición, o uno que
+ * esta edición sacó—, se ve donde existe. Es la misma regla que cuenta los comentarios de la celda
+ * (`conteosQueSeVen`): el número de la celda y lo que lista el panel dicen lo mismo.
+ */
+export function esDelPanelDelNivel(
+  ancla: string,
+  nivel: { id: string; dimension: string; letra: Letra },
+  lectura: { seVe: (ancla: string) => boolean; deOtraLectura: ReadonlySet<string> },
+): boolean {
+  if (ancla === nivel.id) return true;
+  return estaEnLaCelda(ancla, nivel.dimension, nivel.letra) && !lectura.seVe(ancla) && !lectura.deOtraLectura.has(ancla);
+}
+
 /** La dimensión de un ancla (`1.7.F1` → `1.7`). */
 export function dimensionDeAncla(ancla: string): string | null {
   const m = FORMA_DE_ANCLA.exec(ancla);

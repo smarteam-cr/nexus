@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.3.2
-escala: 8.4.1
+version: 1.3.3
+escala: 8.4.2
 fecha: 2026-09-30
 ---
 
@@ -51,7 +51,7 @@ La regla estricta calcula un nivel, y el CSE lo puede ajustar, o marcar un crite
 Algunos criterios dicen cuáles otros requieren: lo que tiene que estar para que se puedan cumplir. En la sección «Escala» de Nexus, al elegir un criterio se marcan los que requiere y los que lo requieren a él. No cambian el nivel ni el puntaje; le sirven al CSE para dos cosas.
 
 - **Al diagnosticar.** Si un criterio quedó como cumplido y lo que requiere no, se vuelve a mirar antes de cerrar: casi siempre uno de los dos está mal marcado. Si de verdad se cumple de otra forma, se deja así y se escribe por qué en la evidencia.
-- **Al proponer qué sigue.** Lo requerido se trabaja antes. Un criterio del que dependen varios —el documento del cliente ideal, la pipeline review— suele ser el mejor primer paso dentro de la dimensión que toca, porque destraba a los demás.
+- **Al proponer qué sigue.** Lo requerido se trabaja antes. Un criterio del que dependen varios —el documento del cliente ideal, la definición de lead calificado— suele ser el mejor primer paso dentro de la dimensión que toca, porque destraba a los demás.
 
 Cuando a un cliente le falta siempre lo mismo antes de poder avanzar en otra cosa y la escala no lo dice, es un requerido que falta: se comenta en Nexus, como cualquier otro cambio.
 
@@ -123,6 +123,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.3.3 (2026-09-30).** Acompaña a la escala 8.4.2. En «Los criterios requeridos», el ejemplo de un criterio del que dependen varios pasa a ser la definición de lead calificado: a la pipeline review la requiere uno solo.
 
 **1.3.2 (2026-09-30).** Acompaña a la escala 8.4.1. Sin otros cambios.
 

@@ -86,6 +86,8 @@ function estructura(escala: Escala): ResultadoDePrueba {
   for (const id of Object.keys(escala.riesgos)) {
     if (!deRiesgo.has(id)) fallas.push(`la tabla «Riesgos» nombra ${id}, que no es un criterio de riesgo.`);
   }
+  // Lo que el lector toleró en la prosa: se lee igual, pero no se publica sin mirarlo.
+  fallas.push(...escala.avisosDeLectura);
   return prueba("Estructura", fallas);
 }
 
@@ -116,8 +118,11 @@ function sinIdentificadoresALaVista(escala: Escala): ResultadoDePrueba {
       if (texto && cita.test(texto)) fugas.add(`${vista.donde}${donde}: ${texto.slice(0, 80)}`);
     };
     for (const a of vista.escala.areas) {
+      revisar(`nombre del área ${a.id}`, a.nombre);
       revisar(`descripción del área ${a.id}`, a.descripcion);
+      for (const [letra, texto] of Object.entries(a.panoramica)) revisar(`vistazo de ${letra} del área ${a.id}`, texto);
       for (const d of a.dimensiones) {
+        revisar(`nombre de ${d.id}`, d.nombre);
         revisar(`pregunta de ${d.id}`, d.pregunta);
         revisar(`costo de ${d.id}`, d.costoDeQuedarse);
         revisar(`descripción de ${d.id}`, d.descripcion);
@@ -130,8 +135,12 @@ function sinIdentificadoresALaVista(escala: Escala): ResultadoDePrueba {
     }
     const ed = vista.escala.edicion;
     if (ed) {
+      revisar("nombre de la edición", ed.nombre);
       revisar("para quién es", ed.descripcion);
-      for (const p of ed.palabras) revisar(`palabra «${p.general}»`, p.edicion);
+      for (const p of ed.palabras) {
+        revisar("tabla de palabras", p.general);
+        revisar(`palabra «${p.general}»`, p.edicion);
+      }
     }
   }
   for (const [id, mensaje] of Object.entries(escala.riesgos)) {
@@ -185,6 +194,22 @@ function documentosAlineados(escala: Escala, opts: OpcionesDeValidacion): Result
 }
 
 /**
+ * Cómo se reconoce en un texto una palabra con valor fijo: igual, o con el verbo en plural («no se
+ * deja envejecer» también es «no se dejan envejecer»; «se sostiene», «se sostienen»). Es la misma
+ * palabra y el mismo umbral: sin esto, una edición que habla de varios documentos no podría decirlo
+ * sin que la prueba lo leyera como un cambio. La regla es de forma, no una lista de palabras: a
+ * cada palabra que termina en vocal se le admite una «n».
+ */
+export function formaDeLaPalabra(termino: string): RegExp {
+  const palabras = termino
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + (/[aeiouáéíóú]$/.test(p) ? "n?" : ""));
+  return new RegExp(`(?<![\\p{L}])${palabras.join("\\s+")}(?![\\p{L}])`, "iu");
+}
+
+/**
  * Lo que es propio de una edición. Que lo que nombra exista, que tenga su clave y que un criterio
  * propio caiga en su bloque y no pise un identificador ya lo exige el lector (`leerEdiciones`). Acá
  * van las reglas de la escala, que son las que impiden que una edición se vuelva otra escala:
@@ -200,8 +225,13 @@ function documentosAlineados(escala: Escala, opts: OpcionesDeValidacion): Result
 function edicionesCoherentes(escala: Escala): ResultadoDePrueba {
   const fallas: string[] = [];
   const generales = new Map(escala.areas.flatMap((a) => a.dimensiones.map((d) => [d.id, d] as const)));
-  const fijas = escala.palabrasConValorFijo.map((p) => p.termino.toLowerCase());
-  const conValorFijo = (texto: string) => fijas.filter((f) => texto.toLowerCase().includes(f)).sort().join(" · ");
+  const fijas = escala.palabrasConValorFijo.map((p) => ({ termino: p.termino.toLowerCase(), forma: formaDeLaPalabra(p.termino) }));
+  const conValorFijo = (texto: string) =>
+    fijas
+      .filter((f) => f.forma.test(texto))
+      .map((f) => f.termino)
+      .sort()
+      .join(" · ");
 
   for (const c of todosLosCriterios(escala)) {
     const numero = Number(/\d+$/.exec(c.id)?.[0]);

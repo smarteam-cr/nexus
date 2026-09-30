@@ -79,6 +79,12 @@ export interface DatosDeLaVista {
   edicion: (EdicionAplicada & { resumen: ResumenDeLaEdicion; adaptaElArea: boolean }) | null;
   /** Los requeridos de los criterios de ESTA área, en los dos sentidos (el otro lado puede ser de otra área). */
   requeridos: RequeridosDelArea;
+  /**
+   * Los criterios de ESTA área que existen en otra lectura de la escala y no en la que se ve
+   * (`anclasDeOtraLectura`). El panel de un nivel lista los comentarios de sus criterios retirados;
+   * con esto sabe cuáles no lo son: son de otra edición, o los sacó esta.
+   */
+  anclasDeOtraLectura: string[];
 }
 
 /** Por id de criterio: lo que requiere y quiénes lo requieren. Sin enlaces, el id no está. */
@@ -161,6 +167,7 @@ export function datosDeLaVista(args: {
         }
       : null,
     requeridos: requeridosDelArea(escala, area),
+    anclasDeOtraLectura: anclasDeOtraLectura(escala, area),
   };
 }
 
@@ -170,13 +177,30 @@ export function anclasDelArea(area: Area): Set<string> {
 }
 
 /**
+ * Los criterios de un área que existen en OTRA lectura de la escala y no en la que se ve: los
+ * propios de las demás ediciones (viendo la general, los de todas) y los que la edición elegida
+ * sacó («No aplican»). Un comentario sobre uno de esos se ve donde su criterio existe.
+ *
+ * Lo que no está acá ni en el área es un identificador RETIRADO: ya no existe en ninguna lectura,
+ * y sus comentarios se siguen viendo en el nivel donde estaba (la evidencia no queda invisible).
+ */
+export function anclasDeOtraLectura(escala: Pick<Escala, "ediciones">, area: Area): string[] {
+  const seVen = anclasDelArea(area);
+  const deLasEdiciones = escala.ediciones.flatMap((e) =>
+    e.areas.filter((a) => a.id === area.id).flatMap((a) => a.dimensiones.flatMap((d) => [...d.propios.map((c) => c.id), ...d.noAplican])),
+  );
+  return [...new Set(deLasEdiciones)].filter((id) => !seVen.has(id));
+}
+
+/**
  * Los contadores de comentarios de lo que SE VE. Un comentario hecho sobre un criterio propio de una
  * edición no se cuenta en la escala general (ahí ese criterio no existe), ni uno sobre un criterio
- * que la edición sacó se cuenta en ella: si no, una celda diría «3 comentarios» y no mostraría dónde.
+ * que la edición sacó se cuenta en ella. Los de un criterio RETIRADO sí se cuentan, en su celda: el
+ * panel de ese nivel los lista, y sin el número nada en la matriz avisaría que están.
  */
-export function conteosQueSeVen<T>(conteos: Record<string, T>, area: Area): Record<string, T> {
-  const existen = anclasDelArea(area);
-  return Object.fromEntries(Object.entries(conteos).filter(([ancla]) => existen.has(ancla)));
+export function conteosQueSeVen<T>(conteos: Record<string, T>, escala: Pick<Escala, "ediciones">, area: Area): Record<string, T> {
+  const deOtraLectura = new Set(anclasDeOtraLectura(escala, area));
+  return Object.fromEntries(Object.entries(conteos).filter(([ancla]) => !deOtraLectura.has(ancla)));
 }
 
 // ── Reglas que la pantalla aplica ─────────────────────────────────────────────

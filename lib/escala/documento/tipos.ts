@@ -182,6 +182,14 @@ export interface Escala {
   historial: EntradaDelHistorial[];
   /** «Cómo se leen los criterios»: las palabras con valor fijo. */
   palabrasConValorFijo: PalabraConValorFijo[];
+  /**
+   * Lo que el lector dejó pasar en la prosa y quien publica tiene que mirar. La prosa se lee con
+   * tolerancia (una versión vieja se tiene que seguir abriendo), pero lo que se tolera en silencio
+   * se pierde en silencio: una palabra entre «» en «Cómo se leen los criterios» a la que no se le
+   * encontró su valor deja de cuidar que una edición no le cambie el umbral. No frena la lectura:
+   * frena la publicación (`validarEscala`, en «Estructura»).
+   */
+  avisosDeLectura: string[];
   /** «Cómo se leen los criterios»: los casos que se leen distinto (departamentos de una o dos personas…). */
   casosDeLectura: BloqueDeTexto[];
   /**

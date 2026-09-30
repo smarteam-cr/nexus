@@ -12,7 +12,12 @@ encabezado.
 
 Desde la 8.0.0 la escala trae ediciones por industria, al final del documento. Las pruebas 1, 2, 4
 y 5 corren sobre la escala general y sobre la escala vista por cada edición, y la 8 mira lo que es
-propio de una edición. La prueba 3 —los ejemplos de la especificación— es solo de la escala general.
+propio de una edición: su clave, su perfil habitual y su bloque; que lo que nombra exista; que si
+toca los criterios de una dimensión diga algo de todos, en un solo lugar; que reescribir no repita
+el texto ni cambie una palabra con valor fijo; que no renombre una dimensión de base ni saque una
+dimensión; y que el título de la parte y el de cada edición estén bien escritos (uno con guion en
+vez de raya se leería como prosa, y la edición desaparecería sin aviso). La prueba 3 —los ejemplos
+de la especificación— es solo de la escala general.
 
 Desde la 8.3.0 un criterio puede decir en su etiqueta cuáles otros requiere («· requiere 1.5.F1»).
 No cambia el cálculo: la prueba 9 revisa que esos enlaces sean coherentes.
@@ -39,17 +44,51 @@ def prueba(nombre, ok, detalle=""):
     if not ok:
         fallas.append(nombre)
 
-def leer(ruta):
-    s = open(ruta, encoding="utf-8").read()
-    matriz = s[s.index("## Área 1 — Ventas"):s.index("# Parte 4")]
-    crit = []
-    for t, i, tipo, rk, hb, pf, rq in PAT.findall(matriz):
-        crit.append(dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·"),
-                         requiere=re.findall(r"\d\.\d\.[DIFEO]\d+", rq)))
-    return s, matriz, crit
+def limpiar(texto):
+    """Sin espacios al final de las líneas: un espacio suelto después de la etiqueta de un criterio no
+    puede hacer que ese criterio se salte."""
+    return re.sub(r"[ \t]+(?=\n|$)", "", texto)
 
-REESCRITO = re.compile(r"(?m)^- .* `\[(\d\.\d\.[DIFEO]\d+)\]`$")
+def abrir(ruta):
+    return limpiar(open(ruta, encoding="utf-8").read())
+
+def criterios(texto):
+    """Los criterios con etiqueta completa que hay en un texto (la matriz, o una edición con sus propios)."""
+    return [dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·"),
+                 requiere=re.findall(r"\d\.\d\.[DIFEO]\d+", rq))
+            for t, i, tipo, rk, hb, pf, rq in PAT.findall(texto)]
+
+def leer_texto(s):
+    matriz = s[s.index("## Área 1 — Ventas"):s.index("# Parte 4")]
+    return s, matriz, criterios(matriz)
+
+def leer(ruta):
+    return leer_texto(abrir(ruta))
+
+REESCRITO = re.compile(r"(?m)^- (.*) `\[(\d\.\d\.[DIFEO]\d+)\]`$")
 ID = re.compile(r"`(\d\.\d\.[DIFEO]\d+)`")
+PARTE_DE_EDICIONES = re.compile(r"(?m)^# Parte \d+ — Ediciones")
+LETRA = r"[^\W\d_]"  # una letra, con o sin tilde
+
+def ids_de(marca, texto):
+    """Los identificadores que nombran las líneas «*No aplican:*» o «*Se leen igual:*» de un texto."""
+    return [i for linea in re.findall(rf"(?m)^\*{marca}:\* (.+)$", texto) for i in ID.findall(linea)]
+
+def titulos_mal_escritos(s):
+    """Un título que habla de ediciones y no tiene la forma exacta se leería como prosa: la edición
+    entera —sus criterios propios, sus reescritos— desaparecería sin que nada más lo notara."""
+    mal = []
+    parte = PARTE_DE_EDICIONES.search(s)
+    desde = s.count("\n", 0, parte.start()) + 1 if parte else None
+    for n, l in enumerate(s.split("\n"), 1):
+        if re.match(r"# .*Edici", l, re.I) and not re.match(r"# Parte \d+ — Ediciones", l):
+            mal.append(f"línea {n}: el título de la parte de las ediciones va con raya («# Parte 5 — Ediciones por industria»)")
+        elif re.match(rf"#{{1,6}} *Edici[oó]n(?!{LETRA})", l, re.I):
+            if not re.match(r"## Edición — \S", l):
+                mal.append(f"línea {n}: el título de una edición va como «## Edición — Nombre», con raya")
+            elif desde is None or n < desde:
+                mal.append(f"línea {n}: una edición fuera de la parte de las ediciones")
+    return mal
 
 def leer_ediciones(s):
     """Las ediciones por industria (desde la 8.0.0): la misma escala dicha para una industria.
@@ -57,7 +96,7 @@ def leer_ediciones(s):
     De cada una: sus criterios propios (etiqueta completa), los de la matriz que reescribe (etiqueta
     con solo el identificador) y los que dice que no aplican.
     """
-    m = re.search(r"(?m)^# Parte \d+ — Ediciones", s)
+    m = PARTE_DE_EDICIONES.search(s)
     if not m:
         return []
     resto = s[m.start():]
@@ -66,12 +105,57 @@ def leer_ediciones(s):
     ediciones = []
     for bloque in re.split(r"(?m)^## Edición — ", parte)[1:]:
         nombre = bloque.split("\n", 1)[0].strip()
-        propios = [dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·"),
-                        requiere=re.findall(r"\d\.\d\.[DIFEO]\d+", rq))
-                   for t, i, tipo, rk, hb, pf, rq in PAT.findall(bloque)]
-        no_aplican = [i for linea in re.findall(r"(?m)^\*No aplican:\* (.+)$", bloque) for i in ID.findall(linea)]
-        ediciones.append(dict(nombre=nombre, propios=propios, reescritos=REESCRITO.findall(bloque), no_aplican=no_aplican, texto=bloque))
+        # Lo que va antes de su primera sección: para quién es, su clave, su perfil habitual y su bloque.
+        cabecera = re.split(r"(?m)^### ", bloque)[0]
+        clave = re.search(r"(?m)^\*Clave:\* *(.+?)\.?$", cabecera)
+        perfil = re.search(r"(?m)^\*Perfil habitual:\* *(.+)$", cabecera)
+        desde = re.search(r"(?m)^\*Criterios propios:\* \D*(\d+)", cabecera)
+        # Cada dimensión que la edición nombra, con lo que dice de sus criterios.
+        dimensiones = []
+        for trozo in re.split(r"(?m)^#### ", bloque)[1:]:
+            titulo, _, cuerpo = trozo.partition("\n")
+            cuerpo = re.split(r"(?m)^### ", cuerpo)[0]  # hasta donde empieza otra área
+            t = re.match(r"(\d\.\d) (.+)$", titulo.strip())
+            if t:
+                dimensiones.append(dict(id=t.group(1), nombre=t.group(2).strip(),
+                                        reescritos={i: txt.strip() for txt, i in REESCRITO.findall(cuerpo)},
+                                        propios=[c["id"] for c in criterios(cuerpo)],
+                                        no_aplican=ids_de("No aplican", cuerpo), se_leen_igual=ids_de("Se leen igual", cuerpo)))
+        ediciones.append(dict(nombre=nombre, clave=clave.group(1).strip() if clave else None,
+                              perfil=perfil.group(1).strip() if perfil else None, desde=int(desde.group(1)) if desde else None,
+                              dimensiones=dimensiones, propios=criterios(bloque),
+                              reescritos=[i for _, i in REESCRITO.findall(bloque)], no_aplican=ids_de("No aplican", bloque), texto=bloque))
     return ediciones
+
+def dimensiones_de_base(matriz):
+    """Las dimensiones que la matriz pone bajo «### Base operativa» (en la escala, x.1 a x.4 de cada área)."""
+    capa, de_base = None, set()
+    for l in matriz.split("\n"):
+        if l.startswith("### "):
+            capa = l[4:].strip()
+        m = re.match(r"#### (\d\.\d) ", l)
+        if m and capa == "Base operativa":
+            de_base.add(m.group(1))
+    return de_base
+
+def palabras_con_valor_fijo(s):
+    """«Cómo se leen los criterios»: las palabras entre «» de la oración que les da su valor.
+
+    Devuelve (las que tienen valor, las que están entre comillas y no lo dicen de una forma que se entienda)."""
+    m = re.search(r"(?ms)^## Cómo se leen los criterios[ \t]*\n(.*?)(?=^#{1,2} |\Z)", s)
+    parrafo = next((p for p in re.split(r"\n\s*\n", m.group(1)) if "«" in p), None) if m else None
+    con_valor, sin_valor = [], []
+    for oracion in re.split(r"(?<=\.)\s+", " ".join(parrafo.split()) if parrafo else ""):
+        terminos = [t.strip() for t in re.findall(r"«([^»]+)»", oracion)]
+        if terminos:
+            (con_valor if re.search(r"\bquieren? decir .+", oracion) or "», " in oracion else sin_valor).extend(terminos)
+    return con_valor, sin_valor
+
+def forma_de_la_palabra(termino):
+    """Cómo se reconoce en un texto una palabra con valor fijo: igual, o con el verbo en plural («no se deja
+    envejecer» también es «no se dejan envejecer»). Es de forma: a cada palabra que termina en vocal se le admite una «n»."""
+    partes = [re.escape(p) + ("n?" if re.search(r"[aeiouáéíóú]$", p) else "") for p in termino.strip().lower().split()]
+    return re.compile(rf"(?<!{LETRA})" + r"\s+".join(partes) + rf"(?!{LETRA})", re.I)
 
 def criterios_de(crit, edicion):
     """Los criterios que valen en una edición: los de la matriz que no sacó, más los propios."""
@@ -125,8 +209,84 @@ def puntaje(nivel_base, avance):
     """Tramo del nivel más la posición dentro del tramo: hacia abajo y sin pasar de 19 (especificación, paso 7)."""
     return {"D": 0, "I": 20, "F": 40, "E": 60}[nivel_base] + min(math.floor(Fraction(avance) * 20), 19)
 
+def incoherencias_de_ediciones(s, matriz, crit, ediciones):
+    """La prueba 8: lo que es propio de una edición. Devuelve la lista de lo que no cuadra (vacía si todo está bien).
+
+    Un título de la parte o de una edición mal escrito se dice aunque no se haya leído ninguna edición:
+    es justo el caso en que la edición desapareció."""
+    incoherencias = titulos_mal_escritos(s)
+    if not ediciones:
+        return incoherencias
+    dims = sorted({c["dim"] for c in crit})
+    de_la_matriz = {c["id"]: c["txt"] for c in crit}
+    nombres = dict(re.findall(r"(?m)^#### (\d\.\d) (.+)$", matriz))
+    de_base = dimensiones_de_base(matriz)
+    numero = lambda i: int(i[5:])
+    incoherencias += [f"{i} está en la matriz con un número de edición" for i in sorted(de_la_matriz) if numero(i) >= 100]
+    # Reescribir es decir lo mismo: las palabras con valor fijo del texto de la matriz son las del reescrito.
+    fijas, sin_valor = palabras_con_valor_fijo(s)
+    incoherencias += [f"«{t}» está entre comillas en «Cómo se leen los criterios» y no dice su valor («quiere decir …»)" for t in sin_valor]
+    formas = [(t.lower(), forma_de_la_palabra(t)) for t in fijas]
+    con_valor_fijo = lambda texto: sorted(t for t, forma in formas if forma.search(texto))
+    aplica_en = lambda cs, d, venta, rel: any(c["dim"] == d and c["lv"] == "F" and not c["riesgo"] and aplica(c, venta, rel) for c in cs)
+    bloques, propios_vistos = {}, {}
+    for e in ediciones:
+        n = e["nombre"]
+        if not e["clave"] or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", e["clave"]):
+            incoherencias.append(f"[{n}] no tiene una «Clave» válida (minúsculas, números y guiones)")
+        if not e["perfil"]:
+            incoherencias.append(f"[{n}] no dice su «Perfil habitual»")
+        if e["desde"] is None:
+            if e["propios"]:
+                incoherencias.append(f"[{n}] trae criterios propios sin decir desde qué número van («Criterios propios»)")
+        elif e["desde"] in bloques:
+            incoherencias.append(f"[{n}] numera sus criterios propios desde el {e['desde']}, igual que «{bloques[e['desde']]}»")
+        else:
+            bloques[e["desde"]] = n
+        incoherencias += [f"[{n}] {i} no está en la matriz" for i in e["reescritos"] + e["no_aplican"] if i not in de_la_matriz]
+        for c in e["propios"]:
+            i = c["id"]
+            if i in de_la_matriz:
+                incoherencias.append(f"[{n}] {i} ya está en la matriz")
+            elif numero(i) <= 100:
+                incoherencias.append(f"[{n}] {i} no está en el bloque de una edición (desde el 101)")
+            elif e["desde"] is not None and not e["desde"] <= numero(i) <= e["desde"] + 98:
+                incoherencias.append(f"[{n}] {i} no está en el bloque de su edición (del {e['desde']} al {e['desde'] + 98})")
+            if i in propios_vistos:
+                incoherencias.append(f"[{n}] {i} ya es un criterio propio de «{propios_vistos[i]}»")
+            propios_vistos[i] = n
+        for d in e["dimensiones"]:
+            if d["id"] not in nombres:
+                incoherencias.append(f"[{n}] la escala no tiene una dimensión {d['id']}")
+                continue
+            # Las dimensiones de base operativa se llaman igual en toda la escala.
+            if d["id"] in de_base and d["nombre"] != nombres[d["id"]]:
+                incoherencias.append(f"[{n}] {d['id']} es de base operativa y se llama «{nombres[d['id']]}»; la edición la llama «{d['nombre']}»")
+            for i, texto in d["reescritos"].items():
+                if i not in de_la_matriz:
+                    continue
+                if texto == de_la_matriz[i].strip():
+                    incoherencias.append(f"[{n}] {i} está reescrito con el mismo texto de la matriz: sobra")
+                if con_valor_fijo(texto) != con_valor_fijo(de_la_matriz[i]):
+                    incoherencias.append(f"[{n}] {i} cambia las palabras con valor fijo al reescribirlo")
+            # Cobertura: si la edición toca los criterios de una dimensión, dice algo de TODOS, en un solo lugar.
+            if d["reescritos"] or d["propios"] or d["no_aplican"] or d["se_leen_igual"]:
+                for i in (c["id"] for c in crit if c["dim"] == d["id"]):
+                    donde = [x for x, esta in (("reescrito", i in d["reescritos"]), ("en «No aplican»", i in d["no_aplican"]),
+                                               ("en «Se leen igual»", i in d["se_leen_igual"])) if esta]
+                    if not donde:
+                        incoherencias.append(f"[{n}] {i} es de la matriz y la edición no dice nada de él")
+                    elif len(donde) > 1:
+                        incoherencias.append(f"[{n}] {i} está {' y '.join(donde)}: va en un solo lugar")
+        # Una edición puede hacer que una dimensión aplique donde en la general no aplica; al revés, no.
+        vista = criterios_de(crit, e)
+        for venta, rel in PERFILES:
+            incoherencias += [f"[{n}] {d} deja de aplicar a {venta}/{rel}: una edición no saca una dimensión"
+                              for d in dims if aplica_en(crit, d, venta, rel) and not aplica_en(vista, d, venta, rel)]
+    return incoherencias
+
 s, matriz, crit = leer(ESCALA)
-espec = open(ESPEC, encoding="utf-8").read()
+espec = abrir(ESPEC)
 # Los identificadores retirados se leen de la especificación («Identificadores retirados…»): una sola lista.
 _linea_retirados = next((l for l in espec.split("\n") if "Identificadores retirados" in l), "")
 RETIRADOS = set(re.findall(r"`(\d\.\d\.[DIFEO]\d+)`", _linea_retirados))
@@ -184,11 +344,21 @@ prueba("3 · Los ejemplos cuadran",
 
 # 4 · Sin identificadores a la vista (criterios, resultados, costos y mensajes de riesgo; también en las ediciones)
 VISIBLE = ("- ", "*Resultado", "*Costo", "*Descripción", "**")
-visibles = [l for l in matriz.split("\n") if l.startswith(VISIBLE)]
+TITULO = re.compile(r"(?:#### \d\.\d |#{2,3} Área \d+ — |## Edición — )(.+)$")
+def nombres_de(texto):
+    """De los títulos de un texto, lo que lee el cliente: el nombre del área, de la dimensión o de la edición, sin su número."""
+    return [m.group(1) for m in map(TITULO.match, texto.split("\n")) if m]
+visibles = [l for l in matriz.split("\n") if l.startswith(VISIBLE)] + nombres_de(matriz)
+# «Los cinco niveles de un vistazo»: cómo se ve cada área entera en cada nivel.
+_vistazo = re.search(r"(?ms)^## Los cinco niveles de un vistazo[ \t]*\n(.*?)(?=^#{1,2} |\Z)", s)
+visibles += [l for l in (_vistazo.group(1).split("\n") if _vistazo else []) if l.startswith("**")]
 for e in ediciones:
     # En una edición también se ven las preguntas y las descripciones, que son texto corrido. Las líneas
     # «No aplican» y «Se leen igual» nombran identificadores a propósito, y no las ve el cliente.
     visibles += [l for l in e["texto"].split("\n") if l.startswith(VISIBLE) or (l.strip() and not l.startswith(("#", "*", "|", "-")))]
+    # Y sus nombres, y su tabla de palabras (se ve al pasar el cursor por cada palabra).
+    visibles += [e["nombre"]] + nombres_de(e["texto"])
+    visibles += [celda for l in e["texto"].split("\n") if l.startswith("|") and not re.fullmatch(r"[|:\- ]+", l) for celda in l.strip("|").split("|")]
 fugas = [re.sub(r" `\[[^]]*\]`$", "", l)[:80] for l in visibles if re.search(r"\b[123]\.[1-8]\b", re.sub(r" `\[[^]]*\]`$", "", l))]
 ini = s.index("## Riesgos")
 riesgos = s[ini:s.index("\n## ", ini + 1)]
@@ -217,23 +387,14 @@ desalineados = []
 if encabezado(espec, "escala") != vigente:
     desalineados.append(f"especificación para {encabezado(espec, 'escala')}")
 if os.path.exists(MANUAL):
-    man = encabezado(open(MANUAL, encoding="utf-8").read(), "escala")
+    man = encabezado(abrir(MANUAL), "escala")
     if man != vigente:
         desalineados.append(f"manual para {man}")
 prueba("7 · Documentos alineados", not desalineados, f"escala {vigente}; " + ", ".join(desalineados))
 
-# 8 · Ediciones coherentes (solo si la versión trae ediciones)
-if ediciones:
-    incoherencias = []
-    de_la_matriz = {c["id"] for c in crit}
-    numero = lambda i: int(i[5:])
-    incoherencias += [f"{i} está en la matriz con un número de edición" for i in sorted(de_la_matriz) if numero(i) >= 100]
-    for e in ediciones:
-        n = e["nombre"]
-        incoherencias += [f"[{n}] {i} no está en la matriz" for i in e["reescritos"] + e["no_aplican"] if i not in de_la_matriz]
-        incoherencias += [f"[{n}] {i} está reescrito y en «No aplican»" for i in sorted(set(e["reescritos"]) & set(e["no_aplican"]))]
-        incoherencias += [f"[{n}] {c['id']} ya está en la matriz" for c in e["propios"] if c["id"] in de_la_matriz]
-        incoherencias += [f"[{n}] {c['id']} no está en el bloque de una edición (desde el 101)" for c in e["propios"] if numero(c["id"]) <= 100]
+# 8 · Ediciones coherentes (solo si la versión trae ediciones, o algo que parece una y no se lee)
+incoherencias = incoherencias_de_ediciones(s, matriz, crit, ediciones)
+if ediciones or incoherencias:
     prueba("8 · Ediciones coherentes", not incoherencias, "; ".join(incoherencias[:8]))
 
 # 9 · Requeridos coherentes (solo si la versión trae criterios que requieren otro)

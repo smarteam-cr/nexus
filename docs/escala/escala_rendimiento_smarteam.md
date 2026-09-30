@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 8.4.1
+version: 8.4.2
 fecha: 2026-09-30
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -336,7 +336,7 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 
 - Los **artefactos de ejecución de venta** (playbook, criterios de etapa, cadencia, metodología) se asignan a **Procesos de Ventas (1.1)**. Lo que recibe el cliente —el mensaje y la propuesta, con su estructura— se mide en **Propuesta y Coherencia (1.5)**, y la definición de lead calificado, en **Priorización de Leads (1.6)**. Cada uno se cuenta una sola vez.
 - Que el equipo **trabaje en el CRM** y no en hojas aparte es una rutina, y se asigna a **Procesos (1.1)**, igual que vigilar que el proceso se cumpla; que las **conversaciones con los prospectos** queden en el sistema se asigna a **Tecnología (1.2)**.
-- **Mejorar el proceso con lo aprendido** se asigna a **Aprendizaje de Ganadas y Perdidas (1.8)**: Procesos (1.1) mide que el proceso exista y se siga, no cómo cambia.
+- **Mejorar el proceso con lo aprendido** se asigna a **Aprendizaje de Ganadas y Perdidas (1.8)**: Procesos (1.1) mide que el proceso exista y se siga, no cómo cambia. Lo único que Procesos conserva, en Óptimo, es la disciplina de probar una técnica nueva en un piloto antes de sumarla al proceso.
 - El **forecast** se asigna a **Datos de Ventas (1.3)**, no a Procesos (1.1) ni a 1.5.
 - En la **frontera Marketing ↔ Ventas**, cada pieza se asigna por quién la ejecuta: la definición de a quién sirve el equipo comercial (ICP) en **1.5 (Ventas)**; la segmentación y personalización del mensaje de marketing en **2.6 (Marketing)**; marcar MQL (lo califica marketing) en **2.6 (Marketing)**; aceptar SQL (criterio del lado de Ventas) en **1.6 (Ventas)**; poblar el campo de etapa del ciclo de vida, como higiene de dato, en **Datos** del área que lo captura (1.3 o 2.3); el pipeline de ventas, con sus etapas y sus criterios de avance, en **Procesos (1.1)**. La definición de lead calificado es una sola y vive en 1.6; los criterios de avance de cada etapa del pipeline son otra cosa, y siguen en 1.1.
 - En **Servicio**, la definición de los tipos de cliente que atiende el área —qué necesita cada uno y qué espera— se asigna a **Consistencia de Atención (3.5)**, como el ICP a 1.5 y los buyer personas a 2.5; la diferenciación de la atención según esos tipos, a **Priorización de Clientes (3.6)**.
@@ -465,7 +465,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Hay secuencias de contacto de varios pasos que cambian según cómo responde el prospecto —si leyó, hizo clic o contestó—, y los leads y las conversaciones se asignan por múltiples condiciones o por capacidad, con control de quién ve y responde cada conversación. `[1.2.E2 · comprobable]`
 - Hay integración con ERP u otros sistemas operativos cuando aplica. `[1.2.E3 · comprobable]`
 - Hay paneles en tiempo real de conversión y de conversaciones: cuánto tarda la primera respuesta y cuántas quedan sin seguimiento. `[1.2.E4 · comprobable]`
-- El equipo usa la IA en su trabajo diario —para redactar, resumir conversaciones o sugerir el siguiente paso—, y la IA trabaja con el contexto de los clientes y prospectos. `[1.2.E5 · evaluado · hábito · requiere 1.3.F5, 1.3.F6, 1.3.F7]`
+- El equipo usa la IA en su trabajo diario —para redactar, resumir conversaciones o preparar una reunión—, y la IA trabaja con el contexto de los clientes y prospectos. `[1.2.E5 · evaluado · hábito · requiere 1.3.F5, 1.3.F6, 1.3.F7]`
 
 **Óptimo.** Agentes de IA califican y agendan; el rep trabaja con predicción de cierre y respuestas sugeridas.
 
@@ -1613,6 +1613,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 
 ## Historial de versiones
 
+**8.4.2 (2026-09-30).** Revisión de las cuatro ediciones antes de publicarlas, con el mismo criterio con que se limpió Ventas: cada cosa se pide una vez. En Banca, la oferta se valida contra la política de crédito vigente y ya no contra las condiciones del cliente, que es la precalificación; el documento del cliente objetivo dice a quién va dirigido cada producto y qué busca. En Inmobiliaria, la disponibilidad queda en Tecnología: el estado de cada unidad la requiere, y los cambios que llegan el mismo día son los de precio y de avance de obra. En Ecommerce y retail, la invitación a volver después de cada compra pasa a ser un criterio propio, y el de los clientes que ya deberían haber vuelto se lee como en la escala general; las devoluciones por «no era lo que esperaba» se miden, y corregir la ficha queda en Embudo de compra; la ficha del producto deja de pedir la disponibilidad, y la meta por canal, un responsable. En Educación, los criterios y los textos que todavía hablaban de venta o de lo comercial se dicen con las palabras de admisiones. Salen dos requeridos que no eran estrictos —uno de Banca y uno de Inmobiliaria— y entran tres que sí lo son. En la escala general, el ejemplo de la IA en el trabajo diario deja de ser sugerir el siguiente paso, que es de Priorización de Leads, y la regla de asignación dice que probar una técnica nueva en un piloto sigue en Procesos. No cambia ningún identificador de la matriz ni su cálculo.
+
 **8.4.1 (2026-09-30).** Las tres ediciones nuevas dicen con sus palabras lo que todavía se leía con el texto general donde más se notaba: los resultados de Procesos y de Tecnología, la definición que no se deja envejecer —prospecto precalificado en Banca, aspirante calificado en Educación, interesado calificado en Inmobiliaria— y, en Educación, los niveles y los criterios que hablaban de vender. No cambia ningún criterio de la matriz ni su cálculo.
 
 **8.4.0 (2026-09-30).** Tres ediciones nuevas, las tres con Ventas escrita entera y, por ahora, solo Ventas: en ellas Marketing y Servicio se siguen midiendo con la escala general. Banca y servicios financieros, para quien coloca créditos, tarjetas y cuentas a personas y pymes con ejecutivos y canales digitales: Oferta y condiciones, Precalificación y priorización, Avance de la solicitud, y Aprobadas, rechazadas y desistidas; pide el permiso del cliente registrado, precalificar antes de armar el expediente y no perder la solicitud que queda a medias en un canal digital. Educación, para el área de admisiones, que en esta edición se llama así: Oferta académica, Priorización de aspirantes, Avance de la admisión, y Matrículas ganadas y perdidas; pide un calendario por período, acompañar al admitido hasta que se matricula y registrar por qué no se matriculó cada aspirante. E Inmobiliaria, para quien vende las unidades de un proyecto: Proyecto y propuesta, Priorización de interesados, Seguimiento de visitas y reservas, y Ventas, pérdidas y desistimientos; pide una sola lista de precios vigente, que reservar bloquee la unidad, y que cada reserva que se cae deje su razón. Varios criterios propios dicen lo que requieren. No cambia ningún criterio de la matriz ni su cálculo.
@@ -1889,7 +1891,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 - El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (ventas, pedidos, valor promedio del pedido, conversión, carritos abandonados) y lo consulta al menos semanalmente. `[1.4.F2]`
 - En la revisión de ventas se rinde cuentas: cada quien responde por lo que se comprometió en la anterior. `[1.4.F3]`
-- Cada canal de venta tiene una meta clara y un responsable, y su avance se reporta en cadencia fija. `[1.4.F4]`
+- Cada canal de venta tiene una meta clara, y su avance se reporta en cadencia fija. `[1.4.F4]`
 
 **Eficiente.**
 
@@ -1927,7 +1929,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 *Resultado:* El comprador encuentra cada producto con la misma ficha, el mismo precio y las mismas condiciones, entre por donde entre.
 
 - Existe un documento con la definición del cliente ideal de la tienda —a quién le vende y qué busca—, consultable por cualquiera del equipo. `[1.5.F1]`
-- Cada producto publicado tiene su ficha completa —fotos, descripción, precio y disponibilidad— con una misma estructura. `[1.5.F101 · comprobable]`
+- Cada producto publicado tiene su ficha completa —fotos, descripción y precio— con una misma estructura. `[1.5.F101 · comprobable]`
 - Las condiciones de compra —envío, cambios, devoluciones y garantía— están escritas y a la vista antes de pagar. `[1.5.F102 · comprobable]`
 
 **Eficiente.** La tienda se ordena como compra el cliente y promete solo lo que entrega.
@@ -1935,7 +1937,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 *Resultado:* El comprador reconoce la tienda por algo concreto, encuentra rápido lo que busca y recibe lo que la ficha le prometió.
 
 - El catálogo está organizado como busca el cliente —categorías, filtros y buscador—, y se revisa con los datos de qué se busca y no se encuentra. `[1.5.E101 · comprobable · hábito]`
-- Lo que promete la ficha es lo que llega: las devoluciones por «no era lo que esperaba» se miden y se corrige la ficha. `[1.5.E102 · comprobable · hábito]`
+- Lo que promete la ficha es lo que llega: se mide cuántas devoluciones son por «no era lo que esperaba». `[1.5.E102 · comprobable · hábito · requiere 1.8.F101]`
 
 **Óptimo.**
 
@@ -2013,7 +2015,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 - Los carritos y los pedidos que quedaron a medias se reconocen a tiempo y reciben un recordatorio acordado, no uno improvisado. `[1.7.F1]`
 - La recuperación usa al menos dos canales, por ejemplo correo y el canal conversacional, como WhatsApp. `[1.7.F2]`
-- Después de cada compra, el cliente recibe solo un recordatorio o un incentivo para volver a comprar, y el que dejó de comprar se reconoce a tiempo. `[1.7.F5]`
+- Después de cada compra, el cliente recibe de forma automática una invitación a volver: un recordatorio, una recomendación o un incentivo. `[1.7.F101 · comprobable · recompra · requiere 1.2.F6]`
 
 **Eficiente.** El recordatorio llega cuando toca: cada producto tiene medido su momento de recompra.
 
@@ -2033,7 +2035,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 *No aplican:* `1.7.D1`, `1.7.I1`, `1.7.I2`.
 
-*Se leen igual:* `1.7.D4`, `1.7.I3`, `1.7.F3`, `1.7.F4`, `1.7.E2`, `1.7.E3`, `1.7.E4`.
+*Se leen igual:* `1.7.D4`, `1.7.I3`, `1.7.F3`, `1.7.F4`, `1.7.F5`, `1.7.E2`, `1.7.E3`, `1.7.E4`.
 
 #### 1.8 Embudo de compra
 
@@ -2243,7 +2245,7 @@ Mide el rendimiento del área comercial de la entidad: cómo está montada por d
 
 **Funcional.** Tu área comercial opera como una maquinaria base. Cada solicitud —de sucursal, de ejecutivo o digital— entra al mismo recorrido, las condiciones de cada producto se dicen igual en todos los canales, el permiso del cliente queda registrado y ninguna solicitud se enfría sin que alguien reaccione.
 
-**Eficiente.** La colocación deja de depender del empuje de cada ejecutivo. Mides en qué etapa se cae cada solicitud, precalificas antes de armar el expediente, les ofreces a los clientes que ya califican sin esperar a que pregunten y proyectas la colocación con confianza.
+**Eficiente.** La colocación deja de depender del empuje de cada ejecutivo. Mides en qué etapa se cae cada solicitud, la precalificación sale sola, les ofreces a los clientes que ya califican sin esperar a que pregunten y proyectas la colocación con confianza.
 
 **Óptimo.** La IA hace el trabajo pesado y tu equipo decide donde importa. Agentes atienden y precalifican a toda hora, los modelos dicen a quién ofrecerle qué y cuándo, y el sistema detecta la solicitud que se traba antes de que el cliente termine el trámite en otra entidad.
 
@@ -2396,9 +2398,9 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 
 *Resultado:* Dos clientes parecidos reciben la misma oferta —tasa, plazo, costos y requisitos— sin importar qué ejecutivo los atienda ni por qué canal lleguen, y saben cuánto les va a costar antes de firmar.
 
-- Existe un documento con el cliente objetivo de cada producto —a quién va dirigido y qué tiene que cumplir—, consultable por cualquier ejecutivo. `[1.5.F1]`
+- Existe un documento con el cliente objetivo de cada producto —a quién va dirigido y qué busca—, consultable por cualquier ejecutivo. `[1.5.F1]`
 - El líder puede explicar quién es el cliente objetivo de cada producto sin consultar su documentación. `[1.5.F2]`
-- Las ofertas están estandarizadas: toda simulación o preaprobación muestra lo mismo —monto, tasa, plazo, cuota y costos—, no armada a mano cada vez. `[1.5.F4]`
+- Las ofertas están estandarizadas: toda simulación o preaprobación muestra lo mismo —monto, tasa, plazo, cuota y costos—, no armada desde cero cada vez. `[1.5.F4]`
 - Las tasas, los costos y los requisitos de cada producto son los mismos en sucursal, por teléfono y en los canales digitales, o la diferencia es a propósito y está escrita. `[1.5.F5]`
 - Cada producto tiene una ficha vigente para el cliente —qué es, para quién, tasa, costos y requisitos— publicada en los canales donde se ofrece. `[1.5.F201 · comprobable]`
 - Antes de firmar, el cliente recibe por escrito el costo total de lo que contrata: tasa, comisiones, seguros y cuota. `[1.5.F202 · comprobable · hábito]`
@@ -2407,7 +2409,7 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 
 *Resultado:* El mercado reconoce a la entidad por algo concreto, la oferta se sostiene igual en cada contacto, y lo que se le ofrece al cliente es lo que después se le aprueba.
 
-- Las ofertas solo prometen lo que se puede aprobar: el ejecutivo valida las condiciones básicas del cliente antes de ofrecerle un monto o una tasa. `[1.5.E3]`
+- Las ofertas solo prometen lo que se puede aprobar: el monto, la tasa y el plazo que se ofrecen se validan contra la política de crédito vigente antes de decírselos al cliente. `[1.5.E3]`
 - Se mide cuántas ofertas terminan aprobadas con condiciones distintas de las ofrecidas, y se corrige el origen. `[1.5.E201 · comprobable · hábito]`
 
 **Óptimo.** La IA mantiene coherentes las condiciones y el mensaje en cada punto de contacto, sin trabajo manual.
@@ -2518,7 +2520,7 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 *Resultado:* Los mismos motivos dejan de repetirse: lo que se aprende de cada rechazo y de cada desistimiento vuelve al proceso, a la precalificación y a la capacitación del equipo.
 
 - Se revisan periódicamente las solicitudes rechazadas, desistidas y abandonadas para identificar patrones. `[1.8.E1]`
-- Las razones de rechazo se revisan con el área de crédito, para ajustar a quién se le ofrece cada producto. `[1.8.E201 · declarado · hábito · requiere 1.4.E201]`
+- Las razones de rechazo se revisan con el área de crédito, para ajustar a quién se le ofrece cada producto. `[1.8.E201 · declarado · hábito]`
 
 **Óptimo.**
 
@@ -2562,7 +2564,7 @@ Mide el rendimiento del área de admisiones: cómo está montada por dentro y qu
 
 **Funcional.** Tu área de admisiones opera como una maquinaria base. Cada interesado entra al mismo recorrido, la información de cada programa —plan de estudios, costos, becas y fechas— se dice igual en todos los canales, y ningún aspirante se queda esperando sin que alguien reaccione.
 
-**Eficiente.** La matrícula deja de depender del empuje de la última semana. Mides en qué paso se cae cada aspirante, priorizas a quien encaja con cada programa, acompañas al admitido hasta que se matricula y proyectas la matrícula del período con confianza.
+**Eficiente.** La matrícula deja de depender del empuje de la última semana. Mides en qué paso se cae cada aspirante y cuántos admitidos no se matriculan, un puntaje te dice a qué aspirante llamar primero y proyectas la matrícula del período con confianza.
 
 **Óptimo.** La IA hace el trabajo pesado y tu equipo decide donde importa. Agentes responden y orientan a toda hora, los modelos dicen qué aspirante necesita qué, y el sistema detecta a quien está por abandonar el proceso antes de que cierre la matrícula.
 
@@ -2667,7 +2669,9 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 
 **Óptimo.**
 
-- Admisiones se apoya en el almacén central de datos de la institución para su proyección, cruzando lo comercial con lo académico y lo financiero. `[1.3.O4]`
+*Resultado:* La proyección de matrícula se anticipa a lo que va a pasar, cruzando lo de admisiones con lo académico y lo financiero, y los datos están al día sin que nadie tenga que cuidarlos.
+
+- Admisiones se apoya en el almacén central de datos de la institución para su proyección, cruzando lo de admisiones con lo académico y lo financiero. `[1.3.O4]`
 
 *No aplican:* `1.3.F8`, `1.3.E4`.
 
@@ -2695,13 +2699,14 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 - Cuando entra un asesor nuevo, hay un plan de inducción con sus pasos y materiales —programas, costos, becas y sistemas—; no se le entrena de memoria. `[1.4.E2]`
 - El acuerdo con las áreas académica y financiera está escrito y se mide: en cuánto tiempo se resuelve una admisión, una convalidación o una beca. `[1.4.E301 · comprobable]`
 
-**Óptimo.**
+**Óptimo.** El liderazgo decide con analítica avanzada y sostiene mesas de innovación en admisiones.
 
 *Resultado:* La dirección decide dónde invertir con números de fondo: qué programa y qué canal dejan más margen, qué cohorte permanece más y qué asesor aporta más.
 
 - Las decisiones usan analítica avanzada (rentabilidad por programa y por canal, permanencia de cada cohorte, aporte de cada asesor). `[1.4.O1]`
+- Hay mesas regulares de innovación en admisiones. `[1.4.O2]`
 
-*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`.
+*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`.
 
 #### 1.5 Oferta académica
 
@@ -2724,7 +2729,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 - Existe un documento con el perfil de estudiante de cada programa —a quién va dirigido y qué busca—, consultable por cualquier asesor. `[1.5.F1]`
 - El líder puede explicar a quién va dirigido cada programa sin consultar su documentación. `[1.5.F2]`
 - Un aspirante que habla con dos asesores recibe el mismo mensaje de valor base. `[1.5.F3]`
-- Las ofertas de admisión están estandarizadas: todo aspirante recibe su detalle de costos, beca y financiamiento con la misma estructura, no armado a mano cada vez. `[1.5.F4]`
+- Las ofertas de admisión están estandarizadas: todo aspirante recibe su detalle de costos, beca y financiamiento con la misma estructura, no armado desde cero cada vez. `[1.5.F4]`
 - Los costos, las becas y los requisitos de cada programa son los mismos en la sede, por teléfono y en línea, o la diferencia es a propósito y está escrita. `[1.5.F5]`
 - Cada programa tiene una ficha vigente para el aspirante —plan de estudios, duración, modalidad, costos, becas, requisitos y fechas— publicada en los canales donde se ofrece. `[1.5.F301 · comprobable]`
 
@@ -2788,9 +2793,12 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 
 **Deficiente.** El asesor está solo con sus aspirantes, y contacta por un solo canal.
 
+- No hay materiales para presentarle al aspirante y apoyar su decisión. `[1.7.D4]`
 - Las solicitudes que el aspirante deja a medias en línea no las retoma nadie. `[1.7.D301 · comprobable · venta sin vendedor]`
 
 **Inicial.** Hay seguimiento, pero depende de que cada asesor se acuerde.
+
+- Cada asesor tiene sus propios materiales para ayudarse con los aspirantes. `[1.7.I3]`
 
 **Funcional.** Ningún aspirante se enfría en silencio, y ningún admitido se queda sin matricular sin que alguien reaccione.
 
@@ -2799,6 +2807,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 - Los aspirantes detenidos —sin respuesta, sin documentos o sin pago— se reconocen a tiempo y tienen un paso acordado para retomarlos, no la improvisación de cada asesor. `[1.7.F1]`
 - El seguimiento usa al menos dos canales, por ejemplo llamada y el canal conversacional, como WhatsApp. `[1.7.F2]`
 - Hay materiales estandarizados que ayudan a decidir la matrícula: plan de estudios, testimonios y simulador de costos. `[1.7.F4]`
+- Los estudiantes que ya deberían haberse matriculado de nuevo —en el siguiente curso o en el siguiente período— se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5]`
 - Todo aspirante admitido que no se ha matriculado recibe seguimiento hasta que se matricula o dice que no. `[1.7.F301 · comprobable · hábito]`
 - Las solicitudes que el aspirante deja a medias en línea reciben un recordatorio o una llamada dentro del plazo acordado. `[1.7.F302 · comprobable · hábito · venta sin vendedor · requiere 1.2.F302]`
 
@@ -2818,7 +2827,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 - El sistema detecta qué aspirante está por abandonar el proceso y responde en el momento: un mensaje, una alerta a la dirección o el aviso al asesor sobre los que más importan. `[1.7.O1]`
 - El canal y el momento de cada seguimiento se autoajustan según el comportamiento del aspirante. `[1.7.O2]`
 
-*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.D4`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F3`, `1.7.F5`, `1.7.E1`.
+*Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I4`, `1.7.F3`, `1.7.E1`.
 
 #### 1.8 Matrículas ganadas y perdidas
 
@@ -2846,13 +2855,15 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 *Resultado:* Los mismos motivos dejan de repetirse: lo que se aprende de cada aspirante que no ingresó, y de por qué sí ingresaron los demás, vuelve al proceso y a la capacitación del equipo.
 
 - Se revisan periódicamente los aspirantes que no se matricularon para identificar patrones. `[1.8.E1]`
+- Hay capacitación recurrente y formal para el equipo de admisiones. `[1.8.E3]`
 - También se registra por qué se matricularon los que sí: qué pesó en su decisión. `[1.8.E301 · comprobable]`
 
 **Óptimo.**
 
+- La estrategia de admisiones se ajusta con base en data de qué funciona. `[1.8.O3]`
 - La IA detecta en qué paso y por qué se caen los aspirantes, y propone el cambio. `[1.8.O301 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
+*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.O1`, `1.8.O2`.
 
 ## Edición — Inmobiliaria
 
@@ -2969,7 +2980,7 @@ Si mañana rotan dos asesores clave, ¿las oportunidades en curso siguen avanzan
 - La documentación sobre el comprador objetivo de cada proyecto no se deja envejecer. `[1.3.F5]`
 - La definición de interesado calificado no se deja envejecer. `[1.3.F6]`
 - La documentación de cada proyecto —precios, acabados, avance de obra y fechas de entrega— no se deja envejecer. `[1.3.F7]`
-- El estado de cada unidad —disponible, reservada o vendida— está al día en el sistema y coincide con lo que se firmó. `[1.3.F401 · comprobable]`
+- El estado de cada unidad —disponible, reservada o vendida— está al día en el sistema y coincide con lo que se firmó. `[1.3.F401 · comprobable · requiere 1.2.F8]`
 
 **Eficiente.** Aparece la proyección de ventas del proyecto, y la ficha del cliente reúne su reserva, sus pagos y sus conversaciones.
 
@@ -3040,7 +3051,7 @@ Si mañana rotan dos asesores clave, ¿las oportunidades en curso siguen avanzan
 *Resultado:* El mercado reconoce el proyecto por algo concreto, la propuesta se sostiene igual en cada contacto, y lo que se le prometió al cliente —acabados, amenidades y fechas— es lo que recibe.
 
 - Las propuestas solo prometen lo que se va a entregar: lo que se dice de acabados, amenidades y fechas de entrega se valida antes de decirlo. `[1.5.E3]`
-- Los cambios de precio, de disponibilidad y de avance de obra les llegan el mismo día a todos los asesores y a todos los canales. `[1.5.E401 · comprobable · hábito]`
+- Los cambios de precio y de avance de obra les llegan el mismo día a todos los asesores y a todos los canales. `[1.5.E401 · comprobable · hábito]`
 
 **Óptimo.** La IA mantiene coherentes la información del proyecto, los precios y el mensaje en cada punto de contacto, sin trabajo manual.
 
@@ -3075,7 +3086,7 @@ Si mañana rotan dos asesores clave, ¿las oportunidades en curso siguen avanzan
 
 - Hay un puntaje de interesados por reglas activo: un modelo que suma puntos por varios atributos —presupuesto, forma de pago, interacción, plazo de compra—, no una regla sobre una propiedad. `[1.6.E1]`
 - Los segmentos prioritarios de cada proyecto —inversionistas, primera vivienda, compradores del exterior— están identificados formalmente. `[1.6.E2]`
-- La capacidad de pago del interesado se comprueba antes de reservar: carta de preaprobación, comprobante de fondos o plan de pagos aceptado. `[1.6.E401 · comprobable · venta con equipo · requiere 1.6.F2]`
+- La capacidad de pago del interesado se comprueba antes de reservar: carta de preaprobación, comprobante de fondos o plan de pagos aceptado. `[1.6.E401 · comprobable · venta con equipo]`
 
 **Óptimo.**
 

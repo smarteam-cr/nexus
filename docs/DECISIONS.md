@@ -3826,3 +3826,60 @@ Marketing y Servicio de cada industria.
   edición suelen ser más largos que los generales y se salían del dibujo.
 - **Pendiente**: Marketing y Servicio generales (revisión de Elías, repetidos y requeridos) y,
   después, su versión en cada edición.
+
+## Lo que se tolera en silencio se pierde en silencio: la revisión de la escala antes del push (2026-09-30)
+
+**Contexto.** Antes de subir los 17 commits de la escala (7.0.1 a 8.4.1) se corrió la revisión de
+siempre: cuatro revisores sobre el rango, cada uno con su lente, y cada hallazgo corrido antes de
+contarlo. Ninguno frenaba el push. Lo que encontraron tiene un patrón: el lector es estricto con la
+matriz y tolerante con la prosa, y todo lo que cae del lado tolerante puede desaparecer sin que una
+prueba lo note.
+
+**Decisiones.**
+
+- **Lo que PARECE una edición tiene que serlo.** Lo que va antes de la primera edición es prosa. Un
+  título con guion en vez de raya («## Edición - Banca», «# Parte 5 - Ediciones») se leía como prosa:
+  la edición entera desaparecía —sus criterios propios, sus reescritos— y las pruebas de Nexus y las
+  de Python daban verde. La única red era la prueba 5, y solo si lo ya publicado traía esos criterios:
+  en la primera publicación con ediciones no existía. Ahora un título que habla de ediciones y no
+  tiene la forma exacta es un error con su línea, y también lo es el contenido de una edición antes
+  de su título (`parsear.ts`; en Python, `titulos_mal_escritos`).
+- **La prosa se lee con tolerancia, pero no se publica sin mirar** (`Escala.avisosDeLectura`). Una
+  palabra entre «» en «Cómo se leen los criterios» a la que el lector no le encuentra su valor dejaba
+  de ser una palabra con valor fijo, y con eso dejaba de cuidar que una edición no le cambiara el
+  umbral. El lector la sigue leyendo (una versión vieja se tiene que poder abrir) y deja un aviso; la
+  validación lo convierte en falla de «Estructura». Es el molde para lo próximo que el lector tolere.
+- **La misma palabra con valor fijo en plural es la misma** («no se dejan envejecer»). La regla es de
+  forma —a cada palabra que termina en vocal se le admite una «n»—, no una lista: la guarda de fuente
+  única sigue prohibiendo textos de la escala en el código.
+- **`pruebas_escala.py` corre la prueba 8 ENTERA.** La especificación la describía completa y el
+  script revisaba una parte: diez casos que Nexus frenaba pasaban en Python (cobertura, un criterio en
+  dos lugares, el mismo texto, una palabra con valor fijo, una dimensión de base renombrada, sin perfil
+  habitual, bloque repetido o ajeno, una dimensión que deja de aplicar). Al publicar corren los dos,
+  así que nada inválido entraba; pero el script viaja con la escala a otros proyectos, y ahí es la
+  única protección. La prueba 8 es ahora una función (`incoherencias_de_ediciones`) y un test corre la
+  del propio archivo sobre los mismos casos que Nexus (`validar.test.ts`): lo que frena uno, lo frena
+  el otro.
+- **La prueba 4 mira todo lo que el cliente lee**: también los nombres (área, dimensión, edición), el
+  vistazo de cada área y las dos columnas de la tabla de palabras.
+- **Lo viejo se mira parte por parte.** Un nivel son dos textos (descripción y resultado) y una
+  dimensión, cuatro. Se comparaba el texto entero del identificador: si la edición decía con sus
+  palabras solo el resultado y en la misma versión cambiaban la descripción y el resultado generales,
+  el nivel «cambiaba» en la edición y su resultado viejo pasaba sin aviso. Ahora cada parte se compara
+  con su par (`partesViejas`), incluidas la descripción y el vistazo del área.
+- **El número de una celda y lo que lista su panel dicen lo mismo.** Con las ediciones, el contador
+  dejó de sumar los comentarios de criterios retirados (una regresión: nada en la matriz avisaba que
+  estaban). La regla queda escrita una vez: se cuenta y se lista lo que se ve y lo RETIRADO —lo que
+  ya no existe en ninguna lectura—; lo que existe en otra lectura (propio de otra edición, o uno que
+  esta edición sacó) se ve donde existe (`anclasDeOtraLectura`, `esDelPanelDelNivel`).
+- **Un requerido es estricto o no es.** La revisión de contenido sacó dos que no lo eran (Banca,
+  Inmobiliaria). Se dejó a propósito `1.2.E5` → los tres documentos que no se dejan envejecer: al pie
+  de la letra la IA puede usarse con documentos viejos, pero la propia escala dice que los criterios
+  de riesgo «se vuelven indispensables al empezar a usar IA».
+- **Las ediciones se revisan con la misma vara que Ventas** (escala 8.4.2): lo que se pedía en dos
+  dimensiones dentro de una edición queda en una (la precalificación en Banca, la disponibilidad en
+  Inmobiliaria, corregir la ficha en Ecommerce), y una reescritura que cambiaba lo que se mide pasa a
+  ser un criterio propio (la invitación a volver después de cada compra).
+- **En espera** (lo dijo la revisión y no se hizo): unas veinte ramas de error del lector de ediciones
+  no tienen test propio (frenan bien, corridas a mano); y `1.8.E1` de la escala general revisa solo lo
+  perdido aunque su nivel dice «ganadas y perdidas» — es de la 7.0.0 y lo decide el responsable.

@@ -210,7 +210,10 @@ async function main() {
         console.log(`${c.requeridos.length} con otros requeridos:`);
         for (const x of c.requeridos.slice(0, 30)) console.log(`  → ${x.id}: ${x.antes.join(", ") || "ninguno"} ⇒ ${x.despues.join(", ") || "ninguno"}`);
       }
-      const tocados = [...c.cambiados.map((x) => x.id), ...c.retirados];
+      // Lo que cambia de texto o deja de existir, en la escala general o leído con alguna edición.
+      const tocados = [
+        ...new Set([...c.cambiados.map((x) => x.id), ...c.retirados, ...c.ediciones.flatMap((ed) => [...ed.cambiados.map((x) => x.id), ...ed.retirados])]),
+      ];
       if (tocados.length) {
         const comentarios = await prisma.escalaComentario.count({ where: { ancla: { in: tocados } } });
         console.log(`${comentarios} comentario(s) van a mostrar que su texto cambió (o que ya no existe).`);
@@ -222,8 +225,11 @@ async function main() {
           console.log(`Edición «${ed.nombre}»: nueva (${ed.propiosDeLaEdicion} textos propios).`);
           continue;
         }
-        console.log(`Edición «${ed.nombre}»: ${ed.cambiados.length} con otro texto.`);
+        console.log(`Edición «${ed.nombre}»: ${ed.nuevos.length} nuevos · ${ed.retirados.length} retirados · ${ed.cambiados.length} con otro texto.`);
+        for (const id of ed.nuevos.slice(0, 20)) console.log(`  + ${id}`);
+        for (const id of ed.retirados.slice(0, 20)) console.log(`  − ${id}`);
         for (const x of ed.cambiados.slice(0, 20)) console.log(`  ~ ${x.id}`);
+        for (const x of ed.requeridos.slice(0, 20)) console.log(`  → ${x.id}: ${x.antes.join(", ") || "ninguno"} ⇒ ${x.despues.join(", ") || "ninguno"}`);
         if (ed.viejos.length) {
           console.log(`  ⚠ ${ed.viejos.length} que la edición dice con sus palabras y cuyo texto general cambió sin que el suyo se tocara:`);
           for (const id of ed.viejos) console.log(`    ? ${id}`);
