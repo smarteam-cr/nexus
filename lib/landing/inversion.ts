@@ -620,7 +620,7 @@ export function conciliarLicenciasHub(
   return {
     faltan: vendidos.filter((v) => !yaEstan.has(normalizeTag(v) ?? v)),
     sobran: [...yaEstan].filter((s) => !venta.has(s)),
-    sinMonto: conHub.filter((l) => !(l.monto ?? "").trim()).length,
+    sinMonto: conHub.filter(lineaSinMonto).length,
   };
 }
 
@@ -652,6 +652,22 @@ export function sembrarLicenciasIniciales<T extends InversionData>(
   return { ...data, licencias: lineasDeLicenciaPorHub(vendidos) };
 }
 
+/**
+ * ¿Esta línea de verdad no tiene precio? La usan el freno de «Subir al cliente» y el aviso
+ * del editor, y tienen que decir lo mismo.
+ *
+ * ⚠ Hasta el 2026-09-30 las dos miraban SOLO `monto` (el importe escrito a mano). Una línea
+ * cotizada como `cantidad × precio de lista − descuento` no tiene `monto` —el importe sale de
+ * la cuenta—, así que el freno bloqueaba una propuesta con la licencia bien cotizada
+ * («Falta el monto de una licencia: Service Hub» sobre `2 × 100 − 40% = $120`, Spectrum).
+ *
+ * Una línea APAGADA no cuenta: no suma, no sale en el PDF y el cliente no la ve.
+ */
+export function lineaSinMonto(l: LineaInversion): boolean {
+  if (!esLineaActiva(l)) return false;
+  return !conTexto(l.monto) && !conTexto(l.precioUnitario) && !conTexto(l.precioAnual);
+}
+
 /** Los conceptos de las líneas de Hub que quedaron SIN monto. Lo consume el preflight de
  *  `publish`: una línea sembrada que nadie coteó vuelve la sección no-blank ⇒ se publicaría
  *  una tabla de guiones sin total. Se lee de un Json crudo, así que tolera basura. */
@@ -659,6 +675,6 @@ export function licenciasDeHubSinMonto(data: unknown): string[] {
   const ls = (data as InversionData | null)?.licencias;
   if (!Array.isArray(ls)) return [];
   return ls
-    .filter((l) => !!l && typeof l === "object" && !!slugDeLinea(l) && !(l.monto ?? "").trim())
+    .filter((l) => !!l && typeof l === "object" && !!slugDeLinea(l) && lineaSinMonto(l))
     .map((l) => (l.concepto ?? "").trim() || labelForTag(slugDeLinea(l)));
 }

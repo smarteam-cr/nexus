@@ -20,6 +20,7 @@ import {
   montoDeLinea,
   INVERSION_LEGACY_KEYS,
   licenciasDeHubSinMonto,
+  lineaSinMonto,
   sembrarLicenciasIniciales,
   type InversionData,
 } from "./inversion";
@@ -792,5 +793,40 @@ describe("monto libre + descuento: la cantidad se reporta para poder invertir", 
     // Y al volver por el camino normal, la línea calculada da el MISMO importe.
     const yaCalculada = montoDeLinea({ cantidad: "3", precioUnitario: "$500", descuento: "20%" }, "USD");
     expect(yaCalculada.rango).toEqual({ min: 1200, max: 1200 });
+  });
+});
+
+/**
+ * El freno de «Subir al cliente» bloqueaba una licencia BIEN cotizada (Spectrum, 2026-09-30):
+ * `2 × 100 − 40% = $120` no tiene `monto` —el importe sale de la cuenta— y el chequeo solo
+ * miraba `monto`. El freno y el aviso del editor comparten ahora `lineaSinMonto`.
+ */
+describe("licencias sin monto: una línea calculada SÍ tiene monto", () => {
+  it("el caso de Spectrum no frena la subida", () => {
+    const data = {
+      moneda: "USD",
+      licencias: [
+        { concepto: "Service Hub", hub: "service_hub", cantidad: "2", precioUnitario: "100", descuento: "40%", recurrencia: "mensual" },
+      ],
+    };
+    expect(licenciasDeHubSinMonto(data)).toEqual([]);
+  });
+
+  it("una licencia sembrada sin nada escrito sigue frenando", () => {
+    expect(licenciasDeHubSinMonto({ licencias: [{ concepto: "Sales Hub", hub: "sales_hub" }] })).toEqual(["Sales Hub"]);
+  });
+
+  it("el precio anual escrito también cuenta como monto", () => {
+    expect(licenciasDeHubSinMonto({ licencias: [{ concepto: "Sales Hub", hub: "sales_hub", precioAnual: "$1,200" }] })).toEqual([]);
+  });
+
+  it("una línea apagada no frena: el cliente no la ve", () => {
+    expect(licenciasDeHubSinMonto({ licencias: [{ concepto: "Sales Hub", hub: "sales_hub", activa: "no" }] })).toEqual([]);
+  });
+
+  it("el aviso del editor cuenta lo mismo que el freno", () => {
+    expect(lineaSinMonto({ precioUnitario: "100" })).toBe(false);
+    expect(lineaSinMonto({ monto: "$50" })).toBe(false);
+    expect(lineaSinMonto({ hub: "sales_hub" })).toBe(true);
   });
 });
