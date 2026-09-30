@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.2.2
-escala: 8.2.0
+version: 1.3.0
+escala: 8.3.0
 fecha: 2026-09-30
 ---
 
@@ -45,6 +45,15 @@ La guía de exploración —a quién entrevistar, qué pedir y qué observar en 
 El diagnóstico puede asistirse con IA: dado el material de la exploración, la IA ubica cada dimensión en su nivel, cita la evidencia que lo sustenta y señala qué tan cerca está del siguiente. Pero la IA propone y un humano confirma. El nivel vale lo que valga la exploración que lo alimenta, y algunas señales son de juicio —"usan el CRM por convicción"— que no se verifican solas desde una entrevista. Cada nivel asignado se acompaña de su evidencia, nunca como caja negra: "Datos en Inicial porque falta X y falta Y".
 
 La regla estricta calcula un nivel, y el CSE lo puede ajustar, o marcar un criterio como que no aplica por la industria o el momento del cliente, siempre con una justificación escrita. Se guardan los dos niveles, el calculado y el ajustado: así el cálculo sigue siendo repetible y el juicio del CSE queda a la vista. Si distintos CSE ajustan una y otra vez el mismo criterio, es la señal de que está mal escrito y hay que corregirlo en la escala. Eso se anota en Cambios pendientes.
+
+## Los criterios requeridos
+
+Algunos criterios dicen cuáles otros requieren: lo que tiene que estar para que se puedan cumplir. En la sección «Escala» de Nexus, al elegir un criterio se marcan los que requiere y los que lo requieren a él. No cambian el nivel ni el puntaje; le sirven al CSE para dos cosas.
+
+- **Al diagnosticar.** Si un criterio quedó como cumplido y lo que requiere no, se vuelve a mirar antes de cerrar: casi siempre uno de los dos está mal marcado. Si de verdad se cumple de otra forma, se deja así y se escribe por qué en la evidencia.
+- **Al proponer qué sigue.** Lo requerido se trabaja antes. Un criterio del que dependen varios —el documento del cliente ideal, la pipeline review— suele ser el mejor primer paso dentro de la dimensión que toca, porque destraba a los demás.
+
+Cuando a un cliente le falta siempre lo mismo antes de poder avanzar en otra cosa y la escala no lo dice, es un requerido que falta: se comenta en Nexus, como cualquier otro cambio.
 
 ## El diagnóstico nunca evalúa al CSE
 
@@ -114,6 +123,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.3.0 (2026-09-30).** Acompaña a la escala 8.3.0. Se suma «Los criterios requeridos»: cómo los usa el CSE al diagnosticar y al proponer qué sigue.
 
 **1.2.2 (2026-09-30).** Acompaña a la escala 8.2.0. Sin otros cambios.
 

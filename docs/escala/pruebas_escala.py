@@ -13,6 +13,9 @@ encabezado.
 Desde la 8.0.0 la escala trae ediciones por industria, al final del documento. Las pruebas 1, 2, 4
 y 5 corren sobre la escala general y sobre la escala vista por cada edición, y la 8 mira lo que es
 propio de una edición. La prueba 3 —los ejemplos de la especificación— es solo de la escala general.
+
+Desde la 8.3.0 un criterio puede decir en su etiqueta cuáles otros requiere («· requiere 1.5.F1»).
+No cambia el cálculo: la prueba 9 revisa que esos enlaces sean coherentes.
 """
 import math
 import os
@@ -28,7 +31,7 @@ ANTERIOR = sys.argv[3] if len(sys.argv) > 3 else None
 MANUAL = os.path.join(os.path.dirname(os.path.abspath(ESPEC)), "manual_operacion_escala.md")
 
 PERFILES = list(product(["con equipo", "transaccional", "mixta"], ["única", "recompra", "continua"]))
-PAT = re.compile(r"(?m)^- (.*) `\[(\d\.\d\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · venta sin vendedor| · cliente recurrente| · recompra| · relación continua)?)\]`$")
+PAT = re.compile(r"(?m)^- (.*) `\[(\d\.\d\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · venta sin vendedor| · cliente recurrente| · recompra| · relación continua)?)((?: · requiere \d\.\d\.[DIFEO]\d+(?:, \d\.\d\.[DIFEO]\d+)*)?)\]`$")
 
 fallas = []
 def prueba(nombre, ok, detalle=""):
@@ -40,8 +43,9 @@ def leer(ruta):
     s = open(ruta, encoding="utf-8").read()
     matriz = s[s.index("## Área 1 — Ventas"):s.index("# Parte 4")]
     crit = []
-    for t, i, tipo, rk, hb, pf in PAT.findall(matriz):
-        crit.append(dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·")))
+    for t, i, tipo, rk, hb, pf, rq in PAT.findall(matriz):
+        crit.append(dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·"),
+                         requiere=re.findall(r"\d\.\d\.[DIFEO]\d+", rq)))
     return s, matriz, crit
 
 REESCRITO = re.compile(r"(?m)^- .* `\[(\d\.\d\.[DIFEO]\d+)\]`$")
@@ -62,8 +66,9 @@ def leer_ediciones(s):
     ediciones = []
     for bloque in re.split(r"(?m)^## Edición — ", parte)[1:]:
         nombre = bloque.split("\n", 1)[0].strip()
-        propios = [dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·"))
-                   for t, i, tipo, rk, hb, pf in PAT.findall(bloque)]
+        propios = [dict(txt=t, id=i, dim=i[:3], lv=i[4], riesgo=bool(rk), habito=bool(hb), perfil=pf.strip(" ·"),
+                        requiere=re.findall(r"\d\.\d\.[DIFEO]\d+", rq))
+                   for t, i, tipo, rk, hb, pf, rq in PAT.findall(bloque)]
         no_aplican = [i for linea in re.findall(r"(?m)^\*No aplican:\* (.+)$", bloque) for i in ID.findall(linea)]
         ediciones.append(dict(nombre=nombre, propios=propios, reescritos=REESCRITO.findall(bloque), no_aplican=no_aplican, texto=bloque))
     return ediciones
@@ -131,6 +136,9 @@ ediciones = leer_ediciones(s)
 VISTAS = [("", crit)] + [(f"[{e['nombre']}] ", criterios_de(crit, e)) for e in ediciones]
 REGLA_INICIADO = "solo le faltan hábitos iniciados" in s
 print(f"{ESCALA} {encabezado(s, 'version')}: {len(crit)} criterios, {len(dims)} dimensiones")
+CON_REQUERIDOS = [c for c in crit + [p for e in ediciones for p in e["propios"]] if c["requiere"]]
+if CON_REQUERIDOS:
+    print(f"  Requeridos: {len(CON_REQUERIDOS)} criterios requieren otro")
 for e in ediciones:
     print(f"  Edición «{e['nombre']}»: {len(e['propios'])} criterios propios, {len(e['reescritos'])} reescritos, {len(e['no_aplican'])} que no aplican")
 print(f"{ESPEC} {encabezado(espec, 'version')}, para la escala {encabezado(espec, 'escala')}")
@@ -227,6 +235,70 @@ if ediciones:
         incoherencias += [f"[{n}] {c['id']} ya está en la matriz" for c in e["propios"] if c["id"] in de_la_matriz]
         incoherencias += [f"[{n}] {c['id']} no está en el bloque de una edición (desde el 101)" for c in e["propios"] if numero(c["id"]) <= 100]
     prueba("8 · Ediciones coherentes", not incoherencias, "; ".join(incoherencias[:8]))
+
+# 9 · Requeridos coherentes (solo si la versión trae criterios que requieren otro)
+def fallas_de_requeridos(cs):
+    """Las reglas de un enlace: solo de Funcional para arriba, a un criterio que existe, de un nivel igual o
+    anterior (anterior, si es de su misma dimensión), que aplique en algún perfil junto con él, y sin ciclos."""
+    por_id = {c["id"]: c for c in cs}
+    out = []
+    for c in cs:
+        if not c["requiere"]:
+            continue
+        if c["lv"] not in "FEO":
+            out.append(f"{c['id']} no es de Funcional para arriba y requiere algo")
+            continue
+        vistos = set()
+        for r in c["requiere"]:
+            if r in vistos:
+                out.append(f"{c['id']} requiere {r} dos veces")
+                continue
+            vistos.add(r)
+            if r == c["id"]:
+                out.append(f"{c['id']} se requiere a sí mismo")
+                continue
+            o = por_id.get(r)
+            if o is None:
+                out.append(f"{c['id']} requiere {r}, que no existe")
+                continue
+            if o["lv"] not in "FEO":
+                out.append(f"{c['id']} requiere {r}, que no es de Funcional para arriba")
+                continue
+            if "DIFEO".index(o["lv"]) > "DIFEO".index(c["lv"]):
+                out.append(f"{c['id']} requiere {r}, que es de un nivel posterior")
+            elif o["dim"] == c["dim"] and o["lv"] == c["lv"]:
+                out.append(f"{c['id']} requiere {r}, que es de su misma dimensión y nivel")
+            if not any(aplica(c, venta, rel) and aplica(o, venta, rel) for venta, rel in PERFILES):
+                out.append(f"{c['id']} requiere {r}, y no hay perfil en que los dos apliquen")
+    estado = {}
+    def visitar(i, camino):
+        if estado.get(i) == "listo":
+            return
+        if estado.get(i) == "en curso":
+            out.append("ciclo: " + " → ".join(camino[camino.index(i):] + [i]))
+            return
+        estado[i] = "en curso"
+        for sig in por_id[i]["requiere"]:
+            if sig in por_id and sig != i:
+                visitar(sig, camino + [i])
+        estado[i] = "listo"
+    for i in por_id:
+        visitar(i, [])
+    return out
+
+if CON_REQUERIDOS:
+    generales = fallas_de_requeridos(crit)
+    incoherentes = list(generales)
+    for e in ediciones:
+        cs = criterios_de(crit, e)
+        estan = {c["id"] for c in cs}
+        # Un criterio PROPIO que requiere algo que la edición no tiene es una falla; el enlace de uno de la
+        # matriz hacia un criterio que la edición sacó, no: se cae solo.
+        incoherentes += [f"[{e['nombre']}] {c['id']} requiere {r}, que en esta edición no existe"
+                         for c in e["propios"] for r in c["requiere"] if r not in estan]
+        vista = [dict(c, requiere=[r for r in c["requiere"] if r in estan]) for c in cs]
+        incoherentes += [f"[{e['nombre']}] {f}" for f in fallas_de_requeridos(vista) if f not in generales]
+    prueba("9 · Requeridos coherentes", not incoherentes, "; ".join(incoherentes[:8]))
 
 print("\nRESULTADO:", "todas pasan" if not fallas else f"fallan {len(fallas)}: {fallas}")
 sys.exit(1 if fallas else 0)

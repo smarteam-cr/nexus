@@ -10,8 +10,10 @@
  * Cada celda de la rueda es una celda de la matriz.
  *
  * Interactiva a propósito, para recorrer la escala en vez de leerla de corrido:
- *   · Qué muestran las celdas: criterios (al entrar), hábitos, riesgos, los que esconde el perfil
- *     o los comentarios del equipo. Cuanto más hay, más intenso el color.
+ *   · Qué muestran las celdas: criterios (al entrar), hábitos, riesgos, los que otros requieren,
+ *     los que esconde el perfil o los comentarios del equipo. Cuanto más hay, más intenso el color.
+ *   · Con una celda en foco, un borde marca las celdas de las que sus criterios requieren algo y
+ *     las que requieren algo de ella: de dónde se sostiene cada cosa.
  *   · Pasar el cursor por una celda la levanta, apaga lo que no es su dimensión ni su nivel y lo
  *     cuenta en el centro (nada tapa la rueda); tocarla la abre al costado, con sus criterios, y
  *     tocarla de nuevo (o la X del panel) la cierra. Lo que se levanta es solo el dibujo: dónde se
@@ -33,6 +35,8 @@ import { COLOR_DE_NIVEL, PUNTO_DE_NIVEL } from "./niveles";
 import {
   BotonComentar,
   Contador,
+  EnlacesDelCriterio,
+  enlacesDe,
   GrupoDeControl,
   MetaDelCriterio,
   NoAplicanEnLaEdicion,
@@ -41,7 +45,7 @@ import {
   TextoConPalabras,
 } from "./piezas";
 
-type CapaDeDatos = "comentarios" | "criterios" | "habitos" | "riesgos" | "perfil";
+type CapaDeDatos = "comentarios" | "criterios" | "habitos" | "riesgos" | "requeridos" | "perfil";
 
 export type SeleccionDelMapa =
   | { tipo: "celda"; dim: string; letra: Letra }
@@ -92,6 +96,11 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
     title: "Cuántos criterios de cada celda son de riesgo: no deciden el nivel, pero hay que cumplirlos para pasar a Eficiente.",
   },
   {
+    clave: "requeridos",
+    etiqueta: "Requeridos",
+    title: "Cuántos criterios de cada celda son requeridos por otros: dónde están los cimientos de la escala. Lo que otro criterio necesita conviene tenerlo antes.",
+  },
+  {
     clave: "perfil",
     etiqueta: "Escondidos por el perfil",
     title: "Cuántos criterios de cada celda NO aplican al perfil de negocio elegido y quedan escondidos. Sirve para ver dónde cambia la escala según cómo vende la empresa.",
@@ -104,9 +113,10 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
 ];
 
 /** El color y el texto de la leyenda en las capas que pintan las celdas de un solo color. */
-const MUESTRA_DE_CAPA: Record<"habitos" | "riesgos" | "perfil", { color: string; texto: string }> = {
+const MUESTRA_DE_CAPA: Record<"habitos" | "riesgos" | "requeridos" | "perfil", { color: string; texto: string }> = {
   habitos: { color: "var(--color-secondary)", texto: "más intenso, más hábitos" },
   riesgos: { color: "var(--color-warning)", texto: "más intenso, más criterios de riesgo" },
+  requeridos: { color: "var(--color-success)", texto: "más intenso, más criterios que otros requieren" },
   perfil: { color: "var(--color-info)", texto: "más intenso, más escondidos" },
 };
 
@@ -319,12 +329,13 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         } else if (capa === "criterios") valor = visibles.length;
         else if (capa === "habitos") valor = visibles.filter((c) => c.habito).length;
         else if (capa === "riesgos") valor = visibles.filter((c) => c.riesgo).length;
+        else if (capa === "requeridos") valor = visibles.filter((c) => enlacesDe(datos, c.id, perfil).loRequieren.length > 0).length;
         else valor = nv.criterios.length - visibles.length;
         out.set(nv.id, { valor, abiertos });
       }
     }
     return out;
-  }, [dims, perfil, capa, conteos]);
+  }, [dims, perfil, capa, conteos, datos]);
 
   const maximo = Math.max(1, ...[...valores.values()].map((v) => v.valor));
   const angulos = useMemo(() => porciones(dims), [dims]);
@@ -353,6 +364,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         return cuantos(v.valor, "hábito", "hábitos");
       case "riesgos":
         return cuantos(v.valor, "criterio de riesgo", "criterios de riesgo");
+      case "requeridos":
+        return `${cuantos(v.valor, "criterio", "criterios")} que otros requieren`;
       case "perfil":
         return `${cuantos(v.valor, "escondido", "escondidos")} por el perfil`;
       case "comentarios":
@@ -398,7 +411,12 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
     if (!foco) return 1;
     const tenue = encima ? 0.26 : 0.5;
     if (foco.tipo === "capa") return d.capa === foco.clave ? 1 : tenue;
-    if (foco.tipo === "celda") return foco.dim === d.id || LETRAS[k] === foco.letra ? 1 : tenue;
+    if (foco.tipo === "celda") {
+      // Su dimensión, su nivel y las celdas con las que se relaciona por sus requeridos.
+      const celda = `${d.id}.${LETRAS[k]}`;
+      const relacionada = relacionDelFoco.requeridas.has(celda) || relacionDelFoco.dependientes.has(celda);
+      return foco.dim === d.id || LETRAS[k] === foco.letra || relacionada ? 1 : tenue;
+    }
     if (foco.tipo === "dimension") return foco.dim === d.id ? 1 : tenue;
     // Un nivel: encendidos todos los anillos hasta él. La escala se sube de a uno.
     return k <= LETRAS.indexOf(foco.letra) ? 1 : 0.2;
@@ -408,6 +426,24 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const focoNivel = foco && (foco.tipo === "celda" || foco.tipo === "nivel") ? foco.letra : null;
   /** La capa en foco: la que se nombra o la de la dimensión en foco. */
   const focoCapa = foco?.tipo === "capa" ? foco.clave : (focoDim?.capa ?? null);
+
+  /**
+   * Los requeridos de la celda en foco, llevados a celdas: las que tienen algo que sus criterios
+   * necesitan («requeridas») y las que tienen criterios que necesitan algo de ella («dependientes»).
+   * Se marcan con un borde en la rueda: así se ve de dónde se sostiene cada cosa.
+   */
+  const relacionDelFoco = { requeridas: new Set<string>(), dependientes: new Set<string>() };
+  if (foco?.tipo === "celda") {
+    const celda = `${foco.dim}.${foco.letra}`;
+    const nv = dims.find((x) => x.id === foco.dim)?.niveles.find((x) => x.letra === foco.letra);
+    for (const c of nv?.criterios.filter((x) => aplica(x, perfil)) ?? []) {
+      const { requiere, loRequieren } = enlacesDe(datos, c.id, perfil);
+      for (const e of requiere) if (e.area === area.id) relacionDelFoco.requeridas.add(`${e.dimension}.${e.letra}`);
+      for (const e of loRequieren) if (e.area === area.id) relacionDelFoco.dependientes.add(`${e.dimension}.${e.letra}`);
+    }
+    relacionDelFoco.requeridas.delete(celda);
+    relacionDelFoco.dependientes.delete(celda);
+  }
 
   /** El centro de la rueda: lo que se mira, dicho corto. */
   const centro = (() => {
@@ -530,7 +566,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           </div>
           <GrupoDeControl
             nombre="Qué muestran las celdas"
-            ayuda="Cada celda es una dimensión en un nivel. Su color se intensifica cuanto más hay ahí de lo que elijas: criterios, hábitos, riesgos, criterios escondidos por el perfil o comentarios del equipo."
+            ayuda="Cada celda es una dimensión en un nivel. Su color se intensifica cuanto más hay ahí de lo que elijas: criterios, hábitos, riesgos, criterios que otros requieren, criterios escondidos por el perfil o comentarios del equipo."
             className="items-end"
           >
             <Segmentado
@@ -685,6 +721,9 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   const px = levantado ? 7 * Math.sin(aRadianes(medio)) : 0;
                   const py = levantado ? -7 * Math.cos(aRadianes(medio)) : 0;
                   const rayada = !aplicaD && capa !== "perfil";
+                  // Relacionada con la celda en foco por sus requeridos: se marca con un borde.
+                  const requerida = relacionDelFoco.requeridas.has(nv.id);
+                  const dependiente = relacionDelFoco.dependientes.has(nv.id);
                   return (
                     <g
                       key={nv.id}
@@ -706,9 +745,19 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                             animationDelay: `${k * 90 + i * 25}ms`,
                             fill: rayada ? `url(#${uid}-rayado)` : v.valor === 0 ? "var(--color-surface-muted)" : colorDe(nv.letra, v),
                             fillOpacity: rayada || v.valor === 0 ? 1 : 0.16 + 0.64 * (v.valor / maximo),
-                            stroke: elegido ? "var(--color-fg)" : enfocado ? "var(--color-brand)" : v.valor === 0 || rayada ? "var(--color-line)" : "none",
-                            strokeWidth: elegido ? 3 : enfocado ? 2.5 : 1,
-                            strokeDasharray: enfocado && !elegido ? "5 4" : undefined,
+                            stroke: elegido
+                              ? "var(--color-fg)"
+                              : enfocado
+                                ? "var(--color-brand)"
+                                : requerida
+                                  ? "var(--color-brand)"
+                                  : dependiente
+                                    ? "var(--color-fg-muted)"
+                                    : v.valor === 0 || rayada
+                                      ? "var(--color-line)"
+                                      : "none",
+                            strokeWidth: elegido ? 3 : enfocado || requerida || dependiente ? 2.5 : 1,
+                            strokeDasharray: enfocado && !elegido ? "5 4" : requerida && !elegido ? "9 5" : dependiente && !elegido ? "2 5" : undefined,
                             transition: "fill 240ms ease, fill-opacity 240ms ease",
                           }}
                         />
@@ -917,6 +966,16 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           <span className="inline-flex items-center gap-1.5">
             <span className="w-5 border-t-2 border-dashed border-success" aria-hidden /> la base: Funcional
           </span>
+          {relacionDelFoco.requeridas.size > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-5" style={{ borderTop: "2px dashed var(--color-brand)" }} aria-hidden /> la celda que miras requiere algo de estas
+            </span>
+          )}
+          {relacionDelFoco.dependientes.size > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-5" style={{ borderTop: "2px dotted var(--color-fg-muted)" }} aria-hidden /> estas requieren algo de la que miras
+            </span>
+          )}
           {hayOrden && (
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-fg-muted text-[9px] font-bold text-fg" aria-hidden>
@@ -1140,6 +1199,7 @@ function DetalleDelMapa({
       perfil={perfil}
       d={d}
       nv={nv}
+      onSeleccion={onSeleccion}
       onCerrar={onCerrar}
       onLeerDimension={onLeerDimension}
       onVerEnLaMatriz={onVerEnLaMatriz}
@@ -1153,6 +1213,7 @@ function DetalleDeCelda({
   perfil,
   d,
   nv,
+  onSeleccion,
   onCerrar,
   onLeerDimension,
   onVerEnLaMatriz,
@@ -1162,6 +1223,7 @@ function DetalleDeCelda({
   perfil: Perfil;
   d: Dimension;
   nv: Nivel;
+  onSeleccion: (s: SeleccionDelMapa) => void;
   onCerrar: () => void;
   onLeerDimension: (dim: string) => void;
   onVerEnLaMatriz: () => void;
@@ -1199,7 +1261,15 @@ function DetalleDeCelda({
                 <p className="text-sm leading-snug text-fg">
                   <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                 </p>
-                <MetaDelCriterio criterio={c} datos={datos} className="mt-1" />
+                <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} className="mt-1" />
+                {/* Lo que requiere y quiénes lo requieren: tocar uno lleva a SU celda de la rueda. */}
+                <EnlacesDelCriterio
+                  criterio={c}
+                  datos={datos}
+                  perfil={perfil}
+                  onIr={(e) => onSeleccion({ tipo: "celda", dim: e.dimension, letra: e.letra })}
+                  className="mt-2"
+                />
               </div>
               <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => abrirComentarios(c.id)} etiqueta={`Comentarios de ${c.id}`} />
             </li>

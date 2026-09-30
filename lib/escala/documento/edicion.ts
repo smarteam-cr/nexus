@@ -63,6 +63,40 @@ function escapar(s: string): string {
 }
 
 /**
+ * Los requeridos, dentro de la edición: un enlace hacia un criterio que la edición sacó («No
+ * aplican») ya no tiene a dónde apuntar, y se cae. El resto queda igual, y lo que no cambia sigue
+ * siendo el MISMO objeto de la escala general (nada se copia de más).
+ */
+function sinRequeridosQueNoEstan(areas: Area[]): Area[] {
+  const estan = new Set(areas.flatMap((a) => a.dimensiones.flatMap((d) => d.niveles.flatMap((n) => n.criterios.map((c) => c.id)))));
+  const cuelga = (c: Criterio) => c.requiere?.some((id) => !estan.has(id)) ?? false;
+  return areas.map((a) => {
+    if (!a.dimensiones.some((d) => d.niveles.some((n) => n.criterios.some(cuelga)))) return a;
+    return {
+      ...a,
+      dimensiones: a.dimensiones.map((d) => {
+        if (!d.niveles.some((n) => n.criterios.some(cuelga))) return d;
+        return {
+          ...d,
+          niveles: d.niveles.map((n) => {
+            if (!n.criterios.some(cuelga)) return n;
+            return {
+              ...n,
+              criterios: n.criterios.map((c): Criterio => {
+                if (!cuelga(c)) return c;
+                const { requiere, ...resto } = c;
+                const quedan = (requiere ?? []).filter((id) => estan.has(id));
+                return quedan.length ? { ...resto, requiere: quedan } : resto;
+              }),
+            };
+          }),
+        };
+      }),
+    };
+  });
+}
+
+/**
  * La escala como la dice una edición. Sin edición (o con un slug que la escala no tiene), devuelve
  * la MISMA escala general. Se le pasa siempre la general: es la que trae las ediciones.
  */
@@ -79,24 +113,26 @@ export function aplicarEdicion(escala: Escala, slug: string | null | undefined):
   const dimensionesRenombradas = new Map<string, string>();
   const areasRenombradas = new Map<string, string>();
 
-  const areas = escala.areas.map((a): Area => {
-    const ea = ed.areas.find((x) => x.id === a.id);
-    if (!ea) return a;
-    if (ea.nombre !== a.nombre) areasRenombradas.set(a.nombre, ea.nombre);
-    const dimensiones = a.dimensiones.map((d) => {
-      const e = ea.dimensiones.find((x) => x.id === d.id);
-      if (e && e.nombre !== d.nombre) dimensionesRenombradas.set(norm(d.nombre), e.nombre);
-      return dimensionDeLaEdicion(d, e);
-    });
-    return {
-      ...a,
-      nombre: ea.nombre,
-      ...(ea.nombre !== a.nombre ? { nombreGeneral: a.nombre } : {}),
-      descripcion: ea.descripcion ?? a.descripcion,
-      panoramica: { ...a.panoramica, ...ea.panoramica },
-      dimensiones,
-    };
-  });
+  const areas = sinRequeridosQueNoEstan(
+    escala.areas.map((a): Area => {
+      const ea = ed.areas.find((x) => x.id === a.id);
+      if (!ea) return a;
+      if (ea.nombre !== a.nombre) areasRenombradas.set(a.nombre, ea.nombre);
+      const dimensiones = a.dimensiones.map((d) => {
+        const e = ea.dimensiones.find((x) => x.id === d.id);
+        if (e && e.nombre !== d.nombre) dimensionesRenombradas.set(norm(d.nombre), e.nombre);
+        return dimensionDeLaEdicion(d, e);
+      });
+      return {
+        ...a,
+        nombre: ea.nombre,
+        ...(ea.nombre !== a.nombre ? { nombreGeneral: a.nombre } : {}),
+        descripcion: ea.descripcion ?? a.descripcion,
+        panoramica: { ...a.panoramica, ...ea.panoramica },
+        dimensiones,
+      };
+    }),
+  );
 
   // El orden de dependencias nombra las áreas («Ventas con equipo») y las dimensiones de producción
   // por su nombre: con los nombres de la edición, la pantalla lo sigue encontrando.

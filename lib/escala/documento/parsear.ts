@@ -46,9 +46,18 @@ import {
   type Verificacion,
 } from "./tipos";
 
-/** La etiqueta de un criterio. Espejo exacto de `PAT` en `pruebas_escala.py`. */
+/**
+ * La etiqueta de un criterio. Espejo exacto de `PAT` en `pruebas_escala.py`. Lo último, desde la
+ * 8.3.0, son los criterios que requiere: `· requiere 1.5.F1, 1.6.F2`.
+ */
 export const ETIQUETA_DE_CRITERIO =
-  /^- (.*) `\[(\d+\.\d+\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · venta sin vendedor| · cliente recurrente| · recompra| · relación continua)?)\]`$/;
+  /^- (.*) `\[(\d+\.\d+\.[DIFEO]\d+) · (\w+)((?: · riesgo)?)((?: · hábito)?)((?: · venta con equipo| · venta sin vendedor| · cliente recurrente| · recompra| · relación continua)?)((?: · requiere \d+\.\d+\.[DIFEO]\d+(?:, \d+\.\d+\.[DIFEO]\d+)*)?)\]`$/;
+
+/** «· requiere 1.5.F1, 1.6.F2» → los ids, en el orden en que están escritos. Sin requeridos, nada. */
+function requeridosDeLaEtiqueta(grupo: string): { requiere?: string[] } {
+  const ids = [...grupo.matchAll(/\d+\.\d+\.[DIFEO]\d+/g)].map((m) => m[0]);
+  return ids.length ? { requiere: ids } : {};
+}
 
 /** Una línea que PARECE un criterio: se reconoce por la etiqueta al final, bien formada o no. */
 const PARECE_CRITERIO = /`\[[^\]]*\]`\s*$/;
@@ -378,12 +387,12 @@ function leerMatriz(lineas: string[], ctx: Contexto, version: string): { areas: 
       if (!m) {
         throw new ErrorDeFormato(
           PARECE_CRITERIO.test(linea)
-            ? `la etiqueta de este criterio no sigue la forma «[id · verificación · riesgo · hábito · perfil]»: ${linea.slice(0, 120)}`
+            ? `la etiqueta de este criterio no sigue la forma «[id · verificación · riesgo · hábito · perfil · requiere ids]»: ${linea.slice(0, 120)}`
             : `un punto de la lista sin etiqueta: ${linea.slice(0, 120)}`,
           n,
         );
       }
-      const [, texto, id, verif, riesgo, habito, perfil] = m;
+      const [, texto, id, verif, riesgo, habito, perfil, requiere] = m;
       if (!(VERIFICACIONES as readonly string[]).includes(verif)) {
         throw new ErrorDeFormato(`«${verif}» no es una forma de verificación (${VERIFICACIONES.join(", ")}).`, n);
       }
@@ -398,6 +407,7 @@ function leerMatriz(lineas: string[], ctx: Contexto, version: string): { areas: 
         riesgo: !!riesgo,
         habito: !!habito,
         perfil: marca ?? (reglaDeTexto && texto.includes("vende sin vendedor") ? "venta sin vendedor" : null),
+        ...requeridosDeLaEtiqueta(requiere),
       };
       nivel.criterios.push(criterio);
       parrafo = null;
@@ -722,7 +732,7 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
       if (!dim || !letra) throw new ErrorDeFormato("un criterio fuera de un nivel.", n);
       const nivelId = `${dim.id}.${letra}`;
       if ((m = ETIQUETA_DE_CRITERIO.exec(linea))) {
-        const [, texto, id, verif, riesgo, habito, perfil] = m;
+        const [, texto, id, verif, riesgo, habito, perfil, requiere] = m;
         if (!(VERIFICACIONES as readonly string[]).includes(verif)) {
           throw new ErrorDeFormato(`«${verif}» no es una forma de verificación (${VERIFICACIONES.join(", ")}).`, n);
         }
@@ -750,6 +760,7 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
           riesgo: !!riesgo,
           habito: !!habito,
           perfil: (perfil.replace(/^ · /, "") || null) as MarcaDePerfil | null,
+          ...requeridosDeLaEtiqueta(requiere),
         });
       } else if ((m = ETIQUETA_DE_REESCRITO.exec(linea))) {
         const [, texto, id] = m;
@@ -762,7 +773,7 @@ function leerEdiciones(lineas: string[], areas: Area[], ctx: Contexto): { edicio
       } else {
         throw new ErrorDeFormato(
           PARECE_CRITERIO.test(linea)
-            ? `la etiqueta de este criterio no sigue la forma «[id]» (reescrito) ni «[id · verificación · riesgo · hábito · perfil]» (propio): ${linea.slice(0, 120)}`
+            ? `la etiqueta de este criterio no sigue la forma «[id]» (reescrito) ni «[id · verificación · riesgo · hábito · perfil · requiere ids]» (propio): ${linea.slice(0, 120)}`
             : `un punto de la lista sin etiqueta: ${linea.slice(0, 120)}`,
           n,
         );
@@ -1039,6 +1050,7 @@ export function parsearEscala(texto: string): Escala {
   const hastaNegrita = regla.findIndex((p) => p.startsWith("**"));
   const evaluacion = hastaNegrita === -1 ? regla : regla.slice(0, hastaNegrita);
   const perfil = parrafos(seccion(lineas, /^## El perfil de negocio\s*$/));
+  const requeridos = parrafos(seccion(lineas, /^## Criterios requeridos\s*$/));
 
   return {
     version,
@@ -1055,6 +1067,7 @@ export function parsearEscala(texto: string): Escala {
       riesgo: bloqueEnNegrita(evaluar, "Criterios de riesgo"),
       habito: bloqueEnNegrita(evaluar, "Niveles por confirmar"),
       perfil: perfil.length ? perfil.join("\n\n") : null,
+      requeridos: requeridos.length ? requeridos.join("\n\n") : null,
     },
     dependencias: leerDependencias(lineas),
     historial: leerHistorial(lineas),

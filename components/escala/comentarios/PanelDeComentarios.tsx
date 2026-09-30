@@ -16,7 +16,7 @@ import type { Perfil } from "@/lib/escala/documento/perfil";
 import type { ComentarioVisto } from "@/lib/escala/comentarios/reglas";
 import type { DatosDeLaVista } from "@/lib/escala/vista";
 import { useEscala } from "../contexto";
-import { MetaDelCriterio, TextoConPalabras } from "../piezas";
+import { EnlacesDelCriterio, MetaDelCriterio, TextoConPalabras } from "../piezas";
 import CompositorDeComentario from "./CompositorDeComentario";
 import TarjetaDeComentario, { type AccionesDeComentario } from "./TarjetaDeComentario";
 
@@ -38,7 +38,7 @@ export default function PanelDeComentarios({
   /** Algo cambió: refrescar los contadores de la pantalla. */
   onCambio: () => void;
 }) {
-  const { yo, esResponsable, almacen, comentariosDisponibles } = useEscala();
+  const { yo, esResponsable, almacen, comentariosDisponibles, abrirComentarios } = useEscala();
   const toast = useToast();
   // La lista se guarda CON el ancla que la pidió: al cambiar de ancla, la vieja deja de valer sola
   // (sin vaciar el estado dentro de un efecto).
@@ -134,13 +134,15 @@ export default function PanelDeComentarios({
                 <p className="text-sm leading-relaxed text-fg">
                   <TextoConPalabras texto={resuelta.criterio.texto} palabras={datos.terminos} />
                 </p>
-                <MetaDelCriterio criterio={resuelta.criterio} datos={datos} />
+                <MetaDelCriterio criterio={resuelta.criterio} datos={datos} perfil={perfil} />
                 {resuelta.criterio.riesgo && datos.riesgos[resuelta.id] && (
                   <p className="rounded-lg border border-warn-line bg-warn-surface px-2.5 py-1.5 text-xs text-warn-ink">
                     <span className="font-semibold">Si no se cumple, el cliente ve: </span>
                     {datos.riesgos[resuelta.id]}
                   </p>
                 )}
+                {/* Lo que requiere y quiénes lo requieren: tocar uno abre ESE criterio (y la matriz lo marca). */}
+                <EnlacesDelCriterio criterio={resuelta.criterio} datos={datos} perfil={perfil} onIr={(e) => abrirComentarios(e.id)} className="pt-1" />
               </>
             ) : resuelta.tipo === "nivel" && resuelta.nivel ? (
               <>

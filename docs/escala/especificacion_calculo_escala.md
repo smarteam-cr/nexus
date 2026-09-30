@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.2.2
-escala: 8.2.0
+version: 1.3.0
+escala: 8.3.0
 fecha: 2026-09-30
 ---
 
@@ -23,9 +23,9 @@ Identificadores retirados, que no se vuelven a usar: `1.1.E4`, `1.1.F3`, `1.2.F1
 
 Un criterio que cambia de dimensión se retira y entra con el siguiente número libre de su nueva dimensión: `1.2.F1` es hoy `1.1.F6`.
 
-La etiqueta de cada criterio sigue siempre el mismo orden: identificador, forma de verificación y, solo si corresponden, las marcas riesgo, hábito y de perfil, separadas por « · ». Por ejemplo: `[1.1.F6 · evaluado · hábito · venta con equipo]`.
+La etiqueta de cada criterio sigue siempre el mismo orden: identificador, forma de verificación y, solo si corresponden, las marcas riesgo, hábito y de perfil, separadas por « · ». Por ejemplo: `[1.1.F6 · evaluado · hábito · venta con equipo]`. Si el criterio requiere otros, van al final, separados por comas: `[1.6.F3 · evaluado · hábito · venta con equipo · requiere 1.5.F1]`.
 
-Las ediciones por industria, en la Parte 5 de la escala, usan los mismos identificadores. Un criterio de la matriz que una edición dice con sus palabras sigue siendo el mismo criterio: en la edición lleva en la etiqueta solo su identificador, `[1.7.F1]`, y conserva la forma de verificación y las marcas que tiene en la matriz. Un criterio propio de una edición lleva la etiqueta completa y un número del bloque de su edición —del 101 al 199 en la primera, del 201 al 299 en la segunda—: `1.7.E101` solo existe en la primera edición. La matriz numera siempre por debajo de 100, así que un identificador dice por sí solo si el criterio es de la matriz o de una edición, y de cuál. Los criterios propios también son estables: no se reasignan ni se renumeran.
+Las ediciones por industria, en la Parte 5 de la escala, usan los mismos identificadores. Un criterio de la matriz que una edición dice con sus palabras sigue siendo el mismo criterio: en la edición lleva en la etiqueta solo su identificador, `[1.7.F1]`, y conserva la forma de verificación, las marcas y los requeridos que tiene en la matriz. Un criterio propio de una edición lleva la etiqueta completa y un número del bloque de su edición —del 101 al 199 en la primera, del 201 al 299 en la segunda—: `1.7.E101` solo existe en la primera edición. La matriz numera siempre por debajo de 100, así que un identificador dice por sí solo si el criterio es de la matriz o de una edición, y de cuál. Los criterios propios también son estables: no se reasignan ni se renumeran.
 
 Cada nivel tiene un código del 1 al 5: Deficiente 1, Inicial 2, Funcional 3, Eficiente 4, Óptimo 5. Sirve para que los sistemas comparen niveles, no para graficar. Lo que se grafica es el puntaje de 0 a 100, que tampoco es una nota inventada aparte: su tramo lo pone el nivel, y dentro del tramo solo dice cuánto se avanzó hacia el siguiente.
 
@@ -55,6 +55,16 @@ Este paso a paso es la versión exacta de las reglas de la Parte 2 de la escala.
 7. **Puntaje de una capa y del departamento.** El tramo lo pone su nivel. La posición es el promedio del avance de sus dimensiones hacia el nivel siguiente al de la capa o del departamento: las que ya llegaron cuentan completas, y las demás, con su porcentaje. En los tres casos —dimensión, capa y departamento—, la posición dentro del tramo se redondea hacia abajo, al entero, y no pasa de 19 mientras no se alcance el nivel siguiente: el puntaje solo cambia de tramo cuando cambia el nivel.
 8. **Ajuste del CSE.** Si el CSE ajusta el nivel de una dimensión, con justificación, se guardan el nivel y el puntaje calculados y también los ajustados. El puntaje ajustado usa el tramo del nivel ajustado, y la capa y el departamento se calculan con el ajustado.
 9. **Qué se trabaja primero.** Entran solo las dimensiones que están debajo de su nivel objetivo: el de su departamento o, si la dimensión tiene uno propio, el suyo. Si se midió más de un departamento, la única recomendación sale del de nivel más bajo; a igual nivel, en el chequeo, del que el prospecto eligió primero, y en el diagnóstico, del que acuerde el CSE con el cliente, con la razón escrita. Dentro del departamento, dos pasos. Primero, la capa más baja entre las que tienen alguna dimensión que entra; si las dos están en el mismo nivel, va la base cuando están debajo de Funcional, y la producción cuando están de Funcional para arriba. Segundo, dentro de esa capa, la dimensión de nivel más bajo, y entre las del mismo nivel, la que va antes en el orden de dependencias de su área y tipo de venta, que está en la escala, en Qué se trabaja primero. Si el CSE elige otra dimensión de esa misma capa, también debajo de su objetivo, porque el resultado que persigue el cliente lo pide, se guardan la calculada y la elegida, con la razón. El puntaje no decide. La razón se escribe en el informe. Si ninguna dimensión entra, el departamento llegó a su objetivo: la recomendación es sostenerlo y volver a medir, y el objetivo se revisa si cambió el resultado que persigue el cliente.
+
+### Los requeridos no entran en el cálculo
+
+Un criterio puede decir en su etiqueta cuáles otros requiere, como explica la escala en Criterios requeridos. Eso no cambia ninguno de los pasos de arriba: el nivel y el puntaje de una dimensión salen solo de sus propios criterios. Lo que sí hacen los sistemas con los requeridos es esto:
+
+- **Avisar.** Si un criterio se marca como cumplido y alguno de los que requiere no lo está, el diagnóstico lo señala para que el CSE lo revise antes de cerrar. El cálculo no corrige nada: el CSE decide si lo requerido se resuelve de otra forma o si el criterio no se cumple.
+- **Ordenar lo que falta.** Al emitir lo que le falta a una dimensión, cada criterio pendiente va con sus requeridos que también están pendientes, para que se vea qué hay que hacer antes. No cambia qué dimensión se trabaja primero: eso lo decide el paso 9.
+- **Dejar de lado lo que no cuenta.** Un requerido que no cuenta para la unidad —por su perfil de negocio, porque la edición lo sacó o porque el CSE lo marcó como que no aplica— no se exige ni se avisa.
+
+Un requerido es siempre de Funcional para arriba, de un nivel igual o anterior al del criterio que lo requiere y, si es de su misma dimensión, de un nivel anterior.
 
 ### El puntaje, con un ejemplo
 
@@ -109,9 +119,11 @@ Cada versión de la escala y de esta especificación, y cada sistema que las imp
 7. **Documentos alineados.** Esta especificación y el manual de operación dicen en su encabezado con qué versión de la escala van, y es la vigente.
 8. **Ediciones coherentes.** Cada edición tiene su clave, su perfil habitual y su bloque de números. Lo que reescribe o saca existe en la matriz, y un criterio propio no usa un identificador de la matriz ni de otra edición. Si toca los criterios de una dimensión, dice algo de todos los de la matriz: lo reescribe, lo saca o lo deja como está, y una sola de las tres. Un criterio reescrito conserva las palabras con valor fijo que tiene en la matriz. Una edición no le cambia el nombre a una dimensión de base operativa ni saca una dimensión que en la escala general aplica.
 
-Las pruebas 1, 2, 4 y 5 se corren sobre la escala general y, además, sobre la escala vista por cada edición: un nivel que queda vacío solo dentro de una edición también es una falla. La prueba 3, que comprueba los ejemplos de este documento, es de la escala general.
+9. **Requeridos coherentes.** Lo que un criterio requiere existe, no es él mismo y no se repite. Los dos son de Funcional para arriba. Lo requerido es de un nivel igual o anterior y, si es de la misma dimensión, de un nivel anterior. Hay al menos un perfil de negocio en que los dos aplican. No hay ciclos. En una edición, un criterio propio no requiere algo que esa edición no tiene.
 
-Las pruebas 1 a 5, la 7 y la 8 las corre `pruebas_escala.py`:
+Las pruebas 1, 2, 4 y 5 se corren sobre la escala general y, además, sobre la escala vista por cada edición: un nivel que queda vacío solo dentro de una edición también es una falla. La prueba 3, que comprueba los ejemplos de este documento, es de la escala general. La 9 corre sobre las dos: en una edición, el requerido que apunta a un criterio que ella sacó se deja de lado, y no es una falla.
+
+Las pruebas 1 a 5, la 7, la 8 y la 9 las corre `pruebas_escala.py`:
 
 ```
 python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_escala.md [escala_anterior.md]
@@ -120,6 +132,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.3.0 (2026-09-30).** Acompaña a la escala 8.3.0, en la que un criterio puede decir cuáles otros requiere. Se dice cómo va en la etiqueta, que no entra en el cálculo y qué hacen los sistemas con eso —avisar cuando algo se marca cumplido sin lo que requiere, ordenar lo que falta y dejar de lado lo que no cuenta—, y se suma la prueba 9. No cambia el cálculo del nivel ni del puntaje.
 
 **1.2.2 (2026-09-30).** Acompaña a la escala 8.2.0, que deja cada cosa de Ventas en una sola dimensión: quedan retirados `1.1.F3`, `1.1.E4`, `1.4.E1` y `1.5.E1`. No cambia el cálculo.
 

@@ -61,6 +61,12 @@ export interface Criterio {
   riesgo: boolean;
   habito: boolean;
   perfil: MarcaDePerfil | null;
+  /**
+   * Los criterios que este necesita para poder cumplirse (`· requiere 1.5.F1, 1.6.F2` en la
+   * etiqueta, desde la 8.3.0): de OTRA dimensión, o de un nivel anterior de la suya. Es para leer la
+   * escala y ordenar el trabajo; no cambia el cálculo. Sin requeridos, el campo no está.
+   */
+  requiere?: string[];
   /** Solo en una escala vista por una edición (`aplicarEdicion`): el criterio existe solo en ella. */
   propio?: true;
   /** Solo en una escala vista por una edición: cómo lo dice la escala general (la edición lo reescribió). */
@@ -169,8 +175,9 @@ export interface Escala {
   /**
    * La prosa de la Parte 2 que explica las marcas. `evaluacion`: cómo se evalúa una dimensión (la
    * regla estricta, «por lo que busca, no por su letra», los criterios condicionados).
+   * `requeridos`: qué quiere decir que un criterio requiera otro (desde la 8.3.0).
    */
-  explicaciones: { evaluacion: string | null; riesgo: string | null; habito: string | null; perfil: string | null };
+  explicaciones: { evaluacion: string | null; riesgo: string | null; habito: string | null; perfil: string | null; requeridos: string | null };
   dependencias: OrdenDeDependencias[];
   historial: EntradaDelHistorial[];
   /** «Cómo se leen los criterios»: las palabras con valor fijo. */

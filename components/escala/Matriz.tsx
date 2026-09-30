@@ -8,13 +8,18 @@
  * Funcional, su línea de resultado; cada criterio, primero su texto y en chico su identificador,
  * cómo se verifica y sus marcas. Todo es clickeable: abre los comentarios de ESE identificador.
  *
+ * Un criterio puede requerir otros, de otra dimensión o de un nivel anterior. Al pasar el cursor por
+ * uno (o con sus comentarios abiertos) se marcan en toda la matriz los que requiere y los que lo
+ * requieren a él.
+ *
  * La matriz tiene su propio scroll (alto de la ventana) para que el encabezado de los niveles y la
  * columna de las dimensiones queden fijos en los dos sentidos.
  */
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
 import type { Dimension, Nivel } from "@/lib/escala/documento/tipos";
-import { ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
+import { ordenDeDependencias, relacionadosCon, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, useEscala } from "./contexto";
 import { PUNTO_DE_NIVEL } from "./niveles";
 import { Contador, MetaDelCriterio, NoAplicanEnLaEdicion, NombreGeneral, TextoConPalabras } from "./piezas";
@@ -28,8 +33,26 @@ interface Props {
   onLeerDimension: (dimension: string) => void;
 }
 
+/**
+ * El criterio que se mira (bajo el cursor o, si no, el que tiene los comentarios abiertos) y los que
+ * se relacionan con él: los que requiere y los que lo requieren. Se marcan en toda la matriz.
+ */
+interface Relacion {
+  foco: string | null;
+  requiere: Set<string>;
+  loRequieren: Set<string>;
+  /** Solo los criterios con algún enlace avisan que el cursor está encima: el resto no mueve nada. */
+  alEntrar: (id: string) => void;
+  alSalir: () => void;
+}
+
 export default function Matriz({ datos, perfil, anclaAbierta, onLeerDimension }: Props) {
   const { area, niveles, capas } = datos;
+  const [encima, setEncima] = useState<string | null>(null);
+  const relacion = useMemo((): Relacion => {
+    const foco = encima ?? anclaAbierta;
+    return { foco, ...relacionadosCon(foco, datos.requeridos, perfil), alEntrar: setEncima, alSalir: () => setEncima(null) };
+  }, [encima, anclaAbierta, datos.requeridos, perfil]);
   return (
     <div
       className="relative overflow-auto rounded-xl border border-line bg-surface"
@@ -78,6 +101,7 @@ export default function Matriz({ datos, perfil, anclaAbierta, onLeerDimension }:
                   datos={datos}
                   perfil={perfil}
                   anclaAbierta={anclaAbierta}
+                  relacion={relacion}
                   onLeerDimension={onLeerDimension}
                 />
               ))}
@@ -93,12 +117,14 @@ function FilaDeDimension({
   datos,
   perfil,
   anclaAbierta,
+  relacion,
   onLeerDimension,
 }: {
   d: Dimension;
   datos: DatosDeLaVista;
   perfil: Perfil;
   anclaAbierta: string | null;
+  relacion: Relacion;
   onLeerDimension: (dimension: string) => void;
 }) {
   const { conteos, abrirComentarios } = useEscala();
@@ -141,7 +167,7 @@ function FilaDeDimension({
 
       {aplicaAca ? (
         d.niveles.map((n) => (
-          <CeldaDeNivel key={n.id} d={d} n={n} datos={datos} perfil={perfil} anclaAbierta={anclaAbierta} />
+          <CeldaDeNivel key={n.id} d={d} n={n} datos={datos} perfil={perfil} anclaAbierta={anclaAbierta} relacion={relacion} />
         ))
       ) : (
         <div className="col-span-5 flex items-center gap-3 bg-surface-muted px-5 py-4 text-sm text-fg-secondary">
@@ -165,16 +191,19 @@ function CeldaDeNivel({
   datos,
   perfil,
   anclaAbierta,
+  relacion,
 }: {
   d: Dimension;
   n: Nivel;
   datos: DatosDeLaVista;
   perfil: Perfil;
   anclaAbierta: string | null;
+  relacion: Relacion;
 }) {
   const { conteos, abrirComentarios } = useEscala();
   const visibles = n.criterios.filter((c) => aplica(c, perfil));
   const ocultos = n.criterios.length - visibles.length;
+  const tieneEnlaces = (id: string) => !!(datos.requeridos.requiere[id]?.length || datos.requeridos.loRequieren[id]?.length);
   return (
     <div className={cn("flex min-w-0 flex-col gap-2 border-l border-line px-3 py-3", n.letra === "F" && "bg-success-surface/40")}>
       <button
@@ -198,26 +227,48 @@ function CeldaDeNivel({
 
       {visibles.length > 0 && (
         <ul className="-mx-1.5 flex flex-col">
-          {visibles.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => abrirComentarios(c.id)}
-                className={cn(
-                  "w-full rounded-md border px-1.5 py-1.5 text-left transition-colors hover:bg-surface-hover",
-                  anclaAbierta === c.id ? "border-info-line bg-info-surface" : "border-transparent",
-                )}
-              >
-                <span className="block text-xs leading-snug text-fg">
-                  <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
-                </span>
-                <span className="mt-1.5 flex items-start justify-between gap-2">
-                  <MetaDelCriterio criterio={c} datos={datos} />
-                  <Contador conteo={conteoDe(conteos, c.id)} />
-                </span>
-              </button>
-            </li>
-          ))}
+          {visibles.map((c) => {
+            // Lo que se mira requiere este criterio, o este criterio requiere lo que se mira.
+            const requerido = relacion.requiere.has(c.id);
+            const dependiente = relacion.loRequieren.has(c.id);
+            const conEnlaces = tieneEnlaces(c.id);
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => abrirComentarios(c.id)}
+                  onMouseEnter={conEnlaces ? () => relacion.alEntrar(c.id) : undefined}
+                  onMouseLeave={conEnlaces ? relacion.alSalir : undefined}
+                  onFocus={conEnlaces ? () => relacion.alEntrar(c.id) : undefined}
+                  onBlur={conEnlaces ? relacion.alSalir : undefined}
+                  className={cn(
+                    "w-full rounded-md border px-1.5 py-1.5 text-left transition-colors hover:bg-surface-hover",
+                    anclaAbierta === c.id
+                      ? "border-info-line bg-info-surface"
+                      : requerido
+                        ? "border-dashed border-info-line bg-info-surface"
+                        : dependiente
+                          ? "border-dashed border-line bg-surface-hover"
+                          : "border-transparent",
+                  )}
+                >
+                  {(requerido || dependiente) && relacion.foco && (
+                    <span className={cn("mb-1 block text-2xs font-semibold", requerido ? "text-info-ink" : "text-fg-secondary")}>
+                      {requerido ? "Lo requiere " : "Requiere a "}
+                      <span className="font-mono">{relacion.foco}</span>
+                    </span>
+                  )}
+                  <span className="block text-xs leading-snug text-fg">
+                    <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
+                  </span>
+                  <span className="mt-1.5 flex items-start justify-between gap-2">
+                    <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} />
+                    <Contador conteo={conteoDe(conteos, c.id)} />
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 

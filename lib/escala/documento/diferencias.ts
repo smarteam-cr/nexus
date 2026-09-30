@@ -7,6 +7,7 @@
  */
 import { textosPorAncla } from "./anclas";
 import { aplicarEdicion } from "./edicion";
+import { todosLosCriterios } from "./parsear";
 import type { Escala } from "./tipos";
 
 export interface CambiosDeUnaEdicion {
@@ -30,6 +31,8 @@ export interface CambiosEntreVersiones {
   nuevos: string[];
   retirados: string[];
   cambiados: { id: string; antes: string; despues: string }[];
+  /** Criterios de la matriz que están en las dos versiones y cambiaron lo que requieren. */
+  requeridos: { id: string; antes: string[]; despues: string[] }[];
   ediciones: CambiosDeUnaEdicion[];
   /** Ediciones que estaban en la versión anterior y ya no. */
   edicionesRetiradas: string[];
@@ -64,10 +67,16 @@ export function compararEscalas(anterior: Escala, nueva: Escala): CambiosEntreVe
     };
   });
 
+  const requiereAntes = new Map(todosLosCriterios(anterior).map((c) => [c.id, c.requiere ?? []] as const));
+  const requeridos = todosLosCriterios(nueva)
+    .filter((c) => requiereAntes.has(c.id) && requiereAntes.get(c.id)!.join(",") !== (c.requiere ?? []).join(","))
+    .map((c) => ({ id: c.id, antes: requiereAntes.get(c.id)!, despues: c.requiere ?? [] }));
+
   return {
     nuevos,
     retirados,
     cambiados: cambiosDeTexto(a, b),
+    requeridos,
     ediciones,
     edicionesRetiradas: anterior.ediciones.filter((e) => !nueva.ediciones.some((x) => x.slug === e.slug)).map((e) => e.nombre),
   };

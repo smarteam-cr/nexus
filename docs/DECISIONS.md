@@ -3755,3 +3755,44 @@ cambia lo que ve el cliente. Primera edición: «Ecommerce y retail», con Venta
 - **En espera**: la tercera pregunta del perfil (¿le vende a empresas o a personas?), hasta que un
   criterio la necesite; el chequeo de prospectos por edición; guardar con qué edición se midió
   (llega con la integración de la escala a los diagnósticos).
+
+## Cada cosa de la escala se pide una vez; quien depende de ella la requiere (2026-09-30)
+
+**Contexto.** Revisando Ventas criterio por criterio, Elías notó que `1.6.F3` nombraba entre
+paréntesis dónde se definía lo que necesitaba («el ICP (definido en Propuesta y Coherencia)») y pidió
+dos cosas: un análisis de los criterios que se repetían entre dimensiones, para dejar cada uno en su
+mejor lugar, y ver si valía la pena que un criterio marcara los que requiere. El análisis encontró 13
+cosas pedidas más de una vez en Ventas (27 de 135 criterios): un mismo faltante frenaba dos
+dimensiones y el cliente leía dos pendientes donde había uno.
+
+**Decisiones.**
+
+- **Una cosa, una dimensión (escala 8.2.0).** Lo que se repetía queda en la dimensión que responde
+  su pregunta y sale de la otra: la integración en Tecnología (Datos pide el resultado), la pipeline
+  review en Procesos (Equipo pide que se rinda cuentas), la definición de lead calificado en
+  Priorización, mejorar el proceso en Aprendizaje, el líder sobre los negocios en riesgo en Tracción.
+  Se retiraron `1.1.F3`, `1.1.E4`, `1.4.E1` y `1.5.E1`. ⚠ Sacar un criterio puede dejar un nivel
+  vacío para un perfil (prueba 1): pasó con `1.1.E4`, y se resolvió quitándole la marca de «venta con
+  equipo» a `1.1.E3`. Las señales repetidas de Deficiente e Inicial NO se tocaron: ahí se asigna por
+  mejor ajuste, no castigan doble.
+- **Los requeridos van en la etiqueta** (`· requiere 1.5.F1, 1.6.F2`, al final; escala 8.3.0). Se
+  leen con el mismo lector estricto (TS y Python, en espejo) y un criterio sin requeridos no lleva el
+  campo. ⛔ Es formato nuevo: en producción, deploy ANTES de publicar la 8.3.0 o posterior.
+- **⛔ No cambian el cálculo.** El nivel y el puntaje de una dimensión salen solo de sus criterios. Si
+  un requerido bajara el nivel de quien lo necesita, volvería el castigo doble que se acababa de
+  quitar. Sirven para leer (de dónde se sostiene cada criterio), ordenar el trabajo (lo requerido va
+  antes) y revisar un diagnóstico (avisar si algo se marcó cumplido sin lo que requiere).
+- **Las reglas de un enlace** (prueba «9 · Requeridos coherentes», `fallasDeRequeridos`): solo de
+  Funcional para arriba, a un criterio que existe, de un nivel igual o anterior (y anterior, si es de
+  su misma dimensión), con algún perfil de negocio en que los dos apliquen, y sin ciclos.
+- **En una edición**, un criterio reescrito conserva sus requeridos; el enlace hacia un criterio que
+  la edición sacó se cae solo (`aplicarEdicion`), sin tocar la escala general; un criterio propio
+  puede requerir, y si requiere algo que la edición no tiene, la publicación se frena.
+- **En la pantalla**: cada criterio muestra qué requiere y cuántos lo requieren; en la matriz, el que
+  está bajo el cursor (o con los comentarios abiertos) marca a los relacionados; el panel los lista y
+  lleva a ellos; en la rueda, la celda en foco marca con un borde las celdas relacionadas, y la capa
+  «Requeridos» muestra dónde están los cimientos. Con un perfil elegido, un enlace hacia un criterio
+  que ese perfil esconde no se muestra.
+- **En espera**: que el diagnóstico avise cuando un criterio se marca cumplido sin lo que requiere
+  (llega con la integración de la escala a los diagnósticos); los requeridos de Marketing y Servicio
+  (después de sus ediciones de Ventas).

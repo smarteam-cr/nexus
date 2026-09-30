@@ -5,6 +5,8 @@
  *
  *   · `MetaDelCriterio`: debajo del texto, en chico, el identificador, cómo se verifica y si es
  *     hábito, riesgo o de un perfil. Cada marca explica en su tooltip lo que la escala dice de ella.
+ *     Al final, qué otros criterios requiere y cuántos lo requieren a él.
+ *   · `EnlacesDelCriterio`: esos requeridos escritos enteros, para leerlos y para ir a ellos.
  *   · `Contador`: cuántos comentarios tiene algo; en azul si hay abiertos.
  *   · `Segmentado`: un grupo de opciones excluyentes (radio), con flechas.
  *   · `BotonComentar`: el globito que abre el panel de comentarios de un ancla.
@@ -12,7 +14,8 @@
 import { useRef } from "react";
 import { InfoHint } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { explicarMarca } from "@/lib/escala/documento/perfil";
+import { explicarMarca, SIN_PERFIL, type Perfil } from "@/lib/escala/documento/perfil";
+import { enlacesQueAplican, type EnlaceDeCriterio } from "@/lib/escala/documento/requeridos";
 import type { BloqueDeTexto, Criterio, Nivel } from "@/lib/escala/documento/tipos";
 import type { Conteo } from "@/lib/escala/comentarios/reglas";
 import { partirPorPalabras, type DatosDeLaVista, type TerminoSubrayado } from "@/lib/escala/vista";
@@ -29,8 +32,35 @@ function definicion(datos: DatosDeLaVista, termino: string): string | undefined 
   return datos.glosario.find((t) => t.termino.toLowerCase() === termino.toLowerCase())?.significado;
 }
 
-export function MetaDelCriterio({ criterio: c, datos, className }: { criterio: Criterio; datos: DatosDeLaVista; className?: string }) {
+/** «1.5.F1 · Propuesta y Coherencia · Funcional — Existe un documento…»: un criterio del otro lado de un enlace, en una línea. */
+function enUnaLinea(datos: DatosDeLaVista, e: EnlaceDeCriterio): string {
+  const nivel = datos.niveles.find((n) => n.letra === e.letra)?.nombre ?? e.letra;
+  const area = e.area !== datos.area.id ? `${e.areaNombre} · ` : "";
+  return `${e.id} · ${area}${e.dimensionNombre} · ${nivel} — ${e.texto}`;
+}
+
+/** Lo que un criterio requiere y quiénes lo requieren, de lo que aplica al perfil elegido. */
+export function enlacesDe(datos: DatosDeLaVista, id: string, perfil: Perfil = SIN_PERFIL): { requiere: EnlaceDeCriterio[]; loRequieren: EnlaceDeCriterio[] } {
+  return {
+    requiere: enlacesQueAplican(datos.requeridos.requiere[id], perfil),
+    loRequieren: enlacesQueAplican(datos.requeridos.loRequieren[id], perfil),
+  };
+}
+
+export function MetaDelCriterio({
+  criterio: c,
+  datos,
+  perfil,
+  className,
+}: {
+  criterio: Criterio;
+  datos: DatosDeLaVista;
+  /** Con un perfil elegido, no se cuentan los enlaces hacia criterios que ese perfil esconde. */
+  perfil?: Perfil;
+  className?: string;
+}) {
   const mensaje = datos.riesgos[c.id];
+  const { requiere, loRequieren } = enlacesDe(datos, c.id, perfil);
   return (
     <span className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs leading-none text-fg-muted", className)}>
       <span className="font-mono">{c.id}</span>
@@ -71,7 +101,91 @@ export function MetaDelCriterio({ criterio: c, datos, className }: { criterio: C
           con sus palabras
         </span>
       )}
+      {requiere.length > 0 && (
+        <span
+          className="cursor-help rounded border border-dashed border-info-line px-1 py-0.5 text-info-ink"
+          title={`Para cumplirse necesita ${requiere.length === 1 ? "este otro criterio" : "estos otros criterios"}:\n${requiere.map((e) => enUnaLinea(datos, e)).join("\n")}`}
+        >
+          requiere {requiere.length === 1 ? <span className="font-mono">{requiere[0].id}</span> : requiere.length}
+        </span>
+      )}
+      {loRequieren.length > 0 && (
+        <span
+          className="cursor-help rounded border border-dashed border-line px-1 py-0.5 text-fg-secondary"
+          title={`${loRequieren.length === 1 ? "Lo necesita este otro criterio" : "Lo necesitan estos otros criterios"}:\n${loRequieren.map((e) => enUnaLinea(datos, e)).join("\n")}`}
+        >
+          lo {loRequieren.length === 1 ? "requiere" : "requieren"} {loRequieren.length === 1 ? <span className="font-mono">{loRequieren[0].id}</span> : loRequieren.length}
+        </span>
+      )}
     </span>
+  );
+}
+
+/**
+ * Los requeridos de un criterio, escritos: lo que necesita y quiénes lo necesitan, cada uno con su
+ * dimensión, su nivel y su texto. Si se puede ir a ellos (`onIr`), cada uno es un botón.
+ */
+export function EnlacesDelCriterio({
+  criterio: c,
+  datos,
+  perfil,
+  onIr,
+  className,
+}: {
+  criterio: Criterio;
+  datos: DatosDeLaVista;
+  perfil?: Perfil;
+  /** Ir al criterio del otro lado. Solo se ofrece para los de esta área (los demás se nombran). */
+  onIr?: (enlace: EnlaceDeCriterio) => void;
+  className?: string;
+}) {
+  const { requiere, loRequieren } = enlacesDe(datos, c.id, perfil);
+  if (requiere.length + loRequieren.length === 0) return null;
+  const grupo = (titulo: string, enlaces: EnlaceDeCriterio[]) =>
+    enlaces.length > 0 && (
+      <div>
+        <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">{titulo}</p>
+        <ul className="mt-1 flex flex-col gap-1">
+          {enlaces.map((e) => {
+            const nivel = datos.niveles.find((n) => n.letra === e.letra)?.nombre ?? e.letra;
+            const deOtraArea = e.area !== datos.area.id;
+            const contenido = (
+              <>
+                <span className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-fg-muted">
+                  <span className="font-mono">{e.id}</span>
+                  <span>
+                    {deOtraArea ? `${e.areaNombre} · ` : ""}
+                    {e.dimensionNombre} · {nivel}
+                  </span>
+                </span>
+                <span className="block text-xs leading-snug text-fg-secondary">{e.texto}</span>
+              </>
+            );
+            return (
+              <li key={e.id}>
+                {onIr && !deOtraArea ? (
+                  <button
+                    type="button"
+                    onClick={() => onIr(e)}
+                    title="Ir a este criterio"
+                    className="w-full rounded-md border border-dashed border-info-line px-2 py-1 text-left transition-colors hover:bg-surface-hover"
+                  >
+                    {contenido}
+                  </button>
+                ) : (
+                  <div className="rounded-md border border-dashed border-line px-2 py-1">{contenido}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  return (
+    <div className={cn("flex flex-col gap-2", className)}>
+      {grupo(requiere.length === 1 ? "Requiere este criterio" : "Requiere estos criterios", requiere)}
+      {grupo(loRequieren.length === 1 ? "Lo requiere" : "Lo requieren", loRequieren)}
+    </div>
   );
 }
 

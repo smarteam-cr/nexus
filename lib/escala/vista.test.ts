@@ -20,6 +20,8 @@ import {
   notaDelCierre,
   ordenDeDependencias,
   partirPorPalabras,
+  relacionadosCon,
+  requeridosDelArea,
   terminosParaSubrayar,
 } from "./vista";
 
@@ -261,6 +263,54 @@ describe("consultaDeLaEscala: lo que se mira, en la URL", () => {
         }
       }
     }
+  });
+});
+
+describe("los requeridos, como los recibe la pantalla", () => {
+  const conEnlaces = parsearEscala(
+    MINI_ESCALA.replace("`[1.2.F2 · evaluado · venta con equipo]`", "`[1.2.F2 · evaluado · venta con equipo · requiere 1.1.F1]`").replace(
+      "`[1.2.E1 · comprobable]`",
+      "`[1.2.E1 · comprobable · requiere 1.1.F1]`",
+    ),
+  );
+  const base = { publicadaEn: new Date("2030-01-01T00:00:00Z"), aviso: null, versiones: [] };
+  const d = datosDeLaVista({ escala: conEnlaces, area: conEnlaces.areas[0], ...base });
+
+  it("por id de criterio, en los dos sentidos; un criterio sin enlaces no está", () => {
+    expect(Object.keys(d.requeridos.requiere).sort()).toEqual(["1.2.E1", "1.2.F2"]);
+    expect(d.requeridos.requiere["1.2.F2"].map((e) => e.id)).toEqual(["1.1.F1"]);
+    expect(d.requeridos.loRequieren).toMatchObject({ "1.1.F1": [{ id: "1.2.F2", dimensionNombre: "Tracción del Deal", letra: "F" }, { id: "1.2.E1" }] });
+    expect(d.requeridos.requiere["1.1.F1"]).toBeUndefined();
+    // Una escala sin requeridos baja los dos vacíos (no falta el campo).
+    expect(datosDeLaVista({ escala: mini, area: mini.areas[0], ...base }).requeridos).toEqual({ requiere: {}, loRequieren: {} });
+  });
+
+  it("con qué se relaciona el criterio que se mira, según el perfil", () => {
+    const todos = relacionadosCon("1.1.F1", d.requeridos, { cierre: null, despues: null });
+    expect([...todos.loRequieren]).toEqual(["1.2.F2", "1.2.E1"]);
+    expect([...todos.requiere]).toEqual([]);
+    // En la venta transaccional, 1.2.F2 (venta con equipo) no se ve: tampoco se marca.
+    expect([...relacionadosCon("1.1.F1", d.requeridos, { cierre: "transaccional", despues: null }).loRequieren]).toEqual(["1.2.E1"]);
+    expect([...relacionadosCon("1.2.F2", d.requeridos, { cierre: null, despues: null }).requiere]).toEqual(["1.1.F1"]);
+    // Sin nada que mirar, o mirando una dimensión o un nivel, no se marca nada.
+    for (const foco of [null, "1.2", "1.2.F"]) {
+      const r = relacionadosCon(foco, d.requeridos, { cierre: null, despues: null });
+      expect(r.requiere.size + r.loRequieren.size, String(foco)).toBe(0);
+    }
+  });
+
+  it("en el archivo real, los enlaces de cada área apuntan a criterios que existen", () => {
+    const existen = new Set(real.areas.flatMap((a) => a.dimensiones.flatMap((x) => x.niveles.flatMap((n) => n.criterios.map((c) => c.id)))));
+    let enlaces = 0;
+    for (const a of real.areas) {
+      const r = requeridosDelArea(real, a);
+      for (const [id, lista] of [...Object.entries(r.requiere), ...Object.entries(r.loRequieren)]) {
+        expect(id.startsWith(`${a.id}.`), id).toBe(true);
+        for (const e of lista) expect(existen.has(e.id), `${id} → ${e.id}`).toBe(true);
+        enlaces += lista.length;
+      }
+    }
+    expect(enlaces).toBeGreaterThan(0);
   });
 });
 

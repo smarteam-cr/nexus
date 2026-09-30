@@ -11,7 +11,8 @@
  *
  * Desde la 8.0.0 la escala trae EDICIONES por industria. Las pruebas 1, 4 y 5 corren sobre la
  * escala general y, además, sobre la escala vista por cada edición (`aplicarEdicion`), y la prueba
- * «8 · Ediciones coherentes» mira lo que es propio de una edición.
+ * «8 · Ediciones coherentes» mira lo que es propio de una edición. Desde la 8.3.0 un criterio puede
+ * decir cuáles otros requiere: «9 · Requeridos coherentes» revisa esos enlaces.
  *
  * Las pruebas 2 y 3 son del CÁLCULO: no se copian acá, las corre el mismo `pruebas_escala.py`
  * que llega con cada versión (`scripts/publicar-escala.ts` lo ejecuta). Así el cálculo tiene una
@@ -20,6 +21,7 @@
 import { aplicarEdicion } from "./edicion";
 import { criteriosPropios, FORMA_DE_EDICION, leerEncabezado, leerRetirados, PRIMER_NUMERO_DE_EDICION, todosLosCriterios } from "./parsear";
 import { aplica, CIERRES, DESPUES, dimensionAplica, type Perfil } from "./perfil";
+import { fallasDeRequeridos } from "./requeridos";
 import { LETRAS_CON_RESULTADO, type Escala } from "./tipos";
 
 export interface ResultadoDePrueba {
@@ -269,6 +271,40 @@ function edicionesCoherentes(escala: Escala): ResultadoDePrueba {
   return prueba("8 · Ediciones coherentes", fallas);
 }
 
+/** ¿La escala dice de algún criterio qué otros requiere? (de la matriz o propio de una edición). */
+export function tieneRequeridos(escala: Escala): boolean {
+  return [...todosLosCriterios(escala), ...criteriosPropios(escala).map((p) => p.criterio)].some((c) => (c.requiere?.length ?? 0) > 0);
+}
+
+/**
+ * Los requeridos (desde la 8.3.0): un criterio dice cuáles otros necesita. Las reglas están en
+ * `fallasDeRequeridos`; acá se corren sobre la escala general y sobre la vista por cada edición.
+ *
+ * En una edición, el enlace de un criterio de la matriz hacia uno que la edición sacó se cae solo
+ * (no es una falla: la edición decidió que ahí no aplica). Lo que sí es una falla es que un criterio
+ * PROPIO de la edición requiera algo que en ella no existe: eso lo escribió la edición.
+ */
+function requeridosCoherentes(escala: Escala): ResultadoDePrueba {
+  const generales = fallasDeRequeridos(escala, PERFILES_COMPLETOS);
+  const fallas = [...generales];
+  for (const ed of escala.ediciones) {
+    const derivada = aplicarEdicion(escala, ed.slug);
+    const estan = new Set(todosLosCriterios(derivada).map((c) => c.id));
+    for (const c of ed.areas.flatMap((a) => a.dimensiones.flatMap((d) => d.propios))) {
+      for (const id of c.requiere ?? []) {
+        if (!estan.has(id)) fallas.push(`[${ed.nombre}] ${c.id} requiere ${id}, que en esta edición no existe.`);
+      }
+    }
+    // Lo que ya falla en la escala general no se repite por cada edición.
+    fallas.push(
+      ...fallasDeRequeridos(derivada, PERFILES_COMPLETOS)
+        .filter((f) => !generales.includes(f))
+        .map((f) => `[${ed.nombre}] ${f}`),
+    );
+  }
+  return prueba("9 · Requeridos coherentes", fallas);
+}
+
 /** Corre todas. La versión se puede publicar si todas dan `ok`. */
 export function validarEscala(escala: Escala, opts: OpcionesDeValidacion = {}): ResultadoDePrueba[] {
   return [
@@ -278,5 +314,6 @@ export function validarEscala(escala: Escala, opts: OpcionesDeValidacion = {}): 
     identificadoresEstables(escala, opts),
     documentosAlineados(escala, opts),
     ...(escala.ediciones.length ? [edicionesCoherentes(escala)] : []),
+    ...(tieneRequeridos(escala) ? [requeridosCoherentes(escala)] : []),
   ];
 }

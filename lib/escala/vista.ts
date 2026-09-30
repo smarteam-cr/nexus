@@ -7,6 +7,7 @@
 import { resumenDeLaEdicion, type ResumenDeLaEdicion } from "./documento/edicion";
 import { sinTildes } from "./documento/parsear";
 import { perfilParaUrl, type Cierre, type Despues, type Perfil } from "./documento/perfil";
+import { enlacesQueAplican, requeridosDe, type EnlaceDeCriterio } from "./documento/requeridos";
 import type { ComoCambiaLaEscala } from "./documento/manual";
 import { DOCUMENTOS_DE_LA_ESCALA, type DocumentoDeLaEscala } from "./documento/documentos";
 import type {
@@ -72,6 +73,33 @@ export interface DatosDeLaVista {
   edicionesIntro: string | null;
   /** La edición con que se está viendo (null = la escala general) y cuánto cambió de ESTA área. */
   edicion: (EdicionAplicada & { resumen: ResumenDeLaEdicion }) | null;
+  /** Los requeridos de los criterios de ESTA área, en los dos sentidos (el otro lado puede ser de otra área). */
+  requeridos: RequeridosDelArea;
+}
+
+/** Por id de criterio: lo que requiere y quiénes lo requieren. Sin enlaces, el id no está. */
+export interface RequeridosDelArea {
+  requiere: Record<string, EnlaceDeCriterio[]>;
+  loRequieren: Record<string, EnlaceDeCriterio[]>;
+}
+
+/** Los requeridos de un área, como objetos planos (viajan del servidor al navegador). */
+export function requeridosDelArea(escala: Pick<Escala, "areas">, area: Pick<Area, "id">): RequeridosDelArea {
+  const { necesita, loNecesitan } = requeridosDe(escala);
+  const delArea = (m: Map<string, EnlaceDeCriterio[]>) => Object.fromEntries([...m].filter(([id]) => id.startsWith(`${area.id}.`)));
+  return { requiere: delArea(necesita), loRequieren: delArea(loNecesitan) };
+}
+
+/**
+ * Con qué criterios se relaciona uno, para marcarlos en la pantalla: los que requiere y los que lo
+ * requieren a él, de los que aplican al perfil elegido. Sin enlaces, los dos conjuntos van vacíos.
+ */
+export function relacionadosCon(id: string | null, requeridos: RequeridosDelArea, perfil: Perfil): { requiere: Set<string>; loRequieren: Set<string> } {
+  if (!id) return { requiere: new Set(), loRequieren: new Set() };
+  return {
+    requiere: new Set(enlacesQueAplican(requeridos.requiere[id], perfil).map((e) => e.id)),
+    loRequieren: new Set(enlacesQueAplican(requeridos.loRequieren[id], perfil).map((e) => e.id)),
+  };
 }
 
 /**
@@ -122,6 +150,7 @@ export function datosDeLaVista(args: {
     ediciones: escala.ediciones.map((e) => ({ slug: e.slug, nombre: e.nombre, descripcion: e.descripcion, perfilHabitual: e.perfilHabitual })),
     edicionesIntro: escala.edicionesIntro,
     edicion: escala.edicion ? { ...escala.edicion, resumen: resumenDeLaEdicion(area.dimensiones) } : null,
+    requeridos: requeridosDelArea(escala, area),
   };
 }
 

@@ -172,6 +172,49 @@ describe("la escala de juguete con una edición", () => {
   });
 });
 
+describe("los requeridos (prueba 9)", () => {
+  const opts = { especificacion: MINI_ESPECIFICACION, manual: MINI_MANUAL };
+  const prueba9 = (r: ResultadoDePrueba[]) => r.find((x) => x.nombre.startsWith("9"));
+  const conEnlace = (texto: string) => texto.replace("`[1.2.F2 · evaluado · venta con equipo]`", "`[1.2.F2 · evaluado · venta con equipo · requiere 1.1.F1]`");
+
+  it("solo corre si algún criterio requiere otro, y pasa con un enlace bien puesto", () => {
+    expect(prueba9(validarEscala(parsearEscala(MINI_ESCALA), opts))).toBeUndefined();
+    const r = validarEscala(parsearEscala(conEnlace(MINI_ESCALA)), opts);
+    expect(prueba9(r)).toMatchObject({ nombre: "9 · Requeridos coherentes", ok: true });
+    expect(fallidas(r)).toEqual([]);
+  });
+
+  it("9 · un requerido que no existe frena la publicación", () => {
+    const r = validarEscala(parsearEscala(MINI_ESCALA.replace("`[1.2.E1 · comprobable]`", "`[1.2.E1 · comprobable · requiere 1.1.F8]`")), opts);
+    expect(fallidas(r)).toEqual(["9 · Requeridos coherentes"]);
+    expect(prueba9(r)!.detalle).toEqual(["1.2.E1 requiere 1.1.F8, que no existe."]);
+  });
+
+  it("9 · lo que ya falla en la escala general no se repite por cada edición", () => {
+    const r = validarEscala(parsearEscala(MINI_ESCALA_CON_EDICION.replace("`[1.2.E1 · comprobable]`", "`[1.2.E1 · comprobable · requiere 1.1.O2]`")), opts);
+    expect(prueba9(r)!.detalle).toEqual(["1.2.E1 requiere 1.1.O2, que es de un nivel posterior al suyo."]);
+  });
+
+  it("9 · en una edición: el enlace a un criterio que ella sacó no es una falla; que lo requiera un criterio PROPIO, sí", () => {
+    const saca = (s: string) => s.replace("*No aplican:* `1.2.I1`.", "*No aplican:* `1.2.I1`, `1.2.F2`.").replace("*Se leen igual:* `1.2.F2`, ", "*Se leen igual:* ");
+    // De la matriz hacia el que la edición sacó: se cae solo.
+    const general = MINI_ESCALA.replace("`[1.1.E2 · declarado · hábito]`", "`[1.1.E2 · declarado · hábito · requiere 1.2.F2]`");
+    expect(fallidas(validarEscala(parsearEscala(general + saca(MINI_EDICION)), opts))).toEqual([]);
+    // Desde un criterio propio: eso lo escribió la edición.
+    const propio = saca(MINI_EDICION).replace("`[1.2.E101 · comprobable · recompra]`", "`[1.2.E101 · comprobable · recompra · requiere 1.2.F2]`");
+    const r = validarEscala(parsearEscala(MINI_ESCALA + propio), opts);
+    expect(fallidas(r)).toEqual(["9 · Requeridos coherentes"]);
+    expect(prueba9(r)!.detalle).toEqual(["[Tiendas de juguete] 1.2.E101 requiere 1.2.F2, que en esta edición no existe."]);
+  });
+
+  it("9 · una falla que solo aparece dentro de la edición dice en cuál", () => {
+    // El propio 1.2.F101 (Funcional) requiere 1.2.E101 (Eficiente): un nivel posterior.
+    const edicion = MINI_EDICION.replace("`[1.2.F101 · comprobable · hábito]`", "`[1.2.F101 · comprobable · hábito · requiere 1.2.E101]`");
+    const r = validarEscala(parsearEscala(MINI_ESCALA + edicion), opts);
+    expect(prueba9(r)!.detalle).toEqual(["[Tiendas de juguete] 1.2.F101 requiere 1.2.E101, que es de un nivel posterior al suyo."]);
+  });
+});
+
 describe("el archivo real pasa todas, con su especificación y su manual", () => {
   it("todas en verde", () => {
     const r = validarEscala(parsearEscala(leerArchivoDeLaEscala("escala")), {
@@ -224,6 +267,23 @@ describe("qué cambió entre versiones", () => {
     expect(c.ediciones[0]).toMatchObject({ slug: "tiendas", nueva: true, cambiados: [], viejos: [] });
     expect(c.ediciones[0].propiosDeLaEdicion).toBeGreaterThan(0);
     expect(compararEscalas(con, sin).edicionesRetiradas).toEqual(["Tiendas de juguete"]);
+  });
+
+  it("los requeridos que cambian se dicen aparte: no son un cambio de texto", () => {
+    const a = parsearEscala(MINI_ESCALA.replace("`[1.2.E1 · comprobable]`", "`[1.2.E1 · comprobable · requiere 1.1.F1]`"));
+    const b = parsearEscala(
+      MINI_ESCALA.replace("`[1.2.E1 · comprobable]`", "`[1.2.E1 · comprobable · requiere 1.1.F1, 1.1.E2]`").replace(
+        "`[1.2.F2 · evaluado · venta con equipo]`",
+        "`[1.2.F2 · evaluado · venta con equipo · requiere 1.1.F1]`",
+      ),
+    );
+    const c = compararEscalas(a, b);
+    expect(c.cambiados).toEqual([]);
+    expect(c.requeridos).toEqual([
+      { id: "1.2.F2", antes: [], despues: ["1.1.F1"] },
+      { id: "1.2.E1", antes: ["1.1.F1"], despues: ["1.1.F1", "1.1.E2"] },
+    ]);
+    expect(compararEscalas(a, a).requeridos).toEqual([]);
   });
 
   it("la diferencia palabra por palabra se vuelve a pegar tal cual", () => {

@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 8.2.0
+version: 8.3.0
 fecha: 2026-09-30
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -16,7 +16,7 @@ Tiene cinco partes. La primera explica qué es la escala y cómo pensarla: es co
 
 Las partes dos, tres, cuatro y cinco son normativas y se aplican al pie de la letra. Si algo de la primera parte parece contradecirlas, mandan ellas. Cualquier material derivado —una página teórica, una presentación, las preguntas del chequeo— respeta la matriz y las reglas sin reinterpretarlas.
 
-Cada criterio de la matriz termina con una etiqueta entre corchetes: su identificador, cómo se verifica y sus marcas. Es para los sistemas y para quien diagnostica; para entender la escala, se puede saltar.
+Cada criterio de la matriz termina con una etiqueta entre corchetes: su identificador, cómo se verifica, sus marcas y, si no se puede cumplir sin otro criterio, cuál requiere. Es para los sistemas y para quien diagnostica; para entender la escala, se puede saltar.
 
 **Cómo cambia.** La escala cambia con el feedback de su responsable y con los comentarios del equipo en Nexus. Cada cambio sale como una versión nueva y queda en el historial; cómo se decide está en el manual de operación.
 
@@ -225,6 +225,22 @@ Para que dos personas decidan igual, algunas palabras de los criterios tienen un
 **Departamentos de una o dos personas.** Varios criterios suponen un equipo o un líder aparte: roles por escrito, reuniones, que cualquiera explique igual el proceso. En un departamento de una o dos personas se leen como lo que haría falta para que otra persona pudiera tomar el puesto mañana: los roles por escrito son la función escrita; las reuniones del equipo, la revisión periódica con quien supervisa; y que cualquiera explique igual el proceso, que esté documentado de forma que alguien nuevo lo explique igual. Así se conserva lo que Funcional pide —no depender de una persona— aunque el equipo sea de una sola persona.
 
 **Equipos grandes.** Cómo se evalúa lo que hace «cualquier persona» de un equipo grande es una regla en espera del manual de operación: se activa con el primer diagnóstico de un equipo de más de 20 personas. Mientras tanto, el CSE decide a quién observar y lo escribe en la evidencia.
+
+## Criterios requeridos
+
+Algunos criterios no se pueden cumplir sin otro. Enfocar el esfuerzo en los leads que encajan con el cliente ideal necesita que el cliente ideal esté escrito; rendir cuentas en la pipeline review necesita que la reunión ocurra. Cuando ese otro criterio está en otra dimensión, o en un nivel anterior de la misma, el criterio lo dice en su etiqueta: lo requiere.
+
+Es la forma de no pedir lo mismo dos veces. Cada cosa se pide en una sola dimensión, la que responde su pregunta, y quien depende de ella la requiere en vez de repetirla.
+
+Un requerido no cambia el cálculo. El nivel y el puntaje de cada dimensión salen solo de sus propios criterios, como dice Cómo se evalúa cada dimensión. Si un requerido bajara el nivel de quien lo necesita, una sola cosa que falte le costaría a dos dimensiones, y eso es justo lo que se evita.
+
+**Para leer la escala.** Se ve de dónde se sostiene cada criterio y cuáles son cimiento: los que más criterios requieren son los que conviene tener primero.
+
+**Para ordenar el trabajo.** Lo que un criterio requiere se hace antes que él. Qué dimensión se trabaja primero lo sigue decidiendo la regla de Qué se trabaja primero; dentro de lo que falta, lo requerido va antes.
+
+**Para revisar un diagnóstico.** Un criterio que se dio por cumplido sin que lo esté lo que requiere es una señal para volver a mirar: o lo requerido se resuelve de otra forma, o el criterio no está tan cumplido como parece.
+
+Solo requieren, y solo se requieren, criterios de Funcional para arriba: Deficiente e Inicial describen lo que falta y se asignan por mejor ajuste. Lo requerido es siempre de un nivel igual o anterior —un criterio de Funcional no depende de uno de Eficiente—, y si es de la misma dimensión, de un nivel anterior. Con un perfil de negocio o con una edición, un requerido que no aplica se deja de lado: no se exige lo que no cuenta.
 
 ## El perfil de negocio
 
@@ -449,7 +465,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Hay secuencias de contacto de varios pasos que cambian según cómo responde el prospecto —si leyó, hizo clic o contestó—, y los leads y las conversaciones se asignan por múltiples condiciones o por capacidad, con control de quién ve y responde cada conversación. `[1.2.E2 · comprobable]`
 - Hay integración con ERP u otros sistemas operativos cuando aplica. `[1.2.E3 · comprobable]`
 - Hay paneles en tiempo real de conversión y de conversaciones: cuánto tarda la primera respuesta y cuántas quedan sin seguimiento. `[1.2.E4 · comprobable]`
-- El equipo usa la IA en su trabajo diario —para redactar, resumir conversaciones o sugerir el siguiente paso—, y la IA trabaja con el contexto de los clientes y prospectos. `[1.2.E5 · evaluado · hábito]`
+- El equipo usa la IA en su trabajo diario —para redactar, resumir conversaciones o sugerir el siguiente paso—, y la IA trabaja con el contexto de los clientes y prospectos. `[1.2.E5 · evaluado · hábito · requiere 1.3.F5, 1.3.F6, 1.3.F7]`
 
 **Óptimo.** Agentes de IA califican y agendan; el rep trabaja con predicción de cierre y respuestas sugeridas.
 
@@ -457,7 +473,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 - Hay análisis predictivo de cierre y sugerencias de respuesta según el contexto de cada conversación. `[1.2.O1 · comprobable]`
 - Agentes de IA califican leads y agendan reuniones 24/7 en el canal conversacional, y le pasan al vendedor, con el contexto, a quien está listo. `[1.2.O2 · comprobable]`
-- Las conclusiones que se calculan en el almacén central de datos vuelven al CRM: el vendedor ve en la ficha, por ejemplo, el potencial de la cuenta, sin salir de su herramienta. `[1.2.O3 · comprobable]`
+- Las conclusiones que se calculan en el almacén central de datos vuelven al CRM: el vendedor ve en la ficha, por ejemplo, el potencial de la cuenta, sin salir de su herramienta. `[1.2.O3 · comprobable · requiere 1.3.O4]`
 
 #### 1.3 Datos
 
@@ -488,8 +504,8 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Los duplicados están bajo control, a mano o de forma automática, y no distorsionan los reportes. `[1.3.F2 · comprobable · riesgo]`
 - Todo deal tiene rastreable la fuente del contacto original. `[1.3.F3 · comprobable]`
 - El reporte de pipeline se genera del sistema sin reconstruir números, y refleja el estado actual, no un pronóstico. `[1.3.F4 · comprobable]`
-- La documentación sobre el ICP no se deja envejecer. `[1.3.F5 · declarado · riesgo · hábito]`
-- La definición de lead calificado no se deja envejecer. `[1.3.F6 · declarado · riesgo · hábito · venta con equipo]`
+- La documentación sobre el ICP no se deja envejecer. `[1.3.F5 · declarado · riesgo · hábito · requiere 1.5.F1]`
+- La definición de lead calificado no se deja envejecer. `[1.3.F6 · declarado · riesgo · hábito · venta con equipo · requiere 1.6.F2]`
 - La documentación sobre las soluciones ofrecidas no se deja envejecer. `[1.3.F7 · declarado · riesgo · hábito]`
 - Se sabe qué parte de las ventas sin vendedor queda asociada a un cliente identificado, y ese número se revisa. `[1.3.F8 · comprobable · venta sin vendedor]`
 
@@ -499,7 +515,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 - Hay forecast con cadencia fija (semanal o quincenal) y precisión alta. `[1.3.E1 · comprobable · hábito]`
 - La deduplicación es automática por reglas o merge del sistema. `[1.3.E2 · comprobable]`
-- La ficha de cada cliente reúne lo comercial con lo que viene de otros sistemas —facturación, pedidos— cuando aplica, y con su historial de conversaciones: la vista 360° empieza a tomar forma. `[1.3.E3 · comprobable]`
+- La ficha de cada cliente reúne lo comercial con lo que viene de otros sistemas —facturación, pedidos— cuando aplica, y con su historial de conversaciones: la vista 360° empieza a tomar forma. `[1.3.E3 · comprobable · requiere 1.2.E3]`
 - La mayoría de las ventas sin vendedor quedan asociadas a un cliente identificado, no a un cliente genérico. `[1.3.E4 · comprobable · venta sin vendedor]`
 
 **Óptimo.** El forecast lo calcula un modelo y la vista 360° del cliente está operativa.
@@ -535,17 +551,17 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 *Resultado:* Cada vendedor sabe qué se espera de él, y el líder sabe cada semana quién va bien y quién necesita ayuda, antes de que termine el mes.
 
 - Cada persona del equipo tiene rol definido por escrito. `[1.4.F1 · declarado]`
-- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (valor del pipeline, deals creados, tasa de cierre, volumen) y lo consulta al menos semanalmente. `[1.4.F2 · evaluado · hábito]`
-- En la pipeline review se rinde cuentas: cada quien responde por lo que se comprometió en la anterior. `[1.4.F3 · evaluado · hábito]`
+- El líder tiene un dashboard descriptivo con 4 a 6 métricas clave (valor del pipeline, deals creados, tasa de cierre, volumen) y lo consulta al menos semanalmente. `[1.4.F2 · evaluado · hábito · requiere 1.3.F4]`
+- En la pipeline review se rinde cuentas: cada quien responde por lo que se comprometió en la anterior. `[1.4.F3 · evaluado · hábito · requiere 1.1.F5]`
 - Cada vendedor —o cada canal, donde se compra sin vendedor— tiene una meta clara, y su avance se reporta en cadencia fija. `[1.4.F4 · declarado · hábito]`
-- El líder ve en reportes automáticos qué tareas cumplió cada vendedor y cuáles tiene pendientes. `[1.4.F5 · comprobable · venta con equipo]`
+- El líder ve en reportes automáticos qué tareas cumplió cada vendedor y cuáles tiene pendientes. `[1.4.F5 · comprobable · venta con equipo · requiere 1.1.F6]`
 
 **Eficiente.** El liderazgo prepara a quien entra, acuerda reglas con Marketing y escucha al equipo.
 
 *Resultado:* Un vendedor nuevo produce más rápido, el traspaso de leads con Marketing tiene reglas que se cumplen, y lo que el equipo ve que no funciona llega a quien puede cambiarlo.
 
 - Cuando entra alguien nuevo al equipo, hay un plan de onboarding con sus pasos y materiales; no se le entrena de memoria. `[1.4.E2 · declarado]`
-- El SLA y el handoff con Marketing están definidos y son trazables: tiempo de respuesta, calidad del lead y criterios de rechazo. `[1.4.E3 · comprobable · venta con equipo]`
+- El SLA y el handoff con Marketing están definidos y son trazables: tiempo de respuesta, calidad del lead y criterios de rechazo. `[1.4.E3 · comprobable · venta con equipo · requiere 1.6.F2]`
 - Hay una cultura de retroalimentación del equipo hacia el sistema: lo que el equipo señala que no funciona se revisa y se le responde. `[1.4.E4 · evaluado · hábito]`
 
 **Óptimo.** El liderazgo decide con analítica avanzada y sostiene mesas de innovación comercial.
@@ -619,10 +635,10 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 *Resultado:* El equipo deja de perder tiempo con prospectos que no van a comprar y concentra el esfuerzo en los que encajan con el cliente ideal.
 
-- El equipo segmenta los leads por los atributos del cliente ideal antes de trabajarlos: en empresas, tamaño, industria o geografía; en personas, presupuesto, zona o lo que buscan. `[1.6.F1 · comprobable · venta con equipo]`
+- El equipo segmenta los leads por los atributos del cliente ideal antes de trabajarlos: en empresas, tamaño, industria o geografía; en personas, presupuesto, zona o lo que buscan. `[1.6.F1 · comprobable · venta con equipo · requiere 1.5.F1]`
 - Hay una definición escrita de lead calificado —los criterios para aceptar un lead como SQL— y se aplica de forma consistente. `[1.6.F2 · comprobable · hábito · venta con equipo]`
-- El esfuerzo se enfoca en los leads que encajan con el ICP (definido en Propuesta y Coherencia). `[1.6.F3 · evaluado · hábito · venta con equipo]`
-- La documentación de ICP se usa en la arquitectura de CRM y en los formularios. `[1.6.F4 · comprobable · venta con equipo]`
+- El esfuerzo se enfoca en los leads que encajan con el ICP. `[1.6.F3 · evaluado · hábito · venta con equipo · requiere 1.5.F1]`
+- La documentación de ICP se usa en la arquitectura de CRM y en los formularios. `[1.6.F4 · comprobable · venta con equipo · requiere 1.5.F1]`
 
 **Eficiente.** Aparece el lead scoring por reglas y las cuentas objetivo.
 
@@ -671,14 +687,14 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - La reactivación usa al menos dos canales, por ejemplo correo y llamada. `[1.7.F2 · comprobable · hábito]`
 - El liderazgo interviene sobre los deals estancados durante el período, no al cierre del trimestre cuando ya se perdieron. `[1.7.F3 · evaluado · hábito · venta con equipo]`
 - Hay assets estandarizados que ayudan a cerrar las ventas. `[1.7.F4 · declarado · venta con equipo]`
-- Los clientes que ya deberían haber vuelto a comprar se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5 · comprobable · hábito · recompra]`
+- Los clientes que ya deberían haber vuelto a comprar se reconocen a tiempo y reciben un recordatorio o un incentivo, sin esperar a que vuelvan solos. `[1.7.F5 · comprobable · hábito · recompra · requiere 1.2.F6]`
 
 **Eficiente.** El contacto es multicanal, el sistema le avisa al líder de lo que se traba y el lead que no está listo sigue en nutrición.
 
 *Resultado:* Ningún negocio espera a la reunión para recibir ayuda: el líder se entera cuando se traba, el lead que todavía no está listo sigue recibiendo contenido hasta que lo esté, y el vendedor tiene a mano el material que cada etapa necesita.
 
-- El contacto multicanal está definido —correo, llamada, canal conversacional y redes— y orquestado en cadencias. `[1.7.E1 · comprobable]`
-- Los leads que todavía no están listos para comprar no se abandonan: vuelven a nutrición y regresan a Ventas cuando muestran interés. `[1.7.E2 · comprobable · venta con equipo]`
+- El contacto multicanal está definido —correo, llamada, canal conversacional y redes— y orquestado en cadencias. `[1.7.E1 · comprobable · requiere 1.2.E2]`
+- Los leads que todavía no están listos para comprar no se abandonan: vuelven a nutrición y regresan a Ventas cuando muestran interés. `[1.7.E2 · comprobable · venta con equipo · requiere 1.4.E3]`
 - Los materiales de venta viven en una biblioteca central. `[1.7.E3 · declarado · venta con equipo]`
 - Cuando un negocio lleva más tiempo del acordado sin avanzar, el líder recibe un aviso del sistema, sin esperar a la pipeline review. `[1.7.E4 · comprobable · venta con equipo]`
 
@@ -719,7 +735,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 *Resultado:* Los mismos errores dejan de repetirse: lo que se aprende de cada pérdida vuelve al proceso y a la capacitación del equipo.
 
 - Se revisan periódicamente los deals perdidos para identificar patrones. `[1.8.E1 · declarado · hábito]`
-- El proceso o playbook se refina con base en lo aprendido. `[1.8.E2 · declarado · hábito]`
+- El proceso o playbook se refina con base en lo aprendido. `[1.8.E2 · declarado · hábito · requiere 1.1.F4]`
 - Hay capacitación comercial recurrente y formal para el equipo. `[1.8.E3 · declarado · hábito · venta con equipo]`
 
 **Óptimo.** Las llamadas se analizan solas y la IA sugiere correcciones al playbook.
@@ -727,7 +743,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 *Resultado:* El equipo mejora en cada llamada: el análisis automático señala qué funciona y qué corregir, y la estrategia se ajusta con esa evidencia.
 
 - Las llamadas se analizan automáticamente con coaching basado en patrones. `[1.8.O1 · comprobable · venta con equipo]`
-- La IA propone correcciones al playbook a partir de lo que encuentra en las llamadas. `[1.8.O2 · comprobable · venta con equipo]`
+- La IA propone correcciones al playbook a partir de lo que encuentra en las llamadas. `[1.8.O2 · comprobable · venta con equipo · requiere 1.1.E2]`
 - La estrategia comercial se ajusta con base en data de qué funciona. `[1.8.O3 · evaluado · hábito]`
 
 ---
@@ -1597,6 +1613,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 
 ## Historial de versiones
 
+**8.3.0 (2026-09-30).** Un criterio puede decir cuáles otros requiere: los que necesita para poder cumplirse y que están en otra dimensión, o en un nivel anterior de la suya. Lo dice en su etiqueta, y la Parte 2 suma «Criterios requeridos», que explica para qué sirve: leer de dónde se sostiene cada criterio, ordenar el trabajo y revisar un diagnóstico. No cambia el nivel ni el puntaje. En Ventas, 17 criterios dicen lo que requieren: el documento del cliente ideal sostiene cuatro criterios de Priorización de Leads y de Datos; la definición de lead calificado, dos; y la pipeline review, la rendición de cuentas. El criterio que enfoca el esfuerzo en los leads que encajan con el cliente ideal deja de nombrar entre paréntesis dónde se define: lo dice su requerido. En la edición Ecommerce y retail, cuatro criterios propios dicen lo que requieren. Ningún criterio ni identificador cambia.
+
 **8.2.0 (2026-09-30).** Ventas deja de pedir lo mismo en dos dimensiones, después de revisar con su responsable los criterios que se repetían. Cada cosa queda en un solo lugar: la integración con otros sistemas, en Tecnología, y Datos pide su resultado; la pipeline review, en Procesos, y Equipo y Gobierno pide que en ella se rinda cuentas; que el equipo trabaje en el CRM, en Procesos, y Tecnología pide que las conversaciones queden en el sistema; la definición de lead calificado, en Priorización de Leads; mejorar el proceso con lo aprendido, en Aprendizaje; vigilar que el proceso se cumpla, en Procesos; y el líder sobre los negocios en riesgo, en Tracción del Deal, que suma en Eficiente el aviso automático al líder. El traspaso con Marketing queda en Equipo y Gobierno, y Tracción pide lo que le toca a Ventas: que el lead que no está listo vuelva a nutrición. En Óptimo, la siguiente mejor acción queda en Priorización, detectar desviaciones en Procesos y ajustar con data en Aprendizaje. Salen cuatro criterios —la definición de oportunidad calificada y el refinamiento del proceso en Procesos, las alertas en Equipo y Gobierno, y el equipo como unidad cohesiva en Propuesta y Coherencia—, entra uno y una docena se dicen de nuevo. Vigilar la adherencia pasa a aplicar a todos los perfiles, para que Eficiente de Procesos no quede vacío donde se vende sin vendedor. La regla de asignación corrige dos casos que decían otra cosa que la matriz y suma cinco, y el glosario, «Lead calificado». En la edición Ecommerce y retail, las alertas de ventas por canal pasan a ser un criterio propio. Cambia lo que piden Funcional, Eficiente y Óptimo en varias dimensiones de Ventas.
 
 **8.1.0 (2026-09-30).** Revisión de Aprendizaje de Ganadas y Perdidas de Ventas con su responsable, con un solo cambio: sale de Funcional el criterio de las ventas ganadas que se caen antes de la entrega, que había entrado en la 7.7.0. Su identificador queda retirado, y la regla de asignación dice que eso se mide solo en las ediciones que lo traen como criterio propio. En la edición Ecommerce y retail, que cada pedido cancelado o devuelto deje su razón pasa a ser un criterio propio. Cambia lo que pide Funcional en Aprendizaje de Ganadas y Perdidas.
@@ -1665,10 +1683,10 @@ La matriz de la Parte 3 es la escala general, escrita para cualquier empresa. Un
 
 ## Qué cambia una edición y qué no
 
-- **Lo que no cambia.** Las áreas, las dimensiones y sus identificadores; los cinco niveles; las marcas de cada criterio; las reglas de la Parte 2 y el cálculo de la especificación. Las dimensiones de base operativa conservan su nombre, que es el mismo en las tres áreas.
+- **Lo que no cambia.** Las áreas, las dimensiones y sus identificadores; los cinco niveles; las marcas de cada criterio y lo que requiere; las reglas de la Parte 2 y el cálculo de la especificación. Las dimensiones de base operativa conservan su nombre, que es el mismo en las tres áreas.
 - **Decir lo mismo con otras palabras.** Una edición puede reescribir un criterio de la matriz. El criterio conserva su identificador y sus marcas, y tiene que medir lo mismo y aplicar a los mismos, con los mismos umbrales: si cambia lo que se pide, no es una reescritura.
 - **Criterios propios.** Lo que solo tiene sentido en la industria entra como un criterio propio de la edición. Lleva un identificador del bloque de su edición —del 101 al 199 en la primera, del 201 al 299 en la segunda—, para que no se cruce con la numeración de la matriz ni con la de otra edición.
-- **Criterios que no aplican.** Una edición puede decir que un criterio de la matriz no aplica a su industria. Sale de la cuenta, igual que uno que no corresponde al perfil de negocio. Lo que no puede hacer es sacar una dimensión entera.
+- **Criterios que no aplican.** Una edición puede decir que un criterio de la matriz no aplica a su industria. Sale de la cuenta, igual que uno que no corresponde al perfil de negocio, y si otro criterio lo requería, ese requerido se deja de lado en la edición. Lo que no puede hacer es sacar una dimensión entera.
 - **Todo criterio queda decidido.** Si una edición toca los criterios de una dimensión, dice algo de todos los de la matriz: lo reescribe, lo saca o lo deja como está. Así, cuando la matriz suma un criterio, cada edición tiene que decidir qué hace con él.
 - **Lo que una edición no dice, vale como está en la matriz.** Una dimensión de la que la edición solo cambia el nombre, la pregunta o el costo se sigue midiendo con los criterios generales, y la tabla de palabras de la edición dice cómo se llama cada cosa en la industria.
 
@@ -1680,7 +1698,7 @@ Una edición puede darle criterios a una dimensión que en la escala general no 
 
 ## Cómo se escribe una edición
 
-Igual que la matriz, y solo lo que cambia. Abre con para quién es, su clave —que no cambia aunque la edición cambie de nombre—, su perfil habitual y desde qué número van sus criterios propios. Siguen la tabla de palabras y, después, cada área y cada dimensión que cambia. Un criterio reescrito lleva en la etiqueta solo su identificador; uno propio lleva la etiqueta completa. Al final de cada dimensión van los criterios de la matriz que no aplican y los que se leen igual.
+Igual que la matriz, y solo lo que cambia. Abre con para quién es, su clave —que no cambia aunque la edición cambie de nombre—, su perfil habitual y desde qué número van sus criterios propios. Siguen la tabla de palabras y, después, cada área y cada dimensión que cambia. Un criterio reescrito lleva en la etiqueta solo su identificador, y conserva lo que requiere en la matriz; uno propio lleva la etiqueta completa, con lo que requiere si no se puede cumplir sin otro. Al final de cada dimensión van los criterios de la matriz que no aplican y los que se leen igual.
 
 ## Edición — Ecommerce y retail
 
@@ -1942,15 +1960,15 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 *Resultado:* Quien compra por primera vez y quien compra seguido reciben ofertas distintas, y cada compra trae una sugerencia que tiene sentido.
 
-- Los compradores se separan al menos en nuevos y recurrentes, y cada grupo recibe en la tienda una oferta distinta. `[1.6.F101 · comprobable]`
+- Los compradores se separan al menos en nuevos y recurrentes, y cada grupo recibe en la tienda una oferta distinta. `[1.6.F101 · comprobable · requiere 1.2.F6]`
 - Al ver un producto o el carrito, el comprador recibe sugerencias de productos relacionados. `[1.6.F102 · comprobable]`
 
 **Eficiente.** Las ofertas salen de la historia de compra, y los mejores clientes tienen un trato propio.
 
 *Resultado:* Cada comprador ve ofertas que salen de lo que él compra, el valor promedio del pedido sube con la venta cruzada, y los mejores clientes lo notan.
 
-- Las sugerencias y las ofertas salen de la historia de compra de cada cliente: qué compró, cuánto y cada cuánto. `[1.6.E101 · comprobable]`
-- Los mejores clientes están identificados y tienen un trato distinto: acceso anticipado, beneficios o atención preferente. `[1.6.E102 · comprobable]`
+- Las sugerencias y las ofertas salen de la historia de compra de cada cliente: qué compró, cuánto y cada cuánto. `[1.6.E101 · comprobable · requiere 1.3.E101]`
+- Los mejores clientes están identificados y tienen un trato distinto: acceso anticipado, beneficios o atención preferente. `[1.6.E102 · comprobable · requiere 1.3.E101]`
 - Se mide el valor promedio del pedido y cuánto de la venta viene de sugerencias, paquetes y venta cruzada. `[1.6.E103 · comprobable]`
 
 **Óptimo.** La IA arma la tienda para cada comprador en tiempo real.
@@ -1996,7 +2014,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 *Resultado:* La tienda sabe cuándo le toca volver a cada cliente y se lo recuerda en ese momento, y mide cuánto recupera.
 
 - La recuperación y la recompra están orquestadas en cadencias por varios canales —correo, canal conversacional, notificaciones y anuncios—. `[1.7.E1]`
-- Cada producto que se acaba o caduca tiene medido cada cuánto se vuelve a comprar, y el recordatorio sale en ese momento. `[1.7.E101 · comprobable · recompra]`
+- Cada producto que se acaba o caduca tiene medido cada cuánto se vuelve a comprar, y el recordatorio sale en ese momento. `[1.7.E101 · comprobable · recompra · requiere 1.3.E4]`
 - Se mide cuántos carritos se recuperan y cuántos clientes vuelven a comprar, y con qué mensaje. `[1.7.E102 · comprobable]`
 
 **Óptimo.** El sistema sabe cuándo le toca volver a cada cliente, y con qué oferta.

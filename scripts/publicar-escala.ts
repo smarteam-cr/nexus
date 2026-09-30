@@ -44,7 +44,7 @@ import { compararEscalas } from "@/lib/escala/documento/diferencias";
 import { DOCUMENTOS_DE_LA_ESCALA, type DocumentoDeLaEscala } from "@/lib/escala/documento/documentos";
 import { leerEncabezado, parsearEscala, todosLosCriterios } from "@/lib/escala/documento/parsear";
 import { ErrorDeFormato, type Escala } from "@/lib/escala/documento/tipos";
-import { validarEscala } from "@/lib/escala/documento/validar";
+import { tieneRequeridos, validarEscala } from "@/lib/escala/documento/validar";
 import { huellaDe } from "@/lib/escala/documento/huella";
 
 const APPLY = resolverApply({ tablas: ["EscalaDocumento"] });
@@ -113,7 +113,8 @@ async function main() {
   titulo(`Escala ${escala.version} (${escala.fecha ?? "sin fecha"})`);
   console.log(
     `${escala.areas.length} áreas · ${escala.areas.flatMap((a) => a.dimensiones).length} dimensiones · ${criterios.length} criterios` +
-      ` (${criterios.filter((c) => c.riesgo).length} de riesgo, ${criterios.filter((c) => c.habito).length} hábitos, ${criterios.filter((c) => c.perfil).length} con perfil)`,
+      ` (${criterios.filter((c) => c.riesgo).length} de riesgo, ${criterios.filter((c) => c.habito).length} hábitos, ${criterios.filter((c) => c.perfil).length} con perfil,` +
+      ` ${criterios.filter((c) => c.requiere?.length).length} que requieren otro)`,
   );
   for (const ed of escala.ediciones) {
     const dims = ed.areas.flatMap((a) => a.dimensiones);
@@ -189,6 +190,11 @@ async function main() {
           console.error(`⛔ pruebas_escala.py no dijo nada de ${sinMirar.map((ed) => `«${ed.nombre}»`).join(", ")}: no está leyendo las ediciones.`);
           fallas.push("pruebas_escala.py (no lee las ediciones)");
         }
+        // Lo mismo con los requeridos: un Python que no conoce la marca saltaría esos criterios enteros.
+        if (tieneRequeridos(escala) && !(r.stdout ?? "").includes("9 · Requeridos coherentes")) {
+          console.error("⛔ pruebas_escala.py no corrió la prueba 9: no está leyendo los criterios que requieren otro.");
+          fallas.push("pruebas_escala.py (no lee los requeridos)");
+        }
       }
     }
 
@@ -200,6 +206,10 @@ async function main() {
       for (const id of c.nuevos.slice(0, 20)) console.log(`  + ${id}`);
       for (const id of c.retirados.slice(0, 20)) console.log(`  − ${id}`);
       for (const x of c.cambiados.slice(0, 20)) console.log(`  ~ ${x.id}`);
+      if (c.requeridos.length) {
+        console.log(`${c.requeridos.length} con otros requeridos:`);
+        for (const x of c.requeridos.slice(0, 30)) console.log(`  → ${x.id}: ${x.antes.join(", ") || "ninguno"} ⇒ ${x.despues.join(", ") || "ninguno"}`);
+      }
       const tocados = [...c.cambiados.map((x) => x.id), ...c.retirados];
       if (tocados.length) {
         const comentarios = await prisma.escalaComentario.count({ where: { ancla: { in: tocados } } });

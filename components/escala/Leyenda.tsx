@@ -50,6 +50,7 @@ export default function Leyenda({ datos }: { datos: DatosDeLaVista }) {
           {bloque("Cómo se evalúa cada dimensión", datos.explicaciones.evaluacion)}
           {bloque("Riesgo", datos.explicaciones.riesgo)}
           {bloque("Hábito y niveles por confirmar", datos.explicaciones.habito)}
+          {bloque("Criterios requeridos", datos.explicaciones.requeridos)}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-fg">Cómo se verifica cada criterio</h3>
             {(["comprobable", "declarado", "evaluado"] as const).map((v) =>

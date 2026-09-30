@@ -7,9 +7,10 @@
  * dimensión de punta a punta. Al costado, cómo se ve el área entera en el nivel que se mira
  * («Los cinco niveles de un vistazo»), para no perder el cuadro grande.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
+import type { EnlaceDeCriterio } from "@/lib/escala/documento/requeridos";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeDimension, useEscala } from "./contexto";
@@ -17,6 +18,7 @@ import { PUNTO_DE_NIVEL } from "./niveles";
 import {
   BotonComentar,
   Contador,
+  EnlacesDelCriterio,
   MetaDelCriterio,
   NoAplicanEnLaEdicion,
   NombreGeneral,
@@ -47,6 +49,20 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
   const reglas = datos.asignacion.filter((r) => r.dimensiones.includes(d.id));
   /** «Qué se trabaja primero»: el orden de su capa en esta área (y el perfil elegido). */
   const ordenes = capa ? ordenDeDependencias(datos.dependencias, area.nombre, capa.nombre, perfil.cierre) : [];
+
+  /**
+   * El criterio al que se llegó desde un requerido: suele estar en otra dimensión, así que se cambia
+   * de dimensión, se lo trae a la vista y queda marcado hasta que se vaya a otro.
+   */
+  const [llegada, setLlegada] = useState<string | null>(null);
+  const irAlCriterio = (e: EnlaceDeCriterio) => {
+    onElegirDimension(e.dimension);
+    setLlegada(e.id);
+  };
+  useEffect(() => {
+    if (!llegada) return;
+    document.getElementById(`criterio-${llegada}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [llegada, d.id]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[230px_minmax(0,1fr)_270px]">
@@ -182,13 +198,21 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                   {visibles.length > 0 && (
                     <ul className="flex flex-col gap-3">
                       {visibles.map((c) => (
-                        <li key={c.id} className={cn("flex items-start gap-3 rounded-lg px-1 py-0.5", anclaAbierta === c.id && "bg-info-surface")}>
+                        <li
+                          key={c.id}
+                          id={`criterio-${c.id}`}
+                          className={cn(
+                            "flex items-start gap-3 rounded-lg px-1 py-0.5",
+                            anclaAbierta === c.id ? "bg-info-surface" : llegada === c.id && "bg-info-surface ring-2 ring-brand/25",
+                          )}
+                        >
                           <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-fg-muted" aria-hidden />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm leading-relaxed text-fg">
                               <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                             </p>
-                            <MetaDelCriterio criterio={c} datos={datos} className="mt-1.5" />
+                            <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} className="mt-1.5" />
+                            <EnlacesDelCriterio criterio={c} datos={datos} perfil={perfil} onIr={irAlCriterio} className="mt-2" />
                           </div>
                           <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => abrirComentarios(c.id)} etiqueta={`Comentarios de ${c.id}`} />
                         </li>
