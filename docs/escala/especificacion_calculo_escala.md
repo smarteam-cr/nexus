@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.2.1
-escala: 8.1.0
+version: 1.2.2
+escala: 8.2.0
 fecha: 2026-09-30
 ---
 
@@ -19,11 +19,11 @@ Junto al identificador va la forma de verificación: comprobable, declarado o ev
 
 Los identificadores son estables. Se asignaron desde cero en la versión 6.0.0, y desde entonces no se reasignan ni se renumeran. Si un criterio se retira, su número queda vacío y no se reutiliza; si se agrega uno, toma el siguiente número libre de su nivel. Eso permite que el chequeo, el cotizador y los agentes apunten siempre al mismo criterio, aunque cambie su redacción.
 
-Identificadores retirados, que no se vuelven a usar: `1.2.F1`, `1.2.F5`, `1.8.F4`, `2.2.F6`, `2.2.F7` y `3.2.F7`.
+Identificadores retirados, que no se vuelven a usar: `1.1.E4`, `1.1.F3`, `1.2.F1`, `1.2.F5`, `1.4.E1`, `1.5.E1`, `1.8.F4`, `2.2.F6`, `2.2.F7` y `3.2.F7`.
 
 Un criterio que cambia de dimensión se retira y entra con el siguiente número libre de su nueva dimensión: `1.2.F1` es hoy `1.1.F6`.
 
-La etiqueta de cada criterio sigue siempre el mismo orden: identificador, forma de verificación y, solo si corresponden, las marcas riesgo, hábito y de perfil, separadas por « · ». Por ejemplo: `[1.1.F3 · evaluado · hábito · venta con equipo]`.
+La etiqueta de cada criterio sigue siempre el mismo orden: identificador, forma de verificación y, solo si corresponden, las marcas riesgo, hábito y de perfil, separadas por « · ». Por ejemplo: `[1.1.F6 · evaluado · hábito · venta con equipo]`.
 
 Las ediciones por industria, en la Parte 5 de la escala, usan los mismos identificadores. Un criterio de la matriz que una edición dice con sus palabras sigue siendo el mismo criterio: en la edición lleva en la etiqueta solo su identificador, `[1.7.F1]`, y conserva la forma de verificación y las marcas que tiene en la matriz. Un criterio propio de una edición lleva la etiqueta completa y un número del bloque de su edición —del 101 al 199 en la primera, del 201 al 299 en la segunda—: `1.7.E101` solo existe en la primera edición. La matriz numera siempre por debajo de 100, así que un identificador dice por sí solo si el criterio es de la matriz o de una edición, y de cuál. Los criterios propios también son estables: no se reasignan ni se renumeran.
 
@@ -120,6 +120,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.2.2 (2026-09-30).** Acompaña a la escala 8.2.0, que deja cada cosa de Ventas en una sola dimensión: quedan retirados `1.1.F3`, `1.1.E4`, `1.4.E1` y `1.5.E1`. No cambia el cálculo.
 
 **1.2.1 (2026-09-30).** Acompaña a la escala 8.1.0: `1.8.F4` queda retirado. No cambia el cálculo.
 
