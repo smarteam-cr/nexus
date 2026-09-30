@@ -45,9 +45,14 @@ describe("la escala de juguete", () => {
     expect(t).toMatchObject({ id: "1.2", capa: "produccion", generica: { nombre: "Alcance" } });
   });
 
-  it("«Qué mide» es opcional: se lee entero (aunque venga en dos líneas) y, si falta, queda vacío", () => {
-    expect(t.queMide).toBe("Si alguien ve cuando un negocio deja de avanzar.");
-    expect(p.queMide).toBeNull();
+  it("la descripción de la dimensión: se lee entera (aunque venga en dos líneas) y, si falta, queda vacía", () => {
+    expect(t.descripcion).toBe("Si alguien ve cuando un negocio deja de avanzar.");
+    expect(p.descripcion).toBeNull();
+  });
+
+  it("«Qué mide», como se llamó en la 7.6.0, se sigue leyendo como la descripción", () => {
+    const vieja = parsearEscala(MINI_ESCALA.replace("*Descripción:* Si alguien", "*Qué mide:* Si alguien"));
+    expect(vieja.areas[0].dimensiones[1].descripcion).toBe("Si alguien ve cuando un negocio deja de avanzar.");
   });
 
   it("cada dimensión trae los cinco niveles, con resultado solo desde Funcional", () => {
@@ -194,9 +199,9 @@ describe("lo que el lector rechaza, con su línea", () => {
     );
   });
 
-  it("«Qué mide» después de los niveles", () => {
-    expect(falla(MINI_ESCALA.replace("**Óptimo.** El sistema vigila.", "**Óptimo.** El sistema vigila.\n\n*Qué mide:* Tarde."))).toMatch(
-      /«Qué mide» fuera de lugar/,
+  it("la descripción de la dimensión después de los niveles", () => {
+    expect(falla(MINI_ESCALA.replace("**Óptimo.** El sistema vigila.", "**Óptimo.** El sistema vigila.\n\n*Descripción:* Tarde."))).toMatch(
+      /descripción de la dimensión está fuera de lugar/,
     );
   });
 

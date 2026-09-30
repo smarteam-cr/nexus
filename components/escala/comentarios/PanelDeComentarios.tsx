@@ -155,10 +155,9 @@ export default function PanelDeComentarios({
             ) : (
               <>
                 <p className="text-sm leading-relaxed text-fg">{resuelta.dimension.pregunta}</p>
-                {resuelta.dimension.queMide && (
+                {resuelta.dimension.descripcion && (
                   <p className="text-xs leading-relaxed text-fg-secondary">
-                    <span className="font-semibold text-fg">Qué mide · </span>
-                    <TextoConPalabras texto={resuelta.dimension.queMide} palabras={datos.terminos} />
+                    <TextoConPalabras texto={resuelta.dimension.descripcion} palabras={datos.terminos} />
                   </p>
                 )}
                 <p className="text-xs leading-relaxed text-warn-ink">

@@ -131,7 +131,7 @@ prueba("3 · Los ejemplos cuadran",
        f"textos que faltan en la especificación={[t for t in textos if t not in espec]}")
 
 # 4 · Sin identificadores a la vista (criterios, resultados, costos y mensajes de riesgo)
-visibles = [l for l in matriz.split("\n") if l.startswith(("- ", "*Resultado", "*Costo", "*Qué mide", "**"))]
+visibles = [l for l in matriz.split("\n") if l.startswith(("- ", "*Resultado", "*Costo", "*Descripción", "**"))]
 fugas = [re.sub(r" `\[[^]]*\]`$", "", l)[:80] for l in visibles if re.search(r"\b[123]\.[1-8]\b", re.sub(r" `\[[^]]*\]`$", "", l))]
 ini = s.index("## Riesgos")
 riesgos = s[ini:s.index("\n## ", ini + 1)]

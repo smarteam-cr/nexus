@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.0.9
-escala: 7.6.0
+version: 1.0.10
+escala: 7.6.1
 fecha: 2026-09-29
 ---
 
@@ -112,6 +112,8 @@ python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_
 La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
 
 ## Historial de versiones
+
+**1.0.10 (2026-09-29).** Acompaña a la escala 7.6.1. No cambia el cálculo.
 
 **1.0.9 (2026-09-29).** Acompaña a la escala 7.6.0. No cambia el cálculo.
 

@@ -96,7 +96,7 @@ describe("fuente única: la escala no está escrita en el código", () => {
   const perfil = escala.perfilDeNegocio;
   const textos = [
     ...todosLosCriterios(escala).map((c) => c.texto),
-    ...todasLasDimensiones(escala).flatMap((d) => [d.pregunta, d.queMide ?? "", d.costoDeQuedarse, ...d.niveles.map((n) => n.descripcion)]),
+    ...todasLasDimensiones(escala).flatMap((d) => [d.pregunta, d.descripcion ?? "", d.costoDeQuedarse, ...d.niveles.map((n) => n.descripcion)]),
     ...Object.values(escala.riesgos),
     ...(escala.explicaciones.evaluacion?.split("\n\n") ?? []),
     ...escala.casosDeLectura.map((b) => b.texto),

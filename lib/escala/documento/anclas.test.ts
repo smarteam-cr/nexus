@@ -16,14 +16,14 @@ import { parsearEscala } from "./parsear";
 const e = parsearEscala(MINI_ESCALA);
 
 describe("resolverAncla", () => {
-  it("una dimensión: nombre, pregunta, qué mide (si lo dice) y costo", () => {
+  it("una dimensión: nombre, pregunta, descripción (si la tiene) y costo", () => {
     const a = resolverAncla(e, "1.2")!;
     expect(a.tipo).toBe("dimension");
     expect(a.ruta).toBe("Ventas · Tracción del Deal");
     expect(a.texto).toBe(
-      "Tracción del Deal\n¿Qué pasa cuando un negocio se enfría?\nQué mide: Si alguien ve cuando un negocio deja de avanzar.\nCosto de quedarse: Los negocios mueren en silencio.",
+      "Tracción del Deal\n¿Qué pasa cuando un negocio se enfría?\nSi alguien ve cuando un negocio deja de avanzar.\nCosto de quedarse: Los negocios mueren en silencio.",
     );
-    // Sin «Qué mide», el texto es el de siempre (los comentarios viejos no cambian).
+    // Sin descripción, el texto es el de siempre (los comentarios viejos no cambian).
     expect(resolverAncla(e, "1.1")!.texto).toBe(
       "Procesos y Rutinas\n¿La operación sigue sin la persona clave?\nCosto de quedarse: Se pierde el proceso.",
     );

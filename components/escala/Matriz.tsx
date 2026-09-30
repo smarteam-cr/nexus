@@ -121,10 +121,9 @@ function FilaDeDimension({
           </span>
           <span className="mt-1 block text-xs leading-snug text-fg-secondary">{d.pregunta}</span>
         </button>
-        {d.queMide && (
+        {d.descripcion && (
           <p className="text-2xs leading-snug text-fg-secondary">
-            <span className="font-semibold text-fg">Qué mide · </span>
-            <TextoConPalabras texto={d.queMide} palabras={datos.terminos} />
+            <TextoConPalabras texto={d.descripcion} palabras={datos.terminos} />
           </p>
         )}
         <p className="text-2xs leading-snug text-fg-muted">

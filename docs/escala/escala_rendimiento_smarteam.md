@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.6.0
+version: 7.6.1
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -356,6 +356,8 @@ Mide el rendimiento del área de Ventas: cómo opera internamente y qué produce
 
 Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo igual?
 
+*Descripción:* Mide si la venta sigue un proceso escrito y repetible, con etapas, cadencias y reuniones que no dependen de nadie.
+
 *Costo de quedarse:* Si se va tu mejor vendedor, se lleva el proceso con él: cada quien vende a su manera y no hay forma de repetir lo que funciona.
 
 **Deficiente.** Sin proceso. Cada asesor vende a su manera y la información clave vive en cabezas o libretas.
@@ -404,6 +406,8 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 ¿Qué parte del tiempo del vendedor se va en tareas que el sistema podría hacer, y cuánto del stack que paga el cliente se está aprovechando?
 
+*Descripción:* Mide cuánto del trabajo repetitivo hace el sistema y cuánto aprovecha el equipo el CRM, la automatización y la IA.
+
 *Costo de quedarse:* Tus vendedores pierden horas en tareas que el sistema podría hacer, pagas herramientas que no usan, y los leads se enfrían mientras alguien decide a quién le tocan.
 
 **Deficiente.** Sin CRM o uso mínimo.
@@ -447,6 +451,8 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 #### 1.3 Datos
 
 ¿Confías en tu forecast, en tu conversión y en tu visibilidad de pipeline, o los validas antes de usarlos?
+
+*Descripción:* Mide si los datos de ventas son confiables para decidir: registros completos, origen de cada negocio y reportes sin reconstruir.
 
 *Costo de quedarse:* Decides con números que no cuadran: el pronóstico se arma a mano, cambia en cada reunión y nadie sabe cuál es el real.
 
@@ -497,6 +503,8 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 ¿El liderazgo decide con datos o con intuición, y con qué cadencia interviene?
 
+*Descripción:* Mide si el liderazgo gestiona con roles claros, metas y datos, y si revisa al equipo con una cadencia fija.
+
 *Costo de quedarse:* El líder se entera tarde de lo que pasa y decide por intuición: los problemas aparecen cuando ya no hay tiempo de corregirlos.
 
 **Deficiente.** Equipo sin estructura formal.
@@ -541,6 +549,8 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 ¿El equipo opera desde una definición compartida de a quién sirve, y el cliente percibe una propuesta coherente, o todo depende del rep que le toque?
 
+*Descripción:* Mide si el equipo comparte cliente ideal y mensaje, y si la propuesta llega igual con cualquier vendedor.
+
 *Costo de quedarse:* Cada vendedor cuenta una historia distinta y persigue clientes distintos: el comprador no ve qué te hace diferente y termina comparando por precio.
 
 **Deficiente.** El cliente recibe mensajes y propuestas distintos según el vendedor; la calidad depende de cada uno.
@@ -580,7 +590,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 ¿El equipo trabaja los leads correctos, o todos por igual?
 
-*Qué mide:* Cómo decide el equipo a qué leads dedicar su tiempo primero: si los separa con criterios escritos que salen del cliente ideal, y si el CRM ayuda a aplicarlos. En la venta transaccional no aplica, porque nadie elige a quién atender.
+*Descripción:* Mide si el equipo decide a qué leads dedicar su tiempo con criterios escritos, basados en el cliente ideal.
 
 *Costo de quedarse:* Tu equipo le dedica el mismo esfuerzo a quien nunca va a comprar que a quien está listo, y los mejores leads esperan su turno.
 
@@ -623,7 +633,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 ¿Qué pasa cuando un deal se enfría?
 
-*Qué mide:* Qué pasa con un deal abierto mientras no se cierra: si alguien se da cuenta cuando deja de avanzar, si hay una respuesta acordada para reactivarlo —por más de un canal, con assets y con ayuda del líder— y si esa respuesta llega a tiempo. En la venta transaccional, el deal es el carrito o el pedido: mide si los carritos abandonados se recuperan.
+*Descripción:* Mide si alguien detecta cuando un deal deja de avanzar y si hay una respuesta acordada para reactivarlo a tiempo.
 
 *Costo de quedarse:* Los negocios se enfrían en silencio: nadie ve cuándo dejaron de avanzar, y los pierdes sin saber por qué.
 
@@ -668,6 +678,8 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 #### 1.8 Aprendizaje de Ganadas y Perdidas
 
 ¿El equipo mejora con cada deal, o repite los mismos errores?
+
+*Descripción:* Mide si el equipo registra por qué gana y por qué pierde cada negocio, y si usa eso para mejorar.
 
 *Costo de quedarse:* Pierdes negocios por las mismas razones una y otra vez, porque nadie registra por qué se ganan ni por qué se pierden.
 
@@ -716,6 +728,8 @@ Mide el rendimiento del área de Marketing: cómo opera internamente y qué prod
 
 Si mañana rota el coordinador o el principal generador de contenido, ¿las campañas siguen saliendo en tiempo y forma?
 
+*Descripción:* Mide si las campañas salen con un proceso y un calendario compartidos, sin depender de quién las arma.
+
 *Costo de quedarse:* Cada campaña depende de quien la arma: si esa persona se va, el marketing se detiene y hay que empezar de cero.
 
 **Deficiente.** Cada quien opera a su criterio; no hay calendario ni ceremonias.
@@ -759,6 +773,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 #### 2.2 Tecnología y Automatización
 
 ¿Qué parte del esfuerzo se va en tareas que un workflow o una IA podrían hacer, y cuánto del stack instalado se está aprovechando?
+
+*Descripción:* Mide cuánto del stack de marketing se aprovecha y cuánto trabajo repetitivo hacen los workflows y la IA.
 
 *Costo de quedarse:* Pagas herramientas que no usas y haces a mano lo que podría salir solo, mientras lo que entra por tus canales espera respuesta.
 
@@ -807,6 +823,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 ¿Confías en tus reportes de canal, conversión y atribución para mover presupuesto, o los validas a mano antes de usarlos?
 
+*Descripción:* Mide si los datos de marketing permiten saber qué canal trae clientes y mover el presupuesto con confianza.
+
 *Costo de quedarse:* No sabes qué canal trae clientes y cuál solo gasta: mueves presupuesto a ciegas, porque cada reporte hay que validarlo antes de creerle.
 
 **Deficiente.** Datos aislados y sin integridad.
@@ -851,6 +869,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 #### 2.4 Equipo y Gobierno
 
 ¿Quién decide qué se publica, qué se invierte y dónde se enfoca, con qué información y en qué cadencia?
+
+*Descripción:* Mide quién decide qué se publica y dónde se invierte, con qué datos y con qué cadencia de revisión.
 
 *Costo de quedarse:* Las decisiones de marketing se toman por costumbre o por quien insiste más, y nadie puede demostrar con datos si la inversión funciona.
 
@@ -899,6 +919,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 ¿El mercado entiende quién eres, qué ofreces y por qué importas?
 
+*Descripción:* Mide si el mercado entiende quién es la empresa y qué ofrece, con una marca y presencia digital consistentes.
+
 *Costo de quedarse:* El mercado no entiende quién eres ni por qué elegirte, y cada pieza se ve distinta a la anterior.
 
 **Deficiente.** Voz de marca indefinida y mensajes inconsistentes.
@@ -944,6 +966,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 ¿Cada prospecto recibe lo que le corresponde, o todos reciben lo mismo?
 
+*Descripción:* Mide si cada prospecto recibe un mensaje pensado para su segmento, o si todos reciben lo mismo.
+
 *Costo de quedarse:* Le hablas igual a todos, así que no le hablas bien a nadie: el mensaje genérico no convence a ningún segmento.
 
 **Deficiente.** Sin segmentación; todos reciben el mismo mensaje. La personalización no existe o se limita al nombre en el saludo.
@@ -984,6 +1008,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 #### 2.7 Canales y Alcance
 
 ¿Llegas a quien necesitas, de la forma adecuada y con el costo correcto?
+
+*Descripción:* Mide si los canales llegan a quien corresponde, con cadencia, bajo un mismo plan y con un costo conocido.
 
 *Costo de quedarse:* Llegas a poca gente, de forma irregular y sin saber cuánto te cuesta: los canales salen cuando alguien se acuerda, no como una campaña.
 
@@ -1029,6 +1055,8 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 #### 2.8 Medición y Aprendizaje
 
 ¿Cada campaña enseña algo, o se repite el ciclo desde cero?
+
+*Descripción:* Mide si cada campaña se mide y deja un aprendizaje, para no repetir lo que no funcionó.
 
 *Costo de quedarse:* Repites lo que no funciona porque nadie mide qué funcionó: el presupuesto se reparte por costumbre, no por retorno.
 
@@ -1078,6 +1106,8 @@ Mide el rendimiento del área de Servicio, que cubre todo lo que pasa después d
 
 Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de atención se mantiene?
 
+*Descripción:* Mide si la atención sigue un proceso y rutinas definidas, para que la calidad no dependa de quién sabe.
+
 *Costo de quedarse:* El servicio depende de quién sabe: si esa persona falta, la calidad se cae y los clientes lo notan de inmediato.
 
 **Deficiente.** Procesos inexistentes o informales.
@@ -1119,6 +1149,8 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 #### 3.2 Tecnología y Automatización
 
 ¿Qué parte de los tickets necesita intervención humana cuando podría resolverse con autoservicio o automatización, y cuánto del stack se está aprovechando?
+
+*Descripción:* Mide cuántos casos se resuelven solos o por autoservicio, y cuánto del sistema de atención se aprovecha.
 
 *Costo de quedarse:* Tu equipo resuelve a mano lo que podría resolverse solo, y los casos se pierden entre correos y chats: el cliente tiene que insistir para que lo atiendan.
 
@@ -1163,6 +1195,8 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 #### 3.3 Datos
 
 ¿El agente que toma el ticket tiene contexto completo del cliente al instante, o lo arma a mano?
+
+*Descripción:* Mide si quien atiende ve la historia completa del cliente al instante, sin pedirle que vuelva a explicar.
 
 *Costo de quedarse:* Cada vez que el cliente escribe, tiene que volver a explicar quién es y qué pasó, porque nadie ve su historia completa.
 
@@ -1210,6 +1244,8 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 ¿Quién decide qué se atiende primero, con qué información, y cómo se mejora la operación?
 
+*Descripción:* Mide quién decide qué se atiende primero, con qué información, y cómo se revisa y mejora el servicio.
+
 *Costo de quedarse:* Se atiende primero al que más insiste, no al que más importa, y los problemas del servicio se repiten porque nadie los revisa.
 
 **Deficiente.** Equipos en silos sin coordinación.
@@ -1254,6 +1290,8 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 ¿Cada cliente recibe el mismo nivel de servicio, o depende del agente que le toque?
 
+*Descripción:* Mide si cada cliente recibe el mismo nivel de servicio y las mismas respuestas, lo atienda quien lo atienda.
+
 *Costo de quedarse:* La calidad depende de quién atienda: el mismo cliente recibe respuestas distintas a la misma pregunta.
 
 **Deficiente.** Sin estandarización; cada agente responde a su criterio.
@@ -1292,6 +1330,8 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 ¿Cada cliente recibe lo que le corresponde según su valor y su contexto?
 
+*Descripción:* Mide si la atención se prioriza según el valor y el contexto de cada cliente, y no por quién insiste.
+
 *Costo de quedarse:* Tu mejor cliente espera en la misma fila que todos, y nadie nota cuando uno importante está en riesgo.
 
 **Deficiente.** Sin priorización.
@@ -1329,6 +1369,8 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 #### 3.7 Proactividad
 
 ¿El área de servicio previene o reacciona?
+
+*Descripción:* Mide si el servicio se adelanta a los riesgos y necesidades del cliente, o solo reacciona cuando algo falla.
 
 *Costo de quedarse:* Te enteras de que un cliente está mal cuando ya decidió irse, y las renovaciones te toman por sorpresa.
 
@@ -1371,6 +1413,8 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 #### 3.8 Escalabilidad del Servicio
 
 ¿La operación escala linealmente o exponencialmente?
+
+*Descripción:* Mide si atender más clientes cuesta menos cada vez, gracias al autoservicio y al conocimiento documentado.
 
 *Costo de quedarse:* Cada cliente nuevo cuesta lo mismo de atender que el anterior: para crecer, tienes que contratar al mismo ritmo.
 
@@ -1533,6 +1577,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.6.1 (2026-09-29).** Cada dimensión trae, entre su pregunta y su costo de quedarse, una descripción de 15 a 20 palabras que dice qué mide. Reemplaza el «qué mide» de la 7.6.0, que tenían solo dos dimensiones y era más largo; cómo se leen en la venta transaccional queda donde ya estaba, en «El perfil de negocio». No cambia el cálculo.
 
 **7.6.0 (2026-09-29).** Revisión de Tracción del Deal de Ventas con su responsable. Deficiente e Inicial se dicen más simple y suman señales sobre el registro de los deals, los assets de venta y el canal único; en Funcional se suma que hay assets estandarizados que ayudan a cerrar, y el resultado pasa a ser lo que se logra al cumplir todos sus criterios. Una dimensión puede traer, entre su pregunta y su costo, qué mide; la escriben Priorización de Leads y Tracción del Deal, con cómo se leen en la venta transaccional. El glosario suma «Asset». Cambia lo que pide Funcional en Tracción del Deal.
 

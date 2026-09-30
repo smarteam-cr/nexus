@@ -34,9 +34,9 @@ export function tipoDeAncla(id: string): TipoDeAncla | null {
   return m[4] ? "criterio" : "nivel";
 }
 
-/** El texto de una dimensión: nombre, pregunta, qué mide (si lo dice) y costo de quedarse. */
+/** El texto de una dimensión: nombre, pregunta, descripción (si la tiene) y costo de quedarse. */
 export function textoDeDimension(d: Dimension): string {
-  return `${d.nombre}\n${d.pregunta}${d.queMide ? `\nQué mide: ${d.queMide}` : ""}\nCosto de quedarse: ${d.costoDeQuedarse}`;
+  return `${d.nombre}\n${d.pregunta}${d.descripcion ? `\n${d.descripcion}` : ""}\nCosto de quedarse: ${d.costoDeQuedarse}`;
 }
 
 /** El texto de un nivel: su descripción y, desde Funcional, su línea de resultado. */

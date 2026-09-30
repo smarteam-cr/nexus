@@ -166,7 +166,7 @@ Mide Ventas.
 
 ¿Qué pasa cuando un negocio se enfría?
 
-*Qué mide:* Si alguien ve cuando un negocio
+*Descripción:* Si alguien ve cuando un negocio
 deja de avanzar.
 
 *Costo de quedarse:* Los negocios mueren en silencio.
