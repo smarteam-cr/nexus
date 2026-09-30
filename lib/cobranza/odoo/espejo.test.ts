@@ -15,12 +15,15 @@
 import { describe, it, expect } from "vitest";
 import {
   calcularDeltas,
+  copiaRecienHecha,
   esBorradoMasivo,
   esCorridaParcial,
   espejoVencido,
   evidenciaDesactualizada,
   HORAS_MAXIMAS_DEL_ESPEJO,
+  SEGUNDOS_ENTRE_COPIAS_A_PEDIDO,
   fechaOdoo,
+  horaDeCostaRica,
   many2one,
   mapearFactura,
   montoConSigno,
@@ -355,5 +358,34 @@ describe("la frescura del espejo (INV31 y la pantalla de Odoo)", () => {
   it("sin ninguna corrida buena está vencido, y el caso medido del 2-sep también", () => {
     expect(espejoVencido(null, ahora)).toBe(true);
     expect(espejoVencido(new Date("2026-09-02T07:17:00Z"), ahora)).toBe(true);
+  });
+});
+
+describe("la copia a pedido: «Actualizar desde Odoo»", () => {
+  /* El botón lo aprietan varias personas a la vez, acá y en el punto de equilibrio. Con una copia de hace
+     segundos no se vuelve a leer Odoo; con una más vieja, sí. */
+  const ahora = new Date("2026-09-29T21:00:00Z");
+  const haceSegundos = (s: number) => new Date(ahora.getTime() - s * 1000);
+
+  it("una copia de hace menos de medio minuto no se repite; una más vieja sí", () => {
+    expect(SEGUNDOS_ENTRE_COPIAS_A_PEDIDO).toBe(30);
+    expect(copiaRecienHecha(haceSegundos(5), ahora)).toBe(true);
+    expect(copiaRecienHecha(haceSegundos(29), ahora)).toBe(true);
+    expect(copiaRecienHecha(haceSegundos(30), ahora)).toBe(false);
+    expect(copiaRecienHecha(new Date("2026-09-29T12:00:45Z"), ahora), "la de las 6 de la mañana").toBe(false);
+  });
+
+  it("sin ninguna copia buena, o con una fechada en el futuro, se lee Odoo", () => {
+    expect(copiaRecienHecha(null, ahora)).toBe(false);
+    expect(copiaRecienHecha(haceSegundos(-10), ahora)).toBe(false);
+  });
+
+  it("la hora de la copia se dice en hora de Costa Rica, no en UTC", () => {
+    /* La edición que lo pone en rojo: volver a cortar el ISO («2026-09-29 12:00 UTC» para la copia de las 6). */
+    expect(horaDeCostaRica("2026-09-29T12:00:45.837Z")).toBe("29 sep, 06:00");
+    expect(horaDeCostaRica("2026-09-29T21:03:20.356Z")).toBe("29 sep, 15:03");
+    /* Pasada la medianoche UTC todavía es el día anterior en Costa Rica. */
+    expect(horaDeCostaRica("2026-10-01T03:30:00.000Z")).toBe("30 sep, 21:30");
+    expect(horaDeCostaRica("no es una fecha")).toBe("no es una fecha");
   });
 });

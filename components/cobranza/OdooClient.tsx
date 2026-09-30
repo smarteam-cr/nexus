@@ -23,15 +23,23 @@
  * Lo que queda fuera por regla (historia, exentas de años anteriores, pagadas sin cuenta, el IVA, lo recién
  * facturado) se cuenta en el texto de su línea, pero una línea sin filas pendientes no se muestra, y con ella se va
  * la cuenta. La explicación que queda siempre es la de esta pestaña. Lo vigila guardas.test.ts.
+ *
+ * ── «ACTUALIZAR DESDE ODOO» (2026-09-29) ────────────────────────────────────────
+ * La copia era una vez por día, a las 6. Alex registraba un pago en Odoo y «Lo que no cuadra» lo seguía acusando
+ * hasta la mañana siguiente, y un cliente recién creado en Odoo no aparecía para emparejar hasta que alguien apretaba
+ * «Actualizar lista desde Odoo», un botón que traía los clientes pero no las facturas. Ahora hay UN botón, arriba de
+ * las tres pestañas, que copia facturas y clientes y recarga la pestaña que se está mirando.
  */
 import Link from "next/link";
 import { useCallback, useRef, useState, type ReactNode } from "react";
-import { Tabs } from "@/components/ui";
-import { fetchJson } from "@/lib/api/fetch-json";
+import { Button, Tabs } from "@/components/ui";
+import { useToast } from "@/components/ui/Toast";
+import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import EmparejadoOdoo from "./EmparejadoOdoo";
 import DiferenciasOdoo from "./DiferenciasOdoo";
 // ⚠ Viven en un módulo neutral: la página (servidor) también las lee, y de un "use client" no podría.
 import type { Pestana } from "@/lib/cobranza/odoo/pestanas";
+import { horaDeCostaRica } from "@/lib/cobranza/odoo/espejo";
 /* «Cómo funciona» dice las reglas con los mismos números que las aplican: si la gracia o el IVA cambian allá, el
    texto cambia solo. */
 import { DIAS_DE_GRACIA_DEL_ESPEJO, resumenDeDiferencias, type DiferenciaOdoo } from "@/lib/cobranza/odoo/diferencias";
@@ -50,6 +58,14 @@ interface CorridaDelEspejo {
   horasDesdeLaUltimaBuena: number | null;
   /** `espejoVencido()` calculado en el servidor, con su reloj. */
   vencido: boolean;
+}
+
+/** Lo que contesta «Actualizar desde Odoo» (`ResultadoDeActualizar`, servicio.ts). */
+interface RespuestaDeActualizar {
+  estado: "COPIADO" | "RECIENTE" | "EN_CURSO" | "FALLO";
+  mensaje: string;
+  corrida: CorridaDelEspejo | null;
+  facturas: number;
 }
 
 /**
@@ -123,7 +139,33 @@ export default function OdooClient({
       })
       .catch(() => undefined);
   }, []);
-  const vivos: Conteos = { ...conteos, ...emparejado, diferencias };
+  /* ⭐ «Actualizar desde Odoo» (2026-09-29). La línea de arriba y el conteo de facturas pasan a estado: los cambia la
+     respuesta del botón, no una recarga de la página. `recarga` les avisa a las dos pestañas que vuelvan a leer. */
+  const toast = useToast();
+  const [copia, setCopia] = useState(corrida);
+  const [facturas, setFacturas] = useState(conteos.facturas);
+  const [recarga, setRecarga] = useState(0);
+  const [actualizando, setActualizando] = useState(false);
+  const actualizar = useCallback(async () => {
+    setActualizando(true);
+    try {
+      const r = await fetchJson<RespuestaDeActualizar>("/api/cobranza/odoo/actualizar", { method: "POST" });
+      setCopia(r.corrida);
+      setFacturas(r.facturas);
+      if (r.estado === "FALLO") toast.error(r.mensaje);
+      else if (r.estado === "COPIADO") toast.success(r.mensaje);
+      else toast.info(r.mensaje);
+      /* La vista se recarga también cuando no se volvió a leer Odoo: lo que otra persona cambió en Nexus sale igual.
+         «Lo que no cuadra» abierta se recuenta sola al recargar; desde otra pestaña, su número se pide aparte. */
+      setRecarga((n) => n + 1);
+      if (tab !== "no-cuadra") recontarDiferencias();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar desde Odoo.");
+    } finally {
+      setActualizando(false);
+    }
+  }, [toast, recontarDiferencias, tab]);
+  const vivos: Conteos = { ...conteos, ...emparejado, facturas, diferencias };
 
   return (
     <div className="space-y-4">
@@ -149,23 +191,45 @@ export default function OdooClient({
         ]}
       />
 
-      {corrida && <EstadoDelEspejo corrida={corrida} facturas={conteos.facturas} puedeVerCorridas={puedeVerCorridas} />}
-      {/* Si nunca corrió, el enlace igual sirve: ahí se ve la conexión y las banderas. */}
-      {!corrida && puedeVerCorridas && (
-        <p className="text-xs text-fg-muted">
-          Nexus todavía no copió nada de Odoo.{" "}
-          <Link href="/integrations/odoo" className="text-brand underline hover:no-underline">
-            Ver el estado de la conexión →
-          </Link>
-        </p>
-      )}
+      {/* De cuándo es la copia, y el botón para traer lo último. Arriba de las tres pestañas: vale para las tres. */}
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+        <div className="min-w-0 flex-1">
+          {copia && <EstadoDelEspejo corrida={copia} facturas={facturas} puedeVerCorridas={puedeVerCorridas} />}
+          {/* Si nunca corrió, el enlace igual sirve: ahí se ve la conexión y las banderas. */}
+          {!copia && (
+            <p className="text-xs text-fg-muted">
+              Nexus todavía no copió nada de Odoo.{" "}
+              {puedeVerCorridas && (
+                <Link href="/integrations/odoo" className="text-brand underline hover:no-underline">
+                  Ver el estado de la conexión →
+                </Link>
+              )}
+            </p>
+          )}
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          onClick={() => void actualizar()}
+          disabled={actualizando}
+          title="Vuelve a copiar ahora las facturas y los clientes de Odoo, sin esperar la copia de la mañana, y recarga esta pantalla. Solo lee Odoo: no cambia ningún cobro."
+        >
+          {actualizando ? "Leyendo Odoo…" : "Actualizar desde Odoo"}
+        </Button>
+      </div>
 
       {tab === "que-es" && <QueEs conteos={vivos} />}
       {tab === "emparejar" && (
-        <EmparejadoOdoo puedeEditar={puedeEditar} onConteos={setEmparejado} onCambio={recontarDiferencias} />
+        <EmparejadoOdoo puedeEditar={puedeEditar} recarga={recarga} onConteos={setEmparejado} onCambio={recontarDiferencias} />
       )}
       {tab === "no-cuadra" && (
-        <DiferenciasOdoo puedeEditar={puedeEditar} onIrAEmparejar={() => setTab("emparejar")} onPendientes={alContarDiferencias} />
+        <DiferenciasOdoo
+          puedeEditar={puedeEditar}
+          recarga={recarga}
+          onIrAEmparejar={() => setTab("emparejar")}
+          onPendientes={alContarDiferencias}
+        />
       )}
     </div>
   );
@@ -173,9 +237,10 @@ export default function OdooClient({
 
 /* ── La línea de arriba: de cuándo es la copia ──────────────────────────────────── */
 
-const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
+/* En hora de Costa Rica: hasta el 2026-09-29 decía «12:00 UTC» para la copia de las 6 de la mañana. */
+const cuando = (iso: string) => horaDeCostaRica(iso);
 const hace = (horas: number | null) =>
-  horas === null ? "" : horas < 48 ? `hace ${horas} h` : `hace ${Math.floor(horas / 24)} días`;
+  horas === null ? "" : horas < 1 ? "hace menos de una hora" : horas < 48 ? `hace ${horas} h` : `hace ${Math.floor(horas / 24)} días`;
 
 function EstadoDelEspejo({
   corrida,
@@ -196,7 +261,7 @@ function EstadoDelEspejo({
   const sinTerminar = corrida.terminadaEn === null;
   const queFallo =
     !corrida.ok && !sinTerminar
-      ? `La última corrida (${utc(corrida.iniciadaEn)}) ${corrida.parcial ? "quedó incompleta" : "falló"}${corrida.error ? `: ${corrida.error}` : "."}`
+      ? `La última copia (${cuando(corrida.iniciadaEn)}) ${corrida.parcial ? "quedó incompleta" : "falló"}${corrida.error ? `: ${corrida.error}` : "."}`
       : null;
 
   if (corrida.vencido) {
@@ -207,15 +272,16 @@ function EstadoDelEspejo({
       >
         <p className="font-semibold">
           {corrida.ultimaOkEn
-            ? `⚠ La copia de Odoo está vieja: la última buena es del ${utc(corrida.ultimaOkEn)} (${hace(corrida.horasDesdeLaUltimaBuena)}).`
+            ? `⚠ La copia de Odoo está vieja: la última buena es del ${cuando(corrida.ultimaOkEn)} (${hace(corrida.horasDesdeLaUltimaBuena)}).`
             : "⚠ Ninguna copia de Odoo salió bien todavía."}
         </p>
         <p>
           Lo facturado en Odoo después no está acá: ni al lado de los cobros ni en «Lo que no cuadra».{" "}
           {queFallo ??
             (sinTerminar
-              ? `Hay una corrida sin terminar desde el ${utc(corrida.iniciadaEn)}.`
-              : "No se volvió a copiar desde entonces.")}
+              ? `Hay una copia sin terminar desde el ${cuando(corrida.iniciadaEn)}.`
+              : "No se volvió a copiar desde entonces.")}{" "}
+          «Actualizar desde Odoo» la vuelve a intentar ahora.
         </p>
         {enlace && <p>{enlace}</p>}
       </div>
@@ -225,13 +291,14 @@ function EstadoDelEspejo({
   return (
     <p className="flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
       {corrida.ultimaOkEn && (
-        <span>
-          Copia de Odoo del {utc(corrida.ultimaOkEn)} · {facturas} facturas
+        <span title="Hora de Costa Rica. La copia se hace sola cada mañana, desde las 6, y cada vez que alguien aprieta «Actualizar desde Odoo».">
+          Copia de Odoo del {cuando(corrida.ultimaOkEn)}
+          {corrida.horasDesdeLaUltimaBuena !== null && ` (${hace(corrida.horasDesdeLaUltimaBuena)})`} · {facturas} facturas
         </span>
       )}
       {queFallo && <span className="text-danger-ink">· ⚠ {queFallo}</span>}
       {sinTerminar && (
-        <span className="text-warn-ink">· la corrida del {utc(corrida.iniciadaEn)} sigue sin terminar</span>
+        <span className="text-warn-ink">· la copia del {cuando(corrida.iniciadaEn)} sigue sin terminar</span>
       )}
       {enlace}
     </p>
@@ -257,9 +324,9 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           reunión de dirección.
         </p>
         <p className="mt-2 text-sm text-fg-secondary">
-          Ahora Nexus lee Odoo una vez por día —cuando la copia automática está encendida en el servidor— y pone las facturas
-          reales al lado de los cobros de las cuentas emparejadas. Lo que no coincide aparece en una lista, con su
-          monto y con quién lo puede cerrar.
+          Ahora Nexus lee Odoo cada mañana —cuando la copia automática está encendida en el servidor—, y otra vez cada
+          vez que alguien aprieta «Actualizar desde Odoo», y pone las facturas reales al lado de los cobros de las
+          cuentas emparejadas. Lo que no coincide aparece en una lista, con su monto y con quién lo puede cerrar.
         </p>
       </div>
 
@@ -267,7 +334,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         <div className="rounded-lg border border-success-line bg-success-surface p-5">
           <h3 className="text-sm font-semibold text-success-ink">Lo que sí hace</h3>
           <ul className="mt-2 space-y-1.5 text-sm text-fg-secondary">
-            <li>· Trae las facturas de venta de Odoo, una vez por día.</li>
+            <li>· Trae las facturas de venta y la lista de clientes de Odoo, cada mañana y cuando se lo pides con «Actualizar desde Odoo».</li>
             <li>· En las cuentas emparejadas, las muestra al lado del cobro que les corresponde, con su número y su estado real.</li>
             <li>· Lista lo que no cuadra, ordenado por la plata que mueve.</li>
             <li>· Guarda el monto sin impuesto y el total, porque los cobros de Nexus están cargados sin IVA.</li>
@@ -313,8 +380,15 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           </li>
           <li>
             <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> La copia de Odoo se hace sola cada mañana,
-            desde las 6. La línea de arriba de estas pestañas dice de cuándo es la última corrida buena; si falla o
-            deja de correr, se pone en rojo. Mientras esté en rojo, lo facturado después no está acá.
+            desde las 6. La línea de arriba de estas pestañas dice de cuándo es la última copia buena, en hora de Costa
+            Rica; si falla o deja de hacerse, se pone en rojo. Mientras esté en rojo, lo facturado después no está acá.
+          </li>
+          <li>
+            <strong className="text-fg">4. Traer lo último cuando haga falta.</strong> Si acabas de registrar algo en
+            Odoo —un pago, una factura, un cliente nuevo—, «Actualizar desde Odoo», arriba a la derecha, lo copia en el
+            momento y recarga la pestaña que estás mirando. Un cobro en Cobrado cuya factura ya figura pagada en Odoo
+            sale de «Lo que no cuadra» con esa copia. Si sigue ahí, es que en Odoo el pago todavía no está aplicado a
+            esa factura.
           </li>
         </ol>
       </div>
@@ -334,9 +408,9 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           Mercury» y «venta contada dos veces».
         </li>
         <li>
-          · La lista <strong className="text-fg">«En Mercury»</strong>, debajo de las tarjetas, dice quién marcó cada
-          cuenta y cuándo. Las que ya decían Mercury desde la importación o desde su alta aparecen «sin firma», para que
-          alguien las confirme o las deshaga.
+          · La lista <strong className="text-fg">«En Mercury»</strong>, debajo de las tarjetas, se abre con un clic y
+          dice quién marcó cada cuenta y cuándo. Las que ya decían Mercury desde la importación o desde su alta
+          aparecen «sin firma», para que alguien las confirme o las deshaga.
         </li>
         <li>
           · <strong className="text-fg">«Deshacer»</strong> devuelve la vía a Odoo, y la cuenta vuelve a «Emparejar»
@@ -347,6 +421,37 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           ese cliente en «Ya vinculadas».
         </li>
         <li>· QuickBooks no tiene botón: se elige en la ficha de la cuenta, y la cuenta también sale de «Emparejar».</li>
+      </Bloque>
+
+      {/* ⭐ 2026-09-29, revisión con Alex: lo que «Emparejar» hace con un cliente de Odoo que no tiene cuenta en Nexus.
+          «Lo que no cuadra» mandaba a emparejar a Publimark y a McCann, y en «Emparejar» no aparecían por ningún lado. */}
+      <Bloque titulo="Los clientes de Odoo que todavía no tienen cuenta en Nexus">
+        <li>
+          · «Emparejar» los muestra aparte, con lo que Odoo les tiene por cobrar. Son los mismos que «Lo que no cuadra»
+          llama «clientes de Odoo que Nexus no tiene emparejados», con la misma cifra.
+        </li>
+        <li>
+          · Cada uno tiene dos salidas: <strong className="text-fg">«Es de una cuenta de Nexus»</strong> lo vincula a
+          una cuenta que ya existe, y sus facturas pasan a ella en el momento;{" "}
+          <strong className="text-fg">«No es cliente nuestro»</strong> lo saca de la lista. Si la empresa todavía no
+          tiene cuenta, se crea en Cobranza, con «Nueva empresa».
+        </li>
+        <li>
+          · Un cliente de Odoo va en una sola cuenta, y una cuenta puede tener varios. Si la empresa ya tiene su cuenta
+          y contrata algo más, el servicio nuevo se agrega en esa misma cuenta: no hay que desvincular nada.
+        </li>
+        <li>
+          · Un cliente nuevo de Odoo entra a la lista con la copia siguiente, aunque todavía no tenga facturas. Si no
+          aparece, «Buscar directamente en Odoo», en el buscador de cada cuenta, lo encuentra por nombre o por cédula.
+        </li>
+        <li>
+          · Los contactos que Odoo crea para mandar copia de la factura —los del correo 2 y el correo 3 de un cliente—
+          no son clientes y no entran a la lista.
+        </li>
+        <li>
+          · Una cuenta nueva nace con la vía de su clasificación: nacional, Odoo; internacional, Mercury. Se cambia en
+          su ficha, y la que pasa a Odoo vuelve sola a «Emparejar».
+        </li>
       </Bloque>
 
       <Bloque titulo="«Está bien así», fila por fila">
@@ -392,7 +497,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         </li>
         <li>
           · Lo que corriges en Nexus sale la próxima vez que abres la pestaña. Lo que se corrige en Odoo sale con la
-          próxima copia de Odoo.
+          próxima copia de Odoo: la de la mañana, o la que pides con «Actualizar desde Odoo».
         </li>
         <li>
           · La suma de arriba va por moneda y sin IVA, y cuenta cada documento una sola vez aunque lo miren varias

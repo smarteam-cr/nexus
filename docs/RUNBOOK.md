@@ -267,7 +267,19 @@ sale de la misma regla que usa `shouldRun` (`lib/jobs/requisitos.ts`).
 Se ve en tres lugares: la línea de arriba de Cobranza › Odoo se pone en rojo, INV31 da rojo en
 `invariants-daily` (y en `check-invariants.ts`), e Integraciones › Jobs del servidor dice si
 `odoo-espejo-daily` está **apagado** y por qué, o si **falló** y con qué error. `/integrations/odoo`
-lista cada corrida con su resultado. No hay botón para correr el sync desde la pantalla.
+lista cada corrida con su resultado.
+
+⭐ Desde el **2026-09-29** hay botón: **«Actualizar desde Odoo»**, arriba de las pestañas de Cobranza › Odoo
+(y «Actualizar» en Finanzas › Punto de equilibrio, que además trae las ventas de HubSpot). Hace la misma
+copia que el job, firmada por quien la pidió, y es la salida más corta para los casos 2 y 3 de abajo una vez
+arreglada la causa: no hace falta liberar el turno ni correr un script.
+- **Nunca corren dos copias a la vez**: la copia toma un candado (`CronJobState`, fila `odoo-espejo-candado`).
+  Si el botón contesta «ya hay una copia en curso» durante más de un minuto, el proceso murió con el candado
+  puesto: **vence solo a los 10 minutos**. Para no esperar (escritura a producción; la hace una persona):
+  `UPDATE "CronJobState" SET "lastRunAt" = NULL WHERE id = 'odoo-espejo-candado';`
+- Con una copia de hace menos de 30 segundos el botón no vuelve a leer Odoo: recarga la pantalla y lo dice.
+- La copia trae también **la lista de clientes de Odoo**, para «Emparejar». Si Odoo deja de permitir leer los
+  clientes (`res.partner`), falla la copia entera, con ese error a la vista.
 
 1. **Apagado, «falta ODOO_PASSWORD»**: cargar `ODOO_LOGIN` y `ODOO_PASSWORD` en el `.env` del VPS y
    hacer deploy; el job corre en el tick siguiente si ya son las 6:00 CR. Desde el **2026-09-13** la

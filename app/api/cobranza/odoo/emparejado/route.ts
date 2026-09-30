@@ -1,15 +1,16 @@
 /**
  * /api/cobranza/odoo/emparejado — decir qué cliente de Odoo es qué cuenta de Nexus.
- *   GET            → propuestas + vínculos ya hechos + conteos. Consulta el ERP.
- *   GET ?q=texto   → buscador sobre los partners ya conocidos. NO consulta el ERP.
- *   POST           → confirmar | ignorar | desvincular | via («Está en Mercury» y su «Deshacer»).
+ *   GET                    → propuestas + vínculos ya hechos + conteos. NO consulta el ERP: sale de la copia guardada.
+ *   GET ?q=texto           → buscador sobre la lista de clientes guardada. NO consulta el ERP.
+ *   GET ?q=texto&enOdoo=1  → busca directamente en Odoo (lo dispara un botón): encuentra también la empresa a la que
+ *                            todavía no se le facturó. ES LA ÚNICA LECTURA DE ACÁ QUE TOCA EL ERP.
+ *   POST                   → confirmar | ignorar | desvincular | via («Está en Mercury» y su «Deshacer»).
  *
  * Acceso: guardCobranzaAccess (ADMIN + SUPER_ADMIN) — el mismo gate que el resto del módulo. `via` pide
  * además EDICIÓN (guardCobranzaEditor): cambia la vía de cobro de la cuenta en todo Cobranza.
  *
- * ⚠ El GET sin `q` lee 82 clientes y 347 facturas de Odoo, así que tarda un par de segundos.
- * Es a propósito: la señal de monto necesita los montos facturados, y cachearlos sería
- * inventar una capa que nadie pidió para una pantalla que se usa un puñado de veces.
+ * ⚠ Traer lo último de Odoo ya no es de esta ruta (2026-09-29): es POST /api/cobranza/odoo/actualizar, que copia
+ * facturas y clientes juntos. El `?refrescar=1` de antes traía solo la lista de clientes.
  *
  * ⛔ Del espejo de facturas escriben UNA sola cosa: confirmar y desvincular dejan las facturas
  * de ese cliente con la cuenta de su vínculo (o sin cuenta), con su fila CUENTA firmada. Montos,
@@ -40,12 +41,18 @@ export async function GET(req: NextRequest) {
   if (guard instanceof NextResponse) return guard;
 
   const q = req.nextUrl.searchParams.get("q");
-  if (q !== null) return NextResponse.json(await buscarEnOdoo(q));
+  if (q !== null) {
+    /* ⚠ `enOdoo=1` consulta el ERP, y por eso lo manda un botón y no cada tecla: consultar Odoo en cada render fue
+       lo que provocó el bloqueo del 2026-09-02. Con menos de tres letras no se le pregunta nada. */
+    const enOdoo = req.nextUrl.searchParams.get("enOdoo") === "1";
+    if (enOdoo && q.trim().length < 3) {
+      return NextResponse.json({ error: "Escribe al menos tres letras para buscar en Odoo." }, { status: 400 });
+    }
+    return NextResponse.json(await buscarEnOdoo(q, { enOdoo }));
+  }
 
-  /* ⚠ Solo `?refrescar=1` toca el ERP. La carga normal sale del espejo y del catálogo
-     guardados: consultar Odoo en cada render fue lo que provocó el bloqueo del 2026-09-02. */
-  const refrescar = req.nextUrl.searchParams.get("refrescar") === "1";
-  return NextResponse.json(await cargarEmparejado({ refrescar }));
+  /* La carga normal sale de la copia y de la lista de clientes guardadas: no toca el ERP. */
+  return NextResponse.json(await cargarEmparejado());
 }
 
 export async function POST(req: NextRequest) {

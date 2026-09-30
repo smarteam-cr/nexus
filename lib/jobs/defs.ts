@@ -258,6 +258,16 @@ const odooEspejoDaily: JobDef = {
     const { sincronizarOdoo } = await import("@/lib/cobranza/odoo/sync");
     const r = await sincronizarOdoo({ disparadaPor: "cron" });
 
+    /* Desde el 2026-09-29 la copia también la pide una persona («Actualizar desde Odoo»), y no corren dos a la vez.
+       Si justo había una en curso, esta no hizo nada: se suelta el turno y el tick siguiente lo vuelve a intentar,
+       con la otra ya terminada. No es una corrida —ni buena ni mala—, así que el scheduler no anota nada. */
+    if (r.enCurso) {
+      await prisma.cronJobState
+        .updateMany({ where: { id: "odoo-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+      return SIN_TURNO;
+    }
+
     // ⚠⚠ SOLO se libera el claim cuando el fallo es TRANSITORIO. Este job era el único del
     // scheduler que lo liberaba ante cualquier fallo, y el tick corre cada 60 s: con la
     // autenticación rechazada eso son ~1080 reintentos por día, uno por minuto, cada uno

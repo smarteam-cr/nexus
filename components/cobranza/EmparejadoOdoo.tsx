@@ -21,11 +21,23 @@
  * tarjeta cambia la VÍA DE COBRO de la cuenta —una sola verdad en todo Cobranza, decisión de Elías— y la lista
  * «En Mercury» dice quién y cuándo, con «Deshacer». La lista y todos los contadores salen de la misma regla
  * (`quedaPorEmparejar`): vía Odoo y sin cliente de Odoo.
+ *
+ * ── LO QUE CAMBIÓ EL 2026-09-29 (revisión con Alex) ─────────────────────────────
+ * · «Actualizar lista desde Odoo» ya no está acá: la lista de clientes viaja con cada copia de Odoo, y la copia a
+ *   pedido es el botón «Actualizar desde Odoo» de arriba de las pestañas (OdooClient). Esta pestaña no llama al ERP
+ *   salvo por «Buscar directamente en Odoo», que aprieta una persona.
+ * · Los clientes de Odoo SIN cuenta en Nexus que tienen facturas por cobrar van a la vista, con su plata. Son los
+ *   mismos que «Lo que no cuadra» manda a emparejar, y hasta ese día acá no aparecían por ningún lado: las tarjetas
+ *   son de cuentas de Nexus, y esos clientes no tienen cuenta.
+ * · «En Mercury» se pliega: 24 cuentas ya resueltas debajo de una sola tarjeta pendiente se leían como trabajo.
+ * · El buscador dice de qué cuenta es cada cliente de Odoo ANTES del clic, y puede buscar directamente en Odoo: un
+ *   cliente nuevo al que todavía no se le facturó se empareja igual.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Badge, Button, EmptyState, Input, Spinner } from "@/components/ui";
+import { Badge, Button, EmptyState, Input, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import { textoDeMontos, type MontoEnMoneda } from "@/lib/cobranza/odoo/diferencias";
 import { fmtFecha } from "./format";
 
 type Via = "CEDULA" | "MONTO" | "NOMBRE" | "MANUAL";
@@ -54,12 +66,29 @@ interface Vinculo {
   via: string | null;
   ignorado: boolean;
   confirmadoPor: string | null;
+  /** Documentos en la copia de Odoo. 0 = todavía no se le facturó. */
+  facturas: number;
+  ultimaFactura: string | null;
+  /** Lo que Odoo le da por cobrar, sin IVA y por moneda: la misma cifra que «Lo que no cuadra». */
+  porCobrar: MontoEnMoneda[];
+  facturasPorCobrar: number;
 }
+/** Una ficha que devolvió el buscador (`FichaEncontrada`, servicio.ts). */
 interface PartnerOdoo {
   odooPartnerId: number;
   nombre: string;
   vat: string | null;
   customerRank: number;
+  /** La cuenta de Nexus que ya la tiene vinculada, si la tiene. */
+  vinculadaA?: string | null;
+  facturas?: number;
+}
+/** Una cuenta de Nexus, para vincularle un cliente de Odoo desde la fila del cliente. */
+interface CuentaDeNexus {
+  cuentaId: string;
+  nombre: string;
+  /** ODOO, MERCURY u OTRA. */
+  via: string;
 }
 /** Una cuenta sin cliente de Odoo que factura por Mercury o QuickBooks (`CuentaFueraDeOdoo` del servicio). */
 interface CuentaFueraDeOdoo {
@@ -91,7 +120,8 @@ interface Estado {
     facturasLeidas: number;
   };
   fueraDeOdoo: CuentaFueraDeOdoo[];
-  errorOdoo: string | null;
+  /** Todas las cuentas de Nexus, para vincular un cliente de Odoo a una que ya existe. */
+  cuentas: CuentaDeNexus[];
 }
 
 /**
@@ -139,11 +169,17 @@ function origenDeLaVia(c: CuentaFueraDeOdoo): string {
 
 export default function EmparejadoOdoo({
   puedeEditar,
+  recarga = 0,
   onConteos,
   onCambio,
 }: {
   /** `cobranza.write`: «Está en Mercury» y «Deshacer» cambian la vía de cobro de la cuenta. Sin él no se dibujan. */
   puedeEditar: boolean;
+  /**
+   * Sube cada vez que alguien aprieta «Actualizar desde Odoo» (OdooClient): la pestaña vuelve a leer, sin
+   * desmontarse, así lo que tenías abierto sigue abierto.
+   */
+  recarga?: number;
   /** Después de cada carga: el número de la pestaña baja al marcar sin recargar la página. */
   onConteos?: (c: ConteosDelEmparejado) => void;
   /**
@@ -159,36 +195,34 @@ export default function EmparejadoOdoo({
   const [buscandoPara, setBuscandoPara] = useState<string | null>(null);
   const [verVinculados, setVerVinculados] = useState(false);
   const [verSinUsar, setVerSinUsar] = useState(false);
+  const [verEnMercury, setVerEnMercury] = useState(false);
   /** El vínculo desde cuya fila se busca otra ficha para la misma cuenta. */
   const [sumandoA, setSumandoA] = useState<number | null>(null);
+  /** El cliente de Odoo sin cuenta al que se le está eligiendo una cuenta de Nexus. */
+  const [eligiendoCuentaPara, setEligiendoCuentaPara] = useState<number | null>(null);
 
   /**
-   * ⚠ `refrescar` es lo ÚNICO que toca el ERP. La carga normal sale del espejo y del catálogo
-   * ya guardados en la base, así que abrir la pantalla no cuesta ninguna autenticación.
+   * ⚠ Esta carga NO toca el ERP: sale de la copia de facturas y de la lista de clientes ya guardadas en la base, así
+   * que abrir la pantalla no cuesta ninguna autenticación.
    *
    * ⛔ Esto no es una optimización: el 2026-09-02 Odoo empezó a rechazar el usuario por
    * volumen de logins. Cada apertura de esta pantalla eran 2 autenticaciones — 4 con el doble
    * render de React en desarrollo — y ninguna hacía falta.
    */
-  const cargar = useCallback(
-    async (refrescar = false) => {
-      setCargando(true);
-      try {
-        setEstado(
-          await fetchJson<Estado>(`/api/cobranza/odoo/emparejado${refrescar ? "?refrescar=1" : ""}`),
-        );
-      } catch (e) {
-        toast.error(e instanceof ApiError ? e.message : "No se pudo cargar el emparejado.");
-      } finally {
-        setCargando(false);
-      }
-    },
-    [toast],
-  );
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try {
+      setEstado(await fetchJson<Estado>("/api/cobranza/odoo/emparejado"));
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo cargar el emparejado.");
+    } finally {
+      setCargando(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     void cargar();
-  }, [cargar]);
+  }, [cargar, recarga]);
 
   useEffect(() => {
     if (!estado || !onConteos) return;
@@ -236,6 +270,7 @@ export default function EmparejadoOdoo({
         }
         setBuscandoPara(null);
         setSumandoA(null);
+        setEligiendoCuentaPara(null);
         await cargar();
         onCambio?.();
       } catch (e) {
@@ -256,7 +291,29 @@ export default function EmparejadoOdoo({
   const pendientes = useMemo(() => ordenadas.filter((p) => !p.otraSociedad), [ordenadas]);
   const otrasFichas = useMemo(() => ordenadas.filter((p) => p.otraSociedad), [ordenadas]);
   const vinculados = useMemo(() => (estado?.vinculos ?? []).filter((v) => v.cuentaId), [estado]);
-  const sinUsar = useMemo(() => (estado?.vinculos ?? []).filter((v) => !v.cuentaId && !v.ignorado), [estado]);
+  /* Los clientes de Odoo que ninguna cuenta de Nexus tiene. ⭐ Los que tienen facturas por cobrar van a la vista: son
+     los que «Lo que no cuadra» manda a emparejar. El resto —historia y fichas sin facturas— sigue plegado, con lo más
+     reciente arriba. */
+  const sinCuenta = useMemo(() => (estado?.vinculos ?? []).filter((v) => !v.cuentaId && !v.ignorado), [estado]);
+  const conPlata = useMemo(
+    () =>
+      sinCuenta
+        .filter((v) => v.porCobrar.length > 0)
+        /* El mismo orden que la línea de «Lo que no cuadra»: primero los dólares, y dentro de cada moneda la cifra
+           más grande. ⛔ Nunca se comparan colones con dólares. */
+        .sort((a, b) => {
+          const [x, y] = [a.porCobrar[0]!, b.porCobrar[0]!];
+          return Number(x.moneda !== "USD") - Number(y.moneda !== "USD") || y.monto - x.monto;
+        }),
+    [sinCuenta],
+  );
+  const sinUsar = useMemo(
+    () =>
+      sinCuenta
+        .filter((v) => v.porCobrar.length === 0)
+        .sort((a, b) => (b.ultimaFactura ?? "").localeCompare(a.ultimaFactura ?? "") || a.odooPartnerNombre.localeCompare(b.odooPartnerNombre, "es")),
+    [sinCuenta],
+  );
   const ignorados = useMemo(() => (estado?.vinculos ?? []).filter((v) => v.ignorado), [estado]);
   const enMercury = useMemo(() => (estado?.fueraDeOdoo ?? []).filter((c) => c.via === "MERCURY"), [estado]);
   const enQuickBooks = useMemo(() => (estado?.fueraDeOdoo ?? []).filter((c) => c.via !== "MERCURY"), [estado]);
@@ -271,6 +328,17 @@ export default function EmparejadoOdoo({
         : `${nombre} vuelve a la lista para emparejar: su vía de cobro es Odoo otra vez.`,
     );
 
+  /* Desde la fila de un cliente de Odoo sin cuenta: vincularlo a una cuenta que ya existe, o marcarlo ajeno. Es el
+     mismo «confirmar» que usa la tarjeta de la cuenta, empezado desde el otro lado. */
+  const vincularACuenta = (v: Vinculo, cuenta: CuentaDeNexus) =>
+    accion(
+      { accion: "confirmar", odooPartnerId: v.odooPartnerId, cuentaId: cuenta.cuentaId, via: "MANUAL", aprenderCedula: true },
+      `p${v.odooPartnerId}`,
+      `«${v.odooPartnerNombre}» quedó vinculado a ${cuenta.nombre}.`,
+    );
+  const ignorar = (v: Vinculo) =>
+    accion({ accion: "ignorar", odooPartnerId: v.odooPartnerId, ignorado: true }, `p${v.odooPartnerId}`, "Marcado como ajeno.");
+
   if (cargando && !estado) {
     return (
       <div className="flex items-center gap-3 py-16 text-sm text-fg-muted">
@@ -284,21 +352,6 @@ export default function EmparejadoOdoo({
 
   return (
     <div className="space-y-6">
-      {/* ⚠ Si Odoo no contestó, el trabajo ya hecho sigue a la vista — pero se dice, en vez
-          de mostrar cero propuestas como si el emparejado estuviera completo. */}
-      {estado.errorOdoo && (
-        <Alert variant="danger" title="No se pudo consultar Odoo">
-          {estado.errorOdoo}
-          <span className="mt-1 block text-fg-secondary">
-            {/* ⚠ Antes decía que las propuestas por monto necesitaban el ERP. Ya no: salen del
-                espejo de facturas, que sigue siendo válido con Odoo caído. Lo único que no se
-                puede es traer clientes NUEVOS de Odoo. */}
-            Todo lo de abajo sigue sirviendo: sale de la copia de las facturas y de la lista de clientes ya
-            guardadas. Lo único que no se pudo es traer clientes nuevos de Odoo.
-          </span>
-        </Alert>
-      )}
-
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <span className="text-fg">
           <strong className="text-lg tabular-nums">{conteos.cuentasVinculadas}</strong>
@@ -313,9 +366,11 @@ export default function EmparejadoOdoo({
         {conteos.facturasLeidas > 0 && (
           <span className="text-fg-muted">{conteos.facturasLeidas} facturas de la copia de Odoo para proponer</span>
         )}
-        <Button variant="secondary" size="sm" className="ml-auto" onClick={() => void cargar(true)} disabled={cargando}>
-          {cargando ? "Consultando…" : "Actualizar lista desde Odoo"}
-        </Button>
+        {/* La lista de clientes ya no se actualiza acá: viaja con «Actualizar desde Odoo», arriba, junto con las
+            facturas. Se dice, para quien busque el botón que estaba en esta fila. */}
+        <span className="ml-auto text-xs text-fg-muted">
+          ¿Falta un cliente nuevo de Odoo? «Actualizar desde Odoo», arriba, lo trae.
+        </span>
       </div>
 
       {pendientes.length === 0 ? (
@@ -397,82 +452,100 @@ export default function EmparejadoOdoo({
         </div>
       )}
 
-      {/* ⭐ Visible, no plegada: es la otra mitad de la lista. Una cuenta que salió de «Emparejar» tiene que poder
-          encontrarse, con quién la sacó y cuándo, y volver con un clic. */}
-      {(enMercury.length > 0 || enQuickBooks.length > 0) && (
+      {/* ⭐ 2026-09-29. Los clientes de Odoo con facturas por cobrar que ninguna cuenta de Nexus tiene. A la vista, no
+          plegados: son exactamente los que «Lo que no cuadra» manda a emparejar, con la misma cifra. Hasta ese día el
+          botón «Ir a emparejar» traía a una pestaña donde no aparecían (Publimark, McCann, Aditec…). */}
+      {conPlata.length > 0 && (
         <div className="rounded-lg border border-line bg-surface">
           <div className="px-4 py-2.5">
-            <h3 className="text-sm font-medium text-fg">En Mercury ({enMercury.length})</h3>
+            <h3 className="text-sm font-medium text-fg">
+              Clientes de Odoo con facturas por cobrar y sin cuenta en Nexus ({conPlata.length})
+            </h3>
             <p className="mt-0.5 text-xs text-fg-muted">
-              Facturan por Mercury, no por Odoo: no se emparejan y Nexus no les busca facturas en Odoo. «Deshacer»
-              devuelve su vía de cobro a Odoo y la cuenta vuelve a la lista para emparejar, con todo lo que tenía.
+              Odoo les facturó, siguen sin pagar y ninguna cuenta de Nexus los tiene: por eso salen en «Lo que no
+              cuadra». Si la empresa ya tiene cuenta —con su nombre comercial, o porque factura con varias razones
+              sociales—, vincúlalo a esa cuenta: sus facturas pasan a ella en el momento. Si todavía no tiene cuenta,
+              créala en Cobranza, con «Nueva empresa», y vuelve a vincularlo.
             </p>
           </div>
-          {enMercury.length > 0 && (
-            <div className="border-t border-line px-4 py-1">
-              {enMercury.map((c) => (
-                <div
-                  key={c.cuentaId}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2 last:border-0"
+          <div className="border-t border-line px-4 py-1">
+            {conPlata.map((v) => (
+              <FilaDeClienteDeOdoo
+                key={v.odooPartnerId}
+                cliente={v}
+                cuentas={estado.cuentas}
+                ocupado={ocupado === `p${v.odooPartnerId}`}
+                eligiendo={eligiendoCuentaPara === v.odooPartnerId}
+                onElegir={() => setEligiendoCuentaPara(eligiendoCuentaPara === v.odooPartnerId ? null : v.odooPartnerId)}
+                onVincular={(cuenta) => vincularACuenta(v, cuenta)}
+                onIgnorar={() => ignorar(v)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Plegada desde el 2026-09-29: 24 cuentas ya resueltas debajo de una sola tarjeta pendiente se leían como
+          trabajo por hacer («me muestra cuentas que ya se emparejaron»). El título dice cuántas son, se abre con un
+          clic y cada una sigue diciendo quién la sacó y cuándo, con su «Deshacer». */}
+      {(enMercury.length > 0 || enQuickBooks.length > 0) && (
+        <Seccion
+          titulo={`En Mercury (${enMercury.length})${enQuickBooks.length > 0 ? ` · en QuickBooks (${enQuickBooks.length})` : ""}`}
+          abierta={verEnMercury}
+          onToggle={() => setVerEnMercury((v) => !v)}
+          nota="Facturan por Mercury, no por Odoo: no se emparejan y Nexus no les busca facturas en Odoo. «Deshacer» devuelve su vía de cobro a Odoo y la cuenta vuelve a la lista para emparejar, con todo lo que tenía."
+        >
+          {enMercury.map((c) => (
+            <div
+              key={c.cuentaId}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-2 last:border-0"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={c.nombre}>
+                {c.nombre}
+              </span>
+              <span className="text-xs text-fg-muted">{origenDeLaVia(c)}</span>
+              {puedeEditar && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={ocupado === `v${c.cuentaId}`}
+                  onClick={() => void marcarVia(c.cuentaId, c.nombre, "ODOO")}
+                  title="Su vía de cobro vuelve a Odoo y la cuenta vuelve a la lista para emparejar."
                 >
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={c.nombre}>
-                    {c.nombre}
-                  </span>
-                  <span className="text-xs text-fg-muted">{origenDeLaVia(c)}</span>
-                  {puedeEditar && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={ocupado === `v${c.cuentaId}`}
-                      onClick={() => void marcarVia(c.cuentaId, c.nombre, "ODOO")}
-                      title="Su vía de cobro vuelve a Odoo y la cuenta vuelve a la lista para emparejar."
-                    >
-                      {ocupado === `v${c.cuentaId}` ? "Guardando…" : "Deshacer"}
-                    </Button>
-                  )}
-                </div>
-              ))}
+                  {ocupado === `v${c.cuentaId}` ? "Guardando…" : "Deshacer"}
+                </Button>
+              )}
             </div>
-          )}
+          ))}
           {/* QuickBooks no tiene botón: se elige en la ficha de la cuenta. Se nombran para que ninguna cuenta
               desaparezca de la pantalla sin decir por qué. */}
           {enQuickBooks.length > 0 && (
-            <p className="border-t border-line px-4 py-2 text-xs text-fg-muted">
+            <p className="pt-2 text-xs text-fg-muted">
               {enQuickBooks.length === 1 ? "Una cuenta factura" : `${enQuickBooks.length} cuentas facturan`} por
               QuickBooks y tampoco se emparejan: {enQuickBooks.map((c) => c.nombre).join(", ")}. Su vía de cobro se
               cambia en la ficha de la cuenta.
             </p>
           )}
-        </div>
+        </Seccion>
       )}
 
       <Seccion
-        titulo={`Clientes de Odoo sin usar (${sinUsar.length})`}
+        titulo={`Otros clientes de Odoo sin cuenta en Nexus (${sinUsar.length})`}
         abierta={verSinUsar}
         onToggle={() => setVerSinUsar((v) => !v)}
-        nota="Odoo tiene más clientes que Nexus cuentas, y la diferencia es historia, no un hueco. Marca acá los que no son clientes nuestros para que dejen de aparecer."
+        nota="No tienen nada por cobrar: son historia ya pagada, o clientes nuevos a los que todavía no se les facturó. Los de facturas más recientes van primero. Vincula el que sea de una cuenta de Nexus, y marca los que no son clientes nuestros para que dejen de aparecer."
       >
         {sinUsar.map((v) => (
-          <div key={v.odooPartnerId} className="flex items-center gap-3 border-b border-line py-2 last:border-0">
-            <span className="min-w-0 flex-1 truncate text-sm text-fg" title={v.odooPartnerNombre}>
-              {v.odooPartnerNombre}
-            </span>
-            {v.odooVat && <span className="shrink-0 font-mono text-xs text-fg-muted">{v.odooVat}</span>}
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={ocupado === `p${v.odooPartnerId}`}
-              onClick={() =>
-                accion(
-                  { accion: "ignorar", odooPartnerId: v.odooPartnerId, ignorado: true },
-                  `p${v.odooPartnerId}`,
-                  "Marcado como ajeno.",
-                )
-              }
-            >
-              No es cliente nuestro
-            </Button>
-          </div>
+          <FilaDeClienteDeOdoo
+            key={v.odooPartnerId}
+            cliente={v}
+            cuentas={estado.cuentas}
+            ocupado={ocupado === `p${v.odooPartnerId}`}
+            eligiendo={eligiendoCuentaPara === v.odooPartnerId}
+            onElegir={() => setEligiendoCuentaPara(eligiendoCuentaPara === v.odooPartnerId ? null : v.odooPartnerId)}
+            onVincular={(cuenta) => vincularACuenta(v, cuenta)}
+            onIgnorar={() => ignorar(v)}
+          />
         ))}
       </Seccion>
 
@@ -652,14 +725,130 @@ function FilaCuenta({
   );
 }
 
+/* ── Un cliente de Odoo que ninguna cuenta tiene ─────────────────────────────────── */
+
+/** Lo que el cliente tiene en Odoo, en una frase: la plata por cobrar, su historia, o que todavía no se le facturó. */
+function loQueTieneEnOdoo(v: Vinculo): string {
+  if (v.porCobrar.length > 0) {
+    return `${v.facturasPorCobrar === 1 ? "1 factura" : `${v.facturasPorCobrar} facturas`} por cobrar · ${textoDeMontos(v.porCobrar)} sin IVA`;
+  }
+  if (v.facturas === 0) return "Sin facturas todavía";
+  return `${v.facturas === 1 ? "1 documento" : `${v.facturas} documentos`}, nada por cobrar · el último, del ${fmtFecha(v.ultimaFactura)}`;
+}
+
+/**
+ * La fila de un cliente de Odoo sin cuenta en Nexus: qué tiene en Odoo y las dos salidas —es de una cuenta que ya
+ * existe, o no es cliente nuestro—. El vínculo es el mismo de la tarjeta de la cuenta, empezado desde el otro lado.
+ */
+function FilaDeClienteDeOdoo({
+  cliente,
+  cuentas,
+  ocupado,
+  eligiendo,
+  onElegir,
+  onVincular,
+  onIgnorar,
+}: {
+  cliente: Vinculo;
+  cuentas: readonly CuentaDeNexus[];
+  ocupado: boolean;
+  /** El selector de cuenta de esta fila está abierto. */
+  eligiendo: boolean;
+  onElegir: () => void;
+  onVincular: (cuenta: CuentaDeNexus) => void;
+  onIgnorar: () => void;
+}) {
+  return (
+    <div className="border-b border-line py-2 last:border-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm text-fg" title={cliente.odooPartnerNombre}>
+            {cliente.odooPartnerNombre}
+          </div>
+          <div className={`text-xs ${cliente.porCobrar.length > 0 ? "text-fg-secondary" : "text-fg-muted"}`}>
+            {loQueTieneEnOdoo(cliente)}
+            {cliente.odooVat && <span className="font-mono"> · {cliente.odooVat}</span>}
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" disabled={ocupado} onClick={onElegir}>
+          {eligiendo ? "Cerrar" : "Es de una cuenta de Nexus"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={ocupado}
+          onClick={onIgnorar}
+          title="Deja de aparecer acá y en las propuestas. Sus facturas siguen en la copia de Odoo: no se borra nada."
+        >
+          No es cliente nuestro
+        </Button>
+      </div>
+      {eligiendo && <SelectorDeCuenta cuentas={cuentas} ocupado={ocupado} onElegir={onVincular} />}
+    </div>
+  );
+}
+
+/** Elegir una cuenta de Nexus por su nombre. Son unas sesenta: se filtran acá, sin ir al servidor. */
+function SelectorDeCuenta({
+  cuentas,
+  ocupado,
+  onElegir,
+}: {
+  cuentas: readonly CuentaDeNexus[];
+  ocupado: boolean;
+  onElegir: (cuenta: CuentaDeNexus) => void;
+}) {
+  const [q, setQ] = useState("");
+  const sinTildes = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const buscada = sinTildes(q.trim());
+  const hits = buscada.length < 2 ? [] : cuentas.filter((c) => sinTildes(c.nombre).includes(buscada)).slice(0, 8);
+  return (
+    <div className="mt-2 rounded-md border border-line p-2">
+      <Input
+        autoFocus
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Nombre de la cuenta en Nexus…"
+        className="text-sm"
+      />
+      {buscada.length >= 2 && hits.length === 0 && (
+        <p className="mt-2 text-xs text-fg-muted">
+          Ninguna cuenta de Nexus se llama así. Si la empresa todavía no tiene cuenta, créala en Cobranza, con «Nueva
+          empresa», y vuelve acá.
+        </p>
+      )}
+      <div className="mt-1 max-h-56 overflow-y-auto">
+        {hits.map((c) => (
+          <div key={c.cuentaId} className="flex items-center gap-3 border-b border-line py-1.5 last:border-0">
+            <span className="min-w-0 flex-1 truncate text-sm text-fg" title={c.nombre}>
+              {c.nombre}
+            </span>
+            {c.via !== "ODOO" && (
+              <span className="shrink-0 text-xs text-fg-muted">factura por {c.via === "MERCURY" ? "Mercury" : "QuickBooks"}</span>
+            )}
+            <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => onElegir(c)}>
+              {ocupado ? "Guardando…" : "Es esta"}
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── El buscador, que es el flujo principal ──────────────────────────────────────── */
 
 function Buscador({ ocupado, onElegir }: { ocupado: boolean; onElegir: (odooPartnerId: number) => void }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<PartnerOdoo[]>([]);
   const [buscando, setBuscando] = useState(false);
+  /* ⭐ «Buscar directamente en Odoo» (2026-09-29): lo que devolvió el ERP para lo que está escrito, y si falló. Se
+     limpia al cambiar el texto: son resultados de OTRA búsqueda. */
+  const [deOdoo, setDeOdoo] = useState<{ para: string; fichas: PartnerOdoo[]; error: string | null } | null>(null);
+  const [buscandoEnOdoo, setBuscandoEnOdoo] = useState(false);
 
   useEffect(() => {
+    setDeOdoo(null);
     if (q.trim().length < 2) {
       setHits([]);
       return;
@@ -682,6 +871,55 @@ function Buscador({ ocupado, onElegir }: { ocupado: boolean; onElegir: (odooPart
     return () => clearTimeout(t);
   }, [q]);
 
+  /* ⚠ Esta SÍ consulta el ERP, y por eso la manda un botón y no cada tecla. */
+  const buscarEnOdoo = async () => {
+    const para = q.trim();
+    setBuscandoEnOdoo(true);
+    try {
+      const r = await fetchJson<{ partners: PartnerOdoo[]; errorOdoo: string | null }>(
+        `/api/cobranza/odoo/emparejado?q=${encodeURIComponent(para)}&enOdoo=1`,
+      );
+      setDeOdoo({ para, fichas: r.partners, error: r.errorOdoo });
+    } catch (e) {
+      setDeOdoo({ para, fichas: [], error: e instanceof ApiError ? e.message : "No se pudo consultar Odoo." });
+    } finally {
+      setBuscandoEnOdoo(false);
+    }
+  };
+
+  const enLaLista = new Set(hits.map((p) => p.odooPartnerId));
+  const soloEnOdoo = (deOdoo?.fichas ?? []).filter((p) => !enLaLista.has(p.odooPartnerId));
+  const fila = (p: PartnerOdoo) => (
+    <div key={p.odooPartnerId} className="flex items-center gap-3 border-b border-line py-1.5 last:border-0">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm text-fg" title={p.nombre}>
+          {p.nombre}
+        </div>
+        {/* De quién es, ANTES del clic: hasta el 2026-09-29 se podía elegir el cliente de otra cuenta y recién ahí
+            aparecía el rechazo. */}
+        {(p.vinculadaA || p.facturas === 0) && (
+          <div className="text-xs text-fg-muted">
+            {p.vinculadaA ? `Ya es de la cuenta «${p.vinculadaA}»` : "Sin facturas todavía"}
+          </div>
+        )}
+      </div>
+      {p.vat && <span className="shrink-0 font-mono text-xs text-fg-muted">{p.vat}</span>}
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={ocupado || !!p.vinculadaA}
+        title={
+          p.vinculadaA
+            ? `Un cliente de Odoo va en una sola cuenta, y este ya es de «${p.vinculadaA}». Si es la misma empresa, el servicio nuevo se agrega en esa cuenta.`
+            : undefined
+        }
+        onClick={() => onElegir(p.odooPartnerId)}
+      >
+        Es este
+      </Button>
+    </div>
+  );
+
   return (
     <div className="mt-2 rounded-md border border-line p-2">
       <Input
@@ -694,22 +932,38 @@ function Buscador({ ocupado, onElegir }: { ocupado: boolean; onElegir: (odooPart
       {buscando && <p className="mt-2 text-xs text-fg-muted">Buscando…</p>}
       {!buscando && q.trim().length >= 2 && hits.length === 0 && (
         <p className="mt-2 text-xs text-fg-muted">
-          Nada con ese nombre ni esa cédula. Odoo puede tenerlo con la razón social completa.
+          Nada con ese nombre ni esa cédula en la lista guardada. Odoo puede tenerlo con la razón social completa, o
+          ser un cliente nuevo: búscalo directamente en Odoo.
         </p>
       )}
-      <div className="mt-1 max-h-56 overflow-y-auto">
-        {hits.map((p) => (
-          <div key={p.odooPartnerId} className="flex items-center gap-3 border-b border-line py-1.5 last:border-0">
-            <span className="min-w-0 flex-1 truncate text-sm text-fg" title={p.nombre}>
-              {p.nombre}
-            </span>
-            {p.vat && <span className="shrink-0 font-mono text-xs text-fg-muted">{p.vat}</span>}
-            <Button variant="ghost" size="sm" disabled={ocupado} onClick={() => onElegir(p.odooPartnerId)}>
-              Es este
+      <div className="mt-1 max-h-56 overflow-y-auto">{hits.map(fila)}</div>
+
+      {q.trim().length >= 3 && (
+        <div className="mt-2 border-t border-line pt-2">
+          {deOdoo?.para !== q.trim() && (
+            <Button variant="ghost" size="sm" disabled={buscandoEnOdoo} onClick={() => void buscarEnOdoo()}>
+              {buscandoEnOdoo ? "Consultando Odoo…" : `Buscar «${q.trim()}» directamente en Odoo`}
             </Button>
-          </div>
-        ))}
-      </div>
+          )}
+          {deOdoo?.para === q.trim() && deOdoo.error && (
+            <p className="text-xs text-danger-ink">No se pudo consultar Odoo: {deOdoo.error}</p>
+          )}
+          {deOdoo?.para === q.trim() && !deOdoo.error && soloEnOdoo.length === 0 && (
+            <p className="text-xs text-fg-muted">
+              Odoo no tiene ningún otro cliente con ese nombre ni esa cédula. Si lo acaban de crear, revisa cómo quedó
+              escrito en Odoo.
+            </p>
+          )}
+          {soloEnOdoo.length > 0 && (
+            <>
+              <p className="text-xs text-fg-muted">
+                En Odoo y todavía fuera de la lista guardada. Al elegir uno, entra a la lista y queda vinculado:
+              </p>
+              <div className="mt-1 max-h-56 overflow-y-auto">{soloEnOdoo.map(fila)}</div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

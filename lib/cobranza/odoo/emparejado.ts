@@ -514,6 +514,73 @@ export function resumenDelEmparejado(
   return r;
 }
 
+/* ── 9 bis. La lista de clientes de Odoo ────────────────────────────────────────── */
+
+/** Un nombre que es, entero, una dirección de correo: `conta10@corporacioncsb.com`. */
+const ES_UN_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * ¿Esta ficha de Odoo es un contacto para recibir la factura, y no un cliente?
+ *
+ * ── DE DÓNDE SALEN (medido el 2026-09-29 contra el ERP) ─────────────────────────
+ * Odoo tiene los campos «correo 2» y «correo 3» en la ficha del cliente, para mandar copia de la factura. Al enviar
+ * una factura a esas direcciones, Odoo crea además UN CONTACTO por cada una, con el correo como nombre: hay 13, y a 4
+ * los dejó marcados como cliente (`conta10@` y `conta17@corporacioncsb.com`, `ingrid.granados@almoteccr.com`,
+ * `mgonzalez@gruposervica.com`). Nexus trae todo lo que Odoo marca como cliente, así que esos 4 entraban a la lista de
+ * «Clientes de Odoo sin usar» como si fueran empresas. Ninguno de los 13 tiene cédula ni una sola factura.
+ *
+ * La regla pide las tres cosas: el nombre es un correo, no tiene cédula y no tiene facturas. ⚠ Si algún día se le
+ * emite una factura a una ficha así, deja de ser un contacto: tiene plata a su nombre y tiene que verse.
+ */
+export function esContactoYNoCliente(ficha: { nombre: string; vat: string | null }, tieneFacturas: boolean): boolean {
+  return !tieneFacturas && ES_UN_CORREO.test(ficha.nombre.trim()) && soloDigitos(ficha.vat) === "";
+}
+
+/** Una ficha de la lista guardada en Nexus. `decidida` = vinculada a una cuenta o marcada «no es cliente nuestro». */
+export interface FichaGuardada {
+  odooPartnerId: number;
+  nombre: string;
+  vat: string | null;
+  decidida: boolean;
+}
+
+/**
+ * Qué hay que escribir para que la lista de clientes de Odoo quede como Odoo la tiene hoy.
+ *
+ * ── POR QUÉ EXISTE ──────────────────────────────────────────────────────────────
+ * Hasta el 2026-09-29 la lista solo se actualizaba con un botón aparte, así que un cliente recién creado en Odoo no
+ * se podía emparejar hasta que alguien se acordara de apretarlo: «Cemaco Internacional» tenía su cuenta en Nexus y su
+ * ficha en Odoo, y no aparecía ni como propuesta ni en el buscador. Ahora viaja con cada copia de Odoo.
+ *
+ * - `nuevas`: las que Odoo tiene y Nexus no. ⚠ Tengan o no facturas: un cliente nuevo se empareja antes de facturarle.
+ *   Quedan fuera los contactos de correo (`esContactoYNoCliente`).
+ * - `renombradas`: las que cambiaron de nombre o de cédula en Odoo y nadie decidió todavía. ⛔ Una ficha ya decidida no
+ *   se toca: el nombre guardado es el que la persona vio cuando confirmó.
+ *
+ * ⛔ Nunca saca una ficha de la lista: que Odoo deje de devolverla no borra un vínculo que alguien confirmó.
+ */
+export function cambiosDeLaLista(
+  deOdoo: readonly PartnerOdoo[],
+  guardadas: readonly FichaGuardada[],
+  conFacturas: ReadonlySet<number>,
+): { nuevas: PartnerOdoo[]; renombradas: PartnerOdoo[] } {
+  const guardada = new Map(guardadas.map((g) => [g.odooPartnerId, g]));
+  const nuevas: PartnerOdoo[] = [];
+  const renombradas: PartnerOdoo[] = [];
+  const vistas = new Set<number>();
+  for (const p of deOdoo) {
+    if (vistas.has(p.odooPartnerId)) continue;
+    vistas.add(p.odooPartnerId);
+    const g = guardada.get(p.odooPartnerId);
+    if (!g) {
+      if (!esContactoYNoCliente(p, conFacturas.has(p.odooPartnerId))) nuevas.push(p);
+      continue;
+    }
+    if (!g.decidida && (g.nombre !== p.nombre || (g.vat ?? null) !== (p.vat ?? null))) renombradas.push(p);
+  }
+  return { nuevas, renombradas };
+}
+
 /* ── 10. «Está en Mercury» ──────────────────────────────────────────────────────── */
 
 /** Lo que pide el botón: marcar la cuenta en Mercury, o deshacerlo (vuelve a Odoo). */

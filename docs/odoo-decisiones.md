@@ -426,6 +426,8 @@ para el contador de fallos. La causa quedó del lado del ERP.
 ERP**. Los montos salen de `FacturaOdoo` y los clientes del catálogo guardado — las dos cosas
 están en la base desde que existe el sync. Abrir `/cobranza/odoo` ahora cuesta **cero
 autenticaciones**. Solo el botón «Actualizar lista desde Odoo» y el cron diario tocan el ERP.
+(Desde el 2026-09-29 ese botón es «Actualizar desde Odoo», arriba de las pestañas, y copia también las facturas; ver
+la entrada de ese día.)
 
 **Qué lo revertiría.** Nada de esto. La única parte discutible es la sesión compartida a nivel
 de módulo, que contradice una decisión anterior de este mismo archivo («cachear por instancia,
@@ -1188,3 +1190,59 @@ tocó: si adopta lib/ui/voseo.ts, caza también el pronombre pegado.
 **Qué la revertiría.** El tuteo, nada: es la regla del repo. El detector del pronombre pegado, que su lista de
 excepciones crezca más rápido que el voseo que caza: ahí conviene cambiar la forma por una lista de verbos. «Cómo
 funciona», que cambie una regla de la lista: la guarda obliga a cambiar el texto en el mismo commit.
+
+## 2026-09-29 · Revisión con Alex: la copia también se pide con un botón, y la lista de clientes viaja con ella
+
+**Qué se decidió.**
+- **«Actualizar desde Odoo»**, un solo botón arriba de las tres pestañas (OdooClient). Hace la misma copia que el job
+  de las 6 (`sincronizarOdoo`), firmada por quien la pidió, y recarga la pestaña que se mira. Reemplaza a «Actualizar
+  lista desde Odoo» de «Emparejar», que traía los clientes pero no las facturas. Ruta: `POST
+  /api/cobranza/odoo/actualizar` (lectura de Cobranza: no cambia ningún dato del negocio).
+- **Una sola copia a la vez.** `sincronizarOdoo` toma un candado (`CronJobState`, fila `odoo-espejo-candado`, el molde
+  de `ventas-ganadas-sync-lock`). La que encuentra el candado devuelve `enCurso` y no deja fila en `SyncOdooCorrida`;
+  el job de la mañana, si justo choca, suelta su turno y reintenta en el tick siguiente.
+- **Con una copia de hace menos de 30 s no se vuelve a leer** (`copiaRecienHecha`): la pantalla se recarga igual. La
+  copia a pedido espera 15 s por respuesta de Odoo, no 60: el botón no puede quedar colgado tres minutos.
+- **La lista de clientes de Odoo viaja con cada copia** (`recordarClientes` en sync.ts, con la regla pura
+  `cambiosDeLaLista`). Se lee junto con las facturas y antes de escribir nada: si Odoo no contesta, la corrida falla
+  entera. Escribe solo las fichas nuevas y las que cambiaron de nombre o de cédula sin tener decisión.
+- **Los contactos de correo no son clientes** (`esContactoYNoCliente`): nombre que es un correo, sin cédula y sin
+  facturas. La copia no los trae y «Emparejar» deja de mostrar los 4 que habían entrado, sin borrar nada.
+- **«Emparejar» muestra a la vista los clientes de Odoo sin cuenta que tienen facturas por cobrar**, con su plata
+  (`facturasPorCliente`, la misma regla de «por cobrar» que la línea de facturas sin cuenta) y dos salidas: «Es de una
+  cuenta de Nexus» y «No es cliente nuestro». «En Mercury» pasa a estar plegada.
+- **«Buscar directamente en Odoo»** en el buscador (`dominioBuscarFicha`): encuentra también la empresa que Odoo no
+  marca como cliente porque nunca se le facturó. Elegirla la agrega a la lista en el momento.
+- **La clasificación de la cuenta propone la vía** (`lib/cobranza/via-por-tipo.ts`): nacional → Odoo, internacional →
+  Mercury, en las tres puertas de alta. En una cuenta que ya existe no se cambia sola: la ficha lo avisa al cambiar
+  el tipo.
+- **El rechazo «ya está vinculado a otra cuenta» nombra la otra cuenta** y dice qué hacer: el servicio nuevo va en
+  esa cuenta. Y el buscador lo dice antes del clic.
+- **La hora de la copia se dice en hora de Costa Rica** (`horaDeCostaRica`), no en UTC.
+
+**Por qué.** Alex usa el módulo a diario y reportó tres cosas. (1) «Las facturas ya están pagadas en Odoo y Nexus las
+sigue acusando»: medido contra el ERP en vivo, la copia de ese día era igual a Odoo factura por factura (378), y las
+que nombró seguían abiertas EN ODOO (Transportes Juanva FAC/2026/0197 y 0230 sin pago; Aditec FAC/2025/0174 pagada a
+medias; Ingeniería Verde FAC/2025/0160 sin pago). El hueco real era otro: la copia era una vez por día y el único
+botón no traía facturas. (2) «Cemaco es un cliente nuevo de Odoo y no se liga»: su ficha existía en Odoo sin
+facturas, pero la lista de clientes de Nexus solo se actualizaba a mano, y sin ella ni la propuesta por cédula ni el
+buscador lo veían. (3) «En la lista de clientes salen correos»: Odoo tiene los campos correo 2 y correo 3 en la ficha
+del cliente (módulo `bts_partner_extra_email`) y, al mandar una factura a esas direcciones, crea además un contacto
+por cada una con el correo como nombre. Hay 13; a 4 los dejó marcados como cliente (`customer_rank = 1`), y la copia
+trae todo lo que Odoo marca como cliente. Ninguno de los 13 tiene cédula ni facturas.
+
+Probado de punta a punta contra la base LOCAL con el ERP real (solo lectura allá): de dos copias lanzadas a la vez
+corre una y la otra encuentra el candado; entran 84 fichas y ningún correo; Cemaco entra sin facturas; la segunda
+copia no escribe nada.
+
+⚠ El candado vence a los 10 minutos: si el proceso muere con él puesto, en ese rato ni el botón ni el job copian.
+⚠ La copia a pedido deja una fila en `SyncOdooCorrida` cada vez. Con el tope de 30 s son, como mucho, dos por minuto
+por persona: si alguna vez molesta en «Ver todas las corridas», se filtran ahí, no se dejan de registrar.
+⚠ Los 4 contactos de correo siguen en `OdooPartnerVinculo`: se dejan de mostrar, no se borran. Dos ya estaban
+marcados «no es cliente nuestro».
+⚠ «Buscar directamente en Odoo» es la única lectura de «Emparejar» que toca el ERP, y la dispara un botón.
+
+**Qué la revertiría.** El botón, nada. El tope de 30 s, que estorbe a quien registra dos pagos seguidos: se baja.
+Que la lista viaje con la copia, que leer `res.partner` empiece a fallar por permisos y tumbe la copia de facturas:
+ahí conviene que falle sola y avise, en vez de arrastrar a la otra. La regla de los correos, que aparezca un cliente
+de verdad cuyo nombre en Odoo sea un correo: tendría cédula o facturas, y la regla ya lo deja pasar.

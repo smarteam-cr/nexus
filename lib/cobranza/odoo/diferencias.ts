@@ -450,9 +450,53 @@ export function estaPorCobrar(f: Pick<FacturaParaCruzar, "moveType" | "state" | 
 }
 
 /** Lo que falta cobrar de una factura, sin IVA como todo Nexus. Pago parcial: la parte del neto que queda. */
-function netoPorCobrar(f: FacturaParaCruzar): number {
+function netoPorCobrar(f: Pick<FacturaParaCruzar, "paymentState" | "montoTotal" | "montoNeto" | "montoResidual">): number {
   if (f.paymentState === "partial" && f.montoTotal > 0) return round2((f.montoNeto * f.montoResidual) / f.montoTotal);
   return f.montoNeto;
+}
+
+/** Lo que un cliente de Odoo tiene en la copia: cuántos documentos, de cuándo es el último y cuánto le queda por cobrar. */
+export interface FacturasDeUnCliente {
+  /** Facturas y notas de crédito, vivas o no: «tiene historia en Odoo». */
+  documentos: number;
+  /** Día de su documento más nuevo (`YYYY-MM-DD`). */
+  ultima: string;
+  /** Lo que Odoo le da por cobrar, sin IVA y por moneda. Vacío = nada pendiente. */
+  porCobrar: MontoEnMoneda[];
+  /** Cuántas facturas suman eso. */
+  facturasPorCobrar: number;
+}
+
+/**
+ * Lo que cada cliente de Odoo tiene facturado, para la lista de clientes de Odoo sin cuenta de «Emparejar» (2026-09-29).
+ *
+ * ── POR QUÉ EXISTE ──────────────────────────────────────────────────────────────
+ * Esa lista eran 53 nombres sueltos: no decía cuáles tienen plata en la calle (Publimark, US$53.900) y cuáles son
+ * historia de 2021. Y «Lo que no cuadra» mandaba a emparejar a clientes que en «Emparejar» no aparecían por ningún
+ * lado, porque las tarjetas son de cuentas de Nexus y esos clientes no tienen cuenta.
+ *
+ * «Por cobrar» es la MISMA regla que la línea de facturas sin cuenta (`estaPorCobrar` y `netoPorCobrar`): si acá
+ * dijera otra cifra, las dos pantallas se contradirían. Un cliente sin documentos no está en el mapa.
+ */
+export function facturasPorCliente(
+  facturas: ReadonlyArray<
+    Pick<FacturaParaCruzar, "odooPartnerId" | "invoiceDate" | "montoNeto" | "montoTotal" | "montoResidual" | "moneda" | "moveType" | "paymentState" | "state">
+  >,
+): Map<number, FacturasDeUnCliente> {
+  const crudo = new Map<number, { documentos: number; ultima: string; porCobrar: Array<{ monto: number; moneda: string }> }>();
+  for (const f of facturas) {
+    const c = crudo.get(f.odooPartnerId) ?? { documentos: 0, ultima: f.invoiceDate, porCobrar: [] };
+    c.documentos++;
+    if (f.invoiceDate > c.ultima) c.ultima = f.invoiceDate;
+    if (estaPorCobrar(f)) c.porCobrar.push({ monto: netoPorCobrar(f), moneda: f.moneda });
+    crudo.set(f.odooPartnerId, c);
+  }
+  return new Map(
+    [...crudo].map(([id, c]) => [
+      id,
+      { documentos: c.documentos, ultima: c.ultima, porCobrar: montosPorMoneda(c.porCobrar), facturasPorCobrar: c.porCobrar.length },
+    ]),
+  );
 }
 
 /** Lo que una nota de crédito tiene sin aplicar, con IVA: su saldo, o el total si Odoo no la tocó. */

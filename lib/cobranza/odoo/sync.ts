@@ -22,7 +22,9 @@ import { prisma } from "@/lib/db/prisma";
 import { crearTransporteXmlRpc, configDesdeEntorno } from "./transporte-xmlrpc";
 import {
   ODOO_CAMPOS_FACTURA,
+  ODOO_CAMPOS_PARTNER,
   OdooError,
+  dominioClientes,
   dominioFacturasDesde,
   dominioFacturasVenta,
   explicarFallo,
@@ -36,11 +38,12 @@ import {
   espejoVencido,
   evidenciaDesactualizada,
   mapearFactura,
+  textoOdoo,
   type Delta,
   type FacturaEspejada,
   type TipoCambioBitacora,
 } from "./espejo";
-import { reatribuciones } from "./emparejado";
+import { cambiosDeLaLista, reatribuciones, type PartnerOdoo } from "./emparejado";
 
 /** El separador del detalle de rechazos. Constante para no pelear con el escapado. */
 const SALTO = String.fromCharCode(10);
@@ -67,6 +70,45 @@ export interface ResultadoSync {
    */
   clase: OdooFalloClase | null;
   duracionMs: number;
+  /** Clientes de Odoo que entraron a la lista para emparejar en esta copia (`recordarClientes`). */
+  clientesNuevos: number;
+  /**
+   * true = otra copia estaba corriendo —la de la mañana, o la que pidió otra persona con «Actualizar desde Odoo»—.
+   * Esta no leyó Odoo ni escribió nada, y no dejó fila en `SyncOdooCorrida`: no es una corrida fallida, es una que
+   * no hizo falta.
+   */
+  enCurso?: boolean;
+}
+
+/* ── El candado: una sola copia a la vez ───────────────────────────────────────── */
+
+/**
+ * Desde el 2026-09-29 la copia también la pide una persona con un botón. Dos copias a la vez leen lo mismo, calculan
+ * los mismos cambios contra la misma base y los anotan dos veces en la bitácora. El candado es una fila de
+ * `CronJobState` con compare-and-set, el mismo molde que `ventas-ganadas-sync-lock`.
+ */
+const CANDADO = "odoo-espejo-candado";
+/** Una copia tarda segundos. Si el proceso murió con el candado puesto, a los 10 minutos se da por suelto. */
+const CANDADO_VENCE_MS = 10 * 60 * 1000;
+
+async function tomarCandado(ahora: Date): Promise<boolean> {
+  /* La fila tiene que existir para que el compare-and-set de abajo tenga contra qué comparar. `skipDuplicates` y no
+     `upsert`: dos copias que llegan a la vez la primera vez chocaban al crearla, y aunque el choque se atajaba, Prisma
+     lo dejaba escrito en el log como un error que no era (medido contra la base local). */
+  await prisma.cronJobState.createMany({ data: [{ id: CANDADO }], skipDuplicates: true });
+  const tomado = await prisma.cronJobState.updateMany({
+    where: {
+      id: CANDADO,
+      OR: [{ lastRunAt: null }, { lastRunAt: { lt: new Date(ahora.getTime() - CANDADO_VENCE_MS) } }],
+    },
+    data: { lastRunAt: ahora },
+  });
+  return tomado.count === 1;
+}
+
+/** ⛔ Nunca lanza: corre en un `finally`, y un fallo al soltar no puede tapar el resultado de la copia. */
+async function soltarCandado(): Promise<void> {
+  await prisma.cronJobState.updateMany({ where: { id: CANDADO }, data: { lastRunAt: null } }).catch(() => {});
 }
 
 /**
@@ -81,18 +123,31 @@ export interface ResultadoSync {
  * El filtro por `write_date` sí se usa: para CONTAR cuántas se movieron y dejarlo anotado en
  * la corrida. Es el dato que un humano quiere ver primero cuando algo no cuadra.
  */
-export async function sincronizarOdoo(opts: {
+export async function sincronizarOdoo(opts: OpcionesDeCopia): Promise<ResultadoSync> {
+  if (!(await tomarCandado(new Date()))) {
+    return { ...resultadoVacio(""), enCurso: true, error: "Ya hay una copia de Odoo en curso." };
+  }
+  try {
+    return await copiar(opts);
+  } finally {
+    await soltarCandado();
+  }
+}
+
+export interface OpcionesDeCopia {
   disparadaPor: string;
   transporte?: OdooTransport;
-}): Promise<ResultadoSync> {
-  const t0 = Date.now();
-  const corrida = await prisma.syncOdooCorrida.create({
-    data: { disparadaPor: opts.disparadaPor },
-    select: { id: true },
-  });
+  /**
+   * Cuánto se espera cada respuesta de Odoo, en ms. La copia de la mañana usa el de la configuración (60 s); la que
+   * pide una persona con el botón, uno corto: una pantalla esperando tres minutos a un ERP que no contesta se lee
+   * como que Nexus se colgó.
+   */
+  esperaMs?: number;
+}
 
-  const res: ResultadoSync = {
-    corridaId: corrida.id,
+function resultadoVacio(corridaId: string): ResultadoSync {
+  return {
+    corridaId,
     ok: false,
     parcial: false,
     facturasVistas: 0,
@@ -107,10 +162,23 @@ export async function sincronizarOdoo(opts: {
     error: null,
     clase: null,
     duracionMs: 0,
+    clientesNuevos: 0,
   };
+}
+
+async function copiar(opts: OpcionesDeCopia): Promise<ResultadoSync> {
+  const t0 = Date.now();
+  const corrida = await prisma.syncOdooCorrida.create({
+    data: { disparadaPor: opts.disparadaPor },
+    select: { id: true },
+  });
+
+  const res = resultadoVacio(corrida.id);
 
   try {
-    const t = opts.transporte ?? crearTransporteXmlRpc(configDesdeEntorno());
+    const t =
+      opts.transporte ??
+      crearTransporteXmlRpc({ ...configDesdeEntorno(), ...(opts.esperaMs ? { timeoutMs: opts.esperaMs } : {}) });
 
     const ultima = await prisma.syncOdooCorrida.findFirst({
       where: { ok: true, id: { not: corrida.id } },
@@ -125,6 +193,12 @@ export async function sincronizarOdoo(opts: {
       order: "id asc",
     });
     res.facturasVistas = crudas.length;
+
+    /* ⭐ La lista de clientes de Odoo viaja con la copia (2026-09-29). Se lee acá, junto con las facturas y ANTES de
+       escribir nada: si Odoo no contesta, la corrida falla entera y no queda una copia a medias. */
+    const crudosCliente = await t.buscarYLeer("res.partner", dominioClientes(), ODOO_CAMPOS_PARTNER, {
+      order: "id asc",
+    });
 
     const vistas: FacturaEspejada[] = [];
     for (const c of crudas) {
@@ -142,7 +216,7 @@ export async function sincronizarOdoo(opts: {
        fallando: es teniendo ÉXITO con la mitad de los datos y concluyendo que las otras 200
        facturas ya no existen. */
     if (res.parcial) {
-      res.error = `La lectura trajo ${vistas.length} facturas contra ${conocidas} conocidas (menos de la mitad): no se espeja nada.`;
+      res.error = `La lectura trajo ${vistas.length} facturas contra ${conocidas} conocidas (menos de la mitad): no se copió nada.`;
       return res;
     }
 
@@ -377,6 +451,18 @@ export async function sincronizarOdoo(opts: {
          desaparecidas habiendo marcado la mitad. */
       res.desaparecidas++;
     }
+
+    /* Al final, con las facturas ya guardadas: un cliente nuevo de Odoo queda para emparejar esa misma mañana, o en
+       el momento si alguien pidió la copia con el botón. */
+    res.clientesNuevos = await recordarClientes(
+      crudosCliente.flatMap((p) => {
+        const odooPartnerId = Number(p.id);
+        const nombre = textoOdoo(p.name);
+        if (!Number.isFinite(odooPartnerId) || odooPartnerId <= 0 || !nombre) return [];
+        return [{ odooPartnerId, nombre, vat: textoOdoo(p.vat), customerRank: Number(p.customer_rank ?? 0) }];
+      }),
+      new Set(vistas.map((f) => f.odooPartnerId)),
+    );
     res.ok = true;
   } catch (e) {
     /* El texto del error se GUARDA. Es la diferencia entre «viene fallando hace tres días
@@ -393,6 +479,43 @@ export async function sincronizarOdoo(opts: {
   }
 
   return res;
+}
+
+/**
+ * Deja la lista de clientes de Odoo como Odoo la tiene hoy, sin tocar las fichas que ya tienen decisión. Qué entra y
+ * qué se renombra lo decide `cambiosDeLaLista` (emparejado.ts, pura): acá solo se escribe. Devuelve cuántas entraron.
+ *
+ * ⚠ Se escribe solo lo que cambió. Hasta el 2026-09-29 el botón «Actualizar lista desde Odoo» hacía una escritura por
+ * cada cliente, cambiara o no: 88 idas y vueltas a la base para que casi siempre no pasara nada.
+ */
+async function recordarClientes(deOdoo: readonly PartnerOdoo[], conFacturas: ReadonlySet<number>): Promise<number> {
+  const guardadas = await prisma.odooPartnerVinculo.findMany({
+    where: { odooPartnerId: { not: null } },
+    select: { odooPartnerId: true, odooPartnerNombre: true, odooVat: true, cuentaId: true, ignorado: true },
+  });
+  const { nuevas, renombradas } = cambiosDeLaLista(
+    deOdoo,
+    guardadas.flatMap((g) =>
+      g.odooPartnerId === null
+        ? []
+        : [{ odooPartnerId: g.odooPartnerId, nombre: g.odooPartnerNombre, vat: g.odooVat, decidida: g.cuentaId !== null || g.ignorado }],
+    ),
+    conFacturas,
+  );
+  if (nuevas.length) {
+    await prisma.odooPartnerVinculo.createMany({
+      data: nuevas.map((p) => ({ odooPartnerId: p.odooPartnerId, odooPartnerNombre: p.nombre, odooVat: p.vat })),
+      skipDuplicates: true,
+    });
+  }
+  for (const p of renombradas) {
+    /* El filtro se repite en la escritura: si alguien la vinculó mientras corría la copia, no se le pisa el nombre. */
+    await prisma.odooPartnerVinculo.updateMany({
+      where: { odooPartnerId: p.odooPartnerId, cuentaId: null, ignorado: false },
+      data: { odooPartnerNombre: p.nombre, odooVat: p.vat },
+    });
+  }
+  return nuevas.length;
 }
 
 async function cerrar(corridaId: string, res: ResultadoSync, t0: number): Promise<void> {

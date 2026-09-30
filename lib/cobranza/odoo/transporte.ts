@@ -111,9 +111,60 @@ export function dominioFacturasDesde(desde: Date): OdooDominio {
   return [...dominioFacturasVenta(), ["write_date", ">=", fechaHoraOdoo(desde)]];
 }
 
-/** Los partners que alguna vez le compraron algo a la empresa. */
+/**
+ * Las fichas que Odoo marca como cliente: las que tienen alguna factura de venta, y las que alguien creó desde el
+ * menú de clientes aunque todavía no se les haya facturado.
+ *
+ * ⚠ También trae los contactos que Odoo crea solo al mandar una factura a un «correo 2» o «correo 3»: los saca
+ * `esContactoYNoCliente` (emparejado.ts), que necesita saber si tienen facturas.
+ */
 export function dominioClientes(): OdooDominio {
   return [["customer_rank", ">", 0]];
+}
+
+/**
+ * Las formas en que puede estar escrita una cédula en Odoo, que guarda el texto tal cual lo tecleó alguien:
+ * `3101070993` y `3-101-070993` son el mismo contribuyente, y un `ilike` con una no encuentra la otra.
+ */
+export function variantesDeCedula(texto: string): string[] {
+  const d = texto.replace(/\D/g, "");
+  if (d.length < 4) return [];
+  const formas = [d];
+  if (d.length === 10) formas.push(`${d[0]}-${d.slice(1, 4)}-${d.slice(4)}`); // jurídica: 3-101-070993
+  if (d.length === 9) formas.push(`${d[0]}-${d.slice(1, 5)}-${d.slice(5)}`); // física: 1-1161-0327
+  return [...new Set(formas)];
+}
+
+/**
+ * Buscar una ficha directamente en Odoo, por nombre o por cédula, tenga o no facturas (2026-09-29).
+ *
+ * ── POR QUÉ EXISTE ──────────────────────────────────────────────────────────────
+ * La lista guardada trae lo que Odoo marca como cliente (`dominioClientes`). Una empresa creada desde «Contactos» no
+ * lleva esa marca hasta su primera factura, y no se podía emparejar antes de facturarle. Esto la encuentra igual.
+ *
+ * Solo fichas principales (sin las direcciones y contactos que cuelgan de otra) y sin los que son solo proveedores.
+ * ⚠ Lo dispara una persona con un botón, nunca una tecla: cada llamada es una consulta al ERP.
+ */
+export function dominioBuscarFicha(texto: string): OdooDominio {
+  const q = texto.trim();
+  const condiciones: OdooDominio[] = [
+    ["name", "ilike", q],
+    ["vat", "ilike", q],
+    ...variantesDeCedula(q)
+      .filter((c) => c !== q)
+      .map((c): OdooDominio => ["vat", "ilike", c]),
+  ];
+  return [
+    "&",
+    ["parent_id", "=", false],
+    "&",
+    "|",
+    ["customer_rank", ">", 0],
+    ["supplier_rank", "=", 0],
+    /* Notación prefija de Odoo: N condiciones unidas por «o» llevan N−1 operadores delante. */
+    ...condiciones.slice(1).map(() => "|"),
+    ...condiciones,
+  ];
 }
 
 /**

@@ -294,8 +294,9 @@ describe("⛔ las marcas de «Lo que no cuadra» no se borran", () => {
 describe("⛔ la sección Odoo de Cobranza habla en tuteo, nunca en voseo", () => {
   const RAIZ = join(DIR, "..", "..", "..");
   const leerDeLaRaiz = (rel: string) => readFileSync(join(RAIZ, rel), "utf8");
-  /* Las tres pestañas, la página, las dos rutas y todo el módulo: los pasos, títulos y avisos los arma diferencias.ts,
-     las evidencias emparejado.ts y los rechazos servicio.ts. La vía firmada (via-cobro.ts) escribe la bitácora. */
+  /* Las tres pestañas, la página, las tres rutas y todo el módulo: los pasos, títulos y avisos los arma diferencias.ts,
+     las evidencias emparejado.ts y los rechazos y el aviso de «Actualizar desde Odoo» servicio.ts. La vía firmada
+     (via-cobro.ts) escribe la bitácora. */
   const DE_LA_SECCION = [
     "components/cobranza/OdooClient.tsx",
     "components/cobranza/EmparejadoOdoo.tsx",
@@ -303,6 +304,7 @@ describe("⛔ la sección Odoo de Cobranza habla en tuteo, nunca en voseo", () =
     "app/(shell)/cobranza/odoo/page.tsx",
     "app/api/cobranza/odoo/diferencias/route.ts",
     "app/api/cobranza/odoo/emparejado/route.ts",
+    "app/api/cobranza/odoo/actualizar/route.ts",
     "lib/cobranza/via-cobro.ts",
     ...archivos.map((f) => `lib/cobranza/odoo/${f}`),
   ];

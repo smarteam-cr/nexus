@@ -456,3 +456,45 @@ export function espejoVencido(ultimaOk: Date | null, ahora: Date): boolean {
   if (!ultimaOk) return true;
   return ahora.getTime() - ultimaOk.getTime() > HORAS_MAXIMAS_DEL_ESPEJO * 3_600_000;
 }
+
+/* ── 6. La copia a pedido ──────────────────────────────────────────────────────── */
+
+/**
+ * Cuántos segundos tiene que tener la última copia buena para que «Actualizar desde Odoo» vuelva a leer el ERP.
+ *
+ * El botón lo aprieta una persona —y en una reunión, varias a la vez, en esta pantalla y en el punto de
+ * equilibrio—. Registrar un pago en Odoo lleva más de medio minuto, así que una copia de hace menos que eso ya
+ * tiene todo lo que Odoo tenía: volver a leerlo es pedirle al ERP lo mismo dos veces.
+ */
+export const SEGUNDOS_ENTRE_COPIAS_A_PEDIDO = 30;
+
+/**
+ * ¿La última copia buena es tan reciente que no hace falta leer Odoo otra vez? `null` = nunca hubo una.
+ *
+ * ⚠ Una copia «del futuro» (el reloj de la base adelantado unos segundos) no cuenta como reciente: ante la duda
+ * se lee.
+ */
+export function copiaRecienHecha(ultimaOk: Date | null, ahora: Date): boolean {
+  if (!ultimaOk) return false;
+  const edad = ahora.getTime() - ultimaOk.getTime();
+  return edad >= 0 && edad < SEGUNDOS_ENTRE_COPIAS_A_PEDIDO * 1000;
+}
+
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/**
+ * Un instante, en la hora de Costa Rica: `2026-09-29T12:00:45Z` → «29 sep, 06:00».
+ *
+ * La pantalla decía «12:00 UTC» para la copia de las 6 de la mañana, y quien la lee no tiene por qué restar seis
+ * horas. Costa Rica no cambia la hora: siempre UTC−6.
+ *
+ * ⚠ A mano y sin `Intl`: esta línea se dibuja en el servidor y otra vez en el navegador, y un formateador con
+ * otra zona u otra versión de ICU da textos distintos (error de hidratación). Un ISO ilegible se devuelve tal cual.
+ */
+export function horaDeCostaRica(iso: string): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return iso;
+  const local = new Date(ms - 6 * 3_600_000).toISOString();
+  const mes = MESES_CORTOS[Number(local.slice(5, 7)) - 1] ?? local.slice(5, 7);
+  return `${Number(local.slice(8, 10))} ${mes}, ${local.slice(11, 16)}`;
+}

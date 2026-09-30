@@ -21,10 +21,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   buscarPartners,
+  cambiosDeLaLista,
   candidatosPorMonto,
   cedulaAAprender,
   claseDeCedula,
   decidirMarcaDeMercury,
+  esContactoYNoCliente,
   normalizar,
   proponerEmparejados,
   quedaPorEmparejar,
@@ -37,6 +39,7 @@ import {
   type PartnerOdoo,
 } from "./emparejado";
 import { cambiarViaCobroTx } from "../via-cobro";
+import { dominioBuscarFicha, variantesDeCedula } from "./transporte";
 
 const FIX = JSON.parse(
   readFileSync(join(__dirname, "..", "__fixtures__", "odoo-emparejado.json"), "utf8"),
@@ -524,5 +527,122 @@ describe("⭐ las sugerencias por monto no proponen clientes de Odoo que ya tien
     const r = proponerEmparejados(cuentas, partners, montos, { partnersDescartados: new Set([74]) });
     expect(r.find((p) => p.cuentaId === "kaizen")).toMatchObject({ clase: "SIN_CANDIDATO", candidatos: [] });
     expect(r.find((p) => p.cuentaId === "amc")).toMatchObject({ clase: "MONTO", candidatos: [{ odooPartnerId: 33 }] });
+  });
+});
+
+describe("⭐ la lista de clientes de Odoo viaja con cada copia", () => {
+  /* Medido el 2026-09-29: Odoo guarda el correo 2 y el correo 3 de un cliente en su ficha, y además crea un contacto
+     por cada uno, con el correo como nombre. A 4 de esos 13 contactos los dejó marcados como cliente, y entraban a
+     «Clientes de Odoo sin usar» como si fueran empresas. */
+  const sinFacturas = new Set<number>();
+  const ficha = (odooPartnerId: number, nombre: string, vat: string | null = null): PartnerOdoo => ({
+    odooPartnerId,
+    nombre,
+    vat,
+    customerRank: 1,
+  });
+
+  it("un contacto de correo no es un cliente: nombre de correo, sin cédula y sin facturas", () => {
+    for (const nombre of ["conta10@corporacioncsb.com", "conta17@corporacioncsb.com", "ingrid.granados@almoteccr.com", " mgonzalez@gruposervica.com "]) {
+      expect(esContactoYNoCliente({ nombre, vat: null }, false), nombre).toBe(true);
+    }
+  });
+
+  it("⚠ con una factura a su nombre deja de ser un contacto: tiene plata y tiene que verse", () => {
+    expect(esContactoYNoCliente({ nombre: "conta10@corporacioncsb.com", vat: null }, true)).toBe(false);
+  });
+
+  it("una empresa o una persona no son contactos de correo, aunque no tengan cédula ni facturas", () => {
+    for (const c of [
+      { nombre: "CEMACO INTERNACIONAL SOCIEDAD ANONIMA", vat: "3-101-070993" },
+      { nombre: "Border Freight S. de R.L. de C.V", vat: null },
+      { nombre: "KEYLOR RODRIGUEZ ARCE", vat: "206920875" },
+      /* Un nombre que CONTIENE un correo no es un correo. */
+      { nombre: "Arquitectura (facturacion@mobilineacr.com)", vat: null },
+      /* Y con cédula es un contribuyente, se llame como se llame. */
+      { nombre: "factu.aam@gmail.com", vat: "206980803" },
+    ]) {
+      expect(esContactoYNoCliente(c, false), c.nombre).toBe(false);
+    }
+  });
+
+  it("⭐ un cliente nuevo de Odoo entra a la lista aunque todavía no tenga facturas (Cemaco)", () => {
+    const r = cambiosDeLaLista([ficha(233, "CEMACO INTERNACIONAL SOCIEDAD ANONIMA", "3-101-070993")], [], sinFacturas);
+    expect(r.nuevas.map((p) => p.odooPartnerId)).toEqual([233]);
+    expect(r.renombradas).toEqual([]);
+  });
+
+  it("los contactos de correo no entran; el que tiene una factura, sí", () => {
+    const deOdoo = [ficha(139, "conta10@corporacioncsb.com"), ficha(180, "ingrid.granados@almoteccr.com"), ficha(233, "CEMACO", "3-101-070993")];
+    expect(cambiosDeLaLista(deOdoo, [], sinFacturas).nuevas.map((p) => p.odooPartnerId)).toEqual([233]);
+    expect(cambiosDeLaLista(deOdoo, [], new Set([180])).nuevas.map((p) => p.odooPartnerId)).toEqual([180, 233]);
+  });
+
+  it("un nombre o una cédula corregidos en Odoo llegan a la ficha que nadie decidió; la decidida no se toca", () => {
+    const guardadas = [
+      { odooPartnerId: 1, nombre: "ACME SA", vat: "3101000001", decidida: false },
+      { odooPartnerId: 2, nombre: "BETA SA", vat: null, decidida: false },
+      { odooPartnerId: 3, nombre: "GAMA SA", vat: "3101000003", decidida: true },
+      { odooPartnerId: 4, nombre: "DELTA SA", vat: "3101000004", decidida: false },
+    ];
+    const deOdoo = [
+      ficha(1, "ACME SOCIEDAD ANONIMA", "3101000001"),
+      ficha(2, "BETA SA", "3-101-000002"),
+      ficha(3, "GAMA RENOMBRADA SA", "3101000003"),
+      ficha(4, "DELTA SA", "3101000004"),
+    ];
+    const r = cambiosDeLaLista(deOdoo, guardadas, sinFacturas);
+    expect(r.nuevas).toEqual([]);
+    expect(r.renombradas.map((p) => p.odooPartnerId)).toEqual([1, 2]);
+  });
+
+  it("⛔ nunca saca una ficha: lo que Odoo deja de devolver se queda, y una ficha repetida en la lectura entra una vez", () => {
+    const guardadas = [{ odooPartnerId: 9, nombre: "YA NO VIENE SA", vat: null, decidida: true }];
+    const r = cambiosDeLaLista([ficha(5, "NUEVA SA"), ficha(5, "NUEVA SA")], guardadas, sinFacturas);
+    expect(r).toEqual({ nuevas: [ficha(5, "NUEVA SA")], renombradas: [] });
+  });
+});
+
+describe("⭐ buscar directamente en Odoo: también el cliente al que todavía no se le facturó", () => {
+  /* La lista guardada trae lo que Odoo marca como cliente. Una empresa creada desde «Contactos» no lleva esa marca
+     hasta su primera factura: el botón «Buscar directamente en Odoo» la encuentra igual. */
+  it("la cédula se busca como esté escrita: con guiones y sin guiones", () => {
+    expect(variantesDeCedula("3101070993")).toEqual(["3101070993", "3-101-070993"]);
+    expect(variantesDeCedula("3-101-070993")).toEqual(["3101070993", "3-101-070993"]);
+    expect(variantesDeCedula("111610327")).toEqual(["111610327", "1-1161-0327"]);
+    /* Un pedazo de cédula se busca tal cual; un nombre no es una cédula. */
+    expect(variantesDeCedula("070993")).toEqual(["070993"]);
+    expect(variantesDeCedula("Cemaco")).toEqual([]);
+    expect(variantesDeCedula("Grupo 3M")).toEqual([]);
+  });
+
+  it("por nombre: fichas principales, que no sean solo proveedores, con ese nombre o esa cédula", () => {
+    expect(dominioBuscarFicha("  Cemaco ")).toEqual([
+      "&",
+      ["parent_id", "=", false],
+      "&",
+      "|",
+      ["customer_rank", ">", 0],
+      ["supplier_rank", "=", 0],
+      "|",
+      ["name", "ilike", "Cemaco"],
+      ["vat", "ilike", "Cemaco"],
+    ]);
+  });
+
+  it("por cédula: suma las otras formas de escribirla, con un «o» por cada condición de más", () => {
+    const d = dominioBuscarFicha("3101070993");
+    /* Notación prefija de Odoo: 3 condiciones unidas por «o» llevan 2 operadores delante. La edición que lo pone en
+       rojo: agregar una condición sin su operador, y Odoo responde «dominio inválido» o, peor, lo lee como un «y». */
+    expect(d.slice(6)).toEqual([
+      "|",
+      "|",
+      ["name", "ilike", "3101070993"],
+      ["vat", "ilike", "3101070993"],
+      ["vat", "ilike", "3-101-070993"],
+    ]);
+    const operadores = d.filter((x) => x === "|" || x === "&").length;
+    const condiciones = d.filter((x) => Array.isArray(x)).length;
+    expect(operadores, "un dominio prefijo bien formado tiene una condición más que operadores").toBe(condiciones - 1);
   });
 });

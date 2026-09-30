@@ -80,6 +80,7 @@ function corrida(cambios: Partial<ResultadoSync>): ResultadoSync {
     error: null,
     clase: null,
     duracionMs: 1,
+    clientesNuevos: 0,
     ...cambios,
   };
 }
@@ -173,6 +174,17 @@ describe("odoo-espejo-daily", () => {
     claimDateKey.mockResolvedValue(false);
     await expect(job("odoo-espejo-daily").run(AHORA)).resolves.toBe(SIN_TURNO);
     expect(sincronizarOdoo).not.toHaveBeenCalled();
+  });
+
+  it("si alguien pidió la copia con el botón justo a las 6, suelta el turno y no anota ni un ok ni un fallo", async () => {
+    /* La edición que lo pone en rojo: tratar `enCurso` como un fallo (lanzaría y pintaría Integraciones de rojo por
+       una copia que sí se está haciendo) o quedarse con el turno (la copia de la mañana no correría ese día). */
+    sincronizarOdoo.mockResolvedValue(corrida({ ok: false, enCurso: true, corridaId: "", error: "Ya hay una copia de Odoo en curso." }));
+    await expect(job("odoo-espejo-daily").run(AHORA)).resolves.toBe(SIN_TURNO);
+    expect(liberarTurno).toHaveBeenCalledWith({
+      where: { id: "odoo-espejo-daily", lastRunDateKey: HOY },
+      data: { lastRunDateKey: null },
+    });
   });
 });
 

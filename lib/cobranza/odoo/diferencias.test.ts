@@ -22,6 +22,7 @@ import {
   detectarDiferenciasOdoo,
   esDocumentoVivo,
   facturasDeVariasCuotas,
+  facturasPorCliente,
   huellaDe,
   liberacionesPendientes,
   montosEnDosMonedas,
@@ -1742,6 +1743,24 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
     expect(resumenDeDiferencias(lista).documentos).toBe(new Set(lista.flatMap((x) => x.plata.map((p) => p.clave))).size);
   });
 
+  it("⭐ cuando el pago se registra en Odoo y llega una copia nueva, la alerta de ese cobro se va sola (Juanva 0197)", () => {
+    /* 2026-09-29, el pedido de «Actualizar desde Odoo»: si la factura está pagada en Odoo y cobrada en Nexus, la fila
+       desaparece. La fila nace del estado de pago que trae la copia, así que basta con que la copia sea nueva. */
+    const conLa197 = (p: Partial<FacturaParaCruzar>) =>
+      detectarDiferenciasOdoo({ ...estado, facturas: estado.facturas.map((f) => (f.id === "f197" ? { ...f, ...p } : f)) });
+    const filas = (l: DiferenciaOdoo[]) => linea(l, "ODOO-COBRADO-SIN-PAGAR")?.items.map((i) => i.fila.clave);
+
+    expect(filas(lista)).toContain("f:f197");
+    expect(filas(conLa197({ paymentState: "paid", montoResidual: 0 })), "pagada").toEqual(["f:f218", "f:f272", "f:f200"]);
+    expect(filas(conLa197({ paymentState: "in_payment", montoResidual: 0 })), "pagada, falta conciliarla con el banco").toEqual([
+      "f:f218",
+      "f:f272",
+      "f:f200",
+    ]);
+    /* ⚠ Pagada a medias NO se va: en Odoo todavía falta plata. */
+    expect(filas(conLa197({ paymentState: "partial", montoResidual: 250 })), "a medias").toContain("f:f197");
+  });
+
   it("⭐ marcar filas saca su plata de su línea y del encabezado, salvo lo que otra línea sigue mirando (TEC-AE 0200)", () => {
     /* 2026-09-25: con algunas filas marcadas, la línea cuenta y suma lo que le queda. La 0200 sigue en el encabezado
        porque la nota de crédito 0242 parece anularla, y esa línea no se marcó. */
@@ -2579,6 +2598,59 @@ describe("⭐ lo que «Lo que no cuadra» escondía después de cargar el Excel 
  * facturadas al día siguiente). Alliance RH INV-46 (US$120) entró cobrada y «Capacitación Sales» no generó sus cobros.
  * La regla vive en lib/cobranza/venta-duplicada.ts; acá, que la página la muestre sin contar nada dos veces.
  */
+describe("⭐ lo que cada cliente de Odoo tiene facturado (la lista de clientes sin cuenta de «Emparejar»)", () => {
+  /* 2026-09-29: esa lista eran 53 nombres sueltos. Ahora dice cuáles tienen plata en la calle, con la misma regla de
+     «por cobrar» que la línea de facturas sin cuenta de «Lo que no cuadra». */
+  const publimark = { cuentaId: null, odooPartnerId: 75, odooPartnerNombre: "PUBLIMARK SOCIEDAD ANONIMA" };
+  const facturas = [
+    factura({ ...publimark, id: "p1", odooMoveId: 1, invoiceDate: "2026-02-12", montoNeto: 13475, montoTotal: 15226.75, montoResidual: 15226.75, paymentState: "not_paid" }),
+    factura({ ...publimark, id: "p2", odooMoveId: 2, invoiceDate: "2026-09-03", montoNeto: 13475, montoTotal: 15226.75 }),
+    /* A medias: queda la parte del neto que falta, igual que en «Lo que no cuadra». */
+    factura({ ...publimark, id: "p3", odooMoveId: 3, invoiceDate: "2026-06-24", montoNeto: 1000, montoTotal: 1130, montoResidual: 565, paymentState: "partial" }),
+    factura({ ...publimark, id: "p4", odooMoveId: 4, invoiceDate: "2026-07-28", montoNeto: 11541250, montoTotal: 13041612.5, montoResidual: 13041612.5, paymentState: "not_paid", moneda: "CRC" }),
+    /* Una nota de crédito y una revertida cuentan como historia, nunca como plata por cobrar. */
+    factura({ ...publimark, id: "p5", odooMoveId: 5, invoiceDate: "2026-03-24", montoNeto: 23083, montoTotal: 26083, montoResidual: 26083, paymentState: "not_paid", moveType: "out_refund" }),
+    factura({ ...publimark, id: "p6", odooMoveId: 6, invoiceDate: "2026-03-06", montoNeto: 23083, montoTotal: 26083, paymentState: "reversed" }),
+    factura({ cuentaId: null, odooPartnerId: 40, odooPartnerNombre: "CLIENTE DE 2021 SA", id: "v1", odooMoveId: 7, invoiceDate: "2021-05-10", montoNeto: 800 }),
+  ];
+  const mapa = facturasPorCliente(facturas);
+
+  it("cuenta los documentos, dice el día del más nuevo y suma lo por cobrar sin IVA, por moneda", () => {
+    expect(mapa.get(75)).toEqual({
+      documentos: 6,
+      ultima: "2026-09-03",
+      porCobrar: [
+        { moneda: "USD", monto: 13975 },
+        { moneda: "CRC", monto: 11541250 },
+      ],
+      facturasPorCobrar: 3,
+    });
+  });
+
+  it("un cliente con todo pagado tiene historia y nada por cobrar; uno sin documentos no está", () => {
+    expect(mapa.get(40)).toEqual({ documentos: 1, ultima: "2021-05-10", porCobrar: [], facturasPorCobrar: 0 });
+    expect(mapa.has(233)).toBe(false);
+  });
+
+  it("⚠ suma lo mismo que la línea de facturas sin cuenta de «Lo que no cuadra»", () => {
+    /* La edición que lo pone en rojo: calcular «por cobrar» con otra regla acá (el total con IVA, o contar las pagadas
+       sin conciliar). Las dos pantallas dirían cifras distintas del mismo cliente. */
+    const lista = detectarDiferenciasOdoo({
+      ...alDia,
+      cuentasVinculadas: new Set<string>(),
+      cuentasSinVinculo: 0,
+      cuentasTotales: 0,
+      liberaciones: [],
+      cuentas: [],
+      marcas: [],
+      cobros: [],
+      facturas,
+    });
+    const sinCuenta = lista.find((l) => l.codigo === "ODOO-SIN-CUENTA");
+    expect(sinCuenta?.montos).toEqual(mapa.get(75)?.porCobrar);
+  });
+});
+
 describe("⭐ «Lo que no cuadra» muestra la misma venta contada dos veces", () => {
   const cuentas = [
     { id: "rs", nombre: "Real Shipping & Trade", tipo: "INTERNACIONAL", viaCobro: "MERCURY" },

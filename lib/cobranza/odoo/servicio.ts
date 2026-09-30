@@ -22,12 +22,13 @@ import type { FacturaLiberada } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { atribuirFacturasDelPartner } from "./atribucion";
 import { crearTransporteXmlRpc, configDesdeEntorno } from "./transporte-xmlrpc";
-import { ODOO_CAMPOS_PARTNER, OdooError, dominioClientes, explicarFallo } from "./transporte";
-import { textoOdoo } from "./espejo";
+import { ODOO_CAMPOS_PARTNER, OdooError, dominioBuscarFicha, explicarFallo } from "./transporte";
+import { copiaRecienHecha, textoOdoo } from "./espejo";
 import {
   buscarPartners,
   cedulaAAprender,
   decidirMarcaDeMercury,
+  esContactoYNoCliente,
   proponerEmparejados,
   quedaPorEmparejar,
   resumenDelEmparejado,
@@ -42,11 +43,13 @@ import {
   contarDocumentos,
   decidirMarcas,
   detectarDiferenciasOdoo,
+  facturasPorCliente,
   numeroVerificableEnOdoo,
   textoDeLiberacion,
   type DiferenciaOdoo,
   type EstadoDelCruce,
   type LiberacionParaCruzar,
+  type MontoEnMoneda,
 } from "./diferencias";
 import {
   MARCA_ANULADA,
@@ -58,7 +61,7 @@ import {
 } from "./marcas";
 import { documentosDelUltimoLibro, leerServiciosDeVenta } from "../libro-alex-server";
 import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
-import { ultimaCorridaOk } from "./sync";
+import { sincronizarOdoo, ultimaCorrida, ultimaCorridaOk } from "./sync";
 import type {
   OdooCuentaVia,
   OdooDeshacerMarcas,
@@ -99,6 +102,25 @@ export interface VinculoGuardado {
   ignorado: boolean;
   confirmadoPor: string | null;
   confirmadoEn: string | null;
+  /**
+   * Lo que tiene facturado en la copia de Odoo (2026-09-29): la lista de clientes sin cuenta dice con esto cuáles
+   * tienen plata en la calle. `facturas: 0` = todavía no se le facturó.
+   */
+  facturas: number;
+  /** Día de su documento más nuevo (`YYYY-MM-DD`); null = sin documentos. */
+  ultimaFactura: string | null;
+  /** Lo que Odoo le da por cobrar, sin IVA y por moneda: la misma cifra que «Lo que no cuadra». */
+  porCobrar: MontoEnMoneda[];
+  /** Cuántas facturas suman eso. */
+  facturasPorCobrar: number;
+}
+
+/** Lo que devuelve el buscador de «Emparejar»: una ficha de Odoo, y si ya es de alguna cuenta. */
+export interface FichaEncontrada extends PartnerOdoo {
+  /** La cuenta de Nexus que ya la tiene vinculada. Elegirla para otra cuenta se rechaza: se dice antes del clic. */
+  vinculadaA: string | null;
+  /** Documentos en la copia de Odoo. 0 = todavía no se le facturó. */
+  facturas: number;
 }
 
 /**
@@ -139,16 +161,15 @@ export interface EstadoEmparejado {
   /** Las cuentas sin cliente de Odoo que facturan por Mercury o QuickBooks, con quién las dejó ahí. */
   fueraDeOdoo: CuentaFueraDeOdoo[];
   /**
-   * ⚠ No null cuando Odoo no contestó. La pantalla sigue sirviendo con lo que hay guardado
-   * —el trabajo hecho no se pierde porque el ERP esté caído— pero **lo dice**, en vez de
-   * mostrar cero propuestas como si el emparejado ya estuviera completo.
+   * Todas las cuentas de Nexus (2026-09-29): la fila de un cliente de Odoo sin cuenta ofrece vincularlo a una que ya
+   * existe. Hasta ese día el vínculo solo se podía empezar desde la tarjeta de la cuenta.
    */
-  errorOdoo: string | null;
+  cuentas: Array<{ cuentaId: string; nombre: string; via: string }>;
 }
 
 /**
- * ⚠⚠ POR DEFECTO **NO LLAMA AL ERP**. Los partners salen del catálogo guardado y los montos
- * del espejo de facturas — las dos cosas ya están en la base desde que corre el sync.
+ * ⚠⚠ **NUNCA LLAMA AL ERP**. Los clientes salen de la lista guardada y los montos de la copia de
+ * facturas: las dos cosas las deja en la base la copia de Odoo (`sincronizarOdoo`).
  *
  * Antes esta función consultaba Odoo en cada carga de pantalla, y estaba escrito en la
  * bitácora como una decisión provisional: «con el espejo de la etapa 2 andando, los montos
@@ -159,9 +180,10 @@ export interface EstadoEmparejado {
  * 8 ms —ni evaluó la contraseña— compatible con su bloqueo por volumen de logins. Cada carga
  * de esta pantalla eran 2 autenticaciones, y 4 con el doble render de React en desarrollo.
  *
- * `refrescar: true` es el único camino que toca el ERP, y lo dispara una persona con un botón.
+ * Hasta el 2026-09-29 tenía un `refrescar: true` que traía la lista de clientes (y solo eso) con un botón
+ * aparte. Ahora la lista viaja con cada copia, y la copia a pedido es `actualizarDesdeOdoo`.
  */
-export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Promise<EstadoEmparejado> {
+export async function cargarEmparejado(): Promise<EstadoEmparejado> {
   const cuentasDb = await prisma.cuentaFinanciera.findMany({
     select: {
       id: true,
@@ -181,50 +203,49 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
     orderBy: { client: { name: "asc" } },
   });
 
-  let partnersOdoo: PartnerOdoo[] = [];
-  let montosOdoo: MontoDeOdoo[] = [];
-  let facturasLeidas = 0;
-  let errorOdoo: string | null = null;
-
-  /* Los montos para proponer salen del ESPEJO, no del ERP. Solo las facturas propiamente
+  /* Todos los documentos vigentes de la copia: dicen qué cliente tiene facturas, cuánto le queda por cobrar
+     (`facturasPorCliente`) y, con las facturas propiamente dichas, los montos para proponer. */
+  const espejo = await prisma.facturaOdoo.findMany({
+    where: { estadoEspejo: "VIGENTE" },
+    select: {
+      odooPartnerId: true,
+      invoiceDate: true,
+      montoNeto: true,
+      montoTotal: true,
+      montoResidual: true,
+      moneda: true,
+      moveType: true,
+      paymentState: true,
+      state: true,
+    },
+  });
+  const deCliente = facturasPorCliente(
+    espejo.map((f) => ({
+      ...f,
+      invoiceDate: f.invoiceDate.toISOString().slice(0, 10),
+      montoNeto: Number(f.montoNeto),
+      montoTotal: Number(f.montoTotal),
+      montoResidual: Number(f.montoResidual),
+    })),
+  );
+  /* Los montos para proponer salen de la copia, no del ERP. Solo las facturas propiamente
      dichas: una nota de crédito por el mismo monto que un cobro apuntaría al partner correcto
      por la razón equivocada. */
-  const espejo = await prisma.facturaOdoo.findMany({
-    where: { estadoEspejo: "VIGENTE", moveType: "out_invoice" },
-    select: { odooPartnerId: true, montoNeto: true, moneda: true },
-  });
-  montosOdoo = espejo.map((f) => ({
+  const facturasDeVenta = espejo.filter((f) => f.moveType === "out_invoice");
+  const montosOdoo: MontoDeOdoo[] = facturasDeVenta.map((f) => ({
     odooPartnerId: f.odooPartnerId,
     montoNeto: Number(f.montoNeto),
     moneda: f.moneda,
   }));
-  facturasLeidas = espejo.length;
-
-  if (opts.refrescar) try {
-    /* UNA sola lectura, y solo la lista de clientes: los montos ya salieron del espejo. */
-    const t = crearTransporteXmlRpc(configDesdeEntorno());
-    const crudosPartner = await t.buscarYLeer("res.partner", dominioClientes(), ODOO_CAMPOS_PARTNER, {
-      order: "name asc",
-    });
-    partnersOdoo = crudosPartner.map((p) => ({
-      odooPartnerId: Number(p.id),
-      nombre: textoOdoo(p.name) ?? "",
-      vat: textoOdoo(p.vat),
-      customerRank: Number(p.customer_rank ?? 0),
-    }));
-    await recordarPartners(partnersOdoo);
-  } catch (e) {
-    /* ⛔ No se traga el error. Un ERP que no responde es un hallazgo, no un problema a
-       resolver en silencio. ⚠ Pero los montos NO se descartan: vienen del espejo, que sigue
-       siendo válido aunque el ERP esté caído. Vaciarlos borraría las propuestas por monto
-       —que son 9 de las 15— por un problema que no las afecta. */
-    errorOdoo =
-      e instanceof OdooError ? `${explicarFallo(e.clase)} (${e.message})` : e instanceof Error ? e.message : String(e);
-  }
+  const facturasLeidas = facturasDeVenta.length;
 
   /* ⚠ Solo las fichas de Odoo: desde la etapa 12 la tabla guarda también las sociedades de Mercury y
      QuickBooks, que no son clientes de Odoo y no se emparejan. Con `select` explícito, así una columna
-     nueva no tumba el emparejado. */
+     nueva no tumba el emparejado.
+     ⚠ Y sin los contactos de correo (2026-09-29): 4 fichas que Odoo creó al mandar una factura a un «correo 2»
+     entraron a la lista como si fueran empresas. La copia ya no las trae (`cambiosDeLaLista`), y las que entraron
+     antes se dejan de mostrar acá, sin borrar nada. La que alguien vinculó a una cuenta se sigue viendo: hay que
+     poder desvincularla. */
   const guardados = (
     await prisma.odooPartnerVinculo.findMany({
       where: { odooPartnerId: { not: null } },
@@ -241,18 +262,20 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
       },
       orderBy: { odooPartnerNombre: "asc" },
     })
-  ).filter(conFicha);
+  )
+    .filter(conFicha)
+    .filter(
+      (v) =>
+        v.cuentaId !== null ||
+        !esContactoYNoCliente({ nombre: v.odooPartnerNombre, vat: v.odooVat }, deCliente.has(v.odooPartnerId)),
+    );
 
-  /* Si Odoo no contestó, la lista de partners sale de lo que ya se había guardado: el
-     buscador y los vínculos hechos siguen funcionando. */
-  if (!partnersOdoo.length) {
-    partnersOdoo = guardados.map((v) => ({
-      odooPartnerId: v.odooPartnerId,
-      nombre: v.odooPartnerNombre,
-      vat: v.odooVat,
-      customerRank: 1,
-    }));
-  }
+  const partnersOdoo: PartnerOdoo[] = guardados.map((v) => ({
+    odooPartnerId: v.odooPartnerId,
+    nombre: v.odooPartnerNombre,
+    vat: v.odooVat,
+    customerRank: 1,
+  }));
 
   const yaVinculado = new Set(guardados.flatMap((v) => (v.cuentaId ? [v.cuentaId] : [])));
   /* Los clientes de Odoo que ya tienen decisión: vinculados a una cuenta o marcados ajenos. */
@@ -297,6 +320,10 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
       ignorado: v.ignorado,
       confirmadoPor: v.confirmadoPor,
       confirmadoEn: v.confirmadoEn?.toISOString() ?? null,
+      facturas: deCliente.get(v.odooPartnerId)?.documentos ?? 0,
+      ultimaFactura: deCliente.get(v.odooPartnerId)?.ultima ?? null,
+      porCobrar: deCliente.get(v.odooPartnerId)?.porCobrar ?? [],
+      facturasPorCobrar: deCliente.get(v.odooPartnerId)?.facturasPorCobrar ?? 0,
     })),
     partners: partnersOdoo,
     conteos: {
@@ -323,7 +350,7 @@ export async function cargarEmparejado(opts: { refrescar?: boolean } = {}): Prom
         origen: c.fuente === "sheet" ? ("IMPORTACION" as const) : ("ALTA" as const),
         altaEn: c.createdAt.toISOString().slice(0, 10),
       })),
-    errorOdoo,
+    cuentas: cuentasDb.map((c) => ({ cuentaId: c.id, nombre: c.client.name, via: c.viaCobro })),
   };
 }
 
@@ -345,48 +372,171 @@ export async function contarEmparejado(): Promise<ResumenDelEmparejado> {
   return resumenDelEmparejado(cuentas, new Set(vinculos.flatMap((v) => (v.cuentaId ? [v.cuentaId] : []))));
 }
 
+/* ── 1 bis. Traer lo último de Odoo, a pedido ───────────────────────────────────── */
+
+/** Cuánto espera cada respuesta de Odoo la copia que pide una persona: corto, para que el botón no quede colgado. */
+const ESPERA_A_PEDIDO_MS = 15_000;
+
+export type EstadoDeActualizar = "COPIADO" | "RECIENTE" | "EN_CURSO" | "FALLO";
+
+export interface ResultadoDeActualizar {
+  estado: EstadoDeActualizar;
+  /** Lo que se le dice a quien apretó el botón, tal cual. */
+  mensaje: string;
+  /** La línea de arriba de las pestañas, ya actualizada. */
+  corrida: Awaited<ReturnType<typeof ultimaCorrida>>;
+  /** Documentos vigentes en la copia, para esa misma línea. */
+  facturas: number;
+}
+
+const plural = (n: number, uno: string, varios: string) => (n === 1 ? `1 ${uno}` : `${n} ${varios}`);
+
 /**
- * Deja constancia de los partners que Odoo tiene hoy, SIN tocar los que ya tienen decisión.
- * Es lo que permite que la pantalla siga sirviendo cuando el ERP no responde.
+ * «Actualizar desde Odoo» (2026-09-29): vuelve a copiar las facturas y la lista de clientes AHORA, sin esperar la
+ * copia de la mañana. Lo pidió Alex: registraba un pago en Odoo y «Lo que no cuadra» lo seguía acusando hasta el día
+ * siguiente, y un cliente recién creado en Odoo no aparecía para emparejar.
+ *
+ * Es la misma copia de todas las mañanas (`sincronizarOdoo`), con el mismo candado —no corren dos a la vez— y firmada
+ * por quien la pidió. ⛔ Solo lee Odoo, y no toca ningún cobro: la fila de un cobro sale de la lista porque la copia
+ * nueva dice que su factura está pagada, no porque esto lo marque.
+ *
+ * ⚠ Con una copia de hace segundos no se vuelve a leer (`copiaRecienHecha`): en una reunión lo aprietan varias
+ * personas, acá y en el punto de equilibrio. La pantalla se recarga igual.
+ * ⚠ Nunca lanza por un fallo de Odoo: lo devuelve como texto, con la línea de arriba diciendo qué pasó.
  */
-async function recordarPartners(partners: readonly PartnerOdoo[]): Promise<void> {
-  const conocidos = new Set(
-    (await prisma.odooPartnerVinculo.findMany({ select: { odooPartnerId: true } })).map((v) => v.odooPartnerId),
-  );
-  const nuevos = partners.filter((p) => !conocidos.has(p.odooPartnerId));
-  if (nuevos.length) {
-    await prisma.odooPartnerVinculo.createMany({
-      data: nuevos.map((p) => ({ odooPartnerId: p.odooPartnerId, odooPartnerNombre: p.nombre, odooVat: p.vat })),
-      skipDuplicates: true,
-    });
+export async function actualizarDesdeOdoo(actor: string, ahora: Date = new Date()): Promise<ResultadoDeActualizar> {
+  let estado: EstadoDeActualizar;
+  let mensaje: string;
+  const ultimaOk = await ultimaCorridaOk();
+  if (copiaRecienHecha(ultimaOk, ahora)) {
+    estado = "RECIENTE";
+    mensaje =
+      "La copia de Odoo es de hace unos segundos: no se volvió a leer. Si acabas de registrar algo en Odoo, espera medio minuto y actualiza otra vez.";
+  } else {
+    const r = await sincronizarOdoo({ disparadaPor: actor, esperaMs: ESPERA_A_PEDIDO_MS });
+    if (r.enCurso) {
+      estado = "EN_CURSO";
+      mensaje = "Ya hay una copia de Odoo en curso, pedida por otra persona o la de la mañana. Espera unos segundos y actualiza otra vez.";
+    } else if (!r.ok) {
+      estado = "FALLO";
+      mensaje = `No se pudo leer Odoo: ${r.error ?? "sin detalle"} Lo que ves es la copia anterior.`;
+    } else {
+      estado = "COPIADO";
+      const cambios = [
+        r.creadas > 0 ? plural(r.creadas, "factura nueva", "facturas nuevas") : null,
+        r.actualizadas > 0 ? plural(r.actualizadas, "con cambios", "con cambios") : null,
+        r.desaparecidas > 0 ? plural(r.desaparecidas, "que Odoo ya no tiene", "que Odoo ya no tiene") : null,
+        r.clientesNuevos > 0 ? plural(r.clientesNuevos, "cliente nuevo para emparejar", "clientes nuevos para emparejar") : null,
+      ].filter((x): x is string => x !== null);
+      mensaje = cambios.length
+        ? `Listo: Nexus leyó las ${r.facturasVistas} facturas de Odoo ahora. ${cambios.join(" · ")}.`
+        : `Listo: Nexus leyó las ${r.facturasVistas} facturas de Odoo ahora y no cambió nada desde la copia anterior.`;
+    }
   }
-  /* El nombre y el vat SÍ se refrescan en los que no tienen decisión: si alguien corrigió la
-     razón social en Odoo, la pantalla tiene que mostrar la buena. En los ya decididos no se
-     toca nada — el nombre guardado es el que la persona vio cuando confirmó. */
-  for (const p of partners) {
-    await prisma.odooPartnerVinculo.updateMany({
-      where: { odooPartnerId: p.odooPartnerId, cuentaId: null, ignorado: false },
-      data: { odooPartnerNombre: p.nombre, odooVat: p.vat },
-    });
-  }
+  const [corrida, facturas] = await Promise.all([
+    ultimaCorrida(ahora),
+    prisma.facturaOdoo.count({ where: { estadoEspejo: "VIGENTE" } }),
+  ]);
+  return { estado, mensaje, corrida, facturas };
 }
 
 /* ── 2. Buscar ──────────────────────────────────────────────────────────────────── */
 
-export async function buscarEnOdoo(consulta: string): Promise<{ partners: PartnerOdoo[]; errorOdoo: string | null }> {
-  const guardados = await prisma.odooPartnerVinculo.findMany({
-    where: { odooPartnerId: { not: null } },
-    select: { odooPartnerId: true, odooPartnerNombre: true, odooVat: true },
+/** Cuántas fichas devuelve el buscador, como mucho. */
+const LIMITE_DEL_BUSCADOR = 25;
+
+const textoDelFalloDeOdoo = (e: unknown) =>
+  e instanceof OdooError ? `${explicarFallo(e.clase)} (${e.message})` : e instanceof Error ? e.message : String(e);
+
+/**
+ * El buscador de «Emparejar». Por defecto busca en la lista guardada —una consulta por tecla al ERP sería gratis de
+ * escribir y cara de sostener—, que desde el 2026-09-29 se actualiza con cada copia de Odoo.
+ *
+ * `enOdoo: true` busca directamente en el ERP, y lo dispara una persona con un botón: encuentra también la empresa
+ * que Odoo todavía no marca como cliente porque nunca se le facturó (`dominioBuscarFicha`). Elegir una de esas la
+ * agrega a la lista en el momento (`confirmarVinculo`).
+ *
+ * Cada ficha dice si ya es de una cuenta: hasta ese día se podía elegir un cliente de otra cuenta y recién ahí
+ * aparecía el rechazo.
+ */
+export async function buscarEnOdoo(
+  consulta: string,
+  opts: { enOdoo?: boolean } = {},
+): Promise<{ partners: FichaEncontrada[]; errorOdoo: string | null }> {
+  const [guardados, facturas] = await Promise.all([
+    prisma.odooPartnerVinculo.findMany({
+      where: { odooPartnerId: { not: null } },
+      select: {
+        odooPartnerId: true,
+        odooPartnerNombre: true,
+        odooVat: true,
+        cuentaId: true,
+        cuenta: { select: { client: { select: { name: true } } } },
+      },
+    }),
+    prisma.facturaOdoo.groupBy({ by: ["odooPartnerId"], where: { estadoEspejo: "VIGENTE" }, _count: { _all: true } }),
+  ]);
+  const facturasDe = new Map(facturas.map((f) => [f.odooPartnerId, f._count._all]));
+  const guardada = new Map(guardados.filter(conFicha).map((v) => [v.odooPartnerId, v]));
+  const comoFicha = (p: PartnerOdoo): FichaEncontrada => ({
+    ...p,
+    vinculadaA: guardada.get(p.odooPartnerId)?.cuenta?.client.name ?? null,
+    facturas: facturasDe.get(p.odooPartnerId) ?? 0,
   });
-  const partners: PartnerOdoo[] = guardados.filter(conFicha).map((v) => ({
-    odooPartnerId: v.odooPartnerId,
-    nombre: v.odooPartnerNombre,
-    vat: v.odooVat,
-    customerRank: 1,
-  }));
-  /* Se busca sobre lo guardado, no sobre Odoo: son 82 filas y una consulta por tecla al ERP
-     sería gratis de escribir y cara de sostener. `cargarEmparejado` las refresca. */
-  return { partners: buscarPartners(partners, consulta, { limite: 25 }), errorOdoo: null };
+  const esCliente = (p: PartnerOdoo) =>
+    guardada.get(p.odooPartnerId)?.cuentaId != null || !esContactoYNoCliente(p, facturasDe.has(p.odooPartnerId));
+
+  if (!opts.enOdoo) {
+    const deLaLista: PartnerOdoo[] = [...guardada.values()].map((v) => ({
+      odooPartnerId: v.odooPartnerId,
+      nombre: v.odooPartnerNombre,
+      vat: v.odooVat,
+      customerRank: 1,
+    }));
+    return {
+      partners: buscarPartners(deLaLista.filter(esCliente), consulta, { limite: LIMITE_DEL_BUSCADOR }).map(comoFicha),
+      errorOdoo: null,
+    };
+  }
+
+  try {
+    const t = crearTransporteXmlRpc({ ...configDesdeEntorno(), timeoutMs: ESPERA_A_PEDIDO_MS });
+    const crudos = await t.buscarYLeer("res.partner", dominioBuscarFicha(consulta), ODOO_CAMPOS_PARTNER, {
+      order: "name asc",
+      limit: LIMITE_DEL_BUSCADOR,
+    });
+    const deOdoo = crudos.flatMap((p): PartnerOdoo[] => {
+      const odooPartnerId = Number(p.id);
+      const nombre = textoOdoo(p.name);
+      if (!Number.isFinite(odooPartnerId) || odooPartnerId <= 0 || !nombre) return [];
+      return [{ odooPartnerId, nombre, vat: textoOdoo(p.vat), customerRank: Number(p.customer_rank ?? 0) }];
+    });
+    return { partners: deOdoo.filter(esCliente).map(comoFicha), errorOdoo: null };
+  } catch (e) {
+    /* ⛔ No se traga: «Odoo no tiene nada con ese nombre» y «Odoo no contestó» son dos respuestas distintas. */
+    return { partners: [], errorOdoo: textoDelFalloDeOdoo(e) };
+  }
+}
+
+/**
+ * Trae UNA ficha de Odoo por su id y la agrega a la lista guardada. La usa `confirmarVinculo` cuando la persona eligió
+ * una ficha que el buscador encontró directamente en Odoo y que la lista todavía no tenía.
+ */
+async function sumarFichaDeOdoo(odooPartnerId: number) {
+  let cruda: Record<string, unknown> | undefined;
+  try {
+    const t = crearTransporteXmlRpc({ ...configDesdeEntorno(), timeoutMs: ESPERA_A_PEDIDO_MS });
+    [cruda] = await t.buscarYLeer("res.partner", [["id", "=", odooPartnerId]], ODOO_CAMPOS_PARTNER, { limit: 1 });
+  } catch (e) {
+    throw new EmparejadoError(`No se pudo traer ese cliente de Odoo: ${textoDelFalloDeOdoo(e)}`, 502);
+  }
+  const nombre = cruda ? textoOdoo(cruda.name) : null;
+  if (!cruda || !nombre) throw new EmparejadoError("Ese cliente ya no está en Odoo. Actualiza desde Odoo y búscalo otra vez.", 404);
+  await prisma.odooPartnerVinculo.createMany({
+    data: [{ odooPartnerId, odooPartnerNombre: nombre, odooVat: textoOdoo(cruda.vat) }],
+    skipDuplicates: true,
+  });
+  return prisma.odooPartnerVinculo.findUnique({ where: { odooPartnerId } });
 }
 
 /* ── 3. Decidir ─────────────────────────────────────────────────────────────────── */
@@ -416,13 +566,27 @@ export async function confirmarVinculo(
   });
   if (!cuenta) throw new EmparejadoError("Esa cuenta no existe.", 404);
 
-  const partner = await prisma.odooPartnerVinculo.findUnique({ where: { odooPartnerId: input.odooPartnerId } });
-  if (!partner) throw new EmparejadoError("Ese cliente de Odoo no está en la lista. Actualiza la lista desde Odoo primero.", 404);
+  /* ⭐ 2026-09-29: si la ficha todavía no está en la lista —la persona la encontró buscando directamente en Odoo,
+     porque es un cliente nuevo al que todavía no se le facturó—, se trae y se agrega en el momento. Hasta ese día
+     esto era un rechazo («actualiza la lista primero») y un cliente sin facturas no se podía emparejar. */
+  const partner =
+    (await prisma.odooPartnerVinculo.findUnique({ where: { odooPartnerId: input.odooPartnerId } })) ??
+    (await sumarFichaDeOdoo(input.odooPartnerId));
+  if (!partner) throw new EmparejadoError("Ese cliente de Odoo no está en la lista. Actualiza desde Odoo y búscalo otra vez.", 404);
 
   /* ⛔ Un partner no puede tener dos dueños: el `@unique` de la base lo impide, pero acá se
-     explica en vez de reventar con un error de Postgres. */
+     explica en vez de reventar con un error de Postgres. ⚠ Y se dice CUÁL es la otra cuenta: casi siempre es la misma
+     empresa cargada dos veces en Nexus (Librería Internacional y su razón social, 2026-09-29), y «desvincúlalo
+     primero» mandaba a romper el historial de la cuenta buena. */
   if (partner.cuentaId && partner.cuentaId !== input.cuentaId) {
-    throw new EmparejadoError("Ese cliente de Odoo ya está vinculado a otra cuenta. Desvincúlalo primero.", 409);
+    const otra = await prisma.cuentaFinanciera.findUnique({
+      where: { id: partner.cuentaId },
+      select: { client: { select: { name: true } } },
+    });
+    throw new EmparejadoError(
+      `Ese cliente de Odoo ya es de la cuenta «${otra?.client.name ?? "otra cuenta"}». Un cliente de Odoo va en una sola cuenta: si el servicio nuevo es de esa misma empresa, agrégalo como otro servicio en esa cuenta, sin desvincular nada.`,
+      409,
+    );
   }
 
   /* Las cédulas de las OTRAS fichas de la cuenta: con ellas, una segunda cédula deja de ser un conflicto

@@ -85,7 +85,7 @@ const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: (espejoA
     label: "Se arregla en Odoo",
     chip: "text-violet-600 bg-violet-500/10 border-violet-500/30",
     pie: (espejoAl) =>
-      `Con la próxima copia de Odoo la línea se actualiza sola${espejoAl ? ` (la última buena es del ${espejoAl})` : ""}.`,
+      `Con la próxima copia de Odoo la línea se actualiza sola${espejoAl ? ` (la última buena es del ${espejoAl})` : ""}. Para no esperar a mañana, aprieta «Actualizar desde Odoo», arriba.`,
   },
   /* ⚠ Su pie dice lo contrario que el de ODOO a propósito: acá NO hay copia que cierre la
      línea. Si dijera lo mismo, alguien anularía la factura en Mercury y esperaría para siempre
@@ -120,7 +120,13 @@ export default function DiferenciasOdoo({
   onIrAEmparejar,
   onPendientes,
   puedeEditar = true,
+  recarga = 0,
 }: {
+  /**
+   * Sube cada vez que alguien aprieta «Actualizar desde Odoo» (OdooClient): la lista se vuelve a leer con la copia
+   * nueva, sin desmontarse, así lo que tenías abierto sigue abierto.
+   */
+  recarga?: number;
   onIrAEmparejar?: () => void;
   /**
    * Las filas pendientes, cada vez que la lista se carga o se recarga (después de marcar o deshacer). OdooClient las
@@ -162,7 +168,7 @@ export default function DiferenciasOdoo({
 
   useEffect(() => {
     void cargar();
-  }, [cargar]);
+  }, [cargar, recarga]);
 
   /** Manda una escritura, recarga la lista y devuelve la respuesta; null si falló (ya avisó). */
   const enviar = useCallback(
