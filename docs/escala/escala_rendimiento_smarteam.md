@@ -1,6 +1,6 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 7.4.1
+version: 7.5.0
 fecha: 2026-09-29
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
@@ -588,15 +588,17 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 **Inicial.** Se prioriza por intuición o por listas estáticas.
 
-- La segmentación es rudimentaria y no hay datos que guíen el foco. `[1.6.I1 · comprobable]`
+- La segmentación es rudimentaria y no hay datos para decidir en qué leads concentrarse. `[1.6.I1 · comprobable]`
+- El líder puede nombrar al ICP, pero no hay arquitectura de CRM para segmentarlo. `[1.6.I2 · comprobable]`
 
 **Funcional.** Hay segmentación básica de leads y criterios claros para aceptar un SQL.
 
 *Resultado:* El equipo deja de perder tiempo con prospectos que no van a comprar y concentra el esfuerzo en los que encajan con el cliente ideal.
 
 - El equipo segmenta los leads al menos por tamaño, industria o geografía antes de trabajarlos. `[1.6.F1 · comprobable · venta con equipo]`
-- Hay criterios escritos para aceptar un lead como SQL y se aplican de forma consistente, a mano o con una automatización simple sobre las propiedades de calificación. Con poco volumen puede ser manual; con volumen alto conviene automatizarlo. `[1.6.F2 · comprobable · hábito · venta con equipo]`
+- Hay criterios escritos para aceptar un lead como SQL y se aplican de forma consistente. `[1.6.F2 · comprobable · hábito · venta con equipo]`
 - El esfuerzo se enfoca en los leads que encajan con el ICP (definido en Propuesta y Coherencia). `[1.6.F3 · evaluado · hábito · venta con equipo]`
+- La documentación de ICP se usa en la arquitectura de CRM y en los formularios. `[1.6.F4 · comprobable · venta con equipo]`
 
 **Eficiente.** Aparece el lead scoring por reglas y las cuentas objetivo.
 
@@ -1466,6 +1468,7 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 |:--|:--|
 | AEO | Optimización para motores de respuesta: que el contenido aparezca como respuesta en asistentes de IA y en buscadores que contestan preguntas. |
 | Almacén central de datos | Base donde la empresa junta la información de todas sus herramientas para analizarla en conjunto. En inglés, data warehouse. |
+| Arquitectura de CRM | Cómo está armado el CRM por dentro: sus propiedades, pipelines, listas y formularios. |
 | Backlog | Trabajo pendiente acumulado, como los tickets sin resolver. |
 | BANT, MEDDIC, SPIN | Metodologías de venta con pasos definidos para calificar y conducir una oportunidad. |
 | Buyer persona | Retrato escrito de un tipo de comprador: quién es, qué le preocupa y cómo decide. |
@@ -1520,6 +1523,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**7.5.0 (2026-09-29).** Revisión de Priorización de Leads de Ventas con su responsable. Inicial se dice más simple y suma que el líder puede nombrar el ICP pero el CRM no tiene cómo segmentarlo. En Funcional, el criterio del SQL se queda con lo esencial —criterios escritos que se aplican de forma consistente— y se suma que la documentación del ICP se usa en la arquitectura de CRM y en los formularios. El glosario suma «Arquitectura de CRM». Cambia lo que pide Funcional en Priorización de Leads, que sigue sin aplicar a la venta transaccional.
 
 **7.4.1 (2026-09-29).** Revisión de Propuesta y Coherencia de Ventas con su responsable: Inicial se dice más simple —el mensaje común apenas empieza, las propuestas todavía no están estandarizadas—, y en Funcional el líder explica el cliente ideal sin consultar su documentación y las propuestas están estandarizadas. En Datos de Ventas, lo que no se deja envejecer es la documentación sobre el ICP. No cambia el cálculo.
 
