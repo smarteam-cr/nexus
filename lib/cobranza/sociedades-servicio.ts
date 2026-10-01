@@ -106,7 +106,7 @@ export async function agregarSociedadTx(
 ): Promise<{ id: string; retomada: boolean; yaLeFacturaba: boolean }> {
   const nombre = input.nombre.trim();
   const clave = claveFactura(nombre);
-  if (!clave) throw new SociedadError("Ese nombre no alcanza para distinguir la sociedad. Escribilo como sale en la factura.");
+  if (!clave) throw new SociedadError("Ese nombre no alcanza para distinguir la sociedad. Escríbelo como sale en la factura.");
   const cedula = input.cedula?.trim() || null;
   const donde = NOMBRE_DE_PLATAFORMA[input.plataforma];
 
@@ -193,7 +193,7 @@ export async function soltarSociedad(cuentaId: string, sociedadId: string, actor
   }
   if (s._count.cobrosFacturados > 0) {
     throw new SociedadError(
-      `${s._count.cobrosFacturados} cobro(s) dicen que se le facturaron a «${s.odooPartnerNombre}». Cambiales la sociedad antes de soltarla.`,
+      `${s._count.cobrosFacturados} cobro(s) dicen que se le facturaron a «${s.odooPartnerNombre}». Cámbiales la sociedad antes de soltarla.`,
       409,
     );
   }

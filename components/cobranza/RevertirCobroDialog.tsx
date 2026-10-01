@@ -192,7 +192,7 @@ export default function RevertirCobroDialog({
               onChange={(e) => setMotivoSinNumero(e.target.value)}
               rows={2}
               maxLength={MOTIVO_SIN_NUMERO_MAX}
-              placeholder="¿Por qué no lo tenés? Ej.: QuickBooks no numera las facturas en el libro"
+              placeholder="¿Por qué no lo tienes? Ej.: QuickBooks no numera las facturas en el libro"
               className={`${INPUT_CLS} mt-1.5`}
             />
           )}

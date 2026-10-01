@@ -274,7 +274,7 @@ export const planPutSchema = z
         });
       }
       if (!val.numCuotas) {
-        ctx.addIssue({ code: "custom", message: "Indicá en cuántas cuotas va el resto.", path: ["numCuotas"] });
+        ctx.addIssue({ code: "custom", message: "Indica en cuántas cuotas va el resto.", path: ["numCuotas"] });
       }
     }
     if (val.template === "PERSONALIZADO") {
@@ -332,7 +332,7 @@ export const cobroPatchSchema = z
       motivo: z
         .string()
         .trim()
-        .min(MOTIVO_REVERSION_MIN, `Contá por qué sale de Cobrado (al menos ${MOTIVO_REVERSION_MIN} caracteres).`)
+        .min(MOTIVO_REVERSION_MIN, `Cuenta por qué sale de Cobrado (al menos ${MOTIVO_REVERSION_MIN} caracteres).`)
         .max(1000),
       numeroFactura: z.string().trim().max(60).nullable().optional(),
     }),
@@ -364,7 +364,7 @@ export const alertaPatchSchema = z
   })
   .partial()
   .refine((v) => v.estado !== undefined || v.posponerHasta !== undefined, {
-    message: "Indicá el estado o la fecha de posposición.",
+    message: "Indica el estado o la fecha de posposición.",
   });
 
 // ── Reporte de finanzas (agente reporter, fase 3) ──────────────────────────────
@@ -940,7 +940,7 @@ export const tipoCambioUpsertSchema = z.object({
   // El rango espeja el CHECK de la base a propósito: uno atrapa la UI y el otro lo
   // que entre por un script. Un 5.13 en vez de 513 pasa desapercibido de otro modo.
   crcPorUsd: z.number().gt(50, "Tasa fuera de rango").lt(5000, "Tasa fuera de rango"),
-  fuente: z.string().trim().min(3, "Decí de dónde sale la tasa").max(200),
+  fuente: z.string().trim().min(3, "Di de dónde sale la tasa").max(200),
   notas: z.string().max(2000).nullish(),
 });
 export type TipoCambioUpsert = z.infer<typeof tipoCambioUpsertSchema>;
@@ -1001,7 +1001,7 @@ export type OdooCuentaVia = z.infer<typeof odooCuentaViaSchema>;
  */
 export const sociedadAgregarSchema = z.object({
   plataforma: z.enum(["MERCURY", "OTRA"]),
-  nombre: z.string().trim().min(2, "Escribí el nombre como sale en la factura").max(200),
+  nombre: z.string().trim().min(2, "Escribe el nombre como sale en la factura").max(200),
   cedula: z.string().trim().max(40).nullish(),
 });
 export type SociedadAgregar = z.infer<typeof sociedadAgregarSchema>;

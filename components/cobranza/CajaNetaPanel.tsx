@@ -315,7 +315,7 @@ export default function CajaNetaPanel({
         <EmptyState
           variant="dashed"
           title="Sin buckets de caja neta"
-          description="Configurá servicios con cobros y costos recurrentes para ver acá el neto proyectado."
+          description="Configura servicios con cobros y costos recurrentes para ver acá el neto proyectado."
         />
       ) : (
         <>

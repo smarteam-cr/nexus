@@ -202,7 +202,7 @@ export default function MarcarFacturadoDialog({
         {cargando && <p className="text-xs text-fg-muted">Buscando las facturas de este cliente en el espejo de Odoo…</p>}
         {errorCarga && (
           <Alert variant="warning">
-            <p className="text-xs">{errorCarga} Podés teclear el número igual.</p>
+            <p className="text-xs">{errorCarga} Puedes teclear el número igual.</p>
           </Alert>
         )}
 
@@ -210,17 +210,17 @@ export default function MarcarFacturadoDialog({
           <Alert variant="info">
             <p className="text-xs">
               {datos.clientesDeOdoo === 0
-                ? "Esta cuenta todavía no está emparejada con un cliente de Odoo, así que no hay facturas para elegir. Tecleá el número."
+                ? "Esta cuenta todavía no está emparejada con un cliente de Odoo, así que no hay facturas para elegir. Teclea el número."
                 : `El espejo de Odoo no tiene facturas de este cliente en ${cobro.moneda} sin usar${
                     datos.espejoAl ? ` (última lectura buena: ${fmtFecha(datos.espejoAl)})` : ""
-                  }. Tecleá el número.`}
+                  }. Teclea el número.`}
             </p>
           </Alert>
         )}
 
         {hayLista && datos && (
           <div>
-            <p className="text-[11px] font-medium text-fg-muted mb-1">Elegí la factura en Odoo</p>
+            <p className="text-[11px] font-medium text-fg-muted mb-1">Elige la factura en Odoo</p>
             <ul className="max-h-56 overflow-y-auto space-y-1 pr-1">
               {datos.candidatas.map((f) => {
                 const activa = forma === "espejo" && elegida === f.numero;
@@ -296,10 +296,10 @@ export default function MarcarFacturadoDialog({
             {plataformaFinal === "ODOO" && numeroNormalizado && datos && (
               <p className="mt-1 text-[10px] text-warn-ink">
                 {enLaLista
-                  ? "Esa factura está en la lista de arriba: elegila ahí y la fecha sale del documento."
+                  ? "Esa factura está en la lista de arriba: elígela ahí y la fecha sale del documento."
                   : `No está en el espejo de Odoo${
                       datos.espejoAl ? ` (última lectura buena: ${fmtFecha(datos.espejoAl)})` : ""
-                    }. Se guarda igual; revisá que sea el número del documento.`}
+                    }. Se guarda igual; revisa que sea el número del documento.`}
               </p>
             )}
             {aviso && <p className="mt-1 text-[10px] text-warn-ink">{aviso}</p>}
@@ -308,7 +308,7 @@ export default function MarcarFacturadoDialog({
 
         {forma === "sinNumero" && (
           <div>
-            <label className="block text-[11px] font-medium text-fg-muted mb-1">¿Por qué no tenés el número?</label>
+            <label className="block text-[11px] font-medium text-fg-muted mb-1">¿Por qué no tienes el número?</label>
             <textarea
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
@@ -319,7 +319,7 @@ export default function MarcarFacturadoDialog({
               autoFocus
             />
             <p className="mt-1 text-[10px] text-fg-muted">
-              Queda marcada a tu nombre. Cuando tengas el número, lo cambiás desde el cronograma de la cuenta.
+              Queda marcada a tu nombre. Cuando tengas el número, lo cambias desde el cronograma de la cuenta.
             </p>
           </div>
         )}
@@ -350,7 +350,7 @@ export default function MarcarFacturadoDialog({
                   onChange={(e) => setSociedadId(e.target.value || null)}
                   className={SELECT_CLS}
                 >
-                  <option value="">{sociedadesDeLaPlataforma.length >= 2 ? "Elegí la sociedad" : "Sin anotar"}</option>
+                  <option value="">{sociedadesDeLaPlataforma.length >= 2 ? "Elige la sociedad" : "Sin anotar"}</option>
                   {sociedadesDeLaPlataforma.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.nombre}
@@ -364,7 +364,7 @@ export default function MarcarFacturadoDialog({
         {faltaSociedad && plataformaFinal && (
           <p className="text-[10px] text-warn-ink">
             Esta cuenta factura por {NOMBRE_DE_PLATAFORMA[plataformaFinal]} con {sociedadesDeLaPlataforma.length} sociedades:
-            elegí a cuál se le facturó. Nexus no lo adivina.
+            elige a cuál se le facturó. Nexus no lo adivina.
           </p>
         )}
 

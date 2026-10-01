@@ -21,6 +21,9 @@
  *   calibrada el 2026-09-25 sobre todos los textos de app/, components/ y lib/.
  * ⚠ No mira -nos («decinos»): esa forma la comparten decenas de gentilicios y sustantivos («mexicanos»,
  *   «destinos»), y en la app no apareció nunca.
+ * ⚠ Pegada a un guion no cuenta: es código, una clase de Tailwind («animate-pulse») o un slug, no una palabra de
+ *   una frase. Se decidió así y no sumando «animate» a la lista porque «Animate» también es voseo («anímate»).
+ *   Medido el 2026-10-01: en todo app/, components/ y lib/ la regla saca un solo texto, esa clase.
  *
  * Si una guarda marca una palabra que es tuteo de verdad (un futuro como «mostrará», un sustantivo), se suma a la
  * lista que corresponde, a propósito y con su porqué. Si es voseo, se corrige el texto.
@@ -122,6 +125,8 @@ export const NO_SON_VOSEO: ReadonlySet<string> = new Set([
   "escala", "escuela", "modelo", "modelos", "estilo", "estilos", "paralelo", "gemela", "centinela", "cautela", "paquete",
   "rescate", "empate", "limite", "portapapeles", "carteles", "perfiles", "niveles", "canales", "señales",
   "umbrales", "portales", "paneles", "metales", "papeles", "guatemala", "huthwaite",
+  // …y una pestaña del Excel de facturación, con el nombre que le deja Excel (31 letras): «Implementaciones Internacionale»
+  "internacionale",
   // Adjetivos en plural (-ales, -eles, -iles)
   "totales", "subtotales", "internacionales", "comerciales", "adicionales", "manuales", "actuales", "opcionales",
   "credenciales", "puntuales", "mensuales", "semanales", "principales", "sociales", "informales", "formales",
@@ -143,8 +148,8 @@ export const NO_SON_VOSEO: ReadonlySet<string> = new Set([
 
 const AGUDA = /(?<!\p{L})\p{L}+(?:á|é|í|ás|és|ís)(?!\p{L})/gu;
 /* Minúsculas después de la primera letra: «paymentState» es código, no texto. Al menos tres letras antes de la
-   vocal: «dale», «dile», «vale» son tuteo o tercera persona. */
-const PRONOMBRE_PEGADO = /(?<!\p{L})[A-Za-zñÑ][a-zñ]{2,}[aei](?:l[oae]s?|me|te)(?!\p{L})/gu;
+   vocal: «dale», «dile», «vale» son tuteo o tercera persona. Pegada a un guion es código («animate-pulse»). */
+const PRONOMBRE_PEGADO = /(?<![\p{L}-])[A-Za-zñÑ][a-zñ]{2,}[aei](?:l[oae]s?|me|te)(?![\p{L}-])/gu;
 const palabraEntera = (w: string) => new RegExp(`(?<!\\p{L})${w}(?!\\p{L})`, "u");
 
 /** Las palabras de un texto que tienen la forma del voseo. Vacío = tuteo (o sin verbos). */

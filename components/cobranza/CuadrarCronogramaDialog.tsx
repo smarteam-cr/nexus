@@ -146,7 +146,7 @@ export default function CuadrarCronogramaDialog({
       size="xl"
       z="z-[70]"
       title="Cuadrar el cronograma con el acuerdo nuevo"
-      description="Esto cambia cobros y suelta facturas ya emitidas. Revisá cada línea antes de confirmar."
+      description="Esto cambia cobros y suelta facturas ya emitidas. Revisa cada línea antes de confirmar."
       footer={
         <>
           <button type="button" onClick={onCancel} className="text-xs text-fg-muted hover:text-fg px-2 py-1.5">
@@ -220,7 +220,7 @@ export default function CuadrarCronogramaDialog({
             El acuerdo pide <strong className="text-fg">{m(preview.sumaDelPlan)}</strong>.
           </p>
           <p className="mt-1 text-xs text-fg-secondary tabular-nums">
-            Si confirmás sin soltar nada: <strong className="text-fg">{m(preview.sumaSiNoSeLibera)}</strong>
+            Si confirmas sin soltar nada: <strong className="text-fg">{m(preview.sumaSiNoSeLibera)}</strong>
             {Math.abs(preview.sumaSiNoSeLibera - preview.sumaDelPlan) >= 0.01 && (
               <span className="text-amber-600"> — sigue sin cuadrar</span>
             )}
@@ -400,7 +400,7 @@ function FilaBloqueada({
               </div>
               {plataformaDudosa && (
                 <p className="text-[11px] text-amber-600">
-                  ⚠ Esta cuenta es internacional pero su vía de cobro dice Odoo — confirmá dónde se emitió de verdad.
+                  ⚠ Esta cuenta es internacional pero su vía de cobro dice Odoo — confirma dónde se emitió de verdad.
                 </p>
               )}
             </div>

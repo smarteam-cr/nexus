@@ -420,7 +420,7 @@ export function resolverSociedad(
   /* 1. Sin factura. */
   if (fechaDespues === null) {
     if (pedido.plataformaFactura || pedido.sociedadFacturadaId) {
-      return rechazo(400, "Un cobro sin factura no tiene a quién ni dónde se facturó: primero marcalo facturado.");
+      return rechazo(400, "Un cobro sin factura no tiene a quién ni dónde se facturó: primero márcalo facturado.");
     }
     if (!antes.plataformaFactura && !antes.sociedadFacturadaId) return { tipo: "sin-cambios" };
     return {
@@ -444,8 +444,8 @@ export function resolverSociedad(
       return rechazo(
         409,
         pedido.sociedadFacturadaId !== undefined
-          ? "Esa sociedad no le factura a esta cuenta. Agregala en la cuenta, o en Cobranza › Odoo si es una ficha de Odoo."
-          : "La sociedad anotada ya no le factura a esta cuenta: elegí de nuevo a quién se facturó.",
+          ? "Esa sociedad no le factura a esta cuenta. Agrégala en la cuenta, o en Cobranza › Odoo si es una ficha de Odoo."
+          : "La sociedad anotada ya no le factura a esta cuenta: elige de nuevo a quién se facturó.",
       );
     }
     if (pedido.sociedadFacturadaId !== undefined && pedido.plataformaFactura && pedido.plataformaFactura !== s.plataforma) {
@@ -458,13 +458,13 @@ export function resolverSociedad(
     if (pedido.sociedadFacturadaId === undefined && plataforma !== s.plataforma) {
       return rechazo(
         400,
-        `La factura está anotada a «${s.nombre}», que factura por ${NOMBRE_DE_PLATAFORMA[s.plataforma]}. Para cambiar la plataforma, elegí también la sociedad.`,
+        `La factura está anotada a «${s.nombre}», que factura por ${NOMBRE_DE_PLATAFORMA[s.plataforma]}. Para cambiar la plataforma, elige también la sociedad.`,
       );
     }
     if (documento && s.odooPartnerId !== null && documento.odooPartnerId !== s.odooPartnerId) {
       return rechazo(
         409,
-        `La factura ${documento.numero} es de «${documento.odooPartnerNombre}» en Odoo, no de «${s.nombre}». Elegí la sociedad del documento.`,
+        `La factura ${documento.numero} es de «${documento.odooPartnerNombre}» en Odoo, no de «${s.nombre}». Elige la sociedad del documento.`,
       );
     }
     plataforma = s.plataforma;
@@ -478,7 +478,7 @@ export function resolverSociedad(
         400,
         `Esta cuenta factura por ${NOMBRE_DE_PLATAFORMA[plataforma]} con ${deEsaPlataforma.length} sociedades (${deEsaPlataforma
           .map((s) => `«${s.nombre}»`)
-          .join(", ")}): elegí a cuál se le facturó.`,
+          .join(", ")}): elige a cuál se le facturó.`,
       );
     }
   }

@@ -187,7 +187,7 @@ export default function ImportWizard() {
     if (!file || busy) return;
     const esLibro = /\.xlsx$/i.test(file.name);
     if (!esLibro && !/\.csv$/i.test(file.name)) {
-      toast.error("Subí el CSV del sheet de Finanzas o el libro de Alex en .xlsx.");
+      toast.error("Sube el CSV del sheet de Finanzas o el libro de Alex en .xlsx.");
       return;
     }
     setBusy(true);
@@ -422,7 +422,7 @@ function PasoSubir({
           />
         </svg>
         <p className="text-sm text-fg-secondary">
-          {busy ? "Subiendo…" : "Arrastrá el CSV o el libro de Alex acá, o hacé clic para elegirlo"}
+          {busy ? "Subiendo…" : "Arrastra el CSV o el libro de Alex acá, o haz clic para elegirlo"}
         </p>
         <p className="text-[11px] text-fg-muted text-center">
           .csv del sheet de Finanzas: carga cuentas · .xlsx del libro de Alex: se compara fila por fila contra Nexus, y lo que
@@ -443,7 +443,7 @@ function PasoSubir({
       {prevBatches.length > 0 && (
         <div className="rounded-2xl border border-line bg-surface p-4 space-y-2">
           <p className="text-xs font-semibold text-fg">Imports anteriores</p>
-          <p className="text-[11px] text-fg-muted">Retomá uno a medias o revisá el resumen de uno aplicado.</p>
+          <p className="text-[11px] text-fg-muted">Retoma uno a medias o revisa el resumen de uno aplicado.</p>
           <div className="space-y-1.5">
             {prevBatches.map((b) => (
               <div key={b.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-muted">
@@ -499,7 +499,7 @@ function PasoMapear({
         <div>
           <p className="text-sm font-semibold text-fg">¿Qué columna alimenta cada campo?</p>
           <p className="text-xs text-fg-muted mt-0.5">
-            Sugerimos el mapeo desde los encabezados del CSV — corregí lo que haga falta. Los campos sin mapear
+            Sugerimos el mapeo desde los encabezados del CSV — corrige lo que haga falta. Los campos sin mapear
             quedan vacíos.
           </p>
         </div>
@@ -572,7 +572,7 @@ function PasoMapear({
         </button>
       </div>
       {!mapeo.clienteNombre && (
-        <p className="text-[11px] text-amber-600">Mapeá al menos el nombre del cliente para validar.</p>
+        <p className="text-[11px] text-amber-600">Mapea al menos el nombre del cliente para validar.</p>
       )}
     </div>
   );
@@ -614,7 +614,7 @@ function PasoRevisar({
           <p>
             Si se crean estos clientes, estas palabras quedarían repetidas entre 2+ empresas y dejarían de servir
             para resolver sesiones por título: <span className="font-medium">{avisoResolver.join(", ")}</span>.
-            Revisá que no sean duplicados de un cliente existente antes de aplicar.
+            Revisa que no sean duplicados de un cliente existente antes de aplicar.
           </p>
         </div>
       )}
@@ -818,11 +818,11 @@ function FilaForm({
       return;
     }
     if (form.suscripcionMonto.trim() && parseMontoLocal(form.suscripcionMonto) == null) {
-      toast.error("No entendí el monto — probá con un número (ej. 1.500.000,00).");
+      toast.error("No entendí el monto — prueba con un número (ej. 1.500.000,00).");
       return;
     }
     if (form.suscripcionInicio.trim() && !parseFechaLocal(form.suscripcionInicio)) {
-      toast.error("No entendí la fecha de inicio — usá AAAA-MM-DD o DD/MM/AAAA.");
+      toast.error("No entendí la fecha de inicio — usa AAAA-MM-DD o DD/MM/AAAA.");
       return;
     }
     if (form.diaCobroAncla.trim() && parseDiaAncla(form.diaCobroAncla) == null) {
@@ -993,7 +993,7 @@ function PasoAplicar({
         </div>
         {resumen.fallidas > 0 && (
           <p className="text-[11px] text-amber-600">
-            Las filas fallidas quedaron marcadas con su error — revisalas en el paso anterior.
+            Las filas fallidas quedaron marcadas con su error — revísalas en el paso anterior.
           </p>
         )}
         <Link href="/cobranza" className={`${BTN_PRIMARY} inline-block`}>
@@ -1020,7 +1020,7 @@ function PasoAplicar({
         </div>
         {nRevisar > 0 ? (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-700">
-            Quedan <span className="font-semibold">{nRevisar}</span> filas por revisar — corregilas u omitilas antes
+            Quedan <span className="font-semibold">{nRevisar}</span> filas por revisar — corrígelas u omítelas antes
             de aplicar.
           </div>
         ) : (

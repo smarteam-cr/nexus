@@ -519,7 +519,7 @@ export default function ColaCobros({
         <EmptyState
           variant="dashed"
           title="Nada matchea esos filtros"
-          description="Ajustá la búsqueda, la moneda, el tipo de cuenta o quitá el filtro de promesas."
+          description="Ajusta la búsqueda, la moneda, el tipo de cuenta o quita el filtro de promesas."
         />
       ) : (
         GRUPOS_ORDEN.map((g) => {
@@ -703,7 +703,7 @@ export default function ColaCobros({
                       <button
                         type="button"
                         onClick={() => setFacturarCobro(r)}
-                        title="Esta factura no tiene número: elegilo de Odoo o tecleálo"
+                        title="Esta factura no tiene número: elígelo de Odoo o tecléalo"
                         className="text-[11px] font-medium px-2 py-1 rounded-md border border-warn-line text-warn-ink bg-warn-surface hover:opacity-90 transition-opacity whitespace-nowrap"
                       >
                         Agregar número
@@ -739,7 +739,7 @@ export default function ColaCobros({
                 <button
                   type="button"
                   onClick={() => setBorradorCobro(r)}
-                  title="Generar borrador de correo de cobro (lo revisás y lo enviás vos)"
+                  title="Generar borrador de correo de cobro (lo revisas y lo envías tú)"
                   className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors whitespace-nowrap"
                 >
                   Borrador

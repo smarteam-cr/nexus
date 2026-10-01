@@ -96,7 +96,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const porRevisar = batch.filas.filter((f) => f.estado === "REVISAR").length;
   if (porRevisar > 0) {
     return NextResponse.json(
-      { error: `quedan ${porRevisar} filas por revisar (corregilas u omitilas)` },
+      { error: `quedan ${porRevisar} filas por revisar (corrígelas u omítelas)` },
       { status: 409 },
     );
   }
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       updates.push(
         prisma.importacionFila.update({
           where: { id: fila.id },
-          data: { estado: "REVISAR", errores: ["El canónico guardado ya no valida — revisá la fila."] },
+          data: { estado: "REVISAR", errores: ["El canónico guardado ya no valida — revisa la fila."] },
         }),
       );
       continue;

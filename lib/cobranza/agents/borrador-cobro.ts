@@ -117,7 +117,7 @@ export async function runBorradorCobro(
      * ⚠ Y NO se puede escribir "+13 %" acá: hay clientes exentos (11 de 111, todos ticos).
      * Lo honesto es no presentar el número como el total y remitir a la factura.
      */
-    `⚠ Ese monto es el del SERVICIO, sin impuestos. La factura del cliente puede llevar IVA encima. NO lo presentes como "el total a pagar" ni sumes ningún impuesto vos: nombralo como el monto del servicio y, si hace falta hablar del total, remitite a la factura.`,
+    `⚠ Ese monto es el del SERVICIO, sin impuestos. La factura del cliente puede llevar IVA encima. NO lo presentes como "el total a pagar" ni sumes ningún impuesto por tu cuenta: nómbralo como el monto del servicio y, si hace falta hablar del total, remítete a la factura.`,
     `Servicio: ${cobro.servicio.tipoServicio}${cobro.servicio.descripcion ? ` — ${cobro.servicio.descripcion}` : ""}`,
     `Crédito: ${cobro.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS} días · vía de cobro: ${cobro.cuenta.viaCobro}${cobro.cuenta.responsableCobroTerceros ? ` · cobro de terceros a cargo de: ${cobro.cuenta.responsableCobroTerceros}` : ""}`,
     /* La promesa de pago de ESTA factura, si la hay. Hasta el 2026-09-12 el prompt no la traía y el
@@ -130,7 +130,7 @@ export async function runBorradorCobro(
     `# CONTEXTO DE COMUNICACIÓN (fuente: ${comm.slot})`,
     ctxCom.ultimaComunicacion
       ? `Última comunicación humana: ${ctxCom.ultimaComunicacion.fechaISO} · ${ctxCom.ultimaComunicacion.tipo} — ${ctxCom.ultimaComunicacion.resumen}`
-      : `Sin historial de comunicación registrado — redactá un recordatorio genérico cortés.`,
+      : `Sin historial de comunicación registrado — redacta un recordatorio genérico cortés.`,
     ctxCom.hiloReciente ? `Hilo de correo reciente (pegado a mano):\n"""\n${ctxCom.hiloReciente}\n"""` : "",
   ].filter(Boolean);
 
@@ -153,7 +153,7 @@ export async function runBorradorCobro(
       messages: [
         {
           role: "user",
-          content: `${bloques.join("\n")}\n\nRedactá el borrador de correo de cobro según tus instrucciones. Devolvé SOLO el JSON.`,
+          content: `${bloques.join("\n")}\n\nRedacta el borrador de correo de cobro según tus instrucciones. Devuelve SOLO el JSON.`,
         },
       ],
     });

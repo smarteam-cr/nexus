@@ -643,7 +643,7 @@ function sinCuenta(p: PropuestaDelLibro, res: Exclude<ResolucionDeCuenta, { tipo
       veredicto: "SIN_CUENTA",
       accion: "EMPAREJAR",
       propuesta:
-        `El cliente de Odoo «${res.clienteDeOdoo}» no está emparejado con ninguna cuenta. Emparejalo en Cobranza › Odoo` +
+        `El cliente de Odoo «${res.clienteDeOdoo}» no está emparejado con ninguna cuenta. Emparéjalo en Cobranza › Odoo` +
         (res.posibles.length ? ` (puede ser ${nombres(res.posibles)})` : "; si la cuenta no existe, hay que cargarla") +
         ".",
     };
@@ -654,7 +654,7 @@ function sinCuenta(p: PropuestaDelLibro, res: Exclude<ResolucionDeCuenta, { tipo
       cuentasPosibles: res.posibles,
       veredicto: "REVISAR",
       accion: "EMPAREJAR",
-      propuesta: `Hay ${res.posibles.length} cuentas que pueden ser esta: ${nombres(res.posibles)}. Nexus no elige: decidí cuál es.`,
+      propuesta: `Hay ${res.posibles.length} cuentas que pueden ser esta: ${nombres(res.posibles)}. Nexus no elige: decide cuál es.`,
     };
   }
   return {
@@ -663,7 +663,7 @@ function sinCuenta(p: PropuestaDelLibro, res: Exclude<ResolucionDeCuenta, { tipo
     accion: p.seccion === "NO_INSCRITOS" ? "CARGAR_PLAN" : "CARGAR_CUENTA",
     propuesta:
       p.seccion === "NO_INSCRITOS"
-        ? `Firmado y sin factura, y ninguna cuenta de Nexus se llama «${p.cliente}». Cargá la cuenta, el servicio y el plan: queda programado hasta confirmar que hay factura.`
+        ? `Firmado y sin factura, y ninguna cuenta de Nexus se llama «${p.cliente}». Carga la cuenta, el servicio y el plan: queda programado hasta confirmar que hay factura.`
         : `Ninguna cuenta de Nexus se llama «${p.cliente}». Puede faltar, o estar con otro nombre: la sociedad que factura no siempre es la empresa.`,
   };
 }
@@ -672,13 +672,13 @@ function sinCuenta(p: PropuestaDelLibro, res: Exclude<ResolucionDeCuenta, { tipo
 
 const TEXTO_DE_ACCION: Partial<Record<AccionDelLibro, (numero: string | null, fecha: string | null) => string>> = {
   SACAR_DE_COBRADO: () =>
-    "Alex decidió que esta vuelve a por cobrar: sacala de Cobrado desde el cronograma de la cuenta, con el motivo y la fecha real de la factura. Lo hace una persona; Nexus no la mueve solo.",
+    "Alex decidió que esta vuelve a por cobrar: sácala de Cobrado desde el cronograma de la cuenta, con el motivo y la fecha real de la factura. Lo hace una persona; Nexus no la mueve solo.",
   REVISAR_COBRADO: () =>
-    "Lo cobrado se queda cobrado salvo tres facturas que Alex ya identificó, y esta no es una de ellas. Si tampoco se depositó, sacala de Cobrado desde el cronograma, con motivo: lo decide una persona.",
+    "Lo cobrado se queda cobrado salvo tres facturas que Alex ya identificó, y esta no es una de ellas. Si tampoco se depositó, sácala de Cobrado desde el cronograma, con motivo: lo decide una persona.",
   REVISAR_PAGO: () =>
-    "Si la plata entró, registrá el pago desde el cronograma con el comprobante: lo confirma quien lo ve. Nexus no la pasa a Cobrado por el libro.",
-  MARCAR_FACTURADO: (numero, fecha) => `Marcala facturada con el número ${numero ?? "de la factura"} y la fecha ${fecha ?? "del documento"}.`,
-  CONFIRMAR_IVA: () => "Confirmá si el monto lleva IVA antes de corregir nada: Nexus guarda los montos sin IVA.",
+    "Si la plata entró, registra el pago desde el cronograma con el comprobante: lo confirma quien lo ve. Nexus no la pasa a Cobrado por el libro.",
+  MARCAR_FACTURADO: (numero, fecha) => `Márcala facturada con el número ${numero ?? "de la factura"} y la fecha ${fecha ?? "del documento"}.`,
+  CONFIRMAR_IVA: () => "Confirma si el monto lleva IVA antes de corregir nada: Nexus guarda los montos sin IVA.",
   AGREGAR_NUMERO: (numero) => `Coincide. Falta anotarle el número ${numero ?? ""}: está propuesto en la pestaña «Números».`,
   NINGUNA: () => "Coincide.",
 };
@@ -693,14 +693,14 @@ function proponerFactura(
 ): PropuestaDelLibro {
   const f = doc.principal;
   const p: PropuestaDelLibro = { ...p0, cuenta, neto: neto.monto, netoFuente: neto.fuente };
-  if (cuenta.via === "SIGLAS") p.avisos.push(`La cuenta «${cuenta.nombre}» sale solo por las siglas: confirmala antes de tocar nada.`);
+  if (cuenta.via === "SIGLAS") p.avisos.push(`La cuenta «${cuenta.nombre}» sale solo por las siglas: confírmala antes de tocar nada.`);
   const objetivo = neto.monto ?? f.total;
 
   if (!asignada && ambigua) {
     return {
       ...p,
       veredicto: "REVISAR",
-      propuesta: `Hay más de una combinación de cuotas de ${cuenta.nombre} que suma ${fmtMontoLibro(objetivo, f.moneda)}. Nexus no elige: decidí cuáles cubre esta factura.`,
+      propuesta: `Hay más de una combinación de cuotas de ${cuenta.nombre} que suma ${fmtMontoLibro(objetivo, f.moneda)}. Nexus no elige: decide cuáles cubre esta factura.`,
     };
   }
   if (!asignada) {
@@ -733,7 +733,7 @@ function proponerFactura(
     const pareceIva = neto.monto === null && f.total !== null && centavos(f.total / IVA_COSTA_RICA) === centavos(suma);
     if (pareceIva) {
       diferencias.push(
-        `El libro dice ${fmtMontoLibro(f.total, f.moneda)} y Nexus ${fmtMontoLibro(suma, f.moneda)}: la diferencia es el 13 %. Confirmá si la factura lleva IVA.`,
+        `El libro dice ${fmtMontoLibro(f.total, f.moneda)} y Nexus ${fmtMontoLibro(suma, f.moneda)}: la diferencia es el 13 %. Confirma si la factura lleva IVA.`,
       );
       acciones.push("CONFIRMAR_IVA");
     } else {
@@ -850,7 +850,7 @@ function proponerServicio(doc: DocumentoLibro, cuenta: CuentaResuelta, idx: Indi
       ...p,
       veredicto: "REVISAR",
       accion: f.seccion === "NO_INSCRITOS" ? "CARGAR_PLAN" : "NINGUNA",
-      propuesta: `Hay más de una combinación de servicios de ${cuenta.nombre} que suma ${fmtMontoLibro(f.total, f.moneda)}. Decidí cuáles son.`,
+      propuesta: `Hay más de una combinación de servicios de ${cuenta.nombre} que suma ${fmtMontoLibro(f.total, f.moneda)}. Decide cuáles son.`,
     };
   }
   if (!atados) {
@@ -860,8 +860,8 @@ function proponerServicio(doc: DocumentoLibro, cuenta: CuentaResuelta, idx: Indi
       accion: f.seccion === "NO_INSCRITOS" ? "CARGAR_PLAN" : "CARGAR_COBRO",
       propuesta:
         f.seccion === "NO_INSCRITOS"
-          ? `${cuenta.nombre} no tiene un servicio que sume ${fmtMontoLibro(f.total, f.moneda)}. Cargá el servicio y su plan: queda programado hasta confirmar que hay factura.`
-          : `${cuenta.nombre} no tiene cobros que sumen ${fmtMontoLibro(f.total, f.moneda)}. Manda el libro: cargalos por cobrar; al marcar facturado, «no tengo el número» (QuickBooks no numera en el libro).`,
+          ? `${cuenta.nombre} no tiene un servicio que sume ${fmtMontoLibro(f.total, f.moneda)}. Carga el servicio y su plan: queda programado hasta confirmar que hay factura.`
+          : `${cuenta.nombre} no tiene cobros que sumen ${fmtMontoLibro(f.total, f.moneda)}. Manda el libro: cárgalos por cobrar; al marcar facturado, «no tengo el número» (QuickBooks no numera en el libro).`,
     };
   }
 
@@ -915,9 +915,9 @@ function proponerServicio(doc: DocumentoLibro, cuenta: CuentaResuelta, idx: Indi
       accion === "REVISAR_COBRADO"
         ? "El libro deja más adeudado que Nexus y Nexus tiene cuotas en Cobrado. Si no se depositaron, se sacan de Cobrado desde el cronograma, con motivo: lo decide una persona."
         : accion === "REVISAR_PAGO"
-          ? "Si la plata entró, registrá el pago desde el cronograma con el comprobante. Nexus no la pasa a Cobrado por el libro."
+          ? "Si la plata entró, registra el pago desde el cronograma con el comprobante. Nexus no la pasa a Cobrado por el libro."
           : accion === "MARCAR_FACTURADO"
-            ? "Marcá facturadas las cuotas con «no tengo el número»: QuickBooks no numera en el libro."
+            ? "Marca facturadas las cuotas con «no tengo el número»: QuickBooks no numera en el libro."
             : "Coincide.",
   };
 }
@@ -958,7 +958,7 @@ export function compararLibro(filas: readonly FilaLibro[], ctx: ContextoLibro): 
           sinCobro === "NOTA_DE_CREDITO"
             ? "Es una nota de crédito: no es algo que cobrar. Qué factura anula lo dice la conciliación de Odoo."
             : conNumero.length
-              ? "Odoo la tiene anulada o revertida y Nexus la tiene anotada en un cobro. Soltala con «Cuadrar cronograma»."
+              ? "Odoo la tiene anulada o revertida y Nexus la tiene anotada en un cobro. Suéltala con «Cuadrar cronograma»."
               : "Odoo la tiene anulada o revertida: no hay nada que cobrar.",
       });
       continue;

@@ -42,17 +42,17 @@ const IMPORTAR = "/cobranza/importar";
 const CAUSA: Record<CausaDeDiferencia, { titulo: string; accion: string; href: string | null }> = {
   SIN_CUENTA: {
     titulo: "Empresas que Nexus no tiene como cuenta",
-    accion: "Elegí la cuenta, o creala, en Cobranza › Importar",
+    accion: "Elige la cuenta, o créala, en Cobranza › Importar",
     href: IMPORTAR,
   },
   SIN_FACTURA: {
     titulo: "Contratos de QuickBooks y «No inscritos» que Nexus no tiene facturados",
-    accion: "Nexus los suma cuando tienen factura: cargá los que falten en Cobranza › Importar",
+    accion: "Nexus los suma cuando tienen factura: carga los que falten en Cobranza › Importar",
     href: IMPORTAR,
   },
   FALTA_CARGAR: {
     titulo: "Facturas que Nexus no tiene como facturadas",
-    accion: "Cargalas en Cobranza › Importar",
+    accion: "Cárgalas en Cobranza › Importar",
     href: IMPORTAR,
   },
   IVA: {
@@ -62,7 +62,7 @@ const CAUSA: Record<CausaDeDiferencia, { titulo: string; accion: string; href: s
   },
   NO_CUADRA: {
     titulo: "Nexus y el Excel dicen otra cosa",
-    accion: "Revisalas en Cobranza › Odoo › «Lo que no cuadra»",
+    accion: "Revísalas en Cobranza › Odoo › «Lo que no cuadra»",
     href: "/cobranza/odoo?pestana=no-cuadra",
   },
 };

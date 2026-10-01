@@ -113,7 +113,7 @@ export default function PanelCartera({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clientId }),
       });
-      if (d.created) toast.success("Cuenta creada. Completá los datos de cobro.");
+      if (d.created) toast.success("Cuenta creada. Completa los datos de cobro.");
       else toast.info("Este cliente ya tenía una cuenta — se abrió la existente.");
       onOpenCuenta(d.cuenta.id);
       onRefresh();
@@ -136,7 +136,7 @@ export default function PanelCartera({
   const vacio = hayFiltros
     ? {
         title: "Nada matchea esos filtros",
-        description: "Ajustá la búsqueda o los filtros para ver más clientes.",
+        description: "Ajusta la búsqueda o los filtros para ver más clientes.",
       }
     : vista === "sin_configurar"
       ? {
@@ -146,7 +146,7 @@ export default function PanelCartera({
       : vista === "configuradas"
         ? {
             title: "Todavía no hay cuentas configuradas",
-            description: "Configurá la primera desde la pestaña «Sin configurar».",
+            description: "Configura la primera desde la pestaña «Sin configurar».",
           }
         : {
             title: "Todavía no hay cartera que mostrar",

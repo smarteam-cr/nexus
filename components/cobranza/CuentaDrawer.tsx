@@ -315,7 +315,7 @@ export default function CuentaDrawer({
 
               {cuenta.servicios.length === 0 && !adding && (
                 <p className="text-xs text-fg-muted rounded-lg border border-dashed border-line px-3 py-4 text-center">
-                  Sin servicios todavía. Agregá el primero para armar el plan de pago.
+                  Sin servicios todavía. Agrega el primero para armar el plan de pago.
                 </p>
               )}
 
@@ -497,7 +497,7 @@ export default function CuentaDrawer({
                     className={INPUT_CLS}
                   />
                   <p className="mt-1 text-[10px] text-fg-muted">
-                    Día del mes en que se cobra. Si lo dejás vacío, cada servicio usa el día de su
+                    Día del mes en que se cobra. Si lo dejas vacío, cada servicio usa el día de su
                     fecha de arranque.
                   </p>
                 </div>
@@ -593,7 +593,7 @@ export default function CuentaDrawer({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") addBitacora();
                   }}
-                  placeholder="Registrá una llamada, correo o nota…"
+                  placeholder="Registra una llamada, correo o nota…"
                   className={INPUT_CLS}
                 />
                 <button
@@ -783,7 +783,7 @@ function ServicioCard({
               {arranqueMovido && (
                 <p className="text-[11px] text-amber-600 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-1.5">
                   El arranque del cronograma cambió a {fmtFecha(servicio.anchorActual)} y difiere de la
-                  facturación configurada ({fmtFecha(servicio.fechaInicioFacturacion)}). Revisá si hay que ajustar.
+                  facturación configurada ({fmtFecha(servicio.fechaInicioFacturacion)}). Revisa si hay que ajustar.
                 </p>
               )}
 
@@ -797,7 +797,7 @@ function ServicioCard({
                     {plan.notas ? ` · ${plan.notas}` : ""}
                   </>
                 ) : (
-                  "sin plan configurado — editá el servicio para definirlo"
+                  "sin plan configurado — edita el servicio para definirlo"
                 )}
               </p>
 
@@ -837,7 +837,7 @@ function ServicioCard({
                       type="button"
                       onClick={onGenerar}
                       disabled={generando || !plan}
-                      title={!plan ? "Configurá el plan primero" : undefined}
+                      title={!plan ? "Configura el plan primero" : undefined}
                       className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-40"
                     >
                       {generando ? "Generando…" : "Generar cobros"}

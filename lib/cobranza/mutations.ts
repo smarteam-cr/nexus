@@ -332,7 +332,7 @@ export async function deleteServicio(servicioId: string, byEmail = "sistema") {
   const cobrados = await prisma.cobro.count({ where: { servicioId, estado: "COBRADO" } });
   if (cobrados > 0) {
     throw new CobranzaError(
-      `No se puede borrar: el servicio tiene ${cobrados} cobro(s) ya COBRADO(s). Marcalo FINALIZADO en su lugar.`,
+      `No se puede borrar: el servicio tiene ${cobrados} cobro(s) ya COBRADO(s). Márcalo FINALIZADO en su lugar.`,
       409,
     );
   }
@@ -467,7 +467,7 @@ export async function planificarCobros(servicioId: string, todayISO: string): Pr
   });
   if (!servicio) throw new CobranzaError("El servicio no existe.", 404);
   const plan = servicio.planes[0];
-  if (!plan) throw new CobranzaError("El servicio no tiene un plan de pago activo. Configuralo primero.");
+  if (!plan) throw new CobranzaError("El servicio no tiene un plan de pago activo. Configúralo primero.");
   if (!servicio.fechaInicioFacturacion) {
     throw new CobranzaError(
       "El servicio no tiene fecha de inicio de facturación — no se generan cobros (pendiente de datos).",
@@ -514,7 +514,7 @@ export async function planificarCobros(servicioId: string, todayISO: string): Pr
   );
   if (sumaPlan != null && Math.abs(sumaPlan - servicioInput.montoTotal) > 0.01) {
     throw new CobranzaError(
-      `El plan suma ${sumaPlan.toLocaleString("es-CR")} pero el servicio vale ${servicioInput.montoTotal.toLocaleString("es-CR")} ${servicioInput.moneda} — cuadrá el plan antes de generar cobros.`,
+      `El plan suma ${sumaPlan.toLocaleString("es-CR")} pero el servicio vale ${servicioInput.montoTotal.toLocaleString("es-CR")} ${servicioInput.moneda} — cuadra el plan antes de generar cobros.`,
       409,
     );
   }
@@ -1077,7 +1077,7 @@ export async function liberarYRegenerar(
 
   if (huellaEsperada && huellaDelCronograma(previo) !== huellaEsperada) {
     throw new CobranzaError(
-      "El cronograma cambió desde que abriste esto. Volvé a revisarlo antes de confirmar.",
+      "El cronograma cambió desde que abriste esto. Vuelve a revisarlo antes de confirmar.",
       409,
     );
   }
@@ -1885,7 +1885,7 @@ export async function updateComisionPartner(
     const cambiaFecha = data.fecha !== undefined && data.fecha !== isoDay(actual.fecha);
     if (cambiaMonto || cambiaFecha) {
       throw new CobranzaError(
-        "Esta comisión ya está confirmada como cobrada. Para corregir el monto o la fecha, revertila a «por cobrar» y volvé a confirmarla con el número bueno — así queda claro quién firmó qué.",
+        "Esta comisión ya está confirmada como cobrada. Para corregir el monto o la fecha, reviértela a «por cobrar» y vuelve a confirmarla con el número bueno — así queda claro quién firmó qué.",
         409,
       );
     }
@@ -2431,7 +2431,7 @@ export async function liquidarComision(
     // que el aguinaldo la cuente. Se frena acá; la UI ni siquiera la sugiere.
     if (pago.estado === "PAGADO") {
       throw new CobranzaError(
-        "Esa quincena ya se pagó: no se le puede colgar una comisión después. Liquidala suelta o engancharla a una quincena pendiente.",
+        "Esa quincena ya se pagó: no se le puede colgar una comisión después. Liquídala suelta o engánchala a una quincena pendiente.",
         409,
       );
     }
@@ -2450,7 +2450,7 @@ export async function liquidarComision(
     });
     if (yaPagados) {
       throw new CobranzaError(
-        "Alguno de esos cobros ya entró en una comisión liquidada. Refrescá la pantalla: puede que se haya liquidado en otra pestaña.",
+        "Alguno de esos cobros ya entró en una comisión liquidada. Refresca la pantalla: puede que se haya liquidado en otra pestaña.",
         409,
       );
     }

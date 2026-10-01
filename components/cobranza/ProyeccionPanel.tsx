@@ -224,7 +224,7 @@ export default function ProyeccionPanel({
         <EmptyState
           variant="dashed"
           title="Sin cobros proyectados"
-          description="Configurá servicios y generá cobros desde el panel de cartera para ver acá la plata que viene."
+          description="Configura servicios y genera cobros desde el panel de cartera para ver acá la plata que viene."
         />
       ) : (
         <>

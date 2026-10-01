@@ -1128,7 +1128,7 @@ export function calcularEquilibrio(
     avisos.push({
       codigo: "SIN_TIPO_DE_CAMBIO",
       severidad: "ALTA",
-      mensaje: `Falta el tipo de cambio de ${periodosSinTasa.size} mes(es): esos montos NO entraron a los totales. Cargalos para que el año cierre.`,
+      mensaje: `Falta el tipo de cambio de ${periodosSinTasa.size} mes(es): esos montos NO entraron a los totales. Cárgalos para que el año cierre.`,
       periodos: [...periodosSinTasa].sort(),
       conceptos: [...new Set(noConvertidos.map((n) => n.concepto))].slice(0, 10),
     });

@@ -394,7 +394,7 @@ export function posibleDuplicado(
         esDocumentoVivo(o),
     );
     if (gemela) {
-      return `Odoo tiene para el mismo cliente ${gemela.numero} por el mismo importe en ${NOMBRE_DE_MONEDA[gemela.moneda] ?? gemela.moneda}: una de las dos salió en la moneda equivocada. Resolvelo en Odoo antes de cargarla (Cobranza › Odoo › «Lo que no cuadra»).`;
+      return `Odoo tiene para el mismo cliente ${gemela.numero} por el mismo importe en ${NOMBRE_DE_MONEDA[gemela.moneda] ?? gemela.moneda}: una de las dos salió en la moneda equivocada. Resuélvelo en Odoo antes de cargarla (Cobranza › Odoo › «Lo que no cuadra»).`;
     }
   }
   const libres = (id: string, ventana: number) =>
@@ -414,11 +414,11 @@ export function posibleDuplicado(
   const propias = libres(cuentaId, DIAS_DE_VENTANA_DUPLICADO);
   const una = propias.find(parecida);
   if (una) {
-    return `${nombre} ya tiene una cuota sin número de ${cuota(una)}: puede ser esta factura. Si lo es, anotale el número en vez de cargarla.`;
+    return `${nombre} ya tiene una cuota sin número de ${cuota(una)}: puede ser esta factura. Si lo es, anótale el número en vez de cargarla.`;
   }
   const suma = subconjuntoUnico(propias, (c) => centavos(c.monto), centavos(monto), 2, 3);
   if (suma === "varios") {
-    return `${nombre} tiene varias combinaciones de cuotas sin número que suman ${fmtMontoLibro(monto, f.moneda)}: puede ser esta factura. Decidí cuáles cubre antes de cargar otra.`;
+    return `${nombre} tiene varias combinaciones de cuotas sin número que suman ${fmtMontoLibro(monto, f.moneda)}: puede ser esta factura. Decide cuáles cubre antes de cargar otra.`;
   }
   if (suma) {
     return `${nombre} ya tiene ${suma.length} cuotas sin número que suman ${fmtMontoLibro(monto, f.moneda)} (${suma.map(cuota).join(" + ")}): puede ser esta factura.`;
@@ -427,7 +427,7 @@ export function posibleDuplicado(
     if (candidata.id === cuentaId || candidata.via === "SIGLAS") continue;
     const ajena = libres(candidata.id, DIAS_DE_VENTANA_OTRA_CUENTA).find(parecida);
     if (ajena) {
-      return `La cuenta «${idx.cuentaPorId.get(candidata.id)?.nombre ?? candidata.id}» tiene una cuota sin número de ${cuota(ajena)}: puede ser esta misma factura en otra cuenta. Resolvé cuál es la cuenta antes de cargar.`;
+      return `La cuenta «${idx.cuentaPorId.get(candidata.id)?.nombre ?? candidata.id}» tiene una cuota sin número de ${cuota(ajena)}: puede ser esta misma factura en otra cuenta. Resuelve cuál es la cuenta antes de cargar.`;
     }
   }
   const venta = laMismaVenta(
@@ -436,7 +436,7 @@ export function posibleDuplicado(
     idx.serviciosPorCuenta.get(cuentaId) ?? [],
   );
   if (venta) {
-    return `${nombre} tiene, a pocos días y en otro servicio, ${textoDeLaMismaVenta(venta)}: puede ser la misma venta, y cargar esta factura la contaría dos veces. Decidilo antes de cargarla.`;
+    return `${nombre} tiene, a pocos días y en otro servicio, ${textoDeLaMismaVenta(venta)}: puede ser la misma venta, y cargar esta factura la contaría dos veces. Decídelo antes de cargarla.`;
   }
   return null;
 }
@@ -486,7 +486,7 @@ export function textoDeCuotasQueCubre(p: Pick<PropuestaDelLibro, "numero" | "cli
   const ajena = unica && !cubre.some((c) => c.id === unica.id) ? unica : null;
   return (
     `Monto: el libro dice ${fmtMontoLibro(p.neto ?? p.total, p.moneda)}${p.neto === null ? "" : " neto"} y la factura cubre ${cubre.length} cuotas de ${p.cuenta?.nombre ?? p.cliente}: ` +
-    `${cubre.map(cuotaEnPalabras).join(" + ")}. Es lo mismo que propone Cobranza › Odoo › «Lo que no cuadra»: anotá ${p.numero ?? "el número"} en cada una desde el cronograma` +
+    `${cubre.map(cuotaEnPalabras).join(" + ")}. Es lo mismo que propone Cobranza › Odoo › «Lo que no cuadra»: anota ${p.numero ?? "el número"} en cada una desde el cronograma` +
     (ajena ? `, no en la cuota de ${nombreDelPeriodo(ajena.periodo)} por ${fmtMontoLibro(ajena.monto, ajena.moneda)}, que no es de esta factura.` : ".")
   );
 }
@@ -504,7 +504,7 @@ export function textoDeCobradoDelExcel(p: Pick<PagadaDelExcel, "numero" | "fecha
   return (
     `${firma} registró este cobro como cobrado desde el Excel de Alexander (${p.fuente}): ` +
     `${p.numero ? `la factura ${p.numero}` : "la factura"} figura pagada el ${p.fechaPago}. ` +
-    "El comprobante es ese Excel; si aparece el depósito, anotale su referencia."
+    "El comprobante es ese Excel; si aparece el depósito, anótale su referencia."
   );
 }
 
@@ -585,7 +585,7 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
         ...dePropuesta(p),
         motivo: "NO_COINCIDE",
         detalle:
-          "Es una de las tres facturas que Alex devuelve a por cobrar, pero su cuota no está atada por el número ni por el monto exacto: sacala de Cobrado a mano, desde el cronograma.",
+          "Es una de las tres facturas que Alex devuelve a por cobrar, pero su cuota no está atada por el número ni por el monto exacto: sácala de Cobrado a mano, desde el cronograma.",
       });
       continue;
     }
@@ -667,7 +667,7 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
           numero: q.opcion.numero,
           monto: q.monto,
           moneda: q.moneda,
-          detalle: `${q.opcion.detalle}. El Excel no nombra esa cuota: si es esa factura, confirmala con «Es esta» en Cobranza › Importar › Números.`,
+          detalle: `${q.opcion.detalle}. El Excel no nombra esa cuota: si es esa factura, confírmala con «Es esta» en Cobranza › Importar › Números.`,
         },
         false,
       );
@@ -707,8 +707,8 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
     if (!g.cuenta) {
       const detalle =
         (g.cuentasPosibles.length
-          ? `Nexus no elige la cuenta de «${g.cliente}» por parecido: puede ser ${g.cuentasPosibles.map((c) => c.nombre).join(", ")}. Elegila en Cobranza › Importar › Aplicar.`
-          : `Ninguna cuenta de Nexus es «${g.cliente}»: dala de alta con «Nueva empresa», o elegí la que es, y después cargala.`) +
+          ? `Nexus no elige la cuenta de «${g.cliente}» por parecido: puede ser ${g.cuentasPosibles.map((c) => c.nombre).join(", ")}. Elígela en Cobranza › Importar › Aplicar.`
+          : `Ninguna cuenta de Nexus es «${g.cliente}»: dala de alta con «Nueva empresa», o elige la que es, y después cárgala.`) +
         (g.clienteDeOdoo ? ` Su cliente de Odoo, «${g.clienteDeOdoo}», está sin emparejar.` : "");
       for (const f of g.facturas) aPersona({ ...deFactura(f), motivo: "SIN_CUENTA", detalle });
       continue;
@@ -721,7 +721,7 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
         aPersona({
           ...deFactura(f),
           motivo: "FALTA_IVA",
-          detalle: `Decí si el total de «${g.cliente}» trae IVA: la copia de Odoo no tiene esta factura y Nexus guarda los montos sin IVA.`,
+          detalle: `Di si el total de «${g.cliente}» trae IVA: la copia de Odoo no tiene esta factura y Nexus guarda los montos sin IVA.`,
         });
         continue;
       }
@@ -770,7 +770,7 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
       monto,
       moneda: primero.moneda,
       motivo: "POSIBLE_DUPLICADO",
-      detalle: `${p.cuenta.nombre} ya tiene cargada la factura ${p.numero} (${fmtMontoLibro(monto, primero.moneda)}, ${estados}) y, a pocos días y en otro servicio, ${textoDeLaMismaVenta(venta)}: puede ser la misma venta contada dos veces. Nexus no revierte nada: decidilo en el cronograma de la cuenta (también sale en Cobranza › Odoo › «Lo que no cuadra»).`,
+      detalle: `${p.cuenta.nombre} ya tiene cargada la factura ${p.numero} (${fmtMontoLibro(monto, primero.moneda)}, ${estados}) y, a pocos días y en otro servicio, ${textoDeLaMismaVenta(venta)}: puede ser la misma venta contada dos veces. Nexus no revierte nada: decídelo en el cronograma de la cuenta (también sale en Cobranza › Odoo › «Lo que no cuadra»).`,
     });
   }
 
@@ -868,7 +868,7 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
       aPersona({
         ...dePropuesta(p),
         motivo: "NO_COINCIDE",
-        detalle: "El Excel la da pagada, pero su cuota no está atada a esta factura por el número ni por el monto exacto: registrá el pago a mano, con el comprobante.",
+        detalle: "El Excel la da pagada, pero su cuota no está atada a esta factura por el número ni por el monto exacto: registra el pago a mano, con el comprobante.",
       });
       continue;
     }
@@ -878,10 +878,10 @@ export function planDeCargaCompleta(filas: readonly FilaLibro[], ctx0: ContextoL
         ...dePropuesta(p),
         motivo: "PAGADA_SIN_FECHA",
         detalle: pago.distintas
-          ? "El Excel la da pagada, pero sus pestañas no dicen la misma fecha de pago: registrá el pago con el comprobante."
+          ? "El Excel la da pagada, pero sus pestañas no dicen la misma fecha de pago: registra el pago con el comprobante."
           : pago.fecha
-            ? `El Excel la da pagada con fecha futura (${pago.fecha}): registrá el pago cuando entre.`
-            : "El Excel la da pagada pero no dice cuándo se pagó: registrá el pago con el comprobante.",
+            ? `El Excel la da pagada con fecha futura (${pago.fecha}): registra el pago cuando entre.`
+            : "El Excel la da pagada pero no dice cuándo se pagó: registra el pago con el comprobante.",
       });
       continue;
     }

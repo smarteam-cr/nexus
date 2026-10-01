@@ -75,7 +75,7 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
       );
       setLibro(data.libro);
     } catch {
-      toast.error("No se pudo refrescar el libro. Recargá la página.");
+      toast.error("No se pudo refrescar el libro. Recarga la página.");
     }
   }
 
@@ -130,7 +130,7 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
       {libro.pagos.length === 0 ? (
         <EmptyState
           title="El libro está vacío"
-          description="Generá la quincena corriente para materializar las filas de cada persona con salario activo."
+          description="Genera la quincena corriente para materializar las filas de cada persona con salario activo."
         />
       ) : (
         <div className="space-y-5">

@@ -80,7 +80,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
       const r = await fetchJson<{ data: ComisionesVendedorDTO }>(BASE);
       setData(r.data);
     } catch {
-      toast.error("No se pudo refrescar. Recargá la página.");
+      toast.error("No se pudo refrescar. Recarga la página.");
     }
   }
 
@@ -261,7 +261,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
             title="No hay nada devengado"
             description={
               data.reglas.length === 0
-                ? "Cargá una regla para que los cobros empiecen a devengar comisión."
+                ? "Carga una regla para que los cobros empiecen a devengar comisión."
                 : "Ningún cobro cobrado cae bajo una regla vigente todavía."
             }
           />

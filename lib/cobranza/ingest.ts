@@ -88,7 +88,7 @@ export async function ingestCuentasEntrantes(
     const ajena = !matchId && dominioUsable ? fueraPorDominio.get(dominioUsable) : undefined;
     if (ajena) {
       throw new Error(
-        `El dominio ${dominioUsable} ya es de «${ajena.name}» (${CLIENT_KIND_META[ajena.kind].label}): no se crea otra empresa con el mismo dominio. Si es la misma, pasala a Cliente en su ficha y volvé a intentar; si es otra, sacá el dominio.`,
+        `El dominio ${dominioUsable} ya es de «${ajena.name}» (${CLIENT_KIND_META[ajena.kind].label}): no se crea otra empresa con el mismo dominio. Si es la misma, pásala a Cliente en su ficha y vuelve a intentar; si es otra, saca el dominio.`,
       );
     }
 

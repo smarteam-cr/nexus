@@ -207,7 +207,7 @@ describe("--cobrar-con-firma: lo pagado se registra con esa firma y la fecha del
 
   it("la bitácora nombra la firma, la fila del Excel y la fecha de pago", () => {
     expect(textoDeCobradoDelExcel({ numero: "INV-9", fechaPago: "2026-01-25", fuente: `«${MERCURY}» fila 5` }, ALEX)).toBe(
-      `${ALEX} registró este cobro como cobrado desde el Excel de Alexander («${MERCURY}» fila 5): la factura INV-9 figura pagada el 2026-01-25. El comprobante es ese Excel; si aparece el depósito, anotale su referencia.`,
+      `${ALEX} registró este cobro como cobrado desde el Excel de Alexander («${MERCURY}» fila 5): la factura INV-9 figura pagada el 2026-01-25. El comprobante es ese Excel; si aparece el depósito, anótale su referencia.`,
     );
   });
 });
@@ -472,12 +472,12 @@ describe("Iberorutas 0328 y Honda 0311: la carga dice lo mismo que «Lo que no c
 
   it("Iberorutas: la 0328 cubre mayo + junio, no la cuota de US$150; nada se anota solo", () => {
     expect(deUna("FAC/2026/0328", "NO_COINCIDE")).toBe(
-      "Monto: el libro dice US$7.100 neto y la factura cubre 2 cuotas de Iberorutas: mayo de 2026 por US$3.550 (por cobrar) + junio de 2026 por US$3.550 (por cobrar). Es lo mismo que propone Cobranza › Odoo › «Lo que no cuadra»: anotá FAC/2026/0328 en cada una desde el cronograma, no en la cuota de agosto de 2026 por US$150, que no es de esta factura. Anotación del Excel: «Ya se inicio la comuicación para cobro».",
+      "Monto: el libro dice US$7.100 neto y la factura cubre 2 cuotas de Iberorutas: mayo de 2026 por US$3.550 (por cobrar) + junio de 2026 por US$3.550 (por cobrar). Es lo mismo que propone Cobranza › Odoo › «Lo que no cuadra»: anota FAC/2026/0328 en cada una desde el cronograma, no en la cuota de agosto de 2026 por US$150, que no es de esta factura. Anotación del Excel: «Ya se inicio la comuicación para cobro».",
     );
     expect(deUna("FAC/2026/0328", "ANOTACION_SIN_COBRO")).toBe(
       "La anotación «Ya se inicio la comuicación para cobro» no se escribe sola: la factura cubre mayo de 2026 por US$3.550 (por cobrar) + junio de 2026 por US$3.550 (por cobrar), y esas cuotas se confirman anotándoles FAC/2026/0328 desde el cronograma.",
     );
-    expect(plan.paraUnaPersona.some((x) => x.detalle.includes("Marcala facturada con el número FAC/2026/0328"))).toBe(false);
+    expect(plan.paraUnaPersona.some((x) => x.detalle.includes("Márcala facturada con el número FAC/2026/0328"))).toBe(false);
     expect([plan.numeros, plan.anotaciones, plan.promesas]).toEqual([[], [], []]);
   });
 
@@ -486,7 +486,7 @@ describe("Iberorutas 0328 y Honda 0311: la carga dice lo mismo que «Lo que no c
       "la factura cubre 2 cuotas de Honda Costa Rica: mayo de 2026 por US$500 (cobrada) + junio de 2026 por US$500 (cobrada)",
     );
     /* La cuota atada por el mes (junio) es una de las dos: no se la descarta. */
-    expect(deUna("FAC/2026/0311", "NO_COINCIDE")).toContain("anotá FAC/2026/0311 en cada una desde el cronograma. Anotación del Excel: «Pago de Mayo y Junio 2026».");
+    expect(deUna("FAC/2026/0311", "NO_COINCIDE")).toContain("anota FAC/2026/0311 en cada una desde el cronograma. Anotación del Excel: «Pago de Mayo y Junio 2026».");
     expect(deUna("FAC/2026/0311", "NO_COINCIDE")).not.toContain("que no es de esta factura");
   });
 

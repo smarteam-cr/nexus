@@ -135,7 +135,7 @@ export default function AguinaldoPanel({
       {personas.length === 0 ? (
         <EmptyState
           title="Todavía no hay nada que calcular"
-          description="El aguinaldo sale del historial de planilla. Registrá quincenas como pagadas y aparece solo."
+          description="El aguinaldo sale del historial de planilla. Registra quincenas como pagadas y aparece solo."
         />
       ) : (
         <div className="rounded-xl border border-line bg-surface overflow-x-auto">

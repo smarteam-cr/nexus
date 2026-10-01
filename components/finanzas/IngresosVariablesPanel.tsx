@@ -332,7 +332,7 @@ export default function IngresosVariablesPanel({
               <EmptyState
                 variant="dashed"
                 title={`Sin ${FILTRO_VACIO[filtro]}`}
-                description="No hay ingresos de este tipo. Mirá «Todos» para ver el resto."
+                description="No hay ingresos de este tipo. Mira «Todos» para ver el resto."
               />
             )
           }

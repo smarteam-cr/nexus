@@ -352,7 +352,7 @@ describe("⛔ la sección Odoo de Cobranza habla en tuteo, nunca en voseo", () =
     const esquemas = textosDeLosEsquemas().map((t) => t.texto);
     expect(esquemas).toContain("Escribe por qué está bien así (al menos 5 letras)");
     expect(esquemas).toContain("Escribe cómo se anuló (al menos 5 letras)");
-    expect(esquemas, "el filtro dejó entrar los esquemas de otra ruta").not.toContain("Escribí el nombre como sale en la factura");
+    expect(esquemas, "el filtro dejó entrar los esquemas de otra ruta").not.toContain("Escribe el nombre como sale en la factura");
     /* Y el comentario no cuenta: el de arriba de este bloque cita el voseo y no es un texto. */
     expect(textosDelFuente("/* Andá y marcala */ const x = 1;", "x.ts")).toEqual([]);
   });

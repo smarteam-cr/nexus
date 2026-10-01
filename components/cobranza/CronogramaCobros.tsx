@@ -183,7 +183,7 @@ export default function CronogramaCobros({
   if (items.length === 0) {
     return (
       <p className="text-xs text-fg-muted rounded-lg border border-dashed border-line px-3 py-3 text-center">
-        Sin cobros generados todavía — guardá el plan y apretá &quot;Generar cobros&quot;.
+        Sin cobros generados todavía — guarda el plan y aprieta &quot;Generar cobros&quot;.
       </p>
     );
   }
@@ -239,7 +239,7 @@ export default function CronogramaCobros({
                       <button
                         type="button"
                         onClick={() => setFacturarCobro(c)}
-                        title="Esta factura no tiene número: elegilo de Odoo o tecleálo"
+                        title="Esta factura no tiene número: elígelo de Odoo o tecléalo"
                         className="ml-auto text-[11px] font-medium px-2 py-1 rounded-md border border-warn-line text-warn-ink bg-warn-surface hover:opacity-90 transition-opacity flex-shrink-0"
                       >
                         Agregar número
@@ -277,7 +277,7 @@ export default function CronogramaCobros({
                     <button
                       type="button"
                       onClick={() => setBorradorCobro(c)}
-                      title="Generar borrador de correo de cobro (lo revisás y lo enviás vos)"
+                      title="Generar borrador de correo de cobro (lo revisas y lo envías tú)"
                       className="text-[11px] font-medium px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
                     >
                       Borrador

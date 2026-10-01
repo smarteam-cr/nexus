@@ -62,7 +62,7 @@ export function etiquetaDeCategoria(c: string | null | undefined): string {
  * (en lo facturado y, si se cobró, en la caja). Cargarla otra vez acá la contaría dos veces.
  */
 export function mensajeReferenciaYaEsCobro(referencia: string, cliente: string): string {
-  return `«${referencia}» ya es la factura de un cobro de ${cliente}: esa plata ya cuenta como venta. Si no es venta, corregí ese cobro en Cobranza; si es venta, no va en Ingresos variables.`;
+  return `«${referencia}» ya es la factura de un cobro de ${cliente}: esa plata ya cuenta como venta. Si no es venta, corrige ese cobro en Cobranza; si es venta, no va en Ingresos variables.`;
 }
 
 /** Lo que hace falta de una fila de `IngresoVariable` para el reporte. */

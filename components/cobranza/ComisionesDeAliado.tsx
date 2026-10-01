@@ -246,7 +246,7 @@ export default function ComisionesDeAliado({
                 inputMode="decimal"
                 value={cobro.montoBruto}
                 onChange={(e) => setCobro({ ...cobro, montoBruto: e.target.value })}
-                placeholder="Si lo sabés, la retención sale sola"
+                placeholder="Si lo sabes, la retención sale sola"
               />
             </Field>
             <p className="text-[11px] text-fg-muted">

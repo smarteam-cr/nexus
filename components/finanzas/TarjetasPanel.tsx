@@ -112,7 +112,7 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO }: Pro
       setTarjetas(data.tarjetas);
     } catch {
       // Best-effort: si el refresco falla, lo escrito ya está en la base.
-      toast.error("No se pudo refrescar la lista. Recargá la página.");
+      toast.error("No se pudo refrescar la lista. Recarga la página.");
     }
   }
 
@@ -209,7 +209,7 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO }: Pro
       {tarjetas.length === 0 ? (
         <EmptyState
           title="Todavía no hay tarjetas"
-          description="Agregá las tarjetas que maneja la empresa para ver su capacidad disponible."
+          description="Agrega las tarjetas que maneja la empresa para ver su capacidad disponible."
         />
       ) : (
         <div className="space-y-3">

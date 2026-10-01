@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   }
   const nombreDeclarado = typeof body.nombre === "string" ? body.nombre.slice(0, 200) : "";
   if (!/\.(csv|xlsx)$/i.test(nombreDeclarado)) {
-    return NextResponse.json({ error: "Subí el CSV del sheet de Finanzas o el libro de Alex en .xlsx." }, { status: 415 });
+    return NextResponse.json({ error: "Sube el CSV del sheet de Finanzas o el libro de Alex en .xlsx." }, { status: 415 });
   }
 
   if (body.accion === "preparar") {

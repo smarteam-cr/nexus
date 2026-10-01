@@ -52,7 +52,7 @@ export async function crearLoteDelLibro(
   try {
     libro = leerLibro(await hojasDelXlsx(archivo.datos));
   } catch {
-    throw new LibroError("No pude abrir el archivo como Excel. Subí el libro tal como sale de Excel o Google Sheets (.xlsx).");
+    throw new LibroError("No pude abrir el archivo como Excel. Sube el libro tal como sale de Excel o Google Sheets (.xlsx).");
   }
   if (!libro.filas.length) {
     throw new LibroError(

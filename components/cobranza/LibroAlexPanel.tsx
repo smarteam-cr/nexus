@@ -187,7 +187,7 @@ export default function LibroAlexPanel({ importId, onCerrar }: { importId: strin
       {datos && datos.lote.filasIlegibles > 0 && (
         <Alert variant="warning">
           <p className="text-xs">
-            {datos.lote.filasIlegibles} filas del lote no se pudieron leer y quedaron afuera de la comparación. Volvé a subir el
+            {datos.lote.filasIlegibles} filas del lote no se pudieron leer y quedaron afuera de la comparación. Vuelve a subir el
             libro.
           </p>
         </Alert>

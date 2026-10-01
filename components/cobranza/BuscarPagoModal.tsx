@@ -58,7 +58,7 @@ export default function BuscarPagoModal({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscá el cliente o el período…"
+          placeholder="Busca el cliente o el período…"
           className={INPUT_CLS}
           autoFocus
         />
@@ -100,7 +100,7 @@ export default function BuscarPagoModal({
           </ul>
         )}
         {deMas > 0 && (
-          <p className="text-[11px] text-fg-muted px-1">y {deMas} más — afiná la búsqueda.</p>
+          <p className="text-[11px] text-fg-muted px-1">y {deMas} más — afina la búsqueda.</p>
         )}
         <div className="border-t border-line pt-2">
           <button

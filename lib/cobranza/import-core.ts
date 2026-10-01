@@ -331,7 +331,7 @@ export function warningsFila(canonico: {
   const nombre = typeof canonico.clienteNombre === "string" ? canonico.clienteNombre : "";
   const dom = typeof canonico.dominio === "string" ? canonico.dominio : null;
   if (nombre && nombreEnSkipList(nombre)) {
-    out.push("El nombre está en la lista de exclusión (interno o basura de sheet) — revisá antes de crear.");
+    out.push("El nombre está en la lista de exclusión (interno o basura de sheet) — revisa antes de crear.");
   }
   if (!dom) {
     out.push("Sin dominio: la empresa no va a matchear sesiones automáticamente.");

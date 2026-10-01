@@ -178,7 +178,7 @@ export default function DigestPanel({
         <EmptyState
           variant="dashed"
           title="Todavía no hay cortes"
-          description="Hacé el primer corte para arrancar el registro quincenal de cambios."
+          description="Haz el primer corte para arrancar el registro quincenal de cambios."
           action={botonCorte}
         />
         <p className="text-[11px] text-fg-muted text-center">{HORARIO_DEL_AUTOMATICO}</p>

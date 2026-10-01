@@ -102,7 +102,7 @@ export default function CobranzaClient({
       );
       setComisiones(r.data.comisiones);
     } catch {
-      toast.error("No se pudo refrescar las comisiones. Recargá la página.");
+      toast.error("No se pudo refrescar las comisiones. Recarga la página.");
     }
   }
   const [cola, setCola] = useState(initialCola);
@@ -210,7 +210,7 @@ export default function CobranzaClient({
     <div>
       <PageHeader
         title="Cobranza"
-        description="Registrá los pagos que entran, mirá qué está vencido y llevá el control de cada cliente."
+        description="Registra los pagos que entran, mira qué está vencido y lleva el control de cada cliente."
         action={
           <div className="flex items-center gap-2">
             {/* ⚠ Vive ACÁ y no dentro de una pestaña. Estuvo en la barra de «Clientes», al lado

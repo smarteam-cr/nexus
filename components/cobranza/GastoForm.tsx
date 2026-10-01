@@ -82,7 +82,7 @@ export default function GastoForm({
       onSaved();
     } catch (e) {
       setServerError(
-        e instanceof ApiError ? e.message : "No se pudo guardar el gasto. Probá de nuevo.",
+        e instanceof ApiError ? e.message : "No se pudo guardar el gasto. Prueba de nuevo.",
       );
       setSaving(false);
     }
@@ -109,7 +109,7 @@ export default function GastoForm({
             onClick={submit}
             className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? "Guardando…" : gasto ? "Guardá los cambios" : "Agregá el gasto"}
+            {saving ? "Guardando…" : gasto ? "Guarda los cambios" : "Agrega el gasto"}
           </button>
         </>
       }

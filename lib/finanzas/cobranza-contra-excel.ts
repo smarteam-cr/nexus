@@ -342,7 +342,7 @@ export function enLaCalleContraExcel(entrada: {
       continue;
     }
     anotar("IVA", s.moneda, s.P - n, cuota.cliente, s.d.numero, "el Excel con IVA, Nexus sin IVA");
-    anotar("SIN_CUENTA", s.moneda, 0, s.d.cliente, s.d.numero, `puede ser la cuota de ${cuota.cliente} (misma plata, misma fecha): elegí la cuenta`, true);
+    anotar("SIN_CUENTA", s.moneda, 0, s.d.cliente, s.d.numero, `puede ser la cuota de ${cuota.cliente} (misma plata, misma fecha): elige la cuenta`, true);
   }
 
   // ── 7. Lo que quedó sin pareja ────────────────────────────────────────────────

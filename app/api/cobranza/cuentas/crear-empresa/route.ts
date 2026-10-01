@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     if (!esClienteDeCartera(elegida.kind)) {
       return NextResponse.json(
         {
-          error: `«${elegida.name}» está como ${etiquetaDeTipo(elegida.kind)}. Pasala a Cliente en su ficha y volvé a intentar: una cuenta de cobro de un ${etiquetaDeTipo(elegida.kind).toLowerCase()} no aparece en la cartera.`,
+          error: `«${elegida.name}» está como ${etiquetaDeTipo(elegida.kind)}. Pásala a Cliente en su ficha y vuelve a intentar: una cuenta de cobro de un ${etiquetaDeTipo(elegida.kind).toLowerCase()} no aparece en la cartera.`,
         },
         { status: 409 },
       );
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     if (delDominio) {
       return NextResponse.json(
         {
-          error: `El dominio ya es de «${delDominio.nombre}». Si es la misma empresa, elegila; si es otra, sacá el dominio.`,
+          error: `El dominio ya es de «${delDominio.nombre}». Si es la misma empresa, elígela; si es otra, saca el dominio.`,
           parecidas,
         },
         { status: 409 },
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     }
     if (parecidas.length > 0 && !d.noEsNingunaParecida) {
       return NextResponse.json(
-        { error: "Ya hay empresas que se le parecen. Decí si es alguna antes de crear otra.", parecidas },
+        { error: "Ya hay empresas que se le parecen. Di si es alguna antes de crear otra.", parecidas },
         { status: 409 },
       );
     }

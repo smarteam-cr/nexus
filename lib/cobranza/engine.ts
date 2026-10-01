@@ -775,7 +775,7 @@ function mensajeDeRecurrencia(cliente: string, descripcion: string | null, r: Re
       : r.apagada
         ? `se quedó sin cuotas: la última fue el ${r.ultimaCuotaISO}, hace ${-r.diasHastaUltima} día(s)`
         : `se queda sin cuotas: la última es el ${r.ultimaCuotaISO}, en ${r.diasHastaUltima} día(s)`;
-  return `${cliente}: ${servicio} ${situacion}, y no tiene plan que genere las siguientes. Ponele el plan de suscripción, o marcalo finalizado si terminó.`;
+  return `${cliente}: ${servicio} ${situacion}, y no tiene plan que genere las siguientes. Ponle el plan de suscripción, o márcalo finalizado si terminó.`;
 }
 
 // ── 7. Cómputo del set de alertas ───────────────────────────────────────────────
@@ -901,7 +901,7 @@ export function computeAlertSet(
           tipo: "ARRANQUE_CAMBIADO",
           urgencia: "ALTA",
           cuentaId: cuenta.cuentaId,
-          mensaje: `${cuenta.clienteNombre}: el arranque del proyecto cambió (cronograma: ${toISODate(toUTCDate(s.anchorActualISO))}) y difiere de la facturación configurada (${toISODate(toUTCDate(s.fechaInicioFacturacion))}). Los cobros emitidos/cobrados NO se regeneran — revisá si hay que ajustar.`,
+          mensaje: `${cuenta.clienteNombre}: el arranque del proyecto cambió (cronograma: ${toISODate(toUTCDate(s.anchorActualISO))}) y difiere de la facturación configurada (${toISODate(toUTCDate(s.fechaInicioFacturacion))}). Los cobros emitidos/cobrados NO se regeneran — revisa si hay que ajustar.`,
           evidencia: {
             servicioId: s.servicioId,
             fechaFacturacion: toISODate(toUTCDate(s.fechaInicioFacturacion)),

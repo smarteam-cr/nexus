@@ -143,7 +143,7 @@ export default function RegistrarPagoManualDialog({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscá el cliente…"
+              placeholder="Busca el cliente…"
               className={INPUT_CLS}
               autoFocus
             />
@@ -191,7 +191,7 @@ export default function RegistrarPagoManualDialog({
             ) : servicios && servicios.length === 0 ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-3 space-y-2">
                 <p className="text-xs text-amber-600">
-                  Este cliente no tiene servicios configurados. Configuralo primero para poder
+                  Este cliente no tiene servicios configurados. Configúralo primero para poder
                   registrarle un pago.
                 </p>
                 <button
@@ -207,7 +207,7 @@ export default function RegistrarPagoManualDialog({
                 <div>
                   <label className={LABEL_CLS}>Servicio</label>
                   <select value={servicioId} onChange={(e) => elegirServicio(e.target.value)} className={SELECT_CLS}>
-                    <option value="">Elegí el servicio…</option>
+                    <option value="">Elige el servicio…</option>
                     {servicios?.map((s) => (
                       <option key={s.id} value={s.id}>
                         {TIPO_SERVICIO_LABEL[s.tipoServicio] ?? s.tipoServicio}

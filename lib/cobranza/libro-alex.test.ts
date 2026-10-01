@@ -122,7 +122,7 @@ describe("1 · una propuesta por documento, y ninguna escribe COBRADO", () => {
     expect(filas.length).toBe(Object.values(conteo).reduce((a, b) => a + b, 0));
   });
 
-  it("⛔ lo pagado según el libro con Nexus sin cobrar es «revisá el pago», nunca un cambio de estado", () => {
+  it("⛔ lo pagado según el libro con Nexus sin cobrar es «revisa el pago», nunca un cambio de estado", () => {
     const ecoPagada = filas.filter((p) => p.estadoLibro === "PAGADO" && p.cobros.some((c) => c.estado !== "COBRADO"));
     for (const p of ecoPagada) {
       expect(p.accion).toBe("REVISAR_PAGO");
@@ -218,7 +218,7 @@ describe("6 · una fila puede atar varios servicios o varias cuotas", () => {
 });
 
 describe("7 · lo cobrado se queda cobrado, salvo las tres facturas que decidió Alex", () => {
-  it.each(["FAC/2026/0206", "FAC/2026/0295"])("%s vuelve a por cobrar: «sacala de Cobrado», con la firma del import a la vista", (numero) => {
+  it.each(["FAC/2026/0206", "FAC/2026/0295"])("%s vuelve a por cobrar: «sácala de Cobrado», con la firma del import a la vista", (numero) => {
     const p = de(numero);
     expect(p).toMatchObject({ veredicto: "NO_COINCIDE", accion: "SACAR_DE_COBRADO" });
     expect(p.diferencias.join(" ")).toMatch(/import:facturaciones-2026/);

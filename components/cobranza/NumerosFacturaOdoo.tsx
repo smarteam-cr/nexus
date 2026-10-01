@@ -91,7 +91,7 @@ export default function NumerosFacturaOdoo({ importId }: { importId: string }) {
     <div className="space-y-3">
       <Alert variant="info">
         <p className="text-xs">
-          Cada número sale del libro: el número y el mes llevan a la cuota de la cuenta con el mismo monto. Revisalo y tocá «Es
+          Cada número sale del libro: el número y el mes llevan a la cuota de la cuenta con el mismo monto. Revísalo y toca «Es
           esta»: queda anotado a tu nombre, cuota por cuota. Las cuotas facturadas que el libro no nombra traen la factura del
           espejo de Odoo con el mismo monto y la fecha más cercana. Montos sin IVA, igual que los cobros.
         </p>

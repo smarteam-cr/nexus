@@ -323,7 +323,7 @@ function cuotasQuePuedenSerLaMisma(
   const nombre = idx.cuentaPorId.get(cuentaId)?.nombre ?? "La cuenta";
   return (
     `${nombre} tiene ${delMes.length === 1 ? "una cuota" : `${delMes.length} cuotas`} de ${nombreDelPeriodo(f.periodo)} sin número ` +
-    `(${delMes.map((c) => fmtMontoLibro(c.monto, c.moneda)).join(" + ")}): si es esta factura, anotale el número desde el cronograma en vez de cargar otra.`
+    `(${delMes.map((c) => fmtMontoLibro(c.monto, c.moneda)).join(" + ")}): si es esta factura, anótale el número desde el cronograma en vez de cargar otra.`
   );
 }
 
@@ -479,7 +479,7 @@ export function planDelLibro(filas: readonly FilaLibro[], ctx: ContextoLibro, re
           ...f.avisos,
           ...(aviso ? [aviso] : []),
           ...(f.pagadaSegunLibro
-            ? ["El libro la da pagada: no se tilda sola. Si la cargás entra por cobrar, y el pago lo registra quien lo vea, con el comprobante."]
+            ? ["El libro la da pagada: no se tilda sola. Si la cargas entra por cobrar, y el pago lo registra quien lo vea, con el comprobante."]
             : []),
         ];
         return { ...f, avisos, sugerida: !f.pagadaSegunLibro && !aviso };
@@ -576,7 +576,7 @@ function textoDeCarga(f: FacturaDelLibroACargar, monto: number, iva: IvaDelLibro
   return (
     `${byEmail} cargó la factura ${f.numero} desde el libro de Alex${deDonde}: ${fmtMontoLibro(f.total, f.moneda)} en el libro y ` +
     `${fmtMontoLibro(monto, f.moneda)} sin IVA (${neto}). Entra por cobrar, facturada a «${sociedad.nombre}» el ${f.fechaFactura}.` +
-    (f.pagadaSegunLibro ? " ⚠ El libro la da pagada: si entró la plata, registrá el pago en este cobro con el comprobante." : "")
+    (f.pagadaSegunLibro ? " ⚠ El libro la da pagada: si entró la plata, registra el pago en este cobro con el comprobante." : "")
   );
 }
 
@@ -614,7 +614,7 @@ export function decidirCarga(
       const rechazar = (motivo: string) =>
         rechazos.push({ clave: claveFactura, cliente: g?.cliente ?? pg.clave, numero: f?.numero ?? claveFactura, motivo });
       if (!g || !f) {
-        rechazar("El libro ya no la trae para cargar: puede que alguien la haya cargado. Volvé a abrir «Aplicar».");
+        rechazar("El libro ya no la trae para cargar: puede que alguien la haya cargado. Vuelve a abrir «Aplicar».");
         continue;
       }
       if (pedidas.has(claveFactura)) {
@@ -624,12 +624,12 @@ export function decidirCarga(
       pedidas.add(claveFactura);
       const cuenta = idx.cuentaPorId.get(pg.cuentaId);
       if (!cuenta) {
-        rechazar("Esa cuenta ya no existe: elegí otra.");
+        rechazar("Esa cuenta ya no existe: elige otra.");
         continue;
       }
       const monto = montoACargar(f, pg.iva);
       if (monto === null || monto <= 0) {
-        rechazar(`Decí si los montos de «${g.cliente}» traen IVA: Nexus guarda los montos sin IVA.`);
+        rechazar(`Di si los montos de «${g.cliente}» traen IVA: Nexus guarda los montos sin IVA.`);
         continue;
       }
       const enOtra = (idx.cobrosPorNumero.get(f.numero) ?? []).find((c) => c.cuentaId !== cuenta.cuentaId);
@@ -643,7 +643,7 @@ export function decidirCarga(
       const cuentaDeLaFicha = espejo ? idx.vinculoPorPartner.get(espejo.odooPartnerId)?.cuentaId : null;
       if (cuentaDeLaFicha && cuentaDeLaFicha !== cuenta.cuentaId) {
         rechazar(
-          `En Odoo la factura ${f.numero} es de «${espejo?.odooPartnerNombre ?? f.cliente}», emparejado con ${idx.cuentaPorId.get(cuentaDeLaFicha)?.nombre ?? "otra cuenta"}: cargala en esa cuenta, o corregí el emparejado en Cobranza › Odoo.`,
+          `En Odoo la factura ${f.numero} es de «${espejo?.odooPartnerNombre ?? f.cliente}», emparejado con ${idx.cuentaPorId.get(cuentaDeLaFicha)?.nombre ?? "otra cuenta"}: cárgala en esa cuenta, o corrige el emparejado en Cobranza › Odoo.`,
         );
         continue;
       }
@@ -675,12 +675,12 @@ export function decidirCarga(
         ya.forma === "NUMERO"
           ? `${cuentaNombre} ya tiene la factura ${x.f.numero} anotada: no se carga dos veces.`
           : `${cuentaNombre} ya tiene ${ya.cobros.length === 1 ? "la cuota" : `${ya.cobros.length} cuotas`} de ${nombreDelPeriodo(x.f.periodo)} por ` +
-              `${ya.cobros.map((c) => fmtMontoLibro(c.monto, c.moneda)).join(" + ")}: es esta factura. Anotale el número desde el cronograma en vez de cargar otra.`,
+              `${ya.cobros.map((c) => fmtMontoLibro(c.monto, c.moneda)).join(" + ")}: es esta factura. Anótale el número desde el cronograma en vez de cargar otra.`,
       );
       continue;
     }
     if (ambiguas.has(x.f.clave)) {
-      rechazar(`Más de una combinación de cuotas de ${cuentaNombre} suma esta factura: decidí en el cronograma cuáles cubre.`);
+      rechazar(`Más de una combinación de cuotas de ${cuentaNombre} suma esta factura: decide en el cronograma cuáles cubre.`);
       continue;
     }
     const sociedad = sociedadDelDocumento(x.f, x.g.plataforma, idx);

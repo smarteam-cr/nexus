@@ -92,7 +92,7 @@ export default function NuevaEmpresaModal({
   async function crear(decision: { empresaExistenteId?: string; noEsNingunaParecida?: boolean } = {}) {
     if (saving) return;
     if (nombre.trim().length < 2) {
-      toast.error("Indicá el nombre de la empresa.");
+      toast.error("Indica el nombre de la empresa.");
       return;
     }
     setSaving(true);
@@ -117,7 +117,7 @@ export default function NuevaEmpresaModal({
       );
       toast.success(
         d.clientCreado
-          ? "Empresa creada con su cuenta. Completá los servicios."
+          ? "Empresa creada con su cuenta. Completa los servicios."
           : "La empresa ya existía — se abrió su cuenta.",
       );
       reset();
@@ -186,7 +186,7 @@ export default function NuevaEmpresaModal({
                     </button>
                   ) : (
                     <span className="ml-auto text-[10px] text-fg-muted">
-                      Si es esta, pasala a Cliente en su ficha y volvé a intentar.
+                      Si es esta, pásala a Cliente en su ficha y vuelve a intentar.
                     </span>
                   )}
                 </li>
@@ -194,7 +194,7 @@ export default function NuevaEmpresaModal({
             </ul>
             {compartenDominio ? (
               <p className="mt-2 text-xs">
-                Una comparte el dominio: si es otra empresa, sacá el dominio y volvé a crear.
+                Una comparte el dominio: si es otra empresa, saca el dominio y vuelve a crear.
               </p>
             ) : (
               <button

@@ -144,7 +144,7 @@ export function evaluarCanonico(canonico: Record<string, unknown>, idx: DedupInd
   const enSkipList = nombre !== "" && nombreEnSkipList(nombre);
   if (enSkipList) {
     errores.push(
-      `"${nombre}" está en la lista de exclusión (interno de Smarteam o basura de sheet) — corregí el nombre u omití la fila; no se crea automáticamente.`,
+      `"${nombre}" está en la lista de exclusión (interno de Smarteam o basura de sheet) — corrige el nombre u omite la fila; no se crea automáticamente.`,
     );
   }
 
@@ -164,7 +164,7 @@ export function evaluarCanonico(canonico: Record<string, unknown>, idx: DedupInd
     if (!dedup) {
       for (const p of empresasParecidas({ nombre: c.clienteNombre, dominio: c.dominio ?? null }, idx.empresas).slice(0, 3)) {
         errores.push(
-          `⚠ Se parece a «${p.nombre}» (${etiquetaDeTipo(p.kind)}, ${p.via === "DOMINIO" ? "mismo dominio" : "nombre parecido"}): si es la misma empresa, vinculala antes de aplicar; si no, se crea otra.`,
+          `⚠ Se parece a «${p.nombre}» (${etiquetaDeTipo(p.kind)}, ${p.via === "DOMINIO" ? "mismo dominio" : "nombre parecido"}): si es la misma empresa, vincúlala antes de aplicar; si no, se crea otra.`,
         );
       }
     }

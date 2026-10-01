@@ -91,7 +91,7 @@ export function avisoDePlataforma(numero: string | null | undefined, viaCobro: s
       : null;
   }
   if (forma === viaCobro) return null;
-  return `«${n}» tiene forma de número de ${NOMBRE_DE_PLATAFORMA[forma]}, y esta cuenta factura por ${via}. Revisalo antes de guardar.`;
+  return `«${n}» tiene forma de número de ${NOMBRE_DE_PLATAFORMA[forma]}, y esta cuenta factura por ${via}. Revísalo antes de guardar.`;
 }
 
 /** Lo que hay en el cobro antes del cambio. Fechas como día ISO (`YYYY-MM-DD`). */
@@ -160,7 +160,7 @@ export function decidirNumeroFactura(antes: NumeroAntes, pedido: PedidoDeNumero,
     return rechazo("O el número de la factura, o «no tengo el número»: los dos a la vez no.");
   }
   if (motivoPedido && motivoPedido.length < MOTIVO_SIN_NUMERO_MIN) {
-    return rechazo(`Contá por qué no tenés el número de la factura (al menos ${MOTIVO_SIN_NUMERO_MIN} caracteres).`);
+    return rechazo(`Cuenta por qué no tienes el número de la factura (al menos ${MOTIVO_SIN_NUMERO_MIN} caracteres).`);
   }
   if (numeroPedido && numeroPedido.length > NUMERO_FACTURA_MAX) {
     return rechazo(`El número de la factura no puede pasar de ${NUMERO_FACTURA_MAX} caracteres.`);
@@ -169,7 +169,7 @@ export function decidirNumeroFactura(antes: NumeroAntes, pedido: PedidoDeNumero,
   /* 2. Sin factura: no hay número que guardar, y el que había se va con su firma. */
   if (fechaDespues === null) {
     if (numeroPedido || motivoPedido) {
-      return rechazo("Un cobro sin factura no lleva número: primero marcalo facturado.");
+      return rechazo("Un cobro sin factura no lleva número: primero márcalo facturado.");
     }
     if (!antes.numeroFactura && !antes.sinNumeroFacturaMotivo) return { tipo: "sin-cambios" };
     return {
@@ -197,7 +197,7 @@ export function decidirNumeroFactura(antes: NumeroAntes, pedido: PedidoDeNumero,
     }
     /* 5. */
     if (antes.numeroFactura) {
-      return rechazo("Para quitarle el número a una factura, decí por qué no lo tenés, o revertí la factura.");
+      return rechazo("Para quitarle el número a una factura, di por qué no lo tienes, o revierte la factura.");
     }
     if (antes.sinNumeroFacturaMotivo) {
       return rechazo("Para quitar «no tengo el número» hace falta poner el número de la factura.");
@@ -245,7 +245,7 @@ export function decidirNumeroFactura(antes: NumeroAntes, pedido: PedidoDeNumero,
 export function mensajeNumeroEnOtraCuenta(numero: string, otraCuenta: string): string {
   return (
     `La factura ${numero} ya está anotada en otra cuenta (${otraCuenta}). Un documento le cobra a un solo cliente: ` +
-    `revisá el número, o el emparejado con Odoo si es la misma empresa.`
+    `revisa el número, o el emparejado con Odoo si es la misma empresa.`
   );
 }
 

@@ -271,7 +271,7 @@ describe("decidirCarga: ⛔ nada entra como COBRADO", () => {
     ]);
     expect(rechazos).toEqual([]);
     expect(cobros[0]).toMatchObject({ numero: "FAC/2026/0212", monto: 60, pagadaSegunLibro: true });
-    expect(cobros[0]?.bitacora).toMatch(/registrá el pago en este cobro con el comprobante/);
+    expect(cobros[0]?.bitacora).toMatch(/registra el pago en este cobro con el comprobante/);
   });
 
   it("la cuenta elegida ya tiene la cuota del mes con ese monto: es esa factura, no se carga otra", () => {

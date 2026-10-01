@@ -181,7 +181,7 @@ export default function IngresoVariableForm({
             ))}
           </select>
           <p className="text-[11px] text-fg-muted mt-1">
-            Si ninguna le queda, dejalo sin clasificar: el punto de equilibrio lo lista para ponerle nombre.
+            Si ninguna le queda, déjalo sin clasificar: el punto de equilibrio lo lista para ponerle nombre.
           </p>
         </div>
 

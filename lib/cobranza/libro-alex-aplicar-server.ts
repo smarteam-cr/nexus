@@ -178,10 +178,10 @@ async function sociedadDelCobroTx(
     if (ficha && ficha.cuentaId === c.cuentaId) {
       return { patch: { plataformaFactura: "ODOO", sociedadFacturadaId: ficha.id }, nueva: false };
     }
-    avisos.push(`El cliente de Odoo «${nombre}» no está emparejado con ${c.cuentaNombre}: emparejalo en Cobranza › Odoo, así el cruce encuentra sus facturas.`);
+    avisos.push(`El cliente de Odoo «${nombre}» no está emparejado con ${c.cuentaNombre}: emparéjalo en Cobranza › Odoo, así el cruce encuentra sus facturas.`);
     const fichas = await tx.odooPartnerVinculo.count({ where: { cuentaId: c.cuentaId, plataforma: "ODOO" } });
     if (fichas >= 2) {
-      avisos.push(`${c.cuentaNombre} factura por Odoo con ${fichas} sociedades: elegí a cuál se le facturó desde el cronograma.`);
+      avisos.push(`${c.cuentaNombre} factura por Odoo con ${fichas} sociedades: elige a cuál se le facturó desde el cronograma.`);
       return { patch: {}, nueva: false };
     }
     return { patch: { plataformaFactura: "ODOO" }, nueva: false };
@@ -290,7 +290,7 @@ export async function aplicarLote(importId: string, pedido: PedidoDeAplicacion, 
   if (!byEmail) throw new LibroError("Aplicar el libro exige un usuario con nombre.");
   const lote = await leerLoteDelLibro(importId);
   if (!lote) return null;
-  if (lote.estado === "DESCARTADO") throw new LibroError("Ese lote está descartado: subí el libro de nuevo.", 409);
+  if (lote.estado === "DESCARTADO") throw new LibroError("Ese lote está descartado: sube el libro de nuevo.", 409);
   const faltaSql = await sqlQueFalta();
   if (faltaSql.length) {
     throw new LibroError(`Todavía no se puede cargar nada: falta correr ${faltaSql.join(" y ")}. El plan se ve igual.`, 409);
@@ -334,7 +334,7 @@ export async function aplicarLote(importId: string, pedido: PedidoDeAplicacion, 
         e instanceof CobranzaError || e instanceof SociedadError
           ? e.message
           : codigoDe(e) === "P2002"
-            ? "Otra persona la estaba cargando a la vez: volvé a abrir «Aplicar»."
+            ? "Otra persona la estaba cargando a la vez: vuelve a abrir «Aplicar»."
             : null;
       if (motivo === null) throw e;
       r.rechazos.push({ clave: c.clave, cliente: c.cuentaNombre, numero: c.numero, motivo });

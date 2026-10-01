@@ -1356,7 +1356,7 @@ test("L7 — computeAlertSet: la recurrencia que se apaga sale con su clave, ALT
   // ⚠ ALTA aunque la cuenta no tenga proyecto real (L4 baja el resto a BAJA): se pierde facturación, no un dato.
   expect(selectrica).toMatchObject({ tipo: "CUENTA_SIN_DATOS", urgencia: "ALTA", cuentaId: "selectrica" });
   expect(selectrica?.mensaje).toBe(
-    'Seléctrica: el servicio recurrente "Continuidad Web" se quedó sin cuotas: la última fue el 2026-08-15, hace 29 día(s), y no tiene plan que genere las siguientes. Ponele el plan de suscripción, o marcalo finalizado si terminó.',
+    'Seléctrica: el servicio recurrente "Continuidad Web" se quedó sin cuotas: la última fue el 2026-08-15, hace 29 día(s), y no tiene plan que genere las siguientes. Ponle el plan de suscripción, o márcalo finalizado si terminó.',
   );
   expect(selectrica?.evidencia).toEqual({ servicioId: "web", ultimaCuota: "2026-08-15", diasHastaUltima: -29 });
   expect(hoy.some((a) => a.dedupeKey === claveDeRecurrencia("iia", "web"))).toBe(false);

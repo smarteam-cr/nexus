@@ -34,7 +34,7 @@ const patchSchema = z
     estado: z.enum(["OMITIDA", "REVISAR"]).optional(),
   })
   .refine((v) => (v.canonico !== undefined) !== (v.estado !== undefined), {
-    message: "Mandá canonico O estado, uno de los dos.",
+    message: "Manda canonico O estado, uno de los dos.",
   });
 
 export async function PATCH(req: NextRequest, { params }: Params) {

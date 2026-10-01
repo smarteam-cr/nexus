@@ -142,7 +142,7 @@ export default function GastosSection({
         <EmptyState
           variant="dashed"
           title="Sin gastos puntuales"
-          description="Agregá un gasto único (un evento, una compra puntual) para llevar el registro. Los futuros entran a la caja neta."
+          description="Agrega un gasto único (un evento, una compra puntual) para llevar el registro. Los futuros entran a la caja neta."
         />
       ) : (
         <>

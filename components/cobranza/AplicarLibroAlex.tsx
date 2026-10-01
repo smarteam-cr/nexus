@@ -165,7 +165,7 @@ export default function AplicarLibroAlex({ importId }: { importId: string }) {
       toast.success(
         r.cargadas.length
           ? `${r.cargadas.length} ${r.cargadas.length === 1 ? "factura cargada" : "facturas cargadas"} por cobrar, a tu nombre.`
-          : "No se cargó ninguna factura: mirá el detalle.",
+          : "No se cargó ninguna factura: mira el detalle.",
       );
       setVersion((v) => v + 1);
     } catch (e) {
@@ -213,7 +213,7 @@ export default function AplicarLibroAlex({ importId }: { importId: string }) {
     <div className="space-y-3">
       <Alert variant="info">
         <p className="text-xs">
-          Cargá las facturas del libro que Nexus no tiene. Entran por cobrar, facturadas con su número y a tu nombre, en un
+          Carga las facturas del libro que Nexus no tiene. Entran por cobrar, facturadas con su número y a tu nombre, en un
           servicio «Facturación importada del libro de Alex» de la cuenta. Nada entra como cobrado: si el libro la da pagada, no
           se tilda sola, y el pago lo registra quien lo vea, con el comprobante. Montos sin IVA, igual que los cobros.
         </p>
@@ -259,7 +259,7 @@ export default function AplicarLibroAlex({ importId }: { importId: string }) {
                       onChange={(e) => cambiar(g.clave, { cuentaId: e.target.value })}
                       className={`${SELECT_CLS} min-w-0 flex-1`}
                     >
-                      <option value="">— elegí la cuenta —</option>
+                      <option value="">— elige la cuenta —</option>
                       {posibles.length > 0 && (
                         <optgroup label="Puede ser">
                           {posibles.map((c) => (
@@ -284,17 +284,17 @@ export default function AplicarLibroAlex({ importId }: { importId: string }) {
                     </button>
                   </div>
                   {g.cuenta && d.cuentaId === g.cuenta.cuentaId && (
-                    <p className="text-[10px] text-fg-muted">Propuesta {VIA_LABEL[g.cuenta.via] ?? ""}. Si no es, elegí otra.</p>
+                    <p className="text-[10px] text-fg-muted">Propuesta {VIA_LABEL[g.cuenta.via] ?? ""}. Si no es, elige otra.</p>
                   )}
                   {!g.cuenta && (
                     <p className="text-[10px] text-fg-muted">
-                      Nexus no la elige: {posibles.length ? "hay candidatas por el nombre, confirmá cuál es" : "ninguna cuenta se llama así"}.
+                      Nexus no la elige: {posibles.length ? "hay candidatas por el nombre, confirma cuál es" : "ninguna cuenta se llama así"}.
                       Si la empresa no existe, dala de alta.
                     </p>
                   )}
                   {g.clienteDeOdoo && (
                     <p className="text-[10px] text-warn-ink">
-                      El cliente de Odoo «{g.clienteDeOdoo}» no está emparejado. Después de cargar, emparejalo en{" "}
+                      El cliente de Odoo «{g.clienteDeOdoo}» no está emparejado. Después de cargar, emparéjalo en{" "}
                       <Link href="/cobranza/odoo" className="underline decoration-dotted">
                         Cobranza › Odoo
                       </Link>
@@ -312,7 +312,7 @@ export default function AplicarLibroAlex({ importId }: { importId: string }) {
                       }
                       className={SELECT_CLS}
                     >
-                      <option value="">— decilo antes de cargar —</option>
+                      <option value="">— dilo antes de cargar —</option>
                       <option value="SIN_IVA">No: entran tal cual</option>
                       <option value="CON_IVA">Sí, el 13 %: entran ÷ 1,13</option>
                     </select>
@@ -385,8 +385,8 @@ export default function AplicarLibroAlex({ importId }: { importId: string }) {
         <div className="rounded-xl border border-line bg-surface p-3 space-y-2">
           <p className="text-xs font-semibold text-fg">Anotaciones del libro sobre cobros que Nexus ya tiene</p>
           <p className="text-[11px] text-fg-muted">
-            Van a la bitácora de su cobro, una sola vez. Si el texto trae una fecha, Nexus la propone como promesa y la registrás
-            vos: la factura sigue vencida y su alerta, a la vista.
+            Van a la bitácora de su cobro, una sola vez. Si el texto trae una fecha, Nexus la propone como promesa y la registras
+            tú: la factura sigue vencida y su alerta, a la vista.
           </p>
           <ul className="space-y-1.5">
             {plan.anotaciones.map((a) => {
@@ -477,7 +477,7 @@ export default function AplicarLibroAlex({ importId }: { importId: string }) {
                   .filter((c) => c.pagadaSegunLibro)
                   .map((c) => `${c.numero} (${c.cuentaNombre})`)
                   .join(", ")}
-                . Si la plata entró, registrá el pago en ese cobro, desde el cronograma de la cuenta en{" "}
+                . Si la plata entró, registra el pago en ese cobro, desde el cronograma de la cuenta en{" "}
                 <Link href="/cobranza" className="underline decoration-dotted">
                   Cobranza
                 </Link>

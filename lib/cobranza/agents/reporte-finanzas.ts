@@ -136,7 +136,7 @@ export async function runReporteFinanzas(
     `Fecha del reporte: ${todayISO}`,
     `Antigüedad de los datos: métricas computadas EN VIVO hoy ${todayISO}. Último corte de cartera registrado: ${desdeUltimoCorteISO ?? "nunca (todavía no hay cortes)"}.`,
     ``,
-    `# COBERTURA (declarala SIEMPRE en el reporte)`,
+    `# COBERTURA (declárala SIEMPRE en el reporte)`,
     `Cuentas en el universo: ${cob.cuentasTotales} · configuradas: ${cob.cuentasConfiguradas} · pendientes de datos: ${cob.cuentasPendienteDatos} · configuradas sin cobros: ${cob.cuentasSinCobros}`,
     ``,
     `# MÉTRICAS FRESCAS (por moneda — CRC y USD JAMÁS se suman ni convierten)`,
@@ -211,7 +211,7 @@ export async function runReporteFinanzas(
       messages: [
         {
           role: "user",
-          content: `${bloques.join("\n")}\n\nGenerá el reporte según tus instrucciones. Devolvé SOLO el JSON.`,
+          content: `${bloques.join("\n")}\n\nGenera el reporte según tus instrucciones. Devuelve SOLO el JSON.`,
         },
       ],
     });

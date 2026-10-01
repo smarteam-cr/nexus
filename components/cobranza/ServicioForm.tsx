@@ -172,11 +172,11 @@ export default function ServicioForm({
       const pct = Number(pctEntrada);
       const n = Number(numCuotas);
       if (!pct || pct <= 0 || pct >= 100) {
-        toast.error("Indicá el porcentaje de entrada (entre 0 y 100).");
+        toast.error("Indica el porcentaje de entrada (entre 0 y 100).");
         return null;
       }
       if (!n || n < 1) {
-        toast.error("Indicá en cuántas cuotas va el resto.");
+        toast.error("Indica en cuántas cuotas va el resto.");
         return null;
       }
       return {
@@ -191,7 +191,7 @@ export default function ServicioForm({
     }
     // PERSONALIZADO
     if (cuotas.length === 0) {
-      toast.error("Agregá al menos una cuota al plan personalizado.");
+      toast.error("Agrega al menos una cuota al plan personalizado.");
       return null;
     }
     const parsed = cuotas.map((c) => ({
@@ -201,7 +201,7 @@ export default function ServicioForm({
       offsetMeses: Number(c.offsetMeses),
     }));
     if (parsed.some((c) => !c.orden || c.orden < 1 || !c.valor || c.valor <= 0 || c.offsetMeses < 0 || Number.isNaN(c.offsetMeses))) {
-      toast.error("Revisá las cuotas: orden y valor positivos, offset en meses desde el arranque.");
+      toast.error("Revisa las cuotas: orden y valor positivos, offset en meses desde el arranque.");
       return null;
     }
     if (new Set(parsed.map((c) => c.orden)).size !== parsed.length) {
@@ -215,7 +215,7 @@ export default function ServicioForm({
     if (saving) return;
     const monto = round2(Number(montoTotal));
     if (!monto || monto <= 0) {
-      toast.error("Indicá el monto total del servicio.");
+      toast.error("Indica el monto total del servicio.");
       return;
     }
     const planBody = buildPlanBody();

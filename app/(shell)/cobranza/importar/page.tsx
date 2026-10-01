@@ -20,7 +20,7 @@ export default async function ImportarCobranzaPage() {
     <div className="px-6 py-8">
       <PageHeader
         title="Importar cuentas y comparar el libro"
-        description="Subí el CSV del sheet de Finanzas para cargar cuentas, o el libro de Alex (.xlsx) para ver fila por fila qué no coincide con Nexus, sin escribir nada."
+        description="Sube el CSV del sheet de Finanzas para cargar cuentas, o el libro de Alex (.xlsx) para ver fila por fila qué no coincide con Nexus, sin escribir nada."
       />
       <ImportWizard />
     </div>

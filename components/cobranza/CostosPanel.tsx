@@ -271,7 +271,7 @@ export default function CostosPanel({
             mostrarDatos
               ? "Ocultar los montos (salarios y precios de herramientas)"
               : puedeRevelar
-                ? "Mostrar los montos — pide confirmación; ojo con quién tenés al lado o si estás compartiendo pantalla"
+                ? "Mostrar los montos — pide confirmación; ojo con quién tienes al lado o si estás compartiendo pantalla"
                 : "Solo un super admin puede mostrar los montos"
           }
           className="ml-auto flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-line text-fg-muted hover:text-fg-secondary hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -312,8 +312,8 @@ export default function CostosPanel({
               title={acotado ? "Sin costos en esta categoría" : "Sin costos registrados"}
               description={
                 acotado
-                  ? "Todavía no hay nada acá. Agregá el primero con el botón de arriba."
-                  : "Todavía no registraste ningún costo. Empezá por los salarios y las herramientas fijas."
+                  ? "Todavía no hay nada acá. Agrega el primero con el botón de arriba."
+                  : "Todavía no registraste ningún costo. Empieza por los salarios y las herramientas fijas."
               }
             />
           ) : (
@@ -343,7 +343,7 @@ export default function CostosPanel({
               <input
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscá por nombre o persona…"
+                placeholder="Busca por nombre o persona…"
                 className={INPUT_CLS}
               />
 
@@ -503,8 +503,8 @@ export default function CostosPanel({
                             {confirmBorrarId === c.id && (
                               <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2">
                                 <p className="flex-1 min-w-[200px] text-xs text-red-600">
-                                  ¿Borrar este costo? No se puede deshacer. Si querés conservar el
-                                  histórico, usá &ldquo;Finalizar&rdquo; en vez de borrar.
+                                  ¿Borrar este costo? No se puede deshacer. Si quieres conservar el
+                                  histórico, usa &ldquo;Finalizar&rdquo; en vez de borrar.
                                 </p>
                                 <button
                                   type="button"
@@ -635,7 +635,7 @@ export default function CostosPanel({
         description={
           <>
             Vas a revelar en pantalla los salarios y los precios de las herramientas.
-            Asegurate de que nadie más los esté viendo (alguien al lado, pantalla
+            Asegúrate de que nadie más los esté viendo (alguien al lado, pantalla
             compartida). Se ocultan solos al recargar.
           </>
         }

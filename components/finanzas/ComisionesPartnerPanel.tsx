@@ -93,7 +93,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
       const r = await fetchJson<{ data: ComisionesPartnerDTO }>("/api/cobranza/comisiones-partner");
       setData(r.data);
     } catch {
-      toast.error("No se pudo refrescar la lista. Recargá la página.");
+      toast.error("No se pudo refrescar la lista. Recarga la página.");
     }
   }
 
@@ -365,7 +365,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
       {data.comisiones.length === 0 ? (
         <EmptyState
           title="Todavía no hay comisiones registradas"
-          description="Registrá lo que cada aliado te paga y aparece acá, agrupado por partner."
+          description="Registra lo que cada aliado te paga y aparece acá, agrupado por partner."
         />
       ) : (
         <ComisionesDeAliado
@@ -416,7 +416,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
         {data.partners.length === 0 ? (
           <EmptyState
             title="Sin aliados configurados"
-            description="Configurá cada cuánto te paga cada aliado y el historial se agrupa a esa frecuencia en vez de mes a mes."
+            description="Configura cada cuánto te paga cada aliado y el historial se agrupa a esa frecuencia en vez de mes a mes."
           />
         ) : (
           <div className="rounded-xl border border-line bg-surface overflow-x-auto">
@@ -539,12 +539,12 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
             setEditandoId(null);
           }}
           title={editandoId ? "Editar comisión" : "Registrar comisión de partner"}
-          description="Lo que te pagó un aliado comercial. Si el aliado no está en la cartera, dejá el cliente vacío."
+          description="Lo que te pagó un aliado comercial. Si el aliado no está en la cartera, deja el cliente vacío."
         >
           <div className="space-y-3">
             <Field
               label="Aliado"
-              hint="Si lo elegís de la lista, el pago hereda su frecuencia y entra al historial con esa cadencia."
+              hint="Si lo eliges de la lista, el pago hereda su frecuencia y entra al historial con esa cadencia."
             >
               <Select
                 value={form.partnerId}
@@ -559,7 +559,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
                   });
                 }}
               >
-                <option value="">Sin aliado configurado — escribí el nombre abajo</option>
+                <option value="">Sin aliado configurado — escribe el nombre abajo</option>
                 {data.partners.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.nombre} · {p.frecuenciaLabel}

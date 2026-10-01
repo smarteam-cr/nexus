@@ -74,7 +74,7 @@ export default function BorradorCobroModal({
       await navigator.clipboard.writeText(texto);
       toast.success(`${label} copiado.`);
     } catch {
-      toast.error("No se pudo copiar — seleccioná y copiá a mano.");
+      toast.error("No se pudo copiar — selecciona y copia a mano.");
     }
   }
 
@@ -85,7 +85,7 @@ export default function BorradorCobroModal({
       size="lg"
       z="z-[70]"
       title="Borrador de correo de cobro"
-      description={`${fmtMonto(cobro.monto, cobro.moneda)} · programado ${fmtFecha(cobro.fechaProgramada)} — revisalo, ajustalo y envialo desde tu correo.`}
+      description={`${fmtMonto(cobro.monto, cobro.moneda)} · programado ${fmtFecha(cobro.fechaProgramada)} — revísalo, ajústalo y envíalo desde tu correo.`}
       footer={
         !loading && !error ? (
           <>
@@ -106,14 +106,14 @@ export default function BorradorCobroModal({
             {mailtoUrl ? (
               <a
                 href={mailtoUrl}
-                title={cuerpoLargo ? "El cuerpo es largo y el correo lo puede truncar — mejor copialo." : undefined}
+                title={cuerpoLargo ? "El cuerpo es largo y el correo lo puede truncar — mejor cópialo." : undefined}
                 className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
               >
                 Abrir en correo
               </a>
             ) : (
               <span
-                title="La cuenta no tiene correo de cobro registrado — agregalo en el drawer de la cuenta."
+                title="La cuenta no tiene correo de cobro registrado — agrégalo en el drawer de la cuenta."
                 className="text-xs font-medium px-3 py-1.5 rounded-lg border border-line text-fg-muted opacity-60 cursor-not-allowed"
               >
                 Abrir en correo
@@ -148,12 +148,12 @@ export default function BorradorCobroModal({
             />
             {cuerpoLargo && (
               <p className="mt-1 text-[10px] text-amber-600">
-                El cuerpo supera lo que un mailto aguanta — usá &quot;Copiar cuerpo&quot; y pegalo en tu correo.
+                El cuerpo supera lo que un mailto aguanta — usa &quot;Copiar cuerpo&quot; y pégalo en tu correo.
               </p>
             )}
           </div>
           <p className="text-[10px] text-fg-muted">
-            El borrador usa solo el contexto real de la cuenta (bitácora). Reemplazá [FIRMA] con tu firma.
+            El borrador usa solo el contexto real de la cuenta (bitácora). Reemplaza [FIRMA] con tu firma.
             {correoCobro ? ` Destino: ${correoCobro}.` : " La cuenta no tiene correo de cobro registrado."}
           </p>
         </div>

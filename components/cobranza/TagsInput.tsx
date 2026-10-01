@@ -94,7 +94,7 @@ export default function TagsInput({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           disabled={lleno}
-          placeholder={lleno ? "Máximo 8 tags" : "Agregá un tag y Enter…"}
+          placeholder={lleno ? "Máximo 8 tags" : "Agrega un tag y Enter…"}
           maxLength={60}
           className={`${INPUT_CLS} disabled:opacity-50 disabled:cursor-not-allowed`}
         />

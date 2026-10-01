@@ -25,7 +25,7 @@ export class ApiError extends Error {
   }
 }
 
-const FALLBACK = "Ocurrió un error. Probá de nuevo.";
+const FALLBACK = "Ocurrió un error. Prueba de nuevo.";
 
 /** Extrae el mensaje legible de un cuerpo de error (las 3 formas que conviven hoy). */
 export function extractErrorMessage(payload: unknown, fallback = FALLBACK): string {
@@ -52,7 +52,7 @@ export async function fetchJson<T = unknown>(
   try {
     res = await fetch(input, init);
   } catch {
-    throw new ApiError("Error de conexión. Revisá tu internet.", 0, null);
+    throw new ApiError("Error de conexión. Revisa tu internet.", 0, null);
   }
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) {

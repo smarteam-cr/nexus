@@ -355,7 +355,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       {sinDatos ? (
         <EmptyState
           title={`Todavía no hay datos de ${r.anio}`}
-          description="El reporte se arma con el libro de egresos, el libro de planilla y los cobros del año. Cargá el Excel de egresos para empezar."
+          description="El reporte se arma con el libro de egresos, el libro de planilla y los cobros del año. Carga el Excel de egresos para empezar."
         />
       ) : (
         <div className="space-y-4">
@@ -487,7 +487,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               <div>
                 <h3 className="text-sm font-medium text-fg">La curva mensual de la operación</h3>
                 <p className="text-[11px] text-fg-muted mt-0.5">
-                  Pasá el mouse por un indicador para enfocarlo. Con clics sucesivos: lo marca, lo saca del
+                  Pasa el mouse por un indicador para enfocarlo. Con clics sucesivos: lo marca, lo saca del
                   reporte y lo devuelve. Sacar una serie no cambia ningún número — solo qué se mira.
                 </p>
               </div>

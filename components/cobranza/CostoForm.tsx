@@ -192,7 +192,7 @@ export default function CostoForm({
       onSaved();
     } catch (e) {
       setServerError(
-        e instanceof ApiError ? e.message : "No se pudo guardar el costo. Probá de nuevo.",
+        e instanceof ApiError ? e.message : "No se pudo guardar el costo. Prueba de nuevo.",
       );
       setSaving(false);
     }
@@ -318,13 +318,13 @@ export default function CostoForm({
                 </select>
               )}
               <p className="text-[11px] text-fg-muted mt-1">
-                Vinculá la persona si ya existe — un salario puede quedar sin vincular
+                Vincula la persona si ya existe — un salario puede quedar sin vincular
                 (contratación en curso).
               </p>
             </div>
 
             <div>
-              <label className={LABEL_CLS}>¿Cómo capturás el monto?</label>
+              <label className={LABEL_CLS}>¿Cómo capturas el monto?</label>
               <div className="flex gap-2">
                 {(
                   [
@@ -417,7 +417,7 @@ export default function CostoForm({
           />
           {costo === null ? (
             <p className="text-[11px] text-fg-muted mt-1">
-              Desde cuándo cuenta este costo. Si la persona ya venía de antes, poné su fecha real.
+              Desde cuándo cuenta este costo. Si la persona ya venía de antes, pon su fecha real.
             </p>
           ) : montoCambia ? (
             <p className="text-[11px] mt-1 text-fg-secondary">

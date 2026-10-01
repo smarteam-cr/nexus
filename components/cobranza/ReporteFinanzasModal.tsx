@@ -63,7 +63,7 @@ export default function ReporteFinanzasModal({
       await navigator.clipboard.writeText(`${titulo}\n\n${cuerpo}`);
       toast.success("Reporte copiado.");
     } catch {
-      toast.error("No se pudo copiar — seleccioná y copiá a mano.");
+      toast.error("No se pudo copiar — selecciona y copia a mano.");
     }
   }
 
@@ -111,7 +111,7 @@ export default function ReporteFinanzasModal({
           </div>
           <p className="text-[10px] text-fg-muted">
             El reporte usa solo los datos reales de la cartera (métricas en vivo + cortes registrados).
-            Revisalo antes de compartirlo.
+            Revísalo antes de compartirlo.
           </p>
         </div>
       )}
