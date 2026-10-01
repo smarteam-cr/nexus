@@ -180,7 +180,7 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
         ? {
             type: "array",
             description:
-              "Tu HIPÓTESIS de dónde está cada dimensión, antes de hablar con el cliente: por mejor ajuste contra las descripciones, con las pistas que dan las fuentes (el test, las notas, lo que tiene en HubSpot). Ante la duda entre dos, el más bajo. Sin ninguna pista, no la mandes.",
+              "Tu HIPÓTESIS de dónde está CADA dimensión de las áreas en juego, antes de hablar con el cliente: por mejor ajuste contra las descripciones, con las pistas que dan las fuentes (el test, las notas, lo que tiene en HubSpot). Sin pistas directas, dedúcela del cuadro general y dilo en el porQue. Ante la duda entre dos, el más bajo.",
             items: {
               type: "object",
               properties: { dimensionId: { type: "string", enum: dims }, nivel: { type: "string", enum: [...NIVELES] }, porQue, fuentes },
@@ -280,7 +280,7 @@ function sistema(ctx: ContextoDelPedido): string {
 - hubspotActual: qué HubSpot tiene (hubs, ediciones, usuarios, quién lo configuró, renovación), si las fuentes lo dicen.
 - hipotesis: de 3 a 5, cada una «Creemos que… porque…», para confirmar o descartar en la reunión.
 - areas: las que deberían estar en juego y no están (la del test, lo que menciona, lo que paga sin usar).
-- niveles: tu HIPÓTESIS de dónde está cada dimensión de las áreas en juego, con su porQue en lenguaje llano («Creemos que está en Inicial porque las notas dicen que cada vendedor lleva su Excel»). El test es una pista, no la verdad: lo contestó el prospecto con la escala anterior. Cruza el test con lo demás; si no hay ninguna pista para una dimensión, no la mandes (queda para preguntar).
+- niveles: tu HIPÓTESIS de dónde está CADA una de las dimensiones de las áreas en juego, con su porQue en lenguaje llano («Creemos que está en Inicial porque las notas dicen que cada vendedor lleva su Excel»). El test es una pista, no la verdad: lo contestó el prospecto con la escala anterior; crúzalo con lo demás. Si una dimensión no tiene pistas directas, dedúcela del cuadro general (lo que tiene en HubSpot, el tamaño, lo que se ve de las dimensiones vecinas) y dilo en el porQue («Sin pistas directas: …»); nunca la pongas por encima de Funcional sin una pista. Es para que el vendedor sepa qué preguntar: el mapa la muestra como hipótesis.
 - aExplorar: las dimensiones donde hay indicios (debajo de Funcional según el test o lo que dijo), que tocan una meta o que dejan ver un riesgo. Máximo 4 por área. La razón, en una frase llana.
 - personas: quién es quién, si las fuentes lo dicen. El papel en la decisión no se deduce del cargo.`
       : `ESTA CORRIDA: LEER LA REUNIÓN que acaba de pasar. Lo que más sirve, con la frase del cliente:
