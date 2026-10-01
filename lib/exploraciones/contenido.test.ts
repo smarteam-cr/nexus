@@ -10,6 +10,7 @@ import {
   contenidoVacio,
   destinoValido,
   fusionarPropuestas,
+  industriaDelVendedor,
   idDelItem,
   propuestaVacia,
   propuestaVigente,
@@ -235,14 +236,65 @@ describe("las operaciones", () => {
     expect(leerContenido({ casillas: { metas } }).casillas.metas).toHaveLength(20);
   });
 
-  it("el mismo nivel desde el test no pisa al pendiente de una reunión: queda su frase y su riesgo", () => {
+  it("el nivel del test no pisa al pendiente de una reunión: queda su frase y su riesgo", () => {
     const deLaReunion = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "I", fuente: "reunion", evidencia: "Cada uno en su Excel", riesgo: true });
     const delTest = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "I", fuente: "test", evidencia: "Algunos pasos escritos" }, [{ id: "T1", etiqueta: "Test" }]);
-    expect(delTest.id).toBe(deLaReunion.id);
     const p = fusionarPropuestas(estado({ propuesta: fusionarPropuestas(estado(), [deLaReunion]) }), [delTest]);
     expect(p.items).toHaveLength(1);
     expect(p.items[0].valor).toMatchObject({ fuente: "reunion", riesgo: true, evidencia: "Cada uno en su Excel" });
-    expect(p.items[0].fuentes.map((f) => f.id)).toEqual(["S1", "T1"]);
+  });
+
+  it("la hipótesis del agente le gana a lo que marcó en el test, y una hipótesis nueva no pisa lo que dijo el cliente", () => {
+    const delTest = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "F", fuente: "test" }, [{ id: "T1", etiqueta: "Test" }]);
+    const hipotesis = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "I", fuente: "hipotesis", porQue: "Usan Excel" }, [{ id: "H1", etiqueta: "Nota" }]);
+    const conLasDos = fusionarPropuestas(estado({ propuesta: fusionarPropuestas(estado(), [delTest]) }), [hipotesis]);
+    expect(conLasDos.items.map((i) => (i.valor as { fuente: string }).fuente)).toEqual(["hipotesis"]);
+    // Al volver a preparar, el test (más débil) no vuelve sobre la hipótesis.
+    expect(fusionarPropuestas(estado({ propuesta: conLasDos }), [delTest]).items.map((i) => (i.valor as { fuente: string }).fuente)).toEqual(["hipotesis"]);
+    // Lo que dijo el cliente reemplaza a la hipótesis; una hipótesis nueva no lo pisa.
+    const deLaReunion = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "D", fuente: "reunion", evidencia: "No tenemos nada" });
+    const conLaReunion = fusionarPropuestas(estado({ propuesta: conLasDos }), [deLaReunion]);
+    expect(conLaReunion.items.map((i) => (i.valor as { fuente: string }).fuente)).toEqual(["reunion"]);
+    expect(fusionarPropuestas(estado({ propuesta: conLaReunion }), [hipotesis]).items.map((i) => (i.valor as { fuente: string }).fuente)).toEqual(["reunion"]);
+  });
+
+  it("lo que dijo el cliente confirma una hipótesis aunque sea el mismo nivel; una hipótesis sobra si ya hay evidencia", () => {
+    const conHipotesis = estado({ contenido: { ...contenidoVacio(), chequeo: { "1.3": { nivel: "I", fuente: "test" } } } });
+    const evidencia = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "I", fuente: "reunion", evidencia: "Cada uno en su Excel" });
+    expect(fusionarPropuestas(conHipotesis, [evidencia]).items).toHaveLength(1);
+    const conEvidencia = estado({ contenido: { ...contenidoVacio(), chequeo: { "1.3": { nivel: "F", fuente: "reunion" } } } });
+    const hipotesis = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "I", fuente: "hipotesis", porQue: "x" });
+    expect(fusionarPropuestas(conEvidencia, [hipotesis]).items).toHaveLength(0);
+  });
+
+  it("elegir la industria trae su perfil habitual y la deja como elegida por el vendedor; tocar el perfil, también", () => {
+    const v: Validez = { ...VALIDEZ, perfilesHabituales: { banca: { cierre: "mixta", despues: "continua" }, "ecommerce-retail": null } };
+    const r = aplicarOperaciones(estado({ contenido: { ...contenidoVacio(), edicionElegida: { por: "agente", razon: "x" } } }), [{ op: "edicion", edicion: "banca" }], v);
+    expect(r.ok && [r.estado.edicion, r.estado.perfilCierre, r.estado.perfilDespues, r.estado.contenido.edicionElegida]).toEqual(["banca", "mixta", "continua", { por: "vendedor" }]);
+    // Una edición sin perfil habitual deja el perfil como estaba.
+    const sin = aplicarOperaciones(estado(), [{ op: "edicion", edicion: "ecommerce-retail" }], v);
+    expect(sin.ok && [sin.estado.perfilCierre, sin.estado.perfilDespues]).toEqual(["con equipo", "continua"]);
+    const perfil = aplicarOperaciones(estado(), [{ op: "perfil", cierre: "transaccional", despues: "recompra" }], v);
+    expect(perfil.ok && perfil.estado.contenido.edicionElegida).toEqual({ por: "vendedor" });
+  });
+
+  it("la industria es del vendedor si la eligió él, o si ya estaba puesta antes de que se anotara quién", () => {
+    expect(industriaDelVendedor(estado({ edicion: "banca", contenido: { ...contenidoVacio(), edicionElegida: { por: "agente" } } }))).toBe(false);
+    expect(industriaDelVendedor(estado({ edicion: "banca", contenido: { ...contenidoVacio(), edicionElegida: { por: "vendedor" } } }))).toBe(true);
+    expect(industriaDelVendedor(estado({ edicion: "banca" }))).toBe(true);
+    expect(industriaDelVendedor(estado({ edicion: null, perfilCierre: null, perfilDespues: null }))).toBe(false);
+  });
+
+  it("descartar un caso de uso anota su título para la próxima tanda, sin subir la versión", () => {
+    const caso = item({ tipo: "casoDeUso", useCaseId: "ia-1" }, { titulo: "Tablero de ventas", areaId: "1" }, []);
+    const antes = estado({ propuesta: { ...propuestaVacia(), items: [caso] } });
+    const r = aplicarOperaciones(antes, [{ op: "descartar", itemIds: [caso.id] }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.casosDescartados).toEqual(["Tablero de ventas"]);
+    expect(r.ok && cambioLoConfirmado(antes, r.estado)).toBe(false);
+    // La lectura lo conserva, igual que quién eligió la industria.
+    const leido = leerContenido({ casosDescartados: ["Tablero de ventas"], edicionElegida: { por: "agente", razon: "Coloca créditos" } });
+    expect([leido.casosDescartados, leido.edicionElegida]).toEqual([["Tablero de ventas"], { por: "agente", razon: "Coloca créditos" }]);
+    expect(leerContenido({ edicionElegida: { por: "otro" } }).edicionElegida).toBeNull();
   });
 
   it("una tilde también es un cambio de lo confirmado: sube la versión", () => {

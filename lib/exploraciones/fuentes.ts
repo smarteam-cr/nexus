@@ -45,6 +45,8 @@ export interface LoQueSeLeyo {
   leidas: { sesiones: string[]; hubspot: string[] };
   /** Las reuniones de Meet que fueron al modelo (marcadas o no): las fuentes de la corrida. */
   sesionesUsadas: string[];
+  /** Los datos de la empresa en HubSpot que la escala pide con toda medición (país, tamaño). */
+  empresa: { pais: string | null; empleados: string | null } | null;
 }
 
 const fecha = diaConAnio;
@@ -235,7 +237,15 @@ export async function leerFuentes(opts: {
   const notas = textoDeLasNotas(opts.notas);
   if (notas) fuentes.push({ id: "N0", etiqueta: "Notas del vendedor en el guion", texto: notas });
 
-  return { fuentes, tests, agenda: actividad.agenda, correosSinPermiso: actividad.correosSinPermiso, leidas, sesionesUsadas };
+  return {
+    fuentes,
+    tests,
+    agenda: actividad.agenda,
+    correosSinPermiso: actividad.correosSinPermiso,
+    leidas,
+    sesionesUsadas,
+    empresa: empresa ? { pais: empresa.pais, empleados: empresa.empleados } : null,
+  };
 }
 
 /**

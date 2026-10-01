@@ -1,14 +1,19 @@
 "use client";
 
 /**
- * PasoPreparacion — antes de la primera reunión: la industria y el perfil (la escala los pide antes
- * de medir), las áreas en juego, lo que ya se sabe y las dimensiones en las que se va a profundizar.
+ * PasoPreparacion — antes de la primera reunión, armado solo con lo que hay en HubSpot.
+ *
+ * La industria (la edición de la escala) y el perfil de negocio se ELIGEN SOLOS (pedido de Elías,
+ * 2026-10-01): por la industria de HubSpot o, si no alcanza, por el agente que lee todo lo de la
+ * empresa; con la edición va su perfil habitual. Se ve quién los eligió y por qué, y se cambian con
+ * un clic. Después: las áreas en juego, lo que ya se sabe, las hipótesis y qué explorar a fondo.
  */
 import { useState } from "react";
 import { Badge, Button, Input, Segmentado, Select } from "@/components/ui";
 import { estaDebajo } from "@/lib/escala/chequeo";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
-import { ETIQUETA_DEL_MOTIVO, MOTIVOS_PARA_EXPLORAR, normalizarTexto, type MotivoParaExplorar } from "@/lib/exploraciones/contenido";
+import { industriaDelVendedor, normalizarTexto } from "@/lib/exploraciones/contenido";
+import { industriaLegible } from "@/lib/exploraciones/industria";
 import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
 import PanelDelAgente from "./PanelDelAgente";
@@ -16,6 +21,9 @@ import { Propuestas } from "./Propuestas";
 
 /** Hasta cuántas dimensiones por área se profundiza: lo que cabe en la segunda reunión. */
 export const MAX_A_EXPLORAR_POR_AREA = 4;
+
+const NOMBRE_DEL_CIERRE: Record<Cierre, string> = { "con equipo": "Con equipo", transaccional: "Transaccional", mixta: "Mixta" };
+const NOMBRE_DEL_DESPUES: Record<Despues, string> = { única: "Relación única", recompra: "Recompra", continua: "Relación continua" };
 
 function Tarjeta({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: React.ReactNode }) {
   return (
@@ -32,21 +40,37 @@ function Tarjeta({ titulo, ayuda, children }: { titulo: string; ayuda?: string; 
 function IndustriaYPerfil() {
   const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
   const e = exp.estado;
+  const elegida = e.contenido.edicionElegida;
   const pendientes = pendientesPara((d) => d.tipo === "edicion" || d.tipo === "perfil");
+  const edicion = escala.ediciones.find((x) => x.slug === e.edicion) ?? null;
+  const habitual = edicion?.perfilHabitual ?? null;
+  const esElHabitual = !!habitual && habitual.cierre === e.perfilCierre && habitual.despues === e.perfilDespues;
   const definicion = (p: typeof escala.perfil.cierre, nombre: string) =>
     p?.opciones.find((o) => normalizarTexto(o.nombre) === normalizarTexto(nombre))?.definicion;
-  const opcionesCierre = CIERRES.map((c) => ({ clave: c, etiqueta: c === "con equipo" ? "Con equipo" : c === "transaccional" ? "Transaccional" : "Mixta", title: definicion(escala.perfil.cierre, c) }));
-  const opcionesDespues = DESPUES.map((d) => ({ clave: d, etiqueta: d === "única" ? "Relación única" : d === "recompra" ? "Recompra" : "Relación continua", title: definicion(escala.perfil.despues, d) }));
+  const opcionesCierre = CIERRES.map((c) => ({ clave: c, etiqueta: NOMBRE_DEL_CIERRE[c], title: definicion(escala.perfil.cierre, c) }));
+  const opcionesDespues = DESPUES.map((d) => ({ clave: d, etiqueta: NOMBRE_DEL_DESPUES[d], title: definicion(escala.perfil.despues, d) }));
+
+  const quien =
+    industriaDelVendedor(e)
+      ? { insignia: "La elegiste tú", texto: "El agente ya no la cambia." }
+      : elegida?.por === "agente"
+        ? { insignia: "Automática", texto: elegida.razon ?? "La eligió el agente con lo que hay en HubSpot." }
+        : elegida?.por === "industria"
+          ? { insignia: "Automática", texto: elegida.razon ?? "Por la industria de la empresa en HubSpot." }
+          : { insignia: null, texto: "El agente la elige al preparar, con lo que hay de la empresa en HubSpot." };
 
   return (
     <Tarjeta
       titulo="Industria y perfil de negocio"
-      ayuda="La escala se lee con la edición de su industria (o la general) y cada criterio aplica según cómo vende la empresa. Se decide antes de medir."
+      ayuda="Con qué edición de la escala se mide y cómo vende la empresa. Se eligen solos con lo que hay en HubSpot; cámbialos si no calzan."
     >
-      <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
-        <label className="space-y-1.5">
-          <span className="block text-xs font-medium text-fg-secondary">Industria (edición de la escala)</span>
+      <div className="grid gap-4 md:grid-cols-[1fr_1.3fr]">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-fg-secondary" htmlFor="exploracion-edicion">
+            Industria (edición de la escala)
+          </label>
           <Select
+            id="exploracion-edicion"
             value={e.edicion ?? ""}
             disabled={!puedeEditar || guardando}
             onChange={(ev) => void cambiar([{ op: "edicion", edicion: ev.target.value || null }], { refrescar: true })}
@@ -58,10 +82,19 @@ function IndustriaYPerfil() {
               </option>
             ))}
           </Select>
-          {exp.empresa.industria && <span className="block text-xs text-fg-muted">En HubSpot: {exp.empresa.industria}</span>}
-        </label>
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary">
+            {quien.insignia && (
+              <Badge size="xs" variant={industriaDelVendedor(e) ? "default" : "info"}>
+                {quien.insignia}
+              </Badge>
+            )}
+            <span>{quien.texto}</span>
+          </p>
+          {edicion?.descripcion && <p className="text-xs text-fg-muted">{edicion.descripcion}</p>}
+          {exp.empresa.industria && <p className="text-2xs text-fg-muted">En HubSpot: {industriaLegible(exp.empresa.industria)}</p>}
+        </div>
         <div className="space-y-2">
-          <span className="block text-xs font-medium text-fg-secondary">Cómo cierra la venta y qué pasa después</span>
+          <span className="block text-xs font-medium text-fg-secondary">Cómo se cierra la venta y qué pasa después</span>
           <div className="flex flex-wrap gap-2">
             <Segmentado<Cierre>
               etiqueta="Cómo se cierra la venta"
@@ -78,6 +111,13 @@ function IndustriaYPerfil() {
               onCambio={(d) => void cambiar([{ op: "perfil", cierre: e.perfilCierre, despues: d }], { refrescar: true })}
             />
           </div>
+          {edicion && habitual && (
+            <p className="text-xs text-fg-muted">
+              {esElHabitual
+                ? `Es el perfil habitual de «${edicion.nombre}» en la escala.`
+                : `El habitual de «${edicion.nombre}» es ${NOMBRE_DEL_CIERRE[habitual.cierre].toLowerCase()} · ${NOMBRE_DEL_DESPUES[habitual.despues].toLowerCase()}.`}
+            </p>
+          )}
         </div>
       </div>
       <Propuestas items={pendientes} />
@@ -149,93 +189,89 @@ function AreasEnJuego() {
   );
 }
 
-function DimensionesAExplorar() {
-  const { exp, escala, chequeo, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
+/**
+ * Qué explorar a fondo en la segunda reunión: una lista para marcar, con la razón de cada una dicha
+ * en llano (lo que sugirió el agente o dónde parece estar). Sin motivos que elegir: el agente los
+ * sugiere y el vendedor marca o desmarca.
+ */
+function QueExplorarAFondo() {
+  const { exp, escala, mapa, cambiar, puedeEditar, guardando, pendientesPara, nombreDeNivel } = useLienzo();
   const e = exp.estado;
-  const pendientes = pendientesPara((d) => d.tipo === "aExplorar");
+  const sugeridas = pendientesPara((d) => d.tipo === "aExplorar");
   if (e.areas.length === 0) return null;
 
   return (
     <Tarjeta
-      titulo="Dimensiones a explorar"
-      ayuda={`Solo se profundiza en las que quedan debajo de Funcional, las que tocan una meta del cliente y las que dejan ver un riesgo. Como máximo ${MAX_A_EXPLORAR_POR_AREA} por área; el resto lo verifica el CSE.`}
+      titulo="Qué explorar a fondo"
+      ayuda={`Las dimensiones en las que vale la pena profundizar en la segunda reunión, con el portal abierto: las que parecen estar debajo de ${nombreDeNivel("F")}, las que tocan una meta del cliente o dejan ver un riesgo. Hasta ${MAX_A_EXPLORAR_POR_AREA} por área; el resto lo verifica el CSE.`}
     >
-      {e.areas.map((areaId) => {
-        const area = escala.areas.find((a) => a.id === areaId);
-        const calculo = chequeo.areas.find((a) => a.id === areaId);
-        if (!area) return null;
-        const elegidas = area.dimensiones.filter((d) => d.id in e.contenido.aExplorar).length;
-        return (
-          <div key={areaId} className="space-y-2">
-            <p className="flex items-center gap-2 text-xs font-semibold text-fg-secondary">
-              {area.nombre}
-              <Badge size="xs" variant={elegidas > MAX_A_EXPLORAR_POR_AREA ? "warning" : "default"}>
-                {elegidas} de {MAX_A_EXPLORAR_POR_AREA}
-              </Badge>
-            </p>
-            <ul className="divide-y divide-line rounded-lg border border-line">
-              {area.dimensiones
-                .filter((d) => d.aplica)
-                .map((d) => {
-                  const marcada = e.contenido.aExplorar[d.id];
-                  const nivel = calculo?.dimensiones.find((x) => x.id === d.id)?.nivel ?? null;
-                  const sugerida = !!nivel && estaDebajo(nivel, "F");
-                  return (
-                    <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                      <span className="flex min-w-0 items-center gap-2 text-sm text-fg">
-                        {d.nombre}
-                        {sugerida && !marcada && (
-                          <Badge size="xs" variant="info">
-                            Debajo de Funcional
-                          </Badge>
-                        )}
-                      </span>
-                      <span className="flex items-center gap-2">
-                        {marcada && (
-                          <Select
-                            aria-label={`Por qué explorar ${d.nombre}`}
-                            value={marcada.motivo}
-                            disabled={!puedeEditar || guardando}
-                            onChange={(ev) =>
-                              void cambiar([{ op: "aExplorar", dimensionId: d.id, valor: { ...marcada, motivo: ev.target.value as MotivoParaExplorar } }])
-                            }
-                          >
-                            {MOTIVOS_PARA_EXPLORAR.map((m) => (
-                              <option key={m} value={m}>
-                                {ETIQUETA_DEL_MOTIVO[m]}
-                              </option>
-                            ))}
-                          </Select>
-                        )}
-                        {puedeEditar && (
-                          <Button
-                            size="xs"
-                            className="whitespace-nowrap"
-                            variant={marcada ? "ghost" : "secondary"}
+      {escala.areas
+        .filter((a) => e.areas.includes(a.id))
+        .map((area) => {
+          const elegidas = area.dimensiones.filter((d) => d.id in e.contenido.aExplorar).length;
+          return (
+            <div key={area.id} className="space-y-2">
+              <p className="flex items-center gap-2 text-xs font-semibold text-fg-secondary">
+                {area.nombre}
+                <Badge size="xs" variant={elegidas > MAX_A_EXPLORAR_POR_AREA ? "warning" : "default"}>
+                  {elegidas} de {MAX_A_EXPLORAR_POR_AREA}
+                </Badge>
+              </p>
+              <ul className="divide-y divide-line rounded-lg border border-line">
+                {area.dimensiones
+                  .filter((d) => d.aplica)
+                  .map((d) => {
+                    const marcada = e.contenido.aExplorar[d.id];
+                    const sugerida = sugeridas.find((it) => it.destino.tipo === "aExplorar" && it.destino.dimensionId === d.id);
+                    const p = mapa.posiciones[d.id];
+                    const debajo = !!p && estaDebajo(p.nivel, "F");
+                    const razon =
+                      marcada?.razon ??
+                      sugerida?.razon ??
+                      (p ? `Parece estar en ${nombreDeNivel(p.nivel)}${p.clase === "hipotesis" ? " (hipótesis)" : ""}.` : "Todavía sin dato.");
+                    const alternar = () => {
+                      if (marcada) return void cambiar([{ op: "aExplorar", dimensionId: d.id, valor: null }]);
+                      if (sugerida) return void cambiar([{ op: "usar", itemId: sugerida.id, valor: sugerida.valor }]);
+                      void cambiar([{ op: "aExplorar", dimensionId: d.id, valor: { motivo: debajo ? "indicio" : "otro", razon: razon.slice(0, 300) } }]);
+                    };
+                    return (
+                      <li key={d.id} className="flex items-start gap-3 px-3 py-2">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={!!marcada}
+                          disabled={!puedeEditar || guardando}
+                          onChange={alternar}
+                          aria-label={`Explorar ${d.nombre} a fondo`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="flex flex-wrap items-center gap-2 text-sm text-fg">
+                            {d.nombre}
+                            {sugerida && !marcada && (
+                              <Badge size="xs" variant="info">
+                                Sugerida por el agente
+                              </Badge>
+                            )}
+                          </p>
+                          <p className="text-xs text-fg-muted">{razon}</p>
+                        </div>
+                        {sugerida && !marcada && puedeEditar && (
+                          <button
+                            type="button"
+                            className="flex-shrink-0 text-xs text-fg-muted hover:text-fg"
                             disabled={guardando}
-                            aria-pressed={!!marcada}
-                            onClick={() =>
-                              void cambiar([
-                                {
-                                  op: "aExplorar",
-                                  dimensionId: d.id,
-                                  valor: marcada ? null : { motivo: sugerida ? "indicio" : "meta" },
-                                },
-                              ])
-                            }
+                            onClick={() => void cambiar([{ op: "descartar", itemIds: [sugerida.id] }])}
                           >
-                            {marcada ? "Se explora" : "Explorar"}
-                          </Button>
+                            Descartar
+                          </button>
                         )}
-                      </span>
-                    </li>
-                  );
-                })}
-            </ul>
-          </div>
-        );
-      })}
-      <Propuestas items={pendientes} />
+                      </li>
+                    );
+                  })}
+              </ul>
+            </div>
+          );
+        })}
     </Tarjeta>
   );
 }
@@ -251,7 +287,7 @@ export default function PasoPreparacion() {
         <Casilla clave="hubspotActual" />
       </div>
       <Casilla clave="hipotesis" />
-      <DimensionesAExplorar />
+      <QueExplorarAFondo />
     </div>
   );
 }

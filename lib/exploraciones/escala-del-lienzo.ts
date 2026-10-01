@@ -63,7 +63,8 @@ export interface EscalaDelLienzo {
   version: string;
   niveles: { letra: Letra; nombre: string }[];
   capas: { clave: ClaveDeCapa; nombre: string }[];
-  ediciones: { slug: string; nombre: string; perfilHabitual: { cierre: Cierre; despues: Despues } | null }[];
+  /** Las ediciones de la escala, con para quién es cada una y su perfil habitual. */
+  ediciones: { slug: string; nombre: string; descripcion: string | null; perfilHabitual: { cierre: Cierre; despues: Despues } | null }[];
   edicion: { slug: string; nombre: string } | null;
   perfil: { cierre: PreguntaDelPerfil | null; despues: PreguntaDelPerfil | null };
   areas: AreaDelLienzo[];
@@ -76,7 +77,7 @@ export function escalaParaElLienzo(general: Escala, edicion: string | null, perf
     version: vista.version,
     niveles: vista.niveles.map((n) => ({ letra: n.letra, nombre: n.nombre })),
     capas: vista.capas.map((c) => ({ clave: c.clave, nombre: c.nombre })),
-    ediciones: general.ediciones.map((e) => ({ slug: e.slug, nombre: e.nombre, perfilHabitual: e.perfilHabitual })),
+    ediciones: general.ediciones.map((e) => ({ slug: e.slug, nombre: e.nombre, descripcion: e.descripcion, perfilHabitual: e.perfilHabitual })),
     edicion: vista.edicion ? { slug: vista.edicion.slug, nombre: vista.edicion.nombre } : null,
     perfil: { cierre: vista.perfilDeNegocio.cierre, despues: vista.perfilDeNegocio.despues },
     areas: vista.areas.map((a) => ({

@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: r.error }, { status: 400 });
     case "conflicto":
       return NextResponse.json(
-        { error: "Alguien más cambió esta exploración mientras la editabas. Se cargó lo último.", exploracion: paraLaPantalla(r.fila) },
+        { error: "La exploración cambió mientras la editabas (otra persona, o el agente al preparar). Se cargó lo último.", exploracion: paraLaPantalla(r.fila) },
         { status: 409 },
       );
     case "ok":

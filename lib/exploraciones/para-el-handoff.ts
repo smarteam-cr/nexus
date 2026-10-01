@@ -117,7 +117,9 @@ export function bloqueParaElHandoff(o: { estado: EstadoDeExploracion; escala: Es
     partes.push(
       "",
       "## Los casos de uso que se eligieron para la propuesta",
-      ...casos.map((k) => `- ${k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}`),
+      ...casos.map(
+        (k) => `- ${k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}${k.descripcion ? ` Qué es: ${k.descripcion}` : ""}`,
+      ),
     );
   }
 

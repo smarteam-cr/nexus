@@ -45,7 +45,7 @@ function Historia({ corridas }: { corridas: CorridaDelAgente[] }) {
             <li key={c.id} className="text-xs text-fg-muted">
               <p className="text-fg-secondary">
                 {diaYHora(c.en)} ·{" "}
-                {c.modo === "preparar" ? "Preparó" : c.modo === "casos" ? "Sugirió casos de uso" : c.automatica ? "Leyó sola la reunión que llegó" : "Leyó lo nuevo"}
+                {c.modo === "preparar" ? "Preparó" : c.modo === "casos" ? "Propuso casos de uso" : c.automatica ? "Leyó sola la reunión que llegó" : "Leyó lo nuevo"}
                 {" · "}
                 {c.propuestos === 0 ? "nada nuevo que proponer" : `${c.propuestos} ${c.propuestos === 1 ? "propuesta" : "propuestas"}`}
                 {alimento ? ` en ${alimento}` : ""}
@@ -70,7 +70,11 @@ function Historia({ corridas }: { corridas: CorridaDelAgente[] }) {
   );
 }
 
-export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPrincipal?: "preparar" | "leer" }) {
+/**
+ * `compacto`: solo los botones, la fase y el aviso de reuniones sin leer (en «La escala», donde lo
+ * que importa es que el mapa esté al día); la historia completa vive en los otros pasos.
+ */
+export default function PanelDelAgente({ modoPrincipal = "preparar", compacto = false }: { modoPrincipal?: "preparar" | "leer"; compacto?: boolean }) {
   const { exp, escala, puedeEditar, sinLeer } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
 
@@ -89,7 +93,9 @@ export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPri
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-fg">El agente</h3>
           <p className="text-xs text-fg-muted">
-            Lee lo que hay en HubSpot (la empresa, sus contactos, negocios, notas, llamadas, reuniones y el test) y las reuniones de Meet, y propone qué va en cada casilla con la frase que lo respalda. Nada se confirma solo.
+            {compacto
+              ? "Lee cada reunión cuando llega su transcripción y propone dónde está cada dimensión, con la frase que lo respalda."
+              : "Lee lo que hay en HubSpot (la empresa, sus contactos, negocios, notas, llamadas, reuniones y el test) y las reuniones de Meet. Al preparar, elige la industria y arma las hipótesis; después de cada reunión, propone las respuestas y dónde está cada equipo, con la frase que lo respalda."}
           </p>
         </div>
         {puedeEditar && (
@@ -137,23 +143,23 @@ export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPri
         </Alert>
       )}
 
-      <Historia corridas={corridas} />
+      {!compacto && <Historia corridas={corridas} />}
 
-      {leido.tests.length > 0 && (
+      {!compacto && leido.tests.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-medium text-fg-secondary">El test de marketing</p>
           <ul className="space-y-0.5 text-xs text-fg-muted">
             {leido.tests.map((t) => (
               <li key={t.resultado.areaId}>
                 {nombreDeArea(t.resultado.areaId)}: lo contestó {t.contacto}
-                {t.resultado.fecha ? ` el ${diaCorto(t.resultado.fecha)}` : ""}. Sus niveles entran como propuesta: son de la escala anterior, valídalos en la primera reunión.
+                {t.resultado.fecha ? ` el ${diaCorto(t.resultado.fecha)}` : ""}. Sus niveles entran como hipótesis en «La escala»: son de la escala anterior y se confirman en la primera reunión.
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {agenda.length > 0 && (
+      {!compacto && agenda.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-medium text-fg-secondary">Reuniones agendadas en HubSpot</p>
           <ul className="space-y-0.5 text-xs text-fg-muted">
@@ -166,7 +172,7 @@ export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPri
         </div>
       )}
 
-      {leido.correosSinPermiso > 0 && (
+      {!compacto && leido.correosSinPermiso > 0 && (
         <p className="text-xs text-fg-muted">
           Hay {leido.correosSinPermiso} {leido.correosSinPermiso === 1 ? "correo" : "correos"} con la empresa que Nexus todavía no puede leer: falta el permiso de correos en la conexión con HubSpot.
         </p>

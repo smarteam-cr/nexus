@@ -9,7 +9,7 @@
  */
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import { metaEnCifras } from "./casillas";
-import { propuestaVigente, type EstadoDeExploracion } from "./contenido";
+import { esFuenteDeHipotesis, esHipotesisDeNivel, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import { diaCorto } from "./fechas";
 import type { ReunionSinLeer } from "./lectura";
 
@@ -28,7 +28,7 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
   return [
     {
       id: "dimensiones",
-      titulo: "Las 8 dimensiones de cada área en juego, estimadas",
+      titulo: "Dónde está cada equipo: las 8 dimensiones de cada área, confirmadas",
       cumplido: estado.areas.length > 0 && chequeo.completo,
     },
     { id: "meta", titulo: "Al menos una meta en cifras", cumplido: (c.metas ?? []).some(metaEnCifras) },
@@ -52,28 +52,56 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
   ];
 }
 
+/** El paso del lienzo donde se hace lo que sigue (la pantalla pone el botón para ir). */
+export type PasoDeQueSigue = "preparacion" | "reuniones" | "escala" | "casos";
+
 /**
- * Una sola indicación de qué hacer ahora: la primera cosa que falta, en el orden del proceso. Una
- * reunión sin leer va antes que lo propuesto: lo nuevo de esa reunión puede cambiar lo que hay que
- * revisar.
+ * Una sola indicación de qué hacer ahora: la primera cosa que falta, en el orden del proceso, con el
+ * paso donde se hace. Una reunión sin leer va antes que lo propuesto: lo nuevo de esa reunión puede
+ * cambiar lo que hay que revisar. Las hipótesis de nivel no cuentan como «para revisar»: son el mapa
+ * de lo que se cree, y se confirman en las reuniones.
  */
-export function queSigue(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo, sinLeer: readonly ReunionSinLeer[] = []): string {
-  const pendientes = propuestaVigente(estado).length;
-  if (!estado.perfilCierre || !estado.perfilDespues) return "Elige la industria y el perfil de negocio: la escala los pide antes de medir.";
-  if (estado.areas.length === 0) return "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.";
-  if (sinLeer.length === 1) return `Hay una reunión sin leer («${sinLeer[0].titulo}», ${diaCorto(sinLeer[0].fecha)}): pídele al agente que la lea, en «Lo que quedó».`;
-  if (sinLeer.length > 1) return `Hay ${sinLeer.length} reuniones sin leer: pídele al agente que las lea, en «Lo que quedó».`;
-  if (pendientes > 0) return `Revisa lo que propuso el agente: ${pendientes} ${pendientes === 1 ? "cosa" : "cosas"} para usar o descartar.`;
+export function queSigueConPaso(
+  estado: EstadoDeExploracion,
+  chequeo: ResultadoDelChequeo,
+  sinLeer: readonly ReunionSinLeer[] = [],
+): { texto: string; paso: PasoDeQueSigue | null } {
+  const revisables = propuestaVigente(estado).filter((it) => !esHipotesisDeNivel(it) && it.destino.tipo !== "casoDeUso").length;
+  if (!estado.perfilCierre || !estado.perfilDespues) {
+    return { texto: "Revisa la industria y el perfil de negocio: la escala los pide antes de medir.", paso: "preparacion" };
+  }
+  if (estado.areas.length === 0) return { texto: "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.", paso: "preparacion" };
+  if (sinLeer.length === 1) {
+    return { texto: `Hay una reunión sin leer («${sinLeer[0].titulo}», ${diaCorto(sinLeer[0].fecha)}): pídele al agente que la lea.`, paso: "reuniones" };
+  }
+  if (sinLeer.length > 1) return { texto: `Hay ${sinLeer.length} reuniones sin leer: pídele al agente que las lea.`, paso: "reuniones" };
+  if (revisables > 0) return { texto: `Revisa lo que propuso el agente: ${revisables} ${revisables === 1 ? "cosa" : "cosas"} para usar o descartar.`, paso: null };
+  // Todavía nada que haya dicho el cliente: lo que hay son hipótesis. Toca la primera reunión.
+  const conEvidencia = Object.values(estado.contenido.chequeo).some((e) => !esFuenteDeHipotesis(e.fuente));
+  if (!conEvidencia && estado.propuesta.leidas.sesiones.length === 0) {
+    return {
+      texto: "Haz la primera reunión con la guía: 30 minutos para validar el test, sacar sus metas en cifras y mostrarle qué va primero. Cuando llegue la transcripción, el agente la lee solo.",
+      paso: "reuniones",
+    };
+  }
   if (!chequeo.completo) {
     const faltan = chequeo.areas.reduce((s, a) => s + a.faltan.length, 0);
-    return `Estima ${faltan === 1 ? "la dimensión que falta" : `las ${faltan} dimensiones que faltan`}: sin las 8 no se sabe cuál es la más débil.`;
+    return {
+      texto: `Falta confirmar ${faltan === 1 ? "una dimensión" : `${faltan} dimensiones`}: míralas en el mapa y pregúntalas en la próxima reunión (sin las 8 no se sabe cuál es la más débil).`,
+      paso: "escala",
+    };
   }
   const puntos = listaParaProponer(estado, chequeo);
   const falta = (id: PuntoDeCalidad["id"]) => !puntos.find((p) => p.id === id)?.cumplido;
-  if (falta("meta")) return "Falta una meta en cifras: de cuánto a cuánto y para cuándo.";
-  if (falta("siguientePaso")) return "Agenda el siguiente paso, con fecha.";
-  if (falta("autoridad")) return "Falta saber quién firma y a quién más le afecta la decisión.";
-  if (falta("consecuencia")) return "Falta qué pasa si no actúa.";
-  if (falta("portal")) return "Revisen el portal en la segunda reunión, o marca que no usa HubSpot.";
-  return "Lista para proponer: arma la propuesta.";
+  if (falta("meta")) return { texto: "Falta una meta en cifras: de cuánto a cuánto y para cuándo.", paso: "reuniones" };
+  if (falta("siguientePaso")) return { texto: "Agenda el siguiente paso, con fecha.", paso: "reuniones" };
+  if (falta("autoridad")) return { texto: "Falta saber quién firma y a quién más le afecta la decisión.", paso: "reuniones" };
+  if (falta("consecuencia")) return { texto: "Falta qué pasa si no actúa.", paso: "reuniones" };
+  if (falta("portal")) return { texto: "Revisen el portal en la segunda reunión, o marca que no usa HubSpot.", paso: "reuniones" };
+  return { texto: "Lista para proponer: elige los casos de uso y arma la propuesta.", paso: "casos" };
+}
+
+/** Lo mismo, solo el texto (la lista de exploraciones). */
+export function queSigue(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo, sinLeer: readonly ReunionSinLeer[] = []): string {
+  return queSigueConPaso(estado, chequeo, sinLeer).texto;
 }

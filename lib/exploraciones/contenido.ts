@@ -34,21 +34,37 @@ import {
 
 export const NIVELES = ["D", "I", "F", "E", "O"] as const satisfies readonly Letra[];
 
-/** De dónde salió el nivel estimado de una dimensión. */
-export const FUENTES_DEL_NIVEL = ["test", "reunion", "portal", "vendedor"] as const;
+/**
+ * De dónde salió el nivel estimado de una dimensión. Dos clases, y el mapa de la escala las pinta
+ * distinto:
+ *   - HIPÓTESIS (`test`, `hipotesis`): lo que se cree antes de hablar con el cliente —lo que marcó
+ *     en el test, con la escala anterior, o lo que el agente deduce de HubSpot—. Se explora en la
+ *     reunión para saber si está ahí o no.
+ *   - EVIDENCIA (`reunion`, `portal`, `vendedor`): lo dijo el cliente, se vio en su portal o lo
+ *     marcó el vendedor.
+ */
+export const FUENTES_DEL_NIVEL = ["test", "hipotesis", "reunion", "portal", "vendedor"] as const;
 export type FuenteDelNivel = (typeof FUENTES_DEL_NIVEL)[number];
 export const ETIQUETA_DE_LA_FUENTE: Record<FuenteDelNivel, string> = {
-  test: "Test confirmado",
+  test: "El test",
+  hipotesis: "Hipótesis del agente",
   reunion: "Reunión",
   portal: "Portal",
-  vendedor: "Vendedor",
+  vendedor: "Lo marcó el vendedor",
 };
+
+/** ¿El nivel es una hipótesis (para explorar) y no algo que dijo el cliente o se vio? */
+export function esFuenteDeHipotesis(f: FuenteDelNivel): boolean {
+  return f === "test" || f === "hipotesis";
+}
 
 export interface EstimadoGuardado {
   nivel: Letra;
   fuente: FuenteDelNivel;
   /** La frase que lo respalda, en palabras del cliente. */
   evidencia?: string;
+  /** Por qué ese nivel, en una o dos frases que el vendedor pueda decir (lo escribe el agente). */
+  porQue?: string;
   /** «No sé»: cuenta como el nivel más bajo, como dice la escala. */
   noSabe?: boolean;
   /** Una respuesta dejó ver un riesgo de la dimensión: no se estima por encima de Funcional. */
@@ -85,13 +101,38 @@ export interface Medicion {
 }
 
 /**
- * Un caso de uso del catálogo de Smarteam elegido para la propuesta, con el área que lleva a
- * Funcional y por qué. El título se guarda con el elegido: la propuesta y el traspaso lo nombran sin
- * depender de que el catálogo siga igual.
+ * Un caso de uso elegido para la propuesta, con el área que lleva a Funcional y por qué. Puede ser
+ * del catálogo de Smarteam (su id es el del catálogo) o uno que propuso el agente sin el catálogo
+ * (id `ia-…`, ver `idDeCasoLibre`): ese no tiene precio ni fila en el catálogo, y entra a la
+ * propuesta solo como contexto. El título se guarda con el elegido: la propuesta y el traspaso lo
+ * nombran sin depender de que el catálogo siga igual.
  */
 export interface CasoDeUsoElegido {
   titulo: string;
   areaId: string | null;
+  razon?: string;
+  /** Qué se implementa y cómo se usa, en dos o tres frases (los que propone el agente). */
+  descripcion?: string;
+  /** Las dimensiones de la escala que mueve (ids). */
+  dimensiones?: string[];
+}
+
+/** El id de un caso de uso que propuso el agente sin el catálogo: sale del título. */
+export function idDeCasoLibre(titulo: string): string {
+  return `ia-${fnv1a(normalizarTexto(titulo))}`;
+}
+
+/** ¿Es un caso de uso que propuso el agente, sin el catálogo? */
+export const esCasoLibre = (useCaseId: string) => useCaseId.startsWith("ia-");
+
+/**
+ * Quién eligió la edición de la escala (la industria). Se elige SOLA —por la industria de HubSpot o
+ * por el agente, que lee todo lo que hay de la empresa— hasta que el vendedor la cambia: desde ahí,
+ * el agente ya no la toca.
+ */
+export interface EdicionElegida {
+  por: "industria" | "agente" | "vendedor";
+  /** Por qué esa, en una línea (la industria de HubSpot, lo que hace la empresa). */
   razon?: string;
 }
 
@@ -120,8 +161,12 @@ export interface ContenidoDeExploracion {
   medicion: Medicion;
   /** El prospecto no usa HubSpot: no hay portal que mirar (cuenta como revisado). */
   sinPortal: boolean;
-  /** Los casos de uso del catálogo que van a la propuesta, por id del catálogo. */
+  /** Los casos de uso que van a la propuesta: del catálogo (por su id) o los que propuso el agente (`ia-…`). */
   casosDeUso: Record<string, CasoDeUsoElegido>;
+  /** Los títulos de los casos de uso que el vendedor descartó: la próxima tanda no los repite. */
+  casosDescartados: string[];
+  /** Quién eligió la edición. null = nadie todavía (la exploración arrancó con la escala general). */
+  edicionElegida: EdicionElegida | null;
   /** Lápidas: ids de lo propuesto que el vendedor descartó. */
   descartadas: string[];
   alProponer: FotoAlProponer[];
@@ -140,9 +185,25 @@ export function contenidoVacio(): ContenidoDeExploracion {
     medicion: {},
     sinPortal: false,
     casosDeUso: {},
+    casosDescartados: [],
+    edicionElegida: null,
     descartadas: [],
     alProponer: [],
   };
+}
+
+/** Cuántos títulos de casos descartados se recuerdan. */
+export const MAX_CASOS_DESCARTADOS = 100;
+
+/**
+ * ¿La industria (y el perfil) los eligió el vendedor? Entonces el agente ya no los cambia. Una
+ * exploración de antes del 2026-10-01 no anotaba quién: ahí nada se elegía solo, así que una
+ * industria o un perfil ya puestos los puso el vendedor.
+ */
+export function industriaDelVendedor(e: Pick<EstadoDeExploracion, "contenido" | "edicion" | "perfilCierre" | "perfilDespues">): boolean {
+  const elegida = e.contenido.edicionElegida;
+  if (elegida) return elegida.por === "vendedor";
+  return e.edicion !== null || (e.perfilCierre !== null && e.perfilDespues !== null);
 }
 
 // ── Lo que propone el agente ──────────────────────────────────────────────────
@@ -177,7 +238,7 @@ export interface ItemPropuesto {
   en: string;
 }
 
-/** Los tres momentos del agente: preparar la primera reunión, leer las reuniones, sugerir los casos de uso. */
+/** Los tres momentos del agente: preparar la primera reunión, leer las reuniones, proponer los casos de uso. */
 export const MODOS_DE_LA_CORRIDA = ["preparar", "leer", "casos"] as const;
 export type ModoDeLaCorrida = (typeof MODOS_DE_LA_CORRIDA)[number];
 
@@ -293,13 +354,17 @@ export function claveDelDestino(d: DestinoDePropuesta): string {
 }
 
 /**
- * El id de lo propuesto. Para el NIVEL cuenta solo el nivel (no la frase que lo respalda): si el
- * vendedor descartó «Datos en Inicial», otra corrida que diga lo mismo con otra cita no vuelve.
+ * El id de lo propuesto. Para el NIVEL cuenta el nivel y si es hipótesis (no la frase que lo
+ * respalda): si el vendedor descartó «Datos en Inicial», otra corrida que diga lo mismo con otra
+ * cita no vuelve; pero descartar la HIPÓTESIS «Datos en Inicial» no tapa lo que el cliente diga
+ * después en una reunión.
  */
 export function idDelItem(destino: DestinoDePropuesta, valor: unknown): string {
   const valorQueCuenta =
     destino.tipo === "nivel" && esObjeto(valor)
-      ? { nivel: valor.nivel }
+      ? esFuenteDeHipotesis(valor.fuente as FuenteDelNivel)
+        ? { nivel: valor.nivel, hipotesis: true }
+        : { nivel: valor.nivel }
       : destino.tipo === "falta" && esObjeto(valor)
         ? { estado: valor.estado }
         : destino.tipo === "aExplorar" || destino.tipo === "area" || destino.tipo === "casoDeUso"
@@ -356,8 +421,13 @@ export function yaEstaConfirmado(estado: EstadoDeExploracion, destino: DestinoDe
       }
       return canonico(actual) === canonico(valor);
     }
-    case "nivel":
-      return c.chequeo[destino.dimensionId]?.nivel === (valor as EstimadoGuardado).nivel;
+    case "nivel": {
+      /* El mismo nivel ya confirmado. Pero si lo confirmado es una hipótesis y lo propuesto trae
+         evidencia (lo dijo el cliente), NO está confirmado: es la evidencia que faltaba. */
+      const actual = c.chequeo[destino.dimensionId];
+      const v = valor as EstimadoGuardado;
+      return !!actual && actual.nivel === v.nivel && (!esFuenteDeHipotesis(actual.fuente) || esFuenteDeHipotesis(v.fuente));
+    }
     case "falta":
       return c.falta[destino.criterioId]?.estado === (valor as EstadoDeCriterio).estado;
     case "aExplorar":
@@ -382,35 +452,54 @@ function unirFuentes(a: FuenteCitada[], b: FuenteCitada[]): FuenteCitada[] {
 }
 
 /**
+ * Qué tanto pesa un nivel propuesto: lo que marcó en el test (escala anterior) < la hipótesis del
+ * agente (que ya leyó el test y lo demás) < lo que dijo el cliente o se vio. 0 = no es un nivel.
+ */
+function pesoDelNivel(it: ItemPropuesto): number {
+  if (it.destino.tipo !== "nivel" || !esObjeto(it.valor)) return 0;
+  const f = it.valor.fuente as FuenteDelNivel;
+  return f === "test" ? 1 : f === "hipotesis" ? 2 : 3;
+}
+
+/** ¿Es la hipótesis de un nivel (del test o del agente)? Es la capa del mapa: no hay que «usarla». */
+export function esHipotesisDeNivel(it: ItemPropuesto): boolean {
+  const p = pesoDelNivel(it);
+  return p === 1 || p === 2;
+}
+
+/**
  * Suma lo que propuso una corrida a lo pendiente. No entra lo descartado (lápida), ni lo que ya está
  * confirmado igual. Un destino escalar queda con UNA sola propuesta: la más nueva reemplaza a la
- * anterior. Lo repetido junta sus fuentes.
+ * anterior, salvo que pese menos (una hipótesis no pisa lo que dijo el cliente). Lo repetido junta
+ * sus fuentes.
  */
-/** ¿Es un nivel que sale del test de marketing (escala anterior, hipótesis)? */
-const esNivelDelTest = (it: ItemPropuesto) => it.destino.tipo === "nivel" && esObjeto(it.valor) && it.valor.fuente === "test";
-
 export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemPropuesto[]): PropuestaDeExploracion {
   const base = estado.propuesta;
   const lapidas = new Set(estado.contenido.descartadas);
   let items = [...estado.propuesta.items];
   for (const n of nuevos) {
     if (lapidas.has(n.id) || yaEstaConfirmado(estado, n.destino, n.valor)) continue;
+    const peso = pesoDelNivel(n);
+    /* Una hipótesis no compite con lo que ya dijo el cliente: si el nivel confirmado tiene evidencia,
+       la hipótesis sobra. */
+    if (peso === 1 || peso === 2) {
+      const confirmado = estado.contenido.chequeo[(n.destino as { dimensionId: string }).dimensionId];
+      if (confirmado && !esFuenteDeHipotesis(confirmado.fuente)) continue;
+    }
     const i = items.findIndex((x) => x.id === n.id);
     if (i >= 0) {
-      /* El mismo nivel desde el test y desde una reunión tienen el mismo id: queda el de la reunión
-         (su frase, su riesgo a la vista); el test solo suma su fuente. */
-      if (esNivelDelTest(n) && !esNivelDelTest(items[i])) {
-        items[i] = { ...items[i], fuentes: unirFuentes(items[i].fuentes, n.fuentes) };
-        continue;
-      }
-      items[i] = { ...n, fuentes: unirFuentes(items[i].fuentes, n.fuentes) };
+      /* El mismo nivel y la misma clase: queda el que más pesa (la hipótesis del agente sobre lo que
+         marcó en el test), con las fuentes de los dos. */
+      items[i] =
+        peso < pesoDelNivel(items[i])
+          ? { ...items[i], fuentes: unirFuentes(items[i].fuentes, n.fuentes) }
+          : { ...n, fuentes: unirFuentes(items[i].fuentes, n.fuentes) };
       continue;
     }
-    /* El test es la hipótesis más débil: al volver a preparar, su nivel no pisa uno pendiente que
-       salió de una reunión o del portal, con su frase. */
-    if (esNivelDelTest(n)) {
+    // Al volver a preparar, una hipótesis no pisa un nivel pendiente que pesa más (el que salió de una reunión).
+    if (peso > 0) {
       const clave = claveDelDestino(n.destino);
-      if (items.some((x) => claveDelDestino(x.destino) === clave && !lapidas.has(x.id) && !esNivelDelTest(x))) continue;
+      if (items.some((x) => claveDelDestino(x.destino) === clave && !lapidas.has(x.id) && pesoDelNivel(x) > peso)) continue;
     }
     if (!destinoDeLista(n.destino)) {
       const clave = claveDelDestino(n.destino);
@@ -453,6 +542,11 @@ export interface Validez {
   criterios: ReadonlySet<string>;
   areas: ReadonlySet<string>;
   ediciones: ReadonlySet<string>;
+  /**
+   * El perfil habitual de cada edición, como lo dice la escala: al elegir la industria, el perfil
+   * (cómo se cierra la venta y qué pasa después) se elige con ella. Sin esto, la edición cambia sola.
+   */
+  perfilesHabituales?: Readonly<Record<string, { cierre: Cierre; despues: Despues } | null>>;
   /** La versión de la escala publicada: queda anotada con cada nivel. */
   escalaVersion: string | null;
 }
@@ -569,9 +663,20 @@ function aplicarAlDestino(
       };
     }
     case "edicion": {
+      /* La elige el vendedor (a mano o usando lo propuesto): desde ahora el agente no la cambia. Con
+         ella va su perfil habitual, como lo dice la escala; el vendedor lo ajusta después si hace falta. */
       const slug = (v as { slug: string | null }).slug;
       if (slug !== null && !validez.ediciones.has(slug)) return { ok: false, error: "Esa industria no tiene edición en la escala." };
-      return { ok: true, estado: { ...estado, edicion: slug } };
+      const habitual = slug ? validez.perfilesHabituales?.[slug] : null;
+      return {
+        ok: true,
+        estado: {
+          ...estado,
+          edicion: slug,
+          ...(habitual ? { perfilCierre: habitual.cierre, perfilDespues: habitual.despues } : {}),
+          contenido: { ...c, edicionElegida: { por: "vendedor" } },
+        },
+      };
     }
     case "perfil": {
       const p = v as { cierre: Cierre; despues: Despues };
@@ -625,7 +730,11 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       return { ok: true, estado: { ...estado, areas, contenido: { ...c, razonesDeAreas } } };
     }
     case "perfil":
-      return { ok: true, estado: { ...estado, perfilCierre: op.cierre, perfilDespues: op.despues } };
+      // El vendedor tocó el perfil: desde ahora el agente ya no cambia ni la industria ni el perfil.
+      return {
+        ok: true,
+        estado: { ...estado, perfilCierre: op.cierre, perfilDespues: op.despues, contenido: { ...c, edicionElegida: { por: "vendedor" } } },
+      };
     case "edicion":
       return aplicarAlDestino(estado, { tipo: "edicion" }, { slug: op.edicion }, validez, validador);
     case "nota": {
@@ -661,12 +770,20 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     }
     case "descartar": {
       const ids = new Set(op.itemIds);
+      // El título de un caso de uso descartado queda anotado: la próxima tanda del agente no lo repite.
+      const titulos = estado.propuesta.items
+        .filter((x) => ids.has(x.id) && x.destino.tipo === "casoDeUso" && esObjeto(x.valor) && typeof x.valor.titulo === "string")
+        .map((x) => (x.valor as CasoDeUsoElegido).titulo);
       return {
         ok: true,
         estado: {
           ...estado,
           propuesta: { ...estado.propuesta, items: estado.propuesta.items.filter((x) => !ids.has(x.id)) },
-          contenido: { ...c, descartadas: [...c.descartadas.filter((d) => !ids.has(d)), ...ids].slice(-MAX_DESCARTADAS) },
+          contenido: {
+            ...c,
+            descartadas: [...c.descartadas.filter((d) => !ids.has(d)), ...ids].slice(-MAX_DESCARTADAS),
+            ...(titulos.length ? { casosDescartados: [...c.casosDescartados.filter((t) => !titulos.includes(t)), ...titulos].slice(-MAX_CASOS_DESCARTADOS) } : {}),
+          },
         },
       };
     }
@@ -695,8 +812,10 @@ export function aplicarOperaciones(
 
 /** ¿Lo que cambió es lo confirmado (sube la versión) o solo lo pendiente? */
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
+  // Las lápidas (y los títulos de los casos descartados) son de lo propuesto: no suben la versión.
+  const sinLapidas = (c: ContenidoDeExploracion) => exacto({ ...c, descartadas: [], casosDescartados: [] });
   return (
-    exacto({ ...antes.contenido, descartadas: [] }) !== exacto({ ...despues.contenido, descartadas: [] }) ||
+    sinLapidas(antes.contenido) !== sinLapidas(despues.contenido) ||
     exacto(antes.areas) !== exacto(despues.areas) ||
     antes.edicion !== despues.edicion ||
     antes.perfilCierre !== despues.perfilCierre ||

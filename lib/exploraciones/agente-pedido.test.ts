@@ -8,16 +8,18 @@ import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import {
   citaVerificable,
   herramienta,
+  leerLaIndustria,
   leerLaRespuesta,
   leerLosCasos,
   MAX_CASOS_POR_AREA,
   pedidoDeCasos,
+  pedidoDeLaIndustria,
   MODELO_DE_LA_EXPLORACION,
   pedidoDeLaExploracion,
   propuestasDelTest,
   type ContextoDelPedido,
 } from "./agente-pedido";
-import { contenidoVacio, fusionarPropuestas, NIVELES, propuestaVacia, propuestaVigente, type EstadoDeExploracion } from "./contenido";
+import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, NIVELES, propuestaVacia, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 
 // ── Una escala de juguete: dos áreas, cuatro dimensiones cada una ─────────────────
@@ -301,6 +303,72 @@ describe("la herramienta y el pedido", () => {
   });
 });
 
+describe("las hipótesis al preparar", () => {
+  it("un nivel entra sin frase literal, como hipótesis con su porqué y sus fuentes; sin porqué o sin fuente, no", () => {
+    const r = leerLaRespuesta(
+      respuesta({
+        niveles: [
+          { dimensionId: "1.1", nivel: "I", porQue: "Las notas dicen que cada vendedor lleva su Excel.", fuentes: [{ id: "E0" }] },
+          { dimensionId: "1.2", nivel: "F", fuentes: [{ id: "E0" }] },
+          { dimensionId: "1.5", nivel: "D", porQue: "Sin fuente.", fuentes: [] },
+        ],
+      }),
+      ctx({ modo: "preparar" }),
+      "run_1",
+      AHORA,
+    );
+    expect(r.items.map((i) => i.destino)).toEqual([{ tipo: "nivel", dimensionId: "1.1" }]);
+    expect(r.items[0].valor).toEqual({ nivel: "I", fuente: "hipotesis", porQue: "Las notas dicen que cada vendedor lleva su Excel." });
+    expect(r.descartadas).toBe(2);
+  });
+
+  it("la hipótesis y lo que dijo el cliente, en el mismo nivel, son cosas distintas: descartar una no tapa la otra", () => {
+    const destino = { tipo: "nivel" as const, dimensionId: "1.1" };
+    expect(idDelItem(destino, { nivel: "I", fuente: "hipotesis" })).not.toBe(idDelItem(destino, { nivel: "I", fuente: "reunion" }));
+    // El test y la hipótesis del agente son la misma clase: se juntan.
+    expect(idDelItem(destino, { nivel: "I", fuente: "test" })).toBe(idDelItem(destino, { nivel: "I", fuente: "hipotesis" }));
+  });
+
+  it("la herramienta pide el porqué de cada nivel, y al preparar no exige la frase", () => {
+    const props = (herramienta(ctx({ modo: "preparar" })).input_schema as { properties: Record<string, { items: { required: string[] } }> }).properties;
+    expect(props.niveles.items.required).toEqual(["dimensionId", "nivel", "porQue", "fuentes"]);
+    const alLeer = (herramienta(ctx()).input_schema as { properties: Record<string, { items: { required: string[] } }> }).properties;
+    expect(alLeer.niveles.items.required).toEqual(expect.arrayContaining(["evidencia", "porQue"]));
+  });
+});
+
+describe("la industria que elige el agente", () => {
+  const EDICIONES = [
+    { slug: "banca", nombre: "Banca y servicios financieros", descripcion: "Para una financiera que coloca créditos.", perfilHabitual: { cierre: "mixta" as const, despues: "continua" as const } },
+    { slug: "educacion", nombre: "Educación", descripcion: "Para admisiones.", perfilHabitual: null },
+  ];
+  const conIndustria = (input: Record<string, unknown>) =>
+    ({ ...respuesta({}), content: [{ type: "tool_use", id: "tu", name: "elegir_industria", input }] }) as unknown as Anthropic.Messages.Message;
+
+  it("una edición que existe, con su razón; la general con su perfil; lo demás no cuenta", () => {
+    expect(leerLaIndustria(conIndustria({ edicion: "banca", razon: "Coloca créditos a pymes." }), { ediciones: EDICIONES })).toEqual({
+      edicion: "banca",
+      razon: "Coloca créditos a pymes.",
+      perfil: null,
+    });
+    expect(leerLaIndustria(conIndustria({ edicion: "general", razon: "Vende software.", cierre: "con equipo", despues: "continua" }), { ediciones: EDICIONES })).toEqual({
+      edicion: null,
+      razon: "Vende software.",
+      perfil: { cierre: "con equipo", despues: "continua" },
+    });
+    expect(leerLaIndustria(conIndustria({ edicion: "salud", razon: "x" }), { ediciones: EDICIONES })).toBeNull();
+    expect(leerLaIndustria(conIndustria({ edicion: "banca" }), { ediciones: EDICIONES })).toBeNull();
+  });
+
+  it("el pedido lleva para quién es cada edición (de la escala) y fuerza su herramienta", () => {
+    const p = pedidoDeLaIndustria({ empresa: "CreditForce", ediciones: EDICIONES, perfil: { cierre: null, despues: null }, fuentes: FUENTES });
+    expect(p.tool_choice).toEqual({ type: "tool", name: "elegir_industria" });
+    const cuerpo = String(p.messages[0].content);
+    expect(cuerpo).toContain("- banca · Banca y servicios financieros: Para una financiera que coloca créditos.");
+    expect(cuerpo).toContain("=== FUENTE E0: La empresa en HubSpot ===");
+  });
+});
+
 describe("propuestasDelTest", () => {
   const TEST = {
     contacto: "Ana Pérez",
@@ -323,7 +391,9 @@ describe("propuestasDelTest", () => {
       { tipo: "nivel", dimensionId: "3.1" },
       { tipo: "nivel", dimensionId: "3.2" },
     ]);
-    expect(items[1].valor).toEqual({ nivel: "I", fuente: "test", evidencia: "Usamos un correo compartido" });
+    expect(items[1].valor).toMatchObject({ nivel: "I", fuente: "test", evidencia: "Usamos un correo compartido" });
+    // Su porqué dice qué eligió y que es una pista: lo que el vendedor lee en el mapa.
+    expect((items[1].valor as { porQue: string }).porQue).toMatch(/Usamos un correo compartido.*escala anterior/);
     expect(items[1].razon).toMatch(/escala anterior/);
   });
 
@@ -363,31 +433,44 @@ describe("propuestasDelTest", () => {
   });
 });
 
-describe("los casos de uso que sugiere", () => {
-  const CATALOGO = Array.from({ length: 7 }, (_, i) => ({ id: `uc-${i}`, titulo: `Caso ${i}`, descripcion: "Hace algo útil", tags: [] }));
-  const CTX = { empresa: "Acme", areas: [{ id: "1", nombre: "Ventas" }], exploracion: "(la exploración)", catalogo: CATALOGO };
+describe("los casos de uso que propone (experimental, sin la biblioteca)", () => {
+  const CTX = {
+    empresa: "Acme",
+    edicion: "escala general",
+    areas: [{ id: "1", nombre: "Ventas", dimensiones: [{ id: "1.1", nombre: "Proceso" }, { id: "1.2", nombre: "Datos" }] }],
+    exploracion: "(la exploración)",
+    yaEstan: ["Pipeline con etapas"],
+    descartados: ["Tablero de ventas"],
+  };
   const conCasos = (casos: unknown[]) =>
     ({ ...respuesta({}), content: [{ type: "tool_use", id: "tu", name: "proponer_casos", input: { casos } }] }) as unknown as Anthropic.Messages.Message;
+  const caso = (titulo: string, extra: Record<string, unknown> = {}) => ({ areaId: "1", titulo, descripcion: "Qué se implementa", razon: "Lo que resuelve", ...extra });
 
-  it("solo del catálogo, en un área en juego, con su razón, sin repetidos y con el tope por área", () => {
+  it("en un área en juego, con título, descripción y razón; sin repetir lo que ya está ni lo descartado; con el tope por área", () => {
     const casos = [
-      { useCaseId: "uc-0", areaId: "1", razon: "Define las etapas" },
-      { useCaseId: "uc-0", areaId: "1", razon: "Repetido" },
-      { useCaseId: "inventado", areaId: "1", razon: "No está en el catálogo" },
-      { useCaseId: "uc-1", areaId: "3", razon: "Área que no está en juego" },
-      { useCaseId: "uc-2", areaId: "1" },
-      ...[3, 4, 5, 6].map((i) => ({ useCaseId: `uc-${i}`, areaId: "1", razon: `Cubre ${i}` })),
+      caso("Seguimiento de negocios", { dimensiones: ["1.1", "9.9"] }),
+      caso("seguimiento de NEGOCIOS"),
+      caso("Pipeline con etapas"),
+      caso("Tablero de ventas"),
+      caso("Otra área", { areaId: "3" }),
+      { areaId: "1", titulo: "Sin descripción", razon: "x" },
+      ...[1, 2, 3, 4].map((n) => caso(`Caso ${n}`)),
     ];
     const r = leerLosCasos(conCasos(casos), CTX, "run_1", AHORA);
-    expect(r.items.map((i) => (i.destino as { useCaseId: string }).useCaseId)).toEqual(["uc-0", "uc-3", "uc-4", "uc-5"]);
+    expect(r.items.map((i) => (i.valor as { titulo: string }).titulo)).toEqual(["Seguimiento de negocios", "Caso 1", "Caso 2", "Caso 3"]);
     expect(r.items).toHaveLength(MAX_CASOS_POR_AREA);
-    expect(r.items[0].valor).toEqual({ titulo: "Caso 0", areaId: "1", razon: "Define las etapas" });
-    expect(r.descartadas).toBe(5);
+    // El id sale del título (no del catálogo): un caso descartado deja su lápida.
+    expect(r.items[0].destino).toEqual({ tipo: "casoDeUso", useCaseId: idDeCasoLibre("Seguimiento de negocios") });
+    expect(r.items[0].valor).toEqual({ titulo: "Seguimiento de negocios", areaId: "1", razon: "Lo que resuelve", descripcion: "Qué se implementa", dimensiones: ["1.1"] });
+    expect(r.descartadas).toBe(6);
   });
 
-  it("el pedido nombra los casos por id y fuerza su herramienta", () => {
+  it("el pedido no usa catálogo, lleva lo que ya está y lo descartado, y fuerza su herramienta", () => {
     const p = pedidoDeCasos(CTX);
     expect(p.tool_choice).toEqual({ type: "tool", name: "proponer_casos" });
-    expect(String(p.messages[0].content)).toContain("- uc-3 · Caso 3");
+    const cuerpo = String(p.messages[0].content);
+    expect(cuerpo).toContain("=== YA ESTÁN (no los repitas) ===\n- Pipeline con etapas");
+    expect(cuerpo).toContain("- Tablero de ventas");
+    expect(cuerpo).not.toMatch(/catálogo/i);
   });
 });

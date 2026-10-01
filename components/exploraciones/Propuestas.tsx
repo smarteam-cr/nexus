@@ -9,6 +9,7 @@
 import { Button } from "@/components/ui";
 import { ETIQUETA_DEL_ROL, type Apertura, type Meta, type Persona, type Reto, type SiguientePaso } from "@/lib/exploraciones/casillas";
 import {
+  esFuenteDeHipotesis,
   ETIQUETA_DEL_MOTIVO,
   type AExplorar,
   type CasoDeUsoElegido,
@@ -69,6 +70,7 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
       }
     case "nivel": {
       const e = v as EstimadoGuardado;
+      if (esFuenteDeHipotesis(e.fuente)) return `${nombreDeNivel(e.nivel)} (hipótesis)`;
       return `${nombreDeNivel(e.nivel)}${e.evidencia ? ` — «${e.evidencia}»` : ""}`;
     }
     case "falta": {
@@ -78,7 +80,8 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
     case "aExplorar": {
       const a = v as AExplorar;
       // La razón va en su propia línea (item.razon); acá solo si es otra.
-      return `${nombreDeDimension(escala, d.dimensionId)} — ${ETIQUETA_DEL_MOTIVO[a.motivo]}${a.razon && a.razon !== item.razon ? `. ${a.razon}` : ""}`;
+      const motivo = a.motivo === "otro" ? "" : ` (${ETIQUETA_DEL_MOTIVO[a.motivo].charAt(0).toLowerCase()}${ETIQUETA_DEL_MOTIVO[a.motivo].slice(1)})`;
+      return `Explorar a fondo: ${nombreDeDimension(escala, d.dimensionId)}${a.razon && a.razon !== item.razon ? `. ${a.razon}` : motivo}`;
     }
     case "area":
       return escala.areas.find((a) => a.id === d.areaId)?.nombre ?? d.areaId;

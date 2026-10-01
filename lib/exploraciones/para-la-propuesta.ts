@@ -219,7 +219,9 @@ export function bloqueParaLaPropuesta(o: {
     partes.push(
       "",
       "## Para qué va cada caso de uso elegido",
-      ...casos.map((k) => `- ${k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}`),
+      ...casos.map(
+        (k) => `- ${k.titulo}${nombreDeArea(k.areaId) ? ` (${nombreDeArea(k.areaId)})` : ""}${k.razon ? `: ${k.razon}` : ""}${k.descripcion ? ` Qué es: ${k.descripcion}` : ""}`,
+      ),
     );
   }
 

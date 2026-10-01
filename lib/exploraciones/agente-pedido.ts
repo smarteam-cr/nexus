@@ -7,20 +7,27 @@
  *   - nombra una casilla, una dimensión, un criterio, un área o una fuente que no existen (las
  *     listas cerradas de la herramienta lo hacen casi imposible, y acá se verifica igual);
  *   - no tiene la forma de su casilla (el validador estricto de esquemas.ts);
- *   - es un NIVEL o un «lo tiene / no lo tiene» sin una frase que aparezca, literal, en su fuente.
+ *   - es un NIVEL leído de una reunión o un «lo tiene / no lo tiene» sin una frase que aparezca,
+ *     literal, en su fuente.
  * Una cita que no aparece en su fuente se quita (la fuente queda): la frase es lo que el vendedor
  * lee para decidir, y una inventada lo engañaría.
+ *
+ * Al PREPARAR, el nivel es una HIPÓTESIS (lo que se cree antes de hablar con el cliente, para
+ * explorarlo en la reunión): no necesita una frase literal, pero sí sus fuentes y su porqué. Va
+ * marcada como hipótesis y nunca llega a la propuesta ni al handoff (lib/exploraciones/mapa.ts).
  *
  * Solo la escala PUBLICADA, con la edición de la industria: nunca la de los documentos de
  * conocimiento (5.2), porque un agente con dos escalas las mezcla. Ningún id de la escala en los
  * textos que propone: los ids van en sus campos.
  */
 import type Anthropic from "@anthropic-ai/sdk";
-import type { Letra } from "@/lib/escala/documento/tipos";
+import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import { CASILLAS, ETIQUETA_DEL_ROL, ROLES_EN_LA_DECISION, TIPO_DE_CASILLA, VALORES_DE_APERTURA, type ClaveDeCasilla } from "./casillas";
 import {
+  ETIQUETA_DE_LA_FUENTE,
   ETIQUETA_DEL_MOTIVO,
   ESTADOS_DEL_CRITERIO,
+  idDeCasoLibre,
   idDelItem,
   MOTIVOS_PARA_EXPLORAR,
   NIVELES,
@@ -164,22 +171,38 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
     };
   }
   if (dims.length) {
-    properties.niveles = {
-      type: "array",
-      description: "El nivel por mejor ajuste, SOLO con una frase de la fuente que lo respalde. Ante la duda entre dos, el más bajo.",
-      items: {
-        type: "object",
-        properties: {
-          dimensionId: { type: "string", enum: dims },
-          nivel: { type: "string", enum: [...NIVELES] },
-          evidencia: { type: "string", description: "La frase del cliente que lo respalda, tal cual." },
-          riesgo: { type: "boolean", description: "true si lo que dijo deja ver que un riesgo de la dimensión está activo." },
-          razon: { type: "string" },
-          fuentes,
-        },
-        required: ["dimensionId", "nivel", "evidencia", "fuentes"],
-      },
+    const porQue = {
+      type: "string",
+      description: "Por qué ese nivel, en una o dos frases llanas que el vendedor pueda leer y decir. Sin identificadores de la escala.",
     };
+    properties.niveles =
+      ctx.modo === "preparar"
+        ? {
+            type: "array",
+            description:
+              "Tu HIPÓTESIS de dónde está cada dimensión, antes de hablar con el cliente: por mejor ajuste contra las descripciones, con las pistas que dan las fuentes (el test, las notas, lo que tiene en HubSpot). Ante la duda entre dos, el más bajo. Sin ninguna pista, no la mandes.",
+            items: {
+              type: "object",
+              properties: { dimensionId: { type: "string", enum: dims }, nivel: { type: "string", enum: [...NIVELES] }, porQue, fuentes },
+              required: ["dimensionId", "nivel", "porQue", "fuentes"],
+            },
+          }
+        : {
+            type: "array",
+            description: "El nivel por mejor ajuste, SOLO con una frase de la fuente que lo respalde. Ante la duda entre dos, el más bajo.",
+            items: {
+              type: "object",
+              properties: {
+                dimensionId: { type: "string", enum: dims },
+                nivel: { type: "string", enum: [...NIVELES] },
+                evidencia: { type: "string", description: "La frase del cliente que lo respalda, tal cual." },
+                riesgo: { type: "boolean", description: "true si lo que dijo deja ver que un riesgo de la dimensión está activo." },
+                porQue,
+                fuentes,
+              },
+              required: ["dimensionId", "nivel", "evidencia", "porQue", "fuentes"],
+            },
+          };
     properties.aExplorar = {
       type: "array",
       description: "Dimensiones en las que conviene profundizar (máximo 4 por área).",
@@ -242,7 +265,7 @@ function confirmadoComoTexto(ctx: ContextoDelPedido): string {
     if (v === undefined) continue;
     lineas.push(`- ${def.etiqueta}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
   }
-  const niveles = Object.entries(c.chequeo).map(([id, e]) => `${id}=${e.nivel}`);
+  const niveles = Object.entries(c.chequeo).map(([id, e]) => `${id}=${e.nivel} (${ETIQUETA_DE_LA_FUENTE[e.fuente].toLowerCase()})`);
   if (niveles.length) lineas.push(`- Niveles ya estimados: ${niveles.join(", ")}`);
   const explorar = Object.keys(c.aExplorar);
   if (explorar.length) lineas.push(`- Dimensiones elegidas para explorar: ${explorar.join(", ")}`);
@@ -257,11 +280,11 @@ function sistema(ctx: ContextoDelPedido): string {
 - hubspotActual: qué HubSpot tiene (hubs, ediciones, usuarios, quién lo configuró, renovación), si las fuentes lo dicen.
 - hipotesis: de 3 a 5, cada una «Creemos que… porque…», para confirmar o descartar en la reunión.
 - areas: las que deberían estar en juego y no están (la del test, lo que menciona, lo que paga sin usar).
-- aExplorar: las dimensiones donde hay indicios (debajo de Funcional según el test o lo que dijo), que tocan una meta o que dejan ver un riesgo. Máximo 4 por área.
-- personas: quién es quién, si las fuentes lo dicen. El papel en la decisión no se deduce del cargo.
-- NO propongas niveles a partir del test: el test ya entra solo como hipótesis. Solo propón un nivel si OTRA fuente lo respalda con una frase.`
+- niveles: tu HIPÓTESIS de dónde está cada dimensión de las áreas en juego, con su porQue en lenguaje llano («Creemos que está en Inicial porque las notas dicen que cada vendedor lleva su Excel»). El test es una pista, no la verdad: lo contestó el prospecto con la escala anterior. Cruza el test con lo demás; si no hay ninguna pista para una dimensión, no la mandes (queda para preguntar).
+- aExplorar: las dimensiones donde hay indicios (debajo de Funcional según el test o lo que dijo), que tocan una meta o que dejan ver un riesgo. Máximo 4 por área. La razón, en una frase llana.
+- personas: quién es quién, si las fuentes lo dicen. El papel en la decisión no se deduce del cargo.`
       : `ESTA CORRIDA: LEER LA REUNIÓN que acaba de pasar. Lo que más sirve, con la frase del cliente:
-- niveles: el nivel de cada dimensión que la conversación deja ver, por mejor ajuste contra las descripciones.
+- niveles: el nivel de cada dimensión que la conversación deja ver, por mejor ajuste contra las descripciones, con la frase del cliente y su porQue en lenguaje llano.
 - metas (en cifras si las dijo), planes, retos (con su dimensión), consecuencias de no actuar, implicaciones de lograrlo, presupuesto.
 - tiempos: los plazos del CLIENTE (para cuándo necesita el resultado, cuándo decide, cuándo renueva). La próxima reunión no va acá: es el siguientePaso.
 - personas: quién firma, quién decide, quién influye y a quién más le afecta.
@@ -275,8 +298,8 @@ function sistema(ctx: ContextoDelPedido): string {
 ${enfoque}
 
 Reglas estrictas:
-- Solo lo que las fuentes dicen de forma explícita. No deduzcas, no completes, no inventes cifras, nombres ni fechas. Ante la duda, no lo propongas.
-- Cada propuesta cita sus fuentes por id, y la cita es la frase EXACTA copiada de esa fuente. Una cita que no esté literal en su fuente se descarta.
+- Solo lo que las fuentes dicen de forma explícita. No deduzcas, no completes, no inventes cifras, nombres ni fechas. Ante la duda, no lo propongas. (La única excepción son las hipótesis de nivel al preparar: son deducciones a propósito, y van marcadas como hipótesis.)
+- Cada propuesta cita sus fuentes por id, y la cita es la frase EXACTA copiada de esa fuente. Una cita que no esté literal en su fuente se descarta. Las hipótesis de nivel citan las fuentes en que se basan; la frase, si la hay.
 - Los niveles se eligen por mejor ajuste contra las descripciones de la escala de abajo. Si hay duda entre dos niveles, el más bajo. «No sé» cuenta como el más bajo.
 - No vuelvas a proponer lo que ya está confirmado (abajo).
 - El equipo de Smarteam (consultores, vendedores) no es parte del cliente: nunca va en personas.
@@ -444,6 +467,16 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
       continue;
     }
     const fuentes = citar(n.fuentes);
+    const porQue = (str(n.porQue) ?? str(n.razon))?.slice(0, 600);
+    if (ctx.modo === "preparar") {
+      // Una HIPÓTESIS: sin frase literal, pero con sus fuentes y su porqué (es lo que el vendedor lee).
+      if (!porQue) {
+        descartadas++;
+        continue;
+      }
+      agregar({ tipo: "nivel", dimensionId }, { nivel: str(n.nivel), fuente: "hipotesis", porQue }, fuentes, { razon: porQue });
+      continue;
+    }
     const evidencia = fuentes.find((f) => f.cita)?.cita;
     agregar(
       { tipo: "nivel", dimensionId },
@@ -451,10 +484,11 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
         nivel: str(n.nivel),
         fuente: fuenteDelNivel(fuentes.filter((f) => f.cita).map((f) => f.id)),
         ...(evidencia ? { evidencia } : {}),
+        ...(porQue ? { porQue } : {}),
         ...(n.riesgo === true ? { riesgo: true } : {}),
       },
       fuentes,
-      { razon: str(n.razon), exigeCita: true },
+      { razon: porQue, exigeCita: true },
     );
   }
   for (const x of lista(input.aExplorar)) {
@@ -505,12 +539,15 @@ export function propuestasDelTest(
       const d = area.dimensiones.find((x) => x.id === r.dimensionId);
       if (!d?.aplica || ctx.contenido.chequeo[r.dimensionId]) continue;
       const destino: DestinoDePropuesta = { tipo: "nivel", dimensionId: r.dimensionId };
-      const valor = { nivel: r.nivel, fuente: "test" as const, ...(r.respuesta ? { evidencia: r.respuesta.slice(0, 600) } : {}) };
+      const porQue = r.respuesta
+        ? `En el test eligió «${r.respuesta.slice(0, 200)}». Es una pista: lo contestó con la escala anterior, y se confirma en la primera reunión.`
+        : "Lo marcó en el test. Es una pista: lo contestó con la escala anterior, y se confirma en la primera reunión.";
+      const valor = { nivel: r.nivel, fuente: "test" as const, porQue, ...(r.respuesta ? { evidencia: r.respuesta.slice(0, 600) } : {}) };
       items.push({
         id: idDelItem(destino, valor),
         destino,
         valor,
-        razon: "Lo marcó en el test, con la escala anterior: valídalo en la primera reunión.",
+        razon: "Lo marcó en el test, con la escala anterior: es una hipótesis para la primera reunión.",
         fuentes: [{ id: fuente.id, etiqueta: fuente.etiqueta, ...(r.respuesta ? { cita: r.respuesta.slice(0, 300) } : {}) }],
         ...base,
       });
@@ -519,33 +556,109 @@ export function propuestasDelTest(
   return items;
 }
 
-// ── Sugerir los casos de uso del catálogo ─────────────────────────────────────
+// ── Elegir la industria (la edición de la escala) ─────────────────────────────
+
+export const NOMBRE_DE_LA_HERRAMIENTA_DE_INDUSTRIA = "elegir_industria";
+
+export interface ContextoDeIndustria {
+  empresa: string;
+  /** Las ediciones de la escala publicada, con para quién es cada una (el texto es de la escala). */
+  ediciones: { slug: string; nombre: string; descripcion: string | null; perfilHabitual: { cierre: Cierre; despues: Despues } | null }[];
+  /** Las dos preguntas del perfil de negocio, con lo que dice la escala de cada opción. */
+  perfil: { cierre: string | null; despues: string | null };
+  /** Lo que se leyó de la empresa (la ficha, los contactos, los negocios, el test, la actividad). */
+  fuentes: Fuente[];
+}
+
+export interface IndustriaElegida {
+  /** La clave de la edición, o null = la escala general. */
+  edicion: string | null;
+  razon: string;
+  /** El perfil, solo con la escala general (una edición trae su perfil habitual). */
+  perfil: { cierre: Cierre; despues: Despues } | null;
+}
+
+export function pedidoDeLaIndustria(ctx: ContextoDeIndustria): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const tool: Anthropic.Messages.Tool = {
+    name: NOMBRE_DE_LA_HERRAMIENTA_DE_INDUSTRIA,
+    description: "Elige con qué edición de la escala se mide esta empresa. Llámala una sola vez.",
+    input_schema: {
+      type: "object",
+      properties: {
+        edicion: { type: "string", enum: [...ctx.ediciones.map((e) => e.slug), "general"], description: "La edición de su industria, o «general» si ninguna calza." },
+        razon: { type: "string", description: "Por qué, en una frase llana para el vendedor: qué hace la empresa y a quién le vende." },
+        cierre: { type: "string", enum: [...CIERRES], description: "Solo con la escala general: cómo se cierra la venta." },
+        despues: { type: "string", enum: [...DESPUES], description: "Solo con la escala general: qué pasa después de la venta." },
+      },
+      required: ["edicion", "razon"],
+    },
+  };
+  const sistema = `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Antes de medir a un prospecto con la Escala de Rendimiento hay que elegir con qué edición se lee: la de su industria, si alguna calza, o la escala general.
+
+Reglas:
+- Elige por lo que HACE la empresa y a quién le VENDE, según las fuentes. La industria que tiene en HubSpot es una pista, pero muchas veces está mal puesta: no la sigas si lo demás dice otra cosa.
+- Compara contra «para quién es» cada edición. Si ninguna calza bien, la general.
+- Con la general, elige también el perfil de negocio si las fuentes lo dejan ver. Con una edición no hace falta: trae su perfil habitual.
+- La razón, en una frase, en español neutro y sin identificadores.`;
+  const cuerpo =
+    `Empresa: ${ctx.empresa}\n\n` +
+    `=== LAS EDICIONES DE LA ESCALA ===\n` +
+    ctx.ediciones.map((e) => `- ${e.slug} · ${e.nombre}${e.descripcion ? `: ${e.descripcion}` : ""}`).join("\n") +
+    `\n- general · Escala general: cuando ninguna edición calza.\n\n` +
+    (ctx.perfil.cierre || ctx.perfil.despues ? `=== EL PERFIL DE NEGOCIO ===\n${[ctx.perfil.cierre, ctx.perfil.despues].filter(Boolean).join("\n")}\n\n` : "") +
+    ctx.fuentes.map((f) => `=== FUENTE ${f.id}: ${f.etiqueta} ===\n${f.texto}`).join("\n\n");
+  return {
+    model: MODELO_DE_LA_EXPLORACION,
+    max_tokens: 600,
+    system: sistema,
+    tools: [tool],
+    tool_choice: { type: "tool", name: tool.name },
+    messages: [{ role: "user", content: cuerpo }],
+  };
+}
+
+/** Lo que eligió, o null si no respondió con la herramienta o nombró una edición que no existe. */
+export function leerLaIndustria(respuesta: Anthropic.Messages.Message, ctx: Pick<ContextoDeIndustria, "ediciones">): IndustriaElegida | null {
+  const bloque = respuesta.content.find((b) => b.type === "tool_use" && b.name === NOMBRE_DE_LA_HERRAMIENTA_DE_INDUSTRIA);
+  const input = bloque && bloque.type === "tool_use" && esObjeto(bloque.input) ? bloque.input : null;
+  if (!input) return null;
+  const slug = str(input.edicion);
+  const razon = str(input.razon)?.slice(0, 300);
+  if (!slug || !razon) return null;
+  if (slug === "general") {
+    const cierre = (CIERRES as readonly string[]).includes(str(input.cierre) ?? "") ? (input.cierre as Cierre) : null;
+    const despues = (DESPUES as readonly string[]).includes(str(input.despues) ?? "") ? (input.despues as Despues) : null;
+    return { edicion: null, razon, perfil: cierre && despues ? { cierre, despues } : null };
+  }
+  if (!ctx.ediciones.some((e) => e.slug === slug)) return null;
+  return { edicion: slug, razon, perfil: null };
+}
+
+// ── Proponer casos de uso (experimental: sin la biblioteca) ───────────────────
 
 export const NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS = "proponer_casos";
 
-/** Hasta cuántos casos por área: los que caben en una primera venta. */
+/** Hasta cuántos casos por área en una tanda: los que caben en una primera venta. */
 export const MAX_CASOS_POR_AREA = 4;
-
-export interface CasoParaElPedido {
-  id: string;
-  titulo: string;
-  descripcion: string;
-  tags: string[];
-}
 
 export interface ContextoDeCasos {
   empresa: string;
-  /** Las áreas en juego, con su nombre. */
-  areas: { id: string; nombre: string }[];
-  /** La exploración como la ve la propuesta (bloqueParaLaPropuesta): metas, retos, niveles, lo que falta. */
+  /** La edición con que se lee la escala (o «escala general»). */
+  edicion: string;
+  /** Las áreas en juego, con sus dimensiones (para nombrar las que mueve cada caso). */
+  areas: { id: string; nombre: string; dimensiones: { id: string; nombre: string }[] }[];
+  /** Dónde parece estar cada equipo y lo que se sabe del cliente (sin lo interno: lo que propone llega a la propuesta). */
   exploracion: string;
-  catalogo: CasoParaElPedido[];
+  /** Lo que ya está elegido o propuesto, y lo que el vendedor descartó: no se repite. */
+  yaEstan: string[];
+  descartados: string[];
 }
 
 export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const dims = ctx.areas.flatMap((a) => a.dimensiones.map((d) => d.id));
   const tool: Anthropic.Messages.Tool = {
     name: NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS,
-    description: "Propone, por área, los casos de uso del catálogo para la propuesta. Llámala una sola vez.",
+    description: "Propone casos de uso para la primera propuesta, por área. Llámala una sola vez.",
     input_schema: {
       type: "object",
       properties: {
@@ -554,30 +667,37 @@ export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageC
           items: {
             type: "object",
             properties: {
-              useCaseId: { type: "string", enum: ctx.catalogo.map((c) => c.id) },
               areaId: { type: "string", enum: ctx.areas.map((a) => a.id) },
-              razon: { type: "string", description: "Una frase: qué de lo que le falta (o de su meta) cubre este caso de uso." },
+              titulo: { type: "string", description: "Corto y concreto, como lo diría el cliente (máximo 80 caracteres)." },
+              descripcion: { type: "string", description: "Qué se implementa en HubSpot y cómo lo usa el equipo, en dos o tres frases." },
+              dimensiones: { type: "array", items: { type: "string", enum: dims.length ? dims : ["0.0"] }, description: "Las dimensiones de la escala que mueve." },
+              razon: { type: "string", description: "Una frase: qué de lo que le falta, o de su meta, resuelve." },
             },
-            required: ["useCaseId", "areaId", "razon"],
+            required: ["areaId", "titulo", "descripcion", "razon"],
           },
         },
       },
       required: ["casos"],
     },
   };
-  const sistema = `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Ayudas a un vendedor a armar la PRIMERA propuesta de un prospecto: llevar cada área en juego a Funcional en la Escala de Rendimiento, cubriendo lo que le falta y sus metas.
+  const sistema = `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Ayudas a un vendedor a armar la PRIMERA propuesta de un prospecto: casos de uso que llevan cada área en juego a Funcional en la Escala de Rendimiento, empezando por lo que va primero.
 
-Elige del catálogo los casos de uso que lo logran, por área:
-- Empieza por lo que va primero y por lo que le falta para Funcional; después, lo que toca una meta con cifras.
-- Como máximo ${MAX_CASOS_POR_AREA} por área. Menos es mejor si alcanza: una primera venta que el cliente puede sostener.
-- La razón, en una frase concreta, nombra qué de lo que le falta (o de su meta) cubre. Sin frases de venta.
-- Si ningún caso del catálogo cubre algo, no lo fuerces: no lo propongas.
-- No propongas los que ya están elegidos. Nunca inventes un caso de uso: solo los del catálogo, por su id.`;
+Reglas:
+- Cada caso de uso es algo concreto que se implementa en HubSpot y que el equipo usa (no «capacitación» ni «consultoría» sueltas).
+- Empieza por lo que frena al área (sus dimensiones más bajas) y por lo que le falta para Funcional; después, lo que toca una meta con cifras.
+- Como máximo ${MAX_CASOS_POR_AREA} por área. Menos es mejor si alcanza: una primera venta que el cliente pueda sostener.
+- La razón nombra qué de lo que le falta, o de su meta, resuelve. Sin frases de venta, sin precios, sin montos de dinero.
+- Lo que propones lo puede ver el cliente en la propuesta: nada de opiniones sobre personas ni nada interno de Smarteam.
+- No repitas los casos que ya están ni los que el vendedor descartó (abajo). Si no hay nada nuevo que valga la pena, manda la lista vacía.
+- Español neutro, en tercera persona sobre el cliente. Nunca escribas los identificadores de la escala dentro de un texto: van en su campo.`;
   const cuerpo =
-    `Empresa: ${ctx.empresa}\nÁreas en juego: ${ctx.areas.map((a) => `${a.id} (${a.nombre})`).join(", ")}\n\n` +
+    `Empresa: ${ctx.empresa}\nEdición de la escala: ${ctx.edicion}\n` +
+    `Áreas en juego: ${ctx.areas.map((a) => `${a.id} (${a.nombre})`).join(", ")}\n\n` +
     `=== LA EXPLORACIÓN ===\n${ctx.exploracion}\n\n` +
-    `=== EL CATÁLOGO DE CASOS DE USO ===\n` +
-    ctx.catalogo.map((c) => `- ${c.id} · ${c.titulo}${c.tags.length ? ` [${c.tags.join(", ")}]` : ""}\n  ${c.descripcion.slice(0, 400)}`).join("\n");
+    `=== LAS DIMENSIONES (para el campo «dimensiones») ===\n` +
+    ctx.areas.map((a) => `${a.nombre}: ${a.dimensiones.map((d) => `${d.id} ${d.nombre}`).join("; ")}`).join("\n") +
+    `\n\n=== YA ESTÁN (no los repitas) ===\n${ctx.yaEstan.length ? ctx.yaEstan.map((t) => `- ${t}`).join("\n") : "(ninguno)"}` +
+    `\n\n=== EL VENDEDOR LOS DESCARTÓ (no los vuelvas a proponer) ===\n${ctx.descartados.length ? ctx.descartados.map((t) => `- ${t}`).join("\n") : "(ninguno)"}`;
   return {
     model: MODELO_DE_LA_EXPLORACION,
     max_tokens: 3000,
@@ -588,32 +708,39 @@ Elige del catálogo los casos de uso que lo logran, por área:
   };
 }
 
-/** Lo que devolvió, filtrado: solo casos del catálogo, en áreas en juego, con razón y con el tope por área. */
+/**
+ * Lo que devolvió, filtrado: en un área en juego, con título, descripción y razón, sin repetir lo que
+ * ya está ni lo descartado, y con el tope por área. El id sale del título (`idDeCasoLibre`): un caso
+ * descartado deja su lápida y no vuelve.
+ */
 export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: ContextoDeCasos, corridaId: string, ahora = new Date()): Lectura {
   const bloque = respuesta.content.find((b) => b.type === "tool_use" && b.name === NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS);
   const input = bloque && bloque.type === "tool_use" && esObjeto(bloque.input) ? bloque.input : {};
-  const porId = new Map(ctx.catalogo.map((c) => [c.id, c]));
-  const areas = new Set(ctx.areas.map((a) => a.id));
+  const areas = new Map(ctx.areas.map((a) => [a.id, a]));
+  const vistos = new Set([...ctx.yaEstan, ...ctx.descartados].map(normalizarTexto));
   const porArea = new Map<string, number>();
-  const vistos = new Set<string>();
   const items: ItemPropuesto[] = [];
   let descartadas = 0;
   for (const x of lista(input.casos)) {
-    const caso = porId.get(str(x.useCaseId) ?? "");
     const areaId = str(x.areaId);
-    const razon = str(x.razon);
-    if (!caso || !areaId || !areas.has(areaId) || !razon || vistos.has(caso.id) || (porArea.get(areaId) ?? 0) >= MAX_CASOS_POR_AREA) {
+    const area = areaId ? areas.get(areaId) : undefined;
+    const titulo = str(x.titulo)?.slice(0, 200);
+    const descripcion = str(x.descripcion)?.slice(0, 800);
+    const razon = str(x.razon)?.slice(0, 400);
+    if (!area || !titulo || !descripcion || !razon || vistos.has(normalizarTexto(titulo)) || (porArea.get(area.id) ?? 0) >= MAX_CASOS_POR_AREA) {
       descartadas++;
       continue;
     }
-    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: caso.id };
-    const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, { titulo: caso.titulo.slice(0, 200), areaId, razon: razon.slice(0, 400) });
+    const deEstaArea = new Set(area.dimensiones.map((d) => d.id));
+    const dimensiones = (Array.isArray(x.dimensiones) ? x.dimensiones : []).filter((d): d is string => typeof d === "string" && deEstaArea.has(d)).slice(0, 8);
+    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: idDeCasoLibre(titulo) };
+    const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, { titulo, areaId: area.id, razon, descripcion, ...(dimensiones.length ? { dimensiones } : {}) });
     if (valor === null) {
       descartadas++;
       continue;
     }
-    vistos.add(caso.id);
-    porArea.set(areaId, (porArea.get(areaId) ?? 0) + 1);
+    vistos.add(normalizarTexto(titulo));
+    porArea.set(area.id, (porArea.get(area.id) ?? 0) + 1);
     items.push({ id: idDelItem(destino, valor), destino, valor, razon: razon.slice(0, 300), fuentes: [], corridaId, en: ahora.toISOString() });
   }
   return { items, descartadas };

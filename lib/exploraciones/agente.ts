@@ -1,14 +1,19 @@
 /**
  * lib/exploraciones/agente.ts — correr el agente de la exploración. SERVIDOR.
  *
- * Dos momentos: «preparar» (antes de la primera reunión) y «leer» (después de cada una). La
- * corrida queda en `AgentRun` (creada ANTES de llamar a nada: cualquier falla deja su causa) y corre
- * en segundo plano; la pantalla sigue su fase.
+ * Tres momentos: «preparar» (antes de la primera reunión), «leer» (después de cada una) y «casos»
+ * (los casos de uso, en modo experimental). La corrida queda en `AgentRun` (creada ANTES de llamar
+ * a nada: cualquier falla deja su causa) y corre en segundo plano; la pantalla sigue su fase.
  *
- * ⛔ El agente NUNCA escribe lo confirmado: lo único que guarda es `propuesta` (lo propuesto, lo que
- * ya leyó y sus corridas) y la foto de lo leído en `test`. Lo guarda con la fila BLOQUEADA y
- * releída, como el vendedor: así una corrida que leyó antes de un «Descartar» no lo resucita, y la
- * lápida de lo descartado se respeta (fusionarPropuestas).
+ * ⛔ El agente PROPONE: lo que guarda es `propuesta` (lo propuesto, lo que ya leyó y sus corridas) y
+ * la foto de lo leído en `test`, con la fila BLOQUEADA y releída, como el vendedor: así una corrida
+ * que leyó antes de un «Descartar» no lo resucita, y la lápida de lo descartado se respeta.
+ *
+ * La ÚNICA excepción es lo que la preparación deja hecho sola (pedido de Elías, 2026-10-01: «debería
+ * leerse la información de HubSpot para automáticamente seleccionar…»): la industria y su perfil
+ * —mientras el vendedor no los haya tocado—, el área del test si no había ninguna y el país y el
+ * tamaño de la empresa si estaban vacíos. Son datos de arranque, no conclusiones: se ven con quién
+ * los eligió y por qué, y el vendedor los cambia con un clic (`escribirLoQueVaSolo`).
  */
 import "server-only";
 import type { Prisma } from "@prisma/client";
@@ -19,22 +24,43 @@ import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
+import type { Escala } from "@/lib/escala/documento/tipos";
 import {
+  leerLaIndustria,
   leerLaRespuesta,
   leerLosCasos,
   pedidoDeCasos,
   pedidoDeLaExploracion,
+  pedidoDeLaIndustria,
   propuestasDelTest,
   type ContextoDelPedido,
 } from "./agente-pedido";
-import { claveDelDestino, fusionarPropuestas, propuestaVigente, type ItemPropuesto, type ModoDeLaCorrida } from "./contenido";
+import { exploracionParaLosCasos } from "./casos-de-uso";
+import {
+  cambioLoConfirmado,
+  claveDelDestino,
+  destinoValido,
+  fusionarPropuestas,
+  industriaDelVendedor,
+  propuestaVigente,
+  type EstadoDeExploracion,
+  type ItemPropuesto,
+  type ModoDeLaCorrida,
+} from "./contenido";
+import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { leerPropuesta } from "./esquemas";
-import { leerFuentes } from "./fuentes";
+import { leerFuentes, type LoQueSeLeyo } from "./fuentes";
 import { debeLeerSola } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
-import { bloqueParaLaPropuesta } from "./para-la-propuesta";
-import { catalogoDeCasosDeUso } from "./propuesta";
-import { bloquearFila, chequeoDe, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
+import {
+  bloquearFila,
+  datosParaGuardar,
+  escalaDeLaExploracion,
+  escalaParaExplorar,
+  estadoDesdeFila,
+  leerExploracion,
+  validezPara,
+} from "./servidor";
 
 export const AGENTE_DE_LA_EXPLORACION = "exploracion-de-venta";
 
@@ -46,7 +72,7 @@ export type ModoDelAgente = ModoDeLaCorrida;
 const ETIQUETA: Record<ModoDelAgente, string> = {
   preparar: "Exploración de venta: preparar",
   leer: "Exploración de venta: leer la reunión",
-  casos: "Exploración de venta: sugerir casos de uso",
+  casos: "Exploración de venta: proponer casos de uso",
 };
 
 /** Lo que una corrida leyó, para guardarlo con lo propuesto. */
@@ -76,7 +102,7 @@ export async function ultimaCorrida(exploracionId: string, clientId: string, db:
   return db.agentRun.findFirst({
     where: { clientId, agentSlug: AGENTE_DE_LA_EXPLORACION, filters: { path: ["exploracionId"], equals: exploracionId } },
     orderBy: { createdAt: "desc" },
-    select: { id: true, status: true, currentPhase: true, createdAt: true, updatedAt: true, output: true, stepLabel: true },
+    select: { id: true, status: true, currentPhase: true, createdAt: true, updatedAt: true, output: true, stepLabel: true, filters: true },
   });
 }
 
@@ -132,11 +158,11 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     const lectura = await leerExploracion(exploracionId);
     if (lectura.estado !== "ok") throw new FalloDeLaExploracion("La exploración ya no existe.");
     const fila = lectura.fila;
-    const estado = estadoDesdeFila(fila);
-    const escala = escalaDeLaExploracion(escalaVig.general, estado);
+    let estado = estadoDesdeFila(fila);
+    let escala = escalaDeLaExploracion(escalaVig.general, estado);
 
     if (modo === "casos") {
-      await sugerirCasos(runId, exploracionId, { fila, estado, escala }, opts);
+      await proponerCasos(runId, exploracionId, { fila, estado, escala, general: escalaVig.general }, opts);
       return;
     }
 
@@ -151,6 +177,15 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       modo,
       sesionId: opts.sesionId,
     });
+
+    // Lo que la preparación deja hecho sola; desde ahí, la escala con la industria y el perfil nuevos.
+    if (modo === "preparar") {
+      const armado = await armarLoQueVaSolo(runId, exploracionId, { fila, estado, escala, general: escalaVig.general, leido }, opts);
+      if (armado) {
+        estado = armado;
+        escala = escalaDeLaExploracion(escalaVig.general, armado);
+      }
+    }
 
     const ctx: ContextoDelPedido = {
       modo,
@@ -229,30 +264,38 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
 }
 
 /**
- * Los casos de uso del catálogo que llevan cada área a Funcional (modo «casos»). Lee lo confirmado
- * en el lienzo, como lo verá la propuesta, y el catálogo; no lee HubSpot ni las reuniones.
+ * Los casos de uso, en modo EXPERIMENTAL: el agente los propone sin la biblioteca (que hoy está
+ * vacía), a partir de dónde parece estar cada equipo, lo que le falta y sus metas. Cada tanda no
+ * repite lo que ya está ni lo que el vendedor descartó. No lee HubSpot ni las reuniones.
  */
-async function sugerirCasos(
+async function proponerCasos(
   runId: string,
   exploracionId: string,
   ex: {
     fila: { clientId: string; client: { name: string } };
-    estado: ReturnType<typeof estadoDesdeFila>;
-    escala: ReturnType<typeof escalaDeLaExploracion>;
+    estado: EstadoDeExploracion;
+    escala: EscalaDelLienzo;
+    general: Escala;
   },
   opts: OpcionesDeLaCorrida,
 ) {
-  if (ex.estado.areas.length === 0) throw new FalloDeLaExploracion("Elige primero las áreas en juego: los casos de uso se sugieren por área.");
-  await fase(runId, "Leyendo el catálogo…");
-  const catalogo = await catalogoDeCasosDeUso();
-  if (catalogo.length === 0) throw new FalloDeLaExploracion("El catálogo de casos de uso está vacío: no hay qué sugerir.");
+  if (ex.estado.areas.length === 0) throw new FalloDeLaExploracion("Elige primero las áreas en juego: los casos de uso se proponen por área.");
+  await fase(runId, "Mirando dónde está cada equipo…");
+  const pendientes = pendientesVigentes(ex.estado, ex.general, ex.escala);
   const ctx = {
     empresa: ex.fila.client.name,
-    areas: ex.escala.areas.filter((a) => ex.estado.areas.includes(a.id)).map((a) => ({ id: a.id, nombre: a.nombre })),
-    exploracion: bloqueParaLaPropuesta({ estado: ex.estado, escala: ex.escala, chequeo: chequeoDe(ex.escala, ex.estado), conEscala: true }),
-    catalogo: catalogo.map((c) => ({ id: c.id, titulo: c.titulo, descripcion: c.descripcion, tags: c.tags })),
+    edicion: ex.escala.edicion?.nombre ?? "escala general",
+    areas: ex.escala.areas
+      .filter((a) => ex.estado.areas.includes(a.id))
+      .map((a) => ({ id: a.id, nombre: a.nombre, dimensiones: a.dimensiones.filter((d) => d.aplica).map((d) => ({ id: d.id, nombre: d.nombre })) })),
+    exploracion: exploracionParaLosCasos(ex.estado, ex.escala, pendientes),
+    yaEstan: [
+      ...Object.values(ex.estado.contenido.casosDeUso).map((c) => c.titulo),
+      ...pendientes.filter((it) => it.destino.tipo === "casoDeUso").map((it) => (it.valor as { titulo: string }).titulo),
+    ],
+    descartados: ex.estado.contenido.casosDescartados,
   };
-  await fase(runId, "Pensando qué casos de uso cubren lo que falta…");
+  await fase(runId, "Pensando casos de uso…");
   const respuesta = await conContextoDeIA(
     {
       agentSlug: AGENTE_DE_LA_EXPLORACION,
@@ -268,13 +311,140 @@ async function sugerirCasos(
   const propuestos = await guardar(
     exploracionId,
     r.items,
-    { leyo: ["Lo confirmado en el lienzo", `El catálogo de casos de uso (${catalogo.length})`], leidas: { sesiones: [], hubspot: [] }, foto: null },
+    { leyo: ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones"], leidas: { sesiones: [], hubspot: [] }, foto: null },
     { runId, modo: "casos", automatica: false },
   );
   await prisma.agentRun.update({
     where: { id: runId },
     data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos, descartadas: r.descartadas, nadaNuevo: false }) },
   });
+}
+
+/** Las fuentes que bastan para saber qué hace la empresa: la ficha, los contactos, los negocios, el test y la actividad reciente, recortadas. */
+function fuentesParaLaIndustria(leido: LoQueSeLeyo) {
+  const deLaEmpresa = leido.fuentes.filter((f) => /^(E0|C0|D0|T\d+)$/.test(f.id));
+  const actividad = leido.fuentes.filter((f) => /^H\d+$/.test(f.id)).slice(0, 6);
+  return [...deLaEmpresa, ...actividad].map((f) => ({ ...f, texto: f.texto.slice(0, 1500) }));
+}
+
+/**
+ * Lo que la preparación deja hecho SOLA, antes de pensar las hipótesis: la industria (la edición de
+ * la escala) y su perfil, mientras el vendedor no los haya tocado; el área del test, si no había
+ * ninguna; el país y el tamaño de la empresa, si estaban vacíos. Devuelve el estado nuevo, o null si
+ * no cambió nada. Una falla al elegir la industria no frena la preparación: sigue con la que había.
+ */
+async function armarLoQueVaSolo(
+  runId: string,
+  exploracionId: string,
+  ex: { fila: { clientId: string; client: { name: string } }; estado: EstadoDeExploracion; escala: EscalaDelLienzo; general: Escala; leido: LoQueSeLeyo },
+  opts: OpcionesDeLaCorrida,
+): Promise<EstadoDeExploracion | null> {
+  let industria: Awaited<ReturnType<typeof leerLaIndustria>> = null;
+  if (!industriaDelVendedor(ex.estado) && ex.general.ediciones.length > 0) {
+    await fase(runId, "Eligiendo la industria…");
+    const pregunta = (p: EscalaDelLienzo["perfil"]["cierre"]) => (p ? `${p.pregunta}: ${p.opciones.map((o) => `${o.nombre} (${o.definicion})`).join("; ")}` : null);
+    const ctx = {
+      empresa: ex.fila.client.name,
+      ediciones: ex.escala.ediciones,
+      perfil: { cierre: pregunta(ex.escala.perfil.cierre), despues: pregunta(ex.escala.perfil.despues) },
+      fuentes: fuentesParaLaIndustria(ex.leido),
+    };
+    if (ctx.fuentes.length > 0) {
+      try {
+        const respuesta = await conContextoDeIA(
+          {
+            agentSlug: AGENTE_DE_LA_EXPLORACION,
+            agentRunId: runId,
+            clientId: ex.fila.clientId,
+            triggeredByEmail: opts.triggeredByEmail,
+            origen: "exploraciones/agente:industria",
+          },
+          () => getAnthropic().messages.create(pedidoDeLaIndustria(ctx)),
+        );
+        industria = leerLaIndustria(respuesta, ctx);
+      } catch (e) {
+        console.error(`[exploraciones/agente] no se pudo elegir la industria de ${exploracionId}`, e);
+      }
+    }
+  }
+
+  const habituales = Object.fromEntries(ex.general.ediciones.map((e) => [e.slug, e.perfilHabitual]));
+  const areasDelTest = [...new Set(ex.leido.tests.map((t) => t.resultado.areaId))].filter((id) => ex.general.areas.some((a) => a.id === id));
+  const nombreDeArea = (id: string) => ex.escala.areas.find((a) => a.id === id)?.nombre ?? id;
+
+  return escribirLoQueVaSolo(exploracionId, (actual) => {
+    let e = actual;
+    // Se vuelve a mirar con la fila bloqueada: si el vendedor eligió mientras tanto, manda lo suyo.
+    if (industria && !industriaDelVendedor(e)) {
+      const perfil = industria.edicion ? habituales[industria.edicion] : industria.perfil;
+      e = {
+        ...e,
+        edicion: industria.edicion,
+        ...(perfil ? { perfilCierre: perfil.cierre, perfilDespues: perfil.despues } : {}),
+        contenido: { ...e.contenido, edicionElegida: { por: "agente", razon: industria.razon } },
+      };
+    }
+    if (e.areas.length === 0 && areasDelTest.length > 0) {
+      e = {
+        ...e,
+        areas: areasDelTest,
+        contenido: {
+          ...e.contenido,
+          razonesDeAreas: { ...Object.fromEntries(areasDelTest.map((id) => [id, `Hizo el test de ${nombreDeArea(id)}`])), ...e.contenido.razonesDeAreas },
+        },
+      };
+    }
+    const m = e.contenido.medicion;
+    const pais = !m.pais && ex.leido.empresa?.pais ? ex.leido.empresa.pais.slice(0, 80) : null;
+    const personas = !m.personasEmpresa && ex.leido.empresa?.empleados ? ex.leido.empresa.empleados.slice(0, 40) : null;
+    if (pais || personas) {
+      e = { ...e, contenido: { ...e.contenido, medicion: { ...m, ...(pais ? { pais } : {}), ...(personas ? { personasEmpresa: personas } : {}) } } };
+    }
+    return e;
+  }, ex.general);
+}
+
+/**
+ * Escribe lo que va solo con la fila BLOQUEADA y releída, y sube la versión (es un cambio de lo
+ * confirmado: si el vendedor tenía la pantalla abierta, su próximo cambio recarga en vez de pisar).
+ * Lo pendiente que quedó sin dónde ir con la industria nueva se cuenta como inválido en la pantalla,
+ * como siempre (`destinoValido`).
+ */
+async function escribirLoQueVaSolo(
+  exploracionId: string,
+  cambio: (e: EstadoDeExploracion) => EstadoDeExploracion,
+  general: Escala,
+): Promise<EstadoDeExploracion | null> {
+  return prisma.$transaction(async (tx) => {
+    await bloquearFila(tx, exploracionId);
+    const fila = await tx.exploracionDeVenta.findUnique({
+      where: { id: exploracionId },
+      select: {
+        contenido: true,
+        propuesta: true,
+        areas: true,
+        edicion: true,
+        perfilCierre: true,
+        perfilDespues: true,
+        responsableEmail: true,
+        archivadaEn: true,
+      },
+    });
+    if (!fila || fila.archivadaEn) return null;
+    const antes = estadoDesdeFila(fila);
+    const despues = cambio(antes);
+    if (!cambioLoConfirmado(antes, despues)) return null;
+    // Una edición que la escala publicada ya no trae no se escribe (la lista cerrada del pedido lo evita; esto lo asegura).
+    if (despues.edicion !== null && !general.ediciones.some((e) => e.slug === despues.edicion)) return null;
+    await tx.exploracionDeVenta.update({ where: { id: exploracionId }, data: { ...datosParaGuardar(despues), version: { increment: 1 } } });
+    return despues;
+  });
+}
+
+/** Lo pendiente que sigue teniendo dónde ir con la escala de la exploración. */
+function pendientesVigentes(estado: EstadoDeExploracion, general: Escala, escala: EscalaDelLienzo): ItemPropuesto[] {
+  const validez = validezPara(general, escala);
+  return propuestaVigente(estado).filter((it) => destinoValido(it.destino, validez));
 }
 
 /** Suma lo propuesto con la fila bloqueada y releída. Devuelve cuántas propuestas nuevas quedaron. */

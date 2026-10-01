@@ -29,6 +29,7 @@ import {
   contenidoVacio,
   ESTADOS_DEL_CRITERIO,
   FUENTES_DEL_NIVEL,
+  MAX_CASOS_DESCARTADOS,
   MAX_DESCARTADAS,
   MODOS_DE_LA_CORRIDA,
   MOTIVOS_PARA_EXPLORAR,
@@ -39,6 +40,7 @@ import {
   type ContenidoDeExploracion,
   type CorridaDelAgente,
   type DestinoDePropuesta,
+  type EdicionElegida,
   type EstadoDeCriterio,
   type EstimadoGuardado,
   type FotoAlProponer,
@@ -135,6 +137,7 @@ export const EstimadoSchema: z.ZodType<EstimadoGuardado> = z.object({
   nivel: z.enum(NIVELES),
   fuente: z.enum(FUENTES_DEL_NIVEL),
   evidencia: texto(600).optional(),
+  porQue: texto(600).optional(),
   noSabe: z.boolean().optional(),
   riesgo: z.boolean().optional(),
 });
@@ -162,6 +165,13 @@ export const CasoDeUsoElegidoSchema: z.ZodType<CasoDeUsoElegido> = z.object({
   titulo: textoLleno(200),
   areaId: ID_AREA.nullable(),
   razon: texto(400).optional(),
+  descripcion: texto(800).optional(),
+  dimensiones: z.array(ID_DIMENSION).max(8).optional(),
+});
+
+const EdicionElegidaSchema: z.ZodType<EdicionElegida> = z.object({
+  por: z.enum(["industria", "agente", "vendedor"]),
+  razon: texto(300).optional(),
 });
 
 const AreaPropuestaSchema = z.object({ razon: texto(300).optional() });
@@ -307,6 +317,9 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
   c.casosDeUso = registroValido(raw.casosDeUso, ID_CASO_DE_USO, CasoDeUsoElegidoSchema);
+  c.casosDescartados = listaDeTextos(raw.casosDescartados, MAX_CASOS_DESCARTADOS);
+  const elegida = EdicionElegidaSchema.safeParse(raw.edicionElegida);
+  c.edicionElegida = elegida.success ? elegida.data : null;
   c.descartadas = listaDeTextos(raw.descartadas, MAX_DESCARTADAS);
   if (Array.isArray(raw.alProponer)) {
     c.alProponer = raw.alProponer.filter(

@@ -15,6 +15,7 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import type { DestinoDePropuesta, ItemPropuesto, Operacion } from "@/lib/exploraciones/contenido";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import type { ReunionSinLeer } from "@/lib/exploraciones/lectura";
+import type { PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 
 export interface OpcionesDeCambio {
@@ -27,9 +28,17 @@ export interface OpcionesDeCambio {
 export interface Lienzo {
   exp: ExploracionParaLaPantalla;
   escala: EscalaDelLienzo;
+  /** El chequeo de lo CONFIRMADO: lo que leen la propuesta, el handoff y «lista para proponer». */
   chequeo: ResultadoDelChequeo;
-  /** Lo que propuso el agente y sigue sin usar ni descartar. */
+  /**
+   * El mapa de la escala: dónde parece estar cada dimensión (lo confirmado y, si no hay, lo que
+   * propone el agente, con su clase: evidencia o hipótesis) y el chequeo que sale de ahí.
+   */
+  mapa: { posiciones: Record<string, PosicionEnElMapa>; chequeo: ResultadoDelChequeo };
+  /** Lo que propuso el agente y sigue sin usar ni descartar (con las hipótesis de nivel). */
   pendientes: ItemPropuesto[];
+  /** Lo pendiente que hay que revisar: sin las hipótesis de nivel, que son la capa del mapa. */
+  revisables: ItemPropuesto[];
   /** Las reuniones que el agente todavía no leyó (al abrir y al recargar). */
   sinLeer: ReunionSinLeer[];
   /** Los proyectos cuyo handoff ya recibe la exploración (al abrir y al recargar). */
@@ -43,9 +52,14 @@ export interface Lienzo {
   /** Espera a que salgan los cambios en fila. */
   alDia: () => Promise<void>;
   nombreDeNivel: (l: Letra) => string;
-  /** Lo pendiente para un destino (o para todos los de un tipo). */
+  /** Lo pendiente para revisar de un destino (o de todos los de un tipo). Sin las hipótesis de nivel. */
   pendientesPara: (filtro: (d: DestinoDePropuesta) => boolean) => ItemPropuesto[];
+  /** Lleva al paso del lienzo (desde «Qué sigue» o un enlace). */
+  irA: (paso: PasoDelLienzoUI) => void;
 }
+
+/** Los pasos del lienzo, como pestañas. */
+export type PasoDelLienzoUI = "preparacion" | "reuniones" | "escala" | "casos" | "traspaso";
 
 export const LienzoContexto = createContext<Lienzo | null>(null);
 

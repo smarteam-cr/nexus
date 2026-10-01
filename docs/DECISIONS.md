@@ -4154,3 +4154,55 @@ escala y sin tocar el diagnóstico del CSE.
 **Lo que no entra.** Una versión nueva de la escala (las precisiones, en
 `docs/propuestas-escala-desde-la-exploracion.md`), el diagnóstico del CSE, el test de marketing (sigue
 en la escala anterior) y ampliar la sincronización de Meet (fue la sospechosa de la caída del 21-sep).
+
+## La exploración de venta, rediseñada: una guía fácil, la escala como mapa (2026-10-01, tarde)
+
+**Contexto.** Elías revisó el módulo en producción y pidió que fuera «una guía muy fácil de rellenar»,
+sin sobreingeniería: que la preparación lea HubSpot y elija SOLA la industria (CreditForce figuraba
+como software y es de banca y servicios financieros) y con ella el perfil; que el desplegable de
+motivos de «dimensiones a explorar» desapareciera; que las reuniones fueran solo una guía de qué
+preguntar («la transcripción se encarga de anotar y de sugerir las respuestas y una mejor posición
+en la escala»); que «Lo que quedó» fuera la escala, con las etapas en que parece estar cada equipo y
+el porqué escrito por la IA, separando evidencia de hipótesis; y que «Propuesta» se llamara «Casos
+de uso», con un agente experimental que los proponga sin la biblioteca (vacía).
+
+**Decisiones.**
+
+- **La preparación escribe sola lo de arranque: la ÚNICA excepción a «el agente propone».** La
+  industria (la edición) y su perfil habitual, el área del test si no había ninguna, y el país y el
+  tamaño de la empresa si estaban vacíos (`armarLoQueVaSolo` en `lib/exploraciones/agente.ts`). Son
+  datos de arranque, no conclusiones sobre el cliente: se ven con quién los eligió y por qué
+  (`contenido.edicionElegida`) y se cambian con un clic. Primero por la industria de HubSpot al crear
+  la exploración; si no apunta a ninguna edición, el agente decide leyendo todo lo de la empresa
+  contra «para quién es» cada edición (el texto sale de la escala publicada). En cuanto el vendedor
+  toca la industria o el perfil, el agente ya no los cambia. La escritura va con la fila bloqueada y
+  releída, y sube la versión: si el vendedor tenía la pantalla abierta, su próximo cambio recarga en
+  vez de pisar.
+- **Hipótesis y evidencia son dos clases de nivel, y el mapa las pinta distinto.** Hipótesis: lo que
+  marcó en el test y lo que el agente deduce de HubSpot al preparar (con su porqué, sin frase
+  literal). Evidencia: lo que dijo el cliente (con su frase), lo que se vio en el portal o lo que
+  marcó el vendedor. Tienen ids distintos (descartar una hipótesis no tapa lo que el cliente diga
+  después), una hipótesis nunca pisa lo que dijo el cliente, y lo que dijo el cliente confirma una
+  hipótesis aunque sea el mismo nivel (`fusionarPropuestas`, `yaEstaConfirmado`).
+- **Las hipótesis no se «usan»: son el mapa.** No cuentan como «para revisar» ni entran a «Usar
+  todas»; el mapa dibuja lo confirmado y, donde no hay, lo propuesto (`lib/exploraciones/mapa.ts`),
+  y con eso calcula «qué va primero» para la primera reunión, avisando cuando sale de hipótesis.
+  ⛔ La propuesta, el handoff y «lista para proponer» siguen leyendo SOLO lo confirmado: una
+  hipótesis del agente no llega al cliente. El vendedor confirma o corrige con un clic en el nivel
+  que mejor describe a la dimensión.
+- **El porqué del nivel del área lo arma el código, no la IA.** La escala ubica al equipo en su capa
+  más baja y la capa en su dimensión más débil: el porqué nombra esas dimensiones y suma el porqué
+  que escribió el agente para ellas. Así nunca contradice al nivel calculado.
+- **Las reuniones son una guía, sin campos.** Cada paso dice qué buscar, cuánto dura y qué preguntar
+  (las del marco y la pregunta de cada dimensión, de la más baja a la más alta, con lo que hoy se
+  cree de ella). Lo que respondió el cliente lo propone el agente con la transcripción, en su propia
+  pestaña. Las notas rápidas viejas se siguen leyendo como fuente; ya no se escriben.
+- **Los casos de uso, experimentales y sin la biblioteca.** La primera vez que se abre el paso, el
+  agente propone solo; después, otra tanda con un botón. Lee dónde está cada equipo y lo que el
+  cliente puede ver (nunca lo interno: lo que propone termina en la propuesta). Cada caso lleva id
+  `ia-…` sacado del título: lo descartado deja su lápida y su título, y la tanda siguiente no lo
+  repite. No tiene precio ni fila del catálogo: entra a la propuesta como contexto, y la sección de
+  casos de uso con precio sigue saliendo solo del catálogo.
+
+**Lo que no cambia.** El modelo de propuesta y confirmación para todo lo demás, los dos escritores
+con la fila bloqueada, lo que ve el cliente y lo que recibe el CSE.

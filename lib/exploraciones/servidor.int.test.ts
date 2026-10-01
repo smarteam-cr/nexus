@@ -123,7 +123,8 @@ describe("una sola exploración viva por empresa (el índice parcial del SQL)", 
     expect(lista.estado).toBe("ok");
     if (lista.estado !== "ok") return;
     expect(lista.filas).toHaveLength(1);
-    expect(lista.filas[0].queSigue).toMatch(/Estima/);
+    // Sin nada que haya dicho el cliente todavía, lo que sigue es la primera reunión, con la guía.
+    expect(lista.filas[0].queSigue).toMatch(/^Haz la primera reunión/);
     expect(lista.filas[0].total).toBe(7);
   });
 });

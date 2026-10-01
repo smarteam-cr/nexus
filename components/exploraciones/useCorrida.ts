@@ -15,6 +15,8 @@ import { useLienzo } from "./contexto";
 
 export interface CorridaEnCurso {
   id: string;
+  /** Qué se le pidió (preparar, leer, casos): cada paso muestra el error de la suya. */
+  modo: ModoDeLaCorrida | null;
   estado: "RUNNING" | "DONE" | "ERROR";
   etiqueta: string | null;
   fase: string | null;

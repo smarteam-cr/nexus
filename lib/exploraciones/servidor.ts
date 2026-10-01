@@ -97,6 +97,7 @@ export function validezPara(general: Escala, escala: EscalaDelLienzo): Validez {
     criterios: ids.criterios,
     areas: new Set(general.areas.map((a) => a.id)),
     ediciones: new Set(general.ediciones.map((e) => e.slug)),
+    perfilesHabituales: Object.fromEntries(general.ediciones.map((e) => [e.slug, e.perfilHabitual])),
     escalaVersion: general.version,
   };
 }

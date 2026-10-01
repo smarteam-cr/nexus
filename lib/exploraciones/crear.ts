@@ -6,16 +6,17 @@
  * (`clienteDeLaEmpresaDeVentas`): si no existe, nace PROSPECTO; si existe, se reusa sin tocarle el
  * `kind`.
  *
- * La industria y el perfil NO se fijan solos: la edición que sugiere la industria de HubSpot y el
- * perfil habitual de esa edición entran como PROPUESTA, para que el vendedor los confirme. La
- * escala dice que la edición se decide al arrancar, y la industria de HubSpot a veces engaña (una
- * empresa de software para bancos no se mide como un banco).
+ * La industria y el perfil se eligen SOLOS (pedido de Elías, 2026-10-01): si la industria de HubSpot
+ * apunta a una edición, la exploración nace con esa edición y su perfil habitual, como lo dice la
+ * escala. Si no apunta a ninguna, nace con la escala general y la preparación —que lee todo lo que
+ * hay de la empresa— la elige (lib/exploraciones/agente.ts). En los dos casos se ve quién la eligió
+ * y por qué, y el vendedor la cambia con un clic: desde ahí, nadie más la toca.
  */
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { clienteDeLaEmpresaDeVentas } from "@/lib/clients/cliente-de-la-empresa-de-ventas";
 import { prisma } from "@/lib/db/prisma";
-import { contenidoVacio, idDelItem, propuestaVacia, type DestinoDePropuesta, type ItemPropuesto } from "./contenido";
+import { contenidoVacio, propuestaVacia, type ContenidoDeExploracion } from "./contenido";
 import { leerEmpresa } from "./hubspot";
 import { industriaLegible, sugerirEdicion } from "./industria";
 import { escalaParaExplorar } from "./servidor";
@@ -45,27 +46,16 @@ export async function crearExploracion(companyId: string, email: string): Promis
   });
   if (viva) return { ok: true, id: viva.id, existia: true };
 
-  const items: ItemPropuesto[] = [];
+  // La edición que apunta la industria de HubSpot, con su perfil habitual. Si no apunta a ninguna, la elige la preparación.
+  const contenido: ContenidoDeExploracion = contenidoVacio();
+  let edicion: { slug: string; perfil: { cierre: string; despues: string } | null } | null = null;
   const escala = await escalaParaExplorar();
   if (escala.estado === "ok") {
     const slug = sugerirEdicion(empresa.industria, escala.general.ediciones.map((e) => e.slug));
-    const edicion = slug ? escala.general.ediciones.find((e) => e.slug === slug) : null;
-    const fuente = { id: "H0", etiqueta: `Industria en HubSpot: ${industriaLegible(empresa.industria) ?? "sin dato"}` };
-    const en = new Date().toISOString();
-    const item = (destino: DestinoDePropuesta, valor: unknown, razon: string): ItemPropuesto => ({
-      id: idDelItem(destino, valor),
-      destino,
-      valor,
-      razon,
-      fuentes: [fuente],
-      corridaId: null,
-      en,
-    });
-    if (edicion) {
-      items.push(item({ tipo: "edicion" }, { slug: edicion.slug }, `La industria de la empresa apunta a la edición «${edicion.nombre}».`));
-      if (edicion.perfilHabitual) {
-        items.push(item({ tipo: "perfil" }, edicion.perfilHabitual, `Es el perfil habitual de «${edicion.nombre}»: confírmalo con el prospecto.`));
-      }
+    const ed = slug ? escala.general.ediciones.find((e) => e.slug === slug) : null;
+    if (ed) {
+      edicion = { slug: ed.slug, perfil: ed.perfilHabitual };
+      contenido.edicionElegida = { por: "industria", razon: `La industria de la empresa en HubSpot es «${industriaLegible(empresa.industria)}».` };
     }
   }
 
@@ -75,8 +65,11 @@ export async function crearExploracion(companyId: string, email: string): Promis
         clientId: cliente.clientId,
         creadaPor: email,
         responsableEmail: email,
-        contenido: contenidoVacio() as unknown as Prisma.InputJsonValue,
-        propuesta: { ...propuestaVacia(), items } as unknown as Prisma.InputJsonValue,
+        edicion: edicion?.slug ?? null,
+        perfilCierre: edicion?.perfil?.cierre ?? null,
+        perfilDespues: edicion?.perfil?.despues ?? null,
+        contenido: contenido as unknown as Prisma.InputJsonValue,
+        propuesta: propuestaVacia() as unknown as Prisma.InputJsonValue,
       },
       select: { id: true },
     });

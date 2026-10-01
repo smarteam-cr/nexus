@@ -1,11 +1,17 @@
 "use client";
 
 /**
- * PasoPropuesta — de la exploración a la Propuesta de Nexus.
+ * PasoCasosDeUso — los casos de uso de la primera propuesta, y la propuesta.
  *
- * Tres piezas: ¿está lista para proponer? (los siete puntos: avisan, no bloquean), los casos de uso
- * del catálogo que llevan cada área a Funcional (el agente los sugiere, el vendedor elige) y el
- * botón que arma la propuesta y la genera. El precio se pone a mano en la propuesta, como siempre.
+ * Pedido de Elías (2026-10-01): «la parte de propuestas, yo le pondría casos de uso; y ahí debería
+ * arrancar un agente, en modo experimental, que proponga casos de uso sin la biblioteca, porque en
+ * este momento está vacía». La PRIMERA vez que se abre el paso, el agente propone solo; después, otra
+ * tanda con un botón (cada tanda cuesta unos centavos). El vendedor usa o descarta cada uno; lo
+ * descartado no vuelve.
+ *
+ * Abajo, como cierre: ¿está lista para proponer? (los siete puntos: avisan, no bloquean) y el botón
+ * que arma la Propuesta de Nexus y la genera. Los casos de uso del agente entran a la propuesta como
+ * contexto; la sección de casos de uso con precio sale solo del catálogo, como siempre.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -13,11 +19,13 @@ import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Input, Select, Skeleton, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { listaParaProponer } from "@/lib/exploraciones/calidad";
-import type { CasoDeUsoElegido } from "@/lib/exploraciones/contenido";
+import { esCasoLibre, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { useLienzo } from "./contexto";
-import { Propuestas } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
+
+/** Las exploraciones en las que esta pestaña ya lanzó la primera tanda (un montaje doble no lanza dos). */
+const yaLanzadas = new Set<string>();
 
 interface Negocio {
   id: string;
@@ -80,95 +88,160 @@ export function ListaParaProponer() {
   );
 }
 
+/** Un caso de uso: qué es, por qué y qué dimensiones mueve. */
+function TarjetaDeCaso({ caso, propuesto, acciones }: { caso: CasoDeUsoElegido; propuesto?: boolean; acciones?: React.ReactNode }) {
+  const { escala } = useLienzo();
+  const nombreDim = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre;
+  const mueve = (caso.dimensiones ?? []).map(nombreDim).filter((x): x is string => !!x);
+  return (
+    <li className={cn("flex flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2.5", propuesto ? "border-brand/25 bg-brand/5" : "border-line")}>
+      <div className="min-w-0 flex-1 space-y-1">
+        {propuesto && <p className="text-2xs font-semibold uppercase tracking-wide text-brand-light">Propuesto</p>}
+        <p className="text-sm font-medium text-fg">{caso.titulo}</p>
+        {caso.descripcion && <p className="text-xs text-fg-secondary">{caso.descripcion}</p>}
+        {caso.razon && (
+          <p className="text-xs text-fg-muted">
+            <span className="font-medium text-fg-secondary">Por qué: </span>
+            {caso.razon}
+          </p>
+        )}
+        {mueve.length > 0 && <p className="text-2xs text-fg-muted">Mueve: {mueve.join(" · ")}</p>}
+      </div>
+      {acciones && <div className="flex flex-shrink-0 items-center gap-1.5">{acciones}</div>}
+    </li>
+  );
+}
+
 function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const e = exp.estado;
   const elegidos = Object.entries(e.contenido.casosDeUso);
   const areas = escala.areas.filter((a) => e.areas.includes(a.id));
-  const sugeridos = pendientesPara((d) => d.tipo === "casoDeUso");
+  const propuestos = pendientesPara((d) => d.tipo === "casoDeUso");
   const libres = catalogo.filter((c) => !(c.id in e.contenido.casosDeUso));
+  const yaPropuso = e.propuesta.corridas.some((c) => c.modo === "casos");
 
-  const elegir = (caso: Caso, areaId: string | null) =>
-    void cambiar([{ op: "casoDeUso", useCaseId: caso.id, valor: { titulo: caso.titulo, areaId } }]);
+  /* La primera vez que se abre el paso, el agente propone solo. Si en ese momento ya trabajaba en
+     otra cosa, no se insiste: queda el botón. */
+  useEffect(() => {
+    if (!puedeEditar || areas.length === 0 || yaPropuso || yaLanzadas.has(exp.id)) return;
+    yaLanzadas.add(exp.id);
+    void lanzar("casos");
+  }, [puedeEditar, areas.length, yaPropuso, exp.id, lanzar]);
+
+  const usar = (it: ItemPropuesto) => void cambiar([{ op: "usar", itemId: it.id, valor: it.valor }]);
+  const descartar = (it: ItemPropuesto) => void cambiar([{ op: "descartar", itemIds: [it.id] }]);
   const quitar = (id: string) => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: null }]);
-  const moverDeArea = (id: string, caso: CasoDeUsoElegido, areaId: string | null) =>
-    void cambiar([{ op: "casoDeUso", useCaseId: id, valor: { ...caso, areaId } }]);
-
-  const grupos = [
-    ...areas.map((a) => ({ id: a.id as string | null, nombre: a.nombre })),
-    { id: null, nombre: "Sin área" },
-  ];
-  const deGrupo = (id: string | null) => elegidos.filter(([, c]) => (id === null ? !c.areaId || !e.areas.includes(c.areaId) : c.areaId === id));
+  const elegirDelCatalogo = (caso: Caso, areaId: string | null) =>
+    void cambiar([{ op: "casoDeUso", useCaseId: caso.id, valor: { titulo: caso.titulo, areaId, razon: caso.descripcion.slice(0, 400) } }]);
+  const sinArea = elegidos.filter(([, c]) => !c.areaId || !e.areas.includes(c.areaId));
+  const esPropia = corrida?.modo === "casos";
 
   return (
     <section className="space-y-4 rounded-xl border border-line bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-fg">Casos de uso para la propuesta</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
+            Casos de uso
+            <Badge size="xs" variant="purple">
+              Experimental
+            </Badge>
+          </h3>
           <p className="text-xs text-fg-muted">
-            Los del catálogo de Smarteam que llevan cada área a Funcional, cubriendo lo que le falta y sus metas. El agente los sugiere; tú eliges. La propuesta los incluye con su precio del catálogo.
+            El agente los propone a partir de dónde está cada equipo en la escala, lo que le falta para Funcional y lo que contó el cliente. Todavía no usa la biblioteca de casos de uso: son propuestas para conversar, sin precio. Cada tanda cuesta unos centavos de dólar.
           </p>
         </div>
         {puedeEditar && (
-          <Button size="sm" variant="secondary" loading={lanzando} disabled={corriendo || areas.length === 0 || catalogo.length === 0} onClick={() => void lanzar("casos")}>
-            Sugerir con el agente
+          <Button size="sm" variant="secondary" loading={lanzando} disabled={corriendo || areas.length === 0} onClick={() => void lanzar("casos")}>
+            {yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
           </Button>
         )}
       </div>
       {corriendo && (
         <p className="text-xs text-fg-secondary" role="status">
-          {corrida?.fase ?? "El agente está trabajando…"}
+          {corrida?.etiqueta ?? "El agente está trabajando"}: {corrida?.fase ?? "empezando…"}
         </p>
       )}
-      {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (paso «Preparación»).</p>}
+      {corrida?.estado === "ERROR" && esPropia && <Alert variant="danger">{corrida.error}</Alert>}
+      {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (paso «Preparación»): los casos de uso se proponen por área.</p>}
 
-      {grupos.map((g) => {
-        const susElegidos = deGrupo(g.id);
-        const susSugeridos = g.id ? sugeridos.filter((it) => (it.valor as CasoDeUsoElegido).areaId === g.id) : [];
-        if (g.id === null && susElegidos.length === 0) return null;
+      {areas.map((a) => {
+        const susElegidos = elegidos.filter(([, c]) => c.areaId === a.id);
+        const susPropuestos = propuestos.filter((it) => (it.valor as CasoDeUsoElegido).areaId === a.id);
         return (
-          <div key={g.id ?? "sin-area"} className="space-y-2">
-            <p className="text-xs font-medium text-fg-secondary">{g.nombre}</p>
-            {susElegidos.length === 0 && susSugeridos.length === 0 && <p className="text-xs text-fg-muted">Todavía ninguno.</p>}
-            <ul className="space-y-1.5">
+          <div key={a.id} className="space-y-2">
+            <p className="text-xs font-semibold text-fg-secondary">{a.nombre}</p>
+            {susElegidos.length === 0 && susPropuestos.length === 0 && (
+              <p className="text-xs text-fg-muted">{corriendo ? "El agente está pensando los de esta área…" : "Todavía ninguno."}</p>
+            )}
+            <ul className="space-y-2">
               {susElegidos.map(([id, caso]) => (
-                <li key={id} className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-line px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-fg">{caso.titulo}</p>
-                    {caso.razon && <p className="text-xs text-fg-secondary">{caso.razon}</p>}
-                  </div>
-                  {puedeEditar && (
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                      <Select
-                        aria-label={`Área de «${caso.titulo}»`}
-                        value={caso.areaId && e.areas.includes(caso.areaId) ? caso.areaId : ""}
-                        disabled={guardando}
-                        onChange={(ev) => moverDeArea(id, caso, ev.target.value || null)}
-                      >
-                        <option value="">Sin área</option>
-                        {areas.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.nombre}
-                          </option>
-                        ))}
-                      </Select>
-                      <Button size="sm" variant="ghost" disabled={guardando} onClick={() => quitar(id)}>
-                        Quitar
-                      </Button>
-                    </div>
-                  )}
-                </li>
+                <TarjetaDeCaso
+                  key={id}
+                  caso={caso}
+                  acciones={
+                    <>
+                      <Badge size="xs" variant="success">
+                        {esCasoLibre(id) ? "Elegido" : "Del catálogo"}
+                      </Badge>
+                      {puedeEditar && (
+                        <Button size="xs" variant="ghost" disabled={guardando} onClick={() => quitar(id)}>
+                          Quitar
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              ))}
+              {susPropuestos.map((it) => (
+                <TarjetaDeCaso
+                  key={it.id}
+                  caso={it.valor as CasoDeUsoElegido}
+                  propuesto
+                  acciones={
+                    puedeEditar && (
+                      <>
+                        <Button size="xs" variant="primary" disabled={guardando} onClick={() => usar(it)}>
+                          Usar
+                        </Button>
+                        <Button size="xs" variant="secondary" disabled={guardando} onClick={() => descartar(it)}>
+                          Descartar
+                        </Button>
+                      </>
+                    )
+                  }
+                />
               ))}
             </ul>
-            <Propuestas items={susSugeridos} />
           </div>
         );
       })}
 
+      {sinArea.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-fg-secondary">Sin área en juego</p>
+          <ul className="space-y-2">
+            {sinArea.map(([id, caso]) => (
+              <TarjetaDeCaso
+                key={id}
+                caso={caso}
+                acciones={
+                  puedeEditar && (
+                    <Button size="xs" variant="ghost" disabled={guardando} onClick={() => quitar(id)}>
+                      Quitar
+                    </Button>
+                  )
+                }
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
       {libres.length > 0 && (
         <details className="rounded-lg border border-line">
-          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-fg-secondary">Todo el catálogo ({libres.length})</summary>
+          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-fg-secondary">Del catálogo de Smarteam ({libres.length})</summary>
           <ul className="divide-y divide-line">
             {libres.map((c) => (
               <li key={c.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2">
@@ -189,7 +262,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
                     value=""
                     disabled={guardando}
                     onChange={(ev) => {
-                      if (ev.target.value) elegir(c, ev.target.value === "-" ? null : ev.target.value);
+                      if (ev.target.value) elegirDelCatalogo(c, ev.target.value === "-" ? null : ev.target.value);
                     }}
                   >
                     <option value="">Agregar a…</option>
@@ -206,7 +279,6 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
           </ul>
         </details>
       )}
-      {catalogo.length === 0 && <p className="text-xs text-fg-muted">El catálogo de casos de uso está vacío o no está disponible.</p>}
     </section>
   );
 }
@@ -254,7 +326,7 @@ function ArmarLaPropuesta({ negocios, propuestas, alRecargar }: { negocios: Nego
       <div>
         <h3 className="text-sm font-semibold text-fg">Armar la propuesta</h3>
         <p className="text-xs text-fg-muted">
-          Crea la Propuesta de Nexus con lo que puede ver el cliente de este lienzo y la genera con IA: sus metas en cifras como criterio de éxito, el nivel de cada área tal como quedó aquí y los casos de uso elegidos. Lo interno (hipótesis, presupuesto, quién decide, lo que nadie exploró) no entra. El precio se pone a mano, como siempre.
+          Crea la Propuesta de Nexus con lo que puede ver el cliente de este lienzo y la genera con IA: sus metas en cifras como criterio de éxito, el nivel de cada área tal como quedó confirmado y los casos de uso elegidos. Lo interno (hipótesis, presupuesto, quién decide, lo que nadie exploró) no entra. El precio se pone a mano, como siempre.
         </p>
       </div>
       {negocios === null ? (
@@ -321,7 +393,7 @@ function ArmarLaPropuesta({ negocios, propuestas, alRecargar }: { negocios: Nego
   );
 }
 
-export default function PasoPropuesta() {
+export default function PasoCasosDeUso() {
   const { exp } = useLienzo();
   const [datos, setDatos] = useState<DatosDelPaso | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -352,6 +424,7 @@ export default function PasoPropuesta() {
 
   return (
     <div className="space-y-4">
+      <CasosDeUso catalogo={datos?.catalogo ?? []} />
       <ListaParaProponer />
       {error && <Alert variant="danger">{error}</Alert>}
       {!datos && !error ? (
@@ -360,15 +433,12 @@ export default function PasoPropuesta() {
           <Skeleton className="h-10 w-full" />
         </div>
       ) : datos ? (
-        <>
-          <CasosDeUso catalogo={datos.catalogo} />
-          <ArmarLaPropuesta
-            key={datos.negocios?.map((n) => n.id).join(",") ?? "sin"}
-            negocios={datos.negocios}
-            propuestas={datos.propuestas}
-            alRecargar={() => setIntento((n) => n + 1)}
-          />
-        </>
+        <ArmarLaPropuesta
+          key={datos.negocios?.map((n) => n.id).join(",") ?? "sin"}
+          negocios={datos.negocios}
+          propuestas={datos.propuestas}
+          alRecargar={() => setIntento((n) => n + 1)}
+        />
       ) : null}
     </div>
   );

@@ -9,7 +9,7 @@ vi.mock("@/lib/hubspot/client", () => ({ getSystemHubspotClient: async () => ({}
 
 import { calcularChequeo, type AreaParaChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { listaParaProponer, queSigue } from "./calidad";
+import { listaParaProponer, queSigue, queSigueConPaso } from "./calidad";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { aFecha, diaConAnio, diaCorto } from "./fechas";
 import { esDeLaEmpresa } from "./hubspot";
@@ -120,6 +120,7 @@ describe("lista para proponer", () => {
     const e = estado({
       contenido: {
         ...contenidoVacio(),
+        chequeo: { "1.1": { nivel: "F", fuente: "reunion" } },
         sinPortal: true,
         casillas: {
           metas: [{ que: "Cerrar más", objetivo: "7 de cada 10" }],
@@ -141,17 +142,31 @@ describe("lista para proponer", () => {
     expect(listaParaProponer(e, chequeoCon("FFFFFFFF")).find((p) => p.id === "meta")!.cumplido).toBe(false);
   });
 
-  it("qué sigue va en el orden del proceso: perfil, áreas, lo propuesto, las dimensiones, la meta", () => {
+  it("qué sigue va en el orden del proceso: perfil, áreas, la primera reunión, las dimensiones, la meta", () => {
     expect(queSigue(estado({ perfilCierre: null }), chequeoCon("FFFFFFFF"))).toMatch(/perfil/);
     expect(queSigue(estado({ areas: [] }), chequeoCon("FFFFFFFF"))).toMatch(/áreas/);
-    expect(queSigue(estado(), chequeoCon("FFFFFFF"))).toMatch(/dimensión que falta/);
-    expect(queSigue(estado(), chequeoCon("FFFFFFFF"))).toMatch(/meta en cifras/);
+    // Sin nada que haya dicho el cliente, lo que toca es la primera reunión, con la guía.
+    expect(queSigueConPaso(estado(), chequeoCon("FFFFFFF"))).toMatchObject({ paso: "reuniones", texto: expect.stringMatching(/^Haz la primera reunión/) });
+    const conEvidencia = estado({ contenido: { ...contenidoVacio(), chequeo: { "1.1": { nivel: "F", fuente: "reunion" } } } });
+    expect(queSigueConPaso(conEvidencia, chequeoCon("FFFFFFF"))).toMatchObject({ paso: "escala", texto: expect.stringMatching(/^Falta confirmar una dimensión/) });
+    expect(queSigue(conEvidencia, chequeoCon("FFFFFFFF"))).toMatch(/meta en cifras/);
     // Una reunión sin leer va antes que todo lo que se llena con ella.
     const sinLeer = [{ id: "s1", titulo: "Revisión del diagnóstico", fecha: "2026-10-01T15:00:00.000Z", origen: "meet" as const }];
-    expect(queSigue(estado(), chequeoCon("FFFFFFF"), sinLeer)).toBe(
-      "Hay una reunión sin leer («Revisión del diagnóstico», 1 oct): pídele al agente que la lea, en «Lo que quedó».",
-    );
+    expect(queSigue(estado(), chequeoCon("FFFFFFF"), sinLeer)).toBe("Hay una reunión sin leer («Revisión del diagnóstico», 1 oct): pídele al agente que la lea.");
     expect(queSigue(estado(), chequeoCon("FFFFFFF"), [...sinLeer, { ...sinLeer[0], id: "s2" }])).toMatch(/^Hay 2 reuniones sin leer/);
+  });
+
+  it("las hipótesis de nivel no son «para revisar»: son el mapa, y se confirman en la reunión", () => {
+    const hipotesis = {
+      id: "nivel:1.3:x",
+      destino: { tipo: "nivel" as const, dimensionId: "1.3" },
+      valor: { nivel: "I", fuente: "hipotesis", porQue: "Las notas dicen que cada vendedor lleva su Excel" },
+      fuentes: [{ id: "H1", etiqueta: "Nota" }],
+      corridaId: "r",
+      en: "2026-10-01T00:00:00.000Z",
+    };
+    const e = estado({ propuesta: { ...propuestaVacia(), items: [hipotesis] } });
+    expect(queSigue(e, chequeoCon("FFFFFFF"))).not.toMatch(/Revisa lo que propuso/);
   });
 });
 

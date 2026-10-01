@@ -3,19 +3,22 @@
 /**
  * LienzoDeExploracion — el lienzo de la exploración de venta de una empresa.
  *
- * Es un PROCESO, no un formulario: arriba, una sola indicación de qué sigue; abajo, los cinco pasos
- * (preparación, las dos reuniones, lo que quedó, la propuesta y el traspaso). Lo que propuso el
- * agente aparece en el lugar de cada casilla, para usarlo o descartarlo mirando lo que ya está.
+ * Una GUÍA, no un formulario (pedido de Elías, 2026-10-01: «una guía muy fácil de rellenar»):
+ * arriba, una sola indicación de qué sigue; abajo, los cinco pasos —preparación (se arma sola),
+ * las reuniones (la guía de qué preguntar; las respuestas las anota el agente con la
+ * transcripción), la escala (dónde parece estar cada equipo, con hipótesis y evidencia), los casos
+ * de uso y el traspaso—. Lo que propone el agente aparece en su lugar, para usarlo o descartarlo.
  */
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { AgentProposal } from "@/components/ai/AgentProposal";
-import { Alert, Tabs, useToast } from "@/components/ui";
+import { Alert, Button, Tabs, useToast } from "@/components/ui";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { listaParaProponer, queSigue } from "@/lib/exploraciones/calidad";
+import { queSigueConPaso } from "@/lib/exploraciones/calidad";
 import {
   aplicarOperaciones,
   destinoValido,
+  esHipotesisDeNivel,
   propuestaVigente,
   VALIDADOR_LIBRE,
   type DestinoDePropuesta,
@@ -23,16 +26,26 @@ import {
   type Validez,
 } from "@/lib/exploraciones/contenido";
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
+import { chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import { calcularChequeo } from "@/lib/escala/chequeo";
-import { LienzoContexto, type Lienzo, type OpcionesDeCambio } from "./contexto";
+import { LienzoContexto, type Lienzo, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
+import PasoCasosDeUso from "./PasoCasosDeUso";
+import PasoEscala from "./PasoEscala";
 import PasoPreparacion from "./PasoPreparacion";
-import PasoPropuesta from "./PasoPropuesta";
-import PasoQuedo from "./PasoQuedo";
 import PasoReuniones from "./PasoReuniones";
 import PasoTraspaso from "./PasoTraspaso";
 
-type Paso = "preparacion" | "reuniones" | "quedo" | "propuesta" | "traspaso";
+const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
+  preparacion: "Preparación",
+  reuniones: "Reuniones",
+  escala: "La escala",
+  casos: "Casos de uso",
+  traspaso: "Traspaso",
+};
+
+/** Las casillas que se arman al preparar: lo demás es lo que respondió el cliente. */
+const DE_LA_PREPARACION = new Set(["contexto", "hubspotActual", "hipotesis"]);
 
 export default function LienzoDeExploracion({
   inicial,
@@ -49,7 +62,7 @@ export default function LienzoDeExploracion({
   const [sinLeer, setSinLeer] = useState(inicial.sinLeer ?? []);
   const [proyectos, setProyectos] = useState(inicial.proyectos ?? []);
   const [guardando, setGuardando] = useState(false);
-  const [paso, setPaso] = useState<Paso>("preparacion");
+  const [paso, setPaso] = useState<PasoDelLienzoUI>("preparacion");
 
   /* Lo último que confirmó el servidor, y la fila de pedidos: cada uno sale con la versión que dejó
      el anterior. */
@@ -82,6 +95,7 @@ export default function LienzoDeExploracion({
       criterios: ids.criterios,
       areas: new Set(escala.areas.map((a) => a.id)),
       ediciones: new Set(escala.ediciones.map((e) => e.slug)),
+      perfilesHabituales: Object.fromEntries(escala.ediciones.map((e) => [e.slug, e.perfilHabitual])),
       escalaVersion: escala.version,
     };
   }, [escala]);
@@ -149,10 +163,17 @@ export default function LienzoDeExploracion({
         const res = await fetch(`/api/sales/exploraciones/${confirmada.current.id}`);
         const data = (await res.json().catch(() => ({}))) as { exploracion?: ExploracionParaLaPantalla };
         if (data.exploracion) {
+          const antes = confirmada.current.estado;
+          const ahora = data.exploracion.estado;
           confirmada.current = data.exploracion;
           setExp(data.exploracion);
           if (data.exploracion.sinLeer) setSinLeer(data.exploracion.sinLeer);
           if (data.exploracion.proyectos) setProyectos(data.exploracion.proyectos);
+          /* La preparación eligió la industria o el perfil: la escala del lienzo es otra (la arma el
+             servidor con esos dos), así que se vuelve a pedir la página. */
+          if (antes.edicion !== ahora.edicion || antes.perfilCierre !== ahora.perfilCierre || antes.perfilDespues !== ahora.perfilDespues) {
+            router.refresh();
+          }
         }
       } catch {
         /* se queda con lo que tiene: el próximo cambio trae lo último */
@@ -160,7 +181,7 @@ export default function LienzoDeExploracion({
     });
     cola.current = p;
     return p;
-  }, []);
+  }, [router]);
 
   const chequeo = useMemo(() => {
     const areas = exp.estado.areas
@@ -174,54 +195,90 @@ export default function LienzoDeExploracion({
 
   // Lo pendiente que todavía tiene dónde ir: lo de una dimensión o un criterio que ya no está no se cuenta ni se usa.
   const pendientes = useMemo(() => propuestaVigente(exp.estado).filter((it) => destinoValido(it.destino, validez)), [exp.estado, validez]);
-  const pendientesPara = useCallback((filtro: (d: DestinoDePropuesta) => boolean) => pendientes.filter((it) => filtro(it.destino)), [pendientes]);
+  // Las hipótesis de nivel son el mapa: no se «usan», se confirman en las reuniones.
+  const revisables = useMemo(() => pendientes.filter((it) => !esHipotesisDeNivel(it)), [pendientes]);
+  const mapa = useMemo(() => {
+    const posiciones = posicionesDelMapa(exp.estado, pendientes);
+    return { posiciones, chequeo: chequeoDelMapa(escala, exp.estado.areas, posiciones) };
+  }, [exp.estado, pendientes, escala]);
+  const pendientesPara = useCallback((filtro: (d: DestinoDePropuesta) => boolean) => revisables.filter((it) => filtro(it.destino)), [revisables]);
   const nombreDeNivel = useCallback((l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l, [escala]);
+  const irA = useCallback((p: PasoDelLienzoUI) => {
+    setPaso(p);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
-  const lienzo: Lienzo = { exp, escala, chequeo, pendientes, sinLeer, proyectos, puedeEditar, guardando, cambiar, recargar, alDia, nombreDeNivel, pendientesPara };
+  const lienzo: Lienzo = {
+    exp,
+    escala,
+    chequeo,
+    mapa,
+    pendientes,
+    revisables,
+    sinLeer,
+    proyectos,
+    puedeEditar,
+    guardando,
+    cambiar,
+    recargar,
+    alDia,
+    nombreDeNivel,
+    pendientesPara,
+    irA,
+  };
 
-  const puntos = listaParaProponer(exp.estado, chequeo);
-  const sigue = queSigue(exp.estado, chequeo, sinLeer);
-  const enPrep = pendientes.filter((p) => ["edicion", "perfil", "area", "aExplorar"].includes(p.destino.tipo) || (p.destino.tipo === "casilla" && ["contexto", "hubspotActual", "hipotesis"].includes(p.destino.clave))).length;
-  const enPropuesta = pendientes.filter((p) => p.destino.tipo === "casoDeUso").length;
-  const enQuedo = pendientes.length - enPrep - enPropuesta;
+  const sigue = queSigueConPaso(exp.estado, chequeo, sinLeer);
+  const deCadaPaso = (p: PasoDelLienzoUI) =>
+    revisables.filter((it) => {
+      const d = it.destino;
+      if (d.tipo === "casoDeUso") return p === "casos";
+      if (d.tipo === "nivel" || d.tipo === "falta") return p === "escala";
+      if (d.tipo === "casilla") return DE_LA_PREPARACION.has(d.clave) ? p === "preparacion" : p === "reuniones";
+      return p === "preparacion";
+    }).length || undefined;
+  // «Usar todas» no toca los casos de uso: esos se eligen uno por uno, en su paso.
+  const paraUsarTodas = revisables.filter((it) => it.destino.tipo !== "casoDeUso");
 
-  const pasos: { key: Paso; label: string; count?: number }[] = [
-    { key: "preparacion", label: "Preparación", count: enPrep || undefined },
-    { key: "reuniones", label: "Reuniones" },
-    { key: "quedo", label: "Lo que quedó", count: enQuedo || undefined },
-    { key: "propuesta", label: `Propuesta · ${puntos.filter((p) => p.cumplido).length}/${puntos.length}`, count: enPropuesta || undefined },
-    { key: "traspaso", label: "Traspaso" },
-  ];
+  const pasos = (["preparacion", "reuniones", "escala", "casos", "traspaso"] as const).map((key) => ({
+    key,
+    label: NOMBRE_DEL_PASO[key],
+    count: key === "traspaso" ? undefined : deCadaPaso(key),
+  }));
 
   return (
     <LienzoContexto.Provider value={lienzo}>
       <div className="space-y-5">
         <Alert variant="info" title="Qué sigue">
-          {sigue}
+          <span>{sigue.texto}</span>
+          {sigue.paso && sigue.paso !== paso && (
+            <Button size="xs" variant="secondary" className="ml-2 align-middle" onClick={() => irA(sigue.paso!)}>
+              Ir a «{NOMBRE_DEL_PASO[sigue.paso]}»
+            </Button>
+          )}
         </Alert>
 
-        {pendientes.length > 0 && puedeEditar && (
+        {paraUsarTodas.length > 0 && puedeEditar && (
           <AgentProposal
-            title={`Hay ${pendientes.length} ${pendientes.length === 1 ? "propuesta" : "propuestas"} para revisar`}
+            title={`Hay ${paraUsarTodas.length} ${paraUsarTodas.length === 1 ? "propuesta" : "propuestas"} para revisar`}
             subtitle="Están en su lugar, en cada paso. Úsalas o descártalas mirando lo que ya está; nada se confirma solo."
             applyLabel="Usar todas"
             discardLabel="Descartar todas"
             applying={guardando}
             onApply={() =>
-              void cambiar([{ op: "usarVarias", items: pendientes.map((it) => ({ itemId: it.id, valor: it.valor })) }], {
-                refrescar: pendientes.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil"),
+              void cambiar([{ op: "usarVarias", items: paraUsarTodas.map((it) => ({ itemId: it.id, valor: it.valor })) }], {
+                refrescar: paraUsarTodas.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil"),
               })
             }
-            onDiscard={() => void cambiar([{ op: "descartar", itemIds: pendientes.map((it) => it.id) }])}
+            onDiscard={() => void cambiar([{ op: "descartar", itemIds: paraUsarTodas.map((it) => it.id) }])}
           />
         )}
 
-        <Tabs<Paso> aria-label="Pasos de la exploración" value={paso} onChange={setPaso} items={pasos} />
+        <Tabs<PasoDelLienzoUI> aria-label="Pasos de la exploración" value={paso} onChange={setPaso} items={pasos} />
 
         {paso === "preparacion" && <PasoPreparacion />}
         {paso === "reuniones" && <PasoReuniones />}
-        {paso === "quedo" && <PasoQuedo />}
-        {paso === "propuesta" && <PasoPropuesta />}
+        {paso === "escala" && <PasoEscala />}
+        {paso === "casos" && <PasoCasosDeUso />}
         {paso === "traspaso" && <PasoTraspaso />}
       </div>
     </LienzoContexto.Provider>
