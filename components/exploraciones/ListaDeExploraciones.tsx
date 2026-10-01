@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * ListaDeExploraciones — las exploraciones vivas, con lo que le falta a cada una.
+ * ListaDeExploraciones — las exploraciones en curso, con lo que le falta a cada una. Una nueva se
+ * abre desde «Todas las empresas» (EmpresasDeHubspot), debajo.
  *
  * Cada fila dice en una línea QUÉ SIGUE (la misma indicación que el lienzo muestra arriba) y cuántos
  * de los siete puntos de «lista para proponer» ya cumple. Se ordena por la última actividad.
@@ -10,11 +11,10 @@ import { useRouter } from "next/navigation";
 import { Badge, EmptyState, Table, type TableColumn } from "@/components/ui";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import type { FilaDeLaLista } from "@/lib/exploraciones/servidor";
-import NuevaExploracion from "./NuevaExploracion";
 
 const cuando = (iso: string): string => diaCorto(iso);
 
-export default function ListaDeExploraciones({ filas, puedeEditar }: { filas: FilaDeLaLista[]; puedeEditar: boolean }) {
+export default function ListaDeExploraciones({ filas }: { filas: FilaDeLaLista[] }) {
   const router = useRouter();
 
   const columnas: TableColumn<FilaDeLaLista>[] = [
@@ -72,14 +72,12 @@ export default function ListaDeExploraciones({ filas, puedeEditar }: { filas: Fi
       rowKey={(f) => f.id}
       onRowClick={(f) => router.push(`/sales/exploraciones/${f.id}`)}
       search={{ placeholder: "Buscar empresa…", getText: (f) => `${f.empresa} ${f.edicion ?? ""}` }}
-      action={puedeEditar ? <NuevaExploracion /> : undefined}
       initialSort={{ key: "actualizada", dir: "desc" }}
       empty={
         <EmptyState
           variant="dashed"
           title="Todavía no hay exploraciones"
-          description="Una exploración es el lienzo de una empresa para preparar y guiar las dos reuniones con el prospecto, y llegar a la primera propuesta con sus metas en cifras."
-          action={puedeEditar ? <NuevaExploracion /> : undefined}
+          description="Una exploración es el lienzo de una empresa para preparar cada reunión con el prospecto y llegar a la primera propuesta con sus metas en cifras. Elige la empresa abajo, en «Todas las empresas»."
         />
       }
     />

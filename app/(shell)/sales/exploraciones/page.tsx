@@ -1,17 +1,21 @@
 /**
  * /sales/exploraciones — las exploraciones de venta: un lienzo por empresa para preparar y guiar las
- * dos reuniones con el prospecto y llegar a la primera propuesta (lib/exploraciones).
+ * reuniones con el prospecto y llegar a la primera propuesta (lib/exploraciones).
+ *
+ * Arriba, «Llegaron por el test»; después, las exploraciones en curso; abajo, todas las empresas del
+ * HubSpot de Smarteam con su buscador, para elegir con quién planificar. Las tarjetas de la métrica
+ * se retiraron de esta pantalla (2026-10-01, no le aportan al vendedor): la foto de «lista para
+ * proponer» al armar cada propuesta se sigue guardando (`metricasDeLasPropuestas`).
  *
  * Gateada por `ventas.read`; abrir y editar pide `ventas.write`.
  */
 import { redirect } from "next/navigation";
 import { Alert, PageHeader } from "@/components/ui";
+import EmpresasDeHubspot from "@/components/exploraciones/EmpresasDeHubspot";
 import ListaDeExploraciones from "@/components/exploraciones/ListaDeExploraciones";
 import LlegaronPorElTest from "@/components/exploraciones/LlegaronPorElTest";
-import MetricasDeExploraciones from "@/components/exploraciones/MetricasDeExploraciones";
 import { can } from "@/lib/auth/permissions/engine";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { metricasDeLasPropuestas } from "@/lib/exploraciones/propuesta";
 import { escalaParaExplorar, listarExploraciones, SQL_DE_EXPLORACIONES } from "@/lib/exploraciones/servidor";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
@@ -23,13 +27,7 @@ export default async function ExploracionesPage() {
   const puedeEditar = await can(ctx.teamMember, "ventas", "write");
 
   const escala = await escalaParaExplorar();
-  const [lista, metricas] = await Promise.all([
-    listarExploraciones(escala.estado === "ok" ? escala.general : null),
-    metricasDeLasPropuestas().catch((e) => {
-      console.error("[exploraciones] no se pudo calcular la métrica", e);
-      return null;
-    }),
-  ]);
+  const lista = await listarExploraciones(escala.estado === "ok" ? escala.general : null);
   // El test de marketing nombra el área por su id general: se muestra con el nombre de la escala.
   const nombresDeAreas = escala.estado === "ok" ? Object.fromEntries(escala.general.areas.map((a) => [a.id, a.nombre])) : {};
 
@@ -37,7 +35,7 @@ export default async function ExploracionesPage() {
     <div className={SHELL_DEFAULT}>
       <PageHeader
         title="Exploraciones"
-        description="El lienzo de cada prospecto: prepara las dos reuniones, estima su nivel en la escala y llega a la propuesta con sus metas en cifras."
+        description="El lienzo de cada prospecto: prepara cada reunión, ubícalo en la escala y llega a la propuesta con sus metas en cifras."
         crumbs={[{ label: "Ventas", href: "/business-cases" }, { label: "Exploraciones" }]}
       />
       {escala.estado !== "ok" && (
@@ -51,9 +49,14 @@ export default async function ExploracionesPage() {
         </Alert>
       ) : (
         <>
-          {metricas && <MetricasDeExploraciones metricas={metricas} />}
           <LlegaronPorElTest nombresDeAreas={nombresDeAreas} puedeEditar={puedeEditar} />
-          <ListaDeExploraciones filas={lista.filas} puedeEditar={puedeEditar} />
+          {lista.filas.length > 0 && (
+            <section className="mb-6 space-y-2">
+              <h2 className="text-sm font-semibold text-fg">En curso</h2>
+              <ListaDeExploraciones filas={lista.filas} />
+            </section>
+          )}
+          <EmpresasDeHubspot puedeEditar={puedeEditar} />
         </>
       )}
     </div>

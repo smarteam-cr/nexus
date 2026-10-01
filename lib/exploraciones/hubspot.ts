@@ -48,6 +48,8 @@ export interface EmpresaDeHubspot {
   sitio: string | null;
   etapa: string | null;
   descripcion: string | null;
+  /** La última actividad de ventas (nota, llamada, reunión, correo), ISO. */
+  ultimaActividad: string | null;
 }
 
 const PROPIEDADES_DE_EMPRESA = [
@@ -60,6 +62,7 @@ const PROPIEDADES_DE_EMPRESA = [
   "website",
   "lifecyclestage",
   "description",
+  "notes_last_updated",
 ];
 
 type FilaDeEmpresa = { id: string; properties: Record<string, string | null | undefined> };
@@ -75,30 +78,48 @@ const aEmpresa = (f: FilaDeEmpresa): EmpresaDeHubspot => ({
   sitio: f.properties.website || null,
   etapa: f.properties.lifecyclestage || null,
   descripcion: f.properties.description || null,
+  ultimaActividad: f.properties.notes_last_updated || null,
 });
 
+/** Cuántas empresas trae cada página de la lista. */
+export const EMPRESAS_POR_PAGINA = 25;
+
 /**
- * Busca empresas por nombre o dominio. Devuelve VARIAS para que el vendedor elija: tomar la primera,
- * como hacía el buscador de propuestas, abre la exploración de otra empresa sin que nadie lo note.
+ * Las empresas del HubSpot de Smarteam, de a una página: buscadas por nombre o dominio, o, sin
+ * búsqueda, las que tuvieron actividad de ventas más reciente (son miles: nunca se cargan todas).
+ * Devuelve VARIAS para que el vendedor elija: tomar la primera, como hacía el buscador de
+ * propuestas, abre la exploración de otra empresa sin que nadie lo note. `siguiente` es el cursor
+ * de la página que sigue (null si no hay más).
  */
-export async function buscarEmpresas(q: string): Promise<EmpresaDeHubspot[] | null> {
+export async function buscarEmpresas(
+  q: string,
+  after: string | null = null,
+): Promise<{ empresas: EmpresaDeHubspot[]; siguiente: string | null } | null> {
   const termino = q.trim();
-  if (termino.length < 2) return [];
-  const data = await pedirAHubspot<{ results?: FilaDeEmpresa[] }>({
+  const body: Record<string, unknown> = {
+    properties: PROPIEDADES_DE_EMPRESA,
+    limit: EMPRESAS_POR_PAGINA,
+    ...(after ? { after } : {}),
+  };
+  if (termino.length >= 2) {
+    /* `query` busca en las propiedades de texto por defecto de la empresa (nombre, dominio, sitio,
+       teléfono) y acepta varias palabras: «grupo inve» encuentra «Grupo INVE S.A.». Un filtro
+       CONTAINS_TOKEN solo calza un token suelto. */
+    body.query = termino;
+    body.sorts = [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }];
+  } else {
+    /* Sin búsqueda: por la fecha de la última actividad de ventas (nota, llamada, reunión, correo),
+       solo las que tienen alguna. `hs_lastmodifieddate` lo mueve cualquier automatización. */
+    body.filterGroups = [{ filters: [{ propertyName: "notes_last_updated", operator: "HAS_PROPERTY" }] }];
+    body.sorts = [{ propertyName: "notes_last_updated", direction: "DESCENDING" }];
+  }
+  const data = await pedirAHubspot<{ results?: FilaDeEmpresa[]; paging?: { next?: { after?: string } } }>({
     method: "POST",
     path: "/crm/v3/objects/companies/search",
-    body: {
-      /* `query` busca en las propiedades de texto por defecto de la empresa (nombre, dominio, sitio,
-         teléfono) y acepta varias palabras: «grupo inve» encuentra «Grupo INVE S.A.». Un filtro
-         CONTAINS_TOKEN solo calza un token suelto. */
-      query: termino,
-      properties: PROPIEDADES_DE_EMPRESA,
-      sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
-      limit: 10,
-    },
+    body,
   });
   if (!data) return null;
-  return (data.results ?? []).map(aEmpresa);
+  return { empresas: (data.results ?? []).map(aEmpresa), siguiente: data.paging?.next?.after ?? null };
 }
 
 /** Una empresa por su id. null si no existe o HubSpot no respondió. */

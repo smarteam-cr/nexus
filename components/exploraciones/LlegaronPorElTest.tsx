@@ -74,7 +74,7 @@ export default function LlegaronPorElTest({ nombresDeAreas, puedeEditar }: { nom
   if (llegadas !== null && llegadas.length === 0 && !error) return null;
 
   return (
-    <section className="mb-6 space-y-3 rounded-xl border border-line bg-surface p-4">
+    <section className="mb-6 space-y-3 rounded-xl border border-brand/30 bg-brand/5 p-4">
       <div>
         <h2 className="text-sm font-semibold text-fg">Llegaron por el test</h2>
         <p className="text-xs text-fg-muted">
@@ -113,7 +113,7 @@ export default function LlegaronPorElTest({ nombresDeAreas, puedeEditar }: { nom
                 )}
                 {puedeEditar && (
                   <Button size="sm" variant="secondary" loading={abriendo === l.companyId} disabled={abriendo !== null} onClick={() => void preparar(l)}>
-                    Preparar
+                    Planificar
                   </Button>
                 )}
               </div>
