@@ -134,8 +134,8 @@ function DetalleDeDimension({ area, d, onCerrar }: { area: AreaDelLienzo; d: Dim
       const valor: EstimadoGuardado = esHipotesisDeNivel(pend) ? { ...v, fuente: "vendedor" } : v;
       return void cambiar([{ op: "usar", itemId: pend.id, valor }]);
     }
-    // Ya está en ese nivel: no se toca (se perdería la frase que lo respalda).
-    if (confirmado?.nivel === nivel) return;
+    // Ya está en ese nivel y es lo que se ve: no se toca (se perdería la frase que lo respalda).
+    if (confirmado?.nivel === nivel && p?.origen === "confirmado") return;
     const estimado: EstimadoGuardado = {
       nivel,
       fuente: "vendedor",

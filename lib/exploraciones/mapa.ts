@@ -1,10 +1,11 @@
 /**
  * lib/exploraciones/mapa.ts — dónde parece estar cada equipo, dimensión por dimensión. PURO.
  *
- * El mapa de la escala del lienzo dibuja UN nivel por dimensión de las áreas en juego:
- *   1. lo confirmado (lo que dijo el cliente, lo que se vio en el portal, lo que marcó el vendedor);
- *   2. si no hay, lo que propone el agente: lo que leyó en una reunión, con la frase, o su
- *      HIPÓTESIS (lo que se cree antes de hablar con el cliente, del test o de lo que hay en HubSpot).
+ * El mapa de la escala del lienzo dibuja UN nivel por dimensión de las áreas en juego: el que más
+ * pesa entre lo confirmado y lo que propone el agente. Lo que dijo el cliente (o se vio, o marcó el
+ * vendedor) pesa más que la HIPÓTESIS del agente (lo que deduce de HubSpot), y esa más que lo que el
+ * prospecto marcó en el test. A igual peso, lo confirmado. Así, un nivel del test que se «usó» con el
+ * lienzo anterior no tapa la hipótesis del agente, y lo nuevo de una reunión se ve enseguida.
  * Cada uno con su clase —evidencia o hipótesis— y su porqué. Con eso se calcula el nivel de cada
  * área como lo hace el chequeo; si entra una hipótesis, el área «parece» estar ahí.
  *
@@ -26,6 +27,9 @@ import {
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 
 export type ClaseDelNivel = "evidencia" | "hipotesis";
+
+/** Lo que marcó en el test < la hipótesis del agente < lo que dijo el cliente, se vio o marcó el vendedor. */
+const pesoDeLaFuente = (f: FuenteDelNivel) => (f === "test" ? 1 : f === "hipotesis" ? 2 : 3);
 
 export interface PosicionEnElMapa {
   nivel: Letra;
@@ -59,7 +63,8 @@ export function posicionesDelMapa(estado: EstadoDeExploracion, pendientes: reado
     // Lo que dijo el cliente manda: una hipótesis vieja que quedó pendiente ya no dice nada.
     if (conf && pend && !esFuenteDeHipotesis(conf.fuente) && esHipotesisDeNivel(pend)) pend = null;
     const porRevisar = !!pend && !esHipotesisDeNivel(pend);
-    if (conf) {
+    // Lo propuesto se dibuja si no hay nada confirmado o si pesa más que lo confirmado.
+    if (conf && !(pend && pesoDeLaFuente((pend.valor as EstimadoGuardado).fuente) > pesoDeLaFuente(conf.fuente))) {
       out[id] = {
         nivel: conf.nivel,
         clase: esFuenteDeHipotesis(conf.fuente) ? "hipotesis" : "evidencia",
@@ -73,6 +78,7 @@ export function posicionesDelMapa(estado: EstadoDeExploracion, pendientes: reado
         porRevisar,
       };
     } else if (pend) {
+      // Lo dibujado es lo propuesto (no había nada confirmado, o lo propuesto pesa más).
       const v = pend.valor as EstimadoGuardado;
       out[id] = {
         nivel: v.nivel,

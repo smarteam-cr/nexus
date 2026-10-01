@@ -85,6 +85,20 @@ describe("lo que dibuja el mapa", () => {
     expect(posicionesDelMapa(e, [nivel("1.1", { nivel: "I", fuente: "reunion", evidencia: "x" })])["1.1"]).toMatchObject({ nivel: "F", porRevisar: true });
   });
 
+  it("se dibuja lo que más pesa: la hipótesis del agente sobre un nivel del test ya usado; lo que dijo el cliente sobre una hipótesis", () => {
+    const conTest = estado({ contenido: { ...contenidoVacio(), chequeo: { "1.1": { nivel: "F", fuente: "test" } } } });
+    expect(posicionesDelMapa(conTest, [nivel("1.1", { nivel: "I", fuente: "hipotesis", porQue: "Usan Excel." })])["1.1"]).toMatchObject({
+      nivel: "I",
+      clase: "hipotesis",
+      origen: "propuesto",
+      porQue: "Usan Excel.",
+    });
+    expect(posicionesDelMapa(conTest, [nivel("1.1", { nivel: "D", fuente: "reunion", evidencia: "x" })])["1.1"]).toMatchObject({ nivel: "D", clase: "evidencia", porRevisar: true });
+    // A igual peso, lo confirmado (y lo nuevo queda para revisar).
+    const conReunion = estado({ contenido: { ...contenidoVacio(), chequeo: { "1.1": { nivel: "F", fuente: "reunion" } } } });
+    expect(posicionesDelMapa(conReunion, [nivel("1.1", { nivel: "I", fuente: "reunion", evidencia: "x" })])["1.1"]).toMatchObject({ nivel: "F", origen: "confirmado", porRevisar: true });
+  });
+
   it("el área sale como en el chequeo, con lo que la deja ahí y la cuenta de evidencia e hipótesis", () => {
     const letras: Letra[] = ["F", "I", "F", "F", "E", "E", "F", "F"];
     const pendientes = letras.map((l, i) => nivel(`1.${i + 1}`, { nivel: l, fuente: i < 3 ? "reunion" : "hipotesis", ...(i < 3 ? { evidencia: "x" } : {}) }));
