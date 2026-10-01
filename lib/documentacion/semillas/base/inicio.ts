@@ -54,7 +54,7 @@ export function construirInicio(): PaginaSembrada {
         ["¿Entras a Customer Success? ", { negrita: true }],
         "Empieza por ",
         deCs("primerosDias"),
-        ": tu primer día, tu primera semana y qué leer, en orden.",
+        ": la guía del primer día, la primera semana y el primer mes, y qué leer, en orden.",
       ),
       parrafo("Para cualquier área, cinco páginas, en este orden, alcanzan para arrancar:"),
       parrafoRico("1. ", a("proposito"), " — por qué existimos y qué nos importa."),

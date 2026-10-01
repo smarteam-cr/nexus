@@ -356,7 +356,7 @@ export default function ArbolDePaginas({ arbol, puedeEscribir, puedeAdministrar,
                 {...attributes}
                 {...listeners}
                 className="cursor-grab px-1 text-fg-muted hover:text-fg"
-                title="Arrastrá para reordenar"
+                title="Arrastra para reordenar"
                 aria-label="Reordenar"
               >
                 <IconoArrastrar />

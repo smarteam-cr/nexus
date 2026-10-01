@@ -443,7 +443,9 @@ describe("«Customer Success»", () => {
     expect(slugsMencionados(ARTICULOS()[0].bloques)).toContain(slug);
     expect(slugsMencionados(cs.bloques)).toContain(slug);
     const texto = textoDeBloques(hija(slug).bloques);
-    for (const momento of ["Tu primer día", "Tu primera semana", "Tu primer mes"]) expect(texto).toContain(momento);
+    for (const momento of ["El primer día", "La primera semana", "El primer mes"]) expect(texto).toContain(momento);
+    // Es una guía para seguir, la misma para todo el área: pasos numerados, no casillas para marcar.
+    expect(todos(hija(slug).bloques).filter((b) => b.type === "checkListItem")).toEqual([]);
     expect(texto).toContain(LIDERES.customerSuccess);
     expect(texto).toContain(LIDERES.revops);
   });

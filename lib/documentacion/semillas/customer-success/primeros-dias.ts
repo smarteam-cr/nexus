@@ -18,7 +18,6 @@ import {
   numerado,
   parrafo,
   parrafoRico,
-  tarea,
   tarjeta,
   tarjetas,
   titulo,
@@ -57,44 +56,48 @@ export function construirPrimerosDias(): PaginaSembrada {
       tarjetas(
         "2",
         tarjeta(
-          `${LIDERES.customerSuccess} — tu líder directo`,
-          "Customer Success Lead. Con él ves tus cuentas, la revisión de cartera y el 1:1 mensual. Para cualquier duda del día a día, empieza por él.",
+          `${LIDERES.customerSuccess} — el líder del área`,
+          "Customer Success Lead y líder directo de cada CSE. Con él se ven las cuentas, la revisión de cartera y el 1:1 mensual. Para cualquier duda del día a día, empieza por él.",
         ),
         tarjeta(
           `${LIDERES.revops} — Nexus y estrategia`,
-          "Revenue Operations. Junto con Alexander, te acompaña en todo lo de Nexus —sus procesos y cómo se trabaja ahí— y en el pensamiento estratégico con que encaramos a cada cliente. Los primeros días vas a tener sesiones con él.",
+          "Revenue Operations. Junto con Alexander, acompaña todo lo de Nexus —sus procesos y cómo se trabaja ahí— y el pensamiento estratégico con que encaramos a cada cliente. Los primeros días hay sesiones con él.",
         ),
       ),
 
-      titulo(2, "Tu primer día"),
-      tarea("Entra a Nexus con tu cuenta de Google de Smarteam y recorre el menú."),
-      tarea(
-        "Confirma que tienes acceso a las herramientas del día a día: Google (correo, calendario y Meet), Slack, HubSpot y Nexus. Si te falta alguna, avísale a Alexander.",
+      parrafo(
+        "Es la misma guía para todos los que entran al área: síguela en orden. No hay nada que marcar; cada paso dice qué hacer y qué tiene que quedar claro antes de pasar al siguiente.",
       ),
-      tarea("Lee, en este orden, las cinco páginas de «Para entender Smarteam», más abajo."),
-      tarea(
+
+      titulo(2, "El primer día"),
+      numerado("Entra a Nexus con tu cuenta de Google de Smarteam y recorre el menú."),
+      numerado(
+        "Confirma que tienes acceso a las herramientas del día a día: Google (correo, calendario y Meet), Slack, HubSpot y Nexus. Si falta alguna, avísale a tu líder.",
+      ),
+      numerado("Lee, en este orden, las cinco páginas de «Para entender Smarteam», más abajo."),
+      numerado(
         "Revisa tu calendario: la Sesión de Customer Success es los lunes a las 8:30. Dura 20 minutos y no se mueve.",
       ),
-      tarea("Primera sesión con Elías: un recorrido por Nexus."),
-      tarea("Preséntate en Slack y mira quién es quién en El equipo."),
+      numerado("Primera sesión con Elías: un recorrido por Nexus."),
+      numerado("Preséntate en Slack y mira quién es quién en El equipo."),
 
-      titulo(2, "Tu primera semana"),
-      tarea("Lee lo de tu trabajo: el rol de CSE, la Guía de CSE y Nexus para un CSE, paso a paso."),
-      tarea(
+      titulo(2, "La primera semana"),
+      numerado("Lee lo de tu trabajo: el rol de CSE, la Guía de CSE y Nexus para un CSE, paso a paso."),
+      numerado(
         "Lee la Escala de rendimiento y recórrela en Nexus → Escala, en el área que mejor conozcas. Lo que no se entienda, coméntalo ahí mismo: así mejora.",
       ),
-      tarea("Sesiones con Elías y Alexander: Nexus, la Escala y cómo pensamos a un cliente."),
-      tarea("Entra como oyente a sesiones de clientes de otros CSE."),
-      tarea(
+      numerado("Sesiones con Elías y con tu líder: Nexus, la Escala y cómo pensamos a un cliente."),
+      numerado("Entra como oyente a sesiones de clientes de otros CSE."),
+      numerado(
         "Recibe tus primeras cuentas, con acompañamiento. En cada una: abre su Resumen en Nexus, lee «Información de la venta» completa y revisa su etapa en HubSpot antes de hablar con el cliente.",
       ),
 
-      titulo(2, "Tu primer mes"),
-      tarea("Cada cuenta tuya mueve algo cada semana, y su etapa en HubSpot está al día."),
-      tarea("Tus reuniones con clientes se graban siempre, con el título «Tema | Nombre del cliente»."),
-      tarea("Haces —o acompañas— un diagnóstico con la Escala."),
-      tarea("Primer 1:1 mensual con Alexander: en qué nivel de la ruta del CSE estás y qué cuentas puedes sostener solo."),
-      tarea("Lees las competencias, la relación con el cliente y los nueve modos de que salga mal, en la Guía de CSE."),
+      titulo(2, "El primer mes"),
+      numerado("Cada una de tus cuentas mueve algo cada semana, y su etapa en HubSpot está al día."),
+      numerado("Las reuniones con clientes se graban siempre, con el título «Tema | Nombre del cliente»."),
+      numerado("Haz —o acompaña— un diagnóstico con la Escala."),
+      numerado("Primer 1:1 mensual con tu líder: en qué nivel de la ruta del CSE estás y qué cuentas puedes sostener solo."),
+      numerado("Lee las competencias, la relación con el cliente y los nueve modos de que salga mal, en la Guía de CSE."),
 
       titulo(2, "Para entender Smarteam"),
       parrafo("Cinco páginas, en este orden, alcanzan para saber quiénes somos y cómo trabajamos:"),
