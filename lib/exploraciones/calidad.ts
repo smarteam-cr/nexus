@@ -52,8 +52,11 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
   ];
 }
 
-/** El paso del lienzo donde se hace lo que sigue (la pantalla pone el botón para ir). */
-export type PasoDeQueSigue = "preparacion" | "reuniones" | "escala" | "casos";
+/**
+ * La pestaña del lienzo donde se hace lo que sigue (la pantalla pone el botón para ir). null = está
+ * en el resumen de arriba, que siempre se ve.
+ */
+export type PasoDeQueSigue = "exploracion" | "escala" | "casos";
 
 /**
  * Una sola indicación de qué hacer ahora: la primera cosa que falta, en el orden del proceso, con el
@@ -68,20 +71,20 @@ export function queSigueConPaso(
 ): { texto: string; paso: PasoDeQueSigue | null } {
   const revisables = propuestaVigente(estado).filter((it) => !esHipotesisDeNivel(it) && it.destino.tipo !== "casoDeUso").length;
   if (!estado.perfilCierre || !estado.perfilDespues) {
-    return { texto: "Revisa la industria y el perfil de negocio: la escala los pide antes de medir.", paso: "preparacion" };
+    return { texto: "Revisa la industria y el perfil de negocio: la escala los pide antes de medir.", paso: "exploracion" };
   }
-  if (estado.areas.length === 0) return { texto: "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.", paso: "preparacion" };
+  if (estado.areas.length === 0) return { texto: "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.", paso: "exploracion" };
   if (sinLeer.length === 1) {
-    return { texto: `Hay una reunión sin leer («${sinLeer[0].titulo}», ${diaCorto(sinLeer[0].fecha)}): pídele al agente que la lea.`, paso: "reuniones" };
+    return { texto: `Hay una reunión sin leer («${sinLeer[0].titulo}», ${diaCorto(sinLeer[0].fecha)}): pídele al agente que la lea.`, paso: "exploracion" };
   }
-  if (sinLeer.length > 1) return { texto: `Hay ${sinLeer.length} reuniones sin leer: pídele al agente que las lea.`, paso: "reuniones" };
+  if (sinLeer.length > 1) return { texto: `Hay ${sinLeer.length} reuniones sin leer: pídele al agente que las lea.`, paso: "exploracion" };
   if (revisables > 0) return { texto: `Revisa lo que propuso el agente: ${revisables} ${revisables === 1 ? "cosa" : "cosas"} para usar o descartar.`, paso: null };
   // Todavía nada que haya dicho el cliente: lo que hay son hipótesis. Toca la primera reunión.
   const conEvidencia = Object.values(estado.contenido.chequeo).some((e) => !esFuenteDeHipotesis(e.fuente));
   if (!conEvidencia && estado.propuesta.leidas.sesiones.length === 0) {
     return {
       texto: "Haz la primera reunión con la guía: 30 minutos para validar el test, sacar sus metas en cifras y mostrarle qué va primero. Cuando llegue la transcripción, el agente la lee solo.",
-      paso: "reuniones",
+      paso: "exploracion",
     };
   }
   if (!chequeo.completo) {
@@ -93,11 +96,11 @@ export function queSigueConPaso(
   }
   const puntos = listaParaProponer(estado, chequeo);
   const falta = (id: PuntoDeCalidad["id"]) => !puntos.find((p) => p.id === id)?.cumplido;
-  if (falta("meta")) return { texto: "Falta una meta en cifras: de cuánto a cuánto y para cuándo.", paso: "reuniones" };
-  if (falta("siguientePaso")) return { texto: "Agenda el siguiente paso, con fecha.", paso: "reuniones" };
-  if (falta("autoridad")) return { texto: "Falta saber quién firma y a quién más le afecta la decisión.", paso: "reuniones" };
-  if (falta("consecuencia")) return { texto: "Falta qué pasa si no actúa.", paso: "reuniones" };
-  if (falta("portal")) return { texto: "Revisen el portal en la segunda reunión, o marca que no usa HubSpot.", paso: "reuniones" };
+  if (falta("meta")) return { texto: "Falta una meta en cifras: de cuánto a cuánto y para cuándo. Pregúntala en la próxima reunión.", paso: null };
+  if (falta("siguientePaso")) return { texto: "Agenda el siguiente paso, con fecha.", paso: "exploracion" };
+  if (falta("autoridad")) return { texto: "Falta saber quién firma y a quién más le afecta la decisión.", paso: null };
+  if (falta("consecuencia")) return { texto: "Falta qué pasa si no actúa.", paso: null };
+  if (falta("portal")) return { texto: "Revisen el portal en la próxima reunión, o marca que no usa HubSpot.", paso: "exploracion" };
   return { texto: "Lista para proponer: elige los casos de uso y arma la propuesta.", paso: "casos" };
 }
 

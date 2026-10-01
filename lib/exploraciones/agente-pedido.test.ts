@@ -492,3 +492,13 @@ describe("la fecha de hoy y la próxima reunión", () => {
     expect(lineaDeHoy({})).toBe("");
   });
 });
+
+describe("las casillas retiradas", () => {
+  it("el agente ya no puede proponer «Hipótesis»: se repetía con el mapa de la escala y la guía", () => {
+    const tool = herramienta(ctx({ modo: "preparar" }));
+    const textos = (tool.input_schema as { properties: { textos: { items: { properties: { casilla: { enum: string[] } } } } } }).properties.textos;
+    expect(textos.items.properties.casilla.enum).not.toContain("hipotesis");
+    expect(textos.items.properties.casilla.enum).toContain("contexto");
+    expect(String(pedidoDeLaExploracion(ctx({ modo: "preparar" })).system)).not.toMatch(/hipotesis \(/);
+  });
+});

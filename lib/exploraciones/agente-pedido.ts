@@ -22,7 +22,7 @@
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
-import { CASILLAS, ETIQUETA_DEL_ROL, ROLES_EN_LA_DECISION, TIPO_DE_CASILLA, VALORES_DE_APERTURA, type ClaveDeCasilla } from "./casillas";
+import { CASILLAS, CASILLAS_VIGENTES, ETIQUETA_DEL_ROL, ROLES_EN_LA_DECISION, TIPO_DE_CASILLA, VALORES_DE_APERTURA, type ClaveDeCasilla } from "./casillas";
 import {
   ETIQUETA_DE_LA_FUENTE,
   ETIQUETA_DEL_MOTIVO,
@@ -46,8 +46,8 @@ import type { Fuente } from "./fuentes-tipos";
 export const MODELO_DE_LA_EXPLORACION = "claude-sonnet-4-6";
 export const NOMBRE_DE_LA_HERRAMIENTA = "proponer";
 
-/** Las casillas de texto o de lista que el agente propone con un texto. */
-const CASILLAS_DE_TEXTO: ClaveDeCasilla[] = CASILLAS.filter((c) => c.tipo === "texto" || c.tipo === "lista").map((c) => c.clave);
+/** Las casillas de texto o de lista que el agente propone con un texto (sin las retiradas). */
+const CASILLAS_DE_TEXTO: ClaveDeCasilla[] = CASILLAS_VIGENTES.filter((c) => c.tipo === "texto" || c.tipo === "lista").map((c) => c.clave);
 
 export interface ContextoDelPedido {
   modo: "preparar" | "leer";
@@ -294,9 +294,8 @@ function sistema(ctx: ContextoDelPedido): string {
   const enfoque =
     ctx.modo === "preparar"
       ? `ESTA CORRIDA: PREPARAR la primera reunión. Lo que más sirve:
-- contexto: qué hace la empresa, cómo llegó y lo que ya se habló (un párrafo corto).
+- contexto («Para conectar»): en cuatro líneas cortas, qué hace la empresa, cómo llegó, quién es el contacto (nombre y cargo) y una forma de abrir la conversación desde algo suyo.
 - hubspotActual: qué HubSpot tiene (hubs, ediciones, usuarios, quién lo configuró, renovación), si las fuentes lo dicen.
-- hipotesis: de 3 a 5, cada una «Creemos que… porque…», para confirmar o descartar en la reunión.
 - areas: las que deberían estar en juego y no están (la del test, lo que menciona, lo que paga sin usar).
 - niveles: tu HIPÓTESIS de dónde está CADA una de las dimensiones de las áreas en juego, con su porQue en lenguaje llano («Creemos que está en Inicial porque las notas dicen que cada vendedor lleva su Excel»). El test es una pista, no la verdad: lo contestó el prospecto con la escala anterior; crúzalo con lo demás. Si una dimensión no tiene pistas directas, dedúcela del cuadro general (lo que tiene en HubSpot, el tamaño, lo que se ve de las dimensiones vecinas) y dilo en el porQue («Sin pistas directas: …»); nunca la pongas por encima de Funcional sin una pista. Es para que el vendedor sepa qué preguntar: el mapa la muestra como hipótesis.
 - aExplorar: las dimensiones donde hay indicios (debajo de Funcional según el test o lo que dijo), que tocan una meta o que dejan ver un riesgo. Máximo 4 por área. La razón, en una frase llana.
@@ -326,7 +325,7 @@ Reglas estrictas:
 - Si una lista no tiene nada que proponer, mándala vacía. Es la respuesta correcta muchas veces.
 - Estas casillas las ve el CLIENTE en la propuesta: ${CASILLAS.filter((c) => c.alCliente).map((c) => c.clave).join(", ")}. En ellas nunca pongas montos de dinero, presupuesto, opiniones sobre personas ni nada interno de Smarteam: el dinero va solo en presupuesto; las personas, en autoridad.
 
-Las casillas: ${CASILLAS.map((c) => `${c.clave} («${c.etiqueta}»: ${c.ayuda})`).join("; ")}.
+Las casillas: ${CASILLAS_VIGENTES.map((c) => `${c.clave} («${c.etiqueta}»: ${c.ayuda})`).join("; ")}.
 Los motivos para explorar: ${MOTIVOS_PARA_EXPLORAR.map((m) => `${m} (${ETIQUETA_DEL_MOTIVO[m]})`).join(", ")}. Los papeles en la decisión: ${ROLES_EN_LA_DECISION.map((r) => `${r} (${ETIQUETA_DEL_ROL[r]})`).join(", ")}.`;
 }
 

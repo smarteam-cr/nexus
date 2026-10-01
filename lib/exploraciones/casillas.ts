@@ -69,7 +69,12 @@ export interface Apertura {
 /** Los tipos de casilla. Las de lista reciben del agente UN ítem por propuesta; las demás, el valor entero. */
 export type TipoDeCasilla = "texto" | "lista" | "metas" | "retos" | "autoridad" | "siguientePaso" | "apertura";
 
-export type PasoDelLienzo = "preparacion" | "quedo";
+/**
+ * Dónde vive la casilla en el lienzo: arriba de todo, en el RESUMEN (el marco de calificación:
+ * metas, planes, retos, tiempos, presupuesto, quién decide, consecuencias e implicaciones), o en la
+ * pestaña Exploración (cómo conectar, su HubSpot, el portal y lo demás que sale de las reuniones).
+ */
+export type PasoDelLienzo = "resumen" | "exploracion";
 
 export interface DefinicionDeCasilla {
   clave: ClaveDeCasilla;
@@ -82,6 +87,11 @@ export interface DefinicionDeCasilla {
   alCliente: boolean;
   /** Cómo le llega al CSE en el handoff. */
   alHandoff: "normal" | "interno";
+  /**
+   * Ya no se muestra ni la propone el agente; lo guardado se sigue leyendo (el CSE lo ve en el
+   * traspaso). «Hipótesis» se retiró el 2026-10-01: se repetía con el mapa de la escala y la guía.
+   */
+  retirada?: true;
 }
 
 export const CLAVES_DE_CASILLA = [
@@ -105,12 +115,12 @@ export const CLAVES_DE_CASILLA = [
 export type ClaveDeCasilla = (typeof CLAVES_DE_CASILLA)[number];
 
 export const CASILLAS: readonly DefinicionDeCasilla[] = [
-  // ── Preparación ──
+  // ── Exploración: antes de la primera reunión ──
   {
     clave: "contexto",
-    etiqueta: "Lo que ya sabemos",
-    ayuda: "Qué hace la empresa, cómo llegó y lo que ya se habló, con su fuente.",
-    paso: "preparacion",
+    etiqueta: "Para conectar",
+    ayuda: "Qué hace la empresa, cómo llegó, quién es el contacto y cómo abrir la conversación.",
+    paso: "exploracion",
     tipo: "texto",
     alCliente: false,
     alHandoff: "normal",
@@ -119,7 +129,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "hubspotActual",
     etiqueta: "Su HubSpot hoy",
     ayuda: "Qué hubs y ediciones tiene, cuántos usuarios, quién lo configuró y cuándo renueva.",
-    paso: "preparacion",
+    paso: "exploracion",
     tipo: "texto",
     alCliente: true,
     alHandoff: "normal",
@@ -128,17 +138,18 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "hipotesis",
     etiqueta: "Hipótesis",
     ayuda: "«Creemos que… porque…». Para confirmar o descartar en la reunión, nunca para afirmar.",
-    paso: "preparacion",
+    paso: "exploracion",
     tipo: "lista",
     alCliente: false,
     alHandoff: "interno",
+    retirada: true,
   },
-  // ── Lo que quedó: adónde quiere llegar y si hay negocio ──
+  // ── El resumen: adónde quiere llegar y si hay negocio ──
   {
     clave: "metas",
     etiqueta: "Metas",
     ayuda: "En cifras: de cuánto a cuánto y para cuándo. Son el criterio de éxito y la base del precio.",
-    paso: "quedo",
+    paso: "resumen",
     tipo: "metas",
     alCliente: true,
     alHandoff: "normal",
@@ -147,7 +158,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "planes",
     etiqueta: "Planes",
     ayuda: "Lo que ya intentaron o piensan hacer para llegar.",
-    paso: "quedo",
+    paso: "resumen",
     tipo: "lista",
     alCliente: true,
     alHandoff: "normal",
@@ -156,7 +167,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "retos",
     etiqueta: "Retos",
     ayuda: "Lo que hoy les impide llegar. Salen de las dimensiones bajas de la escala.",
-    paso: "quedo",
+    paso: "resumen",
     tipo: "retos",
     alCliente: true,
     alHandoff: "normal",
@@ -165,7 +176,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "tiempos",
     etiqueta: "Tiempos",
     ayuda: "Para cuándo lo necesitan y qué fechas mandan (una renovación, un lanzamiento, el cierre del año).",
-    paso: "quedo",
+    paso: "resumen",
     tipo: "lista",
     alCliente: true,
     alHandoff: "normal",
@@ -174,7 +185,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "consecuencias",
     etiqueta: "Qué pasa si no actúa",
     ayuda: "Lo que le cuesta quedarse como está, mejor con su número.",
-    paso: "quedo",
+    paso: "resumen",
     tipo: "lista",
     alCliente: true,
     alHandoff: "normal",
@@ -183,7 +194,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "implicaciones",
     etiqueta: "Qué cambia si lo logra",
     ayuda: "Lo que gana el negocio al llegar a la meta, en sus palabras.",
-    paso: "quedo",
+    paso: "resumen",
     tipo: "lista",
     alCliente: true,
     alHandoff: "normal",
@@ -192,7 +203,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "presupuesto",
     etiqueta: "Presupuesto",
     ayuda: "El rango que tienen, o contra qué lo van a comparar.",
-    paso: "quedo",
+    paso: "resumen",
     tipo: "texto",
     alCliente: false,
     alHandoff: "interno",
@@ -201,17 +212,17 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "autoridad",
     etiqueta: "Quién decide",
     ayuda: "Quién firma, quién decide, quién influye y a quién más le afecta la decisión.",
-    paso: "quedo",
+    paso: "resumen",
     tipo: "autoridad",
     alCliente: false,
     alHandoff: "interno",
   },
-  // ── Lo que quedó: la exploración misma ──
+  // ── Exploración: lo que se vio y lo que sigue ──
   {
     clave: "portal",
     etiqueta: "Lo que vimos en el portal",
     ayuda: "Lo que se vio con el portal abierto: lo que está, lo que falta y lo que nadie documentó.",
-    paso: "quedo",
+    paso: "exploracion",
     tipo: "lista",
     alCliente: true,
     alHandoff: "normal",
@@ -220,7 +231,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "noExplorado",
     etiqueta: "Lo que se dijo y nadie exploró",
     ayuda: "Pistas que el cliente dio y nadie siguió. Cada una: qué dijo y qué preguntar la próxima vez.",
-    paso: "quedo",
+    paso: "exploracion",
     tipo: "lista",
     alCliente: false,
     alHandoff: "interno",
@@ -228,8 +239,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   {
     clave: "producto",
     etiqueta: "Producto que se mostró",
-    ayuda: "Qué se mostró y para qué reto. Cinco minutos como máximo, y solo en la segunda reunión.",
-    paso: "quedo",
+    ayuda: "Qué se mostró y para qué reto. Cinco minutos como máximo, y solo para un reto que el cliente ya nombró.",
+    paso: "exploracion",
     tipo: "texto",
     alCliente: false,
     alHandoff: "interno",
@@ -238,7 +249,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "apertura",
     etiqueta: "Apertura a la asesoría",
     ayuda: "¿Quiere acompañamiento para crecer, o solo una buena implementación?",
-    paso: "quedo",
+    paso: "exploracion",
     tipo: "apertura",
     alCliente: false,
     alHandoff: "interno",
@@ -247,12 +258,27 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "siguientePaso",
     etiqueta: "Siguiente paso",
     ayuda: "Qué sigue, con quién y en qué fecha. Se agenda en la misma reunión.",
-    paso: "quedo",
+    paso: "exploracion",
     tipo: "siguientePaso",
     alCliente: false,
     alHandoff: "normal",
   },
 ];
+
+/** Las casillas del resumen, en el orden del marco: metas, planes, retos y tiempos; presupuesto y quién decide; consecuencias e implicaciones. */
+export const CASILLAS_DEL_RESUMEN = [
+  "metas",
+  "planes",
+  "retos",
+  "tiempos",
+  "presupuesto",
+  "autoridad",
+  "consecuencias",
+  "implicaciones",
+] as const satisfies readonly ClaveDeCasilla[];
+
+/** Las que el agente propone y el lienzo muestra: todas menos las retiradas. */
+export const CASILLAS_VIGENTES: readonly DefinicionDeCasilla[] = CASILLAS.filter((c) => !c.retirada);
 
 export function definicionDe(clave: ClaveDeCasilla): DefinicionDeCasilla {
   const d = CASILLAS.find((c) => c.clave === clave);

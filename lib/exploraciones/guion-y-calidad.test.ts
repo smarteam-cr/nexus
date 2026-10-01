@@ -146,7 +146,7 @@ describe("lista para proponer", () => {
     expect(queSigue(estado({ perfilCierre: null }), chequeoCon("FFFFFFFF"))).toMatch(/perfil/);
     expect(queSigue(estado({ areas: [] }), chequeoCon("FFFFFFFF"))).toMatch(/áreas/);
     // Sin nada que haya dicho el cliente, lo que toca es la primera reunión, con la guía.
-    expect(queSigueConPaso(estado(), chequeoCon("FFFFFFF"))).toMatchObject({ paso: "reuniones", texto: expect.stringMatching(/^Haz la primera reunión/) });
+    expect(queSigueConPaso(estado(), chequeoCon("FFFFFFF"))).toMatchObject({ paso: "exploracion", texto: expect.stringMatching(/^Haz la primera reunión/) });
     const conEvidencia = estado({ contenido: { ...contenidoVacio(), chequeo: { "1.1": { nivel: "F", fuente: "reunion" } } } });
     expect(queSigueConPaso(conEvidencia, chequeoCon("FFFFFFF"))).toMatchObject({ paso: "escala", texto: expect.stringMatching(/^Falta confirmar una dimensión/) });
     expect(queSigue(conEvidencia, chequeoCon("FFFFFFFF"))).toMatch(/meta en cifras/);

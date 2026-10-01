@@ -285,7 +285,8 @@ function vacio(v: unknown): boolean {
   return v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
 }
 
-export function Casilla({ clave, className }: { clave: ClaveDeCasilla; className?: string }) {
+/** `sinTitulo`: dentro de un cajón que ya muestra el nombre y la ayuda de la casilla (el resumen). */
+export function Casilla({ clave, className, sinTitulo = false }: { clave: ClaveDeCasilla; className?: string; sinTitulo?: boolean }) {
   const { exp, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
   const def = definicionDe(clave);
   const valor = exp.estado.contenido.casillas[clave] as ValoresDeCasillas[typeof clave] | undefined;
@@ -300,12 +301,14 @@ export function Casilla({ clave, className }: { clave: ClaveDeCasilla; className
   }
 
   return (
-    <section className={cn("space-y-2 rounded-xl border border-line bg-surface p-4", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-fg">{def.etiqueta}</h3>
-          <p className="text-xs text-fg-muted">{def.ayuda}</p>
-        </div>
+    <section className={cn("space-y-2", !sinTitulo && "rounded-xl border border-line bg-surface p-4", className)}>
+      <div className={cn("flex items-start gap-3", sinTitulo ? "justify-end" : "justify-between")}>
+        {!sinTitulo && (
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-fg">{def.etiqueta}</h3>
+            <p className="text-xs text-fg-muted">{def.ayuda}</p>
+          </div>
+        )}
         <div className="flex flex-shrink-0 items-center gap-2">
           {!def.alCliente && (
             <Badge size="xs" title="No entra a la propuesta: la ve el cliente.">

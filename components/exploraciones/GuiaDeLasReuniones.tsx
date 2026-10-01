@@ -1,14 +1,15 @@
 "use client";
 
 /**
- * PasoReuniones — la GUÍA de las dos reuniones, para tenerla abierta mientras se conversa.
+ * GuiaDeLasReuniones — la GUÍA de las reuniones, para tenerla abierta mientras se conversa. Vive en la
+ * pestaña Exploración; lo que respondió el cliente se ve arriba, en el resumen.
  *
  * Pedido de Elías (2026-10-01): «ni siquiera anotar respuestas: lo que ventas necesita es una guía
  * de exploración; la transcripción se encarga de anotar y de sugerir las respuestas y una mejor
  * posición en la escala». Por eso cada paso dice qué se busca, cuánto dura y QUÉ PREGUNTAR —las del
  * marco y, donde toca, la pregunta de cada dimensión de la escala, con lo que hoy se cree de ella—,
- * y no hay nada que llenar. Lo que respondió el cliente aparece en su propia pestaña, propuesto por
- * el agente cuando lee la transcripción.
+ * y no hay nada que llenar. Lo que respondió el cliente aparece en el resumen de arriba, propuesto
+ * por el agente cuando lee la transcripción.
  */
 import { useState } from "react";
 import { Alert, Badge, Button, Input, Select, Tabs } from "@/components/ui";
@@ -17,9 +18,7 @@ import { definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas"
 import type { Medicion } from "@/lib/exploraciones/contenido";
 import type { AreaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { minutosPara, REUNIONES, type IdDeReunion, type LoQueLlena, type PasoDelGuion, type Reunion } from "@/lib/exploraciones/sesion";
-import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
-import PanelDelAgente from "./PanelDelAgente";
 import { NivelChip, QueVaPrimero } from "./QueVaPrimero";
 
 const QUE_LLENA: Record<Exclude<LoQueLlena, ClaveDeCasilla>, string> = {
@@ -127,22 +126,16 @@ function PasoDeLaReunion({ paso, numero, minutos }: { paso: PasoDelGuion; numero
       {paso.ojo && <Alert variant="warning">{paso.ojo}</Alert>}
 
       {paso.dimensiones === "todas" && enJuego.length === 0 && (
-        <p className="text-xs text-fg-muted">
-          Elige primero las áreas en juego, en{" "}
-          <button type="button" className="text-brand-light underline" onClick={() => irA("preparacion")}>
-            Preparación
-          </button>
-          .
-        </p>
+        <p className="text-xs text-fg-muted">Elige primero las áreas en juego, arriba.</p>
       )}
       {paso.dimensiones === "sumadas" && delPaso.length === 0 && <p className="text-xs text-fg-muted">No se sumaron áreas: estos minutos van a profundizar.</p>}
       {paso.dimensiones === "elegidas" && !hayElegidas && (
         <p className="text-xs text-fg-muted">
           Todavía no hay dimensiones para explorar a fondo: márcalas en{" "}
-          <button type="button" className="text-brand-light underline" onClick={() => irA("preparacion")}>
-            Preparación
-          </button>{" "}
-          o en el mapa de la escala.
+          <button type="button" className="text-brand-light underline" onClick={() => irA("escala")}>
+            el mapa de la escala
+          </button>
+          .
         </p>
       )}
       {delPaso.map((a) => (
@@ -182,27 +175,15 @@ function Guia({ reunion }: { reunion: Reunion }) {
         ))}
       </ol>
       <p className="text-xs text-fg-muted">
-        No hace falta anotar: cuando llega la transcripción de la reunión, el agente la lee sola y propone las respuestas (en «Lo que respondió») y dónde está cada equipo (en «La escala»).
+        No hace falta anotar: cuando llega la transcripción de la reunión, el agente la lee sola y propone las respuestas (en el resumen de arriba) y dónde está cada equipo (en «La escala»).
       </p>
     </div>
   );
 }
 
-// ── Lo que respondió ──────────────────────────────────────────────────────────
+// ── Lo demás de la medición ──
 
-function Grupo({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold text-fg">{titulo}</h3>
-        {ayuda && <p className="text-xs text-fg-muted">{ayuda}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function DatosDeLaMedicion() {
+export function DatosDeLaMedicion() {
   const { exp, cambiar, puedeEditar } = useLienzo();
   const guardada = exp.estado.contenido.medicion;
   const [m, setM] = useState<Medicion>(guardada);
@@ -234,7 +215,7 @@ function DatosDeLaMedicion() {
   );
 }
 
-function SinPortal() {
+export function SinPortal() {
   const { exp, cambiar, puedeEditar, guardando } = useLienzo();
   const sin = exp.estado.contenido.sinPortal;
   if (!puedeEditar && !sin) return null;
@@ -250,82 +231,25 @@ function SinPortal() {
   );
 }
 
-/** Lo que el cliente respondió en las reuniones: lo propone el agente con la transcripción; el vendedor lo usa o lo corrige. */
-function LoQueRespondio() {
+/** La guía de cada reunión, una al lado de la otra. */
+export default function GuiaDeLasReuniones() {
+  const [vista, setVista] = useState<IdDeReunion>("revision");
+  const reunion = REUNIONES.find((r) => r.id === vista) ?? REUNIONES[0];
   return (
-    <div className="space-y-8">
-      <p className="text-sm text-fg-secondary">
-        Lo anota el agente con la transcripción de cada reunión: tú usas o descartas lo que propone, y si algo falta lo completas a mano. Es lo que alimenta la propuesta y el traspaso.
-      </p>
-      <PanelDelAgente modoPrincipal="leer" />
-      <Grupo titulo="Adónde quiere llegar" ayuda="Las metas en cifras son el criterio de éxito de la propuesta.">
-        <Casilla clave="metas" />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Casilla clave="retos" />
-          <Casilla clave="planes" />
-          <Casilla clave="tiempos" />
-        </div>
-      </Grupo>
-      <Grupo titulo="Qué está en juego">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Casilla clave="consecuencias" />
-          <Casilla clave="implicaciones" />
-        </div>
-      </Grupo>
-      <Grupo titulo="Quién decide y con qué">
-        <Casilla clave="autoridad" />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Casilla clave="presupuesto" />
-          <Casilla clave="apertura" />
-        </div>
-      </Grupo>
-      <Grupo titulo="Lo que se vio y lo que sigue">
-        <div className="space-y-2">
-          <Casilla clave="portal" />
-          <SinPortal />
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Casilla clave="noExplorado" />
-          <Casilla clave="siguientePaso" />
-          <Casilla clave="producto" />
-        </div>
-      </Grupo>
-      <Grupo titulo="Datos de la medición" ayuda="La escala los pide en toda medición, para poder comparar con el tiempo. El país y el tamaño salen de HubSpot.">
-        <DatosDeLaMedicion />
-      </Grupo>
-    </div>
-  );
-}
-
-type Vista = IdDeReunion | "respuestas";
-
-export default function PasoReuniones() {
-  const { revisables } = useLienzo();
-  const [vista, setVista] = useState<Vista>("revision");
-  const reunion = REUNIONES.find((r) => r.id === vista);
-  const respuestasPendientes = revisables.filter(
-    (it) => it.destino.tipo === "casilla" && !["contexto", "hubspotActual", "hipotesis"].includes(it.destino.clave),
-  ).length;
-  return (
-    <div className="space-y-4">
-      <Tabs<Vista>
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold text-fg">La guía de la reunión</h2>
+        <p className="text-xs text-fg-muted">Qué preguntar en cada paso. No hace falta anotar: el agente lee la transcripción.</p>
+      </div>
+      <Tabs<IdDeReunion>
         aria-label="Las reuniones"
         variant="pill"
         value={vista}
         onChange={setVista}
-        items={[
-          ...REUNIONES.map((r) => ({ key: r.id as Vista, label: `${r.titulo.split(" — ")[0]} · ${r.duracion} min` })),
-          { key: "respuestas" as Vista, label: "Lo que respondió", count: respuestasPendientes || undefined },
-        ]}
+        items={REUNIONES.map((r) => ({ key: r.id, label: `${r.titulo.split(" — ")[0]} · ${r.duracion} min` }))}
       />
-      {reunion ? (
-        <>
-          <h2 className="text-sm font-semibold text-fg">{reunion.titulo}</h2>
-          <Guia key={reunion.id} reunion={reunion} />
-        </>
-      ) : (
-        <LoQueRespondio />
-      )}
-    </div>
+      <h3 className="text-sm font-semibold text-fg">{reunion.titulo}</h3>
+      <Guia key={reunion.id} reunion={reunion} />
+    </section>
   );
 }

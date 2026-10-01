@@ -164,7 +164,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
         </p>
       )}
       {corrida?.estado === "ERROR" && esPropia && <Alert variant="danger">{corrida.error}</Alert>}
-      {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (paso «Preparación»): los casos de uso se proponen por área.</p>}
+      {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (en «Exploración»): los casos de uso se proponen por área.</p>}
 
       {areas.map((a) => {
         const susElegidos = elegidos.filter(([, c]) => c.areaId === a.id);

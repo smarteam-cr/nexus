@@ -78,7 +78,8 @@ function Leyenda() {
 
 /** La lista de las ocho dimensiones del área (al costado de la rueda, cuando no hay una abierta). */
 function ListaDeDimensiones({ area, onElegir }: { area: AreaDelLienzo; onElegir: (id: string) => void }) {
-  const { mapa, exp } = useLienzo();
+  const { mapa, exp, pendientesPara } = useLienzo();
+  const sugeridas = new Set(pendientesPara((x) => x.tipo === "aExplorar").map((it) => (it.destino as { dimensionId: string }).dimensionId));
   return (
     <ul className="divide-y divide-line rounded-xl border border-line">
       {area.dimensiones.map((d) => {
@@ -95,10 +96,16 @@ function ListaDeDimensiones({ area, onElegir }: { area: AreaDelLienzo; onElegir:
                 <span className="flex flex-wrap items-center gap-1.5 text-sm text-fg">
                   {p?.porRevisar && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-brand" aria-label="Algo nuevo del agente" />}
                   <span>{d.nombre}</span>
-                  {d.id in exp.estado.contenido.aExplorar && (
+                  {d.id in exp.estado.contenido.aExplorar ? (
                     <Badge size="xs" variant="primary">
                       A explorar
                     </Badge>
+                  ) : (
+                    sugeridas.has(d.id) && (
+                      <Badge size="xs" variant="info">
+                        Sugerida a fondo
+                      </Badge>
+                    )
                   )}
                 </span>
                 {!d.aplica && <span className="block text-xs text-fg-muted">No aplica a este perfil de negocio</span>}
@@ -145,14 +152,18 @@ function DetalleDeDimension({ area, d, onCerrar }: { area: AreaDelLienzo; d: Dim
     void cambiar([{ op: "nivel", dimensionId: d.id, estimado }]);
   };
 
+  // Lo que sugirió el agente para explorar a fondo: marcarla usa su sugerencia, con su razón.
+  const sugerida = pendientesPara((x) => x.tipo === "aExplorar" && x.dimensionId === d.id)[0];
   const explorar = () =>
-    void cambiar([
-      {
-        op: "aExplorar",
-        dimensionId: d.id,
-        valor: marcada ? null : { motivo: p && LETRAS.indexOf(p.nivel) < LETRAS.indexOf("F") ? "indicio" : "otro", ...(p?.porQue ? { razon: p.porQue.slice(0, 300) } : {}) },
-      },
-    ]);
+    !marcada && sugerida
+      ? void cambiar([{ op: "usar", itemId: sugerida.id, valor: sugerida.valor }])
+      : void cambiar([
+          {
+            op: "aExplorar",
+            dimensionId: d.id,
+            valor: marcada ? null : { motivo: p && LETRAS.indexOf(p.nivel) < LETRAS.indexOf("F") ? "indicio" : "otro", ...(p?.porQue ? { razon: p.porQue.slice(0, 300) } : {}) },
+          },
+        ]);
 
   const faltaPendiente = pendientesPara((x) => x.tipo === "falta" && d.funcional.some((c) => c.id === x.criterioId));
 
@@ -295,10 +306,18 @@ function DetalleDeDimension({ area, d, onCerrar }: { area: AreaDelLienzo; d: Dim
         </details>
       )}
 
+      {sugerida && !marcada && <p className="text-xs text-fg-muted">El agente sugiere explorarla a fondo: {sugerida.razon ?? "toca una meta o deja ver un riesgo"}.</p>}
       {puedeEditar && (
-        <Button size="sm" variant={marcada ? "ghost" : "secondary"} disabled={guardando} aria-pressed={!!marcada} onClick={explorar}>
-          {marcada ? "✓ Se explora en la segunda reunión" : "Explorarla en la segunda reunión"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant={marcada ? "ghost" : "secondary"} disabled={guardando} aria-pressed={!!marcada} onClick={explorar}>
+            {marcada ? "✓ Se explora a fondo" : "Explorarla a fondo"}
+          </Button>
+          {sugerida && !marcada && (
+            <button type="button" className="text-xs text-fg-muted underline hover:text-fg" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [sugerida.id] }])}>
+              Descartar la sugerencia
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -395,8 +414,8 @@ export default function PasoEscala() {
       {enJuego.length === 0 ? (
         <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-fg-muted">
           Elige primero las áreas en juego, en{" "}
-          <button type="button" className="text-brand-light underline" onClick={() => irA("preparacion")}>
-            Preparación
+          <button type="button" className="text-brand-light underline" onClick={() => irA("exploracion")}>
+            Exploración
           </button>
           .
         </p>

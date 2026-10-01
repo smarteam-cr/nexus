@@ -8,6 +8,9 @@
  * cada casilla para usarlo o descartarlo. Si el vendedor sale y vuelve, la pantalla retoma la
  * corrida que sigue viva (la consulta al abrir). Las reuniones de Meet las lee solo cuando llega la
  * transcripción; las que quedan sin leer se avisan acá y en «Qué sigue».
+ *
+ * Compacto (pedido de Elías, 2026-10-01): los botones y UNA línea con la última lectura; la historia,
+ * el test, la agenda y los correos sin permiso quedan plegados en «Lo que leyó».
  */
 import { Alert, Button } from "@/components/ui";
 import { definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
@@ -33,19 +36,23 @@ function queAlimento(claves: readonly string[]): string {
   return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
 }
 
+/** Qué hizo una corrida, en pocas palabras. */
+function queHizo(c: CorridaDelAgente): string {
+  return c.modo === "preparar" ? "Preparó" : c.modo === "casos" ? "Propuso casos de uso" : c.automatica ? "Leyó sola la reunión que llegó" : "Leyó lo nuevo";
+}
+
 function Historia({ corridas }: { corridas: CorridaDelAgente[] }) {
   if (corridas.length === 0) return null;
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium text-fg-secondary">Lo que leyó</p>
+      <p className="text-xs font-medium text-fg-secondary">Las últimas lecturas</p>
       <ul className="space-y-2">
         {corridas.slice(0, 5).map((c) => {
           const alimento = queAlimento(c.alimento);
           return (
             <li key={c.id} className="text-xs text-fg-muted">
               <p className="text-fg-secondary">
-                {diaYHora(c.en)} ·{" "}
-                {c.modo === "preparar" ? "Preparó" : c.modo === "casos" ? "Propuso casos de uso" : c.automatica ? "Leyó sola la reunión que llegó" : "Leyó lo nuevo"}
+                {diaYHora(c.en)} · {queHizo(c)}
                 {" · "}
                 {c.propuestos === 0 ? "nada nuevo que proponer" : `${c.propuestos} ${c.propuestos === 1 ? "propuesta" : "propuestas"}`}
                 {alimento ? ` en ${alimento}` : ""}
@@ -71,8 +78,8 @@ function Historia({ corridas }: { corridas: CorridaDelAgente[] }) {
 }
 
 /**
- * `compacto`: solo los botones, la fase y el aviso de reuniones sin leer (en «La escala», donde lo
- * que importa es que el mapa esté al día); la historia completa vive en los otros pasos.
+ * `compacto`: sin «Lo que leyó» (en «La escala», donde lo que importa es que el mapa esté al día);
+ * el detalle vive en «Exploración».
  */
 export default function PanelDelAgente({ modoPrincipal = "preparar", compacto = false }: { modoPrincipal?: "preparar" | "leer"; compacto?: boolean }) {
   const { exp, escala, puedeEditar, sinLeer } = useLienzo();
@@ -86,6 +93,8 @@ export default function PanelDelAgente({ modoPrincipal = "preparar", compacto = 
   // Ya viene sin lo que pasó desde la última lectura (eso se avisa como «sin leer»).
   const agenda = leido.agenda;
   const nombreDeArea = (id: string) => escala.areas.find((a) => a.id === id)?.nombre ?? id;
+  const ultima = corridas[0];
+  const hayDetalle = corridas.length > 0 || leido.tests.length > 0 || agenda.length > 0 || leido.correosSinPermiso > 0;
 
   return (
     <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
@@ -93,9 +102,9 @@ export default function PanelDelAgente({ modoPrincipal = "preparar", compacto = 
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-fg">El agente</h3>
           <p className="text-xs text-fg-muted">
-            {compacto
-              ? "Lee cada reunión cuando llega su transcripción y propone dónde está cada dimensión, con la frase que lo respalda."
-              : "Lee lo que hay en HubSpot (la empresa, sus contactos, negocios, notas, llamadas, reuniones y el test) y las reuniones de Meet. Al preparar, elige la industria y arma las hipótesis; después de cada reunión, propone las respuestas y dónde está cada equipo, con la frase que lo respalda."}
+            {ultima
+              ? `Última lectura: ${diaYHora(ultima.en)} · ${queHizo(ultima)} · ${ultima.propuestos === 0 ? "nada nuevo que proponer" : `${ultima.propuestos} ${ultima.propuestos === 1 ? "propuesta" : "propuestas"}`}`
+              : "Lee HubSpot, el test y las reuniones de Meet, y propone; tú usas o descartas."}
           </p>
         </div>
         {puedeEditar && (
@@ -143,39 +152,46 @@ export default function PanelDelAgente({ modoPrincipal = "preparar", compacto = 
         </Alert>
       )}
 
-      {!compacto && <Historia corridas={corridas} />}
+      {!compacto && hayDetalle && (
+        <details className="group">
+          <summary className="cursor-pointer select-none text-xs text-brand-light">Lo que leyó</summary>
+          <div className="mt-2 space-y-3">
+            <Historia corridas={corridas} />
 
-      {!compacto && leido.tests.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-fg-secondary">El test de marketing</p>
-          <ul className="space-y-0.5 text-xs text-fg-muted">
-            {leido.tests.map((t) => (
-              <li key={t.resultado.areaId}>
-                {nombreDeArea(t.resultado.areaId)}: lo contestó {t.contacto}
-                {t.resultado.fecha ? ` el ${diaCorto(t.resultado.fecha)}` : ""}. Sus niveles entran como hipótesis en «La escala»: son de la escala anterior y se confirman en la primera reunión.
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+            {leido.tests.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-fg-secondary">El test de marketing</p>
+                <ul className="space-y-0.5 text-xs text-fg-muted">
+                  {leido.tests.map((t) => (
+                    <li key={t.resultado.areaId}>
+                      {nombreDeArea(t.resultado.areaId)}: lo contestó {t.contacto}
+                      {t.resultado.fecha ? ` el ${diaCorto(t.resultado.fecha)}` : ""}. Sus niveles entran como hipótesis en «La escala»: son de la escala anterior y se confirman en la primera reunión.
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-      {!compacto && agenda.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-fg-secondary">Reuniones agendadas en HubSpot</p>
-          <ul className="space-y-0.5 text-xs text-fg-muted">
-            {agenda.slice(0, 3).map((a) => (
-              <li key={a.id}>
-                {diaYHora(a.inicio)} · {a.titulo}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+            {agenda.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-fg-secondary">Reuniones agendadas en HubSpot</p>
+                <ul className="space-y-0.5 text-xs text-fg-muted">
+                  {agenda.slice(0, 3).map((a) => (
+                    <li key={a.id}>
+                      {diaYHora(a.inicio)} · {a.titulo}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-      {!compacto && leido.correosSinPermiso > 0 && (
-        <p className="text-xs text-fg-muted">
-          Hay {leido.correosSinPermiso} {leido.correosSinPermiso === 1 ? "correo" : "correos"} con la empresa que Nexus todavía no puede leer: falta el permiso de correos en la conexión con HubSpot.
-        </p>
+            {leido.correosSinPermiso > 0 && (
+              <p className="text-xs text-fg-muted">
+                Hay {leido.correosSinPermiso} {leido.correosSinPermiso === 1 ? "correo" : "correos"} con la empresa que Nexus todavía no puede leer: falta el permiso de correos en la conexión con HubSpot.
+              </p>
+            )}
+          </div>
+        </details>
       )}
     </section>
   );

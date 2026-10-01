@@ -3,17 +3,19 @@
 /**
  * LienzoDeExploracion — el lienzo de la exploración de venta de una empresa.
  *
- * Una GUÍA, no un formulario (pedido de Elías, 2026-10-01: «una guía muy fácil de rellenar»):
- * arriba, una sola indicación de qué sigue; abajo, los cinco pasos —preparación (se arma sola),
- * las reuniones (la guía de qué preguntar; las respuestas las anota el agente con la
- * transcripción), la escala (dónde parece estar cada equipo, con hipótesis y evidencia), los casos
- * de uso y el traspaso—. Lo que propone el agente aparece en su lugar, para usarlo o descartarlo.
+ * Una GUÍA, no un formulario (pedido de Elías, 2026-10-01: «una guía muy fácil de rellenar»).
+ * Arriba de todo, el resumen: qué sigue, las ocho tarjetas del marco de calificación (lo que el
+ * vendedor necesita ver de un vistazo para poder proponer) y lo que el agente propuso para revisar.
+ * Abajo, cuatro pestañas: Exploración (con quién se habla y la guía de la reunión; las respuestas
+ * las anota el agente con la transcripción), la escala (dónde parece estar cada equipo, con
+ * hipótesis y evidencia), los casos de uso y el traspaso. Lo que propone el agente aparece en su
+ * lugar, para usarlo o descartarlo.
  */
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { AgentProposal } from "@/components/ai/AgentProposal";
-import { Alert, Button, Tabs, useToast } from "@/components/ui";
+import { Tabs, useToast } from "@/components/ui";
 import type { Letra } from "@/lib/escala/documento/tipos";
+import { CASILLAS_DEL_RESUMEN } from "@/lib/exploraciones/casillas";
 import { queSigueConPaso } from "@/lib/exploraciones/calidad";
 import {
   aplicarOperaciones,
@@ -31,20 +33,19 @@ import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import { LienzoContexto, type Lienzo, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
 import PasoCasosDeUso from "./PasoCasosDeUso";
 import PasoEscala from "./PasoEscala";
-import PasoPreparacion from "./PasoPreparacion";
-import PasoReuniones from "./PasoReuniones";
+import PasoExploracion from "./PasoExploracion";
 import PasoTraspaso from "./PasoTraspaso";
+import Resumen from "./Resumen";
 
 const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
-  preparacion: "Preparación",
-  reuniones: "Reuniones",
+  exploracion: "Exploración",
   escala: "La escala",
   casos: "Casos de uso",
   traspaso: "Traspaso",
 };
 
-/** Las casillas que se arman al preparar: lo demás es lo que respondió el cliente. */
-const DE_LA_PREPARACION = new Set(["contexto", "hubspotActual", "hipotesis"]);
+/** Las casillas del resumen se revisan en sus tarjetas, arriba: no cuentan en ninguna pestaña. */
+const DEL_RESUMEN = new Set<string>(CASILLAS_DEL_RESUMEN);
 
 export default function LienzoDeExploracion({
   inicial,
@@ -61,7 +62,7 @@ export default function LienzoDeExploracion({
   const [sinLeer, setSinLeer] = useState(inicial.sinLeer ?? []);
   const [proyectos, setProyectos] = useState(inicial.proyectos ?? []);
   const [guardando, setGuardando] = useState(false);
-  const [paso, setPaso] = useState<PasoDelLienzoUI>("preparacion");
+  const [paso, setPaso] = useState<PasoDelLienzoUI>("exploracion");
 
   /* Lo último que confirmó el servidor, y la fila de pedidos: cada uno sale con la versión que dejó
      el anterior. */
@@ -225,13 +226,14 @@ export default function LienzoDeExploracion({
       const d = it.destino;
       if (d.tipo === "casoDeUso") return p === "casos";
       if (d.tipo === "nivel" || d.tipo === "falta") return p === "escala";
-      if (d.tipo === "casilla") return DE_LA_PREPARACION.has(d.clave) ? p === "preparacion" : p === "reuniones";
-      return p === "preparacion";
+      if (d.tipo === "aExplorar") return p === "escala";
+      if (d.tipo === "casilla") return !DEL_RESUMEN.has(d.clave) && p === "exploracion";
+      return p === "exploracion";
     }).length || undefined;
   // «Usar todas» no toca los casos de uso: esos se eligen uno por uno, en su paso.
   const paraUsarTodas = revisables.filter((it) => it.destino.tipo !== "casoDeUso");
 
-  const pasos = (["preparacion", "reuniones", "escala", "casos", "traspaso"] as const).map((key) => ({
+  const pasos = (["exploracion", "escala", "casos", "traspaso"] as const).map((key) => ({
     key,
     label: NOMBRE_DEL_PASO[key],
     count: key === "traspaso" ? undefined : deCadaPaso(key),
@@ -240,35 +242,11 @@ export default function LienzoDeExploracion({
   return (
     <LienzoContexto.Provider value={lienzo}>
       <div className="space-y-5">
-        <Alert variant="info" title="Qué sigue">
-          <span>{sigue.texto}</span>
-          {sigue.paso && sigue.paso !== paso && (
-            <Button size="xs" variant="secondary" className="ml-2 align-middle" onClick={() => irA(sigue.paso!)}>
-              Ir a «{NOMBRE_DEL_PASO[sigue.paso]}»
-            </Button>
-          )}
-        </Alert>
-
-        {paraUsarTodas.length > 0 && puedeEditar && (
-          <AgentProposal
-            title={`Hay ${paraUsarTodas.length} ${paraUsarTodas.length === 1 ? "propuesta" : "propuestas"} para revisar`}
-            subtitle="Están en su lugar, en cada paso. Úsalas o descártalas mirando lo que ya está; nada se confirma solo."
-            applyLabel="Usar todas"
-            discardLabel="Descartar todas"
-            applying={guardando}
-            onApply={() =>
-              void cambiar([{ op: "usarVarias", items: paraUsarTodas.map((it) => ({ itemId: it.id, valor: it.valor })) }], {
-                refrescar: paraUsarTodas.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil"),
-              })
-            }
-            onDiscard={() => void cambiar([{ op: "descartar", itemIds: paraUsarTodas.map((it) => it.id) }])}
-          />
-        )}
+        <Resumen sigue={{ ...sigue, paso: sigue.paso === paso ? null : sigue.paso }} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paraUsarTodas={paraUsarTodas} />
 
         <Tabs<PasoDelLienzoUI> aria-label="Pasos de la exploración" value={paso} onChange={setPaso} items={pasos} />
 
-        {paso === "preparacion" && <PasoPreparacion />}
-        {paso === "reuniones" && <PasoReuniones />}
+        {paso === "exploracion" && <PasoExploracion />}
         {paso === "escala" && <PasoEscala />}
         {paso === "casos" && <PasoCasosDeUso />}
         {paso === "traspaso" && <PasoTraspaso />}

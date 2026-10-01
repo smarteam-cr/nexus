@@ -59,7 +59,7 @@ export interface Lienzo {
 }
 
 /** Los pasos del lienzo, como pestañas. */
-export type PasoDelLienzoUI = "preparacion" | "reuniones" | "escala" | "casos" | "traspaso";
+export type PasoDelLienzoUI = "exploracion" | "escala" | "casos" | "traspaso";
 
 export const LienzoContexto = createContext<Lienzo | null>(null);
 
