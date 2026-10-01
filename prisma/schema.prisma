@@ -1597,9 +1597,31 @@ model ExploracionDeVenta {
 
   /// Las propuestas que salieron de esta exploración.
   propuestas BusinessCase[]
+  /// Las sesiones y los documentos que el vendedor sumó a mano.
+  documentos ExploracionDocumento[]
 
   @@index([clientId])
   @@index([updatedAt])
+}
+
+// Una sesión o un documento que el vendedor suma a mano a su exploración (pegó el texto o subió un
+// archivo: el resumen del Smartflow, una minuta). El agente lo lee igual que una transcripción. Se
+// guarda solo el texto extraído, nunca el archivo. `origen`: `pegado` · `archivo` (String, INV4).
+model ExploracionDocumento {
+  id            String             @id @default(cuid())
+  exploracionId String
+  exploracion   ExploracionDeVenta @relation(fields: [exploracionId], references: [id], onDelete: Cascade)
+
+  titulo        String
+  origen        String
+  nombreArchivo String?
+  /// La fecha de la reunión (`AAAA-MM-DD`), si es una sesión.
+  fecha         String?
+  texto         String
+  creadoPor     String
+  createdAt     DateTime @default(now())
+
+  @@index([exploracionId])
 }
 
 // ─── Catálogo de casos de uso (Ventas) ────────────────────────────────────────

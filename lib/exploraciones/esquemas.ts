@@ -311,6 +311,16 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   cierre: textoDeGuia(400).nullable(),
 });
 
+/** Una sesión o un documento que el vendedor pega a mano (lib/exploraciones/documentos.ts). */
+export const DocumentoPegadoSchema = z.object({
+  titulo: textoLleno(120),
+  texto: z.string().trim().min(40, "Pega al menos unas líneas: con tan poco el agente no tiene qué leer.").max(60_000),
+  fecha: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
+
 /** La guía guardada, o null si no tiene la forma (se vuelve a armar). */
 export function leerGuia(raw: unknown): GuiaDeLaSesion | null {
   const r = GuiaSchema.safeParse(raw);
@@ -401,7 +411,11 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   const p = propuestaVacia();
   if (!esObjeto(raw)) return p;
   if (esObjeto(raw.leidas)) {
-    p.leidas = { sesiones: listaDeTextos(raw.leidas.sesiones, 300), hubspot: listaDeTextos(raw.leidas.hubspot, 500) };
+    p.leidas = {
+      sesiones: listaDeTextos(raw.leidas.sesiones, 300),
+      hubspot: listaDeTextos(raw.leidas.hubspot, 500),
+      documentos: listaDeTextos(raw.leidas.documentos, 300),
+    };
   }
   if (Array.isArray(raw.corridas)) {
     p.corridas = raw.corridas

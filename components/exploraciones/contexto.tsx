@@ -43,6 +43,8 @@ export interface Lienzo {
   sinLeer: ReunionSinLeer[];
   /** Los proyectos cuyo handoff ya recibe la exploración (al abrir y al recargar). */
   proyectos: NonNullable<ExploracionParaLaPantalla["proyectos"]>;
+  /** Las sesiones y los documentos sumados a mano (al abrir y al recargar). */
+  documentos: NonNullable<ExploracionParaLaPantalla["documentos"]>;
   puedeEditar: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;

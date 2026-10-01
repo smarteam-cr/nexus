@@ -14,7 +14,8 @@ export interface ReunionSinLeer {
   titulo: string;
   /** ISO. */
   fecha: string;
-  origen: "meet" | "hubspot";
+  /** De dónde viene: una reunión de Meet, una de HubSpot o algo que el vendedor sumó a mano. */
+  origen: "meet" | "hubspot" | "documento";
 }
 
 /** Hasta cuántos días después de la reunión el agente la lee solo. Más vieja, ya no es noticia. */

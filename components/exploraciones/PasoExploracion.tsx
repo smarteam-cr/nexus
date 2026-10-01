@@ -5,8 +5,8 @@
  * y Reuniones; se juntaron el 2026-10-01 a pedido de Elías).
  *
  * De arriba abajo: el agente, con quién se habla (industria, perfil, áreas en juego, cómo conectar y
- * su HubSpot), las sesiones que planea el vendedor, la guía de la PRÓXIMA y lo demás que sale de las
- * reuniones (el siguiente paso, el portal, lo que nadie exploró). Lo que respondió el cliente en el
+ * su HubSpot), las sesiones que planea el vendedor, la guía de la PRÓXIMA, lo que suma a mano (una
+ * sesión que no quedó grabada, un documento) y lo demás que sale de las reuniones (el siguiente paso, el portal, lo que nadie exploró). Lo que respondió el cliente en el
  * marco de calificación vive arriba de todo, en el resumen.
  */
 import { useState } from "react";
@@ -18,6 +18,7 @@ import GuiaDeLaProxima from "./GuiaDeLaProxima";
 import { AreasEnJuego, IndustriaYPerfil } from "./Identificacion";
 import PanelDelAgente from "./PanelDelAgente";
 import Sesiones from "./Sesiones";
+import SumarAMano from "./SumarAMano";
 
 function Seccion({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: React.ReactNode }) {
   return (
@@ -99,6 +100,7 @@ export default function PasoExploracion() {
 
       <Sesiones />
       <GuiaDeLaProxima />
+      <SumarAMano />
 
       <Seccion titulo="Lo que se vio y lo que sigue" ayuda="Lo propone el agente con la transcripción de cada reunión; úsalo, descártalo o complétalo a mano.">
         <Casilla clave="siguientePaso" />

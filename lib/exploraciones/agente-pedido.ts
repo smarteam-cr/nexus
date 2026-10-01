@@ -381,6 +381,8 @@ const str = (x: unknown): string | undefined => (typeof x === "string" && x.trim
 function fuenteDelNivel(ids: string[]): FuenteDelNivel {
   const primero = ids[0] ?? "";
   if (primero.startsWith("T")) return "test";
+  // Lo que la empresa dice de sí misma en su sitio no es evidencia de cómo trabaja.
+  if (primero.startsWith("W")) return "hipotesis";
   if (primero.startsWith("N")) return "vendedor";
   return "reunion";
 }

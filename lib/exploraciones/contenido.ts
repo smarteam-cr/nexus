@@ -271,8 +271,8 @@ export interface CorridaDelAgente {
 export interface PropuestaDeExploracion {
   version: 1;
   items: ItemPropuesto[];
-  /** Ids de las sesiones de Meet y de las actividades de HubSpot que el agente ya leyó. */
-  leidas: { sesiones: string[]; hubspot: string[] };
+  /** Ids de las sesiones de Meet, las actividades de HubSpot y los documentos sumados a mano que el agente ya leyó. */
+  leidas: { sesiones: string[]; hubspot: string[]; documentos: string[] };
   corridas: CorridaDelAgente[];
   /**
    * La guía de la próxima reunión (lib/exploraciones/guia.ts). Material de preparación, no un dato
@@ -282,7 +282,7 @@ export interface PropuestaDeExploracion {
 }
 
 export function propuestaVacia(): PropuestaDeExploracion {
-  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [] }, corridas: [], guia: null };
+  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [], documentos: [] }, corridas: [], guia: null };
 }
 
 /** Tope de lo pendiente: lo más viejo se cae primero. */

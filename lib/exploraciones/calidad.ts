@@ -75,9 +75,17 @@ export function queSigueConPaso(
   }
   if (estado.areas.length === 0) return { texto: "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.", paso: "exploracion" };
   if (sinLeer.length === 1) {
-    return { texto: `Hay una reunión sin leer («${sinLeer[0].titulo}», ${diaCorto(sinLeer[0].fecha)}): pídele al agente que la lea.`, paso: "exploracion" };
+    const r = sinLeer[0];
+    const texto =
+      r.origen === "documento"
+        ? `Hay algo que sumaste sin leer («${r.titulo}», ${diaCorto(r.fecha)}): pídele al agente que lo lea.`
+        : `Hay una reunión sin leer («${r.titulo}», ${diaCorto(r.fecha)}): pídele al agente que la lea.`;
+    return { texto, paso: "exploracion" };
   }
-  if (sinLeer.length > 1) return { texto: `Hay ${sinLeer.length} reuniones sin leer: pídele al agente que las lea.`, paso: "exploracion" };
+  if (sinLeer.length > 1) {
+    const todasReuniones = sinLeer.every((r) => r.origen !== "documento");
+    return { texto: `Hay ${sinLeer.length} ${todasReuniones ? "reuniones" : "reuniones o documentos"} sin leer: pídele al agente que las lea.`, paso: "exploracion" };
+  }
   if (revisables > 0) return { texto: `Revisa lo que propuso el agente: ${revisables} ${revisables === 1 ? "cosa" : "cosas"} para usar o descartar.`, paso: null };
   // Todavía nada que haya dicho el cliente: lo que hay son hipótesis. Toca la primera reunión.
   const conEvidencia = Object.values(estado.contenido.chequeo).some((e) => !esFuenteDeHipotesis(e.fuente));

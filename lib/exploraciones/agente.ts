@@ -85,7 +85,7 @@ const ETIQUETA: Record<ModoDelAgente, string> = {
 interface LoQueLeyoLaCorrida {
   /** Cómo lo ve el vendedor, para la historia. */
   leyo: string[];
-  leidas: { sesiones: string[]; hubspot: string[] };
+  leidas: { sesiones: string[]; hubspot: string[]; documentos: string[] };
   /** La foto de HubSpot (el test, la agenda, los correos). null = no leyó HubSpot: queda la anterior. */
   foto: Omit<LoLeidoDeHubspot, "leidoEn"> | null;
 }
@@ -99,6 +99,8 @@ interface OpcionesDeLaCorrida {
   triggeredByEmail: string | null;
   /** Para «leer»: la reunión que hay que leer (la que acaba de llegar). */
   sesionId?: string | null;
+  /** Para «leer»: el documento que el vendedor acaba de sumar. */
+  documentoId?: string | null;
   /** La lanzó una reunión nueva, no una persona. */
   automatica?: boolean;
 }
@@ -183,6 +185,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
 
     await fase(runId, "Leyendo HubSpot y las reuniones…");
     const leido = await leerFuentes({
+      exploracionId,
       clientId: fila.clientId,
       companyId: fila.client.hubspotCompanyId,
       creadaEn: fila.createdAt,
@@ -191,6 +194,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       notas: estado.contenido.notas,
       modo,
       sesionId: opts.sesionId,
+      documentoId: opts.documentoId,
     });
 
     // Lo que la preparación deja hecho sola; desde ahí, la escala con la industria y el perfil nuevos.
@@ -218,7 +222,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     const delTest = propuestasDelTest(leido.tests, ctx, runId);
     let deLaIA: ItemPropuesto[] = [];
     let descartadas = 0;
-    const hayQueLeer = modo === "preparar" ? leido.fuentes.length > 0 : leido.fuentes.some((f) => /^[SH]\d/.test(f.id));
+    const hayQueLeer = modo === "preparar" ? leido.fuentes.length > 0 : leido.fuentes.some((f) => /^[SHM]\d/.test(f.id));
     if (hayQueLeer) {
       await fase(runId, "Pensando qué proponer…");
       const respuesta = await conContextoDeIA(
@@ -333,7 +337,7 @@ async function proponerCasos(
   const propuestos = await guardar(
     exploracionId,
     r.items,
-    { leyo: ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones"], leidas: { sesiones: [], hubspot: [] }, foto: null },
+    { leyo: ["Dónde está cada equipo en la escala", "Lo que el cliente contó en las reuniones"], leidas: { sesiones: [], hubspot: [], documentos: [] }, foto: null },
     { runId, modo: "casos", automatica: false },
   );
   await prisma.agentRun.update({
@@ -564,6 +568,7 @@ async function guardar(
     const leidas = {
       sesiones: union(fusion.leidas.sesiones, leido.leidas.sesiones),
       hubspot: union(fusion.leidas.hubspot, leido.leidas.hubspot),
+      documentos: union(fusion.leidas.documentos, leido.leidas.documentos ?? []),
     };
     // Lo que esta corrida dejó pendiente y antes no estaba: es lo que la historia cuenta.
     const nuevas = propuestaVigente({ ...estado, propuesta: { ...fusion, leidas } }).filter((it) => !antes.has(it.id));

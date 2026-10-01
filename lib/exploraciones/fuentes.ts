@@ -2,8 +2,8 @@
  * lib/exploraciones/fuentes.ts — lo que lee el agente de la exploración, cada cosa con su id. SERVIDOR.
  *
  * Cada fuente lleva un id corto que el modelo cita (E0 la empresa, W0 su sitio web, C0 los
- * contactos, D0 los negocios, T1 el test, H3 una actividad de HubSpot, S2 una reunión de Meet, N0
- * las notas del vendedor) y la frase que respalda lo que propone se busca LITERAL en el texto de su fuente.
+ * contactos, D0 los negocios, T1 el test, H3 una actividad de HubSpot, S2 una reunión de Meet, M1
+ * una sesión o un documento que el vendedor sumó a mano, N0 las notas del vendedor) y la frase que respalda lo que propone se busca LITERAL en el texto de su fuente.
  *
  * ⚠ Las reuniones salen por el chokepoint (`getClientSessions`, solo las que ya ocurrieron) y su
  * transcripción se lee ENTERA (no con `fetchTranscriptContent`, que antepone el resumen y corta a
@@ -31,6 +31,7 @@ import {
   type ContactoDeHubspot,
   type ResultadoDeReunion,
 } from "./hubspot";
+import { documentosParaLeer } from "./documentos";
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
 import { REUNIONES } from "./sesion";
@@ -47,7 +48,7 @@ export interface LoQueSeLeyo {
   agenda: ActividadDeLaEmpresa["agenda"];
   correosSinPermiso: number;
   /** Lo que LEYÓ esta corrida para no volver a leerlo: solo «leer» lo marca (ver abajo). */
-  leidas: { sesiones: string[]; hubspot: string[] };
+  leidas: { sesiones: string[]; hubspot: string[]; documentos: string[] };
   /** Las reuniones de Meet que fueron al modelo (marcadas o no): las fuentes de la corrida. */
   sesionesUsadas: string[];
   /** Los datos de la empresa en HubSpot que la escala pide con toda medición (país, tamaño). */
@@ -123,6 +124,7 @@ function textoDeLasNotas(notas: Record<string, string>): string {
 }
 
 export async function leerFuentes(opts: {
+  exploracionId: string;
   clientId: string;
   companyId: string | null;
   /** Cuándo empezó la exploración: «leer» busca reuniones desde un mes antes (como «sin leer»). */
@@ -133,10 +135,12 @@ export async function leerFuentes(opts: {
   modo: "preparar" | "leer";
   /** Para «leer»: una reunión elegida; si no, las que todavía no se leyeron. */
   sesionId?: string | null;
+  /** Para «leer»: un documento que el vendedor acaba de sumar (solo ese, sin reuniones de Meet). */
+  documentoId?: string | null;
 }): Promise<LoQueSeLeyo> {
   const nombreDeNivel = (l: Letra) => opts.escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
   const fuentes: Fuente[] = [];
-  const leidas = { sesiones: [] as string[], hubspot: [] as string[] };
+  const leidas = { sesiones: [] as string[], hubspot: [] as string[], documentos: [] as string[] };
 
   // ── HubSpot ──
   const [empresa, contactos, partner] = await Promise.all([
@@ -226,7 +230,9 @@ export async function leerFuentes(opts: {
   };
   const elegidas =
     opts.modo === "leer"
-      ? opts.sesionId
+      ? opts.documentoId
+        ? []
+        : opts.sesionId
         ? sesiones.filter((s) => s.id === opts.sesionId)
         : await sinLeerConTranscripcion()
       : sesiones.slice(0, 3);
@@ -253,6 +259,23 @@ export async function leerFuentes(opts: {
     if (marcar && s.transcript) leidas.sesiones.push(s.id);
   });
 
+  /* ── Lo que el vendedor sumó a mano: una sesión que no quedó grabada, el resumen del Smartflow,
+     una minuta. Se lee como una transcripción (las citas se verifican igual). ── */
+  const docs = await documentosParaLeer(
+    opts.exploracionId,
+    opts.modo === "leer"
+      ? { soloEste: opts.documentoId, excepto: opts.propuesta.leidas.documentos, cuantos: opts.documentoId ? 1 : 3 }
+      : { cuantos: 3 },
+  );
+  docs.forEach((d, i) => {
+    fuentes.push({
+      id: `M${i + 1}`,
+      etiqueta: `Lo que sumó el vendedor${d.fecha ? ` (sesión del ${fecha(d.fecha)})` : ""}: ${d.titulo}`,
+      texto: d.texto.slice(0, MAX),
+    });
+    if (marcar) leidas.documentos.push(d.id);
+  });
+
   // ── Las notas del vendedor en el guion ──
   const notas = textoDeLasNotas(opts.notas);
   if (notas) fuentes.push({ id: "N0", etiqueta: "Notas del vendedor en el guion", texto: notas });
@@ -274,7 +297,7 @@ export async function leerFuentes(opts: {
  * Solo lee la base (nada de HubSpot): se pide al abrir el lienzo.
  */
 export async function reunionesSinLeer(
-  opts: { clientId: string; creadaEn: Date; propuesta: PropuestaDeExploracion; leido: LoLeidoDeHubspot },
+  opts: { exploracionId: string; clientId: string; creadaEn: Date; propuesta: PropuestaDeExploracion; leido: LoLeidoDeHubspot },
   ahora = new Date(),
 ): Promise<ReunionSinLeer[]> {
   const desde = opts.creadaEn.getTime() - DIAS_ANTES_DEL_ALTA * 24 * 60 * 60 * 1000;
@@ -292,5 +315,8 @@ export async function reunionesSinLeer(
       })
     : [];
   const deMeet: ReunionSinLeer[] = conTranscripcion.map((s) => ({ id: s.id, titulo: s.title, fecha: s.date.toISOString(), origen: "meet" }));
-  return [...deMeet, ...agendadasQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora)];
+  // Lo que el vendedor sumó a mano y el agente no leyó (la lectura se lanza sola al sumarlo; esto queda si falló).
+  const docs = await documentosParaLeer(opts.exploracionId, { excepto: opts.propuesta.leidas.documentos, cuantos: 5 });
+  const aMano: ReunionSinLeer[] = docs.map((d) => ({ id: d.id, titulo: d.titulo, fecha: (d.fecha ?? d.createdAt.toISOString()), origen: "documento" }));
+  return [...deMeet, ...aMano, ...agendadasQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora)];
 }

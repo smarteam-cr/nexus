@@ -111,5 +111,5 @@ export function useCorrida() {
     [exp.id, seguir, toast],
   );
 
-  return { corrida, corriendo: corrida?.estado === "RUNNING", lanzando, lanzar };
+  return { corrida, corriendo: corrida?.estado === "RUNNING", lanzando, lanzar, seguir };
 }

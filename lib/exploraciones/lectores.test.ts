@@ -31,6 +31,8 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/sales/exploraciones/[id]/route.ts": { destino: "ventas", motivo: "Leer y cambiar el lienzo." },
   "app/api/sales/exploraciones/[id]/agente/route.ts": { destino: "ventas", motivo: "Lanzar y seguir al agente." },
   "app/api/sales/exploraciones/[id]/propuesta/route.ts": { destino: "ventas", motivo: "Armar la propuesta desde el lienzo." },
+  "app/api/sales/exploraciones/[id]/documentos/route.ts": { destino: "ventas", motivo: "Sumar a mano una sesión o un documento, y listarlos." },
+  "app/api/sales/exploraciones/[id]/documentos/[documentoId]/route.ts": { destino: "ventas", motivo: "Quitar lo que se sumó a mano." },
   "app/api/sales/exploraciones/empresas/route.ts": { destino: "ventas", motivo: "Buscar la empresa." },
   "app/api/sales/exploraciones/sugerencias/route.ts": { destino: "ventas", motivo: "«Llegaron por el test»." },
   "app/api/business-cases/[id]/generate/route.ts": { destino: "propuesta-al-cliente", motivo: "La exploración como fuente de la propuesta y su posición en la escala." },

@@ -18,6 +18,7 @@ import { listaParaProponer, queSigue, type PuntoDeCalidad } from "./calidad";
 import { aplicarOperaciones, cambioLoConfirmado, type EstadoDeExploracion, type Operacion, type Validez } from "./contenido";
 import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
+import type { DocumentoDeLaLista } from "./documentos";
 import type { ReunionSinLeer } from "./lectura";
 import { chequeoConfirmado } from "./mapa";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
@@ -273,6 +274,8 @@ export interface ExploracionParaLaPantalla {
   sinLeer?: ReunionSinLeer[];
   /** Los proyectos cuyo handoff ya la recibe (lib/exploraciones/handoff.ts). Igual que `sinLeer`. */
   proyectos?: { id: string; nombre: string; clientId: string }[];
+  /** Las sesiones y los documentos sumados a mano, sin el texto (lib/exploraciones/documentos.ts). Igual que `sinLeer`. */
+  documentos?: DocumentoDeLaLista[];
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;

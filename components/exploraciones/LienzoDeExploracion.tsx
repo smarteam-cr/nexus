@@ -61,6 +61,7 @@ export default function LienzoDeExploracion({
   const [exp, setExp] = useState(inicial);
   const [sinLeer, setSinLeer] = useState(inicial.sinLeer ?? []);
   const [proyectos, setProyectos] = useState(inicial.proyectos ?? []);
+  const [documentos, setDocumentos] = useState(inicial.documentos ?? []);
   const [guardando, setGuardando] = useState(false);
   const [paso, setPaso] = useState<PasoDelLienzoUI>("exploracion");
 
@@ -86,6 +87,7 @@ export default function LienzoDeExploracion({
     }
     if (inicial.sinLeer) setSinLeer(inicial.sinLeer);
     if (inicial.proyectos) setProyectos(inicial.proyectos);
+    if (inicial.documentos) setDocumentos(inicial.documentos);
   }
 
   const validez = useMemo<Validez>(() => {
@@ -169,6 +171,7 @@ export default function LienzoDeExploracion({
           setExp(data.exploracion);
           if (data.exploracion.sinLeer) setSinLeer(data.exploracion.sinLeer);
           if (data.exploracion.proyectos) setProyectos(data.exploracion.proyectos);
+          if (data.exploracion.documentos) setDocumentos(data.exploracion.documentos);
           /* La preparación eligió la industria o el perfil: la escala del lienzo es otra (la arma el
              servidor con esos dos), así que se vuelve a pedir la página. */
           if (antes.edicion !== ahora.edicion || antes.perfilCierre !== ahora.perfilCierre || antes.perfilDespues !== ahora.perfilDespues) {
@@ -210,6 +213,7 @@ export default function LienzoDeExploracion({
     revisables,
     sinLeer,
     proyectos,
+    documentos,
     puedeEditar,
     guardando,
     cambiar,
