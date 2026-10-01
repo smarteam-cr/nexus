@@ -344,7 +344,7 @@ async function proponerCasos(
 
 /** Las fuentes que bastan para saber qué hace la empresa: la ficha, los contactos, los negocios, el test y la actividad reciente, recortadas. */
 function fuentesParaLaIndustria(leido: LoQueSeLeyo) {
-  const deLaEmpresa = leido.fuentes.filter((f) => /^(E0|C0|D0|T\d+)$/.test(f.id));
+  const deLaEmpresa = leido.fuentes.filter((f) => /^(E0|W0|C0|D0|T\d+)$/.test(f.id));
   const actividad = leido.fuentes.filter((f) => /^H\d+$/.test(f.id)).slice(0, 6);
   return [...deLaEmpresa, ...actividad].map((f) => ({ ...f, texto: f.texto.slice(0, 1500) }));
 }

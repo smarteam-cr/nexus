@@ -1,9 +1,9 @@
 /**
  * lib/exploraciones/fuentes.ts — lo que lee el agente de la exploración, cada cosa con su id. SERVIDOR.
  *
- * Cada fuente lleva un id corto que el modelo cita (E0 la empresa, C0 los contactos, D0 los
- * negocios, T1 el test, H3 una actividad de HubSpot, S2 una reunión de Meet, N0 las notas del
- * vendedor) y la frase que respalda lo que propone se busca LITERAL en el texto de su fuente.
+ * Cada fuente lleva un id corto que el modelo cita (E0 la empresa, W0 su sitio web, C0 los
+ * contactos, D0 los negocios, T1 el test, H3 una actividad de HubSpot, S2 una reunión de Meet, N0
+ * las notas del vendedor) y la frase que respalda lo que propone se busca LITERAL en el texto de su fuente.
  *
  * ⚠ Las reuniones salen por el chokepoint (`getClientSessions`, solo las que ya ocurrieron) y su
  * transcripción se lee ENTERA (no con `fetchTranscriptContent`, que antepone el resumen y corta a
@@ -34,6 +34,8 @@ import {
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
 import { REUNIONES } from "./sesion";
+import { leerSitioWeb } from "./sitio-web";
+import { hostDelSitio } from "./sitio-web-reglas";
 import type { ResultadoDelTest } from "./test-de-marketing";
 
 export type { Fuente } from "./fuentes-tipos";
@@ -156,6 +158,13 @@ export async function leerFuentes(opts: {
 
   const textoEmpresa = textoDeLaEmpresa(empresa, partner);
   if (textoEmpresa) fuentes.push({ id: "E0", etiqueta: "La empresa en HubSpot", texto: textoEmpresa });
+
+  /* Al preparar, la portada del sitio de la empresa: qué dice de sí misma. Es DATO (el prompt lo
+     dice); se lee con candados (sitio-web.ts) y, si falla, la preparación sigue sin él. */
+  if (opts.modo === "preparar" && empresa) {
+    const sitio = await leerSitioWeb(hostDelSitio(empresa.sitio, empresa.dominio));
+    if (sitio) fuentes.push({ id: "W0", etiqueta: `Su sitio web (${new URL(sitio.url).hostname})`, texto: sitio.texto });
+  }
   if (contactos.length) fuentes.push({ id: "C0", etiqueta: "Contactos en HubSpot", texto: textoDeLosContactos(contactos) });
   if (negocios.length) {
     fuentes.push({
