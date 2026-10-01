@@ -21,6 +21,7 @@ import { prisma } from "@/lib/db/prisma";
 import { fetchCompanyDeals, type AvailableDeal } from "@/lib/hubspot/deals";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { listaParaProponer } from "./calidad";
+import { calcularMetricas, DIAS_DE_LA_METRICA, type Metricas } from "./metricas";
 import { leerContenido } from "./esquemas";
 import { bloquearFila, exploracionParaLaPropuesta, leerExploracion } from "./servidor";
 
@@ -136,4 +137,24 @@ export async function armarPropuesta(o: { exploracionId: string; dealId: string;
     return bc.id;
   });
   return { ok: true, businessCaseId };
+}
+
+/**
+ * Los números de la métrica (lib/exploraciones/metricas.ts): las fotos de «lista para proponer» de
+ * todas las exploraciones y cuántas propuestas a prospectos salieron sin exploración en la ventana.
+ * Las exploraciones son pocas (una por prospecto): se leen enteras.
+ */
+export async function metricasDeLasPropuestas(ahora = new Date()): Promise<Metricas | null> {
+  if (!modeloDisponible(prisma.exploracionDeVenta)) return null;
+  const desde = new Date(ahora.getTime() - DIAS_DE_LA_METRICA * 24 * 60 * 60 * 1000);
+  const [filas, sinExploracion] = await Promise.all([
+    prisma.exploracionDeVenta.findMany({ select: { contenido: true } }),
+    prisma.businessCase.count({ where: { createdAt: { gte: desde }, exploracionId: null, client: { kind: "PROSPECTO" } } }),
+  ]);
+  const fotos = filas.flatMap((f) => leerContenido(f.contenido).alProponer);
+  const ids = [...new Set(fotos.map((f) => f.businessCaseId))];
+  const existen = new Set(
+    ids.length ? (await prisma.businessCase.findMany({ where: { id: { in: ids } }, select: { id: true } })).map((b) => b.id) : [],
+  );
+  return calcularMetricas(fotos, { ahora, existen, sinExploracion });
 }

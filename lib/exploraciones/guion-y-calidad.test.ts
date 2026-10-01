@@ -9,6 +9,7 @@ import { listaParaProponer, queSigue } from "./calidad";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { aFecha, diaConAnio, diaCorto } from "./fechas";
 import { agendadasQueYaPasaron, debeLeerSola } from "./lectura";
+import { calcularMetricas } from "./metricas";
 import { industriaLegible, sugerirEdicion } from "./industria";
 import { minutosPara, REUNIONES } from "./sesion";
 
@@ -192,5 +193,25 @@ describe("las reuniones de HubSpot que ya pasaron sin leer", () => {
 
   it("la que también está en Meet cuenta una vez: la de Meet, que trae la transcripción", () => {
     expect(agendadasQueYaPasaron(agenda, [], [{ fecha: "2026-10-08T15:05:00.000Z" }], AHORA).map((r) => r.id)).toEqual(["h1"]);
+  });
+});
+
+describe("la métrica", () => {
+  const AHORA = new Date("2026-12-01T12:00:00.000Z");
+  const todos = { dimensiones: true, meta: true, autoridad: true, consecuencia: true, portal: true, siguientePaso: true, noExplorado: true };
+  const foto = (businessCaseId: string, en: string, puntos: Record<string, boolean>) => ({ businessCaseId, en, puntos });
+
+  it("cuenta la última foto de cada propuesta de la ventana, sin las borradas", () => {
+    const m = calcularMetricas(
+      [
+        foto("bc1", "2026-11-01T12:00:00.000Z", { ...todos, meta: false }),
+        foto("bc1", "2026-11-05T12:00:00.000Z", todos), // la misma propuesta, armada otra vez: cuenta esta
+        foto("bc2", "2026-11-10T12:00:00.000Z", { ...todos, siguientePaso: false }),
+        foto("bc3", "2026-06-01T12:00:00.000Z", todos), // fuera de los 90 días
+        foto("bc4", "2026-11-20T12:00:00.000Z", todos), // se borró la propuesta
+      ],
+      { ahora: AHORA, existen: new Set(["bc1", "bc2", "bc3"]), sinExploracion: 3 },
+    );
+    expect(m).toEqual({ propuestas: 2, conMeta: 2, listas: 1, conSiguientePaso: 1, sinExploracion: 3 });
   });
 });

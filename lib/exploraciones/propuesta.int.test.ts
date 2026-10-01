@@ -29,7 +29,7 @@ import { prisma } from "@/lib/db/prisma";
 import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
 import { parsearEscala } from "@/lib/escala/documento/parsear";
 import { leerContenido } from "./esquemas";
-import { armarPropuesta } from "./propuesta";
+import { armarPropuesta, metricasDeLasPropuestas } from "./propuesta";
 
 const texto = leerArchivoDeLaEscala("escala");
 const general = parsearEscala(texto);
@@ -85,6 +85,9 @@ describe("armar la propuesta desde la exploración", () => {
     const fotos = leerContenido(fila.contenido).alProponer;
     expect(fotos).toHaveLength(1);
     expect(fotos[0]).toMatchObject({ businessCaseId: bc.id, puntos: { meta: true, dimensiones: false } });
+
+    // La métrica la cuenta: una propuesta, con una meta en cifras.
+    expect(await metricasDeLasPropuestas()).toMatchObject({ propuestas: 1, conMeta: 1, listas: 0, sinExploracion: 0 });
   });
 
   it("un negocio que no es de la empresa no se acepta, y no queda nada a medias", async () => {
