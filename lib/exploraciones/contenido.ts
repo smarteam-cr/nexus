@@ -99,8 +99,6 @@ export interface ContenidoDeExploracion {
   medicion: Medicion;
   /** El prospecto no usa HubSpot: no hay portal que mirar (cuenta como revisado). */
   sinPortal: boolean;
-  /** Lo que el agente ya leyó (sesiones de Meet, actividades de HubSpot): para saber qué es nuevo. */
-  leidas: { sesiones: string[]; hubspot: string[] };
   /** Lápidas: ids de lo propuesto que el vendedor descartó. */
   descartadas: string[];
   alProponer: FotoAlProponer[];
@@ -118,7 +116,6 @@ export function contenidoVacio(): ContenidoDeExploracion {
     notas: {},
     medicion: {},
     sinPortal: false,
-    leidas: { sesiones: [], hubspot: [] },
     descartadas: [],
     alProponer: [],
   };
@@ -155,9 +152,29 @@ export interface ItemPropuesto {
   en: string;
 }
 
+/** Una corrida del agente sobre esta exploración: qué hizo y cuándo (para la historia del lienzo). */
+export interface CorridaDelAgente {
+  id: string;
+  modo: "preparar" | "leer";
+  en: string;
+  propuestos: number;
+}
+
+/**
+ * Lo que escribe el AGENTE, y nada más: lo propuesto, lo que ya leyó (para saber qué es nuevo) y
+ * sus corridas. Vive aparte de lo confirmado a propósito: así ninguna escritura del agente puede
+ * tocar lo que el vendedor confirmó, ni subirle la versión.
+ */
 export interface PropuestaDeExploracion {
   version: 1;
   items: ItemPropuesto[];
+  /** Ids de las sesiones de Meet y de las actividades de HubSpot que el agente ya leyó. */
+  leidas: { sesiones: string[]; hubspot: string[] };
+  corridas: CorridaDelAgente[];
+}
+
+export function propuestaVacia(): PropuestaDeExploracion {
+  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [] }, corridas: [] };
 }
 
 /** Tope de lo pendiente: lo más viejo se cae primero. */
@@ -311,7 +328,11 @@ function unirFuentes(a: FuenteCitada[], b: FuenteCitada[]): FuenteCitada[] {
  * confirmado igual. Un destino escalar queda con UNA sola propuesta: la más nueva reemplaza a la
  * anterior. Lo repetido junta sus fuentes.
  */
+/** ¿Es un nivel que sale del test de marketing (escala anterior, hipótesis)? */
+const esNivelDelTest = (it: ItemPropuesto) => it.destino.tipo === "nivel" && esObjeto(it.valor) && it.valor.fuente === "test";
+
 export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemPropuesto[]): PropuestaDeExploracion {
+  const base = estado.propuesta;
   const lapidas = new Set(estado.contenido.descartadas);
   let items = [...estado.propuesta.items];
   for (const n of nuevos) {
@@ -321,13 +342,19 @@ export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemProp
       items[i] = { ...n, fuentes: unirFuentes(items[i].fuentes, n.fuentes) };
       continue;
     }
+    /* El test es la hipótesis más débil: al volver a preparar, su nivel no pisa uno pendiente que
+       salió de una reunión o del portal, con su frase. */
+    if (esNivelDelTest(n)) {
+      const clave = claveDelDestino(n.destino);
+      if (items.some((x) => claveDelDestino(x.destino) === clave && !lapidas.has(x.id) && !esNivelDelTest(x))) continue;
+    }
     if (!destinoDeLista(n.destino)) {
       const clave = claveDelDestino(n.destino);
       items = items.filter((x) => claveDelDestino(x.destino) !== clave);
     }
     items.push(n);
   }
-  return { version: 1, items: items.slice(-MAX_ITEMS) };
+  return { ...base, items: items.slice(-MAX_ITEMS) };
 }
 
 /** Lo pendiente, quitando lo que ya quedó confirmado por otro camino (el vendedor lo escribió a mano). */
@@ -522,7 +549,7 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       if (!item) return { ok: false, error: "Esa propuesta ya no está: la usó o la descartó alguien más." };
       const r = aplicarAlDestino(estado, item.destino, op.valor === undefined ? item.valor : op.valor, validez, validador);
       if (!r.ok) return r;
-      return { ok: true, estado: { ...r.estado, propuesta: { version: 1, items: r.estado.propuesta.items.filter((x) => x.id !== op.itemId) } } };
+      return { ok: true, estado: { ...r.estado, propuesta: { ...r.estado.propuesta, items: r.estado.propuesta.items.filter((x) => x.id !== op.itemId) } } };
     }
     case "descartar": {
       const ids = new Set(op.itemIds);
@@ -530,7 +557,7 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
         ok: true,
         estado: {
           ...estado,
-          propuesta: { version: 1, items: estado.propuesta.items.filter((x) => !ids.has(x.id)) },
+          propuesta: { ...estado.propuesta, items: estado.propuesta.items.filter((x) => !ids.has(x.id)) },
           contenido: { ...c, descartadas: [...c.descartadas.filter((d) => !ids.has(d)), ...ids].slice(-500) },
         },
       };

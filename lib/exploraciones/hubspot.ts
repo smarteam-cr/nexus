@@ -6,7 +6,9 @@
  * vez). Lo que no responde se devuelve vacío: sin HubSpot, el lienzo se puede llenar a mano.
  */
 import "server-only";
+import { esNotaDeLaFicha } from "@/lib/clients/ficha";
 import { forceRefreshSystemToken, getSystemHubspotClient } from "@/lib/hubspot/client";
+import { leerResultadoDelTest, PROPIEDADES_DEL_TEST, type ResultadoDelTest } from "./test-de-marketing";
 
 interface Pedido {
   method: "GET" | "POST";
@@ -106,4 +108,285 @@ export async function leerEmpresa(companyId: string): Promise<EmpresaDeHubspot |
     path: `/crm/v3/objects/companies/${encodeURIComponent(companyId)}?properties=${PROPIEDADES_DE_EMPRESA.join(",")}`,
   });
   return data ? aEmpresa(data) : null;
+}
+
+// ── Los contactos y el test ───────────────────────────────────────────────────
+
+export interface ContactoDeHubspot {
+  id: string;
+  nombre: string;
+  email: string | null;
+  cargo: string | null;
+  etapa: string | null;
+  /** `Completado`, `Iniciado`, `Abandonado`: lo escribe el test de marketing. */
+  estadoDelTest: string | null;
+  /** La dirección del resultado del test, por área de la escala de hoy (`1`, `2`, `3`). */
+  urlsDelTest: Record<string, string>;
+}
+
+const PROPIEDADES_DE_CONTACTO = [
+  "firstname",
+  "lastname",
+  "email",
+  "jobtitle",
+  "puesto_actual",
+  "lifecyclestage",
+  "diag_estado",
+  "diag_area",
+  "diag_fecha_inicio",
+  ...Object.values(PROPIEDADES_DEL_TEST),
+  "associatedcompanyid",
+  "lastmodifieddate",
+];
+
+type FilaDeContacto = { id: string; properties: Record<string, string | null | undefined> };
+
+const aContacto = (f: FilaDeContacto): ContactoDeHubspot => {
+  const p = f.properties;
+  const urlsDelTest: Record<string, string> = {};
+  for (const [area, prop] of Object.entries(PROPIEDADES_DEL_TEST)) {
+    const u = p[prop];
+    if (u) urlsDelTest[area] = u;
+  }
+  return {
+    id: f.id,
+    nombre: [p.firstname, p.lastname].filter(Boolean).join(" ").trim() || p.email || "(sin nombre)",
+    email: p.email || null,
+    cargo: p.jobtitle || p.puesto_actual || null,
+    etapa: p.lifecyclestage || null,
+    estadoDelTest: p.diag_estado || null,
+    urlsDelTest,
+  };
+};
+
+/** Los contactos asociados a la empresa (hasta 50), con lo que el test dejó en cada uno. */
+export async function leerContactos(companyId: string): Promise<ContactoDeHubspot[]> {
+  const asoc = await pedirAHubspot<{ results?: { toObjectId: number | string }[] }>({
+    method: "GET",
+    path: `/crm/v4/objects/companies/${encodeURIComponent(companyId)}/associations/contacts?limit=100`,
+  });
+  const ids = (asoc?.results ?? []).map((r) => String(r.toObjectId)).slice(0, 50);
+  if (ids.length === 0) return [];
+  const data = await pedirAHubspot<{ results?: FilaDeContacto[] }>({
+    method: "POST",
+    path: "/crm/v3/objects/contacts/batch/read",
+    body: { properties: PROPIEDADES_DE_CONTACTO, inputs: ids.map((id) => ({ id })) },
+  });
+  return (data?.results ?? []).map(aContacto);
+}
+
+/** Los resultados del test de los contactos: el más reciente de cada área. */
+export function testsDeLosContactos(contactos: readonly ContactoDeHubspot[]): { contacto: string; resultado: ResultadoDelTest }[] {
+  const porArea = new Map<string, { contacto: string; resultado: ResultadoDelTest }>();
+  for (const c of contactos) {
+    for (const url of Object.values(c.urlsDelTest)) {
+      const r = leerResultadoDelTest(url);
+      if (!r) continue;
+      const previo = porArea.get(r.areaId);
+      if (!previo || (r.fecha ?? "") > (previo.resultado.fecha ?? "")) porArea.set(r.areaId, { contacto: c.nombre, resultado: r });
+    }
+  }
+  return [...porArea.values()].sort((a, b) => a.resultado.areaId.localeCompare(b.resultado.areaId));
+}
+
+// ── La actividad: notas, llamadas, reuniones y correos ───────────────────────
+
+export interface ActividadDeHubspot {
+  /** Id estable del engagement (v1). */
+  id: string;
+  tipo: "NOTE" | "CALL" | "MEETING" | "EMAIL";
+  /** Cuándo fue (ms); 0 si HubSpot no lo dice. Se escribe con lib/exploraciones/fechas.ts. */
+  ts: number;
+  titulo: string;
+  texto: string;
+}
+
+export interface ActividadDeLaEmpresa {
+  /** Lo que ya pasó, más reciente primero. */
+  material: ActividadDeHubspot[];
+  /** Reuniones agendadas (todavía no ocurrieron): para la pantalla, NUNCA para el modelo. */
+  agenda: { id: string; titulo: string; inicio: string }[];
+  /** Correos que HubSpot no deja leer sin el permiso de correos: se cuentan para avisar. */
+  correosSinPermiso: number;
+}
+
+type V1 = {
+  engagement?: { id?: number | string; type?: string; timestamp?: number };
+  metadata?: Record<string, unknown>;
+};
+
+const QUE_SE_LEE = new Set(["NOTE", "CALL", "MEETING", "EMAIL"]);
+const TAPADO = /has been redacted|ha sido ocultad|redactado/i;
+
+/** HTML a texto plano: sin etiquetas, con los saltos de párrafo y las entidades comunes. */
+export function textoPlano(html: string): string {
+  return html
+    .replace(/<\s*(br|\/p|\/div|\/li|\/h\d)\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n+/g, "\n")
+    .trim();
+}
+
+function aActividad(e: V1): ActividadDeHubspot | "tapado" | null {
+  const tipo = e.engagement?.type ?? "";
+  const id = e.engagement?.id != null ? String(e.engagement.id) : "";
+  if (!QUE_SE_LEE.has(tipo) || !id) return null;
+  const m = e.metadata ?? {};
+  const get = (k: string) => (typeof m[k] === "string" ? textoPlano(m[k] as string) : "");
+  let titulo = "";
+  let texto = "";
+  if (tipo === "NOTE") texto = get("body");
+  else if (tipo === "CALL") {
+    titulo = get("title");
+    texto = [get("callSummary"), get("body")].filter(Boolean).join("\n");
+  } else if (tipo === "MEETING") {
+    titulo = get("title");
+    // El notetaker de HubSpot deja su resumen en el cuerpo o en las notas internas de la reunión.
+    texto = [get("body"), get("internalMeetingNotes")].filter(Boolean).join("\n");
+  } else if (tipo === "EMAIL") {
+    titulo = get("subject");
+    texto = get("text") || get("html");
+    if (TAPADO.test(texto) || TAPADO.test(titulo)) return "tapado";
+  }
+  if (!texto) return null;
+  if (tipo === "NOTE" && esNotaDeLaFicha(texto)) return null;
+  const ts = typeof e.engagement?.timestamp === "number" ? e.engagement.timestamp : 0;
+  return {
+    id,
+    tipo: tipo as ActividadDeHubspot["tipo"],
+    ts,
+    titulo,
+    texto: texto.slice(0, 4000),
+  };
+}
+
+async function engagementsDe(objeto: "company" | "contact", id: string): Promise<V1[]> {
+  const data = await pedirAHubspot<{ results?: V1[] }>({
+    method: "GET",
+    path: `/engagements/v1/engagements/associated/${objeto}/${encodeURIComponent(id)}/paged?limit=100`,
+  });
+  return data?.results ?? [];
+}
+
+/**
+ * La actividad de la empresa Y de sus contactos (la nota del test y las reuniones que agenda el
+ * prospecto pueden colgar solo del contacto). Sin repetidos; las reuniones futuras van aparte.
+ */
+export async function leerActividad(companyId: string, contactos: readonly ContactoDeHubspot[], ahora = new Date()): Promise<ActividadDeLaEmpresa> {
+  const lotes = await Promise.all([
+    engagementsDe("company", companyId),
+    ...contactos.slice(0, 12).map((c) => engagementsDe("contact", c.id)),
+  ]);
+  const vistos = new Set<string>();
+  const material: ActividadDeHubspot[] = [];
+  const agenda: ActividadDeLaEmpresa["agenda"] = [];
+  let correosSinPermiso = 0;
+  for (const e of lotes.flat()) {
+    const a = aActividad(e);
+    if (a === "tapado") {
+      correosSinPermiso++;
+      continue;
+    }
+    if (!a || vistos.has(a.id)) continue;
+    vistos.add(a.id);
+    const inicio = typeof e.metadata?.startTime === "number" ? (e.metadata.startTime as number) : a.ts;
+    if (a.tipo === "MEETING" && inicio > ahora.getTime()) {
+      agenda.push({ id: a.id, titulo: a.titulo || "Reunión", inicio: new Date(inicio).toISOString() });
+      continue;
+    }
+    material.push(a);
+  }
+  material.sort((a, b) => b.ts - a.ts);
+  agenda.sort((a, b) => a.inicio.localeCompare(b.inicio));
+  return { material: material.slice(0, 40), agenda, correosSinPermiso };
+}
+
+// ── «Llegaron por el test» ────────────────────────────────────────────────────
+
+export interface LlegadaPorElTest {
+  companyId: string;
+  empresa: string;
+  dominio: string | null;
+  contacto: string;
+  areaId: string | null;
+  fecha: string | null;
+  /** Agendó una reunión con la herramienta de reuniones de HubSpot después del test (la revisión). */
+  agendo: boolean;
+  /** La próxima actividad agendada con ese contacto, si es futura. */
+  proxima: string | null;
+}
+
+/** Fecha de HubSpot (ISO o milisegundos) → milisegundos, o null. */
+function enMs(v: string | null | undefined): number | null {
+  if (!v) return null;
+  const n = /^\d+$/.test(v) ? Number(v) : Date.parse(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Los contactos que terminaron el test en los últimos `dias` días, agrupados por empresa. Es lo que
+ * Marketing le pasa a Ventas: el prospecto hace el test y agenda la revisión del diagnóstico.
+ */
+export async function llegadasPorElTest(dias = 30, ahora = new Date()): Promise<LlegadaPorElTest[] | null> {
+  const desde = ahora.getTime() - dias * 24 * 60 * 60 * 1000;
+  const data = await pedirAHubspot<{ results?: FilaDeContacto[] }>({
+    method: "POST",
+    path: "/crm/v3/objects/contacts/search",
+    body: {
+      filterGroups: [
+        {
+          filters: [
+            { propertyName: "diag_estado", operator: "EQ", value: "Completado" },
+            { propertyName: "lastmodifieddate", operator: "GTE", value: String(desde) },
+          ],
+        },
+      ],
+      properties: [...PROPIEDADES_DE_CONTACTO, "engagements_last_meeting_booked", "notes_next_activity_date"],
+      sorts: [{ propertyName: "lastmodifieddate", direction: "DESCENDING" }],
+      limit: 100,
+    },
+  });
+  if (!data) return null;
+  const porEmpresa = new Map<string, LlegadaPorElTest>();
+  for (const f of data.results ?? []) {
+    const companyId = f.properties.associatedcompanyid;
+    if (!companyId || porEmpresa.has(companyId)) continue;
+    const c = aContacto(f);
+    const test = testsDeLosContactos([c])[0]?.resultado ?? null;
+    const agendada = enMs(f.properties.engagements_last_meeting_booked);
+    const delTest = enMs(test?.fecha) ?? desde;
+    const proxima = enMs(f.properties.notes_next_activity_date);
+    porEmpresa.set(companyId, {
+      companyId,
+      empresa: "",
+      dominio: null,
+      contacto: c.nombre,
+      areaId: test?.areaId ?? null,
+      fecha: test?.fecha ?? null,
+      // Un día de holgura: el test guarda su fecha al empezar y la reunión se agenda al terminar.
+      agendo: agendada !== null && agendada >= delTest - 24 * 60 * 60 * 1000,
+      proxima: proxima !== null && proxima >= ahora.getTime() ? new Date(proxima).toISOString() : null,
+    });
+  }
+  const ids = [...porEmpresa.keys()].slice(0, 40);
+  if (ids.length === 0) return [];
+  const empresas = await pedirAHubspot<{ results?: FilaDeEmpresa[] }>({
+    method: "POST",
+    path: "/crm/v3/objects/companies/batch/read",
+    body: { properties: ["name", "domain"], inputs: ids.map((id) => ({ id })) },
+  });
+  for (const e of empresas?.results ?? []) {
+    const l = porEmpresa.get(e.id);
+    if (!l) continue;
+    l.empresa = e.properties.name?.trim() || e.properties.domain || "(sin nombre)";
+    l.dominio = e.properties.domain || null;
+  }
+  return ids.map((id) => porEmpresa.get(id)!).filter((l) => l.empresa);
 }

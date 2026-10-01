@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 import { calcularChequeo, type AreaParaChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { listaParaProponer, queSigue } from "./calidad";
-import { contenidoVacio, type EstadoDeExploracion } from "./contenido";
+import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
+import { aFecha, diaConAnio, diaCorto } from "./fechas";
 import { industriaLegible, sugerirEdicion } from "./industria";
 import { minutosPara, REUNIONES } from "./sesion";
 
@@ -90,7 +91,7 @@ const chequeoCon = (letras: string) =>
 function estado(parcial: Partial<EstadoDeExploracion> = {}): EstadoDeExploracion {
   return {
     contenido: contenidoVacio(),
-    propuesta: { version: 1, items: [] },
+    propuesta: propuestaVacia(),
     areas: ["1"],
     edicion: null,
     perfilCierre: "con equipo",
@@ -138,5 +139,17 @@ describe("lista para proponer", () => {
     expect(queSigue(estado({ areas: [] }), chequeoCon("FFFFFFFF"))).toMatch(/áreas/);
     expect(queSigue(estado(), chequeoCon("FFFFFFF"))).toMatch(/dimensión que falta/);
     expect(queSigue(estado(), chequeoCon("FFFFFFFF"))).toMatch(/meta en cifras/);
+  });
+});
+
+describe("fechas en la hora de Costa Rica", () => {
+  it("una fecha sin hora es ese día, no el anterior (la medianoche UTC ya es el día de antes en Costa Rica)", () => {
+    expect(diaCorto("2026-09-26")).toMatch(/^26 sept/);
+    expect(aFecha("2026-09-26").toISOString()).toBe("2026-09-26T18:00:00.000Z");
+  });
+
+  it("una llamada de las 8 de la noche es de ese día aunque en UTC ya sea el siguiente", () => {
+    // 2026-09-21T02:00Z = 20 de septiembre, 8 p. m. en Costa Rica.
+    expect(diaConAnio(Date.parse("2026-09-21T02:00:00.000Z"))).toMatch(/^20 sept/);
   });
 });

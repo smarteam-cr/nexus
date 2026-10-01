@@ -121,7 +121,7 @@ export const NO_SON_VOSEO: ReadonlySet<string> = new Set([
   // Sustantivos y nombres
   "escala", "escuela", "modelo", "modelos", "estilo", "estilos", "paralelo", "gemela", "centinela", "cautela", "paquete",
   "rescate", "empate", "limite", "portapapeles", "carteles", "perfiles", "niveles", "canales", "señales",
-  "umbrales", "portales", "paneles", "metales", "guatemala", "huthwaite",
+  "umbrales", "portales", "paneles", "metales", "papeles", "guatemala", "huthwaite",
   // Adjetivos en plural (-ales, -eles, -iles)
   "totales", "subtotales", "internacionales", "comerciales", "adicionales", "manuales", "actuales", "opcionales",
   "credenciales", "puntuales", "mensuales", "semanales", "principales", "sociales", "informales", "formales",
@@ -137,6 +137,7 @@ export const NO_SON_VOSEO: ReadonlySet<string> = new Set([
   "create", "update", "delete", "generate", "regenerate", "template", "private", "profile", "rotate", "translate",
   "estimate", "estate", "rationale", "realtime", "datetime", "filename", "website", "iframe", "infinite", "polite",
   "authenticate", "createdate", "closedate", "dealname", "lastmodifieddate", "lastactivitydate", "assigneddate",
+  "firstname", "lastname",
   "quirinale",
 ]);
 

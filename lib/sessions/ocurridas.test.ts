@@ -204,6 +204,13 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "Las reuniones NUEVAS que leyó el paso 2 (resumen y minuta) van a la llamada de Haiku que explica la propuesta. " +
       "Son ids que el material ya filtró con soloOcurridas, y la consulta vuelve a cortar por fecha (hasta que leyó).",
   },
+  // Exploraciones de venta (2026-10-01): lo que lee el agente que prepara y lee las reuniones.
+  "lib/exploraciones/fuentes.ts": {
+    clase: "contexto",
+    motivo:
+      "Las reuniones de Meet del prospecto van al agente de la exploración con su transcripción completa (las citas se verifican contra ella). " +
+      "Los ids salen de getClientSessions (solo las ocurridas) y la consulta de la transcripción vuelve a cortar por fecha.",
+  },
 };
 
 /**
@@ -231,6 +238,7 @@ const CORTAN_POR_FECHA = [
   "app/api/sessions/analyze/route.ts",
   "lib/contexto/cargar.ts",
   "lib/timeline/fuentes-de-la-explicacion.ts",
+  "lib/exploraciones/fuentes.ts",
 ];
 
 const RAIZ = join(__dirname, "..", "..");

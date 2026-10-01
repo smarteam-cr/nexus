@@ -10,6 +10,7 @@ import {
   contenidoVacio,
   fusionarPropuestas,
   idDelItem,
+  propuestaVacia,
   propuestaVigente,
   type DestinoDePropuesta,
   type EstadoDeExploracion,
@@ -33,7 +34,7 @@ const VALIDEZ: Validez = {
 function estado(parcial: Partial<EstadoDeExploracion> = {}): EstadoDeExploracion {
   return {
     contenido: contenidoVacio(),
-    propuesta: { version: 1, items: [] },
+    propuesta: propuestaVacia(),
     areas: ["1"],
     edicion: null,
     perfilCierre: "con equipo",

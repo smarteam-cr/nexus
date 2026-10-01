@@ -121,6 +121,23 @@ export default function LienzoDeExploracion({
     [enviar, validez],
   );
 
+  const recargar = useCallback((): Promise<void> => {
+    const p = cola.current.then(async () => {
+      try {
+        const res = await fetch(`/api/sales/exploraciones/${confirmada.current.id}`);
+        const data = (await res.json().catch(() => ({}))) as { exploracion?: ExploracionParaLaPantalla };
+        if (data.exploracion) {
+          confirmada.current = data.exploracion;
+          setExp(data.exploracion);
+        }
+      } catch {
+        /* se queda con lo que tiene: el próximo cambio trae lo último */
+      }
+    });
+    cola.current = p;
+    return p;
+  }, []);
+
   const chequeo = useMemo(() => {
     const areas = exp.estado.areas
       .map((id) => escala.areas.find((a) => a.id === id)?.paraChequeo)
@@ -135,7 +152,7 @@ export default function LienzoDeExploracion({
   const pendientesPara = useCallback((filtro: (d: DestinoDePropuesta) => boolean) => pendientes.filter((it) => filtro(it.destino)), [pendientes]);
   const nombreDeNivel = useCallback((l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l, [escala]);
 
-  const lienzo: Lienzo = { exp, escala, chequeo, pendientes, puedeEditar, guardando, cambiar, nombreDeNivel, pendientesPara };
+  const lienzo: Lienzo = { exp, escala, chequeo, pendientes, puedeEditar, guardando, cambiar, recargar, nombreDeNivel, pendientesPara };
 
   const puntos = listaParaProponer(exp.estado, chequeo);
   const sigue = queSigue(exp.estado, chequeo);

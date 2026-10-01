@@ -35,7 +35,7 @@ async function sembrar(propuestos: ItemPropuesto[] = []) {
       areas: ["1"],
       perfilCierre: "con equipo",
       perfilDespues: "continua",
-      propuesta: { version: 1, items: propuestos } as never,
+      propuesta: { version: 1, items: propuestos, leidas: { sesiones: [], hubspot: [] }, corridas: [] } as never,
     },
     select: { id: true },
   });

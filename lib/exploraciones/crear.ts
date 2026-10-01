@@ -15,7 +15,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { clienteDeLaEmpresaDeVentas } from "@/lib/clients/cliente-de-la-empresa-de-ventas";
 import { prisma } from "@/lib/db/prisma";
-import { contenidoVacio, idDelItem, type DestinoDePropuesta, type ItemPropuesto } from "./contenido";
+import { contenidoVacio, idDelItem, propuestaVacia, type DestinoDePropuesta, type ItemPropuesto } from "./contenido";
 import { leerEmpresa } from "./hubspot";
 import { industriaLegible, sugerirEdicion } from "./industria";
 import { escalaParaExplorar } from "./servidor";
@@ -76,7 +76,7 @@ export async function crearExploracion(companyId: string, email: string): Promis
         creadaPor: email,
         responsableEmail: email,
         contenido: contenidoVacio() as unknown as Prisma.InputJsonValue,
-        propuesta: { version: 1, items } as unknown as Prisma.InputJsonValue,
+        propuesta: { ...propuestaVacia(), items } as unknown as Prisma.InputJsonValue,
       },
       select: { id: true },
     });

@@ -30,8 +30,10 @@ import {
   FUENTES_DEL_NIVEL,
   MOTIVOS_PARA_EXPLORAR,
   NIVELES,
+  propuestaVacia,
   type AExplorar,
   type ContenidoDeExploracion,
+  type CorridaDelAgente,
   type DestinoDePropuesta,
   type EstadoDeCriterio,
   type EstimadoGuardado,
@@ -270,9 +272,6 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   const med = MedicionSchema.safeParse(raw.medicion);
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
-  if (esObjeto(raw.leidas)) {
-    c.leidas = { sesiones: listaDeTextos(raw.leidas.sesiones, 300), hubspot: listaDeTextos(raw.leidas.hubspot, 500) };
-  }
   c.descartadas = listaDeTextos(raw.descartadas, 500);
   if (Array.isArray(raw.alProponer)) {
     c.alProponer = raw.alProponer.filter(
@@ -290,7 +289,18 @@ const FuenteSchema = z.object({
 });
 
 export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
-  if (!esObjeto(raw) || !Array.isArray(raw.items)) return { version: 1, items: [] };
+  const p = propuestaVacia();
+  if (!esObjeto(raw)) return p;
+  if (esObjeto(raw.leidas)) {
+    p.leidas = { sesiones: listaDeTextos(raw.leidas.sesiones, 300), hubspot: listaDeTextos(raw.leidas.hubspot, 500) };
+  }
+  if (Array.isArray(raw.corridas)) {
+    p.corridas = raw.corridas
+      .filter((c): c is CorridaDelAgente => esObjeto(c) && typeof c.id === "string" && (c.modo === "preparar" || c.modo === "leer") && typeof c.en === "string")
+      .map((c) => ({ id: c.id, modo: c.modo, en: c.en, propuestos: typeof c.propuestos === "number" ? c.propuestos : 0 }))
+      .slice(-50);
+  }
+  if (!Array.isArray(raw.items)) return p;
   const items: ItemPropuesto[] = [];
   for (const it of raw.items) {
     if (!esObjeto(it) || typeof it.id !== "string") continue;
@@ -311,5 +321,5 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
       en: typeof it.en === "string" ? it.en : new Date(0).toISOString(),
     });
   }
-  return { version: 1, items };
+  return { ...p, items };
 }

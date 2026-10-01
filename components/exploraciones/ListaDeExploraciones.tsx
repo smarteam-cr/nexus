@@ -8,13 +8,11 @@
  */
 import { useRouter } from "next/navigation";
 import { Badge, EmptyState, Table, type TableColumn } from "@/components/ui";
+import { diaCorto } from "@/lib/exploraciones/fechas";
 import type { FilaDeLaLista } from "@/lib/exploraciones/servidor";
 import NuevaExploracion from "./NuevaExploracion";
 
-function cuando(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("es-CR", { day: "numeric", month: "short" });
-}
+const cuando = (iso: string): string => diaCorto(iso);
 
 export default function ListaDeExploraciones({ filas, puedeEditar }: { filas: FilaDeLaLista[]; puedeEditar: boolean }) {
   const router = useRouter();

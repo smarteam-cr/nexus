@@ -18,6 +18,7 @@ import { listaParaProponer, queSigue, type PuntoDeCalidad } from "./calidad";
 import { aplicarOperaciones, cambioLoConfirmado, type EstadoDeExploracion, type Operacion, type Validez } from "./contenido";
 import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
+import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 
 export const SQL_DE_EXPLORACIONES = "scripts/sql/2026-10-01-exploracion-de-venta.sql";
 
@@ -241,7 +242,8 @@ export interface ExploracionParaLaPantalla {
   version: number;
   empresa: { clientId: string; nombre: string; hubspotCompanyId: string | null; industria: string | null; kind: string };
   estado: EstadoDeExploracion;
-  test: unknown;
+  /** Lo que el agente leyó de HubSpot: el test, la agenda, los correos que no pudo leer. */
+  leido: LoLeidoDeHubspot;
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;
@@ -259,7 +261,7 @@ export function paraLaPantalla(fila: FilaDeExploracion): ExploracionParaLaPantal
       kind: fila.client.kind,
     },
     estado: estadoDesdeFila(fila),
-    test: fila.test,
+    leido: leerLoLeido(fila.test),
     creadaPor: fila.creadaPor,
     creadaEn: fila.createdAt.toISOString(),
     actualizadaEn: fila.updatedAt.toISOString(),

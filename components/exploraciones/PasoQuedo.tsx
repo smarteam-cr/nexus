@@ -11,6 +11,7 @@ import type { Medicion } from "@/lib/exploraciones/contenido";
 import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
 import { NivelDelArea, QueVaPrimero } from "./NivelDelArea";
+import PanelDelAgente from "./PanelDelAgente";
 
 function Grupo({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: React.ReactNode }) {
   return (
@@ -77,6 +78,7 @@ export default function PasoQuedo() {
   const areas = exp.estado.areas;
   return (
     <div className="space-y-8">
+      <PanelDelAgente modoPrincipal="leer" />
       <Grupo
         titulo="El nivel de cada área"
         ayuda="Estimado, como el chequeo de la escala: cada dimensión por mejor ajuste; la capa queda en su dimensión más débil y el área en su capa más baja."

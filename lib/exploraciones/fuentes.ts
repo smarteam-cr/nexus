@@ -1,0 +1,219 @@
+/**
+ * lib/exploraciones/fuentes.ts — lo que lee el agente de la exploración, cada cosa con su id. SERVIDOR.
+ *
+ * Cada fuente lleva un id corto que el modelo cita (E0 la empresa, C0 los contactos, D0 los
+ * negocios, T1 el test, H3 una actividad de HubSpot, S2 una reunión de Meet, N0 las notas del
+ * vendedor) y la frase que respalda lo que propone se busca LITERAL en el texto de su fuente.
+ *
+ * ⚠ Las reuniones salen por el chokepoint (`getClientSessions`, solo las que ya ocurrieron) y su
+ * transcripción se lee ENTERA (no con `fetchTranscriptContent`, que antepone el resumen y corta a
+ * 5.000 caracteres: las citas no se podrían verificar y se perdería el final de la reunión, donde
+ * está la decisión). Las reuniones de HubSpot que todavía no pasaron son agenda: nunca van al modelo.
+ */
+import "server-only";
+import { prisma } from "@/lib/db/prisma";
+import { fetchCompanyDeals } from "@/lib/hubspot/deals";
+import { getSystemHubspotClient } from "@/lib/hubspot/client";
+import { getClientSessions } from "@/lib/sessions/project-sources";
+import type { Letra } from "@/lib/escala/documento/tipos";
+import type { PropuestaDeExploracion } from "./contenido";
+import type { EscalaDelLienzo } from "./escala-del-lienzo";
+import { diaConAnio } from "./fechas";
+import type { Fuente } from "./fuentes-tipos";
+import {
+  leerActividad,
+  leerContactos,
+  leerEmpresa,
+  testsDeLosContactos,
+  type ActividadDeLaEmpresa,
+  type ContactoDeHubspot,
+} from "./hubspot";
+import { REUNIONES } from "./sesion";
+import type { ResultadoDelTest } from "./test-de-marketing";
+
+export type { Fuente } from "./fuentes-tipos";
+
+export interface LoQueSeLeyo {
+  fuentes: Fuente[];
+  /** Los resultados del test, por área (hipótesis: escala anterior). */
+  tests: { contacto: string; resultado: ResultadoDelTest }[];
+  agenda: ActividadDeLaEmpresa["agenda"];
+  correosSinPermiso: number;
+  /** Lo que LEYÓ esta corrida para no volver a leerlo: solo «leer» lo marca (ver abajo). */
+  leidas: { sesiones: string[]; hubspot: string[] };
+  /** Las reuniones de Meet que fueron al modelo (marcadas o no): las fuentes de la corrida. */
+  sesionesUsadas: string[];
+}
+
+const fecha = diaConAnio;
+
+const NOMBRE_DEL_TIPO: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", MEETING: "Reunión en HubSpot", EMAIL: "Correo" };
+
+function textoDeLaEmpresa(
+  empresa: Awaited<ReturnType<typeof leerEmpresa>>,
+  partner: { hubEditions: unknown; seats: unknown; nextRenewalAt: Date | null; activeProducts: string | null } | null,
+): string {
+  const lineas = [
+    empresa?.nombre && `Nombre: ${empresa.nombre}`,
+    empresa?.dominio && `Dominio: ${empresa.dominio}`,
+    empresa?.industria && `Industria en HubSpot: ${empresa.industria}`,
+    empresa?.pais && `País: ${empresa.pais}${empresa.ciudad ? ` (${empresa.ciudad})` : ""}`,
+    empresa?.empleados && `Empleados: ${empresa.empleados}`,
+    empresa?.sitio && `Sitio: ${empresa.sitio}`,
+    empresa?.etapa && `Etapa del ciclo de vida: ${empresa.etapa}`,
+    empresa?.descripcion && `Descripción: ${empresa.descripcion}`,
+  ];
+  if (partner) {
+    lineas.push(
+      partner.hubEditions ? `Ediciones de HubSpot que tiene: ${JSON.stringify(partner.hubEditions)}` : null,
+      partner.seats ? `Asientos: ${JSON.stringify(partner.seats)}` : null,
+      partner.activeProducts ? `Productos activos: ${partner.activeProducts}` : null,
+      partner.nextRenewalAt ? `Próxima renovación: ${fecha(partner.nextRenewalAt)}` : null,
+    );
+  }
+  return lineas.filter(Boolean).join("\n");
+}
+
+function textoDeLosContactos(contactos: readonly ContactoDeHubspot[]): string {
+  return contactos
+    .map((c) =>
+      [c.nombre, c.cargo, c.email, c.etapa && `etapa: ${c.etapa}`, c.estadoDelTest && `test: ${c.estadoDelTest}`].filter(Boolean).join(" · "),
+    )
+    .join("\n");
+}
+
+function textoDelTest(r: ResultadoDelTest, contacto: string, escala: EscalaDelLienzo, nombreDeNivel: (l: Letra) => string): string {
+  const area = escala.areas.find((a) => a.id === r.areaId);
+  const lineas = r.respuestas.map((x) => {
+    const d = area?.dimensiones.find((y) => y.id === x.dimensionId);
+    return [
+      `${x.dimensionId} ${d?.nombre ?? ""}: ${nombreDeNivel(x.nivel)}`,
+      x.respuesta && `eligió «${x.respuesta}»`,
+      x.matiz && `agregó «${x.matiz}»`,
+    ]
+      .filter(Boolean)
+      .join(" — ");
+  });
+  return [`Contestó: ${contacto}${r.fecha ? `, el ${fecha(r.fecha)}` : ""}. Área: ${area?.nombre ?? r.areaId}.`, ...lineas].join("\n");
+}
+
+/** Las notas rápidas que el vendedor dejó en el guion, con el paso al que pertenecen. */
+function textoDeLasNotas(notas: Record<string, string>): string {
+  const pasos = REUNIONES.flatMap((r) => r.pasos.map((p) => ({ id: p.id, titulo: `${r.titulo.split(" — ")[0]} · ${p.titulo}` })));
+  return Object.entries(notas)
+    .map(([id, texto]) => `${pasos.find((p) => p.id === id)?.titulo ?? id}: ${texto}`)
+    .join("\n");
+}
+
+export async function leerFuentes(opts: {
+  clientId: string;
+  companyId: string | null;
+  escala: EscalaDelLienzo;
+  propuesta: PropuestaDeExploracion;
+  notas: Record<string, string>;
+  modo: "preparar" | "leer";
+  /** Para «leer»: una reunión elegida; si no, las que todavía no se leyeron. */
+  sesionId?: string | null;
+}): Promise<LoQueSeLeyo> {
+  const nombreDeNivel = (l: Letra) => opts.escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
+  const fuentes: Fuente[] = [];
+  const leidas = { sesiones: [] as string[], hubspot: [] as string[] };
+
+  // ── HubSpot ──
+  const [empresa, contactos, partner] = await Promise.all([
+    opts.companyId ? leerEmpresa(opts.companyId) : Promise.resolve(null),
+    opts.companyId ? leerContactos(opts.companyId) : Promise.resolve([] as ContactoDeHubspot[]),
+    prisma.clientPartnerSnapshot.findUnique({
+      where: { clientId: opts.clientId },
+      select: { hubEditions: true, seats: true, nextRenewalAt: true, activeProducts: true },
+    }),
+  ]);
+  const [actividad, negocios] = await Promise.all([
+    opts.companyId ? leerActividad(opts.companyId, contactos) : Promise.resolve<ActividadDeLaEmpresa>({ material: [], agenda: [], correosSinPermiso: 0 }),
+    opts.companyId
+      ? getSystemHubspotClient()
+          .then((hs) => fetchCompanyDeals(hs, opts.companyId as string))
+          .catch(() => [])
+      : Promise.resolve([]),
+  ]);
+
+  const textoEmpresa = textoDeLaEmpresa(empresa, partner);
+  if (textoEmpresa) fuentes.push({ id: "E0", etiqueta: "La empresa en HubSpot", texto: textoEmpresa });
+  if (contactos.length) fuentes.push({ id: "C0", etiqueta: "Contactos en HubSpot", texto: textoDeLosContactos(contactos) });
+  if (negocios.length) {
+    fuentes.push({
+      id: "D0",
+      etiqueta: "Negocios en HubSpot",
+      texto: negocios
+        .slice(0, 10)
+        .map((n) => [n.name, n.stage, n.amount && `monto ${n.amount}`, n.closedate && `cierre ${fecha(n.closedate)}`].filter(Boolean).join(" · "))
+        .join("\n"),
+    });
+  }
+
+  const tests = testsDeLosContactos(contactos);
+  tests.forEach((t, i) => {
+    const area = opts.escala.areas.find((a) => a.id === t.resultado.areaId)?.nombre ?? t.resultado.areaId;
+    fuentes.push({
+      id: `T${i + 1}`,
+      etiqueta: `Test de ${area}${t.resultado.fecha ? ` del ${fecha(t.resultado.fecha)}` : ""}`,
+      texto: textoDelTest(t.resultado, t.contacto, opts.escala, nombreDeNivel),
+    });
+  });
+
+  /* Lo leído lo marca solo «leer». «Preparar» mira todo con otra pregunta (qué hipótesis llevar) y
+     recorta las reuniones: si las marcara, la primera «Leer la reunión» no tendría nada que leer y
+     nadie sacaría de esa reunión los niveles, las metas ni lo que quedó sin explorar. */
+  const marcar = opts.modo === "leer";
+
+  // La actividad de HubSpot: al preparar, toda la reciente; al leer, solo lo que no se leyó.
+  const yaLeidas = new Set(opts.propuesta.leidas.hubspot);
+  const actividadQueVa = opts.modo === "leer" ? actividad.material.filter((a) => !yaLeidas.has(a.id)) : actividad.material;
+  actividadQueVa.slice(0, 25).forEach((a, i) => {
+    fuentes.push({
+      id: `H${i + 1}`,
+      etiqueta: `${NOMBRE_DEL_TIPO[a.tipo]}${a.ts ? ` del ${fecha(a.ts)}` : ""}${a.titulo ? `: ${a.titulo}` : ""}`,
+      texto: a.texto,
+    });
+    if (marcar) leidas.hubspot.push(a.id);
+  });
+
+  // ── Las reuniones de Meet (solo las que ya ocurrieron) ──
+  const sesiones = await getClientSessions(opts.clientId, { take: 30 });
+  const yaLeidasS = new Set(opts.propuesta.leidas.sesiones);
+  const elegidas =
+    opts.modo === "leer"
+      ? opts.sesionId
+        ? sesiones.filter((s) => s.id === opts.sesionId)
+        : sesiones.filter((s) => !yaLeidasS.has(s.id)).slice(0, 2)
+      : sesiones.slice(0, 3);
+  const ahora = new Date();
+  const conTexto = elegidas.length
+    ? await prisma.firefliesSession.findMany({
+        // Ids que el chokepoint ya filtró por dueño y por fecha; el techo de fecha se repite acá.
+        where: { id: { in: elegidas.map((s) => s.id) }, date: { lte: ahora } },
+        select: { id: true, title: true, date: true, transcript: true, summary: true },
+        orderBy: { date: "desc" },
+      })
+    : [];
+  const MAX = opts.modo === "leer" ? 60_000 : 12_000;
+  const sesionesUsadas: string[] = [];
+  conTexto.forEach((s, i) => {
+    const resumen =
+      s.summary && typeof s.summary === "object" && typeof (s.summary as { overview?: unknown }).overview === "string"
+        ? ((s.summary as { overview: string }).overview as string)
+        : "";
+    const texto = (s.transcript ?? "").trim() || resumen;
+    if (!texto) return;
+    fuentes.push({ id: `S${i + 1}`, etiqueta: `Reunión del ${fecha(s.date)}: ${s.title}`, texto: texto.slice(0, MAX) });
+    sesionesUsadas.push(s.id);
+    // Sin transcripción (solo el resumen) no se marca: se vuelve a leer cuando llegue.
+    if (marcar && s.transcript) leidas.sesiones.push(s.id);
+  });
+
+  // ── Las notas del vendedor en el guion ──
+  const notas = textoDeLasNotas(opts.notas);
+  if (notas) fuentes.push({ id: "N0", etiqueta: "Notas del vendedor en el guion", texto: notas });
+
+  return { fuentes, tests, agenda: actividad.agenda, correosSinPermiso: actividad.correosSinPermiso, leidas, sesionesUsadas };
+}

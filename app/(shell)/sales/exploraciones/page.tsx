@@ -7,6 +7,7 @@
 import { redirect } from "next/navigation";
 import { Alert, PageHeader } from "@/components/ui";
 import ListaDeExploraciones from "@/components/exploraciones/ListaDeExploraciones";
+import LlegaronPorElTest from "@/components/exploraciones/LlegaronPorElTest";
 import { can } from "@/lib/auth/permissions/engine";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { escalaParaExplorar, listarExploraciones, SQL_DE_EXPLORACIONES } from "@/lib/exploraciones/servidor";
@@ -21,6 +22,8 @@ export default async function ExploracionesPage() {
 
   const escala = await escalaParaExplorar();
   const lista = await listarExploraciones(escala.estado === "ok" ? escala.general : null);
+  // El test de marketing nombra el área por su id general: se muestra con el nombre de la escala.
+  const nombresDeAreas = escala.estado === "ok" ? Object.fromEntries(escala.general.areas.map((a) => [a.id, a.nombre])) : {};
 
   return (
     <div className={SHELL_DEFAULT}>
@@ -39,7 +42,10 @@ export default async function ExploracionesPage() {
           Hay que aplicar {SQL_DE_EXPLORACIONES} y reiniciar el servidor.
         </Alert>
       ) : (
-        <ListaDeExploraciones filas={lista.filas} puedeEditar={puedeEditar} />
+        <>
+          <LlegaronPorElTest nombresDeAreas={nombresDeAreas} puedeEditar={puedeEditar} />
+          <ListaDeExploraciones filas={lista.filas} puedeEditar={puedeEditar} />
+        </>
       )}
     </div>
   );

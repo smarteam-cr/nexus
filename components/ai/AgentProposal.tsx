@@ -22,6 +22,11 @@ import { cn } from "@/lib/cn";
 //     son flujos de curaduría, no una propuesta puntual.
 //   - Borradores editables tipo cobranza (generar → editar → copiar): es un
 //     Modal con formulario; si aparece un segundo caso se extrae AgentDraftModal.
+//   - Propuestas que se ACUMULAN por casilla a lo largo de varias corridas (la
+//     exploración de venta, components/exploraciones): el detalle vive en el
+//     lugar de cada casilla, con su «Usar / Descartar» y su fuente. Este banner
+//     solo resume lo pendiente de todas las corridas y ofrece usar o descartar
+//     todo junto; no es la propuesta de UNA corrida.
 //
 // `tone` mapea a los acentos ya establecidos: brand (propuesta general),
 // progress (avance detectado, esmeralda), deviation (particularidades, ámbar).

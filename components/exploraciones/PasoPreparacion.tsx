@@ -11,6 +11,7 @@ import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/docume
 import { ETIQUETA_DEL_MOTIVO, MOTIVOS_PARA_EXPLORAR, normalizarTexto, type MotivoParaExplorar } from "@/lib/exploraciones/contenido";
 import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
+import PanelDelAgente from "./PanelDelAgente";
 import { Propuestas } from "./Propuestas";
 
 /** Hasta cuántas dimensiones por área se profundiza: lo que cabe en la segunda reunión. */
@@ -242,6 +243,7 @@ function DimensionesAExplorar() {
 export default function PasoPreparacion() {
   return (
     <div className="space-y-4">
+      <PanelDelAgente />
       <IndustriaYPerfil />
       <AreasEnJuego />
       <div className="grid gap-4 lg:grid-cols-2">

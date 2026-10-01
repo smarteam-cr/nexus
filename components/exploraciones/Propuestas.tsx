@@ -76,7 +76,8 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
     }
     case "aExplorar": {
       const a = v as AExplorar;
-      return `${nombreDeDimension(escala, d.dimensionId)}: ${ETIQUETA_DEL_MOTIVO[a.motivo].toLowerCase()}${a.razon ? `. ${a.razon}` : ""}`;
+      // La razón va en su propia línea (item.razon); acá solo si es otra.
+      return `${nombreDeDimension(escala, d.dimensionId)} — ${ETIQUETA_DEL_MOTIVO[a.motivo]}${a.razon && a.razon !== item.razon ? `. ${a.razon}` : ""}`;
     }
     case "area":
       return escala.areas.find((a) => a.id === d.areaId)?.nombre ?? d.areaId;
