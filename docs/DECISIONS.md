@@ -4206,3 +4206,55 @@ de uso», con un agente experimental que los proponga sin la biblioteca (vacía)
 
 **Lo que no cambia.** El modelo de propuesta y confirmación para todo lo demás, los dos escritores
 con la fila bloqueada, lo que ve el cliente y lo que recibe el CSE.
+
+## La exploración de venta, tercera vuelta: preparar al vendedor, no llenar un formulario (2026-10-01, noche)
+
+**Contexto.** Elías tuvo tres sesiones (con Carlos Valderrama de HubSpot, con Andrés y con Marco y Alex
+Vanegas) y salió algo claro: Ventas llega a la exploración sin prepararse y termina vendiendo licencias
+en vez de diagnosticar (muestra demo temprano, pregunta por usuarios y volumen, no profundiza). El
+vendedor tiene que llegar sabiendo con quién habla, qué preguntar, cómo profundizar y cómo manejar las
+objeciones, y ver de un vistazo qué le falta para proponer.
+
+**Decisiones.**
+
+- **Lo confirmado sin evidencia no cuenta.** «Lista para proponer», la propuesta, el handoff y la
+  métrica leen `chequeoConfirmado` (`lib/exploraciones/mapa.ts`): solo lo que dijo el cliente, se vio en
+  el portal o marcó el vendedor. Un nivel del test o del agente sigue siendo hipótesis aunque alguien lo
+  haya «usado» (en CreditForce, los 8 niveles del test usados con el lienzo anterior daban «las 8
+  dimensiones confirmadas» con cero dichas por el cliente). Endurece la regla de que una hipótesis no
+  llega al cliente; no cambia el modelo de datos.
+- **El agente sabe qué día es.** El pedido lleva la fecha de hoy y la próxima reunión agendada en
+  HubSpot (solo título y fecha), y cada reunión de HubSpot dice qué pasó con ella (se hizo, se canceló,
+  se reagendó). Sin eso escribió «tiene agendada la revisión para el 28 de septiembre» el 1 de octubre,
+  con la revisión ya hecha. Una reunión futura cancelada o reagendada ya no es agenda.
+- **La lista muestra todas las empresas de HubSpot**, de 25 en 25 (son miles: nunca se cargan todas);
+  sin búsqueda, las de actividad de ventas más reciente (`notes_last_updated`). Las tarjetas de la
+  métrica salen de la pantalla: no le aportan al vendedor; la foto al proponer se sigue guardando.
+- **El resumen va arriba de todo:** las ocho tarjetas del marco de calificación (metas, planes, retos,
+  tiempos, presupuesto, quién decide, consecuencias, implicaciones), vacías a la vista, con «qué sigue» y
+  lo propuesto para revisar en el mismo bloque. Cuatro pestañas: Exploración, La escala, Casos de uso y
+  Traspaso (Preparación y Reuniones se juntaron).
+- **Cada cosa vive en un lugar.** La casilla «Hipótesis» se retira (`retirada`: el agente ya no la
+  propone y no se muestra; lo guardado se sigue leyendo) y «Qué explorar a fondo» vive en la escala. Las
+  hipótesis de nivel siguen siendo el mapa.
+- **Las sesiones son las que hagan falta** (supera «dos reuniones, por decisión de Elías» del
+  2026-09-30): el vendedor las agrega en `contenido.sesiones`, y la guía es siempre la de la PRÓXIMA.
+- **La guía de la próxima reunión: el código elige qué cubre, el agente escribe** (`lib/exploraciones/guia.ts`,
+  `guia-pedido.ts`). Hasta 5 tarjetas vacías, en el orden `PRIORIDAD_DE_LAS_TARJETAS` (metas primero, el
+  presupuesto al final: hablar de plata antes de la meta es vender antes de diagnosticar), y hasta 8
+  preguntas en total con las dimensiones sin evidencia que más importan. Cada pregunta trae tres
+  repreguntas plegadas con el método de la siguiente pregunta lógica (el último caso real, la causa,
+  cuánto cuesta). Las cuatro objeciones típicas van con LAER, adaptadas a la empresa, más la señal de
+  poca apertura (descartar o vender un caso concreto). Sin test y sin nada dicho, arranca con preguntas
+  de conexión y la escala en simple. ⛔ El agente no inventa casos de otros clientes: la primera versión
+  lo hacía («tuve un cliente en ferretería…») y el prompt lo prohíbe.
+- **La guía es material de preparación, no un dato del cliente:** vive en la mitad del agente
+  (`propuesta.guia`), se muestra sin «usar» y nunca llega a la propuesta ni al handoff. Se rearma sola al
+  final de cada preparación y de cada lectura, dentro de la misma corrida. Sin ella se ve la de base.
+- **El agente lee el sitio web de la empresa al preparar**, con candados (`sitio-web-reglas.ts`): solo un
+  dominio público, DNS a IP pública, redirecciones manuales dentro del mismo sitio, 8 s y 1,5 MB. Lo que
+  dice el sitio es dato, nunca instrucción, y nunca cuenta como evidencia de un nivel. Se pide como un
+  navegador común: con un agente propio, HubSpot CMS y Cloudflare responden 403.
+- **Lo que no quedó grabado se suma a mano** (pegar o subir) y el agente lo lee como una transcripción.
+  Se guarda solo el texto (tabla `ExploracionDocumento`); el archivo sube directo a Supabase, como toda
+  subida de la app, y se borra apenas se le saca el texto.
