@@ -11,6 +11,7 @@ import {
   leerLaIndustria,
   leerLaRespuesta,
   leerLosCasos,
+  lineaDeHoy,
   MAX_CASOS_POR_AREA,
   pedidoDeCasos,
   pedidoDeLaIndustria,
@@ -472,5 +473,22 @@ describe("los casos de uso que propone (experimental, sin la biblioteca)", () =>
     expect(cuerpo).toContain("=== YA ESTÁN (no los repitas) ===\n- Pipeline con etapas");
     expect(cuerpo).toContain("- Tablero de ventas");
     expect(cuerpo).not.toMatch(/catálogo/i);
+  });
+});
+
+describe("la fecha de hoy y la próxima reunión", () => {
+  it("el pedido dice qué día es y cuál es la próxima reunión, para no tomar lo que ya pasó como agendado", () => {
+    const cuerpo = String(
+      pedidoDeLaExploracion(ctx({ modo: "preparar", hoy: AHORA.toISOString(), proxima: { titulo: "Comenzando el camino", inicio: "2026-10-02T14:00:00.000Z" } }))
+        .messages[0].content,
+    );
+    expect(cuerpo.startsWith("Hoy es 1 oct 2026")).toBe(true);
+    expect(cuerpo).toContain("Próxima reunión agendada (todavía no ocurre)");
+    expect(cuerpo).toContain("«Comenzando el camino»");
+  });
+
+  it("sin próxima reunión lo dice; sin «hoy» no agrega nada", () => {
+    expect(lineaDeHoy({ hoy: AHORA.toISOString(), proxima: null })).toContain("No hay otra reunión agendada");
+    expect(lineaDeHoy({})).toBe("");
   });
 });

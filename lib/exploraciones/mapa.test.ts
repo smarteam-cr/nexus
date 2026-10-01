@@ -7,7 +7,7 @@ import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import { exploracionParaLosCasos } from "./casos-de-uso";
 import { contenidoVacio, idDelItem, NIVELES, propuestaVacia, type EstadoDeExploracion, type EstimadoGuardado, type ItemPropuesto } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
-import { chequeoDelMapa, cuentaDelArea, loQueLaFrena, posicionesDelMapa } from "./mapa";
+import { chequeoConfirmado, chequeoDelMapa, cuentaDelArea, loQueLaFrena, posicionesDelMapa } from "./mapa";
 
 function dim(id: string, capa: ClaveDeCapa): DimensionDelLienzo {
   return {
@@ -131,5 +131,26 @@ describe("lo que lee el agente de los casos de uso", () => {
     expect(texto).toContain("- Dimensión 1.2 (Ventas): Lo que pide 1.2");
     expect(texto).toContain("- Cerrar más de 2 de 10 a 4 de 10");
     for (const interno of ["HIPOTESIS_INTERNA", "PRESUPUESTO_INTERNO", "NOTA_INTERNA", "NO_EXPLORADO_INTERNO", "Ana"]) expect(texto).not.toContain(interno);
+  });
+});
+
+describe("chequeoConfirmado: solo cuenta lo que tiene evidencia", () => {
+  const conFuente = (fuente: EstimadoGuardado["fuente"]) =>
+    estado({
+      contenido: {
+        ...contenidoVacio(),
+        chequeo: Object.fromEntries(DIMS.map((d) => [d.id, { nivel: "I" as Letra, fuente }])),
+      },
+    });
+
+  it("los 8 niveles del test, aunque se hayan «usado», no completan nada (el caso de CreditForce)", () => {
+    const c = chequeoConfirmado(ESCALA, conFuente("test"));
+    expect(c.completo).toBe(false);
+    expect(c.areas[0].dimensiones.every((d) => d.nivel === null)).toBe(true);
+    expect(chequeoConfirmado(ESCALA, conFuente("hipotesis")).completo).toBe(false);
+  });
+
+  it("lo que dijo el cliente, se vio en el portal o marcó el vendedor sí cuenta", () => {
+    for (const f of ["reunion", "portal", "vendedor"] as const) expect(chequeoConfirmado(ESCALA, conFuente(f)).completo).toBe(true);
   });
 });

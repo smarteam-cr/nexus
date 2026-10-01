@@ -8,7 +8,9 @@
  * ⚠ Las reuniones salen por el chokepoint (`getClientSessions`, solo las que ya ocurrieron) y su
  * transcripción se lee ENTERA (no con `fetchTranscriptContent`, que antepone el resumen y corta a
  * 5.000 caracteres: las citas no se podrían verificar y se perdería el final de la reunión, donde
- * está la decisión). Las reuniones de HubSpot que todavía no pasaron son agenda: nunca van al modelo.
+ * está la decisión). Las reuniones de HubSpot que todavía no pasaron son agenda: nunca van al modelo
+ * como fuente. De la próxima solo va su título y su fecha, en la línea de «hoy» (agente-pedido.ts).
+ * Una que ya pasó lleva lo que HubSpot dice que pasó con ella: se hizo, se canceló, se reagendó.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -27,6 +29,7 @@ import {
   testsDeLosContactos,
   type ActividadDeLaEmpresa,
   type ContactoDeHubspot,
+  type ResultadoDeReunion,
 } from "./hubspot";
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
@@ -52,6 +55,14 @@ export interface LoQueSeLeyo {
 const fecha = diaConAnio;
 
 const NOMBRE_DEL_TIPO: Record<string, string> = { NOTE: "Nota", CALL: "Llamada", MEETING: "Reunión en HubSpot", EMAIL: "Correo" };
+
+/** Lo que pasó con una reunión de HubSpot, para que el modelo no lea una cancelada como hecha. */
+const QUE_PASO: Record<ResultadoDeReunion, string> = {
+  hecha: "se hizo",
+  cancelada: "se canceló, no ocurrió",
+  reagendada: "se reagendó, no ocurrió ese día",
+  no_se_presento: "el cliente no se presentó",
+};
 
 function textoDeLaEmpresa(
   empresa: Awaited<ReturnType<typeof leerEmpresa>>,
@@ -179,7 +190,7 @@ export async function leerFuentes(opts: {
   actividadQueVa.slice(0, 25).forEach((a, i) => {
     fuentes.push({
       id: `H${i + 1}`,
-      etiqueta: `${NOMBRE_DEL_TIPO[a.tipo]}${a.ts ? ` del ${fecha(a.ts)}` : ""}${a.titulo ? `: ${a.titulo}` : ""}`,
+      etiqueta: `${NOMBRE_DEL_TIPO[a.tipo]}${a.ts ? ` del ${fecha(a.ts)}` : ""}${a.resultado ? ` (${QUE_PASO[a.resultado]})` : ""}${a.titulo ? `: ${a.titulo}` : ""}`,
       texto: a.texto,
     });
     if (marcar) leidas.hubspot.push(a.id);

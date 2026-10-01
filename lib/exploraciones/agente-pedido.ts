@@ -40,6 +40,7 @@ import {
 } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { VALIDADOR_ESTRICTO } from "./esquemas";
+import { diaConAnio, diaYHora } from "./fechas";
 import type { Fuente } from "./fuentes-tipos";
 
 export const MODELO_DE_LA_EXPLORACION = "claude-sonnet-4-6";
@@ -58,6 +59,23 @@ export interface ContextoDelPedido {
   perfil: string | null;
   contenido: ContenidoDeExploracion;
   fuentes: Fuente[];
+  /**
+   * Cuándo corre (ISO). Sin «hoy», el modelo no sabe si una reunión ya pasó: en CreditForce escribió
+   * «tiene agendada una sesión de revisión para el 28 de septiembre» el 1 de octubre, con la revisión
+   * ya hecha (HubSpot la marcaba completada).
+   */
+  hoy?: string;
+  /** La próxima reunión agendada en HubSpot: solo su título y su fecha, para no confundirla con lo que ya pasó. */
+  proxima?: { titulo: string; inicio: string } | null;
+}
+
+/** La línea de la fecha de hoy y de la próxima reunión, al principio del pedido. */
+export function lineaDeHoy(ctx: Pick<ContextoDelPedido, "hoy" | "proxima">): string {
+  if (!ctx.hoy) return "";
+  const proxima = ctx.proxima
+    ? ` · Próxima reunión agendada (todavía no ocurre): ${diaYHora(ctx.proxima.inicio)}, «${ctx.proxima.titulo}»`
+    : " · No hay otra reunión agendada en HubSpot";
+  return `Hoy es ${diaConAnio(ctx.hoy)}${proxima}\n`;
 }
 
 /** Las dimensiones que el agente puede nombrar: las de las áreas en juego (o todas, si no hay). */
@@ -298,6 +316,7 @@ function sistema(ctx: ContextoDelPedido): string {
 ${enfoque}
 
 Reglas estrictas:
+- Las fechas: cada fecha va con lo que pasó ese día, y lo que es de antes de hoy ya ocurrió (nunca «tiene agendada» una reunión que ya pasó). La reunión que viene es solo la que dice «Próxima reunión agendada». Una reunión de HubSpot que se canceló o se reagendó no ocurrió ese día.
 - Solo lo que las fuentes dicen de forma explícita. No deduzcas, no completes, no inventes cifras, nombres ni fechas. Ante la duda, no lo propongas. (La única excepción son las hipótesis de nivel al preparar: son deducciones a propósito, y van marcadas como hipótesis.)
 - Cada propuesta cita sus fuentes por id, y la cita es la frase EXACTA copiada de esa fuente. Una cita que no esté literal en su fuente se descarta. Las hipótesis de nivel citan las fuentes en que se basan; la frase, si la hay.
 - Los niveles se eligen por mejor ajuste contra las descripciones de la escala de abajo. Si hay duda entre dos niveles, el más bajo. «No sé» cuenta como el más bajo.
@@ -315,6 +334,7 @@ Los motivos para explorar: ${MOTIVOS_PARA_EXPLORAR.map((m) => `${m} (${ETIQUETA_
 export function pedidoDeLaExploracion(ctx: ContextoDelPedido): Anthropic.Messages.MessageCreateParamsNonStreaming {
   const tool = herramienta(ctx);
   const cuerpo =
+    lineaDeHoy(ctx) +
     `Empresa: ${ctx.empresa}${ctx.industria ? ` · Industria en HubSpot: ${ctx.industria}` : ""}${ctx.perfil ? ` · Perfil: ${ctx.perfil}` : ""}\n` +
     `Edición de la escala: ${ctx.escala.edicion?.nombre ?? "escala general"}\n\n` +
     `=== LO QUE YA ESTÁ CONFIRMADO ===\n${confirmadoComoTexto(ctx)}\n\n` +

@@ -28,7 +28,7 @@ export interface OpcionesDeCambio {
 export interface Lienzo {
   exp: ExploracionParaLaPantalla;
   escala: EscalaDelLienzo;
-  /** El chequeo de lo CONFIRMADO: lo que leen la propuesta, el handoff y «lista para proponer». */
+  /** El chequeo de lo confirmado CON EVIDENCIA: lo que leen la propuesta, el handoff y «lista para proponer». */
   chequeo: ResultadoDelChequeo;
   /**
    * El mapa de la escala: dónde parece estar cada dimensión (lo confirmado y, si no hay, lo que

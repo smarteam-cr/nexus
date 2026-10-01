@@ -9,7 +9,7 @@
  */
 import "server-only";
 import type { Prisma } from "@prisma/client";
-import { calcularChequeo, type ResultadoDelChequeo } from "@/lib/escala/chequeo";
+import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import type { Cierre, Despues, Escala } from "@/lib/escala/documento/tipos";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
@@ -19,6 +19,7 @@ import { aplicarOperaciones, cambioLoConfirmado, type EstadoDeExploracion, type 
 import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
 import type { ReunionSinLeer } from "./lectura";
+import { chequeoConfirmado } from "./mapa";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 import { bloqueParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
 import type { PosicionEnLaEscala } from "@/lib/escala/posicion";
@@ -79,15 +80,9 @@ export function escalaDeLaExploracion(general: Escala, estado: EstadoDeExploraci
   return escalaParaElLienzo(general, estado.edicion, { cierre: estado.perfilCierre, despues: estado.perfilDespues });
 }
 
-/** El chequeo de las áreas en juego, en el orden en que se eligieron. */
+/** El chequeo de lo confirmado con evidencia (mapa.ts › `chequeoConfirmado`). */
 export function chequeoDe(escala: EscalaDelLienzo, estado: EstadoDeExploracion): ResultadoDelChequeo {
-  const areas = estado.areas
-    .map((id) => escala.areas.find((a) => a.id === id)?.paraChequeo)
-    .filter((a): a is NonNullable<typeof a> => !!a);
-  const estimados = Object.fromEntries(
-    Object.entries(estado.contenido.chequeo).map(([id, e]) => [id, { nivel: e.nivel, riesgoALaVista: !!e.riesgo }]),
-  );
-  return calcularChequeo(areas, estimados);
+  return chequeoConfirmado(escala, estado);
 }
 
 export function validezPara(general: Escala, escala: EscalaDelLienzo): Validez {

@@ -9,8 +9,10 @@
  * Cada uno con su clase —evidencia o hipótesis— y su porqué. Con eso se calcula el nivel de cada
  * área como lo hace el chequeo; si entra una hipótesis, el área «parece» estar ahí.
  *
- * ⛔ Lo que leen la propuesta, el handoff y «lista para proponer» sigue siendo SOLO lo confirmado
- * (`chequeoDe` en servidor.ts): una hipótesis del agente no llega al cliente.
+ * ⛔ Lo que leen la propuesta, el handoff y «lista para proponer» es SOLO lo confirmado CON
+ * evidencia (`chequeoConfirmado`): una hipótesis no llega al cliente, ni aunque el vendedor la haya
+ * «usado» (en CreditForce, los 8 niveles del test usados con el lienzo anterior marcaban «las 8
+ * dimensiones confirmadas» con cero dichas por el cliente).
  */
 import { calcularChequeo, estaDebajo, type AreaDelChequeo, type ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
@@ -95,6 +97,22 @@ export function posicionesDelMapa(estado: EstadoDeExploracion, pendientes: reado
     }
   }
   return out;
+}
+
+/**
+ * El chequeo de lo CONFIRMADO CON EVIDENCIA, de las áreas en juego en el orden en que se eligieron:
+ * lo que dijo el cliente, se vio en el portal o marcó el vendedor. Un nivel del test o del agente
+ * sigue siendo hipótesis aunque se haya usado, y no cuenta. Es lo que leen la propuesta, el handoff,
+ * «lista para proponer» y la métrica.
+ */
+export function chequeoConfirmado(escala: EscalaDelLienzo, estado: Pick<EstadoDeExploracion, "areas" | "contenido">): ResultadoDelChequeo {
+  const enJuego = estado.areas.map((id) => escala.areas.find((a) => a.id === id)?.paraChequeo).filter((a): a is NonNullable<typeof a> => !!a);
+  const estimados = Object.fromEntries(
+    Object.entries(estado.contenido.chequeo)
+      .filter(([, e]) => !esFuenteDeHipotesis(e.fuente))
+      .map(([id, e]) => [id, { nivel: e.nivel, riesgoALaVista: !!e.riesgo }]),
+  );
+  return calcularChequeo(enJuego, estimados);
 }
 
 /** El chequeo de las áreas en juego con lo que dibuja el mapa (lo confirmado y, si no hay, lo propuesto). */

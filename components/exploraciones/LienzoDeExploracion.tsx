@@ -26,9 +26,8 @@ import {
   type Validez,
 } from "@/lib/exploraciones/contenido";
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
-import { chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
+import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
-import { calcularChequeo } from "@/lib/escala/chequeo";
 import { LienzoContexto, type Lienzo, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
 import PasoCasosDeUso from "./PasoCasosDeUso";
 import PasoEscala from "./PasoEscala";
@@ -183,15 +182,8 @@ export default function LienzoDeExploracion({
     return p;
   }, [router]);
 
-  const chequeo = useMemo(() => {
-    const areas = exp.estado.areas
-      .map((id) => escala.areas.find((a) => a.id === id)?.paraChequeo)
-      .filter((a): a is NonNullable<typeof a> => !!a);
-    const estimados = Object.fromEntries(
-      Object.entries(exp.estado.contenido.chequeo).map(([id, e]) => [id, { nivel: e.nivel, riesgoALaVista: !!e.riesgo }]),
-    );
-    return calcularChequeo(areas, estimados);
-  }, [exp.estado, escala]);
+  // Lo confirmado CON evidencia: lo mismo que lee el servidor para la propuesta y el handoff.
+  const chequeo = useMemo(() => chequeoConfirmado(escala, exp.estado), [exp.estado, escala]);
 
   // Lo pendiente que todavía tiene dónde ir: lo de una dimensión o un criterio que ya no está no se cuenta ni se usa.
   const pendientes = useMemo(() => propuestaVigente(exp.estado).filter((it) => destinoValido(it.destino, validez)), [exp.estado, validez]);

@@ -28,7 +28,7 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
   return [
     {
       id: "dimensiones",
-      titulo: "Dónde está cada equipo: las 8 dimensiones de cada área, confirmadas",
+      titulo: "Dónde está cada equipo: las 8 dimensiones de cada área, con evidencia del cliente",
       cumplido: estado.areas.length > 0 && chequeo.completo,
     },
     { id: "meta", titulo: "Al menos una meta en cifras", cumplido: (c.metas ?? []).some(metaEnCifras) },

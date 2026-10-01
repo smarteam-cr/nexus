@@ -202,7 +202,31 @@ export interface ActividadDeHubspot {
   ts: number;
   titulo: string;
   texto: string;
+  /** El resultado de una reunión que ya pasó, si HubSpot lo dice: se hizo, se canceló, se reagendó. */
+  resultado?: ResultadoDeReunion;
 }
+
+export type ResultadoDeReunion = "hecha" | "cancelada" | "reagendada" | "no_se_presento";
+
+/** El resultado de la reunión en HubSpot (`meetingOutcome`), en palabras de la exploración. */
+export function resultadoDeReunion(outcome: unknown): ResultadoDeReunion | undefined {
+  switch (typeof outcome === "string" ? outcome.toUpperCase() : "") {
+    case "COMPLETED":
+      return "hecha";
+    case "CANCELED":
+    case "CANCELLED":
+      return "cancelada";
+    case "RESCHEDULED":
+      return "reagendada";
+    case "NO_SHOW":
+      return "no_se_presento";
+    default:
+      return undefined;
+  }
+}
+
+/** Una reunión que no ocurrió como estaba agendada: ni es agenda ni es algo que el cliente dijo. */
+export const reunionQueNoOcurrio = (r: ResultadoDeReunion | undefined) => r === "cancelada" || r === "reagendada" || r === "no_se_presento";
 
 export interface ActividadDeLaEmpresa {
   /** Lo que ya pasó, más reciente primero. */
@@ -276,13 +300,17 @@ function aActividad(e: V1): ActividadDeHubspot | "tapado" | null {
   // test no trae descripción). Si ya pasó y no tiene texto, la descarta leerActividad.
   if (!texto && tipo !== "MEETING") return null;
   if (tipo === "NOTE" && esNotaDeLaFicha(texto)) return null;
-  const ts = typeof e.engagement?.timestamp === "number" ? e.engagement.timestamp : 0;
+  // De una reunión cuenta cuándo EMPIEZA (no cuándo se agendó).
+  const inicio = tipo === "MEETING" && typeof m.startTime === "number" ? (m.startTime as number) : null;
+  const ts = inicio ?? (typeof e.engagement?.timestamp === "number" ? e.engagement.timestamp : 0);
+  const resultado = tipo === "MEETING" ? resultadoDeReunion(m.meetingOutcome) : undefined;
   return {
     id,
     tipo: tipo as ActividadDeHubspot["tipo"],
     ts,
     titulo,
     texto: texto.slice(0, 4000),
+    ...(resultado ? { resultado } : {}),
   };
 }
 
@@ -324,9 +352,10 @@ export async function leerActividad(companyId: string, contactos: readonly Conta
     }
     if (!a || vistos.has(a.id)) continue;
     vistos.add(a.id);
-    const inicio = typeof e.metadata?.startTime === "number" ? (e.metadata.startTime as number) : a.ts;
-    if (a.tipo === "MEETING" && inicio > ahora.getTime()) {
-      agenda.push({ id: a.id, titulo: a.titulo || "Reunión", inicio: new Date(inicio).toISOString() });
+    if (a.tipo === "MEETING" && a.ts > ahora.getTime()) {
+      // Una reunión futura que se canceló o se reagendó no es agenda: la nueva fecha es otra reunión.
+      if (reunionQueNoOcurrio(a.resultado)) continue;
+      agenda.push({ id: a.id, titulo: a.titulo || "Reunión", inicio: new Date(a.ts).toISOString() });
       continue;
     }
     if (!a.texto) continue;

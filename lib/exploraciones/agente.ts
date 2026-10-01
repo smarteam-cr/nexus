@@ -196,6 +196,8 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       perfil: estado.perfilCierre && estado.perfilDespues ? `venta ${estado.perfilCierre} · relación ${estado.perfilDespues}` : null,
       contenido: estado.contenido,
       fuentes: leido.fuentes,
+      hoy: new Date().toISOString(),
+      proxima: leido.agenda[0] ?? null,
     };
 
     const delTest = propuestasDelTest(leido.tests, ctx, runId);
