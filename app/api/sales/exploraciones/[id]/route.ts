@@ -17,9 +17,9 @@ import {
   escalaParaExplorar,
   leerExploracion,
   paraLaPantalla,
-  paraLaPantallaConLoSinLeer,
   SQL_DE_EXPLORACIONES,
 } from "@/lib/exploraciones/servidor";
+import { paraLaPantallaCompleta } from "@/lib/exploraciones/pantalla";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: `Falta aplicar ${SQL_DE_EXPLORACIONES} y reiniciar.` }, { status: 503 });
   }
   if (lectura.estado === "no-existe") return NextResponse.json({ error: "Esa exploración no existe." }, { status: 404 });
-  return NextResponse.json({ exploracion: await paraLaPantallaConLoSinLeer(lectura.fila) });
+  return NextResponse.json({ exploracion: await paraLaPantallaCompleta(lectura.fila) });
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {

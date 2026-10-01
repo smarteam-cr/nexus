@@ -18,7 +18,6 @@ import { listaParaProponer, queSigue, type PuntoDeCalidad } from "./calidad";
 import { aplicarOperaciones, cambioLoConfirmado, type EstadoDeExploracion, type Operacion, type Validez } from "./contenido";
 import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
-import { reunionesSinLeer } from "./fuentes";
 import type { ReunionSinLeer } from "./lectura";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 
@@ -254,6 +253,8 @@ export interface ExploracionParaLaPantalla {
   /** Las reuniones que el agente todavía no leyó. Solo al abrir y al recargar (cuesta una consulta):
    *  la respuesta de un cambio no lo trae y la pantalla conserva lo que tenía. */
   sinLeer?: ReunionSinLeer[];
+  /** Los proyectos cuyo handoff ya la recibe (lib/exploraciones/handoff.ts). Igual que `sinLeer`. */
+  proyectos?: { id: string; nombre: string; clientId: string }[];
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;
@@ -296,18 +297,3 @@ export async function exploracionParaLaPropuesta(
   return { estado, escala, chequeo: chequeoDe(escala, estado) };
 }
 
-/** Lo mismo, con las reuniones sin leer (para abrir el lienzo y para recargarlo). */
-export async function paraLaPantallaConLoSinLeer(fila: FilaDeExploracion): Promise<ExploracionParaLaPantalla> {
-  const exp = paraLaPantalla(fila);
-  const sinLeer = await reunionesSinLeer({
-    clientId: fila.client.id,
-    creadaEn: fila.createdAt,
-    propuesta: exp.estado.propuesta,
-    // La foto ENTERA: las agendadas que ya pasaron son justamente las que se avisan como «sin leer».
-    leido: leerLoLeido(fila.test),
-  }).catch((e) => {
-    console.error("[exploraciones] no se pudieron contar las reuniones sin leer", e);
-    return [];
-  });
-  return { ...exp, sinLeer };
-}

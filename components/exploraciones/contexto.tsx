@@ -32,6 +32,8 @@ export interface Lienzo {
   pendientes: ItemPropuesto[];
   /** Las reuniones que el agente todavía no leyó (al abrir y al recargar). */
   sinLeer: ReunionSinLeer[];
+  /** Los proyectos cuyo handoff ya recibe la exploración (al abrir y al recargar). */
+  proyectos: NonNullable<ExploracionParaLaPantalla["proyectos"]>;
   puedeEditar: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;

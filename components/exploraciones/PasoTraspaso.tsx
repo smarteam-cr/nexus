@@ -7,11 +7,12 @@
  * mirar, no es evidencia», como dice la escala. El diagnóstico del CSE no cambia: lo arma completo
  * desde ahí. Lo interno va a las secciones internas del handoff, nunca a un documento del cliente.
  */
+import Link from "next/link";
 import { CASILLAS } from "@/lib/exploraciones/casillas";
 import { useLienzo } from "./contexto";
 
 export default function PasoTraspaso() {
-  const { exp } = useLienzo();
+  const { exp, proyectos } = useLienzo();
   const c = exp.estado.contenido.casillas;
   const llenas = CASILLAS.filter((d) => c[d.clave] !== undefined);
   return (
@@ -26,6 +27,25 @@ export default function PasoTraspaso() {
           <li>Las metas en cifras, quién decide y a quién afecta, qué pasa si no actúa y lo que falta para Funcional.</li>
           <li>Lo interno (presupuesto, hipótesis, lo que nadie exploró, la apertura a la asesoría) va solo a las secciones internas del handoff.</li>
         </ul>
+      </section>
+      <section className="space-y-2 rounded-xl border border-line bg-surface p-4">
+        <h3 className="text-sm font-semibold text-fg">A qué proyecto le llega</h3>
+        {proyectos.length === 0 ? (
+          <p className="text-sm text-fg-muted">
+            Todavía a ninguno. Le llega al proyecto que nace del negocio de la propuesta o, si no hay ese enlace, al primer proyecto de Customer Success de la empresa en los seis meses siguientes. Nunca a uno de desarrollo ni de sitio web.
+          </p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {proyectos.map((p) => (
+              <li key={p.id}>
+                <Link href={`/clients/${p.clientId}?tab=${p.id}`} className="text-brand-light hover:underline">
+                  {p.nombre}
+                </Link>
+                <span className="text-xs text-fg-muted"> · aparece en el contexto de su handoff</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
       <section className="space-y-2 rounded-xl border border-line bg-surface p-4">
         <h3 className="text-sm font-semibold text-fg">Lo que hoy tiene para traspasar</h3>

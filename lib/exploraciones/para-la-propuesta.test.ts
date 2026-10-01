@@ -14,6 +14,7 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import { leerPosicion } from "@/lib/escala/posicion";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { escalaParaElLienzo, type EscalaDelLienzo } from "./escala-del-lienzo";
+import { bloqueParaElHandoff, TOPE_DEL_BLOQUE_DEL_HANDOFF } from "./para-el-handoff";
 import { bloqueParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
 
 const general = parsearEscala(leerArchivoDeLaEscala("escala"));
@@ -147,5 +148,42 @@ describe("el bloque de contexto para la generación", () => {
     const b = bloqueParaLaPropuesta({ estado: e, escala, chequeo, conEscala: false });
     expect(b).not.toMatch(/Deficiente|Funcional|Inicial|nivel|Escala/);
     expect(b).toContain("Lo que le falta hoy");
+  });
+});
+
+describe("el bloque del handoff", () => {
+  const escala = escalaParaElLienzo(general, null, PERFIL);
+  const base = escala.areas.find((a) => a.id === "1")!.dimensiones.find((d) => d.capa === "base" && d.aplica)!;
+  const e = estadoCon(nivelesDeVentas(escala, base.id), {
+    casillas: {
+      metas: [{ que: "Subir la tasa de cierre", actual: "dos de cada diez", objetivo: "cuatro de cada diez" }],
+      consecuencias: ["Recortan el presupuesto de marketing"],
+      hipotesis: ["Creemos que HIPOTESIS_INTERNA"],
+      presupuesto: "PRESUPUESTO_INTERNO",
+      autoridad: [{ nombre: "Ana", rol: "firma", nota: "NOTA_INTERNA" }],
+      apertura: { valor: "si", porQue: "APERTURA_INTERNA" },
+    },
+  });
+  e.contenido.chequeo[base.id] = { nivel: "D", fuente: "reunion", evidencia: "Cada vendedor en su planilla" };
+  const b = bloqueParaElHandoff({ estado: e, escala, chequeo: chequeoDe(escala, e) });
+
+  it("va rotulado ESTIMADO, con el nivel de cada dimensión y de dónde salió", () => {
+    expect(b.split("\n")[0]).toMatch(/ESTIMADO: sirve para saber dónde mirar, no es evidencia/);
+    expect(b).toContain(`· ${base.nombre}: Deficiente (`);
+    expect(b).toContain("«Cada vendedor en su planilla»");
+    expect(b).toContain("Subir la tasa de cierre: de dos de cada diez a cuatro de cada diez");
+  });
+
+  it("lo interno va al final, debajo de «SOLO INTERNO», y en ningún otro lado", () => {
+    const corte = b.indexOf("## SOLO INTERNO");
+    expect(corte).toBeGreaterThan(0);
+    for (const interno of ["HIPOTESIS_INTERNA", "PRESUPUESTO_INTERNO", "NOTA_INTERNA", "APERTURA_INTERNA"]) {
+      expect(b.indexOf(interno), interno).toBeGreaterThan(corte);
+    }
+  });
+
+  it("tiene tope", () => {
+    const largo = estadoCon({}, { casillas: { consecuencias: Array.from({ length: 40 }, (_, i) => `Consecuencia ${i} ${"x".repeat(300)}`) } });
+    expect(bloqueParaElHandoff({ estado: largo, escala, chequeo: chequeoDe(escala, largo) }).length).toBeLessThanOrEqual(TOPE_DEL_BLOQUE_DEL_HANDOFF + 20);
   });
 });

@@ -5,7 +5,8 @@
  *
  * Sección "Contexto" del proyecto (reemplaza el bloque suelto "Detectado en HubSpot" +
  * selección de sesiones + fuentes manuales). Colapsable (toggle) y en 3 columnas:
- * HubSpot · Google Meet · Fuentes manuales. Es la materia prima que los agentes usan al
+ * HubSpot · Google Meet · Fuentes manuales, más una cuarta —«Exploración de venta»— cuando al
+ * proyecto le corresponde una (ExploracionDeVentaColumn). Es la materia prima que los agentes usan al
  * generar. Por defecto EXPANDIDO si el handoff no se generó (hace falta ver/curar las
  * fuentes), y COLAPSADO una vez generado (ya pesa menos); el toggle manual manda.
  *
@@ -19,6 +20,7 @@ import HubspotTimelinePanel from "./HubspotTimelinePanel";
 import SessionSelectionReview from "./SessionSelectionReview";
 import FuentesManualesColumn from "./FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "./context-column";
+import { ExploracionDeVentaResumen, useExploracionDeVenta } from "./ExploracionDeVentaColumn";
 
 export default function ProjectContextSection({
   projectId,
@@ -53,9 +55,13 @@ export default function ProjectContextSection({
   const [manualCount, setManualCountState] = useState(0);
   const setManualCount = useCallback((n: number) => setManualCountState((c) => (c === n ? c : n)), []);
 
+  // La exploración de venta de la empresa, si le corresponde a este proyecto: una fuente más.
+  const exploracion = useExploracionDeVenta(projectId);
+  const exploracionCount = exploracion ? 1 : 0;
+
   // "Alimentan" = todo lo que entra al handoff (mismo criterio en las 3 columnas). Las
   // excluidas a mano (Meet + HubSpot) se cuentan aparte (no alimentan, pero son gestionables).
-  const feedTotal = hubspotCount + meetCount + manualCount;
+  const feedTotal = hubspotCount + meetCount + manualCount + exploracionCount;
   const excludedTotal = meetExcluded + hubspotExcluded;
   const dot = (color: string) => <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />;
 
@@ -79,6 +85,9 @@ export default function ProjectContextSection({
           <span className="inline-flex items-center gap-1" title="HubSpot (alimentan)">{dot("#ff7a59")}{hubspotCount}</span>
           <span className="inline-flex items-center gap-1" title="Google Meet (alimentan)">{dot("#16a34a")}{meetCount}</span>
           <span className="inline-flex items-center gap-1" title="Fuentes manuales">{dot("#7c6df2")}{manualCount}</span>
+          {exploracion && (
+            <span className="inline-flex items-center gap-1" title="Exploración de venta">{dot("#d97706")}{exploracionCount}</span>
+          )}
         </span>
         <span className="ml-auto text-xs text-fg-muted">{open ? "Colapsar" : "Expandir"}</span>
       </button>
@@ -91,7 +100,7 @@ export default function ProjectContextSection({
           generación; <span className="font-medium text-fg-secondary">excluye</span> lo que sea de otro proyecto. En HubSpot,
           el material de la era del proyecto; el resto queda como trasfondo.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className={`grid grid-cols-1 gap-3 ${exploracion ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"}`}>
           <ContextColumn icon={CTX_ICONS.hubspot} color="#ff7a59" title="HubSpot" count={hubspotCount}>
             <HubspotTimelinePanel
               projectId={projectId}
@@ -120,6 +129,12 @@ export default function ProjectContextSection({
               onCount={setManualCount}
             />
           </ContextColumn>
+
+          {exploracion && (
+            <ContextColumn icon={CTX_ICONS.note} color="#d97706" title="Exploración de venta" count={exploracionCount}>
+              <ExploracionDeVentaResumen datos={exploracion} />
+            </ContextColumn>
+          )}
         </div>
       </div>
     </div>

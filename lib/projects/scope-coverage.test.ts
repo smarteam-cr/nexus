@@ -230,6 +230,10 @@ const CRITICOS = [
  */
 const DEUDA: Record<string, number> = {
   "lib/canvas/load-canvas-context.ts": 1,
+  // Misma necesidad: «¿hubo otro proyecto de CS antes?» cuenta los CERRADOS (un ciclo cerrado igual
+  // fue el primero), que `clasificable` excluye. Solo compone el átomo del sentinel; su razón, en
+  // scope-coverage.ts.
+  "lib/exploraciones/handoff.ts": 1,
 };
 
 describe("ratchet — el filtro no vuelve a escribirse a mano", () => {

@@ -99,6 +99,17 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   },
 
   // ── Los exentos, cada uno con su motivo ────────────────────────────────────
+  "lib/exploraciones/handoff.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: pregunta si hubo OTRO proyecto de Customer Success " +
+      "antes de éste, dentro de la ventana de la exploración de venta, para que un ciclo posterior " +
+      "no reciba lo que se habló para la primera venta. Cualquiera que haya existido cuenta, activo " +
+      "o cerrado (un ciclo cerrado igual fue el primero): un criterio de alcance que esconda los " +
+      "cerrados sería el bug. Solo deja afuera el contenedor de «Información del cliente», con la " +
+      "constante de kind.ts. La otra consulta del archivo (qué proyectos reciben la exploración, " +
+      "para el lienzo) sí usa el criterio `clasificable`.",
+  },
   "app/api/clients/[id]/projects/[projectId]/route.ts": {
     modo: "exento",
     razon:
