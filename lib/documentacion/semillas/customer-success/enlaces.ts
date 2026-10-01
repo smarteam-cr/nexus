@@ -9,6 +9,13 @@ import { mencion, type MencionASembrar } from "../bloques";
 
 const PAGINAS = {
   customerSuccess: { slug: "customer-success", titulo: "Customer Success", icono: "🌱" },
+  // 2026-09-30: la puerta de entrada para quien llega, y la práctica de Nexus para un CSE.
+  primerosDias: {
+    slug: "primeros-dias-en-customer-success",
+    titulo: "Tus primeros días en Customer Success",
+    icono: "👋",
+  },
+  nexusCse: { slug: "nexus-para-un-cse", titulo: "Nexus para un CSE, paso a paso", icono: "🧑‍💻" },
   rolCse: { slug: "rol-cse", titulo: "Customer Success Executive (CSE)", icono: "🛠️" },
   rolCsl: { slug: "rol-csl", titulo: "Customer Success Lead (CSL)", icono: "🛡️" },
   guiaCse: { slug: "guia-de-cse", titulo: "Guía de CSE", icono: "🎯" },
@@ -31,6 +38,14 @@ const PAGINAS = {
   escala: { slug: "escala-de-rendimiento", titulo: "Escala de rendimiento", icono: "📈" },
   nexus: { slug: "como-funciona-nexus", titulo: "¿Cómo funciona Nexus?", icono: "🧭" },
   trabajar: { slug: "como-trabajar-en-smarteam", titulo: "¿Cómo trabajar en Smarteam?", icono: "🤝" },
+  empresa: { slug: "la-empresa", titulo: "La empresa", icono: "🏛️" },
+  proposito: { slug: "proposito-mision-y-valores", titulo: "Propósito, misión y valores", icono: "💡" },
+  historia: { slug: "historia-e-hitos", titulo: "Historia e hitos", icono: "📜" },
+  servicios: { slug: "servicios", titulo: "Servicios", icono: "🧩" },
+  casos: { slug: "casos-de-exito", titulo: "Casos de éxito", icono: "🏆" },
+  herramientas: { slug: "herramientas", titulo: "Herramientas", icono: "🔧" },
+  condiciones: { slug: "horario-y-condiciones", titulo: "Horario y condiciones", icono: "⏰" },
+  equipo: { slug: "el-equipo", titulo: "El equipo", icono: "👥" },
 } as const;
 
 export type ClaveDePagina = keyof typeof PAGINAS;

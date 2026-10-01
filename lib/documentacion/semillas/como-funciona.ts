@@ -55,11 +55,11 @@ function bloques(): BloqueGuardado[] {
       "2",
       tarjeta(
         "Escuchar grabaciones para entender qué se vendió",
-        "El traspaso se arma leyendo las sesiones de venta del proyecto. En vez de repasar seis reuniones, revisás un documento y corregís lo que esté mal.",
+        "El traspaso se arma leyendo las sesiones de venta del proyecto. En vez de repasar seis reuniones, revisas un documento y corriges lo que esté mal.",
       ),
       tarjeta(
         "Rearmar el cronograma desde cero en cada proyecto",
-        "El plan se propone a partir de lo que se vendió y del tipo de proyecto. Vos ajustás fechas y responsables; no partís de una hoja en blanco.",
+        "El plan se propone a partir de lo que se vendió y del tipo de proyecto. Tú ajustas fechas y responsables; no partes de una hoja en blanco.",
       ),
       tarjeta(
         "Perder el contexto cuando alguien cambia de proyecto",
@@ -81,19 +81,19 @@ function bloques(): BloqueGuardado[] {
       "2",
       tarjeta(
         "No es el CRM",
-        "Las empresas, los tratos y la etapa de cada proyecto se manejan en HubSpot. La etapa la movés allá; Nexus la refleja, y puede sugerirte un cambio que vos confirmás con un clic.",
+        "Las empresas, los tratos y la etapa de cada proyecto se manejan en HubSpot. La etapa la mueves allá, y Nexus la refleja.",
       ),
       tarjeta(
         "No es contabilidad",
         "Cobranza controla a quién le toca cobrar y cómo va cada cobro. Las facturas y la conciliación viven en Odoo y Mercury.",
       ),
       tarjeta(
-        "No decide por vos",
+        "No decide por ti",
         "Todo lo que escribe un agente es un borrador. Nada se publica al cliente ni se da por bueno sin que una persona lo revise.",
       ),
       tarjeta(
         "No manda correos solo",
-        "Cuando redacta un mensaje de cobro, lo deja listo para que vos lo edites y lo envíes.",
+        "Cuando redacta un mensaje de cobro, lo deja listo para que tú lo edites y lo envíes.",
       ),
     ),
 
@@ -103,7 +103,7 @@ function bloques(): BloqueGuardado[] {
 
     titulo(2, "Cómo avanza un proyecto"),
     parrafo(
-      "Un proyecto de implementación recorre estas etapas en orden. La etapa la mueve el equipo en HubSpot y Nexus la refleja; cuando Nexus nota que el proyecto ya avanzó, te sugiere el cambio y vos lo confirmás.",
+      "Un proyecto de implementación recorre estas etapas en orden. La etapa la mueve el CSE en HubSpot y Nexus la refleja.",
     ),
     parrafo(
       "Las etapas con documento son en las que hay algo que abrir y trabajar. Las que aparecen como hito no tienen documento a propósito: se marcan cuando ocurren y ya.",
@@ -120,16 +120,16 @@ function bloques(): BloqueGuardado[] {
     parrafo(
       "Un agente es una tarea de inteligencia artificial con un encargo concreto: leer cierto material y escribir cierto documento. No es un chat: no se conversa con él, se dispara y devuelve un borrador.",
     ),
-    parrafo("Algunos los disparás vos con el botón «Generar» del documento. Otros corren solos cuando entra una reunión nueva."),
+    parrafo("Algunos los disparas tú con el botón «Generar» del documento. Otros corren solos cuando entra una reunión nueva."),
     aviso("advertencia", "Lo que escribe un agente SIEMPRE es un borrador. Se revisa antes de darlo por bueno, y con más razón antes de que lo vea el cliente."),
     bloqueVivo("agentes"),
 
     titulo(2, "El asistente que conversa sobre un documento"),
     parrafo(
-      "Al costado de un documento hay un chat. Le pedís un cambio en palabras —«corré la fase 2 dos semanas», «sacá esta sección»— y te dice qué es posible y qué implica antes de tocar nada.",
+      "Al costado de un documento hay un chat. Le pides un cambio en palabras —«corre la fase 2 dos semanas», «saca esta sección»— y te dice qué es posible y qué implica antes de tocar nada.",
     ),
     parrafo(
-      "El asistente nunca escribe solo: cuando estás de acuerdo, «Aplicar» pasa por el editor de siempre y respeta tus permisos. Si no podés editar ese documento, tampoco puede el chat en tu nombre.",
+      "El asistente nunca escribe solo: cuando estás de acuerdo, «Aplicar» pasa por el editor de siempre y respeta tus permisos. Si no puedes editar ese documento, tampoco puede el chat en tu nombre.",
     ),
 
     titulo(2, "De dónde salen las reuniones"),
@@ -146,7 +146,7 @@ function bloques(): BloqueGuardado[] {
     ),
     titulo(4, "Qué escribe"),
     parrafo(
-      "Crea el proyecto al dar un traspaso y lo asocia a la empresa y al trato; marca a la empresa como en onboarding; actualiza el estado y la etapa del proyecto cuando el CSE confirma la sugerencia; cambia el CSE encargado (solo liderazgo); marca un proyecto como interno; y deja borradores de publicaciones sociales.",
+      "Crea el proyecto al dar un traspaso y lo asocia a la empresa y al trato; marca a la empresa como en onboarding; actualiza el estado del proyecto cuando el CSE confirma la sugerencia; cambia el CSE encargado (solo liderazgo); marca un proyecto como interno; y deja borradores de publicaciones sociales.",
     ),
     titulo(4, "Qué NO toca"),
     parrafo(
@@ -169,9 +169,9 @@ function bloques(): BloqueGuardado[] {
 
     titulo(2, "Con qué vara medimos a un cliente"),
     parrafoRico(
-      "El diagnóstico que se le entrega al cliente no puntúa a ojo: usa la Escala de Rendimiento, que define cinco niveles y ocho dimensiones por departamento. El reglamento completo está en ",
+      "El diagnóstico que se le entrega al cliente no puntúa a ojo: usa la Escala de Rendimiento, que define cinco niveles y ocho dimensiones por departamento. Para entenderla: ",
       mencion("escala-de-rendimiento", "Escala de rendimiento", "📈"),
-      ".",
+      ". La versión vigente, criterio por criterio, está en la sección Escala del menú: ahí también se comenta lo que no se entiende o no calza con un cliente.",
     ),
 
     titulo(2, "Los roles del equipo"),
@@ -192,7 +192,7 @@ function bloques(): BloqueGuardado[] {
       tarjeta(
         "Conocimientos",
         "La biblioteca que leen los agentes cuando arman un documento: reglamentos, catálogos y material de referencia, ordenado por etiquetas.",
-        "Si querés que la IA tenga en cuenta algo, va acá.",
+        "Si quieres que la IA tenga en cuenta algo, va acá.",
       ),
       tarjeta(
         "HubSpot",
@@ -219,6 +219,11 @@ function bloques(): BloqueGuardado[] {
     titulo(2, "Seguir leyendo"),
     parrafoRico("La portada de toda la base: ", mencion("inicio", "Inicio", "🏠"), "."),
     parrafoRico(
+      "Cómo se lleva una cuenta en Nexus, paso a paso: ",
+      mencion("nexus-para-un-cse", "Nexus para un CSE, paso a paso", "🧑‍💻"),
+      ".",
+    ),
+    parrafoRico(
       "Cómo nos comunicamos puertas adentro y qué se espera de cada reunión: ",
       mencion("como-trabajar-en-smarteam", "¿Cómo trabajar en Smarteam?", "🤝"),
       ". El recorrido completo de una cuenta, etapa por etapa: ",
@@ -230,7 +235,7 @@ function bloques(): BloqueGuardado[] {
 
     divisor(),
     parrafoRico([
-      "¿Falta algo o quedó viejo? Esta página se edita como cualquier otra: pedile a un líder que la desbloquee y escribí.",
+      "¿Falta algo o quedó viejo? Esta página se edita como cualquier otra: pídele a un líder que la desbloquee y escribe. O coméntala: marca el texto y deja tu comentario.",
       { italica: true },
     ]),
   ];

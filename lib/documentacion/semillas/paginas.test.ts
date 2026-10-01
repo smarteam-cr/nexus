@@ -21,6 +21,7 @@ import { LIDERES } from "./base/lideres";
 import { HERRAMIENTAS } from "./base/recursos";
 import type { PaginaSembrada } from "./bloques";
 import { leerReglamentoV5 } from "./escala-v5";
+import { leerEscalaVigente } from "./escala-vigente";
 import { FUENTES_VIVAS, SLUG_DE_INICIO, TIPOS_DE_BLOQUE, type BloqueGuardado } from "../tipos";
 import { textoDeBloques } from "../texto";
 
@@ -242,10 +243,15 @@ describe("«¿Cómo funciona Nexus?»", () => {
   });
 
   it("⚠ corrige lo que el manual viejo decía mal sobre HubSpot", () => {
-    // Hasta el 2026-07-30 Nexus deducía la etapa; hoy la manda HubSpot y Nexus solo sugiere.
-    expect(texto).toContain("La etapa la movés allá");
-    expect(texto).toContain("confirmás");
+    // Hasta el 2026-07-30 Nexus deducía la etapa; hoy la manda HubSpot y el CSE la mueve allá.
+    expect(texto).toContain("La etapa la mueves allá");
     expect(texto).not.toContain("Nexus no mueve la etapa");
+  });
+
+  it("⚠ no promete una sugerencia de etapa que la app todavía no muestra (2026-09-30)", () => {
+    for (const p of [construirComoFunciona(), construirGuiaCse()]) {
+      expect(textoDeBloques(p.bloques), p.slug).not.toMatch(/te sugiere el cambio|sugerirte un cambio/);
+    }
   });
 
   it("dice que lo que escribe un agente es un borrador", () => {
@@ -255,7 +261,8 @@ describe("«¿Cómo funciona Nexus?»", () => {
 
 describe("«Escala de rendimiento»", () => {
   const pagina = construirEscala();
-  const reglamento = leerReglamentoV5();
+  const vigente = leerEscalaVigente();
+  const texto = textoDeBloques(pagina.bloques);
 
   it("tiene su dirección, su título y sus tres áreas como subpáginas", () => {
     expect(pagina.slug).toBe("escala-de-rendimiento");
@@ -268,36 +275,41 @@ describe("«Escala de rendimiento»", () => {
     ]);
   });
 
-  it("la página principal explica el piso y la brecha", () => {
-    const texto = textoDeBloques(pagina.bloques);
+  it("⭐ nombra la versión VIGENTE, la que publica Nexus, no la 5.2.0 de la base vieja", () => {
+    expect(vigente.version).not.toBe("5.2.0");
+    expect(texto).toContain(`versión ${vigente.version}`);
+    expect(texto).not.toContain("5.2.0");
+  });
+
+  it("explica el piso, la brecha, el puntaje y las ediciones por industria", () => {
     expect(texto).toContain("El piso, no el promedio");
     expect(texto).toContain("Funcional es la base");
     expect(texto).toContain("Base más alta que producción");
-    expect(texto).toContain(`versión ${reglamento.version}`);
+    expect(texto).toContain("El puntaje de 0 a 100");
+    for (const edicion of ["Ecommerce y retail", "Banca y servicios financieros", "Educación", "Inmobiliaria"]) {
+      expect(texto, edicion).toContain(edicion);
+    }
   });
 
-  it("cada subpágina trae sus ocho dimensiones con su pregunta", () => {
-    for (const [i, hija] of (pagina.hijas ?? []).entries()) {
-      const area = reglamento.areas[i];
-      const texto = textoDeBloques(hija.bloques);
-      for (const d of area.dimensiones) {
-        expect(texto, `${hija.slug} · ${d.id}`).toContain(`${d.id} ${d.nombre}`);
-        expect(texto, `${hija.slug} · ${d.id} (pregunta)`).toContain(d.pregunta);
+  it("⛔ ya no dice que tres dimensiones no tienen Funcional (la escala vigente las tiene todas)", () => {
+    for (const p of [pagina, ...(pagina.hijas ?? [])]) {
+      expect(textoDeBloques(p.bloques), p.slug).not.toMatch(/no tienen nivel Funcional|Sin nivel Funcional/);
+    }
+  });
+
+  it("cada área lleva a Nexus → Escala, que es la fuente del detalle, y trae su panorama", () => {
+    for (const hija of pagina.hijas ?? []) {
+      const t = textoDeBloques(hija.bloques);
+      expect(t, hija.slug).toContain(`Nexus → Escala → ${hija.titulo}`);
+      for (const p of vigente.panorama) {
+        expect(t, `${hija.slug} · ${p.nivel}`).toContain(p.porArea[hija.titulo as "Ventas"]);
       }
     }
   });
 
-  it("las tres dimensiones sin Funcional lo dicen en vez de mostrar un nivel que no existe", () => {
-    const servicio = pagina.hijas?.find((h) => h.slug === "escala-servicio");
-    const texto = textoDeBloques(servicio?.bloques ?? []);
-    expect(texto).toContain("Sin nivel Funcional");
-  });
-
-  it("las señales del reglamento llegan a la página", () => {
-    const ventas = pagina.hijas?.find((h) => h.slug === "escala-ventas");
-    const texto = textoDeBloques(ventas?.bloques ?? []);
-    expect(texto).toContain("pipeline de ventas configurado");
-    expect(texto).toContain("Agentes de IA califican leads");
+  it("explica cómo se usa en Nexus, incluido comentar la escala", () => {
+    expect(texto).toContain("Cómo se usa en Nexus");
+    expect(texto).toMatch(/coméntalo ahí mismo/);
   });
 });
 
@@ -402,9 +414,11 @@ describe("«Customer Success»", () => {
   it("arma el árbol completo, en su orden", () => {
     expect(cs.slug).toBe("customer-success");
     expect(cs.hijas?.map((h) => h.slug)).toEqual([
+      "primeros-dias-en-customer-success",
       "rol-cse",
       "rol-csl",
       "guia-de-cse",
+      "nexus-para-un-cse",
       "competencias-core",
       "relacion-con-el-cliente",
       "land-and-expand",
@@ -421,7 +435,32 @@ describe("«Customer Success»", () => {
       "descubrimiento",
     ]);
     expect(hijasDe("smartloop")).toEqual(["smartloop-proceso-operativo"]);
-    expect(todas).toHaveLength(15);
+    expect(todas).toHaveLength(17);
+  });
+
+  it("⭐ quien llega encuentra la puerta: Inicio y la portada del área enlazan «Tus primeros días»", () => {
+    const slug = "primeros-dias-en-customer-success";
+    expect(slugsMencionados(ARTICULOS()[0].bloques)).toContain(slug);
+    expect(slugsMencionados(cs.bloques)).toContain(slug);
+    const texto = textoDeBloques(hija(slug).bloques);
+    for (const momento of ["Tu primer día", "Tu primera semana", "Tu primer mes"]) expect(texto).toContain(momento);
+    expect(texto).toContain(LIDERES.customerSuccess);
+    expect(texto).toContain(LIDERES.revops);
+  });
+
+  it("«Nexus para un CSE» recorre la cuenta de punta a punta y dice qué llega al cliente", () => {
+    const texto = textoDeBloques(hija("nexus-para-un-cse").bloques);
+    for (const pieza of ["Kickoff", "Cuestionario previo", "Diagnóstico", "Cronograma", "Entrega", "Subir al cliente", "CSL Encargado"]) {
+      expect(texto, pieza).toContain(pieza);
+    }
+  });
+
+  it("⛔ tuteo: ninguna página de toda la base habla de vos (2026-09-30)", () => {
+    for (const p of TODAS()) {
+      expect(textoDeBloques(p.bloques), p.slug).not.toMatch(
+        /\b(vos|sos|tenés|podés|querés|hacés|movés|confirmás|revisás|corregís|firmás|encendés|contame|pedile|escribí)\b/i,
+      );
+    }
   });
 
   it("la Guía de CSE es la misma página de siempre, movida adentro — no una copia distinta", () => {

@@ -32,6 +32,7 @@ export function bloquesDePortada(): BloqueGuardado[] {
       "Customer Success es el área que se asegura de que lo que el cliente compró le resuelva el problema — y de que la cuenta crezca porque funcionó, no porque insistimos.",
     ),
     parrafoRico(["Lo lidera: ", { negrita: true }], `${LIDERES.customerSuccess}, Customer Success Lead.`),
+    aviso("exito", ["¿Recién llegas? ", { negrita: true }], "Empieza por ", a("primerosDias"), ": qué hacer el primer día, qué leer y en qué orden."),
 
     titulo(2, "Qué hacemos"),
     parrafo(
@@ -156,8 +157,10 @@ export function bloquesDePortada(): BloqueGuardado[] {
     ),
 
     titulo(2, "Esta sección"),
+    parrafoRico("Para quien llega: ", a("primerosDias"), "."),
     parrafoRico("Los roles: ", a("rolCse"), " · ", a("rolCsl"), "."),
     parrafoRico("El día a día del CSE, etapa por etapa: ", a("guiaCse"), "."),
+    parrafoRico("Cómo se lleva una cuenta en Nexus, pantalla por pantalla: ", a("nexusCse"), "."),
     parrafoRico("Lo que distingue a quien hace bien este trabajo: ", a("competencias"), "."),
     parrafoRico(
       "Cómo se construye la relación con el cliente: ",

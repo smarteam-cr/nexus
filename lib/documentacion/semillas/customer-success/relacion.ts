@@ -272,7 +272,7 @@ function construirDescubrimiento(): PaginaSembrada {
         tarjeta(
           "3 · Consecuencia — qué pasa si sigue igual",
           "Son las más valiosas: hacen que el cliente dimensione el impacto con sus propios números.",
-          "«Si un tercio de los leads no recibe respuesta en el día, ¿cuántas ventas estimás que se pierden por mes?»",
+          "«Si un tercio de los leads no recibe respuesta en el día, ¿cuántas ventas estimas que se pierden por mes?»",
         ),
         tarjeta(
           "4 · Valor — qué cambiaría si se resuelve",
@@ -289,13 +289,13 @@ function construirDescubrimiento(): PaginaSembrada {
 
       titulo(2, "Conectado con el Diagnóstico de Rendimiento"),
       parrafo(
-        "El descubrimiento no empieza de cero. Muchos prospectos llegan habiendo hecho el Diagnóstico de Rendimiento público: ocho preguntas, una por dimensión, con una opción por nivel. El resultado deja una nota en HubSpot con el nivel de cada dimensión y un ángulo para Ventas.",
+        "El descubrimiento no empieza de cero. Muchos prospectos llegan habiendo hecho el Diagnóstico de Rendimiento público, el chequeo del sitio: ocho preguntas, una por dimensión, con una opción por nivel, todavía sobre una versión anterior de la Escala. Lo que muestra es estimado. El resultado deja una nota en HubSpot con el nivel de cada dimensión y un ángulo para Ventas.",
       ),
       tarjetas(
         "3",
         tarjeta(
           "Si hizo el diagnóstico",
-          "Se lleva el resultado a la reunión y se valida: «marcaste que el pipeline se revisa cuando alguien se acuerda; contame cómo fue la última vez».",
+          "Se lleva el resultado a la reunión y se valida: «marcaste que el pipeline se revisa cuando alguien se acuerda; cuéntame cómo fue la última vez».",
         ),
         tarjeta(
           "Si no lo hizo",
@@ -310,7 +310,7 @@ function construirDescubrimiento(): PaginaSembrada {
 
       titulo(2, "El banco de preguntas"),
       parrafo(
-        `Una pregunta por dimensión, por área. Salen del reglamento de la Escala (versión ${banco.version}), así que nunca se desalinean. Son el punto de partida: las preguntas de consecuencia y de valor se arman en la sesión, con lo que el cliente va contando.`,
+        "Una pregunta por dimensión, por área: la pregunta de fondo que cada dimensión responde. Son el punto de partida, no el diagnóstico —ese recorre los criterios de la versión vigente, en Nexus → Escala—: las preguntas de consecuencia y de valor se arman en la sesión, con lo que el cliente va contando.",
       ),
       ...banco.bloques,
 

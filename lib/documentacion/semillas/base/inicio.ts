@@ -49,7 +49,14 @@ export function construirInicio(): PaginaSembrada {
       ),
 
       titulo(2, "Si recién llegas"),
-      parrafo("Cinco páginas, en este orden, alcanzan para arrancar:"),
+      aviso(
+        "exito",
+        ["¿Entras a Customer Success? ", { negrita: true }],
+        "Empieza por ",
+        deCs("primerosDias"),
+        ": tu primer día, tu primera semana y qué leer, en orden.",
+      ),
+      parrafo("Para cualquier área, cinco páginas, en este orden, alcanzan para arrancar:"),
       parrafoRico("1. ", a("proposito"), " — por qué existimos y qué nos importa."),
       parrafoRico("2. ", deCs("trabajar"), " — por dónde se habla cada cosa y cómo se graba una reunión."),
       parrafoRico("3. ", a("condiciones"), " — la jornada, las vacaciones y los feriados."),

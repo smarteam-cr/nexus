@@ -80,20 +80,20 @@ function bloques(): BloqueGuardado[] {
       "Una reunión sin transcripción no alimenta ningún documento. El traspaso, el arranque, el diagnóstico y la entrega se arman leyendo lo que se dijo: si no quedó grabado, esa conversación no existe para Nexus — y pedirla después de la reunión ya no sirve.",
     ),
     parrafo(
-      "No es una preferencia de la herramienta: es la diferencia entre revisar un borrador y escribirlo desde cero. Cada reunión que se graba le ahorra media hora de reconstrucción a quien siga la cuenta, incluido vos dentro de tres meses.",
+      "No es una preferencia de la herramienta: es la diferencia entre revisar un borrador y escribirlo desde cero. Cada reunión que se graba le ahorra media hora de reconstrucción a quien siga la cuenta, incluido tú dentro de tres meses.",
     ),
     titulo(4, "Dónde estamos hoy"),
     parrafo(
       "Medido sobre las reuniones de los últimos tres meses, más de la mitad no dejó transcripción. Y el dato incómodo: puertas adentro se graba peor que de cara al cliente, que es lo contrario de lo que uno supondría.",
     ),
     parrafo(
-      "Nexus lo muestra en la pantalla de Reuniones, con el desglose por persona. No está para señalar a nadie: está porque un número global no dice a quién pedirle que grabe.",
+      "Nexus lo muestra en la pantalla de Sesiones, con el desglose por persona. No está para señalar a nadie: está porque un número global no dice a quién pedirle que grabe.",
     ),
-    titulo(4, "Qué hacés vos"),
-    vinneta("Activá las notas de la reunión antes de empezar, no a los diez minutos."),
-    vinneta("Avisá que se está grabando. Con el cliente, la primera vez se pide y se deja dicho por qué: para no hacerle repetir lo que ya contó."),
+    titulo(4, "Qué haces tú"),
+    vinneta("Activa las notas de la reunión antes de empezar, no a los diez minutos."),
+    vinneta("Avisa que se está grabando. Con el cliente, la primera vez se pide y se deja dicho por qué: para no hacerle repetir lo que ya contó."),
     vinneta("Si la reunión se armó sobre la marcha, igual va con su enlace de Meet: una llamada suelta no deja rastro."),
-    vinneta("Si no se pudo grabar, escribí las tres líneas de lo que se acordó en el documento del proyecto, el mismo día."),
+    vinneta("Si no se pudo grabar, escribe las tres líneas de lo que se acordó en el documento del proyecto, el mismo día."),
 
     titulo(2, "Cómo se nombra una reunión"),
     parrafoRico(
@@ -119,7 +119,7 @@ function bloques(): BloqueGuardado[] {
     ),
     titulo(4, "Un mensaje que se entienda en la primera lectura"),
     parrafo(
-      "El modo más caro de escribir a distancia es el mensaje incompleto: obliga a tres idas y vueltas que se estiran todo el día. Tres líneas alcanzan: el contexto, qué necesitás, y qué proponés vos.",
+      "El modo más caro de escribir a distancia es el mensaje incompleto: obliga a tres idas y vueltas que se estiran todo el día. Tres líneas alcanzan: el contexto, qué necesitas, y qué propones tú.",
     ),
     aviso(
       "exito",

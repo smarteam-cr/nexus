@@ -50,7 +50,7 @@ function bloques(): BloqueGuardado[] {
     ),
     aviso(
       "advertencia",
-      "Una cuenta es del CSE que la lleva. Nexus le muestra a cada CSE sus propias cuentas: si no ves un cliente, es porque no sos su encargado — la asignación la hace el liderazgo.",
+      "Una cuenta es del CSE que la lleva. Nexus le muestra a cada CSE sus propias cuentas: si no ves un cliente, es porque no eres su encargado — la asignación la hace el liderazgo.",
     ),
 
     titulo(2, "La semana"),
@@ -90,7 +90,7 @@ function bloques(): BloqueGuardado[] {
 
     titulo(2, "El recorrido de una cuenta"),
     parrafo(
-      "Un proyecto de implementación recorre estas etapas en orden. La etapa la mueve el equipo en HubSpot y Nexus la refleja; cuando Nexus nota que el proyecto ya avanzó, te sugiere el cambio y vos lo confirmás.",
+      "Un proyecto de implementación recorre estas etapas en orden. La etapa la mueve el CSE en HubSpot, cuando la etapa de verdad cerró, y Nexus la refleja.",
     ),
     bloqueVivo("recorrido"),
     titulo(4, "Qué cierra cada etapa"),
@@ -114,12 +114,12 @@ function bloques(): BloqueGuardado[] {
 
     titulo(2, "Los documentos que arma el CSE"),
     parrafo(
-      "Cada proyecto tiene su menú de documentos. Algunos nacen con el proyecto y otros los encendés vos cuando llega el momento de usarlos.",
+      "Cada proyecto tiene su menú de documentos. Algunos nacen con el proyecto y otros los activas tú cuando llega el momento de usarlos.",
     ),
     bloqueVivo("documentos"),
     aviso(
       "advertencia",
-      "Lo que escribe un agente es un borrador, siempre. Se revisa antes de darlo por bueno, y con más razón antes de que lo vea el cliente: lo que sale con nuestro nombre lo firmás vos, no la IA.",
+      "Lo que escribe un agente es un borrador, siempre. Se revisa antes de darlo por bueno, y con más razón antes de que lo vea el cliente: lo que sale con nuestro nombre lo firmas tú, no la IA.",
     ),
     parrafo(
       "Hay partes que la IA no escribe a propósito, porque son criterio del CSE: los canales y horarios de atención, el equipo del cliente, los indicadores que se le comprometen y el cierre del arranque.",
@@ -129,7 +129,7 @@ function bloques(): BloqueGuardado[] {
     parrafo(
       "El tablero del negocio es HubSpot, y mantenerlo al día es trabajo del CSE, no del liderazgo. Si la etapa de un proyecto está vieja, la cartera entera se lee mal: el líder ve una foto que no existe.",
     ),
-    vinneta("La etapa se mueve en HubSpot. Nexus te sugiere el cambio cuando ve que el proyecto ya avanzó, y vos lo confirmás."),
+    vinneta("La etapa se mueve en HubSpot, en cuanto la etapa cierra de verdad. Nexus la lee de ahí."),
     vinneta("Si algo está trabado, el motivo del bloqueo se escribe en el proyecto. «Bloqueado» sin motivo no le sirve a nadie."),
     vinneta("El estado de adopción se actualiza cuando cambia de verdad, no al final."),
 
@@ -182,7 +182,7 @@ function bloques(): BloqueGuardado[] {
 
     titulo(2, "Cómo se crece en el puesto"),
     parrafo(
-      "La ruta no la mide la antigüedad: la mide qué cuenta podés sostener solo.",
+      "La ruta no la mide la antigüedad: la mide qué cuenta puedes sostener solo.",
     ),
     desplegable("Nivel 1 · Implementador inicial", [
       parrafo("Implementa lo básico de HubSpot con acompañamiento. Ejecuta bien lo que ya está decidido."),
@@ -202,7 +202,9 @@ function bloques(): BloqueGuardado[] {
 
     divisor(),
     parrafoRico(
-      "Qué hace Nexus y cómo se conecta con HubSpot: ",
+      "Cómo se lleva una cuenta en Nexus, pantalla por pantalla: ",
+      mencion("nexus-para-un-cse", "Nexus para un CSE, paso a paso", "🧑‍💻"),
+      ". Qué hace Nexus y cómo se conecta con HubSpot: ",
       mencion("como-funciona-nexus", "¿Cómo funciona Nexus?", "🧭"),
       ". Con qué vara medimos a un cliente: ",
       mencion("escala-de-rendimiento", "Escala de rendimiento", "📈"),
