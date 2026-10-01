@@ -122,6 +122,8 @@ export interface ContactoDeHubspot {
   estadoDelTest: string | null;
   /** La dirección del resultado del test, por área de la escala de hoy (`1`, `2`, `3`). */
   urlsDelTest: Record<string, string>;
+  /** La empresa principal del contacto en HubSpot (`associatedcompanyid`). */
+  empresaId: string | null;
 }
 
 const PROPIEDADES_DE_CONTACTO = [
@@ -156,6 +158,7 @@ const aContacto = (f: FilaDeContacto): ContactoDeHubspot => {
     etapa: p.lifecyclestage || null,
     estadoDelTest: p.diag_estado || null,
     urlsDelTest,
+    empresaId: p.associatedcompanyid || null,
   };
 };
 
@@ -212,8 +215,22 @@ export interface ActividadDeLaEmpresa {
 
 type V1 = {
   engagement?: { id?: number | string; type?: string; timestamp?: number };
+  associations?: { companyIds?: (number | string)[] };
   metadata?: Record<string, unknown>;
 };
+
+/**
+ * ¿Una actividad leída por un CONTACTO es de esta empresa? Si cuelga de otras empresas y no de ésta
+ * (el contacto cambió de trabajo, es de una agencia, de un grupo), no: se colaría lo de otra empresa
+ * en esta exploración. Sin empresas asociadas, sí: es del contacto (la nota del test, por ejemplo).
+ */
+export function esDeLaEmpresa(e: { associations?: { companyIds?: (number | string)[] } }, companyId: string): boolean {
+  const ids = (e.associations?.companyIds ?? []).map(String);
+  return ids.length === 0 || ids.includes(companyId);
+}
+
+/** Cuántas páginas de 100 se leen por empresa o contacto: lo reciente y bastante más. */
+const PAGINAS_DE_ACTIVIDAD = 3;
 
 const QUE_SE_LEE = new Set(["NOTE", "CALL", "MEETING", "EMAIL"]);
 const TAPADO = /has been redacted|ha sido ocultad|redactado/i;
@@ -270,11 +287,19 @@ function aActividad(e: V1): ActividadDeHubspot | "tapado" | null {
 }
 
 async function engagementsDe(objeto: "company" | "contact", id: string): Promise<V1[]> {
-  const data = await pedirAHubspot<{ results?: V1[] }>({
-    method: "GET",
-    path: `/engagements/v1/engagements/associated/${objeto}/${encodeURIComponent(id)}/paged?limit=100`,
-  });
-  return data?.results ?? [];
+  const todos: V1[] = [];
+  let offset: number | string | undefined;
+  for (let pagina = 0; pagina < PAGINAS_DE_ACTIVIDAD; pagina++) {
+    const sigue = offset !== undefined ? `&offset=${encodeURIComponent(String(offset))}` : "";
+    const data = await pedirAHubspot<{ results?: V1[]; hasMore?: boolean; offset?: number | string }>({
+      method: "GET",
+      path: `/engagements/v1/engagements/associated/${objeto}/${encodeURIComponent(id)}/paged?limit=100${sigue}`,
+    });
+    todos.push(...(data?.results ?? []));
+    if (!data?.hasMore || data.offset === undefined) break;
+    offset = data.offset;
+  }
+  return todos;
 }
 
 /**
@@ -282,10 +307,11 @@ async function engagementsDe(objeto: "company" | "contact", id: string): Promise
  * prospecto pueden colgar solo del contacto). Sin repetidos; las reuniones futuras van aparte.
  */
 export async function leerActividad(companyId: string, contactos: readonly ContactoDeHubspot[], ahora = new Date()): Promise<ActividadDeLaEmpresa> {
-  const lotes = await Promise.all([
+  const [deLaEmpresa, ...deLosContactos] = await Promise.all([
     engagementsDe("company", companyId),
     ...contactos.slice(0, 12).map((c) => engagementsDe("contact", c.id)),
   ]);
+  const lotes = [deLaEmpresa, ...deLosContactos.map((lote) => lote.filter((e) => esDeLaEmpresa(e, companyId)))];
   const vistos = new Set<string>();
   const material: ActividadDeHubspot[] = [];
   const agenda: ActividadDeLaEmpresa["agenda"] = [];
@@ -339,30 +365,46 @@ function enMs(v: string | null | undefined): number | null {
  */
 export async function llegadasPorElTest(dias = 30, ahora = new Date()): Promise<LlegadaPorElTest[] | null> {
   const desde = ahora.getTime() - dias * 24 * 60 * 60 * 1000;
-  const data = await pedirAHubspot<{ results?: FilaDeContacto[] }>({
-    method: "POST",
-    path: "/crm/v3/objects/contacts/search",
-    body: {
-      filterGroups: [
-        {
-          filters: [
-            { propertyName: "diag_estado", operator: "EQ", value: "Completado" },
-            { propertyName: "lastmodifieddate", operator: "GTE", value: String(desde) },
-          ],
-        },
-      ],
-      properties: [...PROPIEDADES_DE_CONTACTO, "engagements_last_meeting_booked", "notes_next_activity_date"],
-      sorts: [{ propertyName: "lastmodifieddate", direction: "DESCENDING" }],
-      limit: 100,
-    },
-  });
-  if (!data) return null;
+  /* `lastmodifieddate` acota la búsqueda (HubSpot no deja filtrar por la fecha del test), pero cambia
+     con cualquier escritura en el contacto: abajo se filtra otra vez por la fecha del resultado. */
+  const filas: FilaDeContacto[] = [];
+  let after: string | undefined;
+  for (let pagina = 0; pagina < 3; pagina++) {
+    const data = await pedirAHubspot<{ results?: FilaDeContacto[]; paging?: { next?: { after?: string } } }>({
+      method: "POST",
+      path: "/crm/v3/objects/contacts/search",
+      body: {
+        filterGroups: [
+          {
+            filters: [
+              { propertyName: "diag_estado", operator: "EQ", value: "Completado" },
+              { propertyName: "lastmodifieddate", operator: "GTE", value: String(desde) },
+            ],
+          },
+        ],
+        properties: [...PROPIEDADES_DE_CONTACTO, "engagements_last_meeting_booked", "notes_next_activity_date"],
+        sorts: [{ propertyName: "lastmodifieddate", direction: "DESCENDING" }],
+        limit: 100,
+        ...(after ? { after } : {}),
+      },
+    });
+    if (!data) {
+      if (pagina === 0) return null;
+      break;
+    }
+    filas.push(...(data.results ?? []));
+    after = data.paging?.next?.after;
+    if (!after) break;
+  }
   const porEmpresa = new Map<string, LlegadaPorElTest>();
-  for (const f of data.results ?? []) {
+  for (const f of filas) {
     const companyId = f.properties.associatedcompanyid;
     if (!companyId || porEmpresa.has(companyId)) continue;
     const c = aContacto(f);
     const test = testsDeLosContactos([c])[0]?.resultado ?? null;
+    // El test de hace meses no es una llegada, aunque el contacto se haya tocado ayer.
+    const fechaDelTest = enMs(test?.fecha);
+    if (fechaDelTest !== null && fechaDelTest < desde - 24 * 60 * 60 * 1000) continue;
     const agendada = enMs(f.properties.engagements_last_meeting_booked);
     const delTest = enMs(test?.fecha) ?? desde;
     const proxima = enMs(f.properties.notes_next_activity_date);

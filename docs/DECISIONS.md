@@ -4128,11 +4128,23 @@ escala y sin tocar el diagnóstico del CSE.
   que frena, texto neutro, en el idioma de la propuesta), también al regenerarla. «Sin Escala» se
   respeta. La propuesta exige el negocio de la empresa: el kickoff une propuesta y proyecto por él.
 - **A qué handoff le llega.** Por el negocio de la propuesta; si no hay enlace, al PRIMER proyecto de
-  Customer Success de la empresa dentro de seis meses; nunca a desarrollo ni a sitio web, ni a un
-  ciclo posterior (`lib/exploraciones/handoff.ts`). Va rotulada «estimado: sirve para saber dónde
-  mirar, no es evidencia», y lo interno «SOLO INTERNO» hacia «Riesgos y banderas rojas» o «¿Por qué
-  vendimos?», secciones que ningún documento del cliente lee. Lo vigila un censo propio
-  (`lib/exploraciones/lectores.test.ts`).
+  Customer Success de la empresa dentro de seis meses (una archivada no cuenta); nunca a desarrollo
+  ni a sitio web, ni a un ciclo posterior (`lib/exploraciones/handoff.ts`). Va rotulada «estimado:
+  sirve para saber dónde mirar, no es evidencia». Lo vigila un censo propio
+  (`lib/exploraciones/lectores.test.ts`): lo que ve el cliente solo entra por `paraLaPropuesta`.
+- **Lo interno NO se le manda al agente del handoff** (cambio de la revisión adversarial, mismo día).
+  El primer diseño lo mandaba rotulado «SOLO INTERNO» hacia «Riesgos y banderas rojas» o «¿Por qué
+  vendimos?». Pero ese agente escribe en una sola llamada también las secciones que leen el kickoff,
+  el diagnóstico, la entrega y el cuestionario previo (que el cliente ve sin revisión): una nota
+  como «no confía en consultoras» podía terminar en «Stakeholders clave». La regla del repo es
+  filtrar datos, no rogarle al modelo: lo interno (hipótesis, presupuesto, quién decide, lo no
+  explorado, el producto mostrado, la apertura, el contexto, el siguiente paso) lo ve el CSE en la
+  columna «Exploración de venta» del contexto del proyecto, que es pantalla interna.
+- **La lectura automática solo mientras se vende.** Cada reunión nueva dispara al agente solo si la
+  empresa sigue siendo prospecto, la exploración tiene menos de seis meses y la venta todavía no
+  tiene proyecto. Sin ese freno, cada reunión de implementación de la cuenta disparaba una corrida
+  (HubSpot y Claude, contra el presupuesto automático) para siempre — la multiplicación por sesión
+  que se sospechó en la caída del 21-sep. El botón sigue disponible a mano.
 - **La métrica se mide con la foto del momento de proponer**, no con lo que se completó después; y
   sirve para mejorar el proceso, nunca para evaluar a quien vende.
 - **Los permisos nuevos de HubSpot entran por entorno** (`HUBSPOT_SCOPES_OPCIONALES_EXTRA`): un scope

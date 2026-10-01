@@ -40,6 +40,8 @@ export interface Lienzo {
   /** Vuelve a pedir la exploración (el agente terminó y dejó propuestas nuevas). Sale en la misma
    *  fila que los cambios: no pisa uno que todavía no volvió. */
   recargar: () => Promise<void>;
+  /** Espera a que salgan los cambios en fila. */
+  alDia: () => Promise<void>;
   nombreDeNivel: (l: Letra) => string;
   /** Lo pendiente para un destino (o para todos los de un tipo). */
   pendientesPara: (filtro: (d: DestinoDePropuesta) => boolean) => ItemPropuesto[];

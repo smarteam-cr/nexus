@@ -34,12 +34,8 @@ import { fetchCompanyTimelineItems, serializeTimeline } from "@/lib/hubspot/comp
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { escalaParaPosicionar, SECCION_DE_ESCALA, type BloqueDeEscala } from "@/lib/escala/contexto";
-import {
-  AVISO_DE_LA_ESCALA_DESDE_LA_EXPLORACION,
-  bloqueParaLaPropuesta,
-  posicionDesdeElChequeo,
-} from "@/lib/exploraciones/para-la-propuesta";
-import { exploracionParaLaPropuesta } from "@/lib/exploraciones/servidor";
+import { AVISO_DE_LA_ESCALA_DESDE_LA_EXPLORACION, TITULOS_DE_LA_SECCION_EN } from "@/lib/exploraciones/para-la-propuesta";
+import { paraLaPropuesta } from "@/lib/exploraciones/servidor";
 import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, usaEscala, type HubspotHubSlug } from "@/lib/tags/catalog";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
@@ -115,8 +111,8 @@ export async function POST(
      está tu operación hoy» se escribe desde su chequeo y no la escribe la IA: esa sección alimenta
      el bloque de la Escala del kickoff, y un nivel que la IA estima distinto del que se confirmó con
      el prospecto se contradiría con la exploración. Si no se puede leer, la propuesta se genera igual. */
-  const exploracion = bc.exploracionId ? await exploracionParaLaPropuesta(bc.exploracionId).catch(() => null) : null;
   const conEscala = usaEscala(bc.tags);
+  const exploracion = bc.exploracionId ? await paraLaPropuesta(bc.exploracionId, conEscala).catch(() => null) : null;
   const posicionDeLaExploracion = exploracion && conEscala ? exploracion : null;
   const AVISO_DE_LA_EXPLORACION: BloqueDeEscala = { usa: true, texto: AVISO_DE_LA_ESCALA_DESDE_LA_EXPLORACION, documentos: 0 };
 
@@ -155,7 +151,8 @@ export async function POST(
   ]);
 
   const parts: string[] = [];
-  if (exploracion) parts.push(bloqueParaLaPropuesta({ ...exploracion, conEscala }));
+  // Solo si aporta algo: un bloque vacío no puede contar como la fuente que la generación exige.
+  if (exploracion?.bloque) parts.push(exploracion.bloque);
   for (const t of transcripts) {
     if (t.rawText.trim()) parts.push(`# Nota/transcript${t.fileName ? ` (${t.fileName})` : ""}\n${t.rawText.trim()}`);
   }
@@ -525,10 +522,12 @@ export async function POST(
     if (posicionDeLaExploracion && !skipKeys.has(SECCION_DE_ESCALA.propuesta)) {
       const i = generated.findIndex((g) => g.key === SECCION_DE_ESCALA.propuesta);
       if (i >= 0) generated.splice(i, 1);
-      generated.push({
-        key: SECCION_DE_ESCALA.propuesta,
-        data: posicionDesdeElChequeo(posicionDeLaExploracion.chequeo, posicionDeLaExploracion.escala, gen.lang),
-      });
+      generated.push({ key: SECCION_DE_ESCALA.propuesta, data: posicionDeLaExploracion.posicion(gen.lang) });
+      // La IA no la escribió, así que tampoco tradujo sus títulos: en inglés van acá.
+      if (gen.lang?.toLowerCase().startsWith("en")) {
+        gen.titleOverrides[SECCION_DE_ESCALA.propuesta] ??= TITULOS_DE_LA_SECCION_EN.titulo;
+        gen.eyebrowOverrides[SECCION_DE_ESCALA.propuesta] ??= TITULOS_DE_LA_SECCION_EN.antetitulo;
+      }
     }
 
     // Cada "Generar" crea un CASO NUEVO (v1, v2, …). La Plantilla (v0) nunca se llena.

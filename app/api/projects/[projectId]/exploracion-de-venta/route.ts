@@ -6,12 +6,16 @@
  * le va a llegar al handoff y que es ESTIMADO. El CSE no tiene el permiso de Ventas: la ve por el
  * proyecto, con el mismo gate que el resto del contexto del handoff. El enlace al lienzo, solo
  * con `ventas.read`. Solo lee.
+ *
+ * Lo INTERNO (hipótesis, presupuesto, quién decide, lo no explorado…) llega SOLO por acá, a una
+ * pantalla interna: al agente del handoff no se le manda (lib/exploraciones/para-el-handoff.ts).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { can } from "@/lib/auth/permissions/engine";
 import type { Meta } from "@/lib/exploraciones/casillas";
 import { exploracionDelProyecto } from "@/lib/exploraciones/handoff";
+import { internoParaElCse } from "@/lib/exploraciones/para-el-handoff";
 import { exploracionParaLaPropuesta } from "@/lib/exploraciones/servidor";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
@@ -41,6 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
       })),
       metas,
       casosDeUso: Object.values(estado.contenido.casosDeUso).map((c) => c.titulo),
+      interno: internoParaElCse(estado, escala),
       puedeAbrir: await can(guard.teamMember, "ventas", "read"),
     },
   });

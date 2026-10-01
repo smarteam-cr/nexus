@@ -20,6 +20,8 @@ import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
 import type { ReunionSinLeer } from "./lectura";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
+import { bloqueParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
+import type { PosicionEnLaEscala } from "@/lib/escala/posicion";
 
 export const SQL_DE_EXPLORACIONES = "scripts/sql/2026-10-01-exploracion-de-venta.sql";
 
@@ -213,6 +215,8 @@ export async function aplicarCambios(
     await bloquearFila(tx, id);
     const fila = await tx.exploracionDeVenta.findUnique({ where: { id }, select: SELECT_FILA });
     if (!fila) return { estado: "no-existe" } as const;
+    // Archivada es de solo lectura: la pantalla ya no deja editar, y la API tampoco.
+    if (fila.archivadaEn) return { estado: "invalido", error: "La exploración está archivada: ya no se puede cambiar." } as const;
 
     const antes = estadoDesdeFila(fila);
     // Los ids se validan contra la escala con la edición que la exploración tiene AHORA. Los ids de
@@ -235,6 +239,24 @@ export async function aplicarCambios(
     });
     return { estado: "ok", fila: actualizada, confirmado } as const;
   });
+}
+
+/**
+ * La ÚNICA puerta de lo que ve el cliente (la propuesta y la regeneración de su sección de la
+ * escala): devuelve el bloque de contexto —sin lo interno ni ids— y la posición en la escala desde el
+ * chequeo. Nunca el estado: lib/exploraciones/lectores.test.ts no deja que un lector de un documento
+ * del cliente lea otra cosa. `bloque` vacío = la exploración no tiene nada que aportar todavía.
+ */
+export async function paraLaPropuesta(
+  exploracionId: string,
+  conEscala: boolean,
+): Promise<{ bloque: string; posicion: (lang: string | null | undefined) => PosicionEnLaEscala } | null> {
+  const datos = await exploracionParaLaPropuesta(exploracionId);
+  if (!datos) return null;
+  return {
+    bloque: bloqueParaLaPropuesta({ ...datos, conEscala }),
+    posicion: (lang) => posicionDesdeElChequeo(datos.chequeo, datos.escala, lang),
+  };
 }
 
 /** La foto es de la última lectura: lo que ya pasó desde entonces no es agenda (se avisa como «sin leer»). */

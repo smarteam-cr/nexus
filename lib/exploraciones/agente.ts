@@ -14,9 +14,11 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
+import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
+import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import {
   leerLaRespuesta,
   leerLosCasos,
@@ -35,6 +37,9 @@ import { catalogoDeCasosDeUso } from "./propuesta";
 import { bloquearFila, chequeoDe, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
 
 export const AGENTE_DE_LA_EXPLORACION = "exploracion-de-venta";
+
+/** Hasta cuántos días después del alta el agente lee solo las reuniones nuevas. */
+export const DIAS_DE_LECTURA_AUTOMATICA = 180;
 
 export type ModoDelAgente = ModoDeLaCorrida;
 
@@ -56,9 +61,6 @@ interface LoQueLeyoLaCorrida {
 /** Un fallo con un mensaje que ya está escrito para el vendedor (no hace falta traducirlo). */
 class FalloDeLaExploracion extends Error {}
 
-/** Una corrida RUNNING más vieja que esto se da por muerta (el proceso se reinició a mitad). */
-const VIVA_POR_MINUTOS = 15;
-
 export type ResultadoDeLanzar = { ok: true; runId: string; yaCorria: boolean } | { ok: false; status: number; error: string };
 
 interface OpcionesDeLaCorrida {
@@ -70,43 +72,53 @@ interface OpcionesDeLaCorrida {
 }
 
 /** La última corrida de esta exploración (la pantalla la sigue). */
-export async function ultimaCorrida(exploracionId: string, clientId: string) {
-  return prisma.agentRun.findFirst({
+export async function ultimaCorrida(exploracionId: string, clientId: string, db: Prisma.TransactionClient | typeof prisma = prisma) {
+  return db.agentRun.findFirst({
     where: { clientId, agentSlug: AGENTE_DE_LA_EXPLORACION, filters: { path: ["exploracionId"], equals: exploracionId } },
     orderBy: { createdAt: "desc" },
-    select: { id: true, status: true, currentPhase: true, createdAt: true, output: true, stepLabel: true },
+    select: { id: true, status: true, currentPhase: true, createdAt: true, updatedAt: true, output: true, stepLabel: true },
   });
-}
-
-/** ¿Hay una corrida viva de esta exploración? Una a la vez: dos corridas se pisarían lo leído. */
-async function corridaViva(exploracionId: string, clientId: string) {
-  const r = await ultimaCorrida(exploracionId, clientId);
-  if (!r || r.status !== "RUNNING") return null;
-  return Date.now() - r.createdAt.getTime() < VIVA_POR_MINUTOS * 60_000 ? r : null;
 }
 
 export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, opts: OpcionesDeLaCorrida): Promise<ResultadoDeLanzar> {
   const lectura = await leerExploracion(exploracionId);
   if (lectura.estado !== "ok") return { ok: false, status: lectura.estado === "no-existe" ? 404 : 503, error: "Esa exploración no existe." };
+  if (lectura.fila.archivadaEn) return { ok: false, status: 409, error: "La exploración está archivada: el agente ya no trabaja en ella." };
   const clientId = lectura.fila.clientId;
-  const viva = await corridaViva(exploracionId, clientId);
-  if (viva) return { ok: true, runId: viva.id, yaCorria: true };
 
-  const run = await prisma.agentRun.create({
-    data: {
-      agentSlug: AGENTE_DE_LA_EXPLORACION,
-      clientId,
-      status: "RUNNING",
-      stepLabel: ETIQUETA[modo],
-      currentPhase: "Empezando…",
-      triggeredByEmail: opts.triggeredByEmail,
-      filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}) } as Prisma.InputJsonValue,
-    },
-    select: { id: true },
+  /* Una corrida a la vez, y la revisión con el alta en la MISMA transacción, con la fila bloqueada:
+     dos pedidos juntos (un clic durante la lectura automática, dos reuniones que llegan a la vez) no
+     arrancan dos corridas. Una que dice RUNNING pero hace rato que no da señales murió con un
+     reinicio (lib/agents/run-colgada.ts): se cierra con su motivo y se lanza otra. */
+  const r = await prisma.$transaction(async (tx) => {
+    await bloquearFila(tx, exploracionId);
+    const ultima = await ultimaCorrida(exploracionId, clientId, tx);
+    if (ultima?.status === "RUNNING") {
+      if (!estaColgada(ultima)) return { runId: ultima.id, yaCorria: true };
+      await tx.agentRun.update({
+        where: { id: ultima.id },
+        data: { status: "ERROR", currentPhase: null, output: JSON.stringify({ error: MOTIVO_COLGADA }) },
+      });
+    }
+    const run = await tx.agentRun.create({
+      data: {
+        agentSlug: AGENTE_DE_LA_EXPLORACION,
+        clientId,
+        status: "RUNNING",
+        stepLabel: ETIQUETA[modo],
+        currentPhase: "Empezando…",
+        triggeredByEmail: opts.triggeredByEmail,
+        filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}) } as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+    return { runId: run.id, yaCorria: false };
   });
   // En segundo plano: la pantalla sigue la fase. Cualquier falla queda en la corrida.
-  void correr(run.id, exploracionId, modo, opts).catch((e) => console.error("[exploraciones/agente] la corrida falló fuera de su try", e));
-  return { ok: true, runId: run.id, yaCorria: false };
+  if (!r.yaCorria) {
+    void correr(r.runId, exploracionId, modo, opts).catch((e) => console.error("[exploraciones/agente] la corrida falló fuera de su try", e));
+  }
+  return { ok: true, ...r };
 }
 
 async function fase(runId: string, texto: string) {
@@ -132,6 +144,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     const leido = await leerFuentes({
       clientId: fila.clientId,
       companyId: fila.client.hubspotCompanyId,
+      creadaEn: fila.createdAt,
       escala,
       propuesta: estado.propuesta,
       notas: estado.contenido.notas,
@@ -335,11 +348,19 @@ export async function leerReunionNueva(o: { sesionId: string; fecha: Date; clien
   if (!modeloDisponible(prisma.exploracionDeVenta)) return "no-corresponde";
   const exp = await prisma.exploracionDeVenta.findFirst({
     where: { clientId: o.clientId, archivadaEn: null },
-    select: { id: true, createdAt: true, propuesta: true },
+    select: { id: true, createdAt: true, propuesta: true, client: { select: { kind: true } } },
   });
   if (!exp) return "no-corresponde";
+  const ahora = new Date();
+  /* Lee sola solo MIENTRAS SE VENDE: a un prospecto, dentro de los seis meses del alta y antes de que
+     la venta tenga un proyecto. Después, cada reunión de implementación dispararía una corrida (HubSpot
+     y Claude) contra el presupuesto automático, para siempre. El botón sigue a mano. */
+  if (exp.client.kind !== "PROSPECTO") return "no-corresponde";
+  if (ahora.getTime() - exp.createdAt.getTime() > DIAS_DE_LECTURA_AUTOMATICA * 24 * 60 * 60 * 1000) return "no-corresponde";
+  const yaHayProyecto = await prisma.project.count({ where: proyectoClasificableWhere({ clientId: o.clientId, createdAt: { gte: exp.createdAt } }) });
+  if (yaHayProyecto > 0) return "no-corresponde";
   const leidas = leerPropuesta(exp.propuesta).leidas.sesiones;
-  if (!debeLeerSola({ fechaDeLaReunion: o.fecha, creadaEn: exp.createdAt, sesionId: o.sesionId, leidas, ahora: new Date() })) return "no-corresponde";
+  if (!debeLeerSola({ fechaDeLaReunion: o.fecha, creadaEn: exp.createdAt, sesionId: o.sesionId, leidas, ahora })) return "no-corresponde";
   const r = await lanzarCorrida(exp.id, "leer", { triggeredByEmail: null, sesionId: o.sesionId, automatica: true });
   if (!r.ok) return "no-corresponde";
   return r.yaCorria ? "ya-corre" : "lanzada";

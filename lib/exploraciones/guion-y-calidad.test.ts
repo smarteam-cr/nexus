@@ -2,12 +2,17 @@
  * lib/exploraciones/guion-y-calidad.test.ts — el guion de las dos reuniones, la industria sugerida y
  * «lista para proponer».
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/hubspot/client", () => ({ getSystemHubspotClient: async () => ({}), forceRefreshSystemToken: async () => {} }));
+
 import { calcularChequeo, type AreaParaChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { listaParaProponer, queSigue } from "./calidad";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { aFecha, diaConAnio, diaCorto } from "./fechas";
+import { esDeLaEmpresa } from "./hubspot";
 import { agendadasQueYaPasaron, debeLeerSola } from "./lectura";
 import { calcularMetricas } from "./metricas";
 import { industriaLegible, sugerirEdicion } from "./industria";
@@ -213,5 +218,14 @@ describe("la métrica", () => {
       { ahora: AHORA, existen: new Set(["bc1", "bc2", "bc3"]), sinExploracion: 3 },
     );
     expect(m).toEqual({ propuestas: 2, conMeta: 2, listas: 1, conSiguientePaso: 1, sinExploracion: 3 });
+  });
+});
+
+describe("la actividad que se lee por un contacto", () => {
+  it("es de esta empresa si cuelga de ella, o de ninguna; la de otra empresa no entra", () => {
+    expect(esDeLaEmpresa({ associations: { companyIds: [111, 999] } }, "999")).toBe(true);
+    expect(esDeLaEmpresa({ associations: { companyIds: [] } }, "999")).toBe(true);
+    expect(esDeLaEmpresa({}, "999")).toBe(true);
+    expect(esDeLaEmpresa({ associations: { companyIds: [111] } }, "999")).toBe(false);
   });
 });

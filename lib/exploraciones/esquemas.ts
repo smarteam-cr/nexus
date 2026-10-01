@@ -15,6 +15,7 @@ import {
   esDeLista,
   ROLES_EN_LA_DECISION,
   TIPO_DE_CASILLA,
+  TOPE_DE_LA_LISTA,
   VALORES_DE_APERTURA,
   type Apertura,
   type ClaveDeCasilla,
@@ -28,6 +29,7 @@ import {
   contenidoVacio,
   ESTADOS_DEL_CRITERIO,
   FUENTES_DEL_NIVEL,
+  MAX_DESCARTADAS,
   MODOS_DE_LA_CORRIDA,
   MOTIVOS_PARA_EXPLORAR,
   NIVELES,
@@ -90,13 +92,13 @@ export function esquemaDelValor(tipo: TipoDeCasilla): z.ZodType<unknown> {
     case "texto":
       return texto(4000);
     case "lista":
-      return z.array(ItemDeLista).max(40);
+      return z.array(ItemDeLista).max(TOPE_DE_LA_LISTA.lista);
     case "metas":
-      return z.array(MetaSchema).max(20);
+      return z.array(MetaSchema).max(TOPE_DE_LA_LISTA.metas);
     case "retos":
-      return z.array(RetoSchema).max(30);
+      return z.array(RetoSchema).max(TOPE_DE_LA_LISTA.retos);
     case "autoridad":
-      return z.array(PersonaSchema).max(30);
+      return z.array(PersonaSchema).max(TOPE_DE_LA_LISTA.autoridad);
     case "siguientePaso":
       return SiguientePasoSchema;
     case "apertura":
@@ -219,6 +221,10 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
+  z.object({
+    op: z.literal("usarVarias"),
+    items: z.array(z.object({ itemId: z.string().min(1).max(120), valor: z.unknown().optional() })).min(1).max(250),
+  }),
   z.object({ op: z.literal("descartar"), itemIds: z.array(z.string().min(1).max(120)).min(1).max(250) }),
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
   z.object({ op: z.literal("archivar") }),
@@ -274,7 +280,20 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
     const casillas = raw.casillas;
     for (const clave of CLAVES_DE_CASILLA) {
       if (casillas[clave] === undefined) continue;
-      const r = esquemaDelValor(TIPO_DE_CASILLA[clave]).safeParse(casillas[clave]);
+      const tipo = TIPO_DE_CASILLA[clave];
+      /* Una lista se lee ítem por ítem, hasta su tope: un ítem malo (o uno de más) no se lleva la
+         lista entera, que la próxima escritura borraría para siempre. */
+      if (esDeLista(tipo)) {
+        if (!Array.isArray(casillas[clave])) continue;
+        const items = (casillas[clave] as unknown[])
+          .map((it) => esquemaDeLoPropuesto(tipo).safeParse(it))
+          .filter((r) => r.success)
+          .map((r) => r.data)
+          .slice(0, TOPE_DE_LA_LISTA[tipo]);
+        if (items.length) (c.casillas as Record<string, unknown>)[clave] = items;
+        continue;
+      }
+      const r = esquemaDelValor(tipo).safeParse(casillas[clave]);
       if (r.success) (c.casillas as Record<string, unknown>)[clave] = r.data;
     }
   }
@@ -288,7 +307,7 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
   c.casosDeUso = registroValido(raw.casosDeUso, ID_CASO_DE_USO, CasoDeUsoElegidoSchema);
-  c.descartadas = listaDeTextos(raw.descartadas, 500);
+  c.descartadas = listaDeTextos(raw.descartadas, MAX_DESCARTADAS);
   if (Array.isArray(raw.alProponer)) {
     c.alProponer = raw.alProponer.filter(
       (f): f is FotoAlProponer =>

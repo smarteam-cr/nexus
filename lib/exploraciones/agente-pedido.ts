@@ -282,6 +282,7 @@ Reglas estrictas:
 - El equipo de Smarteam (consultores, vendedores) no es parte del cliente: nunca va en personas.
 - Textos cortos, en español neutro, en tercera persona sobre el cliente. Nunca escribas los identificadores de la escala dentro de un texto: van en sus campos.
 - Si una lista no tiene nada que proponer, mándala vacía. Es la respuesta correcta muchas veces.
+- Estas casillas las ve el CLIENTE en la propuesta: ${CASILLAS.filter((c) => c.alCliente).map((c) => c.clave).join(", ")}. En ellas nunca pongas montos de dinero, presupuesto, opiniones sobre personas ni nada interno de Smarteam: el dinero va solo en presupuesto; las personas, en autoridad.
 
 Las casillas: ${CASILLAS.map((c) => `${c.clave} («${c.etiqueta}»: ${c.ayuda})`).join("; ")}.
 Los motivos para explorar: ${MOTIVOS_PARA_EXPLORAR.map((m) => `${m} (${ETIQUETA_DEL_MOTIVO[m]})`).join(", ")}. Los papeles en la decisión: ${ROLES_EN_LA_DECISION.map((r) => `${r} (${ETIQUETA_DEL_ROL[r]})`).join(", ")}.`;

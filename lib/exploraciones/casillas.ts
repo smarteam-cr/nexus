@@ -302,6 +302,18 @@ export function esDeLista(tipo: TipoDeCasilla): tipo is "lista" | "metas" | "ret
   return tipo === "lista" || tipo === "metas" || tipo === "retos" || tipo === "autoridad";
 }
 
+/**
+ * Cuántos ítems admite cada casilla de lista. Lo usan el esquema (esquemas.ts) y la operación que
+ * agrega un ítem (contenido.ts): si solo lo supiera el esquema, «Usar» agregaría el ítem 21 y la
+ * lectura descartaría la lista ENTERA.
+ */
+export const TOPE_DE_LA_LISTA: Record<"lista" | "metas" | "retos" | "autoridad", number> = {
+  lista: 40,
+  metas: 20,
+  retos: 30,
+  autoridad: 30,
+};
+
 /** ¿La meta está en cifras? Su objetivo trae un número. */
 export function metaEnCifras(m: Pick<Meta, "objetivo">): boolean {
   return /\d/.test(m.objetivo ?? "");

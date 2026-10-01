@@ -5,7 +5,7 @@
  *
  * La exploración entra al handoff del proyecto como contexto ESTIMADO: «sirve para saber dónde
  * mirar, no es evidencia», como dice la escala. El diagnóstico del CSE no cambia: lo arma completo
- * desde ahí. Lo interno va a las secciones internas del handoff, nunca a un documento del cliente.
+ * desde ahí. Lo interno no entra al documento del handoff: el CSE lo ve en el contexto del proyecto.
  */
 import Link from "next/link";
 import { CASILLAS } from "@/lib/exploraciones/casillas";
@@ -25,7 +25,7 @@ export default function PasoTraspaso() {
         <ul className="list-disc space-y-1 pl-5 text-sm text-fg-secondary">
           <li>La industria, el perfil de negocio y el nivel estimado de cada área y dimensión, con de dónde salió.</li>
           <li>Las metas en cifras, quién decide y a quién afecta, qué pasa si no actúa y lo que falta para Funcional.</li>
-          <li>Lo interno (presupuesto, hipótesis, lo que nadie exploró, la apertura a la asesoría) va solo a las secciones internas del handoff.</li>
+          <li>Lo interno (presupuesto, hipótesis, quién decide, lo que nadie exploró, la apertura a la asesoría) no entra al documento del handoff: el CSE lo ve en el contexto del proyecto, marcado «solo interno».</li>
         </ul>
       </section>
       <section className="space-y-2 rounded-xl border border-line bg-surface p-4">

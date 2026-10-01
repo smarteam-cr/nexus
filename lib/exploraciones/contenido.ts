@@ -18,7 +18,17 @@
  * —el servidor vuelve a validar todo, y su respuesta es la que queda—.
  */
 import type { Cierre, Despues, Letra } from "@/lib/escala/documento/tipos";
-import { esDeLista, TIPO_DE_CASILLA, type ClaveDeCasilla, type Meta, type Persona, type Reto, type ValoresDeCasillas } from "./casillas";
+import {
+  definicionDe,
+  esDeLista,
+  TIPO_DE_CASILLA,
+  TOPE_DE_LA_LISTA,
+  type ClaveDeCasilla,
+  type Meta,
+  type Persona,
+  type Reto,
+  type ValoresDeCasillas,
+} from "./casillas";
 
 // ── Las piezas ────────────────────────────────────────────────────────────────
 
@@ -205,6 +215,12 @@ export function propuestaVacia(): PropuestaDeExploracion {
 /** Tope de lo pendiente: lo más viejo se cae primero. */
 const MAX_ITEMS = 250;
 
+/**
+ * Tope de las lápidas. Holgado a propósito: si una lápida se cae, lo descartado VUELVE a
+ * proponerse (y los niveles del test se re-proponen en cada corrida).
+ */
+export const MAX_DESCARTADAS = 2000;
+
 const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 
 /** Texto comparable: sin mayúsculas, sin tildes y con los espacios colapsados. */
@@ -218,6 +234,19 @@ export function normalizarTexto(s: string): string {
 }
 
 /** JSON con las claves ordenadas y los textos normalizados: dos valores iguales dan el mismo texto. */
+/** JSON con las claves ordenadas y SIN normalizar: lo que decide si cambió lo confirmado (una tilde cuenta). */
+function exacto(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(exacto).join(",")}]`;
+  if (esObjeto(v)) {
+    return `{${Object.keys(v)
+      .filter((k) => v[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${exacto(v[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
 function canonico(v: unknown): string {
   if (typeof v === "string") return JSON.stringify(normalizarTexto(v));
   if (Array.isArray(v)) return `[${v.map(canonico).join(",")}]`;
@@ -368,6 +397,12 @@ export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemProp
     if (lapidas.has(n.id) || yaEstaConfirmado(estado, n.destino, n.valor)) continue;
     const i = items.findIndex((x) => x.id === n.id);
     if (i >= 0) {
+      /* El mismo nivel desde el test y desde una reunión tienen el mismo id: queda el de la reunión
+         (su frase, su riesgo a la vista); el test solo suma su fuente. */
+      if (esNivelDelTest(n) && !esNivelDelTest(items[i])) {
+        items[i] = { ...items[i], fuentes: unirFuentes(items[i].fuentes, n.fuentes) };
+        continue;
+      }
       items[i] = { ...n, fuentes: unirFuentes(items[i].fuentes, n.fuentes) };
       continue;
     }
@@ -384,6 +419,24 @@ export function fusionarPropuestas(estado: EstadoDeExploracion, nuevos: ItemProp
     items.push(n);
   }
   return { ...base, items: items.slice(-MAX_ITEMS) };
+}
+
+/**
+ * ¿Lo propuesto sigue teniendo dónde ir con la escala de ahora? Al cambiar la edición o el perfil,
+ * una dimensión o un criterio pueden dejar de estar: esa propuesta ya no se puede usar ni se cuenta.
+ */
+export function destinoValido(d: DestinoDePropuesta, v: Validez): boolean {
+  switch (d.tipo) {
+    case "nivel":
+    case "aExplorar":
+      return v.dimensiones.has(d.dimensionId);
+    case "falta":
+      return v.criterios.has(d.criterioId);
+    case "area":
+      return v.areas.has(d.areaId);
+    default:
+      return true;
+  }
 }
 
 /** Lo pendiente, quitando lo que ya quedó confirmado por otro camino (el vendedor lo escribió a mano). */
@@ -433,6 +486,8 @@ export type Operacion =
   | { op: "sinPortal"; valor: boolean }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   | { op: "usar"; itemId: string; valor?: unknown }
+  /** «Usar todas»: cada una por su cuenta; la que ya no está o ya no corresponde se salta. */
+  | { op: "usarVarias"; items: { itemId: string; valor?: unknown }[] }
   | { op: "descartar"; itemIds: string[] }
   | { op: "responsable"; email: string | null }
   | { op: "archivar" };
@@ -468,6 +523,10 @@ function aplicarAlDestino(
         const actual = (c.casillas[destino.clave] as unknown[] | undefined) ?? [];
         const k = claveDeItemDeLista(destino.clave, v);
         if (actual.some((x) => claveDeItemDeLista(destino.clave, x) === k)) return { ok: true, estado };
+        const tope = TOPE_DE_LA_LISTA[TIPO_DE_CASILLA[destino.clave] as keyof typeof TOPE_DE_LA_LISTA];
+        if (actual.length >= tope) {
+          return { ok: false, error: `«${definicionDe(destino.clave).etiqueta}» ya tiene ${tope}: quita uno antes de agregar otro.` };
+        }
         return {
           ok: true,
           estado: { ...estado, contenido: conCasilla(c, destino.clave, [...actual, v] as ValoresDeCasillas[ClaveDeCasilla]) },
@@ -592,6 +651,14 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       if (!r.ok) return r;
       return { ok: true, estado: { ...r.estado, propuesta: { ...r.estado.propuesta, items: r.estado.propuesta.items.filter((x) => x.id !== op.itemId) } } };
     }
+    case "usarVarias": {
+      let actual = estado;
+      for (const x of op.items) {
+        const r = aplicarUna(actual, { op: "usar", itemId: x.itemId, valor: x.valor }, validez, validador);
+        if (r.ok) actual = r.estado;
+      }
+      return { ok: true, estado: actual };
+    }
     case "descartar": {
       const ids = new Set(op.itemIds);
       return {
@@ -599,7 +666,7 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
         estado: {
           ...estado,
           propuesta: { ...estado.propuesta, items: estado.propuesta.items.filter((x) => !ids.has(x.id)) },
-          contenido: { ...c, descartadas: [...c.descartadas.filter((d) => !ids.has(d)), ...ids].slice(-500) },
+          contenido: { ...c, descartadas: [...c.descartadas.filter((d) => !ids.has(d)), ...ids].slice(-MAX_DESCARTADAS) },
         },
       };
     }
@@ -629,8 +696,8 @@ export function aplicarOperaciones(
 /** ¿Lo que cambió es lo confirmado (sube la versión) o solo lo pendiente? */
 export function cambioLoConfirmado(antes: EstadoDeExploracion, despues: EstadoDeExploracion): boolean {
   return (
-    canonico({ ...antes.contenido, descartadas: [] }) !== canonico({ ...despues.contenido, descartadas: [] }) ||
-    canonico(antes.areas) !== canonico(despues.areas) ||
+    exacto({ ...antes.contenido, descartadas: [] }) !== exacto({ ...despues.contenido, descartadas: [] }) ||
+    exacto(antes.areas) !== exacto(despues.areas) ||
     antes.edicion !== despues.edicion ||
     antes.perfilCierre !== despues.perfilCierre ||
     antes.perfilDespues !== despues.perfilDespues ||

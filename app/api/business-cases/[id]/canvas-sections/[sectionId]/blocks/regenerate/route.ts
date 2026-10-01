@@ -16,8 +16,7 @@ import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { defForCanvasSection, findDefAcrossTemplates } from "@/components/landing/configs/templates.defs";
 import { SECCION_DE_ESCALA } from "@/lib/escala/contexto";
-import { posicionDesdeElChequeo } from "@/lib/exploraciones/para-la-propuesta";
-import { exploracionParaLaPropuesta } from "@/lib/exploraciones/servidor";
+import { paraLaPropuesta } from "@/lib/exploraciones/servidor";
 import { usaEscala } from "@/lib/tags/catalog";
 
 type Params = Promise<{ id: string; sectionId: string }>;
@@ -105,10 +104,8 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
      ahí, con lo último que se confirmó con el prospecto. */
   const bcDelBloque = block.section.canvas.businessCase;
   if (block.section.key === SECCION_DE_ESCALA.propuesta && bcDelBloque?.exploracionId && usaEscala(bcDelBloque.tags)) {
-    const exploracion = await exploracionParaLaPropuesta(bcDelBloque.exploracionId).catch(() => null);
-    if (exploracion) {
-      return NextResponse.json({ data: posicionDesdeElChequeo(exploracion.chequeo, exploracion.escala, lang) });
-    }
+    const exploracion = await paraLaPropuesta(bcDelBloque.exploracionId, true).catch(() => null);
+    if (exploracion) return NextResponse.json({ data: exploracion.posicion(lang) });
   }
 
   const result = await regenerateTypedSection(def, current, instruction, {

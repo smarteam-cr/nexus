@@ -47,6 +47,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "app/(shell)/sessions/[id]/page.tsx": { modo: "criterio", criterio: "clasificable" },
   "app/api/projects/[projectId]/project-sessions/route.ts": { modo: "criterio", criterio: "clasificable" },
   "app/api/clients/[id]/analyze/route.ts": { modo: "criterio", criterio: "clasificable" },
+  // La lectura automática de la exploración de venta se detiene cuando la venta ya tiene un proyecto.
+  "lib/exploraciones/agente.ts": { modo: "criterio", criterio: "clasificable" },
   "lib/projects/proyecto-del-cliente.ts": {
     modo: "exento",
     razon:

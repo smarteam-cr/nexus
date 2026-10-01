@@ -46,8 +46,9 @@ export async function exploracionDelProyecto(projectId: string): Promise<string 
     if (bc?.exploracionId) return bc.exploracionId;
   }
 
+  // Sin enlace por el negocio: la viva. Una archivada se abandonó (o ya tuvo su propuesta, que va arriba).
   const exp = await prisma.exploracionDeVenta.findFirst({
-    where: { clientId: p.clientId },
+    where: { clientId: p.clientId, archivadaEn: null },
     orderBy: { updatedAt: "desc" },
     select: { id: true, createdAt: true, updatedAt: true },
   });

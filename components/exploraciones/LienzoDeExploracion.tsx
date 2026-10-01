@@ -15,6 +15,7 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import { listaParaProponer, queSigue } from "@/lib/exploraciones/calidad";
 import {
   aplicarOperaciones,
+  destinoValido,
   propuestaVigente,
   VALIDADOR_LIBRE,
   type DestinoDePropuesta,
@@ -54,15 +55,24 @@ export default function LienzoDeExploracion({
      el anterior. */
   const confirmada = useRef(inicial);
   const cola = useRef<Promise<unknown>>(Promise.resolve());
+  /* La «época» de la fila: sube con cada conflicto (409). Un cambio que se encoló ANTES del conflicto
+     se armó sobre algo que otra persona ya cambió: no se manda (si saliera con la versión nueva,
+     pisaría ese cambio sin que nadie se entere). */
+  const epoca = useRef(0);
 
-  /* Un `router.refresh()` (cambió la edición o el perfil) trae una fila más nueva: se adopta. */
+  /* Un `router.refresh()` (cambió la edición o el perfil) trae la fila: se adopta solo si es MÁS
+     NUEVA que la última confirmada. Una respuesta que leyó la base antes de un cambio posterior
+     haría retroceder la pantalla, y el próximo cambio chocaría como si fuera de otra persona. */
   const [vistaDe, setVistaDe] = useState(inicial.actualizadaEn);
   if (vistaDe !== inicial.actualizadaEn) {
     setVistaDe(inicial.actualizadaEn);
-    setExp(inicial);
+    const actual = confirmada.current;
+    if (inicial.version > actual.version || (inicial.version === actual.version && inicial.actualizadaEn >= actual.actualizadaEn)) {
+      setExp(inicial);
+      confirmada.current = inicial;
+    }
     if (inicial.sinLeer) setSinLeer(inicial.sinLeer);
     if (inicial.proyectos) setProyectos(inicial.proyectos);
-    confirmada.current = inicial;
   }
 
   const validez = useMemo<Validez>(() => {
@@ -87,6 +97,7 @@ export default function LienzoDeExploracion({
           body: JSON.stringify({ version: base.version, operaciones: ops }),
         });
         const data = (await res.json().catch(() => ({}))) as { exploracion?: ExploracionParaLaPantalla; error?: string };
+        if (res.status === 409) epoca.current += 1;
         if (data.exploracion) {
           confirmada.current = data.exploracion;
           setExp(data.exploracion);
@@ -95,6 +106,8 @@ export default function LienzoDeExploracion({
         }
         if (!res.ok) {
           toast.error(data.error ?? "No se pudo guardar.");
+          // Sin la fila en la respuesta, se pide la de ahora: el rechazo pudo venir de algo que cambió.
+          if (!data.exploracion) void recargar();
           return false;
         }
         if (opciones.refrescar) router.refresh();
@@ -108,6 +121,7 @@ export default function LienzoDeExploracion({
         setGuardando(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `recargar` se declara abajo y es estable
     [router, toast],
   );
 
@@ -118,12 +132,16 @@ export default function LienzoDeExploracion({
         const r = aplicarOperaciones(actual.estado, ops, validez, VALIDADOR_LIBRE);
         return r.ok ? { ...actual, estado: r.estado } : actual;
       });
-      const p = cola.current.then(() => enviar(ops, opciones));
+      const deLaEpoca = epoca.current;
+      const p = cola.current.then(() => (deLaEpoca === epoca.current ? enviar(ops, opciones) : false));
       cola.current = p.catch(() => undefined);
       return p;
     },
     [enviar, validez],
   );
+
+  /** Espera a que salgan los cambios en fila (antes de armar la propuesta, por ejemplo). */
+  const alDia = useCallback((): Promise<void> => cola.current.then(() => undefined), []);
 
   const recargar = useCallback((): Promise<void> => {
     const p = cola.current.then(async () => {
@@ -154,11 +172,12 @@ export default function LienzoDeExploracion({
     return calcularChequeo(areas, estimados);
   }, [exp.estado, escala]);
 
-  const pendientes = useMemo(() => propuestaVigente(exp.estado), [exp.estado]);
+  // Lo pendiente que todavía tiene dónde ir: lo de una dimensión o un criterio que ya no está no se cuenta ni se usa.
+  const pendientes = useMemo(() => propuestaVigente(exp.estado).filter((it) => destinoValido(it.destino, validez)), [exp.estado, validez]);
   const pendientesPara = useCallback((filtro: (d: DestinoDePropuesta) => boolean) => pendientes.filter((it) => filtro(it.destino)), [pendientes]);
   const nombreDeNivel = useCallback((l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l, [escala]);
 
-  const lienzo: Lienzo = { exp, escala, chequeo, pendientes, sinLeer, proyectos, puedeEditar, guardando, cambiar, recargar, nombreDeNivel, pendientesPara };
+  const lienzo: Lienzo = { exp, escala, chequeo, pendientes, sinLeer, proyectos, puedeEditar, guardando, cambiar, recargar, alDia, nombreDeNivel, pendientesPara };
 
   const puntos = listaParaProponer(exp.estado, chequeo);
   const sigue = queSigue(exp.estado, chequeo, sinLeer);
@@ -188,7 +207,11 @@ export default function LienzoDeExploracion({
             applyLabel="Usar todas"
             discardLabel="Descartar todas"
             applying={guardando}
-            onApply={() => void cambiar(pendientes.map((it) => ({ op: "usar" as const, itemId: it.id })), { refrescar: pendientes.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil") })}
+            onApply={() =>
+              void cambiar([{ op: "usarVarias", items: pendientes.map((it) => ({ itemId: it.id, valor: it.valor })) }], {
+                refrescar: pendientes.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil"),
+              })
+            }
             onDiscard={() => void cambiar([{ op: "descartar", itemIds: pendientes.map((it) => it.id) }])}
           />
         )}

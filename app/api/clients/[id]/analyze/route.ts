@@ -2043,10 +2043,11 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
   }
 
   /* La EXPLORACIÓN DE VENTA (Ventas → Exploraciones, 2026-10-01): lo que el vendedor confirmó con el
-     prospecto antes del cierre, rotulado ESTIMADO —sirve para saber dónde mirar, no es evidencia— y
-     con lo interno marcado «SOLO INTERNO» hacia secciones que ningún documento del cliente lee. Solo
-     handoffs de Customer Success: lib/exploraciones/handoff.ts decide a qué proyecto le corresponde.
-     Entra DESPUÉS del recordatorio de las exclusiones del CSE, así que el recordatorio se repite. */
+     prospecto antes del cierre, rotulado ESTIMADO —sirve para saber dónde mirar, no es evidencia—.
+     SIN lo interno: este agente escribe también las secciones que leen los documentos del cliente, así
+     que lo interno no se le manda (lo ve el CSE en el contexto del proyecto). Solo handoffs de
+     Customer Success: lib/exploraciones/handoff.ts decide a qué proyecto le corresponde. Entra
+     DESPUÉS del recordatorio de las exclusiones del CSE, así que el recordatorio se repite. */
   if (isHandoffAgent && bodyProjectId) {
     try {
       const deLaVenta = await exploracionParaElHandoff(bodyProjectId);

@@ -108,7 +108,7 @@ export const AGUDAS_DE_TUTEO: ReadonlySet<string> = new Set([
   // Primera persona del pretérito (el chat cuenta lo que hizo)
   "dejé", "cambié", "registré", "quedé", "encontré", "contesté",
   // …y el vendedor cuenta lo que entendió (el guion de la exploración de venta)
-  "entendí", "creé",
+  "entendí",
   // Sustantivos, gentilicios y nombres
   "país", "multipaís", "inglés", "interés", "cortés", "comité", "caché", "josé", "andrés", "mié",
 ]);

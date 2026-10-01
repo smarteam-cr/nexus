@@ -110,6 +110,8 @@ function textoDeLasNotas(notas: Record<string, string>): string {
 export async function leerFuentes(opts: {
   clientId: string;
   companyId: string | null;
+  /** Cuándo empezó la exploración: «leer» busca reuniones desde un mes antes (como «sin leer»). */
+  creadaEn: Date;
   escala: EscalaDelLienzo;
   propuesta: PropuestaDeExploracion;
   notas: Record<string, string>;
@@ -153,7 +155,8 @@ export async function leerFuentes(opts: {
     });
   }
 
-  const tests = testsDeLosContactos(contactos);
+  // Solo el test de quien es de esta empresa: el de un contacto cuya empresa principal es otra no es de acá.
+  const tests = testsDeLosContactos(contactos.filter((c) => !c.empresaId || c.empresaId === opts.companyId));
   tests.forEach((t, i) => {
     const area = opts.escala.areas.find((a) => a.id === t.resultado.areaId)?.nombre ?? t.resultado.areaId;
     fuentes.push({
@@ -183,13 +186,28 @@ export async function leerFuentes(opts: {
   // ── Las reuniones de Meet (solo las que ya ocurrieron) ──
   const sesiones = await getClientSessions(opts.clientId, { take: 30 });
   const yaLeidasS = new Set(opts.propuesta.leidas.sesiones);
+  const ahora = new Date();
+  /* Al leer sin una reunión elegida: las dos más recientes SIN LEER y CON transcripción, desde un mes
+     antes del alta — las mismas que la pantalla avisa como «sin leer». Sin el filtro, el botón podía
+     elegir dos reuniones sin grabar, no leer nada y dejar sin leer para siempre la que se avisa. */
+  const desde = opts.creadaEn.getTime() - DIAS_ANTES_DEL_ALTA * 24 * 60 * 60 * 1000;
+  const sinLeerConTranscripcion = async () => {
+    const candidatas = sesiones.filter((s) => !yaLeidasS.has(s.id) && s.date >= desde).map((s) => s.id);
+    if (candidatas.length === 0) return [];
+    const filas = await prisma.firefliesSession.findMany({
+      where: { id: { in: candidatas }, AND: [{ transcript: { not: null } }, { transcript: { not: "" } }], date: { lte: ahora } },
+      select: { id: true },
+      orderBy: { date: "desc" },
+      take: 2,
+    });
+    return sesiones.filter((s) => filas.some((f) => f.id === s.id));
+  };
   const elegidas =
     opts.modo === "leer"
       ? opts.sesionId
         ? sesiones.filter((s) => s.id === opts.sesionId)
-        : sesiones.filter((s) => !yaLeidasS.has(s.id)).slice(0, 2)
+        : await sinLeerConTranscripcion()
       : sesiones.slice(0, 3);
-  const ahora = new Date();
   const conTexto = elegidas.length
     ? await prisma.firefliesSession.findMany({
         // Ids que el chokepoint ya filtró por dueño y por fecha; el techo de fecha se repite acá.

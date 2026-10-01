@@ -214,7 +214,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
 function ArmarLaPropuesta({ negocios, propuestas, alRecargar }: { negocios: Negocio[] | null; propuestas: PropuestaArmada[]; alRecargar: () => void }) {
   const router = useRouter();
   const toast = useToast();
-  const { exp, chequeo, puedeEditar } = useLienzo();
+  const { exp, chequeo, puedeEditar, guardando, alDia } = useLienzo();
   const abiertos = (negocios ?? []).filter((n) => !n.isClosed);
   const [dealId, setDealId] = useState(abiertos[0]?.id ?? negocios?.[0]?.id ?? "");
   const [nombre, setNombre] = useState(`Propuesta — ${exp.empresa.nombre}`);
@@ -224,6 +224,8 @@ function ArmarLaPropuesta({ negocios, propuestas, alRecargar }: { negocios: Nego
   async function armar() {
     setArmando(true);
     try {
+      // Lo que se acaba de elegir (un caso de uso, por ejemplo) tiene que estar guardado antes.
+      await alDia();
       const res = await fetch(`/api/sales/exploraciones/${exp.id}/propuesta`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -266,7 +268,7 @@ function ArmarLaPropuesta({ negocios, propuestas, alRecargar }: { negocios: Nego
         <Alert variant="warning" title="La empresa no tiene negocios en HubSpot">
           La propuesta se une al proyecto por el negocio: créalo en HubSpot y vuelve.{" "}
           <button type="button" className="underline" onClick={alRecargar}>
-            Ya lo creé
+            Volver a buscar
           </button>
         </Alert>
       ) : (
@@ -293,7 +295,7 @@ function ArmarLaPropuesta({ negocios, propuestas, alRecargar }: { negocios: Nego
         </p>
       )}
       {puedeEditar && negocios && negocios.length > 0 && (
-        <Button variant="primary" loading={armando} disabled={!dealId || !nombre.trim()} onClick={() => void armar()}>
+        <Button variant="primary" loading={armando} disabled={!dealId || !nombre.trim() || guardando} onClick={() => void armar()}>
           Armar y generar la propuesta
         </Button>
       )}

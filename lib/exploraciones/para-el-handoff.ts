@@ -6,10 +6,13 @@
  * chequeo de la venta: «sirve para saber dónde mirar, no es evidencia»— y su diagnóstico no
  * cambia: lo arma completo, desde ahí.
  *
- * Lo INTERNO (hipótesis, presupuesto, quién decide, lo que nadie exploró, el producto mostrado, la
- * apertura a la asesoría) va aparte, rotulado «SOLO INTERNO», con el destino escrito: «Riesgos y
- * banderas rojas» o «¿Por qué vendimos?». Esas secciones del handoff no las lee ningún documento del
- * cliente (lib/canvas/handoff-al-cliente.test.ts). Sin ids de la escala: nombres.
+ * ⛔ Lo INTERNO (hipótesis, presupuesto, quién decide, lo que nadie exploró, el producto mostrado, la
+ * apertura a la asesoría, el contexto y el siguiente paso) NO entra al bloque. El agente del handoff
+ * escribe en una sola llamada también las secciones que leen los documentos del cliente (el kickoff,
+ * el diagnóstico, la entrega, el cuestionario previo), y rotularlo «solo interno» era pedirle al modelo
+ * que no se equivoque: la regla del repo es filtrar datos, no rogarle al modelo. Lo interno lo ve el
+ * CSE en la columna «Exploración de venta» del contexto del proyecto (`internoParaElCse`), que es
+ * pantalla interna. Sin ids de la escala: nombres.
  */
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
@@ -59,43 +62,42 @@ export function bloqueParaElHandoff(o: { estado: EstadoDeExploracion; escala: Es
   const { estado, escala, chequeo } = o;
   const c = estado.contenido;
   const nivel = (l: Letra | null) => (l ? (escala.niveles.find((n) => n.letra === l)?.nombre ?? l) : "sin estimar");
-  const nombreDim = (id: string) => {
-    for (const a of escala.areas) {
-      const d = a.dimensiones.find((x) => x.id === id);
-      if (d) return d.nombre;
-    }
-    return null;
-  };
+  const nombreDim = nombreDeDimension(escala);
 
   const partes: string[] = [
     "=== EXPLORACIÓN DE VENTA (ESTIMADO: sirve para saber dónde mirar, no es evidencia) ===",
     "La armó el vendedor con el prospecto antes del cierre. Todo lo de acá es ESTIMADO —un chequeo de la Escala hecho en la venta, con lo que se dijo en las reuniones—: úsalo para saber dónde mirar y qué preguntar, nunca como evidencia ni como un nivel medido. El diagnóstico del proyecto se arma completo, desde ahí.",
-    "Lo marcado «SOLO INTERNO» va a «Riesgos y banderas rojas» o a «¿Por qué vendimos?»: nunca a una sección que lea el cliente.",
   ];
   const perfil = estado.perfilCierre && estado.perfilDespues ? ` · Perfil: venta ${estado.perfilCierre}, relación ${estado.perfilDespues}` : "";
   partes.push("", `Industria (edición de la escala): ${escala.edicion?.nombre ?? "escala general"}${perfil}.`);
 
-  // El nivel estimado de cada área y de cada dimensión, con de dónde salió.
+  /* En orden de valor, porque el tope corta por el final: el nivel de cada área (una línea), las
+     metas y lo demás, lo que falta y lo que se eligió; el detalle de cada dimensión, al último. */
   const medidas = chequeo.areas.filter((a) => a.dimensiones.some((d) => d.nivel));
   if (medidas.length) {
-    partes.push("", "## Nivel estimado por área y dimensión (con de dónde salió)");
-    for (const a of medidas) {
-      partes.push(
-        `- ${a.nombre}: base operativa ${nivel(a.capas.base.nivel)}, producción ${nivel(a.capas.produccion.nivel)}${a.objetivo ? `; objetivo de la primera venta: ${nivel(a.objetivo)}` : ""}.`,
-      );
-      for (const d of a.dimensiones) {
-        if (!d.aplica || !d.nivel) continue;
-        const e = c.chequeo[d.id];
-        const fuente = e ? ETIQUETA_DE_LA_FUENTE[e.fuente] : null;
-        partes.push(`  · ${d.nombre}: ${nivel(d.nivel)}${fuente ? ` (${fuente}${e?.evidencia ? `: «${e.evidencia.slice(0, 160)}»` : ""})` : ""}`);
-      }
-    }
+    partes.push(
+      "",
+      "## Nivel estimado de cada área",
+      ...medidas.map(
+        (a) =>
+          `- ${a.nombre}: base operativa ${nivel(a.capas.base.nivel)}, producción ${nivel(a.capas.produccion.nivel)}${a.objetivo ? `; objetivo de la primera venta: ${nivel(a.objetivo)}` : ""}.`,
+      ),
+    );
     const r = chequeo.recomendacion;
     if (r?.tipo === "trabajar") {
       const area = chequeo.areas.find((x) => x.id === r.areaId);
       const dim = nombreDim(r.dimensionId);
       if (area && dim) partes.push(`Qué va primero según la exploración: ${dim}, en ${area.nombre}.`);
     }
+  }
+
+  // Solo lo que también podría ver el cliente: lo interno va a la columna del contexto, no al modelo.
+  for (const def of CASILLAS) {
+    if (!def.alCliente) continue;
+    const v = c.casillas[def.clave];
+    if (v === undefined) continue;
+    const lineas = valorComoTexto(def.clave, v, nombreDim);
+    if (lineas.length) partes.push("", `## ${def.etiqueta}`, ...lineas.map((l) => `- ${l}`));
   }
 
   // Lo que le falta para Funcional: los criterios que NO tiene, por su texto.
@@ -109,16 +111,6 @@ export function bloqueParaElHandoff(o: { estado: EstadoDeExploracion; escala: Es
   }
   if (faltas.length) partes.push("", "## Lo que le falta para Funcional (según lo que se habló)", ...faltas);
 
-  const internas: string[] = [];
-  for (const def of CASILLAS) {
-    const v = c.casillas[def.clave];
-    if (v === undefined) continue;
-    const lineas = valorComoTexto(def.clave, v, nombreDim);
-    if (lineas.length === 0) continue;
-    if (def.alHandoff === "interno") internas.push(`- ${def.etiqueta}: ${lineas.join(" | ")}`);
-    else partes.push("", `## ${def.etiqueta}`, ...lineas.map((l) => `- ${l}`));
-  }
-
   const casos = Object.values(c.casosDeUso);
   if (casos.length) {
     const nombreDeArea = (id: string | null) => (id ? (escala.areas.find((a) => a.id === id)?.nombre ?? null) : null);
@@ -129,8 +121,39 @@ export function bloqueParaElHandoff(o: { estado: EstadoDeExploracion; escala: Es
     );
   }
 
-  if (internas.length) partes.push("", "## SOLO INTERNO (va a «Riesgos y banderas rojas» o a «¿Por qué vendimos?»)", ...internas);
+  if (medidas.length) {
+    partes.push("", "## El nivel de cada dimensión, y de dónde salió");
+    for (const a of medidas) {
+      for (const d of a.dimensiones) {
+        if (!d.aplica || !d.nivel) continue;
+        const e = c.chequeo[d.id];
+        const fuente = e ? ETIQUETA_DE_LA_FUENTE[e.fuente] : null;
+        partes.push(`- ${d.nombre} (${a.nombre}): ${nivel(d.nivel)}${fuente ? ` (${fuente}${e?.evidencia ? `: «${e.evidencia.slice(0, 160)}»` : ""})` : ""}`);
+      }
+    }
+  }
 
   const texto = partes.join("\n");
   return texto.length > TOPE_DEL_BLOQUE_DEL_HANDOFF ? `${texto.slice(0, TOPE_DEL_BLOQUE_DEL_HANDOFF)}\n(…recortado)` : texto;
+}
+
+/**
+ * Lo interno de la exploración, para el CSE en la columna del contexto del proyecto (pantalla
+ * interna, nunca un documento ni un prompt): cada casilla que el cliente no ve, con lo que tiene.
+ */
+export function internoParaElCse(estado: EstadoDeExploracion, escala: EscalaDelLienzo): { etiqueta: string; lineas: string[] }[] {
+  const nombreDim = nombreDeDimension(escala);
+  return CASILLAS.filter((def) => !def.alCliente && estado.contenido.casillas[def.clave] !== undefined)
+    .map((def) => ({ etiqueta: def.etiqueta, lineas: valorComoTexto(def.clave, estado.contenido.casillas[def.clave], nombreDim) }))
+    .filter((x) => x.lineas.length > 0);
+}
+
+function nombreDeDimension(escala: EscalaDelLienzo): (id: string) => string | null {
+  return (id) => {
+    for (const a of escala.areas) {
+      const d = a.dimensiones.find((x) => x.id === id);
+      if (d) return d.nombre;
+    }
+    return null;
+  };
 }

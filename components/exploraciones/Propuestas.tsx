@@ -125,7 +125,7 @@ export function Propuestas({ items, compacto = false }: { items: ItemPropuesto[]
             </div>
             {puedeEditar && (
               <div className="flex flex-shrink-0 items-center gap-1.5">
-                <Button size="xs" variant="primary" disabled={guardando} onClick={() => void cambiar([{ op: "usar", itemId: it.id }], { refrescar: it.destino.tipo === "edicion" || it.destino.tipo === "perfil" })}>
+                <Button size="xs" variant="primary" disabled={guardando} onClick={() => void cambiar([{ op: "usar", itemId: it.id, valor: it.valor }], { refrescar: it.destino.tipo === "edicion" || it.destino.tipo === "perfil" })}>
                   Usar
                 </Button>
                 <Button size="xs" variant="secondary" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [it.id] }])}>

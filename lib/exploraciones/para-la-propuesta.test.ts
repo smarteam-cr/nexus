@@ -14,7 +14,7 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import { leerPosicion } from "@/lib/escala/posicion";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { escalaParaElLienzo, type EscalaDelLienzo } from "./escala-del-lienzo";
-import { bloqueParaElHandoff, TOPE_DEL_BLOQUE_DEL_HANDOFF } from "./para-el-handoff";
+import { bloqueParaElHandoff, internoParaElCse, TOPE_DEL_BLOQUE_DEL_HANDOFF } from "./para-el-handoff";
 import { bloqueParaLaPropuesta, posicionDesdeElChequeo } from "./para-la-propuesta";
 
 const general = parsearEscala(leerArchivoDeLaEscala("escala"));
@@ -144,6 +144,11 @@ describe("el bloque de contexto para la generación", () => {
     expect(b).not.toMatch(/\b\d\.\d\b/);
   });
 
+  it("sin nada que aportar, no hay bloque: la generación no puede contar un encabezado como fuente", () => {
+    const vacia = estadoCon({}, { casillas: { hipotesis: ["Creemos que HIPOTESIS_INTERNA"], presupuesto: "PRESUPUESTO_INTERNO" } });
+    expect(bloqueParaLaPropuesta({ estado: vacia, escala, chequeo: chequeoDe(escala, vacia), conEscala: true })).toBe("");
+  });
+
   it("con «Sin Escala» no nombra niveles ni la escala", () => {
     const b = bloqueParaLaPropuesta({ estado: e, escala, chequeo, conEscala: false });
     expect(b).not.toMatch(/Deficiente|Funcional|Inicial|nivel|Escala/);
@@ -169,17 +174,23 @@ describe("el bloque del handoff", () => {
 
   it("va rotulado ESTIMADO, con el nivel de cada dimensión y de dónde salió", () => {
     expect(b.split("\n")[0]).toMatch(/ESTIMADO: sirve para saber dónde mirar, no es evidencia/);
-    expect(b).toContain(`· ${base.nombre}: Deficiente (`);
+    expect(b).toContain(`- ${base.nombre} (${escala.areas.find((a) => a.id === "1")!.nombre}): Deficiente (`);
     expect(b).toContain("«Cada vendedor en su planilla»");
     expect(b).toContain("Subir la tasa de cierre: de dos de cada diez a cuatro de cada diez");
   });
 
-  it("lo interno va al final, debajo de «SOLO INTERNO», y en ningún otro lado", () => {
-    const corte = b.indexOf("## SOLO INTERNO");
-    expect(corte).toBeGreaterThan(0);
-    for (const interno of ["HIPOTESIS_INTERNA", "PRESUPUESTO_INTERNO", "NOTA_INTERNA", "APERTURA_INTERNA"]) {
-      expect(b.indexOf(interno), interno).toBeGreaterThan(corte);
+  it("⛔ lo interno NO entra: ese agente escribe también lo que leen los documentos del cliente", () => {
+    for (const interno of ["HIPOTESIS_INTERNA", "PRESUPUESTO_INTERNO", "NOTA_INTERNA", "APERTURA_INTERNA", "Ana"]) {
+      expect(b, interno).not.toContain(interno);
     }
+  });
+
+  it("lo interno lo ve el CSE en la columna del contexto, con su etiqueta", () => {
+    const interno = internoParaElCse(e, escala);
+    const todo = interno.map((x) => `${x.etiqueta}: ${x.lineas.join(" | ")}`).join("\n");
+    for (const dato of ["HIPOTESIS_INTERNA", "PRESUPUESTO_INTERNO", "NOTA_INTERNA", "APERTURA_INTERNA"]) expect(todo).toContain(dato);
+    // Lo que sí puede ver el cliente no se repite ahí.
+    expect(todo).not.toContain("Subir la tasa de cierre");
   });
 
   it("tiene tope", () => {

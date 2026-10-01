@@ -23,7 +23,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { listaParaProponer } from "./calidad";
 import { calcularMetricas, DIAS_DE_LA_METRICA, type Metricas } from "./metricas";
 import { leerContenido } from "./esquemas";
-import { bloquearFila, exploracionParaLaPropuesta, leerExploracion } from "./servidor";
+import { bloquearFila, chequeoDe, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
 
 /** El tipo de la primera venta que sale de una exploración: la implementación de HubSpot. */
 export const TIPO_DE_LA_PROPUESTA = DEFAULT_BC_TYPE_ID;
@@ -76,6 +76,9 @@ export async function propuestasDeLaExploracion(exploracionId: string) {
   return filas.map((f) => ({ id: f.id, nombre: f.name, estado: f.status, creadaEn: f.createdAt.toISOString() }));
 }
 
+/** La exploración se archivó entre que se abrió el paso y se armó la propuesta. */
+class ExploracionArchivada extends Error {}
+
 export type ResultadoDeArmar = { ok: true; businessCaseId: string } | { ok: false; status: number; error: string };
 
 export async function armarPropuesta(o: { exploracionId: string; dealId: string; nombre: string | null; email: string | null }): Promise<ResultadoDeArmar> {
@@ -97,46 +100,68 @@ export async function armarPropuesta(o: { exploracionId: string; dealId: string;
   const negocio = negocios.find((n) => n.id === o.dealId);
   if (!negocio) return { ok: false, status: 400, error: "Ese negocio no es de esta empresa en HubSpot." };
 
-  const datos = await exploracionParaLaPropuesta(o.exploracionId);
-  const contenido = leerContenido(fila.contenido);
-  const casos = Object.keys(contenido.casosDeUso);
-  const delCatalogo = casos.length
-    ? new Set((await prisma.useCase.findMany({ where: { id: { in: casos } }, select: { id: true } }).catch(() => [])).map((u) => u.id))
-    : new Set<string>();
+  // Fuera de la transacción lo que no cambia con la fila: la escala y qué hay en el catálogo.
+  const escalaVig = await escalaParaExplorar();
+  const delCatalogo = new Set((await prisma.useCase.findMany({ select: { id: true } }).catch(() => [])).map((u) => u.id));
 
-  const businessCaseId = await prisma.$transaction(async (tx) => {
-    const bc = await createBusinessCase(
-      {
-        clientId: fila.clientId,
-        name: o.nombre?.trim() || `Propuesta — ${fila.client.name}`,
-        hubspotCompanyId: companyId,
-        hubspotDealId: negocio.id,
-        createdByEmail: o.email,
-        caseType: tipo.id,
-        caseSubtype: null,
-        tags: seedTagsFor(tipo, null),
-        exploracionId: o.exploracionId,
-      },
-      tx,
-    );
-    await createBusinessCaseCanvas(bc.id, 0, tx, tipo.templateId, { caseType: tipo.id, caseSubtype: null });
-    for (const useCaseId of casos.filter((id) => delCatalogo.has(id))) {
-      await tx.businessCaseUseCase.create({ data: { businessCaseId: bc.id, useCaseId, selected: true } });
-    }
-
-    /* La foto de «lista para proponer» de este momento, para la métrica. Con la fila bloqueada y
-       releída; no sube la versión: no es algo que el vendedor confirme, es un registro. */
-    if (datos) {
+  try {
+    const businessCaseId = await prisma.$transaction(async (tx) => {
+      /* La fila BLOQUEADA primero y releída adentro: entra lo que se eligió hasta el último momento, y
+         dos armados a la vez se esperan en vez de cruzarse. (Insertar la propuesta toma una traba sobre
+         la exploración por su clave foránea; pedir FOR UPDATE recién después, en dos transacciones a la
+         vez, era un abrazo mortal.) */
       await bloquearFila(tx, o.exploracionId);
-      const actual = await tx.exploracionDeVenta.findUnique({ where: { id: o.exploracionId }, select: { contenido: true } });
-      const c = leerContenido(actual?.contenido);
-      const puntos = Object.fromEntries(listaParaProponer(datos.estado, datos.chequeo).map((p) => [p.id, p.cumplido]));
-      c.alProponer = [...c.alProponer, { en: new Date().toISOString(), businessCaseId: bc.id, puntos }].slice(-50);
-      await tx.exploracionDeVenta.update({ where: { id: o.exploracionId }, data: { contenido: c as unknown as Prisma.InputJsonValue } });
-    }
-    return bc.id;
-  });
-  return { ok: true, businessCaseId };
+      const actual = await tx.exploracionDeVenta.findUnique({
+        where: { id: o.exploracionId },
+        select: {
+          contenido: true,
+          propuesta: true,
+          areas: true,
+          edicion: true,
+          perfilCierre: true,
+          perfilDespues: true,
+          responsableEmail: true,
+          archivadaEn: true,
+        },
+      });
+      if (!actual || actual.archivadaEn) throw new ExploracionArchivada();
+      const estado = estadoDesdeFila(actual);
+
+      const bc = await createBusinessCase(
+        {
+          clientId: fila.clientId,
+          name: o.nombre?.trim() || `Propuesta — ${fila.client.name}`,
+          hubspotCompanyId: companyId,
+          hubspotDealId: negocio.id,
+          createdByEmail: o.email,
+          caseType: tipo.id,
+          caseSubtype: null,
+          tags: seedTagsFor(tipo, null),
+          exploracionId: o.exploracionId,
+        },
+        tx,
+      );
+      await createBusinessCaseCanvas(bc.id, 0, tx, tipo.templateId, { caseType: tipo.id, caseSubtype: null });
+      for (const useCaseId of Object.keys(estado.contenido.casosDeUso).filter((id) => delCatalogo.has(id))) {
+        await tx.businessCaseUseCase.create({ data: { businessCaseId: bc.id, useCaseId, selected: true } });
+      }
+
+      // La foto de «lista para proponer» de este momento, para la métrica. No sube la versión: no es
+      // algo que el vendedor confirme, es un registro.
+      if (escalaVig.estado === "ok") {
+        const escala = escalaDeLaExploracion(escalaVig.general, estado);
+        const puntos = Object.fromEntries(listaParaProponer(estado, chequeoDe(escala, estado)).map((p) => [p.id, p.cumplido]));
+        const c = estado.contenido;
+        c.alProponer = [...c.alProponer, { en: new Date().toISOString(), businessCaseId: bc.id, puntos }].slice(-50);
+        await tx.exploracionDeVenta.update({ where: { id: o.exploracionId }, data: { contenido: c as unknown as Prisma.InputJsonValue } });
+      }
+      return bc.id;
+    });
+    return { ok: true, businessCaseId };
+  } catch (e) {
+    if (e instanceof ExploracionArchivada) return { ok: false, status: 409, error: "La exploración está archivada." };
+    throw e;
+  }
 }
 
 /**

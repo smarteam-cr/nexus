@@ -12,6 +12,7 @@ import { z } from "zod";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { parseRunError } from "@/lib/agents/run-error";
+import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { lanzarCorrida, ultimaCorrida } from "@/lib/exploraciones/agente";
 import { MODOS_DE_LA_CORRIDA } from "@/lib/exploraciones/contenido";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
@@ -51,6 +52,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (lectura.estado !== "ok") return NextResponse.json({ corrida: null });
   const r = await ultimaCorrida(id, lectura.fila.clientId);
   if (!r) return NextResponse.json({ corrida: null });
+
+  // Murió con un reinicio y nadie escribió su final: se informa como lo que es, y los botones vuelven.
+  if (r.status === "RUNNING" && estaColgada(r)) {
+    return NextResponse.json({
+      corrida: { id: r.id, estado: "ERROR", etiqueta: r.stepLabel, fase: null, empezo: r.createdAt.toISOString(), propuestos: null, nadaNuevo: false, error: MOTIVO_COLGADA },
+    });
+  }
 
   let salida: { propuestos?: number; nadaNuevo?: boolean; correosSinPermiso?: number } = {};
   if (r.status === "DONE") {

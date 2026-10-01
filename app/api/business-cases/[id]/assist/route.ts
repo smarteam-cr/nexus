@@ -19,6 +19,8 @@ import { DEFAULT_AGENT_INTRO } from "@/lib/business-cases/canvas-agent";
 import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { templateById } from "@/components/landing/configs/templates.defs";
+import { SECCION_DE_ESCALA } from "@/lib/escala/contexto";
+import { usaEscala } from "@/lib/tags/catalog";
 
 const bodySchema = z.object({
   canvasId: z.string().min(1),
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
           blocks: { orderBy: { order: "asc" }, select: { blockType: true, data: true } },
         },
       },
-      businessCase: { select: { id: true, clientId: true, caseType: true, caseSubtype: true, language: true } },
+      businessCase: { select: { id: true, clientId: true, caseType: true, caseSubtype: true, language: true, exploracionId: true, tags: true } },
     },
   });
   if (!canvas?.businessCase) return NextResponse.json({ error: "Canvas no encontrado" }, { status: 404 });
@@ -70,10 +72,14 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const briefs = briefsByKeyFrom(template?.sections ?? canvas.sections);
   const defsByKey = new Map(tpl.sections.map((d) => [d.key, d]));
 
+  /* En una propuesta que nació de una exploración de venta, «Dónde está tu operación hoy» sale del
+     chequeo de la exploración y alimenta el kickoff: la IA no la toca (ver la generación). */
+  const escalaDeLaExploracion = !!canvas.businessCase.exploracionId && usaEscala(canvas.businessCase.tags);
   const sections: AssistSectionDef[] = [];
   for (const s of canvas.canvasSections) {
     const def = defsByKey.get(s.key);
     if (!def || def.agentGenerated === false || def.ctxDriven) continue;
+    if (escalaDeLaExploracion && s.key === SECCION_DE_ESCALA.propuesta) continue;
     const card = s.blocks.find((b) => b.blockType === "CARD");
     sections.push({
       key: def.key,

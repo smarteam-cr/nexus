@@ -8,6 +8,7 @@ import {
   aplicarOperaciones as aplicar,
   cambioLoConfirmado,
   contenidoVacio,
+  destinoValido,
   fusionarPropuestas,
   idDelItem,
   propuestaVacia,
@@ -218,6 +219,47 @@ describe("las operaciones", () => {
     expect(fusionarPropuestas(usado.estado, [caso]).items).toEqual([]);
     const quitado = aplicarOperaciones(usado.estado, [{ op: "casoDeUso", useCaseId: "uc-1", valor: null }], VALIDEZ);
     expect(quitado.ok && quitado.estado.contenido.casosDeUso).toEqual({});
+  });
+
+  it("«Usar» no pasa el tope de una lista: avisa en vez de dejar una lista que la lectura borraría entera", () => {
+    const metas = Array.from({ length: 20 }, (_, i) => ({ que: `Meta ${i}` }));
+    const nueva = item({ tipo: "casilla", clave: "metas" }, { que: "Meta 21" });
+    const e = estado({ contenido: { ...contenidoVacio(), casillas: { metas } }, propuesta: fusionarPropuestas(estado(), [nueva]) });
+    const r = aplicarOperaciones(e, [{ op: "usar", itemId: nueva.id }], VALIDEZ);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/ya tiene 20/);
+  });
+
+  it("la lectura conserva los ítems buenos de una lista, hasta su tope, en vez de tirarla entera", () => {
+    const metas = [...Array.from({ length: 22 }, (_, i) => ({ que: `Meta ${i}` })), { que: "" }];
+    expect(leerContenido({ casillas: { metas } }).casillas.metas).toHaveLength(20);
+  });
+
+  it("el mismo nivel desde el test no pisa al pendiente de una reunión: queda su frase y su riesgo", () => {
+    const deLaReunion = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "I", fuente: "reunion", evidencia: "Cada uno en su Excel", riesgo: true });
+    const delTest = item({ tipo: "nivel", dimensionId: "1.3" }, { nivel: "I", fuente: "test", evidencia: "Algunos pasos escritos" }, [{ id: "T1", etiqueta: "Test" }]);
+    expect(delTest.id).toBe(deLaReunion.id);
+    const p = fusionarPropuestas(estado({ propuesta: fusionarPropuestas(estado(), [deLaReunion]) }), [delTest]);
+    expect(p.items).toHaveLength(1);
+    expect(p.items[0].valor).toMatchObject({ fuente: "reunion", riesgo: true, evidencia: "Cada uno en su Excel" });
+    expect(p.items[0].fuentes.map((f) => f.id)).toEqual(["S1", "T1"]);
+  });
+
+  it("una tilde también es un cambio de lo confirmado: sube la versión", () => {
+    const antes = estado({ contenido: { ...contenidoVacio(), casillas: { presupuesto: "esta definido" } } });
+    const r = aplicarOperaciones(antes, [{ op: "casilla", clave: "presupuesto", valor: "está definido" }], VALIDEZ);
+    expect(r.ok && cambioLoConfirmado(antes, r.estado)).toBe(true);
+  });
+
+  it("«Usar todas» usa cada una por su cuenta: la que ya no corresponde se salta y no frena a las demás", () => {
+    const buena = item({ tipo: "casilla", clave: "hipotesis" }, "Creemos que sí");
+    const deOtraEdicion = item({ tipo: "falta", criterioId: "9.9.F1" }, { estado: "no_tiene" });
+    const e = estado({ propuesta: { ...propuestaVacia(), items: [buena, deOtraEdicion] } });
+    const r = aplicarOperaciones(e, [{ op: "usarVarias", items: [{ itemId: deOtraEdicion.id }, { itemId: buena.id }, { itemId: "ya-no-esta" }] }], VALIDEZ);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.estado.contenido.casillas.hipotesis).toEqual(["Creemos que sí"]);
+    expect(destinoValido(deOtraEdicion.destino, VALIDEZ)).toBe(false);
   });
 
   it("un caso de uso en un área que no existe, o sin título, se rechaza", () => {

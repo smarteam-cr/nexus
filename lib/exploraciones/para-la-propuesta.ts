@@ -27,6 +27,12 @@ export const AVISO_DE_LA_ESCALA_DESDE_LA_EXPLORACION = [
     "Si en otra sección nombras el nivel de un área, usa el que trae la exploración; no estimes otro.",
 ].join("\n");
 
+/**
+ * El título y la antetítulo de la sección en inglés: como la IA no la escribe, tampoco traduce sus
+ * títulos, y una propuesta en inglés la mostraría en español.
+ */
+export const TITULOS_DE_LA_SECCION_EN = { titulo: "Where your operation stands today", antetitulo: "Performance scale" } as const;
+
 const ORDEN: Letra[] = ["D", "I", "F", "E", "O"];
 const NIVEL_EN: Record<Letra, string> = { D: "Deficient", I: "Initial", F: "Functional", E: "Efficient", O: "Optimal" };
 const AREA_EN: Record<string, string> = { ventas: "Sales", marketing: "Marketing", servicio: "Service" };
@@ -137,6 +143,8 @@ export function bloqueParaLaPropuesta(o: {
     "Lo que el vendedor confirmó con el prospecto en las reuniones de exploración." +
       (conEscala ? " El nivel de cada área es un ESTIMADO de la venta: sirve para la propuesta, no es una medición." : ""),
   ];
+  // Sin nada abajo del encabezado, no hay bloque: la generación no puede contar un encabezado como fuente.
+  const encabezado = partes.length;
 
   const metas = (c.casillas.metas ?? []) as Meta[];
   if (metas.length) {
@@ -215,5 +223,5 @@ export function bloqueParaLaPropuesta(o: {
     );
   }
 
-  return partes.join("\n");
+  return partes.length === encabezado ? "" : partes.join("\n");
 }

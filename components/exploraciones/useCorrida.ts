@@ -94,11 +94,12 @@ export function useCorrida() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ modo }),
         });
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        const data = (await res.json().catch(() => ({}))) as { error?: string; yaCorria?: boolean };
         if (!res.ok) {
           toast.error(data.error ?? "No se pudo lanzar el agente.");
           return;
         }
+        if (data.yaCorria) toast.info("El agente ya está trabajando en esta exploración: cuando termine, lánzalo de nuevo si hace falta.");
         void seguir();
       } finally {
         setLanzando(false);

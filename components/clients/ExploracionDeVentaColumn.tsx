@@ -18,6 +18,8 @@ export interface ResumenDeLaExploracion {
   areas: { nombre: string; base: string | null; produccion: string | null; objetivo: string | null }[];
   metas: string[];
   casosDeUso: string[];
+  /** Lo que el cliente no ve (hipótesis, presupuesto, quién decide…): solo para el CSE, acá. */
+  interno: { etiqueta: string; lineas: string[] }[];
   puedeAbrir: boolean;
 }
 
@@ -56,11 +58,14 @@ export function ExploracionDeVentaResumen({ datos }: { datos: ResumenDeLaExplora
     )),
     ...datos.metas.map((m, i) => <ContextRow key={`meta-${i}`} meta="Meta del cliente" title={m} />),
     ...(datos.casosDeUso.length ? [<ContextRow key="casos" meta="Casos de uso elegidos" title={datos.casosDeUso.join(" · ")} />] : []),
+    ...(datos.interno ?? []).map((x) => (
+      <ContextRow key={`interno-${x.etiqueta}`} meta={x.etiqueta} title={x.lineas.join(" · ")} badge={{ label: "Solo interno", tone: "muted" }} />
+    )),
   ];
   return (
     <div className="space-y-2">
       <p className="text-[11px] text-fg-muted">
-        Entra al handoff como <span className="font-medium text-fg-secondary">estimado</span>: dice dónde mirar, no es evidencia.
+        Entra al handoff como <span className="font-medium text-fg-secondary">estimado</span>: dice dónde mirar, no es evidencia. Lo marcado «solo interno» no entra: queda acá.
         {datos.edicion ? ` Edición de la escala: ${datos.edicion}.` : ""}
       </p>
       <ContextColumnList empty="La exploración todavía no tiene nada confirmado.">{filas}</ContextColumnList>

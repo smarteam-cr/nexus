@@ -5,10 +5,10 @@
  * La exploración tiene cosas que el cliente nunca puede ver (hipótesis, presupuesto, quién decide,
  * lo que nadie exploró, la apertura a la asesoría). La defensa no es el prompt: es que cada lector
  * use la puerta que corresponde a su destino.
- *   · La PROPUESTA (la ve el cliente) solo con `bloqueParaLaPropuesta` y `posicionDesdeElChequeo`,
- *     que dejan afuera lo interno y los ids de la escala.
- *   · El HANDOFF (interno) con `exploracionParaElHandoff`, que rotula lo interno «SOLO INTERNO»
- *     hacia secciones que ningún documento del cliente lee.
+ *   · La PROPUESTA (la ve el cliente) solo por `paraLaPropuesta`, que devuelve el bloque sin lo
+ *     interno ni ids de la escala y la posición desde el chequeo: nunca el estado.
+ *   · El HANDOFF con `exploracionParaElHandoff`, SIN lo interno: ese agente escribe también lo que
+ *     leen los documentos del cliente. Lo interno solo llega a la columna del contexto (pantalla).
  *   · Ningún documento del cliente (kickoff, entrega, diagnóstico…) la lee directo: le llega, si
  *     acaso, por el handoff y con sus listas de siempre.
  *
@@ -46,8 +46,8 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
 /** Lo que cada destino puede importar de lib/exploraciones (además de tipos). */
 const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibidas: RegExp }> = {
   "propuesta-al-cliente": {
-    permitidas: /bloqueParaLaPropuesta|posicionDesdeElChequeo|exploracionParaLaPropuesta|AVISO_DE_LA_ESCALA_DESDE_LA_EXPLORACION/,
-    prohibidas: /bloqueParaElHandoff|exploracionParaElHandoff|leerContenido|leerExploracion\b|\.exploracionDeVenta\b/,
+    permitidas: /\bparaLaPropuesta\b/,
+    prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\.estado\b/,
   },
   "handoff-interno": {
     permitidas: /exploracionParaElHandoff|exploracionDelProyecto|exploracionParaLaPropuesta/,
@@ -72,7 +72,9 @@ function archivos(dir: string): string[] {
   return out;
 }
 
-const LEE = /@\/lib\/exploraciones\/|\.exploracionDeVenta\b/;
+/* Por import, por la tabla en Prisma (también por sus relaciones: `client.exploracionesDeVenta`,
+   `businessCase.exploracion`) y por SQL crudo. */
+const LEE = /@\/lib\/exploraciones\/|\.exploracionDeVenta\b|\bexploracionesDeVenta\b|\bexploracion\s*:\s*\{|"ExploracionDeVenta"/;
 
 describe("⛔ quién lee una exploración de venta", () => {
   const lectores = ["app", "lib", "components"]
