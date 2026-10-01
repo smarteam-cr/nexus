@@ -88,6 +88,9 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   // Forma PROPIA: secciones plegables por etapa del pipeline, no las tarjetas de
   // prospecto de /sales. Heredar prometería otra pantalla.
   "sales/sicop": { modo: "own" },
+  // La lista es una tabla; el lienzo, un cartel + la barra de pasos + tarjetas: formas propias.
+  "sales/exploraciones": { modo: "own" },
+  "sales/exploraciones/[id]": { modo: "own" },
   "business-cases": { modo: "own" },
   "business-cases/[id]": { modo: "inherits", de: "business-cases" },
   "business-cases/new": { modo: "inherits", de: "business-cases" },

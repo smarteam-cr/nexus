@@ -62,7 +62,8 @@ describe("las rutas de la escala", () => {
 
 describe("los agentes no leen los comentarios", () => {
   it("lib/agents, lib/canvas, lib/knowledge y lib/ai no importan lib/escala/comentarios", () => {
-    for (const dir of ["lib/agents", "lib/canvas", "lib/knowledge", "lib/ai"]) {
+    // lib/exploraciones también: su agente propone con la escala publicada y nada más.
+    for (const dir of ["lib/agents", "lib/canvas", "lib/knowledge", "lib/ai", "lib/exploraciones"]) {
       for (const rel of archivos(dir, (f) => f.endsWith(".ts") || f.endsWith(".tsx"))) {
         expect(leer(rel), rel).not.toMatch(/escala\/comentarios|escalaComentario/);
       }
@@ -154,6 +155,11 @@ describe("fuente única: la escala no está escrita en el código", () => {
     ...archivos("components/escala", (f) => /\.tsx?$/.test(f)),
     ...archivos("app/(shell)/escala", (f) => /\.tsx?$/.test(f)),
     ...archivos("app/api/escala", (f) => /\.tsx?$/.test(f)),
+    // La exploración de venta lee la escala publicada y la muestra: la regla vale igual.
+    ...archivos("lib/exploraciones", (f) => /\.tsx?$/.test(f) && !f.endsWith(".test.ts")),
+    ...archivos("components/exploraciones", (f) => /\.tsx?$/.test(f)),
+    ...archivos("app/(shell)/sales/exploraciones", (f) => /\.tsx?$/.test(f)),
+    ...archivos("app/api/sales/exploraciones", (f) => /\.tsx?$/.test(f)),
   ];
 
   it("hay textos y hay código que revisar", () => {

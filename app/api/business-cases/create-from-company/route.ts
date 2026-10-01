@@ -12,12 +12,7 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { createBusinessCase } from "@/lib/business-cases";
 import { createBusinessCaseCanvas } from "@/lib/canvas/default-canvases";
-import { getSystemHubspotClient } from "@/lib/hubspot/client";
-import {
-  anotarReapunte,
-  reapuntarEnTx,
-  resolverClienteDeLaEmpresa,
-} from "@/lib/hubspot/cliente-de-la-empresa";
+import { clienteDeLaEmpresaDeVentas } from "@/lib/clients/cliente-de-la-empresa-de-ventas";
 import { bcTypeOrNull, seedTagsFor, DEFAULT_BC_TYPE_ID } from "@/lib/business-cases/case-types";
 
 export async function POST(req: NextRequest) {
@@ -69,48 +64,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sub-tipo desconocido para ese tipo de caso." }, { status: 400 });
   }
 
-  /* find-or-create Client — prospecto si es nuevo (no ensucia los listados de CS).
-     El buscador de empresas entrega SIEMPRE la ficha viva, así que un `findFirst` por ese id no
-     encuentra al cliente que quedó guardado bajo una empresa fusionada y fabrica un segundo
-     cliente para la misma cuenta. Ver lib/hubspot/cliente-de-la-empresa.ts. */
-  const resolucion = await resolverClienteDeLaEmpresa(await getSystemHubspotClient(), companyId);
-  if (resolucion.estado === "ambiguo") {
-    return NextResponse.json({ error: resolucion.mensaje }, { status: 409 });
+  /* find-or-create Client — prospecto si es nuevo (no ensucia los listados de CS). La puerta es
+     compartida con la exploración de venta: resuelve empresas fusionadas, nunca cambia el `kind`
+     al reusar y atribuye las reuniones de un cliente nuevo (ver el archivo). */
+  const cliente = await clienteDeLaEmpresaDeVentas({
+    companyId,
+    companyName,
+    domain,
+    origen: "business-case",
+  });
+  if (!cliente.ok) {
+    return NextResponse.json({ error: cliente.mensaje }, { status: 409 });
   }
-
-  let clientId: string;
-  if (resolucion.estado === "ninguno") {
-    clientId = (
-      await prisma.client.create({
-        data: {
-          name: companyName,
-          company: companyName,
-          hubspotCompanyId: companyId,
-          emailDomains: domain ? [domain] : [],
-          kind: "PROSPECTO",
-        },
-        select: { id: true },
-      })
-    ).id;
-    /* ⚠ Un cliente NUEVO puede matchear reuniones que ya están. Acá no hay proyecto todavía, así
-       que no existe la carrera con la reclasificación que rompió a «Discover Puerto Rico»
-       (2026-08-18) — pero el feeding del business case SÍ va a buscar las sesiones del cliente,
-       y sin esto las encuentra vacías. `void` a propósito: nada de acá depende del orden.
-       El censo de puertas vive en lib/sessions/puertas-que-crean-cliente.test.ts. */
-    void import("@/lib/sessions/resolve-client")
-      .then((m) => m.resolveAllSessions())
-      .catch((e) => console.error("[business-case] la atribución del cliente nuevo falló", e));
-  } else {
-    clientId = resolucion.clientId;
-    /* ⚠ Reusar NO cambia el `kind`. Si el cliente ya era CLIENTE, degradarlo a PROSPECTO por
-       abrirle un caso de negocio lo sacaría de la cartera de CS y de cobranza. */
-    if (resolucion.estado === "encontrado-fusionado") {
-      const { businessCases } = await prisma.$transaction((tx) =>
-        reapuntarEnTx(tx, resolucion.reapunte),
-      );
-      console.warn(anotarReapunte(resolucion.reapunte, resolucion.nombre, businessCases));
-    }
-  }
+  const clientId = cliente.clientId;
 
   const bc = await createBusinessCase({
     clientId,

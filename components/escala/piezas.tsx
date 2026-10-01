@@ -11,7 +11,6 @@
  *   · `Segmentado`: un grupo de opciones excluyentes (radio), con flechas.
  *   · `BotonComentar`: el globito que abre el panel de comentarios de un ancla.
  */
-import { useRef } from "react";
 import { InfoHint } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { explicarMarca, SIN_PERFIL, type Perfil } from "@/lib/escala/documento/perfil";
@@ -263,84 +262,8 @@ export function BotonComentar({
   );
 }
 
-export interface OpcionSegmentada<K extends string> {
-  clave: K;
-  etiqueta: string;
-  title?: string;
-  /** Se ve pero no se elige (con su `title` explicando por qué). */
-  deshabilitada?: boolean;
-}
-
-/** Opciones excluyentes: role="radiogroup", flechas para moverse, la selección sigue al foco. */
-export function Segmentado<K extends string>({
-  opciones,
-  valor,
-  onCambio,
-  etiqueta,
-  className,
-}: {
-  opciones: readonly OpcionSegmentada<K>[];
-  valor: K;
-  onCambio: (k: K) => void;
-  etiqueta: string;
-  className?: string;
-}) {
-  const refs = useRef(new Map<K, HTMLButtonElement>());
-  const mover = (paso: 1 | -1) => {
-    const activas = opciones.filter((o) => !o.deshabilitada);
-    if (activas.length === 0) return;
-    const i = activas.findIndex((o) => o.clave === valor);
-    const sig = activas[(i + paso + activas.length) % activas.length];
-    onCambio(sig.clave);
-    refs.current.get(sig.clave)?.focus();
-  };
-  return (
-    <div
-      role="radiogroup"
-      aria-label={etiqueta}
-      className={cn("inline-flex max-w-full flex-wrap rounded-lg border border-line bg-surface-muted p-0.5", className)}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-          e.preventDefault();
-          mover(1);
-        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-          e.preventDefault();
-          mover(-1);
-        }
-      }}
-    >
-      {opciones.map((o) => {
-        const activo = o.clave === valor;
-        return (
-          <button
-            key={o.clave}
-            ref={(el) => {
-              if (el) refs.current.set(o.clave, el);
-              else refs.current.delete(o.clave);
-            }}
-            type="button"
-            role="radio"
-            aria-checked={activo}
-            tabIndex={activo ? 0 : -1}
-            title={o.title}
-            aria-disabled={o.deshabilitada || undefined}
-            onClick={() => !o.deshabilitada && onCambio(o.clave)}
-            className={cn(
-              "whitespace-nowrap rounded-md px-2.5 py-1 text-xs transition-colors",
-              activo
-                ? "bg-surface font-semibold text-fg shadow-sm"
-                : o.deshabilitada
-                  ? "cursor-not-allowed text-fg-muted opacity-50"
-                  : "text-fg-muted hover:text-fg-secondary",
-            )}
-          >
-            {o.etiqueta}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+/** Opciones excluyentes: vive en components/ui (la usa también la exploración de venta). */
+export { Segmentado, type OpcionSegmentada } from "@/components/ui/Segmentado";
 
 /** Un párrafo de la escala con sus negritas (`**Título.**`), sin más markdown. */
 export function ParrafoDeLaEscala({ texto, className }: { texto: string; className?: string }) {

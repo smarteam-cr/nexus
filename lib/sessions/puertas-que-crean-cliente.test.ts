@@ -61,12 +61,13 @@ const PUERTAS: Record<string, { veredicto: Veredicto; motivo: string; delegaEn?:
     veredicto: "atribuye",
     motivo: "Trae un proyecto que ya existe en HubSpot y le crea el cliente si falta. Mismo efecto.",
   },
-  "app/api/business-cases/create-from-company/route.ts": {
+  "lib/clients/cliente-de-la-empresa-de-ventas.ts": {
     veredicto: "atribuye",
     motivo:
-      "Crea el cliente para un business case sobre una empresa que puede no serlo todavía. No hay " +
-      "proyecto, así que no hay carrera con la reclasificación — pero el cliente igual puede matchear " +
-      "reuniones que ya están, y el feeding del BC las va a buscar.",
+      "La puerta de Ventas: crea el cliente PROSPECTO para una propuesta o una exploración de venta " +
+      "sobre una empresa que puede no serlo todavía (la usan /api/business-cases/create-from-company y " +
+      "lib/exploraciones/crear.ts). No hay proyecto, así que no hay carrera con la reclasificación — pero " +
+      "el cliente igual puede matchear reuniones que ya están, y la propuesta y el agente las van a buscar.",
   },
   "app/api/clients/connect/route.ts": {
     veredicto: "atribuye",

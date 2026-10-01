@@ -203,6 +203,10 @@ export const APP_NAV: readonly NavItemConfig[] = [
     gate: { kind: "permission", section: "ventas", action: "read" },
     group: "operacion",
     children: [
+      // El lienzo de cada prospecto antes de la propuesta: prepara las dos reuniones, estima su
+      // nivel en la escala y llega a la propuesta con metas en cifras. Va primero: es el orden
+      // del proceso (se explora, después se propone).
+      { href: "/sales/exploraciones", label: "Exploraciones" },
       { href: "/business-cases", label: "Propuestas" },
       // El CATÁLOGO de servicios pre-cotizados que el vendedor marca en el checklist de una
       // propuesta. Hasta hoy solo se llegaba por un link chiquito del encabezado de

@@ -29,6 +29,11 @@ export type { AccionProps } from "./AcceptReject";
 export { Tabs } from "./Tabs";
 export type { TabsProps, TabItem } from "./Tabs";
 
+/* Opciones excluyentes que se ven todas a la vez (radio con flechas): los filtros de la escala y el
+   nivel de cada dimensión en la exploración de venta. */
+export { Segmentado } from "./Segmentado";
+export type { SegmentadoProps, OpcionSegmentada } from "./Segmentado";
+
 export { Menu } from "./Menu";
 export type { MenuProps, MenuItemDef } from "./Menu";
 

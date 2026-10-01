@@ -212,6 +212,7 @@ model Client {
   reglasComisionVendedor ReglaComisionVendedor[] @relation("ReglasDeComisionVendedor") // ⚠ SUPER_ADMIN-only
   importFilasAplicadas   ImportacionFila[] // Cobranza: trazabilidad del importador
   escalaComentarios      EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
+  exploracionesDeVenta   ExploracionDeVenta[] // Ventas: el lienzo de la exploración (una VIVA por empresa)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -1537,6 +1538,12 @@ model BusinessCase {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // La exploración de venta de la que salió (lib/exploraciones): la generación la usa como fuente
+  // principal. Nullable porque casi todas las propuestas no vienen de una exploración (las de antes
+  // y las que se arman a mano). SQL: scripts/sql/2026-10-01-exploracion-de-venta.sql
+  exploracionId String?
+  exploracion   ExploracionDeVenta? @relation(fields: [exploracionId], references: [id], onDelete: SetNull)
+
   blocks      BusinessCaseBlock[] // (v1 — se elimina en la limpieza F7)
   canvases    ProjectCanvas[] // canvases versionados (cada "Generar" = uno nuevo)
   sessions    BusinessCaseSession[] // sesiones de contexto incluidas/excluidas
@@ -1549,6 +1556,50 @@ model BusinessCase {
   hilosDeChat HiloDeChat[]
 
   @@index([clientId])
+  @@index([exploracionId])
+}
+
+// ─── Exploraciones de venta (2026-10-01) ──────────────────────────────────────
+// SQL: scripts/sql/2026-10-01-exploracion-de-venta.sql (⛔ nunca `db push`). RLS encendida en su SQL.
+// El lienzo con el que el vendedor amplía el diagnóstico de un prospecto para cerrar la primera
+// venta (lib/exploraciones). Una VIVA por empresa: el índice único parcial vive solo en el SQL
+// (Prisma no modela índices parciales). El agente PROPONE en `propuesta`; lo confirmado vive en
+// `contenido`. Estados en String y no enum (INV4).
+model ExploracionDeVenta {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  /// Edición por industria de la escala (`ecommerce-retail`…); null = la escala general.
+  edicion       String?
+  /// El perfil de negocio, con las palabras de la escala: `con equipo` · `transaccional` · `mixta`.
+  perfilCierre  String?
+  /// `única` · `recompra` · `continua`.
+  perfilDespues String?
+  /// Las áreas en juego (`1`, `2`, `3`) en el orden en que se eligieron: decide qué va primero.
+  areas         String[] @default([])
+
+  /// Lo confirmado por el vendedor (lib/exploraciones/contenido.ts).
+  contenido Json  @default("{}")
+  /// Lo que propone el agente, con sus fuentes, hasta que el vendedor lo usa o lo descarta.
+  propuesta Json?
+  /// Lo leído del test de marketing: hipótesis, con la escala anterior.
+  test      Json?
+
+  responsableEmail String?
+  creadaPor        String
+  /// Concurrencia optimista: sube con cada cambio de lo confirmado (no con lo que propone el agente).
+  version          Int       @default(0)
+  archivadaEn      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Las propuestas que salieron de esta exploración.
+  propuestas BusinessCase[]
+
+  @@index([clientId])
+  @@index([updatedAt])
 }
 
 // ─── Catálogo de casos de uso (Ventas) ────────────────────────────────────────

@@ -107,6 +107,8 @@ export const AGUDAS_DE_TUTEO: ReadonlySet<string> = new Set([
   "priorizará", "actualizará", "importará", "medirá", "registrará", "reemplazará", "funcionará", "desasociará",
   // Primera persona del pretérito (el chat cuenta lo que hizo)
   "dejé", "cambié", "registré", "quedé", "encontré", "contesté",
+  // …y el vendedor cuenta lo que entendió (el guion de la exploración de venta)
+  "entendí",
   // Sustantivos, gentilicios y nombres
   "país", "multipaís", "inglés", "interés", "cortés", "comité", "caché", "josé", "andrés", "mié",
 ]);
@@ -117,7 +119,7 @@ export const AGUDAS_DE_TUTEO: ReadonlySet<string> = new Set([
  */
 export const NO_SON_VOSEO: ReadonlySet<string> = new Set([
   // Sustantivos y nombres
-  "escala", "modelo", "modelos", "estilo", "estilos", "paralelo", "gemela", "centinela", "cautela", "paquete",
+  "escala", "escuela", "modelo", "modelos", "estilo", "estilos", "paralelo", "gemela", "centinela", "cautela", "paquete",
   "rescate", "empate", "limite", "portapapeles", "carteles", "perfiles", "niveles", "canales", "señales",
   "umbrales", "portales", "paneles", "metales", "guatemala", "huthwaite",
   // Adjetivos en plural (-ales, -eles, -iles)

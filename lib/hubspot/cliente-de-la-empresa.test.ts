@@ -142,7 +142,8 @@ describe("está cableado donde se crea un cliente, y NO en los buscadores", () =
 
   const ALTAS = [
     "app/api/projects/route.ts",
-    "app/api/business-cases/create-from-company/route.ts",
+    // La puerta de Ventas: la usan la propuesta (create-from-company) y la exploración de venta.
+    "lib/clients/cliente-de-la-empresa-de-ventas.ts",
   ];
 
   it("las dos altas que crean un cliente lo usan", () => {
