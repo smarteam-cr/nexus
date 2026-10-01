@@ -52,9 +52,11 @@ export async function createBusinessCase(input: {
   caseSubtype?: string | null;
   /** Tags seed del tipo (slugs del catálogo; se sanitizan). El CSE los edita después. */
   tags?: string[];
-}) {
+  /** La exploración de venta de la que nace (lib/exploraciones): su fuente principal al generar. */
+  exploracionId?: string | null;
+}, db: Prisma.TransactionClient | typeof prisma = prisma) {
   const slug = `${slugify(input.name)}-${randomBytes(3).toString("hex")}`;
-  return prisma.businessCase.create({
+  return db.businessCase.create({
     data: {
       clientId: input.clientId,
       name: input.name,
@@ -65,6 +67,7 @@ export async function createBusinessCase(input: {
       caseType: input.caseType ?? null,
       caseSubtype: input.caseSubtype ?? null,
       ...(input.tags?.length ? { tags: sanitizeTags(input.tags) } : {}),
+      ...(input.exploracionId ? { exploracionId: input.exploracionId } : {}),
     },
   });
 }

@@ -160,13 +160,14 @@ export default function LienzoDeExploracion({
   const puntos = listaParaProponer(exp.estado, chequeo);
   const sigue = queSigue(exp.estado, chequeo, sinLeer);
   const enPrep = pendientes.filter((p) => ["edicion", "perfil", "area", "aExplorar"].includes(p.destino.tipo) || (p.destino.tipo === "casilla" && ["contexto", "hubspotActual", "hipotesis"].includes(p.destino.clave))).length;
-  const enQuedo = pendientes.length - enPrep;
+  const enPropuesta = pendientes.filter((p) => p.destino.tipo === "casoDeUso").length;
+  const enQuedo = pendientes.length - enPrep - enPropuesta;
 
   const pasos: { key: Paso; label: string; count?: number }[] = [
     { key: "preparacion", label: "Preparación", count: enPrep || undefined },
     { key: "reuniones", label: "Reuniones" },
     { key: "quedo", label: "Lo que quedó", count: enQuedo || undefined },
-    { key: "propuesta", label: `Propuesta · ${puntos.filter((p) => p.cumplido).length}/${puntos.length}` },
+    { key: "propuesta", label: `Propuesta · ${puntos.filter((p) => p.cumplido).length}/${puntos.length}`, count: enPropuesta || undefined },
     { key: "traspaso", label: "Traspaso" },
   ];
 

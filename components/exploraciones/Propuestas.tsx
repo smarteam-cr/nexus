@@ -11,6 +11,7 @@ import { ETIQUETA_DEL_ROL, type Apertura, type Meta, type Persona, type Reto, ty
 import {
   ETIQUETA_DEL_MOTIVO,
   type AExplorar,
+  type CasoDeUsoElegido,
   type EstadoDeCriterio,
   type EstimadoGuardado,
   type ItemPropuesto,
@@ -88,6 +89,11 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
     case "perfil": {
       const p = v as { cierre: string; despues: string };
       return `Venta ${p.cierre === "con equipo" ? "con equipo" : p.cierre} · relación ${p.despues}`;
+    }
+    case "casoDeUso": {
+      const caso = v as CasoDeUsoElegido;
+      const area = caso.areaId ? escala.areas.find((a) => a.id === caso.areaId)?.nombre : null;
+      return `${caso.titulo}${area ? ` · ${area}` : ""}`;
     }
   }
 }

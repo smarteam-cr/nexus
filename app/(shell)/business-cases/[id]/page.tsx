@@ -44,6 +44,8 @@ export default async function BusinessCasePage({
       caseType: true,
       caseSubtype: true,
       language: true,
+      // La exploración de venta de la que nació (Ventas → Exploraciones): se enlaza arriba.
+      exploracionId: true,
       client: { select: { id: true, name: true, kind: true, logoUrl: true, logoDarkUrl: true, logoScale: true } },
     },
   });
@@ -82,6 +84,14 @@ export default async function BusinessCasePage({
         {bc.client.name}
         {bc.client.kind === "PROSPECTO" ? " (prospecto)" : ""}
         {bc.hubspotDealId ? " · deal vinculado" : ""}
+        {bc.exploracionId && (
+          <>
+            {" · "}
+            <Link href={`/sales/exploraciones/${bc.exploracionId}`} className="text-brand-light hover:underline">
+              Viene de la exploración de venta
+            </Link>
+          </>
+        )}
       </p>
 
       <div className="mt-8">

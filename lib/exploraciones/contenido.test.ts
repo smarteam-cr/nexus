@@ -207,4 +207,21 @@ describe("las operaciones", () => {
     const usado = aplicarOperaciones(e, [{ op: "usar", itemId: h.id }], VALIDEZ);
     expect(usado.ok && cambioLoConfirmado(e, usado.estado)).toBe(true);
   });
+
+  it("un caso de uso sugerido se usa, queda elegido con su área y ya no se vuelve a proponer; quitarlo lo saca", () => {
+    const caso = item({ tipo: "casoDeUso", useCaseId: "uc-1" }, { titulo: "Pipeline de ventas", areaId: "1", razon: "Define las etapas" }, []);
+    const e = estado({ propuesta: fusionarPropuestas(estado(), [caso]) });
+    const usado = aplicarOperaciones(e, [{ op: "usar", itemId: caso.id }], VALIDEZ);
+    expect(usado.ok).toBe(true);
+    if (!usado.ok) return;
+    expect(usado.estado.contenido.casosDeUso["uc-1"]).toEqual({ titulo: "Pipeline de ventas", areaId: "1", razon: "Define las etapas" });
+    expect(fusionarPropuestas(usado.estado, [caso]).items).toEqual([]);
+    const quitado = aplicarOperaciones(usado.estado, [{ op: "casoDeUso", useCaseId: "uc-1", valor: null }], VALIDEZ);
+    expect(quitado.ok && quitado.estado.contenido.casosDeUso).toEqual({});
+  });
+
+  it("un caso de uso en un área que no existe, o sin título, se rechaza", () => {
+    expect(aplicarOperaciones(estado(), [{ op: "casoDeUso", useCaseId: "uc-1", valor: { titulo: "X", areaId: "9" } }], VALIDEZ).ok).toBe(false);
+    expect(aplicarOperaciones(estado(), [{ op: "casoDeUso", useCaseId: "uc-1", valor: { titulo: "", areaId: "1" } }], VALIDEZ).ok).toBe(false);
+  });
 });

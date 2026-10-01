@@ -517,3 +517,103 @@ export function propuestasDelTest(
   });
   return items;
 }
+
+// ── Sugerir los casos de uso del catálogo ─────────────────────────────────────
+
+export const NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS = "proponer_casos";
+
+/** Hasta cuántos casos por área: los que caben en una primera venta. */
+export const MAX_CASOS_POR_AREA = 4;
+
+export interface CasoParaElPedido {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  tags: string[];
+}
+
+export interface ContextoDeCasos {
+  empresa: string;
+  /** Las áreas en juego, con su nombre. */
+  areas: { id: string; nombre: string }[];
+  /** La exploración como la ve la propuesta (bloqueParaLaPropuesta): metas, retos, niveles, lo que falta. */
+  exploracion: string;
+  catalogo: CasoParaElPedido[];
+}
+
+export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const tool: Anthropic.Messages.Tool = {
+    name: NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS,
+    description: "Propone, por área, los casos de uso del catálogo para la propuesta. Llámala una sola vez.",
+    input_schema: {
+      type: "object",
+      properties: {
+        casos: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              useCaseId: { type: "string", enum: ctx.catalogo.map((c) => c.id) },
+              areaId: { type: "string", enum: ctx.areas.map((a) => a.id) },
+              razon: { type: "string", description: "Una frase: qué de lo que le falta (o de su meta) cubre este caso de uso." },
+            },
+            required: ["useCaseId", "areaId", "razon"],
+          },
+        },
+      },
+      required: ["casos"],
+    },
+  };
+  const sistema = `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Ayudas a un vendedor a armar la PRIMERA propuesta de un prospecto: llevar cada área en juego a Funcional en la Escala de Rendimiento, cubriendo lo que le falta y sus metas.
+
+Elige del catálogo los casos de uso que lo logran, por área:
+- Empieza por lo que va primero y por lo que le falta para Funcional; después, lo que toca una meta con cifras.
+- Como máximo ${MAX_CASOS_POR_AREA} por área. Menos es mejor si alcanza: una primera venta que el cliente puede sostener.
+- La razón, en una frase concreta, nombra qué de lo que le falta (o de su meta) cubre. Sin frases de venta.
+- Si ningún caso del catálogo cubre algo, no lo fuerces: no lo propongas.
+- No propongas los que ya están elegidos. Nunca inventes un caso de uso: solo los del catálogo, por su id.`;
+  const cuerpo =
+    `Empresa: ${ctx.empresa}\nÁreas en juego: ${ctx.areas.map((a) => `${a.id} (${a.nombre})`).join(", ")}\n\n` +
+    `=== LA EXPLORACIÓN ===\n${ctx.exploracion}\n\n` +
+    `=== EL CATÁLOGO DE CASOS DE USO ===\n` +
+    ctx.catalogo.map((c) => `- ${c.id} · ${c.titulo}${c.tags.length ? ` [${c.tags.join(", ")}]` : ""}\n  ${c.descripcion.slice(0, 400)}`).join("\n");
+  return {
+    model: MODELO_DE_LA_EXPLORACION,
+    max_tokens: 3000,
+    system: sistema,
+    tools: [tool],
+    tool_choice: { type: "tool", name: tool.name },
+    messages: [{ role: "user", content: cuerpo }],
+  };
+}
+
+/** Lo que devolvió, filtrado: solo casos del catálogo, en áreas en juego, con razón y con el tope por área. */
+export function leerLosCasos(respuesta: Anthropic.Messages.Message, ctx: ContextoDeCasos, corridaId: string, ahora = new Date()): Lectura {
+  const bloque = respuesta.content.find((b) => b.type === "tool_use" && b.name === NOMBRE_DE_LA_HERRAMIENTA_DE_CASOS);
+  const input = bloque && bloque.type === "tool_use" && esObjeto(bloque.input) ? bloque.input : {};
+  const porId = new Map(ctx.catalogo.map((c) => [c.id, c]));
+  const areas = new Set(ctx.areas.map((a) => a.id));
+  const porArea = new Map<string, number>();
+  const vistos = new Set<string>();
+  const items: ItemPropuesto[] = [];
+  let descartadas = 0;
+  for (const x of lista(input.casos)) {
+    const caso = porId.get(str(x.useCaseId) ?? "");
+    const areaId = str(x.areaId);
+    const razon = str(x.razon);
+    if (!caso || !areaId || !areas.has(areaId) || !razon || vistos.has(caso.id) || (porArea.get(areaId) ?? 0) >= MAX_CASOS_POR_AREA) {
+      descartadas++;
+      continue;
+    }
+    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: caso.id };
+    const valor = VALIDADOR_ESTRICTO.valorDelDestino(destino, { titulo: caso.titulo.slice(0, 200), areaId, razon: razon.slice(0, 400) });
+    if (valor === null) {
+      descartadas++;
+      continue;
+    }
+    vistos.add(caso.id);
+    porArea.set(areaId, (porArea.get(areaId) ?? 0) + 1);
+    items.push({ id: idDelItem(destino, valor), destino, valor, razon: razon.slice(0, 300), fuentes: [], corridaId, en: ahora.toISOString() });
+  }
+  return { items, descartadas };
+}

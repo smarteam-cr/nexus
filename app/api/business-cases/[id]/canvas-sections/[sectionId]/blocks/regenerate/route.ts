@@ -15,6 +15,10 @@ import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagra
 import { briefsByKeyFrom } from "@/lib/business-cases/section-briefs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { defForCanvasSection, findDefAcrossTemplates } from "@/components/landing/configs/templates.defs";
+import { SECCION_DE_ESCALA } from "@/lib/escala/contexto";
+import { posicionDesdeElChequeo } from "@/lib/exploraciones/para-la-propuesta";
+import { exploracionParaLaPropuesta } from "@/lib/exploraciones/servidor";
+import { usaEscala } from "@/lib/tags/catalog";
 
 type Params = Promise<{ id: string; sectionId: string }>;
 
@@ -42,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
               id: true,
               businessCaseId: true,
               sections: true,
-              businessCase: { select: { id: true, caseType: true, caseSubtype: true, language: true } },
+              businessCase: { select: { id: true, caseType: true, caseSubtype: true, language: true, exploracionId: true, tags: true } },
             },
           },
         },
@@ -94,6 +98,17 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
         ? (heroData as Record<string, unknown>).__lang
         : null;
     lang = typeof rawLang === "string" && rawLang.trim() ? rawLang.trim().toLowerCase() : null;
+  }
+
+  /* Una propuesta que nació de una exploración de venta: su sección de la Escala sale del chequeo
+     de la exploración, NUNCA de la IA (ver la generación). «Regenerar» la vuelve a escribir desde
+     ahí, con lo último que se confirmó con el prospecto. */
+  const bcDelBloque = block.section.canvas.businessCase;
+  if (block.section.key === SECCION_DE_ESCALA.propuesta && bcDelBloque?.exploracionId && usaEscala(bcDelBloque.tags)) {
+    const exploracion = await exploracionParaLaPropuesta(bcDelBloque.exploracionId).catch(() => null);
+    if (exploracion) {
+      return NextResponse.json({ data: posicionDesdeElChequeo(exploracion.chequeo, exploracion.escala, lang) });
+    }
   }
 
   const result = await regenerateTypedSection(def, current, instruction, {

@@ -28,10 +28,12 @@ import {
   contenidoVacio,
   ESTADOS_DEL_CRITERIO,
   FUENTES_DEL_NIVEL,
+  MODOS_DE_LA_CORRIDA,
   MOTIVOS_PARA_EXPLORAR,
   NIVELES,
   propuestaVacia,
   type AExplorar,
+  type CasoDeUsoElegido,
   type ContenidoDeExploracion,
   type CorridaDelAgente,
   type DestinoDePropuesta,
@@ -151,6 +153,15 @@ export const MedicionSchema: z.ZodType<Medicion> = z.object({
   personasEquipo: texto(40).optional(),
 });
 
+/** El id de un caso de uso del catálogo. ⛔ Nunca `.cuid()`: en esta base conviven cuid y UUID. */
+const ID_CASO_DE_USO = z.string().min(1).max(60);
+
+export const CasoDeUsoElegidoSchema: z.ZodType<CasoDeUsoElegido> = z.object({
+  titulo: textoLleno(200),
+  areaId: ID_AREA.nullable(),
+  razon: texto(400).optional(),
+});
+
 const AreaPropuestaSchema = z.object({ razon: texto(300).optional() });
 const EdicionPropuestaSchema = z.object({ slug: z.string().max(60).nullable() });
 const PerfilPropuestoSchema = z.object({ cierre: ENUM_CIERRE, despues: ENUM_DESPUES });
@@ -163,6 +174,7 @@ export const DestinoSchema: z.ZodType<DestinoDePropuesta> = z.discriminatedUnion
   z.object({ tipo: z.literal("area"), areaId: ID_AREA }),
   z.object({ tipo: z.literal("edicion") }),
   z.object({ tipo: z.literal("perfil") }),
+  z.object({ tipo: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO }),
 ]);
 
 /** El esquema del valor que se propone para un destino. */
@@ -182,6 +194,8 @@ export function esquemaDelDestino(d: DestinoDePropuesta): z.ZodType<unknown> {
       return EdicionPropuestaSchema;
     case "perfil":
       return PerfilPropuestoSchema;
+    case "casoDeUso":
+      return CasoDeUsoElegidoSchema;
   }
 }
 
@@ -203,6 +217,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("nota"), paso: z.string().min(1).max(40), texto: z.string().max(4000) }),
   z.object({ op: z.literal("medicion"), medicion: MedicionSchema }),
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
+  z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
   z.object({ op: z.literal("descartar"), itemIds: z.array(z.string().min(1).max(120)).min(1).max(250) }),
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
@@ -272,6 +287,7 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   const med = MedicionSchema.safeParse(raw.medicion);
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
+  c.casosDeUso = registroValido(raw.casosDeUso, ID_CASO_DE_USO, CasoDeUsoElegidoSchema);
   c.descartadas = listaDeTextos(raw.descartadas, 500);
   if (Array.isArray(raw.alProponer)) {
     c.alProponer = raw.alProponer.filter(
@@ -296,7 +312,10 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   }
   if (Array.isArray(raw.corridas)) {
     p.corridas = raw.corridas
-      .filter((c): c is CorridaDelAgente => esObjeto(c) && typeof c.id === "string" && (c.modo === "preparar" || c.modo === "leer") && typeof c.en === "string")
+      .filter(
+        (c): c is CorridaDelAgente =>
+          esObjeto(c) && typeof c.id === "string" && (MODOS_DE_LA_CORRIDA as readonly unknown[]).includes(c.modo) && typeof c.en === "string",
+      )
       .map((c) => ({
         id: c.id,
         modo: c.modo,

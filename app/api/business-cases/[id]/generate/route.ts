@@ -33,8 +33,14 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { fetchCompanyTimelineItems, serializeTimeline } from "@/lib/hubspot/company-timeline";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
-import { escalaParaPosicionar, SECCION_DE_ESCALA } from "@/lib/escala/contexto";
-import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, type HubspotHubSlug } from "@/lib/tags/catalog";
+import { escalaParaPosicionar, SECCION_DE_ESCALA, type BloqueDeEscala } from "@/lib/escala/contexto";
+import {
+  AVISO_DE_LA_ESCALA_DESDE_LA_EXPLORACION,
+  bloqueParaLaPropuesta,
+  posicionDesdeElChequeo,
+} from "@/lib/exploraciones/para-la-propuesta";
+import { exploracionParaLaPropuesta } from "@/lib/exploraciones/servidor";
+import { HUBSPOT_HUB_SLUGS, sanitizeTags, tagLabels, usaEscala, type HubspotHubSlug } from "@/lib/tags/catalog";
 import { esCustomKey } from "@/lib/landing/custom-sections";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { MONEY_RULE_BRIEF } from "@/lib/business-cases/money-brief";
@@ -96,11 +102,23 @@ export async function POST(
       // que deducirlo del transcript — medido, se equivoca (en REMPRO escribió "Smarteam
       // acompaña a O4Bi", que es el ERP que se nombra en la sesión, no el prospecto).
       client: { select: { name: true, notes: true, industry: true } },
+      // La exploración de venta de la que nació (lib/exploraciones): su fuente principal.
+      exploracionId: true,
     },
   });
   if (!bc) {
     return NextResponse.json({ error: "Esa propuesta no existe" }, { status: 404 });
   }
+
+  /* La exploración de venta de la que nació la propuesta es su FUENTE PRINCIPAL (solo lo que puede
+     ver el cliente; ver lib/exploraciones/para-la-propuesta.ts). Con la Escala, la sección «Dónde
+     está tu operación hoy» se escribe desde su chequeo y no la escribe la IA: esa sección alimenta
+     el bloque de la Escala del kickoff, y un nivel que la IA estima distinto del que se confirmó con
+     el prospecto se contradiría con la exploración. Si no se puede leer, la propuesta se genera igual. */
+  const exploracion = bc.exploracionId ? await exploracionParaLaPropuesta(bc.exploracionId).catch(() => null) : null;
+  const conEscala = usaEscala(bc.tags);
+  const posicionDeLaExploracion = exploracion && conEscala ? exploracion : null;
+  const AVISO_DE_LA_EXPLORACION: BloqueDeEscala = { usa: true, texto: AVISO_DE_LA_ESCALA_DESDE_LA_EXPLORACION, documentos: 0 };
 
   // ── Contexto: transcripts manuales + transcripts de las sesiones que ALIMENTAN
   //    el caso (regla de Ventas + overrides; mismo criterio que el panel) ─────────
@@ -133,10 +151,11 @@ export async function POST(
     /* La Escala de Rendimiento (2026-09-12): el RESUMEN para posicionar, no el reglamento — la
        propuesta estima el nivel, no lo asigna, y ya tarda un minuto. Con el trato marcado
        «Sin Escala» el bloque solo dice eso y la sección no se genera (ver `trabajo`). */
-    escalaParaPosicionar(bc.tags),
+    posicionDeLaExploracion ? Promise.resolve(AVISO_DE_LA_EXPLORACION) : escalaParaPosicionar(bc.tags),
   ]);
 
   const parts: string[] = [];
+  if (exploracion) parts.push(bloqueParaLaPropuesta({ ...exploracion, conEscala }));
   for (const t of transcripts) {
     if (t.rawText.trim()) parts.push(`# Nota/transcript${t.fileName ? ` (${t.fileName})` : ""}\n${t.rawText.trim()}`);
   }
@@ -360,9 +379,8 @@ export async function POST(
     /* «Sin Escala» también saltea la sección de la Escala, pero NO entra a `skipKeys`: ese set
        además ARRASTRA lo de la versión anterior (carry-forward b, más abajo), y un trato que se
        pasó a «Sin Escala» no puede heredar el estimado de cuando la tenía. Así nace vacía. */
-    const skipDeLaGeneracion = escalaPropuesta.usa
-      ? skipKeys
-      : new Set([...skipKeys, SECCION_DE_ESCALA.propuesta]);
+    const skipDeLaGeneracion =
+      escalaPropuesta.usa && !posicionDeLaExploracion ? skipKeys : new Set([...skipKeys, SECCION_DE_ESCALA.propuesta]);
 
     await setPhase("Generando las secciones con IA…");
     const gen = await withTimeout(
@@ -500,6 +518,17 @@ export async function POST(
           else generated.push({ key: INVERSION_SECTION_KEY, data: next });
         }
       }
+    }
+
+    /* La posición en la Escala de una propuesta que nació de una exploración: desde su chequeo, en
+       el idioma de esta corrida. Si la sección está oculta, manda lo oculto (se arrastra lo anterior). */
+    if (posicionDeLaExploracion && !skipKeys.has(SECCION_DE_ESCALA.propuesta)) {
+      const i = generated.findIndex((g) => g.key === SECCION_DE_ESCALA.propuesta);
+      if (i >= 0) generated.splice(i, 1);
+      generated.push({
+        key: SECCION_DE_ESCALA.propuesta,
+        data: posicionDesdeElChequeo(posicionDeLaExploracion.chequeo, posicionDeLaExploracion.escala, gen.lang),
+      });
     }
 
     // Cada "Generar" crea un CASO NUEVO (v1, v2, …). La Plantilla (v0) nunca se llena.

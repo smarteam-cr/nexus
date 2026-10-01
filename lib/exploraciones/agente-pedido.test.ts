@@ -9,6 +9,9 @@ import {
   citaVerificable,
   herramienta,
   leerLaRespuesta,
+  leerLosCasos,
+  MAX_CASOS_POR_AREA,
+  pedidoDeCasos,
   MODELO_DE_LA_EXPLORACION,
   pedidoDeLaExploracion,
   propuestasDelTest,
@@ -357,5 +360,34 @@ describe("propuestasDelTest", () => {
       [{ tipo: "nivel", dimensionId: "3.1" }, "reunion"],
       [{ tipo: "nivel", dimensionId: "3.2" }, "test"],
     ]);
+  });
+});
+
+describe("los casos de uso que sugiere", () => {
+  const CATALOGO = Array.from({ length: 7 }, (_, i) => ({ id: `uc-${i}`, titulo: `Caso ${i}`, descripcion: "Hace algo útil", tags: [] }));
+  const CTX = { empresa: "Acme", areas: [{ id: "1", nombre: "Ventas" }], exploracion: "(la exploración)", catalogo: CATALOGO };
+  const conCasos = (casos: unknown[]) =>
+    ({ ...respuesta({}), content: [{ type: "tool_use", id: "tu", name: "proponer_casos", input: { casos } }] }) as unknown as Anthropic.Messages.Message;
+
+  it("solo del catálogo, en un área en juego, con su razón, sin repetidos y con el tope por área", () => {
+    const casos = [
+      { useCaseId: "uc-0", areaId: "1", razon: "Define las etapas" },
+      { useCaseId: "uc-0", areaId: "1", razon: "Repetido" },
+      { useCaseId: "inventado", areaId: "1", razon: "No está en el catálogo" },
+      { useCaseId: "uc-1", areaId: "3", razon: "Área que no está en juego" },
+      { useCaseId: "uc-2", areaId: "1" },
+      ...[3, 4, 5, 6].map((i) => ({ useCaseId: `uc-${i}`, areaId: "1", razon: `Cubre ${i}` })),
+    ];
+    const r = leerLosCasos(conCasos(casos), CTX, "run_1", AHORA);
+    expect(r.items.map((i) => (i.destino as { useCaseId: string }).useCaseId)).toEqual(["uc-0", "uc-3", "uc-4", "uc-5"]);
+    expect(r.items).toHaveLength(MAX_CASOS_POR_AREA);
+    expect(r.items[0].valor).toEqual({ titulo: "Caso 0", areaId: "1", razon: "Define las etapas" });
+    expect(r.descartadas).toBe(5);
+  });
+
+  it("el pedido nombra los casos por id y fuerza su herramienta", () => {
+    const p = pedidoDeCasos(CTX);
+    expect(p.tool_choice).toEqual({ type: "tool", name: "proponer_casos" });
+    expect(String(p.messages[0].content)).toContain("- uc-3 · Caso 3");
   });
 });

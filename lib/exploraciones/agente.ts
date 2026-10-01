@@ -17,21 +17,41 @@ import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
-import { leerLaRespuesta, pedidoDeLaExploracion, propuestasDelTest, type ContextoDelPedido } from "./agente-pedido";
-import { claveDelDestino, fusionarPropuestas, propuestaVigente, type ItemPropuesto } from "./contenido";
+import {
+  leerLaRespuesta,
+  leerLosCasos,
+  pedidoDeCasos,
+  pedidoDeLaExploracion,
+  propuestasDelTest,
+  type ContextoDelPedido,
+} from "./agente-pedido";
+import { claveDelDestino, fusionarPropuestas, propuestaVigente, type ItemPropuesto, type ModoDeLaCorrida } from "./contenido";
 import { leerPropuesta } from "./esquemas";
-import { leerFuentes, type LoQueSeLeyo } from "./fuentes";
+import { leerFuentes } from "./fuentes";
 import { debeLeerSola } from "./lectura";
-import { bloquearFila, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
+import type { LoLeidoDeHubspot } from "./lo-leido";
+import { bloqueParaLaPropuesta } from "./para-la-propuesta";
+import { catalogoDeCasosDeUso } from "./propuesta";
+import { bloquearFila, chequeoDe, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
 
 export const AGENTE_DE_LA_EXPLORACION = "exploracion-de-venta";
 
-export type ModoDelAgente = "preparar" | "leer";
+export type ModoDelAgente = ModoDeLaCorrida;
 
 const ETIQUETA: Record<ModoDelAgente, string> = {
   preparar: "Exploración de venta: preparar",
   leer: "Exploración de venta: leer la reunión",
+  casos: "Exploración de venta: sugerir casos de uso",
 };
+
+/** Lo que una corrida leyó, para guardarlo con lo propuesto. */
+interface LoQueLeyoLaCorrida {
+  /** Cómo lo ve el vendedor, para la historia. */
+  leyo: string[];
+  leidas: { sesiones: string[]; hubspot: string[] };
+  /** La foto de HubSpot (el test, la agenda, los correos). null = no leyó HubSpot: queda la anterior. */
+  foto: Omit<LoLeidoDeHubspot, "leidoEn"> | null;
+}
 
 /** Un fallo con un mensaje que ya está escrito para el vendedor (no hace falta traducirlo). */
 class FalloDeLaExploracion extends Error {}
@@ -103,6 +123,11 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     const estado = estadoDesdeFila(fila);
     const escala = escalaDeLaExploracion(escalaVig.general, estado);
 
+    if (modo === "casos") {
+      await sugerirCasos(runId, exploracionId, { fila, estado, escala }, opts);
+      return;
+    }
+
     await fase(runId, "Leyendo HubSpot y las reuniones…");
     const leido = await leerFuentes({
       clientId: fila.clientId,
@@ -147,7 +172,16 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     }
 
     await fase(runId, "Guardando lo propuesto…");
-    const propuestos = await guardar(exploracionId, [...delTest, ...deLaIA], leido, { runId, modo, automatica: opts.automatica === true });
+    const propuestos = await guardar(
+      exploracionId,
+      [...delTest, ...deLaIA],
+      {
+        leyo: leido.fuentes.map((f) => f.etiqueta),
+        leidas: leido.leidas,
+        foto: { tests: leido.tests, agenda: leido.agenda, correosSinPermiso: leido.correosSinPermiso },
+      },
+      { runId, modo, automatica: opts.automatica === true },
+    );
     await prisma.agentRun.update({
       where: { id: runId },
       data: {
@@ -181,11 +215,60 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
   }
 }
 
+/**
+ * Los casos de uso del catálogo que llevan cada área a Funcional (modo «casos»). Lee lo confirmado
+ * en el lienzo, como lo verá la propuesta, y el catálogo; no lee HubSpot ni las reuniones.
+ */
+async function sugerirCasos(
+  runId: string,
+  exploracionId: string,
+  ex: {
+    fila: { clientId: string; client: { name: string } };
+    estado: ReturnType<typeof estadoDesdeFila>;
+    escala: ReturnType<typeof escalaDeLaExploracion>;
+  },
+  opts: OpcionesDeLaCorrida,
+) {
+  if (ex.estado.areas.length === 0) throw new FalloDeLaExploracion("Elige primero las áreas en juego: los casos de uso se sugieren por área.");
+  await fase(runId, "Leyendo el catálogo…");
+  const catalogo = await catalogoDeCasosDeUso();
+  if (catalogo.length === 0) throw new FalloDeLaExploracion("El catálogo de casos de uso está vacío: no hay qué sugerir.");
+  const ctx = {
+    empresa: ex.fila.client.name,
+    areas: ex.escala.areas.filter((a) => ex.estado.areas.includes(a.id)).map((a) => ({ id: a.id, nombre: a.nombre })),
+    exploracion: bloqueParaLaPropuesta({ estado: ex.estado, escala: ex.escala, chequeo: chequeoDe(ex.escala, ex.estado), conEscala: true }),
+    catalogo: catalogo.map((c) => ({ id: c.id, titulo: c.titulo, descripcion: c.descripcion, tags: c.tags })),
+  };
+  await fase(runId, "Pensando qué casos de uso cubren lo que falta…");
+  const respuesta = await conContextoDeIA(
+    {
+      agentSlug: AGENTE_DE_LA_EXPLORACION,
+      agentRunId: runId,
+      clientId: ex.fila.clientId,
+      triggeredByEmail: opts.triggeredByEmail,
+      origen: "exploraciones/agente:casos",
+    },
+    () => getAnthropic().messages.create(pedidoDeCasos(ctx)),
+  );
+  const r = leerLosCasos(respuesta, ctx, runId);
+  await fase(runId, "Guardando lo propuesto…");
+  const propuestos = await guardar(
+    exploracionId,
+    r.items,
+    { leyo: ["Lo confirmado en el lienzo", `El catálogo de casos de uso (${catalogo.length})`], leidas: { sesiones: [], hubspot: [] }, foto: null },
+    { runId, modo: "casos", automatica: false },
+  );
+  await prisma.agentRun.update({
+    where: { id: runId },
+    data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos, descartadas: r.descartadas, nadaNuevo: false }) },
+  });
+}
+
 /** Suma lo propuesto con la fila bloqueada y releída. Devuelve cuántas propuestas nuevas quedaron. */
 async function guardar(
   exploracionId: string,
   items: ItemPropuesto[],
-  leido: LoQueSeLeyo,
+  leido: LoQueLeyoLaCorrida,
   corrida: { runId: string; modo: ModoDelAgente; automatica: boolean },
 ): Promise<number> {
   return prisma.$transaction(async (tx) => {
@@ -224,7 +307,7 @@ async function guardar(
           modo: corrida.modo,
           en: new Date().toISOString(),
           propuestos: nuevas.length,
-          leyo: leido.fuentes.map((f) => f.etiqueta.slice(0, 200)).slice(0, 40),
+          leyo: leido.leyo.map((f) => f.slice(0, 200)).slice(0, 40),
           alimento: [...new Set(nuevas.map((it) => claveDelDestino(it.destino)))].slice(0, 120),
           automatica: corrida.automatica,
         },
@@ -234,12 +317,7 @@ async function guardar(
       where: { id: exploracionId },
       data: {
         propuesta: propuesta as unknown as Prisma.InputJsonValue,
-        test: {
-          tests: leido.tests,
-          agenda: leido.agenda,
-          correosSinPermiso: leido.correosSinPermiso,
-          leidoEn: new Date().toISOString(),
-        } as unknown as Prisma.InputJsonValue,
+        ...(leido.foto ? { test: { ...leido.foto, leidoEn: new Date().toISOString() } as unknown as Prisma.InputJsonValue } : {}),
       },
     });
     return nuevas.length;

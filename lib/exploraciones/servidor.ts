@@ -238,6 +238,11 @@ export async function aplicarCambios(
   });
 }
 
+/** La foto es de la última lectura: lo que ya pasó desde entonces no es agenda (se avisa como «sin leer»). */
+function loQueVieneDeLaAgenda(leido: LoLeidoDeHubspot, ahora = Date.now()): LoLeidoDeHubspot {
+  return { ...leido, agenda: leido.agenda.filter((a) => Date.parse(a.inicio) > ahora) };
+}
+
 /** Lo que la pantalla del lienzo recibe: la fila ya leída, sin los objetos de Prisma. */
 export interface ExploracionParaLaPantalla {
   id: string;
@@ -266,11 +271,29 @@ export function paraLaPantalla(fila: FilaDeExploracion): ExploracionParaLaPantal
       kind: fila.client.kind,
     },
     estado: estadoDesdeFila(fila),
-    leido: leerLoLeido(fila.test),
+    leido: loQueVieneDeLaAgenda(leerLoLeido(fila.test)),
     creadaPor: fila.creadaPor,
     creadaEn: fila.createdAt.toISOString(),
     actualizadaEn: fila.updatedAt.toISOString(),
   };
+}
+
+/**
+ * La exploración enlazada a una propuesta, como la usa la generación (y la regeneración de la
+ * sección de la Escala): su estado, la escala con su edición y su perfil, y el chequeo. null si la
+ * tabla no está, si la exploración ya no existe o si la escala no está publicada: la propuesta se
+ * genera igual, sin ella.
+ */
+export async function exploracionParaLaPropuesta(
+  exploracionId: string,
+): Promise<{ estado: EstadoDeExploracion; escala: EscalaDelLienzo; chequeo: ResultadoDelChequeo } | null> {
+  const lectura = await leerExploracion(exploracionId);
+  if (lectura.estado !== "ok") return null;
+  const vigente = await escalaParaExplorar();
+  if (vigente.estado !== "ok") return null;
+  const estado = estadoDesdeFila(lectura.fila);
+  const escala = escalaDeLaExploracion(vigente.general, estado);
+  return { estado, escala, chequeo: chequeoDe(escala, estado) };
 }
 
 /** Lo mismo, con las reuniones sin leer (para abrir el lienzo y para recargarlo). */
@@ -280,7 +303,8 @@ export async function paraLaPantallaConLoSinLeer(fila: FilaDeExploracion): Promi
     clientId: fila.client.id,
     creadaEn: fila.createdAt,
     propuesta: exp.estado.propuesta,
-    leido: exp.leido,
+    // La foto ENTERA: las agendadas que ya pasaron son justamente las que se avisan como «sin leer».
+    leido: leerLoLeido(fila.test),
   }).catch((e) => {
     console.error("[exploraciones] no se pudieron contar las reuniones sin leer", e);
     return [];

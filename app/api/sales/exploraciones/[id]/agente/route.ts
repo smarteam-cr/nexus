@@ -1,5 +1,5 @@
 /**
- * POST /api/sales/exploraciones/[id]/agente   body: { modo: "preparar" | "leer", sesionId? }
+ * POST /api/sales/exploraciones/[id]/agente   body: { modo: "preparar" | "leer" | "casos", sesionId? }
  *   Lanza el agente de la exploración en segundo plano (lib/exploraciones/agente.ts). 202 con la
  *   corrida. Si ya hay una viva, devuelve esa: dos corridas a la vez se pisarían lo leído.
  *   Pide `ventas.write` (gasta IA).
@@ -13,12 +13,13 @@ import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { guardPermission } from "@/lib/auth/api-guards";
 import { parseRunError } from "@/lib/agents/run-error";
 import { lanzarCorrida, ultimaCorrida } from "@/lib/exploraciones/agente";
+import { MODOS_DE_LA_CORRIDA } from "@/lib/exploraciones/contenido";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const Cuerpo = z.object({
-  modo: z.enum(["preparar", "leer"]),
+  modo: z.enum(MODOS_DE_LA_CORRIDA),
   sesionId: z.string().min(1).max(60).optional(),
 });
 

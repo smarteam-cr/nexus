@@ -74,6 +74,17 @@ export interface Medicion {
   personasEquipo?: string;
 }
 
+/**
+ * Un caso de uso del catálogo de Smarteam elegido para la propuesta, con el área que lleva a
+ * Funcional y por qué. El título se guarda con el elegido: la propuesta y el traspaso lo nombran sin
+ * depender de que el catálogo siga igual.
+ */
+export interface CasoDeUsoElegido {
+  titulo: string;
+  areaId: string | null;
+  razon?: string;
+}
+
 /** La foto de «lista para proponer» en el momento de armar una propuesta (la lee la métrica). */
 export interface FotoAlProponer {
   en: string;
@@ -99,6 +110,8 @@ export interface ContenidoDeExploracion {
   medicion: Medicion;
   /** El prospecto no usa HubSpot: no hay portal que mirar (cuenta como revisado). */
   sinPortal: boolean;
+  /** Los casos de uso del catálogo que van a la propuesta, por id del catálogo. */
+  casosDeUso: Record<string, CasoDeUsoElegido>;
   /** Lápidas: ids de lo propuesto que el vendedor descartó. */
   descartadas: string[];
   alProponer: FotoAlProponer[];
@@ -116,6 +129,7 @@ export function contenidoVacio(): ContenidoDeExploracion {
     notas: {},
     medicion: {},
     sinPortal: false,
+    casosDeUso: {},
     descartadas: [],
     alProponer: [],
   };
@@ -131,7 +145,8 @@ export type DestinoDePropuesta =
   | { tipo: "aExplorar"; dimensionId: string }
   | { tipo: "area"; areaId: string }
   | { tipo: "edicion" }
-  | { tipo: "perfil" };
+  | { tipo: "perfil" }
+  | { tipo: "casoDeUso"; useCaseId: string };
 
 /** Una fuente citada: su id en la corrida (H3, S1…), cómo se llama y la frase exacta que lo respalda. */
 export interface FuenteCitada {
@@ -152,10 +167,14 @@ export interface ItemPropuesto {
   en: string;
 }
 
+/** Los tres momentos del agente: preparar la primera reunión, leer las reuniones, sugerir los casos de uso. */
+export const MODOS_DE_LA_CORRIDA = ["preparar", "leer", "casos"] as const;
+export type ModoDeLaCorrida = (typeof MODOS_DE_LA_CORRIDA)[number];
+
 /** Una corrida del agente sobre esta exploración: qué hizo y cuándo (para la historia del lienzo). */
 export interface CorridaDelAgente {
   id: string;
-  modo: "preparar" | "leer";
+  modo: ModoDeLaCorrida;
   en: string;
   propuestos: number;
   /** Lo que leyó, como lo ve el vendedor («Reunión del 1 oct: Revisión del diagnóstico»). */
@@ -239,6 +258,8 @@ export function claveDelDestino(d: DestinoDePropuesta): string {
       return "edicion";
     case "perfil":
       return "perfil";
+    case "casoDeUso":
+      return `casoDeUso:${d.useCaseId}`;
   }
 }
 
@@ -252,7 +273,7 @@ export function idDelItem(destino: DestinoDePropuesta, valor: unknown): string {
       ? { nivel: valor.nivel }
       : destino.tipo === "falta" && esObjeto(valor)
         ? { estado: valor.estado }
-        : destino.tipo === "aExplorar" || destino.tipo === "area"
+        : destino.tipo === "aExplorar" || destino.tipo === "area" || destino.tipo === "casoDeUso"
           ? null
           : valor;
   return `${claveDelDestino(destino)}:${fnv1a(canonico(valorQueCuenta))}`;
@@ -320,6 +341,8 @@ export function yaEstaConfirmado(estado: EstadoDeExploracion, destino: DestinoDe
       const p = valor as { cierre: Cierre; despues: Despues };
       return estado.perfilCierre === p.cierre && estado.perfilDespues === p.despues;
     }
+    case "casoDeUso":
+      return destino.useCaseId in c.casosDeUso;
   }
 }
 
@@ -408,6 +431,7 @@ export type Operacion =
   | { op: "nota"; paso: string; texto: string }
   | { op: "medicion"; medicion: Medicion }
   | { op: "sinPortal"; valor: boolean }
+  | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   | { op: "usar"; itemId: string; valor?: unknown }
   | { op: "descartar"; itemIds: string[] }
   | { op: "responsable"; email: string | null }
@@ -494,6 +518,11 @@ function aplicarAlDestino(
       const p = v as { cierre: Cierre; despues: Despues };
       return { ok: true, estado: { ...estado, perfilCierre: p.cierre, perfilDespues: p.despues } };
     }
+    case "casoDeUso": {
+      const caso = v as CasoDeUsoElegido;
+      if (caso.areaId !== null && !validez.areas.has(caso.areaId)) return { ok: false, error: `El área ${caso.areaId} no existe.` };
+      return { ok: true, estado: { ...estado, contenido: { ...c, casosDeUso: { ...c.casosDeUso, [destino.useCaseId]: caso } } } };
+    }
   }
 }
 
@@ -550,6 +579,12 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       return { ok: true, estado: { ...estado, contenido: { ...c, medicion: { ...c.medicion, ...op.medicion } } } };
     case "sinPortal":
       return { ok: true, estado: { ...estado, contenido: { ...c, sinPortal: op.valor } } };
+    case "casoDeUso": {
+      if (op.valor) return aplicarAlDestino(estado, { tipo: "casoDeUso", useCaseId: op.useCaseId }, op.valor, validez, validador);
+      const casosDeUso = { ...c.casosDeUso };
+      delete casosDeUso[op.useCaseId];
+      return { ok: true, estado: { ...estado, contenido: { ...c, casosDeUso } } };
+    }
     case "usar": {
       const item = estado.propuesta.items.find((x) => x.id === op.itemId);
       if (!item) return { ok: false, error: "Esa propuesta ya no está: la usó o la descartó alguien más." };
