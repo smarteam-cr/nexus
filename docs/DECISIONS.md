@@ -4093,3 +4093,52 @@ usabilidad.
   intensidad, las guías (vacía, rayada, la base, el orden en que se trabaja) y lo que pasa al tocar
   una celda. La anterior estaba debajo, en letra chica, y los bordes de los requeridos solo aparecían
   en ella cuando había alguno: justo cuando hacía falta entenderlos, no estaban.
+
+## La exploración de venta: un lienzo que se usa, el agente propone y el vendedor confirma (2026-10-01)
+
+**Contexto.** Elías pidió, en Ventas, un lienzo por empresa que guíe la exploración para cerrar la
+primera venta (llevar cada área en juego a Funcional) con la escala y el marco de calificación de
+HubSpot, que alimente la propuesta y que le llegue al CSE en el handoff. Sin versión nueva de la
+escala y sin tocar el diagnóstico del CSE.
+
+**Decisiones.**
+
+- **Dos reuniones, por decisión de Elías.** La revisión del diagnóstico que promete el test (30 min,
+  una sesión de trabajo, sin producto) y una exploración a fondo (45–60 min) con el portal abierto.
+  El guion de cada una vive en `lib/exploraciones/sesion.ts`; si dura distinto, los minutos se
+  ajustan en proporción.
+- **La profundidad: las 8 dimensiones de cada área en juego, estimadas; se profundiza en hasta 4.**
+  La escala no deja saltar dimensiones (la capa es su dimensión más débil). Se profundiza en las que
+  quedan debajo de Funcional, tocan una meta o dejan ver un riesgo, hasta saber qué les falta para
+  Funcional. «Lo que pide Funcional» guía la conversación y **no cambia el nivel**, que sigue
+  estimado. El resto (comprobar en el sistema, hábitos, Eficiente y Óptimo) queda para el CSE.
+- **El agente propone; nada se confirma solo.** Lo propuesto vive aparte (`propuesta`) de lo
+  confirmado (`contenido`), con lápidas para lo descartado y la fila bloqueada para los dos
+  escritores. Un nivel o un «lo tiene / no lo tiene» entra solo con una frase que aparezca LITERAL en
+  su fuente: una cita inventada engañaría al vendedor. Solo «leer» marca lo leído: «preparar» recorta
+  las reuniones y no debe dejar a la primera lectura sin nada.
+- **El test de marketing es hipótesis.** Usa la escala anterior (v4): se decodifica el enlace del
+  resultado (`url_ultimo_diag_*`, lz-string), sus dimensiones caen en las de hoy por posición, entra
+  como propuesta «valídalo en la primera reunión», y nunca pisa un nivel pendiente que salió de una
+  reunión. Al modelo no le llegan las etiquetas v4.
+- **La propuesta solo ve lo que puede ver el cliente, y su posición en la escala sale del chequeo.**
+  Hipótesis, presupuesto, quién decide, lo no explorado y la apertura a la asesoría no entran
+  (`bloqueParaLaPropuesta`). «Dónde está tu operación hoy» alimenta el bloque de la Escala del
+  kickoff: la escribe el código desde el chequeo (nombres de nivel, el nombre GENERAL de la dimensión
+  que frena, texto neutro, en el idioma de la propuesta), también al regenerarla. «Sin Escala» se
+  respeta. La propuesta exige el negocio de la empresa: el kickoff une propuesta y proyecto por él.
+- **A qué handoff le llega.** Por el negocio de la propuesta; si no hay enlace, al PRIMER proyecto de
+  Customer Success de la empresa dentro de seis meses; nunca a desarrollo ni a sitio web, ni a un
+  ciclo posterior (`lib/exploraciones/handoff.ts`). Va rotulada «estimado: sirve para saber dónde
+  mirar, no es evidencia», y lo interno «SOLO INTERNO» hacia «Riesgos y banderas rojas» o «¿Por qué
+  vendimos?», secciones que ningún documento del cliente lee. Lo vigila un censo propio
+  (`lib/exploraciones/lectores.test.ts`).
+- **La métrica se mide con la foto del momento de proponer**, no con lo que se completó después; y
+  sirve para mejorar el proceso, nunca para evaluar a quien vende.
+- **Los permisos nuevos de HubSpot entran por entorno** (`HUBSPOT_SCOPES_OPCIONALES_EXTRA`): un scope
+  escrito en el código rompería la instalación desde el deploy hasta que alguien lo declarara
+  «Opcional» en la app pública.
+
+**Lo que no entra.** Una versión nueva de la escala (las precisiones, en
+`docs/propuestas-escala-desde-la-exploracion.md`), el diagnóstico del CSE, el test de marketing (sigue
+en la escala anterior) y ampliar la sincronización de Meet (fue la sospechosa de la caída del 21-sep).

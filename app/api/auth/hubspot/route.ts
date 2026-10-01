@@ -73,7 +73,17 @@ const HUBSPOT_SCOPES = [
 //   archivos en SIN_PERMISO y la pantalla explica qué falta en vez de fingir que no
 //   hay nada. ⚠ Pedirlo acá NO alcanza: hay que declararlo "Opcional" en la config de
 //   la app pública y volver a autorizar la conexión del sistema.
-const HUBSPOT_OPTIONAL_SCOPES = ["social", "crm.objects.partner-clients.read", "files"].join(" ");
+// · Los que se suman POR ENTORNO (`HUBSPOT_SCOPES_OPCIONALES_EXTRA`, separados por espacio): un
+//   scope nuevo primero se declara "Opcional" en la app pública y RECIÉN DESPUÉS se pide. Escrito
+//   acá, rompería la instalación desde el deploy hasta que alguien tocara la app. Hoy:
+//   `sales-email-read`, para que la exploración de venta lea los correos con la empresa (sin él,
+//   HubSpot los devuelve tachados y el lienzo avisa cuántos no pudo leer).
+const HUBSPOT_OPTIONAL_SCOPES = [
+  "social",
+  "crm.objects.partner-clients.read",
+  "files",
+  ...(process.env.HUBSPOT_SCOPES_OPCIONALES_EXTRA ?? "").split(/\s+/).filter(Boolean),
+].join(" ");
 
 /**
  * GET /api/auth/hubspot — arranca el OAuth con HubSpot.
