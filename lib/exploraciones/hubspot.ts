@@ -255,7 +255,9 @@ function aActividad(e: V1): ActividadDeHubspot | "tapado" | null {
     texto = get("text") || get("html");
     if (TAPADO.test(texto) || TAPADO.test(titulo)) return "tapado";
   }
-  if (!texto) return null;
+  // Una reunión sin texto igual sirve: si es futura, es agenda (la que se agenda desde el enlace del
+  // test no trae descripción). Si ya pasó y no tiene texto, la descarta leerActividad.
+  if (!texto && tipo !== "MEETING") return null;
   if (tipo === "NOTE" && esNotaDeLaFicha(texto)) return null;
   const ts = typeof e.engagement?.timestamp === "number" ? e.engagement.timestamp : 0;
   return {
@@ -301,6 +303,7 @@ export async function leerActividad(companyId: string, contactos: readonly Conta
       agenda.push({ id: a.id, titulo: a.titulo || "Reunión", inicio: new Date(inicio).toISOString() });
       continue;
     }
+    if (!a.texto) continue;
     material.push(a);
   }
   material.sort((a, b) => b.ts - a.ts);

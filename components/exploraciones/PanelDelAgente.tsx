@@ -1,14 +1,18 @@
 "use client";
 
 /**
- * PanelDelAgente — el agente de la exploración: prepararla, leer la última reunión y lo que leyó.
+ * PanelDelAgente — el agente de la exploración: prepararla, leer las reuniones y la historia de lo
+ * que leyó.
  *
  * El agente corre en segundo plano y PROPONE: cuando termina, lo propuesto aparece en el lugar de
  * cada casilla para usarlo o descartarlo. Si el vendedor sale y vuelve, la pantalla retoma la
- * corrida que sigue viva (la consulta al abrir).
+ * corrida que sigue viva (la consulta al abrir). Las reuniones de Meet las lee solo cuando llega la
+ * transcripción; las que quedan sin leer se avisan acá y en «Qué sigue».
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Badge, Button, useToast } from "@/components/ui";
+import { Alert, Button, useToast } from "@/components/ui";
+import { definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
+import type { CorridaDelAgente } from "@/lib/exploraciones/contenido";
 import { diaCorto, diaYHora } from "@/lib/exploraciones/fechas";
 import { useLienzo } from "./contexto";
 
@@ -23,17 +27,60 @@ interface Corrida {
   error: string | null;
 }
 
-function haceCuanto(iso: string): string {
-  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (min < 1) return "recién";
-  if (min < 60) return `hace ${min} min`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  return diaCorto(iso);
+/** Qué casillas alimentó una corrida, en palabras: «Metas», «Retos» y el nivel de 3 dimensiones. */
+function queAlimento(claves: readonly string[]): string {
+  const partes: string[] = [];
+  const casillas = claves.filter((c) => c.startsWith("casilla:")).map((c) => `«${definicionDe(c.slice(8) as ClaveDeCasilla).etiqueta}»`);
+  partes.push(...new Set(casillas));
+  const contar = (prefijo: string) => claves.filter((c) => c.startsWith(prefijo)).length;
+  const niveles = contar("nivel:");
+  if (niveles) partes.push(niveles === 1 ? "el nivel de una dimensión" : `el nivel de ${niveles} dimensiones`);
+  if (contar("falta:")) partes.push("lo que pide Funcional");
+  if (contar("aExplorar:")) partes.push("las dimensiones a explorar");
+  if (contar("area:")) partes.push("las áreas en juego");
+  if (claves.includes("edicion") || claves.includes("perfil")) partes.push("la industria y el perfil");
+  if (partes.length <= 1) return partes[0] ?? "";
+  return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+}
+
+function Historia({ corridas }: { corridas: CorridaDelAgente[] }) {
+  if (corridas.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-fg-secondary">Lo que leyó</p>
+      <ul className="space-y-2">
+        {corridas.slice(0, 5).map((c) => {
+          const alimento = queAlimento(c.alimento);
+          return (
+            <li key={c.id} className="text-xs text-fg-muted">
+              <p className="text-fg-secondary">
+                {diaYHora(c.en)} · {c.modo === "preparar" ? "Preparó" : c.automatica ? "Leyó sola la reunión que llegó" : "Leyó lo nuevo"}
+                {" · "}
+                {c.propuestos === 0 ? "nada nuevo que proponer" : `${c.propuestos} ${c.propuestos === 1 ? "propuesta" : "propuestas"}`}
+                {alimento ? ` en ${alimento}` : ""}
+              </p>
+              {c.leyo.length > 0 && (
+                <details>
+                  <summary className="cursor-pointer select-none">
+                    {c.leyo.length} {c.leyo.length === 1 ? "fuente" : "fuentes"}
+                  </summary>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                    {c.leyo.map((f, i) => (
+                      <li key={i}>{f}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPrincipal?: "preparar" | "leer" }) {
-  const { exp, escala, puedeEditar, recargar } = useLienzo();
+  const { exp, escala, puedeEditar, recargar, sinLeer } = useLienzo();
   const toast = useToast();
   const [corrida, setCorrida] = useState<Corrida | null>(null);
   const [lanzando, setLanzando] = useState(false);
@@ -104,7 +151,11 @@ export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPri
   const corriendo = corrida?.estado === "RUNNING";
   const corridas = [...exp.estado.propuesta.corridas].reverse();
   const yaPreparo = corridas.some((c) => c.modo === "preparar");
+  // Con una reunión sin leer, leerla es lo primero, en cualquier paso.
+  const leerPrimero = modoPrincipal === "leer" || sinLeer.length > 0;
   const leido = exp.leido;
+  // La foto es de la última lectura: lo que ya pasó desde entonces no es agenda (es «sin leer»).
+  const agenda = leido.agenda.filter((a) => Date.parse(a.inicio) > Date.now());
   const nombreDeArea = (id: string) => escala.areas.find((a) => a.id === id)?.nombre ?? id;
 
   return (
@@ -118,7 +169,7 @@ export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPri
         </div>
         {puedeEditar && (
           <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
-            {modoPrincipal === "leer" ? (
+            {leerPrimero ? (
               <>
                 <Button size="sm" variant="primary" loading={lanzando} disabled={corriendo} onClick={() => void lanzar("leer")}>
                   Leer la última reunión
@@ -148,17 +199,20 @@ export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPri
       )}
       {corrida?.estado === "ERROR" && <Alert variant="danger">{corrida.error}</Alert>}
 
-      {corridas.length > 0 && (
-        <ul className="flex flex-wrap gap-2 text-xs text-fg-muted">
-          {corridas.slice(0, 4).map((c) => (
-            <li key={c.id}>
-              <Badge size="xs">
-                {c.modo === "preparar" ? "Preparó" : "Leyó una reunión"} · {haceCuanto(c.en)} · {c.propuestos} {c.propuestos === 1 ? "propuesta" : "propuestas"}
-              </Badge>
-            </li>
-          ))}
-        </ul>
+      {sinLeer.length > 0 && !corriendo && (
+        <Alert variant="warning" title={sinLeer.length === 1 ? "Hay una reunión sin leer" : `Hay ${sinLeer.length} reuniones sin leer`}>
+          <ul className="space-y-0.5">
+            {sinLeer.slice(0, 4).map((r) => (
+              <li key={`${r.origen}-${r.id}`}>
+                «{r.titulo}», {diaCorto(r.fecha)}
+                {r.origen === "hubspot" ? " (agendada en HubSpot: se lee lo que dejó el notetaker)" : ""}
+              </li>
+            ))}
+          </ul>
+        </Alert>
       )}
+
+      <Historia corridas={corridas} />
 
       {leido.tests.length > 0 && (
         <div className="space-y-1">
@@ -174,11 +228,11 @@ export default function PanelDelAgente({ modoPrincipal = "preparar" }: { modoPri
         </div>
       )}
 
-      {leido.agenda.length > 0 && (
+      {agenda.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-medium text-fg-secondary">Reuniones agendadas en HubSpot</p>
           <ul className="space-y-0.5 text-xs text-fg-muted">
-            {leido.agenda.slice(0, 3).map((a) => (
+            {agenda.slice(0, 3).map((a) => (
               <li key={a.id}>
                 {diaYHora(a.inicio)} · {a.titulo}
               </li>

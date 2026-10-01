@@ -28,6 +28,8 @@ import {
   type ActividadDeLaEmpresa,
   type ContactoDeHubspot,
 } from "./hubspot";
+import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, type ReunionSinLeer } from "./lectura";
+import type { LoLeidoDeHubspot } from "./lo-leido";
 import { REUNIONES } from "./sesion";
 import type { ResultadoDelTest } from "./test-de-marketing";
 
@@ -216,4 +218,31 @@ export async function leerFuentes(opts: {
   if (notas) fuentes.push({ id: "N0", etiqueta: "Notas del vendedor en el guion", texto: notas });
 
   return { fuentes, tests, agenda: actividad.agenda, correosSinPermiso: actividad.correosSinPermiso, leidas, sesionesUsadas };
+}
+
+/**
+ * Las reuniones que el agente todavía no leyó (lib/exploraciones/lectura.ts): las de Meet CON
+ * transcripción desde un mes antes del alta, y las de HubSpot que estaban agendadas y ya pasaron.
+ * Solo lee la base (nada de HubSpot): se pide al abrir el lienzo.
+ */
+export async function reunionesSinLeer(
+  opts: { clientId: string; creadaEn: Date; propuesta: PropuestaDeExploracion; leido: LoLeidoDeHubspot },
+  ahora = new Date(),
+): Promise<ReunionSinLeer[]> {
+  const desde = opts.creadaEn.getTime() - DIAS_ANTES_DEL_ALTA * 24 * 60 * 60 * 1000;
+  const leidas = new Set(opts.propuesta.leidas.sesiones);
+  const candidatas = (await getClientSessions(opts.clientId, { take: 10 })).filter((s) => s.date >= desde && !leidas.has(s.id));
+  const conTranscripcion = candidatas.length
+    ? await prisma.firefliesSession.findMany({
+        where: {
+          id: { in: candidatas.map((s) => s.id) },
+          AND: [{ transcript: { not: null } }, { transcript: { not: "" } }],
+          date: { lte: ahora },
+        },
+        select: { id: true, title: true, date: true },
+        orderBy: { date: "desc" },
+      })
+    : [];
+  const deMeet: ReunionSinLeer[] = conTranscripcion.map((s) => ({ id: s.id, titulo: s.title, fecha: s.date.toISOString(), origen: "meet" }));
+  return [...deMeet, ...agendadasQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora)];
 }

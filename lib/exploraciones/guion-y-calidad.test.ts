@@ -8,6 +8,7 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import { listaParaProponer, queSigue } from "./calidad";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { aFecha, diaConAnio, diaCorto } from "./fechas";
+import { agendadasQueYaPasaron, debeLeerSola } from "./lectura";
 import { industriaLegible, sugerirEdicion } from "./industria";
 import { minutosPara, REUNIONES } from "./sesion";
 
@@ -139,6 +140,12 @@ describe("lista para proponer", () => {
     expect(queSigue(estado({ areas: [] }), chequeoCon("FFFFFFFF"))).toMatch(/áreas/);
     expect(queSigue(estado(), chequeoCon("FFFFFFF"))).toMatch(/dimensión que falta/);
     expect(queSigue(estado(), chequeoCon("FFFFFFFF"))).toMatch(/meta en cifras/);
+    // Una reunión sin leer va antes que todo lo que se llena con ella.
+    const sinLeer = [{ id: "s1", titulo: "Revisión del diagnóstico", fecha: "2026-10-01T15:00:00.000Z", origen: "meet" as const }];
+    expect(queSigue(estado(), chequeoCon("FFFFFFF"), sinLeer)).toBe(
+      "Hay una reunión sin leer («Revisión del diagnóstico», 1 oct): pídele al agente que la lea, en «Lo que quedó».",
+    );
+    expect(queSigue(estado(), chequeoCon("FFFFFFF"), [...sinLeer, { ...sinLeer[0], id: "s2" }])).toMatch(/^Hay 2 reuniones sin leer/);
   });
 });
 
@@ -151,5 +158,39 @@ describe("fechas en la hora de Costa Rica", () => {
   it("una llamada de las 8 de la noche es de ese día aunque en UTC ya sea el siguiente", () => {
     // 2026-09-21T02:00Z = 20 de septiembre, 8 p. m. en Costa Rica.
     expect(diaConAnio(Date.parse("2026-09-21T02:00:00.000Z"))).toMatch(/^20 sept/);
+  });
+});
+
+describe("cuándo el agente lee solo una reunión", () => {
+  const AHORA = new Date("2026-10-10T18:00:00.000Z");
+  const ALTA = new Date("2026-10-01T15:00:00.000Z");
+  const base = { creadaEn: ALTA, sesionId: "s1", leidas: [] as string[], ahora: AHORA };
+
+  it("una reunión de después del alta, reciente y sin leer: sí", () => {
+    expect(debeLeerSola({ ...base, fechaDeLaReunion: new Date("2026-10-08T15:00:00.000Z") })).toBe(true);
+  });
+
+  it("no: si ya se leyó, si es de antes del alta (la vio al preparar), si tiene más de dos semanas o si todavía no pasó", () => {
+    expect(debeLeerSola({ ...base, leidas: ["s1"], fechaDeLaReunion: new Date("2026-10-08T15:00:00.000Z") })).toBe(false);
+    expect(debeLeerSola({ ...base, fechaDeLaReunion: new Date("2026-09-30T15:00:00.000Z") })).toBe(false);
+    expect(debeLeerSola({ ...base, creadaEn: new Date("2026-09-01T00:00:00.000Z"), fechaDeLaReunion: new Date("2026-09-20T15:00:00.000Z") })).toBe(false);
+    expect(debeLeerSola({ ...base, fechaDeLaReunion: new Date("2026-10-11T15:00:00.000Z") })).toBe(false);
+  });
+});
+
+describe("las reuniones de HubSpot que ya pasaron sin leer", () => {
+  const AHORA = new Date("2026-10-10T18:00:00.000Z");
+  const agenda = [
+    { id: "h1", titulo: "Revisión del diagnóstico", inicio: "2026-10-02T15:00:00.000Z" },
+    { id: "h2", titulo: "Exploración a fondo", inicio: "2026-10-08T15:00:00.000Z" },
+    { id: "h3", titulo: "Presentación de la propuesta", inicio: "2026-10-15T15:00:00.000Z" },
+  ];
+
+  it("las que ya pasaron y no se leyeron; la futura no", () => {
+    expect(agendadasQueYaPasaron(agenda, ["h1"], [], AHORA).map((r) => r.id)).toEqual(["h2"]);
+  });
+
+  it("la que también está en Meet cuenta una vez: la de Meet, que trae la transcripción", () => {
+    expect(agendadasQueYaPasaron(agenda, [], [{ fecha: "2026-10-08T15:05:00.000Z" }], AHORA).map((r) => r.id)).toEqual(["h1"]);
   });
 });

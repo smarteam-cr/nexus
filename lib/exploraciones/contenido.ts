@@ -158,6 +158,12 @@ export interface CorridaDelAgente {
   modo: "preparar" | "leer";
   en: string;
   propuestos: number;
+  /** Lo que leyó, como lo ve el vendedor («Reunión del 1 oct: Revisión del diagnóstico»). */
+  leyo: string[];
+  /** A dónde fue lo que propuso (claveDelDestino): la historia dice qué casillas alimentó. */
+  alimento: string[];
+  /** La lanzó una reunión nueva, sin que nadie apretara el botón. */
+  automatica: boolean;
 }
 
 /**

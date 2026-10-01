@@ -45,6 +45,7 @@ export default function LienzoDeExploracion({
   const router = useRouter();
   const toast = useToast();
   const [exp, setExp] = useState(inicial);
+  const [sinLeer, setSinLeer] = useState(inicial.sinLeer ?? []);
   const [guardando, setGuardando] = useState(false);
   const [paso, setPaso] = useState<Paso>("preparacion");
 
@@ -58,6 +59,7 @@ export default function LienzoDeExploracion({
   if (vistaDe !== inicial.actualizadaEn) {
     setVistaDe(inicial.actualizadaEn);
     setExp(inicial);
+    if (inicial.sinLeer) setSinLeer(inicial.sinLeer);
     confirmada.current = inicial;
   }
 
@@ -129,6 +131,7 @@ export default function LienzoDeExploracion({
         if (data.exploracion) {
           confirmada.current = data.exploracion;
           setExp(data.exploracion);
+          if (data.exploracion.sinLeer) setSinLeer(data.exploracion.sinLeer);
         }
       } catch {
         /* se queda con lo que tiene: el próximo cambio trae lo último */
@@ -152,10 +155,10 @@ export default function LienzoDeExploracion({
   const pendientesPara = useCallback((filtro: (d: DestinoDePropuesta) => boolean) => pendientes.filter((it) => filtro(it.destino)), [pendientes]);
   const nombreDeNivel = useCallback((l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l, [escala]);
 
-  const lienzo: Lienzo = { exp, escala, chequeo, pendientes, puedeEditar, guardando, cambiar, recargar, nombreDeNivel, pendientesPara };
+  const lienzo: Lienzo = { exp, escala, chequeo, pendientes, sinLeer, puedeEditar, guardando, cambiar, recargar, nombreDeNivel, pendientesPara };
 
   const puntos = listaParaProponer(exp.estado, chequeo);
-  const sigue = queSigue(exp.estado, chequeo);
+  const sigue = queSigue(exp.estado, chequeo, sinLeer);
   const enPrep = pendientes.filter((p) => ["edicion", "perfil", "area", "aExplorar"].includes(p.destino.tipo) || (p.destino.tipo === "casilla" && ["contexto", "hubspotActual", "hipotesis"].includes(p.destino.clave))).length;
   const enQuedo = pendientes.length - enPrep;
 

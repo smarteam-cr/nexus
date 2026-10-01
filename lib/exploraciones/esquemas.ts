@@ -297,7 +297,15 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   if (Array.isArray(raw.corridas)) {
     p.corridas = raw.corridas
       .filter((c): c is CorridaDelAgente => esObjeto(c) && typeof c.id === "string" && (c.modo === "preparar" || c.modo === "leer") && typeof c.en === "string")
-      .map((c) => ({ id: c.id, modo: c.modo, en: c.en, propuestos: typeof c.propuestos === "number" ? c.propuestos : 0 }))
+      .map((c) => ({
+        id: c.id,
+        modo: c.modo,
+        en: c.en,
+        propuestos: typeof c.propuestos === "number" ? c.propuestos : 0,
+        leyo: listaDeTextos(c.leyo, 40),
+        alimento: listaDeTextos(c.alimento, 120),
+        automatica: c.automatica === true,
+      }))
       .slice(-50);
   }
   if (!Array.isArray(raw.items)) return p;

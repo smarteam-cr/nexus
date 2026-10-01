@@ -18,6 +18,8 @@ import { listaParaProponer, queSigue, type PuntoDeCalidad } from "./calidad";
 import { aplicarOperaciones, cambioLoConfirmado, type EstadoDeExploracion, type Operacion, type Validez } from "./contenido";
 import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
+import { reunionesSinLeer } from "./fuentes";
+import type { ReunionSinLeer } from "./lectura";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 
 export const SQL_DE_EXPLORACIONES = "scripts/sql/2026-10-01-exploracion-de-venta.sql";
@@ -244,6 +246,9 @@ export interface ExploracionParaLaPantalla {
   estado: EstadoDeExploracion;
   /** Lo que el agente leyó de HubSpot: el test, la agenda, los correos que no pudo leer. */
   leido: LoLeidoDeHubspot;
+  /** Las reuniones que el agente todavía no leyó. Solo al abrir y al recargar (cuesta una consulta):
+   *  la respuesta de un cambio no lo trae y la pantalla conserva lo que tenía. */
+  sinLeer?: ReunionSinLeer[];
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;
@@ -266,4 +271,19 @@ export function paraLaPantalla(fila: FilaDeExploracion): ExploracionParaLaPantal
     creadaEn: fila.createdAt.toISOString(),
     actualizadaEn: fila.updatedAt.toISOString(),
   };
+}
+
+/** Lo mismo, con las reuniones sin leer (para abrir el lienzo y para recargarlo). */
+export async function paraLaPantallaConLoSinLeer(fila: FilaDeExploracion): Promise<ExploracionParaLaPantalla> {
+  const exp = paraLaPantalla(fila);
+  const sinLeer = await reunionesSinLeer({
+    clientId: fila.client.id,
+    creadaEn: fila.createdAt,
+    propuesta: exp.estado.propuesta,
+    leido: exp.leido,
+  }).catch((e) => {
+    console.error("[exploraciones] no se pudieron contar las reuniones sin leer", e);
+    return [];
+  });
+  return { ...exp, sinLeer };
 }

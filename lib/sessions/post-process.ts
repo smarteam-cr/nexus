@@ -375,6 +375,17 @@ export async function postProcessSession(
     console.error(`[post-session] ficha del cliente falló (no bloqueante):`, e instanceof Error ? e.message : e);
   }
 
+  // Exploración de venta: si la empresa tiene una viva, el agente lee esta reunión y propone qué va
+  // en cada casilla (lib/exploraciones/agente.ts decide si corresponde y corre en segundo plano).
+  // Solo dispara; best-effort: nunca tumba el post-proceso.
+  try {
+    const { leerReunionNueva } = await import("@/lib/exploraciones/agente");
+    const r = await leerReunionNueva({ sesionId: sessionId, fecha: session.date, clientId: client.id });
+    if (r === "lanzada") console.log(`[post-session] ✓ exploración de venta: el agente está leyendo la reunión`);
+  } catch (e) {
+    console.error(`[post-session] exploración de venta falló (no bloqueante):`, e instanceof Error ? e.message : e);
+  }
+
   console.log(
     `[post-session] ✓ "${session.title}" (cliente=${client.name}) — minuta DRAFT + ${created} action items`,
   );

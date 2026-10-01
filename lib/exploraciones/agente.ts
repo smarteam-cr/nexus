@@ -15,10 +15,13 @@ import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
+import { modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
 import { leerLaRespuesta, pedidoDeLaExploracion, propuestasDelTest, type ContextoDelPedido } from "./agente-pedido";
-import { fusionarPropuestas, propuestaVigente, type ItemPropuesto } from "./contenido";
+import { claveDelDestino, fusionarPropuestas, propuestaVigente, type ItemPropuesto } from "./contenido";
+import { leerPropuesta } from "./esquemas";
 import { leerFuentes, type LoQueSeLeyo } from "./fuentes";
+import { debeLeerSola } from "./lectura";
 import { bloquearFila, escalaDeLaExploracion, escalaParaExplorar, estadoDesdeFila, leerExploracion } from "./servidor";
 
 export const AGENTE_DE_LA_EXPLORACION = "exploracion-de-venta";
@@ -38,6 +41,14 @@ const VIVA_POR_MINUTOS = 15;
 
 export type ResultadoDeLanzar = { ok: true; runId: string; yaCorria: boolean } | { ok: false; status: number; error: string };
 
+interface OpcionesDeLaCorrida {
+  triggeredByEmail: string | null;
+  /** Para «leer»: la reunión que hay que leer (la que acaba de llegar). */
+  sesionId?: string | null;
+  /** La lanzó una reunión nueva, no una persona. */
+  automatica?: boolean;
+}
+
 /** La última corrida de esta exploración (la pantalla la sigue). */
 export async function ultimaCorrida(exploracionId: string, clientId: string) {
   return prisma.agentRun.findFirst({
@@ -54,11 +65,7 @@ async function corridaViva(exploracionId: string, clientId: string) {
   return Date.now() - r.createdAt.getTime() < VIVA_POR_MINUTOS * 60_000 ? r : null;
 }
 
-export async function lanzarCorrida(
-  exploracionId: string,
-  modo: ModoDelAgente,
-  opts: { triggeredByEmail: string | null; sesionId?: string | null },
-): Promise<ResultadoDeLanzar> {
+export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, opts: OpcionesDeLaCorrida): Promise<ResultadoDeLanzar> {
   const lectura = await leerExploracion(exploracionId);
   if (lectura.estado !== "ok") return { ok: false, status: lectura.estado === "no-existe" ? 404 : 503, error: "Esa exploración no existe." };
   const clientId = lectura.fila.clientId;
@@ -73,7 +80,7 @@ export async function lanzarCorrida(
       stepLabel: ETIQUETA[modo],
       currentPhase: "Empezando…",
       triggeredByEmail: opts.triggeredByEmail,
-      filters: { exploracionId, modo } as Prisma.InputJsonValue,
+      filters: { exploracionId, modo, ...(opts.automatica ? { automatica: true } : {}) } as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
@@ -86,7 +93,7 @@ async function fase(runId: string, texto: string) {
   await prisma.agentRun.update({ where: { id: runId }, data: { currentPhase: texto } }).catch(() => {});
 }
 
-async function correr(runId: string, exploracionId: string, modo: ModoDelAgente, opts: { triggeredByEmail: string | null; sesionId?: string | null }) {
+async function correr(runId: string, exploracionId: string, modo: ModoDelAgente, opts: OpcionesDeLaCorrida) {
   try {
     const escalaVig = await escalaParaExplorar();
     if (escalaVig.estado !== "ok") throw new FalloDeLaExploracion("La escala no está publicada en Nexus: sin ella el agente no puede proponer niveles.");
@@ -140,7 +147,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     }
 
     await fase(runId, "Guardando lo propuesto…");
-    const propuestos = await guardar(exploracionId, [...delTest, ...deLaIA], leido, { runId, modo });
+    const propuestos = await guardar(exploracionId, [...delTest, ...deLaIA], leido, { runId, modo, automatica: opts.automatica === true });
     await prisma.agentRun.update({
       where: { id: runId },
       data: {
@@ -179,7 +186,7 @@ async function guardar(
   exploracionId: string,
   items: ItemPropuesto[],
   leido: LoQueSeLeyo,
-  corrida: { runId: string; modo: ModoDelAgente },
+  corrida: { runId: string; modo: ModoDelAgente; automatica: boolean },
 ): Promise<number> {
   return prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
@@ -198,20 +205,31 @@ async function guardar(
     });
     if (!fila) return 0;
     const estado = estadoDesdeFila(fila);
-    const antes = propuestaVigente(estado).length;
+    const antes = new Set(propuestaVigente(estado).map((it) => it.id));
     const fusion = fusionarPropuestas(estado, items);
     const union = (a: string[], b: string[]) => [...new Set([...a, ...b])].slice(-500);
+    const leidas = {
+      sesiones: union(fusion.leidas.sesiones, leido.leidas.sesiones),
+      hubspot: union(fusion.leidas.hubspot, leido.leidas.hubspot),
+    };
+    // Lo que esta corrida dejó pendiente y antes no estaba: es lo que la historia cuenta.
+    const nuevas = propuestaVigente({ ...estado, propuesta: { ...fusion, leidas } }).filter((it) => !antes.has(it.id));
     const propuesta = {
       ...fusion,
-      leidas: {
-        sesiones: union(fusion.leidas.sesiones, leido.leidas.sesiones),
-        hubspot: union(fusion.leidas.hubspot, leido.leidas.hubspot),
-      },
-      corridas: [...fusion.corridas, { id: corrida.runId, modo: corrida.modo, en: new Date().toISOString(), propuestos: 0 }].slice(-50),
+      leidas,
+      corridas: [
+        ...fusion.corridas,
+        {
+          id: corrida.runId,
+          modo: corrida.modo,
+          en: new Date().toISOString(),
+          propuestos: nuevas.length,
+          leyo: leido.fuentes.map((f) => f.etiqueta.slice(0, 200)).slice(0, 40),
+          alimento: [...new Set(nuevas.map((it) => claveDelDestino(it.destino)))].slice(0, 120),
+          automatica: corrida.automatica,
+        },
+      ].slice(-50),
     };
-    const despues = propuestaVigente({ ...estado, propuesta }).length;
-    const nuevas = Math.max(0, despues - antes);
-    propuesta.corridas[propuesta.corridas.length - 1].propuestos = nuevas;
     await tx.exploracionDeVenta.update({
       where: { id: exploracionId },
       data: {
@@ -224,6 +242,27 @@ async function guardar(
         } as unknown as Prisma.InputJsonValue,
       },
     });
-    return nuevas;
+    return nuevas.length;
   });
+}
+
+/**
+ * Llegó la transcripción de una reunión (lib/sessions/post-process.ts): si la empresa tiene una
+ * exploración viva y la reunión es de después del alta, de hace a lo sumo dos semanas y nadie la
+ * leyó, el agente la lee solo. Solo DISPARA: la corrida va en segundo plano y cobra contra el
+ * presupuesto automático (sin persona). Si ya hay una corrida en curso, no lanza otra: la reunión
+ * queda avisada como «sin leer».
+ */
+export async function leerReunionNueva(o: { sesionId: string; fecha: Date; clientId: string }): Promise<"lanzada" | "ya-corre" | "no-corresponde"> {
+  if (!modeloDisponible(prisma.exploracionDeVenta)) return "no-corresponde";
+  const exp = await prisma.exploracionDeVenta.findFirst({
+    where: { clientId: o.clientId, archivadaEn: null },
+    select: { id: true, createdAt: true, propuesta: true },
+  });
+  if (!exp) return "no-corresponde";
+  const leidas = leerPropuesta(exp.propuesta).leidas.sesiones;
+  if (!debeLeerSola({ fechaDeLaReunion: o.fecha, creadaEn: exp.createdAt, sesionId: o.sesionId, leidas, ahora: new Date() })) return "no-corresponde";
+  const r = await lanzarCorrida(exp.id, "leer", { triggeredByEmail: null, sesionId: o.sesionId, automatica: true });
+  if (!r.ok) return "no-corresponde";
+  return r.yaCorria ? "ya-corre" : "lanzada";
 }

@@ -17,7 +17,7 @@ import {
   escalaDeLaExploracion,
   escalaParaExplorar,
   leerExploracion,
-  paraLaPantalla,
+  paraLaPantallaConLoSinLeer,
   SQL_DE_EXPLORACIONES,
 } from "@/lib/exploraciones/servidor";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -48,7 +48,7 @@ export default async function ExploracionPage({ params }: { params: Promise<{ id
     );
   }
 
-  const exp = paraLaPantalla(lectura.fila);
+  const exp = await paraLaPantallaConLoSinLeer(lectura.fila);
   const escala = await escalaParaExplorar();
   const portal = await prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } });
   const empresaUrl = hubspotCompanyUrl(portal?.hubspotPortalId ?? null, exp.empresa.hubspotCompanyId);

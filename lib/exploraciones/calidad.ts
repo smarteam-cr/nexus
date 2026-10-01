@@ -10,6 +10,8 @@
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import { metaEnCifras } from "./casillas";
 import { propuestaVigente, type EstadoDeExploracion } from "./contenido";
+import { diaCorto } from "./fechas";
+import type { ReunionSinLeer } from "./lectura";
 
 export interface PuntoDeCalidad {
   id: "dimensiones" | "meta" | "autoridad" | "consecuencia" | "portal" | "siguientePaso" | "noExplorado";
@@ -50,11 +52,17 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
   ];
 }
 
-/** Una sola indicación de qué hacer ahora: la primera cosa que falta, en el orden del proceso. */
-export function queSigue(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo): string {
+/**
+ * Una sola indicación de qué hacer ahora: la primera cosa que falta, en el orden del proceso. Una
+ * reunión sin leer va antes que lo propuesto: lo nuevo de esa reunión puede cambiar lo que hay que
+ * revisar.
+ */
+export function queSigue(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo, sinLeer: readonly ReunionSinLeer[] = []): string {
   const pendientes = propuestaVigente(estado).length;
   if (!estado.perfilCierre || !estado.perfilDespues) return "Elige la industria y el perfil de negocio: la escala los pide antes de medir.";
   if (estado.areas.length === 0) return "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.";
+  if (sinLeer.length === 1) return `Hay una reunión sin leer («${sinLeer[0].titulo}», ${diaCorto(sinLeer[0].fecha)}): pídele al agente que la lea, en «Lo que quedó».`;
+  if (sinLeer.length > 1) return `Hay ${sinLeer.length} reuniones sin leer: pídele al agente que las lea, en «Lo que quedó».`;
   if (pendientes > 0) return `Revisa lo que propuso el agente: ${pendientes} ${pendientes === 1 ? "cosa" : "cosas"} para usar o descartar.`;
   if (!chequeo.completo) {
     const faltan = chequeo.areas.reduce((s, a) => s + a.faltan.length, 0);

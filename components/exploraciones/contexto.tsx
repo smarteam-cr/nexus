@@ -14,6 +14,7 @@ import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import type { DestinoDePropuesta, ItemPropuesto, Operacion } from "@/lib/exploraciones/contenido";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
+import type { ReunionSinLeer } from "@/lib/exploraciones/lectura";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 
 export interface OpcionesDeCambio {
@@ -29,6 +30,8 @@ export interface Lienzo {
   chequeo: ResultadoDelChequeo;
   /** Lo que propuso el agente y sigue sin usar ni descartar. */
   pendientes: ItemPropuesto[];
+  /** Las reuniones que el agente todavía no leyó (al abrir y al recargar). */
+  sinLeer: ReunionSinLeer[];
   puedeEditar: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;
