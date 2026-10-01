@@ -83,7 +83,7 @@ export function queSigueConPaso(
   const conEvidencia = Object.values(estado.contenido.chequeo).some((e) => !esFuenteDeHipotesis(e.fuente));
   if (!conEvidencia && estado.propuesta.leidas.sesiones.length === 0) {
     return {
-      texto: "Haz la primera reunión con la guía: 30 minutos para validar el test, sacar sus metas en cifras y mostrarle qué va primero. Cuando llegue la transcripción, el agente la lee solo.",
+      texto: "Haz la primera reunión con la guía de «Exploración»: qué preguntar, cómo profundizar y cómo manejar las objeciones. Cuando llegue la transcripción, el agente la lee solo.",
       paso: "exploracion",
     };
   }

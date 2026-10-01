@@ -1,8 +1,9 @@
 /**
  * lib/exploraciones/agente.ts — correr el agente de la exploración. SERVIDOR.
  *
- * Tres momentos: «preparar» (antes de la primera reunión), «leer» (después de cada una) y «casos»
- * (los casos de uso, en modo experimental). La corrida queda en `AgentRun` (creada ANTES de llamar
+ * Cuatro momentos: «preparar» (antes de la primera reunión), «leer» (después de cada una), «casos»
+ * (los casos de uso, en modo experimental) y «guia» (la guía de la próxima reunión, que también se
+ * rearma sola al final de cada preparación y de cada lectura). La corrida queda en `AgentRun` (creada ANTES de llamar
  * a nada: cualquier falla deja su causa) y corre en segundo plano; la pantalla sigue su fase.
  *
  * ⛔ El agente PROPONE: lo que guarda es `propuesta` (lo propuesto, lo que ya leyó y sus corridas) y
@@ -51,7 +52,11 @@ import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { leerPropuesta } from "./esquemas";
 import { leerFuentes, type LoQueSeLeyo } from "./fuentes";
 import { debeLeerSola } from "./lectura";
-import type { LoLeidoDeHubspot } from "./lo-leido";
+import { hoyEnCostaRica } from "./fechas";
+import { contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia } from "./guia-pedido";
+import type { GuiaDeLaSesion } from "./guia";
+import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
+import { posicionesDelMapa } from "./mapa";
 import {
   bloquearFila,
   datosParaGuardar,
@@ -73,6 +78,7 @@ const ETIQUETA: Record<ModoDelAgente, string> = {
   preparar: "Exploración de venta: preparar",
   leer: "Exploración de venta: leer la reunión",
   casos: "Exploración de venta: proponer casos de uso",
+  guia: "Exploración de venta: armar la guía de la próxima reunión",
 };
 
 /** Lo que una corrida leyó, para guardarlo con lo propuesto. */
@@ -165,6 +171,15 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       await proponerCasos(runId, exploracionId, { fila, estado, escala, general: escalaVig.general }, opts);
       return;
     }
+    if (modo === "guia") {
+      await fase(runId, "Armando la guía de la próxima reunión…");
+      const preguntas = await armarGuia(runId, exploracionId, opts, true);
+      await prisma.agentRun.update({
+        where: { id: runId },
+        data: { status: "DONE", currentPhase: null, output: JSON.stringify({ propuestos: 0, guia: preguntas, nadaNuevo: false }) },
+      });
+      return;
+    }
 
     await fase(runId, "Leyendo HubSpot y las reuniones…");
     const leido = await leerFuentes({
@@ -232,6 +247,11 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       },
       { runId, modo, automatica: opts.automatica === true },
     );
+    /* Con lo nuevo ya guardado, la guía de la próxima reunión se rearma en la misma corrida (la
+       pantalla la sigue sola). Si falla, lo propuesto queda igual: la guía de base sigue ahí. */
+    await fase(runId, "Armando la guía de la próxima reunión…");
+    await armarGuia(runId, exploracionId, opts, false).catch((e) => console.error(`[exploraciones/agente] guía ${exploracionId}`, e));
+
     await prisma.agentRun.update({
       where: { id: runId },
       data: {
@@ -440,6 +460,71 @@ async function escribirLoQueVaSolo(
     if (despues.edicion !== null && !general.ediciones.some((e) => e.slug === despues.edicion)) return null;
     await tx.exploracionDeVenta.update({ where: { id: exploracionId }, data: { ...datosParaGuardar(despues), version: { increment: 1 } } });
     return despues;
+  });
+}
+
+/**
+ * La guía de la PRÓXIMA reunión (lib/exploraciones/guia.ts): el código elige qué cubre (las tarjetas
+ * vacías del resumen y hasta 4 dimensiones sin evidencia) y el agente escribe las preguntas, las
+ * repreguntas y las objeciones. Lee la exploración de nuevo: corre después de guardar lo propuesto.
+ * Devuelve cuántas preguntas armó (0 si el agente no devolvió nada que sirva: queda la de base).
+ */
+async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeLaCorrida, registrar: boolean): Promise<number> {
+  const escalaVig = await escalaParaExplorar();
+  if (escalaVig.estado !== "ok") throw new FalloDeLaExploracion("La escala no está publicada en Nexus.");
+  const lectura = await leerExploracion(exploracionId);
+  if (lectura.estado !== "ok") throw new FalloDeLaExploracion("La exploración ya no existe.");
+  const fila = lectura.fila;
+  const estado = estadoDesdeFila(fila);
+  const escala = escalaDeLaExploracion(escalaVig.general, estado);
+  const pendientes = pendientesVigentes(estado, escalaVig.general, escala);
+  const loLeido = leerLoLeido(fila.test);
+  const ahora = new Date();
+  const ctx = contextoDeLaGuia({
+    empresa: fila.client.name,
+    industria: fila.client.industry,
+    estado,
+    escala,
+    posiciones: posicionesDelMapa(estado, pendientes),
+    pendientes,
+    agenda: loLeido.agenda.filter((a) => Date.parse(a.inicio) > ahora.getTime()),
+    conTest: loLeido.tests.length > 0,
+    hoy: hoyEnCostaRica(ahora),
+  });
+  const respuesta = await conContextoDeIA(
+    {
+      agentSlug: AGENTE_DE_LA_EXPLORACION,
+      agentRunId: runId,
+      clientId: fila.clientId,
+      triggeredByEmail: opts.triggeredByEmail,
+      origen: "exploraciones/agente:guia",
+    },
+    () => getAnthropic().messages.create(pedidoDeLaGuia(ctx)),
+  );
+  const guia = leerLaGuiaDelAgente(respuesta, ctx, runId, ahora);
+  if (!guia) return 0;
+  await guardarGuia(exploracionId, guia, registrar ? { runId, automatica: opts.automatica === true } : null);
+  return guia.preguntas.length;
+}
+
+/** Guarda la guía con la fila bloqueada (solo la mitad del agente: lo confirmado no se toca). */
+async function guardarGuia(exploracionId: string, guia: GuiaDeLaSesion, corrida: { runId: string; automatica: boolean } | null) {
+  await prisma.$transaction(async (tx) => {
+    await bloquearFila(tx, exploracionId);
+    const fila = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { propuesta: true } });
+    if (!fila) return;
+    const actual = leerPropuesta(fila.propuesta);
+    const propuesta = {
+      ...actual,
+      guia,
+      corridas: corrida
+        ? [
+            ...actual.corridas,
+            { id: corrida.runId, modo: "guia" as const, en: new Date().toISOString(), propuestos: 0, leyo: ["Lo que falta del resumen", "Dónde parece estar cada equipo"], alimento: [], automatica: corrida.automatica },
+          ].slice(-50)
+        : actual.corridas,
+    };
+    await tx.exploracionDeVenta.update({ where: { id: exploracionId }, data: { propuesta: propuesta as unknown as Prisma.InputJsonValue } });
   });
 }
 

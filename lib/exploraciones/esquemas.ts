@@ -50,6 +50,14 @@ import {
   type PropuestaDeExploracion,
   type Validador,
 } from "./contenido";
+import {
+  MAX_PREGUNTAS_EN_LA_GUIA,
+  MAX_SESIONES,
+  REPREGUNTAS_POR_PREGUNTA,
+  TIPOS_DE_OBJECION,
+  type GuiaDeLaSesion,
+  type SesionPlaneada,
+} from "./guia";
 
 const texto = (max: number) => z.string().trim().max(max);
 const textoLleno = (max: number) => z.string().trim().min(1).max(max);
@@ -218,6 +226,17 @@ export function seProponeDeAUno(d: DestinoDePropuesta): boolean {
 
 // ── Las operaciones (lo que manda la pantalla) ────────────────────────────────
 
+/** Una sesión planeada por el vendedor (lib/exploraciones/guia.ts). */
+export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
+  id: z.string().regex(/^s-[a-z0-9]{1,24}$/),
+  titulo: texto(120).optional(),
+  fecha: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  hecha: z.boolean().optional(),
+});
+
 export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("casilla"), clave: z.enum(CLAVES_DE_CASILLA), valor: z.unknown() }),
   z.object({ op: z.literal("nivel"), dimensionId: ID_DIMENSION, estimado: EstimadoSchema.nullable() }),
@@ -227,6 +246,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("perfil"), cierre: ENUM_CIERRE.nullable(), despues: ENUM_DESPUES.nullable() }),
   z.object({ op: z.literal("edicion"), edicion: z.string().max(60).nullable() }),
   z.object({ op: z.literal("nota"), paso: z.string().min(1).max(40), texto: z.string().max(4000) }),
+  z.object({ op: z.literal("sesiones"), sesiones: z.array(SesionPlaneadaSchema).max(MAX_SESIONES) }),
   z.object({ op: z.literal("medicion"), medicion: MedicionSchema }),
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
@@ -262,6 +282,40 @@ export const VALIDADOR_ESTRICTO: Validador = {
     return r.success ? r.data : null;
   },
 };
+
+// ── Las sesiones y la guía ────────────────────────────────────────────────────
+
+const textoDeGuia = (max: number) => z.string().trim().min(1).max(max);
+const ObjecionSchema = z.object({
+  tipo: z.enum(TIPOS_DE_OBJECION),
+  escuchar: textoDeGuia(400),
+  reconocer: textoDeGuia(400),
+  explorar: textoDeGuia(500),
+  responder: textoDeGuia(500),
+});
+const PreguntaDeLaGuiaSchema = z.object({
+  para: z.string().min(1).max(40),
+  pregunta: textoDeGuia(400),
+  repreguntas: z.array(textoDeGuia(300)).max(REPREGUNTAS_POR_PREGUNTA),
+});
+const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
+  en: z.string().max(40),
+  corridaId: z.string().max(60).nullable(),
+  huecos: z.array(z.string().max(40)).max(20),
+  enfoque: z.array(z.string().max(20)).max(20),
+  apertura: z.array(textoDeGuia(400)).max(4),
+  escalaEnSimple: textoDeGuia(800).nullable(),
+  preguntas: z.array(PreguntaDeLaGuiaSchema).max(MAX_PREGUNTAS_EN_LA_GUIA),
+  objeciones: z.array(ObjecionSchema).max(TIPOS_DE_OBJECION.length),
+  pocaApertura: textoDeGuia(600).nullable(),
+  cierre: textoDeGuia(400).nullable(),
+});
+
+/** La guía guardada, o null si no tiene la forma (se vuelve a armar). */
+export function leerGuia(raw: unknown): GuiaDeLaSesion | null {
+  const r = GuiaSchema.safeParse(raw);
+  return r.success ? r.data : null;
+}
 
 // ── Leer lo guardado, con tolerancia ──────────────────────────────────────────
 
@@ -313,6 +367,13 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   c.aExplorar = registroValido(raw.aExplorar, ID_DIMENSION, AExplorarSchema);
   c.razonesDeAreas = registroValido(raw.razonesDeAreas, ID_AREA, z.string().max(300));
   c.notas = registroValido(raw.notas, z.string().max(40), z.string().max(4000));
+  if (Array.isArray(raw.sesiones)) {
+    c.sesiones = raw.sesiones
+      .map((s) => SesionPlaneadaSchema.safeParse(s))
+      .filter((r) => r.success)
+      .map((r) => r.data)
+      .slice(0, MAX_SESIONES);
+  }
   const med = MedicionSchema.safeParse(raw.medicion);
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
@@ -359,6 +420,7 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
       }))
       .slice(-50);
   }
+  p.guia = leerGuia(raw.guia);
   if (!Array.isArray(raw.items)) return p;
   const items: ItemPropuesto[] = [];
   for (const it of raw.items) {

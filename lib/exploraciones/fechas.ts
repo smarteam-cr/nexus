@@ -35,3 +35,8 @@ export function diaYHora(v: string | number | Date): string {
     timeZone: ZONA_DE_LA_EXPLORACION,
   });
 }
+
+/** El día de hoy en Costa Rica, `AAAA-MM-DD` (el formato de las fechas sin hora). */
+export function hoyEnCostaRica(ahora = new Date()): string {
+  return ahora.toLocaleDateString("en-CA", { timeZone: ZONA_DE_LA_EXPLORACION });
+}

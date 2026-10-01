@@ -55,7 +55,8 @@ export function useCorrida() {
         if (!c || c.estado !== "RUNNING") {
           if (c?.estado === "DONE") {
             await recargar();
-            if (c.nadaNuevo) toast.success("No había reuniones nuevas para leer.");
+            if (c.modo === "guia") toast.success("La guía de la próxima reunión está lista.");
+            else if (c.nadaNuevo) toast.success("No había reuniones nuevas para leer.");
             else
               toast.success(
                 c.propuestos

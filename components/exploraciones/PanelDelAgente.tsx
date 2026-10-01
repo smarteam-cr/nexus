@@ -38,7 +38,10 @@ function queAlimento(claves: readonly string[]): string {
 
 /** Qué hizo una corrida, en pocas palabras. */
 function queHizo(c: CorridaDelAgente): string {
-  return c.modo === "preparar" ? "Preparó" : c.modo === "casos" ? "Propuso casos de uso" : c.automatica ? "Leyó sola la reunión que llegó" : "Leyó lo nuevo";
+  if (c.modo === "preparar") return "Preparó";
+  if (c.modo === "casos") return "Propuso casos de uso";
+  if (c.modo === "guia") return "Armó la guía de la próxima reunión";
+  return c.automatica ? "Leyó sola la reunión que llegó" : "Leyó lo nuevo";
 }
 
 function Historia({ corridas }: { corridas: CorridaDelAgente[] }) {
@@ -53,9 +56,13 @@ function Historia({ corridas }: { corridas: CorridaDelAgente[] }) {
             <li key={c.id} className="text-xs text-fg-muted">
               <p className="text-fg-secondary">
                 {diaYHora(c.en)} · {queHizo(c)}
-                {" · "}
-                {c.propuestos === 0 ? "nada nuevo que proponer" : `${c.propuestos} ${c.propuestos === 1 ? "propuesta" : "propuestas"}`}
-                {alimento ? ` en ${alimento}` : ""}
+                {c.modo !== "guia" && (
+                  <>
+                    {" · "}
+                    {c.propuestos === 0 ? "nada nuevo que proponer" : `${c.propuestos} ${c.propuestos === 1 ? "propuesta" : "propuestas"}`}
+                    {alimento ? ` en ${alimento}` : ""}
+                  </>
+                )}
               </p>
               {c.leyo.length > 0 && (
                 <details>
@@ -103,7 +110,7 @@ export default function PanelDelAgente({ modoPrincipal = "preparar", compacto = 
           <h3 className="text-sm font-semibold text-fg">El agente</h3>
           <p className="text-xs text-fg-muted">
             {ultima
-              ? `Última lectura: ${diaYHora(ultima.en)} · ${queHizo(ultima)} · ${ultima.propuestos === 0 ? "nada nuevo que proponer" : `${ultima.propuestos} ${ultima.propuestos === 1 ? "propuesta" : "propuestas"}`}`
+              ? `Última lectura: ${diaYHora(ultima.en)} · ${queHizo(ultima)}${ultima.modo === "guia" ? "" : ` · ${ultima.propuestos === 0 ? "nada nuevo que proponer" : `${ultima.propuestos} ${ultima.propuestos === 1 ? "propuesta" : "propuestas"}`}`}`
               : "Lee HubSpot, el test y las reuniones de Meet, y propone; tú usas o descartas."}
           </p>
         </div>

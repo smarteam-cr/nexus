@@ -18,6 +18,7 @@
  * —el servidor vuelve a validar todo, y su respuesta es la que queda—.
  */
 import type { Cierre, Despues, Letra } from "@/lib/escala/documento/tipos";
+import { MAX_SESIONES, type GuiaDeLaSesion, type SesionPlaneada } from "./guia";
 import {
   definicionDe,
   esDeLista,
@@ -156,8 +157,13 @@ export interface ContenidoDeExploracion {
   aExplorar: Record<string, AExplorar>;
   /** Por qué está cada área en juego. */
   razonesDeAreas: Record<string, string>;
-  /** La nota rápida de cada paso del guion de las reuniones. */
+  /**
+   * La nota rápida de cada paso del guion de las dos reuniones fijas (hasta el 2026-10-01). Ya no se
+   * escriben: se siguen leyendo como fuente del agente.
+   */
   notas: Record<string, string>;
+  /** Las sesiones que planea el vendedor, las que necesite (lib/exploraciones/guia.ts). */
+  sesiones: SesionPlaneada[];
   medicion: Medicion;
   /** El prospecto no usa HubSpot: no hay portal que mirar (cuenta como revisado). */
   sinPortal: boolean;
@@ -182,6 +188,7 @@ export function contenidoVacio(): ContenidoDeExploracion {
     aExplorar: {},
     razonesDeAreas: {},
     notas: {},
+    sesiones: [],
     medicion: {},
     sinPortal: false,
     casosDeUso: {},
@@ -239,7 +246,7 @@ export interface ItemPropuesto {
 }
 
 /** Los tres momentos del agente: preparar la primera reunión, leer las reuniones, proponer los casos de uso. */
-export const MODOS_DE_LA_CORRIDA = ["preparar", "leer", "casos"] as const;
+export const MODOS_DE_LA_CORRIDA = ["preparar", "leer", "casos", "guia"] as const;
 export type ModoDeLaCorrida = (typeof MODOS_DE_LA_CORRIDA)[number];
 
 /** Una corrida del agente sobre esta exploración: qué hizo y cuándo (para la historia del lienzo). */
@@ -267,10 +274,15 @@ export interface PropuestaDeExploracion {
   /** Ids de las sesiones de Meet y de las actividades de HubSpot que el agente ya leyó. */
   leidas: { sesiones: string[]; hubspot: string[] };
   corridas: CorridaDelAgente[];
+  /**
+   * La guía de la próxima reunión (lib/exploraciones/guia.ts). Material de preparación, no un dato
+   * del cliente: se muestra directo, sin «usar», y nunca llega a la propuesta ni al handoff.
+   */
+  guia: GuiaDeLaSesion | null;
 }
 
 export function propuestaVacia(): PropuestaDeExploracion {
-  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [] }, corridas: [] };
+  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [] }, corridas: [], guia: null };
 }
 
 /** Tope de lo pendiente: lo más viejo se cae primero. */
@@ -576,6 +588,8 @@ export type Operacion =
   | { op: "perfil"; cierre: Cierre | null; despues: Despues | null }
   | { op: "edicion"; edicion: string | null }
   | { op: "nota"; paso: string; texto: string }
+  /** La lista entera de sesiones planeadas (agregar, fechar, marcar hecha o quitar). */
+  | { op: "sesiones"; sesiones: SesionPlaneada[] }
   | { op: "medicion"; medicion: Medicion }
   | { op: "sinPortal"; valor: boolean }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
@@ -743,6 +757,8 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       else delete notas[op.paso];
       return { ok: true, estado: { ...estado, contenido: { ...c, notas } } };
     }
+    case "sesiones":
+      return { ok: true, estado: { ...estado, contenido: { ...c, sesiones: op.sesiones.slice(0, MAX_SESIONES) } } };
     case "medicion":
       return { ok: true, estado: { ...estado, contenido: { ...c, medicion: { ...c.medicion, ...op.medicion } } } };
     case "sinPortal":
