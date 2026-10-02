@@ -11,6 +11,7 @@
  * Los clientes SÍ entran (decisión de Elías, 2026-10-01): «al final de cuentas son exploraciones que se
  * deben hacer».
  */
+import { DOMINIO_PROPIO } from "@/lib/sessions/dominio-propio";
 import { leerResultadoDelTest, type ResultadoDelTest } from "./test-de-marketing";
 
 /** Desde cuándo existe el test que deja estas notas. */
@@ -87,7 +88,7 @@ export function leerNotaDelTest(html: string): NotaDelTest | null {
  * Dominios que nunca son un lead: los de Smarteam (lo que hace el equipo con el test es una prueba) y el
  * de HubSpot, que es aliado (Carlos Valderrama lo hizo en junio de 2026 para conocerlo).
  */
-const DOMINIOS_INTERNOS = ["smarteamcr.com", "smarteam.com", "hubspot.com"];
+const DOMINIOS_INTERNOS = [DOMINIO_PROPIO, "smarteam.com", "hubspot.com"];
 
 const esDominioInterno = (d: string) => DOMINIOS_INTERNOS.some((i) => d === i || d.endsWith(`.${i}`));
 
