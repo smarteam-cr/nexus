@@ -1,8 +1,8 @@
 ---
 documento: Escala de Rendimiento Smarteam — Manual de operación
-version: 1.3.5
-escala: 8.6.0
-fecha: 2026-09-30
+version: 1.3.6
+escala: 8.7.0
+fecha: 2026-10-01
 ---
 
 # Manual de operación de la Escala de Rendimiento
@@ -123,6 +123,8 @@ Aquí se anota lo que el responsable pasó a cambio pendiente y todavía no entr
 Todavía no hay cambios pendientes.
 
 ## Historial de versiones
+
+**1.3.6 (2026-10-01).** Acompaña a la escala 8.7.0. Sin otros cambios.
 
 **1.3.5 (2026-09-30).** Acompaña a la escala 8.6.0. En «Las ediciones por industria», cuándo se escriben Marketing y Servicio de una edición: las cuatro primeras salieron con las tres áreas antes de probarse con clientes.
 

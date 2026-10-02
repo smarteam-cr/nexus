@@ -1,7 +1,7 @@
 ---
 documento: Escala de Rendimiento Smarteam — Escalas departamentales
-version: 8.6.0
-fecha: 2026-09-30
+version: 8.7.0
+fecha: 2026-10-01
 estado: En revisión: cambia con el feedback de su responsable y los comentarios del equipo en Nexus
 relacionados: especificacion_calculo_escala.md, manual_operacion_escala.md
 ---
@@ -326,7 +326,7 @@ El gradiente **manual → con lógica → autónomo** es el desempate principal 
 
 - **Funcional — automatización simple.** Un disparador, una acción, sin lógica condicional ni coordinación entre áreas. Rotación de leads por regla simple, un email automático tras un form, ticket asignado al recibirse, notificaciones internas, chatbot de árbol de decisión.
 - **Eficiente — automatización con lógica o amplitud.** Secuencias multi-paso con ramificación y tiempos de espera (nurturing real), routing por múltiples condiciones o por capacidad, escalación automática de SLA, workflows que conectan áreas, enriquecimiento de datos, contenido que se adapta por segmento.
-- **Óptimo — flujos IA-first con validación humana.** La IA ejecuta el trabajo —agentes que califican, agendan, resuelven o generan contenido— y las personas validan en los puntos que importan: excepciones, casos de alto valor y entrenamiento del propio sistema. El equipo pasa de ejecutar a supervisar.
+- **Óptimo — flujos IA-first con validación humana.** La IA ejecuta el trabajo —agentes que califican, agendan, resuelven o generan contenido— y las personas validan en los puntos que importan: excepciones, casos de alto valor y entrenamiento del propio sistema. El equipo pasa de ejecutar a supervisar. Cuando la IA decide sola cada envío, nadie aprueba uno por uno: el equipo fija las metas y los límites, y revisa los resultados.
 
 La IA no define Óptimo por sí sola. Ya aparece en Eficiente como asistente que apoya a una persona —redacción de contenido, enriquecimiento de datos, sugerencias—. La línea entre Eficiente y Óptimo es quién ejecuta: en Eficiente la IA asiste y la persona hace el trabajo; en Óptimo la IA lo hace y la persona valida. Un caso no es Óptimo solo porque mencione IA, ni deja de serlo porque haya humanos involucrados: la pregunta es dónde están puestos.
 
@@ -347,6 +347,8 @@ Cada evidencia observada se asigna a una sola dimensión —la que responde su p
 - El **canal conversacional y la bandeja** se asignan a **Tecnología** del área correspondiente (1.2, 2.2 o 3.2): un canal con bandeja básica es Funcional; varios canales en una bandeja unificada es Eficiente. Usar ese mismo canal para **salir** con cadencia —WhatsApp como canal de campaña— se asigna a Canales (2.7), no a Tecnología: una cosa es tenerlo conectado y otra es usarlo para llegar.
 - El **análisis automático de conversaciones** se asigna a **1.8 (Ventas)**, no a Tecnología: es aprendizaje, no infraestructura. Lo que sale de ese análisis para mejorar el playbook es de 1.8; señalar a quien se sale del proceso es adherencia, y sigue en Procesos (1.1).
 - La **siguiente mejor acción** que propone la IA se asigna a **Priorización de Leads (1.6)**; Tecnología (1.2) cuenta los agentes, la predicción de cierre y las respuestas sugeridas, no esa recomendación.
+- Lo que la **IA decide enviar a cada persona** —qué, por qué canal y cuándo— se asigna a **Tecnología de Marketing (2.2)** en las campañas, a **Tracción del Deal (1.7)** en los seguimientos de Ventas y a **Proactividad (3.7)** en los avisos a los clientes. Lo que la IA puede decidir sola se escribe en **Equipo y Gobierno** de cada área, y medirlo contra un grupo de control va en su dimensión de aprendizaje (**1.8, 2.8 o 3.8**).
+- La **predicción por persona** va donde se usa: en **Segmentación (2.6)** cuando es de marketing, en **Tecnología de Ventas (1.2)** cuando es la probabilidad de cerrar un negocio y en **Datos de Servicio (3.3)** cuando es el riesgo de que un cliente se vaya.
 - La **integración con ERP** u otros sistemas se asigna a **Tecnología** del área que la implementa; **Datos** solo declara el resultado (registros completos y trazables).
 - La **orquestación entre áreas** (SLAs, handoffs, rutinas conjuntas) se asigna a **Equipo y Gobierno** del área cuyo liderazgo sostiene la coordinación, y nunca es Funcional: su piso es Eficiente. El workflow técnico que la habilita se asigna a Tecnología. Las dimensiones 1.7, 2.7 y 3.7 miden el alcance hacia el destinatario final, no la coordinación entre departamentos.
 - La **respuesta a un deal que se enfría** —reconocerlo a tiempo, reactivarlo, y que el líder se entere e intervenga— se asigna a **Tracción del Deal (1.7)**, y Equipo y Gobierno no la vuelve a contar. La cadencia general de contacto sigue en Procesos (1.1), y la notificación que el sistema le manda al vendedor, en Tecnología (1.2).
@@ -574,6 +576,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 
 - Las decisiones usan analítica avanzada (LTV, rentabilidad por canal, contribución por vendedor). `[1.4.O1 · evaluado · hábito]`
 - Hay mesas regulares de innovación comercial. `[1.4.O2 · declarado · hábito]`
+- Hay responsables de validar lo que hace la IA en ventas, y lo que puede decidir sola está por escrito. `[1.4.O3 · declarado]`
 
 ### Producción
 
@@ -707,7 +710,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 *Resultado:* Las mejores oportunidades reciben ayuda justo cuando la necesitan: el sistema detecta cuándo un negocio se traba y moviliza a quien corresponde.
 
 - El sistema detecta fricción y dispara contenido de alto valor, alerta a directivos o moviliza al equipo sobre las mejores oportunidades. `[1.7.O1 · comprobable]`
-- La distribución multicanal se autoajusta según el comportamiento del deal. `[1.7.O2 · comprobable]`
+- El canal y el momento de cada seguimiento se ajustan solos según cómo responde cada persona. `[1.7.O2 · comprobable · requiere 1.7.E1]`
 
 #### 1.8 Aprendizaje de Ganadas y Perdidas
 
@@ -749,6 +752,7 @@ Si mañana rotan dos personas clave, ¿la operación comercial sigue corriendo i
 - Las llamadas se analizan automáticamente con coaching basado en patrones. `[1.8.O1 · comprobable · venta con equipo]`
 - La IA propone correcciones al playbook a partir de lo que encuentra en las llamadas. `[1.8.O2 · comprobable · venta con equipo · requiere 1.1.E2]`
 - La estrategia comercial se ajusta con base en data de qué funciona. `[1.8.O3 · evaluado · hábito]`
+- Los seguimientos que decide la IA se miden contra un grupo de control: se sabe cuánto agregan. `[1.8.O4 · comprobable · requiere 1.7.O2]`
 
 ---
 
@@ -850,7 +854,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 
 *Resultado:* Cada contacto vive un recorrido pensado para él: la IA decide el siguiente paso y conversa en el momento, con información que se calcula en toda la empresa.
 
-- La IA predictiva y generativa orquesta el recorrido completo. `[2.2.O1 · comprobable]`
+- La IA decide qué mensaje recibe cada persona, por qué canal y en qué momento. `[2.2.O1 · comprobable · requiere 2.6.E4]`
 - Agentes de IA atienden el canal conversacional: responden lo que generan las campañas y mantienen la conversación con quien todavía no está listo para Ventas. `[2.2.O2 · comprobable]`
 - Las conclusiones que se calculan en el almacén central de datos vuelven a las herramientas de marketing: la segmentación usa, por ejemplo, el valor real de cada cliente calculado afuera. `[2.2.O3 · comprobable · requiere 2.3.O1]`
 
@@ -890,6 +894,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - Hay enriquecimiento de datos activo con servicios de terceros. `[2.3.E1 · comprobable]`
 - La atribución está configurada para repartir el mérito entre todos los puntos de contacto, no solo el primero o el último, e incluye todos los canales, también el conversacional: se sabe cuánto ingreso deja cada uno. `[2.3.E2 · comprobable · requiere 2.2.F4]`
 - La deduplicación es automática por reglas o merge del sistema. `[2.3.E3 · comprobable]`
+- Lo que alguien hizo antes de dejar sus datos queda en su ficha cuando se identifica. `[2.3.E4 · comprobable]`
 
 **Óptimo.** Los datos entran de forma continua, limpios y trazados de punta a punta.
 
@@ -898,6 +903,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - Marketing se apoya en el almacén central de datos de la empresa, donde se junta la información de todas las herramientas, y atribuye resultados con esa vista completa. `[2.3.O1 · comprobable]`
 - El enriquecimiento de datos es automático, con IA. `[2.3.O3 · comprobable]`
 - Los datos se mantienen al día sin depender de que alguien se acuerde de actualizarlos: se capturan y se corrigen solos, y las personas solo validan las excepciones. `[2.3.O4 · comprobable]`
+- Cada persona tiene una sola ficha que junta al momento lo que hace en todos los canales. `[2.3.O5 · comprobable · requiere 2.3.E3, 2.3.E4]`
 
 #### 2.4 Equipo y Gobierno
 
@@ -937,11 +943,11 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - El liderazgo orquesta con Ventas (handoff de leads, SLAs, cadencia conjunta) y con Servicio. `[2.4.E3 · declarado · hábito · requiere 2.6.F4]`
 - El equipo da retroalimentación sobre el sistema y pide que evolucione. `[2.4.E4 · evaluado · hábito]`
 
-**Óptimo.** Hay responsables de validar la IA y de cuidar los datos, y la gobernanza de datos e IA es parte de las decisiones.
+**Óptimo.** Hay responsables de validar la IA y de cuidar los datos, y lo que la IA puede decidir sola está por escrito.
 
 *Resultado:* La dirección sabe cuánto deja cada canal frente a lo que cuesta y decide dónde invertir con esa cuenta, con un equipo capaz de sostener la IA.
 
-- Hay responsables definidos de validar lo que produce la IA y de mantener la calidad de los datos, y esa gobernanza es parte de cómo se decide. `[2.4.O1 · declarado]`
+- Hay responsables de validar lo que produce la IA y de cuidar la calidad de los datos, y lo que la IA puede decidir sola está por escrito. `[2.4.O1 · declarado]`
 - El liderazgo se enfoca en estrategia y en mejorar el sistema. `[2.4.O2 · evaluado · hábito]`
 - Las decisiones usan analítica avanzada, como lo que deja cada canal —el valor de vida de los clientes que trae— frente a lo que cuesta. `[2.4.O4 · evaluado · hábito]`
 
@@ -1029,12 +1035,12 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - Hay lead scoring por reglas: un modelo que suma puntos por varios atributos y califica al pasar un umbral, cuyo score dispara las secuencias de nurturing. Se distingue de la calificación de Funcional, que responde a un valor de propiedad sin modelo de puntaje detrás. `[2.6.E3 · comprobable · requiere 2.2.E1]`
 - La segmentación usa datos de comportamiento —qué abrió, qué visitó, qué compró—, no solo lo que la persona declaró. `[2.6.E4 · comprobable]`
 
-**Óptimo.** La IA identifica micro-segmentos y el contenido cambia según el comportamiento de cada persona.
+**Óptimo.** La IA predice qué va a hacer cada persona y el contenido cambia según su comportamiento.
 
 *Resultado:* Cada persona ve el contenido que le corresponde según lo que hizo antes, sin que nadie tenga que armar un segmento para ella.
 
-- La IA identifica micro-segmentos y comportamientos. `[2.6.O1 · comprobable]`
-- Hay personalización uno a uno: lo que ve cada persona —en los mensajes y en el sitio web— cambia en tiempo real según lo que hizo antes. `[2.6.O3 · comprobable]`
+- La IA predice quién va a comprar y quién se va a ir, y arma los segmentos con eso. `[2.6.O1 · comprobable]`
+- Hay personalización uno a uno: lo que ve cada persona en los mensajes, el sitio web o la app cambia en tiempo real según lo que hizo antes. `[2.6.O3 · comprobable · requiere 2.3.E4]`
 
 #### 2.7 Canales y Alcance
 
@@ -1074,6 +1080,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 - Hay webinars o eventos como canal recurrente. `[2.7.E2 · declarado · hábito]`
 - Los presupuestos se optimizan con frecuencia según data. `[2.7.E3 · comprobable · hábito]`
 - Hay un programa de referidos activo: los clientes saben cómo recomendar, y cada referido queda registrado con quién lo trajo. `[2.7.E4 · comprobable]`
+- Si hay app, sus notificaciones son parte de las campañas, con el permiso de cada persona. `[2.7.E5 · comprobable]`
 
 **Óptimo.** La IA reasigna presupuesto entre canales y se prueban canales emergentes en ciclos cortos.
 
@@ -1122,6 +1129,7 @@ Si mañana rota el coordinador o el principal generador de contenido, ¿las camp
 *Resultado:* Las campañas mejoran mientras están corriendo, no recién cuando terminan.
 
 - La IA aplica aprendizajes en tiempo real. `[2.8.O2 · comprobable]`
+- Los mensajes que decide la IA se miden contra un grupo de control: se sabe cuánto agregan. `[2.8.O3 · comprobable · requiere 2.2.O1]`
 
 ---
 
@@ -1307,7 +1315,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 
 *Resultado:* Servicio se mide por los ingresos que retiene y hace crecer, no solo por los casos que cierra.
 
-- Hay responsables definidos de validar lo que responde la IA y de mantener la base de conocimiento al día. `[3.4.O1 · declarado]`
+- Hay responsables de validar lo que responde la IA y de mantener al día la base de conocimiento, y lo que la IA puede resolver sola está por escrito. `[3.4.O1 · declarado]`
 - El liderazgo se enfoca en estrategia. `[3.4.O2 · evaluado · hábito]`
 - El equipo de servicio se mide por la retención y el crecimiento de sus clientes, no solo por los casos que cierra. `[3.4.O3 · declarado · hábito · cliente recurrente]`
 - Las decisiones usan analítica avanzada, como cuánto cuesta atender a cada tipo de cliente frente a lo que deja. `[3.4.O4 · evaluado · hábito]`
@@ -1476,6 +1484,7 @@ Si mañana rotan dos agentes con mucho conocimiento de cuentas, ¿la calidad de 
 - La IA detecta nuevas consultas y genera artículos o respuestas automáticamente. `[3.8.O1 · comprobable]`
 - La capacidad se ajusta a la demanda en tiempo real; el costo marginal de un cliente nuevo es cercano a cero. `[3.8.O2 · comprobable]`
 - Los aprendizajes retroalimentan automáticamente la consistencia de atención, la priorización de clientes y la proactividad. `[3.8.O3 · comprobable]`
+- Los avisos que decide la IA se miden contra un grupo de control: se sabe cuánto agregan. `[3.8.O4 · comprobable · requiere 3.7.O3]`
 
 ---
 
@@ -1567,6 +1576,7 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Deal | Negocio u oportunidad de venta en curso. |
 | Diagnóstico | Medición que hace el CSE con los agentes de Nexus, criterio por criterio con la regla estricta. Fija la línea base y se repite en cada remedición. |
 | Forecast | Pronóstico de cuánto se va a vender en un período. |
+| Grupo de control | Personas parecidas a las que no se les envía el mensaje, para medir cuánto agrega lo que sí se envió. |
 | Handoff | Traspaso de un contacto o cliente de un área a otra, por ejemplo de Marketing a Ventas. |
 | Health Score | Puntaje de salud de un cliente que anticipa si está en riesgo o tiene potencial de crecer. |
 | Hábito | Criterio que describe algo que el equipo repite. Puede estar cumplido, iniciado —la rutina existe pero todavía no tiene historia— o no cumplido. |
@@ -1606,6 +1616,8 @@ Términos que aparecen en la escala, la especificación o el manual, y que puede
 | Workflow | Flujo automático que se dispara con un evento y ejecuta acciones en el sistema. |
 
 ## Historial de versiones
+
+**8.7.0 (2026-10-01).** Óptimo dice qué se ve cuando la IA decide sola, sin nombrar herramientas. En Marketing, la IA decide qué mensaje recibe cada persona, por qué canal y en qué momento, y predice quién va a comprar y quién se va a ir; la personalización uno a uno llega también a la app. En Ventas, el canal y el momento de cada seguimiento se ajustan solos según cómo responde cada persona. En las tres áreas, lo que la IA puede decidir sola queda por escrito, y lo que decide se mide contra un grupo de control. Entran siete criterios: en Ventas, quién valida lo que hace la IA (1.4.O3) y medir sus seguimientos contra un grupo de control (1.8.O4); en Marketing, que lo que alguien hizo antes de dejar sus datos quede en su ficha (2.3.E4), una sola ficha por persona que se arma al momento (2.3.O5), las notificaciones de la app como parte de las campañas, si hay app (2.7.E5), y el grupo de control de los mensajes (2.8.O3); y en Servicio, el de los avisos (3.8.O4). La regla de automatización dice que, cuando la IA decide sola, el equipo fija las metas y los límites en vez de aprobar cada envío; la de asignación dice dónde va lo que la IA decide enviar y la predicción por persona, y el glosario suma «Grupo de control». Las ediciones deciden los criterios nuevos: casi todos se leen igual; Educación dice el de gobierno con «admisiones», Ecommerce y retail mide sus recordatorios, y en Banca no aplica el de la app, que ya pide como canal en Funcional. Cambia lo que piden Eficiente y Óptimo.
 
 **8.6.0 (2026-09-30).** Las cuatro ediciones suman Marketing y Servicio, escritos con el mismo cuidado que Ventas: cada área con su vistazo por nivel, y cada dimensión con su pregunta, su descripción, su costo, sus niveles, sus resultados y sus criterios dichos con las palabras de la industria. Entran 54 criterios propios en esas dos áreas y 467 criterios de la matriz se dicen con otras palabras. Ecommerce y retail completa lo que ya traía y suma, entre otros, el catálogo que alimenta los anuncios de producto, las ventas que vuelven a las plataformas de anuncios, los locales en los mapas, los creadores con su código, cada caso ligado a su pedido, las mismas condiciones de cambio y devolución para todos, el pedido atrasado avisado antes del reclamo y la retención de los suscriptores. Banca y servicios financieros suma la revisión de cumplimiento normativo antes de publicar, el costo total a la vista en cada anuncio, las campañas que no le ofrecen a un cliente lo que ya tiene y que respetan su permiso, los plazos del regulador para cada reclamo, la verificación de identidad antes de atender una gestión, el bloqueo inmediato de la tarjeta y, en Eficiente, las gestiones más comunes en la app. Educación suma la campaña de cada período desde las fechas de admisión, la familia como audiencia, la reputación a la vista, el costo por matrícula, el calendario de atención de cada período y la permanencia del estudiante. Inmobiliaria suma el plan de marketing por etapa del proyecto, la página de cada proyecto, anunciar solo lo disponible, el costo por visita y por reserva, la garantía escrita, el aviso de un cambio en la fecha de entrega, el avance de obra hasta la entrega y, donde hay condominio, el traspaso a su administración. Dentro de cada edición, cada cosa se pide una vez: en Banca, Ventas pide la autorización para consultar el historial y Marketing el permiso para las ofertas; en Educación, Admisiones pide el permiso del responsable de un menor, su recordatorio habla del curso siguiente —la rematrícula es de Servicio— y suma la matrícula que no llega a clases; en Ecommerce, las secuencias de Ventas son las del carrito y las de después de la compra, y las de Marketing, las de quien todavía no compra. Cinco criterios de la matriz no aplican en su edición: el responsable dedicado, la retención con propuesta de expansión y las revisiones de resultado en una tienda, y la retención con expansión en Banca, donde ofrecer un producto más es del área comercial. En la escala general, la retención y la propuesta de expansión de Proactividad pasan a aplicar solo donde la relación es continua: donde el cliente vuelve sin contrato, reactivarlo es de Tracción del Deal. También cambian textos sin cambiar lo que se mide: el orden de dependencias ya no nombra una dimensión que las ediciones renombran, el vistazo de Marketing en Eficiente deja de prometer una presencia medible que ningún criterio pide, el resultado de Eficiente en Equipo y Gobierno de Servicio deja de prometer que se avisan las oportunidades, y se retocan la descripción de Medición y Aprendizaje y un criterio de Datos de Servicio. Cambia lo que piden Marketing y Servicio en las cuatro ediciones, y Eficiente de Proactividad para el perfil de recompra.
 
@@ -1902,7 +1914,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 - Las decisiones usan analítica avanzada (LTV, rentabilidad por canal y por producto). `[1.4.O1]`
 
-*Se leen igual:* `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F5`, `1.4.E2`, `1.4.E3`, `1.4.E4`, `1.4.O2`.
+*Se leen igual:* `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F5`, `1.4.E2`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
 
 #### 1.5 Catálogo y oferta
 
@@ -2027,7 +2039,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 *Resultado:* Cada cliente recibe su recordatorio en el momento y por el canal en que más le sirve, sin que nadie lo programe.
 
 - El sistema detecta dónde se traba una compra y responde en el momento: una ayuda, una oferta o el aviso a una persona. `[1.7.O1]`
-- El canal y el momento de cada recordatorio se autoajustan según el comportamiento del comprador. `[1.7.O2]`
+- El canal y el momento de cada recordatorio se ajustan solos según cómo responde cada comprador. `[1.7.O2]`
 - La IA calcula cuándo le toca volver a comprar a cada cliente según su propio consumo, y ajusta la oferta. `[1.7.O101 · comprobable · recompra]`
 
 *No aplican:* `1.7.D1`, `1.7.I1`, `1.7.I2`.
@@ -2069,6 +2081,7 @@ Si mañana se va quien administra la tienda, ¿las ventas siguen saliendo igual?
 
 *Resultado:* La tienda mejora mientras vende: el sistema señala dónde se cae la compra y qué cambio probar, y la estrategia se ajusta con esa evidencia.
 
+- Los recordatorios que decide la IA se miden contra un grupo de control: se sabe cuánto agregan. `[1.8.O4]`
 - La IA detecta dónde y por qué se abandona la compra, y propone o aplica el cambio. `[1.8.O101 · comprobable]`
 
 *Se leen igual:* `1.8.D1`, `1.8.I1`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
@@ -2208,7 +2221,7 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 - Marketing se apoya en el almacén central de datos de la empresa —donde se juntan los canales de venta que tenga la tienda y las herramientas de marketing— y atribuye las ventas con esa vista completa. `[2.3.O1]`
 - Los datos de cada comprador se completan solos, con IA: por ejemplo, las categorías que le interesan o su talla. `[2.3.O3]`
 
-*Se leen igual:* `2.3.D2`, `2.3.I2`, `2.3.E1`, `2.3.O4`.
+*Se leen igual:* `2.3.D2`, `2.3.I2`, `2.3.E1`, `2.3.E4`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -2330,8 +2343,8 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 
 *Resultado:* Cada comprador recibe los mensajes y ve el contenido que le corresponde según lo que hizo antes, sin que nadie arme un segmento para él.
 
-- La IA identifica micro-segmentos y comportamientos de compra: por ejemplo, quien solo compra con descuento o quien compra para regalar. `[2.6.O1]`
-- Hay personalización uno a uno: lo que ve cada persona en los mensajes y en las páginas de campaña de la tienda en línea cambia en tiempo real según lo que hizo antes. `[2.6.O3]`
+- La IA predice qué comprador va a volver a comprar y cuál va a dejar de hacerlo, y arma los segmentos con eso. `[2.6.O1]`
+- Hay personalización uno a uno: lo que ve cada persona en los mensajes, en las páginas de campaña de la tienda en línea o en la app cambia en tiempo real según lo que hizo antes. `[2.6.O3]`
 
 *Se leen igual:* `2.6.D2`, `2.6.I2`, `2.6.F4`.
 
@@ -2380,7 +2393,7 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 - La IA reasigna sola la pauta entre canales mientras las campañas corren, para sacarle el mayor retorno a lo invertido. `[2.7.O2]`
 - Los compradores que Servicio identifica como promotores se vuelven un canal de referidos y de contenido —sus fotos y videos con el producto—, sin pedírselo a mano. `[2.7.O4]`
 
-*Se leen igual:* `2.7.D1`, `2.7.I1`, `2.7.I3`.
+*Se leen igual:* `2.7.D1`, `2.7.I1`, `2.7.I3`, `2.7.E5`.
 
 #### 2.8 Medición y Aprendizaje
 
@@ -2421,7 +2434,7 @@ Si mañana se va quien arma las campañas, ¿las promociones y los lanzamientos 
 
 - La IA aplica lo aprendido mientras la campaña corre: cambia las piezas, las audiencias o el mensaje según lo que vende. `[2.8.O2]`
 
-*Se leen igual:* `2.8.I2`.
+*Se leen igual:* `2.8.I2`, `2.8.O3`.
 
 ### Área 3 — Servicio
 
@@ -2755,7 +2768,7 @@ Si mañana falta quien más sabe de cambios y devoluciones, ¿la atención se ma
 - La capacidad de atención se ajusta sola a la demanda en tiempo real, también en temporada alta, y atender a un comprador más casi no cuesta. `[3.8.O2]`
 - Lo que se aprende de cada caso vuelve solo a las respuestas del equipo, a cómo se prioriza cada caso y a los avisos al comprador. `[3.8.O3]`
 
-*Se leen igual:* `3.8.I1`, `3.8.I2`.
+*Se leen igual:* `3.8.I1`, `3.8.I2`, `3.8.O4`.
 
 ## Edición — Banca y servicios financieros
 
@@ -2928,7 +2941,7 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 
 - Las decisiones usan analítica avanzada (rentabilidad por producto y por canal, valor del cliente en el tiempo, aporte de cada ejecutivo). `[1.4.O1]`
 
-*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`.
+*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
 
 #### 1.5 Oferta y condiciones
 
@@ -3040,7 +3053,7 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 *Resultado:* Las solicitudes con más posibilidades reciben ayuda justo cuando la necesitan: el sistema detecta dónde se traba cada una y moviliza a quien corresponde.
 
 - El sistema detecta dónde se traba una solicitud y responde en el momento: un recordatorio al cliente, una alerta a la gerencia o el aviso al ejecutivo sobre las que más importan. `[1.7.O1]`
-- El canal y el momento de cada seguimiento se autoajustan según el comportamiento del cliente. `[1.7.O2]`
+- El canal y el momento de cada seguimiento se ajustan solos según cómo responde cada cliente. `[1.7.O2]`
 
 *Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.D4`, `1.7.I1`, `1.7.I2`, `1.7.I3`, `1.7.I4`, `1.7.F3`, `1.7.F4`, `1.7.F5`, `1.7.E3`.
 
@@ -3076,7 +3089,7 @@ Si mañana rotan dos ejecutivos clave, ¿las solicitudes en curso siguen avanzan
 
 - La IA detecta en qué etapa y por qué se caen las solicitudes, y propone el cambio. `[1.8.O201 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
+*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
 
 ### Área 2 — Marketing
 
@@ -3179,7 +3192,7 @@ Si mañana se va quien arma las campañas, ¿las de cada producto siguen saliend
 
 - Marketing se apoya en el almacén central de datos de la entidad, donde se junta la información de todas las herramientas, y atribuye resultados con esa vista completa. `[2.3.O1]`
 
-*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F6`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.O3`, `2.3.O4`.
+*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F6`, `2.3.E1`, `2.3.E2`, `2.3.E3`, `2.3.E4`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -3307,6 +3320,8 @@ Si mañana se va quien arma las campañas, ¿las de cada producto siguen saliend
 
 *Resultado:* La inversión se reparte sola donde más retorna, los clientes satisfechos traen clientes nuevos, y la entidad llega antes que otras a los canales nuevos.
 
+*No aplican:* `2.7.E5`.
+
 *Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E1`, `2.7.E3`, `2.7.O1`, `2.7.O2`, `2.7.O4`.
 
 #### 2.8 Medición y Aprendizaje
@@ -3321,7 +3336,7 @@ Si mañana se va quien arma las campañas, ¿las de cada producto siguen saliend
 
 - Los resultados de cada campaña —los prospectos, las solicitudes o los productos colocados que trajo, no solo los clics— se ven en el sistema sin armarlos a mano. `[2.8.F5]`
 
-*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.F3`, `2.8.E1`, `2.8.E2`, `2.8.E3`, `2.8.O2`.
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.F3`, `2.8.E1`, `2.8.E2`, `2.8.E3`, `2.8.O2`, `2.8.O3`.
 
 ### Área 3 — Servicio
 
@@ -3577,7 +3592,7 @@ Si mañana rotan las dos personas que más saben de reclamos y gestiones, ¿la a
 
 - Se revisan periódicamente los casos y los reclamos recurrentes y, donde la relación es continua, las razones por las que se van los clientes, para encontrar patrones y mejorar. `[3.8.E2]`
 
-*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O3`.
+*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O3`, `3.8.O4`.
 
 ## Edición — Educación
 
@@ -3759,6 +3774,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 
 - Las decisiones usan analítica avanzada (rentabilidad por programa y por canal, permanencia de cada cohorte, aporte de cada asesor). `[1.4.O1]`
 - Hay mesas regulares de innovación en admisiones. `[1.4.O2]`
+- Hay responsables de validar lo que hace la IA en admisiones, y lo que puede decidir sola está por escrito. `[1.4.O3]`
 
 *Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`.
 
@@ -3879,7 +3895,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 *Resultado:* Los aspirantes con más posibilidades reciben ayuda justo cuando la necesitan: el sistema detecta cuándo alguien deja de avanzar y moviliza a quien corresponde.
 
 - El sistema detecta qué aspirante está por abandonar el proceso y responde en el momento: un mensaje, una alerta a la dirección o el aviso al asesor sobre los que más importan. `[1.7.O1]`
-- El canal y el momento de cada seguimiento se autoajustan según el comportamiento del aspirante. `[1.7.O2]`
+- El canal y el momento de cada seguimiento se ajustan solos según cómo responde cada aspirante. `[1.7.O2]`
 
 *Se leen igual:* `1.7.D1`, `1.7.D2`, `1.7.D3`, `1.7.I1`, `1.7.I2`, `1.7.I4`, `1.7.F3`, `1.7.E1`.
 
@@ -3918,7 +3934,7 @@ Si mañana rotan dos asesores clave en plena temporada, ¿el proceso de admisió
 - La estrategia de admisiones se ajusta con base en data de qué funciona. `[1.8.O3]`
 - La IA detecta en qué paso y por qué se caen los aspirantes, y propone el cambio. `[1.8.O301 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.O1`, `1.8.O2`.
+*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.E2`, `1.8.O1`, `1.8.O2`, `1.8.O4`.
 
 ### Área 2 — Marketing
 
@@ -4022,7 +4038,7 @@ Si mañana se va quien arma las campañas, ¿la campaña de admisión del próxi
 
 - Marketing se apoya en el almacén central de datos de la institución, donde se junta la información de todos sus sistemas —admisiones, lo académico y los pagos—, y atribuye resultados con esa vista completa. `[2.3.O1]`
 
-*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F5`, `2.3.F6`, `2.3.F7`, `2.3.E1`, `2.3.E3`, `2.3.O3`, `2.3.O4`.
+*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F5`, `2.3.F6`, `2.3.F7`, `2.3.E1`, `2.3.E3`, `2.3.E4`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -4161,7 +4177,7 @@ Si mañana se va quien arma las campañas, ¿la campaña de admisión del próxi
 
 - Los estudiantes y egresados que Servicio identifica como promotores se vuelven embajadores y testimonios de la institución, sin pedirlos a mano. `[2.7.O4]`
 
-*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E3`, `2.7.O1`, `2.7.O2`.
+*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.F1`, `2.7.F2`, `2.7.F4`, `2.7.E3`, `2.7.E5`, `2.7.O1`, `2.7.O2`.
 
 #### 2.8 Medición y Aprendizaje
 
@@ -4194,7 +4210,7 @@ Si mañana se va quien arma las campañas, ¿la campaña de admisión del próxi
 
 *Resultado:* Las campañas mejoran mientras están corriendo, no recién cuando cierra la matrícula.
 
-*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.I2`, `2.8.E1`, `2.8.E2`, `2.8.O2`.
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.I2`, `2.8.E1`, `2.8.E2`, `2.8.O2`, `2.8.O3`.
 
 ### Área 3 — Servicio
 
@@ -4512,7 +4528,7 @@ Si mañana se van las dos personas que más saben de trámites, ¿la atención a
 - La capacidad se ajusta a la demanda en tiempo real, también en los picos de cada período; el costo marginal de un estudiante nuevo es cercano a cero. `[3.8.O2]`
 - Los aprendizajes retroalimentan automáticamente la consistencia de la atención, la priorización de estudiantes y la permanencia. `[3.8.O3]`
 
-*Se leen igual:* `3.8.D1`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.O1`.
+*Se leen igual:* `3.8.D1`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.O1`, `3.8.O4`.
 
 ## Edición — Inmobiliaria
 
@@ -4673,7 +4689,7 @@ Si mañana rotan dos asesores clave, ¿las oportunidades en curso siguen avanzan
 
 - Las decisiones usan analítica avanzada (rentabilidad por proyecto y por canal, velocidad de venta por tipo de unidad, aporte de cada asesor). `[1.4.O1]`
 
-*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`.
+*Se leen igual:* `1.4.D1`, `1.4.D2`, `1.4.I1`, `1.4.I2`, `1.4.F1`, `1.4.F3`, `1.4.F5`, `1.4.E3`, `1.4.E4`, `1.4.O2`, `1.4.O3`.
 
 #### 1.5 Proyecto y propuesta
 
@@ -4806,7 +4822,7 @@ Si mañana rotan dos asesores clave, ¿las oportunidades en curso siguen avanzan
 - Se revisan periódicamente las ventas cerradas, las oportunidades perdidas y las reservas caídas para identificar patrones. `[1.8.E1]`
 - Cuando el cliente compró en otro proyecto, queda registrado en cuál y por qué. `[1.8.E401 · comprobable]`
 
-*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`.
+*Se leen igual:* `1.8.D1`, `1.8.D2`, `1.8.I1`, `1.8.F2`, `1.8.F3`, `1.8.E2`, `1.8.E3`, `1.8.O1`, `1.8.O2`, `1.8.O3`, `1.8.O4`.
 
 ### Área 2 — Marketing
 
@@ -4905,7 +4921,7 @@ Si mañana se va quien arma las campañas, ¿los lanzamientos y la promoción de
 
 - La atribución reparte el mérito de cada venta entre todos los puntos de contacto —portales, pauta, redes y ferias—, no solo el primero o el último, e incluye todos los canales, también el conversacional, como WhatsApp: se sabe cuánto ingreso deja cada uno. `[2.3.E2]`
 
-*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F3`, `2.3.F6`, `2.3.E1`, `2.3.E3`, `2.3.O1`, `2.3.O3`, `2.3.O4`.
+*Se leen igual:* `2.3.D1`, `2.3.D2`, `2.3.I1`, `2.3.I2`, `2.3.F3`, `2.3.F6`, `2.3.E1`, `2.3.E3`, `2.3.E4`, `2.3.O1`, `2.3.O3`, `2.3.O4`, `2.3.O5`.
 
 #### 2.4 Equipo y Gobierno
 
@@ -5001,7 +5017,7 @@ Si mañana se va quien arma las campañas, ¿los lanzamientos y la promoción de
 
 *Resultado:* Cada interesado ve los proyectos y las unidades que le corresponden según lo que hizo antes, sin que nadie tenga que armar un segmento para él.
 
-- Hay personalización uno a uno: lo que ve cada persona —en los mensajes y en el sitio— cambia en tiempo real según lo que hizo antes, como los proyectos y las unidades que miró. `[2.6.O3]`
+- Hay personalización uno a uno: lo que ve cada persona en los mensajes, el sitio o la app cambia en tiempo real según lo que hizo antes, como los proyectos y las unidades que miró. `[2.6.O3]`
 
 *Se leen igual:* `2.6.D1`, `2.6.D2`, `2.6.I1`, `2.6.I2`, `2.6.E2`, `2.6.E3`, `2.6.O1`.
 
@@ -5039,7 +5055,7 @@ Si mañana se va quien arma las campañas, ¿los lanzamientos y la promoción de
 
 - Los compradores que Servicio identifica como promotores se vuelven un canal de referidos y de testimonios, sin pedirlos a mano. `[2.7.O4]`
 
-*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.O1`, `2.7.O2`.
+*Se leen igual:* `2.7.D1`, `2.7.D2`, `2.7.I1`, `2.7.I2`, `2.7.I3`, `2.7.F1`, `2.7.F2`, `2.7.E5`, `2.7.O1`, `2.7.O2`.
 
 #### 2.8 Medición y Aprendizaje
 
@@ -5063,7 +5079,7 @@ Si mañana se va quien arma las campañas, ¿los lanzamientos y la promoción de
 - Hay tests A/B regulares (al menos uno activo por mes): por ejemplo, dos renders o dos mensajes para el mismo proyecto. `[2.8.E1]`
 - El proceso de campaña y la planificación de las campañas siguientes —también el lanzamiento del próximo proyecto— se refinan con base en lo aprendido. `[2.8.E3]`
 
-*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.E2`, `2.8.O2`.
+*Se leen igual:* `2.8.D1`, `2.8.D2`, `2.8.D3`, `2.8.I1`, `2.8.I2`, `2.8.E2`, `2.8.O2`, `2.8.O3`.
 
 ### Área 3 — Servicio
 
@@ -5345,4 +5361,4 @@ Si mañana se va quien lleva la posventa, ¿cada comprador sigue sabiendo cómo 
 
 - Los aprendizajes retroalimentan automáticamente la consistencia de la posventa, la priorización de los compradores y el acompañamiento de cada uno. `[3.8.O3]`
 
-*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`.
+*Se leen igual:* `3.8.D1`, `3.8.D2`, `3.8.I1`, `3.8.I2`, `3.8.F2`, `3.8.E1`, `3.8.E3`, `3.8.O1`, `3.8.O2`, `3.8.O4`.
