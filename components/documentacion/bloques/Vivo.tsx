@@ -223,7 +223,8 @@ function SinCargar({ que }: { que: string }) {
 }
 
 /**
- * Cómo se ve el bloque MIENTRAS SE EDITA: plegado, con su nombre y el motivo.
+ * Cómo se ve el bloque MIENTRAS SE EDITA: con su nombre y el motivo, desplegado, y con un botón
+ * para plegarlo.
  *
  * Desplegado mide más de mil píxeles, y con esa altura la manija de arrastre de BlockNote —que se
  * ancla arriba del bloque— queda lejísimos del cursor: para moverlo o sacarlo había que subir
@@ -232,7 +233,9 @@ function SinCargar({ que }: { que: string }) {
  * escribe, se arma solo.
  */
 function VivoPlegado({ fuente }: { fuente: FuenteViva }) {
-  const [abierto, setAbierto] = useState(false);
+  /* Abierto por defecto (Elías, 2026-10-01): quien edita quiere ver qué muestra el bloque sin un
+     clic de más. Para mover o sacar un bloque largo, «Ocultar» lo pliega a un renglón. */
+  const [abierto, setAbierto] = useState(true);
   return (
     <div className="my-2 rounded-lg border border-line bg-surface-muted">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2">
