@@ -76,8 +76,19 @@ export const SLUG_DE_INICIO = "inicio";
 /**
  * De dónde sale un bloque vivo: cada fuente se deriva de un registro del código o de la base.
  * `equipo` (2026-09-13) es el directorio: las personas activas de Nexus, por área.
+ * `icp` y `personas` (2026-10-01) son el cliente ideal y las buyer personas de Marketing → Audiencia.
  */
-export const FUENTES_VIVAS = ["menu", "recorrido", "documentos", "agentes", "hubspot", "roles", "equipo"] as const;
+export const FUENTES_VIVAS = [
+  "menu",
+  "recorrido",
+  "documentos",
+  "agentes",
+  "hubspot",
+  "roles",
+  "equipo",
+  "icp",
+  "personas",
+] as const;
 export type FuenteViva = (typeof FUENTES_VIVAS)[number];
 
 /** Por qué se guardó una versión en el historial. */

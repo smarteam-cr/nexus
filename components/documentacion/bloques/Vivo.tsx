@@ -30,6 +30,8 @@ export const ETIQUETAS_DE_FUENTE: Record<FuenteViva, string> = {
   hubspot: "Los pipelines y las propiedades de HubSpot",
   roles: "Los roles del equipo",
   equipo: "El equipo, por área",
+  icp: "El cliente ideal (ICP)",
+  personas: "Las buyer personas",
 };
 
 function Contenido({ fuente }: { fuente: FuenteViva }) {
@@ -38,7 +40,7 @@ function Contenido({ fuente }: { fuente: FuenteViva }) {
   if (!datos) {
     return (
       <p className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm text-fg-muted">
-        Esta parte se arma sola desde Nexus. Recargá la página para verla.
+        Esta parte se arma sola desde Nexus. Recarga la página para verla.
       </p>
     );
   }
@@ -55,6 +57,61 @@ function Contenido({ fuente }: { fuente: FuenteViva }) {
         grupos={datos.hubspot.grupos}
         totalProps={datos.hubspot.totalProps}
       />
+    );
+  }
+
+  if (fuente === "icp") {
+    if (datos.icp.length === 0) return <SinCargar que="el cliente ideal" />;
+    return (
+      <div className="grid gap-5">
+        {datos.icp.map((g) => (
+          <section key={g.titulo}>
+            <h3 className="text-sm font-semibold text-fg">{g.titulo}</h3>
+            <p className="mb-2 text-xs text-fg-muted">{g.bajada}</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {g.secciones.map((s) => (
+                <div key={s.titulo} className="rounded-lg border border-line bg-surface p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{s.titulo}</p>
+                  <ul className="mt-1.5 list-disc space-y-1 pl-4 text-sm text-fg-secondary">
+                    {s.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  if (fuente === "personas") {
+    if (datos.personas.length === 0) return <SinCargar que="las buyer personas" />;
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        {datos.personas.map((p) => (
+          <article key={p.nombre} className="rounded-lg border border-line bg-surface p-3">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h3 className="text-sm font-semibold text-fg">{p.nombre}</h3>
+              {p.arquetipo && <span className="text-2xs text-fg-muted">{p.arquetipo}</span>}
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-fg-secondary">{p.quienEs}</p>
+            {p.dolores && (
+              <p className="mt-2 text-sm leading-relaxed text-fg-secondary">
+                <span className="font-medium text-fg">Qué le duele: </span>
+                {p.dolores}
+              </p>
+            )}
+            {p.objetivos && (
+              <p className="mt-1 text-sm leading-relaxed text-fg-secondary">
+                <span className="font-medium text-fg">Qué busca: </span>
+                {p.objetivos}
+              </p>
+            )}
+          </article>
+        ))}
+      </div>
     );
   }
 
@@ -153,6 +210,15 @@ function Contenido({ fuente }: { fuente: FuenteViva }) {
         Éstos son los permisos de fábrica. La dirección los ajusta por rol y por persona en Equipo.
       </p>
     </div>
+  );
+}
+
+/** Lo que muestra un bloque vivo cuyo origen todavía no tiene nada cargado. */
+function SinCargar({ que }: { que: string }) {
+  return (
+    <p className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+      Todavía no hay nada cargado sobre {que}. Se carga en Marketing → Audiencia.
+    </p>
   );
 }
 

@@ -2,6 +2,7 @@
  * lib/documentacion/semillas/base/servicios.ts — la sección «Servicios».
  *
  *   🧩 Servicios          el catálogo, las plataformas y a quién le hablamos
+ *   ├── 🧲 Cliente ideal y buyer personas   (en vivo, desde Marketing → Audiencia)
  *   └── 🏆 Casos de éxito
  *
  * ── DE DÓNDE SALE CADA COSA ──────────────────────────────────────────────────
@@ -13,6 +14,7 @@
  */
 import {
   aviso,
+  bloqueVivo,
   cita,
   divisor,
   enlace,
@@ -88,11 +90,7 @@ function bloquesDeServicios(): BloqueGuardado[] {
     ),
 
     titulo(2, "A quién le hablamos"),
-    parrafoRico(
-      "El cliente ideal y las buyer personas viven en ",
-      enlace("Marketing → Audiencia", "/marketing/icp"),
-      ", en Nexus.",
-    ),
+    parrafoRico("A qué empresas les vendemos y con quién hablamos adentro de ellas: ", a("audiencia"), "."),
 
     titulo(2, "Cómo se ve en la práctica"),
     parrafoRico("Dos proyectos contados de punta a punta: ", a("casos"), "."),
@@ -174,10 +172,59 @@ function bloquesDeCasos(): BloqueGuardado[] {
   ];
 }
 
+/**
+ * «Cliente ideal y buyer personas» (2026-10-01). NO copia nada: los dos bloques vivos muestran lo que
+ * está en Marketing → Audiencia, que es donde se edita y de donde lo lee el agente de publicaciones.
+ * Una sola fuente, decidida por Elías.
+ */
+function bloquesDeAudiencia(): BloqueGuardado[] {
+  return [
+    aviso(
+      "info",
+      ["En una frase: ", { negrita: true }],
+      "a qué empresas les vendemos y con quién hablamos adentro de ellas. Lo usan Ventas para calificar, Customer Success para entender a cada cliente y Marketing para escribirle.",
+    ),
+    aviso(
+      "advertencia",
+      ["Se edita en Marketing. ", { negrita: true }],
+      "Esta página se arma sola con lo que está en ",
+      enlace("Marketing → Audiencia", "/marketing/icp"),
+      ". Para cambiar algo se edita allá: así lo ven igual el equipo y el agente que genera las publicaciones.",
+    ),
+
+    titulo(2, "El cliente ideal (ICP)"),
+    parrafo(
+      "Una empresa encaja cuando se parece a lo de «Cómo es la empresa» y, además, se reconoce en «Cómo piensa y se comporta». Las señales dicen cuándo está lista para hablar, y el anti-ICP, cuándo no es para nosotros.",
+    ),
+    bloqueVivo("icp"),
+
+    titulo(2, "Las buyer personas"),
+    parrafo(
+      "Las personas con las que hablamos adentro de un cliente ideal: quién es cada una, qué le duele y qué busca. En una misma venta suelen aparecer varias, y cada una necesita escuchar algo distinto.",
+    ),
+    bloqueVivo("personas"),
+
+    titulo(2, "Cómo se usa"),
+    vinneta("En Ventas, para calificar: un prospecto fuera del ICP o con señales de anti-ICP se dice a tiempo, antes de proponer."),
+    parrafoRico(
+      "En Customer Success, para entender al cliente y a su gente antes de cada sesión: ",
+      deCs("descubrimiento"),
+      ".",
+    ),
+    vinneta("En Marketing, para decidir de qué hablar y a quién: el agente de publicaciones parte de esto mismo."),
+
+    divisor(),
+    parrafoRico("El catálogo de lo que vendemos: ", a("servicios"), "."),
+  ];
+}
+
 export function construirServicios(): PaginaSembrada {
   return {
     ...pagina("servicios"),
     bloques: bloquesDeServicios(),
-    hijas: [{ ...pagina("casos"), bloques: bloquesDeCasos() }],
+    hijas: [
+      { ...pagina("audiencia"), bloques: bloquesDeAudiencia() },
+      { ...pagina("casos"), bloques: bloquesDeCasos() },
+    ],
   };
 }

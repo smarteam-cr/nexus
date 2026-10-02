@@ -219,6 +219,12 @@ describe("«El equipo» y «Horario y condiciones»", () => {
     expect(fuentesVivas(porSlug("el-equipo").bloques)).toEqual(["equipo"]);
   });
 
+  it("⭐ el ICP y las buyer personas se muestran en vivo desde Marketing, no se copian (2026-10-01)", () => {
+    const pagina = porSlug("cliente-ideal-y-buyer-personas");
+    expect(fuentesVivas(pagina.bloques).sort()).toEqual(["icp", "personas"]);
+    expect(textoDeBloques(pagina.bloques)).toContain("Marketing → Audiencia");
+  });
+
   it("las condiciones traen la jornada, las vacaciones y los feriados", () => {
     const texto = textoDeBloques(porSlug("horario-y-condiciones").bloques);
     expect(texto).toContain("8:00 a 17:00");
@@ -239,7 +245,9 @@ describe("«¿Cómo funciona Nexus?»", () => {
 
   it("trae las partes de la app que se arman solas", () => {
     /* Todas menos el directorio del equipo, que vive en «El equipo»: no es parte del manual. */
-    expect(fuentesVivas(pagina.bloques).sort()).toEqual(FUENTES_VIVAS.filter((f) => f !== "equipo").sort());
+    // Menos el directorio (vive en «El equipo») y la audiencia (vive en Servicios).
+    const deOtraPagina = ["equipo", "icp", "personas"];
+    expect(fuentesVivas(pagina.bloques).sort()).toEqual(FUENTES_VIVAS.filter((f) => !deOtraPagina.includes(f)).sort());
   });
 
   it("⚠ corrige lo que el manual viejo decía mal sobre HubSpot", () => {

@@ -37,6 +37,7 @@ import {
 } from "@/lib/manual/armar";
 import { FUENTES_VIVAS, type BloqueGuardado, type FuenteViva } from "./tipos";
 import { armarEquipo, type AreaDelEquipo } from "./equipo";
+import { armarIcp, armarPersonas, type GrupoDelIcp, type PersonaVista } from "./audiencia";
 
 export interface ItemDeMenu {
   key: string;
@@ -68,6 +69,9 @@ export interface DatosVivos {
   roles: RolDoc[];
   /** El directorio: las personas activas, por área (`equipo.ts`). */
   equipo: AreaDelEquipo[];
+  /** El cliente ideal y las buyer personas: se editan en Marketing → Audiencia (`audiencia.ts`). */
+  icp: GrupoDelIcp[];
+  personas: PersonaVista[];
 }
 
 /** El gate del menú, dicho para una persona. */
@@ -115,7 +119,7 @@ function armarRoles(): RolDoc[] {
 
 /** Arma TODAS las fuentes de una vez: es barato y así la página hace una sola pasada. */
 export async function cargarDatosVivos(): Promise<DatosVivos> {
-  const [filas, miembros] = await Promise.all([
+  const [filas, miembros, icp, personas] = await Promise.all([
     prisma.agent.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, status: true, agentType: true, agentGroup: true },
@@ -125,6 +129,11 @@ export async function cargarDatosVivos(): Promise<DatosVivos> {
     prisma.teamMember.findMany({
       where: { deactivatedAt: null },
       select: { name: true, email: true, area: true, roleEnum: true, photoUrl: true },
+    }),
+    prisma.icpItem.findMany({ select: { section: true, label: true, order: true } }),
+    prisma.buyerPersona.findMany({
+      where: { active: true },
+      select: { name: true, role: true, description: true, pains: true, goals: true, order: true },
     }),
   ]);
 
@@ -140,6 +149,8 @@ export async function cargarDatosVivos(): Promise<DatosVivos> {
     },
     roles: armarRoles(),
     equipo: armarEquipo(miembros),
+    icp: armarIcp(icp),
+    personas: armarPersonas(personas),
   };
 }
 
@@ -180,6 +191,16 @@ export function textoDeLoVivo(datos: DatosVivos, fuentes: readonly FuenteViva[])
     if (fuente === "equipo") {
       partes.push(
         datos.equipo.flatMap((g) => g.personas.map((p) => `${p.nombre} ${g.area} ${p.rol}`)).join("\n"),
+      );
+    }
+    if (fuente === "icp") {
+      partes.push(datos.icp.flatMap((g) => g.secciones.flatMap((s) => [s.titulo, ...s.items])).join("\n"));
+    }
+    if (fuente === "personas") {
+      partes.push(
+        datos.personas
+          .map((p) => [p.nombre, p.arquetipo, p.quienEs, p.dolores, p.objetivos].filter(Boolean).join(" "))
+          .join("\n"),
       );
     }
   }

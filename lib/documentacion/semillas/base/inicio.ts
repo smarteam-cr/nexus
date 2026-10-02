@@ -35,7 +35,13 @@ export function construirInicio(): PaginaSembrada {
           parrafoRico(a("marketing")),
           parrafoRico(a("revops")),
         ),
-        tarjeta("Qué ofrecemos", parrafoRico(a("servicios")), parrafoRico(deCs("smartloop")), parrafoRico(a("casos"))),
+        tarjeta(
+          "Qué ofrecemos",
+          parrafoRico(a("servicios")),
+          parrafoRico(a("audiencia")),
+          parrafoRico(deCs("smartloop")),
+          parrafoRico(a("casos")),
+        ),
         tarjeta(
           "Con qué trabajamos",
           parrafoRico(a("recursos")),

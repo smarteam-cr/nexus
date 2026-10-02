@@ -24,6 +24,7 @@ const PAGINAS = {
   revops: { slug: "departamento-revops", titulo: "Revenue Operations", icono: "⚙️" },
   servicios: { slug: "servicios", titulo: "Servicios", icono: "🧩" },
   casos: { slug: "casos-de-exito", titulo: "Casos de éxito", icono: "🏆" },
+  audiencia: { slug: "cliente-ideal-y-buyer-personas", titulo: "Cliente ideal y buyer personas", icono: "🧲" },
   recursos: { slug: "recursos-y-herramientas", titulo: "Recursos y herramientas", icono: "🧰" },
   herramientas: { slug: "herramientas", titulo: "Herramientas", icono: "🔧" },
   marca: { slug: "marca", titulo: "Marca", icono: "🎨" },
