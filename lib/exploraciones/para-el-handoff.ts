@@ -18,10 +18,12 @@ import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import {
   CASILLAS,
+  ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_ROL,
   type Apertura,
   type ClaveDeCasilla,
   type Meta,
+  type Objecion,
   type Persona,
   type Reto,
   type SiguientePaso,
@@ -45,6 +47,8 @@ function valorComoTexto(clave: ClaveDeCasilla, v: unknown, nombreDim: (id: strin
       return (v as Reto[]).map((r) => `${r.texto}${r.dimensionId && nombreDim(r.dimensionId) ? ` (${nombreDim(r.dimensionId)})` : ""}`);
     case "autoridad":
       return (v as Persona[]).map((p) => `${p.nombre}${p.cargo ? `, ${p.cargo}` : ""} (${ETIQUETA_DEL_ROL[p.rol]})${p.nota ? ` — ${p.nota}` : ""}`);
+    case "objeciones":
+      return (v as Objecion[]).map((o) => `${o.texto} (${ETIQUETA_DE_LA_OBJECION[o.clase].toLowerCase()})${o.respuesta ? ` — se respondió: ${o.respuesta}` : " — sin responder"}`);
     case "siguientePaso": {
       const s = v as SiguientePaso;
       return [`${s.que}${s.fecha ? ` (${s.fecha})` : ""}${s.conQuien ? `, con ${s.conQuien}` : ""}`];

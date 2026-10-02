@@ -58,6 +58,27 @@ export interface SiguientePaso {
   conQuien?: string;
 }
 
+/**
+ * Una objeción del cliente: lo que dijo que lo frena, con sus palabras, de qué clase es y cómo se
+ * respondió, si se respondió. Las cuatro primeras clases son las típicas de la guía (guia.ts).
+ */
+export const CLASES_DE_OBJECION = ["precio", "herramienta", "momento", "propuesta", "confianza", "otra"] as const;
+export type ClaseDeObjecion = (typeof CLASES_DE_OBJECION)[number];
+export const ETIQUETA_DE_LA_OBJECION: Record<ClaseDeObjecion, string> = {
+  precio: "Precio",
+  herramienta: "Ya tiene herramienta",
+  momento: "No es el momento",
+  propuesta: "Pide la propuesta",
+  confianza: "Desconfianza",
+  otra: "Otra",
+};
+export interface Objecion {
+  texto: string;
+  clase: ClaseDeObjecion;
+  /** Cómo se respondió en la reunión. Sin respuesta, sigue abierta. */
+  respuesta?: string;
+}
+
 export const VALORES_DE_APERTURA = ["si", "no", "no_se"] as const;
 export interface Apertura {
   valor: (typeof VALORES_DE_APERTURA)[number];
@@ -67,12 +88,13 @@ export interface Apertura {
 // ── Las casillas ──────────────────────────────────────────────────────────────
 
 /** Los tipos de casilla. Las de lista reciben del agente UN ítem por propuesta; las demás, el valor entero. */
-export type TipoDeCasilla = "texto" | "lista" | "metas" | "retos" | "autoridad" | "siguientePaso" | "apertura";
+export type TipoDeCasilla = "texto" | "lista" | "metas" | "retos" | "autoridad" | "objeciones" | "siguientePaso" | "apertura";
 
 /**
- * Dónde vive la casilla en el lienzo: arriba de todo, en el RESUMEN (el marco de calificación:
- * metas, planes, retos, tiempos, presupuesto, quién decide, consecuencias e implicaciones), o en la
- * pestaña Exploración (cómo conectar, su HubSpot, el portal y lo demás que sale de las reuniones).
+ * Dónde vive la casilla en el lienzo: en el RESUMEN (el marco de calificación —metas, planes, retos,
+ * tiempos, presupuesto, quién decide, consecuencias e implicaciones— más las objeciones y las
+ * particularidades), o en la pieza Exploración (cómo conectar, su HubSpot, el portal y lo demás que
+ * sale de las reuniones).
  */
 export type PasoDelLienzo = "resumen" | "exploracion";
 
@@ -111,6 +133,8 @@ export const CLAVES_DE_CASILLA = [
   "producto",
   "apertura",
   "siguientePaso",
+  "objeciones",
+  "particularidades",
 ] as const;
 export type ClaveDeCasilla = (typeof CLAVES_DE_CASILLA)[number];
 
@@ -263,6 +287,25 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     alCliente: false,
     alHandoff: "normal",
   },
+  // ── El resumen: lo que sale de cada reunión (pedido de Elías, 2026-10-01) ──
+  {
+    clave: "objeciones",
+    etiqueta: "Objeciones",
+    ayuda: "Lo que el cliente dijo que lo frena, con sus palabras, y cómo se respondió. Sin respuesta, sigue abierta.",
+    paso: "resumen",
+    tipo: "objeciones",
+    alCliente: false,
+    alHandoff: "interno",
+  },
+  {
+    clave: "particularidades",
+    etiqueta: "Particularidades",
+    ayuda: "Lo propio de esta cuenta que cambia cómo venderle o implementar: una restricción, un contrato vigente, una política, una fecha que manda, alguien clave.",
+    paso: "resumen",
+    tipo: "lista",
+    alCliente: false,
+    alHandoff: "interno",
+  },
 ];
 
 /** Las casillas del resumen, en el orden del marco: metas, planes, retos y tiempos; presupuesto y quién decide; consecuencias e implicaciones. */
@@ -276,6 +319,9 @@ export const CASILLAS_DEL_RESUMEN = [
   "consecuencias",
   "implicaciones",
 ] as const satisfies readonly ClaveDeCasilla[];
+
+/** Las del resumen que van debajo de las tarjetas del marco: lo que sale de cada reunión. */
+export const CASILLAS_DE_LAS_REUNIONES = ["objeciones", "particularidades"] as const satisfies readonly ClaveDeCasilla[];
 
 /** Las que el agente propone y el lienzo muestra: todas menos las retiradas. */
 export const CASILLAS_VIGENTES: readonly DefinicionDeCasilla[] = CASILLAS.filter((c) => !c.retirada);
@@ -307,6 +353,8 @@ export const TIPO_DE_CASILLA = {
   producto: "texto",
   apertura: "apertura",
   siguientePaso: "siguientePaso",
+  objeciones: "objeciones",
+  particularidades: "lista",
 } as const satisfies Record<ClaveDeCasilla, TipoDeCasilla>;
 
 /** El valor guardado de cada tipo de casilla. */
@@ -316,6 +364,7 @@ export interface ValorPorTipo {
   metas: Meta[];
   retos: Reto[];
   autoridad: Persona[];
+  objeciones: Objecion[];
   siguientePaso: SiguientePaso;
   apertura: Apertura;
 }
@@ -324,8 +373,8 @@ export interface ValorPorTipo {
 export type ValoresDeCasillas = { [K in ClaveDeCasilla]: ValorPorTipo[(typeof TIPO_DE_CASILLA)[K]] };
 
 /** Las casillas de lista se proponen de a UN ítem; las demás, con el valor entero. */
-export function esDeLista(tipo: TipoDeCasilla): tipo is "lista" | "metas" | "retos" | "autoridad" {
-  return tipo === "lista" || tipo === "metas" || tipo === "retos" || tipo === "autoridad";
+export function esDeLista(tipo: TipoDeCasilla): tipo is "lista" | "metas" | "retos" | "autoridad" | "objeciones" {
+  return tipo === "lista" || tipo === "metas" || tipo === "retos" || tipo === "autoridad" || tipo === "objeciones";
 }
 
 /**
@@ -333,11 +382,12 @@ export function esDeLista(tipo: TipoDeCasilla): tipo is "lista" | "metas" | "ret
  * agrega un ítem (contenido.ts): si solo lo supiera el esquema, «Usar» agregaría el ítem 21 y la
  * lectura descartaría la lista ENTERA.
  */
-export const TOPE_DE_LA_LISTA: Record<"lista" | "metas" | "retos" | "autoridad", number> = {
+export const TOPE_DE_LA_LISTA: Record<"lista" | "metas" | "retos" | "autoridad" | "objeciones", number> = {
   lista: 40,
   metas: 20,
   retos: 30,
   autoridad: 30,
+  objeciones: 30,
 };
 
 /** ¿La meta está en cifras? Su objetivo trae un número. */

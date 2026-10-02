@@ -9,12 +9,18 @@
  * cuando el agente propuso algo para ella; al tocarla se abre la casilla para completarla o revisar
  * lo propuesto. En el mismo bloque van «qué sigue» y las propuestas pendientes, que antes eran dos
  * avisos aparte.
+ *
+ * Debajo, lo que sale de cada reunión (pedido de Elías, 2026-10-01): las objeciones y las
+ * particularidades de la cuenta, que el agente propone al leer cada sesión, como el cronograma
+ * propone sus particularidades. Y, si ya hay un proyecto, a cuál le llega la exploración.
  */
+import Link from "next/link";
 import { useState } from "react";
 import { AgentProposal } from "@/components/ai/AgentProposal";
 import { Badge, Button, Drawer } from "@/components/ui";
 import type { PasoDeQueSigue } from "@/lib/exploraciones/calidad";
 import {
+  CASILLAS_DE_LAS_REUNIONES,
   CASILLAS_DEL_RESUMEN,
   definicionDe,
   ETIQUETA_DEL_ROL,
@@ -122,44 +128,75 @@ export default function Resumen({
   const contar = (clave: ClaveDeCasilla) => pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).length;
 
   return (
-    <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">Qué sigue</p>
-          <p className="text-sm text-fg">{sigue.texto}</p>
+    <div className="space-y-4">
+      <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">Qué sigue</p>
+            <p className="text-sm text-fg">{sigue.texto}</p>
+          </div>
+          {sigue.paso && (
+            <Button size="xs" variant="secondary" className="flex-shrink-0" onClick={() => irA(sigue.paso!)}>
+              Ir a «{nombreDelPaso(sigue.paso)}»
+            </Button>
+          )}
         </div>
-        {sigue.paso && (
-          <Button size="xs" variant="secondary" className="flex-shrink-0" onClick={() => irA(sigue.paso!)}>
-            Ir a «{nombreDelPaso(sigue.paso)}»
-          </Button>
-        )}
-      </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {CASILLAS_DEL_RESUMEN.map((clave) => (
-          <Tarjeta key={clave} clave={clave} pendientes={contar(clave)} onAbrir={() => setAbierta(clave)} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {CASILLAS_DEL_RESUMEN.map((clave) => (
+            <Tarjeta key={clave} clave={clave} pendientes={contar(clave)} onAbrir={() => setAbierta(clave)} />
+          ))}
+        </div>
+
+        {paraUsarTodas.length > 0 && puedeEditar && (
+          <AgentProposal
+            title={`Hay ${paraUsarTodas.length} ${paraUsarTodas.length === 1 ? "propuesta" : "propuestas"} del agente para revisar`}
+            subtitle="Están en su lugar: en estas tarjetas, en «Exploración» y en «La escala». Úsalas o descártalas mirando lo que ya está; nada se confirma solo."
+            applyLabel="Usar todas"
+            discardLabel="Descartar todas"
+            applying={guardando}
+            onApply={() =>
+              void cambiar([{ op: "usarVarias", items: paraUsarTodas.map((it) => ({ itemId: it.id, valor: it.valor })) }], {
+                refrescar: paraUsarTodas.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil"),
+              })
+            }
+            onDiscard={() => void cambiar([{ op: "descartar", itemIds: paraUsarTodas.map((it) => it.id) }])}
+          />
+        )}
+
+        <Drawer open={abierta !== null} onClose={() => setAbierta(null)} title={abierta ? definicionDe(abierta).etiqueta : undefined} description={abierta ? definicionDe(abierta).ayuda : undefined} size="lg">
+          {abierta && <Casilla clave={abierta} sinTitulo />}
+        </Drawer>
+      </section>
+
+      {/* Lo que sale de cada reunión: lo propone el agente al leerla, con la frase del cliente. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {CASILLAS_DE_LAS_REUNIONES.map((clave) => (
+          <Casilla key={clave} clave={clave} />
         ))}
       </div>
 
-      {paraUsarTodas.length > 0 && puedeEditar && (
-        <AgentProposal
-          title={`Hay ${paraUsarTodas.length} ${paraUsarTodas.length === 1 ? "propuesta" : "propuestas"} del agente para revisar`}
-          subtitle="Están en su lugar: en estas tarjetas, en «Exploración» y en «La escala». Úsalas o descártalas mirando lo que ya está; nada se confirma solo."
-          applyLabel="Usar todas"
-          discardLabel="Descartar todas"
-          applying={guardando}
-          onApply={() =>
-            void cambiar([{ op: "usarVarias", items: paraUsarTodas.map((it) => ({ itemId: it.id, valor: it.valor })) }], {
-              refrescar: paraUsarTodas.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil"),
-            })
-          }
-          onDiscard={() => void cambiar([{ op: "descartar", itemIds: paraUsarTodas.map((it) => it.id) }])}
-        />
-      )}
+      <ProyectosQueLaReciben />
+    </div>
+  );
+}
 
-      <Drawer open={abierta !== null} onClose={() => setAbierta(null)} title={abierta ? definicionDe(abierta).etiqueta : undefined} description={abierta ? definicionDe(abierta).ayuda : undefined} size="lg">
-        {abierta && <Casilla clave={abierta} sinTitulo />}
-      </Drawer>
-    </section>
+/** A qué proyecto le llega la exploración: lo único del viejo «Traspaso» que es un dato y no una explicación. */
+function ProyectosQueLaReciben() {
+  const { proyectos } = useLienzo();
+  if (proyectos.length === 0) return null;
+  return (
+    <p className="text-xs text-fg-muted">
+      Le llega al handoff de{" "}
+      {proyectos.map((p, i) => (
+        <span key={p.id}>
+          {i > 0 && ", "}
+          <Link href={`/clients/${p.clientId}?tab=${p.id}`} className="text-brand-light hover:underline">
+            {p.nombre}
+          </Link>
+        </span>
+      ))}
+      , marcada como estimada: le dice al CSE dónde mirar.
+    </p>
   );
 }

@@ -17,7 +17,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui";
 import { SelectorDePiezas, type EstadoDePieza, type FilaDePieza } from "@/components/canvas/SelectorDePiezas";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { CASILLAS_DEL_RESUMEN } from "@/lib/exploraciones/casillas";
+import { CASILLAS_DE_LAS_REUNIONES, CASILLAS_DEL_RESUMEN } from "@/lib/exploraciones/casillas";
 import { listaParaProponer, queSigueConPaso } from "@/lib/exploraciones/calidad";
 import {
   aplicarOperaciones,
@@ -59,8 +59,8 @@ const AYUDA_DEL_ESTADO: Record<EstadoDePieza, string> = {
 
 const esPieza = (x: string | null | undefined): x is PasoDelLienzoUI => !!x && x in NOMBRE_DEL_PASO;
 
-/** Las casillas del resumen se revisan en sus tarjetas, arriba: no cuentan en ninguna pestaña. */
-const DEL_RESUMEN = new Set<string>(CASILLAS_DEL_RESUMEN);
+/** Las casillas del resumen (las tarjetas, las objeciones y las particularidades) se revisan ahí: no cuentan en otra pieza. */
+const DEL_RESUMEN = new Set<string>([...CASILLAS_DEL_RESUMEN, ...CASILLAS_DE_LAS_REUNIONES]);
 
 export default function LienzoDeExploracion({
   inicial,

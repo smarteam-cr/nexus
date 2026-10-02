@@ -278,6 +278,46 @@ describe("leerLaRespuesta", () => {
   });
 });
 
+describe("las objeciones y las particularidades (pedido de Elías, 2026-10-01)", () => {
+  const OBJECION = "Ana: está muy caro para lo que pagamos hoy, y ya tenemos Pipedrive.";
+  const conObjecion = () => ctx({ fuentes: [...FUENTES, { id: "S2", etiqueta: "Reunión del 2 oct", texto: OBJECION }] });
+
+  it("una objeción entra solo con la frase literal del cliente; con su clase y su respuesta", () => {
+    const r = leerLaRespuesta(
+      respuesta({
+        objeciones: [
+          { texto: "Le parece caro", clase: "precio", respuesta: "Se le mostró el costo de no actuar", fuentes: [{ id: "S2", cita: "está muy caro para lo que pagamos hoy" }] },
+          { texto: "Ya usa otra herramienta", clase: "herramienta", fuentes: [{ id: "S2", cita: "ya usamos Salesforce hace años" }] },
+          { texto: "Algo sin clase", clase: "inventada", fuentes: [{ id: "S2", cita: "ya tenemos Pipedrive" }] },
+        ],
+      }),
+      conObjecion(),
+      "run_1",
+      AHORA,
+    );
+    expect(r.items.map((i) => i.destino)).toEqual([{ tipo: "casilla", clave: "objeciones" }]);
+    expect(r.items[0].valor).toEqual({ texto: "Le parece caro", clase: "precio", respuesta: "Se le mostró el costo de no actuar" });
+    expect(r.descartadas).toBe(2);
+  });
+
+  it("una particularidad es una casilla de lista: un ítem por entrada", () => {
+    const r = leerLaRespuesta(
+      respuesta({ textos: [{ casilla: "particularidades", texto: "Tiene contrato con Pipedrive", fuentes: [{ id: "S2", cita: "ya tenemos Pipedrive" }] }] }),
+      conObjecion(),
+      "run_1",
+      AHORA,
+    );
+    expect(r.items.map((i) => [i.destino, i.valor])).toEqual([[{ tipo: "casilla", clave: "particularidades" }, "Tiene contrato con Pipedrive"]]);
+  });
+
+  it("la herramienta pide las objeciones con su clase, y el pedido nombra las clases", () => {
+    const tool = herramienta(ctx());
+    const props = (tool.input_schema as { properties: Record<string, { items?: { properties?: Record<string, { enum?: string[] }> } }> }).properties;
+    expect(props.objeciones.items?.properties?.clase.enum).toEqual(["precio", "herramienta", "momento", "propuesta", "confianza", "otra"]);
+    expect(String(pedidoDeLaExploracion(ctx()).system)).toMatch(/Las clases de objeción: precio/);
+  });
+});
+
 describe("la herramienta y el pedido", () => {
   it("las listas cerradas solo nombran lo que existe: dimensiones de las áreas en juego que aplican, y las fuentes leídas", () => {
     const t = herramienta(ctx());

@@ -10,13 +10,16 @@
 import { useState } from "react";
 import { Badge, Button, Input, Segmentado, Select, Textarea } from "@/components/ui";
 import {
+  CLASES_DE_OBJECION,
   definicionDe,
+  ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_ROL,
   metaEnCifras,
   ROLES_EN_LA_DECISION,
   type Apertura,
   type ClaveDeCasilla,
   type Meta,
+  type Objecion,
   type Persona,
   type Reto,
   type SiguientePaso,
@@ -98,6 +101,27 @@ function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown }) {
                 {ETIQUETA_DEL_ROL[p.rol]}
               </Badge>
               {p.nota && <span className="text-xs text-fg-secondary">{p.nota}</span>}
+            </li>
+          ))}
+        </ul>
+      );
+    case "objeciones":
+      return (
+        <ul className="space-y-2 text-sm">
+          {(valor as Objecion[]).map((o, i) => (
+            <li key={i} className="space-y-0.5">
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="text-fg">{o.texto}</span>
+                <Badge variant="default" size="xs">
+                  {ETIQUETA_DE_LA_OBJECION[o.clase]}
+                </Badge>
+                {!o.respuesta && (
+                  <Badge variant="warning" size="xs">
+                    Sin responder
+                  </Badge>
+                )}
+              </p>
+              {o.respuesta && <p className="text-xs text-fg-muted">Se respondió: {o.respuesta}</p>}
             </li>
           ))}
         </ul>
@@ -235,6 +259,33 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
         </div>
       );
     }
+    case "objeciones": {
+      const objeciones = ((borrador as Objecion[]) ?? []).length ? (borrador as Objecion[]) : [{ texto: "", clase: "otra" as const }];
+      const set = (i: number, cambio: Partial<Objecion>) => setBorrador(objeciones.map((o, j) => (j === i ? { ...o, ...cambio } : o)));
+      return (
+        <div className="space-y-3">
+          {objeciones.map((o, i) => (
+            <div key={i} className="grid gap-2 rounded-lg border border-line p-2.5 sm:grid-cols-[2fr_1fr_2fr_auto]">
+              <Input value={o.texto} placeholder="Qué dijo que lo frena" aria-label="Objeción" onChange={(e) => set(i, { texto: e.target.value })} />
+              <Select aria-label="Clase de objeción" value={o.clase} onChange={(e) => set(i, { clase: e.target.value as Objecion["clase"] })}>
+                {CLASES_DE_OBJECION.map((c) => (
+                  <option key={c} value={c}>
+                    {ETIQUETA_DE_LA_OBJECION[c]}
+                  </option>
+                ))}
+              </Select>
+              <Input value={o.respuesta ?? ""} placeholder="Cómo se respondió (si se respondió)" aria-label="Cómo se respondió" onChange={(e) => set(i, { respuesta: e.target.value })} />
+              <Button size="sm" variant="destructive" onClick={() => setBorrador(objeciones.filter((_, j) => j !== i))}>
+                Quitar
+              </Button>
+            </div>
+          ))}
+          <Button size="xs" variant="ghost" onClick={() => setBorrador([...objeciones, { texto: "", clase: "otra" }])}>
+            Agregar otra objeción
+          </Button>
+        </div>
+      );
+    }
     case "siguientePaso": {
       const s = (borrador as SiguientePaso) ?? { que: "" };
       return (
@@ -273,6 +324,8 @@ function limpiar(clave: ClaveDeCasilla, v: unknown): unknown {
       return ((v as Reto[]) ?? []).filter((r) => r.texto?.trim()).map((r) => sinVacios(r));
     case "autoridad":
       return ((v as Persona[]) ?? []).filter((p) => p.nombre?.trim()).map((p) => sinVacios(p));
+    case "objeciones":
+      return ((v as Objecion[]) ?? []).filter((o) => o.texto?.trim()).map((o) => sinVacios(o));
     case "siguientePaso":
       return v && (v as SiguientePaso).que?.trim() ? sinVacios(v as SiguientePaso) : undefined;
     case "apertura":

@@ -7,7 +7,16 @@
  * decide mirando lo que ya está confirmado al lado. Lo descartado no vuelve (queda su lápida).
  */
 import { Button } from "@/components/ui";
-import { ETIQUETA_DEL_ROL, type Apertura, type Meta, type Persona, type Reto, type SiguientePaso } from "@/lib/exploraciones/casillas";
+import {
+  ETIQUETA_DE_LA_OBJECION,
+  ETIQUETA_DEL_ROL,
+  type Apertura,
+  type Meta,
+  type Objecion,
+  type Persona,
+  type Reto,
+  type SiguientePaso,
+} from "@/lib/exploraciones/casillas";
 import {
   esFuenteDeHipotesis,
   ETIQUETA_DEL_MOTIVO,
@@ -60,6 +69,10 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
         case "siguientePaso": {
           const s = v as SiguientePaso;
           return [s.que, s.fecha, s.conQuien && `con ${s.conQuien}`].filter(Boolean).join(" · ");
+        }
+        case "objeciones": {
+          const o = v as Objecion;
+          return `${o.texto} (${ETIQUETA_DE_LA_OBJECION[o.clase].toLowerCase()})${o.respuesta ? ` — se respondió: ${o.respuesta}` : ""}`;
         }
         case "apertura": {
           const a = v as Apertura;

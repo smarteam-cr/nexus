@@ -4269,3 +4269,21 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   que se deben hacer»). Quedan fuera las pruebas del equipo (correos de Smarteam, dominios y nombres
   de prueba), HubSpot (aliado), lo que Nexus marca `INTERNO` o `ALIADO` y lo que ya tiene exploración.
   Una prueba que la regla no reconozca se borra en HubSpot: no hay botón para esconderla en Nexus.
+- **La exploración usa el MISMO caparazón que el cliente y el proyecto** (pedido de Elías, «incluso
+  para reutilizar código»). La cabecera de la ficha y el selector de piezas salieron a componentes
+  compartidos (`components/layout/CabeceraDeFicha.tsx`, `components/canvas/SelectorDePiezas.tsx`),
+  sin cambiar lo que hacen en el proyecto. Las piezas: Resumen, Exploración, La escala, Casos de uso y
+  Propuesta; la abierta queda en la dirección (`?pieza=`). Sin acciones de agente en las filas del
+  desplegable: cada pieza tiene las suyas adentro, y un seguimiento de corrida por fila duplicaría
+  las consultas.
+- **Traspaso se retira; Propuesta pasa a ser una pieza.** Traspaso explicaba qué recibe el CSE y no
+  había nada que hacer ahí (Elías: «teoría innecesaria»). De ahí sobrevive un dato, a qué proyecto le
+  llega, como una línea en el Resumen. Armar la propuesta estaba al pie de Casos de uso.
+- **Objeciones y particularidades son casillas del Resumen, no una entidad aparte.** Las propone el
+  agente al leer cada sesión, con su fuente, y el vendedor usa o descarta, como todo lo demás del
+  lienzo. Una tabla propia daría consultas entre exploraciones, pero duplicaría el mecanismo de
+  proponer y confirmar (fuentes, lápidas, «Usar todas»); si Marketing quiere cruzar objeciones entre
+  leads, se lee el JSON. La objeción entra solo con la frase literal del cliente, lleva su clase
+  (las cuatro típicas de la guía, más desconfianza y otra) y cómo se respondió; sin respuesta,
+  sigue abierta. Las dos son internas: no llegan a la propuesta, y al CSE le llegan en la columna
+  interna del contexto. La guía de la próxima reunión retoma las objeciones que ya puso el cliente.

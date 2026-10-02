@@ -26,6 +26,7 @@ import {
   TOPE_DE_LA_LISTA,
   type ClaveDeCasilla,
   type Meta,
+  type Objecion,
   type Persona,
   type Reto,
   type ValoresDeCasillas,
@@ -411,6 +412,8 @@ function claveDeItemDeLista(clave: ClaveDeCasilla, item: unknown): string {
       return normalizarTexto((item as Meta).que ?? "");
     case "retos":
       return normalizarTexto((item as Reto).texto ?? "");
+    case "objeciones":
+      return normalizarTexto((item as Objecion).texto ?? "");
     case "autoridad": {
       const p = item as Persona;
       return `${normalizarTexto(p.nombre ?? "")}|${p.rol ?? ""}`;

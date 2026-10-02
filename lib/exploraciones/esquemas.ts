@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
 import {
+  CLASES_DE_OBJECION,
   CLAVES_DE_CASILLA,
   esDeLista,
   ROLES_EN_LA_DECISION,
@@ -20,6 +21,7 @@ import {
   type Apertura,
   type ClaveDeCasilla,
   type Meta,
+  type Objecion,
   type Persona,
   type Reto,
   type SiguientePaso,
@@ -83,6 +85,13 @@ export const RetoSchema: z.ZodType<Reto> = z.object({
   dimensionId: z.string().trim().max(12).optional(),
 });
 
+/** Una objeción que dijo el cliente (la casilla); la de la guía, con su respuesta LAER, es otra. */
+export const ObjecionRegistradaSchema: z.ZodType<Objecion> = z.object({
+  texto: textoLleno(400),
+  clase: z.enum(CLASES_DE_OBJECION),
+  respuesta: texto(400).optional(),
+});
+
 export const SiguientePasoSchema: z.ZodType<SiguientePaso> = z.object({
   que: textoLleno(300),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -109,6 +118,8 @@ export function esquemaDelValor(tipo: TipoDeCasilla): z.ZodType<unknown> {
       return z.array(RetoSchema).max(TOPE_DE_LA_LISTA.retos);
     case "autoridad":
       return z.array(PersonaSchema).max(TOPE_DE_LA_LISTA.autoridad);
+    case "objeciones":
+      return z.array(ObjecionRegistradaSchema).max(TOPE_DE_LA_LISTA.objeciones);
     case "siguientePaso":
       return SiguientePasoSchema;
     case "apertura":
@@ -127,6 +138,8 @@ export function esquemaDeLoPropuesto(tipo: TipoDeCasilla): z.ZodType<unknown> {
       return RetoSchema;
     case "autoridad":
       return PersonaSchema;
+    case "objeciones":
+      return ObjecionRegistradaSchema;
     default:
       return esquemaDelValor(tipo);
   }

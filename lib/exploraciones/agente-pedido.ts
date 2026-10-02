@@ -22,7 +22,17 @@
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
-import { CASILLAS, CASILLAS_VIGENTES, ETIQUETA_DEL_ROL, ROLES_EN_LA_DECISION, TIPO_DE_CASILLA, VALORES_DE_APERTURA, type ClaveDeCasilla } from "./casillas";
+import {
+  CASILLAS,
+  CASILLAS_VIGENTES,
+  CLASES_DE_OBJECION,
+  ETIQUETA_DE_LA_OBJECION,
+  ETIQUETA_DEL_ROL,
+  ROLES_EN_LA_DECISION,
+  TIPO_DE_CASILLA,
+  VALORES_DE_APERTURA,
+  type ClaveDeCasilla,
+} from "./casillas";
 import {
   ETIQUETA_DE_LA_FUENTE,
   ETIQUETA_DEL_MOTIVO,
@@ -156,6 +166,21 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
           fuentes,
         },
         required: ["nombre", "rol", "fuentes"],
+      },
+    },
+    objeciones: {
+      type: "array",
+      description:
+        "Lo que el CLIENTE dijo que lo frena (el precio, que ya tiene herramienta, que no es el momento…), con su frase EXACTA en la cita. No es un reto de su operación: es una resistencia a comprar.",
+      items: {
+        type: "object",
+        properties: {
+          texto: { type: "string", description: "La objeción en una frase, en tercera persona." },
+          clase: { type: "string", enum: [...CLASES_DE_OBJECION] },
+          respuesta: { type: "string", description: "Cómo la respondió el vendedor en la reunión, solo si la respondió." },
+          fuentes,
+        },
+        required: ["texto", "clase", "fuentes"],
       },
     },
     apertura: {
@@ -309,6 +334,8 @@ function sistema(ctx: ContextoDelPedido): string {
 - falta: de lo que pide Funcional en las dimensiones elegidas, qué tiene y qué no.
 - noExplorado: lo que el cliente dijo y nadie siguió (qué dijo y qué preguntar la próxima vez). Es de lo más valioso: búscalo.
 - producto: qué se mostró y para qué reto, si se mostró.
+- objeciones: lo que el cliente dijo que lo frena, con su frase, su clase y cómo se respondió si se respondió.
+- particularidades: lo propio de esta cuenta que cambia cómo venderle o implementar (una restricción, un contrato vigente, una política, una fecha que manda, alguien clave). Un hecho, no una opinión.
 - apertura y siguientePaso, si quedaron claros.`;
   return `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Ayudas a un vendedor a explorar a un prospecto para cerrar la PRIMERA venta: llevar cada área en juego a Funcional en la Escala de Rendimiento de Smarteam. No escribes en el lienzo: PROPONES, y el vendedor usa o descarta cada cosa.
 
@@ -327,6 +354,7 @@ Reglas estrictas:
 - Estas casillas las ve el CLIENTE en la propuesta: ${CASILLAS.filter((c) => c.alCliente).map((c) => c.clave).join(", ")}. En ellas nunca pongas montos de dinero, presupuesto, opiniones sobre personas ni nada interno de Smarteam: el dinero va solo en presupuesto; las personas, en autoridad.
 
 Las casillas: ${CASILLAS_VIGENTES.map((c) => `${c.clave} («${c.etiqueta}»: ${c.ayuda})`).join("; ")}.
+Las clases de objeción: ${CLASES_DE_OBJECION.map((c) => `${c} (${ETIQUETA_DE_LA_OBJECION[c]})`).join(", ")}.
 Los motivos para explorar: ${MOTIVOS_PARA_EXPLORAR.map((m) => `${m} (${ETIQUETA_DEL_MOTIVO[m]})`).join(", ")}. Los papeles en la decisión: ${ROLES_EN_LA_DECISION.map((r) => `${r} (${ETIQUETA_DEL_ROL[r]})`).join(", ")}.`;
 }
 
@@ -456,6 +484,10 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
   for (const r of lista(input.retos)) {
     const dimensionId = str(r.dimensionId);
     agregar({ tipo: "casilla", clave: "retos" }, { texto: str(r.texto), ...(dimensionId && dims.has(dimensionId) ? { dimensionId } : {}) }, citar(r.fuentes));
+  }
+  // Una objeción es lo que DIJO el cliente: sin su frase literal no entra.
+  for (const o of lista(input.objeciones)) {
+    agregar({ tipo: "casilla", clave: "objeciones" }, { texto: str(o.texto), clase: str(o.clase), respuesta: str(o.respuesta) }, citar(o.fuentes), { exigeCita: true });
   }
   for (const p of lista(input.personas)) {
     agregar({ tipo: "casilla", clave: "autoridad" }, { nombre: str(p.nombre), cargo: str(p.cargo), rol: str(p.rol), nota: str(p.nota) }, citar(p.fuentes));

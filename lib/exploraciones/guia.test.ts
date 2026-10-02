@@ -209,6 +209,30 @@ function respuesta(input: Record<string, unknown>): Anthropic.Messages.Message {
 }
 
 describe("el contexto de la guía", () => {
+  it("las objeciones que ya puso el cliente llegan a la guía, sin repetir, con su clase y si se respondió", () => {
+    const destino = { tipo: "casilla" as const, clave: "objeciones" as const };
+    const propuesta = { texto: "No es el momento", clase: "momento" as const };
+    const pendiente: ItemPropuesto = { id: idDelItem(destino, propuesta), destino, valor: propuesta, fuentes: [], corridaId: null, en: "" };
+    const c = contextoDeLaGuia({
+      empresa: "Acme",
+      industria: null,
+      estado: estado({
+        contenido: {
+          ...contenidoVacio(),
+          casillas: { objeciones: [{ texto: "Le parece caro", clase: "precio", respuesta: "Costo de no actuar" }, { texto: "No es el momento", clase: "momento" }] },
+        },
+      }),
+      escala: ESCALA,
+      posiciones: {},
+      pendientes: [pendiente],
+      agenda: [],
+      conTest: false,
+      hoy: "2026-10-01",
+    });
+    expect(c.objecionesDichas).toEqual(["Le parece caro (precio) — se respondió: Costo de no actuar", "No es el momento (momento) — sin responder"]);
+    expect(String(pedidoDeLaGuia(c).messages[0].content)).toContain("LAS OBJECIONES QUE YA PUSO");
+  });
+
   it("sin test y sin nada dicho por el cliente arranca desde cero, y la próxima es la de HubSpot", () => {
     const c = ctx();
     expect(c.desdeCero).toBe(true);
