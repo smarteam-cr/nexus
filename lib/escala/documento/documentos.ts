@@ -1,12 +1,13 @@
 /**
- * lib/escala/documento/documentos.ts — los tres documentos de la escala. PURO.
+ * lib/escala/documento/documentos.ts — los documentos de la escala. PURO.
  *
  * La escala viaja con dos documentos más (su Parte «Cómo leer este documento» los nombra):
- * la especificación del cálculo y el manual de operación. Los tres se publican en Nexus y se
- * descargan tal cual, con su nombre de archivo fijo: la escala se cita por ese nombre.
+ * la especificación del cálculo y el manual de operación. Al lado va el mapa de herramientas, que
+ * la escala NO nombra (ella no habla de herramientas): dice en qué criterios ayuda cada una, y es
+ * interno. Los cuatro se publican en Nexus y se descargan tal cual, con su nombre de archivo fijo.
  */
 
-export type DocumentoDeLaEscala = "escala" | "especificacion" | "manual";
+export type DocumentoDeLaEscala = "escala" | "especificacion" | "manual" | "herramientas";
 
 export const DOCUMENTOS_DE_LA_ESCALA: readonly {
   clave: DocumentoDeLaEscala;
@@ -34,6 +35,12 @@ export const DOCUMENTOS_DE_LA_ESCALA: readonly {
     archivo: "manual_operacion_escala.md",
     titulo: "Manual de operación",
     paraQuien: "Cómo trabaja el equipo con la escala, y los cambios pendientes.",
+  },
+  {
+    clave: "herramientas",
+    archivo: "mapa_de_herramientas.md",
+    titulo: "Mapa de herramientas",
+    paraQuien: "Dónde ayuda cada herramienta, criterio por criterio. Interno.",
   },
 ];
 

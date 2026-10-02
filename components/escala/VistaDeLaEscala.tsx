@@ -31,10 +31,12 @@ import {
 import { LETRAS, type Letra, type PreguntaDelPerfil } from "@/lib/escala/documento/tipos";
 import type { Autor, ConteosPorClave } from "@/lib/escala/comentarios/reglas";
 import { consultaDeLaEscala, definicionDeOpcion, notaDelCierre, type DatosDeLaVista, type Vista } from "@/lib/escala/vista";
+import { activasQueExisten } from "@/lib/escala/herramientas/vista";
 import { almacenDeLaApi, type AlmacenDeLaEscala } from "./comentarios/almacen";
 import PanelDeComentarios from "./comentarios/PanelDeComentarios";
 import { ProveedorDeLaEscala } from "./contexto";
 import Escalera from "./Escalera";
+import { FiltroDeHerramientas, ProveedorDeHerramientas, ResumenDeHerramientas } from "./herramientas";
 import Leyenda from "./Leyenda";
 import Mapa, { type SeleccionDelMapa } from "./Mapa";
 import Matriz from "./Matriz";
@@ -157,6 +159,8 @@ export interface EstadoInicial {
   /** `1.7.F` (celda), `1.7` (dimensión) o `F` (nivel), para el mapa. */
   celda: string | null;
   ancla: string | null;
+  /** Las herramientas prendidas (`?h=insider,hubspot`). */
+  herramientas?: string[];
 }
 
 function seleccionDesde(celda: string | null): SeleccionDelMapa {
@@ -211,6 +215,8 @@ export default function VistaDeLaEscala({
   );
   const [seleccion, setSeleccion] = useState<SeleccionDelMapa>(seleccionDesde(inicial.celda));
   const [ancla, setAncla] = useState<string | null>(inicial.ancla);
+  /** Las herramientas prendidas: un enlace viejo puede nombrar una que el mapa ya no tiene. */
+  const [herramientas, setHerramientas] = useState<string[]>(() => activasQueExisten(inicial.herramientas ?? [], datos.herramientas));
 
   /** La edición por industria con que se está viendo (la decide el servidor: viene en los datos). */
   const industria = datos.edicion?.slug ?? null;
@@ -218,9 +224,11 @@ export default function VistaDeLaEscala({
   // Lo que se mira, en la URL: sin recargar ni volver a pedir la página (history nativo). La
   // industria va siempre: un refresco (después de comentar, por ejemplo) no devuelve a la general.
   useEffect(() => {
-    const url = `${window.location.pathname}${consultaDeLaEscala({ vista, perfil, industria, dimension, celda: seleccionHacia(seleccion), ancla })}`;
+    const url = `${window.location.pathname}${consultaDeLaEscala({ vista, perfil, industria, dimension, celda: seleccionHacia(seleccion), ancla, herramientas })}`;
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
-  }, [vista, perfil, industria, dimension, seleccion, ancla]);
+  }, [vista, perfil, industria, dimension, seleccion, ancla, herramientas]);
+
+  const prendidas = useMemo(() => ({ activas: herramientas, mapa: datos.herramientas }), [herramientas, datos.herramientas]);
 
   const abrirComentarios = useCallback((a: string) => setAncla(a), []);
   const contexto = useMemo(
@@ -228,9 +236,9 @@ export default function VistaDeLaEscala({
     [yo, esResponsable, almacen, conteos, comentariosDisponibles, abrirComentarios],
   );
 
-  /** Cambiar de área conserva la vista, la industria y el perfil (no la dimensión ni la celda, que son del área). */
+  /** Cambiar de área conserva la vista, la industria, el perfil y las herramientas (no la dimensión ni la celda, que son del área). */
   const irAlArea = (slug: string) => {
-    router.push(`${hrefDeArea(slug)}${consultaDeLaEscala({ vista, perfil, industria })}`);
+    router.push(`${hrefDeArea(slug)}${consultaDeLaEscala({ vista, perfil, industria, herramientas })}`);
   };
 
   /**
@@ -248,7 +256,7 @@ export default function VistaDeLaEscala({
     if (nueva === industria) return;
     const habitual = datos.ediciones.find((e) => e.slug === nueva)?.perfilHabitual ?? null;
     router.push(
-      `${hrefDeArea(area.slug)}${consultaDeLaEscala({ vista, perfil: habitual ?? perfil, industria: nueva, dimension, celda: seleccionHacia(seleccion) })}`,
+      `${hrefDeArea(area.slug)}${consultaDeLaEscala({ vista, perfil: habitual ?? perfil, industria: nueva, dimension, celda: seleccionHacia(seleccion), herramientas })}`,
     );
   };
 
@@ -266,6 +274,7 @@ export default function VistaDeLaEscala({
 
   return (
     <ProveedorDeLaEscala value={contexto}>
+      <ProveedorDeHerramientas value={prendidas}>
       <div className="space-y-4">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -474,9 +483,12 @@ export default function VistaDeLaEscala({
                 </div>
               </div>
             </GrupoDeControl>
+
+            <FiltroDeHerramientas datos={datos} perfil={perfil} activas={herramientas} onCambio={setHerramientas} />
           </div>
           {datos.edicion && <ResumenDeLaEdicion datos={datos} />}
           {(perfil.cierre || perfil.despues) && <ResumenDelPerfil datos={datos} perfil={perfil} />}
+          <ResumenDeHerramientas datos={datos} perfil={perfil} activas={herramientas} />
         </div>
 
         {vista === "matriz" && <Matriz datos={datos} perfil={perfil} anclaAbierta={ancla} onLeerDimension={leerDimension} />}
@@ -501,6 +513,7 @@ export default function VistaDeLaEscala({
       </div>
 
       <PanelDeComentarios ancla={ancla} datos={datos} perfil={perfil} onCerrar={() => setAncla(null)} onCambio={alCambiar ?? (() => router.refresh())} />
+      </ProveedorDeHerramientas>
     </ProveedorDeLaEscala>
   );
 }

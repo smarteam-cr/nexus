@@ -14,6 +14,7 @@ import type { EnlaceDeCriterio } from "@/lib/escala/documento/requeridos";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeDimension, useEscala } from "./contexto";
+import { HerramientasDelCriterio, useHerramientas } from "./herramientas";
 import { PUNTO_DE_NIVEL } from "./niveles";
 import {
   BotonComentar,
@@ -37,6 +38,7 @@ interface Props {
 
 export default function Escalera({ datos, perfil, dimension, onElegirDimension, anclaAbierta }: Props) {
   const { conteos, abrirComentarios } = useEscala();
+  const { atenuado } = useHerramientas();
   const { area, niveles, capas } = datos;
   const dims = area.dimensiones;
   const i = Math.max(0, dims.findIndex((x) => x.id === dimension));
@@ -210,8 +212,10 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                           key={c.id}
                           id={`criterio-${c.id}`}
                           className={cn(
-                            "flex items-start gap-3 rounded-lg px-1 py-0.5",
+                            "flex items-start gap-3 rounded-lg px-1 py-0.5 transition-opacity",
                             anclaAbierta === c.id ? "bg-info-surface" : llegada === c.id && "bg-info-surface ring-2 ring-brand/25",
+                            // Con herramientas prendidas, lo que ninguna toca queda más claro.
+                            atenuado(c.id) && anclaAbierta !== c.id && "opacity-45 hover:opacity-100",
                           )}
                         >
                           <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-fg-muted" aria-hidden />
@@ -220,6 +224,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                               <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                             </p>
                             <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} className="mt-1.5" />
+                            <HerramientasDelCriterio criterio={c} conTexto className="mt-2" />
                             <EnlacesDelCriterio criterio={c} datos={datos} perfil={perfil} onIr={irAlCriterio} className="mt-2" />
                           </div>
                           <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => abrirComentarios(c.id)} etiqueta={`Comentarios de ${c.id}`} />

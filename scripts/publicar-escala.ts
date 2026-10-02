@@ -19,6 +19,9 @@
  * · Nada se publica si falla una prueba: las de Nexus (lo que la pantalla necesita, con la misma
  *   regla de perfil de la escala) y las de `pruebas_escala.py`, que son las del dueño de la escala.
  * · La prueba 5 (nada desaparece) se corre contra la versión PUBLICADA, no contra la del repo.
+ * · El mapa de herramientas (`mapa_de_herramientas.md`) se publica con la misma regla. Una versión
+ *   NUEVA del mapa no entra si nombra un criterio que la escala no tiene; una ya publicada no frena
+ *   una escala nueva: lo que quedó sin criterio se avisa y la pantalla lo ignora.
  *
  * Uso (PowerShell):
  *   npx tsx scripts/publicar-escala.ts                                         (en seco)
@@ -46,6 +49,9 @@ import { leerEncabezado, parsearEscala, todosLosCriterios } from "@/lib/escala/d
 import { ErrorDeFormato, type Escala } from "@/lib/escala/documento/tipos";
 import { tieneRequeridos, validarEscala } from "@/lib/escala/documento/validar";
 import { huellaDe } from "@/lib/escala/documento/huella";
+import { parsearMapaDeHerramientas } from "@/lib/escala/herramientas/parsear";
+import { problemasDelMapa } from "@/lib/escala/herramientas/validar";
+import type { MapaDeHerramientas } from "@/lib/escala/herramientas/tipos";
 
 const APPLY = resolverApply({ tablas: ["EscalaDocumento"] });
 const SIN_PYTHON = process.argv.includes("--sin-python");
@@ -195,6 +201,32 @@ async function main() {
           console.error("⛔ pruebas_escala.py no corrió la prueba 9: no está leyendo los criterios que requieren otro.");
           fallas.push("pruebas_escala.py (no lee los requeridos)");
         }
+      }
+    }
+
+    // 4b · El mapa de herramientas: que nombre criterios de la escala que queda publicada
+    titulo("Mapa de herramientas");
+    let mapa: MapaDeHerramientas | null = null;
+    try {
+      mapa = parsearMapaDeHerramientas(textos.herramientas);
+    } catch (e) {
+      console.error(`⛔ El lector no entiende el mapa de herramientas: ${e instanceof ErrorDeFormato ? e.message : String(e)}`);
+      fallas.push("mapa de herramientas (formato)");
+    }
+    if (mapa) {
+      const version = mapa.version;
+      console.log(`${version} · ${mapa.herramientas.map((h) => `${h.nombre}: ${Object.keys(h.aportes).length} criterios`).join(" · ")}`);
+      if (mapa.escala && mapa.escala !== escala.version) console.log(`  Se armó con la escala ${mapa.escala}; se mira contra la ${escala.version}.`);
+      const problemas = problemasDelMapa(mapa, escala);
+      const yaPublicado = publicadas.some((p) => p.documento === "herramientas" && p.version === version);
+      for (const p of problemas) console.log(`  ${yaPublicado ? "⚠" : "⛔"} ${p}`);
+      if (problemas.length && !yaPublicado) {
+        console.error("  Corrige el mapa (o sácale esos criterios) antes de publicarlo.");
+        fallas.push("mapa de herramientas (criterios que la escala no tiene)");
+      } else if (problemas.length) {
+        console.log("  Esa versión del mapa ya está publicada: esos criterios se ignoran en la pantalla hasta la próxima.");
+      } else {
+        console.log("PASA  Todos sus criterios existen en la escala");
       }
     }
 

@@ -4287,3 +4287,39 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   (las cuatro típicas de la guía, más desconfianza y otra) y cómo se respondió; sin respuesta,
   sigue abierta. Las dos son internas: no llegan a la propuesta, y al CSE le llegan en la columna
   interna del contexto. La guía de la próxima reunión retoma las objeciones que ya puso el cliente.
+
+## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
+
+**Contexto.** Smarteam se alió con Insider One. Elías pidió que la escala refleje lo que habilita una
+plataforma así sin dejar de ser neutral y, después, una vista interna para prender Insider, HubSpot o
+Smarteam y ver en qué criterios aplica cada una («no ponerlo explícitamente, sino en qué criterios…
+aplica una herramienta u otra»). Preguntó si era buena idea meter esa información en la escala, y
+encontró largos y difíciles los textos propuestos.
+
+**Decisiones.**
+
+- **En la escala, capacidades; en un mapa aparte, herramientas.** La 8.7.0 dice qué se ve en Óptimo
+  cuando la IA decide sola (qué recibe cada persona, la predicción por persona, los límites escritos,
+  el grupo de control) sin nombrar marcas. Las herramientas van en el mapa de herramientas, que nombra
+  criterios por su identificador. Si un criterio nombrara a Insider, el cliente leería «para ser Óptimo
+  hay que comprar Insider», y cada lanzamiento de un proveedor obligaría a una versión de la escala.
+- **Textos cortos.** Cada criterio nuevo o precisado mide lo mismo que el de hoy o poco más, sin
+  incisos ni listas de ejemplos; donde el criterio ya era largo, se cambia una frase en vez de sumar
+  otra. Un «requiere» va solo donde el criterio no se puede cumplir sin el otro, como define la escala.
+- **Lo habilita, no lo cumple.** Que una herramienta aparezca en un criterio quiere decir que trae lo
+  que hace falta para cumplirlo; el nivel lo sigue dando la evidencia. Solo se mapean Funcional,
+  Eficiente y Óptimo.
+- **El mapa se publica con la escala, con su propia versión.** Es un cuarto documento en la misma
+  tabla, sin SQL. Una versión nueva del mapa no entra si nombra un criterio que la escala no tiene; una
+  ya publicada no frena una escala nueva (lo que quedó sin criterio se avisa y la pantalla lo ignora).
+- **La marca va encima; el color sigue siendo el nivel.** Con herramientas prendidas, cada celda de la
+  rueda lleva un punto con la sigla de las que ayudan ahí, en vez de su número, y las demás se aclaran;
+  en la matriz y en la escalera, cada criterio dice qué aporta cada una. Pintar la celda con el color de
+  la herramienta la confundiría con un nivel: el celeste de Smarteam es casi el azul de Eficiente.
+- **Smarteam, con su catálogo.** Su capa marca lo que se crea, se integra, se ordena o se adopta, con el
+  nombre del servicio que lo entrega: implementación, rescate, CDP y activación, integraciones, RevOps,
+  migraciones, sitio web o SmartLoop.
+- **Interno.** Solo lo leen la sección de la escala y el script que la publica; una prueba impide que
+  lo importe cualquier otra parte (propuestas, handoffs, reportes, landings).
+
+**Pendiente.** Quién es el dueño del mapa: lo tiene que revisar cuando cambian HubSpot o Insider.

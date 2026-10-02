@@ -21,6 +21,7 @@ import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/esc
 import type { Dimension, Nivel } from "@/lib/escala/documento/tipos";
 import { ordenDeDependencias, relacionadosCon, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, useEscala } from "./contexto";
+import { HerramientasDelCriterio, useHerramientas } from "./herramientas";
 import { PUNTO_DE_NIVEL } from "./niveles";
 import { Contador, MetaDelCriterio, NoAplicanEnLaEdicion, NombreGeneral, TextoConPalabras } from "./piezas";
 
@@ -201,6 +202,7 @@ function CeldaDeNivel({
   relacion: Relacion;
 }) {
   const { conteos, abrirComentarios } = useEscala();
+  const { atenuado } = useHerramientas();
   const visibles = n.criterios.filter((c) => aplica(c, perfil));
   const ocultos = n.criterios.length - visibles.length;
   const tieneEnlaces = (id: string) => !!(datos.requeridos.requiere[id]?.length || datos.requeridos.loRequieren[id]?.length);
@@ -245,7 +247,7 @@ function CeldaDeNivel({
                   onKeyUp={conEnlaces ? (e) => e.key === "Tab" && relacion.alEntrar(c.id) : undefined}
                   onBlur={conEnlaces ? relacion.alSalir : undefined}
                   className={cn(
-                    "relative w-full rounded-md border px-1.5 py-1.5 text-left transition-colors hover:bg-surface-hover",
+                    "relative w-full rounded-md border px-1.5 py-1.5 text-left transition-[background-color,opacity] hover:bg-surface-hover",
                     anclaAbierta === c.id
                       ? "border-info-line bg-info-surface"
                       : requerido
@@ -253,6 +255,8 @@ function CeldaDeNivel({
                         : dependiente
                           ? "border-dashed border-line bg-surface-hover"
                           : "border-transparent",
+                    // Con herramientas prendidas, lo que ninguna toca queda más claro (al pasar el cursor, entero).
+                    atenuado(c.id) && anclaAbierta !== c.id && "opacity-45 hover:opacity-100",
                   )}
                 >
                   {/* El rótulo va SOBRE el borde, sin ocupar lugar: como una línea más hacía crecer la
@@ -276,6 +280,7 @@ function CeldaDeNivel({
                     <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} />
                     <Contador conteo={conteoDe(conteos, c.id)} />
                   </span>
+                  <HerramientasDelCriterio criterio={c} className="mt-1.5" />
                 </button>
               </li>
             );

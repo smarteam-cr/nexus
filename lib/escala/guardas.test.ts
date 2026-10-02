@@ -7,13 +7,17 @@
  *   · Los agentes no leen los comentarios: «por ahora, nada de análisis con IA» (Elías).
  *   · El SQL deja las tres tablas cerradas para `anon` (RLS + RESTRICTIVE).
  *   · FUENTE ÚNICA: ningún texto de la escala aparece escrito en el código de la sección. Todo sale
- *     del documento publicado; si alguien pega un criterio en un componente, esto se pone rojo.
+ *     del documento publicado; si alguien pega un criterio en un componente, esto se pone rojo. Lo
+ *     mismo con el mapa de herramientas.
+ *   · El mapa de herramientas es INTERNO: solo lo leen la sección de la escala y el script que la
+ *     publica. Nada que llegue al cliente (propuestas, handoffs, reportes, landings) lo importa.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { leerArchivoDeLaEscala } from "./documento/archivos";
 import { parsearEscala, todasLasDimensiones, todosLosCriterios } from "./documento/parsear";
+import { parsearMapaDeHerramientas } from "./herramientas/parsear";
 
 const RAIZ = process.cwd();
 
@@ -149,6 +153,11 @@ describe("fuente única: la escala no está escrita en el código", () => {
       ]),
     ]),
   ].filter((t) => t.length >= 40);
+  // El mapa de herramientas tampoco se escribe en el código: qué es cada una y lo que aporta.
+  const mapa = parsearMapaDeHerramientas(leerArchivoDeLaEscala("herramientas"));
+  textos.push(
+    ...[...mapa.intro, ...mapa.herramientas.flatMap((h) => [h.queEs, h.cuandoConviene ?? "", ...Object.values(h.aportes)])].filter((t) => t.length >= 40),
+  );
 
   const codigo = [
     ...archivos("lib/escala", (f) => /\.tsx?$/.test(f) && !f.endsWith(".test.ts") && !f.includes(".fixture.")),
@@ -174,5 +183,22 @@ describe("fuente única: la escala no está escrita en el código", () => {
       for (const t of textos) if (fuente.includes(t)) pegados.push(`${rel}: «${t.slice(0, 60)}…»`);
     }
     expect(pegados).toEqual([]);
+  });
+});
+
+describe("el mapa de herramientas es interno", () => {
+  /** Quién puede leerlo: la sección de la escala y el script que la publica. */
+  const PERMITIDOS = ["lib/escala", "components/escala", "app/(shell)/escala", "app/api/escala", "scripts/publicar-escala.ts"].map((p) => p.replace(/\//g, path.sep));
+  const fuentes = ["app", "lib", "components", "scripts"].flatMap((dir) => archivos(dir, (f) => /\.tsx?$/.test(f)));
+
+  it("hay fuentes que revisar", () => {
+    expect(fuentes.length).toBeGreaterThan(500);
+  });
+
+  it("nada fuera de la sección de la escala importa el mapa de herramientas", () => {
+    const fuera = fuentes
+      .filter((rel) => !PERMITIDOS.some((p) => rel === p || rel.startsWith(p + path.sep)))
+      .filter((rel) => /escala\/herramientas/.test(soloCodigo(leer(rel))));
+    expect(fuera).toEqual([]);
   });
 });

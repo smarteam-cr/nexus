@@ -10,6 +10,8 @@ import { perfilParaUrl, type Cierre, type Despues, type Perfil } from "./documen
 import { enlacesQueAplican, requeridosDe, type EnlaceDeCriterio } from "./documento/requeridos";
 import type { ComoCambiaLaEscala } from "./documento/manual";
 import { DOCUMENTOS_DE_LA_ESCALA, type DocumentoDeLaEscala } from "./documento/documentos";
+import { herramientasDeLaVista, type HerramientasDeLaVista } from "./herramientas/vista";
+import type { MapaDeHerramientas } from "./herramientas/tipos";
 import type {
   Area,
   CapaDeLaEscala,
@@ -85,6 +87,11 @@ export interface DatosDeLaVista {
    * con esto sabe cuáles no lo son: son de otra edición, o los sacó esta.
    */
   anclasDeOtraLectura: string[];
+  /**
+   * El mapa de herramientas publicado, reducido a esta área (null si no hay uno publicado): dónde
+   * ayuda cada herramienta. Interno, como toda la sección; la escala misma no nombra herramientas.
+   */
+  herramientas: HerramientasDeLaVista | null;
 }
 
 /** Por id de criterio: lo que requiere y quiénes lo requieren. Sin enlaces, el id no está. */
@@ -123,6 +130,8 @@ export function datosDeLaVista(args: {
   aviso: string | null;
   versiones: { documento: string; version: string }[];
   comoCambia?: ComoCambiaLaEscala | null;
+  /** El mapa de herramientas publicado (o null): baja solo lo de esta área. */
+  mapa?: MapaDeHerramientas | null;
 }): DatosDeLaVista {
   const { escala, area } = args;
   const prefijo = `${area.id}.`;
@@ -168,6 +177,7 @@ export function datosDeLaVista(args: {
       : null,
     requeridos: requeridosDelArea(escala, area),
     anclasDeOtraLectura: anclasDeOtraLectura(escala, area),
+    herramientas: herramientasDeLaVista(args.mapa ?? null, area),
   };
 }
 
@@ -368,6 +378,8 @@ export interface EstadoEnLaUrl {
   celda?: string | null;
   /** El identificador con el panel de comentarios abierto. */
   ancla?: string | null;
+  /** Las herramientas prendidas en el filtro (`?h=insider,hubspot`). */
+  herramientas?: readonly string[];
 }
 
 /**
@@ -384,6 +396,7 @@ export function consultaDeLaEscala(e: EstadoEnLaUrl): string {
   if (u.despues) p.set("despues", u.despues);
   if (e.vista === "dimension" && e.dimension) p.set("dim", e.dimension);
   if (e.vista === "mapa" && e.celda) p.set("celda", e.celda);
+  if (e.herramientas?.length) p.set("h", e.herramientas.join(","));
   if (e.ancla) p.set("c", e.ancla);
   const qs = p.toString();
   return qs ? `?${qs}` : "";

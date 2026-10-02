@@ -1,6 +1,6 @@
 /**
  * app/(shell)/escala/[area]/page.tsx — un área de la Escala de Rendimiento: matriz, por dimensión o
- * mapa, con el filtro de perfil y los comentarios del equipo.
+ * mapa, con los filtros de perfil y de herramientas y los comentarios del equipo.
  *
  * La escala se lee de la versión PUBLICADA en Nexus (nunca del repo: la imagen no lleva .md) y se
  * baja al navegador solo el área que se mira. Es interna: la ve todo el equipo, nadie de afuera.
@@ -16,6 +16,8 @@ import { comentariosDisponibles, contarPorAncla, contarPorArea } from "@/lib/esc
 import { esResponsable } from "@/lib/escala/comentarios/reglas";
 import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { conteosQueSeVen, datosDeLaVista, vistaDesdeUrl } from "@/lib/escala/vista";
+import { leerMapaDeHerramientasVigente } from "@/lib/escala/herramientas/vigente";
+import { herramientasDesdeUrl } from "@/lib/escala/herramientas/vista";
 import VistaDeLaEscala from "@/components/escala/VistaDeLaEscala";
 import EscalaSinPublicar from "@/components/escala/EscalaSinPublicar";
 
@@ -50,11 +52,12 @@ export default async function PaginaDeLaEscala({
   const area = escala.areas.find((a) => a.slug === slug);
   if (!area) redirect(`/escala/${escala.areas[0].slug}`);
 
-  const [conteos, porArea, versiones, manual] = await Promise.all([
+  const [conteos, porArea, versiones, manual, mapa] = await Promise.all([
     contarPorAncla(area.id),
     contarPorArea(),
     versionesPublicadas(),
     leerDocumentoPublicado("manual"),
+    leerMapaDeHerramientasVigente(),
   ]);
   const abiertosEnTotal = Object.values(porArea).reduce((s, c) => s + c.abiertos, 0);
 
@@ -72,6 +75,7 @@ export default async function PaginaDeLaEscala({
           aviso: vigente.aviso,
           versiones,
           comoCambia: leerComoCambia(manual?.texto),
+          mapa,
         })}
         conteos={conteosQueSeVen(conteos, escala, area)}
         porArea={porArea}
@@ -85,6 +89,7 @@ export default async function PaginaDeLaEscala({
           dimension: uno(sp, "dim"),
           celda: uno(sp, "celda"),
           ancla: uno(sp, "c"),
+          herramientas: herramientasDesdeUrl(uno(sp, "h")),
         }}
       />
     </div>

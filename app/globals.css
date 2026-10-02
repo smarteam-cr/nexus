@@ -130,6 +130,19 @@
   --color-info-fg:           #ffffff;
   --color-warning:           #f59e0b;  /* amber-500 */
   --color-warning-fg:        #ffffff;
+
+  /* ── Las marcas de las herramientas en la escala (mapa de herramientas) ─────
+   *  Un color por herramienta, el mismo en los dos modos. Nunca pintan una celda:
+   *  la celda lleva el color de su nivel, y la herramienta va encima como un punto
+   *  con su sigla en blanco. Los nombres son los que admite el documento
+   *  (lib/escala/herramientas/tipos.ts).
+   */
+  --color-herramienta-celeste:  #0ea5e9;  /* sky-500 */
+  --color-herramienta-naranja:  #ea580c;  /* orange-600 */
+  --color-herramienta-fucsia:   #c026d3;  /* fuchsia-600 */
+  --color-herramienta-turquesa: #0d9488;  /* teal-600 */
+  --color-herramienta-lima:     #65a30d;  /* lime-600 */
+  --color-herramienta-fg:       #ffffff;  /* la sigla sobre la marca */
 }
 
 html {

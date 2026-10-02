@@ -24,13 +24,18 @@
  *   · ▶ en el centro recorre la escala de Deficiente a Óptimo, un nivel a la vez.
  *   · Con el teclado: ←/→ cambian de dimensión, ↑/↓ de nivel, Enter abre los comentarios, Escape
  *     vuelve al área.
+ *   · Con herramientas prendidas (el filtro de arriba), cada celda lleva la marca de las que ayudan
+ *     ahí, en vez de su número, y las celdas donde no ayuda ninguna se aclaran. ⛔ La marca va
+ *     encima: el color de la celda sigue siendo el de su nivel.
  */
 import { createElement, useEffect, useId, useMemo, useRef, useState, type SVGProps } from "react";
 import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
 import { LETRAS, type ClaveDeCapa, type Dimension, type Letra, type Nivel } from "@/lib/escala/documento/tipos";
+import type { Herramienta } from "@/lib/escala/herramientas/tipos";
 import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, conteoDeDimension, useEscala } from "./contexto";
+import { COLOR_DE_HERRAMIENTA, HerramientasDelCriterio, MarcaDeHerramienta, useHerramientas } from "./herramientas";
 import { COLOR_DE_NIVEL, PUNTO_DE_NIVEL } from "./niveles";
 import {
   BotonComentar,
@@ -355,6 +360,26 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const maximo = Math.max(1, ...[...valores.values()].map((v) => v.valor));
   const angulos = useMemo(() => porciones(dims), [dims]);
 
+  /**
+   * Con herramientas prendidas: las que ayudan en cada celda (en algún criterio que aplica al perfil)
+   * y en cuántos criterios. Una celda sin ninguna se aclara.
+   */
+  const { hayFiltro, prendidas } = useHerramientas();
+  const marcasPorCelda = useMemo(() => {
+    const out = new Map<string, { herramienta: Herramienta; cuantos: number }[]>();
+    if (!hayFiltro) return out;
+    for (const d of dims) {
+      for (const nv of d.niveles) {
+        const visibles = nv.criterios.filter((c) => aplica(c, perfil));
+        const marcas = prendidas
+          .map((h) => ({ herramienta: h, cuantos: visibles.filter((c) => h.aportes[c.id] !== undefined).length }))
+          .filter((m) => m.cuantos > 0);
+        if (marcas.length) out.set(nv.id, marcas);
+      }
+    }
+    return out;
+  }, [dims, perfil, hayFiltro, prendidas]);
+
   /** «Qué se trabaja primero»: el orden de cada capa en esta área, con el cierre elegido. */
   const ordenes = useMemo(
     () => new Map(capas.map((c) => [c.clave, ordenDeDependencias(datos.dependencias, area.nombre, c.nombre, perfil.cierre)])),
@@ -567,9 +592,27 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         <p className="mt-0.5 line-clamp-2 leading-tight text-fg-secondary" style={{ fontSize: 18 }}>
           {focoDim.nombre}
         </p>
-        <p className="mt-1 text-fg-muted" style={{ fontSize: 15 }}>
-          {dimensionAplica(focoDim, perfil) || capa === "perfil" ? enPalabras(valores.get(nv.id)!) : "no aplica a este perfil"}
-        </p>
+        {hayFiltro && dimensionAplica(focoDim, perfil) ? (
+          // Con herramientas prendidas: cuáles ayudan acá y en cuántos criterios.
+          (marcasPorCelda.get(nv.id)?.length ?? 0) > 0 ? (
+            <p className="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-semibold text-fg-secondary" style={{ fontSize: 15 }}>
+              {marcasPorCelda.get(nv.id)!.map((m) => (
+                <span key={m.herramienta.clave} className="inline-flex items-center gap-1" title={m.herramienta.nombre}>
+                  <MarcaDeHerramienta herramienta={m.herramienta} />
+                  {m.cuantos}
+                </span>
+              ))}
+            </p>
+          ) : (
+            <p className="mt-1 text-fg-muted" style={{ fontSize: 14 }}>
+              ninguna ayuda acá
+            </p>
+          )
+        ) : (
+          <p className="mt-1 text-fg-muted" style={{ fontSize: 15 }}>
+            {dimensionAplica(focoDim, perfil) || capa === "perfil" ? enPalabras(valores.get(nv.id)!) : "no aplica a este perfil"}
+          </p>
+        )}
       </>
     );
   })();
@@ -605,7 +648,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           </GrupoDeControl>
         </div>
 
-        <LeyendaDeLaRueda capa={capa} nombreNivel={nombreNivel} conOrden={hayOrden} conNoAplica={algunaNoAplica} />
+        <LeyendaDeLaRueda capa={capa} nombreNivel={nombreNivel} conOrden={hayOrden} conNoAplica={algunaNoAplica} herramientas={hayFiltro ? prendidas : []} />
 
         <div className="relative mt-2" onMouseLeave={soltarEncima}>
           <svg
@@ -750,7 +793,10 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   // Relacionada con la celda en foco por sus requeridos: se marca con un borde.
                   const requerida = relacionDelFoco.requeridas.has(nv.id);
                   const dependiente = relacionDelFoco.dependientes.has(nv.id);
-                  const luz = luzDe(d, k);
+                  // Las herramientas prendidas que ayudan acá. Si hay filtro y no ayuda ninguna, la celda
+                  // se aclara (salvo la elegida, que se sigue leyendo entera).
+                  const marcas = rayada ? [] : (marcasPorCelda.get(nv.id) ?? []);
+                  const luz: Luz = hayFiltro && marcas.length === 0 && !elegido ? "apagada" : luzDe(d, k);
                   return (
                     <g
                       key={nv.id}
@@ -794,7 +840,22 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                             transition: "fill 240ms ease, fill-opacity 240ms ease",
                           }}
                         />
-                        {v.valor > 0 && !rayada && (
+                        {/* Con herramientas prendidas, la marca de cada una en vez del número: un punto de su
+                            color con su sigla, en fila sobre el arco de la celda. */}
+                        {marcas.map((m, j) => {
+                          const radio = (r0 + r1) / 2;
+                          const paso = (31 / radio) * (180 / Math.PI);
+                          const [mx, my] = polar(medio + (j - (marcas.length - 1) / 2) * paso, radio);
+                          return (
+                            <g key={m.herramienta.clave} transform={`translate(${f(mx)} ${f(my)})`}>
+                              <circle r={14} style={{ fill: COLOR_DE_HERRAMIENTA[m.herramienta.color], stroke: "var(--color-surface)", strokeWidth: 2.5 }} />
+                              <text y={5.5} style={{ fill: "var(--color-herramienta-fg)", fontSize: 16, fontWeight: 800, textAnchor: "middle" }}>
+                                {m.herramienta.sigla}
+                              </text>
+                            </g>
+                          );
+                        })}
+                        {v.valor > 0 && !rayada && !hayFiltro && (
                           <text
                             x={f(tx)}
                             y={f(ty + 6)}
@@ -1043,13 +1104,17 @@ function LeyendaDeLaRueda({
   nombreNivel,
   conOrden,
   conNoAplica,
+  herramientas,
 }: {
   capa: CapaDeDatos;
   nombreNivel: (l: Letra) => string;
   conOrden: boolean;
   conNoAplica: boolean;
+  /** Las herramientas prendidas en el filtro (vacío: no hay filtro). */
+  herramientas: Herramienta[];
 }) {
   const titulo = "mb-1.5 text-2xs font-bold uppercase tracking-wide text-fg-muted";
+  const conHerramientas = herramientas.length > 0;
   return (
     // Abierta de entrada; quien ya la conoce la cierra (y vuelve a abrirse al recargar: es ayuda, no un ajuste).
     <details open className="group mt-3 rounded-xl border border-line text-xs text-fg-secondary">
@@ -1059,7 +1124,28 @@ function LeyendaDeLaRueda({
         </svg>
         Cómo leer la rueda
       </summary>
-      <div className="grid gap-x-6 gap-y-3 border-t border-line px-4 py-3 md:grid-cols-3">
+      <div className={cn("grid gap-x-6 gap-y-3 border-t border-line px-4 py-3", conHerramientas ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3")}>
+        {conHerramientas && (
+          <div>
+            <p className={titulo}>Herramientas</p>
+            <ul className="space-y-1">
+              {herramientas.map((h) => (
+                <ItemDeLeyenda key={h.clave} muestra={<MarcaDeHerramienta herramienta={h} />}>
+                  {h.nombre} ayuda en esa celda
+                </ItemDeLeyenda>
+              ))}
+              <ItemDeLeyenda
+                muestra={
+                  <span className="flex gap-0.5" aria-hidden>
+                    <span className={cn("h-3.5 w-2.5 rounded-sm opacity-30", PUNTO_DE_NIVEL.F)} />
+                  </span>
+                }
+              >
+                Más clara: no ayuda ninguna de las elegidas
+              </ItemDeLeyenda>
+            </ul>
+          </div>
+        )}
         <div>
           <p className={titulo}>El color es el nivel</p>
           <ul className="space-y-1">
@@ -1080,7 +1166,8 @@ function LeyendaDeLaRueda({
                 </span>
               }
             >
-              Más intenso, más {QUE_CUENTA[capa]}; el número dice cuántos
+              Más intenso, más {QUE_CUENTA[capa]}
+              {conHerramientas ? "" : "; el número dice cuántos"}
             </ItemDeLeyenda>
             {capa === "comentarios" && (
               <ItemDeLeyenda muestra={<span className="h-3.5 w-3.5 rounded-sm bg-fg-muted" aria-hidden />}>Gris: sus comentarios ya se cerraron</ItemDeLeyenda>
@@ -1364,6 +1451,7 @@ function DetalleDeCelda({
   caja: string;
 }) {
   const { conteos, abrirComentarios } = useEscala();
+  const { atenuado } = useHerramientas();
   const nombre = datos.niveles.find((x) => x.letra === nv.letra)!.nombre;
   const visibles = nv.criterios.filter((c) => aplica(c, perfil));
   const ocultos = nv.criterios.length - visibles.length;
@@ -1390,12 +1478,13 @@ function DetalleDeCelda({
       {visibles.length > 0 && (
         <ul className="mt-3 divide-y divide-line border-y border-line">
           {visibles.map((c) => (
-            <li key={c.id} className="flex items-start gap-2 py-2">
+            <li key={c.id} className={cn("flex items-start gap-2 py-2 transition-opacity", atenuado(c.id) && "opacity-45 hover:opacity-100")}>
               <div className="min-w-0 flex-1">
                 <p className="text-sm leading-snug text-fg">
                   <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                 </p>
                 <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} className="mt-1" />
+                <HerramientasDelCriterio criterio={c} conTexto className="mt-1.5" />
                 {/* Lo que requiere y quiénes lo requieren: tocar uno lleva a SU celda de la rueda. */}
                 <EnlacesDelCriterio
                   criterio={c}
