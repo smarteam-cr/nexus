@@ -4258,3 +4258,14 @@ objeciones, y ver de un vistazo qué le falta para proponer.
 - **Lo que no quedó grabado se suma a mano** (pegar o subir) y el agente lo lee como una transcripción.
   Se guarda solo el texto (tabla `ExploracionDocumento`); el archivo sube directo a Supabase, como toda
   subida de la app, y se borra apenas se le saca el texto.
+- **«Llegaron por el test» se lee de la NOTA que deja el test, no del contacto** (2026-10-01, noche).
+  La propiedad `diag_estado` existe en 41 contactos; la nota («📊 Diagnóstico de Rendimiento» o «⏳
+  Diagnóstico SIN TERMINAR»), en 64 fichas desde que arrancó el test (12 de junio de 2026). La lista
+  pasó de 4 o 5 empresas a 46: todas las que lo hicieron desde ese día, la más reciente arriba, y las
+  que lo dejaron a medias aparte y plegadas (leads más fríos). Las 142 notas completas traen el enlace
+  del resultado, así que la preparación también lo saca de ahí: los tests de junio y julio no lo dejaron
+  en el contacto, y sin eso arrancaban como si no hubiera test (`lib/exploraciones/llegadas.ts`).
+- **Los clientes también entran, marcados** (decisión de Elías: «al final de cuentas son exploraciones
+  que se deben hacer»). Quedan fuera las pruebas del equipo (correos de Smarteam, dominios y nombres
+  de prueba), HubSpot (aliado), lo que Nexus marca `INTERNO` o `ALIADO` y lo que ya tiene exploración.
+  Una prueba que la regla no reconozca se borra en HubSpot: no hay botón para esconderla en Nexus.

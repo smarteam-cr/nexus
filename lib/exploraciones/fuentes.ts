@@ -26,7 +26,8 @@ import {
   leerActividad,
   leerContactos,
   leerEmpresa,
-  testsDeLosContactos,
+  enlacesDeLosContactos,
+  testsDeLosEnlaces,
   type ActividadDeLaEmpresa,
   type ContactoDeHubspot,
   type ResultadoDeReunion,
@@ -181,8 +182,13 @@ export async function leerFuentes(opts: {
     });
   }
 
-  // Solo el test de quien es de esta empresa: el de un contacto cuya empresa principal es otra no es de acá.
-  const tests = testsDeLosContactos(contactos.filter((c) => !c.empresaId || c.empresaId === opts.companyId));
+  /* Solo el test de quien es de esta empresa: el de un contacto cuya empresa principal es otra no es de acá.
+     Y el de las notas que dejó el test (ya filtradas por empresa en leerActividad): los tests de junio y
+     julio de 2026 dejaron la nota pero no la dirección en el contacto. */
+  const tests = testsDeLosEnlaces([
+    ...enlacesDeLosContactos(contactos.filter((c) => !c.empresaId || c.empresaId === opts.companyId)),
+    ...(actividad.enlacesDelTest ?? []),
+  ]);
   tests.forEach((t, i) => {
     const area = opts.escala.areas.find((a) => a.id === t.resultado.areaId)?.nombre ?? t.resultado.areaId;
     fuentes.push({
