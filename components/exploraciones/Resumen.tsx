@@ -125,6 +125,8 @@ export default function Resumen({
 }) {
   const { pendientesPara, puedeEditar, guardando, cambiar, irA } = useLienzo();
   const [abierta, setAbierta] = useState<ClaveDeCasilla | null>(null);
+  // El pie del cajón: ahí van «Guardar» y «Cancelar», fijos abajo aunque el formulario sea largo.
+  const [pie, setPie] = useState<HTMLDivElement | null>(null);
   const contar = (clave: ClaveDeCasilla) => pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).length;
 
   return (
@@ -164,8 +166,15 @@ export default function Resumen({
           />
         )}
 
-        <Drawer open={abierta !== null} onClose={() => setAbierta(null)} title={abierta ? definicionDe(abierta).etiqueta : undefined} description={abierta ? definicionDe(abierta).ayuda : undefined} size="lg">
-          {abierta && <Casilla key={abierta} clave={abierta} sinTitulo editarDeEntrada onListo={() => setAbierta(null)} />}
+        <Drawer
+          open={abierta !== null}
+          onClose={() => setAbierta(null)}
+          title={abierta ? definicionDe(abierta).etiqueta : undefined}
+          description={abierta ? definicionDe(abierta).ayuda : undefined}
+          size="lg"
+          footer={puedeEditar ? <div ref={setPie} className="flex items-center gap-2" /> : undefined}
+        >
+          {abierta && <Casilla key={abierta} clave={abierta} sinTitulo editarDeEntrada pie={pie} onListo={() => setAbierta(null)} />}
         </Drawer>
       </section>
 

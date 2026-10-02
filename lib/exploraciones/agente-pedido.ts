@@ -155,7 +155,7 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
     personas: {
       type: "array",
       description:
-        "Solo personas del CLIENTE, nunca del equipo de Smarteam. El papel (firma, decide) solo si la fuente lo dice: el cargo no alcanza. Si solo se sabe el cargo, «influye».",
+        "Solo personas del CLIENTE, nunca del equipo de Smarteam. El papel (firma = quien aprueba la compra y el presupuesto; decide) solo si la fuente lo dice: el cargo no alcanza. Si solo se sabe el cargo, «influye».",
       items: {
         type: "object",
         properties: {
@@ -329,7 +329,7 @@ function sistema(ctx: ContextoDelPedido): string {
 - niveles: el nivel de cada dimensión que la conversación deja ver, por mejor ajuste contra las descripciones, con la frase del cliente y su porQue en lenguaje llano.
 - metas (en cifras si las dijo), planes, retos (con su dimensión), consecuencias de no actuar, implicaciones de lograrlo, presupuesto.
 - tiempos: los plazos del CLIENTE (para cuándo necesita el resultado, cuándo decide, cuándo renueva). La próxima reunión no va acá: es el siguientePaso.
-- personas: quién firma, quién decide, quién influye y a quién más le afecta.
+- personas: quién aprueba, quién decide, quién influye y a quién más le afecta.
 - portal: lo que se vio del portal, si se miró.
 - falta: de lo que pide Funcional en las dimensiones elegidas, qué tiene y qué no.
 - noExplorado: lo que el cliente dijo y nadie siguió (qué dijo y qué preguntar la próxima vez). Es de lo más valioso: búscalo.

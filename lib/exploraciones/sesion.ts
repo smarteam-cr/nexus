@@ -171,10 +171,10 @@ export const REUNIONES: readonly Reunion[] = [
         id: "r2-decision",
         titulo: "Presupuesto y decisión",
         minutos: 10,
-        objetivo: "Rango de inversión, quién firma, a quién más afecta, cómo y cuándo deciden.",
+        objetivo: "Rango de inversión, quién aprueba, a quién más afecta, cómo y cuándo deciden.",
         preguntas: [
           "¿Tienen un rango de inversión pensado para esto, o contra qué lo van a comparar?",
-          "¿Quién firma? ¿Cómo deciden y para cuándo?",
+          "¿Quién da el visto bueno final? ¿Cómo deciden y para cuándo?",
           "Además de ti, ¿a quién le cambia el trabajo si esto sale?",
           "¿Quieres que te acompañemos a crecer después, o te alcanza con una buena implementación?",
         ],

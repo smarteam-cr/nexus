@@ -4,10 +4,11 @@
  * Casilla — una casilla del lienzo: lo confirmado, el editor y lo que propuso el agente para ella.
  *
  * Se edita entera («Editar» → «Guardar»): una casilla es una idea completa (las metas, quién decide)
- * y guardarla a medias en cada tecla dejaría versiones raras en la historia. Lo propuesto se usa o
- * se descarta desde la propia casilla.
+ * y guardarla a medias en cada tecla dejaría versiones raras en la historia. En una lista, cada ítem
+ * se ve como una tarjeta y se abre de a uno. Lo propuesto se usa o se descarta desde la propia casilla.
  */
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Badge, Button, Field, Input, Segmentado, Select, Textarea } from "@/components/ui";
 import {
   CLASES_DE_OBJECION,
@@ -15,6 +16,7 @@ import {
   ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_ROL,
   metaEnCifras,
+  QUE_HACE_EL_ROL,
   ROLES_EN_LA_DECISION,
   type Apertura,
   type ClaveDeCasilla,
@@ -150,103 +152,199 @@ function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown }) {
 
 // ── Editores ──────────────────────────────────────────────────────────────────
 //
-// Cada campo con su ETIQUETA a la vista y a todo el ancho (pedido de Elías, 2026-10-01: los
-// placeholders cortados no se leían y no había espacio para ver lo escrito). Cada ítem de una lista
-// va en su propia tarjeta, con los campos uno debajo del otro.
+// Pedido de Elías (2026-10-02): «agregar metas debe ser más sencillo; lo propuesto por el agente se ve
+// mejor». Una lista no se edita como un formulario gigante: cada ítem se ve como una tarjeta (igual
+// que lo propuesto) con «Editar» y «Quitar», y solo el que se está editando abre sus campos. Los
+// textos crecen con lo escrito: nada queda cortado detrás de una barra de desplazamiento.
 
-/** La tarjeta de un ítem de lista: sus campos y «Quitar» arriba a la derecha. */
-function Item({ children, onQuitar, titulo }: { children: React.ReactNode; onQuitar: () => void; titulo: string }) {
+/** Un cuadro de texto que crece con lo escrito. */
+function TextoQueCrece({ value, onChange, minFilas = 2, ...resto }: { value: string; onChange: (v: string) => void; minFilas?: number; placeholder?: string; "aria-label"?: string; autoFocus?: boolean }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
   return (
-    <div className="space-y-3 rounded-lg border border-line p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-fg-secondary">{titulo}</p>
-        <button type="button" className="text-xs text-fg-muted underline-offset-2 hover:text-fg hover:underline" onClick={onQuitar}>
-          Quitar
-        </button>
-      </div>
-      {children}
-    </div>
+    <Textarea
+      ref={ref}
+      rows={minFilas}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="overflow-hidden leading-relaxed"
+      {...resto}
+    />
   );
 }
 
-function Agregar({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <Button size="xs" variant="ghost" onClick={onClick}>
-      {children}
-    </Button>
-  );
-}
+/**
+ * Una lista editable de a un ítem. `abierto` es el que muestra sus campos; los demás se ven como
+ * tarjetas. «Listo» lo cierra (y lo quita si quedó vacío); «Agregar» suma uno vacío, ya abierto.
+ */
+function EditorDeItems<T>({
+  items,
+  onCambio,
+  nuevo,
+  estaVacio,
+  verItem,
+  campos,
+  agregar,
+}: {
+  items: T[];
+  onCambio: (v: T[]) => void;
+  nuevo: () => T;
+  estaVacio: (x: T) => boolean;
+  verItem: (x: T) => React.ReactNode;
+  campos: (x: T, set: (cambio: Partial<T>) => void) => React.ReactNode;
+  agregar: string;
+}) {
+  // Sin nada todavía, el primero ya está abierto: tocar la tarjeta es querer llenarla.
+  const [abierto, setAbierto] = useState<number | null>(items.length === 0 ? 0 : null);
+  const lista = items.length === 0 && abierto === 0 ? [nuevo()] : items;
 
-function EditorDeLista({ valor, onCambio }: { valor: string[]; onCambio: (v: string[]) => void }) {
-  const filas = valor.length ? valor : [""];
+  const set = (i: number, cambio: Partial<T>) => onCambio(lista.map((x, j) => (j === i ? { ...x, ...cambio } : x)));
+  const quitar = (i: number) => {
+    onCambio(lista.filter((_, j) => j !== i));
+    setAbierto(null);
+  };
+  const cerrar = (i: number) => {
+    if (estaVacio(lista[i])) onCambio(lista.filter((_, j) => j !== i));
+    setAbierto(null);
+  };
+
   return (
     <div className="space-y-2">
-      {filas.map((t, i) => (
-        <div key={i} className="flex items-start gap-2">
-          <Textarea rows={2} value={t} aria-label={`Punto ${i + 1}`} onChange={(e) => onCambio(filas.map((x, j) => (j === i ? e.target.value : x)))} />
-          <button
-            type="button"
-            className="mt-2 flex-shrink-0 text-xs text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-            onClick={() => onCambio(filas.filter((_, j) => j !== i))}
-          >
-            Quitar
-          </button>
-        </div>
-      ))}
-      <Agregar onClick={() => onCambio([...filas, ""])}>Agregar otro punto</Agregar>
+      {lista.map((x, i) =>
+        i === abierto ? (
+          <div key={i} className="space-y-3 rounded-xl border border-brand/40 bg-surface p-4 shadow-sm">
+            {campos(x, (cambio) => set(i, cambio))}
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <button type="button" className="text-xs text-fg-muted hover:text-fg hover:underline" onClick={() => quitar(i)}>
+                Quitar
+              </button>
+              <Button size="sm" variant="secondary" onClick={() => cerrar(i)}>
+                Listo
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div key={i} className="flex items-start justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+            <div className="min-w-0 flex-1 text-sm">{verItem(x)}</div>
+            <div className="flex flex-shrink-0 items-center gap-3 text-xs">
+              <button type="button" className="font-medium text-brand-light hover:underline" onClick={() => setAbierto(i)}>
+                Editar
+              </button>
+              <button type="button" className="text-fg-muted hover:text-fg hover:underline" onClick={() => quitar(i)}>
+                Quitar
+              </button>
+            </div>
+          </div>
+        ),
+      )}
+      {abierto === null && (
+        <button
+          type="button"
+          className="w-full rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm font-medium text-brand-light transition-colors hover:bg-surface-hover"
+          onClick={() => {
+            onCambio([...lista, nuevo()]);
+            setAbierto(lista.length);
+          }}
+        >
+          + {agregar}
+        </button>
+      )}
     </div>
   );
 }
+
+const vacioDeTexto = (s: string | undefined) => !s || !s.trim();
 
 function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borrador: unknown; setBorrador: (v: unknown) => void }) {
   const { escala, exp } = useLienzo();
   const tipo = definicionDe(clave).tipo;
   const dimsEnJuego = escala.areas.filter((a) => exp.estado.areas.includes(a.id)).flatMap((a) => a.dimensiones.filter((d) => d.aplica));
+  const nombreDim = (id?: string) => (id ? dimsEnJuego.find((d) => d.id === id)?.nombre : undefined);
 
   switch (tipo) {
     case "texto":
-      return <Textarea rows={6} aria-label={definicionDe(clave).etiqueta} value={(borrador as string) ?? ""} onChange={(e) => setBorrador(e.target.value)} />;
-    case "lista":
-      return <EditorDeLista valor={(borrador as string[]) ?? []} onCambio={setBorrador} />;
-    case "metas": {
-      const metas = ((borrador as Meta[]) ?? []).length ? (borrador as Meta[]) : [{ que: "" }];
-      const set = (i: number, campo: keyof Meta, v: string) => setBorrador(metas.map((m, j) => (j === i ? { ...m, [campo]: v } : m)));
+      return <TextoQueCrece minFilas={5} aria-label={definicionDe(clave).etiqueta} value={(borrador as string) ?? ""} onChange={setBorrador} />;
+    case "lista": {
+      type Fila = { t: string };
+      const filas = ((borrador as string[]) ?? []).map((t) => ({ t }));
       return (
-        <div className="space-y-3">
-          {metas.map((m, i) => (
-            <Item key={i} titulo={`Meta ${i + 1}`} onQuitar={() => setBorrador(metas.filter((_, j) => j !== i))}>
-              <Field label="Qué quiere lograr">
-                <Textarea rows={2} value={m.que} placeholder="Por ejemplo: cerrar más de lo que entra" onChange={(e) => set(i, "que", e.target.value)} />
-              </Field>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="De cuánto parte">
-                  <Input value={m.actual ?? ""} placeholder="Hoy: 4 de cada 10" onChange={(e) => set(i, "actual", e.target.value)} />
-                </Field>
-                <Field label="A cuánto quiere llegar">
-                  <Input value={m.objetivo ?? ""} placeholder="7 de cada 10" onChange={(e) => set(i, "objetivo", e.target.value)} />
-                </Field>
-                <Field label="Para cuándo">
-                  <Input value={m.para ?? ""} placeholder="Diciembre" onChange={(e) => set(i, "para", e.target.value)} />
-                </Field>
-              </div>
-            </Item>
-          ))}
-          <Agregar onClick={() => setBorrador([...metas, { que: "" }])}>Agregar otra meta</Agregar>
-        </div>
+        <EditorDeItems<Fila>
+          items={filas}
+          onCambio={(v) => setBorrador(v.map((f) => f.t))}
+          nuevo={() => ({ t: "" })}
+          estaVacio={(f) => vacioDeTexto(f.t)}
+          verItem={(f) => <p className="text-fg">{f.t}</p>}
+          campos={(f, set) => <TextoQueCrece autoFocus aria-label={definicionDe(clave).etiqueta} value={f.t} onChange={(t) => set({ t })} />}
+          agregar="Agregar otro"
+        />
       );
     }
-    case "retos": {
-      const retos = ((borrador as Reto[]) ?? []).length ? (borrador as Reto[]) : [{ texto: "" }];
-      const set = (i: number, cambio: Partial<Reto>) => setBorrador(retos.map((x, j) => (j === i ? { ...x, ...cambio } : x)));
+    case "metas":
       return (
-        <div className="space-y-3">
-          {retos.map((r, i) => (
-            <Item key={i} titulo={`Reto ${i + 1}`} onQuitar={() => setBorrador(retos.filter((_, j) => j !== i))}>
+        <EditorDeItems<Meta>
+          items={(borrador as Meta[]) ?? []}
+          onCambio={setBorrador}
+          nuevo={() => ({ que: "" })}
+          estaVacio={(m) => vacioDeTexto(m.que)}
+          verItem={(m) => (
+            <div className="space-y-1">
+              <p className="font-medium text-fg">{m.que}</p>
+              {(m.actual || m.objetivo || m.para) && (
+                <p className="text-xs text-fg-secondary">
+                  {[m.actual && `Hoy: ${m.actual}`, m.objetivo && `Meta: ${m.objetivo}`, m.para && `Para: ${m.para}`].filter(Boolean).join(" · ")}
+                </p>
+              )}
+              <Badge variant={metaEnCifras(m) ? "success" : "warning"} size="xs">
+                {metaEnCifras(m) ? "En cifras" : "Sin cifra"}
+              </Badge>
+            </div>
+          )}
+          campos={(m, set) => (
+            <>
+              <Field label="Qué quiere lograr">
+                <TextoQueCrece autoFocus value={m.que} onChange={(que) => set({ que })} placeholder="Cerrar más de lo que entra" />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Hoy">
+                  <Input value={m.actual ?? ""} onChange={(e) => set({ actual: e.target.value })} placeholder="4 de cada 10" />
+                </Field>
+                <Field label="Meta">
+                  <Input value={m.objetivo ?? ""} onChange={(e) => set({ objetivo: e.target.value })} placeholder="7 de cada 10" />
+                </Field>
+                <Field label="Para cuándo">
+                  <Input value={m.para ?? ""} onChange={(e) => set({ para: e.target.value })} placeholder="Diciembre" />
+                </Field>
+              </div>
+            </>
+          )}
+          agregar="Agregar una meta"
+        />
+      );
+    case "retos":
+      return (
+        <EditorDeItems<Reto>
+          items={(borrador as Reto[]) ?? []}
+          onCambio={setBorrador}
+          nuevo={() => ({ texto: "" })}
+          estaVacio={(r) => vacioDeTexto(r.texto)}
+          verItem={(r) => (
+            <div className="space-y-1">
+              <p className="text-fg">{r.texto}</p>
+              {nombreDim(r.dimensionId) && <p className="text-xs text-fg-muted">{nombreDim(r.dimensionId)}</p>}
+            </div>
+          )}
+          campos={(r, set) => (
+            <>
               <Field label="Qué los frena">
-                <Textarea rows={2} value={r.texto} onChange={(e) => set(i, { texto: e.target.value })} />
+                <TextoQueCrece autoFocus value={r.texto} onChange={(texto) => set({ texto })} />
               </Field>
               <Field label="Dimensión de la escala" hint="Opcional: de qué parte de la operación sale.">
-                <Select value={r.dimensionId ?? ""} onChange={(e) => set(i, { dimensionId: e.target.value || undefined })}>
+                <Select value={r.dimensionId ?? ""} onChange={(e) => set({ dimensionId: e.target.value || undefined })}>
                   <option value="">Sin dimensión</option>
                   {dimsEnJuego.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -255,25 +353,38 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
                   ))}
                 </Select>
               </Field>
-            </Item>
-          ))}
-          <Agregar onClick={() => setBorrador([...retos, { texto: "" }])}>Agregar otro reto</Agregar>
-        </div>
+            </>
+          )}
+          agregar="Agregar un reto"
+        />
       );
-    }
-    case "autoridad": {
-      const personas = ((borrador as Persona[]) ?? []).length ? (borrador as Persona[]) : [{ nombre: "", rol: "decide" as const }];
-      const set = (i: number, cambio: Partial<Persona>) => setBorrador(personas.map((p, j) => (j === i ? { ...p, ...cambio } : p)));
+    case "autoridad":
       return (
-        <div className="space-y-3">
-          {personas.map((p, i) => (
-            <Item key={i} titulo={p.nombre.trim() || `Persona ${i + 1}`} onQuitar={() => setBorrador(personas.filter((_, j) => j !== i))}>
+        <EditorDeItems<Persona>
+          items={(borrador as Persona[]) ?? []}
+          onCambio={setBorrador}
+          nuevo={() => ({ nombre: "", rol: "decide" })}
+          estaVacio={(p) => vacioDeTexto(p.nombre)}
+          verItem={(p) => (
+            <div className="space-y-1">
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-fg">{p.nombre}</span>
+                {p.cargo && <span className="text-xs text-fg-muted">{p.cargo}</span>}
+                <Badge variant={p.rol === "firma" ? "primary" : "default"} size="xs">
+                  {ETIQUETA_DEL_ROL[p.rol]}
+                </Badge>
+              </p>
+              {p.nota && <p className="text-xs text-fg-secondary">{p.nota}</p>}
+            </div>
+          )}
+          campos={(p, set) => (
+            <>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Nombre">
-                  <Input value={p.nombre} onChange={(e) => set(i, { nombre: e.target.value })} />
+                  <Input autoFocus value={p.nombre} onChange={(e) => set({ nombre: e.target.value })} />
                 </Field>
                 <Field label="Cargo">
-                  <Input value={p.cargo ?? ""} onChange={(e) => set(i, { cargo: e.target.value })} />
+                  <Input value={p.cargo ?? ""} onChange={(e) => set({ cargo: e.target.value })} />
                 </Field>
               </div>
               <div className="space-y-1.5">
@@ -282,30 +393,46 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
                   etiqueta="Papel en la decisión"
                   opciones={ROLES_EN_LA_DECISION.map((r) => ({ clave: r, etiqueta: ETIQUETA_DEL_ROL[r] }))}
                   valor={p.rol}
-                  onCambio={(rol) => set(i, { rol })}
+                  onCambio={(rol) => set({ rol })}
                 />
+                <p className="text-xs text-fg-muted">{QUE_HACE_EL_ROL[p.rol]}</p>
               </div>
               <Field label="Nota" hint="Cómo le afecta, qué le preocupa.">
-                <Textarea rows={2} value={p.nota ?? ""} onChange={(e) => set(i, { nota: e.target.value })} />
+                <TextoQueCrece value={p.nota ?? ""} onChange={(nota) => set({ nota })} />
               </Field>
-            </Item>
-          ))}
-          <Agregar onClick={() => setBorrador([...personas, { nombre: "", rol: "afectado" }])}>Agregar otra persona</Agregar>
-        </div>
+            </>
+          )}
+          agregar="Agregar una persona"
+        />
       );
-    }
-    case "objeciones": {
-      const objeciones = ((borrador as Objecion[]) ?? []).length ? (borrador as Objecion[]) : [{ texto: "", clase: "otra" as const }];
-      const set = (i: number, cambio: Partial<Objecion>) => setBorrador(objeciones.map((o, j) => (j === i ? { ...o, ...cambio } : o)));
+    case "objeciones":
       return (
-        <div className="space-y-3">
-          {objeciones.map((o, i) => (
-            <Item key={i} titulo={`Objeción ${i + 1}`} onQuitar={() => setBorrador(objeciones.filter((_, j) => j !== i))}>
+        <EditorDeItems<Objecion>
+          items={(borrador as Objecion[]) ?? []}
+          onCambio={setBorrador}
+          nuevo={() => ({ texto: "", clase: "otra" })}
+          estaVacio={(o) => vacioDeTexto(o.texto)}
+          verItem={(o) => (
+            <div className="space-y-1">
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="text-fg">{o.texto}</span>
+                <Badge size="xs">{ETIQUETA_DE_LA_OBJECION[o.clase]}</Badge>
+                {!o.respuesta && (
+                  <Badge variant="warning" size="xs">
+                    Sin responder
+                  </Badge>
+                )}
+              </p>
+              {o.respuesta && <p className="text-xs text-fg-secondary">Se respondió: {o.respuesta}</p>}
+            </div>
+          )}
+          campos={(o, set) => (
+            <>
               <Field label="Qué dijo que lo frena">
-                <Textarea rows={2} value={o.texto} onChange={(e) => set(i, { texto: e.target.value })} />
+                <TextoQueCrece autoFocus value={o.texto} onChange={(texto) => set({ texto })} />
               </Field>
               <Field label="De qué tipo es">
-                <Select value={o.clase} onChange={(e) => set(i, { clase: e.target.value as Objecion["clase"] })}>
+                <Select value={o.clase} onChange={(e) => set({ clase: e.target.value as Objecion["clase"] })}>
                   {CLASES_DE_OBJECION.map((c) => (
                     <option key={c} value={c}>
                       {ETIQUETA_DE_LA_OBJECION[c]}
@@ -314,20 +441,19 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
                 </Select>
               </Field>
               <Field label="Cómo se respondió" hint="Si no se respondió, déjalo vacío: queda abierta.">
-                <Textarea rows={2} value={o.respuesta ?? ""} onChange={(e) => set(i, { respuesta: e.target.value })} />
+                <TextoQueCrece value={o.respuesta ?? ""} onChange={(respuesta) => set({ respuesta })} />
               </Field>
-            </Item>
-          ))}
-          <Agregar onClick={() => setBorrador([...objeciones, { texto: "", clase: "otra" }])}>Agregar otra objeción</Agregar>
-        </div>
+            </>
+          )}
+          agregar="Agregar una objeción"
+        />
       );
-    }
     case "siguientePaso": {
       const s = (borrador as SiguientePaso) ?? { que: "" };
       return (
         <div className="space-y-3">
           <Field label="Qué sigue">
-            <Textarea rows={2} value={s.que} onChange={(e) => setBorrador({ ...s, que: e.target.value })} />
+            <TextoQueCrece value={s.que} onChange={(que) => setBorrador({ ...s, que })} />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Fecha">
@@ -346,7 +472,7 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
         <div className="space-y-3">
           <Segmentado etiqueta="Apertura a la asesoría" opciones={APERTURA} valor={a?.valor ?? null} onCambio={(v) => setBorrador({ ...(a ?? {}), valor: v })} />
           <Field label="Por qué lo dices">
-            <Textarea rows={2} value={a?.porQue ?? ""} onChange={(e) => setBorrador({ ...(a ?? { valor: "no_se" }), porQue: e.target.value })} />
+            <TextoQueCrece value={a?.porQue ?? ""} onChange={(porQue) => setBorrador({ ...(a ?? { valor: "no_se" }), porQue })} />
           </Field>
         </div>
       );
@@ -384,10 +510,13 @@ function vacio(v: unknown): boolean {
   return v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
 }
 
+const igual = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
 /**
  * `sinTitulo`: dentro de un cajón que ya muestra el nombre y la ayuda de la casilla (el resumen).
  * `editarDeEntrada`: abre directo en el formulario, sin «Completar» ni «Editar» (el cajón del
  * resumen: tocar la tarjeta ya es querer llenarla). Al guardar o cancelar avisa con `onListo`.
+ * `pie`: dónde van «Guardar» y «Cancelar» (el pie del cajón, fijo abajo); sin él, debajo del editor.
  */
 export function Casilla({
   clave,
@@ -395,12 +524,14 @@ export function Casilla({
   sinTitulo = false,
   editarDeEntrada = false,
   onListo,
+  pie,
 }: {
   clave: ClaveDeCasilla;
   className?: string;
   sinTitulo?: boolean;
   editarDeEntrada?: boolean;
   onListo?: () => void;
+  pie?: HTMLElement | null;
 }) {
   const { exp, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
   const def = definicionDe(clave);
@@ -408,6 +539,20 @@ export function Casilla({
   const pendientes = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
   const [editando, setEditando] = useState(editarDeEntrada && puedeEditar);
   const [borrador, setBorrador] = useState<unknown>(valor);
+
+  /* Si mientras se edita cambia lo confirmado (se usó algo que propuso el agente), lo nuevo entra al
+     borrador: si no, «Guardar» lo borraría sin que nadie lo note. */
+  const [visto, setVisto] = useState<unknown>(valor);
+  if (!igual(visto, valor)) {
+    setVisto(valor);
+    if (Array.isArray(valor) && Array.isArray(borrador)) {
+      const antes = Array.isArray(visto) ? (visto as unknown[]) : [];
+      const nuevos = (valor as unknown[]).filter((x) => !antes.some((y) => igual(x, y)));
+      setBorrador([...(borrador as unknown[]), ...nuevos]);
+    } else if (igual(borrador, visto)) {
+      setBorrador(valor);
+    }
+  }
 
   async function guardar() {
     const limpio = limpiar(clave, borrador);
@@ -418,12 +563,26 @@ export function Casilla({
   }
 
   function cancelar() {
+    setBorrador(valor);
     setEditando(false);
     onListo?.();
   }
 
+  const enCajon = editarDeEntrada;
   return (
-    <section className={cn("space-y-2", !sinTitulo && "rounded-xl border border-line bg-surface p-4", className)}>
+    <section className={cn(enCajon ? "space-y-4" : "space-y-2", !sinTitulo && "rounded-xl border border-line bg-surface p-4", className)}>
+      {enCajon && (def.explicacion || def.ejemplo) && (
+        <div className="space-y-1.5 rounded-xl bg-surface-muted px-4 py-3">
+          {def.explicacion && <p className="text-sm leading-relaxed text-fg-secondary">{def.explicacion}</p>}
+          {def.ejemplo && (
+            <p className="text-xs text-fg-muted">
+              <span className="font-semibold text-fg-secondary">Ejemplo: </span>
+              {def.ejemplo}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className={cn("flex items-start gap-3", sinTitulo ? "justify-end" : "justify-between")}>
         {!sinTitulo && (
           <div className="min-w-0">
@@ -455,14 +614,16 @@ export function Casilla({
       {editando ? (
         <div className="space-y-3">
           <Editor clave={clave} borrador={borrador} setBorrador={setBorrador} />
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="primary" loading={guardando} onClick={() => void guardar()}>
-              Guardar
-            </Button>
-            <Button size="sm" variant="secondary" onClick={cancelar}>
-              Cancelar
-            </Button>
-          </div>
+          {!pie && (
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="primary" loading={guardando} onClick={() => void guardar()}>
+                Guardar
+              </Button>
+              <Button size="sm" variant="secondary" onClick={cancelar}>
+                Cancelar
+              </Button>
+            </div>
+          )}
         </div>
       ) : valor !== undefined ? (
         <Vista clave={clave} valor={valor} />
@@ -470,7 +631,26 @@ export function Casilla({
         <p className="text-sm text-fg-muted">Sin completar.</p>
       )}
 
-      <Propuestas items={pendientes} />
+      {pendientes.length > 0 && (
+        <div className="space-y-2">
+          {enCajon && <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Propuesto por el agente</p>}
+          <Propuestas items={pendientes} />
+        </div>
+      )}
+
+      {pie &&
+        editando &&
+        createPortal(
+          <>
+            <Button size="sm" variant="secondary" onClick={cancelar}>
+              Cancelar
+            </Button>
+            <Button size="sm" variant="primary" loading={guardando} onClick={() => void guardar()}>
+              Guardar
+            </Button>
+          </>,
+          pie,
+        )}
     </section>
   );
 }

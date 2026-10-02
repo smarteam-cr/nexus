@@ -34,7 +34,7 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
     { id: "meta", titulo: "Al menos una meta en cifras", cumplido: (c.metas ?? []).some(metaEnCifras) },
     {
       id: "autoridad",
-      titulo: "Quién firma y a quién más le afecta",
+      titulo: "Quién aprueba y a quién más le afecta",
       cumplido: autoridad.some((p) => p.rol === "firma") && autoridad.some((p) => p.rol === "afectado"),
     },
     { id: "consecuencia", titulo: "Qué pasa si no actúa", cumplido: (c.consecuencias ?? []).length > 0 },
@@ -106,7 +106,7 @@ export function queSigueConPaso(
   const falta = (id: PuntoDeCalidad["id"]) => !puntos.find((p) => p.id === id)?.cumplido;
   if (falta("meta")) return { texto: "Falta una meta en cifras: de cuánto a cuánto y para cuándo. Pregúntala en la próxima reunión.", paso: null };
   if (falta("siguientePaso")) return { texto: "Agenda el siguiente paso, con fecha.", paso: "exploracion" };
-  if (falta("autoridad")) return { texto: "Falta saber quién firma y a quién más le afecta la decisión.", paso: null };
+  if (falta("autoridad")) return { texto: "Falta saber quién aprueba y a quién más le afecta la decisión.", paso: null };
   if (falta("consecuencia")) return { texto: "Falta qué pasa si no actúa.", paso: null };
   if (falta("portal")) return { texto: "Revisen el portal en la próxima reunión, o marca que no usa HubSpot.", paso: "exploracion" };
   return { texto: "Lista para proponer: elige los casos de uso y arma la propuesta.", paso: "casos" };

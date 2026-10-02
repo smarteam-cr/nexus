@@ -163,7 +163,7 @@ export const PREGUNTA_DE_BASE: Record<(typeof CASILLAS_DEL_RESUMEN)[number], str
   retos: "¿Qué los frena hoy?",
   tiempos: "¿Para cuándo lo necesitan? ¿Hay alguna fecha que mande, como una renovación o un lanzamiento?",
   presupuesto: "¿Tienen un rango de inversión pensado para esto, o contra qué lo van a comparar?",
-  autoridad: "Además de ti, ¿quién tiene que estar de acuerdo para avanzar? ¿Quién firma?",
+  autoridad: "Además de ti, ¿quién tiene que estar de acuerdo para avanzar? ¿Quién da el visto bueno final?",
   consecuencias: "Si esto sigue igual seis meses más, ¿qué pasa? ¿Cuánto les cuesta?",
   implicaciones: "Si lo logran, ¿qué cambia para el negocio, y para ti?",
 };

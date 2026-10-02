@@ -29,11 +29,22 @@ export interface Meta {
   para?: string;
 }
 
-/** Una persona en la decisión: quién firma, quién decide, quién influye y a quién más afecta. */
+/**
+ * Una persona en la decisión: quién aprueba, quién decide, quién influye y a quién más afecta. El
+ * valor guardado sigue siendo `firma`; en pantalla dice «Aprueba» desde el 2026-10-02 (Elías: «Firma
+ * no me parece la mejor palabra»).
+ */
 export const ROLES_EN_LA_DECISION = ["firma", "decide", "influye", "afectado"] as const;
 export type RolEnLaDecision = (typeof ROLES_EN_LA_DECISION)[number];
+/** Qué hace cada papel, para elegirlo sin dudar. */
+export const QUE_HACE_EL_ROL: Record<RolEnLaDecision, string> = {
+  firma: "Da el sí final y aprueba el presupuesto.",
+  decide: "Elige la solución y la recomienda.",
+  influye: "Opina y pesa en la decisión, sin tomarla.",
+  afectado: "Su trabajo cambia con lo que se decida.",
+};
 export const ETIQUETA_DEL_ROL: Record<RolEnLaDecision, string> = {
-  firma: "Firma",
+  firma: "Aprueba",
   decide: "Decide",
   influye: "Influye",
   afectado: "Le afecta",
@@ -105,6 +116,10 @@ export interface DefinicionDeCasilla {
   etiqueta: string;
   /** Qué va, en una línea, para quien la llena. */
   ayuda: string;
+  /** Para qué sirve y cómo llenarla bien, en dos o tres frases: se lee al abrirla. */
+  explicacion?: string;
+  /** Un ejemplo de cómo se ve bien escrita. */
+  ejemplo?: string;
   paso: PasoDelLienzo;
   tipo: TipoDeCasilla;
   /** Puede entrar a la propuesta (la ve el cliente). */
@@ -173,6 +188,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   // ── El resumen: adónde quiere llegar y si hay negocio ──
   {
     clave: "metas",
+    explicacion: "Adónde quiere llegar el negocio, dicho con números: de dónde parte, adónde quiere llegar y para cuándo. Es lo que después mide el éxito del proyecto y lo que justifica el precio. Si no trae cifra, pregunta «¿cuánto es hoy?» y «¿cuánto sería bueno?».",
+    ejemplo: "Pasar de 4 a 7 cierres de cada 10 cotizaciones antes de diciembre.",
     etiqueta: "Metas",
     ayuda: "En cifras: de cuánto a cuánto y para cuándo. Son el criterio de éxito y la base del precio.",
     paso: "resumen",
@@ -182,6 +199,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "planes",
+    explicacion: "Lo que ya hicieron o piensan hacer para llegar a la meta: otra herramienta, contratar, un proceso nuevo. Cuenta qué ya probaron y qué no les funcionó.",
+    ejemplo: "Contrataron dos vendedores en marzo y armaron un Excel compartido para el seguimiento.",
     etiqueta: "Planes",
     ayuda: "Lo que ya intentaron o piensan hacer para llegar.",
     paso: "resumen",
@@ -191,6 +210,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "retos",
+    explicacion: "Lo que hoy les impide llegar a la meta, en sus palabras. Suelen salir de las dimensiones más bajas de la escala: atarlos a una dimensión ayuda a priorizar.",
+    ejemplo: "Nadie sabe en qué etapa va cada negocio: cada vendedor lleva su propio registro.",
     etiqueta: "Retos",
     ayuda: "Lo que hoy les impide llegar. Salen de las dimensiones bajas de la escala.",
     paso: "resumen",
@@ -200,6 +221,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "tiempos",
+    explicacion: "Las fechas que mandan: para cuándo necesitan el resultado, cuándo deciden y cuándo renuevan lo que tienen. Sin una fecha, la venta se estira.",
+    ejemplo: "Renuevan su CRM en febrero y quieren el proceso nuevo andando antes del lanzamiento de abril.",
     etiqueta: "Tiempos",
     ayuda: "Para cuándo lo necesitan y qué fechas mandan (una renovación, un lanzamiento, el cierre del año).",
     paso: "resumen",
@@ -209,6 +232,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "consecuencias",
+    explicacion: "Lo que le cuesta al negocio quedarse como está: clientes que se pierden, horas, dinero. Mejor con su número: es lo que hace urgente la decisión.",
+    ejemplo: "Pierden unos 10 negocios al mes porque nadie les da seguimiento a tiempo.",
     etiqueta: "Qué pasa si no actúa",
     ayuda: "Lo que le cuesta quedarse como está, mejor con su número.",
     paso: "resumen",
@@ -218,6 +243,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "implicaciones",
+    explicacion: "Lo que gana el negocio si llega a la meta, en sus palabras: más ventas, más tiempo, crecer sin contratar. Es la otra cara de las consecuencias.",
+    ejemplo: "Podrían abrir una sucursal sin sumar personal administrativo.",
     etiqueta: "Qué cambia si lo logra",
     ayuda: "Lo que gana el negocio al llegar a la meta, en sus palabras.",
     paso: "resumen",
@@ -227,6 +254,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "presupuesto",
+    explicacion: "El rango que piensan invertir o contra qué lo van a comparar. Es interno: nunca entra a la propuesta.",
+    ejemplo: "Entre 15 y 20 mil dólares; lo comparan con lo que pagan hoy por su CRM.",
     etiqueta: "Presupuesto",
     ayuda: "El rango que tienen, o contra qué lo van a comparar.",
     paso: "resumen",
@@ -236,8 +265,10 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "autoridad",
+    explicacion: "Las personas que pesan en la decisión y el papel de cada una: quién aprueba la compra, quién la decide, quién influye y a quién le cambia el trabajo. El cargo solo no dice el papel: pregúntalo.",
+    ejemplo: "Laura, gerente general, aprueba; Andrés, gerente comercial, decide; el equipo de ventas es el afectado.",
     etiqueta: "Quién decide",
-    ayuda: "Quién firma, quién decide, quién influye y a quién más le afecta la decisión.",
+    ayuda: "Quién aprueba, quién decide, quién influye y a quién más le afecta la decisión.",
     paso: "resumen",
     tipo: "autoridad",
     alCliente: false,
@@ -292,6 +323,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   // ── El resumen: lo que sale de cada reunión (pedido de Elías, 2026-10-01) ──
   {
     clave: "objeciones",
+    explicacion: "Lo que el cliente dijo que lo frena para comprar, con sus palabras, y cómo se respondió. Una objeción sin responder es lo primero que se retoma en la próxima reunión.",
+    ejemplo: "«Ya tenemos Pipedrive»: se respondió que el foco es que funcione lo que ya pagan.",
     etiqueta: "Objeciones",
     ayuda: "Lo que el cliente dijo que lo frena, con sus palabras, y cómo se respondió. Sin respuesta, sigue abierta.",
     paso: "resumen",
@@ -301,6 +334,8 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "particularidades",
+    explicacion: "Lo propio de esta cuenta que cambia cómo venderle o implementar: una restricción, un contrato vigente, una política interna, una fecha que manda o alguien clave.",
+    ejemplo: "Toda compra de más de 5 mil dólares la aprueba la casa matriz en México.",
     etiqueta: "Particularidades",
     ayuda: "Lo propio de esta cuenta que cambia cómo venderle o implementar: una restricción, un contrato vigente, una política, una fecha que manda, alguien clave.",
     paso: "resumen",
