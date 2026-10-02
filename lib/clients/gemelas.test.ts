@@ -167,7 +167,7 @@ describe("los dos scripts que arreglan una empresa partida en dos", () => {
     /* Ante dos fichas de nombre parecido —el caso exacto que este script atiende— elegir una
        sería fusionar la equivocada. */
     expect(src, "la resolución por nombre volvió a elegir ante la ambigüedad").toContain(
-      "Pasá el id.",
+      "Pasa el id.",
     );
   });
 });

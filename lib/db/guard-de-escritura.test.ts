@@ -220,7 +220,6 @@ const SIN_TABLAS: string[] = [
   "scripts/import-egresos-xlsx.ts",
   "scripts/import-planilla-xlsx.ts",
   "scripts/limpiar-piezas-basura.ts",
-  "scripts/merge-duplicate-clients.ts",
   "scripts/merge-particularidades-duplicadas.ts",
   "scripts/migrar-tipo-implementacion-a-tag.ts",
   "scripts/migrate-add-exploracion-canvas.ts",

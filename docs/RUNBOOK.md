@@ -498,6 +498,39 @@ tiene cobro no se vuelve a cargar.
 la cuenta y los cobros creados. Si la cuenta la creó la carga, borrarla se lleva sus servicios, cobros, alertas y
 bitácora; los vínculos y `FacturaOdoo.cuentaId` vuelven a lo que dice «antes».
 
+### Fusionar dos fichas que son la misma empresa (Librería Internacional, 2026-10-01)
+
+Cuando la misma empresa está dos veces en Nexus —y casi siempre también en HubSpot—: primero se fusionan en HubSpot,
+después en Nexus con `scripts/merge-duplicate-clients.ts`. A la ficha que sigue le pasa TODO lo de la otra (proyectos,
+reuniones, handoffs, tareas, ventas, la cuenta de cobro con sus servicios, cobros, bitácora, clientes de Odoo y
+facturas), suma los dominios, junta las notas, apunta a la empresa de HubSpot viva y borra la otra, ya vacía, en UNA
+transacción. Las reglas están en `lib/clients/fusion-de-empresas.ts` (puro, con pruebas). Sigue la que tiene más
+reuniones y proyectos; el script se niega al revés.
+
+**En tu PC**, PowerShell, en `D:\Proyectos\nexus`. Primero el simulacro (solo lee la base y HubSpot):
+
+```powershell
+npx tsx scripts/merge-duplicate-clients.ts --canonico cmtum4orn00bd07lg0if1q51q --dup cmrf4wzfv00aq7gij2fbv1c59 --nombre "Librería Internacional"
+```
+
+**Qué tiene que decir para Librería** (medido el 2026-10-01): pasan 2 proyectos, 1 handoff, 3 reuniones, 12 tareas y 2
+ventas; la cuenta de dólares entrega a la de colones su servicio, su cobro, su bitácora, el cliente de Odoo #48 y sus 4
+facturas; «⚠ moneda: queda CRC»; y HubSpot «28872445070 → 58805575479», la empresa en que quedaron fusionadas las seis.
+
+Después, el mismo comando con `--firma` y `--apply` (sin `pg_dump` en esta PC: `SIN_RESPALDO=1`; el script deja su
+respaldo propio en `backups/<fecha>-merge-duplicate-clients/`):
+
+```powershell
+$env:ALLOW_PROD_WRITE="1"; $env:SIN_RESPALDO="1"; npx tsx scripts/merge-duplicate-clients.ts --canonico cmtum4orn00bd07lg0if1q51q --dup cmrf4wzfv00aq7gij2fbv1c59 --nombre "Librería Internacional" --firma egonzalez@smarteamcr.com --apply; Remove-Item Env:ALLOW_PROD_WRITE; Remove-Item Env:SIN_RESPALDO
+```
+
+Tiene que terminar en «✓ 1/1 pares fusionados». Después: `npm run check:invariants` y
+`npx tsx scripts/backfill-resolved-client.ts` (simulacro → changed=0). La lista de empresas tarda hasta un minuto en
+mostrar una sola.
+
+**Deshacer.** El JSON «antes» tiene las dos fichas y las dos cuentas enteras, lo que se borra entero (las notas de etapa
+que chocaban, lo uno a uno que ya tenía la que sigue) y el id de cada fila que se mudó; el «despues», qué quedó.
+
 ## Respaldo y restauración (Supabase)
 
 La base de Nexus es UNA Supabase Postgres (plan Pro) compartida por producción y las dos PCs

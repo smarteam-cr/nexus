@@ -13,8 +13,9 @@ No tropezar dos veces. Si pisás uno nuevo, agregalo acá.
   → "Larce→DISTELSA" es correcto). Verificá el grupo antes de "arreglar" una resolución sospechosa.
   *OJO 2:* el detector es subset-aware a propósito — los registros DUPLICADOS de la misma empresa
   (un token-set ⊆ del otro) NO cuentan como ambiguos (si no, "Construtecho"/"MINEC" caían a 0).
-  Si ves la misma empresa como 2 `Client`, mergealos (`scripts/merge-duplicate-clients.ts`), no
-  los dejes conviviendo: inflan falsos ambiguos y diluyen las señales.
+  Si ves la misma empresa como 2 `Client`, fusiónalos (`scripts/merge-duplicate-clients.ts`, que desde
+  el 2026-10-01 también une sus cuentas de cobro; ver RUNBOOK › Cobranza), no los dejes conviviendo:
+  inflan falsos ambiguos y diluyen las señales.
 - **Un cliente real cae a 0 (o pierde) sesiones al re-resolver.** *Causa:* su dominio real no
   está en `emailDomains` y HubSpot lo tiene como company no ligada → con el "corte" las sesiones
   caen a null. *Guarda:* HubSpot→Client es ADITIVO (cae al título, no corta); registrar el
