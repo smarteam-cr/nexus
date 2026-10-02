@@ -14,11 +14,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResultadoSync } from "@/lib/cobranza/odoo/sync";
 
-const { claimDateKey, liberarTurno, sincronizarOdoo, tickMarketingCron, refrescarAlertasDeCobranza, barrerTokens, barrerIntentos } =
+const { claimDateKey, liberarTurno, sincronizarOdoo, sincronizarMercury, tickMarketingCron, refrescarAlertasDeCobranza, barrerTokens, barrerIntentos } =
   vi.hoisted(() => ({
     claimDateKey: vi.fn(),
     liberarTurno: vi.fn(),
     sincronizarOdoo: vi.fn(),
+    sincronizarMercury: vi.fn(),
     tickMarketingCron: vi.fn(),
     refrescarAlertasDeCobranza: vi.fn(),
     barrerTokens: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 vi.mock("@/lib/cobranza/odoo/sync", () => ({ sincronizarOdoo }));
+vi.mock("@/lib/cobranza/mercury/sync", () => ({ sincronizarMercury }));
 vi.mock("@/lib/cobranza/alertas-refresco", () => ({ refrescarAlertasDeCobranza }));
 vi.mock("@/lib/marketing/cron", () => ({ tickMarketingCron }));
 // El resto de lo que importa defs.ts arrastra HubSpot, Anthropic y media app, y acá no corre.
@@ -89,6 +91,7 @@ beforeEach(() => {
   claimDateKey.mockReset().mockResolvedValue(true);
   liberarTurno.mockReset().mockResolvedValue({ count: 1 });
   sincronizarOdoo.mockReset();
+  sincronizarMercury.mockReset();
   tickMarketingCron.mockReset();
   refrescarAlertasDeCobranza.mockReset();
   barrerTokens.mockReset().mockResolvedValue({ count: 0 });
@@ -185,6 +188,63 @@ describe("odoo-espejo-daily", () => {
       where: { id: "odoo-espejo-daily", lastRunDateKey: HOY },
       data: { lastRunDateKey: null },
     });
+  });
+});
+
+describe("mercury-espejo-daily", () => {
+  const copia = (c: Record<string, unknown>) => ({
+    corridaId: "m-1",
+    ok: true,
+    parcial: false,
+    facturasVistas: 76,
+    clientesVistos: 30,
+    movimientosVistos: 600,
+    creadas: 0,
+    actualizadas: 0,
+    desaparecidas: 0,
+    clientesNuevos: 0,
+    movimientosNuevos: 0,
+    rechazadas: [],
+    error: null,
+    clase: null,
+    duracionMs: 1,
+    ...c,
+  });
+
+  it("un token rechazado LANZA y retiene el turno: no se reintenta cada minuto con un token muerto", async () => {
+    sincronizarMercury.mockResolvedValue(copia({ ok: false, clase: "TOKEN", error: "401" }));
+    const run = job("mercury-espejo-daily").run(AHORA);
+    await expect(run).rejects.toThrow(/FALLÓ \(TOKEN\).*turno RETENIDO/);
+    await expect(run).rejects.toMatchObject({ name: "SyncMercuryFallido" });
+    expect(liberarTurno).not.toHaveBeenCalled();
+  });
+
+  it("un fallo de red o un «esperá» de Mercury LANZA y libera el turno para reintentar", async () => {
+    for (const clase of ["RED", "LIMITE"]) {
+      liberarTurno.mockClear();
+      sincronizarMercury.mockResolvedValue(copia({ ok: false, clase, error: "x" }));
+      await expect(job("mercury-espejo-daily").run(AHORA)).rejects.toThrow(/turno liberado/);
+      expect(liberarTurno).toHaveBeenCalledWith({ where: { id: "mercury-espejo-daily", lastRunDateKey: HOY }, data: { lastRunDateKey: null } });
+    }
+  });
+
+  it("una corrida parcial LANZA y retiene el turno; una buena cuenta como corrida", async () => {
+    sincronizarMercury.mockResolvedValue(copia({ ok: false, parcial: true, clase: "RED", error: "trajo 10 de 76" }));
+    await expect(job("mercury-espejo-daily").run(AHORA)).rejects.toThrow(/corrida PARCIAL.*turno RETENIDO/);
+    expect(liberarTurno).not.toHaveBeenCalled();
+    sincronizarMercury.mockResolvedValue(copia({ ok: true }));
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(job("mercury-espejo-daily").run(AHORA)).resolves.not.toBe(SIN_TURNO);
+    } finally {
+      silencio.mockRestore();
+    }
+  });
+
+  it("con otra copia en curso suelta el turno y no anota nada", async () => {
+    sincronizarMercury.mockResolvedValue(copia({ ok: false, enCurso: true, corridaId: "" }));
+    await expect(job("mercury-espejo-daily").run(AHORA)).resolves.toBe(SIN_TURNO);
+    expect(liberarTurno).toHaveBeenCalled();
   });
 });
 

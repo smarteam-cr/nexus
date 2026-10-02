@@ -306,6 +306,47 @@ const odooEspejoDaily: JobDef = {
 };
 
 /**
+ * La copia de Mercury (2026-10-02): facturas, clientes y movimientos, una vez al día ≥ 6:00 CR. Mismo molde que la de
+ * Odoo: el turno se suelta solo si el fallo es pasajero (red o «esperá» de Mercury) y LANZA si falla, para que el
+ * semáforo de Integraciones se ponga en rojo. Sin `MERCURY_API_TOKEN` ni se intenta (requisitos.ts).
+ */
+const mercuryEspejoDaily: JobDef = {
+  key: "mercury-espejo-daily",
+  shouldRun: (_now, parts) => encendido("mercury-espejo-daily") && parts.hour >= 6,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const { dateKey } = crDateParts(now);
+    if (!(await claimDateKey("mercury-espejo-daily", dateKey, now))) return SIN_TURNO;
+    const { sincronizarMercury } = await import("@/lib/cobranza/mercury/sync");
+    const { esTransitorio } = await import("@/lib/cobranza/mercury/transporte");
+    const r = await sincronizarMercury({ disparadaPor: "cron" });
+    const soltarTurno = () =>
+      prisma.cronJobState
+        .updateMany({ where: { id: "mercury-espejo-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
+        .catch(() => {});
+    /* Otra copia en curso (la pidió alguien con el botón): esta no hizo nada, y el tick siguiente lo vuelve a intentar. */
+    if (r.enCurso) {
+      await soltarTurno();
+      return SIN_TURNO;
+    }
+    if (!r.ok) {
+      /* ⚠ Un token rechazado no se arregla reintentando cada minuto: el turno se retiene hasta mañana. */
+      const transitorio = !r.parcial && esTransitorio(r.clase);
+      if (transitorio) await soltarTurno();
+      const fallo = new Error(
+        `${r.parcial ? "corrida PARCIAL" : `FALLÓ (${r.clase ?? "?"})`}: ${r.error}; ` +
+          (transitorio ? "turno liberado: reintenta en el próximo tick" : "turno RETENIDO: no reintenta hasta mañana"),
+      );
+      fallo.name = "SyncMercuryFallido";
+      throw fallo;
+    }
+    console.log(
+      `[jobs/mercury-espejo] ${dateKey} — ${r.facturasVistas} facturas: ${r.creadas} nuevas, ${r.actualizadas} con cambios, ${r.desaparecidas} desaparecidas · ${r.clientesVistos} clientes (${r.clientesNuevos} nuevos) · ${r.movimientosVistos} movimientos (${r.movimientosNuevos} nuevos)${r.rechazadas.length ? `, ${r.rechazadas.length} facturas sin leer` : ""} (${r.duracionMs} ms)`,
+    );
+  },
+};
+
+/**
  * Los invariantes que solo miran la base (`lib/invariantes/`), una vez al día ≥ 7:00 CR — después
  * de los espejos de las 6 (ventas, Odoo), para que INV23/INV24 vean la corrida de hoy. Si alguno
  * está en rojo el job LANZA a propósito: el scheduler lo anota en `lastResult` (semáforo rojo en
@@ -329,5 +370,5 @@ const invariantsDaily: JobDef = {
 
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, invariantsDaily];
 }

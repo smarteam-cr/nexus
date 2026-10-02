@@ -26,6 +26,14 @@ describe("motivoApagado", () => {
     expect(motivoApagado("odoo-espejo-daily", { ODOO_PASSWORD: "x", ODOO_SYNC_ENABLED: "1" })).toBeNull();
   });
 
+  it("mercury-espejo-daily: sin token ni se intenta, y el apagado a propósito se dice aparte", () => {
+    expect(motivoApagado("mercury-espejo-daily", { MERCURY_API_TOKEN: "secret-token:x" })).toBeNull();
+    expect(motivoApagado("mercury-espejo-daily", {})).toContain("falta MERCURY_API_TOKEN");
+    const aProposito = motivoApagado("mercury-espejo-daily", { MERCURY_API_TOKEN: "x", MERCURY_SYNC_ENABLED: "0" });
+    expect(aProposito).toContain("MERCURY_SYNC_ENABLED=0");
+    expect(aProposito).not.toContain("falta MERCURY_API_TOKEN");
+  });
+
   it("los cuatro de Éxito del cliente y el corte quincenal exigen su bandera en «1» exacto", () => {
     for (const key of ["cs-signals-daily", "cs-partner-daily", "cs-watchdog-daily", "cs-watchdog-debounce"]) {
       expect(motivoApagado(key, {}), key).toContain("CS_WATCHDOG_ENABLED=1");
@@ -67,12 +75,13 @@ describe("defs.ts decide con esta regla y no con una copia", () => {
     /* La edición que lo pone en rojo: `shouldRun: () => !!process.env.ODOO_PASSWORD && …` — la
        pantalla diría «encendido» sobre un job que la copia apaga, o al revés. */
     expect(defs).not.toMatch(
-      /process\.env\.(CS_WATCHDOG_ENABLED|COBRANZA_CRON_ENABLED|ODOO_PASSWORD|ODOO_SYNC_ENABLED|GOOGLE_SERVICE_ACCOUNT_KEY|GOOGLE_ADMIN_EMAIL)/,
+      /process\.env\.(CS_WATCHDOG_ENABLED|COBRANZA_CRON_ENABLED|ODOO_PASSWORD|ODOO_SYNC_ENABLED|MERCURY_API_TOKEN|MERCURY_SYNC_ENABLED|GOOGLE_SERVICE_ACCOUNT_KEY|GOOGLE_ADMIN_EMAIL)/,
     );
   });
 
   it("cada job con requisito consulta la regla en su shouldRun", () => {
-    expect(JOBS_CON_REQUISITO.length).toBe(7);
+    /* 8 desde el 2026-10-02: la copia de Mercury. */
+    expect(JOBS_CON_REQUISITO.length).toBe(8);
     for (const key of JOBS_CON_REQUISITO) expect(defs, key).toContain(`encendido("${key}")`);
     expect(defs).toContain("motivoApagado(jobKey, process.env) === null");
   });

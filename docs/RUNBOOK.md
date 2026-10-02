@@ -284,6 +284,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `google-enrich-retry` | cada tick, hasta 20 sesiones | `GOOGLE_SERVICE_ACCOUNT_KEY` + `GOOGLE_ADMIN_EMAIL` | reintenta el enriquecimiento de Meet que falló (backoff y tope de intentos) |
 | `ventas-ganadas-daily` | todos los días ≥ 6:00 CR (fines de semana incluidos) | — | espeja los tratos ganados del año en curso |
 | `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` (contraseña o clave de API), `ODOO_LOGIN` si la clave no es de `direct`, y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee). Si la corrida falla, el job FALLA (rojo + Sentry); un rechazo de credenciales retiene el turno hasta mañana (ver «El espejo de Odoo no corre»). INV31 da rojo si la última corrida buena tiene más de 20 h |
+| `mercury-espejo-daily` | ≥ 6:00 CR, una vez al día | `MERCURY_API_TOKEN` (token «Read Only» de Mercury) y `MERCURY_SYNC_ENABLED` ≠ `0` | copia las facturas, los clientes y los movimientos de Mercury (Nexus solo lee: el token no puede escribir). Si falla, el job FALLA (rojo + Sentry); un token rechazado retiene el turno hasta mañana (ver «La copia de Mercury no corre») |
 | `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 21 invariantes solo-base (`lib/invariantes/`, B-07); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
 
 ⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env` cinco de estos no corren, y sin
@@ -352,6 +353,22 @@ arreglada la causa: no hace falta liberar el turno ni correr un script.
    el evento idéntico al anterior. Si dura horas, es el servidor de Odoo o la red del VPS.
 4. **Corrida parcial, `PERMISO` o `PROTOCOLO`**: retiene el turno. Reintentar no lo arregla: el error
    de `/integrations/odoo` dice qué mirar.
+
+### La copia de Mercury no corre
+
+Mismo molde que la de Odoo (2026-10-02, `lib/cobranza/mercury/`). Cada corrida queda en `SyncMercuryCorrida` con su
+error, Integraciones › Jobs del servidor dice si `mercury-espejo-daily` está **apagado** y por qué o si **falló**, y
+Cobranza › Mercury lo dice arriba, con el botón «Actualizar desde Mercury». Nunca corren dos copias a la vez (candado
+`mercury-espejo-candado` en `CronJobState`, vence solo a los 10 minutos).
+
+1. **Apagado, «falta MERCURY_API_TOKEN»**: el token es «Read Only», lo crea un administrador de Mercury en
+   Settings › Tokens, sin IP fija. Se carga en el `.env` del VPS **sin que pase por un chat**, y deploy.
+2. **Falló con `TOKEN`**: Mercury no reconoce el token —revocado, borrado por Mercury tras **45 días sin uso**, o mal
+   copiado—. El job retiene el turno hasta mañana. Se crea uno nuevo y se reemplaza en el `.env`.
+3. **`RED` o `LIMITE`**: libera el turno y reintenta en el tick siguiente.
+4. **Parcial, `PERMISO` o `PROTOCOLO`**: retiene el turno; el error de la corrida dice qué mirar.
+
+A mano, desde una PC con el token en su `.env` (la base es la de producción): `npx tsx scripts/mercury-sync-manual.ts`.
 
 ## Cobranza
 

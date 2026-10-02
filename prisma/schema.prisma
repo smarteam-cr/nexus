@@ -3084,6 +3084,8 @@ model CuentaFinanciera {
   facturasOdoo     FacturaOdoo[]
   vinculosOdoo     OdooPartnerVinculo[]
   facturaLiberadas FacturaLiberada[]
+  /// Los clientes de Mercury emparejados con esta cuenta (espejo de Mercury, 2026-10-02).
+  clientesMercury  ClienteMercury[] @relation("ClientesMercuryDeLaCuenta")
 
   @@unique([fuente, fuenteIdExterno]) // NULLs no colisionan — las cuentas manuales legacy conviven
   @@index([estadoCuenta])
@@ -4842,6 +4844,9 @@ model OdooPartnerVinculo {
   /// Los cobros que dicen que se le facturaron a esta sociedad. Con alguno, no se suelta ni se desvincula.
   cobrosFacturados Cobro[]
 
+  /// Los clientes de Mercury que facturan como esta sociedad (espejo de Mercury, 2026-10-02).
+  clientesMercury ClienteMercury[] @relation("SociedadDelClienteMercury")
+
   cuentaId String?
   cuenta   CuentaFinanciera? @relation(fields: [cuentaId], references: [id], onDelete: SetNull)
 
@@ -4955,6 +4960,122 @@ model DiferenciaOdooMarca {
 
   @@index([deshechaEn])
   @@index([documento])
+}
+
+// ─── Espejo de Mercury (2026-10-02) ─────────────────────────────────────────────
+// Lo internacional se factura en Mercury (sección de facturas) desde noviembre de 2025. Nexus copia sus facturas,
+// sus clientes y los movimientos de la cuenta con un token de SOLO LECTURA: no puede escribir en Mercury aunque
+// quisiera. El molde es el espejo de Odoo (lib/cobranza/odoo/); el código vive en lib/cobranza/mercury/.
+// SQL: scripts/sql/2026-10-02-espejo-mercury.sql (⛔ nunca `db push`).
+
+/// Una factura de Mercury, tal como la devuelve la API (`/ar/invoices`). NUNCA se borra: la que deja de venir queda
+/// DESAPARECIDA. La cuenta de Nexus NO se copia acá: sale del cliente emparejado al leer (`ClienteMercury.cuentaId`).
+model FacturaMercury {
+  id                   String    @id @default(cuid())
+  mercuryInvoiceId     String    @unique
+  /// El número que ve el cliente («INV-53»).
+  numero               String
+  invoiceDate          DateTime  @db.Date
+  dueDate              DateTime? @db.Date
+  /// Lo que dice la factura: sus líneas más impuestos. Lo internacional va sin IVA.
+  monto                Decimal   @db.Decimal(14, 2)
+  moneda               String
+  /// Unpaid · Paid · Cancelled · Processing, como los dice Mercury.
+  estado               String
+  mercuryCustomerId    String
+  /// El nombre del cliente cuando se copió: la factura se lee aunque el cliente desaparezca.
+  clienteNombre        String
+  canceladaEn          DateTime?
+  creadaEnMercury      DateTime
+  /// ⚠ La API no dice CUÁNDO se pagó: este es el último cambio, que para una pagada suele ser el pago.
+  actualizadaEnMercury DateTime
+  /// VIGENTE · DESAPARECIDA (CHECK en el SQL).
+  estadoEspejo         String    @default("VIGENTE")
+  sincronizadoEn       DateTime
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([mercuryCustomerId])
+  @@index([invoiceDate])
+}
+
+/// Un cliente de Mercury (`/ar/customers`) y la cuenta de Nexus a la que corresponde. Es el emparejado: sin él, las
+/// facturas de ese cliente no son de ninguna cuenta.
+model ClienteMercury {
+  id                String           @id @default(cuid())
+  mercuryCustomerId String           @unique
+  /// La razón social, como está en Mercury («SOLUCIONES, ANALITICOS Y SERVICIOS TEAM…» es Teamnet).
+  nombre            String
+  correo            String?
+  pais              String?
+  cuentaId          String?
+  cuenta            CuentaFinanciera? @relation("ClientesMercuryDeLaCuenta", fields: [cuentaId], references: [id], onDelete: SetNull)
+  /// La sociedad de la cuenta a la que se le factura (OdooPartnerVinculo, plataforma MERCURY): la que eligen los cobros.
+  sociedadId        String?
+  sociedad          OdooPartnerVinculo? @relation("SociedadDelClienteMercury", fields: [sociedadId], references: [id], onDelete: SetNull)
+  /// NOMBRE · MONTO · MANUAL: de dónde salió el vínculo.
+  via               String?
+  /// true = «no es cliente nuestro»: no se propone ni se acusa.
+  ignorado          Boolean          @default(false)
+  confirmadoPor     String?
+  confirmadoEn      DateTime?
+  estadoEspejo      String           @default("VIGENTE")
+  sincronizadoEn    DateTime
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([cuentaId])
+}
+
+/// Un movimiento de las cuentas de Mercury (`/transactions`): entradas y salidas. Las entradas de clientes son el día en
+/// que la plata llegó de verdad, que la factura no dice.
+model MovimientoMercury {
+  id                   String    @id @default(cuid())
+  mercuryTransactionId String    @unique
+  mercuryAccountId     String
+  /// Con signo: positivo entra, negativo sale. En dólares.
+  monto                Decimal   @db.Decimal(14, 2)
+  /// pending · sent · cancelled · failed · reversed · blocked, como los dice Mercury.
+  estado               String
+  /// externalTransfer · internalTransfer · incomingDomesticWire · other…, como los dice Mercury.
+  tipo                 String
+  contraparteNombre    String?
+  contraparteId        String?
+  descripcionBanco     String?
+  nota                 String?
+  memoExterno          String?
+  /// Movimiento de una tarjeta (una compra o su devolución): no es plata de un cliente.
+  conTarjeta           Boolean   @default(false)
+  creadoEnMercury      DateTime
+  posteadoEn           DateTime?
+  estadoEspejo         String    @default("VIGENTE")
+  sincronizadoEn       DateTime
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([posteadoEn])
+}
+
+/// Cada copia de Mercury, buena o mala, con lo que trajo. Mismo molde que SyncOdooCorrida.
+model SyncMercuryCorrida {
+  id                String    @id @default(cuid())
+  iniciadaEn        DateTime  @default(now())
+  terminadaEn       DateTime?
+  ok                Boolean   @default(false)
+  parcial           Boolean   @default(false)
+  disparadaPor      String
+  facturasVistas    Int       @default(0)
+  clientesVistos    Int       @default(0)
+  movimientosVistos Int       @default(0)
+  creadas           Int       @default(0)
+  actualizadas      Int       @default(0)
+  desaparecidas     Int       @default(0)
+  clientesNuevos    Int       @default(0)
+  error             String?   @db.Text
+  duracionMs        Int?
+
+  @@index([iniciadaEn])
+  @@index([ok, iniciadaEn])
 }
 
 /// Una página de la base de conocimiento del EQUIPO (`/documentacion`), al estilo de Notion:

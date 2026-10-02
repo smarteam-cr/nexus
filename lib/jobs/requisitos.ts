@@ -55,6 +55,13 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
     if (!env.ODOO_PASSWORD) motivos.push(falta("ODOO_PASSWORD"));
     return motivos.length ? motivos.join(" ") : null;
   },
+  "mercury-espejo-daily": (env) => {
+    /* Igual que Odoo: la credencial que falta y el apagado a propósito se dicen por separado. */
+    const motivos: string[] = [];
+    if (env.MERCURY_SYNC_ENABLED === "0") motivos.push("Apagado a propósito: MERCURY_SYNC_ENABLED=0 en el .env del servidor.");
+    if (!env.MERCURY_API_TOKEN) motivos.push(falta("MERCURY_API_TOKEN"));
+    return motivos.length ? motivos.join(" ") : null;
+  },
 };
 
 /** Los jobs que tienen requisito. La guarda de `requisitos.test.ts` exige que `defs.ts` los consulte a todos. */
