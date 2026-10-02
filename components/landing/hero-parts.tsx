@@ -27,6 +27,7 @@ import { IconX } from "@/components/ui/AcceptReject";
 import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 import { LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP, logoScaleStyle, resolveLogoScale } from "@/lib/ui/logo-scale";
 import type { LandingContext } from "./types";
+import { SMARTEAM_LOGO_FONDO_OSCURO } from "@/lib/ui/smarteam-logo-oscuro";
 import { subirDirecto } from "@/lib/storage/subir-directo";
 
 /** Píldora translúcida sobre el hero oscuro (Portada / Logo del cliente). */
@@ -292,10 +293,18 @@ export function BrandRow({
         /* El hero SIEMPRE va sobre navy (los 7 defs con `backdrop:true` son `theme:"dark"`,
            congelado por lib/ui/landing-hero-theme.test.ts), así que acá se puede elegir la
            versión para fondo oscuro sin preguntarle el tema a nadie. */
-        const usaVersionOscura = esCliente && !!ctx.clientLogoDarkUrl;
-        const logo = token
-          ? (esCliente ? (ctx.clientLogoDarkUrl ?? ctx.clientLogoUrl) : ctx.smarteamLogoUrl)
-          : ctx.brandLogos?.[b.trim().toLowerCase()];
+        /* Smarteam —el token o una marca de texto que se llame así— usa SIEMPRE su versión
+           blanca oficial, sin filtro: aplastado a blanco, el isotipo pierde los círculos y
+           quedan dos barras (ver lib/ui/smarteam-logo-oscuro.ts). Solo si hay logo cargado,
+           para no cambiar qué marcas aparecen en la fila. */
+        const esSmarteam = token ? !esCliente : b.trim().toLowerCase() === "smarteam";
+        const smarteamOscuro = esSmarteam && !!(ctx.smarteamLogoUrl || ctx.brandLogos?.smarteam);
+        const usaVersionOscura = (esCliente && !!ctx.clientLogoDarkUrl) || smarteamOscuro;
+        const logo = smarteamOscuro
+          ? SMARTEAM_LOGO_FONDO_OSCURO
+          : token
+            ? (esCliente ? (ctx.clientLogoDarkUrl ?? ctx.clientLogoUrl) : ctx.smarteamLogoUrl)
+            : ctx.brandLogos?.[b.trim().toLowerCase()];
         const alt = token ? (esCliente ? ctx.clientName || "Cliente" : "Smarteam") : b;
         /* El tamaño se aplica SOLO al logo del cliente. Los tres logos de la fila comparten
            la clase `.stl-brand-logo`; los otros dos no traen la variable y caen al fallback

@@ -118,7 +118,21 @@ describe("el componente aplica la escala solo al logo del cliente", () => {
   it("el modificador que apaga el filtro solo se pone con versión oscura REAL", () => {
     // Si se pusiera incondicionalmente, los logos de los clientes que solo tienen un
     // archivo dejarían de blanquearse y quedarían invisibles sobre el navy.
-    expect(HERO_PARTS).toMatch(/usaVersionOscura\s*=\s*esCliente && !!ctx\.clientLogoDarkUrl/);
+    // Dos versiones oscuras REALES: la que subió el cliente, o la blanca oficial de Smarteam
+    // (un archivo fijo de la marca, siempre presente). Cualquier otra cosa sigue blanqueándose.
+    expect(HERO_PARTS).toMatch(
+      /usaVersionOscura\s*=\s*\(esCliente && !!ctx\.clientLogoDarkUrl\)\s*\|\|\s*smarteamOscuro/,
+    );
     expect(HERO_PARTS).toMatch(/usaVersionOscura \? " stl-brand-logo--asis" : ""/);
+  });
+
+  /* 2026-10-02: aplastado a blanco, el isotipo de Smarteam pierde los círculos (los separa
+     solo el color) y quedan dos barras planas — un logo que no es el de la marca. Sobre el
+     navy del hero va su versión blanca oficial, SIN filtro. */
+  it("Smarteam usa su versión blanca oficial, no el logo de color aplastado", () => {
+    expect(HERO_PARTS).toContain("SMARTEAM_LOGO_FONDO_OSCURO");
+    expect(HERO_PARTS).toMatch(/const logo = smarteamOscuro\s*\?\s*SMARTEAM_LOGO_FONDO_OSCURO/);
+    const asset = fs.readFileSync(path.join(process.cwd(), "public/logo-smarteam-blanco.png"));
+    expect(asset.length, "falta el archivo del logo blanco en public/").toBeGreaterThan(1000);
   });
 });
