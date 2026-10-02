@@ -9,8 +9,9 @@
  *
  *   · `FiltroDeHerramientas`: los botones que se prenden y se apagan (no son excluyentes).
  *   · `ResumenDeHerramientas`: con alguna prendida, qué es cada una y en cuántos criterios aplica.
- *   · `MarcaDeHerramienta`: un punto de su color con su sigla. ⛔ Nunca pinta una celda: el color
- *     de una celda es SIEMPRE el de su nivel (rueda legible, 09-30); la herramienta va encima.
+ *   · `MarcaDeHerramienta`: el isotipo de la herramienta en un círculo claro (o, si no tiene, un
+ *     punto de su color con su sigla). ⛔ Nunca pinta una celda: el color de una celda es SIEMPRE el
+ *     de su nivel (rueda legible, 09-30); la herramienta va encima.
  *   · `HerramientasDelCriterio`: debajo de un criterio, lo que aporta cada herramienta prendida.
  *
  * «Aplica» quiere decir que la herramienta lo hace posible, no que lo cumple: lo dice el mapa en su
@@ -23,6 +24,7 @@ import type { Criterio } from "@/lib/escala/documento/tipos";
 import { LETRAS_QUE_SE_MAPEAN, type ColorDeHerramienta, type Herramienta } from "@/lib/escala/herramientas/tipos";
 import { aportesDelCriterio, type HerramientasDeLaVista } from "@/lib/escala/herramientas/vista";
 import type { DatosDeLaVista } from "@/lib/escala/vista";
+import { Isotipo, tieneIsotipo } from "./isotipos";
 import { GrupoDeControl, ParrafoDeLaEscala } from "./piezas";
 
 /** Para el SVG de la rueda. Tokens del tema (globals.css), nunca hex sueltos. */
@@ -76,8 +78,18 @@ export function useHerramientas() {
   }, [activas, mapa]);
 }
 
-/** Un punto del color de la herramienta con su sigla. */
-export function MarcaDeHerramienta({ herramienta, className }: { herramienta: Pick<Herramienta, "color" | "sigla">; className?: string }) {
+/**
+ * La marca de una herramienta: su isotipo sobre un círculo claro (pedido de Elías, 2026-10-02). Una
+ * herramienta sin isotipo lleva un punto de su color con su sigla.
+ */
+export function MarcaDeHerramienta({ herramienta, className }: { herramienta: Pick<Herramienta, "clave" | "color" | "sigla">; className?: string }) {
+  if (tieneIsotipo(herramienta.clave)) {
+    return (
+      <span className={cn("inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-surface ring-1 ring-line", className)} aria-hidden>
+        <Isotipo clave={herramienta.clave} width={11} height={11} />
+      </span>
+    );
+  }
   return (
     <span
       className={cn(

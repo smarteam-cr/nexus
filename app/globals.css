@@ -143,6 +143,12 @@
   --color-herramienta-turquesa: #0d9488;  /* teal-600 */
   --color-herramienta-lima:     #65a30d;  /* lime-600 */
   --color-herramienta-fg:       #ffffff;  /* la sigla sobre la marca */
+  /* Los isotipos de las herramientas (components/escala/isotipos.tsx): los colores de cada marca. */
+  --color-isotipo-hubspot:         #ff7a59;
+  --color-isotipo-insider-desde:   #e92e2f;
+  --color-isotipo-insider-hasta:   #ff6126;
+  --color-isotipo-smarteam-azul:   #168cf6;
+  --color-isotipo-smarteam-menta:  #42e4b3;
 }
 
 html {

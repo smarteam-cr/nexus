@@ -24,7 +24,7 @@
  *   · ▶ en el centro recorre la escala de Deficiente a Óptimo, un nivel a la vez.
  *   · Con el teclado: ←/→ cambian de dimensión, ↑/↓ de nivel, Enter abre los comentarios, Escape
  *     vuelve al área.
- *   · Con herramientas prendidas (el filtro de arriba), cada celda lleva la marca de las que ayudan
+ *   · Con herramientas prendidas (el filtro de arriba), cada celda lleva el isotipo de las que ayudan
  *     ahí, en vez de su número, y las celdas donde no ayuda ninguna se aclaran. ⛔ La marca va
  *     encima: el color de la celda sigue siendo el de su nivel.
  */
@@ -36,6 +36,7 @@ import type { Herramienta } from "@/lib/escala/herramientas/tipos";
 import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeCelda, conteoDeDimension, useEscala } from "./contexto";
 import { COLOR_DE_HERRAMIENTA, HerramientasDelCriterio, MarcaDeHerramienta, useHerramientas } from "./herramientas";
+import { Isotipo, tieneIsotipo } from "./isotipos";
 import { COLOR_DE_NIVEL, PUNTO_DE_NIVEL } from "./niveles";
 import {
   BotonComentar,
@@ -840,18 +841,29 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                             transition: "fill 240ms ease, fill-opacity 240ms ease",
                           }}
                         />
-                        {/* Con herramientas prendidas, la marca de cada una en vez del número: un punto de su
-                            color con su sigla, en fila sobre el arco de la celda. */}
+                        {/* Con herramientas prendidas, la marca de cada una en vez del número, en fila sobre
+                            el arco de la celda: su isotipo en un círculo claro (o, si no tiene, un punto de
+                            su color con su sigla). */}
                         {marcas.map((m, j) => {
                           const radio = (r0 + r1) / 2;
-                          const paso = (31 / radio) * (180 / Math.PI);
+                          const paso = (33 / radio) * (180 / Math.PI);
                           const [mx, my] = polar(medio + (j - (marcas.length - 1) / 2) * paso, radio);
+                          const h = m.herramienta;
                           return (
-                            <g key={m.herramienta.clave} transform={`translate(${f(mx)} ${f(my)})`}>
-                              <circle r={14} style={{ fill: COLOR_DE_HERRAMIENTA[m.herramienta.color], stroke: "var(--color-surface)", strokeWidth: 2.5 }} />
-                              <text y={5.5} style={{ fill: "var(--color-herramienta-fg)", fontSize: 16, fontWeight: 800, textAnchor: "middle" }}>
-                                {m.herramienta.sigla}
-                              </text>
+                            <g key={h.clave} transform={`translate(${f(mx)} ${f(my)})`}>
+                              {tieneIsotipo(h.clave) ? (
+                                <>
+                                  <circle r={15} style={{ fill: "var(--color-surface)", stroke: "var(--color-line)", strokeWidth: 1.5 }} />
+                                  <Isotipo clave={h.clave} x={-10} y={-10} width={20} height={20} />
+                                </>
+                              ) : (
+                                <>
+                                  <circle r={14} style={{ fill: COLOR_DE_HERRAMIENTA[h.color], stroke: "var(--color-surface)", strokeWidth: 2.5 }} />
+                                  <text y={5.5} style={{ fill: "var(--color-herramienta-fg)", fontSize: 16, fontWeight: 800, textAnchor: "middle" }}>
+                                    {h.sigla}
+                                  </text>
+                                </>
+                              )}
                             </g>
                           );
                         })}
