@@ -9,7 +9,7 @@
  */
 import { useRef, useState } from "react";
 import { Badge, Button, Input, Segmentado, Textarea, useToast } from "@/components/ui";
-import { diaConAnio, diaCorto } from "@/lib/exploraciones/fechas";
+import { conEspaciosComunes, diaConAnio, diaCorto } from "@/lib/exploraciones/fechas";
 import { subirDirecto } from "@/lib/storage/subir-directo";
 import { useLienzo } from "./contexto";
 import { useCorrida } from "./useCorrida";
@@ -146,7 +146,7 @@ export default function SumarAMano() {
                 <p className="truncate text-sm text-fg">{d.titulo}</p>
                 <p className="text-xs text-fg-muted">
                   {d.fecha ? `Sesión del ${diaConAnio(d.fecha)}` : `Sumado el ${diaCorto(d.creadoEn)}`}
-                  {d.nombreArchivo ? ` · ${d.nombreArchivo}` : " · pegado"} · {d.caracteres.toLocaleString("es-CR")} caracteres
+                  {d.nombreArchivo ? ` · ${d.nombreArchivo}` : " · pegado"} · {conEspaciosComunes(d.caracteres.toLocaleString("es-CR"))} caracteres
                 </p>
               </div>
               <span className="flex flex-shrink-0 items-center gap-2">

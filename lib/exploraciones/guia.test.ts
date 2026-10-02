@@ -5,6 +5,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { OBJECIONES_COMUNES, PASOS_LAER, QUE_ES_CADA_PASO } from "./objeciones-comunes";
+import { conEspaciosComunes, diaConAnio, diaCorto, diaYHora } from "./fechas";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import { contenidoVacio, idDelItem, NIVELES, propuestaVacia, type EstadoDeExploracion, type ItemPropuesto } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
@@ -208,6 +209,15 @@ function respuesta(input: Record<string, unknown>): Anthropic.Messages.Message {
     usage: { input_tokens: 1, output_tokens: 1 },
   } as unknown as Anthropic.Messages.Message;
 }
+
+describe("las fechas se escriben igual en el servidor y en el navegador", () => {
+  it("sin los espacios especiales de cada motor (Node pone U+00A0 en «a. m.»): si no, la hidratación falla", () => {
+    for (const t of [diaYHora("2026-10-02T06:26:00Z"), diaCorto("2026-10-02"), diaConAnio("2026-10-02"), conEspaciosComunes((12345).toLocaleString("es-CR"))]) {
+      expect(t).not.toMatch(/[\u00a0\u202f\u2007\u2009]/);
+    }
+    expect(diaYHora("2026-10-02T06:26:00Z")).toContain("12:26");
+  });
+});
 
 describe("el manual de objeciones (el botón «Cómo manejar objeciones»)", () => {
   it("trae las cuatro de la guía y otras, una por clase válida, cada una con sus cuatro pasos", () => {
