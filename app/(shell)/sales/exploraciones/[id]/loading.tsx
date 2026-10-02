@@ -1,30 +1,21 @@
 /**
  * Loading skeleton de /sales/exploraciones/[id] (el lienzo de una exploración).
  *
- * FORMA REAL (page.tsx → LienzoDeExploracion): `SHELL_DEFAULT` · migas «Ventas › Exploraciones ›
- * empresa» · el resumen (la línea de «Qué sigue» y las ocho tarjetas del marco, de a cuatro) · la
- * barra de las cuatro pestañas · y la primera (Exploración): el panel del agente, la tarjeta de
- * industria y perfil y la de áreas en juego.
+ * FORMA REAL (page.tsx → LienzoDeExploracion): la cabecera de la ficha a todo el ancho (h-14, con
+ * borde abajo) · `px-6 py-8` · el nombre de la pieza con su flecha (el selector) · y el Resumen, que
+ * es la pieza que abre: la línea de «Qué sigue» y las ocho tarjetas del marco, de a cuatro.
  */
-import { PageHeaderSkeleton, Skeleton, SkeletonPanel, SkeletonTabs } from "@/components/ui";
-import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-
-function Casilla({ minH }: { minH: string }) {
-  return (
-    <SkeletonPanel minH={minH} className="p-4">
-      <Skeleton className="h-3 w-32" />
-      <Skeleton className="mt-2 h-2.5 w-3/4" delay={120} />
-      <Skeleton className="mt-4 h-2.5 w-1/2" delay={220} />
-    </SkeletonPanel>
-  );
-}
+import { Skeleton, SkeletonPanel } from "@/components/ui";
 
 export default function ExploracionLoading() {
   return (
-    <div className={SHELL_DEFAULT}>
-      <Skeleton className="h-2.5 w-52 mb-2" />
-      <PageHeaderSkeleton titleWidth="w-56" descWidth="w-72" />
-      <div className="space-y-5">
+    <div className="flex min-h-screen flex-col">
+      <div className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-line px-4">
+        <Skeleton className="h-2.5 w-20" />
+        <Skeleton className="h-3 w-48" delay={80} />
+      </div>
+      <div className="space-y-6 px-6 py-8">
+        <Skeleton className="h-5 w-36" />
         {/* El resumen: «Qué sigue» y las ocho tarjetas, de a cuatro. */}
         <SkeletonPanel minH="min-h-[300px]">
           <Skeleton className="h-2.5 w-16" />
@@ -37,10 +28,6 @@ export default function ExploracionLoading() {
             ))}
           </div>
         </SkeletonPanel>
-        <SkeletonTabs count={4} />
-        <Casilla minH="min-h-[72px]" />
-        <Casilla minH="min-h-[160px]" />
-        <Casilla minH="min-h-[112px]" />
       </div>
     </div>
   );

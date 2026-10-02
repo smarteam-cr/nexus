@@ -276,6 +276,8 @@ export interface ExploracionParaLaPantalla {
   proyectos?: { id: string; nombre: string; clientId: string }[];
   /** Las sesiones y los documentos sumados a mano, sin el texto (lib/exploraciones/documentos.ts). Igual que `sinLeer`. */
   documentos?: DocumentoDeLaLista[];
+  /** Las propuestas comerciales que nacieron de esta exploración. Igual que `sinLeer`. */
+  propuestas?: { id: string; nombre: string; estado: string; creadaEn: string }[];
   creadaPor: string;
   creadaEn: string;
   actualizadaEn: string;

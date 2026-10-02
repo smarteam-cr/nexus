@@ -4,19 +4,21 @@
  * LienzoDeExploracion — el lienzo de la exploración de venta de una empresa.
  *
  * Una GUÍA, no un formulario (pedido de Elías, 2026-10-01: «una guía muy fácil de rellenar»).
- * Arriba de todo, el resumen: qué sigue, las ocho tarjetas del marco de calificación (lo que el
- * vendedor necesita ver de un vistazo para poder proponer) y lo que el agente propuso para revisar.
- * Abajo, cuatro pestañas: Exploración (con quién se habla y la guía de la reunión; las respuestas
- * las anota el agente con la transcripción), la escala (dónde parece estar cada equipo, con
- * hipótesis y evidencia), los casos de uso y el traspaso. Lo que propone el agente aparece en su
- * lugar, para usarlo o descartarlo.
+ * Con el MISMO caparazón que el proyecto (pedido de Elías, 2026-10-01): el nombre de la pieza con el
+ * desplegable del recorrido (components/canvas/SelectorDePiezas.tsx). El Resumen abre primero: qué
+ * sigue, lo que el agente propuso para revisar y las tarjetas del marco de calificación. Después,
+ * Exploración (con quién se habla y la guía de la reunión; las respuestas las anota el agente con la
+ * transcripción), la escala (dónde parece estar cada equipo, con hipótesis y evidencia), los casos de
+ * uso y la propuesta. Lo que propone el agente aparece en su lugar, para usarlo o descartarlo. La
+ * pieza abierta queda en la dirección (`?pieza=`): recargar o compartir el enlace abre la misma.
  */
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Tabs, useToast } from "@/components/ui";
+import { useToast } from "@/components/ui";
+import { SelectorDePiezas, type EstadoDePieza, type FilaDePieza } from "@/components/canvas/SelectorDePiezas";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { CASILLAS_DEL_RESUMEN } from "@/lib/exploraciones/casillas";
-import { queSigueConPaso } from "@/lib/exploraciones/calidad";
+import { listaParaProponer, queSigueConPaso } from "@/lib/exploraciones/calidad";
 import {
   aplicarOperaciones,
   destinoValido,
@@ -34,15 +36,28 @@ import { LienzoContexto, type Lienzo, type OpcionesDeCambio, type PasoDelLienzoU
 import PasoCasosDeUso from "./PasoCasosDeUso";
 import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
-import PasoTraspaso from "./PasoTraspaso";
+import PasoPropuesta from "./PasoPropuesta";
 import Resumen from "./Resumen";
 
 const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
+  resumen: "Resumen",
   exploracion: "Exploración",
   escala: "La escala",
   casos: "Casos de uso",
-  traspaso: "Traspaso",
+  propuesta: "Propuesta",
 };
+
+/** Las piezas del recorrido, en orden (el Resumen va aparte, arriba del desplegable). */
+const PIEZAS = ["exploracion", "escala", "casos", "propuesta"] as const;
+
+/** Lo que dice el punto de cada pieza en el title de la fila. */
+const AYUDA_DEL_ESTADO: Record<EstadoDePieza, string> = {
+  generada: "Ya tiene contenido",
+  pendiente: "Hay algo para revisar o hacer",
+  vacia: "Todavía sin contenido",
+};
+
+const esPieza = (x: string | null | undefined): x is PasoDelLienzoUI => !!x && x in NOMBRE_DEL_PASO;
 
 /** Las casillas del resumen se revisan en sus tarjetas, arriba: no cuentan en ninguna pestaña. */
 const DEL_RESUMEN = new Set<string>(CASILLAS_DEL_RESUMEN);
@@ -51,10 +66,13 @@ export default function LienzoDeExploracion({
   inicial,
   escala,
   puedeEditar,
+  piezaInicial,
 }: {
   inicial: ExploracionParaLaPantalla;
   escala: EscalaDelLienzo;
   puedeEditar: boolean;
+  /** La de `?pieza=` en la dirección; sin ella, el Resumen. */
+  piezaInicial?: string | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -62,8 +80,23 @@ export default function LienzoDeExploracion({
   const [sinLeer, setSinLeer] = useState(inicial.sinLeer ?? []);
   const [proyectos, setProyectos] = useState(inicial.proyectos ?? []);
   const [documentos, setDocumentos] = useState(inicial.documentos ?? []);
+  const [propuestas, setPropuestas] = useState(inicial.propuestas ?? []);
   const [guardando, setGuardando] = useState(false);
-  const [paso, setPaso] = useState<PasoDelLienzoUI>("exploracion");
+  const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(esPieza(piezaInicial) ? piezaInicial : "resumen");
+  const [desplegado, setDesplegado] = useState(false);
+  // La pieza abierta queda en la dirección, sin otra navegación (no vuelve a pedir la página).
+  const setPaso = useCallback((p: PasoDelLienzoUI) => {
+    setPasoCrudo(p);
+    setDesplegado(false);
+    try {
+      const url = new URL(window.location.href);
+      if (p === "resumen") url.searchParams.delete("pieza");
+      else url.searchParams.set("pieza", p);
+      window.history.replaceState(window.history.state, "", url.toString());
+    } catch {
+      /* sin la dirección, igual cambia de pieza */
+    }
+  }, []);
 
   /* Lo último que confirmó el servidor, y la fila de pedidos: cada uno sale con la versión que dejó
      el anterior. */
@@ -88,6 +121,7 @@ export default function LienzoDeExploracion({
     if (inicial.sinLeer) setSinLeer(inicial.sinLeer);
     if (inicial.proyectos) setProyectos(inicial.proyectos);
     if (inicial.documentos) setDocumentos(inicial.documentos);
+    if (inicial.propuestas) setPropuestas(inicial.propuestas);
   }
 
   const validez = useMemo<Validez>(() => {
@@ -172,6 +206,7 @@ export default function LienzoDeExploracion({
           if (data.exploracion.sinLeer) setSinLeer(data.exploracion.sinLeer);
           if (data.exploracion.proyectos) setProyectos(data.exploracion.proyectos);
           if (data.exploracion.documentos) setDocumentos(data.exploracion.documentos);
+          if (data.exploracion.propuestas) setPropuestas(data.exploracion.propuestas);
           /* La preparación eligió la industria o el perfil: la escala del lienzo es otra (la arma el
              servidor con esos dos), así que se vuelve a pedir la página. */
           if (antes.edicion !== ahora.edicion || antes.perfilCierre !== ahora.perfilCierre || antes.perfilDespues !== ahora.perfilDespues) {
@@ -199,10 +234,13 @@ export default function LienzoDeExploracion({
   }, [exp.estado, pendientes, escala]);
   const pendientesPara = useCallback((filtro: (d: DestinoDePropuesta) => boolean) => revisables.filter((it) => filtro(it.destino)), [revisables]);
   const nombreDeNivel = useCallback((l: Letra) => escala.niveles.find((n) => n.letra === l)?.nombre ?? l, [escala]);
-  const irA = useCallback((p: PasoDelLienzoUI) => {
-    setPaso(p);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
+  const irA = useCallback(
+    (p: PasoDelLienzoUI) => {
+      setPaso(p);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [setPaso],
+  );
 
   const lienzo: Lienzo = {
     exp,
@@ -214,6 +252,7 @@ export default function LienzoDeExploracion({
     sinLeer,
     proyectos,
     documentos,
+    propuestas,
     puedeEditar,
     guardando,
     cambiar,
@@ -233,27 +272,60 @@ export default function LienzoDeExploracion({
       if (d.tipo === "aExplorar") return p === "escala";
       if (d.tipo === "casilla") return !DEL_RESUMEN.has(d.clave) && p === "exploracion";
       return p === "exploracion";
-    }).length || undefined;
+    }).length;
   // «Usar todas» no toca los casos de uso: esos se eligen uno por uno, en su paso.
   const paraUsarTodas = revisables.filter((it) => it.destino.tipo !== "casoDeUso");
 
-  const pasos = (["exploracion", "escala", "casos", "traspaso"] as const).map((key) => ({
-    key,
-    label: NOMBRE_DEL_PASO[key],
-    count: key === "traspaso" ? undefined : deCadaPaso(key),
-  }));
+  /* El punto de cada pieza: verde si ya tiene contenido, ámbar si hay algo para revisar o hacer,
+     hueco si todavía nada. Lo calcula la pantalla con lo que ya tiene: abrir el desplegable no pide nada. */
+  const lista = listaParaProponer(exp.estado, chequeo).every((p) => p.cumplido);
+  const filaDe = (p: (typeof PIEZAS)[number]): FilaDePieza => {
+    const porRevisar = deCadaPaso(p);
+    let estado: EstadoDePieza;
+    let aviso: FilaDePieza["aviso"] = porRevisar > 0 ? { corto: `${porRevisar} para revisar` } : null;
+    switch (p) {
+      case "exploracion": {
+        const leyo = exp.estado.propuesta.corridas.some((c) => c.modo === "preparar" || c.modo === "leer");
+        estado = porRevisar > 0 || sinLeer.length > 0 ? "pendiente" : leyo ? "generada" : "vacia";
+        if (!aviso && sinLeer.length > 0) aviso = { corto: `${sinLeer.length} sin leer`, largo: "Reuniones o documentos que el agente todavía no leyó" };
+        break;
+      }
+      case "escala":
+        estado = porRevisar > 0 ? "pendiente" : chequeo.completo ? "generada" : "vacia";
+        break;
+      case "casos":
+        estado = porRevisar > 0 ? "pendiente" : Object.keys(exp.estado.contenido.casosDeUso).length > 0 ? "generada" : "vacia";
+        break;
+      case "propuesta":
+        estado = propuestas.length > 0 ? "generada" : lista ? "pendiente" : "vacia";
+        if (propuestas.length === 0 && lista) aviso = { corto: "Lista para proponer" };
+        break;
+    }
+    return { clave: p, etiqueta: NOMBRE_DEL_PASO[p], estado, ayuda: AYUDA_DEL_ESTADO[estado], aviso };
+  };
 
   return (
     <LienzoContexto.Provider value={lienzo}>
-      <div className="space-y-5">
-        <Resumen sigue={{ ...sigue, paso: sigue.paso === paso ? null : sigue.paso }} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paraUsarTodas={paraUsarTodas} />
+      <div className="space-y-6">
+        <SelectorDePiezas
+          titulo={NOMBRE_DEL_PASO[paso]}
+          abierto={desplegado}
+          onCambiarAbierto={setDesplegado}
+          resumen={{
+            activo: paso === "resumen",
+            ayuda: "Qué sigue, lo que propuso el agente y lo que se sabe del prospecto.",
+            onElegir: () => setPaso("resumen"),
+          }}
+          activa={paso === "resumen" ? null : paso}
+          onElegir={(clave) => esPieza(clave) && setPaso(clave)}
+          filas={PIEZAS.map(filaDe)}
+        />
 
-        <Tabs<PasoDelLienzoUI> aria-label="Pasos de la exploración" value={paso} onChange={setPaso} items={pasos} />
-
+        {paso === "resumen" && <Resumen sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paraUsarTodas={paraUsarTodas} />}
         {paso === "exploracion" && <PasoExploracion />}
         {paso === "escala" && <PasoEscala />}
         {paso === "casos" && <PasoCasosDeUso />}
-        {paso === "traspaso" && <PasoTraspaso />}
+        {paso === "propuesta" && <PasoPropuesta />}
       </div>
     </LienzoContexto.Provider>
   );

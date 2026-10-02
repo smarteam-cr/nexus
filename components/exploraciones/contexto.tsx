@@ -45,6 +45,8 @@ export interface Lienzo {
   proyectos: NonNullable<ExploracionParaLaPantalla["proyectos"]>;
   /** Las sesiones y los documentos sumados a mano (al abrir y al recargar). */
   documentos: NonNullable<ExploracionParaLaPantalla["documentos"]>;
+  /** Las propuestas comerciales que nacieron de esta exploración (al abrir y al recargar). */
+  propuestas: NonNullable<ExploracionParaLaPantalla["propuestas"]>;
   puedeEditar: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;
@@ -56,12 +58,16 @@ export interface Lienzo {
   nombreDeNivel: (l: Letra) => string;
   /** Lo pendiente para revisar de un destino (o de todos los de un tipo). Sin las hipótesis de nivel. */
   pendientesPara: (filtro: (d: DestinoDePropuesta) => boolean) => ItemPropuesto[];
-  /** Lleva al paso del lienzo (desde «Qué sigue» o un enlace). */
+  /** Lleva a una pieza del lienzo (desde «Qué sigue» o un enlace). */
   irA: (paso: PasoDelLienzoUI) => void;
 }
 
-/** Los pasos del lienzo, como pestañas. */
-export type PasoDelLienzoUI = "exploracion" | "escala" | "casos" | "traspaso";
+/**
+ * Las piezas del lienzo, en el desplegable de arriba (el mismo caparazón que el proyecto). El
+ * «Traspaso» se retiró el 2026-10-01: era la explicación de qué recibe el CSE, no algo que hacer; en
+ * su lugar está la Propuesta, que es el paso que sigue.
+ */
+export type PasoDelLienzoUI = "resumen" | "exploracion" | "escala" | "casos" | "propuesta";
 
 export const LienzoContexto = createContext<Lienzo | null>(null);
 
