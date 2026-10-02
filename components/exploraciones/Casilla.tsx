@@ -8,7 +8,7 @@
  * se descarta desde la propia casilla.
  */
 import { useState } from "react";
-import { Badge, Button, Input, Segmentado, Select, Textarea } from "@/components/ui";
+import { Badge, Button, Field, Input, Segmentado, Select, Textarea } from "@/components/ui";
 import {
   CLASES_DE_OBJECION,
   definicionDe,
@@ -149,22 +149,51 @@ function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown }) {
 }
 
 // ── Editores ──────────────────────────────────────────────────────────────────
+//
+// Cada campo con su ETIQUETA a la vista y a todo el ancho (pedido de Elías, 2026-10-01: los
+// placeholders cortados no se leían y no había espacio para ver lo escrito). Cada ítem de una lista
+// va en su propia tarjeta, con los campos uno debajo del otro.
 
-function EditorDeLista({ valor, onCambio, placeholder }: { valor: string[]; onCambio: (v: string[]) => void; placeholder: string }) {
+/** La tarjeta de un ítem de lista: sus campos y «Quitar» arriba a la derecha. */
+function Item({ children, onQuitar, titulo }: { children: React.ReactNode; onQuitar: () => void; titulo: string }) {
+  return (
+    <div className="space-y-3 rounded-lg border border-line p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-fg-secondary">{titulo}</p>
+        <button type="button" className="text-xs text-fg-muted underline-offset-2 hover:text-fg hover:underline" onClick={onQuitar}>
+          Quitar
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Agregar({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <Button size="xs" variant="ghost" onClick={onClick}>
+      {children}
+    </Button>
+  );
+}
+
+function EditorDeLista({ valor, onCambio }: { valor: string[]; onCambio: (v: string[]) => void }) {
   const filas = valor.length ? valor : [""];
   return (
     <div className="space-y-2">
       {filas.map((t, i) => (
-        <div key={i} className="flex gap-2">
-          <Input value={t} placeholder={placeholder} onChange={(e) => onCambio(filas.map((x, j) => (j === i ? e.target.value : x)))} />
-          <Button size="sm" variant="destructive" aria-label="Quitar" onClick={() => onCambio(filas.filter((_, j) => j !== i))}>
+        <div key={i} className="flex items-start gap-2">
+          <Textarea rows={2} value={t} aria-label={`Punto ${i + 1}`} onChange={(e) => onCambio(filas.map((x, j) => (j === i ? e.target.value : x)))} />
+          <button
+            type="button"
+            className="mt-2 flex-shrink-0 text-xs text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+            onClick={() => onCambio(filas.filter((_, j) => j !== i))}
+          >
             Quitar
-          </Button>
+          </button>
         </div>
       ))}
-      <Button size="xs" variant="ghost" onClick={() => onCambio([...filas, ""])}>
-        Agregar otra
-      </Button>
+      <Agregar onClick={() => onCambio([...filas, ""])}>Agregar otro punto</Agregar>
     </div>
   );
 }
@@ -176,58 +205,59 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
 
   switch (tipo) {
     case "texto":
-      return <Textarea rows={4} value={(borrador as string) ?? ""} onChange={(e) => setBorrador(e.target.value)} />;
+      return <Textarea rows={6} aria-label={definicionDe(clave).etiqueta} value={(borrador as string) ?? ""} onChange={(e) => setBorrador(e.target.value)} />;
     case "lista":
-      return <EditorDeLista valor={(borrador as string[]) ?? []} onCambio={setBorrador} placeholder="Una idea por línea" />;
+      return <EditorDeLista valor={(borrador as string[]) ?? []} onCambio={setBorrador} />;
     case "metas": {
       const metas = ((borrador as Meta[]) ?? []).length ? (borrador as Meta[]) : [{ que: "" }];
       const set = (i: number, campo: keyof Meta, v: string) => setBorrador(metas.map((m, j) => (j === i ? { ...m, [campo]: v } : m)));
       return (
         <div className="space-y-3">
           {metas.map((m, i) => (
-            <div key={i} className="grid gap-2 rounded-lg border border-line p-2.5 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]">
-              <Input value={m.que} placeholder="Qué quiere lograr" aria-label="Qué quiere lograr" onChange={(e) => set(i, "que", e.target.value)} />
-              <Input value={m.actual ?? ""} placeholder="Hoy (cifra)" aria-label="De cuánto parte" onChange={(e) => set(i, "actual", e.target.value)} />
-              <Input value={m.objetivo ?? ""} placeholder="Meta (cifra)" aria-label="A cuánto quiere llegar" onChange={(e) => set(i, "objetivo", e.target.value)} />
-              <Input value={m.para ?? ""} placeholder="Para cuándo" aria-label="Para cuándo" onChange={(e) => set(i, "para", e.target.value)} />
-              <Button size="sm" variant="destructive" onClick={() => setBorrador(metas.filter((_, j) => j !== i))}>
-                Quitar
-              </Button>
-            </div>
+            <Item key={i} titulo={`Meta ${i + 1}`} onQuitar={() => setBorrador(metas.filter((_, j) => j !== i))}>
+              <Field label="Qué quiere lograr">
+                <Textarea rows={2} value={m.que} placeholder="Por ejemplo: cerrar más de lo que entra" onChange={(e) => set(i, "que", e.target.value)} />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="De cuánto parte">
+                  <Input value={m.actual ?? ""} placeholder="Hoy: 4 de cada 10" onChange={(e) => set(i, "actual", e.target.value)} />
+                </Field>
+                <Field label="A cuánto quiere llegar">
+                  <Input value={m.objetivo ?? ""} placeholder="7 de cada 10" onChange={(e) => set(i, "objetivo", e.target.value)} />
+                </Field>
+                <Field label="Para cuándo">
+                  <Input value={m.para ?? ""} placeholder="Diciembre" onChange={(e) => set(i, "para", e.target.value)} />
+                </Field>
+              </div>
+            </Item>
           ))}
-          <Button size="xs" variant="ghost" onClick={() => setBorrador([...metas, { que: "" }])}>
-            Agregar otra meta
-          </Button>
+          <Agregar onClick={() => setBorrador([...metas, { que: "" }])}>Agregar otra meta</Agregar>
         </div>
       );
     }
     case "retos": {
       const retos = ((borrador as Reto[]) ?? []).length ? (borrador as Reto[]) : [{ texto: "" }];
+      const set = (i: number, cambio: Partial<Reto>) => setBorrador(retos.map((x, j) => (j === i ? { ...x, ...cambio } : x)));
       return (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {retos.map((r, i) => (
-            <div key={i} className="grid gap-2 sm:grid-cols-[2fr_1fr_auto]">
-              <Input value={r.texto} placeholder="Qué los frena" aria-label="Reto" onChange={(e) => setBorrador(retos.map((x, j) => (j === i ? { ...x, texto: e.target.value } : x)))} />
-              <Select
-                aria-label="Dimensión de la escala"
-                value={r.dimensionId ?? ""}
-                onChange={(e) => setBorrador(retos.map((x, j) => (j === i ? { ...x, dimensionId: e.target.value || undefined } : x)))}
-              >
-                <option value="">Sin dimensión</option>
-                {dimsEnJuego.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.nombre}
-                  </option>
-                ))}
-              </Select>
-              <Button size="sm" variant="destructive" onClick={() => setBorrador(retos.filter((_, j) => j !== i))}>
-                Quitar
-              </Button>
-            </div>
+            <Item key={i} titulo={`Reto ${i + 1}`} onQuitar={() => setBorrador(retos.filter((_, j) => j !== i))}>
+              <Field label="Qué los frena">
+                <Textarea rows={2} value={r.texto} onChange={(e) => set(i, { texto: e.target.value })} />
+              </Field>
+              <Field label="Dimensión de la escala" hint="Opcional: de qué parte de la operación sale.">
+                <Select value={r.dimensionId ?? ""} onChange={(e) => set(i, { dimensionId: e.target.value || undefined })}>
+                  <option value="">Sin dimensión</option>
+                  {dimsEnJuego.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.nombre}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </Item>
           ))}
-          <Button size="xs" variant="ghost" onClick={() => setBorrador([...retos, { texto: "" }])}>
-            Agregar otro reto
-          </Button>
+          <Agregar onClick={() => setBorrador([...retos, { texto: "" }])}>Agregar otro reto</Agregar>
         </div>
       );
     }
@@ -237,25 +267,30 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
       return (
         <div className="space-y-3">
           {personas.map((p, i) => (
-            <div key={i} className="grid gap-2 rounded-lg border border-line p-2.5 sm:grid-cols-[1.2fr_1fr_0.9fr_1.6fr_auto]">
-              <Input value={p.nombre} placeholder="Nombre" aria-label="Nombre" onChange={(e) => set(i, { nombre: e.target.value })} />
-              <Input value={p.cargo ?? ""} placeholder="Cargo" aria-label="Cargo" onChange={(e) => set(i, { cargo: e.target.value })} />
-              <Select aria-label="Papel en la decisión" value={p.rol} onChange={(e) => set(i, { rol: e.target.value as Persona["rol"] })}>
-                {ROLES_EN_LA_DECISION.map((r) => (
-                  <option key={r} value={r}>
-                    {ETIQUETA_DEL_ROL[r]}
-                  </option>
-                ))}
-              </Select>
-              <Input value={p.nota ?? ""} placeholder="Cómo le afecta, qué le preocupa" aria-label="Nota" onChange={(e) => set(i, { nota: e.target.value })} />
-              <Button size="sm" variant="destructive" onClick={() => setBorrador(personas.filter((_, j) => j !== i))}>
-                Quitar
-              </Button>
-            </div>
+            <Item key={i} titulo={p.nombre.trim() || `Persona ${i + 1}`} onQuitar={() => setBorrador(personas.filter((_, j) => j !== i))}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Nombre">
+                  <Input value={p.nombre} onChange={(e) => set(i, { nombre: e.target.value })} />
+                </Field>
+                <Field label="Cargo">
+                  <Input value={p.cargo ?? ""} onChange={(e) => set(i, { cargo: e.target.value })} />
+                </Field>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-fg-secondary">Papel en la decisión</p>
+                <Segmentado
+                  etiqueta="Papel en la decisión"
+                  opciones={ROLES_EN_LA_DECISION.map((r) => ({ clave: r, etiqueta: ETIQUETA_DEL_ROL[r] }))}
+                  valor={p.rol}
+                  onCambio={(rol) => set(i, { rol })}
+                />
+              </div>
+              <Field label="Nota" hint="Cómo le afecta, qué le preocupa.">
+                <Textarea rows={2} value={p.nota ?? ""} onChange={(e) => set(i, { nota: e.target.value })} />
+              </Field>
+            </Item>
           ))}
-          <Button size="xs" variant="ghost" onClick={() => setBorrador([...personas, { nombre: "", rol: "afectado" }])}>
-            Agregar otra persona
-          </Button>
+          <Agregar onClick={() => setBorrador([...personas, { nombre: "", rol: "afectado" }])}>Agregar otra persona</Agregar>
         </div>
       );
     }
@@ -265,43 +300,54 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
       return (
         <div className="space-y-3">
           {objeciones.map((o, i) => (
-            <div key={i} className="grid gap-2 rounded-lg border border-line p-2.5 sm:grid-cols-[2fr_1fr_2fr_auto]">
-              <Input value={o.texto} placeholder="Qué dijo que lo frena" aria-label="Objeción" onChange={(e) => set(i, { texto: e.target.value })} />
-              <Select aria-label="Clase de objeción" value={o.clase} onChange={(e) => set(i, { clase: e.target.value as Objecion["clase"] })}>
-                {CLASES_DE_OBJECION.map((c) => (
-                  <option key={c} value={c}>
-                    {ETIQUETA_DE_LA_OBJECION[c]}
-                  </option>
-                ))}
-              </Select>
-              <Input value={o.respuesta ?? ""} placeholder="Cómo se respondió (si se respondió)" aria-label="Cómo se respondió" onChange={(e) => set(i, { respuesta: e.target.value })} />
-              <Button size="sm" variant="destructive" onClick={() => setBorrador(objeciones.filter((_, j) => j !== i))}>
-                Quitar
-              </Button>
-            </div>
+            <Item key={i} titulo={`Objeción ${i + 1}`} onQuitar={() => setBorrador(objeciones.filter((_, j) => j !== i))}>
+              <Field label="Qué dijo que lo frena">
+                <Textarea rows={2} value={o.texto} onChange={(e) => set(i, { texto: e.target.value })} />
+              </Field>
+              <Field label="De qué tipo es">
+                <Select value={o.clase} onChange={(e) => set(i, { clase: e.target.value as Objecion["clase"] })}>
+                  {CLASES_DE_OBJECION.map((c) => (
+                    <option key={c} value={c}>
+                      {ETIQUETA_DE_LA_OBJECION[c]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Cómo se respondió" hint="Si no se respondió, déjalo vacío: queda abierta.">
+                <Textarea rows={2} value={o.respuesta ?? ""} onChange={(e) => set(i, { respuesta: e.target.value })} />
+              </Field>
+            </Item>
           ))}
-          <Button size="xs" variant="ghost" onClick={() => setBorrador([...objeciones, { texto: "", clase: "otra" }])}>
-            Agregar otra objeción
-          </Button>
+          <Agregar onClick={() => setBorrador([...objeciones, { texto: "", clase: "otra" }])}>Agregar otra objeción</Agregar>
         </div>
       );
     }
     case "siguientePaso": {
       const s = (borrador as SiguientePaso) ?? { que: "" };
       return (
-        <div className="grid gap-2 sm:grid-cols-[2fr_1fr_1.5fr]">
-          <Input value={s.que} placeholder="Qué sigue" aria-label="Qué sigue" onChange={(e) => setBorrador({ ...s, que: e.target.value })} />
-          <Input type="date" value={s.fecha ?? ""} aria-label="Fecha" onChange={(e) => setBorrador({ ...s, fecha: e.target.value || undefined })} />
-          <Input value={s.conQuien ?? ""} placeholder="Con quién" aria-label="Con quién" onChange={(e) => setBorrador({ ...s, conQuien: e.target.value })} />
+        <div className="space-y-3">
+          <Field label="Qué sigue">
+            <Textarea rows={2} value={s.que} onChange={(e) => setBorrador({ ...s, que: e.target.value })} />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Fecha">
+              <Input type="date" value={s.fecha ?? ""} onChange={(e) => setBorrador({ ...s, fecha: e.target.value || undefined })} />
+            </Field>
+            <Field label="Con quién">
+              <Input value={s.conQuien ?? ""} onChange={(e) => setBorrador({ ...s, conQuien: e.target.value })} />
+            </Field>
+          </div>
         </div>
       );
     }
     case "apertura": {
       const a = (borrador as Apertura) ?? null;
       return (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <Segmentado etiqueta="Apertura a la asesoría" opciones={APERTURA} valor={a?.valor ?? null} onCambio={(v) => setBorrador({ ...(a ?? {}), valor: v })} />
-          <Input value={a?.porQue ?? ""} placeholder="Por qué lo dices" aria-label="Por qué" onChange={(e) => setBorrador({ ...(a ?? { valor: "no_se" }), porQue: e.target.value })} />
+          <Field label="Por qué lo dices">
+            <Textarea rows={2} value={a?.porQue ?? ""} onChange={(e) => setBorrador({ ...(a ?? { valor: "no_se" }), porQue: e.target.value })} />
+          </Field>
         </div>
       );
     }
@@ -338,19 +384,42 @@ function vacio(v: unknown): boolean {
   return v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
 }
 
-/** `sinTitulo`: dentro de un cajón que ya muestra el nombre y la ayuda de la casilla (el resumen). */
-export function Casilla({ clave, className, sinTitulo = false }: { clave: ClaveDeCasilla; className?: string; sinTitulo?: boolean }) {
+/**
+ * `sinTitulo`: dentro de un cajón que ya muestra el nombre y la ayuda de la casilla (el resumen).
+ * `editarDeEntrada`: abre directo en el formulario, sin «Completar» ni «Editar» (el cajón del
+ * resumen: tocar la tarjeta ya es querer llenarla). Al guardar o cancelar avisa con `onListo`.
+ */
+export function Casilla({
+  clave,
+  className,
+  sinTitulo = false,
+  editarDeEntrada = false,
+  onListo,
+}: {
+  clave: ClaveDeCasilla;
+  className?: string;
+  sinTitulo?: boolean;
+  editarDeEntrada?: boolean;
+  onListo?: () => void;
+}) {
   const { exp, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
   const def = definicionDe(clave);
   const valor = exp.estado.contenido.casillas[clave] as ValoresDeCasillas[typeof clave] | undefined;
   const pendientes = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
-  const [editando, setEditando] = useState(false);
+  const [editando, setEditando] = useState(editarDeEntrada && puedeEditar);
   const [borrador, setBorrador] = useState<unknown>(valor);
 
   async function guardar() {
     const limpio = limpiar(clave, borrador);
     const ok = await cambiar([{ op: "casilla", clave, valor: vacio(limpio) ? null : limpio }]);
-    if (ok) setEditando(false);
+    if (!ok) return;
+    setEditando(false);
+    onListo?.();
+  }
+
+  function cancelar() {
+    setEditando(false);
+    onListo?.();
   }
 
   return (
@@ -390,7 +459,7 @@ export function Casilla({ clave, className, sinTitulo = false }: { clave: ClaveD
             <Button size="sm" variant="primary" loading={guardando} onClick={() => void guardar()}>
               Guardar
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => setEditando(false)}>
+            <Button size="sm" variant="secondary" onClick={cancelar}>
               Cancelar
             </Button>
           </div>

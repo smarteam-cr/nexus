@@ -62,7 +62,7 @@ export interface SiguientePaso {
  * Una objeción del cliente: lo que dijo que lo frena, con sus palabras, de qué clase es y cómo se
  * respondió, si se respondió. Las cuatro primeras clases son las típicas de la guía (guia.ts).
  */
-export const CLASES_DE_OBJECION = ["precio", "herramienta", "momento", "propuesta", "confianza", "otra"] as const;
+export const CLASES_DE_OBJECION = ["precio", "herramienta", "momento", "propuesta", "confianza", "decisor", "interno", "otra"] as const;
 export type ClaseDeObjecion = (typeof CLASES_DE_OBJECION)[number];
 export const ETIQUETA_DE_LA_OBJECION: Record<ClaseDeObjecion, string> = {
   precio: "Precio",
@@ -70,6 +70,8 @@ export const ETIQUETA_DE_LA_OBJECION: Record<ClaseDeObjecion, string> = {
   momento: "No es el momento",
   propuesta: "Pide la propuesta",
   confianza: "Desconfianza",
+  decisor: "Lo tiene que consultar",
+  interno: "Lo harían ellos mismos",
   otra: "Otra",
 };
 export interface Objecion {

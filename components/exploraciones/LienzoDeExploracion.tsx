@@ -33,6 +33,7 @@ import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import { LienzoContexto, type Lienzo, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
+import ManejoDeObjeciones from "./ManejoDeObjeciones";
 import PasoCasosDeUso from "./PasoCasosDeUso";
 import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
@@ -307,19 +308,22 @@ export default function LienzoDeExploracion({
   return (
     <LienzoContexto.Provider value={lienzo}>
       <div className="space-y-6">
-        <SelectorDePiezas
-          titulo={NOMBRE_DEL_PASO[paso]}
-          abierto={desplegado}
-          onCambiarAbierto={setDesplegado}
-          resumen={{
-            activo: paso === "resumen",
-            ayuda: "Qué sigue, lo que propuso el agente y lo que se sabe del prospecto.",
-            onElegir: () => setPaso("resumen"),
-          }}
-          activa={paso === "resumen" ? null : paso}
-          onElegir={(clave) => esPieza(clave) && setPaso(clave)}
-          filas={PIEZAS.map(filaDe)}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <SelectorDePiezas
+            titulo={NOMBRE_DEL_PASO[paso]}
+            abierto={desplegado}
+            onCambiarAbierto={setDesplegado}
+            resumen={{
+              activo: paso === "resumen",
+              ayuda: "Qué sigue, lo que propuso el agente y lo que se sabe del prospecto.",
+              onElegir: () => setPaso("resumen"),
+            }}
+            activa={paso === "resumen" ? null : paso}
+            onElegir={(clave) => esPieza(clave) && setPaso(clave)}
+            filas={PIEZAS.map(filaDe)}
+          />
+          <ManejoDeObjeciones />
+        </div>
 
         {paso === "resumen" && <Resumen sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paraUsarTodas={paraUsarTodas} />}
         {paso === "exploracion" && <PasoExploracion />}

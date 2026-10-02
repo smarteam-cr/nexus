@@ -165,7 +165,7 @@ export default function Resumen({
         )}
 
         <Drawer open={abierta !== null} onClose={() => setAbierta(null)} title={abierta ? definicionDe(abierta).etiqueta : undefined} description={abierta ? definicionDe(abierta).ayuda : undefined} size="lg">
-          {abierta && <Casilla clave={abierta} sinTitulo />}
+          {abierta && <Casilla key={abierta} clave={abierta} sinTitulo editarDeEntrada onListo={() => setAbierta(null)} />}
         </Drawer>
       </section>
 

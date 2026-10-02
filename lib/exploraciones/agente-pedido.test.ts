@@ -313,7 +313,7 @@ describe("las objeciones y las particularidades (pedido de Elías, 2026-10-01)",
   it("la herramienta pide las objeciones con su clase, y el pedido nombra las clases", () => {
     const tool = herramienta(ctx());
     const props = (tool.input_schema as { properties: Record<string, { items?: { properties?: Record<string, { enum?: string[] }> } }> }).properties;
-    expect(props.objeciones.items?.properties?.clase.enum).toEqual(["precio", "herramienta", "momento", "propuesta", "confianza", "otra"]);
+    expect(props.objeciones.items?.properties?.clase.enum).toEqual(["precio", "herramienta", "momento", "propuesta", "confianza", "decisor", "interno", "otra"]);
     expect(String(pedidoDeLaExploracion(ctx()).system)).toMatch(/Las clases de objeción: precio/);
   });
 });

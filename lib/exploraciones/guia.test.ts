@@ -4,11 +4,12 @@
  */
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
+import { OBJECIONES_COMUNES, PASOS_LAER, QUE_ES_CADA_PASO } from "./objeciones-comunes";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import { contenidoVacio, idDelItem, NIVELES, propuestaVacia, type EstadoDeExploracion, type ItemPropuesto } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { CambiosSchema, leerContenido, leerPropuesta } from "./esquemas";
-import { CASILLAS_DEL_RESUMEN } from "./casillas";
+import { CASILLAS_DEL_RESUMEN, CLASES_DE_OBJECION } from "./casillas";
 import {
   enfoqueDeLaGuia,
   focoDeLaGuia,
@@ -207,6 +208,20 @@ function respuesta(input: Record<string, unknown>): Anthropic.Messages.Message {
     usage: { input_tokens: 1, output_tokens: 1 },
   } as unknown as Anthropic.Messages.Message;
 }
+
+describe("el manual de objeciones (el botón «Cómo manejar objeciones»)", () => {
+  it("trae las cuatro de la guía y otras, una por clase válida, cada una con sus cuatro pasos", () => {
+    const clases = OBJECIONES_COMUNES.map((o) => o.clase);
+    expect(new Set(clases).size).toBe(clases.length);
+    for (const t of TIPOS_DE_OBJECION) expect(clases).toContain(t);
+    for (const o of OBJECIONES_COMUNES) {
+      expect(CLASES_DE_OBJECION).toContain(o.clase);
+      expect(o.dice).toMatch(/^«.+»$/);
+      for (const p of PASOS_LAER) expect(o[p.clave].length).toBeGreaterThan(10);
+    }
+    for (const p of PASOS_LAER) expect(QUE_ES_CADA_PASO[p.clave].que.length).toBeGreaterThan(20);
+  });
+});
 
 describe("el contexto de la guía", () => {
   it("las objeciones que ya puso el cliente llegan a la guía, sin repetir, con su clase y si se respondió", () => {
