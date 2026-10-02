@@ -21,6 +21,7 @@ import CanvasBoundary from "./CanvasBoundary";
 import PrintDocButton from "@/components/print/PrintDocButton";
 import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
+import { SelectorDePiezas, type FilaDePieza } from "@/components/canvas/SelectorDePiezas";
 import VersionesDelDocumento from "@/components/canvas/VersionesDelDocumento";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
@@ -61,10 +62,10 @@ const CANVAS_CON_RENDERER_PROPIO = new Set(
 );
 
 /** Cómo se lee de un vistazo el estado de una pieza en el desplegable. */
-const ESTADO_PIEZA: Record<RowState, { glifo: string; hint: string }> = {
-  generada:    { glifo: "✓", hint: "Generada" },
-  vacia:       { glifo: "○", hint: "Todavía sin contenido — entra y genérala" },
-  por_activar: { glifo: "+", hint: "Este proyecto todavía no la tiene" },
+const ESTADO_PIEZA: Record<RowState, { hint: string }> = {
+  generada:    { hint: "Generada" },
+  vacia:       { hint: "Todavía sin contenido — entra y genérala" },
+  por_activar: { hint: "Este proyecto todavía no la tiene" },
 };
 
 // ── Canvas types ────────────────────────────────────────────────────────────
@@ -184,7 +185,6 @@ export default function ProjectCanvasPanel({
   const [enResumen, setEnResumen] = useState(
     () => vistaDeLaUrl(seeded ?? [], urlDeOtroProyecto ? null : canvasFromUrl, seeded !== null).tipo === "resumen",
   );
-  const canvasDropdownRef = useRef<HTMLDivElement>(null);
   /* Slot en el header para los CTAs de un canvas que necesita ESTADO PROPIO para decidir
      qué botón mostrar. El canvas los renderiza acá por portal y quedan junto al nombre, en
      el mismo lugar que el `CanvasAgentButton` que este panel monta para los demás.
@@ -344,17 +344,6 @@ export default function ProjectCanvasPanel({
     void refetchCanvases();
   }, [refetchCanvases, canvasRefreshSignal]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (canvasDropdownRef.current && !canvasDropdownRef.current.contains(e.target as Node)) {
-        setCanvasDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
   /* El esqueleto se apaga cuando VOLVIÓ la consulta de la lista, no cuando la lista trae
      algo: un proyecto sin piezas es un estado válido y antes se quedaba cargando para
      siempre. Acá colgaba también el fetch de los «cards» del Resumen viejo, retirado el
@@ -421,170 +410,94 @@ export default function ProjectCanvasPanel({
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            {/* Canvas selector dropdown */}
-            <div className="relative" ref={canvasDropdownRef}>
-              <button
-                onClick={() => setCanvasDropdownOpen(!canvasDropdownOpen)}
-                disabled={cronogramaOcupado}
-                title={cronogramaOcupado ? "Espera a que la IA termine en el cronograma para cambiar de pieza." : undefined}
-                className="flex items-center gap-2 text-xl font-bold text-white hover:text-gray-300 transition-colors disabled:cursor-wait disabled:opacity-60"
-              >
-                {/* El rótulo sale del REGISTRO y no del nombre guardado en la base: es lo que
-                    hace que renombrar una pieza —«Desarrollo» → «Integraciones»— sea una línea
-                    en `lib/pieces/registry.ts` y no un backfill. Un canvas suelto del CSE no
-                    está registrado y se llama como él lo llamó. */}
-                {enResumen
+            {/* El selector de piezas (components/canvas/SelectorDePiezas.tsx, compartido con la
+                exploración de venta). El desplegable es el MAPA DEL FLUJO, no la lista de lo que
+                existe: las piezas del recorrido, tenga el proyecto las que tenga. CTA a la derecha
+                con jerarquía — Generar sólido (la acción natural siguiente), Regenerar y Activar
+                fantasma (pisan trabajo o son secundarias). El rótulo sale del REGISTRO y no del
+                nombre guardado en la base: renombrar una pieza es una línea en
+                `lib/pieces/registry.ts`. Un canvas suelto del CSE se llama como él lo llamó. */}
+            <SelectorDePiezas
+              titulo={
+                enResumen
                   ? "Resumen"
                   : activeCanvas
                     ? (activeSlug ? pieceLabel(activeSlug) : activeCanvas.name)
-                    : "Sin piezas"}
-                <svg className={`w-4 h-4 text-gray-400 transition-transform ${canvasDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {canvasDropdownOpen && (
-                /* El desplegable es el MAPA DEL FLUJO, no la lista de lo que existe: las
-                   7 piezas del recorrido, tenga el proyecto las que tenga. Cada fila:
-                   estado (dot) · nombre · aviso si no aplica (texto visible, no un hover)
-                   · CTA a la derecha con jerarquía — Generar sólido (la acción natural
-                   siguiente), Regenerar y Activar fantasma (pisan trabajo o son
-                   secundarias). Fila = contenedor + DOS botones: anidar botones es HTML
-                   inválido y el click del CTA burbujearía hasta cambiar de canvas. */
-                <div className="absolute left-0 top-full mt-1.5 z-50 w-96 bg-surface border border-line rounded-2xl shadow-2xl p-1.5">
-                  {/* RESUMEN — primera parada y no un documento: cómo va el proyecto, su
-                      widget y su handoff. Va con separador porque no es una pieza del
-                      recorrido: no se genera, no se activa y no tiene estado que mostrar,
-                      así que tampoco lleva el punto de color de las de abajo. */}
-                  <button
-                    onClick={irAlResumen}
-                    className={`w-full flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-xl text-left transition-colors ${
-                      enResumen ? "bg-brand/10" : "hover:bg-surface-hover"
-                    }`}
-                    title="Cómo va el proyecto: el resumen con fuentes, el estado de la cuenta y el handoff."
-                  >
-                    <span aria-hidden className="w-2 shrink-0" />
-                    <span
-                      className={`block truncate text-sm ${
-                        enResumen ? "text-brand font-semibold" : "text-fg"
-                      }`}
-                    >
-                      Resumen
-                    </span>
-                  </button>
-                  <div className="my-1.5 border-t border-line" aria-hidden />
-                  {pieceRows.map((row) => {
-                    const activa = !enResumen && row.canvasId !== null && row.canvasId === activeCanvasId;
-                    // ¿Esta pieza le corresponde a este proyecto, y están sus pasos
-                    // previos? Nunca bloquea: informa. (lib/flow/piece-readiness)
-                    const readiness = pieceReadiness(row.slug, {
-                      tags: tags ?? [],
-                      piezasConContenido,
-                      hubspotPipelineId: hubspotPipelineId ?? null,
-                    });
-                    return (
-                      <div
-                        key={row.slug}
-                        className={`group flex items-center gap-3 pl-3 pr-2 py-2 rounded-xl transition-colors ${
-                          activa ? "bg-brand/10" : "hover:bg-surface-hover"
-                        }`}
+                    : "Sin piezas"
+              }
+              abierto={canvasDropdownOpen}
+              onCambiarAbierto={setCanvasDropdownOpen}
+              deshabilitado={cronogramaOcupado}
+              motivoDeshabilitado="Espera a que la IA termine en el cronograma para cambiar de pieza."
+              resumen={{
+                activo: enResumen,
+                ayuda: "Cómo va el proyecto: el resumen con fuentes, el estado de la cuenta y el handoff.",
+                onElegir: irAlResumen,
+              }}
+              activa={enResumen ? null : (pieceRows.find((r) => r.canvasId !== null && r.canvasId === activeCanvasId)?.slug ?? null)}
+              bloqueadas={activando !== null}
+              onElegir={(slug) => {
+                const row = pieceRows.find((r) => r.slug === slug);
+                if (!row) return;
+                if (!row.canvasId) {
+                  void activarPieza(row.slug);
+                  return;
+                }
+                switchCanvas(row.canvasId);
+                setCanvasDropdownOpen(false);
+              }}
+              filas={pieceRows.map((row): FilaDePieza => {
+                // ¿Esta pieza le corresponde a este proyecto, y están sus pasos previos?
+                // Nunca bloquea: informa (lib/flow/piece-readiness).
+                const readiness = pieceReadiness(row.slug, {
+                  tags: tags ?? [],
+                  piezasConContenido,
+                  hubspotPipelineId: hubspotPipelineId ?? null,
+                });
+                return {
+                  clave: row.slug,
+                  etiqueta: row.label,
+                  estado: row.state === "generada" ? "generada" : row.state === "vacia" ? "pendiente" : "vacia",
+                  ayuda: ESTADO_PIEZA[row.state].hint,
+                  atenuada: !row.canvasId,
+                  ocupada: activando === row.slug,
+                  /* El aviso COMPRIMIDO ("Sin tag X" / "Antes: Y"); la frase completa va en el title.
+                     Si no, el de «el handoff corrió después»: el encadenado ya NO reescribe solo
+                     (borraba ediciones a mano) y sin este renglón el CSE creía que estaba al día. */
+                  aviso: readiness.shortReason
+                    ? { corto: readiness.shortReason, largo: readiness.reason ?? undefined }
+                    : row.stale
+                      ? { corto: AVISO_DESACTUALIZADA, largo: AVISO_DESACTUALIZADA_LARGO }
+                      : null,
+                  accion:
+                    row.agent && row.canvasId ? (
+                      <CanvasAgentButton
+                        clientId={clientId}
+                        projectId={projectId}
+                        agentId={row.agent.agentId}
+                        canvasId={row.canvasId}
+                        label={row.state === "generada" ? "Regenerar" : "Generar"}
+                        async={row.agent.async}
+                        appearance={row.state === "generada" ? "ghost" : "primary"}
+                        className="shrink-0"
+                        onDone={() => {
+                          setAgentNonce((n) => n + 1);
+                          bumpGpsRefresh();
+                          void refetchCanvases();
+                        }}
+                      />
+                    ) : !row.canvasId ? (
+                      <button
+                        onClick={() => void activarPieza(row.slug)}
+                        disabled={activando !== null}
+                        className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover disabled:opacity-60 transition-colors"
                       >
-                        <button
-                          onClick={() => {
-                            if (!row.canvasId) {
-                              void activarPieza(row.slug);
-                              return;
-                            }
-                            switchCanvas(row.canvasId);
-                            setCanvasDropdownOpen(false);
-                          }}
-                          disabled={activando !== null}
-                          className="flex-1 min-w-0 flex items-center gap-2.5 text-left disabled:opacity-60"
-                          title={ESTADO_PIEZA[row.state].hint}
-                        >
-                          {/* Estado como dot: verde generada · ámbar vacía · hueco por activar. */}
-                          <span aria-hidden className="w-2 shrink-0 flex justify-center">
-                            {activando === row.slug ? (
-                              <span className="w-2 h-2 rounded-full border border-brand border-t-transparent animate-spin" />
-                            ) : (
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  row.state === "generada"
-                                    ? "bg-emerald-400"
-                                    : row.state === "vacia"
-                                      ? "bg-amber-400"
-                                      : "border border-line"
-                                }`}
-                              />
-                            )}
-                          </span>
-                          <span className="min-w-0">
-                            <span
-                              className={`block truncate text-sm ${
-                                activa
-                                  ? "text-brand font-semibold"
-                                  : row.canvasId
-                                    ? "text-fg"
-                                    : "text-fg-muted"
-                              }`}
-                            >
-                              {row.label}
-                            </span>
-                            {/* El aviso COMPRIMIDO y legible ("Sin tag X" / "Antes: Y").
-                                La frase completa no cabe en una fila y truncarla la
-                                volvía ilegible — vive en el tooltip. */}
-                            {readiness.shortReason && (
-                              <span
-                                className="block text-xs leading-snug text-amber-600"
-                                title={readiness.reason ?? undefined}
-                              >
-                                {readiness.shortReason}
-                              </span>
-                            )}
-                            {/* El handoff corrió después de escribirse el documento. El
-                                encadenado ya NO lo reescribe solo (borraba ediciones a
-                                mano), así que sin este renglón el único rastro era un log
-                                del servidor y el CSE creía que estaba al día. */}
-                            {row.stale && !readiness.shortReason && (
-                              <span
-                                className="block text-xs leading-snug text-amber-600"
-                                title={AVISO_DESACTUALIZADA_LARGO}
-                              >
-                                {AVISO_DESACTUALIZADA}
-                              </span>
-                            )}
-                          </span>
-                        </button>
-                        {row.agent && row.canvasId ? (
-                          <CanvasAgentButton
-                            clientId={clientId}
-                            projectId={projectId}
-                            agentId={row.agent.agentId}
-                            canvasId={row.canvasId}
-                            label={row.state === "generada" ? "Regenerar" : "Generar"}
-                            async={row.agent.async}
-                            appearance={row.state === "generada" ? "ghost" : "primary"}
-                            className="shrink-0"
-                            onDone={() => {
-                              setAgentNonce((n) => n + 1);
-                              bumpGpsRefresh();
-                              void refetchCanvases();
-                            }}
-                          />
-                        ) : !row.canvasId ? (
-                          <button
-                            onClick={() => void activarPieza(row.slug)}
-                            disabled={activando !== null}
-                            className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover disabled:opacity-60 transition-colors"
-                          >
-                            {activando === row.slug ? "Activando…" : "Activar"}
-                          </button>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                        {activando === row.slug ? "Activando…" : "Activar"}
+                      </button>
+                    ) : null,
+                };
+              })}
+            />
             {/* CTA por-canvas: ejecuta el agente primario del canvas, anclado junto al
                 nombre (reemplaza el pop-up). Handoff/Cronograma tienen su propio CTA. */}
             {activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && (

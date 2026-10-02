@@ -57,7 +57,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/audits/[id]/OwnerAssignmentWidget.tsx": 28,
   "app/(shell)/audits/AuditsTable.tsx": 3,
   "app/(shell)/clients/[id]/error.tsx": 1,
-  "app/(shell)/clients/[id]/layout.tsx": 19,
   "app/(shell)/clients/[id]/settings/page.tsx": 42,
   // WorkspaceClient salió de la deuda: el rail de proyectos pintaba la pestaña ACTIVA con
   // `text-white`, o sea texto blanco sobre fondo blanco en modo claro. El síntoma no era
@@ -108,7 +107,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/clients/DocumentUpload.tsx": 23,
   "components/clients/ExternalAccessPanel.tsx": 3,
   "components/clients/MinuteDialog.tsx": 44,
-  "components/clients/ProjectCanvasPanel.tsx": 3,
   "components/clients/ProjectHandoffSection.tsx": 2,
   "components/clients/ProjectSessionsReview.tsx": 1,
   "components/clients/SectionDiscoveryModal.tsx": 37,
