@@ -5013,7 +5013,7 @@ model ClienteMercury {
   /// La sociedad de la cuenta a la que se le factura (OdooPartnerVinculo, plataforma MERCURY): la que eligen los cobros.
   sociedadId        String?
   sociedad          OdooPartnerVinculo? @relation("SociedadDelClienteMercury", fields: [sociedadId], references: [id], onDelete: SetNull)
-  /// NOMBRE · MONTO · MANUAL: de dónde salió el vínculo.
+  /// NUMERO · NOMBRE · MONTO · MANUAL: de dónde salió el vínculo (CHECK en el SQL).
   via               String?
   /// true = «no es cliente nuestro»: no se propone ni se acusa.
   ignorado          Boolean          @default(false)

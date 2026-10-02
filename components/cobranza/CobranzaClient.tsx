@@ -223,6 +223,14 @@ export default function CobranzaClient({
             >
               Odoo
             </Link>
+            {/* 2026-10-02: Mercury, con el mismo molde que Odoo (copia, emparejar, lo que no cuadra). */}
+            <Link
+              href="/cobranza/mercury"
+              title="Las facturas y los pagos de Mercury, al lado de los cobros."
+              className="text-sm font-medium px-4 py-2 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
+            >
+              Mercury
+            </Link>
             <button
               type="button"
               onClick={() => setBuscadorOpen(true)}

@@ -62,10 +62,13 @@ CREATE TABLE IF NOT EXISTS "ClienteMercury" (
   "updatedAt"         TIMESTAMP(3) NOT NULL,
   CONSTRAINT "ClienteMercury_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "ClienteMercury_estadoEspejo_check" CHECK ("estadoEspejo" IN ('VIGENTE', 'DESAPARECIDA')),
-  CONSTRAINT "ClienteMercury_via_check" CHECK ("via" IS NULL OR "via" IN ('NOMBRE', 'MONTO', 'MANUAL')),
   -- Emparejado con una cuenta o marcado ajeno, nunca las dos cosas.
   CONSTRAINT "ClienteMercury_cuenta_o_ignorado" CHECK (NOT ("ignorado" AND "cuentaId" IS NOT NULL))
 );
+-- De dónde salió el vínculo. Aparte de la tabla para que re-correr el archivo deje siempre la lista de hoy.
+ALTER TABLE "ClienteMercury" DROP CONSTRAINT IF EXISTS "ClienteMercury_via_check";
+ALTER TABLE "ClienteMercury" ADD CONSTRAINT "ClienteMercury_via_check"
+  CHECK ("via" IS NULL OR "via" IN ('NUMERO', 'NOMBRE', 'MONTO', 'MANUAL'));
 CREATE UNIQUE INDEX IF NOT EXISTS "ClienteMercury_mercuryCustomerId_key" ON "ClienteMercury" ("mercuryCustomerId");
 CREATE INDEX IF NOT EXISTS "ClienteMercury_cuentaId_idx" ON "ClienteMercury" ("cuentaId");
 DO $$ BEGIN

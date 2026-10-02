@@ -69,9 +69,19 @@ export interface PlataDeLinea {
  *   · `l:` una factura que Nexus soltó (`FacturaLiberada.id`);
  *   · `cuenta:` una cuenta de Nexus;
  *   · `venta:` una factura que solo existe como número anotado en cobros de Nexus (`cuenta|moneda|número`).
+ *   · `fm:` una factura de Mercury (`FacturaMercury.id`) y `mov:` un movimiento de Mercury (`MovimientoMercury.id`):
+ *     «Lo que no cuadra» de Mercury (lib/cobranza/mercury/diferencias.ts, 2026-10-02) usa el mismo contrato y las
+ *     mismas marcas.
  * Nunca un nombre: un cliente renombrado en Odoo no puede cambiar qué fila es.
  */
-export type ClaveDeDocumento = `f:${string}` | `c:${string}` | `l:${string}` | `cuenta:${string}` | `venta:${string}`;
+export type ClaveDeDocumento =
+  | `f:${string}`
+  | `c:${string}`
+  | `l:${string}`
+  | `cuenta:${string}`
+  | `venta:${string}`
+  | `fm:${string}`
+  | `mov:${string}`;
 
 export interface ItemDiferencia extends ItemInconsistencia {
   /** La moneda de `monto`. ⚠ Sin ella el monto no se muestra: un número sin moneda es el que se suma mal. */
@@ -1449,7 +1459,7 @@ export function indiceDeMarcas(marcas: readonly MarcaDeFila[]): IndiceDeMarcas {
  * número cambió— para que la fila entera vuelva: el conjunto se lee junto. Las filas que juntan facturas de un
  * cliente no llegan acá mezcladas: se arman aparte, las marcadas por un lado y las pendientes por otro.
  */
-function separarMarcadas(
+export function separarMarcadas(
   codigo: string,
   items: readonly ItemDiferencia[],
   indice: IndiceDeMarcas,
@@ -1468,7 +1478,7 @@ function separarMarcadas(
  * Las filas pendientes que volvieron porque cambió un número: cada documento sin marca vigente que sí tiene una con
  * otros números. Un documento que nunca se marcó (una factura nueva de un cliente) no cuenta: no volvió, llegó.
  */
-function filasQueVolvieron(codigo: string, items: readonly ItemDiferencia[], indice: IndiceDeMarcas): FilaQueVolvio[] {
+export function filasQueVolvieron(codigo: string, items: readonly ItemDiferencia[], indice: IndiceDeMarcas): FilaQueVolvio[] {
   return items.flatMap((item) => {
     const marcas = item.fila.documentos.flatMap((d) =>
       indice.vigente(codigo, d.clave, d.huella) ? [] : (indice.vencida(codigo, d.clave, d.huella) ?? []),

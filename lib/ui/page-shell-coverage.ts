@@ -73,6 +73,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "marketing/icp": { custom: "el layout de marketing pone el contenedor" },
   "cobranza/importar": { custom: "wizard de importación con contenedor propio" },
   "cobranza/odoo": { custom: "px-6 py-8 propio, igual que el importador: es una pantalla de trabajo puntual" },
+  "cobranza/mercury": { custom: "px-6 py-8 propio, el mismo molde que cobranza/odoo" },
 
   // ── Redirects puros / legacy ────────────────────────────────────────────────
   marketing: { custom: "redirect a /marketing/contenido" },

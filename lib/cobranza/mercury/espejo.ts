@@ -11,6 +11,7 @@
  * - Una lectura que trae menos de la mitad de lo conocido es PARCIAL y no se copia nada.
  */
 import { esBorradoMasivo, esCorridaParcial, espejoVencido } from "../odoo/espejo";
+import { normalizarNumeroFactura } from "../numero-factura";
 
 export { esBorradoMasivo, esCorridaParcial, espejoVencido };
 
@@ -191,6 +192,16 @@ export function esEntradaDeCliente(
   const quien = (m.contraparteNombre ?? "").toLowerCase();
   if (quien.startsWith("mercury")) return false;
   return !propios.some((p) => quien.includes(p));
+}
+
+/**
+ * El número de Mercury dentro de lo que alguien anotó en un cobro: «INVOICE NO.INV-48» es la INV-48 (caso real de
+ * Metzger, 2026-09). null = no hay un número de Mercury ahí.
+ */
+export function numeroDeMercury(texto: string | null | undefined): string | null {
+  const n = normalizarNumeroFactura(texto);
+  /* «INVOICE-1» también: Mercury deja numerar a mano, y así salieron las de Intercert (medido el 2026-10-02). */
+  return n?.match(/INV(?:OICE)?-\d+(?:-\d+)*/)?.[0] ?? null;
 }
 
 /** El nombre de quien pagó sin el «1/» que ponen las transferencias internacionales. */

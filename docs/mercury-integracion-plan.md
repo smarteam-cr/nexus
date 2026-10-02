@@ -19,12 +19,18 @@ porqué, en `docs/mercury-decisiones.md`.
 
 ## Etapas
 
-| | Etapa | Qué deja |
-|---|---|---|
-| 1 | **La copia** | Facturas, clientes y movimientos de Mercury en Nexus cada mañana (`mercury-espejo-daily`), a mano con `scripts/mercury-sync-manual.ts`. Token de solo lectura. Corridas registradas, candado, nunca se borra nada. |
-| 2 | **Emparejar** | Cada cliente de Mercury con su cuenta de Nexus (propuestas por nombre y por monto; el resto a mano), o «no es cliente nuestro». Al emparejar, el cliente queda como sociedad de la cuenta para los cobros. |
-| 3 | **Lo que no cuadra** | Todas las diferencias entre Mercury y Nexus en una lista, cada una con dónde se arregla y los pasos. «Está bien así» por fila con motivo; vuelve sola si cambia un número. Botón «Actualizar desde Mercury». Página Cobranza › Mercury. |
-| 4 | **Finanzas** | El punto de equilibrio y «Facturación por cliente» cuentan lo facturado en Mercury que Nexus no tiene. Invariantes de la copia. |
+| | Etapa | Qué deja | Estado |
+|---|---|---|---|
+| 1 | **La copia** | Facturas, clientes y movimientos de Mercury en Nexus cada mañana (`mercury-espejo-daily`), a mano con `scripts/mercury-sync-manual.ts`. Token de solo lectura. Corridas registradas, candado, nunca se borra nada. | ✅ `901f1fa7` |
+| 2 | **Emparejar** | Cada cliente de Mercury con su cuenta de Nexus (propuestas por número, nombre y monto; el resto a mano), o «no es cliente nuestro». Al emparejar, el cliente queda como sociedad de la cuenta para los cobros. | ✅ |
+| 3 | **Lo que no cuadra** | Todas las diferencias entre Mercury y Nexus en una lista, cada una con dónde se arregla y los pasos. «Está bien así» por fila con motivo; vuelve sola si cambia un número. Botón «Actualizar desde Mercury». Página Cobranza › Mercury. | ✅ |
+| 4 | **Finanzas** | El punto de equilibrio y «Facturación por cliente» cuentan lo facturado en Mercury que Nexus no tiene. Invariantes de la copia. | ⬜ |
+
+**Medido con Mercury en vivo y los cobros de producción (2026-10-02, solo lectura)**, emparejando cada cliente con su
+propuesta por número o nombre: 59 filas en 7 líneas. Las de más plata: 4 clientes sin cuenta con US$16.865 por cobrar,
+Multiquímica INV-38 (US$3.400 cobrada en Nexus y sin pagar en Mercury), 14 cobros a los que les falta el número (con su
+factura propuesta) y 13 cobros facturados sin factura en Mercury por ese monto (Club de Amantes, AMC, Spectrum, el doble
+de Real Shipping).
 
 ## Lo que no cuadra (etapa 3)
 
