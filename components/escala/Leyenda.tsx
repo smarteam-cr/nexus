@@ -10,7 +10,7 @@ import { Modal } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { DatosDeLaVista } from "@/lib/escala/vista";
 import { PUNTO_DE_NIVEL } from "./niveles";
-import { BloquesDeLaEscala, ParrafoDeLaEscala } from "./piezas";
+import { BloquesDeLaEscala, BOTON_CLARO, ParrafoDeLaEscala } from "./piezas";
 
 export default function Leyenda({ datos }: { datos: DatosDeLaVista }) {
   const [abierta, setAbierta] = useState(false);
@@ -26,11 +26,10 @@ export default function Leyenda({ datos }: { datos: DatosDeLaVista }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setAbierta(true)}
-        className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover"
-      >
+      <button type="button" onClick={() => setAbierta(true)} className={BOTON_CLARO}>
+        <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M12 6.5v13M12 6.5C10.8 5.6 9.2 5 7.5 5S4.2 5.6 3 6.5v13c1.2-.9 2.8-1.5 4.5-1.5s3.3.6 4.5 1.5m0-13c1.2-.9 2.8-1.5 4.5-1.5s3.3.6 4.5 1.5v13c-1.2-.9-2.8-1.5-4.5-1.5s-3.3.6-4.5 1.5" />
+        </svg>
         Cómo leer la escala
       </button>
       <Modal open={abierta} onClose={() => setAbierta(false)} title="Cómo leer la escala" size="xl">
@@ -39,9 +38,10 @@ export default function Leyenda({ datos }: { datos: DatosDeLaVista }) {
             <h3 className="text-sm font-semibold text-fg">Los niveles</h3>
             <ul className="flex flex-wrap gap-3">
               {datos.niveles.map((n) => (
-                <li key={n.letra} className="flex items-center gap-1.5 text-sm text-fg-secondary">
-                  <span className={cn("h-2.5 w-2.5 rounded-sm", PUNTO_DE_NIVEL[n.letra])} aria-hidden />
-                  <span className="font-mono text-2xs text-fg-muted">{n.letra}</span> {n.nombre}
+                <li key={n.letra} className="flex items-center gap-1.5 text-[13px] font-medium text-fg">
+                  <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", PUNTO_DE_NIVEL[n.letra])} aria-hidden />
+                  {n.nombre}
+                  <span className="text-xs font-normal text-fg-muted">{n.letra}</span>
                 </li>
               ))}
             </ul>
@@ -67,7 +67,7 @@ export default function Leyenda({ datos }: { datos: DatosDeLaVista }) {
               <h3 className="text-sm font-semibold text-fg">Palabras con valor fijo</h3>
               <p className="text-sm leading-relaxed text-fg-secondary">
                 Para que dos personas decidan igual, estas palabras de los criterios valen siempre lo mismo. En la escala se ven subrayadas con
-                puntos azules: pasa el cursor para ver su valor. Los términos del glosario (pipeline review, deal, SQL…) se subrayan con puntos
+                puntos ámbar: pasa el cursor para ver su valor. Los términos del glosario (pipeline review, deal, SQL…) se subrayan con puntos
                 grises: pasa el cursor para ver qué significan.
               </p>
               <ul className="flex flex-col gap-1">

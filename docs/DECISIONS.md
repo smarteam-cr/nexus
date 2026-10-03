@@ -4534,3 +4534,45 @@ encontró largos y difíciles los textos propuestos.
 - **Rutinas de adopción y despliegue por olas se quedan** hasta que exista el documento de Puesta
   en marcha, que es a donde van. Ese documento enmienda la decisión de que Adopción es un hito sin
   documento, como pasó con la Entrega el 2026-08-12.
+
+## La escala toma el sistema «Nexus · interfaz interna» (2026-10-03)
+
+**Contexto.** Elías pidió verificar que la sección de la escala cumpliera el diseño nuevo sin tocar
+el código; el resultado fue un tablero en Claude Design con las tres vistas rediseñadas y la lista de
+lo que no cumplía. Lo aprobó con «Aplícalo todo», incluidas las dos propuestas: los colores de nivel
+como tokens del sistema y el segmentado nuevo también en Preventa.
+
+- **Un solo botón azul por pantalla.** La cabecera pasa a `PageHeader` (el único h1) con la versión y
+  el estado como chips blancos, y «Cómo leer la escala», «Comentarios» y «Descargar .md» como botones
+  claros. En el mapa, el azul es «Recorrer de Deficiente a Óptimo», que sale del centro de la rueda y va
+  arriba, junto a «Qué muestran las celdas» (Pausar · Seguir subiendo · Otra vez). «Leer la dimensión»
+  pasa a botón claro.
+- **Los filtros, sin tarjeta**, cada uno con su rótulo arriba. El segmentado sirve para dos a cuatro
+  opciones: la industria (cinco) y «Qué muestran las celdas» (seis) pasan a lista. Las dos preguntas del
+  perfil son dos filtros separados. El aviso de las herramientas («Lo habilita, no lo cumple») es un
+  `Alert` informativo.
+- **El color dice el estado, y el verde no es adorno.** Funcional se marca con un chip blanco «La base»
+  (sin teñir su columna ni su tarjeta), el resultado de cada nivel va en un bloque neutro y el punteado
+  queda solo para lo que falta: lo que requiere o lo que lo requiere se marca con borde lleno. Los
+  comentarios abiertos y los riesgos van en ámbar (piden atención); lo activo, en azul.
+- **Los colores de nivel son tokens propios** (`--color-nivel-deficiente` … `--color-nivel-optimo`, los
+  mismos valores de antes): son la identidad del nivel, no un estado, así que ya no dependen del rojo de
+  «peligro» ni del verde de «confirmado». Quedaron también en el sistema de diseño. Los puntos de nivel
+  son redondos y van con su nombre.
+- **«Por dimensión» es un lienzo de tres columnas**, como el de Preventa: las dimensiones a la izquierda
+  (232 px, fijas), la dimensión al centro con sus niveles en tarjetas blancas sobre gris, y a la derecha
+  el contexto (300 px): cómo se ve el área en un nivel (una lista), la dimensión en las tres áreas, qué se
+  trabaja primero y dónde se cuenta la evidencia, que antes iba al pie. En pantallas angostas el panel
+  baja.
+- **Medidas del sistema**: títulos 22/700 y 15/600, pregunta 14,5/600, criterios de la matriz en 13 px,
+  rótulos de 11 px en gris (las capas ya no van en azul), identificadores con números tabulares en vez de
+  letra de máquina, radios de 12 px (no 16), página con `space-y-6`. La rueda va sin halo ni sombra.
+- **El `Segmentado` de components/ui toma la forma del sistema** (la misma de `Segmentos`): carril gris
+  de radio 10, opciones de 13 px y la elegida blanca con `shadow-segment`, la única sombra. Cambia
+  también en las pantallas de Preventa que lo usan (papel en la decisión, canal, apertura a la asesoría,
+  perfil y «Sumar una sesión»), que así quedan iguales a sus subpestañas. `PageHeader` suma `badges`
+  (chips junto al título) y, en un celular, baja las acciones debajo del título.
+- **No se repite un dato**: el pie ya no dice la versión (está en la cabecera) y el aviso de herramientas
+  no repite la cuenta de cada una (está en su chip).
+
+**Pendiente.** El isotipo de Smarteam sigue siendo una reconstrucción hasta tener el SVG oficial.

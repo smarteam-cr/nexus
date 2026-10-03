@@ -131,6 +131,18 @@
   --color-warning:           #f59e0b;  /* amber-500 */
   --color-warning-fg:        #ffffff;
 
+  /* ── Los colores de nivel de la escala (sistema «Nexus · interfaz interna») ──
+   *  Son la IDENTIDAD de cada nivel, no un estado: van siempre con su nombre al lado
+   *  (un punto de 8 px + el nombre) y en el mapa pintan la celda. Mismo valor en los dos
+   *  modos. Tienen nombre propio para que cambiar el rojo de «peligro» no cambie
+   *  Deficiente. Los usa components/escala/niveles.ts.
+   */
+  --color-nivel-deficiente: #dc2626;  /* red-600 */
+  --color-nivel-inicial:    #f59e0b;  /* amber-500 */
+  --color-nivel-funcional:  #22c55e;  /* green-500 */
+  --color-nivel-eficiente:  #3b82f6;  /* blue-500 */
+  --color-nivel-optimo:     #8b5cf6;  /* violet-500 */
+
   /* ── Las marcas de las herramientas en la escala (mapa de herramientas) ─────
    *  Un color por herramienta, el mismo en los dos modos. Nunca pintan una celda:
    *  la celda lleva el color de su nivel, y la herramienta va encima como un punto
@@ -143,6 +155,10 @@
   --color-herramienta-turquesa: #0d9488;  /* teal-600 */
   --color-herramienta-lima:     #65a30d;  /* lime-600 */
   --color-herramienta-fg:       #ffffff;  /* la sigla sobre la marca */
+  /* La única sombra de la interfaz interna: la opción elegida del segmentado (sistema «Nexus ·
+     interfaz interna», token shadow-segment). Todo lo demás se separa con bordes. */
+  --shadow-segment: 0 1px 2px rgba(0, 0, 0, 0.08);
+
   /* Los isotipos de las herramientas (components/escala/isotipos.tsx): los colores de cada marca. */
   --color-isotipo-hubspot:         #ff7a59;
   --color-isotipo-insider-desde:   #e92e2f;

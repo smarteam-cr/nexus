@@ -4,27 +4,34 @@
  * components/escala/Escalera.tsx — una dimensión a la vez, sus cinco niveles como escalera.
  *
  * Es la vista para LEER e interiorizar: la matriz sirve para comparar, esta para entender una
- * dimensión de punta a punta. Al costado, cómo se ve el área entera en el nivel que se mira
- * («Los cinco niveles de un vistazo»), para no perder el cuadro grande.
+ * dimensión de punta a punta. Es un lienzo de tres columnas (sistema «Nexus · interfaz interna»,
+ * 2026-10-03): a la izquierda las dimensiones del área, al centro la dimensión con sus niveles en
+ * tarjetas blancas sobre gris claro y a la derecha el contexto, para no perder el cuadro grande:
+ * cómo se ve el área entera en un nivel («Los cinco niveles de un vistazo»), qué se trabaja primero
+ * en su capa y dónde se cuenta la evidencia dudosa («Regla de asignación»).
  */
 import { useEffect, useState } from "react";
+import { Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
 import type { EnlaceDeCriterio } from "@/lib/escala/documento/requeridos";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
+import { lugarEnElOrden, ordenDeDependencias, type DatosDeLaVista } from "@/lib/escala/vista";
 import { conteoDe, conteoDeDimension, useEscala } from "./contexto";
 import { HerramientasDelCriterio, useHerramientas } from "./herramientas";
 import { PUNTO_DE_NIVEL } from "./niveles";
 import {
+  BLOQUE_DE_RESULTADO,
+  BOTON_CLARO,
   BotonComentar,
   Contador,
   EnlacesDelCriterio,
+  MARCA,
   MetaDelCriterio,
   NoAplicanEnLaEdicion,
   NombreGeneral,
   ParrafoDeLaEscala,
-  Segmentado,
+  ROTULO,
   TextoConPalabras,
 } from "./piezas";
 
@@ -46,7 +53,6 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
   const [enfocado, setEnfocado] = useState<Letra>("F");
   const aplicaAca = dimensionAplica(d, perfil);
   const capa = capas.find((c) => c.clave === d.capa);
-  const nivelEnfocado = niveles.find((n) => n.letra === enfocado)!;
   /** «Regla de asignación»: los casos dudosos que tocan a esta dimensión. */
   const reglas = datos.asignacion.filter((r) => r.dimensiones.includes(d.id));
   /** «Qué se trabaja primero»: el orden de su capa en esta área (y el perfil elegido). */
@@ -75,116 +81,112 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
   }, [llegada, d.id]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[230px_minmax(0,1fr)_270px]">
-      <nav aria-label="Dimensiones del área" className="self-start rounded-xl border border-line bg-surface py-2 lg:sticky lg:top-4">
-        {capas.map((c) => (
-          <div key={c.clave} className="pb-1">
-            <p className="px-3 pb-1 pt-2 text-2xs font-bold uppercase tracking-wide text-info-ink">{c.nombre}</p>
-            {dims
-              .filter((x) => x.capa === c.clave)
-              .map((x) => {
-                const activo = x.id === d.id;
-                const aplicaX = dimensionAplica(x, perfil);
-                return (
-                  <button
-                    key={x.id}
-                    type="button"
-                    aria-current={activo ? "true" : undefined}
-                    onClick={() => elegirDimension(x.id)}
-                    className={cn(
-                      "flex w-full items-start gap-2 px-3 py-1.5 text-left text-sm transition-colors",
-                      activo
-                        ? "bg-info-surface font-semibold text-info-ink shadow-[inset_3px_0_0_var(--color-brand)]"
-                        : aplicaX
-                          ? "text-fg-secondary hover:bg-surface-hover"
-                          : "text-fg-muted hover:bg-surface-hover",
-                    )}
-                  >
-                    <span className="w-7 flex-shrink-0 pt-0.5 font-mono text-2xs text-fg-muted">{x.id}</span>
-                    <span className="min-w-0 flex-1 leading-snug">{x.nombre}</span>
-                    {!aplicaX && <span className="text-2xs font-normal">no aplica</span>}
-                    <Contador conteo={conteoDeDimension(conteos, x.id)} />
-                  </button>
-                );
-              })}
-          </div>
-        ))}
-      </nav>
+    // `overflow-clip` y no `hidden`: recorta las esquinas sin volverse contenedor de scroll, así el
+    // menú de las dimensiones y el panel del costado siguen fijos al bajar.
+    <div
+      className={cn(
+        "grid overflow-clip rounded-xl border border-line bg-surface-muted",
+        "lg:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[232px_minmax(0,1fr)_300px]",
+      )}
+    >
+      <div className="border-b border-line bg-surface lg:col-start-1 lg:row-span-2 lg:row-start-1 lg:border-b-0 lg:border-r xl:row-span-1">
+        <nav aria-label="Dimensiones del área" className="flex flex-col gap-1 px-3 py-4 lg:sticky lg:top-4">
+          {capas.map((c) => (
+            <div key={c.clave} className="flex flex-col gap-1">
+              <p className={cn("px-2 pb-1 pt-2", ROTULO)}>{c.nombre}</p>
+              {dims
+                .filter((x) => x.capa === c.clave)
+                .map((x) => {
+                  const activo = x.id === d.id;
+                  const aplicaX = dimensionAplica(x, perfil);
+                  return (
+                    <button
+                      key={x.id}
+                      type="button"
+                      aria-current={activo ? "true" : undefined}
+                      onClick={() => elegirDimension(x.id)}
+                      className={cn(
+                        "flex w-full items-start gap-1.5 rounded-lg border px-2 py-[7px] text-left text-[13px] leading-snug transition-colors",
+                        activo
+                          ? "border-info-line bg-info-surface font-semibold text-brand"
+                          : cn("border-transparent hover:bg-surface-hover", aplicaX ? "text-fg-secondary" : "text-fg-muted"),
+                      )}
+                    >
+                      <span className="w-6 flex-shrink-0 text-xs font-normal tabular-nums text-fg-muted">{x.id}</span>
+                      <span className="min-w-0 flex-1">{x.nombre}</span>
+                      {!aplicaX && <span className="text-xs font-normal text-fg-muted">no aplica</span>}
+                      <Contador conteo={conteoDeDimension(conteos, x.id)} />
+                    </button>
+                  );
+                })}
+            </div>
+          ))}
+        </nav>
+      </div>
 
-      <article className="min-w-0">
-        <header className="flex flex-col gap-3">
+      <article className="flex min-w-0 flex-col gap-5 p-6 lg:col-start-2 lg:row-start-1">
+        <header className="flex flex-col gap-1.5">
           <p className="text-xs text-fg-muted">
             {area.nombre} · {capa?.nombre}
             {d.generica && d.generica.nombre !== d.nombre ? ` · ${d.generica.nombre}` : ""}
           </p>
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-mono text-base text-fg-muted">{d.id}</span>
-            <h2 className="text-2xl font-bold tracking-tight text-fg">{d.nombre}</h2>
-          </div>
-          <NombreGeneral nombre={d.nombreGeneral} className="-mt-2 text-xs" />
-          <p className="text-lg leading-snug text-fg">{d.pregunta}</p>
-          {d.descripcion && (
-            <p className="text-sm leading-relaxed text-fg-secondary">
-              <TextoConPalabras texto={d.descripcion} palabras={datos.terminos} />
-            </p>
-          )}
-          <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-sm leading-relaxed text-warn-ink">
-            <span className="font-semibold">Costo de quedarse. </span>
-            {d.costoDeQuedarse}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-[22px] font-bold leading-7 text-fg">
+              <span className="font-semibold tabular-nums text-fg-muted">{d.id}</span> {d.nombre}
+            </h2>
             <BotonComentar
               conteo={conteoDe(conteos, d.id)}
               onClick={() => abrirComentarios(d.id)}
-              etiqueta="Comentarios de la dimensión"
-              className={cn(anclaAbierta === d.id && "ring-2 ring-brand/40")}
+              etiqueta="Comentarios de la dimensión entera (su pregunta o su costo)"
+              className={cn("mt-1", anclaAbierta === d.id && "border-info-line bg-info-surface text-brand")}
             />
-            <span className="text-xs text-fg-muted">Comentar la dimensión entera (su pregunta o su costo)</span>
           </div>
-          {!aplicaAca && (
-            <p className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-fg-secondary">
-              <strong className="font-semibold text-fg">No aplica a este perfil</strong> ({describirPerfil(perfil)}): se queda sin criterios de
-              Funcional que apliquen.
+          <NombreGeneral nombre={d.nombreGeneral} className="text-xs" />
+          <p className="text-[14.5px] font-semibold leading-[21px] text-fg">{d.pregunta}</p>
+          {d.descripcion && (
+            <p className="text-[13px] leading-normal text-fg-secondary">
+              <TextoConPalabras texto={d.descripcion} palabras={datos.terminos} />
             </p>
           )}
         </header>
 
-        <ol className="mt-6 flex flex-col">
-          {d.niveles.map((n, k) => {
+        <div role="note" className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2.5 text-sm leading-normal text-warn-ink">
+          <strong className="font-semibold">Costo de quedarse.</strong> {d.costoDeQuedarse}
+        </div>
+
+        {!aplicaAca && (
+          <p className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-fg-secondary">
+            <strong className="font-semibold text-fg">No aplica a este perfil</strong> ({describirPerfil(perfil)}): se queda sin criterios de Funcional
+            que apliquen.
+          </p>
+        )}
+
+        <ol className="flex flex-col gap-5">
+          {d.niveles.map((n) => {
             const nivel = niveles.find((x) => x.letra === n.letra)!;
             const visibles = n.criterios.filter((c) => aplica(c, perfil));
             const ocultos = n.criterios.length - visibles.length;
-            const ultimo = k === d.niveles.length - 1;
             return (
-              <li key={n.id} className="flex gap-4">
-                <div className="flex w-8 flex-shrink-0 flex-col items-center" aria-hidden>
-                  <span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-primary-fg", PUNTO_DE_NIVEL[n.letra])}>
-                    {nivel.codigo}
-                  </span>
-                  {!ultimo && <span className="my-1 w-0.5 flex-1 bg-line" />}
-                </div>
+              <li key={n.id}>
                 <section
                   aria-label={nivel.nombre}
-                  className={cn(
-                    "mb-4 flex min-w-0 flex-1 flex-col gap-3 rounded-xl bg-surface px-4 py-4",
-                    n.letra === "F" ? "border-[1.5px] border-dashed border-success-line" : "border border-line",
-                    enfocado === n.letra && "ring-2 ring-brand/25",
-                  )}
+                  className={cn("flex flex-col gap-3 rounded-xl border bg-surface p-5", enfocado === n.letra ? "border-info-line" : "border-line")}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-fg">{nivel.nombre}</h3>
-                      {n.letra === "F" && (
-                        <span className="rounded-full border border-dashed border-success-line px-1.5 text-2xs font-semibold text-success-ink">
-                          La base
-                        </span>
-                      )}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", PUNTO_DE_NIVEL[n.letra])} aria-hidden />
+                      <h3 className="text-[15px] font-semibold text-fg">{nivel.nombre}</h3>
+                      <span className="text-xs text-fg-muted">
+                        Nivel {nivel.codigo} de {niveles.length}
+                      </span>
+                      {n.letra === "F" && <span className={cn(MARCA, "font-medium")}>La base</span>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <button
                         type="button"
+                        aria-pressed={enfocado === n.letra}
                         onClick={() => setEnfocado(n.letra)}
-                        className="rounded-md border border-line px-2 py-1 text-2xs text-fg-secondary hover:bg-surface-hover"
+                        className="text-xs font-semibold text-brand hover:underline"
                       >
                         Ver el área en este nivel
                       </button>
@@ -192,35 +194,38 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                         conteo={conteoDe(conteos, n.id)}
                         onClick={() => abrirComentarios(n.id)}
                         etiqueta={`Comentarios del nivel ${nivel.nombre}`}
-                        className={cn(anclaAbierta === n.id && "ring-2 ring-brand/40")}
+                        className={cn(anclaAbierta === n.id && "border-info-line bg-info-surface text-brand")}
                       />
                     </div>
                   </div>
-                  <p className="text-sm font-medium leading-relaxed text-fg">
+                  <p className="text-sm font-semibold leading-normal text-fg">
                     <TextoConPalabras texto={n.descripcion} palabras={datos.terminos} />
                   </p>
                   {n.resultado && (
-                    <p className="rounded-lg bg-success-surface px-3 py-2 text-sm leading-relaxed text-success-ink">
-                      <span className="font-bold">Resultado · </span>
-                      {n.resultado}
-                    </p>
+                    <div className={cn(BLOQUE_DE_RESULTADO, "px-3 py-2.5")}>
+                      <span className={ROTULO}>Resultado</span>
+                      <span className="text-[13px] leading-normal text-fg-secondary">{n.resultado}</span>
+                    </div>
                   )}
                   {visibles.length > 0 && (
-                    <ul className="flex flex-col gap-3">
+                    <ul className="flex flex-col gap-2">
                       {visibles.map((c) => (
                         <li
                           key={c.id}
                           id={`criterio-${c.id}`}
                           className={cn(
-                            "flex items-start gap-3 rounded-lg px-1 py-0.5 transition-opacity",
-                            anclaAbierta === c.id ? "bg-info-surface" : llegada === c.id && "bg-info-surface ring-2 ring-brand/25",
+                            "-mx-2 flex items-start gap-3 rounded-lg border px-2 py-1.5 transition-opacity",
+                            anclaAbierta === c.id
+                              ? "border-transparent bg-info-surface"
+                              : llegada === c.id
+                                ? "border-info-line bg-info-surface"
+                                : "border-transparent",
                             // Con herramientas prendidas, lo que ninguna toca queda más claro.
                             atenuado(c.id) && anclaAbierta !== c.id && "opacity-45 hover:opacity-100",
                           )}
                         >
-                          <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-fg-muted" aria-hidden />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm leading-relaxed text-fg">
+                            <p className="text-sm leading-normal text-fg">
                               <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                             </p>
                             <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} className="mt-1.5" />
@@ -244,83 +249,85 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
           })}
         </ol>
 
-        {reglas.length > 0 && (
-          <section aria-label="Dónde se cuenta la evidencia" className="mb-5 rounded-xl border border-line bg-surface px-4 py-4">
-            <h3 className="text-sm font-bold text-fg">Dónde se cuenta la evidencia</h3>
-            <p className="mt-0.5 text-xs text-fg-muted">
-              De la regla de asignación: cada evidencia cuenta en una sola dimensión. Los casos dudosos que tocan a esta:
-            </p>
-            <ul className="mt-3 flex flex-col gap-2.5">
-              {reglas.map((r, k) => (
-                <li key={k} className="flex gap-2.5">
-                  <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-info-ink" aria-hidden />
-                  <ParrafoDeLaEscala texto={r.texto} className="text-sm leading-relaxed text-fg-secondary" />
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <div className="flex flex-wrap justify-between gap-3 pt-1">
-          <button
-            type="button"
-            disabled={i === 0}
-            onClick={() => elegirDimension(dims[i - 1].id)}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
-          >
+        <div className="flex flex-wrap justify-between gap-3">
+          <button type="button" disabled={i === 0} onClick={() => elegirDimension(dims[i - 1].id)} className={BOTON_CLARO}>
             ← {i > 0 ? `${dims[i - 1].id} ${dims[i - 1].nombre}` : "Inicio del área"}
           </button>
-          <button
-            type="button"
-            disabled={i === dims.length - 1}
-            onClick={() => elegirDimension(dims[i + 1].id)}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
-          >
+          <button type="button" disabled={i === dims.length - 1} onClick={() => elegirDimension(dims[i + 1].id)} className={BOTON_CLARO}>
             {i < dims.length - 1 ? `${dims[i + 1].id} ${dims[i + 1].nombre}` : "Fin del área"} →
           </button>
         </div>
       </article>
 
-      <aside aria-label="El área entera en un nivel" className="hidden self-start rounded-xl border border-line bg-surface p-4 xl:sticky xl:top-4 xl:block">
-        <p className="text-2xs font-bold uppercase tracking-wide text-fg-muted">Así se ve {area.nombre} en</p>
-        <div className="mt-2 flex items-center gap-2">
-          <span className={cn("h-3 w-3 rounded-sm", PUNTO_DE_NIVEL[enfocado])} aria-hidden />
-          <span className="text-lg font-bold text-fg">{nivelEnfocado.nombre}</span>
+      <aside
+        aria-label="Contexto de la dimensión"
+        className="border-t border-line lg:col-start-2 lg:row-start-2 xl:col-start-3 xl:row-start-1 xl:border-l xl:border-t-0"
+      >
+        <div className="flex flex-col gap-5 p-5 xl:sticky xl:top-4">
+          <section className="flex flex-col gap-2">
+            <span className={ROTULO}>Así se ve {area.nombre} en</span>
+            <Select
+              aria-label="Nivel del área"
+              value={enfocado}
+              onChange={(e) => setEnfocado(e.target.value as Letra)}
+              className="bg-surface py-2 text-[13px] leading-tight text-fg"
+            >
+              {niveles.map((x) => (
+                <option key={x.letra} value={x.letra}>
+                  {x.nombre}
+                </option>
+              ))}
+            </Select>
+            <p className="text-[13px] leading-normal text-fg-secondary">{area.panoramica[enfocado] ?? "—"}</p>
+          </section>
+
+          {d.generica?.descripcion && (
+            <section className="flex flex-col gap-2">
+              <span className={ROTULO}>En las tres áreas</span>
+              <p className="text-xs leading-normal text-fg-secondary">
+                <span className="font-semibold text-fg">{d.generica.nombre}</span>: {d.generica.descripcion}
+              </p>
+            </section>
+          )}
+
+          {ordenes.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <span className={ROTULO}>Qué se trabaja primero en {capa?.nombre.toLowerCase()}</span>
+              {ordenes.map((o) => {
+                const lugar = lugarEnElOrden(o, d);
+                return (
+                  <div key={o.cuando} className="flex flex-col gap-1">
+                    {ordenes.length > 1 && <p className="text-xs font-semibold text-fg-secondary">{o.cuando}</p>}
+                    <ol className="flex flex-col gap-1">
+                      {o.orden.map((nombre, k) => (
+                        <li key={nombre} className={cn("flex text-[13px]", lugar === k + 1 ? "font-semibold text-brand" : "text-fg-secondary")}>
+                          <span className="w-[18px] flex-shrink-0 font-normal tabular-nums text-fg-muted">{k + 1}</span>
+                          {nombre}
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="text-xs leading-normal text-fg-muted">{o.porQue}</p>
+                  </div>
+                );
+              })}
+            </section>
+          )}
+
+          {reglas.length > 0 && (
+            <section aria-label="Dónde se cuenta la evidencia" className="flex flex-col gap-2">
+              <span className={ROTULO}>Dónde se cuenta la evidencia</span>
+              <p className="text-xs leading-normal text-fg-muted">Cada evidencia cuenta en una sola dimensión. Los casos dudosos que tocan a esta:</p>
+              <ul className="flex flex-col gap-2">
+                {reglas.map((r, k) => (
+                  <li key={k} className="flex gap-2">
+                    <span className="mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-fg-muted" aria-hidden />
+                    <ParrafoDeLaEscala texto={r.texto} className="text-xs leading-normal text-fg-secondary" />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{area.panoramica[enfocado] ?? "—"}</p>
-        <Segmentado
-          className="mt-3 flex-wrap"
-          etiqueta="Nivel del área"
-          valor={enfocado}
-          onCambio={setEnfocado}
-          opciones={niveles.map((x) => ({ clave: x.letra, etiqueta: x.nombre.slice(0, 3), title: x.nombre }))}
-        />
-        {d.generica?.descripcion && (
-          <p className="mt-4 border-t border-line pt-3 text-xs leading-relaxed text-fg-muted">
-            <span className="font-semibold text-fg-secondary">{d.generica.nombre}</span> — {d.generica.descripcion}
-          </p>
-        )}
-        {ordenes.length > 0 && (
-          <div className="mt-4 border-t border-line pt-3">
-            <p className="text-2xs font-bold uppercase tracking-wide text-fg-muted">Qué se trabaja primero en {capa?.nombre.toLowerCase()}</p>
-            {ordenes.map((o) => (
-              <div key={o.cuando} className="mt-2">
-                {ordenes.length > 1 && <p className="text-2xs font-semibold text-fg-secondary">{o.cuando}</p>}
-                <ol className="mt-1 flex flex-col gap-0.5">
-                  {o.orden.map((nombre, k) => (
-                    <li
-                      key={nombre}
-                      className={cn("text-xs", nombre === d.nombre ? "font-bold text-info-ink" : "text-fg-secondary")}
-                    >
-                      {k + 1}. {nombre}
-                    </li>
-                  ))}
-                </ol>
-                <p className="mt-1 text-2xs leading-relaxed text-fg-muted">{o.porQue}</p>
-              </div>
-            ))}
-          </div>
-        )}
       </aside>
     </div>
   );

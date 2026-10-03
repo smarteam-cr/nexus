@@ -14,6 +14,11 @@
  *
  * La matriz tiene su propio scroll (alto de la ventana) para que el encabezado de los niveles y la
  * columna de las dimensiones queden fijos en los dos sentidos.
+ *
+ * La forma es la del sistema «Nexus · interfaz interna» (2026-10-03): el encabezado y las capas en
+ * gris claro con rótulos grises, cada nivel con su punto y su nombre, Funcional marcado «La base»
+ * con un chip blanco (sin teñir la columna: el verde es «confirmado» y no se usa de adorno) y el
+ * resultado de cada nivel en un bloque neutro.
  */
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -23,9 +28,9 @@ import { ordenDeDependencias, relacionadosCon, type DatosDeLaVista } from "@/lib
 import { conteoDe, conteoDeCelda, useEscala } from "./contexto";
 import { HerramientasDelCriterio, useHerramientas } from "./herramientas";
 import { PUNTO_DE_NIVEL } from "./niveles";
-import { Contador, MetaDelCriterio, NoAplicanEnLaEdicion, NombreGeneral, TextoConPalabras } from "./piezas";
+import { BLOQUE_DE_RESULTADO, Contador, MARCA, MetaDelCriterio, NoAplicanEnLaEdicion, NombreGeneral, ROTULO, TextoConPalabras } from "./piezas";
 
-const COLUMNAS = "grid-cols-[minmax(210px,1.15fr)_repeat(5,minmax(170px,1fr))]";
+const COLUMNAS = "grid-cols-[minmax(230px,1.15fr)_repeat(5,minmax(180px,1fr))]";
 
 interface Props {
   datos: DatosDeLaVista;
@@ -59,27 +64,19 @@ export default function Matriz({ datos, perfil, anclaAbierta, onLeerDimension }:
       className="relative overflow-auto rounded-xl border border-line bg-surface"
       style={{ maxHeight: "calc(100vh - 15rem)", minHeight: "26rem" }}
     >
-      <div className="min-w-[1090px]">
-        <div className={cn("sticky top-0 z-20 grid border-b border-line bg-surface", COLUMNAS)}>
-          <div className="sticky left-0 z-10 flex items-end bg-surface px-4 py-2.5 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
-            Dimensión
-          </div>
+      <div className="min-w-[1180px]">
+        <div className={cn("sticky top-0 z-20 grid border-b border-line bg-surface-muted", COLUMNAS)}>
+          <div className={cn("sticky left-0 z-10 flex items-center bg-surface-muted px-4 py-2.5", ROTULO)}>Dimensión</div>
           {niveles.map((n) => (
             <div
               key={n.letra}
               // Cómo se ve el área entera en ese nivel («Los cinco niveles de un vistazo»), al pasar el cursor.
               title={area.panoramica[n.letra] ? `Así se ve ${area.nombre} en ${n.nombre}: ${area.panoramica[n.letra]}` : undefined}
-              className={cn("border-l border-line px-3 py-2.5", n.letra === "F" ? "bg-success-surface" : "bg-surface")}
+              className="flex items-center gap-1.5 border-l border-line px-3 py-2.5"
             >
-              <div className="flex items-center gap-1.5">
-                <span className={cn("h-2 w-2 flex-shrink-0 rounded-sm", PUNTO_DE_NIVEL[n.letra])} aria-hidden />
-                <span className="text-sm font-semibold text-fg">{n.nombre}</span>
-                {n.letra === "F" && (
-                  <span className="rounded-full border border-dashed border-success-line px-1.5 text-2xs font-semibold text-success-ink">
-                    La base
-                  </span>
-                )}
-              </div>
+              <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", PUNTO_DE_NIVEL[n.letra])} aria-hidden />
+              <span className="text-[13px] font-medium text-fg">{n.nombre}</span>
+              {n.letra === "F" && <span className={cn(MARCA, "font-medium")}>La base</span>}
             </div>
           ))}
         </div>
@@ -87,8 +84,8 @@ export default function Matriz({ datos, perfil, anclaAbierta, onLeerDimension }:
         {capas.map((capa) => (
           <section key={capa.clave} aria-label={capa.nombre}>
             <div className="flex border-b border-line bg-surface-muted">
-              <div className="sticky left-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 px-4 py-2">
-                <h3 className="text-2xs font-bold uppercase tracking-wide text-info-ink">{capa.nombre}</h3>
+              <div className="sticky left-0 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-4 py-2.5">
+                <h3 className={ROTULO}>{capa.nombre}</h3>
                 {capa.descripcion && <span className="text-xs text-fg-muted">{capa.descripcion}</span>}
                 <OrdenDeLaCapa datos={datos} capa={capa.nombre} perfil={perfil} />
               </div>
@@ -132,35 +129,35 @@ function FilaDeDimension({
   const aplicaAca = dimensionAplica(d, perfil);
   return (
     <div className={cn("grid border-b border-line", COLUMNAS)}>
-      <div className="sticky left-0 z-10 flex flex-col gap-2 border-r border-line bg-surface px-4 py-3">
+      <div className="sticky left-0 z-10 flex flex-col gap-2 border-r border-line bg-surface p-4">
         <button
           type="button"
           onClick={() => abrirComentarios(d.id)}
           title="Ver y dejar comentarios sobre la dimensión"
           className={cn(
-            "-mx-1.5 -my-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover",
+            "-mx-1.5 -my-1 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-surface-hover",
             anclaAbierta === d.id && "bg-info-surface",
           )}
         >
           <span className="flex items-baseline gap-1.5">
-            <span className="font-mono text-2xs text-fg-muted">{d.id}</span>
-            <span className="text-sm font-semibold leading-tight text-fg">{d.nombre}</span>
+            <span className="text-xs tabular-nums text-fg-muted">{d.id}</span>
+            <span className="text-[15px] font-semibold leading-snug text-fg">{d.nombre}</span>
           </span>
           <NombreGeneral nombre={d.nombreGeneral} className="mt-0.5" />
-          <span className="mt-1 block text-xs leading-snug text-fg-secondary">{d.pregunta}</span>
+          <span className="mt-1.5 block text-[13px] leading-normal text-fg-secondary">{d.pregunta}</span>
         </button>
         {d.descripcion && (
-          <p className="text-2xs leading-snug text-fg-secondary">
+          <p className="text-xs leading-normal text-fg-muted">
             <TextoConPalabras texto={d.descripcion} palabras={datos.terminos} />
           </p>
         )}
-        <p className="text-2xs leading-snug text-fg-muted">
+        <p className="text-xs leading-normal text-fg-secondary">
           <span className="font-semibold text-warn-ink">Costo de quedarse · </span>
           {d.costoDeQuedarse}
         </p>
         <div className="mt-auto flex flex-wrap items-center gap-2">
           <Contador conteo={conteoDe(conteos, d.id)} />
-          <button type="button" onClick={() => onLeerDimension(d.id)} className="text-2xs font-medium text-info-ink hover:underline">
+          <button type="button" onClick={() => onLeerDimension(d.id)} className="text-xs font-semibold text-brand hover:underline">
             Leer la dimensión →
           </button>
         </div>
@@ -207,13 +204,13 @@ function CeldaDeNivel({
   const ocultos = n.criterios.length - visibles.length;
   const tieneEnlaces = (id: string) => !!(datos.requeridos.requiere[id]?.length || datos.requeridos.loRequieren[id]?.length);
   return (
-    <div className={cn("flex min-w-0 flex-col gap-2 border-l border-line px-3 py-3", n.letra === "F" && "bg-success-surface/40")}>
+    <div className="flex min-w-0 flex-col gap-2 border-l border-line p-3">
       <button
         type="button"
         onClick={() => abrirComentarios(n.id)}
         title="Ver y dejar comentarios sobre el nivel"
         className={cn(
-          "-mx-1 rounded-md px-1 py-0.5 text-left text-xs font-semibold leading-snug text-fg transition-colors hover:bg-surface-hover",
+          "-mx-1 rounded-lg px-1 py-0.5 text-left text-[13px] font-semibold leading-snug text-fg transition-colors hover:bg-surface-hover",
           anclaAbierta === n.id && "bg-info-surface",
         )}
       >
@@ -221,14 +218,14 @@ function CeldaDeNivel({
       </button>
 
       {n.resultado && (
-        <p className="rounded-md bg-success-surface px-2 py-1.5 text-2xs leading-snug text-success-ink">
-          <span className="font-bold">Resultado · </span>
-          {n.resultado}
-        </p>
+        <div className={BLOQUE_DE_RESULTADO}>
+          <span className={ROTULO}>Resultado</span>
+          <span className="text-xs leading-normal text-fg-secondary">{n.resultado}</span>
+        </div>
       )}
 
       {visibles.length > 0 && (
-        <ul className="-mx-1.5 flex flex-col">
+        <ul className="-mx-1.5 flex flex-col gap-0.5">
           {visibles.map((c) => {
             // Lo que se mira requiere este criterio, o este criterio requiere lo que se mira.
             const requerido = relacion.requiere.has(c.id);
@@ -246,14 +243,16 @@ function CeldaDeNivel({
                   // solo al criterio, y con `onFocus` la marca quedaba puesta sin cursor ni panel.
                   onKeyUp={conEnlaces ? (e) => e.key === "Tab" && relacion.alEntrar(c.id) : undefined}
                   onBlur={conEnlaces ? relacion.alSalir : undefined}
+                  // El punteado es «falta» en el sistema: lo relacionado va con borde lleno, azul lo que
+                  // requiere lo que se mira y gris lo que lo requiere a él.
                   className={cn(
-                    "relative w-full rounded-md border px-1.5 py-1.5 text-left transition-[background-color,opacity] hover:bg-surface-hover",
+                    "relative w-full rounded-lg border p-1.5 text-left transition-[background-color,opacity] hover:bg-surface-hover",
                     anclaAbierta === c.id
                       ? "border-info-line bg-info-surface"
                       : requerido
-                        ? "border-dashed border-info-line bg-info-surface"
+                        ? "border-info-line bg-surface"
                         : dependiente
-                          ? "border-dashed border-line bg-surface-hover"
+                          ? "border-line bg-surface-muted"
                           : "border-transparent",
                     // Con herramientas prendidas, lo que ninguna toca queda más claro (al pasar el cursor, entero).
                     atenuado(c.id) && anclaAbierta !== c.id && "opacity-45 hover:opacity-100",
@@ -265,15 +264,15 @@ function CeldaDeNivel({
                   {(requerido || dependiente) && relacion.foco && (
                     <span
                       className={cn(
-                        "pointer-events-none absolute right-1.5 top-0 z-10 -translate-y-1/2 whitespace-nowrap rounded border bg-surface px-1 text-2xs font-semibold",
-                        requerido ? "border-info-line text-info-ink" : "border-line text-fg-secondary",
+                        "pointer-events-none absolute right-1.5 top-0 z-10 -translate-y-1/2 whitespace-nowrap rounded-full border bg-surface px-1.5 text-[11px] font-semibold leading-4",
+                        requerido ? "border-info-line text-brand" : "border-line text-fg-secondary",
                       )}
                     >
                       {requerido ? "Lo requiere " : "Requiere a "}
-                      <span className="font-mono">{relacion.foco}</span>
+                      <span className="tabular-nums">{relacion.foco}</span>
                     </span>
                   )}
-                  <span className="block text-xs leading-snug text-fg">
+                  <span className="block text-[13px] leading-normal text-fg">
                     <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                   </span>
                   <span className="mt-1.5 flex items-start justify-between gap-2">
@@ -291,7 +290,7 @@ function CeldaDeNivel({
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
         <span className="flex flex-col gap-0.5">
           {ocultos > 0 && (
-            <span className="text-2xs text-fg-muted">
+            <span className="text-xs text-fg-muted">
               {ocultos} {ocultos === 1 ? "no aplica" : "no aplican"} a este perfil
             </span>
           )}
@@ -314,17 +313,14 @@ function OrdenDeLaCapa({ datos, capa, perfil }: { datos: DatosDeLaVista; capa: s
   if (filas.length === 1) {
     const f = filas[0];
     return (
-      <span className="text-2xs text-fg-secondary" title={`Por qué este orden: ${f.porQue}`}>
-        · <span className="font-semibold">Orden de dependencias:</span> {f.orden.join(" → ")}
+      <span className="text-xs text-fg-secondary" title={`Por qué este orden: ${f.porQue}`}>
+        · Orden: {f.orden.join(" → ")}
       </span>
     );
   }
   return (
-    <span
-      className="cursor-help text-2xs text-fg-secondary underline decoration-dotted underline-offset-2"
-      title={filas.map((f) => `${f.cuando}: ${f.orden.join(" → ")}`).join("\n")}
-    >
-      · <span className="font-semibold">Orden de dependencias:</span> depende de cómo se cierra la venta (elige un perfil)
+    <span className="cursor-help text-xs text-fg-secondary" title={filas.map((f) => `${f.cuando}: ${f.orden.join(" → ")}`).join("\n")}>
+      · Orden: depende de cómo se cierra la venta (elige un perfil)
     </span>
   );
 }

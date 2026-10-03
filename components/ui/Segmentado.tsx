@@ -12,6 +12,10 @@ import { cn } from "@/lib/cn";
 //
 // `valor` puede ser null: ninguna elegida todavía (el nivel de una dimensión sin estimar). Entonces
 // la primera opción habilitada es la que recibe el foco con Tab.
+//
+// La forma es la del sistema «Nexus · interfaz interna» (2026-10-03), medida por medida: carril
+// gris de radio 10 sin borde, opciones de 13 px y la elegida blanca con `shadow-segment`, la única
+// sombra de la interfaz. Sirve para dos a cuatro opciones; con más, una lista (`Select`).
 
 export interface OpcionSegmentada<K extends string> {
   clave: K;
@@ -48,7 +52,7 @@ export function Segmentado<K extends string>({ opciones, valor, onCambio, etique
       role="radiogroup"
       aria-label={etiqueta}
       aria-disabled={deshabilitado || undefined}
-      className={cn("inline-flex max-w-full flex-wrap rounded-lg border border-line bg-surface-muted p-0.5", className)}
+      className={cn("inline-flex max-w-full flex-wrap rounded-[10px] bg-surface-hover p-[3px]", className)}
       onKeyDown={(e) => {
         if (e.key === "ArrowRight" || e.key === "ArrowDown") {
           e.preventDefault();
@@ -76,9 +80,9 @@ export function Segmentado<K extends string>({ opciones, valor, onCambio, etique
             aria-disabled={o.deshabilitada || undefined}
             onClick={() => !o.deshabilitada && !deshabilitado && onCambio(o.clave)}
             className={cn(
-              "whitespace-nowrap rounded-md px-2.5 py-1 text-xs transition-colors",
+              "whitespace-nowrap rounded-lg px-4 py-[7px] text-[13px] leading-tight transition-colors",
               activo
-                ? "bg-surface font-semibold text-fg shadow-sm"
+                ? "bg-surface font-semibold text-fg shadow-segment"
                 : o.deshabilitada
                   ? "cursor-not-allowed text-fg-muted opacity-50"
                   : "text-fg-muted hover:text-fg-secondary",

@@ -15,7 +15,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Menu, Tabs } from "@/components/ui";
+import { Alert, Menu, PageHeader, Select, Tabs } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import {
   aplica,
   CIERRES,
@@ -40,7 +41,7 @@ import { FiltroDeHerramientas, ProveedorDeHerramientas, ResumenDeHerramientas } 
 import Leyenda from "./Leyenda";
 import Mapa, { type SeleccionDelMapa } from "./Mapa";
 import Matriz from "./Matriz";
-import { GrupoDeControl, IconoComentario, ParrafoDeLaEscala, Segmentado } from "./piezas";
+import { BOTON_CLARO, CHIP_DE_CABECERA, GrupoDeControl, IconoChevron, IconoComentario, ParrafoDeLaEscala, Segmentado } from "./piezas";
 
 /**
  * Qué esconde cada respuesta del perfil. Es la regla de `aplica` (perfil.ts) dicha en palabras:
@@ -76,7 +77,7 @@ function ResumenDelPerfil({ datos, perfil }: { datos: DatosDeLaVista; perfil: Pe
   // edición puede no valer (ahí una dimensión puede aplicar donde en la general no), así que no va.
   const nota = datos.edicion ? null : notaDelCierre(datos.perfilDeNegocio, perfil.cierre);
   return (
-    <div className="mt-3 space-y-1.5 border-t border-line pt-2 text-xs text-fg-secondary">
+    <div className="space-y-2 text-[13px] text-fg-secondary">
       <p>
         <span className="font-semibold text-fg">{describirPerfil(perfil)}:</span> se esconden{" "}
         <span className="font-semibold tabular-nums text-fg">{escondidos}</span> de los {criterios.length} criterios de {datos.area.nombre}
@@ -90,10 +91,9 @@ function ResumenDelPerfil({ datos, perfil }: { datos: DatosDeLaVista; perfil: Pe
         .
       </p>
       {nota && (
-        <p className="rounded-md bg-info-surface px-2 py-1.5 leading-relaxed text-info-ink">
-          <span className="font-semibold">Cómo se lee con este perfil: </span>
+        <Alert variant="info" title="Cómo se lee con este perfil">
           {nota}
-        </p>
+        </Alert>
       )}
     </div>
   );
@@ -112,7 +112,7 @@ function ResumenDeLaEdicion({ datos }: { datos: DatosDeLaVista }) {
   // Una edición se escribe por áreas: de esta puede no haber dicho nada todavía.
   if (!ed.adaptaElArea) {
     return (
-      <div className="mt-3 border-t border-line pt-2 text-xs text-fg-secondary">
+      <div className="text-[13px] text-fg-secondary">
         <p>
           <span className="font-semibold text-fg">Edición {ed.nombre}</span> en {datos.area.nombre}: esta edición todavía no adapta esta área, así que se lee
           entera con la escala general. Lo que sí trae son sus palabras: aparecen subrayadas donde el texto general nombra algo que en esta industria se
@@ -122,7 +122,7 @@ function ResumenDeLaEdicion({ datos }: { datos: DatosDeLaVista }) {
     );
   }
   return (
-    <div className="mt-3 space-y-1.5 border-t border-line pt-2 text-xs text-fg-secondary">
+    <div className="space-y-2 text-[13px] text-fg-secondary">
       <p>
         <span className="font-semibold text-fg">Edición {ed.nombre}</span> en {datos.area.nombre}:{" "}
         {tocaCriterios ? (
@@ -141,12 +141,11 @@ function ResumenDeLaEdicion({ datos }: { datos: DatosDeLaVista }) {
         )}
       </p>
       {ed.palabras.length > 0 && (
-        <p className="rounded-md bg-info-surface px-2 py-1.5 leading-relaxed text-info-ink">
-          <span className="font-semibold">Las palabras de esta edición: </span>
-          lo que sigue con el texto general trae subrayado cómo se llama en esta industria. Por ejemplo, «{ed.palabras[0].general}» es «
+        <Alert variant="info" title="Las palabras de esta edición">
+          Lo que sigue con el texto general trae subrayado cómo se llama en esta industria. Por ejemplo, «{ed.palabras[0].general}» es «
           {ed.palabras[0].edicion.charAt(0).toLowerCase()}
           {ed.palabras[0].edicion.slice(1)}».
-        </p>
+        </Alert>
       )}
     </div>
   );
@@ -272,95 +271,95 @@ export default function VistaDeLaEscala({
   const [infoAbierta, setInfoAbierta] = useState(false);
   const publicadaEl = new Date(datos.publicadaEn).toLocaleDateString("es-CR", { day: "numeric", month: "long", year: "numeric" });
 
+  /** Los dos chips de la cabecera abren lo mismo: qué cambió en esta versión y cómo cambia la escala. */
+  const chipsDeLaVersion = (
+    <>
+      <button
+        type="button"
+        aria-expanded={infoAbierta}
+        onClick={() => setInfoAbierta((v) => !v)}
+        className={CHIP_DE_CABECERA}
+        title={`Publicada en Nexus el ${publicadaEl}. Toca para ver qué cambió en esta versión.`}
+      >
+        Versión {datos.version}
+        <IconoChevron abierto={infoAbierta} />
+      </button>
+      {estadoCorto && (
+        <button
+          type="button"
+          aria-expanded={infoAbierta}
+          onClick={() => setInfoAbierta((v) => !v)}
+          className={cn(CHIP_DE_CABECERA, congelada && "border-warn-line bg-warn-surface text-warn-ink hover:bg-warn-surface")}
+          title={`${datos.estado}. Toca para ver cómo cambia la escala.`}
+        >
+          {congelada ? "Congelada · solo lectura" : estadoCorto}
+          <IconoChevron abierto={infoAbierta} />
+        </button>
+      )}
+    </>
+  );
+
   return (
     <ProveedorDeLaEscala value={contexto}>
       <ProveedorDeHerramientas value={prendidas}>
-      <div className="space-y-4">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
+      <div className="space-y-6">
+        <PageHeader
+          title="Escala de Rendimiento"
+          badges={chipsDeLaVersion}
+          description="Recórrela por área, dimensión y nivel. Si algo no se entiende o no calza con un cliente real, coméntalo ahí mismo."
+          action={
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold text-fg">Escala de Rendimiento</h1>
-              <button
-                type="button"
-                aria-expanded={infoAbierta}
-                onClick={() => setInfoAbierta((v) => !v)}
-                className="rounded-full border border-info-line bg-info-surface px-2 py-0.5 text-xs font-semibold text-info-ink hover:brightness-95"
-                title={`Publicada en Nexus el ${publicadaEl}. Toca para ver qué cambió en esta versión.`}
-              >
-                Versión {datos.version} {infoAbierta ? "▴" : "▾"}
-              </button>
-              {estadoCorto && (
-                <button
-                  type="button"
-                  aria-expanded={infoAbierta}
-                  onClick={() => setInfoAbierta((v) => !v)}
-                  className={
-                    congelada
-                      ? "rounded-full border border-warn-line bg-warn-surface px-2 py-0.5 text-xs font-semibold text-warn-ink hover:brightness-95"
-                      : "rounded-full border border-line bg-surface-muted px-2 py-0.5 text-xs font-semibold text-fg-secondary hover:bg-surface-hover"
-                  }
-                  title={`${datos.estado}. Toca para ver cómo cambia la escala.`}
-                >
-                  {congelada ? "Congelada · solo lectura" : estadoCorto} {infoAbierta ? "▴" : "▾"}
-                </button>
-              )}
-            </div>
-            <p className="mt-1 text-sm text-fg-secondary">
-              Recórrela por área, dimensión y nivel. Si algo no se entiende o no calza con un cliente real, coméntalo ahí mismo: es la
-              materia prima para mejorarla.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Leyenda datos={datos} />
-            <Link
-              href={hrefDeLaBandeja}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover"
-            >
-              <IconoComentario />
-              Comentarios
-              {abiertosEnTotal > 0 && (
-                <span className="rounded-full bg-info-surface px-1.5 text-2xs font-semibold text-info-ink">{abiertosEnTotal} abiertos</span>
-              )}
-            </Link>
-            <Menu
-              align="end"
-              panelWidth="w-80"
-              aria-label="Descargar los documentos de la escala"
-              triggerClassName="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg hover:bg-primary-hover"
-              trigger={
-                <>
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
-                  </svg>
-                  Descargar .md
-                </>
-              }
-              header={<span className="text-2xs text-fg-muted">Tal cual está publicada en Nexus</span>}
-              items={datos.documentos.map((d) => ({
-                key: d.clave,
-                disabled: !d.version,
-                label: (
-                  <span className="flex flex-col">
-                    <span className="text-sm font-medium text-fg">
-                      {d.titulo}
-                      {d.version ? ` · ${d.version}` : " · sin publicar"}
-                    </span>
-                    <span className="text-2xs text-fg-muted">{d.paraQuien}</span>
+              <Leyenda datos={datos} />
+              <Link href={hrefDeLaBandeja} className={BOTON_CLARO}>
+                <IconoComentario />
+                Comentarios
+                {abiertosEnTotal > 0 && (
+                  <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold leading-[18px] text-warn-ink">
+                    {abiertosEnTotal} {abiertosEnTotal === 1 ? "abierto" : "abiertos"}
                   </span>
-                ),
-                onSelect: () => {
-                  window.location.href = `/api/escala/documentos/${d.clave}`;
-                },
-              }))}
-            />
-          </div>
-        </header>
+                )}
+              </Link>
+              <Menu
+                align="end"
+                panelWidth="w-80"
+                aria-label="Descargar los documentos de la escala"
+                triggerClassName={BOTON_CLARO}
+                trigger={
+                  <>
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" />
+                    </svg>
+                    Descargar .md
+                    <IconoChevron />
+                  </>
+                }
+                header={<span className="text-2xs text-fg-muted">Tal cual está publicada en Nexus</span>}
+                items={datos.documentos.map((d) => ({
+                  key: d.clave,
+                  disabled: !d.version,
+                  label: (
+                    <span className="flex flex-col">
+                      <span className="text-sm font-medium text-fg">
+                        {d.titulo}
+                        {d.version ? ` · ${d.version}` : " · sin publicar"}
+                      </span>
+                      <span className="text-2xs text-fg-muted">{d.paraQuien}</span>
+                    </span>
+                  ),
+                  onSelect: () => {
+                    window.location.href = `/api/escala/documentos/${d.clave}`;
+                  },
+                }))}
+              />
+            </div>
+          }
+        />
 
         {infoAbierta && (
-          <div className="grid gap-5 rounded-xl border border-line bg-surface-muted p-4 md:grid-cols-2">
+          <div className="grid gap-5 rounded-xl border border-line bg-surface p-5 md:grid-cols-2">
             <section aria-label="Sobre esta versión">
               <h2 className="text-sm font-semibold text-fg">Qué cambió en la {datos.version}</h2>
-              <p className="text-2xs text-fg-muted">
+              <p className="text-xs text-fg-muted">
                 Publicada en Nexus el {publicadaEl}
                 {datos.fecha ? ` · fechada ${datos.fecha}` : ""}
               </p>
@@ -399,97 +398,93 @@ export default function VistaDeLaEscala({
           items={datos.areas.map((a) => ({ key: a.slug, label: a.nombre, count: porArea[a.id]?.total || undefined }))}
         />
 
-        <div className="rounded-xl border border-line bg-surface px-4 py-3">
-          <div className="flex flex-wrap items-start gap-x-10 gap-y-3">
+        {/* Los filtros, sin tarjeta: cada uno con su rótulo arriba (sistema «Nexus · interfaz interna»). */}
+        <section aria-label="Filtros" className="space-y-3">
+          <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
             <GrupoDeControl
               nombre="Vista"
               ayuda="Tres formas de recorrer el área que elegiste arriba: la matriz para comparar, una dimensión como escalera para leerla entera y el mapa para ver dónde se concentran los comentarios, los hábitos o los riesgos."
             >
-              <div className="flex flex-col gap-1">
-                <span className="text-2xs text-fg-secondary">Cómo la quieres recorrer</span>
-                <Segmentado<Vista>
-                  etiqueta="Vista"
-                  valor={vista}
-                  onCambio={setVista}
-                  opciones={[
-                    { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
-                    { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
-                    { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos, riesgos o comentarios." },
-                  ]}
-                />
-              </div>
+              <Segmentado<Vista>
+                etiqueta="Vista"
+                valor={vista}
+                onCambio={setVista}
+                opciones={[
+                  { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
+                  { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
+                  { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos, riesgos o comentarios." },
+                ]}
+              />
             </GrupoDeControl>
 
+            {/* Cinco opciones no caben en un segmentado (sirve para dos a cuatro): la industria va en una lista. */}
             {datos.ediciones.length > 0 && (
               <GrupoDeControl
                 nombre="Industria"
-                ayuda={`${datos.edicionesIntro ?? "Cada edición dice la misma escala con las palabras de una industria."} «General» es la escala como está escrita, sin las palabras de ninguna industria. Al elegir una, quedan marcados los criterios que son solo de esa edición y los que dice con sus palabras.`}
+                ayuda={`${datos.edicionesIntro ?? "Cada edición dice la misma escala con las palabras de una industria."} «General» es la escala como está escrita, sin las palabras de ninguna industria. Al elegir una, quedan marcados los criterios que son solo de esa edición y los que dice con sus palabras.${datos.ediciones.some((e) => e.perfilHabitual) ? " Si la edición tiene un perfil habitual, queda elegido." : ""}`}
               >
-                <div className="flex flex-col gap-1">
-                  <span className="text-2xs text-fg-secondary">Con qué edición la lees</span>
-                  <Segmentado<string>
-                    etiqueta="Industria"
-                    valor={industria ?? "general"}
-                    onCambio={elegirIndustria}
-                    opciones={[
-                      { clave: "general", etiqueta: "General", title: "General: la escala como está escrita, para cualquier empresa. Es la que se usa cuando una industria todavía no tiene su edición." },
-                      ...datos.ediciones.map((e) => ({
-                        clave: e.slug,
-                        etiqueta: e.nombre,
-                        title: `${e.nombre}: ${e.descripcion ?? "la escala dicha para esta industria."}${e.perfilHabitual ? ` Al elegirla queda su perfil habitual: ${describirPerfil(e.perfilHabitual)}.` : ""}`,
-                      })),
-                    ]}
-                  />
-                </div>
+                <Select
+                  aria-label="Industria"
+                  value={industria ?? "general"}
+                  onChange={(e) => elegirIndustria(e.target.value)}
+                  title={
+                    datos.edicion
+                      ? `${datos.edicion.nombre}: ${datos.ediciones.find((e) => e.slug === industria)?.descripcion ?? "la escala dicha para esta industria."}`
+                      : "General: la escala como está escrita, para cualquier empresa. Es la que se usa cuando una industria todavía no tiene su edición."
+                  }
+                  className="w-auto min-w-[168px] bg-surface py-2 text-[13px] leading-tight hover:bg-surface-hover"
+                >
+                  <option value="general">General</option>
+                  {datos.ediciones.map((e) => (
+                    <option key={e.slug} value={e.slug}>
+                      {e.nombre}
+                    </option>
+                  ))}
+                </Select>
               </GrupoDeControl>
             )}
 
             <GrupoDeControl
-              nombre="Perfil de negocio"
+              nombre={datos.perfilDeNegocio.cierre?.pregunta ?? "Cómo se cierra la venta"}
               ayuda={`${datos.perfilDeNegocio.introduccion ?? "El perfil de negocio decide qué criterios aplican."} Elegir un perfil esconde los criterios que no le aplican, con la misma regla de la escala; «Sin filtrar» los muestra todos, cada uno con su marca.`}
             >
-              <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
-                <div className="flex flex-col gap-1">
-                  <span className="text-2xs text-fg-secondary">{datos.perfilDeNegocio.cierre?.pregunta ?? "Cómo se cierra la venta"}</span>
-                  <Segmentado<"todas" | Cierre>
-                    etiqueta={datos.perfilDeNegocio.cierre?.pregunta ?? "Cómo se cierra la venta"}
-                    valor={perfil.cierre ?? "todas"}
-                    onCambio={(k) => setPerfil((p) => ({ ...p, cierre: k === "todas" ? null : k }))}
-                    opciones={[
-                      { clave: "todas", etiqueta: "Sin filtrar", title: "Sin filtrar: se ven los criterios de todos los tipos de venta, cada uno con su marca." },
-                      ...CIERRES.map((c) => ({
-                        clave: c,
-                        etiqueta: ETIQUETA_DE_CIERRE[c],
-                        title: tituloDeOpcion(datos.perfilDeNegocio.cierre, c, ETIQUETA_DE_CIERRE[c], EFECTO_DEL_CIERRE[c]),
-                      })),
-                    ]}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-2xs text-fg-secondary">{datos.perfilDeNegocio.despues?.pregunta ?? "Qué pasa después de la venta"}</span>
-                  <Segmentado<"todas" | Despues>
-                    etiqueta={datos.perfilDeNegocio.despues?.pregunta ?? "Qué pasa después de la venta"}
-                    valor={perfil.despues ?? "todas"}
-                    onCambio={(k) => setPerfil((p) => ({ ...p, despues: k === "todas" ? null : k }))}
-                    opciones={[
-                      { clave: "todas", etiqueta: "Sin filtrar", title: "Sin filtrar: se ven los criterios de todos los tipos de relación, cada uno con su marca." },
-                      ...DESPUES.map((d) => ({
-                        clave: d,
-                        etiqueta: ETIQUETA_DE_DESPUES[d],
-                        title: tituloDeOpcion(datos.perfilDeNegocio.despues, d, ETIQUETA_DE_DESPUES[d], EFECTO_DEL_DESPUES[d]),
-                      })),
-                    ]}
-                  />
-                </div>
-              </div>
+              <Segmentado<"todas" | Cierre>
+                etiqueta={datos.perfilDeNegocio.cierre?.pregunta ?? "Cómo se cierra la venta"}
+                valor={perfil.cierre ?? "todas"}
+                onCambio={(k) => setPerfil((p) => ({ ...p, cierre: k === "todas" ? null : k }))}
+                opciones={[
+                  { clave: "todas", etiqueta: "Sin filtrar", title: "Sin filtrar: se ven los criterios de todos los tipos de venta, cada uno con su marca." },
+                  ...CIERRES.map((c) => ({
+                    clave: c,
+                    etiqueta: ETIQUETA_DE_CIERRE[c],
+                    title: tituloDeOpcion(datos.perfilDeNegocio.cierre, c, ETIQUETA_DE_CIERRE[c], EFECTO_DEL_CIERRE[c]),
+                  })),
+                ]}
+              />
+            </GrupoDeControl>
+
+            <GrupoDeControl nombre={datos.perfilDeNegocio.despues?.pregunta ?? "Qué pasa después de la venta"}>
+              <Segmentado<"todas" | Despues>
+                etiqueta={datos.perfilDeNegocio.despues?.pregunta ?? "Qué pasa después de la venta"}
+                valor={perfil.despues ?? "todas"}
+                onCambio={(k) => setPerfil((p) => ({ ...p, despues: k === "todas" ? null : k }))}
+                opciones={[
+                  { clave: "todas", etiqueta: "Sin filtrar", title: "Sin filtrar: se ven los criterios de todos los tipos de relación, cada uno con su marca." },
+                  ...DESPUES.map((d) => ({
+                    clave: d,
+                    etiqueta: ETIQUETA_DE_DESPUES[d],
+                    title: tituloDeOpcion(datos.perfilDeNegocio.despues, d, ETIQUETA_DE_DESPUES[d], EFECTO_DEL_DESPUES[d]),
+                  })),
+                ]}
+              />
             </GrupoDeControl>
 
             <FiltroDeHerramientas datos={datos} perfil={perfil} activas={herramientas} onCambio={setHerramientas} />
           </div>
           {datos.edicion && <ResumenDeLaEdicion datos={datos} />}
           {(perfil.cierre || perfil.despues) && <ResumenDelPerfil datos={datos} perfil={perfil} />}
-          <ResumenDeHerramientas datos={datos} perfil={perfil} activas={herramientas} />
-        </div>
+          <ResumenDeHerramientas datos={datos} activas={herramientas} />
+        </section>
 
         {vista === "matriz" && <Matriz datos={datos} perfil={perfil} anclaAbierta={ancla} onLeerDimension={leerDimension} />}
         {vista === "dimension" && (
@@ -507,8 +502,8 @@ export default function VistaDeLaEscala({
         )}
 
         <p className="text-xs text-fg-muted">
-          Todo lo que ves sale de la versión {datos.version} publicada en Nexus. Ningún criterio está escrito a mano en la aplicación: cuando
-          se publica una versión nueva, esta sección cambia sola.
+          Todo lo que ves sale de la escala publicada en Nexus. Ningún criterio está escrito a mano en la aplicación: cuando se publica una
+          versión nueva, esta sección cambia sola.
         </p>
       </div>
 

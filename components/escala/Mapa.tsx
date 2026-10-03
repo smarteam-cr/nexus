@@ -21,14 +21,18 @@
  *   · Pasar el cursor por el nombre de una capa (base operativa, producción) enciende sus dimensiones.
  *   · Tocar una dimensión la abre entera; tocar un nivel enciende los anillos de adentro hasta él:
  *     la escala se sube de a un nivel.
- *   · ▶ en el centro recorre la escala de Deficiente a Óptimo, un nivel a la vez.
+ *   · «Recorrer», arriba de la rueda, sube la escala de Deficiente a Óptimo, un nivel a la vez. Es el
+ *     único botón azul de la pantalla (sistema «Nexus · interfaz interna», 2026-10-03).
  *   · Con el teclado: ←/→ cambian de dimensión, ↑/↓ de nivel, Enter abre los comentarios, Escape
  *     vuelve al área.
  *   · Con herramientas prendidas (el filtro de arriba), cada celda lleva el isotipo de las que ayudan
  *     ahí, en vez de su número, y las celdas donde no ayuda ninguna se aclaran. ⛔ La marca va
  *     encima: el color de la celda sigue siendo el de su nivel.
+ *
+ * La rueda va sobre blanco, sin halo ni sombra: el sistema separa con bordes, no con brillos.
  */
 import { createElement, useEffect, useId, useMemo, useRef, useState, type SVGProps } from "react";
+import { Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { aplica, describirPerfil, dimensionAplica, type Perfil } from "@/lib/escala/documento/perfil";
 import { LETRAS, type ClaveDeCapa, type Dimension, type Letra, type Nivel } from "@/lib/escala/documento/tipos";
@@ -39,6 +43,8 @@ import { COLOR_DE_HERRAMIENTA, HerramientasDelCriterio, MarcaDeHerramienta, useH
 import { Isotipo, tieneIsotipo } from "./isotipos";
 import { COLOR_DE_NIVEL, PUNTO_DE_NIVEL } from "./niveles";
 import {
+  BLOQUE_DE_RESULTADO,
+  BOTON_CLARO,
   BotonComentar,
   Contador,
   EnlacesDelCriterio,
@@ -47,7 +53,7 @@ import {
   MetaDelCriterio,
   NoAplicanEnLaEdicion,
   NombreGeneral,
-  Segmentado,
+  ROTULO,
   TextoConPalabras,
 } from "./piezas";
 
@@ -114,7 +120,7 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
   {
     clave: "comentarios",
     etiqueta: "Comentarios del equipo",
-    title: "Cuántos comentarios dejó el equipo en cada celda: lo que no se entiende, lo que no calza con un cliente y las propuestas. En azul si alguno sigue abierto; en gris si ya se cerraron todos.",
+    title: "Cuántos comentarios dejó el equipo en cada celda: lo que no se entiende, lo que no calza con un cliente y las propuestas. Con el color de su nivel si alguno sigue abierto; en gris si ya se cerraron todos.",
   },
 ];
 
@@ -232,13 +238,13 @@ function GrupoConTitulo({ titulo, children, ...resto }: SVGProps<SVGGElement> & 
 }
 
 const IconoPlay = () => (
-  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden>
+  <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor" aria-hidden>
     <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" />
   </svg>
 );
 
 const IconoPausa = () => (
-  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden>
+  <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor" aria-hidden>
     <rect x="6" y="5" width="4.5" height="14" rx="1.2" />
     <rect x="13.5" y="5" width="4.5" height="14" rx="1.2" />
   </svg>
@@ -258,7 +264,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const { area, niveles, capas } = datos;
   const dims = area.dimensiones;
   const n = dims.length;
-  /** Para los `id` del SVG (el rayado, el halo): únicos aunque haya dos mapas. */
+  /** Para los `id` del SVG (el rayado): únicos aunque haya dos mapas. */
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const [capa, setCapa] = useState<CapaDeDatos>("criterios");
   /** Lo que está bajo el cursor: manda sobre lo elegido mientras dure. */
@@ -493,19 +499,21 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
     return false;
   };
 
+  /**
+   * «Recorrer»: arriba de la rueda, no en su centro (el centro solo dice lo que se mira). Mientras
+   * sube, se pausa; con un nivel elegido, sigue desde ahí; en Óptimo, vuelve a empezar.
+   */
+  const nivelElegido = seleccion?.tipo === "nivel" ? seleccion.letra : null;
+  const botonRecorrer = recorriendo
+    ? { etiqueta: "Pausar", alTocar: () => setRecorriendo(false), pausa: true }
+    : nivelElegido && nivelElegido !== LETRAS[LETRAS.length - 1]
+      ? { etiqueta: "Seguir subiendo", alTocar: recorrer, pausa: false }
+      : nivelElegido
+        ? { etiqueta: "Otra vez", alTocar: recorrer, pausa: false }
+        : { etiqueta: `Recorrer de ${nombreNivel(LETRAS[0])} a ${nombreNivel(LETRAS[LETRAS.length - 1])}`, alTocar: recorrer, pausa: false };
+
   /** El centro de la rueda: lo que se mira, dicho corto. */
   const centro = (() => {
-    const boton = (etiqueta: string, alTocar: () => void, pausa = false) => (
-      <button
-        type="button"
-        onClick={alTocar}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary font-semibold text-primary-fg shadow-sm transition-colors hover:bg-primary-hover"
-        style={{ fontSize: 15, padding: "6px 14px" }}
-      >
-        {pausa ? <IconoPausa /> : <IconoPlay />}
-        {etiqueta}
-      </button>
-    );
     if (!foco) {
       return (
         <>
@@ -515,7 +523,6 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           <p className="mt-1.5 text-fg-muted" style={{ fontSize: 15 }}>
             {n} dimensiones · {niveles.length} niveles
           </p>
-          {boton("Recorrer", recorrer)}
         </>
       );
     }
@@ -524,7 +531,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
       const elegido = seleccion?.tipo === "nivel" && seleccion.letra === foco.letra;
       return (
         <>
-          <p className="font-semibold uppercase tracking-wide text-fg-muted" style={{ fontSize: 13 }}>
+          <p className="font-semibold uppercase tracking-[0.08em] text-fg-muted" style={{ fontSize: 13 }}>
             Nivel {k + 1} de {LETRAS.length}
           </p>
           <p className="mt-0.5 font-bold leading-tight text-fg" style={{ fontSize: 27 }}>
@@ -535,15 +542,11 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               <span key={l} className={cn("rounded-full", j <= k ? PUNTO_DE_NIVEL[l] : "bg-surface-hover")} style={{ width: 10, height: 10 }} />
             ))}
           </span>
-          {elegido
-            ? recorriendo
-              ? boton("Pausar", () => setRecorriendo(false), true)
-              : boton(k < LETRAS.length - 1 ? "Seguir subiendo" : "Otra vez", recorrer)
-            : (
-              <p className="mt-1.5 text-fg-muted" style={{ fontSize: 14 }}>
-                Toca para ver {area.nombre} en este nivel
-              </p>
-            )}
+          {!elegido && (
+            <p className="mt-1.5 text-fg-muted" style={{ fontSize: 14 }}>
+              Toca para ver {area.nombre} en este nivel
+            </p>
+          )}
         </>
       );
     }
@@ -551,7 +554,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
       const c = capas.find((x) => x.clave === foco.clave);
       return (
         <>
-          <p className="font-semibold uppercase tracking-wide text-fg-muted" style={{ fontSize: 13 }}>
+          <p className="font-semibold uppercase tracking-[0.08em] text-fg-muted" style={{ fontSize: 13 }}>
             Capa
           </p>
           <p className="mt-0.5 font-bold leading-tight text-fg" style={{ fontSize: 24 }}>
@@ -568,7 +571,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
       const visibles = focoDim.niveles.flatMap((x) => x.criterios).filter((c) => aplica(c, perfil)).length;
       return (
         <>
-          <p className="font-mono text-fg-muted" style={{ fontSize: 15 }}>
+          <p className="tabular-nums text-fg-muted" style={{ fontSize: 15 }}>
             {focoDim.id}
           </p>
           <p className="mt-0.5 line-clamp-3 font-bold leading-tight text-fg" style={{ fontSize: 21 }}>
@@ -583,11 +586,11 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
     const nv = focoDim.niveles.find((x) => x.letra === foco.letra)!;
     return (
       <>
-        <p className="font-mono text-fg-muted" style={{ fontSize: 15 }}>
+        <p className="tabular-nums text-fg-muted" style={{ fontSize: 15 }}>
           {nv.id}
         </p>
         <p className="mt-0.5 flex items-center justify-center gap-1.5 font-bold text-fg" style={{ fontSize: 20 }}>
-          <span className={cn("rounded-sm", PUNTO_DE_NIVEL[nv.letra])} style={{ width: 10, height: 10 }} aria-hidden />
+          <span className={cn("rounded-full", PUNTO_DE_NIVEL[nv.letra])} style={{ width: 10, height: 10 }} aria-hidden />
           {nombreNivel(nv.letra)}
         </p>
         <p className="mt-0.5 line-clamp-2 leading-tight text-fg-secondary" style={{ fontSize: 18 }}>
@@ -620,38 +623,47 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <section aria-label={`Mapa de ${area.nombre}`} className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-fg">Mapa de {area.nombre}</h2>
-            <p className="mt-0.5 max-w-xl text-xs text-fg-muted">
-              Cada porción es una dimensión y cada anillo un nivel, de Deficiente al centro a Óptimo en el borde. Cada celda es una
-              dimensión en un nivel ({dims[0].id}.F es {dims[0].nombre} en {nombreNivel("F")}) y su número dice cuántos criterios tiene. Tócala
-              para ver sus criterios y otra vez para cerrarla; «Recorrer», en el centro, sube la escala de Deficiente a Óptimo.
+      <section aria-label={`Mapa de ${area.nombre}`} className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-surface p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0 max-w-[560px]">
+            <h2 className="text-lg font-semibold leading-[26px] text-fg">Mapa de {area.nombre}</h2>
+            <p className="mt-0.5 text-[13px] text-fg-muted">
+              Cada porción es una dimensión y cada anillo un nivel, de {nombreNivel(LETRAS[0])} al centro a {nombreNivel(LETRAS[LETRAS.length - 1])} en el
+              borde. Toca una celda para ver sus criterios.
             </p>
           </div>
-          <GrupoDeControl
-            nombre="Qué muestran las celdas"
-            ayuda="Cada celda es una dimensión en un nivel. Su color se intensifica cuanto más hay ahí de lo que elijas: criterios, hábitos, riesgos, criterios que otros requieren, criterios escondidos por el perfil o comentarios del equipo."
-            className="items-end"
-          >
-            <Segmentado
-              etiqueta="Qué muestran las celdas"
-              valor={capa}
-              onCambio={setCapa}
-              className="flex-wrap"
-              opciones={CAPAS.map((c) =>
-                c.clave === "perfil" && !hayPerfil
-                  ? { ...c, deshabilitada: true, title: "Elige primero un perfil de negocio (arriba): esta capa muestra cuántos criterios esconde en cada celda." }
-                  : c,
-              )}
-            />
-          </GrupoDeControl>
+          <div className="flex flex-wrap items-end gap-3">
+            <GrupoDeControl
+              nombre="Qué muestran las celdas"
+              ayuda={`Cada celda es una dimensión en un nivel (${dims[0].id}.F es ${dims[0].nombre} en ${nombreNivel("F")}). Su color se intensifica cuanto más hay ahí de lo que elijas. ${CAPAS.map((c) => c.title).join(" ")}${hayPerfil ? "" : " «Escondidos por el perfil» se elige después de elegir un perfil de negocio arriba."}`}
+            >
+              <Select
+                aria-label="Qué muestran las celdas"
+                value={capa}
+                onChange={(e) => setCapa(e.target.value as CapaDeDatos)}
+                className="w-auto min-w-[200px] bg-surface py-2 text-[13px] leading-tight text-fg"
+              >
+                {CAPAS.map((c) => (
+                  <option key={c.clave} value={c.clave} title={c.title} disabled={c.clave === "perfil" && !hayPerfil}>
+                    {c.etiqueta}
+                  </option>
+                ))}
+              </Select>
+            </GrupoDeControl>
+            <button
+              type="button"
+              onClick={botonRecorrer.alTocar}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-[9px] text-sm font-semibold leading-tight text-primary-fg transition-colors hover:bg-primary-hover"
+            >
+              {botonRecorrer.pausa ? <IconoPausa /> : <IconoPlay />}
+              {botonRecorrer.etiqueta}
+            </button>
+          </div>
         </div>
 
         <LeyendaDeLaRueda capa={capa} nombreNivel={nombreNivel} conOrden={hayOrden} conNoAplica={algunaNoAplica} herramientas={hayFiltro ? prendidas : []} />
 
-        <div className="relative mt-2" onMouseLeave={soltarEncima}>
+        <div className="relative" onMouseLeave={soltarEncima}>
           <svg
             key={area.id}
             viewBox={`0 0 ${W} ${H}`}
@@ -661,18 +673,11 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
           >
             <style>{ESTILOS}</style>
             <defs>
-              <radialGradient id={`${uid}-halo`}>
-                <stop offset="0%" style={{ stopColor: "var(--color-brand)", stopOpacity: 0.13 }} />
-                <stop offset="100%" style={{ stopColor: "var(--color-brand)", stopOpacity: 0 }} />
-              </radialGradient>
               <pattern id={`${uid}-rayado`} width={9} height={9} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                 <rect width={9} height={9} style={{ fill: "var(--color-surface-muted)" }} />
                 <line x1={0} y1={0} x2={0} y2={9} style={{ stroke: "var(--color-line)", strokeWidth: 4 }} />
               </pattern>
             </defs>
-
-            {/* El halo de fondo */}
-            <circle cx={CX} cy={CY} r={R_FUERA + 70} style={{ fill: `url(#${uid}-halo)` }} />
 
             {/* Las dos capas, bien a la vista: su nombre al costado de su mitad y una banda en el borde, con el
                 orden en que se trabajan. Pasar el cursor por el nombre enciende sus dimensiones. */}
@@ -899,12 +904,12 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
             </g>
 
             {/* La base: el borde de adentro de Funcional */}
-            <circle cx={CX} cy={CY} r={R_BASE} style={{ fill: "none", stroke: "var(--color-success)", strokeWidth: 2.5, strokeDasharray: "8 7", pointerEvents: "none" }} />
+            <circle cx={CX} cy={CY} r={R_BASE} style={{ fill: "none", stroke: "var(--color-nivel-funcional)", strokeWidth: 2.5, strokeDasharray: "8 7", pointerEvents: "none" }} />
             <text
               x={CX}
               y={CY + R_BASE + 21}
               style={{
-                fill: "var(--color-success)",
+                fill: "var(--color-nivel-funcional)",
                 fontSize: 14,
                 fontWeight: 700,
                 textAnchor: "middle",
@@ -1007,7 +1012,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                   onMouseLeave={soltarEncima}
                   onClick={() => alternar({ tipo: "dimension", dim: d.id })}
                 >
-                  <text x={f(x)} y={f(y0)} style={{ textAnchor: ancla, fontSize: 14, fill: "var(--color-fg-muted)", fontFamily: "var(--font-geist-mono), monospace" }}>
+                  <text x={f(x)} y={f(y0)} style={{ textAnchor: ancla, fontSize: 14, fill: "var(--color-fg-muted)", fontVariantNumeric: "tabular-nums" }}>
                     {d.id}
                     {comentarios > 0 ? ` · ${cuantos(comentarios, "comentario", "comentarios")}` : ""}
                   </text>
@@ -1042,7 +1047,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               cx={CX}
               cy={CY}
               r={R_CENTRO}
-              style={{ fill: "var(--color-surface)", stroke: "var(--color-line)", strokeWidth: 1.5, filter: "drop-shadow(0 6px 18px rgb(0 0 0 / 0.10))" }}
+              style={{ fill: "var(--color-surface)", stroke: "var(--color-line)", strokeWidth: 1.5 }}
             />
             <foreignObject x={CX - 88} y={CY - 88} width={176} height={176}>
               <div className="flex h-full w-full flex-col items-center justify-center text-center">{centro}</div>
@@ -1051,7 +1056,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
         </div>
 
         {(ordenSegunElCierre || hayPerfil) && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-2xs text-fg-muted">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-fg-muted">
             {ordenSegunElCierre && <span>El orden de la base depende de cómo se cierra la venta: elige un perfil para verlo.</span>}
             {hayPerfil && <span>Perfil: {describirPerfil(perfil)}</span>}
           </div>
@@ -1125,12 +1130,12 @@ function LeyendaDeLaRueda({
   /** Las herramientas prendidas en el filtro (vacío: no hay filtro). */
   herramientas: Herramienta[];
 }) {
-  const titulo = "mb-1.5 text-2xs font-bold uppercase tracking-wide text-fg-muted";
+  const titulo = cn("mb-1.5", ROTULO);
   const conHerramientas = herramientas.length > 0;
   return (
     // Abierta de entrada; quien ya la conoce la cierra (y vuelve a abrirse al recargar: es ayuda, no un ajuste).
-    <details open className="group mt-3 rounded-xl border border-line text-xs text-fg-secondary">
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-2 text-2xs font-bold uppercase tracking-wide text-fg-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+    <details open className="group rounded-xl border border-line text-xs text-fg-secondary">
+      <summary className={cn("flex cursor-pointer list-none items-center gap-1.5 px-4 py-2.5 hover:text-fg [&::-webkit-details-marker]:hidden", ROTULO)}>
         <svg className="h-3 w-3 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="currentColor" aria-hidden>
           <path d="M4 2.5 8 6l-4 3.5z" />
         </svg>
@@ -1164,7 +1169,7 @@ function LeyendaDeLaRueda({
             <li className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
               {LETRAS.map((l) => (
                 <span key={l} className="inline-flex items-center gap-1.5">
-                  <span className={cn("h-3.5 w-3.5 rounded-sm", PUNTO_DE_NIVEL[l])} aria-hidden />
+                  <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[l])} aria-hidden />
                   {nombreNivel(l)}
                 </span>
               ))}
@@ -1206,7 +1211,7 @@ function LeyendaDeLaRueda({
             <ItemDeLeyenda
               muestra={
                 <svg width={22} height={8} viewBox="0 0 22 8" aria-hidden>
-                  <line x1={1} y1={4} x2={21} y2={4} style={{ stroke: "var(--color-success)", strokeWidth: 2, strokeDasharray: "4 3" }} />
+                  <line x1={1} y1={4} x2={21} y2={4} style={{ stroke: "var(--color-nivel-funcional)", strokeWidth: 2, strokeDasharray: "4 3" }} />
                 </svg>
               }
             >
@@ -1288,14 +1293,14 @@ function DetalleDelMapa({
   const { area, niveles } = datos;
   const dims = area.dimensiones;
   const nombreNivel = (l: Letra) => niveles.find((x) => x.letra === l)!.nombre;
-  const caja = "relative self-start rounded-2xl border border-line bg-surface p-5 xl:sticky xl:top-4";
+  const caja = "relative self-start rounded-xl border border-line bg-surface p-5 xl:sticky xl:top-4";
 
   if (!seleccion) {
     const total = dims.reduce((s, d) => s + conteoDeDimension(conteos, d.id).total, 0);
     const abiertos = dims.reduce((s, d) => s + conteoDeDimension(conteos, d.id).abiertos, 0);
     return (
       <aside aria-label="Detalle" className={caja}>
-        <p className="text-2xs font-bold uppercase tracking-wide text-fg-muted">{area.nombre}</p>
+        <p className={ROTULO}>{area.nombre}</p>
         <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{area.descripcion}</p>
         <p className="mt-4 text-sm text-fg">
           <span className="text-2xl font-bold tabular-nums">{total}</span> comentarios · <span className="font-semibold">{abiertos}</span> abiertos
@@ -1304,7 +1309,7 @@ function DetalleDelMapa({
           <li>Toca una celda para ver sus criterios; tócala otra vez (o la X) para cerrarla.</li>
           <li>Toca el nombre de una dimensión para verla entera.</li>
           <li>Toca el nombre de un nivel (arriba, en la rueda) para ver el área en ese nivel.</li>
-          <li>«Recorrer», en el centro, sube la escala de Deficiente a Óptimo, un nivel a la vez.</li>
+          <li>«Recorrer», arriba de la rueda, sube la escala de Deficiente a Óptimo, un nivel a la vez.</li>
           <li>Con el teclado: flechas para moverte, Enter para comentar, Escape para volver.</li>
         </ul>
       </aside>
@@ -1316,10 +1321,10 @@ function DetalleDelMapa({
     return (
       <aside aria-label="Detalle del nivel" className={caja}>
         <BotonCerrar onClick={onCerrar} />
-        <p className="pr-8 text-2xs font-bold uppercase tracking-wide text-fg-muted">Así se ve {area.nombre} en</p>
+        <p className={cn("pr-8", ROTULO)}>Así se ve {area.nombre} en</p>
         <div className="mt-1 flex items-center gap-2">
-          <span className={cn("h-3 w-3 rounded-sm", PUNTO_DE_NIVEL[seleccion.letra])} aria-hidden />
-          <h3 className="text-lg font-bold text-fg">{nombreNivel(seleccion.letra)}</h3>
+          <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[seleccion.letra])} aria-hidden />
+          <h3 className="text-lg font-semibold text-fg">{nombreNivel(seleccion.letra)}</h3>
         </div>
         <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{area.panoramica[seleccion.letra] ?? "—"}</p>
         <ul className="mt-4 divide-y divide-line border-y border-line">
@@ -1332,7 +1337,7 @@ function DetalleDelMapa({
                   onClick={() => onSeleccion({ tipo: "celda", dim: d.id, letra: seleccion.letra })}
                   className="flex w-full items-start gap-2 py-2 text-left hover:bg-surface-hover"
                 >
-                  <span className="w-7 flex-shrink-0 font-mono text-2xs text-fg-muted">{d.id}</span>
+                  <span className="w-7 flex-shrink-0 text-xs tabular-nums text-fg-muted">{d.id}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-semibold text-fg">{d.nombre}</span>
                     <span className="block text-xs leading-snug text-fg-secondary">{nv.descripcion}</span>
@@ -1344,19 +1349,14 @@ function DetalleDelMapa({
           })}
         </ul>
         <div className="mt-3 flex justify-between gap-2">
-          <button
-            type="button"
-            disabled={k === 0}
-            onClick={() => onSeleccion({ tipo: "nivel", letra: LETRAS[k - 1] })}
-            className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
-          >
+          <button type="button" disabled={k === 0} onClick={() => onSeleccion({ tipo: "nivel", letra: LETRAS[k - 1] })} className={BOTON_CLARO}>
             ← {k > 0 ? nombreNivel(LETRAS[k - 1]) : "—"}
           </button>
           <button
             type="button"
             disabled={k === LETRAS.length - 1}
             onClick={() => onSeleccion({ tipo: "nivel", letra: LETRAS[k + 1] })}
-            className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
+            className={BOTON_CLARO}
           >
             {k < LETRAS.length - 1 ? nombreNivel(LETRAS[k + 1]) : "—"} →
           </button>
@@ -1373,11 +1373,11 @@ function DetalleDelMapa({
     return (
       <aside aria-label="Detalle de la dimensión" className={caja}>
         <BotonCerrar onClick={onCerrar} />
-        <p className="pr-8 text-2xs text-fg-muted">
-          <span className="font-mono">{d.id}</span>
+        <p className="pr-8 text-xs text-fg-muted">
+          <span className="tabular-nums">{d.id}</span>
           {d.generica && d.generica.nombre !== d.nombre ? ` · ${d.generica.nombre}` : ""}
         </p>
-        <h3 className="mt-0.5 text-lg font-bold text-fg">{d.nombre}</h3>
+        <h3 className="mt-0.5 text-lg font-semibold leading-[26px] text-fg">{d.nombre}</h3>
         <NombreGeneral nombre={d.nombreGeneral} />
         <p className="mt-2 text-sm leading-snug text-fg">{d.pregunta}</p>
         {d.descripcion && (
@@ -1385,7 +1385,7 @@ function DetalleDelMapa({
             <TextoConPalabras texto={d.descripcion} palabras={datos.terminos} />
           </p>
         )}
-        <p className="mt-3 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs leading-relaxed text-warn-ink">
+        <p role="note" className="mt-3 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs leading-relaxed text-warn-ink">
           <span className="font-semibold">Costo de quedarse. </span>
           {d.costoDeQuedarse}
         </p>
@@ -1395,9 +1395,9 @@ function DetalleDelMapa({
               <button
                 type="button"
                 onClick={() => onSeleccion({ tipo: "celda", dim: d.id, letra: nv.letra })}
-                className="flex w-full items-start gap-2 rounded-md px-1 py-1.5 text-left hover:bg-surface-hover"
+                className="flex w-full items-start gap-2 rounded-lg px-1 py-1.5 text-left hover:bg-surface-hover"
               >
-                <span className={cn("mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-sm", PUNTO_DE_NIVEL[nv.letra])} aria-hidden />
+                <span className={cn("mt-1 h-2 w-2 flex-shrink-0 rounded-full", PUNTO_DE_NIVEL[nv.letra])} aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs font-semibold text-fg">{nombreNivel(nv.letra)}</span>
                   <span className="block text-xs leading-snug text-fg-secondary">{nv.descripcion}</span>
@@ -1409,7 +1409,7 @@ function DetalleDelMapa({
         </ol>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <BotonComentar conteo={conteoDe(conteos, d.id)} onClick={() => abrirComentarios(d.id)} etiqueta="Comentarios de la dimensión" />
-          <button type="button" onClick={() => onLeerDimension(d.id)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg hover:bg-primary-hover">
+          <button type="button" onClick={() => onLeerDimension(d.id)} className={BOTON_CLARO}>
             Leer la dimensión
           </button>
         </div>
@@ -1470,29 +1470,29 @@ function DetalleDeCelda({
   return (
     <aside aria-label="Detalle de la celda" className={caja}>
       <BotonCerrar onClick={onCerrar} />
-      <p className="pr-8 text-2xs text-fg-muted">
-        <span className="font-mono">{nv.id}</span> · {datos.capas.find((c) => c.clave === d.capa)?.nombre}
+      <p className="pr-8 text-xs text-fg-muted">
+        <span className="tabular-nums">{nv.id}</span> · {datos.capas.find((c) => c.clave === d.capa)?.nombre}
       </p>
-      <h3 className="mt-0.5 text-lg font-bold leading-tight text-fg">
-        {d.nombre} <span className="font-medium text-fg-muted">en</span>{" "}
+      <h3 className="mt-1 text-lg font-semibold leading-[26px] text-fg">
+        {d.nombre} <span className="font-normal text-fg-muted">en</span>{" "}
         <span className="inline-flex items-center gap-1.5">
-          <span className={cn("h-2.5 w-2.5 rounded-sm", PUNTO_DE_NIVEL[nv.letra])} aria-hidden />
+          <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[nv.letra])} aria-hidden />
           {nombre}
         </span>
       </h3>
-      <p className="mt-2 text-sm font-medium leading-relaxed text-fg">{nv.descripcion}</p>
+      <p className="mt-3 text-sm font-semibold leading-normal text-fg">{nv.descripcion}</p>
       {nv.resultado && (
-        <p className="mt-2 rounded-lg bg-success-surface px-3 py-2 text-xs leading-relaxed text-success-ink">
-          <span className="font-bold">Resultado · </span>
-          {nv.resultado}
-        </p>
+        <div className={cn(BLOQUE_DE_RESULTADO, "mt-3 px-3 py-2.5")}>
+          <span className={ROTULO}>Resultado</span>
+          <span className="text-[13px] leading-normal text-fg-secondary">{nv.resultado}</span>
+        </div>
       )}
       {visibles.length > 0 && (
-        <ul className="mt-3 divide-y divide-line border-y border-line">
+        <ul className="mt-2 divide-y divide-line">
           {visibles.map((c) => (
-            <li key={c.id} className={cn("flex items-start gap-2 py-2 transition-opacity", atenuado(c.id) && "opacity-45 hover:opacity-100")}>
+            <li key={c.id} className={cn("flex items-start gap-2 py-2.5 transition-opacity", atenuado(c.id) && "opacity-45 hover:opacity-100")}>
               <div className="min-w-0 flex-1">
-                <p className="text-sm leading-snug text-fg">
+                <p className="text-sm leading-normal text-fg">
                   <TextoConPalabras texto={c.texto} palabras={datos.terminos} />
                 </p>
                 <MetaDelCriterio criterio={c} datos={datos} perfil={perfil} className="mt-1" />
@@ -1519,10 +1519,10 @@ function DetalleDeCelda({
       <NoAplicanEnLaEdicion nivel={nv} className="mt-2 block text-xs" />
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <BotonComentar conteo={conteoDe(conteos, nv.id)} onClick={() => abrirComentarios(nv.id)} etiqueta={`Comentarios del nivel ${nombre}`} />
-        <button type="button" onClick={() => onLeerDimension(d.id)} className="rounded-lg border border-line px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover">
+        <button type="button" onClick={() => onLeerDimension(d.id)} className={BOTON_CLARO}>
           Leer la dimensión
         </button>
-        <button type="button" onClick={onVerEnLaMatriz} className="rounded-lg border border-line px-3 py-1.5 text-xs text-fg-secondary hover:bg-surface-hover">
+        <button type="button" onClick={onVerEnLaMatriz} className={BOTON_CLARO}>
           Ver en la matriz
         </button>
       </div>

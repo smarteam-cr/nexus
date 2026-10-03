@@ -7,7 +7,7 @@
  *     hábito, riesgo o de un perfil. Cada marca explica en su tooltip lo que la escala dice de ella.
  *     Al final, qué otros criterios requiere y cuántos lo requieren a él.
  *   · `EnlacesDelCriterio`: esos requeridos escritos enteros, para leerlos y para ir a ellos.
- *   · `Contador`: cuántos comentarios tiene algo; en azul si hay abiertos.
+ *   · `Contador`: cuántos comentarios tiene algo; en ámbar si hay abiertos (piden atención).
  *   · `Segmentado`: un grupo de opciones excluyentes (radio), con flechas.
  *   · `BotonComentar`: el globito que abre el panel de comentarios de un ancla.
  */
@@ -19,10 +19,45 @@ import type { BloqueDeTexto, Criterio, Nivel } from "@/lib/escala/documento/tipo
 import type { Conteo } from "@/lib/escala/comentarios/reglas";
 import { partirPorPalabras, type DatosDeLaVista, type TerminoSubrayado } from "@/lib/escala/vista";
 
+// ── Las piezas del sistema «Nexus · interfaz interna» que la escala repite ──────
+// Medida por medida (2026-10-03). El color dice el estado: azul es lo activo, ámbar lo que pide
+// atención (un riesgo, un comentario abierto) y lo demás va en blanco con su borde.
+
+/** Rótulo en mayúscula sobre un bloque o un filtro. */
+export const ROTULO = "text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-fg-muted";
+/** Botón claro: las acciones de una cabecera o de un panel. */
+export const BOTON_CLARO =
+  "inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] leading-tight text-fg-secondary transition-colors hover:bg-surface-hover disabled:opacity-50";
+/** Chip blanco de cabecera (la versión, el estado). */
+export const CHIP_DE_CABECERA =
+  "inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-[3px] text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-hover";
+/** Una marca chica junto a un criterio o un nivel (su perfil, lo que requiere, «La base»): blanca. */
+export const MARCA = "inline-flex items-center gap-1 rounded-full border border-line bg-surface px-[7px] text-[11px] leading-[18px] text-fg-secondary";
+/** El bloque «Resultado» de un nivel: neutro (el verde es «confirmado» y no se usa de adorno). */
+export const BLOQUE_DE_RESULTADO = "flex flex-col gap-0.5 rounded-lg bg-surface-muted px-2.5 py-2";
+
 export function IconoComentario({ className }: { className?: string }) {
   return (
     <svg className={cn("h-3.5 w-3.5 flex-shrink-0", className)} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    </svg>
+  );
+}
+
+/** La flecha de lo que se despliega (un chip de cabecera, un menú): mira arriba cuando está abierto. */
+export function IconoChevron({ abierto = false, className }: { abierto?: boolean; className?: string }) {
+  return (
+    <svg
+      className={cn("h-3 w-3 flex-shrink-0 transition-transform", abierto && "rotate-180", className)}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M6 9l6 6 6-6" />
     </svg>
   );
 }
@@ -61,40 +96,37 @@ export function MetaDelCriterio({
   const mensaje = datos.riesgos[c.id];
   const { requiere, loRequieren } = enlacesDe(datos, c.id, perfil);
   return (
-    <span className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs leading-none text-fg-muted", className)}>
-      <span className="font-mono">{c.id}</span>
+    <span className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-none text-fg-muted", className)}>
+      <span className="tabular-nums">{c.id}</span>
       <span title={datos.verificacion[c.verificacion] ? `${c.verificacion[0].toUpperCase()}${c.verificacion.slice(1)}: ${datos.verificacion[c.verificacion]}` : undefined}>
         · {c.verificacion}
       </span>
       {c.habito && (
-        <span className="rounded bg-surface-hover px-1 py-0.5 text-fg-secondary" title={definicion(datos, "Hábito") ?? "Hábito"}>
+        <span className={cn(MARCA, "bg-surface-hover")} title={definicion(datos, "Hábito") ?? "Hábito"}>
           hábito
         </span>
       )}
       {c.riesgo && (
         <span
-          className="rounded border border-warn-line bg-warn-surface px-1 py-0.5 font-medium text-warn-ink"
+          className="inline-flex items-center rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold leading-[18px] text-warn-ink"
           title={mensaje ? `No decide el nivel, pero es requisito para pasar a Eficiente. Si no se cumple, el cliente ve: «${mensaje}»` : "Riesgo"}
         >
           riesgo
         </span>
       )}
       {c.perfil && (
-        <span className="rounded bg-info-surface px-1 py-0.5 text-info-ink" title={explicarMarca(c.perfil) ?? undefined}>
+        <span className={MARCA} title={explicarMarca(c.perfil) ?? undefined}>
           {c.perfil}
         </span>
       )}
       {c.propio && (
-        <span
-          className="rounded bg-success-surface px-1 py-0.5 font-medium text-success-ink"
-          title={`Solo existe en la edición ${datos.edicion?.nombre ?? ""}: la escala general no lo tiene.`}
-        >
+        <span className={MARCA} title={`Solo existe en la edición ${datos.edicion?.nombre ?? ""}: la escala general no lo tiene.`}>
           de la edición
         </span>
       )}
       {c.textoGeneral !== undefined && (
         <span
-          className="cursor-help rounded border border-line px-1 py-0.5 text-fg-secondary"
+          className={cn(MARCA, "cursor-help")}
           title={`Es el mismo criterio de la escala general, dicho con las palabras de la edición. En la general dice: «${c.textoGeneral}»`}
         >
           con sus palabras
@@ -102,18 +134,18 @@ export function MetaDelCriterio({
       )}
       {requiere.length > 0 && (
         <span
-          className="cursor-help rounded border border-dashed border-info-line px-1 py-0.5 text-info-ink"
+          className={cn(MARCA, "cursor-help tabular-nums")}
           title={`Para cumplirse necesita ${requiere.length === 1 ? "este otro criterio" : "estos otros criterios"}:\n${requiere.map((e) => enUnaLinea(datos, e)).join("\n")}`}
         >
-          requiere {requiere.length === 1 ? <span className="font-mono">{requiere[0].id}</span> : requiere.length}
+          ↳ requiere {requiere.length === 1 ? requiere[0].id : requiere.length}
         </span>
       )}
       {loRequieren.length > 0 && (
         <span
-          className="cursor-help rounded border border-dashed border-line px-1 py-0.5 text-fg-secondary"
+          className={cn(MARCA, "cursor-help tabular-nums")}
           title={`${loRequieren.length === 1 ? "Lo necesita este otro criterio" : "Lo necesitan estos otros criterios"}:\n${loRequieren.map((e) => enUnaLinea(datos, e)).join("\n")}`}
         >
-          lo {loRequieren.length === 1 ? "requiere" : "requieren"} {loRequieren.length === 1 ? <span className="font-mono">{loRequieren[0].id}</span> : loRequieren.length}
+          lo {loRequieren.length === 1 ? "requiere" : "requieren"} {loRequieren.length === 1 ? loRequieren[0].id : loRequieren.length}
         </span>
       )}
     </span>
@@ -143,21 +175,21 @@ export function EnlacesDelCriterio({
   const grupo = (titulo: string, enlaces: EnlaceDeCriterio[]) =>
     enlaces.length > 0 && (
       <div>
-        <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">{titulo}</p>
+        <p className={ROTULO}>{titulo}</p>
         <ul className="mt-1 flex flex-col gap-1">
           {enlaces.map((e) => {
             const nivel = datos.niveles.find((n) => n.letra === e.letra)?.nombre ?? e.letra;
             const deOtraArea = e.area !== datos.area.id;
             const contenido = (
               <>
-                <span className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-fg-muted">
-                  <span className="font-mono">{e.id}</span>
+                <span className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-fg-muted">
+                  <span className="tabular-nums">{e.id}</span>
                   <span>
                     {deOtraArea ? `${e.areaNombre} · ` : ""}
                     {e.dimensionNombre} · {nivel}
                   </span>
                 </span>
-                <span className="block text-xs leading-snug text-fg-secondary">{e.texto}</span>
+                <span className="block text-[13px] leading-snug text-fg-secondary">{e.texto}</span>
               </>
             );
             return (
@@ -167,12 +199,12 @@ export function EnlacesDelCriterio({
                     type="button"
                     onClick={() => onIr(e)}
                     title="Ir a este criterio"
-                    className="w-full rounded-md border border-dashed border-info-line px-2 py-1 text-left transition-colors hover:bg-surface-hover"
+                    className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-left transition-colors hover:bg-surface-hover"
                   >
                     {contenido}
                   </button>
                 ) : (
-                  <div className="rounded-md border border-dashed border-line px-2 py-1">{contenido}</div>
+                  <div className="rounded-lg border border-line bg-surface px-2.5 py-1.5">{contenido}</div>
                 )}
               </li>
             );
@@ -211,6 +243,7 @@ export function NoAplicanEnLaEdicion({ nivel, className }: { nivel: Nivel; class
   );
 }
 
+/** Cuántos comentarios tiene algo: en ámbar si alguno sigue abierto (pide atención), neutro si no. */
 export function Contador({ conteo, className, conTexto = false }: { conteo: Conteo; className?: string; conTexto?: boolean }) {
   if (conteo.total === 0) return null;
   const titulo = `${conteo.total} ${conteo.total === 1 ? "comentario" : "comentarios"}${conteo.abiertos ? ` · ${conteo.abiertos} ${conteo.abiertos === 1 ? "abierto" : "abiertos"}` : ""}`;
@@ -218,8 +251,8 @@ export function Contador({ conteo, className, conTexto = false }: { conteo: Cont
     <span
       title={titulo}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
-        conteo.abiertos ? "bg-info-surface text-info-ink" : "bg-surface-hover text-fg-muted",
+        "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-semibold leading-none tabular-nums",
+        conteo.abiertos ? "border-warn-line bg-warn-surface text-warn-ink" : "border-line bg-surface-hover text-fg-muted",
         className,
       )}
     >
@@ -247,10 +280,10 @@ export function BotonComentar({
       aria-label={etiqueta}
       title={etiqueta}
       className={cn(
-        "inline-flex flex-shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-2xs font-semibold tabular-nums transition-colors",
+        "inline-flex flex-shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold tabular-nums transition-colors",
         conteo.total
           ? conteo.abiertos
-            ? "border-info-line bg-info-surface text-info-ink hover:bg-surface-hover"
+            ? "border-warn-line bg-warn-surface text-warn-ink hover:bg-surface-hover"
             : "border-line bg-surface-hover text-fg-secondary hover:bg-surface-active"
           : "border-line bg-surface text-fg-muted hover:bg-surface-hover hover:text-fg",
         className,
@@ -324,8 +357,8 @@ export function GrupoDeControl({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
-      <span className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
+    <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
+      <span className={cn("flex items-center gap-1", ROTULO)}>
         {nombre}
         {ayuda && <InfoHint text={ayuda} />}
       </span>
@@ -360,9 +393,10 @@ export function TextoConPalabras({ texto, palabras }: { texto: string; palabras:
             title={comoFrase(t.palabra.significado)}
             className={cn(
               "cursor-help underline decoration-dotted underline-offset-2",
+              // Una palabra con valor fijo pide atención (tiene un umbral exacto): ámbar, no azul.
               t.palabra.tipo === "glosario"
                 ? "decoration-fg-muted [text-decoration-thickness:1px]"
-                : "decoration-info-ink [text-decoration-thickness:1.5px]",
+                : "decoration-warn-ink [text-decoration-thickness:1.5px]",
             )}
           >
             {t.texto}

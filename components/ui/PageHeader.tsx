@@ -8,6 +8,8 @@ export interface PageHeaderProps {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  /** Chips blancos junto al título (una versión, un estado), como los de la cabecera de una ficha. */
+  badges?: React.ReactNode;
   /** Detalle a profundidad 1: "← {backLabel}" arriba del título (excluyente con crumbs). */
   backHref?: string;
   backLabel?: string;
@@ -27,6 +29,7 @@ export function PageHeader({
   title,
   description,
   action,
+  badges,
   backHref,
   backLabel,
   crumbs,
@@ -41,12 +44,21 @@ export function PageHeader({
           {backLabel ?? "Volver"}
         </BackLink>
       ) : null}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-fg">{title}</h1>
+      {/* En un celular, las acciones bajan debajo del título en vez de salirse de la pantalla: el título
+          se reparte desde 240 px, así en escritorio todo sigue en una fila. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1 basis-60">
+          {badges ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold text-fg">{title}</h1>
+              {badges}
+            </div>
+          ) : (
+            <h1 className="text-xl font-semibold text-fg">{title}</h1>
+          )}
           {description && <p className="text-sm text-fg-secondary mt-0.5">{description}</p>}
         </div>
-        {action && <div className="flex-shrink-0">{action}</div>}
+        {action && <div className="max-w-full flex-shrink-0">{action}</div>}
       </div>
     </div>
   );
