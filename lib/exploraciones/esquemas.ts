@@ -11,8 +11,10 @@
 import { z } from "zod";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
 import {
+  CANALES_DE_CONEXION,
   CLASES_DE_OBJECION,
   CLAVES_DE_CASILLA,
+  MODELOS_DE_NEGOCIO,
   esDeLista,
   ROLES_EN_LA_DECISION,
   TIPO_DE_CASILLA,
@@ -20,6 +22,8 @@ import {
   VALORES_DE_APERTURA,
   type Apertura,
   type ClaveDeCasilla,
+  type EstrategiaDeConexion,
+  type Radiografia,
   type Meta,
   type Objecion,
   type Persona,
@@ -92,6 +96,33 @@ export const ObjecionRegistradaSchema: z.ZodType<Objecion> = z.object({
   respuesta: texto(400).optional(),
 });
 
+/** Un enlace web: solo http(s). */
+const URL_WEB = z.string().trim().max(600).regex(/^https?:\/\/\S+$/);
+
+export const RadiografiaSchema: z.ZodType<Radiografia> = z.object({
+  resumen: texto(800).optional(),
+  sector: texto(160).optional(),
+  modelos: z.array(z.enum(MODELOS_DE_NEGOCIO)).max(6).optional(),
+  stack: z.array(textoLleno(80)).max(20).optional(),
+  hitos: z
+    .array(
+      z.object({
+        texto: textoLleno(300),
+        fecha: z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/).optional(),
+        url: URL_WEB,
+      }),
+    )
+    .max(8)
+    .optional(),
+});
+
+export const EstrategiaDeConexionSchema: z.ZodType<EstrategiaDeConexion> = z.object({
+  canal: z.enum(CANALES_DE_CONEXION),
+  pitch: textoLleno(500),
+  mensaje: textoLleno(2000),
+  cta: texto(300).optional(),
+});
+
 export const SiguientePasoSchema: z.ZodType<SiguientePaso> = z.object({
   que: textoLleno(300),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -124,6 +155,10 @@ export function esquemaDelValor(tipo: TipoDeCasilla): z.ZodType<unknown> {
       return SiguientePasoSchema;
     case "apertura":
       return AperturaSchema;
+    case "radiografia":
+      return RadiografiaSchema;
+    case "conexion":
+      return EstrategiaDeConexionSchema;
   }
 }
 

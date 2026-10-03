@@ -17,7 +17,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui";
 import { SelectorDePiezas, type EstadoDePieza, type FilaDePieza } from "@/components/canvas/SelectorDePiezas";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { CASILLAS_DE_LAS_REUNIONES, CASILLAS_DEL_RESUMEN } from "@/lib/exploraciones/casillas";
+import { definicionDe } from "@/lib/exploraciones/casillas";
 import { listaParaProponer, queSigueConPaso } from "@/lib/exploraciones/calidad";
 import {
   aplicarOperaciones,
@@ -37,11 +37,13 @@ import ManejoDeObjeciones from "./ManejoDeObjeciones";
 import PasoCasosDeUso from "./PasoCasosDeUso";
 import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
+import PasoPreparacion from "./PasoPreparacion";
 import PasoPropuesta from "./PasoPropuesta";
 import Resumen from "./Resumen";
 
 const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
   resumen: "Resumen",
+  preparacion: "Preparación",
   exploracion: "Exploración",
   escala: "La escala",
   casos: "Casos de uso",
@@ -49,7 +51,7 @@ const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
 };
 
 /** Las piezas del recorrido, en orden (el Resumen va aparte, arriba del desplegable). */
-const PIEZAS = ["exploracion", "escala", "casos", "propuesta"] as const;
+const PIEZAS = ["preparacion", "exploracion", "escala", "casos", "propuesta"] as const;
 
 /** Lo que dice el punto de cada pieza en el title de la fila. */
 const AYUDA_DEL_ESTADO: Record<EstadoDePieza, string> = {
@@ -60,8 +62,25 @@ const AYUDA_DEL_ESTADO: Record<EstadoDePieza, string> = {
 
 const esPieza = (x: string | null | undefined): x is PasoDelLienzoUI => !!x && x in NOMBRE_DEL_PASO;
 
-/** Las casillas del resumen (las tarjetas, las objeciones y las particularidades) se revisan ahí: no cuentan en otra pieza. */
-const DEL_RESUMEN = new Set<string>([...CASILLAS_DEL_RESUMEN, ...CASILLAS_DE_LAS_REUNIONES]);
+/**
+ * En qué pieza se revisa lo que propuso el agente: cada casilla en la suya (`paso` en casillas.ts:
+ * las del resumen se revisan en el Resumen y no cuentan en otra pieza), la industria, el perfil y
+ * las áreas en Preparación, los niveles en la escala y los casos en Casos de uso.
+ */
+function piezaDelDestino(d: DestinoDePropuesta): PasoDelLienzoUI {
+  switch (d.tipo) {
+    case "casoDeUso":
+      return "casos";
+    case "nivel":
+    case "falta":
+    case "aExplorar":
+      return "escala";
+    case "casilla":
+      return definicionDe(d.clave).paso;
+    default:
+      return "preparacion";
+  }
+}
 
 export default function LienzoDeExploracion({
   inicial,
@@ -265,15 +284,7 @@ export default function LienzoDeExploracion({
   };
 
   const sigue = queSigueConPaso(exp.estado, chequeo, sinLeer);
-  const deCadaPaso = (p: PasoDelLienzoUI) =>
-    revisables.filter((it) => {
-      const d = it.destino;
-      if (d.tipo === "casoDeUso") return p === "casos";
-      if (d.tipo === "nivel" || d.tipo === "falta") return p === "escala";
-      if (d.tipo === "aExplorar") return p === "escala";
-      if (d.tipo === "casilla") return !DEL_RESUMEN.has(d.clave) && p === "exploracion";
-      return p === "exploracion";
-    }).length;
+  const deCadaPaso = (p: PasoDelLienzoUI) => revisables.filter((it) => piezaDelDestino(it.destino) === p).length;
   // «Usar todas» no toca los casos de uso: esos se eligen uno por uno, en su paso.
   const paraUsarTodas = revisables.filter((it) => it.destino.tipo !== "casoDeUso");
 
@@ -285,8 +296,13 @@ export default function LienzoDeExploracion({
     let estado: EstadoDePieza;
     let aviso: FilaDePieza["aviso"] = porRevisar > 0 ? { corto: `${porRevisar} para revisar` } : null;
     switch (p) {
+      case "preparacion": {
+        const preparo = exp.estado.propuesta.corridas.some((c) => c.modo === "preparar");
+        estado = porRevisar > 0 ? "pendiente" : preparo ? "generada" : "vacia";
+        break;
+      }
       case "exploracion": {
-        const leyo = exp.estado.propuesta.corridas.some((c) => c.modo === "preparar" || c.modo === "leer");
+        const leyo = exp.estado.propuesta.corridas.some((c) => c.modo === "leer");
         estado = porRevisar > 0 || sinLeer.length > 0 ? "pendiente" : leyo ? "generada" : "vacia";
         if (!aviso && sinLeer.length > 0) aviso = { corto: `${sinLeer.length} sin leer`, largo: "Reuniones o documentos que el agente todavía no leyó" };
         break;
@@ -326,6 +342,7 @@ export default function LienzoDeExploracion({
         </div>
 
         {paso === "resumen" && <Resumen sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paraUsarTodas={paraUsarTodas} />}
+        {paso === "preparacion" && <PasoPreparacion />}
         {paso === "exploracion" && <PasoExploracion />}
         {paso === "escala" && <PasoEscala />}
         {paso === "casos" && <PasoCasosDeUso />}

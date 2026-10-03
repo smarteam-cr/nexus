@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * PasoExploracion — la pestaña donde se prepara y se guía cada reunión (antes eran dos: Preparación
- * y Reuniones; se juntaron el 2026-10-01 a pedido de Elías).
+ * PasoExploracion — las reuniones con el cliente.
  *
- * De arriba abajo: el agente, con quién se habla (industria, perfil, áreas en juego, cómo conectar y
- * su HubSpot), las sesiones que planea el vendedor, la guía de la PRÓXIMA, lo que suma a mano (una
- * sesión que no quedó grabada, un documento) y lo demás que sale de las reuniones (el siguiente paso, el portal, lo que nadie exploró). Lo que respondió el cliente en el
- * marco de calificación vive arriba de todo, en el resumen.
+ * Desde el 2026-10-02 (pedido de Elías) con quién se habla y cómo conectar viven en Preparación, y
+ * esta pieza queda para las reuniones. De arriba abajo: la sesión nueva que llegó (o la última que
+ * se leyó), las sesiones que planea el vendedor, la guía de la PRÓXIMA, lo que suma a mano, lo demás
+ * que sale de las reuniones (el siguiente paso, el portal, lo que nadie exploró), los datos de la
+ * medición y, plegado al final, el historial del agente. Lo que respondió el cliente en el marco de
+ * calificación vive en el Resumen.
  */
 import { useState } from "react";
 import { Button, Input } from "@/components/ui";
@@ -15,8 +16,8 @@ import type { Medicion } from "@/lib/exploraciones/contenido";
 import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
 import GuiaDeLaProxima from "./GuiaDeLaProxima";
-import { AreasEnJuego, IndustriaYPerfil } from "./Identificacion";
-import PanelDelAgente from "./PanelDelAgente";
+import { HistorialDelAgente } from "./PanelDelAgente";
+import SesionNueva from "./SesionNueva";
 import Sesiones from "./Sesiones";
 import SumarAMano from "./SumarAMano";
 
@@ -81,22 +82,9 @@ function SinPortal() {
 }
 
 export default function PasoExploracion() {
-  const { exp } = useLienzo();
-  // Después de preparar, lo que más se usa es leer la reunión que pasó.
-  const yaPreparo = exp.estado.propuesta.corridas.some((c) => c.modo === "preparar");
-
   return (
     <div className="space-y-8">
-      <PanelDelAgente modoPrincipal={yaPreparo ? "leer" : "preparar"} />
-
-      <Seccion titulo="Con quién hablas" ayuda="Se arma sola con lo que hay en HubSpot; corrígela si algo no calza.">
-        <IndustriaYPerfil />
-        <AreasEnJuego />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Casilla clave="contexto" />
-          <Casilla clave="hubspotActual" />
-        </div>
-      </Seccion>
+      <SesionNueva />
 
       <Sesiones />
       <GuiaDeLaProxima />
@@ -118,6 +106,8 @@ export default function PasoExploracion() {
       <Seccion titulo="Datos de la medición" ayuda="La escala los pide en toda medición, para poder comparar con el tiempo. El país y el tamaño salen de HubSpot.">
         <DatosDeLaMedicion />
       </Seccion>
+
+      <HistorialDelAgente />
     </div>
   );
 }

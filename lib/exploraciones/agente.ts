@@ -17,6 +17,7 @@
  * los eligió y por qué, y el vendedor los cambia con un clic (`escribirLoQueVaSolo`).
  */
 import "server-only";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { Prisma } from "@prisma/client";
 import { getAnthropic } from "@/lib/anthropic";
 import { humanizeAgentError } from "@/lib/agents/anthropic-error";
@@ -55,7 +56,9 @@ import { debeLeerSola } from "./lectura";
 import { hoyEnCostaRica } from "./fechas";
 import { contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia } from "./guia-pedido";
 import type { GuiaDeLaSesion } from "./guia";
+import { leerEmpresa } from "./hubspot";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
+import { leerLaRadiografia, pedidoDeLaRadiografia } from "./radiografia-pedido";
 import { posicionesDelMapa } from "./mapa";
 import {
   bloquearFila,
@@ -219,6 +222,23 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       proxima: leido.agenda[0] ?? null,
     };
 
+    /* Al preparar, primero la radiografía: el agente investiga la empresa en internet. Lo que
+       encuentra se propone en su casilla y entra como fuente (W1) para la hipótesis de valor y el
+       pitch. Si falla, la preparación sigue sin ella. */
+    let deLaWeb: ItemPropuesto[] = [];
+    if (modo === "preparar" && fila.client.hubspotCompanyId) {
+      await fase(runId, "Investigando la empresa en internet…");
+      const r = await investigar(runId, fila, opts).catch((e) => {
+        console.error(`[exploraciones/agente] radiografía ${exploracionId}`, e);
+        return null;
+      });
+      if (r?.item) deLaWeb = [r.item];
+      if (r?.fuente) {
+        leido.fuentes.push(r.fuente);
+        ctx.fuentes = leido.fuentes;
+      }
+    }
+
     const delTest = propuestasDelTest(leido.tests, ctx, runId);
     let deLaIA: ItemPropuesto[] = [];
     let descartadas = 0;
@@ -243,7 +263,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     await fase(runId, "Guardando lo propuesto…");
     const propuestos = await guardar(
       exploracionId,
-      [...delTest, ...deLaIA],
+      [...deLaWeb, ...delTest, ...deLaIA],
       {
         leyo: leido.fuentes.map((f) => f.etiqueta),
         leidas: leido.leidas,
@@ -287,6 +307,43 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       })
       .catch(() => {});
   }
+}
+
+/** Cuántas veces se continúa una respuesta que la búsqueda web dejó en pausa. */
+const CONTINUACIONES_DE_LA_BUSQUEDA = 3;
+
+/**
+ * La radiografía de la empresa: una llamada con la búsqueda web de Anthropic y nuestra herramienta.
+ * Si la búsqueda deja la respuesta en pausa, se continúa con lo que trajo (patrón del SDK).
+ */
+async function investigar(runId: string, fila: { clientId: string; client: { name: string; industry: string | null; hubspotCompanyId: string | null } }, opts: OpcionesDeLaCorrida) {
+  const empresa = fila.client.hubspotCompanyId ? await leerEmpresa(fila.client.hubspotCompanyId) : null;
+  const pedido = pedidoDeLaRadiografia({
+    empresa: empresa?.nombre ?? fila.client.name,
+    dominio: empresa?.dominio ?? null,
+    industria: empresa?.industria ?? fila.client.industry,
+    pais: empresa?.pais ?? null,
+    hoy: hoyEnCostaRica(),
+  });
+  const contenido: Anthropic.Messages.ContentBlock[] = [];
+  const mensajes = [...pedido.messages];
+  for (let vuelta = 0; vuelta <= CONTINUACIONES_DE_LA_BUSQUEDA; vuelta++) {
+    const respuesta = await conContextoDeIA(
+      {
+        agentSlug: AGENTE_DE_LA_EXPLORACION,
+        agentRunId: runId,
+        clientId: fila.clientId,
+        triggeredByEmail: opts.triggeredByEmail,
+        origen: "exploraciones/agente:radiografia",
+      },
+      () => getAnthropic().messages.create({ ...pedido, messages: mensajes }),
+    );
+    contenido.push(...respuesta.content);
+    if (respuesta.stop_reason !== "pause_turn") break;
+    // El servidor de Anthropic pausó las búsquedas: se reenvía lo que trajo y sigue donde quedó.
+    mensajes.push({ role: "assistant", content: respuesta.content as unknown as Anthropic.Messages.ContentBlockParam[] });
+  }
+  return leerLaRadiografia(contenido, runId);
 }
 
 /**

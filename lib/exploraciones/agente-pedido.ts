@@ -23,6 +23,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { CIERRES, DESPUES, type Cierre, type Despues, type Letra } from "@/lib/escala/documento/tipos";
 import {
+  CANALES_DE_CONEXION,
   CASILLAS,
   CASILLAS_VIGENTES,
   CLASES_DE_OBJECION,
@@ -199,6 +200,21 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
       },
     },
   };
+  // La estrategia de conexión, solo al preparar y si todavía no agendó: si ya agendó, no hace falta.
+  if (ctx.modo === "preparar" && !ctx.proxima) {
+    properties.estrategiaDeConexion = {
+      type: "object",
+      description: "Cómo abrir la conversación: el canal, el ángulo y un primer mensaje corto que cierre invitando a agendar.",
+      properties: {
+        canal: { type: "string", enum: [...CANALES_DE_CONEXION] },
+        pitch: { type: "string", description: "El ángulo en una o dos frases: por qué le importaría hablar, desde su detonante y su hipótesis de valor." },
+        mensaje: { type: "string", description: "Un primer mensaje de 60 a 100 palabras, de tú, que hable de algo suyo y cierre con la invitación a agendar." },
+        cta: { type: "string", description: "El llamado a la acción, p. ej. «Agenda 30 minutos en mi calendario: [enlace]»." },
+        fuentes,
+      },
+      required: ["canal", "pitch", "mensaje", "fuentes"],
+    };
+  }
   // Al preparar todavía no se acordó nada: la reunión agendada ya está a la vista en el lienzo.
   if (ctx.modo === "leer") {
     properties.siguientePaso = {
@@ -324,7 +340,10 @@ function sistema(ctx: ContextoDelPedido): string {
 - areas: las que deberían estar en juego y no están (la del test, lo que menciona, lo que paga sin usar).
 - niveles: tu HIPÓTESIS de dónde está CADA una de las dimensiones de las áreas en juego, con su porQue en lenguaje llano («Creemos que está en Inicial porque las notas dicen que cada vendedor lleva su Excel»). El test es una pista, no la verdad: lo contestó el prospecto con la escala anterior; crúzalo con lo demás. Si una dimensión no tiene pistas directas, dedúcela del cuadro general (lo que tiene en HubSpot, el tamaño, lo que se ve de las dimensiones vecinas) y dilo en el porQue («Sin pistas directas: …»); nunca la pongas por encima de Funcional sin una pista. Es para que el vendedor sepa qué preguntar: el mapa la muestra como hipótesis.
 - aExplorar: las dimensiones donde hay indicios (debajo de Funcional según el test o lo que dijo), que tocan una meta o que dejan ver un riesgo. Máximo 4 por área. La razón, en una frase llana.
-- personas: quién es quién, si las fuentes lo dicen. El papel en la decisión no se deduce del cargo.`
+- personas: quién es quién, si las fuentes lo dicen. El papel en la decisión no se deduce del cargo.
+- detonante («Por qué ahora»): en una o dos frases, qué hizo o qué le pasa que vuelve oportuno hablar ahora. Con lo que dicen las fuentes: el diagnóstico que llenó (cuándo, qué área, qué salió), su último formulario, sus visitas, un hito reciente de la empresa.
+- hipotesisDeValor: dos o tres apuestas, cada una «Creemos que… porque…», que crucen los dolores típicos de su tipo de empresa con lo que dejó el diagnóstico y lo que se ve en HubSpot. Son para confirmar en la reunión: nunca las afirmes como hechos.
+${ctx.proxima ? "- Ya tiene una reunión agendada: no propongas estrategia de conexión." : "- estrategiaDeConexion: el canal que más sentido tiene (si dejó teléfono y es una empresa chica, WhatsApp o llamada; si es grande, correo o LinkedIn), el ángulo desde su detonante y un primer mensaje corto, de tú, que hable de algo suyo y cierre invitando a agendar. Si el enlace del calendario no está en las fuentes, escribe «[tu calendario]»."}`
       : `ESTA CORRIDA: LEER LA REUNIÓN que acaba de pasar. Lo que más sirve, con la frase del cliente:
 - niveles: el nivel de cada dimensión que la conversación deja ver, por mejor ajuste contra las descripciones, con la frase del cliente y su porQue en lenguaje llano.
 - metas (en cifras si las dijo), planes, retos (con su dimensión), consecuencias de no actuar, implicaciones de lograrlo, presupuesto.
@@ -491,6 +510,14 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
   }
   for (const p of lista(input.personas)) {
     agregar({ tipo: "casilla", clave: "autoridad" }, { nombre: str(p.nombre), cargo: str(p.cargo), rol: str(p.rol), nota: str(p.nota) }, citar(p.fuentes));
+  }
+  if (ctx.modo === "preparar" && !ctx.proxima && esObjeto(input.estrategiaDeConexion)) {
+    const e = input.estrategiaDeConexion;
+    agregar(
+      { tipo: "casilla", clave: "estrategiaDeConexion" },
+      { canal: str(e.canal), pitch: str(e.pitch), mensaje: str(e.mensaje), cta: str(e.cta) },
+      citar(e.fuentes),
+    );
   }
   if (ctx.modo === "leer" && esObjeto(input.siguientePaso)) {
     const s = input.siguientePaso;

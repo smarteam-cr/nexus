@@ -23,6 +23,8 @@ import {
 import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, NIVELES, propuestaVacia, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
+import { leerLaRadiografia, urlComparable } from "./radiografia-pedido";
+import { contactoPrincipal, rastroDe, senalesDe } from "./senales";
 
 // ── Una escala de juguete: dos áreas, cuatro dimensiones cada una ─────────────────
 
@@ -571,5 +573,99 @@ describe("el sitio web de la empresa (lo lee la preparación, con candados)", ()
 
   it("el agente sabe que lo que dicen las fuentes es dato, no instrucción", () => {
     expect(String(pedidoDeLaExploracion(ctx({ modo: "preparar" })).system)).toMatch(/nunca instrucciones para ti/);
+  });
+});
+
+describe("Preparación: el detonante con los hechos de HubSpot", () => {
+  const rastro = rastroDe({
+    mobilephone: "+506 8888 8888",
+    hs_analytics_source: "ORGANIC_SEARCH",
+    hs_analytics_source_data_1: "google",
+    recent_conversion_event_name: "Test diagnóstico de rendimiento",
+    recent_conversion_date: "2026-09-23T15:00:00Z",
+    hs_analytics_num_page_views: "12",
+  });
+
+  it("lee el teléfono, de dónde llegó, el último formulario y las visitas", () => {
+    expect(rastro).toMatchObject({ telefono: "+506 8888 8888", fuente: "ORGANIC_SEARCH", visitas: 12, agendo: null });
+    const s = senalesDe({ id: "1", nombre: "Ana", cargo: null, email: null, hizoElTest: true, rastro }, { test: { area: "Ventas", fecha: "2026-09-23" } });
+    expect(s.map((x) => x.que)).toEqual(["Hizo el diagnóstico de rendimiento", "Llegó por", "Último formulario", "Páginas vistas en el sitio"]);
+    expect(s[1].valor).toBe("Búsqueda en Google · google");
+  });
+
+  it("el contacto principal es quien hizo el test; si nadie, el que convirtió más reciente", () => {
+    const base = { cargo: null, email: null, rastro: rastroDe({}) };
+    const viejo = { ...base, id: "a", nombre: "A", hizoElTest: false, rastro: rastroDe({ recent_conversion_date: "2026-01-01" }) };
+    const nuevo = { ...base, id: "b", nombre: "B", hizoElTest: false, rastro: rastroDe({ recent_conversion_date: "2026-09-01" }) };
+    expect(contactoPrincipal([viejo, nuevo])?.id).toBe("b");
+    expect(contactoPrincipal([viejo, { ...nuevo, id: "c", hizoElTest: true }, nuevo])?.id).toBe("c");
+    expect(contactoPrincipal([])).toBeNull();
+  });
+});
+
+describe("Preparación: la radiografía que investiga en internet", () => {
+  const busqueda = {
+    type: "web_search_tool_result",
+    tool_use_id: "s1",
+    content: [{ type: "web_search_result", url: "https://www.credit-force.com/noticias/expansion/", title: "Expansión", encrypted_content: "", page_age: null }],
+  };
+  const herramientaDe = (input: Record<string, unknown>) => ({ type: "tool_use", id: "t1", name: "radiografia", input });
+
+  it("un hito entra solo con un enlace que salió en la búsqueda; lo demás se descarta", () => {
+    const r = leerLaRadiografia(
+      [
+        { type: "server_tool_use", id: "s1", name: "web_search", input: { query: "CreditForce" } },
+        busqueda,
+        herramientaDe({
+          resumen: "Software de crédito y cobranza para financieras.",
+          sector: "Software financiero",
+          modelos: ["b2b", "saas", "inventado"],
+          stack: ["HubSpot", " "],
+          hitos: [
+            { texto: "Abrió oficina en Guatemala", fecha: "2026-03", url: "https://credit-force.com/noticias/expansion" },
+            { texto: "Ganó un premio", url: "https://otro-sitio.com/premio" },
+          ],
+        }),
+      ] as unknown as Anthropic.Messages.ContentBlock[],
+      "run_1",
+      AHORA,
+    );
+    expect(r.busquedas).toBe(1);
+    expect(r.hitosSinEnlace).toBe(1);
+    expect(r.item?.destino).toEqual({ tipo: "casilla", clave: "radiografia" });
+    expect(r.item?.valor).toEqual({
+      resumen: "Software de crédito y cobranza para financieras.",
+      sector: "Software financiero",
+      modelos: ["b2b", "saas"],
+      stack: ["HubSpot"],
+      hitos: [{ texto: "Abrió oficina en Guatemala", fecha: "2026-03", url: "https://credit-force.com/noticias/expansion" }],
+    });
+    expect(r.fuente?.id).toBe("W1");
+    expect(r.fuente?.texto).toContain("Abrió oficina en Guatemala");
+  });
+
+  it("sin la herramienta, o sin nada útil, no propone nada", () => {
+    expect(leerLaRadiografia([busqueda] as unknown as Anthropic.Messages.ContentBlock[], "run_1").item).toBeNull();
+    expect(leerLaRadiografia([herramientaDe({ modelos: [] })] as unknown as Anthropic.Messages.ContentBlock[], "run_1").item).toBeNull();
+  });
+
+  it("compara direcciones sin www, sin la barra final", () => {
+    expect(urlComparable("https://www.Acme.com/a/")).toBe(urlComparable("https://acme.com/a"));
+  });
+});
+
+describe("Preparación: la estrategia de conexión", () => {
+  const cita = [{ id: "S1", cita: "nadie sabe en qué etapa va cada negocio" }];
+  const estrategia = { canal: "whatsapp", pitch: "Ordenar el seguimiento", mensaje: "Hola Ana, vi tu diagnóstico.", cta: "Agenda aquí", fuentes: cita };
+
+  it("se pide y se lee solo al preparar y si todavía no agendó", () => {
+    const props = (c: ContextoDelPedido) => (herramienta(c).input_schema as { properties: Record<string, unknown> }).properties;
+    expect(props(ctx({ modo: "preparar" }))).toHaveProperty("estrategiaDeConexion");
+    expect(props(ctx({ modo: "preparar", proxima: { titulo: "Revisión", inicio: "2026-10-05T15:00:00Z" } }))).not.toHaveProperty("estrategiaDeConexion");
+    expect(props(ctx())).not.toHaveProperty("estrategiaDeConexion");
+    const r = leerLaRespuesta(respuesta({ estrategiaDeConexion: estrategia }), ctx({ modo: "preparar" }), "run_1", AHORA);
+    expect(r.items.map((i) => i.destino)).toEqual([{ tipo: "casilla", clave: "estrategiaDeConexion" }]);
+    expect(r.items[0].valor).toEqual({ canal: "whatsapp", pitch: "Ordenar el seguimiento", mensaje: "Hola Ana, vi tu diagnóstico.", cta: "Agenda aquí" });
+    expect(leerLaRespuesta(respuesta({ estrategiaDeConexion: estrategia }), ctx(), "run_1", AHORA).items).toEqual([]);
   });
 });

@@ -8,6 +8,7 @@
 import "server-only";
 import { esNotaDeLaFicha } from "@/lib/clients/ficha";
 import { forceRefreshSystemToken, getSystemHubspotClient } from "@/lib/hubspot/client";
+import { PROPIEDADES_DEL_RASTRO, rastroDe, type RastroDelContacto } from "./senales";
 import { agruparLlegadas, esDePrueba, leerNotaDelTest, type LlegadaAgrupada, type NotaDeLlegada } from "./llegadas";
 import { leerResultadoDelTest, PROPIEDADES_DEL_TEST, type ResultadoDelTest } from "./test-de-marketing";
 
@@ -146,6 +147,8 @@ export interface ContactoDeHubspot {
   urlsDelTest: Record<string, string>;
   /** La empresa principal del contacto en HubSpot (`associatedcompanyid`). */
   empresaId: string | null;
+  /** Su teléfono y su paso por el sitio y los formularios (lib/exploraciones/senales.ts). */
+  rastro: RastroDelContacto;
 }
 
 const PROPIEDADES_DE_CONTACTO = [
@@ -161,6 +164,7 @@ const PROPIEDADES_DE_CONTACTO = [
   ...Object.values(PROPIEDADES_DEL_TEST),
   "associatedcompanyid",
   "lastmodifieddate",
+  ...PROPIEDADES_DEL_RASTRO,
 ];
 
 type FilaDeContacto = { id: string; properties: Record<string, string | null | undefined> };
@@ -181,6 +185,7 @@ const aContacto = (f: FilaDeContacto): ContactoDeHubspot => {
     estadoDelTest: p.diag_estado || null,
     urlsDelTest,
     empresaId: p.associatedcompanyid || null,
+    rastro: rastroDe(p),
   };
 };
 

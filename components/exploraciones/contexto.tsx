@@ -67,7 +67,7 @@ export interface Lienzo {
  * «Traspaso» se retiró el 2026-10-01: era la explicación de qué recibe el CSE, no algo que hacer; en
  * su lugar está la Propuesta, que es el paso que sigue.
  */
-export type PasoDelLienzoUI = "resumen" | "exploracion" | "escala" | "casos" | "propuesta";
+export type PasoDelLienzoUI = "resumen" | "preparacion" | "exploracion" | "escala" | "casos" | "propuesta";
 
 export const LienzoContexto = createContext<Lienzo | null>(null);
 

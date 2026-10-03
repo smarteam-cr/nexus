@@ -22,7 +22,7 @@ const NOMBRE_DEL_DESPUES: Record<Despues, string> = { única: "Relación única"
 
 export function Tarjeta({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
+    <section className="space-y-4 rounded-xl border border-line bg-surface p-5">
       <div>
         <h3 className="text-sm font-semibold text-fg">{titulo}</h3>
         {ayuda && <p className="text-xs text-fg-muted">{ayuda}</p>}
@@ -59,7 +59,7 @@ export function IndustriaYPerfil() {
       titulo="Industria y perfil de negocio"
       ayuda="Con qué edición de la escala se mide y cómo vende la empresa. Se eligen solos con lo que hay en HubSpot; cámbialos si no calzan."
     >
-      <div className="grid gap-4 md:grid-cols-[1fr_1.3fr]">
+      <div className="space-y-5">
         <div className="space-y-1.5">
           <label className="block text-xs font-medium text-fg-secondary" htmlFor="exploracion-edicion">
             Industria (edición de la escala)
@@ -88,9 +88,9 @@ export function IndustriaYPerfil() {
           {edicion?.descripcion && <p className="text-xs text-fg-muted">{edicion.descripcion}</p>}
           {exp.empresa.industria && <p className="text-2xs text-fg-muted">En HubSpot: {industriaLegible(exp.empresa.industria)}</p>}
         </div>
-        <div className="space-y-2">
-          <span className="block text-xs font-medium text-fg-secondary">Cómo se cierra la venta y qué pasa después</span>
-          <div className="flex flex-wrap gap-2">
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-fg-secondary">Cómo se cierra la venta</span>
             <Segmentado<Cierre>
               etiqueta="Cómo se cierra la venta"
               opciones={opcionesCierre}
@@ -98,6 +98,9 @@ export function IndustriaYPerfil() {
               deshabilitado={!puedeEditar || guardando}
               onCambio={(c) => void cambiar([{ op: "perfil", cierre: c, despues: e.perfilDespues }], { refrescar: true })}
             />
+          </div>
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-fg-secondary">Qué pasa después de la venta</span>
             <Segmentado<Despues>
               etiqueta="Qué pasa después de la venta"
               opciones={opcionesDespues}

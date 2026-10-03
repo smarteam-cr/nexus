@@ -19,11 +19,15 @@ import type { Letra } from "@/lib/escala/documento/tipos";
 import {
   CASILLAS,
   ETIQUETA_DE_LA_OBJECION,
+  ETIQUETA_DEL_CANAL,
+  ETIQUETA_DEL_MODELO,
   ETIQUETA_DEL_ROL,
   type Apertura,
   type ClaveDeCasilla,
+  type EstrategiaDeConexion,
   type Meta,
   type Objecion,
+  type Radiografia,
   type Persona,
   type Reto,
   type SiguientePaso,
@@ -47,6 +51,20 @@ function valorComoTexto(clave: ClaveDeCasilla, v: unknown, nombreDim: (id: strin
       return (v as Reto[]).map((r) => `${r.texto}${r.dimensionId && nombreDim(r.dimensionId) ? ` (${nombreDim(r.dimensionId)})` : ""}`);
     case "autoridad":
       return (v as Persona[]).map((p) => `${p.nombre}${p.cargo ? `, ${p.cargo}` : ""} (${ETIQUETA_DEL_ROL[p.rol]})${p.nota ? ` — ${p.nota}` : ""}`);
+    case "radiografia": {
+      const r = v as Radiografia;
+      return [
+        r.resumen,
+        r.sector && `Sector: ${r.sector}`,
+        r.modelos?.length && `Modelo de negocio: ${r.modelos.map((m) => ETIQUETA_DEL_MODELO[m]).join(", ")}`,
+        r.stack?.length && `Herramientas que se le ven: ${r.stack.join(", ")}`,
+        ...(r.hitos ?? []).map((h) => `${h.fecha ? `${h.fecha}: ` : ""}${h.texto}`),
+      ].filter((x): x is string => typeof x === "string" && x.length > 0);
+    }
+    case "estrategiaDeConexion": {
+      const e = v as EstrategiaDeConexion;
+      return [`${ETIQUETA_DEL_CANAL[e.canal]} — ${e.pitch}`];
+    }
     case "objeciones":
       return (v as Objecion[]).map((o) => `${o.texto} (${ETIQUETA_DE_LA_OBJECION[o.clase].toLowerCase()})${o.respuesta ? ` — se respondió: ${o.respuesta}` : " — sin responder"}`);
     case "siguientePaso": {

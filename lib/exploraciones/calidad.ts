@@ -56,7 +56,7 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
  * La pestaña del lienzo donde se hace lo que sigue (la pantalla pone el botón para ir). null = está
  * en el resumen de arriba, que siempre se ve.
  */
-export type PasoDeQueSigue = "exploracion" | "escala" | "casos";
+export type PasoDeQueSigue = "preparacion" | "exploracion" | "escala" | "casos";
 
 /**
  * Una sola indicación de qué hacer ahora: la primera cosa que falta, en el orden del proceso, con el
@@ -71,9 +71,9 @@ export function queSigueConPaso(
 ): { texto: string; paso: PasoDeQueSigue | null } {
   const revisables = propuestaVigente(estado).filter((it) => !esHipotesisDeNivel(it) && it.destino.tipo !== "casoDeUso").length;
   if (!estado.perfilCierre || !estado.perfilDespues) {
-    return { texto: "Revisa la industria y el perfil de negocio: la escala los pide antes de medir.", paso: "exploracion" };
+    return { texto: "Revisa la industria y el perfil de negocio: la escala los pide antes de medir.", paso: "preparacion" };
   }
-  if (estado.areas.length === 0) return { texto: "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.", paso: "exploracion" };
+  if (estado.areas.length === 0) return { texto: "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.", paso: "preparacion" };
   if (sinLeer.length === 1) {
     const r = sinLeer[0];
     const texto =

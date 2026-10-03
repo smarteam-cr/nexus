@@ -9,7 +9,11 @@
 import { Button } from "@/components/ui";
 import {
   ETIQUETA_DE_LA_OBJECION,
+  ETIQUETA_DEL_CANAL,
+  ETIQUETA_DEL_MODELO,
   ETIQUETA_DEL_ROL,
+  type EstrategiaDeConexion,
+  type Radiografia,
   type Apertura,
   type Meta,
   type Objecion,
@@ -69,6 +73,21 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
         case "siguientePaso": {
           const s = v as SiguientePaso;
           return [s.que, s.fecha, s.conQuien && `con ${s.conQuien}`].filter(Boolean).join(" · ");
+        }
+        case "radiografia": {
+          const r = v as Radiografia;
+          return [
+            r.sector,
+            r.modelos?.map((m) => ETIQUETA_DEL_MODELO[m]).join(", "),
+            r.stack?.length ? `${r.stack.length} herramientas` : null,
+            r.hitos?.length ? `${r.hitos.length} hitos` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+        }
+        case "estrategiaDeConexion": {
+          const e = v as EstrategiaDeConexion;
+          return `${ETIQUETA_DEL_CANAL[e.canal]}: ${e.pitch}`;
         }
         case "objeciones": {
           const o = v as Objecion;

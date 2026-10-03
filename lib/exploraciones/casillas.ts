@@ -92,6 +92,64 @@ export interface Objecion {
   respuesta?: string;
 }
 
+/**
+ * La radiografía de la empresa (account intelligence): lo que el agente investiga en internet al
+ * preparar. Cada hito trae el enlace de donde salió: uno que no apareció en la búsqueda no entra.
+ */
+export const MODELOS_DE_NEGOCIO = ["b2b", "b2c", "ecommerce", "saas", "agencia", "servicios", "manufactura", "distribucion", "retail", "educacion", "banca", "salud", "inmobiliaria", "gobierno", "otro"] as const;
+export type ModeloDeNegocio = (typeof MODELOS_DE_NEGOCIO)[number];
+export const ETIQUETA_DEL_MODELO: Record<ModeloDeNegocio, string> = {
+  b2b: "B2B",
+  b2c: "B2C",
+  ecommerce: "E-commerce",
+  saas: "SaaS",
+  agencia: "Agencia",
+  servicios: "Servicios profesionales",
+  manufactura: "Manufactura",
+  distribucion: "Distribución",
+  retail: "Retail",
+  educacion: "Educación",
+  banca: "Banca y finanzas",
+  salud: "Salud",
+  inmobiliaria: "Inmobiliaria",
+  gobierno: "Gobierno",
+  otro: "Otro",
+};
+export interface Hito {
+  texto: string;
+  /** `AAAA-MM` o `AAAA-MM-DD`, si la fuente la dice. */
+  fecha?: string;
+  url: string;
+}
+export interface Radiografia {
+  /** Qué hace la empresa, en dos o tres frases. */
+  resumen?: string;
+  sector?: string;
+  modelos?: ModeloDeNegocio[];
+  /** Las herramientas que se le ven: su CRM, su tienda, su chat… */
+  stack?: string[];
+  hitos?: Hito[];
+}
+
+/** La estrategia de conexión: por dónde escribirle o llamarle, con qué ángulo y un mensaje de ejemplo. */
+export const CANALES_DE_CONEXION = ["email", "llamada", "whatsapp", "linkedin"] as const;
+export type CanalDeConexion = (typeof CANALES_DE_CONEXION)[number];
+export const ETIQUETA_DEL_CANAL: Record<CanalDeConexion, string> = {
+  email: "Correo",
+  llamada: "Llamada",
+  whatsapp: "WhatsApp",
+  linkedin: "LinkedIn",
+};
+export interface EstrategiaDeConexion {
+  canal: CanalDeConexion;
+  /** El ángulo en una o dos frases: por qué le importaría hablar. */
+  pitch: string;
+  /** Un mensaje de ejemplo, listo para adaptar. */
+  mensaje: string;
+  /** El llamado a la acción (casi siempre, agendar en el calendario). */
+  cta?: string;
+}
+
 export const VALORES_DE_APERTURA = ["si", "no", "no_se"] as const;
 export interface Apertura {
   valor: (typeof VALORES_DE_APERTURA)[number];
@@ -101,15 +159,25 @@ export interface Apertura {
 // ── Las casillas ──────────────────────────────────────────────────────────────
 
 /** Los tipos de casilla. Las de lista reciben del agente UN ítem por propuesta; las demás, el valor entero. */
-export type TipoDeCasilla = "texto" | "lista" | "metas" | "retos" | "autoridad" | "objeciones" | "siguientePaso" | "apertura";
+export type TipoDeCasilla =
+  | "texto"
+  | "lista"
+  | "metas"
+  | "retos"
+  | "autoridad"
+  | "objeciones"
+  | "siguientePaso"
+  | "apertura"
+  | "radiografia"
+  | "conexion";
 
 /**
- * Dónde vive la casilla en el lienzo: en el RESUMEN (el marco de calificación —metas, planes, retos,
- * tiempos, presupuesto, quién decide, consecuencias e implicaciones— más las objeciones y las
- * particularidades), o en la pieza Exploración (cómo conectar, su HubSpot, el portal y lo demás que
- * sale de las reuniones).
+ * Dónde vive la casilla en el lienzo: en PREPARACIÓN (con quién se habla y cómo conectar, antes de la
+ * primera reunión), en el RESUMEN (el marco de calificación —metas, planes, retos, tiempos,
+ * presupuesto, quién decide, consecuencias e implicaciones— más las objeciones y las
+ * particularidades), o en EXPLORACIÓN (el portal y lo demás que sale de las reuniones).
  */
-export type PasoDelLienzo = "resumen" | "exploracion";
+export type PasoDelLienzo = "preparacion" | "resumen" | "exploracion";
 
 export interface DefinicionDeCasilla {
   clave: ClaveDeCasilla;
@@ -152,6 +220,10 @@ export const CLAVES_DE_CASILLA = [
   "siguientePaso",
   "objeciones",
   "particularidades",
+  "detonante",
+  "radiografia",
+  "hipotesisDeValor",
+  "estrategiaDeConexion",
 ] as const;
 export type ClaveDeCasilla = (typeof CLAVES_DE_CASILLA)[number];
 
@@ -161,7 +233,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "contexto",
     etiqueta: "Para conectar",
     ayuda: "Qué hace la empresa, cómo llegó, quién es el contacto y cómo abrir la conversación.",
-    paso: "exploracion",
+    paso: "preparacion",
     tipo: "texto",
     alCliente: false,
     alHandoff: "normal",
@@ -170,7 +242,7 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     clave: "hubspotActual",
     etiqueta: "Su HubSpot hoy",
     ayuda: "Qué hubs y ediciones tiene, cuántos usuarios, quién lo configuró y cuándo renueva.",
-    paso: "exploracion",
+    paso: "preparacion",
     tipo: "texto",
     alCliente: true,
     alHandoff: "normal",
@@ -343,6 +415,53 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     alCliente: false,
     alHandoff: "interno",
   },
+  // ── Preparación: antes de escribirle o llamarle (pedido de Elías, 2026-10-02) ──
+  {
+    clave: "detonante",
+    etiqueta: "Por qué ahora",
+    ayuda: "Qué hizo o qué le pasó que vuelve oportuno hablar ahora: el test, una visita, un cambio en la empresa.",
+    explicacion:
+      "La razón para escribirle hoy y no dentro de tres meses. Sale de lo que hizo (llenó el diagnóstico, pidió una demo, volvió al sitio) o de lo que le pasa a la empresa (crece, contrata, cambia de herramienta). Es la primera frase del mensaje.",
+    ejemplo: "Llenó el diagnóstico de Ventas el 23 de septiembre: salió Deficiente en Datos y es la nueva gerente comercial.",
+    paso: "preparacion",
+    tipo: "texto",
+    alCliente: false,
+    alHandoff: "interno",
+  },
+  {
+    clave: "radiografia",
+    etiqueta: "Radiografía de la empresa",
+    ayuda: "Qué hace, su sector, cómo vende, las herramientas que se le ven y lo que le pasó hace poco.",
+    explicacion:
+      "Lo que el agente encontró en internet sobre la empresa, con el enlace de cada hito. Sirve para no llegar en blanco y para hablar de algo suyo en la primera frase.",
+    paso: "preparacion",
+    tipo: "radiografia",
+    alCliente: false,
+    alHandoff: "normal",
+  },
+  {
+    clave: "hipotesisDeValor",
+    etiqueta: "Hipótesis de valor",
+    ayuda: "Lo que creemos que le duele y cómo lo resolvemos, antes de hablar con el cliente.",
+    explicacion:
+      "La interpretación comercial antes de escribir o llamar: cruza los dolores típicos de su tipo de empresa con lo que dejó el diagnóstico y lo que se ve en HubSpot. Es una apuesta para confirmar en la reunión, nunca algo para afirmarle al cliente.",
+    ejemplo: "Creemos que pierden negocios por seguimiento tardío, porque el diagnóstico salió bajo en Datos y su CRM se usa solo para guardar contactos.",
+    paso: "preparacion",
+    tipo: "lista",
+    alCliente: false,
+    alHandoff: "interno",
+  },
+  {
+    clave: "estrategiaDeConexion",
+    etiqueta: "Estrategia de conexión",
+    ayuda: "Por dónde contactarlo, con qué ángulo y un mensaje de ejemplo que cierre con una invitación a agendar.",
+    explicacion:
+      "Cómo abrir la conversación: el canal, el ángulo y un primer mensaje corto que hable de algo suyo y cierre invitando a agendar en tu calendario. Si ya agendó la reunión, no hace falta.",
+    paso: "preparacion",
+    tipo: "conexion",
+    alCliente: false,
+    alHandoff: "interno",
+  },
 ];
 
 /** Las casillas del resumen, en el orden del marco: metas, planes, retos y tiempos; presupuesto y quién decide; consecuencias e implicaciones. */
@@ -392,6 +511,10 @@ export const TIPO_DE_CASILLA = {
   siguientePaso: "siguientePaso",
   objeciones: "objeciones",
   particularidades: "lista",
+  detonante: "texto",
+  radiografia: "radiografia",
+  hipotesisDeValor: "lista",
+  estrategiaDeConexion: "conexion",
 } as const satisfies Record<ClaveDeCasilla, TipoDeCasilla>;
 
 /** El valor guardado de cada tipo de casilla. */
@@ -404,6 +527,8 @@ export interface ValorPorTipo {
   objeciones: Objecion[];
   siguientePaso: SiguientePaso;
   apertura: Apertura;
+  radiografia: Radiografia;
+  conexion: EstrategiaDeConexion;
 }
 
 /** El valor de cada casilla, con su forma. */

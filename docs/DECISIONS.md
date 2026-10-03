@@ -4287,6 +4287,26 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   (las cuatro típicas de la guía, más desconfianza y otra) y cómo se respondió; sin respuesta,
   sigue abierta. Las dos son internas: no llegan a la propuesta, y al CSE le llegan en la columna
   interna del contexto. La guía de la próxima reunión retoma las objeciones que ya puso el cliente.
+- **Preparación es una pieza propia, antes de Exploración** (pedido de Elías, 2026-10-02), en dos
+  columnas: Identificación (el detonante, el contacto, la radiografía de la empresa, la industria y
+  el perfil, las áreas en juego, su HubSpot hoy) y Conexión (cómo abrir la conversación, la hipótesis
+  de valor y la estrategia de conexión). Exploración queda para las reuniones: arriba, la sesión
+  nueva que llegó, de dónde viene (Google Meet, HubSpot o sumada a mano) y el botón para que el
+  agente la lea; el historial del agente baja, plegado, al final.
+- **Los hechos de HubSpot se leen; lo que interpreta el agente se propone.** El detonante muestra tal
+  cual de dónde llegó, el último formulario, las visitas y si agendó (`lib/exploraciones/senales.ts`,
+  leído al abrir la pieza y sin guardarse); el «por qué ahora», la radiografía, la hipótesis de valor
+  y la estrategia de conexión son casillas que el agente propone y el vendedor usa o descarta.
+- **La radiografía se investiga en internet** (decisión de Elías), con la búsqueda web de Anthropic,
+  en la misma corrida de preparar y antes de la propuesta principal: lo que encuentra entra también
+  como fuente (W1) para la hipótesis de valor y el pitch. Un hito entra solo con un enlace que salió
+  en la búsqueda, la versión web de la cita literal. Tres búsquedas: medido con CreditForce, unos
+  US$0,27 por preparación. Con cinco, la primera prueba le puso de «herramientas» a sus socios y de
+  «hitos» sus páginas de producto: el pedido ahora distingue lo que usa de lo que vende, y una
+  noticia de una página.
+- **La estrategia de conexión no se arma si ya agendó** (decisión de Elías): con una reunión
+  agendada, el agente no la propone y la pieza la muestra plegada con «Ya agendó: no hace falta
+  contactarlo».
 
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 

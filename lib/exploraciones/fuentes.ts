@@ -33,6 +33,7 @@ import {
   type ResultadoDeReunion,
 } from "./hubspot";
 import { documentosParaLeer } from "./documentos";
+import { etiquetaDeLaFuente } from "./senales";
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
 import { REUNIONES } from "./sesion";
@@ -93,11 +94,26 @@ function textoDeLaEmpresa(
   return lineas.filter(Boolean).join("\n");
 }
 
+/** Cada contacto en una línea, con su rastro: de dónde llegó, su último formulario, sus visitas (para el «por qué ahora»). */
 function textoDeLosContactos(contactos: readonly ContactoDeHubspot[]): string {
   return contactos
-    .map((c) =>
-      [c.nombre, c.cargo, c.email, c.etapa && `etapa: ${c.etapa}`, c.estadoDelTest && `test: ${c.estadoDelTest}`].filter(Boolean).join(" · "),
-    )
+    .map((c) => {
+      const r = c.rastro;
+      const origen = etiquetaDeLaFuente(r.fuente);
+      return [
+        c.nombre,
+        c.cargo,
+        c.email,
+        c.etapa && `etapa: ${c.etapa}`,
+        c.estadoDelTest && `test: ${c.estadoDelTest}`,
+        origen && `llegó por: ${origen}${r.fuenteDetalle ? ` (${r.fuenteDetalle})` : ""}`,
+        r.ultimaConversion && `último formulario: ${r.ultimaConversion}${r.fechaUltimaConversion ? ` el ${fecha(r.fechaUltimaConversion)}` : ""}`,
+        r.visitas && `${r.visitas} páginas vistas${r.ultimaVisita ? `, la última el ${fecha(r.ultimaVisita)}` : ""}`,
+        r.agendo && `agendó una reunión el ${fecha(r.agendo)}`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    })
     .join("\n");
 }
 

@@ -89,19 +89,14 @@ function Historia({ corridas }: { corridas: CorridaDelAgente[] }) {
  * el detalle vive en «Exploración».
  */
 export default function PanelDelAgente({ modoPrincipal = "preparar", compacto = false }: { modoPrincipal?: "preparar" | "leer"; compacto?: boolean }) {
-  const { exp, escala, puedeEditar, sinLeer } = useLienzo();
+  const { exp, puedeEditar, sinLeer } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
 
   const corridas = [...exp.estado.propuesta.corridas].reverse();
   const yaPreparo = corridas.some((c) => c.modo === "preparar");
   // Con una reunión sin leer, leerla es lo primero, en cualquier paso.
   const leerPrimero = modoPrincipal === "leer" || sinLeer.length > 0;
-  const leido = exp.leido;
-  // Ya viene sin lo que pasó desde la última lectura (eso se avisa como «sin leer»).
-  const agenda = leido.agenda;
-  const nombreDeArea = (id: string) => escala.areas.find((a) => a.id === id)?.nombre ?? id;
   const ultima = corridas[0];
-  const hayDetalle = corridas.length > 0 || leido.tests.length > 0 || agenda.length > 0 || leido.correosSinPermiso > 0;
 
   return (
     <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
@@ -159,47 +154,66 @@ export default function PanelDelAgente({ modoPrincipal = "preparar", compacto = 
         </Alert>
       )}
 
-      {!compacto && hayDetalle && (
-        <details className="group">
-          <summary className="cursor-pointer select-none text-xs text-brand-light">Lo que leyó</summary>
-          <div className="mt-2 space-y-3">
-            <Historia corridas={corridas} />
-
-            {leido.tests.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-fg-secondary">El test de marketing</p>
-                <ul className="space-y-0.5 text-xs text-fg-muted">
-                  {leido.tests.map((t) => (
-                    <li key={t.resultado.areaId}>
-                      {nombreDeArea(t.resultado.areaId)}: lo contestó {t.contacto}
-                      {t.resultado.fecha ? ` el ${diaCorto(t.resultado.fecha)}` : ""}. Sus niveles entran como hipótesis en «La escala»: son de la escala anterior y se confirman en la primera reunión.
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {agenda.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-fg-secondary">Reuniones agendadas en HubSpot</p>
-                <ul className="space-y-0.5 text-xs text-fg-muted">
-                  {agenda.slice(0, 3).map((a) => (
-                    <li key={a.id}>
-                      {diaYHora(a.inicio)} · {a.titulo}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {leido.correosSinPermiso > 0 && (
-              <p className="text-xs text-fg-muted">
-                Hay {leido.correosSinPermiso} {leido.correosSinPermiso === 1 ? "correo" : "correos"} con la empresa que Nexus todavía no puede leer: falta el permiso de correos en la conexión con HubSpot.
-              </p>
-            )}
-          </div>
-        </details>
-      )}
+      {!compacto && <HistorialDelAgente />}
     </section>
+  );
+}
+
+/**
+ * Lo que leyó el agente: sus últimas corridas con sus fuentes, el test de marketing, las reuniones
+ * agendadas y los correos que no pudo leer. Va plegado al final de Exploración (pedido de Elías,
+ * 2026-10-02: era lo primero que se veía y no es lo primero que se necesita).
+ */
+export function HistorialDelAgente() {
+  const { exp, escala } = useLienzo();
+  const corridas = [...exp.estado.propuesta.corridas].reverse();
+  const leido = exp.leido;
+  const agenda = leido.agenda;
+  const nombreDeArea = (id: string) => escala.areas.find((a) => a.id === id)?.nombre ?? id;
+  const hayDetalle = corridas.length > 0 || leido.tests.length > 0 || agenda.length > 0 || leido.correosSinPermiso > 0;
+  if (!hayDetalle) return null;
+  return (
+    <details className="group rounded-xl border border-line bg-surface px-5 py-4">
+      <summary className="cursor-pointer select-none text-sm font-semibold text-fg">
+        Historial del agente
+        <span className="ml-2 text-xs font-normal text-fg-muted">lo que leyó y propuso en cada corrida</span>
+      </summary>
+      <div className="mt-2 space-y-3">
+        <Historia corridas={corridas} />
+
+        {leido.tests.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-fg-secondary">El test de marketing</p>
+            <ul className="space-y-0.5 text-xs text-fg-muted">
+              {leido.tests.map((t) => (
+                <li key={t.resultado.areaId}>
+                  {nombreDeArea(t.resultado.areaId)}: lo contestó {t.contacto}
+                  {t.resultado.fecha ? ` el ${diaCorto(t.resultado.fecha)}` : ""}. Sus niveles entran como hipótesis en «La escala»: son de la escala anterior y se confirman en la primera reunión.
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {agenda.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-fg-secondary">Reuniones agendadas en HubSpot</p>
+            <ul className="space-y-0.5 text-xs text-fg-muted">
+              {agenda.slice(0, 3).map((a) => (
+                <li key={a.id}>
+                  {diaYHora(a.inicio)} · {a.titulo}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {leido.correosSinPermiso > 0 && (
+          <p className="text-xs text-fg-muted">
+            Hay {leido.correosSinPermiso} {leido.correosSinPermiso === 1 ? "correo" : "correos"} con la empresa que Nexus todavía no puede leer: falta el permiso de correos en la conexión con HubSpot.
+          </p>
+        )}
+      </div>
+    </details>
   );
 }

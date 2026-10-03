@@ -11,8 +11,12 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Badge, Button, Field, Input, Segmentado, Select, Textarea } from "@/components/ui";
 import {
+  CANALES_DE_CONEXION,
   CLASES_DE_OBJECION,
   definicionDe,
+  ETIQUETA_DEL_CANAL,
+  ETIQUETA_DEL_MODELO,
+  MODELOS_DE_NEGOCIO,
   ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_ROL,
   metaEnCifras,
@@ -20,10 +24,13 @@ import {
   ROLES_EN_LA_DECISION,
   type Apertura,
   type ClaveDeCasilla,
+  type EstrategiaDeConexion,
+  type Hito,
   type Meta,
   type Objecion,
   type Persona,
   type Reto,
+  type Radiografia,
   type SiguientePaso,
   type ValoresDeCasillas,
 } from "@/lib/exploraciones/casillas";
@@ -40,6 +47,78 @@ const APERTURA: { clave: Apertura["valor"]; etiqueta: string }[] = [
 function fechaLegible(iso: string): string {
   const [a, m, d] = iso.split("-").map(Number);
   return new Date(a, m - 1, d).toLocaleDateString("es-CR", { weekday: "short", day: "numeric", month: "short" });
+}
+
+/** La radiografía: qué hace, su sector y cómo vende, sus herramientas y lo que le pasó hace poco. */
+export function VistaDeRadiografia({ r }: { r: Radiografia }) {
+  return (
+    <div className="space-y-3 text-sm">
+      {r.resumen && <p className="leading-relaxed text-fg-secondary">{r.resumen}</p>}
+      {(r.sector || r.modelos?.length) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {r.sector && <Badge size="xs" variant="primary">{r.sector}</Badge>}
+          {r.modelos?.map((m) => (
+            <Badge key={m} size="xs">
+              {ETIQUETA_DEL_MODELO[m]}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {!!r.stack?.length && (
+        <div className="space-y-1">
+          <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">Herramientas que se le ven</p>
+          <p className="text-fg-secondary">{r.stack.join(" · ")}</p>
+        </div>
+      )}
+      {!!r.hitos?.length && (
+        <div className="space-y-1.5">
+          <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">Noticias e hitos recientes</p>
+          <ul className="space-y-1.5">
+            {r.hitos.map((h, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="w-16 flex-shrink-0 text-xs tabular-nums text-fg-muted">{h.fecha ?? "—"}</span>
+                <a href={h.url} target="_blank" rel="noreferrer" className="text-fg-secondary hover:text-brand-light hover:underline">
+                  {h.texto}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** La estrategia de conexión: el canal, el ángulo y el mensaje, listo para copiar. */
+function VistaDeConexion({ e }: { e: EstrategiaDeConexion }) {
+  const [copiado, setCopiado] = useState(false);
+  const texto = [e.mensaje, e.cta].filter(Boolean).join("\n\n");
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="primary" size="xs">
+          {ETIQUETA_DEL_CANAL[e.canal]}
+        </Badge>
+        <p className="font-medium text-fg">{e.pitch}</p>
+      </div>
+      <div className="space-y-2 rounded-xl border border-line bg-surface-muted p-4">
+        <p className="whitespace-pre-wrap leading-relaxed text-fg-secondary">{e.mensaje}</p>
+        {e.cta && <p className="font-medium text-fg">{e.cta}</p>}
+      </div>
+      <Button
+        size="xs"
+        variant="secondary"
+        onClick={() =>
+          void navigator.clipboard?.writeText(texto).then(() => {
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 2000);
+          })
+        }
+      >
+        {copiado ? "Copiado" : "Copiar el mensaje"}
+      </Button>
+    </div>
+  );
 }
 
 // ── Vista de lo confirmado ────────────────────────────────────────────────────
@@ -138,6 +217,10 @@ function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown }) {
         </p>
       );
     }
+    case "radiografia":
+      return <VistaDeRadiografia r={valor as Radiografia} />;
+    case "conexion":
+      return <VistaDeConexion e={valor as EstrategiaDeConexion} />;
     case "apertura": {
       const a = valor as Apertura;
       return (
@@ -466,6 +549,107 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
         </div>
       );
     }
+    case "radiografia": {
+      const r = (borrador as Radiografia) ?? {};
+      const set = (cambio: Partial<Radiografia>) => setBorrador({ ...r, ...cambio });
+      const modelos = r.modelos ?? [];
+      return (
+        <div className="space-y-4">
+          <Field label="Qué hace la empresa">
+            <TextoQueCrece minFilas={3} value={r.resumen ?? ""} onChange={(resumen) => set({ resumen })} />
+          </Field>
+          <Field label="Sector">
+            <Input value={r.sector ?? ""} onChange={(e) => set({ sector: e.target.value })} placeholder="Software financiero" />
+          </Field>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-fg-secondary">Cómo vende</p>
+            <div className="flex flex-wrap gap-1.5">
+              {MODELOS_DE_NEGOCIO.map((m) => {
+                const activo = modelos.includes(m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={activo}
+                    onClick={() => set({ modelos: activo ? modelos.filter((x) => x !== m) : [...modelos, m] })}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs transition-colors",
+                      activo ? "border-brand/40 bg-brand/10 font-medium text-brand-light" : "border-line text-fg-secondary hover:bg-surface-hover",
+                    )}
+                  >
+                    {ETIQUETA_DEL_MODELO[m]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <Field label="Herramientas que se le ven" hint="Separadas por comas: su CRM, su tienda, su chat, su ERP.">
+            <Input
+              value={(r.stack ?? []).join(", ")}
+              onChange={(e) => set({ stack: e.target.value.split(",").map((x) => x.trimStart()) })}
+              placeholder="HubSpot, Shopify, WhatsApp Business"
+            />
+          </Field>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-fg-secondary">Noticias e hitos recientes</p>
+            <EditorDeItems<Hito>
+              items={r.hitos ?? []}
+              onCambio={(hitos) => set({ hitos })}
+              nuevo={() => ({ texto: "", url: "" })}
+              estaVacio={(h) => vacioDeTexto(h.texto)}
+              verItem={(h) => (
+                <p className="text-fg">
+                  {h.fecha && <span className="mr-2 text-xs tabular-nums text-fg-muted">{h.fecha}</span>}
+                  {h.texto}
+                </p>
+              )}
+              campos={(h, setH) => (
+                <>
+                  <Field label="Qué pasó">
+                    <TextoQueCrece autoFocus value={h.texto} onChange={(texto) => setH({ texto })} />
+                  </Field>
+                  <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
+                    <Field label="Cuándo">
+                      <Input value={h.fecha ?? ""} onChange={(e) => setH({ fecha: e.target.value || undefined })} placeholder="2026-03" />
+                    </Field>
+                    <Field label="Enlace">
+                      <Input value={h.url} onChange={(e) => setH({ url: e.target.value })} placeholder="https://…" />
+                    </Field>
+                  </div>
+                </>
+              )}
+              agregar="Agregar un hito"
+            />
+          </div>
+        </div>
+      );
+    }
+    case "conexion": {
+      const c = (borrador as EstrategiaDeConexion) ?? { canal: "email" as const, pitch: "", mensaje: "" };
+      const set = (cambio: Partial<EstrategiaDeConexion>) => setBorrador({ ...c, ...cambio });
+      return (
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-fg-secondary">Canal</p>
+            <Segmentado
+              etiqueta="Canal"
+              opciones={CANALES_DE_CONEXION.map((k) => ({ clave: k, etiqueta: ETIQUETA_DEL_CANAL[k] }))}
+              valor={c.canal}
+              onCambio={(canal) => set({ canal })}
+            />
+          </div>
+          <Field label="El ángulo" hint="Por qué le importaría hablar, en una o dos frases.">
+            <TextoQueCrece value={c.pitch} onChange={(pitch) => set({ pitch })} />
+          </Field>
+          <Field label="Mensaje de ejemplo">
+            <TextoQueCrece minFilas={5} value={c.mensaje} onChange={(mensaje) => set({ mensaje })} />
+          </Field>
+          <Field label="Llamado a la acción">
+            <Input value={c.cta ?? ""} onChange={(e) => set({ cta: e.target.value })} placeholder="Agenda 30 minutos en mi calendario: [enlace]" />
+          </Field>
+        </div>
+      );
+    }
     case "apertura": {
       const a = (borrador as Apertura) ?? null;
       return (
@@ -502,6 +686,22 @@ function limpiar(clave: ClaveDeCasilla, v: unknown): unknown {
       return v && (v as SiguientePaso).que?.trim() ? sinVacios(v as SiguientePaso) : undefined;
     case "apertura":
       return v && (v as Apertura).valor ? sinVacios(v as Apertura) : undefined;
+    case "radiografia": {
+      const r = (v as Radiografia) ?? {};
+      const limpia: Radiografia = sinVacios({
+        ...r,
+        stack: (r.stack ?? []).map((x) => x.trim()).filter(Boolean),
+        hitos: (r.hitos ?? []).filter((h) => h.texto?.trim() && h.url?.trim()).map((h) => sinVacios(h)),
+      });
+      if (!limpia.stack?.length) delete limpia.stack;
+      if (!limpia.hitos?.length) delete limpia.hitos;
+      if (!limpia.modelos?.length) delete limpia.modelos;
+      return Object.keys(limpia).length ? limpia : undefined;
+    }
+    case "conexion": {
+      const c = v as EstrategiaDeConexion | undefined;
+      return c && c.pitch?.trim() && c.mensaje?.trim() ? sinVacios(c) : undefined;
+    }
   }
 }
 
@@ -570,7 +770,7 @@ export function Casilla({
 
   const enCajon = editarDeEntrada;
   return (
-    <section className={cn(enCajon ? "space-y-4" : "space-y-2", !sinTitulo && "rounded-xl border border-line bg-surface p-4", className)}>
+    <section className={cn(enCajon ? "space-y-4" : "space-y-2", !sinTitulo && "rounded-xl border border-line bg-surface p-5", className)}>
       {enCajon && (def.explicacion || def.ejemplo) && (
         <div className="space-y-1.5 rounded-xl bg-surface-muted px-4 py-3">
           {def.explicacion && <p className="text-sm leading-relaxed text-fg-secondary">{def.explicacion}</p>}
