@@ -85,7 +85,7 @@ export async function armarPropuesta(o: { exploracionId: string; dealId: string;
   const lectura = await leerExploracion(o.exploracionId);
   if (lectura.estado !== "ok") return { ok: false, status: lectura.estado === "no-existe" ? 404 : 503, error: "Esa exploración no existe." };
   const fila = lectura.fila;
-  if (fila.archivadaEn) return { ok: false, status: 409, error: "La exploración está archivada." };
+  if (fila.archivadaEn) return { ok: false, status: 409, error: "La preventa está archivada." };
   const companyId = fila.client.hubspotCompanyId;
   if (!companyId) return { ok: false, status: 409, error: "La empresa no está vinculada a HubSpot: no se puede elegir su negocio." };
 
@@ -159,7 +159,7 @@ export async function armarPropuesta(o: { exploracionId: string; dealId: string;
     });
     return { ok: true, businessCaseId };
   } catch (e) {
-    if (e instanceof ExploracionArchivada) return { ok: false, status: 409, error: "La exploración está archivada." };
+    if (e instanceof ExploracionArchivada) return { ok: false, status: 409, error: "La preventa está archivada." };
     throw e;
   }
 }

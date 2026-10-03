@@ -102,7 +102,7 @@ function BarraDelAgente() {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info-line bg-info-surface px-5 py-4">
       <div className="min-w-0 space-y-0.5">
-        <p className="text-sm font-semibold text-fg">{trabajando ? "El agente está preparando" : ultima ? "Preparada por el agente" : "Prepara la exploración con el agente"}</p>
+        <p className="text-sm font-semibold text-fg">{trabajando ? "El agente está preparando" : ultima ? "Preparada por el agente" : "Prepara la preventa con el agente"}</p>
         <p className="text-xs text-fg-secondary" role={trabajando ? "status" : undefined}>
           {trabajando
             ? (corrida?.fase ?? "Empezando…")

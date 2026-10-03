@@ -103,7 +103,7 @@ export function useCorrida() {
           toast.error(data.error ?? "No se pudo lanzar el agente.");
           return;
         }
-        if (data.yaCorria) toast.info("El agente ya está trabajando en esta exploración: cuando termine, lánzalo de nuevo si hace falta.");
+        if (data.yaCorria) toast.info("El agente ya está trabajando en esta preventa: cuando termine, lánzalo de nuevo si hace falta.");
         void seguir();
       } finally {
         setLanzando(false);

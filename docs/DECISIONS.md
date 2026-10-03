@@ -4364,6 +4364,48 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   de las sugerencias, en `FranjaDeSugerencias.tsx`); la cabecera es la compartida con la ficha del
   cliente, así que ahí manda la app y el tablero la copia a ella.
 
+## La exploración de venta pasa a llamarse Preventa (2026-10-03)
+
+**Contexto.** Elías: «siento que la exploración es solo una etapa». El módulo cubre el camino entero de
+una empresa hasta la propuesta (llega por el test o desde HubSpot, preparación, reuniones, la escala,
+casos de uso, propuesta y el traspaso al CSE), y «Exploración» es solo la pieza de las reuniones.
+
+- **Se renombró lo visible y nada más**: el menú, el título, las migas, el volver de la ficha, los
+  textos y errores de la pantalla y la API, la columna del contexto del proyecto, el enlace de la
+  propuesta y el nombre de las corridas del agente. La dirección (`/sales/exploraciones`), el modelo
+  (`ExploracionDeVenta`), los archivos y los SQL siguen igual: es la regla del renombre de «Business
+  Case» (el nombre visible es copy; la ruta y el modelo son identidad). Sin SQL.
+- **La pieza «Exploración» se queda**: son las reuniones, que es lo que esa palabra describe. Las
+  piezas son Preparación · Exploración · La escala · Casos de uso · Propuesta.
+- **Los prompts no se tocaron** (el del agente, el de la guía, el bloque de la propuesta y el del
+  handoff): el modelo entiende igual, y cambiarlos mueve la salida sin que nadie vea la diferencia.
+- **El canvas «Exploración» de un proyecto (el del CSE) es otra cosa** y no cambia.
+- Descartados: «Oportunidades» (se confunde con los negocios de HubSpot; una empresa tiene varios
+  negocios y un solo lienzo), «Venta consultiva» (largo y suena a curso), «Calificación» (es una
+  parte), «Diagnóstico» (choca con el documento del CSE y con el test) y «Prospectos» (también entran
+  clientes).
+
+## El listado de Preventa: dos columnas, como el tablero (2026-10-03)
+
+**Contexto.** Primer rediseño hecho con el sistema de diseño «Nexus · interfaz interna» (Claude Design,
+el mismo vocabulario del lienzo). Elías lo aprobó y pidió aplicarlo entero.
+
+- **A la izquierda, lo que ya está en curso; a la derecha, lo que llega.** Las preventas en curso, con
+  «Planificar con una empresa» (el buscador de HubSpot) debajo; en el panel gris, «Qué sigue» y
+  «Llegaron por el test» como bandeja de entrada. El único botón azul, «Planificar una empresa», baja al
+  buscador. Debajo de 1024 px el panel baja al final.
+- **Cada fila dice qué hacer y cuánto falta**: qué sigue (si es revisar sugerencias, la cuenta va en la
+  píldora con la chispa), una barra con un trazo por punto de «lista para proponer», la próxima reunión
+  y quién la lleva. La próxima reunión sale de la misma regla que la guía (`proximaReunion`: la próxima
+  sesión planeada o, si no hay, la agenda de HubSpot), así el listado y el lienzo no dicen fechas
+  distintas. Sin una, «Sin agendar» en ámbar.
+- **Filtros: Todas · Mías · Listas para proponer**, en la forma del segmentado (`Segmentos`, el mismo
+  componente del «Antes / Después»). «Mías» compara con quien la lleva (`responsableEmail`).
+- **`Segmentos` no es el `Segmentado` de components/ui**: ese es un grupo de radios con otra forma, lo
+  usa la escala, y cambiarlo movería pantallas que no se están rediseñando.
+- **Todo lo sugerido lleva la chispa de IA** (regla del sistema de diseño): en el listado, en las filas
+  y píldoras del lienzo, en la barra de piezas, en la cuadrícula del marco y en la franja (18 px).
+
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 
 **Contexto.** Smarteam se alió con Insider One. Elías pidió que la escala refleje lo que habilita una

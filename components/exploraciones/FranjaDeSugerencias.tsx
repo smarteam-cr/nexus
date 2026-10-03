@@ -64,7 +64,7 @@ export function BotonTexto({ children, onClick, disabled, title, className }: Pr
 export default function FranjaDeSugerencias({ children, acciones }: { children: ReactNode; acciones?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-info-line bg-info-surface px-3.5 py-2.5">
-      <IconoDeSugerencia className="h-4 w-4 flex-shrink-0 text-brand" />
+      <IconoDeSugerencia className="h-[18px] w-[18px] flex-shrink-0 text-brand" />
       <p className="min-w-0 flex-1 text-[13px] text-brand">{children}</p>
       {acciones && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{acciones}</div>}
     </div>

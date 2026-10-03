@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);
-  if (lectura.estado !== "ok") return NextResponse.json({ error: "Esa exploración no existe." }, { status: 404 });
+  if (lectura.estado !== "ok") return NextResponse.json({ error: "Esa preventa no existe." }, { status: 404 });
   const companyId = lectura.fila.client.hubspotCompanyId;
   const leido = leerLoLeido(lectura.fila.test);
   if (!companyId) return NextResponse.json({ empresa: null, contactos: [], principalId: null, tests: [], agenda: leido.agenda });

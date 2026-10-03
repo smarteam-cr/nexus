@@ -40,8 +40,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);
-  if (lectura.estado !== "ok") return NextResponse.json({ error: "Esa exploración no existe." }, { status: 404 });
-  if (lectura.fila.archivadaEn) return NextResponse.json({ error: "La exploración está archivada." }, { status: 409 });
+  if (lectura.estado !== "ok") return NextResponse.json({ error: "Esa preventa no existe." }, { status: 404 });
+  if (lectura.fila.archivadaEn) return NextResponse.json({ error: "La preventa está archivada." }, { status: 409 });
 
   let raw: unknown;
   try {

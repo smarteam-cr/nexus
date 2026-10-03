@@ -40,6 +40,7 @@ import {
 } from "@/lib/exploraciones/guia";
 import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { Casilla } from "./Casilla";
+import Segmentos from "./Segmentos";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { FilaSugerida } from "./Propuestas";
 import { QueVaPrimero } from "./QueVaPrimero";
@@ -521,28 +522,16 @@ function DespuesDeLaSesion({
 
 /** Antes / Después: la opción elegida en blanco sobre el gris, como en el tablero. */
 function AntesDespues({ valor, onCambiar }: { valor: MomentoDeLaSesion; onCambiar: (m: MomentoDeLaSesion) => void }) {
-  const opciones: { clave: MomentoDeLaSesion; nombre: string }[] = [
-    { clave: "antes", nombre: "Antes" },
-    { clave: "despues", nombre: "Después" },
-  ];
   return (
-    <div role="tablist" aria-label="Antes y después de la sesión" className="inline-flex rounded-[10px] bg-surface-hover p-[3px]">
-      {opciones.map((o) => (
-        <button
-          key={o.clave}
-          type="button"
-          role="tab"
-          aria-selected={valor === o.clave}
-          onClick={() => onCambiar(o.clave)}
-          className={cn(
-            "rounded-lg px-4 py-[7px] text-[13px] transition-colors",
-            valor === o.clave ? "bg-surface font-semibold text-fg shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-medium text-fg-secondary hover:text-fg",
-          )}
-        >
-          {o.nombre}
-        </button>
-      ))}
-    </div>
+    <Segmentos
+      etiqueta="Antes y después de la sesión"
+      opciones={[
+        { clave: "antes", nombre: "Antes" },
+        { clave: "despues", nombre: "Después" },
+      ]}
+      valor={valor}
+      onCambiar={onCambiar}
+    />
   );
 }
 

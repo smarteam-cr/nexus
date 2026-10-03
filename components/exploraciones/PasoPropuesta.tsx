@@ -104,7 +104,7 @@ function ArmarLaPropuesta({ negocios, alRecargar }: { negocios: Negocio[] | null
       <div>
         <h3 className="text-sm font-semibold text-fg">Armar la propuesta</h3>
         <p className="text-xs text-fg-muted">
-          Crea la Propuesta de Nexus con lo que puede ver el cliente de esta exploración y la genera con IA: sus metas en cifras como criterio de éxito, el nivel de cada área tal como quedó confirmado y los casos de uso elegidos. Lo interno (hipótesis, presupuesto, quién decide, objeciones, lo que nadie exploró) no entra. El precio se pone a mano, como siempre.
+          Crea la Propuesta de Nexus con lo que puede ver el cliente de esta preventa y la genera con IA: sus metas en cifras como criterio de éxito, el nivel de cada área tal como quedó confirmado y los casos de uso elegidos. Lo interno (hipótesis, presupuesto, quién decide, objeciones, lo que nadie exploró) no entra. El precio se pone a mano, como siempre.
         </p>
       </div>
       {negocios === null ? (
@@ -158,7 +158,7 @@ function PropuestasArmadas() {
   if (propuestas.length === 0) return null;
   return (
     <section className="space-y-2 rounded-xl border border-line bg-surface p-4">
-      <h3 className="text-sm font-semibold text-fg">Propuestas que nacieron de esta exploración</h3>
+      <h3 className="text-sm font-semibold text-fg">Propuestas que nacieron de esta preventa</h3>
       <ul className="space-y-1">
         {propuestas.map((p) => (
           <li key={p.id} className="text-sm">

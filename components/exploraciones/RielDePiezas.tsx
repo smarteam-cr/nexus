@@ -22,6 +22,7 @@ import { diaCorto } from "@/lib/exploraciones/fechas";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import { BotonDeObjeciones } from "./ManejoDeObjeciones";
 import { useSesiones } from "./useSesiones";
+import { IconoDeSugerencia } from "./FranjaDeSugerencias";
 
 /** Una fila de la barra: la del selector de piezas, más cuántas sugerencias esperan ahí. */
 export type FilaDelRiel = FilaDePieza & { sugeridas: number };
@@ -71,7 +72,8 @@ function Fila({
       <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", activa || sugeridas.n > 0 ? "bg-brand" : PUNTO[estado])} aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">{etiqueta}</span>
       {sugeridas.n > 0 ? (
-        <span className="flex-shrink-0 text-xs text-brand" title={`${sugeridas.n} sugerencias del agente`}>
+        <span className="inline-flex flex-shrink-0 items-center gap-1 text-xs text-brand" title={`${sugeridas.n} sugerencias del agente`}>
+          <IconoDeSugerencia className="h-[13px] w-[13px]" />
           {sugeridas.texto ?? sugeridas.n}
         </span>
       ) : (
@@ -147,7 +149,7 @@ export default function RielDePiezas({
 }) {
   const { sesion, abrirObjeciones } = useLienzo();
   return (
-    <nav aria-label="Piezas de la exploración" className="flex h-full flex-col gap-4">
+    <nav aria-label="Piezas de la preventa" className="flex h-full flex-col gap-4">
       <div className="flex flex-wrap gap-0.5 lg:flex-col">
         <div className="lg:w-full">
           <Fila

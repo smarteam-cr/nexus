@@ -88,7 +88,7 @@ export default async function BusinessCasePage({
           <>
             {" · "}
             <Link href={`/sales/exploraciones/${bc.exploracionId}`} className="text-brand-light hover:underline">
-              Viene de la exploración de venta
+              Viene de la preventa
             </Link>
           </>
         )}

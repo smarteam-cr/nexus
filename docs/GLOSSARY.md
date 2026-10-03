@@ -33,6 +33,11 @@
   el campo `businessCaseId`, la ruta `/business-cases` y el slug de pieza `business-case`.
   Cambiar eso rompería links ya pegados y obligaría a migrar datos sin que nadie del equipo viera
   la diferencia. Ver DECISIONS §El renombre.
+- **Preventa** (Ventas → Preventa, `/sales/exploraciones`, modelo `ExploracionDeVenta`): el lienzo de
+  una empresa en venta, desde que llega (por el test o desde HubSpot) hasta la primera propuesta y el
+  traspaso al CSE. Sus piezas: Preparación · Exploración (las reuniones) · La escala · Casos de uso ·
+  Propuesta. Se llamaba «Exploración de venta» hasta el 2026-10-03; la dirección y el modelo conservan
+  ese nombre. No confundir con el canvas «Exploración» de un proyecto (el del CSE).
 - **Exploración** (canvas "Exploración", `agent-exploracion-canvas`): guía **INTERNA** por
   proyecto para descubrir el negocio del cliente cuando el kickoff ya pasó — qué hay que
   entender, cómo preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.

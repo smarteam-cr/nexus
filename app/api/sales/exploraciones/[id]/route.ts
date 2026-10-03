@@ -32,7 +32,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (lectura.estado === "sin-tablas") {
     return NextResponse.json({ error: `Falta aplicar ${SQL_DE_EXPLORACIONES} y reiniciar.` }, { status: 503 });
   }
-  if (lectura.estado === "no-existe") return NextResponse.json({ error: "Esa exploración no existe." }, { status: 404 });
+  if (lectura.estado === "no-existe") return NextResponse.json({ error: "Esa preventa no existe." }, { status: 404 });
   return NextResponse.json({ exploracion: await paraLaPantallaCompleta(lectura.fila) });
 }
 
@@ -58,12 +58,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const r = await aplicarCambios(id, cuerpo.data.version, cuerpo.data.operaciones as Operacion[], escala.general);
   switch (r.estado) {
     case "no-existe":
-      return NextResponse.json({ error: "Esa exploración no existe." }, { status: 404 });
+      return NextResponse.json({ error: "Esa preventa no existe." }, { status: 404 });
     case "invalido":
       return NextResponse.json({ error: r.error }, { status: 400 });
     case "conflicto":
       return NextResponse.json(
-        { error: "La exploración cambió mientras la editabas (otra persona, o el agente al preparar). Se cargó lo último.", exploracion: paraLaPantalla(r.fila) },
+        { error: "La preventa cambió mientras la editabas (otra persona, o el agente al preparar). Se cargó lo último.", exploracion: paraLaPantalla(r.fila) },
         { status: 409 },
       );
     case "ok":

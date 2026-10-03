@@ -86,7 +86,7 @@ export default function ProjectContextSection({
           <span className="inline-flex items-center gap-1" title="Google Meet (alimentan)">{dot("#16a34a")}{meetCount}</span>
           <span className="inline-flex items-center gap-1" title="Fuentes manuales">{dot("#7c6df2")}{manualCount}</span>
           {exploracion && (
-            <span className="inline-flex items-center gap-1" title="Exploración de venta">{dot("#d97706")}{exploracionCount}</span>
+            <span className="inline-flex items-center gap-1" title="Preventa">{dot("#d97706")}{exploracionCount}</span>
           )}
         </span>
         <span className="ml-auto text-xs text-fg-muted">{open ? "Colapsar" : "Expandir"}</span>
@@ -131,7 +131,7 @@ export default function ProjectContextSection({
           </ContextColumn>
 
           {exploracion && (
-            <ContextColumn icon={CTX_ICONS.note} color="#d97706" title="Exploración de venta" count={exploracionCount}>
+            <ContextColumn icon={CTX_ICONS.note} color="#d97706" title="Preventa" count={exploracionCount}>
               <ExploracionDeVentaResumen datos={exploracion} />
             </ContextColumn>
           )}

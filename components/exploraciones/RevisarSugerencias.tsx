@@ -9,7 +9,7 @@
  * Se abre desde «Qué sigue» (a la derecha) y desde la franja de una pieza, ya filtrado a esa pieza.
  */
 import { useState, type KeyboardEvent } from "react";
-import { Button, ConfirmDialog, Drawer, IconButton, Tabs } from "@/components/ui";
+import { Button, ConfirmDialog, Drawer, IconButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { definicionDe } from "@/lib/exploraciones/casillas";
 import type { CasoDeUsoElegido, EstimadoGuardado, ItemPropuesto } from "@/lib/exploraciones/contenido";
@@ -17,6 +17,7 @@ import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import { NOMBRE_DEL_PASO, ORDEN_DE_PIEZAS, piezaDelDestino } from "./piezas";
 import { DeDondeSale, describirPropuesta, origenEnUnaLinea } from "./Propuestas";
 import { NivelChip } from "./QueVaPrimero";
+import Segmentos from "./Segmentos";
 
 type Filtro = "todo" | PasoDelLienzoUI;
 
@@ -167,16 +168,14 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
       <div className="-mx-5 -my-4 outline-none" tabIndex={0} onKeyDown={alTeclear} aria-label="Sugerencias del agente; U usa, D descarta, flechas para moverse">
         {porPieza.length > 1 && (
           <div className="px-5 py-3">
-            <Tabs<Filtro>
-              aria-label="Filtrar por pieza"
-              variant="pill"
-              size="sm"
-              value={filtro}
-              onChange={(f) => {
+            <Segmentos<Filtro>
+              etiqueta="Filtrar por pieza"
+              valor={filtro}
+              onCambiar={(f) => {
                 setFiltro(f);
                 setFoco(0);
               }}
-              items={[{ key: "todo", label: "Todo", count: total }, ...porPieza.map((p) => ({ key: p.paso, label: NOMBRE_DEL_PASO[p.paso], count: p.cuantas }))]}
+              opciones={[{ clave: "todo", nombre: "Todo", cuenta: total }, ...porPieza.map((p) => ({ clave: p.paso, nombre: NOMBRE_DEL_PASO[p.paso], cuenta: p.cuantas }))]}
             />
           </div>
         )}

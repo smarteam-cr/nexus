@@ -17,6 +17,7 @@ import { CASILLAS_DEL_RESUMEN, definicionDe, ETIQUETA_DE_LA_OBJECION, type Objec
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
 import { LETRA_DEL_MARCO, lineasDe } from "./Resumen";
+import { IconoDeSugerencia } from "./FranjaDeSugerencias";
 
 function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -48,7 +49,7 @@ function Arquitectura() {
               onClick={() => abrirCasilla(clave)}
               title={`${etiqueta}: ${lleno ? "confirmado" : propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente` : "falta"}`}
               className={cn(
-                "flex h-[46px] flex-col items-center justify-center rounded-lg border text-xs font-bold transition-colors",
+                "relative flex h-[46px] flex-col items-center justify-center rounded-lg border text-xs font-bold transition-colors",
                 lleno
                   ? "border-transparent bg-success-surface text-success-ink"
                   : propuestas > 0
@@ -56,6 +57,7 @@ function Arquitectura() {
                     : "border-dashed border-line text-fg-muted hover:bg-surface-hover",
               )}
             >
+              {!lleno && propuestas > 0 && <IconoDeSugerencia className="absolute right-[3px] top-[3px] h-3 w-3" />}
               {LETRA_DEL_MARCO[clave].letra}
               <span className="w-full truncate px-1 text-center text-[10px] font-medium leading-tight">{etiqueta}</span>
             </button>

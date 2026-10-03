@@ -69,7 +69,7 @@ export async function crearDocumento(o: {
 }): Promise<ResultadoDelDocumento> {
   if (!documentosDisponibles()) return { ok: false, status: 503, error: `Falta aplicar ${SQL_DE_DOCUMENTOS} y reiniciar.` };
   const cuantos = await prisma.exploracionDocumento.count({ where: { exploracionId: o.exploracionId } });
-  if (cuantos >= MAX_DOCUMENTOS) return { ok: false, status: 409, error: `Esta exploración ya tiene ${MAX_DOCUMENTOS} documentos: quita alguno antes de sumar otro.` };
+  if (cuantos >= MAX_DOCUMENTOS) return { ok: false, status: 409, error: `Esta preventa ya tiene ${MAX_DOCUMENTOS} documentos: quita alguno antes de sumar otro.` };
   const creado = await prisma.exploracionDocumento.create({
     data: {
       exploracionId: o.exploracionId,

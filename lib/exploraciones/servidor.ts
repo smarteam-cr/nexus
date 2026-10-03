@@ -14,12 +14,13 @@ import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import type { Cierre, Despues, Escala } from "@/lib/escala/documento/tipos";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { prisma } from "@/lib/db/prisma";
-import { listaParaProponer, queSigue, type PuntoDeCalidad } from "./calidad";
+import { cuantasParaRevisar, listaParaProponer, queSigue, type PuntoDeCalidad } from "./calidad";
 import { aplicarOperaciones, cambioLoConfirmado, type EstadoDeExploracion, type Operacion, type Validez } from "./contenido";
 import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
 import type { DocumentoDeLaLista } from "./documentos";
-import type { ReunionDeLaExploracion } from "./guia";
+import { proximaReunion, type ReunionDeLaExploracion } from "./guia";
+import { hoyEnCostaRica } from "./fechas";
 import type { ReunionSinLeer } from "./lectura";
 import { chequeoConfirmado } from "./mapa";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
@@ -129,6 +130,12 @@ export interface FilaDeLaLista {
   cumplidos: number;
   total: number;
   responsableEmail: string | null;
+  /** El nombre de quien la lleva, si es del equipo (para las iniciales de la lista). */
+  responsableNombre: string | null;
+  /** Lo que el agente sugirió y espera que alguien lo use o lo descarte. */
+  sugeridas: number;
+  /** La fecha de la próxima reunión: la próxima sesión planeada o, si no hay, la agenda de HubSpot. */
+  proximaReunion: string | null;
   actualizadaEn: string;
 }
 
@@ -148,6 +155,12 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
     if (esquemaDesactualizado(e)) return { estado: "sin-tablas" };
     throw e;
   }
+  const correos = [...new Set(filas.map((f) => f.responsableEmail).filter((c): c is string => !!c))];
+  const equipo = correos.length
+    ? await prisma.teamMember.findMany({ where: { email: { in: correos } }, select: { email: true, name: true } })
+    : [];
+  const nombreDe = new Map(equipo.map((m) => [m.email.toLowerCase(), m.name]));
+  const hoy = hoyEnCostaRica();
   return {
     estado: "ok",
     filas: filas.map((f) => {
@@ -171,6 +184,14 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
         cumplidos: puntos.filter((p) => p.cumplido).length,
         total: puntos.length,
         responsableEmail: f.responsableEmail,
+        responsableNombre: f.responsableEmail ? (nombreDe.get(f.responsableEmail.toLowerCase()) ?? null) : null,
+        sugeridas: cuantasParaRevisar(estado),
+        proximaReunion: proximaReunion(
+          estado.contenido.sesiones,
+          loQueVieneDeLaAgenda(leerLoLeido(f.test)).agenda,
+          hoy,
+          estado.propuesta.leidas.sesiones.length,
+        ).fecha,
         actualizadaEn: f.updatedAt.toISOString(),
       };
     }),
@@ -214,7 +235,7 @@ export async function aplicarCambios(
     const fila = await tx.exploracionDeVenta.findUnique({ where: { id }, select: SELECT_FILA });
     if (!fila) return { estado: "no-existe" } as const;
     // Archivada es de solo lectura: la pantalla ya no deja editar, y la API tampoco.
-    if (fila.archivadaEn) return { estado: "invalido", error: "La exploración está archivada: ya no se puede cambiar." } as const;
+    if (fila.archivadaEn) return { estado: "invalido", error: "La preventa está archivada: ya no se puede cambiar." } as const;
 
     const antes = estadoDesdeFila(fila);
     // Los ids se validan contra la escala con la edición que la exploración tiene AHORA. Los ids de

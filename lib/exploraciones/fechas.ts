@@ -49,3 +49,23 @@ export function diaYHora(v: string | number | Date): string {
 export function hoyEnCostaRica(ahora = new Date()): string {
   return ahora.toLocaleDateString("en-CA", { timeZone: ZONA_DE_LA_EXPLORACION });
 }
+
+/** «jue 8 oct»: la próxima reunión en el listado de preventas. */
+export function diaConSemana(v: string | number | Date): string {
+  return conEspaciosComunes(
+    aFecha(v)
+      .toLocaleDateString("es-CR", { weekday: "short", day: "numeric", month: "short", timeZone: ZONA_DE_LA_EXPLORACION })
+      .replace(/\./g, "")
+      .replace(",", ""),
+  );
+}
+
+/** «hoy», «ayer», «hace 3 días» hasta una semana; después, la fecha («28 sept»). */
+export function haceCuanto(v: string | number | Date, ahora = new Date()): string {
+  const dia = (d: Date) => Date.parse(`${d.toLocaleDateString("en-CA", { timeZone: ZONA_DE_LA_EXPLORACION })}T12:00:00Z`);
+  const dias = Math.round((dia(ahora) - dia(aFecha(v))) / 86_400_000);
+  if (dias <= 0) return "hoy";
+  if (dias === 1) return "ayer";
+  if (dias <= 7) return `hace ${dias} días`;
+  return diaCorto(v);
+}

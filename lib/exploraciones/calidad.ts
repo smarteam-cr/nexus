@@ -58,6 +58,11 @@ export function listaParaProponer(estado: EstadoDeExploracion, chequeo: Resultad
  */
 export type PasoDeQueSigue = "preparacion" | "exploracion" | "escala" | "casos";
 
+/** Cuántas cosas sugeridas por el agente esperan que alguien las use o las descarte (las hipótesis de nivel no: son el mapa). */
+export function cuantasParaRevisar(estado: EstadoDeExploracion): number {
+  return propuestaVigente(estado).filter((it) => !esHipotesisDeNivel(it)).length;
+}
+
 /**
  * Una sola indicación de qué hacer ahora: la primera cosa que falta, en el orden del proceso, con el
  * paso donde se hace. Una reunión sin leer va antes que lo propuesto: lo nuevo de esa reunión puede
@@ -69,7 +74,7 @@ export function queSigueConPaso(
   chequeo: ResultadoDelChequeo,
   sinLeer: readonly ReunionSinLeer[] = [],
 ): { texto: string; paso: PasoDeQueSigue | null } {
-  const revisables = propuestaVigente(estado).filter((it) => !esHipotesisDeNivel(it)).length;
+  const revisables = cuantasParaRevisar(estado);
   if (!estado.perfilCierre || !estado.perfilDespues) {
     return { texto: "Revisa la escala y el perfil de negocio: hacen falta antes de medir.", paso: "escala" };
   }

@@ -68,10 +68,10 @@ export function ExploracionDeVentaResumen({ datos }: { datos: ResumenDeLaExplora
         Entra al handoff como <span className="font-medium text-fg-secondary">estimado</span>: dice dónde mirar, no es evidencia. Lo marcado «solo interno» no entra: queda acá.
         {datos.edicion ? ` Edición de la escala: ${datos.edicion}.` : ""}
       </p>
-      <ContextColumnList empty="La exploración todavía no tiene nada confirmado.">{filas}</ContextColumnList>
+      <ContextColumnList empty="La preventa todavía no tiene nada confirmado.">{filas}</ContextColumnList>
       {datos.puedeAbrir && (
         <Link href={`/sales/exploraciones/${datos.id}`} className="block text-[11px] font-semibold text-brand hover:text-brand-dark">
-          Abrir la exploración
+          Abrir la preventa
         </Link>
       )}
     </div>

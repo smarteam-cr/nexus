@@ -25,7 +25,7 @@ import { paraLaPantallaCompleta } from "@/lib/exploraciones/pantalla";
 
 export const dynamic = "force-dynamic";
 
-const VOLVER = { href: "/sales/exploraciones", etiqueta: "Exploraciones" };
+const VOLVER = { href: "/sales/exploraciones", etiqueta: "Preventa" };
 
 /** Los chips de la cabecera, como en el tablero: píldoras blancas con borde, de 12 px. */
 const CLASE_DE_CHIP = "inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-[3px] text-xs font-medium text-fg-secondary";
@@ -80,7 +80,7 @@ export default async function ExploracionPage({
         titulo={exp.empresa.nombre}
         chips={
           <>
-            {edicion && <Chip title="La escala con la que se mide esta exploración">{edicion}</Chip>}
+            {edicion && <Chip title="La escala con la que se mide esta preventa">{edicion}</Chip>}
             {areas.length > 0 && <Chip title="Las áreas en juego">{areas.join(" · ")}</Chip>}
             {exp.estado.archivada && <Chip>Archivada</Chip>}
           </>

@@ -22,7 +22,7 @@ import { Alert, Badge, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { esCasoLibre, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useLienzo } from "./contexto";
-import FranjaDeSugerencias, { BotonAzul, BotonBlanco, BotonTexto } from "./FranjaDeSugerencias";
+import FranjaDeSugerencias, { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
 
 /** Las exploraciones en las que esta pestaña ya lanzó la primera tanda (un montaje doble no lanza dos). */
@@ -86,7 +86,10 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
     <li className="flex flex-col rounded-xl border border-info-line bg-surface">
       <div className="flex flex-col gap-1.5 px-4 pb-3 pt-3.5">
         <p className="flex items-center gap-1.5">
-          <span className="rounded-full border border-info-line bg-info-surface px-2 py-0.5 text-[11px] font-semibold leading-none text-brand">Sugerido</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-info-line bg-info-surface py-0.5 pl-1.5 pr-2 text-[11px] font-semibold leading-none text-brand">
+            <IconoDeSugerencia className="h-[13px] w-[13px]" />
+            Sugerido
+          </span>
           {area && <span className="text-xs text-fg-muted">{area}</span>}
         </p>
         <h3 className="text-[15px] font-semibold leading-[1.35] text-fg">{caso.titulo}</h3>

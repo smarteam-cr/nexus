@@ -78,10 +78,10 @@ export const DIAS_DE_LECTURA_AUTOMATICA = 180;
 export type ModoDelAgente = ModoDeLaCorrida;
 
 const ETIQUETA: Record<ModoDelAgente, string> = {
-  preparar: "Exploración de venta: preparar",
-  leer: "Exploración de venta: leer la reunión",
-  casos: "Exploración de venta: proponer casos de uso",
-  guia: "Exploración de venta: armar la guía de la próxima reunión",
+  preparar: "Preventa: preparar",
+  leer: "Preventa: leer la reunión",
+  casos: "Preventa: proponer casos de uso",
+  guia: "Preventa: armar la guía de la próxima reunión",
 };
 
 /** Lo que una corrida leyó, para guardarlo con lo propuesto. */
@@ -120,7 +120,7 @@ export async function ultimaCorrida(exploracionId: string, clientId: string, db:
 export async function lanzarCorrida(exploracionId: string, modo: ModoDelAgente, opts: OpcionesDeLaCorrida): Promise<ResultadoDeLanzar> {
   const lectura = await leerExploracion(exploracionId);
   if (lectura.estado !== "ok") return { ok: false, status: lectura.estado === "no-existe" ? 404 : 503, error: "Esa exploración no existe." };
-  if (lectura.fila.archivadaEn) return { ok: false, status: 409, error: "La exploración está archivada: el agente ya no trabaja en ella." };
+  if (lectura.fila.archivadaEn) return { ok: false, status: 409, error: "La preventa está archivada: el agente ya no trabaja en ella." };
   const clientId = lectura.fila.clientId;
 
   /* Una corrida a la vez, y la revisión con el alta en la MISMA transacción, con la fila bloqueada:
@@ -167,7 +167,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     const escalaVig = await escalaParaExplorar();
     if (escalaVig.estado !== "ok") throw new FalloDeLaExploracion("La escala no está publicada en Nexus: sin ella el agente no puede proponer niveles.");
     const lectura = await leerExploracion(exploracionId);
-    if (lectura.estado !== "ok") throw new FalloDeLaExploracion("La exploración ya no existe.");
+    if (lectura.estado !== "ok") throw new FalloDeLaExploracion("La preventa ya no existe.");
     const fila = lectura.fila;
     let estado = estadoDesdeFila(fila);
     let escala = escalaDeLaExploracion(escalaVig.general, estado);
@@ -547,7 +547,7 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
   const escalaVig = await escalaParaExplorar();
   if (escalaVig.estado !== "ok") throw new FalloDeLaExploracion("La escala no está publicada en Nexus.");
   const lectura = await leerExploracion(exploracionId);
-  if (lectura.estado !== "ok") throw new FalloDeLaExploracion("La exploración ya no existe.");
+  if (lectura.estado !== "ok") throw new FalloDeLaExploracion("La preventa ya no existe.");
   const fila = lectura.fila;
   const estado = estadoDesdeFila(fila);
   const escala = escalaDeLaExploracion(escalaVig.general, estado);

@@ -27,7 +27,7 @@ import {
 import type { ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { cn } from "@/lib/cn";
 import { Casilla } from "./Casilla";
-import FranjaDeSugerencias, { BotonAzul, BotonBlanco } from "./FranjaDeSugerencias";
+import FranjaDeSugerencias, { BotonAzul, BotonBlanco, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { describirPropuesta } from "./Propuestas";
 import { useLienzo } from "./contexto";
 
@@ -69,7 +69,8 @@ export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
 /** La pastilla azul que cuenta lo sugerido. */
 function Sugeridas({ n, mas }: { n: number; mas: boolean }) {
   return (
-    <span className="flex-shrink-0 rounded-full border border-info-line bg-info-surface px-[7px] py-px text-[11px] font-semibold text-brand">
+    <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-info-line bg-info-surface py-px pl-1.5 pr-2 text-[11px] font-semibold text-brand">
+      <IconoDeSugerencia className="h-[13px] w-[13px]" />
       {mas ? "+" : ""}
       {n} {n === 1 ? "sugerida" : "sugeridas"}
     </span>

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * EmpresasDeHubspot — todas las empresas del HubSpot de Smarteam, para elegir con quién planificar.
+ * EmpresasDeHubspot — «Planificar con una empresa»: todas las empresas del HubSpot de Smarteam, para
+ * elegir con quién planificar una preventa.
  *
  * Son miles: se piden de a una página. Sin búsqueda, las de actividad de ventas más reciente; al
  * escribir, busca en HubSpot por nombre o dominio. Muestra VARIAS coincidencias para que el vendedor
@@ -11,8 +12,9 @@
  */
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Badge, Button, Input, Skeleton } from "@/components/ui";
+import { Alert, Skeleton } from "@/components/ui";
 import { diaCorto } from "@/lib/exploraciones/fechas";
+import { BotonBlanco } from "./FranjaDeSugerencias";
 
 interface Empresa {
   id: string;
@@ -92,37 +94,46 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!res.ok || !data.id) {
-        setError(data.error ?? "No se pudo abrir la exploración.");
+        setError(data.error ?? "No se pudo abrir la preventa.");
         return;
       }
       router.push(`/sales/exploraciones/${data.id}`);
     } catch {
-      setError("No se pudo abrir la exploración. Revisa tu conexión.");
+      setError("No se pudo abrir la preventa. Revisa tu conexión.");
     } finally {
       setAbriendo(null);
     }
   }
 
   return (
-    <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
+    <section id="planificar" className="scroll-mt-6 space-y-3 rounded-xl border border-line bg-surface p-5">
       <div>
-        <h2 className="text-sm font-semibold text-fg">Todas las empresas</h2>
-        <p className="text-xs text-fg-muted">
-          Las del HubSpot de Smarteam. Busca por nombre o dominio y elige con quién planificar; sin búsqueda, ves las de actividad más reciente.
-        </p>
+        <h2 className="text-sm font-semibold text-fg">Planificar con una empresa</h2>
+        <p className="text-xs text-fg-muted">Las del HubSpot de Smarteam. Busca por nombre o dominio; sin búsqueda, ves las de actividad más reciente.</p>
       </div>
-      <Input
-        value={q}
-        onChange={(ev) => setQ(ev.target.value)}
-        placeholder="Busca una empresa: acme o acme.com"
-        aria-label="Buscar una empresa en HubSpot por nombre o dominio"
-      />
+      <label className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-[9px] text-fg-muted focus-within:border-brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 flex-shrink-0" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M20 20l-3.5-3.5" />
+        </svg>
+        <input
+          id="buscar-empresa"
+          value={q}
+          onChange={(ev) => setQ(ev.target.value)}
+          placeholder="Busca una empresa: acme o acme.com"
+          aria-label="Buscar una empresa en HubSpot por nombre o dominio"
+          className="min-w-0 flex-1 border-0 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted"
+        />
+      </label>
       {error && <Alert variant="danger">{error}</Alert>}
 
       {empresas === null && cargando ? (
-        <div className="space-y-2" aria-hidden>
+        <div className="divide-y divide-line rounded-lg border border-line" aria-hidden>
           {[0, 1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-10 w-full" />
+            <div key={i} className="space-y-1.5 px-3 py-2.5">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-3 w-72" />
+            </div>
           ))}
         </div>
       ) : empresas && empresas.length === 0 && !cargando ? (
@@ -130,7 +141,7 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
       ) : (
         <ul className="divide-y divide-line rounded-lg border border-line">
           {(empresas ?? []).map((e) => (
-            <li key={e.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+            <li key={e.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-fg">{e.nombre}</p>
                 <p className="truncate text-xs text-fg-muted">
@@ -140,19 +151,15 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
               </div>
               <div className="flex flex-shrink-0 items-center gap-2">
                 {e.esCliente && (
-                  <Badge size="xs" variant="default">
-                    Cliente
-                  </Badge>
+                  <span className="rounded-full border border-line bg-surface-hover px-2 py-px text-[11px] font-medium text-fg-secondary">Cliente</span>
                 )}
                 {e.exploracionId ? (
-                  <Button size="sm" variant="secondary" onClick={() => void abrir(e)}>
-                    Abrir exploración
-                  </Button>
+                  <BotonBlanco onClick={() => void abrir(e)}>Abrir preventa</BotonBlanco>
                 ) : (
                   puedeEditar && (
-                    <Button size="sm" variant="secondary" loading={abriendo === e.id} disabled={abriendo !== null} onClick={() => void abrir(e)}>
-                      Planificar
-                    </Button>
+                    <BotonBlanco disabled={abriendo !== null} onClick={() => void abrir(e)}>
+                      {abriendo === e.id ? "Abriendo…" : "Planificar"}
+                    </BotonBlanco>
                   )
                 )}
               </div>
@@ -163,9 +170,14 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
 
       {siguiente && empresas && empresas.length > 0 && (
         <div className="flex justify-center">
-          <Button size="sm" variant="secondary" loading={cargando} onClick={() => void traer(siguiente, pedido.current)}>
-            Ver más
-          </Button>
+          <button
+            type="button"
+            disabled={cargando}
+            onClick={() => void traer(siguiente, pedido.current)}
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+          >
+            {cargando ? "Cargando…" : "Ver más"}
+          </button>
         </div>
       )}
     </section>
