@@ -278,6 +278,19 @@ describe("las operaciones", () => {
     expect(perfil.ok && perfil.estado.contenido.edicionElegida).toEqual({ por: "vendedor" });
   });
 
+  it("elegir otra escala guarda la sugerida, y «Restablecer» vuelve a ella y se la devuelve al agente", () => {
+    const sugerida = { edicion: "banca", cierre: "mixta" as const, despues: "continua" as const, por: "agente" as const, razon: "Es una financiera." };
+    const inicial = estado({ edicion: "banca", contenido: { ...contenidoVacio(), edicionElegida: { por: "agente", razon: "Es una financiera.", sugerida } } });
+    const cambiada = aplicarOperaciones(inicial, [{ op: "edicion", edicion: "ecommerce-retail" }], VALIDEZ);
+    if (!cambiada.ok) throw new Error("no cambió");
+    expect(cambiada.estado.contenido.edicionElegida).toEqual({ por: "vendedor", sugerida });
+    expect(industriaDelVendedor(cambiada.estado)).toBe(true);
+    const vuelta = aplicarOperaciones(cambiada.estado, [{ op: "restablecerEscala", sugerida }], VALIDEZ);
+    expect(vuelta.ok && [vuelta.estado.edicion, vuelta.estado.perfilCierre, vuelta.estado.perfilDespues]).toEqual(["banca", "mixta", "continua"]);
+    expect(vuelta.ok && industriaDelVendedor(vuelta.estado)).toBe(false);
+    expect(aplicarOperaciones(inicial, [{ op: "restablecerEscala", sugerida: { ...sugerida, edicion: "salud" } }], VALIDEZ).ok).toBe(false);
+  });
+
   it("la industria es del vendedor si la eligió él, o si ya estaba puesta antes de que se anotara quién", () => {
     expect(industriaDelVendedor(estado({ edicion: "banca", contenido: { ...contenidoVacio(), edicionElegida: { por: "agente" } } }))).toBe(false);
     expect(industriaDelVendedor(estado({ edicion: "banca", contenido: { ...contenidoVacio(), edicionElegida: { por: "vendedor" } } }))).toBe(true);

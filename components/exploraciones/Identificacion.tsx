@@ -12,8 +12,8 @@
 import { useState } from "react";
 import { Badge, Button, Input, Segmentado, Select } from "@/components/ui";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
-import { industriaDelVendedor, normalizarTexto } from "@/lib/exploraciones/contenido";
-import { industriaLegible } from "@/lib/exploraciones/industria";
+import { industriaDelVendedor, normalizarTexto, type EscalaSugerida } from "@/lib/exploraciones/contenido";
+import { industriaLegible, sugerirEdicion } from "@/lib/exploraciones/industria";
 import { useLienzo } from "./contexto";
 import { Propuestas } from "./Propuestas";
 
@@ -45,6 +45,35 @@ export function IndustriaYPerfil() {
   const opcionesCierre = CIERRES.map((c) => ({ clave: c, etiqueta: NOMBRE_DEL_CIERRE[c], title: definicion(escala.perfil.cierre, c) }));
   const opcionesDespues = DESPUES.map((d) => ({ clave: d, etiqueta: NOMBRE_DEL_DESPUES[d], title: definicion(escala.perfil.despues, d) }));
 
+  /* La sugerida: la que guardó la exploración (la industria de HubSpot al abrirla, o el agente al
+     preparar) o, si es vieja y no la tiene, la que dice la industria de HubSpot. */
+  const sugerida: EscalaSugerida | null =
+    elegida?.sugerida ??
+    (() => {
+      const slug = sugerirEdicion(exp.empresa.industria, escala.ediciones.map((x) => x.slug));
+      const ed = slug ? escala.ediciones.find((x) => x.slug === slug) : null;
+      return ed
+        ? {
+            edicion: ed.slug,
+            cierre: ed.perfilHabitual?.cierre ?? null,
+            despues: ed.perfilHabitual?.despues ?? null,
+            por: "industria" as const,
+            razon: `La industria de la empresa en HubSpot es «${industriaLegible(exp.empresa.industria)}».`,
+          }
+        : null;
+    })();
+  const distintaDeLaSugerida =
+    !!sugerida && industriaDelVendedor(e) && (sugerida.edicion !== e.edicion || sugerida.cierre !== e.perfilCierre || sugerida.despues !== e.perfilDespues);
+  const nombreDeLaSugerida = sugerida
+    ? [
+        sugerida.edicion ? (escala.ediciones.find((x) => x.slug === sugerida.edicion)?.nombre ?? sugerida.edicion) : "Escala general",
+        sugerida.cierre && NOMBRE_DEL_CIERRE[sugerida.cierre].toLowerCase(),
+        sugerida.despues && NOMBRE_DEL_DESPUES[sugerida.despues].toLowerCase(),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
   const quien =
     industriaDelVendedor(e)
       ? { insignia: "La elegiste tú", texto: "El agente ya no la cambia." }
@@ -56,8 +85,8 @@ export function IndustriaYPerfil() {
 
   return (
     <Tarjeta
-      titulo="Industria y perfil de negocio"
-      ayuda="Con qué edición de la escala se mide y cómo vende la empresa. Se eligen solos con lo que hay en HubSpot; cámbialos si no calzan."
+      titulo="Escala"
+      ayuda="Con qué edición de la escala se mide y cómo vende la empresa. Se sugieren solas con lo que hay de la empresa; cámbialas si no calzan."
     >
       <div className="space-y-5">
         <div className="space-y-1.5">
@@ -85,6 +114,24 @@ export function IndustriaYPerfil() {
             )}
             <span>{quien.texto}</span>
           </p>
+          {distintaDeLaSugerida && sugerida && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
+              <p className="min-w-0 text-xs text-fg-secondary">
+                La sugerida es <span className="font-medium text-fg">{nombreDeLaSugerida}</span>
+                {sugerida.razon ? `: ${sugerida.razon}` : "."}
+              </p>
+              {puedeEditar && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={guardando}
+                  onClick={() => void cambiar([{ op: "restablecerEscala", sugerida }], { refrescar: true })}
+                >
+                  Restablecer la sugerida
+                </Button>
+              )}
+            </div>
+          )}
           {edicion?.descripcion && <p className="text-xs text-fg-muted">{edicion.descripcion}</p>}
           {exp.empresa.industria && <p className="text-2xs text-fg-muted">En HubSpot: {industriaLegible(exp.empresa.industria)}</p>}
         </div>

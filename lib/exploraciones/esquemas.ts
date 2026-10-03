@@ -225,9 +225,18 @@ export const CasoDeUsoElegidoSchema: z.ZodType<CasoDeUsoElegido> = z.object({
   dimensiones: z.array(ID_DIMENSION).max(8).optional(),
 });
 
+const EscalaSugeridaSchema = z.object({
+  edicion: z.string().max(60).nullable(),
+  cierre: ENUM_CIERRE.nullable(),
+  despues: ENUM_DESPUES.nullable(),
+  por: z.enum(["industria", "agente"]),
+  razon: texto(300).optional(),
+});
+
 const EdicionElegidaSchema: z.ZodType<EdicionElegida> = z.object({
   por: z.enum(["industria", "agente", "vendedor"]),
   razon: texto(300).optional(),
+  sugerida: EscalaSugeridaSchema.optional(),
 });
 
 const AreaPropuestaSchema = z.object({ razon: texto(300).optional() });
@@ -293,6 +302,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("areas"), areas: z.array(ID_AREA).max(3), razones: z.record(z.string(), texto(300)).optional() }),
   z.object({ op: z.literal("perfil"), cierre: ENUM_CIERRE.nullable(), despues: ENUM_DESPUES.nullable() }),
   z.object({ op: z.literal("edicion"), edicion: z.string().max(60).nullable() }),
+  z.object({ op: z.literal("restablecerEscala"), sugerida: EscalaSugeridaSchema }),
   z.object({ op: z.literal("nota"), paso: z.string().min(1).max(40), texto: z.string().max(4000) }),
   z.object({ op: z.literal("sesiones"), sesiones: z.array(SesionPlaneadaSchema).max(MAX_SESIONES) }),
   z.object({ op: z.literal("medicion"), medicion: MedicionSchema }),

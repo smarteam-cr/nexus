@@ -5,7 +5,7 @@
  *
  * Desde el 2026-10-02 (pedido de Elías) con quién se habla y cómo conectar viven en Preparación, y
  * esta pieza queda para las reuniones. De arriba abajo: la sesión nueva que llegó (o la última que
- * se leyó), las sesiones que planea el vendedor, la guía de la PRÓXIMA, lo que suma a mano, lo demás
+ * se leyó), la escala y las áreas en juego (vuelven acá el 2026-10-03), las sesiones que planea el vendedor, la guía de la PRÓXIMA, lo que suma a mano, lo demás
  * que sale de las reuniones (el siguiente paso, el portal, lo que nadie exploró), los datos de la
  * medición y, plegado al final, el historial del agente. Lo que respondió el cliente en el marco de
  * calificación vive en el Resumen.
@@ -16,6 +16,7 @@ import type { Medicion } from "@/lib/exploraciones/contenido";
 import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
 import GuiaDeLaProxima from "./GuiaDeLaProxima";
+import { AreasEnJuego, IndustriaYPerfil } from "./Identificacion";
 import { HistorialDelAgente } from "./PanelDelAgente";
 import SesionNueva from "./SesionNueva";
 import Sesiones from "./Sesiones";
@@ -85,6 +86,13 @@ export default function PasoExploracion() {
   return (
     <div className="space-y-8">
       <SesionNueva />
+
+      <Seccion titulo="Con qué se mide" ayuda="La escala con que se mide la empresa y las áreas en juego. Se sugieren solas; cámbialas si no calzan.">
+        <div className="grid items-start gap-4 xl:grid-cols-2">
+          <IndustriaYPerfil />
+          <AreasEnJuego />
+        </div>
+      </Seccion>
 
       <Sesiones />
       <GuiaDeLaProxima />

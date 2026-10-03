@@ -423,7 +423,10 @@ async function armarLoQueVaSolo(
   opts: OpcionesDeLaCorrida,
 ): Promise<EstadoDeExploracion | null> {
   let industria: Awaited<ReturnType<typeof leerLaIndustria>> = null;
-  if (!industriaDelVendedor(ex.estado) && ex.general.ediciones.length > 0) {
+  /* Se pregunta mientras el vendedor no la haya elegido, o si la eligió pero todavía no hay una
+     sugerida a la que pueda volver con «Restablecer». */
+  const sinSugerida = !ex.estado.contenido.edicionElegida?.sugerida;
+  if ((!industriaDelVendedor(ex.estado) || sinSugerida) && ex.general.ediciones.length > 0) {
     await fase(runId, "Eligiendo la industria…");
     const pregunta = (p: EscalaDelLienzo["perfil"]["cierre"]) => (p ? `${p.pregunta}: ${p.opciones.map((o) => `${o.nombre} (${o.definicion})`).join("; ")}` : null);
     const ctx = {
@@ -458,14 +461,24 @@ async function armarLoQueVaSolo(
   return escribirLoQueVaSolo(exploracionId, (actual) => {
     let e = actual;
     // Se vuelve a mirar con la fila bloqueada: si el vendedor eligió mientras tanto, manda lo suyo.
-    if (industria && !industriaDelVendedor(e)) {
+    if (industria) {
       const perfil = industria.edicion ? habituales[industria.edicion] : industria.perfil;
-      e = {
-        ...e,
+      const sugerida = {
         edicion: industria.edicion,
-        ...(perfil ? { perfilCierre: perfil.cierre, perfilDespues: perfil.despues } : {}),
-        contenido: { ...e.contenido, edicionElegida: { por: "agente", razon: industria.razon } },
+        cierre: perfil?.cierre ?? null,
+        despues: perfil?.despues ?? null,
+        por: "agente" as const,
+        ...(industria.razon ? { razon: industria.razon } : {}),
       };
+      e = industriaDelVendedor(e)
+        ? // La eligió el vendedor: no se toca, pero queda la sugerida para poder volver a ella.
+          { ...e, contenido: { ...e.contenido, edicionElegida: { por: "vendedor", sugerida } } }
+        : {
+            ...e,
+            edicion: industria.edicion,
+            ...(perfil ? { perfilCierre: perfil.cierre, perfilDespues: perfil.despues } : {}),
+            contenido: { ...e.contenido, edicionElegida: { por: "agente", razon: industria.razon, sugerida } },
+          };
     }
     if (e.areas.length === 0 && areasDelTest.length > 0) {
       e = {

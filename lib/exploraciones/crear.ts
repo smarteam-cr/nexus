@@ -55,7 +55,12 @@ export async function crearExploracion(companyId: string, email: string): Promis
     const ed = slug ? escala.general.ediciones.find((e) => e.slug === slug) : null;
     if (ed) {
       edicion = { slug: ed.slug, perfil: ed.perfilHabitual };
-      contenido.edicionElegida = { por: "industria", razon: `La industria de la empresa en HubSpot es «${industriaLegible(empresa.industria)}».` };
+      const razon = `La industria de la empresa en HubSpot es «${industriaLegible(empresa.industria)}».`;
+      contenido.edicionElegida = {
+        por: "industria",
+        razon,
+        sugerida: { edicion: ed.slug, cierre: ed.perfilHabitual?.cierre ?? null, despues: ed.perfilHabitual?.despues ?? null, por: "industria", razon },
+      };
     }
   }
 

@@ -24,7 +24,7 @@ import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, NIVELES, 
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
 import { leerLaRadiografia, urlComparable } from "./radiografia-pedido";
-import { contactoPrincipal, rastroDe, senalesDe } from "./senales";
+import { contactoPrincipal, porQueAhoraSugerido, rastroDe, senalesDe } from "./senales";
 
 // ── Una escala de juguete: dos áreas, cuatro dimensiones cada una ─────────────────
 
@@ -667,5 +667,24 @@ describe("Preparación: la estrategia de conexión", () => {
     expect(r.items.map((i) => i.destino)).toEqual([{ tipo: "casilla", clave: "estrategiaDeConexion" }]);
     expect(r.items[0].valor).toEqual({ canal: "whatsapp", pitch: "Ordenar el seguimiento", mensaje: "Hola Ana, vi tu diagnóstico.", cta: "Agenda aquí" });
     expect(leerLaRespuesta(respuesta({ estrategiaDeConexion: estrategia }), ctx(), "run_1", AHORA).items).toEqual([]);
+  });
+});
+
+describe("Preparación: el «por qué ahora» sugerido con los hechos", () => {
+  const fecha = (iso: string) => iso.slice(0, 10);
+  it("dice qué hizo y de dónde llegó, en una frase; sin hechos, nada", () => {
+    expect(
+      porQueAhoraSugerido(
+        [
+          { que: "Hizo el diagnóstico de rendimiento", valor: "Ventas", fecha: "2026-09-23" },
+          { que: "Llegó por", valor: "Búsqueda en Google" },
+          { que: "Último formulario", valor: "Test diagnóstico de rendimiento", fecha: "2026-09-23T15:00:00Z" },
+          { que: "Páginas vistas en el sitio", valor: "12" },
+        ],
+        fecha,
+      ),
+    ).toBe("Llenó el formulario del diagnóstico de rendimiento de Ventas el 2026-09-23; llegó por búsqueda en Google, vio 12 páginas del sitio.");
+    expect(porQueAhoraSugerido([{ que: "Último formulario", valor: "Contacto", fecha: "2026-09-01" }], fecha)).toBe("Llenó el formulario «Contacto» el 2026-09-01.");
+    expect(porQueAhoraSugerido([], fecha)).toBeNull();
   });
 });

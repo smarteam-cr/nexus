@@ -125,3 +125,28 @@ export function senalesDe(c: ContactoConRastro | null, opts: { test?: { area: st
   if (r.agendo) salida.push({ que: "Agendó una reunión", valor: "con la herramienta de reuniones de HubSpot", fecha: r.agendo });
   return salida;
 }
+
+/**
+ * El «por qué ahora» que se puede decir solo con los hechos, sin el agente: lo que hizo y de dónde
+ * llegó, en una o dos frases. Es una sugerencia para usar con un clic mientras el agente prepara la
+ * suya (pedido de Elías, 2026-10-03: «que se genere solo»). `fecha` escribe las fechas.
+ */
+export function porQueAhoraSugerido(senales: readonly Senal[], fecha: (iso: string) => string): string | null {
+  const de = (que: string) => senales.find((s) => s.que === que);
+  const partes: string[] = [];
+  const test = de("Hizo el diagnóstico de rendimiento");
+  if (test) partes.push(`Llenó el formulario del diagnóstico de rendimiento de ${test.valor}${test.fecha ? ` el ${fecha(test.fecha)}` : ""}`);
+  const formulario = de("Último formulario");
+  if (formulario && !(test && /diagn/i.test(formulario.valor))) {
+    partes.push(`${partes.length ? "su último formulario fue" : "Llenó el formulario"} «${formulario.valor}»${formulario.fecha ? ` el ${fecha(formulario.fecha)}` : ""}`);
+  }
+  const origen = de("Llegó por");
+  if (origen) partes.push(`${partes.length ? "llegó por" : "Llegó por"} ${origen.valor.charAt(0).toLowerCase()}${origen.valor.slice(1)}`);
+  const visitas = de("Páginas vistas en el sitio");
+  if (visitas) partes.push(`vio ${visitas.valor} páginas del sitio`);
+  const agendo = de("Agendó una reunión");
+  if (agendo?.fecha) partes.push(`agendó una reunión el ${fecha(agendo.fecha)}`);
+  if (partes.length === 0) return null;
+  const [primera, ...resto] = partes;
+  return `${primera}${resto.length ? `; ${resto.join(", ")}` : ""}.`;
+}

@@ -4,9 +4,9 @@
  * PasoPreparacion — todo lo que hace falta ANTES de escribirle o llamarle (pedido de Elías,
  * 2026-10-02). Dos columnas:
  *
- *   - Identificación: el detonante (los hechos de HubSpot y el «por qué ahora» que interpreta el
- *     agente), el contacto, la radiografía de la empresa (su ficha de HubSpot y lo que el agente
- *     investigó en internet), la industria y el perfil, las áreas en juego y su HubSpot hoy.
+ *   - Identificación: el detonante (los hechos de HubSpot y el «por qué ahora»), el contacto, la
+ *     radiografía de la empresa (su ficha de HubSpot y lo que el agente investigó en internet) y su
+ *     HubSpot hoy. La escala y las áreas en juego viven en Exploración (Elías, 2026-10-03).
  *   - Conexión: cómo abrir la conversación, la hipótesis de valor y la estrategia de conexión (que
  *     queda plegada si ya agendó: no hace falta contactarlo).
  *
@@ -17,10 +17,9 @@ import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { diaConAnio, diaYHora } from "@/lib/exploraciones/fechas";
-import { contactoPrincipal, senalesDe, type ContactoConRastro } from "@/lib/exploraciones/senales";
+import { contactoPrincipal, porQueAhoraSugerido, senalesDe, type ContactoConRastro } from "@/lib/exploraciones/senales";
 import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
-import { AreasEnJuego, IndustriaYPerfil } from "./Identificacion";
 import { useCorrida } from "./useCorrida";
 
 interface DatosDePreparacion {
@@ -76,12 +75,30 @@ function Dato({ que, children }: { que: string; children: React.ReactNode }) {
   );
 }
 
+/**
+ * Desde cuándo «preparar» investiga en internet y propone el «por qué ahora», la radiografía, la
+ * hipótesis de valor y la estrategia de conexión. Una exploración que no se preparó desde entonces
+ * se prepara sola la primera vez que se abre la pieza (Elías, 2026-10-03: «todo de forma sugerida»).
+ */
+const PREPARAR_CON_RADIOGRAFIA_DESDE = "2026-10-02T00:00:00.000Z";
+
+/** Las exploraciones en las que esta pantalla ya lanzó la preparación sola (un montaje doble no lanza dos). */
+const yaPreparadasSolas = new Set<string>();
+
 /** Lo que hace el agente en esta pieza, con su estado. */
 function BarraDelAgente() {
   const { exp, puedeEditar } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const ultima = [...exp.estado.propuesta.corridas].reverse().find((c) => c.modo === "preparar");
   const trabajando = corriendo && corrida?.modo === "preparar";
+  const preparadaConRadiografia = !!ultima && ultima.en >= PREPARAR_CON_RADIOGRAFIA_DESDE;
+
+  // La primera vez, se prepara sola: lo de esta pieza llega sugerido sin que nadie lo pida.
+  useEffect(() => {
+    if (!puedeEditar || preparadaConRadiografia || corriendo || exp.estado.archivada || yaPreparadasSolas.has(exp.id)) return;
+    yaPreparadasSolas.add(exp.id);
+    void lanzar("preparar");
+  }, [puedeEditar, preparadaConRadiografia, corriendo, exp.estado.archivada, exp.id, lanzar]);
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/20 bg-brand/5 px-5 py-4">
       <div className="min-w-0 space-y-0.5">
@@ -109,12 +126,16 @@ function BarraDelAgente() {
 }
 
 function Detonante({ datos }: { datos: DatosDePreparacion | null }) {
-  const { escala } = useLienzo();
+  const { escala, exp, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
   const principal = datos ? (datos.contactos.find((c) => c.id === datos.principalId) ?? contactoPrincipal(datos.contactos)) : null;
   const test = datos?.tests[0];
   const senales = datos
     ? senalesDe(principal, { test: test ? { area: escala.areas.find((a) => a.id === test.areaId)?.nombre ?? "un área", fecha: test.fecha } : null })
     : [];
+  /* Mientras la casilla está vacía y el agente no propuso la suya, una sugerida con los hechos: se
+     usa con un clic. */
+  const vacia = exp.estado.contenido.casillas.detonante === undefined && pendientesPara((d) => d.tipo === "casilla" && d.clave === "detonante").length === 0;
+  const sugerencia = vacia ? porQueAhoraSugerido(senales, diaConAnio) : null;
   return (
     <Bloque titulo="Detonante" ayuda="Por qué hablar ahora: lo que hizo y de dónde llegó, según HubSpot.">
       {datos === null ? (
@@ -133,6 +154,19 @@ function Detonante({ datos }: { datos: DatosDePreparacion | null }) {
             </Dato>
           ))}
         </dl>
+      )}
+      {sugerencia && (
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-brand/25 bg-brand/5 px-4 py-3">
+          <div className="min-w-0 space-y-1">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-brand-light">Por qué ahora · sugerido con lo que dice HubSpot</p>
+            <p className="text-sm text-fg">{sugerencia}</p>
+          </div>
+          {puedeEditar && (
+            <Button size="sm" variant="primary" disabled={guardando} onClick={() => void cambiar([{ op: "casilla", clave: "detonante", valor: sugerencia }])}>
+              Usar
+            </Button>
+          )}
+        </div>
       )}
       <Casilla clave="detonante" className="rounded-none border-0 border-t border-line bg-transparent p-0 pt-4" />
     </Bloque>
@@ -322,8 +356,6 @@ export default function PasoPreparacion() {
           <Detonante datos={datos} />
           <Contacto datos={datos} />
           <RadiografiaDeLaEmpresa datos={datos} />
-          <IndustriaYPerfil />
-          <AreasEnJuego />
           <Casilla clave="hubspotActual" />
         </Columna>
         <Columna nombre="Conexión" pregunta="Qué le duele, qué le ofrecemos y cómo abrir la conversación.">

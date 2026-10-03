@@ -71,9 +71,9 @@ export function queSigueConPaso(
 ): { texto: string; paso: PasoDeQueSigue | null } {
   const revisables = propuestaVigente(estado).filter((it) => !esHipotesisDeNivel(it) && it.destino.tipo !== "casoDeUso").length;
   if (!estado.perfilCierre || !estado.perfilDespues) {
-    return { texto: "Revisa la industria y el perfil de negocio: la escala los pide antes de medir.", paso: "preparacion" };
+    return { texto: "Revisa la escala y el perfil de negocio: hacen falta antes de medir.", paso: "exploracion" };
   }
-  if (estado.areas.length === 0) return { texto: "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.", paso: "preparacion" };
+  if (estado.areas.length === 0) return { texto: "Elige las áreas en juego: la del test y las que el prospecto nombró o paga sin usar.", paso: "exploracion" };
   if (sinLeer.length === 1) {
     const r = sinLeer[0];
     const texto =

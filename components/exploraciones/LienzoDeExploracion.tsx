@@ -64,8 +64,8 @@ const esPieza = (x: string | null | undefined): x is PasoDelLienzoUI => !!x && x
 
 /**
  * En qué pieza se revisa lo que propuso el agente: cada casilla en la suya (`paso` en casillas.ts:
- * las del resumen se revisan en el Resumen y no cuentan en otra pieza), la industria, el perfil y
- * las áreas en Preparación, los niveles en la escala y los casos en Casos de uso.
+ * las del resumen se revisan en el Resumen y no cuentan en otra pieza), la escala, el perfil y las
+ * áreas en Exploración, los niveles en La escala y los casos en Casos de uso.
  */
 function piezaDelDestino(d: DestinoDePropuesta): PasoDelLienzoUI {
   switch (d.tipo) {
@@ -78,7 +78,7 @@ function piezaDelDestino(d: DestinoDePropuesta): PasoDelLienzoUI {
     case "casilla":
       return definicionDe(d.clave).paso;
     default:
-      return "preparacion";
+      return "exploracion";
   }
 }
 

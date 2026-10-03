@@ -30,7 +30,7 @@ function queAlimento(claves: readonly string[]): string {
   if (contar("falta:")) partes.push("lo que pide Funcional");
   if (contar("aExplorar:")) partes.push("las dimensiones a explorar");
   if (contar("area:")) partes.push("las áreas en juego");
-  if (claves.includes("edicion") || claves.includes("perfil")) partes.push("la industria y el perfil");
+  if (claves.includes("edicion") || claves.includes("perfil")) partes.push("la escala y el perfil");
   if (contar("casoDeUso:")) partes.push("los casos de uso");
   if (partes.length <= 1) return partes[0] ?? "";
   return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;

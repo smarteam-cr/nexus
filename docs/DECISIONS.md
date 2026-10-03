@@ -4307,6 +4307,16 @@ objeciones, y ver de un vistazo qué le falta para proponer.
 - **La estrategia de conexión no se arma si ya agendó** (decisión de Elías): con una reunión
   agendada, el agente no la propone y la pieza la muestra plegada con «Ya agendó: no hace falta
   contactarlo».
+- **Preparación se llena sola** (Elías, 2026-10-03: «que el agente lo genere, todo de forma
+  sugerida»). La primera vez que se abre la pieza en una exploración que no se preparó desde que
+  existe la radiografía, el agente prepara solo (unos US$0,27). Y mientras la casilla «Por qué ahora»
+  está vacía, se ofrece una sugerida armada solo con los hechos de HubSpot (`porQueAhoraSugerido`),
+  para usar con un clic sin esperar al agente.
+- **La escala y las áreas en juego vuelven a Exploración**, y «Industria y perfil» pasa a llamarse
+  «Escala». Cuando el vendedor elige otra, la sugerida (por la industria de HubSpot o por el agente)
+  queda guardada en `edicionElegida.sugerida` y «Restablecer la sugerida» vuelve a ella y se la
+  devuelve al agente. Las exploraciones viejas sin sugerida guardada usan la de la industria de
+  HubSpot; al preparar, el agente guarda la suya aunque el vendedor ya haya elegido.
 
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 

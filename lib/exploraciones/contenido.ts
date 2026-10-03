@@ -132,10 +132,24 @@ export const esCasoLibre = (useCaseId: string) => useCaseId.startsWith("ia-");
  * por el agente, que lee todo lo que hay de la empresa— hasta que el vendedor la cambia: desde ahí,
  * el agente ya no la toca.
  */
+/** La escala que se sugiere sola (por la industria de HubSpot o por el agente), para poder volver a ella. */
+export interface EscalaSugerida {
+  edicion: string | null;
+  cierre: Cierre | null;
+  despues: Despues | null;
+  por: "industria" | "agente";
+  razon?: string;
+}
+
 export interface EdicionElegida {
   por: "industria" | "agente" | "vendedor";
   /** Por qué esa, en una línea (la industria de HubSpot, lo que hace la empresa). */
   razon?: string;
+  /**
+   * La última sugerida, aunque el vendedor haya elegido otra: «Restablecer la sugerida» vuelve a ella
+   * (pedido de Elías, 2026-10-03).
+   */
+  sugerida?: EscalaSugerida;
 }
 
 /** La foto de «lista para proponer» en el momento de armar una propuesta (la lee la métrica). */
@@ -215,6 +229,12 @@ export function industriaDelVendedor(e: Pick<EstadoDeExploracion, "contenido" | 
 }
 
 // ── Lo que propone el agente ──────────────────────────────────────────────────
+
+/** El vendedor eligió la escala: desde ahora el agente no la cambia, pero la sugerida se guarda para poder volver. */
+function elegidaPorElVendedor(c: ContenidoDeExploracion): EdicionElegida {
+  const sugerida = c.edicionElegida?.sugerida;
+  return { por: "vendedor", ...(sugerida ? { sugerida } : {}) };
+}
 
 /** A dónde va lo propuesto. */
 export type DestinoDePropuesta =
@@ -590,6 +610,8 @@ export type Operacion =
   | { op: "areas"; areas: string[]; razones?: Record<string, string> }
   | { op: "perfil"; cierre: Cierre | null; despues: Despues | null }
   | { op: "edicion"; edicion: string | null }
+  /** Volver a la escala sugerida: el agente vuelve a poder cambiarla. */
+  | { op: "restablecerEscala"; sugerida: EscalaSugerida }
   | { op: "nota"; paso: string; texto: string }
   /** La lista entera de sesiones planeadas (agregar, fechar, marcar hecha o quitar). */
   | { op: "sesiones"; sesiones: SesionPlaneada[] }
@@ -691,7 +713,7 @@ function aplicarAlDestino(
           ...estado,
           edicion: slug,
           ...(habitual ? { perfilCierre: habitual.cierre, perfilDespues: habitual.despues } : {}),
-          contenido: { ...c, edicionElegida: { por: "vendedor" } },
+          contenido: { ...c, edicionElegida: elegidaPorElVendedor(c) },
         },
       };
     }
@@ -750,10 +772,24 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       // El vendedor tocó el perfil: desde ahora el agente ya no cambia ni la industria ni el perfil.
       return {
         ok: true,
-        estado: { ...estado, perfilCierre: op.cierre, perfilDespues: op.despues, contenido: { ...c, edicionElegida: { por: "vendedor" } } },
+        estado: { ...estado, perfilCierre: op.cierre, perfilDespues: op.despues, contenido: { ...c, edicionElegida: elegidaPorElVendedor(c) } },
       };
     case "edicion":
       return aplicarAlDestino(estado, { tipo: "edicion" }, { slug: op.edicion }, validez, validador);
+    case "restablecerEscala": {
+      const s = op.sugerida;
+      if (s.edicion !== null && !validez.ediciones.has(s.edicion)) return { ok: false, error: "Esa industria no tiene edición en la escala." };
+      return {
+        ok: true,
+        estado: {
+          ...estado,
+          edicion: s.edicion,
+          perfilCierre: s.cierre,
+          perfilDespues: s.despues,
+          contenido: { ...c, edicionElegida: { por: s.por, ...(s.razon ? { razon: s.razon } : {}), sugerida: s } },
+        },
+      };
+    }
     case "nota": {
       const notas = { ...c.notas };
       if (op.texto.trim()) notas[op.paso] = op.texto;
