@@ -54,6 +54,10 @@ SDK · HubSpot/Google Workspace/Apify (versiones exactas: ARCHITECTURE Parte 0 �
 - Vertical slices por módulo; validación con Zod en las fronteras; RBAC por capability
   (`lib/auth/roles.ts`, `guardCapability`). Detalle en @ARCHITECTURE.md.
 - Server Components por default; `"use client"` solo donde haga falta.
+- **Diseños de pantallas INTERNAS** («hazme un diseño», «rediséñala»): un artefacto de Claude Design
+  armado con el sistema «Nexus · interfaz interna» (https://claude.ai/artifact/6xEQp6LvjgRHURUWg3RP62:
+  leer su `project/README.md` y `project/tokens.json` antes). Al aplicarlo, medida por medida. Las
+  páginas que ve el cliente (kickoff, diagnóstico, propuesta, PDF) NO usan este sistema.
 - Commits: mensaje vía `-F archivo`, **sin BOM** y **sin "/" suelto** (un hook los rechaza).
 
 ## Flujo de trabajo
