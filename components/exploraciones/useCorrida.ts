@@ -88,14 +88,15 @@ export function useCorrida() {
     };
   }, [consultar, seguir]);
 
+  /** `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). */
   const lanzar = useCallback(
-    async (modo: ModoDeLaCorrida) => {
+    async (modo: ModoDeLaCorrida, opciones: { sesionId?: string } = {}) => {
       setLanzando(true);
       try {
         const res = await fetch(`/api/sales/exploraciones/${exp.id}/agente`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modo }),
+          body: JSON.stringify({ modo, ...(opciones.sesionId ? { sesionId: opciones.sesionId } : {}) }),
         });
         const data = (await res.json().catch(() => ({}))) as { error?: string; yaCorria?: boolean };
         if (!res.ok) {

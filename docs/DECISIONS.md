@@ -4317,6 +4317,18 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   queda guardada en `edicionElegida.sugerida` y «Restablecer la sugerida» vuelve a ella y se la
   devuelve al agente. Las exploraciones viejas sin sugerida guardada usan la de la industria de
   HubSpot; al preparar, el agente guarda la suya aunque el vendedor ya haya elegido.
+- **Exploración: una pestaña por sesión, con «Antes» y «Después»** (Elías, 2026-10-03). «Antes» es
+  la guía: las preguntas en dos columnas —«Arquitectura de la venta» (lo que falta del marco; la
+  pieza sigue llamándose Resumen) y «Escala de rendimiento»—, con las repreguntas a la vista en vez
+  del pliegue, y el manejo de objeciones aparte, abajo. «Después» es la reunión, lo que salió, «Lo
+  que se dijo y nadie exploró» (cada punto se lleva a la próxima sesión con un clic, con lo sugerido
+  por el agente a la vista) y «Armar la siguiente sesión». La escala, las áreas en juego y los datos
+  de la medición pasan a la pieza «La escala».
+- **La reunión se liga a su sesión por fecha, y se corrige a mano** (`SesionPlaneada.reunion`). Una
+  reunión que no quedó en ninguna sesión aparece como pestaña propia, para no perderla. La guía se
+  guarda por sesión (`propuesta.guias`), así el «antes» de una sesión que ya pasó muestra lo que se
+  preparó para ella; lo que se lleva a una sesión (`SesionPlaneada.explorar`) entra primero en su
+  guía. Sin SQL: todo vive en los Json de la exploración.
 
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 

@@ -577,20 +577,24 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
   );
   const guia = leerLaGuiaDelAgente(respuesta, ctx, runId, ahora);
   if (!guia) return 0;
-  await guardarGuia(exploracionId, guia, registrar ? { runId, automatica: opts.automatica === true } : null);
+  // Se guarda como la de su sesión, si la próxima está planeada: así su «antes» queda aunque pase.
+  await guardarGuia(exploracionId, guia, registrar ? { runId, automatica: opts.automatica === true } : null, ctx.proxima.sesionId ?? null);
   return guia.preguntas.length;
 }
 
 /** Guarda la guía con la fila bloqueada (solo la mitad del agente: lo confirmado no se toca). */
-async function guardarGuia(exploracionId: string, guia: GuiaDeLaSesion, corrida: { runId: string; automatica: boolean } | null) {
+async function guardarGuia(exploracionId: string, guia: GuiaDeLaSesion, corrida: { runId: string; automatica: boolean } | null, sesionId: string | null) {
   await prisma.$transaction(async (tx) => {
     await bloquearFila(tx, exploracionId);
     const fila = await tx.exploracionDeVenta.findUnique({ where: { id: exploracionId }, select: { propuesta: true } });
     if (!fila) return;
     const actual = leerPropuesta(fila.propuesta);
+    // Las de las últimas 12 sesiones: una por sesión, la nueva reemplaza a la vieja de la misma.
+    const guias = sesionId ? Object.fromEntries(Object.entries({ ...actual.guias, [sesionId]: guia }).slice(-12)) : actual.guias;
     const propuesta = {
       ...actual,
       guia,
+      guias,
       corridas: corrida
         ? [
             ...actual.corridas,

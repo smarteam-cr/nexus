@@ -107,12 +107,17 @@ describe("lo que la preparación deja hecho sola", () => {
     expect(fila.areas).toEqual(["1"]);
     expect(fila.version).toBe(1);
     const c = leerContenido(fila.contenido);
-    expect(c.edicionElegida).toEqual({ por: "agente", razon: "Es una financiera que coloca créditos a pymes." });
+    const razon = "Es una financiera que coloca créditos a pymes.";
+    expect(c.edicionElegida).toEqual({
+      por: "agente",
+      razon,
+      sugerida: { edicion: "banca", cierre: habitual?.cierre ?? null, despues: habitual?.despues ?? null, por: "agente", razon },
+    });
     expect(c.medicion).toEqual({ pais: "Costa Rica", personasEmpresa: "120" });
     expect(c.razonesDeAreas["1"]).toMatch(/test/);
   });
 
-  it("⛔ lo que eligió el vendedor no se toca: ni la industria ni el perfil ni lo que ya estaba", async () => {
+  it("⛔ lo que eligió el vendedor no se toca: ni la industria ni el perfil ni lo que ya estaba (la sugerida sí se guarda, para «Restablecer»)", async () => {
     const { clientId, id } = await sembrar({
       edicion: null,
       perfil: ["con equipo", "única"],
@@ -120,17 +125,29 @@ describe("lo que la preparación deja hecho sola", () => {
     });
     pedidos.length = 0;
     await prepararYEsperar(id, clientId);
-    expect(pedidos).not.toContain("elegir_industria");
+    // Sin sugerida guardada, se le pregunta al agente una vez: para poder volver a ella.
+    expect(pedidos).toContain("elegir_industria");
     const fila = await prisma.exploracionDeVenta.findUniqueOrThrow({ where: { id } });
     expect([fila.edicion, fila.perfilCierre, fila.perfilDespues]).toEqual([null, "con equipo", "única"]);
     const c = leerContenido(fila.contenido);
-    expect(c.edicionElegida).toEqual({ por: "vendedor" });
+    expect(c.edicionElegida?.por).toBe("vendedor");
+    expect(c.edicionElegida?.sugerida?.edicion).toBe("banca");
     // Lo vacío se completa; lo que había, no.
     expect(c.medicion).toEqual({ pais: "Panamá", personasEmpresa: "120" });
   });
 
   it("⛔ en una exploración de antes, que no anotaba quién eligió, una industria ya puesta es del vendedor", async () => {
     const { clientId, id } = await sembrar({ edicion: "educacion" });
+    pedidos.length = 0;
+    await prepararYEsperar(id, clientId);
+    expect((await prisma.exploracionDeVenta.findUniqueOrThrow({ where: { id } })).edicion).toBe("educacion");
+  });
+
+  it("con la sugerida ya guardada, la elección del vendedor no le vuelve a preguntar al agente", async () => {
+    const { clientId, id } = await sembrar({
+      edicion: "educacion",
+      contenido: { version: 1, edicionElegida: { por: "vendedor", sugerida: { edicion: "banca", cierre: null, despues: null, por: "agente" } } },
+    });
     pedidos.length = 0;
     await prepararYEsperar(id, clientId);
     expect(pedidos).not.toContain("elegir_industria");

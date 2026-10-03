@@ -64,8 +64,8 @@ const esPieza = (x: string | null | undefined): x is PasoDelLienzoUI => !!x && x
 
 /**
  * En qué pieza se revisa lo que propuso el agente: cada casilla en la suya (`paso` en casillas.ts:
- * las del resumen se revisan en el Resumen y no cuentan en otra pieza), la escala, el perfil y las
- * áreas en Exploración, los niveles en La escala y los casos en Casos de uso.
+ * las del resumen se revisan en el Resumen y no cuentan en otra pieza), la escala, el perfil, las
+ * áreas y los niveles en La escala, y los casos en Casos de uso.
  */
 function piezaDelDestino(d: DestinoDePropuesta): PasoDelLienzoUI {
   switch (d.tipo) {
@@ -78,7 +78,7 @@ function piezaDelDestino(d: DestinoDePropuesta): PasoDelLienzoUI {
     case "casilla":
       return definicionDe(d.clave).paso;
     default:
-      return "exploracion";
+      return "escala";
   }
 }
 
@@ -101,6 +101,7 @@ export default function LienzoDeExploracion({
   const [proyectos, setProyectos] = useState(inicial.proyectos ?? []);
   const [documentos, setDocumentos] = useState(inicial.documentos ?? []);
   const [propuestas, setPropuestas] = useState(inicial.propuestas ?? []);
+  const [reuniones, setReuniones] = useState(inicial.reuniones ?? []);
   const [guardando, setGuardando] = useState(false);
   const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(esPieza(piezaInicial) ? piezaInicial : "resumen");
   const [desplegado, setDesplegado] = useState(false);
@@ -142,6 +143,7 @@ export default function LienzoDeExploracion({
     if (inicial.proyectos) setProyectos(inicial.proyectos);
     if (inicial.documentos) setDocumentos(inicial.documentos);
     if (inicial.propuestas) setPropuestas(inicial.propuestas);
+    if (inicial.reuniones) setReuniones(inicial.reuniones);
   }
 
   const validez = useMemo<Validez>(() => {
@@ -227,6 +229,7 @@ export default function LienzoDeExploracion({
           if (data.exploracion.proyectos) setProyectos(data.exploracion.proyectos);
           if (data.exploracion.documentos) setDocumentos(data.exploracion.documentos);
           if (data.exploracion.propuestas) setPropuestas(data.exploracion.propuestas);
+          if (data.exploracion.reuniones) setReuniones(data.exploracion.reuniones);
           /* La preparación eligió la industria o el perfil: la escala del lienzo es otra (la arma el
              servidor con esos dos), así que se vuelve a pedir la página. */
           if (antes.edicion !== ahora.edicion || antes.perfilCierre !== ahora.perfilCierre || antes.perfilDespues !== ahora.perfilDespues) {
@@ -273,6 +276,7 @@ export default function LienzoDeExploracion({
     proyectos,
     documentos,
     propuestas,
+    reuniones,
     puedeEditar,
     guardando,
     cambiar,

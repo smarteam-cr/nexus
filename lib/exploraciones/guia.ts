@@ -20,8 +20,12 @@
 import { LETRAS, type Letra } from "@/lib/escala/documento/tipos";
 import { CASILLAS_DEL_RESUMEN, type ClaveDeCasilla } from "./casillas";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
+import { aFecha, hoyEnCostaRica } from "./fechas";
 
 // ── Las sesiones ──────────────────────────────────────────────────────────────
+
+/** De dónde viene una reunión: Google Meet, HubSpot (el notetaker) o sumada a mano. */
+export type OrigenDeReunion = "meet" | "hubspot" | "documento";
 
 /** Una sesión que planea el vendedor. La fecha es `AAAA-MM-DD`; sin fecha, todavía no se agendó. */
 export interface SesionPlaneada {
@@ -30,9 +34,79 @@ export interface SesionPlaneada {
   fecha?: string;
   /** La marcó hecha el vendedor. Una con fecha pasada también cuenta como hecha. */
   hecha?: boolean;
+  /**
+   * La reunión de esta sesión, elegida a mano. Sin ella, es la del mismo día (`reunionDeLaSesion`).
+   * Pedido de Elías (2026-10-03): «por fecha, y se corrige a mano».
+   */
+  reunion?: { id: string; origen: OrigenDeReunion };
+  /** Lo que quedó de una sesión anterior para explorar en esta (lo que se dijo y nadie siguió). */
+  explorar?: string[];
 }
 
 export const MAX_SESIONES = 12;
+/** Cuántos puntos se llevan a una sesión: más no entran en una reunión. */
+export const MAX_PARA_EXPLORAR = 10;
+
+/** Una reunión de la exploración, leída o no: lo que se liga a una sesión. */
+export interface ReunionDeLaExploracion {
+  id: string;
+  titulo: string;
+  /** ISO. */
+  fecha: string;
+  origen: OrigenDeReunion;
+  leida: boolean;
+}
+
+/** El día de Costa Rica (`AAAA-MM-DD`) de una fecha ISO; una de solo día es ese día (no la medianoche UTC). */
+function diaDe(iso: string): string {
+  return hoyEnCostaRica(aFecha(iso));
+}
+
+/** La reunión de una sesión: la elegida a mano o, si no hay, la del mismo día. */
+export function reunionDeLaSesion(s: SesionPlaneada, reuniones: readonly ReunionDeLaExploracion[]): ReunionDeLaExploracion | null {
+  if (s.reunion) return reuniones.find((r) => r.id === s.reunion?.id && r.origen === s.reunion?.origen) ?? null;
+  if (!s.fecha) return null;
+  return reuniones.find((r) => diaDe(r.fecha) === s.fecha) ?? null;
+}
+
+/** Una pestaña de Exploración: una sesión planeada o una reunión que no está en ninguna. */
+export interface PestanaDeSesion {
+  /** El id de la sesión, o `r-<id>` para una reunión suelta. */
+  clave: string;
+  numero: number;
+  sesion: SesionPlaneada | null;
+  reunion: ReunionDeLaExploracion | null;
+  fecha: string | null;
+  hecha: boolean;
+}
+
+/**
+ * Las pestañas, en orden de fecha: las sesiones planeadas (con su reunión) y las reuniones que no
+ * quedaron en ninguna sesión (para no perder ninguna: se suman a las sesiones con un clic). Las sin
+ * fecha van al final, en el orden en que se agregaron.
+ */
+export function pestanasDeSesiones(sesiones: readonly SesionPlaneada[], reuniones: readonly ReunionDeLaExploracion[], hoy: string): PestanaDeSesion[] {
+  const usadas = new Set<string>();
+  const deSesiones = sesiones.map((s, i) => {
+    const r = reunionDeLaSesion(s, reuniones);
+    if (r) usadas.add(`${r.origen}:${r.id}`);
+    return { s, r, i };
+  });
+  const sueltas = reuniones.filter((r) => !usadas.has(`${r.origen}:${r.id}`));
+  const todas = [
+    ...deSesiones.map(({ s, r, i }) => ({
+      clave: s.id,
+      sesion: s,
+      reunion: r,
+      fecha: s.fecha ?? (r ? diaDe(r.fecha) : null),
+      hecha: sesionHecha(s, hoy) || !!r,
+      orden: i,
+    })),
+    ...sueltas.map((r, i) => ({ clave: `r-${r.origen}-${r.id}`, sesion: null, reunion: r, fecha: diaDe(r.fecha), hecha: true, orden: sesiones.length + i })),
+  ];
+  todas.sort((a, b) => (a.fecha && b.fecha ? a.fecha.localeCompare(b.fecha) || a.orden - b.orden : a.fecha ? -1 : b.fecha ? 1 : a.orden - b.orden));
+  return todas.map((p, i) => ({ clave: p.clave, sesion: p.sesion, reunion: p.reunion, fecha: p.fecha, hecha: p.hecha, numero: i + 1 }));
+}
 
 /** ¿Ya pasó? La marcó el vendedor, o su fecha es anterior a hoy. */
 export function sesionHecha(s: SesionPlaneada, hoy: string): boolean {

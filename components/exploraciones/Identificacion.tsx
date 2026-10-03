@@ -14,6 +14,7 @@ import { Badge, Button, Input, Segmentado, Select } from "@/components/ui";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
 import { industriaDelVendedor, normalizarTexto, type EscalaSugerida } from "@/lib/exploraciones/contenido";
 import { industriaLegible, sugerirEdicion } from "@/lib/exploraciones/industria";
+import type { Medicion } from "@/lib/exploraciones/contenido";
 import { useLienzo } from "./contexto";
 import { Propuestas } from "./Propuestas";
 
@@ -231,5 +232,38 @@ export function AreasEnJuego() {
       )}
       <Propuestas items={pendientes} />
     </Tarjeta>
+  );
+}
+
+/** Los datos que la escala pide en toda medición (país y tamaño), para poder comparar con el tiempo. */
+export function DatosDeLaMedicion() {
+  const { exp, cambiar, puedeEditar } = useLienzo();
+  const guardada = exp.estado.contenido.medicion;
+  const [m, setM] = useState<Medicion>(guardada);
+  const [vista, setVista] = useState(guardada);
+  if (vista !== guardada) {
+    setVista(guardada);
+    setM(guardada);
+  }
+  const campo = (k: keyof Medicion, etiqueta: string, placeholder: string) => (
+    <label className="space-y-1.5">
+      <span className="block text-xs font-medium text-fg-secondary">{etiqueta}</span>
+      <Input
+        value={m[k] ?? ""}
+        disabled={!puedeEditar}
+        placeholder={placeholder}
+        onChange={(e) => setM((x) => ({ ...x, [k]: e.target.value }))}
+        onBlur={() => {
+          if ((m[k] ?? "") !== (guardada[k] ?? "")) void cambiar([{ op: "medicion", medicion: { [k]: (m[k] ?? "").trim() } }]);
+        }}
+      />
+    </label>
+  );
+  return (
+    <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-3">
+      {campo("pais", "País", "Por ejemplo, Costa Rica")}
+      {campo("personasEmpresa", "Personas en la empresa", "Por ejemplo, 120")}
+      {campo("personasEquipo", "Personas en el equipo que se mira", "Por ejemplo, 6")}
+    </div>
   );
 }

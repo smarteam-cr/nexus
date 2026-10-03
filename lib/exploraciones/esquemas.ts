@@ -58,6 +58,7 @@ import {
 } from "./contenido";
 import {
   MAX_PREGUNTAS_EN_LA_GUIA,
+  MAX_PARA_EXPLORAR,
   MAX_SESIONES,
   REPREGUNTAS_POR_PREGUNTA,
   TIPOS_DE_OBJECION,
@@ -292,6 +293,8 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   hecha: z.boolean().optional(),
+  reunion: z.object({ id: z.string().min(1).max(60), origen: z.enum(["meet", "hubspot", "documento"]) }).optional(),
+  explorar: z.array(textoLleno(600)).max(MAX_PARA_EXPLORAR).optional(),
 });
 
 export const OperacionSchema = z.discriminatedUnion("op", [
@@ -493,6 +496,7 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
       .slice(-50);
   }
   p.guia = leerGuia(raw.guia);
+  p.guias = registroValido(raw.guias, z.string().regex(/^s-[a-z0-9]{1,24}$/), GuiaSchema);
   if (!Array.isArray(raw.items)) return p;
   const items: ItemPropuesto[] = [];
   for (const it of raw.items) {

@@ -17,11 +17,14 @@ import {
   guiaVieja,
   huecosDelResumen,
   OBJECIONES_DE_BASE,
+  pestanasDeSesiones,
   preguntasParaMostrar,
   PRIORIDAD_DE_LAS_TARJETAS,
   proximaReunion,
+  reunionDeLaSesion,
   sesionHecha,
   TIPOS_DE_OBJECION,
+  type ReunionDeLaExploracion,
 } from "./guia";
 import { contextoDeLaGuia, herramientaDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, type ContextoDeLaGuia } from "./guia-pedido";
 import type { PosicionEnElMapa } from "./mapa";
@@ -209,6 +212,56 @@ function respuesta(input: Record<string, unknown>): Anthropic.Messages.Message {
     usage: { input_tokens: 1, output_tokens: 1 },
   } as unknown as Anthropic.Messages.Message;
 }
+
+describe("una pestaña por sesión (Elías, 2026-10-03)", () => {
+  const reuniones: ReunionDeLaExploracion[] = [
+    { id: "m1", titulo: "Revisión del diagnóstico", fecha: "2026-09-28T15:00:00Z", origen: "meet", leida: true },
+    { id: "m2", titulo: "Comenzando el camino", fecha: "2026-10-02T14:00:00Z", origen: "meet", leida: false },
+    { id: "d1", titulo: "Resumen del Smartflow", fecha: "2026-09-20", origen: "documento", leida: true },
+  ];
+
+  it("la reunión de una sesión es la elegida a mano o la del mismo día", () => {
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-02" }, reuniones)?.id).toBe("m2");
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-02", reunion: { id: "m1", origen: "meet" } }, reuniones)?.id).toBe("m1");
+    expect(reunionDeLaSesion({ id: "s-a", fecha: "2026-10-05" }, reuniones)).toBeNull();
+    expect(reunionDeLaSesion({ id: "s-a" }, reuniones)).toBeNull();
+  });
+
+  it("las pestañas van por fecha; una reunión que no está en ninguna sesión es su propia pestaña", () => {
+    const p = pestanasDeSesiones([{ id: "s-b", fecha: "2026-10-02" }, { id: "s-c", titulo: "Sin fecha" }], reuniones, "2026-10-03");
+    // El documento de solo día es de ese día, no del anterior.
+    expect(p[0].fecha).toBe("2026-09-20");
+    expect(p.map((x) => [x.numero, x.clave, x.reunion?.id ?? null, x.hecha])).toEqual([
+      [1, "r-documento-d1", "d1", true],
+      [2, "r-meet-m1", "m1", true],
+      [3, "s-b", "m2", true],
+      [4, "s-c", null, false],
+    ]);
+  });
+
+  it("lo que se llevó de la sesión anterior llega a la guía de la próxima, primero", () => {
+    const c = contextoDeLaGuia({
+      empresa: "Acme",
+      industria: null,
+      estado: estado({ contenido: { ...contenidoVacio(), sesiones: [{ id: "s-x", fecha: "2026-10-10", explorar: ["Dijo que el gerente no confía en el CRM"] }] } }),
+      escala: ESCALA,
+      posiciones: {},
+      pendientes: [],
+      agenda: [],
+      conTest: false,
+      hoy: "2026-10-03",
+    });
+    expect(c.paraExplorar).toEqual(["Dijo que el gerente no confía en el CRM"]);
+    expect(String(pedidoDeLaGuia(c).messages[0].content)).toContain("LO QUE EL VENDEDOR SE LLEVÓ DE LA SESIÓN ANTERIOR");
+  });
+
+  it("la sesión guarda su reunión y lo que se lleva; la guía de cada sesión se lee de lo guardado", () => {
+    const c = leerContenido({ sesiones: [{ id: "s-x", reunion: { id: "m1", origen: "meet" }, explorar: ["Algo"] }, { id: "s-y", reunion: { id: "m1", origen: "fax" } }] });
+    expect(c.sesiones[0]).toEqual({ id: "s-x", reunion: { id: "m1", origen: "meet" }, explorar: ["Algo"] });
+    expect(c.sesiones).toHaveLength(1);
+    expect(leerPropuesta({ guias: { "s-x": { nada: true } } }).guias).toEqual({});
+  });
+});
 
 describe("las fechas se escriben igual en el servidor y en el navegador", () => {
   it("sin los espacios especiales de cada motor (Node pone U+00A0 en «a. m.»): si no, la hidratación falla", () => {

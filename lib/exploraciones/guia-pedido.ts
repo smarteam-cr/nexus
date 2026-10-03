@@ -55,7 +55,7 @@ export interface ContextoDeLaGuia {
   edicion: string;
   perfil: string | null;
   hoy: string;
-  proxima: { numero: number; titulo: string | null; fecha: string | null };
+  proxima: { numero: number; titulo: string | null; fecha: string | null; sesionId?: string | null };
   /** Hizo el test de marketing: la reunión arranca validándolo. */
   conTest: boolean;
   /** Sin test y todavía sin nada dicho por el cliente: arranca con preguntas de conexión y la escala en simple. */
@@ -71,6 +71,8 @@ export interface ContextoDeLaGuia {
   noExplorado: string[];
   /** Las objeciones que ya puso el cliente (confirmadas o propuestas), en líneas: la guía las retoma. */
   objecionesDichas: string[];
+  /** Lo que el vendedor se llevó de la sesión anterior para explorar en esta: va primero. */
+  paraExplorar: string[];
 }
 
 const ESQUEMA_LAER = Object.fromEntries(PASOS_LAER.map((p) => [p.clave, { type: "string" }]));
@@ -165,6 +167,9 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
   lineas.push("", "=== PARA CONECTAR ===", ctx.paraConectar ?? "(nada todavía)");
   if (ctx.hubspotActual) lineas.push("", "=== SU HUBSPOT HOY ===", ctx.hubspotActual);
   lineas.push("", "=== LO QUE YA ESTÁ CONFIRMADO (no lo preguntes) ===", ...(ctx.confirmado.length ? ctx.confirmado : ["(todavía nada)"]));
+  if (ctx.paraExplorar.length) {
+    lineas.push("", "=== LO QUE EL VENDEDOR SE LLEVÓ DE LA SESIÓN ANTERIOR (pregúntalo primero, en las repreguntas de lo que corresponda) ===", ...ctx.paraExplorar.map((t) => `- ${t}`));
+  }
   if (ctx.noExplorado.length) lineas.push("", "=== LO QUE EL CLIENTE DIJO Y NADIE SIGUIÓ (úsalo en las repreguntas) ===", ...ctx.noExplorado.map((t) => `- ${t}`));
   if (ctx.objecionesDichas.length) {
     lineas.push(
@@ -340,6 +345,10 @@ export function contextoDeLaGuia(o: {
     }),
     noExplorado: textoDe("noExplorado", estado, o.pendientes).slice(0, 8),
     objecionesDichas: objecionesDichas(estado, o.pendientes).slice(0, 8),
+    paraExplorar: (() => {
+      const id = proximaReunion(c.sesiones, o.agenda, o.hoy, estado.propuesta.leidas.sesiones.length).sesionId;
+      return (c.sesiones.find((s) => s.id === id)?.explorar ?? []).slice(0, 10);
+    })(),
   };
 }
 

@@ -19,6 +19,7 @@ import { aplicarOperaciones, cambioLoConfirmado, type EstadoDeExploracion, type 
 import { leerContenido, leerPropuesta, VALIDADOR_ESTRICTO } from "./esquemas";
 import { escalaParaElLienzo, idsDeLaEscala, type EscalaDelLienzo } from "./escala-del-lienzo";
 import type { DocumentoDeLaLista } from "./documentos";
+import type { ReunionDeLaExploracion } from "./guia";
 import type { ReunionSinLeer } from "./lectura";
 import { chequeoConfirmado } from "./mapa";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
@@ -276,6 +277,8 @@ export interface ExploracionParaLaPantalla {
   proyectos?: { id: string; nombre: string; clientId: string }[];
   /** Las sesiones y los documentos sumados a mano, sin el texto (lib/exploraciones/documentos.ts). Igual que `sinLeer`. */
   documentos?: DocumentoDeLaLista[];
+  /** Todas las reuniones, leídas o no, para ligarlas a cada sesión (lib/exploraciones/guia.ts). Igual que `sinLeer`. */
+  reuniones?: ReunionDeLaExploracion[];
   /** Las propuestas comerciales que nacieron de esta exploración. Igual que `sinLeer`. */
   propuestas?: { id: string; nombre: string; estado: string; creadaEn: string }[];
   creadaPor: string;

@@ -300,10 +300,15 @@ export interface PropuestaDeExploracion {
    * del cliente: se muestra directo, sin «usar», y nunca llega a la propuesta ni al handoff.
    */
   guia: GuiaDeLaSesion | null;
+  /**
+   * La guía de cada sesión, por su id: la que se armó para ella. Así el «antes» de una sesión que ya
+   * pasó muestra lo que se preparó (pedido de Elías, 2026-10-03: una pestaña por sesión).
+   */
+  guias: Record<string, GuiaDeLaSesion>;
 }
 
 export function propuestaVacia(): PropuestaDeExploracion {
-  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [], documentos: [] }, corridas: [], guia: null };
+  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [], documentos: [] }, corridas: [], guia: null, guias: {} };
 }
 
 /** Tope de lo pendiente: lo más viejo se cae primero. */

@@ -19,6 +19,7 @@ import { esHipotesisDeNivel, type EstimadoGuardado } from "@/lib/exploraciones/c
 import type { AreaDelLienzo, DimensionDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { cuentaDelArea, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { useLienzo } from "./contexto";
+import { AreasEnJuego, DatosDeLaMedicion, IndustriaYPerfil } from "./Identificacion";
 import PanelDelAgente from "./PanelDelAgente";
 import { Propuestas } from "./Propuestas";
 import { NivelChip, QueVaPrimero } from "./QueVaPrimero";
@@ -397,13 +398,23 @@ function AreaDelMapa({ area }: { area: AreaDelLienzo }) {
 }
 
 export default function PasoEscala() {
-  const { exp, escala, irA } = useLienzo();
+  const { exp, escala } = useLienzo();
   const enJuego = escala.areas.filter((a) => exp.estado.areas.includes(a.id));
   const [cual, setCual] = useState<string | null>(null);
   const area = enJuego.find((a) => a.id === cual) ?? enJuego[0];
 
   return (
     <div className="space-y-4">
+      {/* Con qué se mide: la escala, las áreas en juego y los datos de la medición viven acá desde el
+          2026-10-03 (Exploración quedó para las sesiones). */}
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <IndustriaYPerfil />
+        <div className="space-y-4">
+          <AreasEnJuego />
+          <DatosDeLaMedicion />
+        </div>
+      </div>
+
       <div className="space-y-2">
         <p className="text-sm text-fg-secondary">
           Dónde parece estar cada equipo en la Escala de Rendimiento{escala.edicion ? ` (edición ${escala.edicion.nombre})` : ""}. Antes de hablar con el cliente son hipótesis del agente; después de cada reunión, el agente lee la transcripción y propone dónde está, con la frase que lo respalda.
@@ -412,13 +423,7 @@ export default function PasoEscala() {
       </div>
 
       {enJuego.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-fg-muted">
-          Elige primero las áreas en juego, en{" "}
-          <button type="button" className="text-brand-light underline" onClick={() => irA("exploracion")}>
-            Exploración
-          </button>
-          .
-        </p>
+        <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-fg-muted">Elige primero las áreas en juego, arriba.</p>
       ) : (
         <>
           {enJuego.length > 1 && (

@@ -8,7 +8,7 @@
  */
 import "server-only";
 import { listarDocumentos } from "./documentos";
-import { reunionesSinLeer } from "./fuentes";
+import { reunionesDeLaExploracion, reunionesSinLeer } from "./fuentes";
 import { proyectosQueLaReciben } from "./handoff";
 import { leerLoLeido } from "./lo-leido";
 import { propuestasDeLaExploracion } from "./propuesta";
@@ -16,7 +16,7 @@ import { paraLaPantalla, type ExploracionParaLaPantalla, type FilaDeExploracion 
 
 export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<ExploracionParaLaPantalla> {
   const exp = paraLaPantalla(fila);
-  const [sinLeer, proyectos, documentos, propuestas] = await Promise.all([
+  const [sinLeer, proyectos, documentos, propuestas, reuniones] = await Promise.all([
     reunionesSinLeer({
       exploracionId: fila.id,
       clientId: fila.client.id,
@@ -40,6 +40,16 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
       console.error("[exploraciones] no se pudieron listar las propuestas", e);
       return [];
     }),
+    reunionesDeLaExploracion({
+      exploracionId: fila.id,
+      clientId: fila.client.id,
+      creadaEn: fila.createdAt,
+      propuesta: exp.estado.propuesta,
+      leido: leerLoLeido(fila.test),
+    }).catch((e) => {
+      console.error("[exploraciones] no se pudieron listar las reuniones", e);
+      return [];
+    }),
   ]);
-  return { ...exp, sinLeer, proyectos, documentos, propuestas };
+  return { ...exp, sinLeer, proyectos, documentos, propuestas, reuniones };
 }

@@ -32,7 +32,8 @@ import {
   type ContactoDeHubspot,
   type ResultadoDeReunion,
 } from "./hubspot";
-import { documentosParaLeer } from "./documentos";
+import { documentosParaLeer, listarDocumentos } from "./documentos";
+import type { ReunionDeLaExploracion } from "./guia";
 import { etiquetaDeLaFuente } from "./senales";
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
@@ -318,6 +319,42 @@ export async function leerFuentes(opts: {
  * transcripción desde un mes antes del alta, y las de HubSpot que estaban agendadas y ya pasaron.
  * Solo lee la base (nada de HubSpot): se pide al abrir el lienzo.
  */
+/**
+ * Todas las reuniones de la exploración, leídas o no: las de Meet con transcripción desde un mes antes
+ * del alta, lo que el vendedor sumó a mano y las agendadas en HubSpot que ya pasaron sin leer. Es lo
+ * que se liga a cada sesión en Exploración (una pestaña por sesión, Elías 2026-10-03).
+ */
+export async function reunionesDeLaExploracion(
+  opts: { exploracionId: string; clientId: string; creadaEn: Date; propuesta: PropuestaDeExploracion; leido: LoLeidoDeHubspot },
+  ahora = new Date(),
+): Promise<ReunionDeLaExploracion[]> {
+  const desde = opts.creadaEn.getTime() - DIAS_ANTES_DEL_ALTA * 24 * 60 * 60 * 1000;
+  const leidas = new Set(opts.propuesta.leidas.sesiones);
+  const candidatas = (await getClientSessions(opts.clientId, { take: 30 })).filter((s) => s.date >= desde);
+  const conTranscripcion = candidatas.length
+    ? await prisma.firefliesSession.findMany({
+        where: {
+          id: { in: candidatas.map((s) => s.id) },
+          AND: [{ transcript: { not: null } }, { transcript: { not: "" } }],
+          date: { lte: ahora },
+        },
+        select: { id: true, title: true, date: true },
+        orderBy: { date: "desc" },
+      })
+    : [];
+  const deMeet: ReunionDeLaExploracion[] = conTranscripcion.map((s) => ({ id: s.id, titulo: s.title, fecha: s.date.toISOString(), origen: "meet", leida: leidas.has(s.id) }));
+  const docsLeidos = new Set(opts.propuesta.leidas.documentos);
+  const aMano: ReunionDeLaExploracion[] = (await listarDocumentos(opts.exploracionId)).map((d) => ({
+    id: d.id,
+    titulo: d.titulo,
+    fecha: d.fecha ?? d.creadoEn,
+    origen: "documento",
+    leida: docsLeidos.has(d.id),
+  }));
+  const deHubspot: ReunionDeLaExploracion[] = agendadasQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora).map((r) => ({ ...r, leida: false }));
+  return [...deMeet, ...aMano, ...deHubspot].sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
 export async function reunionesSinLeer(
   opts: { exploracionId: string; clientId: string; creadaEn: Date; propuesta: PropuestaDeExploracion; leido: LoLeidoDeHubspot },
   ahora = new Date(),

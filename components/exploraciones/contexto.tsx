@@ -45,6 +45,8 @@ export interface Lienzo {
   proyectos: NonNullable<ExploracionParaLaPantalla["proyectos"]>;
   /** Las sesiones y los documentos sumados a mano (al abrir y al recargar). */
   documentos: NonNullable<ExploracionParaLaPantalla["documentos"]>;
+  /** Todas las reuniones, leídas o no, para ligarlas a cada sesión (al abrir y al recargar). */
+  reuniones: NonNullable<ExploracionParaLaPantalla["reuniones"]>;
   /** Las propuestas comerciales que nacieron de esta exploración (al abrir y al recargar). */
   propuestas: NonNullable<ExploracionParaLaPantalla["propuestas"]>;
   puedeEditar: boolean;
