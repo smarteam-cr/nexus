@@ -192,7 +192,8 @@ function DatosDelResultado({
   onEditar?: (id: string, campo: "lineaBase" | "meta" | "plazo", valor: string) => void;
 }) {
   const lineaBase = r?.lineaBase ?? "";
-  const porValidar = SIN_DATO.test(lineaBase);
+  // Sin línea base, o sin confirmar por el CSE (la IA propone, el CSE confirma): «Por validar».
+  const porValidar = SIN_DATO.test(lineaBase) || (!!r && !r.confirmadoAt);
   const puedeEditar = !!(editable && r && onEditar);
   const campo = (rotulo: string, k: "lineaBase" | "meta" | "plazo", valor: string) => {
     const vacio = SIN_DATO.test(valor);

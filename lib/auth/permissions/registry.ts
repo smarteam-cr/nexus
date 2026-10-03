@@ -49,6 +49,17 @@ export const PERMISSION_SECTIONS = [
       { key: "write", label: "Editar handoff", enforced: true },
       GENERATE,
       REGENERATE,
+      {
+        /* Confirmar los RESULTADOS que persigue el cliente (2026-10-02): la IA los propone (o los lee
+           del handoff) y una persona los confirma; sin confirmar, el diagnóstico los muestra «Por
+           validar» (lib/handoff/resultados-medibles.ts). Celda
+           propia y no `write` porque va al CSE (decisión de Elías), que NO edita el handoff: es
+           quien conoce al cliente y el resultado es el criterio de éxito de SU implementación.
+           Solo abre esa sección; el resto del documento sigue siendo de `write`. */
+        key: "confirmarResultados",
+        label: "Confirmar los resultados que persigue el cliente",
+        enforced: true,
+      },
     ],
   },
   {

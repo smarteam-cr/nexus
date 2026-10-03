@@ -16,6 +16,10 @@
  * lista que contradice al handoff sin que nadie sepa por qué. Y no inventa: si el texto no da una
  * línea base, queda vacía (= por validar).
  *
+ * Si el handoff NO tiene la sección escrita (los handoffs de antes de que el prompt la pidiera), la
+ * lista la propone la IA desde las reuniones del proyecto: `lib/handoff/proponer-resultados.ts`
+ * (`leerOProponerResultados`). Venga de donde venga, la confirma el CSE.
+ *
  * ⚠ No tira nunca: la corrida del handoff no puede fallar porque esto no salió.
  */
 import { prisma } from "@/lib/db/prisma";
@@ -50,6 +54,8 @@ export const INSTRUCCION_RESULTADOS = [
   "- `lineaBase`: el punto de partida, SOLO si el texto da un número o un estado concreto de hoy. Si no, vacío.",
   "- `meta`: a dónde se quiere llegar, SOLO si el texto la da. Si no, vacío.",
   "- `plazo`: para cuándo, si el texto lo dice. Si no, vacío.",
+  "- `quienLoNecesita`: la persona y su rol en el cliente que necesita ese resultado, si el texto lo dice. Si no, vacío. Nunca alguien de Smarteam.",
+  "- `retos`: lo que hoy le impide llegar a ese resultado, si el texto lo dice (uno por elemento). Si no, lista vacía.",
   "",
   "Reglas:",
   "- Usa SOLO lo que dice el texto. Un número que no está escrito no existe: deja el campo vacío.",
@@ -71,8 +77,10 @@ const ESQUEMA = {
           lineaBase: { type: "string" },
           meta: { type: "string" },
           plazo: { type: "string" },
+          quienLoNecesita: { type: "string" },
+          retos: { type: "array", items: { type: "string" } },
         },
-        required: ["resultado", "metrica", "lineaBase", "meta", "plazo"],
+        required: ["resultado", "metrica", "lineaBase", "meta", "plazo", "quienLoNecesita", "retos"],
         additionalProperties: false,
       },
     },

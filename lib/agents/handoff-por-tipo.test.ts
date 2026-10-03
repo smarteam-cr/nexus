@@ -252,6 +252,16 @@ describe("los RESULTADOS del cliente y la recurrencia (2026-09-12)", () => {
     }
   });
 
+  it("los tres piden QUIÉN necesita cada resultado y QUÉ LO FRENA (2026-10-02)", () => {
+    /* La edición que la pone en rojo: sacar la frase de la guía. Nexus lee esta sección como la lista
+       de resultados (lib/handoff/resultados.ts); si el handoff no los escribe, la lista sale sin quién
+       lo necesita ni retos, que es justo lo que el CSE tiene que confirmar. */
+    for (const [tipo, p] of LOS_TRES) {
+      expect(p, `${tipo}: la guía de resultados ya no pide quién lo necesita`).toContain("QUIÉN lo necesita");
+      expect(p, `${tipo}: la guía de resultados ya no pide los retos`).toContain("QUÉ LO FRENA");
+    }
+  });
+
   it("isRecurrent se pide como BOOLEANO, nunca entre comillas", () => {
     /* La edición que la pone en rojo: volver a `"isRecurrent": "<true o false>"`. El modelo devuelve
        el string, el consumidor espera un booleano y el tag recurrente no se escribe, sin un log. */

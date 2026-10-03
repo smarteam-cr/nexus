@@ -17,6 +17,13 @@
  * se escribe acá, una sola vez, y la ven los dos.
  *
  * Lo que una persona escribió a mano (`editadoAt`) manda: releer el handoff no lo pisa.
+ *
+ * ── UNIDA CON LA RONDA DEL 2026-10-02 (decisión de Elías: «unir las dos») ────────────────────
+ * La misma lista lleva además QUIÉN necesita cada resultado y los RETOS que hoy lo frenan, y el CSE
+ * del proyecto la CONFIRMA (`confirmadoAt`): la IA propone, una persona confirma. Lo que nadie
+ * confirmó todavía sale «Por validar» en el diagnóstico, igual que lo que no tiene línea base. Si el
+ * handoff no escribió la sección (los prompts viejos), la lista la PROPONE la IA desde las reuniones
+ * del proyecto (lib/handoff/proponer-resultados.ts) — una sola lista, venga de donde venga.
  */
 
 export interface ResultadoMedible {
@@ -32,9 +39,18 @@ export interface ResultadoMedible {
   meta: string;
   /** Para cuándo («antes del 16 de diciembre», «sostenido, cada mes»). */
   plazo: string;
+  /** Quién necesita el resultado: persona y rol en el cliente («Ana Pérez, gerente comercial»). */
+  quienLoNecesita?: string;
+  /** Lo que hoy le impide llegar (datos dispersos, un proceso manual, una decisión pendiente). */
+  retos?: string[];
+  /** De dónde salió cuando lo propuso la IA desde las reuniones (H1, S2, F1…). */
+  fuentes?: string[];
   /** Una persona tocó línea base, meta o plazo: releer el handoff ya no los cambia. */
   editadoAt?: string;
   editadoPor?: string;
+  /** El CSE del proyecto lo confirmó. Sin esto, el diagnóstico lo muestra «Por validar». */
+  confirmadoAt?: string;
+  confirmadoPor?: string;
 }
 
 export interface ResultadosDelHandoff {
@@ -42,13 +58,18 @@ export interface ResultadosDelHandoff {
   resultados: ResultadoMedible[];
   /** Cuándo se leyeron del handoff por última vez. */
   at: string;
-  /** Qué los escribió la última vez. */
-  origen: "handoff" | "manual" | "diagnostico" | "edicion";
+  /** Qué los escribió la última vez. «propuesta» = la IA desde las reuniones (sin sección escrita). */
+  origen: "handoff" | "manual" | "diagnostico" | "edicion" | "propuesta" | "confirmacion";
 }
 
 /** Los campos que una persona puede completar (el resto sale del handoff). */
-export const CAMPOS_EDITABLES = ["lineaBase", "meta", "plazo"] as const;
+export const CAMPOS_EDITABLES = ["lineaBase", "meta", "plazo", "quienLoNecesita", "retos"] as const;
 export type CampoEditable = (typeof CAMPOS_EDITABLES)[number];
+
+/** Los campos de texto donde lo que escribió una persona manda sobre lo que trae el handoff. */
+const CAMPOS_QUE_MANDAN = ["lineaBase", "meta", "plazo", "quienLoNecesita"] as const;
+
+const ORIGENES: ReadonlyArray<ResultadosDelHandoff["origen"]> = ["handoff", "manual", "diagnostico", "edicion", "propuesta", "confirmacion"];
 
 const texto = (v: unknown, max = 600) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -63,6 +84,26 @@ export function sinDato(v: string | undefined | null): boolean {
 /** Sin línea base, el objetivo se marca «Por validar» (la regla de Elías). */
 export function porValidar(r: Pick<ResultadoMedible, "lineaBase">): boolean {
   return sinDato(r.lineaBase);
+}
+
+/** La IA lo propuso y el CSE todavía no lo confirmó: también sale «Por validar». */
+export function sinConfirmar(r: Pick<ResultadoMedible, "confirmadoAt">): boolean {
+  return !r.confirmadoAt;
+}
+
+const listaDeTexto = (v: unknown, max = 6): string[] =>
+  Array.isArray(v) ? v.map((x) => texto(x, 300)).filter(Boolean).slice(0, max) : [];
+
+/** Quién lo necesita, los retos y las fuentes, solo si traen algo (lo vacío no se guarda). */
+function camposDeLaRonda(r: Record<string, unknown>): Pick<ResultadoMedible, "quienLoNecesita" | "retos" | "fuentes"> {
+  const quien = texto(r.quienLoNecesita, 300);
+  const retos = listaDeTexto(r.retos);
+  const fuentes = listaDeTexto(r.fuentes, 8).map((f) => f.slice(0, 12));
+  return {
+    ...(quien ? { quienLoNecesita: quien } : {}),
+    ...(retos.length ? { retos } : {}),
+    ...(fuentes.length ? { fuentes } : {}),
+  };
 }
 
 /** Lee lo guardado, tolerante: la columna la puede tocar un script. `null` si no hay nada útil. */
@@ -86,11 +127,14 @@ export function leerResultadosDelHandoff(raw: unknown): ResultadosDelHandoff | n
       lineaBase: texto(r.lineaBase),
       meta: texto(r.meta),
       plazo: texto(r.plazo),
+      ...camposDeLaRonda(r),
       ...(texto(r.editadoAt, 40) ? { editadoAt: texto(r.editadoAt, 40) } : {}),
       ...(texto(r.editadoPor, 200) ? { editadoPor: texto(r.editadoPor, 200) } : {}),
+      ...(texto(r.confirmadoAt, 40) ? { confirmadoAt: texto(r.confirmadoAt, 40) } : {}),
+      ...(texto(r.confirmadoPor, 200) ? { confirmadoPor: texto(r.confirmadoPor, 200) } : {}),
     });
   }
-  const origen = ["handoff", "manual", "diagnostico", "edicion"].includes(String(o.origen))
+  const origen = (ORIGENES as readonly string[]).includes(String(o.origen))
     ? (o.origen as ResultadosDelHandoff["origen"])
     : "handoff";
   return { version: 1, resultados, at: texto(o.at, 40), origen };
@@ -127,10 +171,12 @@ function parecido(a: string, b: string): number {
  *  · Un resultado que el handoff ya no trae pero que alguien editó se conserva: tiene datos que no
  *    están en ningún otro lado. Uno que nadie tocó, se va.
  *  · Los nuevos toman el siguiente R libre.
+ *  · La CONFIRMACIÓN del CSE se conserva solo si el resultado sigue diciendo lo MISMO: si releer el
+ *    handoff le cambió la redacción, vuelve a «sin confirmar» — el CSE confirmó otra frase.
  */
 export function fusionarResultados(
   previos: readonly ResultadoMedible[],
-  leidos: ReadonlyArray<Omit<ResultadoMedible, "id" | "editadoAt" | "editadoPor">>,
+  leidos: ReadonlyArray<Omit<ResultadoMedible, "id" | "editadoAt" | "editadoPor" | "confirmadoAt" | "confirmadoPor">>,
 ): ResultadoMedible[] {
   const usados = new Set<string>();
   let siguiente = previos.reduce((m, p) => Math.max(m, Number(p.id.slice(1)) || 0), 0);
@@ -139,11 +185,13 @@ export function fusionarResultados(
   /* Primero los iguales, después los parecidos: así un parecido no le quita el R a un igual que
      viene más abajo en la lista. */
   const elegido = new Map<number, ResultadoMedible>();
+  const iguales = new Set<number>();
   leidos.forEach((nuevo, i) => {
     const igual = previos.find((p) => !usados.has(p.id) && normal(p.resultado) === normal(nuevo.resultado));
     if (igual) {
       usados.add(igual.id);
       elegido.set(i, igual);
+      iguales.add(i);
     }
   });
   leidos.forEach((nuevo, i) => {
@@ -167,15 +215,23 @@ export function fusionarResultados(
   leidos.forEach((nuevo, i) => {
     const previo = elegido.get(i);
     if (previo) {
-      const manda = (campo: CampoEditable) => (previo.editadoAt && !sinDato(previo[campo]) ? previo[campo] : nuevo[campo] || previo[campo]);
+      const manda = (campo: (typeof CAMPOS_QUE_MANDAN)[number]) =>
+        (previo.editadoAt && !sinDato(previo[campo]) ? previo[campo] : nuevo[campo] || previo[campo]) ?? "";
+      const quien = manda("quienLoNecesita");
+      const retos = previo.editadoAt && previo.retos?.length ? previo.retos : nuevo.retos?.length ? nuevo.retos : previo.retos;
+      const confirmado = iguales.has(i) && previo.confirmadoAt;
       salida.push({
         ...nuevo,
         id: previo.id,
         lineaBase: manda("lineaBase"),
         meta: manda("meta"),
         plazo: manda("plazo"),
+        ...(quien ? { quienLoNecesita: quien } : {}),
+        ...(retos?.length ? { retos } : {}),
         ...(previo.editadoAt ? { editadoAt: previo.editadoAt } : {}),
         ...(previo.editadoPor ? { editadoPor: previo.editadoPor } : {}),
+        ...(confirmado ? { confirmadoAt: previo.confirmadoAt } : {}),
+        ...(confirmado && previo.confirmadoPor ? { confirmadoPor: previo.confirmadoPor } : {}),
       });
     } else {
       siguiente += 1;
@@ -200,7 +256,14 @@ export function leerRespuestaDeResultados(texto: string): Array<Omit<ResultadoMe
   const s = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 600) : "");
   return lista
     .map((r) => (r && typeof r === "object" ? (r as Record<string, unknown>) : {}))
-    .map((r) => ({ resultado: s(r.resultado), metrica: s(r.metrica), lineaBase: s(r.lineaBase), meta: s(r.meta), plazo: s(r.plazo) }))
+    .map((r) => ({
+      resultado: s(r.resultado),
+      metrica: s(r.metrica),
+      lineaBase: s(r.lineaBase),
+      meta: s(r.meta),
+      plazo: s(r.plazo),
+      ...camposDeLaRonda(r),
+    }))
     .filter((r) => r.resultado !== "")
     .slice(0, 20);
 }
@@ -215,14 +278,36 @@ export function editarResultado(
 ): ResultadoMedible[] | null {
   const i = lista.findIndex((r) => r.id === id.toUpperCase());
   if (i < 0) return null;
-  const limpio = Object.fromEntries(
+  const limpio: Record<string, unknown> = Object.fromEntries(
     Object.entries(cambios)
       .filter(([k, v]) => (CAMPOS_EDITABLES as readonly string[]).includes(k) && typeof v === "string")
-      .map(([k, v]) => [k, (v as string).trim().slice(0, 600)]),
+      .map(([k, v]) =>
+        // Los retos se escriben uno por línea y se guardan como lista.
+        k === "retos" ? [k, listaDeTexto((v as string).split(/\r?\n/))] : [k, (v as string).trim().slice(0, 600)],
+      ),
   );
   const copia = [...lista];
   copia[i] = { ...copia[i], ...limpio, editadoAt: ahora.toISOString(), ...(por ? { editadoPor: por } : {}) };
   return copia;
+}
+
+/**
+ * El CSE confirma resultados (todos, o los ids que nombra). Es lo que vuelve «oficial» un resultado
+ * que propuso la IA: sin confirmación, el diagnóstico lo muestra «Por validar». Ids que no existen
+ * se ignoran; confirmar dos veces no cambia la fecha de la primera.
+ */
+export function confirmarResultados(
+  lista: readonly ResultadoMedible[],
+  ids: readonly string[] | null,
+  por: string | null,
+  ahora: Date,
+): ResultadoMedible[] {
+  const cuales = ids ? new Set(ids.map((x) => x.toUpperCase())) : null;
+  return lista.map((r) =>
+    (cuales && !cuales.has(r.id)) || r.confirmadoAt
+      ? r
+      : { ...r, confirmadoAt: ahora.toISOString(), ...(por ? { confirmadoPor: por } : {}) },
+  );
 }
 
 /** Los resultados como texto para un agente. Los vacíos dicen «por validar», nunca se inventan. */
@@ -235,7 +320,10 @@ export function resultadosParaPrompt(lista: readonly ResultadoMedible[]): string
         `- ${r.id} · ${r.resultado}` +
         `${r.metrica ? ` — se mide con: ${r.metrica}` : ""}` +
         ` — línea base: ${dato(r.lineaBase)} — meta: ${dato(r.meta)}` +
-        `${r.plazo ? ` — plazo: ${r.plazo}` : ""}`,
+        `${r.plazo ? ` — plazo: ${r.plazo}` : ""}` +
+        `${r.quienLoNecesita ? ` — lo necesita: ${r.quienLoNecesita}` : ""}` +
+        `${r.retos?.length ? ` — lo que lo frena: ${r.retos.join("; ")}` : ""}` +
+        `${sinConfirmar(r) ? " — (sin confirmar por el CSE: tratarlo como por validar)" : ""}`,
     )
     .join("\n");
 }

@@ -31,7 +31,7 @@ import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { generarResumenDeHandoff } from "@/lib/handoff/resumen";
-import { estructurarResultadosDelHandoff } from "@/lib/handoff/resultados";
+import { leerOProponerResultados } from "@/lib/handoff/proponer-resultados";
 import { proponerFichaDesdeHandoff } from "@/lib/clients/ficha-propuesta";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
@@ -3226,7 +3226,9 @@ async function persistTimelineFromAgentOutput(
          plazo). Los objetivos cuantitativos del diagnóstico apuntan acá en vez de copiarlos
          (lib/handoff/resultados-medibles.ts). Lo editado a mano no se pisa. Fire-and-forget, por la
          misma razón que el resumen: el handoff ya está guardado. */
-      void estructurarResultadosDelHandoff(bodyProjectId, "handoff").then((r) => {
+      /* Si el handoff no escribió la sección (prompt viejo), la lista la propone la IA desde las
+         reuniones del proyecto; en los dos casos la confirma el CSE (lib/handoff/proponer-resultados.ts). */
+      void leerOProponerResultados(bodyProjectId, { origen: "handoff" }).then((r) => {
         if (r.status === "error") console.warn(`[analyze] resultados medibles del handoff no leídos: ${r.error}`);
       });
 

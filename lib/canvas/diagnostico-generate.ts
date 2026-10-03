@@ -49,7 +49,8 @@ import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
 import { ordenDelContrato } from "@/lib/canvas/diagnostico-contrato";
-import { estructurarResultadosDelHandoff, resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { leerOProponerResultados } from "@/lib/handoff/proponer-resultados";
 import { documentoAprobado, MENSAJE_APROBADO, trasRegenerar } from "@/lib/canvas/estado-del-documento-servidor";
 
 /** Asegura el canvas "Diagnóstico" del proyecto + reconcilia sus secciones. Idempotente. */
@@ -77,7 +78,7 @@ export async function runDiagnosticoGeneration(opts: {
      handoff de antes de esa lista todavía no la tiene: se lee primero. Si no sale, el diagnóstico se
      genera igual (los cuantitativos quedan sin resultado y «Por validar»). */
   if (!(await resultadosDelProyecto(projectId).catch(() => null))) {
-    await estructurarResultadosDelHandoff(projectId, "diagnostico");
+    await leerOProponerResultados(projectId, { origen: "diagnostico" });
   }
   const [canvasId, fuentes] = await Promise.all([
     opts.canvasId ?? ensureDiagnosticoCanvas(projectId),

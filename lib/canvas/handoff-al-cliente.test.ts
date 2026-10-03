@@ -139,6 +139,15 @@ const LECTORES: Lector[] = [
       "filtrar el contexto ANTES: el prompt no es la defensa",
   },
   {
+    archivo: "lib/handoff/proponer-resultados.ts",
+    pieza: "diagnosis",
+    exposicion: "directo",
+    porque:
+      "propone la lista de resultados del cliente cuando el handoff no la escribió (2026-10-02). Es la " +
+      "MISMA lista que muestran los objetivos del diagnóstico, que se le presenta al cliente: por eso " +
+      "lee el handoff con la allowlist del diagnóstico, aunque después la confirme el CSE",
+  },
+  {
     archivo: "lib/clients/ficha-propuesta.ts",
     ancla: 'origen: "Handoff"',
     pieza: "client-info",

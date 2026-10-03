@@ -57,8 +57,12 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   // CSE (scoped): edita el cronograma pero NO borra (suspende); genera kickoff/
   // procesos/cronograma en SUS clientes (el row-level lo acota access.ts) y REGENERA el
   // cronograma con IA (decisión de Elías 2026-09-23, ver el docblock);
-  // NADA de handoff; lee Marketing (área universal).
+  // del handoff, SOLO confirmar el resultado que persigue el cliente (2026-10-02); lee Marketing.
   CSE: grant({
+    /* El resultado que persigue el cliente es el criterio de éxito de la implementación, y quien
+       conoce al cliente es el CSE (decisión de Elías, 2026-10-02). Solo esa sección: el resto del
+       handoff sigue sin ser suyo. */
+    handoff: ["confirmarResultados"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
     exploracion: ["generate", "regenerate"],
@@ -90,7 +94,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     clientes: ["viewAll", "classify"],
     // Conserva lo que ya tenía: hasta 2026-08-16 entraba al área por `clientes.viewAll`.
     customerSuccess: ["read"],
-    handoff: ["create", "write", "generate", "regenerate"],
+    handoff: ["create", "write", "generate", "regenerate", "confirmarResultados"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
     exploracion: ["generate", "regenerate"],
@@ -152,7 +156,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     clientes: ["viewAll", "share", "delete", "classify"],
     // El área es SU centro de decisión; además es el único rol (con SUPER_ADMIN) que ve partner.
     customerSuccess: ["read"],
-    handoff: ["write", "generate", "regenerate"],
+    handoff: ["write", "generate", "regenerate", "confirmarResultados"],
     kickoff: ["generate", "regenerate"],
     desarrollo: ["generate", "regenerate"],
     exploracion: ["generate", "regenerate"],

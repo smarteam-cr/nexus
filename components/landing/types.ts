@@ -468,7 +468,16 @@ export interface CtxDelDiagnostico {
    * cuantitativos apuntan a uno (`resultado: "R1"`) y muestran su línea base, meta y plazo desde acá:
    * se capturan una sola vez. Sin línea base, el objetivo sale «Por validar».
    */
-  resultados?: Array<{ id: string; resultado: string; metrica: string; lineaBase: string; meta: string; plazo: string }>;
+  resultados?: Array<{
+    id: string;
+    resultado: string;
+    metrica: string;
+    lineaBase: string;
+    meta: string;
+    plazo: string;
+    /** El CSE lo confirmó (2026-10-02). Sin esto, el objetivo también sale «Por validar». */
+    confirmadoAt?: string;
+  }>;
   /**
    * Solo edición: guarda la línea base, la meta o el plazo de un resultado — en el handoff, que es
    * donde vive. Ausente en lectura y en el PDF: ahí el camino no existe.
