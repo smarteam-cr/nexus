@@ -18,11 +18,11 @@
  * 2026-10-01 (PasoPropuesta.tsx).
  */
 import { useEffect, useState } from "react";
-import { Alert, Badge, Button, Select } from "@/components/ui";
+import { Alert, Badge, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { esCasoLibre, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useLienzo } from "./contexto";
-import FranjaDeSugerencias from "./FranjaDeSugerencias";
+import FranjaDeSugerencias, { BotonAzul, BotonBlanco, BotonTexto } from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
 
 /** Las exploraciones en las que esta pestaña ya lanzó la primera tanda (un montaje doble no lanza dos). */
@@ -51,7 +51,7 @@ function FilaElegida({ id, caso, onQuitar }: { id: string; caso: CasoDeUsoElegid
   const mueve = useMueve(caso);
   const area = escala.areas.find((a) => a.id === caso.areaId)?.nombre ?? "Sin área";
   return (
-    <li className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+    <li className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3">
       <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-success-surface text-xs font-bold text-success-ink" aria-hidden="true">
         ✓
       </span>
@@ -64,9 +64,9 @@ function FilaElegida({ id, caso, onQuitar }: { id: string; caso: CasoDeUsoElegid
         </p>
       </div>
       {onQuitar && (
-        <button type="button" className="flex-shrink-0 text-xs text-fg-muted hover:text-fg hover:underline" disabled={guardando} onClick={onQuitar}>
+        <BotonTexto className="flex-shrink-0" disabled={guardando} onClick={onQuitar}>
           Quitar
-        </button>
+        </BotonTexto>
       )}
     </li>
   );
@@ -86,23 +86,23 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
     <li className="flex flex-col rounded-xl border border-info-line bg-surface">
       <div className="flex flex-col gap-1.5 px-4 pb-3 pt-3.5">
         <p className="flex items-center gap-1.5">
-          <span className="rounded-full border border-info-line bg-info-surface px-2 py-px text-2xs font-semibold text-brand">Sugerido</span>
+          <span className="rounded-full border border-info-line bg-info-surface px-2 py-0.5 text-[11px] font-semibold leading-none text-brand">Sugerido</span>
           {area && <span className="text-xs text-fg-muted">{area}</span>}
         </p>
-        <h3 className="text-[15px] font-semibold leading-snug text-fg">{caso.titulo}</h3>
-        {caso.descripcion && <p className={cn("text-sm leading-relaxed text-fg-secondary", !abierta && "line-clamp-2")}>{caso.descripcion}</p>}
+        <h3 className="text-[15px] font-semibold leading-[1.35] text-fg">{caso.titulo}</h3>
+        {caso.descripcion && <p className={cn("text-[13px] leading-normal text-fg-secondary", !abierta && "line-clamp-2")}>{caso.descripcion}</p>}
         {mueve.length > 0 && (
           <p className="flex flex-wrap items-center gap-1.5">
-            <span className="text-2xs text-fg-muted">Mueve</span>
+            <span className="text-[11px] text-fg-muted">Mueve</span>
             {mueve.map((m) => (
-              <span key={m} className="rounded-md border border-line bg-surface-hover px-2 py-px text-2xs font-medium text-fg-secondary">
+              <span key={m} className="rounded-md border border-line bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-secondary">
                 {m}
               </span>
             ))}
           </p>
         )}
         {abierta && (porQue || cita?.cita) && (
-          <div className="mt-1 rounded-lg bg-surface-muted px-3 py-2.5 text-sm leading-relaxed text-fg-secondary">
+          <div className="mt-1 rounded-lg bg-surface-muted px-3 py-2.5 text-[13px] leading-normal text-fg-secondary">
             {porQue && (
               <>
                 <span className="font-medium text-fg">Por qué: </span>
@@ -126,12 +126,12 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
         <span className="flex-1" />
         {puedeEditar && (
           <>
-            <button type="button" className="rounded px-1.5 py-1 text-xs text-fg-muted hover:text-fg" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
+            <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
               Descartar
-            </button>
-            <Button size="xs" variant="primary" disabled={guardando} onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }])}>
+            </BotonTexto>
+            <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }])}>
               Usar
-            </Button>
+            </BotonAzul>
           </>
         )}
       </div>
@@ -169,18 +169,13 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
         acciones={
           puedeEditar && (
             <>
-              <Button size="sm" variant="secondary" className="bg-surface" loading={lanzando} disabled={corriendo || areas.length === 0} onClick={() => void lanzar("casos")}>
-                {yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
-              </Button>
+              <BotonBlanco disabled={lanzando || corriendo || areas.length === 0} onClick={() => void lanzar("casos")}>
+                {lanzando ? "Pidiendo…" : yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
+              </BotonBlanco>
               {propuestos.length > 1 && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={guardando}
-                  onClick={() => void cambiar([{ op: "usarVarias", items: propuestos.map((it) => ({ itemId: it.id, valor: it.valor })) }])}
-                >
+                <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usarVarias", items: propuestos.map((it) => ({ itemId: it.id, valor: it.valor })) }])}>
                   Usar los {propuestos.length}
-                </Button>
+                </BotonAzul>
               )}
             </>
           )
@@ -205,7 +200,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
 
       {elegidos.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-2xs font-semibold uppercase tracking-widest text-fg-muted">Elegidos · {elegidos.length}</h2>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Elegidos · {elegidos.length}</h2>
           <ul className="space-y-2">
             {elegidos.map(([id, caso]) => (
               <FilaElegida key={id} id={id} caso={caso} onQuitar={puedeEditar ? () => quitar(id) : undefined} />
@@ -216,7 +211,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
 
       {propuestos.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-2xs font-semibold uppercase tracking-widest text-fg-muted">Sugeridos por el agente · {propuestos.length}</h2>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Sugeridos por el agente · {propuestos.length}</h2>
           <ul className="grid items-start gap-3 xl:grid-cols-2">
             {propuestos.map((it) => (
               <TarjetaSugerida key={it.id} item={it} />

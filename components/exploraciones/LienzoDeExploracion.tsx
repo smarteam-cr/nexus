@@ -33,6 +33,7 @@ import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import { Casilla } from "./Casilla";
+import ManejoDeObjeciones from "./ManejoDeObjeciones";
 import { LienzoContexto, type Lienzo, type MomentoDeLaSesion, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
 import PanelDeContexto from "./PanelDeContexto";
 import { NOMBRE_DEL_PASO, piezaDelDestino } from "./piezas";
@@ -91,6 +92,7 @@ export default function LienzoDeExploracion({
   const [sesionElegida, setSesionElegida] = useState<string | null>(null);
   const [momentos, setMomentos] = useState<Record<string, MomentoDeLaSesion>>({});
   const [casillaAbierta, setCasillaAbierta] = useState<ClaveDeCasilla | null>(null);
+  const [objecionesAbiertas, setObjecionesAbiertas] = useState(false);
   const [revision, setRevision] = useState<{ abierto: boolean; filtro: "todo" | PasoDelLienzoUI }>({ abierto: false, filtro: "todo" });
   // El pie del cajón: ahí van «Guardar» y «Cancelar», fijos abajo aunque el formulario sea largo.
   const [pie, setPie] = useState<HTMLDivElement | null>(null);
@@ -275,6 +277,7 @@ export default function LienzoDeExploracion({
     irA,
     abrirCasilla: setCasillaAbierta,
     abrirRevision: (pieza) => setRevision({ abierto: true, filtro: pieza ?? "todo" }),
+    abrirObjeciones: () => setObjecionesAbiertas(true),
     sesion: {
       elegida: sesionElegida,
       elegir: setSesionElegida,
@@ -325,8 +328,8 @@ export default function LienzoDeExploracion({
 
   return (
     <LienzoContexto.Provider value={lienzo}>
-      <div className="flex-1 lg:grid lg:grid-cols-[13.5rem_minmax(0,1fr)] xl:grid-cols-[13.5rem_minmax(0,1fr)_19rem]">
-        <aside className="border-b border-line bg-surface px-3 py-3 lg:sticky lg:top-0 lg:h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r lg:py-5">
+      <div className="flex-1 bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[14.5rem_minmax(0,1fr)_18.75rem]">
+        <aside className="border-b border-line bg-surface px-3 py-4 lg:sticky lg:top-0 lg:h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r lg:py-4">
           <RielDePiezas
             paso={paso}
             onElegir={setPaso}
@@ -335,9 +338,9 @@ export default function LienzoDeExploracion({
           />
         </aside>
 
-        <main className="min-w-0 px-6 py-6 xl:px-8">
+        <main className="min-w-0 px-6 pb-10 pt-6 xl:px-8">
           {paso !== "exploracion" && (
-            <header className="mb-6">
+            <header className="mb-5">
               <h2 className="text-lg font-semibold text-fg">{NOMBRE_DEL_PASO[paso]}</h2>
               <p className="text-sm text-fg-muted">{DE_QUE_VA[paso]}</p>
             </header>
@@ -350,11 +353,12 @@ export default function LienzoDeExploracion({
           {paso === "propuesta" && <PasoPropuesta />}
         </main>
 
-        <aside className="border-t border-line bg-surface-muted px-5 py-6 lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-3.5rem)] xl:self-start xl:overflow-y-auto xl:border-l xl:border-t-0">
+        <aside className="border-t border-line bg-surface-muted p-5 lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-3.5rem)] xl:self-start xl:overflow-y-auto xl:border-l xl:border-t-0">
           <PanelDeContexto sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} />
         </aside>
       </div>
 
+      <ManejoDeObjeciones abierto={objecionesAbiertas} onCerrar={() => setObjecionesAbiertas(false)} />
       <RevisarSugerencias abierto={revision.abierto} filtroInicial={revision.filtro} onCerrar={() => setRevision((r) => ({ ...r, abierto: false }))} />
 
       <Drawer

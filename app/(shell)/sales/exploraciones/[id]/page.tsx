@@ -27,10 +27,12 @@ export const dynamic = "force-dynamic";
 
 const VOLVER = { href: "/sales/exploraciones", etiqueta: "Exploraciones" };
 
-/** El chip de al lado del nombre: qué es esta pantalla y con qué escala se mide. */
+/** Los chips de la cabecera, como en el tablero: píldoras blancas con borde, de 12 px. */
+const CLASE_DE_CHIP = "inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-[3px] text-xs font-medium text-fg-secondary";
+
 function Chip({ children, title }: { children: React.ReactNode; title?: string }) {
   return (
-    <span title={title} className="flex-shrink-0 rounded border border-line bg-surface-hover px-1.5 py-0.5 text-2xs font-medium text-fg-secondary">
+    <span title={title} className={CLASE_DE_CHIP}>
       {children}
     </span>
   );
@@ -67,7 +69,9 @@ export default async function ExploracionPage({
   const escala = await escalaParaExplorar();
   const portal = await prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } });
   const empresaUrl = hubspotCompanyUrl(portal?.hubspotPortalId ?? null, exp.empresa.hubspotCompanyId);
-  const edicion = escala.estado === "ok" ? (escalaDeLaExploracion(escala.general, exp.estado).edicion?.nombre ?? "Escala general") : null;
+  const delLienzo = escala.estado === "ok" ? escalaDeLaExploracion(escala.general, exp.estado) : null;
+  const edicion = delLienzo ? (delLienzo.edicion?.nombre ?? "Escala general") : null;
+  const areas = delLienzo ? delLienzo.areas.filter((a) => exp.estado.areas.includes(a.id)).map((a) => a.nombre) : [];
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -76,21 +80,26 @@ export default async function ExploracionPage({
         titulo={exp.empresa.nombre}
         chips={
           <>
-            <Chip title="La escala con la que se mide esta exploración">Exploración de venta{edicion ? ` · ${edicion}` : ""}</Chip>
+            {edicion && <Chip title="La escala con la que se mide esta exploración">{edicion}</Chip>}
+            {areas.length > 0 && <Chip title="Las áreas en juego">{areas.join(" · ")}</Chip>}
             {exp.estado.archivada && <Chip>Archivada</Chip>}
+          </>
+        }
+        acciones={
+          <>
+            {exp.empresa.kind === "CLIENTE" && (
+              <AccionDeCabecera href={`/clients/${exp.empresa.clientId}`} title="La ficha del cliente, con sus proyectos">
+                Ver ficha del cliente
+              </AccionDeCabecera>
+            )}
             {empresaUrl ? (
-              <ChipHubspot conectado title="Ver la empresa en HubSpot" href={empresaUrl} />
+              <a href={empresaUrl} target="_blank" rel="noreferrer" className={`${CLASE_DE_CHIP} transition-colors hover:bg-surface-hover hover:text-fg`}>
+                Abrir en HubSpot ↗
+              </a>
             ) : (
               <ChipHubspot conectado={false} title="La empresa no está en HubSpot" />
             )}
           </>
-        }
-        acciones={
-          exp.empresa.kind === "CLIENTE" ? (
-            <AccionDeCabecera href={`/clients/${exp.empresa.clientId}`} title="La ficha del cliente, con sus proyectos">
-              Ver ficha del cliente
-            </AccionDeCabecera>
-          ) : undefined
         }
       />
       {escala.estado !== "ok" ? (

@@ -833,7 +833,6 @@ export function Casilla({
 
       {pendientes.length > 0 && (
         <div className="space-y-2">
-          {enCajon && <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Propuesto por el agente</p>}
           <Propuestas items={pendientes} />
         </div>
       )}

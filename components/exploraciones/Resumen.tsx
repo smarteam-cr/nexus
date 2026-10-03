@@ -14,7 +14,6 @@
  * particularidades de la cuenta, que el agente propone al leer cada sesión, como el cronograma
  * propone sus particularidades. Y, si ya hay un proyecto, a cuál le llega la exploración.
  */
-import { Button } from "@/components/ui";
 import {
   CASILLAS_DE_LAS_REUNIONES,
   CASILLAS_DEL_RESUMEN,
@@ -28,7 +27,7 @@ import {
 import type { ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { cn } from "@/lib/cn";
 import { Casilla } from "./Casilla";
-import FranjaDeSugerencias from "./FranjaDeSugerencias";
+import FranjaDeSugerencias, { BotonAzul, BotonBlanco } from "./FranjaDeSugerencias";
 import { describirPropuesta } from "./Propuestas";
 import { useLienzo } from "./contexto";
 
@@ -70,7 +69,7 @@ export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
 /** La pastilla azul que cuenta lo sugerido. */
 function Sugeridas({ n, mas }: { n: number; mas: boolean }) {
   return (
-    <span className="flex-shrink-0 rounded-full border border-info-line bg-info-surface px-2 py-px text-2xs font-semibold text-brand">
+    <span className="flex-shrink-0 rounded-full border border-info-line bg-info-surface px-[7px] py-px text-[11px] font-semibold text-brand">
       {mas ? "+" : ""}
       {n} {n === 1 ? "sugerida" : "sugeridas"}
     </span>
@@ -101,7 +100,7 @@ function Tarjeta({ clave, sugeridas, onAbrir }: { clave: (typeof CASILLAS_DEL_RE
       <span className="flex items-center gap-2">
         <span
           className={cn(
-            "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-md text-2xs font-bold",
+            "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-md text-[11px] font-bold",
             vacia ? "bg-info-surface text-brand" : "bg-success-surface text-success-ink",
           )}
           title={marco}
@@ -113,14 +112,14 @@ function Tarjeta({ clave, sugeridas, onAbrir }: { clave: (typeof CASILLAS_DEL_RE
       </span>
       {vacia ? (
         n > 0 ? (
-          <span className="line-clamp-3 text-sm leading-snug text-brand">{sugeridas.map((it) => `«${describirPropuesta(it, escala, nombreDeNivel)}»`).join(" · ")}</span>
+          <span className="line-clamp-3 text-[13px] leading-[1.45] text-brand">{sugeridas.map((it) => `«${describirPropuesta(it, escala, nombreDeNivel)}»`).join(" · ")}</span>
         ) : (
           <span className="text-xs text-fg-muted">Falta: se pregunta en la próxima sesión</span>
         )
       ) : (
         <span className="space-y-1">
           {lineas.slice(0, 3).map((l, i) => (
-            <span key={i} className="line-clamp-2 block text-sm leading-snug text-fg-secondary">
+            <span key={i} className="line-clamp-2 block text-[13px] leading-[1.45] text-fg-secondary">
               {l}
             </span>
           ))}
@@ -144,18 +143,11 @@ export default function Resumen() {
         <FranjaDeSugerencias
           acciones={
             <>
-              <Button size="sm" variant="secondary" className="bg-surface" onClick={() => abrirRevision("resumen")}>
-                Revisar una por una
-              </Button>
+              <BotonBlanco onClick={() => abrirRevision("resumen")}>Revisar una por una</BotonBlanco>
               {puedeEditar && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={guardando}
-                  onClick={() => void cambiar([{ op: "usarVarias", items: delResumen.map((it) => ({ itemId: it.id, valor: it.valor })) }])}
-                >
+                <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usarVarias", items: delResumen.map((it) => ({ itemId: it.id, valor: it.valor })) }])}>
                   Usar {delResumen.length === 1 ? "la sugerida" : `las ${delResumen.length}`}
-                </Button>
+                </BotonAzul>
               )}
             </>
           }

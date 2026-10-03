@@ -4359,6 +4359,10 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   `text-info-ink`, que es marino. Los diseños del lienzo se arman con los colores reales de la app
   y con su letra: la app no le aplica fuente al cuerpo, así que en Windows se ve en Segoe UI (no
   en Geist, aunque `layout.tsx` la cargue).
+  Lo propio del lienzo copia el tablero medida por medida (el fondo gris de la pieza, el control
+  Antes/Después, el botón blanco «Rearmar la guía», las etiquetas de las preguntas y los tres botones
+  de las sugerencias, en `FranjaDeSugerencias.tsx`); la cabecera es la compartida con la ficha del
+  cliente, así que ahí manda la app y el tablero la copia a ella.
 
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 

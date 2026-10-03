@@ -22,7 +22,7 @@ function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.R
   return (
     <section className="space-y-2.5">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-2xs font-semibold uppercase tracking-widest text-fg-muted">{titulo}</h2>
+        <h2 className="text-2xs font-semibold uppercase tracking-[0.08em] text-fg-muted">{titulo}</h2>
         {accion}
       </div>
       {children}
@@ -30,12 +30,12 @@ function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.R
   );
 }
 
-/** Las ocho casillas del marco, de a cuatro: verde lo confirmado, ámbar lo que propuso el agente, punteado lo que falta. */
+/** Las ocho casillas del marco, de a cuatro: verde lo confirmado, azul lo que sugirió el agente, punteado lo que falta. */
 function Arquitectura() {
   const { exp, pendientesPara, abrirCasilla } = useLienzo();
   const confirmadas = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0).length;
   return (
-    <Bloque titulo="Arquitectura de la venta" accion={<span className="text-2xs text-fg-muted">{confirmadas} de 8</span>}>
+    <Bloque titulo="Arquitectura de la venta" accion={<span className="text-[11px] text-fg-muted">{confirmadas} de 8</span>}>
       <div className="grid grid-cols-4 gap-1.5">
         {CASILLAS_DEL_RESUMEN.map((clave) => {
           const lleno = lineasDe(clave, exp.estado.contenido.casillas[clave]).length > 0;
@@ -48,7 +48,7 @@ function Arquitectura() {
               onClick={() => abrirCasilla(clave)}
               title={`${etiqueta}: ${lleno ? "confirmado" : propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente` : "falta"}`}
               className={cn(
-                "flex h-12 flex-col items-center justify-center rounded-lg border text-xs font-bold transition-colors",
+                "flex h-[46px] flex-col items-center justify-center rounded-lg border text-xs font-bold transition-colors",
                 lleno
                   ? "border-transparent bg-success-surface text-success-ink"
                   : propuestas > 0
@@ -57,20 +57,20 @@ function Arquitectura() {
               )}
             >
               {LETRA_DEL_MARCO[clave].letra}
-              <span className="w-full truncate px-1 text-center text-2xs font-medium">{etiqueta}</span>
+              <span className="w-full truncate px-1 text-center text-[10px] font-medium leading-tight">{etiqueta}</span>
             </button>
           );
         })}
       </div>
-      <p className="flex flex-wrap gap-x-3 gap-y-1 text-2xs text-fg-muted">
+      <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted">
         <span className="flex items-center gap-1">
           <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" /> confirmado
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-info" aria-hidden="true" /> sugerido
+          <span className="h-2 w-2 rounded-full bg-brand" aria-hidden="true" /> sugerido
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full border border-line" aria-hidden="true" /> falta
+          <span className="h-2 w-2 rounded-full border border-dashed border-line" aria-hidden="true" /> falta
         </span>
       </p>
     </Bloque>
@@ -85,7 +85,7 @@ function LaEscala() {
     <Bloque
       titulo="La escala"
       accion={
-        <button type="button" className="text-2xs text-brand hover:underline" onClick={() => irA("escala")}>
+        <button type="button" className="text-[11px] text-brand hover:underline" onClick={() => irA("escala")}>
           Ver el mapa
         </button>
       }
@@ -93,15 +93,15 @@ function LaEscala() {
       {areas.length === 0 ? (
         <p className="text-xs text-fg-muted">Elige las áreas en juego en «La escala».</p>
       ) : (
-        <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
+        <ul className="space-y-1.5 rounded-xl border border-line bg-surface px-3 py-2.5">
           {areas.map((a) => {
             const hipotesis = a.dimensiones.some((d) => d.aplica && mapa.posiciones[d.id]?.clase === "hipotesis");
             return (
-              <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                <span className="min-w-0 truncate text-xs font-medium text-fg">{a.nombre}</span>
+              <li key={a.id} className="flex items-center justify-between gap-2 text-[13px]">
+                <span className="min-w-0 truncate font-medium text-fg">{a.nombre}</span>
                 <span className="flex flex-shrink-0 items-center gap-1.5">
-                  {a.nivel ? <NivelChip nivel={a.nivel} /> : <span className="text-2xs text-fg-muted">falta ubicar {a.faltan.length}</span>}
-                  {a.nivel && hipotesis && <span className="text-2xs text-warn-ink">hipótesis</span>}
+                  {a.nivel ? <NivelChip nivel={a.nivel} className="text-[13px]" /> : <span className="text-[11px] text-fg-muted">falta ubicar {a.faltan.length}</span>}
+                  {a.nivel && hipotesis && <span className="text-[11px] text-warn-ink">hipótesis</span>}
                 </span>
               </li>
             );
@@ -113,7 +113,7 @@ function LaEscala() {
 }
 
 function Objeciones() {
-  const { exp, pendientesPara, abrirCasilla } = useLienzo();
+  const { exp, pendientesPara, abrirCasilla, abrirObjeciones } = useLienzo();
   const dichas = (exp.estado.contenido.casillas.objeciones as Objecion[] | undefined) ?? [];
   const propuestas = pendientesPara((d) => d.tipo === "casilla" && d.clave === "objeciones").length;
   if (dichas.length === 0 && propuestas === 0) return null;
@@ -121,22 +121,21 @@ function Objeciones() {
     <Bloque
       titulo="Ya objetó"
       accion={
-        <button type="button" className="text-2xs text-brand hover:underline" onClick={() => abrirCasilla("objeciones")}>
+        <button type="button" className="text-[11px] text-brand hover:underline" onClick={() => abrirCasilla("objeciones")}>
           {propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"}` : "Ver todas"}
         </button>
       }
     >
       <ul className="space-y-1.5">
         {dichas.slice(0, 3).map((o, i) => (
-          <li key={i} className="rounded-lg border border-line bg-surface px-3 py-2">
-            <p className="line-clamp-2 text-xs text-fg">«{o.texto}»</p>
-            <p className="text-2xs text-fg-muted">
-              {ETIQUETA_DE_LA_OBJECION[o.clase]}
-              {o.respuesta ? " · respondida" : " · abierta"}
-            </p>
+          <li key={i} className="rounded-xl border border-line bg-surface px-3 py-2.5" title={`${ETIQUETA_DE_LA_OBJECION[o.clase]} · ${o.respuesta ? "respondida" : "abierta"}`}>
+            <p className="line-clamp-2 text-[13.5px] text-fg">«{o.texto}»</p>
+            <button type="button" className="mt-1 text-[12.5px] text-brand hover:underline" onClick={abrirObjeciones}>
+              Cómo responder
+            </button>
           </li>
         ))}
-        {dichas.length > 3 && <li className="text-2xs text-fg-muted">y {dichas.length - 3} más</li>}
+        {dichas.length > 3 && <li className="text-[11px] text-fg-muted">y {dichas.length - 3} más</li>}
       </ul>
     </Bloque>
   );
@@ -172,15 +171,15 @@ export default function PanelDeContexto({
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-3.5">
-        <h2 className="text-2xs font-semibold uppercase tracking-widest text-brand">Qué sigue</h2>
-        <p className="text-sm leading-snug text-fg">{sigue.texto}</p>
+        <h2 className="text-2xs font-semibold uppercase tracking-[0.08em] text-brand">Qué sigue</h2>
+        <p className="text-sm leading-[1.4] text-fg">{sigue.texto}</p>
         {sigue.paso ? (
-          <Button size="sm" variant="primary" className="self-start" onClick={() => irA(sigue.paso!)}>
+          <Button size="sm" variant="primary" className="self-start rounded-md font-semibold" onClick={() => irA(sigue.paso!)}>
             Ir a «{nombreDelPaso(sigue.paso)}»
           </Button>
         ) : (
           revisables.length > 0 && (
-            <Button size="sm" variant="primary" className="self-start" onClick={() => abrirRevision()}>
+            <Button size="sm" variant="primary" className="self-start rounded-md font-semibold" onClick={() => abrirRevision()}>
               Revisar {revisables.length === 1 ? "la sugerencia" : `las ${revisables.length}`} →
             </Button>
           )

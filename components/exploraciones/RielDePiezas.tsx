@@ -6,19 +6,21 @@
  * para desktop»). Reemplaza al desplegable de piezas y a las pestañas de sesión: a la vista todo el
  * tiempo, sin abrir nada. Abajo, «Cómo manejar objeciones», a mano en cualquier pieza.
  *
- * El punto de cada pieza: azul si el agente sugirió algo ahí (con cuántas, en azul), ámbar si pide
- * atención (hipótesis, reuniones sin leer, lista para proponer), verde si ya tiene contenido, hueco
- * si todavía nada. Azul es siempre «lo sugiere el agente», en todo el lienzo.
+ * Copia el tablero «1 · Sesión — Antes» medida por medida: filas de 14 px con un punto de 8 px; la
+ * pieza abierta en azul sobre fondo azul claro (Exploración, cuando hay una sesión elegida, va en
+ * negrita oscura y la sesión es la que se pinta); las sesiones colgadas con una línea a la izquierda,
+ * ✓ verde la hecha y ● la abierta.
  *
- * En pantallas chicas se acuesta: las piezas en una fila que salta de renglón, sin las sesiones
- * (Exploración las muestra arriba de la sesión).
+ * El punto de cada pieza: azul si el agente sugirió algo ahí (con cuántas, en azul), ámbar si pide
+ * atención (hipótesis, reuniones sin leer, lista para proponer), verde si ya tiene contenido, gris si
+ * todavía nada. En pantallas chicas se acuesta y las sesiones se eligen en Exploración.
  */
 import type { EstadoDePieza, FilaDePieza } from "@/components/canvas/SelectorDePiezas";
 import { cn } from "@/lib/cn";
 import { MAX_SESIONES, type PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
-import ManejoDeObjeciones from "./ManejoDeObjeciones";
+import { BotonDeObjeciones } from "./ManejoDeObjeciones";
 import { useSesiones } from "./useSesiones";
 
 /** Una fila de la barra: la del selector de piezas, más cuántas sugerencias esperan ahí. */
@@ -27,12 +29,13 @@ export type FilaDelRiel = FilaDePieza & { sugeridas: number };
 const PUNTO: Record<EstadoDePieza, string> = {
   generada: "bg-success",
   pendiente: "bg-warning",
-  vacia: "border border-line",
+  vacia: "bg-fg-muted/30",
 };
 
 function Fila({
   etiqueta,
   activa,
+  conSesion,
   estado,
   aviso,
   sugeridas,
@@ -41,6 +44,8 @@ function Fila({
 }: {
   etiqueta: string;
   activa: boolean;
+  /** Es Exploración con una sesión elegida debajo: la sesión es la que se pinta. */
+  conSesion?: boolean;
   estado: EstadoDePieza;
   aviso?: string | null;
   /** Cuántas sugerencias esperan; el texto que las nombra, si no es solo el número. */
@@ -56,40 +61,50 @@ function Fila({
       onClick={onClick}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-        activa ? "bg-info-surface font-semibold text-brand" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
+        activa && !conSesion
+          ? "bg-info-surface font-semibold text-brand"
+          : activa
+            ? "font-semibold text-fg hover:bg-surface-hover"
+            : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
       )}
     >
-      <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", activa || sugeridas.n > 0 ? "bg-info" : PUNTO[estado])} aria-hidden="true" />
+      <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", activa || sugeridas.n > 0 ? "bg-brand" : PUNTO[estado])} aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">{etiqueta}</span>
       {sugeridas.n > 0 ? (
-        <span className="flex-shrink-0 text-2xs font-medium text-brand" title={`${sugeridas.n} sugerencias del agente`}>
+        <span className="flex-shrink-0 text-xs text-brand" title={`${sugeridas.n} sugerencias del agente`}>
           {sugeridas.texto ?? sugeridas.n}
         </span>
       ) : (
-        aviso && <span className={cn("flex-shrink-0 text-2xs font-medium", estado === "pendiente" ? "text-warn-ink" : "text-fg-muted")}>{aviso}</span>
+        aviso && <span className={cn("flex-shrink-0 text-xs", estado === "pendiente" ? "text-warn-ink" : "text-fg-muted")}>{aviso}</span>
       )}
     </button>
   );
 }
 
 /** Las sesiones, colgadas de Exploración. */
-function Sesiones({ alElegir }: { alElegir: (clave: string) => void }) {
+function Sesiones({ abierta, alElegir }: { abierta: boolean; alElegir: (clave: string) => void }) {
   const { puedeEditar, guardando } = useLienzo();
-  const { todas, activa, claveDeLaProxima, sesiones, agregar } = useSesiones();
-  const marca = (p: PestanaDeSesion) =>
-    p.reunion && !p.reunion.leida ? (
-      <span className="rounded bg-warn-surface px-1 text-2xs font-semibold text-warn-ink">Nueva</span>
-    ) : p.clave === claveDeLaProxima ? (
-      <span className="text-2xs font-semibold text-brand">Próxima</span>
+  const { todas, activa, sesiones, agregar } = useSesiones();
+  const marca = (p: PestanaDeSesion, actual: boolean) =>
+    actual ? (
+      <span aria-hidden="true">●</span>
+    ) : p.reunion && !p.reunion.leida ? (
+      <span className="text-warning" title="Reunión sin leer">
+        ●
+      </span>
     ) : p.hecha ? (
-      <span className="text-success-ink" aria-label="hecha">
+      <span className="text-success" aria-label="hecha">
         ✓
       </span>
-    ) : null;
+    ) : (
+      <span className="text-fg-muted" aria-hidden="true">
+        ○
+      </span>
+    );
   return (
-    <ul className="ml-3.5 space-y-0.5 border-l border-line py-1 pl-2">
+    <ul className="mb-1.5 ml-[18px] mt-0.5 space-y-0.5 border-l border-line pl-2">
       {todas.map((p) => {
-        const actual = p.clave === activa.clave;
+        const actual = abierta && p.clave === activa.clave;
         return (
           <li key={p.clave}>
             <button
@@ -97,20 +112,20 @@ function Sesiones({ alElegir }: { alElegir: (clave: string) => void }) {
               aria-current={actual ? "true" : undefined}
               onClick={() => alElegir(p.clave)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors",
                 actual ? "bg-info-surface font-semibold text-brand" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
               )}
             >
+              {marca(p, actual)}
               <span className="min-w-0 flex-1 truncate">Sesión {p.numero}</span>
-              {p.fecha && <span className="flex-shrink-0 text-2xs text-fg-muted">{diaCorto(p.fecha)}</span>}
-              {marca(p)}
+              {p.fecha && <span className={cn("flex-shrink-0 text-[11.5px]", actual ? "" : "text-fg-muted")}>{diaCorto(p.fecha)}</span>}
             </button>
           </li>
         );
       })}
       {puedeEditar && sesiones.length < MAX_SESIONES && (
         <li>
-          <button type="button" disabled={guardando} onClick={agregar} className="w-full rounded-md px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg">
+          <button type="button" disabled={guardando} onClick={agregar} className="w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg-muted hover:bg-surface-hover hover:text-fg">
             + Agregar sesión
           </button>
         </li>
@@ -130,21 +145,26 @@ export default function RielDePiezas({
   resumen: { sugeridas: number; confirmadas: number; estado: EstadoDePieza };
   filas: readonly FilaDelRiel[];
 }) {
-  const { sesion } = useLienzo();
+  const { sesion, abrirObjeciones } = useLienzo();
   return (
     <nav aria-label="Piezas de la exploración" className="flex h-full flex-col gap-4">
-      <div className="flex flex-wrap gap-1 lg:flex-col lg:gap-0.5">
+      <div className="flex flex-wrap gap-0.5 lg:flex-col">
         <div className="lg:w-full">
-          <Fila etiqueta="Resumen" activa={paso === "resumen"}
+          <Fila
+            etiqueta="Resumen"
+            activa={paso === "resumen"}
             estado={resumen.estado}
             aviso={`${resumen.confirmadas}/8`}
-            sugeridas={{ n: resumen.sugeridas, texto: `${resumen.sugeridas} ${resumen.sugeridas === 1 ? "sugerida" : "sugeridas"}` }} onClick={() => onElegir("resumen")} />
+            sugeridas={{ n: resumen.sugeridas, texto: `${resumen.sugeridas} ${resumen.sugeridas === 1 ? "sugerida" : "sugeridas"}` }}
+            onClick={() => onElegir("resumen")}
+          />
         </div>
         {filas.map((f) => (
           <div key={f.clave} className="lg:w-full">
             <Fila
               etiqueta={f.etiqueta}
               activa={paso === f.clave}
+              conSesion={f.clave === "exploracion"}
               estado={f.estado}
               aviso={f.aviso?.corto ?? null}
               sugeridas={{ n: f.sugeridas }}
@@ -154,6 +174,7 @@ export default function RielDePiezas({
             {f.clave === "exploracion" && (
               <div className="hidden lg:block">
                 <Sesiones
+                  abierta={paso === "exploracion"}
                   alElegir={(clave) => {
                     sesion.elegir(clave);
                     onElegir("exploracion");
@@ -165,7 +186,7 @@ export default function RielDePiezas({
         ))}
       </div>
       <div className="lg:mt-auto">
-        <ManejoDeObjeciones />
+        <BotonDeObjeciones onClick={abrirObjeciones} />
       </div>
     </nav>
   );

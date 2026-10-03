@@ -10,7 +10,7 @@
  * está confirmado al lado. Lo descartado no vuelve (queda su lápida).
  */
 import { useState } from "react";
-import { Button } from "@/components/ui";
+import { BotonAzul, BotonTexto } from "./FranjaDeSugerencias";
 import {
   ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_CANAL,
@@ -174,7 +174,7 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
     <li className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
       <div className="min-w-0 flex-1">
         {destino && <p className="text-2xs font-semibold text-brand">{destino}</p>}
-        <p className="text-sm leading-snug text-fg">{texto ?? describirPropuesta(item, escala, nombreDeNivel)}</p>
+        <p className="text-sm leading-[1.45] text-fg">{texto ?? describirPropuesta(item, escala, nombreDeNivel)}</p>
         {(origen.etiqueta || hayMas) && (
           <p className="mt-0.5 flex min-w-0 items-baseline gap-1 text-xs text-fg-muted">
             <span className="min-w-0 truncate">
@@ -192,17 +192,16 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
       </div>
       {puedeEditar && (
         <div className="flex flex-shrink-0 items-center gap-1">
-          <button type="button" className="rounded px-1.5 py-1 text-xs text-fg-muted hover:text-fg" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
+          <BotonTexto disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
             Descartar
-          </button>
-          <Button
-            size="xs"
-            variant="primary"
+          </BotonTexto>
+          <BotonAzul
+            className="px-[11px] py-[5px]"
             disabled={guardando}
             onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }], { refrescar: item.destino.tipo === "edicion" || item.destino.tipo === "perfil" })}
           >
             Usar
-          </Button>
+          </BotonAzul>
         </div>
       )}
     </li>
@@ -214,7 +213,7 @@ export function Propuestas({ items }: { items: ItemPropuesto[]; compacto?: boole
   if (items.length === 0) return null;
   return (
     <div className="space-y-1.5">
-      <p className="text-2xs font-semibold uppercase tracking-widest text-brand">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
         {items.length === 1 ? "Sugerida por el agente" : `Sugeridas por el agente · ${items.length}`}
       </p>
       <ul className="space-y-1.5">
