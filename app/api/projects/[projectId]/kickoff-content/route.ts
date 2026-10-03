@@ -6,7 +6,7 @@
  * congelado en el último "Subir" — no las ediciones en curso.
  *
  *   GET  → estado para la barra "cambios sin subir"
- *          { publishedSnapshotAt, contentUpdatedAt, dirty }
+ *          { publishedSnapshotAt, contentUpdatedAt, dirty, cronogramaSinSubir, cronogramaSinPublicar }
  *   POST → "Subir": congela el snapshot client-safe (secciones + bloques CONFIRMED
  *          + procesos confirmados) — TODO lo que ve el cliente — hasta el próximo Subir.
  *
@@ -32,15 +32,41 @@ export async function GET(_req: NextRequest, { params }: { params: Params }) {
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const canvas = await prisma.projectCanvas.findFirst({
-    where: { projectId, ...canvasOf("kickoff") },
-    select: { publishedSnapshotAt: true, contentUpdatedAt: true },
-  });
+  const [canvas, proyecto, tl] = await Promise.all([
+    prisma.projectCanvas.findFirst({
+      where: { projectId, ...canvasOf("kickoff") },
+      select: { publishedSnapshotAt: true, contentUpdatedAt: true },
+    }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { timelinePublishedAt: true } }),
+    prisma.projectTimeline.findUnique({
+      where: { projectId },
+      select: { anchorStartDate: true, lastEditedByHuman: true, publishedSnapshot: true, _count: { select: { phases: true } } },
+    }),
+  ]);
+
+  /* ── EL CRONOGRAMA QUE VE EL CLIENTE DENTRO DEL KICKOFF (2026-10-02) ────────────────────────
+     La fecha de arranque y el cronograma del enlace del kickoff salen de la FOTO PUBLICADA DEL
+     CRONOGRAMA, no del kickoff. «Subir» el kickoff no la renovaba, así que en «CAV - SHP» Nexus
+     decía 21-sep y el cliente leía 1-sep, y corregirla no cambiaba el enlace. Acá se avisa:
+     `cronogramaSinSubir` = publicado y editado después (o con otra fecha de arranque);
+     `cronogramaSinPublicar` = existe y nunca se subió (el cliente lee «Por definir»). */
+  const anclaPublicada = (tl?.publishedSnapshot as { anchorStartDate?: string | null } | null)?.anchorStartDate ?? null;
+  const anclaViva = tl?.anchorStartDate?.toISOString() ?? null;
+  const conFases = (tl?._count.phases ?? 0) > 0;
+  const publicadoAt = proyecto?.timelinePublishedAt ?? null;
+  const cronogramaSinSubir =
+    conFases &&
+    !!publicadoAt &&
+    ((!!tl?.lastEditedByHuman && tl.lastEditedByHuman > publicadoAt) ||
+      (anclaPublicada?.slice(0, 10) ?? null) !== (anclaViva?.slice(0, 10) ?? null));
+  const cronogramaSinPublicar = conFases && !publicadoAt;
 
   return NextResponse.json({
     publishedSnapshotAt: canvas?.publishedSnapshotAt?.toISOString() ?? null,
     contentUpdatedAt: canvas?.contentUpdatedAt?.toISOString() ?? null,
     dirty: canvas ? isDirty(canvas.publishedSnapshotAt, canvas.contentUpdatedAt) : false,
+    cronogramaSinSubir,
+    cronogramaSinPublicar,
   });
 }
 

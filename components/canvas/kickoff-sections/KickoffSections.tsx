@@ -26,7 +26,7 @@ import dynamic from "next/dynamic";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "@/components/landing/inline";
 import { SortableItems } from "@/components/landing/sortable";
 import { CardGrid } from "@/components/landing/card-grid";
-import { HeroUploadButtons, BrandRow, TagRow, HeroStat } from "@/components/landing/hero-parts";
+import { HeroUploadButtons, BrandRow, TagRow, HeroStat, HeroStatEditable, HeroStatFecha } from "@/components/landing/hero-parts";
 import { CtaEditor, CtaButton } from "@/components/landing/sections";
 import { resolveHeroTitle } from "@/lib/landing/hero-title";
 import { landingLang, t } from "@/components/landing/i18n";
@@ -255,7 +255,41 @@ export const KickoffHeroSection: FC<SectionProps<KickoffHeroData>> = ({
           portada diría «3 meses semanas». Vaciarlo devuelve el número vivo del cronograma.
           ⚠ El gate acepta que HAYA una métrica escrita: un proyecto sin cronograma todavía puede
           querer anunciar su duración. */}
-      {(phases.length > 0 || conMetricaEscrita) && (
+      {/* ⭐ EDICIÓN A MANO (2026-10-02): duración y fases se escriben acá mismo (vaciarlas devuelve el
+          número del cronograma), y la fecha de arranque es un SELECTOR que mueve el ancla del
+          cronograma — una sola fecha para el kickoff, el cronograma y el enlace del cliente. Antes
+          solo el chat podía tocarlas, y escribía un texto encima de la fecha real. */}
+      {canEdit && (phases.length > 0 || ctx.kickoff?.onSetArranque) && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 32, justifyContent: "center", marginTop: 38 }}>
+          <HeroStatEditable
+            value={d.metricaDuracion ?? ""}
+            placeholder={phases.length > 0 ? `${totalWeeks} ${t(lang, "semanas")}` : "Duración"}
+            label={t(lang, "duracionTotal")}
+            onCommit={(v) => set({ metricaDuracion: v.trim() || undefined })}
+          />
+          {ctx.kickoff?.onSetArranque ? (
+            <HeroStatFecha
+              valor={ctx.kickoff.timeline?.anchorStartDate?.slice(0, 10) ?? null}
+              etiqueta={startLabel}
+              label={t(lang, "arranque")}
+              onCambiar={async (ymd) => {
+                await ctx.kickoff!.onSetArranque!(ymd);
+                // La fecha real manda: un texto escrito antes (por chat) dejaría de coincidir.
+                if (d.metricaArranque?.trim()) set({ metricaArranque: undefined });
+              }}
+            />
+          ) : (
+            <HeroStat value={d.metricaArranque?.trim() || startLabel} label={t(lang, "arranque")} />
+          )}
+          <HeroStatEditable
+            value={d.metricaFases ?? ""}
+            placeholder={phases.length > 0 ? `${phases.length} ${t(lang, phases.length === 1 ? "fase" : "fases")}` : "Fases"}
+            label={t(lang, "hojaDeRuta")}
+            onCommit={(v) => set({ metricaFases: v.trim() || undefined })}
+          />
+        </div>
+      )}
+      {!canEdit && (phases.length > 0 || conMetricaEscrita) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 32, justifyContent: "center", marginTop: 38 }}>
           {d.metricaDuracion?.trim() ? (
             <HeroStat value={d.metricaDuracion} label={t(lang, "duracionTotal")} />

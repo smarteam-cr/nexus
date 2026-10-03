@@ -149,13 +149,15 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
         onToggleHidden: k.toggleHidden,
         // Coordinación (no contenido): se guarda al instante, sin "Subir al cliente".
         onAssignSession: k.assignSession,
+        // La fecha de arranque desde la portada: mueve el ancla del cronograma.
+        onSetArranque: k.cambiarArranque,
       },
     }),
     [
       projectId, k.clientName, k.clientLogoUrl, k.clientLogoDarkUrl, k.clientLogoScale,
       k.smarteamLogoUrl, k.brandLogos, k.clientId,
       onClientLogoChange, k.timeline, k.procesos, k.platformLogos, k.confirmProceso,
-      k.hiddenKeys, k.toggleHidden, k.assignSession,
+      k.hiddenKeys, k.toggleHidden, k.assignSession, k.cambiarArranque,
     ],
   );
 
@@ -189,7 +191,11 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
         unpublished={k.dirty || draftProcesos > 0}
         onPublish={k.publishChanges}
         publishing={k.publishing}
-        savedMessage={`Cambios guardados${draftProcesos > 0 ? ` (${draftProcesos} ${draftProcesos === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.`}
+        savedMessage={
+          `Cambios guardados${draftProcesos > 0 ? ` (${draftProcesos} ${draftProcesos === 1 ? "proceso sin confirmar" : "procesos sin confirmar"})` : ""} — el cliente todavía no los ve.` +
+          (k.cronogramaSinSubir ? " El cronograma cambió (fecha o fases) y se sube junto con el kickoff." : "") +
+          (k.cronogramaSinPublicar ? " El cronograma todavía no está subido: el cliente ve «Por definir» en la fecha de arranque." : "")
+        }
       />
       {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
           upsertCardData. El apply marca dirty solo (onContentChange del hook) —

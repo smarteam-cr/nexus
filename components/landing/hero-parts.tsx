@@ -406,3 +406,84 @@ export function HeroStat({ value, unit, label }: { value: string; unit?: string;
     </div>
   );
 }
+
+/**
+ * Un número de la portada que el CSE escribe A MANO (2026-10-02). Antes solo el chat podía
+ * pisarlo: «la fecha de arranque solo se cambiaba pidiéndosela a la IA» (Caroline, Honda FACO;
+ * Elías, CAV SHP). El placeholder muestra el valor que sale del cronograma: vaciar el campo lo
+ * devuelve.
+ */
+export function HeroStatEditable({
+  value,
+  placeholder,
+  label,
+  onCommit,
+}: {
+  value: string;
+  placeholder: string;
+  label: string;
+  onCommit: (next: string) => void;
+}) {
+  return (
+    <div style={{ textAlign: "center", minWidth: 90 }}>
+      <div className="font-display" style={{ color: "var(--dark-text)", fontSize: 28, lineHeight: 1 }}>
+        <Editable as="span" editable value={value} placeholder={placeholder} onCommit={onCommit} />
+      </div>
+      <div className="eyebrow" style={{ color: "var(--dark-text-muted)", marginTop: 7, fontSize: 11 }}>{label}</div>
+    </div>
+  );
+}
+
+/**
+ * La FECHA de arranque en la portada, editable: escribe el ancla del cronograma (una sola fecha
+ * para kickoff, cronograma y enlace del cliente), no un texto encima. `valor` en AAAA-MM-DD.
+ */
+export function HeroStatFecha({
+  valor,
+  etiqueta,
+  label,
+  onCambiar,
+}: {
+  valor: string | null;
+  /** Cómo se lee la fecha («21 de septiembre de 2026»), o «Por definir». */
+  etiqueta: string;
+  label: string;
+  onCambiar: (ymd: string | null) => Promise<void>;
+}) {
+  const toast = useToast();
+  const [guardando, setGuardando] = useState(false);
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div className="font-display" style={{ color: "var(--dark-text)", fontSize: 28, lineHeight: 1 }}>{etiqueta}</div>
+      <input
+        type="date"
+        aria-label="Fecha de arranque del proyecto"
+        title="Cambia la fecha de arranque del cronograma"
+        value={valor ?? ""}
+        disabled={guardando}
+        onChange={async (e) => {
+          const ymd = e.target.value || null;
+          setGuardando(true);
+          try {
+            await onCambiar(ymd);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "No se pudo cambiar la fecha de arranque.");
+          } finally {
+            setGuardando(false);
+          }
+        }}
+        style={{
+          marginTop: 6,
+          fontSize: 12,
+          background: "transparent",
+          color: "var(--dark-text-secondary)",
+          border: "1px solid var(--dark-text-muted)",
+          borderRadius: 6,
+          padding: "2px 6px",
+          colorScheme: "dark",
+        }}
+      />
+      <div className="eyebrow" style={{ color: "var(--dark-text-muted)", marginTop: 7, fontSize: 11 }}>{label}</div>
+    </div>
+  );
+}

@@ -42,6 +42,12 @@ export function useKickoffData(projectId: string, canvasId: string) {
   // staged: se guarda al instante y no participa de "Subir al cliente". `null` = todavía
   // no sembrado → manda lo que diga el bloque.
   const [horarioAssignments, setHorarioAssignments] = useState<HorarioAssignments | null>(null);
+  /* El cronograma que el cliente ve DENTRO del kickoff sale de la foto publicada del cronograma, no
+     del kickoff (caso «CAV - SHP», 2026-10-02: Nexus 21-sep, el enlace 1-sep). Sin subir = publicado y
+     editado después; sin publicar = existe y nunca se subió. Ver kickoff-content/route.ts. */
+  const [cronogramaSinSubir, setCronogramaSinSubir] = useState(false);
+  const [cronogramaSinPublicar, setCronogramaSinPublicar] = useState(false);
+  const [avisoCronograma, setAvisoCronograma] = useState<string | null>(null);
 
   // Procesos del cliente (diagramas) — el preview interno los muestra todos.
   useEffect(() => {
@@ -71,7 +77,11 @@ export function useKickoffData(projectId: string, canvasId: string) {
   useEffect(() => {
     fetch(`/api/projects/${projectId}/kickoff-content`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setContentDirty(!!d?.dirty))
+      .then((d) => {
+        setContentDirty(!!d?.dirty);
+        setCronogramaSinSubir(!!d?.cronogramaSinSubir);
+        setCronogramaSinPublicar(!!d?.cronogramaSinPublicar);
+      })
       .catch(() => {});
   }, [projectId]);
 
@@ -140,7 +150,27 @@ export function useKickoffData(projectId: string, canvasId: string) {
 
   const visibilityDirty =
     hiddenKeys.size !== savedHiddenKeys.size || [...hiddenKeys].some((k) => !savedHiddenKeys.has(k));
-  const dirty = visibilityDirty || contentDirty;
+  const dirty = visibilityDirty || contentDirty || cronogramaSinSubir;
+
+  /**
+   * La fecha de arranque desde la PORTADA del kickoff: escribe el ancla del cronograma (una sola
+   * fecha para el kickoff, el cronograma y el enlace), no un texto encima. Si el cronograma ya está
+   * publicado, queda «sin subir» hasta el próximo Subir. Lanza si el servidor rechaza.
+   */
+  const cambiarArranque = useCallback(
+    async (ymd: string | null) => {
+      const res = await fetch(`/api/projects/${projectId}/timeline/arranque`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anchorStartDate: ymd }),
+      }).catch(() => null);
+      const d = res ? await res.json().catch(() => null) : null;
+      if (!res?.ok) throw new Error((d?.error as string | undefined) ?? "No se pudo cambiar la fecha de arranque.");
+      setTimeline((cur) => (cur ? { ...cur, anchorStartDate: (d?.anchorStartDate as string | null) ?? null } : cur));
+      if (d?.cambio && !cronogramaSinPublicar) setCronogramaSinSubir(true);
+    },
+    [projectId, cronogramaSinPublicar],
+  );
 
   // Confirmar/desconfirmar UN proceso (DRAFT↔CONFIRMED) — botón por proceso.
   // Memoizado: es dep del `ctx` que consume KickoffWorkspace (evita recrear ctx cada render).
@@ -219,6 +249,21 @@ export function useKickoffData(projectId: string, canvasId: string) {
       }
       await fetch(`/api/projects/${projectId}/kickoff-content`, { method: "POST" }).catch(() => {});
       setContentDirty(false);
+      /* Si el cronograma publicado quedó atrás, se sube junto: es lo que el cliente lee como fecha
+         de arranque y cronograma DENTRO del kickoff. Uno que nunca se publicó NO se publica acá:
+         publicarlo por primera vez es un acto del cronograma (congela la línea base). */
+      if (cronogramaSinSubir) {
+        const r = await fetch(`/api/projects/${projectId}/publish-timeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Subido junto con el kickoff" }),
+        }).catch(() => null);
+        if (r?.ok) setCronogramaSinSubir(false);
+        else {
+          const e = r ? await r.json().catch(() => null) : null;
+          setAvisoCronograma((e?.error as string | undefined) ?? "El kickoff se subió, pero el cronograma no: súbelo desde el cronograma.");
+        }
+      }
     } catch {
       /* dejar el estado local; el usuario puede reintentar */
     }
@@ -253,5 +298,14 @@ export function useKickoffData(projectId: string, canvasId: string) {
     confirmProceso,
     horarioAssignments,
     assignSession,
+    cronogramaSinSubir,
+    cronogramaSinPublicar,
+    cambiarArranque,
+    // El aviso del cronograma comparte la franja de error del documento.
+    error: cs.error ?? avisoCronograma,
+    clearError: () => {
+      cs.clearError();
+      setAvisoCronograma(null);
+    },
   };
 }

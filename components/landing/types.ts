@@ -391,6 +391,12 @@ export interface LandingContext {
      * sin pasar por "Subir al cliente". Rechaza (throw) si el servidor la rechaza.
      */
     onAssignSession?: (sessionId: string, optionId: string | null) => Promise<void>;
+    /**
+     * Solo el editor del CSE: cambiar la FECHA DE ARRANQUE desde la portada. Escribe el ancla del
+     * cronograma (no un texto encima): una sola fecha para el kickoff, el cronograma y el enlace.
+     * Ausente en la vista del cliente y en el PDF. Lanza si el servidor la rechaza.
+     */
+    onSetArranque?: (ymd: string | null) => Promise<void>;
   };
   /**
    * Solo DESARROLLO: la estimación de esfuerzo, que vive en la tabla `DevEstimate` y NO en
