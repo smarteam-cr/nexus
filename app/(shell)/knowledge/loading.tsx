@@ -35,7 +35,7 @@ export default function KnowledgeLoading() {
           <div className="flex gap-3 flex-wrap">
             {STAT_WIDTHS.map((w, i) => (
               <SkeletonPanel
-                key={w}
+                key={i}
                 minH="min-h-[28px]"
                 className={w}
                 bodyClassName="px-4 py-2.5 flex items-center gap-2"

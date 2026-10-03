@@ -4,7 +4,8 @@
  * PasoPreparacion — todo lo que hace falta ANTES de escribirle o llamarle (pedido de Elías,
  * 2026-10-02). Dos columnas:
  *
- *   - Identificación: el detonante (los hechos de HubSpot y el «por qué ahora»), el contacto, la
+ *   - Identificación: arriba, un resumen con «Por qué ahora» y «Su HubSpot hoy» (Elías, 2026-10-03);
+ *     después, el detonante (los hechos de HubSpot y el «por qué ahora»), el contacto, la
  *     radiografía de la empresa (su ficha de HubSpot y lo que el agente investigó en internet) y su
  *     HubSpot hoy. La escala y las áreas en juego viven en Exploración (Elías, 2026-10-03).
  *   - Conexión: cómo abrir la conversación, la hipótesis de valor y la estrategia de conexión (que
@@ -17,9 +18,13 @@ import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { diaConAnio, diaYHora } from "@/lib/exploraciones/fechas";
+import { definicionDe } from "@/lib/exploraciones/casillas";
 import { contactoPrincipal, porQueAhoraSugerido, senalesDe, type ContactoConRastro } from "@/lib/exploraciones/senales";
 import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
+import { IconoDeSugerencia } from "./FranjaDeSugerencias";
+import { describirPropuesta } from "./Propuestas";
+import { lineasDe } from "./Resumen";
 import { useCorrida } from "./useCorrida";
 
 interface DatosDePreparacion {
@@ -122,6 +127,60 @@ function BarraDelAgente() {
         </Alert>
       )}
     </div>
+  );
+}
+
+/**
+ * El resumen de la identificación (pedido de Elías, 2026-10-03): lo que dice «Por qué ahora» y «Su
+ * HubSpot hoy», para leerlo de un vistazo antes de escribirle. Muestra lo confirmado; si todavía no
+ * hay, lo que sugirió el agente, en azul y con su chispa, sin confirmarlo. Tocar una línea abre su
+ * casilla, donde se usa o se cambia.
+ */
+const DEL_RESUMEN = ["detonante", "hubspotActual"] as const;
+
+function ResumenDeLaIdentificacion() {
+  const { exp, escala, nombreDeNivel, pendientesPara, abrirCasilla } = useLienzo();
+  return (
+    <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
+      <div>
+        <h3 className="text-sm font-semibold text-fg">Resumen</h3>
+        <p className="text-xs text-fg-muted">Por qué hablarle ahora y qué tiene hoy en HubSpot, de un vistazo.</p>
+      </div>
+      <div className="divide-y divide-line">
+        {DEL_RESUMEN.map((clave) => {
+          const confirmado = lineasDe(clave, exp.estado.contenido.casillas[clave]);
+          const sugeridas = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
+          const etiqueta = definicionDe(clave).etiqueta;
+          return (
+            <button
+              key={clave}
+              type="button"
+              onClick={() => abrirCasilla(clave)}
+              className="group block w-full space-y-1 py-3 text-left first:pt-0 last:pb-0"
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">{etiqueta}</span>
+                {confirmado.length === 0 && sugeridas.length > 0 && (
+                  <span className="text-xs font-semibold text-brand group-hover:underline">Revisar →</span>
+                )}
+              </span>
+              {confirmado.length > 0 ? (
+                <span className="line-clamp-3 block text-[13px] leading-[1.45] text-fg-secondary">{confirmado.join(" · ")}</span>
+              ) : sugeridas.length > 0 ? (
+                <span className="flex items-start gap-2">
+                  <IconoDeSugerencia className="mt-[3px] h-[15px] w-[15px] flex-shrink-0 text-brand" />
+                  <span className="line-clamp-3 text-[13px] leading-[1.45] text-brand">
+                    {sugeridas.map((it) => describirPropuesta(it, escala, nombreDeNivel)).join(" · ")}
+                  </span>
+                </span>
+              ) : (
+                <span className="block text-xs text-fg-muted">Falta: el agente lo propone al preparar.</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -353,6 +412,7 @@ export default function PasoPreparacion() {
       {error && <Alert variant="warning">{error} Lo demás se puede llenar igual.</Alert>}
       <div className="grid items-start gap-8 xl:grid-cols-2">
         <Columna nombre="Identificación" pregunta="Quién es, qué hace y por qué hablar ahora.">
+          <ResumenDeLaIdentificacion />
           <Detonante datos={datos} />
           <Contacto datos={datos} />
           <RadiografiaDeLaEmpresa datos={datos} />
