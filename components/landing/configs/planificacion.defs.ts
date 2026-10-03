@@ -1,25 +1,30 @@
 /**
  * components/landing/configs/planificacion.defs.ts
  *
- * Defs SERVER-SAFE del canvas "Planificación" — el documento que el cliente APRUEBA
- * antes de habilitar el CRM: procesos rediseñados + arquitectura base + etapas del
- * ciclo de vida + rutinas de adopción (+ despliegue por olas cuando el equipo lo
- * amerita). Documento INTERNO de trabajo (paleta `stl-internal`): se presenta y se
- * discute con el cliente en sesión, pero no tiene superficie externa propia.
+ * Defs SERVER-SAFE del canvas "Planificación" — lo que va a quedar CONFIGURADO en HubSpot, armado
+ * por fuera para que el cliente lo vea y lo apruebe antes de configurar (2026-10-02). Caroline la
+ * presenta como la arquitectura de HubSpot; se llama «Planificación» para que el equipo piense en
+ * estrategia y no solo en HubSpot.
  *
- * KEYS: las 4 legacy se conservan (`arquitectura_solucion`, `roadmap`,
- * `definicion_procesos`, `metricas_exito` — el markdown viejo se ve vía `__legacyMd`)
- * y se suman hero, `ciclo_vida_crm`, `rutinas_adopcion`, `plan_despliegue` y `cierre`.
+ * Secciones: portada · cómo van a funcionar los procesos (solo lo que se hará) · etapas del ciclo de
+ * vida · arquitectura · propiedades por objeto · pipelines (leads, ventas, servicio) ·
+ * automatizaciones · conversaciones (mensajería instantánea y agentes de IA) · rutinas de adopción y
+ * despliegue por olas (hasta que exista el documento de Puesta en marcha) · aprobación. TODAS se
+ * pueden ocultar, también la portada y la aprobación.
+ *
+ * Lo que salió: la política rectora (al Diagnóstico), la hoja de ruta (el orden vive en el Cronograma
+ * y en las acciones del Diagnóstico) y las métricas de éxito (los OBJ del Diagnóstico). Quedan al
+ * final como defs SOLO-LECTURA hasta que la planificación se regenera.
+ *
+ * Propiedades, pipelines y automatizaciones vinieron de Ejecución
+ * (scripts/migrar-planificacion-practica.ts pasa el contenido que ya existía).
  *
  * `plan_despliegue` es CONDICIONAL por diseño: el agente la deja VACÍA cuando la
  * adopción es directa (equipo chico) — vacía → blank → el modo lectura la omite solo.
- * El motor ya hace el trabajo condicional; no hace falta lógica.
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
 import {
-  PROCESS_MAPPING_SCHEMA,
-  PROCESS_MAPPING_EMPTY,
   ROI_SCHEMA,
   ROI_EMPTY,
   makeDiagramArchitectureDef,
@@ -33,6 +38,9 @@ import { heroTitleBrief } from "@/lib/landing/hero-title";
 const str = { type: "string" } as const;
 const strArray = { type: "array", items: { type: "string" } } as const;
 const asSchema = (s: unknown) => s as unknown as Record<string, unknown>;
+function arrayOf(props: Record<string, unknown>, required: string[]) {
+  return { type: "array", items: { type: "object", properties: props, required } } as const;
+}
 
 /* ⭐ Las CINCO copias de este esquema se consolidaron en `shared-sections.defs.ts` el
    2026-08-23. El trinquete «un renderer, un contrato de datos» probó que eran idénticas; una sola
@@ -40,6 +48,12 @@ const asSchema = (s: unknown) => s as unknown as Record<string, unknown>;
    escribe y el agente no: ver `PROSA_SCHEMA_DEL_CHAT`. */
 const proseSchema = PROSA_SCHEMA;
 const proseEmpty = PROSA_EMPTY;
+
+/* El ORIGEN de cada cosa que se configura (lib/planificacion/origen.ts). Va en la guía de cada sección
+   con la misma letra: si cambia, cambia acá. */
+const ORIGEN_BRIEF =
+  "`origen` = 'acordado' SOLO si una reunión con el cliente lo respalda (nómbrala en `fuente`: 'Sesión Ventas 3'); 'propuesta' si es diseño de Smarteam; 'supuesto' si das por hecho algo del cliente que nadie dijo. " +
+  "Lo que solo dice una nota interna o el handoff NO es 'acordado': es 'propuesta' o 'supuesto'.";
 
 export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -50,16 +64,16 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     backdrop: true,
     selfTitled: true,
     pinned: true,
-    noHide: true,
+    // Se puede OCULTAR (2026-10-02): todas las secciones de la Planificación tienen el ojo.
     sectionType: "planificacion_hero",
     agentGenerated: true,
     empty: { titulo: "", headline: "", subhead: "", tags: [] },
-    agentHint: "Qué se construye + la decisión de arquitectura clave + la modalidad de adopción usada.",
+    agentHint: "Qué va a quedar configurado en HubSpot + la decisión de arquitectura clave.",
     brief:
       heroTitleBrief("Plan de implementación") +
-      "Portada del plan. `headline`: QUÉ se construye, en una línea de negocio ('Un solo pipeline de ventas con seguimiento automático'). " +
-      "`subhead`: 1-2 frases con la decisión de arquitectura más importante Y la modalidad de adopción que este plan asume (directa o por pilotos) — declarada para que el CSE la corrija si no es la acordada. " +
-      "`tags`: 2-5 chips de los frentes del plan ('Pipeline', 'Ciclo de vida', 'Adopción').",
+      "Portada del plan. `headline`: QUÉ va a quedar configurado en HubSpot, en una línea de negocio ('Un portal que centraliza leads, admisión y tickets para los cinco proyectos'). " +
+      "`subhead`: 1-2 frases con la decisión de arquitectura más importante y qué muestra el documento (procesos, etapas, propiedades, pipelines, automatizaciones, conversaciones). " +
+      "`tags`: 2-5 chips con los hubs o frentes ('Sales Hub', 'Service Hub', 'Multi-proyecto').",
     schema: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray }, required: ["headline"] },
     /* ⭐ `eyebrow` SOLO acá y no en el esquema del agente: es el rótulo chico de arriba, lo
        cura una persona y `preserveNonSchemaKeys` lo acarrea entre regeneraciones. Hasta el
@@ -69,20 +83,56 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   {
-    /* SOLO-LECTURA desde el 2026-10-02. La política rectora vivió acá del 28-sep al 2-oct y volvió
-       al DIAGNÓSTICO (la parte teórica, como FUNDAUNA). Las planificaciones de esos días la siguen
-       mostrando hasta regenerarse; al regenerar, el runner la oculta (planificacion-generate.ts). */
-    key: "politica_rectora",
-    label: "Política rectora",
-    eyebrow: "En qué nos enfocamos y para qué",
-    theme: "dark",
-    sectionType: "kickoff_prose",
-    agentGenerated: false,
-    empty: proseEmpty,
-    agentHint: "",
-    brief: "Sección legacy. La política rectora vive ahora en el diagnóstico, al lado del desafío principal.",
-    schema: asSchema(proseSchema),
-    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+    /* 2026-10-02 — SOLO lo que se hará. El «hoy / cómo será» se partió: cómo operan hoy vive en el
+       Diagnóstico («Cómo operas hoy»), y acá queda cómo van a funcionar, paso a paso. Misma key:
+       lo ya generado se lee con `adoptarProcesos` (el párrafo «cómo será» se muestra hasta regenerar). */
+    key: "definicion_procesos",
+    label: "Cómo van a funcionar tus procesos",
+    eyebrow: "Lo que se hará",
+    theme: "light",
+    sectionType: "procesos_futuro",
+    agentGenerated: true,
+    empty: { intro: "", procesos: [] },
+    agentHint: "Por proceso: titular de cómo va a funcionar + 3-6 pasos en orden, cada uno con su origen.",
+    brief:
+      "Cómo van a funcionar en HubSpot los procesos que el proyecto toca — SOLO lo que se hará: NO describas cómo operan hoy (eso está en el Diagnóstico). " +
+      "`procesos`: uno por proceso — `nombre` en lenguaje del cliente ('Captación y calificación de leads'); `resumen` = titular de media línea con cómo va a funcionar ('Todo lead entra a HubSpot y llega solo al proyecto correcto'); `fuente` = las reuniones que lo respaldan; " +
+      "`pasos` (3-6, en orden): `paso` = qué pasa, en una línea ('El nombre del formulario lo asigna al proyecto'); `detalle` = opcional, una línea; " + ORIGEN_BRIEF + " " +
+      "Parte de los procesos que el cliente describió (sus mapas y las reuniones): si un proceso no se habló, no lo inventes.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        procesos: arrayOf(
+          { nombre: str, resumen: str, fuente: str, pasos: arrayOf({ paso: str, detalle: str, origen: str }, ["paso"]) },
+          ["nombre"],
+        ),
+      },
+      required: ["procesos"],
+    },
+  },
+  {
+    key: "ciclo_vida_crm",
+    label: "Etapas del ciclo de vida",
+    eyebrow: "Del lead al cliente",
+    theme: "soft",
+    sectionType: "ciclo_vida_tabla",
+    agentGenerated: true,
+    empty: { intro: "", etapas: [] },
+    agentHint: "Una fila por etapa: cuándo entra, qué la mueve, si es nueva/se mantiene/se renombra, y su origen.",
+    brief:
+      "Las etapas del ciclo de vida del CRM del CLIENTE (suscriptor → lead → … → cliente), como van a quedar. `intro`: de dónde parte ('Tu portal arranca desde cero' o 'Hoy tu portal usa N etapas; proponemos M'). " +
+      "`etapas`: una por etapa — `etapa` = su nombre ('Lead calificado'); `entraCuando` = UNA línea con el criterio de entrada; `laMueve` = quién o qué la mueve ('El agente', 'Automatización al ganar el negocio'); " +
+      "`cambio` = UNO de: nueva | se_mantiene | renombrada | se_quita; " + ORIGEN_BRIEF + " " +
+      "Si el portal ya tiene etapas (vienen en el contexto), parte de esas y propone SOLO los cambios que los procesos justifican. No renombres por gusto.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        etapas: arrayOf({ etapa: str, entraCuando: str, laMueve: str, cambio: str, origen: str }, ["etapa"]),
+      },
+      required: ["etapas"],
+    },
   },
   makeDiagramArchitectureDef({
     key: "arquitectura_solucion",
@@ -91,56 +141,135 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: true,
   }),
   {
-    key: "roadmap",
-    label: "Hoja de ruta",
-    eyebrow: "En qué orden",
-    theme: "light",
-    sectionType: "kickoff_prose",
-    agentGenerated: true,
-    empty: proseEmpty,
-    agentHint: "Fases CONCEPTUALES ordenadas por dependencia. SIN fechas ni semanas.",
-    brief:
-      "Las fases del trabajo, ordenadas por DEPENDENCIA — qué desbloquea qué. `items` (3-6): `title` = '1. Fundaciones de datos', '2. Pipeline y propiedades'…; `detail` = UNA línea con el entregable y de qué fase depende. " +
-      "REGLA DURA: SIN fechas, semanas ni duraciones — el calendario vive en el Cronograma, que es otra pieza. Este roadmap dice el ORDEN y el porqué del orden.",
-    schema: asSchema(proseSchema),
-    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
-  },
-  {
-    key: "definicion_procesos",
-    label: "Procesos rediseñados",
-    eyebrow: "Cómo va a operar",
-    theme: "light",
-    sectionType: "process_mapping",
-    agentGenerated: true,
-    empty: PROCESS_MAPPING_EMPTY,
-    agentHint: "Los procesos del cliente como van a operar, anclados a los diagramas reales (la fricción marcada ⚠ → el comoEsHoy).",
-    brief:
-      "El rediseño, proceso por proceso. `procesos`: por cada proceso del cliente que el proyecto toca — `nombre` en lenguaje del cliente; `comoEsHoy` = la operación REAL según sus diagramas mapeados (usá la fricción marcada ⚠ — no la suavices); `comoSera` = cómo opera con el CRM configurado, concreto y dentro del alcance; `sistemas` = herramientas de hoy → de mañana. " +
-      "`resumenHoy` y `resumenSera` = TITULARES de media línea, uno por columna, que se leen solos y contrastan entre sí ('Cada vendedor con su propia planilla' / 'Un solo pipeline que todos ven') — NO son un resumen del párrafo de abajo. " +
-      "Partí de los procesos MAPEADOS del cliente: si un proceso no está mapeado ni mencionado, no lo inventes.",
-    schema: asSchema(PROCESS_MAPPING_SCHEMA),
-  },
-  {
-    key: "ciclo_vida_crm",
-    label: "Etapas del ciclo de vida",
-    eyebrow: "Del lead al cliente",
+    /* 2026-10-02 — vino de Ejecución («Arquitectura de propiedades»). Forma nueva pensada para las
+       plantillas de Excel de Caroline: lib/planificacion/propiedades.ts. `id`, `autor` y `extra` van
+       FUERA del esquema: el agente no los escribe, y el runner conserva las filas de una persona. */
+    key: "propiedades",
+    label: "Propiedades por objeto",
+    eyebrow: "Lo que guarda cada objeto",
     theme: "soft",
-    sectionType: "kickoff_prose",
+    sectionType: "propiedades_objeto",
     agentGenerated: true,
-    empty: proseEmpty,
-    agentHint: "Una etapa por item: criterio de entrada/salida + quién o qué la mueve. Partir de las etapas REALES del portal.",
+    empty: { intro: "", filas: [] },
+    agentHint: "Una fila por propiedad a crear o ajustar, agrupadas por objeto. Nombre interno con `⚠️ Por validar` si no está decidido.",
     brief:
-      "Las etapas del ciclo de vida del CRM del CLIENTE (suscriptor → lead → MQL → … → cliente), como van a quedar definidas. `intro`: de dónde parte ('Hoy tu portal usa N etapas; proponemos M'). " +
-      "`items`: UNA por etapa — `title` = la etapa; `detail` = UNA línea con el criterio de entrada/salida y quién o qué workflow la mueve ('Pasa a MQL cuando descarga una guía; lo mueve el workflow de scoring'). " +
-      "REGLA: partí de las etapas REALES que el portal usa hoy (vienen en el contexto si hay cuenta conectada) y proponé SOLO cambios justificados por el rediseño de procesos. No renombres por gusto.",
-    schema: asSchema(proseSchema),
-    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+      "Las PROPIEDADES que se crean o se ajustan en HubSpot, por objeto. `intro`: 1 frase opcional. `filas`: una por propiedad, agrupadas por objeto (todas las de Contacto juntas, después Empresa, Lead, Negocio, Ticket, objetos personalizados). Por fila: " +
+      "`objeto` = Contacto | Empresa | Lead | Negocio | Ticket | el objeto personalizado; `grupo` = el grupo de propiedades en HubSpot si se habló, si no vacío; `etiqueta` = el nombre que ve el usuario ('Tipo de programa'); " +
+      "`campo` = el nombre interno propuesto entre backticks si está decidido; si no, `⚠️ Por validar` — NUNCA inventes nombres internos del portal del cliente; " +
+      "`tipo` = UNO de: texto | texto_largo | numero | moneda | fecha | fecha_hora | desplegable | opcion_unica | casillas | casilla | telefono | archivo | usuario | calculo; " +
+      "`opciones` = las opciones de un desplegable o de casillas separadas por ' · ' (si no se definieron, `⚠️ Por definir`); `obligatoria` = 'si' si sin ella el proceso no camina, si no 'no'; " +
+      "`estado` = nueva | existente | ajustar; `uso` = para qué existe, en 1 línea sin jerga; " + ORIGEN_BRIEF + " " +
+      "Las propiedades de una INTEGRACIÓN ya están en el requerimiento técnico: no las repitas acá.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        filas: arrayOf(
+          {
+            objeto: str, grupo: str, etiqueta: str, campo: str, tipo: str, opciones: str,
+            obligatoria: str, estado: str, uso: str, origen: str, fuente: str,
+          },
+          ["objeto", "etiqueta"],
+        ),
+      },
+      required: ["filas"],
+    },
   },
   {
+    /* 2026-10-02 — vino de Ejecución («Pipelines y objetos», que era texto). Ahora con etapas de verdad,
+       que se ven de izquierda a derecha. Lo que vino de Ejecución se lee con `adoptarPipelines`. */
+    key: "pipelines",
+    label: "Tus pipelines",
+    eyebrow: "Leads, ventas y servicio",
+    theme: "light",
+    sectionType: "pipelines_horizontal",
+    agentGenerated: true,
+    empty: { intro: "", pipelines: [] },
+    agentHint: "Un pipeline por proceso (leads, ventas, servicio): etapas en orden con cuándo entra y qué se pide para avanzar.",
+    brief:
+      "Los PIPELINES que van a quedar en HubSpot, en este orden: leads, ventas, servicio (y otros si el alcance los trae). `pipelines`: uno por pipeline — " +
+      "`tipo` = UNO de: leads | ventas | servicio | otro; `nombre` = el pipeline ('Admisión de posgrados'); `objeto` = el objeto de HubSpot y una aclaración corta ('Negocio · requisitos de admisión'); `nota` = opcional, una línea (si hay pipelines hermanos, nómbralos acá: 'También: Educación continua y Laboratorio'); " + ORIGEN_BRIEF + " " +
+      "`etapas` (en orden, de izquierda a derecha): `etapa` = su nombre; `entraCuando` = UNA línea; `requisitos` = las propiedades que tienen que estar completas para avanzar, separadas por comas (vacío si no hay); `cierre` = 'ganado' o 'perdido' si la etapa cierra el pipeline, si no vacío; `origen` como arriba. " +
+      "Las etapas salen de los procesos y de las reuniones: no inventes etapas que nadie justificó. Solo los pipelines que el alcance incluye.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        pipelines: arrayOf(
+          {
+            tipo: str, nombre: str, objeto: str, nota: str, origen: str,
+            etapas: arrayOf({ etapa: str, entraCuando: str, requisitos: str, cierre: str, origen: str }, ["etapa"]),
+          },
+          ["tipo", "nombre"],
+        ),
+      },
+      required: ["pipelines"],
+    },
+  },
+  {
+    /* 2026-10-02 — «Automatizaciones» (no «Workflows», decisión de Elías). Absorbe los «Procesos de
+       marketing» de Ejecución: un nurturing o un scoring también son automatizaciones. */
+    key: "automatizaciones",
+    label: "Automatizaciones",
+    eyebrow: "Lo que pasa solo",
+    theme: "soft",
+    sectionType: "automatizaciones",
+    agentGenerated: true,
+    empty: { intro: "", items: [] },
+    agentHint: "Una por automatización: dónde (objeto · hub), cuándo se dispara, qué hace, qué resuelve, qué falta definir.",
+    brief:
+      "Las AUTOMATIZACIONES que se van a construir (workflows, secuencias, asignaciones, scoring, nurturing). `items`: una por automatización — " +
+      "`nombre` = qué hace en 3-6 palabras ('Asignar el lead a su proyecto'); `donde` = objeto · hub ('Contacto · Marketing Hub'); `cuando` = qué la dispara; `hace` = qué hace, en una línea; `resuelve` = qué problema del cliente resuelve; " +
+      "`falta` = lo que todavía no está definido ('Cada cuánto y cuántas veces'), vacío si nada; " + ORIGEN_BRIEF + " " +
+      "Solo las que el alcance incluye y las reuniones o los procesos justifican.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        items: arrayOf(
+          { nombre: str, donde: str, cuando: str, hace: str, resuelve: str, falta: str, origen: str, fuente: str },
+          ["nombre"],
+        ),
+      },
+      required: ["items"],
+    },
+  },
+  {
+    /* 2026-10-02 — «Conversaciones» (no «Chatbots», decisión de Elías): la mensajería instantánea que
+       entra a la bandeja de HubSpot y quién responde en cada canal, incluidos los agentes de IA para
+       WhatsApp. */
+    key: "conversaciones",
+    label: "Conversaciones",
+    eyebrow: "Mensajería instantánea y agentes de IA",
+    theme: "light",
+    sectionType: "conversaciones",
+    agentGenerated: true,
+    empty: { intro: "", items: [] },
+    agentHint: "Un canal o agente por item: canal, quién responde (persona, chatbot, agente de IA), a quién pasa, qué registra.",
+    brief:
+      "Los canales de MENSAJERÍA INSTANTÁNEA que entran a la bandeja de conversaciones de HubSpot (WhatsApp, chat del sitio, Messenger, Instagram) y quién responde en cada uno. `intro`: 1 frase opcional. `items`: uno por canal o por agente — " +
+      "`nombre` = 'WhatsApp en la bandeja de HubSpot' o 'Agente de IA en WhatsApp'; `canal` = canal · hub ('WhatsApp Business · Service Hub'); `responde` = UNO de: persona | chatbot | agente_ia; " +
+      "`paraQue` = para qué sirve; `pasaA` = a quién pasa la conversación y cuándo; `registra` = qué crea o actualiza en HubSpot; `falta` = lo que no está definido (paquete, horario, preguntas frecuentes), vacío si nada; " + ORIGEN_BRIEF + " " +
+      "Si el alcance no incluye mensajería, deja `items` vacío: la sección no se muestra.",
+    schema: {
+      type: "object",
+      properties: {
+        intro: str,
+        items: arrayOf(
+          { nombre: str, canal: str, responde: str, paraQue: str, pasaA: str, registra: str, falta: str, origen: str, fuente: str },
+          ["nombre"],
+        ),
+      },
+      required: ["items"],
+    },
+  },
+  {
+    /* Se queda acá hasta que exista el documento de Puesta en marcha (entrenamiento y adopción), que es
+       a donde va. Mientras tanto no se esconde: no tiene otro lugar donde verse. */
     key: "rutinas_adopcion",
     label: "Rutinas de adopción",
     eyebrow: "Quién, con qué cadencia",
-    theme: "light",
+    theme: "soft",
     sectionType: "kickoff_prose",
     agentGenerated: true,
     empty: proseEmpty,
@@ -156,30 +285,16 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     key: "plan_despliegue",
     label: "Plan de despliegue por olas",
     eyebrow: "Piloto escalonado",
-    theme: "soft",
+    theme: "light",
     sectionType: "kickoff_prose",
     agentGenerated: true,
     empty: proseEmpty,
-    agentHint: "SOLO si la adopción es por pilotos. Adopción directa → dejala VACÍA (vacía = no se muestra).",
+    agentHint: "SOLO si la adopción es por pilotos. Adopción directa → déjala VACÍA (vacía = no se muestra).",
     brief:
-      "SOLO para adopción POR PILOTOS (equipos grandes). Si la modalidad es DIRECTA, dejá `items` VACÍO — una sección vacía no se muestra, y eso es lo correcto. " +
+      "SOLO para adopción POR PILOTOS (equipos grandes). Si la modalidad es DIRECTA, deja `items` VACÍO — una sección vacía no se muestra, y eso es lo correcto. " +
       "`intro`: el criterio de la ola inicial. `items`: una OLA por item — `title` = 'Ola 1 — Equipo comercial de CR'; `detail` = UNA línea con quiénes entran + qué módulos usan + el indicador de éxito para pasar a la siguiente ola ('5 vendedores, pipeline + tareas; pasan cuando el 80% registra su actividad sin recordatorios').",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
-  },
-  {
-    key: "metricas_exito",
-    label: "Métricas de éxito",
-    eyebrow: "Cómo sabremos que funcionó",
-    theme: "dark",
-    sectionType: "roi",
-    agentGenerated: true,
-    empty: ROI_EMPTY,
-    agentHint: "Hasta 4 métricas medibles ligadas a cerrar los gaps del diagnóstico. Como propuesta si no están acordadas.",
-    brief:
-      "Hasta 4 métricas MEDIBLES que conectan el plan con los gaps del diagnóstico. `value` = el objetivo ('100%', '-30%', '48h'); `label` = qué mide y desde dónde ('Negocios con actividad registrada — hoy se pierde el historial'). " +
-      "Si el cliente no las acordó todavía, escribilas como propuesta (el CSE las ajusta en la sesión). Nada que no se pueda medir en el CRM.",
-    schema: asSchema(ROI_SCHEMA),
   },
   {
     key: "cierre",
@@ -188,18 +303,64 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     theme: "dark",
     selfTitled: true,
     pinned: true,
-    noHide: true,
+    // Se puede OCULTAR (2026-10-02), como todas las de la Planificación.
     ctxDriven: true,
     sectionType: "planificacion_cta",
     agentGenerated: false, // CURADA: la escribe el equipo
     empty: PLANIFICACION_CIERRE_DEFAULT,
     agentHint: "",
     brief:
-      "Cierre curado: el plan se aprueba con el cliente antes de habilitar el CRM. Botón opcional a la sesión de aprobación o al documento firmado.",
+      "Cierre curado: el plan se aprueba con el cliente antes de configurar HubSpot. Botón opcional a la sesión de aprobación o al documento firmado.",
     schema: {
       type: "object",
       properties: { eyebrow: str, headline: str, subhead: str, buttonLabel: str, buttonUrl: str, buttonTarget: str },
     },
+  },
+
+  /* ── SOLO-LECTURA: lo que salió de la Planificación ──────────────────────────────────────────────
+     Una planificación vieja las sigue mostrando igual hasta regenerarse; al regenerar, el runner las
+     OCULTA (sin borrar). No están en el canon del canvas: uno nuevo no las crea. */
+  {
+    /* La política rectora vivió acá del 28-sep al 2-oct y volvió al DIAGNÓSTICO (la parte teórica). */
+    key: "politica_rectora",
+    label: "Política rectora",
+    eyebrow: "En qué nos enfocamos y para qué",
+    theme: "dark",
+    sectionType: "kickoff_prose",
+    agentGenerated: false,
+    empty: proseEmpty,
+    agentHint: "",
+    brief: "Sección legacy. La política rectora vive ahora en el diagnóstico, al lado del desafío principal.",
+    schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+  },
+  {
+    /* 2026-10-02 — se retira: el orden del trabajo ya está en el Cronograma y en las acciones del
+       Diagnóstico. La Planificación quedó en lo que se configura. */
+    key: "roadmap",
+    label: "Hoja de ruta",
+    eyebrow: "En qué orden",
+    theme: "light",
+    sectionType: "kickoff_prose",
+    agentGenerated: false,
+    empty: proseEmpty,
+    agentHint: "",
+    brief: "Sección legacy. El orden del trabajo vive en el Cronograma y en las acciones del Diagnóstico.",
+    schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+  },
+  {
+    /* 2026-10-02 — se retira: los objetivos medibles son los OBJ del Diagnóstico. */
+    key: "metricas_exito",
+    label: "Métricas de éxito",
+    eyebrow: "Cómo sabremos que funcionó",
+    theme: "dark",
+    sectionType: "roi",
+    agentGenerated: false,
+    empty: ROI_EMPTY,
+    agentHint: "",
+    brief: "Sección legacy. Los objetivos medibles viven en el Diagnóstico (OBJ).",
+    schema: asSchema(ROI_SCHEMA),
   },
 ];
 
@@ -207,26 +368,30 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
  * Lo que salió de Planificación y sigue como def SOLO-LECTURA (las planificaciones viejas se ven igual
  * hasta regenerarse; ahí el runner las oculta). No está en el canon del canvas: uno nuevo no la crea.
  */
-export const SECCIONES_RETIRADAS_DE_PLANIFICACION = ["politica_rectora"] as const;
+export const SECCIONES_RETIRADAS_DE_PLANIFICACION = ["politica_rectora", "roadmap", "metricas_exito"] as const;
 
 /** Template del canvas Planificación para el agente tipado. */
 export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
   id: "planificacion_v1",
   caseLabel: "Planificación",
-  // diagram + process_mapping + 4 prosas: denso. El generador aborta sin persistir si
-  // se queda corto de tokens.
-  maxTokens: 16000,
-  brandVoice: false, // documento de TRABAJO interno (se discute con el cliente en sesión)
+  // Procesos con pasos + ciclo de vida + diagrama + propiedades + pipelines con etapas + automatizaciones
+  // + conversaciones + rutinas: lo más denso del motor. Tope del modo sin streaming (claude-sonnet-4-6:
+  // ~21.333); el generador aborta sin persistir si se queda corto.
+  maxTokens: 21000,
+  brandVoice: false, // documento de TRABAJO (se discute con el cliente en sesión)
   features: { useCaseChecklist: false },
   agentIntro:
-    "Eres el consultor senior de Smarteam que escribe el PLAN DE IMPLEMENTACIÓN de un CRM: el documento que el cliente APRUEBA antes de que se habilite nada. Define qué se construye (arquitectura, pipelines, ciclo de vida), cómo van a operar los procesos rediseñados, y cómo se adopta (rutinas, y despliegue por olas si el equipo es grande).\n\n" +
-    "TU MÉTODO: parte del DIAGNÓSTICO y de los PROCESOS REALES mapeados. El diagnóstico es la parte teórica y ya decidió el qué: une todo con CÓDIGOS (síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…), trae la POLÍTICA RECTORA y las ACCIONES con sus herramientas. Este plan es la parte práctica: baja esas acciones a lo que se configura, respetando la política rectora. Cada decisión del plan tiene que poder rastrearse a una acción, una causa o un objetivo del diagnóstico o al alcance — un plan que no ataca las causas diagnosticadas es un plan genérico, y el cliente lo nota. No inventes códigos: cita solo los que trae el diagnóstico. Si no hay diagnóstico, trabaja con las sesiones de tu contexto.\n\n" +
-    "LA MODALIDAD DE ADOPCIÓN gobierna dos secciones: la recibís en el contexto (directa o por pilotos, con su porqué). Con adopción DIRECTA, el plan de despliegue por olas queda VACÍO — vacío es correcto, es una sección que no aplica. Con PILOTOS, definí las olas con equipo inicial, módulos e indicador de éxito para avanzar.\n\n" +
-    "EL CICLO DE VIDA: partí de las etapas REALES que el portal del cliente usa hoy (vienen en el contexto si hay cuenta conectada). Proponé SOLO los cambios que el rediseño de procesos justifica, con el criterio de movimiento explícito por etapa. Renombrar etapas sin motivo es churn que el equipo del cliente paga después.\n\n" +
-    "REGLA DURA DE FECHAS: la hoja de ruta es CONCEPTUAL — orden y dependencias, SIN fechas, semanas ni duraciones. El calendario vive en el Cronograma, que es otra pieza y ya existe.\n\n" +
-    "LO INTERNO ES INSUMO, NO CONTENIDO: del handoff te llegan secciones que Smarteam escribió para adentro — riesgos y banderas, la motivación real de la compra, los acuerdos y promesas de la venta, y el estado en vuelo. Las usás para NO planificar contra ellas (no prometas lo que ya se sabe que va a trabarse, no ignores lo que se prometió). PROHIBIDO citarlas, parafrasearlas o dejarlas asomar: este documento se proyecta en pantalla frente al cliente y se exporta a PDF entero. Un riesgo del tipo «el sponsor no responde» o una promesa de la venta escritos acá se leen como que Smarteam habla del cliente a sus espaldas.\n\n" +
-    "DISCIPLINA ANTI-ALUCINACIÓN: NUNCA inventes sistemas, integraciones, personas ni procesos. Lo no confirmado va con `⚠️ Por definir` (y `pending: 'si'` donde el schema lo tenga). Si el contexto es delgado, el plan sale más corto — corto y cierto gana a largo e inventado.\n\n" +
-    "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Los `detail` van en UNA línea. Español, tuteo. Arrays vacíos donde no haya respaldo.",
+    "Eres el consultor senior de Smarteam que escribe la PLANIFICACIÓN de un proyecto de HubSpot: lo que va a quedar CONFIGURADO en el portal, armado por fuera para que el cliente lo vea y lo apruebe antes de configurar nada. Muestra cómo van a funcionar sus procesos, las etapas del ciclo de vida, la arquitectura, las propiedades por objeto, los pipelines, las automatizaciones y las conversaciones (mensajería instantánea y agentes de IA).\n\n" +
+    "SOLO LO QUE SE HARÁ: cómo opera hoy el cliente, el problema y el enfoque viven en el DIAGNÓSTICO. Acá no se describe el presente ni se vuelve a explicar el problema: se dice qué se va a configurar.\n\n" +
+    "TU MÉTODO: parte del DIAGNÓSTICO (la parte teórica: une todo con CÓDIGOS —síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…—, y trae la POLÍTICA RECTORA y las ACCIONES con sus herramientas). Esta planificación es la parte práctica: baja esas acciones a lo que se configura en HubSpot, respetando la política rectora. Si no hay diagnóstico, trabaja con las reuniones de tu contexto. No inventes códigos.\n\n" +
+    "DE DÓNDE SALE CADA COSA: cada paso, etapa, propiedad, pipeline, automatización y conversación lleva su `origen`. 'acordado' SOLO si una reunión con el cliente lo respalda (y la nombras en `fuente`); 'propuesta' si es diseño de Smarteam; 'supuesto' si das por hecho algo del cliente que nadie dijo. Lo que solo aparece en una nota interna o en el handoff NO cuenta como acordado. Prefiere menos cosas bien respaldadas a muchas supuestas.\n\n" +
+    "LOS MAPAS DE PROCESOS son una fuente más, no la verdad: un sistema, un paso o un rol que el mapa trae y que ninguna reunión menciona es, a lo sumo, un supuesto.\n\n" +
+    "LA MODALIDAD DE ADOPCIÓN gobierna las rutinas y el despliegue por olas: la recibes en el contexto (directa o por pilotos, con su porqué). Con adopción DIRECTA, el plan de despliegue por olas queda VACÍO — vacío es correcto. Con PILOTOS, define las olas con equipo inicial, módulos e indicador de éxito para avanzar.\n\n" +
+    "EL CICLO DE VIDA: si el portal ya tiene etapas (vienen en el contexto), parte de esas y propone SOLO los cambios que los procesos justifican. Renombrar etapas sin motivo es trabajo que el equipo del cliente paga después.\n\n" +
+    "SIN FECHAS: ni semanas ni duraciones. El calendario vive en el Cronograma.\n\n" +
+    "LO INTERNO ES INSUMO, NO CONTENIDO: del handoff te llegan secciones que Smarteam escribió para adentro — riesgos y banderas, la motivación real de la compra, los acuerdos y promesas de la venta, y el estado en vuelo. Las usas para NO planificar contra ellas (no prometas lo que ya se sabe que va a trabarse, no ignores lo que se prometió). PROHIBIDO citarlas, parafrasearlas o dejarlas asomar: este documento se proyecta en pantalla frente al cliente y se exporta a PDF entero.\n\n" +
+    "DISCIPLINA ANTI-ALUCINACIÓN: NUNCA inventes sistemas, integraciones, personas, nombres internos de propiedades ni procesos. Lo no definido va con `⚠️ Por definir` (en `falta` donde exista) y `pending: 'si'` en la arquitectura. Si el contexto es delgado, el plan sale más corto — corto y cierto gana a largo e inventado.\n\n" +
+    "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Las líneas, cortas. Español, tuteo. Arrays vacíos donde no haya respaldo.",
   sections: PLANIFICACION_SECTION_DEFS,
 };
 

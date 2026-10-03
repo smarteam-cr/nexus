@@ -460,6 +460,13 @@ describe("un renderer, un contrato de datos", () => {
     // (ACCIONES_SCHEMA / HERRAMIENTAS_SCHEMA de diagnostico.defs.ts).
     ejecucion_acciones: "generico",
     ejecucion_herramientas: "generico",
+    // La Planificación práctica (2026-10-02): lo que va a quedar configurado en HubSpot.
+    procesos_futuro: "modulo",
+    ciclo_vida_tabla: "modulo",
+    propiedades_objeto: "modulo",
+    pipelines_horizontal: "modulo",
+    automatizaciones: "modulo",
+    conversaciones: "modulo",
     site_architecture: "modulo",
     web_methodology: "modulo",
     web_scope: "modulo",
@@ -834,11 +841,14 @@ describe("Planificación: registry completo + keys congeladas", () => {
     );
   });
 
-  it("snapshot de keys: hero abre, cierre cierra, las 4 legacy se conservan", () => {
-    // `politica_rectora` estuvo acá del 28-sep al 2-oct: volvió al diagnóstico, y queda SOLO LECTURA.
+  it("snapshot de keys: hero abre, lo que se configura en el medio, cierre, y las retiradas al final", () => {
+    // 2026-10-02 — la Planificación PRÁCTICA (lo que va a quedar configurado en HubSpot). Propiedades,
+    // pipelines y automatizaciones vinieron de Ejecución. Salieron la política rectora (al
+    // diagnóstico), la hoja de ruta y las métricas: quedan al final, SOLO LECTURA.
     expect(PLANIFICACION_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "planificacion", "politica_rectora", "arquitectura_solucion", "roadmap", "definicion_procesos",
-      "ciclo_vida_crm", "rutinas_adopcion", "plan_despliegue", "metricas_exito", "cierre",
+      "planificacion", "definicion_procesos", "ciclo_vida_crm", "arquitectura_solucion", "propiedades",
+      "pipelines", "automatizaciones", "conversaciones", "rutinas_adopcion", "plan_despliegue", "cierre",
+      "politica_rectora", "roadmap", "metricas_exito",
     ]);
   });
 
@@ -877,8 +887,10 @@ describe("Implementación: registry completo + keys congeladas", () => {
     // Decisión de negocio 2026-07-25: primero se decide la arquitectura (propiedades,
     // pipelines, marketing) y RECIÉN AHÍ valen los prompts para Breeze. Pedirle a
     // Breeze que construya sin arquitectura decidida es pedirle que la invente.
-    // Las ACCIONES y sus herramientas estuvieron acá del 28-sep al 2-oct (volvieron al diagnóstico):
-    // siguen como defs SOLO LECTURA; la arquitectura y los prompts son el cómo, en el orden de siempre.
+    // Las ACCIONES y sus herramientas estuvieron acá del 28-sep al 2-oct (volvieron al diagnóstico), y
+    // la arquitectura (propiedades, pipelines, marketing) se mudó a la PLANIFICACIÓN el 2-oct: siguen
+    // como defs SOLO LECTURA en su lugar. La doctrina no cambió: la arquitectura se decide antes (ahora
+    // en la Planificación, que el cliente aprueba) y los prompts la construyen.
     const keys = IMPLEMENTACION_SECTION_DEFS.map((d) => d.key);
     expect(keys).toEqual([
       "implementacion", "acciones", "herramientas", "arquitectura_propiedades", "pipelines",
@@ -1091,7 +1103,8 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
        algo que nadie les pidió. Es el riesgo real que el assert viejo protegía, y ésta es la
        forma de pagarlo. La edición que la pone en rojo: sumar un sexto documento con la sección y
        olvidarle el brief. */
-    for (const { doc, def } of TODAS_LAS_DEFS.filter((d) => d.def.sectionType === "process_mapping")) {
+    // Las SOLO-LECTURA (agentGenerated:false) no tienen prompt que explicar: el agente no las escribe.
+    for (const { doc, def } of TODAS_LAS_DEFS.filter((d) => d.def.sectionType === "process_mapping" && d.def.agentGenerated !== false)) {
       expect(def.brief ?? "", `${doc}/${def.key} no explica los titulares`).toContain("resumenHoy");
     }
   });

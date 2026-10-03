@@ -42,6 +42,8 @@ export type DefsParaEjecutar = Record<
     /** La superficie que el CHAT puede tocar, cuando difiere de la del agente. */
     schemaDelChat?: unknown;
     pinned?: boolean;
+    /** No se puede ocultar (el ojo del editor tampoco aparece). Ver `SeccionActual.ocultable`. */
+    noHide?: boolean;
     /** El componente trae su propio encabezado: el rótulo de arriba no se pinta desde la columna. */
     selfTitled?: boolean;
     /** Listas que el chat corrige pero no agranda. Ver `BCSectionDef.listasSoloEdicion`. */
@@ -86,6 +88,8 @@ export function seccionesParaElEjecutor(
       oculta: s.hidden === true,
       esCreada: esCustomKey(s.key),
       movible: !def?.pinned,
+      /* Una sección fija se oculta si su def no lo prohíbe (`noHide`), igual que el ojo del editor. */
+      ocultable: !def?.pinned || !def?.noHide,
       /* ⭐ La pregunta NO es «¿el motor le pinta encabezado?» sino «¿escribir el rótulo se va a
          VER?», y `selfTitled` contesta la primera. Falla en las dos direcciones: el cronograma y
          los procesos del kickoff son `selfTitled` y SÍ pintan lo que el motor les pasa, así que el

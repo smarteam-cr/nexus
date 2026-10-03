@@ -128,17 +128,26 @@ export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
   const { config, sections, ctxPropio } = useMemo(() => {
     if (!adaptador) return { config: null, sections: [], ctxPropio: {} };
     const built = adaptador.sections(doc.rows);
+    const config = adaptador.config(doc.rows.map((r) => r.key), doc.templateId);
+    /* La portada y el cierre los arma el motor aunque su fila no venga. Si el CSE los ocultó, se
+       marcan ocultos: sin esto salían con el texto por defecto (2026-10-02). */
+    const enConfig = new Set(config.sections.map((s) => s.key));
+    const conFila = new Set(doc.rows.map((r) => r.key));
+    const ocultasFijas = (doc.ocultas ?? []).filter((k) => enConfig.has(k) && !conFila.has(k));
     return {
-      config: adaptador.config(doc.rows.map((r) => r.key), doc.templateId),
-      sections: doc.rows.map((r, i) => ({
-        key: r.key,
-        data: built[i]?.data ?? null,
-        titleOverride: r.titleOverride,
-        eyebrowOverride: r.eyebrowOverride,
-      })),
+      config,
+      sections: [
+        ...doc.rows.map((r, i) => ({
+          key: r.key,
+          data: built[i]?.data ?? null,
+          titleOverride: r.titleOverride,
+          eyebrowOverride: r.eyebrowOverride,
+        })),
+        ...ocultasFijas.map((key) => ({ key, data: null, titleOverride: null, eyebrowOverride: null, hidden: true })),
+      ],
       ctxPropio: adaptador.ctx?.(built, doc.ctx) ?? {},
     };
-  }, [adaptador, doc.rows, doc.templateId, doc.ctx]);
+  }, [adaptador, doc.rows, doc.templateId, doc.ctx, doc.ocultas]);
 
   if (!config) return null;
 

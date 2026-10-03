@@ -314,8 +314,15 @@ export interface SeccionActual {
   oculta: boolean;
   /** `true` si la creó una persona (`custom:*`): son las únicas que se pueden borrar. */
   esCreada: boolean;
-  /** `false` en las secciones estructurales (portada, cierre): no se mueven ni se ocultan. */
+  /** `false` en las secciones estructurales (portada, cierre): no se mueven. */
   movible: boolean;
+  /**
+   * Si el chat la puede ocultar. Ausente = lo mismo que `movible` (el comportamiento de siempre).
+   * Existe desde el 2026-10-02: la Planificación deja ocultar su portada y su aprobación, que siguen
+   * teniendo lugar fijo. Sale de la def igual que el ojo del editor (`noHide`), así el chat y la
+   * pantalla no discuten.
+   */
+  ocultable?: boolean;
   /**
    * ⭐ El `ref` con el que esta sección se está creando EN ESTE MISMO LOTE — o sea, todavía no
    * tiene id en la base. Las escrituras que la nombren viajan con el `ref` y el navegador las
@@ -1281,7 +1288,7 @@ export function aplicarOperacionesDeDocumento(
           rechazar(o, "en este documento las secciones todavía no se pueden ocultar desde acá");
           break;
         }
-        if (!s.movible) { rechazar(o, `«${s.label}» es estructural: sin ella el documento queda roto`); break; }
+        if (!(s.ocultable ?? s.movible)) { rechazar(o, `«${s.label}» es estructural: sin ella el documento queda roto`); break; }
         const oculta = o.op === "seccion.ocultar";
         if (s.oculta === oculta) { avisos.push(`«${s.label}» ya estaba ${oculta ? "oculta" : "visible"}.`); break; }
         s.oculta = oculta;

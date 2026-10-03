@@ -77,6 +77,13 @@ export interface PrintDocPayload {
    *  tienen una config por tipo y no una por documento. */
   templateId: string | null;
   rows: PrintRow[];
+  /**
+   * Las secciones que el CSE ocultó (2026-10-02). `rows` ya no las trae, pero la PORTADA y el CIERRE
+   * los arma el motor aunque no tengan fila (`buildLandingConfigFromOrder` siempre los agrega), y sin
+   * fila salían con el texto por defecto. La vista los marca ocultos con esto. Hasta esa fecha
+   * ninguna portada ni cierre se podía ocultar; desde que la Planificación lo permite, hace falta.
+   */
+  ocultas?: string[];
   ctx: {
     clientName: string;
     lang: string | null;
@@ -329,8 +336,10 @@ export async function loadPrintDoc(
      portada es la primera: no siempre lo es —una portada oculta se filtró recién— y la key
      del hero es privada de cada adaptador, que corre del lado cliente. Ninguna otra sección
      escribe `__lang`, así que la primera que aparezca es la buena. */
+  /* Se busca en TODAS las secciones, también las ocultas: una portada oculta no cambia el idioma
+     del documento (2026-10-02, la Planificación permite ocultar la portada). */
   const lang =
-    rows
+    secciones
       .flatMap((r) => r.blocks)
       .map((b) => (b.data as { __lang?: unknown } | null)?.__lang)
       .find((v) => typeof v === "string" && v) ?? null;
@@ -345,6 +354,7 @@ export async function loadPrintDoc(
     palette: tipo.palette,
     templateId: null,
     rows,
+    ocultas: secciones.map((s) => s.key).filter((k) => ocultasPorKey.has(k)),
     ctx: {
       clientName: proyecto.client.name,
       lang: typeof lang === "string" ? lang : null,

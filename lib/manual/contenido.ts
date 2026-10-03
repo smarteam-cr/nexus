@@ -110,8 +110,8 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
   },
   planning: {
     paraQue:
-      "Qué vamos a hacer con lo que encontramos en el diagnóstico, y en qué orden. Es el puente entre «esto es lo que duele» y el cronograma.",
-    cuando: "Después del diagnóstico y antes de comprometer fechas.",
+      "Lo que va a quedar configurado en HubSpot, armado por fuera para que el cliente lo vea y lo apruebe antes de configurar: cómo van a funcionar sus procesos, las etapas del ciclo de vida, las propiedades por objeto, los pipelines, las automatizaciones y las conversaciones. Cada cosa dice si se acordó en una reunión, si es propuesta nuestra o si es un supuesto.",
+    cuando: "Después del diagnóstico y antes de configurar. Se presenta al cliente y él la aprueba.",
   },
   "tech-requirements": {
     paraQue:
@@ -121,7 +121,7 @@ export const DOC_PIEZAS: Record<string, DocDePieza> = {
   },
   implementation: {
     paraQue:
-      "La guía de trabajo semanal: qué hay que dejar configurado en HubSpot según el cronograma, paso a paso.",
+      "Cómo se construye lo que la planificación decidió: los prompts para que Breeze cree lo que puede, y lo que va a mano.",
     cuando: "Durante la configuración técnica, semana a semana. Es tuya, no del cliente.",
   },
   delivery: {
@@ -183,11 +183,11 @@ export const DOC_AGENTES: Record<string, string> = {
   diagnostico:
     "Junta lo que se entendió del negocio y lo ordena en hallazgos con evidencia: qué está roto, dónde duele y qué le cuesta al cliente.",
   planificacion:
-    "Propone qué hacer con cada hallazgo del diagnóstico y en qué orden, antes de comprometer fechas.",
+    "Baja las acciones del diagnóstico a lo que va a quedar configurado en HubSpot —procesos, etapas, propiedades, pipelines, automatizaciones y conversaciones—, marcando qué se acordó con el cliente y qué es supuesto.",
   desarrollo:
     "Describe qué hay que construir a la medida —integraciones, automatizaciones, objetos— con su arquitectura y su estimación.",
   implementacion:
-    "Arma la guía de configuración semana a semana: qué hay que dejar listo en HubSpot según el cronograma.",
+    "Escribe cómo se construye lo que decidió la planificación: los prompts para Breeze y lo que va a mano.",
   entrega:
     "Redacta el documento de cierre con lo que pasó en el proyecto. Los números no los escribe él: se los da Nexus ya calculados desde el cronograma.",
   businesscase:

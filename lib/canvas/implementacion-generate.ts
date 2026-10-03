@@ -4,9 +4,10 @@
  * Runner del canvas "Implementación" (la guía de construcción del CSE).
  *
  * ── EL ORDEN ES LA DOCTRINA ───────────────────────────────────────────────────
- * Primero la arquitectura (propiedades, pipelines, procesos de marketing) — derivada de
- * la PLANIFICACIÓN aprobada y del REQUERIMIENTO TÉCNICO — y recién ahí los prompts para
- * Breeze. El prompt del template lo repite; acá se materializa en las fuentes.
+ * Primero la arquitectura y recién ahí los prompts para Breeze. Desde el 2026-10-02 la arquitectura
+ * (propiedades, pipelines, automatizaciones, conversaciones) se decide en la PLANIFICACIÓN, que el
+ * cliente aprueba: esta guía la lee de ahí —solo lo visible— y escribe cómo se construye. Las
+ * secciones de arquitectura que vivían acá se ocultan al regenerar (SECCIONES_RETIRADAS_DE_EJECUCION).
  *
  * ── EL GATE DE BREEZE ─────────────────────────────────────────────────────────
  * El alcance de Breeze se carga de la base de conocimiento (PUBLISHED con tags breeze).
@@ -58,7 +59,8 @@ export async function runImplementacionGeneration(opts: {
   const [canvasId, planificacionCtx, diagnosticoCtx, handoffCtx, desarrolloCtx, breeze, project] =
     await Promise.all([
       opts.canvasId ?? ensureImplementacionCanvas(projectId),
-      loadCanvasContext(projectId, "planning", { onlyConfirmed: false }),
+      // Solo lo VISIBLE: lo que el CSE ocultó en la Planificación no se construye.
+      loadCanvasContext(projectId, "planning", { onlyConfirmed: false, soloVisibles: true }),
       loadCanvasContext(projectId, "diagnosis", { onlyConfirmed: false }),
       loadHandoffContext(projectId, { onlyConfirmed: false }),
       loadDesarrolloContext(projectId),
@@ -90,9 +92,9 @@ export async function runImplementacionGeneration(opts: {
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,
     hubs.length ? `Hubs/alcance del proyecto: ${hubs.join(", ")}` : "",
     "",
-    "=== PLANIFICACIÓN — TU FUENTE ANCLA (qué se decidió construir) ===",
+    "=== PLANIFICACIÓN — TU FUENTE ANCLA (lo que se decidió configurar: propiedades, pipelines, automatizaciones, conversaciones) ===",
     planificacionCtx ||
-      "(Sin planificación todavía. Declaralo en el hero y derivá la arquitectura del handoff y el requerimiento técnico — con más ⚠️ Por validar de lo normal.)",
+      "(Sin planificación todavía. Dilo en la portada: sin la arquitectura decidida, los prompts salen del handoff y el requerimiento técnico, con más ⚠️ Por validar de lo normal.)",
     diagnosticoCtx ? `\n=== DIAGNÓSTICO (por qué se construye esto) ===\n${diagnosticoCtx}` : "",
     "",
     "=== HANDOFF (alcance contratado) ===",

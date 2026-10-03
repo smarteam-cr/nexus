@@ -1,8 +1,8 @@
 /**
  * lib/canvas/planificacion-generate.ts
  *
- * Runner del canvas "Planificación" (el plan que el cliente aprueba antes de habilitar
- * el CRM). Self-contained, molde de diagnostico-generate.
+ * Runner del canvas "Planificación": lo que va a quedar configurado en HubSpot, que el cliente
+ * aprueba antes de configurar (2026-10-02). Self-contained, molde de diagnostico-generate.
  *
  * ── LAS FUENTES ───────────────────────────────────────────────────────────────
  *   1. El DIAGNÓSTICO — la fuente ancla: el plan ataca las causas diagnosticadas.
@@ -11,7 +11,8 @@
  *   2. El HANDOFF completo (documento interno: riesgos y acuerdos incluidos — el plan
  *      no puede planificar contra ellos sin verlos).
  *   3. La EXPLORACIÓN (lo confirmado y lo supuesto).
- *   4. Los PROCESOS REALES serializados — el `comoEsHoy` del rediseño sale de ahí.
+ *   4. Los MAPAS DE PROCESOS del cliente: qué procesos existen. Son una fuente más — lo que ninguna
+ *      reunión menciona es, a lo sumo, un supuesto. La Planificación solo dice lo que se hará.
  *   5. El REQUERIMIENTO TÉCNICO (si existe): objetos, dedup, triggers.
  *   6. Las ETAPAS REALES del portal (best-effort): el ciclo de vida propuesto parte de
  *      lo que el portal usa hoy, no de un template.
@@ -20,6 +21,9 @@
  *
  * NO escribe el esqueleto del cronograma: esa herencia murió con el short-circuit (el
  * prompt ya tenía la regla "sin fechas"; ahora el código la acompaña).
+ *
+ * Las PROPIEDADES que escribió una persona (o que vinieron de una plantilla) sobreviven a regenerar:
+ * `fusionarFilas` (lib/planificacion/propiedades.ts) reemplaza solo las del agente.
  */
 import { prisma } from "@/lib/db/prisma";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
@@ -43,6 +47,7 @@ import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
 import { suggestAdoptionMode } from "@/lib/lifecycle/stage-engine";
 import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { fusionarFilas, type FilaPropiedad } from "@/lib/planificacion/propiedades";
 
 /** Asegura el canvas "Planificación" del proyecto + reconcilia. Idempotente. */
 export async function ensurePlanificacionCanvas(projectId: string): Promise<string> {
@@ -84,9 +89,9 @@ async function adoptionBlock(projectId: string, clientId: string | null): Promis
     marketingContactsLimit: snap?.marketingContactsLimit ?? null,
   });
   if (!sugerida) {
-    return "Modalidad de adopción: sin datos del tamaño del equipo — asumí DIRECTA y declaralo en el hero para que el CSE lo corrija.";
+    return "Modalidad de adopción: sin datos del tamaño del equipo — asume DIRECTA y decláralo en la intro de las rutinas de adopción para que el CSE lo corrija.";
   }
-  return `Modalidad de adopción SUGERIDA por tamaño (no confirmada): ${sugerida === "por_pilotos" ? "POR PILOTOS" : "DIRECTA"}. Declarala en el hero como asumida.`;
+  return `Modalidad de adopción SUGERIDA por tamaño (no confirmada): ${sugerida === "por_pilotos" ? "POR PILOTOS" : "DIRECTA"}. Decláralo en la intro de las rutinas de adopción como asumida.`;
 }
 
 /** Genera (o regenera) el plan con IA. Devuelve canvasId + secciones escritas. */
@@ -139,12 +144,14 @@ export async function runPlanificacionGeneration(opts: {
     `=== MODALIDAD DE ADOPCIÓN ===\n${adopcion}`,
     "",
     "=== DIAGNÓSTICO — TU FUENTE ANCLA (el plan ataca estas causas) ===",
-    diagnosticoCtx || "(Sin diagnóstico todavía. Declaralo en el hero: el plan sale del handoff y la exploración, y conviene validarlo contra un diagnóstico cuando exista.)",
+    diagnosticoCtx || "(Sin diagnóstico todavía. Dilo en el subhead de la portada: el plan sale de las reuniones, el handoff y la exploración, y conviene validarlo contra un diagnóstico cuando exista.)",
     "",
     "=== HANDOFF DEL PROYECTO (completo — documento interno) ===",
     handoffCtx || "(Sin handoff generado.)",
     exploracionCtx ? `\n=== EXPLORACIÓN (lo confirmado y lo supuesto) ===\n${exploracionCtx}` : "",
-    procesosCtx ? `\n=== PROCESOS REALES DEL CLIENTE (⚠ = fricción detectada) ===\n${procesosCtx}` : "",
+    procesosCtx
+      ? `\n=== MAPAS DE PROCESOS DEL CLIENTE (qué procesos existen; ⚠ = fricción. Una fuente más: lo que ninguna reunión menciona es, a lo sumo, un supuesto) ===\n${procesosCtx}`
+      : "",
     cuestionarioCtx ? `\n${cuestionarioCtx}` : "",
     desarrolloCtx ? `\n=== REQUERIMIENTO TÉCNICO (objetos, dedup, triggers) ===\n${desarrolloCtx}` : "",
     portalCtx ? `\n=== EL PORTAL HOY ===\n${portalCtx}` : "",
@@ -154,7 +161,7 @@ export async function runPlanificacionGeneration(opts: {
       : "",
     material.notas ? `\n=== NOTAS DEL EQUIPO PARA LA PLANIFICACIÓN ===\n${material.notas}` : "",
     "",
-    "Escribe el plan siguiendo tus instrucciones: las acciones del diagnóstico bajadas a lo que se configura, respetando su política rectora; rediseño anclado a los procesos reales, ciclo de vida partiendo del portal, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
+    "Escribe la planificación siguiendo tus instrucciones: las acciones del diagnóstico bajadas a lo que va a quedar configurado en HubSpot, respetando su política rectora — cómo van a funcionar los procesos (solo lo que se hará), etapas del ciclo de vida, arquitectura, propiedades por objeto, pipelines, automatizaciones y conversaciones, cada cosa con su origen —, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
   ]
     .filter((x) => x !== "")
     .join("\n");
@@ -176,6 +183,17 @@ export async function runPlanificacionGeneration(opts: {
     undefined,
     prevDataByKey,
   );
+
+  /* Las propiedades de una persona o de una plantilla no se pisan: el agente reemplaza solo las suyas.
+     `coerceToSchema` ya le sacó a cada fila nueva lo que no es del esquema (id, autor, extra). */
+  for (const s of gen.sections) {
+    if (s.key !== "propiedades" || !s.data || typeof s.data !== "object") continue;
+    const nuevas = (s.data as { filas?: FilaPropiedad[] }).filas ?? [];
+    const previas = ((prevDataByKey.propiedades as { filas?: FilaPropiedad[] } | undefined)?.filas ?? []).filter(
+      (f) => f && typeof f === "object",
+    );
+    s.data = { ...(s.data as object), filas: fusionarFilas(previas, Array.isArray(nuevas) ? nuevas : []) };
+  }
 
   // La foto ANTES de escribir (lib/canvas/versiones.ts): la IA ya respondió y todavía no se tocó nada.
   await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });
@@ -203,8 +221,8 @@ export async function runPlanificacionGeneration(opts: {
     sectionCount++;
   }
 
-  /* La política rectora volvió al diagnóstico el 2026-10-02: un plan regenerado ya no la muestra (se
-     OCULTA, no se borra — lib/canvas/retirar-secciones.ts). */
+  /* Lo que salió el 2026-10-02 —la política rectora (al diagnóstico), la hoja de ruta y las métricas—:
+     un plan regenerado ya no lo muestra (se OCULTA, no se borra — lib/canvas/retirar-secciones.ts). */
   if (sectionCount > 0) {
     await ocultarSeccionesRetiradas(canvasId, prevSecs.map((s) => s.key), SECCIONES_RETIRADAS_DE_PLANIFICACION);
   }

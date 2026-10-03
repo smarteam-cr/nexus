@@ -17,6 +17,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { textoDeLaGuia } from "@/lib/guia-exploracion/contexto";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
@@ -368,7 +369,14 @@ export async function loadCanvasContext(
   /** SLUG de la pieza (lib/pieces/registry.ts), no su nombre visible. Era el
    *  nombre y eso ataba el contexto de 8 agentes al rótulo del canvas. */
   canvasSlug: string,
-  opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[] } = {},
+  opts: {
+    onlyConfirmed?: boolean;
+    includeKeys?: readonly string[];
+    /** Solo las secciones que el CSE NO ocultó (2026-10-02). Lo usa Ejecución al leer la
+     *  Planificación: un «Conversaciones» oculto porque el cliente no tiene mensajería no puede
+     *  terminar en prompts para Breeze. Sin la opción, el comportamiento es el de siempre. */
+    soloVisibles?: boolean;
+  } = {},
 ): Promise<string> {
   // Exploración: desde el 2026-10-02 la fuente es la GUÍA DE EXPLORACIÓN (lib/guia-exploracion). El
   // informe viejo solo se lee si el proyecto todavía no tiene guía con contenido.
@@ -378,9 +386,10 @@ export async function loadCanvasContext(
   }
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, ...canvasOf(canvasSlug) },
-    select: { id: true },
+    select: { id: true, sections: true },
   });
   if (!canvas) return "";
+  const ocultas = opts.soloVisibles ? hiddenKeysFrom(canvas.sections) : new Set<string>();
 
   const sections = await prisma.canvasSection.findMany({
     where: { canvasId: canvas.id },
@@ -399,6 +408,7 @@ export async function loadCanvasContext(
   const parts: string[] = [];
   for (const s of sections) {
     if (allow && !allow.has(s.key)) continue;
+    if (ocultas.has(s.key)) continue;
     const blocks = opts.onlyConfirmed
       ? s.blocks.filter((b) => b.status === "CONFIRMED")
       : s.blocks;

@@ -114,7 +114,7 @@ export const PLANIFICACION_CIERRE_DEFAULT = {
   eyebrow: "Aprobación",
   headline: "Listo para construir",
   subhead:
-    "Este plan define qué se construye y cómo se adopta. Con tu aprobación, arranca la configuración del CRM.",
+    "Esto es lo que va a quedar configurado en tu HubSpot. Con tu aprobación, arranca la configuración.",
   buttonLabel: "",
   buttonUrl: "",
   buttonTarget: "_blank",
@@ -273,21 +273,21 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     name: "Planificación",
     isDefault: false,
     order: 3,
-    // 2026-07-25 — la Planificación pasó al motor de landings. Se SUMAN hero, etapas
-    // del ciclo de vida del CRM, rutinas de adopción, plan de despliegue (condicional:
-    // el agente la deja vacía si el equipo es chico) y cierre. Las 4 keys legacy SE
-    // CONSERVAN para que el contenido viejo siga visible.
+    // 2026-10-02 — la Planificación PRÁCTICA: lo que va a quedar configurado en HubSpot. Propiedades,
+    // pipelines y automatizaciones vinieron de Ejecución; la política rectora, la hoja de ruta y las
+    // métricas salieron (las planificaciones viejas las conservan solo-lectura hasta regenerarse).
+    // Rutinas y olas se quedan hasta que exista el documento de Puesta en marcha.
     sections: [
       { key: "planificacion", label: "Plan de implementación" },
-      // La política rectora estuvo acá del 2026-09-28 al 2026-10-02: volvió al diagnóstico (la
-      // parte teórica). Las planificaciones viejas la conservan solo-lectura hasta regenerarse.
-      { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
-      { key: "roadmap", label: "Hoja de ruta" },
-      { key: "definicion_procesos", label: "Procesos rediseñados" },
+      { key: "definicion_procesos", label: "Cómo van a funcionar tus procesos" },
       { key: "ciclo_vida_crm", label: "Etapas del ciclo de vida" },
+      { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
+      { key: "propiedades", label: "Propiedades por objeto" },
+      { key: "pipelines", label: "Tus pipelines" },
+      { key: "automatizaciones", label: "Automatizaciones" },
+      { key: "conversaciones", label: "Conversaciones" },
       { key: "rutinas_adopcion", label: "Rutinas de adopción" },
       { key: "plan_despliegue", label: "Plan de despliegue por olas" },
-      { key: "metricas_exito", label: "Métricas de éxito" },
       { key: "cierre", label: "Aprobación", defaultData: { ...PLANIFICACION_CIERRE_DEFAULT } },
     ],
   },
@@ -486,10 +486,8 @@ export const IMPLEMENTACION_CANVAS: CanvasDefinition = {
   sections: [
     { key: "implementacion",           label: "Guía de construcción" },
     // Las acciones y las herramientas estuvieron acá del 2026-09-28 al 2026-10-02: volvieron al
-    // diagnóstico. Lo que queda (la configuración) espera el rediseño de la planificación.
-    { key: "arquitectura_propiedades", label: "Arquitectura de propiedades" },
-    { key: "pipelines",                label: "Pipelines y objetos" },
-    { key: "procesos_marketing",       label: "Procesos de marketing" },
+    // diagnóstico. Propiedades, pipelines y procesos de marketing se mudaron a la Planificación el
+    // 2026-10-02: Ejecución quedó en CÓMO se construye lo que la Planificación decidió.
     { key: "prompts_breeze",           label: "Prompts para Breeze" },
     { key: "a_mano",                   label: "Lo que va a mano" },
     { key: "cierre",                   label: "A construir", defaultData: { ...IMPLEMENTACION_CIERRE_DEFAULT } },

@@ -4343,3 +4343,48 @@ encontró largos y difíciles los textos propuestos.
   lo importe cualquier otra parte (propuestas, handoffs, reportes, landings).
 
 **Pendiente.** Quién es el dueño del mapa: lo tiene que revisar cuando cambian HubSpot o Insider.
+
+## La Planificación es lo que va a quedar configurado en HubSpot (2026-10-02)
+
+> Pedido de Elías: la Planificación es la parte práctica. Caroline Bersot la presenta al cliente como
+> la arquitectura de HubSpot armada por fuera, para que la vea antes de configurar. El nombre se
+> queda «Planificación», para que el equipo piense en estrategia y no solo en HubSpot.
+
+- **Solo lo que se hará.** Cómo opera hoy el cliente, el problema y el enfoque viven en el
+  Diagnóstico (la política rectora volvió allá el mismo día, en otra sesión). La sección de procesos
+  pasa a «Cómo van a funcionar tus procesos»: pasos en orden, sin la columna «hoy». Misma key
+  (`definicion_procesos`); lo viejo se lee con `adoptarProcesos` y muestra el párrafo «cómo será»
+  hasta regenerar.
+- **Las secciones nuevas** (`components/landing/sections-planificacion.tsx`, forma y lectura de lo
+  viejo en `lib/planificacion/`): etapas del ciclo de vida en tabla, propiedades por objeto (una
+  pestaña por objeto), pipelines de leads, ventas y servicio con las etapas de izquierda a derecha,
+  «Automatizaciones» (no «Workflows») y «Conversaciones» (no «Chatbots»: mensajería instantánea,
+  incluidos los agentes de IA para WhatsApp). Las etapas se encogen para entrar en una fila, como el
+  Gantt: sin scroller, porque el documento se exporta a PDF.
+- **Cada cosa dice de dónde sale** (`lib/planificacion/origen.ts`): acordado (en una reunión con el
+  cliente, que se cita), propuesta de Smarteam o supuesto. Lo que solo dice una nota interna o el
+  handoff no cuenta como acordado. Es el mismo criterio que se pidió para los mapas de procesos
+  (caso FUNDAUNA: el «punto de venta» HiOkus no salió de ninguna reunión); la mejora del módulo de
+  procesos en sí quedó para después, a pedido de Elías.
+- **Propiedades, pipelines y procesos de marketing se mudaron de Ejecución.** Ejecución queda en
+  CÓMO se construye (prompts para Breeze y lo que va a mano) y lee de la Planificación solo lo
+  visible: una sección oculta no se construye. Las tres secciones viejas quedan solo-lectura y se
+  ocultan al regenerar. Por primera vez una mudanza copia el contenido:
+  `scripts/migrar-planificacion-practica.ts` (simulacro por defecto; nunca pisa una sección con
+  contenido; se corre DESPUÉS del deploy, porque el código viejo no pinta las secciones nuevas).
+- **Las propiedades están pensadas para las plantillas de Excel de Caroline**, que todavía no
+  llegaron: campos propios para lo que trae cualquier plantilla, y fuera del esquema del agente un
+  `id`, un `autor` y un mapa `extra` para las columnas sin campo propio. Al regenerar,
+  `fusionarFilas` reemplaza solo las filas del agente: las de una persona o de una plantilla
+  quedan. ⚠ «Mejorar con IA» y el chat todavía reescriben la tabla con el esquema del agente (pierden
+  `id`/`autor`/`extra`): hay que pasarlos por la misma fusión cuando llegue la importación.
+- **Se retiran la hoja de ruta** (el orden vive en el Cronograma y en las acciones del Diagnóstico)
+  **y las métricas de éxito** (los OBJ del Diagnóstico). Solo-lectura y ocultas al regenerar, como
+  la política rectora.
+- **Todas las secciones se pueden ocultar, también la portada y la aprobación.** Hizo falta en tres
+  lugares: la def (sin `noHide`), el PDF (la portada y el cierre los arma el motor aunque no tengan
+  fila; ocultos salían con el texto por defecto, y el idioma se leía de la portada filtrada) y el chat
+  (`ocultable`, separado de `movible`: siguen sin moverse).
+- **Rutinas de adopción y despliegue por olas se quedan** hasta que exista el documento de Puesta
+  en marcha, que es a donde van. Ese documento enmienda la decisión de que Adopción es un hito sin
+  documento, como pasó con la Entrega el 2026-08-12.
