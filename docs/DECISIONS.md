@@ -4355,7 +4355,10 @@ objeciones, y ver de un vistazo qué le falta para proponer.
 - **Los fondos azules van con los tokens `info`, nunca con `bg-brand/5` o `/10`** (2026-10-03). En
   modo claro, `globals.css` remapea esos fondos y bordes de marca translúcidos a lila (red de
   seguridad de antes de los tokens): lo sugerido y lo activo salían violetas y no como en el diseño.
-  Los diseños del lienzo se arman con los colores y la letra (Geist) reales de la app.
+  El azul de los textos (enlaces, lo activo, lo sugerido) es `text-brand`, el del diseño, y no
+  `text-info-ink`, que es marino. Los diseños del lienzo se arman con los colores reales de la app
+  y con su letra: la app no le aplica fuente al cuerpo, así que en Windows se ve en Segoe UI (no
+  en Geist, aunque `layout.tsx` la cargue).
 
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 
