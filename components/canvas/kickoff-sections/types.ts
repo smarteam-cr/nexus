@@ -17,6 +17,9 @@ export interface EquipoMember {
   role: string;
   /** URL de la foto (snapshot al seleccionar) o null → iniciales. */
   photoUrl: string | null;
+  /** Cómo se lo nombra en el kickoff, escrito a mano por el CSE. Sin esto se muestra nombre +
+   *  primer apellido (lib/kickoff/nombre-con-un-apellido.ts). `name` sigue siendo el completo. */
+  nombreVisible?: string;
 }
 export interface EquipoData {
   members: EquipoMember[];
@@ -33,6 +36,10 @@ export function normalizeEquipo(data: unknown): EquipoData {
         name: typeof m.name === "string" ? m.name : "",
         role: typeof m.role === "string" ? m.role : "",
         photoUrl: typeof m.photoUrl === "string" ? m.photoUrl : null,
+        // Se conserva: sin esta línea, el nombre escrito a mano se perdía en el próximo guardado.
+        ...(typeof m.nombreVisible === "string" && m.nombreVisible.trim()
+          ? { nombreVisible: m.nombreVisible.trim() }
+          : {}),
       })),
   };
 }

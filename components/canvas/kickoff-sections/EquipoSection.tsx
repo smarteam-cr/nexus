@@ -16,6 +16,7 @@ import type { SectionProps } from "@/components/landing/types";
 import { SortableItems } from "@/components/landing/sortable";
 import { normalizeEquipo, type EquipoData, type EquipoMember } from "./types";
 import { useBorrador } from "./useBorrador";
+import { nombreConUnApellido, nombreParaElKickoff } from "@/lib/kickoff/nombre-con-un-apellido";
 
 interface ApiTeamMember {
   id: string;
@@ -60,7 +61,7 @@ function LandingAvatar({ name, photoUrl, size = 64 }: { name: string; photoUrl: 
 
 /** Persona en GRANDE (foto circular + nombre + rol). En edit: arrastrar + quitar + rol editable. */
 function BigMember({
-  m, editable, handle, onRemove, onRole, onRoleCommit,
+  m, editable, handle, onRemove, onRole, onRoleCommit, onNombre,
 }: {
   m: EquipoMember;
   editable: boolean;
@@ -69,6 +70,8 @@ function BigMember({
   onRemove?: () => void;
   onRole?: (role: string) => void;
   onRoleCommit?: () => void;
+  /** El nombre visible escrito a mano (vacío o igual a la regla = sin override). */
+  onNombre?: (nombre: string) => void;
 }) {
   return (
     // `stl-item` = el CSS del motor revela y posiciona el ⠿ al hacer hover (landing-engine.css).
@@ -86,7 +89,20 @@ function BigMember({
       )}
       <LandingAvatar name={m.name} photoUrl={m.photoUrl} size={140} />
       <div style={{ width: "100%" }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)" }}>{m.name}</div>
+        {/* Nombre + primer apellido (pedido de Liliana, Cemaco). Se guarda el completo y se acorta
+            al mostrar; el CSE puede corregirlo a mano si la regla no acierta. */}
+        {editable ? (
+          <input
+            className="stl-edit-input"
+            defaultValue={nombreParaElKickoff(m)}
+            key={`${m.teamMemberId}:${m.nombreVisible ?? ""}`}
+            title={`Nombre completo: ${m.name}`}
+            onBlur={(e) => onNombre?.(e.target.value)}
+            style={{ fontSize: 18, fontWeight: 700, textAlign: "center" }}
+          />
+        ) : (
+          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)" }}>{nombreParaElKickoff(m)}</div>
+        )}
         {editable ? (
           <input
             className="stl-edit-input"
@@ -158,6 +174,19 @@ export default function EquipoSection({ data, editable = false, onChange }: Sect
     setDraft((cur) => cur.map((m) => (m.teamMemberId === id ? { ...m, role } : m)));
   };
 
+  /* El nombre visible se guarda SOLO si difiere de la regla: escribir lo mismo que ya se veía (o
+     vaciarlo) vuelve a «nombre + primer apellido», y no deja un override fantasma. */
+  const setNombre = (id: string, escrito: string) => {
+    const next = draft.map((m) => {
+      if (m.teamMemberId !== id) return m;
+      const limpio = escrito.replace(/\s+/g, " ").trim();
+      const resto: EquipoMember = { teamMemberId: m.teamMemberId, name: m.name, role: m.role, photoUrl: m.photoUrl };
+      return limpio && limpio !== nombreConUnApellido(m.name) ? { ...resto, nombreVisible: limpio } : resto;
+    });
+    const cambio = next.some((m, i) => (m.nombreVisible ?? "") !== (draft[i].nombreVisible ?? ""));
+    if (cambio) commit(next);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {/* Preview GRANDE de los seleccionados (lo que ve el cliente), reordenable por el ⠿. */}
@@ -175,6 +204,7 @@ export default function EquipoSection({ data, editable = false, onChange }: Sect
               onRemove={() => commit(draft.filter((x) => x.teamMemberId !== m.teamMemberId))}
               onRole={(role) => setRole(m.teamMemberId, role)}
               onRoleCommit={() => onChange?.({ members: draft })}
+              onNombre={(nombre) => setNombre(m.teamMemberId, nombre)}
             />
           )}
         </SortableItems>
@@ -194,7 +224,7 @@ export default function EquipoSection({ data, editable = false, onChange }: Sect
         {pickerOpen && (
           <div style={{ marginTop: 14 }}>
             <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 10 }}>
-              Tocá una persona para agregarla o quitarla. Las fotos se cargan desde{" "}
+              Toca una persona para agregarla o quitarla. Las fotos se cargan desde{" "}
               <strong style={{ color: "var(--text-secondary)" }}>Equipo</strong> (una vez por persona).
             </p>
             {team === null ? (
