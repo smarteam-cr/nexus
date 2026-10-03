@@ -130,7 +130,7 @@ export default function LlegaronPorElTest({ nombresDeAreas, puedeEditar }: { nom
   );
 
   return (
-    <section className="mb-6 space-y-3 rounded-xl border border-brand/30 bg-brand/5 p-4">
+    <section className="mb-6 space-y-3 rounded-xl border border-info-line bg-info-surface p-4">
       <div>
         <h2 className="text-sm font-semibold text-fg">Llegaron por el test{llegadas ? ` (${terminaron.length})` : ""}</h2>
         <p className="text-xs text-fg-muted">

@@ -356,7 +356,7 @@ export default function LienzoDeExploracion({
           <RielDePiezas
             paso={paso}
             onElegir={setPaso}
-            resumen={{ aviso: delResumen > 0 ? `${delResumen} por revisar` : `${confirmadas}/8` }}
+            resumen={{ aviso: delResumen > 0 ? `${delResumen} por revisar` : `${confirmadas}/8`, estado: delResumen > 0 ? "pendiente" : confirmadas > 0 ? "generada" : "vacia" }}
             filas={PIEZAS.map(filaDe)}
           />
         </aside>

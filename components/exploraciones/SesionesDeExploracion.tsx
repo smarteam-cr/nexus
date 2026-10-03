@@ -73,7 +73,7 @@ function Pregunta({ p }: { p: PreguntaParaMostrar }) {
       <span
         className={cn(
           "mt-0.5 flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-md px-1 text-2xs font-bold",
-          dimension ? "bg-warn-surface text-warn-ink" : "bg-brand/10 text-brand-light",
+          dimension ? "bg-warn-surface text-warn-ink" : "bg-info-surface text-info-ink",
         )}
         aria-hidden="true"
       >
@@ -94,7 +94,7 @@ function Pregunta({ p }: { p: PreguntaParaMostrar }) {
         </p>
         {p.repreguntas.length > 0 && (
           <>
-            <button type="button" aria-expanded={abierta} onClick={() => setAbierta((x) => !x)} className="text-xs font-semibold text-brand-light hover:underline">
+            <button type="button" aria-expanded={abierta} onClick={() => setAbierta((x) => !x)} className="text-xs font-semibold text-info-ink hover:underline">
               {abierta ? "Ocultar repreguntas" : `${p.repreguntas.length} ${p.repreguntas.length === 1 ? "repregunta" : "repreguntas"}`}
             </button>
             {abierta && (
@@ -224,7 +224,7 @@ function AntesDeLaSesion({ pestana, esLaProxima, sesiones, guardar }: { pestana:
               <Rotulo>Te llevaste de la sesión anterior</Rotulo>
               <ul className="flex flex-wrap gap-1.5">
                 {traidos.map((t) => (
-                  <li key={t} className="flex items-center gap-1.5 rounded-full border border-brand/25 bg-brand/5 py-1 pl-3 pr-2 text-xs text-fg">
+                  <li key={t} className="flex items-center gap-1.5 rounded-full border border-info-line bg-info-surface py-1 pl-3 pr-2 text-xs text-fg">
                     <span>{t}</span>
                     {puedeEditar && (
                       <button type="button" aria-label={`Quitar «${t}»`} className="text-fg-muted hover:text-fg" disabled={guardando} onClick={() => quitarTraido(t)}>
@@ -352,7 +352,7 @@ function LoQueSalio() {
         </ul>
       )}
       {items.length > visibles.length && (
-        <button type="button" className="w-full border-t border-line px-4 py-2.5 text-sm font-semibold text-brand-light hover:bg-surface-hover" onClick={() => setTodas(true)}>
+        <button type="button" className="w-full border-t border-line px-4 py-2.5 text-sm font-semibold text-info-ink hover:bg-surface-hover" onClick={() => setTodas(true)}>
           Ver las {items.length - visibles.length} restantes
         </button>
       )}
@@ -380,12 +380,12 @@ function NadieExploro({ llevar, soltar }: { llevar: (texto: string, item: ItemPr
           disabled={!puedeEditar || guardando}
           aria-label={`Llevar «${texto}» a la próxima sesión`}
           onChange={() => (marcado ? soltar(texto) : llevar(texto, item))}
-          className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand"
+          className="mt-0.5 h-4 w-4 flex-shrink-0 accent-info"
         />
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className={cn("text-sm leading-snug", marcado ? "font-medium text-fg" : "text-fg-secondary")}>{texto}</p>
           {cita && <p className="line-clamp-2 text-xs italic text-fg-muted">«{cita}»</p>}
-          {item && <p className="text-2xs font-semibold text-brand-light">Sugerido por el agente</p>}
+          {item && <p className="text-2xs font-semibold text-info-ink">Sugerido por el agente</p>}
         </div>
         {puedeEditar &&
           (item ? (
@@ -456,7 +456,7 @@ function LaReunion({ pestana, sesiones, guardar }: { pestana: PestanaDeSesion; s
     void guardar(sesiones.map((s) => (s.id === id ? { ...s, reunion } : s)));
   };
   return (
-    <section className={cn("space-y-2 rounded-xl border px-4 py-3", r && !r.leida ? "border-brand/30 bg-brand/5" : "border-line bg-surface")}>
+    <section className={cn("space-y-2 rounded-xl border px-4 py-3", r && !r.leida ? "border-info-line bg-info-surface" : "border-line bg-surface")}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1">
           {r ? (

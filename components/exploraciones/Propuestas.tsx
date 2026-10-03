@@ -139,10 +139,10 @@ export function Propuestas({ items, compacto = false }: { items: ItemPropuesto[]
   return (
     <ul className="space-y-2">
       {items.map((it) => (
-        <li key={it.id} className="rounded-lg border border-brand/25 bg-brand/5 px-3 py-2">
+        <li key={it.id} className="rounded-lg border border-info-line bg-info-surface px-3 py-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <p className="text-2xs font-semibold uppercase tracking-wide text-brand-light">Propuesto</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-info-ink">Propuesto</p>
               <p className="text-sm text-fg">{describirPropuesta(it, escala, nombreDeNivel)}</p>
               {!compacto && it.razon && <p className="text-xs text-fg-secondary">{it.razon}</p>}
               {it.fuentes.length > 0 && (

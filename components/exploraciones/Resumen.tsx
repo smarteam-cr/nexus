@@ -83,7 +83,7 @@ function Tarjeta({ clave, pendientes, onAbrir }: { clave: (typeof CASILLAS_DEL_R
     >
       <span className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-brand/10 text-2xs font-semibold text-brand-light" title={marco}>
+          <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-info-surface text-2xs font-semibold text-info-ink" title={marco}>
             {letra}
           </span>
           <span className="truncate text-sm font-semibold text-fg">{def.etiqueta}</span>

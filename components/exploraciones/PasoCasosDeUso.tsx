@@ -39,9 +39,9 @@ function TarjetaDeCaso({ caso, propuesto, acciones }: { caso: CasoDeUsoElegido; 
   const nombreDim = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre;
   const mueve = (caso.dimensiones ?? []).map(nombreDim).filter((x): x is string => !!x);
   return (
-    <li className={cn("flex flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2.5", propuesto ? "border-brand/25 bg-brand/5" : "border-line")}>
+    <li className={cn("flex flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2.5", propuesto ? "border-info-line bg-info-surface" : "border-line")}>
       <div className="min-w-0 flex-1 space-y-1">
-        {propuesto && <p className="text-2xs font-semibold uppercase tracking-wide text-brand-light">Propuesto</p>}
+        {propuesto && <p className="text-2xs font-semibold uppercase tracking-wide text-info-ink">Propuesto</p>}
         <p className="text-sm font-medium text-fg">{caso.titulo}</p>
         {caso.descripcion && <p className="text-xs text-fg-secondary">{caso.descripcion}</p>}
         {caso.razon && (
@@ -261,7 +261,7 @@ export default function PasoCasosDeUso() {
       <CasosDeUso catalogo={datos?.catalogo ?? []} />
       <p className="text-xs text-fg-muted">
         Con los casos elegidos, la propuesta se arma en{" "}
-        <button type="button" className="text-brand-light hover:underline" onClick={() => irA("propuesta")}>
+        <button type="button" className="text-info-ink hover:underline" onClick={() => irA("propuesta")}>
           Propuesta
         </button>
         .

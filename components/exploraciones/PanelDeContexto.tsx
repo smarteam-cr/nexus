@@ -84,7 +84,7 @@ function LaEscala() {
     <Bloque
       titulo="La escala"
       accion={
-        <button type="button" className="text-2xs text-brand-light hover:underline" onClick={() => irA("escala")}>
+        <button type="button" className="text-2xs text-info-ink hover:underline" onClick={() => irA("escala")}>
           Ver el mapa
         </button>
       }
@@ -120,7 +120,7 @@ function Objeciones() {
     <Bloque
       titulo="Ya objetó"
       accion={
-        <button type="button" className="text-2xs text-brand-light hover:underline" onClick={() => abrirCasilla("objeciones")}>
+        <button type="button" className="text-2xs text-info-ink hover:underline" onClick={() => abrirCasilla("objeciones")}>
           {propuestas > 0 ? `${propuestas} por revisar` : "Ver todas"}
         </button>
       }
@@ -177,7 +177,7 @@ function Proyectos() {
       {proyectos.map((p, i) => (
         <span key={p.id}>
           {i > 0 && ", "}
-          <Link href={`/clients/${p.clientId}?tab=${p.id}`} className="text-brand-light hover:underline">
+          <Link href={`/clients/${p.clientId}?tab=${p.id}`} className="text-info-ink hover:underline">
             {p.nombre}
           </Link>
         </span>
@@ -199,8 +199,8 @@ export default function PanelDeContexto({
   const { irA } = useLienzo();
   return (
     <div className="space-y-6">
-      <section className="space-y-2 rounded-xl border border-brand/25 bg-brand/5 p-3.5">
-        <h2 className="text-2xs font-semibold uppercase tracking-widest text-brand-light">Qué sigue</h2>
+      <section className="space-y-2 rounded-xl border border-info-line bg-info-surface p-3.5">
+        <h2 className="text-2xs font-semibold uppercase tracking-widest text-info-ink">Qué sigue</h2>
         <p className="text-sm leading-snug text-fg">{sigue.texto}</p>
         {sigue.paso && (
           <Button size="xs" variant="primary" onClick={() => irA(sigue.paso!)}>

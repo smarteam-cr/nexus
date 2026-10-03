@@ -68,7 +68,7 @@ function Leyenda() {
         Rayado: hipótesis, para explorar en la reunión
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-2.5 rounded-full bg-brand" aria-hidden="true" /> El agente propone algo nuevo
+        <span className="h-2.5 w-2.5 rounded-full bg-info" aria-hidden="true" /> El agente propone algo nuevo
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span className="h-0 w-5 border-t-2 border-dashed border-success" aria-hidden="true" /> Funcional, el objetivo de la primera venta
@@ -95,7 +95,7 @@ function ListaDeDimensiones({ area, onElegir }: { area: AreaDelLienzo; onElegir:
             >
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-1.5 text-sm text-fg">
-                  {p?.porRevisar && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-brand" aria-label="Algo nuevo del agente" />}
+                  {p?.porRevisar && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-info" aria-label="Algo nuevo del agente" />}
                   <span>{d.nombre}</span>
                   {d.id in exp.estado.contenido.aExplorar ? (
                     <Badge size="xs" variant="primary">
@@ -233,7 +233,7 @@ function DetalleDeDimension({ area, d, onCerrar }: { area: AreaDelLienzo; d: Dim
 
       <div className="space-y-1.5">
         <p className="text-xs font-medium text-fg-secondary">Para confirmarlo, pregunta:</p>
-        <p className="rounded-lg border border-brand/25 bg-brand/5 px-3 py-2 text-sm text-fg">{d.pregunta}</p>
+        <p className="rounded-lg border border-info-line bg-info-surface px-3 py-2 text-sm text-fg">{d.pregunta}</p>
       </div>
 
       <div className="space-y-1.5">

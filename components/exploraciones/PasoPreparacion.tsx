@@ -44,7 +44,7 @@ function Columna({ nombre, pregunta, children }: { nombre: string; pregunta: str
   return (
     <div className="min-w-0 space-y-4">
       <div className="border-b border-line pb-2">
-        <p className="text-2xs font-semibold uppercase tracking-widest text-brand-light">{nombre}</p>
+        <p className="text-2xs font-semibold uppercase tracking-widest text-info-ink">{nombre}</p>
         <p className="text-sm text-fg-secondary">{pregunta}</p>
       </div>
       {children}
@@ -100,7 +100,7 @@ function BarraDelAgente() {
     void lanzar("preparar");
   }, [puedeEditar, preparadaConRadiografia, corriendo, exp.estado.archivada, exp.id, lanzar]);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/20 bg-brand/5 px-5 py-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info-line bg-info-surface px-5 py-4">
       <div className="min-w-0 space-y-0.5">
         <p className="text-sm font-semibold text-fg">{trabajando ? "El agente está preparando" : ultima ? "Preparada por el agente" : "Prepara la exploración con el agente"}</p>
         <p className="text-xs text-fg-secondary" role={trabajando ? "status" : undefined}>
@@ -156,9 +156,9 @@ function Detonante({ datos }: { datos: DatosDePreparacion | null }) {
         </dl>
       )}
       {sugerencia && (
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-brand/25 bg-brand/5 px-4 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-info-line bg-info-surface px-4 py-3">
           <div className="min-w-0 space-y-1">
-            <p className="text-2xs font-semibold uppercase tracking-wide text-brand-light">Por qué ahora · sugerido con lo que dice HubSpot</p>
+            <p className="text-2xs font-semibold uppercase tracking-wide text-info-ink">Por qué ahora · sugerido con lo que dice HubSpot</p>
             <p className="text-sm text-fg">{sugerencia}</p>
           </div>
           {puedeEditar && (
@@ -203,7 +203,7 @@ function Contacto({ datos }: { datos: DatosDePreparacion | null }) {
         <Dato que="Cargo">{c.cargo ?? <span className="text-fg-muted">—</span>}</Dato>
         <Dato que="Correo">
           {c.email ? (
-            <a href={`mailto:${c.email}`} className="text-brand-light hover:underline">
+            <a href={`mailto:${c.email}`} className="text-info-ink hover:underline">
               {c.email}
             </a>
           ) : (
@@ -213,7 +213,7 @@ function Contacto({ datos }: { datos: DatosDePreparacion | null }) {
         <Dato que="Teléfono">
           {tel ? (
             <span className="flex flex-wrap items-center gap-2">
-              <a href={`tel:${tel}`} className="text-brand-light hover:underline">
+              <a href={`tel:${tel}`} className="text-info-ink hover:underline">
                 {tel}
               </a>
               {wa && (
@@ -234,7 +234,7 @@ function Contacto({ datos }: { datos: DatosDePreparacion | null }) {
       {principal ? ficha(principal) : <p className="text-sm text-fg-muted">La empresa no tiene contactos en HubSpot.</p>}
       {otros.length > 0 && (
         <div className="space-y-2">
-          <button type="button" className="text-xs font-medium text-brand-light hover:underline" onClick={() => setVerTodos((x) => !x)}>
+          <button type="button" className="text-xs font-medium text-info-ink hover:underline" onClick={() => setVerTodos((x) => !x)}>
             {verTodos ? "Ocultar los demás contactos" : `Ver los demás contactos (${otros.length})`}
           </button>
           {verTodos && (
@@ -274,7 +274,7 @@ function RadiografiaDeLaEmpresa({ datos }: { datos: DatosDePreparacion | null })
           </Dato>
           <Dato que="Sitio web">
             {sitio ? (
-              <a href={sitio} target="_blank" rel="noreferrer" className="text-brand-light hover:underline">
+              <a href={sitio} target="_blank" rel="noreferrer" className="text-info-ink hover:underline">
                 {sitio.replace(/^https?:\/\//, "").replace(/\/$/, "")}
               </a>
             ) : (
@@ -305,7 +305,7 @@ function Conexion({ datos }: { datos: DatosDePreparacion | null }) {
             «{agendada.titulo}», {diaYHora(agendada.inicio)}. Usa lo de arriba para preparar esa reunión.
           </p>
         </div>
-        <button type="button" className="text-xs font-medium text-brand-light hover:underline" onClick={() => setVerIgual(true)}>
+        <button type="button" className="text-xs font-medium text-info-ink hover:underline" onClick={() => setVerIgual(true)}>
           Ver la estrategia igual
         </button>
       </Bloque>

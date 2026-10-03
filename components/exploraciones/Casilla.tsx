@@ -77,7 +77,7 @@ export function VistaDeRadiografia({ r }: { r: Radiografia }) {
             {r.hitos.map((h, i) => (
               <li key={i} className="flex gap-2">
                 <span className="w-16 flex-shrink-0 text-xs tabular-nums text-fg-muted">{h.fecha ?? "—"}</span>
-                <a href={h.url} target="_blank" rel="noreferrer" className="text-fg-secondary hover:text-brand-light hover:underline">
+                <a href={h.url} target="_blank" rel="noreferrer" className="text-fg-secondary hover:text-info-ink hover:underline">
                   {h.texto}
                 </a>
               </li>
@@ -300,7 +300,7 @@ function EditorDeItems<T>({
     <div className="space-y-2">
       {lista.map((x, i) =>
         i === abierto ? (
-          <div key={i} className="space-y-3 rounded-xl border border-brand/40 bg-surface p-4 shadow-sm">
+          <div key={i} className="space-y-3 rounded-xl border border-info-line bg-surface p-4 shadow-sm">
             {campos(x, (cambio) => set(i, cambio))}
             <div className="flex items-center justify-between gap-2 pt-1">
               <button type="button" className="text-xs text-fg-muted hover:text-fg hover:underline" onClick={() => quitar(i)}>
@@ -315,7 +315,7 @@ function EditorDeItems<T>({
           <div key={i} className="flex items-start justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
             <div className="min-w-0 flex-1 text-sm">{verItem(x)}</div>
             <div className="flex flex-shrink-0 items-center gap-3 text-xs">
-              <button type="button" className="font-medium text-brand-light hover:underline" onClick={() => setAbierto(i)}>
+              <button type="button" className="font-medium text-info-ink hover:underline" onClick={() => setAbierto(i)}>
                 Editar
               </button>
               <button type="button" className="text-fg-muted hover:text-fg hover:underline" onClick={() => quitar(i)}>
@@ -328,7 +328,7 @@ function EditorDeItems<T>({
       {abierto === null && (
         <button
           type="button"
-          className="w-full rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm font-medium text-brand-light transition-colors hover:bg-surface-hover"
+          className="w-full rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm font-medium text-info-ink transition-colors hover:bg-surface-hover"
           onClick={() => {
             onCambio([...lista, nuevo()]);
             setAbierto(lista.length);
@@ -574,7 +574,7 @@ function Editor({ clave, borrador, setBorrador }: { clave: ClaveDeCasilla; borra
                     onClick={() => set({ modelos: activo ? modelos.filter((x) => x !== m) : [...modelos, m] })}
                     className={cn(
                       "rounded-full border px-3 py-1 text-xs transition-colors",
-                      activo ? "border-brand/40 bg-brand/10 font-medium text-brand-light" : "border-line text-fg-secondary hover:bg-surface-hover",
+                      activo ? "border-info-line bg-info-surface font-medium text-info-ink" : "border-line text-fg-secondary hover:bg-surface-hover",
                     )}
                   >
                     {ETIQUETA_DEL_MODELO[m]}
