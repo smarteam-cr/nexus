@@ -131,6 +131,10 @@ export function largoDelPlanEnSemanas(foto: FotoDelCronograma | null | undefined
  *    «queda 1 semana de margen» cuando el cierre visible se pasaba 2;
  *  · con el proyecto ATRASADO —hoy ya pasó el cierre planificado y quedan fases sin terminar, el caso
  *    común a media ejecución—, el plan no cierra antes de hoy, aunque las fases digan otra cosa.
+ * ⚠ Y al revés (2026-10-02, validación de los límites): un cierre fijado a mano ANTES del fin de las
+ * fases no adelanta el plan. En Club Amantes del Vino el CSE fijó el 31 de diciembre (la fecha límite
+ * del cliente) con las fases terminando el 11 de enero: comparar contra el fijado escondía que el plan
+ * se pasaba. Vale el más tarde de los dos; el fijado solo manda cuando las fases terminan antes.
  * `semana` es la semana del proyecto (desde 1) en que el plan cierra hoy. null sin fases.
  */
 export interface CierreActual {
@@ -139,8 +143,10 @@ export interface CierreActual {
   porque: "fases" | "fijado" | "vencido";
   /** El fin de las fases (la última semana ocupada). */
   semanasDeLasFases: number;
-  /** El cierre sin mirar hoy: el fijado a mano, o el fin de las fases. */
+  /** El cierre sin mirar hoy: el fijado a mano (si las fases terminan antes), o el fin de las fases. */
   planificado: number;
+  /** La semana del cierre fijado a mano, si lo hay (aunque no mande porque las fases terminan después). */
+  semanaFijada: number | null;
   /** La semana de hoy (desde 1), o null sin ancla. */
   semanaDeHoy: number | null;
 }
@@ -164,12 +170,15 @@ export function cierreActualDelPlan(foto: FotoDelCronograma | null | undefined, 
   const fijado = diaGuardado(foto?.closeDateOverride);
   const conFijado = ancla !== null && fijado !== null;
   // El cierre fijado cae en la semana que lo contiene: el fin de las fases (ancla + n semanas) da n.
-  const planificado = conFijado ? Math.max(1, Math.ceil((fijado - ancla) / SEMANA_MS)) : n;
+  const semanaFijada = conFijado ? Math.max(1, Math.ceil((fijado - ancla) / SEMANA_MS)) : null;
+  // Manda el fijado solo si las fases terminan antes o con él (ver arriba).
+  const mandaElFijado = semanaFijada !== null && semanaFijada >= n;
+  const planificado = mandaElFijado ? semanaFijada : n;
   const quedanFases = (foto?.phases ?? []).some((f) => f.status !== "DONE" && f.status !== "SUSPENDED");
   if (semanaDeHoy !== null && quedanFases && semanaDeHoy > planificado) {
-    return { semana: semanaDeHoy, porque: "vencido", semanasDeLasFases: n, planificado, semanaDeHoy };
+    return { semana: semanaDeHoy, porque: "vencido", semanasDeLasFases: n, planificado, semanaFijada, semanaDeHoy };
   }
-  return { semana: planificado, porque: conFijado ? "fijado" : "fases", semanasDeLasFases: n, planificado, semanaDeHoy };
+  return { semana: planificado, porque: mandaElFijado ? "fijado" : "fases", semanasDeLasFases: n, planificado, semanaFijada, semanaDeHoy };
 }
 
 /**
@@ -194,7 +203,8 @@ export function lineaDelCierreActual(foto: FotoDelCronograma | null | undefined,
   const N = c.semana;
   const porque =
     c.porque === "fases"
-      ? `el fin de las fases, de la semana 1 a la semana ${N}`
+      ? `el fin de las fases, de la semana 1 a la semana ${N}` +
+        (c.semanaFijada !== null && c.semanaFijada < N ? ` (el cierre fijado a mano, en la semana ${c.semanaFijada}, queda antes)` : "")
       : c.porque === "fijado"
         ? `el cierre fijado a mano, que es el que ve el CSE (las fases terminan en la semana ${c.semanasDeLasFases})`
         : `hoy: el cierre planificado (semana ${c.planificado}) ya pasó y quedan fases sin terminar, así que el ` +

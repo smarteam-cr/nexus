@@ -20,12 +20,15 @@
  */
 import { resolvePipeline } from "@/lib/projects/kind";
 import { AGENTES_HANDOFF_POR_TIPO } from "@/lib/agents/handoff-por-tipo";
+import { PRIMERA_FASE_ES_ARRANQUE } from "./arranque";
 
 /**
  * Movido TAL CUAL de `analyze/route.ts` — la única fuente de «esta fase ya es un arranque».
- * Si el regex y la decisión vivieran en lugares distintos, podrían divergir en silencio.
+ * Si el regex y la decisión vivieran en lugares distintos, podrían divergir en silencio. Desde el
+ * 2026-10-02 vive en lib/timeline/arranque.ts (sin imports, para poder usarlo en la pantalla) y
+ * acá se reexporta: sigue siendo uno solo.
  */
-export const PRIMERA_FASE_ES_ARRANQUE = /semana\s*0|semana\s*cero|kick.?off|arranque/i;
+export { PRIMERA_FASE_ES_ARRANQUE };
 
 /**
  * PURA. `true` = anteponer la fase "Semana 0" (conducta histórica de Customer Success y del

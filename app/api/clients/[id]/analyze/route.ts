@@ -10,7 +10,11 @@ import { esAgenteRetirado } from "@/lib/agents/retirados";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { guardarPropuestaDelHandoff, timelineSyncErrorDelHandoff } from "@/lib/timeline/borrador-del-handoff";
-import { fasesDelHandoff } from "@/lib/timeline/referencias-de-la-propuesta";
+import { fasesDelHandoff, tiposDelHandoff } from "@/lib/timeline/referencias-de-la-propuesta";
+import { acomodarEnParalelo, leerTipoDeFase } from "@/lib/timeline/acomodar-en-paralelo";
+import { limitesDeLaSalidaDelHandoff } from "@/lib/timeline/limites";
+import { bloqueDeLimitesParaElHandoff } from "@/lib/timeline/limites-handoff";
+import { conSemanaCeroDelPipeline, contextoDeLimitesParaElHandoff, guardarLimitesPropuestos } from "@/lib/timeline/limites-servidor";
 import { anthropic } from "@/lib/anthropic";
 import { conContextoDeIA } from "@/lib/ai/contexto-de-corrida";
 import { extractTitleTerms } from "@/lib/utils/matching";
@@ -2064,6 +2068,22 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     }
   }
 
+  /* LOS LÍMITES DEL CRONOGRAMA (2026-10-02, lib/timeline/limites-handoff.ts): la IA propone la fecha
+     límite y la duración vendida con su cita, arma un plan que quepa (si no cabe, lo dice en vez de
+     estirarlo) y, en Customer Success, declara el tipo de cada fase para que el código ponga los
+     inicios. Las fuentes para verificar las citas son el mensaje SIN este bloque: con él adentro, la
+     IA podría «citar» la propia instrucción. */
+  let fuentesParaLasCitas: string | null = null;
+  if (isHandoffAgent) {
+    try {
+      fuentesParaLasCitas = userMessage;
+      const ctxLimites = await contextoDeLimitesParaElHandoff(bodyProjectId);
+      userMessage = `${userMessage}\n\n${bloqueDeLimitesParaElHandoff(ctxLimites)}`;
+    } catch (e) {
+      console.error("[analyze handoff] bloque de límites error:", e);
+    }
+  }
+
   // ── 11. Llamar a Claude ───────────────────────────────────────────────────────
   // CARDS_AND_FLOWCHARTS genera varios diagramas grandes (8-15 nodos c/u) + cards;
   // con 16k la salida se trunca (stop_reason=max_tokens) → JSON irrecuperable →
@@ -2629,7 +2649,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
     console.log(`[analyze blocks] Saved ${totalBlocks} blocks across ${outputSections.length} sections`);
 
     // Persistir el cronograma si el agente lo devolvió (mismo helper que el path de cards)
-    const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+    const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent, fuentesParaLasCitas);
     // Tanda M — el handoff SIEMPRE corre detached (runDetached): esta respuesta se descarta y
     // solo `markDone` persiste `AgentRun.output`, que en éxito NO se toca (línea ~2130/2146 ya
     // guardó el analysisJson real — no pisarlo). Si hubo error de timeline, se MERGEA acá (no se
@@ -2907,7 +2927,7 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
 
   // ── 14c. Persistir cronograma sugerido por el agente (Fase 2 módulo externo) ─
   // Se llama desde ambos paths (cards y block format) — ver función helper abajo.
-  const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent);
+  const timelineSync = await persistTimelineFromAgentOutput(bodyProjectId, analysisJson, run.id, isHandoffAgent, fuentesParaLasCitas);
   // Tanda M — mismo motivo que el otro path (block format): mergear, no pisar, y solo cuando
   // hubo error (el éxito ya está guardado en AgentRun.output desde antes).
   if (timelineSync.timelineSyncError) {
@@ -3085,6 +3105,8 @@ async function persistTimelineFromAgentOutput(
   analysisJson: unknown,
   agentRunId: string,
   isHandoff: boolean,
+  /** Lo que leyó el agente de handoff (sin el bloque de límites): contra eso se verifican sus citas. */
+  fuentesParaLasCitas: string | null = null,
 ): Promise<{ timelineSyncError: string | null }> {
   try {
     /* Toda la clasificación en UN solo lugar y UN solo array (2026-08-12). Antes eran dos
@@ -3267,8 +3289,46 @@ async function persistTimelineFromAgentOutput(
        las fases del último handoff, y tiene que leerlas con ESTA misma regla. Sin `timeline.phases`, vacío o sin
        ninguna válida: [] (antes, dos salidas tempranas con el mismo resultado). */
     const validPhases = fasesDelHandoff(analysisJson);
+    const proyectoDeLaCorrida = await prisma.project.findUnique({
+      where: { id: bodyProjectId },
+      select: { hubspotPipelineId: true },
+    });
 
-    if (validPhases.length === 0) return { timelineSyncError: null };
+    /* LOS LÍMITES (2026-10-02, lib/timeline/limites.ts): la fecha límite y la duración vendida que
+       propuso la IA, con su cita. Se guardan como PROPUESTA; los confirma una persona. */
+    const limitesDelHandoff = isHandoff
+      ? limitesDeLaSalidaDelHandoff(analysisJson, fuentesParaLasCitas, agentRunId, new Date())
+      : null;
+
+    if (validPhases.length === 0) {
+      if (isHandoff) await guardarLimitesPropuestos(bodyProjectId, limitesDelHandoff);
+      return { timelineSyncError: null };
+    }
+
+    /* LOS INICIOS LOS PONE EL CÓDIGO (2026-10-02, lib/timeline/acomodar-en-paralelo.ts): en Customer
+       Success, con el tipo de cada fase, la configuración, la migración y el desarrollo van juntos, la
+       capacitación arranca en la segunda mitad de la configuración, las pruebas al terminarla y el
+       cierre al final. Sin tipo reconocible en alguna fase, queda como la armó la IA. Desarrollo y Web
+       tienen su propia secuencia: no se tocan. */
+    const conSemanaCero = conSemanaCeroDelPipeline(proyectoDeLaCorrida?.hubspotPipelineId ?? null);
+    const tipos = tiposDelHandoff(analysisJson).map(leerTipoDeFase);
+    const acomodo =
+      isHandoff && conSemanaCero
+        ? acomodarEnParalelo(validPhases.map((p, i) => ({ ...p, tipo: tipos[i] ?? null })))
+        : null;
+    if (acomodo && !acomodo.aplicado) console.log(`[analyze] inicios del handoff sin acomodar: ${acomodo.motivo}`);
+    const fasesDelPlan = acomodo?.aplicado
+      ? acomodo.fases.map((p, i) => ({
+          name: p.name,
+          order: i,
+          durationWeeks: p.durationWeeks,
+          startWeek: p.startWeek,
+          sessionCount: p.sessionCount,
+          notes: p.notes,
+          needsValidation: p.needsValidation,
+          source: p.source,
+        }))
+      : validPhases;
 
     /* Si YA existe un cronograma NO se pisa (protege ediciones + progreso de tareas): lo que propone
        el agente queda como PROPUESTA (`borrador-v1`, E2b), que el CSE revisa en la barra arriba del
@@ -3278,11 +3338,14 @@ async function persistTimelineFromAgentOutput(
     const delHandoff = await guardarPropuestaDelHandoff({
       projectId: bodyProjectId,
       corrida: agentRunId,
-      fases: validPhases.map((p) => ({
+      fases: fasesDelPlan.map((p) => ({
         name: p.name, durationWeeks: p.durationWeeks, startWeek: p.startWeek,
         sessionCount: p.sessionCount, notes: p.notes,
       })),
     });
+    // Los límites van aparte de las fases: se proponen aunque las fases no cambien (sin cronograma no hace
+    // nada: el create de abajo los lleva adentro).
+    if (isHandoff) await guardarLimitesPropuestos(bodyProjectId, limitesDelHandoff);
     // El reparto (crear las fases, o el aviso para el CSE) es puro y tiene su tabla en borrador-del-handoff.test.ts.
     const reparto = timelineSyncErrorDelHandoff(delHandoff);
     if (!reparto.crear) return { timelineSyncError: reparto.timelineSyncError };
@@ -3293,16 +3356,12 @@ async function persistTimelineFromAgentOutput(
        prohíben la Semana 0 explícitamente, y anteponerla acá deshacía en la persistencia lo que
        el prompt pidió en la generación — sin error y sin log. La decisión es una función PURA
        (lib/timeline/semana-cero.ts) para que la tabla entera viva en un test. */
-    const proyectoDeLaCorrida = await prisma.project.findUnique({
-      where: { id: bodyProjectId },
-      select: { hubspotPipelineId: true },
-    });
     const anteponerSemanaCero = debeAnteponerSemanaCero(
       proyectoDeLaCorrida?.hubspotPipelineId ?? null,
-      validPhases[0]?.name,
+      fasesDelPlan[0]?.name,
     );
     const phasesToCreate = !anteponerSemanaCero
-      ? validPhases
+      ? fasesDelPlan
       : [
           {
             name: "Semana 0",
@@ -3318,7 +3377,7 @@ async function persistTimelineFromAgentOutput(
           // Las contiguas (startWeek null) las recoloca solo computePhaseRanges (el cursor arranca tras
           // Semana 0). Las que traen startWeek EXPLÍCITO (paralelo) hay que correrlas +1 a mano, o
           // quedarían una semana antes de lo que el agente quiso.
-          ...validPhases.map((p) => ({
+          ...fasesDelPlan.map((p) => ({
             ...p,
             order: p.order + 1,
             startWeek: p.startWeek != null ? p.startWeek + 1 : p.startWeek,
@@ -3334,6 +3393,8 @@ async function persistTimelineFromAgentOutput(
         generatedByAgentRunId: agentRunId,
         anchorStartDate: kickoffDate,
         phases: { create: phasesToCreate },
+        // Un cronograma nuevo no tiene nada confirmado: lo que propuso la IA queda tal cual.
+        ...(limitesDelHandoff ? { limitesPropuestos: limitesDelHandoff as unknown as Prisma.InputJsonValue } : {}),
       },
     });
     console.log(

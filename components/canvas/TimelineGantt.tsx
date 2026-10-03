@@ -198,6 +198,9 @@ interface Props {
   // preview de propuesta NO lo pasa, así que ahí el chip queda de solo lectura como siempre).
   closeOverride?: string | null;
   onSetCloseOverride?: (isoDate: string) => void;
+  /** 2026-10-02 · La fecha límite vigente (yyyy-mm-dd), para marcar su semana en la cabecera
+   *  (lib/timeline/limites.ts). Ausente = sin marca. */
+  fechaLimite?: string | null;
   onRegeneratePhase?: (phase: GanttPhase) => void; // regenerar (borrar+rehacer) las tareas IA de esta fase
   kickoffDate?: string | null; // yyyy-mm-dd de la sesión de kickoff — sugerencia del anchor
   // Edición DIRECTA de fases (cuando editable) — además de la barra de IA
@@ -938,6 +941,7 @@ export default function TimelineGantt({
   onSetAnchor,
   closeOverride,
   onSetCloseOverride,
+  fechaLimite,
   onRegeneratePhase,
   kickoffDate,
   onUpdatePhase,
@@ -996,6 +1000,14 @@ export default function TimelineGantt({
   // Tanda K — lo que se PINTA (override si existe) y si hay que preguntar (diverge del vivo).
   const cierreVisible = displayedEnd(closeOverride, cierre);
   const cierreDiverge = closeDateDiverges(closeOverride, cierre);
+  /* La semana del proyecto que contiene la fecha límite (0-based, como la cabecera), o null. Una fecha
+     después del plan no se marca: la cabecera termina antes. */
+  const semanaLimite = useMemo(() => {
+    if (!anchor || !fechaLimite) return null;
+    const a = new Date(anchor);
+    const inicio = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate());
+    return Math.floor((Date.parse(`${fechaLimite}T00:00:00.000Z`) - inicio) / (7 * 86_400_000));
+  }, [anchor, fechaLimite]);
   // "Hoy" es hora de pared LOCAL del usuario (a diferencia de las fechas derivadas
   // del anchor, que son días de calendario en UTC — ver lib/timeline/weeks.ts).
   // Por eso NO puede calcularse en el servidor: `curInRange` gatea nodos y el
@@ -1569,6 +1581,11 @@ export default function TimelineGantt({
                 >
                   <div className="text-[10px] font-bold">S{w}</div>
                   {anchor && <div className="text-[9px] text-fg-muted">{fmtDay(addWeeks(anchor, w))}</div>}
+                  {semanaLimite === w && fechaLimite && (
+                    <div className="text-[9px] font-bold text-warn-ink" title={`Fecha límite: ${fmtFull(`${fechaLimite}T00:00:00.000Z`)}`}>
+                      límite
+                    </div>
+                  )}
                 </div>
               );
             })}

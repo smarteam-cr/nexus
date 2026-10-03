@@ -317,6 +317,13 @@ export default function RevisionDeLaPropuesta({
                 {l}
               </p>
             ))}
+            {/* 2026-10-02 · La propuesta contra la fecha límite y la duración vendida: aparte de las 5 líneas, para
+                que ninguna se pierda. Avisa; no frena «Aplicar» (decisión de Elías). */}
+            {mensaje.avisoDeLimites && (
+              <p className={mensaje.avisoDeLimites.startsWith("⚠") ? "font-semibold text-warn-ink" : "text-success-ink"}>
+                {mensaje.avisoDeLimites}
+              </p>
+            )}
             {general && (
               <p className="flex flex-wrap items-center gap-1.5 text-fg-secondary">
                 <span>

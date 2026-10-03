@@ -69,6 +69,8 @@ import { computePhaseRanges, etiquetaDeSemana, projectedEnd } from "@/lib/timeli
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { datosDeSeccion, formatoDeSeccion, markdownDeBloques } from "@/lib/landing/formato-de-seccion";
 import { handleDeTarea } from "@/lib/timeline/handle-de-tarea";
+import { avisoDeLimites, limitesDeLaFila, revisarLimites } from "@/lib/timeline/limites";
+import { SELECT_LIMITES, conSemanaCeroDelPipeline } from "@/lib/timeline/limites-servidor";
 import type { EstadoDelVacio } from "@/lib/timeline/borrador";
 import { leerEstadoDelVacio } from "@/lib/timeline/borrador-del-detalle";
 /* E3 P4: con una propuesta abierta, el chat conversa sobre ELLA (la lee `leerPropuestaParaElChat`; el
@@ -429,7 +431,8 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
         id: true,
         anchorStartDate: true,
         closeDateOverride: true,
-        project: { select: { name: true, client: { select: { name: true } } } },
+        ...SELECT_LIMITES,
+        project: { select: { name: true, hubspotPipelineId: true, client: { select: { name: true } } } },
         phases: {
           orderBy: { order: "asc" },
           select: {
@@ -496,6 +499,22 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
   const cierre = timeline.closeDateOverride
     ? fmtFecha(timeline.closeDateOverride)
     : fin.label;
+  /* 2026-10-02 · LO ACORDADO CON EL CLIENTE (lib/timeline/limites.ts): la fecha límite y la duración
+     vendida contra el plan de hoy, con la cuenta hecha por el código. El chat no mueve un límite (eso
+     lo hace una persona, con el cliente); si lo que le piden deja el plan fuera, lo dice. */
+  const limites = limitesDeLaFila({ ...timeline, conSemanaCero: conSemanaCeroDelPipeline(timeline.project.hubspotPipelineId) });
+  const avisoLimites = avisoDeLimites(
+    revisarLimites({ ancla: timeline.anchorStartDate?.toISOString() ?? null, fases: timeline.phases, limites }),
+    limites,
+  );
+  const lineasDeLimites = avisoLimites
+    ? [
+        "",
+        "LO ACORDADO CON EL CLIENTE (la cuenta la hizo el sistema):",
+        ...avisoLimites.lineas,
+        "Si lo que te piden deja el plan más largo que lo vendido o después de la fecha límite, dilo en la línea del acuerdo con «⚠» y cuánto se pasa. Nunca muevas un límite: lo mueve una persona, con el cliente, arriba del Gantt.",
+      ]
+    : [];
 
   /**
    * ⭐ EL REPARTO POR SEMANA, Y POR QUÉ ES IMPRESCINDIBLE (2026-08-20).
@@ -624,6 +643,7 @@ export async function contextoDeCronograma(projectId: string): Promise<ContextoD
     `Arranque: ${timeline.anchorStartDate ? fmtFecha(timeline.anchorStartDate) : "SIN FECHA DE ARRANQUE"}`,
     `Cierre proyectado: ${cierre ?? "no se puede calcular sin fecha de arranque"}`,
     `Ancho de calendario: ${fin.spanWeeks} semanas`,
+    ...lineasDeLimites,
     ...(timeline.phases.length > 0 ? ["", paraRehacerTodo] : []),
     ...(propuestasPendientes > 0 ? ["", lineaDeCambiosDeFasesSinDecidir(true, vacio, ilegible)] : []),
     "",

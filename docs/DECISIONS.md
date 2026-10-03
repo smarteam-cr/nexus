@@ -4344,6 +4344,54 @@ encontró largos y difíciles los textos propuestos.
 
 **Pendiente.** Quién es el dueño del mapa: lo tiene que revisar cuando cambian HubSpot o Insider.
 
+## El cronograma cabe en lo acordado: fecha límite, duración vendida y fases en paralelo (2026-10-02)
+
+> Validación de Elías sobre los 50 cronogramas activos. La fecha en que el cliente necesita todo
+> listo y las semanas vendidas no existían como dato en ningún lado: el cierre fijado a mano solo
+> cambia la fecha que se muestra. En 7 de las 14 cuentas donde el handoff nombraba la duración, el
+> plan que armó la IA se pasaba, y ningún handoff lo dijo. Caso real: Club Amantes del Vino, vendido
+> en 12 semanas con Salesforce venciendo el 31 de diciembre; el handoff lo sabía, propuso 16 semanas
+> hasta el 11 de enero, y el aviso de la propuesta lo presentó como mejora («el cierre se adelanta 23
+> días»). Los inicios: el prompt decía «por defecto SECUENCIALES», y la capacitación iba después de toda
+> la configuración en 15 de 19 cronogramas.
+
+- **Dos datos nuevos en `ProjectTimeline`: `fechaLimite` y `duracionVendidaSemanas`.** No se reusó el
+  cierre fijado a mano: ese dice qué fecha se MUESTRA; estos, hasta dónde PUEDE llegar el plan. En CAV
+  alguien había fijado el cierre en la fecha límite y eso escondía que las fases terminaban después.
+  SQL aditivo: `scripts/sql/2026-10-02-limites-del-cronograma.sql`.
+- **La duración vendida NO incluye la Semana 0** (decisión de Elías). Se compara contra el ancho de
+  calendario menos las semanas de la Semana 0 (`semanasDeArranque`, solo en pipelines que la tienen).
+- **Pasarse AVISA, no bloquea** (decisión de Elías): ni «Subir al cliente» ni aplicar una propuesta
+  se frenan. El aviso vive arriba del Gantt (`LimitesDelCronograma`), en la barra de la propuesta
+  (`avisoDeLimites`, aparte de las 5 líneas), marca la semana en la cabecera del Gantt y entra al
+  contexto del chat. La regla y los textos: `lib/timeline/limites.ts` (puro, probado con CAV).
+- **La IA propone; confirma Ventas, y si Ventas no, el CSL o el CSE** (decisión de Elías). Queda
+  escrito quién y con qué rol (`limitesConfirmacion`). El permiso es el de editar el cronograma: no
+  se creó una celda nueva. Un valor de la IA sin cita no se propone; con cita que no aparece tal cual
+  en lo que leyó, se muestra para revisar pero no dispara avisos (`citaVerificada`). Sin confirmar,
+  el aviso funciona con lo propuesto y lo dice.
+- **Mover un límite confirmado es un acuerdo con el cliente**: pide motivo y con quién se acordó
+  (`validarCambioDeLimite`), y deja la razón en `TimelineChange` (la misma que la cartera muestra
+  como el porqué).
+- **El bloque del handoff va en el MENSAJE, no en el prompt** (`lib/timeline/limites-handoff.ts`):
+  vale para los tres agentes de handoff sin re-sembrarlos. Pide la clave `limites`, que el plan quepa
+  y que, si no cabe, lo diga en `noCabe` en vez de estirarlo.
+- **Los inicios de las fases los pone el código, no la IA** (Customer Success; Desarrollo y Web
+  tienen su propia secuencia). La IA declara el `tipo` de cada fase y `acomodarEnParalelo` aplica la
+  regla de Elías: configuración, migración y desarrollo juntos; la capacitación en la SEGUNDA MITAD
+  de la configuración (de la de su Hub si la nombra); pruebas al terminar la configuración; cierre al
+  final. Reemplaza la regla de PARALELISMO del prompt. Es la misma doctrina que el plazo del paso 1:
+  la aritmética de semanas la hace el sistema.
+- **El código nunca alarga un plan.** Si con la regla queda más largo que como lo armó la IA, se
+  queda el de la IA. Medido sobre los 38 handoffs de Customer Success activos: acomoda 6 (CAV pasa de
+  16 a 12 semanas), deja 2 que alargaba (Metzger 10 → 12, Grupo Inve 9 → 10) y 30 sin tipo reconocible
+  (son de antes; desde ahora la IA lo declara).
+- **El paso 1 de «Regenerar todo» compara contra el fin real de las fases** cuando el cierre fijado
+  a mano queda antes (`cierreActualDelPlan`: vale el más tarde de los dos), y con un plazo pasado ya no
+  dice «no piden cambios de tiempos» (`AVISO_SE_PASA_DEL_PLAZO`).
+
+**Pendiente:** el cronograma por resultados (fase 2, solo diseño), conectado a `Project.handoffResultados`.
+
 ## La Planificación es lo que va a quedar configurado en HubSpot (2026-10-02)
 
 > Pedido de Elías: la Planificación es la parte práctica. Caroline Bersot la presenta al cliente como

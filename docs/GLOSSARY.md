@@ -17,6 +17,15 @@
   proyecto. Vive en `CanvasBlock`s del canvas "Handoff".
 - **Kickoff**: arranque del proyecto con el cliente (canvas "Kickoff"; tiene vista externa).
 - **Cronograma** (`ProjectTimeline`): plan del proyecto con fases/tareas/baselines/fechas reales/avances.
+- **Fecha límite** (`ProjectTimeline.fechaLimite`): el día en que el cliente necesita todo listo (vence una
+  licencia, un lanzamiento). No es el cierre fijado a mano (eso es qué fecha se MUESTRA). Si el plan cierra
+  después, aparece un aviso arriba del Gantt. La propone la IA del handoff con su cita; la confirma Ventas
+  (o el CSL o el CSE), y moverla pide motivo y con quién se acordó. Ver DECISIONS §El cronograma cabe en lo acordado.
+- **Duración vendida** (`ProjectTimeline.duracionVendidaSemanas`): las semanas que se vendieron, SIN contar la
+  Semana 0. Se compara contra el ancho de calendario del plan sin la Semana 0. Mismo ciclo que la fecha límite.
+- **Tipo de fase** (`tipo` en la salida del handoff, `lib/timeline/acomodar-en-paralelo.ts`): arranque,
+  diagnóstico, planificación, configuración, migración, desarrollo, capacitación, pruebas o cierre. Con él,
+  el código pone los inicios (lo que va en paralelo); nunca alarga el plan que armó la IA.
 - **Propuesta comercial** (modelo `BusinessCase`): lo que Ventas le arma a un prospecto —qué le
   duele, qué le proponemos, qué gana y cuánto cuesta—. Vive FUERA del proyecto, porque todavía no
   hay proyecto. **Se llamaba "Business Case" hasta el 2026-08-03**; el renombre fue solo del

@@ -95,6 +95,8 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 import { actionsFromSignals } from "@/lib/timeline/project-actions-input";
 import ProjectActionsLine from "./ProjectActionsLine";
 import RevisionDeLaPropuesta from "./RevisionDeLaPropuesta";
+import LimitesDelCronograma from "./LimitesDelCronograma";
+import { limitesVigentes, type LimitesDelCronograma as LimitesDelCronogramaData } from "@/lib/timeline/limites";
 import { useBorradorDelCronograma } from "./useBorradorDelCronograma";
 import { motivoDeLasCasillasSinGuardar, type ResultadoDeGuardarCasillas } from "@/lib/timeline/cola-de-casillas";
 import { useRecalculoDeLasTareas } from "./useRecalculoDeLasTareas";
@@ -340,6 +342,8 @@ export default function CronogramaCanvas({
   const [phases, setPhases] = useState<Phase[]>([]);
   const [anchor, setAnchor] = useState<string>(""); // yyyy-mm-dd o ""
   const [closeOverride, setCloseOverride] = useState<string>(""); // Tanda K — cierre fijado a mano, yyyy-mm-dd o ""
+  // 2026-10-02 — la fecha límite y la duración vendida (lib/timeline/limites.ts). null = sin cargar.
+  const [limites, setLimites] = useState<LimitesDelCronogramaData | null>(null);
   const [kickoffDate, setKickoffDate] = useState<string>(""); // yyyy-mm-dd de la sesión de kickoff (sugerencia)
   const [loading, setLoading] = useState(true);
   // `loading` = primera carga (pinta el skeleton). `refreshing` = refetch tras una acción
@@ -831,6 +835,7 @@ export default function CronogramaCanvas({
         setPhases(mapServerPhases(data.phases ?? []));
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
         setCloseOverride(data.closeDateOverride ? String(data.closeDateOverride).slice(0, 10) : "");
+        setLimites((data.limites as LimitesDelCronogramaData | undefined) ?? null);
         setKickoffDate(data.kickoffSessionDate ? String(data.kickoffSessionDate).slice(0, 10) : "");
         setPublishedAt(data.timelinePublishedAt ?? null);
         setHasPublishedOnce(!!data.hasPublishedOnce);
@@ -1609,9 +1614,10 @@ export default function CronogramaCanvas({
             atrasos: particularidades,
             cierreFijado: closeOverride || null,
             hoy: hydratedNow,
+            limites,
           })
         : null,
-    [revision.resumen, revision.resumenEntero, revision.borrador, vivo, referenciasEnPantalla, particularidades, closeOverride, hydratedNow],
+    [revision.resumen, revision.resumenEntero, revision.borrador, vivo, referenciasEnPantalla, particularidades, closeOverride, hydratedNow, limites],
   );
   /* ⭐ L6 · EL PORQUÉ CON FUENTES NUEVAS: lo escribió la fusión del paso 2 en la propuesta GUARDADA (`explicacion`), con
      la huella de los cambios que escribió. Si hoy los cambios son otros (el chat los editó), es «de cuando se generó».
@@ -1893,6 +1899,7 @@ export default function CronogramaCanvas({
           acordadoSinEntrar: d?.acordadoSinEntrar,
           runId: d?.runId,
           error: d?.error,
+          observaciones: d?.observaciones,
         };
       } catch {
         respuesta = { red: true };
@@ -4410,6 +4417,16 @@ export default function CronogramaCanvas({
               barraRef={revision.barraRef}
             />
           )}
+          {/* 2026-10-02 · Lo acordado con el cliente (fecha límite y duración vendida) contra el cronograma de HOY.
+              Con una propuesta en pantalla, la barra de arriba dice cómo queda con ella. */}
+          <LimitesDelCronograma
+            projectId={projectId}
+            limites={limites}
+            ancla={anchor}
+            fases={phases}
+            canEdit={canEdit}
+            onCambio={setLimites}
+          />
           <TimelineGantt
             /* «Ver la propuesta»: el cronograma como quedaría, SOLO LECTURA y con marcas. Nunca pasa
                por `setPhases` ni por el guardado (plan §3.4): sale de `proyectar`. */
@@ -4435,6 +4452,7 @@ export default function CronogramaCanvas({
                vista de la propuesta es de solo lectura (sin `onSetCloseOverride`). */
             closeOverride={closeOverride}
             onSetCloseOverride={verPropuesta ? undefined : setCloseOverrideFromGantt}
+            fechaLimite={limites ? (limitesVigentes(limites).fecha?.valor ?? null) : null}
             /* E4 P1: el «IA» de cada fase abre el chat con esa fase señalada (el Gantt lo toma del
                proveedor del chip de arriba), con y sin propuesta. Con una propuesta abierta, el chat la
                edita (E3). */

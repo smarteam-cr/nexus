@@ -63,6 +63,7 @@ import {
 import type { FuentesDeLaPropuesta, PrometidoDeLaPropuesta, ReferenciasDeLaPropuesta } from "./referencias-de-la-propuesta";
 import { lecturaDelSistema, semanaDeHoy, semanaVencida, textoDeLaSemanaQueCambio } from "./vista-de-la-propuesta";
 import { computePhaseRanges, fmtDay, plural, semanaDelProyecto, type ProjectedEnd } from "./weeks";
+import { avisoDeLaPropuestaContraLimites, revisarLimites, type LimitesDelCronograma } from "./limites";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── LOS TIPOS ────────────────────────────────────────────────────────────────
@@ -91,6 +92,8 @@ export interface EntradaDelMensaje {
   cierreFijado: string | null;
   /** Hoy; null antes de hidratar: sin la línea de las atrasadas. */
   hoy: Date | null;
+  /** Los límites acordados (2026-10-02). Ausente o null = sin el aviso contra lo acordado. */
+  limites?: LimitesDelCronograma | null;
 }
 
 /** Una fuente real de un cambio de fases: «Instrucciones adicionales», «Reunión «T» · 12 sep», «Nota «T»». */
@@ -114,6 +117,10 @@ export interface MensajeDeLaPropuesta {
   /** M4 P4f: «⚠ Se reprogramó desde la S18 y hoy es la S19: vuelve a generarla…», o null (misma semana, sin reloj o sin
    *  nada del sistema). La barra lo pinta abajo, antes de los choques. */
   avisoDeLaSemana: string | null;
+  /** 2026-10-02: la propuesta contra la fecha límite y la duración vendida («⚠ Con la propuesta, el plan dura
+   *  14 de las 12 semanas vendidas…»), o null sin límites o si ni hoy ni con la propuesta se pasa. Va aparte de
+   *  las 5 líneas para no quitarle lugar a ninguna: pasarse de lo acordado es lo primero que hay que ver. */
+  avisoDeLimites: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -808,5 +815,14 @@ export function mensajeDeLaPropuesta(i: EntradaDelMensaje): MensajeDeLaPropuesta
     fuentes: [...verificadas.values()],
     // M4 P4f: la semana del reloj de la propuesta contra la de hoy (el mismo predicado que «ya pasó»).
     avisoDeLaSemana: textoDeLaSemanaQueCambio(i.borrador, semanaDeHoy(i.vivo.ancla, i.hoy)),
+    avisoDeLimites: avisoContraLimites(i),
   };
+}
+
+/** El plan de hoy y el de la propuesta (con lo marcado) contra los límites vigentes. */
+function avisoContraLimites(i: EntradaDelMensaje): string | null {
+  if (!i.limites) return null;
+  const antes = revisarLimites({ ancla: i.vivo.ancla, fases: i.vivo.fases, limites: i.limites });
+  const despues = revisarLimites({ ancla: i.r.proyeccion.ancla, fases: i.r.proyeccion.fases, limites: i.limites });
+  return avisoDeLaPropuestaContraLimites(antes, despues);
 }

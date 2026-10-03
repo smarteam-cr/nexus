@@ -67,6 +67,8 @@ import { leerReferenciasDeLaPropuesta } from "@/lib/timeline/leer-referencias";
 import type { ReferenciasDeLaPropuesta } from "@/lib/timeline/referencias-de-la-propuesta";
 import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
+import { limitesDeLaFila, type LimitesDelCronograma } from "@/lib/timeline/limites";
+import { SELECT_LIMITES, conSemanaCeroDelPipeline } from "@/lib/timeline/limites-servidor";
 
 // Normaliza un string de fecha entrante al MISMO ISO que produce el lado DB
 // (Date.toISOString()). El validador acepta cualquier formato parseable: comparar
@@ -147,6 +149,9 @@ interface TimelineResponse {
   /** Tanda K — cierre fijado a mano por el CSE. null = seguir el proyectado (derivado en el
    *  cliente vía `displayedEnd`; este endpoint solo persiste/devuelve el override crudo). */
   closeDateOverride: string | null;
+  /** Los límites acordados (fecha límite y duración vendida), lo que propuso la IA y quién confirmó
+   *  (2026-10-02, lib/timeline/limites.ts). La revisión contra el plan la hace la pantalla. */
+  limites: LimitesDelCronograma;
   lastEditedByHuman: string | null;
   generatedByAgentRunId: string | null;
   detailConfirmedAt: string | null;
@@ -278,6 +283,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     select: {
       anchorStartDate: true,
       closeDateOverride: true,
+      ...SELECT_LIMITES,
       lastEditedByHuman: true,
       generatedByAgentRunId: true,
       detailConfirmedAt: true,
@@ -288,7 +294,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
       pendingParticularidades: true,
       pendingParticularidadesRunId: true,
       publishedSnapshot: true,
-      project: { select: { timelinePublishedAt: true, status: true, healthStatusOverride: true } },
+      project: { select: { timelinePublishedAt: true, status: true, healthStatusOverride: true, hubspotPipelineId: true } },
       // C-17 (2026-09-04): lo que el summary del panel «Qué hacer acá» necesita y este select no
       // traía (más las fechas reales de fases y tareas, abajo). Antes `loadProjectSummary` volvía
       // a leer fases y tareas ENTERAS para conseguirlo: dos veces el árbol por cada GET.
@@ -402,6 +408,7 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
     summary,
     anchorStartDate: tl.anchorStartDate?.toISOString() ?? null,
     closeDateOverride: tl.closeDateOverride?.toISOString() ?? null,
+    limites: limitesDeLaFila({ ...tl, conSemanaCero: conSemanaCeroDelPipeline(tl.project.hubspotPipelineId) }),
     lastEditedByHuman: tl.lastEditedByHuman?.toISOString() ?? null,
     generatedByAgentRunId: tl.generatedByAgentRunId,
     detailConfirmedAt: tl.detailConfirmedAt?.toISOString() ?? null,

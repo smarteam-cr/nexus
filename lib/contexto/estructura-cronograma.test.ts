@@ -263,6 +263,20 @@ describe("G5 · el calendario: ids, estado, «Hoy», semanas desde 1 y fechas", 
     expect(calendarioDeEstructura(conFijado, AHORA)).toContain("⭐ CIERRE ACTUAL (sin los cambios que propongas): semana 11 ");
   });
 
+  it("un cierre fijado ANTES del fin de las fases no adelanta el plan: vale el fin de las fases (2026-10-02)", () => {
+    /* Club Amantes del Vino: el CSE fijó el cierre en la fecha límite del cliente con las fases terminando
+       después; comparar contra el fijado escondía cuánto se pasaba el plan. La edición que la pone en rojo:
+       volver a tomar el fijado aunque las fases terminen después. */
+    const fijadoAntes = { ...FOTO, closeDateOverride: "2026-10-26T00:00:00.000Z" }; // 14 sep + 6 semanas; fases: 8
+    expect(cierreActualDelPlan(fijadoAntes, AHORA)).toMatchObject({ semana: 8, porque: "fases", semanaFijada: 6, semanasDeLasFases: 8 });
+    expect(lineaDelCierreActual(fijadoAntes, AHORA)).toContain(
+      "semana 8 del proyecto — el fin de las fases, de la semana 1 a la semana 8 (el cierre fijado a mano, en la semana 6, queda antes)",
+    );
+    expect(fraseDelPlazo({ semanaAcordada: 6, cierreActual: cierreActualDelPlan(fijadoAntes, AHORA)!.semana })).toMatch(
+      /^El plan se pasa 2 semanas del plazo acordado \(semana 6\)/,
+    );
+  });
+
   it("#10 · con el cierre planificado ya PASADO y fases sin terminar, el cierre actual es hoy", () => {
     /* Revisión adversarial (2026-09-24): el proyecto atrasado es el caso común (71 de 103 a media
        ejecución). Hoy en la semana 11, fases hasta la 8 con Configuración sin terminar: el plan no cierra

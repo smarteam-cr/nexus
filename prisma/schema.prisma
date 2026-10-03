@@ -723,6 +723,17 @@ model ProjectTimeline {
   // si el derivado se recalcula distinto (nueva propuesta, edición de duración), la UI pregunta
   // en vez de pisarlo en silencio (ver lib/timeline/weeks.ts: displayedEnd/closeDateDiverges).
   closeDateOverride            DateTime?
+  // LÍMITES ACORDADOS CON EL CLIENTE (2026-10-02, lib/timeline/limites.ts). Distintos del cierre
+  // fijado a mano: ese dice qué fecha se MUESTRA; estos dicen hasta dónde PUEDE llegar el plan. Los
+  // escribe una persona (Ventas; si no, el CSL o el CSE), nunca la IA: la IA los propone en
+  // `limitesPropuestos`. Moverlos pide motivo y con quién se acordó (queda en TimelineChange).
+  fechaLimite                  DateTime? // el día en que todo tiene que estar listo para el cliente
+  duracionVendidaSemanas       Int? // las semanas que se vendieron, SIN contar la Semana 0
+  // Quién confirmó cada límite: { fechaLimite?: {por, rol, en, fuente}, duracionVendida?: {...} }.
+  limitesConfirmacion          Json?
+  // Lo que propuso la IA del handoff y nadie confirmó todavía, con la frase de donde lo sacó:
+  // { runId, en, fechaLimite?: {valor, cita, citaVerificada}, duracionVendida?: {...}, noCabe? }.
+  limitesPropuestos            Json?
   lastEditedByHuman            DateTime? // se actualiza en cada PUT que toca fases (no en el create del agente)
   // D.3 staging — el cliente ve SOLO este SNAPSHOT (shape client-safe de readClientTimeline)
   // congelado al "Subir". La vista externa NUNCA lee en vivo: si está publicado y el snapshot

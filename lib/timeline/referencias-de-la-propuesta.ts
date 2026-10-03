@@ -114,17 +114,7 @@ export interface FaseDelHandoff {
  * Sin salida, sin `timeline.phases` o sin ninguna válida: [].
  */
 export function fasesDelHandoff(salida: unknown): FaseDelHandoff[] {
-  const timelineRaw = (salida as { timeline?: { phases?: unknown } } | null)?.timeline?.phases;
-  if (!Array.isArray(timelineRaw) || timelineRaw.length === 0) return [];
-  return timelineRaw
-    .filter((p: unknown): p is { name: string; durationWeeks: number; sessionCount?: number; notes?: string; estimated?: boolean; startWeek?: number } => {
-      if (!p || typeof p !== "object") return false;
-      const obj = p as Record<string, unknown>;
-      return typeof obj.name === "string"
-        && obj.name.trim().length > 0
-        && typeof obj.durationWeeks === "number"
-        && obj.durationWeeks > 0;
-    })
+  return fasesCrudasValidas(salida)
     .map((p, i) => ({
       name: p.name.trim(),
       order: i,
@@ -141,6 +131,31 @@ export function fasesDelHandoff(salida: unknown): FaseDelHandoff[] {
       needsValidation: p.estimated === true,
       source: "AGENT" as const,
     }));
+}
+
+type FaseCruda = { name: string; durationWeeks: number; sessionCount?: number; notes?: string; estimated?: boolean; startWeek?: number; tipo?: unknown };
+
+/** Las fases crudas que pasan el filtro de `fasesDelHandoff`, en el mismo orden (una sola regla para las dos lecturas). */
+function fasesCrudasValidas(salida: unknown): FaseCruda[] {
+  const timelineRaw = (salida as { timeline?: { phases?: unknown } } | null)?.timeline?.phases;
+  if (!Array.isArray(timelineRaw) || timelineRaw.length === 0) return [];
+  return timelineRaw.filter((p: unknown): p is FaseCruda => {
+    if (!p || typeof p !== "object") return false;
+    const obj = p as Record<string, unknown>;
+    return typeof obj.name === "string"
+      && obj.name.trim().length > 0
+      && typeof obj.durationWeeks === "number"
+      && obj.durationWeeks > 0;
+  });
+}
+
+/**
+ * El `tipo` que la IA declaró para cada fase de `fasesDelHandoff` (mismo filtro, mismo orden), crudo:
+ * lo interpreta lib/timeline/acomodar-en-paralelo.ts. Va aparte porque las fases se escriben tal cual
+ * en `TimelinePhase`, que no tiene esa columna (2026-10-02).
+ */
+export function tiposDelHandoff(salida: unknown): unknown[] {
+  return fasesCrudasValidas(salida).map((p) => p.tipo ?? null);
 }
 
 /** La salida GUARDADA de una corrida (`AgentRun.output`, un JSON en texto), o null si no se deja leer. */

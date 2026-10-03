@@ -996,6 +996,8 @@ export type RespuestaDeEstructura =
       acordadoSinEntrar?: unknown;
       runId?: unknown;
       error?: unknown;
+      /** Las observaciones del paso 1: con la del sistema «El plan se pasa…», el aviso no puede decir «sin cambios». */
+      observaciones?: unknown;
     };
 
 /**
@@ -1040,6 +1042,12 @@ export function hayMaterialParaElPaso1(input: {
 }
 
 export const AVISO_SIN_CAMBIOS = "Tus reuniones, notas e instrucciones no piden cambios de fases ni de tiempos.";
+/** Sin cambios de fases, pero el plan se pasa del plazo acordado (la frase de `fraseDelPlazo`). Validación del
+ *  2026-10-02: en Club Amantes del Vino la pantalla dijo «no piden cambios de tiempos» y la observación de al lado,
+ *  «el plan se pasa 3 semanas». El revisor no estira ni reparte un plazo (decisión del 2026-09-23): lo dice. */
+export const AVISO_SE_PASA_DEL_PLAZO =
+  "Tus reuniones, notas e instrucciones no piden cambios de fases, pero el plan se pasa del plazo acordado: lo ves en «La IA también notó».";
+const SE_PASA_DEL_PLAZO = /^El plan se pasa \d+ semanas? del plazo acordado/;
 /** Sin propuesta, pero con cambios ACORDADOS que el armador no pudo proponer (por el nombre o por el
  *  calendario): quedaron en las observaciones, que se ven en «La IA también notó» (la franja sin
  *  barra, ObservacionesDelPaso1, o la barra de la propuesta). Decir «no piden cambios» sería falso y
@@ -1116,7 +1124,12 @@ export function pasoTrasEstructura(r: RespuestaDeEstructura): PasoTrasEstructura
   }
   if (r.estado === "sin-cambios") {
     const acordado = typeof r.acordadoSinEntrar === "number" && r.acordadoSinEntrar > 0;
-    return { paso: "tareas", token: null, aviso: acordado ? AVISO_ACORDADO_SIN_ENTRAR : AVISO_SIN_CAMBIOS };
+    const sePasa = Array.isArray(r.observaciones) && r.observaciones.some((o) => typeof o === "string" && SE_PASA_DEL_PLAZO.test(o));
+    return {
+      paso: "tareas",
+      token: null,
+      aviso: acordado ? AVISO_ACORDADO_SIN_ENTRAR : sePasa ? AVISO_SE_PASA_DEL_PLAZO : AVISO_SIN_CAMBIOS,
+    };
   }
   if (r.estado === "sin-material") return { paso: "tareas", token: null };
   return { paso: "tareas", token: null, aviso: AVISO_FALLO_DE_ESTRUCTURA };
