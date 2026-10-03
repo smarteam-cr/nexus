@@ -65,6 +65,8 @@ export interface Lienzo {
   irA: (paso: PasoDelLienzoUI) => void;
   /** Abre una casilla en el cajón lateral, desde cualquier pieza (las tarjetas del Resumen, el panel de la derecha). */
   abrirCasilla: (clave: ClaveDeCasilla) => void;
+  /** Abre el cajón «Lo que sugirió el agente», con todo o filtrado a una pieza. */
+  abrirRevision: (pieza?: PasoDelLienzoUI) => void;
   /**
    * La sesión abierta en Exploración y si se mira el «antes» o el «después». Vive en el lienzo y no
    * en la pieza porque las sesiones se eligen desde la barra de la izquierda.

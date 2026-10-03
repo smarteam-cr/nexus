@@ -6,6 +6,10 @@
  * para desktop»). Reemplaza al desplegable de piezas y a las pestañas de sesión: a la vista todo el
  * tiempo, sin abrir nada. Abajo, «Cómo manejar objeciones», a mano en cualquier pieza.
  *
+ * El punto de cada pieza: azul si el agente sugirió algo ahí (con cuántas, en azul), ámbar si pide
+ * atención (hipótesis, reuniones sin leer, lista para proponer), verde si ya tiene contenido, hueco
+ * si todavía nada. Azul es siempre «lo sugiere el agente», en todo el lienzo.
+ *
  * En pantallas chicas se acuesta: las piezas en una fila que salta de renglón, sin las sesiones
  * (Exploración las muestra arriba de la sesión).
  */
@@ -16,6 +20,9 @@ import { diaCorto } from "@/lib/exploraciones/fechas";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import ManejoDeObjeciones from "./ManejoDeObjeciones";
 import { useSesiones } from "./useSesiones";
+
+/** Una fila de la barra: la del selector de piezas, más cuántas sugerencias esperan ahí. */
+export type FilaDelRiel = FilaDePieza & { sugeridas: number };
 
 const PUNTO: Record<EstadoDePieza, string> = {
   generada: "bg-success",
@@ -28,13 +35,16 @@ function Fila({
   activa,
   estado,
   aviso,
+  sugeridas,
   title,
   onClick,
 }: {
   etiqueta: string;
   activa: boolean;
-  estado: EstadoDePieza | null;
+  estado: EstadoDePieza;
   aviso?: string | null;
+  /** Cuántas sugerencias esperan; el texto que las nombra, si no es solo el número. */
+  sugeridas: { n: number; texto?: string };
   title?: string;
   onClick: () => void;
 }) {
@@ -49,9 +59,15 @@ function Fila({
         activa ? "bg-info-surface font-semibold text-info-ink" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
       )}
     >
-      <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", activa || !estado ? "bg-info" : PUNTO[estado])} aria-hidden="true" />
+      <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", activa || sugeridas.n > 0 ? "bg-info" : PUNTO[estado])} aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">{etiqueta}</span>
-      {aviso && <span className="flex-shrink-0 text-2xs font-medium text-fg-muted">{aviso}</span>}
+      {sugeridas.n > 0 ? (
+        <span className="flex-shrink-0 text-2xs font-medium text-info-ink" title={`${sugeridas.n} sugerencias del agente`}>
+          {sugeridas.texto ?? sugeridas.n}
+        </span>
+      ) : (
+        aviso && <span className={cn("flex-shrink-0 text-2xs font-medium", estado === "pendiente" ? "text-warn-ink" : "text-fg-muted")}>{aviso}</span>
+      )}
     </button>
   );
 }
@@ -111,15 +127,18 @@ export default function RielDePiezas({
 }: {
   paso: PasoDelLienzoUI;
   onElegir: (p: PasoDelLienzoUI) => void;
-  resumen: { aviso: string | null; estado: EstadoDePieza };
-  filas: readonly FilaDePieza[];
+  resumen: { sugeridas: number; confirmadas: number; estado: EstadoDePieza };
+  filas: readonly FilaDelRiel[];
 }) {
   const { sesion } = useLienzo();
   return (
     <nav aria-label="Piezas de la exploración" className="flex h-full flex-col gap-4">
       <div className="flex flex-wrap gap-1 lg:flex-col lg:gap-0.5">
         <div className="lg:w-full">
-          <Fila etiqueta="Resumen" activa={paso === "resumen"} estado={resumen.estado} aviso={resumen.aviso} onClick={() => onElegir("resumen")} />
+          <Fila etiqueta="Resumen" activa={paso === "resumen"}
+            estado={resumen.estado}
+            aviso={`${resumen.confirmadas}/8`}
+            sugeridas={{ n: resumen.sugeridas, texto: `${resumen.sugeridas} ${resumen.sugeridas === 1 ? "sugerida" : "sugeridas"}` }} onClick={() => onElegir("resumen")} />
         </div>
         {filas.map((f) => (
           <div key={f.clave} className="lg:w-full">
@@ -128,6 +147,7 @@ export default function RielDePiezas({
               activa={paso === f.clave}
               estado={f.estado}
               aviso={f.aviso?.corto ?? null}
+              sugeridas={{ n: f.sugeridas }}
               title={f.aviso?.largo ?? f.ayuda}
               onClick={() => onElegir(f.clave as PasoDelLienzoUI)}
             />

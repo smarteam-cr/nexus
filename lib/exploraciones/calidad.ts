@@ -69,7 +69,7 @@ export function queSigueConPaso(
   chequeo: ResultadoDelChequeo,
   sinLeer: readonly ReunionSinLeer[] = [],
 ): { texto: string; paso: PasoDeQueSigue | null } {
-  const revisables = propuestaVigente(estado).filter((it) => !esHipotesisDeNivel(it) && it.destino.tipo !== "casoDeUso").length;
+  const revisables = propuestaVigente(estado).filter((it) => !esHipotesisDeNivel(it)).length;
   if (!estado.perfilCierre || !estado.perfilDespues) {
     return { texto: "Revisa la escala y el perfil de negocio: hacen falta antes de medir.", paso: "escala" };
   }
@@ -86,7 +86,7 @@ export function queSigueConPaso(
     const todasReuniones = sinLeer.every((r) => r.origen !== "documento");
     return { texto: `Hay ${sinLeer.length} ${todasReuniones ? "reuniones" : "reuniones o documentos"} sin leer: pídele al agente que las lea.`, paso: "exploracion" };
   }
-  if (revisables > 0) return { texto: `Revisa lo que propuso el agente: ${revisables} ${revisables === 1 ? "cosa" : "cosas"} para usar o descartar.`, paso: null };
+  if (revisables > 0) return { texto: `Revisa lo que sugirió el agente: ${revisables} ${revisables === 1 ? "cosa" : "cosas"} para usar o descartar.`, paso: null };
   // Todavía nada que haya dicho el cliente: lo que hay son hipótesis. Toca la primera reunión.
   const conEvidencia = Object.values(estado.contenido.chequeo).some((e) => !esFuenteDeHipotesis(e.fuente));
   if (!conEvidencia && estado.propuesta.leidas.sesiones.length === 0) {

@@ -1,11 +1,15 @@
 "use client";
 
 /**
- * Propuestas — lo que propuso el agente para una casilla, con de dónde salió y «Usar» / «Descartar».
+ * Propuestas — lo que sugirió el agente para una casilla, como FILAS azules (diseño del 2026-10-03,
+ * «Una sugerencia, en su lugar»): qué propone, de dónde sale en una línea —la cita completa y el
+ * porqué al tocar «ver de dónde sale»— y a la derecha «Descartar» en texto y «Usar» como botón.
+ * Azul es siempre «lo sugiere el agente y espera tu decisión»; nunca una tarjeta grande.
  *
- * Va EN su lugar (debajo de la casilla, en la fila de la dimensión…), no en un panel aparte: se
- * decide mirando lo que ya está confirmado al lado. Lo descartado no vuelve (queda su lápida).
+ * Va EN su lugar (debajo de la casilla, en la fila de la dimensión…): se decide mirando lo que ya
+ * está confirmado al lado. Lo descartado no vuelve (queda su lápida).
  */
+import { useState } from "react";
 import { Button } from "@/components/ui";
 import {
   ETIQUETA_DE_LA_OBJECION,
@@ -133,44 +137,91 @@ export function describirPropuesta(item: ItemPropuesto, escala: EscalaDelLienzo,
   }
 }
 
-export function Propuestas({ items, compacto = false }: { items: ItemPropuesto[]; compacto?: boolean }) {
+/** De dónde sale, en una línea: la primera fuente con cita (o las fuentes, si ninguna trae cita). */
+export function origenEnUnaLinea(item: ItemPropuesto): { etiqueta: string; cita: string | null } {
+  const conCita = item.fuentes.find((f) => f.cita);
+  if (conCita) return { etiqueta: conCita.etiqueta, cita: conCita.cita ?? null };
+  return { etiqueta: item.fuentes.map((f) => f.etiqueta).join(" · "), cita: null };
+}
+
+/** Lo que solo se ve al pedir «ver de dónde sale»: todas las fuentes con su cita, y el porqué. */
+export function DeDondeSale({ item }: { item: ItemPropuesto }) {
+  return (
+    <div className="mt-2 space-y-1 border-l-2 border-info-line bg-surface px-2.5 py-2 text-xs leading-relaxed text-fg-secondary">
+      {item.fuentes.map((f, i) => (
+        <p key={`${f.id}-${i}`}>
+          <span className="text-fg-muted">{f.etiqueta}</span>
+          {f.cita && <span className="italic"> «{f.cita}»</span>}
+        </p>
+      ))}
+      {item.razon && (
+        <p>
+          <span className="font-medium text-fg">Por qué: </span>
+          {item.razon}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Una sugerencia: una fila azul con su texto, su origen en una línea, «Descartar» y «Usar». */
+export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; texto?: React.ReactNode; destino?: string }) {
   const { escala, nombreDeNivel, cambiar, puedeEditar, guardando } = useLienzo();
+  const [abierta, setAbierta] = useState(false);
+  const origen = origenEnUnaLinea(item);
+  const hayMas = !!item.razon || item.fuentes.length > 1 || (origen.cita?.length ?? 0) > 70;
+  return (
+    <li className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
+      <div className="min-w-0 flex-1">
+        {destino && <p className="text-2xs font-semibold text-info-ink">{destino}</p>}
+        <p className="text-sm leading-snug text-fg">{texto ?? describirPropuesta(item, escala, nombreDeNivel)}</p>
+        {(origen.etiqueta || hayMas) && (
+          <p className="mt-0.5 flex min-w-0 items-baseline gap-1 text-xs text-fg-muted">
+            <span className="min-w-0 truncate">
+              {origen.etiqueta}
+              {origen.cita && <span className="italic"> · «{origen.cita}»</span>}
+            </span>
+            {hayMas && (
+              <button type="button" aria-expanded={abierta} className="flex-shrink-0 font-medium text-info-ink hover:underline" onClick={() => setAbierta((x) => !x)}>
+                {abierta ? "ocultar" : "ver de dónde sale"}
+              </button>
+            )}
+          </p>
+        )}
+        {abierta && <DeDondeSale item={item} />}
+      </div>
+      {puedeEditar && (
+        <div className="flex flex-shrink-0 items-center gap-1">
+          <button type="button" className="rounded px-1.5 py-1 text-xs text-fg-muted hover:text-fg" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
+            Descartar
+          </button>
+          <Button
+            size="xs"
+            variant="primary"
+            disabled={guardando}
+            onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }], { refrescar: item.destino.tipo === "edicion" || item.destino.tipo === "perfil" })}
+          >
+            Usar
+          </Button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** Las sugerencias de un lugar, con su rótulo azul arriba. */
+export function Propuestas({ items }: { items: ItemPropuesto[]; compacto?: boolean }) {
   if (items.length === 0) return null;
   return (
-    <ul className="space-y-2">
-      {items.map((it) => (
-        <li key={it.id} className="rounded-lg border border-info-line bg-info-surface px-3 py-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-1">
-              <p className="text-2xs font-semibold uppercase tracking-wide text-info-ink">Propuesto</p>
-              <p className="text-sm text-fg">{describirPropuesta(it, escala, nombreDeNivel)}</p>
-              {!compacto && it.razon && <p className="text-xs text-fg-secondary">{it.razon}</p>}
-              {it.fuentes.length > 0 && (
-                <p className="text-xs text-fg-muted">
-                  De:{" "}
-                  {it.fuentes.map((f, i) => (
-                    <span key={`${f.id}-${i}`}>
-                      {i > 0 && " · "}
-                      {f.etiqueta}
-                      {f.cita && <span className="italic"> «{f.cita}»</span>}
-                    </span>
-                  ))}
-                </p>
-              )}
-            </div>
-            {puedeEditar && (
-              <div className="flex flex-shrink-0 items-center gap-1.5">
-                <Button size="xs" variant="primary" disabled={guardando} onClick={() => void cambiar([{ op: "usar", itemId: it.id, valor: it.valor }], { refrescar: it.destino.tipo === "edicion" || it.destino.tipo === "perfil" })}>
-                  Usar
-                </Button>
-                <Button size="xs" variant="secondary" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [it.id] }])}>
-                  Descartar
-                </Button>
-              </div>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-1.5">
+      <p className="text-2xs font-semibold uppercase tracking-widest text-info-ink">
+        {items.length === 1 ? "Sugerida por el agente" : `Sugeridas por el agente · ${items.length}`}
+      </p>
+      <ul className="space-y-1.5">
+        {items.map((it) => (
+          <FilaSugerida key={it.id} item={it} />
+        ))}
+      </ul>
+    </div>
   );
 }

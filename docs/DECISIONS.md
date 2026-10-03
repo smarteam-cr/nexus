@@ -4341,6 +4341,21 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   lienzo, así se abren desde cualquier columna. La sesión abierta vive en el lienzo y no se guarda en
   la dirección. Debajo de 1280 px el panel de la derecha baja al final; debajo de 1024 px las piezas
   van en una fila y las sesiones se eligen con una lista en Exploración.
+- **Lo que sugiere el agente: azul, en filas, y un solo lugar para revisarlo todo** (Elías,
+  2026-10-03: «se ve un poco abultado… no se entiende bien»; aprobó el diseño). Un color, un
+  significado en todo el lienzo: azul es lo que sugiere el agente y espera decisión; verde, lo
+  confirmado; ámbar, hipótesis o algo que pide atención; punteado, lo que falta (la cuadrícula del
+  marco pasó de ámbar a azul en lo sugerido). Una sugerencia es una fila (`FilaSugerida`): qué
+  propone, de dónde sale en una línea —la cita entera y el porqué al tocar «ver de dónde sale»— y
+  «Descartar» en texto y «Usar» como botón; se fue el rótulo «PROPUESTO». Cada pieza abre con una
+  franja azul (cuántas, usar todas) en vez del marco grande de «Hay N propuestas», y «Qué sigue»
+  lleva un solo botón al cajón «Lo que sugirió el agente» (`RevisarSugerencias`): todo agrupado por
+  pieza y casilla, con filtro, «Usar las N» por grupo y teclas U, D y flechas. «Qué sigue» cuenta
+  también los casos de uso, así el número es el mismo que el del cajón.
+- **Los fondos azules van con los tokens `info`, nunca con `bg-brand/5` o `/10`** (2026-10-03). En
+  modo claro, `globals.css` remapea esos fondos y bordes de marca translúcidos a lila (red de
+  seguridad de antes de los tokens): lo sugerido y lo activo salían violetas y no como en el diseño.
+  Los diseños del lienzo se arman con los colores y la letra (Geist) reales de la app.
 
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 

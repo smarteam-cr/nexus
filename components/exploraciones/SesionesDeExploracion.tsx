@@ -44,7 +44,7 @@ import {
 import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { Casilla } from "./Casilla";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
-import { describirPropuesta } from "./Propuestas";
+import { FilaSugerida } from "./Propuestas";
 import { NivelChip, QueVaPrimero } from "./QueVaPrimero";
 import SumarAMano from "./SumarAMano";
 import { useCorrida } from "./useCorrida";
@@ -300,7 +300,7 @@ function destinoCorto(d: DestinoDePropuesta, nombreDeDimension: (id: string) => 
 
 /** Lo que salió de las reuniones: cada propuesta del agente con su cita, para usarla o descartarla ahí mismo. */
 function LoQueSalio() {
-  const { revisables, escala, nombreDeNivel, cambiar, puedeEditar, guardando } = useLienzo();
+  const { revisables, escala, cambiar, puedeEditar, guardando } = useLienzo();
   const [todas, setTodas] = useState(false);
   const items = revisables.filter((it) => it.destino.tipo !== "casoDeUso" && !(it.destino.tipo === "casilla" && it.destino.clave === "noExplorado"));
   const visibles = todas ? items : items.slice(0, 6);
@@ -326,29 +326,10 @@ function LoQueSalio() {
       {items.length === 0 ? (
         <p className="px-4 py-5 text-sm text-fg-muted">Cuando el agente lee la reunión, lo que propone aparece acá, con la frase del cliente que lo respalda.</p>
       ) : (
-        <ul className="divide-y divide-line">
-          {visibles.map((it) => {
-            const cita = it.fuentes.find((f) => f.cita)?.cita;
-            return (
-              <li key={it.id} className="flex items-start gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <Badge size="xs">{destinoCorto(it.destino, nombreDeDimension)}</Badge>
-                  <p className="text-sm leading-snug text-fg">{describirPropuesta(it, escala, nombreDeNivel)}</p>
-                  {cita && <p className="line-clamp-2 text-xs italic text-fg-muted">«{cita}»</p>}
-                </div>
-                {puedeEditar && (
-                  <div className="flex flex-shrink-0 items-center gap-1.5">
-                    <Button size="xs" variant="secondary" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [it.id] }])}>
-                      Descartar
-                    </Button>
-                    <Button size="xs" variant="primary" disabled={guardando} onClick={() => void cambiar([{ op: "usar", itemId: it.id, valor: it.valor }], { refrescar: refrescar([it]) })}>
-                      Usar
-                    </Button>
-                  </div>
-                )}
-              </li>
-            );
-          })}
+        <ul className="space-y-1.5 p-3">
+          {visibles.map((it) => (
+            <FilaSugerida key={it.id} item={it} destino={destinoCorto(it.destino, nombreDeDimension)} />
+          ))}
         </ul>
       )}
       {items.length > visibles.length && (

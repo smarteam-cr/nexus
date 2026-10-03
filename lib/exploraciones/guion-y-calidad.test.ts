@@ -166,7 +166,7 @@ describe("lista para proponer", () => {
       en: "2026-10-01T00:00:00.000Z",
     };
     const e = estado({ propuesta: { ...propuestaVacia(), items: [hipotesis] } });
-    expect(queSigue(e, chequeoCon("FFFFFFF"))).not.toMatch(/Revisa lo que propuso/);
+    expect(queSigue(e, chequeoCon("FFFFFFF"))).not.toMatch(/Revisa lo que sugirió/);
   });
 });
 

@@ -9,6 +9,10 @@
  * tanda con un botón (cada tanda cuesta unos centavos). El vendedor usa o descarta cada uno; lo
  * descartado no vuelve.
  *
+ * Se ve como en el diseño del 2026-10-03: una franja azul arriba (cuántos sugiere el agente, otra
+ * tanda, usar todos), los elegidos como filas con su marca verde, y los sugeridos en dos columnas de
+ * tarjetas compactas con el porqué plegado.
+ *
  * Los casos de uso del agente entran a la propuesta como contexto; la sección de casos de uso con
  * precio sale solo del catálogo, como siempre. Armar la propuesta es su propia pieza desde el
  * 2026-10-01 (PasoPropuesta.tsx).
@@ -18,6 +22,7 @@ import { Alert, Badge, Button, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { esCasoLibre, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useLienzo } from "./contexto";
+import FranjaDeSugerencias from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
 
 /** Las exploraciones en las que esta pestaña ya lanzó la primera tanda (un montaje doble no lanza dos). */
@@ -33,26 +38,103 @@ interface DatosDelPaso {
   catalogo: Caso[];
 }
 
-/** Un caso de uso: qué es, por qué y qué dimensiones mueve. */
-function TarjetaDeCaso({ caso, propuesto, acciones }: { caso: CasoDeUsoElegido; propuesto?: boolean; acciones?: React.ReactNode }) {
+/** Las dimensiones que mueve un caso, por nombre. */
+function useMueve(caso: CasoDeUsoElegido): string[] {
   const { escala } = useLienzo();
   const nombreDim = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre;
-  const mueve = (caso.dimensiones ?? []).map(nombreDim).filter((x): x is string => !!x);
+  return (caso.dimensiones ?? []).map(nombreDim).filter((x): x is string => !!x);
+}
+
+/** Un caso elegido: una fila con su marca verde, el área y lo que mueve. */
+function FilaElegida({ id, caso, onQuitar }: { id: string; caso: CasoDeUsoElegido; onQuitar?: () => void }) {
+  const { escala, guardando } = useLienzo();
+  const mueve = useMueve(caso);
+  const area = escala.areas.find((a) => a.id === caso.areaId)?.nombre ?? "Sin área";
   return (
-    <li className={cn("flex flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2.5", propuesto ? "border-info-line bg-info-surface" : "border-line")}>
-      <div className="min-w-0 flex-1 space-y-1">
-        {propuesto && <p className="text-2xs font-semibold uppercase tracking-wide text-info-ink">Propuesto</p>}
-        <p className="text-sm font-medium text-fg">{caso.titulo}</p>
-        {caso.descripcion && <p className="text-xs text-fg-secondary">{caso.descripcion}</p>}
-        {caso.razon && (
-          <p className="text-xs text-fg-muted">
-            <span className="font-medium text-fg-secondary">Por qué: </span>
-            {caso.razon}
+    <li className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-success-surface text-xs font-bold text-success-ink" aria-hidden="true">
+        ✓
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-fg">{caso.titulo}</p>
+        <p className="text-xs text-fg-muted">
+          {area}
+          {!esCasoLibre(id) && " · del catálogo"}
+          {mueve.length > 0 && ` · Mueve: ${mueve.join(", ")}`}
+        </p>
+      </div>
+      {onQuitar && (
+        <button type="button" className="flex-shrink-0 text-xs text-fg-muted hover:text-fg hover:underline" disabled={guardando} onClick={onQuitar}>
+          Quitar
+        </button>
+      )}
+    </li>
+  );
+}
+
+/** Un caso sugerido: tarjeta compacta con el porqué plegado, «Descartar» en texto y «Usar». */
+function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
+  const { escala, cambiar, puedeEditar, guardando } = useLienzo();
+  const [abierta, setAbierta] = useState(false);
+  const caso = item.valor as CasoDeUsoElegido;
+  const mueve = useMueve(caso);
+  const area = escala.areas.find((a) => a.id === caso.areaId)?.nombre;
+  const cita = item.fuentes.find((f) => f.cita);
+  const porQue = caso.razon || item.razon;
+  const hayMas = !!porQue || !!cita || (caso.descripcion?.length ?? 0) > 120;
+  return (
+    <li className="flex flex-col rounded-xl border border-info-line bg-surface">
+      <div className="flex flex-col gap-1.5 px-4 pb-3 pt-3.5">
+        <p className="flex items-center gap-1.5">
+          <span className="rounded-full border border-info-line bg-info-surface px-2 py-px text-2xs font-semibold text-info-ink">Sugerido</span>
+          {area && <span className="text-xs text-fg-muted">{area}</span>}
+        </p>
+        <h3 className="text-[15px] font-semibold leading-snug text-fg">{caso.titulo}</h3>
+        {caso.descripcion && <p className={cn("text-sm leading-relaxed text-fg-secondary", !abierta && "line-clamp-2")}>{caso.descripcion}</p>}
+        {mueve.length > 0 && (
+          <p className="flex flex-wrap items-center gap-1.5">
+            <span className="text-2xs text-fg-muted">Mueve</span>
+            {mueve.map((m) => (
+              <span key={m} className="rounded-md border border-line bg-surface-hover px-2 py-px text-2xs font-medium text-fg-secondary">
+                {m}
+              </span>
+            ))}
           </p>
         )}
-        {mueve.length > 0 && <p className="text-2xs text-fg-muted">Mueve: {mueve.join(" · ")}</p>}
+        {abierta && (porQue || cita?.cita) && (
+          <div className="mt-1 rounded-lg bg-surface-muted px-3 py-2.5 text-sm leading-relaxed text-fg-secondary">
+            {porQue && (
+              <>
+                <span className="font-medium text-fg">Por qué: </span>
+                {porQue}
+              </>
+            )}
+            {cita?.cita && (
+              <span className="mt-1 block text-xs italic text-fg-muted">
+                «{cita.cita}» · {cita.etiqueta}
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      {acciones && <div className="flex flex-shrink-0 items-center gap-1.5">{acciones}</div>}
+      <div className="mt-auto flex items-center gap-1 border-t border-line py-2 pl-4 pr-2.5">
+        {hayMas && (
+          <button type="button" aria-expanded={abierta} className="text-xs font-medium text-info-ink hover:underline" onClick={() => setAbierta((x) => !x)}>
+            {abierta ? "Por qué ▴" : "Por qué ▾"}
+          </button>
+        )}
+        <span className="flex-1" />
+        {puedeEditar && (
+          <>
+            <button type="button" className="rounded px-1.5 py-1 text-xs text-fg-muted hover:text-fg" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [item.id] }])}>
+              Descartar
+            </button>
+            <Button size="xs" variant="primary" disabled={guardando} onClick={() => void cambiar([{ op: "usar", itemId: item.id, valor: item.valor }])}>
+              Usar
+            </Button>
+          </>
+        )}
+      </div>
     </li>
   );
 }
@@ -75,121 +157,82 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
     void lanzar("casos");
   }, [puedeEditar, areas.length, yaPropuso, exp.id, lanzar]);
 
-  const usar = (it: ItemPropuesto) => void cambiar([{ op: "usar", itemId: it.id, valor: it.valor }]);
-  const descartar = (it: ItemPropuesto) => void cambiar([{ op: "descartar", itemIds: [it.id] }]);
   const quitar = (id: string) => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: null }]);
   const elegirDelCatalogo = (caso: Caso, areaId: string | null) =>
     void cambiar([{ op: "casoDeUso", useCaseId: caso.id, valor: { titulo: caso.titulo, areaId, razon: caso.descripcion.slice(0, 400) } }]);
-  const sinArea = elegidos.filter(([, c]) => !c.areaId || !e.areas.includes(c.areaId));
   const esPropia = corrida?.modo === "casos";
+  const nombresDeAreas = areas.map((a) => a.nombre).join(" y ");
 
   return (
-    <section className="space-y-4 rounded-xl border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
-            Casos de uso
-            <Badge size="xs" variant="purple">
-              Experimental
-            </Badge>
-          </h3>
-          <p className="text-xs text-fg-muted">
-            El agente los propone a partir de dónde está cada equipo en la escala, lo que le falta para Funcional y lo que contó el cliente. Todavía no usa la biblioteca de casos de uso: son propuestas para conversar, sin precio. Cada tanda cuesta unos centavos de dólar.
-          </p>
-        </div>
-        {puedeEditar && (
-          <Button size="sm" variant="secondary" loading={lanzando} disabled={corriendo || areas.length === 0} onClick={() => void lanzar("casos")}>
-            {yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
-          </Button>
+    <div className="space-y-6">
+      <FranjaDeSugerencias
+        acciones={
+          puedeEditar && (
+            <>
+              <Button size="sm" variant="secondary" className="bg-surface" loading={lanzando} disabled={corriendo || areas.length === 0} onClick={() => void lanzar("casos")}>
+                {yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
+              </Button>
+              {propuestos.length > 1 && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={guardando}
+                  onClick={() => void cambiar([{ op: "usarVarias", items: propuestos.map((it) => ({ itemId: it.id, valor: it.valor })) }])}
+                >
+                  Usar los {propuestos.length}
+                </Button>
+              )}
+            </>
+          )
+        }
+      >
+        {corriendo && esPropia ? (
+          <span role="status">El agente está pensando los casos: {corrida?.fase ?? "empezando…"}</span>
+        ) : propuestos.length > 0 ? (
+          <>
+            <strong>
+              El agente sugiere {propuestos.length} {propuestos.length === 1 ? "caso" : "casos"}
+            </strong>
+            {nombresDeAreas ? ` para ${nombresDeAreas}` : ""}, según dónde está cada equipo. Experimental: sin biblioteca ni precio.
+          </>
+        ) : (
+          <>El agente propone casos de uso según dónde está cada equipo en la escala y lo que contó el cliente. Experimental: sin biblioteca ni precio; cada tanda cuesta unos centavos.</>
         )}
-      </div>
-      {corriendo && (
-        <p className="text-xs text-fg-secondary" role="status">
-          {corrida?.etiqueta ?? "El agente está trabajando"}: {corrida?.fase ?? "empezando…"}
-        </p>
-      )}
+      </FranjaDeSugerencias>
+
       {corrida?.estado === "ERROR" && esPropia && <Alert variant="danger">{corrida.error}</Alert>}
-      {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (en «Exploración»): los casos de uso se proponen por área.</p>}
+      {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (en «La escala»): los casos de uso se proponen por área.</p>}
 
-      {areas.map((a) => {
-        const susElegidos = elegidos.filter(([, c]) => c.areaId === a.id);
-        const susPropuestos = propuestos.filter((it) => (it.valor as CasoDeUsoElegido).areaId === a.id);
-        return (
-          <div key={a.id} className="space-y-2">
-            <p className="text-xs font-semibold text-fg-secondary">{a.nombre}</p>
-            {susElegidos.length === 0 && susPropuestos.length === 0 && (
-              <p className="text-xs text-fg-muted">{corriendo ? "El agente está pensando los de esta área…" : "Todavía ninguno."}</p>
-            )}
-            <ul className="space-y-2">
-              {susElegidos.map(([id, caso]) => (
-                <TarjetaDeCaso
-                  key={id}
-                  caso={caso}
-                  acciones={
-                    <>
-                      <Badge size="xs" variant="success">
-                        {esCasoLibre(id) ? "Elegido" : "Del catálogo"}
-                      </Badge>
-                      {puedeEditar && (
-                        <Button size="xs" variant="ghost" disabled={guardando} onClick={() => quitar(id)}>
-                          Quitar
-                        </Button>
-                      )}
-                    </>
-                  }
-                />
-              ))}
-              {susPropuestos.map((it) => (
-                <TarjetaDeCaso
-                  key={it.id}
-                  caso={it.valor as CasoDeUsoElegido}
-                  propuesto
-                  acciones={
-                    puedeEditar && (
-                      <>
-                        <Button size="xs" variant="primary" disabled={guardando} onClick={() => usar(it)}>
-                          Usar
-                        </Button>
-                        <Button size="xs" variant="secondary" disabled={guardando} onClick={() => descartar(it)}>
-                          Descartar
-                        </Button>
-                      </>
-                    )
-                  }
-                />
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-
-      {sinArea.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-fg-secondary">Sin área en juego</p>
+      {elegidos.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-2xs font-semibold uppercase tracking-widest text-fg-muted">Elegidos · {elegidos.length}</h2>
           <ul className="space-y-2">
-            {sinArea.map(([id, caso]) => (
-              <TarjetaDeCaso
-                key={id}
-                caso={caso}
-                acciones={
-                  puedeEditar && (
-                    <Button size="xs" variant="ghost" disabled={guardando} onClick={() => quitar(id)}>
-                      Quitar
-                    </Button>
-                  )
-                }
-              />
+            {elegidos.map(([id, caso]) => (
+              <FilaElegida key={id} id={id} caso={caso} onQuitar={puedeEditar ? () => quitar(id) : undefined} />
             ))}
           </ul>
-        </div>
+        </section>
+      )}
+
+      {propuestos.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-2xs font-semibold uppercase tracking-widest text-fg-muted">Sugeridos por el agente · {propuestos.length}</h2>
+          <ul className="grid items-start gap-3 xl:grid-cols-2">
+            {propuestos.map((it) => (
+              <TarjetaSugerida key={it.id} item={it} />
+            ))}
+          </ul>
+        </section>
       )}
 
       {libres.length > 0 && (
-        <details className="rounded-lg border border-line">
-          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-fg-secondary">Del catálogo de Smarteam ({libres.length})</summary>
-          <ul className="divide-y divide-line">
+        <details className="rounded-xl border border-line bg-surface">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-fg">
+            Del catálogo de Smarteam <span className="font-normal text-fg-muted">· {libres.length}</span>
+          </summary>
+          <ul className="divide-y divide-line border-t border-line">
             {libres.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2">
+              <li key={c.id} className="flex flex-wrap items-start justify-between gap-2 px-4 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-fg">
                     {c.titulo}
@@ -224,7 +267,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
           </ul>
         </details>
       )}
-    </section>
+    </div>
   );
 }
 

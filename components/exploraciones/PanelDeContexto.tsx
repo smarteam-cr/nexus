@@ -2,9 +2,10 @@
 
 /**
  * PanelDeContexto — la columna de la derecha del lienzo: lo que el vendedor quiere tener a la vista
- * en cualquier pieza (rediseño de escritorio, 2026-10-03). Qué sigue; cómo va la arquitectura de la
- * venta (las ocho casillas del marco, en una cuadrícula que se lee de un vistazo); dónde parece estar
- * cada área; las objeciones que ya puso el cliente; y cuánto propuso el agente en cada pieza.
+ * en cualquier pieza (rediseño de escritorio, 2026-10-03). Qué sigue —y, si el agente sugirió algo,
+ * un solo botón para revisarlo todo—; cómo va la arquitectura de la venta (las ocho casillas del
+ * marco, en una cuadrícula que se lee de un vistazo: verde confirmado, azul sugerido, punteado falta);
+ * dónde parece estar cada área; y las objeciones que ya puso el cliente.
  *
  * No repite contenido: es un índice. Cada cosa abre su lugar (la casilla en el cajón, la pieza).
  */
@@ -45,13 +46,13 @@ function Arquitectura() {
               key={clave}
               type="button"
               onClick={() => abrirCasilla(clave)}
-              title={`${etiqueta}: ${lleno ? "confirmado" : propuestas > 0 ? `${propuestas} del agente para revisar` : "falta"}`}
+              title={`${etiqueta}: ${lleno ? "confirmado" : propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente` : "falta"}`}
               className={cn(
                 "flex h-12 flex-col items-center justify-center rounded-lg border text-xs font-bold transition-colors",
                 lleno
                   ? "border-success-line bg-success-surface text-success-ink"
                   : propuestas > 0
-                    ? "border-warn-line bg-warn-surface text-warn-ink"
+                    ? "border-info-line bg-info-surface text-info-ink"
                     : "border-dashed border-line text-fg-muted hover:bg-surface-hover",
               )}
             >
@@ -66,7 +67,7 @@ function Arquitectura() {
           <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" /> confirmado
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-warning" aria-hidden="true" /> por revisar
+          <span className="h-2 w-2 rounded-full bg-info" aria-hidden="true" /> sugerido
         </span>
         <span className="flex items-center gap-1">
           <span className="h-2 w-2 rounded-full border border-line" aria-hidden="true" /> falta
@@ -121,7 +122,7 @@ function Objeciones() {
       titulo="Ya objetó"
       accion={
         <button type="button" className="text-2xs text-info-ink hover:underline" onClick={() => abrirCasilla("objeciones")}>
-          {propuestas > 0 ? `${propuestas} por revisar` : "Ver todas"}
+          {propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"}` : "Ver todas"}
         </button>
       }
     >
@@ -136,33 +137,6 @@ function Objeciones() {
           </li>
         ))}
         {dichas.length > 3 && <li className="text-2xs text-fg-muted">y {dichas.length - 3} más</li>}
-      </ul>
-    </Bloque>
-  );
-}
-
-/** Cuánto propuso el agente en cada pieza: un enlace por pieza, para ir a revisarlo en su lugar. */
-function Propuestas({ porPieza, nombreDelPaso }: { porPieza: { paso: PasoDelLienzoUI; cuantas: number }[]; nombreDelPaso: (p: PasoDelLienzoUI) => string }) {
-  const { irA } = useLienzo();
-  const total = porPieza.reduce((n, p) => n + p.cuantas, 0);
-  if (total === 0) return null;
-  return (
-    <Bloque titulo={`Del agente, para revisar (${total})`}>
-      <ul className="space-y-1">
-        {porPieza
-          .filter((p) => p.cuantas > 0)
-          .map((p) => (
-            <li key={p.paso}>
-              <button
-                type="button"
-                onClick={() => irA(p.paso)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-left text-xs text-warn-ink transition-colors hover:brightness-95"
-              >
-                <span className="font-medium">{nombreDelPaso(p.paso)}</span>
-                <span>{p.cuantas} →</span>
-              </button>
-            </li>
-          ))}
       </ul>
     </Bloque>
   );
@@ -189,26 +163,29 @@ function Proyectos() {
 
 export default function PanelDeContexto({
   sigue,
-  porPieza,
   nombreDelPaso,
 }: {
   sigue: { texto: string; paso: PasoDeQueSigue | null };
-  porPieza: { paso: PasoDelLienzoUI; cuantas: number }[];
   nombreDelPaso: (p: PasoDelLienzoUI) => string;
 }) {
-  const { irA } = useLienzo();
+  const { irA, revisables, abrirRevision } = useLienzo();
   return (
     <div className="space-y-6">
-      <section className="space-y-2 rounded-xl border border-info-line bg-info-surface p-3.5">
+      <section className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-3.5">
         <h2 className="text-2xs font-semibold uppercase tracking-widest text-info-ink">Qué sigue</h2>
         <p className="text-sm leading-snug text-fg">{sigue.texto}</p>
-        {sigue.paso && (
-          <Button size="xs" variant="primary" onClick={() => irA(sigue.paso!)}>
+        {sigue.paso ? (
+          <Button size="sm" variant="primary" className="self-start" onClick={() => irA(sigue.paso!)}>
             Ir a «{nombreDelPaso(sigue.paso)}»
           </Button>
+        ) : (
+          revisables.length > 0 && (
+            <Button size="sm" variant="primary" className="self-start" onClick={() => abrirRevision()}>
+              Revisar {revisables.length === 1 ? "la sugerencia" : `las ${revisables.length}`} →
+            </Button>
+          )
         )}
       </section>
-      <Propuestas porPieza={porPieza} nombreDelPaso={nombreDelPaso} />
       <Arquitectura />
       <LaEscala />
       <Objeciones />
