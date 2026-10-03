@@ -56,13 +56,13 @@ function Fila({
       onClick={onClick}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-        activa ? "bg-info-surface font-semibold text-info-ink" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
+        activa ? "bg-info-surface font-semibold text-brand" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
       )}
     >
       <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", activa || sugeridas.n > 0 ? "bg-info" : PUNTO[estado])} aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">{etiqueta}</span>
       {sugeridas.n > 0 ? (
-        <span className="flex-shrink-0 text-2xs font-medium text-info-ink" title={`${sugeridas.n} sugerencias del agente`}>
+        <span className="flex-shrink-0 text-2xs font-medium text-brand" title={`${sugeridas.n} sugerencias del agente`}>
           {sugeridas.texto ?? sugeridas.n}
         </span>
       ) : (
@@ -80,7 +80,7 @@ function Sesiones({ alElegir }: { alElegir: (clave: string) => void }) {
     p.reunion && !p.reunion.leida ? (
       <span className="rounded bg-warn-surface px-1 text-2xs font-semibold text-warn-ink">Nueva</span>
     ) : p.clave === claveDeLaProxima ? (
-      <span className="text-2xs font-semibold text-info-ink">Próxima</span>
+      <span className="text-2xs font-semibold text-brand">Próxima</span>
     ) : p.hecha ? (
       <span className="text-success-ink" aria-label="hecha">
         ✓
@@ -98,7 +98,7 @@ function Sesiones({ alElegir }: { alElegir: (clave: string) => void }) {
               onClick={() => alElegir(p.clave)}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-                actual ? "bg-info-surface font-semibold text-info-ink" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
+                actual ? "bg-info-surface font-semibold text-brand" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
               )}
             >
               <span className="min-w-0 flex-1 truncate">Sesión {p.numero}</span>

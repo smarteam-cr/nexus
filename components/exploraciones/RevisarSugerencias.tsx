@@ -217,7 +217,7 @@ export default function RevisarSugerencias({ abierto, filtroInicial, onCerrar }:
                           <button
                             type="button"
                             aria-expanded={abierta}
-                            className="flex-shrink-0 font-medium text-info-ink hover:underline"
+                            className="flex-shrink-0 font-medium text-brand hover:underline"
                             onClick={(ev) => {
                               ev.stopPropagation();
                               setAbiertas((s) => {

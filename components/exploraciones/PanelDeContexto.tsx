@@ -50,9 +50,9 @@ function Arquitectura() {
               className={cn(
                 "flex h-12 flex-col items-center justify-center rounded-lg border text-xs font-bold transition-colors",
                 lleno
-                  ? "border-success-line bg-success-surface text-success-ink"
+                  ? "border-transparent bg-success-surface text-success-ink"
                   : propuestas > 0
-                    ? "border-info-line bg-info-surface text-info-ink"
+                    ? "border-transparent bg-info-surface text-brand"
                     : "border-dashed border-line text-fg-muted hover:bg-surface-hover",
               )}
             >
@@ -85,7 +85,7 @@ function LaEscala() {
     <Bloque
       titulo="La escala"
       accion={
-        <button type="button" className="text-2xs text-info-ink hover:underline" onClick={() => irA("escala")}>
+        <button type="button" className="text-2xs text-brand hover:underline" onClick={() => irA("escala")}>
           Ver el mapa
         </button>
       }
@@ -121,7 +121,7 @@ function Objeciones() {
     <Bloque
       titulo="Ya objetó"
       accion={
-        <button type="button" className="text-2xs text-info-ink hover:underline" onClick={() => abrirCasilla("objeciones")}>
+        <button type="button" className="text-2xs text-brand hover:underline" onClick={() => abrirCasilla("objeciones")}>
           {propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"}` : "Ver todas"}
         </button>
       }
@@ -151,7 +151,7 @@ function Proyectos() {
       {proyectos.map((p, i) => (
         <span key={p.id}>
           {i > 0 && ", "}
-          <Link href={`/clients/${p.clientId}?tab=${p.id}`} className="text-info-ink hover:underline">
+          <Link href={`/clients/${p.clientId}?tab=${p.id}`} className="text-brand hover:underline">
             {p.nombre}
           </Link>
         </span>
@@ -172,7 +172,7 @@ export default function PanelDeContexto({
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-3.5">
-        <h2 className="text-2xs font-semibold uppercase tracking-widest text-info-ink">Qué sigue</h2>
+        <h2 className="text-2xs font-semibold uppercase tracking-widest text-brand">Qué sigue</h2>
         <p className="text-sm leading-snug text-fg">{sigue.texto}</p>
         {sigue.paso ? (
           <Button size="sm" variant="primary" className="self-start" onClick={() => irA(sigue.paso!)}>

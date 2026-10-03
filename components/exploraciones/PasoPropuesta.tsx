@@ -162,7 +162,7 @@ function PropuestasArmadas() {
       <ul className="space-y-1">
         {propuestas.map((p) => (
           <li key={p.id} className="text-sm">
-            <Link href={`/business-cases/${p.id}`} className="text-info-ink hover:underline">
+            <Link href={`/business-cases/${p.id}`} className="text-brand hover:underline">
               {p.nombre}
             </Link>
             <span className="text-xs text-fg-muted">

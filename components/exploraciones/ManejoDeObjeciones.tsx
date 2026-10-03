@@ -85,7 +85,7 @@ export default function ManejoDeObjeciones() {
                 Las de esta empresa, adaptadas a lo que se sabe de ella, están en la guía de la próxima reunión.{" "}
                 <button
                   type="button"
-                  className="text-info-ink hover:underline"
+                  className="text-brand hover:underline"
                   onClick={() => {
                     setAbierto(false);
                     irA("exploracion");

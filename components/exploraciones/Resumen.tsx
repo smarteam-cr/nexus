@@ -70,7 +70,7 @@ export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
 /** La pastilla azul que cuenta lo sugerido. */
 function Sugeridas({ n, mas }: { n: number; mas: boolean }) {
   return (
-    <span className="flex-shrink-0 rounded-full border border-info-line bg-info-surface px-2 py-px text-2xs font-semibold text-info-ink">
+    <span className="flex-shrink-0 rounded-full border border-info-line bg-info-surface px-2 py-px text-2xs font-semibold text-brand">
       {mas ? "+" : ""}
       {n} {n === 1 ? "sugerida" : "sugeridas"}
     </span>
@@ -102,7 +102,7 @@ function Tarjeta({ clave, sugeridas, onAbrir }: { clave: (typeof CASILLAS_DEL_RE
         <span
           className={cn(
             "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-md text-2xs font-bold",
-            vacia ? "bg-info-surface text-info-ink" : "bg-success-surface text-success-ink",
+            vacia ? "bg-info-surface text-brand" : "bg-success-surface text-success-ink",
           )}
           title={marco}
         >
@@ -113,7 +113,7 @@ function Tarjeta({ clave, sugeridas, onAbrir }: { clave: (typeof CASILLAS_DEL_RE
       </span>
       {vacia ? (
         n > 0 ? (
-          <span className="line-clamp-3 text-sm leading-snug text-info-ink">{sugeridas.map((it) => `«${describirPropuesta(it, escala, nombreDeNivel)}»`).join(" · ")}</span>
+          <span className="line-clamp-3 text-sm leading-snug text-brand">{sugeridas.map((it) => `«${describirPropuesta(it, escala, nombreDeNivel)}»`).join(" · ")}</span>
         ) : (
           <span className="text-xs text-fg-muted">Falta: se pregunta en la próxima sesión</span>
         )
@@ -127,7 +127,7 @@ function Tarjeta({ clave, sugeridas, onAbrir }: { clave: (typeof CASILLAS_DEL_RE
           {lineas.length > 3 && <span className="block text-2xs text-fg-muted">y {lineas.length - 3} más</span>}
         </span>
       )}
-      {n > 0 && <span className="mt-auto text-xs font-semibold text-info-ink">Revisar →</span>}
+      {n > 0 && <span className="mt-auto text-xs font-semibold text-brand">Revisar →</span>}
     </button>
   );
 }

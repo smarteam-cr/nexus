@@ -73,7 +73,7 @@ function Pregunta({ p }: { p: PreguntaParaMostrar }) {
       <span
         className={cn(
           "mt-0.5 flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-md px-1 text-2xs font-bold",
-          dimension ? "bg-warn-surface text-warn-ink" : "bg-info-surface text-info-ink",
+          dimension ? "bg-warn-surface text-warn-ink" : "bg-info-surface text-brand",
         )}
         aria-hidden="true"
       >
@@ -94,7 +94,7 @@ function Pregunta({ p }: { p: PreguntaParaMostrar }) {
         </p>
         {p.repreguntas.length > 0 && (
           <>
-            <button type="button" aria-expanded={abierta} onClick={() => setAbierta((x) => !x)} className="text-xs font-semibold text-info-ink hover:underline">
+            <button type="button" aria-expanded={abierta} onClick={() => setAbierta((x) => !x)} className="text-xs font-semibold text-brand hover:underline">
               {abierta ? "Ocultar repreguntas" : `${p.repreguntas.length} ${p.repreguntas.length === 1 ? "repregunta" : "repreguntas"}`}
             </button>
             {abierta && (
@@ -333,7 +333,7 @@ function LoQueSalio() {
         </ul>
       )}
       {items.length > visibles.length && (
-        <button type="button" className="w-full border-t border-line px-4 py-2.5 text-sm font-semibold text-info-ink hover:bg-surface-hover" onClick={() => setTodas(true)}>
+        <button type="button" className="w-full border-t border-line px-4 py-2.5 text-sm font-semibold text-brand hover:bg-surface-hover" onClick={() => setTodas(true)}>
           Ver las {items.length - visibles.length} restantes
         </button>
       )}
@@ -366,7 +366,7 @@ function NadieExploro({ llevar, soltar }: { llevar: (texto: string, item: ItemPr
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className={cn("text-sm leading-snug", marcado ? "font-medium text-fg" : "text-fg-secondary")}>{texto}</p>
           {cita && <p className="line-clamp-2 text-xs italic text-fg-muted">«{cita}»</p>}
-          {item && <p className="text-2xs font-semibold text-info-ink">Sugerido por el agente</p>}
+          {item && <p className="text-2xs font-semibold text-brand">Sugerido por el agente</p>}
         </div>
         {puedeEditar &&
           (item ? (

@@ -86,7 +86,7 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
     <li className="flex flex-col rounded-xl border border-info-line bg-surface">
       <div className="flex flex-col gap-1.5 px-4 pb-3 pt-3.5">
         <p className="flex items-center gap-1.5">
-          <span className="rounded-full border border-info-line bg-info-surface px-2 py-px text-2xs font-semibold text-info-ink">Sugerido</span>
+          <span className="rounded-full border border-info-line bg-info-surface px-2 py-px text-2xs font-semibold text-brand">Sugerido</span>
           {area && <span className="text-xs text-fg-muted">{area}</span>}
         </p>
         <h3 className="text-[15px] font-semibold leading-snug text-fg">{caso.titulo}</h3>
@@ -119,7 +119,7 @@ function TarjetaSugerida({ item }: { item: ItemPropuesto }) {
       </div>
       <div className="mt-auto flex items-center gap-1 border-t border-line py-2 pl-4 pr-2.5">
         {hayMas && (
-          <button type="button" aria-expanded={abierta} className="text-xs font-medium text-info-ink hover:underline" onClick={() => setAbierta((x) => !x)}>
+          <button type="button" aria-expanded={abierta} className="text-xs font-medium text-brand hover:underline" onClick={() => setAbierta((x) => !x)}>
             {abierta ? "Por qué ▴" : "Por qué ▾"}
           </button>
         )}
@@ -304,7 +304,7 @@ export default function PasoCasosDeUso() {
       <CasosDeUso catalogo={datos?.catalogo ?? []} />
       <p className="text-xs text-fg-muted">
         Con los casos elegidos, la propuesta se arma en{" "}
-        <button type="button" className="text-info-ink hover:underline" onClick={() => irA("propuesta")}>
+        <button type="button" className="text-brand hover:underline" onClick={() => irA("propuesta")}>
           Propuesta
         </button>
         .

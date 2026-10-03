@@ -173,7 +173,7 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
   return (
     <li className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
       <div className="min-w-0 flex-1">
-        {destino && <p className="text-2xs font-semibold text-info-ink">{destino}</p>}
+        {destino && <p className="text-2xs font-semibold text-brand">{destino}</p>}
         <p className="text-sm leading-snug text-fg">{texto ?? describirPropuesta(item, escala, nombreDeNivel)}</p>
         {(origen.etiqueta || hayMas) && (
           <p className="mt-0.5 flex min-w-0 items-baseline gap-1 text-xs text-fg-muted">
@@ -182,7 +182,7 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
               {origen.cita && <span className="italic"> · «{origen.cita}»</span>}
             </span>
             {hayMas && (
-              <button type="button" aria-expanded={abierta} className="flex-shrink-0 font-medium text-info-ink hover:underline" onClick={() => setAbierta((x) => !x)}>
+              <button type="button" aria-expanded={abierta} className="flex-shrink-0 font-medium text-brand hover:underline" onClick={() => setAbierta((x) => !x)}>
                 {abierta ? "ocultar" : "ver de dónde sale"}
               </button>
             )}
@@ -214,7 +214,7 @@ export function Propuestas({ items }: { items: ItemPropuesto[]; compacto?: boole
   if (items.length === 0) return null;
   return (
     <div className="space-y-1.5">
-      <p className="text-2xs font-semibold uppercase tracking-widest text-info-ink">
+      <p className="text-2xs font-semibold uppercase tracking-widest text-brand">
         {items.length === 1 ? "Sugerida por el agente" : `Sugeridas por el agente · ${items.length}`}
       </p>
       <ul className="space-y-1.5">

@@ -19,8 +19,8 @@ export function IconoDeSugerencia({ className = "h-4 w-4" }: { className?: strin
 export default function FranjaDeSugerencias({ children, acciones }: { children: ReactNode; acciones?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-info-line bg-info-surface px-3.5 py-2.5">
-      <IconoDeSugerencia className="h-4 w-4 flex-shrink-0 text-info-ink" />
-      <p className="min-w-0 flex-1 text-sm text-info-ink">{children}</p>
+      <IconoDeSugerencia className="h-4 w-4 flex-shrink-0 text-brand" />
+      <p className="min-w-0 flex-1 text-sm text-brand">{children}</p>
       {acciones && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{acciones}</div>}
     </div>
   );

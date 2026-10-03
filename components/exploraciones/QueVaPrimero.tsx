@@ -76,7 +76,7 @@ export function QueVaPrimero() {
 
   return (
     <div className="space-y-2 rounded-xl border border-info-line bg-info-surface px-4 py-3">
-      <p className="text-2xs font-semibold uppercase tracking-wide text-info-ink">Qué va primero</p>
+      <p className="text-2xs font-semibold uppercase tracking-wide text-brand">Qué va primero</p>
       <p className="text-sm text-fg">
         <span className="font-semibold">{dim?.nombre}</span>
         {area && <span className="text-fg-secondary"> ({area.nombre})</span>}, para llevarla a {nombreDeNivel(r.objetivo)}.
