@@ -9,7 +9,8 @@
  * `landingRowData` las rinde vía `{__legacyMd}` — por eso el contenido de esos proyectos
  * sigue visible aunque la pieza haya pasado al motor.
  */
-import type { LandingConfig } from "@/components/landing/types";
+import type { CtxDelDiagnostico, LandingConfig } from "@/components/landing/types";
+import { ACCIONES_KEY } from "@/components/landing/configs/diagnostico.defs";
 import {
   buildLandingConfigFromOrder,
   landingRowData,
@@ -48,4 +49,21 @@ export function diagnosticoSectionData(row: DiagnosticoSectionRow): unknown {
 /** Filas → `data` por sección. */
 export function buildDiagnosticoSections(rows: DiagnosticoSectionRow[]): Array<{ key: string; data: unknown }> {
   return rows.map((r) => ({ key: r.key, data: diagnosticoSectionData(r) }));
+}
+
+const texto = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+/**
+ * El canal `ctx.diagnostico` armado desde las secciones del MISMO documento (2026-10-02). Lo usan el
+ * editor y el PDF, así la cuarta columna del problema —las acciones y cómo generan dinero— sale
+ * igual en los dos: es la tabla de «Acciones coherentes», leída, no copiada.
+ */
+export function ctxDelDiagnostico(sections: ReadonlyArray<{ key: string; data: unknown }>): CtxDelDiagnostico {
+  const data = sections.find((s) => s.key === ACCIONES_KEY)?.data as { acciones?: unknown } | undefined;
+  const lista = Array.isArray(data?.acciones) ? (data!.acciones as Array<Record<string, unknown>>) : [];
+  return {
+    acciones: lista
+      .filter((a) => a && typeof a === "object")
+      .map((a) => ({ id: texto(a.id), accion: texto(a.accion), detalle: texto(a.detalle), ataca: texto(a.ataca) })),
+  };
 }

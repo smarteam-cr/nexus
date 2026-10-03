@@ -20,11 +20,13 @@
  *   7. Los PROCESOS REALES del cliente (dolores marcados ⚠).
  *   8. El CRONOGRAMA, solo lectura: el punto de partida del proyecto (qué dura y qué entrega).
  *
- * ── LO QUE YA NO HACE ────────────────────────────────────────────────────────────
- * No ubica en la Escala (llega la 7.0), no describe cómo va a operar (Planificación) y no recomienda
- * (Ejecución). Al regenerar, OCULTA esas secciones de un diagnóstico viejo
+ * ── EL CONTRATO (2026-10-02) ─────────────────────────────────────────────────────────────────
+ * Escribe el informe con las secciones y el orden de FUNDAUNA (diagnostico.defs.ts): la parte
+ * teórica, con las acciones, las herramientas, la política rectora y cómo va a operar, y sin detalle
+ * de configuración ni escala. Al regenerar, OCULTA las secciones que salieron
  * (SECCIONES_RETIRADAS_DEL_DIAGNOSTICO) sin borrar sus datos — la Entrega lee de ahí la Escala —,
- * y antes guarda una versión del documento entero (lib/canvas/versiones.ts).
+ * lleva el documento al orden del contrato (lib/canvas/diagnostico-contrato.ts), y antes guarda una
+ * versión del documento entero (lib/canvas/versiones.ts).
  *
  * Lo dispara el botón del header (CANVAS_PRIMARY_AGENT, async) vía POST /analyze.
  */
@@ -38,13 +40,17 @@ import {
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import {
   DIAGNOSTICO_TEMPLATE,
+  POLITICA_RECTORA_KEY,
   SECCIONES_RETIRADAS_DEL_DIAGNOSTICO,
 } from "@/components/landing/configs/diagnostico.defs";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { ordenarObjetivosDelDiagnostico } from "@/lib/canvas/diagnostico-hilo";
 import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
-import { patchSectionEntry } from "@/lib/business-cases/section-briefs";
+import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
+import { ordenDelContrato } from "@/lib/canvas/diagnostico-contrato";
+import { estructurarResultadosDelHandoff, resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { documentoAprobado, MENSAJE_APROBADO, trasRegenerar } from "@/lib/canvas/estado-del-documento-servidor";
 
 /** Asegura el canvas "Diagnóstico" del proyecto + reconcilia sus secciones. Idempotente. */
 export async function ensureDiagnosticoCanvas(projectId: string): Promise<string> {
@@ -67,15 +73,23 @@ export async function runDiagnosticoGeneration(opts: {
   canvasId?: string;
 }): Promise<{ canvasId: string; sectionCount: number }> {
   const { projectId } = opts;
+  /* Los objetivos cuantitativos apuntan a los resultados medibles del handoff (2026-10-02). Un
+     handoff de antes de esa lista todavía no la tiene: se lee primero. Si no sale, el diagnóstico se
+     genera igual (los cuantitativos quedan sin resultado y «Por validar»). */
+  if (!(await resultadosDelProyecto(projectId).catch(() => null))) {
+    await estructurarResultadosDelHandoff(projectId, "diagnostico");
+  }
   const [canvasId, fuentes] = await Promise.all([
     opts.canvasId ?? ensureDiagnosticoCanvas(projectId),
     fuentesDelDiagnostico(projectId),
   ]);
+  // Aprobado por el cliente = cerrado (lib/canvas/estado-del-documento.ts): no se regenera sin reabrirlo.
+  if (await documentoAprobado(canvasId).catch(() => false)) throw new Error(MENSAJE_APROBADO);
   // Las MISMAS fuentes que lee «Mejorar el diagnóstico con IA» (lib/canvas/diagnostico-fuentes.ts).
   const userMessage = [
     fuentes,
     "",
-    "Escribe el informe siguiendo tus instrucciones: el hilo completo con sus códigos (S, F, OBJ), sin escala de madurez, sin cómo va a operar y sin recomendaciones.",
+    "Escribe el informe siguiendo tus instrucciones: el hilo completo con sus códigos (S, F, OBJ, AC) — toda causa con al menos una acción, toda acción con causas y objetivos —, la política rectora como sugerencia, cómo va a operar sin detalle de configuración, y sin escala de madurez.",
   ].join("\n");
 
   // Carry-forward: sin la data previa, `coerceToSchema` descartaría lo curado fuera de
@@ -90,7 +104,17 @@ export async function runDiagnosticoGeneration(opts: {
     if (d && typeof d === "object") prevDataByKey[s.key] = d;
   }
 
-  const generado = await generateSectionsForTemplate(DIAGNOSTICO_TEMPLATE, userMessage, undefined, undefined, prevDataByKey);
+  /* La política rectora que el ejecutivo YA REVISÓ no se vuelve a pedir (2026-10-02): es la versión
+     ajustada a mano de una sugerencia, y regenerar —por ejemplo, después de que el cliente agregó
+     algo en la presentación— no puede devolverla a la sugerencia de la IA. */
+  const politicaRevisada = estaRevisada(prevDataByKey[POLITICA_RECTORA_KEY]);
+  const generado = await generateSectionsForTemplate(
+    DIAGNOSTICO_TEMPLATE,
+    userMessage,
+    undefined,
+    politicaRevisada ? new Set([POLITICA_RECTORA_KEY]) : undefined,
+    prevDataByKey,
+  );
   // Los OBJ en orden (cuantitativos primero, seguidos) y sus menciones reescritas: no se le pide al
   // modelo, se ordena acá (lib/canvas/diagnostico-hilo.ts).
   const gen = { ...generado, sections: ordenarObjetivosDelDiagnostico(generado.sections) };
@@ -128,20 +152,38 @@ export async function runDiagnosticoGeneration(opts: {
      las causas sueltas o las recomendaciones de la versión anterior — se contradicen con el hilo.
      ⛔ Pero se OCULTAN, no se borran (Elías, 2026-09-28): la Entrega lee de la sección `escala` el
      punto de partida del cliente, y borrarla lo dejaba sin él. Ocultas no salen al cliente ni al PDF,
-     y sus datos siguen ahí. Solo si la generación escribió algo. */
+     y sus datos siguen ahí. Solo si la generación escribió algo. Y el documento queda en el ORDEN del
+     contrato de FUNDAUNA (lib/canvas/diagnostico-contrato.ts). */
   if (sectionCount > 0) {
-    const retiradas = prevSecs
-      .filter((s) => (SECCIONES_RETIRADAS_DEL_DIAGNOSTICO as readonly string[]).includes(s.key))
-      .map((s) => s.key);
-    if (retiradas.length) {
-      const c = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { sections: true } });
-      let entradas: unknown = c?.sections;
-      for (const key of retiradas) entradas = patchSectionEntry(entradas, key, { hidden: true });
-      await prisma.projectCanvas.update({
-        where: { id: canvasId },
-        data: { sections: entradas as Prisma.InputJsonValue, contentUpdatedAt: new Date() },
-      });
-    }
+    await ocultarSeccionesRetiradas(canvasId, prevSecs.map((s) => s.key), SECCIONES_RETIRADAS_DEL_DIAGNOSTICO);
+    await llevarAlOrdenDelContrato(canvasId);
+    // Si ya se había presentado, lo regenerado es la versión siguiente: la presentada queda intacta.
+    await trasRegenerar(canvasId);
   }
   return { canvasId, sectionCount };
+}
+
+/** ¿La política rectora guardada ya la revisó el ejecutivo? (`revisadaAt`, fuera del esquema). */
+export function estaRevisada(data: unknown): boolean {
+  const r = (data as { revisadaAt?: unknown } | null | undefined)?.revisadaAt;
+  return typeof r === "string" && r.trim() !== "";
+}
+
+/** Reordena las secciones del canvas al orden del contrato. Solo escribe las que cambian de lugar. */
+async function llevarAlOrdenDelContrato(canvasId: string): Promise<void> {
+  const filas = await prisma.canvasSection.findMany({
+    where: { canvasId },
+    orderBy: { order: "asc" },
+    select: { id: true, key: true, order: true },
+  });
+  const orden = ordenDelContrato(
+    filas.map((f) => f.key),
+    DIAGNOSTICO_CANVAS.sections.map((s) => s.key),
+  );
+  const porKey = new Map(filas.map((f) => [f.key, f]));
+  const cambios = orden
+    .map((key, i) => ({ fila: porKey.get(key), i }))
+    .filter((x): x is { fila: { id: string; key: string; order: number }; i: number } => !!x.fila && x.fila.order !== x.i);
+  if (!cambios.length) return;
+  await prisma.$transaction(cambios.map(({ fila, i }) => prisma.canvasSection.update({ where: { id: fila.id }, data: { order: i } })));
 }

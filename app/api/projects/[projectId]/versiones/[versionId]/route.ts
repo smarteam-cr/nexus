@@ -3,6 +3,7 @@ import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { leerSecciones, restaurarVersion, traerSeccionDeVersion } from "@/lib/canvas/versiones";
 import { documentoDelProyecto, permisoParaUsarVersion } from "@/lib/canvas/versiones-acceso";
+import { documentoAprobado, MENSAJE_APROBADO } from "@/lib/canvas/estado-del-documento-servidor";
 
 /**
  * /api/projects/[projectId]/versiones/[versionId]
@@ -45,6 +46,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!accion) return NextResponse.json({ error: "accion: «traer» o «restaurar»" }, { status: 400 });
   const denegado = await permisoParaUsarVersion(r.canvas, accion);
   if (denegado) return denegado;
+  // Un documento aprobado por el cliente está cerrado: ni traer ni restaurar hasta reabrirlo.
+  if (await documentoAprobado(r.canvas.id)) return NextResponse.json({ error: MENSAJE_APROBADO }, { status: 409 });
 
   const actor = guard.user?.email ?? null;
   const res =

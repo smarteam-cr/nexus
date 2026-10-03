@@ -440,6 +440,39 @@ export interface LandingContext {
   propuesta?: {
     hubsVendidos?: string[];
   };
+  /**
+   * Solo el DIAGNÓSTICO (2026-10-02): lo que una sección necesita de OTRA del mismo documento, o de
+   * fuera de él. Hermano de `propuesta`: el motor no propaga data entre secciones, así que se arma
+   * un canal por documento (`ctxDelDiagnostico`, components/canvas/diagnostico-landing-adapter.ts)
+   * y lo pasan el editor y el PDF.
+   */
+  diagnostico?: CtxDelDiagnostico;
+}
+
+/** El canal del diagnóstico. Todo opcional: cada consumidor se apaga solo si su parte no viene. */
+export interface CtxDelDiagnostico {
+  /**
+   * Las filas de «Acciones coherentes». La «Explicación del problema» las pinta como su cuarta
+   * columna —consecuencias positivas: cómo genera dinero cada acción—, como FUNDAUNA, sin
+   * escribirlas dos veces.
+   */
+  acciones?: Array<{ id: string; accion: string; detalle: string; ataca: string }>;
+  /**
+   * Los resultados medibles del HANDOFF (lib/handoff/resultados-medibles.ts). Los objetivos
+   * cuantitativos apuntan a uno (`resultado: "R1"`) y muestran su línea base, meta y plazo desde acá:
+   * se capturan una sola vez. Sin línea base, el objetivo sale «Por validar».
+   */
+  resultados?: Array<{ id: string; resultado: string; metrica: string; lineaBase: string; meta: string; plazo: string }>;
+  /**
+   * Solo edición: guarda la línea base, la meta o el plazo de un resultado — en el handoff, que es
+   * donde vive. Ausente en lectura y en el PDF: ahí el camino no existe.
+   */
+  onEditarResultado?: (id: string, campo: "lineaBase" | "meta" | "plazo", valor: string) => void;
+  /**
+   * La línea de la portada, como FUNDAUNA: «Cliente: X · Fecha: … · Versión: v1 · Estado: Borrador»
+   * (lib/canvas/estado-del-documento.ts → `lineaDelDocumento`). La pone Nexus, no la IA.
+   */
+  lineaDelDocumento?: string;
 }
 
 /** Una estimación como la ve el motor (espejo del DTO de `lib/desarrollo`, sin importarlo:

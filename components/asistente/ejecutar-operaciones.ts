@@ -132,6 +132,11 @@ export function useEjecutarOperacionesDelChat(
    * directorio de AHORA, no el de cuando se montó.
    */
   completadores?: Record<string, CompletadorDeItem>,
+  /**
+   * El documento está CERRADO (2026-10-02: un diagnóstico aprobado por el cliente). Con un motivo, el
+   * chat no escribe nada y lo dice con ese motivo, en vez de editar lo que el cliente ya aprobó.
+   */
+  cerrado?: string | null,
 ) {
   /** Las secciones como las ve el ejecutor. Se recalcula cuando el documento cambia. */
   const secciones: SeccionActual[] = useMemo(
@@ -142,14 +147,15 @@ export function useEjecutarOperacionesDelChat(
   /* Por ref: el aplicador se registra una vez y tiene que ver SIEMPRE el documento de ahora, no el
      de cuando se montó. Sin esto, aplicar después de editar a mano escribiría sobre una foto
      vieja — y el `data` que se manda es el objeto entero de la sección. */
-  const vivo = useRef({ secciones, cs, capacidades, completadores, defsByKey });
+  const vivo = useRef({ secciones, cs, capacidades, completadores, defsByKey, cerrado });
   useEffect(() => {
-    vivo.current = { secciones, cs, capacidades, completadores, defsByKey };
+    vivo.current = { secciones, cs, capacidades, completadores, defsByKey, cerrado };
   });
 
   useRegistrarAplicadorDeDocumento(async (crudas): Promise<ResultadoDelAplicador> => {
-    const { secciones: secs, cs: hook, capacidades: caps, completadores: comps, defsByKey: defs } =
+    const { secciones: secs, cs: hook, capacidades: caps, completadores: comps, defsByKey: defs, cerrado: candado } =
       vivo.current;
+    if (candado) return { escribio: false, avisos: [], rechazadas: [candado] };
     const ops = crudas.filter(esOperacionDeDocumento) as OperacionDeDocumento[];
     if (ops.length === 0) {
       return { escribio: false, avisos: [], rechazadas: ["No llegó ninguna operación que este documento entienda."] };

@@ -5,11 +5,12 @@
  * `landingConfigForDiagnostico()`. Espeja `configs/exploracion.ts`. Las defs server-safe
  * viven en `diagnostico.defs.ts`.
  *
- * Tres componentes PROPIOS desde el 2026-09-28 (sections-diagnostico.tsx): los del hilo con
- * códigos — objetivos, explicación del problema y preguntas —, que ningún renderer tenía. El resto
- * se rinde con renderers YA construidos del motor —
+ * Componentes PROPIOS (sections-diagnostico.tsx): los del hilo con códigos — objetivos, explicación
+ * del problema y preguntas, desde el 2026-09-28 —, y desde el 2026-10-02 la política rectora con su
+ * revisión, equipos y licencias y el alcance acordado. Las acciones y las herramientas usan los de
+ * la Ejecución (sections-ejecucion.tsx). El resto se rinde con renderers YA construidos del motor —
  *   · `hero` del Business Case (de cara al cliente: brand row + portada),
- *   · `process_mapping` para el "cómo operás hoy vs cómo vas a operar",
+ *   · `process_mapping` para el "cómo opera hoy vs cómo va a operar",
  *   · `escala_posicion` para la Escala 5.2 por capa (compartido con Propuesta, Kickoff y Entrega),
  *   · `pain` para las causas, `web_diagnosis` para la brecha,
  *   · `kickoff_prose` para contexto/recomendaciones (y las legacy solo-lectura),
@@ -19,7 +20,7 @@ import type { FC } from "react";
 import type { LandingConfig, SectionDef, SectionProps } from "../types";
 import { DIAGNOSTICO_SECTION_DEFS } from "./diagnostico.defs";
 import { toSectionDef } from "./templates";
-import { HeroSection, PainSection } from "../sections";
+import { PainSection } from "../sections";
 import { WebDiagnosisSection } from "../sections-website";
 import { ProcessMappingSection } from "../sections-shared";
 import { EscalaPosicionSection } from "../sections-escala";
@@ -28,11 +29,17 @@ import {
   ObjetivosDiagnosticoSection,
   ProblemaDiagnosticoSection,
   PreguntasDiagnosticoSection,
+  PoliticaDiagnosticoSection,
+  EquiposDiagnosticoSection,
+  AlcanceDiagnosticoSection,
+  DiagnosticoHeroSection,
 } from "../sections-diagnostico";
+import { AccionesEjecucionSection, HerramientasEjecucionSection } from "../sections-ejecucion";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const DIAGNOSTICO_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
-  hero: HeroSection,
+  // La portada del BC + la línea «Cliente · Fecha · Versión · Estado» de FUNDAUNA (2026-10-02).
+  diagnostico_portada: DiagnosticoHeroSection,
   kickoff_prose: KickoffProseSection,
   process_mapping: ProcessMappingSection,
   // La posición en la Escala 5.2, por capa. Adentro pinta con la grilla de métricas los
@@ -45,6 +52,13 @@ export const DIAGNOSTICO_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>
   diagnostico_objetivos: ObjetivosDiagnosticoSection,
   diagnostico_problema: ProblemaDiagnosticoSection,
   diagnostico_preguntas: PreguntasDiagnosticoSection,
+  // El contrato de FUNDAUNA (2026-10-02): la política rectora con su revisión, las acciones y las
+  // herramientas (renderers de la Ejecución, de donde vinieron), equipos y licencias, y el alcance.
+  diagnostico_politica: PoliticaDiagnosticoSection,
+  ejecucion_acciones: AccionesEjecucionSection,
+  ejecucion_herramientas: HerramientasEjecucionSection,
+  diagnostico_equipos: EquiposDiagnosticoSection,
+  diagnostico_alcance: AlcanceDiagnosticoSection,
 };
 
 const DIAGNOSTICO_LANDING_CONFIG: LandingConfig = {

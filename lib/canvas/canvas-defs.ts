@@ -102,7 +102,7 @@ export const DIAGNOSTICO_CIERRE_DEFAULT = {
   eyebrow: "El siguiente paso",
   headline: "De entender a construir",
   subhead:
-    "Con este diagnóstico sobre la mesa, el siguiente paso es la planificación: cómo pasamos del nivel actual al que sigue.",
+    "Cuando apruebes este diagnóstico, pasamos a la planificación: cómo queda configurado en HubSpot lo que acordamos aquí.",
   buttonLabel: "",
   buttonUrl: "",
   buttonTarget: "_blank",
@@ -242,23 +242,29 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     name: "Diagnóstico",
     isDefault: false,
     order: 2,
-    // 2026-09-28 — EL HILO: la estructura del diagnóstico de referencia (FUNDAUNA), todo unido
-    // con códigos S / F / OBJ. Orden = el del informe. Las secciones que salieron (escala,
-    // causa_raiz, recomendaciones y las tres legacy) ya NO están acá, así que un canvas nuevo no
+    // 2026-10-02 — EL CONTRATO DE FUNDAUNA: el diagnóstico es la parte teórica (qué le pasa al
+    // cliente y cómo lo vamos a resolver), con el orden de las secciones del diagnóstico que hizo
+    // Caroline para FUNDAUNA. Las que salieron (escala, causa_raiz, recomendaciones, las tres
+    // legacy, y desde hoy contexto_alcance y quienes) ya NO están acá, así que un canvas nuevo no
     // las crea; un diagnóstico viejo las conserva (sus defs quedan solo-lectura) hasta que se
-    // regenera, y ahí el runner las retira (SECCIONES_RETIRADAS_DEL_DIAGNOSTICO).
+    // regenera, y ahí el runner las oculta y lo reordena al contrato (lib/canvas/diagnostico-generate.ts).
+    // ⚠ Este orden y el de DIAGNOSTICO_SECTION_DEFS son el mismo: lo cuida diagnostico-contrato.test.ts.
     sections: [
       { key: "diagnostico", label: "Diagnóstico" },
-      { key: "contexto_alcance", label: "Qué miramos y con qué fuentes" },
       { key: "situacion_actual", label: "Situación actual" },
       { key: "objetivos", label: "Objetivos" },
       { key: "problema", label: "Explicación del problema" },
       { key: "desafio", label: "Desafío principal" },
-      { key: "estado_actual", label: "Cómo operas hoy" },
+      { key: "politica_rectora", label: "Política rectora" },
+      { key: "estado_actual", label: "Cómo opera hoy y cómo va a operar" },
+      // (aquí va la Escala de madurez cuando vuelva — Elías la postergó el 2026-10-02)
       { key: "fortalezas", label: "Fortalezas" },
+      { key: "acciones", label: "Acciones coherentes" },
+      { key: "herramientas", label: "Herramientas de HubSpot y para qué" },
+      { key: "equipos_licencias", label: "Equipos involucrados y licencias" },
+      { key: "preguntas", label: "Preguntas que vas a poder responder" },
       { key: "gap_analysis", label: "La brecha y lo que cuesta hoy" },
-      { key: "preguntas", label: "Preguntas que hoy no puedes responder" },
-      { key: "quienes", label: "Quiénes participan" },
+      { key: "alcance_acordado", label: "Alcance acordado" },
       { key: "cierre", label: "El siguiente paso", defaultData: { ...DIAGNOSTICO_CIERRE_DEFAULT } },
     ],
   },
@@ -273,8 +279,8 @@ export const DEFAULT_PROJECT_CANVASES: CanvasDefinition[] = [
     // CONSERVAN para que el contenido viejo siga visible.
     sections: [
       { key: "planificacion", label: "Plan de implementación" },
-      // 2026-09-28 — el enfoque del proyecto; vino del diagnóstico de referencia (FUNDAUNA).
-      { key: "politica_rectora", label: "Política rectora" },
+      // La política rectora estuvo acá del 2026-09-28 al 2026-10-02: volvió al diagnóstico (la
+      // parte teórica). Las planificaciones viejas la conservan solo-lectura hasta regenerarse.
       { key: "arquitectura_solucion", label: "Arquitectura de la solución" },
       { key: "roadmap", label: "Hoja de ruta" },
       { key: "definicion_procesos", label: "Procesos rediseñados" },
@@ -479,9 +485,8 @@ export const IMPLEMENTACION_CANVAS: CanvasDefinition = {
   order: 5,
   sections: [
     { key: "implementacion",           label: "Guía de construcción" },
-    // El plan de acción que cierra el hilo del diagnóstico (AC → F / OBJ), 2026-09-28.
-    { key: "acciones",                 label: "Acciones" },
-    { key: "herramientas",             label: "Herramientas de HubSpot y para qué" },
+    // Las acciones y las herramientas estuvieron acá del 2026-09-28 al 2026-10-02: volvieron al
+    // diagnóstico. Lo que queda (la configuración) espera el rediseño de la planificación.
     { key: "arquitectura_propiedades", label: "Arquitectura de propiedades" },
     { key: "pipelines",                label: "Pipelines y objetos" },
     { key: "procesos_marketing",       label: "Procesos de marketing" },

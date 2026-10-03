@@ -289,6 +289,13 @@ model Project {
   handoffResumen     String?   @db.Text
   handoffResumenAt   DateTime?
 
+  // 2026-10-02 — «Resultados que el cliente necesita alcanzar» del handoff, como LISTA de resultados
+  // medibles (R1…: resultado, cómo se mide, línea base, meta, plazo). La escribe
+  // lib/handoff/resultados.ts después de cada handoff; los objetivos cuantitativos del diagnóstico
+  // apuntan acá en vez de copiarlos (se capturan una sola vez). Forma: lib/handoff/resultados-medibles.ts.
+  // SQL: scripts/sql/2026-10-02-resultados-medibles-del-handoff.sql (⛔ nunca `db push`).
+  handoffResultados  Json?
+
   // Fase C — publish del Kickoff al cliente externo. Acción SEPARADA del acceso:
   // null = no publicado (el cliente, aunque tenga credenciales, no ve el Kickoff);
   // fecha = publicado. El chokepoint externo (lib/external/kickoff-view.ts) exige
@@ -1108,9 +1115,17 @@ model ProjectCanvas {
   publishedSnapshotAt DateTime?
   contentUpdatedAt    DateTime?
 
+  // 2026-10-02 — El ESTADO del documento (hoy solo el diagnóstico, lib/canvas/estado-del-documento.ts):
+  // null = borrador · "presentado" · "aprobado" (por el cliente, con evidencia). `versionDocumento` es
+  // la vN que se está trabajando o presentando: regenerar después de presentar abre la siguiente.
+  // SQL: scripts/sql/2026-10-02-estado-del-documento.sql (⛔ nunca `db push`).
+  estadoDocumento  String?
+  versionDocumento Int     @default(1)
+
   cards          ClientContextCard[]
   canvasSections CanvasSection[]
   versiones      VersionDeDocumento[]
+  hitos          HitoDeDocumento[]
   // OJO — en la base hay además un índice ÚNICO PARCIAL que Prisma no sabe declarar:
   //   ProjectCanvas_projectId_slug_key ON ("projectId", slug)
   //   WHERE "projectId" IS NOT NULL AND slug IS NOT NULL
@@ -1167,6 +1182,42 @@ model VersionDeDocumento {
   /// [{ key, label, order, titleOverride, eyebrowOverride, blocks: [{ blockType, content, data, … }] }]
   secciones Json
   createdAt DateTime      @default(now())
+  /// 2026-10-02 — Lo que se le PRESENTÓ o APROBÓ el cliente: no se borra con el tope de 30 ni se salta
+  /// por ser igual a la anterior (es la evidencia de qué vio y qué aprobó).
+  protegida Boolean       @default(false)
+  hitos     HitoDeDocumento[]
+
+  @@index([canvasId, createdAt])
+}
+
+/// Un HITO del estado de un documento (2026-10-02): se presentó, lo aprobó el cliente, se reabrió.
+/// Solo se inserta: es el historial de qué versión vio el cliente y quién la aprobó, con qué evidencia.
+model HitoDeDocumento {
+  id       String        @id @default(cuid())
+  canvasId String
+  canvas   ProjectCanvas @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  /// La vN del documento a la que se refiere.
+  version  Int
+  /// presentado · aprobado · reabierto
+  tipo     String
+  porEmail String?
+  /// La foto protegida de lo que se presentó o aprobó.
+  fotoId   String?
+  foto     VersionDeDocumento? @relation(fields: [fotoId], references: [id], onDelete: SetNull)
+
+  /// Aprobación: quién del cliente, cuándo, y la evidencia (el correo pegado y/o un documento).
+  aprobadoPorNombre    String?
+  aprobadoPorEmail     String?
+  aprobadoEl           DateTime?
+  evidencia            String?   @db.Text
+  evidenciaDocumentoId String?
+  /// La nota que quedó en la empresa en HubSpot (o el error, si no se pudo escribir).
+  hubspotNotaId        String?
+  hubspotError         String?
+  /// Reabrir: por qué.
+  motivo               String?
+
+  createdAt DateTime @default(now())
 
   @@index([canvasId, createdAt])
 }

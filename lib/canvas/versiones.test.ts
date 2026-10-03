@@ -64,6 +64,10 @@ describe("⭐ todo documento que la IA reescribe guarda la foto ANTES de escribi
   it("⛔ el diagnóstico ya no BORRA sus secciones retiradas: las oculta (la Entrega lee la Escala)", () => {
     const src = leer("lib/canvas/diagnostico-generate.ts").replace(/\/\*[\s\S]*?\*\//g, "");
     expect(src).not.toMatch(/canvasSection\.deleteMany/);
-    expect(src).toContain("patchSectionEntry(");
+    // Desde el 2026-10-02 lo hace un ayudante compartido con Planificación y Ejecución.
+    expect(src).toContain("ocultarSeccionesRetiradas(");
+    const ayudante = leer("lib/canvas/retirar-secciones.ts").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(ayudante).toContain("patchSectionEntry(");
+    expect(ayudante).not.toMatch(/deleteMany/);
   });
 });

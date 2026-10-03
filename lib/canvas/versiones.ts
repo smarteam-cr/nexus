@@ -83,10 +83,14 @@ export function tieneContenido(secciones: readonly SeccionDeVersion[]): boolean 
  * Toma la foto del documento. No lanza nunca. No guarda nada si el documento está vacío (no hay nada
  * que perder) ni si es idéntico a la última foto (regenerar dos veces seguidas sin tocar nada no llena
  * la lista de copias iguales).
+ *
+ * `protegida` (2026-10-02): la foto de lo que se PRESENTÓ o APROBÓ. Si es igual a la última, en vez de
+ * saltarla se protege esa misma (y se devuelve su id): lo que importa es que quede, no que sea nueva.
+ * Las protegidas no cuentan para el tope de 30.
  */
 export async function guardarVersionDelDocumento(
   canvasId: string,
-  opts: { origen: string; creadaPor?: string | null },
+  opts: { origen: string; creadaPor?: string | null; protegida?: boolean },
 ): Promise<{ guardada: boolean; id?: string; motivo?: string }> {
   try {
     if (!modeloDisponible(prisma.versionDeDocumento)) return { guardada: false, motivo: "falta la tabla" };
@@ -100,9 +104,13 @@ export async function guardarVersionDelDocumento(
     const ultima = await prisma.versionDeDocumento.findFirst({
       where: { canvasId },
       orderBy: { createdAt: "desc" },
-      select: { huella: true },
+      select: { id: true, huella: true },
     });
-    if (ultima?.huella === huella) return { guardada: false, motivo: "igual a la última" };
+    if (ultima?.huella === huella) {
+      if (!opts.protegida) return { guardada: false, motivo: "igual a la última" };
+      await prisma.versionDeDocumento.update({ where: { id: ultima.id }, data: { protegida: true, origen: opts.origen } });
+      return { guardada: true, id: ultima.id, motivo: "protegida la última, que era igual" };
+    }
 
     const v = await prisma.versionDeDocumento.create({
       data: {
@@ -112,12 +120,14 @@ export async function guardarVersionDelDocumento(
         creadaPor: opts.creadaPor ?? null,
         huella,
         secciones: secciones as unknown as Prisma.InputJsonValue,
+        ...(opts.protegida ? { protegida: true } : {}),
       },
       select: { id: true },
     });
-    // Tope por documento: se borran las más viejas. Una foto es el documento entero.
+    // Tope por documento: se borran las más viejas. Una foto es el documento entero. Las protegidas
+    // (lo que vio o aprobó el cliente) no se borran nunca ni ocupan lugar en el tope.
     const sobrantes = await prisma.versionDeDocumento.findMany({
-      where: { canvasId },
+      where: { canvasId, protegida: false },
       orderBy: { createdAt: "desc" },
       skip: VERSIONES_POR_DOCUMENTO,
       select: { id: true },

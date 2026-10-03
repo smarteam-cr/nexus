@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * components/landing/sections-ejecucion.tsx — el plan de ACCIÓN de la Ejecución (2026-09-28).
+ * components/landing/sections-ejecucion.tsx — el plan de ACCIÓN (2026-09-28).
  *
- * El diagnóstico une el problema con códigos (síntomas S, causas F, objetivos OBJ). La Ejecución
- * cierra el hilo: cada ACCIÓN (AC-01…) dice qué causas ataca y qué objetivos mueve, con qué hub, si es
- * un quick win y si está dentro del alcance contratado. Viene de las «Acciones coherentes» del
- * diagnóstico de referencia de FUNDAUNA, que Elías ubicó acá y no en el diagnóstico.
+ * El diagnóstico une el problema con códigos (síntomas S, causas F, objetivos OBJ), y cada ACCIÓN
+ * (AC-01…) cierra el hilo: dice qué causas ataca y qué objetivos mueve, con qué hub, si es un quick
+ * win y si está dentro del alcance contratado. Son las «Acciones coherentes» del diagnóstico de
+ * FUNDAUNA. Vivieron en la Ejecución del 28-sep al 2-oct; desde entonces las pinta el DIAGNÓSTICO
+ * (el nombre del archivo y los `sectionType` quedaron, para no romper lo ya guardado).
  *
  *   · `ejecucion_acciones`     — la tabla de acciones.
  *   · `ejecucion_herramientas` — qué herramienta de HubSpot se usa, para qué, y en qué AC.

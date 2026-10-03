@@ -69,22 +69,18 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
     schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
   },
   {
-    /* 2026-09-28 — La POLÍTICA RECTORA vive acá y no en el diagnóstico (decisión de Elías): es el
-       ENFOQUE del proyecto, y el diagnóstico se queda en el problema. Viene del diagnóstico de
-       referencia de FUNDAUNA: 4-6 principios que después evitan discusiones en la entrega. */
+    /* SOLO-LECTURA desde el 2026-10-02. La política rectora vivió acá del 28-sep al 2-oct y volvió
+       al DIAGNÓSTICO (la parte teórica, como FUNDAUNA). Las planificaciones de esos días la siguen
+       mostrando hasta regenerarse; al regenerar, el runner la oculta (planificacion-generate.ts). */
     key: "politica_rectora",
     label: "Política rectora",
     eyebrow: "En qué nos enfocamos y para qué",
     theme: "dark",
     sectionType: "kickoff_prose",
-    agentGenerated: true,
+    agentGenerated: false,
     empty: proseEmpty,
-    agentHint: "La pregunta del enfoque + 4-6 principios de diseño, cada uno atado a las causas (F) del diagnóstico que ataca.",
-    brief:
-      "Los principios que guían TODA la implementación — lo que se decide una vez y no se vuelve a discutir. `intro` = UNA pregunta de enfoque ('¿En qué debemos enfocarnos y para qué?'). " +
-      "`items` (4-6): `title` = el principio en 3-7 palabras, dicho como decisión ('HubSpot como única fuente', 'Automatizar lo repetitivo, dejar el criterio a las personas', 'Medir desde el día uno con lo mínimo'); " +
-      "`detail` = 1-2 frases con qué significa EN CONCRETO para este cliente, y al final, entre paréntesis, las causas del diagnóstico que ataca ('(F1, F3)'). " +
-      "Sale de las causas (F) y los objetivos (OBJ) del DIAGNÓSTICO: un principio que no ataca ninguna causa, sobra.",
+    agentHint: "",
+    brief: "Sección legacy. La política rectora vive ahora en el diagnóstico, al lado del desafío principal.",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
@@ -207,6 +203,12 @@ export const PLANIFICACION_SECTION_DEFS: BCSectionDef[] = [
   },
 ];
 
+/**
+ * Lo que salió de Planificación y sigue como def SOLO-LECTURA (las planificaciones viejas se ven igual
+ * hasta regenerarse; ahí el runner las oculta). No está en el canon del canvas: uno nuevo no la crea.
+ */
+export const SECCIONES_RETIRADAS_DE_PLANIFICACION = ["politica_rectora"] as const;
+
 /** Template del canvas Planificación para el agente tipado. */
 export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
   id: "planificacion_v1",
@@ -218,7 +220,7 @@ export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
   features: { useCaseChecklist: false },
   agentIntro:
     "Eres el consultor senior de Smarteam que escribe el PLAN DE IMPLEMENTACIÓN de un CRM: el documento que el cliente APRUEBA antes de que se habilite nada. Define qué se construye (arquitectura, pipelines, ciclo de vida), cómo van a operar los procesos rediseñados, y cómo se adopta (rutinas, y despliegue por olas si el equipo es grande).\n\n" +
-    "TU MÉTODO: parte del DIAGNÓSTICO y de los PROCESOS REALES mapeados. El diagnóstico une todo con CÓDIGOS: síntomas S1…, causas F1…, objetivos OBJ-01…. Úsalos: la política rectora cita las causas (F) que ataca cada principio, y cada decisión del plan tiene que poder rastrearse a una causa o a un objetivo del diagnóstico o al alcance — un plan que no ataca las causas diagnosticadas es un plan genérico, y el cliente lo nota. No inventes códigos: cita solo los que trae el diagnóstico.\n\n" +
+    "TU MÉTODO: parte del DIAGNÓSTICO y de los PROCESOS REALES mapeados. El diagnóstico es la parte teórica y ya decidió el qué: une todo con CÓDIGOS (síntomas S1…, causas F1…, objetivos OBJ-01…, acciones AC-01…), trae la POLÍTICA RECTORA y las ACCIONES con sus herramientas. Este plan es la parte práctica: baja esas acciones a lo que se configura, respetando la política rectora. Cada decisión del plan tiene que poder rastrearse a una acción, una causa o un objetivo del diagnóstico o al alcance — un plan que no ataca las causas diagnosticadas es un plan genérico, y el cliente lo nota. No inventes códigos: cita solo los que trae el diagnóstico. Si no hay diagnóstico, trabaja con las sesiones de tu contexto.\n\n" +
     "LA MODALIDAD DE ADOPCIÓN gobierna dos secciones: la recibís en el contexto (directa o por pilotos, con su porqué). Con adopción DIRECTA, el plan de despliegue por olas queda VACÍO — vacío es correcto, es una sección que no aplica. Con PILOTOS, definí las olas con equipo inicial, módulos e indicador de éxito para avanzar.\n\n" +
     "EL CICLO DE VIDA: partí de las etapas REALES que el portal del cliente usa hoy (vienen en el contexto si hay cuenta conectada). Proponé SOLO los cambios que el rediseño de procesos justifica, con el criterio de movimiento explícito por etapa. Renombrar etapas sin motivo es churn que el equipo del cliente paga después.\n\n" +
     "REGLA DURA DE FECHAS: la hoja de ruta es CONCEPTUAL — orden y dependencias, SIN fechas, semanas ni duraciones. El calendario vive en el Cronograma, que es otra pieza y ya existe.\n\n" +

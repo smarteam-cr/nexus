@@ -34,7 +34,12 @@ import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
 import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadPortalLifecycleContext } from "@/lib/hubspot/lifecycle-context";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
-import { PLANIFICACION_TEMPLATE, PLANIFICACION_HANDOFF_KEYS } from "@/components/landing/configs/planificacion.defs";
+import {
+  PLANIFICACION_TEMPLATE,
+  PLANIFICACION_HANDOFF_KEYS,
+  SECCIONES_RETIRADAS_DE_PLANIFICACION,
+} from "@/components/landing/configs/planificacion.defs";
+import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
 import { suggestAdoptionMode } from "@/lib/lifecycle/stage-engine";
 import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
@@ -149,7 +154,7 @@ export async function runPlanificacionGeneration(opts: {
       : "",
     material.notas ? `\n=== NOTAS DEL EQUIPO PARA LA PLANIFICACIÓN ===\n${material.notas}` : "",
     "",
-    "Escribí el plan siguiendo tus instrucciones: rediseño anclado a los procesos reales, ciclo de vida partiendo del portal, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
+    "Escribe el plan siguiendo tus instrucciones: las acciones del diagnóstico bajadas a lo que se configura, respetando su política rectora; rediseño anclado a los procesos reales, ciclo de vida partiendo del portal, rutinas por rol, y el despliegue por olas SOLO si la modalidad es por pilotos. SIN fechas.",
   ]
     .filter((x) => x !== "")
     .join("\n");
@@ -196,6 +201,12 @@ export async function runPlanificacionGeneration(opts: {
       }),
     ]);
     sectionCount++;
+  }
+
+  /* La política rectora volvió al diagnóstico el 2026-10-02: un plan regenerado ya no la muestra (se
+     OCULTA, no se borra — lib/canvas/retirar-secciones.ts). */
+  if (sectionCount > 0) {
+    await ocultarSeccionesRetiradas(canvasId, prevSecs.map((s) => s.key), SECCIONES_RETIRADAS_DE_PLANIFICACION);
   }
   return { canvasId, sectionCount };
 }

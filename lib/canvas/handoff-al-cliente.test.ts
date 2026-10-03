@@ -164,6 +164,15 @@ const LECTORES: Lector[] = [
     porque: "el diagnóstico se le presenta al cliente",
   },
   {
+    // 2026-10-02: lee SOLO «Resultados que el cliente necesita alcanzar» (allowlist de una sección,
+    // la misma que ya leen el kickoff, el diagnóstico y la entrega) para dejarla como lista medible.
+    archivo: "lib/handoff/resultados.ts",
+    pieza: "diagnosis",
+    exposicion: "directo",
+    porque:
+      "los objetivos cuantitativos del diagnóstico muestran la línea base y la meta de esta lista, y el diagnóstico se le presenta al cliente",
+  },
+  {
     archivo: "lib/canvas/desarrollo-generate.ts",
     pieza: "tech-requirements",
     exposicion: "directo",

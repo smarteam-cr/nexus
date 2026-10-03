@@ -49,7 +49,7 @@ import {
 } from "@/lib/canvas/capacidades-de-documento";
 import type { SeccionActual } from "@/lib/canvas/operaciones-de-documento";
 import { DOC } from "@/lib/canvas/assist-de-documento";
-import { cabosParaElChat, revisarHilo } from "@/lib/canvas/revisar-hilo";
+import { cabosParaElChat, revisarHilo, seccionesDelHilo } from "@/lib/canvas/revisar-hilo";
 import { EXPLORACION_DEF_BY_KEY } from "@/components/landing/configs/exploracion.defs";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
@@ -749,9 +749,7 @@ function lineasDelHilo(
     const s = secciones.find((x) => x.key === key);
     return (s ? cardDe(s.blocks)?.data : undefined) as Record<string, unknown> | undefined;
   };
-  const texto = cabosParaElChat(
-    revisarHilo({ objetivos: dataDe("objetivos"), problema: dataDe("problema"), preguntas: dataDe("preguntas") }),
-  );
+  const texto = cabosParaElChat(revisarHilo(seccionesDelHilo(dataDe)));
   return texto ? ["", texto] : [];
 }
 

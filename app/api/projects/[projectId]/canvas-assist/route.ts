@@ -24,6 +24,7 @@ import { pieceForCanvas } from "@/lib/pieces/registry";
 import { DOC } from "@/lib/canvas/assist-de-documento";
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
+import { documentoAprobado, MENSAJE_APROBADO } from "@/lib/canvas/estado-del-documento-servidor";
 
 const bodySchema = z.object({
   canvasId: z.string().min(1),
@@ -74,6 +75,8 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     "regenerate" as never,
   );
   if (perm instanceof NextResponse) return perm;
+  // Un documento aprobado por el cliente está cerrado (lib/canvas/estado-del-documento.ts).
+  if (await documentoAprobado(canvasId)) return NextResponse.json({ error: MENSAJE_APROBADO }, { status: 409 });
 
   // Contrato: secciones del canvas cuya def es GENERABLE (mismo filtro que la
   // generación completa). currentData = el CARD de la sección (o el empty).

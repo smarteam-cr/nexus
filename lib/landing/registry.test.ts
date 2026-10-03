@@ -43,9 +43,13 @@ import { DIAGNOSTICO_SECTION_COMPONENTS, landingConfigForDiagnostico } from "@/c
 import { DIAGNOSTICO_CANVAS, PLANIFICACION_CANVAS, IMPLEMENTACION_CANVAS, ENTREGA_CANVAS } from "@/lib/canvas/canvas-defs";
 import { ENTREGA_SECTION_DEFS, ENTREGA_DEF_BY_KEY } from "@/components/landing/configs/entrega.defs";
 import { ENTREGA_SECTION_COMPONENTS, landingConfigForEntrega } from "@/components/landing/configs/entrega";
-import { IMPLEMENTACION_SECTION_DEFS } from "@/components/landing/configs/implementacion.defs";
+import { IMPLEMENTACION_SECTION_DEFS, SECCIONES_RETIRADAS_DE_EJECUCION } from "@/components/landing/configs/implementacion.defs";
 import { IMPLEMENTACION_SECTION_COMPONENTS, landingConfigForImplementacion } from "@/components/landing/configs/implementacion";
-import { PLANIFICACION_SECTION_DEFS, PLANIFICACION_DEF_BY_KEY } from "@/components/landing/configs/planificacion.defs";
+import {
+  PLANIFICACION_SECTION_DEFS,
+  PLANIFICACION_DEF_BY_KEY,
+  SECCIONES_RETIRADAS_DE_PLANIFICACION,
+} from "@/components/landing/configs/planificacion.defs";
 import { PLANIFICACION_SECTION_COMPONENTS, landingConfigForPlanificacion } from "@/components/landing/configs/planificacion";
 import { HTML_EMBED_TYPE } from "@/lib/landing/custom-sections";
 import { TARJETAS_TYPE } from "@/lib/landing/catalogo-de-secciones";
@@ -445,9 +449,17 @@ describe("un renderer, un contrato de datos", () => {
     diagnostico_objetivos: "modulo",
     diagnostico_problema: "modulo",
     diagnostico_preguntas: "modulo",
-    // Las acciones AC y sus herramientas: propias de la Ejecución (2026-09-28).
-    ejecucion_acciones: "modulo",
-    ejecucion_herramientas: "modulo",
+    // El contrato de FUNDAUNA (2026-10-02): la política rectora con su revisión, equipos y licencias,
+    // el alcance acordado, y la portada con la línea «Cliente · Fecha · Versión · Estado».
+    diagnostico_politica: "modulo",
+    diagnostico_equipos: "modulo",
+    diagnostico_alcance: "modulo",
+    diagnostico_portada: "estructural",
+    // Las acciones AC y sus herramientas: GENÉRICOS desde el 2026-10-02. Viven en el diagnóstico y
+    // Ejecución conserva sus defs solo-lectura (donde vivieron): los dos usan el MISMO esquema
+    // (ACCIONES_SCHEMA / HERRAMIENTAS_SCHEMA de diagnostico.defs.ts).
+    ejecucion_acciones: "generico",
+    ejecucion_herramientas: "generico",
     site_architecture: "modulo",
     web_methodology: "modulo",
     web_scope: "modulo",
@@ -771,11 +783,13 @@ describe("Diagnóstico: registry completo + keys congeladas", () => {
   });
 
   it("snapshot de keys: el hilo en orden, cierre cierra, y las retiradas al final solo-lectura", () => {
-    /* 2026-09-28 — EL HILO. Las retiradas SIGUEN como defs a propósito: un diagnóstico viejo se ve
-       igual hasta que se regenera (y ahí el runner las borra). No están en el canon del canvas. */
+    /* 2026-10-02 — EL CONTRATO DE FUNDAUNA (el orden lo cuida además lib/canvas/diagnostico-contrato.test.ts).
+       Las retiradas SIGUEN como defs a propósito: un diagnóstico viejo se ve igual hasta que se
+       regenera (y ahí el runner las oculta). No están en el canon del canvas. */
     expect(DIAGNOSTICO_SECTION_DEFS.map((d) => d.key)).toEqual([
-      "diagnostico", "contexto_alcance", "situacion_actual", "objetivos", "problema", "desafio",
-      "estado_actual", "fortalezas", "gap_analysis", "preguntas", "quienes", "cierre",
+      "diagnostico", "situacion_actual", "objetivos", "problema", "desafio", "politica_rectora",
+      "estado_actual", "fortalezas", "acciones", "herramientas", "equipos_licencias", "preguntas",
+      "gap_analysis", "alcance_acordado", "cierre",
       ...SECCIONES_RETIRADAS_DEL_DIAGNOSTICO,
     ]);
   });
@@ -821,7 +835,7 @@ describe("Planificación: registry completo + keys congeladas", () => {
   });
 
   it("snapshot de keys: hero abre, cierre cierra, las 4 legacy se conservan", () => {
-    // `politica_rectora` desde el 2026-09-28: el enfoque, que salió del diagnóstico.
+    // `politica_rectora` estuvo acá del 28-sep al 2-oct: volvió al diagnóstico, y queda SOLO LECTURA.
     expect(PLANIFICACION_SECTION_DEFS.map((d) => d.key)).toEqual([
       "planificacion", "politica_rectora", "arquitectura_solucion", "roadmap", "definicion_procesos",
       "ciclo_vida_crm", "rutinas_adopcion", "plan_despliegue", "metricas_exito", "cierre",
@@ -830,10 +844,16 @@ describe("Planificación: registry completo + keys congeladas", () => {
 
   it("las keys 1:1 con las secciones del canvas (el runner saltea en silencio lo que no matchea)", () => {
     const canvasKeys = new Set(PLANIFICACION_CANVAS.sections.map((s) => s.key));
+    const retiradas = new Set<string>(SECCIONES_RETIRADAS_DE_PLANIFICACION);
     for (const d of PLANIFICACION_SECTION_DEFS) {
+      if (retiradas.has(d.key)) {
+        expect(canvasKeys.has(d.key), `la retirada "${d.key}" volvió al canon del canvas`).toBe(false);
+        expect(d.agentGenerated, `la retirada "${d.key}" no la escribe el agente`).toBe(false);
+        continue;
+      }
       expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
     }
-    expect(PLANIFICACION_CANVAS.sections.length).toBe(PLANIFICACION_SECTION_DEFS.length);
+    expect(PLANIFICACION_CANVAS.sections.length).toBe(PLANIFICACION_SECTION_DEFS.length - retiradas.size);
   });
 
   it("el plan de despliegue es CONDICIONAL: el agente puede dejarlo vacío", () => {
@@ -857,8 +877,8 @@ describe("Implementación: registry completo + keys congeladas", () => {
     // Decisión de negocio 2026-07-25: primero se decide la arquitectura (propiedades,
     // pipelines, marketing) y RECIÉN AHÍ valen los prompts para Breeze. Pedirle a
     // Breeze que construya sin arquitectura decidida es pedirle que la invente.
-    // 2026-09-28: las ACCIONES (el qué, atado a F y OBJ del diagnóstico) y sus herramientas van
-    // primero; la arquitectura y los prompts son el cómo, en el mismo orden de siempre.
+    // Las ACCIONES y sus herramientas estuvieron acá del 28-sep al 2-oct (volvieron al diagnóstico):
+    // siguen como defs SOLO LECTURA; la arquitectura y los prompts son el cómo, en el orden de siempre.
     const keys = IMPLEMENTACION_SECTION_DEFS.map((d) => d.key);
     expect(keys).toEqual([
       "implementacion", "acciones", "herramientas", "arquitectura_propiedades", "pipelines",
@@ -870,10 +890,16 @@ describe("Implementación: registry completo + keys congeladas", () => {
 
   it("las keys 1:1 con las secciones del canvas", () => {
     const canvasKeys = new Set(IMPLEMENTACION_CANVAS.sections.map((s) => s.key));
+    const retiradas = new Set<string>(SECCIONES_RETIRADAS_DE_EJECUCION);
     for (const d of IMPLEMENTACION_SECTION_DEFS) {
+      if (retiradas.has(d.key)) {
+        expect(canvasKeys.has(d.key), `la retirada "${d.key}" volvió al canon del canvas`).toBe(false);
+        expect(d.agentGenerated, `la retirada "${d.key}" no la escribe el agente`).toBe(false);
+        continue;
+      }
       expect(canvasKeys.has(d.key), `la def "${d.key}" no existe como sección del canvas`).toBe(true);
     }
-    expect(IMPLEMENTACION_CANVAS.sections.length).toBe(IMPLEMENTACION_SECTION_DEFS.length);
+    expect(IMPLEMENTACION_CANVAS.sections.length).toBe(IMPLEMENTACION_SECTION_DEFS.length - retiradas.size);
   });
 });
 
@@ -1070,15 +1096,11 @@ describe("La comparación de procesos: rótulo por documento, subtítulo por caj
     }
   });
 
-  it("solo la Entrega y el Diagnóstico cambian los rótulos; los otros miran hacia adelante", () => {
-    /* El Diagnóstico mira SOLO el hoy desde el 2026-09-28 (decisión de Elías: «cómo va a operar»
-       es enfoque y vive en Planificación): su columna derecha son los puntos de fricción de ese hoy, nunca
-       «Con la implementación». */
-    expect(DIAGNOSTICO_DEF_BY_KEY["estado_actual"].compara).toEqual({
-      izquierda: "hoy",
-      derecha: "puntosDeFriccion",
-      phDerecha: "puntosDeFriccionPh",
-    });
+  it("solo la Entrega cambia los rótulos; los otros miran hacia adelante", () => {
+    /* El Diagnóstico vuelve a «Hoy» / «Con la implementación» desde el 2026-10-02 (contrato de
+       FUNDAUNA: el diagnóstico cuenta cómo va a operar, sin configuración). Del 28-sep al 2-oct su
+       columna derecha fueron los puntos de fricción. */
+    expect(DIAGNOSTICO_DEF_BY_KEY["estado_actual"].compara).toBeUndefined();
     /* «Con la implementación» en un documento de cierre convierte un hecho en una promesa.
        Y al revés: «Ahora» en un diagnóstico afirmaría algo que todavía no pasó. */
     expect(ENTREGA_DEF_BY_KEY["resumen"].compara).toEqual({

@@ -1,10 +1,19 @@
 /**
  * components/landing/configs/diagnostico.defs.ts
  *
- * Defs SERVER-SAFE del canvas "Diagnóstico" — el INFORME PARA EL CLIENTE que explica sus
- * resultados actuales: cómo opera hoy por hub, dónde está en la escala de rendimiento,
- * qué factores explican ese nivel, qué lo separa del siguiente, y qué hacemos. Corre
- * sobre el mismo motor `LandingView` que el Kickoff.
+ * Defs SERVER-SAFE del canvas "Diagnóstico" — el INFORME PARA EL CLIENTE. Corre sobre el mismo
+ * motor `LandingView` que el Kickoff.
+ *
+ * ── EL CONTRATO (2026-10-02) ─────────────────────────────────────────────────────────────────
+ * Acordado por Elías con Caroline Bersot y Alex Vanegas: el diagnóstico es la parte TEÓRICA —qué
+ * le pasa al cliente y cómo lo vamos a resolver— y la planificación es la PRÁCTICA, lo que termina
+ * configurado en HubSpot. La plantilla es el diagnóstico real que Caroline hizo para FUNDAUNA, y el
+ * ORDEN de `DIAGNOSTICO_SECTION_DEFS` es el de sus secciones (lo cuida
+ * `lib/canvas/diagnostico-contrato.test.ts`). Revierte tres decisiones del 27-sep: «cómo va a
+ * operar», la política rectora (venía de Planificación) y las acciones con sus herramientas (venían
+ * de Ejecución) vuelven acá. Nada de detalle de configuración: propiedades, pipelines, etapas y
+ * workflows son de la planificación. La escala de madurez queda afuera por decisión de Elías
+ * (2026-10-02): va después de «Cómo opera hoy y cómo va a operar» cuando vuelva.
  *
  * ES DE CARA AL CLIENTE (paleta de marca, voz de marca): se presenta en la sesión de
  * diagnóstico y se puede exportar a PDF. La publicación con link propio llega en su
@@ -21,11 +30,9 @@
  *   · `proximos_pasos`— reemplazada por recomendaciones + cierre.
  * Con contenido viejo se ven; vacías son blank y el modo lectura las omite solo.
  *
- * LA ESCALA: la única vara es la Escala de Rendimiento 5.2 (Deficiente · Inicial · Funcional ·
- * Eficiente · Óptimo, en dos capas por área), cuyo reglamento vive en la base de conocimiento.
- * Desde el 2026-09-12 la sección `escala` ubica cada área por capa y con evidencia
- * (`escala_posicion`, la misma forma que leen la Propuesta, el Kickoff y la Entrega), y un trato
- * marcado «Sin Escala» no la genera. Ver `lib/escala/`.
+ * LA ESCALA: la sección `escala` (Escala 5.2, `escala_posicion`) quedó SOLO-LECTURA desde el
+ * 2026-09-28. Los diagnósticos viejos la conservan oculta porque la Entrega lee de ahí el punto de
+ * partida del cliente (`posicionDelDiagnostico`, lib/escala/contexto.ts).
  */
 import type { BCSectionDef } from "./business-case.defs";
 import type { BcTemplateDef } from "./templates.defs";
@@ -61,14 +68,19 @@ const obj = (properties: Record<string, unknown>, required?: string[]) =>
   ({ type: "object", properties, ...(required ? { required } : {}) }) as const;
 const arrayOf = (properties: Record<string, unknown>, required?: string[]) => ({ type: "array", items: obj(properties, required) });
 
-/* ── El HILO (2026-09-28) ─────────────────────────────────────────────────────────────────────
-   Estructura aprobada por Elías sobre el diagnóstico de referencia de FUNDAUNA: todo encadenado con
-   CÓDIGOS — síntomas S1…, causas F1…, objetivos OBJ-01… —, sin la Escala (llega la 7.0), sin
-   «cómo vas a operar» (es enfoque: Planificación) y sin recomendaciones (son acciones: Ejecución).
-   Las secciones que salieron (`escala`, `causa_raiz`, `recomendaciones` y las tres legacy) quedan
-   al final como SOLO-LECTURA: un diagnóstico viejo se sigue viendo igual hasta que se regenera, y
-   al regenerarlo el runner las retira (lib/canvas/diagnostico-generate.ts). */
+/* ── El HILO (2026-09-28, completado el 2026-10-02) ─────────────────────────────────────────────
+   Todo se encadena con CÓDIGOS, como en FUNDAUNA: síntomas S1… → causas F1… → consecuencias →
+   acciones AC-01… (cada una ataca causas y mueve objetivos) → objetivos OBJ-01…. Lo que falta o
+   quedó suelto lo encuentra lib/canvas/revisar-hilo.ts, y sin el hilo cerrado no se presenta.
+
+   Las secciones que salieron quedan al final como SOLO-LECTURA: un diagnóstico viejo se sigue
+   viendo igual hasta que se regenera, y al regenerarlo el runner las OCULTA sin borrar sus datos
+   (lib/canvas/diagnostico-generate.ts). `contexto_alcance` y `quienes` salieron el 2026-10-02:
+   FUNDAUNA no tiene «Qué miramos y con qué fuentes» (las fuentes se ven en el panel «Contexto»), y
+   «Quiénes participan» pasó a ser la tabla de equipos y licencias. */
 export const SECCIONES_RETIRADAS_DEL_DIAGNOSTICO = [
+  "contexto_alcance",
+  "quienes",
   "estado_deseado",
   "escala",
   "causa_raiz",
@@ -76,6 +88,30 @@ export const SECCIONES_RETIRADAS_DEL_DIAGNOSTICO = [
   "recomendaciones",
   "proximos_pasos",
 ] as const;
+
+/** Las keys que se movieron entre documentos el 2026-10-02. Una sola fuente para los tres runners. */
+export const POLITICA_RECTORA_KEY = "politica_rectora";
+export const ACCIONES_KEY = "acciones";
+export const HERRAMIENTAS_KEY = "herramientas";
+
+/**
+ * Los esquemas de las acciones y las herramientas, UNO por tipo: los usan el diagnóstico (donde viven
+ * desde el 2026-10-02) y las defs solo-lectura de Ejecución (donde vivieron). Un renderer, un contrato.
+ */
+export const ACCIONES_SCHEMA = obj({
+  intro: str,
+  acciones: arrayOf(
+    { id: str, accion: str, detalle: str, grupo: str, ataca: str, mueve: str, hub: str, quickWin: str, alcance: str },
+    ["id", "accion", "ataca", "mueve"],
+  ),
+});
+export const HERRAMIENTAS_SCHEMA = obj({
+  intro: str,
+  herramientas: arrayOf({ herramienta: str, paraQue: str, acciones: str }, ["herramienta"]),
+});
+
+/** Rótulo interno de la política mientras el ejecutivo no la revisa. El cliente nunca lo ve. */
+export const SUGERENCIA_POR_REVISAR = "Sugerencia por revisar";
 
 export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
   {
@@ -87,7 +123,9 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     selfTitled: true,
     pinned: true,
     noHide: true,
-    sectionType: "hero",
+    // La portada del BC + la línea «Cliente · Fecha · Versión · Estado» (2026-10-02). Tipo propio y no
+    // `hero`: el mismo nombre resolviendo a dos componentes es justo lo que el registro prohíbe.
+    sectionType: "diagnostico_portada",
     /* Se rotula con su titular, que en pantalla es lo correcto y para conversar es pésimo:
        el chip decía «kickoff Wherex». Ver `nombreParaElChat`. */
     chatLabel: "Portada",
@@ -106,20 +144,6 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
        `seccion.rotular` se rechaza —escribiría en una columna que nadie lee— y el renderer lo
        pintaba como texto pelado. Las dos puertas cerradas a la vez. */
     schemaDelChat: { type: "object", properties: { titulo: str, headline: str, subhead: str, tags: strArray, eyebrow: str } },
-  },
-  {
-    key: "contexto_alcance",
-    label: "Qué miramos y con qué fuentes",
-    eyebrow: "Contexto y alcance",
-    theme: "light",
-    sectionType: "kickoff_prose",
-    agentGenerated: true,
-    empty: proseEmpty,
-    agentHint: "Qué se diagnosticó y con qué fuentes. 3-5 items.",
-    brief:
-      "El encuadre, para que el informe sea auditable. `intro`: 1 frase con qué se diagnosticó. `items` (3-5): cada fuente usada — `title` = la fuente dicha al cliente ('Las sesiones que tuvimos', 'Sus respuestas a la encuesta', 'Sus procesos mapeados', 'Lo que conversamos al vender el proyecto'); `detail` = UNA línea con qué aportó y, si aplica, cuántas y de cuándo ('4 sesiones entre el 2 y el 16 de septiembre'). Solo fuentes que de verdad se usaron.",
-    schema: asSchema(proseSchema),
-    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
     key: "situacion_actual",
@@ -146,13 +170,17 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
       "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
     agentGenerated: true,
     empty: { intro: "", objetivos: [] },
-    agentHint: "OBJ-01…: cuantitativos y cualitativos, cada uno con cómo se mide y su meta (o «meta por validar»).",
+    agentHint: "OBJ-01…: los cuantitativos SON los resultados medibles del handoff (uno por R, con su `resultado`); los cualitativos, lo que cambia en cómo se trabaja.",
+    /* 2026-10-02 — Los cuantitativos NO se capturan dos veces (Elías): cada uno apunta a un resultado
+       medible del handoff (`resultado` = 'R1') y la línea base, la meta y el plazo los pinta el
+       renderer desde ahí (`ctx.diagnostico.resultados`); sin línea base, «Por validar». */
     brief:
-      "Lo que el cliente quiere lograr, con código. Parten de los RESULTADOS QUE PERSIGUE (el handoff y la ficha del cliente) y de sus respuestas a la encuesta. `objetivos` (5-9): primero TODOS los cuantitativos y después los cualitativos; `id` = 'OBJ-01', 'OBJ-02'… correlativos en ese orden (Nexus igual los renumera así al guardar); `tipo` = 'cuantitativo' (se mide con un número) o 'cualitativo' (cambia cómo se trabaja); `titulo` = el objetivo en una frase ('Conocer la tasa de conversión de lead a matrícula por proyecto'); `medida` = cómo se mide y la meta ('Línea base tras el primer ciclo de matrícula; meta numérica por validar'). " +
-      "⛔ Nunca inventes una meta numérica: si ninguna fuente la da, la medida dice 'meta por validar'. `intro`: vacío salvo que haga falta una frase.",
+      "Lo que el cliente quiere lograr, con código. `objetivos` (5-9): primero TODOS los cuantitativos y después los cualitativos; `id` = 'OBJ-01', 'OBJ-02'… correlativos en ese orden (Nexus igual los renumera así al guardar); `tipo` = 'cuantitativo' o 'cualitativo'. " +
+      "CUANTITATIVOS = los RESULTADOS MEDIBLES DEL HANDOFF (vienen en el contexto como R1, R2…): uno por cada resultado que se mide con un número, con `resultado` = su código ('R1'); `titulo` = ese resultado dicho como objetivo ('Conocer la tasa de conversión de lead a matrícula por proyecto'); `medida` = SOLO cómo se mide ('Tasa de conversión por proyecto y modalidad'). ⛔ NO escribas línea base, meta ni plazo: Nexus los muestra desde el handoff, y si no hay línea base, el objetivo sale «Por validar». Si no hay resultados medibles en el contexto, deriva los cuantitativos de lo que el cliente persigue y deja `resultado` vacío. " +
+      "CUALITATIVOS = lo que cambia en cómo se trabaja: `resultado` vacío; `titulo` = el objetivo; `medida` = cómo se va a notar ('Ningún proyecto accede a registros de otro'). `intro`: vacío salvo que haga falta una frase.",
     schema: obj({
       intro: str,
-      objetivos: arrayOf({ id: str, tipo: str, titulo: str, medida: str }, ["id", "tipo", "titulo"]),
+      objetivos: arrayOf({ id: str, tipo: str, titulo: str, medida: str, resultado: str }, ["id", "tipo", "titulo"]),
     }),
   },
   {
@@ -167,11 +195,14 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: true,
     empty: { intro: "", sintomas: [], causas: [], consecuencias: [] },
     agentHint: "Síntomas S1… (lo que se ve, con datos) → causas F1… (por qué pasa) → qué le cuesta al cliente.",
+    /* La CUARTA columna de FUNDAUNA —«Consecuencias positivas: acciones coherentes y cómo generan
+       dinero»— no se escribe acá: la pinta el renderer leyendo la tabla de Acciones del mismo
+       documento (`ctx.diagnostico.acciones`). Escribirla dos veces sería que diverjan. */
     brief:
-      "El corazón del informe: el problema contado en tres columnas unidas por códigos. " +
+      "El corazón del informe: el problema contado en tres columnas unidas por códigos (la cuarta, las acciones y cómo generan dinero, sale sola de la tabla de Acciones). " +
       "`sintomas` (4-8): lo que se VE hoy, con el dato que lo muestra — `id` = 'S1', 'S2'…; `titulo` en 3-7 palabras ('Leads sin seguimiento visible'); `detalle` = 1-2 líneas con cifras si las fuentes las traen ('Cerca de 2.900 leads al mes; la tasa de conversión es desconocida'). " +
       "`causas` (4-8): POR QUÉ pasa — causas, no síntomas ('Nadie es dueño del dato' explica; 'el CRM está desordenado' describe) — `id` = 'F1', 'F2'…; `titulo` en 3-8 palabras ('Sin CRM ni registro común'); `detalle` = 1 línea con cómo se manifiesta y de dónde salió; `explica` = los síntomas que explica ('S1, S3'). Cada causa explica al menos un síntoma y cada síntoma lo explica al menos una causa. " +
-      "`consecuencias` (4-8): cómo se pierde dinero, tiempo o clientes por esas causas — `titulo` en 3-8 palabras ('Pauta pagada sin saber cuántas matrículas genera'); `detalle` = 1 línea; `por` = las causas que la producen ('F1, F2'). " +
+      "`consecuencias` (4-8): las consecuencias NEGATIVAS, cómo se pierde dinero, tiempo o clientes por esas causas — `titulo` en 3-8 palabras ('Pauta pagada sin saber cuántas matrículas genera'); `detalle` = 1 línea; `por` = las causas que la producen ('F1, F2'). Cada causa tiene al menos una. " +
       "Trazable o no va: un síntoma sin fuente o una causa sin evidencia es una opinión. `intro`: vacío salvo que haga falta una frase.",
     schema: obj({
       intro: str,
@@ -195,25 +226,44 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
   {
+    /* 2026-10-02 — Vuelve de Planificación: FUNDAUNA la pone al lado del desafío. Casi nunca se
+       habla en las sesiones, así que la IA la PROPONE y el ejecutivo la ajusta antes de presentar:
+       el renderer la marca «Sugerencia por revisar» (solo en edición) hasta que alguien la revisa,
+       y sin revisar no se presenta. Revisada, regenerar no la pisa (diagnostico-generate.ts). */
+    key: POLITICA_RECTORA_KEY,
+    label: "Política rectora",
+    eyebrow: "¿En qué debemos enfocarnos y para qué?",
+    theme: "dark",
+    sectionType: "diagnostico_politica",
+    agentGenerated: true,
+    empty: proseEmpty,
+    agentHint: "La pregunta del enfoque + 4-6 principios, cada uno nacido de las causas (F). Es una sugerencia: la revisa el ejecutivo.",
+    brief:
+      "Los principios que guían la solución — lo que se decide una vez y no se vuelve a discutir. Es una SUGERENCIA: casi nunca se habla en las sesiones, así que la propones desde las causas (F) y los objetivos (OBJ), y el ejecutivo la ajusta antes de presentarla. " +
+      "`intro` = UNA pregunta de enfoque ('¿En qué debemos enfocarnos y para qué?'). `items` (4-6): `title` = el principio en 3-7 palabras, dicho como decisión ('HubSpot como única fuente', 'Automatizar lo repetitivo, dejar el criterio a las personas', 'Medir desde el día uno con lo mínimo'); " +
+      "`detail` = 1-2 frases con qué significa EN CONCRETO para este cliente. Un principio que no ataca ninguna causa, sobra. Sin detalle de configuración.",
+    schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+  },
+  {
     key: "estado_actual",
-    label: "Cómo operas hoy",
-    eyebrow: "La operación actual",
+    label: "Cómo opera hoy y cómo va a operar",
+    eyebrow: "La operación",
     theme: "light",
     sectionType: "process_mapping",
-    /* Solo el HOY: «cómo vas a operar» es enfoque y vive en Planificación (Elías, 2026-09-27). La
-       columna derecha, que en el renderer compartido es «Con la implementación», acá son los
-       puntos de fricción de ese hoy. Los diagnósticos viejos que la traen escrita como futuro se siguen viendo;
-       al regenerar se reescriben. */
-    compara: { izquierda: "hoy", derecha: "puntosDeFriccion", phDerecha: "puntosDeFriccionPh" },
+    /* 2026-10-02 — Vuelve «cómo va a operar» (FUNDAUNA): la columna derecha es otra vez «Con la
+       implementación», contada como lo que cambia para las personas y NUNCA como configuración. Del
+       27-sep al 2-oct esa columna fueron «puntos de fricción»; esos diagnósticos se siguen viendo y
+       al regenerar se reescriben. Las fricciones ya están en los síntomas y las causas. */
     agentGenerated: true,
     empty: PROCESS_MAPPING_EMPTY,
-    agentHint: "UN proceso por frente: cómo funciona HOY y sus puntos de fricción, con las herramientas que usa.",
+    agentHint: "UN proceso por frente: cómo funciona HOY y cómo va a operar con la implementación, con las herramientas de hoy → las de HubSpot.",
     brief:
-      "Cómo opera hoy, por proceso. `procesos`: UNO por frente que el proyecto toca ('Marketing y captación', 'Ventas y matrícula', 'Mesa de ayuda'). Por proceso: " +
+      "Cómo opera hoy y cómo va a operar, por proceso. `procesos`: UNO por frente que el proyecto toca ('Marketing y captación', 'Ventas y matrícula', 'Mesa de ayuda', 'Atención con IA'). Por proceso: " +
       "`nombre` = en lenguaje del cliente; `resumenHoy` = titular de media línea que se lee solo ('La visibilidad termina en el clic'); `comoEsHoy` = 2-4 frases con la operación REAL, con quién la hace y con qué; " +
-      "`resumenSera` = titular de media línea con el PUNTO DE FRICCIÓN ('El dato queda en una libreta'); `comoSera` = 1-3 frases con la fricción concreta — qué se pierde, qué se atrasa, qué depende de una persona —, respaldada por los procesos mapeados (los dolores marcados ⚠) y las sesiones; " +
-      "`sistemas` = las herramientas que usa hoy ('WordPress, Meta Business, WhatsApp en el celular, Excel'). " +
-      "⛔ No describas cómo va a operar con el proyecto: eso no es este informe.",
+      "`resumenSera` = titular de media línea de cómo va a operar ('Cada lead entra con fuente, proyecto y programa'); `comoSera` = 2-4 frases con lo que cambia para las PERSONAS y para el cliente con la implementación — quién recibe qué, qué deja de depender de alguien, qué se ve que antes no se veía —; " +
+      "`sistemas` = las herramientas de hoy → las de HubSpot que las reemplazan o conectan ('WordPress, Meta Business y WhatsApp en el celular → Formularios, Anuncios y Bandeja de entrada de HubSpot'). " +
+      "⛔ Sin detalle de configuración: ni nombres de propiedades, ni etapas de pipeline, ni reglas de workflow — eso es de la planificación.",
     schema: asSchema(PROCESS_MAPPING_SCHEMA),
   },
   {
@@ -229,6 +279,77 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
       "Lo que el cliente YA hace bien y sirve de base. `items` (3-6): `title` = la fortaleza en 3-6 palabras ('Pauta centralizada', 'Llave única por proyecto'); `detail` = 1-2 frases con por qué es una ventaja para lo que viene. Solo fortalezas reales, respaldadas por las fuentes — no halagos genéricos. `intro`: vacío.",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+  },
+  {
+    /* 2026-10-02 — Vienen de Ejecución (FUNDAUNA las pone en el diagnóstico): las acciones son el
+       «cómo lo vamos a resolver» contado al cliente. Cada una ATACA causas (F) y MUEVE objetivos
+       (OBJ); sin eso no se presenta (lib/canvas/revisar-hilo.ts). Su `detalle` es también la
+       cuarta columna de la Explicación del problema: cómo genera dinero. */
+    key: ACCIONES_KEY,
+    label: "Acciones coherentes",
+    eyebrow: "¿Qué nos hace falta?",
+    theme: "light",
+    sectionType: "ejecucion_acciones",
+    agentGenerated: true,
+    avisoDelChat:
+      "cada acción ataca causas (F) y mueve objetivos (OBJ) que existen en este diagnóstico, y toda causa tiene al menos una acción: si cambias un código, cámbialo donde se cita; códigos AC nuevos, correlativos.",
+    empty: { intro: "", acciones: [] },
+    agentHint: "AC-01…: la acción, cómo genera dinero, su grupo, qué causas (F) ataca, qué objetivos (OBJ) mueve, hub, quick win y alcance.",
+    brief:
+      "Las acciones coherentes: cómo se resuelve el problema, en el orden en que se hacen. `acciones` (5-10): `id` = 'AC-01', 'AC-02'… correlativos; `accion` = la acción en 4-10 palabras, dicha al cliente ('Captación conectada: formularios nativos, Meta, LinkedIn y Google Ads'); `detalle` = UNA línea con cómo genera dinero o qué gana el cliente ('Cada lead que llega por la pauta entra al CRM con su campaña, para saber qué inversión genera matrículas'); " +
+      "`grupo` = UNO de: Planeación · Configuración · Integración · Reportería · Adopción; `ataca` = las causas que ataca ('F1, F2') — OBLIGATORIO; `mueve` = los objetivos que mueve ('OBJ-01, OBJ-04') — OBLIGATORIO; `hub` = el hub o herramienta ('Sales Hub', 'Smart CRM', 'Breeze'); " +
+      "`quickWin` = 'si' si da resultado en semanas, si no 'no'; `alcance` = 'dentro' si lo contratado la cubre, 'fuera' si no (una acción fuera de alcance se lista igual: es la conversación de la siguiente etapa). " +
+      "⛔ Toda causa (F) tiene al menos una acción que la ataca, y toda acción cita causas y objetivos que EXISTEN arriba. Sin detalle de configuración (ni propiedades, ni etapas, ni reglas de workflow). `intro`: vacío.",
+    schema: ACCIONES_SCHEMA,
+  },
+  {
+    key: HERRAMIENTAS_KEY,
+    label: "Herramientas de HubSpot y para qué",
+    eyebrow: "Con qué lo vamos a resolver",
+    theme: "light",
+    sectionType: "ejecucion_herramientas",
+    agentGenerated: true,
+    empty: { intro: "", herramientas: [] },
+    agentHint: "Una fila por herramienta de HubSpot: para qué se usa con este cliente y en qué acciones (AC).",
+    brief:
+      "Las herramientas de HubSpot que usa la solución. `herramientas` (5-12): `herramienta` = el nombre en HubSpot ('Equipos, permisos y propietarios', 'Pipelines de leads y de negocios', 'Customer Agent (Breeze)', 'Help Desk y SLA'); " +
+      "`paraQue` = UNA línea con para qué se usa con ESTE cliente, en sus palabras; `acciones` = las AC de arriba que la usan ('AC-02, AC-05'). Solo herramientas que alguna acción usa. " +
+      "⛔ Dice PARA QUÉ, nunca CÓMO se configura: ni nombres de propiedades, ni etapas, ni reglas. `intro`: vacío.",
+    schema: HERRAMIENTAS_SCHEMA,
+  },
+  {
+    /* 2026-10-02 — Reemplaza a «Quiénes participan» (prosa) con la tabla de FUNDAUNA: quién está de
+       cada lado, qué hace en el proyecto y con qué asiento o licencia. Suma la fila de Smarteam. */
+    key: "equipos_licencias",
+    label: "Equipos involucrados y licencias",
+    eyebrow: "Las personas",
+    theme: "light",
+    sectionType: "diagnostico_equipos",
+    agentGenerated: true,
+    empty: { intro: "", equipos: [] },
+    agentHint: "Una fila por equipo: personas, rol en el proyecto y asiento o licencia (o «Por validar»). La última fila es Smarteam.",
+    brief:
+      "Quién participa, de los dos lados. `equipos` (3-9): `equipo` = el equipo o el área del cliente ('Fomento y Gestión de Proyectos', 'Mercadeo y Comunicación', 'Contact center'); `personas` = los nombres que dan las fuentes, o cuántas son si no hay nombres ('4 agentes del servicio'); " +
+      "`rol` = qué hace en el proyecto en UNA línea ('Sponsor de Marketing y Ventas; valida el mapeo con las ejecutivas'); `licencia` = el asiento o la licencia de HubSpot que usa ('Sales Hub Professional (3 licencias)', 'Solo consulta, sin costo', 'Core seat'), y 'Por validar' si ninguna fuente lo dice. " +
+      "La ÚLTIMA fila es Smarteam: `equipo` = 'Smarteam', `personas` = el equipo de Smarteam del proyecto (viene en el contexto), `rol` = qué hace Smarteam ('Diagnóstico, configuración, capacitación y acompañamiento'), `licencia` = 'Acceso de partner'. " +
+      "⛔ Nunca la postura, la opinión ni el nivel de apertura de nadie: este informe lo lee el cliente. `intro`: vacío.",
+    schema: obj({ intro: str, equipos: arrayOf({ equipo: str, personas: str, rol: str, licencia: str }, ["equipo"]) }),
+  },
+  {
+    key: "preguntas",
+    label: "Preguntas que vas a poder responder",
+    eyebrow: "Preguntas de negocio",
+    theme: "light",
+    sectionType: "diagnostico_preguntas",
+    avisoDelChat:
+      "los códigos (S1, F1, OBJ-01) unen secciones: si borras o renumeras uno, actualiza también donde se cita " +
+      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
+    agentGenerated: true,
+    empty: { intro: "", preguntas: [] },
+    agentHint: "Las preguntas de negocio que el cliente va a poder responder, cada una atada a su OBJ.",
+    brief:
+      "Las preguntas de negocio que el cliente HOY no puede responder y que va a poder responder cuando se cumplan los objetivos. `preguntas` (5-9): `pregunta` = en palabras de su gerencia, concreta ('¿Qué porcentaje de leads llega a matrícula por modalidad y por proyecto?'); `objetivos` = el o los OBJ que la responden ('OBJ-01'). Toda pregunta apunta a un OBJ que exista arriba. `intro`: vacío.",
+    schema: obj({ intro: str, preguntas: arrayOf({ pregunta: str, objetivos: str }, ["pregunta", "objetivos"]) }),
   },
   {
     key: "gap_analysis",
@@ -250,35 +371,24 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     schemaDelChat: asSchema(WEB_DIAGNOSIS_SCHEMA_DEL_CHAT),
   },
   {
-    key: "preguntas",
-    label: "Preguntas que hoy no puedes responder",
-    eyebrow: "Preguntas de negocio",
-    theme: "light",
-    sectionType: "diagnostico_preguntas",
-    avisoDelChat:
-      "los códigos (S1, F1, OBJ-01) unen secciones: si borras o renumeras uno, actualiza también donde se cita " +
-      "(«explica» de las causas, «por» de las consecuencias y los objetivos de Preguntas); códigos nuevos, correlativos.",
+    /* 2026-10-02 — Cierra el informe como FUNDAUNA: lo contratado, agrupado por hub, cada ítem con
+       las acciones (AC) que lo cubren. Lo que está fuera queda nombrado: es la siguiente conversación. */
+    key: "alcance_acordado",
+    label: "Alcance acordado",
+    eyebrow: "Qué incluye este proyecto",
+    theme: "soft",
+    sectionType: "diagnostico_alcance",
     agentGenerated: true,
-    empty: { intro: "", preguntas: [] },
-    agentHint: "Las preguntas de negocio que hoy no tienen respuesta, cada una atada a su OBJ.",
+    empty: { intro: "", grupos: [], fuera: [] },
+    agentHint: "Lo contratado agrupado por hub (o «Transversal»), cada ítem con sus AC. Lo que queda fuera, aparte.",
     brief:
-      "Las preguntas de negocio que el cliente HOY no puede responder y que responderá cuando se cumplan los objetivos. `preguntas` (5-9): `pregunta` = en palabras de su gerencia, concreta ('¿Qué porcentaje de leads llega a matrícula por modalidad y por proyecto?'); `objetivos` = el o los OBJ que la responden ('OBJ-01'). Toda pregunta apunta a un OBJ que exista arriba. `intro`: vacío.",
-    schema: obj({ intro: str, preguntas: arrayOf({ pregunta: str, objetivos: str }, ["pregunta", "objetivos"]) }),
-  },
-  {
-    key: "quienes",
-    label: "Quiénes participan",
-    eyebrow: "Las personas",
-    theme: "light",
-    sectionType: "kickoff_prose",
-    agentGenerated: true,
-    empty: proseEmpty,
-    agentHint: "Las personas y equipos del cliente que participan, con su papel. Sin opiniones sobre nadie.",
-    brief:
-      "Las personas y equipos DEL CLIENTE que participan del proyecto. `items`: `title` = el equipo o la persona ('Fomento y Gestión de Proyectos', 'Pablo Olivas'); `detail` = cargo y papel en el proyecto en UNA línea ('Sponsor de Marketing y Ventas; valida el mapeo con las ejecutivas'). " +
-      "⛔ Nunca la postura, la opinión ni el nivel de apertura de nadie: este informe lo lee el cliente. Nunca a nadie del equipo de Smarteam. `intro`: vacío.",
-    schema: asSchema(proseSchema),
-    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+      "El alcance contratado, tal como se vendió (SOLO lo que respaldan el alcance contratado y el desarrollo del handoff — no inflar). `grupos` (2-5): `titulo` = el hub o el frente ('Smart CRM y Sales Hub Professional', 'Service Hub Enterprise', 'Transversal'); `items` (2-6 por grupo): `texto` = lo que incluye, en una línea ('Pipeline de tickets de cinco etapas, formulario de entrada y asignación por categoría'), `acciones` = las AC que lo cubren ('AC-05'). " +
+      "`fuera` (0-4): las acciones con alcance 'fuera', dichas como la siguiente conversación — `texto` + `acciones`. Toda acción 'dentro' aparece en algún ítem. `intro`: vacío.",
+    schema: obj({
+      intro: str,
+      grupos: arrayOf({ titulo: str, items: arrayOf({ texto: str, acciones: str }, ["texto"]) }, ["titulo"]),
+      fuera: arrayOf({ texto: str, acciones: str }, ["texto"]),
+    }),
   },
   {
     key: "cierre",
@@ -294,16 +404,42 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     empty: DIAGNOSTICO_CIERRE_DEFAULT,
     agentHint: "",
     brief:
-      "Cierre curado por el equipo: el siguiente paso con el cliente (presentar el plan, agendar la sesión de planificación) + botón opcional. El agente no la toca.",
+      "Cierre curado por el equipo: el siguiente paso con el cliente (la aprobación del diagnóstico por correo, agendar la sesión de planificación) + botón opcional. El agente no la toca.",
     schema: {
       type: "object",
       properties: { eyebrow: str, headline: str, subhead: str, buttonLabel: str, buttonUrl: str, buttonTarget: str },
     },
   },
 
-  // ── SOLO-LECTURA: lo que salió del diagnóstico el 2026-09-28 ───────────────────────────────
+  // ── SOLO-LECTURA: lo que salió del diagnóstico (2026-09-28 y 2026-10-02) ───────────────────
   // Con contenido viejo se ven; vacías son blank y el modo lectura las omite. El agente no las
   // escribe y el runner las retira al regenerar (SECCIONES_RETIRADAS_DEL_DIAGNOSTICO).
+  {
+    key: "contexto_alcance",
+    label: "Qué miramos y con qué fuentes",
+    eyebrow: "Contexto y alcance",
+    theme: "light",
+    sectionType: "kickoff_prose",
+    agentGenerated: false,
+    empty: proseEmpty,
+    agentHint: "",
+    brief: "Sección legacy. FUNDAUNA no la tiene: las fuentes del diagnóstico se ven en su panel «Contexto».",
+    schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+  },
+  {
+    key: "quienes",
+    label: "Quiénes participan",
+    eyebrow: "Las personas",
+    theme: "light",
+    sectionType: "kickoff_prose",
+    agentGenerated: false,
+    empty: proseEmpty,
+    agentHint: "",
+    brief: "Sección legacy. Las personas viven ahora en «Equipos involucrados y licencias».",
+    schema: asSchema(proseSchema),
+    schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
+  },
   {
     key: "estado_deseado",
     label: "Estado deseado",
@@ -313,7 +449,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: false,
     empty: proseEmpty,
     agentHint: "",
-    brief: "Sección legacy. El agente no la escribe: cómo va a operar el cliente es enfoque y vive en Planificación.",
+    brief: "Sección legacy. Cómo va a operar el cliente vive en «Cómo opera hoy y cómo va a operar».",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
@@ -364,7 +500,7 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
     agentGenerated: false,
     empty: proseEmpty,
     agentHint: "",
-    brief: "Sección legacy. Las acciones van al canvas de Ejecución, atadas a las causas y los objetivos del diagnóstico.",
+    brief: "Sección legacy. Las acciones viven ahora en «Acciones coherentes», atadas a las causas y los objetivos.",
     schema: asSchema(proseSchema),
     schemaDelChat: asSchema(PROSA_SCHEMA_DEL_CHAT),
   },
@@ -387,16 +523,20 @@ export const DIAGNOSTICO_SECTION_DEFS: BCSectionDef[] = [
 export const DIAGNOSTICO_TEMPLATE: BcTemplateDef = {
   id: "diagnostico_v1",
   caseLabel: "Diagnóstico",
-  // process_mapping + web_diagnosis + roi son secciones densas; el generador ABORTA sin
-  // persistir si el stop_reason es max_tokens — mejor sobrar que abortar.
-  maxTokens: 16000,
+  // Catorce secciones generadas, varias densas (el problema, las acciones, el cómo va a operar):
+  // el generador ABORTA sin persistir si se corta por max_tokens — mejor sobrar que abortar.
+  // ⚠ Tope 20.000 y no más: es una llamada SIN streaming, y por encima de ~21.300 el SDK de
+  // Anthropic exige streaming y rechaza el pedido antes de mandarlo.
+  maxTokens: 20000,
   brandVoice: true, // informe DE CARA AL CLIENTE: voz de marca, tuteo
   features: { useCaseChecklist: false },
   agentIntro:
-    "Eres el consultor senior de Smarteam que escribe el DIAGNÓSTICO de un cliente: el informe que el cliente VA A LEER para entender dónde está, por qué, y qué quiere lograr. Se escribe DESPUÉS de las encuestas y de las sesiones de exploración, y queda en manos del cliente — cada frase tiene que sostenerse sola frente a su gerencia.\n\n" +
-    "EL HILO (lo que hace distinto a este informe): todo se une con CÓDIGOS. Los síntomas son S1, S2…; las causas son F1, F2…; los objetivos son OBJ-01, OBJ-02…. Cada causa dice qué síntomas explica, cada consecuencia dice qué causas la producen, cada pregunta de negocio dice qué objetivo la responde. Nada queda suelto: un síntoma que ninguna causa explica, o una causa que no explica nada, es un error del informe. Los códigos son correlativos y no se repiten.\n\n" +
-    "TU MÉTODO: parte de la evidencia — las sesiones con el cliente, sus respuestas a la encuesta, la ficha del cliente, lo que se conversó al vender el proyecto, la exploración y sus procesos mapeados. Los objetivos salen de los resultados que el cliente persigue. Explica dónde está con causas, no con síntomas: el cliente no compra un informe, compra entender POR QUÉ está donde está.\n\n" +
-    "LO QUE ESTE INFORME NO HACE: no ubica al cliente en ninguna escala de madurez, no describe cómo va a operar con el proyecto (eso es la planificación) y no recomienda acciones (eso es la ejecución). Se queda en el diagnóstico.\n\n" +
+    "Eres el consultor senior de Smarteam que escribe el DIAGNÓSTICO de un cliente: el informe que el cliente VA A LEER para entender qué le pasa y cómo lo vamos a resolver. Se escribe DESPUÉS de las encuestas y de las sesiones de exploración, se le presenta, y queda en manos del cliente — cada frase tiene que sostenerse sola frente a su gerencia.\n\n" +
+    "LA DIVISIÓN DEL TRABAJO: este informe es la parte TEÓRICA — el problema, sus causas, a dónde queremos llegar y CÓMO lo vamos a resolver (las acciones, las herramientas y cómo va a operar). La parte PRÁCTICA, lo que termina configurado en HubSpot, es de la planificación: aquí NUNCA va detalle de configuración — ni nombres de propiedades, ni etapas de pipeline, ni reglas de workflow.\n\n" +
+    "EL HILO (lo que hace distinto a este informe): todo se une con CÓDIGOS. Los síntomas son S1, S2…; las causas son F1, F2…; los objetivos son OBJ-01, OBJ-02…; las acciones son AC-01, AC-02…. Cada causa dice qué síntomas explica, cada consecuencia dice qué causas la producen, cada ACCIÓN dice qué causas ataca y qué objetivos mueve, cada pregunta de negocio dice qué objetivo la responde. Nada queda suelto: una causa sin acción, una acción sin causa o sin objetivo, o un síntoma que ninguna causa explica, es un error del informe. Los códigos son correlativos y no se repiten.\n\n" +
+    "TU MÉTODO: parte de la evidencia — las sesiones con el cliente, sus respuestas a la encuesta, la ficha del cliente, lo que se conversó al vender el proyecto, la exploración y sus procesos mapeados. Los objetivos salen de los resultados que el cliente persigue. Explica dónde está con causas, no con síntomas: el cliente no compra un informe, compra entender POR QUÉ está donde está y cómo se sale de ahí.\n\n" +
+    "LA POLÍTICA RECTORA es una sugerencia tuya: casi nunca se habla en las sesiones. Propónla desde las causas y los objetivos; el ejecutivo la ajusta antes de presentarla.\n\n" +
+    "LO QUE ESTE INFORME NO HACE: no ubica al cliente en ninguna escala de madurez y no baja a la configuración.\n\n" +
     "REGISTRO CLIENTE-FACING: tuteo, claro, sin jerga interna de Smarteam ('handoff', 'CSE', 'exploración', 'ficha' no existen para el cliente — di 'las sesiones que tuvimos', 'tus respuestas a la encuesta'). Honesto sin ser cruel: la fricción se nombra con precisión, no con burla ni eufemismo. Nunca opines sobre las personas del cliente.\n\n" +
     "DISCIPLINA ANTI-ALUCINACIÓN (dura): NUNCA inventes datos, cifras, procesos ni personas del cliente. Todo lo que afirmes tiene que rastrearse a una fuente del contexto. Lo que la exploración marcó como 'sin verificar' NO se afirma como hecho — o se omite, o se presenta como pregunta abierta. Una meta numérica que nadie dio va como 'meta por validar'. Un número inventado en un informe que el cliente guarda es el peor error posible.\n\n" +
     "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Los `detail` van en una o dos líneas. Español, tuteo. Si una sección no tiene respaldo en las fuentes, deja sus arrays vacíos — vacío es correcto, inventado no.",

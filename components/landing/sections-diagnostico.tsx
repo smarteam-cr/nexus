@@ -10,20 +10,30 @@
  * esos OBJ. Nada queda suelto, y el CSE le puede decir al chat «cambia la F3».
  *
  * Ningún renderer del motor tenía esa forma: `pain` son tarjetas sueltas y `tabla` no sabe de
- * códigos. Por eso tres secciones propias:
+ * códigos. Por eso secciones propias:
  *   · `diagnostico_objetivos` — OBJ cuantitativos y cualitativos, cada uno con cómo se mide.
- *   · `diagnostico_problema`  — síntomas → causas → consecuencias, en tres columnas, con los
- *                               códigos que las unen. (El diagrama de líneas del original NO se
- *                               copió: en pantalla se ve bien y en el PDF no se lee.)
- *   · `diagnostico_preguntas` — las preguntas de negocio que hoy no se pueden responder, cada una
+ *   · `diagnostico_problema`  — síntomas → causas → consecuencias negativas → consecuencias
+ *                               positivas (las acciones y cómo generan dinero, leídas de la tabla de
+ *                               Acciones por `ctx.diagnostico`), con los códigos que las unen. (El
+ *                               diagrama de líneas del original NO se copió: en pantalla se ve bien
+ *                               y en el PDF no se lee.)
+ *   · `diagnostico_preguntas` — las preguntas de negocio que se van a poder responder, cada una
  *                               atada a su OBJ.
+ *   · `diagnostico_politica`  — la política rectora: la prosa de siempre, más el aviso INTERNO
+ *                               «Sugerencia por revisar» mientras el ejecutivo no la revisa.
+ *   · `diagnostico_equipos`   — equipos involucrados y licencias (tabla de FUNDAUNA).
+ *   · `diagnostico_alcance`   — el alcance acordado, por hub, con sus acciones.
+ * (Las acciones y las herramientas reusan los renderers de sections-ejecucion.tsx.)
  *
  * Los códigos son TEXTO («F1», «S1, S3»): así los edita una persona, los escribe el chat y
  * sobreviven a `coerceToSchema`, que aplana las hojas a string.
  */
 import type { FC } from "react";
-import type { SectionProps } from "./types";
+import type { CtxDelDiagnostico, HeroData, SectionProps } from "./types";
+import { HeroSection } from "./sections";
 import { Editable, RemoveBtn, AddBtn, replaceAt, removeAt, appendItem } from "./inline";
+import { KickoffProseSection } from "@/components/canvas/kickoff-sections/KickoffSections";
+import { SUGERENCIA_POR_REVISAR } from "./configs/diagnostico.defs";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────────────────────
 
@@ -32,8 +42,13 @@ export interface ObjetivoDiagnostico {
   /** "cuantitativo" | "cualitativo" (texto; cualquier otra cosa cae en cuantitativo). */
   tipo: string;
   titulo: string;
-  /** Cómo se mide y la meta: «Línea base tras el go-live; meta por validar». */
+  /** Cómo se mide: «Tasa de conversión por proyecto y modalidad». */
   medida: string;
+  /**
+   * Solo cuantitativos (2026-10-02): el resultado medible del HANDOFF al que apunta («R1»). La línea
+   * base, la meta y el plazo se muestran desde ahí (`ctx.diagnostico.resultados`), no se copian.
+   */
+  resultado?: string;
 }
 export interface ObjetivosDiagnosticoData {
   intro?: string;
@@ -73,6 +88,43 @@ export interface PreguntaDiagnostico {
 export interface PreguntasDiagnosticoData {
   intro?: string;
   preguntas: PreguntaDiagnostico[];
+}
+
+export interface EquipoDiagnostico {
+  equipo: string;
+  personas: string;
+  rol: string;
+  /** El asiento o la licencia; «Por validar» si nadie lo dijo. */
+  licencia: string;
+}
+export interface EquiposDiagnosticoData {
+  intro?: string;
+  equipos: EquipoDiagnostico[];
+}
+
+export interface ItemDeAlcance {
+  texto: string;
+  /** Las acciones que lo cubren: «AC-01, AC-03». */
+  acciones: string;
+}
+export interface AlcanceDiagnosticoData {
+  intro?: string;
+  grupos: Array<{ titulo: string; items: ItemDeAlcance[] }>;
+  /** Lo que quedó fuera: la siguiente conversación. */
+  fuera: ItemDeAlcance[];
+}
+
+/** La política rectora: prosa + la marca de revisión (FUERA del esquema del agente). */
+export interface PoliticaDiagnosticoData {
+  intro?: string;
+  items?: Array<{ title: string; detail: string }>;
+  /**
+   * Cuándo la revisó el ejecutivo (ISO). Ausente = sigue siendo la sugerencia de la IA. Va en el
+   * PRIMER nivel y fuera del esquema: `preserveNonSchemaKeys` la acarrea, y el agente no la puede
+   * escribir. Con ella puesta, regenerar no pisa la política (diagnostico-generate.ts).
+   */
+  revisadaAt?: string;
+  [k: string]: unknown;
 }
 
 // ── Piezas ───────────────────────────────────────────────────────────────────────────────────
@@ -121,9 +173,54 @@ function siguiente(prefijo: string, usados: string[], ancho = 1): string {
 
 const esCualitativo = (tipo: string) => /cuali/i.test(tipo ?? "");
 
-export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoData>> = ({ data, editable, onChange }) => {
+const SIN_DATO = /^\s*$|^(⚠️?\s*)?por (validar|definir|confirmar)\.?$/i;
+
+type ResultadoDelCtx = NonNullable<CtxDelDiagnostico["resultados"]>[number];
+
+/**
+ * La línea base, la meta y el plazo de un objetivo cuantitativo, leídos del resultado medible del
+ * HANDOFF al que apunta (se capturan una sola vez). Sin línea base: «Por validar», como pidió Elías.
+ * En edición se completan acá mismo y se guardan en el handoff (`onEditarResultado`).
+ */
+function DatosDelResultado({
+  r,
+  editable,
+  onEditar,
+}: {
+  r: ResultadoDelCtx | undefined;
+  editable?: boolean;
+  onEditar?: (id: string, campo: "lineaBase" | "meta" | "plazo", valor: string) => void;
+}) {
+  const lineaBase = r?.lineaBase ?? "";
+  const porValidar = SIN_DATO.test(lineaBase);
+  const puedeEditar = !!(editable && r && onEditar);
+  const campo = (rotulo: string, k: "lineaBase" | "meta" | "plazo", valor: string) => {
+    const vacio = SIN_DATO.test(valor);
+    if (!puedeEditar && vacio) return k === "plazo" ? null : <span>{rotulo}: por validar</span>;
+    return (
+      <span>
+        {rotulo}:{" "}
+        <Editable as="span" editable={puedeEditar} value={vacio ? "" : valor} placeholder="por validar"
+          onCommit={(v) => r && onEditar?.(r.id, k, v)} />
+      </span>
+    );
+  };
+  return (
+    <div className="stl-obj-datos">
+      {porValidar && <span className="stl-obj-por-validar">Por validar</span>}
+      {campo("Línea base", "lineaBase", lineaBase)}
+      {campo("Meta", "meta", r?.meta ?? "")}
+      {campo("Plazo", "plazo", r?.plazo ?? "")}
+      {editable && r && <span className="stl-obj-fuente">Del handoff ({r.id})</span>}
+    </div>
+  );
+}
+
+export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoData>> = ({ data, ctx, editable, onChange }) => {
   const objetivos = arr(data.objetivos);
   const set = (next: Partial<ObjetivosDiagnosticoData>) => onChange?.({ ...data, ...next });
+  const resultados = new Map((ctx?.diagnostico?.resultados ?? []).map((r) => [r.id.toUpperCase(), r]));
+  const onEditar = ctx?.diagnostico?.onEditarResultado;
   const grupos: Array<{ titulo: string; cuali: boolean }> = [
     { titulo: "Objetivos cuantitativos", cuali: false },
     { titulo: "Objetivos cualitativos", cuali: true },
@@ -148,8 +245,13 @@ export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoDa
                       onCommit={(v) => set({ objetivos: replaceAt(objetivos, i, { ...o, id: v }) })} />
                     <Editable as="h3" className="stl-card-title" editable={editable} value={o.titulo} placeholder="Qué se quiere lograr…"
                       onCommit={(v) => set({ objetivos: replaceAt(objetivos, i, { ...o, titulo: v }) })} />
-                    <Editable as="p" className="stl-card-detail stl-obj-medida" editable={editable} value={o.medida} placeholder="Cómo se mide y cuál es la meta…"
+                    <Editable as="p" className="stl-card-detail stl-obj-medida" editable={editable} value={o.medida} placeholder={g.cuali ? "Cómo se va a notar…" : "Cómo se mide…"}
                       onCommit={(v) => set({ objetivos: replaceAt(objetivos, i, { ...o, medida: v }) })} />
+                    {/* La línea base, la meta y el plazo de un cuantitativo vienen del handoff. Sin
+                        canal (otro documento que reuse el renderer) no se pinta nada. */}
+                    {!g.cuali && ctx?.diagnostico && (
+                      <DatosDelResultado r={resultados.get((o.resultado ?? "").trim().toUpperCase())} editable={editable} onEditar={onEditar} />
+                    )}
                   </div>
                 ))}
               </div>
@@ -178,18 +280,22 @@ export const ObjetivosDiagnosticoSection: FC<SectionProps<ObjetivosDiagnosticoDa
 
 // ── Síntomas → causas → consecuencias ────────────────────────────────────────────────────────
 
-export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData>> = ({ data, editable, onChange }) => {
+export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData>> = ({ data, ctx, editable, onChange }) => {
   const sintomas = arr(data.sintomas);
   const causas = arr(data.causas);
   const consecuencias = arr(data.consecuencias);
   const set = (next: Partial<ProblemaDiagnosticoData>) => onChange?.({ ...data, ...next });
+  /* La cuarta columna de FUNDAUNA sale de la tabla de Acciones del MISMO documento: se lee, no se
+     escribe acá. Sin el canal (otro documento que reuse este renderer), la columna no existe. */
+  const acciones = (ctx?.diagnostico?.acciones ?? []).filter((a) => a.accion || a.id);
+  const conPositivas = !!ctx?.diagnostico && (acciones.length > 0 || !!editable);
 
   return (
     <>
       <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca el problema (opcional)…" />
-      <div className="stl-hilo">
+      <div className={conPositivas ? "stl-hilo stl-hilo-4" : "stl-hilo"}>
         <div className="stl-hilo-col stl-hilo-sintomas">
-          <h3 className="stl-hilo-titulo">Síntomas <span>lo que se ve hoy</span></h3>
+          <h3 className="stl-hilo-titulo">Síntomas actuales <span>lo que se ve hoy</span></h3>
           {sintomas.map((s, i) => (
             <div key={i} className="stl-item stl-hilo-card">
               {editable && <RemoveBtn onClick={() => set({ sintomas: removeAt(sintomas, i) })} />}
@@ -225,7 +331,7 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
         </div>
 
         <div className="stl-hilo-col stl-hilo-consecuencias">
-          <h3 className="stl-hilo-titulo">Qué te cuesta <span>cómo se pierde dinero</span></h3>
+          <h3 className="stl-hilo-titulo">Consecuencias negativas <span>¿cómo me hace perder dinero?</span></h3>
           {consecuencias.map((k, i) => (
             <div key={i} className="stl-item stl-hilo-card">
               {editable && <RemoveBtn onClick={() => set({ consecuencias: removeAt(consecuencias, i) })} />}
@@ -241,12 +347,35 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
             <AddBtn label="Agregar consecuencia" onClick={() => set({ consecuencias: appendItem(consecuencias, { titulo: "", detalle: "", por: "" }) })} />
           )}
         </div>
+
+        {conPositivas && (
+          <div className="stl-hilo-col stl-hilo-positivas">
+            <h3 className="stl-hilo-titulo">Consecuencias positivas <span>acciones coherentes y cómo generan dinero</span></h3>
+            {acciones.map((a, i) => (
+              <div key={i} className="stl-hilo-card">
+                {a.id && <span className="stl-codigo">{a.id}</span>}
+                <h4 className="stl-hilo-card-titulo">{a.accion}</h4>
+                {a.detalle && <p className="stl-hilo-card-detalle">{a.detalle}</p>}
+                {a.ataca && (
+                  <p className="stl-refs">
+                    <span>Ataca</span> {a.ataca}
+                  </p>
+                )}
+              </div>
+            ))}
+            {editable && (
+              <p className="stl-hilo-nota">
+                {acciones.length ? "Se editan en «Acciones coherentes»." : "Se llena sola con la tabla de «Acciones coherentes»."}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
 };
 
-// ── Preguntas que hoy no se pueden responder ─────────────────────────────────────────────────
+// ── Preguntas que se van a poder responder ───────────────────────────────────────────────────
 
 export const PreguntasDiagnosticoSection: FC<SectionProps<PreguntasDiagnosticoData>> = ({ data, editable, onChange }) => {
   const preguntas = arr(data.preguntas);
@@ -286,6 +415,176 @@ export const PreguntasDiagnosticoSection: FC<SectionProps<PreguntasDiagnosticoDa
         </table>
       </div>
       {editable && <AddBtn label="Agregar pregunta" onClick={() => set({ preguntas: appendItem(preguntas, { pregunta: "", objetivos: "" }) })} />}
+    </>
+  );
+};
+
+// ── Portada (con la línea del documento) ─────────────────────────────────────────────────────
+
+/**
+ * La portada de siempre (la del Business Case) más la línea de FUNDAUNA: «Cliente · Fecha · Versión ·
+ * Estado». La línea la arma Nexus desde el estado del documento (`ctx.diagnostico.lineaDelDocumento`);
+ * sin canal, la portada queda como siempre.
+ */
+export const DiagnosticoHeroSection: FC<SectionProps<HeroData>> = (props) => {
+  const linea = props.ctx?.diagnostico?.lineaDelDocumento;
+  return (
+    <>
+      <HeroSection {...props} />
+      {linea && <p className="stl-doc-meta">{linea}</p>}
+    </>
+  );
+};
+
+// ── Política rectora (con su marca de revisión) ──────────────────────────────────────────────
+
+function fechaCorta(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleDateString("es-CR", { day: "numeric", month: "long", timeZone: "America/Costa_Rica" });
+}
+
+/**
+ * La política rectora es una SUGERENCIA de la IA hasta que el ejecutivo la revisa (2026-10-02): casi
+ * nunca se habla en las sesiones. El aviso es INTERNO: solo existe en edición, así que no llega ni al
+ * modo lectura ni al PDF. Sin revisar, el diagnóstico no se presenta.
+ */
+export const PoliticaDiagnosticoSection: FC<SectionProps<PoliticaDiagnosticoData>> = (props) => {
+  const { data, editable, onChange } = props;
+  const revisada = typeof data?.revisadaAt === "string" && data.revisadaAt !== "";
+  const tieneContenido = !!(data?.intro || (Array.isArray(data?.items) && data.items.length));
+  return (
+    <>
+      {editable && tieneContenido && (
+        <div className={revisada ? "stl-sugerencia stl-sugerencia-ok" : "stl-sugerencia"} role="note">
+          <span>
+            {revisada
+              ? `Revisada${fechaCorta(data.revisadaAt!) ? ` el ${fechaCorta(data.revisadaAt!)}` : ""}. Regenerar el diagnóstico ya no la cambia.`
+              : `${SUGERENCIA_POR_REVISAR}: la propuso la IA porque casi nunca se habla en las sesiones. Ajústala y márcala como revisada antes de presentar.`}
+          </span>
+          <button
+            type="button"
+            onClick={() => onChange?.({ ...data, revisadaAt: revisada ? "" : new Date().toISOString() })}
+          >
+            {revisada ? "Volver a sugerencia" : "Marcar como revisada"}
+          </button>
+        </div>
+      )}
+      {/* La prosa de siempre: el mismo renderer que el resto de las secciones de texto. */}
+      <KickoffProseSection {...(props as unknown as Parameters<typeof KickoffProseSection>[0])} />
+    </>
+  );
+};
+
+// ── Equipos involucrados y licencias ─────────────────────────────────────────────────────────
+
+const POR_VALIDAR = /por validar/i;
+
+export const EquiposDiagnosticoSection: FC<SectionProps<EquiposDiagnosticoData>> = ({ data, editable, onChange }) => {
+  const filas = arr(data.equipos);
+  const set = (next: Partial<EquiposDiagnosticoData>) => onChange?.({ ...data, ...next });
+  if (!editable && !filas.length) return null;
+  const celda = (i: number, campo: keyof EquipoDiagnostico, placeholder: string, className?: string) => (
+    <Editable as="span" className={className} editable={editable} value={filas[i][campo] ?? ""} placeholder={placeholder}
+      onCommit={(v) => set({ equipos: replaceAt(filas, i, { ...filas[i], [campo]: v }) })} />
+  );
+  return (
+    <>
+      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca los equipos (opcional)…" />
+      <div className="stl-props-scroll">
+        <table className="stl-props stl-equipos">
+          <thead>
+            <tr>
+              <th>Equipo</th>
+              <th>Personas</th>
+              <th>Rol en el proyecto</th>
+              <th>Asiento o licencia</th>
+              {editable && <th className="stl-props-actions" aria-label="Acciones" />}
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((f, i) => (
+              <tr key={i}>
+                <td>{celda(i, "equipo", "El equipo o el área…", "stl-accion-titulo")}</td>
+                <td>{celda(i, "personas", "Quiénes…")}</td>
+                <td>{celda(i, "rol", "Qué hace en el proyecto…")}</td>
+                <td className={POR_VALIDAR.test(f.licencia ?? "") ? "stl-por-validar" : undefined}>{celda(i, "licencia", "Por validar")}</td>
+                {editable && (
+                  <td className="stl-props-actions">
+                    <RemoveBtn onClick={() => set({ equipos: removeAt(filas, i) })} title="Quitar este equipo" />
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {editable && (
+        <AddBtn label="Agregar equipo" onClick={() => set({ equipos: appendItem(filas, { equipo: "", personas: "", rol: "", licencia: "" }) })} />
+      )}
+    </>
+  );
+};
+
+// ── Alcance acordado ─────────────────────────────────────────────────────────────────────────
+
+function ItemsDeAlcance({
+  items,
+  editable,
+  onChange,
+}: {
+  items: ItemDeAlcance[];
+  editable?: boolean;
+  onChange: (items: ItemDeAlcance[]) => void;
+}) {
+  return (
+    <ul className="stl-alcance-items">
+      {items.map((it, i) => (
+        <li key={i} className="stl-item">
+          {editable && <RemoveBtn onClick={() => onChange(removeAt(items, i))} title="Quitar este ítem" />}
+          <Editable as="span" className="stl-codigo stl-alcance-ac" editable={editable} value={it.acciones ?? ""} placeholder="AC-01"
+            onCommit={(v) => onChange(replaceAt(items, i, { ...it, acciones: v }))} />{" "}
+          <Editable as="span" editable={editable} value={it.texto ?? ""} placeholder="Lo que incluye…"
+            onCommit={(v) => onChange(replaceAt(items, i, { ...it, texto: v }))} />
+        </li>
+      ))}
+      {editable && (
+        <li>
+          <AddBtn label="Agregar ítem" onClick={() => onChange(appendItem(items, { texto: "", acciones: "" }))} />
+        </li>
+      )}
+    </ul>
+  );
+}
+
+export const AlcanceDiagnosticoSection: FC<SectionProps<AlcanceDiagnosticoData>> = ({ data, editable, onChange }) => {
+  const grupos = arr(data.grupos);
+  const fuera = arr(data.fuera);
+  const set = (next: Partial<AlcanceDiagnosticoData>) => onChange?.({ ...data, ...next });
+  if (!editable && !grupos.length && !fuera.length) return null;
+  return (
+    <>
+      <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca el alcance (opcional)…" />
+      {(grupos.length > 0 || editable) && <h3 className="stl-obj-titulo">Incluido</h3>}
+      <div className="stl-grid stl-grid-2 stl-alcance">
+        {grupos.map((g, i) => (
+          <div key={i} className="stl-item stl-card">
+            {editable && <RemoveBtn onClick={() => set({ grupos: removeAt(grupos, i) })} title="Quitar este grupo" />}
+            <Editable as="h3" className="stl-card-title" editable={editable} value={g.titulo ?? ""} placeholder="El hub o el frente…"
+              onCommit={(v) => set({ grupos: replaceAt(grupos, i, { ...g, titulo: v }) })} />
+            <ItemsDeAlcance items={arr(g.items)} editable={editable}
+              onChange={(items) => set({ grupos: replaceAt(grupos, i, { ...g, items }) })} />
+          </div>
+        ))}
+      </div>
+      {editable && <AddBtn label="Agregar grupo" onClick={() => set({ grupos: appendItem(grupos, { titulo: "", items: [] }) })} />}
+      {(fuera.length > 0 || editable) && (
+        <div className="stl-alcance-fuera">
+          <h3 className="stl-obj-titulo">Fuera de este alcance</h3>
+          <ItemsDeAlcance items={fuera} editable={editable} onChange={(items) => set({ fuera: items })} />
+        </div>
+      )}
     </>
   );
 };

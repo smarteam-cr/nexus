@@ -34,6 +34,10 @@ import { applyAssignments, normalizeAssignments, HORARIOS_KEY } from "@/lib/kick
 import { readClientTimeline } from "@/lib/external/timeline-view";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import type { KickoffTimelineData, KickoffProceso } from "@/lib/external/kickoff-view-types";
+import type { CtxDelDiagnostico } from "@/components/landing/types";
+import { resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { estadoDelDocumento } from "@/lib/canvas/estado-del-documento-servidor";
+import { lineaDelDocumento } from "@/lib/canvas/estado-del-documento";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getRole } from "@/lib/roles/queries";
 import { SYSTEM_SUBJECT, esAdminDeRoles } from "@/lib/roles/access";
@@ -89,6 +93,12 @@ export interface PrintDocPayload {
     };
     /** Solo CRONOGRAMA: el ProjectTimeline vivo. Ausente en los demás tipos. */
     cronograma?: { timeline: KickoffTimelineData };
+    /**
+     * Solo DIAGNÓSTICO: lo que no vive en sus CanvasBlock — los resultados medibles del handoff (la
+     * línea base y la meta de sus objetivos cuantitativos). Lo que sale de sus propias secciones (la
+     * cuarta columna del problema) lo arma la vista con `ctxDelDiagnostico`, como el editor.
+     */
+    diagnostico?: Pick<CtxDelDiagnostico, "resultados" | "lineaDelDocumento">;
   };
 }
 
@@ -263,6 +273,25 @@ export async function loadPrintDoc(
 
   const cronograma = esCronograma ? { timeline: await readClientTimeline(docId) } : undefined;
 
+  /* El diagnóstico muestra la línea base y la meta de sus objetivos desde el handoff (se capturan
+     una sola vez). Sin la columna todavía (SQL sin aplicar), el PDF sale igual, «por validar». */
+  const diagnostico =
+    tipo.id === "diagnosis"
+      ? {
+          resultados: (await resultadosDelProyecto(docId).catch(() => null))?.resultados ?? [],
+          // La línea de la portada (Cliente · Fecha · Versión · Estado), la misma que en pantalla.
+          lineaDelDocumento: canvas
+            ? await estadoDelDocumento(canvas.id)
+                .then((e) =>
+                  e
+                    ? lineaDelDocumento({ cliente: e.cliente, fecha: e.fecha ? new Date(e.fecha) : null, version: e.version, estado: e.estado })
+                    : undefined,
+                )
+                .catch(() => undefined)
+            : undefined,
+        }
+      : undefined;
+
   /* Qué canales ctx tienen contenido, POR TIPO. Que se arme por rama no es cosmético: es lo
      que hace estructuralmente imposible que `hiddenKickoffKeys` apague el documento del
      cronograma. Que el CSE haya escondido el cronograma DENTRO del landing del kickoff no
@@ -326,6 +355,7 @@ export async function loadPrintDoc(
       brandLogos: brandLogoMap(logos),
       kickoff,
       cronograma,
+      diagnostico,
     },
   };
 }

@@ -18,15 +18,19 @@ import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-o
    dos literales, el chat podía acordar algo que este editor rechaza al aplicar. */
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { DIAGNOSTICO_DEF_BY_KEY } from "@/components/landing/configs/diagnostico.defs";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ResultadoMedible } from "@/lib/handoff/resultados-medibles";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
-import { buildDiagnosticoConfig, buildDiagnosticoSections } from "./diagnostico-landing-adapter";
+import { buildDiagnosticoConfig, buildDiagnosticoSections, ctxDelDiagnostico } from "./diagnostico-landing-adapter";
 import DocumentAssist from "@/components/ai/DocumentAssist";
 import DocumentoContextSection from "./DocumentoContextSection";
 import { documentoConContexto } from "@/lib/contexto/documento";
-import { revisarHilo } from "@/lib/canvas/revisar-hilo";
+import { revisarHilo, seccionesDelHilo } from "@/lib/canvas/revisar-hilo";
+import EstadoDelDocumento from "./EstadoDelDocumento";
+import { lineaDelDocumento, MENSAJE_APROBADO, revisarParaPresentar, type EstadoVista } from "@/lib/canvas/estado-del-documento";
+import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
 
 const DOC_CONTEXTO = documentoConContexto("diagnosis")!;
 
@@ -59,7 +63,10 @@ export default function DiagnosticoWorkspace({
 
   /* El chat de este documento ejecuta acá: el editor es el único que escribe, con su optimismo y
      su deshacer. Ocultar y crear están cableados en los seis desde el 2026-08-21. */
-  useEjecutarOperacionesDelChat(cs, DIAGNOSTICO_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["diagnosis"]);
+  /* El estado del documento (2026-10-02): aprobado por el cliente = cerrado, también para el chat. */
+  const [estado, setEstado] = useState<EstadoVista | null>(null);
+  const aprobado = estado?.estado === "aprobado";
+  useEjecutarOperacionesDelChat(cs, DIAGNOSTICO_DEF_BY_KEY, CAPACIDADES_POR_PIEZA["diagnosis"], undefined, aprobado ? MENSAJE_APROBADO : null);
 
   // ¿Ya corrió la generación? El seed solo siembra el bloque del `cierre` (curado).
   const hasGeneratedContent = useMemo(
@@ -80,23 +87,93 @@ export default function DiagnosticoWorkspace({
     }));
   }, [cs.sections]);
 
-  const ctx: LandingContext = useMemo(() => ({ clientName: "" }), []);
+  // Aviso propio del workspace (separado de `cs.error`, que es del hook): lo usamos cuando
+  // ni siquiera pudimos llegar a guardar porque la sección no existe, o no se guardó un resultado.
+  const [aviso, setAviso] = useState<string | null>(null);
 
-  /* Los cabos sueltos del hilo (lib/canvas/revisar-hilo.ts): una causa que no explica nada, un código
-     citado que ya no existe. Se AVISAN, no se corrigen solos: decide la persona (o se lo pide al chat). */
-  const cabos = useMemo(() => {
+  /* Los resultados medibles del HANDOFF (2026-10-02): los objetivos cuantitativos muestran su línea
+     base, meta y plazo desde ahí, y completarlos acá los guarda allá — una sola captura. El editor se
+     remonta al terminar de generar, así que se vuelven a leer solos. */
+  const [resultados, setResultados] = useState<ResultadoMedible[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/projects/${projectId}/handoff-resultados`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { resultados?: ResultadoMedible[] } | null) => {
+        if (vivo) setResultados(Array.isArray(j?.resultados) ? j!.resultados : []);
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [projectId]);
+  const editarResultado = useCallback(
+    (id: string, campo: "lineaBase" | "meta" | "plazo", valor: string) => {
+      const antes = resultados;
+      setResultados((rs) => rs.map((r) => (r.id === id ? { ...r, [campo]: valor } : r)));
+      void fetch(`/api/projects/${projectId}/handoff-resultados`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, campo, valor }),
+      })
+        .then(async (r) => {
+          if (r.ok) return;
+          const j = (await r.json().catch(() => null)) as { error?: string } | null;
+          setResultados(antes);
+          setAviso(j?.error ?? "No se pudo guardar ese dato del resultado. Vuelve a intentarlo.");
+        })
+        .catch(() => {
+          setResultados(antes);
+          setAviso("No se pudo guardar ese dato del resultado. Revisa la conexión y vuelve a intentarlo.");
+        });
+    },
+    [projectId, resultados],
+  );
+
+  /* El canal del diagnóstico (ctxDelDiagnostico): la cuarta columna del problema lee la tabla de
+     Acciones del mismo documento, en vivo — editar una acción la cambia en las dos partes. */
+  const ctx: LandingContext = useMemo(
+    () => ({
+      clientName: "",
+      diagnostico: {
+        ...ctxDelDiagnostico(sections),
+        resultados,
+        onEditarResultado: aprobado ? undefined : editarResultado,
+        lineaDelDocumento: estado
+          ? lineaDelDocumento({ cliente: estado.cliente, fecha: estado.fecha ? new Date(estado.fecha) : null, version: estado.version, estado: estado.estado })
+          : undefined,
+      },
+    }),
+    [sections, resultados, editarResultado, estado, aprobado],
+  );
+
+  /* Los cabos sueltos del hilo (lib/canvas/revisar-hilo.ts): una causa sin acción, una acción sin causa
+     o sin objetivo, un código citado que ya no existe. Se AVISAN, no se corrigen solos: decide la
+     persona (o se lo pide al chat). Los que `bloquean` impiden presentar el diagnóstico. */
+  const cabosTodos = useMemo(() => {
     const dataDe = (key: string) => {
       const s = cs.sections.find((x) => x.key === key);
-      const card = s?.blocks.find((b) => b.blockType === "CARD");
+      if (!s || s.hidden) return undefined; // una sección oculta no es parte de lo que se presenta
+      const card = s.blocks.find((b) => b.blockType === "CARD");
       return (card?.data ?? undefined) as Record<string, unknown> | undefined;
     };
-    return revisarHilo({ objetivos: dataDe("objetivos"), problema: dataDe("problema"), preguntas: dataDe("preguntas") });
+    return revisarHilo(seccionesDelHilo(dataDe));
   }, [cs.sections]);
+  const cabos = useMemo(() => cabosTodos.filter((c) => c.bloquea), [cabosTodos]);
+  const avisos = useMemo(() => cabosTodos.filter((c) => !c.bloquea), [cabosTodos]);
   const [verCabos, setVerCabos] = useState(false);
 
-  // Aviso propio del workspace (separado de `cs.error`, que es del hook): lo usamos cuando
-  // ni siquiera pudimos llegar a guardar porque la sección no existe.
-  const [aviso, setAviso] = useState<string | null>(null);
+  /* Lo que hoy impide presentar, en vivo (el servidor lo vuelve a revisar al presentar). */
+  const motivosParaNoPresentar = useMemo(() => {
+    const politica = cs.sections.find((x) => x.key === POLITICA_RECTORA_KEY);
+    const dataPolitica = politica && !politica.hidden ? politica.blocks.find((b) => b.blockType === "CARD")?.data : undefined;
+    return revisarParaPresentar({
+      estado: estado?.estado ?? "borrador",
+      tieneContenido: hasGeneratedContent,
+      cabos: cabosTodos,
+      politica: dataPolitica,
+    }).motivos;
+  }, [cs.sections, cabosTodos, estado?.estado, hasGeneratedContent]);
 
   /**
    * Resuelve una `key` de la plantilla a su fila REAL en la base, MATERIALIZÁNDOLA si el
@@ -172,6 +249,8 @@ export default function DiagnosticoWorkspace({
     {/* El «Contexto del diagnóstico» va FUERA de `.stl`: el documento usa la paleta de marca del
         cliente, y esto es del equipo (tokens del tema). */}
     <DocumentoContextSection projectId={projectId} doc={DOC_CONTEXTO} generado={hasGeneratedContent} />
+    {/* Borrador → presentado → aprobado (2026-10-02). También fuera de `.stl`: es del equipo. */}
+    <EstadoDelDocumento projectId={projectId} canvasId={canvasId} motivosLocales={motivosParaNoPresentar} onEstado={setEstado} />
     <div className="stl">
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>
@@ -197,20 +276,38 @@ export default function DiagnosticoWorkspace({
         </div>
       )}
 
-      {hasGeneratedContent && cabos.length > 0 && (
-        <div style={{ padding: "10px 16px", background: "#FFF7ED", borderBottom: "1px solid #FED7AA", color: "#9A3412", fontSize: 13 }}>
+      {hasGeneratedContent && (cabos.length > 0 || avisos.length > 0) && (
+        <div
+          style={
+            cabos.length
+              ? { padding: "10px 16px", background: "#FFF7ED", borderBottom: "1px solid #FED7AA", color: "#9A3412", fontSize: 13 }
+              : { padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", color: "var(--text-2)", fontSize: 13 }
+          }
+        >
           <button
             type="button"
             onClick={() => setVerCabos((v) => !v)}
             style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", padding: 0, font: "inherit", fontWeight: 600 }}
           >
-            El hilo tiene {cabos.length} {cabos.length === 1 ? "cabo suelto" : "cabos sueltos"} {verCabos ? "▾" : "▸"}
+            {cabos.length
+              ? `El hilo tiene ${cabos.length} ${cabos.length === 1 ? "cabo suelto" : "cabos sueltos"}`
+              : `El hilo está cerrado`}
+            {avisos.length ? ` y ${avisos.length} ${avisos.length === 1 ? "aviso" : "avisos"}` : ""} {verCabos ? "▾" : "▸"}
           </button>
-          <span> — códigos que no se conectan. Puedes corregirlos a mano o pedírselo al 💬 Asistente.</span>
+          <span>
+            {cabos.length
+              ? " — así no se puede presentar. Puedes corregirlo a mano o pedírselo al 💬 Asistente."
+              : " — se puede presentar; los avisos conviene mirarlos."}
+          </span>
           {verCabos && (
             <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
               {cabos.map((c, i) => (
-                <li key={i}>{c.texto}</li>
+                <li key={`c${i}`}>{c.texto}</li>
+              ))}
+              {avisos.map((c, i) => (
+                <li key={`a${i}`} style={{ opacity: 0.8 }}>
+                  Aviso: {c.texto}
+                </li>
               ))}
             </ul>
           )}
@@ -219,7 +316,7 @@ export default function DiagnosticoWorkspace({
 
       {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
           upsertCardData (a diferencia de Regenerar, que reescribe TODO). */}
-      {hasGeneratedContent && (
+      {hasGeneratedContent && !aprobado && (
         <DocumentAssist
           url={`/api/projects/${projectId}/canvas-assist`}
           extraBody={{ canvasId }}
@@ -240,7 +337,7 @@ export default function DiagnosticoWorkspace({
         config={config}
         ctx={ctx}
         sections={sections}
-        mode="edit"
+        mode={aprobado ? "read" : "edit"}
         showBriefs={false}
         onSectionChange={(key, data) => {
           void (async () => {

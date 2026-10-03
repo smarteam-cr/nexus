@@ -27,6 +27,7 @@ import { mergePendingItemsToProject } from "@/lib/canvas/merge-pending-items";
 import { AGENT_GROUP_TO_CANVAS, reconcileKickoffCanvasSections } from "@/lib/canvas/default-canvases";
 import { runDesarrolloGeneration, ensureDesarrolloCanvas } from "@/lib/canvas/desarrollo-generate";
 import { generarResumenDeHandoff } from "@/lib/handoff/resumen";
+import { estructurarResultadosDelHandoff } from "@/lib/handoff/resultados";
 import { proponerFichaDesdeHandoff } from "@/lib/clients/ficha-propuesta";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
@@ -390,8 +391,8 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
   const isExploracionAgent = agent.id === "agent-exploracion-canvas";
 
   // Ídem el agente de Diagnóstico (informe de rendimiento para el cliente): delega en
-  // `runDiagnosticoGeneration` — motor de landings, escala 1-5 desde conocimiento,
-  // procesos serializados. Resuelto por id. El camino legacy de bloques markdown queda
+  // `runDiagnosticoGeneration` — motor de landings con el contrato de FUNDAUNA (sin escala desde el
+  // 2026-09-28), procesos serializados. Resuelto por id. El camino legacy de bloques markdown queda
   // muerto para este agente sin tocar BLOCK_FORMAT_GROUPS (los agentes dormidos del
   // grupo "diagnostico" lo siguen usando).
   const isDiagnosticoAgent = agent.id === "agent-diagnostico-canvas";
@@ -627,7 +628,7 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
 
   // ── Diagnóstico: short-circuit al runner self-contained ───────────────────────
   if (isDiagnosticoAgent && bodyProjectId) {
-    setPhase("Midiendo contra la escala…");
+    setPhase("Escribiendo el diagnóstico…");
     return finishRunnerShortCircuit(
       await runDiagnosticoGeneration({ projectId: bodyProjectId, agentRunId: existingRunId }),
     );
@@ -3176,6 +3177,14 @@ async function persistTimelineFromAgentOutput(
          respaldo, y `generarResumenDeHandoff` no tira nunca: devuelve su estado. */
       void generarResumenDeHandoff(bodyProjectId).then((r) => {
         if (r.status === "error") console.warn(`[analyze] resumen del handoff no escrito: ${r.error}`);
+      });
+
+      /* «Resultados que el cliente necesita alcanzar», como lista medible (R1…: línea base, meta,
+         plazo). Los objetivos cuantitativos del diagnóstico apuntan acá en vez de copiarlos
+         (lib/handoff/resultados-medibles.ts). Lo editado a mano no se pisa. Fire-and-forget, por la
+         misma razón que el resumen: el handoff ya está guardado. */
+      void estructurarResultadosDelHandoff(bodyProjectId, "handoff").then((r) => {
+        if (r.status === "error") console.warn(`[analyze] resultados medibles del handoff no leídos: ${r.error}`);
       });
 
       /* La venta ya dice mucho del cliente (dolor, stakeholders, motivación, resultados): la ficha

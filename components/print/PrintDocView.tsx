@@ -16,7 +16,7 @@
  */
 import { useMemo } from "react";
 import LandingView from "@/components/landing/LandingView";
-import type { LandingConfig } from "@/components/landing/types";
+import type { LandingConfig, LandingContext } from "@/components/landing/types";
 import type { PrintDocPayload, PrintRow } from "@/lib/print/load-doc";
 import { configForCanvas } from "@/components/landing/configs/templates";
 import { landingConfigForRoles } from "@/components/landing/configs/roles";
@@ -32,6 +32,7 @@ import {
 import {
   buildDiagnosticoConfig,
   buildDiagnosticoSections,
+  ctxDelDiagnostico,
 } from "@/components/canvas/diagnostico-landing-adapter";
 import {
   buildPlanificacionConfig,
@@ -50,6 +51,12 @@ interface Adaptador {
   /** `templateId` solo lo usa el caso de negocio, que elige plantilla por DOCUMENTO. */
   config: (orderedKeys: string[], templateId: string | null) => LandingConfig;
   sections: (rows: PrintRow[]) => Array<{ key: string; data: unknown }>;
+  /**
+   * Lo que el documento arma en `ctx` desde SUS PROPIAS secciones — la misma función que usa su
+   * editor, así el PDF no puede divergir de la pantalla. Hoy solo el diagnóstico (la cuarta columna
+   * del problema lee la tabla de acciones).
+   */
+  ctx?: (sections: Array<{ key: string; data: unknown }>, docCtx: PrintDocPayload["ctx"]) => Partial<LandingContext>;
 }
 
 /**
@@ -95,13 +102,21 @@ const ADAPTADOR_CRONOGRAMA: Adaptador = {
   sections: (rows) => rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
 };
 
+/* El diagnóstico arma su canal `ctx.diagnostico` como el editor: la cuarta columna del problema sale
+   de sus propias secciones; la línea base de los objetivos y la línea de la portada, del cargador. */
+const ADAPTADOR_DIAGNOSTICO: Adaptador = {
+  config: buildDiagnosticoConfig,
+  sections: buildDiagnosticoSections,
+  ctx: (sections, docCtx) => ({ diagnostico: { ...ctxDelDiagnostico(sections), ...docCtx.diagnostico } }),
+};
+
 const ADAPTADORES: Record<string, Adaptador> = {
   "business-case": ADAPTADOR_BUSINESS_CASE,
   timeline: ADAPTADOR_CRONOGRAMA,
   role: ADAPTADOR_ROLES,
   kickoff: { config: buildKickoffConfig, sections: buildKickoffSections },
   "tech-requirements": { config: buildDesarrolloConfig, sections: buildDesarrolloSections },
-  diagnosis: { config: buildDiagnosticoConfig, sections: buildDiagnosticoSections },
+  diagnosis: ADAPTADOR_DIAGNOSTICO,
   planning: { config: buildPlanificacionConfig, sections: buildPlanificacionSections },
   implementation: { config: buildImplementacionConfig, sections: buildImplementacionSections },
   exploration: { config: buildExploracionConfig, sections: buildExploracionSections },
@@ -110,8 +125,8 @@ const ADAPTADORES: Record<string, Adaptador> = {
 export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
   const adaptador = ADAPTADORES[doc.docType];
 
-  const { config, sections } = useMemo(() => {
-    if (!adaptador) return { config: null, sections: [] };
+  const { config, sections, ctxPropio } = useMemo(() => {
+    if (!adaptador) return { config: null, sections: [], ctxPropio: {} };
     const built = adaptador.sections(doc.rows);
     return {
       config: adaptador.config(doc.rows.map((r) => r.key), doc.templateId),
@@ -121,8 +136,9 @@ export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
         titleOverride: r.titleOverride,
         eyebrowOverride: r.eyebrowOverride,
       })),
+      ctxPropio: adaptador.ctx?.(built, doc.ctx) ?? {},
     };
-  }, [adaptador, doc.rows, doc.templateId]);
+  }, [adaptador, doc.rows, doc.templateId, doc.ctx]);
 
   if (!config) return null;
 
@@ -149,6 +165,7 @@ export default function PrintDocView({ doc }: { doc: PrintDocPayload }) {
           ? { timeline: doc.ctx.kickoff.timeline, procesos: doc.ctx.kickoff.procesos }
           : undefined,
         cronograma: doc.ctx.cronograma,
+        ...ctxPropio,
       }}
       sections={sections}
       mode="read"

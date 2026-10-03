@@ -23,20 +23,47 @@ import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { fichaParaPrompt, leerFicha } from "@/lib/clients/ficha";
 import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
 import { documentoConContexto } from "@/lib/contexto/documento";
+import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { resultadosDelProyecto } from "@/lib/handoff/resultados";
+import { resultadosParaPrompt } from "@/lib/handoff/resultados-medibles";
 
 function fechaCorta(ms: number): string {
   return new Date(ms).toLocaleDateString("es-CR", { day: "numeric", month: "long", timeZone: "America/Costa_Rica" });
 }
 
+/**
+ * El equipo de Smarteam del proyecto, para la fila «Smarteam» de «Equipos involucrados y licencias»
+ * (2026-10-02). Sale de la sección «El equipo del proyecto» del Kickoff, que CURA el CSE con el
+ * directorio: es la única lista de quién de Smarteam está en el proyecto que alguien ya revisó.
+ * Sin kickoff curado, el agente lo dice («Por validar») en vez de adivinar nombres.
+ */
+async function equipoDeSmarteam(projectId: string): Promise<string[]> {
+  const bloque = await prisma.canvasBlock.findFirst({
+    where: { blockType: "CARD", section: { key: "equipo", canvas: canvasOfNested("kickoff", { projectId }) } },
+    select: { data: true },
+  });
+  const members = (bloque?.data as { members?: Array<{ name?: unknown; role?: unknown }> } | null)?.members;
+  if (!Array.isArray(members)) return [];
+  return members
+    .map((m) => {
+      const nombre = typeof m?.name === "string" ? m.name.trim() : "";
+      const rol = typeof m?.role === "string" ? m.role.trim() : "";
+      return nombre ? (rol ? `${nombre} (${rol})` : nombre) : "";
+    })
+    .filter(Boolean);
+}
+
 /** El cuerpo del mensaje con todas las fuentes (sin la instrucción final, que pone cada llamador). */
 export async function fuentesDelDiagnostico(projectId: string): Promise<string> {
   const doc = documentoConContexto("diagnosis")!;
-  const [handoffCtx, exploracionCtx, timelineCtx, encuestaCtx, material, project] = await Promise.all([
+  const [handoffCtx, exploracionCtx, timelineCtx, encuestaCtx, material, smarteam, resultados, project] = await Promise.all([
     loadHandoffContext(projectId, { onlyConfirmed: false, includeKeys: DIAGNOSTICO_HANDOFF_KEYS }),
     loadCanvasContext(projectId, "exploration", { onlyConfirmed: false }),
     loadTimelineContext(projectId),
     loadCuestionarioContext(projectId).catch(() => ""),
     cargarMaterialDelDocumento(projectId, doc),
+    equipoDeSmarteam(projectId).catch(() => [] as string[]),
+    resultadosDelProyecto(projectId).catch(() => null),
     prisma.project.findUnique({
       where: { id: projectId },
       select: {
@@ -74,11 +101,17 @@ export async function fuentesDelDiagnostico(projectId: string): Promise<string> 
     fichaCtx ? `\n${fichaCtx}` : "",
     "\n=== LO QUE SE CONVERSÓ AL VENDER EL PROYECTO (solo lo apto para el cliente) ===",
     handoffCtx || "(Sin handoff generado.)",
+    resultados?.resultados.length
+      ? `\n=== RESULTADOS MEDIBLES DEL HANDOFF (los objetivos cuantitativos son ESTOS: uno por R, con su código en \`resultado\`; la línea base y la meta las muestra Nexus, no las escribas) ===\n${resultadosParaPrompt(resultados.resultados)}`
+      : "",
     exploracionCtx
       ? `\n=== EXPLORACIÓN (interna — lo confirmado y lo supuesto) ===\nREGLA DURA: lo que esta fuente marque como supuesto o "sin verificar" NUNCA se afirma como hecho en el informe.\n${exploracionCtx}`
       : "",
     procesosCtx ? `\n=== PROCESOS REALES DEL CLIENTE (⚠ = fricción detectada) ===\n${procesosCtx}` : "",
     timelineCtx ? `\n=== EL PROYECTO CONTRATADO (solo para el punto de partida: qué dura y qué entrega) ===\n${timelineCtx}` : "",
+    smarteam.length
+      ? `\n=== EL EQUIPO DE SMARTEAM EN EL PROYECTO (para la fila «Smarteam» de equipos y licencias) ===\n${smarteam.join(", ")}`
+      : "\n=== EL EQUIPO DE SMARTEAM EN EL PROYECTO ===\n(No está cargado: en la fila «Smarteam», `personas` = 'Por validar'. No inventes nombres.)",
   ]
     .filter((x) => x !== "")
     .join("\n");

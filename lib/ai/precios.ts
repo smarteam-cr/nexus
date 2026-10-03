@@ -91,6 +91,16 @@ export const PRECIOS: Record<string, PrecioDeModelo> = {
     verificado: "2026-09-04",
     nota: "tarifa del SDK, no de la consola — verificar en consola",
   },
+  // Opus 5.5 (2026-10-02): lo usa la lectura de los resultados medibles del handoff
+  // (lib/handoff/resultados.ts). Lectura de caché a $0,20 = 0,05 de la entrada, no el 0,1 general.
+  "claude-opus-5-5": {
+    entrada: 4.0,
+    salida: 20.0,
+    factorEscrituraCache: FACTOR_ESCRITURA_CACHE,
+    factorLecturaCache: 0.05,
+    verificado: "2026-10-02",
+    nota: "tarifa de la documentación de Anthropic, no de la consola — verificar en consola",
+  },
 };
 
 /** Alias sin fecha → id con fecha, para que las dos formas de nombrar un modelo cobren igual. */

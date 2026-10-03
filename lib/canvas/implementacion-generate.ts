@@ -27,7 +27,12 @@ import { loadDesarrolloContext } from "@/lib/canvas/desarrollo-context";
 import { loadPortalLifecycleContext } from "@/lib/hubspot/lifecycle-context";
 import { loadKnowledgeByTags } from "@/lib/knowledge/load-by-tags";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
-import { IMPLEMENTACION_TEMPLATE, BREEZE_KNOWLEDGE_TAGS } from "@/components/landing/configs/implementacion.defs";
+import {
+  IMPLEMENTACION_TEMPLATE,
+  BREEZE_KNOWLEDGE_TAGS,
+  SECCIONES_RETIRADAS_DE_EJECUCION,
+} from "@/components/landing/configs/implementacion.defs";
+import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
 import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 
@@ -106,7 +111,7 @@ export async function runImplementacionGeneration(opts: {
       ? `=== SPEC DE BREEZE (qué puede y qué no puede crear) ===\n${breeze.text}`
       : "=== SPEC DE BREEZE: NO HAY DOCUMENTOS PUBLICADOS ===\nGenerá los prompts igual con capacidades CONSERVADORAS (propiedades, listas, workflows básicos, formularios; pipelines/objetos custom/permisos NO) y marcá TODOS con estado \"sin_verificar\".",
     "",
-    "Escribe la guía siguiendo tus instrucciones: PRIMERO las acciones (AC, atadas a las causas F y los objetivos OBJ del diagnóstico) y sus herramientas, después la arquitectura (propiedades, pipelines, marketing), y los prompts derivados de lo decidido arriba — un prompt que construye algo no decidido, sobra.",
+    "Escribe la guía siguiendo tus instrucciones: PRIMERO la arquitectura (propiedades, pipelines, marketing) que construye las acciones (AC) del diagnóstico, y los prompts derivados de lo decidido arriba — un prompt que construye algo no decidido, sobra.",
   ]
     .filter((x) => x !== "")
     .join("\n");
@@ -153,6 +158,12 @@ export async function runImplementacionGeneration(opts: {
       }),
     ]);
     sectionCount++;
+  }
+
+  /* Las acciones y las herramientas volvieron al diagnóstico el 2026-10-02: una guía regenerada ya
+     no las muestra (se OCULTAN, no se borran — lib/canvas/retirar-secciones.ts). */
+  if (sectionCount > 0) {
+    await ocultarSeccionesRetiradas(canvasId, prevSecs.map((s) => s.key), SECCIONES_RETIRADAS_DE_EJECUCION);
   }
   return { canvasId, sectionCount };
 }

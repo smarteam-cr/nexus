@@ -11,6 +11,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
+import ResultadosMediblesDelHandoff from "./ResultadosMediblesDelHandoff";
 import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import { useAgentRun } from "@/hooks/useAgentRun";
 import { pollAgentRun, type PolledRun } from "@/lib/clients/poll-agent-run";
@@ -812,6 +813,9 @@ export default function ProjectHandoffSection({
 
       {generated && showDoc && visible && status.canvasId && (
         <div className="border-t border-line px-4 py-4">
+          {/* Los resultados del cliente como lista medible (2026-10-02): la única captura de su línea
+              base y su meta — los objetivos del diagnóstico los toman de acá. */}
+          <ResultadosMediblesDelHandoff projectId={projectId} canEdit={canEdit} />
           <CanvasLinearView projectId={projectId} canvasId={status.canvasId} canEdit={canEdit} destacarKey={HANDOFF_SECCION_PRINCIPAL} />
         </div>
       )}
