@@ -485,7 +485,8 @@ model Project {
   sessions            SessionProject[]
   participantSnapshot ProjectParticipantSnapshot?
   externalAccess      ProjectExternalAccess?
-  cuestionario        Cuestionario?
+  cuestionarios       Cuestionario[]
+  personasDeCuestionario CuestionarioResponsable[]
   timeline            ProjectTimeline?
   hilosDeChat         HiloDeChat[] // el asistente que conversa, un hilo por documento
   handoff             Handoff?
@@ -5322,13 +5323,25 @@ model EscalaRespuesta {
 // responsable, con su propio enlace. Ver lib/cuestionario/.
 model Cuestionario {
   id           String                    @id @default(cuid())
-  projectId    String                    @unique
+  // Desde el 2026-10-02 hay VARIOS por proyecto: cada uno es de UNA persona y de un tipo.
+  projectId    String
   project      Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  // null = el CSE todavía lo arma; los enlaces no abren nada hasta publicarlo.
+  // "tactico" (métricas y operación, por hubs) | "escala" (ubica al cliente en la escala de rendimiento).
+  tipo         String                    @default("tactico")
+  // La persona del cliente que lo contesta. null = todavía sin asignar (no se le muestra a nadie).
+  personaId    String?
+  persona      CuestionarioResponsable?  @relation("CuestionarioDePersona", fields: [personaId], references: [id], onDelete: SetNull)
+  // Solo tipo "escala": la versión con la que se ARMÓ queda congelada (la escala sigue cambiando),
+  // la edición por industria y el perfil de negocio ({cierre, despues}; null = se pregunta al cliente).
+  escalaVersion String?
+  escalaHuella  String?
+  edicion       String?
+  perfil        Json?
+  // null = el CSE todavía lo arma; el enlace de la persona no lo muestra hasta publicarlo.
   publicadoAt  DateTime?
-  // != null = el CSE lo dio por terminado: los enlaces muestran lo respondido en solo lectura.
+  // != null = el CSE lo dio por terminado: se muestra lo respondido en solo lectura.
   cerradoAt    DateTime?
-  // Prellenado con IA (lo que ya sabemos del handoff y el kickoff). Corre FUERA del request:
+  // Prellenado con IA (lo que ya sabemos). Corre FUERA del request:
   // `prellenandoDesde` > `prellenadoAt` = en curso. El error queda escrito para mostrarlo.
   prellenandoDesde DateTime?
   prellenadoAt     DateTime?
@@ -5337,8 +5350,12 @@ model Cuestionario {
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   pestanas     CuestionarioPestana[]
-  responsables CuestionarioResponsable[]
   cambios      CuestionarioCambio[]
+  // Restos del modelo anterior (una fila de responsable colgaba de un cuestionario). Sin uso.
+  responsablesViejos CuestionarioResponsable[] @relation("ResponsableDeCuestionarioViejo")
+
+  @@index([projectId])
+  @@index([personaId])
 }
 
 model CuestionarioPestana {
@@ -5360,8 +5377,6 @@ model CuestionarioPestana {
   etapas               Json                     @default("[]")
   // Lo que el cliente quiera contar que no entra en ninguna pregunta.
   contextoAdicional    String?                  @db.Text
-  responsableId        String?
-  responsable          CuestionarioResponsable? @relation(fields: [responsableId], references: [id], onDelete: SetNull)
   // != null = el responsable la envió: queda BLOQUEADA hasta que el CSE la reabra.
   enviadaAt            DateTime?
   // Último guardado del cliente (lo compara su borrador local para saber cuál es más nuevo).
@@ -5372,14 +5387,18 @@ model CuestionarioPestana {
   cambios              CuestionarioCambio[]
 
   @@unique([cuestionarioId, key])
-  @@index([responsableId])
 }
 
 // Una persona del cliente con su propio enlace. La URL ES el secreto (como la propuesta).
+// La PERSONA del cliente en un proyecto (2026-10-02). La tabla conserva su nombre viejo para que los
+// tokens ya entregados sigan abriendo: UN enlace por persona, que le muestra todos sus cuestionarios.
 model CuestionarioResponsable {
   id             String                @id @default(cuid())
-  cuestionarioId String
-  cuestionario   Cuestionario          @relation(fields: [cuestionarioId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Del modelo anterior (la persona colgaba de UN cuestionario). Sin uso.
+  cuestionarioId String?
+  cuestionarioViejo Cuestionario?      @relation("ResponsableDeCuestionarioViejo", fields: [cuestionarioId], references: [id], onDelete: SetNull)
   nombre         String
   cargo          String?
   email          String?
@@ -5388,10 +5407,11 @@ model CuestionarioResponsable {
   ultimoUsoAt    DateTime?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
-  pestanas       CuestionarioPestana[]
+  cuestionarios  Cuestionario[]        @relation("CuestionarioDePersona")
   cambios        CuestionarioCambio[]
 
   @@index([cuestionarioId])
+  @@index([projectId])
 }
 
 // El registro: envíos, cambios que pide el cliente después de enviar y reaperturas del CSE.

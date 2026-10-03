@@ -12,6 +12,7 @@ import {
   type Respuesta,
   type Respuestas,
   type TipoPestana,
+  OPCION_NO_SE,
 } from "./tipos";
 
 export interface Avance {
@@ -27,8 +28,10 @@ export function avanceDePestana(p: {
   respuestas: Respuestas;
   etapas: Etapa[];
 }): Avance {
-  let total = p.preguntas.length;
-  let contestadas = p.preguntas.filter((q) => estaContestada(p.respuestas[q.id])).length;
+  // Las opcionales («cuéntanos un ejemplo») no cuentan: dejarlas en blanco no es estar pendiente.
+  const cuentan = p.preguntas.filter((q) => !q.opcional);
+  let total = cuentan.length;
+  let contestadas = cuentan.filter((q) => estaContestada(p.respuestas[q.id])).length;
   if (p.tipo === "etapas") {
     for (const e of p.etapas) {
       total += PREGUNTAS_DE_ETAPA.length;
@@ -103,7 +106,15 @@ export function fundirGuardado(
   ahora: string,
 ): { respuestas: Respuestas; etapas: Etapa[] } {
   const ids = new Set(previo.preguntas.map((q) => q.id));
-  const respuestas = fundirMapa(previo.respuestas, entrante.respuestas, ids, ahora);
+  // De opción múltiple: solo vale el id de una de SUS opciones (o «No sé»). Otra cosa no se guarda.
+  const entrantes: Respuestas = { ...entrante.respuestas };
+  for (const q of previo.preguntas) {
+    const r = entrantes[q.id];
+    if (q.opciones && r && r.valor && r.valor !== OPCION_NO_SE && !q.opciones.some((o) => o.id === r.valor)) {
+      delete entrantes[q.id];
+    }
+  }
+  const respuestas = fundirMapa(previo.respuestas, entrantes, ids, ahora);
   if (previo.tipo !== "etapas") return { respuestas, etapas: previo.etapas };
 
   // Las etapas son del cliente: las agrega, las nombra, las ordena y las quita. Se respeta su

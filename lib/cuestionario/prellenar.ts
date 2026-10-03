@@ -72,18 +72,25 @@ interface PreguntaAbierta {
   pestanaTitulo: string;
 }
 
-export async function prellenarCuestionario(projectId: string): Promise<{ prellenadas: number }> {
+/**
+ * Prellena UN cuestionario (el de una persona): cada persona confirma lo suyo en su copia.
+ * Las preguntas de opción múltiple (escala) no pasan por acá: se prellenan desde el diagnóstico
+ * preliminar, sin IA (lib/cuestionario/escala.ts).
+ */
+export async function prellenarCuestionario(cuestionarioId: string): Promise<{ prellenadas: number }> {
   const c = await prisma.cuestionario.findUnique({
-    where: { projectId },
+    where: { id: cuestionarioId },
     include: { pestanas: { orderBy: { orden: "asc" } } },
   });
-  if (!c) throw new Error("El proyecto no tiene cuestionario");
+  if (!c) throw new Error("Ese cuestionario ya no existe");
+  const projectId = c.projectId;
 
   const abiertas: PreguntaAbierta[] = [];
   for (const p of c.pestanas) {
     if (p.enviadaAt) continue;
     const respuestas = leerRespuestas(p.respuestas);
     for (const q of leerPreguntas(p.preguntas)) {
+      if (q.opciones) continue;
       if (!estaContestada(respuestas[q.id])) abiertas.push({ pestanaId: p.id, id: q.id, texto: q.texto, pestanaTitulo: p.titulo });
     }
   }
@@ -164,8 +171,8 @@ export async function prellenarCuestionario(projectId: string): Promise<{ prelle
  * Arranca el prellenado sin esperar. Devuelve false si ya hay uno en curso (y no venció).
  * El resultado queda en la fila: la pantalla lo lee por el GET.
  */
-export async function arrancarPrellenado(projectId: string): Promise<boolean> {
-  const c = await prisma.cuestionario.findUnique({ where: { projectId } });
+export async function arrancarPrellenado(cuestionarioId: string): Promise<boolean> {
+  const c = await prisma.cuestionario.findUnique({ where: { id: cuestionarioId } });
   if (!c) return false;
   const enCurso =
     c.prellenandoDesde &&
@@ -178,7 +185,7 @@ export async function arrancarPrellenado(projectId: string): Promise<boolean> {
     data: { prellenandoDesde: new Date(), prellenadoError: null },
   });
 
-  void prellenarCuestionario(projectId)
+  void prellenarCuestionario(c.id)
     .then(() => prisma.cuestionario.update({ where: { id: c.id }, data: { prellenadoAt: new Date() } }))
     .catch(async (e) => {
       console.error("[cuestionario] prellenado falló:", e instanceof Error ? e.message : e);

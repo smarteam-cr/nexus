@@ -22,7 +22,7 @@ import { describe, expect, it } from "vitest";
 
 const RAIZ = process.cwd();
 
-type Destino = "ventas" | "propuesta-al-cliente" | "handoff-interno" | "disparo";
+type Destino = "ventas" | "propuesta-al-cliente" | "handoff-interno" | "disparo" | "cuestionario-al-cliente";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/(shell)/sales/exploraciones/page.tsx": { destino: "ventas", motivo: "La lista de exploraciones." },
@@ -43,6 +43,10 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/clients/[id]/analyze/route.ts": { destino: "handoff-interno", motivo: "El bloque de la exploración en el handoff de Customer Success." },
   "app/api/projects/[projectId]/exploracion-de-venta/route.ts": { destino: "handoff-interno", motivo: "La cuarta columna del contexto del handoff." },
   "lib/sessions/post-process.ts": { destino: "disparo", motivo: "Lanza la lectura automática de una reunión; no lee contenido." },
+  "lib/cuestionario/escala.ts": {
+    destino: "cuestionario-al-cliente",
+    motivo: "El cuestionario de escala llega con el nivel ya ubicado marcado, para que la persona lo confirme. Solo niveles.",
+  },
 };
 
 /** Lo que cada destino puede importar de lib/exploraciones (además de tipos). */
@@ -54,6 +58,10 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
   "handoff-interno": {
     permitidas: /exploracionParaElHandoff|exploracionDelProyecto|exploracionParaLaPropuesta/,
     prohibidas: /\.exploracionDeVenta\b/,
+  },
+  "cuestionario-al-cliente": {
+    permitidas: /\bubicacionPreviaDelProyecto\b/,
+    prohibidas: /exploracionParaLaPropuesta|bloqueParaElHandoff|exploracionParaElHandoff|internoParaElCse|leerContenido|leerExploracion\b|\.exploracionDeVenta\b|\.estado\b/,
   },
   disparo: {
     permitidas: /leerReunionNueva/,

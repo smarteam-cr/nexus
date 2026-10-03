@@ -10,6 +10,17 @@
 /** Cuándo espera el CSE la respuesta: antes de las sesiones, o conversada en una sesión. */
 export type Momento = "previo" | "sesion";
 
+/**
+ * Una opción de una pregunta de opción múltiple (el cuestionario de escala). `nivel` es la letra de
+ * la escala que significa elegirla: SOLO del lado nuestro — `externo.ts` la quita antes de mandar la
+ * pregunta al cliente, que nunca ve letras, ids ni nombres de nivel.
+ */
+export interface Opcion {
+  id: string;
+  texto: string;
+  nivel?: string;
+}
+
 export interface Pregunta {
   id: string;
   categoria: string;
@@ -17,6 +28,27 @@ export interface Pregunta {
   /** Ejemplo de respuesta esperada: baja la ambigüedad sin escribir la respuesta por el cliente. */
   ejemplo?: string;
   momento: Momento;
+  /** Con opciones = de opción múltiple: la respuesta es el `id` de la opción elegida. */
+  opciones?: Opcion[];
+  /** A qué apunta la pregunta del lado nuestro (en escala: la dimensión). Nunca va al cliente. */
+  ref?: string;
+  /** La pregunta se puede dejar en blanco sin que cuente como pendiente («cuéntanos un ejemplo»). */
+  opcional?: boolean;
+}
+
+/** El id de la opción «No sé»: en la escala cuenta como el nivel más bajo (especificación del cálculo). */
+export const OPCION_NO_SE = "no-se";
+
+/** Los tipos de cuestionario. Sumar uno = una entrada acá y su armador. */
+export type TipoDeCuestionario = "tactico" | "escala";
+
+export const TITULO_DEL_TIPO: Record<TipoDeCuestionario, string> = {
+  tactico: "Cuestionario táctico",
+  escala: "Escala de rendimiento",
+};
+
+export function esTipoDeCuestionario(v: unknown): v is TipoDeCuestionario {
+  return v === "tactico" || v === "escala";
 }
 
 /**
@@ -44,7 +76,8 @@ export interface Etapa {
   respuestas: Respuestas;
 }
 
-export type TipoPestana = "normal" | "etapas";
+/** «escala» = una pestaña por área de la escala, con una pregunta de opción múltiple por dimensión. */
+export type TipoPestana = "normal" | "etapas" | "escala";
 
 /** La pestaña tal como se guarda (sin adjuntos ni responsable, que son filas aparte). */
 export interface PestanaData {
@@ -81,9 +114,34 @@ export function leerPreguntas(raw: unknown): Pregunta[] {
       texto: t,
       ...(texto(p.ejemplo, 2000) ? { ejemplo: texto(p.ejemplo, 2000)! } : {}),
       momento: p.momento === "sesion" ? "sesion" : "previo",
+      ...(leerOpciones(p.opciones) ? { opciones: leerOpciones(p.opciones)! } : {}),
+      ...(texto(p.ref, 80) ? { ref: texto(p.ref, 80)! } : {}),
+      ...(p.opcional === true ? { opcional: true } : {}),
     });
   }
   return out;
+}
+
+function leerOpciones(raw: unknown): Opcion[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: Opcion[] = [];
+  const vistos = new Set<string>();
+  for (const o of raw.slice(0, 12)) {
+    if (!esObjeto(o)) continue;
+    const id = texto(o.id, 40);
+    const t = texto(o.texto, 1000);
+    if (!id || !t || vistos.has(id)) continue;
+    vistos.add(id);
+    out.push({ id, texto: t, ...(texto(o.nivel, 4) ? { nivel: texto(o.nivel, 4)! } : {}) });
+  }
+  return out.length ? out : null;
+}
+
+/** La pregunta como la ve el CLIENTE: sin a qué apunta ni qué nivel significa cada opción. */
+export function preguntaParaElCliente(p: Pregunta): Pregunta {
+  const { ref: _ref, opciones, ...resto } = p;
+  void _ref;
+  return opciones ? { ...resto, opciones: opciones.map(({ id, texto }) => ({ id, texto })) } : resto;
 }
 
 export function leerRespuestas(raw: unknown): Respuestas {

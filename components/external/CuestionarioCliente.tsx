@@ -21,10 +21,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avanceDePestana, porcentaje } from "@/lib/cuestionario/avance";
-import type { CuestionarioDelCliente, PestanaDelCliente } from "@/lib/cuestionario/externo";
+import type { PestanaDelCliente, VistaDelCliente } from "@/lib/cuestionario/externo";
 import { PREGUNTAS_DE_ETAPA } from "@/lib/cuestionario/plantilla";
 import { subirDirecto } from "@/lib/storage/subir-directo";
-import type { Etapa, Pregunta, Respuesta, Respuestas } from "@/lib/cuestionario/tipos";
+import { OPCION_NO_SE, type Etapa, type Pregunta, type Respuesta, type Respuestas } from "@/lib/cuestionario/tipos";
 
 const TINTA = "#0f1b3d";
 const SUAVE = "#6b7a99";
@@ -86,12 +86,18 @@ function idEtapa() {
   return `e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-export default function CuestionarioCliente({ token, inicial }: { token: string; inicial: CuestionarioDelCliente }) {
-  const [pestanas, setPestanas] = useState(inicial.pestanas);
-  const [activa, setActiva] = useState(inicial.pestanas[0]?.key ?? "");
+export default function CuestionarioCliente({ token, inicial }: { token: string; inicial: VistaDelCliente }) {
+  // Desde el 2026-10-02 el enlace es de una PERSONA y trae todos sus cuestionarios (táctico, escala…).
+  // Las secciones se nombran por su id: dos cuestionarios pueden repetir la misma `key`.
+  const todas = inicial.cuestionarios.flatMap((c) => c.pestanas);
+  const [pestanas, setPestanas] = useState(todas);
+  const [cuestionarioActivo, setCuestionarioActivo] = useState(inicial.cuestionarios[0]?.id ?? "");
+  const [activa, setActiva] = useState(todas[0]?.id ?? "");
   const [borradores, setBorradores] = useState<Record<string, Borrador>>(() =>
-    Object.fromEntries(inicial.pestanas.map((p) => [p.key, borradorDe(p)])),
+    Object.fromEntries(todas.map((p) => [p.id, borradorDe(p)])),
   );
+  const cerradoDe = (pestanaId: string) =>
+    inicial.cuestionarios.find((c) => c.pestanas.some((p) => p.id === pestanaId))?.cerrado ?? false;
   const [estado, setEstado] = useState<Record<string, EstadoGuardado>>({});
   const [guardadoAt, setGuardadoAt] = useState<Record<string, string>>({});
   const temporizadores = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -113,7 +119,7 @@ export default function CuestionarioCliente({ token, inicial }: { token: string;
           body: JSON.stringify({
             token,
             accion: "guardar",
-            key,
+            pestana: key,
             guardado: { respuestas: b.respuestas, etapas: b.etapas, contextoAdicional: b.contextoAdicional },
           }),
         });
@@ -144,11 +150,13 @@ export default function CuestionarioCliente({ token, inicial }: { token: string;
   // Al abrir: si este navegador tiene un borrador que no llegó a Nexus y es más nuevo, gana él.
   useEffect(() => {
     const recuperados: Record<string, Borrador> = {};
-    for (const p of inicial.pestanas) {
-      if (p.enviadaAt || inicial.cerrado) continue;
-      const local = leerLocal(token, p.key);
-      const servidor = p.clienteActualizadoAt ?? new Date(0).toISOString();
-      if (local?.pendiente && local.editadoAt > servidor) recuperados[p.key] = local;
+    for (const c of inicial.cuestionarios) {
+      for (const p of c.pestanas) {
+        if (p.enviadaAt || c.cerrado) continue;
+        const local = leerLocal(token, p.id);
+        const servidor = p.clienteActualizadoAt ?? new Date(0).toISOString();
+        if (local?.pendiente && local.editadoAt > servidor) recuperados[p.id] = local;
+      }
     }
     if (Object.keys(recuperados).length) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación de localStorage (no existe en SSR)
@@ -194,8 +202,11 @@ export default function CuestionarioCliente({ token, inicial }: { token: string;
     [token, sincronizar],
   );
 
-  const pestana = pestanas.find((p) => p.key === activa) ?? pestanas[0];
-  const nombre = inicial.responsable.nombre.split(" ")[0];
+  const delActivo = new Set(inicial.cuestionarios.find((c) => c.id === cuestionarioActivo)?.pestanas.map((p) => p.id) ?? []);
+  const visibles = pestanas.filter((p) => delActivo.has(p.id));
+  const pestana = visibles.find((p) => p.id === activa) ?? visibles[0] ?? pestanas[0];
+  const cerrado = pestana ? cerradoDe(pestana.id) : false;
+  const nombre = inicial.persona.nombre.split(" ")[0];
 
   if (pestanas.length === 0) {
     return (
@@ -210,26 +221,59 @@ export default function CuestionarioCliente({ token, inicial }: { token: string;
     <Contenedor>
       <header style={{ marginBottom: 24 }}>
         <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: ACENTO, margin: 0 }}>
-          Cuestionario previo
+          {inicial.cuestionarios.length > 1 ? "Cuestionarios previos" : inicial.cuestionarios[0]?.titulo ?? "Cuestionario previo"}
         </p>
         <h1 style={{ fontSize: 28, fontWeight: 700, color: TINTA, margin: "6px 0 8px" }}>Hola, {nombre}</h1>
         <p style={{ color: SUAVE, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
-          {inicial.cerrado
+          {cerrado
             ? "Este cuestionario ya se cerró. Aquí puedes revisar lo que respondiste. ¡Gracias por tu ayuda!"
             : "Queremos entender cómo trabaja tu equipo antes de las sesiones, para aprovecharlas al máximo. Lo que escribas se guarda solo: puedes cerrar la página y seguir cuando quieras. Cuando termines una sección, envíala."}
         </p>
       </header>
 
-      {pestanas.length > 1 && (
-        <nav style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-          {pestanas.map((p) => {
-            const b = borradores[p.key];
-            const a = avanceDePestana({ tipo: p.tipo, preguntas: p.preguntas, respuestas: b.respuestas, etapas: b.etapas });
-            const sel = p.key === pestana.key;
+      {inicial.cuestionarios.length > 1 && (
+        <nav aria-label="Tus cuestionarios" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+          {inicial.cuestionarios.map((c) => {
+            const sel = c.id === cuestionarioActivo;
+            const enviadas = c.pestanas.filter((p) => pestanas.find((x) => x.id === p.id)?.enviadaAt).length;
             return (
               <button
-                key={p.key}
-                onClick={() => setActiva(p.key)}
+                key={c.id}
+                onClick={() => {
+                  setCuestionarioActivo(c.id);
+                  setActiva(c.pestanas[0]?.id ?? "");
+                }}
+                style={{
+                  borderRadius: 12,
+                  padding: "10px 16px",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  border: `2px solid ${sel ? ACENTO : BORDE}`,
+                  background: "#fff",
+                  color: TINTA,
+                }}
+              >
+                {c.titulo}
+                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, color: SUAVE }}>
+                  {enviadas === c.pestanas.length && c.pestanas.length > 0 ? "✓ Enviado" : `${enviadas} de ${c.pestanas.length} enviadas`}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
+
+      {visibles.length > 1 && (
+        <nav style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+          {visibles.map((p) => {
+            const b = borradores[p.id];
+            const a = avanceDePestana({ tipo: p.tipo, preguntas: p.preguntas, respuestas: b.respuestas, etapas: b.etapas });
+            const sel = p.id === pestana.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setActiva(p.id)}
                 style={{
                   borderRadius: 999,
                   padding: "8px 14px",
@@ -252,17 +296,17 @@ export default function CuestionarioCliente({ token, inicial }: { token: string;
       )}
 
       <Pestana
-        key={pestana.key}
+        key={pestana.id}
         token={token}
         p={pestana}
-        b={borradores[pestana.key]}
-        soloLectura={!!pestana.enviadaAt || inicial.cerrado}
-        cerrado={inicial.cerrado}
-        estado={estado[pestana.key] ?? "listo"}
-        guardadoAt={guardadoAt[pestana.key] ?? pestana.clienteActualizadoAt}
-        onCambio={(f) => cambiar(pestana.key, f)}
-        onSincronizar={() => sincronizar(pestana.key)}
-        onActualizar={(np) => setPestanas((prev) => prev.map((x) => (x.key === np.key ? np : x)))}
+        b={borradores[pestana.id]}
+        soloLectura={!!pestana.enviadaAt || cerrado}
+        cerrado={cerrado}
+        estado={estado[pestana.id] ?? "listo"}
+        guardadoAt={guardadoAt[pestana.id] ?? pestana.clienteActualizadoAt}
+        onCambio={(f) => cambiar(pestana.id, f)}
+        onSincronizar={() => sincronizar(pestana.id)}
+        onActualizar={(np) => setPestanas((prev) => prev.map((x) => (x.id === np.id ? np : x)))}
       />
     </Contenedor>
   );
@@ -355,7 +399,7 @@ function Pestana({
         body: JSON.stringify({
           token,
           accion: "enviar",
-          key: p.key,
+          pestana: p.id,
           guardado: { respuestas: b.respuestas, etapas: b.etapas, contextoAdicional: b.contextoAdicional },
         }),
       });
@@ -394,7 +438,7 @@ function Pestana({
         {p.preguntas.map((q, i) => (
           <PreguntaCliente
             key={q.id}
-            numero={i + 1}
+            numero={p.preguntas.slice(0, i + 1).filter((x) => !x.opcional).length}
             q={q}
             r={b.respuestas[q.id]}
             soloLectura={soloLectura}
@@ -519,6 +563,83 @@ function PreguntaCliente({
   onCambio: (r: Partial<Respuesta>) => void;
 }) {
   const prellenada = r?.origen === "prellenado" && !!r.valor.trim();
+  if (q.opcional) {
+    // La pregunta opcional va pegada a la anterior, sin número: es un «si quieres, cuéntanos más».
+    return (
+      <li style={{ margin: "-10px 0 0", padding: "0 18px 4px" }}>
+        <label style={{ display: "block", fontSize: 13, color: SUAVE, margin: "0 0 6px" }}>{q.texto}</label>
+        {soloLectura ? (
+          <p style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 14 }}>{r?.valor?.trim() || <span style={{ color: SUAVE }}>—</span>}</p>
+        ) : (
+          <textarea
+            style={{ ...cajaTexto, fontSize: 14 }}
+            rows={2}
+            value={r?.valor ?? ""}
+            onChange={(e) => onCambio({ valor: e.target.value, confirmada: false })}
+          />
+        )}
+      </li>
+    );
+  }
+  if (q.opciones) {
+    return (
+      <li style={{ border: `1px solid ${BORDE}`, borderRadius: 16, padding: 18, background: "#fff" }}>
+        {q.categoria && (
+          <div style={{ fontSize: 12, fontWeight: 600, color: SUAVE, textTransform: "uppercase", letterSpacing: 0.4 }}>
+            {q.categoria}
+          </div>
+        )}
+        <div role="radiogroup" aria-label={q.texto}>
+          <p style={{ fontSize: 16, fontWeight: 600, margin: "4px 0 10px" }}>
+            {numero}. {q.texto}
+          </p>
+          {prellenada && !soloLectura && (
+            <div style={{ background: "#f3f7ff", border: "1px solid #d4e2fb", borderRadius: 12, padding: "10px 12px", marginBottom: 10, fontSize: 14 }}>
+              <strong>Esto es lo que entendimos.</strong> {r!.confirmada ? "Lo confirmaste. ✓" : "¿Es así? Si no, elige otra opción."}
+              {!r!.confirmada && (
+                <button style={{ ...boton(), marginLeft: 8, padding: "3px 10px", fontSize: 13 }} onClick={() => onCambio({ confirmada: true })}>
+                  Sí, es así
+                </button>
+              )}
+            </div>
+          )}
+          <div style={{ display: "grid", gap: 8 }}>
+            {[...q.opciones, { id: OPCION_NO_SE, texto: "No lo sé" }].map((o) => {
+              const sel = r?.valor === o.id;
+              return (
+                <label
+                  key={o.id}
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "flex-start",
+                    border: `1.5px solid ${sel ? ROYAL : BORDE}`,
+                    background: sel ? "#eef4ff" : "#fff",
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    fontSize: 14,
+                    lineHeight: 1.45,
+                    cursor: soloLectura ? "default" : "pointer",
+                    opacity: soloLectura && !sel ? 0.55 : 1,
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name={q.id}
+                    checked={sel}
+                    disabled={soloLectura}
+                    onChange={() => onCambio({ valor: o.id, confirmada: false })}
+                    style={{ marginTop: 3 }}
+                  />
+                  <span style={{ fontStyle: o.id === OPCION_NO_SE ? "italic" : undefined }}>{o.texto}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      </li>
+    );
+  }
   return (
     <li style={{ border: `1px solid ${BORDE}`, borderRadius: 16, padding: 18, background: "#fff" }}>
       {q.categoria && (
@@ -766,7 +887,7 @@ function Adjuntos({
       const r = await subirDirecto<{ adjunto: PestanaDelCliente["adjuntos"][number] }>({
         ruta: "/api/external/cuestionario/adjunto",
         archivo,
-        extra: { token, key: p.key, descripcion },
+        extra: { token, pestana: p.id, descripcion },
       });
       if (!r.ok) {
         setError(r.error);
@@ -910,7 +1031,7 @@ function PedirCambio({
             const res = await fetch("/api/external/cuestionario", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token, accion: "pedir_cambio", key: p.key, mensaje: texto }),
+              body: JSON.stringify({ token, accion: "pedir_cambio", pestana: p.id, mensaje: texto }),
             });
             const data = await res.json().catch(() => null);
             if (!res.ok || !data?.ok) {

@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Solicitud inválida" }, { status: 400 });
   }
   const token = typeof body?.token === "string" ? body.token : "";
+  // La sección se nombra por su id (dos cuestionarios de la misma persona pueden repetir `key`).
+  const { pestana: seccion } = body;
   // Primero la forma: un token inventado no llega ni a ocupar un lugar en el tope de escrituras.
   if (!TOKEN_RE.test(token)) {
     return NextResponse.json({ ok: false, error: "Este enlace ya no está disponible." }, { status: 404 });
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.accion === "pedir_cambio") {
-    const r = await pedirCambio(token, body.key, body.mensaje);
+    const r = await pedirCambio(token, seccion, body.mensaje);
     return NextResponse.json(r, { status: r.ok ? 200 : r.status });
   }
 
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   const r =
     body.accion === "enviar"
-      ? await enviarPestana(token, body.key, guardado)
-      : await guardarPestana(token, body.key, guardado);
+      ? await enviarPestana(token, seccion, guardado)
+      : await guardarPestana(token, seccion, guardado);
   return NextResponse.json(r, { status: r.ok ? 200 : r.status });
 }

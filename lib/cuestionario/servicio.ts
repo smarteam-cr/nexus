@@ -1,7 +1,13 @@
 import "server-only";
 
 /**
- * lib/cuestionario/servicio.ts — el cuestionario previo del lado del CSE.
+ * lib/cuestionario/servicio.ts — los cuestionarios del proyecto, del lado del CSE.
+ *
+ * ── DESDE EL 2026-10-02: POR PERSONA Y POR TIPO ──────────────────────────────
+ * Un proyecto tiene VARIAS personas del cliente (cada una con UN enlace) y VARIOS cuestionarios;
+ * cada cuestionario es de UNA persona y de un tipo («tactico» o «escala»). Lo que contesta una
+ * persona es solo suyo: lo prellenado lo confirma cada una en su copia, y del lado nuestro se
+ * compara (lib/cuestionario/comparar.ts).
  *
  * Toda escritura interna pasa por acá (la ruta /api/projects/[projectId]/cuestionario solo
  * autentica y despacha). Las del cliente viven en `externo.ts`, con su propia puerta.
@@ -16,6 +22,8 @@ import { pestanasDePlantilla, pestanasParaTags } from "./plantilla";
 // Solo la constante: el módulo del prellenado importa el SDK y esto lo lee cada GET.
 import { PRELLENADO_VENCE_MS } from "./prellenado-estado";
 import {
+  TITULO_DEL_TIPO,
+  esTipoDeCuestionario,
   estaContestada,
   leerEtapas,
   leerPreguntas,
@@ -23,6 +31,7 @@ import {
   type Etapa,
   type Pregunta,
   type Respuestas,
+  type TipoDeCuestionario,
   type TipoPestana,
 } from "./tipos";
 
@@ -47,14 +56,13 @@ export interface PestanaVista {
   respuestas: Respuestas;
   etapas: Etapa[];
   contextoAdicional: string | null;
-  responsableId: string | null;
   enviadaAt: string | null;
   clienteActualizadoAt: string | null;
   avance: Avance;
   adjuntos: AdjuntoVista[];
 }
 
-export interface ResponsableVista {
+export interface PersonaVista {
   id: string;
   nombre: string;
   cargo: string | null;
@@ -69,22 +77,31 @@ export interface CambioVista {
   tipo: "ENVIO" | "SOLICITUD" | "REAPERTURA";
   mensaje: string | null;
   pestanaTitulo: string | null;
-  responsable: string | null;
+  persona: string | null;
   autorEmail: string | null;
   createdAt: string;
 }
 
 export interface CuestionarioVista {
   id: string;
+  tipo: TipoDeCuestionario;
+  titulo: string;
+  personaId: string | null;
   publicadoAt: string | null;
   cerradoAt: string | null;
+  /** Solo «escala»: la versión con que se armó (congelada) y si el perfil ya está. */
+  escala: { version: string | null; edicion: string | null; perfil: unknown } | null;
   /** El prellenado con IA: si está corriendo, cuándo terminó el último y si falló. */
   prellenado: { enCurso: boolean; at: string | null; error: string | null };
   pestanas: PestanaVista[];
-  responsables: ResponsableVista[];
   cambios: CambioVista[];
-  /** Pestañas de la plantilla que este cuestionario no tiene (para sumarlas con un clic). */
+  /** Pestañas de la plantilla que este cuestionario no tiene (solo táctico). */
   disponibles: Array<{ key: string; titulo: string }>;
+}
+
+export interface CuestionariosDelProyecto {
+  personas: PersonaVista[];
+  cuestionarios: CuestionarioVista[];
 }
 
 export class ErrorDeCuestionario extends Error {
@@ -108,7 +125,6 @@ const INCLUDE = {
       },
     },
   },
-  responsables: { orderBy: { createdAt: "asc" } },
   cambios: {
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -118,47 +134,77 @@ const INCLUDE = {
 
 type CuestionarioCompleto = Prisma.CuestionarioGetPayload<{ include: typeof INCLUDE }>;
 
+function vistaDePestana(p: CuestionarioCompleto["pestanas"][number]): PestanaVista {
+  const tipo: TipoPestana = p.tipo === "etapas" ? "etapas" : p.tipo === "escala" ? "escala" : "normal";
+  const preguntas = leerPreguntas(p.preguntas);
+  const respuestas = leerRespuestas(p.respuestas);
+  const etapas = leerEtapas(p.etapas);
+  return {
+    id: p.id,
+    key: p.key,
+    titulo: p.titulo,
+    descripcion: p.descripcion,
+    tipo,
+    preguntas,
+    respuestas,
+    etapas,
+    contextoAdicional: p.contextoAdicional,
+    enviadaAt: iso(p.enviadaAt),
+    clienteActualizadoAt: iso(p.clienteActualizadoAt),
+    avance: avanceDePestana({ tipo, preguntas, respuestas, etapas }),
+    adjuntos: p.adjuntos.map((a) => ({
+      id: a.id,
+      titulo: a.title,
+      descripcion: a.descripcion,
+      fileName: a.fileName,
+      fileSize: a.fileSize,
+      createdAt: a.createdAt.toISOString(),
+    })),
+  };
+}
+
 function aVista(c: CuestionarioCompleto): CuestionarioVista {
   const keys = new Set(c.pestanas.map((p) => p.key));
+  const tipo: TipoDeCuestionario = esTipoDeCuestionario(c.tipo) ? c.tipo : "tactico";
   const enCurso =
     !!c.prellenandoDesde &&
     (!c.prellenadoAt || c.prellenandoDesde > c.prellenadoAt) &&
     Date.now() - c.prellenandoDesde.getTime() < PRELLENADO_VENCE_MS;
   return {
     id: c.id,
+    tipo,
+    titulo: TITULO_DEL_TIPO[tipo],
+    personaId: c.personaId,
     publicadoAt: iso(c.publicadoAt),
     cerradoAt: iso(c.cerradoAt),
+    escala: tipo === "escala" ? { version: c.escalaVersion, edicion: c.edicion, perfil: c.perfil ?? null } : null,
     prellenado: { enCurso, at: iso(c.prellenadoAt), error: enCurso ? null : c.prellenadoError },
-    pestanas: c.pestanas.map((p) => {
-      const tipo: TipoPestana = p.tipo === "etapas" ? "etapas" : "normal";
-      const preguntas = leerPreguntas(p.preguntas);
-      const respuestas = leerRespuestas(p.respuestas);
-      const etapas = leerEtapas(p.etapas);
-      return {
-        id: p.id,
-        key: p.key,
-        titulo: p.titulo,
-        descripcion: p.descripcion,
-        tipo,
-        preguntas,
-        respuestas,
-        etapas,
-        contextoAdicional: p.contextoAdicional,
-        responsableId: p.responsableId,
-        enviadaAt: iso(p.enviadaAt),
-        clienteActualizadoAt: iso(p.clienteActualizadoAt),
-        avance: avanceDePestana({ tipo, preguntas, respuestas, etapas }),
-        adjuntos: p.adjuntos.map((a) => ({
-          id: a.id,
-          titulo: a.title,
-          descripcion: a.descripcion,
-          fileName: a.fileName,
-          fileSize: a.fileSize,
-          createdAt: a.createdAt.toISOString(),
-        })),
-      };
-    }),
-    responsables: c.responsables.map((r) => ({
+    pestanas: c.pestanas.map(vistaDePestana),
+    cambios: c.cambios.map((x) => ({
+      id: x.id,
+      tipo: (x.tipo === "SOLICITUD" || x.tipo === "REAPERTURA" ? x.tipo : "ENVIO") as CambioVista["tipo"],
+      mensaje: x.mensaje,
+      pestanaTitulo: x.enPestana?.titulo ?? null,
+      persona: x.responsable?.nombre ?? null,
+      autorEmail: x.autorEmail,
+      createdAt: x.createdAt.toISOString(),
+    })),
+    disponibles:
+      tipo === "tactico"
+        ? pestanasDePlantilla()
+            .filter((p) => !keys.has(p.key))
+            .map((p) => ({ key: p.key, titulo: p.titulo }))
+        : [],
+  };
+}
+
+export async function obtenerCuestionarios(projectId: string): Promise<CuestionariosDelProyecto> {
+  const [personas, cuestionarios] = await Promise.all([
+    prisma.cuestionarioResponsable.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } }),
+    prisma.cuestionario.findMany({ where: { projectId }, include: INCLUDE, orderBy: { createdAt: "asc" } }),
+  ]);
+  return {
+    personas: personas.map((r) => ({
       id: r.id,
       nombre: r.nombre,
       cargo: r.cargo,
@@ -167,66 +213,57 @@ function aVista(c: CuestionarioCompleto): CuestionarioVista {
       revocado: r.revokedAt != null,
       ultimoUsoAt: iso(r.ultimoUsoAt),
     })),
-    cambios: c.cambios.map((x) => ({
-      id: x.id,
-      tipo: (x.tipo === "SOLICITUD" || x.tipo === "REAPERTURA" ? x.tipo : "ENVIO") as CambioVista["tipo"],
-      mensaje: x.mensaje,
-      pestanaTitulo: x.enPestana?.titulo ?? null,
-      responsable: x.responsable?.nombre ?? null,
-      autorEmail: x.autorEmail,
-      createdAt: x.createdAt.toISOString(),
-    })),
-    disponibles: pestanasDePlantilla()
-      .filter((p) => !keys.has(p.key))
-      .map((p) => ({ key: p.key, titulo: p.titulo })),
+    cuestionarios: cuestionarios.map(aVista),
   };
 }
 
-export async function obtenerCuestionario(projectId: string): Promise<CuestionarioVista | null> {
-  const c = await prisma.cuestionario.findUnique({ where: { projectId }, include: INCLUDE });
-  return c ? aVista(c) : null;
-}
-
-async function exigir(projectId: string): Promise<CuestionarioCompleto> {
-  const c = await prisma.cuestionario.findUnique({ where: { projectId }, include: INCLUDE });
-  if (!c) throw new ErrorDeCuestionario("Este proyecto todavía no tiene cuestionario.", 404);
+async function exigir(projectId: string, cuestionarioId: string): Promise<CuestionarioCompleto> {
+  const c = await prisma.cuestionario.findFirst({ where: { id: cuestionarioId, projectId }, include: INCLUDE });
+  if (!c) throw new ErrorDeCuestionario("Ese cuestionario no es de este proyecto.", 404);
   return c;
 }
 
-/**
- * Arma el cuestionario desde la plantilla, con las pestañas que corresponden a los hubs del
- * proyecto. Idempotente: si ya existe, lo devuelve tal cual (nunca pisa lo que el CSE editó).
- */
-export async function generarCuestionario(projectId: string, creadoPor: string | null): Promise<CuestionarioVista> {
-  const existente = await obtenerCuestionario(projectId);
-  if (existente) return existente;
+async function exigirPersona(projectId: string, personaId: string, activa = true) {
+  const r = await prisma.cuestionarioResponsable.findFirst({ where: { id: personaId, projectId } });
+  if (!r) throw new ErrorDeCuestionario("Esa persona no es de este proyecto.", 404);
+  if (activa && r.revokedAt) throw new ErrorDeCuestionario("Esa persona ya no tiene un enlace activo.", 409);
+  return r;
+}
 
+/**
+ * Crea un cuestionario TÁCTICO para una persona, con las pestañas de los hubs del proyecto.
+ * El de escala lo arma `lib/cuestionario/escala.ts` (lee la escala vigente).
+ * Una persona tiene a lo sumo UNO de cada tipo: si ya lo tiene, se devuelve ese.
+ */
+export async function crearTactico(projectId: string, personaId: string | null, creadoPor: string | null): Promise<string> {
+  if (personaId) {
+    await exigirPersona(projectId, personaId);
+    const ya = await prisma.cuestionario.findFirst({ where: { projectId, personaId, tipo: "tactico" }, select: { id: true } });
+    if (ya) return ya.id;
+  }
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { tags: true } });
   if (!project) throw new ErrorDeCuestionario("Proyecto no existe", 404);
   const pestanas = pestanasParaTags(sanitizeTags(project.tags));
-
-  try {
-    await prisma.cuestionario.create({
-      data: {
-        projectId,
-        createdById: creadoPor,
-        pestanas: {
-          create: pestanas.map((p, i) => ({
-            key: p.key,
-            titulo: p.titulo,
-            descripcion: p.descripcion,
-            tipo: p.tipo,
-            orden: i,
-            preguntas: p.preguntas as unknown as Prisma.InputJsonValue,
-          })),
-        },
+  const c = await prisma.cuestionario.create({
+    data: {
+      projectId,
+      tipo: "tactico",
+      personaId,
+      createdById: creadoPor,
+      pestanas: {
+        create: pestanas.map((p, i) => ({
+          key: p.key,
+          titulo: p.titulo,
+          descripcion: p.descripcion,
+          tipo: p.tipo,
+          orden: i,
+          preguntas: p.preguntas as unknown as Prisma.InputJsonValue,
+        })),
       },
-    });
-  } catch (e) {
-    // Doble clic / dos pestañas: el unique de projectId gana y el segundo devuelve el primero.
-    if ((e as { code?: string }).code !== "P2002") throw e;
-  }
-  return (await obtenerCuestionario(projectId))!;
+    },
+    select: { id: true },
+  });
+  return c.id;
 }
 
 function estadoDe(c: CuestionarioCompleto): EstadoDePestana[] {
@@ -250,14 +287,14 @@ function estadoDe(c: CuestionarioCompleto): EstadoDePestana[] {
 }
 
 /**
- * Aplica operaciones de estructura. Todas o ninguna: si una falla, no se escribe nada y el error
- * dice cuál y por qué (lo muestra el editor y, en su tanda, el chat).
+ * Aplica operaciones de estructura a UN cuestionario táctico. Todas o ninguna: si una falla, no se
+ * escribe nada y el error dice cuál y por qué. El de escala no se edita a mano: sale de la escala.
  */
-export async function editarEstructura(
-  projectId: string,
-  ops: OperacionCuestionario[],
-): Promise<CuestionarioVista> {
-  const c = await exigir(projectId);
+export async function editarEstructura(projectId: string, cuestionarioId: string, ops: OperacionCuestionario[]): Promise<void> {
+  const c = await exigir(projectId, cuestionarioId);
+  if (c.tipo === "escala") {
+    throw new ErrorDeCuestionario("El cuestionario de escala sale de la escala: no se edita a mano.", 409);
+  }
   if (c.cerradoAt) throw new ErrorDeCuestionario("El cuestionario está cerrado. Reábrelo para cambiarlo.", 409);
 
   const res = aplicarOperaciones(estadoDe(c), ops);
@@ -284,45 +321,41 @@ export async function editarEstructura(
         : prisma.cuestionarioPestana.create({ data: { ...data, cuestionarioId: c.id, key: p.key } });
     }),
   ]);
-  return (await obtenerCuestionario(projectId))!;
 }
 
 function limpio(v: unknown, max: number): string {
   return typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
-export async function crearResponsable(
+export async function crearPersona(
   projectId: string,
   datos: { nombre?: unknown; cargo?: unknown; email?: unknown },
-): Promise<CuestionarioVista> {
-  const c = await exigir(projectId);
+): Promise<string> {
   const nombre = limpio(datos.nombre, 120);
-  if (!nombre) throw new ErrorDeCuestionario("El responsable necesita un nombre.");
-  if (c.responsables.filter((r) => !r.revokedAt).length >= 25) {
-    throw new ErrorDeCuestionario("Ya hay 25 responsables con enlace activo.");
-  }
-  await prisma.cuestionarioResponsable.create({
+  if (!nombre) throw new ErrorDeCuestionario("La persona necesita un nombre.");
+  const activas = await prisma.cuestionarioResponsable.count({ where: { projectId, revokedAt: null } });
+  if (activas >= 25) throw new ErrorDeCuestionario("Ya hay 25 personas con enlace activo.");
+  const r = await prisma.cuestionarioResponsable.create({
     data: {
-      cuestionarioId: c.id,
+      projectId,
       nombre,
       cargo: limpio(datos.cargo, 120) || null,
       email: limpio(datos.email, 200) || null,
       accessToken: randomBytes(32).toString("hex"),
     },
+    select: { id: true },
   });
-  return (await obtenerCuestionario(projectId))!;
+  return r.id;
 }
 
-export async function editarResponsable(
+export async function editarPersona(
   projectId: string,
-  responsableId: string,
+  personaId: string,
   datos: { nombre?: unknown; cargo?: unknown; email?: unknown },
-): Promise<CuestionarioVista> {
-  const c = await exigir(projectId);
-  const r = c.responsables.find((x) => x.id === responsableId);
-  if (!r) throw new ErrorDeCuestionario("Ese responsable no es de este cuestionario.", 404);
+): Promise<void> {
+  const r = await exigirPersona(projectId, personaId, false);
   const nombre = datos.nombre === undefined ? r.nombre : limpio(datos.nombre, 120);
-  if (!nombre) throw new ErrorDeCuestionario("El responsable necesita un nombre.");
+  if (!nombre) throw new ErrorDeCuestionario("La persona necesita un nombre.");
   await prisma.cuestionarioResponsable.update({
     where: { id: r.id },
     data: {
@@ -331,56 +364,57 @@ export async function editarResponsable(
       ...(datos.email !== undefined ? { email: limpio(datos.email, 200) || null } : {}),
     },
   });
-  return (await obtenerCuestionario(projectId))!;
 }
 
 /**
- * Revocar apaga el enlace para siempre (el token no se reutiliza). Sus pestañas quedan sin
- * responsable pero CONSERVAN lo que contestó: se le asignan a otra persona y sigue donde quedó.
+ * Revocar apaga el enlace para siempre (el token no se reutiliza). Sus cuestionarios CONSERVAN lo que
+ * contestó y siguen siendo suyos: se ven del lado nuestro. Para que otra persona siga, se le asigna.
  */
-export async function revocarResponsable(projectId: string, responsableId: string): Promise<CuestionarioVista> {
-  const c = await exigir(projectId);
-  const r = c.responsables.find((x) => x.id === responsableId);
-  if (!r) throw new ErrorDeCuestionario("Ese responsable no es de este cuestionario.", 404);
-  await prisma.$transaction([
-    prisma.cuestionarioResponsable.update({ where: { id: r.id }, data: { revokedAt: new Date() } }),
-    prisma.cuestionarioPestana.updateMany({ where: { responsableId: r.id }, data: { responsableId: null } }),
-  ]);
-  return (await obtenerCuestionario(projectId))!;
+export async function revocarPersona(projectId: string, personaId: string): Promise<void> {
+  const r = await exigirPersona(projectId, personaId, false);
+  await prisma.cuestionarioResponsable.update({ where: { id: r.id }, data: { revokedAt: new Date() } });
 }
 
-export async function asignarPestana(
-  projectId: string,
-  pestanaId: string,
-  responsableId: string | null,
-): Promise<CuestionarioVista> {
-  const c = await exigir(projectId);
-  const p = c.pestanas.find((x) => x.id === pestanaId);
-  if (!p) throw new ErrorDeCuestionario("Esa pestaña no es de este cuestionario.", 404);
-  if (responsableId) {
-    const r = c.responsables.find((x) => x.id === responsableId);
-    if (!r || r.revokedAt) throw new ErrorDeCuestionario("Ese responsable no tiene un enlace activo.", 404);
+/** Cambia de quién es un cuestionario (o lo deja sin persona). Una persona: uno de cada tipo. */
+export async function asignarPersona(projectId: string, cuestionarioId: string, personaId: string | null): Promise<void> {
+  const c = await exigir(projectId, cuestionarioId);
+  if (personaId) {
+    await exigirPersona(projectId, personaId);
+    const otro = await prisma.cuestionario.findFirst({
+      where: { projectId, personaId, tipo: c.tipo, id: { not: c.id } },
+      select: { id: true },
+    });
+    if (otro) throw new ErrorDeCuestionario(`Esa persona ya tiene un cuestionario ${TITULO_DEL_TIPO[c.tipo as TipoDeCuestionario]?.toLowerCase() ?? ""}.`, 409);
   }
-  await prisma.cuestionarioPestana.update({ where: { id: p.id }, data: { responsableId } });
-  return (await obtenerCuestionario(projectId))!;
+  await prisma.cuestionario.update({ where: { id: c.id }, data: { personaId } });
 }
 
-export async function publicar(projectId: string, publicado: boolean): Promise<CuestionarioVista> {
-  const c = await exigir(projectId);
-  if (publicado && !c.pestanas.some((p) => p.responsableId)) {
-    throw new ErrorDeCuestionario("Elige al menos una pestaña para algún responsable antes de publicarlo.", 409);
+export async function publicar(projectId: string, cuestionarioId: string, publicado: boolean): Promise<void> {
+  const c = await exigir(projectId, cuestionarioId);
+  if (publicado && !c.personaId) {
+    throw new ErrorDeCuestionario("Asígnale una persona antes de publicarlo: el cuestionario se contesta con su enlace.", 409);
+  }
+  if (publicado && c.pestanas.length === 0) {
+    throw new ErrorDeCuestionario("El cuestionario no tiene preguntas.", 409);
   }
   await prisma.cuestionario.update({
     where: { id: c.id },
     data: { publicadoAt: publicado ? (c.publicadoAt ?? new Date()) : null },
   });
-  return (await obtenerCuestionario(projectId))!;
 }
 
-export async function cerrar(projectId: string, cerrado: boolean): Promise<CuestionarioVista> {
-  const c = await exigir(projectId);
+export async function cerrar(projectId: string, cuestionarioId: string, cerrado: boolean): Promise<void> {
+  const c = await exigir(projectId, cuestionarioId);
   await prisma.cuestionario.update({ where: { id: c.id }, data: { cerradoAt: cerrado ? new Date() : null } });
-  return (await obtenerCuestionario(projectId))!;
+}
+
+/** Se borra solo si nadie contestó nada: lo que escribió el cliente no se pierde por un clic. */
+export async function eliminarCuestionario(projectId: string, cuestionarioId: string): Promise<void> {
+  const c = await exigir(projectId, cuestionarioId);
+  if (estadoDe(c).some((p) => p.tieneRespuestas)) {
+    throw new ErrorDeCuestionario("Ese cuestionario ya tiene respuestas: ciérralo en vez de borrarlo.", 409);
+  }
+  await prisma.cuestionario.delete({ where: { id: c.id } });
 }
 
 /** El CSE devuelve una pestaña enviada al cliente para que la corrija. Queda en el registro. */
@@ -389,23 +423,24 @@ export async function reabrirPestana(
   pestanaId: string,
   autorEmail: string | null,
   motivo: unknown,
-): Promise<CuestionarioVista> {
-  const c = await exigir(projectId);
-  const p = c.pestanas.find((x) => x.id === pestanaId);
-  if (!p) throw new ErrorDeCuestionario("Esa pestaña no es de este cuestionario.", 404);
+): Promise<void> {
+  const p = await prisma.cuestionarioPestana.findFirst({
+    where: { id: pestanaId, cuestionario: { projectId } },
+    include: { cuestionario: { select: { id: true, personaId: true } } },
+  });
+  if (!p) throw new ErrorDeCuestionario("Esa pestaña no es de este proyecto.", 404);
   if (!p.enviadaAt) throw new ErrorDeCuestionario("Esa pestaña no está enviada.", 409);
   await prisma.$transaction([
     prisma.cuestionarioPestana.update({ where: { id: p.id }, data: { enviadaAt: null } }),
     prisma.cuestionarioCambio.create({
       data: {
-        cuestionarioId: c.id,
+        cuestionarioId: p.cuestionario.id,
         pestanaId: p.id,
-        responsableId: p.responsableId,
+        responsableId: p.cuestionario.personaId,
         tipo: "REAPERTURA",
         mensaje: limpio(motivo, 2000) || null,
         autorEmail,
       },
     }),
   ]);
-  return (await obtenerCuestionario(projectId))!;
 }

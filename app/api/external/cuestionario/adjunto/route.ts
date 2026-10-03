@@ -7,8 +7,8 @@
  * en los documentos del proyecto y los agentes lo leen con su descripción.
  *
  * DESDE EL 2026-09-28 el archivo va del navegador DIRECTO a Supabase (el nginx del VPS corta en
- * 1 MB): `{ accion: "preparar", token, key, descripcion, nombre, tipo, tamano }` → permiso firmado;
- * `{ accion: "confirmar", token, key, descripcion, path, nombre }` → valida lo real y crea la fila.
+ * 1 MB): `{ accion: "preparar", token, pestana, descripcion, nombre, tipo, tamano }` → permiso firmado;
+ * `{ accion: "confirmar", token, pestana, descripcion, path, nombre }` → valida lo real y crea la fila.
  * Las dos vuelven a resolver el token. Ver lib/storage/subida-directa.ts.
  *
  * Pública: el token viaja en el body y lo resuelve `lib/cuestionario/externo.ts` en cada llamada.
@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Cuéntanos qué es este documento." }, { status: 400 });
   }
 
-  const destino = await destinoDeAdjunto(token, body.key);
+  const { pestana: seccion } = body;
+  const destino = await destinoDeAdjunto(token, seccion);
   if ("error" in destino) return NextResponse.json(destino.error, { status: destino.error.status });
   const carpeta = `${destino.clientId}/${destino.projectId}/cuestionario`;
 
