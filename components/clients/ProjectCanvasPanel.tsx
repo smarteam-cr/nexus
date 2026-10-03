@@ -470,7 +470,9 @@ export default function ProjectCanvasPanel({
                       ? { corto: AVISO_DESACTUALIZADA, largo: AVISO_DESACTUALIZADA_LARGO }
                       : null,
                   accion:
-                    row.agent && row.canvasId ? (
+                    /* Exploración ya no se GENERA (2026-10-02): su informe quedó en solo lectura y la
+                       guía de exploración tiene su propio agente, adentro de la pieza. */
+                    row.agent && row.canvasId && row.slug !== "exploration" ? (
                       <CanvasAgentButton
                         clientId={clientId}
                         projectId={projectId}
@@ -500,7 +502,7 @@ export default function ProjectCanvasPanel({
             />
             {/* CTA por-canvas: ejecuta el agente primario del canvas, anclado junto al
                 nombre (reemplaza el pop-up). Handoff/Cronograma tienen su propio CTA. */}
-            {activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && (
+            {activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && activeSlug !== "exploration" && (
               <CanvasAgentButton
                 clientId={clientId}
                 projectId={projectId}
@@ -698,7 +700,11 @@ export default function ProjectCanvasPanel({
             {/* 4A Cuestionario previo + 4B Informe: la misma fase, dos momentos. */}
             <ExploracionConCuestionario
               projectId={projectId}
-              informe={<ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />}
+              informeAnterior={
+                piezasConContenido.includes("exploration") ? (
+                  <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} soloLectura />
+                ) : null
+              }
             />
           </CanvasBoundary>
         </div>

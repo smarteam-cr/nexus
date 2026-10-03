@@ -104,6 +104,14 @@ const LECTORES: Lector[] = [
     porque: "asistente de edición sobre el kickoff y el requerimiento técnico, los dos externos",
   },
   {
+    archivo: "lib/guia-exploracion/agente.ts",
+    pieza: "exploration",
+    exposicion: "interno",
+    porque:
+      "el agente de la guía de exploración (reemplazó al informe el 2026-10-02): documento interno " +
+      "del CSE, que nunca se publica — igual lleva la allowlist de Exploración por prolijidad",
+  },
+  {
     archivo: "lib/cuestionario/prellenar.ts",
     pieza: null, // el cuestionario previo vive dentro de Exploración, no es una pieza propia
     exposicion: "directo",

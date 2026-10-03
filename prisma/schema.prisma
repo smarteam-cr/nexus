@@ -487,6 +487,7 @@ model Project {
   externalAccess      ProjectExternalAccess?
   cuestionarios       Cuestionario[]
   personasDeCuestionario CuestionarioResponsable[]
+  guiaDeExploracion  GuiaDeExploracion?
   timeline            ProjectTimeline?
   hilosDeChat         HiloDeChat[] // el asistente que conversa, un hilo por documento
   handoff             Handoff?
@@ -5430,4 +5431,23 @@ model CuestionarioCambio {
   createdAt      DateTime                 @default(now())
 
   @@index([cuestionarioId, createdAt])
+}
+
+// La GUÍA DE EXPLORACIÓN del CSE (2026-10-02): reemplaza al informe. Lo confirmado (`contenido`) aparte
+// de lo que propone el agente (`propuesta`), que nunca escribe en lo confirmado. Ver lib/guia-exploracion/.
+model GuiaDeExploracion {
+  id               String    @id @default(cuid())
+  projectId        String    @unique
+  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contenido        Json      @default("{}")
+  propuesta        Json      @default("{}")
+  // Sube con cada cambio de lo CONFIRMADO: dos pestañas abiertas no se pisan (409).
+  version          Int       @default(0)
+  // La corrida del agente (fuera del request): `corriendoDesde` > `corridaTerminoAt` = en curso.
+  corriendoDesde   DateTime?
+  corridaModo      String?
+  corridaTerminoAt DateTime?
+  corridaError     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }

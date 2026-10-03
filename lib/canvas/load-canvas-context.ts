@@ -17,6 +17,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { extractFingerprint } from "@/lib/timeline/particularidad-identity";
 import { canvasOf } from "@/lib/pieces/canvas-query";
+import { textoDeLaGuia } from "@/lib/guia-exploracion/contexto";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
 import { resolverDuenioDelHandoff } from "@/lib/handoff/duenio";
 import { esCerrada } from "@/lib/timeline/particularidad-state";
@@ -369,6 +370,12 @@ export async function loadCanvasContext(
   canvasSlug: string,
   opts: { onlyConfirmed?: boolean; includeKeys?: readonly string[] } = {},
 ): Promise<string> {
+  // Exploración: desde el 2026-10-02 la fuente es la GUÍA DE EXPLORACIÓN (lib/guia-exploracion). El
+  // informe viejo solo se lee si el proyecto todavía no tiene guía con contenido.
+  if (canvasSlug === "exploration") {
+    const guia = await textoDeLaGuia(projectId);
+    if (guia) return guia;
+  }
   const canvas = await prisma.projectCanvas.findFirst({
     where: { projectId, ...canvasOf(canvasSlug) },
     select: { id: true },

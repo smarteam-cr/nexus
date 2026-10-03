@@ -38,9 +38,12 @@ const MAXW = 860;
 export default function ExploracionWorkspace({
   projectId,
   canvasId,
+  soloLectura = false,
 }: {
   projectId: string;
   canvasId: string;
+  /** El informe quedó reemplazado por la guía de exploración (2026-10-02): se muestra sin editar. */
+  soloLectura?: boolean;
 }) {
   // poll:false — igual que Desarrollo: el poll genérico solo refetchea al cambiar la
   // cuenta de bloques DRAFT, y el runner persiste CONFIRMED. Tras generar, el remonte
@@ -126,13 +129,15 @@ export default function ExploracionWorkspace({
           (CANVAS_PRIMARY_AGENT), igual que el del kickoff en el canvas de kickoff. */}
       <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-          Documento interno · no se comparte con el cliente
+          {soloLectura
+            ? "Informe anterior · solo lectura. La exploración ahora se trabaja en la guía."
+            : "Documento interno · no se comparte con el cliente"}
         </span>
       </div>
 
       {/* Estado IDLE (el canvas existe desde que nace el proyecto, así que abrirlo sin
           generar es lo NORMAL — no se asume que hay una corrida en curso). */}
-      {!hasGeneratedContent && (
+      {!hasGeneratedContent && !soloLectura && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", fontSize: 13, color: "var(--text-2)" }}>
           <span>
             Todavía sin generar. Usa <strong>Generar exploración</strong> arriba, junto al nombre
@@ -145,7 +150,7 @@ export default function ExploracionWorkspace({
         config={config}
         ctx={ctx}
         sections={sections}
-        mode="edit"
+        mode={soloLectura ? "read" : "edit"}
         // La paleta entra por PROP, no por el div de afuera: `LandingView` pinta su
         // propio `.stl` y volvía a declararse los tokens de marca encima. El wrapper
         // exterior se queda porque sí tiñe lo que está FUERA del motor (esqueletos y

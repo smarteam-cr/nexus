@@ -856,7 +856,9 @@ describe("las piezas con chat se DERIVAN de las que tienen editor", () => {
        ⛔ POR ESO LAS LISTAS SE SEPARARON. La edición que la pone en rojo: meter `exploration` en
        `DOC` para darle chat. Eso prendería TAMBIÉN el assist sobre ella, y el borrado silencioso
        vuelve por la otra puerta — que es exactamente de donde veníamos. */
-    expect(PIEZAS_CON_CHAT, "Exploración se quedó sin chat otra vez").toContain("exploration");
+    /* 2026-10-02: Exploración SALE del chat (decisión de Elías): el informe quedó en solo lectura y
+       la exploración se trabaja en la guía, que tiene su propio agente. */
+    expect(PIEZAS_CON_CHAT, "el informe de exploración quedó en solo lectura: no conversa").not.toContain("exploration");
     expect(
       Object.keys(DOC),
       "Exploración entró al assist de documentos: su merge borra las marcas «ya la pregunté»",

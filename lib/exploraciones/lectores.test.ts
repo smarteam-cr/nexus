@@ -22,7 +22,7 @@ import { describe, expect, it } from "vitest";
 
 const RAIZ = process.cwd();
 
-type Destino = "ventas" | "propuesta-al-cliente" | "handoff-interno" | "disparo" | "cuestionario-al-cliente";
+type Destino = "ventas" | "propuesta-al-cliente" | "handoff-interno" | "disparo" | "cuestionario-al-cliente" | "guia-interna";
 
 const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/(shell)/sales/exploraciones/page.tsx": { destino: "ventas", motivo: "La lista de exploraciones." },
@@ -43,6 +43,14 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/clients/[id]/analyze/route.ts": { destino: "handoff-interno", motivo: "El bloque de la exploración en el handoff de Customer Success." },
   "app/api/projects/[projectId]/exploracion-de-venta/route.ts": { destino: "handoff-interno", motivo: "La cuarta columna del contexto del handoff." },
   "lib/sessions/post-process.ts": { destino: "disparo", motivo: "Lanza la lectura automática de una reunión; no lee contenido." },
+  "lib/guia-exploracion/servidor.ts": {
+    destino: "guia-interna",
+    motivo: "La guía de exploración del CSE (interna) muestra dónde quedó el cliente en el preliminar. Solo niveles.",
+  },
+  "lib/guia-exploracion/agente.ts": {
+    destino: "guia-interna",
+    motivo: "El agente de la guía lee los niveles del preliminar como punto de partida (interno, nunca al cliente).",
+  },
   "lib/cuestionario/escala.ts": {
     destino: "cuestionario-al-cliente",
     motivo: "El cuestionario de escala llega con el nivel ya ubicado marcado, para que la persona lo confirme. Solo niveles.",
@@ -57,6 +65,10 @@ const PUERTAS: Record<Exclude<Destino, "ventas">, { permitidas: RegExp; prohibid
   },
   "handoff-interno": {
     permitidas: /exploracionParaElHandoff|exploracionDelProyecto|exploracionParaLaPropuesta/,
+    prohibidas: /\.exploracionDeVenta\b/,
+  },
+  "guia-interna": {
+    permitidas: /\bubicacionPreviaDelProyecto\b/,
     prohibidas: /\.exploracionDeVenta\b/,
   },
   "cuestionario-al-cliente": {

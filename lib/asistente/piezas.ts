@@ -52,7 +52,9 @@ export const PIEZA_ROL = "role";
  * y desde hoy se declaran por separado.
  */
 const CONVERSAN_SIN_ASSIST: readonly string[] = [
-  "exploration",
+  /* `exploration` SALIÓ el 2026-10-02 (decisión de Elías): el informe quedó en solo lectura y la
+     exploración se trabaja en la GUÍA (lib/guia-exploracion), que tiene su propio agente. «Luego
+     implementamos una IA para estos canvas nuevos»: cuando llegue, entra por ahí, no por acá. */
   /* La propuesta comercial y los documentos de Roles conversan por las MISMAS operaciones, pero
      no entran a `DOC`: ése indexa por pieza de PROYECTO, y estos dos no cuelgan de un proyecto.
      Sus defs se resuelven por plantilla (`defsForCanvas`) y por tipo de documento

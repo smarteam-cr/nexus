@@ -1,39 +1,41 @@
 "use client";
 
 /**
- * components/cuestionario/ExploracionConCuestionario.tsx — Exploración en sus dos momentos.
+ * components/cuestionario/ExploracionConCuestionario.tsx — la pieza Exploración, en sus vistas.
  *
- * «Cuestionario previo» (4A) es lo que el CSE manda al cierre del kickoff; «Informe de
- * exploración» (4B) es el documento que sale después de las sesiones y que ya lee lo contestado.
- * Van juntos en la misma pieza porque son la misma fase: separarlos en dos piezas del desplegable
- * obligaba a elegir cuál «es» Exploración.
+ * Desde el 2026-10-02 (pedido de Elías):
+ *   · «Cuestionarios»: lo que se manda a cada persona del cliente (táctico, escala).
+ *   · «Guía de exploración»: el lienzo que se usa durante las sesiones. REEMPLAZA al informe.
+ *   · «Informe anterior»: el informe viejo, en solo lectura, solo si el proyecto lo tenía.
  *
  * La vista elegida se recuerda por proyecto en este navegador (conveniencia, no estado).
  */
 import { useEffect, useState, type ReactNode } from "react";
+import GuiaDeExploracion from "@/components/guia-exploracion/GuiaDeExploracion";
 import CuestionarioPanel from "./CuestionarioPanel";
 
-type Vista = "cuestionario" | "informe";
+type Vista = "cuestionario" | "guia" | "informe";
 
 export default function ExploracionConCuestionario({
   projectId,
-  informe,
+  informeAnterior,
 }: {
   projectId: string;
-  informe: ReactNode;
+  /** El informe viejo en solo lectura; null si el proyecto no tenía. */
+  informeAnterior: ReactNode | null;
 }) {
   const clave = `nexus:exploracion-vista:${projectId}`;
-  const [vista, setVista] = useState<Vista>("informe");
+  const [vista, setVista] = useState<Vista>("guia");
 
   useEffect(() => {
     try {
       const v = window.localStorage.getItem(clave);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación de localStorage (no existe en SSR)
-      if (v === "cuestionario" || v === "informe") setVista(v);
+      if (v === "cuestionario" || v === "guia" || (v === "informe" && informeAnterior)) setVista(v);
     } catch {
       /* sin almacenamiento: queda el default */
     }
-  }, [clave]);
+  }, [clave, informeAnterior]);
 
   const elegir = (v: Vista) => {
     setVista(v);
@@ -58,10 +60,21 @@ export default function ExploracionConCuestionario({
   return (
     <div>
       <div className="flex gap-1 px-6 pt-4">
-        {tab("cuestionario", "Cuestionario previo")}
-        {tab("informe", "Informe de exploración")}
+        {tab("cuestionario", "Cuestionarios")}
+        {tab("guia", "Guía de exploración")}
+        {informeAnterior && tab("informe", "Informe anterior")}
       </div>
-      {vista === "cuestionario" ? <div className="px-6 py-5">{<CuestionarioPanel projectId={projectId} />}</div> : informe}
+      {vista === "cuestionario" ? (
+        <div className="px-6 py-5">
+          <CuestionarioPanel projectId={projectId} />
+        </div>
+      ) : vista === "informe" && informeAnterior ? (
+        informeAnterior
+      ) : (
+        <div className="px-6 py-5">
+          <GuiaDeExploracion projectId={projectId} />
+        </div>
+      )}
     </div>
   );
 }
