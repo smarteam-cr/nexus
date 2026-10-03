@@ -389,7 +389,7 @@ export const PLANIFICACION_TEMPLATE: BcTemplateDef = {
     "LA MODALIDAD DE ADOPCIÓN gobierna las rutinas y el despliegue por olas: la recibes en el contexto (directa o por pilotos, con su porqué). Con adopción DIRECTA, el plan de despliegue por olas queda VACÍO — vacío es correcto. Con PILOTOS, define las olas con equipo inicial, módulos e indicador de éxito para avanzar.\n\n" +
     "EL CICLO DE VIDA: si el portal ya tiene etapas (vienen en el contexto), parte de esas y propone SOLO los cambios que los procesos justifican. Renombrar etapas sin motivo es trabajo que el equipo del cliente paga después.\n\n" +
     "SIN FECHAS: ni semanas ni duraciones. El calendario vive en el Cronograma.\n\n" +
-    "LO INTERNO ES INSUMO, NO CONTENIDO: del handoff te llegan secciones que Smarteam escribió para adentro — riesgos y banderas, la motivación real de la compra, los acuerdos y promesas de la venta, y el estado en vuelo. Las usas para NO planificar contra ellas (no prometas lo que ya se sabe que va a trabarse, no ignores lo que se prometió). PROHIBIDO citarlas, parafrasearlas o dejarlas asomar: este documento se proyecta en pantalla frente al cliente y se exporta a PDF entero.\n\n" +
+    "LO QUE TE LLEGA DEL HANDOFF ES APTO PARA EL CLIENTE: recibes solo el alcance, el dolor, las expectativas, los resultados que persigue el cliente, los interesados y el desarrollo. Este documento se le comparte al cliente por enlace y se exporta a PDF entero, así que lo que Smarteam escribió para adentro (riesgos, motivación de la compra, promesas de la venta) NO te llega a propósito: no lo supongas ni lo menciones.\n\n" +
     "DISCIPLINA ANTI-ALUCINACIÓN: NUNCA inventes sistemas, integraciones, personas, nombres internos de propiedades ni procesos. Lo no definido va con `⚠️ Por definir` (en `falta` donde exista) y `pending: 'si'` en la arquitectura. Si el contexto es delgado, el plan sale más corto — corto y cierto gana a largo e inventado.\n\n" +
     "FORMATO: cada sección tiene su PROPIO shape (su `schema` y su guía) — NO es prosa libre. Las líneas, cortas. Español, tuteo. Arrays vacíos donde no haya respaldo.",
   sections: PLANIFICACION_SECTION_DEFS,
@@ -401,30 +401,25 @@ export const PLANIFICACION_DEF_BY_KEY: Record<string, BCSectionDef> = Object.fro
 );
 
 /**
- * ALLOWLIST del Handoff para el agente de planificación. AMPLIA a propósito: el plan
- * necesita ver el alcance, los riesgos y los acuerdos para no planificar contra ellos.
+ * ALLOWLIST del Handoff para el agente de planificación — RESTRICTIVA, igual que la del
+ * Diagnóstico.
  *
- * ⚠ CUATRO DE ESTAS SON INTERNAS y el documento SÍ se le muestra al cliente (se proyecta
- * en sesión y se exporta a PDF completo): `riesgos_banderas`, `motivacion_decision`,
- * `acuerdos_promesas` y `estado_en_flight`. Su hermano el Diagnóstico resolvió lo mismo
- * al revés, sacándolas de la lista (allowlist RESTRICTIVA), y acá NO se hizo eso a
- * propósito: sin los riesgos ni lo prometido, el plan promete cosas que ya se sabe que se
- * van a trabar, que es el defecto que más caro sale.
+ * Hasta el 2026-10-02 era AMPLIA a propósito (riesgos, motivación de la compra, acuerdos de la
+ * venta y estado en vuelo) y la fuga se cortaba con una regla del prompt («lo interno es insumo,
+ * no contenido»). Ese mismo docblock dejó escrita la condición para recortarla: «si algún día el
+ * plan pasa a tener superficie externa propia, esta lista se recorta a la del Diagnóstico — una
+ * instrucción es más débil que una allowlist». Ese día llegó: la Planificación ahora se comparte
+ * con el cliente por enlace (publish-planificacion). Las cuatro internas quedan FUERA, con su
+ * guarda en lib/canvas/handoff-al-cliente.test.ts.
  *
- * La fuga se corta en el otro extremo: `agentIntro` tiene una regla dura de "lo interno es
- * insumo, no contenido" — se usa para decidir, nunca se cita ni se parafrasea. Si algún
- * día el plan pasa a tener superficie externa propia (un link para el cliente, como el
- * requerimiento técnico), esta lista se recorta a la del Diagnóstico: una instrucción es
- * más débil que una allowlist, y contra un lector de afuera hace falta la allowlist.
+ * El costo, aceptado: el plan ya no ve los riesgos ni lo prometido en la venta. El CSE los conoce
+ * y puede pedirlos por chat o por las instrucciones del documento.
  */
 export const PLANIFICACION_HANDOFF_KEYS = [
+  "resultados_cliente",
   "alcance_contratado",
-  "motivacion_decision",
   "dolor_principal",
   "expectativas",
   "stakeholders_handoff",
-  "acuerdos_promesas",
-  "estado_en_flight",
-  "riesgos_banderas",
   "desarrollo",
 ] as const;

@@ -331,6 +331,10 @@ model Project {
   // documento de cierre es un acto con fecha, y si el número se moviera solo, el PDF que el
   // cliente guardó y el enlace que abre dirían cosas distintas.
   entregaPublishedAt DateTime?
+  // Publish del DIAGNÓSTICO y de la PLANIFICACIÓN al cliente (2026-10-02): mismo mecanismo que la
+  // Entrega (snapshot congelado al publicar, el chokepoint exige NO-null en cada lectura).
+  diagnosticoPublishedAt   DateTime?
+  planificacionPublishedAt DateTime?
 
   // #3 — visibilidad de secciones/procesos en el kickoff del cliente, por proyecto.
   // hiddenKickoffKeys = claves OCULTAS del kickoff. Una clave puede ser:

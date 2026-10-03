@@ -29,6 +29,8 @@ export interface ProyectoAbierto {
     timelinePublishedAt: Date | null;
     desarrolloPublishedAt: Date | null;
     entregaPublishedAt: Date | null;
+    diagnosticoPublishedAt: Date | null;
+    planificacionPublishedAt: Date | null;
     client: { name: string };
   };
 }
@@ -44,6 +46,8 @@ const ETIQUETA: Record<PublishSurfaceKey, string> = {
   cronograma: "Cronograma",
   desarrollo: "Requerimiento técnico",
   entrega: "Entrega",
+  diagnostico: "Diagnóstico",
+  planificacion: "Planificación",
 };
 
 const publicada = (a: ProyectoAbierto, superficie: PublishSurfaceKey): boolean =>

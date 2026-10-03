@@ -69,6 +69,7 @@ import { MENSAJE_PROPUESTA_CAMBIO } from "@/lib/timeline/escribir-estructura";
 import type { EstructuraSupuesta } from "@/lib/contexto/cronograma-para-agentes";
 import { generateSectionsForTemplate } from "@/lib/business-cases/canvas-agent";
 import { KICKOFF_TEMPLATE, KICKOFF_HANDOFF_KEYS } from "@/components/landing/configs/kickoff.defs";
+import { PLANIFICACION_HANDOFF_KEYS } from "@/components/landing/configs/planificacion.defs";
 import {
   escalaParaPosicionar,
   posicionDeLaPropuesta,
@@ -1958,7 +1959,11 @@ Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es
   // hubiera — por eso gatea por grupo y excluye al principal.
   const isPlanificacionGroupLegacy = agent.agentGroup === "planificacion" && !isPlanificacionAgent;
   if (isPlanificacionGroupLegacy && bodyProjectId) {
-    const handoffCtx = await loadHandoffContext(bodyProjectId, { onlyConfirmed: false });
+    // Allowlist: la planificación se comparte con el cliente por enlace desde el 2026-10-02.
+    const handoffCtx = await loadHandoffContext(bodyProjectId, {
+      onlyConfirmed: false,
+      includeKeys: PLANIFICACION_HANDOFF_KEYS,
+    });
     const diagnosticoCtx = await loadCanvasContext(bodyProjectId, "diagnosis", { onlyConfirmed: false });
     userMessage = `Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}

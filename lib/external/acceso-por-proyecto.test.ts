@@ -127,6 +127,8 @@ function fila(id: string, token: string, passwordHash: string, extra: Record<str
       timelinePublishedAt: new Date("2026-08-04T00:00:00Z"),
       desarrolloPublishedAt: null,
       entregaPublishedAt: null,
+      diagnosticoPublishedAt: null,
+      planificacionPublishedAt: null,
       hubspotPipelineId: null,
       proyectoInterno: false,
       hermanoCsProjectId: null,
@@ -277,6 +279,8 @@ describe("4 · ningún nombre de otro cliente a la vista sin pedirlo", () => {
       timelinePublishedAt: publicado.cronograma ? new Date() : null,
       desarrolloPublishedAt: null,
       entregaPublishedAt: null,
+      diagnosticoPublishedAt: null,
+      planificacionPublishedAt: null,
       client: { name: cliente },
     },
   });
@@ -430,6 +434,8 @@ describe("6 · cada superficie tiene su página por proyecto, y la franja se esc
     cronograma: "getPublishedTimelineForToken",
     desarrollo: "getDesarrolloForToken",
     entrega: "getEntregaForToken",
+    diagnostico: "getDiagnosticoForToken",
+    planificacion: "getPlanificacionForToken",
   };
 
   it("hay un chokepoint por superficie declarada", () => {
@@ -460,10 +466,19 @@ describe("6 · cada superficie tiene su página por proyecto, y la franja se esc
       "lib/external/timeline-view.ts",
       "lib/external/desarrollo-view.ts",
       "lib/external/entrega-view.ts",
+      "lib/external/diagnostico-view.ts",
+      "lib/external/planificacion-view.ts",
     ]) {
       expect(sinComentarios(leer(f)), f).toContain("resolveActiveAccess(credencial, accesoId)");
     }
     expect(sinComentarios(leer("lib/external/access.ts"))).toContain("if (access.id !== accesoId) return null");
+  });
+
+  it.each(["diagnostico", "planificacion"] as const)("el chokepoint de %s exige su flag de publicación", (key) => {
+    /* La edición que lo pone en rojo: sacar el chequeo del flag. El token se comparte entre todas
+       las superficies del proyecto: sin el flag, el cliente leería un borrador nunca compartido. */
+    const flag = PUBLISH_SURFACES.find((s) => s.key === key)!.flag;
+    expect(sinComentarios(leer(`lib/external/${key}-view.ts`))).toContain(`if (!access.project.${flag}) return null`);
   });
 
   it("la acción de franjas queda atada al proyecto de la página", () => {

@@ -46,6 +46,13 @@ const SUPERFICIE = [
   "lib/external/timeline-view.ts",
   "lib/external/desarrollo-view.ts",
   "lib/external/business-case-view.ts",
+  // 2026-10-02 — Diagnóstico y Planificación ganaron enlace para el cliente.
+  "lib/external/diagnostico-view.ts",
+  "lib/external/planificacion-view.ts",
+  "lib/external/snapshot-de-documento.ts",
+  "lib/projects/publicar-documento.ts",
+  "app/api/projects/[projectId]/publish-diagnostico",
+  "app/api/projects/[projectId]/publish-planificacion",
   "components/external",
   "app/external",
 ];

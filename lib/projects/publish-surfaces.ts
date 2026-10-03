@@ -17,13 +17,19 @@
  */
 export interface PublishSurface {
   /** La key que usa la UI. */
-  key: "kickoff" | "cronograma" | "desarrollo" | "entrega";
+  key: "kickoff" | "cronograma" | "desarrollo" | "entrega" | "diagnostico" | "planificacion";
   /** Rótulo del link en el panel de acceso. */
   label: string;
   /** Directorio del endpoint bajo `app/api/projects/[projectId]/`. SIEMPRE `publish-*`. */
   endpoint: string;
   /** Campo de `Project` que marca «compartido». El chokepoint lo exige NO-null en cada lectura. */
-  flag: "kickoffPublishedAt" | "timelinePublishedAt" | "desarrolloPublishedAt" | "entregaPublishedAt";
+  flag:
+    | "kickoffPublishedAt"
+    | "timelinePublishedAt"
+    | "desarrolloPublishedAt"
+    | "entregaPublishedAt"
+    | "diagnosticoPublishedAt"
+    | "planificacionPublishedAt";
   /** Valor de `?next=` en el link de verificación. `null` = el kickoff, que es el default. */
   next: string | null;
 }
@@ -39,6 +45,21 @@ export const PUBLISH_SURFACES: readonly PublishSurface[] = [
     next: "desarrollo",
   },
   { key: "entrega", label: "Link Entrega", endpoint: "publish-entrega", flag: "entregaPublishedAt", next: "entrega" },
+  // El diagnóstico y la planificación como entregables (2026-10-02): mismo mecanismo que la Entrega.
+  {
+    key: "diagnostico",
+    label: "Link Diagnóstico",
+    endpoint: "publish-diagnostico",
+    flag: "diagnosticoPublishedAt",
+    next: "diagnostico",
+  },
+  {
+    key: "planificacion",
+    label: "Link Planificación",
+    endpoint: "publish-planificacion",
+    flag: "planificacionPublishedAt",
+    next: "planificacion",
+  },
 ] as const;
 
 export type PublishSurfaceKey = PublishSurface["key"];

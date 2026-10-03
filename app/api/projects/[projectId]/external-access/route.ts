@@ -218,6 +218,8 @@ export async function GET(
           timelinePublishedAt: true,
           desarrolloPublishedAt: true,
           entregaPublishedAt: true,
+          diagnosticoPublishedAt: true,
+          planificacionPublishedAt: true,
         },
       },
     },
@@ -257,6 +259,9 @@ export async function GET(
     desarrolloPublished: !!access.project.desarrolloPublishedAt,
     // El documento de cierre. Congela un snapshot al publicar (ver publish-entrega/route.ts).
     entregaPublished: !!access.project.entregaPublishedAt,
+    // El diagnóstico y la planificación (2026-10-02): congelan un snapshot al publicar, como la Entrega.
+    diagnosticoPublished: !!access.project.diagnosticoPublishedAt,
+    planificacionPublished: !!access.project.planificacionPublishedAt,
   });
 }
 

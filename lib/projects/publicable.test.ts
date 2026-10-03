@@ -265,4 +265,39 @@ describe("un snapshot congelado se congela ENTERO", () => {
       /titleOverride:\s*\(s\.titleOverride/,
     );
   });
+
+  /* 2026-10-02 — el Diagnóstico y la Planificación ganaron enlace con el MISMO mecanismo (un solo
+     helper para los dos). La edición que lo pone en rojo: guardar `canvasSections` crudas, o que
+     una ruta escriba su propio snapshot sin pasar por el helper. */
+  it("publicar la Planificación congela el encabezado y solo lo confirmado", () => {
+    const src = sinComentarios(fs.readFileSync(path.join(RAIZ, "lib", "projects", "publicar-documento.ts"), "utf8"));
+    expect(src).toMatch(/publishedSnapshot:\s*\{\s*sections:\s*congeladas\s*\}/);
+    expect(src).toContain("PLANIFICACION_DEF_BY_KEY");
+    expect(src).toMatch(/titleOverride:\s*\(s\.titleOverride/);
+    expect(src, "una propuesta que nadie aceptó no se entrega").toContain('status: "CONFIRMED"');
+    for (const doc of ["diagnostico", "planificacion"]) {
+      const ruta = sinComentarios(
+        fs.readFileSync(path.join(RAIZ, "app", "api", "projects", "[projectId]", `publish-${doc}`, "route.ts"), "utf8"),
+      );
+      expect(ruta, `publish-${doc} publica por el helper compartido`).toContain(`publicarDocumento(projectId, "${doc}")`);
+      expect(ruta.includes("publishedSnapshot"), `publish-${doc} escribe su propio snapshot`).toBe(false);
+    }
+  });
+
+  /* Decisión de Elías (2026-10-02): el enlace del Diagnóstico muestra la VERSIÓN PRESENTADA. La
+     edición que lo pone en rojo: dejar compartir sin presentar, o que el chokepoint lea el documento
+     vivo en vez de la foto protegida de lo presentado. */
+  it("⭐ el Diagnóstico se comparte en su versión presentada, y solo después de presentarlo", () => {
+    const publicar = sinComentarios(fs.readFileSync(path.join(RAIZ, "lib", "projects", "publicar-documento.ts"), "utf8"));
+    const i = publicar.indexOf("async function publicarDiagnosticoPresentado");
+    const tramo = publicar.slice(i, publicar.indexOf("async function publicarPlanificacion"));
+    expect(tramo.length, "la guarda no mira nada").toBeGreaterThan(300);
+    expect(tramo).toContain("if (!(await ultimaVersionPresentada(canvas.id)))");
+    expect(tramo.includes("publishedSnapshot"), "el diagnóstico no lleva snapshot propio").toBe(false);
+
+    const vista = sinComentarios(fs.readFileSync(path.join(RAIZ, "lib", "external", "diagnostico-view.ts"), "utf8"));
+    expect(vista).toContain('tipo: { in: ["presentado", "aprobado"] }');
+    expect(vista).toContain("presentada.foto.secciones");
+    expect(vista.includes("canvasSections"), "el enlace leería el documento vivo").toBe(false);
+  });
 });

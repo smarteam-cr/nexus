@@ -30,6 +30,8 @@ const QUE_ES: Record<PublishSurfaceKey, string> = {
   cronograma: "el cronograma",
   desarrollo: "el requerimiento técnico",
   entrega: "la entrega",
+  diagnostico: "el diagnóstico",
+  planificacion: "la planificación",
 };
 
 const TEXTO = { fontSize: 14, lineHeight: 1.6, color: "#6b7280" } as const;

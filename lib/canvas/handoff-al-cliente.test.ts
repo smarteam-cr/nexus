@@ -84,11 +84,11 @@ const LECTORES: Lector[] = [
     archivo: "app/api/clients/[id]/analyze/route.ts",
     ancla: "isPlanificacionGroupLegacy",
     pieza: "planning",
-    exposicion: "interno",
+    exposicion: "directo",
     porque:
       "rama LEGACY del grupo planificación, para agentes dormidos: el agente vivo ya no pasa " +
-      "por acá (short-circuit por id al runner del motor). La planificación es guía interna, " +
-      "así que no exige allowlist — pero queda declarada, no omitida",
+      "por acá (short-circuit por id al runner del motor). Desde el 2026-10-02 la planificación " +
+      "se comparte con el cliente por enlace, así que también esta rama pasa la allowlist",
   },
   {
     archivo: "app/api/projects/[projectId]/canvas-sections/[sectionId]/blocks/regenerate/route.ts",
@@ -205,8 +205,8 @@ const LECTORES: Lector[] = [
   {
     archivo: "lib/canvas/planificacion-generate.ts",
     pieza: "planning",
-    exposicion: "interno",
-    porque: "guía de trabajo interna — igual lleva allowlist",
+    exposicion: "directo",
+    porque: "la planificación se le comparte al cliente por enlace desde el 2026-10-02",
   },
   {
     archivo: "lib/canvas/implementacion-generate.ts",
@@ -432,6 +432,9 @@ describe("⚠ lo que el kickoff y la Entrega NO pueden ver", () => {
   it.each([
     ["kickoff", "components/landing/configs/kickoff.defs.ts", "KICKOFF_HANDOFF_KEYS"],
     ["Entrega", "components/landing/configs/entrega.defs.ts", "ENTREGA_HANDOFF_KEYS"],
+    // 2026-10-02 — los dos ganaron enlace para el cliente (publish-diagnostico / -planificacion).
+    ["Diagnóstico", "components/landing/configs/diagnostico.defs.ts", "DIAGNOSTICO_HANDOFF_KEYS"],
+    ["Planificación", "components/landing/configs/planificacion.defs.ts", "PLANIFICACION_HANDOFF_KEYS"],
   ])("la allowlist de %s no contiene ninguna sección interna", (_doc, archivo, constante) => {
     const src = leer(archivo);
     const i = src.indexOf(`export const ${constante}`);

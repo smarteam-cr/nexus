@@ -56,6 +56,8 @@ export interface ActiveAccess {
     timelinePublishedAt: Date | null;
     desarrolloPublishedAt: Date | null;
     entregaPublishedAt: Date | null;
+    diagnosticoPublishedAt: Date | null;
+    planificacionPublishedAt: Date | null;
     /** Empresa cliente (Client) — nombre para titulares + logo para el chrome client-facing. */
     // Los tres campos del logo viajan juntos: qué archivo, cuál variante y a qué tamaño
     // son una sola unidad visual (ver lib/ui/logo-scale.ts).
@@ -85,6 +87,8 @@ const SELECT_ACCESO = {
       timelinePublishedAt: true,
       desarrolloPublishedAt: true,
       entregaPublishedAt: true,
+      diagnosticoPublishedAt: true,
+      planificacionPublishedAt: true,
       // De qué CLASE es el proyecto: decide si admite mirones de afuera.
       hubspotPipelineId: true,
       proyectoInterno: true,

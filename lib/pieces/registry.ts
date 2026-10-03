@@ -173,8 +173,8 @@ export const PIECES: PieceDefinition[] = [
     enabledByTags: [],
     // 2026-07-25 — pasó al motor de landings: DiagnosticoWorkspace.
     ownRenderer: true,
-    // Es un informe DE CARA AL CLIENTE (se presenta en sesión / PDF). La publicación
-    // con link propio llega en su propia tanda.
+    // Es un informe DE CARA AL CLIENTE (se presenta en sesión / PDF y, desde el 2026-10-02,
+    // se comparte por enlace: publish-diagnostico).
     clientFacing: true,
   },
   {
@@ -193,7 +193,9 @@ export const PIECES: PieceDefinition[] = [
     optional: true,
     enabledByTags: [],
     ownRenderer: true, // PlanificacionWorkspace (motor de landings)
-    clientFacing: false,
+    // 2026-10-02 — DE CARA AL CLIENTE: se comparte por enlace (publish-planificacion). Con esto
+    // el censo de lib/canvas/handoff-al-cliente.test.ts exige allowlist en cada lectura del handoff.
+    clientFacing: true,
   },
   {
     slug: "tech-requirements",
