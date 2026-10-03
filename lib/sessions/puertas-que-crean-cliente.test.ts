@@ -161,7 +161,7 @@ describe("las puertas que crean un Client", () => {
     ).toBe(true);
   });
 
-  it("la reclasificación del alta mira TODO el historial, no los 90 días del default", () => {
+  it("la reclasificación del alta pasa su propia ventana (todo el historial si es el primer proyecto), no el default", () => {
     const src = readFileSync(join(RAIZ, "lib/projects/alta-runner.ts"), "utf8");
     expect(
       /reclassifyClientSessions\(clientId,\s*\{\s*sinceDays:/.test(src),

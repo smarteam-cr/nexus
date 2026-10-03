@@ -133,6 +133,27 @@ export async function POST(req: NextRequest) {
     if (resolucion.estado === "ambiguo") return malo(resolucion.mensaje, 409);
 
     if (resolucion.estado === "ninguno") {
+      /* ⛔ ANTES DE CREAR, ¿YA HAY UN CLIENTE CON ESE DOMINIO? (2026-10-02) Una empresa de HubSpot
+         nueva con el dominio de un cliente que ya existe es casi siempre la MISMA empresa cargada
+         dos veces allá. Crearla callado partió a «Club de Amantes del Vino» en dos registros con
+         `lacav.cl`: las reuniones siguieron yendo al viejo y el proyecto nuevo nació con cero. Se
+         frena con el motivo; la salida es fusionar las empresas en HubSpot y reintentar (el alta
+         reconoce la fusión sola, ver lib/hubspot/cliente-de-la-empresa.ts). */
+      const dominio = body.domain?.trim().toLowerCase().replace(/^www\./, "");
+      if (dominio) {
+        const mismoDominio = await prisma.client.findFirst({
+          where: { OR: [{ emailDomains: { has: dominio } }, { company: { equals: dominio, mode: "insensitive" } }] },
+          orderBy: { createdAt: "asc" },
+          select: { name: true },
+        });
+        if (mismoDominio) {
+          return malo(
+            `Ya existe el cliente «${mismoDominio.name}» con el dominio ${dominio}, pero en otra empresa de HubSpot. ` +
+              `Seguramente la empresa está duplicada en HubSpot: fusiónalas allá y vuelve a intentarlo, o elige ese cliente.`,
+            409,
+          );
+        }
+      }
       clientId = (
         await prisma.client.create({
           data: {

@@ -81,3 +81,37 @@ export const INV21: Invariante = {
     );
   },
 };
+
+/**
+ * INV37 · Dos clientes no comparten un dominio (2026-10-02). La cascada de atribución se queda con
+ * el PRIMER cliente que tenga el dominio de un participante; con dos, el segundo no recibe nunca una
+ * reunión por dominio y su proyecto nace vacío. Caso: «Club de Amantes del Vino» duplicado con
+ * `lacav.cl` — «CAV - Optimización comercial» quedó con cero reuniones. El alta ya no crea el
+ * duplicado (app/api/projects/route.ts); esto caza los que ya existen.
+ */
+export const INV37: Invariante = {
+  id: "37",
+  nombre: "dos clientes no comparten un dominio",
+  async correr(db) {
+    const clientes = await db.client.findMany({
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, name: true, company: true, emailDomains: true },
+    });
+    const porDominio = new Map<string, string[]>();
+    for (const c of clientes) {
+      const propios = new Set((c.emailDomains ?? []).map((d) => d.trim().toLowerCase()).filter(Boolean));
+      const comoDominio = (c.company ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+      if (/^[\w-]+(\.[\w-]+)+$/.test(comoDominio)) propios.add(comoDominio);
+      for (const d of propios) porDominio.set(d, [...(porDominio.get(d) ?? []), c.name]);
+    }
+    const repetidos = [...porDominio].filter(([, nombres]) => nombres.length > 1);
+    if (repetidos.length > 0) {
+      return viola(
+        `✗ INV37 VIOLADO: ${repetidos.length} dominio(s) en más de un cliente (las reuniones van solo al más antiguo):\n` +
+          repetidos.map(([d, nombres]) => `    · ${d}: ${nombres.join(" · ")}`).join("\n"),
+        "  → Remedio: fusionar los registros duplicados (scripts/merge-duplicate-clients.ts, en seco primero) o quitar el dominio del que no corresponde.",
+      );
+    }
+    return cumple(`✓ INV37: ningún dominio está en dos clientes (${porDominio.size} dominios).`);
+  },
+};

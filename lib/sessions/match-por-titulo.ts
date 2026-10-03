@@ -39,6 +39,36 @@ export interface ClienteParaMatch {
   id: string;
   name: string;
   company: string | null;
+  /**
+   * Siglas DECLARADAS por una persona (`Client.siglas`). Una sigla en el título cuenta como el
+   * nombre ENTERO (fracción 1), sin la vara de las 4 letras: «CAV» no es una palabra cualquiera,
+   * alguien dijo que es este cliente. Ante dos clientes con la misma sigla, el empate de siempre:
+   * ninguno. Caso que lo motivó: «[Sales & Service handoff] CAV» (2026-09-15) quedó sin dueño.
+   */
+  siglas?: readonly string[] | null;
+}
+
+/** Las palabras del título SIN el piso de 4 letras: solo para cotejar siglas declaradas. */
+function palabrasCortasDelTitulo(titulo: string, normalize: (s: string) => string): Set<string> {
+  return new Set(
+    normalize(titulo)
+      .split(/[\s|&,.()[\]!?*\-_:/]+/)
+      .filter((w) => w.length >= 2),
+  );
+}
+
+/** ¿El título nombra alguna de las siglas declaradas del cliente? */
+export function tituloNombraSigla(
+  titulo: string,
+  siglas: readonly string[] | null | undefined,
+  normalize: (s: string) => string,
+): boolean {
+  if (!siglas || siglas.length === 0) return false;
+  const palabras = palabrasCortasDelTitulo(titulo, normalize);
+  return siglas.some((s) => {
+    const n = normalize(s).replace(/\s+/g, "");
+    return n.length >= 2 && palabras.has(n);
+  });
 }
 
 export type ModoDeMatch = "una-palabra" | "dos-palabras" | "mejor-fraccion";
@@ -125,12 +155,19 @@ export function clientePorTitulo(
   },
 ): ResultadoDeMatch {
   const palabras = tokensDelTitulo(titulo, opts.skip, opts.normalize);
-  if (palabras.size === 0) return { cliente: null, candidatos: [], motivo: "titulo-sin-tokens" };
+  const algunaSigla = clientes.some((c) => c.siglas && c.siglas.length > 0 && tituloNombraSigla(titulo, c.siglas, opts.normalize));
+  if (palabras.size === 0 && !algunaSigla) return { cliente: null, candidatos: [], motivo: "titulo-sin-tokens" };
 
   const candidatos: ClienteParaMatch[] = [];
   const fraccion = new Map<string, number>();
   for (const c of clientes) {
     if (opts.esClienteDePrueba(c.name)) continue;
+    /* Una sigla declarada es el nombre entero: entra con fracción 1, sin vara. */
+    if (tituloNombraSigla(titulo, c.siglas, opts.normalize)) {
+      candidatos.push(c);
+      fraccion.set(c.id, 1);
+      continue;
+    }
     const { delNombre, todos } = tokensDelCliente(c, opts.skip, opts.normalize);
     if (todos.size === 0) continue;
     let coinciden = 0;
@@ -175,6 +212,14 @@ export function clientePorTitulo(
     const mejor = Math.max(...enJuego.map((c) => fraccion.get(c.id) ?? 0));
     const punteros = enJuego.filter((c) => (fraccion.get(c.id) ?? 0) === mejor);
     if (punteros.length === 1) return { cliente: punteros[0], candidatos, motivo: "elegido" };
+    /* Empate entre REGISTROS DUPLICADOS de la misma empresa (mismo nombre): no es una duda entre
+       dos clientes, es el mismo cliente dos veces. Gana el primero del array, que es el más antiguo
+       porque todo `CategorizeContext` se arma con `ORDEN_DE_CLIENTES_PARA_ATRIBUIR`. Medido el
+       2026-10-02: «Sales & Service Handoff | CEMACO» y «| Total Finco» quedaron sin dueño así. */
+    const nombre = opts.normalize(punteros[0].name);
+    if (punteros.every((c) => opts.normalize(c.name) === nombre)) {
+      return { cliente: punteros[0], candidatos: punteros, motivo: "elegido" };
+    }
     return { cliente: null, candidatos: punteros, motivo: "empate" };
   }
 

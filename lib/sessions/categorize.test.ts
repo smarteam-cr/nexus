@@ -541,3 +541,19 @@ test("D-08 · la ficha del cliente: el GPS cuenta con dos COUNT (pasadas, con tr
   expect(widget, "el widget lo pinta con el % único del módulo").toContain("Con transcripción: <strong>{pctTranscript}%</strong>");
   expect(widget, "sin reuniones pasadas no se pinta un 0% sobre nada").toContain("cobertura && pctTranscript !== null &&");
 });
+
+test("el orden de atribución: todo armador de CategorizeContext recorre los clientes del más antiguo al más nuevo", () => {
+  /* Sin orden, dos clientes con el mismo dominio se reparten las reuniones al azar entre corridas
+     (caso «Club de Amantes del Vino» duplicado, 2026-10-02). Los tres armadores de producción. */
+  const leer = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+  for (const f of ["lib/sessions/resolve-client.ts", "lib/sessions/post-process.ts"]) {
+    const src = leer(f);
+    const i = src.indexOf("prisma.client.findMany(");
+    expect(i, `${f} ya no lee los clientes`).toBeGreaterThan(-1);
+    expect(src.slice(i, i + 200), `${f} lee los clientes SIN el orden de atribución`).toContain(
+      "orderBy: ORDEN_DE_CLIENTES_PARA_ATRIBUIR",
+    );
+  }
+  const cargar = leer("lib/sessions/cargar-sesiones-categorizadas.ts");
+  expect(cargar, "/sessions atribuye con la lista ordenada por nombre").toContain("clients: clientsParaAtribuir");
+});

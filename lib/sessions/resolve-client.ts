@@ -27,14 +27,18 @@ import {
   computeAmbiguousNameTokens,
   type CategorizeContext,
   type CategorizableSession,
+  ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
 } from "@/lib/sessions/categorize";
+export { ORDEN_DE_CLIENTES_PARA_ATRIBUIR };
 import { searchCompaniesByDomains, type HubspotCompanyLite } from "@/lib/hubspot/companies";
+
 
 /** Carga el contexto de categorización (clientes + categorías) una sola vez. */
 export async function buildCategorizeCtx(): Promise<CategorizeContext> {
   const [clients, categories] = await Promise.all([
     prisma.client.findMany({
-      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true },
+      orderBy: ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
+      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true, siglas: true },
     }),
     prisma.sessionCategory.findMany({
       select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },

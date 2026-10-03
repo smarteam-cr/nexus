@@ -179,7 +179,7 @@ vi.mock("@/lib/sessions/reclassify", () => ({
   reclassifyClientSessions: async (clientId: string) => { pasos.push("reclasificar"); reclasificaciones.push(clientId); },
 }));
 
-const { avanzarAlta } = await import("./alta-runner");
+const { avanzarAlta, ventanaDelAlta } = await import("./alta-runner");
 
 /** Cede el turno para que corran los `void … .then()` que el motor dispara sin esperar. */
 /* Varios turnos: el bloque de fondo encadena importar → atribuir → importar → reclasificar. */
@@ -495,5 +495,15 @@ describe("lo que se rechaza antes de tocar HubSpot", () => {
     await avanzarAlta("p1");
     expect(db.proyectos.get("p1")!.altaIntentos).toBe(2);
     expect(db.proyectos.get("p1")!.altaError).toBe("boom");
+  });
+});
+
+describe("cuánto historial hereda el proyecto que nace (2026-10-02)", () => {
+  it("primer proyecto del cliente: todo el historial (caso kamalio, reuniones de 2025)", () => {
+    expect(ventanaDelAlta(0)).toBe(3650);
+  });
+  it("el cliente ya tuvo otro proyecto: solo los 90 días previos (caso CAV SHP, 32 reuniones de 2025 ajenas)", () => {
+    expect(ventanaDelAlta(1)).toBe(90);
+    expect(ventanaDelAlta(4)).toBe(90);
   });
 });

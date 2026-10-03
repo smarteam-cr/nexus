@@ -19,6 +19,7 @@ import {
   categorizeSession,
   buildInternalDomainsSet,
   type CategorizeContext,
+  ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
 } from "@/lib/sessions/categorize";
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
 import { titleMentionsKickoff } from "@/lib/sessions/session-type";
@@ -102,7 +103,8 @@ export async function postProcessSession(
   // 3. Matchear sesión a cliente
   const [clients, categories, teamMembers] = await Promise.all([
     prisma.client.findMany({
-      select: { id: true, name: true, company: true, emailDomains: true, industry: true },
+      orderBy: ORDEN_DE_CLIENTES_PARA_ATRIBUIR,
+      select: { id: true, name: true, company: true, emailDomains: true, industry: true, siglas: true },
     }),
     prisma.sessionCategory.findMany({
       select: { id: true, name: true, slug: true, domains: true, kind: true, color: true },

@@ -23,6 +23,7 @@ interface Client {
   industry: string | null;
   notes: string | null;
   emailDomains: string[];
+  siglas?: string[];
   logoUrl: string | null;
   hubspotAccount: HubspotAccount | null;
   kind: ClientKind;
@@ -63,6 +64,7 @@ export default function ClientSettingsPage() {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [emailDomains, setEmailDomains] = useState("");
+  const [siglas, setSiglas] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -77,6 +79,7 @@ export default function ClientSettingsPage() {
       setName(data.name);
       setCompany(data.company ?? "");
       setEmailDomains((data.emailDomains ?? []).join(", "));
+      setSiglas((data.siglas ?? []).join(", "));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -123,7 +126,12 @@ export default function ClientSettingsPage() {
       const res = await fetch(`/api/clients/${clientId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, company, emailDomains: parsedDomains }),
+        body: JSON.stringify({
+          name,
+          company,
+          emailDomains: parsedDomains,
+          siglas: siglas.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean),
+        }),
       });
       if (!res.ok) throw new Error("Error al guardar");
       setSaveSuccess(true);
@@ -226,6 +234,23 @@ export default function ClientSettingsPage() {
             />
             <p className="text-xs text-gray-600 mt-1">
               Separados por coma. Las sesiones donde participe alguien de estos dominios se asignarán automáticamente a este cliente.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-fg-muted mb-1.5">
+              Siglas{" "}
+              <span className="font-normal">(cómo lo nombra el equipo en los títulos de las reuniones)</span>
+            </label>
+            <input
+              type="text"
+              value={siglas}
+              onChange={(e) => setSiglas(e.target.value)}
+              placeholder="ej. CAV"
+              className="w-full px-3 py-2.5 rounded-lg bg-surface border border-line text-fg placeholder-fg-muted text-sm focus:outline-none focus:border-brand"
+            />
+            <p className="text-xs text-fg-muted mt-1">
+              Separadas por coma. Una reunión solo del equipo cuyo título diga la sigla (por ejemplo «Handoff | CAV») queda asignada a este cliente.
             </p>
           </div>
 

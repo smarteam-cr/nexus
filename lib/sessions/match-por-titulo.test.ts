@@ -205,3 +205,46 @@ describe("la casa se retira ANTES de comparar, no desempata", () => {
     expect(mf("Comisiones Smarteam").cliente?.id).toBe("smarteam");
   });
 });
+
+describe("siglas declaradas y registros duplicados (2026-10-02)", () => {
+  const conSigla: ClienteParaMatch = { id: "cav", name: "Club de Amantes del Vino", company: "lacav.cl", siglas: ["CAV"] };
+  const otro: ClienteParaMatch = { id: "faco", name: "Honda FACO", company: "facocr.com" };
+  const opts = { modo: "mejor-fraccion" as const, skip, normalize, esClienteDePrueba };
+
+  it("caso real: «[Sales & Service handoff] CAV» va al cliente que declaró la sigla", () => {
+    const r = clientePorTitulo("[Sales & Service handoff] CAV", [otro, conSigla], opts);
+    expect(r.cliente?.id).toBe("cav");
+  });
+
+  it("sin la sigla declarada, la misma reunión queda sin dueño (el defecto que se arregla)", () => {
+    const sinSigla = { ...conSigla, siglas: [] };
+    const r = clientePorTitulo("[Sales & Service handoff] CAV", [otro, sinSigla], opts);
+    expect(r.cliente).toBeNull();
+  });
+
+  it("la sigla se compara como palabra entera, no como pedazo de otra («cava» no es «CAV»)", () => {
+    const r = clientePorTitulo("Cata en la cava del hotel", [conSigla], opts);
+    expect(r.cliente).toBeNull();
+  });
+
+  it("dos clientes con la misma sigla: empate, ninguno", () => {
+    const gemelo: ClienteParaMatch = { id: "cav2", name: "Compania Agricola del Valle", company: null, siglas: ["CAV"] };
+    const r = clientePorTitulo("Seguimiento | CAV", [conSigla, gemelo], opts);
+    expect(r.cliente).toBeNull();
+    expect(r.motivo).toBe("empate");
+  });
+
+  it("registros duplicados con el MISMO nombre no empatan: gana el primero (el más antiguo)", () => {
+    const viejo = C("cemaco-viejo", "Cemaco Internacional", null);
+    const nuevo = C("cemaco-nuevo", "Cemaco Internacional", null);
+    const r = clientePorTitulo("Sales & Service Handoff | CEMACO Internacional", [viejo, nuevo], opts);
+    expect(r.cliente?.id).toBe("cemaco-viejo");
+  });
+
+  it("dos clientes DISTINTOS empatados siguen sin dueño", () => {
+    const a = C("a", "Grupo Alfa", null);
+    const b = C("b", "Alfa Logistica", null);
+    const r = clientePorTitulo("Alfa | seguimiento", [a, b], { ...opts, skip: (w: string) => skip(w) || w === "grupo" || w === "logistica" });
+    expect(r.cliente).toBeNull();
+  });
+});

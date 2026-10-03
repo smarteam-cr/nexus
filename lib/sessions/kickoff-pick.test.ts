@@ -40,6 +40,16 @@ test("un único kickoff (aunque viejo) se usa igual", () => {
   expect(picked).toEqual(d("2026-06-03"));
 });
 
+test("caso CAV SHP — el único kickoff es de hace 10 meses (otro proyecto) → null, no lo hereda", () => {
+  const picked = pickKickoffSessionDate([d("2025-10-30")], d("2026-08-25"));
+  expect(picked).toBeNull();
+});
+
+test("sin posteriores — un kickoff de más de 60 días antes no cuenta aunque haya otro más viejo", () => {
+  const picked = pickKickoffSessionDate([d("2025-10-30"), d("2026-06-01")], d("2026-08-25"));
+  expect(picked).toBeNull();
+});
+
 test("sin candidatas → null", () => {
   expect(pickKickoffSessionDate([], d("2026-07-08"))).toBeNull();
 });

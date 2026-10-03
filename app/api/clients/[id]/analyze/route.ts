@@ -8,7 +8,7 @@ import { resolveArtifactGate, artifactGateMessage } from "@/lib/auth/permissions
 import { triggeredByEmail } from "@/lib/agents/triggered-by";
 import { esAgenteRetirado } from "@/lib/agents/retirados";
 import { classifyHandoffSession, HANDOFF_MIN_SECONDARY_CONFIDENCE, linkFeedsHandoff } from "@/lib/handoff/session-relevance";
-import { planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
+import { esTratoDeOtroCiclo, planHandoffSessionBudget, type HandoffSessionBlock } from "@/lib/handoff/session-budget";
 import { guardarPropuestaDelHandoff, timelineSyncErrorDelHandoff } from "@/lib/timeline/borrador-del-handoff";
 import { fasesDelHandoff, tiposDelHandoff } from "@/lib/timeline/referencias-de-la-propuesta";
 import { acomodarEnParalelo, leerTipoDeFase } from "@/lib/timeline/acomodar-en-paralelo";
@@ -967,7 +967,11 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
         const p = dpDeal?.deal?.properties;
         if (p?.hs_is_closed_won === "true" && p.closedate) {
           const t = new Date(p.closedate).getTime();
-          if (!isNaN(t)) dealProjectCloseDate = t;
+          const inicio = (dealProject.hubspotCreatedAt ?? dealProject.createdAt).getTime();
+          // Un trato de OTRO ciclo del cliente no ancla nada (caso «CAV - SHP», ver esTratoDeOtroCiclo).
+          if (!isNaN(t) && esTratoDeOtroCiclo(t, inicio)) {
+            console.warn(`[analyze handoff] el trato del proyecto ${bodyProjectId} cerró el ${p.closedate}, más de 6 meses antes de que el proyecto existiera: no se usa como ancla.`);
+          } else if (!isNaN(t)) dealProjectCloseDate = t;
         }
       }
 
@@ -1049,6 +1053,23 @@ export const POST = withClientAccess(async (_req: NextRequest, { params }: Param
           if (d.lineItemsText) lines.push(`Productos:\n${d.lineItemsText}`);
           if (d.dealNotes.length > 0) {
             lines.push(`Notas del deal (${d.dealNotes.length}):\n${d.dealNotes.slice(0, 10).map((n) => `  • ${n}`).join("\n")}`);
+          }
+          /* Un trato ganado que cerró más de 6 meses antes de que este proyecto existiera es de un
+             ciclo ANTERIOR: entra (es historia del cliente), pero rotulado, para que el agente no
+             lo lea como «lo que se vendió» (caso «CAV - SHP»: el trato de 2025 trajo una integración
+             SAP que nadie vendió en 2026). */
+          const cierreMs = p.closedate ? new Date(p.closedate).getTime() : NaN;
+          if (
+            agent.agentGroup === "handoff" &&
+            dealProject &&
+            isWon &&
+            !isNaN(cierreMs) &&
+            esTratoDeOtroCiclo(cierreMs, (dealProject.hubspotCreatedAt ?? dealProject.createdAt).getTime())
+          ) {
+            lines.unshift(
+              `⚠ ESTE NEGOCIO ES DE UN CICLO ANTERIOR DEL CLIENTE (cerró ${closeDate}, más de 6 meses antes de que existiera este proyecto): ` +
+                `es historia, NO lo que se vendió ahora. No copies su alcance, sus integraciones ni sus fechas como de ESTE proyecto.`,
+            );
           }
           if (esDealDelMayor(d.id)) {
             lines.unshift(

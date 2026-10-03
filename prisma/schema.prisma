@@ -139,6 +139,12 @@ model Client {
   notes            String?    @db.Text
   hubspotCompanyId String? // ID de la empresa vinculada en HubSpot CRM
   emailDomains     String[] // dominios de email para matching automático de sesiones (ej: "ice.go.cr")
+  // Siglas con que el EQUIPO nombra a este cliente en los títulos de sus reuniones («CAV» por
+  // Club de Amantes del Vino). Una reunión 100 % interna solo se puede atribuir por título, y el
+  // match por palabras descarta las de menos de 4 letras: «[Sales & Service handoff] CAV» quedó
+  // sin dueño y fuera del handoff de SHP (2026-09-15). Una sigla declarada acá cuenta como el
+  // nombre entero. Las escribe una persona en la ficha; nada las deduce. Ver lib/sessions/match-por-titulo.ts.
+  siglas           String[]   @default([])
   logoUrl          String? // URL pública del logo del cliente (bucket public-assets) — se muestra en kickoff/cronograma externos
   // Segundo archivo de logo, para las superficies de fondo OSCURO (el hero de TODOS los
   // documentos del motor de landing). Es la ALTERNATIVA del primario, no un asset suelto:

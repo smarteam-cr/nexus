@@ -34,7 +34,8 @@ export type SessionGroup =
   | { kind: "orphan"; label: string; domain?: string };
 
 export interface CategorizeContext {
-  clients: Pick<Client, "id" | "name" | "company" | "emailDomains">[];
+  /** ⚠ En el orden de `ORDEN_DE_CLIENTES_PARA_ATRIBUIR` (abajo): el primero gana. */
+  clients: (Pick<Client, "id" | "name" | "company" | "emailDomains"> & { siglas?: string[] | null })[];
   categories: Pick<SessionCategory, "id" | "name" | "slug" | "domains" | "kind" | "color">[];
   hubspotCompaniesByDomain: Map<string, HubspotCompanyLite>;
   /** Dominios marcados como "internos" en categorías kind=internal (set para lookup O(1)) */
@@ -64,6 +65,18 @@ export interface CategorizableSession {
   manualClientId: string | null;
   title: string;
 }
+
+/**
+ * El ORDEN en que la cascada recorre los clientes, y es load-bearing: el paso por dominio se queda
+ * con el PRIMERO que lo tenga. Sin orden, Postgres devuelve las filas como le conviene y dos clientes
+ * con el mismo dominio se reparten las reuniones al azar entre corridas — caso medido el
+ * 2026-10-02: «Club de Amantes del Vino» quedó duplicado con `lacav.cl` (el alta de «CAV -
+ * Optimización comercial» creó un segundo registro). Gana el más antiguo, que es el que tiene la
+ * historia; el duplicado se FUSIONA aparte (`scripts/merge-duplicate-clients.ts`) — el orden solo
+ * garantiza que la elección no cambie de una corrida a otra.
+ * ⚠ Todo lugar que arme un `CategorizeContext` usa este orden (lo vigila `categorize.test.ts`).
+ */
+export const ORDEN_DE_CLIENTES_PARA_ATRIBUIR = [{ createdAt: "asc" as const }, { id: "asc" as const }];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -272,7 +285,7 @@ export function computeAmbiguousNameTokens(
  */
 function findClientByTitleMatch(
   title: string,
-  clients: Pick<Client, "id" | "name" | "company">[],
+  clients: (Pick<Client, "id" | "name" | "company"> & { siglas?: string[] | null })[],
   ambiguous: Set<string>,
   internalDomains: Set<string>,
 ): Pick<Client, "id" | "name" | "company"> | null {

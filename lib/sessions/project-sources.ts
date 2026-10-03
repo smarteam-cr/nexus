@@ -23,6 +23,8 @@ import { COLUMNA_DEL_DESTINO, linkFeedsDocumento, type DestinoSugerido } from ".
 import { etiquetaDeSala } from "./etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
+import { pisoDelProyecto, quedaAntesDelPiso } from "./piso-del-proyecto";
+import { NO_ES_CONTENEDOR_WHERE } from "@/lib/projects/scope";
 
 /** Compatible con `RawTranscript` de analyze (date en epoch ms). */
 export interface ProjectSourceSession {
@@ -52,6 +54,8 @@ export interface DroppedLink {
 export interface ProjectSourcesResult {
   sessions: ProjectSourceSession[];
   dropped: DroppedLink[];
+  /** Vinculadas pero anteriores al piso del proyecto (lib/sessions/piso-del-proyecto.ts): no alimentan. */
+  anteriores?: DroppedLink[];
 }
 
 /**
@@ -148,9 +152,20 @@ function foldOrganizer(participants: string[], organizerEmail: string | null): s
 export async function getProjectMemberSessions(projectId: string): Promise<ProjectSourcesResult> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { clientId: true },
+    select: { clientId: true, createdAt: true, hubspotCreatedAt: true },
   });
   if (!project) return { sessions: [], dropped: [] };
+  /* El piso solo existe si el cliente ya tuvo OTRO proyecto antes que éste: su historia vieja es de ese
+     otro. Ver lib/sessions/piso-del-proyecto.ts (caso «CAV - SHP», 2026-10-02). */
+  const anteriorDelCliente = await prisma.project.count({
+    where: {
+      clientId: project.clientId,
+      id: { not: projectId },
+      createdAt: { lt: project.createdAt },
+      ...NO_ES_CONTENEDOR_WHERE,
+    },
+  });
+  const piso = pisoDelProyecto(project, anteriorDelCliente > 0);
 
   const links = await prisma.sessionProject.findMany({
     where: { projectId, included: true },
@@ -162,6 +177,7 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
       implementationOverride: true,
       isPrimary: true,
       confidence: true,
+      source: true,
       session: {
         select: {
           id: true,
@@ -178,10 +194,15 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
 
   const sessions: ProjectSourceSession[] = [];
   const dropped: DroppedLink[] = [];
+  const anteriores: DroppedLink[] = [];
   for (const l of links) {
     const s = l.session;
     if (!belongsToClient(s, project.clientId)) {
       dropped.push({ sessionId: s.id, title: s.title, resolvedClientId: s.resolvedClientId });
+      continue;
+    }
+    if (quedaAntesDelPiso(s.date.getTime(), piso, l.source)) {
+      anteriores.push({ sessionId: s.id, title: s.title, resolvedClientId: s.resolvedClientId });
       continue;
     }
     sessions.push({
@@ -206,7 +227,7 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
         dropped.map((d) => `${d.sessionId}("${d.title}")→${d.resolvedClientId ?? "null"}`).join(", "),
     );
   }
-  return { sessions, dropped };
+  return { sessions, dropped, anteriores };
 }
 
 /**

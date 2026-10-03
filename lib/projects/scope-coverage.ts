@@ -150,6 +150,15 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
       "de alcance dejaría afuera justo al que hay que encontrar (un proyecto inactivo lo " +
       "reclama igual) y el alta se apropiaría de un record ajeno.",
   },
+  "lib/sessions/project-sources.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: pregunta si el cliente tuvo ALGÚN otro proyecto antes " +
+      "que éste —activo, finalizado o en cuarentena, da igual— para decidir si su historia vieja es " +
+      "de ese otro (lib/sessions/piso-del-proyecto.ts, caso «CAV - SHP»). El proyecto anterior que " +
+      "importa es justamente el que ya terminó, así que acotar por un criterio de alcance lo " +
+      "escondería y el piso no se aplicaría nunca.",
+  },
   "lib/handoff/duenio.ts": {
     modo: "exento",
     razon:

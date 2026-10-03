@@ -1,0 +1,11 @@
+-- Siglas con que el equipo nombra a un cliente en los títulos de sus reuniones («CAV»).
+--
+-- ADITIVA: los clientes existentes quedan con la lista vacía, que es exactamente lo que
+-- corresponde (nadie declaró siglas todavía). Sin backfill.
+--
+-- Por qué: una reunión 100 % del equipo solo se atribuye por título, y el match descarta las
+-- palabras de menos de 4 letras. «[Sales & Service handoff] CAV» (2026-09-15) quedó sin dueño y
+-- fuera del handoff de «CAV - SHP». Ver lib/sessions/match-por-titulo.ts.
+--
+-- Aplicar (En tu PC):  $env:ALLOW_PROD_WRITE="1"; npx prisma db execute --file scripts/sql/2026-10-02-siglas-de-cliente.sql; Remove-Item Env:ALLOW_PROD_WRITE
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "siglas" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

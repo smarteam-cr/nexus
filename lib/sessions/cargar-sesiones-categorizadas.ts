@@ -93,7 +93,7 @@ export async function cargarSesionesCategorizadas() {
     }),
     prisma.client.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true },
+      select: { id: true, name: true, company: true, emailDomains: true, hubspotCompanyId: true, siglas: true, createdAt: true },
     }),
     getTeamMembers(),       // cacheado
     getSessionCategories(), // cacheado
@@ -142,8 +142,14 @@ export async function cargarSesionesCategorizadas() {
       .filter((c) => c.hubspotCompanyId)
       .map((c) => [c.hubspotCompanyId as string, { id: c.id, name: c.name, company: c.company }]),
   );
+  /* La lista que se MUESTRA va por nombre; la que ATRIBUYE va por antigüedad, igual que la
+     materialización (`ORDEN_DE_CLIENTES_PARA_ATRIBUIR`): si no, /sessions y `resolvedClientId`
+     podrían elegir distinto registro entre dos clientes con el mismo dominio. */
+  const clientsParaAtribuir = [...clients].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+  );
   const categorized = categorizeSessions(sessions, {
-    clients,
+    clients: clientsParaAtribuir,
     categories,
     hubspotCompaniesByDomain,
     internalDomains,

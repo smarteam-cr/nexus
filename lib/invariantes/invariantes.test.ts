@@ -17,7 +17,7 @@ import {
   INVARIANTES_SOLO_BASE,
   correrInvariantesSoloBase,
   INV1, INV3, INV5, INV8, INV8c, INV10, INV11, INV14, INV18, INV20, INV21, INV22, INV23, INV24, INV25, INV26, INV27, INV28, INV30,
-  INV31, INV32, INV33, INV34, INV35, INV36,
+  INV31, INV32, INV33, INV34, INV35, INV36, INV37,
   type Invariante,
 } from "./index";
 import { InvariantesVioladosError, JOB_INVARIANTES, correrJobDeInvariantes, mensajeDeViolaciones } from "./job";
@@ -87,6 +87,17 @@ describe("sesiones: INV1 e INV21", () => {
     expect(w.date, "las futuras no cuentan: la agenda vive en la misma tabla").toEqual({ lte: AHORA });
     expect((await INV21.correr(baseFalsa({ project: [proyecto], firefliesSession: 0 }), AHORA)).ok).toBe(true);
     expect((await INV21.correr(baseFalsa({ project: [{ ...proyecto, _count: { sessions: 2 } }], firefliesSession: 9 }), AHORA)).ok).toBe(true);
+  });
+
+  it("INV37 · dos clientes con el mismo dominio (por emailDomains o por company) violan; dominios distintos no", async () => {
+    const viejo = { id: "c1", name: "Club de Amantes del Vino", company: "Club de Amantes del Vino", emailDomains: ["lacav.cl"] };
+    const duplicado = { id: "c2", name: "Club de Amantes del Vino", company: "lacav.cl", emailDomains: [] };
+    const otro = { id: "c3", name: "Wherex", company: "wherex.com", emailDomains: ["wherex.com"] };
+    const r = await INV37.correr(baseFalsa({ client: [viejo, duplicado, otro] }), AHORA);
+    expect(r.ok).toBe(false);
+    expect(r.lineas[0]).toContain("lacav.cl: Club de Amantes del Vino · Club de Amantes del Vino");
+    expect(r.lineas[0], "un cliente con el dominio repetido en sus dos campos no se cuenta dos veces").not.toContain("wherex.com");
+    expect((await INV37.correr(baseFalsa({ client: [viejo, otro] }), AHORA)).ok).toBe(true);
   });
 });
 
@@ -545,12 +556,12 @@ const soloCodigoDe = (rel: string) => soloCodigo(fs.readFileSync(path.join(RAIZ,
 
 describe("el registro y el consumidor", () => {
 
-  it("el registro tiene los 25 solo-base, con ids únicos y en el orden del gate", () => {
+  it("el registro tiene los 26 solo-base, con ids únicos y en el orden del gate", () => {
     /* Del 28 salta al 30: INV29 lo reserva docs/database-refactoring-plan.md. 31 y 32 son las frescuras (espejo y corte);
-       33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12). */
+       33 y 34, el número de factura (etapa 7); 35, la plata que no es venta (etapa 10); 36, a quién se facturó (etapa 12); 37, dos clientes con un dominio (2026-10-02). */
     expect(INVARIANTES_SOLO_BASE.map((i) => i.id)).toEqual([
       "1", "3", "5", "8", "8c", "10", "11", "14", "18", "20", "21", "22", "23", "24", "25", "26", "27", "28", "30", "31", "32",
-      "33", "34", "35", "36",
+      "33", "34", "35", "36", "37",
     ]);
     expect(new Set(INVARIANTES_SOLO_BASE.map((i) => i.id)).size).toBe(INVARIANTES_SOLO_BASE.length);
   });
@@ -598,7 +609,7 @@ describe("el job invariants-daily (B-08)", () => {
    */
   it("con todo en verde devuelve el resumen; con algo en rojo LANZA con los ids y el mensaje acotado", async () => {
     /* La edición que lo pone en rojo: cambiar el throw por un console.error «para no ensuciar Sentry». */
-    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("25 invariantes solo-base en verde");
+    await expect(correrJobDeInvariantes(baseFalsa({}), AHORA)).resolves.toBe("26 invariantes solo-base en verde");
     const promesa = correrJobDeInvariantes(baseFalsa({ cobro: 2 }), AHORA); // INV3 e INV5 cuentan cobros
     await expect(promesa).rejects.toBeInstanceOf(InvariantesVioladosError);
     const e = (await promesa.catch((x: unknown) => x)) as InvariantesVioladosError;

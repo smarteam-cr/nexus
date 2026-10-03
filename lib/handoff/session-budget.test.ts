@@ -5,6 +5,7 @@
  */
 import { describe, test, expect } from "vitest";
 import {
+  esTratoDeOtroCiclo,
   planHandoffSessionBudget,
   HANDOFF_SESSION_CHAR_TIERS,
   type HandoffSessionCandidate,
@@ -140,5 +141,18 @@ describe("planHandoffSessionBudget", () => {
   test("el borde exacto cuenta como ocurrida", () => {
     const plan = planHandoffSessionBudget([c("justo-ahora", 20)], null, day(20));
     expect(plan.map((p) => p.id)).toEqual(["justo-ahora"]);
+  });
+});
+
+describe("el trato de otro ciclo (2026-10-02)", () => {
+  const ms = (s: string) => new Date(s).getTime();
+  test("caso CAV SHP: trato de oct-2025 para un proyecto de ago-2026 es de otro ciclo", () => {
+    expect(esTratoDeOtroCiclo(ms("2025-10-16"), ms("2026-08-25"))).toBe(true);
+  });
+  test("el trato de la venta (semanas antes del alta) ancla normal", () => {
+    expect(esTratoDeOtroCiclo(ms("2026-07-31"), ms("2026-08-25"))).toBe(false);
+  });
+  test("un cierre posterior al alta (alta adelantada) tampoco es de otro ciclo", () => {
+    expect(esTratoDeOtroCiclo(ms("2026-08-31"), ms("2026-08-25"))).toBe(false);
   });
 });

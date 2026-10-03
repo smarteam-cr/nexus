@@ -16,6 +16,7 @@ const patchClientSchema = z.strictObject({
   industry: z.string().max(200).nullable().optional(),
   notes: z.string().max(20_000).nullable().optional(),
   emailDomains: z.array(z.string().max(253)).max(50).optional(),
+  siglas: z.array(z.string().max(20)).max(10).optional(),
   logoScale: z.number().nullable().optional(),
 });
 
@@ -76,6 +77,11 @@ export async function PATCH(
           .map((d: string) => d.trim().toLowerCase().replace(/^@/, ""))
           .filter(Boolean),
       }),
+      /* Siglas con que el equipo nombra al cliente en los títulos («CAV»). Se guardan en
+         mayúsculas y sin espacios; de 2 letras para arriba (una letra matchearía cualquier cosa). */
+      ...(data.siglas !== undefined && {
+        siglas: [...new Set(data.siglas.map((x) => x.trim().toUpperCase().replace(/\s+/g, "")).filter((x) => x.length >= 2))],
+      }),
       // Tamaño del logo. `null` explícito = "volver al default", y por eso se distingue
       // de `undefined` (= "no lo mandé"): son cosas distintas. El clamp es del servidor
       // porque la barra es solo una UI — un PATCH a mano con 5000 haría que el logo tape
@@ -88,9 +94,9 @@ export async function PATCH(
     revalidateClientsSidebar();
   }
   /* PERF #1: si cambió algo que afecta el match (name/company/emailDomains), re-resolver en
-     background. ⚠ El catch LOGUEA: renombrar un cliente cambia de quién son sus reuniones, así
+     background (las siglas también: deciden de quién es una reunión interna). ⚠ El catch LOGUEA: renombrar un cliente cambia de quién son sus reuniones, así
      que un refresco que falla en silencio deja la atribución vieja sin que nadie se entere. */
-  if (data.name !== undefined || data.company !== undefined || data.emailDomains !== undefined) {
+  if (data.name !== undefined || data.company !== undefined || data.emailDomains !== undefined || data.siglas !== undefined) {
     void resolveAllSessions().catch((e) => {
       console.error(`[clients] re-resolver tras editar ${id} falló:`, e);
     });

@@ -6,6 +6,7 @@ import { createHandoffCanvas } from "@/lib/canvas/default-canvases";
 import { canvasOf } from "@/lib/pieces/canvas-query";
 import { duenioDelHandoff } from "@/lib/handoff/duenio";
 import { resolvePipeline } from "@/lib/projects/kind";
+import { NO_ES_CONTENEDOR_WHERE } from "@/lib/projects/scope";
 import { altaEnCurso, parseEstadoDeAlta, type EstadoDeAltaEnBase } from "@/lib/projects/alta";
 
 /**
@@ -362,7 +363,7 @@ async function terminarElAlta(
      sello de arriba lo garantiza aunque se reintente diez— y va fuera de la transacción porque
      es larga y no puede hacer fallar el alta que ya terminó. */
   if (!ctx.yaReclasificado) {
-    void vincularLasReunionesDelCliente(ctx.clientId).catch(() => {});
+    void vincularLasReunionesDelCliente(ctx.clientId, projectId).catch(() => {});
   }
 }
 
@@ -393,8 +394,16 @@ async function terminarElAlta(
  * —el sello lo garantiza—, así que 90 días deja afuera a todo cliente con historia más vieja.
  * Medido: «kamalio», 3 reuniones de 2025 y un alta de agosto 2026, proyecto sin ninguna. El tope
  * de 60 sesiones sigue acotando el gasto, y con un solo proyecto activo ni llama al modelo.
+ *
+ * ⛔ PERO SOLO SI ES EL PRIMER PROYECTO DEL CLIENTE (2026-10-02). Con la ventana abierta siempre,
+ * el alta de «CAV - SHP» (agosto 2026) colgó del proyecto nuevo las 57 reuniones del cliente —32
+ * de 2025, del proyecto anterior YA FINALIZADO—: como el viejo estaba inactivo, el nuevo era el
+ * «único proyecto activo» y se las llevó todas. El handoff salió con una integración SAP que no
+ * se vendió y el kickoff con una fecha de 2025. Si el cliente ya tuvo otro proyecto, su historia
+ * vieja es de ESE proyecto: la ventana se cierra a los 90 días previos al alta. Lo anterior sigue
+ * en el buscador de sesiones del proyecto, para quien lo quiera agregar a mano.
  */
-async function vincularLasReunionesDelCliente(clientId: string): Promise<void> {
+async function vincularLasReunionesDelCliente(clientId: string, projectId: string): Promise<void> {
   try {
     const { resolveAllSessions } = await import("@/lib/sessions/resolve-client");
     // `reclassify: false`: la reclasificación la dispara la línea de abajo, con la ventana
@@ -404,8 +413,11 @@ async function vincularLasReunionesDelCliente(clientId: string): Promise<void> {
     // Si la atribución falla, se reclasifica igual con lo que haya: peor es no intentarlo.
     console.error(`[alta] la atribución de sesiones del cliente ${clientId} falló`, e);
   }
+  const otrosProyectos = await prisma.project.count({
+    where: { clientId, id: { not: projectId }, ...NO_ES_CONTENEDOR_WHERE },
+  });
   const { reclassifyClientSessions } = await import("@/lib/sessions/reclassify");
-  await reclassifyClientSessions(clientId, { sinceDays: VENTANA_DEL_ALTA_DIAS, max: 60 });
+  await reclassifyClientSessions(clientId, { sinceDays: ventanaDelAlta(otrosProyectos), max: 60 });
 }
 
 /** El objeto "projects" tal como lo nombran las rutas de lectura del portal. */
@@ -413,6 +425,13 @@ const SLUG_PROYECTOS = "projects";
 
 /** Diez años: en la práctica, «todo el historial del cliente». Ver el docblock de arriba. */
 const VENTANA_DEL_ALTA_DIAS = 3650;
+/** Cuando el cliente ya tuvo otro proyecto: solo lo reciente es de éste. */
+export const VENTANA_DEL_ALTA_CON_HISTORIA_DIAS = 90;
+
+/** Cuánto historial hereda el proyecto que nace. Exportada para su test. */
+export function ventanaDelAlta(otrosProyectosDelCliente: number): number {
+  return otrosProyectosDelCliente > 0 ? VENTANA_DEL_ALTA_CON_HISTORIA_DIAS : VENTANA_DEL_ALTA_DIAS;
+}
 
 /**
  * ¿Un intento anterior de ESTA alta ya dejó un record en HubSpot?

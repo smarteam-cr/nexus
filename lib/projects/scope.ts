@@ -337,6 +337,13 @@ const CLASIFICABLE: readonly CriterioDeProyecto[] = [ACTIVO, NO_ES_SENTINEL];
  */
 const PIPELINE_CS: readonly CriterioDeProyecto[] = [ES_PIPELINE_CS];
 
+/**
+ * «No es el contenedor "Información del cliente"», solo. Para quien pregunta por EXISTENCIA (¿el
+ * cliente tuvo otro proyecto?) y no por alcance: incluye las filas con `serviceType` NULL, que
+ * `{ not: SENTINEL }` a secas descartaría.
+ */
+export const NO_ES_CONTENEDOR_WHERE = NO_ES_SENTINEL.where;
+
 export const PROYECTO_NAVEGABLE_WHERE = componer(NAVEGABLE);
 export const PROYECTO_DE_CARTERA_WHERE = componer(DE_CARTERA);
 export const PROYECTO_FACTURABLE_WHERE = componer(FACTURABLE);

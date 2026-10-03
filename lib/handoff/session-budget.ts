@@ -20,6 +20,24 @@
  */
 import { soloOcurridas } from "@/lib/sessions/ocurridas";
 
+/** Más de esto antes del inicio del proyecto, un trato ganado es de OTRO ciclo del cliente. */
+export const MESES_DE_TRATO_DE_OTRO_CICLO = 6;
+
+/**
+ * ¿Este trato ganado es de un ciclo ANTERIOR del cliente, no de la venta de este proyecto?
+ *
+ * Caso medido el 2026-10-02: «CAV - SHP» nació el 25-ago-2026 colgado del trato del 16-oct-2025 (el
+ * del proyecto anterior). El handoff partió las reuniones por esa fecha y rotuló la PREVENTA DE 2025
+ * como «lo que se prometió/vendió»: salió una integración SAP que nadie vendió. Un trato que cerró
+ * más de 6 meses antes de que el proyecto existiera no ancla nada: el handoff cae a «sin ancla» y el
+ * trato se rotula como de otro ciclo.
+ */
+export function esTratoDeOtroCiclo(cierreMs: number, inicioDelProyectoMs: number): boolean {
+  const limite = new Date(inicioDelProyectoMs);
+  limite.setUTCMonth(limite.getUTCMonth() - MESES_DE_TRATO_DE_OTRO_CICLO);
+  return cierreMs < limite.getTime();
+}
+
 export type HandoffSessionBlock = "antes_cierre" | "despues_cierre" | "sin_ancla";
 
 export interface HandoffSessionCandidate {
