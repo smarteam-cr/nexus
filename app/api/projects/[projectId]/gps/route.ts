@@ -305,6 +305,8 @@ export const GET = withProjectAccess(async (
     id: true,
     text: true,
     ownerEmail: true,
+    ladoResponsable: true,
+    responsableNombre: true,
     dueDate: true,
     status: true,
     done: true,
@@ -318,6 +320,8 @@ export const GET = withProjectAccess(async (
     id: string;
     text: string;
     ownerEmail: string | null;
+    ladoResponsable: string | null;
+    responsableNombre: string | null;
     dueDate: Date | null;
     status: "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE";
     done: boolean;
@@ -335,6 +339,8 @@ export const GET = withProjectAccess(async (
     // Campos extra para que el UI nuevo aproveche si quiere
     id: a.id,
     ownerEmail: a.ownerEmail,
+    ladoResponsable: a.ladoResponsable,
+    responsableNombre: a.responsableNombre,
     dueDate: a.dueDate?.toISOString() ?? null,
     status: a.status,
     deletedAt: a.deletedAt?.toISOString() ?? null,

@@ -139,6 +139,15 @@ const LECTORES: Lector[] = [
       "filtrar el contexto ANTES: el prompt no es la defensa",
   },
   {
+    archivo: "lib/sessions/post-process.ts",
+    pieza: null,
+    exposicion: "interno",
+    porque:
+      "el análisis de cada reunión lee SOLO el alcance vendido y lo que quedó afuera, para reconocer un " +
+      "pedido fuera de alcance (2026-10-02). Lo que produce —la minuta, los compromisos y los pedidos— es " +
+      "interno: ningún documento del cliente lo lee",
+  },
+  {
     archivo: "lib/handoff/proponer-resultados.ts",
     pieza: "diagnosis",
     exposicion: "directo",

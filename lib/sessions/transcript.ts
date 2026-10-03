@@ -10,6 +10,7 @@
  * necesite leer sesiones pasadas. Best-effort: devuelve null si no hay contenido.
  */
 import { prisma } from "@/lib/db/prisma";
+import { notasPriorizadas } from "./notas-de-gemini";
 
 export async function fetchTranscriptContent(
   sessionId: string,
@@ -53,7 +54,8 @@ export async function fetchTranscriptContent(
       const overview = asText(s?.overview);
       const actionItems = asText(s?.action_items);
       if (keywords.trim()) parts.push(`**Temas clave:** ${keywords.trim()}`);
-      if (overview.trim()) parts.push(`**Resumen:**\n${overview.trim().slice(0, 1500)}`);
+      // Decisiones y próximos pasos ENTEROS: ahí viven las fechas y los compromisos (lib/sessions/notas-de-gemini.ts).
+      if (overview.trim()) parts.push(`**Resumen:**\n${notasPriorizadas(overview)}`);
       if (actionItems.trim()) parts.push(`**Compromisos:**\n${actionItems.trim().slice(0, 800)}`);
       // Gemini Notes sections — donde vive el detalle real de la reunión
       // (Presentación del cliente, Dolores, Acuerdos, Próximos pasos, etc.).

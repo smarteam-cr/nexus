@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildProgressUserMessage } from "./regenerate-progress";
+import { buildProgressUserMessage, fusionarParticularidadesPendientes } from "./regenerate-progress";
 import { bloqueDeInstruccionesDeDoc } from "@/lib/business-cases/section-briefs";
 import { bloqueDeOperativa } from "@/lib/cs/hubspot-ops-block";
 
@@ -42,7 +42,10 @@ describe("buildProgressUserMessage", () => {
     /* ⚠ ACTUALIZADA (revisión adversarial, 2026-09-24), con esta razón: el encabezado de las
        instrucciones decía «cumplilas» (voseo) y pasó a «cúmplelas»: es lo primero que leen los agentes
        del cronograma cuando hay instrucciones, y el texto para el modelo va en tuteo. La guarda sigue
-       pidiendo lo mismo: una sola línea en blanco entre el bloque y Empresa. */
+       pidiendo lo mismo: una sola línea en blanco entre el bloque y Empresa.
+       ⚠ ACTUALIZADA otra vez (2026-10-02), con esta razón: el cierre pasó a tuteo y suma que una
+       decisión de alcance nunca es un ATRASO (la validación con 14 sesiones reales encontró DocuSign y
+       O4Bi forzados como atraso). La forma que protege la guarda no cambió. */
     expect(msg).toBe(
       `=== INSTRUCCIONES DEL CSE PARA ESTA PIEZA (reglas duras — cúmplelas SIEMPRE) ===\n` +
         `Las fases de QA van al final\n\n` +
@@ -54,9 +57,9 @@ describe("buildProgressUserMessage", () => {
         `=== HANDOFF CURADO (alcance del proyecto) ===\n` +
         `(sin handoff confirmado)\n\n` +
         `CRONOGRAMA\n\n` +
-        `Detectá el avance real siguiendo tus instrucciones: ubicá el currentPhaseId, marcá las fases completadas y las tareas hechas. Usá ids EXACTOS. No re-propongas lo que ya está DONE. Sé conservador.\n` +
-        `La etapa de HubSpot (ANCLA #1) manda la POSICIÓN cuando no hay una instrucción explícita del CSE sobre una fase puntual — pero si arriba, en las instrucciones del CSE, dice explícitamente que una fase concreta está resuelta o casi resuelta, proponela como completada (fase y/o sus tareas) AUNQUE esa fase venga después del currentPhaseId en el orden del plan. El orden del cronograma es una expectativa inicial: no siempre coincide con el orden real en que se hizo el trabajo, y una instrucción explícita sobre una fase puntual pesa más que la posición.\n` +
-        `Además, si el transcript RESPALDA una DESVIACIÓN FECHADA del plan (una fecha se corrió = ATRASO con weeksImpact obligatorio; o se comprometió una fecha nueva = COMPROMISO), proponela en \`particularidades\` con su party, occurredAt (fecha ISO de la sesión) y sourceQuote (fragmento de respaldo). NO son particularidades los pendientes/insumos del cliente ('se necesita X', 'pendiente entrega de Y') — esos son tareas party=CLIENTE, no los emitas acá. Si no hay una desviación fechada clara, dejá el array vacío.`,
+        `Detecta el avance real siguiendo tus instrucciones: ubica el currentPhaseId, marca las fases completadas y las tareas hechas. Usa ids EXACTOS. No vuelvas a proponer lo que ya está DONE. Sé conservador.\n` +
+        `La etapa de HubSpot (ANCLA #1) manda la POSICIÓN cuando no hay una instrucción explícita del CSE sobre una fase puntual — pero si arriba, en las instrucciones del CSE, dice explícitamente que una fase concreta está resuelta o casi resuelta, proponla como completada (fase y/o sus tareas) AUNQUE esa fase venga después del currentPhaseId en el orden del plan. El orden del cronograma es una expectativa inicial: no siempre coincide con el orden real en que se hizo el trabajo, y una instrucción explícita sobre una fase puntual pesa más que la posición.\n` +
+        `Además, si el transcript RESPALDA una DESVIACIÓN FECHADA del plan (una fecha se corrió = ATRASO con weeksImpact obligatorio; o se comprometió una fecha nueva = COMPROMISO), propónla en \`particularidades\` con su party, occurredAt (fecha ISO de la sesión) y sourceQuote (fragmento de respaldo). NO son particularidades los pendientes/insumos del cliente ('se necesita X', 'pendiente entrega de Y'): esos los registra el análisis de cada reunión. Tampoco una decisión de alcance (algo que se cotizó y no se hace, o se pidió aparte): eso es un pedido fuera de alcance, nunca un ATRASO. Si no hay una desviación fechada clara, deja el array vacío.`,
     );
   });
 
@@ -148,5 +151,24 @@ describe("el agente de avance ve el estado que el equipo carga en HubSpot", () =
       hubspotAdoptionState: null,
     });
     expect(bloque.length).toBeLessThan(600);
+  });
+});
+
+describe("la fecha de hoy y el borrador que acumula (2026-10-02)", () => {
+  it("con la fecha de hoy, el agente la recibe en su propia línea", () => {
+    const msg = buildProgressUserMessage({ ...base, instrucciones: "", hoy: "2026-10-02" });
+    expect(msg).toContain("Empresa: Acme\nHoy: 2026-10-02\n");
+  });
+
+  it("lo que el agente no vuelve a proponer se conserva; lo nuevo gana con la misma huella", () => {
+    const vieja = { fingerprint: "pausa-de-avances", title: "Se pausaron los avances" };
+    const repetida = { fingerprint: "n8n", title: "versión vieja" };
+    const nueva = { fingerprint: "n8n", title: "Cambios de N8N sin coordinar" };
+    const out = fusionarParticularidadesPendientes([vieja, repetida], [nueva] as never);
+    expect(out.map((p) => p.title)).toEqual(["Cambios de N8N sin coordinar", "Se pausaron los avances"]);
+  });
+
+  it("sin borrador previo, queda solo lo nuevo", () => {
+    expect(fusionarParticularidadesPendientes(null, [])).toEqual([]);
   });
 });

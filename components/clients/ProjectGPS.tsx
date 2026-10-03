@@ -25,6 +25,9 @@ export interface PendingItem {
   addedAt?: string;
   // Campos del modelo ActionItem
   ownerEmail?: string | null;
+  /** Quién se comprometió (2026-10-02): el compromiso puede ser del CLIENTE, sin correo del equipo. */
+  ladoResponsable?: string | null;
+  responsableNombre?: string | null;
   dueDate?: string | null; // ISO
   status?: "PENDING" | "IN_PROGRESS" | "BLOCKED" | "DONE";
   deletedAt?: string | null; // ISO — set si la tarea fue borrada (soft-delete) → Histórico

@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import ResultadosMediblesDelHandoff from "./ResultadosMediblesDelHandoff";
+import PedidosFueraDeAlcance from "@/components/clients/PedidosFueraDeAlcance";
 import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
 import { useAgentRun } from "@/hooks/useAgentRun";
 import { pollAgentRun, type PolledRun } from "@/lib/clients/poll-agent-run";
@@ -810,6 +811,9 @@ export default function ProjectHandoffSection({
           )}
         </div>
       )}
+
+      {/* Lo que el cliente pidió en las reuniones y no está en lo vendido (2026-10-02): el CSE decide. */}
+      {visible && <PedidosFueraDeAlcance projectId={projectId} />}
 
       {generated && showDoc && visible && status.canvasId && (
         <div className="border-t border-line px-4 py-4">

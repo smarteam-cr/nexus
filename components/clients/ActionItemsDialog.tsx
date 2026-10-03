@@ -31,7 +31,19 @@ function ItemMeta({ item }: { item: PendingItem }) {
           ↗ {item.sessionTitle}
         </Link>
       )}
-      {item.ownerEmail && <span className="text-[10px] text-fg-muted">@{item.ownerEmail.split("@")[0]}</span>}
+      {item.ownerEmail ? (
+        <span className="text-[10px] text-fg-muted">@{item.ownerEmail.split("@")[0]}</span>
+      ) : (
+        item.responsableNombre && (
+          <span className="text-[10px] text-fg-muted">
+            {item.ladoResponsable === "CLIENTE" ? "Cliente: " : ""}
+            {item.responsableNombre}
+          </span>
+        )
+      )}
+      {!item.ownerEmail && !item.responsableNombre && item.ladoResponsable === "CLIENTE" && (
+        <span className="text-[10px] text-fg-muted">Lo entrega el cliente</span>
+      )}
       {item.dueDate && (
         <span className="text-[10px] text-fg-muted">
           vence {new Date(item.dueDate).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}

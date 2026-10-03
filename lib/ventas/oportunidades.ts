@@ -18,7 +18,7 @@
  * lo consume un componente de cliente.
  */
 
-export type FuenteDeOportunidad = "entrega" | "handoff";
+export type FuenteDeOportunidad = "entrega" | "reunion" | "handoff";
 
 export interface OportunidadDetectada {
   clientId: string;
@@ -45,11 +45,12 @@ export interface OportunidadesDeCliente {
 /** Rótulo de cada fuente, para la pantalla. Un solo dueño: el componente no los redacta. */
 export const ROTULO_DE_FUENTE: Record<FuenteDeOportunidad, string> = {
   entrega: "Sugerencia del CSE al entregar",
+  reunion: "Pedido fuera de alcance en una reunión",
   handoff: "Se conversó y no se vendió",
 };
 
 /** La sugerencia de un humano va antes que la lista del agente: es la señal más curada. */
-const ORDEN_DE_FUENTE: Record<FuenteDeOportunidad, number> = { entrega: 0, handoff: 1 };
+const ORDEN_DE_FUENTE: Record<FuenteDeOportunidad, number> = { entrega: 0, reunion: 1, handoff: 2 };
 
 /** Tope por ítem. /sales lista a toda la cartera: una sección de handoff entera por fila no es una lista. */
 export const TOPE_DE_TEXTO = 700;

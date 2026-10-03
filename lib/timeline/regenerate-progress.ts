@@ -29,6 +29,7 @@ import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { cargarNotasDelCronograma } from "@/lib/contexto/cargar";
+import { fechaLocalDeLaReunion } from "@/lib/sessions/compromisos-y-alcance";
 
 const AGENT_ID_PROGRESS = "agent-timeline-progress";
 
@@ -83,6 +84,25 @@ const VALID_KINDS = new Set(["ATRASO", "COMPROMISO"]);
 const VALID_PARTIES = new Set(["CLIENTE", "SMARTEAM", "AMBOS", "DEV"]);
 
 /** Borrador de una particularidad propuesta (validado; aún sin crear). */
+/**
+ * El borrador de particularidades ACUMULA por huella (2026-10-02). Antes cada corrida lo pisaba: lo
+ * que el agente no volvía a proponer desaparecía sin que nadie lo revisara (medido en RC: la pausa de
+ * avances salió en una corrida y se esfumó en la siguiente). Lo nuevo gana sobre lo previo con la
+ * misma huella; lo previo que no volvió a salir se conserva hasta que el CSE decida.
+ */
+export function fusionarParticularidadesPendientes(
+  previas: unknown,
+  nuevas: readonly PendingParticularidadDraft[],
+): PendingParticularidadDraft[] {
+  const huellas = new Set(nuevas.map((n) => n.fingerprint));
+  const viejas = Array.isArray(previas)
+    ? (previas as PendingParticularidadDraft[]).filter(
+        (p) => p && typeof p === "object" && typeof p.fingerprint === "string" && !huellas.has(p.fingerprint),
+      )
+    : [];
+  return [...nuevas, ...viejas];
+}
+
 export interface PendingParticularidadDraft {
   kind: string;
   party: string;
@@ -123,6 +143,8 @@ export interface ProgressMessageInputs {
   notasBlock?: string;
   handoffCtx: string;
   timelineCtx: string;
+  /** AAAA-MM-DD en Costa Rica (2026-10-02). Opcional: el golden de abajo no la trae. */
+  hoy?: string;
 }
 
 /**
@@ -137,6 +159,8 @@ export function buildProgressUserMessage(i: ProgressMessageInputs): string {
     `${i.instrucciones}Empresa: ${i.companyName}`,
     i.industry ? `Industria: ${i.industry}` : null,
     i.serviceType ? `Servicio: ${i.serviceType}` : null,
+    // La fecha de HOY en Costa Rica: sin ella el agente no sabe cuánto pasó desde cada reunión.
+    i.hoy ? `Hoy: ${i.hoy}` : null,
     "",
     "=== ETAPA ACTUAL EN HUBSPOT (ANCLA #1 — manda la posición) ===",
     i.stageLabel ? i.stageLabel : "(sin etapa de HubSpot disponible — inferí el avance solo desde las sesiones y el handoff)",
@@ -151,9 +175,9 @@ export function buildProgressUserMessage(i: ProgressMessageInputs): string {
     "",
     i.timelineCtx,
     "",
-    "Detectá el avance real siguiendo tus instrucciones: ubicá el currentPhaseId, marcá las fases completadas y las tareas hechas. Usá ids EXACTOS. No re-propongas lo que ya está DONE. Sé conservador.",
-    "La etapa de HubSpot (ANCLA #1) manda la POSICIÓN cuando no hay una instrucción explícita del CSE sobre una fase puntual — pero si arriba, en las instrucciones del CSE, dice explícitamente que una fase concreta está resuelta o casi resuelta, proponela como completada (fase y/o sus tareas) AUNQUE esa fase venga después del currentPhaseId en el orden del plan. El orden del cronograma es una expectativa inicial: no siempre coincide con el orden real en que se hizo el trabajo, y una instrucción explícita sobre una fase puntual pesa más que la posición.",
-    "Además, si el transcript RESPALDA una DESVIACIÓN FECHADA del plan (una fecha se corrió = ATRASO con weeksImpact obligatorio; o se comprometió una fecha nueva = COMPROMISO), proponela en `particularidades` con su party, occurredAt (fecha ISO de la sesión) y sourceQuote (fragmento de respaldo). NO son particularidades los pendientes/insumos del cliente ('se necesita X', 'pendiente entrega de Y') — esos son tareas party=CLIENTE, no los emitas acá. Si no hay una desviación fechada clara, dejá el array vacío.",
+    "Detecta el avance real siguiendo tus instrucciones: ubica el currentPhaseId, marca las fases completadas y las tareas hechas. Usa ids EXACTOS. No vuelvas a proponer lo que ya está DONE. Sé conservador.",
+    "La etapa de HubSpot (ANCLA #1) manda la POSICIÓN cuando no hay una instrucción explícita del CSE sobre una fase puntual — pero si arriba, en las instrucciones del CSE, dice explícitamente que una fase concreta está resuelta o casi resuelta, proponla como completada (fase y/o sus tareas) AUNQUE esa fase venga después del currentPhaseId en el orden del plan. El orden del cronograma es una expectativa inicial: no siempre coincide con el orden real en que se hizo el trabajo, y una instrucción explícita sobre una fase puntual pesa más que la posición.",
+    "Además, si el transcript RESPALDA una DESVIACIÓN FECHADA del plan (una fecha se corrió = ATRASO con weeksImpact obligatorio; o se comprometió una fecha nueva = COMPROMISO), propónla en `particularidades` con su party, occurredAt (fecha ISO de la sesión) y sourceQuote (fragmento de respaldo). NO son particularidades los pendientes/insumos del cliente ('se necesita X', 'pendiente entrega de Y'): esos los registra el análisis de cada reunión. Tampoco una decisión de alcance (algo que se cotizó y no se hace, o se pidió aparte): eso es un pedido fuera de alcance, nunca un ATRASO. Si no hay una desviación fechada clara, deja el array vacío.",
   ]
     .filter((x) => x !== null)
     .join("\n");
@@ -192,6 +216,7 @@ export async function regenerateTimelineProgress(
         timeline: {
           select: {
             id: true,
+            pendingParticularidades: true,
             phases: {
               select: { id: true, status: true, tasks: { select: { id: true, status: true } } },
             },
@@ -276,14 +301,14 @@ export async function regenerateTimelineProgress(
     const bloqueConContenido = conContenido
       .map(
         (s) =>
-          `[${s.date.toISOString().slice(0, 10)}] ${prefijoDeSala(etiquetaDeSala(s, dominiosPropios))}` +
+          `[${fechaLocalDeLaReunion(s.date)}] ${prefijoDeSala(etiquetaDeSala(s, dominiosPropios))}` +
           `${s.content}`,
       )
       .join("\n\n---\n\n");
     const colaSinContenido = sinContenido.length
       ? `Además hubo ${sinContenido.length} reunión(es) del proyecto SIN transcripción ni ` +
         `resumen — ocurrieron, pero no hay material para leer: ` +
-        sinContenido.map((s) => `"${s.title}" (${s.date.toISOString().slice(0, 10)})`).join(", ")
+        sinContenido.map((s) => `"${s.title}" (${fechaLocalDeLaReunion(s.date)})`).join(", ")
       : "";
     const sessionsBlock = [bloqueConContenido, colaSinContenido]
       .filter(Boolean)
@@ -324,6 +349,7 @@ export async function regenerateTimelineProgress(
       notasBlock,
       handoffCtx,
       timelineCtx,
+      hoy: fechaLocalDeLaReunion(new Date()),
     });
 
     // 5. Claude
@@ -331,7 +357,8 @@ export async function regenerateTimelineProgress(
     try {
       const msg = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 3000,
+        // 6.000 (antes 3.000): con las particularidades y el razonamiento, 3.000 cortaba la respuesta.
+        max_tokens: 6000,
         system: `${agent.systemPrompt ?? ""}\n\nESTILO (OBLIGATORIO): TODO el texto en español con TUTEO neutro ("tú"): "Transforma", "centraliza", "tienes", "puedes". PROHIBIDO el voseo: NUNCA "Transformá", "centralizá", "tenés", "querés", "podés" ni "vos".`,
         messages: [{ role: "user", content: userMessage }],
       });
@@ -455,7 +482,10 @@ export async function regenerateTimelineProgress(
       updateData.pendingProgressRunId = run.id;
     }
     if (hasParticularidades) {
-      updateData.pendingParticularidades = particularidadesDraft as unknown as Prisma.InputJsonValue;
+      updateData.pendingParticularidades = fusionarParticularidadesPendientes(
+        project.timeline?.pendingParticularidades,
+        particularidadesDraft,
+      ) as unknown as Prisma.InputJsonValue;
       updateData.pendingParticularidadesRunId = run.id;
     }
 

@@ -203,6 +203,7 @@ model Client {
   projects               Project[]
   canvasSuggestions      CanvasSuggestion[]
   actionItems            ActionItem[]
+  pedidosFueraDeAlcance  PedidoFueraDeAlcance[]
   appUsers               AppUser[] // F2: usuarios externos vinculados (kind=EXTERNAL)
   assignments            ClientAssignment[] // F2: overrides manuales CSE↔Cliente
   handoffs               Handoff[] // entidad Handoff (1:N por cliente, ver model Handoff)
@@ -495,6 +496,7 @@ model Project {
   agentRuns           AgentRun[]
   canvases            ProjectCanvas[]
   actionItems         ActionItem[]
+  pedidosFueraDeAlcance PedidoFueraDeAlcance[]
   sessions            SessionProject[]
   participantSnapshot ProjectParticipantSnapshot?
   externalAccess      ProjectExternalAccess?
@@ -2152,6 +2154,7 @@ model FirefliesSession {
   // Relaciones del ciclo de reunión (minuta post + acciones derivadas)
   minute      SessionMinute?
   actionItems ActionItem[]
+  pedidosFueraDeAlcance PedidoFueraDeAlcance[]
   projects    SessionProject[]
 
   // Índices para los queries principales:
@@ -2221,6 +2224,13 @@ model ActionItem {
   // Asignación y plazos
   ownerEmail String?
   dueDate    DateTime?
+  // QUIÉN se comprometió (2026-10-02): el análisis post-sesión captura también los compromisos del
+  // CLIENTE («Rodrigo entrega la base el miércoles»), que no tienen correo del equipo. `ownerEmail`
+  // sigue siendo solo para gente de Smarteam. Lado: "CLIENTE" | "SMARTEAM".
+  ladoResponsable   String?
+  responsableNombre String?
+  // El fragmento de la reunión que sostiene el compromiso (interno, nunca al cliente).
+  cita              String?   @db.Text
   status     ActionStatus @default(PENDING)
   done       Boolean      @default(false)
 
@@ -2241,6 +2251,34 @@ model ActionItem {
   @@index([sessionId])
   @@index([ownerEmail, done])
   @@index([dueDate])
+}
+
+// Un pedido que salió en una reunión y no está en lo vendido (2026-10-02). Lo detecta el análisis
+// post-sesión, que lee el transcript completo; el CSE decide qué es (cotizar, ya incluido,
+// descartar) y Ventas lo ve como oportunidad. ⛔ Nunca cruza a un documento del cliente.
+// La huella identifica el pedido entre reuniones: el mismo pedido dicho dos veces es UNA fila.
+model PedidoFueraDeAlcance {
+  id           String            @id @default(cuid())
+  clientId     String
+  client       Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  sessionId    String?
+  session      FirefliesSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  huella       String
+  pedido       String            @db.Text
+  quienLoPidio String?
+  // PEDIDO (lo detectó Nexus) | COTIZADO | APROBADO | DESCARTADO | INCLUIDO (ya estaba en lo vendido)
+  estado       String            @default("PEDIDO")
+  monto        String?
+  cita         String?           @db.Text
+  decididoPor  String?
+  decididoAt   DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([clientId, huella])
+  @@index([projectId, estado])
 }
 
 // ─── SessionProject — pivote N:N entre FirefliesSession y Project ─────────────

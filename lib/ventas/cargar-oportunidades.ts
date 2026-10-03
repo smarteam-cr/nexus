@@ -14,7 +14,7 @@ import { loadFueraDeAlcanceDeTodos } from "@/lib/canvas/load-canvas-context";
 import { agruparPorCliente, recortarTexto, type OportunidadDetectada, type OportunidadesDeCliente } from "./oportunidades";
 
 export async function cargarOportunidadesDetectadas(): Promise<OportunidadesDeCliente[]> {
-  const [notas, handoffs] = await Promise.all([
+  const [notas, handoffs, pedidos] = await Promise.all([
     /* La nota vive en la compuerta ENTREGA_REALIZADA (ProjectStageGate.note): «p.ej. sugerencia de
        cross-selling», dice el schema. Se escribe una vez al marcar y nadie la releía. */
     prisma.projectStageGate.findMany({
@@ -27,6 +27,22 @@ export async function cargarOportunidadesDetectadas(): Promise<OportunidadesDeCl
       },
     }),
     loadFueraDeAlcanceDeTodos(),
+    /* Los pedidos fuera de alcance que salieron en las REUNIONES (2026-10-02, lib/sessions/
+       compromisos-y-alcance.ts). Solo los que siguen abiertos: lo descartado o lo que ya estaba
+       incluido no es una oportunidad. */
+    prisma.pedidoFueraDeAlcance.findMany({
+      where: { estado: { in: ["PEDIDO", "COTIZADO"] } },
+      select: {
+        pedido: true,
+        quienLoPidio: true,
+        monto: true,
+        createdAt: true,
+        decididoPor: true,
+        clientId: true,
+        client: { select: { name: true, company: true } },
+        project: { select: { id: true, name: true, proyectoInterno: true } },
+      },
+    }),
   ]);
 
   const items: OportunidadDetectada[] = [];
@@ -42,6 +58,21 @@ export async function cargarOportunidadesDetectadas(): Promise<OportunidadesDeCl
       texto: recortarTexto(texto),
       fecha: g.markedAt.toISOString(),
       autor: g.markedBy,
+    });
+  }
+  for (const p of pedidos) {
+    // Lo de un proyecto interno de Smarteam no es una oportunidad de venta (misma regla que arriba).
+    if (p.project?.proyectoInterno) continue;
+    const detalle = [p.quienLoPidio ? `Lo pidió: ${p.quienLoPidio}` : "", p.monto ? `Monto: ${p.monto}` : ""].filter(Boolean).join(" · ");
+    items.push({
+      clientId: p.clientId,
+      clientName: p.client?.name ?? p.client?.company ?? "",
+      projectId: p.project?.id ?? "",
+      projectName: p.project?.name ?? "",
+      fuente: "reunion",
+      texto: recortarTexto(detalle ? `${p.pedido} (${detalle})` : p.pedido),
+      fecha: p.createdAt.toISOString(),
+      autor: p.decididoPor,
     });
   }
   for (const h of handoffs) {

@@ -24,6 +24,14 @@ import {
 import { classifySessionToProjects } from "@/lib/sessions/classify-session-project";
 import { titleMentionsKickoff } from "@/lib/sessions/session-type";
 import { maybeReanchorToKickoff } from "@/lib/timeline/reanchor";
+import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
+import {
+  ADENDA_COMPROMISOS_Y_ALCANCE,
+  fechaComprometida,
+  fechaLocalDeLaReunion,
+  leerCompromisos,
+  leerPedidosFueraDeAlcance,
+} from "@/lib/sessions/compromisos-y-alcance";
 
 const AGENT_ID_POST_SESSION = "agent-post-session";
 
@@ -41,6 +49,9 @@ interface AgentOutput {
     dueDate?: string | null;
   }[];
   stageProgress?: { advance: boolean; reason?: string };
+  // 2026-10-02 — ver lib/sessions/compromisos-y-alcance.ts (la adenda que los pide).
+  compromisos?: unknown;
+  fueraDeAlcance?: unknown;
   // F5: sub-topics detectados (lead-scoring, workflow-builder, etc.)
   detectedTopics?: string[];
 }
@@ -191,6 +202,15 @@ export async function postProcessSession(
           .join("\n")}`
       : "";
 
+  /* Lo que se VENDIÓ, para que el agente reconozca un pedido fuera de alcance (2026-10-02). Solo el
+     alcance y lo que quedó afuera; interno (la minuta y los pedidos no salen al cliente). */
+  const alcanceVendido = project
+    ? (await loadHandoffContext(project.id, { onlyConfirmed: false, includeKeys: ["alcance_contratado", "fuera_de_alcance"] }).catch(() => "")).slice(0, 4000)
+    : "";
+  const alcanceBlock = alcanceVendido.trim()
+    ? `\n\n=== LO QUE SE VENDIÓ (para reconocer lo que está fuera de alcance) ===\n${alcanceVendido}`
+    : "";
+
   const summaryBlock =
     session.summary && typeof session.summary === "object" && "overview" in (session.summary as object)
       ? `\n\n=== RESUMEN GENERADO POR GEMINI NOTES ===\n${(session.summary as { overview?: string }).overview ?? ""}`
@@ -208,9 +228,11 @@ export async function postProcessSession(
     "",
     `=== REUNIÓN ===`,
     `Título: ${session.title}`,
-    `Fecha: ${session.date.toISOString().slice(0, 10)}`,
+    // En hora de Costa Rica: en UTC, una reunión de las 18:00 caía al día siguiente y toda fecha calculada desde ahí también.
+    `Fecha: ${fechaLocalDeLaReunion(session.date)}`,
     `Participantes: ${session.participants.join(", ")}`,
     summaryBlock,
+    alcanceBlock,
     previousItemsBlock,
     "",
     `=== TRANSCRIPT ===`,
@@ -231,8 +253,12 @@ export async function postProcessSession(
     };
     const msg = await conContextoDeIA(ctxDeGasto, async () => anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 4000,
-      system: (await prisma.agent.findUnique({ where: { id: AGENT_ID_POST_SESSION }, select: { systemPrompt: true } }))?.systemPrompt ?? "",
+      max_tokens: 6000,
+      // La adenda pide los compromisos con fecha y los pedidos fuera de alcance (lib/sessions/compromisos-y-alcance.ts).
+      // Vive en código a propósito: funciona sin re-sembrar el prompt de la base.
+      system:
+        ((await prisma.agent.findUnique({ where: { id: AGENT_ID_POST_SESSION }, select: { systemPrompt: true } }))?.systemPrompt ?? "") +
+        ADENDA_COMPROMISOS_Y_ALCANCE,
       messages: [{ role: "user", content: userMessage }],
     }));
     rawText = (msg.content[0] as { type: string; text: string }).text.trim();
@@ -341,6 +367,67 @@ export async function postProcessSession(
       },
     });
     created++;
+  }
+
+  // 10b. Compromisos con fecha (de los dos lados) → ActionItem con quién se comprometió y la cita.
+  for (const c of leerCompromisos(parsed.compromisos)) {
+    const ya = await prisma.actionItem.findFirst({
+      where: { clientId: client.id, sessionId, text: c.que },
+      select: { id: true },
+    });
+    if (ya) continue;
+    // Si es de Smarteam y el nombre coincide con alguien del equipo, queda asignado a esa persona.
+    const delEquipo =
+      c.quien === "SMARTEAM" && c.responsable
+        ? teamMembers.find((m) => !m.deactivatedAt && m.name.toLowerCase().includes(c.responsable.toLowerCase().split(" ")[0]))
+        : undefined;
+    await prisma.actionItem.create({
+      data: {
+        text: c.que,
+        clientId: client.id,
+        projectId: project?.id ?? null,
+        sessionId,
+        ownerEmail: delEquipo?.email.toLowerCase() ?? null,
+        ladoResponsable: c.quien,
+        responsableNombre: c.responsable || null,
+        cita: c.cita || null,
+        dueDate: fechaComprometida(c.fecha),
+        status: "PENDING",
+        done: false,
+        source: "agent:post-session:compromiso",
+        generatedByAgentRunId: run.id,
+      },
+    });
+    created++;
+  }
+
+  // 10c. Pedidos fuera de alcance → PedidoFueraDeAlcance (lo decide el CSE; Ventas lo ve). El mismo
+  // pedido en otra reunión (misma huella) actualiza la fila, pero NUNCA pisa una decisión del CSE.
+  for (const pf of leerPedidosFueraDeAlcance(parsed.fueraDeAlcance)) {
+    const previo = await prisma.pedidoFueraDeAlcance.findUnique({
+      where: { clientId_huella: { clientId: client.id, huella: pf.huella } },
+      select: { id: true, decididoAt: true },
+    });
+    if (!previo) {
+      await prisma.pedidoFueraDeAlcance.create({
+        data: {
+          clientId: client.id,
+          projectId: project?.id ?? null,
+          sessionId,
+          huella: pf.huella,
+          pedido: pf.pedido,
+          quienLoPidio: pf.quienLoPidio || null,
+          estado: pf.estado,
+          monto: pf.monto,
+          cita: pf.cita || null,
+        },
+      });
+    } else if (!previo.decididoAt) {
+      await prisma.pedidoFueraDeAlcance.update({
+        where: { id: previo.id },
+        data: { estado: pf.estado, ...(pf.monto ? { monto: pf.monto } : {}), ...(pf.cita ? { cita: pf.cita } : {}), sessionId },
+      });
+    }
   }
 
   // Refrescar el cache de heat ya que recién creamos un AgentRun.
