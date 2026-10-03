@@ -103,12 +103,12 @@ const ADAPTADOR_CRONOGRAMA: Adaptador = {
 };
 
 /* El diagnóstico arma su canal `ctx.diagnostico` como el editor: la cuarta columna del problema sale
-   de sus propias secciones; la línea base de los objetivos y la línea de la portada, del cargador. */
-const ADAPTADOR_DIAGNOSTICO: Adaptador = {
-  config: buildDiagnosticoConfig,
-  sections: buildDiagnosticoSections,
-  ctx: (sections, docCtx) => ({ diagnostico: { ...ctxDelDiagnostico(sections), ...docCtx.diagnostico } }),
-};
+   de sus propias secciones; la línea base de los objetivos y la línea de la portada, del cargador.
+   ⚠ Su entrada en el mapa va en UNA línea y con los builders a la vista: doc-types.test lee las
+   claves línea por línea, y secciones-creadas.test exige ver `buildDiagnosticoConfig` en el mapa. */
+const ctxDelDiagnosticoImpreso: NonNullable<Adaptador["ctx"]> = (sections, docCtx) => ({
+  diagnostico: { ...ctxDelDiagnostico(sections), ...docCtx.diagnostico },
+});
 
 const ADAPTADORES: Record<string, Adaptador> = {
   "business-case": ADAPTADOR_BUSINESS_CASE,
@@ -116,7 +116,7 @@ const ADAPTADORES: Record<string, Adaptador> = {
   role: ADAPTADOR_ROLES,
   kickoff: { config: buildKickoffConfig, sections: buildKickoffSections },
   "tech-requirements": { config: buildDesarrolloConfig, sections: buildDesarrolloSections },
-  diagnosis: ADAPTADOR_DIAGNOSTICO,
+  diagnosis: { config: buildDiagnosticoConfig, sections: buildDiagnosticoSections, ctx: ctxDelDiagnosticoImpreso },
   planning: { config: buildPlanificacionConfig, sections: buildPlanificacionSections },
   implementation: { config: buildImplementacionConfig, sections: buildImplementacionSections },
   exploration: { config: buildExploracionConfig, sections: buildExploracionSections },
