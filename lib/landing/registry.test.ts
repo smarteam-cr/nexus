@@ -427,6 +427,11 @@ describe("un renderer, un contrato de datos", () => {
     kickoff_compara: "modulo",
     kickoff_timeline: "modulo",
     exploracion_sesiones: "modulo",
+    // La grilla de dolores con SU rótulo por sección (2026-10-02: «A quién involucrar» decía
+    // «Agregar dolor»). Mismo esquema que `pain`, propios de Exploración.
+    exploracion_datos: "modulo",
+    exploracion_personas: "modulo",
+    exploracion_temas: "modulo",
     estimacion: "modulo",
     impacto_declarado: "modulo",
     prompts_breeze: "modulo",

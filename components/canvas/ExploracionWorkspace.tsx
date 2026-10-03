@@ -135,7 +135,7 @@ export default function ExploracionWorkspace({
       {!hasGeneratedContent && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg-soft)", borderBottom: "1px solid var(--border)", fontSize: 13, color: "var(--text-2)" }}>
           <span>
-            Todavía sin generar. Usá <strong>Generar exploración</strong> arriba, junto al nombre
+            Todavía sin generar. Usa <strong>Generar exploración</strong> arriba, junto al nombre
             del canvas. El handoff del proyecto es la fuente ancla.
           </span>
         </div>

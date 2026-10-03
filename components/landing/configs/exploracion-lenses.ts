@@ -8,8 +8,8 @@
  * Sales Hub, Sitio web") y el agente producía lo mismo tuviera los tags que tuviera.
  *
  * Cada lente nombra los SUPUESTOS que ese tipo de proyecto suele esconder y el tipo de
- * pregunta que los cierra. NO son checklists para copiar: el método sigue siendo "leé el
- * handoff, detectá el supuesto, derivá la pregunta" — la lente dice DÓNDE mirar.
+ * pregunta que los cierra. NO son checklists para copiar: el método sigue siendo "lee el
+ * handoff, detecta el supuesto, deriva la pregunta" — la lente dice DÓNDE mirar.
  *
  * REGLAS DE ESTE REGISTRO:
  *  1. Una lente por CADA tag del catálogo. `lib/canvas/exploracion-lenses.test.ts` falla si
@@ -29,7 +29,7 @@ import { sanitizeTags, labelForTag } from "@/lib/tags/catalog";
 export const EXPLORACION_TAG_LENSES: Record<string, string> = {
   // ── Alcance / características ───────────────────────────────────────────────
   sitio_web:
-    "Un sitio se aprueba por GUSTO y se atrasa por INSUMOS — los dos se dan por supuestos en el handoff. Buscá: " +
+    "Un sitio se aprueba por GUSTO y se atrasa por INSUMOS — los dos se dan por supuestos en el handoff. Busca: " +
     "REFERENCIAS y ANTI-REFERENCIAS (qué sitios les gustan y cuáles NO soportan, siempre con el PORQUÉ — el porqué es el dato, no el link); " +
     "FUNCIONALIDAD más allá del contenido (formularios y a dónde entregan, buscador, área privada o portal, multi-idioma, e-commerce, reservas, integraciones con lo que ya usan); " +
     "ASSETS REALES (¿existen fotos y video de calidad o hay que producirlos?, ¿quién los produce y para cuándo?, ¿hay manual de marca o hay que inventarlo?); " +
@@ -37,34 +37,34 @@ export const EXPLORACION_TAG_LENSES: Record<string, string> = {
     "y QUIÉN APRUEBA el diseño — si son varios, cuántas rondas y quién desempata. " +
     "El supuesto más caro de un proyecto web es 'el cliente tiene el contenido listo'.",
   custom_dev:
-    "Lo técnico se rompe en los BORDES, no en el centro. Buscá: qué sistemas se tocan de verdad y quién es dueño de cada uno; " +
+    "Lo técnico se rompe en los BORDES, no en el centro. Busca: qué sistemas se tocan de verdad y quién es dueño de cada uno; " +
     "cuál es el identificador único de cada lado y qué pasa cuando no matchea; cómo se evita duplicar; " +
     "en qué dirección viaja el dato y quién gana si los dos lados cambian; volúmenes reales y ventanas de mantenimiento; " +
     "y a quién se llama del lado del cliente cuando la integración falla un viernes.",
   crm_migration:
-    "Migrar es DECIDIR QUÉ SE DEJA, y eso nunca está en el handoff. Buscá: qué historia se trae y desde cuándo; " +
+    "Migrar es DECIDIR QUÉ SE DEJA, y eso nunca está en el handoff. Busca: qué historia se trae y desde cuándo; " +
     "qué propiedades se usan de verdad vs. las que nadie llenó nunca; cómo de sucios están los datos (duplicados, campos libres, formatos); " +
     "quién tiene autoridad para decir 'esto no se migra'; qué pasa con lo que está a mitad de camino el día del corte; " +
     "y qué reportes actuales tienen que seguir funcionando después.",
 
   // ── Productos ──────────────────────────────────────────────────────────────
   sales_hub:
-    "El pipeline dibujado y el proceso real casi nunca coinciden. Buscá: cómo venden HOY de verdad, etapa por etapa, con un caso reciente concreto; " +
+    "El pipeline dibujado y el proceso real casi nunca coinciden. Busca: cómo venden HOY de verdad, etapa por etapa, con un caso reciente concreto; " +
     "qué hecho observable dispara el paso de una etapa a la siguiente (no la definición teórica); dónde vive hoy la información (cabeza, WhatsApp, Excel, otro CRM); " +
     "quién carga y quién no, y qué pasa cuando no cargan; si el pronóstico se usa para algo o es decorativo; " +
     "y qué hace un vendedor en su primera hora del día.",
   marketing_hub:
-    "Marketing se mide con lo que ya existe, y lo que existe suele estar peor de lo que dicen. Buscá: de dónde vienen hoy los leads y cuáles cierran de verdad; " +
+    "Marketing se mide con lo que ya existe, y lo que existe suele estar peor de lo que dicen. Busca: de dónde vienen hoy los leads y cuáles cierran de verdad; " +
     "qué le pasa a un lead entre que levanta la mano y que alguien lo llama; qué se le promete al lead y quién cumple esa promesa; " +
     "en qué estado están las listas y los permisos de contacto; qué contenido tienen vs. qué van a tener que producir; " +
-    "y cómo definen 'lead calificado' — pediles que lo digan Ventas y Marketing por separado y comparalos.",
+    "y cómo definen 'lead calificado' — pídeles que lo digan Ventas y Marketing por separado y compáralos.",
   service_hub:
-    "Soporte se juzga por los casos malos, no por el promedio. Buscá: por dónde entra un caso hoy (todos los canales, incluidos los informales); " +
+    "Soporte se juzga por los casos malos, no por el promedio. Busca: por dónde entra un caso hoy (todos los canales, incluidos los informales); " +
     "qué se considera resuelto y quién lo declara; qué casos escalan y a quién; qué preguntan los clientes una y otra vez; " +
     "qué compromisos de tiempo tienen (escritos o de palabra) y qué pasa si no los cumplen; " +
     "y qué sabe Soporte del cliente que Ventas no sabe.",
   content_hub:
-    "Contenido muere por falta de dueño, no por falta de herramienta. Buscá: quién escribe, quién aprueba y con qué frecuencia real (no la deseada); " +
+    "Contenido muere por falta de dueño, no por falta de herramienta. Busca: quién escribe, quién aprueba y con qué frecuencia real (no la deseada); " +
     "qué contenido ya tienen y en qué estado; cómo miden si un contenido sirvió; " +
     "quién mantiene el sitio hoy y qué tan autónomo quiere ser el cliente después; " +
     "y qué pasó la última vez que quisieron publicar algo rápido.",
@@ -73,32 +73,32 @@ export const EXPLORACION_TAG_LENSES: Record<string, string> = {
   // la otra el trabajo manual que tapa el problema— así que se funden en vez de descartar una.
   data_hub:
     "Datos es un proyecto de ACUERDOS antes que de tecnología, y el síntoma aparece cuando algo ya se rompió en silencio. " +
-    "Buscá: qué dato es la fuente de verdad de qué, y quién lo decidió; " +
+    "Busca: qué dato es la fuente de verdad de qué, y quién lo decidió; " +
     "qué métrica calcula distinto cada área y cuál es la versión que se lleva a dirección; " +
     "qué se arregla hoy a mano y cada cuánto; qué datos no coinciden entre sistemas y quién los concilia; " +
     "qué automatización existente nadie se anima a tocar; qué pasa cuando un registro entra mal (¿alguien se entera?); " +
     "quién es dueño de la calidad; y qué decisión concreta quieren tomar con estos datos que hoy no pueden tomar.",
   revenue_hub:
-    "Cobrar toca finanzas, y finanzas no suele estar en la sala del handoff. Buscá: cómo cobran hoy y con qué herramienta; " +
+    "Cobrar toca finanzas, y finanzas no suele estar en la sala del handoff. Busca: cómo cobran hoy y con qué herramienta; " +
     "qué pasa cuando un pago falla o llega tarde; cómo manejan suscripciones y renovaciones si las tienen; " +
     "quién concilia contra contabilidad y con qué frecuencia; " +
     "qué necesita el equipo fiscal/contable que el sistema tiene que emitir sí o sí; " +
     "y quién de finanzas tiene que estar de acuerdo para que esto salga.",
   insider_one:
-    "Insider One es producto propio: el supuesto es que el cliente sabe qué esperar y casi nunca es así. Buscá: qué entendió el cliente que hace la app y qué NO hace; " +
+    "Insider One es producto propio: el supuesto es que el cliente sabe qué esperar y casi nunca es así. Busca: qué entendió el cliente que hace la app y qué NO hace; " +
     "cómo encaja en el flujo de trabajo que ya tienen; quién la va a usar todos los días y qué usa hoy en su lugar; " +
     "qué datos necesita para funcionar y si el cliente los tiene; y qué mediría el cliente para decir que valió la pena.",
 
   // ── Modalidad del servicio ──────────────────────────────────────────────────
   recurrente:
-    "En un servicio de continuidad el riesgo no es entregar mal: es volverse invisible. Buscá: cómo se ve un mes bueno vs. un mes malo PARA EL CLIENTE; " +
+    "En un servicio de continuidad el riesgo no es entregar mal: es volverse invisible. Busca: cómo se ve un mes bueno vs. un mes malo PARA EL CLIENTE; " +
     "quién adentro tiene que justificar este gasto y ante quién; qué esperan recibir cada mes (y con qué frecuencia quieren verse); " +
     "qué haría que no renueven; y quién es el reemplazo si mañana cambia el contacto.",
 
   // ── Escala de Rendimiento ───────────────────────────────────────────────────
   sin_escala:
     "Este trato se vendió SIN la Escala de Rendimiento (un gobierno, una corporación con un encargo puntual): nadie va a ubicar al cliente en niveles, así que no gastes preguntas en madurez por dimensión. " +
-    "Buscá lo que el encargo necesita para cerrarse bien: el entregable exacto y cómo se reconoce terminado; quién lo aprueba y contra qué criterio escrito; " +
+    "Busca lo que el encargo necesita para cerrarse bien: el entregable exacto y cómo se reconoce terminado; quién lo aprueba y contra qué criterio escrito; " +
     "y las reglas formales que pueden frenarlo (licitación, compras, auditoría, seguridad de la información) con sus plazos.",
 
   // ── Tipo de implementación ──────────────────────────────────────────────────
@@ -106,13 +106,13 @@ export const EXPLORACION_TAG_LENSES: Record<string, string> = {
   // Es el par de lentes más opuesto del catálogo: una mira lo que todavía no existe, la otra
   // lo que ya está y estorba.
   implementacion:
-    "Arrancar de cero no es más simple: es más ambiguo. Nada existe todavía, así que todo es una decisión que alguien tiene que tomar y nadie sabe que le toca. Buscá: " +
+    "Arrancar de cero no es más simple: es más ambiguo. Nada existe todavía, así que todo es una decisión que alguien tiene que tomar y nadie sabe que le toca. Busca: " +
     "qué usan HOY para hacer el trabajo que HubSpot va a hacer (siempre hay algo — Excel, WhatsApp, la cabeza de alguien) y qué de eso quieren conservar; " +
     "quién decide la estructura cuando no hay una previa (propiedades, etapas, permisos) y si esa persona está disponible de verdad; " +
     "qué datos existen para cargar y en qué estado REAL están; cuánto sabe el equipo de HubSpot hoy —sin base previa la adopción ES el proyecto—; " +
     "y qué tiene que pasar para que dejen de usar la herramienta vieja (si nadie lo declara, van a convivir para siempre).",
   reimplementacion:
-    "Acá el enemigo es lo que YA ESTÁ, y el handoff casi nunca lo describe. Buscá: " +
+    "Acá el enemigo es lo que YA ESTÁ, y el handoff casi nunca lo describe. Busca: " +
     "qué hay configurado hoy y quién lo hizo (¿queda alguien que sepa por qué?); qué se conserva, qué se corrige y qué se apaga —y quién tiene autoridad para decir «esto se borra»—; " +
     "qué está roto y todos aprendieron a esquivar (el workaround es el síntoma); qué automatizaciones viejas siguen corriendo sin dueño; " +
     "qué se intentó antes y por qué no funcionó —eso predice la resistencia mejor que cualquier otra pregunta—; " +
@@ -137,7 +137,7 @@ export function buildTagLensBlock(slugs: string[]): string {
     return (
       `${LENTE_HEADER}\n` +
       "Este proyecto NO tiene etiquetas de alcance. No asumas de qué tipo de proyecto se trata: " +
-      "derivá todo del handoff y, si el tipo de trabajo no queda claro ahí, eso mismo ES un supuesto sin verificar " +
+      "deriva todo del handoff y, si el tipo de trabajo no queda claro ahí, eso mismo ES un supuesto sin verificar " +
       "y va a «Lo que damos por supuesto»."
     );
   }
@@ -149,7 +149,7 @@ export function buildTagLensBlock(slugs: string[]): string {
     `${LENTE_HEADER}\n` +
     `Este proyecto está etiquetado como: ${activos.map(labelForTag).join(", ")}.\n` +
     "Estas lentes NO son un checklist para copiar: te dicen DÓNDE mirar. El método no cambia — " +
-    "seguí derivando cada pregunta de un supuesto concreto de ESTE handoff. Si el handoff ya confirma " +
+    "sigue derivando cada pregunta de un supuesto concreto de ESTE handoff. Si el handoff ya confirma " +
     "algo que la lente sugiere preguntar, va a «Lo que ya sabemos», no a las preguntas." +
     lineas.join("")
   );

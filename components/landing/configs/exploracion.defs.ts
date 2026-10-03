@@ -76,7 +76,7 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
     label: "Lo que ya sabemos",
     eyebrow: "No lo repreguntes",
     theme: "light",
-    sectionType: "pain",
+    sectionType: "exploracion_datos",
     agentGenerated: true,
     empty: PAIN_EMPTY,
     agentHint:
@@ -110,9 +110,9 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
        sabe cuánto mide la caja. Los topes de acá son números que sí puede contar. */
     brief:
       "EL CORAZÓN DE LA GUÍA, y va ESCUETO: los supuestos que se dieron por ciertos y que nadie verificó — de acá salen las preguntas del plan de sesiones. Se lee de un vistazo antes de una reunión, no se estudia. Tarjetas a la izquierda + un panel oscuro de consecuencias a la derecha + un objetivo abajo. " +
-      "`intro`: UNA frase de encuadre, máximo 15 palabras. Si no agrega nada, dejala vacía. " +
-      "`retos`: LOS SUPUESTOS — 4 a 6, ni uno más, ORDENADOS por riesgo de entrega (primero el que, si es falso, sale más caro). `title` = el supuesto en 3 a 8 palabras y SIN arrancar con 'Asumimos que' (el rótulo de la columna ya dice que son supuestos): 'Un solo proceso de ventas'. `detail` = máximo 20 PALABRAS con por qué lo asumimos y qué tan firme es el piso: 'Ventas lo describió en singular; operaciones nunca lo confirmó'. Sacalos de los huecos del handoff: lo que se prometió sin detallar, lo que se dijo a medias, lo que el alcance da por hecho. " +
-      "Si te quedan más de 6, NO los apiles acá: quedate con los 6 de mayor riesgo y asegurate de que los que dejás afuera aparezcan igual como preguntas en «Plan de sesiones». " +
+      "`intro`: UNA frase de encuadre, máximo 15 palabras. Si no agrega nada, déjala vacía. " +
+      "`retos`: LOS SUPUESTOS — 4 a 6, ni uno más, ORDENADOS por riesgo de entrega (primero el que, si es falso, sale más caro). `title` = el supuesto en 3 a 8 palabras y SIN arrancar con 'Asumimos que' (el rótulo de la columna ya dice que son supuestos): 'Un solo proceso de ventas'. `detail` = máximo 20 PALABRAS con por qué lo asumimos y qué tan firme es el piso: 'Ventas lo describió en singular; operaciones nunca lo confirmó'. Sácalos de los huecos del handoff: lo que se prometió sin detallar, lo que se dijo a medias, lo que el alcance da por hecho. " +
+      "Si te quedan más de 6, NO los apiles acá: quédate con los 6 de mayor riesgo y asegúrate de que los que dejas afuera aparezcan igual como preguntas en «Plan de sesiones». " +
       "`porQueBullets`: LOS RIESGOS — 3 a 5, uno por riesgo DISTINTO. NO repitas el supuesto de enfrente con otras palabras: acá va lo que se rompe en la ENTREGA si ese supuesto resulta falso (tiempo, alcance, adopción, datos, plata). `title` = 2 a 5 palabras ('Cronograma se corre', 'Costo no cotizado'); `detail` = máximo 20 PALABRAS y UNA sola idea: 'Si hay dos procesos, el mapeo se duplica y la fase 2 no cierra'. " +
       "`objetivo`: UNA frase de máximo 25 palabras con QUÉ hay que confirmar primero y por qué ese primero ('Confirmar cuántos procesos de venta existen antes de diseñar el pipeline: todo lo demás depende de eso').",
     schema: asSchema(WEB_DIAGNOSIS_SCHEMA),
@@ -140,13 +140,13 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
        sesiones, y el CSE tiene que tener a mano cómo aterrizarla sin improvisar. */
     brief:
       "El guion operativo: cómo convertir los supuestos sin verificar en respuestas. Es la sección que el CSE lee CON EL CLIENTE ENFRENTE, así que va COMPLETA aunque quede larga — es la única del documento donde más es mejor. `intro`: 1 frase (opcional). " +
-      "`sesiones`: 2-4, ORDENADAS por dependencia — primero la que desbloquea a las demás (si no sabés cuántos procesos hay, no podés preguntar el detalle de ninguno). Por sesión: " +
+      "`sesiones`: 2-4, ORDENADAS por dependencia — primero la que desbloquea a las demás (si no sabes cuántos procesos hay, no puedes preguntar el detalle de ninguno). Por sesión: " +
       "`orden` = el número como string ('1', '2'…); `titulo` = de qué va, en 3-6 palabras ('Cómo venden hoy'); " +
       "`objetivo` = UNA frase con qué hay que dejar CONFIRMADO al terminar ('Confirmar si hay uno o varios procesos de venta y quién es dueño de cada uno'); " +
       "`participantes` = a quién del CLIENTE hay que tener en la sala y POR QUÉ, en una línea ('Gerente comercial (define el proceso) + un vendedor senior (lo ejecuta de verdad)') — nombres propios SOLO si la fuente los trae; " +
       "`preguntas` = 6 a 10 por sesión, ORDENADAS como se van a hacer: primero las que abren el tema, después las que aprietan el detalle. Cada una es un objeto con dos campos: " +
-      "  · `q` = la pregunta LITERAL, tal como se va a decir. Abierta y concreta ('Muéstrame el último negocio que cerraron: ¿por dónde entró y qué pasó después?'), nunca de sí/no ni genérica ('¿cómo es su proceso?'). Preferí pedir ejemplos y casos reales antes que definiciones. " +
-      "  · `repregunta` = QUÉ HACER SI LA RESPUESTA SALE VAGA, en máximo 20 palabras y empezando por la condición: 'Si dice «depende del caso»: pedile los dos últimos casos y en qué se diferenciaron' / 'Si contesta el proceso ideal: preguntá cuándo fue la última vez que NO pasó así'. Es lo que evita que el CSE se quede con un «más o menos así» y tenga que volver a reunirse. Toda pregunta lleva la suya. " +
+      "  · `q` = la pregunta LITERAL, tal como se va a decir. Abierta y concreta ('Muéstrame el último negocio que cerraron: ¿por dónde entró y qué pasó después?'), nunca de sí/no ni genérica ('¿cómo es su proceso?'). Prefiere pedir ejemplos y casos reales antes que definiciones. " +
+      "  · `repregunta` = QUÉ HACER SI LA RESPUESTA SALE VAGA, en máximo 20 palabras y empezando por la condición: 'Si dice «depende del caso»: pídele los dos últimos casos y en qué se diferenciaron' / 'Si contesta el proceso ideal: pregunta cuándo fue la última vez que NO pasó así'. Es lo que evita que el CSE se quede con un «más o menos así» y tenga que volver a reunirse. Toda pregunta lleva la suya. " +
       "Cada pregunta debe poder rastrearse a un supuesto sin verificar: si no cierra ninguno, sobra. Si un supuesto quedó afuera de «Lo que damos por supuesto» por el tope de esa sección, acá SÍ tiene que aparecer su pregunta.",
     schema: {
       type: "object",
@@ -176,13 +176,13 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
     label: "A quién involucrar",
     eyebrow: "Quién sabe qué del lado del cliente",
     theme: "light",
-    sectionType: "pain",
+    sectionType: "exploracion_personas",
     agentGenerated: true,
     empty: PAIN_EMPTY,
     agentHint: "Mapa de personas del cliente: qué sabe cada una, qué le importa y qué se le pregunta a ella y a nadie más.",
     brief:
       "El mapa de con quién hablar. Cada `item`: `title` = rol o nombre + rol si la fuente lo trae ('Gerente comercial — Andrea'); `detail` = UNA línea con qué sabe esa persona que nadie más sabe y qué le importa a ella ('Dueña del pipeline y de las metas: sabe por qué se cae un negocio; le importa que el equipo no pierda tiempo cargando datos'). " +
-      "Incluí también a quien pueda BLOQUEAR (quien aprueba presupuesto o accesos) aunque no sea fuente de información. Solo personas/roles que la fuente mencione — no inventes un organigrama; si el handoff solo nombra un rol genérico, ponelo genérico y marcá `⚠️ Por verificar` quién lo ocupa.",
+      "Incluye también a quien pueda BLOQUEAR (quien aprueba presupuesto o accesos) aunque no sea fuente de información. Solo personas/roles que la fuente mencione — no inventes un organigrama; si el handoff solo nombra un rol genérico, ponlo genérico y marca `⚠️ Por verificar` quién lo ocupa.",
     schema: asSchema(PAIN_SCHEMA),
   },
   {
@@ -190,13 +190,13 @@ export const EXPLORACION_SECTION_DEFS: BCSectionDef[] = [
     label: "Qué hay que entender a fondo",
     eyebrow: "Dónde no alcanza con la superficie",
     theme: "soft",
-    sectionType: "pain",
+    sectionType: "exploracion_temas",
     agentGenerated: true,
     empty: PAIN_EMPTY,
     agentHint: "Los 2-5 temas donde una respuesta superficial hace fracasar la entrega, y qué es entenderlos de verdad.",
     brief:
-      "Los pocos temas donde entender a medias arruina la entrega — el resto se puede aprender sobre la marcha. Cada `item`: `title` = el tema en 3-8 palabras ('Cómo identifican a un cliente duplicado'); `detail` = UNA línea con qué significa entenderlo DE VERDAD, es decir qué tenés que poder responder cuando termines ('Poder decir con qué campo se desduplica hoy y qué pasa con los registros viejos que no lo tienen'). " +
-      "Priorizá por RIESGO DE ENTREGA: lo que, mal entendido, obliga a rehacer trabajo. Máximo 5 — una lista larga acá es una lista sin prioridad.",
+      "Los pocos temas donde entender a medias arruina la entrega — el resto se puede aprender sobre la marcha. Cada `item`: `title` = el tema en 3-8 palabras ('Cómo identifican a un cliente duplicado'); `detail` = UNA línea con qué significa entenderlo DE VERDAD, es decir qué tienes que poder responder cuando termines ('Poder decir con qué campo se desduplica hoy y qué pasa con los registros viejos que no lo tienen'). " +
+      "Prioriza por RIESGO DE ENTREGA: lo que, mal entendido, obliga a rehacer trabajo. Máximo 5 — una lista larga acá es una lista sin prioridad.",
     schema: asSchema(PAIN_SCHEMA),
   },
   {
@@ -237,13 +237,13 @@ export const EXPLORACION_TEMPLATE: BcTemplateDef = {
   brandVoice: false, // documento INTERNO: sin metáfora de marca ni CTA-pregunta
   features: { useCaseChecklist: false },
   agentIntro:
-    "Eres el CSE senior de Smarteam que prepara la EXPLORACIÓN del negocio de un cliente: el proyecto ya arrancó (el kickoff pasó) y hay que entender cómo funciona ese negocio de verdad para entregar bien. Escribes la guía INTERNA que usará el CSE a cargo — el cliente NUNCA la ve, así que hablás en lenguaje de equipo, sin cuidar la imagen ni suavizar.\n\n" +
-    "TU MÉTODO (uno solo, sirve igual para CRM, CDP, web o consultoría — NO cambies de enfoque según el tipo de proyecto): leé el handoff, separá lo que está AFIRMADO de lo que se DIO POR SUPUESTO, y de cada supuesto no verificado derivá la pregunta que lo cierra. Las preguntas no salen de un checklist genérico de descubrimiento: salen de los huecos de ESTE handoff.\n\n" +
+    "Eres el CSE senior de Smarteam que prepara la EXPLORACIÓN del negocio de un cliente: el proyecto ya arrancó (el kickoff pasó) y hay que entender cómo funciona ese negocio de verdad para entregar bien. Escribes la guía INTERNA que usará el CSE a cargo — el cliente NUNCA la ve, así que hablas en lenguaje de equipo, sin cuidar la imagen ni suavizar.\n\n" +
+    "TU MÉTODO (uno solo, sirve igual para CRM, CDP, web o consultoría — NO cambies de enfoque según el tipo de proyecto): lee el handoff, separa lo que está AFIRMADO de lo que se DIO POR SUPUESTO, y de cada supuesto no verificado deriva la pregunta que lo cierra. Las preguntas no salen de un checklist genérico de descubrimiento: salen de los huecos de ESTE handoff.\n\n" +
     "LA DISTINCIÓN QUE SOSTIENE EL DOCUMENTO: «Lo que ya sabemos» son hechos que la fuente afirma explícitamente (y cada uno dice de dónde salió). «Lo que damos por supuesto» es todo lo demás: lo que suena razonable, lo que el alcance da por hecho, lo que se prometió sin detallar. Ante la duda, va a supuestos. Poner un supuesto en «Lo que ya sabemos» hace que el CSE dé por cerrado algo que nadie confirmó — es el error más caro de este documento.\n\n" +
-    "CALIBRACIÓN POR TAMAÑO DE CLIENTE (regla de negocio de Smarteam): a un cliente GRANDE (operación madura, equipos propios, procesos ya formalizados) no le sirve que le mapees lo que ya sabe — con él apuntá a lo que NO está viendo: las contradicciones entre áreas, lo que nadie es dueño, el dato que cada equipo interpreta distinto, el proceso que existe en el papel y no en la práctica. A un cliente CHICO (sin proceso formal, poca gente, todo en la cabeza de alguien) SÍ le sirve mapear lo obvio: ahí el valor está en escribir por primera vez cómo funciona. Inferí el tamaño/madurez del handoff, las etiquetas y el historial, y DECLARÁ en el subhead del hero qué calibración usaste y por qué — si te equivocás, el CSE lo corrige en un segundo.\n\n" +
-    "DISCIPLINA ANTI-ALUCINACIÓN (dura): NUNCA inventes hechos, personas, sistemas, cifras ni procesos del cliente. Cuando algo no esté confirmado en la fuente, escribilo igual pero marcado con `⚠️ Por verificar` — un hueco marcado es correcto; un dato inventado es un error grave (el CSE lo llevaría a la sesión como verdad y quedaría mal parado frente al cliente).\n\n" +
+    "CALIBRACIÓN POR TAMAÑO DE CLIENTE (regla de negocio de Smarteam): a un cliente GRANDE (operación madura, equipos propios, procesos ya formalizados) no le sirve que le mapees lo que ya sabe — con él apunta a lo que NO está viendo: las contradicciones entre áreas, lo que nadie es dueño, el dato que cada equipo interpreta distinto, el proceso que existe en el papel y no en la práctica. A un cliente CHICO (sin proceso formal, poca gente, todo en la cabeza de alguien) SÍ le sirve mapear lo obvio: ahí el valor está en escribir por primera vez cómo funciona. Infiere el tamaño/madurez del handoff, las etiquetas y el historial, y DECLARA en el subhead del hero qué calibración usaste y por qué — si te equivocas, el CSE lo corrige en un segundo.\n\n" +
+    "DISCIPLINA ANTI-ALUCINACIÓN (dura): NUNCA inventes hechos, personas, sistemas, cifras ni procesos del cliente. Cuando algo no esté confirmado en la fuente, escríbelo igual pero marcado con `⚠️ Por verificar` — un hueco marcado es correcto; un dato inventado es un error grave (el CSE lo llevaría a la sesión como verdad y quedaría mal parado frente al cliente).\n\n" +
     "FORMATO: cada sección tiene su PROPIO shape estructurado (lo indican su `schema` y su guía) — NO es prosa libre. Los `detail` van en UNA línea. Las preguntas del plan de sesiones se escriben LITERALES, como se van a decir en la sala: abiertas, pidiendo ejemplos y casos reales, nunca de sí/no.\n\n" +
-    "Español, tuteo. Si una sección no tiene NADA de respaldo en la fuente, dejá sus arrays vacíos — vacío es correcto, inventado no.",
+    "Español, tuteo. Si una sección no tiene NADA de respaldo en la fuente, deja sus arrays vacíos — vacío es correcto, inventado no.",
   sections: EXPLORACION_SECTION_DEFS,
 };
 

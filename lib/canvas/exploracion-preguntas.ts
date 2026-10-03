@@ -25,9 +25,10 @@
  * el brief. La UI sí la persiste, porque el guardado del canvas escribe `data` tal cual
  * (useCanvasSections.upsertCardData → PUT del bloque, sin coerción).
  *
- * COROLARIO ACEPTADO: regenerar la sección BORRA las marcas, porque reescribe las
- * preguntas. Es correcto — una marca sobre una pregunta que ya no existe no significa
- * nada. La UI lo avisa antes (ver ExploracionSections).
+ * ⛔ REGENERAR NO BORRA LAS MARCAS (pedido de Elías, 2026-10-02). Antes se aceptaba que
+ * se perdieran; ahora `conservarMarcas` las arrastra: una pregunta marcada que vuelve
+ * (mismo texto normalizado) conserva su marca, y una marcada que el agente ya no trae
+ * se agrega de vuelta a su sesión. Lo que el CSE ya preguntó no se borra nunca.
  *
  * ⚠ EL MISMO BORRADO, PERO SIN AVISO, ESPERA EN EL ASSIST. `preserveNonSchemaKeys`
  * (lib/ai/section-schema.ts) es SHALLOW: solo conserva keys fuera de schema de PRIMER
@@ -79,4 +80,69 @@ export function contarMarcasDelPlan(
     (a, s) => a + normalizarPreguntas(s.preguntas).filter((p) => isSi(p.hecha)).length,
     0,
   );
+}
+
+/** Texto comparable: sin tildes, sin signos, sin mayúsculas ni espacios de más. */
+export function claveDePregunta(q: string): string {
+  return q
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+interface SesionConPreguntas {
+  titulo?: unknown;
+  preguntas?: PreguntaGuardada[];
+  [k: string]: unknown;
+}
+
+/** La sesión tal como sale: lo que traía, con sus preguntas ya normalizadas. */
+export type SesionConMarcas<T> = Omit<T, "preguntas"> & { titulo?: unknown; preguntas: ExploracionPregunta[] };
+
+/**
+ * Arrastra las marcas del plan anterior al plan regenerado. Pura: no muta sus argumentos.
+ *   · Pregunta que vuelve con el mismo texto (normalizado) → conserva `hecha`.
+ *   · Pregunta marcada que el agente ya no trae → vuelve a su sesión (mismo título, si no
+ *     la misma posición, si no la última); si el plan nuevo no tiene sesiones, una propia.
+ */
+export function conservarMarcas<T extends SesionConPreguntas>(
+  previas: SesionConPreguntas[] | undefined | null,
+  nuevas: T[] | undefined | null,
+): SesionConMarcas<T>[] {
+  const salida: SesionConMarcas<T>[] = (nuevas ?? []).map((s) => ({ ...s, preguntas: normalizarPreguntas(s.preguntas) }));
+  const marcadas: { clave: string; pregunta: ExploracionPregunta; titulo: string; indice: number }[] = [];
+  (previas ?? []).forEach((s, indice) => {
+    for (const p of normalizarPreguntas(s.preguntas)) {
+      if (isSi(p.hecha) && p.q.trim()) {
+        marcadas.push({ clave: claveDePregunta(p.q), pregunta: p, titulo: typeof s.titulo === "string" ? s.titulo : "", indice });
+      }
+    }
+  });
+  if (marcadas.length === 0) return salida;
+
+  const vueltas = new Set<string>();
+  for (const s of salida) {
+    for (const p of s.preguntas) {
+      const m = marcadas.find((x) => x.clave === claveDePregunta(p.q));
+      if (m) {
+        p.hecha = m.pregunta.hecha;
+        vueltas.add(m.clave);
+      }
+    }
+  }
+  for (const m of marcadas) {
+    if (vueltas.has(m.clave)) continue;
+    let destino = salida.find((s) => typeof s.titulo === "string" && claveDePregunta(s.titulo) === claveDePregunta(m.titulo));
+    destino ??= salida[m.indice] ?? salida[salida.length - 1];
+    if (!destino) {
+      destino = { titulo: "Lo que ya se preguntó", preguntas: [] } as unknown as SesionConMarcas<T>;
+      salida.push(destino);
+    }
+    destino.preguntas.push({ ...m.pregunta });
+    vueltas.add(m.clave);
+  }
+  return salida;
 }

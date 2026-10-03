@@ -7,8 +7,9 @@
  *
  * REUSO (solo UN componente nuevo): de las 6 secciones de contenido, 5 se rinden con
  * renderers YA construidos del motor —
- *   · `pain` (grid de tarjetas título+detalle) para «Lo que ya sabemos», «A quién
- *     involucrar» y «Qué hay que entender a fondo»,
+ *   · la grilla de tarjetas de `pain` (título+detalle) para «Lo que ya sabemos», «A quién
+ *     involucrar» y «Qué hay que entender a fondo», cada una con SU rótulo (`crearPainSection`):
+ *     antes heredaban «Agregar dolor» del Diagnóstico,
  *   · `web_diagnosis` (supuestos a la izquierda + panel oscuro de consecuencias) para
  *     «Lo que damos por supuesto»,
  *   · el hero de Desarrollo (`headline/subhead/tags`, sin logo ni stats) y el CTA del
@@ -23,7 +24,7 @@ import { toSectionDef } from "./templates";
 import { DesarrolloHeroSection } from "@/components/canvas/desarrollo-sections/DesarrolloSections";
 import { KickoffCtaSection } from "@/components/canvas/kickoff-sections/KickoffSections";
 import { ExploracionSesionesSection } from "@/components/canvas/exploracion-sections/ExploracionSections";
-import { PainSection } from "../sections";
+import { crearPainSection } from "../sections";
 import { WebDiagnosisSection } from "../sections-website";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,7 +34,21 @@ export const EXPLORACION_SECTION_COMPONENTS: Record<string, FC<SectionProps<any>
   exploracion_hero: DesarrolloHeroSection,
   exploracion_cta: KickoffCtaSection,
   // Renderers visuales reusados del motor.
-  pain: PainSection,
+  exploracion_datos: crearPainSection({
+    addLabel: "Agregar dato",
+    placeholderTitulo: "El dato, afirmado…",
+    placeholderDetalle: "De dónde salió (handoff, documento, reunión)…",
+  }),
+  exploracion_personas: crearPainSection({
+    addLabel: "Agregar persona",
+    placeholderTitulo: "Rol o nombre y rol…",
+    placeholderDetalle: "Qué sabe que nadie más sabe y qué le importa…",
+  }),
+  exploracion_temas: crearPainSection({
+    addLabel: "Agregar tema",
+    placeholderTitulo: "El tema…",
+    placeholderDetalle: "Qué tienes que poder responder para entenderlo de verdad…",
+  }),
   web_diagnosis: WebDiagnosisSection,
   // El único propio.
   exploracion_sesiones: ExploracionSesionesSection,

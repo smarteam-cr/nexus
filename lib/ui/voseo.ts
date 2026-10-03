@@ -108,6 +108,7 @@ export const AGUDAS_DE_TUTEO: ReadonlySet<string> = new Set([
   "irá", "dirá", "quedará", "aplicará", "mostrará", "cambiará", "pasará", "llegará", "seguirá", "volverá", "sabrá",
   "deberá", "moverá", "correrá", "aparecerá", "eliminará", "dejará", "usará", "creará", "tratará", "recibirás",
   "priorizará", "actualizará", "importará", "medirá", "registrará", "reemplazará", "funcionará", "desasociará",
+  "confirmará", "corregirá", "avisará",
   // Primera persona del pretérito (el chat cuenta lo que hizo)
   "dejé", "cambié", "registré", "quedé", "encontré", "contesté",
   // …y el vendedor cuenta lo que entendió (el guion de la exploración de venta)

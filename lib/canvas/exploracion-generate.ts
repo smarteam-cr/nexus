@@ -25,6 +25,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
+import { conservarMarcas } from "@/lib/canvas/exploracion-preguntas";
 import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
 import { Prisma } from "@prisma/client";
 import { EXPLORACION_CANVAS } from "@/lib/canvas/canvas-defs";
@@ -123,14 +124,14 @@ export async function runExploracionGeneration(opts: {
     "",
     "=== HANDOFF DEL PROYECTO — TU FUENTE ANCLA ===",
     handoffCtx ||
-      "(Sin handoff curado. Decilo explícitamente en el hero y tratá TODO como no verificado: sin handoff, la exploración arranca de cero.)",
+      "(Sin handoff curado. Dilo explícitamente en el hero y trata TODO como no verificado: sin handoff, la exploración arranca de cero.)",
     priorCtx ? `\n${priorCtx}` : "",
     businessCasesBlock(businessCases),
     kickoffCtx ? `\n=== KICKOFF DEL PROYECTO (lo que ya se le dijo al cliente) ===\n${kickoffCtx}` : "",
     cuestionarioCtx ? `\n${cuestionarioCtx}` : "",
     timelineCtx ? `\n${timelineCtx}` : "",
     "",
-    "Escribí la guía de exploración siguiendo tus instrucciones: separá lo AFIRMADO de lo SUPUESTO, derivá las preguntas de los supuestos sin verificar, y declará en el hero qué calibración de tamaño de cliente usaste.",
+    "Escribe la guía de exploración siguiendo tus instrucciones: separa lo AFIRMADO de lo SUPUESTO, deriva las preguntas de los supuestos sin verificar, y declara en el hero qué calibración de tamaño de cliente usaste.",
   ]
     .filter((x) => x !== "")
     .join("\n");
@@ -166,6 +167,18 @@ export async function runExploracionGeneration(opts: {
   for (const s of gen.sections) {
     const sectionId = sectionMap.get(s.key);
     if (!sectionId) continue;
+    // ⛔ Las preguntas que el CSE ya marcó como hechas NO se pierden al regenerar: el agente no
+    // escribe `hecha` (está fuera de su schema), así que se arrastra desde la versión anterior.
+    if (s.key === "sesiones" && s.data && typeof s.data === "object") {
+      const previa = prevDataByKey.sesiones as { sesiones?: unknown } | undefined;
+      const nueva = s.data as { sesiones?: unknown };
+      if (Array.isArray(previa?.sesiones)) {
+        nueva.sesiones = conservarMarcas(
+          previa.sesiones as Parameters<typeof conservarMarcas>[0],
+          (Array.isArray(nueva.sesiones) ? nueva.sesiones : []) as Parameters<typeof conservarMarcas>[1],
+        );
+      }
+    }
     await prisma.$transaction([
       prisma.canvasBlock.deleteMany({ where: { sectionId } }),
       prisma.canvasBlock.create({

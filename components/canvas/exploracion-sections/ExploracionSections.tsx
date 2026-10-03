@@ -70,17 +70,15 @@ export const ExploracionSesionesSection: FC<SectionProps<ExploracionSesionesData
         />
       )}
 
-      {/* Las marcas viven en la data de la sección, así que REGENERAR el plan las borra
-          junto con las preguntas que las tenían. Es lo correcto —una marca sobre una
-          pregunta que ya no existe no significa nada— pero se avisa antes en vez de
-          sorprender después. El CTA de regenerar vive en el header del canvas. */}
+      {/* Regenerar ya NO borra las marcas (lib/canvas/exploracion-preguntas.ts →
+          `conservarMarcas`): se dice, para que nadie deje de regenerar por miedo. */}
       {marcas > 0 && (
         <p
           className="stl-card-detail"
           style={{ marginTop: 14, color: "var(--text-muted)", fontSize: 13 }}
         >
-          Tenés {marcas === 1 ? "1 pregunta marcada" : `${marcas} preguntas marcadas`} como
-          preguntadas. Regenerar la exploración reescribe el plan y las borra.
+          Tienes {marcas === 1 ? "1 pregunta marcada" : `${marcas} preguntas marcadas`} como
+          preguntadas. Si regeneras la exploración, se conservan.
         </p>
       )}
 
@@ -217,7 +215,7 @@ export const ExploracionSesionesSection: FC<SectionProps<ExploracionSesionesData
                                   className="stl-card-detail stl-q-followup"
                                   editable={editable}
                                   value={p.repregunta ?? ""}
-                                  placeholder="Si contesta en general o se va por las ramas, repreguntá…"
+                                  placeholder="Si contesta en general o se va por las ramas, repregunta…"
                                   onCommit={(v) => setPregunta({ repregunta: v })}
                                 />
                               </div>

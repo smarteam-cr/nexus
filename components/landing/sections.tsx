@@ -137,26 +137,44 @@ export const HeroSection: FC<SectionProps<HeroData>> = ({
 };
 
 // ── 2) Diagnóstico — los puntos de dolor reales ──────────────────────────────
-export const PainSection: FC<SectionProps<PainData>> = ({ data, editable, onChange }) => {
-  const items = data.items ?? [];
-  const set = (next: Partial<PainData>) => onChange?.({ ...data, ...next });
-  /* El markup lo pone `CardGrid`, que es el mismo de las tarjetas del kickoff: lo único propio de
-     esta sección son las cuatro columnas, el ícono y su ámbar — que ahora se DECLARA acá en vez de
-     pisar el token del motor desde adentro del markup compartido. */
-  return (
-    <CardGrid
-      items={items}
-      editable={editable}
-      onItems={(next) => set({ items: next })}
-      columnas={4}
-      icono={(i) => PAIN_ICONS[i % PAIN_ICONS.length]}
-      acentoIcono={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}
-      addLabel="Agregar dolor"
-      placeholderTitulo="Nombre del dolor…"
-      placeholderDetalle="Descripción en 1-2 líneas (impacto medible si se mencionó)…"
-    />
-  );
-};
+/**
+ * La grilla de tarjetas con ícono ámbar, con sus TEXTOS por sección. La reusan secciones que no
+ * son dolores (en Exploración, «A quién involucrar» mostraba «Agregar dolor»): cada una declara su
+ * rótulo con `crearPainSection` en vez de heredar el del Diagnóstico.
+ */
+export function crearPainSection(textos: {
+  addLabel: string;
+  placeholderTitulo: string;
+  placeholderDetalle: string;
+}): FC<SectionProps<PainData>> {
+  const Seccion: FC<SectionProps<PainData>> = ({ data, editable, onChange }) => {
+    const items = data.items ?? [];
+    const set = (next: Partial<PainData>) => onChange?.({ ...data, ...next });
+    /* El markup lo pone `CardGrid`, que es el mismo de las tarjetas del kickoff: lo único propio de
+       esta sección son las cuatro columnas, el ícono y su ámbar — que ahora se DECLARA acá en vez de
+       pisar el token del motor desde adentro del markup compartido. */
+    return (
+      <CardGrid
+        items={items}
+        editable={editable}
+        onItems={(next) => set({ items: next })}
+        columnas={4}
+        icono={(i) => PAIN_ICONS[i % PAIN_ICONS.length]}
+        acentoIcono={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}
+        addLabel={textos.addLabel}
+        placeholderTitulo={textos.placeholderTitulo}
+        placeholderDetalle={textos.placeholderDetalle}
+      />
+    );
+  };
+  return Seccion;
+}
+
+export const PainSection: FC<SectionProps<PainData>> = crearPainSection({
+  addLabel: "Agregar dolor",
+  placeholderTitulo: "Nombre del dolor…",
+  placeholderDetalle: "Descripción en 1-2 líneas (impacto medible si se mencionó)…",
+});
 
 // ── 3) Antes vs. después — dos columnas ──────────────────────────────────────
 export const BeforeAfterSection: FC<SectionProps<BeforeAfterData>> = ({ data, ctx, editable, onChange }) => {

@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  conservarMarcas,
   contarHechas,
   contarMarcasDelPlan,
   normalizarPregunta,
@@ -79,5 +80,59 @@ describe("el agente no puede marcar una pregunta como preguntada", () => {
     };
     const campos = props?.properties?.sesiones?.items?.properties?.preguntas?.items?.properties ?? {};
     expect(Object.keys(campos).sort()).toEqual(["q", "repregunta"]);
+  });
+});
+
+describe("⛔ regenerar NO borra las preguntas ya marcadas", () => {
+  const previas = [
+    { titulo: "Cómo venden hoy", preguntas: [{ q: "¿Cuántos procesos de venta tienen?", hecha: "si" }, { q: "¿Quién aprueba descuentos?" }] },
+    { titulo: "Datos", preguntas: [{ q: "¿Dónde vive la base de clientes?", hecha: "si" }] },
+  ];
+
+  it("la que vuelve con otro tono (tildes, signos, mayúsculas) conserva su marca", () => {
+    const nuevas = [{ titulo: "Cómo venden hoy", preguntas: [{ q: "¿cuantos procesos de venta tienen" }, { q: "Nueva" }] }];
+    const r = conservarMarcas(previas, nuevas);
+    expect(r[0].preguntas[0].hecha).toBe("si");
+    expect(r[0].preguntas[1].hecha).toBeUndefined();
+  });
+
+  it("la marcada que el agente ya no trae vuelve a su sesión (por título)", () => {
+    const nuevas = [
+      { titulo: "Cómo venden hoy", preguntas: [{ q: "Otra" }] },
+      { titulo: "Datos", preguntas: [{ q: "¿Hay duplicados?" }] },
+    ];
+    const r = conservarMarcas(previas, nuevas);
+    expect(r[0].preguntas.map((p) => p.q)).toContain("¿Cuántos procesos de venta tienen?");
+    expect(r[1].preguntas.map((p) => p.q)).toContain("¿Dónde vive la base de clientes?");
+    expect(contarMarcasDelPlan(r)).toBe(2);
+  });
+
+  it("si el plan nuevo viene vacío, las marcadas no se pierden", () => {
+    const r = conservarMarcas(previas, []);
+    expect(contarMarcasDelPlan(r)).toBe(2);
+  });
+
+  it("las no marcadas no se arrastran (el agente decide el plan nuevo)", () => {
+    const r = conservarMarcas(previas, [{ titulo: "X", preguntas: [] }]);
+    expect(r.flatMap((s) => s.preguntas).some((p) => p.q === "¿Quién aprueba descuentos?")).toBe(false);
+  });
+
+  it("no muta lo que recibe", () => {
+    const nuevas = [{ titulo: "Cómo venden hoy", preguntas: [{ q: "¿Cuántos procesos de venta tienen?" }] }];
+    conservarMarcas(previas, nuevas);
+    expect((nuevas[0].preguntas[0] as { hecha?: string }).hecha).toBeUndefined();
+  });
+
+  it("el generador la usa antes de escribir", async () => {
+    const fs = await import("node:fs");
+    const src = fs.readFileSync("lib/canvas/exploracion-generate.ts", "utf8");
+    expect(src.indexOf("conservarMarcas(")).toBeGreaterThan(-1);
+    expect(src.indexOf("conservarMarcas(")).toBeLessThan(src.indexOf("canvasBlock.deleteMany"));
+  });
+});
+
+describe("cada sección de la exploración tiene SU botón (no «Agregar dolor»)", () => {
+  it("ninguna sección usa el renderer de dolores del Diagnóstico", () => {
+    expect(EXPLORACION_SECTION_DEFS.filter((d) => d.sectionType === "pain").map((d) => d.key)).toEqual([]);
   });
 });
