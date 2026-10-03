@@ -4329,6 +4329,18 @@ objeciones, y ver de un vistazo qué le falta para proponer.
   guarda por sesión (`propuesta.guias`), así el «antes» de una sesión que ya pasó muestra lo que se
   preparó para ella; lo que se lleva a una sesión (`SesionPlaneada.explorar`) entra primero en su
   guía. Sin SQL: todo vive en los Json de la exploración.
+- **El lienzo es de escritorio, en tres columnas** (Elías, 2026-10-03: «veo mucha información… no se
+  está aprovechando bien el espacio»; aprobó el diseño y pidió aplicarlo). A la izquierda, las piezas
+  y, debajo de Exploración, cada sesión: reemplazan al desplegable de piezas y a las pestañas de
+  sesión. Al centro, una sola tarea. A la derecha, lo que conviene ver en cualquier pieza: qué sigue,
+  lo que propuso el agente por pieza, las ocho casillas del marco en una cuadrícula de colores, dónde
+  está cada área y las objeciones ya dichas. Las repreguntas vuelven a plegarse, ahora detrás de un
+  enlace en la misma línea, y las objeciones de la empresa quedan plegadas al pie del «antes». En el
+  «después», lo que salió se usa o descarta ahí mismo, «nadie lo exploró» se marca con una casilla, y
+  la barra para armar la siguiente sesión queda fija abajo. El cajón de las casillas vive en el
+  lienzo, así se abren desde cualquier columna. La sesión abierta vive en el lienzo y no se guarda en
+  la dirección. Debajo de 1280 px el panel de la derecha baja al final; debajo de 1024 px las piezas
+  van en una fila y las sesiones se eligen con una lista en Exploración.
 
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 

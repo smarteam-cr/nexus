@@ -3,7 +3,7 @@
  *
  * Con el MISMO caparazón que la ficha del cliente y del proyecto (pedido de Elías, 2026-10-01): la
  * cabecera de la ficha a todo el ancho (components/layout/CabeceraDeFicha.tsx) y, debajo, el lienzo
- * con su selector de piezas. El servidor lee la exploración y la escala PUBLICADA (con la edición y
+ * en tres columnas (las piezas, la tarea y el contexto), de borde a borde. El servidor lee la exploración y la escala PUBLICADA (con la edición y
  * el perfil de la exploración) y le baja al lienzo solo lo que usa (lib/exploraciones/escala-del-lienzo.ts).
  * Gateada por `ventas.read`; editar pide `ventas.write`.
  */
@@ -93,27 +93,27 @@ export default async function ExploracionPage({
           ) : undefined
         }
       />
-      <div className="px-6 py-8">
-        {escala.estado !== "ok" ? (
+      {escala.estado !== "ok" ? (
+        <div className="px-6 py-8">
           <Alert variant="warning" title="La escala no está publicada en Nexus">
             Sin ella el lienzo no puede mostrar las dimensiones ni calcular el nivel. Se publica desde la sección Escala.
           </Alert>
-        ) : (
-          <>
-            {escala.aviso && (
-              <Alert variant="warning" className="mb-4">
-                {escala.aviso}
-              </Alert>
-            )}
-            <LienzoDeExploracion
-              inicial={exp}
-              escala={escalaDeLaExploracion(escala.general, exp.estado)}
-              puedeEditar={puedeEditar && !exp.estado.archivada}
-              piezaInicial={pieza ?? null}
-            />
-          </>
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          {escala.aviso && (
+            <div className="px-6 pt-4">
+              <Alert variant="warning">{escala.aviso}</Alert>
+            </div>
+          )}
+          <LienzoDeExploracion
+            inicial={exp}
+            escala={escalaDeLaExploracion(escala.general, exp.estado)}
+            puedeEditar={puedeEditar && !exp.estado.archivada}
+            piezaInicial={pieza ?? null}
+          />
+        </>
+      )}
     </div>
   );
 }

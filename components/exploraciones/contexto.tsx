@@ -12,6 +12,7 @@
 import { createContext, useContext } from "react";
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
+import type { ClaveDeCasilla } from "@/lib/exploraciones/casillas";
 import type { DestinoDePropuesta, ItemPropuesto, Operacion } from "@/lib/exploraciones/contenido";
 import type { EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import type { ReunionSinLeer } from "@/lib/exploraciones/lectura";
@@ -62,7 +63,21 @@ export interface Lienzo {
   pendientesPara: (filtro: (d: DestinoDePropuesta) => boolean) => ItemPropuesto[];
   /** Lleva a una pieza del lienzo (desde «Qué sigue» o un enlace). */
   irA: (paso: PasoDelLienzoUI) => void;
+  /** Abre una casilla en el cajón lateral, desde cualquier pieza (las tarjetas del Resumen, el panel de la derecha). */
+  abrirCasilla: (clave: ClaveDeCasilla) => void;
+  /**
+   * La sesión abierta en Exploración y si se mira el «antes» o el «después». Vive en el lienzo y no
+   * en la pieza porque las sesiones se eligen desde la barra de la izquierda.
+   */
+  sesion: {
+    elegida: string | null;
+    elegir: (clave: string) => void;
+    momentos: Readonly<Record<string, MomentoDeLaSesion>>;
+    ponerMomento: (clave: string, m: MomentoDeLaSesion) => void;
+  };
 }
+
+export type MomentoDeLaSesion = "antes" | "despues";
 
 /**
  * Las piezas del lienzo, en el desplegable de arriba (el mismo caparazón que el proyecto). El

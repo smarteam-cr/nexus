@@ -1,24 +1,21 @@
 "use client";
 
 /**
- * Resumen — lo más visible del lienzo: qué sigue y las ocho tarjetas del marco de calificación.
+ * Resumen — las ocho tarjetas del marco de calificación, grandes, y lo que sale de cada reunión.
  *
  * Pedido de Elías (2026-10-01): el vendedor tiene que ver DE UN VISTAZO qué le falta para poder
  * proponer. Metas, planes, retos y tiempos; presupuesto y quién decide; consecuencias de no actuar e
  * implicaciones de lograrlo. Cada tarjeta muestra lo confirmado o se ve vacía cuando falta, y avisa
  * cuando el agente propuso algo para ella; al tocarla se abre la casilla para completarla o revisar
- * lo propuesto. En el mismo bloque van «qué sigue» y las propuestas pendientes, que antes eran dos
- * avisos aparte.
+ * lo propuesto. «Qué sigue» y a qué proyecto le llega viven en la columna de la derecha, a la vista en
+ * todas las piezas (rediseño de escritorio, 2026-10-03); el cajón de la casilla vive en el lienzo.
  *
  * Debajo, lo que sale de cada reunión (pedido de Elías, 2026-10-01): las objeciones y las
  * particularidades de la cuenta, que el agente propone al leer cada sesión, como el cronograma
  * propone sus particularidades. Y, si ya hay un proyecto, a cuál le llega la exploración.
  */
-import Link from "next/link";
-import { useState } from "react";
 import { AgentProposal } from "@/components/ai/AgentProposal";
-import { Badge, Button, Drawer } from "@/components/ui";
-import type { PasoDeQueSigue } from "@/lib/exploraciones/calidad";
+import { Badge } from "@/components/ui";
 import {
   CASILLAS_DE_LAS_REUNIONES,
   CASILLAS_DEL_RESUMEN,
@@ -35,7 +32,7 @@ import { Casilla } from "./Casilla";
 import { useLienzo } from "./contexto";
 
 /** La letra del marco de cada tarjeta (GPCT, presupuesto y autoridad, C&I), con su nombre en inglés. */
-const LETRA: Record<(typeof CASILLAS_DEL_RESUMEN)[number], { letra: string; marco: string }> = {
+export const LETRA_DEL_MARCO: Record<(typeof CASILLAS_DEL_RESUMEN)[number], { letra: string; marco: string }> = {
   metas: { letra: "G", marco: "Goals" },
   planes: { letra: "P", marco: "Plans" },
   retos: { letra: "C", marco: "Challenges" },
@@ -47,7 +44,7 @@ const LETRA: Record<(typeof CASILLAS_DEL_RESUMEN)[number], { letra: string; marc
 };
 
 /** Lo confirmado de una casilla, en líneas cortas para la tarjeta. */
-function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
+export function lineasDe(clave: ClaveDeCasilla, valor: unknown): string[] {
   if (valor === undefined || valor === null) return [];
   const tipo = definicionDe(clave).tipo;
   switch (tipo) {
@@ -74,13 +71,13 @@ function Tarjeta({ clave, pendientes, onAbrir }: { clave: (typeof CASILLAS_DEL_R
   const def = definicionDe(clave);
   const lineas = lineasDe(clave, exp.estado.contenido.casillas[clave]);
   const vacia = lineas.length === 0;
-  const { letra, marco } = LETRA[clave];
+  const { letra, marco } = LETRA_DEL_MARCO[clave];
   return (
     <button
       type="button"
       onClick={onAbrir}
       className={cn(
-        "flex min-h-[6.5rem] flex-col gap-1.5 rounded-xl border p-3 text-left transition-colors hover:bg-surface-hover",
+        "flex min-h-[8.5rem] flex-col gap-2 rounded-xl border p-4 text-left transition-colors hover:bg-surface-hover",
         vacia ? "border-dashed border-line bg-surface-muted" : "border-line bg-surface",
       )}
     >
@@ -89,7 +86,7 @@ function Tarjeta({ clave, pendientes, onAbrir }: { clave: (typeof CASILLAS_DEL_R
           <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-brand/10 text-2xs font-semibold text-brand-light" title={marco}>
             {letra}
           </span>
-          <span className="truncate text-xs font-semibold text-fg">{def.etiqueta}</span>
+          <span className="truncate text-sm font-semibold text-fg">{def.etiqueta}</span>
         </span>
         {pendientes > 0 && (
           <Badge size="xs" variant="info">
@@ -98,15 +95,15 @@ function Tarjeta({ clave, pendientes, onAbrir }: { clave: (typeof CASILLAS_DEL_R
         )}
       </span>
       {vacia ? (
-        <span className="text-xs text-fg-muted">Falta</span>
+        <span className="text-xs text-fg-muted">Falta: se pregunta en la próxima sesión</span>
       ) : (
-        <span className="space-y-0.5">
-          {lineas.slice(0, 2).map((l, i) => (
-            <span key={i} className="line-clamp-2 block text-xs text-fg-secondary">
+        <span className="space-y-1">
+          {lineas.slice(0, 3).map((l, i) => (
+            <span key={i} className="line-clamp-2 block text-sm leading-snug text-fg-secondary">
               {l}
             </span>
           ))}
-          {lineas.length > 2 && <span className="block text-2xs text-fg-muted">y {lineas.length - 2} más</span>}
+          {lineas.length > 3 && <span className="block text-2xs text-fg-muted">y {lineas.length - 3} más</span>}
         </span>
       )}
     </button>
@@ -114,69 +111,37 @@ function Tarjeta({ clave, pendientes, onAbrir }: { clave: (typeof CASILLAS_DEL_R
 }
 
 export default function Resumen({
-  sigue,
-  nombreDelPaso,
   paraUsarTodas,
 }: {
-  sigue: { texto: string; paso: PasoDeQueSigue | null };
-  nombreDelPaso: (p: PasoDeQueSigue) => string;
   /** Lo propuesto que se puede usar de una vez (sin los casos de uso, que se eligen uno por uno). */
   paraUsarTodas: ItemPropuesto[];
 }) {
-  const { pendientesPara, puedeEditar, guardando, cambiar, irA } = useLienzo();
-  const [abierta, setAbierta] = useState<ClaveDeCasilla | null>(null);
-  // El pie del cajón: ahí van «Guardar» y «Cancelar», fijos abajo aunque el formulario sea largo.
-  const [pie, setPie] = useState<HTMLDivElement | null>(null);
+  const { pendientesPara, puedeEditar, guardando, cambiar, abrirCasilla } = useLienzo();
   const contar = (clave: ClaveDeCasilla) => pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).length;
 
   return (
-    <div className="space-y-4">
-      <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">Qué sigue</p>
-            <p className="text-sm text-fg">{sigue.texto}</p>
-          </div>
-          {sigue.paso && (
-            <Button size="xs" variant="secondary" className="flex-shrink-0" onClick={() => irA(sigue.paso!)}>
-              Ir a «{nombreDelPaso(sigue.paso)}»
-            </Button>
-          )}
-        </div>
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {CASILLAS_DEL_RESUMEN.map((clave) => (
+          <Tarjeta key={clave} clave={clave} pendientes={contar(clave)} onAbrir={() => abrirCasilla(clave)} />
+        ))}
+      </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {CASILLAS_DEL_RESUMEN.map((clave) => (
-            <Tarjeta key={clave} clave={clave} pendientes={contar(clave)} onAbrir={() => setAbierta(clave)} />
-          ))}
-        </div>
-
-        {paraUsarTodas.length > 0 && puedeEditar && (
-          <AgentProposal
-            title={`Hay ${paraUsarTodas.length} ${paraUsarTodas.length === 1 ? "propuesta" : "propuestas"} del agente para revisar`}
-            subtitle="Están en su lugar: en estas tarjetas, en «Exploración» y en «La escala». Úsalas o descártalas mirando lo que ya está; nada se confirma solo."
-            applyLabel="Usar todas"
-            discardLabel="Descartar todas"
-            applying={guardando}
-            onApply={() =>
-              void cambiar([{ op: "usarVarias", items: paraUsarTodas.map((it) => ({ itemId: it.id, valor: it.valor })) }], {
-                refrescar: paraUsarTodas.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil"),
-              })
-            }
-            onDiscard={() => void cambiar([{ op: "descartar", itemIds: paraUsarTodas.map((it) => it.id) }])}
-          />
-        )}
-
-        <Drawer
-          open={abierta !== null}
-          onClose={() => setAbierta(null)}
-          title={abierta ? definicionDe(abierta).etiqueta : undefined}
-          description={abierta ? definicionDe(abierta).ayuda : undefined}
-          size="lg"
-          footer={puedeEditar ? <div ref={setPie} className="flex items-center gap-2" /> : undefined}
-        >
-          {abierta && <Casilla key={abierta} clave={abierta} sinTitulo editarDeEntrada pie={pie} onListo={() => setAbierta(null)} />}
-        </Drawer>
-      </section>
+      {paraUsarTodas.length > 0 && puedeEditar && (
+        <AgentProposal
+          title={`Hay ${paraUsarTodas.length} ${paraUsarTodas.length === 1 ? "propuesta" : "propuestas"} del agente para revisar`}
+          subtitle="Están en su lugar: en estas tarjetas, en «Exploración» y en «La escala». Úsalas o descártalas mirando lo que ya está; nada se confirma solo."
+          applyLabel="Usar todas"
+          discardLabel="Descartar todas"
+          applying={guardando}
+          onApply={() =>
+            void cambiar([{ op: "usarVarias", items: paraUsarTodas.map((it) => ({ itemId: it.id, valor: it.valor })) }], {
+              refrescar: paraUsarTodas.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil"),
+            })
+          }
+          onDiscard={() => void cambiar([{ op: "descartar", itemIds: paraUsarTodas.map((it) => it.id) }])}
+        />
+      )}
 
       {/* Lo que sale de cada reunión: lo propone el agente al leerla, con la frase del cliente. */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -184,28 +149,6 @@ export default function Resumen({
           <Casilla key={clave} clave={clave} />
         ))}
       </div>
-
-      <ProyectosQueLaReciben />
     </div>
-  );
-}
-
-/** A qué proyecto le llega la exploración: lo único del viejo «Traspaso» que es un dato y no una explicación. */
-function ProyectosQueLaReciben() {
-  const { proyectos } = useLienzo();
-  if (proyectos.length === 0) return null;
-  return (
-    <p className="text-xs text-fg-muted">
-      Le llega al handoff de{" "}
-      {proyectos.map((p, i) => (
-        <span key={p.id}>
-          {i > 0 && ", "}
-          <Link href={`/clients/${p.clientId}?tab=${p.id}`} className="text-brand-light hover:underline">
-            {p.nombre}
-          </Link>
-        </span>
-      ))}
-      , marcada como estimada: le dice al CSE dónde mirar.
-    </p>
   );
 }

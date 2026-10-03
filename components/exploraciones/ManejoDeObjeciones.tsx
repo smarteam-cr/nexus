@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ManejoDeObjeciones — el botón «Cómo manejar objeciones», al lado del título de la exploración.
+ * ManejoDeObjeciones — el botón «Cómo manejar objeciones», al pie de la barra de la izquierda.
  *
  * Pedido de Elías (2026-10-01): a mano en cualquier pieza, porque una objeción aparece en la reunión
  * y no espera. Abre un cajón con tres pestañas: LAER (qué es cada paso y una frase para decirlo), las
@@ -25,7 +25,7 @@ export default function ManejoDeObjeciones() {
 
   return (
     <>
-      <Button size="sm" variant="secondary" onClick={() => setAbierto(true)}>
+      <Button size="sm" variant="secondary" className="w-full lg:justify-start" onClick={() => setAbierto(true)}>
         Cómo manejar objeciones
       </Button>
       <Drawer

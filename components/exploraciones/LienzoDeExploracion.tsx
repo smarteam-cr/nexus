@@ -4,20 +4,20 @@
  * LienzoDeExploracion — el lienzo de la exploración de venta de una empresa.
  *
  * Una GUÍA, no un formulario (pedido de Elías, 2026-10-01: «una guía muy fácil de rellenar»).
- * Con el MISMO caparazón que el proyecto (pedido de Elías, 2026-10-01): el nombre de la pieza con el
- * desplegable del recorrido (components/canvas/SelectorDePiezas.tsx). El Resumen abre primero: qué
- * sigue, lo que el agente propuso para revisar y las tarjetas del marco de calificación. Después,
- * Exploración (con quién se habla y la guía de la reunión; las respuestas las anota el agente con la
- * transcripción), la escala (dónde parece estar cada equipo, con hipótesis y evidencia), los casos de
- * uso y la propuesta. Lo que propone el agente aparece en su lugar, para usarlo o descartarlo. La
- * pieza abierta queda en la dirección (`?pieza=`): recargar o compartir el enlace abre la misma.
+ * Pensado para escritorio (rediseño del 2026-10-03: «no se está aprovechando bien el espacio»), en
+ * tres columnas: a la izquierda las piezas y las sesiones (RielDePiezas), al centro una sola tarea, y
+ * a la derecha lo que conviene tener a la vista en cualquier pieza (PanelDeContexto: qué sigue, la
+ * arquitectura de la venta, la escala, las objeciones y lo que propuso el agente). Lo que propone el
+ * agente aparece en su lugar, para usarlo o descartarlo. La pieza abierta queda en la dirección
+ * (`?pieza=`): recargar o compartir el enlace abre la misma. Las casillas se abren en un cajón que
+ * vive acá, para poder abrirlas desde cualquier columna.
  */
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useToast } from "@/components/ui";
-import { SelectorDePiezas, type EstadoDePieza, type FilaDePieza } from "@/components/canvas/SelectorDePiezas";
+import { Drawer, useToast } from "@/components/ui";
+import type { EstadoDePieza, FilaDePieza } from "@/components/canvas/SelectorDePiezas";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { definicionDe } from "@/lib/exploraciones/casillas";
+import { CASILLAS_DEL_RESUMEN, definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
 import { listaParaProponer, queSigueConPaso } from "@/lib/exploraciones/calidad";
 import {
   aplicarOperaciones,
@@ -32,14 +32,16 @@ import {
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
-import { LienzoContexto, type Lienzo, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
-import ManejoDeObjeciones from "./ManejoDeObjeciones";
+import { Casilla } from "./Casilla";
+import { LienzoContexto, type Lienzo, type MomentoDeLaSesion, type OpcionesDeCambio, type PasoDelLienzoUI } from "./contexto";
+import PanelDeContexto from "./PanelDeContexto";
 import PasoCasosDeUso from "./PasoCasosDeUso";
 import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
 import PasoPreparacion from "./PasoPreparacion";
 import PasoPropuesta from "./PasoPropuesta";
-import Resumen from "./Resumen";
+import Resumen, { lineasDe } from "./Resumen";
+import RielDePiezas from "./RielDePiezas";
 
 const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
   resumen: "Resumen",
@@ -50,7 +52,16 @@ const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
   propuesta: "Propuesta",
 };
 
-/** Las piezas del recorrido, en orden (el Resumen va aparte, arriba del desplegable). */
+/** Qué es cada pieza, en una línea, debajo de su nombre. Exploración lleva su propio encabezado (la sesión). */
+const DE_QUE_VA: Record<Exclude<PasoDelLienzoUI, "exploracion">, string> = {
+  resumen: "Lo que se sabe del prospecto. Toca una tarjeta para completarla o revisar lo que propuso el agente.",
+  preparacion: "Con quién vas a hablar, qué es la empresa y cómo abrir la conversación.",
+  escala: "Dónde parece estar cada equipo, con hipótesis y evidencia.",
+  casos: "Lo que se le puede proponer, según dónde está cada equipo.",
+  propuesta: "La propuesta comercial, armada con lo confirmado.",
+};
+
+/** Las piezas del recorrido, en orden (el Resumen va aparte, arriba de todas). */
 const PIEZAS = ["preparacion", "exploracion", "escala", "casos", "propuesta"] as const;
 
 /** Lo que dice el punto de cada pieza en el title de la fila. */
@@ -104,11 +115,14 @@ export default function LienzoDeExploracion({
   const [reuniones, setReuniones] = useState(inicial.reuniones ?? []);
   const [guardando, setGuardando] = useState(false);
   const [paso, setPasoCrudo] = useState<PasoDelLienzoUI>(esPieza(piezaInicial) ? piezaInicial : "resumen");
-  const [desplegado, setDesplegado] = useState(false);
+  const [sesionElegida, setSesionElegida] = useState<string | null>(null);
+  const [momentos, setMomentos] = useState<Record<string, MomentoDeLaSesion>>({});
+  const [casillaAbierta, setCasillaAbierta] = useState<ClaveDeCasilla | null>(null);
+  // El pie del cajón: ahí van «Guardar» y «Cancelar», fijos abajo aunque el formulario sea largo.
+  const [pie, setPie] = useState<HTMLDivElement | null>(null);
   // La pieza abierta queda en la dirección, sin otra navegación (no vuelve a pedir la página).
   const setPaso = useCallback((p: PasoDelLienzoUI) => {
     setPasoCrudo(p);
-    setDesplegado(false);
     try {
       const url = new URL(window.location.href);
       if (p === "resumen") url.searchParams.delete("pieza");
@@ -285,6 +299,13 @@ export default function LienzoDeExploracion({
     nombreDeNivel,
     pendientesPara,
     irA,
+    abrirCasilla: setCasillaAbierta,
+    sesion: {
+      elegida: sesionElegida,
+      elegir: setSesionElegida,
+      momentos,
+      ponerMomento: (clave, m) => setMomentos((x) => ({ ...x, [clave]: m })),
+    },
   };
 
   const sigue = queSigueConPaso(exp.estado, chequeo, sinLeer);
@@ -293,12 +314,12 @@ export default function LienzoDeExploracion({
   const paraUsarTodas = revisables.filter((it) => it.destino.tipo !== "casoDeUso");
 
   /* El punto de cada pieza: verde si ya tiene contenido, ámbar si hay algo para revisar o hacer,
-     hueco si todavía nada. Lo calcula la pantalla con lo que ya tiene: abrir el desplegable no pide nada. */
+     hueco si todavía nada. Lo calcula la pantalla con lo que ya tiene. */
   const lista = listaParaProponer(exp.estado, chequeo).every((p) => p.cumplido);
   const filaDe = (p: (typeof PIEZAS)[number]): FilaDePieza => {
     const porRevisar = deCadaPaso(p);
     let estado: EstadoDePieza;
-    let aviso: FilaDePieza["aviso"] = porRevisar > 0 ? { corto: `${porRevisar} para revisar` } : null;
+    let aviso: FilaDePieza["aviso"] = porRevisar > 0 ? { corto: `${porRevisar} por revisar` } : null;
     switch (p) {
       case "preparacion": {
         const preparo = exp.estado.propuesta.corridas.some((c) => c.modo === "preparar");
@@ -319,39 +340,57 @@ export default function LienzoDeExploracion({
         break;
       case "propuesta":
         estado = propuestas.length > 0 ? "generada" : lista ? "pendiente" : "vacia";
-        if (propuestas.length === 0 && lista) aviso = { corto: "Lista para proponer" };
+        if (propuestas.length === 0 && lista) aviso = { corto: "Lista", largo: "Lista para proponer" };
         break;
     }
     return { clave: p, etiqueta: NOMBRE_DEL_PASO[p], estado, ayuda: AYUDA_DEL_ESTADO[estado], aviso };
   };
+  const delResumen = deCadaPaso("resumen");
+  const confirmadas = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0).length;
+  const porPieza = (["resumen", ...PIEZAS] as PasoDelLienzoUI[]).map((p) => ({ paso: p, cuantas: deCadaPaso(p) }));
 
   return (
     <LienzoContexto.Provider value={lienzo}>
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <SelectorDePiezas
-            titulo={NOMBRE_DEL_PASO[paso]}
-            abierto={desplegado}
-            onCambiarAbierto={setDesplegado}
-            resumen={{
-              activo: paso === "resumen",
-              ayuda: "Qué sigue, lo que propuso el agente y lo que se sabe del prospecto.",
-              onElegir: () => setPaso("resumen"),
-            }}
-            activa={paso === "resumen" ? null : paso}
-            onElegir={(clave) => esPieza(clave) && setPaso(clave)}
+      <div className="flex-1 lg:grid lg:grid-cols-[13.5rem_minmax(0,1fr)] xl:grid-cols-[13.5rem_minmax(0,1fr)_19rem]">
+        <aside className="border-b border-line bg-surface px-3 py-3 lg:sticky lg:top-0 lg:h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r lg:py-5">
+          <RielDePiezas
+            paso={paso}
+            onElegir={setPaso}
+            resumen={{ aviso: delResumen > 0 ? `${delResumen} por revisar` : `${confirmadas}/8` }}
             filas={PIEZAS.map(filaDe)}
           />
-          <ManejoDeObjeciones />
-        </div>
+        </aside>
 
-        {paso === "resumen" && <Resumen sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paraUsarTodas={paraUsarTodas} />}
-        {paso === "preparacion" && <PasoPreparacion />}
-        {paso === "exploracion" && <PasoExploracion />}
-        {paso === "escala" && <PasoEscala />}
-        {paso === "casos" && <PasoCasosDeUso />}
-        {paso === "propuesta" && <PasoPropuesta />}
+        <main className="min-w-0 px-6 py-6 xl:px-8">
+          {paso !== "exploracion" && (
+            <header className="mb-6">
+              <h2 className="text-lg font-semibold text-fg">{NOMBRE_DEL_PASO[paso]}</h2>
+              <p className="text-sm text-fg-muted">{DE_QUE_VA[paso]}</p>
+            </header>
+          )}
+          {paso === "resumen" && <Resumen paraUsarTodas={paraUsarTodas} />}
+          {paso === "preparacion" && <PasoPreparacion />}
+          {paso === "exploracion" && <PasoExploracion />}
+          {paso === "escala" && <PasoEscala />}
+          {paso === "casos" && <PasoCasosDeUso />}
+          {paso === "propuesta" && <PasoPropuesta />}
+        </main>
+
+        <aside className="border-t border-line bg-surface-muted px-5 py-6 lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-3.5rem)] xl:self-start xl:overflow-y-auto xl:border-l xl:border-t-0">
+          <PanelDeContexto sigue={sigue} porPieza={porPieza} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} />
+        </aside>
       </div>
+
+      <Drawer
+        open={casillaAbierta !== null}
+        onClose={() => setCasillaAbierta(null)}
+        title={casillaAbierta ? definicionDe(casillaAbierta).etiqueta : undefined}
+        description={casillaAbierta ? definicionDe(casillaAbierta).ayuda : undefined}
+        size="lg"
+        footer={puedeEditar ? <div ref={setPie} className="flex items-center gap-2" /> : undefined}
+      >
+        {casillaAbierta && <Casilla key={casillaAbierta} clave={casillaAbierta} sinTitulo editarDeEntrada pie={pie} onListo={() => setCasillaAbierta(null)} />}
+      </Drawer>
     </LienzoContexto.Provider>
   );
 }
