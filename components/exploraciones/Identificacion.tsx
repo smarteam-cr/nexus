@@ -17,6 +17,8 @@ import { industriaLegible, sugerirEdicion } from "@/lib/exploraciones/industria"
 import type { Medicion } from "@/lib/exploraciones/contenido";
 import { useLienzo } from "./contexto";
 import { Propuestas } from "./Propuestas";
+import { BotonBlanco } from "./FranjaDeSugerencias";
+import { useCorrida } from "./useCorrida";
 
 const NOMBRE_DEL_CIERRE: Record<Cierre, string> = { "con equipo": "Con equipo", transaccional: "Transaccional", mixta: "Mixta" };
 const NOMBRE_DEL_DESPUES: Record<Despues, string> = { única: "Relación única", recompra: "Recompra", continua: "Relación continua" };
@@ -35,6 +37,7 @@ export function Tarjeta({ titulo, ayuda, children }: { titulo: string; ayuda?: s
 
 export function IndustriaYPerfil() {
   const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
+  const { corriendo, lanzando, lanzar } = useCorrida();
   const e = exp.estado;
   const elegida = e.contenido.edicionElegida;
   const pendientes = pendientesPara((d) => d.tipo === "edicion" || d.tipo === "perfil");
@@ -115,22 +118,34 @@ export function IndustriaYPerfil() {
             )}
             <span>{quien.texto}</span>
           </p>
-          {distintaDeLaSugerida && sugerida && (
+          {/* Siempre que la eligió el vendedor hay una salida: volver a la sugerida (aunque sea la
+              misma, así el agente la vuelve a manejar) o, si todavía no hay ninguna, pedírsela al agente. */}
+          {industriaDelVendedor(e) && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
-              <p className="min-w-0 text-xs text-fg-secondary">
-                La sugerida es <span className="font-medium text-fg">{nombreDeLaSugerida}</span>
-                {sugerida.razon ? `: ${sugerida.razon}` : "."}
+              <p className="min-w-0 flex-1 text-xs text-fg-secondary">
+                {sugerida ? (
+                  distintaDeLaSugerida ? (
+                    <>
+                      La sugerida es <span className="font-medium text-fg">{nombreDeLaSugerida}</span>
+                      {sugerida.razon ? `: ${sugerida.razon}` : "."}
+                    </>
+                  ) : (
+                    <>Es la misma que sugiere el agente. Restablécela para que la vuelva a manejar él.</>
+                  )
+                ) : (
+                  <>Todavía no hay una sugerida: el agente la propone al preparar, con lo que hay de la empresa.</>
+                )}
               </p>
-              {puedeEditar && (
-                <Button
-                  size="xs"
-                  variant="secondary"
-                  disabled={guardando}
-                  onClick={() => void cambiar([{ op: "restablecerEscala", sugerida }], { refrescar: true })}
-                >
-                  Restablecer la sugerida
-                </Button>
-              )}
+              {puedeEditar &&
+                (sugerida ? (
+                  <BotonBlanco disabled={guardando} onClick={() => void cambiar([{ op: "restablecerEscala", sugerida }], { refrescar: true })}>
+                    Restablecer la sugerida
+                  </BotonBlanco>
+                ) : (
+                  <BotonBlanco disabled={corriendo || lanzando} onClick={() => void lanzar("preparar")}>
+                    {corriendo || lanzando ? "Preparando…" : "Pedírsela al agente"}
+                  </BotonBlanco>
+                ))}
             </div>
           )}
           {edicion?.descripcion && <p className="text-xs text-fg-muted">{edicion.descripcion}</p>}
