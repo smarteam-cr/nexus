@@ -34,7 +34,7 @@ import { syncPartnerClients } from "@/lib/cs/partner-sync";
 import { syncVentasGanadas } from "@/lib/ventas/sync-ganadas";
 import { watchdogJobs } from "@/lib/cs/watchdog";
 import { claimDateKey, SIN_TURNO, type JobDef } from "./registry";
-import { motivoApagado } from "./requisitos";
+import { motivoApagado, partnerCreaClientes } from "./requisitos";
 import { WEEKDAYS_MON_FRI } from "./time";
 import { esDiaDeCorte } from "@/lib/cobranza/antiguedad";
 
@@ -78,7 +78,7 @@ const csPartnerDaily: JobDef = {
   run: async (now) => {
     const { dateKey } = (await import("./time")).crDateParts(now);
     if (!(await claimDateKey("cs-partner-daily", dateKey, now))) return SIN_TURNO;
-    const r = await syncPartnerClients({ createClients: true });
+    const r = await syncPartnerClients({ createClients: partnerCreaClientes(process.env) });
     // Fallo TRANSITORIO (API caída / lock ajeno): liberar el claim del día para
     // que el próximo tick reintente. El 403 de scope NO es transitorio (dura todo
     // el día) — ahí el claim se queda y no se martilla la API.
@@ -368,7 +368,24 @@ const invariantsDaily: JobDef = {
   },
 };
 
+/**
+ * Avisos de renovación de licencias (2026-10-02, lib/cs/avisos-de-renovacion.ts): a 90, 60 y 30 días
+ * de cada renovación, una alerta de «Renovación» en Éxito del cliente. Determinista, sin IA ni costo:
+ * corre todos los días ≥ 7:00 CR, después de la copia de HubSpot Partner.
+ */
+const licenciasRenovacionDaily: JobDef = {
+  key: "licencias-renovacion-daily",
+  shouldRun: (_now, parts) => parts.hour >= 7,
+  run: async (now) => {
+    const { dateKey } = (await import("./time")).crDateParts(now);
+    if (!(await claimDateKey("licencias-renovacion-daily", dateKey, now))) return SIN_TURNO;
+    const { correrAvisosDeRenovacion } = await import("@/lib/cs/avisos-de-renovacion");
+    const r = await correrAvisosDeRenovacion(now);
+    console.log(`[jobs/licencias] ${dateKey} — ${r.creados} aviso(s) de renovación sobre ${r.revisados} cliente(s)`);
+  },
+};
+
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, licenciasRenovacionDaily, invariantsDaily];
 }

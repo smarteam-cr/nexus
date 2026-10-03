@@ -270,13 +270,13 @@ por fecha en `CronJobState`: matar el contenedor a mitad de un job NO re-dispara
 Cada corrida deja su resultado en `CronJobState.lastResult` y el **semáforo de
 Integraciones** lo pinta (B-03); un fallo llega a Sentry con `tags.job` (B-02), y un job que no
 toma el turno del día no anota nada, así que un rojo queda rojo hasta la corrida siguiente. Hasta el
-2026-09-04 esta sección listaba 6 jobs; son 11 (`allJobs()`), más dos disparos por navegación:
+2026-09-04 esta sección listaba 6 jobs; son 13 (`allJobs()`), más dos disparos por navegación:
 
 | Job | Cuándo | Gate | Qué hace |
 |---|---|---|---|
 | `marketing-weekly` | cada tick; ventana propia (viernes 6:00 CR) + claim propio en `MarketingSettings` | — | delega a `tickMarketingCron` tal cual |
 | `cs-signals-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_WATCHDOG_ENABLED=1` | refresca las señales HubSpot de Éxito del cliente |
-| `cs-partner-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_WATCHDOG_ENABLED=1` | espeja Partner Clients (uso, licencias, MRR); degrada sin scope |
+| `cs-partner-daily` | L–V ≥ 6:00 CR, una vez al día | `CS_PARTNER_SYNC_ENABLED=1` o `CS_WATCHDOG_ENABLED=1` | espeja Partner Clients (uso, licencias, MRR); degrada sin scope. Prendido solo por `CS_PARTNER_SYNC_ENABLED` NO crea clientes nuevos (2026-10-02): las licencias del cliente lo necesitan sin el vigilante |
 | `cs-watchdog-daily` | L–V ≥ 7:00 CR (después de las señales) | `CS_WATCHDOG_ENABLED=1` + `CsSettings.watchdogEnabled` | sweep del watchdog con pre-filtro determinístico |
 | `cs-watchdog-debounce` | cada tick | `CS_WATCHDOG_ENABLED=1` | triage de eventos «quiesced» (>15 min), hasta 5 proyectos por tick |
 | `maintenance-daily` | una vez al día, a cualquier hora (en la práctica, pasada la medianoche CR) | — | barre `PrintJobToken` expirados y `ExternalVerifyAttempt` sin actividad en 24 h, y refresca las alertas de cobranza: abre vencidos y promesas incumplidas, pone al día las filas vivas y cierra las que ya no aplican (`lib/cobranza/alertas-refresco.ts`). No guarda corte. Si el refresco falla, el job queda en rojo y no reintenta hasta el día siguiente |
@@ -285,6 +285,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 | `ventas-ganadas-daily` | todos los días ≥ 6:00 CR (fines de semana incluidos) | — | espeja los tratos ganados del año en curso |
 | `odoo-espejo-daily` | ≥ 6:00 CR, una vez al día | `ODOO_PASSWORD` (contraseña o clave de API), `ODOO_LOGIN` si la clave no es de `direct`, y `ODOO_SYNC_ENABLED` ≠ `0` | espeja las facturas de Odoo (Nexus solo lee). Si la corrida falla, el job FALLA (rojo + Sentry); un rechazo de credenciales retiene el turno hasta mañana (ver «El espejo de Odoo no corre»). INV31 da rojo si la última corrida buena tiene más de 20 h |
 | `mercury-espejo-daily` | ≥ 6:00 CR, una vez al día | `MERCURY_API_TOKEN` (token «Read Only» de Mercury) y `MERCURY_SYNC_ENABLED` ≠ `0` | copia las facturas, los clientes y los movimientos de Mercury (Nexus solo lee: el token no puede escribir). Si falla, el job FALLA (rojo + Sentry); un token rechazado retiene el turno hasta mañana (ver «La copia de Mercury no corre») |
+| `licencias-renovacion-daily` | ≥ 7:00 CR, una vez al día | — | a 90, 60 y 30 días de cada renovación de licencias (HubSpot Partner + lo cargado a mano en la información del cliente), una alerta de «Renovación» en Éxito del cliente; una por cliente, hub, fecha y umbral. Sin IA (`lib/cs/avisos-de-renovacion.ts`) |
 | `invariants-daily` | ≥ 7:00 CR, una vez al día (después de los espejos) | — | corre los 21 invariantes solo-base (`lib/invariantes/`, B-07); si alguno está en rojo el job FALLA a propósito: semáforo rojo + Sentry. Los que necesitan HubSpot o archivos siguen en `check-invariants.ts`, a mano |
 
 ⚠ Sin `CS_WATCHDOG_ENABLED` y `COBRANZA_CRON_ENABLED` en el `.env` cinco de estos no corren, y sin

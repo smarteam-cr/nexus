@@ -204,6 +204,7 @@ model Client {
   canvasSuggestions      CanvasSuggestion[]
   actionItems            ActionItem[]
   pedidosFueraDeAlcance  PedidoFueraDeAlcance[]
+  licencias              LicenciaCliente[]
   appUsers               AppUser[] // F2: usuarios externos vinculados (kind=EXTERNAL)
   assignments            ClientAssignment[] // F2: overrides manuales CSE↔Cliente
   handoffs               Handoff[] // entidad Handoff (1:N por cliente, ver model Handoff)
@@ -2279,6 +2280,29 @@ model PedidoFueraDeAlcance {
 
   @@unique([clientId, huella])
   @@index([projectId, estado])
+}
+
+// Lo que una persona carga A MANO de las licencias de HubSpot de un cliente (2026-10-02). HubSpot
+// Partner ya trae plan, renovación y monto por hub (ClientPartnerSnapshot.properties); esto guarda
+// la fecha de COMPRA (HubSpot no la tiene) y completa lo que falta en las cuentas que Smarteam no
+// administra. Ver lib/cs/licencias.ts. Un registro por cliente y hub.
+model LicenciaCliente {
+  id              String    @id @default(cuid())
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // marketing | sales | service | content | operations | commerce
+  hub             String
+  plan            String?
+  fechaCompra     DateTime?
+  fechaRenovacion DateTime?
+  montoMensual    Float?
+  moneda          String?
+  nota            String?   @db.Text
+  actualizadoPor  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([clientId, hub])
 }
 
 // ─── SessionProject — pivote N:N entre FirefliesSession y Project ─────────────

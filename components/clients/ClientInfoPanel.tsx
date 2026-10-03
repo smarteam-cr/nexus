@@ -19,6 +19,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import DocumentUpload from "./DocumentUpload";
 import FichaDelCliente from "./FichaDelCliente";
+import LicenciasDelCliente from "./LicenciasDelCliente";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
 import {
@@ -26,10 +27,12 @@ import {
   logoHeightCalc, logoScaleStyle, resolveLogoScale,
 } from "@/lib/ui/logo-scale";
 
-type SubTab = "ficha" | "docs" | "marca";
+type SubTab = "ficha" | "licencias" | "docs" | "marca";
 
 const TABS: { key: SubTab; label: string }[] = [
   { key: "ficha", label: "Ficha" },
+  // Licencias de HubSpot y sus renovaciones (2026-10-02, pedido de Liliana Moreno).
+  { key: "licencias", label: "Licencias" },
   { key: "docs",  label: "Documentos" },
   { key: "marca", label: "Marca" },
 ];
@@ -95,6 +98,7 @@ export default function ClientInfoPanel({
       {/* Contenido del sub-tab activo */}
       <div className="pt-2">
         {tab === "ficha" && clientId && <FichaDelCliente clientId={clientId} />}
+        {tab === "licencias" && clientId && <LicenciasDelCliente clientId={clientId} />}
 
         {tab === "docs" && <DocumentUpload projectId={projectId} />}
 

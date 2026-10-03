@@ -27,9 +27,24 @@ const falta = (...variables: string[]) =>
 const exitoDelCliente = (env: Entorno) =>
   env.CS_WATCHDOG_ENABLED === "1" ? null : falta("CS_WATCHDOG_ENABLED=1");
 
+/**
+ * ¿La copia diaria de HubSpot Partner crea clientes nuevos? Solo con el vigilante encendido, como fue
+ * siempre. Prendida por CS_PARTNER_SYNC_ENABLED (para las licencias) solo actualiza los que existen:
+ * crear clientes solo es lo que en julio rompió la atribución de reuniones (decisión D-07, pendiente).
+ */
+export function partnerCreaClientes(env: Entorno): boolean {
+  return env.CS_WATCHDOG_ENABLED === "1";
+}
+
 const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
   "cs-signals-daily": exitoDelCliente,
-  "cs-partner-daily": exitoDelCliente,
+  /* La copia de HubSpot Partner (licencias, renovaciones, uso) se puede prender SOLA desde el
+     2026-10-02, sin el vigilante con IA: las renovaciones de la información del cliente la necesitan y
+     en producción estaba parada desde julio porque colgaba de CS_WATCHDOG_ENABLED. */
+  "cs-partner-daily": (env) =>
+    env.CS_WATCHDOG_ENABLED === "1" || env.CS_PARTNER_SYNC_ENABLED === "1"
+      ? null
+      : falta("CS_PARTNER_SYNC_ENABLED=1 (o CS_WATCHDOG_ENABLED=1)"),
   "cs-watchdog-daily": exitoDelCliente,
   "cs-watchdog-debounce": exitoDelCliente,
   "cobranza-quincenal": (env) =>
