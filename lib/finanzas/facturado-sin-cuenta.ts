@@ -102,3 +102,63 @@ export function facturadoEnOdooSinCuenta(
     items: filas,
   };
 }
+
+// ── Mercury (rediseño de Finanzas, 2026-10-03) ────────────────────────────────────
+// En Mercury el problema no es que falte la cuenta: los clientes de afuera casi todos tienen su cuenta en Nexus. Lo que
+// falta es EMPAREJARLOS (decir qué cuenta es cada cliente de Mercury). Mientras no lo estén, no se puede saber si una
+// factura sin pagar está en «Por cobrar» del tablero (si alguien marcó la cuota facturada) o falta. Por eso esto no
+// suma a nada ni dice «falta»: dice cuánto hay sin poder comprobar.
+
+/** Una factura de la copia de Mercury cuyo cliente no está emparejado con una cuenta de Nexus. */
+export interface FacturaDeMercurySinEmparejar {
+  mercuryCustomerId: string;
+  clienteNombre: string;
+  /** `YYYY-MM-DD`. */
+  invoiceDate: string;
+  monto: number;
+  moneda: string;
+  /** Unpaid · Paid · Cancelled · Processing, como los dice Mercury. */
+  estado: string;
+}
+
+/** Lo que Mercury tiene sin pagar del año, de clientes sin emparejar, por cliente. */
+export function porCobrarEnMercurySinEmparejar(
+  facturas: readonly FacturaDeMercurySinEmparejar[],
+  anio: number,
+  aPresentacion: (monto: number, moneda: string, periodo: string) => number | null,
+): FacturadoSinCuenta {
+  const delAnio = facturas.filter(
+    (f) => f.invoiceDate.startsWith(`${anio}-`) && f.estado !== "Paid" && f.estado !== "Cancelled",
+  );
+  const porCliente = new Map<string, { nombre: string; facturas: FacturaDeMercurySinEmparejar[] }>();
+  for (const f of delAnio) {
+    const c = porCliente.get(f.mercuryCustomerId) ?? { nombre: f.clienteNombre, facturas: [] };
+    c.facturas.push(f);
+    porCliente.set(f.mercuryCustomerId, c);
+  }
+  let sinTasa = 0;
+  const filas = [...porCliente.values()].map((c) => {
+    let monto = 0;
+    for (const f of c.facturas) {
+      const convertido = aPresentacion(f.monto, f.moneda, f.invoiceDate.slice(0, 7));
+      if (convertido === null) sinTasa++;
+      else monto += convertido;
+    }
+    const periodos = c.facturas.map((f) => f.invoiceDate.slice(0, 7)).sort();
+    const [desde, hasta] = [periodos[0]!, periodos[periodos.length - 1]!];
+    const nota = [
+      c.facturas.length === 1 ? "1 factura sin pagar" : `${c.facturas.length} facturas sin pagar`,
+      textoDeMontos(montosPorMoneda(c.facturas.map((f) => ({ monto: f.monto, moneda: f.moneda })))),
+      desde === hasta ? `de ${mesDe(desde)}` : `de ${mesDe(desde)} a ${mesDe(hasta)}`,
+    ].join(" · ");
+    return { texto: c.nombre, monto: round2(monto), nota };
+  });
+  filas.sort((a, b) => b.monto - a.monto || a.texto.localeCompare(b.texto, "es"));
+  return {
+    cuantas: delAnio.length,
+    clientes: porCliente.size,
+    monto: round2(filas.reduce((n, f) => n + f.monto, 0)),
+    sinTasa,
+    items: filas,
+  };
+}

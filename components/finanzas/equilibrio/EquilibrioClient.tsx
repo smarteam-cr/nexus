@@ -49,7 +49,7 @@ const pct = (x: number | null) =>
 
 export default function EquilibrioClient({ initialReporte }: { initialReporte: ReporteAnualDTO }) {
   /* ⭐ «Actualizar» (2026-09-29): el reporte pasa a estado. El botón vuelve a copiar las ventas de HubSpot y las
-     facturas de Odoo —las dos copias que se hacen una vez por día— y trae el reporte recién armado, para verlo al
+     facturas de Odoo y lo de Mercury —las copias que se hacen una vez por día— y trae el reporte recién armado, para verlo al
      día en una reunión sin recargar la página. El escenario simulado no se toca: es una pregunta de quien mira. */
   const toast = useToast();
   const [r, setReporte] = useState(initialReporte);
@@ -343,7 +343,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
             size="sm"
             onClick={() => void actualizar()}
             disabled={actualizando}
-            title="Vuelve a traer ahora las ventas ganadas de HubSpot y las facturas de Odoo, que normalmente se copian una vez por día, y recarga el tablero. Los cobros, el gasto y la planilla ya se leen al abrir."
+            title="Vuelve a traer ahora las ventas ganadas de HubSpot, las facturas de Odoo y lo de Mercury, que normalmente se copian una vez por día, y recarga el tablero. Los cobros, el gasto y la planilla ya se leen al abrir."
           >
             {actualizando ? "Actualizando…" : "Actualizar"}
           </Button>

@@ -103,9 +103,10 @@ import {
 } from "./partners";
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
-import { facturadoEnOdooSinCuenta } from "@/lib/finanzas/facturado-sin-cuenta";
+import { facturadoEnOdooSinCuenta, porCobrarEnMercurySinEmparejar } from "@/lib/finanzas/facturado-sin-cuenta";
 import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
 import { cambioDespuesDelCierre, type NumerosDelCierre } from "@/lib/finanzas/cierre";
+import { calidadDeMesDeNexus, egresoDesdeNexus, egresosDeNexus } from "@/lib/finanzas/egresos-nexus";
 import { crDateParts } from "@/lib/jobs/time";
 import type { ComparacionConExcel } from "@/lib/finanzas/cobranza-contra-excel";
 import { cargarEnLaCalleContraExcel, type PorCobrarParaExcel } from "@/lib/finanzas/cobranza-contra-excel-server";
@@ -2341,10 +2342,15 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
  * Los egresos del año como los lee el reporte de equilibrio: el libro de egresos del Excel, la planilla por quincena y la
  * reserva de aguinaldo. Vive aparte de `loadReporteAnual` para que el cierre del mes (lib/finanzas/cierre-server.ts) mida
  * la calidad de cada mes con la MISMA lista, sin leer los ingresos.
+ *
+ * ⭐ Desde `EGRESOS_DESDE_NEXUS` (octubre de 2026, rediseño de Finanzas) el gasto que no es planilla sale de Nexus —los
+ * recurrentes sin salarios y los gastos del mes—, no del Excel (lib/finanzas/egresos-nexus.ts). Esos meses traen su
+ * calidad ya decidida en `calidadDada`: completos con la planilla y el aviso de que los gastos están todos.
  */
 export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor = 12) {
   const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
-  const [filasEgreso, filasPlanilla, aguinaldo] = await Promise.all([
+  const deNexus = periodos.filter(egresoDesdeNexus);
+  const [filasEgreso, filasPlanilla, aguinaldo, costosNexus, gastosNexus, cierresNexus] = await Promise.all([
     prisma.egresoMensual.findMany({
       where: { periodo: { in: periodos } },
       select: { periodo: true, categoria: true, concepto: true, conceptoClave: true, monto: true, moneda: true, monedaInferida: true },
@@ -2354,13 +2360,32 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
       select: { periodo: true, quincena: true, monto: true, moneda: true },
     }),
     loadAguinaldo(anio, hoyISO),
+    deNexus.length === 0
+      ? Promise.resolve([])
+      : prisma.costoRecurrente.findMany({
+          where: { categoria: { in: [...CATEGORIAS_SIN_SALARIO] } },
+          select: { id: true, nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true, activo: true, finalizadoEl: true, createdAt: true },
+        }),
+    deNexus.length === 0
+      ? Promise.resolve([])
+      : prisma.gastoPuntual.findMany({
+          where: { fecha: { gte: dayUTC(`${deNexus[0]}-01`), lt: dayUTC(`${anio + 1}-01-01`) } },
+          select: { fecha: true, monto: true, moneda: true },
+        }),
+    deNexus.length === 0
+      ? Promise.resolve([])
+      : prisma.cierreMes.findMany({
+          where: { periodo: { in: deNexus } },
+          select: { periodo: true, estado: true, gastosListosPor: true },
+        }),
   ]);
 
   const periodoHoy = periodoDe(hoyISO);
   /** Un mes que todavía no ocurrió trae dato de PLAN, no medido. */
   const calidadDe = (periodo: string) => (periodo > periodoHoy ? ("PLANIFICADO" as const) : ("MEDIDO" as const));
 
-  const egresos: EgresoDeMes[] = filasEgreso.map((f) => ({
+  // Del Excel, solo los meses que todavía salen de él: desde el corte manda Nexus.
+  const egresos: EgresoDeMes[] = filasEgreso.filter((f) => !egresoDesdeNexus(f.periodo)).map((f) => ({
     periodo: f.periodo,
     rubro: f.categoria as EgresoDeMes["rubro"],
     concepto: f.concepto,
@@ -2411,7 +2436,35 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
     }
   }
 
-  return { egresos, filasEgreso, planillaAcc };
+  // Los meses de Nexus: recurrentes sin salarios y gastos del mes, con su calidad ya decidida.
+  egresos.push(
+    ...egresosDeNexus(
+      deNexus,
+      costosNexus.map((c) => ({
+        id: c.id,
+        nombre: c.nombre,
+        categoria: c.categoria as "HERRAMIENTA" | "FIJO_OPERACION",
+        monto: num(c.monto)!,
+        moneda: c.moneda as MonedaEq,
+        frecuencia: c.frecuencia,
+        activo: c.activo,
+        finalizadoEl: isoDay(c.finalizadoEl),
+        creadoEl: c.createdAt.toISOString().slice(0, 10),
+      })),
+      gastosNexus.map((g) => ({ fecha: isoDay(g.fecha)!, monto: num(g.monto)!, moneda: g.moneda as MonedaEq })),
+      calidadDe,
+    ),
+  );
+  const cierreNexus = new Map(cierresNexus.map((c) => [c.periodo, c]));
+  const calidadDada = new Map(
+    deNexus.map((p) => {
+      const quincenas = new Set([...planillaAcc.values()].filter((x) => x.periodo === p).map((x) => x.quincena));
+      const c = cierreNexus.get(p);
+      return [p, calidadDeMesDeNexus(quincenas, !!c?.gastosListosPor || c?.estado === "CERRADO")] as const;
+    }),
+  );
+
+  return { egresos, filasEgreso, planillaAcc, calidadDada };
 }
 
 /**
@@ -2446,7 +2499,7 @@ export async function loadReporteAnual(
   const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
   const divisor = opciones?.divisorAguinaldo ?? 12;
 
-  const [{ egresos, filasEgreso, planillaAcc }, filasCobro, filasComision, filasTasa, costosActivos, filasVenta, filasNoVenta, filasCierre] =
+  const [{ egresos, filasEgreso, planillaAcc, calidadDada }, filasCobro, filasComision, filasTasa, costosActivos, filasVenta, filasNoVenta, filasCierre] =
     await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO, divisor),
     prisma.cobro.findMany({
@@ -2621,7 +2674,7 @@ export async function loadReporteAnual(
   // La tarjeta no es un CostoRecurrente (no hay tarjetas cargadas): su cargo vive en el
   // libro de egresos. Se toma el ÚLTIMO mes que lo tenga, que es el vigente.
   const ultimoTarjeta = filasEgreso
-    .filter((f) => f.categoria === "TARJETA" && f.periodo <= periodoDe(hoyISO))
+    .filter((f) => f.categoria === "TARJETA" && f.periodo <= periodoDe(hoyISO) && !egresoDesdeNexus(f.periodo))
     .sort((a, b) => b.periodo.localeCompare(a.periodo))[0]?.periodo;
   if (ultimoTarjeta) {
     for (const f of filasEgreso.filter((x) => x.categoria === "TARJETA" && x.periodo === ultimoTarjeta)) {
@@ -2641,6 +2694,7 @@ export async function loadReporteAnual(
     ventana: opciones?.ventana ?? "SOLO_MEDIDOS",
     tasas,
     divisorAguinaldo: divisor,
+    calidadDada,
     costosVigentes,
     partnershipCubreElPiso: opciones?.partnershipCubreElPiso,
     // Cuando HubSpot ya convirtió, se usa SU número: es el que ve el vendedor en el
@@ -2965,6 +3019,36 @@ async function armarEstadoParaAuditar(
       )
     : undefined;
 
+  // ⭐ Lo que Mercury tiene sin pagar de clientes sin emparejar (rediseño de Finanzas, 2026-10-03). Misma regla de no
+  // tumbar el reporte: si la copia de Mercury no se puede leer, la línea no sale.
+  const mercurySinEmparejar = await Promise.all([
+    prisma.facturaMercury.findMany({
+      where: { estadoEspejo: "VIGENTE", invoiceDate: { gte: desde, lt: inicioDelOtroAnio }, estado: { notIn: ["Paid", "Cancelled"] } },
+      select: { mercuryCustomerId: true, clienteNombre: true, invoiceDate: true, monto: true, moneda: true, estado: true },
+    }),
+    prisma.clienteMercury.findMany({
+      where: { OR: [{ cuentaId: { not: null } }, { ignorado: true }] },
+      select: { mercuryCustomerId: true },
+    }),
+  ])
+    .then(([facturas, resueltos]) => {
+      const fuera = new Set(resueltos.map((c) => c.mercuryCustomerId));
+      return porCobrarEnMercurySinEmparejar(
+        facturas
+          .filter((f) => !fuera.has(f.mercuryCustomerId))
+          .map((f) => ({ ...f, invoiceDate: isoDay(f.invoiceDate)!, monto: num(f.monto)! })),
+        anio,
+        (monto, moneda, periodo) =>
+          moneda === "CRC" || moneda === "USD"
+            ? (convertir(monto, moneda, reporte.monedaPresentacion, tasaDeMes.get(periodo) ?? null)?.monto ?? null)
+            : null,
+      );
+    })
+    .catch((e: unknown) => {
+      console.error("[equilibrio] no se pudo leer la copia de Mercury para medir lo que está sin emparejar:", e);
+      return undefined;
+    });
+
   // Servicios sin cuotas por delante (etapa 14). El monto va en la moneda del reporte con la tasa del
   // mes en curso; sin tasa no se inventa una: el ítem sale sin monto y no suma. En un recurrente es
   // lo de UN mes, que es lo que se deja de facturar cada mes.
@@ -3097,6 +3181,7 @@ async function armarEstadoParaAuditar(
         : null,
     ingresosSinCategoria,
     facturadoEnOdooSinCuenta: facturadoSinCuenta,
+    porCobrarEnMercurySinEmparejar: mercurySinEmparejar,
   };
 }
 

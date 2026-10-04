@@ -402,3 +402,19 @@ describe("identidadDeFila", () => {
     expect(detectarInconsistencias({ ...limpio(), monedaInferida: ["Luz"] }).flatMap((i) => i.items)).toEqual([{ texto: "Luz" }]);
   });
 });
+
+describe("Mercury sin emparejar (rediseño de Finanzas, 2026-10-03)", () => {
+  const medido = { cuantas: 3, clientes: 2, monto: 4925, sinTasa: 0, items: [{ texto: "Teamnet", monto: 4000 }, { texto: "Metzger", monto: 925 }] };
+  it("sale en la lista sin sumar al total: no se sabe si el tablero ya lo cuenta", () => {
+    const linea = detectarInconsistencias({ ...limpio(), porCobrarEnMercurySinEmparejar: medido }).find(
+      (l) => l.codigo === "MERCURY_POR_COBRAR_SIN_EMPAREJAR",
+    );
+    expect(linea?.montoEnJuego).toBeNull();
+    expect(linea?.titulo).toContain("2 clientes sin emparejar");
+    expect(linea?.queHacer).toContain("Conciliación");
+  });
+  it("con todo emparejado, no hay línea", () => {
+    const sinNada = { ...medido, cuantas: 0, clientes: 0, monto: 0, items: [] };
+    expect(detectarInconsistencias({ ...limpio(), porCobrarEnMercurySinEmparejar: sinNada })).toEqual([]);
+  });
+});

@@ -229,6 +229,13 @@ export interface OpcionesEquilibrio {
   /** Default `PARTNERSHIP_CUBRE_EL_PISO`. Entra por acá para poder probar los dos valores. */
   partnershipCubreElPiso?: boolean;
   /**
+   * Los meses cuya calidad (COMPLETO o PARCIAL, y qué falta) se decide afuera, con otra regla. Son los meses en que el
+   * gasto sale de Nexus y no del Excel de egresos (desde octubre de 2026, lib/finanzas/egresos-nexus.ts): ahí el gasto
+   * está completo cuando quien registra avisa que anotó todo, no cuando aparecen los conceptos de siempre. Esos meses
+   * tampoco cuentan para decidir qué conceptos son recurrentes: sus conceptos son otros y ensuciarían a los del Excel.
+   */
+  calidadDada?: ReadonlyMap<string, { estado: EstadoMes; faltantes: string[] }>;
+  /**
    * Cuántas ventas ganadas quedaron fuera de `ventas` por no traer monto en HubSpot.
    * Entra por separado porque el motor no las puede contar: nunca las recibe. Sin esto,
    * el vendido del año se leería como un total y es un piso.
@@ -900,7 +907,8 @@ export function calcularEquilibrio(
   const calidadPorRubro = new Map<RubroEgreso, Set<CalidadDato>>();
   const conceptosInferidos = new Set<string>();
   // Qué se ESPERA cada mes: solo lo recurrente. Un pago anual no falta once veces.
-  const esperados = conceptosRecurrentes(egresos.filter((e) => porMes.has(e.periodo)));
+  const calidadDada = opciones.calidadDada ?? new Map<string, { estado: EstadoMes; faltantes: string[] }>();
+  const esperados = conceptosRecurrentes(egresos.filter((e) => porMes.has(e.periodo) && !calidadDada.has(e.periodo)));
 
   for (const e of egresos) {
     const mes = porMes.get(e.periodo);
@@ -1037,7 +1045,8 @@ export function calcularEquilibrio(
     const partnershipEnIngresos = cubreElPiso ? ing.partnership : 0;
     const ingresosTotales = round2(facturado + partnershipEnIngresos);
     const futuro = periodo > periodoHoy;
-    const { estado, faltantes } = calidadDelMes(periodo, eg.presentes, esperados, rubrosDelAnio, egresosMes > 0);
+    const { estado, faltantes } =
+      calidadDada.get(periodo) ?? calidadDelMes(periodo, eg.presentes, esperados, rubrosDelAnio, egresosMes > 0);
     const { brecha, cubre } = brechaDe(ingresosTotales, egresosMes);
 
     return {

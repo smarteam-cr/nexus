@@ -223,6 +223,12 @@ export interface EstadoParaAuditar {
    * Ausente = no se midió (la copia de Odoo no entra en este cálculo).
    */
   facturadoEnOdooSinCuenta?: { cuantas: number; clientes: number; monto: number; sinTasa: number; items: ItemInconsistencia[] };
+  /**
+   * Lo que Mercury tiene sin pagar del año, de clientes que no están emparejados con su cuenta de Nexus
+   * (`porCobrarEnMercurySinEmparejar`, rediseño de Finanzas 2026-10-03). No se sabe si el tablero lo cuenta.
+   * Ausente = no se midió.
+   */
+  porCobrarEnMercurySinEmparejar?: { cuantas: number; clientes: number; monto: number; sinTasa: number; items: ItemInconsistencia[] };
   /** Hoy, "YYYY-MM-DD". Entra por parámetro: este módulo no lee el reloj. */
   hoyISO: string;
 }
@@ -285,9 +291,31 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       // La venta de esos clientes ya figura descubierta en la línea de ventas: es el mismo negocio desde otro ángulo.
       ...(descubierto > 0 ? { yaContadoEn: "VENTAS_SIN_COBRANZA" } : {}),
       queHacer:
-        "En Cobranza › Odoo › Emparejar, vincular cada cliente de Odoo a su cuenta de Nexus. Si la empresa todavía no tiene cuenta, crearla en Cobranza con sus servicios y sus cobros: desde ahí entra a este tablero.",
+        "En Finanzas › Conciliación › Emparejar, vincular cada cliente de Odoo a su cuenta de Nexus. Si la empresa todavía no tiene cuenta, crearla en Cobranza con sus servicios y sus cobros: desde ahí entra a este tablero.",
       resuelve: "COBRANZA",
       items: fuera.items,
+    });
+  }
+
+  // ── Mercury sin emparejar ───────────────────────────────────────────────────
+  // No se suma al total (`montoEnJuego` null): puede ser plata que el tablero ya cuenta, si alguien marcó la cuota
+  // facturada en Nexus. Lo que se sabe es que no se puede comprobar hasta emparejar.
+  const merc = e.porCobrarEnMercurySinEmparejar;
+  if (merc && merc.cuantas > 0) {
+    out.push({
+      codigo: "MERCURY_POR_COBRAR_SIN_EMPAREJAR",
+      severidad: "MEDIA",
+      titulo: `${money(merc.monto)} por cobrar en Mercury de ${merc.clientes === 1 ? "1 cliente" : `${merc.clientes} clientes`} sin emparejar`,
+      detalle:
+        `Mercury tiene ${merc.cuantas === 1 ? "1 factura" : `${merc.cuantas} facturas`} de este año sin pagar de clientes que ` +
+        `todavía no están emparejados con su cuenta de Nexus. Hasta emparejarlos no se puede saber si esa plata está en ` +
+        `«Por cobrar» de este tablero (si alguien marcó la cuota facturada) o si falta, así que no se suma a nada.` +
+        (merc.sinTasa > 0 ? ` ⚠ ${merc.sinTasa} no están en el monto: falta el tipo de cambio de su mes.` : ""),
+      montoEnJuego: null,
+      queHacer:
+        "En Finanzas › Conciliación › Emparejar (Mercury), decir qué cuenta de Nexus es cada cliente. Con eso, Conciliación compara factura por factura.",
+      resuelve: "COBRANZA",
+      items: merc.items,
     });
   }
 
@@ -309,7 +337,7 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
           : ""),
       montoEnJuego: null,
       queHacer:
-        "Cargar lo que falta en cada mes. Lo de enero a marzo no es recuperable del Excel (ese bloque tiene las fórmulas rotas y mezcla monedas): si hace falta, hay que reconstruirlo de otra fuente.",
+        "Cargar lo que falta en cada mes. Lo de enero a marzo no es recuperable del Excel (ese bloque tiene las fórmulas rotas y mezcla monedas): si hace falta, hay que reconstruirlo de otra fuente. Desde octubre de 2026 el gasto sale de Nexus: un mes queda completo con las dos quincenas de planilla y el aviso de que los gastos del mes están todos (Finanzas › Gastos del mes).",
       resuelve: "COBRANZA",
       items: parcialesPasados.map((m) => ({ texto: m.periodo, nota: `falta ${m.faltantes.join(", ")}` })),
     });

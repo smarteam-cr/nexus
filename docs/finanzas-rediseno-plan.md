@@ -45,7 +45,7 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 | ✅ | **Dinia en gastos** | Gastos del mes, Recurrentes y Tarjetas sin salarios; quién anotó cada gasto | columna `registradoPor` del gasto |
 | ✅ | **Revisión** | Supervisión de Alex: decisiones, revisión con «Devolver», cobranza que se complica | tabla `RevisionRegistro` |
 | ✅ | **Cierre del mes** | Cerrar y reabrir; tipo de cambio en pantalla; meses cerrados en el punto de equilibrio | tabla `CierreMes` |
-| ⬜ | **Gasto sin Excel** | El punto de equilibrio lee los gastos de Nexus desde octubre; Mercury en el punto de equilibrio y en «Actualizar» | — |
+| ✅ | **Gasto sin Excel** | El punto de equilibrio lee los gastos de Nexus desde octubre; Mercury en el punto de equilibrio y en «Actualizar» | — |
 
 ## Cómo funciona la revisión
 
@@ -74,6 +74,19 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 - El punto de equilibrio tiene una columna «Cierre» (✓ Cerrado · Cambió después del cierre · Preliminar) y el margen a
   la fecha dice qué meses del margen están sin cerrar.
 - La calidad de cada mes sale de la misma lista de egresos que el reporte (`cargarEgresosDelAnio`).
+
+## Cómo funciona el gasto sin Excel
+
+- Desde octubre de 2026 (`EGRESOS_DESDE_NEXUS`) el punto de equilibrio arma el gasto de cada mes con los recurrentes que
+  no son salarios (vigentes ese mes; un anual pesa 1/12) y los gastos del mes, sumados por moneda como costo fijo. La
+  planilla y la reserva de aguinaldo siguen igual. Las filas del Excel de octubre a diciembre dejan de contar.
+- La tarjeta deja de ser un rubro aparte: en Nexus lo que se paga con tarjeta es un recurrente o un gasto del mes.
+- Un mes de Nexus está completo con las dos quincenas de planilla y el aviso de que los gastos están todos (o el mes
+  cerrado); si no, sale parcial con «gastos del mes sin confirmar».
+- Medido el 2026-10-04 en prod: los recurrentes de Nexus dan US$3.907 al mes (herramientas 1.796 + fijos 2.111) contra
+  US$4.107 del Excel para octubre; la diferencia es la tarjeta (US$131) y ajustes chicos.
+- «Lo que no cuadra» del punto de equilibrio suma «por cobrar en Mercury de clientes sin emparejar» (sin sumar al total:
+  no se sabe si el tablero ya lo cuenta). «Actualizar» ya trae también Mercury.
 
 Todo el SQL va en un solo archivo, `scripts/sql/2026-10-03-finanzas-rediseno.sql`, **antes del deploy**. ⚠ La columna de
 `TeamMember` la lee cada página de Nexus: sin el SQL aplicado, nada carga (el deploy lo detecta y vuelve atrás solo).

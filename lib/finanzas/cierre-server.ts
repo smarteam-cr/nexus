@@ -77,7 +77,7 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
   const anio = Number(periodo.slice(0, 4));
   const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
 
-  const [{ egresos, planillaAcc }, filasTasa, cierres, gastos, revision, registra, supervisa, pendientes] = await Promise.all([
+  const [{ egresos, planillaAcc, calidadDada }, filasTasa, cierres, gastos, revision, registra, supervisa, pendientes] = await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO),
     prisma.tipoCambioMes.findMany({
       where: { periodo: { in: periodos } },
@@ -96,7 +96,7 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
 
   /* La calidad de cada mes, con el mismo cálculo que el punto de equilibrio (sin ingresos: no la cambian). */
   const tasas: TasaDeMes[] = filasTasa.map((t) => ({ periodo: t.periodo, crcPorUsd: num(t.crcPorUsd), fuente: t.fuente }));
-  const calidad = new Map(calcularEquilibrio(egresos, [], { anio, hoyISO, tasas }).meses.map((m) => [m.periodo, m]));
+  const calidad = new Map(calcularEquilibrio(egresos, [], { anio, hoyISO, tasas, calidadDada }).meses.map((m) => [m.periodo, m]));
 
   const quincenas = new Map<string, Set<number>>();
   for (const p of planillaAcc.values()) {
