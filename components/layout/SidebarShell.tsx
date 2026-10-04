@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
+import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import Sidebar from "./Sidebar";
 
 interface UserLite {
@@ -14,6 +15,8 @@ interface UserLite {
   permissions: PermissionMap;
   /** ¿Le compartieron algún documento de Roles? Enciende ese ítem del menú. */
   hasSharedDocs: boolean;
+  /** La vista de Finanzas (lib/finanzas/vista.ts): decide el panel de Finanzas. */
+  vistaFinanzas: VistaFinanzas;
 }
 
 interface Props {

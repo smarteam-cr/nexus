@@ -36,6 +36,12 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "cobranza/importar": { modo: "inherits", de: "cobranza" },
   "cobranza/odoo": { modo: "inherits", de: "cobranza" },
   "cobranza/mercury": { modo: "inherits", de: "cobranza" },
+  // Rediseño de Finanzas (2026-10-03): la puerta redirige según la vista; las pantallas nuevas tienen el suyo.
+  finanzas: { modo: "exempt", razon: "redirect puro a la pantalla de entrada de cada vista (lib/finanzas/vista.ts)" },
+  "finanzas/pendientes": { modo: "own" },
+  "finanzas/conciliacion": { modo: "own" },
+  "finanzas/integraciones": { modo: "own" },
+  "finanzas/reportes": { modo: "own" },
   "finanzas/costos": { modo: "own" },
   // Las 3 hojas por categoría comparten el MISMO skeleton (CostosCategoriaSkeleton),
   // pero se declaran `own` y no `inherits`: su forma NO es la del Resumen (que

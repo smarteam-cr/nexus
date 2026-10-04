@@ -53,15 +53,12 @@ describe("visibleNavChildren — el filtro costosOnly del Sidebar", () => {
     expect(visibleNavChildren(clients, { isCostos: true })).toEqual([]);
   });
 
-  it("todo hijo costosOnly vive en «Costos y gastos» o es la hoja suelta", () => {
-    // Un costosOnly colgado de «Ingresos» sería un ítem invisible para ADMIN
-    // dentro de un bloque que SÍ ve — el encabezado quedaría prometiendo de más.
+  it("ningún hijo costosOnly está en el panel de quien registra", () => {
+    // Quien registra (ADMIN) no es rol de Costos: un costosOnly en su vista sería un ítem que su propio panel promete y
+    // el filtro le saca — el encabezado de su bloque quedaría prometiendo de más.
     for (const c of finanzas.children ?? []) {
       if (!c.costosOnly) continue;
-      expect(
-        c.section === "Costos y gastos" || c.section === undefined,
-        `${c.href} es costosOnly pero vive en la sección "${c.section}"`,
-      ).toBe(true);
+      expect(c.vistas?.includes("REGISTRA") ?? true, `${c.href} es costosOnly y está en la vista REGISTRA`).toBe(false);
     }
   });
 
@@ -107,21 +104,45 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(bloques.map((b) => b.section)).not.toContain("Costos y gastos");
   });
 
-  it("con rol de Costos aparecen los dos encabezados y las hojas sueltas al final", () => {
-    const bloques = groupNavChildren(visibleNavChildren(finanzas, { isCostos: true }));
-    expect(bloques.map((b) => b.section)).toEqual(["Ingresos", "Costos y gastos", undefined]);
-    // El run suelto son las SÍNTESIS de los bloques de arriba: la caja neta (entra −
-    // sale de acá en adelante) y el punto de equilibrio (el año cerrado). Lo que no cuadra
-    // entre Nexus y Odoo no es de Finanzas: vive en Cobranza › Odoo.
-    expect(bloques[bloques.length - 1].items.map((i) => i.href)).toEqual([
-      "/finanzas/caja-neta",
+  // ── El panel de cada vista (rediseño de Finanzas, 2026-10-03, lib/finanzas/vista.ts) ──
+  const panel = (vista: "REGISTRA" | "SUPERVISA" | "DIRECCION", isCostos: boolean) =>
+    groupNavChildren(visibleNavChildren(finanzas, { isCostos, vista }));
+
+  it("quien registra: Mi día · Ingresos · Cuadre, sin nada de costos con salarios ni reportes", () => {
+    const bloques = panel("REGISTRA", false);
+    expect(bloques.map((b) => b.section)).toEqual(["Mi día", "Ingresos", "Cuadre"]);
+    expect(bloques[0].items.map((i) => i.href)).toEqual(["/finanzas/pendientes"]);
+    const hrefs = bloques.flatMap((b) => b.items.map((i) => i.href));
+    expect(hrefs).not.toContain("/finanzas/equilibrio");
+    expect(hrefs).not.toContain("/finanzas/costos/planillas");
+  });
+
+  it("quien supervisa: Ingresos · Costos y gastos · Cuadre · Reportes, sin la entrada de quien registra", () => {
+    const bloques = panel("SUPERVISA", true);
+    expect(bloques.map((b) => b.section)).toEqual(["Ingresos", "Costos y gastos", "Cuadre", "Reportes"]);
+    const hrefs = bloques.flatMap((b) => b.items.map((i) => i.href));
+    expect(hrefs).not.toContain("/finanzas/pendientes");
+    expect(hrefs).toContain("/finanzas/costos/planillas");
+    expect(hrefs).toContain("/finanzas/reportes");
+  });
+
+  it("dirección: solo Reportes — punto de equilibrio, caja neta e integraciones", () => {
+    const bloques = panel("DIRECCION", true);
+    expect(bloques.map((b) => b.section)).toEqual(["Reportes"]);
+    expect(bloques[0].items.map((i) => i.href)).toEqual([
       "/finanzas/equilibrio",
+      "/finanzas/caja-neta",
+      "/finanzas/integraciones",
     ]);
   });
 
-  it("higiene: un typo en `section` crearía un bloque extra — hoy hay exactamente 2", () => {
+  it("todo hijo de Finanzas dice en qué vistas va (un hijo sin `vistas` aparecería en las tres)", () => {
+    for (const c of finanzas.children ?? []) expect(c.vistas, `${c.href} no declara sus vistas`).toBeDefined();
+  });
+
+  it("higiene: un typo en `section` crearía un bloque extra — hoy hay exactamente 5", () => {
     const secciones = (finanzas.children ?? []).map((c) => c.section).filter(Boolean);
-    expect(new Set(secciones).size).toBe(2);
+    expect(new Set(secciones)).toEqual(new Set(["Mi día", "Ingresos", "Costos y gastos", "Cuadre", "Reportes"]));
   });
 });
 

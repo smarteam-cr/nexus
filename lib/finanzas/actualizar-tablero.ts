@@ -16,7 +16,7 @@
 import type { SyncVentasResult } from "@/lib/ventas/sync-ganadas";
 
 export interface FuenteActualizada {
-  fuente: "HUBSPOT" | "ODOO";
+  fuente: "HUBSPOT" | "ODOO" | "MERCURY";
   /** false = esa fuente no se pudo actualizar: el tablero muestra lo que tenía de ella. */
   ok: boolean;
   /** Lo que se le dice a la persona, tal cual. */
@@ -63,7 +63,7 @@ export function ventasSinActualizar(error: unknown): FuenteActualizada {
   };
 }
 
-/** El aviso entero: las dos fuentes, una por línea, y si hay que mirar alguna. */
+/** El aviso entero: las fuentes, una por línea, y si hay que mirar alguna. */
 export function avisoDeActualizacion(fuentes: readonly FuenteActualizada[]): { todoBien: boolean; texto: string } {
   return { todoBien: fuentes.every((f) => f.ok), texto: fuentes.map((f) => f.texto).join(" ") };
 }

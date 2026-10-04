@@ -27,6 +27,10 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   cobranza: { shell: "SHELL_DEFAULT" },
   "customer-success": { shell: "SHELL_DEFAULT" },
   "customer-success/[clientId]": { shell: "SHELL_DEFAULT" },
+  "finanzas/pendientes": { shell: "SHELL_DEFAULT" },
+  "finanzas/conciliacion": { shell: "SHELL_DEFAULT" },
+  "finanzas/integraciones": { shell: "SHELL_DEFAULT" },
+  "finanzas/reportes": { shell: "SHELL_DEFAULT" },
   "finanzas/caja-neta": { shell: "SHELL_DEFAULT" },
   "finanzas/equilibrio": { shell: "SHELL_DEFAULT" },
   "finanzas/costos": { shell: "SHELL_DEFAULT" },
@@ -76,6 +80,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "cobranza/mercury": { custom: "px-6 py-8 propio, el mismo molde que cobranza/odoo" },
 
   // ── Redirects puros / legacy ────────────────────────────────────────────────
+  finanzas: { custom: "redirect a la pantalla de entrada de cada vista de Finanzas" },
   marketing: { custom: "redirect a /marketing/contenido" },
   "marketing/ideas": { custom: "redirect (nombre viejo)" },
   "marketing/campanas": { custom: "redirect (nombre viejo)" },

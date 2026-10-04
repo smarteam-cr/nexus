@@ -17,6 +17,7 @@
  * para que sumar procesos no produzca una tira ilegible de 17 ítems.
  */
 import type { PermissionMap } from "@/lib/auth/permissions/types";
+import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { MARKETING_NAV_GROUPS } from "@/components/marketing/nav-config";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
@@ -35,6 +36,13 @@ export interface NavChildConfig {
   match?: readonly string[];
   /** Hijo visible solo para roles de Costos (whitelist COSTOS_ROLES). */
   costosOnly?: boolean;
+  /**
+   * Las vistas de Finanzas que lo tienen en el panel (2026-10-03, lib/finanzas/vista.ts). Ausente = todas. Decide solo
+   * el MENÚ: la seguridad sigue en cada página.
+   */
+  vistas?: readonly VistaFinanzas[];
+  /** Además de lo anterior, el hijo pide este permiso (p. ej. `gastos.read` para lo de gastos sin salarios). */
+  permiso?: { section: string; action: string };
   /**
    * Activo por igualdad EXACTA en vez de prefijo. Lo necesita una hoja que es
    * PADRE de otras: sin esto, `/finanzas/costos` se marcaría activo también en
@@ -98,12 +106,22 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
 // dejaba el test de gates congelados. Extraerlas es lo que permite que el test
 // PRUEBE la regla en vez de duplicarla.
 
-/** Espeja el filtro del Sidebar: un hijo `costosOnly` solo lo ve un rol de Costos. */
+/**
+ * Espeja el filtro del Sidebar: un hijo `costosOnly` solo lo ve un rol de Costos; uno con `vistas`, solo quien tiene una
+ * de esas vistas de Finanzas; uno con `permiso`, solo quien lo tiene. Sin `vista` en el contexto no se filtra por vista
+ * (los flyouts que no son de Finanzas no la usan).
+ */
 export function visibleNavChildren(
   item: Pick<NavItemConfig, "children">,
-  ctx: { isCostos: boolean },
+  ctx: { isCostos: boolean; vista?: VistaFinanzas; permissions?: PermissionMap },
 ): NavChildConfig[] {
-  return (item.children ?? []).filter((c) => !c.costosOnly || ctx.isCostos);
+  const sections = (ctx.permissions?.sections ?? {}) as Record<string, Record<string, boolean> | undefined>;
+  return (item.children ?? []).filter(
+    (c) =>
+      (!c.costosOnly || ctx.isCostos) &&
+      (!c.vistas || !ctx.vista || c.vistas.includes(ctx.vista)) &&
+      (!c.permiso || ctx.isCostos || sections[c.permiso.section]?.[c.permiso.action] === true),
+  );
 }
 
 /**
@@ -219,56 +237,54 @@ export const APP_NAV: readonly NavItemConfig[] = [
     icon: icon("M3 3v18h18M7 14l4-4 3 3 5-6"),
   },
   {
-    // Finanzas: agrupa Cobranza · Costos y gastos · Caja neta. Los últimos 2
-    // hijos son costosOnly (whitelist COSTOS_ROLES, se filtra al montar).
+    // Finanzas (rediseño 2026-10-03, docs/finanzas-rediseno-plan.md): UN ítem, pero el panel cambia según la VISTA de
+    // quien entra (lib/finanzas/vista.ts) y «Finanzas» lleva a la pantalla de entrada de esa vista (/finanzas redirige).
+    //   · REGISTRA (Dinia): Mi día · Ingresos · Costos y gastos sin salarios · Cuadre.
+    //   · SUPERVISA (Alex): Mi área · Ingresos · Costos y gastos con planilla · Cuadre · Reportes.
+    //   · DIRECCION: Reportes.
+    // ⚠ La vista decide el menú, no la seguridad: cada página sigue con su guarda. `costosOnly` y `permiso` filtran
+    // además, para que nadie vea en el menú algo que la página le va a negar.
     key: "finanzas",
     label: "Finanzas",
-    href: "/cobranza",
+    href: "/finanzas",
     match: ["/cobranza", "/finanzas"],
     gate: { kind: "permission", section: "cobranza", action: "read" },
     group: "operacion",
     children: [
-      // Una hoja se agrega acá en la MISMA tanda que crea su ruta: hasta que
-      // exista su page.tsx, el menú prometería un 404.
-      { href: "/cobranza", label: "Cobranza", section: "Ingresos" },
-      { href: "/finanzas/ingresos-variables", label: "Ingresos variables", section: "Ingresos" },
-      // Las de PARTNER son un ingreso y van en este bloque, visibles para ADMIN.
-      // Las de VENDEDOR son remuneración y viven en "Costos y gastos" con otro gate.
-      { href: "/finanzas/comisiones-partner", label: "Comisiones de partner", section: "Ingresos" },
-      // `exact`: sin esto el Resumen se marcaría activo también en sus 3 hojas hijas.
-      { href: "/finanzas/costos", label: "Resumen", section: "Costos y gastos", costosOnly: true, exact: true },
-      { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true },
-      // ⚠ UNA sola entrada de planilla. Adentro conviven los dos números —lo que
-      // cuesta por mes (configuración, alimenta el burn) y lo que se pagó de verdad
-      // (`planillas/historial`, al que se llega por el botón «Historial»)— y esa
-      // hoja hija NO se declara acá a propósito: si estuviera, el prefijo de
-      // «Planillas» la marcaría activa y `nav-children.test` lo frena. Sin entrada
-      // propia, estar en el historial deja iluminada a su madre, que es lo correcto.
-      // Hasta 2026-08-16 esto decía «Planillas (estimado)» para distinguirla del
-      // ítem hermano «Libro de planilla»; sin el hermano, el paréntesis sobra.
-      { href: "/finanzas/costos/planillas", label: "Planillas", section: "Costos y gastos", costosOnly: true },
-      { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", costosOnly: true },
-      { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true },
-      // ⚠ Va DENTRO del run "Costos y gastos" y ANTES de caja-neta: nav-children.test
-      // exige que el ÚLTIMO bloque sea exactamente ["/finanzas/caja-neta"] sin section.
-      { href: "/finanzas/costos/tarjetas", label: "Tarjetas", section: "Costos y gastos", costosOnly: true },
-      // La remuneración por vender. Su gemela de PARTNER (que es un ingreso) está
-      // arriba, en "Ingresos", con otro gate: nunca se juntan.
+      // Una hoja se agrega acá en la MISMA tanda que crea su ruta: hasta que exista su page.tsx, el menú prometería
+      // un 404.
+      { href: "/finanzas/pendientes", label: "Pendientes", section: "Mi día", vistas: ["REGISTRA"] },
+      { href: "/cobranza", label: "Cobranza", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"] },
+      // Las de PARTNER son un ingreso y van en este bloque, visibles para ADMIN. Las de VENDEDOR son remuneración y
+      // viven con la planilla, con otro gate: nunca se juntan.
+      { href: "/finanzas/comisiones-partner", label: "Comisiones de aliados", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"] },
+      { href: "/finanzas/ingresos-variables", label: "Otros ingresos", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"] },
+      // ⚠ UNA sola entrada de planilla. Adentro conviven los dos números —lo que cuesta por mes (configuración,
+      // alimenta el burn) y lo que se pagó de verdad (`planillas/historial`, al que se llega por el botón
+      // «Historial»)— y esa hoja hija NO se declara acá a propósito: si estuviera, el prefijo de «Planillas» la marcaría
+      // activa y `nav-children.test` lo frena.
+      { href: "/finanzas/costos", label: "Resumen", section: "Costos y gastos", costosOnly: true, exact: true, vistas: ["SUPERVISA"] },
+      { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
+      { href: "/finanzas/costos/planillas", label: "Planilla", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
+      { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
+      { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
+      { href: "/finanzas/costos/tarjetas", label: "Tarjetas", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
       {
         href: "/finanzas/costos/comisiones-vendedor",
         label: "Comisiones de vendedor",
         section: "Costos y gastos",
         costosOnly: true,
+        vistas: ["SUPERVISA"],
       },
-      // Sin `section`: la caja neta es la SÍNTESIS de los dos bloques (entra − sale),
-      // no pertenece a ninguno. El flyout le deriva un divisor por ser un run suelto.
-      { href: "/finanzas/caja-neta", label: "Caja neta", costosOnly: true },
-      // Misma naturaleza y por eso el mismo run suelto: el reporte anual cruza los dos
-      // lados para contestar cuánto hay que facturar. No es una hoja de costos ni una
-      // de ingresos, es la síntesis del año.
-      { href: "/finanzas/equilibrio", label: "Punto de equilibrio", costosOnly: true },
-      // ⚠ Sin «Excel vs Odoo» ni «Plan de cobranza» (2026-09-13): el Excel de Alex actualiza Nexus
-      // (Cobranza › Importar) y lo que no cuadra entre Nexus y Odoo vive en Cobranza › Odoo.
+      // Lo que no cuadra con Odoo y Mercury, en una sola lista. Lo trabaja quien registra; quien supervisa decide lo que
+      // es de negocio.
+      { href: "/finanzas/conciliacion", label: "Conciliación", section: "Cuadre", vistas: ["REGISTRA", "SUPERVISA"] },
+      // Los reportes: la síntesis de los dos lados (entra − sale). Son de dirección y de quien supervisa.
+      { href: "/finanzas/equilibrio", label: "Punto de equilibrio", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
+      { href: "/finanzas/caja-neta", label: "Caja neta", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
+      { href: "/finanzas/integraciones", label: "Integraciones", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
+      // Proyección, reportes de cobranza y el corte quincenal: se mudaron de las pestañas de Cobranza.
+      { href: "/finanzas/reportes", label: "Reportes de cobranza", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA"] },
     ],
     icon: icon(
       "M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z",

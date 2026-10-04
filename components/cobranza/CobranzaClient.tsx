@@ -3,11 +3,15 @@
 /**
  * components/cobranza/CobranzaClient.tsx
  *
- * Contenedor client del módulo: 6 tabs in-page (useState local, no rutas) con
+ * Contenedor client del módulo: 3 tabs in-page (useState local, no rutas) con
  * la COLA DE COBROS como landing — la vista de trabajo diaria de quien cobra.
- * TODO el estado de datos vive acá (cola, cartera, alertas, proyección, serie,
- * riesgo): los tabs desmontan y un useState local en el hijo volvería stale al
- * cambiar de tab y volver (fue el bug del doble "Configurar cuenta").
+ * TODO el estado de datos vive acá (cola, cartera, alertas, riesgo): los tabs
+ * desmontan y un useState local en el hijo volvería stale al cambiar de tab y
+ * volver (fue el bug del doble "Configurar cuenta").
+ *
+ * Rediseño de Finanzas (2026-10-03, docs/finanzas-rediseno-plan.md): Cobranza es la página de TRABAJO de quien registra.
+ * Proyección, Reportes y Corte quincenal se mudaron a Finanzas › Reportes de cobranza (son de quien supervisa); Aliados
+ * vive en Finanzas › Comisiones de aliados; Odoo y Mercury, en Conciliación e Integraciones.
  *
  * También viven acá, porque los comparten varios tabs:
  *  - el CuentaDrawer (lo abren la cola, la tabla de clientes y las alertas),
@@ -17,47 +21,30 @@
  *    modales (BuscarPagoModal → RegistrarPagoDialog).
  */
 import { useCallback, useState } from "react";
-import { PageHeader } from "@/components/ui";
+import { Button, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import type {
   AlertaDTO,
   CarteraRow,
   ColaCobroRow,
-  ProyeccionIngresos,
   RiesgoPagoItem,
-  SnapshotDTO,
-  SnapshotSerieDTO,
 } from "@/lib/cobranza";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { esAlertaDeRecurrencia } from "@/lib/cobranza/engine";
 import ColaCobros from "./ColaCobros";
 import PanelCartera from "./PanelCartera";
 import AlertasCobranza from "./AlertasCobranza";
-import DigestPanel from "./DigestPanel";
-import ProyeccionPanel from "./ProyeccionPanel";
-import ReportesPanel from "./ReportesPanel";
 import CuentaDrawer from "./CuentaDrawer";
-import Link from "next/link";
 import BuscarPagoModal from "./BuscarPagoModal";
-import type { ComisionPartnerDTO } from "@/lib/cobranza";
-import ComisionesDeAliado from "./ComisionesDeAliado";
 import RegistrarPagoDialog from "./RegistrarPagoDialog";
 import RegistrarPagoManualDialog from "./RegistrarPagoManualDialog";
 
-type Tab = "cobros" | "clientes" | "proyeccion" | "aliados" | "alertas" | "reportes" | "corte";
+type Tab = "cobros" | "clientes" | "alertas";
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "cobros", label: "Cobros" },
   { key: "clientes", label: "Clientes" },
-  { key: "proyeccion", label: "Proyección" },
-  // Las comisiones de aliado se COBRAN acá, junto al resto de la cobranza, y se dan de
-  // alta en Finanzas. Pestaña propia y no filas en la cola: no se facturan por Odoo ni
-  // por Mercury, así que mezclarlas con el trabajo de facturación diario sería meterle
-  // a esa lista cosas que no se hacen ahí.
-  { key: "aliados", label: "Aliados" },
   { key: "alertas", label: "Alertas" },
-  { key: "reportes", label: "Reportes" },
-  { key: "corte", label: "Corte quincenal" },
 ];
 
 const porFecha = (a: ColaCobroRow, b: ColaCobroRow) =>
@@ -67,55 +54,32 @@ export default function CobranzaClient({
   initialCola,
   initialCartera,
   initialAlertas,
-  initialSnapshot,
-  initialProyeccion,
-  initialSeries,
   initialRiesgo,
-  initialComisiones,
-  role,
   puedeEditar,
+  abrirPago = false,
   todayISO,
 }: {
   initialCola: ColaCobroRow[];
   initialCartera: CarteraRow[];
   initialAlertas: AlertaDTO[];
-  initialSnapshot: SnapshotDTO | null;
-  initialProyeccion: ProyeccionIngresos;
-  initialSeries: SnapshotSerieDTO[];
   initialRiesgo: RiesgoPagoItem[];
-  /** Las comisiones de aliado, para la pestaña donde se cobran. */
-  initialComisiones: ComisionPartnerDTO[];
   /** `cobranza.write` resuelto en el servidor. Decide qué se DIBUJA, no qué se permite. */
   puedeEditar: boolean;
-  role: string;
+  /** Abrir el buscador de «Registrar pago» al entrar (llega desde Pendientes). */
+  abrirPago?: boolean;
   todayISO: string;
 }) {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("cobros");
-  const [comisiones, setComisiones] = useState(initialComisiones);
-
-  /** Después de confirmar un cobro de aliado, la lista se vuelve a pedir. */
-  async function refrescarComisiones() {
-    try {
-      const r = await fetchJson<{ data: { comisiones: ComisionPartnerDTO[] } }>(
-        "/api/cobranza/comisiones-partner",
-      );
-      setComisiones(r.data.comisiones);
-    } catch {
-      toast.error("No se pudo refrescar las comisiones. Recarga la página.");
-    }
-  }
   const [cola, setCola] = useState(initialCola);
   const [cartera, setCartera] = useState(initialCartera);
   const [alertas, setAlertas] = useState(initialAlertas);
-  const [proyeccion, setProyeccion] = useState(initialProyeccion);
-  const [series, setSeries] = useState(initialSeries);
   const [riesgo, setRiesgo] = useState(initialRiesgo);
 
   // UI compartida entre tabs (drawer + flujo global de registrar pago).
   const [openCuentaId, setOpenCuentaId] = useState<string | null>(null);
   const [pagoTarget, setPagoTarget] = useState<ColaCobroRow | null>(null);
-  const [buscadorOpen, setBuscadorOpen] = useState(false);
+  const [buscadorOpen, setBuscadorOpen] = useState(abrirPago);
   const [manualOpen, setManualOpen] = useState(false);
 
   // Cuentas configuradas para el pago manual (fuente = el cartera ya cargado).
@@ -144,38 +108,13 @@ export default function CobranzaClient({
     } catch {}
   }, []);
 
-  const refreshAlertas = useCallback(async () => {
+  /* El riesgo de pago de cada cliente: lo usa la cola para marcar «en riesgo». */
+  const refreshRiesgo = useCallback(async () => {
     try {
-      const d = await fetchJson<{ alertas: AlertaDTO[] }>(
-        "/api/cobranza/alertas?estados=ABIERTA,VISTA",
-      );
-      setAlertas(d.alertas);
-    } catch {}
-  }, []);
-
-  const refreshProyeccion = useCallback(async () => {
-    try {
-      const d = await fetchJson<{ proyeccion: ProyeccionIngresos }>("/api/cobranza/proyeccion");
-      setProyeccion(d.proyeccion);
-    } catch {}
-  }, []);
-
-  const refreshReportes = useCallback(async () => {
-    try {
-      const [s, r] = await Promise.all([
-        fetchJson<{ series: SnapshotSerieDTO[] }>("/api/cobranza/series"),
-        fetchJson<{ riesgo: RiesgoPagoItem[] }>("/api/cobranza/riesgo"),
-      ]);
-      setSeries(s.series);
+      const r = await fetchJson<{ riesgo: RiesgoPagoItem[] }>("/api/cobranza/riesgo");
       setRiesgo(r.riesgo);
     } catch {}
   }, []);
-
-  const onDigestDone = useCallback(() => {
-    void refreshAlertas();
-    void refreshReportes();
-    void refreshCola();
-  }, [refreshAlertas, refreshReportes, refreshCola]);
 
   /**
    * CHOKEPOINT client de registrar pago (cola + buscador global): optimista en
@@ -196,14 +135,13 @@ export default function CobranzaClient({
         toast.success("Pago registrado a tu nombre.");
         void refreshCola();
         void refreshCartera();
-        void refreshProyeccion();
-        void refreshReportes();
+        void refreshRiesgo();
       } catch (e) {
         setCola((rs) => [...rs, row].sort(porFecha));
         toast.error(e instanceof ApiError ? e.message : "No se pudo registrar el pago.");
       }
     },
-    [toast, refreshCola, refreshCartera, refreshProyeccion, refreshReportes],
+    [toast, refreshCola, refreshCartera, refreshRiesgo],
   );
 
   return (
@@ -212,33 +150,9 @@ export default function CobranzaClient({
         title="Cobranza"
         description="Registra los pagos que entran, mira qué está vencido y lleva el control de cada cliente."
         action={
-          <div className="flex items-center gap-2">
-            {/* ⚠ Vive ACÁ y no dentro de una pestaña. Estuvo en la barra de «Clientes», al lado
-                de «Importar CSV», porque los dos son mantenimiento puntual de cuentas — pero
-                nadie lo encontraba: todo el mundo cae en «Cobros» y ahí no se veía. La
-                integración alimenta el módulo entero, así que se ve desde cualquier pestaña. */}
-            <Link
-              href="/cobranza/odoo"
-              className="text-sm font-medium px-4 py-2 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
-            >
-              Odoo
-            </Link>
-            {/* 2026-10-02: Mercury, con el mismo molde que Odoo (copia, emparejar, lo que no cuadra). */}
-            <Link
-              href="/cobranza/mercury"
-              title="Las facturas y los pagos de Mercury, al lado de los cobros."
-              className="text-sm font-medium px-4 py-2 rounded-lg border border-line text-fg-secondary hover:bg-surface-hover transition-colors"
-            >
-              Mercury
-            </Link>
-            <button
-              type="button"
-              onClick={() => setBuscadorOpen(true)}
-              className="text-sm font-medium px-4 py-2 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
-            >
-              Registrar pago
-            </button>
-          </div>
+          <Button variant="primary" onClick={() => setBuscadorOpen(true)}>
+            Registrar pago
+          </Button>
         }
       />
 
@@ -258,7 +172,7 @@ export default function CobranzaClient({
             >
               {t.label}
               {t.key === "alertas" && abiertas > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] px-1 py-px rounded-full text-[10px] font-semibold text-red-600 bg-red-500/10 border border-red-500/30">
+                <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] px-1 py-px rounded-full text-[10px] font-semibold text-danger-ink bg-danger-surface border border-danger-line">
                   {abiertas}
                 </span>
               )}
@@ -285,34 +199,9 @@ export default function CobranzaClient({
           onRefresh={refreshCartera}
         />
       )}
-      {tab === "proyeccion" && <ProyeccionPanel proyeccion={proyeccion} onRefresh={refreshProyeccion} />}
       {tab === "alertas" && (
         <AlertasCobranza alertas={alertas} setAlertas={setAlertas} onOpenCuenta={setOpenCuentaId} />
       )}
-      {tab === "aliados" && (
-        <div className="space-y-3">
-          <p className="text-[11px] text-fg-muted">
-            Lo que nos pagan los aliados. Se dan de alta en{" "}
-            <Link href="/finanzas/comisiones-partner" className="text-brand hover:underline">
-              Finanzas · Comisiones de partner
-            </Link>{" "}
-            y se cobran acá. ⚠ Son un INGRESO, pero NO entran al total de facturación: esa
-            cifra es solo servicios.
-          </p>
-          <ComisionesDeAliado
-            comisiones={comisiones}
-            todayISO={todayISO}
-            onCambio={refrescarComisiones}
-          />
-        </div>
-      )}
-      {tab === "reportes" && (
-        <ReportesPanel series={series} riesgo={riesgo} role={role} cola={cola} todayISO={todayISO} />
-      )}
-      {tab === "corte" && (
-        <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={onDigestDone} todayISO={todayISO} />
-      )}
-
       {/* ── Superficies compartidas entre tabs ── */}
       <CuentaDrawer
         cuentaId={openCuentaId}
@@ -323,7 +212,6 @@ export default function CobranzaClient({
           // El drawer pudo cambiar cobros/estados → re-sincronizar lo visible.
           void refreshCola();
           void refreshCartera();
-          void refreshProyeccion();
         }}
       />
 
@@ -364,8 +252,7 @@ export default function CobranzaClient({
             setManualOpen(false);
             void refreshCola();
             void refreshCartera();
-            void refreshProyeccion();
-            void refreshReportes();
+            void refreshRiesgo();
           }}
           onOpenCuenta={(id) => {
             setManualOpen(false);

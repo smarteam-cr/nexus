@@ -4,6 +4,7 @@ import { requireUser, UnauthorizedError } from "@/lib/auth/supabase";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import { esAdminDeRoles, hasSharedRoleDocs } from "@/lib/roles/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
+import { vistaFinanzasDe } from "@/lib/finanzas/vista";
 import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
 import { TooltipLayer } from "@/components/ui/Tooltip";
@@ -57,6 +58,11 @@ export default async function AppShell({
     isSuperAdmin,
     permissions,
     hasSharedDocs,
+    // El panel de Finanzas de esta persona (rediseño 2026-10-03): sale de su fila, sin consulta extra.
+    vistaFinanzas: vistaFinanzasDe({
+      roleEnum: user.teamMember?.roleEnum,
+      vistaFinanzas: user.teamMember?.vistaFinanzas,
+    }),
   };
 
   // Ancho del sidebar resuelto en SSR (mismo mecanismo que la cookie nexus-theme):

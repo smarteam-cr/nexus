@@ -1901,6 +1901,10 @@ model TeamMember {
   // SUPER_ADMIN pineó para ESTE usuario; ausencia = hereda la plantilla del rol
   // (RolePermission) o el default de código. null = hereda todo. Lectura tolerante.
   permissionOverrides Json?
+  // VISTA DE FINANZAS (2026-10-03, docs/finanzas-rediseno-plan.md): solo cuenta para un SUPER_ADMIN. null o SUPERVISA =
+  // el panel completo (revisar, decidir, cerrar el mes); DIRECCION = solo los reportes. Decide el MENÚ y la pantalla de
+  // entrada, no los permisos. CHECK en el SQL. ⚠ La lee cada página (el usuario se carga con su fila entera).
+  vistaFinanzas       String?
   // Baja blanda: si != null, el miembro pierde acceso (login bloqueado) y desaparece
   // de los listados de personas, pero su histórico (sesiones/handoffs/runs) queda intacto.
   deactivatedAt       DateTime?
@@ -3721,11 +3725,58 @@ model GastoPuntual {
   fecha  DateTime       @db.Date // día del gasto (único campo temporal con semántica)
   tags   String[]       @default([])
   notas  String?        @db.Text
+  /// Quién lo anotó (2026-10-03): sin autor no se puede revisar lo que registró el equipo. Los viejos quedan vacíos.
+  registradoPor String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([fecha])
+}
+
+/// La revisión de Alex sobre un registro del equipo (2026-10-03, docs/finanzas-rediseno-plan.md): un PAGO (Cobro en
+/// Cobrado) o un GASTO (GastoPuntual). Guarda la HUELLA de los números al revisarlo: si cambian, vuelve a «por revisar».
+/// BIEN = revisado; DEVUELTO = devuelto con comentario, le llega a quien lo registró; CORREGIDO = dice que ya lo arregló.
+/// `registroId` sin FK a propósito: apunta a dos tablas distintas según el tipo.
+model RevisionRegistro {
+  id           String    @id @default(cuid())
+  /// PAGO · GASTO (CHECK en el SQL).
+  tipo         String
+  registroId   String
+  /// BIEN · DEVUELTO · CORREGIDO (CHECK en el SQL).
+  estado       String
+  huella       String
+  comentario   String?   @db.Text
+  revisadoPor  String
+  revisadoEn   DateTime
+  corregidoPor String?
+  corregidoEn  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tipo, registroId])
+  @@index([estado])
+}
+
+/// El cierre de un mes (2026-10-03, docs/finanzas-rediseno-plan.md). ABIERTO mientras se trabaja; CERRADO cuando Alex lo
+/// cierra, con los números de ese momento en `numeros`: si después cambian, el punto de equilibrio lo dice. No congela nada.
+model CierreMes {
+  id               String    @id @default(cuid())
+  /// YYYY-MM.
+  periodo          String    @unique
+  /// ABIERTO · CERRADO (CHECK en el SQL).
+  estado           String    @default("ABIERTO")
+  /// Dinia avisa que ya anotó todos los gastos del mes.
+  gastosListosPor  String?
+  gastosListosEn   DateTime?
+  cerradoPor       String?
+  cerradoEn        DateTime?
+  numeros          Json?
+  reabiertoPor     String?
+  reabiertoEn      DateTime?
+  motivoReapertura String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 // ─── IngresoVariable ─────────────────────────────────────────────────────────

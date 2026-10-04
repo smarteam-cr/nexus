@@ -13,15 +13,18 @@ describe("moduleCrumb", () => {
   it("las rutas de Finanzas resuelven a Finanzas (los dos prefijos del match)", () => {
     // El grupo declara match ["/cobranza", "/finanzas"]: ambos lados del menú
     // tienen que caer en el mismo módulo o las migas se contradicen entre hojas.
+    // Desde el rediseño de Finanzas (2026-10-03) la miga lleva a /finanzas, la puerta que
+    // manda a cada persona a la entrada de su vista.
     for (const p of [
       "/cobranza",
       "/cobranza/importar",
       "/finanzas/costos",
       "/finanzas/caja-neta",
+      "/finanzas/pendientes",
     ]) {
       expect(moduleCrumb(p), `${p} no resolvió a Finanzas`).toEqual({
         label: "Finanzas",
-        href: "/cobranza",
+        href: "/finanzas",
       });
     }
   });

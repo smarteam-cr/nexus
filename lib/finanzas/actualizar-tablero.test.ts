@@ -97,11 +97,13 @@ describe("⚠ el botón del tablero: privacidad y robustez", () => {
     expect(cuerpo.indexOf("actualizarFuentesDelTablero("), "el reporte se arma DESPUÉS de traer lo último").toBeLessThan(cuerpo.indexOf("loadReporteAnual("));
   });
 
-  it("⛔ una fuente caída no tumba a la otra ni impide recargar: cada una ataja su propio fallo", () => {
-    /* La edición que lo pone en rojo: sacarle el `.catch` a una de las dos. Con HubSpot caído, el botón daría error
-       y el tablero no se recargaría, en plena reunión. */
+  it("⛔ una fuente caída no tumba a las otras ni impide recargar: cada una ataja su propio fallo", () => {
+    /* La edición que lo pone en rojo: sacarle el `.catch` a una de las tres. Con HubSpot caído, el botón daría error
+       y el tablero no se recargaría, en plena reunión. Desde el rediseño de Finanzas (2026-10-03) son tres fuentes:
+       HubSpot, Odoo y Mercury, y Conciliación pide solo las dos últimas. */
     const src = leer("lib/finanzas/actualizar-tablero-server.ts");
-    expect(src.match(/\.catch\(/g)?.length).toBe(2);
-    expect(src).toMatch(/Promise\.all\(\[ventas, odoo\]\)/);
+    expect(src.match(/\.catch\(/g)?.length).toBe(3);
+    expect(src).toMatch(/Promise\.all\(\[ventas, odoo, mercury\]\)/);
+    expect(src).toMatch(/Promise\.all\(\[odoo, mercury\]\)/);
   });
 });

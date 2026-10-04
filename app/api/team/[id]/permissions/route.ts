@@ -3,7 +3,7 @@
  *
  * Gate DURO: solo SUPER_ADMIN (decisión del usuario: administrar permisos no es
  * delegable — ni siquiera vía equipo.manage). PATCH acepta cualquier subconjunto:
- *   { roleEnum?, canViewAllClients?, canViewAllExpiresAt?, permissionOverrides? }
+ *   { roleEnum?, canViewAllClients?, canViewAllExpiresAt?, permissionOverrides?, vistaFinanzas? }
  *
  * Reglas anti-lockout:
  *   - No se puede degradar al ÚLTIMO Super Admin activo.
@@ -24,6 +24,7 @@ import { permissionMapWriteSchema, parsePermissionMapLoose } from "@/lib/auth/pe
 import { computeEffective } from "@/lib/auth/permissions/defaults";
 import { getRoleTemplate, getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import { revalidateTeamMembers } from "@/lib/cache/team";
+import { VISTAS_ELEGIBLES } from "@/lib/finanzas/vista";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -36,6 +37,9 @@ const patchSchema = z.strictObject({
   canViewAllExpiresAt: z.string().nullable().optional(),
   // REPLACE: mapa sparse validado contra el registry, o null (limpiar), o ausente (no tocar).
   permissionOverrides: permissionMapWriteSchema.nullable().optional(),
+  // La vista de Finanzas (rediseño 2026-10-03, lib/finanzas/vista.ts): solo la elige un Super Admin, y solo decide su
+  // menú y su pantalla de entrada. null = la de por defecto (revisa y cierra el mes).
+  vistaFinanzas: z.enum(VISTAS_ELEGIBLES).nullable().optional(),
 });
 
 /** Bundle que consume el modal: fila + capas del mapa (herencia / pines / efectivo). */
@@ -52,6 +56,7 @@ async function memberBundle(member: TeamMember) {
       photoUrl: member.photoUrl,
       canViewAllClients: member.canViewAllClients,
       canViewAllExpiresAt: member.canViewAllExpiresAt,
+      vistaFinanzas: member.vistaFinanzas,
     },
     // base = lo que HEREDA del rol (default ← plantilla DB), sin overrides
     base: computeEffective(member.roleEnum, template, null),
@@ -125,6 +130,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const data: Prisma.TeamMemberUpdateInput = {};
   if (body.roleEnum !== undefined) data.roleEnum = body.roleEnum;
   if (body.canViewAllClients !== undefined) data.canViewAllClients = body.canViewAllClients;
+  // Solo cuenta para un Super Admin: a cualquier otro rol se le limpia, para que no quede un valor que nadie ve.
+  if (body.vistaFinanzas !== undefined) data.vistaFinanzas = nextRole === "SUPER_ADMIN" ? body.vistaFinanzas : null;
+  else if (nextRole !== "SUPER_ADMIN" && member.vistaFinanzas) data.vistaFinanzas = null;
   if (expiresAt !== undefined) data.canViewAllExpiresAt = expiresAt;
   // Json?: limpiar = Prisma.DbNull (columna NULL — "hereda todo"); null/undefined no limpian.
   if (overrides !== undefined) {

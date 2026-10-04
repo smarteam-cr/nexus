@@ -371,6 +371,14 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
       "son INGRESOS (cobros ya registrados), no costos: su gate es cobranza.read, la superficie de ADMIN",
     "comisiones-partner":
       "es lo que Smarteam GANA de un aliado: un INGRESO con gate cobranza.read. Ponerle el guard de costos dejaría afuera a Alex, que es quien las registra. Lo que Smarteam PAGA a sus vendedores es otra pantalla (costos/comisiones-vendedor) y sí lleva isCostosRole",
+    // ── Rediseño de Finanzas (2026-10-03, docs/finanzas-rediseno-plan.md) ──
+    "": "la puerta de Finanzas: solo redirige a la pantalla de entrada de cada vista, no carga datos; gate cobranza.read",
+    pendientes:
+      "la entrada de quien registra (ADMIN): cobros por facturar, promesas, conciliación y comisiones de aliados. Ni un costo ni un salario; gate cobranza.read",
+    conciliacion:
+      "lo que no cuadra entre los cobros y las facturas de Odoo y Mercury: INGRESOS, la misma superficie que Cobranza › Odoo; gate cobranza.read",
+    reportes:
+      "proyección, reportes y corte quincenal de COBRANZA, que eran pestañas de /cobranza; gate cobranza.read",
   };
 
   /**
@@ -469,8 +477,10 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
 
       const idxGate = src.indexOf("isCostosRole(");
       // `load[A-Z]…` cubre los futuros (loadTarjetas, loadMovimientosCostos…);
-      // exige mayúscula para no matchear `loading`.
-      const llamadasLoad = [...src.matchAll(/\bload[A-Z]\w*\(/g)];
+      // exige mayúscula para no matchear `loading`. Desde el rediseño de Finanzas
+      // (2026-10-03) también cuentan los `cargar…`/`contar…` y las lecturas directas
+      // `prisma.…`: una página puede leer datos sin llamarlos «load».
+      const llamadasLoad = [...src.matchAll(/\b(?:load|cargar|contar)[A-Z]\w*\(|\bprisma\./g)];
       expect(llamadasLoad.length, `finanzas/${rel} no llama a ningún load*`).toBeGreaterThan(0);
       for (const m of llamadasLoad) {
         expect(

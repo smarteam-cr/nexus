@@ -7,6 +7,7 @@ import { Menu } from "@/components/ui";
 import RunsIndicator from "@/components/ai/RunsIndicator";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { APP_NAV, canSeeNavItem, visibleNavChildren } from "./nav-config";
 import NavFlyout, { RolesNavFlyout } from "./NavFlyout";
 
@@ -19,6 +20,8 @@ interface UserLite {
   permissions: PermissionMap;
   /** ¿Le compartieron algún documento de Roles? Enciende ese ítem del menú. */
   hasSharedDocs: boolean;
+  /** La vista de Finanzas (lib/finanzas/vista.ts): decide el panel de Finanzas. */
+  vistaFinanzas: VistaFinanzas;
 }
 
 interface SidebarProps {
@@ -252,7 +255,11 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
                     return <RolesNavFlyout key={item.key} item={item} isOpen={isOpen} />;
                   }
                   if (item.children) {
-                    const children = visibleNavChildren(item, { isCostos: isCostosRole(role) });
+                    const children = visibleNavChildren(item, {
+                      isCostos: isCostosRole(role),
+                      vista: user.vistaFinanzas,
+                      permissions: user.permissions,
+                    });
                     return <NavFlyout key={item.key} item={item} items={children} isOpen={isOpen} />;
                   }
                   return (

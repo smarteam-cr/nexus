@@ -20,6 +20,7 @@ import type { PermissionMap } from "@/lib/auth/permissions/types";
 import PermissionMatrix from "./PermissionMatrix";
 
 import { ROLE_OPTIONS } from "./roles-ui";
+import { ETIQUETA_DE_VISTA } from "@/lib/finanzas/vista";
 
 interface MemberBundle {
   member: {
@@ -31,6 +32,7 @@ interface MemberBundle {
     photoUrl: string | null;
     canViewAllClients: boolean;
     canViewAllExpiresAt: string | null;
+    vistaFinanzas: string | null;
   };
   base: PermissionMap;
   overrides: PermissionMap | null;
@@ -64,6 +66,8 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
   const [viewAll, setViewAll] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string>(""); // yyyy-mm-dd o ""
   const [overrides, setOverrides] = useState<SparseSections>({});
+  /* La vista de Finanzas de un Super Admin (rediseño 2026-10-03): "" = la de por defecto, revisa y cierra el mes. */
+  const [vistaFinanzas, setVistaFinanzas] = useState<string>("");
 
   useEffect(() => {
     let active = true;
@@ -80,6 +84,7 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
         setViewAll(b.member.canViewAllClients);
         setExpiresAt(b.member.canViewAllExpiresAt ? b.member.canViewAllExpiresAt.slice(0, 10) : "");
         setOverrides(structuredClone(b.overrides?.sections ?? {}));
+        setVistaFinanzas(b.member.vistaFinanzas ?? "");
       } catch (e) {
         toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar los permisos.");
         onClose();
@@ -163,6 +168,7 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
           // en husos negativos (CR = UTC-6). Con `Z` el round-trip es estable.
           canViewAllExpiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59.999Z`).toISOString() : null,
           permissionOverrides: isSA || overrideCount === 0 ? null : { v: 1, sections: overrides },
+          vistaFinanzas: isSA && vistaFinanzas ? vistaFinanzas : null,
         }),
       });
       toast.success("Permisos guardados.");
@@ -225,9 +231,20 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
           )}
 
           {isSA ? (
-            <p className="rounded-md border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
-              Super Admin siempre tiene todos los permisos (regla anti-lockout) — no se puede recortar ni pinear.
-            </p>
+            <>
+              <p className="rounded-md border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
+                Super Admin siempre tiene todos los permisos (regla anti-lockout) — no se puede recortar ni pinear.
+              </p>
+              {/* La vista de Finanzas: decide su menú de Finanzas y adónde entra, no lo que puede abrir. */}
+              <label className="flex flex-wrap items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-xs text-fg-secondary">
+                Finanzas
+                <Select value={vistaFinanzas} onChange={(e) => setVistaFinanzas(e.target.value)} className="w-64">
+                  <option value="">{ETIQUETA_DE_VISTA.SUPERVISA}</option>
+                  <option value="DIRECCION">{ETIQUETA_DE_VISTA.DIRECCION}</option>
+                </Select>
+                <span className="text-fg-muted">Cambia su menú de Finanzas y la pantalla a la que entra.</span>
+              </label>
+            </>
           ) : (
             <>
               {/* Visibilidad de clientes (override por persona; el row-level lo aplica access.ts) */}

@@ -33,9 +33,15 @@
  * Con `fuente="mercury"` lee /api/cobranza/mercury/diferencias, que contesta con el mismo contrato: mismas líneas,
  * mismo «Está bien así» con huella, mismas «Marcadas». Cambian el nombre del sistema en los textos y el pie de las
  * líneas que se arreglan en Mercury: ahí SÍ hay copia que las cierre.
+ *
+ * ── Y LAS DOS JUNTAS: Finanzas › Conciliación (rediseño 2026-10-03) ─────────────
+ * Con `fuente="todas"` lee las dos rutas y muestra UNA lista (lib/finanzas/conciliacion.ts), con dos filtros: de dónde
+ * viene y quién la resuelve. Las líneas que «falta un dato de negocio» son decisiones de quien supervisa; las demás las
+ * trabaja quien registra, y con eso arranca filtrada la vista de Dinia. Cada «Está bien así» y cada «Deshacer» va a la
+ * ruta de su línea.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, EmptyState, Input, Spinner } from "@/components/ui";
+import { Button, EmptyState, Input, Segmentado, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import {
@@ -48,6 +54,15 @@ import {
   type MarcaDeFila,
 } from "@/lib/cobranza/odoo/diferencias";
 import { fmtFecha } from "./format";
+import {
+  filasPorQuien,
+  filtrarDiferencias,
+  fuenteDeLinea,
+  juntarDiferencias,
+  type FiltroFuente,
+  type FiltroQuien,
+} from "@/lib/finanzas/conciliacion";
+import type { VistaFinanzas } from "@/lib/finanzas/vista";
 
 /** Una factura soltada cerrada a mano con «Ya está anulada» (`AnuladaAMano`, servicio.ts). */
 interface AnuladaAMano {
@@ -93,7 +108,7 @@ const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: (espejoA
      13-sep. Un pie con la fecha real no promete lo que no se cumple. */
   ODOO: {
     label: "Se arregla en Odoo",
-    chip: "text-violet-600 bg-violet-500/10 border-violet-500/30",
+    chip: "text-fg-secondary bg-surface border-line",
     pie: (espejoAl) =>
       `Con la próxima copia de Odoo la línea se actualiza sola${espejoAl ? ` (la última buena es del ${espejoAl})` : ""}. Para no esperar a mañana, aprieta «Actualizar desde Odoo», arriba.`,
   },
@@ -102,17 +117,17 @@ const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: (espejoA
      a que la lista se limpie sola. */
   MERCURY: {
     label: "Se arregla fuera de Odoo",
-    chip: "text-cyan-600 bg-cyan-500/10 border-cyan-500/30",
+    chip: "text-fg-secondary bg-surface border-line",
     pie: () => "Nexus no tiene copia de esa plataforma: hay que volver acá y marcarla «Ya está anulada» a mano.",
   },
   NEXUS: {
     label: "Se arregla en Nexus",
-    chip: "text-brand bg-brand/10 border-brand/30",
+    chip: "text-fg-secondary bg-surface border-line",
     pie: () => "El cambio se ve en la próxima carga de esta pantalla.",
   },
   PREGUNTANDO: {
     label: "Falta un dato de negocio",
-    chip: "text-amber-600 bg-amber-500/10 border-amber-500/30",
+    chip: "text-warn-ink bg-warn-surface border-warn-line",
     pie: () => "Esto no se resuelve tecleando: alguien tiene que responder una pregunta.",
   },
 };
@@ -130,31 +145,45 @@ const DONDE_MERCURY: Dondes = {
   },
 };
 
-/** Lo que cambia entre «Lo que no cuadra» de Odoo y el de Mercury. */
-export type FuenteDeDiferencias = "odoo" | "mercury";
-const FUENTE: Record<FuenteDeDiferencias, { nombre: string; endpoint: string; sinIva: boolean; dondes: Dondes }> = {
+/** Lo que cambia entre «Lo que no cuadra» de Odoo y el de Mercury. «todas» = las dos juntas (Conciliación). */
+export type FuenteDeDiferencias = "odoo" | "mercury" | "todas";
+const FUENTE: Record<"odoo" | "mercury", { nombre: string; endpoint: string; sinIva: boolean; dondes: Dondes }> = {
   odoo: { nombre: "Odoo", endpoint: "/api/cobranza/odoo/diferencias", sinIva: true, dondes: DONDE },
   mercury: { nombre: "Mercury", endpoint: "/api/cobranza/mercury/diferencias", sinIva: false, dondes: DONDE_MERCURY },
 };
 
 const SEV: Record<string, string> = {
-  ALTA: "text-red-600 bg-red-500/10 border-red-500/30",
-  MEDIA: "text-amber-600 bg-amber-500/10 border-amber-500/30",
+  ALTA: "text-danger-ink bg-danger-surface border-danger-line",
+  MEDIA: "text-warn-ink bg-warn-surface border-warn-line",
   BAJA: "text-fg-muted bg-surface-muted border-line",
 };
+
+/** La ruta, el nombre y los textos de una línea, según de dónde viene. */
+const deLaLinea = (codigo: string) => FUENTE[fuenteDeLinea(codigo)];
+
+type Medido = Respuesta["medido"];
 
 const filas = (n: number) => (n === 1 ? "1 fila" : `${n} filas`);
 const enLineas = (n: number) => (n === 1 ? "1 línea" : `${n} líneas`);
 
 export default function DiferenciasOdoo({
   fuente = "odoo",
+  vista = "SUPERVISA",
+  supervisor = "quien supervisa",
   onIrAEmparejar,
   onPendientes,
   puedeEditar = true,
   recarga = 0,
 }: {
-  /** Contra qué sistema se cruza: Odoo (por defecto) o Mercury. */
+  /** Contra qué sistema se cruza: Odoo (por defecto), Mercury, o los dos juntos (Conciliación). */
   fuente?: FuenteDeDiferencias;
+  /**
+   * La vista de Finanzas de quien mira (lib/finanzas/vista.ts). Solo cambia cómo se nombran las decisiones («esperan a
+   * Alex» o «esperan tu decisión») y con qué filtro arranca la lista juntas. No cambia qué se puede hacer.
+   */
+  vista?: VistaFinanzas;
+  /** El nombre de pila de quien supervisa, para decirle a quien registra «Esperan a Alex». */
+  supervisor?: string;
   /**
    * Sube cada vez que alguien aprieta «Actualizar desde Odoo» (OdooClient): la lista se vuelve a leer con la copia
    * nueva, sin desmontarse, así lo que tenías abierto sigue abierto.
@@ -176,8 +205,14 @@ export default function DiferenciasOdoo({
   puedeEditar?: boolean;
 }) {
   const toast = useToast();
-  const { nombre, endpoint, sinIva, dondes } = FUENTE[fuente];
+  const juntas = fuente === "todas";
+  const { nombre, endpoint, sinIva, dondes } = FUENTE[juntas ? "odoo" : fuente];
   const [data, setData] = useState<Respuesta | null>(null);
+  /* Con las dos juntas, lo medido de Mercury (lo de Odoo queda en `data.medido`). */
+  const [medidoMercury, setMedidoMercury] = useState<Medido | null>(null);
+  /* Los filtros de la lista juntas. Quien registra arranca viendo lo suyo; quien supervisa, todo. */
+  const [filtroFuente, setFiltroFuente] = useState<FiltroFuente>("todas");
+  const [filtroQuien, setFiltroQuien] = useState<FiltroQuien>(vista === "REGISTRA" ? "mias" : "todas");
   const [cargando, setCargando] = useState(true);
   /* Una escritura a la vez: la clave de la que está en curso, para decir «Guardando…» en su botón. */
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -187,7 +222,22 @@ export default function DiferenciasOdoo({
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const r = await fetchJson<Respuesta>(endpoint);
+      let r: Respuesta;
+      if (juntas) {
+        const [o, m] = await Promise.all([
+          fetchJson<Respuesta>(FUENTE.odoo.endpoint),
+          fetchJson<Respuesta>(FUENTE.mercury.endpoint),
+        ]);
+        r = {
+          inconsistencias: juntarDiferencias(o.inconsistencias, m.inconsistencias),
+          anuladas: o.anuladas,
+          ultimosMotivos: { bienAsi: o.ultimosMotivos.bienAsi ?? m.ultimosMotivos.bienAsi, anulada: o.ultimosMotivos.anulada },
+          medido: o.medido,
+        };
+        setMedidoMercury(m.medido);
+      } else {
+        r = await fetchJson<Respuesta>(endpoint);
+      }
       setData(r);
       setMotivos((m) => ({
         bienAsi: m.bienAsi || (r.ultimosMotivos.bienAsi ?? ""),
@@ -198,7 +248,7 @@ export default function DiferenciasOdoo({
     } finally {
       setCargando(false);
     }
-  }, [toast, endpoint]);
+  }, [toast, endpoint, juntas]);
 
   useEffect(() => {
     void cargar();
@@ -206,10 +256,12 @@ export default function DiferenciasOdoo({
 
   /** Manda una escritura, recarga la lista y devuelve la respuesta; null si falló (ya avisó). */
   const enviar = useCallback(
-    async <T,>(clave: string, body: Record<string, unknown>): Promise<T | null> => {
+    async <T,>(clave: string, body: Record<string, unknown>, codigo?: string): Promise<T | null> => {
       setOcupado(clave);
       try {
-        const r = await fetchJson<T>(endpoint, { method: "POST", body: JSON.stringify(body) });
+        /* Con las dos juntas, cada escritura va a la ruta de SU línea. Las facturas soltadas son solo de Odoo. */
+        const ruta = juntas && codigo ? deLaLinea(codigo).endpoint : endpoint;
+        const r = await fetchJson<T>(ruta, { method: "POST", body: JSON.stringify(body) });
         await cargar();
         return r;
       } catch (e) {
@@ -219,18 +271,22 @@ export default function DiferenciasOdoo({
         setOcupado(null);
       }
     },
-    [cargar, toast, endpoint],
+    [cargar, toast, endpoint, juntas],
   );
 
   /* ⭐ Cada fila viaja con la huella que ves: si cambió antes del clic, el servidor no la marca y lo dice. */
   const marcar = useCallback(
     async (inc: DiferenciaOdoo, items: readonly ItemDiferencia[], motivo: string, clave: string) => {
-      const r = await enviar<ResultadoDeMarcar>(clave, {
-        accion: "marcar",
-        linea: inc.codigo,
-        motivo,
-        filas: items.map((i) => ({ clave: i.fila.clave, huella: i.fila.huella })),
-      });
+      const r = await enviar<ResultadoDeMarcar>(
+        clave,
+        {
+          accion: "marcar",
+          linea: inc.codigo,
+          motivo,
+          filas: items.map((i) => ({ clave: i.fila.clave, huella: i.fila.huella })),
+        },
+        inc.codigo,
+      );
       if (!r) return false;
       setMotivos((m) => ({ ...m, bienAsi: motivo }));
       if (r.marcadas > 0) {
@@ -256,8 +312,8 @@ export default function DiferenciasOdoo({
   );
 
   const deshacer = useCallback(
-    async (ids: readonly string[], clave: string) => {
-      if (await enviar(clave, { accion: "deshacer-marcas", ids })) {
+    async (ids: readonly string[], clave: string, codigo: string) => {
+      if (await enviar(clave, { accion: "deshacer-marcas", ids }, codigo)) {
         toast.success("Vuelve a la lista. Queda anotado que la deshiciste.");
       }
     },
@@ -266,7 +322,7 @@ export default function DiferenciasOdoo({
 
   const anular = useCallback(
     async (inc: DiferenciaOdoo, liberacionId: string, nota: string, clave: string) => {
-      const r = await enviar(clave, { accion: "resolver-liberacion", liberacionId, linea: inc.codigo, nota });
+      const r = await enviar(clave, { accion: "resolver-liberacion", liberacionId, linea: inc.codigo, nota }, inc.codigo);
       if (!r) return false;
       setMotivos((m) => ({ ...m, anulada: nota }));
       toast.success("Anotado. Esa factura sale de la lista y queda en «Marcadas».");
@@ -277,7 +333,7 @@ export default function DiferenciasOdoo({
 
   const reabrir = useCallback(
     async (liberacionId: string, clave: string) => {
-      if (await enviar(clave, { accion: "reabrir-liberacion", liberacionId })) {
+      if (await enviar(clave, { accion: "reabrir-liberacion", liberacionId }, "ODOO")) {
         toast.success("La factura vuelve a la lista. Queda anotado quién la había cerrado y que la reabriste.");
       }
     },
@@ -287,9 +343,28 @@ export default function DiferenciasOdoo({
   /* ⚠ El titular suma por moneda y cuenta cada documento UNA vez aunque lo miren varias líneas
      (`resumenDeDiferencias`, con sus pruebas). Hasta el 2026-09-13 decía «121 693 746» sumando colones
      con dólares y contaba dos veces ₡26 millones. */
-  const resumen = useMemo(() => resumenDeDiferencias(data?.inconsistencias ?? []), [data]);
+  /* Con las dos juntas, lo que pasa los filtros. Con una sola fuente, todo. */
+  const visibles = useMemo(
+    () =>
+      juntas
+        ? filtrarDiferencias(data?.inconsistencias ?? [], { fuente: filtroFuente, quien: filtroQuien })
+        : (data?.inconsistencias ?? []),
+    [data, juntas, filtroFuente, filtroQuien],
+  );
+  const resumen = useMemo(() => resumenDeDiferencias(visibles), [visibles]);
+  /* Lo que muestra cada botón de filtro: las filas pendientes de cada lado. */
+  const conteos = useMemo(() => {
+    const todas = data?.inconsistencias ?? [];
+    const filasDe = (ls: readonly DiferenciaOdoo[]) => ls.reduce((n, l) => n + l.items.length, 0);
+    return {
+      todas: filasDe(todas),
+      odoo: filasDe(todas.filter((l) => fuenteDeLinea(l.codigo) === "odoo")),
+      mercury: filasDe(todas.filter((l) => fuenteDeLinea(l.codigo) === "mercury")),
+      ...filasPorQuien(todas),
+    };
+  }, [data]);
   /* Una línea sin filas pendientes no es trabajo: sus filas están en «Marcadas». */
-  const abiertas = useMemo(() => (data?.inconsistencias ?? []).filter((i) => i.items.length > 0), [data]);
+  const abiertas = useMemo(() => visibles.filter((i) => i.items.length > 0), [visibles]);
   /* En «Marcadas» también las que tienen filas que volvieron porque cambió un número: se dice por qué volvieron. */
   const conMarcadas = useMemo(
     () => (data?.inconsistencias ?? []).filter((i) => i.marcadas.length > 0 || i.volvieron.length > 0),
@@ -297,8 +372,8 @@ export default function DiferenciasOdoo({
   );
   /* ⭐ El número de la pestaña sale de acá después de cada carga: marcar una fila lo baja sin recargar la página. */
   useEffect(() => {
-    if (data) onPendientes?.(resumen.filas);
-  }, [data, resumen.filas, onPendientes]);
+    if (data) onPendientes?.(juntas ? (vista === "REGISTRA" ? conteos.mias : conteos.todas) : resumen.filas);
+  }, [data, resumen.filas, onPendientes, juntas, vista, conteos]);
   /* «Ya contado en» con el título de la otra línea: el código (ODOO-SIN-CUENTA) no lo entiende nadie. */
   const tituloDe = useMemo(
     () => new Map((data?.inconsistencias ?? []).map((i) => [i.codigo, i.titulo] as const)),
@@ -314,13 +389,52 @@ export default function DiferenciasOdoo({
   }
   if (!data) return null;
 
+  /* Cómo se nombran las decisiones según quién mira: a Dinia le dicen que esperan a otro; a Alex, que esperan por él. */
+  const decisionesLabel = vista === "REGISTRA" ? `Esperan a ${supervisor}` : "Esperan tu decisión";
+
   return (
     <div className="space-y-4">
+      {juntas && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Segmentado<FiltroQuien>
+            etiqueta="Quién lo resuelve"
+            valor={filtroQuien}
+            onCambio={setFiltroQuien}
+            opciones={[
+              {
+                clave: "mias",
+                etiqueta: vista === "REGISTRA" ? `Te tocan · ${conteos.mias}` : `Se arreglan registrando · ${conteos.mias}`,
+                title: "Lo que se arregla registrando o corrigiendo un dato.",
+              },
+              {
+                clave: "decisiones",
+                etiqueta: `${decisionesLabel} · ${conteos.decisiones}`,
+                title: "Preguntas de negocio, como «¿entró esta plata?». Las decide quien supervisa.",
+              },
+              { clave: "todas", etiqueta: `Todas · ${conteos.todas}` },
+            ]}
+          />
+          <Segmentado<FiltroFuente>
+            etiqueta="De dónde viene"
+            valor={filtroFuente}
+            onCambio={setFiltroFuente}
+            opciones={[
+              { clave: "todas", etiqueta: "Odoo y Mercury" },
+              { clave: "odoo", etiqueta: `Odoo · ${conteos.odoo}` },
+              { clave: "mercury", etiqueta: `Mercury · ${conteos.mercury}` },
+            ]}
+          />
+        </div>
+      )}
       <div className="rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <p className="text-fg">
           {/* ⚠ FILAS, no líneas (2026-09-25): una línea con una fila pendiente no pesa lo mismo que una con treinta. */}
           {resumen.filas === 0 ? (
-            `Nexus y ${nombre} cuadran.`
+            juntas ? (
+              "No queda nada con este filtro."
+            ) : (
+              `Nexus y ${nombre} cuadran.`
+            )
           ) : (
             <>
               <strong className="text-lg tabular-nums">{resumen.filas}</strong> cosas por resolver en{" "}
@@ -331,7 +445,7 @@ export default function DiferenciasOdoo({
         {resumen.plata.length > 0 && (
           <p className="mt-1 text-fg">
             Lo que no cuadra suma <span className="font-medium tabular-nums">{textoDeMontos(resumen.plata)}</span>
-            <span className="text-fg-muted">{sinIva ? ", sin IVA." : "."}</span>
+            <span className="text-fg-muted">{sinIva || juntas ? ", sin IVA." : "."}</span>
           </p>
         )}
         <p className="mt-0.5 text-xs text-fg-muted">
@@ -339,6 +453,20 @@ export default function DiferenciasOdoo({
               60 millones en riesgo», o que sume las dos monedas a mano. */}
           {resumen.plata.length > 0 &&
             "Cada moneda por separado y cada documento contado una vez, aunque lo miren varias líneas; no es plata perdida. "}
+          {juntas ? (
+            <>
+              Cruzado con {data.medido.facturas} facturas de Odoo
+              {data.medido.espejoAl && <> (copia del {data.medido.espejoAl})</>}
+              {medidoMercury && (
+                <>
+                  {" "}y {medidoMercury.facturas} de Mercury
+                  {medidoMercury.espejoAl && <> (copia del {medidoMercury.espejoAl})</>}
+                </>
+              )}
+              .
+            </>
+          ) : (
+            <>
           Cruzado sobre {data.medido.cobros} cobros de Nexus y {data.medido.facturas} facturas de {nombre}
           {data.medido.otrosDocumentos > 0 &&
             (fuente === "mercury" ? (
@@ -355,13 +483,19 @@ export default function DiferenciasOdoo({
             </>
           )}
           {data.medido.espejoAl && <> Última copia buena de {nombre}: {data.medido.espejoAl}.</>}
+            </>
+          )}
         </p>
       </div>
 
       {abiertas.length === 0 && conMarcadas.length === 0 && data.anuladas.length === 0 ? (
         <EmptyState
           title="No hay nada que resolver"
-          description={`Todos los cobros de Nexus tienen su factura en ${nombre} y los montos coinciden.`}
+          description={
+            juntas
+              ? "Todos los cobros de Nexus tienen su factura en Odoo o en Mercury y los montos coinciden."
+              : `Todos los cobros de Nexus tienen su factura en ${nombre} y los montos coinciden.`
+          }
         />
       ) : (
         abiertas.map((inc) => (
@@ -369,9 +503,10 @@ export default function DiferenciasOdoo({
             key={inc.codigo}
             inc={inc}
             tituloDe={tituloDe}
-            espejoAl={data.medido.espejoAl}
-            nombre={nombre}
-            dondes={dondes}
+            espejoAl={juntas && fuenteDeLinea(inc.codigo) === "mercury" ? (medidoMercury?.espejoAl ?? null) : data.medido.espejoAl}
+            nombre={juntas ? deLaLinea(inc.codigo).nombre : nombre}
+            dondes={juntas ? deLaLinea(inc.codigo).dondes : dondes}
+            origen={juntas ? deLaLinea(inc.codigo).nombre : undefined}
             ocupado={ocupado}
             puedeEditar={puedeEditar}
             motivos={motivos}
@@ -410,6 +545,7 @@ function Linea({
   espejoAl,
   nombre,
   dondes,
+  origen,
   ocupado,
   puedeEditar,
   motivos,
@@ -425,6 +561,8 @@ function Linea({
   /** «Odoo» o «Mercury»: el sistema contra el que se cruza. */
   nombre: string;
   dondes: Dondes;
+  /** Con las dos listas juntas, de dónde viene la línea («Odoo» o «Mercury»): se muestra como etiqueta. */
+  origen?: string;
   /** La escritura en curso, si hay una: mientras tanto no se ofrece otra. */
   ocupado: string | null;
   /** `cobranza.write`: sin esto la línea se lee, pero no se marca ni se cierra nada. */
@@ -452,6 +590,11 @@ function Linea({
     <div className="rounded-lg border border-line bg-surface">
       <div className="border-b border-line p-4">
         <div className="flex flex-wrap items-center gap-2">
+          {origen && (
+            <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-fg-secondary">
+              {origen}
+            </span>
+          )}
           <span className={`rounded-full border px-2 py-0.5 text-xs ${SEV[inc.severidad] ?? SEV.BAJA}`}>
             {inc.severidad.toLowerCase()}
           </span>
@@ -721,7 +864,7 @@ function Marcadas({
   anuladas: readonly AnuladaAMano[];
   ocupado: string | null;
   puedeEditar: boolean;
-  onDeshacer: (ids: readonly string[], clave: string) => void;
+  onDeshacer: (ids: readonly string[], clave: string, codigo: string) => void;
   onReabrir: (liberacionId: string, clave: string) => void;
 }) {
   const total = lineas.reduce((a, l) => a + l.marcadas.length, 0) + anuladas.length;
@@ -791,7 +934,7 @@ function Marcadas({
                       className="shrink-0"
                       disabled={ocupado !== null}
                       title="La fila vuelve a su línea. Queda anotado que la deshiciste."
-                      onClick={() => onDeshacer(f.marcas.map((m) => m.id), clave)}
+                      onClick={() => onDeshacer(f.marcas.map((m) => m.id), clave, l.codigo)}
                     >
                       {ocupado === clave ? "Guardando…" : "Deshacer"}
                     </Button>
