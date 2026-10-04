@@ -191,3 +191,45 @@ export function notaDeAprobacion(d: {
     .filter(Boolean)
     .join("");
 }
+
+// ── El cliente aprueba desde su enlace (2026-10-04) ──────────────────────────────────────────────
+
+/** Lo que el cliente declara al aprobar desde su enlace. Va tal cual a la evidencia y a la nota de HubSpot. */
+export const TEXTO_DE_APROBACION_DEL_CLIENTE = "Leí este diagnóstico y lo apruebo como base para la planificación.";
+
+/** Lo que el cliente puede hacer con la versión que VE en su enlace. */
+export type AprobacionEnElEnlace =
+  | { estado: "por-aprobar" }
+  | { estado: "aprobado"; nombre: string | null; fecha: string | null }
+  | { estado: "en-revision" };
+
+/**
+ * El enlace muestra la última versión presentada o aprobada (`vista`); el equipo puede estar ya en
+ * otra (`vivo`). El cliente aprueba SOLO lo que está viendo, y solo si es lo vigente: presentado, la
+ * misma versión y sin cambios desde que se presentó. Si el equipo ya está ajustando (regeneró, editó o
+ * reabrió), espera la versión nueva. Una versión aprobada se muestra como aprobada aunque después se
+ * haya reabierto: es lo que el cliente aprobó.
+ */
+export function aprobacionEnElEnlace(d: {
+  vista: { tipo: string; version: number; aprobadoPorNombre: string | null; aprobadoEl: Date | string | null };
+  vivo: { estado: EstadoDocumento; version: number; cambiosDesdeLaPresentacion: boolean } | null;
+}): AprobacionEnElEnlace {
+  if (d.vista.tipo === "aprobado") {
+    const fecha = d.vista.aprobadoEl ? new Date(d.vista.aprobadoEl) : null;
+    return {
+      estado: "aprobado",
+      nombre: d.vista.aprobadoPorNombre?.trim() || null,
+      fecha: fecha && !Number.isNaN(fecha.getTime()) ? fecha.toISOString() : null,
+    };
+  }
+  const v = d.vivo;
+  if (v && v.estado === "presentado" && v.version === d.vista.version && !v.cambiosDesdeLaPresentacion) {
+    return { estado: "por-aprobar" };
+  }
+  return { estado: "en-revision" };
+}
+
+/** La evidencia que queda cuando aprueba el cliente desde su enlace (no hay correo que pegar). */
+export function evidenciaDelEnlace(nombre: string, email: string): string {
+  return `Aprobado por el cliente desde su enlace de Nexus: ${nombre.trim()}${email.trim() ? ` (${email.trim()})` : ""} marcó «${TEXTO_DE_APROBACION_DEL_CLIENTE}»`;
+}

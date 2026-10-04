@@ -6,7 +6,8 @@
  * `getDiagnosticoForToken`, que re-chequea el acceso —y que sea ESE acceso— y exige
  * `diagnosticoPublishedAt != null` en CADA render — despublicar corta al instante.
  *
- * Read-only. `force-dynamic`: lee cookies por request.
+ * Lectura, más UNA escritura: el cliente aprueba lo que ve (app/external/diagnostico/actions.ts,
+ * 2026-10-04). `force-dynamic`: lee cookies por request.
  */
 import type { Metadata } from "next";
 import DiagnosticoClientView from "@/components/external/DiagnosticoClientView";
@@ -22,6 +23,7 @@ import {
   tituloDeLaPestana,
 } from "@/lib/external/selector-de-proyectos";
 import { getSmarteamLogoUrl } from "@/lib/external/smarteam-logo";
+import { aprobarDiagnosticoAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +58,8 @@ export default async function ExternalDiagnosticoPage({ params }: Props) {
       }
     >
       {data ? (
-        <DiagnosticoClientView data={data} />
+        // La aprobación del cliente (2026-10-04), atada al proyecto de ESTA página.
+        <DiagnosticoClientView data={data} aprobar={aprobarDiagnosticoAction.bind(null, acceso)} />
       ) : (
         // Sin callejón: si el navegador tiene otros proyectos abiertos, se ofrece elegirlos.
         <NoAccess elegirHref={hayProyectosAbiertos(accesos, "diagnostico") ? "/external/diagnostico" : undefined} />

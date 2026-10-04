@@ -51,22 +51,22 @@ export async function assignHorarioAction(
   // El proyecto que nombra la página, y solo si este navegador lo tiene abierto (con los mismos
   // checks de la lectura: revocado, versión de la contraseña, publicable).
   const actual = elegirAcceso(await accesosDelNavegador(), acceso);
-  if (!actual) return { ok: false, error: "Tu acceso ya no está disponible. Recargá la página." };
+  if (!actual) return { ok: false, error: "Tu acceso ya no está disponible. Recarga la página." };
 
   // Check de superficie EXPLÍCITO, igual que en la lectura: si el CSE despublicó el
   // kickoff, la credencial viva no habilita nada.
   if (!actual.project.kickoffPublishedAt) {
-    return { ok: false, error: "Tu acceso ya no está disponible. Recargá la página." };
+    return { ok: false, error: "Tu acceso ya no está disponible. Recarga la página." };
   }
 
   if (!checkExternalWriteRate(actual.credencial)) {
-    return { ok: false, error: "Demasiados cambios seguidos. Esperá unos segundos." };
+    return { ok: false, error: "Demasiados cambios seguidos. Espera unos segundos." };
   }
 
   const res = await assignKickoffHorario(actual.project.id, sessionId, optionId);
   if (!res.ok) {
     // Los ids dejaron de existir (el CSE cambió las franjas y volvió a publicar).
-    return { ok: false, error: "Esa opción ya no está disponible. Recargá la página." };
+    return { ok: false, error: "Esa opción ya no está disponible. Recarga la página." };
   }
 
   await touchAccess(actual.accessId);

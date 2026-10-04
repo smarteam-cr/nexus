@@ -9,7 +9,7 @@
  *   - loading:     mientras llega la respuesta
  *   - success:     muestra "Entrando a <proyecto> · <cliente>"
  *   - denied:      "Token o contraseña incorrectos"
- *   - rateLimited: "Demasiados intentos. Probá en N minutos"
+ *   - rateLimited: "Demasiados intentos. Prueba en N minutos"
  *   - error:       error de red u otro caso inesperado
  *
  * REGLA: este componente NO debe importar de librerías que carguen recursos
@@ -148,7 +148,7 @@ export function VerifyForm({ token, next }: { token: string; next?: string }) {
       {state.kind === "rateLimited" && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
           <p className="text-xs text-amber-700">
-            Demasiados intentos. Probá de nuevo en{" "}
+            Demasiados intentos. Prueba de nuevo en{" "}
             <span className="font-semibold">
               {formatRetryAfter(state.retryAfterSeconds)}
             </span>
@@ -160,7 +160,7 @@ export function VerifyForm({ token, next }: { token: string; next?: string }) {
       {state.kind === "error" && (
         <div className="rounded-lg bg-gray-100 border border-gray-200 px-3 py-2">
           <p className="text-xs text-gray-700">
-            No se pudo verificar el acceso. Probá de nuevo en unos segundos.
+            No se pudo verificar el acceso. Prueba de nuevo en unos segundos.
           </p>
         </div>
       )}

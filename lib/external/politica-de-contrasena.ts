@@ -115,7 +115,7 @@ export function evaluarContrasena(
       return {
         ok: false,
         motivo: "diccionario",
-        mensaje: "Esa contraseña es de las primeras que prueba cualquiera: elegí otra.",
+        mensaje: "Esa contraseña es de las primeras que prueba cualquiera: elige otra.",
       };
     }
   }

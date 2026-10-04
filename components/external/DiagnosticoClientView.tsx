@@ -12,8 +12,17 @@
 import LandingView from "@/components/landing/LandingView";
 import { buildDiagnosticoConfig, buildDiagnosticoSections, ctxDelDiagnostico } from "@/components/canvas/diagnostico-landing-adapter";
 import type { DiagnosticoViewData } from "@/lib/external/diagnostico-view";
+import type { AprobarDiagnosticoResult } from "@/app/external/diagnostico/actions";
+import AprobarDiagnostico from "./AprobarDiagnostico";
 
-export default function DiagnosticoClientView({ data }: { data: DiagnosticoViewData }) {
+export default function DiagnosticoClientView({
+  data,
+  aprobar,
+}: {
+  data: DiagnosticoViewData;
+  /** La acción del servidor ya atada al acceso de la página (2026-10-04). Sin ella, solo lectura. */
+  aprobar?: (nombre: string, email: string, acepto: boolean) => Promise<AprobarDiagnosticoResult>;
+}) {
   const keys = data.rows.map((s) => s.key);
   const config = buildDiagnosticoConfig(keys);
   const built = buildDiagnosticoSections(data.rows);
@@ -44,6 +53,7 @@ export default function DiagnosticoClientView({ data }: { data: DiagnosticoViewD
         sections={sections}
         mode="read"
       />
+      {aprobar && <AprobarDiagnostico aprobacion={data.aprobacion} aprobar={aprobar} />}
     </div>
   );
 }

@@ -491,4 +491,21 @@ describe("6 · cada superficie tiene su página por proyecto, y la franja se esc
     expect(accion).toContain("elegirAcceso(await accesosDelNavegador(), acceso)");
     expect(accion).toContain("assignKickoffHorario(actual.project.id,");
   });
+
+  it("la aprobación del diagnóstico queda atada al proyecto de la página, a su flag y al límite de escrituras", () => {
+    /* 2026-10-04: el cliente aprueba el diagnóstico desde su enlace. Las ediciones que lo ponen en
+       rojo: pasar la acción sin `.bind`, resolver «la cookie que haya», aprobar con el diagnóstico
+       despublicado, sacar el límite de escrituras o aprobar por otra puerta que no sea
+       `registrarAprobacion` (la que exige que esté presentado y sin cambios desde entonces). */
+    const pagina = sinComentarios(leer("app/external/diagnostico/[acceso]/page.tsx"));
+    expect(pagina).toContain("aprobarDiagnosticoAction.bind(null, acceso)");
+    const accion = sinComentarios(leer("app/external/diagnostico/actions.ts"));
+    expect(accion).toMatch(/export async function aprobarDiagnosticoAction\(\s*acceso: string,/);
+    expect(accion).toContain("elegirAcceso(await accesosDelNavegador(), acceso)");
+    expect(accion).toContain("if (!actual.project.diagnosticoPublishedAt)");
+    expect(accion).toContain("checkExternalWriteRate(actual.credencial)");
+    expect(accion).toContain("where: { projectId: actual.project.id, ...canvasOf(\"diagnosis\") }");
+    expect(accion).toContain("registrarAprobacion(");
+    expect(accion).not.toMatch(/hitoDeDocumento\.(create|update)|estadoDocumento:/);
+  });
 });

@@ -39,7 +39,9 @@ const CHIP: Record<EstadoVista["estado"], string> = {
 function textoDelHito(h: HitoVista): string {
   if (h.tipo === "presentado") return `Se presentó la v${h.version}${h.porEmail ? ` (${h.porEmail})` : ""}.`;
   if (h.tipo === "aprobado") {
-    return `El cliente aprobó la v${h.version}: ${h.aprobadoPorNombre ?? "—"}${h.aprobadoPorEmail ? ` (${h.aprobadoPorEmail})` : ""}, el ${fecha(h.aprobadoEl)}.`;
+    // Sin quién lo registró = lo aprobó el cliente desde su enlace (app/external/diagnostico/actions.ts).
+    const como = h.porEmail ? ` (lo registró ${h.porEmail})` : " desde su enlace";
+    return `El cliente aprobó la v${h.version}${como}: ${h.aprobadoPorNombre ?? "—"}${h.aprobadoPorEmail ? ` (${h.aprobadoPorEmail})` : ""}, el ${fecha(h.aprobadoEl)}.`;
   }
   return `Se abrió la v${h.version}${h.motivo ? `: ${h.motivo}` : "."}`;
 }
@@ -140,7 +142,7 @@ export default function EstadoDelDocumento({
             : estado.estado === "presentado"
               ? estado.cambiosDesdeLaPresentacion
                 ? "Cambió desde que se presentó: preséntalo de nuevo (será la versión siguiente) antes de registrar la aprobación."
-                : "Presentado al cliente. Cuando llegue su aprobación por correo, regístrala acá."
+                : "Presentado al cliente. Si le compartiste el enlace, puede aprobarlo ahí; si te llega por correo, regístrala aquí."
               : "Borrador: se presenta cuando el hilo está cerrado y la política rectora revisada."}
         </span>
         <div className="flex flex-wrap gap-2">

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   aColumna,
+  aprobacionEnElEnlace,
+  evidenciaDelEnlace,
+  TEXTO_DE_APROBACION_DEL_CLIENTE,
   leerEstado,
   lineaDelDocumento,
   notaDeAprobacion,
@@ -69,5 +72,49 @@ describe("estado del documento: borrador, presentado y aprobado", () => {
     expect(n).toContain("Diagnóstico v2 aprobado por el cliente.");
     expect(n).toContain("&lt;script&gt;");
     expect(n).not.toContain("<script>");
+  });
+});
+
+describe("el cliente aprueba desde su enlace", () => {
+  const presentadaV2 = { tipo: "presentado", version: 2, aprobadoPorNombre: null, aprobadoEl: null };
+
+  it("puede aprobar lo que ve si es lo vigente: presentado, la misma versión y sin cambios", () => {
+    expect(
+      aprobacionEnElEnlace({ vista: presentadaV2, vivo: { estado: "presentado", version: 2, cambiosDesdeLaPresentacion: false } }),
+    ).toEqual({ estado: "por-aprobar" });
+  });
+
+  it("si el equipo ya está ajustando, espera la versión nueva", () => {
+    // Regeneró después de presentar: borrador v3.
+    expect(aprobacionEnElEnlace({ vista: presentadaV2, vivo: { estado: "borrador", version: 3, cambiosDesdeLaPresentacion: false } }))
+      .toEqual({ estado: "en-revision" });
+    // Editó a mano lo presentado.
+    expect(aprobacionEnElEnlace({ vista: presentadaV2, vivo: { estado: "presentado", version: 2, cambiosDesdeLaPresentacion: true } }))
+      .toEqual({ estado: "en-revision" });
+    // Sin estado vivo legible.
+    expect(aprobacionEnElEnlace({ vista: presentadaV2, vivo: null })).toEqual({ estado: "en-revision" });
+  });
+
+  it("nunca aprueba una versión que no es la que ve", () => {
+    expect(aprobacionEnElEnlace({ vista: presentadaV2, vivo: { estado: "presentado", version: 3, cambiosDesdeLaPresentacion: false } }))
+      .toEqual({ estado: "en-revision" });
+  });
+
+  it("lo aprobado se muestra aprobado, con quién y cuándo, aunque después se haya reabierto", () => {
+    const vista = { tipo: "aprobado", version: 2, aprobadoPorNombre: " Ana Pérez ", aprobadoEl: new Date("2026-10-04T12:00:00Z") };
+    expect(aprobacionEnElEnlace({ vista, vivo: { estado: "borrador", version: 3, cambiosDesdeLaPresentacion: false } })).toEqual({
+      estado: "aprobado",
+      nombre: "Ana Pérez",
+      fecha: "2026-10-04T12:00:00.000Z",
+    });
+  });
+
+  it("la evidencia dice que fue desde el enlace, quién y lo que aceptó", () => {
+    const e = evidenciaDelEnlace("Ana Pérez", "ana@cliente.com");
+    expect(e).toContain("desde su enlace de Nexus");
+    expect(e).toContain("Ana Pérez (ana@cliente.com)");
+    expect(e).toContain(TEXTO_DE_APROBACION_DEL_CLIENTE);
+    // Y alcanza como evidencia para registrar la aprobación.
+    expect(validarAprobacion({ nombre: "Ana Pérez", email: "ana@cliente.com", fecha: "2026-10-04", evidencia: e }, new Date("2026-10-04T15:00:00Z")).ok).toBe(true);
   });
 });
