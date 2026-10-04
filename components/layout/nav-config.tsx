@@ -259,22 +259,24 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // viven con la planilla, con otro gate: nunca se juntan.
       { href: "/finanzas/comisiones-partner", label: "Comisiones de aliados", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"] },
       { href: "/finanzas/ingresos-variables", label: "Otros ingresos", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"] },
-      // ⚠ UNA sola entrada de planilla. Adentro conviven los dos números —lo que cuesta por mes (configuración,
-      // alimenta el burn) y lo que se pagó de verdad (`planillas/historial`, al que se llega por el botón
-      // «Historial»)— y esa hoja hija NO se declara acá a propósito: si estuviera, el prefijo de «Planillas» la marcaría
-      // activa y `nav-children.test` lo frena.
-      { href: "/finanzas/costos", label: "Resumen", section: "Costos y gastos", costosOnly: true, exact: true, vistas: ["SUPERVISA"] },
-      { href: "/finanzas/costos/herramientas", label: "Herramientas", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
-      { href: "/finanzas/costos/planillas", label: "Planilla", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
-      { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
-      { href: "/finanzas/costos/fijos", label: "Costos fijos", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
-      { href: "/finanzas/costos/tarjetas", label: "Tarjetas", section: "Costos y gastos", costosOnly: true, vistas: ["SUPERVISA"] },
+      // Costos y gastos SIN salarios (permiso `gastos`, que ADMIN trae): lo que anota quien registra. Reemplazan a las
+      // hojas Resumen · Herramientas · Costos fijos · Tarjetas de Costos, que siguen existiendo para Super Admin pero ya no
+      // están en el menú.
+      { href: "/finanzas/gastos", label: "Gastos del mes", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
+      { href: "/finanzas/recurrentes", label: "Recurrentes", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
+      { href: "/finanzas/tarjetas", label: "Tarjetas", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
+      // ⚠ UNA sola entrada de planilla, solo para Super Admin. Adentro conviven lo que cuesta por mes (configuración) y lo
+      // que se pagó de verdad (`planillas/historial`, botón «Historial»), y desde ahí se llega al aguinaldo y a las
+      // comisiones de vendedor, que viven con la planilla. Esas hojas hijas NO se declaran acá a propósito: si
+      // estuvieran, el prefijo las marcaría activas dos veces y `nav-children.test` lo frena; con `match` queda
+      // iluminada la planilla mientras se las mira.
       {
-        href: "/finanzas/costos/comisiones-vendedor",
-        label: "Comisiones de vendedor",
+        href: "/finanzas/costos/planillas",
+        label: "Planilla",
         section: "Costos y gastos",
         costosOnly: true,
         vistas: ["SUPERVISA"],
+        match: ["/finanzas/costos/planillas", "/finanzas/costos/aguinaldo", "/finanzas/costos/comisiones-vendedor"],
       },
       // Lo que no cuadra con Odoo y Mercury, en una sola lista. Lo trabaja quien registra; quien supervisa decide lo que
       // es de negocio.

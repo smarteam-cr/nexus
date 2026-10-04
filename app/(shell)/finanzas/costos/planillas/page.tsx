@@ -54,6 +54,17 @@ export default async function FinanzasCostosPlanillasPage() {
             >
               Historial
             </Link>
+            {/* Rediseño de Finanzas (2026-10-03): el aguinaldo y las comisiones de vendedor salieron del menú y viven
+                con la planilla, que es de donde salen. */}
+            <Link href="/finanzas/costos/aguinaldo" className={buttonVariants({ variant: "secondary", size: "md" })}>
+              Aguinaldo
+            </Link>
+            <Link
+              href="/finanzas/costos/comisiones-vendedor"
+              className={buttonVariants({ variant: "secondary", size: "md" })}
+            >
+              Comisiones de vendedor
+            </Link>
           </div>
         }
         initialCostos={costos.filter((c) => c.categoria === "SALARIO")}

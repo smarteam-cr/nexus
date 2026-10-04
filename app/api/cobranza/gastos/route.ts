@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const gasto = await createGasto(parsed.data);
+    const gasto = await createGasto(parsed.data, guard.user.email);
     return NextResponse.json({ gasto }, { status: 201 });
   } catch (e) {
     if (e instanceof CobranzaError) {

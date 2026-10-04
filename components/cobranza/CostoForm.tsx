@@ -39,9 +39,18 @@ export default function CostoForm({
   categoriaInicial,
   todayISO,
   fechaEfectivaInicial,
+  apiBase = "/api/cobranza/costos",
+  sinSalarios = false,
   onClose,
   onSaved,
 }: {
+  /**
+   * La ruta contra la que guarda. Las pantallas de quien registra (rediseño de Finanzas, 2026-10-03) usan
+   * /api/finanzas/recurrentes, que nunca lee ni escribe un salario.
+   */
+  apiBase?: string;
+  /** Sin la categoría Salario ni lo que solo usa un salario (persona del equipo, base y factor de cargas). */
+  sinSalarios?: boolean;
   /** null = crear; con valor = editar. */
   costo: CostoRecurrenteDTO | null;
   /**
@@ -65,7 +74,11 @@ export default function CostoForm({
 }) {
   const editaBaseFactor = costo != null && costo.montoBase != null && costo.factorCargas != null;
 
-  const [categoria, setCategoria] = useState(costo?.categoria ?? categoriaInicial ?? "SALARIO");
+  const [categoria, setCategoria] = useState(
+    costo?.categoria ?? categoriaInicial ?? (sinSalarios ? "HERRAMIENTA" : "SALARIO"),
+  );
+  /* Las categorías que se pueden elegir: sin Salario en las pantallas de quien registra. */
+  const categorias = sinSalarios ? COSTOS_CATEGORIAS.filter((c) => c !== "SALARIO") : COSTOS_CATEGORIAS;
   const [nombre, setNombre] = useState(costo?.nombre ?? "");
   const [moneda, setMoneda] = useState(costo?.moneda ?? "CRC");
   const [frecuencia, setFrecuencia] = useState(costo?.frecuencia ?? "MENSUAL");
@@ -177,13 +190,13 @@ export default function CostoForm({
     };
     try {
       if (costo) {
-        await fetchJson(`/api/cobranza/costos/${costo.id}`, {
+        await fetchJson(`${apiBase}/${costo.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
       } else {
-        await fetchJson("/api/cobranza/costos", {
+        await fetchJson(apiBase, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -232,7 +245,7 @@ export default function CostoForm({
             onChange={(e) => cambiarCategoria(e.target.value)}
             className={SELECT_CLS}
           >
-            {COSTOS_CATEGORIAS.map((c) => (
+            {categorias.map((c) => (
               <option key={c} value={c}>
                 {CATEGORIA_COSTO_LABEL[c] ?? c}
               </option>

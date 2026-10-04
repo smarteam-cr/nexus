@@ -230,6 +230,8 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
   ADMIN: grant({
     marketing: ["read"],
     cobranza: ["read", "write"],
+    // Rediseño de Finanzas (2026-10-03): quien registra anota los gastos del mes, sin ver salarios.
+    gastos: ["read", "write"],
   }),
   // SUPER_ADMIN: all-true. El engine ni siquiera consulta esta fila (hardcodea
   // allTrueMap), pero se declara completa para hasCapability/capabilitiesFor sync.

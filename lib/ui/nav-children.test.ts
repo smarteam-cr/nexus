@@ -34,11 +34,22 @@ describe("visibleNavChildren — el filtro costosOnly del Sidebar", () => {
   });
 
   it("sin rol de Costos NO se filtra ningún hijo marcado costosOnly", () => {
-    const visibles = visibleNavChildren(finanzas, { isCostos: false });
+    // Con el permiso de gastos (el que trae ADMIN): lo que queda es exactamente lo que NO es costosOnly.
+    const conGastos = { v: 1 as const, sections: { gastos: { read: true } } };
+    const visibles = visibleNavChildren(finanzas, { isCostos: false, permissions: conGastos });
     expect(visibles.every((c) => !c.costosOnly)).toBe(true);
-    // …y lo que queda es exactamente lo que NO está marcado.
     expect(visibles.map((c) => c.href)).toEqual(
       (finanzas.children ?? []).filter((c) => !c.costosOnly).map((c) => c.href),
+    );
+  });
+
+  it("sin el permiso de gastos no aparecen Gastos del mes, Recurrentes ni Tarjetas", () => {
+    const hs = visibleNavChildren(finanzas, { isCostos: false, vista: "REGISTRA" }).map((c) => c.href);
+    expect(hs).not.toContain("/finanzas/gastos");
+    expect(hs).not.toContain("/finanzas/tarjetas");
+    const conGastos = { v: 1 as const, sections: { gastos: { read: true } } };
+    expect(visibleNavChildren(finanzas, { isCostos: false, vista: "REGISTRA", permissions: conGastos }).map((c) => c.href)).toContain(
+      "/finanzas/gastos",
     );
   });
 
@@ -105,12 +116,14 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
   });
 
   // ── El panel de cada vista (rediseño de Finanzas, 2026-10-03, lib/finanzas/vista.ts) ──
+  const conGastos = { v: 1 as const, sections: { gastos: { read: true } } };
   const panel = (vista: "REGISTRA" | "SUPERVISA" | "DIRECCION", isCostos: boolean) =>
-    groupNavChildren(visibleNavChildren(finanzas, { isCostos, vista }));
+    groupNavChildren(visibleNavChildren(finanzas, { isCostos, vista, permissions: conGastos }));
 
-  it("quien registra: Mi día · Ingresos · Cuadre, sin nada de costos con salarios ni reportes", () => {
+  it("quien registra: Mi día · Ingresos · Costos y gastos (sin planilla) · Cuadre, sin reportes", () => {
     const bloques = panel("REGISTRA", false);
-    expect(bloques.map((b) => b.section)).toEqual(["Mi día", "Ingresos", "Cuadre"]);
+    expect(bloques.map((b) => b.section)).toEqual(["Mi día", "Ingresos", "Costos y gastos", "Cuadre"]);
+    expect(bloques[2].items.map((i) => i.href)).toEqual(["/finanzas/gastos", "/finanzas/recurrentes", "/finanzas/tarjetas"]);
     expect(bloques[0].items.map((i) => i.href)).toEqual(["/finanzas/pendientes"]);
     const hrefs = bloques.flatMap((b) => b.items.map((i) => i.href));
     expect(hrefs).not.toContain("/finanzas/equilibrio");

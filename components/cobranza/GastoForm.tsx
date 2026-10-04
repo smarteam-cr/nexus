@@ -22,9 +22,12 @@ export default function GastoForm({
   gasto,
   todayISO,
   allGastos,
+  apiBase = "/api/cobranza/gastos",
   onClose,
   onSaved,
 }: {
+  /** La ruta contra la que guarda. Gastos del mes (rediseño de Finanzas, 2026-10-03) usa /api/finanzas/gastos. */
+  apiBase?: string;
   /** null = crear; con valor = editar. */
   gasto: GastoPuntualDTO | null;
   todayISO: string;
@@ -67,13 +70,13 @@ export default function GastoForm({
     };
     try {
       if (gasto) {
-        await fetchJson(`/api/cobranza/gastos/${gasto.id}`, {
+        await fetchJson(`${apiBase}/${gasto.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
       } else {
-        await fetchJson("/api/cobranza/gastos", {
+        await fetchJson(apiBase, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -107,7 +110,7 @@ export default function GastoForm({
             type="button"
             disabled={!puedeGuardar}
             onClick={submit}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary text-primary-fg hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Guardando…" : gasto ? "Guarda los cambios" : "Agrega el gasto"}
           </button>

@@ -35,6 +35,11 @@ interface Props {
   initialTarjetas: TarjetaDTO[];
   costos: CostoRecurrenteDTO[];
   todayISO: string;
+  /**
+   * La ruta contra la que lee y guarda. Finanzas › Tarjetas de quien registra (rediseño 2026-10-03) usa
+   * /api/finanzas/tarjetas, que trae y asigna solo costos que no son salarios.
+   */
+  apiBase?: string;
 }
 
 type FormState = {
@@ -97,7 +102,7 @@ const ESTIMADO_TIP =
 
 const esVigente = (c: TarjetaCostoDTO) => c.activo && c.finalizadoEl === null;
 
-export default function TarjetasPanel({ initialTarjetas, costos, todayISO }: Props) {
+export default function TarjetasPanel({ initialTarjetas, costos, todayISO, apiBase = "/api/cobranza/costos/tarjetas" }: Props) {
   const toast = useToast();
   const [tarjetas, setTarjetas] = useState(initialTarjetas);
   const [form, setForm] = useState<FormState | null>(null);
@@ -108,7 +113,7 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO }: Pro
 
   async function refrescar() {
     try {
-      const data = await fetchJson<{ tarjetas: TarjetaDTO[] }>("/api/cobranza/costos/tarjetas");
+      const data = await fetchJson<{ tarjetas: TarjetaDTO[] }>(apiBase);
       setTarjetas(data.tarjetas);
     } catch {
       // Best-effort: si el refresco falla, lo escrito ya está en la base.
@@ -131,13 +136,13 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO }: Pro
     setGuardando(true);
     try {
       if (editandoId) {
-        await fetchJson(`/api/cobranza/costos/tarjetas/${editandoId}`, {
+        await fetchJson(`${apiBase}/${editandoId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
       } else {
-        await fetchJson("/api/cobranza/costos/tarjetas", {
+        await fetchJson(apiBase, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -156,7 +161,7 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO }: Pro
 
   async function borrarTarjeta(t: TarjetaDTO) {
     try {
-      await fetchJson(`/api/cobranza/costos/tarjetas/${t.id}`, { method: "DELETE" });
+      await fetchJson(`${apiBase}/${t.id}`, { method: "DELETE" });
       await refrescar();
       toast.success("Tarjeta eliminada. Los costos que tenía asignados siguen vivos.");
     } catch (e) {
@@ -166,7 +171,7 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO }: Pro
 
   async function toggleCosto(tarjeta: TarjetaDTO, costoId: string, asignar: boolean) {
     try {
-      await fetchJson(`/api/cobranza/costos/tarjetas/${tarjeta.id}/costos`, {
+      await fetchJson(`${apiBase}/${tarjeta.id}/costos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ costoId, asignar }),
@@ -346,6 +351,7 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO }: Pro
         <SaldoModal
           tarjeta={saldoDe}
           todayISO={todayISO}
+          apiBase={apiBase}
           onClose={() => setSaldoDe(null)}
           onGuardado={async () => {
             setSaldoDe(null);
@@ -586,11 +592,13 @@ function Dato({
 function SaldoModal({
   tarjeta,
   todayISO,
+  apiBase,
   onClose,
   onGuardado,
 }: {
   tarjeta: TarjetaDTO;
   todayISO: string;
+  apiBase: string;
   onClose: () => void;
   onGuardado: () => void;
 }) {
@@ -607,7 +615,7 @@ function SaldoModal({
     }
     setGuardando(true);
     try {
-      await fetchJson(`/api/cobranza/costos/tarjetas/${tarjeta.id}/saldo`, {
+      await fetchJson(`${apiBase}/${tarjeta.id}/saldo`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ saldoUsado: n, saldoAlDia: fecha }),

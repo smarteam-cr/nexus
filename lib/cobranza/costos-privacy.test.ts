@@ -379,6 +379,12 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
       "lo que no cuadra entre los cobros y las facturas de Odoo y Mercury: INGRESOS, la misma superficie que Cobranza › Odoo; gate cobranza.read",
     reportes:
       "proyección, reportes y corte quincenal de COBRANZA, que eran pestañas de /cobranza; gate cobranza.read",
+    gastos:
+      "gastos del mes SIN salarios: gastos puntuales, recurrentes que no son salario y el TOTAL de la planilla; gate gastos.read. Lo vigila P5",
+    recurrentes:
+      "costos recurrentes SIN salarios, pedidos con la categoría filtrada en la consulta; gate gastos.read. Lo vigila P5",
+    tarjetas:
+      "tarjetas con sus costos SIN salarios, filtrados en la consulta; gate gastos.read. Lo vigila P5",
   };
 
   /**
@@ -490,4 +496,69 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
       }
     });
   }
+});
+
+// ── P5 · Gastos SIN salarios (rediseño de Finanzas, 2026-10-03) ──────────────
+// Quien registra (ADMIN, permiso `gastos`) anota los gastos del mes, los recurrentes que no son salarios y las tarjetas.
+// Son rutas y páginas NUEVAS, separadas de las de Costos: las de Costos siguen siendo solo de Super Admin (P1-P4 intactos).
+// Lo que estas pruebas frenan es que una de las nuevas lea un salario o se olvide de su guard.
+describe("P5 · gastos sin salarios: guard propio y nunca un salario", () => {
+  const raiz = process.cwd();
+  const apiBase = path.join(raiz, "app", "api", "finanzas");
+  const paginasBase = path.join(raiz, "app", "(shell)", "finanzas");
+
+  function rutasBajo(dir: string): string[] {
+    if (!fs.existsSync(dir)) return [];
+    const out: string[] = [];
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) out.push(...rutasBajo(abs));
+      else if (e.name === "route.ts") out.push(abs);
+    }
+    return out;
+  }
+  const rutas = ["gastos", "recurrentes", "tarjetas"].flatMap((d) => rutasBajo(path.join(apiBase, d)));
+  const paginas = ["gastos", "recurrentes", "tarjetas"].map((d) => path.join(paginasBase, d, "page.tsx"));
+
+  it("el escaneo encuentra las rutas (guard del propio test)", () => {
+    expect(rutas.length).toBeGreaterThanOrEqual(7);
+  });
+
+  for (const abs of rutas) {
+    const rel = path.relative(raiz, abs).replace(/\\/g, "/");
+    it(`${rel}: cada handler arranca con guardGastosAccess o guardGastosEditor`, () => {
+      const src = fs.readFileSync(abs, "utf8");
+      const handlers = [...src.matchAll(/export async function (GET|POST|PATCH|PUT|DELETE)\b[\s\S]*?\n}/g)];
+      expect(handlers.length, `${rel} no exporta handlers`).toBeGreaterThan(0);
+      for (const h of handlers) {
+        const cuerpo = h[0];
+        const primerAwait = cuerpo.indexOf("await ");
+        expect(
+          /await guardGastos(Access|Editor)\(\)/.test(cuerpo.slice(primerAwait, primerAwait + 40)),
+          `${rel} ${h[1]}: lo primero no es el guard de gastos`,
+        ).toBe(true);
+      }
+      // El guard de Costos abriría salarios a quien no debe: estas rutas no lo usan, ni lo necesitan.
+      expect(src).not.toMatch(/guardCostosAccess/);
+    });
+  }
+
+  for (const abs of [...rutas, ...paginas]) {
+    const rel = path.relative(raiz, abs).replace(/\\/g, "/");
+    it(`${rel}: si pide costos o tarjetas, los pide sin salarios`, () => {
+      // Sin comentarios: un docblock que NOMBRA la llamada no es la llamada.
+      const src = fs.readFileSync(abs, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      for (const m of src.matchAll(/\b(loadCostos|loadTarjetas)\(((?:[^()]|\([^()]*\))*)\)/g)) {
+        expect(m[2], `${rel}: ${m[1]}(${m[2]}) sin { sinSalarios: true }`).toMatch(/sinSalarios:\s*true/);
+      }
+      expect(src, `${rel} nombra la categoría Salario`).not.toMatch(/"SALARIO"/);
+    });
+  }
+
+  it("lib/finanzas/gastos-server.ts no nombra la categoría Salario y filtra por la lista sin salarios", () => {
+    const src = fs.readFileSync(path.join(raiz, "lib", "finanzas", "gastos-server.ts"), "utf8");
+    expect(src).not.toMatch(/"SALARIO"/);
+    expect(src).toMatch(/CATEGORIAS_SIN_SALARIO/);
+    expect(src).toMatch(/loadCostos\(\{ sinSalarios: true \}\)/);
+  });
 });

@@ -2280,7 +2280,8 @@ export async function deleteIngresoVariable(ingresoId: string) {
   }
 }
 
-export async function createGasto(data: z.infer<typeof gastoCreateSchema>) {
+/** `registradoPor` (2026-10-03): quién lo anota, para que quien supervisa pueda revisarlo. */
+export async function createGasto(data: z.infer<typeof gastoCreateSchema>, registradoPor: string | null = null) {
   return prisma.gastoPuntual.create({
     data: {
       nombre: data.nombre,
@@ -2289,6 +2290,7 @@ export async function createGasto(data: z.infer<typeof gastoCreateSchema>) {
       fecha: dayUTC(data.fecha),
       tags: data.tags,
       notas: data.notas ?? null,
+      registradoPor,
     },
     select: { id: true },
   });

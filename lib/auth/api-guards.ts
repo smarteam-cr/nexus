@@ -600,6 +600,32 @@ export async function guardCobranzaEditor(): Promise<
 }
 
 /**
+ * GASTOS SIN SALARIOS (rediseño de Finanzas, 2026-10-03): los gastos del mes, los recurrentes que no son salarios y las
+ * tarjetas. Lectura con `gastos.read`; anotar, editar y borrar con `gastos.write`. PRIMERA línea de todo handler bajo
+ * /api/finanzas/gastos, /recurrentes y /tarjetas (lo vigila costos-privacy.test.ts, P5).
+ *
+ * ⛔ Este guard NO abre salarios: esas rutas filtran la categoría Salario en la consulta misma y rechazan escribirla. Los
+ * salarios siguen detrás de `guardCostosAccess`.
+ */
+export async function guardGastosAccess(): Promise<Awaited<ReturnType<typeof requireInternalUser>> | NextResponse> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!(await can(guard.teamMember, "gastos", "read"))) {
+    return NextResponse.json({ error: "Tu rol no tiene acceso a los gastos." }, { status: 403 });
+  }
+  return guard;
+}
+
+export async function guardGastosEditor(): Promise<Awaited<ReturnType<typeof requireInternalUser>> | NextResponse> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!(await can(guard.teamMember, "gastos", "write"))) {
+    return NextResponse.json({ error: "Tu rol puede ver los gastos pero no anotarlos." }, { status: 403 });
+  }
+  return guard;
+}
+
+/**
  * COSTOS RECURRENTES + CAJA NETA (Cobranza fase 4): SOLO dirección
  * (SUPER_ADMIN, fuente única `COSTOS_ROLES`). Los salarios estimados son la
  * información más sensible del sistema — ADMIN NO pasa ni por API, y esta capa

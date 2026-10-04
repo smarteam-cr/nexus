@@ -104,6 +104,7 @@ import {
 import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguinaldo";
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
 import { facturadoEnOdooSinCuenta } from "@/lib/finanzas/facturado-sin-cuenta";
+import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
 import type { ComparacionConExcel } from "@/lib/finanzas/cobranza-contra-excel";
 import { cargarEnLaCalleContraExcel, type PorCobrarParaExcel } from "@/lib/finanzas/cobranza-contra-excel-server";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
@@ -1420,8 +1421,14 @@ export interface CostoRecurrenteDTO {
   updatedAt: string;
 }
 
-export async function loadCostos(): Promise<CostoRecurrenteDTO[]> {
+/**
+ * Los costos recurrentes. `sinSalarios` (rediseño de Finanzas, 2026-10-03): solo herramientas y fijos de operación, para
+ * las pantallas de quien registra. ⛔ El filtro va EN LA CONSULTA, no después: un salario no sale de la base para esas
+ * pantallas ni por error.
+ */
+export async function loadCostos(opciones: { sinSalarios?: boolean } = {}): Promise<CostoRecurrenteDTO[]> {
   const filas = await prisma.costoRecurrente.findMany({
+    where: opciones.sinSalarios ? { categoria: { in: [...CATEGORIAS_SIN_SALARIO] } } : undefined,
     include: { teamMember: { select: { name: true } } },
     orderBy: [{ categoria: "asc" }, { nombre: "asc" }],
   });
@@ -1454,11 +1461,18 @@ export interface GastoPuntualDTO {
   fecha: string; // YYYY-MM-DD
   tags: string[];
   notas: string | null;
+  /** Quién lo anotó (2026-10-03). null = se anotó antes de que se guardara. */
+  registradoPor: string | null;
   createdAt: string;
 }
 
-export async function loadGastos(): Promise<GastoPuntualDTO[]> {
-  const filas = await prisma.gastoPuntual.findMany({ orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] });
+/** Los gastos puntuales; con `periodo` ("YYYY-MM"), solo los de ese mes (rediseño de Finanzas, 2026-10-03). */
+export async function loadGastos(opciones: { periodo?: string } = {}): Promise<GastoPuntualDTO[]> {
+  const rango = opciones.periodo ? rangoDelMes(opciones.periodo) : null;
+  const filas = await prisma.gastoPuntual.findMany({
+    where: rango ? { fecha: { gte: rango.desde, lt: rango.hasta } } : undefined,
+    orderBy: [{ fecha: "desc" }, { createdAt: "desc" }],
+  });
   return filas.map((g) => ({
     id: g.id,
     nombre: g.nombre,
@@ -1467,8 +1481,15 @@ export async function loadGastos(): Promise<GastoPuntualDTO[]> {
     fecha: isoDay(g.fecha)!,
     tags: g.tags,
     notas: g.notas,
+    registradoPor: g.registradoPor,
     createdAt: iso(g.createdAt)!,
   }));
+}
+
+/** El primer día del mes y el primero del siguiente, en UTC (las fechas de la base son días). */
+function rangoDelMes(periodo: string): { desde: Date; hasta: Date } {
+  const [y, m] = periodo.split("-").map(Number) as [number, number];
+  return { desde: new Date(Date.UTC(y, m - 1, 1)), hasta: new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1)) };
 }
 
 export interface CostoMovimientoDTO {
@@ -1632,11 +1653,16 @@ export interface TarjetaDTO {
 
 /** `hoyISO` entra por parámetro (fecha de Costa Rica, la resuelve el llamador):
  *  el motor de tarjetas no puede leer el reloj — ver lib/cobranza/tarjetas.ts. */
-export async function loadTarjetas(hoyISO: string): Promise<TarjetaDTO[]> {
+/**
+ * Las tarjetas. `sinSalarios` (rediseño de Finanzas, 2026-10-03): cada tarjeta trae solo sus costos que no son salarios,
+ * para las pantallas de quien registra. El filtro va en la consulta.
+ */
+export async function loadTarjetas(hoyISO: string, opciones: { sinSalarios?: boolean } = {}): Promise<TarjetaDTO[]> {
   const filas = await prisma.tarjetaCredito.findMany({
     include: {
       titular: { select: { name: true } },
       costos: {
+        where: opciones.sinSalarios ? { costo: { categoria: { in: [...CATEGORIAS_SIN_SALARIO] } } } : undefined,
         include: {
           costo: {
             select: {

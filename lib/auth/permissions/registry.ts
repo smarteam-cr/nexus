@@ -260,6 +260,19 @@ export const PERMISSION_SECTIONS = [
       { key: "write", label: "Editar (incluye liberar facturas)", enforced: true },
     ],
   },
+  /* Gastos SIN salarios (rediseño de Finanzas, 2026-10-03, docs/finanzas-rediseno-plan.md): los gastos del mes, los costos
+     recurrentes que no son salarios y las tarjetas. Es lo que registra Dinia. ⛔ Los salarios —planilla, aguinaldo,
+     comisiones de vendedor y los costos de categoría Salario— NO entran acá: siguen solo para Super Admin, con su guarda
+     propia (`guardCostosAccess`) y sus pruebas de privacidad. Las rutas de este permiso viven bajo /api/finanzas/gastos,
+     /recurrentes y /tarjetas, y nunca leen un salario. */
+  {
+    key: "gastos",
+    label: "Gastos (sin salarios)",
+    actions: [
+      { key: "read", label: "Ver los gastos del mes, los recurrentes y las tarjetas", enforced: true },
+      { key: "write", label: "Anotar y editar gastos, recurrentes y tarjetas", enforced: true },
+    ],
+  },
   {
     key: "conocimientos",
     label: "Conocimientos",

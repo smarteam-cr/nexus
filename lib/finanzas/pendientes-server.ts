@@ -13,7 +13,9 @@ import { comisionesPorCobrar } from "@/lib/cobranza/comisiones-partner";
 import { cargarDiferencias, contarEmparejado } from "@/lib/cobranza/odoo/servicio";
 import { cargarDiferenciasMercury, cargarEmparejadoMercury } from "@/lib/cobranza/mercury/servicio";
 import { montosPorMoneda, type DiferenciaOdoo, type MontoEnMoneda } from "@/lib/cobranza/odoo/diferencias";
+import { prisma } from "@/lib/db/prisma";
 import { filasPorQuien, juntarDiferencias } from "./conciliacion";
+import { gastosDelMesPendiente, mesAnterior, periodoDe } from "./gastos";
 import type { DatosDePendientes } from "./pendientes";
 
 /** Las líneas que dicen «ya pagada allá, por cobrar acá»: son su propia tarea, «Registrar pagos». */
@@ -33,13 +35,23 @@ function filasYPlata(lineas: readonly DiferenciaOdoo[]): { n: number; montos: Mo
 }
 
 export async function medirPendientes(todayISO: string): Promise<DatosDePendientes> {
-  const [cola, comisiones, odoo, mercury, empOdoo, empMercury] = await Promise.all([
+  const periodos = [mesAnterior(periodoDe(todayISO)), periodoDe(todayISO)];
+  const [cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres] = await Promise.all([
     loadColaCobros(todayISO),
     loadComisionesPartner(),
     cargarDiferencias(),
     cargarDiferenciasMercury(),
     contarEmparejado(),
     cargarEmparejadoMercury().then((e) => e.conteos),
+    /* Cuántos gastos hay anotados en el mes anterior y en este, y si ya se avisó que están todos. */
+    prisma.gastoPuntual.findMany({
+      where: { fecha: { gte: new Date(`${periodos[0]}-01T00:00:00Z`) } },
+      select: { fecha: true },
+    }),
+    prisma.cierreMes.findMany({
+      where: { periodo: { in: periodos } },
+      select: { periodo: true, estado: true, gastosListosPor: true },
+    }),
   ]);
 
   /* Cobranza: lo mismo que las tarjetas de la cola. */
@@ -84,7 +96,15 @@ export async function medirPendientes(todayISO: string): Promise<DatosDePendient
     porEmparejar: { odoo: empOdoo.porEmparejar, mercury: empMercury.sinEmparejar },
     diferencias: Math.max(0, porQuien.mias - pagosDetectados.n),
     decisiones: porQuien.decisiones,
-    gastosDelMes: null,
+    gastosDelMes: gastosDelMesPendiente({
+      hoyISO: todayISO,
+      /* Un mes cerrado tampoco pide nada: ya se dio por bueno. */
+      listos: new Set(cierres.filter((c) => c.gastosListosPor || c.estado === "CERRADO").map((c) => c.periodo)),
+      anotados: gastosDeLosMeses.reduce((m, g) => {
+        const p = g.fecha.toISOString().slice(0, 7);
+        return m.set(p, (m.get(p) ?? 0) + 1);
+      }, new Map<string, number>()),
+    }),
     devueltos: [],
   };
 }

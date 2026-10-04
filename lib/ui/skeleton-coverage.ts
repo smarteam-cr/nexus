@@ -42,6 +42,9 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/conciliacion": { modo: "own" },
   "finanzas/integraciones": { modo: "own" },
   "finanzas/reportes": { modo: "own" },
+  "finanzas/gastos": { modo: "own" },
+  "finanzas/recurrentes": { modo: "own" },
+  "finanzas/tarjetas": { modo: "own" },
   "finanzas/costos": { modo: "own" },
   // Las 3 hojas por categoría comparten el MISMO skeleton (CostosCategoriaSkeleton),
   // pero se declaran `own` y no `inherits`: su forma NO es la del Resumen (que
