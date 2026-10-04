@@ -21,3 +21,22 @@ export function ordenDelContrato(existentes: readonly string[], canon: readonly 
   const resto = existentes.filter((k) => !enCanon.has(k) && k !== CIERRE);
   return [...canonicas, ...resto, ...(presentes.has(CIERRE) ? [CIERRE] : [])];
 }
+
+/**
+ * El texto de fábrica del cierre ANTES del contrato de FUNDAUNA: hablaba de pasar «del nivel actual al
+ * que sigue» (la escala, que salió del diagnóstico). El cierre lo cura una persona y no se regenera,
+ * así que los diagnósticos viejos lo seguían diciendo (visto en la prueba con FUNDAUNA, 2026-10-04).
+ */
+export const CIERRE_DE_FABRICA_VIEJO =
+  "Con este diagnóstico sobre la mesa, el siguiente paso es la planificación: cómo pasamos del nivel actual al que sigue.";
+
+/**
+ * El cierre al día: si conserva el texto de fábrica VIEJO, tal cual, pasa al de hoy. Si alguien lo
+ * cambió (aunque sea una coma), no se toca: es suyo. Devuelve la data nueva, o null si no hay nada que hacer.
+ */
+export function cierreAlDia(data: unknown, subheadDeHoy: string): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  if (typeof d.subhead !== "string" || d.subhead.trim() !== CIERRE_DE_FABRICA_VIEJO) return null;
+  return { ...d, subhead: subheadDeHoy };
+}

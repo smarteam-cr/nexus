@@ -460,9 +460,10 @@ export interface CtxDelDiagnostico {
   /**
    * Las filas de «Acciones coherentes». La «Explicación del problema» las pinta como su cuarta
    * columna —consecuencias positivas: cómo genera dinero cada acción—, como FUNDAUNA, sin
-   * escribirlas dos veces.
+   * escribirlas dos veces. `fuera`: la acción quedó fuera del alcance contratado (se marca, no se
+   * esconde: sigue siendo la que ataca su causa, pero no se le promete al cliente en este proyecto).
    */
-  acciones?: Array<{ id: string; accion: string; detalle: string; ataca: string }>;
+  acciones?: Array<{ id: string; accion: string; detalle: string; ataca: string; fuera?: boolean }>;
   /**
    * Los resultados medibles del HANDOFF (lib/handoff/resultados-medibles.ts). Los objetivos
    * cuantitativos apuntan a uno (`resultado: "R1"`) y muestran su línea base, meta y plazo desde acá:

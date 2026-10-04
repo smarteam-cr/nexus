@@ -32,7 +32,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { DIAGNOSTICO_CANVAS, diagnosticoSectionSequence } from "@/lib/canvas/canvas-defs";
+import { DIAGNOSTICO_CANVAS, DIAGNOSTICO_CIERRE_DEFAULT, diagnosticoSectionSequence } from "@/lib/canvas/canvas-defs";
 import {
   createOnDemandCanvas,
   reconcileOnDemandCanvasSections,
@@ -48,7 +48,7 @@ import { ordenarObjetivosDelDiagnostico } from "@/lib/canvas/diagnostico-hilo";
 import { fuentesDelDiagnostico } from "@/lib/canvas/diagnostico-fuentes";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
-import { ordenDelContrato } from "@/lib/canvas/diagnostico-contrato";
+import { cierreAlDia, ordenDelContrato } from "@/lib/canvas/diagnostico-contrato";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { leerOProponerResultados } from "@/lib/handoff/proponer-resultados";
 import { documentoAprobado, MENSAJE_APROBADO, trasRegenerar } from "@/lib/canvas/estado-del-documento-servidor";
@@ -158,6 +158,7 @@ export async function runDiagnosticoGeneration(opts: {
   if (sectionCount > 0) {
     await ocultarSeccionesRetiradas(canvasId, prevSecs.map((s) => s.key), SECCIONES_RETIRADAS_DEL_DIAGNOSTICO);
     await llevarAlOrdenDelContrato(canvasId);
+    await ponerAlDiaElCierre(canvasId);
     // Si ya se había presentado, lo regenerado es la versión siguiente: la presentada queda intacta.
     await trasRegenerar(canvasId);
   }
@@ -168,6 +169,17 @@ export async function runDiagnosticoGeneration(opts: {
 export function estaRevisada(data: unknown): boolean {
   const r = (data as { revisadaAt?: unknown } | null | undefined)?.revisadaAt;
   return typeof r === "string" && r.trim() !== "";
+}
+
+/** El cierre con el texto de fábrica viejo (hablaba de la escala) pasa al de hoy (ver `cierreAlDia`). */
+async function ponerAlDiaElCierre(canvasId: string): Promise<void> {
+  const bloque = await prisma.canvasBlock.findFirst({
+    where: { blockType: "CARD", section: { canvasId, key: "cierre" } },
+    select: { id: true, data: true },
+  });
+  const nueva = bloque ? cierreAlDia(bloque.data, DIAGNOSTICO_CIERRE_DEFAULT.subhead) : null;
+  if (!bloque || !nueva) return;
+  await prisma.canvasBlock.update({ where: { id: bloque.id }, data: { data: nueva as Prisma.InputJsonValue } });
 }
 
 /** Reordena las secciones del canvas al orden del contrato. Solo escribe las que cambian de lugar. */

@@ -54,6 +54,11 @@ export interface HerramientasEjecucionData {
 const arr = <T,>(v: T[] | undefined): T[] => (Array.isArray(v) ? v : []);
 const esSi = (v: string) => /^s[ií]/i.test((v ?? "").trim());
 const esFuera = (v: string) => /fuera/i.test(v ?? "");
+/** Lo que se lee (el cliente, el PDF): «Sí» / «No» / «Dentro» / «Fuera», como en FUNDAUNA. La IA
+ *  escribe «si», «no», «dentro»: al editar se ve tal cual está guardado. */
+const leerSiNo = (v: string) => (esSi(v) ? "Sí" : /^no\b/i.test((v ?? "").trim()) ? "No" : (v ?? ""));
+const leerAlcance = (v: string) =>
+  esFuera(v) ? "Fuera" : /dentro/i.test(v ?? "") ? "Dentro" : (v ?? "");
 
 function Intro({ value, editable, onCommit, placeholder }: { value?: string; editable?: boolean; onCommit: (v: string) => void; placeholder: string }) {
   if (!editable && !value) return null;
@@ -73,9 +78,17 @@ export const AccionesEjecucionSection: FC<SectionProps<AccionesEjecucionData>> =
   const set = (next: Partial<AccionesEjecucionData>) => onChange?.({ ...data, ...next });
   const setCampo = (i: number, campo: keyof AccionEjecucion, v: string) => set({ acciones: replaceAt(acciones, i, { ...acciones[i], [campo]: v }) });
   if (!editable && !acciones.length) return null;
-  const celda = (i: number, campo: keyof AccionEjecucion, placeholder: string, className?: string) => (
-    <Editable as="span" className={className} editable={editable} value={acciones[i][campo] ?? ""} placeholder={placeholder} onCommit={(v) => setCampo(i, campo, v)} />
-  );
+  const celda = (
+    i: number,
+    campo: keyof AccionEjecucion,
+    placeholder: string,
+    className?: string,
+    paraLeer?: (v: string) => string,
+  ) => {
+    const guardado = acciones[i][campo] ?? "";
+    const valor = !editable && paraLeer ? paraLeer(guardado) : guardado;
+    return <Editable as="span" className={className} editable={editable} value={valor} placeholder={placeholder} onCommit={(v) => setCampo(i, campo, v)} />;
+  };
   return (
     <>
       <Intro value={data.intro} editable={editable} onCommit={(v) => set({ intro: v })} placeholder="Una frase que enmarca las acciones (opcional)…" />
@@ -107,8 +120,8 @@ export const AccionesEjecucionSection: FC<SectionProps<AccionesEjecucionData>> =
                 <td>{celda(i, "ataca", "F1")}</td>
                 <td>{celda(i, "mueve", "OBJ-01")}</td>
                 <td>{celda(i, "hub", "Sales Hub")}</td>
-                <td className={esSi(a.quickWin) ? "stl-accion-si" : undefined}>{celda(i, "quickWin", "no")}</td>
-                <td className={esFuera(a.alcance) ? "stl-accion-fuera-txt" : "stl-accion-dentro"}>{celda(i, "alcance", "dentro")}</td>
+                <td className={esSi(a.quickWin) ? "stl-accion-si" : undefined}>{celda(i, "quickWin", "no", undefined, leerSiNo)}</td>
+                <td className={esFuera(a.alcance) ? "stl-accion-fuera-txt" : "stl-accion-dentro"}>{celda(i, "alcance", "dentro", undefined, leerAlcance)}</td>
                 {editable && (
                   <td className="stl-props-actions">
                     <RemoveBtn onClick={() => set({ acciones: removeAt(acciones, i) })} title="Quitar esta acción" />

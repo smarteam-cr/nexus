@@ -353,8 +353,9 @@ export const ProblemaDiagnosticoSection: FC<SectionProps<ProblemaDiagnosticoData
           <div className="stl-hilo-col stl-hilo-positivas">
             <h3 className="stl-hilo-titulo">Consecuencias positivas <span>acciones coherentes y cómo generan dinero</span></h3>
             {acciones.map((a, i) => (
-              <div key={i} className="stl-hilo-card">
+              <div key={i} className={a.fuera ? "stl-hilo-card stl-hilo-fuera" : "stl-hilo-card"}>
                 {a.id && <span className="stl-codigo">{a.id}</span>}
+                {a.fuera && <span className="stl-hilo-fuera-tag">Fuera de este alcance</span>}
                 <h4 className="stl-hilo-card-titulo">{a.accion}</h4>
                 {a.detalle && <p className="stl-hilo-card-detalle">{a.detalle}</p>}
                 {a.ataca && (

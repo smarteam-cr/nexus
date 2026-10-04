@@ -536,7 +536,7 @@ export const KickoffCtaSection: FC<SectionProps<CtaData>> = ({ data, editable, o
               label={d.buttonLabel}
               url={d.buttonUrl}
               target={d.buttonTarget}
-              labelPlaceholder="Agendá la primera sesión…"
+              labelPlaceholder="Agenda la primera sesión…"
               onLabel={(v) => set({ buttonLabel: v })}
               onUrl={(v) => set({ buttonUrl: v })}
               onTarget={(v) => set({ buttonTarget: v })}
@@ -547,7 +547,7 @@ export const KickoffCtaSection: FC<SectionProps<CtaData>> = ({ data, editable, o
               <p style={{ marginTop: 10, fontSize: 11, color: "var(--dark-text-muted)" }}>
                 {(d.buttonLabel ?? "").trim()
                   ? "⚠ Falta el enlace: el cliente todavía NO ve este botón."
-                  : "El botón se muestra al cliente cuando completás texto y enlace."}
+                  : "El botón se muestra al cliente cuando completas texto y enlace."}
               </p>
             )}
           </div>

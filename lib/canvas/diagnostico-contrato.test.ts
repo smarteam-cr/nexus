@@ -7,7 +7,8 @@ import {
 import { PLANIFICACION_SECTION_DEFS } from "@/components/landing/configs/planificacion.defs";
 import { IMPLEMENTACION_SECTION_DEFS } from "@/components/landing/configs/implementacion.defs";
 import { DIAGNOSTICO_CANVAS, IMPLEMENTACION_CANVAS, PLANIFICACION_CANVAS } from "./canvas-defs";
-import { ordenDelContrato } from "./diagnostico-contrato";
+import { CIERRE_DE_FABRICA_VIEJO, cierreAlDia, ordenDelContrato } from "./diagnostico-contrato";
+import * as canvasDefs from "./canvas-defs";
 
 /**
  * EL CONTRATO DEL DIAGNÓSTICO (2026-10-02): las secciones y el orden del diagnóstico que hizo Caroline
@@ -101,5 +102,30 @@ describe("ordenDelContrato: un diagnóstico viejo vuelve al orden de FUNDAUNA al
 
   it("un documento ya en orden no cambia", () => {
     expect(ordenDelContrato(CONTRATO_FUNDAUNA, canon)).toEqual(CONTRATO_FUNDAUNA);
+  });
+});
+
+describe("el cierre de fábrica viejo se pone al día (hablaba de la escala)", () => {
+  const HOY = "Cuando apruebes este diagnóstico, pasamos a la planificación.";
+
+  it("el texto viejo, tal cual, pasa al de hoy y conserva lo demás", () => {
+    const viejo = { eyebrow: "El siguiente paso", headline: "De entender a construir", subhead: CIERRE_DE_FABRICA_VIEJO };
+    expect(cierreAlDia(viejo, HOY)).toEqual({ ...viejo, subhead: HOY });
+  });
+
+  it("lo que una persona cambió no se toca, aunque sea una coma", () => {
+    expect(cierreAlDia({ subhead: CIERRE_DE_FABRICA_VIEJO.replace(":", ",") }, HOY)).toBeNull();
+    expect(cierreAlDia({ subhead: "Nos vemos el lunes para la planificación." }, HOY)).toBeNull();
+  });
+
+  it("sin data o sin bajada, nada que hacer", () => {
+    expect(cierreAlDia(null, HOY)).toBeNull();
+    expect(cierreAlDia({ headline: "x" }, HOY)).toBeNull();
+  });
+
+  it("el cierre de fábrica de HOY ya no habla de niveles", () => {
+    const { DIAGNOSTICO_CIERRE_DEFAULT } = canvasDefs;
+    expect(DIAGNOSTICO_CIERRE_DEFAULT.subhead).not.toBe(CIERRE_DE_FABRICA_VIEJO);
+    expect(DIAGNOSTICO_CIERRE_DEFAULT.subhead).not.toMatch(/nivel/i);
   });
 });

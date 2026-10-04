@@ -64,6 +64,12 @@ export function ctxDelDiagnostico(sections: ReadonlyArray<{ key: string; data: u
   return {
     acciones: lista
       .filter((a) => a && typeof a === "object")
-      .map((a) => ({ id: texto(a.id), accion: texto(a.accion), detalle: texto(a.detalle), ataca: texto(a.ataca) })),
+      .map((a) => ({
+        id: texto(a.id),
+        accion: texto(a.accion),
+        detalle: texto(a.detalle),
+        ataca: texto(a.ataca),
+        fuera: /fuera/i.test(texto(a.alcance)),
+      })),
   };
 }
