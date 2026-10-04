@@ -26,6 +26,7 @@ describe("vistaFinanzasDe", () => {
   it("cada vista tiene su pantalla de entrada dentro de Finanzas", () => {
     for (const href of Object.values(ENTRADA_DE_VISTA)) expect(href.startsWith("/finanzas/")).toBe(true);
     expect(ENTRADA_DE_VISTA.REGISTRA).toBe("/finanzas/pendientes");
+    expect(ENTRADA_DE_VISTA.SUPERVISA).toBe("/finanzas/supervision");
     expect(ENTRADA_DE_VISTA.DIRECCION).toBe("/finanzas/equilibrio");
   });
 });

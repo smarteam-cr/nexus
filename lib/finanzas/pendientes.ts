@@ -13,6 +13,7 @@
  * PURO: recibe los conteos ya medidos y arma las tareas. La medición vive en pendientes-server.ts.
  */
 import { textoDeMontos, type MontoEnMoneda } from "@/lib/cobranza/odoo/diferencias";
+import type { Devuelto } from "./revision";
 
 export interface DatosDePendientes {
   /** Cuotas que ya tocaba facturar y siguen sin factura. */
@@ -32,7 +33,7 @@ export interface DatosDePendientes {
   /** El mes de los gastos, y si ya se avisó que están todos. null = la etapa de gastos todavía no existe. */
   gastosDelMes?: { periodo: string; etiqueta: string; anotados: number; listos: boolean } | null;
   /** Lo que quien supervisa devolvió, con su comentario. */
-  devueltos?: Array<{ id: string; texto: string; comentario: string; por: string; href: string }>;
+  devueltos?: Devuelto[];
 }
 
 export type Cuando = "hoy" | "semana";

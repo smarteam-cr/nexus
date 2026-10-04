@@ -57,6 +57,7 @@ export default function CobranzaClient({
   initialRiesgo,
   puedeEditar,
   abrirPago = false,
+  abrirCuenta = null,
   todayISO,
 }: {
   initialCola: ColaCobroRow[];
@@ -67,6 +68,8 @@ export default function CobranzaClient({
   puedeEditar: boolean;
   /** Abrir el buscador de «Registrar pago» al entrar (llega desde Pendientes). */
   abrirPago?: boolean;
+  /** Abrir la cuenta de una vez (un pago devuelto por quien supervisa llega con ?cuenta=). */
+  abrirCuenta?: string | null;
   todayISO: string;
 }) {
   const toast = useToast();
@@ -77,7 +80,7 @@ export default function CobranzaClient({
   const [riesgo, setRiesgo] = useState(initialRiesgo);
 
   // UI compartida entre tabs (drawer + flujo global de registrar pago).
-  const [openCuentaId, setOpenCuentaId] = useState<string | null>(null);
+  const [openCuentaId, setOpenCuentaId] = useState<string | null>(abrirCuenta);
   const [pagoTarget, setPagoTarget] = useState<ColaCobroRow | null>(null);
   const [buscadorOpen, setBuscadorOpen] = useState(abrirPago);
   const [manualOpen, setManualOpen] = useState(false);

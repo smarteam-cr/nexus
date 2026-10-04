@@ -626,6 +626,20 @@ export async function guardGastosEditor(): Promise<Awaited<ReturnType<typeof req
 }
 
 /**
+ * SUPERVISIÓN DE FINANZAS (rediseño 2026-10-03): revisar lo que registró el equipo y cerrar el mes. Es de dirección
+ * (Super Admin), con la misma fuente única que Costos (`COSTOS_ROLES`): el cierre lee la planilla. PRIMERA línea de todo
+ * handler bajo /api/finanzas/revision y /api/finanzas/cierre (salvo «Ya lo corregí», que es de quien registró).
+ */
+export async function guardSupervisionFinanzas(): Promise<Awaited<ReturnType<typeof requireInternalUser>> | NextResponse> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!isCostosRole(guard.role)) {
+    return NextResponse.json({ error: "La supervisión de Finanzas es de dirección (Super Admin)." }, { status: 403 });
+  }
+  return guard;
+}
+
+/**
  * COSTOS RECURRENTES + CAJA NETA (Cobranza fase 4): SOLO dirección
  * (SUPER_ADMIN, fuente única `COSTOS_ROLES`). Los salarios estimados son la
  * información más sensible del sistema — ADMIN NO pasa ni por API, y esta capa

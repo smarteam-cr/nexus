@@ -40,12 +40,26 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 
 | | Etapa | Qué deja | Base de datos |
 |---|---|---|---|
-| ⬜ | **Menú por persona** | La vista de cada uno, el panel por vista y la entrada `/finanzas`; Cobranza más corta; «Reportes de cobranza» | columna `vistaFinanzas` |
-| ⬜ | **Pendientes y Conciliación** | La entrada de Dinia y la lista única de lo que no cuadra (Odoo + Mercury) | — |
-| ⬜ | **Dinia en gastos** | Gastos del mes, Recurrentes y Tarjetas sin salarios; quién anotó cada gasto | columna `registradoPor` del gasto |
-| ⬜ | **Revisión** | Supervisión de Alex: decisiones, revisión con «Devolver», cobranza que se complica | tabla `RevisionRegistro` |
+| ✅ | **Menú por persona** | La vista de cada uno, el panel por vista y la entrada `/finanzas`; Cobranza más corta; «Reportes de cobranza» | columna `vistaFinanzas` |
+| ✅ | **Pendientes y Conciliación** | La entrada de Dinia y la lista única de lo que no cuadra (Odoo + Mercury) | — |
+| ✅ | **Dinia en gastos** | Gastos del mes, Recurrentes y Tarjetas sin salarios; quién anotó cada gasto | columna `registradoPor` del gasto |
+| ✅ | **Revisión** | Supervisión de Alex: decisiones, revisión con «Devolver», cobranza que se complica | tabla `RevisionRegistro` |
 | ⬜ | **Cierre del mes** | Cerrar y reabrir; tipo de cambio en pantalla; meses cerrados en el punto de equilibrio | tabla `CierreMes` |
 | ⬜ | **Gasto sin Excel** | El punto de equilibrio lee los gastos de Nexus desde octubre; Mercury en el punto de equilibrio y en «Actualizar» | — |
+
+## Cómo funciona la revisión
+
+- Entra lo que registró alguien del equipo que **no** es Super Admin desde el 1 de agosto de 2026 (el primer mes en que
+  Dinia registró pagos): los pagos que dio por cobrados (`Cobro.confirmadoPor`) y los gastos que anotó
+  (`GastoPuntual.registradoPor`). Las firmas de importación (libro de Alex, planilla de facturaciones) no son de nadie
+  del equipo y no entran.
+- «Está bien» guarda la **huella** de los números (monto, moneda, fecha en que entró, referencia y factura del pago;
+  nombre, monto, moneda y fecha del gasto). Si cambian, vuelve con «Cambió después de tu revisión». La huella se calcula
+  en el servidor, nunca la manda la pantalla.
+- «Devolver» pide un comentario y le llega a quien lo registró en Pendientes, con «Ir a corregirlo» y «Ya lo corregí».
+  Devolver no deshace nada. Lo corregido vuelve a Supervisión marcado.
+- Avisos: registrado más de 30 días después de entrar la plata (o del gasto), una fecha de entrada posterior al
+  registro, un cobro sin factura marcada, un gasto a futuro.
 
 Todo el SQL va en un solo archivo, `scripts/sql/2026-10-03-finanzas-rediseno.sql`, **antes del deploy**. ⚠ La columna de
 `TeamMember` la lee cada página de Nexus: sin el SQL aplicado, nada carga (el deploy lo detecta y vuelve atrás solo).

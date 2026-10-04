@@ -130,9 +130,10 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(hrefs).not.toContain("/finanzas/costos/planillas");
   });
 
-  it("quien supervisa: Ingresos · Costos y gastos · Cuadre · Reportes, sin la entrada de quien registra", () => {
+  it("quien supervisa: Mi área · Ingresos · Costos y gastos · Cuadre · Reportes, sin la entrada de quien registra", () => {
     const bloques = panel("SUPERVISA", true);
-    expect(bloques.map((b) => b.section)).toEqual(["Ingresos", "Costos y gastos", "Cuadre", "Reportes"]);
+    expect(bloques.map((b) => b.section)).toEqual(["Mi área", "Ingresos", "Costos y gastos", "Cuadre", "Reportes"]);
+    expect(bloques[0].items[0].href).toBe("/finanzas/supervision");
     const hrefs = bloques.flatMap((b) => b.items.map((i) => i.href));
     expect(hrefs).not.toContain("/finanzas/pendientes");
     expect(hrefs).toContain("/finanzas/costos/planillas");
@@ -153,9 +154,9 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     for (const c of finanzas.children ?? []) expect(c.vistas, `${c.href} no declara sus vistas`).toBeDefined();
   });
 
-  it("higiene: un typo en `section` crearía un bloque extra — hoy hay exactamente 5", () => {
+  it("higiene: un typo en `section` crearía un bloque extra — hoy hay exactamente 6", () => {
     const secciones = (finanzas.children ?? []).map((c) => c.section).filter(Boolean);
-    expect(new Set(secciones)).toEqual(new Set(["Mi día", "Ingresos", "Costos y gastos", "Cuadre", "Reportes"]));
+    expect(new Set(secciones)).toEqual(new Set(["Mi día", "Mi área", "Ingresos", "Costos y gastos", "Cuadre", "Reportes"]));
   });
 });
 

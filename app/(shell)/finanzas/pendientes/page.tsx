@@ -15,6 +15,7 @@ import { nombreDeQuienSupervisa } from "@/lib/finanzas/vista-server";
 import { armarPendientes, type TareaPendiente } from "@/lib/finanzas/pendientes";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { EmptyState, PageHeader } from "@/components/ui";
+import YaLoCorregi from "@/components/finanzas/YaLoCorregi";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,9 @@ export default async function PendientesPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
   const todayISO = crDateParts(new Date()).dateKey;
-  const [datos, supervisor] = await Promise.all([medirPendientes(todayISO), nombreDeQuienSupervisa()]);
+  /* Lo devuelto es de quien lo registró; un Super Admin que abre Pendientes ve todo lo devuelto. */
+  const quien = ctx.role === "SUPER_ADMIN" ? null : ctx.user.email;
+  const [datos, supervisor] = await Promise.all([medirPendientes(todayISO, quien), nombreDeQuienSupervisa()]);
   const tareas = armarPendientes(datos);
   const hoy = tareas.filter((t) => t.cuando === "hoy");
   const semana = tareas.filter((t) => t.cuando === "semana");
@@ -98,7 +101,10 @@ export default async function PendientesPage() {
               <>
                 <h2 className="px-4 pb-2 pt-3.5 text-[15px] font-semibold text-fg">Devuelto por {supervisor}</h2>
                 {devueltos.map((d) => (
-                  <div key={d.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-t border-warn-line px-4 py-3">
+                  <div
+                    key={`${d.tipo}:${d.registroId}`}
+                    className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-t border-warn-line px-4 py-3"
+                  >
                     <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-0.5">
                       <span className="text-sm font-semibold text-fg">{d.texto}</span>
                       <span className="text-[13px] text-warn-ink">
@@ -106,8 +112,9 @@ export default async function PendientesPage() {
                       </span>
                     </div>
                     <Link href={d.href} className={BOTON_BLANCO}>
-                      Corregir
+                      Ir a corregirlo
                     </Link>
+                    <YaLoCorregi tipo={d.tipo} registroId={d.registroId} supervisor={supervisor} />
                   </div>
                 ))}
               </>

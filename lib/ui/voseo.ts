@@ -113,8 +113,8 @@ export const AGUDAS_DE_TUTEO: ReadonlySet<string> = new Set([
   "dejé", "cambié", "registré", "quedé", "encontré", "contesté",
   // …y el vendedor cuenta lo que entendió (el guion de la exploración de venta)
   "entendí",
-  // …y quien registra avisa que terminó el mes («Ya anoté todos los gastos de octubre»)
-  "anoté",
+  // …y quien registra avisa que terminó el mes («Ya anoté todos los gastos de octubre») o que arregló algo devuelto
+  "anoté", "corregí",
   // Sustantivos, gentilicios y nombres
   "país", "multipaís", "inglés", "interés", "cortés", "comité", "caché", "josé", "andrés", "mié",
 ]);

@@ -16,6 +16,7 @@ import { montosPorMoneda, type DiferenciaOdoo, type MontoEnMoneda } from "@/lib/
 import { prisma } from "@/lib/db/prisma";
 import { filasPorQuien, juntarDiferencias } from "./conciliacion";
 import { gastosDelMesPendiente, mesAnterior, periodoDe } from "./gastos";
+import { devueltosPara } from "./revision-server";
 import type { DatosDePendientes } from "./pendientes";
 
 /** Las líneas que dicen «ya pagada allá, por cobrar acá»: son su propia tarea, «Registrar pagos». */
@@ -34,9 +35,16 @@ function filasYPlata(lineas: readonly DiferenciaOdoo[]): { n: number; montos: Mo
   };
 }
 
-export async function medirPendientes(todayISO: string): Promise<DatosDePendientes> {
+/**
+ * Lo que se lee para medir Pendientes, en una vuelta. Supervisión lo reusa (la cola y las dos listas de Conciliación
+ * son lo más caro de leer y las dos pantallas las necesitan).
+ *
+ * `quien`: el email de quien mira, para traerle lo que LE devolvieron (lo que él o ella registró). null = todo lo
+ * devuelto (un Super Admin que abre Pendientes).
+ */
+export async function cargarFuentesDePendientes(todayISO: string, quien: string | null = null) {
   const periodos = [mesAnterior(periodoDe(todayISO)), periodoDe(todayISO)];
-  const [cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres] = await Promise.all([
+  const [cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres, devueltos] = await Promise.all([
     loadColaCobros(todayISO),
     loadComisionesPartner(),
     cargarDiferencias(),
@@ -52,7 +60,20 @@ export async function medirPendientes(todayISO: string): Promise<DatosDePendient
       where: { periodo: { in: periodos } },
       select: { periodo: true, estado: true, gastosListosPor: true },
     }),
+    devueltosPara(quien),
   ]);
+  return { cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres, devueltos };
+}
+
+export type FuentesDePendientes = Awaited<ReturnType<typeof cargarFuentesDePendientes>>;
+
+export async function medirPendientes(todayISO: string, quien: string | null = null): Promise<DatosDePendientes> {
+  return medirDesdeFuentes(await cargarFuentesDePendientes(todayISO, quien), todayISO);
+}
+
+/** Las tareas a partir de lo leído. Sin base ni red: lo mismo que mide Pendientes, para quien ya tiene las fuentes. */
+export function medirDesdeFuentes(f: FuentesDePendientes, todayISO: string): DatosDePendientes {
+  const { cola, comisiones, odoo, mercury, empOdoo, empMercury, gastosDeLosMeses, cierres, devueltos } = f;
 
   /* Cobranza: lo mismo que las tarjetas de la cola. */
   const resumen = resumenAntiguedad(cola, todayISO);
@@ -105,6 +126,6 @@ export async function medirPendientes(todayISO: string): Promise<DatosDePendient
         return m.set(p, (m.get(p) ?? 0) + 1);
       }, new Map<string, number>()),
     }),
-    devueltos: [],
+    devueltos,
   };
 }

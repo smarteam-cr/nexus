@@ -20,7 +20,7 @@ import ConciliacionClient from "@/components/finanzas/ConciliacionClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function ConciliacionPage() {
+export default async function ConciliacionPage({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
   const vista = vistaFinanzasDe(ctx.teamMember);
@@ -40,6 +40,8 @@ export default async function ConciliacionPage() {
       <ConciliacionClient
         vista={vista}
         supervisor={supervisor}
+        /* Supervisión › «Decidir» llega con ?ver=decisiones. */
+        soloDecisiones={(await searchParams).ver === "decisiones"}
         puedeEditar={puedeEditar}
         copias={{
           odoo: copiaOdoo?.ultimaOkEn ? horaDeCostaRica(copiaOdoo.ultimaOkEn) : null,

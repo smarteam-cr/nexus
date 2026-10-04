@@ -33,6 +33,7 @@ export default function ConciliacionClient({
   puedeEditar,
   copias,
   conteos,
+  soloDecisiones = false,
 }: {
   vista: VistaFinanzas;
   /** El nombre de pila de quien supervisa (lib/finanzas/vista-server.ts). */
@@ -43,6 +44,8 @@ export default function ConciliacionClient({
   copias: { odoo: string | null; mercury: string | null };
   /** Con qué número abre cada pestaña. Después se mueven solos. */
   conteos: { noCuadra: number; porEmparejarOdoo: number; porEmparejarMercury: number };
+  /** Se llegó desde Supervisión › «Decidir»: la lista arranca con las decisiones. */
+  soloDecisiones?: boolean;
 }) {
   const toast = useToast();
   const [tab, setTab] = useState<Pestana>("no-cuadra");
@@ -125,6 +128,7 @@ export default function ConciliacionClient({
           fuente="todas"
           vista={vista}
           supervisor={supervisor}
+          quienInicial={soloDecisiones ? "decisiones" : undefined}
           puedeEditar={puedeEditar}
           recarga={recarga}
           onIrAEmparejar={() => setTab("emparejar")}

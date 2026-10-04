@@ -14,7 +14,7 @@ import CobranzaClient from "@/components/cobranza/CobranzaClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function CobranzaPage({ searchParams }: { searchParams: Promise<{ pago?: string }> }) {
+export default async function CobranzaPage({ searchParams }: { searchParams: Promise<{ pago?: string; cuenta?: string }> }) {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "cobranza", "read"))) redirect("/clients");
   /* ⚠ La API ya exige `cobranza.write` para liberar facturas y deshacer cobros, pero la pantalla
@@ -24,6 +24,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Pro
   const puedeEditar = await can(ctx.teamMember, "cobranza", "write");
 
   const todayISO = crDateParts(new Date()).dateKey; // "hoy" = día calendario CR
+  const { pago, cuenta } = await searchParams;
   /* Rediseño de Finanzas (2026-10-03): Cobranza es la página de trabajo. Proyección, reportes y corte quincenal se leen
      en Finanzas › Reportes de cobranza; las comisiones de aliado, en su propia página. */
   const [cola, cartera, alertas, riesgo] = await Promise.all([
@@ -44,7 +45,9 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Pro
         initialRiesgo={riesgo}
         puedeEditar={puedeEditar}
         /* «Registrar pago» de Pendientes llega con ?pago=1: abre el buscador de una vez. */
-        abrirPago={(await searchParams).pago === "1"}
+        abrirPago={pago === "1"}
+        /* Un pago devuelto por quien supervisa llega con ?cuenta=: abre esa cuenta, donde se corrige. */
+        abrirCuenta={cuenta && /^[\w-]{8,40}$/.test(cuenta) ? cuenta : null}
         todayISO={todayISO}
       />
     </div>

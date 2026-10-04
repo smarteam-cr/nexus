@@ -34,13 +34,9 @@ export function vistaFinanzasDe(p: { roleEnum: string | null | undefined; vistaF
   return p.vistaFinanzas === "DIRECCION" ? "DIRECCION" : "SUPERVISA";
 }
 
-/**
- * La pantalla de entrada de cada vista: adonde lleva «Finanzas» en el menú.
- * ⚠ Cada etapa del rediseño la mueve a su pantalla cuando esa pantalla existe.
- */
+/** La pantalla de entrada de cada vista: adonde lleva «Finanzas» en el menú. */
 export const ENTRADA_DE_VISTA: Record<VistaFinanzas, string> = {
   REGISTRA: "/finanzas/pendientes",
-  // ⚠ Hasta que exista Supervisión (etapa «Revisión»), quien supervisa entra al punto de equilibrio.
-  SUPERVISA: "/finanzas/equilibrio",
+  SUPERVISA: "/finanzas/supervision",
   DIRECCION: "/finanzas/equilibrio",
 };

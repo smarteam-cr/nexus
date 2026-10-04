@@ -484,9 +484,9 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
       const idxGate = src.indexOf("isCostosRole(");
       // `load[A-Z]…` cubre los futuros (loadTarjetas, loadMovimientosCostos…);
       // exige mayúscula para no matchear `loading`. Desde el rediseño de Finanzas
-      // (2026-10-03) también cuentan los `cargar…`/`contar…` y las lecturas directas
-      // `prisma.…`: una página puede leer datos sin llamarlos «load».
-      const llamadasLoad = [...src.matchAll(/\b(?:load|cargar|contar)[A-Z]\w*\(|\bprisma\./g)];
+      // (2026-10-03) también cuentan los `cargar…`/`contar…`/`medir…` y las lecturas
+      // directas `prisma.…`: una página puede leer datos sin llamarlos «load».
+      const llamadasLoad = [...src.matchAll(/\b(?:load|cargar|contar|medir)[A-Z]\w*\(|\bprisma\./g)];
       expect(llamadasLoad.length, `finanzas/${rel} no llama a ningún load*`).toBeGreaterThan(0);
       for (const m of llamadasLoad) {
         expect(

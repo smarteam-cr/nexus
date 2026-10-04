@@ -170,6 +170,7 @@ export default function DiferenciasOdoo({
   fuente = "odoo",
   vista = "SUPERVISA",
   supervisor = "quien supervisa",
+  quienInicial,
   onIrAEmparejar,
   onPendientes,
   puedeEditar = true,
@@ -184,6 +185,8 @@ export default function DiferenciasOdoo({
   vista?: VistaFinanzas;
   /** El nombre de pila de quien supervisa, para decirle a quien registra «Esperan a Alex». */
   supervisor?: string;
+  /** Con qué filtro arranca la lista juntas, cuando se llega con uno (Supervisión › «Decidir» abre las decisiones). */
+  quienInicial?: FiltroQuien;
   /**
    * Sube cada vez que alguien aprieta «Actualizar desde Odoo» (OdooClient): la lista se vuelve a leer con la copia
    * nueva, sin desmontarse, así lo que tenías abierto sigue abierto.
@@ -212,7 +215,7 @@ export default function DiferenciasOdoo({
   const [medidoMercury, setMedidoMercury] = useState<Medido | null>(null);
   /* Los filtros de la lista juntas. Quien registra arranca viendo lo suyo; quien supervisa, todo. */
   const [filtroFuente, setFiltroFuente] = useState<FiltroFuente>("todas");
-  const [filtroQuien, setFiltroQuien] = useState<FiltroQuien>(vista === "REGISTRA" ? "mias" : "todas");
+  const [filtroQuien, setFiltroQuien] = useState<FiltroQuien>(quienInicial ?? (vista === "REGISTRA" ? "mias" : "todas"));
   const [cargando, setCargando] = useState(true);
   /* Una escritura a la vez: la clave de la que está en curso, para decir «Guardando…» en su botón. */
   const [ocupado, setOcupado] = useState<string | null>(null);
