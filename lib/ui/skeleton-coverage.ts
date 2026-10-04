@@ -44,6 +44,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "finanzas/reportes": { modo: "own" },
   "finanzas/gastos": { modo: "own" },
   "finanzas/supervision": { modo: "own" },
+  "finanzas/cierre": { modo: "own" },
   "finanzas/recurrentes": { modo: "own" },
   "finanzas/tarjetas": { modo: "own" },
   "finanzas/costos": { modo: "own" },

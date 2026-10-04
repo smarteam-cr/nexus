@@ -7,6 +7,8 @@
 import "server-only";
 import { cargarFuentesDePendientes, medirDesdeFuentes } from "./pendientes-server";
 import { cargarRevision, type DatosDeRevision } from "./revision-server";
+import { cargarCierre } from "./cierre-server";
+import { faltanParaCerrar, mesParaCerrar } from "./cierre";
 import { juntarDiferencias } from "./conciliacion";
 import { cobranzaQueSeComplica, decisionesPendientes, type CobranzaQueSeComplica, type DecisionPendiente } from "./supervision";
 
@@ -16,6 +18,8 @@ export interface DatosDeSupervision {
   filasPorDecidir: number;
   revision: DatosDeRevision;
   complicada: CobranzaQueSeComplica;
+  /** El cierre del mes anterior: cuántas de las líneas que frenan están listas. */
+  cierre: { periodo: string; cerrado: boolean; listas: number; total: number };
   /** Lo que tiene el equipo por hacer: lo mismo que ve en su Pendientes. */
   equipo: {
     porFacturar: number;
@@ -26,13 +30,25 @@ export interface DatosDeSupervision {
 }
 
 export async function medirSupervision(todayISO: string): Promise<DatosDeSupervision> {
-  const [fuentes, revision] = await Promise.all([cargarFuentesDePendientes(todayISO, null), cargarRevision()]);
+  const periodoDelCierre = mesParaCerrar(todayISO);
+  const [fuentes, revision, cierre] = await Promise.all([
+    cargarFuentesDePendientes(todayISO, null),
+    cargarRevision(),
+    cargarCierre(periodoDelCierre, todayISO),
+  ]);
+  const bloquean = cierre.items.filter((i) => i.bloquea);
   const pendientes = medirDesdeFuentes(fuentes, todayISO);
   const decisiones = decisionesPendientes(juntarDiferencias(fuentes.odoo.inconsistencias, fuentes.mercury.inconsistencias));
   return {
     decisiones,
     filasPorDecidir: decisiones.reduce((s, d) => s + d.filas, 0),
     revision,
+    cierre: {
+      periodo: periodoDelCierre,
+      cerrado: cierre.cierre?.estado === "CERRADO",
+      listas: bloquean.length - faltanParaCerrar(cierre.items).length,
+      total: bloquean.length,
+    },
     complicada: cobranzaQueSeComplica(fuentes.cola, todayISO),
     equipo: {
       porFacturar: pendientes.porFacturar.n,

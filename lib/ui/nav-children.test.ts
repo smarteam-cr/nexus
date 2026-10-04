@@ -133,7 +133,7 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
   it("quien supervisa: Mi área · Ingresos · Costos y gastos · Cuadre · Reportes, sin la entrada de quien registra", () => {
     const bloques = panel("SUPERVISA", true);
     expect(bloques.map((b) => b.section)).toEqual(["Mi área", "Ingresos", "Costos y gastos", "Cuadre", "Reportes"]);
-    expect(bloques[0].items[0].href).toBe("/finanzas/supervision");
+    expect(bloques[0].items.map((i) => i.href)).toEqual(["/finanzas/supervision", "/finanzas/cierre"]);
     const hrefs = bloques.flatMap((b) => b.items.map((i) => i.href));
     expect(hrefs).not.toContain("/finanzas/pendientes");
     expect(hrefs).toContain("/finanzas/costos/planillas");

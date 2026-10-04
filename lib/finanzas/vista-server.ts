@@ -22,3 +22,16 @@ export async function nombreDeQuienSupervisa(): Promise<string> {
   });
   return candidatos.length === 1 ? (candidatos[0]!.name.split(" ")[0] ?? "quien supervisa") : "quien supervisa";
 }
+
+/**
+ * El nombre de pila de quien registra (Dinia), para que el cierre y la supervisión digan quién resuelve cada cosa: el
+ * ADMIN activo del área Admin. Si no hay exactamente uno, «el equipo». ⚠ Solo es un texto: no decide nada.
+ */
+export async function nombreDeQuienRegistra(): Promise<string> {
+  const candidatos = await prisma.teamMember.findMany({
+    where: { roleEnum: "ADMIN", deactivatedAt: null, area: { equals: "Admin", mode: "insensitive" } },
+    select: { name: true },
+    take: 2,
+  });
+  return candidatos.length === 1 ? (candidatos[0]!.name.split(" ")[0] ?? "el equipo") : "el equipo";
+}

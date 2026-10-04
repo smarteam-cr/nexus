@@ -44,7 +44,7 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 | ✅ | **Pendientes y Conciliación** | La entrada de Dinia y la lista única de lo que no cuadra (Odoo + Mercury) | — |
 | ✅ | **Dinia en gastos** | Gastos del mes, Recurrentes y Tarjetas sin salarios; quién anotó cada gasto | columna `registradoPor` del gasto |
 | ✅ | **Revisión** | Supervisión de Alex: decisiones, revisión con «Devolver», cobranza que se complica | tabla `RevisionRegistro` |
-| ⬜ | **Cierre del mes** | Cerrar y reabrir; tipo de cambio en pantalla; meses cerrados en el punto de equilibrio | tabla `CierreMes` |
+| ✅ | **Cierre del mes** | Cerrar y reabrir; tipo de cambio en pantalla; meses cerrados en el punto de equilibrio | tabla `CierreMes` |
 | ⬜ | **Gasto sin Excel** | El punto de equilibrio lee los gastos de Nexus desde octubre; Mercury en el punto de equilibrio y en «Actualizar» | — |
 
 ## Cómo funciona la revisión
@@ -60,6 +60,20 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
   Devolver no deshace nada. Lo corregido vuelve a Supervisión marcado.
 - Avisos: registrado más de 30 días después de entrar la plata (o del gasto), una fecha de entrada posterior al
   registro, un cobro sin factura marcada, un gasto a futuro.
+
+## Cómo funciona el cierre
+
+- `/finanzas/cierre` abre en el mes anterior al de hoy. La tira del año dice cómo está cada mes: cerrado, completo y sin
+  cerrar, en curso, por venir, o qué le falta.
+- Frenan el cierre: las dos quincenas de planilla; los gastos (desde octubre de 2026 el aviso de Dinia, antes lo que el
+  punto de equilibrio dice que le falta al Excel de egresos, sin la planilla); el tipo de cambio firmado por una persona
+  (el que cargó el script no cuenta hasta que alguien lo confirma); la revisión de ese mes al día. Lo de Ingresos y
+  Conciliación se muestra con «No frena el cierre».
+- Solo se cierra un mes que terminó. Cerrar guarda quién, cuándo y los números del punto de equilibrio en dólares
+  (egresos, facturado, cobrado, ingresos). Reabrir pide un motivo y deja guardados los números del cierre.
+- El punto de equilibrio tiene una columna «Cierre» (✓ Cerrado · Cambió después del cierre · Preliminar) y el margen a
+  la fecha dice qué meses del margen están sin cerrar.
+- La calidad de cada mes sale de la misma lista de egresos que el reporte (`cargarEgresosDelAnio`).
 
 Todo el SQL va en un solo archivo, `scripts/sql/2026-10-03-finanzas-rediseno.sql`, **antes del deploy**. ⚠ La columna de
 `TeamMember` la lee cada página de Nexus: sin el SQL aplicado, nada carga (el deploy lo detecta y vuelve atrás solo).

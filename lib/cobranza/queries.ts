@@ -105,6 +105,8 @@ import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguin
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
 import { facturadoEnOdooSinCuenta } from "@/lib/finanzas/facturado-sin-cuenta";
 import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
+import { cambioDespuesDelCierre, type NumerosDelCierre } from "@/lib/finanzas/cierre";
+import { crDateParts } from "@/lib/jobs/time";
 import type { ComparacionConExcel } from "@/lib/finanzas/cobranza-contra-excel";
 import { cargarEnLaCalleContraExcel, type PorCobrarParaExcel } from "@/lib/finanzas/cobranza-contra-excel-server";
 import { esquemaDesactualizado } from "@/lib/db/esquema";
@@ -2328,41 +2330,21 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
   inconsistencias: Inconsistencia[];
   /** Lo que está en la calle según el último Excel de Alex, por moneda, con la diferencia explicada. */
   cobranzaContraExcel: ComparacionConExcel;
+  /**
+   * Los meses cerrados (Finanzas › Cierre del mes, 2026-10-03): el día del cierre y si algún número cambió después.
+   * `cambio` null = no se puede saber en esta moneda (los números del cierre se guardan en dólares).
+   */
+  cierres: Array<{ periodo: string; cerradoEn: string; cambio: boolean | null }>;
 }
 
 /**
- * El reporte anual de equilibrio, armado desde la base.
- *
- * Este loader NO calcula: lee, serializa a los tipos del módulo puro y delega en
- * `calcularEquilibrio`. Toda la aritmética —incluida la única conversión de moneda del
- * sistema— vive en `lib/finanzas/equilibrio.ts`, que se puede testear sin base.
- *
- * De dónde sale cada rubro del egreso:
- *  · PLANILLA          `PagoPlanilla`, la ÚNICA serie mensual real que ya existía.
- *                      Va por QUINCENA (dos "conceptos" por mes) para que un mes con
- *                      una sola quincena salga PARCIAL en vez de parecer barato.
- *  · RESERVA_AGUINALDO derivada del aguinaldo proyectado ÷ 12, repartida en los doce
- *                      meses. Siempre ESTIMADO: es un devengo, no plata que se movió.
- *  · el resto          `EgresoMensual`, el libro que siembra el Excel.
+ * Los egresos del año como los lee el reporte de equilibrio: el libro de egresos del Excel, la planilla por quincena y la
+ * reserva de aguinaldo. Vive aparte de `loadReporteAnual` para que el cierre del mes (lib/finanzas/cierre-server.ts) mida
+ * la calidad de cada mes con la MISMA lista, sin leer los ingresos.
  */
-export async function loadReporteAnual(
-  anio: number,
-  hoyISO: string,
-  opciones?: {
-    monedaPresentacion?: MonedaEq;
-    ventana?: VentanaEquilibrio;
-    divisorAguinaldo?: number;
-    /** Default `PARTNERSHIP_CUBRE_EL_PISO`. Existe para poder medir el otro criterio. */
-    partnershipCubreElPiso?: boolean;
-  },
-): Promise<ReporteAnualDTO> {
+export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor = 12) {
   const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
-  const desde = dayUTC(`${anio}-01-01`);
-  const hasta = dayUTC(`${anio}-12-31`);
-  const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
-
-  const [filasEgreso, filasPlanilla, filasCobro, filasComision, filasTasa, aguinaldo, costosActivos, filasVenta, filasNoVenta] =
-    await Promise.all([
+  const [filasEgreso, filasPlanilla, aguinaldo] = await Promise.all([
     prisma.egresoMensual.findMany({
       where: { periodo: { in: periodos } },
       select: { periodo: true, categoria: true, concepto: true, conceptoClave: true, monto: true, moneda: true, monedaInferida: true },
@@ -2371,72 +2353,7 @@ export async function loadReporteAnual(
       where: { periodo: { in: periodos } },
       select: { periodo: true, quincena: true, monto: true, moneda: true },
     }),
-    prisma.cobro.findMany({
-      // Por período, o porque se facturó o se cobró en el año: lo facturado va al mes de emisión y
-      // lo cobrado al mes en que entró, así que un cobro de otro período puede ser plata de este
-      // año. Al 2026-09-13 no hay ninguno; sin el OR, el primero desaparecería sin aviso.
-      where: {
-        OR: [
-          { periodo: { in: periodos } },
-          { fechaEmision: { gte: desde, lt: inicioDelOtroAnio } },
-          { fechaCobro: { gte: desde, lt: inicioDelOtroAnio } },
-          // Facturado antes de este año y sin cobrar: sigue en la calle (`porCobrarDeAniosAnteriores`).
-          // Sin esto, el 1 de enero una factura de diciembre sin pagar desaparecía de «Cuentas por cobrar».
-          { fechaEmision: { lt: desde }, estado: { not: "COBRADO" } },
-        ],
-      },
-      select: {
-        periodo: true,
-        monto: true,
-        moneda: true,
-        estado: true,
-        fechaProgramada: true,
-        fechaEmision: true,
-        fechaCobro: true,
-        servicio: { select: { tipoServicio: true } },
-        cuenta: { select: { creditoDias: true } },
-        // Solo para poner cada cobro por cobrar al lado de su factura del Excel de Alex.
-        id: true,
-        cuentaId: true,
-      },
-    }),
-    prisma.comisionPartner.findMany({
-      where: { fecha: { gte: desde, lte: hasta } },
-      select: { fecha: true, monto: true, moneda: true, estado: true, montoEsProyeccion: true },
-    }),
-    prisma.tipoCambioMes.findMany({
-      where: { periodo: { in: periodos } },
-      select: { periodo: true, crcPorUsd: true, fuente: true },
-      // Sin orden explícito, "la primera tasa" la decide el plan de Postgres. Hoy las 12
-      // de 2026 valen 500 y da igual; el día que una difiera, el número cambiaría solo.
-      orderBy: { periodo: "asc" },
-    }),
     loadAguinaldo(anio, hoyISO),
-    // Los costos VIGENTES hoy: la fuente del piso vigente, que es el titular del
-    // reporte. Es el catálogo que una persona mantiene al día — a diferencia del libro
-    // de pagos, que va detrás de la realidad (ver DECISIONS §El piso de hoy).
-    prisma.costoRecurrente.findMany({
-      where: { activo: true, finalizadoEl: null },
-      select: { nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true },
-    }),
-    // Lo vendido, para poder ver el desfase entre vender, facturar y cobrar. Solo los
-    // pipelines que cuentan como venta propia: Shared Selling se declara aparte, en la
-    // lista de inconsistencias, y no se mezcla acá para no dar por decidido lo que no está.
-    prisma.ventaGanada.findMany({
-      where: {
-        estado: "GANADA",
-        excluida: false,
-        pipelineId: { in: [...PIPELINES_VENTA_PROPIA] },
-        fechaCierre: { gte: desde, lte: hasta },
-      },
-      select: { fechaCierre: true, monto: true, moneda: true, montoConvertidoHubspot: true },
-    }),
-    // La plata que entró y no es venta (etapa 10). Solo columnas anteriores a la etapa: el reporte no
-    // se cae si el código llega antes que scripts/sql/2026-09-12-10-ingreso-no-venta.sql.
-    prisma.ingresoVariable.findMany({
-      where: { fecha: { gte: desde, lte: hasta } },
-      select: { fecha: true, monto: true, moneda: true },
-    }),
   ]);
 
   const periodoHoy = periodoDe(hoyISO);
@@ -2478,7 +2395,6 @@ export async function loadReporteAnual(
   // Reserva de aguinaldo: el proyectado del año ÷ 12, en cada mes. Por moneda separada
   // (el aguinaldo nunca se convierte en su propio módulo; acá la conversión, si hace
   // falta, la hace el reporte con la tasa del mes).
-  const divisor = opciones?.divisorAguinaldo ?? 12;
   for (const [moneda, total] of Object.entries(aguinaldo.totalesProyectado)) {
     if (!total) continue;
     const mensual = Math.round((total / divisor) * 100) / 100;
@@ -2494,6 +2410,116 @@ export async function loadReporteAnual(
       });
     }
   }
+
+  return { egresos, filasEgreso, planillaAcc };
+}
+
+/**
+ * El reporte anual de equilibrio, armado desde la base.
+ *
+ * Este loader NO calcula: lee, serializa a los tipos del módulo puro y delega en
+ * `calcularEquilibrio`. Toda la aritmética —incluida la única conversión de moneda del
+ * sistema— vive en `lib/finanzas/equilibrio.ts`, que se puede testear sin base.
+ *
+ * De dónde sale cada rubro del egreso:
+ *  · PLANILLA          `PagoPlanilla`, la ÚNICA serie mensual real que ya existía.
+ *                      Va por QUINCENA (dos "conceptos" por mes) para que un mes con
+ *                      una sola quincena salga PARCIAL en vez de parecer barato.
+ *  · RESERVA_AGUINALDO derivada del aguinaldo proyectado ÷ 12, repartida en los doce
+ *                      meses. Siempre ESTIMADO: es un devengo, no plata que se movió.
+ *  · el resto          `EgresoMensual`, el libro que siembra el Excel.
+ */
+export async function loadReporteAnual(
+  anio: number,
+  hoyISO: string,
+  opciones?: {
+    monedaPresentacion?: MonedaEq;
+    ventana?: VentanaEquilibrio;
+    divisorAguinaldo?: number;
+    /** Default `PARTNERSHIP_CUBRE_EL_PISO`. Existe para poder medir el otro criterio. */
+    partnershipCubreElPiso?: boolean;
+  },
+): Promise<ReporteAnualDTO> {
+  const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
+  const desde = dayUTC(`${anio}-01-01`);
+  const hasta = dayUTC(`${anio}-12-31`);
+  const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
+  const divisor = opciones?.divisorAguinaldo ?? 12;
+
+  const [{ egresos, filasEgreso, planillaAcc }, filasCobro, filasComision, filasTasa, costosActivos, filasVenta, filasNoVenta, filasCierre] =
+    await Promise.all([
+    cargarEgresosDelAnio(anio, hoyISO, divisor),
+    prisma.cobro.findMany({
+      // Por período, o porque se facturó o se cobró en el año: lo facturado va al mes de emisión y
+      // lo cobrado al mes en que entró, así que un cobro de otro período puede ser plata de este
+      // año. Al 2026-09-13 no hay ninguno; sin el OR, el primero desaparecería sin aviso.
+      where: {
+        OR: [
+          { periodo: { in: periodos } },
+          { fechaEmision: { gte: desde, lt: inicioDelOtroAnio } },
+          { fechaCobro: { gte: desde, lt: inicioDelOtroAnio } },
+          // Facturado antes de este año y sin cobrar: sigue en la calle (`porCobrarDeAniosAnteriores`).
+          // Sin esto, el 1 de enero una factura de diciembre sin pagar desaparecía de «Cuentas por cobrar».
+          { fechaEmision: { lt: desde }, estado: { not: "COBRADO" } },
+        ],
+      },
+      select: {
+        periodo: true,
+        monto: true,
+        moneda: true,
+        estado: true,
+        fechaProgramada: true,
+        fechaEmision: true,
+        fechaCobro: true,
+        servicio: { select: { tipoServicio: true } },
+        cuenta: { select: { creditoDias: true } },
+        // Solo para poner cada cobro por cobrar al lado de su factura del Excel de Alex.
+        id: true,
+        cuentaId: true,
+      },
+    }),
+    prisma.comisionPartner.findMany({
+      where: { fecha: { gte: desde, lte: hasta } },
+      select: { fecha: true, monto: true, moneda: true, estado: true, montoEsProyeccion: true },
+    }),
+    prisma.tipoCambioMes.findMany({
+      where: { periodo: { in: periodos } },
+      select: { periodo: true, crcPorUsd: true, fuente: true },
+      // Sin orden explícito, "la primera tasa" la decide el plan de Postgres. Hoy las 12
+      // de 2026 valen 500 y da igual; el día que una difiera, el número cambiaría solo.
+      orderBy: { periodo: "asc" },
+    }),
+    // Los costos VIGENTES hoy: la fuente del piso vigente, que es el titular del
+    // reporte. Es el catálogo que una persona mantiene al día — a diferencia del libro
+    // de pagos, que va detrás de la realidad (ver DECISIONS §El piso de hoy).
+    prisma.costoRecurrente.findMany({
+      where: { activo: true, finalizadoEl: null },
+      select: { nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true },
+    }),
+    // Lo vendido, para poder ver el desfase entre vender, facturar y cobrar. Solo los
+    // pipelines que cuentan como venta propia: Shared Selling se declara aparte, en la
+    // lista de inconsistencias, y no se mezcla acá para no dar por decidido lo que no está.
+    prisma.ventaGanada.findMany({
+      where: {
+        estado: "GANADA",
+        excluida: false,
+        pipelineId: { in: [...PIPELINES_VENTA_PROPIA] },
+        fechaCierre: { gte: desde, lte: hasta },
+      },
+      select: { fechaCierre: true, monto: true, moneda: true, montoConvertidoHubspot: true },
+    }),
+    // La plata que entró y no es venta (etapa 10). Solo columnas anteriores a la etapa: el reporte no
+    // se cae si el código llega antes que scripts/sql/2026-09-12-10-ingreso-no-venta.sql.
+    prisma.ingresoVariable.findMany({
+      where: { fecha: { gte: desde, lte: hasta } },
+      select: { fecha: true, monto: true, moneda: true },
+    }),
+    // Los meses cerrados, para decir cuáles ya dio por buenos quien supervisa y si cambiaron después.
+    prisma.cierreMes.findMany({
+      where: { periodo: { in: periodos }, estado: "CERRADO" },
+      select: { periodo: true, cerradoEn: true, numeros: true },
+    }),
+  ]);
 
   // ── Ingresos ────────────────────────────────────────────────────────────────
   const ingresos: IngresoDeMes[] = [];
@@ -2654,6 +2680,16 @@ export async function loadReporteAnual(
     },
     inconsistencias,
     cobranzaContraExcel,
+    cierres: filasCierre.map((c) => {
+      const fila = reporte.meses.find((m) => m.periodo === c.periodo);
+      const guardados = c.numeros as unknown as NumerosDelCierre | null;
+      return {
+        periodo: c.periodo,
+        cerradoEn: c.cerradoEn ? crDateParts(c.cerradoEn).dateKey : "",
+        cambio:
+          fila && guardados && guardados.moneda === reporte.monedaPresentacion ? cambioDespuesDelCierre(guardados, fila) : null,
+      };
+    }),
   };
 }
 

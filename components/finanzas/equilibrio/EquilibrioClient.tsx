@@ -154,6 +154,9 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
   const noVentaEnCaja = ind.noVentaEnCajaAlDia;
   const margenCaja = round2(ind.cajaAlDia - ind.egresosDeCajaTotal);
   const fueraDelMargen = ind.mesesFueraDelMargen.map(etiquetaMesCorta).join(", ");
+  /* Finanzas › Cierre del mes (2026-10-03): un mes del margen que quien supervisa todavía no cerró es preliminar. */
+  const cerrados = new Set((r.cierres ?? []).map((c) => c.periodo));
+  const sinCerrar = ind.mesesDelMargen.filter((p) => !cerrados.has(p));
 
   // Lo facturado en años anteriores que sigue sin cobrar, en su moneda: no está en el total del año.
   const deAntes = Object.entries(r.porCobrarDeAniosAnteriores)
@@ -287,6 +290,11 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
       detalle:
         [
           fueraDelMargen ? `sin ${fueraDelMargen}: les falta gasto cargado` : null,
+          sinCerrar.length > 0
+            ? sinCerrar.length === ind.mesesDelMargen.length
+              ? "preliminar: ningún mes está cerrado"
+              : `preliminar: ${sinCerrar.map(etiquetaMesCorta).join(", ")} sin cerrar`
+            : null,
           noVentaEnCaja > 0 ? `la caja incluye ${fmtMonto(noVentaEnCaja, moneda)} que no es venta` : null,
         ]
           .filter(Boolean)
@@ -562,6 +570,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
 
           <TablaMeses
             meses={meses}
+            cierres={r.cierres}
             moneda={moneda}
             hayEscenario={hayEscenario}
             onEditar={editar}

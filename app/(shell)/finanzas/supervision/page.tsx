@@ -1,8 +1,8 @@
 /**
- * /finanzas/supervision â€” la pantalla de entrada de quien supervisa (rediseÃ±o de Finanzas, 2026-10-03, etapa Â«RevisiÃ³nÂ»).
+ * /finanzas/supervision — la pantalla de entrada de quien supervisa (rediseño de Finanzas, 2026-10-03, etapa «Revisión»).
  *
- * Lo que espera su decisiÃ³n (las preguntas de negocio de ConciliaciÃ³n), el trabajo del equipo por revisar (pagos y
- * gastos, con Â«EstÃ¡ bienÂ» y Â«DevolverÂ») y la cobranza que se complica. Solo direcciÃ³n (Super Admin): el gate es el
+ * Lo que espera su decisión (las preguntas de negocio de Conciliación), el trabajo del equipo por revisar (pagos y
+ * gastos, con «Está bien» y «Devolver») y la cobranza que se complica. Solo dirección (Super Admin): el gate es el
  * mismo que Costos, y las rutas que escribe lo vuelven a pedir (`guardSupervisionFinanzas`).
  */
 import Link from "next/link";
@@ -12,13 +12,14 @@ import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { crDateParts } from "@/lib/jobs/time";
 import { textoDeMontos } from "@/lib/cobranza/odoo/diferencias";
 import { medirSupervision } from "@/lib/finanzas/supervision-server";
+import { etiquetaMes } from "@/lib/finanzas/gastos";
 import { PageHeader } from "@/components/ui";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import RevisionDelEquipo from "@/components/finanzas/RevisionDelEquipo";
 
 export const dynamic = "force-dynamic";
 
-/** CuÃ¡ntas decisiones se listan acÃ¡; el resto, en ConciliaciÃ³n. */
+/** Cuántas decisiones se listan acá; el resto, en Conciliación. */
 const DECISIONES_A_LA_VISTA = 6;
 
 const RENGLON = "flex justify-between gap-3 text-[13px]";
@@ -38,8 +39,8 @@ export default async function SupervisionPage() {
   return (
     <div className={`${SHELL_DEFAULT} space-y-5`}>
       <PageHeader
-        title="SupervisiÃ³n"
-        description="Lo que espera tu decisiÃ³n, el trabajo del equipo por revisar y la cobranza que se estÃ¡ complicando."
+        title="Supervisión"
+        description="Lo que espera tu decisión, el trabajo del equipo por revisar y la cobranza que se está complicando."
       />
 
       <section aria-label="Resumen" className="grid gap-3 sm:grid-cols-3">
@@ -49,7 +50,7 @@ export default async function SupervisionPage() {
             d.filasPorDecidir > 0 ? "border-warn-line bg-warn-surface text-warn-ink" : "border-line bg-surface text-fg"
           }`}
         >
-          <span className="text-xs">Esperan tu decisiÃ³n</span>
+          <span className="text-xs">Esperan tu decisión</span>
           <span className="text-[22px] font-bold leading-7 tabular-nums">{d.filasPorDecidir}</span>
           <span className="text-xs">Preguntas de negocio de Odoo y Mercury</span>
         </a>
@@ -60,23 +61,32 @@ export default async function SupervisionPage() {
             {porRevisar === 0 ? "Todo revisado" : `De ${equipo}: pagos y gastos`}
           </span>
         </a>
-        <div className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-4 text-fg">
-          <span className="text-xs text-fg-muted">Devuelto, sin corregir</span>
-          <span className="text-[22px] font-bold leading-7 tabular-nums">{d.revision.devueltos.length}</span>
-          <span className="text-xs text-fg-muted">Le llega a quien lo registrÃ³, en Pendientes</span>
-        </div>
+        <Link
+          href={`/finanzas/cierre?mes=${d.cierre.periodo}`}
+          className={`flex flex-col gap-1 rounded-xl border p-4 ${
+            d.cierre.cerrado ? "border-success-line bg-success-surface text-success-ink" : "border-line bg-surface text-fg"
+          }`}
+        >
+          <span className={`text-xs ${d.cierre.cerrado ? "" : "text-fg-muted"}`}>Cierre de {etiquetaMes(d.cierre.periodo)}</span>
+          <span className="text-[22px] font-bold leading-7 tabular-nums">
+            {d.cierre.cerrado ? "✓ Cerrado" : `${d.cierre.listas} de ${d.cierre.total}`}
+          </span>
+          <span className={`text-xs ${d.cierre.cerrado ? "" : "text-fg-muted"}`}>
+            {d.cierre.cerrado ? "Los números quedaron guardados" : "listos para cerrar"}
+          </span>
+        </Link>
       </section>
 
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[2_1_600px] flex-col gap-5">
-          <section id="decisiones" aria-label="Necesitan tu decisiÃ³n" className="rounded-xl border border-line bg-surface">
+          <section id="decisiones" aria-label="Necesitan tu decisión" className="rounded-xl border border-line bg-surface">
             <div className="flex flex-wrap items-baseline gap-x-2.5 px-4 pb-2.5 pt-3.5">
-              <h2 className="text-[15px] font-semibold text-fg">Necesitan tu decisiÃ³n</h2>
+              <h2 className="text-[15px] font-semibold text-fg">Necesitan tu decisión</h2>
               <span className="text-xs text-fg-muted">El equipo no las puede cerrar: son preguntas de negocio</span>
             </div>
             {d.decisiones.length === 0 ? (
               <p className="border-t border-line px-4 py-4 text-[13px] text-fg-muted">
-                Nada espera tu decisiÃ³n. Cuando Odoo o Mercury digan algo que solo tÃº puedes contestar, aparece acÃ¡.
+                Nada espera tu decisión. Cuando Odoo o Mercury digan algo que solo tú puedes contestar, aparece acá.
               </p>
             ) : (
               d.decisiones.slice(0, DECISIONES_A_LA_VISTA).map((x) => (
@@ -100,9 +110,9 @@ export default async function SupervisionPage() {
             )}
             {d.decisiones.length > DECISIONES_A_LA_VISTA && (
               <div className="border-t border-line px-4 py-2.5 text-[13px] text-fg-secondary">
-                Y {d.decisiones.length - DECISIONES_A_LA_VISTA} mÃ¡s.{" "}
+                Y {d.decisiones.length - DECISIONES_A_LA_VISTA} más.{" "}
                 <Link href="/finanzas/conciliacion?ver=decisiones" className="font-semibold text-brand hover:text-brand-light">
-                  Verlas todas en ConciliaciÃ³n
+                  Verlas todas en Conciliación
                 </Link>
               </div>
             )}
@@ -115,7 +125,7 @@ export default async function SupervisionPage() {
           <section aria-label="Cobranza que se complica" className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface-muted p-4">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Cobranza que se complica</span>
             <div className={RENGLON}>
-              <span className="text-fg-secondary">Vencido hace mÃ¡s de 90 dÃ­as</span>
+              <span className="text-fg-secondary">Vencido hace más de 90 días</span>
               <span className="text-right font-semibold tabular-nums text-fg">{c.nMas90 ? textoDeMontos(c.mas90) : "nada"}</span>
             </div>
             <div className={RENGLON}>
@@ -126,7 +136,7 @@ export default async function SupervisionPage() {
               <ul className="flex flex-col gap-1.5 border-t border-line pt-2 text-[13px] text-fg-secondary">
                 {c.clientes.map((x) => (
                   <li key={x.cliente}>
-                    <span className="font-medium text-fg">{x.cliente}</span> Â· {x.texto}
+                    <span className="font-medium text-fg">{x.cliente}</span> · {x.texto}
                   </li>
                 ))}
               </ul>

@@ -33,6 +33,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "finanzas/reportes": { shell: "SHELL_DEFAULT" },
   "finanzas/gastos": { shell: "SHELL_DEFAULT" },
   "finanzas/supervision": { shell: "SHELL_DEFAULT" },
+  "finanzas/cierre": { shell: "SHELL_DEFAULT" },
   "finanzas/recurrentes": { shell: "SHELL_DEFAULT" },
   "finanzas/tarjetas": { shell: "SHELL_DEFAULT" },
   "finanzas/caja-neta": { shell: "SHELL_DEFAULT" },

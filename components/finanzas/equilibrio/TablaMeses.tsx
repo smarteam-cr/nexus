@@ -26,6 +26,11 @@ const TD_NUM = "px-3 py-2 text-right tabular-nums whitespace-nowrap";
 
 interface Props {
   meses: MesEfectivo[];
+  /**
+   * Los meses cerrados en Finanzas › Cierre del mes (2026-10-03). Un mes que ya pasó y no está cerrado es preliminar:
+   * quien supervisa todavía no dio sus números por buenos.
+   */
+  cierres?: ReadonlyArray<{ periodo: string; cerradoEn: string; cambio: boolean | null }>;
   moneda: string;
   hayEscenario: boolean;
   onEditar: (periodo: string, valor: number | null) => void;
@@ -73,7 +78,8 @@ function CeldaFacturado({
   );
 }
 
-export default function TablaMeses({ meses, moneda, hayEscenario, onEditar, onReset, onIgualar, onLimpiar }: Props) {
+export default function TablaMeses({ meses, cierres = [], moneda, hayEscenario, onEditar, onReset, onIgualar, onLimpiar }: Props) {
+  const cierreDe = new Map(cierres.map((c) => [c.periodo, c]));
   // Sube cuando una acción de arriba reescribe la columna entera. Es lo único que puede
   // pisar lo que alguien está tecleando.
   const [generacion, setGeneracion] = useState(0);
@@ -135,6 +141,7 @@ export default function TablaMeses({ meses, moneda, hayEscenario, onEditar, onRe
               <th className={`${TH_CLS} text-right`}>Brecha</th>
               <th className={TH_CLS}>Estado</th>
               <th className={TH_CLS}>Dato del egreso</th>
+              <th className={TH_CLS}>Cierre</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -210,6 +217,21 @@ export default function TablaMeses({ meses, moneda, hayEscenario, onEditar, onRe
                         Parcial
                       </span>
                     )}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {(() => {
+                      const c = cierreDe.get(m.periodo);
+                      if (c?.cambio) {
+                        return (
+                          <span className="text-warn-ink" title={`Se cerró el ${c.cerradoEn} y algún número del mes cambió después.`}>
+                            Cambió después del cierre
+                          </span>
+                        );
+                      }
+                      if (c) return <span className="text-success-ink" title={`Cerrado el ${c.cerradoEn}`}>✓ Cerrado</span>;
+                      if (m.futuro) return <span className="text-fg-muted">—</span>;
+                      return <span className="text-fg-muted">Preliminar</span>;
+                    })()}
                   </td>
                 </tr>
               );

@@ -256,6 +256,7 @@ export const APP_NAV: readonly NavItemConfig[] = [
       { href: "/finanzas/pendientes", label: "Pendientes", section: "Mi día", vistas: ["REGISTRA"] },
       // Lo de quien supervisa: decidir, revisar el trabajo del equipo y cerrar el mes.
       { href: "/finanzas/supervision", label: "Supervisión", section: "Mi área", costosOnly: true, vistas: ["SUPERVISA"] },
+      { href: "/finanzas/cierre", label: "Cierre del mes", section: "Mi área", costosOnly: true, vistas: ["SUPERVISA"] },
       { href: "/cobranza", label: "Cobranza", section: "Ingresos", vistas: ["REGISTRA", "SUPERVISA"] },
       // Las de PARTNER son un ingreso y van en este bloque, visibles para ADMIN. Las de VENDEDOR son remuneración y
       // viven con la planilla, con otro gate: nunca se juntan.
