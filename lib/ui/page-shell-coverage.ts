@@ -70,7 +70,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   "business-cases/new": { custom: "formulario de creación con contenedor propio (candidato a SHELL_NARROW)" },
   "sessions/[id]": { custom: "lectura larga con max-w-5xl propio (candidato a SHELL_WIDE)" },
   "agents/[id]": { custom: "formulario del agente con contenedor propio (candidato a SHELL_NARROW)" },
-  "audits/[id]": { custom: "detalle de auditoría con contenedor propio" },
+  "audits/[id]": { custom: "ficha a todo el ancho con la cabecera de la ficha, como sales/exploraciones/[id] (CabeceraDeFicha)" },
 
   // ── El layout del área pone el contenedor ───────────────────────────────────
   documentacion: { custom: "el layout de documentación pone el árbol + el contenedor" },

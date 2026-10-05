@@ -16,6 +16,7 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { getFreshToken, fetchLifecycleStats } from "./portal-analyzer";
+import { nuevoRegistro } from "@/lib/auditoria-portal/lecturas";
 
 export async function loadPortalLifecycleContext(clientId: string): Promise<string> {
   try {
@@ -26,16 +27,27 @@ export async function loadPortalLifecycleContext(clientId: string): Promise<stri
     if (!account) return "";
 
     const token = await getFreshToken(account.id);
-    // fetchLifecycleStats ya llama a las opciones adentro; el segundo argumento son los
-    // workflows a inspeccionar — vacío: la detección de workflows del ciclo de vida es
-    // parte del análisis de portal completo, no de este contexto barato.
-    const stats = await fetchLifecycleStats(token, []);
+    // La detección de workflows del ciclo de vida corre adentro (una sola llamada). Lo que no se
+    // pudo leer queda en el registro y se dice como tal: un «0 contactos» que en realidad fue un
+    // 403 llevaría al agente a proponer borrar una etapa que se usa.
+    const registro = nuevoRegistro();
+    const stats = await fetchLifecycleStats(token, registro);
+    // Sin las etapas del portal, la lista es la de HubSpot por defecto: presentarla como «lo que
+    // el portal usa HOY» sería falso. Mejor ninguna fuente que una inventada.
+    if (registro.fallidas.some((f) => f.bloque === "etapas_del_portal")) return "";
     if (!stats.contacts.length) return "";
 
-    const lineas = stats.contacts.map((c) => `- ${c.label} (${c.value}): ${c.count} contactos`);
-    const wf = stats.lifecycleWorkflows?.length
-      ? `\nWorkflows activos que mueven el ciclo de vida: ${stats.lifecycleWorkflows.length}`
-      : "";
+    const lineas = stats.contacts.map((c) =>
+      c.count === null
+        ? `- ${c.label} (${c.value}): no se pudo leer cuántos contactos hay`
+        : `- ${c.label} (${c.value}): ${c.count} contactos`,
+    );
+    const wf =
+      stats.lifecycleWorkflows === null
+        ? "\nNo se pudo leer la lista de workflows del portal."
+        : stats.lifecycleWorkflows.length
+          ? `\nWorkflows activos que mueven el ciclo de vida: ${stats.lifecycleWorkflows.length}`
+          : "";
     return `Etapas del ciclo de vida que el portal usa HOY:\n${lineas.join("\n")}${wf}`;
   } catch {
     // Token vencido, scopes insuficientes, portal caído: el plan sale igual, sin esta

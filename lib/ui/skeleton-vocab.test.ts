@@ -43,7 +43,6 @@ const DEUDA = {
     "components/clients/SectionDiscoveryModal.tsx:9",
   ],
   animatePulse: [
-    "app/(shell)/audits/[id]/AuditDetailClient.tsx",
     "app/(shell)/marketing/generacion/EngineClient.tsx",
     "components/clients/ClientContextCards.tsx",
   ],

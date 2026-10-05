@@ -137,7 +137,7 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   agents: { modo: "own" },
   "agents/[id]": { modo: "inherits", de: "agents" },
   audits: { modo: "own" },
-  "audits/[id]": { modo: "inherits", de: "audits" },
+  "audits/[id]": { modo: "own" },
 
   // ── Implementación ──────────────────────────────────────────────────────────
 };

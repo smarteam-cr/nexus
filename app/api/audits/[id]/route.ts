@@ -1,38 +1,27 @@
 import { NextResponse } from "next/server";
-import { withAuth, withPermission } from "@/lib/api";
 import { prisma } from "@/lib/db/prisma";
+import { guardPermission } from "@/lib/auth/api-guards";
+import { guardAuditoria } from "@/lib/auditoria-portal/acceso";
+import { leerFoto } from "@/lib/auditoria-portal/foto";
 
-export const GET = withAuth(async (
-  _request,
-  { params }: { params: Promise<{ id: string }> }
-) => {
-  try {
-    const { id } = await params;
+type Params = { params: Promise<{ id: string }> };
 
-    const audit = await prisma.audit.findUnique({ where: { id } });
+/** GET → el estado de la auditoría (para saber si ya terminó de capturarse). */
+export async function GET(_request: Request, { params }: Params) {
+  const { id } = await params;
+  const g = await guardAuditoria(id);
+  if (g instanceof NextResponse) return g;
+  const foto = leerFoto(g.audit.data);
+  return NextResponse.json({ id: g.audit.id, name: g.audit.name, estado: foto?.estado ?? "vieja" });
+}
 
-    if (!audit) {
-      return NextResponse.json({ error: "Auditoría no encontrada" }, { status: 404 });
-    }
-
-    return NextResponse.json(audit);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 401 });
-  }
-});
-
-export const DELETE = withPermission("auditoria", "delete", async (
-  _request,
-  { params }: { params: Promise<{ id: string }> }
-) => {
-  try {
-    const { id } = await params;
-
-    await prisma.audit.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-});
+/** DELETE → borra la auditoría (pide además la celda `auditoria.delete`). */
+export async function DELETE(_request: Request, { params }: Params) {
+  const { id } = await params;
+  const g = await guardAuditoria(id);
+  if (g instanceof NextResponse) return g;
+  const borrar = await guardPermission("auditoria", "delete");
+  if (borrar instanceof NextResponse) return borrar;
+  await prisma.audit.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+}
