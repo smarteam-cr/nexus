@@ -127,6 +127,10 @@ export type ResultadoDeUsar = { ok: true } | { ok: false; status: number; error:
  * Une (o desune, con `exploracionId` null) una propuesta con una preventa de SU empresa. Al unirla
  * marca los casos de uso que la preventa eligió y que la propuesta todavía no tiene: no desmarca ni
  * pisa el precio de los que el vendedor ya tocó.
+ *
+ * Los casos se suman con `createMany` + `skipDuplicates` (ON CONFLICT DO NOTHING): si dos pedidos
+ * unen la misma preventa a la vez, el segundo ya no choca con `@@unique([businessCaseId, useCaseId])`
+ * (antes era un P2002 y un 500), y la fila que ya estaba queda como estaba (`selected`, `priceOverride`).
  */
 export async function usarPreventa(businessCaseId: string, exploracionId: string | null): Promise<ResultadoDeUsar> {
   const bc = await prisma.businessCase.findUnique({ where: { id: businessCaseId }, select: { clientId: true } });
@@ -168,7 +172,14 @@ export async function usarPreventa(businessCaseId: string, exploracionId: string
 
   await prisma.$transaction([
     prisma.businessCase.update({ where: { id: businessCaseId }, data: { exploracionId } }),
-    ...nuevos.map((useCaseId) => prisma.businessCaseUseCase.create({ data: { businessCaseId, useCaseId, selected: true } })),
+    ...(nuevos.length
+      ? [
+          prisma.businessCaseUseCase.createMany({
+            data: nuevos.map((useCaseId) => ({ businessCaseId, useCaseId, selected: true })),
+            skipDuplicates: true,
+          }),
+        ]
+      : []),
   ]);
   return { ok: true };
 }

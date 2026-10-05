@@ -20,13 +20,27 @@ import type { Recorrido } from "./tipos";
 const FUENTES = [...listarTsx("app"), ...listarTsx("components")];
 const CODIGO = FUENTES.map((rel) => ({ rel, texto: fs.readFileSync(path.join(RAIZ, rel), "utf8") }));
 
-/** Las anclas que el código declara: `data-recorrido="x"` o `data-recorrido={cond ? "x" : …}`. */
+/** La forma de un ancla: minúsculas, números y guiones, separados por puntos (`preventa.escala.areas`, `que-sigue`). */
+const FORMA_DE_ANCLA = /^[a-z0-9-]+(?:\.[a-z0-9-]+)*$/;
+
+/**
+ * Las anclas que el código declara: `data-recorrido="x"` o `data-recorrido={cond ? "x" : …}`. De la
+ * condición no se cuentan los literales con que se compara (`titulo === "Contacto"`): no son anclas, y
+ * si contaran, un paso que citara «Contacto» pasaría por bueno sin existir.
+ */
 function anclasDelCodigo(): Set<string> {
   const out = new Set<string>();
   for (const { texto } of CODIGO) {
     for (const m of texto.matchAll(/data-recorrido=(?:"([^"]+)"|\{([^}]*)\})/g)) {
-      if (m[1]) out.add(m[1]);
-      if (m[2]) for (const q of m[2].matchAll(/"([^"]+)"/g)) out.add(q[1]);
+      if (m[1] && FORMA_DE_ANCLA.test(m[1])) out.add(m[1]);
+      if (m[2]) {
+        const cond = m[2];
+        for (const q of cond.matchAll(/"([^"]*)"/g)) {
+          const fin = (q.index ?? 0) + q[0].length;
+          const comparado = /[!=]==?\s*$/.test(cond.slice(0, q.index)) || /^\s*[!=]==?/.test(cond.slice(fin));
+          if (!comparado && FORMA_DE_ANCLA.test(q[1])) out.add(q[1]);
+        }
+      }
     }
   }
   return out;
@@ -50,6 +64,17 @@ describe("el registro de recorridos", () => {
       expect(r.id, r.id).toMatch(/^[a-z0-9-]+$/);
       expect(Number.isInteger(r.version) && r.version >= 1, `${r.id}: versión`).toBe(true);
       expect(r.pasos.length, `${r.id}: sin pasos`).toBeGreaterThan(0);
+    }
+  });
+
+  it("las anclas del código son solo anclas: los literales de las condiciones no cuentan", () => {
+    const anclas = anclasDelCodigo();
+    // Las que se ponen con una condición (PasoPreparacion, Identificacion, el mapa de la escala).
+    for (const a of ["preventa.preparacion.contacto", "preventa.preparacion.conexion", "preventa.escala.edicion", "escala.nivel"]) {
+      expect(anclas.has(a), a).toBe(true);
+    }
+    for (const literal of ["Contacto", "Conexión", "Escala", "Áreas en juego", "F"]) {
+      expect(anclas.has(literal), `«${literal}» es de una condición, no un ancla`).toBe(false);
     }
   });
 

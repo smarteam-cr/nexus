@@ -64,6 +64,14 @@ describe("las rutas de la escala", () => {
   });
 });
 
+describe("publicar la escala cuenta los comentarios donde viven", () => {
+  it("scripts/publicar-escala.ts no lee la tabla vieja de comentarios: desde el 2026-10-05 están en Feedback", () => {
+    const codigo = soloCodigo(leer(path.join("scripts", "publicar-escala.ts")));
+    expect(codigo).not.toMatch(/escalaComentario/);
+    expect(codigo).toMatch(/feedbackReporte\.count\(\{ where: \{ escalaAncla:/);
+  });
+});
+
 describe("los agentes no leen los comentarios", () => {
   it("lib/agents, lib/canvas, lib/knowledge y lib/ai no importan lib/escala/comentarios", () => {
     // lib/exploraciones también: su agente propone con la escala publicada y nada más. Desde el

@@ -247,7 +247,8 @@ async function main() {
         ...new Set([...c.cambiados.map((x) => x.id), ...c.retirados, ...c.ediciones.flatMap((ed) => [...ed.cambiados.map((x) => x.id), ...ed.retirados])]),
       ];
       if (tocados.length) {
-        const comentarios = await prisma.escalaComentario.count({ where: { ancla: { in: tocados } } });
+        // Desde el 2026-10-05 los comentarios de la escala viven en Feedback (lib/feedback/escala-server.ts).
+        const comentarios = await prisma.feedbackReporte.count({ where: { escalaAncla: { in: tocados } } });
         console.log(`${comentarios} comentario(s) van a mostrar que su texto cambió (o que ya no existe).`);
       }
       // Las ediciones: qué cambia leído con cada una, y lo que una edición dice con sus palabras y

@@ -10,7 +10,12 @@
  *
  * Si chocó con otro cambio (409) y quien la lleva sigue siendo el que se veía, se manda de nuevo
  * sobre la versión nueva: lo que cambió fue otra cosa (casi siempre el agente al preparar).
+ *
+ * La celda no es optimista y el refresco tarda: lo que devolvió el último PATCH (quién la lleva y la
+ * versión) queda guardado y manda sobre las props mientras sea más nuevo. Sin eso, elegir B y volver
+ * a A antes del refresco no mandaba nada («ya es A») y quedaba B en el servidor (auditoría 2026-10-05).
  */
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CeldaSelect, type OpcionDeCelda } from "@/components/ui/CeldaSelect";
 
@@ -46,22 +51,30 @@ export default function ElegirResponsable({
   // Quien la lleva y ya no está en el equipo activo se sigue viendo (CeldaSelect cae al value crudo).
   const seleccion = actual ? [actual] : [];
 
+  // Lo último que confirmó un PATCH de esta celda, hasta que el refresco traiga algo igual o más nuevo.
+  const confirmado = useRef<{ email: string | null; version: number } | null>(null);
+
   const guardar = async (value: string) => {
     const email = value === NADIE ? null : value;
-    if (email === actual) return;
+    const ultimo = confirmado.current;
+    const base = ultimo && ultimo.version > version ? ultimo : { email: actual, version };
+    if (email === base.email) return;
     const mandar = (v: number) =>
       fetch(`/api/sales/exploraciones/${exploracionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ version: v, operaciones: [{ op: "responsable", email }] }),
       });
-    let res = await mandar(version);
+    let res = await mandar(base.version);
     let data = (await res.json().catch(() => ({}))) as { error?: string; exploracion?: { version: number; estado: { responsableEmail: string | null } } };
-    if (res.status === 409 && data.exploracion && (data.exploracion.estado.responsableEmail?.toLowerCase() ?? null) === actual) {
+    if (res.status === 409 && data.exploracion && (data.exploracion.estado.responsableEmail?.toLowerCase() ?? null) === base.email) {
       res = await mandar(data.exploracion.version);
       data = (await res.json().catch(() => ({}))) as typeof data;
     }
     if (!res.ok) throw new Error(data.error ?? "no se pudo cambiar quién la lleva");
+    if (data.exploracion) {
+      confirmado.current = { email: data.exploracion.estado.responsableEmail?.toLowerCase() ?? null, version: data.exploracion.version };
+    }
     router.refresh();
   };
 
