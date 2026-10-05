@@ -1,7 +1,8 @@
 "use client";
 
 import { ChatDeSeccionProvider, ChatDeSeccionDisponible } from "@/components/asistente/chat-de-seccion";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import ProjectGPS from "./ProjectGPS";
 import SectionBlockList from "@/components/canvas/SectionBlockList";
@@ -21,7 +22,12 @@ import CanvasBoundary from "./CanvasBoundary";
 import PrintDocButton from "@/components/print/PrintDocButton";
 import { PrintStagingProvider } from "@/components/print/PrintStaging";
 import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
-import { SelectorDePiezas, type FilaDePieza } from "@/components/canvas/SelectorDePiezas";
+import { PiezasDelRiel, type FilaDelRielDePiezas } from "./RielDelCliente";
+import PanelDelDocumento from "./PanelDelDocumento";
+import { MarcoDelDocumento } from "./MarcoDelDocumento";
+import { ProveedorDelResumen, type AvisoDePieza, type ContextoDelResumen } from "./contexto-del-resumen";
+import type { PiezaParaQueSigue, QueSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
+import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO, BotonAzul, BotonBlanco } from "@/components/ui/sistema";
 import VersionesDelDocumento from "@/components/canvas/VersionesDelDocumento";
 import { CANVAS_PRIMARY_AGENT } from "@/lib/agents/canvas-agents";
 import { slugForCanvas, pieceBySlug, pieceLabel, PIECES } from "@/lib/pieces/registry";
@@ -30,8 +36,8 @@ import { buscarDocumento, vistaDeLaUrl } from "@/lib/flow/vista-de-la-url";
 import { urlDeDocumentoEnManual } from "@/lib/manual/anclas";
 import ChatDelDocumento from "@/components/asistente/ChatDelDocumento";
 import { puedeConversar, PIEZA_CRONOGRAMA } from "@/lib/asistente/piezas";
-import { buildPieceRows, type RowState } from "@/lib/flow/dropdown-rows";
-import { AVISO_DESACTUALIZADA, AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
+import { buildPieceRows } from "@/lib/flow/dropdown-rows";
+import { AVISO_DESACTUALIZADA_LARGO } from "@/lib/pieces/piece-staleness";
 import { pieceReadiness } from "@/lib/flow/piece-readiness";
 import { ExternalAccessButton } from "./ExternalAccessPanel";
 import ProjectHandoffSection from "./ProjectHandoffSection";
@@ -62,13 +68,6 @@ const CANVAS_CON_RENDERER_PROPIO = new Set(
   PIECES.filter((p) => p.scope === "project" && p.ownRenderer).map((p) => p.slug),
 );
 
-/** Cómo se lee de un vistazo el estado de una pieza en el desplegable. */
-const ESTADO_PIEZA: Record<RowState, { hint: string }> = {
-  generada:    { hint: "Generada" },
-  vacia:       { hint: "Todavía sin contenido — entra y genérala" },
-  por_activar: { hint: "Este proyecto todavía no la tiene" },
-};
-
 // ── Canvas types ────────────────────────────────────────────────────────────
 
 interface CanvasMeta {
@@ -94,16 +93,39 @@ interface CanvasMeta {
 
 export default function ProjectCanvasPanel({
   projectId,
+  nombreDelProyecto,
   tags,
   hubspotPipelineId,
   initialCanvases,
+  visible = true,
+  slotDePiezas = null,
+  slotDelPanel = null,
+  propuestaPendiente = false,
+  queSigueOcupado = false,
+  onAbrirDesdeOculto,
 }: {
   projectId: string;
+  /** El nombre del proyecto, para el título del Resumen y el subtítulo de cada documento. */
+  nombreDelProyecto?: string | null;
   tags?: string[];
   /** De qué pipeline viene (lib/projects/kind.ts). Decide qué piezas le corresponden. */
   hubspotPipelineId?: string | null;
   /** Canvases sembrados server-side (page.tsx) para el proyecto inicial. */
   initialCanvases?: CanvasMeta[] | null;
+  /** ¿Se está mirando este proyecto? Mientras se mira algo de la cuenta (Información del
+   *  cliente, Procesos) el panel queda montado y oculto: sus piezas siguen en el riel. Oculto
+   *  no monta ningún documento (sus entradas de deshacer quedarían vivas debajo de otro editor). */
+  visible?: boolean;
+  /** Dónde se pintan las piezas, colgadas de la fila del proyecto en el riel de la ficha. */
+  slotDePiezas?: HTMLElement | null;
+  /** El panel de la derecha (null con el panel oculto o mientras no se mira el proyecto). */
+  slotDelPanel?: HTMLElement | null;
+  /** El cronograma tiene una propuesta sin decidir: la pieza lo dice en el riel. */
+  propuestaPendiente?: boolean;
+  /** El alta a medio hacer o la propuesta ya ocupan el «Qué sigue» del panel. */
+  queSigueOcupado?: boolean;
+  /** Abrir una pieza (o el Resumen, con null) mientras el panel está oculto. */
+  onAbrirDesdeOculto?: (canvasId: string | null) => void;
 }) {
   const params = useParams();
   const clientId = params?.id as string;
@@ -165,7 +187,8 @@ export default function ProjectCanvasPanel({
      leía el contexto de afuera de su propio proveedor — `null`, siempre. El botón «Aplicar» del
      chat de documentos nunca funcionó. Ahora lo consume `ChatDelDocumento`, que vive adentro. */
   const toast = useToast();
-  const [canvasDropdownOpen, setCanvasDropdownOpen] = useState(false);
+  /** «+ N piezas por activar» del riel, abierto o plegado. */
+  const [porActivarAbiertas, setPorActivarAbiertas] = useState(false);
   /**
    * ¿Se está mirando el RESUMEN del proyecto o un documento?
    *
@@ -217,9 +240,9 @@ export default function ProjectCanvasPanel({
    * Los dos que NO se apagan con un slug vacío —la grilla genérica y el botón de PDF— llevan
    * el gate escrito a mano, porque para ellos "sin slug" significa otra cosa.
    */
-  const activeSlug = !enResumen && activeCanvas ? slugForCanvas(activeCanvas) : null;
-  // Las filas del desplegable salen del FLUJO (lib/flow), no de la lista de canvases.
-  const pieceRows = buildPieceRows(canvases);
+  const activeSlug = visible && !enResumen && activeCanvas ? slugForCanvas(activeCanvas) : null;
+  // Las filas del riel salen del FLUJO (lib/flow), no de la lista de canvases.
+  const pieceRows = useMemo(() => buildPieceRows(canvases), [canvases]);
   // Qué piezas ya tienen algo escrito — lo mira `pieceReadiness` para avisar cuando a una
   // pieza le faltan sus pasos previos.
   const piezasConContenido = pieceRows.filter((r) => r.state === "generada").map((r) => r.slug);
@@ -256,7 +279,6 @@ export default function ProjectCanvasPanel({
   const irAlResumen = useCallback(() => {
     if (cronogramaOcupado) return;
     setEnResumen(true);
-    setCanvasDropdownOpen(false);
     const url = new URL(window.location.href);
     url.searchParams.delete("canvas");
     router.replace(url.pathname + url.search, { scroll: false });
@@ -326,8 +348,8 @@ export default function ProjectCanvasPanel({
         return;
       }
       await refetchCanvases();
-      switchCanvas(data.canvasId);
-      setCanvasDropdownOpen(false);
+      if (visible) switchCanvas(data.canvasId);
+      else onAbrirDesdeOculto?.(data.canvasId);
       if (data.outcome === "reactivada") {
         toast.info(`${data.label} vuelve a estar activa — su contenido sigue ahí.`);
       }
@@ -336,7 +358,7 @@ export default function ProjectCanvasPanel({
     } finally {
       setActivando(null);
     }
-  }, [projectId, refetchCanvases, switchCanvas, toast]);
+  }, [projectId, refetchCanvases, switchCanvas, toast, visible, onAbrirDesdeOculto]);
 
   // Primer load + refetch cuando la señal genérica de canvases bumpea (canvas
   // auto-creado por un agente). La señal es el punto de escalabilidad: cualquier
@@ -374,13 +396,99 @@ export default function ProjectCanvasPanel({
     setActiveCanvasId(vista.canvasId);
   }, [canvasFromUrl, listLoaded, cronogramaOcupado, urlDeOtroProyecto]);
 
+  /* ── LO QUE EL RESUMEN Y EL PANEL SE CUENTAN (rediseño del 2026-10-04) ─────────────
+     El widget del Resumen calcula la etapa, el «Qué sigue» del proyecto y la anotación de cada
+     pieza; los devuelve por el contexto para el riel y para el panel de un documento al día. Los
+     setters comparan antes de escribir: el widget los llama en cada cambio de sus datos, y un
+     objeto nuevo con el mismo contenido re-renderizaría el panel en bucle. */
+  const [etapaMeta, setEtapaMeta] = useState<string | null>(null);
+  const [queSigueProyecto, setQueSigueProyecto] = useState<QueSigueDelProyecto | null>(null);
+  const [avisosDePiezas, setAvisosDePiezas] = useState<Record<string, AvisoDePieza>>({});
+  const onQueSigue = useCallback((q: QueSigueDelProyecto | null) => {
+    setQueSigueProyecto((prev) => (JSON.stringify(prev) === JSON.stringify(q) ? prev : q));
+  }, []);
+  const onAvisosDePiezas = useCallback((a: Record<string, AvisoDePieza>) => {
+    setAvisosDePiezas((prev) => (JSON.stringify(prev) === JSON.stringify(a) ? prev : a));
+  }, []);
+  const piezasParaQueSigue = useMemo<PiezaParaQueSigue[]>(
+    () => pieceRows.map((r) => ({ slug: r.slug, etiqueta: r.label, estado: r.state, stale: !!r.stale })),
+    [pieceRows],
+  );
+  const abrirPieza = useCallback(
+    (slug: string) => {
+      const row = pieceRows.find((r) => r.slug === slug);
+      if (!row) return;
+      if (row.canvasId) switchCanvas(row.canvasId);
+      else void activarPieza(slug);
+    },
+    [pieceRows, switchCanvas, activarPieza],
+  );
+  const contextoDelResumen = useMemo<ContextoDelResumen>(
+    () => ({
+      slotDelPanel: enResumen ? slotDelPanel : null,
+      queSigueOcupado,
+      piezas: piezasParaQueSigue,
+      abrirPieza,
+      aLaVista: visible && enResumen,
+      proyectoVisible: visible,
+      onEtapa: setEtapaMeta,
+      onQueSigue,
+      onAvisosDePiezas,
+    }),
+    [enResumen, slotDelPanel, queSigueOcupado, piezasParaQueSigue, abrirPieza, visible, onQueSigue, onAvisosDePiezas],
+  );
+
   // El recorrido de la pieza abierta (el cronograma o la exploración): el botón «Recorrido» de la
   // cabecera ofrece ese en vez del de la ficha. Va antes del retorno temprano: es un hook.
   usePantallaDelRecorrido(activeSlug === "timeline" ? "ficha-cronograma" : activeSlug === "exploration" ? "ficha-exploracion" : null);
 
   // La MISMA pieza que pinta app/(shell)/clients/[id]/loading.tsx: el RSC y este gate
   // client-side se ven uno tras otro, así que tienen que hablar el mismo vocabulario.
-  if (loading) return <WorkspaceSkeleton />;
+  if (loading) return visible ? <WorkspaceSkeleton /> : null;
+
+  /* El documento que se mira, con su estado en el flujo: decide el aviso del título y si el botón
+     del agente va en la fila del título o en el «Qué sigue» del panel. */
+  const filaActiva = !enResumen && activeCanvasId ? (pieceRows.find((r) => r.canvasId === activeCanvasId) ?? null) : null;
+  const readinessActiva = filaActiva
+    ? pieceReadiness(filaActiva.slug, { tags: tags ?? [], piezasConContenido, hubspotPipelineId: hubspotPipelineId ?? null })
+    : null;
+  const botonDelAgente =
+    activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && activeSlug !== "exploration" ? (
+      <CanvasAgentButton
+        clientId={clientId}
+        projectId={projectId}
+        agentId={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].agentId}
+        canvasId={activeCanvasId}
+        label={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].label}
+        async={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].async}
+        appearance={filaActiva?.state === "generada" && !filaActiva.stale ? "ghost" : "primary"}
+        /* Mismo cierre que el CTA de la fila del riel, incluido el refetch: sin él, generar desde
+           acá dejaba la pieza en «Generar» y las siguientes avisando "Antes: …" sobre algo que ya
+           estaba hecho. El documento se veía bien y el mapa del flujo mentía hasta recargar. */
+        onDone={() => {
+          setAgentNonce((n) => n + 1);
+          bumpGpsRefresh();
+          void refetchCanvases();
+        }}
+      />
+    ) : null;
+  /** La franja del marco dice si el documento abierto se publica al cliente (registro de piezas). */
+  const loVeElCliente = !!(activeSlug && pieceBySlug(activeSlug)?.clientFacing);
+  const ctaEnElPanel =
+    !!slotDelPanel && !queSigueOcupado && !!botonDelAgente && !!filaActiva && (filaActiva.state !== "generada" || !!filaActiva.stale);
+  const queSigueParaElDocumento = queSigueProyecto
+    ? {
+        texto: queSigueProyecto.texto,
+        accion:
+          queSigueProyecto.accion?.tipo === "pieza" ? (
+            <BotonAzul onClick={() => abrirPieza((queSigueProyecto.accion as { slug: string }).slug)}>
+              Abrir «{queSigueProyecto.accion.etiqueta}» →
+            </BotonAzul>
+          ) : queSigueProyecto.accion ? (
+            <BotonBlanco onClick={irAlResumen}>Ir al Resumen</BotonBlanco>
+          ) : null,
+      }
+    : null;
 
   return (
     /* El editor de un canvas puede tener cambios EN PANTALLA que aún no guardó y que cambian
@@ -401,195 +509,169 @@ export default function ProjectCanvasPanel({
     <ChatDeSeccionDisponible
       cuando={!!activeSlug && puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? ""))}
     />
-    <div className="px-6 py-8 space-y-6">
-      {/* La sección "Ciclo de vida" se PLEGÓ dentro del widget (2026-07-30). Eran dos lugares
-          con la misma respuesta a "¿en qué etapa va esto?": el widget mostraba la etapa de
-          HubSpot como texto y esta sección su propio chip con tooltip. Desde que la etapa la
-          manda HubSpot también en las implementaciones, no queda nada que marcar acá —las
-          validaciones de salida se apagaron con el motor de 8 etapas—, así que la etapa vive
-          en el bloque "Etapa" del widget de arriba, con el ancla `#proyecto-etapa`.
-          `ProjectLifecyclePanel` NO se borró: queda parqueado junto al motor, para evaluarlo
-          con las alarmas nuevas basadas en sesiones. */}
+    <div hidden={!visible} className="space-y-5 px-8 pb-10 pt-6">
+      {/* La sección "Ciclo de vida" se PLEGÓ dentro del widget (2026-07-30): la etapa vive en el
+          bloque "Etapa" del Resumen, con el ancla `#proyecto-etapa`. `ProjectLifecyclePanel` NO se
+          borró: queda parqueado junto al motor, para evaluarlo con las alarmas nuevas. */}
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            {/* El selector de piezas (components/canvas/SelectorDePiezas.tsx, compartido con la
-                exploración de venta). El desplegable es el MAPA DEL FLUJO, no la lista de lo que
-                existe: las piezas del recorrido, tenga el proyecto las que tenga. CTA a la derecha
-                con jerarquía — Generar sólido (la acción natural siguiente), Regenerar y Activar
-                fantasma (pisan trabajo o son secundarias). El rótulo sale del REGISTRO y no del
-                nombre guardado en la base: renombrar una pieza es una línea en
-                `lib/pieces/registry.ts`. Un canvas suelto del CSE se llama como él lo llamó. */}
-            <SelectorDePiezas
-              titulo={
-                enResumen
-                  ? "Resumen"
-                  : activeCanvas
-                    ? (activeSlug ? pieceLabel(activeSlug) : activeCanvas.name)
-                    : "Sin piezas"
-              }
-              abierto={canvasDropdownOpen}
-              onCambiarAbierto={setCanvasDropdownOpen}
-              deshabilitado={cronogramaOcupado}
-              motivoDeshabilitado="Espera a que la IA termine en el cronograma para cambiar de pieza."
-              resumen={{
-                activo: enResumen,
-                ayuda: "Cómo va el proyecto: el resumen con fuentes, el estado de la cuenta y el handoff.",
-                onElegir: irAlResumen,
-              }}
-              activa={enResumen ? null : (pieceRows.find((r) => r.canvasId !== null && r.canvasId === activeCanvasId)?.slug ?? null)}
-              bloqueadas={activando !== null}
-              onElegir={(slug) => {
-                const row = pieceRows.find((r) => r.slug === slug);
-                if (!row) return;
-                if (!row.canvasId) {
-                  void activarPieza(row.slug);
-                  return;
-                }
-                switchCanvas(row.canvasId);
-                setCanvasDropdownOpen(false);
-              }}
-              filas={pieceRows.map((row): FilaDePieza => {
-                // ¿Esta pieza le corresponde a este proyecto, y están sus pasos previos?
-                // Nunca bloquea: informa (lib/flow/piece-readiness).
-                const readiness = pieceReadiness(row.slug, {
-                  tags: tags ?? [],
-                  piezasConContenido,
-                  hubspotPipelineId: hubspotPipelineId ?? null,
-                });
-                return {
-                  clave: row.slug,
-                  etiqueta: row.label,
-                  estado: row.state === "generada" ? "generada" : row.state === "vacia" ? "pendiente" : "vacia",
-                  ayuda: ESTADO_PIEZA[row.state].hint,
-                  atenuada: !row.canvasId,
-                  ocupada: activando === row.slug,
-                  /* El aviso COMPRIMIDO ("Sin tag X" / "Antes: Y"); la frase completa va en el title.
-                     Si no, el de «el handoff corrió después»: el encadenado ya NO reescribe solo
-                     (borraba ediciones a mano) y sin este renglón el CSE creía que estaba al día. */
-                  aviso: readiness.shortReason
-                    ? { corto: readiness.shortReason, largo: readiness.reason ?? undefined }
-                    : row.stale
-                      ? { corto: AVISO_DESACTUALIZADA, largo: AVISO_DESACTUALIZADA_LARGO }
+      {/* ── LAS PIEZAS, EN EL RIEL ─────────────────────────────────────────────────
+          El desplegable de piezas se mudó al riel de la ficha (rediseño del 2026-10-04): cuelgan
+          de la fila del proyecto, con su estado a la vista. El desplegable es el MAPA DEL FLUJO, no
+          la lista de lo que existe: las piezas del recorrido, tenga el proyecto las que tenga. El
+          rótulo sale del REGISTRO, no del nombre guardado en la base. */}
+      {slotDePiezas &&
+        createPortal(
+          <PiezasDelRiel
+            resumen={{
+              activa: visible && enResumen,
+              meta: etapaMeta,
+              onClick: () => (visible ? irAlResumen() : onAbrirDesdeOculto?.(null)),
+            }}
+            filas={pieceRows.map((row): FilaDelRielDePiezas => {
+              // ¿Esta pieza le corresponde a este proyecto, y están sus pasos previos?
+              // Nunca bloquea: informa (lib/flow/piece-readiness).
+              const readiness = pieceReadiness(row.slug, {
+                tags: tags ?? [],
+                piezasConContenido,
+                hubspotPipelineId: hubspotPipelineId ?? null,
+              });
+              const avisoDelResumen = avisosDePiezas[row.slug];
+              return {
+                slug: row.slug,
+                etiqueta: row.label,
+                estado: row.state === "generada" ? "generada" : row.state === "vacia" ? "pendiente" : "por_activar",
+                activa: visible && !enResumen && row.canvasId !== null && row.canvasId === activeCanvasId,
+                /* El aviso COMPRIMIDO ("Sin tag X" / "Antes: Y"); la frase completa va en el title.
+                   Si no, el de «el handoff corrió después»: el encadenado ya NO reescribe solo
+                   (borraba ediciones a mano) y sin este renglón el CSE creía que estaba al día.
+                   Si no, lo que el Resumen sabe de la pieza («opcional», «sin subir»). */
+                aviso: readiness.shortReason
+                  ? { corto: readiness.shortReason, largo: readiness.reason ?? undefined, tono: "neutro" }
+                  : row.stale
+                    ? { corto: "desactualizado", largo: AVISO_DESACTUALIZADA_LARGO, tono: "atencion" }
+                    : avisoDelResumen
+                      ? avisoDelResumen
                       : null,
-                  accion:
-                    /* Exploración ya no se GENERA (2026-10-02): su informe quedó en solo lectura y la
-                       guía de exploración tiene su propio agente, adentro de la pieza. */
-                    row.agent && row.canvasId && row.slug !== "exploration" ? (
-                      <CanvasAgentButton
-                        clientId={clientId}
-                        projectId={projectId}
-                        agentId={row.agent.agentId}
-                        canvasId={row.canvasId}
-                        label={row.state === "generada" ? "Regenerar" : "Generar"}
-                        async={row.agent.async}
-                        appearance={row.state === "generada" ? "ghost" : "primary"}
-                        className="shrink-0"
-                        onDone={() => {
-                          setAgentNonce((n) => n + 1);
-                          bumpGpsRefresh();
-                          void refetchCanvases();
-                        }}
-                      />
-                    ) : !row.canvasId ? (
-                      <button
-                        onClick={() => void activarPieza(row.slug)}
-                        disabled={activando !== null}
-                        className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover disabled:opacity-60 transition-colors"
-                      >
-                        {activando === row.slug ? "Activando…" : "Activar"}
-                      </button>
-                    ) : null,
-                };
-              })}
-            />
-            {/* CTA por-canvas: ejecuta el agente primario del canvas, anclado junto al
-                nombre (reemplaza el pop-up). Handoff/Cronograma tienen su propio CTA. */}
-            {activeCanvas && CANVAS_PRIMARY_AGENT[activeSlug ?? ""] && activeSlug !== "exploration" && (
-              <CanvasAgentButton
-                clientId={clientId}
-                projectId={projectId}
-                agentId={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].agentId}
-                canvasId={activeCanvasId}
-                label={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].label}
-                async={CANVAS_PRIMARY_AGENT[activeSlug ?? ""].async}
-                /* Mismo cierre que el CTA de la fila del desplegable, incluido el refetch:
-                   sin él, generar desde acá dejaba la fila en ámbar con "Generar" y las
-                   piezas siguientes avisando "Antes: …" sobre algo que ya estaba hecho.
-                   El documento se veía bien y el mapa del flujo mentía hasta recargar. */
-                onDone={() => {
-                  setAgentNonce((n) => n + 1);
-                  bumpGpsRefresh();
-                  void refetchCanvases();
-                }}
-              />
-            )}
-            {/* Las fotos que se toman antes de cada regeneración (lib/canvas/versiones.ts): en todo
-                documento que la IA reescribe, incluido Desarrollo (su CTA viene por portal). */}
-            {activeCanvas && activeCanvasId && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff") && (
-              <VersionesDelDocumento
-                projectId={projectId}
-                canvasId={activeCanvasId}
-                onCambio={() => {
-                  setAgentNonce((n) => n + 1);
-                  bumpGpsRefresh();
-                  void refetchCanvases();
-                }}
-              />
-            )}
-            {/* CTAs de los canvas que se los inyectan por portal (Cronograma y Desarrollo) —
-                A LA PAR DEL NOMBRE, en el mismo lugar que el CanvasAgentButton de los demás. */}
-            {(activeSlug === "timeline" || activeSlug === "tech-requirements") && (
-              <div ref={setCanvasHeaderSlot} className="flex items-center gap-2" />
-            )}
-            {/* Aviso (nunca bloqueo): en clientes multi-proyecto, links de IA sin revisar
-                pueden mezclar contexto de otro proyecto en el handoff/kickoff. */}
-            {(activeSlug === "handoff" || activeSlug === "kickoff") && (
-                <UnreviewedSessionsChip projectId={projectId} />
-              )}
-            {/* Puerta al manual, en el momento de la duda. La sección /documentacion existe
-                desde el 2026-08-02 y su única entrada era acordarse del ítem del sidebar — para
-                un equipo que la abre pocas veces al mes, eso es no tenerla. Va acá porque es
-                donde alguien se pregunta "¿y esto para qué era?", con el slug ya resuelto. */}
-            {/* Conversar el cambio antes de generarlo. El cronograma tiene el suyo propio (con
-                «Aplicar» cableado), así que acá se ofrece para el resto de los documentos. */}
-            {activeSlug !== PIEZA_CRONOGRAMA &&
-              puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? "")) && (
-                <button
-                  onClick={() => setChatAbierto((v) => !v)}
-                  className={
-                    chatAbierto
-                      ? "shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold bg-secondary text-secondary-fg transition-colors"
-                      : "shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover transition-colors"
-                  }
-                  title="Conversa el cambio con el asistente antes de generarlo"
-                >
-                  💬 Asistente
-                </button>
-              )}
-            {activeSlug && pieceBySlug(activeSlug) && (
-              <a
-                href={urlDeDocumentoEnManual(activeSlug)}
-                className="shrink-0 text-xs text-fg-muted hover:text-fg transition-colors"
-                title={`Qué es el canvas ${pieceLabel(activeSlug)} y cuándo se usa`}
-              >
-                ¿Qué es esto?
-              </a>
-            )}
-          </div>
+                propuesta: row.slug === PIEZA_CRONOGRAMA && propuestaPendiente,
+                ocupada: activando === row.slug,
+              };
+            })}
+            porActivarAbiertas={porActivarAbiertas}
+            onAlternarPorActivar={() => setPorActivarAbiertas((v) => !v)}
+            onElegir={(slug) => {
+              if (cronogramaOcupado) {
+                toast.info("Espera a que la IA termine en el cronograma para cambiar de pieza.");
+                return;
+              }
+              const row = pieceRows.find((r) => r.slug === slug);
+              if (!row?.canvasId) return;
+              if (visible) switchCanvas(row.canvasId);
+              else onAbrirDesdeOculto?.(row.canvasId);
+            }}
+            onActivar={(slug) => {
+              if (activando === null) void activarPieza(slug);
+            }}
+          />,
+          slotDePiezas,
+        )}
+
+      {/* ── LA FILA DEL TÍTULO ──────────────────────────────────────────────────────
+          A la izquierda qué se está mirando; a la derecha lo que se hace con eso. Con el panel de
+          la derecha visible, el botón del agente de un documento vacío o desactualizado se muda a
+          su «Qué sigue» (un solo botón azul por pantalla). */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          {enResumen ? (
+            <>
+              <h2 className="text-[22px] font-bold leading-tight text-fg">{nombreDelProyecto ?? "Resumen del proyecto"}</h2>
+              <p className="mt-1 text-[13px] text-fg-muted">Cómo va el proyecto y qué se vendió.</p>
+            </>
+          ) : activeCanvas ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-[22px] font-bold leading-tight text-fg">
+                  {activeSlug ? pieceLabel(activeSlug) : activeCanvas.name}
+                </h2>
+                {filaActiva?.stale && (
+                  <span
+                    className="rounded-full border border-warn-line bg-warn-surface px-2 py-0.5 text-[11px] font-medium text-warn-ink"
+                    title={AVISO_DESACTUALIZADA_LARGO}
+                  >
+                    desactualizado
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-[13px] text-fg-muted">
+                {nombreDelProyecto}
+                {/* Puerta al manual, en el momento de la duda: va acá porque es donde alguien se
+                    pregunta "¿y esto para qué era?", con el slug ya resuelto. */}
+                {activeSlug && pieceBySlug(activeSlug) && (
+                  <>
+                    {nombreDelProyecto ? " · " : ""}
+                    <a
+                      href={urlDeDocumentoEnManual(activeSlug)}
+                      className="text-fg-muted underline-offset-2 transition-colors hover:text-fg hover:underline"
+                      title={`Qué es el canvas ${pieceLabel(activeSlug)} y cuándo se usa`}
+                    >
+                      ¿Qué es esto?
+                    </a>
+                  </>
+                )}
+              </p>
+            </>
+          ) : (
+            <h2 className="text-[22px] font-bold leading-tight text-fg">Sin piezas</h2>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          {/* Acceso del cliente externo (token + contraseña) — PROJECT-LEVEL:
-              las mismas credenciales destraban todas las superficies externas
-              (kickoff, cronograma), por eso vive acá y no en un canvas. */}
-          <ExternalAccessButton projectId={projectId} />
-          {/* Export PDF. Qué camino toma lo decide el REGISTRO de impresión leyendo la
-              pieza del canvas activo, no un `if` acá: las piezas del motor bajan el PDF con
-              el diseño del documento, y todo lo demás —Resumen, handoff, cronograma, los
-              canvas a medida— sigue con la vista imprimible de siempre. */}
-          {/* El resumen no se imprime: no es un documento, es la foto de cómo va el
+        <div className="flex flex-wrap items-center gap-2">
+          {/* CTA por-canvas: ejecuta el agente primario del canvas, anclado junto al
+              nombre (reemplaza el pop-up). Handoff/Cronograma tienen su propio CTA. */}
+          {!ctaEnElPanel && botonDelAgente}
+          {/* Las fotos que se toman antes de cada regeneración (lib/canvas/versiones.ts): en todo
+              documento que la IA reescribe, incluido Desarrollo (su CTA viene por portal). */}
+          {activeCanvas && activeCanvasId && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff") && (
+            <VersionesDelDocumento
+              projectId={projectId}
+              canvasId={activeCanvasId}
+              onCambio={() => {
+                setAgentNonce((n) => n + 1);
+                bumpGpsRefresh();
+                void refetchCanvases();
+              }}
+            />
+          )}
+          {/* CTAs de los canvas que se los inyectan por portal (Cronograma y Desarrollo) —
+              A LA PAR DEL NOMBRE, en el mismo lugar que el CanvasAgentButton de los demás. */}
+          {(activeSlug === "timeline" || activeSlug === "tech-requirements") && (
+            <div ref={setCanvasHeaderSlot} className="flex items-center gap-2" />
+          )}
+          {/* Aviso (nunca bloqueo): en clientes multi-proyecto, links de IA sin revisar
+              pueden mezclar contexto de otro proyecto en el handoff/kickoff. */}
+          {(activeSlug === "handoff" || activeSlug === "kickoff") && (
+              <UnreviewedSessionsChip projectId={projectId} />
+            )}
+          {/* Conversar el cambio antes de generarlo. El cronograma tiene el suyo propio (con
+              «Aplicar» cableado), así que acá se ofrece para el resto de los documentos. */}
+          {activeSlug !== PIEZA_CRONOGRAMA &&
+            puedeConversar(activeSlug, piezasConContenido.includes(activeSlug ?? "")) && (
+              <button
+                onClick={() => setChatAbierto((v) => !v)}
+                aria-pressed={chatAbierto}
+                className={
+                  chatAbierto
+                    ? `${BOTON_DE_HERRAMIENTA_ACTIVO} shrink-0`
+                    : `${BOTON_DE_HERRAMIENTA} shrink-0`
+                }
+                title="Conversa el cambio con el asistente antes de generarlo"
+              >
+                <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
+                </svg>
+                Asistente
+              </button>
+            )}
+          {/* Export PDF. Qué camino toma lo decide el REGISTRO de impresión leyendo la pieza del
+              canvas activo. El resumen no se imprime: no es un documento, es la foto de cómo va el
               proyecto — y sus dos piezas (el brief y el handoff) tienen su propio PDF. */}
           {!enResumen && (
             <PrintDocButton
@@ -598,15 +680,39 @@ export default function ProjectCanvasPanel({
               canvasHref={`/print/canvas/${clientId}/${activeCanvasId ?? "default"}?print=1&projectId=${projectId}`}
             />
           )}
-
+          {/* Acceso del cliente externo (token + contraseña) — PROJECT-LEVEL: las mismas
+              credenciales destraban todas las superficies externas (kickoff, cronograma), por eso
+              vive acá y no en un canvas. */}
+          <ExternalAccessButton projectId={projectId} />
         </div>
       </div>
 
+      {/* El panel de la derecha mientras se mira un documento: su «Qué sigue», de dónde salió y el
+          índice de secciones. */}
+      {slotDelPanel && !enResumen && activeCanvas && activeCanvasId &&
+        createPortal(
+          <PanelDelDocumento
+            key={activeCanvasId}
+            projectId={projectId}
+            canvasId={activeCanvasId}
+            etiqueta={activeSlug ? pieceLabel(activeSlug) : activeCanvas.name}
+            grupoDelAgente={activeSlug ? (pieceBySlug(activeSlug)?.agentGroup ?? null) : null}
+            generada={filaActiva ? filaActiva.state === "generada" : !!activeCanvas.hasContent}
+            desactualizada={!!filaActiva?.stale}
+            motivoPrevio={readinessActiva?.reason ?? null}
+            accion={ctaEnElPanel ? botonDelAgente : null}
+            queSigueDelProyecto={queSigueParaElDocumento}
+            queSigueOcupado={queSigueOcupado}
+            secciones={activeCanvas.sections ?? []}
+          />,
+          slotDelPanel,
+        )}
 
       {/* ── RESUMEN ────────────────────────────────────────────────────────────────
-          Cómo va el proyecto (el brief con fuentes y el widget de la cuenta) y el handoff
-          del que sale todo lo demás. Vivía ARRIBA de los nueve documentos y por eso se
-          repetía en los nueve; acá es una parada del mismo desplegable. */}
+          Cómo va el proyecto (la etapa, el resumen con fuentes) y el handoff del que sale todo lo
+          demás, en dos columnas; el panel de la derecha lo llenan el widget (qué sigue, reuniones,
+          pendientes) por el contexto. Vivía ARRIBA de los nueve documentos y por eso se repetía en
+          los nueve; acá es una parada del riel. */}
       {/* ⛔ OCULTO, NO DESMONTADO (2026-09-28). Con `{enResumen && …}`, ir a un documento
           desmontaba el widget y el handoff: se perdía el «Generando…» del handoff (y un segundo
           clic lanzaba otra corrida pagada), el widget se quedaba con datos viejos porque los
@@ -614,10 +720,12 @@ export default function ProjectCanvasPanel({
           a mitad de la corrida y las exclusiones sin guardar desaparecían. Con `hidden` siguen
           vivos y vuelven como quedaron; se pintan UNA vez, solo en el Resumen. Guarda:
           lib/flow/resumen-del-proyecto.test.ts. */}
-      <div hidden={!enResumen} className="space-y-6">
+      <ProveedorDelResumen value={contextoDelResumen}>
+      <div hidden={!enResumen} className="grid items-start gap-4 lg:grid-cols-2">
         <ProjectGPS projectId={projectId} clientId={clientId} />
         <ProjectHandoffSection projectId={projectId} clientId={clientId} visible={enResumen} />
       </div>
+      </ProveedorDelResumen>
 
       {/* Handoff: vista lineal (lectura/curación del CSE, sin grilla) */}
       {activeSlug === "handoff" && activeCanvasId && (
@@ -626,13 +734,12 @@ export default function ProjectCanvasPanel({
         </CanvasBoundary>
       )}
 
-      {/* Kickoff: landing (Camino C) editable in-situ por el CSE.
-          El div rompe el padding del panel (px-6 py-8 space-y-6) para que las
-          secciones del landing sean full-bleed dentro del scroll container. */}
+      {/* Kickoff: landing (Camino C) editable in-situ por el CSE, dentro del marco del documento
+          (MarcoDelDocumento: sin padding, así las bandas del motor llegan a los bordes). */}
       {activeSlug === "kickoff" && activeCanvasId && (
         // Publicar/ocultar el kickoff vive en el pop-up "Acceso del cliente"
         // (toolbar del proyecto), junto al resto de la visibilidad por superficie.
-        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+        <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           {/* agentNonce remonta el landing al terminar una corrida del CTA → refetch.
               Editor sobre el motor LandingView (drag&drop + edición tipada); el fallback
               tolerante del motor pinta la prosa markdown heredada. El renderer viejo
@@ -641,7 +748,7 @@ export default function ProjectCanvasPanel({
           <CanvasBoundary label="el Kickoff">
             <KickoffWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
           </CanvasBoundary>
-        </div>
+        </MarcoDelDocumento>
       )}
 
       {/* Integraciones («Desarrollo» hasta el 2026-09-27): requerimiento técnico editable
@@ -649,58 +756,58 @@ export default function ProjectCanvasPanel({
           sin staging: la vista externa lee el canvas vivo). El canvas es on-demand — solo
           aparece si el handoff detectó trabajo técnico (o se regenera con el botón). */}
       {activeSlug === "tech-requirements" && activeCanvasId && (
-        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+        <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="el canvas de Integraciones">
             <DesarrolloWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} headerSlot={canvasHeaderSlot} />
           </CanvasBoundary>
-        </div>
+        </MarcoDelDocumento>
       )}
 
       {/* Exploración: guía INTERNA de descubrimiento del negocio (mismo motor, paleta gris).
           Canvas de primera clase como Kickoff: vive en el dropdown y su agente se dispara
           desde el header (CANVAS_PRIMARY_AGENT). NO tiene vista externa ni publicación. */}
       {/* Implementación: la guía de construcción del CSE (motor de landings, interna).
-          El margen negativo es OBLIGATORIO en todo canvas del motor: anula el px-6 py-8
-          del panel para que las bandas de sección lleguen a los bordes. Sin él, el hero
-          y el cierre —que llevan fondo propio— quedan recortados con calles a los lados. */}
+          El marco es OBLIGATORIO en todo canvas del motor: va sin padding para que las bandas de
+          sección lleguen a los bordes. Con padding, el hero y el cierre —que llevan fondo propio—
+          quedan recortados con calles a los lados. */}
       {activeSlug === "implementation" && activeCanvasId && (
-        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+        <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="la ejecución">
             <ImplementacionWorkspace key={`implementacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
           </CanvasBoundary>
-        </div>
+        </MarcoDelDocumento>
       )}
 
       {/* Entrega: el documento de cierre (motor de landings, paleta de MARCA — lo ve el cliente). */}
       {activeSlug === "delivery" && activeCanvasId && (
-        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+        <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="la entrega">
             <EntregaWorkspace key={`entrega-${activeCanvasId}-${agentNonce}`} projectId={projectId} clientId={clientId} canvasId={activeCanvasId} />
           </CanvasBoundary>
-        </div>
+        </MarcoDelDocumento>
       )}
 
       {/* Planificación: el plan que aprueba el cliente (motor de landings, interno). */}
       {activeSlug === "planning" && activeCanvasId && (
-        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+        <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="la planificación">
             <PlanificacionWorkspace key={`planificacion-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
           </CanvasBoundary>
-        </div>
+        </MarcoDelDocumento>
       )}
 
       {/* Diagnóstico: informe de rendimiento para el cliente (motor de landings). Es el
           que más lo necesita: se proyecta en la sesión con el cliente. */}
       {activeSlug === "diagnosis" && activeCanvasId && (
-        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+        <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="el diagnóstico">
             <DiagnosticoWorkspace key={`diagnostico-${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
           </CanvasBoundary>
-        </div>
+        </MarcoDelDocumento>
       )}
 
       {activeSlug === "exploration" && activeCanvasId && (
-        <div style={{ margin: "1.5rem -1.5rem -2rem" }}>
+        <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="el canvas de Exploración">
             {/* 4A Cuestionario previo + 4B Informe: la misma fase, dos momentos. */}
             <ExploracionConCuestionario
@@ -712,7 +819,7 @@ export default function ProjectCanvasPanel({
               }
             />
           </CanvasBoundary>
-        </div>
+        </MarcoDelDocumento>
       )}
 
       {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).
@@ -736,7 +843,7 @@ export default function ProjectCanvasPanel({
           Los que tienen renderer PROPIO se excluyen por `CANVAS_CON_RENDERER_PROPIO`:
           si uno falta ahí, su canvas se pinta DOS veces (el motor arriba y esta grilla
           abajo). Pasó con Exploración — por eso es un set con nombre y no otra `&&`. */}
-      {!enResumen && !CANVAS_CON_RENDERER_PROPIO.has(activeSlug ?? "") && activeCanvasId && (
+      {visible && !enResumen && !CANVAS_CON_RENDERER_PROPIO.has(activeSlug ?? "") && activeCanvasId && (
         // agentNonce remonta la grilla al terminar una corrida del CTA → refetch
         <CanvasBoundary label="este canvas">
           <SectionBlockList key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} />
@@ -751,8 +858,8 @@ export default function ProjectCanvasPanel({
         <div className="rounded-xl border border-dashed border-line px-6 py-10 text-center">
           <p className="text-sm font-medium text-fg">Este proyecto no tiene piezas activas.</p>
           <p className="mt-1 text-sm text-fg-muted">
-            El handoff está en el Resumen, acá arriba. Para trabajar el contenido del
-            proyecto, activa una pieza desde el desplegable.
+            El handoff está en el Resumen. Para trabajar el contenido del proyecto, activa una
+            pieza desde «+ piezas por activar», en el riel.
           </p>
         </div>
       )}

@@ -19,18 +19,14 @@ import { ApiError, extractErrorMessage } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { printDocForPiece, type PrintDocType } from "@/lib/print/doc-types";
 import { useOcultasEnPantalla } from "./PrintStaging";
+import { BOTON_DE_HERRAMIENTA } from "@/components/ui/sistema";
 
+/** La flecha de descarga del diseño del documento (sistema «Nexus · interfaz interna», 2026-10-04). */
 const ICONO_IMPRESORA = (
-  <path
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    strokeWidth={2}
-    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-  />
+  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14" />
 );
 
-const CLASES =
-  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors disabled:opacity-50 bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover";
+const CLASES = BOTON_DE_HERRAMIENTA;
 
 /** Descarga un documento del registro y, al lado, un ojo para ver la hoja antes de bajarla. */
 export function PrintDownloadButton({ tipo, docId }: { tipo: PrintDocType; docId: string }) {
@@ -85,7 +81,7 @@ export function PrintDownloadButton({ tipo, docId }: { tipo: PrintDocType; docId
         title={`Descarga el ${tipo.label.toLowerCase()} con el diseño del documento (contenido actual)`}
       >
         <svg
-          className={`w-3.5 h-3.5 ${working ? "animate-spin" : ""}`}
+          className={`h-[15px] w-[15px] ${working ? "animate-spin" : ""}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -149,7 +145,7 @@ export default function PrintDocButton({
       className={CLASES}
       title="Abre una vista imprimible para guardar como PDF"
     >
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-[15px] w-[15px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         {ICONO_IMPRESORA}
       </svg>
       Exportar PDF

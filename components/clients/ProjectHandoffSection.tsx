@@ -21,6 +21,10 @@ import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/cli
 import { useWorkspace } from "./WorkspaceContext";
 import { useMe } from "@/hooks/useMe";
 import ProjectContextSection from "./ProjectContextSection";
+import { Alert } from "@/components/ui";
+import { BotonAzul, BotonBlanco, BotonEnlace, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { FilaDeAlrededor } from "./FilaDeAlrededor";
+import { useContextoDelResumen } from "./contexto-del-resumen";
 import TagsStrip from "@/components/tags/TagsStrip";
 import type { ProjectPipelineKey } from "@/lib/projects/kind";
 import { HandoffSectionSkeleton } from "./skeletons";
@@ -185,7 +189,7 @@ function HandoffDelHermano({
 export default function ProjectHandoffSection({
   projectId,
   clientId,
-  visible = true,
+  visible: visibleEnElPanel = true,
 }: {
   projectId: string;
   clientId: string;
@@ -195,6 +199,10 @@ export default function ProjectHandoffSection({
    *  del handoff (y consultaba cada 5 s). Guarda: lib/flow/resumen-del-proyecto.test.ts. */
   visible?: boolean;
 }) {
+  /* Con algo de la cuenta en el centro (Información del cliente, Procesos) el panel del proyecto
+     queda montado y oculto: el documento se desmonta igual que fuera del Resumen. */
+  const { aLaVista, proyectoVisible } = useContextoDelResumen();
+  const visible = visibleEnElPanel && proyectoVisible;
   // Siembra desde el cache de módulo: al volver a un tab ya visitado, la sección pinta
   // su estado real AL INSTANTE con la altura correcta (sin skeleton ni empujón).
   const cached = readHandoffStatusCache<HandoffStatus>(projectId);
@@ -255,6 +263,23 @@ export default function ProjectHandoffSection({
    *  reescribir el documento que redactar tres frases sobre el que ya está. */
   const [resumiendo, setResumiendo] = useState(false);
   const [showExcl, setShowExcl] = useState(false);
+  /** La fila «Resultados que persigue el cliente» y su cuenta (la reporta el componente al cargar). */
+  const [verResultados, setVerResultados] = useState(false);
+  const [cuentaDeResultados, setCuentaDeResultados] = useState<{ total: number; pendientes: number } | null>(null);
+  const alContarResultados = useCallback((total: number, pendientes: number) => {
+    setCuentaDeResultados((c) => (c && c.total === total && c.pendientes === pendientes ? c : { total, pendientes }));
+  }, []);
+  /* «Ver documento» abre el documento pegado a su tarjeta y la vista baja hasta él: sin esto, con la
+     tarjeta arriba de la pantalla, el documento se abría fuera de la vista y el botón parecía roto.
+     Solo cuando lo pide el CLIC: al terminar una generación también se abre, y ahí la vista no puede
+     saltar debajo de alguien que está leyendo otra cosa. */
+  const docRef = useRef<HTMLElement>(null);
+  const bajarAlDocumento = useRef(false);
+  useEffect(() => {
+    if (!showDoc || !bajarAlDocumento.current) return;
+    bajarAlDocumento.current = false;
+    docRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [showDoc]);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -329,24 +354,49 @@ export default function ProjectHandoffSection({
    * escrito y redacta tres frases. Es la diferencia entera con «Regenerar»: eso reescribe el
    * documento (y pisa lo editado a mano); esto no lo toca.
    */
-  const handleResumen = useCallback(async () => {
+  const handleResumen = useCallback(async (silencioso = false) => {
     setResumiendo(true);
-    setError(null);
+    if (!silencioso) setError(null);
     try {
       const r = await fetch(`/api/projects/${projectId}/handoff/resumen`, { method: "POST" });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) setError(d.error ?? "No se pudo escribir el resumen.");
-      else {
+      if (!r.ok) {
+        if (!silencioso) setError(d.error ?? "No se pudo escribir el resumen.");
+      } else {
         // El status guarda caché de módulo: sin invalidar, cambiar de pestaña y volver
         // repintaría la versión sin resumen y el botón parecería no haber hecho nada.
         invalidateHandoffStatus(projectId);
         fetchStatus();
       }
     } catch {
-      setError("Error de conexión al escribir el resumen.");
+      if (!silencioso) setError("Error de conexión al escribir el resumen.");
     }
     setResumiendo(false);
   }, [projectId, fetchStatus]);
+
+  /* «QUÉ SE VENDIÓ» SE ESCRIBE SOLO AL ABRIR EL RESUMEN (2026-10-04, decisión de Elías). Si el
+     handoff está generado y el resumen falta o quedó viejo, se pide una vez por versión del
+     handoff y por sesión del navegador, sin avisos. Solo quien puede generarlo: el servidor pide
+     la misma celda (`guardProjectGenerateHandoff`), así que para el resto sería un 403 seguro.
+     Lo de antes de esta tanda lo llena una sola vez `scripts/backfill-resumen-handoff.ts`. */
+  const puedeResumir = handoffPerms?.write === true || handoffPerms?.generate === true || handoffPerms?.regenerate === true;
+  const faltaResumen = !!status?.generated && (!status.handoffResumen || !!status.handoffResumenViejo);
+  const versionDelHandoff = status?.lastRunAt ?? "none";
+  /* La versión del handoff para la que ya se pidió: si se regenera sin salir de la pantalla, la
+     versión nueva vuelve a poder pedirlo (un booleano lo trababa para siempre). */
+  const resumenPedido = useRef<string | null>(null);
+  useEffect(() => {
+    if (!aLaVista || !faltaResumen || !puedeResumir || generating || resumenPedido.current === versionDelHandoff) return;
+    const clave = `nexus-resumen-venta-auto:${projectId}:${versionDelHandoff}`;
+    try {
+      if (sessionStorage.getItem(clave)) return;
+      sessionStorage.setItem(clave, "1");
+    } catch {
+      /* Sin sessionStorage: igual se pide una sola vez por montaje. */
+    }
+    resumenPedido.current = versionDelHandoff;
+    void handleResumen(true);
+  }, [aLaVista, faltaResumen, puedeResumir, generating, projectId, versionDelHandoff, handleResumen]);
 
   /* RETOMAR LA CORRIDA EN CURSO (2026-09-28). Recargar, abrir el proyecto en otra pestaña o volver
      al Resumen a mitad de una generación dejaba «Generar» habilitado: un segundo clic lanzaba otra
@@ -550,183 +600,191 @@ export default function ProjectHandoffSection({
     readiness.feedingCount > 0 && readiness.withTranscript === 0 && readiness.manualSources === 0;
 
   const badge = generating
-    ? <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">{phase ?? "Generando…"}</span>
+    ? <span className="rounded-full border border-warn-line bg-warn-surface px-2 py-px text-[11px] font-semibold text-warn-ink">{phase ?? "Generando…"}</span>
     : generated
-    ? <span className="text-[10px] font-bold uppercase tracking-wider text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">Generado</span>
-    : <span className="text-[10px] font-bold uppercase tracking-wider text-fg-muted bg-surface-muted border border-line rounded-full px-2 py-0.5">No generado</span>;
+    ? <span className="rounded-full border border-success-line bg-success-surface px-2 py-px text-[11px] font-semibold text-success-ink">✓ Generado</span>
+    : <span className="rounded-full border border-line bg-surface-muted px-2 py-px text-[11px] font-semibold text-fg-muted">Sin generar</span>;
 
   const esVenta = status.pipelineKey !== "development" && status.pipelineKey !== "web";
+  const exclusionesSinGuardar = exclusionsDirty && exclusions.trim() !== (status.contextExclusions ?? "");
 
   return (
-    <div className="space-y-2">
-      {/* ── EL TÍTULO DE LA SECCIÓN (pedido de Elías, 2026-09-27) ──────────────────
-          «Handoff Sales→CS» nombra el PROCESO que produjo el documento, no lo que el
-          documento contiene. Quien abre un proyecto no busca un traspaso: busca qué se
-          vendió. El rótulo del proceso se queda —es como el equipo lo llama, y cambiarlo
-          rompería la conversación— pero deja de ser lo primero que se lee.
-
-          Para un Desarrollo o un Sitio web no hubo traspaso de Ventas a CS, así que tampoco
-          se titula como una venta: mismo criterio que ya usa el rótulo de la tarjeta. */}
-      <h2 className="text-sm font-semibold text-fg-secondary px-1">
-        {esVenta ? "Información de la venta" : "Información del proyecto"}
-      </h2>
-    <section className="rounded-2xl border border-line bg-surface">
-      <div className="flex items-center gap-3 px-5 py-3.5">
-        <svg className="w-4 h-4 text-brand flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m4 6H4m0 0l4 4m-4-4l4-4" />
-        </svg>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+    <div className="contents">
+    <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
+      {/* ── LA CABECERA, con la acción arriba a la derecha (pedido de Elías, 2026-10-04) ───
+          «Handoff Sales→CS» nombra el PROCESO que produjo el documento, no lo que contiene: quien
+          abre un proyecto busca qué se vendió. El rótulo del proceso se queda —es como el equipo lo
+          llama— pero deja de ser lo primero que se lee. Para un Desarrollo o un Sitio web no hubo
+          traspaso de Ventas a CS, así que tampoco se titula como una venta. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h2 className={ROTULO_DEL_SISTEMA}>
+            {esVenta ? "Información de la venta" : "Información del proyecto"}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
             {/* ⚠ "Sales→CS" SOLO para una Implementación de HubSpot —y para un pipeline sin
-                declarar, que degrada al comportamiento de siempre—. Un proyecto de Desarrollo
-                o un Sitio web no se entrega de Ventas a CS: titularlo así era describir un
-                flujo que no ocurre. El requisito duro de la tanda es que la Implementación se
-                vea EXACTAMENTE como antes, y por eso el default es el rótulo viejo. */}
-            <h3 className="text-sm font-bold text-fg">
+                declarar, que degrada al comportamiento de siempre—. */}
+            <h3 className="text-[15px] font-semibold text-fg">
               {esVenta ? "Handoff Sales→CS" : "Handoff del proyecto"}
             </h3>
             {badge}
           </div>
-          <p className="text-xs text-fg-muted mt-0.5 truncate">
+          <p className="text-xs text-fg-muted">
             {generated
-              ? `Armado con ${status.sourceSessions.length} sesión${status.sourceSessions.length === 1 ? "" : "es"} del proyecto${status.lastRunAt ? ` · ${fmtDate(status.lastRunAt)}` : ""}`
+              ? `Armado con ${status.sourceSessions.length} reunión${status.sourceSessions.length === 1 ? "" : "es"} del proyecto${status.lastRunAt ? ` · ${fmtDate(status.lastRunAt)}` : ""}`
               : readiness.feedingCount > 0 || readiness.manualSources > 0
               ? // Tanda L: ya no es un cupo fijo — "cumplen la regla" en vez de "alimentarán", porque
-                // cuáles entran de verdad al documento depende del presupuesto de contexto (antes/
-                // después del cierre del trato), no solo de esta cuenta.
-                `${readiness.feedingCount} sesión${readiness.feedingCount === 1 ? "" : "es"} cumplen la regla (${readiness.withTranscript} con transcript${readiness.manualSources > 0 ? `, ${readiness.manualSources} fuente${readiness.manualSources === 1 ? "" : "s"} manual${readiness.manualSources === 1 ? "" : "es"}` : ""}) — las que entran al documento final dependen del espacio disponible`
-              : "Ninguna sesión alimenta este handoff todavía — revisá el Contexto o pegá una fuente manual"}
+                // cuáles entran de verdad al documento depende del presupuesto de contexto.
+                `${readiness.feedingCount} reunión${readiness.feedingCount === 1 ? "" : "es"} cumplen la regla (${readiness.withTranscript} con transcripción${readiness.manualSources > 0 ? `, ${readiness.manualSources} fuente${readiness.manualSources === 1 ? "" : "s"} manual${readiness.manualSources === 1 ? "" : "es"}` : ""}). Las que entran al documento dependen del espacio disponible.`
+              : "Ninguna reunión alimenta este handoff todavía: revisa el contexto o pega una fuente manual."}
           </p>
-          {/* ── EL ENLACE DISCRETO AL HERMANO MAYOR ──────────────────────────────────
-              Una línea, no un bloque: este proyecto TIENE su handoff y lo genera acá. Lo que
-              el enlace resuelve es que el alcance vendido vive en la implementación, y quien
-              lea éste probablemente quiera verlo. (Antes, en su lugar, se pintaba la sección
-              entera del hermano en SOLO LECTURA y no había forma de generar nada acá.) */}
+          {/* ── EL ENLACE DISCRETO AL HERMANO MAYOR ── una línea, no un bloque: este proyecto TIENE
+              su handoff y lo genera acá; el alcance vendido vive en la implementación. */}
           {status.hermanoMayor && (
-            <p className="text-[11px] text-fg-muted mt-1">
+            <p className="text-xs text-fg-muted">
               Cuelga de{" "}
               <a
                 href={`/clients/${status.hermanoMayor.clientId}?tab=${status.hermanoMayor.projectId}`}
-                className="text-brand hover:underline font-medium"
+                className="font-medium text-brand hover:underline"
               >
                 {status.hermanoMayor.projectName}
               </a>
               {" "}— ver su handoff
             </p>
           )}
-          {/* ── «¿QUÉ SE VENDIÓ?», EN TRES FRASES ────────────────────────────────
-              El documento son 12 secciones y esa pregunta —la única con la que todo el
-              mundo lo abre— solo se contestaba leyéndolo entero, o sea que en la práctica no
-              se contestaba. Lo escribe la IA a partir del documento ya generado; el criterio
-              y el tope de caracteres viven en `lib/handoff/resumen.ts`.
+        </div>
+        {canGenerateHandoff &&
+          (generated ? (
+            <BotonEnlace className="flex-shrink-0" onClick={() => void handleGenerate()} disabled={generating}>
+              {generating ? (phase ?? "Generando…") : "Regenerar"}
+            </BotonEnlace>
+          ) : (
+            <BotonAzul className="flex-shrink-0" onClick={() => void handleGenerate()} disabled={generating}>
+              {generating ? (phase ?? "Generando…") : "Generar handoff"}
+            </BotonAzul>
+          ))}
+      </div>
 
-              El botón de al lado existe para lo RETROACTIVO: los handoffs que ya estaban
-              generados no pasan por la puerta automática, y regenerarlos entero solo por el
-              resumen cuesta una corrida y pisa lo editado a mano. */}
-          {generated && status.handoffResumen && (
-            <div className="mt-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
-              <p className="text-xs text-fg-secondary leading-relaxed">{status.handoffResumen}</p>
-              {status.handoffResumenViejo && (
-                <p className="text-[11px] text-warn-ink mt-1.5">
-                  El handoff se regeneró después de este resumen.{" "}
-                  {canGenerateHandoff && (
-                    <button
-                      onClick={handleResumen}
-                      disabled={resumiendo}
-                      className="font-semibold underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
-                    >
-                      {resumiendo ? "Actualizando…" : "Actualizarlo"}
-                    </button>
-                  )}
-                </p>
+      {/* ── «¿QUÉ SE VENDIÓ?», EN TRES FRASES ────────────────────────────────
+          El documento son 12 secciones y esa pregunta —la única con la que todo el mundo lo
+          abre— solo se contestaba leyéndolo entero. Lo escribe la IA a partir del documento
+          ya generado (criterio y tope en `lib/handoff/resumen.ts`). Desde el 2026-10-04 se
+          escribe SOLO al abrir el Resumen si falta o quedó viejo (ver el efecto de `resumenPedido`);
+          el botón queda para cuando eso falló o quien mira no puede generar. */}
+      {generated && (status.handoffResumen || (puedeResumir && resumiendo)) && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-muted p-3">
+          <span className={`flex items-center gap-1 ${ROTULO_DEL_SISTEMA}`}>
+            <IconoDeSugerencia className="h-3 w-3 text-brand" />
+            Qué se vendió
+          </span>
+          {status.handoffResumen ? (
+            <p className="text-[13px] leading-relaxed text-fg-secondary">{status.handoffResumen}</p>
+          ) : (
+            <p className="text-[13px] leading-relaxed text-fg-muted">La IA está leyendo el handoff para resumirlo en tres frases…</p>
+          )}
+          {status.handoffResumen && status.handoffResumenViejo && (
+            <p className="text-xs text-warn-ink">
+              El handoff se regeneró después de este resumen.{" "}
+              {puedeResumir && (
+                <button
+                  onClick={() => void handleResumen()}
+                  disabled={resumiendo}
+                  className="font-semibold underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
+                >
+                  {resumiendo ? "Actualizando…" : "Actualizarlo"}
+                </button>
               )}
-            </div>
-          )}
-          {generated && !status.handoffResumen && canGenerateHandoff && (
-            <button
-              onClick={handleResumen}
-              disabled={resumiendo}
-              className="mt-2 text-xs font-semibold text-brand hover:opacity-80 disabled:opacity-50"
-              title="Escribe con IA un resumen de tres frases de lo que se vendió, a partir de este handoff."
-            >
-              {resumiendo ? "Escribiendo el resumen…" : "Resumir qué se vendió"}
-            </button>
-          )}
-          {noMaterial && !generated && (
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5 inline-block">
-              Las sesiones que alimentan este handoff aún no tienen transcripción — el handoff saldría vacío.
             </p>
           )}
-          {/* #5 — la clasificación del proyecto, compartida con el BC. UN solo eje de datos. */}
-          <div className="mt-2">
-            <TagsStrip tags={tags} canEdit={canManageContext} onSetTags={saveTags} />
-          </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+      )}
+      {generated && !status.handoffResumen && !resumiendo && puedeResumir && (
+        <div className="-ml-1.5">
+          <BotonTexto
+            onClick={() => void handleResumen()}
+            title="Escribe con IA un resumen de tres frases de lo que se vendió, a partir de este handoff."
+          >
+            Resumir qué se vendió
+          </BotonTexto>
+        </div>
+      )}
+      {noMaterial && !generated && (
+        <p className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs text-warn-ink">
+          Las reuniones que alimentan este handoff aún no tienen transcripción: el handoff saldría vacío.
+        </p>
+      )}
+      {/* #5 — la clasificación del proyecto, compartida con el BC. UN solo eje de datos. */}
+      <TagsStrip tags={tags} canEdit={canManageContext} onSetTags={saveTags} />
+
+      {(generated && status.canvasId) || puedeVerHistorial ? (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           {generated && status.canvasId && (
-            <button
-              onClick={() => setShowDoc((v) => !v)}
-              className="text-xs font-medium text-fg-muted hover:text-fg px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
+            <BotonBlanco
+              className="rounded-lg px-3 py-[7px] text-[13px] font-normal"
+              onClick={() => {
+                if (!showDoc) bajarAlDocumento.current = true;
+                setShowDoc(!showDoc);
+              }}
             >
-              {showDoc ? "Ocultar" : "Ver documento"}
-            </button>
+              {showDoc ? "Ocultar el documento" : "Ver documento"}
+            </BotonBlanco>
           )}
+          <span className="flex-1" />
           {/* Regenerar BORRA los bloques de la corrida anterior, así que lo que el agente había
-              escrito antes sobrevive solo dentro del run — y no había forma de abrirlo. Estilo
-              de texto igual que "Ver documento" a propósito: los dos son el mismo gesto (abrir
-              algo para leer), y el botón brand sigue siendo el único enfatizado de la barra. */}
+              escrito antes sobrevive solo dentro del run — y no había forma de abrirlo. */}
           {puedeVerHistorial && (
-            <button
-              onClick={() => setShowHistorial(true)}
-              className="text-xs font-medium text-fg-muted hover:text-fg px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
-              title="Corridas anteriores del agente de handoff (solo lectura)"
-            >
+            <BotonTexto onClick={() => setShowHistorial(true)} title="Corridas anteriores del agente de handoff (solo lectura)">
               Ver historial
-            </button>
+            </BotonTexto>
           )}
-          {/* El handoff no aparece en el desplegable de canvases, así que nunca pasó por el
-              botón del panel: hasta ahora, a su PDF solo se llegaba escribiendo la URL a
-              mano. Su contenido son bloques de canvas y la vista imprimible ya los rinde
-              bien — le faltaba únicamente la puerta. Mismo enlace que usa ClientInfoPanel. */}
+          {/* El handoff no aparece en el desplegable de canvases: a su PDF solo se llega por acá. */}
           {generated && status.canvasId && (
             <a
               href={`/print/canvas/${clientId}/${status.canvasId}?print=1&projectId=${projectId}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover"
+              className="rounded px-1.5 py-[5px] text-xs text-fg-muted transition-colors hover:text-fg"
               title="Abre una vista imprimible para guardar como PDF"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
               Exportar PDF
             </a>
           )}
-          {canGenerateHandoff && (
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              {generating ? (
-                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              ) : null}
-              {generating ? (phase ?? "Generando…") : generated ? "Regenerar" : "Generar handoff"}
-            </button>
-          )}
         </div>
-      </div>
+      ) : null}
 
       {error && (
-        <div className="px-5 pb-3 -mt-1">
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
-        </div>
+        <Alert variant="danger" title="No se pudo completar">
+          {error}
+        </Alert>
+      )}
+    </section>
+
+      {/* ── EL DOCUMENTO, PEGADO A SU TARJETA ──────────────────────────────────────
+          Iba al final, debajo de «Alrededor del handoff»: con el contexto abierto quedaba a dos
+          pantallas y «Ver documento» parecía no hacer nada. Ahora se abre acá, a todo el ancho,
+          y la vista baja hasta él. Es interno: nunca se publica al cliente. */}
+      {generated && showDoc && visible && status.canvasId && (
+        <section ref={docRef} className="scroll-mt-6 overflow-hidden rounded-xl border border-line bg-surface lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface-muted px-4 py-2">
+            <span className={ROTULO_DEL_SISTEMA}>El documento del handoff · interno</span>
+            <span className="flex items-center gap-2 text-xs text-fg-muted">
+              {canEdit ? "Se edita en el lugar" : "Solo lectura"}
+              <BotonTexto onClick={() => setShowDoc(false)}>Cerrar</BotonTexto>
+            </span>
+          </div>
+          <div className="bg-surface-muted p-4">
+            <CanvasLinearView projectId={projectId} canvasId={status.canvasId} canEdit={canEdit} destacarKey={HANDOFF_SECCION_PRINCIPAL} />
+          </div>
+        </section>
       )}
 
-      {/* Contexto — HubSpot · Google Meet · Fuentes manuales, en 3 columnas colapsables.
-          El CSE (owner) también lo ve y gestiona; el server enforce el scope de owner. */}
+    {/* ── ALREDEDOR DEL HANDOFF ──────────────────────────────────────────────────
+        Lo que decide qué entra al documento (el contexto y las exclusiones), lo que persigue el
+        cliente y lo que pidió fuera de lo vendido. Cuatro filas plegables con la misma cabecera
+        (FilaDeAlrededor). A todo el ancho; desaparece si no hay ninguna fila. */}
+    <section className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface empty:hidden lg:col-span-2 [&>*:first-child]:border-t-0">
+      {/* Contexto — HubSpot · Google Meet · Fuentes manuales. El CSE (owner) también lo ve y
+          gestiona; el server enforce el scope de owner. */}
       {canManageContext && (
         <ProjectContextSection
           projectId={projectId}
@@ -736,103 +794,105 @@ export default function ProjectHandoffSection({
         />
       )}
 
-      {/* Exclusiones para el handoff — texto libre del CSE que el agente debe ignorar
-          (temas de OTROS proyectos del cliente). Se inyecta como regla dura al generar. */}
-      {canEdit && (
-        <div className="border-t border-line px-5 py-3">
-          <button
-            onClick={() => setShowExcl((v) => !v)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-fg hover:text-brand transition-colors"
-          >
-            <svg
-              className={`w-3 h-3 transition-transform ${showExcl ? "rotate-90" : ""}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            Exclusiones para el handoff
-            {exclusionsDirty && exclusions.trim() !== (status.contextExclusions ?? "") ? (
-              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
-                sin guardar — se guardan al regenerar
-              </span>
-            ) : status.contextExclusions || status.exclusionAutomatica ? (
-              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
-                activas
-              </span>
-            ) : null}
-          </button>
-          {showExcl && (
-            <div className="mt-2 space-y-2">
-              {/* ── LA EXCLUSIÓN QUE PONE LA APP ─────────────────────────────────
-                  Se calcula en cada generación y no se guarda en ningún lado: no se puede
-                  borrar ni por accidente ni a propósito (decisión de Elías, 2026-08-08).
-                  Se PINTA porque si no, el encargado abriría este panel, vería el campo vacío,
-                  creería que el proyecto no tiene ninguna exclusión, y escribiría a mano lo que
-                  la app ya está diciendo. */}
-              {status.exclusionAutomatica && (
-                <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <svg className="w-3 h-3 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-fg-muted">
-                      La pone la app · siempre activa
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-fg-secondary leading-relaxed">
-                    {status.exclusionAutomatica}
-                  </p>
-                </div>
-              )}
-              <p className="text-[11px] text-fg-muted leading-relaxed">
-                {status.exclusionAutomatica ? "Sumá acá otros t" : "T"}emas que el agente debe
-                IGNORAR al generar — útil cuando el cliente tiene varios proyectos (ej.
-                &quot;ignorá el proyecto DocuSign&quot;, &quot;no hables de contratos&quot;).
-                Si las cambiás, regenerá el handoff (y después el kickoff).
-              </p>
-              <textarea
-                value={exclusions}
-                onChange={(e) => { setExclusions(e.target.value); setExclusionsDirty(true); }}
-                rows={3}
-                maxLength={5000}
-                placeholder='Ej.: "Ignorá todo lo relativo al proyecto de contratos en DocuSign."'
-                className="w-full px-3 py-2 text-xs bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand resize-y"
-              />
-              <div className="flex justify-end">
-                <button
-                  onClick={saveExclusions}
-                  disabled={savingExcl || !exclusionsDirty || exclusions.trim() === (status.contextExclusions ?? "")}
-                  className="text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  {savingExcl ? "Guardando…" : "Guardar exclusiones"}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Los resultados del cliente como lista medible (2026-10-02): la única captura de su línea
+          base y su meta — los objetivos del diagnóstico los toman de acá. La confirma el CSE del
+          proyecto (celda `handoff.confirmarResultados`), que no edita el resto del handoff. */}
+      {generated && visible && (
+        <FilaDeAlrededor
+          titulo="Resultados que persigue el cliente"
+          ayuda="Línea base, meta y plazo de cada uno."
+          meta={
+            cuentaDeResultados === null
+              ? undefined
+              : cuentaDeResultados.pendientes > 0
+              ? `${cuentaDeResultados.pendientes} sin confirmar`
+              : `${cuentaDeResultados.total} resultado${cuentaDeResultados.total === 1 ? "" : "s"}`
+          }
+          metaTono={cuentaDeResultados && cuentaDeResultados.pendientes > 0 ? "atencion" : "neutro"}
+          abierto={verResultados}
+          onAlternar={() => setVerResultados((v) => !v)}
+        >
+          <ResultadosMediblesDelHandoff
+            projectId={projectId}
+            canEdit={canEdit}
+            canConfirm={me?.permissions?.sections?.handoff?.confirmarResultados === true}
+            onCuenta={alContarResultados}
+          />
+        </FilaDeAlrededor>
       )}
 
       {/* Lo que el cliente pidió en las reuniones y no está en lo vendido (2026-10-02): el CSE decide. */}
       {visible && <PedidosFueraDeAlcance projectId={projectId} />}
 
-      {generated && showDoc && visible && status.canvasId && (
-        <div className="border-t border-line px-4 py-4">
-          {/* Los resultados del cliente como lista medible (2026-10-02): la única captura de su línea
-              base y su meta — los objetivos del diagnóstico los toman de acá. La confirma el CSE del
-              proyecto (celda `handoff.confirmarResultados`), que no edita el resto del handoff. */}
-          <ResultadosMediblesDelHandoff
-            projectId={projectId}
-            canEdit={canEdit}
-            canConfirm={me?.permissions?.sections?.handoff?.confirmarResultados === true}
-          />
-          <CanvasLinearView projectId={projectId} canvasId={status.canvasId} canEdit={canEdit} destacarKey={HANDOFF_SECCION_PRINCIPAL} />
-        </div>
+      {/* Exclusiones para el handoff — texto libre del CSE que el agente debe ignorar
+          (temas de OTROS proyectos del cliente). Se inyecta como regla dura al generar. */}
+      {canEdit && (
+        <FilaDeAlrededor
+          titulo="Exclusiones para el handoff"
+          ayuda="Lo que el agente no debe tomar en cuenta."
+          meta={
+            exclusionesSinGuardar
+              ? "sin guardar · se guardan al regenerar"
+              : status.contextExclusions || status.exclusionAutomatica
+              ? "activas"
+              : "ninguna"
+          }
+          metaTono={exclusionesSinGuardar ? "atencion" : "neutro"}
+          abierto={showExcl}
+          onAlternar={() => setShowExcl((v) => !v)}
+        >
+          <div className="space-y-2">
+            {/* ── LA EXCLUSIÓN QUE PONE LA APP ─────────────────────────────────
+                Se calcula en cada generación y no se guarda en ningún lado: no se puede
+                borrar ni por accidente ni a propósito (decisión de Elías, 2026-08-08).
+                Se PINTA porque si no, el encargado abriría este panel, vería el campo vacío,
+                creería que el proyecto no tiene ninguna exclusión, y escribiría a mano lo que
+                la app ya está diciendo. */}
+            {status.exclusionAutomatica && (
+              <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <svg className="h-3 w-3 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  <span className={ROTULO_DEL_SISTEMA}>
+                    La pone la app · siempre activa
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-fg-secondary">
+                  {status.exclusionAutomatica}
+                </p>
+              </div>
+            )}
+            <p className="text-xs leading-relaxed text-fg-muted">
+              {status.exclusionAutomatica ? "Suma acá otros t" : "T"}emas que el agente debe
+              IGNORAR al generar: útil cuando el cliente tiene varios proyectos (ej.
+              &quot;ignora el proyecto DocuSign&quot;, &quot;no hables de contratos&quot;).
+              Si las cambias, regenera el handoff (y después el kickoff).
+            </p>
+            <textarea
+              value={exclusions}
+              onChange={(e) => { setExclusions(e.target.value); setExclusionsDirty(true); }}
+              rows={3}
+              maxLength={5000}
+              placeholder='Ej.: "Ignora todo lo relativo al proyecto de contratos en DocuSign."'
+              className="w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none"
+            />
+            <div className="flex justify-end">
+              <BotonBlanco
+                onClick={() => void saveExclusions()}
+                disabled={savingExcl || !exclusionsDirty || exclusions.trim() === (status.contextExclusions ?? "")}
+              >
+                {savingExcl ? "Guardando…" : "Guardar exclusiones"}
+              </BotonBlanco>
+            </div>
+          </div>
+        </FilaDeAlrededor>
       )}
+    </section>
 
       {showHistorial && (
         <HistorialHandoffModal projectId={projectId} onClose={() => setShowHistorial(false)} />
       )}
-    </section>
     </div>
   );
 }

@@ -314,6 +314,7 @@ export const GET = withProjectAccess(async (
     source: true,
     sessionId: true,
     session: { select: { id: true, title: true, date: true } },
+    createdAt: true,
   } as const;
 
   type ActionItemRow = {
@@ -329,13 +330,14 @@ export const GET = withProjectAccess(async (
     source: string | null;
     sessionId: string | null;
     session: { id: string; title: string | null; date: Date | null } | null;
+    createdAt: Date;
   };
 
   const toCompat = (a: ActionItemRow) => ({
     text: a.text,
     done: a.done,
     source: a.source ?? undefined,
-    addedAt: undefined,
+    addedAt: a.createdAt.toISOString(),
     // Campos extra para que el UI nuevo aproveche si quiere
     id: a.id,
     ownerEmail: a.ownerEmail,
@@ -347,6 +349,21 @@ export const GET = withProjectAccess(async (
     sessionId: a.sessionId,
     sessionTitle: a.session?.title ?? null,
   });
+
+  /* Lo RECIENTE del panel de la ficha (rediseño del 2026-10-04, decisión de Elías): los pendientes
+     abiertos de las últimas 4 semanas. Medido en producción, el promedio es de 50 abiertos por
+     proyecto con el 62 % vencido y el 76 % de hace más de 60 días: la lista de siempre (los 20 de
+     fecha más vieja) mostraba justo el ruido. El diálogo «Ver todos» sigue leyendo `pendingItems`. */
+  const desdeHace4Semanas = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
+  const [pendientesRecientesRows, pendientesAbiertos] = await Promise.all([
+    prisma.actionItem.findMany({
+      where: { projectId, done: false, deletedAt: null, createdAt: { gte: desdeHace4Semanas } },
+      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+      select: actionItemSelect,
+      take: 5,
+    }),
+    prisma.actionItem.count({ where: { projectId, done: false, deletedAt: null } }),
+  ]);
 
   // Pendientes ABIERTOS (no hechos, no borrados) — lo que ve el widget + tab Pendientes.
   const [openItems, historyRows, setup, canvases] = await Promise.all([
@@ -513,6 +530,10 @@ export const GET = withProjectAccess(async (
     etapa, // el bloque "Etapa" — null cuando no hay etapa que mostrar
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
+    /* El panel de la ficha: lo de las últimas 4 semanas (hasta 5, con fecha primero) y cuántos
+       abiertos hay en total, para decir «y N más antiguos» sin traerlos. */
+    pendientesRecientes: pendientesRecientesRows.map(toCompat),
+    pendientesAbiertos,
     historyItems, // tareas hechas o borradas (tab Histórico)
     setup, // #5 — { handoff, kickoff, cronograma, procesos } para el indicador del widget
     /* El bloque "Canvas": qué documentos le corresponden a ESTE proyecto y cuáles ya están.

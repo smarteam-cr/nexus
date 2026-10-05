@@ -21,7 +21,9 @@ const RAIZ = process.cwd();
 const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
 
 const BOTON = "components/projects/NuevoProyectoStepper.tsx";
-const INDICE = "app/(shell)/clients/ClientsGrid.tsx";
+/* El botón pasó de la barra de la tabla a la cabecera de la página (rediseño del 2026-10-04: es el
+   único botón azul de /clients, y la cabecera la pinta el servidor antes que la tabla). */
+const INDICE = "app/(shell)/clients/page.tsx";
 const VIEJO = "components/handoffs/HandoffStepper.tsx";
 
 /** `/api/handoffs/lookup` → `app/api/handoffs/lookup/route.ts` */
@@ -330,7 +332,8 @@ describe("las tres puertas dicen lo que hacen", () => {
   const ROTULOS: Record<string, string> = {
     "app/(shell)/integrations/HubspotSystemCard.tsx": "Buscar empresas nuevas en HubSpot",
     "components/projects/NuevoProyectoStepper.tsx": "Agregar proyecto",
-    "app/(shell)/clients/[id]/WorkspaceClient.tsx": "Traer de HubSpot",
+    // Desde el riel de la ficha (2026-10-04) la puerta vive al pie del riel, no en las pestañas.
+    "components/clients/RielDelCliente.tsx": "Traer proyectos de HubSpot",
   };
 
   it("LA guarda: cada puerta conserva su rótulo, sin jerga de CRM", () => {
@@ -355,7 +358,7 @@ describe("las tres puertas dicen lo que hacen", () => {
     expect(
       sinComentarios("components/projects/NuevoProyectoStepper.tsx"),
       "el botón dejó de decir que también trae uno que ya existe",
-    ).toContain("traé uno que ya existe en HubSpot");
+    ).toContain("trae uno que ya existe en HubSpot");
   });
 
   it("y el importador masivo no se le ofrece a quien va a comer un 403", () => {

@@ -13,6 +13,10 @@ import ProjectCanvasPanel from "@/components/clients/ProjectCanvasPanel";
 import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
+import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
+import { BotonTexto } from "@/components/ui/sistema";
+import { cn } from "@/lib/cn";
+import { parseEstadoDeAlta, siguientePaso } from "@/lib/projects/alta";
 import { leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import {
   SENTINEL_SERVICE_TYPE,
@@ -57,13 +61,14 @@ interface ProjectSummary {
 }
 
 /**
- * La tira que explica de qué clase es el proyecto.
+ * De qué clase es el proyecto, en palabras, para la fila del riel (rediseño del 2026-10-04).
  *
- * Silenciosa por diseño: si el proyecto es una implementación de Customer Success normal
- * —no interno, sin hermano— no devuelve nada. Solo habla cuando el proyecto se comporta
- * distinto de lo que el CSE espera, que es exactamente cuando hace falta.
+ * Era la «tira de clase» que se pintaba debajo de las pestañas, y solo hablaba cuando el proyecto
+ * se comportaba distinto de lo que el CSE espera. Ahora el tipo va siempre, debajo del nombre —el
+ * riel lista los proyectos, y hay que poder distinguirlos—, y lo que implica para la plata y la
+ * cartera («no entra a cobranza», «no suma a la cartera de CS») va en el `title`.
  */
-function TiraDeClase({ p, projects }: { p: ProjectSummary; projects: ProjectSummary[] }) {
+function claseDelProyecto(p: ProjectSummary, projects: ProjectSummary[]): Pick<ProyectoDelRiel, "tipo" | "ayuda"> {
   const def = resolvePipeline(p.hubspotPipelineId ?? null);
   const hermano = p.hermanoCsProjectId
     ? projects.find((o) => o.id === p.hermanoCsProjectId)
@@ -77,39 +82,20 @@ function TiraDeClase({ p, projects }: { p: ProjectSummary; projects: ProjectSumm
     }),
   );
 
-  const chips: Array<{ texto: string; ayuda: string }> = [];
-  if (def && def.key !== "customer-success") {
-    chips.push({ texto: def.label, ayuda: def.help });
-  }
+  const partes = [def?.label ?? "Implementación de HubSpot"];
+  const ayuda: string[] = [];
+  if (def?.help) ayuda.push(def.help);
   if (p.proyectoInterno) {
-    chips.push({
-      texto: "Interno",
-      ayuda: "Proyecto de Smarteam para Smarteam. No se factura, no es cartera de nadie y no se le publica nada al cliente.",
-    });
+    partes.push("interno");
+    ayuda.push("Proyecto de Smarteam para Smarteam. No se factura, no es cartera de nadie y no se le publica nada al cliente.");
   }
   if (p.hermanoCsProjectId) {
-    chips.push({
-      texto: `Hermano de ${hermano?.name ?? "otro proyecto"}`,
-      ayuda: "Cuelga de esa implementación en HubSpot, así que no se factura aparte: cobra el hermano.",
-    });
+    partes.push(`hermano de ${hermano?.name ?? "otro proyecto"}`);
+    ayuda.push("Cuelga de esa implementación en HubSpot, así que no se factura aparte: cobra el hermano.");
   }
-  if (!chips.length) return null;
-
-  return (
-    <div className="px-6 py-2 flex items-center gap-2 flex-wrap border-b border-line bg-surface-muted">
-      {chips.map((c) => (
-        <span
-          key={c.texto}
-          title={c.ayuda}
-          className="px-2 py-0.5 rounded-md text-xs font-medium text-fg-secondary border border-line bg-surface"
-        >
-          {c.texto}
-        </span>
-      ))}
-      {!caps.cobranza && <span className="text-xs text-fg-muted">· no entra a cobranza</span>}
-      {!caps.carteraCs && <span className="text-xs text-fg-muted">· no suma a la cartera de CS</span>}
-    </div>
-  );
+  if (!caps.cobranza) ayuda.push("No entra a cobranza.");
+  if (!caps.carteraCs) ayuda.push("No suma a la cartera de CS.");
+  return { tipo: partes.join(" · "), ayuda: ayuda.join(" ") };
 }
 
 // ── Main workspace component ─────────────────────────────────────────────────
@@ -330,6 +316,41 @@ export default function WorkspaceClient({
     return () => clearTimeout(t);
   }, [bumpGpsRefresh, startSync, endSync]);
 
+  /* Sync no-silencioso: cliente con HubSpot que quedó SIN proyectos visibles tras sincronizar →
+     aviso con el motivo + Reintentar (antes era un cliente vacío y mudo, imposible de
+     diagnosticar). Va arriba del centro del lienzo. */
+  const avisoDeSync =
+    hasHubspot && projects.length === 0 && syncDone && !syncing ? (
+      /* ⚠ Escrito a mano con colores crudos hasta el 2026-08-05, y era ILEGIBLE en tema
+         claro: la descripción daba 1,16:1 y el botón 1,00:1 —el mismo color que su fondo,
+         literalmente invisible—. Ahora usa la primitiva, que pinta con tokens medidos en los dos
+         temas. */
+      <Alert
+        variant="warning"
+        title={
+          (syncResult?.suprimidos ?? 0) > 0
+            ? `${syncResult!.suprimidos} proyecto${syncResult!.suprimidos === 1 ? "" : "s"} de este cliente está${syncResult!.suprimidos === 1 ? "" : "n"} oculto${syncResult!.suprimidos === 1 ? "" : "s"}: se borró desde Nexus.`
+            : "No se cargó ningún proyecto de HubSpot para este cliente."
+        }
+        action={
+          /* ⚠ Llamaba `runHubspotSync()` SIN force, o sea que dentro del cooldown de 10 min
+             no hacía absolutamente nada. Un botón que dice "Reintentar" y no reintenta. */
+          <Button size="xs" variant="secondary" onClick={() => void runHubspotSync(true, true)} disabled={syncing}>
+            Reintentar
+          </Button>
+        }
+      >
+        {/* El motivo tiene que ser el REAL, no el genérico: si el proyecto se borró desde
+            Nexus, en HubSpot está perfectamente asociado y mandar a revisarlo allá hace
+            perder tiempo buscando un problema que no existe. */}
+        {(syncResult?.suprimidos ?? 0) > 0
+          ? "En HubSpot sigue existiendo y está bien asociado — Nexus lo ignora a pedido, para no recrearlo. Para volver a traerlo hay que sacarlo de la lista de ignorados."
+          : syncResult?.errors && syncResult.errors.length > 0
+            ? syncResult.errors[0]
+            : "Revisa en HubSpot que el proyecto esté asociado a la empresa de este cliente, y reintenta."}
+      </Alert>
+    ) : null;
+
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
       {/* Indicador discreto de sync de fondo (F4) — desaparece al terminar bien. */}
@@ -343,46 +364,6 @@ export default function WorkspaceClient({
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
-        {/* Sync no-silencioso: cliente con HubSpot que quedó SIN proyectos visibles
-            tras sincronizar → banner con el motivo + Reintentar (antes era un cliente
-            vacío y mudo, imposible de diagnosticar). */}
-        {hasHubspot && projects.length === 0 && syncDone && !syncing && (
-          /* ⚠ Escrito a mano con colores crudos hasta el 2026-08-05, y era ILEGIBLE en tema
-             claro: la descripción daba 1,16:1 y el botón 1,00:1 —el mismo color que su fondo,
-             literalmente invisible—. El título sí se leía, lo que lo hacía más confuso todavía.
-             La causa no era este archivo sino el método: el tema claro de los colores crudos es
-             una lista de clases remapeadas a mano, y `text-amber-200/80` (una opacidad sobre una
-             clase que SÍ estaba en la lista) nunca entró. Ahora usa la primitiva, que pinta con
-             tokens medidos en los dos temas. */
-          <div className="mx-6 mt-4">
-            <Alert
-              variant="warning"
-              title={
-                (syncResult?.suprimidos ?? 0) > 0
-                  ? `${syncResult!.suprimidos} proyecto${syncResult!.suprimidos === 1 ? "" : "s"} de este cliente está${syncResult!.suprimidos === 1 ? "" : "n"} oculto${syncResult!.suprimidos === 1 ? "" : "s"}: se borró desde Nexus.`
-                  : "No se cargó ningún proyecto de HubSpot para este cliente."
-              }
-              action={
-                /* ⚠ Llamaba `runHubspotSync()` SIN force, o sea que dentro del cooldown de 10 min
-                   no hacía absolutamente nada — y el cooldown YA estaba reclamado por la auto-sync
-                   del montaje, así que ése era el caso NORMAL. Un botón que dice "Reintentar" y no
-                   reintenta. (Los comentarios de tres archivos daban por hecho que sí forzaba.) */
-                <Button size="xs" variant="secondary" onClick={() => void runHubspotSync(true, true)} disabled={syncing}>
-                  Reintentar
-                </Button>
-              }
-            >
-              {/* El motivo tiene que ser el REAL, no el genérico: si el proyecto se borró desde
-                  Nexus, en HubSpot está perfectamente asociado y mandar a revisarlo allá hace
-                  perder tiempo buscando un problema que no existe. */}
-              {(syncResult?.suprimidos ?? 0) > 0
-                ? "En HubSpot sigue existiendo y está bien asociado — Nexus lo ignora a pedido, para no recrearlo. Para volver a traerlo hay que sacarlo de la lista de ignorados."
-                : syncResult?.errors && syncResult.errors.length > 0
-                  ? syncResult.errors[0]
-                  : "Revisá en HubSpot que el proyecto esté asociado a la empresa de este cliente, y reintentá."}
-            </Alert>
-          </div>
-        )}
         <ProjectSection
           clientId={clientId}
           projects={projects}
@@ -393,6 +374,7 @@ export default function WorkspaceClient({
           hasHubspot={hasHubspot}
           sincronizando={sincronizandoManual}
           onSync={() => void runHubspotSync(true, true)}
+          avisoDeSync={avisoDeSync}
         />
       </div>
     </div>
@@ -411,6 +393,7 @@ function ProjectSection({
   hasHubspot,
   sincronizando,
   onSync,
+  avisoDeSync,
 }: {
   clientId: string;
   projects: ProjectSummary[];
@@ -427,6 +410,8 @@ function ProjectSection({
    */
   sincronizando: boolean;
   onSync: () => void;
+  /** El aviso del sync que no trajo proyectos: va arriba del centro. */
+  avisoDeSync: React.ReactNode;
 }) {
   const { activeProjectId, setActiveProjectId, gpsRefreshSignal, timelineRefreshSignal } = useWorkspace();
   const router = useRouter();
@@ -522,158 +507,192 @@ function ProjectSection({
   const isProcesos = activeProjectId === PROCESOS_TAB_ID;
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
+  /* El proyecto cuyas piezas cuelgan en el riel: el abierto o, mientras se mira algo de la cuenta
+     («Información del cliente», «Procesos»), el último que se abrió. Su panel queda MONTADO y
+     oculto —como el Resumen dentro de un proyecto—, así sus piezas siguen en el riel y volver a él
+     no recarga nada. Sin ninguno abierto todavía, los proyectos se ven plegados. */
+  const [ultimoProyecto, setUltimoProyecto] = useState<string | null>(activeProject ? activeProject.id : null);
+  if (activeProject && ultimoProyecto !== activeProject.id) setUltimoProyecto(activeProject.id);
+  const proyectoDelRiel = activeProject ?? projects.find((p) => p.id === ultimoProyecto) ?? null;
+
+  /* Dónde se pintan las piezas (en el riel) y el contexto (en el panel derecho). Los dueños de
+     cada vista los llenan por portal: el panel del proyecto sabe sus piezas y su «Qué sigue», la
+     información del cliente sabe sus licencias. Estado y no ref: el portal tiene que re-renderizar
+     cuando el nodo aparece. */
+  const [slotDePiezas, setSlotDePiezas] = useState<HTMLDivElement | null>(null);
+  const [slotDelPanel, setSlotDelPanel] = useState<HTMLDivElement | null>(null);
+
+  /* «Ocultar panel»: para proyectar un documento en una reunión. Se recuerda por navegador
+     (decisión del 2026-10-04). El panel arranca visible y el efecto lee lo guardado. */
+  const [panelVisible, setPanelVisible] = useState(true);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("nexus-ficha-panel") === "oculto") setPanelVisible(false);
+    } catch {
+      /* sin almacenamiento (ventana privada): queda visible */
+    }
+  }, []);
+  const cambiarPanel = useCallback((visible: boolean) => {
+    setPanelVisible(visible);
+    try {
+      window.localStorage.setItem("nexus-ficha-panel", visible ? "visible" : "oculto");
+    } catch {
+      /* sin almacenamiento: solo dura esta visita */
+    }
+  }, []);
+
+  /** Abrir una pieza de un proyecto que no está en el centro (se mira algo de la cuenta). */
+  const abrirEnProyecto = useCallback(
+    (projectId: string, canvasId: string | null) => {
+      setActiveProjectId(projectId);
+      const params = new URLSearchParams(Array.from(searchParams.entries()));
+      params.set("tab", projectId);
+      if (canvasId) params.set("canvas", canvasId);
+      else params.delete("canvas");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, pathname, router, setActiveProjectId],
+  );
+
+  const propuestaPendiente = activeProject
+    ? (propuestaViva[activeProject.id]?.pending ?? activeProject.timelineProposalPending ?? false)
+    : false;
+  const altaPendiente = activeProject ? siguientePaso(parseEstadoDeAlta(activeProject.altaEstado ?? null)) !== null : false;
+
+  const filasDelRiel: ProyectoDelRiel[] = projects.map((p) => ({ id: p.id, nombre: p.name, ...claseDelProyecto(p, projects) }));
+
   return (
-    <div>
-      {/* Tab bar. El scroll horizontal vive en el contenedor INTERNO, no en la fila: si no,
-          con muchos proyectos el botón "Actualizar" se iría con el scroll y dejaría de estar
-          donde uno lo busca. */}
-      <div className="border-b border-line px-6 flex items-center">
-      <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
-        {projects.map((p) => {
-          const isActive = p.id === activeProjectId;
-          return (
-            <button
-              key={p.id}
-              onClick={() => selectTab(p.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                isActive
-                  ? "border-brand text-fg"
-                  : "border-transparent text-fg-muted hover:text-fg-secondary hover:border-line"
-              }`}
-            >
-              {p.name}
-            </button>
-          );
-        })}
-
-        {/* Procesos — pestaña top-level del cliente. Muestra la sección "procesos"
-            del canvas de Información del cliente (mismo storage, superficie dedicada). */}
-        <button
-          onClick={() => selectTab(PROCESOS_TAB_ID)}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            isProcesos
-              ? "border-brand text-fg"
-              : "border-transparent text-fg-muted hover:text-fg-secondary hover:border-line"
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-          </svg>
-          Procesos
-        </button>
-
-        {/* Información del cliente — siempre al final. Internamente sigue siendo
-            el Project con serviceType=__strategy__ (mismo storage; cambia el
-            label visible y el contenido del panel). */}
-        <button
-          onClick={() => selectTab(STRATEGY_TAB_ID)}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            isStrategy
-              ? "border-brand text-fg"
-              : "border-transparent text-fg-muted hover:text-fg-secondary hover:border-line"
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Información del cliente
-          <AvisoDeFicha clientId={clientId} />
-        </button>
-      </div>
-
-      {/* Traer AHORA los proyectos de HubSpot.
-          Por qué existe: la sincronización automática del montaje corre SIN `force`, así que
-          respeta el cooldown de 10 min del server — recargar la página cinco veces no baja un
-          solo dato nuevo. Sin este botón no había forma de pedir datos frescos a demanda: el
-          "Reintentar" del banner solo se pinta cuando el cliente quedó con CERO proyectos, y el
-          del toast solo cuando el pedido TIRA. El caso normal —"acabo de crear el proyecto en
-          HubSpot, traelo"— no tenía puerta.
-          Discreto a propósito (`secondary`, `xs`): es una acción de mantenimiento, no el trabajo
-          de la pantalla. Los frenos que lo hacen seguro (mutex + piso duro) están en el server,
-          donde no dependen de que la UI se porte bien. */}
-      {hasHubspot && (
-        <Button
-          variant="secondary"
-          size="xs"
-          className="ml-3 shrink-0"
-          loading={sincronizando}
-          onClick={onSync}
-          title="Trae los proyectos que esta empresa tenga en HubSpot y todavía no estén acá. No borra nada."
-        >
-          {/* ⚠ Se llamaba «Actualizar», y ése era el problema: es LA puerta por la que un CSE
-              puede traerse un proyecto de HubSpot —su gate es solo tener acceso al cliente, sin
-              permiso especial— y nadie la encontraba porque el nombre no dice lo que hace.
-              «Actualizar» suena a refrescar la pantalla. */}
-          {sincronizando ? "Trayendo…" : "Traer de HubSpot"}
-        </Button>
+    /* El lienzo de tres columnas, como la preventa (sistema «Nexus · interfaz interna»): a la
+       izquierda el riel (14,5rem), al centro una sola tarea, a la derecha el panel de contexto
+       (18,75rem). Debajo de 1280 px el panel baja al final; debajo de 1024 px el riel se acuesta. */
+    <div
+      className={cn(
+        "min-h-full bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)]",
+        panelVisible ? "xl:grid-cols-[14.5rem_minmax(0,1fr)_18.75rem]" : "xl:grid-cols-[14.5rem_minmax(0,1fr)_2.75rem]",
       )}
-      </div>
+    >
+      <aside className="border-b border-line bg-surface px-3 py-4 lg:sticky lg:top-0 lg:h-[calc(100vh-57px)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r">
+        <RielDelCliente
+          proyectos={filasDelRiel}
+          activo={activeProject?.id ?? null}
+          proyectoDelRiel={proyectoDelRiel?.id ?? null}
+          onElegirProyecto={selectTab}
+          onElegirCuenta={(que) => selectTab(que === "info" ? STRATEGY_TAB_ID : PROCESOS_TAB_ID)}
+          cuentaActiva={isStrategy ? "info" : isProcesos ? "procesos" : null}
+          avisoDeLaFicha={<AvisoDeFicha clientId={clientId} />}
+          slotDePiezas={setSlotDePiezas}
+          /* Traer AHORA los proyectos de HubSpot. La sincronización del montaje corre SIN
+             `force` y respeta el cooldown de 10 min: recargar la página no baja un dato nuevo, y el
+             caso normal —«acabo de crear el proyecto en HubSpot, tráelo»— no tenía puerta. Los
+             frenos que lo hacen seguro (mutex + piso duro) están en el server. */
+          traer={{ visible: hasHubspot, sincronizando, onClick: onSync }}
+        />
+      </aside>
 
-      {/* De qué CLASE es el proyecto activo. Solo aparece cuando hay algo que explicar:
-          para una implementación de Customer Success normal —el 99% de los casos— no se
-          pinta nada. Es la única superficie que responde "¿por qué este proyecto no me
-          aparece en la cartera / en cobranza?" sin tener que abrir HubSpot. */}
-      {activeProject && <TiraDeClase p={activeProject} projects={projects} />}
+      <main className="min-w-0">
+        {avisoDeSync && <div className="px-6 pt-6">{avisoDeSync}</div>}
 
-      {/* El alta que quedó a medio hacer, con su botón de retomar. Va ARRIBA del contenido y
-          no adentro de un panel: mientras el alta no termine, el proyecto no cobra, no suma a
-          la cartera y no se le publica nada al cliente — o sea que casi todo lo que se ve más
-          abajo está contando una versión incompleta de la verdad. */}
-      {activeProject && (
-        <AltaTrabada
-          variante="compacto"
-          projectId={activeProject.id}
-          altaEstado={activeProject.altaEstado}
-          altaError={activeProject.altaError}
-          altaUltimoIntentoAt={
-            activeProject.altaUltimoIntentoAt
-              ? new Date(activeProject.altaUltimoIntentoAt).toISOString()
-              : null
-          }
-          altaIntentos={activeProject.altaIntentos}
-          altaActorEmail={activeProject.altaActorEmail}
-          onTermino={() => {
-            invalidateGps(activeProject.id);
-            window.location.reload();
-          }}
-        />
-      )}
+        {isStrategy && (
+          <ClientInfoPanel
+            key={STRATEGY_TAB_ID}
+            projectId={strategyProjectId}
+            canvasId={strategyCanvasId}
+            slotDelPanel={panelVisible ? slotDelPanel : null}
+          />
+        )}
+        {isProcesos && (
+          <ClientProcesosPanel
+            key={PROCESOS_TAB_ID}
+            clientId={clientId}
+            projectId={strategyProjectId}
+            canvasId={strategyCanvasId}
+            slotDelPanel={panelVisible ? slotDelPanel : null}
+          />
+        )}
+        {proyectoDelRiel && (
+          <ProjectCanvasPanel
+            key={proyectoDelRiel.id}
+            projectId={proyectoDelRiel.id}
+            nombreDelProyecto={proyectoDelRiel.name}
+            tags={proyectoDelRiel.tags}
+            hubspotPipelineId={proyectoDelRiel.hubspotPipelineId}
+            initialCanvases={proyectoDelRiel.id === initialCanvasesProjectId ? initialCanvases : null}
+            visible={!!activeProject}
+            slotDePiezas={slotDePiezas}
+            slotDelPanel={activeProject && panelVisible ? slotDelPanel : null}
+            propuestaPendiente={activeProject ? propuestaPendiente : (proyectoDelRiel.timelineProposalPending ?? false)}
+            queSigueOcupado={altaPendiente || propuestaPendiente}
+            onAbrirDesdeOculto={(canvasId) => abrirEnProyecto(proyectoDelRiel.id, canvasId)}
+          />
+        )}
+      </main>
 
-      {/* Tanda M — igual criterio que AltaTrabada: se ve sin tener que entrar a la pestaña
-          Cronograma, que es justo donde este aviso vivía enterrado antes. */}
-      {activeProject && (
-        <TimelineProposalPendiente
-          variante="compacto"
-          projectId={activeProject.id}
-          clientId={clientId}
-          pending={propuestaViva[activeProject.id]?.pending ?? activeProject.timelineProposalPending ?? false}
-          autoria={propuestaViva[activeProject.id] ? propuestaViva[activeProject.id].autoria : (activeProject.timelineProposalAutoria ?? null)}
-        />
-      )}
-
-      {/* Content */}
-      {isStrategy ? (
-        <ClientInfoPanel
-          key={STRATEGY_TAB_ID}
-          projectId={strategyProjectId}
-          canvasId={strategyCanvasId}
-        />
-      ) : isProcesos ? (
-        <ClientProcesosPanel
-          key={PROCESOS_TAB_ID}
-          clientId={clientId}
-          projectId={strategyProjectId}
-          canvasId={strategyCanvasId}
-        />
-      ) : activeProjectId && activeProject ? (
-        <ProjectCanvasPanel
-          key={activeProjectId}
-          projectId={activeProjectId}
-          tags={activeProject.tags}
-          hubspotPipelineId={activeProject.hubspotPipelineId}
-          initialCanvases={activeProjectId === initialCanvasesProjectId ? initialCanvases : null}
-        />
-      ) : null}
+      <aside
+        className={cn(
+          "border-t border-line bg-surface-muted lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-57px)] xl:self-start xl:overflow-y-auto xl:border-l xl:border-t-0",
+          panelVisible ? "p-5" : "px-5 py-3 xl:px-1.5 xl:py-5",
+        )}
+      >
+        {panelVisible ? (
+          <div className="flex flex-col gap-6">
+            <div className="-mb-4 flex justify-end">
+              <BotonTexto onClick={() => cambiarPanel(false)} title="Oculta este panel; por ejemplo, para proyectar un documento">
+                Ocultar panel
+              </BotonTexto>
+            </div>
+            {/* El alta que quedó a medio hacer, con su botón de retomar. Va primero en el panel —que
+                se ve en todos los documentos— y no adentro de una pieza: mientras el alta no
+                termine, el proyecto no cobra, no suma a la cartera y no se le publica nada al
+                cliente, o sea que casi todo lo demás cuenta una versión incompleta de la verdad. */}
+            {activeProject && (
+              <AltaTrabada
+                variante="completo"
+                projectId={activeProject.id}
+                altaEstado={activeProject.altaEstado}
+                altaError={activeProject.altaError}
+                altaUltimoIntentoAt={
+                  activeProject.altaUltimoIntentoAt
+                    ? new Date(activeProject.altaUltimoIntentoAt).toISOString()
+                    : null
+                }
+                altaIntentos={activeProject.altaIntentos}
+                altaActorEmail={activeProject.altaActorEmail}
+                onTermino={() => {
+                  invalidateGps(activeProject.id);
+                  window.location.reload();
+                }}
+              />
+            )}
+            {/* Tanda M — la propuesta de cronograma sin decidir. Mismo criterio que el alta: se ve
+                sin entrar al cronograma, que es justo donde este aviso vivía enterrado antes. Con
+                ella a la vista, el panel del proyecto no repite otro «Qué sigue». */}
+            {activeProject && !altaPendiente && (
+              <TimelineProposalPendiente
+                variante="panel"
+                projectId={activeProject.id}
+                clientId={clientId}
+                pending={propuestaViva[activeProject.id]?.pending ?? activeProject.timelineProposalPending ?? false}
+                autoria={propuestaViva[activeProject.id] ? propuestaViva[activeProject.id].autoria : (activeProject.timelineProposalAutoria ?? null)}
+              />
+            )}
+            <div ref={setSlotDelPanel} className="flex flex-col gap-6" />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => cambiarPanel(true)}
+            aria-label="Mostrar el panel"
+            title="Mostrar el panel"
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-line bg-surface px-2 py-1.5 text-xs text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg xl:h-8 xl:w-8 xl:px-0"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M15 4v16" />
+            </svg>
+            <span className="xl:hidden">Mostrar el panel</span>
+          </button>
+        )}
+      </aside>
     </div>
   );
 }

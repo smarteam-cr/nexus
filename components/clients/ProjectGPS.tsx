@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
-import { IconCheck } from "@/components/ui";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
+import { Alert, Modal } from "@/components/ui";
+import { BotonAzul, BotonBlanco, QueSigue } from "@/components/ui/sistema";
 import MinuteDialog from "./MinuteDialog";
 import ActionItemsDialog from "./ActionItemsDialog";
 import { useWorkspace } from "./WorkspaceContext";
@@ -15,6 +17,9 @@ import type { ChipDeCanvas } from "@/lib/flow/canvas-chips";
 import type { EtapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import StageBadge from "@/components/lifecycle/StageBadge";
 import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects/ProjectBriefSection";
+import ProjectSessionsReview from "./ProjectSessionsReview";
+import { useContextoDelResumen, type AvisoDePieza } from "./contexto-del-resumen";
+import { porQueEstaAca, queSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
 
 
 export interface PendingItem {
@@ -154,6 +159,11 @@ interface GPSData {
    * bloque no aparece en vez de romper.
    */
   brief?: BriefDeProyecto | null;
+  /** Lo abierto de las últimas 4 semanas, vencido primero (2026-10-04). Ausente en respuestas
+   *  cacheadas viejas: ahí se cae a los abiertos de siempre. */
+  pendientesRecientes?: PendingItem[];
+  /** Cuántos abiertos hay en total, para el «y N más antiguos». */
+  pendientesAbiertos?: number;
 }
 
 /** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
@@ -184,17 +194,6 @@ type SetupSignals = {
   procesos: boolean;
 };
 
-// Pill de un canvas generado, en el tema CLARO del widget (no reusa el SetupPill del panel).
-// `optional` (D-02): le corresponde, no está, y no se reclama — neutro, no rojo.
-function SetupChip({ state, label }: { state: "done" | "draft" | "missing" | "optional"; label: ReactNode }) {
-  const cls = {
-    done: "text-emerald-700 bg-emerald-50 border-emerald-200",
-    draft: "text-amber-700 bg-amber-50 border-amber-200",
-    missing: "text-red-600 bg-red-50 border-red-200",
-    optional: "text-fg-muted bg-surface-muted border-line",
-  }[state];
-  return <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${cls}`}>{label}</span>;
-}
 
 export default function ProjectGPS({ projectId, clientId }: { projectId: string; clientId: string }) {
   // Inicializa desde el cache de módulo → al remontar (cambio de tab) renderiza al
@@ -207,6 +206,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const [minuteDialogOpen, setMinuteDialogOpen] = useState(false);
   const [itemsDialogOpen, setItemsDialogOpen] = useState(false);
   const frontDateRef = useRef<HTMLInputElement>(null);
+  const resumenCtx = useContextoDelResumen();
+  const { onEtapa, onQueSigue, onAvisosDePiezas } = resumenCtx;
+  const [sesionesAbiertas, setSesionesAbiertas] = useState(false);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchGPS = useCallback(async () => {
@@ -253,9 +255,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [field]: value }),
       });
-      if (!res.ok) toast.error("No se pudo guardar el cambio del GPS.");
+      if (!res.ok) toast.error("No se pudo guardar el cambio.");
     } catch {
-      toast.error("No se pudo guardar el cambio del GPS. Revisá tu conexión.");
+      toast.error("No se pudo guardar el cambio. Revisa tu conexión.");
     }
   }, [projectId, toast]);
 
@@ -416,23 +418,97 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     });
   }, [projectId, fetchGPS]);
 
+  // ── Lo que el Resumen le cuenta al panel del proyecto ────────────────────────
+  // Se calcula ANTES de los early-returns: los hooks no pueden quedar detrás de un `if`.
+  const etapaParaElRiel = data?.etapa?.posicion ? `${data.etapa.posicion.index} de ${data.etapa.posicion.total}` : null;
+  useEffect(() => {
+    onEtapa(etapaParaElRiel);
+  }, [etapaParaElRiel, onEtapa]);
+
+  /* «Opcional» y «sin subir» dejaron de ser chips del widget (el riel ya dice el estado de cada
+     pieza) y viajan al riel como su aviso, en NEUTRO: un rojo por algo que no se reclama enseña a
+     ignorar los rojos. `PIEZAS_NO_REQUERIDAS` decide cuál es opcional, en el servidor. */
+  const canvasChips = data?.canvasChips;
+  const avisosDePiezas = useMemo(() => {
+    const out: Record<string, AvisoDePieza> = {};
+    if (!canvasChips) return out;
+    for (const [slug, aviso] of canvasChips.map((c): [string, AvisoDePieza | null] => [
+      c.slug,
+      c.estado === "opcional"
+        ? { corto: "opcional", largo: "Le corresponde a este proyecto, pero no se reclama si no se usa.", tono: "neutro" }
+        : c.estado === "borrador"
+          ? { corto: "sin subir", largo: "Tiene contenido, pero el cliente todavía no lo ve: falta subirlo.", tono: "neutro" }
+          : null,
+    ])) {
+      if (aviso) out[slug] = aviso;
+    }
+    return out;
+  }, [canvasChips]);
+  useEffect(() => {
+    onAvisosDePiezas(avisosDePiezas);
+  }, [avisosDePiezas, onAvisosDePiezas]);
+
+  /* Las reuniones que asignó la IA y nadie revisó: solo cuentan con 2+ proyectos abiertos en la
+     empresa (es la regla del chip de la ficha y del índice). Una lectura por apertura del Resumen. */
+  const [sinRevisar, setSinRevisar] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/projects/${projectId}/project-sessions`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { multiProject?: boolean; unreviewedCount?: number } | null) => {
+        if (vivo && j) setSinRevisar(j.multiProject ? (j.unreviewedCount ?? 0) : 0);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [projectId, gpsRefreshSignal, sesionesAbiertas]);
+
+  const proximaDeCualquierFrente = useMemo(() => {
+    const fechas = (data?.frentes ?? FRENTES_LEGACY)
+      .map((f) => data?.fronts?.[f.key]?.next?.date ?? null)
+      /* La «próxima» de cada frente ya la resuelve el servidor (la siguiente agendada o la cargada
+         a mano): acá solo importa si hay alguna. */
+      .filter((d): d is string => !!d);
+    return fechas.sort()[0] ?? null;
+  }, [data]);
+
+  const queSigue = useMemo(
+    () =>
+      data
+        ? queSigueDelProyecto({
+            etapa: data.etapa ?? null,
+            piezas: resumenCtx.piezas,
+            sesionesSinRevisar: sinRevisar,
+            resumenPendiente:
+              data.brief === null ? { motivo: null } : data.brief?.vencido ? { motivo: data.brief.motivoDeVencimiento } : null,
+            proximaReunion: proximaDeCualquierFrente,
+          })
+        : null,
+    [data, resumenCtx.piezas, sinRevisar, proximaDeCualquierFrente],
+  );
+  useEffect(() => {
+    onQueSigue(queSigue);
+  }, [queSigue, onQueSigue]);
+
   if (error) {
     return (
-      <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-xs text-red-500 flex items-center justify-between gap-3">
-        <span className="truncate" title={error}>⚠ No se pudo cargar el GPS: {error}</span>
-        <button
-          onClick={fetchGPS}
-          className="flex-shrink-0 px-2.5 py-1 rounded bg-red-500/15 hover:bg-red-500/25 text-red-600 transition-colors font-medium"
+      <div className="lg:col-span-2">
+        <Alert
+          variant="danger"
+          title="No se pudo cargar el resumen del proyecto"
+          action={
+            <BotonBlanco onClick={() => void fetchGPS()}>Reintentar</BotonBlanco>
+          }
         >
-          Reintentar
-        </button>
+          {error}
+        </Alert>
       </div>
     );
   }
 
-  // Skeleton ESTRUCTURAL: misma cáscara/altura que el widget cargado (cabecera + grid
-  // de 4 columnas con `min-h-[170px]`, ver abajo) para que al cargar no haya salto.
-  // Vive en ./skeletons.tsx porque el loading.tsx de la ruta pinta la MISMA pieza.
+  // Skeleton ESTRUCTURAL: misma cáscara que lo cargado (la tarjeta de la etapa a todo el ancho y
+  // la del resumen debajo). Vive en ./skeletons.tsx porque el loading.tsx pinta la MISMA pieza.
   if (!data) return <ProjectGpsSkeleton />;
 
   const formatDate = (d: Date) => {
@@ -453,103 +529,120 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  const pendingOpen = data.pendingItems.filter((i) => !i.done);
-  const pendingCount = pendingOpen.length;
-
   const info = data.projectInfo;
   const createdAtStr = info?.createdAt
-    ? new Date(info.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
+    ? new Date(info.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })
     : null;
-
-  const cardLabel = "text-[10px] font-semibold text-fg-muted uppercase tracking-wide";
-  const frontLabel = "text-[11px] font-semibold text-fg-secondary";
-  const mixtaBadge = (
-    <span className="text-[9px] uppercase tracking-wide text-brand bg-brand/10 border border-brand/30 rounded px-1 py-0.5">mixta</span>
-  );
 
   // Los frentes que este proyecto muestra, con su rótulo — los manda el servidor.
   const frentes = data.frentes ?? FRENTES_LEGACY;
   const cobertura = data.coberturaDelCliente ?? null;
   const pctTranscript = cobertura ? pctConTranscript(cobertura) : null;
-  const canvasChips = data.canvasChips ?? [];
   const etapa = data.etapa ?? null;
+  const lineas = porQueEstaAca(etapa);
+
+  // Pendientes: lo reciente (decisión del 2026-10-04). Respuestas cacheadas viejas no traen el
+  // campo: ahí se cae a los abiertos de siempre.
+  const recientes = data.pendientesRecientes ?? data.pendingItems.filter((i) => !i.done).slice(0, 5);
+  const abiertosTotal = data.pendientesAbiertos ?? data.pendingItems.filter((i) => !i.done).length;
+  const masAntiguos = Math.max(0, abiertosTotal - recientes.length);
+
+  const rotulo = "text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-fg-muted";
+  const mixtaBadge = (
+    <span className="rounded-full border border-line bg-surface-hover px-1.5 text-[10px] font-medium text-fg-secondary" title="La reunión mezcla a Ventas y al equipo de entrega">
+      mixta
+    </span>
+  );
 
   // ── Última de un frente (Ventas / CSE / Desarrollo) ───────────────────────────
   const renderLastFront = (frontKey: FrontKey, label: string) => {
     const last = data.fronts?.[frontKey]?.last ?? null;
     const d = last?.date ? new Date(last.date) : null;
     return (
-      <div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={frontLabel}>{label}</span>
-          {last?.mixed && mixtaBadge}
-          {d && <span className="text-[10px] text-fg-muted">{formatPastDate(d)}</span>}
-        </div>
-        {last ? (
+      <div className="flex flex-col gap-0.5 py-2">
+        <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
+          Última · {label} {last?.mixed && mixtaBadge}
+        </span>
+        {last && d ? (
           <>
-            {last.title && <p className="text-xs text-fg truncate" title={last.title}>{last.title}</p>}
-            {last.googleDocId && (
-              <a
-                href={`https://docs.google.com/document/d/${last.googleDocId}`}
-                target="_blank" rel="noopener noreferrer"
-                className="text-[10px] text-brand hover:text-brand/80 inline-block"
-              >
-                Abrir notas →
-              </a>
-            )}
+            <span className="text-[13px] font-semibold text-fg">{formatPastDate(d)}</span>
+            <span className="text-xs text-fg-secondary">
+              {last.title && <span className="break-words">{last.title}</span>}
+              {last.googleDocId && (
+                <>
+                  {last.title && " · "}
+                  <a
+                    href={`https://docs.google.com/document/d/${last.googleDocId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand hover:text-brand-light"
+                  >
+                    Abrir notas
+                  </a>
+                </>
+              )}
+            </span>
           </>
         ) : (
-          <p className="text-xs text-fg-muted">Sin sesiones</p>
+          <span className="text-[13px] text-fg-muted">Sin reuniones</span>
         )}
       </div>
     );
   };
 
-  // ── Próxima de un frente (Ventas / CSE / Desarrollo) — editable (override manual) ──
+  // ── Próxima de un frente — editable (una fecha cargada a mano, fuera de Meet) ──
   const renderNextFront = (frontKey: FrontKey, label: string) => {
     const next = data.fronts?.[frontKey]?.next ?? null;
     const d = next?.date ? new Date(next.date) : null;
     const editing = editingFront === frontKey;
     const isManual = next?.source === "manual";
     return (
-      <div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={frontLabel}>{label}</span>
-          {next?.mixed && mixtaBadge}
+      <div className="flex flex-col gap-0.5 py-2">
+        <span className="flex items-center gap-1.5 text-[11px] text-fg-muted">
+          Próxima · {label} {next?.mixed && mixtaBadge}
           {isManual && (
-            <span className="text-[9px] uppercase tracking-wide text-fg-muted bg-surface-muted border border-line rounded px-1 py-0.5">manual</span>
+            <span className="rounded-full border border-line bg-surface-hover px-1.5 text-[10px] font-medium text-fg-secondary" title="Cargada a mano">
+              a mano
+            </span>
           )}
-        </div>
+        </span>
         {editing ? (
-          <div className="space-y-1.5 mt-1">
+          <div className="mt-1 space-y-1.5">
             <input
               ref={frontDateRef}
               type="datetime-local"
+              aria-label={`Fecha de la próxima reunión de ${label}`}
               defaultValue={isManual && d ? new Date(d).toISOString().slice(0, 16) : ""}
               onChange={(e) => onFrontDate(frontKey, e.target.value)}
-              className="w-full text-xs border border-line rounded px-2 py-1 focus:outline-none focus:border-brand bg-surface-muted text-fg"
+              className="w-full rounded-md border border-line bg-surface px-2 py-1 text-xs text-fg focus:border-brand focus:outline-none"
             />
             <input
               defaultValue={isManual ? next?.note ?? "" : ""}
               placeholder="Nota (opcional)…"
+              aria-label="Nota de la reunión"
               onChange={(e) => onFrontNote(frontKey, e.target.value)}
-              className="w-full text-xs border border-line rounded px-2 py-1 focus:outline-none focus:border-brand bg-surface-muted text-fg"
+              className="w-full rounded-md border border-line bg-surface px-2 py-1 text-xs text-fg focus:border-brand focus:outline-none"
             />
-            <button onClick={() => setEditingFront(null)} className="text-[10px] text-brand hover:text-brand/80">Listo</button>
+            <button onClick={() => setEditingFront(null)} className="text-xs font-semibold text-brand hover:text-brand-light">
+              Listo
+            </button>
           </div>
         ) : (
           <button
-            onClick={() => { setEditingFront(frontKey); setTimeout(() => frontDateRef.current?.focus(), 50); }}
-            className="text-left w-full group"
+            onClick={() => {
+              setEditingFront(frontKey);
+              setTimeout(() => frontDateRef.current?.focus(), 50);
+            }}
+            title="Cargar o cambiar la fecha a mano"
+            className="group w-full text-left"
           >
             {next && d ? (
-              <div>
-                <p className="text-sm font-medium text-fg">{formatDate(d)}</p>
-                {next.title && <p className="text-xs text-fg-muted truncate" title={next.title}>{next.title}</p>}
-                {next.note && <p className="text-xs text-fg-muted truncate">{next.note}</p>}
-              </div>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-[13px] font-semibold text-fg">{formatDate(d)}</span>
+                {(next.title || next.note) && <span className="text-xs text-fg-secondary">{next.title ?? next.note}</span>}
+              </span>
             ) : (
-              <p className="text-xs text-fg-muted group-hover:text-fg-secondary transition-colors">Sin agendar</p>
+              <span className="text-[13px] text-fg-muted group-hover:text-fg-secondary">Sin agendar · cargar fecha</span>
             )}
           </button>
         )}
@@ -557,123 +650,176 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
     );
   };
 
-  return (
-    <div className="mb-6 bg-surface border border-line rounded-xl overflow-hidden">
-      {/* ⛔ ACÁ SE PINTABAN OTRA VEZ el alta trabada y la propuesta de cronograma sin decidir,
-          en su versión completa, MIENTRAS el rail de la ficha ya las pintaba compactas arriba.
-          Eran literalmente el mismo aviso dos veces en la misma pantalla, a treinta centímetros
-          — y eso enseña a ignorarlo. Se fueron de acá y no de allá (2026-09-27): el widget vive
-          adentro del Resumen desde esta tanda, así que la copia que sobrevive tiene que ser la
-          que se ve en los NUEVE documentos, no la que solo aparece si entrás a una pestaña.
-          Lo que se pierde es diagnóstico de segundo nivel (el error crudo entero, el conteo de
-          intentos); el compacto ya trae el motivo, el fallo y el botón que resuelve. */}
-      {/* El resumen del proyecto va ARRIBA de todo lo demás: es la respuesta a «cómo va esto»,
-          que es la pregunta con la que alguien abre este widget. Debajo está el detalle que la
-          sostiene. `undefined` (respuesta cacheada vieja) no pinta nada; `null` sí, porque «no
-          hay resumen» es información y trae su CTA. */}
-      {data.brief !== undefined && (
-        <ProjectBriefSection projectId={projectId} brief={data.brief} onRefresh={fetchGPS} />
-      )}
+  /* ── El panel de contexto (columna derecha) ──────────────────────────────────
+     «Qué sigue», las reuniones, lo reciente de los pendientes y los datos del proyecto. Lo pinta
+     el widget porque los datos son suyos; lo lleva por portal al panel que monta la ficha. */
+  const accionDeQueSigue = (() => {
+    const a = queSigue?.accion;
+    if (!a) return undefined;
+    if (a.tipo === "pieza") {
+      return <BotonAzul onClick={() => resumenCtx.abrirPieza(a.slug)}>Abrir «{a.etiqueta}» →</BotonAzul>;
+    }
+    if (a.tipo === "agendar") {
+      const entrega = frentes[frentes.length - 1];
+      return entrega ? (
+        <BotonAzul
+          onClick={() => {
+            setEditingFront(entrega.key);
+            setTimeout(() => frontDateRef.current?.focus(), 50);
+          }}
+        >
+          Cargar la próxima reunión
+        </BotonAzul>
+      ) : undefined;
+    }
+    if (a.tipo === "sesiones") return <BotonAzul onClick={() => setSesionesAbiertas(true)}>Revisar las reuniones</BotonAzul>;
+    return undefined;
+  })();
 
-      {/* Info bar del proyecto (desde HubSpot) */}
-      {info && (info.name || info.pipelineName || info.cseEncargado || createdAtStr) && (
-        <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-surface-muted border-b border-line text-xs">
-          {info.name && (
-            <span className="min-w-0 truncate">
-              <span className="text-fg-muted">Proyecto: </span>
-              {info.hubspotUrl ? (
-                <a
-                  href={info.hubspotUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-fg font-medium hover:text-brand hover:underline"
-                  title={`${info.name} — abrir en HubSpot`}
-                >
-                  {info.name}
-                </a>
-              ) : (
-                <span className="text-fg font-medium" title={info.name}>{info.name}</span>
-              )}
-            </span>
-          )}
-          {info.pipelineName && (
-            <span className="min-w-0 truncate">
-              <span className="text-fg-muted">Pipeline: </span>
-              <span className="text-fg-secondary" title={info.pipelineName}>{info.pipelineName}</span>
-            </span>
-          )}
-          {info.cseEncargado && (
-            <span className="min-w-0 truncate">
-              <span className="text-fg-muted">CSE: </span>
-              <span className="text-fg-secondary" title={info.cseEncargadoEmail ?? info.cseEncargado}>{info.cseEncargado}</span>
-            </span>
-          )}
-          {createdAtStr && (
-            <span className="min-w-0 truncate ml-auto">
-              <span className="text-fg-muted">Creado: </span>
-              <span className="text-fg-secondary">{createdAtStr}</span>
-              {info.createdAtSource === "nexus" && (
-                <span className="text-[9px] text-fg-muted uppercase tracking-wider ml-1">en Nexus</span>
-              )}
-            </span>
-          )}
-        </div>
-      )}
+  const panel = (
+    <>
+      {!resumenCtx.queSigueOcupado && queSigue && <QueSigue accion={accionDeQueSigue}>{queSigue.texto}</QueSigue>}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-line min-h-[170px]">
-        {/* Última sesión — agrupada por frente (Ventas / CSE) */}
-        <div className="p-4 flex flex-col">
-          <div className="flex items-center gap-1.5 mb-2">
-            <span className={cardLabel}>Última sesión</span>
-          </div>
-          <div className="space-y-2.5">
-            {frentes.map((f) => (
-              <div key={f.key}>{renderLastFront(f.key, f.label)}</div>
-            ))}
-          </div>
-          {/* D-08: la cobertura de transcripción de ESTE cliente. Sin reuniones pasadas no se pinta:
-             un «0%» sobre cero reuniones sería una acusación sobre nada. */}
-          {cobertura && pctTranscript !== null && (
-            <div
-              className="mt-2 text-[10px] text-fg-muted"
-              title={`Reuniones del cliente de los últimos ${cobertura.ventanaDias} días que dejaron transcripción. Lo que no se graba no alimenta ningún documento.`}
-            >
-              Con transcripción: <strong>{pctTranscript}%</strong> ({cobertura.conTranscript} de {cobertura.pasadas}, últimos 3 meses)
-            </div>
-          )}
-          <button
-            onClick={() => setMinuteDialogOpen(true)}
-            className="mt-auto pt-2 text-xs font-semibold text-brand hover:text-brand/80 self-start transition-colors"
-            title="Ver minuta generada por la IA"
-          >
+      <section className="flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between">
+          <span className={rotulo}>Reuniones</span>
+          <button onClick={() => setMinuteDialogOpen(true)} className="text-[11px] text-brand hover:text-brand-light" title="La minuta de la última reunión, generada por la IA">
             Ver minuta
           </button>
         </div>
-
-        {/* Próxima sesión — agrupada por frente (Ventas / CSE) */}
-        <div className="p-4 flex flex-col">
-          <div className="flex items-center gap-1.5 mb-2">
-            <span className={cardLabel}>Próxima sesión</span>
-          </div>
-          <div className="space-y-2.5">
-            {frentes.map((f) => (
-              <div key={f.key}>{renderNextFront(f.key, f.label)}</div>
-            ))}
-          </div>
+        <div className="divide-y divide-line rounded-xl border border-line bg-surface px-3">
+          {frentes.map((f) => (
+            <div key={`next-${f.key}`}>{renderNextFront(f.key, f.label)}</div>
+          ))}
+          {frentes.map((f) => (
+            <div key={`last-${f.key}`}>{renderLastFront(f.key, f.label)}</div>
+          ))}
         </div>
+        {/* D-08: la cobertura de transcripción de ESTE cliente. Sin reuniones pasadas no se pinta:
+           un «0%» sobre cero reuniones sería una acusación sobre nada. */}
+        {cobertura && pctTranscript !== null && (
+          <span
+            className="text-[11px] text-fg-muted"
+            title={`Reuniones del cliente de los últimos ${cobertura.ventanaDias} días que dejaron transcripción. Lo que no se graba no alimenta ningún documento.`}
+          >
+            Con transcripción: <strong>{pctTranscript}%</strong> ({cobertura.conTranscript} de {cobertura.pasadas}, últimos 3 meses)
+          </span>
+        )}
+      </section>
 
-        {/* ETAPA + CANVAS — dos bloques, no uno.
-            Antes convivían acá la etapa del pipeline (texto grande) y los chips de canvas,
-            sin separador ni rótulo, y se leían como una sola cosa. Y la etapa además vivía
-            en OTRA sección más abajo con su propio tooltip: dos respuestas a "¿en qué etapa
-            va esto?". Ahora es una sola, acá.
-            `#proyecto-etapa` es el ancla del enlace profundo del panel "Qué hacer acá" del
-            cronograma — se mudó con el bloque; sin ella ese botón no lleva a ningún lado. */}
-        <div className="p-4 space-y-3 scroll-mt-24" id="proyecto-etapa">
-          <div>
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className={cardLabel}>Etapa</span>
-            </div>
+      <section className="flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between">
+          <span className={rotulo}>Pendientes recientes · {recientes.length}</span>
+          <button onClick={() => setItemsDialogOpen(true)} className="text-[11px] text-brand hover:text-brand-light">
+            {abiertosTotal > 0 ? `Ver los ${abiertosTotal}` : "Ver el histórico"}
+          </button>
+        </div>
+        {recientes.length > 0 ? (
+          <div className="divide-y divide-line rounded-xl border border-line bg-surface px-3">
+            {recientes.map((item) => {
+              const vence = item.dueDate ? new Date(item.dueDate) : null;
+              const vencido = vence ? calendarDaysFromToday(vence) < 0 : false;
+              const quien = item.responsableNombre ?? item.ladoResponsable ?? item.ownerEmail ?? null;
+              return (
+                <label key={item.id ?? item.text} className="flex items-start gap-2 py-2">
+                  <input
+                    type="checkbox"
+                    aria-label="Marcar como hecho"
+                    className="mt-[3px]"
+                    onChange={() => item.id && toggleItem(item.id)}
+                  />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-[13px] text-fg">{item.text}</span>
+                    <span className="text-xs text-fg-muted">
+                      {[
+                        quien,
+                        vence ? (
+                          <span key="vence" className={vencido ? "text-warn-ink" : undefined}>
+                            {vencido ? "venció el " : "para el "}
+                            {vence.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                          </span>
+                        ) : (
+                          "sin fecha"
+                        ),
+                      ]
+                        .filter(Boolean)
+                        .map((x, i) => (
+                          <span key={i}>
+                            {i > 0 && " · "}
+                            {x}
+                          </span>
+                        ))}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-[13px] text-fg-muted">Nada nuevo en las últimas 4 semanas.</p>
+        )}
+        {masAntiguos > 0 && (
+          <span className="text-[11px] text-fg-muted">
+            y {masAntiguos} {masAntiguos === 1 ? "más antiguo" : "más antiguos"}: están en «Ver los {abiertosTotal}».
+          </span>
+        )}
+        <button onClick={() => setItemsDialogOpen(true)} className="self-start text-xs text-fg-muted transition-colors hover:text-fg">
+          + Agregar pendiente
+        </button>
+      </section>
+
+      {info && (info.name || info.cseEncargado || createdAtStr) && (
+        <section className="flex flex-col gap-2.5">
+          <span className={rotulo}>El proyecto</span>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-xl border border-line bg-surface px-3 py-2.5 text-[13px]">
+            {info.cseEncargado && (
+              <>
+                <dt className="text-fg-muted">CSE</dt>
+                <dd className="text-fg" title={info.cseEncargadoEmail ?? info.cseEncargado}>{info.cseEncargado}</dd>
+              </>
+            )}
+            {info.pipelineName && (
+              <>
+                <dt className="text-fg-muted">Pipeline</dt>
+                <dd className="text-fg">{info.pipelineName}</dd>
+              </>
+            )}
+            {createdAtStr && (
+              <>
+                <dt className="text-fg-muted">Creado</dt>
+                <dd className="text-fg">
+                  {createdAtStr}
+                  {info.createdAtSource === "nexus" && <span className="text-xs text-fg-muted"> · en Nexus</span>}
+                </dd>
+              </>
+            )}
+            {info.hubspotUrl && (
+              <>
+                <dt className="text-fg-muted">En HubSpot</dt>
+                <dd>
+                  <a href={info.hubspotUrl} target="_blank" rel="noopener noreferrer" className="text-brand hover:text-brand-light">
+                    Abrir el proyecto ↗
+                  </a>
+                </dd>
+              </>
+            )}
+          </dl>
+        </section>
+      )}
+    </>
+  );
+
+  return (
+    <div className="contents">
+      {resumenCtx.slotDelPanel && createPortal(panel, resumenCtx.slotDelPanel)}
+
+      {/* LA ETAPA, a todo el ancho del centro: dónde está el proyecto, la línea entera y qué
+          falta para pasar a la siguiente. `#proyecto-etapa` es el ancla del enlace profundo del
+          panel «Qué hacer acá» del cronograma; sin ella ese botón no lleva a ningún lado. */}
+      <section className="scroll-mt-24 flex flex-col gap-3 rounded-xl border border-line bg-surface px-5 py-4 lg:col-span-2" id="proyecto-etapa" data-recorrido="ficha.etapa">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div className="flex flex-wrap items-baseline gap-2.5">
+            <span className={rotulo}>Etapa</span>
             {etapa ? (
               <StageBadge
                 stage={etapa.id}
@@ -683,80 +829,62 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
                 source={etapa.curada ? "override" : "inferred"}
                 reasons={etapa.razones}
                 overrideReason={etapa.curadaPorque}
-                size="md"
+                size="titulo"
               />
             ) : data.currentState ? (
-              <p className="text-sm font-medium text-fg">{data.currentState}</p>
+              <span className="text-[15px] font-semibold text-fg">{data.currentState}</span>
             ) : (
               /* Sin etapa y sin rótulo: no se afirma nada. Un «Etapa 1 → Análisis inicial»
                  inventado se lee como un dato del proyecto y no lo es. */
-              <p className="text-sm text-fg-muted">Sin etapa registrada</p>
+              <span className="text-[13px] text-fg-muted">Sin etapa registrada</span>
+            )}
+            {etapa?.posicion && (
+              <span className="text-xs text-fg-muted">
+                {etapa.posicion.index} de {etapa.posicion.total}
+              </span>
             )}
           </div>
-
-          {/* Los CANVAS del proyecto: qué documentos le corresponden y cuáles ya están.
-              La lista viene del servidor YA filtrada por lo que aplica a este proyecto
-              (lib/flow/canvas-chips.ts) — el widget solo pinta. Guard por compat de cache. */}
-          {canvasChips.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className={cardLabel}>Canvas</span>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {canvasChips.map((c) => (
-                  <SetupChip
-                    key={c.slug}
-                    state={
-                      c.estado === "generada"
-                        ? "done"
-                        : c.estado === "borrador"
-                          ? "draft"
-                          : c.estado === "opcional"
-                            ? "optional"
-                            : "missing"
-                    }
-                    label={
-                      c.estado === "generada"
-                        ? <><IconCheck className="w-3 h-3" />{c.label}</>
-                        : c.estado === "borrador"
-                          ? `${c.label} sin subir`
-                          : c.estado === "opcional"
-                            ? `${c.label} · opcional`
-                            : c.label
-                    }
-                  />
-                ))}
-              </div>
-            </div>
+          {info?.hubspotUrl && (
+            <a href={info.hubspotUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand hover:text-brand-light">
+              Ver en HubSpot ↗
+            </a>
           )}
         </div>
-
-        {/* Pendientes — resumen + botón al dialog central */}
-        <div className="p-4 flex flex-col">
-          <div className="flex items-center gap-1.5 mb-2">
-            <span className={cardLabel}>Pendientes{pendingCount > 0 ? ` (${pendingCount})` : ""}</span>
-          </div>
-          {pendingCount > 0 ? (
-            <ul className="space-y-1 mb-2">
-              {pendingOpen.slice(0, 2).map((item, i) => (
-                <li key={i} className="text-xs text-fg-secondary truncate flex items-center gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-fg-muted flex-shrink-0" />
-                  <span className="truncate">{item.text}</span>
+        {etapa && etapa.linea.length > 0 && etapa.posicion && (
+          <ol className="grid gap-1" style={{ gridTemplateColumns: `repeat(${etapa.linea.length}, minmax(0, 1fr))` }}>
+            {etapa.linea.map((s, k) => {
+              const i = etapa.posicion!.index - 1;
+              return (
+                <li key={s.id} className="flex min-w-0 flex-col gap-1.5">
+                  <span className={`h-1.5 rounded-full ${k < i ? "bg-success" : k === i ? "bg-brand" : "bg-surface-active"}`} aria-hidden="true" />
+                  <span className={`text-[11px] leading-[1.3] ${k < i ? "text-fg-secondary" : k === i ? "font-semibold text-brand" : "text-fg-muted"}`}>
+                    {s.label}
+                  </span>
                 </li>
-              ))}
-              {pendingCount > 2 && <li className="text-[10px] text-fg-muted">+{pendingCount - 2} más</li>}
-            </ul>
-          ) : (
-            <p className="text-xs text-fg-muted mb-2">Sin pendientes</p>
-          )}
-          <button
-            onClick={() => setItemsDialogOpen(true)}
-            className="mt-auto text-xs font-semibold text-brand hover:text-brand/80 self-start transition-colors"
-          >
-            {pendingCount > 0 ? "Ver todos" : "Agregar pendiente"}
-          </button>
-        </div>
-      </div>
+              );
+            })}
+          </ol>
+        )}
+        {lineas.length > 0 && (
+          <div className="flex flex-col gap-1 border-t border-line pt-2.5 text-[13px] text-fg-secondary">
+            {lineas.map((l, k) => (
+              <span key={k}>
+                {l.hecho ? <span className="font-bold text-success">✓</span> : <span className="text-fg-muted">○</span>} {l.texto}
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* El resumen del proyecto: la respuesta a «cómo va esto». `undefined` (respuesta cacheada
+          vieja) no pinta nada; `null` sí, porque «no hay resumen» es información y trae su CTA. */}
+      {data.brief !== undefined && (
+        <ProjectBriefSection projectId={projectId} brief={data.brief} onRefresh={fetchGPS} />
+      )}
+
+      <Modal open={sesionesAbiertas} onClose={() => setSesionesAbiertas(false)} title="Las reuniones de este proyecto" size="xl">
+        <ProjectSessionsReview projectId={projectId} />
+      </Modal>
 
       {minuteDialogOpen && <MinuteDialog projectId={projectId} onClose={() => setMinuteDialogOpen(false)} />}
 

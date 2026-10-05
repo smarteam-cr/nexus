@@ -171,12 +171,8 @@ export default function ImplementacionWorkspace({
         </div>
       )}
 
-      <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-          Documento interno · la guía de construcción del CSE
-        </span>
-      </div>
-
+      {/* «Documento interno» lo dice la franja del marco del documento (MarcoDelDocumento,
+          2026-10-04): una segunda franja con lo mismo, justo debajo, sobraba. */}
       {/* El gate de Breeze: avisa, no bloquea. El agente genera igual y marca. */}
       {breezeReady === false && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "rgba(245, 158, 11, 0.08)", borderBottom: "1px solid rgba(245, 158, 11, 0.3)", fontSize: 13, color: "#92400e" }}>

@@ -190,7 +190,8 @@ describe("los nombres de los tres tipos", () => {
 
 describe("el índice de clientes deja UN solo botón", () => {
   const RAIZ = process.cwd();
-  const INDICE = "app/(shell)/clients/ClientsGrid.tsx";
+  /* Desde el rediseño del índice (2026-10-04) el botón vive en la cabecera de la página. */
+  const INDICE = "app/(shell)/clients/page.tsx";
   const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");
 
   it("ya no monta «Nuevo cliente»", () => {

@@ -13,11 +13,13 @@
  * AgentProposal, pero su apply mapea el hero a METADATOS y pasa por el autosave
  * — no por upsertCardData). Doctrina: DECISIONS §Roles.
  */
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import AssistDialog from "@/components/ai/AssistDialog";
 import { AgentProposal } from "@/components/ai/AgentProposal";
+import { useChatDeSeccion } from "@/components/asistente/chat-de-seccion";
+import { BOTON_DE_HERRAMIENTA, IconoDeSugerencia } from "@/components/ui/sistema";
 
 /** Respuesta de los endpoints .../assist (espejo de DocumentAssistResult). */
 export interface DocAssistResult {
@@ -39,6 +41,7 @@ export default function DocumentAssist({
   onApplySection,
   onApplied,
   className,
+  style,
 }: {
   /** Endpoint POST del assist (ej. `/api/projects/${projectId}/canvas-assist`). */
   url: string;
@@ -54,6 +57,9 @@ export default function DocumentAssist({
   /** Tras aplicar todo (ej. refetch/marcar dirty). */
   onApplied?: () => void;
   className?: string;
+  /** Estilo del contenedor. Va acá y no en un div de afuera: cuando hay chat el componente no pinta
+   *  nada, y un envoltorio con padding dejaba una franja vacía sobre el documento. */
+  style?: CSSProperties;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -108,18 +114,29 @@ export default function DocumentAssist({
     }
   };
 
+  /* Donde el documento tiene chat, «✨ Mejorar con IA» sobra (2026-10-04, Elías): el «Cambiar» de
+     cada sección abre el chat, que arma la lista de cambios con casillas y la aplica por el mismo
+     editor. El botón queda solo donde no hay chat (Roles monta el suyo aparte; acá, cualquier
+     documento sin proveedor del chat). */
+  const { disponible: hayChat } = useChatDeSeccion();
+
+  if (hayChat && !result) return null;
+
   return (
-    <div className={className}>
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          disabled={loading}
-          className="px-3 py-1.5 text-sm font-medium rounded-lg border border-line text-fg-secondary hover:border-brand hover:text-brand transition-colors disabled:opacity-50"
-        >
-          ✨ Mejorar con IA
-        </button>
-      </div>
+    <div className={className} style={style}>
+      {!hayChat && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            disabled={loading}
+            className={BOTON_DE_HERRAMIENTA}
+          >
+            <IconoDeSugerencia className="h-[15px] w-[15px] text-brand" />
+            Mejorar con IA
+          </button>
+        </div>
+      )}
 
       <AssistDialog
         open={open}

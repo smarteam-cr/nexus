@@ -164,12 +164,8 @@ export default function EntregaWorkspace({
         </div>
       )}
 
-      <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-          Documento de cierre · se le comparte al cliente
-        </span>
-      </div>
-
+      {/* «Se le comparte al cliente» lo dice la franja del marco del documento (MarcoDelDocumento,
+          2026-10-04): una segunda franja con lo mismo, justo debajo, sobraba. */}
       {avisos.length > 0 && (
         <div style={{ padding: "10px 16px", background: "rgba(245, 158, 11, 0.08)", borderBottom: "1px solid rgba(245, 158, 11, 0.3)", fontSize: 13, color: "#92400e" }}>
           <strong style={{ display: "block", marginBottom: 4 }}>

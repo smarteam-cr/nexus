@@ -16,18 +16,22 @@
 import { useEffect, useState } from "react";
 import type { CampoEditable, ResultadoMedible } from "@/lib/handoff/resultados-medibles";
 import { sinConfirmar, sinDato } from "@/lib/handoff/resultados-medibles";
+import { BotonAzul, BotonBlanco } from "@/components/ui/sistema";
 
-const CHIP = "inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide border";
+const CHIP = "inline-block rounded-full border px-2 py-px text-[11px] font-semibold";
 
 export default function ResultadosMediblesDelHandoff({
   projectId,
   canEdit,
   canConfirm = false,
+  onCuenta,
 }: {
   projectId: string;
   canEdit: boolean;
   /** Celda `handoff.confirmarResultados` (CSE, CSL, Ventas). */
   canConfirm?: boolean;
+  /** Cuántos hay y cuántos falta confirmar: lo pinta la fila de «Alrededor del handoff». */
+  onCuenta?: (total: number, sinConfirmar: number) => void;
 }) {
   const [resultados, setResultados] = useState<ResultadoMedible[] | null>(null);
   const [leyendo, setLeyendo] = useState(false);
@@ -108,38 +112,32 @@ export default function ResultadosMediblesDelHandoff({
     }
   };
 
-  if (resultados === null) return null;
-  const pendientes = resultados.filter((r) => sinConfirmar(r)).length;
+  const pendientes = resultados ? resultados.filter((r) => sinConfirmar(r)).length : 0;
+  const total = resultados?.length ?? 0;
+  useEffect(() => {
+    if (resultados !== null) onCuenta?.(total, pendientes);
+  }, [resultados, total, pendientes, onCuenta]);
 
+  if (resultados === null) return null;
+
+  /* Vive adentro de su fila de «Alrededor del handoff» (rediseño del 2026-10-04): el título y la
+     cuenta los pone la fila; acá van la explicación y las acciones. */
   return (
-    <div className="mb-5 rounded-2xl border border-line bg-surface p-4">
+    <div>
       <div className="flex flex-wrap items-start gap-3 mb-3">
-        <div className="flex-1 min-w-[240px]">
-          <h3 className="text-sm font-bold text-fg">Resultados que persigue el cliente</h3>
-          <p className="text-xs text-fg-secondary mt-0.5">
-            Salen de «Resultados que el cliente necesita alcanzar». Se capturan una sola vez: los objetivos del diagnóstico
-            toman de acá su línea base y su meta. Sin línea base, o sin confirmar por el CSE, quedan «Por validar».
-          </p>
-        </div>
-        {canConfirm && pendientes > 0 && (
-          <button
-            type="button"
-            onClick={() => void confirmar(null)}
-            disabled={confirmando}
-            className="text-xs font-semibold text-primary-fg bg-brand hover:bg-brand-dark disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            {confirmando ? "Confirmando…" : pendientes === resultados.length ? "Confirmar todos" : `Confirmar los ${pendientes} pendientes`}
-          </button>
-        )}
+        <p className="flex-1 min-w-[240px] text-xs text-fg-muted">
+          Salen de «Resultados que el cliente necesita alcanzar». Se capturan una sola vez: los objetivos del diagnóstico
+          toman de acá su línea base y su meta. Sin línea base, o sin confirmar por el CSE, quedan «Por validar».
+        </p>
         {canEdit && (
-          <button
-            type="button"
-            onClick={releer}
-            disabled={leyendo}
-            className="text-xs font-semibold text-brand border border-brand/40 hover:bg-brand/10 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors"
-          >
+          <BotonBlanco onClick={() => void releer()} disabled={leyendo}>
             {leyendo ? "Leyendo el handoff…" : resultados.length ? "Releer del handoff" : "Leer del handoff"}
-          </button>
+          </BotonBlanco>
+        )}
+        {canConfirm && pendientes > 0 && (
+          <BotonAzul onClick={() => void confirmar(null)} disabled={confirmando}>
+            {confirmando ? "Confirmando…" : pendientes === resultados.length ? "Confirmar todos" : `Confirmar los ${pendientes} pendientes`}
+          </BotonAzul>
         )}
       </div>
 
@@ -152,7 +150,7 @@ export default function ResultadosMediblesDelHandoff({
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-fg-muted">
+              <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-fg-muted">
                 <th className="py-1.5 pr-3 font-semibold">#</th>
                 <th className="py-1.5 pr-3 font-semibold">Resultado y lo que lo frena</th>
                 <th className="py-1.5 pr-3 font-semibold">Quién lo necesita</th>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Alert, Modal } from "@/components/ui";
+import { BotonBlanco, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import type { UniversoTraible, EmpresaTraible } from "@/lib/hubspot/empresas-con-proyecto";
 import { conLaPreseleccionadaPrimero } from "@/lib/hubspot/preseleccion-traible";
 
@@ -43,15 +44,13 @@ async function pedirUniverso(): Promise<UniversoConEnganche> {
   return data;
 }
 
-export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
+/**
+ * Traer UNA empresa: el POST, el spinner por fila y el desenlace de cada una. Lo comparten el modal
+ * (el que abre `?traer=`) y la bandeja del panel del índice, para que las dos puertas no puedan
+ * resolver distinto la misma fila.
+ */
+function useTraerDeHubspot() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const companyIdATraer = searchParams.get("traer");
-  const nombreDeLaTraida = searchParams.get("empresa");
-  const [abierto, setAbierto] = useState(!!companyIdATraer);
-  const [cargando, setCargando] = useState(!!companyIdATraer);
-  const [universo, setUniverso] = useState<UniversoConEnganche | null>(null);
-  const [error, setError] = useState<string | null>(null);
   /* Un CONJUNTO y no un id: con dos filas apretadas seguidas, la primera en volver le apagaba
      el spinner a la segunda —que seguía en vuelo— y su botón quedaba habilitado otra vez. La
      fila que MÁS estaba trabajando era la que se veía inactiva, y el segundo click mandaba un
@@ -59,41 +58,10 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
   const [trayendo, setTrayendo] = useState<ReadonlySet<string>>(() => new Set());
   const [resultados, setResultados] = useState<Record<string, ResultadoFila>>({});
 
-  async function abrir() {
-    setAbierto(true);
-    setCargando(true);
-    setError(null);
-    /* Sin esto, la segunda apertura pinta la lista VIEJA —accionable, con sus botones y sus
-       contadores— debajo de «Buscando en HubSpot…», y si el fetch falla queda el banner rojo
-       encima de una lista que se lee como si estuviera viva. */
-    setUniverso(null);
-    try {
-      setUniverso(await pedirUniverso());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo consultar HubSpot.");
-    } finally {
-      setCargando(false);
-    }
-  }
-
-  /* La preselección: el modal ya arrancó abierto y «cargando»; acá solo llega el universo.
-     Sin `setState` sincrónico en el efecto (el estado inicial ya lo dejó listo). */
-  useEffect(() => {
-    if (!companyIdATraer) return;
-    let vivo = true;
-    pedirUniverso()
-      .then((u) => { if (vivo) setUniverso(u); })
-      .catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo consultar HubSpot."); })
-      .finally(() => { if (vivo) setCargando(false); });
-    return () => { vivo = false; };
-  }, [companyIdATraer]);
-
-  const { lista, encontrada } = conLaPreseleccionadaPrimero(universo?.traibles ?? [], companyIdATraer);
-
-  async function traer(
+  const traer = useCallback(async (
     empresa: EmpresaTraible,
     opts: { confirmoGemela?: boolean; adoptarEnClientId?: string },
-  ) {
+  ) => {
     setTrayendo((s) => new Set(s).add(empresa.companyId));
     try {
       const res = await fetch("/api/clients/traer-de-hubspot", {
@@ -129,7 +97,117 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
         return next;
       });
     }
+  }, [router]);
+
+  return { trayendo, resultados, traer };
+}
+
+/**
+ * La bandeja del panel del índice (rediseño del 2026-10-04): las empresas con un proyecto en
+ * HubSpot que falta traer, cada una con su botón, sin abrir un modal. Las filas son las mismas
+ * `FilaEmpresa` del modal —con sus gemelas y su confirmación de dos clics—.
+ *
+ * ⚠ Las filas viven en ESTADO, no en la prop: traer hace `router.refresh()` y el servidor saca a
+ * la empresa recién traída del universo. Si la lista saliera de la prop, la fila desaparecería con
+ * su desenlace sin leer (el «le aparece a X», el ámbar del alta a medio hacer). Lo nuevo que traiga
+ * el servidor se suma; lo que ya se resolvió se queda hasta recargar la página.
+ */
+export function BandejaDeHubspot({ universo }: { universo: UniversoTraible | null }) {
+  const { trayendo, resultados, traer } = useTraerDeHubspot();
+  const [filas, setFilas] = useState<EmpresaTraible[]>(() => universo?.traibles ?? []);
+  const [vistas, setVistas] = useState(universo);
+  if (universo !== vistas) {
+    setVistas(universo);
+    setFilas((actuales) => {
+      const ids = new Set(actuales.map((f) => f.companyId));
+      return [...actuales, ...(universo?.traibles ?? []).filter((t) => !ids.has(t.companyId))];
+    });
   }
+
+  /* La cabecera va ACÁ y no en el panel: la cuenta y el denominador los sabe solo esta bandeja, que
+     llega en su propio Suspense. «· N» cuenta lo que falta traer AHORA (lo resuelto en esta visita
+     ya no falta). */
+  const pendientes = filas.filter((f) => !resultados[f.companyId]).length;
+  return (
+    <section data-recorrido="clientes.hubspot" className="flex flex-col gap-2">
+      <div className="space-y-1">
+        <p className={ROTULO_DEL_SISTEMA}>
+          Falta traer de HubSpot{universo ? ` · ${pendientes}` : ""}
+        </p>
+        <p className="text-xs text-fg-muted">
+          {universo
+            ? `HubSpot tiene ${universo.totalConProyecto} empresa${universo.totalConProyecto === 1 ? "" : "s"} con proyecto; ` +
+              `${universo.yaEnNexus} ya ${universo.yaEnNexus === 1 ? "está" : "están"} en Nexus.` +
+              (filas.length > 0 ? " Estas tienen un proyecto que falta traer: se crea la empresa con su proyecto y entra a Cobranza sin cobro cargado." : "")
+            : "Empresas con un proyecto en HubSpot que falta traer."}
+        </p>
+      </div>
+      {!universo ? (
+        <p className="text-[13px] text-fg-muted">HubSpot no contestó. Vuelve a cargar la página en un minuto.</p>
+      ) : filas.length === 0 ? (
+        <p className="text-[13px] text-fg-muted">Todas las empresas con proyecto en HubSpot ya están en Nexus.</p>
+      ) : (
+        filas.map((e) => (
+          <FilaEmpresa
+            key={e.companyId}
+            empresa={e}
+            ocupada={trayendo.has(e.companyId)}
+            resultado={resultados[e.companyId]}
+            onTraer={(opts) => traer(e, opts)}
+          />
+        ))
+      )}
+    </section>
+  );
+}
+
+export default function TraerDeHubspot({ cuantas, soloPreseleccion = false }: {
+  cuantas: number;
+  /**
+   * Sin botón: solo el modal que abre `?traer=` (el enlace de /sessions). En el índice el botón se
+   * fue al panel como bandeja (`BandejaDeHubspot`); el modal se queda para la preselección.
+   */
+  soloPreseleccion?: boolean;
+}) {
+  const searchParams = useSearchParams();
+  const companyIdATraer = searchParams.get("traer");
+  const nombreDeLaTraida = searchParams.get("empresa");
+  const [abierto, setAbierto] = useState(!!companyIdATraer);
+  const [cargando, setCargando] = useState(!!companyIdATraer);
+  const [universo, setUniverso] = useState<UniversoConEnganche | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { trayendo, resultados, traer } = useTraerDeHubspot();
+
+  async function abrir() {
+    setAbierto(true);
+    setCargando(true);
+    setError(null);
+    /* Sin esto, la segunda apertura pinta la lista VIEJA —accionable, con sus botones y sus
+       contadores— debajo de «Buscando en HubSpot…», y si el fetch falla queda el banner rojo
+       encima de una lista que se lee como si estuviera viva. */
+    setUniverso(null);
+    try {
+      setUniverso(await pedirUniverso());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo consultar HubSpot.");
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  /* La preselección: el modal ya arrancó abierto y «cargando»; acá solo llega el universo.
+     Sin `setState` sincrónico en el efecto (el estado inicial ya lo dejó listo). */
+  useEffect(() => {
+    if (!companyIdATraer) return;
+    let vivo = true;
+    pedirUniverso()
+      .then((u) => { if (vivo) setUniverso(u); })
+      .catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudo consultar HubSpot."); })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, [companyIdATraer]);
+
+  const { lista, encontrada } = conLaPreseleccionadaPrimero(universo?.traibles ?? [], companyIdATraer);
 
   /**
    * ⚠ `&& !abierto`: traer una empresa hace `router.refresh()`, el servidor recalcula `cuantas`
@@ -139,17 +217,20 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
    * todo salió bien. Es el mismo incidente que esta tanda vino a cerrar, reabierto por la UI.
    */
   if (cuantas <= 0 && !abierto) return null;
+  if (soloPreseleccion && !abierto) return null;
 
   return (
     <>
-      <Button
-        variant="secondary"
-        size="md"
-        onClick={abrir}
-        title="Empresas que ya tienen un proyecto en HubSpot y todavía no están en Nexus."
-      >
-        Traer {cuantas} empresa{cuantas !== 1 ? "s" : ""} de HubSpot
-      </Button>
+      {!soloPreseleccion && (
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={abrir}
+          title="Empresas que ya tienen un proyecto en HubSpot y todavía no están en Nexus."
+        >
+          Traer {cuantas} empresa{cuantas !== 1 ? "s" : ""} de HubSpot
+        </Button>
+      )}
 
       {/* En Modal y no inline: el botón vive dentro del toolbar, que es un flex, así que un
           panel ahí adentro se pinta AL LADO del buscador y parte la fila. El Modal además trae
@@ -223,7 +304,7 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
           {universo && universo.ilegibles > 0 && (
             <p className="text-xs text-warn-ink">
               HubSpot no contestó por {universo.ilegibles} proyecto
-              {universo.ilegibles !== 1 ? "s" : ""}. Volvé a abrir en un minuto.
+              {universo.ilegibles !== 1 ? "s" : ""}. Vuelve a abrir en un minuto.
             </p>
           )}
           {/* ⚠ Los tres descartes se DICEN. Una lista que se acorta en silencio se lee como
@@ -238,8 +319,8 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
           {universo && universo.tipoDesconocido > 0 && (
             <p className="text-xs text-warn-ink">
               {universo.tipoDesconocido} proyecto{universo.tipoDesconocido !== 1 ? "s" : ""} en un
-              pipeline que Nexus no conoce. Move{universo.tipoDesconocido !== 1 ? "los" : "lo"} a
-              uno de los tres tipos en HubSpot y volvé.
+              pipeline que Nexus no conoce. Mueve{universo.tipoDesconocido !== 1 ? "los" : "lo"} a
+              uno de los tres tipos en HubSpot y vuelve.
             </p>
           )}
           {universo && universo.suprimidos > 0 && (
@@ -321,7 +402,7 @@ function FilaEmpresa({
             funcionó. */}
         <span className={aMedias ? "text-xs text-warn-ink" : "text-xs text-success-ink/80"}>
           {aMedias
-            ? "Falta que Nexus lo lea de HubSpot: todavía no cobra ni se publica. Abrilo para reintentar."
+            ? "Falta que Nexus lo lea de HubSpot: todavía no cobra ni se publica. Ábrelo para reintentar."
             : resultado.adoptado
             ? "No se creó otra ficha."
             : resultado.sinEncargado
@@ -331,8 +412,8 @@ function FilaEmpresa({
             : resultado.loVasAVer
               ? "Te aparece en tu lista."
               : resultado.encargadoNombre
-                ? `Le aparece a ${resultado.encargadoNombre}, no a vos.`
-                : "Abrila para ver a quién le aparece."}
+                ? `Le aparece a ${resultado.encargadoNombre}, no a ti.`
+                : "Ábrela para ver a quién le aparece."}
         </span>
         {resultado.clientId && (
           <a href={`/clients/${resultado.clientId}`} className="text-xs text-brand hover:underline">
@@ -344,10 +425,10 @@ function FilaEmpresa({
   }
 
   return (
-    <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 space-y-1.5">
+    <div className="space-y-2 rounded-xl border border-line bg-surface p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-fg truncate">
+          <p className="truncate text-sm font-semibold text-fg">
             {empresa.rotulo}
             {preseleccionada && <span className="ml-2 text-xs font-normal text-brand">la que venías a traer</span>}
           </p>
@@ -359,9 +440,9 @@ function FilaEmpresa({
           </p>
         </div>
         {gemelas.length === 0 && (
-          <Button variant="secondary" size="xs" loading={ocupada} onClick={() => onTraer({})}>
-            Traer
-          </Button>
+          <BotonBlanco className="flex-shrink-0" disabled={ocupada} onClick={() => onTraer({})}>
+            {ocupada ? "Trayendo…" : "Traer"}
+          </BotonBlanco>
         )}
       </div>
 

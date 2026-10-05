@@ -200,8 +200,9 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
       {/* Assist de documento: instrucción → propuesta → revisar → aplicar por
           upsertCardData. El apply marca dirty solo (onContentChange del hook) —
           el cliente no ve nada hasta "Subir al cliente". */}
-      <div style={{ maxWidth: MAXW, margin: "0 auto", padding: "14px 24px 0" }}>
-        <DocumentAssist
+      {/* El estilo va a DocumentAssist y no a un div de afuera: con chat no pinta nada (2026-10-04). */}
+      <DocumentAssist
+          style={{ maxWidth: MAXW, margin: "0 auto", padding: "14px 24px 0" }}
           url={`/api/projects/${projectId}/canvas-assist`}
           extraBody={{ canvasId }}
           dialogTitle="Mejorar el kickoff con IA"
@@ -215,7 +216,6 @@ export default function KickoffWorkspace({ projectId, canvasId }: { projectId: s
             return k.upsertCardData(s.id, card?.id ?? null, data);
           }}
         />
-      </div>
       <LandingView
         config={config}
         ctx={ctx}

@@ -251,7 +251,12 @@ export async function runProjectBrief(
     const rawText = await generarTextoDeBrief(
       agent.systemPrompt,
       ctx.serialized,
-      "Redactá el resumen de cómo va ESTE proyecto según tus instrucciones.",
+      /* Va en el mensaje y no en el prompt guardado (2026-10-04): así llega a todas las corridas sin
+         re-sembrar el agente. Tuteo, y el próximo paso al cierre de la narrativa: es lo que
+         necesita quien abre la ficha para saber qué hacer hoy. */
+      "Redacta el resumen de cómo va ESTE proyecto según tus instrucciones. Escribe en tuteo, nunca " +
+        "en voseo. Si el material lo dice, cierra la narrativa con el próximo paso acordado con el " +
+        "cliente (qué, quién y para cuándo); si no lo dice, no lo inventes.",
     );
     const { headline, narrativa, statements, discarded } = parsearBriefCitado(rawText, ctx.sources);
 

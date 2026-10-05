@@ -4865,3 +4865,85 @@ Alexander Vanegas (CSL) y dirección.
   esa persona como dueña de proyectos activos (Lorena Osorio, Felipe Sepúlveda y Brandon Centeno, al
   2026-10-05). Esos proyectos cuentan como sin CSE y Equipo dice de quién eran, para reasignarlos en
   HubSpot. El filtro por CSE lista a todos los que llevan algún cliente, no solo a los de la lista.
+
+## Clientes con el sistema «Nexus · interfaz interna»: el índice y la ficha (2026-10-04)
+
+> Elías pidió rediseñar la parte de clientes (el índice y la ficha) con el sistema nuevo, tomando
+> como modelo la preventa, y validar que los datos alcancen para que sea útil a quien ejecuta un
+> proyecto de implementación. Aprobó el diseño (artefacto «Clientes · rediseño») y contestó cuatro
+> preguntas.
+
+- **El índice son dos columnas, como la preventa.** A la izquierda la tabla de empresas; a la
+  derecha «Qué sigue» y «Necesitan atención» (propuestas de cronograma sin decidir, altas a medio
+  hacer, reuniones que asignó la IA sin revisar) y lo que está en HubSpot y todavía no en Nexus.
+  La etapa de cada fila sale de `loadLifecycleBatch` + `etapaParaLaUI`, lo mismo que la ficha; con
+  dos o más proyectos de CS se muestra el más atrasado. Las consultas del índice viven en
+  `ClientsTable.tsx` (`consultarIndice`, con `cache()`) para que la tabla y el panel no las repitan.
+- **«Próxima reunión» lee también las fechas cargadas a mano por frente** (Ventas y CSE), no solo la
+  agenda: era la fuente que faltaba (`lib/clients/last-interaction.ts`).
+- **La ficha son tres columnas: riel, centro y panel.** El riel reemplaza las pestañas de proyecto,
+  las de la cuenta y el desplegable de piezas: las piezas cuelgan del proyecto abierto, con su
+  estado a la vista. El panel de la derecha dice qué sigue y da contexto; se oculta con «Ocultar
+  panel» (para proyectar) y se recuerda por navegador (`nexus-ficha-panel`).
+- **El panel del proyecto queda montado y oculto mientras se mira algo de la cuenta**, así sus
+  piezas siguen en el riel. Oculto no monta ningún documento ni el documento del handoff: sus
+  entradas de deshacer quedarían vivas debajo de otro editor (la misma razón por la que el handoff
+  se desmonta fuera del Resumen).
+- **«Qué sigue» del proyecto, en este orden** (decisión de Elías): alta a medio hacer → propuesta
+  de cronograma → reuniones sin revisar → el documento de la etapa sin generar o desactualizado →
+  resumen vencido → agendar la próxima reunión. Los dos primeros los pinta la ficha con sus propios
+  carteles. Lo que falta para cerrar la etapa no se repite: ya lo dice la tarjeta de la etapa.
+  Regla pura en `lib/clients/que-sigue-del-proyecto.ts`.
+- **El resumen del proyecto y «Qué se vendió» se generan solos al abrir el Resumen** (decisión de
+  Elías), si faltan o quedaron viejos: una vez por versión y por sesión del navegador, sin avisos.
+  El de «Qué se vendió» solo para quien puede generar el handoff (el servidor pide la misma celda);
+  para lo que ya existía, `scripts/backfill-resumen-handoff.ts` (simulacro primero: 59 handoffs,
+  hasta US$1,24 el 2026-10-04). Sigue siendo una persona la que lo dispara al mirar, nunca un cron.
+- **Los dos prompts piden lo que necesita quien ejecuta**: «Qué se vendió» suma, si el documento lo
+  dice, quién decide del lado del cliente y lo que quedó fuera del alcance (cuatro frases, mismo
+  tope); el resumen del proyecto cierra con el próximo paso acordado, si el material lo dice. Los
+  dos en tuteo. El del resumen va en el mensaje y no en el prompt guardado: no hace falta
+  re-sembrar el agente.
+- **Pendientes: lo de las últimas cuatro semanas**, vencido primero, con «y N más antiguos»
+  (decisión de Elías). «Ver los N» sigue mostrando todo.
+- **Un solo botón azul a la vez.** En la ficha es el del «Qué sigue»; las acciones de una tarjeta
+  («Regenerar», «Ver los N hallazgos») van como texto azul arriba a la derecha. Lo que propone la IA
+  se usa con un «Usar» azul, como en la preventa (pedido de Elías, segunda vuelta del mismo día): en
+  la información del cliente, mientras haya propuestas el azul es «Usar», y «Confirmar y guardar en
+  HubSpot» pasa a azul cuando ya no queda ninguna y hay algo que confirmar. El «Qué sigue» de la
+  cuenta no lleva botón cuando ya se está en la pestaña que pide.
+
+**Segunda vuelta, el mismo día** (Elías, mirando lo aplicado contra el diseño):
+
+- **«Mis clientes · Compartidos · Todos» para todos los roles.** Antes el filtro de pertenencia se
+  escondía a quien ve la cartera entera; esa persona también lleva cuentas propias y las quiere
+  separar. Los que ven todo abren en «Todos».
+- **Las fechas del listado se arman a mano, en la hora de Costa Rica (UTC-6, sin horario de
+  verano).** El `title` de «Última actividad» usaba `toLocaleString` y Node y Chrome escriben
+  distinto (espacios finos, «sept» contra «sep»): error de hidratación. Y «hoy/ayer» salía de la
+  zona LOCAL, que en el contenedor de producción es UTC: entre las 18 y las 24 de Costa Rica el
+  servidor y el navegador decían días distintos.
+- **Los documentos del motor de landings van dentro de un marco, no a sangre**
+  (`MarcoDelDocumento`): una franja gris dice «El documento · así lo ve el cliente» o «interno, el
+  cliente no lo ve» (sale de `PieceDefinition.clientFacing`) y el documento va en una tarjeta SIN
+  padding, así las bandas del motor siguen llegando a los bordes. Reemplaza al margen negativo; la
+  guarda es la misma (`lib/ui/full-bleed-workspaces.test.ts`), ahora exige el marco y que no gane
+  padding.
+- **«✨ Mejorar con IA» ya no aparece donde el documento tiene chat**: el «Cambiar» de cada sección
+  abre el chat, que arma la lista con casillas y aplica por el mismo editor; el botón era un resto.
+  `DocumentAssist` lo pinta solo sin proveedor del chat (hoy, ningún documento de proyecto; Roles
+  monta el suyo aparte). El «Cambiar» dejó la píldora con emoji: es el botón blanco de Nexus, con la
+  letra de la interfaz y la burbuja del chat en azul.
+- **El documento del handoff se abre pegado a su tarjeta** y la vista baja hasta él. Iba debajo de
+  «Alrededor del handoff»: con el contexto abierto quedaba a dos pantallas y «Ver documento» parecía
+  no hacer nada. Su interior (secciones y bloques) usa los tokens del sistema, y un bloque en
+  borrador es una sugerencia de la IA: azul, con «Usar» y «Descartar».
+- **«Alrededor del handoff» son cuatro filas iguales** (`FilaDeAlrededor`): Contexto del handoff,
+  Resultados que persigue el cliente (salió de adentro del documento), Pedidos fuera de alcance y
+  Exclusiones. A la derecha, lo que pide decisión en ámbar o solo la cuenta en gris.
+- **En la información del cliente, lo que propone la IA ocupa el lugar del campo**, pintado como va
+  a quedar (viñetas y negritas, `TextoConFormato`, el mismo formato que `textoAHtml` manda a
+  HubSpot), con «Ver lo que dice hoy» para comparar. «Usar» lo deja como el valor del campo,
+  editable.
+- **«Acceso»**, con un punto verde (activo) o ámbar (revocado), en vez de «Acceso activo»: el botón
+  blanco de la barra del documento, como «Asistente» y «Exportar PDF».

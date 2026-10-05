@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { EVENTO_FICHA_CAMBIO, camposPropuestos, type FichaGuardada } from "@/lib/clients/ficha";
+import { IconoDeSugerencia } from "@/components/ui/sistema";
 
 export default function AvisoDeFicha({ clientId }: { clientId: string }) {
   const [n, setN] = useState(0);
@@ -32,11 +33,14 @@ export default function AvisoDeFicha({ clientId }: { clientId: string }) {
   }, [clientId]);
 
   if (!n) return null;
+  /* La forma de lo que sugiere el agente en el sistema «Nexus · interfaz interna»: chispa y
+     número en azul sobre azul claro (rediseño de la ficha, 2026-10-04). */
   return (
     <span
       title={`La IA propone cambios en ${n} ${n === 1 ? "campo" : "campos"} de la ficha`}
-      className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-brand text-primary-fg text-[10px] font-semibold inline-flex items-center justify-center tabular-nums"
+      className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full border border-info-line bg-info-surface py-0 pl-1 pr-1.5 text-[11px] font-semibold tabular-nums text-brand"
     >
+      <IconoDeSugerencia className="h-3 w-3" />
       {n}
     </span>
   );

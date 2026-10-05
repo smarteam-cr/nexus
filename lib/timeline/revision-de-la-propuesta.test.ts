@@ -162,7 +162,8 @@ describe("los textos de la barra", () => {
     }
     const cartel = soloCodigo(leer("components/projects/TimelineProposalPendiente.tsx"));
     expect(cartel.length).toBeGreaterThan(1500);
-    expect(cartel.match(/El cronograma tiene una propuesta sin decidir/g)?.length, "las dos variantes").toBe(2);
+    /* 3 desde el 2026-10-04: el compacto, el completo y el del panel de la ficha (el «Qué sigue»). */
+    expect(cartel.match(/El cronograma tiene una propuesta sin decidir/g)?.length, "las tres variantes").toBe(3);
     /* ⚠ ACTUALIZADA en E2b P7 (2026-09-25), con esta razón: pedía «la IA propuso cambios del
        cronograma», la segunda oración del compacto. Esa oración se fue: ahora dice de dónde viene, quién
        la dejó y cuándo (`fraseDeAutoria`, en autoria-de-la-propuesta.test.ts). El completo sigue diciendo
@@ -2103,7 +2104,9 @@ describe("E3 P5 · el chat con una propuesta abierta: el despachador, la apertur
     }
 
     // El 💬: anota su pointerdown y no cierra un cajón que se abrió solo después de él.
-    const boton = tramo(CANVAS, "{canEdit && phases.length > 0 && (", "💬 Asistente");
+    /* El fin del tramo es el `title` del botón: desde el 2026-10-04 su rótulo es una burbuja SVG +
+       «Asistente», sin el emoji. */
+    const boton = tramo(CANVAS, "{canEdit && phases.length > 0 && (", "Conversa el cambio con el asistente: te dice qué se puede y qué fecha mueve.");
     expect(contiene(boton, "onPointerDown={() => { apretadoDelChatRef.current = Date.now(); }}"), "el 💬 dejó de anotar su pointerdown").toBe(true);
     expect(contiene(boton, "const apretadoEn = e.detail > 0 ? apretadoDelChatRef.current : null;")).toBe(true);
     expect(contiene(boton, "const abiertoSoloEn = abiertoSoloEnRef.current;")).toBe(true);

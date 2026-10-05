@@ -2,6 +2,7 @@
 
 import { useMe } from "@/hooks/useMe";
 import { fraseDeAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
+import { QueSigue } from "@/components/ui/sistema";
 
 /**
  * components/projects/TimelineProposalPendiente.tsx — EL CARTEL de la propuesta de
@@ -33,8 +34,11 @@ export interface TimelineProposalPendienteProps {
   clientId: string;
   /** `ProjectTimeline.pendingProposal != null`. Si no hay propuesta, no pinta nada. */
   pending: boolean;
-  /** `compacto` en el rail (una línea); `completo` en el widget del proyecto. */
-  variante?: "compacto" | "completo";
+  /**
+   * `compacto` (una línea); `completo` (tarjeta); `panel`: el «Qué sigue» del panel de contexto de
+   * la ficha (rediseño del 2026-10-04), que es donde vive hoy — se ve en todos los documentos.
+   */
+  variante?: "compacto" | "completo" | "panel";
   /** De dónde viene, quién la dejó y cuándo. Ausente o null = no se dice. */
   autoria?: AutoriaDeLaPropuesta | null;
 }
@@ -67,6 +71,30 @@ export default function TimelineProposalPendiente({
       Revisar
     </a>
   ) : null;
+
+  if (variante === "panel") {
+    /* Lo dejó un agente: va en el azul de las sugerencias, como «Qué sigue». La acción es la única
+       azul sólida del panel; sin el permiso, se dice quién puede aplicarla en vez de un botón. */
+    return (
+      <QueSigue
+        accion={
+          puedeRevisar ? (
+            <a
+              href={href}
+              className="inline-block rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
+            >
+              Revisar la propuesta →
+            </a>
+          ) : (
+            <span className="text-xs text-fg-muted">La aplica quien puede editar el cronograma.</span>
+          )
+        }
+      >
+        El cronograma tiene una propuesta sin decidir{autoria ? ` (${fraseDeAutoria(autoria)})` : ""}. Revísala antes
+        de subirlo al cliente: nada se aplica solo.
+      </QueSigue>
+    );
+  }
 
   if (variante === "compacto") {
     return (

@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
+import { BOTON_DE_HERRAMIENTA } from "@/components/ui/sistema";
 
 interface Resumen {
   id: string;
@@ -121,8 +122,12 @@ export default function VersionesDelDocumento({
         type="button"
         onClick={() => setAbierto(true)}
         title="Cómo estaba este documento antes de cada regeneración: consúltalo, trae una sección o restáuralo"
-        className="text-xs font-medium px-2.5 py-1.5 rounded-lg border border-line text-fg-secondary hover:text-fg hover:bg-surface-hover transition-colors"
+        className={BOTON_DE_HERRAMIENTA}
       >
+        {/* El reloj de «antes»: mismo botón blanco que «Asistente» y «Exportar PDF» (2026-10-04). */}
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+          <path d="M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8M3 3v5h5M12 7v5l3 2" />
+        </svg>
         Versiones anteriores
       </button>
       <Modal open={abierto} onClose={() => setAbierto(false)} title="Versiones anteriores" size="xl">

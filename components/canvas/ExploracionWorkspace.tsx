@@ -127,13 +127,15 @@ export default function ExploracionWorkspace({
       {/* El rótulo es parte del contrato con el CSE: este documento no se comparte.
           El CTA de generar NO vive acá: está en el header del canvas, junto a su nombre
           (CANVAS_PRIMARY_AGENT), igual que el del kickoff en el canvas de kickoff. */}
-      <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-          {soloLectura
-            ? "Informe anterior · solo lectura. La exploración ahora se trabaja en la guía."
-            : "Documento interno · no se comparte con el cliente"}
-        </span>
-      </div>
+      {/* «Interno, no se comparte» lo dice la franja del marco del documento (MarcoDelDocumento,
+          2026-10-04). Queda solo el aviso del informe anterior, que el marco no sabe. */}
+      {soloLectura && (
+        <div style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
+            Informe anterior · solo lectura. La exploración ahora se trabaja en la guía.
+          </span>
+        </div>
+      )}
 
       {/* Estado IDLE (el canvas existe desde que nace el proyecto, así que abrirlo sin
           generar es lo NORMAL — no se asume que hay una corrida en curso). */}

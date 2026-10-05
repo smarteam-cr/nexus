@@ -439,8 +439,9 @@ export default function NuevoProyectoStepper() {
       <Button
         variant="primary"
         size="md"
-        className="bg-brand hover:bg-brand-dark"
-        title="Creá uno nuevo, o traé uno que ya existe en HubSpot."
+        className="gap-1.5 px-3.5 font-semibold"
+        data-recorrido="clientes.agregar"
+        title="Crea uno nuevo, o trae uno que ya existe en HubSpot."
         onClick={() => setAbierto(true)}
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

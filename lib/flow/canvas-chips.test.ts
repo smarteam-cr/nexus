@@ -190,9 +190,12 @@ describe("D-02: el kickoff que falta es «opcional», no «pendiente» — y las
   it("y el widget y la cartera pintan «opcional» en NEUTRO, nunca en rojo", () => {
     /* La edición que la pone en rojo: `state={r.setup.kickoff ? "done" : "missing"}` de vuelta en la
        cartera, o el widget mapeando «opcional» a «missing». */
+    /* Desde el rediseño de la ficha (2026-10-04) el estado de cada pieza lo dice el riel de la
+       izquierda; el widget le manda la anotación «opcional» y tiene que ir en NEUTRO. */
     const gps = leer("components/clients/ProjectGPS.tsx");
     expect(gps, "el widget no distingue «opcional»").toContain('c.estado === "opcional"');
-    expect(gps).toContain('? "optional"');
+    const i = gps.indexOf('c.estado === "opcional"');
+    expect(gps.slice(i, i + 220), "«opcional» dejó de ir en neutro").toContain('tono: "neutro"');
     const grid = leer("components/dashboard/PortfolioGrid.tsx");
     expect(grid, "la cartera decide por su cuenta si el kickoff se reclama").toContain('PIEZAS_NO_REQUERIDAS.has("kickoff")');
     /* Sobre el USO, no sobre el nombre: que la constante se lea no prueba que decida el color. */

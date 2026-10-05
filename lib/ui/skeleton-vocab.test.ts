@@ -36,7 +36,7 @@ const LOADINGS = ARCHIVOS.filter((f) => path.basename(f) === "loading.tsx");
 const DEUDA = {
   slabs: [
     "app/(shell)/sessions/AnalysisPanel.tsx:469",
-    "components/canvas/BlockRenderer.tsx:9",
+    "components/canvas/BlockRenderer.tsx:11",
     "components/charts/EChartRenderer.tsx:10",
     "components/clients/MinuteDialog.tsx:212",
     "components/clients/ProjectSessionsReview.tsx:152",

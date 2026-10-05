@@ -59,7 +59,10 @@ export default function StageBadge({
   /** Razones legibles de la inferencia (tooltip). */
   reasons?: string[];
   overrideReason?: string | null;
-  size?: "sm" | "md";
+  /** `titulo` = el nombre de la etapa a secas, 15 px seminegrita y sin borde: la tarjeta de Etapa
+   *  de la ficha ya pinta «3 de 9» y la línea debajo (rediseño del 2026-10-04). Conserva el
+   *  desplegable de razones y la marca de curada. */
+  size?: "sm" | "md" | "titulo";
   /** La línea de avance a pintar. Ausente = la del ciclo de CS. */
   order?: ReadonlyArray<{ id: string; label: string }>;
   /** Rótulo de la etapa actual. Necesario cuando la etapa está FUERA de `order`. */
@@ -113,18 +116,22 @@ export default function StageBadge({
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <span
-        className={`inline-flex items-center gap-1 font-medium rounded border ${
-          enLinea
-            ? "text-sky-700 bg-sky-500/10 border-sky-500/25"
-            : "text-fg-secondary bg-surface-muted border-line"
-        } ${size === "md" ? "text-xs px-2 py-1" : "text-[10px] px-1.5 py-0.5"}`}
-      >
-        {enLinea ? `Etapa ${idx + 1}/${linea.length} · ${label}` : label}
-      </span>
+      {size === "titulo" ? (
+        <span className="cursor-default text-[15px] font-semibold text-fg">{label}</span>
+      ) : (
+        <span
+          className={`inline-flex items-center gap-1 font-medium rounded border ${
+            enLinea
+              ? "text-sky-700 bg-sky-500/10 border-sky-500/25"
+              : "text-fg-secondary bg-surface-muted border-line"
+          } ${size === "md" ? "text-xs px-2 py-1" : "text-[10px] px-1.5 py-0.5"}`}
+        >
+          {enLinea ? `Etapa ${idx + 1}/${linea.length} · ${label}` : label}
+        </span>
+      )}
       {source === "override" && (
         <span
-          className="text-[9px] text-fg-muted uppercase tracking-wide"
+          className={size === "titulo" ? "text-[11px] text-fg-muted" : "text-[9px] text-fg-muted uppercase tracking-wide"}
           title={overrideReason ?? "Etapa fijada a mano por el CSE"}
         >
           curada

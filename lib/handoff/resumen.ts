@@ -48,8 +48,8 @@ export const MAX_CARACTERES_RESUMEN = 700;
 const MAX_CARACTERES_CONTEXTO = 24_000;
 
 const SYSTEM = [
-  "Sos el analista de Customer Success de Smarteam, una consultora de HubSpot en Costa Rica.",
-  "Escribís para el equipo interno que va a implementar el proyecto, no para el cliente.",
+  "Eres el analista de Customer Success de Smarteam, una consultora de HubSpot en Costa Rica.",
+  "Escribes para el equipo interno que va a implementar el proyecto, no para el cliente.",
   "Español de Costa Rica, en tuteo (tú/tienes/necesitas). NUNCA voseo (vos/tenés/necesitás).",
 ].join(" ");
 
@@ -61,16 +61,23 @@ const SYSTEM = [
  *     vuelve una fuente de verdad paralela, y como es la que se lee primero, gana.
  *  2. **El alcance primero.** Si el texto se corta o se lee a medias, lo que tiene que haber
  *     sobrevivido es qué se vendió.
- *  3. **Sin preámbulo.** «Este proyecto consiste en…» gasta una de las tres frases en no decir
- *     nada, y son tres.
+ *  3. **Sin preámbulo.** «Este proyecto consiste en…» gasta una de las frases en no decir nada.
+ *
+ * Desde el 2026-10-04 (pedido de Elías) también dice, si el documento lo nombra, QUIÉN DECIDE del
+ * lado del cliente y QUÉ QUEDÓ FUERA del alcance: son las dos cosas que la persona que ejecuta el
+ * proyecto necesita en la primera semana y que el resumen viejo callaba. Son cuatro frases como
+ * máximo; el tope de caracteres no cambió.
  */
 export const INSTRUCCION_RESUMEN = [
   "Arriba está el documento de handoff de un proyecto.",
-  "Escribe un resumen de MÁXIMO 3 frases que responda: ¿qué se le vendió a este cliente y para qué?",
+  "Escribe un resumen de MÁXIMO 4 frases que responda: ¿qué se le vendió a este cliente y para qué?",
   "",
   "Reglas:",
   "- Usa SOLO lo que dice el documento. Si algo no está, no lo menciones. No inventes alcance, cifras ni fechas.",
   "- Empieza por el alcance contratado (qué se vendió). Después, si cabe, el resultado que el cliente busca.",
+  "- Si el documento lo dice, nombra quién decide del lado del cliente (nombre y cargo).",
+  "- Si el documento lo dice, cierra con lo que quedó FUERA del alcance, para que nadie lo prometa.",
+  "- En tuteo cuando te dirijas al lector. Nunca voseo.",
   "- Nombra productos, integraciones o sistemas concretos si el documento los nombra.",
   "- Sin preámbulo ni títulos. No empieces con «Este proyecto» ni «El handoff».",
   "- Texto plano corrido. Sin viñetas, sin markdown, sin comillas envolventes.",

@@ -15,6 +15,8 @@ import { useToast } from "@/components/ui/Toast";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useMe } from "@/hooks/useMe";
 import { urlDeProyecto } from "@/lib/agents/run-url";
+import { BOTON_DE_HERRAMIENTA } from "@/components/ui/sistema";
+import { cn } from "@/lib/cn";
 
 // Gating COSMÉTICO por sección de permisos (PERM-F5): agentes que ESCRIBEN un
 // artefacto → si el usuario no puede NI generar NI regenerar esa sección, el CTA
@@ -167,13 +169,15 @@ export default function CanvasAgentButton({
     <button
       onClick={() => void run()}
       disabled={running || disabled || !!busy}
-      className={[
-        "flex items-center gap-1.5 rounded-lg text-xs font-semibold disabled:opacity-60 transition-colors",
+      className={cn(
+        "flex items-center gap-1.5 disabled:opacity-60 transition-colors",
+        /* `primary` es el botón azul de los tableros; `ghost` es el blanco de la barra del documento
+           (BOTON_DE_HERRAMIENTA), igual que «Asistente» y «Exportar PDF» a su lado. */
         appearance === "primary"
-          ? "px-3 py-1.5 text-primary-fg bg-brand hover:bg-brand-dark"
-          : "px-2.5 py-1 text-fg-muted border border-line hover:text-fg hover:bg-surface-hover",
-        className ?? "",
-      ].join(" ")}
+          ? "rounded-md px-3 py-1.5 text-xs font-semibold text-primary-fg bg-primary hover:bg-primary-hover"
+          : BOTON_DE_HERRAMIENTA,
+        className,
+      )}
     >
       {showRunning ? (
         <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">

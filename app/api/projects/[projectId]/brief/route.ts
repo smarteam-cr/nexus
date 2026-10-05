@@ -5,6 +5,8 @@
  * Nada de regeneración masiva: lo dispara una persona desde la pantalla del proyecto. El aviso de
  * «quedó viejo» lo calcula `lib/projects/brief-vencido.ts` al leer, y la decisión de regenerar es
  * de quien mira — no de un cron que quema tokens sobre 163 proyectos por las dudas.
+ * Desde el 2026-10-04 la pantalla lo pide sola al abrir el Resumen si falta o quedó viejo (una vez
+ * por versión y por sesión del navegador): sigue siendo alguien mirando ese proyecto.
  *
  * ── EL GATE ES EL ACCESO AL PROYECTO, NO UNA CELDA NUEVA ─────────────────────
  * Leer cómo va un proyecto al que ya tenés acceso no es un privilegio aparte: quien puede abrir

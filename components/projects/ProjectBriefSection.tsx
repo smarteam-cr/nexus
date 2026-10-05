@@ -21,25 +21,36 @@
  * re-corre componentes de SERVIDOR — acá no hay ninguno en el medio, así que generaba el resumen
  * de verdad y la pantalla se quedaba mostrando el estado vacío hasta que alguien recargaba a mano.
  * `onRefresh` es el mismo `fetchGPS` que el padre ya usa para cualquier otro cambio.
+ *
+ * ── SE GENERA SOLO AL ABRIR EL RESUMEN (2026-10-04, decisión de Elías) ──────
+ * Si no existe o quedó viejo cuando alguien abre el Resumen del proyecto, se pide una vez, sin
+ * avisos: quien abre la ficha quiere leer cómo va, no apretar un botón. Una vez por sesión del
+ * navegador y por versión del resumen (`nexus-brief-auto:{proyecto}:{fecha o none}`): si falla o
+ * no hay material, no se reintenta en cada apertura. Lo sigue disparando una persona al mirar,
+ * nunca un cron.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { fmtChipDate } from "@/components/cs/SourceChip";
 import { describirCita } from "@/lib/projects/brief-cita";
+import { BotonEnlace, IconoDeSugerencia } from "@/components/ui/sistema";
+import { useContextoDelResumen } from "@/components/clients/contexto-del-resumen";
 
-/** Acento por tipo de fuente — para poder escanear la lista sin leer cada línea entera.
- *  Deliberadamente discreto (un borde de 2px, no un fondo de color): la afirmación es el
- *  contenido, el acento es solo una guía para el ojo. */
-const ACENTO_POR_TIPO: Record<string, string> = {
-  desviacion: "border-warn-line",
-  hubspot_ops: "border-sky-500/40",
-  cobertura: "border-warn-line",
-  sesion: "border-line",
-  handoff: "border-line",
-  etapa: "border-line",
+/** El chip de la fuente de cada hallazgo (rediseño del 2026-10-04): deja escanear de dónde sale
+ *  cada punto y «cuáles son atrasos» sin leer la cita. Los que piden atención van en ámbar. */
+const FUENTE_POR_TIPO: Record<string, { texto: string; tono: "atencion" | "neutro" }> = {
+  sesion: { texto: "Reunión", tono: "neutro" },
+  handoff: { texto: "Handoff", tono: "neutro" },
+  etapa: { texto: "Etapa", tono: "neutro" },
+  hubspot_ops: { texto: "HubSpot", tono: "neutro" },
+  desviacion: { texto: "Desviación", tono: "atencion" },
+  cobertura: { texto: "Cobertura", tono: "atencion" },
 };
+
+/** Cuántos hallazgos se ven sin abrir «Ver los N hallazgos». */
+const HALLAZGOS_A_LA_VISTA = 3;
 
 /** El ícono de «abre en otra pestaña». Sin texto: el nombre de la reunión ya está al lado. */
 function IconoEnlace() {
@@ -70,11 +81,11 @@ function Cita({ source }: { source: { kind: string; id: string; label: string; d
   const c = describirCita(source);
   const cuando = c.cuando && (c.cuandoPrefijo ? `${c.cuandoPrefijo} ${c.cuando}` : c.cuando);
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] text-fg-muted">
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-fg-muted">
       {c.sala && (
-        <span className="font-semibold uppercase tracking-wide text-fg-secondary">{c.sala}</span>
+        <span className="font-semibold text-fg-secondary">{c.sala}</span>
       )}
-      <span className="font-medium text-fg-secondary">{c.nombre}</span>
+      <span>{c.nombre}</span>
       {cuando && <span>· {cuando}</span>}
       {c.href && (
         <Link
@@ -125,16 +136,15 @@ export default function ProjectBriefSection({
   onRefresh: () => void;
 }) {
   const toast = useToast();
+  const { aLaVista } = useContextoDelResumen();
   const [generando, setGenerando] = useState(false);
-  /* Arranca ABIERTO: es la respuesta a «cómo va esto», que es la pregunta con la que alguien abre
-     el widget. El toggle existe para poder sacarlo del camino cuando ya se leyó, no para
-     esconderlo por default. No se recuerda entre cargas a propósito: un resumen que quedó
-     colapsado de ayer es exactamente el que nadie vuelve a leer. */
-  const [abierto, setAbierto] = useState(true);
+  /* Los hallazgos de más arrancan plegados (rediseño del 2026-10-04): el titular, la narrativa y
+     los primeros tres contestan «cómo va esto»; el resto está a un clic. */
+  const [abierto, setAbierto] = useState(false);
 
-  async function generar() {
+  async function generar(silencioso = false) {
     setGenerando(true);
-    toast.info("Leyendo el material del proyecto… (~30 segundos)");
+    if (!silencioso) toast.info("Leyendo el material del proyecto… (~30 segundos)");
     try {
       const r = await fetchJson<{ statements: number; discarded: number }>(
         `/api/projects/${projectId}/brief`,
@@ -148,129 +158,135 @@ export default function ProjectBriefSection({
           `Resumen generado con ${r.statements} afirmaciones. Se descartaron ${r.discarded} por ` +
             `citar una fuente que no existe — si se repite, el prompt del agente necesita ajuste.`,
         );
-      } else {
+      } else if (!silencioso) {
         toast.success(`Resumen generado con ${r.statements} afirmaciones.`);
       }
       onRefresh();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo generar el resumen.");
+      /* La generación automática no grita: si no hay material o falló, queda el botón. */
+      if (!silencioso) toast.error(e instanceof ApiError ? e.message : "No se pudo generar el resumen.");
     } finally {
       setGenerando(false);
     }
   }
 
+  /* Solo al abrir el Resumen, y una vez por versión: ver el comentario del encabezado. */
+  const pedido = useRef<string | null>(null);
+  const falta = !brief || brief.vencido;
+  const versionDelResumen = brief?.generatedAt ?? "none";
+  useEffect(() => {
+    if (!aLaVista || !falta || pedido.current === versionDelResumen) return;
+    const clave = `nexus-brief-auto:${projectId}:${versionDelResumen}`;
+    try {
+      if (sessionStorage.getItem(clave)) return;
+      sessionStorage.setItem(clave, "1");
+    } catch {
+      /* Sin sessionStorage (modo privado estricto): igual se pide una sola vez por montaje. */
+    }
+    pedido.current = versionDelResumen;
+    void generar(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `generar` cambia en cada render; la clave ya evita repetir
+  }, [aLaVista, falta, projectId, versionDelResumen]);
+
+  /* La cabecera de la tarjeta, igual con y sin resumen: la chispa (lo escribe la IA), el nombre, su
+     edad y, arriba a la derecha, la acción en azul (pedido de Elías, 2026-10-04). */
+  const cabecera = (sub: string, accion: string) => (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5">
+          <IconoDeSugerencia className="h-[15px] w-[15px] flex-shrink-0 text-brand" />
+          <h3 className="text-[15px] font-semibold text-fg">Resumen del proyecto</h3>
+        </div>
+        <p className="mt-0.5 text-xs text-fg-muted">{sub}</p>
+      </div>
+      <BotonEnlace className="flex-shrink-0" onClick={() => void generar()} disabled={generando}>
+        {accion}
+      </BotonEnlace>
+    </div>
+  );
+
   if (!brief) {
     return (
-      <div className="px-4 py-3 border-b border-line">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-fg-muted">
-            Todavía no hay resumen de este proyecto. El agente lo redacta desde las reuniones, el
-            estado en HubSpot y las desviaciones del cronograma, citando cada afirmación.
-          </p>
-          <button
-            onClick={generar}
-            disabled={generando}
-            className="text-xs font-medium px-3 py-1.5 rounded-md bg-brand text-primary-fg hover:bg-brand/90 disabled:opacity-50 transition-colors whitespace-nowrap"
-          >
-            {generando ? "Generando…" : "✨ Generar resumen"}
-          </button>
-        </div>
-      </div>
+      <section data-recorrido="ficha.resumen" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
+        {cabecera(generando ? "Generándose…" : "Todavía sin generar", generando ? "Generando…" : "Generar")}
+        <p className="text-[13px] leading-relaxed text-fg-secondary">
+          {generando
+            ? "La IA está leyendo las reuniones, el estado en HubSpot y las desviaciones del cronograma. Tarda unos 30 segundos."
+            : "La IA lo redacta desde las reuniones, el estado en HubSpot y las desviaciones del cronograma, citando cada afirmación."}
+        </p>
+      </section>
     );
   }
 
+  const ocultos = Math.max(0, brief.statements.length - HALLAZGOS_A_LA_VISTA);
   return (
-    <div className="border-b border-line">
-      {/* ── EL ENCABEZADO ES EL TOGGLE ──────────────────────────────────────────
-          Molde: `components/clients/ProjectContextSection.tsx:112-132` (chevron + título +
-          contexto + «Colapsar/Expandir» a la derecha). Colapsado se sigue leyendo LO QUE IMPORTA
-          —el titular y el aviso de vencido—: un toggle que esconde la única frase que alguien
-          necesita obliga a abrirlo siempre, y entonces no sirve de nada. */}
-      <button
-        onClick={() => setAbierto(!abierto)}
-        aria-expanded={abierto}
-        className="w-full flex items-start gap-2.5 px-4 py-3 hover:bg-surface-hover transition-colors text-left"
-      >
-        <svg
-          className={`w-4 h-4 mt-0.5 text-fg-secondary flex-shrink-0 transition-transform ${abierto ? "" : "-rotate-90"}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-        <span className="flex-1 min-w-0">
-          <span className="block text-sm font-semibold text-fg leading-snug">
-            {brief.headline ?? "Resumen del proyecto"}
-          </span>
-          <span className="mt-0.5 block text-[10px] text-fg-muted">
-            {brief.statements.length} hallazgo{brief.statements.length === 1 ? "" : "s"} · generado{" "}
-            {fmtChipDate(brief.generatedAt)}
-            {brief.vencido ? " · quedó viejo" : ""}
-          </span>
-        </span>
-        <span className="text-xs text-fg-muted flex-shrink-0">{abierto ? "Colapsar" : "Expandir"}</span>
-      </button>
-      {/* Se oculta con `hidden` en vez de desmontarse: el estado de «generando» y el scroll de la
-          lista sobreviven al toggle, igual que en la sección de Contexto. */}
-      <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
+    <section data-recorrido="ficha.resumen" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
+      {cabecera(
+        `${brief.statements.length} hallazgo${brief.statements.length === 1 ? "" : "s"} · generado ${fmtChipDate(brief.generatedAt)}` +
+          (brief.vencido ? (generando ? " · actualizándose" : " · quedó viejo") : ""),
+        generando ? "Regenerando…" : "Regenerar",
+      )}
+      {/* El titular y el aviso de vencido están SIEMPRE a la vista: lo único que se pliega son los
+          hallazgos de más. */}
+      {brief.headline && <p className="text-[14.5px] font-semibold leading-snug text-fg">{brief.headline}</p>}
       {brief.vencido && (
-        <div className="flex items-start gap-2 text-[11px] border border-warn-line bg-warn-surface text-warn-ink rounded-lg px-3 py-2">
+        <div className="flex items-start gap-2 rounded-lg border border-warn-line bg-warn-surface text-warn-ink px-3 py-2 text-xs">
           {/* El motivo, no un «quedó viejo» genérico: es lo que dice si hace falta regenerar ya
               o si puede esperar. */}
           <span className="flex-1">{brief.motivoDeVencimiento}</span>
           <button
-            onClick={generar}
+            onClick={() => void generar()}
             disabled={generando}
-            className="font-medium underline decoration-dotted hover:text-fg disabled:opacity-50 whitespace-nowrap"
+            className="whitespace-nowrap font-semibold hover:text-fg disabled:opacity-50"
           >
-            {generando ? "Regenerando…" : "↻ Regenerar"}
+            {generando ? "Actualizando…" : "Actualizar"}
           </button>
         </div>
       )}
-      {/* El titular ya vive en el encabezado (se lee también colapsado): repetirlo acá sería
-          la misma frase dos veces seguidas. */}
       {brief.narrativa && (
         /* La NARRATIVA va primero y se lee como texto corrido: es el contexto que vuelve
            interpretables a los hallazgos de abajo. Sin cita al pie a propósito —es una síntesis
            de todo el material, no una afirmación puntual—; lo que se afirma con evidencia va en
            la lista, donde cada línea trae su fuente. */
-        <div className="space-y-2 border-l-2 border-brand/30 pl-2.5">
+        <div className="flex flex-col gap-2">
           {brief.narrativa.split(/\n{2,}/).map((parrafo, i) => (
-            <p key={i} className="text-xs text-fg-secondary leading-relaxed">
+            <p key={i} className="text-[13px] leading-relaxed text-fg-secondary">
               {parrafo.trim()}
             </p>
           ))}
         </div>
       )}
-      {/* Cada afirmación es un BLOQUE, no una línea corrida: la cita va DEBAJO del texto, no
-          pegada al final. Antes competían en el mismo renglón —el texto se cortaba justo donde
-          empezaba la cita, o la cita se iba sola a la línea siguiente sin avisar por qué— y con
-          6-8 afirmaciones la sección se leía como un párrafo único, sin dónde apoyar la vista.
-          El borde izquierdo por tipo (`ACENTO_POR_TIPO`) deja escanear "cuáles son atrasos" de
-          un vistazo, sin tener que leer cada cita. */}
-      <ul className="space-y-2.5">
-        {brief.statements.map((s, i) => (
-          <li
-            key={i}
-            className={`border-l-2 pl-2.5 ${ACENTO_POR_TIPO[s.source.kind] ?? "border-line"}`}
-          >
-            <p className="text-xs text-fg-secondary leading-relaxed">{s.text}</p>
-            <Cita source={s.source} />
-          </li>
-        ))}
+      {/* Cada afirmación: de qué fuente sale (chip), el texto y, debajo, la cita. Los hallazgos de
+          más se OCULTAN, no se desmontan: el scroll y el foco sobreviven al pliegue. */}
+      <ul className="flex flex-col gap-2.5">
+        {brief.statements.map((s, i) => {
+          const fuente = FUENTE_POR_TIPO[s.source.kind] ?? { texto: "Fuente", tono: "neutro" as const };
+          return (
+            <li key={i} hidden={!abierto && i >= HALLAZGOS_A_LA_VISTA} className="flex items-start gap-2.5">
+              <span
+                className={`mt-px flex-shrink-0 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold ${
+                  fuente.tono === "atencion"
+                    ? "border-warn-line bg-warn-surface text-warn-ink"
+                    : "border-line bg-surface-muted text-fg-secondary"
+                }`}
+              >
+                {fuente.texto}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[13px] leading-[1.45] text-fg">{s.text}</p>
+                <Cita source={s.source} />
+              </div>
+            </li>
+          );
+        })}
       </ul>
-      {!brief.vencido && (
-        /* La fecha ya está en el encabezado; acá queda solo la acción. */
-        <button
-          onClick={generar}
-          disabled={generando}
-          className="text-[10px] text-brand hover:text-brand/80 disabled:opacity-50"
-        >
-          {generando ? "Regenerando…" : "↻ Regenerar"}
-        </button>
+      {ocultos > 0 && (
+        <div className="self-start">
+          <BotonEnlace onClick={() => setAbierto(!abierto)} aria-expanded={abierto}>
+            {abierto ? "Ver menos" : `Ver los ${brief.statements.length} hallazgos`}
+          </BotonEnlace>
+        </div>
       )}
-      </div>
-    </div>
+    </section>
   );
 }

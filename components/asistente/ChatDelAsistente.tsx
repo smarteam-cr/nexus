@@ -1007,7 +1007,7 @@ export default function ChatDelAsistente({
                   </button>
                 ) : (
                   <p className="mt-2 text-xs text-fg-muted">
-                    Copia esta instrucción y pégala en «✨ Mejorar con IA» del documento.
+                    No hay un editor abierto para aplicarlo: abre el documento en esta pantalla y vuelve a pedirlo.
                   </p>
                 )}
               </div>

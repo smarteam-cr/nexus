@@ -174,7 +174,11 @@ function ChatDeSeccionBtn({ seccionKey, label }: { seccionKey: string; label: st
       aria-label={`Hablar con el asistente sobre la sección ${label}`}
       onClick={() => abrirCon({ key: seccionKey, label })}
     >
-      💬 Cambiar
+      {/* La burbuja del chat (2026-10-04): el botón se ve como los demás de Nexus, sin emoji. */}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+        <path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
+      </svg>
+      Cambiar
     </button>
   );
 }
@@ -489,7 +493,7 @@ export default function LandingView({
       const needsChrome = editable && (!def.pinned || !def.noHide);
       if (!needsChrome) return <Fragment key={def.key}>{body}</Fragment>;
       return (
-        <div key={def.key} className={`stl-ctx-sec${hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}>
+        <div key={def.key} data-seccion={def.key} className={`stl-ctx-sec${hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}>
           {chrome}
           {collapsedBar}
           <div style={hideWhenCollapsed}>{body}</div>
@@ -500,6 +504,8 @@ export default function LandingView({
     return (
       <section
         key={def.key}
+        /* El índice de secciones del panel de la ficha salta acá (PanelDelDocumento). */
+        data-seccion={def.key}
         ref={isHero ? heroRef : undefined}
         className={`stl-sec stl-${def.theme}${isHero ? " hero-backdrop" : ""}${editable && hidden ? " stl-hidden" : ""}${collapsed ? " stl-collapsed" : ""}`}
       >

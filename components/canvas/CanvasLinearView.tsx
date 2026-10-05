@@ -18,15 +18,15 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import BlockRenderer, { type BlockData } from "./BlockRenderer";
 import { useCanvasSections } from "./useCanvasSections";
 import { CanvasSectionsSkeleton } from "@/components/clients/skeletons";
+import { Alert } from "@/components/ui";
+import { BotonAzul, BotonTexto, FranjaDeSugerencias, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 
-/* La cáscara de cada sección. Escritas UNA vez a propósito: el trinquete de grises
-   (lib/ui/token-vocab.test.ts) cuenta los crudos de este archivo y muerde en las dos
-   direcciones, así que la variante destacada usa SOLO tokens y la normal conserva los suyos
-   sin repetirlos en un ternario. */
-const SECCION_NORMAL = "rounded-2xl border border-gray-800 bg-gray-900 shadow-sm";
-const SECCION_PRINCIPAL = "rounded-2xl border border-brand bg-surface ring-1 ring-brand/25 shadow-sm lg:col-span-2";
-const CABECERA_NORMAL = "flex items-center gap-2 px-5 py-3.5 border-b border-gray-800";
-const CABECERA_PRINCIPAL = "flex items-center gap-2 px-5 py-4 border-b border-line";
+/* La cáscara de cada sección, con el sistema «Nexus · interfaz interna» (2026-10-04): tarjeta
+   blanca de radio 12, sin sombras ni anillos, y solo tokens (se ve igual en claro y en oscuro).
+   La destacada se distingue por ir a todo el ancho y con su rótulo, no por un borde de color. */
+const SECCION_NORMAL = "rounded-xl border border-line bg-surface";
+const SECCION_PRINCIPAL = "rounded-xl border border-line bg-surface lg:col-span-2";
+const CABECERA = "flex items-center gap-2 border-b border-line px-5 py-3.5";
 
 /** Un bloque "tiene contenido" si su texto o su data traen algo (no un manual vacío). */
 function blockHasContent(block: BlockData): boolean {
@@ -131,58 +131,45 @@ export default function CanvasLinearView({
 
   return (
     <>
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Error de guardado — no silencioso */}
       {error && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-900/20 border border-red-700/50 text-red-300">
-          <span className="text-sm font-medium flex-1">{error}</span>
-          <button onClick={clearError} className="text-xs font-semibold text-red-200 hover:text-white px-2 py-1 rounded hover:bg-red-800/40">Cerrar</button>
-        </div>
+        <Alert variant="danger" title="No se pudo guardar">
+          <span className="flex flex-wrap items-center gap-3">
+            <span className="flex-1">{error}</span>
+            <BotonTexto onClick={clearError}>Cerrar</BotonTexto>
+          </span>
+        </Alert>
       )}
 
-      {/* Draft banner — solo editores pueden aceptar */}
+      {/* Lo que propuso el agente y espera decisión: la franja azul de las piezas, con «Usar todos». */}
       {draftCount > 0 && canEdit && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-900/20 border border-amber-700/50 text-amber-300">
-          <svg className="w-4 h-4 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-sm font-medium">
-            {draftCount} {draftCount === 1 ? "bloque nuevo" : "bloques nuevos"} del agente
-          </span>
-          <button
-            onClick={acceptAll}
-            className="ml-auto text-xs font-semibold text-amber-200 hover:text-white px-2 py-1 rounded hover:bg-amber-800/40"
-          >
-            Aceptar todos
-          </button>
-        </div>
+        <FranjaDeSugerencias acciones={<BotonAzul onClick={() => void acceptAll()}>Usar todos</BotonAzul>}>
+          El agente propone {draftCount} {draftCount === 1 ? "bloque nuevo" : "bloques nuevos"}: úsalos o descártalos uno por uno.
+        </FranjaDeSugerencias>
       )}
 
       {/* Sections — onlyKey: una sección a ancho completo; si no, 2 por fila */}
-      <div className={onlyKey ? "space-y-5" : "grid grid-cols-1 lg:grid-cols-2 gap-5 items-start"}>
+      <div className={onlyKey ? "space-y-4" : "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start"}>
       {sections.map((section) => {
         const destacada = section.key === destacarKey;
         return (
         <section key={section.id} className={destacada ? SECCION_PRINCIPAL : SECCION_NORMAL}>
-          <div className={destacada ? CABECERA_PRINCIPAL : CABECERA_NORMAL}>
+          <div className={CABECERA}>
             <div className="flex-1 min-w-0">
-              {destacada && (
-                <p className="text-[10px] font-bold uppercase tracking-wider text-brand mb-0.5">
-                  El propósito del proyecto
-                </p>
-              )}
-              <h3 className={destacada ? "text-lg font-bold text-fg" : "text-base font-bold text-white"}>{section.label}</h3>
+              {destacada && <p className={`${ROTULO_DEL_SISTEMA} mb-0.5`}>El propósito del proyecto</p>}
+              <h3 className="text-[15px] font-semibold text-fg">{section.label}</h3>
             </div>
             {section.blocks.length > 0 && (
-              <span className="text-[10px] font-medium text-gray-400 bg-gray-800 rounded-full w-5 h-5 flex items-center justify-center">
+              <span className="rounded-full border border-line bg-surface-muted px-1.5 text-[11px] font-semibold tabular-nums text-fg-muted">
                 {section.blocks.length}
               </span>
             )}
           </div>
 
-          <div className="px-5 py-4 space-y-3">
+          <div className="px-4 py-3 space-y-2">
             {section.blocks.length === 0 ? (
-              <p className="text-sm text-gray-400">Sin contenido todavía.</p>
+              <p className="px-1 text-[13px] text-fg-muted">Sin contenido todavía.</p>
             ) : (
               section.blocks.map((block) => (
                 <BlockRenderer
@@ -201,7 +188,7 @@ export default function CanvasLinearView({
             {canEdit && (
               <button
                 onClick={() => addBlock(section.id)}
-                className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white transition-colors pt-1"
+                className="flex items-center gap-1.5 px-1 pt-1 text-xs font-medium text-fg-muted transition-colors hover:text-fg"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

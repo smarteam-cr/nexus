@@ -11,7 +11,9 @@ import { accessibleClientWhere, sharedClientIdsFor } from "@/lib/auth/access";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { can } from "@/lib/auth/permissions/engine";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-import { ClientsTable, ClientsTableZoneSkeleton } from "./ClientsTable";
+import { cn } from "@/lib/cn";
+import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
+import { ClientsTable, ClientsTableZoneSkeleton, PanelDeLaCartera, PanelDeLaCarteraSkeleton } from "./ClientsTable";
 
 // Render dinámico — la página depende del usuario logueado (sesión Supabase
 // vía cookies), así que no puede cachearse con ISR como antes.
@@ -22,9 +24,8 @@ export const dynamic = "force-dynamic";
  *
  * Esta page resuelve solo lo barato (auth + rol + count) y pinta el header real de
  * inmediato; las queries pesadas (clients + team + meeting-dates + actividad) viven en
- * <ClientsTable>, suspendida con un fallback que ESTA page elige sabiendo el rol: con
- * pills para CSE, sin pills para SUPER_ADMIN. Así el skeleton de la zona calza exacto
- * con lo que cada rol va a ver — cosa que el loading.tsx estático no puede hacer.
+ * <ClientsTable>, suspendida con su skeleton. Desde el 2026-10-04 todos los roles ven el filtro
+ * «De quién es», así que el skeleton es uno solo (antes cambiaba por rol).
  */
 export default async function ClientsPage() {
   // Identidad del usuario logueado (Supabase Auth + AppUser).
@@ -71,30 +72,48 @@ export default async function ClientsPage() {
     prisma.client.count({ where: { AND: [clientWhere ?? {}, { ...CS_CLIENT_WHERE }] } }),
   ]);
 
+  /* Dos columnas, como el listado de la preventa (sistema «Nexus · interfaz interna», rediseño
+     del 2026-10-04): a la izquierda la cartera; a la derecha «Qué sigue», lo que necesita atención
+     y la bandeja de HubSpot. En pantallas angostas el panel baja al final.
+     ⚠ Las dos zonas reciben el MISMO `clientWhere` y el MISMO `sharedIds`: es lo que hace que
+     `consultarIndice` (con `cache()`) corra una sola vez para las dos. */
   return (
-    <div className={SHELL_DEFAULT}>
-      <PageHeader recorrido="clientes-listado"
-        title="Clientes"
-        description={
-          empresaCount === 0
-            ? "Sin empresas aún"
-            : `${empresaCount} empresa${empresaCount !== 1 ? "s" : ""} · ` +
-              `${clientCount} cliente${clientCount !== 1 ? "s" : ""}`
-        }
-        /* Sin acción. El CTA a «Business cases» vivía acá y se sacó (Elías, 2026-08-22):
-           esta pantalla es el índice de EMPRESAS, y el hub de propuestas ya tiene su celda
-           propia en el menú («Ventas»). Un botón primario que se lleva a otra sección es
-           el gesto más pesado de la pantalla apuntando a lo que nadie vino a hacer acá. */
-      />
-
-      <Suspense fallback={<ClientsTableZoneSkeleton showPills={!activeCse.isSuperAdmin} />}>
-        <ClientsTable
-          user={user}
-          activeCse={activeCse}
-          clientWhere={clientWhere}
-          sharedIds={sharedIds}
+    <div className="flex flex-col lg:min-h-screen lg:flex-row">
+      <main className={cn(SHELL_DEFAULT, "min-w-0 flex-1 pb-12")}>
+        <PageHeader recorrido="clientes-listado"
+          className="mb-5"
+          title="Clientes"
+          description={
+            empresaCount === 0
+              ? "Sin empresas aún"
+              : `${empresaCount} empresa${empresaCount !== 1 ? "s" : ""} · ` +
+                `${clientCount} cliente${clientCount !== 1 ? "s" : ""}. ` +
+                "Abre una para ver sus proyectos, sus documentos y su información."
+          }
+          /* El único botón azul de la pantalla. «Traer de HubSpot» dejó de ser un botón con modal:
+             es la bandeja del panel de la derecha. */
+          action={<NuevoProyectoStepper />}
         />
-      </Suspense>
+
+        <Suspense fallback={<ClientsTableZoneSkeleton showPills />}>
+          <ClientsTable
+            user={user}
+            activeCse={activeCse}
+            clientWhere={clientWhere}
+            sharedIds={sharedIds}
+          />
+        </Suspense>
+      </main>
+      <aside className="border-t border-line bg-surface-muted px-5 pb-12 pt-8 lg:w-[340px] lg:flex-shrink-0 lg:border-l lg:border-t-0">
+        <Suspense fallback={<PanelDeLaCarteraSkeleton />}>
+          <PanelDeLaCartera
+            user={user}
+            activeCse={activeCse}
+            clientWhere={clientWhere}
+            sharedIds={sharedIds}
+          />
+        </Suspense>
+      </aside>
     </div>
   );
 }

@@ -5,10 +5,11 @@
  *
  * Un formulario, no un canvas: cada campo es un texto con formato mínimo («- » viñetas,
  * **negrita**) que el CSE edita, y un solo botón que CONFIRMA y escribe en HubSpot. Si la IA dejó
- * una propuesta, aparece debajo de cada campo que cambiaría, con «Usar» y «Descartar»: la IA
- * propone, el CSE confirma — nada llega a HubSpot sin ese botón.
+ * una propuesta, ocupa el lugar del campo que cambiaría —en azul, con la chispa, pintada como va a
+ * quedar— con «Usar» y «Descartar»: la IA propone, el CSE confirma — nada llega a HubSpot sin ese
+ * botón.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CAMPOS_DE_LA_FICHA,
   EVENTO_FICHA_CAMBIO,
@@ -23,6 +24,9 @@ import {
   type FichaGuardada,
   type ValoresDeFicha,
 } from "@/lib/clients/ficha";
+import { BotonAzul, BotonBlanco, BotonTexto, FranjaDeSugerencias, IconoDeSugerencia } from "@/components/ui/sistema";
+import { Alert } from "@/components/ui";
+import { TextoConFormato } from "./TextoConFormato";
 
 interface Respuesta {
   ficha: FichaGuardada;
@@ -33,7 +37,10 @@ interface Respuesta {
 
 function fecha(iso: string | null | undefined): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric" });
+  // Intl mete espacios finos distintos en Node y en Chrome: se normalizan (sin error de hidratación).
+  return new Date(iso)
+    .toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Costa_Rica" })
+    .replace(/[\u00a0\u202f]/g, " ");
 }
 
 export default function FichaDelCliente({ clientId }: { clientId: string }) {
@@ -193,97 +200,106 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
       return n;
     });
 
+  /** Lleva la vista al primer campo con propuesta («Revisar uno por uno»). */
+  const irALaPrimera = () =>
+    document.getElementById(`campo-${propuestas[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  /* Un solo botón azul a la vez: con propuestas por revisar, el azul es «Usar»; cuando no queda
+     ninguna y hay algo que confirmar, pasa a «Confirmar y guardar en HubSpot». */
+  const hayQueConfirmar = cambios.length > 0 || hubspotPendiente;
+  const BotonConfirmar = hayQueConfirmar && propuestas.length === 0 ? BotonAzul : BotonBlanco;
+
   return (
     <div className="space-y-5 pb-24">
-      <EstadoDeLaFicha ficha={ficha} hubspotUrl={hubspotUrl} />
-      <div className="flex items-start justify-between gap-3 flex-wrap -mt-2">
-        <p className="text-xs text-fg-muted min-w-0 flex-1">
-          Se alimenta sola con el handoff y con cada sesión con el cliente; tú confirmas. En los textos, «- » al
-          inicio de la línea arma viñetas y **así** queda en negrita.
-        </p>
-        <button
-          type="button"
-          disabled={leyendo || guardando}
-          onClick={() => void actualizarConIA()}
-          title="Lee los handoffs, las encuestas y las últimas sesiones del cliente y propone lo que falte en la ficha"
-          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 bg-brand/15 text-brand hover:bg-brand/25 transition-colors disabled:opacity-50 flex-shrink-0"
-        >
-          {leyendo ? "Leyendo handoff y sesiones… (hasta un minuto)" : "Actualizar con IA"}
-        </button>
-      </div>
-
       {propuestas.length > 0 && ficha.propuesta && (
-        <div className="rounded-xl border border-info-line bg-info-surface px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-info-ink">
-              La IA propone cambios en {propuestas.length}{" "}
-              {propuestas.length === 1 ? "campo" : "campos"}
-            </p>
-            <p className="text-xs text-fg-muted mt-0.5">
-              Revísalos abajo. Nada llega a HubSpot hasta que confirmes la ficha.
-              {ficha.propuesta.fuentes.length > 0 &&
-                ` Sale de ${ficha.propuesta.fuentes.length === 1 ? ficha.propuesta.fuentes[0] : `${ficha.propuesta.fuentes.length} fuentes`}; cada campo dice cuáles.`}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <button
-              type="button"
-              onClick={usarTodas}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 bg-brand/15 text-brand hover:bg-brand/25 transition-colors"
-            >
-              Usar todas
-            </button>
-            <button
-              type="button"
-              disabled={guardando}
-              onClick={() => void enviar({ descartarPropuesta: true })}
-              className="text-xs px-3 py-1.5 rounded-lg border border-line text-fg-muted hover:text-fg transition-colors"
-            >
-              Descartar la propuesta
-            </button>
-          </div>
+        <div data-recorrido="info.sugerencias">
+        <FranjaDeSugerencias
+          acciones={
+            <>
+              <BotonTexto disabled={guardando} onClick={() => void enviar({ descartarPropuesta: true })}>
+                Descartar todo
+              </BotonTexto>
+              <BotonBlanco onClick={irALaPrimera}>Revisar uno por uno</BotonBlanco>
+              <BotonAzul onClick={usarTodas}>Usar {propuestas.length === 1 ? "la propuesta" : `las ${propuestas.length}`}</BotonAzul>
+            </>
+          }
+        >
+          <strong className="font-semibold">
+            La IA propone cambios en {propuestas.length} {propuestas.length === 1 ? "campo" : "campos"}
+          </strong>
+          {ficha.propuesta.fuentes.length > 0
+            ? ` con lo que leyó de ${ficha.propuesta.fuentes.length === 1 ? ficha.propuesta.fuentes[0] : `${ficha.propuesta.fuentes.length} fuentes`}.`
+            : "."}{" "}
+          Nada llega a HubSpot hasta que confirmes la ficha.
+        </FranjaDeSugerencias>
         </div>
       )}
 
-      {GRUPOS_DE_FICHA.map((g) => (
-        <section key={g.clave} className="rounded-xl border border-line bg-surface p-5 space-y-5">
-          <header>
-            <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
-              {g.titulo}
-              {g.clave === "interno" && (
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border border-warn-line bg-warn-surface text-warn-ink">
-                  Solo el equipo
-                </span>
-              )}
-            </h3>
-            <p className="text-xs text-fg-muted mt-0.5">{g.bajada}</p>
-          </header>
-          {CAMPOS_DE_LA_FICHA.filter((c) => c.grupo === g.clave).map((c) => (
-            <Campo
-              key={c.clave}
-              campo={c}
-              valor={borrador[c.clave]}
-              cambiado={cambios.includes(c.clave)}
-              propuesta={propuestas.includes(c.clave) ? ficha.propuesta!.valores[c.clave]! : null}
-              fuentes={ficha.propuesta?.fuentesPorCampo[c.clave] ?? []}
-              onChange={(v) => set(c.clave, v)}
-              onUsar={() => set(c.clave, ficha.propuesta!.valores[c.clave]!)}
-              onDescartar={() => void descartarCampo(c.clave)}
-            />
-          ))}
-        </section>
-      ))}
+      <EstadoDeLaFicha ficha={ficha} hubspotUrl={hubspotUrl} />
+
+      <div data-recorrido="info.actualizar" className="flex flex-wrap items-start justify-between gap-3">
+        <p className="min-w-0 flex-1 text-xs text-fg-muted">
+          Se alimenta sola con el handoff y con cada sesión con el cliente; tú confirmas. En los textos, «- » al
+          inicio de la línea arma viñetas y **así** queda en negrita.
+        </p>
+        <BotonBlanco
+          disabled={leyendo || guardando}
+          onClick={() => void actualizarConIA()}
+          title="Lee los handoffs, las encuestas y las últimas sesiones del cliente y propone lo que falte en la ficha"
+          className="flex-shrink-0"
+        >
+          {leyendo ? "Leyendo handoff y sesiones… (hasta un minuto)" : "Actualizar con IA"}
+        </BotonBlanco>
+      </div>
+
+      {/* Los grupos en dos columnas, como el diseño de la ficha (2026-10-04). */}
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        {GRUPOS_DE_FICHA.map((g) => (
+          <section data-recorrido="info.grupo" key={g.clave} className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
+            <header className="flex flex-col gap-0.5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[15px] font-semibold text-fg">{g.titulo}</h3>
+                {g.clave === "interno" && (
+                  <span
+                    className="rounded-full border border-line bg-surface-muted px-2 py-px text-[11px] font-medium text-fg-secondary"
+                    title="No se le muestra al cliente ni va a la nota de HubSpot"
+                  >
+                    Solo el equipo
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-fg-muted">{g.bajada}</p>
+            </header>
+            {CAMPOS_DE_LA_FICHA.filter((c) => c.grupo === g.clave).map((c) => (
+              <Campo
+                key={c.clave}
+                campo={c}
+                valor={borrador[c.clave]}
+                cambiado={cambios.includes(c.clave)}
+                propuesta={propuestas.includes(c.clave) ? ficha.propuesta!.valores[c.clave]! : null}
+                fuentes={ficha.propuesta?.fuentesPorCampo[c.clave] ?? []}
+                onChange={(v) => set(c.clave, v)}
+                onUsar={() => set(c.clave, ficha.propuesta!.valores[c.clave]!)}
+                onDescartar={() => void descartarCampo(c.clave)}
+              />
+            ))}
+          </section>
+        ))}
+      </div>
 
       {/* La barra de confirmar: fija abajo para que el botón esté siempre a mano en una ficha larga. */}
-      <div className="sticky bottom-0 -mx-1 px-1">
-        <div className="rounded-xl border border-line bg-surface shadow-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs text-fg-muted min-w-0">
+      <div className="sticky bottom-4">
+        <div data-recorrido="info.guardar" className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+          {(cambios.length > 0 || hubspotPendiente) && !error && (
+            <span className="h-2 w-2 flex-shrink-0 rounded-full bg-warn-ink" aria-hidden="true" />
+          )}
+          <p className="min-w-[200px] flex-1 text-[13px] text-fg-secondary">
             {error ? (
               <span className="text-danger-ink">{error}</span>
             ) : aviso ? (
               aviso
             ) : cambios.length ? (
-              `${cambios.length} ${cambios.length === 1 ? "campo cambiado" : "campos cambiados"} sin confirmar.`
+              `${cambios.length} ${cambios.length === 1 ? "campo cambiado" : "campos cambiados"} sin confirmar. Al confirmar, se guarda en la empresa de HubSpot.`
             ) : hubspotPendiente ? (
               "La ficha está confirmada pero no quedó en HubSpot. Confirma de nuevo para reintentar."
             ) : propuestas.length ? (
@@ -294,25 +310,18 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
               "Completa lo que sepas y confirma: se guarda en Nexus y en la empresa de HubSpot."
             )}
           </p>
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex flex-shrink-0 gap-2">
             {cambios.length > 0 && (
-              <button
-                type="button"
-                disabled={guardando}
-                onClick={() => setBorrador(ficha.valores)}
-                className="text-xs px-3 py-2 rounded-lg border border-line text-fg-muted hover:text-fg transition-colors"
-              >
+              <BotonTexto disabled={guardando} onClick={() => setBorrador(ficha.valores)}>
                 Deshacer cambios
-              </button>
+              </BotonTexto>
             )}
-            <button
-              type="button"
+            <BotonConfirmar
               disabled={guardando || (!cambios.length && !hubspotPendiente && !!ficha.confirmadaAt)}
               onClick={() => void enviar({ valores: borrador })}
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-primary-fg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {guardando ? "Guardando…" : hubspotPendiente && !cambios.length ? "Reintentar en HubSpot" : "Confirmar y guardar en HubSpot"}
-            </button>
+            </BotonConfirmar>
           </div>
         </div>
       </div>
@@ -320,28 +329,45 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   );
 }
 
+/** La línea de estado: quién confirmó y si quedó en HubSpot. En rojo solo si falló. */
 function EstadoDeLaFicha({ ficha, hubspotUrl }: { ficha: FichaGuardada; hubspotUrl: string | null }) {
   const h = ficha.hubspot;
-  let tono = "border-line bg-surface-muted text-fg-muted";
+  let marca: ReactNode = null;
   let texto = "Todavía sin confirmar. La completa la IA al generar el diagnóstico, o tú a mano.";
+  let fallo = false;
   if (ficha.confirmadaAt) {
-    const quien = `Confirmada por ${ficha.confirmadaPor ?? "el equipo"} el ${fecha(ficha.confirmadaAt)}.`;
+    const quien = `Confirmada por ${ficha.confirmadaPor ?? "el equipo"} el ${fecha(ficha.confirmadaAt)}`;
     if (h?.estado === "sincronizada") {
-      tono = "border-success-line bg-success-surface text-success-ink";
-      texto = `${quien} Guardada en la empresa de HubSpot.`;
+      marca = <span className="font-bold text-success-ink">✓</span>;
+      texto = `${quien} y guardada en la empresa de HubSpot.`;
     } else if (h?.estado === "sin_empresa") {
-      texto = `${quien} Queda solo en Nexus: el cliente no tiene empresa vinculada en HubSpot.`;
+      texto = `${quien}. Queda solo en Nexus: el cliente no tiene empresa vinculada en HubSpot.`;
     } else {
-      tono = "border-danger-line bg-danger-surface text-danger-ink";
-      texto = `${quien} ${h?.error ?? "No quedó en HubSpot."}`;
+      fallo = true;
+      texto = `${quien}. ${h?.error ?? "No quedó en HubSpot."}`;
     }
   }
+  if (fallo) {
+    return (
+      <Alert variant="danger" title="No quedó en HubSpot">
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>{texto}</span>
+          {hubspotUrl && (
+            <a href={hubspotUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+              Abrir la empresa en HubSpot ↗
+            </a>
+          )}
+        </span>
+      </Alert>
+    );
+  }
   return (
-    <div className={`rounded-xl border px-4 py-2.5 text-xs flex items-center justify-between gap-3 flex-wrap ${tono}`}>
+    <div className="flex flex-wrap items-center gap-2 text-[13px] text-fg-secondary">
+      {marca}
       <span className="min-w-0">{texto}</span>
       {hubspotUrl && (
-        <a href={hubspotUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 flex-shrink-0">
-          Abrir la empresa en HubSpot
+        <a href={hubspotUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand hover:text-brand-light">
+          Abrir la empresa en HubSpot ↗
         </a>
       )}
     </div>
@@ -367,19 +393,64 @@ function Campo({
   onUsar: () => void;
   onDescartar: () => void;
 }) {
+  const [verLoDeHoy, setVerLoDeHoy] = useState(false);
   const destino =
     campo.destino.tipo === "nota" ? "Va en la nota de HubSpot" : "Propiedad de la empresa en HubSpot";
+  const esLista = campo.destino.tipo === "lista";
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <label htmlFor={`ficha-${campo.clave}`} className="text-sm font-medium text-fg">
+    <div id={`campo-${campo.clave}`} className="flex scroll-mt-24 flex-col gap-1.5">
+      <div className="flex flex-wrap items-baseline gap-2">
+        {/* Con propuesta, el campo no está en pantalla: el rótulo no apunta a un id que no existe. */}
+        <label htmlFor={propuesta === null ? `ficha-${campo.clave}` : undefined} className="text-[13px] font-semibold text-fg">
           {campo.etiqueta}
-          {cambiado && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-brand">Cambiado</span>}
         </label>
-        <span className="text-[10px] text-fg-muted flex-shrink-0">{destino}</span>
+        {cambiado && (
+          <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold text-warn-ink">
+            cambiado sin confirmar
+          </span>
+        )}
+        <span className="ml-auto flex-shrink-0 text-[11px] text-fg-muted">{destino}</span>
       </div>
       <p className="text-xs text-fg-muted">{campo.ayuda}</p>
-      {campo.destino.tipo === "lista" ? (
+      {propuesta !== null ? (
+        /* ── LO QUE PROPONE LA IA, EN LA MISMA CAJA (pedido de Elías, 2026-10-04) ──────────────
+           Ocupa el lugar del campo y se lee como va a quedar si se usa: viñetas como viñetas y
+           negritas como negritas. «Usar» lo deja como el valor del campo, editable; «Descartar»
+           devuelve el campo con lo que tenía. Lo de hoy se puede mirar sin perder la propuesta. */
+        <div data-recorrido="info.propuesta" className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
+          <IconoDeSugerencia className="mt-0.5 h-[15px] w-[15px] flex-shrink-0 text-brand" />
+          <div className="min-w-0 flex-1">
+            {esLista ? (
+              <p className="text-sm text-fg">{etiquetaDeApertura(propuesta)}</p>
+            ) : (
+              <TextoConFormato texto={propuesta} className="text-sm text-fg" />
+            )}
+            <p className="mt-1 text-xs text-fg-muted">
+              {fuentes.length > 0 ? `Lo propone la IA con: ${fuentes.join(" · ")}` : "Lo propone la IA"}
+              {" · Úsala y ajústala en el campo si hace falta"}
+              {valor.trim() && (
+                <>
+                  {" · "}
+                  <button type="button" onClick={() => setVerLoDeHoy((v) => !v)} className="text-brand hover:text-brand-light">
+                    {verLoDeHoy ? "Ocultar lo que dice hoy" : "Ver lo que dice hoy"}
+                  </button>
+                </>
+              )}
+            </p>
+            {verLoDeHoy && valor.trim() && (
+              <div className="mt-2 rounded-md border border-line bg-surface px-2.5 py-2 text-[13px] text-fg-secondary">
+                {esLista ? etiquetaDeApertura(valor) : <TextoConFormato texto={valor} />}
+              </div>
+            )}
+          </div>
+          <BotonTexto className="flex-shrink-0" onClick={onDescartar}>
+            Descartar
+          </BotonTexto>
+          <BotonAzul className="flex-shrink-0" onClick={onUsar}>
+            Usar
+          </BotonAzul>
+        </div>
+      ) : esLista ? (
         <select
           id={`ficha-${campo.clave}`}
           value={valor}
@@ -395,31 +466,6 @@ function Campo({
         </select>
       ) : (
         <AreaDeTexto id={`ficha-${campo.clave}`} valor={valor} onChange={onChange} />
-      )}
-      {propuesta !== null && (
-        <div className="rounded-lg border border-info-line bg-info-surface px-3 py-2 space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-info-ink">Propuesta de la IA</p>
-          <p className="text-sm text-fg whitespace-pre-wrap">
-            {campo.destino.tipo === "lista" ? etiquetaDeApertura(propuesta) : propuesta}
-          </p>
-          {fuentes.length > 0 && <p className="text-[11px] text-fg-muted">De: {fuentes.join(" · ")}</p>}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onUsar}
-              className="text-xs font-medium px-2.5 py-1 rounded-md border border-brand/30 bg-brand/15 text-brand hover:bg-brand/25 transition-colors"
-            >
-              Usar
-            </button>
-            <button
-              type="button"
-              onClick={onDescartar}
-              className="text-xs px-2.5 py-1 rounded-md border border-line text-fg-muted hover:text-fg transition-colors"
-            >
-              Descartar
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );

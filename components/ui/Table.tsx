@@ -56,6 +56,14 @@ export interface TableProps<T> {
   /** Orden inicial; la columna referida debe tener `sortValue`. */
   initialSort?: { key: string; dir: "asc" | "desc" };
   className?: string;
+  /**
+   * La forma del sistema «Nexus · interfaz interna» (2026-10-04, listado de clientes): cabecera
+   * sobre `surface-muted` con rótulos de 11 px y 0,08em, hover de fila en `surface-hover`, 14 px
+   * entre columnas (16 en los bordes) y un ancho mínimo de 880 px: más angosta, se desplaza de
+   * costado en vez de aplastar las columnas. Los anchos de columna se dan con ese hueco incluido.
+   * La de siempre (`apoyada`) queda de default: cambiarla movería todas las tablas de la app.
+   */
+  variante?: "apoyada" | "sistema";
 }
 
 type SortValue = string | number | Date | null | undefined;
@@ -139,6 +147,7 @@ export function Table<T>({
   action,
   initialSort,
   className,
+  variante = "apoyada",
 }: TableProps<T>) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortState | null>(initialSort ?? null);
@@ -191,12 +200,13 @@ export function Table<T>({
 
       <div className="rounded-xl border border-line bg-surface overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm table-fixed">
+          <table className={cn("w-full text-sm table-fixed", variante === "sistema" && "min-w-[880px]")}>
             <thead>
-              <tr className="border-b border-line bg-surface-hover">
+              <tr className={cn("border-b border-line", variante === "sistema" ? "bg-surface-muted" : "bg-surface-hover")}>
                 {columns.map((col) => {
                   const thClass = cn(
-                    "px-4 py-2.5 text-2xs font-semibold uppercase tracking-wider text-fg-muted whitespace-nowrap",
+                    "py-2.5 text-2xs font-semibold uppercase text-fg-muted whitespace-nowrap",
+                    variante === "sistema" ? "px-[7px] first:pl-4 last:pr-4 tracking-[0.08em]" : "px-4 tracking-wider",
                     ALIGN[col.align ?? "left"],
                     col.width,
                     col.hideOnMobile && "hidden sm:table-cell"
@@ -263,7 +273,7 @@ export function Table<T>({
                     key={rowKey(row)}
                     className={cn(
                       "group border-b border-line last:border-0 transition-colors",
-                      clickable && "hover:bg-surface-hover/50 cursor-pointer"
+                      clickable && (variante === "sistema" ? "hover:bg-surface-hover cursor-pointer" : "hover:bg-surface-hover/50 cursor-pointer")
                     )}
                     onClick={clickable ? () => onRowClick!(row) : undefined}
                     role={clickable ? "button" : undefined}
@@ -283,7 +293,8 @@ export function Table<T>({
                       <td
                         key={col.key}
                         className={cn(
-                          "px-4 py-3 align-middle text-fg-secondary",
+                          "py-3 align-middle text-fg-secondary",
+                          variante === "sistema" ? "px-[7px] first:pl-4 last:pr-4" : "px-4",
                           ALIGN[col.align ?? "left"],
                           col.hideOnMobile && "hidden sm:table-cell"
                         )}

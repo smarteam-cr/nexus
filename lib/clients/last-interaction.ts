@@ -7,8 +7,9 @@
  *     ejecución de agente. Es lo que llamamos "Última actividad" en la UI.
  *
  *   - nextMeeting: la PRÓXIMA reunión agendada (futura), tomando el mínimo
- *     entre `Project.nextSessionDate` y la próxima `FirefliesSession` futura
- *     matched al cliente.
+ *     entre las fechas cargadas a mano en los proyectos (`nextSessionDate`, la legacy, y
+ *     `salesNextSessionDate` / `csNextSessionDate`, las de cada frente) y la próxima
+ *     `FirefliesSession` futura matched al cliente.
  *
  * Reusa el matching cascade existente (`lib/sessions/categorize.ts`) para
  * vincular sesiones → clientes, evitando duplicar lógica.
@@ -76,9 +77,26 @@ export async function computeClientActivityMap(
   const nowDate = new Date(now);
   const [projects, stageNotesMax, agentRunsMax, pastSessions, futureSessions] =
     await Promise.all([
+      /* Las tres fechas que se cargan a mano: la legacy y las dos por frente que escribe hoy el
+         widget del proyecto (Ventas / CSE). Hasta el 2026-10-04 se leía solo la legacy, y una
+         reunión agendada a mano desde la ficha no aparecía en el índice. */
       prisma.project.findMany({
-        where: { clientId: { in: clientIds }, nextSessionDate: { not: null } },
-        select: { clientId: true, nextSessionDate: true },
+        where: {
+          clientId: { in: clientIds },
+          OR: [
+            { nextSessionDate: { gt: nowDate } },
+            { salesNextSessionDate: { gt: nowDate } },
+            { csNextSessionDate: { gt: nowDate } },
+          ],
+        },
+        select: {
+          clientId: true,
+          nextSessionDate: true,
+          salesNextSessionDate: true,
+          salesNextSessionNote: true,
+          csNextSessionDate: true,
+          csNextSessionNote: true,
+        },
       }),
       prisma.stageNote.groupBy({
         by: ["clientId"],
@@ -125,13 +143,21 @@ export async function computeClientActivityMap(
     if (r._max.createdAt && r.clientId) runsMaxByClient.set(r.clientId, r._max.createdAt);
   }
 
-  // Próxima sesión agendada manual por cliente (Project.nextSessionDate)
-  const manualNextByClient = new Map<string, Date>();
+  // Próxima sesión agendada a mano por cliente: la más cercana de las tres fechas de cada
+  // proyecto, con la nota del frente como rótulo si la tiene.
+  const manualNextByClient = new Map<string, { date: Date; label: string | null }>();
   for (const p of projects) {
-    if (!p.nextSessionDate || p.nextSessionDate.getTime() <= now) continue;
-    const current = manualNextByClient.get(p.clientId);
-    if (!current || p.nextSessionDate.getTime() < current.getTime()) {
-      manualNextByClient.set(p.clientId, p.nextSessionDate);
+    const candidatas: Array<{ date: Date | null; label: string | null }> = [
+      { date: p.nextSessionDate, label: null },
+      { date: p.salesNextSessionDate, label: p.salesNextSessionNote },
+      { date: p.csNextSessionDate, label: p.csNextSessionNote },
+    ];
+    for (const c of candidatas) {
+      if (!c.date || c.date.getTime() <= now) continue;
+      const current = manualNextByClient.get(p.clientId);
+      if (!current || c.date.getTime() < current.date.getTime()) {
+        manualNextByClient.set(p.clientId, { date: c.date, label: c.label?.trim() || null });
+      }
     }
   }
 
@@ -161,18 +187,19 @@ export async function computeClientActivityMap(
 
     // ── nextMeeting: min de (sesión futura real, manual agendada) ──────────
     const futureSessionDate = futureSession?.date ?? null;
+    const manual = manualNext ? { date: manualNext.date, label: manualNext.label ?? "Próxima sesión agendada" } : null;
     let nextMeeting: ClientActivitySummary["nextMeeting"] = null;
-    if (futureSessionDate && manualNext) {
+    if (futureSessionDate && manual) {
       // Ambas existen — la más cercana gana, con label apropiado
-      if (futureSessionDate.getTime() <= manualNext.getTime()) {
+      if (futureSessionDate.getTime() <= manual.date.getTime()) {
         nextMeeting = { date: futureSessionDate, label: futureSession!.title };
       } else {
-        nextMeeting = { date: manualNext, label: "Próxima sesión agendada" };
+        nextMeeting = manual;
       }
     } else if (futureSessionDate) {
       nextMeeting = { date: futureSessionDate, label: futureSession!.title };
-    } else if (manualNext) {
-      nextMeeting = { date: manualNext, label: "Próxima sesión agendada" };
+    } else if (manual) {
+      nextMeeting = manual;
     }
 
     if (lastActivity || nextMeeting) {

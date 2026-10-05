@@ -139,6 +139,15 @@ const LECTORES: Lector[] = [
       "filtrar el contexto ANTES: el prompt no es la defensa",
   },
   {
+    archivo: "scripts/backfill-resumen-handoff.ts",
+    pieza: null,
+    exposicion: "interno",
+    porque:
+      "solo MIDE el largo del documento para el simulacro (cuántos handoffs tienen algo que resumir " +
+      "y cuánto costaría). El texto no sale del script: el resumen lo escribe `generarResumenDeHandoff`, " +
+      "que ya está en este censo",
+  },
+  {
     archivo: "lib/sessions/post-process.ts",
     pieza: null,
     exposicion: "interno",

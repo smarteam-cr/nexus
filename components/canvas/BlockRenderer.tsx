@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
+import { IconoDeSugerencia } from "@/components/ui/sistema";
+import { cn } from "@/lib/cn";
 
 const FlowchartViewer = dynamic(
   () => import("@/components/flowchart/FlowchartViewer").then((m) => m.default),
@@ -41,6 +43,23 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
   IMAGE: "Imagen",
 };
 
+/* Sistema «Nexus · interfaz interna» (2026-10-04): solo tokens semánticos —el bloque se ve igual en
+   claro y en oscuro—, sin sombras, y lo que propone el agente en azul con la chispa y un «Usar» azul,
+   como en la preventa. Un borrador (DRAFT) ES una sugerencia de la IA esperando decisión. */
+const CHIP = "rounded border px-1.5 py-0.5 text-[10px] font-medium";
+const ICONO_BOTON = "rounded border border-line bg-surface p-0.5 text-fg-muted transition-colors";
+
+/** Los cuatro tonos de un CALLOUT, con su par de tokens. */
+const TONOS_DE_CALLOUT: Record<string, string> = {
+  info: "border-info-line bg-info-surface text-info-ink",
+  warning: "border-warn-line bg-warn-surface text-warn-ink",
+  success: "border-success-line bg-success-surface text-success-ink",
+  error: "border-danger-line bg-danger-surface text-danger-ink",
+};
+
+/** El markdown de un bloque: `prose-invert` + el remapeo de `html.light` lo dejan legible en los dos temas. */
+const MARKDOWN = "prose prose-sm prose-invert max-w-none text-sm leading-relaxed";
+
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export default function BlockRenderer({
@@ -78,12 +97,12 @@ export default function BlockRenderer({
         onMouseDown={(e) => { mouseDownPos.current = { x: e.clientX, y: e.clientY }; }}
         className={`rounded-lg transition-all ${
           isDeleting
-            ? "border-2 border-red-300 bg-red-50/60 p-3 opacity-60 animate-pulse"
+            ? "border border-danger-line bg-danger-surface p-3 opacity-60"
             : editing
-            ? "bg-white border border-brand/40 bg-brand/5 p-3 ring-1 ring-brand/20"
+            ? "border border-brand bg-surface p-3"
             : isDraft
-            ? "bg-white border border-amber-200 bg-amber-50/30 p-3"
-            : "bg-white border border-transparent p-3 cursor-text"
+            ? "border border-info-line bg-info-surface p-3"
+            : "border border-transparent p-3 cursor-text hover:bg-surface-muted"
         }`}
         onClick={(e) => {
           if (!editing && onSave && block.blockType !== "FLOWCHART" && block.blockType !== "CHART") {
@@ -103,7 +122,7 @@ export default function BlockRenderer({
             editing ? "opacity-0" : "opacity-0 group-hover/block:opacity-100"
           }`}>
             <div
-              className="p-0.5 rounded bg-white border border-gray-200 shadow-sm cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+              className={`${ICONO_BOTON} cursor-grab active:cursor-grabbing hover:text-fg`}
               title="Mover bloque"
               onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onDragStart?.(e); }}
             >
@@ -121,52 +140,62 @@ export default function BlockRenderer({
         <div className={`absolute top-1.5 right-1.5 z-10 flex items-center gap-1.5 transition-opacity ${
           editing || isDraft || block.source !== "AGENT" ? "opacity-100" : "opacity-0 group-hover/block:opacity-100"
         }`}>
-          <span className="text-[9px] font-medium text-gray-400 bg-white border border-gray-200 px-1.5 py-0.5 rounded shadow-sm">
-            {BLOCK_TYPE_LABELS[block.blockType] ?? block.blockType}
-          </span>
+          {!isDraft && (
+            <span className={`${CHIP} border-line bg-surface text-fg-muted`}>
+              {BLOCK_TYPE_LABELS[block.blockType] ?? block.blockType}
+            </span>
+          )}
           {block.source === "MODIFIED" && (
-            <span className="text-[9px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded" title="Editado por un humano sobre la propuesta de la IA">
-              Modificado
+            <span className={`${CHIP} border-line bg-surface-muted text-fg-secondary`} title="Editado por una persona sobre la propuesta de la IA">
+              Editado
             </span>
           )}
           {block.source === "HUMAN" && (
-            <span className="text-[9px] font-medium uppercase tracking-wider text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded" title="Creado manualmente por el CSE">
+            <span className={`${CHIP} border-line bg-surface-muted text-fg-secondary`} title="Lo escribió una persona del equipo">
               Manual
             </span>
           )}
-          {/* Eliminar — siempre disponible para bloques no-draft (los draft se quitan con Rechazar) */}
+          {/* Eliminar — siempre disponible para bloques no-draft (los draft se quitan con «Descartar») */}
           {onDelete && !isDraft && (
-            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-0.5 rounded bg-white border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-300 transition-colors shadow-sm" title="Eliminar bloque">
+            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className={`${ICONO_BOTON} hover:border-danger-line hover:text-danger-ink`} title="Eliminar bloque">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
             </button>
           )}
+          {isDraft && (
+            <span className={cn(CHIP, "inline-flex items-center gap-1 border-info-line bg-surface font-semibold text-brand")}>
+              <IconoDeSugerencia className="h-3 w-3" />
+              Sugerido
+            </span>
+          )}
           {isDraft && onAccept && onReject && (
             <>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                Borrador
-              </span>
-              <button onClick={(e) => { e.stopPropagation(); onAccept(); }} className="p-0.5 rounded bg-white border border-gray-200 text-green-600 hover:text-green-800 hover:border-green-300 transition-colors shadow-sm" title="Aceptar">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
+              <button
+                onClick={(e) => { e.stopPropagation(); onReject(); }}
+                className="rounded px-1.5 py-0.5 text-[11px] text-fg-muted transition-colors hover:text-fg"
+              >
+                Descartar
               </button>
-              <button onClick={(e) => { e.stopPropagation(); onReject(); }} className="p-0.5 rounded bg-white border border-gray-200 text-red-400 hover:text-red-600 hover:border-red-300 transition-colors shadow-sm" title="Rechazar">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+              <button
+                onClick={(e) => { e.stopPropagation(); onAccept(); }}
+                className="rounded-md bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
+              >
+                Usar
               </button>
             </>
           )}
         </div>
 
-        {/* Block content — edit or view mode */}
-        {editing ? (
-          <EditBlock block={block} onSave={handleSave} onCancel={() => setEditing(false)} />
-        ) : (
-          renderBlock(block, onSave)
-        )}
+        {/* Block content — edit or view mode. Con borrador, el contenido baja para no quedar
+            debajo de la barra de «Usar». */}
+        <div className={isDraft && !editing ? "pt-6" : undefined}>
+          {editing ? (
+            <EditBlock block={block} onSave={handleSave} onCancel={() => setEditing(false)} />
+          ) : (
+            renderBlock(block, onSave)
+          )}
+        </div>
       </div>
 
     </div>
@@ -200,12 +229,15 @@ function EditBlock({
 
 // ── Shared ───────────────────────────────────────────────────────────────────
 
+const BOTON_GUARDAR = "rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-fg hover:bg-primary-hover";
+const BOTON_CANCELAR = "px-2 py-1 text-xs text-fg-muted hover:text-fg";
+
 function InlineSaveBar({ onSave, onCancel }: { onSave: () => void; onCancel: () => void }) {
   return (
     <div className="flex items-center gap-2 justify-end mt-2" onClick={(e) => e.stopPropagation()}>
-      <span className="text-[10px] text-gray-400 mr-auto">Esc cancelar · Ctrl+Enter guardar</span>
-      <button onClick={onCancel} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancelar</button>
-      <button onClick={onSave} className="text-xs font-medium text-white bg-brand hover:bg-brand/90 px-3 py-1 rounded-md">Guardar</button>
+      <span className="text-[10px] text-fg-muted mr-auto">Esc cancelar · Ctrl+Enter guardar</span>
+      <button onClick={onCancel} className={BOTON_CANCELAR}>Cancelar</button>
+      <button onClick={onSave} className={BOTON_GUARDAR}>Guardar</button>
     </div>
   );
 }
@@ -229,7 +261,7 @@ function EditText({ content, onSave, onCancel }: { content: string; onSave: (c: 
     <div onClick={(e) => e.stopPropagation()}>
       <textarea ref={ref} value={value} onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") onCancel(); if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSave(valueRef.current); } }}
-        className="w-full text-sm text-gray-700 leading-relaxed bg-transparent border-none focus:outline-none resize-none p-0" placeholder="Escribe aquí..." />
+        className="w-full text-sm text-fg-secondary leading-relaxed bg-transparent border-none focus:outline-none resize-none p-0 placeholder:text-fg-muted" placeholder="Escribe aquí..." />
       <InlineSaveBar onSave={() => onSave(valueRef.current)} onCancel={onCancel} />
     </div>
   );
@@ -244,11 +276,13 @@ function EditHeading({ content, data, onSave, onCancel }: { content: string; dat
     <div onClick={(e) => e.stopPropagation()}>
       <input ref={ref} value={value} onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") onCancel(); if (e.key === "Enter") onSave({ content: value, data: { level } }); }}
-        className={`w-full bg-transparent border-none focus:outline-none p-0 ${level === 3 ? "text-base font-bold text-gray-800" : "text-lg font-bold text-gray-900"}`} />
+        className={`w-full bg-transparent border-none focus:outline-none p-0 text-fg ${level === 3 ? "text-base font-semibold" : "text-lg font-semibold"}`} />
       <InlineSaveBar onSave={() => onSave({ content: value, data: { level } })} onCancel={onCancel} />
     </div>
   );
 }
+
+const CELDA_EDITABLE = "w-full bg-transparent focus:outline-none focus:bg-surface-muted rounded px-1";
 
 function EditTable({ data, onSave, onCancel }: { data: { headers?: string[]; rows?: string[][] } | null; onSave: (d: { headers: string[]; rows: string[][] }) => void; onCancel: () => void }) {
   const [headers, setHeaders] = useState<string[]>(data?.headers ?? [""]);
@@ -261,23 +295,23 @@ function EditTable({ data, onSave, onCancel }: { data: { headers?: string[]; row
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <div className="overflow-x-auto my-2">
-        <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-          <thead><tr className="bg-gray-50">
-            {headers.map((h, i) => (<th key={i} className="px-3 py-2 border-b border-gray-200"><input value={h} onChange={(e) => updateHeader(i, e.target.value)} className="w-full text-xs font-semibold text-gray-600 uppercase tracking-wider bg-transparent focus:outline-none focus:bg-white rounded px-1" placeholder="Header" /></th>))}
-            <th className="px-1 py-2 border-b border-gray-200 w-6" />
+        <table className="min-w-full text-sm border border-line rounded-lg overflow-hidden">
+          <thead><tr className="bg-surface-muted">
+            {headers.map((h, i) => (<th key={i} className="px-3 py-2 border-b border-line"><input value={h} onChange={(e) => updateHeader(i, e.target.value)} className={`${CELDA_EDITABLE} text-[11px] font-semibold text-fg-muted uppercase tracking-[0.08em]`} placeholder="Encabezado" /></th>))}
+            <th className="px-1 py-2 border-b border-line w-6" />
           </tr></thead>
-          <tbody>{rows.map((row, ri) => (<tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
-            {row.map((cell, ci) => (<td key={ci} className="px-3 py-1.5 border-b border-gray-100"><input value={cell} onChange={(e) => updateCell(ri, ci, e.target.value)} className="w-full text-sm text-gray-700 bg-transparent focus:outline-none focus:bg-white rounded px-1" /></td>))}
-            <td className="px-1 py-1.5 border-b border-gray-100 text-center"><button onClick={() => removeRow(ri)} className="text-gray-300 hover:text-red-400 text-xs">x</button></td>
+          <tbody>{rows.map((row, ri) => (<tr key={ri}>
+            {row.map((cell, ci) => (<td key={ci} className="px-3 py-1.5 border-b border-line"><input value={cell} onChange={(e) => updateCell(ri, ci, e.target.value)} className={`${CELDA_EDITABLE} text-sm text-fg-secondary`} /></td>))}
+            <td className="px-1 py-1.5 border-b border-line text-center"><button onClick={() => removeRow(ri)} className="text-xs text-fg-muted hover:text-danger-ink" title="Quitar la fila">×</button></td>
           </tr>))}</tbody>
         </table>
       </div>
       <div className="flex items-center gap-3">
-        <button onClick={addRow} className="text-[10px] text-gray-500 hover:text-gray-700">+ Fila</button>
-        <button onClick={addCol} className="text-[10px] text-gray-500 hover:text-gray-700">+ Columna</button>
+        <button onClick={addRow} className="text-[11px] text-fg-muted hover:text-fg">+ Fila</button>
+        <button onClick={addCol} className="text-[11px] text-fg-muted hover:text-fg">+ Columna</button>
         <div className="ml-auto flex gap-2">
-          <button onClick={onCancel} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancelar</button>
-          <button onClick={() => onSave({ headers, rows })} className="text-xs font-medium text-white bg-brand hover:bg-brand/90 px-3 py-1 rounded-md">Guardar</button>
+          <button onClick={onCancel} className={BOTON_CANCELAR}>Cancelar</button>
+          <button onClick={() => onSave({ headers, rows })} className={BOTON_GUARDAR}>Guardar</button>
         </div>
       </div>
     </div>
@@ -291,15 +325,15 @@ function EditMetric({ data, onSave, onCancel }: { data: { label?: string; value?
   const [comparison, setComparison] = useState(data?.comparison ?? "");
   return (
     <div onClick={(e) => e.stopPropagation()}>
-      <div className="inline-flex items-baseline gap-3 px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 my-1">
+      <div className="inline-flex items-baseline gap-3 px-4 py-3 rounded-xl bg-surface-muted border border-line my-1">
         <div>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-transparent focus:outline-none focus:bg-white rounded px-1 w-full" placeholder="Label" />
-          <input value={value} onChange={(e) => setValue(e.target.value)} className="text-2xl font-bold text-gray-900 bg-transparent focus:outline-none focus:bg-white rounded px-1 w-full" placeholder="Valor" />
+          <input value={label} onChange={(e) => setLabel(e.target.value)} className={`${CELDA_EDITABLE} text-[11px] font-semibold text-fg-muted uppercase tracking-[0.08em]`} placeholder="Rótulo" />
+          <input value={value} onChange={(e) => setValue(e.target.value)} className={`${CELDA_EDITABLE} text-2xl font-bold text-fg`} placeholder="Valor" />
         </div>
-        <select value={trend} onChange={(e) => setTrend(e.target.value)} className="text-lg font-bold bg-transparent border-none focus:outline-none cursor-pointer">
+        <select value={trend} onChange={(e) => setTrend(e.target.value)} className="text-lg font-bold text-fg bg-transparent border-none focus:outline-none cursor-pointer">
           <option value="up">↑</option><option value="down">↓</option><option value="flat">→</option>
         </select>
-        <input value={comparison} onChange={(e) => setComparison(e.target.value)} className="text-xs text-gray-400 bg-transparent focus:outline-none focus:bg-white rounded px-1 w-24" placeholder="vs ..." />
+        <input value={comparison} onChange={(e) => setComparison(e.target.value)} className={`${CELDA_EDITABLE} text-xs text-fg-muted w-24`} placeholder="vs ..." />
       </div>
       <InlineSaveBar onSave={() => onSave({ label, value, trend, comparison: comparison || undefined })} onCancel={onCancel} />
     </div>
@@ -312,15 +346,14 @@ function EditCallout({ content, data, onSave, onCancel }: { content: string; dat
   const [title, setTitle] = useState(data?.title ?? "");
   const ref = useRef<HTMLTextAreaElement>(null);
   useAutoResize(ref, text);
-  const styles: Record<string, string> = { info: "bg-blue-50 border-blue-200 text-blue-800", warning: "bg-amber-50 border-amber-200 text-amber-800", success: "bg-green-50 border-green-200 text-green-800", error: "bg-red-50 border-red-200 text-red-800" };
   return (
     <div onClick={(e) => e.stopPropagation()}>
-      <div className={`rounded-xl border px-4 py-3 my-2 ${styles[variant] ?? styles.info}`}>
+      <div className={`rounded-xl border px-4 py-3 my-2 ${TONOS_DE_CALLOUT[variant] ?? TONOS_DE_CALLOUT.info}`}>
         <div className="flex items-center gap-2 mb-1">
-          <select value={variant} onChange={(e) => setVariant(e.target.value)} className="text-sm bg-transparent border-none focus:outline-none cursor-pointer p-0">
-            <option value="info">ℹ️</option><option value="warning">⚠️</option><option value="success">✅</option><option value="error">❌</option>
+          <select value={variant} onChange={(e) => setVariant(e.target.value)} className="text-xs font-semibold bg-transparent border-none focus:outline-none cursor-pointer p-0">
+            <option value="info">Información</option><option value="warning">Atención</option><option value="success">Logro</option><option value="error">Problema</option>
           </select>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="flex-1 text-sm font-bold bg-transparent focus:outline-none focus:bg-white/50 rounded px-1" placeholder="Título (opcional)" />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="flex-1 text-sm font-semibold bg-transparent focus:outline-none rounded px-1" placeholder="Título (opcional)" />
         </div>
         <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Escape") onCancel(); if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) onSave({ content: text, data: { variant, title: title || undefined } }); }}
@@ -356,21 +389,21 @@ function fixMarkdownHeadings(text: string): string {
 
 function TextBlockView({ content }: { content: string }) {
   if (!content.trim()) return null;
-  return <div className="text-sm text-gray-700 leading-relaxed prose prose-sm prose-gray max-w-none"><ReactMarkdown>{fixMarkdownHeadings(content)}</ReactMarkdown></div>;
+  return <div className={MARKDOWN}><ReactMarkdown>{fixMarkdownHeadings(content)}</ReactMarkdown></div>;
 }
 
 function HeadingBlockView({ content, data }: { content: string; data: { level?: number } | null }) {
-  if ((data?.level ?? 2) === 3) return <h3 className="text-base font-bold text-gray-800 mt-3 mb-1">{content}</h3>;
-  return <h2 className="text-lg font-bold text-gray-900 mt-4 mb-2">{content}</h2>;
+  if ((data?.level ?? 2) === 3) return <h3 className="text-base font-semibold text-fg mt-3 mb-1">{content}</h3>;
+  return <h2 className="text-lg font-semibold text-fg mt-4 mb-2">{content}</h2>;
 }
 
 function TableBlockView({ data }: { data: { headers?: string[]; rows?: string[][] } | null }) {
   if (!data?.headers?.length) return null;
   return (
     <div className="overflow-x-auto my-2">
-      <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-        <thead><tr className="bg-gray-50">{data.headers.map((h, i) => (<th key={i} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-200">{h}</th>))}</tr></thead>
-        <tbody>{(data.rows ?? []).map((row, ri) => (<tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>{row.map((cell, ci) => (<td key={ci} className="px-3 py-2 text-gray-700 border-b border-gray-100">{cell}</td>))}</tr>))}</tbody>
+      <table className="min-w-full text-sm border border-line rounded-lg overflow-hidden">
+        <thead><tr className="bg-surface-muted">{data.headers.map((h, i) => (<th key={i} className="px-3 py-2 text-left text-[11px] font-semibold text-fg-muted uppercase tracking-[0.08em] border-b border-line">{h}</th>))}</tr></thead>
+        <tbody>{(data.rows ?? []).map((row, ri) => (<tr key={ri}>{row.map((cell, ci) => (<td key={ci} className="px-3 py-2 text-fg-secondary border-b border-line">{cell}</td>))}</tr>))}</tbody>
       </table>
     </div>
   );
@@ -379,24 +412,22 @@ function TableBlockView({ data }: { data: { headers?: string[]; rows?: string[][
 function MetricBlockView({ data }: { data: { label?: string; value?: string; trend?: string; comparison?: string } | null }) {
   if (!data?.label) return null;
   const trendIcon = data.trend === "up" ? "↑" : data.trend === "down" ? "↓" : "→";
-  const trendColor = data.trend === "up" ? "text-green-600" : data.trend === "down" ? "text-red-500" : "text-gray-400";
+  const trendColor = data.trend === "up" ? "text-success-ink" : data.trend === "down" ? "text-danger-ink" : "text-fg-muted";
   return (
-    <div className="inline-flex items-baseline gap-3 px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 my-1">
-      <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{data.label}</p><p className="text-2xl font-bold text-gray-900">{data.value ?? "—"}</p></div>
+    <div className="inline-flex items-baseline gap-3 px-4 py-3 rounded-xl bg-surface-muted border border-line my-1">
+      <div><p className="text-[11px] font-semibold text-fg-muted uppercase tracking-[0.08em]">{data.label}</p><p className="text-2xl font-bold text-fg">{data.value ?? "—"}</p></div>
       {data.trend && <span className={`text-lg font-bold ${trendColor}`}>{trendIcon}</span>}
-      {data.comparison && <span className="text-xs text-gray-400">{data.comparison}</span>}
+      {data.comparison && <span className="text-xs text-fg-muted">{data.comparison}</span>}
     </div>
   );
 }
 
 function CalloutBlockView({ content, data }: { content: string; data: { variant?: string; title?: string } | null }) {
   const variant = data?.variant ?? "info";
-  const styles: Record<string, string> = { info: "bg-blue-50 border-blue-200 text-blue-800", warning: "bg-amber-50 border-amber-200 text-amber-800", success: "bg-green-50 border-green-200 text-green-800", error: "bg-red-50 border-red-200 text-red-800" };
-  const icons: Record<string, string> = { info: "ℹ️", warning: "⚠️", success: "✅", error: "❌" };
   return (
-    <div className={`rounded-xl border px-4 py-3 my-2 ${styles[variant] ?? styles.info}`}>
-      {data?.title && <p className="text-sm font-bold mb-1">{icons[variant] ?? ""} {data.title}</p>}
-      <div className="text-sm leading-relaxed prose prose-sm max-w-none"><ReactMarkdown>{content}</ReactMarkdown></div>
+    <div className={`rounded-xl border px-4 py-3 my-2 ${TONOS_DE_CALLOUT[variant] ?? TONOS_DE_CALLOUT.info}`}>
+      {data?.title && <p className="text-sm font-semibold mb-1">{data.title}</p>}
+      <div className="text-sm leading-relaxed [&_p+p]:mt-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"><ReactMarkdown>{content}</ReactMarkdown></div>
     </div>
   );
 }
@@ -409,11 +440,11 @@ function FlowchartBlockView({ data, title, onSave }: { data: { nodes?: unknown[]
     <div className="my-2">
       {(heading || desc) && (
         <div className="mb-2">
-          {heading && <p className="text-sm font-bold text-gray-800">{heading}</p>}
-          {desc && <p className="text-xs text-gray-600 leading-relaxed mt-0.5">{desc}</p>}
+          {heading && <p className="text-sm font-semibold text-fg">{heading}</p>}
+          {desc && <p className="text-xs text-fg-secondary leading-relaxed mt-0.5">{desc}</p>}
         </div>
       )}
-      <div className="h-[560px] rounded-xl border border-gray-200 overflow-hidden">
+      <div className="h-[560px] rounded-xl border border-line overflow-hidden">
         <FlowchartViewer
           data={{ title: "", description: data.description ?? "", nodes: data.nodes as Array<{ id: string; type: string; label: string; position?: { x: number; y: number } }>, edges: data.edges as Array<{ id?: string; source: string; target: string; label?: string }> }}
           // Guardar el diagrama editado → PUT del bloque (marca source MODIFIED → sobrevive regen).
@@ -427,5 +458,5 @@ function FlowchartBlockView({ data, title, onSave }: { data: { nodes?: unknown[]
 
 function ImageBlockView({ data }: { data: { url?: string; alt?: string; caption?: string } | null }) {
   if (!data?.url) return null;
-  return (<figure className="my-2"><img src={data.url} alt={data.alt ?? ""} className="rounded-xl max-w-full" />{data.caption && <figcaption className="text-xs text-gray-400 mt-1 text-center">{data.caption}</figcaption>}</figure>);
+  return (<figure className="my-2"><img src={data.url} alt={data.alt ?? ""} className="rounded-xl max-w-full" />{data.caption && <figcaption className="text-xs text-fg-muted mt-1 text-center">{data.caption}</figcaption>}</figure>);
 }

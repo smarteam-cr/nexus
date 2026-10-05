@@ -14,9 +14,16 @@
  * Stakeholders, Retos y Oportunidades eran sub-tabs sueltas sobre bloques del canvas client-info
  * y se fueron el 2026-09-27: los tres son campos de la ficha. En prod había 1 bloque (vacío)
  * entre los 188 clientes, así que no hubo nada que migrar.
+ *
+ * Desde el rediseño de la ficha (2026-10-04, sistema «Nexus · interfaz interna») las subpestañas
+ * son un segmentado y el contexto de la cuenta —qué sigue, licencias, la empresa— va en el panel
+ * de la derecha (`PanelDeLaCuenta`, por portal).
  */
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
+import { Segmentado } from "@/components/ui/Segmentado";
+import PanelDeLaCuenta from "./PanelDeLaCuenta";
 import DocumentUpload from "./DocumentUpload";
 import FichaDelCliente from "./FichaDelCliente";
 import LicenciasDelCliente from "./LicenciasDelCliente";
@@ -41,9 +48,12 @@ const TABS: { key: SubTab; label: string }[] = [
 export default function ClientInfoPanel({
   projectId,
   canvasId,
+  slotDelPanel = null,
 }: {
   projectId: string;
   canvasId: string;
+  /** El panel de la derecha de la ficha (null con el panel oculto). */
+  slotDelPanel?: HTMLElement | null;
   // domain/company siguen aceptándose por compatibilidad del caller, pero ya no
   // se usan acá (la sub-pestaña Sesiones que los consumía fue eliminada).
   domain?: string;
@@ -56,50 +66,39 @@ export default function ClientInfoPanel({
   usePantallaDelRecorrido("ficha-informacion");
 
   return (
-    <div className="px-6 py-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-fg">Información del cliente</h2>
-          <p className="text-sm text-fg-muted mt-0.5">
-            La ficha que leen los agentes, los documentos y la marca del cliente.
+    <div className="space-y-5 px-8 pb-10 pt-6">
+      {slotDelPanel && clientId && createPortal(<PanelDeLaCuenta clientId={clientId} tabActual={tab} onIrA={setTab} />, slotDelPanel)}
+
+      {/* El título y, a su derecha, las sub-pestañas y el PDF (diseño de la ficha, 2026-10-04). */}
+      <div data-recorrido="info.vistas" className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div className="min-w-0">
+          <h2 className="text-[22px] font-bold leading-tight text-fg">Información del cliente</h2>
+          <p className="mt-0.5 text-[13px] text-fg-muted">
+            La ficha que leen los agentes, las licencias, los documentos y la marca del cliente.
           </p>
         </div>
+        <span className="flex-1" />
+        <Segmentado
+          etiqueta="Qué mirar de la cuenta"
+          opciones={TABS.map((t) => ({ clave: t.key, etiqueta: t.label }))}
+          valor={tab}
+          onCambio={setTab}
+        />
         {clientId && (
           <a
             href={`/print/canvas/${clientId}/${canvasId}?print=1&projectId=${projectId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800 hover:border-gray-700"
+            className="shrink-0 rounded px-1 py-1 text-xs text-fg-muted transition-colors hover:text-fg"
             title="Abre una vista imprimible de las secciones del canvas"
           >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
             Exportar PDF
           </a>
         )}
       </div>
 
-      {/* Sub-tabs horizontales */}
-      <div className="flex gap-0 border-b border-line">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === t.key
-                ? "border-brand text-fg"
-                : "border-transparent text-fg-muted hover:text-fg-secondary hover:border-line"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       {/* Contenido del sub-tab activo */}
-      <div className="pt-2">
+      <div>
         {tab === "ficha" && clientId && <FichaDelCliente clientId={clientId} />}
         {tab === "licencias" && clientId && <LicenciasDelCliente clientId={clientId} />}
 

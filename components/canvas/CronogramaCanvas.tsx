@@ -177,6 +177,7 @@ import { ScaleSlider } from "@/components/ui/ScaleSlider";
 import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 import { diasSinConfirmar } from "@/lib/timeline/avance-sin-confirmar";
 import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs";
+import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO } from "@/components/ui/sistema";
 
 /* ── E3 P5: LO QUE EL CRONOGRAMA LE CONTESTA AL CHAT (tuteo, cortos: se leen en el botón o en el hilo) ── */
 const MOTIVO_SIN_APLICAR = "Espera: la propuesta se está aplicando o descartando.";
@@ -3767,12 +3768,16 @@ export default function CronogramaCanvas({
               aria-controls={ID_DEL_CAJON}
               className={
                 chatAbierto
-                  ? "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary text-secondary-fg transition-colors"
-                  : "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-fg-muted border border-line hover:text-fg hover:bg-surface-hover transition-colors"
+                  ? BOTON_DE_HERRAMIENTA_ACTIVO
+                  : BOTON_DE_HERRAMIENTA
               }
               title="Conversa el cambio con el asistente: te dice qué se puede y qué fecha mueve."
             >
-              💬 Asistente
+              {/* Mismo botón que «Asistente» en los demás documentos (rediseño del 2026-10-04). */}
+              <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z" />
+              </svg>
+              Asistente
               {/* Revisión de E3 (#17): llegó una propuesta y el chat no se abrió solo (la persona estaba en
                   otra cosa): el punto lo dice hasta que lo abra. */}
               {puntoDelChat !== null && puntoDelChat === tokenParaLaApertura && !chatAbierto ? (

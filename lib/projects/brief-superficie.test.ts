@@ -199,30 +199,26 @@ describe("⭐ la narrativa llega de punta a punta", () => {
  * ⭐ EL TOGGLE NO PUEDE ESCONDER LO QUE HAY QUE VER
  *
  * Una sección colapsable es una forma de esconder cosas, y lo primero que se esconde suele ser
- * justo lo que avisa. Colapsado se tienen que seguir leyendo el titular y el «quedó viejo».
+ * justo lo que avisa. Desde el rediseño del 2026-10-04 lo único que se pliega son los hallazgos de
+ * más («Ver los N hallazgos»): el titular y el «quedó viejo» se leen siempre.
  */
-describe("⭐ la sección se colapsa sin perder el aviso", () => {
-  const encabezado = () => {
+describe("⭐ la sección se pliega sin perder el aviso", () => {
+  it("el titular y el aviso de vencido se pintan ANTES del pliegue, fuera de él", () => {
     const src = sinComentarios(SECCION);
-    const i = src.indexOf("aria-expanded");
-    expect(i, "el encabezado dejó de ser un toggle accesible").toBeGreaterThan(-1);
-    const tramo = src.slice(i, src.indexOf('className={abierto ? "', i));
-    expect(tramo.length, "la guarda no está mirando el encabezado").toBeGreaterThan(100);
-    return tramo;
-  };
-
-  it("el titular y el aviso de vencido viven FUERA del cuerpo colapsable", () => {
-    const h = encabezado();
-    expect(h, "el titular quedó adentro del cuerpo: colapsado no se lee nada").toContain(
-      "brief.headline",
-    );
-    expect(h, "colapsado ya no se ve que el resumen quedó viejo").toContain("brief.vencido");
+    const iToggle = src.indexOf("aria-expanded={abierto}");
+    expect(iToggle, "el pliegue dejó de ser un toggle accesible").toBeGreaterThan(-1);
+    const iTitular = src.indexOf("{brief.headline &&");
+    const iVencido = src.indexOf("{brief.vencido && (");
+    expect(iTitular, "el titular dejó de pintarse (o la condición cambió)").toBeGreaterThan(-1);
+    expect(iVencido, "el aviso de vencido dejó de pintarse (o la condición cambió)").toBeGreaterThan(-1);
+    expect(iTitular, "el titular quedó detrás del pliegue").toBeLessThan(iToggle);
+    expect(iVencido, "el aviso de vencido quedó detrás del pliegue").toBeLessThan(iToggle);
   });
 
-  it("el cuerpo se OCULTA, no se desmonta", () => {
-    /* Desmontarlo tira el estado de «generando» y cualquier scroll: el toggle pasaría a tener
-       efectos que nadie pidió. Mismo criterio que la sección de Contexto. */
-    expect(sinComentarios(SECCION)).toContain('className={abierto ? "');
+  it("los hallazgos de más se OCULTAN, no se desmontan", () => {
+    /* Desmontarlos tira el scroll y el foco: el pliegue pasaría a tener efectos que nadie pidió.
+       Mismo criterio que la sección de Contexto. */
+    expect(sinComentarios(SECCION)).toContain("hidden={!abierto && i >= HALLAZGOS_A_LA_VISTA}");
   });
 });
 

@@ -26,6 +26,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { IconCheck } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
+import { BOTON_DE_HERRAMIENTA } from "@/components/ui/sistema";
 import { LARGO_MAXIMO_CONTRASENA, LARGO_MINIMO_CONTRASENA } from "@/lib/external/politica-de-contrasena";
 import {
   PUBLISH_SURFACES,
@@ -198,11 +199,8 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
 
   if (!state) {
     return (
-      <button
-        disabled
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line text-xs font-medium bg-surface-muted text-fg-muted opacity-50"
-      >
-        Acceso del cliente
+      <button disabled className={`${BOTON_DE_HERRAMIENTA} opacity-50`}>
+        Acceso
       </button>
     );
   }
@@ -210,30 +208,31 @@ export function ExternalAccessButton({ projectId }: { projectId: string }) {
   const isRevoked = state.exists && !!state.revokedAt;
   const isActive = state.exists && !state.revokedAt;
 
-  const buttonClasses = isActive
-    ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-    : isRevoked
-    ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
-    : "bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover";
-
-  const buttonLabel = isActive ? "Acceso activo" : isRevoked ? "Acceso revocado" : "Acceso del cliente";
+  /* «Acceso», con el estado en un punto (pedido de Elías, 2026-10-04): verde activo, ámbar revocado,
+     sin punto si todavía no se generó. El detalle lo dice el `title` y el modal. */
+  const punto = isActive ? "bg-success-ink" : isRevoked ? "bg-warn-ink" : null;
+  const estado = isActive ? "activo" : isRevoked ? "revocado" : "sin generar";
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${buttonClasses}`}
-        title="Generar / ver / revocar el acceso del cliente externo al proyecto"
+        className={BOTON_DE_HERRAMIENTA}
+        title={`Acceso del cliente: ${estado}. Quién del cliente puede abrir el kickoff y el cronograma`}
       >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-          />
-        </svg>
-        {buttonLabel}
+        {punto ? (
+          <span className={`h-2 w-2 flex-shrink-0 rounded-full ${punto}`} aria-hidden="true" />
+        ) : (
+          <svg className="h-[15px] w-[15px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+            />
+          </svg>
+        )}
+        Acceso
       </button>
 
       {open && (

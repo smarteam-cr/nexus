@@ -21,6 +21,7 @@ import SessionSelectionReview from "./SessionSelectionReview";
 import FuentesManualesColumn from "./FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "./context-column";
 import { ExploracionDeVentaResumen, useExploracionDeVenta } from "./ExploracionDeVentaColumn";
+import { FilaDeAlrededor } from "./FilaDeAlrededor";
 
 export default function ProjectContextSection({
   projectId,
@@ -63,39 +64,18 @@ export default function ProjectContextSection({
   // excluidas a mano (Meet + HubSpot) se cuentan aparte (no alimentan, pero son gestionables).
   const feedTotal = hubspotCount + meetCount + manualCount + exploracionCount;
   const excludedTotal = meetExcluded + hubspotExcluded;
-  const dot = (color: string) => <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />;
 
   return (
-    <div className="border-t border-line">
-      {/* Header colapsable */}
-      <button
-        onClick={() => setOverride(!open)}
-        aria-expanded={open}
-        className="w-full flex items-center gap-2.5 px-5 py-3 hover:bg-surface-hover transition-colors text-left"
-      >
-        <svg className={`w-4 h-4 text-fg-secondary flex-shrink-0 transition-transform ${open ? "" : "-rotate-90"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-        <span className="text-sm font-bold text-fg">Contexto</span>
-        <span className="text-[11px] text-fg-muted">
-          {feedTotal} fuente{feedTotal === 1 ? "" : "s"} alimentan
-          {excludedTotal > 0 ? ` · ${excludedTotal} excluida${excludedTotal === 1 ? "" : "s"}` : ""}
-        </span>
-        <span className="hidden sm:flex items-center gap-3 ml-2 text-[11px] text-fg-secondary">
-          <span className="inline-flex items-center gap-1" title="HubSpot (alimentan)">{dot("#ff7a59")}{hubspotCount}</span>
-          <span className="inline-flex items-center gap-1" title="Google Meet (alimentan)">{dot("#16a34a")}{meetCount}</span>
-          <span className="inline-flex items-center gap-1" title="Fuentes manuales">{dot("#7c6df2")}{manualCount}</span>
-          {exploracion && (
-            <span className="inline-flex items-center gap-1" title="Preventa">{dot("#d97706")}{exploracionCount}</span>
-          )}
-        </span>
-        <span className="ml-auto text-xs text-fg-muted">{open ? "Colapsar" : "Expandir"}</span>
-      </button>
-
-      {/* Cuerpo: 3 columnas. Siempre montado (los contadores del header valen colapsado);
-          se oculta con `hidden` para no desmontar y re-fetchear al togglear. */}
-      <div className={open ? "px-5 pb-4" : "hidden"}>
-        <p className="text-[11px] text-fg-muted mb-2.5">
+    /* La cabecera es la fila común de «Alrededor del handoff» (FilaDeAlrededor). El cuerpo queda
+       montado aunque esté plegado: los contadores de la cabecera los reportan las columnas. */
+    <FilaDeAlrededor
+      titulo="Contexto del handoff"
+      ayuda={`Lo que leyó el agente: reuniones, notas de HubSpot, fuentes a mano${exploracion ? " y la preventa" : ""}.`}
+      meta={`${feedTotal} fuente${feedTotal === 1 ? "" : "s"}${excludedTotal > 0 ? ` · ${excludedTotal} excluida${excludedTotal === 1 ? "" : "s"}` : ""}`}
+      abierto={open}
+      onAlternar={() => setOverride(!open)}
+    >
+        <p className="text-xs text-fg-muted mb-2.5">
           Estas fuentes arman el handoff. Todo lo <span className="font-medium text-fg-secondary">incluido</span> alimenta la
           generación; <span className="font-medium text-fg-secondary">excluye</span> lo que sea de otro proyecto. En HubSpot,
           el material de la era del proyecto; el resto queda como trasfondo.
@@ -136,7 +116,6 @@ export default function ProjectContextSection({
             </ContextColumn>
           )}
         </div>
-      </div>
-    </div>
+    </FilaDeAlrededor>
   );
 }
