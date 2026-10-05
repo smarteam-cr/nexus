@@ -16,6 +16,7 @@
  * desconfiar de los enlaces.
  */
 import Link from "next/link";
+import TarjetaDeConexion, { type EstadoDeConexion } from "./TarjetaDeConexion";
 
 export interface EstadoDeOdoo {
   /**
@@ -40,62 +41,55 @@ interface Props {
 const miles = (n: number) => n.toLocaleString("es-CR");
 
 export default function OdooCard({ estado }: Props) {
+  /* Sin rol de costos: la tarjeta existe —saber que Odoo está conectado no es plata— pero sin un
+     solo número. Es la misma línea que trazan Claude y Mercury. */
+  if (!estado) {
+    return (
+      <TarjetaDeConexion
+        nombre="Odoo"
+        queTrae="Las facturas que se cobran"
+        estado={{ tono: "ok", texto: "Conectado" }}
+        pie="El detalle lo ve un Super Admin"
+      />
+    );
+  }
+
+  const situacion: EstadoDeConexion = estado.motivoApagado
+    ? { tono: "apagado", texto: "Apagado" }
+    : estado.corridasConProblema > 0
+      ? { tono: "atencion", texto: "Con fallos" }
+      : { tono: "ok", texto: "Responde" };
+
   return (
-    <section className="rounded-xl bg-surface border border-line p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-semibold text-fg mb-1">Odoo</h2>
-          <p className="text-xs text-fg-muted">
-            El ERP de donde salen las facturas que Nexus muestra al lado de cada cobro. Nexus solo
-            lee: nunca escribe en Odoo.
-          </p>
-        </div>
-        {estado && (
-          <span
-            className={
-              estado.motivoApagado
-                ? "shrink-0 text-xs font-medium text-fg-muted"
-                : "shrink-0 text-xs font-medium text-success-ink"
-            }
-          >
-            {estado.motivoApagado ? "Apagado" : "Sincronizando"}
-          </span>
-        )}
-      </div>
-
-      {estado ? (
-        <>
-          <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
-            <div>
-              <dt className="text-fg-muted">Facturas espejadas</dt>
-              <dd className="text-fg font-semibold">{miles(estado.facturas)}</dd>
-            </div>
-            <div>
-              <dt className="text-fg-muted">Última corrida</dt>
-              <dd className="text-fg font-semibold">{estado.ultimaCorrida ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-fg-muted">Con problema (últimas 20)</dt>
-              <dd className={estado.corridasConProblema ? "text-danger-ink font-semibold" : "text-fg font-semibold"}>
-                {estado.corridasConProblema}
-              </dd>
-            </div>
-          </dl>
-
-          {estado.motivoApagado && <p className="mt-3 text-xs text-danger-ink">{estado.motivoApagado}</p>}
-
-          <Link
-            href="/integrations/odoo"
-            className="mt-4 inline-block text-xs font-medium text-brand hover:underline"
-          >
-            Ver el estado de la conexión y las últimas corridas →
-          </Link>
-        </>
-      ) : (
-        <p className="mt-4 text-xs text-fg-muted">
-          El estado de la conexión y el detalle de las corridas los ve un Super Admin.
+    <TarjetaDeConexion
+      nombre="Odoo"
+      queTrae="Las facturas que se cobran"
+      estado={situacion}
+      dato={{
+        numero: miles(estado.facturas),
+        unidad: estado.facturas === 1 ? "factura vigente" : "facturas vigentes",
+      }}
+      pie={
+        estado.motivoApagado ??
+        `Copia diaria · solo lectura${estado.ultimaCorrida ? ` · ${estado.ultimaCorrida}` : ""}`
+      }
+      accion={
+        <Link
+          href="/integrations/odoo"
+          className="text-[13px] font-semibold text-brand hover:text-brand-light"
+        >
+          Ver la copia
+        </Link>
+      }
+    >
+      {/* Las corridas con problema NO son un número más de una lista: son la única señal de que
+          lo que se está mirando en Cobranza puede estar viejo. Por eso suben a aviso. */}
+      {estado.corridasConProblema > 0 && (
+        <p className="text-xs leading-[17px] text-warn-ink bg-warn-surface border border-warn-line rounded-lg px-3 py-2">
+          {estado.corridasConProblema} de las últimas 20 corridas falló o quedó colgada: puede
+          haber facturas que todavía no llegaron.
         </p>
       )}
-    </section>
+    </TarjetaDeConexion>
   );
 }

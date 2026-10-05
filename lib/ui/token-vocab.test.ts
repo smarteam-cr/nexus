@@ -49,13 +49,6 @@ function contarGrises(rel: string): number {
 const DEUDA_TOKENS: Record<string, number> = {
 
   "app/(shell)/agents/AgentsClient.tsx": 4,
-  "app/(shell)/audits/[id]/AuditDetailClient.tsx": 11,
-  "app/(shell)/audits/[id]/CompanyFunnelWidget.tsx": 22,
-  "app/(shell)/audits/[id]/ContactFunnelWidget.tsx": 22,
-  "app/(shell)/audits/[id]/GenerateInsightsButton.tsx": 1,
-  "app/(shell)/audits/[id]/LifecycleReport.tsx": 39,
-  "app/(shell)/audits/[id]/OwnerAssignmentWidget.tsx": 28,
-  "app/(shell)/audits/AuditsTable.tsx": 3,
   "app/(shell)/clients/[id]/error.tsx": 1,
   "app/(shell)/clients/[id]/settings/page.tsx": 42,
   // WorkspaceClient salió de la deuda: el rail de proyectos pintaba la pestaña ACTIVA con
@@ -66,18 +59,10 @@ const DEUDA_TOKENS: Record<string, number> = {
   // de pestañas escritas a mano (ahora <Tabs>, que además trae role="tab" y teclado) y los
   // "—" de las celdas vacías. De paso cayó un `text-emerald-400` que ninguna de las dos
   // guardas cazaba.
-  "app/(shell)/clients/DeleteClientButton.tsx": 1,
   "app/(shell)/clients/NewClientButton.tsx": 3,
   "app/(shell)/error.tsx": 1,
-  "app/(shell)/integrations/GoogleMeetCard.tsx": 29,
-  "app/(shell)/integrations/HubspotSystemCard.tsx": 21,
+  "app/(shell)/integrations/GoogleMeetCard.tsx": 21,
   "app/(shell)/knowledge/KnowledgeClient.tsx": 47,
-  "app/(shell)/marketing/contenido/ContentClient.tsx": 6,
-  "app/(shell)/marketing/fuentes/SourcesClient.tsx": 2,
-  "app/(shell)/marketing/ideas-de-campana/CampaignsClient.tsx": 1,
-  "app/(shell)/marketing/personas/PersonasClient.tsx": 2,
-  "app/(shell)/marketing/temas/TemasClient.tsx": 3,
-  "app/(shell)/marketing/voz/VoiceClient.tsx": 1,
   "app/(shell)/sales/SalesClient.tsx": 58,
   "app/(shell)/sessions/[id]/SessionView.tsx": 49,
   "app/(shell)/sessions/AnalysisPanel.tsx": 72,
@@ -85,8 +70,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "app/(shell)/sessions/SessionsClient.tsx": 161,
   "app/(shell)/team/page.tsx": 2,
   "components/canvas/AnchorDatePicker.tsx": 10,
-  "components/canvas/BlockRenderer.tsx": 77,
-  "components/canvas/CanvasLinearView.tsx": 11,
   "components/canvas/CronogramaCanvas.tsx": 20, // E4: −10 con el banner de «Pedir cambio con IA», que se retiró
   "components/canvas/ParticularidadEditModal.tsx": 12,
   "components/canvas/ParticularidadToTaskModal.tsx": 7,
@@ -97,18 +80,15 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/clients/ActionItemsDialog.tsx": 2,
   "components/clients/CanvasBoundary.tsx": 1,
   "components/clients/ClientContextCards.tsx": 108,
-  "components/clients/ClientInfoPanel.tsx": 5,
   "components/clients/ClientSharing.tsx": 28,
   "components/clients/CronogramaProgressButton.tsx": 1,
   "components/clients/DocumentUpload.tsx": 23,
   "components/clients/ExternalAccessPanel.tsx": 3,
   "components/clients/MinuteDialog.tsx": 44,
-  "components/clients/ProjectHandoffSection.tsx": 2,
   "components/clients/ProjectSessionsReview.tsx": 1,
   "components/clients/SectionDiscoveryModal.tsx": 37,
   "components/clients/SendToCanvasMenu.tsx": 27,
   "components/clients/SessionHistoryDrawer.tsx": 17,
-  "components/cs/account/AccountBriefSection.tsx": 1,
   "components/dashboard/PortfolioGrid.tsx": 2,
   "components/flowchart/FlowchartViewer.tsx": 59,
   "components/flowchart/nodes.tsx": 9,
@@ -117,7 +97,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   // 12 → 1 al retirar "Clientes recientes" (2026-07-24): la sección concentraba
   // 11 de los grises del rail (los ítems de cliente y el separador).
   "components/layout/Sidebar.tsx": 1,
-  "components/marketing/ICPView.tsx": 51,
   "components/notifications/NotificationsInit.tsx": 1,
   "components/team/TeamManager.tsx": 1,
   // components/ui/* llegó a 0 en la ola A1 (2026-07-19) — las primitivas son la referencia.
@@ -134,22 +113,15 @@ const DEUDA_TOKENS: Record<string, number> = {
  * (Alert/Field/Toast SON la alternativa). Censo inicial: 23 archivos, 30 líneas.
  */
 const DEUDA_ALERTS: Record<string, number> = {
-  "app/(shell)/audits/[id]/GenerateInsightsButton.tsx": 1,
   "app/(shell)/clients/[id]/settings/page.tsx": 2,
   "app/(shell)/clients/NewClientButton.tsx": 1,
   "app/(shell)/integrations/GoogleMeetCard.tsx": 2,
-  "app/(shell)/integrations/HubspotSystemCard.tsx": 1,
   "app/(shell)/knowledge/KnowledgeClient.tsx": 1,
-  "app/(shell)/marketing/fuentes/SourcesClient.tsx": 1,
-  "app/(shell)/marketing/generacion/EngineClient.tsx": 3,
   "app/(shell)/sessions/AnalysisPanel.tsx": 1,
-  "components/canvas/BlockRenderer.tsx": 2,
-  "components/canvas/CanvasLinearView.tsx": 1,
   "components/canvas/CronogramaCanvas.tsx": 2,
   "components/clients/ClientContextCards.tsx": 1,
   "components/clients/DocumentUpload.tsx": 1,
   "components/clients/ExternalAccessPanel.tsx": 1,
-  "components/clients/ProjectHandoffSection.tsx": 1,
   "components/handoffs/HandoffStepper.tsx": 2,
 };
 
@@ -195,16 +167,15 @@ describe("Ratchet de alerts: el error rojo ad-hoc solo ENCOGE", () => {
  * de color activo. La primitiva es components/ui/Tabs.tsx (modo estado y modo
  * navegación, accesible, variantes espejo de SkeletonTabs). Heurística: líneas con
  * `border-b-2` (la firma del subrayado a mano) fuera de components/ui. Pilotos ya
- * migrados: KnowledgeClient y MarketingSectionTabs. ⚠ WorkspaceClient y el área del
- * canvas se migran en pasada coordinada con la otra PC.
+ * migrados: KnowledgeClient y MarketingSectionTabs (este se retiró el 2026-10-04: Marketing ya no tiene pestañas de grupo). WorkspaceClient dejó de tener
+ * pestañas propias con el riel de la ficha (2026-10-04); el área del canvas se migra en
+ * pasada coordinada con la otra PC.
  */
 const DEUDA_TABBARS: Record<string, number> = {
-  "app/(shell)/clients/[id]/WorkspaceClient.tsx": 3,
   "app/(shell)/sessions/SessionsClient.tsx": 2,
   "app/(shell)/sessions/[id]/SessionView.tsx": 1,
   "components/clients/ActionItemsDialog.tsx": 1,
   "components/clients/ClientContextCards.tsx": 3,
-  "components/clients/ClientInfoPanel.tsx": 1,
   "components/clients/MinuteDialog.tsx": 1,
   "components/cobranza/CobranzaClient.tsx": 1,
 };

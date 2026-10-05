@@ -1,5 +1,7 @@
 "use client";
 
+import TarjetaDeConexion from "./TarjetaDeConexion";
+
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
@@ -64,37 +66,18 @@ export default function GoogleMeetCard({ connected, adminEmail, sessionCount }: 
   }
 
   return (
-    <div className="rounded-xl bg-gray-900 border border-gray-800 p-6">
-      <div className="flex items-start gap-4">
-        {/* Logo Google Meet */}
-        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shadow-lg">
-          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" fill="#1a73e8" />
-          </svg>
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2.5 mb-1">
-            <h2 className="text-sm font-semibold text-white">Google Meet / Gemini</h2>
-            {connected ? (
-              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-                Conectado
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-700/50 border border-gray-700 text-gray-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-500 flex-shrink-0" />
-                No conectado
-              </span>
-            )}
-          </div>
-
-          <p className="text-xs text-gray-400 leading-relaxed mb-4">
-            Sincroniza reuniones de Google Meet grabadas con Gemini. Los transcripts y
-            notas de Gemini aparecerán automáticamente en cada cliente para análisis y seguimiento.
-          </p>
-
+    <TarjetaDeConexion
+      nombre="Google Meet"
+      queTrae="Las reuniones y sus transcripciones"
+      estado={
+        connected
+          ? { tono: "ok", texto: "Responde" }
+          : { tono: "apagado", texto: "Sin conectar" }
+      }
+      dato={connected ? { numero: count.toLocaleString("es-CR"), unidad: "reuniones traídas" } : null}
+      pie={connected ? `Como ${adminEmail}` : "La conecta quien administra la configuración"}
+    >
+      <div className="min-w-0">
           {connected ? (
             <ConnectedState
               adminEmail={adminEmail!}
@@ -114,7 +97,6 @@ export default function GoogleMeetCard({ connected, adminEmail, sessionCount }: 
           ) : (
             <DisconnectedState />
           )}
-        </div>
       </div>
 
       {/* ⚠ «Re-enriquecer todo» BORRA contenido: resetea transcript y summary de TODAS las
@@ -147,7 +129,7 @@ export default function GoogleMeetCard({ connected, adminEmail, sessionCount }: 
           void handleEnrich("all");
         }}
       />
-    </div>
+    </TarjetaDeConexion>
   );
 }
 

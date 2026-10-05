@@ -11,6 +11,7 @@ import HubspotSystemCard from "./HubspotSystemCard";
 import GoogleMeetCard from "./GoogleMeetCard";
 import ClaudeCard, { type GastoDeClaude } from "./ClaudeCard";
 import OdooCard, { type EstadoDeOdoo } from "./OdooCard";
+import MercuryCard, { type EstadoDeMercury } from "./MercuryCard";
 import JobsSemaforo from "./JobsSemaforo";
 import { gastoResumidoDeClaude } from "@/lib/ai/gasto-en-integraciones";
 import { requireInternalUser } from "@/lib/auth/supabase";
@@ -147,6 +148,30 @@ export default async function IntegrationsPage({
       })()
     : null;
 
+  /* Mercury, con el MISMO gate que Odoo y por el mismo motivo: su detalle es plata y
+     `/finanzas/integraciones` corta por rol de costos. El emparejado se cuenta aparte del total
+     porque es lo que decide si la conexión sirve de algo — medido el 2026-10-05: 0 de 30. */
+  const estadoDeMercury: EstadoDeMercury | null = puedeVerGasto
+    ? await (async () => {
+        const [clientes, emparejados, facturas, corrida] = await Promise.all([
+          prisma.clienteMercury.count(),
+          prisma.clienteMercury.count({ where: { cuentaId: { not: null } } }),
+          prisma.facturaMercury.count(),
+          prisma.syncMercuryCorrida.findFirst({
+            orderBy: { iniciadaEn: "desc" },
+            select: { terminadaEn: true },
+          }),
+        ]);
+        return {
+          motivoApagado: motivoApagado("mercury-espejo-daily", process.env),
+          clientes,
+          emparejados,
+          facturas,
+          ultimaCorrida: corrida?.terminadaEn?.toISOString().slice(0, 10) ?? null,
+        };
+      })()
+    : null;
+
   const [hubspot, google, googleMeetCount, systemCfg] = await Promise.all([
     getHubspotSystemStatus(),
     getGoogleStatus(),
@@ -175,34 +200,61 @@ export default async function IntegrationsPage({
         description="Lo que Nexus conecta con el mundo, y la marca con la que sale. Configuración global, compartida por todos los clientes."
       />
 
-      {/* Grid de integraciones */}
-      <div className="max-w-2xl grid grid-cols-1 gap-4">
-        {/* HubSpot sistema — siempre primero */}
-        <HubspotSystemCard
-          status={hubspot}
-          justConnected={hs_connected === "1"}
-        />
+      {/* ── LAS CONEXIONES ───────────────────────────────────────────────────
+          Rediseño 2026-10-05: las cinco van juntas y con el MISMO esqueleto
+          (`TarjetaDeConexion`). Antes vivían en una columna donde además se mezclaban con el
+          semáforo del servidor y con los cargadores de logo, que no son una conexión. */}
+      <section className="max-w-5xl space-y-3">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+          Conexiones
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* HubSpot sistema — siempre primero */}
+          <HubspotSystemCard
+            status={hubspot}
+            justConnected={hs_connected === "1"}
+          />
 
-        {/* Google Meet / Gemini — fuente única de sesiones */}
-        <GoogleMeetCard
-          connected={google.connected}
-          adminEmail={google.adminEmail}
-          sessionCount={googleMeetCount}
-        />
+          {/* Google Meet / Gemini — fuente única de sesiones */}
+          <GoogleMeetCard
+            connected={google.connected}
+            adminEmail={google.adminEmail}
+            sessionCount={googleMeetCount}
+          />
 
-        {/* Claude — el motor de IA. Es la integración MÁS usada del producto (~30 caminos) y
-            era la única que no aparecía acá; su gasto vivía en una pantalla que hay que saber
-            que existe. */}
-        <ClaudeCard gasto={gastoDeClaude} medidorListo={medidorListo} />
+          {/* Claude — el motor de IA. Es la integración MÁS usada del producto (~30 caminos) y
+              era la única que no aparecía acá; su gasto vivía en una pantalla que hay que saber
+              que existe. */}
+          <ClaudeCard gasto={gastoDeClaude} medidorListo={medidorListo} />
 
-        {/* Odoo — el ERP del que salen las facturas de cobranza. Su pantalla se mudó acá desde
-            /settings, y sin esta tarjeta se quedaba sin ninguna entrada propia. */}
-        <OdooCard estado={estadoDeOdoo} />
+          {/* Odoo — el ERP del que salen las facturas de cobranza. Su pantalla se mudó acá desde
+              /settings, y sin esta tarjeta se quedaba sin ninguna entrada propia. */}
+          <OdooCard estado={estadoDeOdoo} />
 
-        {/* Jobs del server — el semáforo (B-03). Hasta hoy un job que fallaba era una línea en
-            docker logs que nadie leía; acá se ve cómo terminó la última corrida de cada uno. */}
+          {/* Mercury — el banco. La última en tener tarjeta propia, y la que obligó a que el
+              estado de una conexión no sea un booleano: responde, copia todo y no sirve para
+              nada mientras sus clientes no estén emparejados. */}
+          <MercuryCard estado={estadoDeMercury} />
+        </div>
+      </section>
+
+      {/* ── EL RELOJ DEL SERVIDOR ────────────────────────────────────────────
+          No es una conexión: es si las corridas automáticas están pasando. Sección propia. */}
+      <section className="max-w-5xl space-y-3 mt-6">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+          El reloj del servidor
+        </h2>
         <JobsSemaforo jobs={jobs} schedulerApagado={schedulerApagado} />
+      </section>
 
+      {/* ── LA MARCA ─────────────────────────────────────────────────────────
+          Los tres logos salen en los documentos del CLIENTE. Tampoco son una conexión, y
+          pesaban lo mismo que HubSpot por estar en la misma columna. */}
+      <section className="max-w-5xl space-y-3 mt-6">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">
+          Marca de los documentos del cliente
+        </h2>
+        <div className="grid grid-cols-1 gap-4">
         {/* Logo de Smarteam — config global de marca (páginas externas) */}
         <section className="rounded-xl bg-surface border border-line p-5">
           <h2 className="text-sm font-semibold text-fg mb-1">Logo de Smarteam</h2>
@@ -245,11 +297,12 @@ export default async function IntegrationsPage({
             </div>
           </div>
         </section>
-      </div>
+        </div>
+      </section>
 
       {/* «Acerca del Workspace», que vivía en /settings. Se mudó acá porque es información del
           SISTEMA —qué es Nexus y con qué versión corre—, no una preferencia de quien mira. */}
-      <div className="max-w-2xl mt-6 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">
+      <div className="max-w-5xl mt-6 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">
         <span>Workspace de Consultoría IA</span>
         <span aria-hidden="true">·</span>
         <span>Versión 0.2.0</span>
