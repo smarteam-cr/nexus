@@ -301,6 +301,8 @@ export const APP_NAV: readonly NavItemConfig[] = [
       // Los reportes: la síntesis de los dos lados (entra − sale). Son de dirección y de quien supervisa.
       { href: "/finanzas/equilibrio", label: "Punto de equilibrio", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
       { href: "/finanzas/caja-neta", label: "Caja neta", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
+      // El tipo de cambio del BCCR día por día (2026-10-05). Sin `costosOnly`: una tasa publicada no es sensible.
+      { href: "/finanzas/tipo-de-cambio", label: "Tipo de cambio", section: "Reportes", vistas: ["SUPERVISA", "DIRECCION"] },
       { href: "/finanzas/integraciones", label: "Integraciones", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA", "DIRECCION"] },
       // Proyección, reportes de cobranza y el corte quincenal: se mudaron de las pestañas de Cobranza.
       { href: "/finanzas/reportes", label: "Reportes de cobranza", section: "Reportes", costosOnly: true, vistas: ["SUPERVISA"] },

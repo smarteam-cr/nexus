@@ -385,6 +385,9 @@ describe("P4 · las páginas de Finanzas gatean ANTES de cargar datos", () => {
       "costos recurrentes SIN salarios, pedidos con la categoría filtrada en la consulta; gate gastos.read. Lo vigila P5",
     tarjetas:
       "tarjetas con sus costos SIN salarios, filtrados en la consulta; gate gastos.read. Lo vigila P5",
+    // ── Tipo de cambio del BCCR (2026-10-05) ──
+    "tipo-de-cambio":
+      "el tipo de cambio del BCCR día por día: una tasa publicada, ni un costo ni un salario (como TipoCambioMes en policies.sql); gate cobranza.read",
   };
 
   /**

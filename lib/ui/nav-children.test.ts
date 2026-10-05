@@ -140,12 +140,13 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(hrefs).toContain("/finanzas/reportes");
   });
 
-  it("dirección: solo Reportes — punto de equilibrio, caja neta e integraciones", () => {
+  it("dirección: solo Reportes — punto de equilibrio, caja neta, tipo de cambio e integraciones", () => {
     const bloques = panel("DIRECCION", true);
     expect(bloques.map((b) => b.section)).toEqual(["Reportes"]);
     expect(bloques[0].items.map((i) => i.href)).toEqual([
       "/finanzas/equilibrio",
       "/finanzas/caja-neta",
+      "/finanzas/tipo-de-cambio",
       "/finanzas/integraciones",
     ]);
   });

@@ -5,7 +5,8 @@
  * mes»).
  *
  * La tira del año (cómo está cada mes), lo que falta para cerrar el elegido —lo que frena y lo que solo se muestra—, el
- * tipo de cambio para confirmar o cambiar, y los botones de cerrar y reabrir. Cerrar no congela nada: guarda quién,
+ * tipo de cambio (el del Banco Central desde 2026-10-05; para confirmar o cambiar, solo en un mes sin días del BCCR), y
+ * los botones de cerrar y reabrir. Cerrar no congela nada: guarda quién,
  * cuándo y los números de ese momento (lib/finanzas/cierre.ts).
  */
 import Link from "next/link";
@@ -190,6 +191,29 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
         </section>
 
         <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
+          {d.tipoCambio?.bccr ? (
+            <section
+              data-recorrido="fin.cierre.tc"
+              id="tipo-de-cambio"
+              aria-label={`Tipo de cambio de ${mes}`}
+              className={`flex flex-col gap-2 rounded-xl border p-4 ${d.tipoCambio.bccr.completo ? "border-line bg-surface" : "border-warn-line bg-warn-surface"}`}
+            >
+              <span className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${d.tipoCambio.bccr.completo ? "text-fg-muted" : "text-warn-ink"}`}>
+                Tipo de cambio de {mes}
+              </span>
+              <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">
+                ₡{d.tipoCambio.crcPorUsd.toLocaleString("es-CR", { maximumFractionDigits: 2 })} por dólar
+              </span>
+              <span className={`text-[13px] leading-[19px] ${d.tipoCambio.bccr.completo ? "text-fg-secondary" : "text-warn-ink"}`}>
+                {d.tipoCambio.bccr.completo
+                  ? `✓ El promedio de la venta del Banco Central de los ${d.tipoCambio.bccr.dias} días. Cada cobro y cada pago con fecha se convierte con la tasa de su día.`
+                  : `● Solo ${d.tipoCambio.bccr.dias === 1 ? "1 día tiene" : `${d.tipoCambio.bccr.dias} días tienen`} la tasa del Banco Central: faltan días del mes.`}
+              </span>
+              <Link href="/finanzas/tipo-de-cambio" className="text-[13px] font-semibold text-brand hover:text-brand-light">
+                Ver el histórico
+              </Link>
+            </section>
+          ) : (
           <section data-recorrido="fin.cierre.tc"
             id="tipo-de-cambio"
             aria-label={`Tipo de cambio de ${mes}`}
@@ -261,6 +285,7 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
               </form>
             )}
           </section>
+          )}
 
           <section data-recorrido="que-sigue" aria-label="Qué sigue" className="flex flex-col gap-1.5 rounded-xl border border-info-line bg-info-surface p-4">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-info-ink">Qué sigue</span>

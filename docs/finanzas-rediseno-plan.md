@@ -47,6 +47,7 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 | ✅ | **Cierre del mes** | Cerrar y reabrir; tipo de cambio en pantalla; meses cerrados en el punto de equilibrio | tabla `CierreMes` |
 | ✅ | **Gasto sin Excel** | El punto de equilibrio lee los gastos de Nexus desde octubre; Mercury en el punto de equilibrio y en «Actualizar» | — |
 | ✅ | **Punto de equilibrio para dirección** | La página rehecha para RevOps, el CFO y el CEO (ver abajo) | tabla `DecisionFinanzas` |
+| ✅ | **Tipo de cambio del BCCR** | La tasa de cada día, del Banco Central, y su histórico (ver abajo) | tabla `TipoCambioDia` |
 
 ## Cómo funciona la revisión
 
@@ -107,7 +108,20 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
   EstructuraCostos, ConfiabilidadDato) quedan sin uso; se borran cuando la otra sesión termine lo que tiene abierto en
   ellos. RendimientoCobranza sigue en uso, dentro de «Ver la cobranza contra el Excel».
 
+## Cómo funciona el tipo de cambio (2026-10-05)
+
+- `/finanzas/tipo-de-cambio` muestra la venta y la compra de referencia del BCCR día por día, el promedio de cada mes y
+  la tasa cargada a mano que se usaba antes (el ₡500), para ver la diferencia. En el menú, en Reportes.
+- Cada cobro, factura, quincena de planilla, comisión e ingreso que no es venta se convierte con la tasa de su día; lo
+  que es de un mes entero, con el promedio de los días del mes. Un mes sin días del BCCR sigue con la tasa cargada a
+  mano, y el punto de equilibrio lo dice en «Lo que todavía no está».
+- Lo trae solo el job `tipo-cambio-daily`. Sin `BCCR_TOKEN` usa el API de Hacienda: la tasa de hoy siempre, el histórico
+  cuando Hacienda lo sirve (el 2026-10-05 respondía 503). Con el token del BCCR, el histórico desde 2023 llega en la
+  primera corrida.
+- El cierre del mes ya no pide confirmar el tipo de cambio cuando el mes tiene todos sus días del BCCR.
+
 Todo el SQL va en un solo archivo, `scripts/sql/2026-10-03-finanzas-rediseno.sql`, **antes del deploy**. ⚠ La columna de
 `TeamMember` la lee cada página de Nexus: sin el SQL aplicado, nada carga (el deploy lo detecta y vuelve atrás solo).
 El punto de equilibrio suma `scripts/sql/2026-10-05-decisiones-de-finanzas.sql`, también antes del deploy (sin él la
-página carga igual, pero no se puede guardar la decisión de los aliados).
+página carga igual, pero no se puede guardar la decisión de los aliados). El tipo de cambio diario suma
+`scripts/sql/2026-10-05-tipo-de-cambio-diario.sql`, antes del deploy (sin él todo sigue con la tasa cargada a mano).

@@ -43,6 +43,7 @@ import {
   type LecturaDeCobranza,
 } from "@/lib/cobranza/antiguedad";
 import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
+import { tasaDelDia } from "./tipo-cambio";
 
 // ── La pregunta abierta de Dirección ────────────────────────────────────────────
 
@@ -92,6 +93,11 @@ export interface EgresoDeMes {
   calidad: CalidadDato;
   /** La hoja no declaró la moneda y se dedujo del formato. Alimenta un aviso. */
   monedaInferida?: boolean;
+  /**
+   * El día en que se pagó, si es un pago con fecha (una quincena de planilla). Con `tasasDiarias`, se convierte con la
+   * tasa de ese día; sin fecha (una fila del Excel, un recurrente), con la del mes.
+   */
+  fechaISO?: string;
 }
 
 /**
@@ -131,6 +137,8 @@ export interface IngresoDeMes {
    * VENCIDA: no se puede afirmar que algo está en plazo sin haber mirado su reloj.
    */
   enPlazo?: boolean;
+  /** El día del movimiento (cobrado: el de entrada; facturado: el de emisión). Ver `EgresoDeMes.fechaISO`. */
+  fechaISO?: string;
 }
 
 /** Lo que hace falta de un cobro para saber en qué mes y como qué entra al reporte. */
@@ -208,6 +216,12 @@ export interface OpcionesEquilibrio {
   hoyISO: string; // "YYYY-MM-DD" — la fecha ENTRA, nunca se lee el reloj acá
   monedaPresentacion?: MonedaEq; // default USD
   tasas?: TasaDeMes[];
+  /**
+   * La venta del BCCR de cada día (fecha → colones por dólar), 2026-10-05. Lo que trae `fechaISO` se convierte con la
+   * tasa de su día (o la del día anterior más cercano, hasta una semana: lib/finanzas/tipo-cambio.ts); lo demás, y lo que
+   * no encuentra tasa cerca, con la del mes.
+   */
+  tasasDiarias?: ReadonlyMap<string, number>;
   ventana?: VentanaEquilibrio; // default SOLO_MEDIDOS
   colchones?: number[]; // default [10, 15]
   /** Divisor de la reserva de aguinaldo. 12 = la regla de Nexus; el Excel usa 10. */
@@ -427,6 +441,8 @@ export interface ReporteEquilibrio {
     periodosSinTasa: string[];
     montosNoConvertidos: Array<{ periodo: string; moneda: MonedaEq; monto: number; concepto: string }>;
     convertidos: number;
+    /** De `convertidos`, cuántos con la tasa de su día (el resto, con la del mes). */
+    convertidosConTasaDelDia: number;
   };
   /**
    * La cobranza del año por moneda NATIVA, sin convertir: lo que un % en dólares no deja ver.
@@ -885,16 +901,26 @@ export function calcularEquilibrio(
   const noConvertidos: ReporteEquilibrio["fx"]["montosNoConvertidos"] = [];
   const periodosSinTasa = new Set<string>();
   let convertidos = 0;
+  let convertidosConTasaDelDia = 0;
+  const tasasDiarias = opciones.tasasDiarias;
 
-  /** Convierte y, si no puede, lo anota y devuelve null (nunca un cero silencioso). */
-  const aPresentacion = (monto: number, m: MonedaEq, periodo: string, concepto: string): number | null => {
-    const r = convertir(monto, m, moneda, tasaPorPeriodo.get(periodo) ?? null);
+  /**
+   * Convierte y, si no puede, lo anota y devuelve null (nunca un cero silencioso). Con fecha y tasas diarias, con la tasa
+   * de ESE día; si no, con la del mes.
+   */
+  const aPresentacion = (monto: number, m: MonedaEq, periodo: string, concepto: string, fechaISO?: string): number | null => {
+    const delDia = m !== moneda && fechaISO && tasasDiarias ? tasaDelDia(tasasDiarias, fechaISO) : null;
+    const tasa = delDia ? { periodo, crcPorUsd: delDia.venta, fuente: `BCCR del ${delDia.fecha}` } : (tasaPorPeriodo.get(periodo) ?? null);
+    const r = convertir(monto, m, moneda, tasa);
     if (r === null) {
       noConvertidos.push({ periodo, moneda: m, monto, concepto });
       periodosSinTasa.add(periodo);
       return null;
     }
-    if (r.convertido) convertidos++;
+    if (r.convertido) {
+      convertidos++;
+      if (delDia) convertidosConTasaDelDia++;
+    }
     return r.monto;
   };
 
@@ -913,7 +939,7 @@ export function calcularEquilibrio(
   for (const e of egresos) {
     const mes = porMes.get(e.periodo);
     if (!mes) continue; // fuera del año pedido
-    const monto = aPresentacion(e.monto, e.moneda, e.periodo, e.concepto);
+    const monto = aPresentacion(e.monto, e.moneda, e.periodo, e.concepto, e.fechaISO);
     if (monto === null) continue;
 
     mes.rubros[e.rubro] = round2(mes.rubros[e.rubro] + monto);
@@ -981,7 +1007,7 @@ export function calcularEquilibrio(
     }
     const concepto =
       i.tipo === "NO_VENTA" ? "ingreso que no es venta" : (i.tipoServicio ?? "comisión de aliado");
-    const monto = aPresentacion(i.monto, i.moneda, i.periodo, concepto);
+    const monto = aPresentacion(i.monto, i.moneda, i.periodo, concepto, i.fechaISO);
     if (monto === null) continue;
 
     if (i.tipo === "NO_VENTA") {
@@ -1298,6 +1324,7 @@ export function calcularEquilibrio(
     fx: {
       tasas,
       periodosSinTasa: [...periodosSinTasa].sort(),
+      convertidosConTasaDelDia,
       montosNoConvertidos: noConvertidos,
       convertidos,
     },

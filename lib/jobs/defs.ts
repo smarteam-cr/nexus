@@ -351,6 +351,42 @@ const mercuryEspejoDaily: JobDef = {
 };
 
 /**
+ * El tipo de cambio del día (2026-10-05, lib/finanzas/tipo-cambio-server.ts): la venta y la compra de referencia del
+ * BCCR, una vez al día ≥ 6:00 CR, para que cada cobro y cada pago se convierta con la tasa de su día. Del servicio del
+ * BCCR si hay `BCCR_TOKEN`; si no, del API de Hacienda (sin token). Si todavía falta el histórico, lo intenta traer en
+ * la misma corrida. LANZA si no quedó la tasa de hoy (semáforo rojo); el turno se suelta si el fallo fue pasajero.
+ */
+const tipoCambioDaily: JobDef = {
+  key: "tipo-cambio-daily",
+  shouldRun: (_now, parts) => encendido("tipo-cambio-daily") && parts.hour >= 6,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const { dateKey } = crDateParts(now);
+    if (!(await claimDateKey("tipo-cambio-daily", dateKey, now))) return SIN_TURNO;
+    const { sincronizarTipoDeCambio } = await import("@/lib/finanzas/tipo-cambio-server");
+    const r = await sincronizarTipoDeCambio();
+    if (!r.ok) {
+      if (r.transitorio) {
+        await prisma.cronJobState
+          .updateMany({ where: { id: "tipo-cambio-daily", lastRunDateKey: dateKey }, data: { lastRunDateKey: null } })
+          .catch(() => {});
+      }
+      const fallo = new Error(
+        `sin la tasa de hoy: ${r.avisos.join(" · ") || "ninguna fuente respondió"}; ` +
+          (r.transitorio ? "turno liberado: reintenta en el próximo tick" : "turno RETENIDO: no reintenta hasta mañana"),
+      );
+      fallo.name = "TipoDeCambioFallido";
+      throw fallo;
+    }
+    console.log(
+      `[jobs/tipo-cambio] ${dateKey} — ${r.nuevos} día(s) nuevos, ${r.corregidos} corregidos (${r.fuente ?? "sin fuente"}, ${r.desde} a ${r.hasta})` +
+        (r.faltaHistorico ? " · ⚠ falta el histórico: hace falta BCCR_TOKEN o que vuelva el de Hacienda" : "") +
+        (r.avisos.length ? ` · ${r.avisos.join(" · ")}` : ""),
+    );
+  },
+};
+
+/**
  * Los invariantes que solo miran la base (`lib/invariantes/`), una vez al día ≥ 7:00 CR — después
  * de los espejos de las 6 (ventas, Odoo), para que INV23/INV24 vean la corrida de hoy. Si alguno
  * está en rojo el job LANZA a propósito: el scheduler lo anota en `lastResult` (semáforo rojo en
@@ -391,5 +427,5 @@ const licenciasRenovacionDaily: JobDef = {
 
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, licenciasRenovacionDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, licenciasRenovacionDaily, invariantsDaily];
 }

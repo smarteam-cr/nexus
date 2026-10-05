@@ -125,15 +125,20 @@ export interface PorQueEsPreliminar {
 
 /**
  * Por qué el margen a la fecha es preliminar, en palabras. Es preliminar mientras algún mes del margen no esté cerrado
- * por el CFO o su tipo de cambio no lo haya confirmado una persona. Que el margen cuente solo los meses con el gasto
- * completo no lo hace preliminar —es su regla—, pero se dice, porque es lo primero que alguien pregunta.
+ * por el CFO o su tipo de cambio no sea firme: desde 2026-10-05, el del Banco Central con todos sus días (o, en un mes
+ * sin días del BCCR, uno confirmado por una persona). Que el margen cuente solo los meses con el gasto completo no lo
+ * hace preliminar —es su regla—, pero se dice, porque es lo primero que alguien pregunta.
+ *
+ * `tasaManual`: la tasa cargada a mano que comparten los meses sin días del BCCR (el ₡500 de siempre), o null si
+ * difieren. `mesesDelBccr`: los meses que ya tienen días del Banco Central, completos o no.
  */
 export function porQueEsPreliminar(
   r: Pick<Reporte, "meses" | "indicadores">,
   hoyISO: string,
   cerrados: ReadonlySet<string>,
   tasasConfirmadas: ReadonlySet<string>,
-  tasaUnica: number | null,
+  tasaManual: number | null,
+  mesesDelBccr: ReadonlySet<string> = new Set(),
 ): PorQueEsPreliminar {
   const delMargen = r.indicadores.mesesDelMargen;
   const razones: string[] = [];
@@ -168,18 +173,25 @@ export function porQueEsPreliminar(
   }
 
   const sinConfirmar = delMargen.filter((p) => !tasasConfirmadas.has(p));
-  if (sinConfirmar.length > 0) {
+  const sinBccr = sinConfirmar.filter((p) => !mesesDelBccr.has(p));
+  const aMedias = sinConfirmar.filter((p) => mesesDelBccr.has(p));
+  if (sinBccr.length > 0) {
     razones.push(
-      sinConfirmar.length === delMargen.length && tasaUnica !== null
-        ? `Usa ₡${tasaUnica.toLocaleString("es-CR")} por dólar y nadie lo confirmó.`
-        : `El tipo de cambio de ${rangoDeMeses(sinConfirmar)} no está confirmado.`,
+      sinBccr.length === delMargen.length && tasaManual !== null
+        ? `Usa ₡${tasaManual.toLocaleString("es-CR")} por dólar, no el tipo de cambio del Banco Central.`
+        : `${rangoDeMeses(sinBccr).replace(/^./, (c) => c.toUpperCase())} ${sinBccr.length === 1 ? "usa" : "usan"} un tipo de cambio cargado a mano, no el del Banco Central.`,
+    );
+  }
+  if (aMedias.length > 0) {
+    razones.push(
+      `${rangoDeMeses(aMedias).replace(/^./, (c) => c.toUpperCase())} todavía no ${aMedias.length === 1 ? "tiene" : "tienen"} todos los días del tipo de cambio del Banco Central.`,
     );
   }
 
   const preliminar = sinCerrar.length > 0 || sinConfirmar.length > 0;
   const pasos = [
     sinCerrar.length > 0 ? `el CFO cierre ${rangoDeMeses(sinCerrar)}` : null,
-    sinConfirmar.length > 0 ? "confirme el tipo de cambio" : null,
+    sinConfirmar.length > 0 ? "esté el tipo de cambio del Banco Central de esos meses" : null,
   ].filter(Boolean);
   return { preliminar, razones, cuando: preliminar ? `Deja de ser preliminar cuando ${pasos.join(" y ")}.` : "" };
 }

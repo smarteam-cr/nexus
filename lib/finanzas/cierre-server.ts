@@ -16,6 +16,7 @@ import { CobranzaError } from "@/lib/cobranza/mutations";
 import { crDateParts } from "@/lib/jobs/time";
 import { cargarEgresosDelAnio, loadReporteAnual } from "@/lib/cobranza/queries";
 import { calcularEquilibrio, type TasaDeMes } from "./equilibrio";
+import { cargarTasasDelAnio, type TasaDelMesParaReporte } from "./tipo-cambio-server";
 import { textoDeMontos } from "@/lib/cobranza/odoo/diferencias";
 import { cargarRevision } from "./revision-server";
 import { medirPendientes } from "./pendientes-server";
@@ -52,12 +53,21 @@ export interface CierreDelMesDTO {
     reabiertoEn: string | null;
     motivo: string | null;
   } | null;
-  tipoCambio: { crcPorUsd: number; fuente: string; confirmadoPor: string | null; registradoEn: string } | null;
+  /**
+   * `bccr`: el mes tiene días del Banco Central (2026-10-05) y la tasa es su promedio; ahí no se confirma a mano.
+   * `registradoEn` es de la tasa cargada a mano (null si la del mes es la del BCCR).
+   */
+  tipoCambio: {
+    crcPorUsd: number;
+    fuente: string;
+    confirmadoPor: string | null;
+    registradoEn: string | null;
+    bccr: { dias: number; completo: boolean } | null;
+  } | null;
   nombres: { registra: string; supervisa: string };
 }
 
 const MES_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-const num = (d: unknown) => Number(d);
 
 async function nombrePorEmail(emails: ReadonlyArray<string | null | undefined>): Promise<Map<string, string>> {
   const lista = [...new Set(emails.filter((e): e is string => !!e && e.includes("@")).map((e) => e.toLowerCase()))];
@@ -78,12 +88,10 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
   const anio = Number(periodo.slice(0, 4));
   const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
 
-  const [{ egresos, planillaAcc, calidadDada }, filasTasa, cierres, gastos, revision, registra, supervisa, pendientes] = await Promise.all([
+  const [{ egresos, planillaAcc, calidadDada }, tasasDelAnio, cierres, gastos, revision, registra, supervisa, pendientes] = await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO),
-    prisma.tipoCambioMes.findMany({
-      where: { periodo: { in: periodos } },
-      select: { periodo: true, crcPorUsd: true, fuente: true, registradoPor: true, registradoEn: true },
-    }),
+    // La misma lectura que el punto de equilibrio: el BCCR día por día y, sin días, la cargada a mano (2026-10-05).
+    cargarTasasDelAnio(anio, hoyISO),
     prisma.cierreMes.findMany({ where: { periodo: { in: periodos } } }),
     prisma.gastoPuntual.findMany({
       where: { fecha: { gte: new Date(`${anio}-01-01T00:00:00Z`), lt: new Date(`${anio + 1}-01-01T00:00:00Z`) } },
@@ -96,8 +104,10 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
   ]);
 
   /* La calidad de cada mes, con el mismo cálculo que el punto de equilibrio (sin ingresos: no la cambian). */
-  const tasas: TasaDeMes[] = filasTasa.map((t) => ({ periodo: t.periodo, crcPorUsd: num(t.crcPorUsd), fuente: t.fuente }));
-  const calidad = new Map(calcularEquilibrio(egresos, [], { anio, hoyISO, tasas, calidadDada }).meses.map((m) => [m.periodo, m]));
+  const tasas: TasaDeMes[] = tasasDelAnio.tasas;
+  const calidad = new Map(
+    calcularEquilibrio(egresos, [], { anio, hoyISO, tasas, tasasDiarias: tasasDelAnio.tasasDiarias, calidadDada }).meses.map((m) => [m.periodo, m]),
+  );
 
   const quincenas = new Map<string, Set<number>>();
   for (const p of planillaAcc.values()) {
@@ -114,7 +124,17 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
   for (const f of [...revision.pagos, ...revision.gastos]) porRevisar.set(mesDe(f), (porRevisar.get(mesDe(f)) ?? 0) + 1);
   const devueltos = new Map<string, number>();
   for (const f of revision.devueltos) devueltos.set(mesDe(f), (devueltos.get(mesDe(f)) ?? 0) + 1);
-  const tasaDe = new Map(filasTasa.map((t) => [t.periodo, t]));
+  const tasaDe = tasasDelAnio.porMes;
+  /** Lo que el cierre necesita de la tasa del mes. La confirmación a mano solo vale en un mes sin días del BCCR. */
+  const tipoCambioDe = (t: TasaDelMesParaReporte | undefined) =>
+    t
+      ? {
+          crcPorUsd: t.crcPorUsd,
+          fuente: t.fuente,
+          confirmadoPor: !t.bccr && t.manual ? confirmadoPorPersona(t.manual.registradoPor) : null,
+          bccr: t.bccr && !t.bccr.porVenir ? { dias: t.bccr.dias, completo: t.bccr.completo } : null,
+        }
+      : null;
   const cierreDe = new Map(cierres.map((c) => [c.periodo, c]));
   const nombres = { registra, supervisa };
 
@@ -126,7 +146,7 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
       gastosListos: !!cierreDe.get(p)?.gastosListosPor,
       gastosAnotados: anotados.get(p) ?? 0,
       faltantesDelExcel: p >= EGRESOS_DESDE_NEXUS ? [] : (calidad.get(p)?.faltantes ?? []).filter((f) => !esFaltanteDePlanilla(f)),
-      tipoCambio: t ? { crcPorUsd: num(t.crcPorUsd), fuente: t.fuente, confirmadoPor: confirmadoPorPersona(t.registradoPor) } : null,
+      tipoCambio: tipoCambioDe(t),
       porRevisar: porRevisar.get(p) ?? 0,
       devueltos: devueltos.get(p) ?? 0,
     };
@@ -148,7 +168,8 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
   const items = itemsDeCierre(datosDe(periodo), equipo, nombres);
   const c = cierreDe.get(periodo);
   const t = tasaDe.get(periodo);
-  const firmas = await nombrePorEmail([c?.cerradoPor, c?.reabiertoPor, t?.registradoPor]);
+  const firmas = await nombrePorEmail([c?.cerradoPor, c?.reabiertoPor, t?.manual?.registradoPor]);
+  const tc = tipoCambioDe(t);
   const nombre = (e: string | null | undefined) => (e ? (firmas.get(e.toLowerCase()) ?? e) : null);
 
   return {
@@ -167,14 +188,14 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
           motivo: c.motivoReapertura,
         }
       : null,
-    tipoCambio: t
-      ? {
-          crcPorUsd: num(t.crcPorUsd),
-          fuente: t.fuente,
-          confirmadoPor: nombre(confirmadoPorPersona(t.registradoPor)),
-          registradoEn: crDateParts(t.registradoEn).dateKey,
-        }
-      : null,
+    tipoCambio:
+      t && tc
+        ? {
+            ...tc,
+            confirmadoPor: nombre(tc.confirmadoPor),
+            registradoEn: t.manual && !t.bccr ? crDateParts(t.manual.registradoEn).dateKey : null,
+          }
+        : null,
     nombres,
   };
 }

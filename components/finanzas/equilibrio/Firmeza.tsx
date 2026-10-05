@@ -26,6 +26,7 @@ export default function Firmeza({
   piso,
   meses,
   inconsistencias,
+  sinTasaDelBccr,
   onVerExcel,
   onAbrirLinea,
 }: {
@@ -36,6 +37,8 @@ export default function Firmeza({
   piso: ReporteEquilibrio["pisoVigente"];
   meses: FilaMes[];
   inconsistencias: readonly Inconsistencia[];
+  /** Los meses que ya pasaron y todavía usan la tasa cargada a mano (no la del BCCR), y esa tasa si es una sola. */
+  sinTasaDelBccr: { meses: string[]; tasa: number | null };
   onVerExcel: () => void;
   onAbrirLinea: (codigo: string) => void;
 }) {
@@ -166,7 +169,18 @@ export default function Firmeza({
               }
             />
           )}
-          {!odoo && !(mercury && mercury.items.length > 0) && !primeraSinPlanilla && (
+          {sinTasaDelBccr.meses.length > 0 && (
+            <Pendiente
+              titulo={`${rangoDeMeses(sinTasaDelBccr.meses).replace(/^./, (c) => c.toUpperCase())} con ${sinTasaDelBccr.tasa !== null ? `₡${sinTasaDelBccr.tasa.toLocaleString("es-CR")} por dólar cargado a mano` : "un tipo de cambio cargado a mano"}, no el del Banco Central.`}
+              detalle="Lo que está en colones en esos meses se corrige solo cuando se traiga el histórico del BCCR."
+              accion={
+                <Link href="/finanzas/tipo-de-cambio" className="font-semibold text-brand hover:text-brand-light">
+                  Tipo de cambio
+                </Link>
+              }
+            />
+          )}
+          {!odoo && !(mercury && mercury.items.length > 0) && !primeraSinPlanilla && sinTasaDelBccr.meses.length === 0 && (
             <span className="text-[13px] text-fg-muted">Nada afuera: todo lo que se sabe del año está en estos números.</span>
           )}
         </article>

@@ -4468,6 +4468,22 @@ model TipoCambioMes {
   updatedAt DateTime @updatedAt
 }
 
+// El tipo de cambio del dólar de CADA DÍA, como lo publica el BCCR (2026-10-05, lib/finanzas/tipo-cambio.ts). Lo trae
+// el job diario `tipo-cambio-daily` (del servicio del BCCR con `BCCR_TOKEN`, o del API de Hacienda). Un movimiento con
+// fecha se convierte con la tasa de su día; un mes, con el promedio de sus días. `TipoCambioMes` queda de respaldo para
+// los meses que todavía no tienen días traídos. Sin deny-all, como TipoCambioMes: una tasa publicada no es sensible.
+model TipoCambioDia {
+  fecha    String   @id // "YYYY-MM-DD", día de Costa Rica
+  // Colones por dólar. La VENTA de referencia es la que se usa (la que pide Hacienda); la compra solo se muestra.
+  venta    Decimal  @db.Decimal(12, 4)
+  compra   Decimal? @db.Decimal(12, 4)
+  fuente   String // "BCCR" | "HACIENDA" — CHECK en la DB
+  traidoEn DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// En qué estado está una venta ganada respecto de HubSpot. NO es la etapa del trato:
 /// es qué sabemos de él la última vez que miramos.
 enum VentaGanadaEstado {

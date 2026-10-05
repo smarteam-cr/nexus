@@ -80,8 +80,8 @@ describe("defs.ts decide con esta regla y no con una copia", () => {
   });
 
   it("cada job con requisito consulta la regla en su shouldRun", () => {
-    /* 8 desde el 2026-10-02: la copia de Mercury. */
-    expect(JOBS_CON_REQUISITO.length).toBe(8);
+    /* 9 desde el 2026-10-05: el tipo de cambio del BCCR. */
+    expect(JOBS_CON_REQUISITO.length).toBe(9);
     for (const key of JOBS_CON_REQUISITO) expect(defs, key).toContain(`encendido("${key}")`);
     expect(defs).toContain("motivoApagado(jobKey, process.env) === null");
   });

@@ -114,15 +114,23 @@ describe("el margen a la fecha, desarmado", () => {
 });
 
 describe("¿por qué es preliminar?", () => {
-  it("dice qué meses cuenta y por qué no los otros, que ninguno está cerrado y que nadie confirmó el tipo de cambio", () => {
+  it("dice qué meses cuenta y por qué no los otros, que ninguno está cerrado y que el tipo de cambio no es el del BCCR", () => {
     const p = porQueEsPreliminar(reporte, HOY, new Set(), new Set(), 500);
     expect(p.preliminar).toBe(true);
     expect(p.razones[0]).toBe(
       "Solo cuenta abril a julio: son los únicos meses con el gasto completo. Enero a marzo, sin costos fijos ni tarjetas; agosto, sin la 2ª quincena de planilla; septiembre, sin la planilla.",
     );
     expect(p.razones[1]).toBe("Ninguno de esos 4 meses está cerrado por el CFO.");
-    expect(p.razones[2]).toBe("Usa ₡500 por dólar y nadie lo confirmó.");
-    expect(p.cuando).toBe("Deja de ser preliminar cuando el CFO cierre abril a julio y confirme el tipo de cambio.");
+    expect(p.razones[2]).toBe("Usa ₡500 por dólar, no el tipo de cambio del Banco Central.");
+    expect(p.cuando).toBe(
+      "Deja de ser preliminar cuando el CFO cierre abril a julio y esté el tipo de cambio del Banco Central de esos meses.",
+    );
+  });
+  it("con días del BCCR a medias, dice a qué meses les faltan", () => {
+    const todos = new Set(["2026-04", "2026-05", "2026-06", "2026-07"]);
+    const p = porQueEsPreliminar(reporte, HOY, todos, new Set(["2026-04", "2026-05"]), null, new Set(["2026-06", "2026-07"]));
+    expect(p.preliminar).toBe(true);
+    expect(p.razones).toContain("Junio a julio todavía no tienen todos los días del tipo de cambio del Banco Central.");
   });
   it("con los cuatro cerrados y el tipo de cambio confirmado deja de serlo", () => {
     const todos = new Set(["2026-04", "2026-05", "2026-06", "2026-07"]);

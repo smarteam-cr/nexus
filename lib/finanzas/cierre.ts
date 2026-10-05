@@ -41,6 +41,11 @@ export interface TipoCambioDelMes {
   fuente: string;
   /** Email de quien lo confirmó, o null si lo cargó un script (todavía no lo confirmó nadie). */
   confirmadoPor: string | null;
+  /**
+   * El del Banco Central (2026-10-05): cuántos días del mes trajeron su tasa y si están todos. Con esto el mes no se
+   * confirma a mano: está listo cuando el BCCR tiene todos sus días. null o ausente = el mes no tiene días del BCCR.
+   */
+  bccr?: { dias: number; completo: boolean } | null;
 }
 
 export interface DatosDelMes {
@@ -77,6 +82,7 @@ export function esFaltanteDePlanilla(f: string): boolean {
 }
 
 const plural = (n: number, uno: string, varios: string) => (n === 1 ? `1 ${uno}` : `${n} ${varios}`);
+const colones = (n: number) => `₡${n.toLocaleString("es-CR", { maximumFractionDigits: 2 })}`;
 
 /** Las líneas del cierre de un mes, en el orden en que se leen. */
 export function itemsDeCierre(
@@ -132,21 +138,36 @@ export function itemsDeCierre(
           accion: "Ver en el punto de equilibrio",
           href: "/finanzas/equilibrio",
         },
-    {
-      clave: "tipo-cambio",
-      grupo: "Costos y gastos",
-      titulo: "Confirmar el tipo de cambio",
-      detalle: !d.tipoCambio
-        ? `${mes} no tiene tipo de cambio: lo que está en colones no se puede sumar.`
-        : d.tipoCambio.confirmadoPor
-          ? `₡${d.tipoCambio.crcPorUsd.toLocaleString("es-CR")} por dólar, confirmado.`
-          : `₡${d.tipoCambio.crcPorUsd.toLocaleString("es-CR")} por dólar, sin confirmar: ${d.tipoCambio.fuente}`,
-      listo: !!d.tipoCambio?.confirmadoPor,
-      bloquea: true,
-      quien: nombres.supervisa,
-      accion: d.tipoCambio ? "Confirmar" : "Poner",
-      href: "#tipo-de-cambio",
-    },
+    d.tipoCambio?.bccr
+      ? {
+          // Desde 2026-10-05 el tipo de cambio sale del Banco Central día por día: nadie lo confirma, se trae.
+          clave: "tipo-cambio",
+          grupo: "Costos y gastos",
+          titulo: "Tener el tipo de cambio del Banco Central",
+          detalle: d.tipoCambio.bccr.completo
+            ? `${colones(d.tipoCambio.crcPorUsd)} por dólar: el promedio de la venta del BCCR de ${plural(d.tipoCambio.bccr.dias, "día", "días")}.`
+            : `${colones(d.tipoCambio.crcPorUsd)} por dólar con ${plural(d.tipoCambio.bccr.dias, "día", "días")} del BCCR: faltan días del mes.`,
+          listo: d.tipoCambio.bccr.completo,
+          bloquea: true,
+          quien: nombres.supervisa,
+          accion: "Ver el tipo de cambio",
+          href: "/finanzas/tipo-de-cambio",
+        }
+      : {
+          clave: "tipo-cambio",
+          grupo: "Costos y gastos",
+          titulo: "Confirmar el tipo de cambio",
+          detalle: !d.tipoCambio
+            ? `${mes} no tiene tipo de cambio: lo que está en colones no se puede sumar.`
+            : d.tipoCambio.confirmadoPor
+              ? `${colones(d.tipoCambio.crcPorUsd)} por dólar, confirmado.`
+              : `${colones(d.tipoCambio.crcPorUsd)} por dólar, sin confirmar: ${d.tipoCambio.fuente}. No hay días del Banco Central para este mes.`,
+          listo: !!d.tipoCambio?.confirmadoPor,
+          bloquea: true,
+          quien: nombres.supervisa,
+          accion: d.tipoCambio ? "Confirmar" : "Poner",
+          href: "#tipo-de-cambio",
+        },
     {
       clave: "revision",
       grupo: "Revisión",

@@ -89,14 +89,16 @@ export default function PuntoDeEquilibrio({
 
   const lectura = useMemo(() => {
     const cerradosFirmes = new Set(r.cierres.filter((c) => c.cambio !== true).map((c) => c.periodo));
-    const tasas = [...new Set(r.fx.tasas.map((t) => t.crcPorUsd))];
+    const delBccr = new Set(r.mesesConTasaDelBccr);
+    // La tasa cargada a mano que comparten los meses sin días del Banco Central (el ₡500 de antes), si es una sola.
+    const manuales = [...new Set(r.fx.tasas.filter((t) => !delBccr.has(t.periodo)).map((t) => t.crcPorUsd))];
     const cierrePorMes = new Map(r.cierres.map((c) => [c.periodo, c]));
     const estados = r.meses.map((m) => estadoDelMes(m, cierrePorMes.get(m.periodo), hoyISO));
     const respuesta = respuestaDelAnio(r, hoyISO);
     return {
       respuesta,
       margen: desgloseDelMargen(r),
-      preliminar: porQueEsPreliminar(r, hoyISO, cerradosFirmes, new Set(r.tasasConfirmadas), tasas.length === 1 ? tasas[0]! : null),
+      preliminar: porQueEsPreliminar(r, hoyISO, cerradosFirmes, new Set(r.tasasConfirmadas), manuales.length === 1 ? manuales[0]! : null, delBccr),
       viene: loQueViene(r, hoyISO),
       estados,
       agenda: armarAgenda({
@@ -120,6 +122,13 @@ export default function PuntoDeEquilibrio({
     decidido: r.decisionAliados ? { por: nombres[r.decisionAliados.decididoPor.toLowerCase()] ?? r.decisionAliados.decididoPor, en: r.decisionAliados.decididoEn } : null,
   };
   const avisoDeArriba = lectura.preliminar.razones.filter((t) => !t.startsWith("Solo cuenta"));
+  // Los meses que ya pasaron con la tasa cargada a mano: se dicen en «Lo que todavía no está» (2026-10-05).
+  const delBccr = new Set(r.mesesConTasaDelBccr);
+  const tasasManuales = r.fx.tasas.filter((t) => t.periodo <= hoyISO.slice(0, 7) && !delBccr.has(t.periodo));
+  const sinTasaDelBccr = {
+    meses: tasasManuales.map((t) => t.periodo),
+    tasa: new Set(tasasManuales.map((t) => t.crcPorUsd)).size === 1 ? tasasManuales[0]!.crcPorUsd : null,
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -199,6 +208,7 @@ export default function PuntoDeEquilibrio({
             piso={r.pisoVigente}
             meses={r.meses}
             inconsistencias={r.inconsistencias}
+            sinTasaDelBccr={sinTasaDelBccr}
             onVerExcel={() => setViendoExcel(true)}
             onAbrirLinea={setLineaAbierta}
           />

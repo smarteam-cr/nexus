@@ -105,7 +105,8 @@ import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguin
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
 import { facturadoEnOdooSinCuenta, porCobrarEnMercurySinEmparejar } from "@/lib/finanzas/facturado-sin-cuenta";
 import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
-import { cambioDespuesDelCierre, confirmadoPorPersona, esFaltanteDePlanilla, type NumerosDelCierre } from "@/lib/finanzas/cierre";
+import { cambioDespuesDelCierre, esFaltanteDePlanilla, type NumerosDelCierre } from "@/lib/finanzas/cierre";
+import { cargarTasasDelAnio, tasaFirme } from "@/lib/finanzas/tipo-cambio-server";
 import { leerDecisionAliados, type DecisionAliados } from "@/lib/finanzas/decisiones-server";
 import { calidadDeMesDeNexus, egresoDesdeNexus, egresosDeNexus } from "@/lib/finanzas/egresos-nexus";
 import { crDateParts } from "@/lib/jobs/time";
@@ -2337,8 +2338,13 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
    * `cambio` null = no se puede saber en esta moneda (los números del cierre se guardan en dólares).
    */
   cierres: Array<{ periodo: string; cerradoEn: string; cambio: boolean | null }>;
-  /** Los meses cuyo tipo de cambio confirmó una persona (desde el cierre del mes). El resto lo cargó un script. */
+  /**
+   * Los meses con el tipo de cambio FIRME: el del Banco Central con todos sus días (2026-10-05) o, en un mes sin días
+   * del BCCR, uno que confirmó una persona desde el cierre. El resto es provisorio.
+   */
   tasasConfirmadas: string[];
+  /** Los meses cuya tasa sale del Banco Central (completa o no). Los otros usan la cargada a mano en `TipoCambioMes`. */
+  mesesConTasaDelBccr: string[];
   /**
    * Si lo que pagan los aliados cuenta para cubrir el piso, decidido por dirección desde el punto de equilibrio.
    * null = sin decidir: manda `PARTNERSHIP_CUBRE_EL_PISO` (y `criterios.partnershipCubreElPiso` dice cuál rigió).
@@ -2365,7 +2371,7 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
     }),
     prisma.pagoPlanilla.findMany({
       where: { periodo: { in: periodos } },
-      select: { periodo: true, quincena: true, monto: true, moneda: true },
+      select: { periodo: true, quincena: true, monto: true, moneda: true, fechaPago: true, fechaProgramada: true },
     }),
     loadAguinaldo(anio, hoyISO),
     deNexus.length === 0
@@ -2406,12 +2412,17 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
 
   // Planilla: una línea por (mes, quincena, moneda). La quincena es parte de la clave
   // del concepto justamente para que falte visiblemente cuando falta.
-  const planillaAcc = new Map<string, { periodo: string; quincena: number; moneda: string; monto: number }>();
+  // El día de la quincena (2026-10-05): el del pago, o el programado si todavía no se pagó. Con eso se convierte con la
+  // tasa de ese día; si las personas se pagaron en días distintos, el último.
+  const planillaAcc = new Map<string, { periodo: string; quincena: number; moneda: string; monto: number; fechaISO: string }>();
   for (const p of filasPlanilla) {
     const k = `${p.periodo}|${p.quincena}|${p.moneda}`;
+    const fecha = isoDay(p.fechaPago ?? p.fechaProgramada)!;
     const prev = planillaAcc.get(k);
-    if (prev) prev.monto = Math.round((prev.monto + num(p.monto)!) * 100) / 100;
-    else planillaAcc.set(k, { periodo: p.periodo, quincena: p.quincena, moneda: p.moneda, monto: num(p.monto)! });
+    if (prev) {
+      prev.monto = Math.round((prev.monto + num(p.monto)!) * 100) / 100;
+      if (fecha > prev.fechaISO) prev.fechaISO = fecha;
+    } else planillaAcc.set(k, { periodo: p.periodo, quincena: p.quincena, moneda: p.moneda, monto: num(p.monto)!, fechaISO: fecha });
   }
   for (const p of planillaAcc.values()) {
     egresos.push({
@@ -2422,6 +2433,7 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
       monto: p.monto,
       moneda: p.moneda as MonedaEq,
       calidad: calidadDe(p.periodo),
+      fechaISO: p.fechaISO,
     });
   }
 
@@ -2507,7 +2519,7 @@ export async function loadReporteAnual(
   const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
   const divisor = opciones?.divisorAguinaldo ?? 12;
 
-  const [{ egresos, filasEgreso, planillaAcc, calidadDada }, filasCobro, filasComision, filasTasa, costosActivos, filasVenta, filasNoVenta, filasCierre, decisionAliados] =
+  const [{ egresos, filasEgreso, planillaAcc, calidadDada }, filasCobro, filasComision, tasasDelAnio, costosActivos, filasVenta, filasNoVenta, filasCierre, decisionAliados] =
     await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO, divisor),
     prisma.cobro.findMany({
@@ -2543,13 +2555,9 @@ export async function loadReporteAnual(
       where: { fecha: { gte: desde, lte: hasta } },
       select: { fecha: true, monto: true, moneda: true, estado: true, montoEsProyeccion: true },
     }),
-    prisma.tipoCambioMes.findMany({
-      where: { periodo: { in: periodos } },
-      select: { periodo: true, crcPorUsd: true, fuente: true, registradoPor: true },
-      // Sin orden explícito, "la primera tasa" la decide el plan de Postgres. Hoy las 12
-      // de 2026 valen 500 y da igual; el día que una difiera, el número cambiaría solo.
-      orderBy: { periodo: "asc" },
-    }),
+    // El tipo de cambio (2026-10-05): la venta del BCCR de cada día y, por mes, su promedio; los meses sin días traídos,
+    // con la tasa cargada a mano en `TipoCambioMes` (lib/finanzas/tipo-cambio-server.ts).
+    cargarTasasDelAnio(anio, hoyISO),
     // Los costos VIGENTES hoy: la fuente del piso vigente, que es el titular del
     // reporte. Es el catálogo que una persona mantiene al día — a diferencia del libro
     // de pagos, que va detrás de la realidad (ver DECISIONS §El piso de hoy).
@@ -2629,6 +2637,8 @@ export async function loadReporteAnual(
       moneda: c.moneda as MonedaEq,
       tipoServicio: c.servicio.tipoServicio,
       enPlazo: t.enPlazo,
+      // Con la tasa del día en que entró la plata o en que se facturó. Lo programado no tiene día: va con la del mes.
+      fechaISO: t.tipo === "COBRADO" ? (isoDay(c.fechaCobro) ?? undefined) : t.tipo === "POR_COBRAR" ? (isoDay(c.fechaEmision) ?? undefined) : undefined,
     });
   }
 
@@ -2645,23 +2655,20 @@ export async function loadReporteAnual(
       // caja. Una ESTIMACIÓN no suma a nada: el motor la declara aparte (H12).
       cobrada: c.estado === "COBRADO",
       esProyeccion: c.montoEsProyeccion,
+      fechaISO: iso,
     });
   }
 
   // Lo registrado en Ingresos variables NO es venta: el motor lo suma a la caja y a nada más.
+  // Fila por fila, para que cada una lleve su día y se convierta con la tasa de ese día.
   ingresos.push(
-    ...ingresosNoVentaDelAnio(
-      filasNoVenta.map((f) => ({ fechaISO: isoDay(f.fecha)!, monto: num(f.monto)!, moneda: f.moneda as MonedaEq })),
-      anio,
-      hoyISO,
-    ),
+    ...filasNoVenta.flatMap((f) => {
+      const fila = { fechaISO: isoDay(f.fecha)!, monto: num(f.monto)!, moneda: f.moneda as MonedaEq };
+      return ingresosNoVentaDelAnio([fila], anio, hoyISO).map((i) => ({ ...i, fechaISO: fila.fechaISO }));
+    }),
   );
 
-  const tasas: TasaDeMes[] = filasTasa.map((t) => ({
-    periodo: t.periodo,
-    crcPorUsd: num(t.crcPorUsd)!,
-    fuente: t.fuente,
-  }));
+  const tasas: TasaDeMes[] = tasasDelAnio.tasas;
 
   const mesesPlanillaIncompleta = periodos.filter((p) => {
     const quincenas = new Set([...planillaAcc.values()].filter((x) => x.periodo === p).map((x) => x.quincena));
@@ -2703,6 +2710,7 @@ export async function loadReporteAnual(
     monedaPresentacion: opciones?.monedaPresentacion ?? "USD",
     ventana: opciones?.ventana ?? "SOLO_MEDIDOS",
     tasas,
+    tasasDiarias: tasasDelAnio.tasasDiarias,
     divisorAguinaldo: divisor,
     calidadDada,
     costosVigentes,
@@ -2744,7 +2752,8 @@ export async function loadReporteAnual(
     },
     inconsistencias,
     cobranzaContraExcel,
-    tasasConfirmadas: filasTasa.filter((t) => confirmadoPorPersona(t.registradoPor)).map((t) => t.periodo),
+    tasasConfirmadas: periodos.filter((p) => tasaFirme(tasasDelAnio.porMes.get(p))),
+    mesesConTasaDelBccr: periodos.filter((p) => !!tasasDelAnio.porMes.get(p)?.bccr),
     decisionAliados,
     cierres: filasCierre.map((c) => {
       const fila = reporte.meses.find((m) => m.periodo === c.periodo);

@@ -77,6 +77,9 @@ const REQUISITOS: Readonly<Record<string, (env: Entorno) => string | null>> = {
     if (!env.MERCURY_API_TOKEN) motivos.push(falta("MERCURY_API_TOKEN"));
     return motivos.length ? motivos.join(" ") : null;
   },
+  "tipo-cambio-daily": (env) =>
+    /* No necesita credencial: sin `BCCR_TOKEN` usa el API de Hacienda, que es abierto. Solo se apaga a propósito. */
+    env.TIPO_CAMBIO_SYNC_ENABLED === "0" ? "Apagado a propósito: TIPO_CAMBIO_SYNC_ENABLED=0 en el .env del servidor." : null,
 };
 
 /** Los jobs que tienen requisito. La guarda de `requisitos.test.ts` exige que `defs.ts` los consulte a todos. */

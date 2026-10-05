@@ -4762,3 +4762,26 @@ sostiene (`CambiarEstado`, los campos opcionales de `ComentarioVisto`).
   de Feedback (`lib/feedback`), siempre con `avisar()`. El frente Escala cuenta los comentarios de la Escala que esperan
   una decisión (reportes de Feedback con ancla, sin revisar) y pide Super Admin, porque se deciden en la bandeja de
   Feedback.
+
+## El tipo de cambio del BCCR, día por día (2026-10-05)
+
+Pedido de Elías: dejar el ₡500 fijo y usar el tipo de cambio del Banco Central de cada día, guardado para todas las
+transacciones, con su histórico a la vista (`/finanzas/tipo-de-cambio`). El 5 de octubre la venta era ₡462,08: con
+₡500, todo lo que está en colones se leía un 8 % más barato en dólares.
+
+- **Qué tasa:** la venta de referencia del BCCR (indicador 318), la que pide Hacienda. La compra (317) se guarda y solo
+  se muestra.
+- **De dónde:** el servicio del BCCR (SDDE) si hay `BCCR_TOKEN`; si no, el API del Ministerio de Hacienda, que publica la
+  misma tasa y no pide token. Al 2026-10-05 el histórico de Hacienda respondía 503: sin el token del BCCR, se guarda
+  desde hoy y los meses anteriores siguen con la tasa cargada a mano. Lo trae `tipo-cambio-daily` (≥ 6:00 CR) a
+  `TipoCambioDia`; la primera carga, `scripts/traer-tipo-de-cambio.ts --apply`.
+- **Cómo se usa:** lo que tiene fecha (un cobro, una factura, una quincena de planilla, una comisión, un ingreso que no
+  es venta) se convierte con la tasa de SU día, o la del día anterior más cercano hasta una semana. Lo que es de un mes
+  entero (una fila del Excel de egresos, un recurrente, la reserva de aguinaldo) va con el promedio de la venta de los
+  días del mes; un mes por venir, con la última conocida. Convertir sigue siendo solo de lib/finanzas/equilibrio.ts.
+- **`TipoCambioMes` no se borra ni se pisa:** queda de respaldo para los meses sin días del BCCR. El punto de equilibrio
+  y el cierre leen las dos con `cargarTasasDelAnio` (lib/finanzas/tipo-cambio-server.ts).
+- **Firme** = el del BCCR con todos los días del mes, o (en un mes sin días del BCCR) uno confirmado por una persona. El
+  cierre ya no pide confirmarlo a mano cuando el mes tiene días del BCCR.
+- **Lo que lo revertiría:** si dirección prefiere otra tasa (la de compra, o la del Excel de Alex), se cambia el
+  indicador en tipo-cambio-server.ts y los textos de la página; lo demás queda igual.
