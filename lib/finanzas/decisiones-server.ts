@@ -34,7 +34,9 @@ export async function leerDecisionAliados(): Promise<DecisionAliados | null> {
     });
     return d ? { cuentan: d.valor === "SI", decididoPor: d.decididoPor, decididoEn: d.decididoEn.toISOString() } : null;
   } catch {
-    console.error("[equilibrio] no se pudo leer la decisión sobre los aliados (¿falta el SQL de 2026-10-05?): se toma «sin decidir»");
+    // Aviso y no error: la página sigue bien con «sin decidir». Con `dev:prod` antes del SQL, un error pintaba la pantalla
+    // roja de Next como si algo se hubiera roto.
+    console.warn("[equilibrio] no se pudo leer la decisión sobre los aliados (¿falta el SQL de 2026-10-05?): se toma «sin decidir»");
     return null;
   }
 }
