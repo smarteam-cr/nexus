@@ -134,7 +134,20 @@ const fechaCorta = (iso: string) =>
 const fechaYHora = (iso: string) =>
   new Date(iso).toLocaleString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-function Panel({ vista, seccion, acciones, volverACorrer }: { vista: VistaDeAuditoria; seccion: SeccionDeLaFicha; acciones: AccionesDeLaFicha; volverACorrer: () => void }) {
+function Panel({
+  vista,
+  seccion,
+  acciones,
+  volverACorrer,
+  corriendo,
+}: {
+  vista: VistaDeAuditoria;
+  seccion: SeccionDeLaFicha;
+  acciones: AccionesDeLaFicha;
+  volverACorrer: () => void;
+  /** «Volver a correr» ya está creando la auditoría nueva: el botón no vuelve a apretarse. */
+  corriendo: boolean;
+}) {
   const sigue = vista.queSigue;
   // Si lo que sigue ya está en la pantalla abierta, el botón sobra (y sería el segundo azul).
   const mostrarAccion = sigue.accion && sigue.accion.a !== seccion;
@@ -154,7 +167,7 @@ function Panel({ vista, seccion, acciones, volverACorrer }: { vista: VistaDeAudi
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">Qué sigue</h2>
         <p className="text-sm text-fg">{sigue.texto}</p>
         {mostrarAccion && sigue.accion && (
-          <BotonAzul className="self-start" disabled={acciones.ocupado} onClick={correr}>
+          <BotonAzul className="self-start" disabled={acciones.ocupado || corriendo} onClick={correr}>
             {sigue.accion.etiqueta}
           </BotonAzul>
         )}
@@ -258,7 +271,7 @@ export default function FichaDeAuditoria({ vista, clientId }: { vista: VistaDeAu
   const inicial: SeccionDeLaFicha = (SECCIONES_DE_LA_FICHA as readonly string[]).includes(pedida ?? "") ? (pedida as SeccionDeLaFicha) : "resumen";
   const [seccion, setSeccion] = useState<SeccionDeLaFicha>(inicial);
   const [ocupado, setOcupado] = useState(false);
-  const { correr: volverACorrer } = useVolverACorrer(clientId);
+  const { correr: volverACorrer, corriendo } = useVolverACorrer(clientId);
 
   const enCurso = vista.estado === "capturando" || vista.estado === "analizando";
   useEffect(() => {
@@ -300,7 +313,9 @@ export default function FichaDeAuditoria({ vista, clientId }: { vista: VistaDeAu
   const acciones: AccionesDeLaFicha = {
     ocupado,
     ir,
-    decidir: (ids, estado) => void pedir(`/api/audits/${vista.id}/hallazgos`, { method: "PATCH", body: JSON.stringify({ ids, estado }) }),
+    // Con el análisis que se ve: si se generó otro mientras tanto, los ids (h1…) son de otros hallazgos.
+    decidir: (ids, estado) =>
+      void pedir(`/api/audits/${vista.id}/hallazgos`, { method: "PATCH", body: JSON.stringify({ ids, estado, generadoEn: vista.analisis?.generadoEn ?? "" }) }),
     marcar: (clave, revisado) => void pedir(`/api/audits/${vista.id}/comprobados`, { method: "PATCH", body: JSON.stringify({ clave, revisado }) }),
     regenerar: () => void pedir(`/api/audits/${vista.id}/insights`, { method: "POST" }, "El análisis se está generando de nuevo."),
   };
@@ -344,7 +359,7 @@ export default function FichaDeAuditoria({ vista, clientId }: { vista: VistaDeAu
       </main>
 
       <aside className="border-t border-line bg-surface-muted p-5 lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-3.5rem)] xl:self-start xl:overflow-y-auto xl:border-l xl:border-t-0">
-        <Panel vista={vista} seccion={seccion} acciones={acciones} volverACorrer={() => void volverACorrer()} />
+        <Panel vista={vista} seccion={seccion} acciones={acciones} volverACorrer={() => void volverACorrer()} corriendo={corriendo} />
       </aside>
     </div>
   );

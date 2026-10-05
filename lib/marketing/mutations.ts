@@ -212,10 +212,13 @@ export async function discardPillarSuggestion(id: string) {
 /**
  * Descarta varias publicaciones (las parecidas de una que se queda). Reversible como el descarte de una: no borra
  * nada, y solo toca las que no estaban descartadas (descartar dos veces no corre la fecha).
+ *
+ * Solo las SUGERIDAS, como su gemela `descartarCampanas` con las pendientes (2026-10-05): una publicación que
+ * alguien ya aceptó (`selectedAt`) o aprobó (`usedAt`) es trabajo en curso, y «Descartar las otras» no la toca.
  */
 export async function descartarIdeas(ids: string[]) {
   const r = await prisma.contentIdea.updateMany({
-    where: { id: { in: ids }, discardedAt: null },
+    where: { id: { in: ids }, discardedAt: null, selectedAt: null, usedAt: null },
     data: { discardedAt: new Date() },
   });
   return r.count;

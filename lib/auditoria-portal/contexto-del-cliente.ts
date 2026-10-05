@@ -14,8 +14,8 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { loadCanvasContext } from "@/lib/canvas/load-canvas-context";
-import { PLANIFICACION_CANVAS } from "@/lib/canvas/canvas-defs";
 import { serializeProcesosForPrompt } from "@/lib/canvas/read-procesos";
+import { canvasOf } from "@/lib/pieces/canvas-query";
 import { adoptarPipelines } from "@/lib/planificacion/secciones";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import type { ContextoDelCliente } from "./cruces";
@@ -80,7 +80,8 @@ export async function leerContextoDelCliente(clientId: string): Promise<Contexto
 }
 
 async function pipelinesDeLaPlanificacion(projectId: string): Promise<ContextoDelCliente["pipelinesPlaneados"]> {
-  const canvas = await prisma.projectCanvas.findFirst({ where: { projectId, name: PLANIFICACION_CANVAS.name }, select: { id: true } });
+  // Por el slug de la pieza, como `loadCanvasContext` arriba: el nombre visible se puede cambiar.
+  const canvas = await prisma.projectCanvas.findFirst({ where: { projectId, ...canvasOf("planning") }, select: { id: true } });
   if (!canvas) return [];
   const seccion = await prisma.canvasSection.findFirst({
     where: { canvasId: canvas.id, key: "pipelines" },

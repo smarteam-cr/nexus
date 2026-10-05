@@ -58,8 +58,9 @@ export default async function ExternalDiagnosticoPage({ params }: Props) {
       }
     >
       {data ? (
-        // La aprobación del cliente (2026-10-04), atada al proyecto de ESTA página.
-        <DiagnosticoClientView data={data} aprobar={aprobarDiagnosticoAction.bind(null, acceso)} />
+        // La aprobación del cliente (2026-10-04), atada al proyecto de ESTA página y a la versión que
+        // está viendo (2026-10-05): si el equipo presenta otra, esta no la aprueba.
+        <DiagnosticoClientView data={data} aprobar={aprobarDiagnosticoAction.bind(null, acceso, data.versionPresentada)} />
       ) : (
         // Sin callejón: si el navegador tiene otros proyectos abiertos, se ofrece elegirlos.
         <NoAccess elegirHref={hayProyectosAbiertos(accesos, "diagnostico") ? "/external/diagnostico" : undefined} />

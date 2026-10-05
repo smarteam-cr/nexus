@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   aColumna,
   aprobacionEnElEnlace,
@@ -10,7 +10,26 @@ import {
   revisarParaPresentar,
   validarAprobacion,
 } from "./estado-del-documento";
+import { registrarAprobacion, trasRegenerar } from "./estado-del-documento-servidor";
 import type { CaboSuelto } from "./revisar-hilo";
+
+// La parte que ESCRIBE (estado-del-documento-servidor.ts), con la base y HubSpot falsos. Lo puro de
+// arriba no los usa.
+const db = vi.hoisted(() => ({
+  projectCanvas: { findUnique: vi.fn(), updateMany: vi.fn() },
+  hitoDeDocumento: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+  $transaction: vi.fn(),
+}));
+const hubspot = vi.hoisted(() => ({ apiRequest: vi.fn() }));
+vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
+vi.mock("@/lib/para-ti/avisos-server", () => ({ avisar: vi.fn(async () => {}) }));
+vi.mock("@/lib/hubspot/client", () => ({ getSystemHubspotClient: async () => hubspot }));
+vi.mock("./versiones", () => ({
+  fotoDelDocumento: vi.fn(async () => ({ secciones: [] })),
+  guardarVersionDelDocumento: vi.fn(),
+  huellaDe: () => "huella-presentada",
+  tieneContenido: () => true,
+}));
 
 const POLITICA_REVISADA = { intro: "¿En qué debemos enfocarnos?", items: [{ title: "HubSpot como única fuente", detail: "…" }], revisadaAt: "2026-10-02T10:00:00.000Z" };
 const roto: CaboSuelto = { seccion: "acciones", texto: "La causa F2 no tiene ninguna acción que la ataque.", bloquea: true };
@@ -116,5 +135,89 @@ describe("el cliente aprueba desde su enlace", () => {
     expect(e).toContain(TEXTO_DE_APROBACION_DEL_CLIENTE);
     // Y alcanza como evidencia para registrar la aprobación.
     expect(validarAprobacion({ nombre: "Ana Pérez", email: "ana@cliente.com", fecha: "2026-10-04", evidencia: e }, new Date("2026-10-04T15:00:00Z")).ok).toBe(true);
+  });
+});
+
+describe("registrar la aprobación (lo que escribe)", () => {
+  const HOY = new Date().toISOString().slice(0, 10);
+  const datos = { nombre: "Ana Pérez", email: "ana@cliente.com", fecha: HOY, evidencia: "Aprobado desde el enlace.", evidenciaDocumentoId: null };
+  const documento = (cambios: Record<string, unknown> = {}) => ({
+    id: "c1",
+    name: "Diagnóstico",
+    slug: "diagnosis",
+    projectId: "p1",
+    sections: null,
+    estadoDocumento: "presentado",
+    versionDocumento: 2,
+    contentUpdatedAt: null,
+    updatedAt: new Date("2026-10-04T12:00:00Z"),
+    project: { clientId: "cl1", hubspotOwnerEmail: null, client: { name: "Cliente", hubspotCompanyId: "hs1" } },
+    canvasSections: [],
+    ...cambios,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.$transaction.mockImplementation(async (fn: (tx: typeof db) => unknown) => fn(db));
+    db.projectCanvas.findUnique.mockResolvedValue(documento());
+    db.projectCanvas.updateMany.mockResolvedValue({ count: 1 });
+    db.hitoDeDocumento.findMany.mockResolvedValue([]);
+    db.hitoDeDocumento.create.mockResolvedValue({ id: "hito-nuevo" });
+    db.hitoDeDocumento.update.mockResolvedValue({});
+    db.hitoDeDocumento.findFirst.mockImplementation(async ({ where }: { where: { tipo: string } }) =>
+      where.tipo === "presentado"
+        ? { id: "h-presentado", fotoId: "foto-v2", foto: { huella: "huella-presentada" } }
+        : { aprobadoPorNombre: "Pablo Olivas", aprobadoEl: new Date("2026-10-03T12:00:00Z") },
+    );
+    hubspot.apiRequest.mockResolvedValue({ ok: true, json: async () => ({ id: "nota-1" }) });
+  });
+
+  it("no aprueba una versión que no es la que tiene a la vista quien aprueba: 409 y no escribe nada", async () => {
+    /* El cliente abrió el enlace con la v1 presentada; el equipo presentó la v2. Lo que lo pone en
+       rojo: que `registrarAprobacion` deje de comparar la versión esperada con la viva. */
+    const r = await registrarAprobacion("c1", datos, null, 1);
+    expect(r).toMatchObject({ ok: false, status: 409, codigo: "otra-version" });
+    expect(db.projectCanvas.updateMany).not.toHaveBeenCalled();
+    expect(db.hitoDeDocumento.create).not.toHaveBeenCalled();
+    expect(hubspot.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("toma el documento ANTES de escribir afuera: si otra aprobación se adelantó, 409 con quién aprobó de verdad y sin nota en HubSpot", async () => {
+    /* Doble clic, o el equipo y el cliente a la vez: los dos leyeron «presentado». Lo que lo pone en
+       rojo: volver a cambiar el estado sin condición, o seguir aunque el cambio condicional no tomó la fila. */
+    db.projectCanvas.updateMany.mockResolvedValue({ count: 0 });
+    db.projectCanvas.findUnique.mockResolvedValueOnce(documento()).mockResolvedValue(documento({ estadoDocumento: "aprobado" }));
+    const r = await registrarAprobacion("c1", datos, null, 2);
+    expect(db.projectCanvas.updateMany).toHaveBeenCalledWith({
+      where: { id: "c1", estadoDocumento: "presentado", versionDocumento: 2 },
+      data: { estadoDocumento: "aprobado" },
+    });
+    expect(r).toMatchObject({
+      ok: false,
+      status: 409,
+      codigo: "ya-aprobado",
+      aprobado: { nombre: "Pablo Olivas", fecha: "2026-10-03T12:00:00.000Z" },
+    });
+    expect(db.hitoDeDocumento.create).not.toHaveBeenCalled();
+    expect(hubspot.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("cuando toma el documento, deja el hito y DESPUÉS escribe la nota en HubSpot y la anota en el hito", async () => {
+    const r = await registrarAprobacion("c1", datos, null, 2);
+    expect(r.ok).toBe(true);
+    expect(db.projectCanvas.updateMany.mock.invocationCallOrder[0]).toBeLessThan(hubspot.apiRequest.mock.invocationCallOrder[0]);
+    expect(db.hitoDeDocumento.update).toHaveBeenCalledWith({ where: { id: "hito-nuevo" }, data: { hubspotNotaId: "nota-1", hubspotError: null } });
+  });
+
+  it("regenerar no pisa lo que pasó entre la lectura y la escritura (una aprobación, por ejemplo)", async () => {
+    /* Lo que lo pone en rojo: volver a cambiar a borrador sin condición o dejar el hito «reabierto»
+       aunque el cambio no tomó la fila. */
+    db.projectCanvas.updateMany.mockResolvedValue({ count: 0 });
+    await trasRegenerar("c1");
+    expect(db.projectCanvas.updateMany).toHaveBeenCalledWith({
+      where: { id: "c1", estadoDocumento: "presentado", versionDocumento: 2 },
+      data: { estadoDocumento: null, versionDocumento: 3 },
+    });
+    expect(db.hitoDeDocumento.create).not.toHaveBeenCalled();
   });
 });

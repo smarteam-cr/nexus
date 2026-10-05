@@ -138,7 +138,8 @@ export async function analizarAuditoria(auditId: string, quien: string | null): 
   const foto = leerFoto(audit?.data);
   if (!audit || !foto?.lifecycleStats) return;
 
-  await actualizarFoto(auditId, (f) => ({ ...f, estado: "analizando", analisisError: undefined }));
+  // La marca de cuándo arrancó: «analizando» se mide desde acá, no desde la lectura del portal.
+  await actualizarFoto(auditId, (f) => ({ ...f, estado: "analizando", analisisIniciadoEn: new Date().toISOString(), analisisError: undefined }));
 
   const run = await prisma.agentRun.create({
     data: {

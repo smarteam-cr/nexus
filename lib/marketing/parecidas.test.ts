@@ -4,8 +4,13 @@
  * Los títulos son reales (las sugeridas del 2026-10-04). Si alguien afloja los umbrales y empiezan a juntarse
  * cosas distintas, o los aprieta y el «33 % / 67 %» se vuelve a partir, esto se pone rojo.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { agruparParecidas, huellaDeTitulo, IGNORAR_EN_SEM, sonParecidos } from "./parecidas";
+import { descartarIdeas } from "./mutations";
+
+// «Descartar las otras» escribe en la base (mutations.ts): acá, falsa.
+const db = vi.hoisted(() => ({ contentIdea: { updateMany: vi.fn(async (_pedido: unknown) => ({ count: 0 })) } }));
+vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
 
 const t = (titulo: string) => ({ titulo });
 const titulos = (g: Array<{ titulo: string }>) => g.map((x) => x.titulo);
@@ -95,5 +100,17 @@ describe("agruparParecidas", () => {
     ];
     const g = agruparParecidas(sem, (x) => x.titulo, IGNORAR_EN_SEM).map((x) => x.length);
     expect(g).toEqual([2, 1, 2]);
+  });
+});
+
+describe("descartar las otras", () => {
+  it("solo descarta las sugeridas: una parecida que alguien ya aceptó o aprobó no se toca", async () => {
+    /* Lo que lo pone en rojo: volver a filtrar solo por `discardedAt: null` (se descartaban publicaciones
+       aceptadas o listas para publicar que estaban en el mismo grupo). */
+    await descartarIdeas(["i1", "i2"]);
+    expect(db.contentIdea.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["i1", "i2"] }, discardedAt: null, selectedAt: null, usedAt: null },
+      data: { discardedAt: expect.any(Date) },
+    });
   });
 });

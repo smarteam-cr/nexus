@@ -137,11 +137,17 @@ export function useMarketingEngine() {
     [toast, load],
   );
 
+  /**
+   * Dispara una corrida. Devuelve `true` apenas el servidor la ACEPTÓ (y con eso guardó las cantidades,
+   * runs/route.ts) y `false` si no se disparó; el seguimiento sigue solo. 2026-10-05: antes no devolvía
+   * nada y la pantalla daba las cantidades por guardadas aunque el servidor dijera que no.
+   */
   const startRun = useCallback(
-    async (kind: RunKind, config?: RunConfig) => {
-      if (busyRef.current) return;
+    async (kind: RunKind, config?: RunConfig): Promise<boolean> => {
+      if (busyRef.current) return false;
       maybeRequestPermission();
       setBusy(true);
+      let runId: string;
       try {
         // La config solo aplica a lo que genera; INGEST va sin números.
         const body =
@@ -153,12 +159,18 @@ export function useMarketingEngine() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        toast.info(`${RUN_KIND_LABEL[kind]}…`);
-        await attachToRun(d.runId);
+        runId = d.runId;
       } catch (e) {
         setBusy(false);
         toast.error(e instanceof ApiError ? e.message : "No se pudo disparar la corrida.");
+        return false;
       }
+      toast.info(`${RUN_KIND_LABEL[kind]}…`);
+      void attachToRun(runId).catch(() => {
+        setBusy(false);
+        setRunningPhase(null);
+      });
+      return true;
     },
     [toast, attachToRun],
   );

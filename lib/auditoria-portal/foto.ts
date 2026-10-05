@@ -121,6 +121,11 @@ export interface FotoDeAuditoria {
   iniciadaEn: string;
   /** Cuando terminó de leer el portal. */
   capturedAt?: string;
+  /**
+   * Cuando arrancó el análisis en curso (2026-10-05). Al volver a generarlo, la lectura del portal
+   * es de antes: sin esto, «analizando» se medía desde `capturedAt` y salía «perdida» enseguida.
+   */
+  analisisIniciadoEn?: string;
   duracionMs?: number;
   cuenta?: Pick<AccountDetails, "portalId" | "hubDomain" | "uiDomain" | "timeZone" | "companyCurrency" | "dataHostingLocation" | "accountType" | "scopes">;
   lifecycleStats?: LifecycleStats;
@@ -151,9 +156,13 @@ export function leerFoto(data: unknown): FotoDeAuditoria | null {
 /** Pasado este tiempo en `capturando` o `analizando`, la corrida se da por perdida (el proceso murió). */
 export const CORRIDA_PERDIDA_MS = 15 * 60 * 1000;
 
-/** ¿La corrida en curso se perdió? (el proceso murió con la fila en `capturando` o `analizando`). */
+/**
+ * ¿La corrida en curso se perdió? (el proceso murió con la fila en `capturando` o `analizando`).
+ * `analizando` se mide desde que arrancó el análisis; las fotos de antes de esa marca, desde la lectura.
+ */
 export function corridaPerdida(foto: FotoDeAuditoria, ahora = Date.now()): boolean {
   if (foto.estado !== "capturando" && foto.estado !== "analizando") return false;
-  const desde = new Date(foto.capturedAt ?? foto.iniciadaEn).getTime();
+  const inicio = foto.estado === "analizando" ? (foto.analisisIniciadoEn ?? foto.capturedAt) : foto.capturedAt;
+  const desde = new Date(inicio ?? foto.iniciadaEn).getTime();
   return Number.isFinite(desde) && ahora - desde > CORRIDA_PERDIDA_MS;
 }

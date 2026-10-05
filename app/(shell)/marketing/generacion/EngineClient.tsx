@@ -80,9 +80,12 @@ export default function EngineClient({
     }
   };
 
-  /** Correr con cantidades las guarda como las de la tanda (runs/route.ts): la pantalla lo refleja. */
-  const correr = (kind: "CHAIN" | "GENERATE") => {
-    startRun(kind, config);
+  /**
+   * Correr con cantidades las guarda como las de la tanda (runs/route.ts): la pantalla lo refleja, pero
+   * solo si el servidor aceptó la corrida (si dijo que no —ya había una en curso, por ejemplo— no guardó).
+   */
+  const correr = async (kind: "CHAIN" | "GENERATE") => {
+    if (!(await startRun(kind, config))) return;
     setEmpresaGuardada(nEmpresa);
     setPersonaGuardada(nPersona);
   };

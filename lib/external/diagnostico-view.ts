@@ -40,6 +40,11 @@ export interface DiagnosticoViewData extends DocumentoPublicadoViewData {
   resultados: Array<{ id: string; resultado: string; metrica: string; lineaBase: string; meta: string; plazo: string; confirmadoAt?: string }>;
   /** 2026-10-04: si el cliente puede aprobar lo que ve, si ya lo aprobó (quién y cuándo) o si el equipo está ajustando. */
   aprobacion: AprobacionEnElEnlace;
+  /**
+   * La versión de la foto que el cliente está viendo (2026-10-05). La página la ata a la acción de
+   * aprobar: si el equipo presenta otra mientras tanto, la aprobación no pasa a la versión nueva.
+   */
+  versionPresentada: number;
 }
 
 interface SeccionDeFoto {
@@ -122,6 +127,7 @@ export async function getDiagnosticoForToken(credencial: string, accesoId: strin
       vista: presentada,
       vivo: vivo && { estado: vivo.estado, version: vivo.version, cambiosDesdeLaPresentacion: vivo.cambiosDesdeLaPresentacion },
     }),
+    versionPresentada: presentada.version,
     rows: secciones
       .filter((s) => !ocultas.has(s.key))
       .map((s) => ({

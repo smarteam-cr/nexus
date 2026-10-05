@@ -5,7 +5,7 @@
  * mismo portal, así queda la historia) y eliminarla (con confirmación). «Volver a correr» es un hook
  * porque lo usa también «Qué sigue».
  */
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast } from "@/components/ui";
 import { BotonTexto } from "@/components/exploraciones/FranjaDeSugerencias";
@@ -14,7 +14,11 @@ export function useVolverACorrer(clientId: string | null) {
   const router = useRouter();
   const toast = useToast();
   const [corriendo, setCorriendo] = useState(false);
+  // El estado tarda un render en llegar al botón: un doble clic rápido creaba dos auditorías.
+  const enCurso = useRef(false);
   const correr = useCallback(async () => {
+    if (enCurso.current) return;
+    enCurso.current = true;
     setCorriendo(true);
     try {
       const res = await fetch("/api/audits", {
@@ -27,6 +31,7 @@ export function useVolverACorrer(clientId: string | null) {
       router.push(`/audits/${d.id}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo crear la auditoría");
+      enCurso.current = false;
       setCorriendo(false);
     }
   }, [clientId, router, toast]);

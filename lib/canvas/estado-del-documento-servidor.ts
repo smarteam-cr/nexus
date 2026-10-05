@@ -32,7 +32,21 @@ export { MENSAJE_APROBADO } from "./estado-del-documento";
 
 const NOTA_A_EMPRESA = 190; // asociación nota → empresa (HUBSPOT_DEFINED), la misma que usa la ficha
 
-export type ResultadoDeEstado = { ok: true; estado: EstadoVista } | { ok: false; status: number; error: string; motivos?: string[] };
+export type ResultadoDeEstado =
+  | { ok: true; estado: EstadoVista }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      motivos?: string[];
+      /** Por qué no se aprobó, para quien llama: ya estaba aprobada esa versión, o es otra versión. */
+      codigo?: "ya-aprobado" | "otra-version";
+      /** Con `ya-aprobado`: quién la aprobó de verdad y cuándo (nunca quien lo intentó después). */
+      aprobado?: { nombre: string | null; fecha: string | null };
+    };
+
+/** Lo que dice el hito mientras se escribe la nota en HubSpot (si el proceso muere ahí, queda dicho). */
+const NOTA_PENDIENTE = "La nota en HubSpot no se llegó a escribir.";
 
 async function cargarDocumento(canvasId: string) {
   return prisma.projectCanvas.findUnique({
@@ -152,12 +166,52 @@ export async function presentarDocumento(canvasId: string, por: string | null): 
   return devolver(canvasId);
 }
 
-/** APROBAR: solo sobre lo presentado y sin cambios desde entonces. Deja la nota en HubSpot. */
-export async function registrarAprobacion(canvasId: string, datos: DatosDeAprobacion, por: string | null): Promise<ResultadoDeEstado> {
+/** La aprobación que ya está registrada en esa versión: quién y cuándo, del hito real. */
+async function yaAprobado(canvasId: string, version: number): Promise<ResultadoDeEstado> {
+  const h = await prisma.hitoDeDocumento.findFirst({
+    where: { canvasId, version, tipo: "aprobado" },
+    orderBy: { createdAt: "desc" },
+    select: { aprobadoPorNombre: true, aprobadoEl: true },
+  });
+  return {
+    ok: false,
+    status: 409,
+    codigo: "ya-aprobado",
+    error: "Ya está aprobado.",
+    aprobado: { nombre: h?.aprobadoPorNombre?.trim() || null, fecha: h?.aprobadoEl ? h.aprobadoEl.toISOString() : null },
+  };
+}
+
+/**
+ * APROBAR: solo sobre lo presentado y sin cambios desde entonces. Deja la nota en HubSpot.
+ *
+ * `versionEsperada`: la versión que tiene a la vista quien aprueba (el cliente, en su enlace). Si el
+ * equipo ya presentó otra, no se aprueba: el cliente aprueba lo que vio, nunca la versión siguiente.
+ * `null` = quien registra ve el documento vivo (el equipo, desde la ficha).
+ *
+ * El documento se TOMA antes de escribir afuera (2026-10-05): el cambio a «aprobado» es condicional
+ * a que siga presentado en la versión revisada, en la misma transacción que el hito. Dos
+ * aprobaciones a la vez, o una regeneración en el medio, dejan una sola; la otra no escribe nada,
+ * ni la nota en HubSpot.
+ */
+export async function registrarAprobacion(
+  canvasId: string,
+  datos: DatosDeAprobacion,
+  por: string | null,
+  versionEsperada: number | null,
+): Promise<ResultadoDeEstado> {
   const doc = await cargarDocumento(canvasId);
   if (!doc) return { ok: false, status: 404, error: "El documento no existe." };
   const estado = leerEstado(doc.estadoDocumento);
-  if (estado === "aprobado") return { ok: false, status: 409, error: "Ya está aprobado." };
+  if (versionEsperada !== null && doc.versionDocumento !== versionEsperada) {
+    return {
+      ok: false,
+      status: 409,
+      codigo: "otra-version",
+      error: `Lo que se quiere aprobar es la v${versionEsperada}, y el documento ya va en la v${doc.versionDocumento}.`,
+    };
+  }
+  if (estado === "aprobado") return yaAprobado(canvasId, doc.versionDocumento);
   if (estado !== "presentado") return { ok: false, status: 409, error: "Primero preséntalo: la aprobación es sobre lo que vio el cliente." };
 
   const presentado = await ultimoPresentado(canvasId, doc.versionDocumento);
@@ -172,8 +226,42 @@ export async function registrarAprobacion(canvasId: string, datos: DatosDeAproba
   const v = validarAprobacion(datos, new Date());
   if (!v.ok) return { ok: false, status: 400, error: v.error };
 
+  // Tomar el documento: pasa a «aprobado» solo si sigue presentado en la versión que se revisó.
+  const hito = await prisma.$transaction(async (tx) => {
+    const tomado = await tx.projectCanvas.updateMany({
+      where: { id: canvasId, estadoDocumento: aColumna("presentado"), versionDocumento: doc.versionDocumento },
+      data: { estadoDocumento: aColumna("aprobado") },
+    });
+    if (tomado.count !== 1) return null;
+    return tx.hitoDeDocumento.create({
+      data: {
+        canvasId,
+        version: doc.versionDocumento,
+        tipo: "aprobado",
+        porEmail: por,
+        fotoId: presentado?.fotoId ?? null,
+        aprobadoPorNombre: datos.nombre.trim(),
+        aprobadoPorEmail: datos.email.trim() || null,
+        aprobadoEl: v.fecha,
+        evidencia: datos.evidencia.trim() || null,
+        evidenciaDocumentoId: datos.evidenciaDocumentoId ?? null,
+        hubspotNotaId: null,
+        hubspotError: NOTA_PENDIENTE,
+      },
+      select: { id: true },
+    });
+  });
+  if (!hito) {
+    // Alguien se adelantó: si fue otra aprobación de esta misma versión, se dice quién de verdad.
+    const ahora = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { estadoDocumento: true, versionDocumento: true } });
+    if (leerEstado(ahora?.estadoDocumento) === "aprobado" && ahora?.versionDocumento === doc.versionDocumento) {
+      return yaAprobado(canvasId, doc.versionDocumento);
+    }
+    return { ok: false, status: 409, error: "El documento cambió mientras se registraba la aprobación: recarga y vuelve a intentarlo." };
+  }
+
   // La nota en la empresa en HubSpot: el registro queda donde el equipo comercial también mira. Si
-  // HubSpot no responde, la aprobación igual se registra en Nexus (con el error a la vista).
+  // HubSpot no responde, la aprobación igual queda registrada en Nexus (con el error a la vista).
   let hubspotNotaId: string | null = null;
   let hubspotError: string | null = null;
   const companyId = doc.project?.client?.hubspotCompanyId ?? null;
@@ -210,25 +298,9 @@ export async function registrarAprobacion(canvasId: string, datos: DatosDeAproba
     }
   }
 
-  await prisma.$transaction([
-    prisma.projectCanvas.update({ where: { id: canvasId }, data: { estadoDocumento: aColumna("aprobado") } }),
-    prisma.hitoDeDocumento.create({
-      data: {
-        canvasId,
-        version: doc.versionDocumento,
-        tipo: "aprobado",
-        porEmail: por,
-        fotoId: presentado?.fotoId ?? null,
-        aprobadoPorNombre: datos.nombre.trim(),
-        aprobadoPorEmail: datos.email.trim() || null,
-        aprobadoEl: v.fecha,
-        evidencia: datos.evidencia.trim() || null,
-        evidenciaDocumentoId: datos.evidenciaDocumentoId ?? null,
-        hubspotNotaId,
-        hubspotError,
-      },
-    }),
-  ]);
+  await prisma.hitoDeDocumento.update({ where: { id: hito.id }, data: { hubspotNotaId, hubspotError } }).catch((e) => {
+    console.error(`[estado-del-documento] no se pudo anotar la nota de HubSpot en el hito ${hito.id}:`, e instanceof Error ? e.message : e);
+  });
   // «Para ti» (2026-10-04): al encargado del proyecto le llega que el cliente aprobó (si no fue él quien lo registró).
   if (doc.project && doc.projectId) {
     await avisar({
@@ -269,18 +341,26 @@ export async function documentoAprobado(canvasId: string): Promise<boolean> {
 /**
  * Después de REGENERAR: si estaba presentado, lo que sigue es la versión siguiente en borrador (la
  * presentada queda en el historial, con su foto protegida). Nunca tira: es un rastro, no la corrida.
+ *
+ * El cambio es condicional a que SIGA presentado en esa versión (2026-10-05): si entre la lectura y
+ * la escritura alguien aprobó, reabrió o presentó otra, no se pisa.
  */
 export async function trasRegenerar(canvasId: string): Promise<void> {
   try {
     const c = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { estadoDocumento: true, versionDocumento: true } });
-    if (leerEstado(c?.estadoDocumento) !== "presentado") return;
-    const version = (c?.versionDocumento ?? 1) + 1;
-    await prisma.$transaction([
-      prisma.projectCanvas.update({ where: { id: canvasId }, data: { estadoDocumento: null, versionDocumento: version } }),
-      prisma.hitoDeDocumento.create({
-        data: { canvasId, version, tipo: "reabierto", motivo: `Se regeneró después de presentarlo: la v${version - 1} presentada queda en el historial.` },
-      }),
-    ]);
+    if (!c || leerEstado(c.estadoDocumento) !== "presentado") return;
+    const presentada = c.versionDocumento;
+    const version = presentada + 1;
+    await prisma.$transaction(async (tx) => {
+      const tomado = await tx.projectCanvas.updateMany({
+        where: { id: canvasId, estadoDocumento: aColumna("presentado"), versionDocumento: presentada },
+        data: { estadoDocumento: aColumna("borrador"), versionDocumento: version },
+      });
+      if (tomado.count !== 1) return;
+      await tx.hitoDeDocumento.create({
+        data: { canvasId, version, tipo: "reabierto", motivo: `Se regeneró después de presentarlo: la v${presentada} presentada queda en el historial.` },
+      });
+    });
   } catch (e) {
     console.error(`[estado-del-documento] no se pudo abrir la versión siguiente de ${canvasId}:`, e instanceof Error ? e.message : e);
   }

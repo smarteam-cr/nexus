@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { Hallazgo } from "../foto";
+import type { AnalisisGuardado, Hallazgo } from "../foto";
 import type { HechosDelPortal } from "./hechos";
 import type { DefDeReporte } from "../reportes";
 import { esquemaDelAnalisis, MODELO_DEL_ANALISIS, pedidoDelAnalisis } from "./prompt";
-import { leerAnalisis, MAX_HALLAZGOS, unirConLoConfirmado } from "./validar";
+import { decidirHallazgos, leerAnalisis, MAX_HALLAZGOS, unirConLoConfirmado } from "./validar";
 
 /**
  * lib/auditoria-portal/analisis/validar.test.ts — LO QUE DEVUELVE EL MODELO NO PASA SIN COMPROBAR.
@@ -160,6 +162,56 @@ describe("unirConLoConfirmado", () => {
 
   it("sin análisis anterior son los nuevos tal cual", () => {
     expect(unirConLoConfirmado(undefined, [h("A", "sugerido")]).map((x) => x.titulo)).toEqual(["A"]);
+  });
+});
+
+describe("decidirHallazgos", () => {
+  const h = (id: string, titulo: string): Hallazgo => ({
+    id,
+    seccion: "workflows",
+    severidad: "atencion",
+    titulo,
+    hallazgo: "…",
+    porQueImporta: "",
+    recomendacion: "",
+    decision: "investigar",
+    evidencia: [],
+    pregunta: null,
+    estado: "sugerido",
+  });
+  const analisis = (generadoEn: string, hallazgos: Hallazgo[]): AnalisisGuardado => ({
+    generadoEn,
+    modelo: "modelo",
+    agentRunId: null,
+    resumen: "",
+    hallazgos,
+    preguntas: [],
+    descartadosPorCifras: 0,
+    etiquetas: {},
+  });
+  const pedido = { ids: ["h2"], estado: "confirmado" as const, quien: "Persona del equipo", en: "2026-10-05T12:00:00.000Z" };
+
+  it("si mientras tanto se generó otro análisis, 409 y no toca nada: «h2» ya es otro hallazgo", () => {
+    /* La persona veía el análisis de las 10:00 (h2 = «Etapas sin usar»); al volver a generarlo, h2 pasó a
+       ser «Workflows sin dueño». Lo que lo pone en rojo: aplicar los ids sin comparar el `generadoEn`. */
+    const nuevo = analisis("2026-10-05T11:00:00.000Z", [h("h1", "Confirmado de antes"), h("h2", "Workflows sin dueño")]);
+    const r = decidirHallazgos(nuevo, { ...pedido, generadoEn: "2026-10-05T10:00:00.000Z" });
+    expect(r).toMatchObject({ ok: false, status: 409 });
+    expect(nuevo.hallazgos.every((x) => x.estado === "sugerido")).toBe(true);
+    // La ruta decide con esto, sobre la foto leída con la fila bloqueada (no sobre la del guard).
+    const ruta = readFileSync(join(process.cwd(), "app/api/audits/[id]/hallazgos/route.ts"), "utf8");
+    expect(ruta).toMatch(/actualizarFoto\(id, \(f\) => \{\s*const r = decidirHallazgos\(f\.analisis, pedido\)/);
+  });
+
+  it("con el mismo análisis, decide sobre esos ids con quién y cuándo", () => {
+    const visto = analisis("2026-10-05T10:00:00.000Z", [h("h1", "Uno"), h("h2", "Etapas sin usar")]);
+    const r = decidirHallazgos(visto, { ...pedido, generadoEn: "2026-10-05T10:00:00.000Z" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.analisis.hallazgos.map((x) => [x.id, x.estado, x.decididoPor ?? null])).toEqual([
+      ["h1", "sugerido", null],
+      ["h2", "confirmado", "Persona del equipo"],
+    ]);
   });
 });
 

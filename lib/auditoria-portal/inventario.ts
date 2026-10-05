@@ -568,36 +568,70 @@ async function leerPipelines(lector: LectorDeHubspot, hoy: Date): Promise<Pipeli
   return algunaLeida ? salida : null;
 }
 
-async function leerPersonas(lector: LectorDeHubspot): Promise<PersonaDelPortal[] | null> {
-  const r = await lector.leer<{ results?: Array<{ id?: string | number; email?: string; firstName?: string; lastName?: string; superAdmin?: boolean }> }>(
-    "usuarios",
-    "Los usuarios del portal",
-    "/settings/v3/users?limit=100",
-  );
-  if (!r) return null;
+type Pagina<T> = { results?: T[]; paging?: { next?: { after?: string } } };
+type UsuarioCrudo = { id?: string | number; email?: string; firstName?: string; lastName?: string; superAdmin?: boolean };
+type PropietarioCrudo = { userIdIncludingInactive?: number | string; firstName?: string; lastName?: string; email?: string };
+
+/** Tope de páginas de usuarios (100 por página). */
+const MAX_PAGINAS_DE_USUARIOS = 50;
+
+/**
+ * Las personas del portal: los usuarios (paginados, 2026-10-05) y los propietarios archivados.
+ *
+ * ⚠ La lista de usuarios va COMPLETA o no va: quien no está en ella se lee como «ya no está», así que
+ * una lista a medias inventa hallazgos (propiedades de gente que se fue, workflows que avisan a nadie).
+ * Si falla una página —o hay más de las que se leen—, `null` («sin leer»).
+ */
+export async function leerPersonas(lector: LectorDeHubspot): Promise<PersonaDelPortal[] | null> {
   const personas = new Map<string, PersonaDelPortal>();
-  for (const u of r.results ?? []) {
-    const id = String(u.id ?? "");
-    if (!id) continue;
-    personas.set(id, {
-      usuarioId: id,
-      nombre: nombreDe(u, `Usuario ${id}`),
-      dominio: dominioDe(u.email),
-      activo: true,
-      superAdmin: u.superAdmin === true,
-    });
+  let despues: string | null = null;
+  let completa = false;
+  for (let pagina = 0; pagina < MAX_PAGINAS_DE_USUARIOS; pagina++) {
+    const ruta: string = `/settings/v3/users?limit=100${despues ? `&after=${encodeURIComponent(despues)}` : ""}`;
+    const r: Pagina<UsuarioCrudo> | null = await lector.leer<Pagina<UsuarioCrudo>>(
+      "usuarios",
+      pagina === 0 ? "Los usuarios del portal" : `Los usuarios del portal (página ${pagina + 1})`,
+      ruta,
+    );
+    if (!r) return null;
+    for (const u of r.results ?? []) {
+      const id = String(u.id ?? "");
+      if (!id) continue;
+      personas.set(id, {
+        usuarioId: id,
+        nombre: nombreDe(u, `Usuario ${id}`),
+        dominio: dominioDe(u.email),
+        activo: true,
+        superAdmin: u.superAdmin === true,
+      });
+    }
+    despues = r.paging?.next?.after ?? null;
+    if (!despues) {
+      completa = true;
+      break;
+    }
   }
+  if (!completa) return null;
+
   // Los propietarios archivados dicen el nombre de quien ya no tiene usuario: así una propiedad
-  // creada por alguien que se fue (el partner anterior, casi siempre) muestra quién fue.
-  const archivados = await lector.leer<{ results?: Array<{ userIdIncludingInactive?: number | string; firstName?: string; lastName?: string; email?: string }> }>(
-    "usuarios",
-    "Los propietarios que ya no están",
-    "/crm/v3/owners?limit=500&archived=true",
-  );
-  for (const o of archivados?.results ?? []) {
-    const id = o.userIdIncludingInactive != null ? String(o.userIdIncludingInactive) : "";
-    if (!id || personas.has(id)) continue;
-    personas.set(id, { usuarioId: id, nombre: nombreDe(o, `Usuario ${id}`), dominio: dominioDe(o.email), activo: false, superAdmin: false });
+  // creada por alguien que se fue (el partner anterior, casi siempre) muestra quién fue. Acá una
+  // página que falla solo deja a alguien sin nombre: «ya no está» lo decide la lista de usuarios.
+  despues = null;
+  for (let pagina = 0; pagina < 20; pagina++) {
+    const ruta: string = `/crm/v3/owners?limit=500&archived=true${despues ? `&after=${encodeURIComponent(despues)}` : ""}`;
+    const archivados: Pagina<PropietarioCrudo> | null = await lector.leer<Pagina<PropietarioCrudo>>(
+      "usuarios",
+      pagina === 0 ? "Los propietarios que ya no están" : `Los propietarios que ya no están (página ${pagina + 1})`,
+      ruta,
+    );
+    if (!archivados) break;
+    for (const o of archivados.results ?? []) {
+      const id = o.userIdIncludingInactive != null ? String(o.userIdIncludingInactive) : "";
+      if (!id || personas.has(id)) continue;
+      personas.set(id, { usuarioId: id, nombre: nombreDe(o, `Usuario ${id}`), dominio: dominioDe(o.email), activo: false, superAdmin: false });
+    }
+    despues = archivados.paging?.next?.after ?? null;
+    if (!despues) break;
   }
   return [...personas.values()];
 }

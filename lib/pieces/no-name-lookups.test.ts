@@ -61,6 +61,9 @@ const CRITICOS = [
   // CANVAS DUPLICADO y deja el contenido viejo huérfano. Es el peor caso de todos.
   "lib/canvas/desarrollo-generate.ts",
   "lib/canvas/exploracion-generate.ts",
+  // La auditoría del portal compara los pipelines con los de la Planificación (2026-10-05): por
+  // nombre, renombrar la pieza la dejaba sin con qué comparar, en silencio.
+  "lib/auditoria-portal/contexto-del-cliente.ts",
 ];
 
 describe("los caminos críticos NO identifican piezas por nombre", () => {

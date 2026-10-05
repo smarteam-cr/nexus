@@ -94,6 +94,8 @@ export async function POST(req: NextRequest, { params }: Params) {
               p.canvasId,
               { nombre: p.nombre, email: p.email, fecha: p.fecha, evidencia: p.evidencia, evidenciaDocumentoId: p.evidenciaDocumentoId ?? null },
               por,
+              // El equipo registra sobre el documento vivo que tiene abierto (la huella cuida los cambios).
+              null,
             )
           : await reabrirDocumento(p.canvasId, p.motivo, por);
     if (!r.ok) return NextResponse.json({ error: r.error, motivos: r.motivos ?? [] }, { status: r.status });

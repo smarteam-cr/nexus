@@ -12,6 +12,8 @@ export const crearAuditoriaSchema = z.object({
 export const decidirHallazgosSchema = z.object({
   ids: z.array(z.string().regex(/^h\d{1,3}$/)).min(1).max(20),
   estado: z.enum(["confirmado", "descartado", "sugerido"]),
+  /** El `generadoEn` del análisis que se ve: los ids (h1…) solo valen dentro de ese análisis. */
+  generadoEn: z.string().min(1).max(64),
 });
 
 export const marcarRevisadoSchema = z.object({

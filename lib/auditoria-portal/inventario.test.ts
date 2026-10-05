@@ -4,12 +4,14 @@ import {
   dominioDe,
   dominiosConAcceso,
   leerEtapa,
+  leerPersonas,
   normalizarPipeline,
   propiedadesEnChoque,
   resumirWorkflow,
   sinCambiosHaceUnAnio,
 } from "./inventario";
 import type { PipelineLeido } from "./inventario";
+import type { LectorDeHubspot } from "./lecturas";
 import { HOY, inventarioDePrueba } from "./__fixtures__/foto";
 
 /**
@@ -175,5 +177,49 @@ describe("cruces", () => {
     expect(sinCambiosHaceUnAnio(w2!, HOY)).toBe(false);
     expect(sinCambiosHaceUnAnio(w3!, HOY)).toBe(true);
     expect(sinCambiosHaceUnAnio({ ...w1!, cambiadoEn: null }, HOY)).toBe(false);
+  });
+});
+
+describe("leerPersonas", () => {
+  /** Un portal con más de 100 usuarios: la API los da en dos páginas. `fallaLaSegunda` = la página 2 no sale. */
+  const lectorDePrueba = (fallaLaSegunda = false) => {
+    const rutas: string[] = [];
+    const lector: LectorDeHubspot = {
+      registro: { intentos: 0, fallidas: [] },
+      contar: async () => null,
+      buscar: async () => null,
+      leerPorLote: async () => null,
+      leer: async <T,>(_bloque: unknown, _que: string, ruta: string) => {
+        rutas.push(ruta);
+        if (ruta.startsWith("/settings/v3/users")) {
+          if (!ruta.includes("after=")) {
+            return { results: [{ id: 1, firstName: "Ana", email: "ana@cliente.test" }], paging: { next: { after: "pag-2" } } } as T;
+          }
+          if (fallaLaSegunda) return null;
+          return { results: [{ id: 101, firstName: "Beto", email: "beto@cliente.test" }] } as T;
+        }
+        if (ruta.startsWith("/crm/v3/owners")) return { results: [{ userIdIncludingInactive: 7, firstName: "Ida", email: "ida@agencia.test" }] } as T;
+        return null;
+      },
+    };
+    return { lector, rutas };
+  };
+
+  it("lee todas las páginas de usuarios: el de la página 2 está activo, no «ya no está»", async () => {
+    /* Lo que lo pone en rojo: volver a leer solo la primera página (los >100 se daban por idos y
+       salían hallazgos falsos de propiedades y avisos). */
+    const { lector, rutas } = lectorDePrueba();
+    const personas = await leerPersonas(lector);
+    expect(personas?.map((p) => [p.usuarioId, p.activo])).toEqual([
+      ["1", true],
+      ["101", true],
+      ["7", false],
+    ]);
+    expect(rutas).toContain("/settings/v3/users?limit=100&after=pag-2");
+  });
+
+  it("si falla una página de usuarios, «sin leer» (null), nunca una lista a medias", async () => {
+    const { lector } = lectorDePrueba(true);
+    expect(await leerPersonas(lector)).toBeNull();
   });
 });

@@ -16,7 +16,9 @@ import {
   SECCIONES_CON_LECTURA,
   SECCIONES_DE_HALLAZGO,
   SEVERIDADES,
+  type AnalisisGuardado,
   type Decision,
+  type EstadoDeHallazgo,
   type Hallazgo,
   type SeccionConLectura,
   type SeccionDeHallazgo,
@@ -160,4 +162,31 @@ export function unirConLoConfirmado(anteriores: readonly Hallazgo[] | undefined,
   const titulos = new Set(confirmados.map((h) => normalizar(h.titulo)));
   const agregados = nuevos.filter((h) => !titulos.has(normalizar(h.titulo))).slice(0, Math.max(0, MAX_HALLAZGOS - confirmados.length));
   return [...confirmados, ...agregados].map((h, i) => ({ ...h, id: `h${i + 1}` }));
+}
+
+/**
+ * Confirmar, descartar o devolver a «sugerido» hallazgos del análisis que la persona tiene a la vista
+ * (2026-10-05). Como los ids se renumeran en cada análisis (h1…), un id solo dice algo junto con el
+ * `generadoEn` del análisis que se veía: si mientras tanto se generó otro, «h3» es otro hallazgo y no
+ * se toca nada (409). PURO: la ruta lo aplica con la fila bloqueada.
+ */
+export function decidirHallazgos(
+  analisis: AnalisisGuardado | undefined,
+  pedido: { ids: readonly string[]; estado: EstadoDeHallazgo; generadoEn: string; quien: string; en: string },
+): { ok: true; analisis: AnalisisGuardado } | { ok: false; status: 409; error: string } {
+  if (!analisis) return { ok: false, status: 409, error: "Esta auditoría no tiene análisis." };
+  if (analisis.generadoEn !== pedido.generadoEn) {
+    return { ok: false, status: 409, error: "El análisis cambió mientras lo revisabas: recarga la página y vuelve a decidir." };
+  }
+  return {
+    ok: true,
+    analisis: {
+      ...analisis,
+      hallazgos: analisis.hallazgos.map((h): Hallazgo => {
+        if (!pedido.ids.includes(h.id)) return h;
+        if (pedido.estado === "sugerido") return { ...h, estado: "sugerido", decididoPor: undefined, decididoEn: undefined };
+        return { ...h, estado: pedido.estado, decididoPor: pedido.quien, decididoEn: pedido.en };
+      }),
+    },
+  };
 }

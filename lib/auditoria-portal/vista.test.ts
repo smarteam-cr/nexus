@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Hallazgo } from "./foto";
 import { fotoDePrueba, HOY } from "./__fixtures__/foto";
@@ -66,6 +68,21 @@ describe("armarVista", () => {
     expect(v.estado).toBe("perdida");
     expect(v.queSigue.accion?.a).toBe("volver-a-correr");
     expect(vista({ estado: "capturando", capturedAt: undefined, iniciadaEn: "2026-10-04T11:55:00.000Z" }).estado).toBe("capturando");
+  });
+
+  it("volver a generar el análisis no la da por perdida: se mide desde que arrancó el análisis, no desde la lectura", () => {
+    /* La lectura del portal es de ayer y el análisis arrancó hace dos minutos. Lo que lo pone en rojo:
+       volver a medir «analizando» desde `capturedAt` (salía «perdida», sin refresco y con «Volver a correr»). */
+    const ahora = new Date("2026-10-05T12:00:00.000Z");
+    const regenerando = { estado: "analizando" as const, capturedAt: "2026-10-04T12:00:00.000Z", analisisIniciadoEn: "2026-10-05T11:58:00.000Z" };
+    const v = vista(regenerando, ahora);
+    expect(v.estado).toBe("analizando");
+    expect(v.queSigue.accion).toBeNull();
+    // Y si de verdad se colgó, se da por perdida igual.
+    expect(vista({ ...regenerando, analisisIniciadoEn: "2026-10-05T11:30:00.000Z" }, ahora).estado).toBe("perdida");
+    // La marca la deja quien arranca el análisis (servidor.ts), en el mismo cambio que lo pone «analizando».
+    const servidor = readFileSync(join(process.cwd(), "lib/auditoria-portal/servidor.ts"), "utf8");
+    expect(servidor).toMatch(/estado: "analizando", analisisIniciadoEn: new Date\(\)\.toISOString\(\)/);
   });
 
   it("deriva los creadores y los workflows sin cambios hace un año", () => {

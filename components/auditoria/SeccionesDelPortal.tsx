@@ -23,6 +23,12 @@ type Props = { vista: VistaDeAuditoria; acciones: AccionesDeLaFicha };
 export const lecturaDe = (vista: VistaDeAuditoria, reporte: string) => vista.analisis?.lecturasDeReporte?.[reporte] ?? null;
 
 /**
+ * Se decide sobre los hallazgos solo con la auditoría «lista»: mientras se genera otro análisis, los
+ * que se ven van a ser reemplazados (y sus ids, renumerados).
+ */
+const sinDecisiones = (vista: VistaDeAuditoria, acciones: AccionesDeLaFicha) => acciones.ocupado || vista.estado !== "lista";
+
+/**
  * Lo de arriba de cada sección: la lectura del análisis y sus hallazgos, del más grave al que
  * funciona. Confirmar no los mueve; los descartados se esconden y se pueden volver a ver.
  */
@@ -61,7 +67,7 @@ function ListaDeHallazgos({ lista, vista, acciones, conSeccion }: { lista: Halla
           hallazgo={h}
           etiquetas={vista.analisis?.etiquetas ?? {}}
           conSeccion={conSeccion}
-          ocupado={acciones.ocupado}
+          ocupado={sinDecisiones(vista, acciones)}
           onDecidir={(estado) => acciones.decidir([h.id], estado)}
           onIrASeccion={conSeccion ? () => acciones.ir(seccionDelHallazgo(h.seccion)) : undefined}
         />
@@ -116,7 +122,7 @@ export function SeccionResumen({ vista, acciones }: Props) {
       {sugeridos.length > 0 && (
         <FranjaDeSugerencias
           acciones={
-            <BotonAzul disabled={acciones.ocupado} onClick={() => acciones.decidir(sugeridos.map((h) => h.id), "confirmado")}>
+            <BotonAzul disabled={sinDecisiones(vista, acciones)} onClick={() => acciones.decidir(sugeridos.map((h) => h.id), "confirmado")}>
               {`Confirmar ${sugeridos.length === 1 ? "el hallazgo" : `los ${sugeridos.length}`}`}
             </BotonAzul>
           }
