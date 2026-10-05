@@ -134,6 +134,33 @@ export async function notifyCsAlert(a: {
   }
 }
 
+/**
+ * Un aviso nuevo de «Para ti» (2026-10-04) → notificación del sistema operativo, SOLO si la persona no está mirando
+ * Nexus (si está mirando, el número del menú ya lo dice). Al hacer clic abre lo que el aviso nombra.
+ */
+export async function notifyAviso(a: { id: string; titulo: string; href: string }): Promise<CsNotifyOutcome> {
+  if (!notifSupported() || Notification.permission !== "granted") return "unavailable";
+  const lookingAtNexus =
+    typeof document !== "undefined" && document.visibilityState === "visible" && document.hasFocus();
+  if (lookingAtNexus) return "focused";
+  const options: NotificationOptions = {
+    body: a.titulo,
+    icon: "/logo-smarteam.png",
+    badge: "/logo-smarteam.png",
+    tag: `nexus-aviso-${a.id}`,
+    data: { url: a.href },
+  };
+  try {
+    const reg = swRegistration ?? (await registerServiceWorker());
+    if (reg) await reg.showNotification("Nexus · Para ti", options);
+    else new Notification("Nexus · Para ti", options);
+    return "shown";
+  } catch (e) {
+    console.warn("[notif] no se pudo mostrar el aviso", e);
+    return "unavailable";
+  }
+}
+
 export async function notifyAgentDone(n: AgentDoneNotice): Promise<void> {
   const meta = notifyMetaForGroup(n.group);
   if (!meta.notifiable) return;

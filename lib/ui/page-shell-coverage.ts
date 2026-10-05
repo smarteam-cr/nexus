@@ -21,6 +21,7 @@ export type ShellDecl =
 /** Clave = directorio de la ruta relativo a `app/(shell)/`. */
 export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   // ── Índices con constante (el estándar) ─────────────────────────────────────
+  "para-ti": { shell: "SHELL_DEFAULT" },
   audits: { shell: "SHELL_DEFAULT" },
   "business-cases": { shell: "SHELL_DEFAULT" },
   clients: { shell: "SHELL_DEFAULT" },

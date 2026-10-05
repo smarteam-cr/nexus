@@ -73,6 +73,8 @@ export interface NavItemConfig {
   children?: readonly NavChildConfig[];
   /** Hijos cargados por fetch (el flyout de Roles lista los perfiles). */
   dynamicChildren?: "roles";
+  /** Lleva un número al lado (lo que pide atención hoy). Solo «Para ti» (components/para-ti/cuenta.ts). */
+  cuenta?: "para-ti";
   group: "operacion" | "administracion";
 }
 
@@ -172,6 +174,18 @@ const icon = (d: string) => (
 // ── El rail ────────────────────────────────────────────────────────────────────
 
 export const APP_NAV: readonly NavItemConfig[] = [
+  {
+    // Para ti (2026-10-04): lo que le toca a cada persona, de todos los módulos. Universal: no muestra nada que la
+    // persona no pueda abrir. Primero del menú porque es por donde se empieza el día.
+    key: "para-ti",
+    label: "Para ti",
+    href: "/para-ti",
+    group: "operacion",
+    cuenta: "para-ti",
+    icon: icon(
+      "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4",
+    ),
+  },
   {
     key: "clients",
     label: "Clientes",

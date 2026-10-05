@@ -338,3 +338,36 @@ export async function getClientSessions(
     confidence: null,
   }));
 }
+
+/**
+ * Cuántas reuniones asignó la IA a cada proyecto y nadie revisó todavía, EN LOTE.
+ *
+ * Es el `unreviewedCount` de GET /api/projects/[id]/project-sessions —mismo criterio, mismas
+ * tres condiciones (`included`, `source: "agent"`, `reviewedAt` en null) y el mismo filtro de
+ * pertenencia— para muchos proyectos con UNA consulta. Lo usa el panel «Necesitan atención» del
+ * índice de clientes (2026-10-04), que antes no tenía forma de saberlo sin abrir cada ficha.
+ *
+ * ⚠ Solo tiene sentido en empresas con 2+ proyectos abiertos: con uno solo, una reunión de la
+ * empresa no puede caer en el proyecto equivocado (el chip de la ficha se apaga igual). Lo decide
+ * el llamador, que es quien sabe cuántos proyectos tiene cada empresa.
+ *
+ * Vive acá porque lee `SessionProject`: todo consumidor de sesiones pasa por el chokepoint, y el
+ * filtro `belongsToClient` descarta los vínculos que cruzan de cliente (los muestra el route igual).
+ */
+export async function contarSesionesSinRevisar(
+  proyectos: readonly { id: string; clientId: string }[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (proyectos.length === 0) return out;
+  const clienteDe = new Map(proyectos.map((p) => [p.id, p.clientId]));
+  const links = await prisma.sessionProject.findMany({
+    where: { projectId: { in: [...clienteDe.keys()] }, included: true, source: "agent", reviewedAt: null },
+    select: { projectId: true, session: { select: { resolvedClientId: true, manualClientId: true } } },
+  });
+  for (const l of links) {
+    const clientId = clienteDe.get(l.projectId);
+    if (!clientId || !belongsToClient(l.session, clientId)) continue;
+    out.set(l.projectId, (out.get(l.projectId) ?? 0) + 1);
+  }
+  return out;
+}

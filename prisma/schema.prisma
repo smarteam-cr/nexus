@@ -1904,7 +1904,16 @@ model TeamMember {
   // VISTA DE FINANZAS (2026-10-03, docs/finanzas-rediseno-plan.md): solo cuenta para un SUPER_ADMIN. null o SUPERVISA =
   // el panel completo (revisar, decidir, cerrar el mes); DIRECCION = solo los reportes. Decide el MENÚ y la pantalla de
   // entrada, no los permisos. CHECK en el SQL. ⚠ La lee cada página (el usuario se carga con su fila entera).
+  // Desde 2026-10-04 se DESPRENDE de los frentes: la escribe quien guarda los frentes (vistaFinanzasDeFrentes). Ya no
+  // se elige aparte en Equipo.
   vistaFinanzas       String?
+  // LO QUE LLEVA (2026-10-04, «Para ti», lib/para-ti/frentes.ts): los frentes que la persona sigue, aparte de su ROL de
+  // acceso. No dan permisos: deciden qué le llega en «Para ti». frentesEditadosAt null = nadie los eligió → salen del
+  // rol (FRENTES_POR_DEFECTO); con fecha, la lista manda aunque esté vacía. Texto y no enum: sumar un frente no toca
+  // la base. ⚠ Como vistaFinanzas, la lee cada página: el SQL va ANTES del deploy.
+  frentes             String[]  @default([])
+  frentesEditadosAt   DateTime?
+  frentesEditadosPor  String?
   // Baja blanda: si != null, el miembro pierde acceso (login bloqueado) y desaparece
   // de los listados de personas, pero su histórico (sesiones/handoffs/runs) queda intacto.
   deactivatedAt       DateTime?
@@ -1932,6 +1941,34 @@ model TeamMember {
   comisionesVendedor      ComisionVendedor[]      @relation("ComisionesDeVendedor")
   ventasAtribuidas        AtribucionVenta[]       @relation("VentasAtribuidas")
   aguinaldosPagados       AguinaldoPago[]         @relation("AguinaldosDePersona")
+}
+
+// ─── Aviso ────────────────────────────────────────────────────────────────────
+// «Para ti» (2026-10-04, lib/para-ti): algo que PASÓ y que una persona debería saber — el cliente aprobó, te
+// devolvieron un pago, te compartieron un documento. Lo que te toca HACER no vive acá: se calcula del estado y se va
+// solo cuando se resuelve. Un aviso se guarda, se marca leído y se borra a los 90 días de leído. Nunca se le escribe a
+// quien hizo la acción (lib/para-ti/avisos-server.ts). Sin FKs: el destinatario va por correo, como toda la autoría
+// del repo (*ByEmail), y el enlace es una ruta.
+model Aviso {
+  id         String    @id @default(cuid())
+  // Destinatario, por correo en minúsculas.
+  paraEmail  String
+  // Qué pasó, con punto ("finanzas.devuelto"). Texto y no enum (INV4): sumar un tipo no toca la base.
+  tipo       String
+  titulo     String
+  detalle    String?
+  // Adónde lleva: una ruta interna.
+  href       String
+  // Por qué le llegó: la clave del frente, o null = era personal.
+  frente     String?
+  actorEmail String?
+  // El mismo hecho le avisa UNA vez a cada persona.
+  dedupeKey  String
+  creadoAt   DateTime  @default(now())
+  leidoAt    DateTime?
+
+  @@unique([paraEmail, dedupeKey])
+  @@index([paraEmail, leidoAt, creadoAt])
 }
 
 enum TeamRole {

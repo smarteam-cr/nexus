@@ -3,7 +3,11 @@
  *
  * Gate DURO: solo SUPER_ADMIN (decisión del usuario: administrar permisos no es
  * delegable — ni siquiera vía equipo.manage). PATCH acepta cualquier subconjunto:
- *   { roleEnum?, canViewAllClients?, canViewAllExpiresAt?, permissionOverrides?, vistaFinanzas? }
+ *   { roleEnum?, canViewAllClients?, canViewAllExpiresAt?, permissionOverrides?, vistaFinanzas?, frentes? }
+ *
+ * Los FRENTES («Lo que lleva», lib/para-ti/frentes.ts, 2026-10-04) no son permisos: deciden qué le llega a la persona
+ * en «Para ti». Al guardarlos, la vista de Finanzas de un Super Admin se desprende de ellos (vistaFinanzasDeFrentes):
+ * deja de elegirse aparte, así no quedan dos datos diciendo lo mismo.
  *
  * Reglas anti-lockout:
  *   - No se puede degradar al ÚLTIMO Super Admin activo.
@@ -25,6 +29,9 @@ import { computeEffective } from "@/lib/auth/permissions/defaults";
 import { getRoleTemplate, getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import { revalidateTeamMembers } from "@/lib/cache/team";
 import { VISTAS_ELEGIBLES } from "@/lib/finanzas/vista";
+import { frentesDe, vistaFinanzasDeFrentes } from "@/lib/para-ti/frentes";
+import { frentesSchema } from "@/lib/para-ti/schema";
+import { esResponsable } from "@/lib/escala/comentarios/reglas";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -40,6 +47,8 @@ const patchSchema = z.strictObject({
   // La vista de Finanzas (rediseño 2026-10-03, lib/finanzas/vista.ts): solo la elige un Super Admin, y solo decide su
   // menú y su pantalla de entrada. null = la de por defecto (revisa y cierra el mes).
   vistaFinanzas: z.enum(VISTAS_ELEGIBLES).nullable().optional(),
+  // Lo que lleva (lib/para-ti/frentes.ts): REPLACE. null = vuelve a lo de su rol. Ausente = no tocar.
+  frentes: frentesSchema.nullable().optional(),
 });
 
 /** Bundle que consume el modal: fila + capas del mapa (herencia / pines / efectivo). */
@@ -57,6 +66,16 @@ async function memberBundle(member: TeamMember) {
       canViewAllClients: member.canViewAllClients,
       canViewAllExpiresAt: member.canViewAllExpiresAt,
       vistaFinanzas: member.vistaFinanzas,
+      // Los EFECTIVOS (con el default del rol si nadie los eligió) y si alguien los eligió.
+      frentes: frentesDe({
+        roleEnum: member.roleEnum,
+        frentes: member.frentes,
+        frentesEditadosAt: member.frentesEditadosAt,
+        vistaFinanzas: member.vistaFinanzas,
+        esResponsableDeLaEscala: esResponsable(member.email),
+      }),
+      frentesElegidos: member.frentesEditadosAt !== null,
+      esResponsableDeLaEscala: esResponsable(member.email),
     },
     // base = lo que HEREDA del rol (default ← plantilla DB), sin overrides
     base: computeEffective(member.roleEnum, template, null),
@@ -134,6 +153,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.vistaFinanzas !== undefined) data.vistaFinanzas = nextRole === "SUPER_ADMIN" ? body.vistaFinanzas : null;
   else if (nextRole !== "SUPER_ADMIN" && member.vistaFinanzas) data.vistaFinanzas = null;
   if (expiresAt !== undefined) data.canViewAllExpiresAt = expiresAt;
+  if (body.frentes === null) {
+    // Volver a lo del rol: nadie los eligió. La vista de Finanzas queda como estaba (de ahí sale el default de un SA).
+    data.frentes = [];
+    data.frentesEditadosAt = null;
+    data.frentesEditadosPor = null;
+  } else if (body.frentes !== undefined) {
+    data.frentes = body.frentes;
+    data.frentesEditadosAt = new Date();
+    data.frentesEditadosPor = guard.user.email.toLowerCase();
+    // La vista de Finanzas sale de los frentes (gana a una vistaFinanzas que viniera en el mismo pedido).
+    data.vistaFinanzas = vistaFinanzasDeFrentes(nextRole, body.frentes);
+  }
   // Json?: limpiar = Prisma.DbNull (columna NULL — "hereda todo"); null/undefined no limpian.
   if (overrides !== undefined) {
     data.permissionOverrides = overrides === null ? Prisma.DbNull : (overrides as Prisma.InputJsonValue);

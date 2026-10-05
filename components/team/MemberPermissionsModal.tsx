@@ -20,7 +20,7 @@ import type { PermissionMap } from "@/lib/auth/permissions/types";
 import PermissionMatrix from "./PermissionMatrix";
 
 import { ROLE_OPTIONS } from "./roles-ui";
-import { ETIQUETA_DE_VISTA } from "@/lib/finanzas/vista";
+import FrentesDelMiembro from "./FrentesDelMiembro";
 
 interface MemberBundle {
   member: {
@@ -33,6 +33,10 @@ interface MemberBundle {
     canViewAllClients: boolean;
     canViewAllExpiresAt: string | null;
     vistaFinanzas: string | null;
+    /** Los frentes efectivos («Lo que lleva»): los elegidos, o los del rol si nadie los eligió. */
+    frentes: string[];
+    frentesElegidos: boolean;
+    esResponsableDeLaEscala: boolean;
   };
   base: PermissionMap;
   overrides: PermissionMap | null;
@@ -66,8 +70,8 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
   const [viewAll, setViewAll] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string>(""); // yyyy-mm-dd o ""
   const [overrides, setOverrides] = useState<SparseSections>({});
-  /* La vista de Finanzas de un Super Admin (rediseño 2026-10-03): "" = la de por defecto, revisa y cierra el mes. */
-  const [vistaFinanzas, setVistaFinanzas] = useState<string>("");
+  /* «Lo que lleva» (2026-10-04): null = no se tocó en este modal (no se manda); "rol" = volver a lo del rol. */
+  const [frentes, setFrentes] = useState<string[] | "rol" | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -84,7 +88,6 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
         setViewAll(b.member.canViewAllClients);
         setExpiresAt(b.member.canViewAllExpiresAt ? b.member.canViewAllExpiresAt.slice(0, 10) : "");
         setOverrides(structuredClone(b.overrides?.sections ?? {}));
-        setVistaFinanzas(b.member.vistaFinanzas ?? "");
       } catch (e) {
         toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar los permisos.");
         onClose();
@@ -110,6 +113,16 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
   // → checkbox deshabilitado. Si está pineado en ✕, el flag SÍ importa (es un canal de
   // acceso aparte en access.ts) → debe quedar editable, no bloqueado con leyenda falsa.
   const effViewAll = overrides.clientes?.viewAll ?? base?.sections.clientes?.viewAll === true;
+  /* El mapa EFECTIVO con lo que hay en pantalla (plantilla del rol elegido + pines): con él «Lo que lleva» avisa si un
+     frente pide pantallas que esta persona no va a poder abrir. */
+  const permisosEfectivos = useMemo(() => {
+    if (!base) return null;
+    const sections = structuredClone(base.sections) as Record<string, Record<string, boolean>>;
+    for (const [sec, acciones] of Object.entries(overrides)) {
+      for (const [accion, v] of Object.entries(acciones)) (sections[sec] ??= {})[accion] = v;
+    }
+    return { sections };
+  }, [base, overrides]);
   const roleSeesAll = effViewAll === true;
 
   const getCell = useCallback(
@@ -168,7 +181,8 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
           // en husos negativos (CR = UTC-6). Con `Z` el round-trip es estable.
           canViewAllExpiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59.999Z`).toISOString() : null,
           permissionOverrides: isSA || overrideCount === 0 ? null : { v: 1, sections: overrides },
-          vistaFinanzas: isSA && vistaFinanzas ? vistaFinanzas : null,
+          // Los frentes solo viajan si se tocaron: abrir y guardar no los marca como «elegidos a mano».
+          ...(frentes === null ? {} : { frentes: frentes === "rol" ? null : frentes }),
         }),
       });
       toast.success("Permisos guardados.");
@@ -230,20 +244,23 @@ export default function MemberPermissionsModal({ memberId, onClose, onSaved }: P
             </p>
           )}
 
+          {/* «Lo que lleva»: no es un permiso, decide qué le llega en «Para ti». Va para todos los roles. */}
+          <FrentesDelMiembro
+            role={role}
+            vistaFinanzas={bundle.member.vistaFinanzas}
+            esResponsableDeLaEscala={bundle.member.esResponsableDeLaEscala}
+            guardados={bundle.member.frentes}
+            elegidos={bundle.member.frentesElegidos}
+            valor={frentes}
+            onChange={setFrentes}
+            permisos={permisosEfectivos}
+          />
+
           {isSA ? (
             <>
               <p className="rounded-md border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
                 Super Admin siempre tiene todos los permisos (regla anti-lockout) — no se puede recortar ni pinear.
               </p>
-              {/* La vista de Finanzas: decide su menú de Finanzas y adónde entra, no lo que puede abrir. */}
-              <label className="flex flex-wrap items-center gap-2 rounded-lg border border-line px-3 py-2.5 text-xs text-fg-secondary">
-                Finanzas
-                <Select value={vistaFinanzas} onChange={(e) => setVistaFinanzas(e.target.value)} className="w-64">
-                  <option value="">{ETIQUETA_DE_VISTA.SUPERVISA}</option>
-                  <option value="DIRECCION">{ETIQUETA_DE_VISTA.DIRECCION}</option>
-                </Select>
-                <span className="text-fg-muted">Cambia su menú de Finanzas y la pantalla a la que entra.</span>
-              </label>
             </>
           ) : (
             <>

@@ -32,10 +32,10 @@ const visibles = (c: NavContext) =>
    no es un privilegio, y un manual que solo ven algunos no cumple su función. `escala` se sumó el
    2026-09-27 por la misma razón: la escala la interioriza todo el equipo.
    ⚠ El orden importa: `visibles()` respeta el orden de APP_NAV. */
-const UNIVERSALES = ["clients", "marketing", "sessions", "knowledge", "documentacion", "escala"];
+const UNIVERSALES = ["para-ti", "clients", "marketing", "sessions", "knowledge", "documentacion", "escala"];
 
 describe("gates del sidebar congelados (espejo de los booleanos pre-migración)", () => {
-  it("SUPER_ADMIN ve los 15 ítems", () => {
+  it("SUPER_ADMIN ve los 16 ítems", () => {
     const c = ctx(true, {
       clientes: { viewAll: true },
       customerSuccess: { read: true },
@@ -46,6 +46,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       configuracion: { read: true },
     });
     expect(visibles(c)).toEqual([
+      "para-ti",
       "clients",
       "marketing",
       "customer-success",
@@ -80,6 +81,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       configuracion: { read: true },
     });
     expect(visibles(c)).toEqual([
+      "para-ti",
       "clients",
       "marketing",
       "customer-success",
@@ -103,6 +105,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
        entera de la empresa y acá se vería. */
     const c = ctx(false, { customerSuccess: { read: true } });
     expect(visibles(c)).toEqual([
+      "para-ti",
       "clients",
       "marketing",
       "customer-success",
@@ -116,6 +119,7 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
   it("cobranza.read habilita Finanzas (perfil ADMIN) y nada más", () => {
     const c = ctx(false, { cobranza: { read: true } });
     expect(visibles(c)).toEqual([
+      "para-ti",
       "clients",
       "marketing",
       "finanzas",

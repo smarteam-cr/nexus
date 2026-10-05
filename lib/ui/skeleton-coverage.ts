@@ -21,6 +21,9 @@ export type Cobertura =
 
 /** Clave = directorio de la ruta relativo a `app/(shell)/` ("" = la raíz del grupo). */
 export const SKELETON_COVERAGE: Record<string, Cobertura> = {
+  // ── Para ti (2026-10-04) ────────────────────────────────────────────────────
+  "para-ti": { modo: "own" },
+
   // ── Clientes ────────────────────────────────────────────────────────────────
   clients: { modo: "own" },
   "clients/[id]": { modo: "own" },

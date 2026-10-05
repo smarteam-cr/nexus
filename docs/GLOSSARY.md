@@ -585,6 +585,19 @@
   retiró** el 2026-08-14. Reemplazó a las cuatro tarjetas de texto ese mismo día **sin agregar
   ningún campo obligatorio**, así que las propuestas ya publicadas la estrenan solas: sin
   `titular` cae al rótulo del documento. Ver DECISIONS §«Por qué Smarteam».
+- **Para ti** (`/para-ti`, primer ítem del menú, `lib/para-ti`): lo que le toca a cada persona en Nexus, juntado de
+  todos los módulos y recortado a lo suyo y a sus frentes. Arriba lo que dejó un agente; después «Para hoy», «Esta
+  semana» y «Cuando puedas»; a la derecha los avisos. El número del menú cuenta lo de hoy y los avisos sin leer.
+  «Del equipo» muestra cuánto tiene cada persona (o cada área, para dirección) sin dar permisos nuevos.
+- **frente / «Lo que lleva»** (`TeamMember.frentes`, `lib/para-ti/frentes.ts`): lo que una persona SIGUE en Smarteam,
+  aparte de su rol de acceso: Liderar Customer Success, Ventas, Finanzas (registrar / supervisar), Dirección,
+  Marketing, Escala, Documentación, Sistema (Feedback, reservado). No da permisos: decide qué le llega en «Para ti».
+  Se elige en Equipo; sin elegir, sale del rol. De los frentes de un Super Admin sale su vista de Finanzas.
+- **pendiente** (de «Para ti»): algo que te toca hacer, calculado del estado con las reglas del módulo; se va solo
+  cuando se resuelve. Distinto de un **aviso**.
+- **aviso** (modelo `Aviso`): algo que pasó y que una persona debería saber (el cliente aprobó, te devolvieron un pago,
+  te compartieron un documento, quedaste como encargado). Se escribe solo con `avisar()`, nunca a quien hizo la
+  acción, una vez por persona; se marca leído y se borra a los 90 días de leído.
 - **Feedback** (botón del pie del menú; revisión en `/feedback`): lo que cualquier persona del equipo reporta
   sobre Nexus desde la pantalla en la que está, con la captura de esa pantalla. Tres tipos: **Algo falla**,
   **Una mejora** y **No se entiende**. Lo revisa Super Admin. Ver DECISIONS §Feedback desde cualquier pantalla.

@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+import { armarParaTi, cuentaDelMenu, haceCuanto, loQueMasEspera } from "./armar";
+import type { Pendiente, ResultadoDeFuente } from "./tipos";
+
+const p = (clave: string, extra: Partial<Pendiente> = {}): Pendiente => ({
+  clave,
+  fuente: clave.split(":")[0],
+  cuando: "hoy",
+  delAgente: false,
+  titulo: clave,
+  detalle: "",
+  meta: "",
+  accion: "Ir",
+  href: "/",
+  ...extra,
+});
+
+const r = (fuente: string, items: Pendiente[], ok = true): ResultadoDeFuente => ({ fuente, alDia: `Al día: ${fuente}`, ok, items });
+
+describe("armarParaTi", () => {
+  it("lo del agente va aparte y arriba; lo demás por cuándo", () => {
+    const m = armarParaTi([
+      r("a", [p("a:1", { delAgente: true }), p("a:2", { cuando: "semana" })]),
+      r("b", [p("b:1"), p("b:2", { cuando: "luego" })]),
+    ]);
+    expect(m.agente.map((x) => x.clave)).toEqual(["a:1"]);
+    expect(m.hoy.map((x) => x.clave)).toEqual(["b:1"]);
+    expect(m.semana.map((x) => x.clave)).toEqual(["a:2"]);
+    expect(m.luego.map((x) => x.clave)).toEqual(["b:2"]);
+  });
+
+  it("lo que falló va primero; después, lo que más espera", () => {
+    const m = armarParaTi([
+      r("x", [
+        p("x:nuevo", { desde: "2026-10-03T12:00:00Z" }),
+        p("x:viejo", { desde: "2026-09-20T12:00:00Z" }),
+        p("x:sin-fecha"),
+        p("x:fallo", { error: true, desde: "2026-10-04T12:00:00Z" }),
+      ]),
+    ]);
+    expect(m.hoy.map((x) => x.clave)).toEqual(["x:fallo", "x:viejo", "x:nuevo", "x:sin-fecha"]);
+  });
+
+  it("una fuente sin nada va a «al día»; una que no se pudo medir, a «no se pudo revisar»", () => {
+    const m = armarParaTi([r("vacia", []), r("rota", [], false), r("con", [p("con:1")])]);
+    expect(m.alDia).toEqual(["Al día: vacia"]);
+    expect(m.sinMedir).toEqual(["Al día: rota"]);
+  });
+
+  it("la misma clave no se repite aunque dos fuentes la midan", () => {
+    const m = armarParaTi([r("a", [p("a:1")]), r("b", [p("a:1")])]);
+    expect(m.hoy).toHaveLength(1);
+  });
+});
+
+describe("el número del menú", () => {
+  it("cuenta lo del agente, lo de hoy y los avisos sin leer — no lo de la semana", () => {
+    const m = armarParaTi([r("a", [p("a:1", { delAgente: true }), p("a:2"), p("a:3", { cuando: "semana" })])]);
+    expect(cuentaDelMenu(m, 2)).toBe(4);
+  });
+});
+
+describe("lo que más espera", () => {
+  it("lo más viejo de hoy o del agente; si no hay, lo de la semana; si no, nada", () => {
+    const viejo = p("a:viejo", { delAgente: true, desde: "2026-09-01T00:00:00Z" });
+    expect(loQueMasEspera(armarParaTi([r("a", [p("a:1", { desde: "2026-10-01T00:00:00Z" }), viejo])]))?.clave).toBe("a:viejo");
+    expect(loQueMasEspera(armarParaTi([r("a", [p("a:s", { cuando: "semana" })])]))?.clave).toBe("a:s");
+    expect(loQueMasEspera(armarParaTi([r("a", [])]))).toBeNull();
+  });
+
+  it("haceCuanto", () => {
+    const ahora = new Date("2026-10-04T15:00:00Z");
+    expect(haceCuanto("2026-10-04T10:00:00Z", ahora)).toBe("hoy");
+    expect(haceCuanto("2026-10-03T10:00:00Z", ahora)).toBe("ayer");
+    expect(haceCuanto("2026-09-29T10:00:00Z", ahora)).toBe("hace 5 días");
+    expect(haceCuanto(null, ahora)).toBeNull();
+  });
+});

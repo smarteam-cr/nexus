@@ -20,7 +20,8 @@ export default async function HomePage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const authenticated = await getConsultantSession();
-  if (authenticated) redirect("/clients");
+  // La entrada es «Para ti» (2026-10-04): lo que le toca a cada persona, con un clic a cada módulo.
+  if (authenticated) redirect("/para-ti");
 
   const { error: errorCode } = await searchParams;
   const errorMessage = errorCode ? ERROR_MESSAGES[errorCode] : null;

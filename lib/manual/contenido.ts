@@ -208,6 +208,8 @@ export const DOC_AGENTES: Record<string, string> = {
  * una sección nueva sin explicación aparecería como una fila muda.
  */
 export const DOC_MENU: Record<string, string> = {
+  "para-ti":
+    "Lo que te toca hoy, juntado de todos los módulos: lo de tus proyectos y tus preventas, lo de lo que llevas (se elige en Equipo) y los avisos de lo que pasó. Cada cosa te lleva a donde se hace.",
   clients:
     "La cartera: todas las empresas, con sus proyectos adentro. Es la pantalla donde se trabaja el día a día de un cliente.",
   marketing:

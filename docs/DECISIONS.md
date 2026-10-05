@@ -3708,7 +3708,10 @@ escalera, mapa radial), filtro por perfil de negocio y comentarios anclados.
   `--centinela`, inserta un comentario dentro de una transacción, mira como `anon` y
   `authenticated`, y hace ROLLBACK. Se probó que falla si la tabla queda abierta.
 - **Fuera de alcance, a pedido**: votos, notificaciones y análisis con IA. Los agentes no leen los
-  comentarios (guardia en `guardas.test.ts`).
+  comentarios (guardia en `guardas.test.ts`). ⚠ **Las notificaciones se sumaron con «Para ti»** y,
+  desde el 2026-10-05, las escribe el módulo de Feedback (ver «Los comentarios de la escala se deciden
+  en Feedback»): un comentario nuevo avisa a los frentes Feedback y Escala, y una respuesta, a su
+  autor. Votos y análisis con IA siguen fuera.
 
 ## La escala tiene ediciones por industria, no una escala por industria (2026-09-29)
 
@@ -4714,3 +4717,48 @@ todavía no estaba desplegado: no hubo nada que mover.
 **Pendiente.** `lib/escala/comentarios/consultas.ts` (las tablas viejas) queda sin uso: tiene cambios
 sin guardar de «Para ti» y se borra cuando esa conversación los guarde, junto con lo que solo lo
 sostiene (`CambiarEstado`, los campos opcionales de `ComentarioVisto`).
+
+## «Para ti»: lo que le toca a cada persona, y los avisos (2026-10-04)
+
+> Elías, con el rediseño ya aplicado: «la información sobre qué sigue, qué necesita atención en cada parte de Nexus
+> debería ser específica para cada usuario… No es que solo pueda ver eso, la transparencia está bien, sino que la
+> interfaz le sea muy útil». Diseño aprobado: artefacto «Notificaciones · diseño».
+
+- **Dos preguntas separadas.** El ROL (y la matriz de permisos) sigue diciendo qué puedes VER y HACER. Lo que te
+  TOCA sale de datos: los proyectos de implementación donde eres el encargado en HubSpot, las cuentas que te
+  compartieron a ti, las preventas que llevas, las propuestas que creaste, lo que te devolvieron. Un solo lugar lo
+  calcula (`lib/para-ti/alcance-server.ts`). *Por qué:* el índice de clientes decidía el alcance por permiso
+  (`veTodo ? todo : lo tuyo`), y como Ventas, la CSL, Marketing, Dev y dirección ven toda la cartera, veían los
+  avisos de todas las cuentas como si les tocaran.
+- **Los FRENTES («Lo que lleva»)** cubren lo que no tiene una persona escrita en el dato: las alertas del vigía, los
+  comentarios de la Escala, los pendientes de Finanzas. Tres Super Admin (Elías, Marco Salas, Alex Arrieta) tienen el
+  mismo acceso y no siguen lo mismo. Se eligen en Equipo, por persona (`TeamMember.frentes`); sin elegir, salen del rol
+  (`FRENTES_POR_DEFECTO`). **No dan permisos**: Equipo avisa en ámbar si alguien lleva un frente cuyas pantallas no
+  puede abrir. `frentesEditadosAt` null = nadie los eligió (null no es lo mismo que una lista vacía). Texto y no enum.
+- **La vista de Finanzas se desprende de los frentes.** Al guardar los frentes de un Super Admin, `vistaFinanzas` queda
+  en «Dirección» salvo que lleve «Finanzas: supervisar». Ya no se elige aparte en Equipo: dos datos diciendo lo mismo
+  terminan diciendo cosas distintas. Sin elegir, un Super Admin hereda lo que ya decía su vista.
+- **Dos clases de cosas, y no se mezclan.** PENDIENTE: lo que te toca hacer, calculado del estado con las reglas que
+  ya usa cada módulo (`lib/para-ti/fuentes`), y que se va solo cuando se resuelve. AVISO: algo que pasó (el cliente
+  aprobó, te devolvieron un pago, te asignaron una cuenta), guardado en la tabla `Aviso`, que se marca leído.
+- **Los avisos tienen una sola puerta** (`avisar`, `lib/para-ti/avisos-server.ts`): se llama DESPUÉS de que la acción
+  quedó hecha y nunca lanza (perder un aviso es menos grave que fallar un «Devolver»); nunca le llega a quien hizo la
+  acción (también un CHECK en la base); el mismo hecho avisa una vez por persona (`dedupeKey`); el enlace es una ruta
+  de Nexus. Los leídos se borran a los 90 días, los no leídos a los 180 (mantenimiento diario).
+- **Sin librería.** Novu, Knock y similares resuelven el envío por varios canales, no la pregunta difícil (qué le toca
+  a quién), mandarían nombres de clientes y montos a un tercero, y Novu en el VPS pide Mongo y Redis. Supabase Realtime
+  choca con el bloqueo total de RLS. Para unas 20 personas alcanza un pedido cada minuto y medio con la pestaña a la
+  vista (cada cinco escondida, para la notificación del navegador), con la medición guardada dos minutos en memoria
+  (un solo proceso, RUNBOOK invariante #1). No va en el armado del menú: ese corre en cada navegación.
+- **«Del equipo» no da permisos nuevos.** Quien no puede abrir toda la cartera (un CSE) ve cuántas cosas tiene cada
+  persona, sin nombres de cuentas. Dirección lo ve por área. Lo que no tiene dueño (proyectos sin encargado) tiene su
+  fila, en ámbar.
+- **El número del menú es lo de HOY** (lo del agente, lo de hoy y los avisos sin leer), no la semana: un número que
+  nunca baja se deja de mirar.
+- **Pendiente, a propósito:** el notificador de alertas de la CSL (`CsAlertNotifier`) sigue hasta que el vigía escriba
+  avisos (su archivo lo estaba cambiando otra sesión), y el «Necesitan atención» del índice de clientes sigue con el
+  alcance por permiso hasta sumarle «Tuyas · Todas».
+- **Feedback y la Escala (2026-10-05):** los avisos del feedback y de los comentarios de la Escala los escribe el módulo
+  de Feedback (`lib/feedback`), siempre con `avisar()`. El frente Escala cuenta los comentarios de la Escala que esperan
+  una decisión (reportes de Feedback con ancla, sin revisar) y pide Super Admin, porque se deciden en la bandeja de
+  Feedback.

@@ -9,6 +9,8 @@
  * el cliente, y no la borra el tope de 30 versiones (lib/canvas/versiones.ts).
  */
 import { prisma } from "@/lib/db/prisma";
+import { avisar } from "@/lib/para-ti/avisos-server";
+import { urlDeProyecto } from "@/lib/agents/run-url";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { hiddenKeysFrom } from "@/lib/business-cases/section-briefs";
 import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
@@ -45,7 +47,7 @@ async function cargarDocumento(canvasId: string) {
       versionDocumento: true,
       contentUpdatedAt: true,
       updatedAt: true,
-      project: { select: { client: { select: { name: true, hubspotCompanyId: true } } } },
+      project: { select: { clientId: true, hubspotOwnerEmail: true, client: { select: { name: true, hubspotCompanyId: true } } } },
       canvasSections: {
         select: { key: true, blocks: { where: { blockType: "CARD" }, select: { data: true }, take: 1 } },
       },
@@ -227,6 +229,18 @@ export async function registrarAprobacion(canvasId: string, datos: DatosDeAproba
       },
     }),
   ]);
+  // «Para ti» (2026-10-04): al encargado del proyecto le llega que el cliente aprobó (si no fue él quien lo registró).
+  if (doc.project && doc.projectId) {
+    await avisar({
+      para: doc.project.hubspotOwnerEmail,
+      tipo: "cliente.aprobo-documento",
+      titulo: `${doc.project.client?.name ?? "El cliente"} aprobó ${doc.name || "el documento"}${por ? "" : " desde su enlace"}`,
+      detalle: `Lo aprobó ${datos.nombre.trim()} sobre la versión ${doc.versionDocumento}.`,
+      href: urlDeProyecto(doc.project.clientId, doc.projectId, canvasId),
+      actorEmail: por,
+      dedupeKey: `cliente.aprobo-documento:${canvasId}:${doc.versionDocumento}`,
+    });
+  }
   return devolver(canvasId);
 }
 

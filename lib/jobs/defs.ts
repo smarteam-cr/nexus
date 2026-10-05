@@ -137,6 +137,10 @@ const maintenanceDaily: JobDef = {
     console.log(
       `[jobs/maintenance] ${dateKey} — ${tokens.count} PrintJobToken expirados, ${attempts.count} ExternalVerifyAttempt viejos barridos`,
     );
+    // «Para ti» (2026-10-04): los avisos leídos hace más de 90 días y los no leídos de más de 180 se borran.
+    const { borrarAvisosViejos } = await import("@/lib/para-ti/avisos-server");
+    const avisos = await borrarAvisosViejos(now);
+    if (avisos > 0) console.log(`[jobs/maintenance] ${dateKey} — ${avisos} avisos viejos de «Para ti» borrados`);
     /* ⚠ Si falla, LANZA y el turno del día se queda: rojo en Integraciones y Sentry, sin martillar
        la base cada minuto. Lo de arriba ya quedó hecho, y repetirlo mañana no le hace daño. */
     const { refrescarAlertasDeCobranza } = await import("@/lib/cobranza/alertas-refresco");

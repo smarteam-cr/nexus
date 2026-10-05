@@ -11,6 +11,7 @@ import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { APP_NAV, canSeeNavItem, visibleNavChildren } from "./nav-config";
 import NavFlyout, { RolesNavFlyout } from "./NavFlyout";
+import { useCuentaParaTi } from "@/components/para-ti/cuenta";
 import BotonDeFeedback from "@/components/feedback/BotonDeFeedback";
 
 interface UserLite {
@@ -54,18 +55,23 @@ function NavItem({
   isOpen,
   icon,
   label,
+  cuenta,
 }: {
   href: string;
   active: boolean;
   isOpen: boolean;
   icon: React.ReactNode;
   label: string;
+  /** El número de «Para ti» (lo que pide atención hoy). Sin número o en 0, no se pinta. */
+  cuenta?: number | null;
 }) {
+  const conCuenta = !!cuenta && cuenta > 0;
   return (
     <Link
       href={href}
-      title={!isOpen ? label : undefined}
-      className={`flex items-center rounded-lg text-sm transition-colors ${
+      title={!isOpen ? (conCuenta ? `${label} · ${cuenta}` : label) : undefined}
+      aria-label={conCuenta ? `${label}, ${cuenta} ${cuenta === 1 ? "cosa" : "cosas"} para hoy` : undefined}
+      className={`relative flex items-center rounded-lg text-sm transition-colors ${
         isOpen ? "gap-2.5 px-3 py-2" : "justify-center p-2.5"
       } ${
         active
@@ -75,6 +81,14 @@ function NavItem({
     >
       {icon}
       {isOpen && <span className="truncate">{label}</span>}
+      {conCuenta &&
+        (isOpen ? (
+          <span className="ml-auto min-w-5 flex-none rounded-full border border-info-line bg-info-surface px-[7px] text-center text-[11px] font-semibold leading-[18px] tabular-nums text-brand">
+            {cuenta! > 99 ? "99+" : cuenta}
+          </span>
+        ) : (
+          <span aria-hidden className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary" />
+        ))}
     </Link>
   );
 }
@@ -201,6 +215,7 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
 
 export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps) {
   const pathname = usePathname();
+  const cuentaParaTi = useCuentaParaTi();
 
   // Visibilidad de ítems desde el mapa de PERMISOS EFECTIVO, resuelta por los
   // gates DECLARATIVOS de nav-config (canSeeNavItem es puro; el test de gates
@@ -224,7 +239,7 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
         {isOpen ? (
           <>
             <Link
-              href="/clients"
+              href="/para-ti"
               onClick={scrollSiteToTop}
               className="flex items-center gap-2.5 min-w-0"
             >
@@ -297,6 +312,7 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
                       isOpen={isOpen}
                       label={item.label}
                       icon={item.icon}
+                      cuenta={item.cuenta === "para-ti" ? cuentaParaTi?.cuenta : undefined}
                     />
                   );
                 })}

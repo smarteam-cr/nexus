@@ -6,6 +6,7 @@
  * editados por humano. Publicar congela un snapshot client-safe.
  */
 import { randomBytes } from "node:crypto";
+import { avisar } from "@/lib/para-ti/avisos-server";
 import bcrypt from "bcrypt";
 import { Prisma, type BusinessCaseBlockType } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
@@ -401,7 +402,36 @@ export async function approveBusinessCase(
   businessCaseId: string,
   input: { email: string; name?: string | null },
 ): Promise<{ approval: BcApproval; yaEstaba: boolean }> {
-  return aprobarUnaSolaVez(prisma, businessCaseId, input);
+  const r = await aprobarUnaSolaVez(prisma, businessCaseId, input);
+  if (!r.yaEstaba) await avisarPropuestaAprobada(businessCaseId, r.approval);
+  return r;
+}
+
+/**
+ * «Para ti» (2026-10-04): a quien armó la propuesta (y a quien lleva la preventa de donde salió) le llega que el cliente
+ * la aprobó; a dirección también. Nunca lanza: la aprobación del cliente ya quedó guardada.
+ */
+async function avisarPropuestaAprobada(businessCaseId: string, approval: BcApproval) {
+  try {
+    const bc = await prisma.businessCase.findUnique({
+      where: { id: businessCaseId },
+      select: { name: true, createdByEmail: true, client: { select: { name: true } }, exploracion: { select: { responsableEmail: true } } },
+    });
+    if (!bc) return;
+    const aviso = {
+      tipo: "cliente.aprobo-propuesta",
+      titulo: `${bc.client?.name ?? "El cliente"} aprobó la propuesta «${bc.name}»`,
+      detalle: `La aprobó ${approval.approvedByName || approval.approvedByEmail} desde su enlace.`,
+      href: `/business-cases/${encodeURIComponent(businessCaseId)}`,
+      dedupeKey: `cliente.aprobo-propuesta:${businessCaseId}:${approval.approvedAt.toISOString()}`,
+    };
+    await Promise.all([
+      avisar({ ...aviso, para: [bc.createdByEmail, bc.exploracion?.responsableEmail] }),
+      avisar({ ...aviso, frente: "DIRECCION" }),
+    ]);
+  } catch (e) {
+    console.error(`[para-ti] no se pudo avisar la aprobación de ${businessCaseId}: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /** Borra la aprobación (aprobaciones de prueba, correo equivocado). Solo interno. */

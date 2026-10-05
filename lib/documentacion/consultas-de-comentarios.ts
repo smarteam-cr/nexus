@@ -9,6 +9,7 @@
  * TeamMember al devolver, con un select propio (⛔ no ampliar `TEAM_MEMBER_SAFE_SELECT`).
  */
 import { prisma } from "@/lib/db/prisma";
+import { avisar } from "@/lib/para-ti/avisos-server";
 import type { Autor, HiloAbiertoDeLaBase, HiloVisto } from "./comentarios";
 
 const CAMPOS_DEL_HILO = {
@@ -149,7 +150,7 @@ export async function crearHilo(datos: {
   email: string;
 }) {
   const { paginaId, bloqueId, cita, antes, despues, cuerpo, email } = datos;
-  const pagina = await prisma.paginaDoc.findUnique({ where: { id: paginaId }, select: { archivadaAt: true } });
+  const pagina = await prisma.paginaDoc.findUnique({ where: { id: paginaId }, select: { archivadaAt: true, slug: true, titulo: true } });
   if (!pagina) return { ok: false as const, motivo: "La página no existe." };
   if (pagina.archivadaAt) return { ok: false as const, motivo: "La página está en la papelera." };
 
@@ -165,15 +166,39 @@ export async function crearHilo(datos: {
     },
     select: CAMPOS_DEL_HILO,
   });
+  // «Para ti» (2026-10-04): le llega a quien lleva el frente Documentación (los que resuelven). `avisar` no lanza.
+  await avisar({
+    frente: "DOCUMENTACION",
+    tipo: "documentacion.comentario",
+    titulo: `Comentario nuevo en «${pagina.titulo}»`,
+    detalle: cuerpo,
+    href: `/documentacion/${encodeURIComponent(pagina.slug)}`,
+    actorEmail: email,
+    dedupeKey: `documentacion.comentario:${creado.id}`,
+  });
   const autor = await autoresDe(emailsDe([creado]));
   return { ok: true as const, hilo: verHilo(creado, autor) };
 }
 
 export async function responder(datos: { hiloId: string; cuerpo: string; email: string }) {
   const { hiloId, cuerpo, email } = datos;
-  await prisma.comentarioDoc.create({ data: { hiloId, autorEmail: email, cuerpo } });
+  const creado = await prisma.comentarioDoc.create({ data: { hiloId, autorEmail: email, cuerpo }, select: { id: true } });
   // Tocar el hilo mueve su `updatedAt`: una respuesta es actividad del hilo.
-  await prisma.hiloDeComentariosDoc.update({ where: { id: hiloId }, data: { updatedAt: new Date() } });
+  const hilo = await prisma.hiloDeComentariosDoc.update({
+    where: { id: hiloId },
+    data: { updatedAt: new Date() },
+    select: { autorEmail: true, comentarios: { select: { autorEmail: true } }, pagina: { select: { slug: true, titulo: true } } },
+  });
+  // «Para ti»: a quienes ya escribieron en el hilo (menos quien responde) les llega la respuesta. `avisar` no lanza.
+  await avisar({
+    para: [hilo.autorEmail, ...hilo.comentarios.map((c) => c.autorEmail)],
+    tipo: "documentacion.respuesta",
+    titulo: `Respondieron un comentario en «${hilo.pagina.titulo}»`,
+    detalle: cuerpo,
+    href: `/documentacion/${encodeURIComponent(hilo.pagina.slug)}`,
+    actorEmail: email,
+    dedupeKey: `documentacion.respuesta:${creado.id}`,
+  });
 }
 
 export async function cambiarResuelto(datos: { hiloId: string; resuelto: boolean; email: string }) {

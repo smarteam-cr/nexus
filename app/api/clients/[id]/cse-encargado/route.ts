@@ -5,6 +5,7 @@ import { getSystemHubspotClient } from "@/lib/hubspot/client";
 import { actualizarCslEncargado, resolverOwnerIdPorEmail } from "@/lib/hubspot/project-record";
 import { syncProjectsForClient } from "@/lib/hubspot/sync-projects";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
+import { avisar } from "@/lib/para-ti/avisos-server";
 
 /**
  * PATCH /api/clients/[id]/cse-encargado — reasignar el CSE encargado de una CUENTA.
@@ -138,6 +139,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       { status: 502 },
     );
   }
+
+  // «Para ti» (2026-10-04): a quien queda como encargado le llega el aviso (salvo que se lo haya asignado a sí mismo).
+  const cliente = await prisma.client.findUnique({ where: { id: clientId }, select: { name: true } });
+  await avisar({
+    para: destino.email,
+    tipo: "proyecto.encargado",
+    titulo: `Quedaste como encargado de ${cliente?.name ?? "una cuenta"}`,
+    detalle: proyectos.length === 1 ? `«${proyectos[0].name}».` : `${proyectos.length} proyectos: ${proyectos.map((p) => `«${p.name}»`).join(", ")}.`,
+    href: `/clients/${encodeURIComponent(clientId)}`,
+    actorEmail: guard.user.email,
+    dedupeKey: `proyecto.encargado:${clientId}:${new Date().toISOString().slice(0, 10)}`,
+  });
 
   return NextResponse.json({ encargado: destino.name, proyectos: proyectos.length });
 }

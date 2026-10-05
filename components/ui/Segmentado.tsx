@@ -23,6 +23,8 @@ export interface OpcionSegmentada<K extends string> {
   title?: string;
   /** Se ve pero no se elige (con su `title` explicando por qué). */
   deshabilitada?: boolean;
+  /** Cuántas filas deja ver la opción («Mis clientes 23»). En 11 px y gris, después del nombre. */
+  cuenta?: number;
 }
 
 export interface SegmentadoProps<K extends string> {
@@ -89,6 +91,7 @@ export function Segmentado<K extends string>({ opciones, valor, onCambio, etique
             )}
           >
             {o.etiqueta}
+            {o.cuenta !== undefined && <span className="ml-1 text-[11px] font-normal tabular-nums text-fg-muted">{o.cuenta}</span>}
           </button>
         );
       })}

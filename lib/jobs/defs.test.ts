@@ -42,6 +42,8 @@ vi.mock("@/lib/cobranza/odoo/sync", () => ({ sincronizarOdoo }));
 vi.mock("@/lib/cobranza/mercury/sync", () => ({ sincronizarMercury }));
 vi.mock("@/lib/cobranza/alertas-refresco", () => ({ refrescarAlertasDeCobranza }));
 vi.mock("@/lib/marketing/cron", () => ({ tickMarketingCron }));
+// «Para ti»: el mantenimiento borra los avisos viejos (la base acá está simulada).
+vi.mock("@/lib/para-ti/avisos-server", () => ({ borrarAvisosViejos: async () => 0 }));
 // El resto de lo que importa defs.ts arrastra HubSpot, Anthropic y media app, y acá no corre.
 vi.mock("@/lib/hubspot/cs-signals", () => ({ refreshAllCsSignals: vi.fn() }));
 vi.mock("@/lib/cs/partner-sync", () => ({ syncPartnerClients: vi.fn() }));

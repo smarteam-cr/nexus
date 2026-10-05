@@ -5,6 +5,7 @@
  * El gate de quién administra —dirección y el CSL— vive en las routes (`guardRolesAdmin`).
  */
 import type { Prisma } from "@prisma/client";
+import { avisar } from "@/lib/para-ti/avisos-server";
 import { prisma } from "@/lib/db/prisma";
 
 export async function createRole(data: Prisma.RoleProfileCreateInput) {
@@ -41,11 +42,24 @@ export async function loadRoleShares(roleId: string) {
  * compartir dos veces con la misma persona no duplica ni falla.
  */
 export async function shareRoleDoc(roleId: string, teamMemberId: string, grantedByEmail: string) {
-  return prisma.roleProfileShare.upsert({
+  const share = await prisma.roleProfileShare.upsert({
     where: { roleId_teamMemberId: { roleId, teamMemberId } },
     create: { roleId, teamMemberId, grantedByEmail },
     update: {},
+    include: { role: { select: { title: true } }, teamMember: { select: { email: true } } },
   });
+  // «Para ti» (2026-10-04): a quien recibe el documento le llega un aviso. Una vez por documento y persona (el dedupe):
+  // volver a compartir lo mismo no vuelve a avisar. `avisar` no lanza.
+  await avisar({
+    para: share.teamMember.email,
+    tipo: "roles.compartido",
+    titulo: `Te compartieron «${share.role.title}»`,
+    detalle: "Lo puedes leer en Roles.",
+    href: `/roles/${encodeURIComponent(roleId)}`,
+    actorEmail: grantedByEmail,
+    dedupeKey: `roles.compartido:${roleId}`,
+  });
+  return share;
 }
 
 /**

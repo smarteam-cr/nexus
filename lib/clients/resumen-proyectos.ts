@@ -93,6 +93,31 @@ export const tieneTrabajoInterno = (r: ResumenDeProyectos): boolean => r.interno
 export const esTrabajoInterno = (p: ProyectoParaFiltro): boolean =>
   esProyectoClasificable(p) && p.proyectoInterno;
 
+/**
+ * Los proyectos que cuentan como ABIERTOS: el mismo criterio que `abiertos`, devolviendo las
+ * filas. El índice saca de acá la línea de nombres, la etapa y los avisos de «Necesitan atención»
+ * (2026-10-04), para que ninguno pueda filtrar distinto que la columna y el filtro.
+ */
+export function proyectosAbiertos<P extends ProyectoParaFiltro>(proyectos: readonly P[]): P[] {
+  return proyectos.filter((p) => p.serviceType !== SENTINEL_SERVICE_TYPE && esProyectoClasificable(p));
+}
+
+/**
+ * Los NOMBRES de los proyectos abiertos, en orden alfabético estable. Es la línea de abajo del
+ * nombre de la empresa en el índice (rediseño del 2026-10-04): dice QUÉ se está haciendo, que es
+ * lo que el número de la columna vieja no decía.
+ *
+ * Mismo criterio que `abiertos` —escrito una vez, arriba— para que la línea y el filtro «Con
+ * proyecto abierto» no puedan contar historias distintas. Va como función aparte y no como campo
+ * del resumen: el resumen cruza como tres escalares y sus tests lo comparan entero.
+ */
+export function nombresAbiertos(proyectos: readonly (ProyectoParaFiltro & { name: string })[]): string[] {
+  return proyectosAbiertos(proyectos)
+    .map((p) => p.name.trim())
+    .filter((n) => n.length > 0)
+    .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+}
+
 /** El `title` de la columna "Proyectos". Dice lo que el número NO muestra. */
 export function tituloDeProyectos(r: ResumenDeProyectos): string {
   const partes: string[] = [];

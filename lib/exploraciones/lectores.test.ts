@@ -49,6 +49,14 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/clients/[id]/analyze/route.ts": { destino: "handoff-interno", motivo: "El bloque de la exploración en el handoff de Customer Success." },
   "app/api/projects/[projectId]/exploracion-de-venta/route.ts": { destino: "handoff-interno", motivo: "La cuarta columna del contexto del handoff." },
   "lib/sessions/post-process.ts": { destino: "disparo", motivo: "Lanza la lectura automática de una reunión; no lee contenido." },
+  "lib/para-ti/fuentes/preventa.ts": {
+    destino: "ventas",
+    motivo: "«Para ti» (interno): cuántas sugerencias esperan y la próxima reunión de las preventas que lleva cada persona.",
+  },
+  "lib/business-cases/mutations.ts": {
+    destino: "ventas",
+    motivo: "«Para ti»: avisarle a quien lleva la preventa que el cliente aprobó la propuesta. Solo lee el responsable.",
+  },
   "lib/guia-exploracion/servidor.ts": {
     destino: "guia-interna",
     motivo: "La guía de exploración del CSE (interna) muestra dónde quedó el cliente en el preliminar. Solo niveles.",

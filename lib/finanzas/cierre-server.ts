@@ -11,6 +11,7 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
+import { avisar } from "@/lib/para-ti/avisos-server";
 import { CobranzaError } from "@/lib/cobranza/mutations";
 import { crDateParts } from "@/lib/jobs/time";
 import { cargarEgresosDelAnio, loadReporteAnual } from "@/lib/cobranza/queries";
@@ -203,7 +204,19 @@ export async function cerrarMes(periodo: string, actor: string, hoyISO: string):
   };
   const datos = { estado: "CERRADO", cerradoPor: actor, cerradoEn: new Date(), numeros: { ...numeros } };
   await prisma.cierreMes.upsert({ where: { periodo }, create: { periodo, ...datos }, update: datos });
+  // «Para ti» (2026-10-04): le llega a quien registra (su trabajo de ese mes quedó cerrado) y a dirección. No lanza.
+  const aviso = {
+    tipo: "finanzas.mes-cerrado",
+    titulo: `Se cerró ${NOMBRE_DEL_MES[Number(periodo.slice(5, 7)) - 1] ?? periodo} de ${periodo.slice(0, 4)}`,
+    detalle: "Sus números quedaron guardados en el punto de equilibrio.",
+    href: "/finanzas/equilibrio",
+    actorEmail: actor,
+    dedupeKey: `finanzas.mes-cerrado:${periodo}:${datos.cerradoEn.toISOString()}`,
+  };
+  await Promise.all([avisar({ ...aviso, frente: "FINANZAS_REGISTRAR" }), avisar({ ...aviso, frente: "DIRECCION" })]);
 }
+
+const NOMBRE_DEL_MES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 /** Reabrir un mes cerrado, con el motivo. Los números del cierre quedan guardados como estaban. */
 export async function reabrirMes(periodo: string, motivo: string, actor: string): Promise<void> {
