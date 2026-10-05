@@ -3779,6 +3779,19 @@ model CierreMes {
   updatedAt        DateTime  @updatedAt
 }
 
+/// Una decisión de dirección sobre el punto de equilibrio, tomada desde la página (2026-10-05). Sin fila = sin decidir:
+/// manda el valor por defecto del código. Hoy hay una sola: `aliados-cubren-piso` (SI · NO), la pregunta de si lo que
+/// pagan los aliados cuenta para cubrir el piso (`PARTNERSHIP_CUBRE_EL_PISO`). SQL: 2026-10-05-decisiones-de-finanzas.sql.
+model DecisionFinanzas {
+  clave       String   @id
+  valor       String
+  decididoPor String
+  decididoEn  DateTime
+  nota        String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 // ─── IngresoVariable ─────────────────────────────────────────────────────────
 // Entrada de dinero que NO forma parte del flujo constante de cobranza quincenal
 // y que NO cuelga de un servicio contratado: una cuenta rescatada que se cobró

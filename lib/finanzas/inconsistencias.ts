@@ -229,6 +229,12 @@ export interface EstadoParaAuditar {
    * Ausente = no se midió.
    */
   porCobrarEnMercurySinEmparejar?: { cuantas: number; clientes: number; monto: number; sinTasa: number; items: ItemInconsistencia[] };
+  /**
+   * Lo que cuesta la planilla por mes según Costos (los salarios vigentes, que es lo que usa el piso de hoy) contra
+   * lo último que se pagó en un mes con las dos quincenas anotadas (rediseño del punto de equilibrio, 2026-10-05).
+   * Ausente = no se midió; `ultimoPagado` null = ningún mes tiene la planilla completa.
+   */
+  planilla?: { costoMensual: number; ultimoPagado: { periodo: string; monto: number } | null };
   /** Hoy, "YYYY-MM-DD". Entra por parámetro: este módulo no lee el reloj. */
   hoyISO: string;
 }
@@ -568,6 +574,34 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       resuelve: "DIRECCION",
       items: [],
     });
+  }
+
+  // ── La planilla del piso contra la que se pagó ──────────────────────────────
+  // El piso de hoy suma los salarios vigentes de Costos. Si lo último pagado es muy distinto, una de las dos cosas
+  // está mal (un salario de más o de menos en Costos, o quincenas sin anotar) y el piso sube o baja con ella.
+  const pl = e.planilla;
+  if (pl?.ultimoPagado && pl.ultimoPagado.monto > 0) {
+    const diferencia = round2(pl.costoMensual - pl.ultimoPagado.monto);
+    if (Math.abs(diferencia) / pl.ultimoPagado.monto > 0.1) {
+      out.push({
+        codigo: "PLANILLA_COSTO_VS_PAGADO",
+        severidad: "ALTA",
+        titulo: "¿Cuánto cuesta de verdad la planilla?",
+        detalle:
+          `Costos dice ${money(pl.costoMensual)} al mes; lo último pagado con las dos quincenas anotadas fue ` +
+          `${money(pl.ultimoPagado.monto)}, en ${pl.ultimoPagado.periodo}. El piso de hoy usa el primero, así que ` +
+          `${diferencia > 0 ? "sube" : "baja"} ${money(Math.abs(diferencia))} por mes por esta diferencia.`,
+        // Es una diferencia por MES que mueve el piso, no plata que falte en algún lado: no suma al total de la lista.
+        montoEnJuego: null,
+        queHacer:
+          "Revisar los salarios vigentes en Costos › Planilla contra lo que se paga: alguien de más, un aumento sin «Rige desde», o quincenas sin anotar.",
+        resuelve: "DIRECCION",
+        items: [
+          { texto: "Según Costos (salarios vigentes)", monto: pl.costoMensual },
+          { texto: `Pagado en ${pl.ultimoPagado.periodo}`, monto: pl.ultimoPagado.monto },
+        ],
+      });
+    }
   }
 
   // ── Moneda deducida ─────────────────────────────────────────────────────────

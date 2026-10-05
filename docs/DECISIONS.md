@@ -2935,6 +2935,10 @@ fabricarla.
   siempre sin que nadie lo firmara. Vive en `lib/finanzas/equilibrio.ts`, los tests corren con
   los dos valores y un centinela compara esta línea con el código: cambiar la decisión exige
   cambiar las dos. La caja no depende de la bandera: una comisión cobrada entró igual.
+  **Desde el 2026-10-05 la decide dirección en la página** (Finanzas › Punto de equilibrio › «Para
+  decidir»): queda en `DecisionFinanzas` (`aliados-cubren-piso`, SI · NO), firmada con quién y cuándo,
+  y manda sobre la bandera. La bandera sigue siendo el valor POR DEFECTO —el que rige mientras nadie
+  decidió—, por eso esta línea y el centinela siguen valiendo.
 
 ## Documentación pasa a ser una base de conocimiento (2026-09-11)
 

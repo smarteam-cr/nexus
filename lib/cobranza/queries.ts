@@ -105,7 +105,8 @@ import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguin
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
 import { facturadoEnOdooSinCuenta, porCobrarEnMercurySinEmparejar } from "@/lib/finanzas/facturado-sin-cuenta";
 import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
-import { cambioDespuesDelCierre, type NumerosDelCierre } from "@/lib/finanzas/cierre";
+import { cambioDespuesDelCierre, confirmadoPorPersona, esFaltanteDePlanilla, type NumerosDelCierre } from "@/lib/finanzas/cierre";
+import { leerDecisionAliados, type DecisionAliados } from "@/lib/finanzas/decisiones-server";
 import { calidadDeMesDeNexus, egresoDesdeNexus, egresosDeNexus } from "@/lib/finanzas/egresos-nexus";
 import { crDateParts } from "@/lib/jobs/time";
 import type { ComparacionConExcel } from "@/lib/finanzas/cobranza-contra-excel";
@@ -2336,6 +2337,13 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
    * `cambio` null = no se puede saber en esta moneda (los números del cierre se guardan en dólares).
    */
   cierres: Array<{ periodo: string; cerradoEn: string; cambio: boolean | null }>;
+  /** Los meses cuyo tipo de cambio confirmó una persona (desde el cierre del mes). El resto lo cargó un script. */
+  tasasConfirmadas: string[];
+  /**
+   * Si lo que pagan los aliados cuenta para cubrir el piso, decidido por dirección desde el punto de equilibrio.
+   * null = sin decidir: manda `PARTNERSHIP_CUBRE_EL_PISO` (y `criterios.partnershipCubreElPiso` dice cuál rigió).
+   */
+  decisionAliados: DecisionAliados | null;
 }
 
 /**
@@ -2499,7 +2507,7 @@ export async function loadReporteAnual(
   const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
   const divisor = opciones?.divisorAguinaldo ?? 12;
 
-  const [{ egresos, filasEgreso, planillaAcc, calidadDada }, filasCobro, filasComision, filasTasa, costosActivos, filasVenta, filasNoVenta, filasCierre] =
+  const [{ egresos, filasEgreso, planillaAcc, calidadDada }, filasCobro, filasComision, filasTasa, costosActivos, filasVenta, filasNoVenta, filasCierre, decisionAliados] =
     await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO, divisor),
     prisma.cobro.findMany({
@@ -2537,7 +2545,7 @@ export async function loadReporteAnual(
     }),
     prisma.tipoCambioMes.findMany({
       where: { periodo: { in: periodos } },
-      select: { periodo: true, crcPorUsd: true, fuente: true },
+      select: { periodo: true, crcPorUsd: true, fuente: true, registradoPor: true },
       // Sin orden explícito, "la primera tasa" la decide el plan de Postgres. Hoy las 12
       // de 2026 valen 500 y da igual; el día que una difiera, el número cambiaría solo.
       orderBy: { periodo: "asc" },
@@ -2572,6 +2580,8 @@ export async function loadReporteAnual(
       where: { periodo: { in: periodos }, estado: "CERRADO" },
       select: { periodo: true, cerradoEn: true, numeros: true },
     }),
+    // Lo que dirección decidió sobre los aliados (null = sin decidir: manda la constante del código).
+    leerDecisionAliados(),
   ]);
 
   // ── Ingresos ────────────────────────────────────────────────────────────────
@@ -2696,7 +2706,7 @@ export async function loadReporteAnual(
     divisorAguinaldo: divisor,
     calidadDada,
     costosVigentes,
-    partnershipCubreElPiso: opciones?.partnershipCubreElPiso,
+    partnershipCubreElPiso: opciones?.partnershipCubreElPiso ?? decisionAliados?.cuentan,
     // Cuando HubSpot ya convirtió, se usa SU número: es el que ve el vendedor en el
     // portal, y una segunda conversión con otra tasa haría que la misma venta valiera
     // distinto en dos pantallas. Sin monto, la venta no aporta —cero sería mentir.
@@ -2734,6 +2744,8 @@ export async function loadReporteAnual(
     },
     inconsistencias,
     cobranzaContraExcel,
+    tasasConfirmadas: filasTasa.filter((t) => confirmadoPorPersona(t.registradoPor)).map((t) => t.periodo),
+    decisionAliados,
     cierres: filasCierre.map((c) => {
       const fila = reporte.meses.find((m) => m.periodo === c.periodo);
       const guardados = c.numeros as unknown as NumerosDelCierre | null;
@@ -2746,6 +2758,25 @@ export async function loadReporteAnual(
     }),
   };
 }
+
+/**
+ * La planilla del piso de hoy contra lo último que se pagó en un mes con las dos quincenas anotadas, en la moneda del
+ * reporte. undefined = el reporte no trae piso vigente (sin costos vigentes no hay contra qué comparar).
+ */
+function planillaDelPiso(reporte: ReporteEquilibrio): EstadoParaAuditar["planilla"] {
+  const costoMensual = reporte.pisoVigente?.porRubro.PLANILLA;
+  if (costoMensual === undefined || costoMensual <= 0) return undefined;
+  const ultimo = [...reporte.meses]
+    .reverse()
+    .find((m) => !m.futuro && m.egresosPorRubro.PLANILLA > 0 && !m.faltantes.some(esFaltanteDePlanilla));
+  return {
+    costoMensual,
+    ultimoPagado: ultimo ? { periodo: etiquetaMesLarga(ultimo.periodo), monto: ultimo.egresosPorRubro.PLANILLA } : null,
+  };
+}
+
+const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const etiquetaMesLarga = (periodo: string) => MESES_LARGOS[Number(periodo.slice(5, 7)) - 1] ?? periodo;
 
 /**
  * Junta de la base todo lo que hace falta para auditar. Es una función aparte porque son
@@ -3182,6 +3213,7 @@ async function armarEstadoParaAuditar(
     ingresosSinCategoria,
     facturadoEnOdooSinCuenta: facturadoSinCuenta,
     porCobrarEnMercurySinEmparejar: mercurySinEmparejar,
+    planilla: planillaDelPiso(reporte),
   };
 }
 
