@@ -16,6 +16,7 @@ import MemberPermissionsModal from "./MemberPermissionsModal";
 import NuevoMiembroModal from "./NuevoMiembroModal";
 import RoleTemplatesPanel from "./RoleTemplatesPanel";
 import { ROLE_LABEL } from "./roles-ui";
+import { useMe } from "@/hooks/useMe";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ interface TeamMember {
   /** Foto de la persona (bucket público). Se muestra en el selector de equipo del Kickoff. */
   photoUrl: string | null;
   createdAt: string;
+  /** Fecha en que salió del equipo. Solo llega en la pestaña «Fuera del equipo». */
+  deactivatedAt?: string | null;
 }
 
 // ── Avatar con edición de foto (lápiz al hover) ─────────────────────────────────
@@ -147,9 +150,18 @@ export default function TeamManager({
   /** SOLO Super Admin (gate duro, no delegable): filas clickeables + pestaña Plantillas. */
   canAdminPermissions?: boolean;
 }) {
+  const me = useMe();
+  /**
+   * ⭐ TU PROPIA FOTO (Elías, 2026-10-05). Subirla exigía `equipo.manage`, así que alguien sin esa
+   * celda —seis CSE, por ejemplo— no podía cambiar ni la suya: tenía que pedírselo a dirección.
+   * El permiso sigue gobernando las fotos AJENAS; la propia es de cada quien. El endpoint
+   * `/api/team/[id]/photo` lo vuelve a exigir igual, así que esto solo decide si se pinta el CTA.
+   */
+  const miEmail = (me?.email ?? "").toLowerCase();
+
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"miembros" | "plantillas">("miembros");
+  const [tab, setTab] = useState<"miembros" | "plantillas" | "fuera">("miembros");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
 
@@ -164,16 +176,18 @@ export default function TeamManager({
     </Button>
   ) : undefined;
 
+  /* La pestaña decide QUÉ lista se pide. «Fuera del equipo» es otra consulta, no un filtro en el
+     browser: los que ya no están nunca viajan a quien no es dirección. */
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/team");
+      const res = await fetch(tab === "fuera" ? "/api/team?fuera=1" : "/api/team");
       const data = await res.json();
       setMembers(data.members ?? []);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tab]);
 
   useEffect(() => {
     load();
@@ -190,7 +204,14 @@ export default function TeamManager({
       sortValue: (m) => m.name,
       render: (m) => (
         <Table.IdentityCell
-          leading={<TeamPhotoAvatar member={m} editable={canManage} onUploaded={onUploaded} />}
+          leading={
+            <TeamPhotoAvatar
+              member={m}
+              /* La propia SIEMPRE; las ajenas, con el permiso. */
+              editable={canManage || m.email.toLowerCase() === miEmail}
+              onUploaded={onUploaded}
+            />
+          }
           primary={m.name}
           secondary={m.email}
         />
@@ -224,13 +245,15 @@ export default function TeamManager({
 
   return (
     <div className="space-y-4">
-      {/* Pestañas (Plantillas solo para Super Admin) */}
+      {/* Pestañas. Las tres son de DIRECCIÓN: las plantillas de rol y quién salió del equipo no
+          se le muestran a nadie más (el endpoint de «fuera» lo vuelve a exigir). */}
       {canAdminPermissions && (
         <div className="flex gap-1.5">
           {(
             [
               ["miembros", "Miembros"],
               ["plantillas", "Plantillas por rol"],
+              ["fuera", "Fuera del equipo"],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -255,11 +278,13 @@ export default function TeamManager({
       ) : (
         <>
           <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
-            {canAdminPermissions
-              ? "Clickeá un miembro para editar su rol, visibilidad y permisos (los pines pisan la plantilla del rol solo para esa persona). Pasá el mouse sobre una foto para cambiarla."
-              : canManage
-                ? "Pasá el mouse sobre una foto para cambiarla; se usan en el selector de equipo del Kickoff. Los permisos los administra un Super Admin."
-                : "Los roles y permisos los administra un Super Admin desde esta página."}
+            {tab === "fuera"
+              ? "Personas que ya no están en el equipo. Siguen acá porque su nombre aparece en reuniones, proyectos y documentos viejos: borrarlas dejaría esos registros sin autor."
+              : canAdminPermissions
+                ? "Clickeá un miembro para editar su rol, visibilidad y permisos (los pines pisan la plantilla del rol solo para esa persona). Pasá el mouse sobre una foto para cambiarla."
+                : canManage
+                  ? "Pasá el mouse sobre una foto para cambiarla; se usan en el selector de equipo del Kickoff. Los permisos los administra un Super Admin."
+                  : "Tu foto la cambiás vos desde tu propia fila. Los roles y permisos los administra un Super Admin."}
           </div>
 
           {loading ? (
@@ -267,26 +292,30 @@ export default function TeamManager({
           ) : members.length === 0 ? (
             <EmptyState
               variant="dashed"
-              title="Aún no hay miembros del equipo activos"
+              title={tab === "fuera" ? "No salió nadie del equipo" : "Aún no hay miembros del equipo activos"}
               description={
-                canAdminPermissions
-                  ? "Dá de alta a la primera persona: queda habilitada para entrar con su cuenta de Google."
-                  : "El alta de miembros la hace un Super Admin desde esta misma página."
+                tab === "fuera"
+                  ? "Cuando alguien se dé de baja, queda acá con la fecha en que salió."
+                  : canAdminPermissions
+                    ? "Dá de alta a la primera persona: queda habilitada para entrar con su cuenta de Google."
+                    : "El alta de miembros la hace un Super Admin desde esta misma página."
               }
-              action={botonDeAlta}
+              action={tab === "fuera" ? undefined : botonDeAlta}
             />
           ) : (
             <Table
               columns={columns}
               rows={members}
               rowKey={(m) => m.id}
-              onRowClick={canAdminPermissions ? (m) => setEditingId(m.id) : undefined}
+              /* En «Fuera del equipo» la fila no abre nada: editarle los permisos a quien ya no
+                 entra es una puerta sin uso que invita a creer que sigue activa. */
+              onRowClick={canAdminPermissions && tab !== "fuera" ? (m) => setEditingId(m.id) : undefined}
               search={{
                 placeholder: "Buscar miembro…",
                 getText: (m) => `${m.name} ${m.email} ${m.area ?? ""} ${m.roleEnum}`,
               }}
               initialSort={{ key: "member", dir: "asc" }}
-              action={botonDeAlta}
+              action={tab === "fuera" ? undefined : botonDeAlta}
             />
           )}
         </>

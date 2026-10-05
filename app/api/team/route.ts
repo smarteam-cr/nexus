@@ -6,15 +6,28 @@ import { guardInternalUser, guardRole } from "@/lib/auth/api-guards";
 import { revalidateTeamMembers, TEAM_MEMBER_SAFE_SELECT } from "@/lib/cache/team";
 import { altaDeMiembro, ROLES_DE_EQUIPO } from "@/lib/team/alta-de-miembro";
 
-// GET /api/team — lista miembros ACTIVOS (cualquier interno).
-// SELECT explícito (allowlist): TeamMember tiene una relación con los costos
-// (salarios estimados, SUPER_ADMIN-only) — acá NUNCA va un include.
-export async function GET() {
+/**
+ * GET /api/team — lista miembros ACTIVOS (cualquier interno).
+ *
+ * `?fuera=1` devuelve en cambio a los que YA NO ESTÁN, y **exige SUPER_ADMIN**: quién salió de
+ * Smarteam, y cuándo, es cosa de dirección (Elías, 2026-10-05). El gate va acá y no solo en la
+ * pantalla — una lista que se esconde con una pestaña se lee igual escribiendo la URL.
+ *
+ * SELECT explícito (allowlist): TeamMember tiene una relación con los costos
+ * (salarios estimados, SUPER_ADMIN-only) — acá NUNCA va un include.
+ */
+export async function GET(req: NextRequest) {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
 
+  const fuera = req.nextUrl.searchParams.get("fuera") === "1";
+  if (fuera) {
+    const soloDireccion = await guardRole("SUPER_ADMIN");
+    if (soloDireccion instanceof NextResponse) return soloDireccion;
+  }
+
   const members = await prisma.teamMember.findMany({
-    where: { deactivatedAt: null },
+    where: fuera ? { deactivatedAt: { not: null } } : { deactivatedAt: null },
     orderBy: { createdAt: "asc" },
     // SELECT explícito (allowlist escalar): excluye la relación de costos
     // (salarios, SUPER_ADMIN-only) Y `permissionOverrides` (los pines por-persona,
