@@ -3,15 +3,20 @@
 /**
  * components/cs/account/AccountBriefSection.tsx
  *
- * Resumen ejecutivo CITADO de la cuenta (agente agent-cs-account-brief): cada
- * afirmación lleva su SourceChip con fuente+fecha ("Minuta kickoff · 2 jul",
- * "HubSpot Partner · hoy"). Banner "desactualizado" cuando el sync marcó staleAt.
- * La generación es on-demand (POST /api/cs/account-brief/[clientId]).
+ * Resumen ejecutivo CITADO de la cuenta (agente agent-cs-account-brief): cada afirmación lleva su
+ * SourceChip con fuente y fecha («Minuta kickoff · 2 jul», «HubSpot Partner · hoy»). Aviso de
+ * «desactualizado» cuando el sync marcó staleAt. La generación es on-demand
+ * (POST /api/cs/account-brief/[clientId]).
+ *
+ * Rediseño 2026-10-04: recuadro azul con la chispa de IA (lo escribió el agente) y los botones del
+ * sistema. El botón azul sólido de la ficha es el de «Qué sigue»: este es blanco.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
+import { BotonBlanco, BotonTexto, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import { cn } from "@/lib/cn";
 import SourceChip, { fmtChipDate } from "@/components/cs/SourceChip";
 import type { CsAccountData } from "@/lib/cs/load-account";
 
@@ -23,7 +28,7 @@ const SOURCE_KIND_LABEL: Record<string, string> = {
   handoff: "Handoff",
   kickoff: "Kickoff",
   propuesta: "Propuesta",
-  alerta: "Alerta watchdog",
+  alerta: "Alerta del agente vigía",
 };
 
 export default function AccountBriefSection({
@@ -39,13 +44,13 @@ export default function AccountBriefSection({
 
   async function generate() {
     setGenerating(true);
-    toast.info("Generando el resumen de la cuenta… (~30 segundos)");
+    toast.info("Redactando el resumen de la cuenta… (unos 30 segundos)");
     try {
       await fetchJson(`/api/cs/account-brief/${clientId}`, { method: "POST" });
-      toast.success("Resumen generado.");
+      toast.success("Resumen listo.");
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo generar el resumen.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo redactar el resumen.");
     } finally {
       setGenerating(false);
     }
@@ -53,57 +58,41 @@ export default function AccountBriefSection({
 
   if (!brief) {
     return (
-      <div className="text-center py-6">
-        <p className="text-xs text-fg-muted mb-3">
-          Todavía no hay resumen ejecutivo de esta cuenta. El agente lo redacta desde el contexto
-          disponible (minutas, cronograma, HubSpot, alertas) citando cada afirmación con su fuente.
+      <div data-recorrido="cs.resumen" className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-line bg-surface px-4 py-3.5">
+        <IconoDeSugerencia className="h-[15px] w-[15px] flex-shrink-0 text-brand" />
+        <p className="min-w-0 flex-1 text-[13px] text-fg-muted">
+          Todavía no hay resumen de la cuenta. El agente lo redacta con las minutas, el cronograma, HubSpot y las alertas, y cita cada frase.
         </p>
-        <button
-          onClick={generate}
-          disabled={generating}
-          className="text-xs font-medium px-3 py-1.5 rounded-md bg-brand text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
-        >
-          {generating ? "Generando…" : "✨ Generar resumen"}
-        </button>
+        <BotonBlanco onClick={generate} disabled={generating}>
+          {generating ? "Redactando…" : "Redactar el resumen"}
+        </BotonBlanco>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      {brief.staleAt && (
-        <div className="flex items-center gap-2 text-[11px] text-amber-600 bg-amber-500/5 border border-amber-500/25 rounded-lg px-3 py-2">
-          <span className="flex-1">
-            Los datos de la cuenta cambiaron desde que se generó este resumen ({fmtChipDate(brief.staleAt)}).
-          </span>
-          <button
-            onClick={generate}
-            disabled={generating}
-            className="font-medium text-brand hover:text-brand/80 disabled:opacity-50 whitespace-nowrap"
-          >
-            {generating ? "Regenerando…" : "↻ Regenerar"}
-          </button>
-        </div>
-      )}
-      {brief.headline && <p className="text-sm font-semibold text-fg leading-snug">{brief.headline}</p>}
-      <ul className="space-y-2">
-        {brief.statements.map((s, i) => (
-          <li key={i} className="text-xs text-fg-secondary leading-relaxed">
-            <span>{s.text} </span>
-            <SourceChip
-              label={s.source.label || SOURCE_KIND_LABEL[s.source.kind] || s.source.kind}
-              date={s.source.date}
-            />
-          </li>
-        ))}
-      </ul>
-      <div className="flex items-center gap-2 pt-1">
-        <span className="text-[10px] text-fg-muted">Generado {fmtChipDate(brief.generatedAt)}</span>
-        {!brief.staleAt && (
-          <button onClick={generate} disabled={generating} className="text-[10px] text-brand hover:text-brand/80 disabled:opacity-50">
-            {generating ? "Regenerando…" : "↻ Regenerar"}
-          </button>
+    <div data-recorrido="cs.resumen" className="flex items-start gap-2.5 rounded-xl border border-info-line bg-info-surface px-4 py-3.5">
+      <IconoDeSugerencia className="mt-[3px] h-[15px] w-[15px] flex-shrink-0 text-brand" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <span className={cn(ROTULO_DEL_SISTEMA, "text-brand")}>Resumen del agente</span>
+        {brief.staleAt && (
+          <span className="text-xs text-warn-ink">Los datos de la cuenta cambiaron desde que se redactó ({fmtChipDate(brief.staleAt)}).</span>
         )}
+        {brief.headline && <p className="text-sm font-semibold leading-snug text-fg">{brief.headline}</p>}
+        <ul className="space-y-1.5">
+          {brief.statements.map((s, i) => (
+            <li key={i} className="text-[13px] leading-relaxed text-fg-secondary">
+              <span>{s.text} </span>
+              <SourceChip label={s.source.label || SOURCE_KIND_LABEL[s.source.kind] || s.source.kind} date={s.source.date} />
+            </li>
+          ))}
+        </ul>
+        <span className="flex items-center gap-2 text-xs text-fg-muted">
+          Redactado {fmtChipDate(brief.generatedAt)}
+          <BotonTexto onClick={generate} disabled={generating} className="text-brand hover:text-brand-light">
+            {generating ? "Redactando…" : "Volver a redactar"}
+          </BotonTexto>
+        </span>
       </div>
     </div>
   );

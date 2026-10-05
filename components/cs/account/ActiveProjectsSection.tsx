@@ -3,180 +3,148 @@
 /**
  * components/cs/account/ActiveProjectsSection.tsx
  *
- * Proyectos activos de la cuenta: salud resuelta + avance del cronograma
- * (ProjectSummary determinístico) + operativa de HubSpot (etapa, prioridad,
- * status, bloqueo con razón y detalle, adopción). Cada mitad con su fuente.
+ * Proyectos activos de la cuenta, como filas de una tabla (rediseño 2026-10-04): etapa, salud, qué
+ * pasa (bloqueo de HubSpot, atraso del cronograma, alarmas de etapa), el cierre prometido contra el
+ * proyectado, el CSE y el avance. Dentro de «Qué pasa» viven los dos chips que resuelven cosas:
+ * la propuesta de salud del agente vigía y el estado sugerido por el motivo de bloqueo.
  */
 import Link from "next/link";
-import SourceChip from "@/components/cs/SourceChip";
-import StageBadge from "@/components/lifecycle/StageBadge";
 import HealthProposalChip from "@/components/lifecycle/HealthProposalChip";
 import EstadoSugeridoChip from "./EstadoSugeridoChip";
-import RecurrenteBadge from "@/components/lifecycle/RecurrenteBadge";
-import { PRIORITY_META, HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
 import type { PortfolioRow } from "@/lib/portfolio/load";
 // PURO y client-safe a propósito: `lib/portfolio/load.ts` importa Prisma, así que de ahí
 // solo puede venir el TIPO (que se borra en compilación), nunca una función.
 import { etapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
+import { HS_STATUS_LABEL } from "@/components/cs/dashboard/chart-theme";
 import type { AccountProjectOps } from "@/lib/cs/load-account";
+import { cn } from "@/lib/cn";
+import { fmtDia } from "@/lib/cs/formato";
+import { Avatar, Barra, CajaDeTabla, Chip, EncabezadoDeTabla, Flecha, Punto, type ColorDePunto } from "../piezas";
 
-const HEALTH_META: Record<string, { label: string; cls: string }> = {
-  SALUDABLE: { label: "Saludable", cls: "text-emerald-600 bg-emerald-500/10 border-emerald-500/25" },
-  EN_FRICCION: { label: "En fricción", cls: "text-amber-600 bg-amber-500/10 border-amber-500/30" },
-  EN_RIESGO: { label: "En riesgo", cls: "text-red-600 bg-red-500/10 border-red-500/30" },
-  PAUSADO: { label: "Pausado", cls: "text-fg-muted bg-surface-muted border-line" },
+const SALUD: Record<string, { texto: string; color: ColorDePunto }> = {
+  SALUDABLE: { texto: "Saludable", color: "verde" },
+  EN_FRICCION: { texto: "En fricción", color: "ambar" },
+  EN_RIESGO: { texto: "En riesgo", color: "rojo" },
+  PAUSADO: { texto: "Pausado", color: "gris" },
 };
+
+const COLUMNAS = "grid-cols-[minmax(0,1.3fr)_112px_minmax(0,1.7fr)_170px_120px_30px_16px]";
 
 export default function ActiveProjectsSection({
   projects,
   projectOps,
+  csePorProyecto,
   puedeCurar,
 }: {
   projects: PortfolioRow[];
   projectOps: Record<string, AccountProjectOps>;
   /**
-   * ⚠ Si puede RESOLVER la propuesta de salud del watchdog (`clientes.viewAll`), que no es
-   * lo mismo que poder abrir esta ficha (`customerSuccess.read`, celda propia desde el
-   * 2026-08-16). Con `false` el chip rojo se sigue viendo —es informacion util sobre un
-   * proyecto propio— pero sin Confirmar/Descartar, que darian 403 y dejarian la propuesta
-   * pendiente para siempre salvo que la resuelva otro rol.
+   * El CSE que vale para Éxito del cliente (`cseVigente`, lib/cs/cartera.ts): quien está de baja en
+   * Nexus no cuenta como CSE aunque HubSpot lo siga teniendo como dueño.
+   */
+  csePorProyecto: Record<string, { nombre: string | null; deBaja: string | null }>;
+  /**
+   * ⚠ Si puede RESOLVER la propuesta de salud del watchdog (`clientes.viewAll`). Con `false` el
+   * chip se sigue viendo —es información útil— pero sin Confirmar/Descartar, que darían 403.
    */
   puedeCurar: boolean;
 }) {
   if (projects.length === 0) {
-    return <p className="text-xs text-fg-muted">Sin proyectos activos en Nexus para esta cuenta.</p>;
+    return (
+      <p className="rounded-xl border border-dashed border-line bg-surface px-4 py-5 text-[13px] text-fg-muted">
+        Sin proyectos activos en Nexus para esta cuenta.
+      </p>
+    );
   }
   return (
-    <div className="space-y-3">
-      {projects.map((p) => {
+    <CajaDeTabla minimo="min-w-[900px]">
+      <EncabezadoDeTabla columnas={COLUMNAS}>
+        <span>Proyecto</span>
+        <span>Salud</span>
+        <span>Qué pasa</span>
+        <span>Cierre</span>
+        <span>Avance</span>
+        <span>CSE</span>
+        <span />
+      </EncabezadoDeTabla>
+      {projects.map((p, i) => {
         const ops = projectOps[p.projectId];
-        const health = HEALTH_META[p.summary.health.resolved] ?? HEALTH_META.SALUDABLE;
-        const prio = ops?.hubspotPriority ? PRIORITY_META[ops.hubspotPriority] : null;
-        const blocked = ops?.hubspotStatus === "blocked" || /bloquead/i.test(p.stageLabel ?? "");
-        const pct = Math.round(p.summary.progress.pct * 100);
+        const s = p.summary;
+        const salud = SALUD[s.health.resolved] ?? SALUD.SALUDABLE;
+        const bloqueado = ops?.hubspotStatus === "blocked" || /bloquead/i.test(p.stageLabel ?? "");
         const etapa = etapaParaLaUI(p.lifecycle);
+        const pct = Math.round(s.progress.pct * 100);
+        const atrasado = s.scheduleAlarmsActive && (s.overduePhases > 0 || s.overdueTasks > 0);
+        const href = `/clients/${p.clientId}?tab=${p.projectId}`;
         return (
-          <div key={p.projectId} className="bg-surface border border-line rounded-xl p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Link href={`/clients/${p.clientId}?tab=${p.projectId}`} className="text-sm font-semibold text-fg hover:text-brand">
+          <div key={p.projectId} className={cn("grid items-center gap-4 px-4 py-3.5 text-fg", COLUMNAS, i > 0 && "border-t border-line")}>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <Link href={href} className="truncate text-sm font-semibold hover:text-brand">
                 {p.projectName}
               </Link>
-              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${health.cls}`}>{health.label}</span>
-              {p.summary.health.source === "override" && (
-                <span className="text-[9px] text-fg-muted uppercase tracking-wide" title={p.healthOverrideReason ?? undefined}>curada</span>
-              )}
-              {/* La ETAPA, venga del ciclo de Nexus o del pipeline de HubSpot: `etapaParaLaUI`
-                  normaliza las dos ramas para que esta pantalla no sepa de pipelines.
-                  Devuelve null cuando no hay etapa que mostrar — hoy, un proyecto del ciclo
-                  de CS sin handoff generado. */}
-              {etapa ? (
-                <StageBadge
-                  stage={etapa.id}
-                  label={etapa.label}
-                  order={etapa.linea}
-                  stepperTitle={etapa.tituloDeLaLinea}
-                  source={etapa.curada ? "override" : "inferred"}
-                  reasons={etapa.razones}
-                  overrideReason={etapa.curadaPorque}
-                />
-              ) : (
-                <Link
-                  href={`/clients/${p.clientId}?tab=${p.projectId}`}
-                  className="text-[10px] font-medium px-1.5 py-0.5 rounded border text-amber-600 bg-amber-500/10 border-amber-500/30"
-                  title="Generá el handoff para activar el ciclo de vida (etapas + recurrencia)."
-                >
-                  Handoff sin generar
-                </Link>
-              )}
-              <RecurrenteBadge recurrent={!!p.lifecycle?.recurrent} />
-              {p.healthProposed && (
-                <HealthProposalChip
-                  projectId={p.projectId}
-                  reason={p.healthProposedReason}
-                  proposedAt={p.healthProposedAt}
-                  puedeResolver={puedeCurar}
-                />
-              )}
-              {prio && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-line" style={{ color: prio.color }}>
-                  Prioridad {prio.label}
-                </span>
-              )}
-              {ops?.hubspotStatus && (
-                <span className="text-[10px] text-fg-muted px-1.5 py-0.5 rounded border border-line">
-                  {HS_STATUS_LABEL[ops.hubspotStatus] ?? ops.hubspotStatus}
-                </span>
-              )}
-              {/* Va JUNTO al estado y no en un cartel aparte: lo que el chip dice es que ese
-                  rótulo de al lado contradice el motivo cargado en el mismo registro. Separarlos
-                  obligaría a la persona a acordarse de qué decía el otro. */}
-              <EstadoSugeridoChip
-                projectId={p.projectId}
-                estadoActual={ops?.hubspotStatus ?? null}
-                motivo={ops?.hubspotBlockReason ?? null}
-              />
-              <span className="ml-auto flex items-center gap-1.5">
-                {p.stageLabel && <SourceChip label={`HubSpot · ${p.stageLabel}`} />}
-                {p.cseName && <span className="text-[11px] text-fg-muted">CSE: {p.cseName}</span>}
+              <span className="truncate text-xs text-fg-muted">{etapa?.label ?? p.stageLabel ?? "Handoff sin generar"}</span>
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <span className="inline-flex items-center gap-1.5 text-[13px]">
+                <Punto color={bloqueado ? "rojo" : salud.color} />
+                {bloqueado ? "Bloqueado" : salud.texto}
               </span>
-            </div>
-
-            {/* Cronograma (fuente: Nexus) */}
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-fg-secondary">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-24 h-1.5 rounded-full bg-surface-muted overflow-hidden">
-                  <span className="block h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
+              {s.health.source === "override" && (
+                <span className="text-[11px] text-fg-muted" title={p.healthOverrideReason ?? undefined}>
+                  fijada a mano
                 </span>
-                {pct}% · {p.summary.progress.tasksDone}/{p.summary.progress.tasksTotal} tareas
+              )}
+            </span>
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="text-[13px]">
+                {bloqueado && ops?.hubspotBlockReason
+                  ? `Bloqueado: ${ops.hubspotBlockReason.toLowerCase()}`
+                  : atrasado
+                    ? s.worstOverduePhase
+                      ? `«${s.worstOverduePhase.name}» va ${s.worstOverduePhase.daysLate} días tarde`
+                      : `${s.overdueTasks} tareas vencidas`
+                    : s.stageAlarms.length > 0
+                      ? s.stageAlarms.map((a) => a.label).join(" · ")
+                      : s.scheduleAlarmsActive
+                        ? "Al día."
+                        : "Cronograma sin línea base: las fechas todavía son tentativas."}
               </span>
-              {/* Alarmas de cronograma SOLO cuando aplican. Con la etapa mandada por HubSpot,
-                  el criterio es la LÍNEA BASE publicada: hasta que alguien la publica, las
-                  fechas son tentativas y no hay atraso que reclamar. */}
-              {p.summary.scheduleAlarmsActive ? (
-                <>
-                  {p.summary.overduePhases > 0 && (
-                    <span className="text-red-600">
-                      {p.summary.overduePhases} fase{p.summary.overduePhases !== 1 ? "s" : ""} vencida{p.summary.overduePhases !== 1 ? "s" : ""}
-                      {p.summary.worstOverduePhase ? ` (${p.summary.worstOverduePhase.name}, ${p.summary.worstOverduePhase.daysLate}d)` : ""}
-                    </span>
-                  )}
-                  {p.summary.overdueTasks > 0 && <span className="text-amber-600">{p.summary.overdueTasks} tareas vencidas</span>}
-                  {p.summary.stalled && <span className="text-amber-600">sin actividad {p.summary.daysSinceActivity}d</span>}
-                </>
-              ) : etapa ? (
-                // Hay etapa, pero el cronograma todavía no se subió: aún no es una promesa.
-                <span className="text-fg-muted">cronograma sin línea base</span>
-              ) : null /* sin etapa → el badge de al lado ya lo comunica */}
-              {p.summary.stageAlarms.map((a) => (
-                <span key={a.key} className="text-amber-600">{a.label}</span>
-              ))}
-              {p.summary.scope.exceeded && !p.summary.scope.attenuated && (
-                <span className="text-purple-600">
-                  alcance +{p.summary.scope.addedTasks} tareas{p.summary.scope.weeksDelta > 0 ? ` / +${p.summary.scope.weeksDelta} sem` : ""}
+              {ops?.hubspotBlockDetail && <span className="line-clamp-2 text-xs text-fg-muted">{ops.hubspotBlockDetail}</span>}
+              <span className="flex flex-wrap gap-1.5">
+                {p.healthProposed && (
+                  <HealthProposalChip projectId={p.projectId} reason={p.healthProposedReason} proposedAt={p.healthProposedAt} puedeResolver={puedeCurar} />
+                )}
+                {/* El estado que dice HubSpot, y JUNTO a él el chip que avisa si el motivo cargado lo
+                    contradice: separarlos obligaría a acordarse de qué decía el otro. */}
+                {ops?.hubspotStatus && <Chip>HubSpot: {HS_STATUS_LABEL[ops.hubspotStatus] ?? ops.hubspotStatus}</Chip>}
+                <EstadoSugeridoChip projectId={p.projectId} estadoActual={ops?.hubspotStatus ?? null} motivo={ops?.hubspotBlockReason ?? null} />
+              </span>
+            </span>
+            <span className="flex flex-col gap-0.5 text-[13px]">
+              {s.closing.promisedISO ? <span>Prometido {fmtDia(s.closing.promisedISO)}</span> : <span className="text-fg-muted">sin promesa</span>}
+              {s.closing.projectedISO && s.closing.driftDays !== null && s.closing.driftDays > 0 ? (
+                <span className="text-xs text-warn-ink">
+                  Ahora {fmtDia(s.closing.projectedISO)} · +{Math.round(s.closing.driftDays / 7)} sem
                 </span>
-              )}
-              <SourceChip label={p.summary.hasBaseline ? "Cronograma · baseline" : "Cronograma · sin baseline"} />
-              {ops?.hubspotAdoptionState && (
-                <span className="inline-flex items-center gap-1">
-                  Adopción: <strong className="text-fg">{ops.hubspotAdoptionState}</strong>
-                  <SourceChip label="HubSpot" />
-                </span>
-              )}
-            </div>
-
-            {/* Bloqueo (fuente: HubSpot) */}
-            {(blocked || ops?.hubspotBlockReason) && (
-              <div className="mt-2.5 text-[11px] bg-orange-500/5 border border-orange-500/20 rounded-lg px-3 py-2">
-                <span className="font-medium text-orange-600">
-                  {blocked ? "⛔ Bloqueado" : "⚠ Con motivo de bloqueo"}
-                  {ops?.hubspotBlockReason ? `: ${ops.hubspotBlockReason}` : ""}
-                </span>
-                {ops?.hubspotBlockDetail && <p className="text-fg-secondary mt-1">{ops.hubspotBlockDetail}</p>}
-              </div>
-            )}
+              ) : s.closing.projectedISO ? (
+                <span className="text-xs text-fg-muted">Proyectado {fmtDia(s.closing.projectedISO)}</span>
+              ) : null}
+            </span>
+            <span className="flex items-center gap-2 text-[13px]">
+              <Barra valor={pct} ancho="w-14" />
+              <span className="tabular-nums">{pct} %</span>
+            </span>
+            {(() => {
+              const vigente = csePorProyecto[p.projectId];
+              const nombre = vigente ? vigente.nombre : p.cseName;
+              return <Avatar nombre={nombre} title={vigente?.deBaja ? `Sin CSE: ${vigente.deBaja} ya no está en el equipo` : undefined} />;
+            })()}
+            <Link href={href} aria-label={`Abrir ${p.projectName}`}>
+              <Flecha />
+            </Link>
           </div>
         );
       })}
-    </div>
+    </CajaDeTabla>
   );
 }

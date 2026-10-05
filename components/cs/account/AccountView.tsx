@@ -1,34 +1,43 @@
 "use client";
 
 /**
- * components/cs/account/AccountView.tsx
+ * components/cs/account/AccountView.tsx — la FICHA de una cuenta en Éxito del cliente (rediseño
+ * 2026-10-04, sistema «Nexus · interfaz interna»; en pestañas desde el 2026-10-05, pedido de Elías:
+ * «que se pueda entender más y no sea solo hacer scroll»).
  *
- * VISTA POR CUENTA de Customer Success: header (equipo HubSpot + frescura),
- * resumen ejecutivo citado, proyectos activos (salud+cronograma+operativa HS),
- * alertas del watchdog, utilización de licencias, adopción/uso y últimas minutas.
- * Cada sección declara su fuente (SourceChip) — la regla del módulo.
+ * Cabecera de ficha a todo el ancho y, debajo, dos columnas: el contenido sobre gris y el panel de
+ * contexto a la derecha (igual en todas las pestañas). El contenido, en seis pestañas:
+ *   · Estado de la cuenta: el resumen del agente, las cuatro lecturas (cada una abre su pestaña),
+ *     lo que pide atención y lo que viene en 90 días.
+ *   · Adopción · Renovación · Proyectos · Resultados · Conversaciones.
+ *
+ * Las seis quedan MONTADAS y se ocultan con `hidden`: cambiar de pestaña no pierde lo que se estaba
+ * haciendo (el resumen generándose, la propuesta de salud abierta). La pestaña abierta viaja en la
+ * dirección (`?pestana=`) con `history.replaceState`: compartible, y sin volver a pedir la página
+ * al servidor (con `router.replace` se re-cargaría la cuenta entera en cada clic).
+ *
+ * Todo sale de la MISMA cuenta armada que el índice (`data.cuenta`, lib/cs/cartera.ts).
  */
-import Link from "next/link";
-import type { ReactNode } from "react";
-import SourceChip, { fmtChipDate } from "@/components/cs/SourceChip";
-import AlertsFeed from "@/components/cs/AlertsFeed";
-import ActiveProjectsSection from "./ActiveProjectsSection";
-import AccountUsageReport from "./AccountUsageReport";
-import AccountBriefSection from "./AccountBriefSection";
-import type { CsAccountData } from "@/lib/cs/load-account";
+import { useCallback, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Tabs } from "@/components/ui";
+import { CabeceraDeFicha, AccionDeCabecera, ChipHubspot } from "@/components/layout/CabeceraDeFicha";
+import { diasEntre } from "@/lib/cs/formato";
+import { UMBRALES, usoCayendo } from "@/lib/cs/lectura-partner";
 import { PARTNER_STATE_META } from "@/lib/cs/partner-state";
+import { NOMBRE_DE_LA_PESTANA, PESTANAS_DE_LA_CUENTA, pestanaDeLaUrl, type PestanaDeCuenta } from "@/lib/cs/pestanas-de-la-cuenta";
+import type { CsAccountData } from "@/lib/cs/load-account";
+import { Chip, ChipDeCabecera, Punto } from "../piezas";
+import PanelDeLaCuenta from "./PanelDeLaCuenta";
+import PestanaEstado from "./pestanas/PestanaEstado";
+import PestanaAdopcion from "./pestanas/PestanaAdopcion";
+import PestanaRenovacion from "./pestanas/PestanaRenovacion";
+import PestanaProyectos from "./pestanas/PestanaProyectos";
+import PestanaResultados from "./pestanas/PestanaResultados";
+import PestanaConversaciones from "./pestanas/PestanaConversaciones";
 
-function Section({ title, children, source }: { title: string; children: ReactNode; source?: ReactNode }) {
-  return (
-    <section>
-      <div className="flex items-center gap-2 mb-2">
-        <h2 className="text-sm font-semibold text-fg">{title}</h2>
-        {source}
-      </div>
-      {children}
-    </section>
-  );
-}
+const MESES_LARGOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const mesYAnio = (ymd: string) => `${MESES_LARGOS[Number(ymd.slice(5, 7)) - 1]} ${ymd.slice(0, 4)}`;
 
 export default function AccountView({
   data,
@@ -38,97 +47,115 @@ export default function AccountView({
   /** ⚠ Resolver la propuesta de salud exige `clientes.viewAll`; abrir esta ficha, no. */
   puedeCurar: boolean;
 }) {
-  const p = data.partner;
-  return (
-    <div className="space-y-7">
-      {/* Header de la cuenta */}
-      <div className="bg-surface border border-line rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
-        {p?.hsCsmName && (
-          <span className="text-fg-secondary" title={p.hsCsmEmail ?? undefined}>
-            <span className="text-fg-muted">CSM HubSpot: </span>{p.hsCsmName}
-          </span>
-        )}
-        {p?.hsGrowthName && (
-          <span className="text-fg-secondary" title={p.hsGrowthEmail ?? undefined}>
-            <span className="text-fg-muted">Growth: </span>{p.hsGrowthName}
-          </span>
-        )}
-        {p?.cslImplementaciones && (
-          <span className="text-fg-secondary"><span className="text-fg-muted">CSL: </span>{p.cslImplementaciones}</span>
-        )}
-        {p?.country && <span className="text-fg-secondary">{p.country}</span>}
-        <span className="ml-auto flex items-center gap-1.5">
-          {data.partnerVisible &&
-            (p ? (
-              <SourceChip label="HubSpot Partner" date={p.fetchedAt} />
-            ) : (
-              // La CAUSA real del vacío (no_scope / never_synced / no_match), no un
-              // texto ambiguo: la resuelve el loader contra cs-partner-sync-status.
-              <SourceChip
-                label={data.partnerState === "ok" ? "HubSpot Partner" : PARTNER_STATE_META[data.partnerState].chip}
-                tone="missing"
-              />
-            ))}
-          {data.signals && <SourceChip label="Señales" date={data.signals.fetchedAt} />}
-          <Link href={`/clients/${data.clientId}`} className="text-[11px] font-medium text-brand hover:text-brand/80">
-            Workspace →
-          </Link>
+  const { cuenta, hoy } = data;
+  const p = cuenta.partner;
+  const searchParams = useSearchParams();
+  const [pestana, setPestana] = useState<PestanaDeCuenta>(() => pestanaDeLaUrl(searchParams.get("pestana")));
+
+  const irA = useCallback((siguiente: PestanaDeCuenta) => {
+    setPestana(siguiente);
+    const url = new URL(window.location.href);
+    if (siguiente === "estado") url.searchParams.delete("pestana");
+    else url.searchParams.set("pestana", siguiente);
+    window.history.replaceState(window.history.state, "", url);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  // Lo que marca cada pestaña en su rótulo: dónde hay algo que mirar.
+  const adopcionPideAtencion =
+    !!p && ((p.uso !== null && p.uso < UMBRALES.usoBajo) || usoCayendo(p) || p.hubs.some((h) => h.activado === false));
+  const proximaRenovacion = p
+    ? (p.proximaRenovacion && p.proximaRenovacion >= hoy
+        ? p.proximaRenovacion
+        : (p.hubs.map((h) => h.renovacion).filter((f): f is string => !!f && f >= hoy).sort()[0] ?? null))
+    : null;
+  const diasARenovar = proximaRenovacion ? diasEntre(hoy, proximaRenovacion) : null;
+
+  const rotulo = (k: PestanaDeCuenta) => {
+    const nombre = NOMBRE_DE_LA_PESTANA[k];
+    if (k === "adopcion") {
+      return (
+        <span className="inline-flex items-center gap-1.5" data-recorrido="cs.uso">
+          {adopcionPideAtencion && <Punto color="ambar" className="h-[7px] w-[7px]" />}
+          {nombre}
         </span>
+      );
+    }
+    if (k === "renovacion" && diasARenovar !== null) {
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          {nombre}
+          <span className="tabular-nums opacity-70">{diasARenovar === 0 ? "hoy" : `${diasARenovar} ${diasARenovar === 1 ? "día" : "días"}`}</span>
+        </span>
+      );
+    }
+    if (k === "proyectos") return <span data-recorrido="cs.proyectos">{nombre}</span>;
+    return nombre;
+  };
+  const cuenta_ = (k: PestanaDeCuenta): number | undefined =>
+    k === "proyectos" ? data.projects.length : k === "resultados" ? data.resultados.length : k === "conversaciones" ? (data.signals?.engagements90d ?? undefined) : undefined;
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <CabeceraDeFicha
+        volver={{ href: "/customer-success", etiqueta: "Éxito del cliente" }}
+        recorrido="exito-cuenta"
+        titulo={cuenta.nombre}
+        chips={
+          <>
+            <ChipHubspot conectado={!!p} title={p ? "Vinculada a HubSpot Partner" : PARTNER_STATE_META[data.partnerState === "ok" ? "no_match" : data.partnerState].message} />
+            {p && <ChipDeCabecera>{!p.activa ? "Inactiva en HubSpot" : p.gestionada ? "Gestionado por Smarteam" : "Solo vendido"}</ChipDeCabecera>}
+            {p?.pais && <ChipDeCabecera>{p.pais}</ChipDeCabecera>}
+            {p?.clienteDesde && <ChipDeCabecera>Cliente desde {mesYAnio(p.clienteDesde)}</ChipDeCabecera>}
+            {(p?.partnersQueGestionan ?? 1) >= 2 && <Chip tono="atencion">Otro partner la gestiona</Chip>}
+          </>
+        }
+        acciones={
+          <>
+            {p?.enlacePortal && (
+              <AccionDeCabecera href={p.enlacePortal} externa>
+                Abrir en HubSpot ↗
+              </AccionDeCabecera>
+            )}
+            <AccionDeCabecera href={`/clients/${cuenta.clientId}`}>Ficha del cliente →</AccionDeCabecera>
+          </>
+        }
+      />
+
+      <div className="flex flex-1 flex-col lg:flex-row">
+        <main className="min-w-0 flex-1 bg-surface-muted px-6 pb-12 pt-4 xl:px-8">
+          <div className="flex max-w-[1060px] flex-col gap-7">
+            <div data-recorrido="cs.pestanas">
+              <Tabs
+                aria-label="Qué mirar de la cuenta"
+                value={pestana}
+                onChange={irA}
+                items={PESTANAS_DE_LA_CUENTA.map((k) => ({ key: k, label: rotulo(k), count: cuenta_(k) }))}
+              />
+            </div>
+
+            <div hidden={pestana !== "estado"}>
+              <PestanaEstado data={data} irA={irA} />
+            </div>
+            <div hidden={pestana !== "adopcion"}>
+              <PestanaAdopcion data={data} irA={irA} />
+            </div>
+            <div hidden={pestana !== "renovacion"}>
+              <PestanaRenovacion data={data} irA={irA} />
+            </div>
+            <div hidden={pestana !== "proyectos"}>
+              <PestanaProyectos data={data} puedeCurar={puedeCurar} />
+            </div>
+            <div hidden={pestana !== "resultados"}>
+              <PestanaResultados data={data} />
+            </div>
+            <div hidden={pestana !== "conversaciones"}>
+              <PestanaConversaciones data={data} />
+            </div>
+          </div>
+        </main>
+        <PanelDeLaCuenta data={data} />
       </div>
-
-      {/* Resumen ejecutivo citado */}
-      <Section title="🧭 Resumen de la cuenta" source={<span className="text-[11px] text-fg-muted">generado por agente — cada afirmación cita su fuente</span>}>
-        <div className="bg-surface border border-line rounded-xl p-4">
-          <AccountBriefSection clientId={data.clientId} brief={data.brief} />
-        </div>
-      </Section>
-
-      {/* Alertas del watchdog (reuso del feed) */}
-      {data.alerts.length > 0 && (
-        <Section title="🚨 Alertas de la cuenta">
-          <AlertsFeed initialAlerts={data.alerts} />
-        </Section>
-      )}
-
-      {/* Proyectos activos */}
-      <Section title="📁 Proyectos activos">
-        <ActiveProjectsSection projects={data.projects} projectOps={data.projectOps} puedeCurar={puedeCurar} />
-      </Section>
-
-      {/* Uso/licencias/MRR: CONFIDENCIAL (términos de partner) — solo CSL/SUPER_ADMIN.
-          Una sola sección tipo REPORTE (antes eran dos cajas que duplicaban el dato). */}
-      {data.partnerVisible && (
-        <Section title="📊 Uso, adopción y licencias">
-          <div className="bg-surface border border-line rounded-xl p-4">
-            <AccountUsageReport partner={data.partner} partnerState={data.partnerState} />
-          </div>
-        </Section>
-      )}
-
-      {/* Últimas minutas (fuente citable) */}
-      {data.minutes.length > 0 && (
-        <Section title="📝 Últimas sesiones">
-          <div className="space-y-2">
-            {data.minutes.map((m) => (
-              <div key={m.sessionId} className="bg-surface border border-line rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Link href={`/sessions/${m.sessionId}`} className="text-xs font-semibold text-fg hover:text-brand truncate">
-                    {m.sessionTitle}
-                  </Link>
-                  <SourceChip label="Minuta" date={m.date} title={new Date(m.date).toLocaleString("es-CR", { hour12: false })} />
-                  <span className="text-[10px] text-fg-muted ml-auto whitespace-nowrap">{fmtChipDate(m.date)}</span>
-                </div>
-                {m.summary && <p className="text-[11px] text-fg-secondary mt-1.5 line-clamp-3">{m.summary}</p>}
-                {m.risks.length > 0 && (
-                  <p className="text-[11px] text-amber-600 mt-1">
-                    ⚠ {m.risks.map((r) => r.text).slice(0, 2).join(" · ")}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
     </div>
   );
 }

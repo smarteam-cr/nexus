@@ -4947,3 +4947,31 @@ Alexander Vanegas (CSL) y dirección.
   editable.
 - **«Acceso»**, con un punto verde (activo) o ámbar (revocado), en vez de «Acceso activo»: el botón
   blanco de la barra del documento, como «Asistente» y «Exportar PDF».
+
+## La cuenta de Éxito del cliente, en pestañas (2026-10-05)
+
+> Elías: «que se pueda entender más y no sea solo hacer scroll», pensado para la CSL que administra
+> la cartera; «la parte de adopción es muy importante». Aprobó el diseño (lienzo «Éxito del cliente ·
+> rediseño», fila «La cuenta en pestañas») y pidió aplicarlo.
+
+- **Seis pestañas: Estado de la cuenta · Adopción · Renovación · Proyectos · Resultados ·
+  Conversaciones.** La primera contesta «¿cómo está?» en un vistazo (resumen del agente, las cuatro
+  lecturas, lo que pide atención y lo que viene en 90 días) y cada lectura o motivo lleva a la
+  pestaña con el detalle (`PESTANA_DE_LA_LECTURA`, `PESTANA_DEL_MOTIVO`). El panel derecho queda
+  igual en todas; las personas del cliente pasaron a Conversaciones y las apps a Adopción.
+- **La pestaña viaja en la dirección (`?pestana=`) con `history.replaceState`, no con
+  `router.replace`**: la página es dinámica y `router.replace` volvería a cargar la cuenta entera en
+  cada clic. Las seis quedan montadas (ocultas con `hidden`) para no perder lo que se estaba haciendo.
+- **Lo nuevo se calcula con datos que ya existían**, en funciones puras de `lib/cs` con pruebas:
+  del contrato al uso y licencias (`adopcion.ts`), la lista para renovar (`lista-para-renovar.ts`,
+  un punto sin dato no cuenta como listo ni como pendiente) y lo que viene en 90 días
+  (`lo-que-viene.ts`). La lectura del agente sobre la adopción son las frases del resumen citadas
+  con HubSpot Partner: no hay un agente nuevo.
+- **El gráfico semanal de uso sale de `PartnerUsageSnapshot`** y con menos de dos semanas dice por
+  qué no hay gráfico: hoy hay una sola (10 jul) porque la copia diaria de HubSpot Partner está
+  apagada en producción. Commerce no tiene columna semanal: su «hace 4 semanas» dice «sin historia».
+- **«Por qué se movió el plan» son las particularidades confirmadas que corrieron fechas**, cerradas
+  incluidas (cerrar no devuelve calendario, ver §Cronograma). Nunca se lee `sourceQuote`.
+- **El avance hacia la meta de cada resultado no se mide**: la pestaña lo dice en vez de inventarlo.
+- El recorrido «Una cuenta de Éxito del cliente» pasó a la versión 2: sus pasos de adopción y
+  proyectos apuntan a las pestañas, y suma uno sobre las pestañas.

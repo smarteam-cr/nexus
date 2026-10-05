@@ -69,9 +69,10 @@ export const EXITO_LISTADO: Recorrido = {
 
 export const EXITO_CUENTA: Recorrido = {
   id: "exito-cuenta",
-  version: 1,
+  // v2 (2026-10-05): la ficha pasó a pestañas; dos pasos apuntan ahora a su pestaña.
+  version: 2,
   titulo: "Una cuenta de Éxito del cliente",
-  descripcion: "El estado de la cuenta, su uso, sus proyectos y sus alertas",
+  descripcion: "El estado de la cuenta, su adopción, sus proyectos y sus alertas",
   rotulo: "Recorrido · La cuenta",
   invitacion: {
     titulo: "¿Te muestro cómo leer una cuenta?",
@@ -86,7 +87,7 @@ export const EXITO_CUENTA: Recorrido = {
     {
       ancla: "cs.estado",
       titulo: "El estado de la cuenta",
-      texto: "Entrega, uso, relación y renovación, cada una con su color, el porqué y de dónde sale.",
+      texto: "Entrega, adopción, relación y renovación, cada una con su color, el porqué y de dónde sale. Toca una para abrir su pestaña.",
       lado: "bottom-start",
     },
     {
@@ -102,16 +103,22 @@ export const EXITO_CUENTA: Recorrido = {
       lado: "bottom-start",
     },
     {
+      ancla: "cs.pestanas",
+      titulo: "Una pestaña por pregunta",
+      texto: "Adopción, renovación, proyectos, resultados y conversaciones. La pestaña abierta queda en la dirección, así la puedes compartir.",
+      lado: "bottom-start",
+    },
+    {
       ancla: "cs.uso",
-      titulo: "Uso y adopción",
-      texto: "Hub por hub: qué contrató, cuánto lo usa, las licencias que paga sin asignar y lo que falta activar.",
-      lado: "top-start",
+      titulo: "La adopción",
+      texto: "El uso semana a semana, cuánto de lo contratado está activado y se usa, las licencias que paga sin asignar y lo que falta activar. El punto ámbar avisa que algo pide atención.",
+      lado: "bottom-start",
     },
     {
       ancla: "cs.proyectos",
       titulo: "Sus proyectos",
-      texto: "Cada proyecto con su salud y su cierre. Si el vigía propone cambiar la salud de uno, la confirmas o la descartas desde su fila.",
-      lado: "top-start",
+      texto: "Cada proyecto con su salud y su cierre, y por qué se movió el plan. Si el vigía propone cambiar la salud de uno, la confirmas o la descartas desde su fila.",
+      lado: "bottom-start",
     },
     {
       ancla: "que-sigue",
