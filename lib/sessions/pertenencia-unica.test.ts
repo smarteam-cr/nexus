@@ -28,6 +28,8 @@ const CONSUMIDORES = [
   "app/api/projects/[projectId]/session-candidates/route.ts",
   "app/api/sessions/analyze/route.ts",
   "lib/cs/load-account.ts",
+  "lib/cs/cartera.ts",
+  "lib/cs/watchdog-cuenta.ts",
   "lib/hubspot/cs-signals.ts",
   "lib/projects/analyze-participants.ts",
   "lib/sessions/reclassify.ts",

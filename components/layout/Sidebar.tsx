@@ -227,6 +227,7 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
     isSuperAdmin,
     permissions: user.permissions,
     hasSharedDocs: user.hasSharedDocs,
+    role: user.role,
   };
 
   return (

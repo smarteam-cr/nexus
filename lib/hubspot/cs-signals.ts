@@ -19,6 +19,7 @@ import { getSystemHubspotClient } from "./client";
 import { fetchCompanyDeals, type AvailableDeal } from "./deals";
 import { fetchCompanyTimelineItems } from "./company-timeline";
 import { fetchCompanyTickets } from "./tickets";
+import { fetchCompanyContacts, type ContactoDeEmpresa } from "./company-contacts";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 
@@ -84,12 +85,14 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
   // del sync) — una "última actividad" futura rompería la señal de frialdad.
   let lastEngagementAt: Date | null = null;
   let engagements90d = 0;
-  let engagementItems: { type: string; title: string; date: string | null; ts: number }[] = [];
+  // `resumen`: las primeras líneas de la nota o llamada (2026-10-04). Las lee el agente vigía: el
+  // registro de la empresa en HubSpot cuenta cosas que no pasan por las reuniones de Nexus.
+  let engagementItems: { type: string; title: string; date: string | null; ts: number; resumen: string }[] = [];
   try {
     const items = (await fetchCompanyTimelineItems(hs, client.hubspotCompanyId)).filter(
       (i) => i.ts <= now,
     );
-    engagementItems = items.map((i) => ({ type: i.type, title: i.title, date: i.date, ts: i.ts }));
+    engagementItems = items.map((i) => ({ type: i.type, title: i.title, date: i.date, ts: i.ts, resumen: i.body.slice(0, 280) }));
     const latest = items[0]?.ts;
     if (latest) lastEngagementAt = new Date(latest);
     engagements90d = items.filter((i) => i.ts >= now - 90 * DAY_MS).length;
@@ -112,6 +115,18 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
     }
   } catch (e) {
     errors.push(`sessions: ${e instanceof Error ? e.message : "error"}`);
+  }
+
+  // ── 2b. Contactos de la empresa (2026-10-04) ──────────────────────────────
+  // Quiénes son y cuándo se habló con cada uno: el agente vigía nota si el sponsor dejó de aparecer.
+  // Van DENTRO de `engagement` (Json que ya existe): una columna nueva sería DDL por un dato que
+  // solo lee el agente.
+  let contactos: ContactoDeEmpresa[] = [];
+  try {
+    const c = await fetchCompanyContacts(hs, client.hubspotCompanyId);
+    contactos = c.contactos;
+  } catch (e) {
+    errors.push(`contactos: ${e instanceof Error ? e.message : "error"}`);
   }
 
   // ── 3. Tickets (degradación de scope) ──────────────────────────────────────
@@ -151,6 +166,7 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
         lastAt: lastEngagementAt?.toISOString() ?? null,
         count90d: engagements90d,
         lastItems: engagementItems.slice(0, 10) as unknown as Prisma.InputJsonValue,
+        contactos: contactos as unknown as Prisma.InputJsonValue,
       },
       tickets: ticketsJson,
       lastEngagementAt,
@@ -174,6 +190,7 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
         lastAt: lastEngagementAt?.toISOString() ?? null,
         count90d: engagements90d,
         lastItems: engagementItems.slice(0, 10) as unknown as Prisma.InputJsonValue,
+        contactos: contactos as unknown as Prisma.InputJsonValue,
       },
       tickets: ticketsJson,
       lastEngagementAt,

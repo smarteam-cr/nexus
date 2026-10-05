@@ -37,6 +37,7 @@ import { isCostosRole } from "./cobranza-roles";
 // que también sale el filtro de visibilidad y el gate de las pantallas. Este guard lo
 // consume; no lo reimplementa.
 import { esAdminDeRoles } from "@/lib/roles/access";
+import { esLiderDeCs } from "@/lib/cs/acceso";
 import type { TeamRole } from "@prisma/client";
 import { pieceByName } from "@/lib/pieces/registry";
 import {
@@ -682,6 +683,28 @@ export async function guardRolesAdmin(): Promise<
   if (!esAdminDeRoles({ role: guard.role })) {
     return NextResponse.json(
       { error: "La sección de Roles es para dirección y el CSL." },
+      { status: 403 },
+    );
+  }
+  return guard;
+}
+
+/**
+ * ÉXITO DEL CLIENTE (2026-10-04): la CSL y dirección, por ROL (`esLiderDeCs`). Gate hardcodeado
+ * fuera de la matriz, como Roles: el índice muestra la cartera entera en dinero y no se delega por
+ * plantilla. PRIMERA línea de todo handler de `app/api/cs/*` que lee o escribe por cuenta.
+ *
+ * ⚠ No reemplaza al filtro por cliente: los handlers siguen aplicando `accessibleClientWhere`
+ * (hoy la CSL ve todo, pero el día que una plantilla le recorte la cartera, el filtro sigue ahí).
+ */
+export async function guardLiderDeCs(): Promise<
+  Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
+> {
+  const guard = await guardInternalUser();
+  if (guard instanceof NextResponse) return guard;
+  if (!esLiderDeCs(guard.role)) {
+    return NextResponse.json(
+      { error: "Éxito del cliente es para la líder de Customer Success y dirección." },
       { status: 403 },
     );
   }

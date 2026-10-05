@@ -1,46 +1,39 @@
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
-import { PageHeader } from "@/components/ui";
-import { can, requirePermission } from "@/lib/auth/permissions/engine";
+import { requireInternalUser } from "@/lib/auth/supabase";
+import { can } from "@/lib/auth/permissions/engine";
 import { accessibleClientWhere } from "@/lib/auth/access";
+import { esLiderDeCs } from "@/lib/cs/acceso";
 import { loadCsAccount } from "@/lib/cs/load-account";
 import AccountView from "@/components/cs/account/AccountView";
 // Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
-import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
+import { SHELL_FULL } from "@/lib/ui/page-shell";
 
 export const dynamic = "force-dynamic";
 
-// VISTA POR CUENTA de Customer Success: estado completo de UNA cuenta (proyectos,
-// alertas, cronograma, licencias, adopción, resumen citado). Mismo gate que el
-// panel (customerSuccess.read); si el cliente no pasa el where del usuario → 404.
+// LA FICHA DE UNA CUENTA en Éxito del cliente (rediseño 2026-10-04; en pestañas desde el
+// 2026-10-05): Estado de la cuenta · Adopción · Renovación · Proyectos · Resultados ·
+// Conversaciones, con el panel de contexto a la derecha. La pestaña viaja en `?pestana=`.
+//
+// De la CSL y dirección, por ROL (`esLiderDeCs`, lib/cs/acceso.ts), igual que el índice. Si el
+// cliente no pasa el where del usuario → 404.
 export default async function CustomerSuccessAccountPage({
   params,
 }: {
   params: Promise<{ clientId: string }>;
 }) {
   const { clientId } = await params;
-  const ctx = await requirePermission("customerSuccess", "read").catch(() => null);
-  if (!ctx) redirect("/clients");
+  const ctx = await requireInternalUser().catch(() => null);
+  if (!ctx || !esLiderDeCs(ctx.role)) redirect("/clients");
 
   const where = await accessibleClientWhere(ctx.user);
-  // Uso/UUS/MRR de partner: confidenciales — solo CSL y SUPER_ADMIN.
-  const role = ctx.user.teamMember?.roleEnum ?? null;
-  const canSeePartnerData = role === "CSL" || role === "SUPER_ADMIN";
   // Resolver la propuesta de salud del watchdog (Confirmar / Descartar) sigue exigiendo
-  // `clientes.viewAll`: el CSE VE el chip rojo de su proyecto, pero no lo resuelve. Ver el
-  // comentario largo en la pantalla del panel.
+  // `clientes.viewAll`. Sin la bandera, el chip se pintaría con botones que dan 403.
   const puedeCurar = await can(ctx.teamMember, "clientes", "viewAll");
-  const data = await loadCsAccount(clientId, where, canSeePartnerData);
+  const data = await loadCsAccount(clientId, where, true);
   if (!data) notFound();
 
   return (
-    <div className={SHELL_DEFAULT}>
-      <PageHeader
-        backHref="/customer-success"
-        backLabel="Éxito del cliente"
-        title={data.clientCompany || data.clientName}
-        description={`${data.projects.length} proyecto${data.projects.length !== 1 ? "s" : ""} activo${data.projects.length !== 1 ? "s" : ""}${data.alerts.length > 0 ? ` · ${data.alerts.length} alerta${data.alerts.length !== 1 ? "s" : ""} vigente${data.alerts.length !== 1 ? "s" : ""}` : ""}`}
-      />
+    <div className={SHELL_FULL}>
       <AccountView data={data} puedeCurar={puedeCurar} />
     </div>
   );

@@ -1,78 +1,34 @@
 import { redirect } from "next/navigation";
-import { PageHeader } from "@/components/ui";
-import { can, requirePermission } from "@/lib/auth/permissions/engine";
+import { requireInternalUser } from "@/lib/auth/supabase";
+import { can } from "@/lib/auth/permissions/engine";
 import { accessibleClientWhere } from "@/lib/auth/access";
-import { loadPortfolio } from "@/lib/portfolio/load";
-import { loadCsPanel } from "@/lib/cs/load-panel";
-import { loadCsDashboard } from "@/lib/cs/load-dashboard";
+import { esLiderDeCs } from "@/lib/cs/acceso";
+import { cargarCarteraDeLaCsl } from "@/lib/cs/cartera";
 import CsPanel from "@/components/cs/CsPanel";
-import CsDashboard from "@/components/cs/dashboard/CsDashboard";
-import AlertsFeed from "@/components/cs/AlertsFeed";
 // Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 
 // Depende del usuario logueado (rol) → no cacheable.
 export const dynamic = "force-dynamic";
 
-// CUSTOMER SUCCESS — centro de decisión de la CSL: dashboard visual (carga por
-// CSE, etapas, bloqueos, adopción/uso de Partner) + alertas triadas por el
-// watchdog + expansión/renovaciones + buckets de salud. Todo dato derivado
-// lleva su fuente (SourceChip). Desde 2026-08-16 el gate es la celda propia
-// `customerSuccess.read` y NO «ver todos los clientes»: el CSE entra a su propia
-// pantalla, acotado por `accessibleClientWhere` a SUS clientes.
+// ÉXITO DEL CLIENTE — la pantalla de la líder de Customer Success (rediseño 2026-10-04): la cartera
+// en una línea, la entrega de proyectos y una pestaña por pregunta del lunes (a quién llamar, qué
+// renueva, uso y licencias, crecimiento, equipo y nivel de partner).
+//
+// De la CSL y dirección, por ROL (`esLiderDeCs`, lib/cs/acceso.ts): muestra la cartera entera en
+// dinero —MRR, comisión, puntos de partner—, que es dato de partner (términos con HubSpot) y no se
+// delega por plantilla. Hasta el 2026-10-04 colgaba de la celda `customerSuccess.read` y el CSE
+// entraba a ver sus cuentas.
 export default async function CustomerSuccessPage() {
-  const ctx = await requirePermission("customerSuccess", "read").catch(() => null);
-  if (!ctx) redirect("/clients");
+  const ctx = await requireInternalUser().catch(() => null);
+  if (!ctx || !esLiderDeCs(ctx.role)) redirect("/clients");
 
   const where = await accessibleClientWhere(ctx.user);
-  // CONFIDENCIALIDAD (términos de partner de HubSpot): uso/UUS/MRR solo CSL y
-  // SUPER_ADMIN. ⚠ Este chequeo es por ROL y NO por la celda de acceso al área, así
-  // que abrirle el área al CSE no le destraba nada de partner.
-  const role = ctx.user.teamMember?.roleEnum ?? null;
-  const canSeePartnerData = role === "CSL" || role === "SUPER_ADMIN";
-  // ⚠ CURAR NO ES MIRAR. Abrirle el area al CSE (celda `customerSuccess.read`) no le abrio
-  // lo que esta pantalla ESCRIBE: refrescar senales, correr el watchdog y fijar la salud
-  // siguen exigiendo `clientes.viewAll`. Sin este dato los controles se pintarian igual y
-  // darian 403 al apretarlos, y un boton que solo sirve para dar error ensena a ignorar los
-  // botones: el proximo, el que si importaba, tambien se ignora.
+  // ⚠ CURAR NO ES MIRAR. Refrescar señales y correr el vigía recorren la cartera entera y sus
+  // endpoints siguen exigiendo `clientes.viewAll`. Sin esta bandera los botones se pintarían igual
+  // y darían 403 si una plantilla le saca ese permiso a la CSL.
   const puedeCurar = await can(ctx.teamMember, "clientes", "viewAll");
-  // El portfolio (la query más pesada) se carga UNA vez y se comparte.
-  const rows = await loadPortfolio(where);
-  const [data, dashboard] = await Promise.all([
-    loadCsPanel(where, rows),
-    loadCsDashboard(where, rows, canSeePartnerData),
-  ]);
+  const data = await cargarCarteraDeLaCsl(where);
 
-  const openAlerts = data.alerts.filter((a) => a.status === "OPEN").length;
-  return (
-    <div className={SHELL_DEFAULT}>
-      <PageHeader
-        title="Éxito del cliente"
-        description={
-          data.rows.length === 0
-            ? "Sin proyectos"
-            : `${data.rows.length} proyecto${data.rows.length !== 1 ? "s" : ""}${openAlerts > 0 ? ` · ${openAlerts} alerta${openAlerts !== 1 ? "s" : ""} sin ver` : " · sin alertas nuevas"}`
-        }
-      />
-      {/* Las alertas del watchdog (incluidas las derivadas de datos de partner:
-          UUS, licencias, renovaciones) son visibles a TODO rol seeAllClients a
-          propósito: son insight DERIVADO ("llamá a X porque su uso cae"), no el
-          dashboard crudo de uso/MRR, que sí queda gateado por canSeePartnerData.
-          Decisión consciente de producto — no es un gate olvidado. El feed va
-          ARRIBA de los charts vía slot: es el único ranking accionable por riesgo. */}
-      <CsDashboard
-        data={dashboard}
-        alertsSlot={
-          <section>
-            <div className="flex items-baseline gap-2 mb-2">
-              <h2 className="text-sm font-semibold text-fg">🚨 Alertas</h2>
-              <span className="text-[11px] text-fg-muted">triadas por el watchdog — severidad, razón y acción sugerida</span>
-            </div>
-            <AlertsFeed initialAlerts={data.alerts} />
-          </section>
-        }
-      />
-      <CsPanel data={data} canSyncPartner={canSeePartnerData} puedeCurar={puedeCurar} />
-    </div>
-  );
+  return <CsPanel data={data} puedeCurar={puedeCurar} contenedor={SHELL_DEFAULT} />;
 }

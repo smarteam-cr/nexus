@@ -2,7 +2,8 @@
  * PATCH /api/cs/alerts/[alertId]   body: { status: "SEEN" | "RESOLVED" | "DISMISSED" | "OPEN" }
  *
  * Ciclo de vida de una alerta del watchdog desde el feed: marcar vista, resolver,
- * descartar (o reabrir). Registra quién y cuándo. Gateado con `customerSuccess.read`.
+ * descartar (o reabrir). Registra quién y cuándo. Desde el 2026-10-04 es de la CSL y dirección
+ * (`guardLiderDeCs`); hasta entonces la celda `customerSuccess.read`.
  *
  * ⚠ Y SE VERIFICA A QUÉ CLIENTE PERTENECE LA ALERTA. El gate viejo (`seeAllClients`) implicaba
  * acceso a todos los clientes; la celda nueva no. Sin este chequeo, un CSE con el id de una
@@ -10,7 +11,7 @@
  * quien SÍ tenía que actuar, sin dejar rastro de que la apagó alguien de afuera.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardPermission } from "@/lib/auth/api-guards";
+import { guardLiderDeCs } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { serializeAlert } from "@/lib/cs/load-panel";
@@ -23,7 +24,7 @@ export async function PATCH(
   { params }: { params: Promise<{ alertId: string }> },
 ) {
   const { alertId } = await params;
-  const guard = await guardPermission("customerSuccess", "read");
+  const guard = await guardLiderDeCs();
   if (guard instanceof NextResponse) return guard;
 
   let body: { status?: unknown } = {};

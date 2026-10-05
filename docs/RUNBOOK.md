@@ -307,6 +307,26 @@ sale de la misma regla que usa `shouldRun` (`lib/jobs/requisitos.ts`).
 - **Espejo de proyectos de HubSpot**: `POST /api/clients/[id]/sync-projects` al abrir la ficha de
   un cliente (`app/(shell)/clients/[id]/WorkspaceClient.tsx`), con cooldown en el servidor.
 
+### Prender la copia diaria de Éxito del cliente
+
+Sin estas banderas, Éxito del cliente muestra datos viejos (la copia de Partner en producción está parada
+desde julio de 2026) y la columna «De dónde salen los datos» lo dice. Dos niveles, en el `.env` del VPS
+(`/opt/smartflow/Nexus/.env`), y después `bash scripts/deploy.sh` (el deploy recrea el contenedor con
+el `.env` nuevo; sin SQL):
+
+- **Solo los datos de Partner** (uso, licencias, renovaciones, MRR): `CS_PARTNER_SYNC_ENABLED=1`. Corre
+  `cs-partner-daily` (L–V desde las 6:00 CR). No usa IA y no crea clientes: solo actualiza los que ya
+  existen.
+- **Todo, con el vigía**: `CS_WATCHDOG_ENABLED=1`. Suma `cs-signals-daily` (tickets, actividad y las
+  personas de cada empresa), `cs-watchdog-daily` (hasta 10 proyectos por día) y `cs-watchdog-debounce`
+  (hasta 5 por tick), que **gastan API de Anthropic**. ⚠ Con esta bandera la copia de Partner también
+  CREA clientes para los registros de Partner que no encuentra (`partnerCreaClientes`): mirar la lista
+  de clientes los días siguientes. El vigía se apaga sin deploy con `CsSettings.watchdogEnabled`.
+
+El permiso `crm.objects.partner-clients.read` ya está concedido. Al día siguiente, Integraciones › Jobs
+del servidor tiene que mostrar los jobs en verde; si dicen **apagado**, nombran la variable que falta.
+Para no esperar a las 6:00: «Actualizar partner» y «Actualizar señales» en Éxito del cliente.
+
 ### El espejo de Odoo no corre
 
 Se ve en tres lugares: la línea de arriba de Cobranza › Odoo se pone en rojo, INV31 da rojo en

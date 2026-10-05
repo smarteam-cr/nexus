@@ -90,6 +90,14 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
   "lib/cs/load-account.ts": { clase: "contexto", motivo: "El resumen de cuenta de CS. Ya cortaba." },
   "lib/projects/project-brief.ts": { clase: "contexto", motivo: "El resumen por proyecto. Ya cortaba (su const se llama `ocurridas`)." },
   "lib/cs/watchdog-context.ts": { clase: "contexto", motivo: "El vigilante. Ya cortaba, citando las fechas corruptas 2037+." },
+  "lib/cs/watchdog-cuenta.ts": {
+    clase: "contexto",
+    motivo: "Las reuniones de la CUENTA que lee el vigilante (con el cliente e internas). Corta por fecha desde el primer día.",
+  },
+  "lib/cs/cartera.ts": {
+    clase: "contexto",
+    motivo: "El último contacto de cada cuenta en la pantalla de la CSL: una reunión agendada no es contacto.",
+  },
   "lib/projects/analyze-participants.ts": {
     clase: "contexto",
     motivo: "Manda las 8 más recientes a Claude para leer quién asiste. Le atribuía asistencias a gente que no se sentó.",
@@ -231,6 +239,8 @@ const CORTAN_POR_FECHA = [
   "lib/cs/load-account.ts",
   "lib/projects/project-brief.ts",
   "lib/cs/watchdog-context.ts",
+  "lib/cs/watchdog-cuenta.ts",
+  "lib/cs/cartera.ts",
   "lib/projects/analyze-participants.ts",
   "lib/lifecycle/load.ts",
   "app/api/clients/[id]/canvas/refresh/route.ts",

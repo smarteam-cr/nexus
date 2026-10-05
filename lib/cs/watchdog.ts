@@ -25,6 +25,8 @@ import { claimDateKey, SIN_TURNO } from "@/lib/jobs/registry";
 import { crDateParts, WEEKDAYS_MON_FRI } from "@/lib/jobs/time";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { PROYECTO_DE_CARTERA_WHERE, proyectoDeCarteraWhere } from "@/lib/projects/scope";
+import { leerPartner } from "./lectura-partner";
+import { hayDeudaDelCliente, resumirFacturacion } from "./facturacion-de-la-cuenta";
 
 const AGENT_ID = "agent-cs-watchdog";
 const AGENT_SLUG = "cs-watchdog";
@@ -489,9 +491,43 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
   const opsByProject = new Map(opsRows.map((o) => [o.id, o]));
   const partnerRows = await prisma.clientPartnerSnapshot.findMany({
     where: { clientId: { not: null } },
-    select: { clientId: true, uusScore: true, uusTrend: true, seats: true, nextRenewalAt: true, cancellationHubs: true, revenueSignal: true },
+    select: { clientId: true, uusScore: true, uusTrend: true, seats: true, nextRenewalAt: true, cancellationHubs: true, revenueSignal: true, properties: true },
   });
   const partnerByClient = new Map(partnerRows.map((p) => [p.clientId as string, p]));
+
+  // Facturación (2026-10-04): una cuenta con facturas vencidas o una promesa incumplida es
+  // candidata aunque su cronograma no tenga novedades. Mismas reglas que Cobranza.
+  const hoyISO = now.toISOString().slice(0, 10);
+  const cuentasFin = await prisma.cuentaFinanciera.findMany({
+    where: { clientId: { in: [...new Set(rows.map((r) => r.clientId))] } },
+    select: {
+      clientId: true,
+      creditoDias: true,
+      cobros: { select: { estado: true, fechaProgramada: true, fechaEmision: true, fechaCobro: true, promesaPago: true, monto: true, moneda: true } },
+    },
+  });
+  const ymdDe = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+  const conDeuda = new Set(
+    cuentasFin
+      .filter((c) =>
+        hayDeudaDelCliente(
+          resumirFacturacion(
+            c.cobros.map((x) => ({
+              estado: x.estado,
+              fechaProgramada: x.fechaProgramada.toISOString().slice(0, 10),
+              fechaEmision: ymdDe(x.fechaEmision),
+              fechaCobro: ymdDe(x.fechaCobro),
+              promesaPago: ymdDe(x.promesaPago),
+              monto: Number(x.monto),
+              moneda: x.moneda,
+            })),
+            hoyISO,
+            c.creditoDias,
+          ),
+        ),
+      )
+      .map((c) => c.clientId),
+  );
 
   // Proyectos con eventos pendientes (cualquier antigüedad — el sweep los barre).
   const pendingEvents = await prisma.timelineEvent.groupBy({
@@ -551,7 +587,17 @@ export async function runWatchdogSweep(now: Date): Promise<{ candidates: number;
     const uusLowOrFalling =
       (partner?.uusScore !== null && partner?.uusScore !== undefined && partner.uusScore < LOW_UUS_THRESHOLD) ||
       (typeof partner?.uusTrend === "number" && partner.uusTrend < -0.05);
+    // La relación gestionada por vencer (≤30 días): si nadie de Smarteam trabaja en el portal,
+    // HubSpot deja de dar los datos de uso. Sale del crudo (`leerPartner`), sin columna nueva.
+    const lectura = partner ? leerPartner(partner.properties) : null;
+    const relacionPorVencer =
+      !!lectura?.gestionada &&
+      !!lectura.relacionGestionadaVence &&
+      new Date(`${lectura.relacionGestionadaVence}T00:00:00Z`).getTime() < now.getTime() + 30 * DAY_MS &&
+      new Date(`${lectura.relacionGestionadaVence}T00:00:00Z`).getTime() >= now.getTime() - DAY_MS;
     const partnerRisk =
+      relacionPorVencer ||
+      conDeuda.has(row.clientId) ||
       hsBlocked ||
       !!partner?.cancellationHubs ||
       // Señal de ingresos de HubSpot (upsell/cross-sell/renovación de competidor…):

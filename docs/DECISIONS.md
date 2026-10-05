@@ -4824,3 +4824,44 @@ transacciones, con su histórico a la vista (`/finanzas/tipo-de-cambio`). El 5 d
   cierre ya no pide confirmarlo a mano cuando el mes tiene días del BCCR.
 - **Lo que lo revertiría:** si dirección prefiere otra tasa (la de compra, o la del Excel de Alex), se cambia el
   indicador en tipo-cambio-server.ts y los textos de la página; lo demás queda igual.
+
+## Éxito del cliente es de la CSL y dirección, y lee la cuenta entera (2026-10-04)
+
+**Contexto.** Elías pidió rediseñar Éxito del cliente con el sistema «Nexus · interfaz interna» para la
+líder de Customer Success: en el índice, atrasos, bloqueos y alertas; en cada cuenta, uso, adopción y
+licencias con todo lo aprovechable de HubSpot Partner. Aprobó el diseño (Claude Design) y pidió
+aplicarlo, que el agente vigía cruce todo lo que Nexus sabe de la cuenta y que las pantallas sean de
+Alexander Vanegas (CSL) y dirección.
+
+- **Por ROL, no por celda** (`lib/cs/acceso.ts`: CSL y SUPER_ADMIN). Revierte el 2026-08-16: el índice
+  muestra la cartera entera en dinero (MRR gestionado, comisión, puntos de partner) y eso no se
+  delega por plantilla. Las páginas, las tres APIs por cuenta (`guardLiderDeCs`) y el menú (gate
+  `roles`) leen la misma lista; `customerSuccess.read` queda con `enforced:false` y no abre nada.
+  ⚠ El CSE deja de ver el área. Lo congela `lib/auth/customer-success-propio.test.ts`.
+- **Curar sigue siendo `clientes.viewAll`.** Refrescar señales, traer Partner y correr el vigía
+  recorren la cartera entera; las pantallas los pintan solo con `puedeCurar`.
+- **El índice responde preguntas, no muestra gráficos**: la cartera en una línea, la entrega de
+  proyectos, y una pestaña por pregunta (a quién llamar, qué renueva, uso y licencias, crecimiento,
+  equipo, nivel de partner). Cada número sale de una regla pura con prueba
+  (`lib/cs/cartera-reglas.ts`, `ficha-reglas.ts`, `facturacion-de-la-cuenta.ts`); lo que no hay se
+  dice («sin datos de Partner», «hace N días»), nunca se rellena.
+- **Lo que no se usa de Partner, a propósito**: `hs_renewal_mrr` (no coincide con la suma de los hubs)
+  y los puntos de tier como dato fresco (HubSpot los dejó de calcular el 26-11-2025: se muestran con
+  su fecha).
+- **El vigía lee la cuenta entera, en el mensaje** (`lib/cs/watchdog-cuenta.ts`): handoff (resumen,
+  resultados, fecha límite y duración vendida), facturación, Partner, el registro de la empresa con
+  sus personas, y las reuniones de 45 días, separando las internas. Más una guía de cruces (riesgo
+  doble, uso tras la implementación, «dice que sí pero no lo usa», facturas vencidas). Sin re-sembrar
+  el prompt y con las categorías de alerta que ya existen: una factura vencida es `CHURN_RISK`.
+- **Las personas del cliente van en el JSON de señales** (`ClientCsSignals.engagement.contactos`,
+  `lib/hubspot/company-contacts.ts`), sin SQL: se leen de HubSpot con la copia diaria de señales.
+- **El barrido diario suma dos motivos para mirar una cuenta**: deuda vencida del cliente y relación
+  gestionada con HubSpot que vence en 30 días o menos.
+- **El buscador va en la fila de filtros de «A quién llamar» y mira TODAS las cuentas** (`cuentasParaBuscar`,
+  2026-10-05). Filtra la lista por nombre y, debajo, muestra las que coinciden y no están en ella: una
+  cuenta sana y sin renovación cerca no aparece en ninguna pestaña y también se tiene que poder abrir.
+  Enter abre la primera.
+- **Quien está de baja en Nexus no es CSE** (`cseVigente`, 2026-10-05): HubSpot puede seguir teniendo a
+  esa persona como dueña de proyectos activos (Lorena Osorio, Felipe Sepúlveda y Brandon Centeno, al
+  2026-10-05). Esos proyectos cuentan como sin CSE y Equipo dice de quién eran, para reasignarlos en
+  HubSpot. El filtro por CSE lista a todos los que llevan algún cliente, no solo a los de la lista.

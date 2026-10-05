@@ -79,6 +79,7 @@ function quienLoVe(gate: (typeof APP_NAV)[number]["gate"]): string {
   if (!gate || gate.kind === "always") return "Todo el equipo";
   if (gate.kind === "superAdmin") return "Solo dirección";
   if (gate.kind === "superAdminOrSharedDocs") return "Dirección, y quien tenga un documento compartido";
+  if (gate.kind === "roles") return gate.roles.includes("CSL") ? "La líder de Customer Success y dirección" : "Solo algunos roles";
   const seccion = PERMISSION_SECTIONS.find((s) => s.key === gate.section);
   return `Quien tenga permiso de ${seccion?.label ?? gate.section}`;
 }

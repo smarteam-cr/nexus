@@ -12,6 +12,7 @@ import { toSummaryLifecycle } from "@/lib/portfolio/load";
 import { getProjectLifecycle, type ProjectLifecycle } from "@/lib/lifecycle";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { computePhaseRanges, addWeeks, projectedEnd } from "@/lib/timeline/weeks";
+import { bloquesDeLaCuenta } from "./watchdog-cuenta";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -394,6 +395,16 @@ export async function buildWatchdogContext(
         .filter(Boolean)
         .join("\n");
 
+  /* La CUENTA, además del proyecto (2026-10-04): handoff, facturación, más de Partner, el registro
+     de la empresa en HubSpot y sus contactos, y las reuniones de la cuenta (con el cliente e
+     internas). Cierra con la guía de cruces. Nunca tira: un bloque que falla se omite. */
+  const cuentaBlock = await bloquesDeLaCuenta({
+    projectId,
+    clientId: project.clientId,
+    sesionesYaListadas: new Set(recentSessions.map((sp) => sp.session.id)),
+    ahora: now,
+  }).catch(() => "");
+
   const serialized = [
     `PROYECTO: ${project.name} (projectId=${project.id})`,
     `CLIENTE: ${project.client.name}${project.client.industry ? ` · ${project.client.industry}` : ""} (clientId=${project.clientId})`,
@@ -436,6 +447,8 @@ export async function buildWatchdogContext(
     "=== SEÑALES DE HUBSPOT DEL CLIENTE ===",
     signalsBlock,
     "",
+    cuentaBlock || null,
+    cuentaBlock ? "" : null,
     "=== ALERTAS YA EXISTENTES (NO las repitas; DISMISSED reciente = a la líder no le interesó) ===",
     serializeAlerts(existingAlerts),
   ]

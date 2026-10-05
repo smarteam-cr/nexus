@@ -236,9 +236,12 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
     modo: "exento",
     razon: "lee propiedades por `id IN` de una lista que loadPortfolio YA filtró por cartera.",
   },
-  "lib/cs/load-dashboard.ts": {
+  "lib/cs/cartera.ts": {
     modo: "exento",
-    razon: "lee propiedades por `id IN` de una lista que loadPortfolio YA filtró por cartera.",
+    razon:
+      "lee propiedades por `id IN` de una lista que loadPortfolio YA filtró por cartera, y los proyectos " +
+      "de CS cerrados hace poco (`PROYECTO_DE_PIPELINE_CS_WHERE` + estado) solo para el cruce «el uso cae " +
+      "desde que se cerró la implementación».",
   },
   "lib/lifecycle/load.ts": {
     modo: "exento",

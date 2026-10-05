@@ -8,11 +8,11 @@
  * Concurrencia: mutex en-proceso por cliente (doble click = 409) + chequeo en DB
  * de un AgentRun RUNNING reciente (cubre la otra máquina de la DB compartida —
  * peor caso residual: costo duplicado de UNA llamada; el upsert es consistente).
- * Gateado con `customerSuccess.read`.
+ * Desde el 2026-10-04 es de la CSL y dirección (`guardLiderDeCs`, lib/cs/acceso.ts).
  */
 import { NextRequest, NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { guardPermission } from "@/lib/auth/api-guards";
+import { guardLiderDeCs } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { runAccountBrief, humanizeBriefError } from "@/lib/cs/account-brief";
@@ -25,7 +25,7 @@ export async function POST(
   { params }: { params: Promise<{ clientId: string }> },
 ) {
   const { clientId } = await params;
-  const guard = await guardPermission("customerSuccess", "read");
+  const guard = await guardLiderDeCs();
   if (guard instanceof NextResponse) return guard;
 
   // El cliente debe pasar el where del usuario (mismo criterio que la página).

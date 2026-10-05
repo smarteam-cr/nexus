@@ -220,11 +220,17 @@ export const PERMISSION_SECTIONS = [
        (`lib/auth/access.ts`): un CSE con esta celda ve el área acotada a SUS
        clientes, porque `accessibleClientWhere` se aplica igual. Y los datos de
        partner (uso, UUS, MRR) siguen siendo de CSL y SUPER_ADMIN por su propio
-       chequeo de rol en la página — esta celda no los destraba. */
+       chequeo de rol en la página — esta celda no los destraba.
+
+       ⛔ APAGADA DESDE EL 2026-10-04 (`enforced: false`). Decisión de Elías: el área es de la
+       CSL y de dirección, por ROL y fuera de la matriz (`lib/cs/acceso.ts`, como Roles). El
+       índice pasó a mostrar la cartera entera en dinero. Ningún guard consulta ya esta celda,
+       así que el modal de /team la oculta: un switch que no hace nada miente. Se deja declarada
+       para que las filas viejas de `RolePermission` sigan leyéndose sin error. */
     key: "customerSuccess",
     label: "Éxito del cliente",
     actions: [
-      { key: "read", label: "Acceder al área de Éxito del cliente", enforced: true },
+      { key: "read", label: "Acceder al área de Éxito del cliente", enforced: false },
     ],
   },
   {

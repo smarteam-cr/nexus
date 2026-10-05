@@ -19,6 +19,7 @@
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { MARKETING_NAV } from "@/components/marketing/nav-config";
+import { ROLES_DE_EXITO_DEL_CLIENTE } from "@/lib/cs/acceso";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,12 @@ export type NavGate =
   | { kind: "permission"; section: string; action: string }
   | { kind: "superAdmin" }
   /** Dirección, MÁS quien tenga algún documento de Roles compartido (ver `hasSharedDocs`). */
-  | { kind: "superAdminOrSharedDocs" };
+  | { kind: "superAdminOrSharedDocs" }
+  /**
+   * Por ROL, fuera de la matriz (no se delega por plantilla): Éxito del cliente es de la CSL y de
+   * dirección (2026-10-04, `lib/cs/acceso.ts`). SUPER_ADMIN pasa siempre.
+   */
+  | { kind: "roles"; roles: readonly string[] };
 
 export interface NavChildConfig {
   href: string;
@@ -86,6 +92,8 @@ export interface NavContext {
    * HECHO de datos, y por eso no se puede derivar de `permissions`. Lo calcula AppShell.
    */
   hasSharedDocs?: boolean;
+  /** El rol de la persona (`TeamRole`), para los gates por rol. */
+  role?: string | null;
 }
 
 /** Espeja 1:1 los booleanos canSeeX del Sidebar pre-migración. PURO y testeable. */
@@ -95,6 +103,7 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
   if (gate.kind === "superAdmin") return ctx.isSuperAdmin;
   // Roles: dirección lo administra; el resto entra solo si le compartieron algo.
   if (gate.kind === "superAdminOrSharedDocs") return ctx.isSuperAdmin || ctx.hasSharedDocs === true;
+  if (gate.kind === "roles") return ctx.isSuperAdmin || (!!ctx.role && gate.roles.includes(ctx.role));
   const sections = (ctx.permissions?.sections ?? {}) as Record<
     string,
     Record<string, boolean> | undefined
@@ -217,9 +226,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
     key: "customer-success",
     label: "Éxito del cliente",
     href: "/customer-success",
-    // Celda propia desde 2026-08-16: el CSE entra a su propia pantalla sin que eso
-    // signifique «ve todos los clientes» (el row-level sigue aparte).
-    gate: { kind: "permission", section: "customerSuccess", action: "read" },
+    // De la CSL y dirección, por rol (2026-10-04, lib/cs/acceso.ts): el índice muestra la cartera
+    // entera en dinero. Hasta entonces colgaba de la celda `customerSuccess.read` (el CSE entraba).
+    gate: { kind: "roles", roles: ROLES_DE_EXITO_DEL_CLIENTE },
     group: "operacion",
     icon: icon(
       "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",

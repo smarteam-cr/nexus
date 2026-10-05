@@ -8,7 +8,8 @@ import { CAPABILITY_TO_PERMISSION } from "./permissions/compat";
  *
  * ── DE DÓNDE SALE ESTE ARCHIVO ───────────────────────────────────────────────
  * El 2026-08-16 Éxito del cliente ganó celda propia (`customerSuccess.read`) y el CSE pasó
- * a entrar a una pantalla que antes exigía `clientes.viewAll`. Lo que ESCRIBE esa pantalla
+ * a entrar a una pantalla que antes exigía `clientes.viewAll`. (Desde el 2026-10-04 la
+ * pantalla es de la CSL y dirección, por rol; el hueco sigue: el rol no garantiza la celda.) Lo que ESCRIBE esa pantalla
  * —refrescar señales, correr el watchdog, fijar la salud, resolver la propuesta del
  * watchdog— se dejó a propósito en el gate viejo: son actos de cartera, no de mirar la
  * propia. La auditoría adversarial encontró la consecuencia que nadie había mirado: los
@@ -54,9 +55,12 @@ describe("⭐ la premisa: esos cuatro endpoints NO son del CSE", () => {
     expect(sinComentarios(ruta)).toContain('guardCapability("seeAllClients")');
   });
 
-  it("y la pantalla se abre con OTRA celda, que es lo que crea el hueco", () => {
-    expect(sinComentarios(PANEL)).toContain('requirePermission("customerSuccess", "read")');
-    expect(sinComentarios(FICHA)).toContain('requirePermission("customerSuccess", "read")');
+  it("y la pantalla se abre por ROL, no con esa celda: eso es lo que crea el hueco", () => {
+    /* Desde el 2026-10-04 entran la CSL y dirección (`esLiderDeCs`). La CSL tiene
+       `clientes.viewAll` por default, pero una plantilla o un pin se lo pueden sacar: ahí entra a
+       la pantalla y los cuatro controles darían 403. */
+    expect(sinComentarios(PANEL)).toContain("esLiderDeCs(ctx.role)");
+    expect(sinComentarios(FICHA)).toContain("esLiderDeCs(ctx.role)");
   });
 });
 
@@ -81,9 +85,9 @@ describe("las dos pantallas calculan el permiso de ESCRITURA por separado", () =
 });
 
 describe("⛔ ninguno de los cuatro controles se ofrece sin el permiso", () => {
-  it("«Actualizar señales» y «Correr watchdog» no se pintan", () => {
+  it("«Actualizar señales», «Actualizar partner» y «Correr watchdog» no se pintan", () => {
     const src = sinComentarios(CS_PANEL);
-    for (const handler of ["refreshSignals", "runWatchdog"]) {
+    for (const handler of ["refreshSignals", "runWatchdog", "refreshPartner"]) {
       const i = src.indexOf(`onClick={${handler}}`);
       expect(i, `desapareció el botón de ${handler}`).toBeGreaterThan(0);
       const antes = src.slice(Math.max(0, i - 400), i);

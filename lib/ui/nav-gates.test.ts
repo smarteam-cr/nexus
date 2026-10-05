@@ -21,8 +21,11 @@ function ctx(
   // Default `false` a propósito: los casos congelados de arriba NO se editan al sumar
   // este eje — siguen probando exactamente lo mismo que probaban.
   hasSharedDocs = false,
+  // Mismo criterio: sin rol, los casos de arriba siguen probando lo mismo. Hace falta para los
+  // ítems con gate por ROL (Éxito del cliente, desde el 2026-10-04).
+  role: string | null = null,
 ): NavContext {
-  return { isSuperAdmin, permissions: { sections } as unknown as PermissionMap, hasSharedDocs };
+  return { isSuperAdmin, permissions: { sections } as unknown as PermissionMap, hasSharedDocs, role };
 }
 
 const visibles = (c: NavContext) =>
@@ -30,7 +33,8 @@ const visibles = (c: NavContext) =>
 
 /* Los que ve TODO rol interno. `documentacion` se sumó el 2026-08-02: explicar la herramienta
    no es un privilegio, y un manual que solo ven algunos no cumple su función. `escala` se sumó el
-   2026-09-27 por la misma razón: la escala la interioriza todo el equipo.
+   2026-09-27 por la misma razón: la escala la interioriza todo el equipo. `para-ti` (2026-10-04) muestra a cada
+   persona lo suyo: no hay rol que no tenga algo que le toque.
    ⚠ El orden importa: `visibles()` respeta el orden de APP_NAV. */
 const UNIVERSALES = ["para-ti", "clients", "marketing", "sessions", "knowledge", "documentacion", "escala"];
 
@@ -72,14 +76,19 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
   });
 
   it("un rol con viewAll+ventas+auditoria+config+agentes (perfil CSL) ve lo suyo, sin Finanzas ni admin duro", () => {
-    const c = ctx(false, {
-      clientes: { viewAll: true },
-      customerSuccess: { read: true },
-      ventas: { read: true },
-      auditoria: { read: true },
-      agentes: { read: true },
-      configuracion: { read: true },
-    });
+    const c = ctx(
+      false,
+      {
+        clientes: { viewAll: true },
+        customerSuccess: { read: true },
+        ventas: { read: true },
+        auditoria: { read: true },
+        agentes: { read: true },
+        configuracion: { read: true },
+      },
+      false,
+      "CSL",
+    );
     expect(visibles(c)).toEqual([
       "para-ti",
       "clients",
@@ -96,15 +105,28 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
     ]);
   });
 
-  it("⭐ un CSE con `customerSuccess.read` ve SU pantalla — y sigue sin ver la cartera", () => {
-    /* El cambio del 2026-08-16: hasta entonces «Éxito del cliente» colgaba de `clientes.viewAll`,
-       así que el rol que HACE éxito del cliente era el único operativo que no entraba, mientras
-       Ventas, Desarrollo y Marketing sí — al revés de lo que hace falta.
-       ⚠ Lo que este caso congela no es solo que aparezca: es que aparezca SIN `clientes.viewAll`.
-       Si alguien "arreglara" esto volviendo a atar las dos cosas, el CSE pasaría a ver la cartera
-       entera de la empresa y acá se vería. */
-    const c = ctx(false, { customerSuccess: { read: true } });
-    expect(visibles(c)).toEqual([
+  it("⭐ Éxito del cliente es por ROL: CSL y dirección, ningún permiso lo enciende", () => {
+    /* Desde el 2026-10-04 la pantalla muestra la cartera entera en dinero (MRR, comisión, puntos
+       de partner) y es de la líder de Customer Success y de dirección. Hasta entonces colgaba de
+       la celda `customerSuccess.read` y el CSE entraba a ver sus cuentas.
+       ⚠ Lo que este caso congela es que NINGUNA combinación de permisos la abra: ni la celda
+       vieja ni «ver todos los clientes». Volver a colgarla de una celda la delegaría por
+       plantilla. */
+    const todo = {
+      clientes: { viewAll: true },
+      customerSuccess: { read: true },
+      ventas: { read: true },
+      cobranza: { read: true },
+      auditoria: { read: true },
+      agentes: { read: true },
+      configuracion: { read: true },
+    };
+    for (const rol of ["CSE", "VENTAS", "DEV", "MARKETING", "ADMIN", null]) {
+      expect(visibles(ctx(false, todo, false, rol)), `${rol} ve Éxito del cliente`).not.toContain(
+        "customer-success",
+      );
+    }
+    expect(visibles(ctx(false, {}, false, "CSL"))).toEqual([
       "para-ti",
       "clients",
       "marketing",

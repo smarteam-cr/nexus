@@ -4,7 +4,8 @@
  * Lista alertas del watchdog de Éxito del cliente. Lo usan el feed del panel
  * (refetch tras acciones), el drill por cliente (historial completo con
  * ?clientId= sin filtro de status) y el poller de notificaciones del CSL
- * (?status=OPEN&severity=HIGH&since=watermark). Gateado con `customerSuccess.read`.
+ * (?status=OPEN&severity=HIGH&since=watermark). Desde el 2026-10-04 es de la CSL y dirección
+ * (`guardLiderDeCs`, lib/cs/acceso.ts); hasta entonces la celda `customerSuccess.read`.
  *
  * ⚠ Y ACOTADO POR CLIENTE. Hasta el 2026-08-16 el gate era `seeAllClients`, que IMPLICABA ver
  * todos los clientes, así que esta ruta nunca necesitó filtrar. La celda nueva no implica nada de
@@ -15,7 +16,7 @@
  * esta ruta era el camino que se salteó esa previsión.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardPermission } from "@/lib/auth/api-guards";
+import { guardLiderDeCs } from "@/lib/auth/api-guards";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { serializeAlert } from "@/lib/cs/load-panel";
@@ -25,7 +26,7 @@ const STATUSES = ["OPEN", "SEEN", "RESOLVED", "DISMISSED"] as const;
 const SEVERITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 
 export async function GET(req: NextRequest) {
-  const guard = await guardPermission("customerSuccess", "read");
+  const guard = await guardLiderDeCs();
   if (guard instanceof NextResponse) return guard;
 
   const sp = req.nextUrl.searchParams;
