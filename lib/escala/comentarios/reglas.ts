@@ -99,11 +99,8 @@ export interface RespuestaVista {
 
 export interface ComentarioVisto {
   id: string;
-  /**
-   * El número del reporte de Feedback, el que se cita: «F-128». (Opcional solo mientras
-   * `consultas.ts`, las tablas viejas, siga en el repo: se va con ese archivo.)
-   */
-  numero?: number;
+  /** El número del reporte de Feedback, el que se cita: «F-128». */
+  numero: number;
   ancla: string;
   tipoDeAncla: TipoDeAncla;
   area: string;
@@ -134,7 +131,7 @@ export interface ComentarioVisto {
   /** La fila de «Cambios pendientes» (solo si está en la hoja de ruta). */
   cambio: { que: string; caso: string; decision: string } | null;
   /** El tema de la hoja de ruta donde está (solo si está en la hoja de ruta). */
-  tema?: { titulo: string; columna: string } | null;
+  tema: { titulo: string; columna: string } | null;
   /** El motivo de «No se hará». */
   motivoDescarte: string | null;
   createdAt: string;

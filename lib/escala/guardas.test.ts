@@ -104,21 +104,9 @@ describe("el SQL deja todo cerrado para anon", () => {
   });
 });
 
-describe("la columna de la edición puede faltar (la ventana entre el deploy y su SQL)", () => {
-  const consultas = soloCodigo(leer(path.join("lib", "escala", "comentarios", "consultas.ts")));
-
-  it("toda escritura de un comentario pide de vuelta solo el id: sin `select`, Prisma pide todas las columnas", () => {
-    // Sentencia por sentencia: crear, editar, borrar y los tres cambios de estado.
-    const escrituras = consultas.split(/;\s*\n/).filter((s) => /escalaComentario\.(create|update|delete)\(/.test(s));
-    expect(escrituras.length).toBeGreaterThanOrEqual(6);
-    for (const e of escrituras) expect(e, e.trim().slice(0, 80)).toMatch(/select: (\{ id: true \}|soloId)/);
-  });
-
-  it("las lecturas caen a los campos de antes si la columna no está", () => {
-    expect(consultas).toMatch(/select: CAMPOS_CON_EDICION/);
-    expect(consultas).toMatch(/esquemaDesactualizado\(e\)[\s\S]*?select: CAMPOS \}/);
-  });
-});
+// «La columna de la edición puede faltar» se fue con lib/escala/comentarios/consultas.ts (2026-10-05):
+// los comentarios se guardan en Feedback (lib/feedback/escala-server.ts) y sus columnas las cubre
+// lib/feedback/escala.test.ts.
 
 describe("fuente única: la escala no está escrita en el código", () => {
   const escala = parsearEscala(leerArchivoDeLaEscala("escala"));

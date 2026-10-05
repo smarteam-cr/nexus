@@ -2,7 +2,8 @@
  * lib/feedback/escala-server.ts — los comentarios de la escala, guardados como reportes de Feedback.
  * SERVIDOR.
  *
- * Lo que antes hacía `lib/escala/comentarios/consultas.ts` sobre sus tablas propias, ahora sobre
+ * Lo que antes hacía `lib/escala/comentarios/consultas.ts` (borrado el 2026-10-05) sobre sus tablas
+ * propias, ahora sobre
  * "FeedbackReporte" y "FeedbackMensaje" (ver `lib/feedback/escala.ts`, que tiene las reglas). La
  * pantalla de la escala sigue hablando en `ComentarioVisto`: lo que cambia es dónde se guarda y dónde
  * se decide (la bandeja de /feedback).

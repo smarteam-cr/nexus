@@ -58,23 +58,8 @@ export const EditarComentario = z.object({
 
 export const Responder = z.object({ cuerpo: texto("Escribe la respuesta.") });
 
-/**
- * ⚠ YA NO ENTRA POR NINGUNA RUTA: desde el 2026-10-05 el estado se decide en la bandeja de /feedback
- * (lib/feedback/schema.ts, `Decidir`), con la fila del manual al llevarlo a la hoja de ruta. Queda
- * solo porque `consultas.ts` (las tablas viejas) lo nombra; se va con ese archivo.
- */
-export const CambiarEstado = z.discriminatedUnion("estado", [
-  z.object({ estado: z.literal("abierto") }),
-  z.object({ estado: z.literal("respondido"), respuesta: opcional(5000) }),
-  z.object({
-    estado: z.literal("cambio_pendiente"),
-    cambioQue: texto("Di qué cambiaría.", 2000),
-    cambioCaso: opcional(2000),
-    cambioDecision: texto("Di qué decisión con el cliente cambiaría.", 2000),
-  }),
-  z.object({ estado: z.literal("descartado"), motivoDescarte: opcional(2000) }),
-]);
-export type CambiarEstadoInput = z.infer<typeof CambiarEstado>;
+// El estado no entra por acá: desde el 2026-10-05 se decide en la bandeja de /feedback
+// (lib/feedback/schema.ts, `Decidir`), con la fila del manual al llevarlo a la hoja de ruta.
 
 /** Filtros del listado (query string). */
 export const FiltroDeComentarios = z.object({

@@ -4714,9 +4714,9 @@ todavía no estaba desplegado: no hubo nada que mover.
   `FeedbackReporte`, después del SQL del feedback y antes del deploy. Las tablas viejas
   (`EscalaComentario`, `EscalaRespuesta`) quedan como estaban.
 
-**Pendiente.** `lib/escala/comentarios/consultas.ts` (las tablas viejas) queda sin uso: tiene cambios
-sin guardar de «Para ti» y se borra cuando esa conversación los guarde, junto con lo que solo lo
-sostiene (`CambiarEstado`, los campos opcionales de `ComentarioVisto`).
+**Después, el mismo día.** Cuando «Para ti» guardó lo suyo se borró `lib/escala/comentarios/consultas.ts`
+(las tablas viejas, ya sin uso) junto con lo que solo lo sostenía: `CambiarEstado` y los campos
+opcionales de `ComentarioVisto` (`numero` y `tema` pasan a ser obligatorios).
 
 ## «Para ti»: lo que le toca a cada persona, y los avisos (2026-10-04)
 

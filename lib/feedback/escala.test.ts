@@ -119,6 +119,10 @@ describe("las rutas de la escala", () => {
     }
   });
 
+  it("las tablas viejas ya no tienen quién las lea: su archivo se borró", () => {
+    expect(fs.existsSync(path.join(RAIZ, "lib/escala/comentarios/consultas.ts"))).toBe(false);
+  });
+
   it("el estado ya no se cambia desde la escala: se decide en /feedback", () => {
     expect(fs.existsSync(path.join(RAIZ, "app/api/escala/comentarios/[id]/estado/route.ts"))).toBe(false);
   });
