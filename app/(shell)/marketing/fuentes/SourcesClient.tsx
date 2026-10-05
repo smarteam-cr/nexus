@@ -1,40 +1,54 @@
 "use client";
 
 /**
- * Fuentes de inspiración (perfiles públicos de LinkedIn). CRUD (crear en
- * panel lateral) + estado de la última ingesta por fuente (lastFetchedAt /
- * lastFetchError).
+ * Fuentes (/marketing/fuentes) — los perfiles de LinkedIn que lee el motor (rediseño del 2026-10-04, sistema
+ * «Nexus · interfaz interna»). Lo nuevo es decir qué APORTA cada uno: cuántos posts de los últimos 3 meses entran a
+ * la tanda y cuántas publicaciones del agente citan al menos un post suyo. Medido ese día: una sola fuente aparecía
+ * en las 112 publicaciones, aunque otra tenía cinco veces más posts recientes.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge, Drawer, ListSkeleton } from "@/components/ui";
+import { Alert, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Menu, PageHeader, SkeletonPanel, Skeleton, TableSkeleton } from "@/components/ui";
+import { BotonTexto } from "@/components/ui/sistema";
+import { ChipGris, diaYMesCr } from "@/components/marketing/piezas";
+import { cn } from "@/lib/cn";
 
-interface SourceRow {
+interface Fuente {
   id: string;
   profileUrl: string;
   label: string | null;
   active: boolean;
   lastFetchedAt: string | null;
   lastFetchError: string | null;
+  postsEnVentana: number;
+  ideasInspiradas: number;
   _count: { posts: number };
 }
 
-const EMPTY_FORM = { profileUrl: "", label: "" };
+const FORM_VACIO = { profileUrl: "", label: "" };
+const RECOMENDADAS = { min: 5, max: 10 };
+
+const urlCorta = (u: string) => u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+const hora = (iso: string) =>
+  new Date(iso).toLocaleTimeString("es-CR", { hour: "numeric", minute: "2-digit", hour12: false, timeZone: "America/Costa_Rica" }).replace(/^0/, "");
 
 export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
-  const [rows, setRows] = useState<SourceRow[]>([]);
+  const [fuentes, setFuentes] = useState<Fuente[]>([]);
+  const [totalIdeas, setTotalIdeas] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [drawer, setDrawer] = useState(false);
+  const [form, setForm] = useState(FORM_VACIO);
   const [busy, setBusy] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBorrar, setConfirmBorrar] = useState<Fuente | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const d = await fetchJson<{ sources: SourceRow[] }>("/api/marketing/sources");
-      setRows(d.sources);
+      const d = await fetchJson<{ sources: Fuente[]; totalIdeas: number }>("/api/marketing/sources");
+      // Las que más inspiran primero; las pausadas al final.
+      setFuentes([...d.sources].sort((a, b) => (a.active !== b.active ? (a.active ? -1 : 1) : b.ideasInspiradas - a.ideasInspiradas)));
+      setTotalIdeas(d.totalIdeas);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar las fuentes.");
     } finally {
@@ -45,25 +59,22 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
     load();
   }, [load]);
 
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setForm(EMPTY_FORM);
+  const cerrar = () => {
+    setDrawer(false);
+    setForm(FORM_VACIO);
   };
 
-  const add = async () => {
+  const agregar = async () => {
     if (!form.profileUrl.trim() || busy) return;
     setBusy(true);
     try {
       await fetchJson("/api/marketing/sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profileUrl: form.profileUrl.trim(),
-          label: form.label.trim() || null,
-        }),
+        body: JSON.stringify({ profileUrl: form.profileUrl.trim(), label: form.label.trim() || null }),
       });
-      toast.success("Fuente agregada.");
-      closeDrawer();
+      toast.success("Fuente agregada. Se lee en la próxima tanda.");
+      cerrar();
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo agregar.");
@@ -72,153 +83,260 @@ export default function SourcesClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const toggleActive = async (r: SourceRow) => {
+  const alternar = async (f: Fuente) => {
     try {
-      await fetchJson(`/api/marketing/sources/${r.id}`, {
+      await fetchJson(`/api/marketing/sources/${f.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: !r.active }),
+        body: JSON.stringify({ active: !f.active }),
       });
+      toast.info(f.active ? "Pausada: el motor no la lee." : "Activada.");
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
     }
   };
 
-  const remove = async (id: string) => {
+  const borrar = async (f: Fuente) => {
     try {
-      await fetchJson(`/api/marketing/sources/${id}`, { method: "DELETE" });
-      toast.info("Fuente eliminada (con sus posts).");
+      await fetchJson(`/api/marketing/sources/${f.id}`, { method: "DELETE" });
+      toast.info("Fuente borrada, con sus posts guardados.");
       load();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo borrar.");
     }
   };
 
+  const activas = fuentes.filter((f) => f.active);
+  const enVentana = activas.reduce((n, f) => n + f.postsEnVentana, 0);
+  const guardados = fuentes.reduce((n, f) => n + f._count.posts, 0);
+  const conError = activas.filter((f) => f.lastFetchError);
+  const ultima = activas.map((f) => f.lastFetchedAt).filter((x): x is string => !!x).sort().pop() ?? null;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <p className="text-xs text-fg-muted max-w-xl">
-          Perfiles públicos de LinkedIn que la ingesta scrapea (~20 posts recientes por corrida, sin duplicar).
-          Recomendado: 5–10 fuentes activas.
-        </p>
-        {canEdit && (
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="flex-shrink-0 px-4 py-2 text-sm rounded-lg bg-brand text-white hover:opacity-90"
-          >
-            + Nueva fuente
-          </button>
+    <>
+      <PageHeader
+        title="Fuentes"
+        description={`Perfiles de LinkedIn que el motor lee cada viernes: unos 20 posts recientes de cada uno, sin repetir. De ahí saca las ideas. Se recomiendan entre ${RECOMENDADAS.min} y ${RECOMENDADAS.max} activas.`}
+        action={
+          canEdit ? (
+            <Button variant="primary" onClick={() => setDrawer(true)}>
+              Agregar fuente
+            </Button>
+          ) : undefined
+        }
+      />
+      <div className="space-y-5">
+        {loading ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <SkeletonPanel key={i} minH="min-h-[96px]" bodyClassName="p-4 space-y-2">
+                <Skeleton className="h-3 w-28" delay={i * 40} />
+                <Skeleton className="h-6 w-16" delay={i * 40 + 20} />
+                <Skeleton className="h-3 w-40" delay={i * 40 + 40} />
+              </SkeletonPanel>
+            ))}
+          </div>
+        ) : (
+          <section aria-label="Resumen" className="grid gap-3 sm:grid-cols-3">
+            <Cifra
+              rotulo="Fuentes activas"
+              valor={String(activas.length)}
+              nota={
+                activas.length < RECOMENDADAS.min
+                  ? `● Se recomiendan entre ${RECOMENDADAS.min} y ${RECOMENDADAS.max}`
+                  : `Dentro de lo recomendado (${RECOMENDADAS.min} a ${RECOMENDADAS.max})`
+              }
+              tono={activas.length < RECOMENDADAS.min ? "atencion" : "neutro"}
+            />
+            <Cifra rotulo="Posts de los últimos 3 meses" valor={String(enVentana)} nota={`Entran a la tanda · ${guardados} guardados en total`} />
+            <Cifra
+              rotulo="Última lectura"
+              valor={ultima ? `${diaYMesCr(ultima)}, ${hora(ultima)}` : "Todavía no"}
+              nota={
+                ultima
+                  ? conError.length === 0
+                    ? `✓ ${activas.length === 1 ? "Se leyó" : `Las ${activas.length} se leyeron`} sin errores`
+                    : `✕ ${conError.length === 1 ? "Una falló" : `${conError.length} fallaron`}`
+                  : "La primera lectura es en la próxima tanda"
+              }
+              tono={ultima ? (conError.length === 0 ? "hecho" : "error") : "neutro"}
+            />
+          </section>
+        )}
+
+        {conError.length > 0 && (
+          <Alert variant="danger" title="No se pudieron leer en la última tanda">
+            {conError.map((f) => `${f.label ?? urlCorta(f.profileUrl)}: ${f.lastFetchError}`).join(" · ")}
+          </Alert>
+        )}
+
+        {loading ? (
+          <TableSkeleton columns={5} rows={4} />
+        ) : fuentes.length === 0 ? (
+          <EmptyState
+            variant="dashed"
+            title="Todavía no hay fuentes"
+            description={canEdit ? `Agrega entre ${RECOMENDADAS.min} y ${RECOMENDADAS.max} perfiles de LinkedIn para alimentar el motor.` : "El equipo de Marketing todavía no cargó fuentes."}
+          />
+        ) : (
+          <section aria-label="Perfiles" className="space-y-2.5">
+            <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+              <table className="w-full min-w-[820px] border-collapse text-[13px] leading-[19px]">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-fg-muted">
+                    <th className="border-b border-line px-4 py-2.5 font-semibold">Fuente</th>
+                    <th className="w-[130px] border-b border-line px-4 py-2.5 text-right font-semibold">Últimos 3 meses</th>
+                    <th className="w-[110px] border-b border-line px-4 py-2.5 text-right font-semibold">Guardados</th>
+                    <th className="w-[210px] border-b border-line px-4 py-2.5 font-semibold">Inspiró</th>
+                    <th className="w-[150px] border-b border-line px-4 py-2.5 font-semibold">Última lectura</th>
+                    <th className="w-[100px] border-b border-line px-4 py-2.5">
+                      <span className="sr-only">Acciones</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fuentes.map((f) => {
+                    const parte = totalIdeas > 0 ? Math.round((f.ideasInspiradas / totalIdeas) * 100) : 0;
+                    return (
+                      <tr key={f.id} className={f.active ? "" : "opacity-60"}>
+                        <td className="border-b border-line px-4 py-3">
+                          <span className="flex flex-col gap-0.5">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-fg">{f.label || urlCorta(f.profileUrl)}</span>
+                              {!f.active && <ChipGris>Pausada</ChipGris>}
+                            </span>
+                            <a href={f.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-fg-muted hover:text-fg">
+                              {urlCorta(f.profileUrl)} ↗
+                            </a>
+                          </span>
+                        </td>
+                        <td className="border-b border-line px-4 py-3 text-right tabular-nums text-fg">{f.postsEnVentana}</td>
+                        <td className="border-b border-line px-4 py-3 text-right tabular-nums text-fg-muted">{f._count.posts}</td>
+                        <td className="border-b border-line px-4 py-3">
+                          <span className="flex flex-col gap-1">
+                            <span className="tabular-nums text-fg">
+                              {f.ideasInspiradas} de {totalIdeas} publicaciones
+                            </span>
+                            <span aria-hidden="true" className="block h-1 overflow-hidden rounded-full bg-surface-hover">
+                              <span className="block h-1 rounded-full bg-fg-muted" style={{ width: `${parte}%` }} />
+                            </span>
+                          </span>
+                        </td>
+                        <td className="border-b border-line px-4 py-3">
+                          {f.lastFetchedAt ? (
+                            <span className="flex flex-col gap-0.5">
+                              <span className="text-fg">
+                                {diaYMesCr(f.lastFetchedAt)}, {hora(f.lastFetchedAt)}
+                              </span>
+                              <span className={cn("text-xs", f.lastFetchError ? "text-danger-ink" : "text-success-ink")}>
+                                {f.lastFetchError ? "✕ Falló" : "✓ Sin errores"}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-fg-muted">Todavía no</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap border-b border-line px-4 py-3 text-right">
+                          {canEdit && (
+                            <span className="inline-flex items-center gap-1">
+                              <BotonTexto onClick={() => alternar(f)}>{f.active ? "Pausar" : "Activar"}</BotonTexto>
+                              <Menu
+                                aria-label={`Más acciones para ${f.label ?? urlCorta(f.profileUrl)}`}
+                                align="end"
+                                triggerClassName="rounded-md p-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+                                trigger={<IconoMas />}
+                                items={[{ key: "borrar", label: "Borrar", danger: true, onSelect: () => setConfirmBorrar(f) }]}
+                              />
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-fg-muted">
+              «Inspiró» cuenta, de las {totalIdeas} publicaciones que propuso el agente, cuántas citan al menos un post de esa fuente.
+            </p>
+          </section>
         )}
       </div>
 
-      {loading ? (
-        // Skeleton estructural: misma cáscara que la lista de fuentes (filas
-        // rounded-xl de ~3 líneas) para que al llegar la data nada salte.
-        <ListSkeleton rows={5} lines={2} />
-      ) : rows.length === 0 ? (
-        <EmptyState
-          variant="dashed"
-          title="Todavía no hay fuentes de inspiración"
-          description={canEdit ? "Agregá 5-10 perfiles de LinkedIn para alimentar el motor." : "El equipo de Marketing todavía no cargó fuentes."}
-        />
-      ) : (
-        <ul className="space-y-2">
-          {rows.map((r) => (
-            <li key={r.id} className={`rounded-xl border border-line bg-surface px-4 py-3 ${r.active ? "" : "opacity-60"}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-fg truncate">
-                    {r.label || r.profileUrl.replace(/^https?:\/\/(www\.)?/, "")}
-                    {!r.active && (
-                      <Badge size="xs" className="ml-2">
-                        Inactiva
-                      </Badge>
-                    )}
-                  </p>
-                  <a
-                    href={r.profileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-fg-muted hover:text-fg truncate block"
-                  >
-                    {r.profileUrl}
-                  </a>
-                  <p className="mt-1 text-xs text-fg-muted">
-                    {r._count.posts} post(s) guardados ·{" "}
-                    {r.lastFetchedAt
-                      ? `última ingesta ${new Date(r.lastFetchedAt).toLocaleString("es-CR", { dateStyle: "short", timeStyle: "short" })}`
-                      : "sin ingestas todavía"}
-                  </p>
-                  {r.lastFetchError && (
-                    <p className="mt-1 text-xs text-red-400">Último error: {r.lastFetchError}</p>
-                  )}
-                </div>
-                {canEdit && (
-                  <span className="flex-shrink-0 flex items-center gap-2">
-                    <button onClick={() => toggleActive(r)} className="text-xs text-fg-muted hover:text-fg">
-                      {r.active ? "Desactivar" : "Activar"}
-                    </button>
-                    <button onClick={() => setConfirmDeleteId(r.id)} className="text-xs text-red-400 hover:text-red-300">
-                      Borrar
-                    </button>
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
       <Drawer
-        open={drawerOpen}
-        onClose={closeDrawer}
-        title="Nueva fuente"
-        description="Un perfil o company público de LinkedIn."
+        open={drawer}
+        onClose={cerrar}
+        title="Agregar fuente"
+        description="Un perfil o una página de empresa pública de LinkedIn."
         footer={
           <>
-            <button onClick={closeDrawer} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
+            <Button variant="secondary" onClick={cerrar}>
               Cancelar
-            </button>
-            <button
-              onClick={add}
-              disabled={busy || !form.profileUrl.trim()}
-              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-            >
-              {busy ? "Agregando…" : "Agregar fuente"}
-            </button>
+            </Button>
+            <Button variant="primary" onClick={agregar} disabled={busy || !form.profileUrl.trim()}>
+              {busy ? "Agregando…" : "Agregar la fuente"}
+            </Button>
           </>
         }
       >
-        <div className="space-y-3">
-          <input
-            value={form.profileUrl}
-            onChange={(e) => setForm({ ...form, profileUrl: e.target.value })}
-            placeholder="https://www.linkedin.com/in/…"
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            autoFocus
-          />
-          <input
-            value={form.label}
-            onChange={(e) => setForm({ ...form, label: e.target.value })}
-            placeholder="Etiqueta (opcional)…"
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
+        <div className="space-y-4">
+          <Field label="Enlace del perfil">
+            <Input value={form.profileUrl} onChange={(e) => setForm({ ...form, profileUrl: e.target.value })} placeholder="https://www.linkedin.com/in/…" autoFocus />
+          </Field>
+          <Field label="Nombre para mostrar" hint="Opcional. Si no lo pones, se muestra el enlace.">
+            <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
+          </Field>
         </div>
       </Drawer>
 
       <ConfirmDialog
-        open={!!confirmDeleteId}
-        onCancel={() => setConfirmDeleteId(null)}
+        open={!!confirmBorrar}
+        onCancel={() => setConfirmBorrar(null)}
         onConfirm={async () => {
-          const id = confirmDeleteId;
-          setConfirmDeleteId(null);
-          if (id) await remove(id);
+          const f = confirmBorrar;
+          setConfirmBorrar(null);
+          if (f) await borrar(f);
         }}
         title="¿Borrar esta fuente?"
-        description="Se borran también sus posts guardados. Esta acción no se puede deshacer."
+        description="Se borran también sus posts guardados. No se puede deshacer; si solo quieres que no se lea, usa «Pausar»."
         confirmLabel="Borrar"
       />
+    </>
+  );
+}
+
+function Cifra({
+  rotulo,
+  valor,
+  nota,
+  tono = "neutro",
+}: {
+  rotulo: string;
+  valor: string;
+  nota: string;
+  tono?: "neutro" | "atencion" | "hecho" | "error";
+}) {
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-4">
+      <span className="text-xs text-fg-muted">{rotulo}</span>
+      <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">{valor}</span>
+      <span
+        className={cn(
+          "text-xs",
+          tono === "atencion" ? "text-warn-ink" : tono === "hecho" ? "text-success-ink" : tono === "error" ? "text-danger-ink" : "text-fg-muted",
+        )}
+      >
+        {nota}
+      </span>
     </div>
+  );
+}
+
+function IconoMas() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+      <path d="M5 12h.01M12 12h.01M19 12h.01" />
+    </svg>
   );
 }

@@ -75,7 +75,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   // ── El layout del área pone el contenedor ───────────────────────────────────
   documentacion: { custom: "el layout de documentación pone el árbol + el contenedor" },
   "documentacion/[slug]": { custom: "el layout de documentación pone el árbol + el contenedor" },
-  "marketing/contenido": { custom: "el layout de marketing pone header + tabs + contenedor" },
+  "marketing/contenido": { custom: "el layout de marketing pone el contenedor (cada página pone su PageHeader)" },
   "marketing/generacion": { custom: "el layout de marketing pone el contenedor" },
   "marketing/ideas-de-campana": { custom: "el layout de marketing pone el contenedor" },
   "marketing/temas": { custom: "el layout de marketing pone el contenedor" },

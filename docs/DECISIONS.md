@@ -4584,6 +4584,45 @@ como tokens del sistema y el segmentado nuevo también en Preventa.
 
 **Pendiente.** El isotipo de Smarteam sigue siendo una reconstrucción hasta tener el SVG oficial.
 
+## Marketing toma el sistema «Nexus · interfaz interna» (2026-10-04)
+
+**Contexto.** Elías pidió rediseñar Marketing con el sistema nuevo (tablero en Claude Design «Marketing ·
+rediseño») y lo aplicó. Medido ese día en producción: 75 publicaciones sugeridas sin revisar (la más vieja del
+3 jul), 15 de ellas el mismo ángulo («El 33 % / 67 % del tiempo de ventas…»), 56 ideas de SEM sin revisar nunca, y
+la tanda configurada en 1 publicación de empresa y 0 de perfil personal: las últimas 10 tandas trajeron 1 cada una.
+
+- **El menú pasa de 3 grupos con pestañas a 7 páginas en dos bloques**: «Revisar» (Publicaciones, Ideas de SEM)
+  y «Lo que lee el agente» (Temas, Audiencia, Voz de marca, Fuentes), más Generación suelta. Cada página pone su
+  PageHeader con su nombre (antes todas decían «Marketing»). Las RUTAS no cambian (`/marketing/contenido` es
+  Publicaciones): son identidad, hay enlaces pegados. La única con pestañas es Audiencia (ICP y buyer personas).
+- **Publicaciones es una bandeja**: lista a la izquierda, la publicación elegida a la derecha, en vez de tarjetas
+  de 552 px una debajo de otra. Pestañas con su cuenta, tipo en segmentado, atajos A / D / ↓ ↑ para quien edita.
+- **Las parecidas van juntas** (`lib/marketing/parecidas.ts`, sin IA): un título entra a un grupo si comparte con
+  un tercio de sus miembros 2 o más palabras con contenido (raíz de 4 letras), que pesen el 60 % del más corto y el
+  30 % del más largo. Se probó primero la cadena simple y encadenaba de más (en SEM juntaba 24 ideas por «Google
+  Search»); en SEM además se ignoran el canal y el público. Es una ayuda para revisar: nada se descarta solo.
+  «Descartar las otras N» (`POST /api/marketing/ideas/descartar`) es reversible.
+- **«Ajustar con IA» deja una propuesta** que se usa o se descarta; antes reemplazaba el texto. El endpoint ya
+  devolvía sin guardar: el cambio es solo de pantalla.
+- **«Copiar texto» lo tiene todo el equipo**, también quien solo mira: antes estaba detrás del permiso de editar y
+  un CSE no podía copiar una publicación para su perfil. Copiar no cambia nada.
+- **Las ideas de SEM se leen por campos** (`lib/marketing/idea-sem.ts`): el agente escribe un párrafo con ~20
+  rótulos distintos para 6 cosas; una lista cerrada los junta. Medido sobre las 56: 51 se separan completas y
+  ninguna pierde texto. Si algún día el agente las devuelve por campos, el lector sobra.
+- **La tanda se guarda sin correr el motor** (`PUT /api/marketing/tanda`); antes solo al apretar «Generar», así
+  que nadie sabía qué pedía el cron. Con 2 o menos por tanda, un aviso ámbar lo dice.
+- **Fuentes dice qué aporta cada perfil**: posts de los últimos 3 meses y cuántas publicaciones lo citan. Medido:
+  Yamini aparece en las 112; Kyle, con cinco veces más posts recientes, en 6.
+- **Se fue lo que no servía**: emojis de estado, el recuadro oscuro del concepto de imagen (ahora punteado: la
+  imagen no existe, se diseña aparte), los botones falsos «Me gusta / Comentario / Compartir» y las tarjetas
+  «Tier 2 / Tier 3 · Próximamente» del ICP. La fuerza de una señal del ICP se dice con marcas (●●●, ●●○, ●○○, ✕),
+  no con colores.
+- Las constantes que lee el navegador viven en `lib/marketing/marketing-ui.ts`, sin zod (regla C-24);
+  `schema.ts` las re-exporta. `lib/marketing/tuteo.test.ts` vigila el tuteo de todo Marketing, menos los prompts
+  de los agentes.
+- **Pendiente**: los números del submenú (75, 56, 1 del diseño) no están: el sidebar no tiene de dónde sacarlos
+  sin sumar consultas a cada navegación.
+
 ## Feedback desde cualquier pantalla (2026-10-04)
 
 **Contexto.** Elías hace sesiones para que cada persona le diga qué mejorar de la interfaz, y la mitad no se acuerda de lo que le molestó. Pidió un módulo de feedback en todo Nexus: reportar en el momento, con la pantalla guardada, armar una hoja de ruta de mejoras y ver quién reporta más. Diseño aprobado en Claude Design («Feedback · diseño»).

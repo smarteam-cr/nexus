@@ -206,3 +206,36 @@ export async function discardPillarSuggestion(id: string) {
     data: { status: "DISCARDED", reviewedAt: new Date() },
   });
 }
+
+// ── Descartar varias de una vez (rediseño de Marketing, 2026-10-04) ────────────
+
+/**
+ * Descarta varias publicaciones (las parecidas de una que se queda). Reversible como el descarte de una: no borra
+ * nada, y solo toca las que no estaban descartadas (descartar dos veces no corre la fecha).
+ */
+export async function descartarIdeas(ids: string[]) {
+  const r = await prisma.contentIdea.updateMany({
+    where: { id: { in: ids }, discardedAt: null },
+    data: { discardedAt: new Date() },
+  });
+  return r.count;
+}
+
+/** Descarta varias ideas de SEM pendientes (la cola vieja). Las aprobadas no se tocan. */
+export async function descartarCampanas(ids: string[]) {
+  const r = await prisma.campaignIdea.updateMany({
+    where: { id: { in: ids }, status: "PENDING" },
+    data: { status: "DISCARDED", reviewedAt: new Date() },
+  });
+  return r.count;
+}
+
+/** Lo que pide cada tanda, sin correr el motor. El cron y «Generar ahora» leen de acá. */
+export async function guardarTanda(empresaCount: number, personaCount: number) {
+  return prisma.marketingSettings.upsert({
+    where: { id: "marketing" },
+    update: { genEmpresaTarget: empresaCount, genPersonaTarget: personaCount },
+    create: { id: "marketing", brandVoice: "", genEmpresaTarget: empresaCount, genPersonaTarget: personaCount },
+    select: { genEmpresaTarget: true, genPersonaTarget: true },
+  });
+}

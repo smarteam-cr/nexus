@@ -39,6 +39,8 @@ export interface RunRow {
   error: string | null;
   createdAt: string;
   finishedAt: string | null;
+  /** Quién la corrió a mano (null en las del cron, o si ya no está en el equipo). */
+  startedByName?: string | null;
 }
 export interface SourceStat {
   id: string;
@@ -57,7 +59,7 @@ export interface PostsStats {
 export const RUN_KIND_LABEL: Record<RunKind, string> = {
   CHAIN: "Generar ideas nuevas",
   GENERATE: "Regenerar con lo guardado",
-  INGEST: "Solo actualizar fuentes",
+  INGEST: "Solo leer las fuentes",
 };
 
 export function useMarketingEngine() {
@@ -109,25 +111,26 @@ export function useMarketingEngine() {
 
       if (finished.status === "DONE") {
         const parts: string[] = [];
-        if (finished.contentIdeasCount != null) parts.push(`${finished.contentIdeasCount} idea(s) nuevas`);
-        if (finished.campaignIdeasCount) parts.push(`${finished.campaignIdeasCount} campaña(s)`);
-        if (finished.newPostsCount != null) parts.push(`${finished.newPostsCount} post(s) nuevos`);
-        if (finished.sourcesErrorCount) parts.push(`${finished.sourcesErrorCount} fuente(s) con error`);
+        const n = (k: number, uno: string, varios: string) => `${k} ${k === 1 ? uno : varios}`;
+        if (finished.contentIdeasCount != null) parts.push(n(finished.contentIdeasCount, "publicación nueva", "publicaciones nuevas"));
+        if (finished.campaignIdeasCount) parts.push(n(finished.campaignIdeasCount, "idea de SEM", "ideas de SEM"));
+        if (finished.newPostsCount != null) parts.push(n(finished.newPostsCount, "post nuevo", "posts nuevos"));
+        if (finished.sourcesErrorCount) parts.push(n(finished.sourcesErrorCount, "fuente con error", "fuentes con error"));
         // La cadena SIEMPRE genera — si no hubo inspiración nueva esta corrida,
         // avisamos que igual se generó con lo guardado (no es un error).
         const noFreshInspiration =
           finished.kind === "CHAIN" && finished.newPostsCount === 0 && finished.contentIdeasCount != null;
         toast.success(
           noFreshInspiration
-            ? `Listo — sin inspiración nueva esta semana, se generó con lo guardado (${parts.join(" · ")}).`
-            : `Listo — ${parts.join(" · ") || "corrida completada"}.`,
+            ? `Listo: no había posts nuevos y se generó con lo guardado (${parts.join(" · ")}).`
+            : `Listo: ${parts.join(" · ") || "terminó la corrida"}.`,
         );
         notifyAgentDone({ group: "marketing-contenido", ok: true });
       } else if (finished.status === "ERROR") {
         toast.error(finished.error ?? "La corrida falló.");
         notifyAgentDone({ group: "marketing-contenido", ok: false });
       } else {
-        toast.error("La corrida sigue en curso (timeout del polling). Recargá en un rato.");
+        toast.error("La corrida sigue en curso. Recarga la página en un rato.");
       }
       load();
     },

@@ -1,11 +1,12 @@
 /**
  * /api/marketing/ideas — ideas de contenido generadas (salida NO-CRUD).
- * GET ?pillarId=&runId=&state=sugerida|seleccionada|utilizada (cualquier interno).
+ * GET ?pillarId=&runId=&state=sugerida|seleccionada|aprobada|descartada&postType=&stage= (cualquier interno).
+ * Devuelve también `counts`: cuántas hay por estado y tipo, sin filtros.
  * Las mutaciones son PATCH (estado + edición de campos) y DELETE (podar) en [id].
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardInternalUser } from "@/lib/auth/api-guards";
-import { getIdeas } from "@/lib/marketing/queries";
+import { getIdeas, getIdeaCounts } from "@/lib/marketing/queries";
 import {
   CONTENT_IDEA_STATES,
   MARKETING_POST_TYPES,
@@ -32,12 +33,16 @@ export async function GET(req: NextRequest) {
   const journeyStage = MARKETING_JOURNEY_STAGES.includes(stageParam as MarketingJourneyStageValue)
     ? (stageParam as MarketingJourneyStageValue)
     : undefined;
-  const ideas = await getIdeas({
-    pillarId: sp.get("pillarId") ?? undefined,
-    runId: sp.get("runId") ?? undefined,
-    state,
-    postType,
-    journeyStage,
-  });
-  return NextResponse.json({ ideas });
+  const [ideas, counts] = await Promise.all([
+    getIdeas({
+      pillarId: sp.get("pillarId") ?? undefined,
+      runId: sp.get("runId") ?? undefined,
+      state,
+      postType,
+      journeyStage,
+    }),
+    // Los números de las pestañas y del segmentado: de TODO, sin los filtros de tema/etapa.
+    getIdeaCounts(),
+  ]);
+  return NextResponse.json({ ideas, counts });
 }

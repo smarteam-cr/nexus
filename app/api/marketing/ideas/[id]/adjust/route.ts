@@ -41,6 +41,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!copy) return NextResponse.json({ error: "La IA no devolvió texto." }, { status: 502 });
     return NextResponse.json({ copy });
   } catch {
-    return NextResponse.json({ error: "No se pudo ajustar con IA. Probá de nuevo." }, { status: 502 });
+    return NextResponse.json({ error: "No se pudo ajustar con IA. Prueba de nuevo." }, { status: 502 });
   }
 }

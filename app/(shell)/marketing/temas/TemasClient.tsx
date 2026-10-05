@@ -1,52 +1,65 @@
 "use client";
 
 /**
- * Temas de contenido (antes "Pilares" — el modelo Prisma sigue llamándose
- * ContentPillar, esto es solo relabel de UI): bloque de SUGERENCIAS PENDING
- * del agente (aprobar = crea el tema y re-linkea ideas huérfanas; descartar)
- * + CRUD (crear/editar en panel lateral).
+ * Temas (/marketing/temas) — sobre qué escribe el agente (rediseño del 2026-10-04, sistema «Nexus · interfaz
+ * interna»). El modelo Prisma sigue llamándose ContentPillar.
+ *
+ *  - Lo que sugiere el agente va arriba como fila azul con su chispa y su porqué: «Crear el tema» o «Descartar».
+ *    Aprobar crea el tema y le pasa las publicaciones que esperaban ese nombre.
+ *  - La tabla dice cuántas publicaciones tiene cada tema y cuántas siguen sin revisar: así se ve qué tema llena la
+ *    cola (medido ese día: el tema en campaña tenía 31 de las 75 sin revisar).
+ *  - El tema en campaña lleva su chip; poner o quitar de campaña, pausar y borrar van en el menú «⋯».
  */
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge, Drawer, ListSkeleton } from "@/components/ui";
+import { Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Menu, PageHeader, Textarea, TableSkeleton } from "@/components/ui";
+import { BotonAzul, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
+import { BotonClaro, ChipActivo, ChipGris, Rotulo } from "@/components/marketing/piezas";
 
-interface PillarRow {
+interface Tema {
   id: string;
   name: string;
   description: string | null;
   origin: "HUMAN" | "AGENT";
   active: boolean;
   isCampaign: boolean;
+  sinRevisar: number;
   _count: { ideas: number };
 }
-interface SuggestionRow {
+interface Sugerencia {
   id: string;
   name: string;
   description: string | null;
   rationale: string | null;
 }
 
-const EMPTY_FORM = { name: "", description: "" };
+const FORM_VACIO = { name: "", description: "" };
+
+/** En campaña primero, después los que más publicaciones tienen; los pausados al final. */
+function orden(a: Tema, b: Tema): number {
+  if (a.active !== b.active) return a.active ? -1 : 1;
+  if (a.isCampaign !== b.isCampaign) return a.isCampaign ? -1 : 1;
+  return b._count.ideas - a._count.ideas;
+}
 
 export default function TemasClient({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
-  const [pillars, setPillars] = useState<PillarRow[]>([]);
-  const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
+  const [temas, setTemas] = useState<Tema[]>([]);
+  const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
   const [loading, setLoading] = useState(true);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState(false);
+  const [form, setForm] = useState(FORM_VACIO);
+  const [editando, setEditando] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBorrar, setConfirmBorrar] = useState<Tema | null>(null);
+  const [porQueAbierto, setPorQueAbierto] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
-      const d = await fetchJson<{ pillars: PillarRow[]; suggestions: SuggestionRow[] }>(
-        "/api/marketing/pillars",
-      );
-      setPillars(d.pillars);
-      setSuggestions(d.suggestions);
+      const d = await fetchJson<{ pillars: Tema[]; suggestions: Sugerencia[] }>("/api/marketing/pillars");
+      setTemas([...d.pillars].sort(orden));
+      setSugerencias(d.suggestions);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar los temas.");
     } finally {
@@ -57,72 +70,22 @@ export default function TemasClient({ canEdit }: { canEdit: boolean }) {
     load();
   }, [load]);
 
-  const reviewSuggestion = async (id: string, action: "approve" | "discard") => {
+  const revisarSugerencia = async (id: string, action: "approve" | "discard") => {
     if (busy) return;
     setBusy(true);
     try {
-      const r = await fetchJson<{ ok: boolean; relinkedIdeas?: number }>(
-        `/api/marketing/pillar-suggestions/${id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
+      const r = await fetchJson<{ ok: boolean; relinkedIdeas?: number }>(`/api/marketing/pillar-suggestions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
       if (action === "approve") {
         toast.success(
-          `Tema creado${r.relinkedIdeas ? ` · ${r.relinkedIdeas} idea(s) re-vinculadas` : ""}.`,
+          `Tema creado${r.relinkedIdeas ? `. ${r.relinkedIdeas === 1 ? "Una publicación quedó" : `${r.relinkedIdeas} publicaciones quedaron`} con este tema` : ""}.`,
         );
       } else {
         toast.info("Sugerencia descartada.");
       }
-      load();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo procesar.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-  };
-
-  const openCreate = () => {
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setDrawerOpen(true);
-  };
-
-  const startEdit = (r: PillarRow) => {
-    setEditingId(r.id);
-    setForm({ name: r.name, description: r.description ?? "" });
-    setDrawerOpen(true);
-  };
-
-  const save = async () => {
-    if (!form.name.trim() || busy) return;
-    setBusy(true);
-    try {
-      const body = { name: form.name.trim(), description: form.description.trim() || null };
-      if (editingId) {
-        await fetchJson(`/api/marketing/pillars/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        toast.success("Tema actualizado.");
-      } else {
-        await fetchJson("/api/marketing/pillars", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        toast.success("Tema creado.");
-      }
-      closeDrawer();
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
@@ -131,214 +94,269 @@ export default function TemasClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const toggleActive = async (r: PillarRow) => {
+  const cerrar = () => {
+    setDrawer(false);
+    setForm(FORM_VACIO);
+    setEditando(null);
+  };
+
+  const guardar = async () => {
+    if (!form.name.trim() || busy) return;
+    setBusy(true);
     try {
-      await fetchJson(`/api/marketing/pillars/${r.id}`, {
+      const body = { name: form.name.trim(), description: form.description.trim() || null };
+      await fetchJson(editando ? `/api/marketing/pillars/${editando}` : "/api/marketing/pillars", {
+        method: editando ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      toast.success(editando ? "Tema actualizado." : "Tema creado.");
+      cerrar();
+      load();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cambiar = async (t: Tema, body: { active?: boolean; isCampaign?: boolean }, msg: string) => {
+    try {
+      await fetchJson(`/api/marketing/pillars/${t.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: !r.active }),
+        body: JSON.stringify(body),
       });
+      toast.info(msg);
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
     }
   };
 
-  // Marca/desmarca el tema como campaña. Solo sesga la generación si además está
-  // activo (buildGenerationInput filtra active primero, luego isCampaign).
-  const toggleCampaign = async (r: PillarRow) => {
+  const borrar = async (t: Tema) => {
     try {
-      await fetchJson(`/api/marketing/pillars/${r.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isCampaign: !r.isCampaign }),
-      });
-      toast.info(!r.isCampaign ? "Tema marcado como campaña — la generación lo priorizará." : "Campaña desactivada.");
+      await fetchJson(`/api/marketing/pillars/${t.id}`, { method: "DELETE" });
+      toast.info("Tema borrado. Sus publicaciones quedaron sin tema.");
       load();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo borrar.");
     }
   };
 
-  const remove = async (id: string) => {
-    try {
-      await fetchJson(`/api/marketing/pillars/${id}`, { method: "DELETE" });
-      toast.info("Tema eliminado (sus ideas quedan sin tema, no se pierden).");
-      load();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar.");
-    }
-  };
+  const activos = temas.filter((t) => t.active).length;
 
   return (
-    <div className="space-y-6">
-      {/* Sugerencias del agente */}
-      {suggestions.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
-          <p className="text-sm font-semibold text-fg mb-3">
-            Sugerencias del agente <Badge size="xs">{suggestions.length}</Badge>
-          </p>
-          <ul className="space-y-3">
-            {suggestions.map((s) => (
-              <li key={s.id} className="rounded-xl border border-line bg-surface px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-fg">{s.name}</p>
-                    {s.description && <p className="mt-0.5 text-xs text-fg-secondary">{s.description}</p>}
-                    {s.rationale && (
-                      <p className="mt-1 text-xs text-fg-muted italic">Por qué: {s.rationale}</p>
-                    )}
-                  </div>
-                  {canEdit && (
-                    <span className="flex-shrink-0 flex gap-2">
+    <>
+      <PageHeader
+        title="Temas"
+        description="Los temas sobre los que escribe el agente. El tema en campaña pesa más en cada tanda; uno pausado no se usa."
+        action={
+          canEdit ? (
+            <BotonClaro
+              onClick={() => {
+                setForm(FORM_VACIO);
+                setEditando(null);
+                setDrawer(true);
+              }}
+            >
+              Nuevo tema
+            </BotonClaro>
+          ) : undefined
+        }
+      />
+      <div className="space-y-6">
+        {sugerencias.length > 0 && (
+          <section aria-label="Temas que sugiere el agente" className="flex flex-col gap-1.5">
+            <Rotulo azul>
+              <IconoDeSugerencia className="h-[13px] w-[13px]" />
+              Sugeridos por el agente · {sugerencias.length}
+            </Rotulo>
+            {sugerencias.map((s) => (
+              <div key={s.id} className="flex flex-wrap items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
+                <IconoDeSugerencia className="mt-0.5 h-[15px] w-[15px] flex-shrink-0 text-brand" />
+                <div className="flex min-w-0 flex-1 basis-[28rem] flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-brand">Tema nuevo</span>
+                  <span className="text-sm font-semibold leading-5 text-fg">{s.name}</span>
+                  {s.description && <span className="text-[13px] leading-[19px] text-fg-secondary">{s.description}</span>}
+                  {s.rationale && (
+                    <span className="text-xs leading-[17px] text-fg-muted">
+                      {porQueAbierto.has(s.id) ? (
+                        <>Por qué: {s.rationale} · </>
+                      ) : null}
                       <button
-                        onClick={() => reviewSuggestion(s.id, "approve")}
-                        disabled={busy}
-                        className="px-3 py-1.5 text-xs rounded-lg bg-brand text-white hover:opacity-90 disabled:opacity-40"
+                        type="button"
+                        className="font-medium text-brand hover:text-brand-light"
+                        onClick={() =>
+                          setPorQueAbierto((p) => {
+                            const n = new Set(p);
+                            if (n.has(s.id)) n.delete(s.id);
+                            else n.add(s.id);
+                            return n;
+                          })
+                        }
                       >
-                        Aprobar
-                      </button>
-                      <button
-                        onClick={() => reviewSuggestion(s.id, "discard")}
-                        disabled={busy}
-                        className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
-                      >
-                        Descartar
+                        {porQueAbierto.has(s.id) ? "ocultar" : "ver de dónde sale"}
                       </button>
                     </span>
                   )}
                 </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* CRUD */}
-      {canEdit && (
-        <div className="flex justify-end">
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 text-sm rounded-lg bg-brand text-white hover:opacity-90"
-          >
-            + Nuevo tema
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        // Skeleton ESTRUCTURAL: filas de la misma altura que un tema cargado
-        // (rounded-xl px-4 py-3, título + descripción) para que nada salte.
-        <div aria-label="Cargando los temas">
-          <ListSkeleton rows={6} lines={2} />
-        </div>
-      ) : pillars.length === 0 ? (
-        <EmptyState
-          variant="dashed"
-          title="Todavía no hay temas de contenido"
-          description={canEdit ? "Creá el primero, o corré el motor: el agente puede sugerir temas." : "El equipo de Marketing todavía no cargó temas."}
-        />
-      ) : (
-        <ul className="space-y-2">
-          {pillars.map((r) => (
-            <li key={r.id} className={`rounded-xl border border-line bg-surface px-4 py-3 ${r.active ? "" : "opacity-60"}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-fg">
-                    {r.name}
-                    {r.origin === "AGENT" && (
-                      <Badge size="xs" className="ml-2">
-                        Sugerido por el agente
-                      </Badge>
-                    )}
-                    {!r.active && (
-                      <Badge size="xs" className="ml-2">
-                        Inactivo
-                      </Badge>
-                    )}
-                    {r.isCampaign && (
-                      <Badge size="xs" variant="primary" className="ml-2">
-                        Campaña
-                      </Badge>
-                    )}
-                    <span className="ml-2 text-xs text-fg-muted">{r._count.ideas} idea(s)</span>
-                  </p>
-                  {r.description && <p className="mt-0.5 text-xs text-fg-secondary">{r.description}</p>}
-                </div>
                 {canEdit && (
-                  <span className="flex-shrink-0 flex items-center gap-2">
-                    <button onClick={() => startEdit(r)} className="text-xs text-fg-muted hover:text-fg">
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => toggleCampaign(r)}
-                      className={`text-xs hover:text-fg ${r.isCampaign ? "text-brand" : "text-fg-muted"}`}
-                    >
-                      {r.isCampaign ? "Quitar campaña" : "Marcar campaña"}
-                    </button>
-                    <button onClick={() => toggleActive(r)} className="text-xs text-fg-muted hover:text-fg">
-                      {r.active ? "Desactivar" : "Activar"}
-                    </button>
-                    <button onClick={() => setConfirmDeleteId(r.id)} className="text-xs text-red-400 hover:text-red-300">
-                      Borrar
-                    </button>
+                  <span className="flex items-center gap-1.5">
+                    <BotonTexto onClick={() => revisarSugerencia(s.id, "discard")} disabled={busy}>Descartar</BotonTexto>
+                    <BotonAzul onClick={() => revisarSugerencia(s.id, "approve")} disabled={busy}>Crear el tema</BotonAzul>
                   </span>
                 )}
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
+            ))}
+          </section>
+        )}
+
+        <section aria-label="Temas" className="flex flex-col gap-2.5">
+          <div className="flex items-baseline gap-2.5">
+            <h2 className="text-sm font-semibold text-fg">Temas</h2>
+            {!loading && (
+              <span className="text-xs text-fg-muted">
+                {activos} {activos === 1 ? "activo" : "activos"} · en campaña primero, después los que más publicaciones tienen
+              </span>
+            )}
+          </div>
+          {loading ? (
+            <TableSkeleton columns={4} rows={8} />
+          ) : temas.length === 0 ? (
+            <EmptyState
+              variant="dashed"
+              title="Todavía no hay temas"
+              description={canEdit ? "Crea el primero, o espera la tanda del viernes: el agente puede sugerir temas." : "El equipo de Marketing todavía no cargó temas."}
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+              <table className="w-full min-w-[720px] border-collapse text-[13px] leading-[19px]">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-fg-muted">
+                    <th className="border-b border-line px-4 py-2.5 font-semibold">Tema</th>
+                    <th className="w-[150px] border-b border-line px-4 py-2.5 font-semibold">Publicaciones</th>
+                    <th className="w-[140px] border-b border-line px-4 py-2.5 font-semibold">Lo creó</th>
+                    <th className="w-[100px] border-b border-line px-4 py-2.5">
+                      <span className="sr-only">Acciones</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {temas.map((t) => (
+                    <tr key={t.id} className={t.active ? "" : "opacity-60"}>
+                      <td className="border-b border-line px-4 py-3 align-top">
+                        <span className="flex flex-col gap-0.5">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-fg">{t.name}</span>
+                            {t.isCampaign && t.active && <ChipActivo>● En campaña</ChipActivo>}
+                            {!t.active && <ChipGris>Pausado</ChipGris>}
+                          </span>
+                          {t.description && <span className="line-clamp-2 max-w-[640px] text-fg-muted">{t.description}</span>}
+                        </span>
+                      </td>
+                      <td className="border-b border-line px-4 py-3 align-top tabular-nums">
+                        <span className="flex flex-col gap-0.5">
+                          <span className="text-fg">{t._count.ideas}</span>
+                          {t.sinRevisar > 0 && <span className="text-xs text-fg-muted">{t.sinRevisar} sin revisar</span>}
+                        </span>
+                      </td>
+                      <td className="border-b border-line px-4 py-3 align-top text-fg-secondary">
+                        {t.origin === "AGENT" ? "El agente" : "El equipo"}
+                      </td>
+                      <td className="whitespace-nowrap border-b border-line px-4 py-3 text-right align-top">
+                        {canEdit && (
+                          <span className="inline-flex items-center gap-1">
+                            <BotonTexto
+                              onClick={() => {
+                                setEditando(t.id);
+                                setForm({ name: t.name, description: t.description ?? "" });
+                                setDrawer(true);
+                              }}
+                            >
+                              Editar
+                            </BotonTexto>
+                            <Menu
+                              aria-label={`Más acciones para ${t.name}`}
+                              align="end"
+                              triggerClassName="rounded-md p-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+                              trigger={<IconoMas />}
+                              items={[
+                                {
+                                  key: "campana",
+                                  label: t.isCampaign ? "Quitar de campaña" : "Poner en campaña",
+                                  onSelect: () =>
+                                    cambiar(
+                                      t,
+                                      { isCampaign: !t.isCampaign },
+                                      t.isCampaign ? "Ya no está en campaña." : "En campaña: la próxima tanda lo va a priorizar.",
+                                    ),
+                                },
+                                {
+                                  key: "activo",
+                                  label: t.active ? "Pausar" : "Activar",
+                                  onSelect: () => cambiar(t, { active: !t.active }, t.active ? "Pausado: el agente no lo usa." : "Activado."),
+                                },
+                                { key: "borrar", label: "Borrar", danger: true, separatorBefore: true, onSelect: () => setConfirmBorrar(t) },
+                              ]}
+                            />
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
 
       <Drawer
-        open={drawerOpen}
-        onClose={closeDrawer}
-        title={editingId ? "Editar tema" : "Nuevo tema"}
+        open={drawer}
+        onClose={cerrar}
+        title={editando ? "Editar tema" : "Nuevo tema"}
         footer={
           <>
-            <button onClick={closeDrawer} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
+            <Button variant="secondary" onClick={cerrar}>
               Cancelar
-            </button>
-            <button
-              onClick={save}
-              disabled={busy || !form.name.trim()}
-              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-            >
-              {busy ? "Guardando…" : editingId ? "Guardar cambios" : "Crear tema"}
-            </button>
+            </Button>
+            <Button variant="primary" onClick={guardar} disabled={busy || !form.name.trim()}>
+              {busy ? "Guardando…" : editando ? "Guardar los cambios" : "Crear el tema"}
+            </Button>
           </>
         }
       >
-        <div className="space-y-3">
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Nombre del tema (ej. IA aplicada a revenue)…"
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            autoFocus
-          />
-          <textarea
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Qué cubre este tema (opcional)…"
-            rows={3}
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
+        <div className="space-y-4">
+          <Field label="Nombre">
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Por ejemplo: IA aplicada a revenue" autoFocus />
+          </Field>
+          <Field label="Qué cubre" hint="Opcional. El agente lo lee para saber qué entra en el tema.">
+            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
+          </Field>
         </div>
       </Drawer>
 
       <ConfirmDialog
-        open={!!confirmDeleteId}
-        onCancel={() => setConfirmDeleteId(null)}
+        open={!!confirmBorrar}
+        onCancel={() => setConfirmBorrar(null)}
         onConfirm={async () => {
-          const id = confirmDeleteId;
-          setConfirmDeleteId(null);
-          if (id) await remove(id);
+          const t = confirmBorrar;
+          setConfirmBorrar(null);
+          if (t) await borrar(t);
         }}
-        title="¿Borrar este tema?"
-        description="Las ideas categorizadas en él quedan sin tema (no se borran)."
+        title={`¿Borrar «${confirmBorrar?.name ?? ""}»?`}
+        description="Sus publicaciones no se borran: quedan sin tema."
         confirmLabel="Borrar"
       />
-    </div>
+    </>
+  );
+}
+
+function IconoMas() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+      <path d="M5 12h.01M12 12h.01M19 12h.01" />
+    </svg>
   );
 }

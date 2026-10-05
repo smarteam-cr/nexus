@@ -1,26 +1,24 @@
 "use client";
 
 /**
- * CRUD del ICP (1 fila = 1 bullet), agrupado por sección — reusa el MISMO
- * componente visual que la vista de consumo (ICPView, 3 columnas + pills +
- * señales expandibles) con `editable` prendido: hover sobre un bullet muestra
- * editar/borrar, y cada sección tiene su propio "+ Agregar" inline. Ya no hay
- * una vista de administración separada (lista plana) — el ICP se ve y se
- * edita en el mismo lugar, en el mismo formato.
+ * Audiencia › Cliente ideal (/marketing/icp) — el ICP se ve y se edita en el mismo lugar, con el mismo componente
+ * (ICPView): pasar el mouse sobre un ítem muestra editar y borrar, y cada sección tiene su «+ Agregar». Rediseño del
+ * 2026-10-04: la página se llama «Audiencia» y trae las pestañas ICP / Buyer personas.
  */
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, Skeleton, SkeletonText } from "@/components/ui";
+import { ConfirmDialog, PageHeader, Skeleton, SkeletonPanel, SkeletonText } from "@/components/ui";
+import AudienciaTabs from "@/components/marketing/AudienciaTabs";
 import ICPView, { type IcpViewGroup } from "@/components/marketing/ICPView";
 import type { IcpSection } from "@prisma/client";
 
-export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
+export default function IcpAdminClient({ canEdit, conteos }: { canEdit: boolean; conteos: { icp: number; personas: number } }) {
   const toast = useToast();
   const [groups, setGroups] = useState<IcpViewGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBorrar, setConfirmBorrar] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -36,7 +34,7 @@ export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
     load();
   }, [load]);
 
-  const handleAdd = async (section: IcpSection, label: string) => {
+  const agregar = async (section: IcpSection, label: string) => {
     setBusy(true);
     try {
       await fetchJson("/api/marketing/icp", {
@@ -52,7 +50,7 @@ export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const handleEdit = async (id: string, label: string) => {
+  const editar = async (id: string, label: string) => {
     setBusy(true);
     try {
       await fetchJson(`/api/marketing/icp/${id}`, {
@@ -68,64 +66,60 @@ export default function IcpAdminClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const remove = async (id: string) => {
+  const borrar = async (id: string) => {
     try {
       await fetchJson(`/api/marketing/icp/${id}`, { method: "DELETE" });
-      toast.info("Ítem eliminado.");
+      toast.info("Ítem borrado.");
       load();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo borrar.");
     }
   };
 
-  // Skeleton ESTRUCTURAL: misma cáscara que el estado cargado (línea de ayuda +
-  // columnas de secciones del ICP) para que al llegar la data nada salte.
-  if (loading) {
-    return (
-      <div aria-label="Cargando el ICP">
-        <Skeleton className="h-3 w-96 max-w-full" />
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[0, 1].map((i) => (
-            <div key={i} className="bg-surface border border-line rounded-xl p-4 min-h-[220px]">
-              <Skeleton className="h-3 w-32 mb-3" delay={i * 60} />
-              <SkeletonText lines={5} />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <p className="text-xs text-fg-muted">
-        Estos ítems alimentan al agente de contenido.
-        {canEdit
-          ? " Pasá el mouse sobre un ítem para editarlo o borrarlo, o usá \"+ Agregar\" en cada sección."
-          : " Tu rol puede verlos pero no editarlos."}
-      </p>
-
-      <ICPView
-        groups={groups}
-        editable={canEdit}
-        onAdd={handleAdd}
-        onEdit={handleEdit}
-        onDelete={(id) => setConfirmDeleteId(id)}
-        busy={busy}
+    <>
+      <PageHeader
+        title="Audiencia"
+        description={`A quién le escribe el agente: la empresa que buscamos y las personas que deciden la compra.${canEdit ? "" : " Tu rol puede verla pero no editarla."}`}
       />
+      <div className="space-y-6">
+        <AudienciaTabs icp={conteos.icp} personas={conteos.personas} />
+        {loading ? (
+          <div className="space-y-6" aria-label="Cargando el ICP">
+            <SkeletonPanel minH="min-h-[420px]" header bodyClassName="grid gap-5 p-5 lg:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="space-y-3">
+                  <Skeleton className="h-3 w-32" delay={i * 60} />
+                  <SkeletonText lines={5} />
+                </div>
+              ))}
+            </SkeletonPanel>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[0, 1, 2, 3].map((i) => (
+                <SkeletonPanel key={i} minH="min-h-[160px]" bodyClassName="p-4 space-y-2">
+                  <Skeleton className="h-4 w-24" delay={i * 40} />
+                  <SkeletonText lines={3} />
+                </SkeletonPanel>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <ICPView groups={groups} editable={canEdit} onAdd={agregar} onEdit={editar} onDelete={(id) => setConfirmBorrar(id)} busy={busy} />
+        )}
+      </div>
 
       <ConfirmDialog
-        open={!!confirmDeleteId}
-        onCancel={() => setConfirmDeleteId(null)}
+        open={!!confirmBorrar}
+        onCancel={() => setConfirmBorrar(null)}
         onConfirm={async () => {
-          const id = confirmDeleteId;
-          setConfirmDeleteId(null);
-          if (id) await remove(id);
+          const id = confirmBorrar;
+          setConfirmBorrar(null);
+          if (id) await borrar(id);
         }}
         title="¿Borrar este ítem del ICP?"
-        description="El agente de contenido dejará de considerarlo. Esta acción no se puede deshacer."
+        description="El agente deja de tenerlo en cuenta desde la próxima tanda. No se puede deshacer."
         confirmLabel="Borrar"
       />
-    </div>
+    </>
   );
 }

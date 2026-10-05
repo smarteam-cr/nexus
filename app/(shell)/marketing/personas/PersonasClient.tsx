@@ -1,13 +1,19 @@
 "use client";
 
-/** CRUD de buyer personas (insumo del agente de contenido). Crear/editar vive
- * en un panel lateral (Drawer) — el CTA lo abre, el form no está siempre visible. */
+/**
+ * Audiencia › Buyer personas (/marketing/personas) — las personas que deciden la compra, insumo del agente
+ * (rediseño del 2026-10-04, sistema «Nexus · interfaz interna»): tarjetas en dos columnas con lo que le duele y lo
+ * que quiere cada una, a la vista. Crear y editar viven en un panel lateral.
+ */
 import { useState, useEffect, useCallback } from "react";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge, Drawer, CardsSkeleton } from "@/components/ui";
+import { Button, CardsSkeleton, ConfirmDialog, Drawer, EmptyState, Field, Input, Menu, PageHeader, Textarea } from "@/components/ui";
+import { BotonTexto } from "@/components/ui/sistema";
+import AudienciaTabs from "@/components/marketing/AudienciaTabs";
+import { Chip, ChipGris, Rotulo } from "@/components/marketing/piezas";
 
-interface PersonaRow {
+interface Persona {
   id: string;
   name: string;
   role: string | null;
@@ -17,24 +23,24 @@ interface PersonaRow {
   active: boolean;
 }
 
-const EMPTY_FORM = { name: "", role: "", description: "", pains: "", goals: "" };
+const FORM_VACIO = { name: "", role: "", description: "", pains: "", goals: "" };
 
-export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
+export default function PersonasClient({ canEdit, conteos }: { canEdit: boolean; conteos: { icp: number; personas: number } }) {
   const toast = useToast();
-  const [rows, setRows] = useState<PersonaRow[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState(false);
+  const [form, setForm] = useState(FORM_VACIO);
+  const [editando, setEditando] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBorrar, setConfirmBorrar] = useState<Persona | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const d = await fetchJson<{ personas: PersonaRow[] }>("/api/marketing/personas");
-      setRows(d.personas);
+      const d = await fetchJson<{ personas: Persona[] }>("/api/marketing/personas");
+      setPersonas(d.personas);
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar las personas.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar las buyer personas.");
     } finally {
       setLoading(false);
     }
@@ -43,31 +49,13 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
     load();
   }, [load]);
 
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setForm(EMPTY_FORM);
-    setEditingId(null);
+  const cerrar = () => {
+    setDrawer(false);
+    setForm(FORM_VACIO);
+    setEditando(null);
   };
 
-  const openCreate = () => {
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setDrawerOpen(true);
-  };
-
-  const startEdit = (r: PersonaRow) => {
-    setEditingId(r.id);
-    setForm({
-      name: r.name,
-      role: r.role ?? "",
-      description: r.description,
-      pains: r.pains ?? "",
-      goals: r.goals ?? "",
-    });
-    setDrawerOpen(true);
-  };
-
-  const save = async () => {
+  const guardar = async () => {
     if (!form.name.trim() || !form.description.trim() || busy) return;
     setBusy(true);
     try {
@@ -78,22 +66,13 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
         pains: form.pains.trim() || null,
         goals: form.goals.trim() || null,
       };
-      if (editingId) {
-        await fetchJson(`/api/marketing/personas/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        toast.success("Persona actualizada.");
-      } else {
-        await fetchJson("/api/marketing/personas", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        toast.success("Persona creada.");
-      }
-      closeDrawer();
+      await fetchJson(editando ? `/api/marketing/personas/${editando}` : "/api/marketing/personas", {
+        method: editando ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      toast.success(editando ? "Buyer persona actualizada." : "Buyer persona creada.");
+      cerrar();
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
@@ -102,161 +81,160 @@ export default function PersonasClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const toggleActive = async (r: PersonaRow) => {
+  const alternar = async (p: Persona) => {
     try {
-      await fetchJson(`/api/marketing/personas/${r.id}`, {
+      await fetchJson(`/api/marketing/personas/${p.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: !r.active }),
+        body: JSON.stringify({ active: !p.active }),
       });
+      toast.info(p.active ? "Pausada: el agente no la tiene en cuenta." : "Activada.");
       load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
     }
   };
 
-  const remove = async (id: string) => {
+  const borrar = async (p: Persona) => {
     try {
-      await fetchJson(`/api/marketing/personas/${id}`, { method: "DELETE" });
-      toast.info("Persona eliminada.");
+      await fetchJson(`/api/marketing/personas/${p.id}`, { method: "DELETE" });
+      toast.info("Buyer persona borrada.");
       load();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo borrar.");
     }
   };
 
   return (
-    <div className="space-y-6">
-      {canEdit && (
-        <div className="flex justify-end">
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 text-sm rounded-lg bg-brand text-white hover:opacity-90"
-          >
-            + Nueva persona
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        // Skeleton ESTRUCTURAL: cards de la altura de una persona cargada
-        // (nombre + descripción + dolores/objetivos) para que nada salte.
-        <div aria-label="Cargando las personas">
-          <CardsSkeleton count={4} columns={2} minH="min-h-[160px]" />
-        </div>
-      ) : rows.length === 0 ? (
-        <EmptyState
-          variant="dashed"
-          title="Todavía no hay buyer personas"
-          description={canEdit ? "Creá la primera con el botón de arriba." : "El equipo de Marketing todavía no cargó personas."}
-        />
-      ) : (
-        <ul className="space-y-2">
-          {rows.map((r) => (
-            <li key={r.id} className={`rounded-xl border border-line bg-surface px-4 py-3 ${r.active ? "" : "opacity-60"}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-fg">
-                    {r.name}
-                    {r.role && <span className="ml-2 text-xs text-fg-muted">{r.role}</span>}
-                    {!r.active && (
-                      <Badge size="xs" className="ml-2">
-                        Inactiva
-                      </Badge>
-                    )}
-                  </p>
-                  <p className="mt-1 text-xs text-fg-secondary whitespace-pre-wrap">{r.description}</p>
-                  {r.pains && <p className="mt-1 text-xs text-fg-muted"><span className="font-medium">Dolores:</span> {r.pains}</p>}
-                  {r.goals && <p className="mt-1 text-xs text-fg-muted"><span className="font-medium">Objetivos:</span> {r.goals}</p>}
+    <>
+      <PageHeader
+        title="Audiencia"
+        description={`A quién le escribe el agente: la empresa que buscamos y las personas que deciden la compra.${canEdit ? "" : " Tu rol puede verla pero no editarla."}`}
+        action={
+          canEdit ? (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setForm(FORM_VACIO);
+                setEditando(null);
+                setDrawer(true);
+              }}
+            >
+              Agregar persona
+            </Button>
+          ) : undefined
+        }
+      />
+      <div className="space-y-6">
+        <AudienciaTabs icp={conteos.icp} personas={conteos.personas} />
+        {loading ? (
+          <div aria-label="Cargando las buyer personas">
+            <CardsSkeleton count={4} columns={2} breakpoint="md" minH="min-h-[260px]" />
+          </div>
+        ) : personas.length === 0 ? (
+          <EmptyState
+            variant="dashed"
+            title="Todavía no hay buyer personas"
+            description={canEdit ? "Agrega la primera: quién es, qué le duele y qué quiere." : "El equipo de Marketing todavía no cargó buyer personas."}
+          />
+        ) : (
+          <section aria-label="Buyer personas" className="grid gap-3 md:grid-cols-2">
+            {personas.map((p) => (
+              <article key={p.id} className={`flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 ${p.active ? "" : "opacity-60"}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-[15px] font-semibold leading-5 text-fg">{p.name}</h2>
+                  {p.role && <Chip className="px-2 py-px text-[11px]">{p.role}</Chip>}
+                  {!p.active && <ChipGris>Pausada</ChipGris>}
                 </div>
-                {canEdit && (
-                  <span className="flex-shrink-0 flex items-center gap-2">
-                    <button onClick={() => startEdit(r)} className="text-xs text-fg-muted hover:text-fg">
-                      Editar
-                    </button>
-                    <button onClick={() => toggleActive(r)} className="text-xs text-fg-muted hover:text-fg">
-                      {r.active ? "Desactivar" : "Activar"}
-                    </button>
-                    <button onClick={() => setConfirmDeleteId(r.id)} className="text-xs text-red-400 hover:text-red-300">
-                      Borrar
-                    </button>
-                  </span>
+                <p className="whitespace-pre-wrap text-[13px] leading-[19px] text-fg-secondary">{p.description}</p>
+                {(p.pains || p.goals) && (
+                  <div className="grid gap-3 border-t border-line pt-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1">
+                      <Rotulo>Le duele</Rotulo>
+                      <span className="whitespace-pre-wrap text-[13px] leading-[19px] text-fg-secondary">{p.pains || "Sin cargar"}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Rotulo>Quiere</Rotulo>
+                      <span className="whitespace-pre-wrap text-[13px] leading-[19px] text-fg-secondary">{p.goals || "Sin cargar"}</span>
+                    </div>
+                  </div>
                 )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+                {canEdit && (
+                  <div className="mt-auto flex items-center gap-1">
+                    <BotonTexto
+                      onClick={() => {
+                        setEditando(p.id);
+                        setForm({ name: p.name, role: p.role ?? "", description: p.description, pains: p.pains ?? "", goals: p.goals ?? "" });
+                        setDrawer(true);
+                      }}
+                    >
+                      Editar
+                    </BotonTexto>
+                    <BotonTexto onClick={() => alternar(p)}>{p.active ? "Pausar" : "Activar"}</BotonTexto>
+                    <Menu
+                      aria-label={`Más acciones para ${p.name}`}
+                      triggerClassName="rounded-md p-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+                      trigger={
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+                          <path d="M5 12h.01M12 12h.01M19 12h.01" />
+                        </svg>
+                      }
+                      items={[{ key: "borrar", label: "Borrar", danger: true, onSelect: () => setConfirmBorrar(p) }]}
+                    />
+                  </div>
+                )}
+              </article>
+            ))}
+          </section>
+        )}
+      </div>
 
       <Drawer
-        open={drawerOpen}
-        onClose={closeDrawer}
-        title={editingId ? "Editar persona" : "Nueva persona"}
+        open={drawer}
+        onClose={cerrar}
+        title={editando ? "Editar buyer persona" : "Agregar buyer persona"}
         footer={
           <>
-            <button onClick={closeDrawer} className="px-4 py-2 text-sm rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
+            <Button variant="secondary" onClick={cerrar}>
               Cancelar
-            </button>
-            <button
-              onClick={save}
-              disabled={busy || !form.name.trim() || !form.description.trim()}
-              className="px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-            >
-              {busy ? "Guardando…" : editingId ? "Guardar cambios" : "Crear persona"}
-            </button>
+            </Button>
+            <Button variant="primary" onClick={guardar} disabled={busy || !form.name.trim() || !form.description.trim()}>
+              {busy ? "Guardando…" : editando ? "Guardar los cambios" : "Agregar la persona"}
+            </Button>
           </>
         }
       >
-        <div className="space-y-3">
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Nombre (ej. Director comercial LATAM)…"
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-            autoFocus
-          />
-          <input
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}
-            placeholder="Cargo / segmento (opcional)…"
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
-          <textarea
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Quién es, contexto…"
-            rows={3}
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
-          <textarea
-            value={form.pains}
-            onChange={(e) => setForm({ ...form, pains: e.target.value })}
-            placeholder="Dolores (opcional)…"
-            rows={2}
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
-          <textarea
-            value={form.goals}
-            onChange={(e) => setForm({ ...form, goals: e.target.value })}
-            placeholder="Objetivos (opcional)…"
-            rows={2}
-            className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg placeholder:text-fg-muted"
-          />
+        <div className="space-y-4">
+          <Field label="Nombre">
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Por ejemplo: Director comercial" autoFocus />
+          </Field>
+          <Field label="Papel en la compra" hint="Opcional. Por ejemplo: decisor final, habilitador.">
+            <Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />
+          </Field>
+          <Field label="Quién es">
+            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
+          </Field>
+          <Field label="Qué le duele" hint="Opcional.">
+            <Textarea value={form.pains} onChange={(e) => setForm({ ...form, pains: e.target.value })} rows={3} />
+          </Field>
+          <Field label="Qué quiere" hint="Opcional.">
+            <Textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })} rows={3} />
+          </Field>
         </div>
       </Drawer>
 
       <ConfirmDialog
-        open={!!confirmDeleteId}
-        onCancel={() => setConfirmDeleteId(null)}
+        open={!!confirmBorrar}
+        onCancel={() => setConfirmBorrar(null)}
         onConfirm={async () => {
-          const id = confirmDeleteId;
-          setConfirmDeleteId(null);
-          if (id) await remove(id);
+          const p = confirmBorrar;
+          setConfirmBorrar(null);
+          if (p) await borrar(p);
         }}
-        title="¿Borrar esta persona?"
-        description="El agente dejará de considerarla. Esta acción no se puede deshacer."
+        title={`¿Borrar «${confirmBorrar?.name ?? ""}»?`}
+        description="El agente deja de tenerla en cuenta. No se puede deshacer; si solo quieres apartarla, usa «Pausar»."
         confirmLabel="Borrar"
       />
-    </div>
+    </>
   );
 }

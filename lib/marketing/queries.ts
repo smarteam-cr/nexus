@@ -5,9 +5,10 @@
  * Single-tenant: ninguna query cuelga de Client.
  */
 import { prisma } from "@/lib/db/prisma";
-import type { IcpSection } from "@prisma/client";
+import type { IcpSection, Prisma } from "@prisma/client";
 import { ICP_SECTION_ORDER } from "./seed-data";
-import type { MarketingPostTypeValue, MarketingJourneyStageValue } from "./schema";
+import { CONTENT_IDEA_STATES } from "./schema";
+import type { ContentIdeaState, MarketingPostTypeValue, MarketingJourneyStageValue } from "./schema";
 
 /** Ventana de inspiración para la generación: posts de los últimos 3 meses. */
 export function inspirationWindowStart(now = new Date()): Date {
@@ -36,15 +37,27 @@ export async function getIcpItemsGrouped(): Promise<
   }));
 }
 
+/** Los números de las pestañas de Audiencia. */
+export async function getConteosAudiencia() {
+  const [icp, personas] = await Promise.all([prisma.icpItem.count(), prisma.buyerPersona.count()]);
+  return { icp, personas };
+}
+
 export async function getPersonas() {
   return prisma.buyerPersona.findMany({ orderBy: [{ order: "asc" }, { createdAt: "asc" }] });
 }
 
 export async function getPillars() {
-  return prisma.contentPillar.findMany({
-    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-    include: { _count: { select: { ideas: true } } },
-  });
+  const [pillars, sinRevisar] = await Promise.all([
+    prisma.contentPillar.findMany({
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      include: { _count: { select: { ideas: true } } },
+    }),
+    // Las sugeridas que nadie miró, por tema: dice qué tema está llenando la cola.
+    prisma.contentIdea.groupBy({ by: ["pillarId"], where: whereDeEstado("sugerida"), _count: { _all: true } }),
+  ]);
+  const porTema = new Map(sinRevisar.map((g) => [g.pillarId, g._count._all]));
+  return pillars.map((p) => ({ ...p, sinRevisar: porTema.get(p.id) ?? 0 }));
 }
 
 export async function getSources() {
@@ -54,46 +67,147 @@ export async function getSources() {
   });
 }
 
+/**
+ * Las fuentes con lo que aportan: posts de los últimos 3 meses (los que entran a la tanda) y cuántas publicaciones
+ * del agente citan al menos un post suyo. Medido el 2026-10-04: una sola fuente aparecía en las 112 publicaciones.
+ */
+export async function getSourcesConUso(now = new Date()) {
+  const windowStart = inspirationWindowStart(now);
+  const [sources, enVentana, citas, totalIdeas] = await Promise.all([
+    getSources(),
+    prisma.inspirationPost.groupBy({
+      by: ["sourceId"],
+      where: { postedAt: { gte: windowStart } },
+      _count: { _all: true },
+    }),
+    prisma.contentIdeaSource.findMany({ select: { ideaId: true, post: { select: { sourceId: true } } } }),
+    prisma.contentIdea.count(),
+  ]);
+  const ventana = new Map(enVentana.map((g) => [g.sourceId, g._count._all]));
+  const ideasPorFuente = new Map<string, Set<string>>();
+  for (const c of citas) {
+    const set = ideasPorFuente.get(c.post.sourceId) ?? new Set<string>();
+    set.add(c.ideaId);
+    ideasPorFuente.set(c.post.sourceId, set);
+  }
+  return {
+    totalIdeas,
+    sources: sources.map((s) => ({
+      ...s,
+      postsEnVentana: ventana.get(s.id) ?? 0,
+      ideasInspiradas: ideasPorFuente.get(s.id)?.size ?? 0,
+    })),
+  };
+}
+
 export async function getSettings() {
   return prisma.marketingSettings.findUnique({ where: { id: "marketing" } });
 }
 
+/**
+ * Lo que lee el agente en cada tanda, contado: el panel de Voz de marca y la tarjeta «Lo que entra» de Generación.
+ */
+export async function getResumenInsumos(now = new Date()) {
+  const [temas, icpItems, personasActivas, fuentesActivas, postsEnVentana, postsTotal, settings] = await Promise.all([
+    prisma.contentPillar.findMany({ where: { active: true }, select: { name: true, isCampaign: true } }),
+    prisma.icpItem.count(),
+    prisma.buyerPersona.count({ where: { active: true } }),
+    prisma.inspirationSource.count({ where: { active: true } }),
+    prisma.inspirationPost.count({ where: { postedAt: { gte: inspirationWindowStart(now) } } }),
+    prisma.inspirationPost.count(),
+    getSettings(),
+  ]);
+  return {
+    temasActivos: temas.length,
+    temasEnCampana: temas.filter((t) => t.isCampaign).map((t) => t.name),
+    icpItems,
+    personasActivas,
+    fuentesActivas,
+    postsEnVentana,
+    postsTotal,
+    genEmpresaTarget: settings?.genEmpresaTarget ?? null,
+    genPersonaTarget: settings?.genPersonaTarget ?? null,
+    lastCronDateKey: settings?.lastCronDateKey ?? null,
+  };
+}
+
+export type ResumenInsumos = Awaited<ReturnType<typeof getResumenInsumos>>;
+
 // ── Salidas del agente ─────────────────────────────────────────────────────────
+
+/**
+ * Estado derivado (misma prioridad que ideaState): descartada=discardedAt set · aprobada=usedAt set y no descartada ·
+ * seleccionada=selectedAt set y no aprobada ni descartada · sugerida=todos null.
+ */
+function whereDeEstado(state: ContentIdeaState): Prisma.ContentIdeaWhereInput {
+  switch (state) {
+    case "descartada":
+      return { discardedAt: { not: null } };
+    case "aprobada":
+      return { discardedAt: null, usedAt: { not: null } };
+    case "seleccionada":
+      return { discardedAt: null, usedAt: null, selectedAt: { not: null } };
+    case "sugerida":
+      return { discardedAt: null, usedAt: null, selectedAt: null };
+  }
+}
+
+export interface ConteoPorTipo {
+  total: number;
+  EMPRESA: number;
+  PERSONA: number;
+}
+
+/** Cuántas publicaciones hay en cada estado, y de qué tipo: los números de las pestañas y del segmentado. */
+export async function getIdeaCounts(): Promise<Record<ContentIdeaState, ConteoPorTipo>> {
+  const porEstado = await Promise.all(
+    CONTENT_IDEA_STATES.map((state) =>
+      prisma.contentIdea.groupBy({ by: ["postType"], where: whereDeEstado(state), _count: { _all: true } }),
+    ),
+  );
+  const out = {} as Record<ContentIdeaState, ConteoPorTipo>;
+  CONTENT_IDEA_STATES.forEach((state, i) => {
+    const c: ConteoPorTipo = { total: 0, EMPRESA: 0, PERSONA: 0 };
+    for (const g of porEstado[i]) {
+      c[g.postType] = g._count._all;
+      c.total += g._count._all;
+    }
+    out[state] = c;
+  });
+  return out;
+}
 
 export async function getIdeas(filter?: {
   pillarId?: string;
   runId?: string;
-  state?: "sugerida" | "seleccionada" | "aprobada" | "descartada";
+  state?: ContentIdeaState;
   postType?: MarketingPostTypeValue;
   journeyStage?: MarketingJourneyStageValue;
 }) {
-  // Estado derivado (misma prioridad que ideaState): descartada=discardedAt set ·
-  // aprobada=usedAt set y no descartada · seleccionada=selectedAt set y no aprobada
-  // ni descartada · sugerida=todos null.
-  const stateWhere =
-    filter?.state === "descartada"
-      ? { discardedAt: { not: null } }
-      : filter?.state === "aprobada"
-        ? { discardedAt: null, usedAt: { not: null } }
-        : filter?.state === "seleccionada"
-          ? { discardedAt: null, usedAt: null, selectedAt: { not: null } }
-          : filter?.state === "sugerida"
-            ? { discardedAt: null, usedAt: null, selectedAt: null }
-            : {};
   const ideas = await prisma.contentIdea.findMany({
     where: {
       ...(filter?.pillarId ? { pillarId: filter.pillarId } : {}),
       ...(filter?.runId ? { runId: filter.runId } : {}),
       ...(filter?.postType ? { postType: filter.postType } : {}),
       ...(filter?.journeyStage ? { journeyStage: filter.journeyStage } : {}),
-      ...stateWhere,
+      ...(filter?.state ? whereDeEstado(filter.state) : {}),
     },
     orderBy: { createdAt: "desc" },
     include: {
       pillar: { select: { id: true, name: true } },
+      // El texto del post NO viaja (pesaba ~1.500 caracteres por post y nadie lo pintaba): la pantalla dice de qué
+      // fuente sale y enlaza al post.
       sources: {
         include: {
-          post: { select: { id: true, url: true, authorName: true, text: true } },
+          post: {
+            select: {
+              id: true,
+              url: true,
+              authorName: true,
+              postedAt: true,
+              source: { select: { label: true, profileUrl: true } },
+            },
+          },
         },
       },
     },
@@ -123,6 +237,21 @@ export async function getCampaigns(status?: "PENDING" | "APPROVED" | "DISCARDED"
   });
 }
 
+/** Cuántas ideas de SEM hay por estado y canal: los números de las pestañas y del segmentado. */
+export async function getCampaignCounts() {
+  const filas = await prisma.campaignIdea.groupBy({ by: ["status", "channel"], _count: { _all: true } });
+  const out: Record<"PENDING" | "APPROVED" | "DISCARDED", { total: number; porCanal: Record<string, number> }> = {
+    PENDING: { total: 0, porCanal: {} },
+    APPROVED: { total: 0, porCanal: {} },
+    DISCARDED: { total: 0, porCanal: {} },
+  };
+  for (const f of filas) {
+    out[f.status].total += f._count._all;
+    out[f.status].porCanal[f.channel] = (out[f.status].porCanal[f.channel] ?? 0) + f._count._all;
+  }
+  return out;
+}
+
 export async function getPendingSuggestions() {
   return prisma.pillarSuggestion.findMany({
     where: { status: "PENDING" },
@@ -130,7 +259,7 @@ export async function getPendingSuggestions() {
   });
 }
 
-// ── Posts / runs (para /contenido) ─────────────────────────────────────────────
+// ── Posts / runs (para Generación) ─────────────────────────────────────────────
 
 export async function getPostsStats(now = new Date()) {
   const windowStart = inspirationWindowStart(now);
@@ -150,5 +279,16 @@ export async function getLatestRun() {
 }
 
 export async function getRunHistory(take = 10) {
-  return prisma.marketingRun.findMany({ orderBy: { createdAt: "desc" }, take });
+  const runs = await prisma.marketingRun.findMany({
+    orderBy: { createdAt: "desc" },
+    take,
+    // rawOutput es el JSON crudo de Claude (decenas de kB por corrida): la pantalla no lo usa.
+    omit: { rawOutput: true },
+  });
+  const emails = [...new Set(runs.map((r) => r.startedByEmail).filter((e): e is string => !!e))];
+  const members = emails.length
+    ? await prisma.teamMember.findMany({ where: { email: { in: emails } }, select: { email: true, name: true } })
+    : [];
+  const nombre = new Map(members.map((m) => [m.email, m.name]));
+  return runs.map((r) => ({ ...r, startedByName: r.startedByEmail ? (nombre.get(r.startedByEmail) ?? null) : null }));
 }

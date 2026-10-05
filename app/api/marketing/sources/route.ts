@@ -1,17 +1,19 @@
 /**
  * /api/marketing/sources — fuentes de inspiración (perfiles LinkedIn).
- * GET lista (con lastFetchedAt/lastFetchError) · POST crea. Escritura: editores.
+ * GET lista (con lastFetchedAt/lastFetchError, posts de los últimos 3 meses y cuántas publicaciones inspiró) ·
+ * POST crea. Escritura: editores.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardInternalUser, guardMarketingEditor } from "@/lib/auth/api-guards";
-import { getSources } from "@/lib/marketing/queries";
+import { getSourcesConUso } from "@/lib/marketing/queries";
 import { createSource } from "@/lib/marketing/mutations";
 import { sourceCreateSchema } from "@/lib/marketing/schema";
 
 export async function GET() {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  return NextResponse.json({ sources: await getSources() });
+  const { sources, totalIdeas } = await getSourcesConUso();
+  return NextResponse.json({ sources, totalIdeas });
 }
 
 export async function POST(req: NextRequest) {

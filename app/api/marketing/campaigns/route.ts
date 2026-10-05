@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardInternalUser } from "@/lib/auth/api-guards";
-import { getCampaigns } from "@/lib/marketing/queries";
+import { getCampaigns, getCampaignCounts } from "@/lib/marketing/queries";
 
 export async function GET(req: NextRequest) {
   const guard = await guardInternalUser();
@@ -13,5 +13,6 @@ export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get("status");
   const status =
     raw === "PENDING" || raw === "APPROVED" || raw === "DISCARDED" ? raw : undefined;
-  return NextResponse.json({ campaigns: await getCampaigns(status) });
+  const [campaigns, counts] = await Promise.all([getCampaigns(status), getCampaignCounts()]);
+  return NextResponse.json({ campaigns, counts });
 }

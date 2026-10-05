@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const active = await findActiveRun();
   if (active) {
     return NextResponse.json(
-      { error: "Ya hay una corrida en curso. Esperá a que termine.", runId: active.id },
+      { error: "Ya hay una corrida en curso. Espera a que termine.", runId: active.id },
       { status: 409 },
     );
   }

@@ -1,178 +1,195 @@
 "use client";
 
 /**
- * Contenido — ideas de contenido como VISTA PREVIA de post social (ancho fijo
- * 552px). Flujo en 4 estados: Sugeridas → Seleccionadas → Aprobadas (+ Descartadas,
- * reversible). La tarjeta imita un post (logo Smarteam + copy + área de imagen
- * OSCURA que muestra el CONCEPTO de imagen + CTAs falsos de red social). El
- * título/tema/fecha viven en el menú "…" de la esquina; las acciones reales van
- * DEBAJO del post. Editable inline (copy/título/concepto) en Seleccionadas/
- * Aprobadas; Sugeridas/Descartadas son read-only.
+ * Publicaciones (/marketing/contenido) — lo que propone el agente para LinkedIn (rediseño del 2026-10-04, sistema
+ * «Nexus · interfaz interna»). Antes eran tarjetas de 552 px una debajo de otra: con 75 sugeridas, una pared que
+ * nadie revisaba (medido ese día: la sugerida más vieja era del 3 jul). Ahora es una lista con la publicación elegida
+ * al lado, como una bandeja:
+ *
+ *  - Pestañas por estado (Sugeridas → Aceptadas → Aprobadas · Descartadas) con su cuenta, y el tipo como segmentado.
+ *  - En Sugeridas, las que dicen casi lo mismo van juntas en una fila (lib/marketing/parecidas.ts): 15 de las 75
+ *    eran el mismo ángulo. Desde el detalle se ven todas o se descartan las otras de un saque.
+ *  - Atajos para revisar rápido: A acepta, D descarta, ↓/↑ se mueve. Solo para quien puede editar.
+ *  - Los estados y la regla «por equipo» (solo Marketing publica para Smarteam) no cambian.
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { ConfirmDialog, EmptyState, Badge, Skeleton, ListSkeleton, IconCheck } from "@/components/ui";
+import {
+  Alert,
+  ConfirmDialog,
+  EmptyState,
+  ListSkeleton,
+  PageHeader,
+  Segmentado,
+  Select,
+  SkeletonPanel,
+  SkeletonText,
+  Tabs,
+} from "@/components/ui";
+import { FranjaDeSugerencias, IconoDeSugerencia } from "@/components/ui/sistema";
 import { useMarketingEngine } from "@/components/marketing/useMarketingEngine";
+import PublicacionDetalle from "@/components/marketing/PublicacionDetalle";
+import { BotonClaro, Chip, ChipGris, ChipHecho, Rotulo, diaYMesCr } from "@/components/marketing/piezas";
+import type { CampoEditable, CanalSocial, ConteosDeIdeas, IdeaRow } from "@/components/marketing/tipos";
 import { useMe } from "@/hooks/useMe";
+import { agruparParecidas } from "@/lib/marketing/parecidas";
+import { cn } from "@/lib/cn";
 import {
   ideaState,
   canPublishForSmarteam,
-  POST_TYPE_META,
   JOURNEY_STAGE_META,
-  USAGE_TARGET_META,
   MARKETING_JOURNEY_STAGES,
   type ContentIdeaState,
-  type MarketingPostTypeValue,
   type MarketingJourneyStageValue,
+  type MarketingPostTypeValue,
   type MarketingUsageTargetValue,
-} from "@/lib/marketing/schema";
+} from "@/lib/marketing/marketing-ui";
 
-interface IdeaRow {
-  id: string;
-  title: string;
-  copy: string;
-  imageConcept: string;
-  postType: MarketingPostTypeValue;
-  journeyStage: MarketingJourneyStageValue | null;
-  acceptedFor: MarketingUsageTargetValue | null;
-  acceptedByName: string | null;
-  suggestedPillarName: string | null;
-  pillar: { id: string; name: string } | null;
-  selectedAt: string | null;
-  usedAt: string | null;
-  discardedAt: string | null;
-  hubspotDraftAt: string | null;
-  sources: Array<{
-    post: { id: string; url: string | null; authorName: string | null; text: string };
-  }>;
-  createdAt: string;
-}
-interface PillarOption {
+interface Tema {
   id: string;
   name: string;
-}
-interface SocialChannel {
-  channelKey: string;
-  type: string;
-  name: string;
+  isCampaign: boolean;
 }
 
-// Etiqueta amable del canal a partir del type de HubSpot.
-const CHANNEL_LABEL: Record<string, string> = {
-  LinkedInCompanyPage: "LinkedIn",
-  LinkedInProfile: "LinkedIn (perfil)",
-  FacebookPage: "Facebook",
-  Instagram: "Instagram",
-};
-const channelLabel = (c: SocialChannel) => `${CHANNEL_LABEL[c.type] ?? c.type} · ${c.name}`;
-
-// Flujo: Publicaciones sugeridas → Aceptadas (editable) → Aprobadas (aprobar o
-// enviar a HubSpot) · Descartadas (reversible, alcanzable desde cualquier paso).
-// Los keys internos siguen siendo sugerida/seleccionada/aprobada/descartada.
-const TABS: Array<{ key: ContentIdeaState; label: string }> = [
-  { key: "sugerida", label: "Publicaciones sugeridas" },
+const ESTADOS: Array<{ key: ContentIdeaState; label: string }> = [
+  { key: "sugerida", label: "Sugeridas" },
   { key: "seleccionada", label: "Aceptadas" },
   { key: "aprobada", label: "Aprobadas" },
   { key: "descartada", label: "Descartadas" },
 ];
 
-// Color del badge por etapa del viaje semanal (espeja los 🔴🟡🟢 de la guía).
-const STAGE_BADGE_VARIANT: Record<
-  MarketingJourneyStageValue,
-  "destructive" | "warning" | "success"
-> = {
-  CONCIENCIA: "destructive",
-  ESTRATEGIA: "warning",
-  INSPIRACION: "success",
+type Tipo = "todas" | MarketingPostTypeValue;
+
+const VACIO: Record<ContentIdeaState, { title: string; description: string }> = {
+  sugerida: {
+    title: "No hay publicaciones sugeridas",
+    description: "El agente propone una tanda cada viernes a las 6:00. También puedes generarla ahora.",
+  },
+  seleccionada: {
+    title: "No hay publicaciones aceptadas",
+    description: "Acepta una sugerida para trabajarla: editarla y ajustarla con IA.",
+  },
+  aprobada: {
+    title: "No hay publicaciones aprobadas",
+    description: "Desde Aceptadas, aprueba una o envíala a HubSpot cuando esté lista.",
+  },
+  descartada: {
+    title: "No hay publicaciones descartadas",
+    description: "Las que descartes aparecen acá, y puedes restaurarlas.",
+  },
 };
 
-// Estilos de botón de aceptación (tokenizados; mismo navy que el resto de la
-// tarjeta, texto por token — sin grises crudos).
-const BTN_ACCEPT =
-  "px-3 py-1.5 text-xs rounded-lg bg-brand text-primary-fg disabled:opacity-40 hover:opacity-90";
-const BTN_OUTLINE =
-  "px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40";
+const ahora = () => new Date().toISOString();
 
-const nowIso = () => new Date().toISOString();
+/** Una fila de la lista: una publicación, o la primera de un grupo de parecidas. */
+interface Fila {
+  idea: IdeaRow;
+  grupo: IdeaRow[];
+  /** true si es una de las parecidas que se ven al abrir el grupo. */
+  miembro: boolean;
+}
 
-export default function ContentClient({ canEdit }: { canEdit: boolean }) {
+export default function ContentClient({ canEdit, proximaTanda }: { canEdit: boolean; proximaTanda: string }) {
   const toast = useToast();
   const me = useMe();
-  // Regla "por equipo": solo el equipo de MARKETING elige destino Personal/Smarteam.
   const canChooseSmarteam = canPublishForSmarteam(me?.role);
-  const [tab, setTab] = useState<ContentIdeaState>("sugerida");
-  const [ideas, setIdeas] = useState<IdeaRow[]>([]);
-  const [pillars, setPillars] = useState<PillarOption[]>([]);
-  const [pillarFilter, setPillarFilter] = useState<string>("");
-  const [postTypeFilter, setPostTypeFilter] = useState<"" | MarketingPostTypeValue>("");
-  const [stageFilter, setStageFilter] = useState<"" | MarketingJourneyStageValue>("");
-  const [loading, setLoading] = useState(true);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  // Canales sociales de HubSpot (para "Enviar a HubSpot"). supported=false → sin scope social.
-  const [channels, setChannels] = useState<SocialChannel[]>([]);
-  const [channelsSupported, setChannelsSupported] = useState(true);
-
   const engine = useMarketingEngine();
 
-  const requestIdRef = useRef(0);
+  const [tab, setTab] = useState<ContentIdeaState>("sugerida");
+  const [tipo, setTipo] = useState<Tipo>("todas");
+  const [tema, setTema] = useState("");
+  const [etapa, setEtapa] = useState<"" | MarketingJourneyStageValue>("");
+  const [ideas, setIdeas] = useState<IdeaRow[]>([]);
+  const [conteos, setConteos] = useState<ConteosDeIdeas | null>(null);
+  const [temas, setTemas] = useState<Tema[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [selId, setSelId] = useState<string | null>(null);
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  const [confirmBorrar, setConfirmBorrar] = useState<string | null>(null);
+  const [confirmOtras, setConfirmOtras] = useState<string[] | null>(null);
+  const [canales, setCanales] = useState<CanalSocial[]>([]);
+  const [canalesOk, setCanalesOk] = useState(true);
+
+  const pedido = useRef(0);
   const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
+    const id = ++pedido.current;
     try {
-      const params = new URLSearchParams();
-      params.set("state", tab);
-      if (pillarFilter) params.set("pillarId", pillarFilter);
-      if (postTypeFilter) params.set("postType", postTypeFilter);
-      // La etapa solo aplica a posts de empresa; con PERSONA seleccionado no se envía.
-      if (stageFilter && postTypeFilter !== "PERSONA") params.set("stage", stageFilter);
-      const [ideasRes, pillarsRes] = await Promise.all([
-        fetchJson<{ ideas: IdeaRow[] }>(`/api/marketing/ideas?${params.toString()}`),
-        fetchJson<{ pillars: PillarOption[] }>("/api/marketing/pillars"),
+      const params = new URLSearchParams({ state: tab });
+      if (tipo !== "todas") params.set("postType", tipo);
+      if (tema) params.set("pillarId", tema);
+      // La etapa es solo de los posts de empresa: con «Perfil personal» no se manda.
+      if (etapa && tipo !== "PERSONA") params.set("stage", etapa);
+      const [r, t] = await Promise.all([
+        fetchJson<{ ideas: IdeaRow[]; counts: ConteosDeIdeas }>(`/api/marketing/ideas?${params}`),
+        fetchJson<{ pillars: Tema[] }>("/api/marketing/pillars"),
       ]);
-      if (requestId !== requestIdRef.current) return;
-      setIdeas(ideasRes.ideas);
-      setPillars(pillarsRes.pillars);
+      if (id !== pedido.current) return;
+      setIdeas(r.ideas);
+      setConteos(r.counts);
+      setTemas(t.pillars);
     } catch (e) {
-      if (requestId !== requestIdRef.current) return;
-      toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar las ideas.");
+      if (id !== pedido.current) return;
+      toast.error(e instanceof ApiError ? e.message : "No se pudieron cargar las publicaciones.");
     } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+      if (id === pedido.current) setLoading(false);
     }
-  }, [toast, pillarFilter, postTypeFilter, stageFilter, tab]);
+  }, [toast, tab, tipo, tema, etapa]);
   useEffect(() => {
     load();
   }, [load]);
 
-  // Canales sociales de HubSpot: una vez al montar (portal-wide, no por tarjeta).
+  // Canales sociales de HubSpot: una vez al montar. Sin el permiso social, enviar a HubSpot no aparece.
   useEffect(() => {
     if (!canEdit) return;
-    fetchJson<{ supported: boolean; channels: SocialChannel[] }>("/api/marketing/social-channels")
+    fetchJson<{ supported: boolean; channels: CanalSocial[] }>("/api/marketing/social-channels")
       .then((r) => {
-        setChannelsSupported(r.supported);
-        setChannels(r.channels ?? []);
+        setCanalesOk(r.supported);
+        setCanales(r.channels ?? []);
       })
-      .catch(() => setChannelsSupported(false)); // silencioso: la feature simplemente no aparece
+      .catch(() => setCanalesOk(false));
   }, [canEdit]);
 
-  const wasEngineBusyRef = useRef(false);
-  const engineBusy = engine.busy;
+  // Al terminar una tanda, la lista se recarga sola.
+  const corriendoAntes = useRef(false);
   useEffect(() => {
-    if (wasEngineBusyRef.current && !engineBusy) load();
-    wasEngineBusyRef.current = engineBusy;
+    if (corriendoAntes.current && !engine.busy) load();
+    corriendoAntes.current = engine.busy;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineBusy]);
+  }, [engine.busy]);
 
-  const patchState = async (
-    id: string,
-    body: Record<string, boolean | string>,
-    optimistic: Partial<IdeaRow>,
-    msg: string,
-  ) => {
+  // ── La lista ──────────────────────────────────────────────────────────────────
+  const visibles = useMemo(() => ideas.filter((i) => ideaState(i) === tab), [ideas, tab]);
+  const grupos = useMemo(
+    () => (tab === "sugerida" ? agruparParecidas(visibles, (i) => i.title) : visibles.map((i) => [i])),
+    [visibles, tab],
+  );
+  const filas = useMemo<Fila[]>(() => {
+    const out: Fila[] = [];
+    for (const g of grupos) {
+      out.push({ idea: g[0], grupo: g, miembro: false });
+      if (g.length > 1 && abiertos.has(g[0].id)) for (const m of g.slice(1)) out.push({ idea: m, grupo: g, miembro: true });
+    }
+    return out;
+  }, [grupos, abiertos]);
+  const elegida = visibles.find((i) => i.id === selId) ?? filas[0]?.idea ?? null;
+  const grupoElegido = elegida ? (grupos.find((g) => g.some((i) => i.id === elegida.id)) ?? [elegida]) : [];
+  const repartidas = grupos.filter((g) => g.length > 1).length;
+
+  /** La que queda elegida después de que `id` sale de la pestaña: la siguiente, o la anterior si era la última. */
+  const siguienteA = (id: string): string | null => {
+    const i = filas.findIndex((f) => f.idea.id === id);
+    return filas[i + 1]?.idea.id ?? filas[i - 1]?.idea.id ?? null;
+  };
+
+  // ── Acciones ──────────────────────────────────────────────────────────────────
+  const cambiar = async (id: string, body: Record<string, boolean | string>, optimista: Partial<IdeaRow>, msg: string, saleDeLaPestana: boolean) => {
     if (busyId) return;
     setBusyId(id);
-    setIdeas((prev) => prev.map((i) => (i.id === id ? { ...i, ...optimistic } : i)));
+    if (saleDeLaPestana) setSelId(siguienteA(id));
+    setIdeas((prev) => prev.map((i) => (i.id === id ? { ...i, ...optimista } : i)));
     try {
       await fetchJson(`/api/marketing/ideas/${id}`, {
         method: "PATCH",
@@ -180,36 +197,36 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
         body: JSON.stringify(body),
       });
       toast.info(msg);
-      load();
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo actualizar.");
-      load();
     } finally {
       setBusyId(null);
+      load();
     }
   };
 
-  const accept = (id: string, acceptedFor: MarketingUsageTargetValue) =>
-    patchState(
+  const aceptar = (id: string, destino: MarketingUsageTargetValue) =>
+    cambiar(
       id,
-      { selected: true, acceptedFor },
-      { selectedAt: nowIso(), acceptedFor, acceptedByName: me?.name ?? null },
-      acceptedFor === "SMARTEAM" ? "Aceptada para Smarteam." : "Aceptada.",
+      { selected: true, acceptedFor: destino },
+      { selectedAt: ahora(), acceptedFor: destino, acceptedByName: me?.name ?? null },
+      destino === "SMARTEAM" ? "Aceptada para Smarteam. Está en Aceptadas." : "Aceptada para tu perfil. Está en Aceptadas.",
+      true,
     );
-  const approve = (id: string) => patchState(id, { used: true }, { usedAt: nowIso() }, "Aprobada.");
-  const unapprove = (id: string) => patchState(id, { used: false }, { usedAt: null }, "Reabierta en Aceptadas.");
-  const discard = (id: string) => patchState(id, { discarded: true }, { discardedAt: nowIso() }, "Descartada.");
-  const restore = (id: string) => patchState(id, { discarded: false }, { discardedAt: null }, "Restaurada.");
+  const aprobar = (id: string) => cambiar(id, { used: true }, { usedAt: ahora() }, "Aprobada.", true);
+  const reabrir = (id: string) => cambiar(id, { used: false }, { usedAt: null }, "Volvió a Aceptadas.", true);
+  const descartar = (id: string) => cambiar(id, { discarded: true }, { discardedAt: ahora() }, "Descartada. Puedes restaurarla.", true);
+  const restaurar = (id: string) => cambiar(id, { discarded: false }, { discardedAt: null }, "Restaurada.", true);
 
-  const saveField = async (id: string, field: "title" | "copy" | "imageConcept", value: string) => {
-    const prev = ideas.find((i) => i.id === id)?.[field];
-    if (value === prev) return;
-    setIdeas((cur) => cur.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
+  const guardarCampo = async (id: string, campo: CampoEditable, valor: string) => {
+    const antes = ideas.find((i) => i.id === id)?.[campo];
+    if (valor === antes) return;
+    setIdeas((cur) => cur.map((i) => (i.id === id ? { ...i, [campo]: valor } : i)));
     try {
       await fetchJson(`/api/marketing/ideas/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value }),
+        body: JSON.stringify({ [campo]: valor }),
       });
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo guardar el cambio.");
@@ -217,7 +234,7 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const adjust = async (id: string, instruction: string): Promise<string | null> => {
+  const ajustar = async (id: string, instruction: string): Promise<string | null> => {
     try {
       const r = await fetchJson<{ copy: string }>(`/api/marketing/ideas/${id}/adjust`, {
         method: "POST",
@@ -231,17 +248,18 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  // Enviar la idea a HubSpot como borrador social (uno por canal elegido).
-  const sendHubspotDraft = async (id: string, channelKeys: string[]): Promise<boolean> => {
+  const enviarAHubspot = async (id: string, channelKeys: string[]): Promise<boolean> => {
     try {
-      const r = await fetchJson<{ created: number; total: number }>(
-        `/api/marketing/ideas/${id}/hubspot-draft`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channelKeys }) },
-      );
-      const partial = r.created < r.total ? ` (${r.created}/${r.total} canales)` : "";
-      toast.success(`Borrador${r.created === 1 ? "" : "es"} creado${r.created === 1 ? "" : "s"} en HubSpot${partial}. Revisalo en el compositor social.`);
-      // Enviar a HubSpot también APRUEBA (usedAt): la publicación pasa a Aprobadas.
-      setIdeas((cur) => cur.map((i) => (i.id === id ? { ...i, hubspotDraftAt: nowIso(), usedAt: i.usedAt ?? nowIso() } : i)));
+      const r = await fetchJson<{ created: number; total: number }>(`/api/marketing/ideas/${id}/hubspot-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelKeys }),
+      });
+      const parcial = r.created < r.total ? ` (${r.created} de ${r.total} canales)` : "";
+      toast.success(`${r.created === 1 ? "Borrador creado" : "Borradores creados"} en HubSpot${parcial}. Revísalo en el compositor social.`);
+      // Enviar a HubSpot también aprueba: desde Aceptadas, pasa a Aprobadas.
+      if (tab === "seleccionada") setSelId(siguienteA(id));
+      setIdeas((cur) => cur.map((i) => (i.id === id ? { ...i, hubspotDraftAt: ahora(), usedAt: i.usedAt ?? ahora() } : i)));
       load();
       return true;
     } catch (e) {
@@ -250,730 +268,317 @@ export default function ContentClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
-  const remove = async (id: string) => {
+  const borrar = async (id: string) => {
+    setSelId(siguienteA(id));
     try {
       await fetchJson(`/api/marketing/ideas/${id}`, { method: "DELETE" });
-      toast.info("Idea borrada definitivamente.");
-      load();
+      toast.info("Publicación borrada para siempre.");
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "No se pudo borrar.");
+    } finally {
+      load();
     }
   };
 
-  const copyToClipboard = async (text: string) => {
+  const descartarVarias = async (ids: string[]) => {
+    const quedan = new Set(ids);
+    setIdeas((cur) => cur.map((i) => (quedan.has(i.id) ? { ...i, discardedAt: ahora() } : i)));
     try {
-      await navigator.clipboard.writeText(text);
-      toast.success("Copiado al portapapeles.");
+      const r = await fetchJson<{ descartadas: number }>("/api/marketing/ideas/descartar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      toast.info(`${r.descartadas === 1 ? "Se descartó 1" : `Se descartaron ${r.descartadas}`}. Están en Descartadas.`);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudieron descartar.");
+    } finally {
+      load();
+    }
+  };
+
+  const copiar = async (texto: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success("Texto copiado.");
     } catch {
       toast.error("No se pudo copiar.");
     }
   };
 
-  const lastRun = engine.lastRun;
-  const visibleIdeas = ideas.filter((i) => ideaState(i) === tab);
-
-  const emptyCopy: Record<ContentIdeaState, { title: string; description: string }> = {
-    sugerida: { title: "No hay publicaciones sugeridas", description: "Generá la primera tanda con el botón de arriba." },
-    seleccionada: {
-      title: "No hay publicaciones aceptadas",
-      description: "Aceptá una publicación desde las sugeridas para trabajarla (editarla y ajustarla con IA).",
-    },
-    aprobada: {
-      title: "No hay publicaciones aprobadas",
-      description: "Desde Aceptadas, aprobá o enviá a HubSpot una publicación cuando esté lista.",
-    },
-    descartada: { title: "No hay publicaciones descartadas", description: "Las que descartes aparecen acá (podés restaurarlas)." },
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Barra del motor */}
-      <div className="rounded-2xl border border-line bg-surface p-4 flex items-center justify-between gap-4 flex-wrap">
-        <div className="min-w-0">
-          {engine.loading ? (
-            // Skeleton inline: reserva la línea de estado del motor (misma altura que el text-sm).
-            <Skeleton className="h-3 w-40 my-1" />
-          ) : (
-            <p className="text-sm font-medium text-fg">
-              {lastRun
-                ? `Última corrida: ${new Date(lastRun.createdAt).toLocaleString("es-CR", { dateStyle: "short", timeStyle: "short" })}${
-                    lastRun.status === "DONE" && lastRun.contentIdeasCount != null
-                      ? ` · ${lastRun.contentIdeasCount} idea(s) generadas`
-                      : lastRun.status === "ERROR"
-                        ? " · falló"
-                        : lastRun.status === "RUNNING"
-                          ? " · en curso"
-                          : ""
-                  }`
-                : "Todavía no corriste el motor."}
-            </p>
-          )}
-          <Link href="/marketing/generacion" className="text-xs text-brand hover:underline">
-            Ver detalle del motor →
-          </Link>
-        </div>
-        {canEdit && (
-          <button
-            onClick={() => engine.startRun("CHAIN")}
-            disabled={engine.busy}
-            className="flex-shrink-0 px-4 py-2 text-sm rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-          >
-            {engine.busy ? (engine.runningPhase ?? "En curso…") : "Generar ideas nuevas"}
-          </button>
-        )}
-      </div>
-
-      {/* Tabs de estado + filtro por tema */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex gap-1 flex-wrap">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                tab === t.key
-                  ? "border-brand text-brand bg-brand/5 font-medium"
-                  : "border-line text-fg-muted hover:text-fg-secondary"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <select
-            value={postTypeFilter}
-            onChange={(e) => setPostTypeFilter(e.target.value as "" | MarketingPostTypeValue)}
-            className="px-3 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg"
-            aria-label="Filtrar por tipo de publicación"
-          >
-            <option value="">Todos los tipos</option>
-            <option value="EMPRESA">{POST_TYPE_META.EMPRESA.label}</option>
-            <option value="PERSONA">{POST_TYPE_META.PERSONA.label}</option>
-          </select>
-          {postTypeFilter !== "PERSONA" && (
-            <select
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value as "" | MarketingJourneyStageValue)}
-              className="px-3 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg"
-              aria-label="Filtrar por etapa de la guía semanal"
-            >
-              <option value="">Todas las etapas</option>
-              {MARKETING_JOURNEY_STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {JOURNEY_STAGE_META[s].emoji} {JOURNEY_STAGE_META[s].label}
-                </option>
-              ))}
-            </select>
-          )}
-          <select
-            value={pillarFilter}
-            onChange={(e) => setPillarFilter(e.target.value)}
-            className="px-3 py-1.5 text-xs bg-surface border border-line rounded-lg text-fg"
-            aria-label="Filtrar por tema"
-          >
-            <option value="">Todos los temas</option>
-            {pillars.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {loading ? (
-        // Skeleton estructural: reserva el área de la lista de publicaciones
-        // (filas rounded-xl) para que al llegar las ideas nada salte.
-        <ListSkeleton rows={6} lines={2} />
-      ) : visibleIdeas.length === 0 ? (
-        <EmptyState variant="dashed" title={emptyCopy[tab].title} description={emptyCopy[tab].description} />
-      ) : (
-        <ul className="flex flex-wrap gap-4 justify-center lg:justify-start">
-          {visibleIdeas.map((idea) => (
-            <IdeaCard
-              key={idea.id}
-              idea={idea}
-              canEdit={canEdit}
-              canChooseSmarteam={canChooseSmarteam}
-              busy={busyId === idea.id}
-              onAccept={(dest) => accept(idea.id, dest)}
-              onApprove={() => approve(idea.id)}
-              onUnapprove={() => unapprove(idea.id)}
-              onDiscard={() => discard(idea.id)}
-              onRestore={() => restore(idea.id)}
-              onDelete={() => setConfirmDeleteId(idea.id)}
-              onSaveField={(field, value) => saveField(idea.id, field, value)}
-              onAdjust={(instruction) => adjust(idea.id, instruction)}
-              onCopy={copyToClipboard}
-              channels={channels}
-              channelsSupported={channelsSupported}
-              onSendHubspot={(channelKeys) => sendHubspotDraft(idea.id, channelKeys)}
-            />
-          ))}
-        </ul>
-      )}
-
-      <ConfirmDialog
-        open={!!confirmDeleteId}
-        onCancel={() => setConfirmDeleteId(null)}
-        onConfirm={async () => {
-          const id = confirmDeleteId;
-          setConfirmDeleteId(null);
-          if (id) await remove(id);
-        }}
-        title="¿Borrar definitivamente?"
-        description="Se borra para siempre. Si solo querés sacarla de la vista, usá Descartar (es reversible)."
-        confirmLabel="Borrar"
-      />
-    </div>
-  );
-}
-
-// ── Tarjeta de idea (vista previa de post, ancho fijo 552px) ────────────────────
-
-function IdeaCard({
-  idea,
-  canEdit,
-  canChooseSmarteam,
-  busy,
-  onAccept,
-  onApprove,
-  onUnapprove,
-  onDiscard,
-  onRestore,
-  onDelete,
-  onSaveField,
-  onAdjust,
-  onCopy,
-  channels,
-  channelsSupported,
-  onSendHubspot,
-}: {
-  idea: IdeaRow;
-  canEdit: boolean;
-  canChooseSmarteam: boolean;
-  busy: boolean;
-  onAccept: (acceptedFor: MarketingUsageTargetValue) => void;
-  onApprove: () => void;
-  onUnapprove: () => void;
-  onDiscard: () => void;
-  onRestore: () => void;
-  onDelete: () => void;
-  onSaveField: (field: "title" | "copy" | "imageConcept", value: string) => void;
-  onAdjust: (instruction: string) => Promise<string | null>;
-  onCopy: (text: string) => void;
-  channels: SocialChannel[];
-  channelsSupported: boolean;
-  onSendHubspot: (channelKeys: string[]) => Promise<boolean>;
-}) {
-  const state = ideaState(idea);
-  const editable = canEdit && (state === "seleccionada" || state === "aprobada");
-  const [adjusting, setAdjusting] = useState(false);
-  // "Ver copy completo": el copy se recorta a 3 líneas; el toggle SIEMPRE se
-  // ofrece (sin heurístico de longitud) — un conteo de caracteres no predice
-  // cuántas líneas ocupa un texto que envuelve por ancho real de viewport.
-  const [showFull, setShowFull] = useState(false);
-  const clampCls = showFull ? "" : "line-clamp-3";
-
-  const tag = idea.pillar ? (
-    <Badge size="xs">{idea.pillar.name}</Badge>
-  ) : idea.suggestedPillarName ? (
-    <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/30">
-      Tema sugerido: {idea.suggestedPillarName}
-    </span>
-  ) : (
-    <span className="text-[11px] text-fg-muted">Sin tema</span>
-  );
-
-  const isPersona = idea.postType === "PERSONA";
-  const stageMeta = idea.journeyStage ? JOURNEY_STAGE_META[idea.journeyStage] : null;
-  const accepted = state === "seleccionada" || state === "aprobada";
-
-  return (
-    <li className={`w-[552px] max-w-full ${state === "descartada" ? "opacity-60" : ""}`}>
-      {/* Chrome de gestión (fuera del post): tipo · etapa (empresa) · atribución */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-2 px-1">
-        <Badge size="xs" variant={isPersona ? "purple" : "info"}>
-          {isPersona ? "👤" : "🏢"} {POST_TYPE_META[idea.postType].label}
-        </Badge>
-        {stageMeta && idea.journeyStage && (
-          <Badge size="xs" variant={STAGE_BADGE_VARIANT[idea.journeyStage]}>
-            {stageMeta.emoji} {stageMeta.label}
-          </Badge>
-        )}
-        {accepted && idea.acceptedFor && (
-          <Badge size="xs" variant={idea.acceptedFor === "SMARTEAM" ? "primary" : "default"}>
-            {USAGE_TARGET_META[idea.acceptedFor].label}
-            {idea.acceptedByName ? ` · ${idea.acceptedByName}` : ""}
-          </Badge>
-        )}
-      </div>
-      {/* La "publicación" — vista previa estilo post (ancho 552px, padding 16px) */}
-      <article className="rounded-2xl border border-line bg-surface p-4 flex flex-col gap-3">
-        {/* Header: avatar + nombre (Smarteam para empresa, perfil personal para persona) + menú "…" */}
-        <div className="flex items-center gap-2.5">
-          {isPersona ? (
-            // Avatar neutro de persona (tokenizado): el borrador se adapta a quien publique.
-            <div
-              className="w-9 h-9 rounded-full bg-surface-hover flex items-center justify-center flex-shrink-0"
-              aria-label="Perfil personal"
-            >
-              <svg className="w-5 h-5 text-fg-muted" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z" />
-              </svg>
-            </div>
-          ) : (
-            // Avatar: círculo navy con el isotipo (SVG vectorial, nítido a cualquier tamaño)
-            <div
-              className="w-9 h-9 rounded-full bg-[#0d2340] flex items-center justify-center flex-shrink-0"
-              aria-label="Smarteam"
-            >
-              <SmarteamMark className="w-5 h-5" />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-fg leading-tight">
-              {isPersona ? "Perfil personal" : "Smarteam"}
-            </p>
-            <p className="text-[11px] text-fg-muted leading-tight">
-              {isPersona ? "Borrador adaptable" : "Justo ahora"} · 🌐
-              {state === "seleccionada" && " · Aceptada"}
-              {state === "aprobada" && " · Aprobada"}
-              {idea.hubspotDraftAt && (
-                <> · <IconCheck className="w-2.5 h-2.5 align-middle" /> Borrador en HubSpot</>
-              )}
-              {state === "descartada" && " · Descartada"}
-            </p>
-          </div>
-          <InfoPopover title={idea.title} tag={tag} date={new Date(idea.createdAt).toLocaleDateString("es-CR")} />
-        </div>
-
-        {/* Copy del post (3 líneas en lectura + "… más"; editable al seleccionar) */}
-        <div>
-          {editable && !adjusting ? (
-            <InlineEditable
-              value={idea.copy}
-              editable
-              onSave={(v) => onSaveField("copy", v)}
-              multiline
-              textClass={`text-sm text-fg-secondary whitespace-pre-wrap leading-relaxed ${clampCls}`}
-              placeholder="Escribí el copy…"
-            />
-          ) : (
-            <p className={`text-sm text-fg-secondary whitespace-pre-wrap leading-relaxed ${clampCls}`}>{idea.copy}</p>
-          )}
-          <button
-            onClick={() => setShowFull((s) => !s)}
-            className="mt-1 text-xs font-medium text-fg-muted hover:text-fg-secondary"
-          >
-            {showFull ? "Ver menos" : "… más"}
-          </button>
-        </div>
-
-        {/* Área de imagen: OSCURA + letras claras, más cuadrada — muestra el concepto */}
-        <div className="rounded-xl bg-[#0d2340] min-h-[220px] flex flex-col items-center justify-center text-center gap-2 p-4 overflow-y-auto">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6f8bb0]">🖼 Concepto de imagen</span>
-          {editable ? (
-            <InlineEditable
-              value={idea.imageConcept}
-              editable
-              dark
-              onSave={(v) => onSaveField("imageConcept", v)}
-              multiline
-              textClass="text-sm text-[#e6edf7] whitespace-pre-wrap w-full"
-              placeholder="Describí la imagen…"
-            />
-          ) : (
-            <p className="text-sm text-[#e6edf7] whitespace-pre-wrap">{idea.imageConcept}</p>
-          )}
-        </div>
-
-        {/* CTAs falsos del post (decorativos) */}
-        <div className="flex items-center justify-around border-t border-line pt-2.5 text-fg-muted text-xs font-medium">
-          <span className="flex items-center gap-1.5">👍 Me gusta</span>
-          <span className="flex items-center gap-1.5">💬 Comentario</span>
-          <span className="flex items-center gap-1.5">↗ Compartir</span>
-        </div>
-      </article>
-
-      {/* Acciones reales (gestión de la idea) — DEBAJO del post */}
-      {canEdit && (
-        <div className="flex items-center gap-2 flex-wrap mt-2 px-1">
-          {/* Enviar a HubSpot: disponible en Aceptadas y Aprobadas (si el scope social está activo).
-              Desde Aceptadas, enviar TAMBIÉN aprueba → pasa a Aprobadas. */}
-          {(state === "seleccionada" || state === "aprobada") && channelsSupported && channels.length > 0 && (
-            <HubspotDraftPopover channels={channels} alreadySent={!!idea.hubspotDraftAt} onSend={onSendHubspot} />
-          )}
-          {state === "sugerida" && (
-            <>
-              {canChooseSmarteam ? (
-                // Equipo de marketing: elige destino. En posts de EMPRESA el default
-                // es Smarteam; en PERSONA (borrador para el perfil propio), personal.
-                isPersona ? (
-                  <>
-                    <button onClick={() => onAccept("PERSONAL")} disabled={busy} className={BTN_ACCEPT}>
-                      Aceptar para mí
-                    </button>
-                    <button onClick={() => onAccept("SMARTEAM")} disabled={busy} className={BTN_OUTLINE}>
-                      Para Smarteam
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => onAccept("SMARTEAM")} disabled={busy} className={BTN_ACCEPT}>
-                      Aceptar para Smarteam
-                    </button>
-                    <button onClick={() => onAccept("PERSONAL")} disabled={busy} className={BTN_OUTLINE}>
-                      Para mí
-                    </button>
-                  </>
-                )
-              ) : (
-                // Resto del equipo: siempre uso personal (el server lo fuerza igual).
-                <button onClick={() => onAccept("PERSONAL")} disabled={busy} className={BTN_ACCEPT}>
-                  Aceptar
-                </button>
-              )}
-              <button onClick={onDiscard} disabled={busy} className={BTN_OUTLINE}>
-                Descartar
-              </button>
-            </>
-          )}
-          {state === "seleccionada" && (
-            <>
-              <button onClick={onApprove} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90">
-                Aprobar
-              </button>
-              <button onClick={onDiscard} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40">
-                Descartar
-              </button>
-            </>
-          )}
-          {state === "aprobada" && (
-            <>
-              <button onClick={onUnapprove} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40">
-                Reabrir
-              </button>
-              <button onClick={onDiscard} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-muted hover:text-fg-secondary disabled:opacity-40">
-                Descartar
-              </button>
-            </>
-          )}
-          {state === "descartada" && (
-            <>
-              <button onClick={onRestore} disabled={busy} className="px-3 py-1.5 text-xs rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90">
-                Restaurar
-              </button>
-              <button onClick={onDelete} className="px-3 py-1.5 text-xs rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10">
-                Borrar definitivo
-              </button>
-            </>
-          )}
-          {editable && <AdjustPopover onAdjust={onAdjust} onApplied={(copy) => onSaveField("copy", copy)} onBusyChange={setAdjusting} />}
-          <button onClick={() => onCopy(idea.copy)} className="px-3 py-1.5 text-xs rounded-lg border border-line text-fg-secondary hover:bg-surface-hover">
-            Copiar copy
-          </button>
-        </div>
-      )}
-    </li>
-  );
-}
-
-// ── Menú "…" con la metadata (título / tema / fecha) ────────────────────────────
-
-function InfoPopover({ title, tag, date }: { title: string; tag: React.ReactNode; date: string }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-  return (
-    <div className="relative flex-shrink-0" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Detalles de la publicación (título, tema, fecha)"
-        aria-expanded={open}
-        className="w-7 h-7 rounded-full text-fg-muted hover:text-fg-secondary hover:bg-surface-hover flex items-center justify-center"
-      >
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="5" cy="12" r="1.6" />
-          <circle cx="12" cy="12" r="1.6" />
-          <circle cx="19" cy="12" r="1.6" />
-        </svg>
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 w-64 rounded-xl border border-line bg-surface p-3 shadow-xl space-y-2 text-left">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-fg-muted">Título</p>
-            <p className="text-xs text-fg">{title}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-fg-muted mb-0.5">Tema</p>
-            <div className="text-xs">{tag}</div>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-fg-muted">Fecha</p>
-            <p className="text-xs text-fg-secondary">{date}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Ajustar con IA (popover: presets + instrucción libre) ───────────────────────
-
-const ADJUST_PRESETS: Array<{ label: string; instruction: string }> = [
-  { label: "Más corto", instruction: "Hacelo más corto y conciso, sin perder el mensaje central." },
-  { label: "Más largo", instruction: "Desarrollalo un poco más, con más detalle y contexto." },
-  { label: "Otro tono", instruction: "Reescribilo con un tono distinto (más cercano y conversacional)." },
-];
-
-function AdjustPopover({
-  onAdjust,
-  onApplied,
-  onBusyChange,
-}: {
-  onAdjust: (instruction: string) => Promise<string | null>;
-  onApplied: (copy: string) => void;
-  onBusyChange: (busy: boolean) => void;
-}) {
-  const toast = useToast();
-  const [open, setOpen] = useState(false);
-  const [instruction, setInstruction] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const run = async (text: string) => {
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    onBusyChange(true);
-    try {
-      const copy = await onAdjust(text.trim());
-      if (copy) {
-        onApplied(copy);
-        toast.success("Copy ajustado con IA.");
-        setInstruction("");
-        setOpen(false);
+  // ── Atajos de teclado (Sugeridas, para quien puede editar) ───────────────────
+  const atajos = useRef<(e: KeyboardEvent) => void>(() => {});
+  atajos.current = (e: KeyboardEvent) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || !elegida) return;
+    const el = e.target as HTMLElement | null;
+    if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+    if (document.querySelector('[role="dialog"]')) return;
+    const i = filas.findIndex((f) => f.idea.id === elegida.id);
+    if (e.key === "ArrowDown" || e.key === "j") {
+      const sig = filas[i + 1];
+      if (sig) {
+        e.preventDefault();
+        setSelId(sig.idea.id);
       }
-    } finally {
-      setBusy(false);
-      onBusyChange(false);
+    } else if (e.key === "ArrowUp" || e.key === "k") {
+      const ant = filas[i - 1];
+      if (ant) {
+        e.preventDefault();
+        setSelId(ant.idea.id);
+      }
+    } else if (canEdit && tab === "sugerida" && !busyId) {
+      const principal: MarketingUsageTargetValue =
+        canChooseSmarteam && elegida.postType !== "PERSONA" ? "SMARTEAM" : "PERSONAL";
+      if (e.key === "a" || e.key === "A") {
+        e.preventDefault();
+        aceptar(elegida.id, principal);
+      } else if (e.key === "d" || e.key === "D") {
+        e.preventDefault();
+        descartar(elegida.id);
+      }
+    }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => atajos.current(e);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  // ── Textos ────────────────────────────────────────────────────────────────────
+  const sinFiltros = tipo === "todas" && !tema && !etapa;
+  const masVieja = tab === "sugerida" && sinFiltros && visibles.length > 0 ? visibles[visibles.length - 1].createdAt : null;
+  const totalSugeridas = conteos?.sugerida.total ?? visibles.length;
+  const cuentaTipo = (k: Tipo) => (conteos ? (k === "todas" ? conteos[tab].total : conteos[tab][k]) : undefined);
+
+  const meta = (i: IdeaRow): string => {
+    const temaTxt = i.pillar?.name ?? (i.suggestedPillarName ? `${i.suggestedPillarName} (propuesto)` : "Sin tema");
+    switch (ideaState(i)) {
+      case "sugerida":
+        return `${i.postType === "PERSONA" ? "Perfil personal" : "Página de empresa"} · ${temaTxt} · ${diaYMesCr(i.createdAt)}`;
+      case "seleccionada":
+        return i.acceptedFor
+          ? `${i.acceptedByName ?? "Alguien del equipo"} · ${i.acceptedFor === "SMARTEAM" ? "para Smarteam" : "uso personal"}${i.selectedAt ? ` · ${diaYMesCr(i.selectedAt)}` : ""}`
+          : `Sin destino anotado${i.selectedAt ? ` · ${diaYMesCr(i.selectedAt)}` : ""}`;
+      case "aprobada":
+        return `Aprobada${i.usedAt ? ` el ${diaYMesCr(i.usedAt)}` : ""} · ${temaTxt}`;
+      default:
+        return `${temaTxt} · ${diaYMesCr(i.createdAt)}`;
     }
   };
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        title="Ajustar el copy con IA"
-        aria-expanded={open}
-        className="px-3 py-1.5 text-xs rounded-lg border border-brand/30 text-brand hover:bg-brand/5"
-      >
-        ✨ Ajustar
-      </button>
-      {open && (
-        <div className="absolute left-0 bottom-full mb-1 z-20 w-72 rounded-xl border border-line bg-surface p-2 shadow-xl">
-          <div className="flex flex-wrap gap-1 mb-2">
-            {ADJUST_PRESETS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => run(p.instruction)}
-                disabled={busy}
-                className="px-2 py-1 text-[11px] rounded-lg border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-40"
+    <>
+      <PageHeader
+        title="Publicaciones"
+        description="Lo que propone el agente cada viernes para LinkedIn: la página de Smarteam y los perfiles personales del equipo. Nada se publica solo."
+        badges={<Chip>Próxima tanda: {proximaTanda}</Chip>}
+        action={
+          canEdit ? (
+            <BotonClaro onClick={() => engine.startRun("CHAIN")} disabled={engine.busy}>
+              {engine.busy ? "Generando…" : "Generar ahora"}
+            </BotonClaro>
+          ) : undefined
+        }
+      />
+
+      <div className="space-y-5">
+        {engine.busy && (
+          <Alert variant="info">
+            El agente está armando la tanda{engine.runningPhase ? ` · ${engine.runningPhase}` : ""}. Las nuevas aparecen acá cuando termine.
+          </Alert>
+        )}
+        {!engine.busy && engine.lastRun?.status === "ERROR" && (
+          <Alert variant="danger" action={<Link href="/marketing/generacion" className="text-xs font-semibold text-danger-ink underline">Ver en Generación</Link>}>
+            La última tanda falló: {engine.lastRun.error ?? "sin detalle"}.
+          </Alert>
+        )}
+
+        <Tabs
+          aria-label="Estado de las publicaciones"
+          value={tab}
+          onChange={(k) => {
+            setTab(k);
+            setSelId(null);
+            setAbiertos(new Set());
+            setLoading(true);
+          }}
+          items={ESTADOS.map((e) => ({ key: e.key, label: e.label, count: conteos?.[e.key].total }))}
+        />
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Rotulo>Tipo</Rotulo>
+            <Segmentado<Tipo>
+              etiqueta="Tipo de publicación"
+              valor={tipo}
+              onCambio={(k) => {
+                setTipo(k);
+                setSelId(null);
+              }}
+              opciones={[
+                { clave: "todas", etiqueta: "Todas", cuenta: cuentaTipo("todas") },
+                { clave: "EMPRESA", etiqueta: "Página de empresa", cuenta: cuentaTipo("EMPRESA") },
+                { clave: "PERSONA", etiqueta: "Perfil personal", cuenta: cuentaTipo("PERSONA") },
+              ]}
+            />
+          </div>
+          <label className="flex flex-col gap-1.5">
+            <Rotulo>Tema</Rotulo>
+            <Select value={tema} onChange={(e) => setTema(e.target.value)} className="w-auto min-w-[220px] bg-surface py-[7px] text-[13px] text-fg">
+              <option value="">Todos los temas</option>
+              {temas.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.isCampaign ? " · en campaña" : ""}
+                </option>
+              ))}
+            </Select>
+          </label>
+          {tipo !== "PERSONA" && (
+            <label className="flex flex-col gap-1.5">
+              <Rotulo>Etapa</Rotulo>
+              <Select
+                value={etapa}
+                onChange={(e) => setEtapa(e.target.value as "" | MarketingJourneyStageValue)}
+                className="w-auto min-w-[170px] bg-surface py-[7px] text-[13px] text-fg"
               >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <textarea
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            placeholder="O escribí una instrucción (ej. más orientado a ventas)"
-            rows={2}
-            className="w-full bg-surface-muted border border-line rounded-lg px-2 py-1.5 text-xs text-fg focus:outline-none focus:border-brand/50 resize-y"
-          />
-          <div className="flex justify-end gap-2 mt-2">
-            <button onClick={() => setOpen(false)} className="px-2.5 py-1 text-[11px] rounded-lg text-fg-muted hover:text-fg-secondary">
-              Cancelar
-            </button>
-            <button
-              onClick={() => run(instruction)}
-              disabled={busy || !instruction.trim()}
-              className="px-2.5 py-1 text-[11px] rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-            >
-              {busy ? "Ajustando…" : "Aplicar"}
-            </button>
-          </div>
+                <option value="">Todas las etapas</option>
+                {MARKETING_JOURNEY_STAGES.map((s) => (
+                  <option key={s} value={s}>
+                    {JOURNEY_STAGE_META[s].label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
         </div>
-      )}
-    </div>
-  );
-}
 
-// ── Enviar a HubSpot como borrador social (popover: elegir canal[es]) ───────────
+        {tab === "sugerida" && !loading && visibles.length > 0 && (
+          <FranjaDeSugerencias>
+            <strong className="font-semibold">
+              El agente propone {totalSugeridas} {totalSugeridas === 1 ? "publicación" : "publicaciones"}
+            </strong>
+            {masVieja ? ` desde el ${diaYMesCr(masVieja)}` : ""}. Nada se publica solo.
+            {repartidas > 0 ? " Las que dicen casi lo mismo van juntas." : ""}
+          </FranjaDeSugerencias>
+        )}
 
-function HubspotDraftPopover({
-  channels,
-  alreadySent,
-  onSend,
-}: {
-  channels: SocialChannel[];
-  alreadySent: boolean;
-  onSend: (channelKeys: string[]) => Promise<boolean>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  // Default: LinkedIn marcado si existe; si no, el primer canal.
-  const [selected, setSelected] = useState<Set<string>>(() => {
-    const li = channels.find((c) => /linkedin/i.test(c.type));
-    return new Set(li ? [li.channelKey] : channels[0] ? [channels[0].channelKey] : []);
-  });
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  const toggle = (key: string) =>
-    setSelected((s) => {
-      const n = new Set(s);
-      if (n.has(key)) n.delete(key);
-      else n.add(key);
-      return n;
-    });
-
-  const send = async () => {
-    if (selected.size === 0 || busy) return;
-    setBusy(true);
-    const ok = await onSend([...selected]);
-    setBusy(false);
-    if (ok) setOpen(false);
-  };
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="px-3 py-1.5 text-xs rounded-lg border border-brand/30 text-brand hover:bg-brand/5"
-      >
-        {alreadySent ? "Reenviar a HubSpot" : "Enviar a HubSpot"}
-      </button>
-      {open && (
-        <div className="absolute left-0 bottom-full mb-1 z-20 w-64 rounded-xl border border-line bg-surface p-3 shadow-xl">
-          <p className="text-[11px] font-semibold text-fg-muted mb-2">Crear borrador en HubSpot en:</p>
-          <div className="space-y-1.5 mb-3">
-            {channels.map((c) => (
-              <label key={c.channelKey} className="flex items-center gap-2 text-xs text-fg-secondary cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selected.has(c.channelKey)}
-                  onChange={() => toggle(c.channelKey)}
-                  className="accent-brand"
-                />
-                {channelLabel(c)}
-              </label>
-            ))}
+        {loading ? (
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]" aria-label="Cargando las publicaciones">
+            <ListSkeleton rows={7} lines={2} />
+            <SkeletonPanel minH="min-h-[520px]" bodyClassName="p-5 space-y-4">
+              <SkeletonText lines={3} />
+              <SkeletonText lines={8} />
+            </SkeletonPanel>
           </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setOpen(false)} className="px-2.5 py-1 text-[11px] rounded-lg text-fg-muted hover:text-fg-secondary">
-              Cancelar
-            </button>
-            <button
-              onClick={send}
-              disabled={busy || selected.size === 0}
-              className="px-2.5 py-1 text-[11px] rounded-lg bg-brand text-white disabled:opacity-40 hover:opacity-90"
-            >
-              {busy ? "Enviando…" : "Crear borrador"}
-            </button>
+        ) : filas.length === 0 ? (
+          <EmptyState variant="dashed" title={VACIO[tab].title} description={VACIO[tab].description} />
+        ) : (
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
+            <section aria-label="Lista de publicaciones" className="overflow-hidden rounded-xl border border-line bg-surface">
+              <ul className="max-h-[860px] overflow-y-auto">
+                {filas.map((f) => {
+                  const on = elegida?.id === f.idea.id;
+                  return (
+                    <li key={f.idea.id}>
+                      <button
+                        type="button"
+                        aria-current={on ? "true" : undefined}
+                        onClick={() => setSelId(f.idea.id)}
+                        className={cn(
+                          "flex w-full flex-col gap-1.5 border-b border-line py-3 pr-3.5 text-left transition-colors",
+                          f.miembro ? "pl-9" : "pl-3.5",
+                          on ? "bg-info-surface" : "bg-surface hover:bg-surface-hover",
+                        )}
+                      >
+                        <span className="flex items-start gap-2">
+                          {tab === "sugerida" && !f.miembro && (
+                            <IconoDeSugerencia className="mt-[3px] h-[13px] w-[13px] flex-shrink-0 text-brand" />
+                          )}
+                          <span className={cn("line-clamp-2 min-w-0 flex-1 leading-[18px] text-fg", f.miembro ? "text-xs" : "text-[13px] font-semibold")}>
+                            {f.idea.title}
+                          </span>
+                        </span>
+                        <span className="text-xs leading-4 text-fg-muted">{meta(f.idea)}</span>
+                        {(!f.miembro && f.grupo.length > 1) || (tab !== "sugerida" && f.idea.hubspotDraftAt) ? (
+                          <span className="flex flex-wrap gap-1.5">
+                            {!f.miembro && f.grupo.length > 1 && <ChipGris>{f.grupo.length} versiones</ChipGris>}
+                            {tab !== "sugerida" && f.idea.hubspotDraftAt && <ChipHecho>✓ En HubSpot</ChipHecho>}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="border-t border-line px-3.5 py-2.5 text-xs text-fg-muted">
+                {visibles.length} {visibles.length === 1 ? "publicación" : "publicaciones"}
+                {repartidas > 0 ? ` en ${grupos.length} filas` : ""} · las más nuevas primero
+              </div>
+            </section>
+
+            {elegida && (
+              <PublicacionDetalle
+                key={elegida.id}
+                idea={elegida}
+                canEdit={canEdit}
+                canChooseSmarteam={canChooseSmarteam}
+                busy={busyId === elegida.id}
+                versiones={grupoElegido.length}
+                versionesDesde={grupoElegido.length > 1 ? diaYMesCr(grupoElegido[grupoElegido.length - 1].createdAt) : null}
+                versionesAbiertas={abiertos.has(grupoElegido[0]?.id ?? "")}
+                onVerVersiones={() =>
+                  setAbiertos((s) => {
+                    const n = new Set(s);
+                    const k = grupoElegido[0].id;
+                    if (n.has(k)) n.delete(k);
+                    else n.add(k);
+                    return n;
+                  })
+                }
+                onDescartarOtras={() => setConfirmOtras(grupoElegido.filter((i) => i.id !== elegida.id).map((i) => i.id))}
+                onAccept={(d) => aceptar(elegida.id, d)}
+                onApprove={() => aprobar(elegida.id)}
+                onUnapprove={() => reabrir(elegida.id)}
+                onDiscard={() => descartar(elegida.id)}
+                onRestore={() => restaurar(elegida.id)}
+                onDelete={() => setConfirmBorrar(elegida.id)}
+                onSaveField={(c, v) => guardarCampo(elegida.id, c, v)}
+                onAdjust={(t) => ajustar(elegida.id, t)}
+                onCopy={copiar}
+                channels={canales}
+                channelsSupported={canalesOk}
+                onSendHubspot={(keys) => enviarAHubspot(elegida.id, keys)}
+              />
+            )}
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Isotipo Smarteam (dos cápsulas diagonales teal/azul) ────────────────────────
-
-function SmarteamMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 100 100" fill="none" className={className} aria-hidden="true">
-      {/* cápsula teal + su cap azul arriba */}
-      <line x1="52" y1="30" x2="30" y2="60" stroke="#42E4B3" strokeWidth="20" strokeLinecap="round" />
-      <circle cx="52" cy="30" r="12" fill="#168CF6" />
-      {/* cápsula azul + su cap teal abajo */}
-      <line x1="72" y1="45" x2="50" y2="75" stroke="#168CF6" strokeWidth="20" strokeLinecap="round" />
-      <circle cx="50" cy="75" r="12" fill="#42E4B3" />
-    </svg>
-  );
-}
-
-// ── Editor inline (click-to-edit, guarda en blur si cambió y no vacío) ───────────
-// `dark`: variante para el área de imagen oscura (textarea de fondo oscuro).
-
-function InlineEditable({
-  value,
-  editable,
-  onSave,
-  multiline = false,
-  textClass,
-  placeholder,
-  dark = false,
-}: {
-  value: string;
-  editable: boolean;
-  onSave: (v: string) => void;
-  multiline?: boolean;
-  textClass: string;
-  placeholder?: string;
-  dark?: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-
-  if (!editable) {
-    return <div className={textClass}>{value}</div>;
-  }
-
-  if (!editing) {
-    return (
-      <div
-        onClick={() => {
-          setDraft(value);
-          setEditing(true);
-        }}
-        title="Clic para editar"
-        className={`${textClass} cursor-text rounded -mx-1 px-1 transition-colors ${dark ? "hover:bg-white/5" : "hover:bg-surface-hover"}`}
-      >
-        {value || <span className={`italic ${dark ? "text-[#6f8bb0]" : "text-fg-muted"}`}>{placeholder ?? "Clic para editar"}</span>}
+        )}
       </div>
-    );
-  }
 
-  return (
-    <textarea
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        const t = draft.trim();
-        if (t && t !== value) onSave(t);
-        setEditing(false);
-      }}
-      autoFocus
-      rows={multiline ? 6 : 2}
-      className={
-        dark
-          ? "w-full bg-[#0a1c33] border border-[#24405f] rounded-lg px-2 py-1.5 text-sm text-[#e6edf7] focus:outline-none focus:border-brand resize-y"
-          : "w-full bg-surface-muted border border-line rounded-lg px-2 py-1.5 text-xs text-fg focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/20 resize-y"
-      }
-    />
+      <ConfirmDialog
+        open={!!confirmBorrar}
+        onCancel={() => setConfirmBorrar(null)}
+        onConfirm={async () => {
+          const id = confirmBorrar;
+          setConfirmBorrar(null);
+          if (id) await borrar(id);
+        }}
+        title="¿Borrar para siempre?"
+        description="No se puede deshacer. Si solo quieres sacarla de la vista, ya está en Descartadas."
+        confirmLabel="Borrar"
+      />
+      <ConfirmDialog
+        open={!!confirmOtras}
+        onCancel={() => setConfirmOtras(null)}
+        onConfirm={async () => {
+          const ids = confirmOtras;
+          setConfirmOtras(null);
+          if (ids?.length) await descartarVarias(ids);
+        }}
+        title={`¿Descartar las otras ${confirmOtras?.length ?? 0}?`}
+        description="Te quedas con la que estás viendo. Las otras pasan a Descartadas y puedes restaurarlas."
+        confirmLabel="Descartar"
+      />
+    </>
   );
 }

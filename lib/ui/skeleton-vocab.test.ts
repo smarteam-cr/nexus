@@ -43,7 +43,6 @@ const DEUDA = {
     "components/clients/SectionDiscoveryModal.tsx:9",
   ],
   animatePulse: [
-    "app/(shell)/marketing/generacion/EngineClient.tsx",
     "components/clients/ClientContextCards.tsx",
   ],
   // El aside de /sessions es excelente, pero su panel derecho usa un spinner centrado.

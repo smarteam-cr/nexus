@@ -1,18 +1,20 @@
 "use client";
 
 /**
- * components/marketing/ICPView.tsx
+ * components/marketing/ICPView.tsx — el perfil de cliente ideal, para leerlo y editarlo en el mismo lugar.
  *
- * Vista del ICP — extracción props-driven del viejo app/icp/ICPSection.tsx
- * (que tenía el contenido hardcodeado). El contenido vive en la tabla IcpItem.
- * Modo dual: read-only (por default, usado donde `editable` no se pasa) y
- * editable (usado por /marketing/icp — mismo formato visual, con altas/bajas/
- * ediciones in-place vía onAdd/onEdit/onDelete). Las clases visuales se
- * conservan IDÉNTICAS al componente original (por eso los grises literales: es
- * una relocación, no diseño nuevo; el remap de html.light las cubre).
+ * Rediseño del 2026-10-04 (sistema «Nexus · interfaz interna»): antes era una tarjeta oscura con grises crudos,
+ * bordes de color a la izquierda y listas numeradas en violeta y celeste, más dos tarjetas «Tier 2 / Tier 3 ·
+ * Próximamente» que no tenían nada. Ahora: una tarjeta blanca en tres columnas y las señales de intención en cuatro
+ * columnas a la vista (antes había que abrirlas de a una). La fuerza de una señal se dice con marcas (●●●, ●●○,
+ * ●○○, ✕), no con colores: el verde y el rojo significan otra cosa en la app.
+ *
+ * El contenido vive en IcpItem (1 fila = 1 ítem). `editable` prende las altas, ediciones y bajas en el lugar.
  */
 import { useState } from "react";
 import type { IcpSection } from "@prisma/client";
+import { cn } from "@/lib/cn";
+import { Rotulo } from "./piezas";
 
 export interface IcpViewGroup {
   section: IcpSection;
@@ -27,137 +29,112 @@ interface EditHandlers {
   busy?: boolean;
 }
 
-const SIGNAL_SECTIONS: Array<{ section: IcpSection; level: "strong" | "medium" | "weak" | "anti"; label: string }> = [
-  { section: "SIGNAL_ANTI", level: "anti", label: "Anti-ICP" },
-  { section: "SIGNAL_FUERTE", level: "strong", label: "Señales fuertes" },
-  { section: "SIGNAL_MEDIA", level: "medium", label: "Señales medias" },
-  { section: "SIGNAL_DEBIL", level: "weak", label: "Señales débiles" },
+const SENALES: Array<{ section: IcpSection; marca: string; titulo: string; ayuda: string }> = [
+  { section: "SIGNAL_FUERTE", marca: "●●●", titulo: "Fuertes", ayuda: "Está lista para hablar" },
+  { section: "SIGNAL_MEDIA", marca: "●●○", titulo: "Medias", ayuda: "Hay interés, falta confirmar" },
+  { section: "SIGNAL_DEBIL", marca: "●○○", titulo: "Débiles", ayuda: "Solo curiosidad" },
+  { section: "SIGNAL_ANTI", marca: "✕", titulo: "La descartan", ayuda: "No es nuestro cliente" },
 ];
 
-const SIGNAL_CONFIG: Record<string, { accent: string; dot: string; panelBorder: string; panelBg: string }> = {
-  strong: { accent: "border-l-emerald-400", dot: "bg-emerald-400", panelBorder: "border-emerald-500/25", panelBg: "bg-emerald-500/5" },
-  medium: { accent: "border-l-amber-400", dot: "bg-amber-400", panelBorder: "border-amber-500/25", panelBg: "bg-amber-500/5" },
-  weak: { accent: "border-l-gray-400", dot: "bg-gray-400", panelBorder: "border-gray-600", panelBg: "bg-gray-800/50" },
-  anti: { accent: "border-l-red-400", dot: "bg-red-400", panelBorder: "border-red-500/25", panelBg: "bg-red-500/5" },
-};
-
-function itemsOf(groups: IcpViewGroup[], section: IcpSection): Array<{ id: string; label: string }> {
+function itemsDe(groups: IcpViewGroup[], section: IcpSection) {
   return groups.find((g) => g.section === section)?.items ?? [];
 }
 
-// ── Íconos de edición (SVG, no emoji — se ven consistentes en claro/oscuro) ──
-function IconPencil() {
+function IconoLapiz() {
   return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
     </svg>
   );
 }
-function IconTrash() {
+function IconoBasura() {
   return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v12a2 2 0 01-2 2H8a2 2 0 01-2-2V7" />
     </svg>
   );
 }
-function IconCheck() {
+function IconoX({ className = "h-3 w-3" }: { className?: string }) {
   return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-    </svg>
-  );
-}
-function IconX({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+      <path d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-2xs font-semibold uppercase tracking-widest text-gray-600 mb-2">{children}</p>
-  );
-}
+const ENTRADA = "min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-[13px] text-fg focus:border-brand focus:outline-none";
 
-/** Lista bullet/numerada editable — hover muestra editar/borrar, "+ Agregar" al final. */
-function EditableList({
+/** Una lista de ítems (con número o con viñeta). Pasar el mouse muestra editar y borrar; abajo, «+ Agregar». */
+function Lista({
   section,
   items,
-  numbered,
-  accent = "text-brand-light",
+  numerada,
   editable,
   onAdd,
   onEdit,
   onDelete,
   busy,
-}: {
-  section: IcpSection;
-  items: Array<{ id: string; label: string }>;
-  numbered: boolean;
-  accent?: string;
-} & EditHandlers) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [newText, setNewText] = useState("");
+}: { section: IcpSection; items: Array<{ id: string; label: string }>; numerada: boolean } & EditHandlers) {
+  const [editando, setEditando] = useState<string | null>(null);
+  const [texto, setTexto] = useState("");
+  const [agregando, setAgregando] = useState(false);
+  const [nuevo, setNuevo] = useState("");
 
-  const startEdit = (item: { id: string; label: string }) => {
-    setEditingId(item.id);
-    setEditingText(item.label);
+  const guardar = () => {
+    if (editando && texto.trim()) onEdit?.(editando, texto.trim());
+    setEditando(null);
   };
-  const saveEdit = () => {
-    if (editingId && editingText.trim()) onEdit?.(editingId, editingText.trim());
-    setEditingId(null);
+  const agregar = () => {
+    if (nuevo.trim()) onAdd?.(section, nuevo.trim());
+    setNuevo("");
+    setAgregando(false);
   };
-  const saveAdd = () => {
-    if (newText.trim()) onAdd?.(section, newText.trim());
-    setNewText("");
-    setAdding(false);
-  };
-
-  const Wrapper = numbered ? "ol" : "ul";
+  const Envoltura = numerada ? "ol" : "ul";
 
   return (
-    <div>
-      <Wrapper className="space-y-1.5">
-        {items.map((item, i) => (
-          <li key={item.id} className="group/item flex items-start gap-2 text-xs text-gray-300 leading-relaxed">
-            {numbered ? (
-              <span className={`flex-shrink-0 text-2xs font-bold ${accent} mt-0.5 w-3 text-right`}>{i + 1}.</span>
-            ) : (
-              <span className="flex-shrink-0 mt-1.5 w-1 h-1 rounded-full bg-gray-600" />
-            )}
-            {editingId === item.id ? (
-              <span className="flex-1 flex items-center gap-1">
+    <div className="flex flex-col gap-1.5">
+      <Envoltura className="flex flex-col gap-1">
+        {items.map((it, i) => (
+          <li key={it.id} className="group/item -mx-1 flex items-start gap-2 rounded-md px-1 py-0.5 text-[13px] leading-[19px] text-fg-secondary hover:bg-surface-hover">
+            <span className="w-4 flex-shrink-0 text-right text-xs tabular-nums text-fg-muted">{numerada ? `${i + 1}.` : "•"}</span>
+            {editando === it.id ? (
+              <span className="flex flex-1 items-center gap-1.5">
                 <input
-                  value={editingText}
-                  onChange={(e) => setEditingText(e.target.value)}
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") saveEdit();
-                    if (e.key === "Escape") setEditingId(null);
+                    if (e.key === "Enter") guardar();
+                    if (e.key === "Escape") setEditando(null);
                   }}
-                  className="flex-1 min-w-0 bg-gray-800 text-white text-xs px-1.5 py-0.5 rounded border border-gray-700"
+                  aria-label="Editar el ítem"
+                  className={ENTRADA}
                   autoFocus
                 />
-                <button onClick={saveEdit} className="flex-shrink-0 p-1 rounded-md text-brand-light hover:bg-gray-800 transition-colors" title="Guardar">
-                  <IconCheck />
+                <button type="button" onClick={guardar} className="text-xs font-semibold text-brand hover:text-brand-light">
+                  Guardar
                 </button>
-                <button onClick={() => setEditingId(null)} className="flex-shrink-0 p-1 rounded-md text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors" title="Cancelar">
-                  <IconX />
+                <button type="button" onClick={() => setEditando(null)} className="text-xs text-fg-muted hover:text-fg">
+                  Cancelar
                 </button>
               </span>
             ) : (
               <>
-                <span className="flex-1">{item.label}</span>
+                <span className="flex-1">{it.label}</span>
                 {editable && (
-                  <span className="flex-shrink-0 flex gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                    <button onClick={() => startEdit(item)} title="Editar" className="p-1 rounded-md text-gray-500 hover:text-white hover:bg-gray-800 transition-colors">
-                      <IconPencil />
+                  <span className="flex flex-shrink-0 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/item:opacity-100">
+                    <button
+                      type="button"
+                      aria-label={`Editar «${it.label}»`}
+                      onClick={() => {
+                        setEditando(it.id);
+                        setTexto(it.label);
+                      }}
+                      className="rounded-md p-0.5 text-fg-muted hover:text-fg"
+                    >
+                      <IconoLapiz />
                     </button>
-                    <button onClick={() => onDelete?.(item.id)} title="Borrar" className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-gray-800 transition-colors">
-                      <IconTrash />
+                    <button type="button" aria-label={`Borrar «${it.label}»`} onClick={() => onDelete?.(it.id)} className="rounded-md p-0.5 text-fg-muted hover:text-danger-ink">
+                      <IconoBasura />
                     </button>
                   </span>
                 )}
@@ -165,39 +142,41 @@ function EditableList({
             )}
           </li>
         ))}
-      </Wrapper>
+      </Envoltura>
       {editable &&
-        (adding ? (
-          <div className="mt-1.5 flex items-center gap-1">
+        (agregando ? (
+          <span className="flex items-center gap-1.5">
             <input
-              value={newText}
-              onChange={(e) => setNewText(e.target.value)}
+              value={nuevo}
+              onChange={(e) => setNuevo(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") saveAdd();
+                if (e.key === "Enter") agregar();
                 if (e.key === "Escape") {
-                  setAdding(false);
-                  setNewText("");
+                  setAgregando(false);
+                  setNuevo("");
                 }
               }}
               placeholder="Nuevo ítem…"
-              className="flex-1 min-w-0 bg-gray-800 text-white text-xs px-1.5 py-0.5 rounded border border-gray-700"
+              aria-label="Nuevo ítem"
+              className={ENTRADA}
               autoFocus
             />
-            <button onClick={saveAdd} disabled={busy} className="flex-shrink-0 text-xs text-brand-light hover:underline disabled:opacity-40">
+            <button type="button" onClick={agregar} disabled={busy} className="text-xs font-semibold text-brand hover:text-brand-light disabled:opacity-50">
               Agregar
             </button>
             <button
+              type="button"
               onClick={() => {
-                setAdding(false);
-                setNewText("");
+                setAgregando(false);
+                setNuevo("");
               }}
-              className="flex-shrink-0 text-xs text-gray-500 hover:text-gray-300"
+              className="text-xs text-fg-muted hover:text-fg"
             >
               Cancelar
             </button>
-          </div>
+          </span>
         ) : (
-          <button onClick={() => setAdding(true)} className="mt-1.5 text-2xs text-brand-light hover:underline">
+          <button type="button" onClick={() => setAgregando(true)} className="self-start text-xs font-semibold text-brand hover:text-brand-light">
             + Agregar
           </button>
         ))}
@@ -205,66 +184,55 @@ function EditableList({
   );
 }
 
-/** Industrias — pills en vez de lista, con "×" en hover y una pill "+ Agregar". */
-function EditableIndustries({
-  section,
-  items,
-  editable,
-  onAdd,
-  onDelete,
-}: {
-  section: IcpSection;
-  items: Array<{ id: string; label: string }>;
-} & EditHandlers) {
-  const [adding, setAdding] = useState(false);
-  const [newText, setNewText] = useState("");
-
-  const commit = () => {
-    if (newText.trim()) onAdd?.(section, newText.trim());
-    setNewText("");
-    setAdding(false);
+/** Industrias: chips blancos, con «×» al pasar el mouse y un chip punteado para agregar. */
+function Industrias({ section, items, editable, onAdd, onDelete }: { section: IcpSection; items: Array<{ id: string; label: string }> } & EditHandlers) {
+  const [agregando, setAgregando] = useState(false);
+  const [nuevo, setNuevo] = useState("");
+  const agregar = () => {
+    if (nuevo.trim()) onAdd?.(section, nuevo.trim());
+    setNuevo("");
+    setAgregando(false);
   };
-
   return (
-    <div className="flex flex-wrap gap-1.5 items-center">
-      {items.map((item) => (
-        <span
-          key={item.id}
-          className="group/pill inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-brand/10 text-brand-light border border-brand/20"
-        >
-          {item.label}
+    <div className="flex flex-wrap items-center gap-1.5">
+      {items.map((it) => (
+        <span key={it.id} className="group/chip inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-[3px] text-xs font-medium text-fg-secondary">
+          {it.label}
           {editable && (
             <button
-              onClick={() => onDelete?.(item.id)}
-              title="Borrar"
-              className="opacity-0 group-hover/pill:opacity-100 transition-opacity text-brand-light/70 hover:text-red-400"
+              type="button"
+              aria-label={`Borrar «${it.label}»`}
+              onClick={() => onDelete?.(it.id)}
+              className="text-fg-muted opacity-0 transition-opacity hover:text-danger-ink focus:opacity-100 group-hover/chip:opacity-100"
             >
-              <IconX className="w-3 h-3" />
+              <IconoX />
             </button>
           )}
         </span>
       ))}
       {editable &&
-        (adding ? (
+        (agregando ? (
           <input
-            value={newText}
-            onChange={(e) => setNewText(e.target.value)}
+            value={nuevo}
+            onChange={(e) => setNuevo(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
+              if (e.key === "Enter") agregar();
               if (e.key === "Escape") {
-                setAdding(false);
-                setNewText("");
+                setAgregando(false);
+                setNuevo("");
               }
             }}
-            onBlur={commit}
+            onBlur={agregar}
             placeholder="Nueva industria…"
-            className="px-2 py-0.5 text-xs bg-gray-800 text-white rounded-full border border-gray-700 w-32"
+            aria-label="Nueva industria"
+            className="w-36 rounded-full border border-line bg-surface px-2.5 py-[3px] text-xs text-fg focus:border-brand focus:outline-none"
             autoFocus
           />
         ) : (
           <button
-            onClick={() => setAdding(true)}
-            className="px-2 py-0.5 rounded-full text-xs border border-dashed border-gray-600 text-gray-500 hover:text-white hover:border-gray-400"
+            type="button"
+            onClick={() => setAgregando(true)}
+            className="rounded-full border border-dashed border-line px-2.5 py-[3px] text-xs text-fg-muted hover:text-fg"
           >
             + Agregar
           </button>
@@ -273,200 +241,71 @@ function EditableIndustries({
   );
 }
 
-function ICPCard({ groups, editable, onAdd, onEdit, onDelete, busy }: { groups: IcpViewGroup[] } & EditHandlers) {
-  const [signalOpen, setSignalOpen] = useState<string | null>("strong");
-
-  const descriptors = itemsOf(groups, "FIRMOGRAFICA_DESCRIPTOR");
-  const industries = itemsOf(groups, "FIRMOGRAFICA_INDUSTRIA");
-  const revenue = itemsOf(groups, "BEHAVIORAL_REVENUE");
-  const channels = itemsOf(groups, "BEHAVIORAL_CANALES");
-  const org = itemsOf(groups, "BEHAVIORAL_ORG");
-  const decision = itemsOf(groups, "BEHAVIORAL_DECISION");
-  const signals = SIGNAL_SECTIONS.map((s) => ({ ...s, items: itemsOf(groups, s.section) })).filter(
-    (s) => editable || s.items.length > 0,
-  );
-
-  return (
-    <div className="rounded-2xl border border-brand/20 bg-gray-900 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center">
-            <svg className="w-4 h-4 text-brand-light" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white">Perfil de Cliente Ideal</h3>
-            <p className="text-xs text-gray-500">ICP · Empresa mediana–grande en LATAM</p>
-          </div>
-        </div>
-        <span className="px-2.5 py-1 rounded-full text-2xs font-bold bg-brand text-white tracking-wider">
-          ICP
-        </span>
-      </div>
-
-      {/* Body: 3 columnas en desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-line">
-        <div className="p-5 space-y-5">
-          <div>
-            <SectionTitle>Firmográfica</SectionTitle>
-            <EditableList section="FIRMOGRAFICA_DESCRIPTOR" items={descriptors} numbered={false} editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
-          </div>
-          <div>
-            <SectionTitle>Industrias con validación real</SectionTitle>
-            <EditableIndustries section="FIRMOGRAFICA_INDUSTRIA" items={industries} editable={editable} onAdd={onAdd} onDelete={onDelete} busy={busy} />
-          </div>
-        </div>
-
-        <div className="p-5 space-y-5">
-          <div>
-            <SectionTitle>Revenue Intelligence</SectionTitle>
-            <EditableList section="BEHAVIORAL_REVENUE" items={revenue} numbered editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
-          </div>
-          <div>
-            <SectionTitle>Canales y comportamiento</SectionTitle>
-            <EditableList section="BEHAVIORAL_CANALES" items={channels} numbered accent="text-purple-400" editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
-          </div>
-        </div>
-
-        <div className="p-5 space-y-5">
-          <div>
-            <SectionTitle>La organización</SectionTitle>
-            <EditableList section="BEHAVIORAL_ORG" items={org} numbered accent="text-sky-400" editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
-          </div>
-          <div>
-            <SectionTitle>Estructura de decisión</SectionTitle>
-            <EditableList section="BEHAVIORAL_DECISION" items={decision} numbered accent="text-sky-400" editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
-          </div>
-        </div>
-      </div>
-
-      {/* Footer: Señales de intención */}
-      {signals.length > 0 && (
-        <div className="border-t border-gray-800 px-5 py-4">
-          <p className="text-2xs font-semibold uppercase tracking-widest text-gray-600 mb-3">
-            Señales de intención
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
-            {signals.map((group) => {
-              const cfg = SIGNAL_CONFIG[group.level];
-              const open = signalOpen === group.level;
-              return (
-                <button
-                  key={group.level}
-                  onClick={() => setSignalOpen(open ? null : group.level)}
-                  className={`rounded-xl border-l-2 border px-3 py-2.5 flex items-center justify-between gap-2 transition-all ${
-                    open
-                      ? `bg-gray-800/60 border-gray-700 ${cfg.accent}`
-                      : "bg-white/5 border-white/10 border-l-white/10 hover:bg-gray-800/60 hover:border-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-                    <span className="text-xs font-medium text-white truncate">{group.label}</span>
-                  </div>
-                  <svg
-                    className={`w-3 h-3 flex-shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              );
-            })}
-          </div>
-          {signalOpen &&
-            (() => {
-              const group = signals.find((g) => g.level === signalOpen);
-              if (!group) return null;
-              const cfg = SIGNAL_CONFIG[group.level];
-              return (
-                <div className={`rounded-xl border px-4 py-3 ${cfg.panelBorder} ${cfg.panelBg}`}>
-                  <EditableList
-                    section={group.section}
-                    items={group.items}
-                    numbered={false}
-                    editable={editable}
-                    onAdd={onAdd}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    busy={busy}
-                  />
-                </div>
-              );
-            })()}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TierCard({ tier, label, color }: { tier: string; label: string; color: string }) {
-  return (
-    <div className={`rounded-2xl border ${color} bg-gray-900 overflow-hidden`}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-              tier === "2"
-                ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                : "bg-sky-500/10 text-sky-400 border border-sky-500/20"
-            }`}
-          >
-            {tier}
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white">{label}</h3>
-            <p className="text-xs text-gray-500">Próximamente</p>
-          </div>
-        </div>
-        <span
-          className={`px-2.5 py-1 rounded-full text-2xs font-bold tracking-wider ${
-            tier === "2" ? "bg-purple-500/20 text-purple-400" : "bg-sky-500/20 text-sky-400"
-          }`}
-        >
-          TIER {tier}
-        </span>
-      </div>
-      <div className="p-5 flex flex-col items-center justify-center gap-2 min-h-[140px]">
-        <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-            tier === "2" ? "bg-purple-500/5 border border-purple-500/10" : "bg-sky-500/5 border border-sky-500/10"
-          }`}
-        >
-          <svg
-            className={`w-5 h-5 ${tier === "2" ? "text-purple-500/40" : "text-sky-500/40"}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-        </div>
-        <p className="text-xs text-gray-600 text-center max-w-[190px]">
-          Próximamente vas a poder generar y editar los criterios de este tier.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function ICPView({ groups, editable, onAdd, onEdit, onDelete, busy }: { groups: IcpViewGroup[] } & EditHandlers) {
+  const h = { editable, onAdd, onEdit, onDelete, busy };
+  const columnas: Array<Array<{ titulo: string; nodo: React.ReactNode }>> = [
+    [
+      { titulo: "Firmográfica", nodo: <Lista section="FIRMOGRAFICA_DESCRIPTOR" items={itemsDe(groups, "FIRMOGRAFICA_DESCRIPTOR")} numerada={false} {...h} /> },
+      { titulo: "Industrias con validación real", nodo: <Industrias section="FIRMOGRAFICA_INDUSTRIA" items={itemsDe(groups, "FIRMOGRAFICA_INDUSTRIA")} {...h} /> },
+    ],
+    [
+      { titulo: "Revenue Intelligence", nodo: <Lista section="BEHAVIORAL_REVENUE" items={itemsDe(groups, "BEHAVIORAL_REVENUE")} numerada {...h} /> },
+      { titulo: "Canales y comportamiento", nodo: <Lista section="BEHAVIORAL_CANALES" items={itemsDe(groups, "BEHAVIORAL_CANALES")} numerada {...h} /> },
+    ],
+    [
+      { titulo: "La organización", nodo: <Lista section="BEHAVIORAL_ORG" items={itemsDe(groups, "BEHAVIORAL_ORG")} numerada {...h} /> },
+      { titulo: "Estructura de decisión", nodo: <Lista section="BEHAVIORAL_DECISION" items={itemsDe(groups, "BEHAVIORAL_DECISION")} numerada {...h} /> },
+    ],
+  ];
+  const senales = SENALES.map((s) => ({ ...s, items: itemsDe(groups, s.section) })).filter((s) => editable || s.items.length > 0);
+
   return (
-    <div className="mt-8 mb-8 space-y-3">
-      <div className="flex items-center gap-2 mb-1">
-        <p className="text-2xs font-semibold uppercase tracking-widest text-gray-600">
-          Perfiles objetivo
-        </p>
-        <div className="flex-1 h-px bg-gray-800" />
-      </div>
+    <div className="space-y-6">
+      <section aria-label="Perfil de cliente ideal" className="rounded-xl border border-line bg-surface">
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border-b border-line px-5 py-3.5">
+          <h2 className="text-[15px] font-semibold leading-5 text-fg">Perfil de cliente ideal</h2>
+          <span className="text-[13px] text-fg-muted">Empresa mediana o grande en Latinoamérica</span>
+          {editable && <span className="ml-auto text-xs text-fg-muted">Pasa el mouse sobre un ítem para editarlo o borrarlo</span>}
+        </div>
+        <div className="grid lg:grid-cols-3">
+          {columnas.map((col, i) => (
+            <div key={i} className={cn("flex min-w-0 flex-col gap-5 p-5", i > 0 && "border-t border-line lg:border-l lg:border-t-0")}>
+              {col.map((b) => (
+                <div key={b.titulo} className="flex flex-col gap-2">
+                  <Rotulo>{b.titulo}</Rotulo>
+                  {b.nodo}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <ICPCard groups={groups} editable={editable} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} busy={busy} />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <TierCard tier="2" label="Tier 2" color="border-purple-500/15" />
-        <TierCard tier="3" label="Tier 3" color="border-sky-500/15" />
-      </div>
+      {senales.length > 0 && (
+        <section aria-label="Señales de intención" className="space-y-2.5">
+          <div className="flex flex-wrap items-baseline gap-x-2.5">
+            <h2 className="text-sm font-semibold text-fg">Señales de intención</h2>
+            <span className="text-xs text-fg-muted">qué dice que una empresa está lista para hablar, y qué la descarta</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {senales.map((s) => (
+              <div key={s.section} className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface p-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="flex items-center gap-2">
+                    <span aria-hidden="true" className="text-xs tracking-[1px] text-fg-secondary">
+                      {s.marca}
+                    </span>
+                    <span className="text-sm font-semibold text-fg">{s.titulo}</span>
+                    <span className="text-xs tabular-nums text-fg-muted">{s.items.length}</span>
+                  </span>
+                  <span className="text-xs text-fg-muted">{s.ayuda}</span>
+                </div>
+                <Lista section={s.section} items={s.items} numerada={false} {...h} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -1,255 +1,276 @@
 "use client";
 
 /**
- * Motor de Contenido (detalle): estado de la última corrida, stats de posts,
- * fuentes con error, historial completo. Tres niveles de CTA, siempre visibles
- * (sin banners condicionales que aparecen/desaparecen según el historial):
- *   1) "Generar ideas nuevas" (CHAIN) — primario. SIEMPRE genera (con lo nuevo
- *      + lo guardado). Es la misma corrida que dispara el cron los viernes.
- *   2) "Regenerar con lo guardado" (GENERATE) — sin re-scrapear; para cuando
- *      se editaron insumos (pilares/voz/personas) y se quiere una tanda nueva.
- *   3) "Solo actualizar fuentes" (INGEST) — sin generar; para revisar que una
- *      fuente nueva esté trayendo posts antes de gastar en generación.
+ * Generación (/marketing/generacion) — la tanda de los viernes y el historial del motor (rediseño del 2026-10-04,
+ * sistema «Nexus · interfaz interna»).
+ *
+ *  - «Próxima tanda»: cuándo corre sola y cuánto pide. Las cantidades se GUARDAN sin correr el motor (PUT
+ *    /api/marketing/tanda): antes solo se guardaban al apretar «Generar», así que nadie sabía qué iba a pedir el
+ *    cron. Medido ese día: pedía 1 de empresa y 0 de perfil personal, y las últimas 10 tandas trajeron 1 cada una.
+ *  - Tres formas de correrlo, como antes: «Generar ahora» (la cadena completa, la del cron), «Regenerar con lo
+ *    guardado» (sin leer las fuentes) y «Solo leer las fuentes» (sin generar).
+ *  - El historial es una tabla con lo que trajo cada corrida, y quién la corrió si fue a mano.
  */
-import { useState } from "react";
 import Link from "next/link";
-import { Badge, ListSkeleton, Field, Input } from "@/components/ui";
-import { useMarketingEngine, RUN_KIND_LABEL } from "@/components/marketing/useMarketingEngine";
-import { MARKETING_GEN_LIMITS } from "@/lib/marketing/schema";
+import { useState } from "react";
+import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import { useToast } from "@/components/ui/Toast";
+import { Alert, Button, Field, Input, PageHeader, TableSkeleton } from "@/components/ui";
+import { BotonBlanco } from "@/components/ui/sistema";
+import { useMarketingEngine, type RunRow } from "@/components/marketing/useMarketingEngine";
+import { Rotulo } from "@/components/marketing/piezas";
+import { MARKETING_GEN_DEFAULTS, MARKETING_GEN_LIMITS } from "@/lib/marketing/marketing-ui";
+import { fechaCorta } from "@/lib/marketing/tanda";
+import { crDateParts } from "@/lib/jobs/time";
+import type { ResumenInsumos } from "@/lib/marketing/queries";
+import { cn } from "@/lib/cn";
 
-/** Clampea el string de un input al rango [0, max] (entero; vacío/NaN → 0). */
-function clampCount(raw: string, max: number): number {
+/** Entero en [0, max]; vacío o basura → 0. */
+function acotar(raw: string, max: number): number {
   const n = Math.floor(Number(raw));
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.min(n, max);
 }
 
+const cuando = (iso: string) => {
+  const hora = new Date(iso).toLocaleTimeString("es-CR", { hour: "numeric", minute: "2-digit", hour12: false, timeZone: "America/Costa_Rica" }).replace(/^0/, "");
+  return `${fechaCorta(crDateParts(new Date(iso)).dateKey)}, ${hora}`;
+};
+
 export default function EngineClient({
   canEdit,
-  empresaTarget,
-  personaTarget,
+  proximaTanda,
+  resumen,
 }: {
   canEdit: boolean;
-  empresaTarget: number;
-  personaTarget: number;
+  proximaTanda: { etiqueta: string; pendienteHoy: boolean };
+  resumen: ResumenInsumos;
 }) {
+  const toast = useToast();
   const { runs, stats, sources, loading, busy, runningPhase, startRun, lastRun } = useMarketingEngine();
-  const canGenerate = (stats?.inWindow ?? 0) > 0;
 
-  // Config a medida de la tanda (pre-cargada con el default guardado; al generar se
-  // persiste como nuevo default y el cron lo hereda — ver runs/route.ts).
-  const [empresa, setEmpresa] = useState(String(empresaTarget));
-  const [persona, setPersona] = useState(String(personaTarget));
-  const empresaCount = clampCount(empresa, MARKETING_GEN_LIMITS.maxEmpresa);
-  const personaCount = clampCount(persona, MARKETING_GEN_LIMITS.maxPersona);
-  const bothZero = empresaCount + personaCount === 0;
-  const genConfig = { empresaCount, personaCount };
+  const [empresaGuardada, setEmpresaGuardada] = useState(resumen.genEmpresaTarget ?? MARKETING_GEN_DEFAULTS.empresa);
+  const [personaGuardada, setPersonaGuardada] = useState(resumen.genPersonaTarget ?? MARKETING_GEN_DEFAULTS.persona);
+  const [empresa, setEmpresa] = useState(String(empresaGuardada));
+  const [persona, setPersona] = useState(String(personaGuardada));
+  const [guardando, setGuardando] = useState(false);
+  const nEmpresa = acotar(empresa, MARKETING_GEN_LIMITS.maxEmpresa);
+  const nPersona = acotar(persona, MARKETING_GEN_LIMITS.maxPersona);
+  const total = nEmpresa + nPersona;
+  const cambio = nEmpresa !== empresaGuardada || nPersona !== personaGuardada;
+  const config = { empresaCount: nEmpresa, personaCount: nPersona };
+  const hayPosts = (stats?.inWindow ?? resumen.postsEnVentana) > 0;
+
+  const guardar = async () => {
+    if (total === 0 || guardando) return;
+    setGuardando(true);
+    try {
+      const r = await fetchJson<{ settings: { genEmpresaTarget: number; genPersonaTarget: number } }>("/api/marketing/tanda", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      setEmpresaGuardada(r.settings.genEmpresaTarget);
+      setPersonaGuardada(r.settings.genPersonaTarget);
+      toast.success("Guardado. La tanda del viernes pide eso.");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo guardar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  /** Correr con cantidades las guarda como las de la tanda (runs/route.ts): la pantalla lo refleja. */
+  const correr = (kind: "CHAIN" | "GENERATE") => {
+    startRun(kind, config);
+    setEmpresaGuardada(nEmpresa);
+    setPersonaGuardada(nPersona);
+  };
+
+  const conError = sources.filter((s) => s.active && s.lastFetchError);
+  const fuentesActivas = loading ? resumen.fuentesActivas : sources.filter((s) => s.active).length;
+  const pocas = empresaGuardada + personaGuardada <= 2;
+  const totalGuardado = empresaGuardada + personaGuardada;
 
   return (
-    <div className="space-y-6">
-      {/* CTAs */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="max-w-md">
-            <p className="text-sm font-semibold text-fg">Correr el motor</p>
-            <p className="mt-0.5 text-xs text-fg-muted">
-              &quot;Generar ideas nuevas&quot; scrapea las fuentes y genera SIEMPRE — aunque
-              esa semana no haya inspiración nueva, genera con lo guardado. Es la misma
-              corrida que dispara el cron cada viernes a las 6:00 am.
-            </p>
-          </div>
-          {canEdit ? (
-            <div className="flex flex-col items-end gap-2 flex-shrink-0">
-              <button
-                onClick={() => startRun("CHAIN", genConfig)}
-                disabled={busy || bothZero}
-                className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-fg disabled:opacity-40 hover:bg-primary-hover"
-              >
-                {busy ? (runningPhase ?? "En curso…") : "Generar ideas nuevas"}
-              </button>
-              <div className="flex items-center gap-3">
+    <>
+      <PageHeader
+        title="Generación"
+        description="Cada viernes a las 6:00 el motor lee las fuentes y el agente propone publicaciones e ideas de SEM con lo que lee de temas, audiencia y voz. También se puede correr a mano."
+        action={
+          canEdit ? (
+            <Button variant="primary" onClick={() => correr("CHAIN")} disabled={busy || total === 0}>
+              {busy ? "Generando…" : "Generar ahora"}
+            </Button>
+          ) : undefined
+        }
+      />
+      <div className="space-y-6">
+        {busy && (
+          <Alert variant="info">
+            El agente está armando la tanda{runningPhase ? ` · ${runningPhase}` : ""}. Las nuevas aparecen en Publicaciones e Ideas de SEM cuando termine.
+          </Alert>
+        )}
+        {!busy && lastRun?.status === "ERROR" && <Alert variant="danger" title="La última corrida falló">{lastRun.error ?? "Sin detalle."}</Alert>}
+        {conError.length > 0 && (
+          <Alert variant="danger" title="Fuentes que no se pudieron leer en la última tanda">
+            {conError.map((s) => `${s.label}: ${s.lastFetchError}`).join(" · ")}
+          </Alert>
+        )}
+
+        <div className="flex flex-wrap items-stretch gap-4">
+          <section aria-label="Próxima tanda" className="flex min-w-0 flex-[2_1_520px] flex-col gap-3.5 rounded-xl border border-line bg-surface p-5">
+            <div className="flex flex-col gap-0.5">
+              <Rotulo>Próxima tanda</Rotulo>
+              <span className="text-[22px] font-bold leading-7 text-fg">{proximaTanda.etiqueta.replace(", ", " · ")}</span>
+              <span className="text-[13px] text-fg-muted">
+                {proximaTanda.pendienteHoy
+                  ? "Hoy: el motor la corre en el próximo minuto."
+                  : "Automática. Pide lo que configures acá; el agente puede entregar menos si no hay buen material."}
+              </span>
+            </div>
+
+            {canEdit ? (
+              <div className="flex flex-wrap items-end gap-4">
+                <Field label="Página de empresa" hint={`por tanda · máx ${MARKETING_GEN_LIMITS.maxEmpresa}`} className="w-[200px]">
+                  <Input type="number" min={0} max={MARKETING_GEN_LIMITS.maxEmpresa} value={empresa} onChange={(e) => setEmpresa(e.target.value)} disabled={busy} />
+                </Field>
+                <Field label="Perfil personal" hint={`por tanda · máx ${MARKETING_GEN_LIMITS.maxPersona}`} className="w-[200px]">
+                  <Input type="number" min={0} max={MARKETING_GEN_LIMITS.maxPersona} value={persona} onChange={(e) => setPersona(e.target.value)} disabled={busy} />
+                </Field>
+                {cambio && (
+                  <div className="flex items-center gap-2 pb-6">
+                    <BotonBlanco onClick={guardar} disabled={guardando || total === 0}>
+                      {guardando ? "Guardando…" : "Guardar"}
+                    </BotonBlanco>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-fg-secondary">
+                Pide {empresaGuardada} de página de empresa y {personaGuardada} de perfil personal.
+              </p>
+            )}
+            {total === 0 && <p className="text-xs text-warn-ink">Configura al menos una publicación, de empresa o de perfil personal.</p>}
+
+            {pocas && (
+              <Alert variant="warning" title={`Cada viernes ${totalGuardado === 1 ? "sale una sola publicación" : `salen solo ${totalGuardado} publicaciones`}.`}>
+                El valor de fábrica es {MARKETING_GEN_DEFAULTS.empresa} de empresa y {MARKETING_GEN_DEFAULTS.persona} de perfil personal.
+              </Alert>
+            )}
+
+            {canEdit && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line pt-3.5 text-xs text-fg-muted">
+                <span>Otras formas de correrlo:</span>
                 <button
-                  onClick={() => startRun("GENERATE", genConfig)}
-                  disabled={busy || !canGenerate || bothZero}
-                  title={
-                    canGenerate
-                      ? "Genera sin re-scrapear, con los posts que ya están guardados"
-                      : "Todavía no hay posts guardados"
-                  }
-                  className="text-xs text-brand hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+                  type="button"
+                  onClick={() => correr("GENERATE")}
+                  disabled={busy || !hayPosts || total === 0}
+                  title={hayPosts ? undefined : "Todavía no hay posts guardados"}
+                  className="font-semibold text-brand hover:text-brand-light disabled:opacity-50"
                 >
                   Regenerar con lo guardado
                 </button>
-                <span className="text-fg-muted">·</span>
-                <button
-                  onClick={() => startRun("INGEST")}
-                  disabled={busy}
-                  className="text-xs text-fg-muted hover:text-fg-secondary disabled:opacity-40"
-                >
-                  Solo actualizar fuentes
+                <span>sin leer las fuentes, para estrenar cambios en temas o voz ·</span>
+                <button type="button" onClick={() => startRun("INGEST")} disabled={busy} className="font-semibold text-brand hover:text-brand-light disabled:opacity-50">
+                  Solo leer las fuentes
                 </button>
+                <span>sin generar, para probar una fuente nueva</span>
               </div>
-            </div>
-          ) : (
-            <p className="text-xs text-fg-muted">Tu rol puede ver el estado; correr el motor es del equipo de Marketing.</p>
-          )}
-        </div>
-
-        {/* Config a medida de la tanda */}
-        {canEdit && (
-          <div className="mt-4 border-t border-line pt-4">
-            <p className="text-xs font-semibold text-fg">Configuración de la tanda</p>
-            <p className="mt-0.5 text-xs text-fg-muted">
-              Cuántas piezas generar de cada tipo. Es un objetivo: la IA prioriza calidad y
-              puede entregar menos. Estos números quedan guardados como el default (también
-              los usa la corrida automática de los viernes).
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-3 max-w-sm">
-              <Field label="Página de empresa" hint={`Máx ${MARKETING_GEN_LIMITS.maxEmpresa}`}>
-                <Input
-                  type="number"
-                  min={0}
-                  max={MARKETING_GEN_LIMITS.maxEmpresa}
-                  value={empresa}
-                  onChange={(e) => setEmpresa(e.target.value)}
-                  disabled={busy}
-                />
-              </Field>
-              <Field label="Perfil personal" hint={`Máx ${MARKETING_GEN_LIMITS.maxPersona}`}>
-                <Input
-                  type="number"
-                  min={0}
-                  max={MARKETING_GEN_LIMITS.maxPersona}
-                  value={persona}
-                  onChange={(e) => setPersona(e.target.value)}
-                  disabled={busy}
-                />
-              </Field>
-            </div>
-            {bothZero && (
-              <p className="mt-2 text-xs text-amber-500">
-                Configurá al menos una pieza (Empresa o Persona) para generar.
-              </p>
             )}
-          </div>
-        )}
+          </section>
 
-        {busy && runningPhase && (
-          <p className="mt-3 text-xs text-brand animate-pulse">⏳ {runningPhase}</p>
-        )}
-
-        {!busy && lastRun?.status === "ERROR" && (
-          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
-            <p className="text-xs text-red-400">Última corrida falló: {lastRun.error}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Stats de inspiración */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <p className="text-2xl font-semibold text-fg">{loading ? "…" : (stats?.inWindow ?? 0)}</p>
-          <p className="text-xs text-fg-muted">posts en ventana (últimos 3 meses) — entran a la generación</p>
+          <section aria-label="Lo que entra a la tanda" className="flex min-w-0 flex-[1_1_300px] flex-col gap-3 rounded-xl border border-line bg-surface-muted p-5">
+            <Rotulo>Lo que entra a la tanda</Rotulo>
+            <Dato numero={stats?.inWindow ?? resumen.postsEnVentana} texto="posts de los últimos 3 meses" nota={`${stats?.total ?? resumen.postsTotal} guardados; los de más de 3 meses quedan afuera`} />
+            <Dato numero={fuentesActivas} texto={fuentesActivas === 1 ? "fuente activa" : "fuentes activas"} href="/marketing/fuentes" enlace="ver fuentes" />
+            <Dato
+              numero={resumen.temasActivos}
+              texto={`temas activos${resumen.temasEnCampana.length > 0 ? ` · ${resumen.temasEnCampana.length} en campaña` : ""}`}
+              href="/marketing/temas"
+              enlace="ver temas"
+            />
+          </section>
         </div>
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <p className="text-2xl font-semibold text-fg">{loading ? "…" : (stats?.total ?? 0)}</p>
-          <p className="text-xs text-fg-muted">posts guardados en total (los &gt;3 meses quedan archivados)</p>
-        </div>
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <p className="text-2xl font-semibold text-fg">
-            {loading ? "…" : sources.filter((s) => s.active).length}
-          </p>
+
+        <section aria-label="Historial de corridas" className="space-y-2.5">
+          <div className="flex items-baseline gap-2.5">
+            <h2 className="text-sm font-semibold text-fg">Historial</h2>
+            <span className="text-xs text-fg-muted">las últimas 10 corridas</span>
+          </div>
+          {loading ? (
+            <TableSkeleton columns={7} rows={5} />
+          ) : runs.length === 0 ? (
+            <p className="text-[13px] text-fg-muted">Todavía no hay corridas. La primera es el viernes a las 6:00, o ahora con «Generar ahora».</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+              <table className="w-full min-w-[820px] border-collapse text-[13px] leading-[19px]">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-fg-muted">
+                    <th className="border-b border-line px-4 py-2.5 font-semibold">Fecha</th>
+                    <th className="border-b border-line px-4 py-2.5 font-semibold">Cómo</th>
+                    <th className="border-b border-line px-4 py-2.5 text-right font-semibold">Posts nuevos</th>
+                    <th className="border-b border-line px-4 py-2.5 text-right font-semibold">Publicaciones</th>
+                    <th className="border-b border-line px-4 py-2.5 text-right font-semibold">Ideas de SEM</th>
+                    <th className="border-b border-line px-4 py-2.5 text-right font-semibold">Temas sugeridos</th>
+                    <th className="border-b border-line px-4 py-2.5 font-semibold">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map((r) => (
+                    <Corrida key={r.id} r={r} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <p className="text-xs text-fg-muted">
-            fuentes activas ·{" "}
-            <Link href="/marketing/fuentes" className="text-brand hover:underline">
-              administrar
-            </Link>
+            Lo que propone cada tanda llega a <Link href="/marketing/contenido" className="font-medium text-brand hover:text-brand-light">Publicaciones</Link> y{" "}
+            <Link href="/marketing/ideas-de-campana" className="font-medium text-brand hover:text-brand-light">Ideas de SEM</Link>.
           </p>
-        </div>
+        </section>
       </div>
+    </>
+  );
+}
 
-      {/* Fuentes con error */}
-      {sources.some((s) => s.active && s.lastFetchError) && (
-        <div className="rounded-2xl border border-red-500/20 bg-surface p-4">
-          <p className="text-xs font-semibold text-fg mb-2">Fuentes con error en la última ingesta</p>
-          <ul className="space-y-1">
-            {sources
-              .filter((s) => s.active && s.lastFetchError)
-              .map((s) => (
-                <li key={s.id} className="text-xs text-fg-secondary">
-                  <span className="font-medium">{s.label}</span>:{" "}
-                  <span className="text-red-400">{s.lastFetchError}</span>
-                </li>
-              ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Historial */}
-      <div className="rounded-2xl border border-line bg-surface p-5">
-        <p className="text-sm font-semibold text-fg mb-3">Historial de corridas</p>
-        {loading ? (
-          // Skeleton estructural: la card del historial ya está montada; se
-          // reservan filas de la altura real de una corrida para evitar saltos.
-          <ListSkeleton rows={3} lines={1} />
-        ) : runs.length === 0 ? (
-          <p className="text-xs text-fg-muted">Todavía no hay corridas. Corré la primera con el botón de arriba.</p>
-        ) : (
-          <ul className="space-y-2">
-            {runs.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-3 text-xs border-b border-line pb-2 last:border-0 last:pb-0">
-                <div className="min-w-0">
-                  <span className="font-medium text-fg">{RUN_KIND_LABEL[r.kind]}</span>
-                  <Badge size="xs" className="ml-2">
-                    {r.trigger === "CRON" ? "Cron" : "Manual"}
-                  </Badge>
-                  <span className="ml-2 text-fg-muted">
-                    {new Date(r.createdAt).toLocaleString("es-CR", { dateStyle: "short", timeStyle: "short" })}
-                  </span>
-                  {r.status === "DONE" && (
-                    <span className="ml-2 text-fg-secondary">
-                      {[
-                        r.newPostsCount != null ? `${r.newPostsCount} nuevos` : null,
-                        r.contentIdeasCount != null ? `${r.contentIdeasCount} ideas` : null,
-                        r.campaignIdeasCount != null ? `${r.campaignIdeasCount} campañas` : null,
-                        r.pillarSuggestionsCount ? `${r.pillarSuggestionsCount} pilares sugeridos` : null,
-                        r.sourcesErrorCount ? `${r.sourcesErrorCount} fuentes con error` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  )}
-                  {r.status === "ERROR" && <span className="ml-2 text-red-400 truncate">{r.error}</span>}
-                </div>
-                <span
-                  className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] ${
-                    r.status === "DONE"
-                      ? "bg-emerald-500/10 text-emerald-500"
-                      : r.status === "ERROR"
-                        ? "bg-red-500/10 text-red-400"
-                        : "bg-amber-500/10 text-amber-500"
-                  }`}
-                >
-                  {r.status === "DONE" ? "OK" : r.status === "ERROR" ? "Error" : "En curso"}
-                </span>
-              </li>
-            ))}
-          </ul>
+function Dato({ numero, texto, nota, href, enlace }: { numero: number; texto: string; nota?: string; href?: string; enlace?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 border-t border-line pt-3 first-of-type:border-t-0 first-of-type:pt-0">
+      <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">{numero}</span>
+      <span className="text-[13px] text-fg-secondary">
+        {texto}
+        {href && enlace && (
+          <>
+            {" · "}
+            <Link href={href} className="font-semibold text-brand hover:text-brand-light">
+              {enlace}
+            </Link>
+          </>
         )}
-      </div>
-
-      <p className="text-xs text-fg-muted">
-        Las salidas viven en{" "}
-        <Link href="/marketing/contenido" className="text-brand hover:underline">
-          Contenido
-        </Link>{" "}
-        y{" "}
-        <Link href="/marketing/ideas-de-campana" className="text-brand hover:underline">
-          Ideas de campaña
-        </Link>
-        . Los insumos (ICP, personas, temas, fuentes, voz) se administran en el resto de las
-        secciones.
-      </p>
+      </span>
+      {nota && <span className="text-xs text-fg-muted">{nota}</span>}
     </div>
+  );
+}
+
+function Corrida({ r }: { r: RunRow }) {
+  const como =
+    r.trigger === "CRON"
+      ? "Automática"
+      : `A mano${r.startedByName ? ` · ${r.startedByName}` : ""}${r.kind === "GENERATE" ? " · con lo guardado" : r.kind === "INGEST" ? " · solo fuentes" : ""}`;
+  const num = (n: number | null) => (n === null ? "—" : String(n));
+  return (
+    <tr>
+      <td className="whitespace-nowrap border-b border-line px-4 py-2.5 text-fg">{cuando(r.createdAt)}</td>
+      <td className="border-b border-line px-4 py-2.5 text-fg-secondary">{como}</td>
+      <td className="border-b border-line px-4 py-2.5 text-right tabular-nums">{num(r.newPostsCount)}</td>
+      <td className="border-b border-line px-4 py-2.5 text-right tabular-nums">{num(r.contentIdeasCount)}</td>
+      <td className="border-b border-line px-4 py-2.5 text-right tabular-nums">{num(r.campaignIdeasCount)}</td>
+      <td className="border-b border-line px-4 py-2.5 text-right tabular-nums text-fg-muted">{num(r.pillarSuggestionsCount)}</td>
+      <td className={cn("border-b border-line px-4 py-2.5", r.status === "DONE" ? "text-success-ink" : r.status === "ERROR" ? "text-danger-ink" : "text-fg-secondary")}>
+        {r.status === "DONE" ? "✓ Lista" : r.status === "ERROR" ? <span title={r.error ?? undefined}>✕ Falló</span> : "● En curso"}
+      </td>
+    </tr>
   );
 }

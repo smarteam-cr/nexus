@@ -18,7 +18,7 @@
  */
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
-import { MARKETING_NAV_GROUPS } from "@/components/marketing/nav-config";
+import { MARKETING_NAV } from "@/components/marketing/nav-config";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -196,17 +196,18 @@ export const APP_NAV: readonly NavItemConfig[] = [
     ),
   },
   {
-    // Marketing: universal — todo rol interno VE (submenú con los 3 grupos;
+    // Marketing: universal — todo rol interno VE (submenú en dos bloques más Generación;
     // editan MARKETING/CSL/SUPER_ADMIN — gate en API/páginas).
     key: "marketing",
     label: "Marketing",
     href: "/marketing",
     match: ["/marketing", "/contenido"],
     group: "operacion",
-    children: MARKETING_NAV_GROUPS.map((g) => ({
-      href: g.href,
-      label: g.label,
-      match: [g.href, ...g.children.map((c) => c.href)],
+    children: MARKETING_NAV.map((c) => ({
+      href: c.href,
+      label: c.label,
+      match: c.match ?? [c.href],
+      section: c.section,
     })),
     icon: icon(
       "M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z",

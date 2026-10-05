@@ -125,7 +125,8 @@ const DEPARTAMENTOS: Departamento[] = [
       ["Customer Success", "Entra en el bucle con Ventas cuando la conversación es de expansión."],
     ],
     enNexus: [
-      { nombre: "Marketing → Generación de contenido", url: "/marketing/contenido", detalle: "el contenido, las ideas de campaña, los temas y las fuentes." },
+      { nombre: "Marketing → Publicaciones", url: "/marketing/contenido", detalle: "lo que propone el agente para LinkedIn cada viernes, para revisar, ajustar y aprobar." },
+      { nombre: "Marketing → Ideas de SEM", url: "/marketing/ideas-de-campana", detalle: "las campañas pagadas que propone el agente." },
       { nombre: "Marketing → Audiencia", url: "/marketing/icp", detalle: "el cliente ideal (ICP) y las buyer personas." },
       { nombre: "Marketing → Voz de marca", url: "/marketing/voz", detalle: "cómo habla Smarteam cuando escribe." },
     ],
