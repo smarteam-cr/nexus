@@ -11,7 +11,17 @@
  *              plantilla ≠ default) → se pinta sólida con punto; heredada = tenue
  * La usan MemberPermissionsModal (tri-estado con overrides) y
  * RoleTemplatesPanel (bi-estado plantilla vs default).
+ *
+ * ── POR QUÉ SE PLIEGA POR ÁREA (rediseño 2026-10-05) ─────────────────────────
+ * Son **24 áreas y 58 permisos**, y hasta hoy se pintaban los 58 a la vez: una pared de píldoras
+ * donde las cincuenta y pico que están como corresponde pesan exactamente igual que las dos que
+ * alguien cambió a mano. Encontrar en qué se aparta una persona de su rol era leerla entera.
+ *
+ * Casi siempre un área está ENTERA encendida o ENTERA apagada, y eso se dice con una palabra
+ * («Todo», «Nada»). Las casillas aparecen donde de verdad hay mezcla —que es donde hay algo que
+ * leer— o cuando alguien abre el área a propósito.
  */
+import { useState } from "react";
 import { PERMISSION_SECTIONS } from "@/lib/auth/permissions/registry";
 import { IconCheck, IconX } from "@/components/ui";
 
@@ -39,6 +49,8 @@ export default function PermissionMatrix({
   pinLabel = "Distinto de lo heredado",
 }: Props) {
   const interactive = !!onToggle && !disabled;
+  /** Áreas que alguien abrió a mano. Las que tienen mezcla se abren solas. */
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
 
   return (
     <div className="divide-y divide-line rounded-lg border border-line">
@@ -46,53 +58,143 @@ export default function PermissionMatrix({
         const actions = section.actions.filter((a) => a.enforced);
         if (actions.length === 0) return null;
         const sectionPinned = actions.some((a) => getCell(section.key, a.key).pinned);
+        const encendidas = actions.filter((a) => getCell(section.key, a.key).checked).length;
+        const hayMezcla = encendidas > 0 && encendidas < actions.length;
+        const abierta = abiertas.has(section.key) || hayMezcla;
+
+        /* Poner un área entera en un valor: recorre sus acciones y toca SOLO las que hay que
+           cambiar. No hay una API de «sección» más abajo, y fabricar una para esto sería inventar
+           un segundo camino de escritura para el mismo dato. */
+        const ponerTodas = (valor: boolean) => {
+          for (const a of actions) {
+            if (getCell(section.key, a.key).checked !== valor) onToggle?.(section.key, a.key);
+          }
+        };
 
         return (
-          <div key={section.key} className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-start">
-            <div className="flex w-40 flex-shrink-0 items-center gap-1.5 pt-0.5">
-              <span className="text-xs font-medium text-fg-secondary">{section.label}</span>
+          <div key={section.key} className="px-3 py-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() =>
+                  setAbiertas((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(section.key)) next.delete(section.key);
+                    else next.add(section.key);
+                    return next;
+                  })
+                }
+                className="flex flex-1 min-w-0 items-center gap-2 text-left"
+                aria-expanded={abierta}
+              >
+                <svg
+                  className={`w-3 h-3 flex-shrink-0 text-fg-muted transition-transform ${abierta ? "rotate-90" : ""}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-xs font-medium text-fg-secondary truncate">{section.label}</span>
+                {/* El resumen del área: una palabra donde antes había cinco píldoras. */}
+                <span
+                  className={[
+                    "flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                    encendidas === actions.length
+                      ? "border-success-line bg-success-surface text-success-ink"
+                      : encendidas === 0
+                        ? "border-line bg-surface-muted text-fg-muted"
+                        : "border-warn-line bg-warn-surface text-warn-ink",
+                  ].join(" ")}
+                >
+                  {encendidas === actions.length
+                    ? "Todo"
+                    : encendidas === 0
+                      ? "Nada"
+                      : `${encendidas} de ${actions.length}`}
+                </span>
+                {sectionPinned && (
+                  <span
+                    aria-label={pinLabel}
+                    title={pinLabel}
+                    className="flex-shrink-0 h-2 w-2 rounded-full bg-warning"
+                  />
+                )}
+              </button>
+
+              {interactive && (
+                <span className="flex-shrink-0 inline-flex rounded-lg bg-surface-hover p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => ponerTodas(false)}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      encendidas === 0
+                        ? "bg-surface text-fg shadow-segment"
+                        : "text-fg-secondary hover:text-fg"
+                    }`}
+                  >
+                    Nada
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => ponerTodas(true)}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      encendidas === actions.length
+                        ? "bg-surface text-fg shadow-segment"
+                        : "text-fg-secondary hover:text-fg"
+                    }`}
+                  >
+                    Todo
+                  </button>
+                </span>
+              )}
+
               {sectionPinned && onResetSection && !disabled && (
                 <button
                   type="button"
                   onClick={() => onResetSection(section.key)}
                   title="Restaurar herencia de esta sección"
-                  className="text-[10px] text-amber-500/90 underline decoration-dotted underline-offset-2 hover:text-amber-400"
+                  className="flex-shrink-0 text-[11px] font-semibold text-brand hover:text-brand-light"
                 >
-                  restaurar
+                  Volver a la plantilla
                 </button>
               )}
             </div>
-            <div className="flex flex-1 flex-wrap gap-1.5">
-              {actions.map((action) => {
-                const cell = getCell(section.key, action.key);
-                return (
-                  <button
-                    key={action.key}
-                    type="button"
-                    disabled={!interactive}
-                    onClick={() => onToggle?.(section.key, action.key)}
-                    title={cell.pinned ? `${action.label} — ${pinLabel}` : action.label}
-                    className={[
-                      "relative inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] leading-none transition-colors",
-                      cell.checked
-                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-                        : "border-line bg-surface-muted text-fg-muted",
-                      cell.pinned ? "" : "opacity-75",
-                      interactive ? "cursor-pointer hover:border-fg-muted/50" : "cursor-default",
-                    ].join(" ")}
-                  >
-                    {cell.checked ? <IconCheck className="w-3 h-3" /> : <IconX className="w-3 h-3" />}
-                    {action.label}
-                    {cell.pinned && (
-                      <span
-                        aria-label={pinLabel}
-                        className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-400 ring-2 ring-surface"
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+
+            {/* Las casillas, solo cuando hay algo que mirar: mezcla, o alguien la abrió. */}
+            {abierta && (
+              <div className="mt-2 flex flex-wrap gap-1.5 pl-5">
+                {actions.map((action) => {
+                  const cell = getCell(section.key, action.key);
+                  return (
+                    <button
+                      key={action.key}
+                      type="button"
+                      disabled={!interactive}
+                      onClick={() => onToggle?.(section.key, action.key)}
+                      title={cell.pinned ? `${action.label} — ${pinLabel}` : action.label}
+                      className={[
+                        "relative inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] leading-none transition-colors",
+                        cell.checked
+                          ? "border-success-line bg-success-surface text-success-ink"
+                          : "border-line bg-surface-muted text-fg-muted",
+                        interactive ? "cursor-pointer hover:border-fg-muted" : "cursor-default",
+                      ].join(" ")}
+                    >
+                      {cell.checked ? <IconCheck className="w-3 h-3" /> : <IconX className="w-3 h-3" />}
+                      {action.label}
+                      {cell.pinned && (
+                        <span
+                          aria-label={pinLabel}
+                          className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-warning ring-2 ring-surface"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })}
