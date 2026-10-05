@@ -4413,6 +4413,27 @@ el mismo vocabulario del lienzo). Elías lo aprobó y pidió aplicarlo entero.
 - **Todo lo sugerido lleva la chispa de IA** (regla del sistema de diseño): en el listado, en las filas
   y píldoras del lienzo, en la barra de piezas, en la cuadrícula del marco y en la franja (18 px).
 
+## Preventa: quién la lleva se elige a la vista, y el resumen se lee en filas (2026-10-05)
+
+**Contexto.** Elías: en el listado «Qué sigue» se cortaba, la barra de «Para proponer» no se entendía,
+no había forma de elegir quién lleva una preventa, y el resumen de cada preventa se veía apretado en
+cuatro columnas incluso a 1080. Aprobó el tablero «Preventa · listado y resumen».
+
+- **Quién la lleva se elige en la columna «La lleva» del listado y en la cabecera de la preventa**
+  (`ElegirResponsable`, sobre `CeldaSelect`), con la misma operación del lienzo (`responsable`). Es lo
+  que decide el «Para ti» de cada persona (`lib/para-ti/fuentes/preventa.ts` ya leía
+  `responsableEmail`; faltaba poder cambiarlo).
+- **Al cambiarla, a la persona nueva le llega un aviso** (`preventa.responsable`, salvo que se la asigne
+  ella misma) y el «Para ti» de las dos se vuelve a medir (`olvidarMedicion`): la preventa sale de uno y
+  entra al otro sin esperar los dos minutos de la medición guardada.
+- **Elegir desde fuera del lienzo no choca con lo que hizo el agente**: si el PATCH vuelve 409 y quien la
+  lleva sigue siendo el que se veía, se manda otra vez sobre la versión nueva.
+- **«Para proponer» pinta CUÁLES puntos faltan, no solo cuántos** (`FilaDeLaLista.puntos`), con «N de 7
+  listos», lo primero que falta en palabras y los siete puntos al pasar el cursor (la capa de tooltips de
+  la app, que no recorta la tabla con scroll horizontal).
+- **El resumen del marco son filas a lo ancho en tres bloques** (el objetivo; quién y con qué; lo que está
+  en juego): la letra, el nombre y su estado a la izquierda, lo confirmado en viñetas a la derecha.
+
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 
 **Contexto.** Smarteam se alió con Insider One. Elías pidió que la escala refleje lo que habilita una

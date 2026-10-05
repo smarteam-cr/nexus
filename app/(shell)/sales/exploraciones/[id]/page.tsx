@@ -9,6 +9,7 @@
  */
 import { notFound, redirect } from "next/navigation";
 import { Alert } from "@/components/ui";
+import ElegirResponsable from "@/components/exploraciones/ElegirResponsable";
 import LienzoDeExploracion from "@/components/exploraciones/LienzoDeExploracion";
 import { AccionDeCabecera, CabeceraDeFicha, ChipHubspot } from "@/components/layout/CabeceraDeFicha";
 import { can } from "@/lib/auth/permissions/engine";
@@ -16,6 +17,7 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
 import { hubspotCompanyUrl } from "@/lib/hubspot/urls";
 import {
+  equipoParaLaPreventa,
   escalaDeLaExploracion,
   escalaParaExplorar,
   leerExploracion,
@@ -66,7 +68,7 @@ export default async function ExploracionPage({
   }
 
   const exp = await paraLaPantallaCompleta(lectura.fila);
-  const escala = await escalaParaExplorar();
+  const [escala, equipo] = await Promise.all([escalaParaExplorar(), equipoParaLaPreventa()]);
   const portal = await prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } });
   const empresaUrl = hubspotCompanyUrl(portal?.hubspotPortalId ?? null, exp.empresa.hubspotCompanyId);
   const delLienzo = escala.estado === "ok" ? escalaDeLaExploracion(escala.general, exp.estado) : null;
@@ -87,6 +89,20 @@ export default async function ExploracionPage({
         }
         acciones={
           <>
+            {/* Quién la lleva: se elige acá y en el listado (decide el «Para ti» de cada persona). */}
+            <span className="flex items-center gap-1.5 rounded-full border border-line bg-surface py-0.5 pl-2.5 pr-1.5 text-xs">
+              <span className="text-fg-muted">La lleva</span>
+              <span className="min-w-[7.5rem] max-w-[11rem] font-medium">
+                <ElegirResponsable
+                  exploracionId={exp.id}
+                  version={exp.version}
+                  responsableEmail={exp.estado.responsableEmail}
+                  empresa={exp.empresa.nombre}
+                  equipo={equipo}
+                  puedeEditar={puedeEditar && !exp.estado.archivada}
+                />
+              </span>
+            </span>
             {exp.empresa.kind === "CLIENTE" && (
               <AccionDeCabecera href={`/clients/${exp.empresa.clientId}`} title="La ficha del cliente, con sus proyectos">
                 Ver ficha del cliente

@@ -5,6 +5,8 @@
  * Las operaciones (lib/exploraciones/contenido.ts) cambian lo CONFIRMADO o usan y descartan lo que
  * propuso el agente. Se aplican todas o ninguna, con la fila bloqueada. Si otra persona cambió lo
  * confirmado entretanto, 409 con la exploración actual: la pantalla la recarga en vez de pisar.
+ * Si cambia quién la lleva, a la persona nueva le llega un aviso y el «Para ti» de las dos se vuelve
+ * a medir (la preventa sale de uno y entra al otro).
  * Mirar pide `ventas.read`; cambiar, `ventas.write`.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -20,6 +22,8 @@ import {
   SQL_DE_EXPLORACIONES,
 } from "@/lib/exploraciones/servidor";
 import { paraLaPantallaCompleta } from "@/lib/exploraciones/pantalla";
+import { avisar } from "@/lib/para-ti/avisos-server";
+import { olvidarMedicion } from "@/lib/para-ti/medir-server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -66,7 +70,25 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
         { error: "La preventa cambió mientras la editabas (otra persona, o el agente al preparar). Se cargó lo último.", exploracion: paraLaPantalla(r.fila) },
         { status: 409 },
       );
-    case "ok":
+    case "ok": {
+      const antes = r.responsableAntes?.toLowerCase() ?? null;
+      const ahora = r.fila.responsableEmail?.toLowerCase() ?? null;
+      if (antes !== ahora) {
+        if (antes) olvidarMedicion(antes);
+        if (ahora) {
+          olvidarMedicion(ahora);
+          await avisar({
+            para: ahora,
+            tipo: "preventa.responsable",
+            titulo: `Te asignaron la preventa de ${r.fila.client.name}`,
+            detalle: "Sus pendientes ya están en tu «Para ti».",
+            href: `/sales/exploraciones/${encodeURIComponent(id)}`,
+            actorEmail: guard.user.email,
+            dedupeKey: `preventa.responsable:${id}:${ahora}:${new Date().toISOString().slice(0, 10)}`,
+          });
+        }
+      }
       return NextResponse.json({ exploracion: paraLaPantalla(r.fila) });
+    }
   }
 }

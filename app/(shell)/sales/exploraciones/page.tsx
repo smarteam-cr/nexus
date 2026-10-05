@@ -18,7 +18,7 @@ import LlegaronPorElTest from "@/components/exploraciones/LlegaronPorElTest";
 import { can } from "@/lib/auth/permissions/engine";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { cn } from "@/lib/cn";
-import { escalaParaExplorar, listarExploraciones, SQL_DE_EXPLORACIONES } from "@/lib/exploraciones/servidor";
+import { equipoParaLaPreventa, escalaParaExplorar, listarExploraciones, SQL_DE_EXPLORACIONES } from "@/lib/exploraciones/servidor";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import PanelLateral from "@/components/ui/PanelLateral";
 
@@ -30,7 +30,7 @@ export default async function ExploracionesPage() {
   const puedeEditar = await can(ctx.teamMember, "ventas", "write");
 
   const escala = await escalaParaExplorar();
-  const lista = await listarExploraciones(escala.estado === "ok" ? escala.general : null);
+  const [lista, equipo] = await Promise.all([listarExploraciones(escala.estado === "ok" ? escala.general : null), equipoParaLaPreventa()]);
   // El test de marketing nombra el área por su id general: se muestra con el nombre de la escala.
   const nombresDeAreas = escala.estado === "ok" ? Object.fromEntries(escala.general.areas.map((a) => [a.id, a.nombre])) : {};
 
@@ -64,7 +64,7 @@ export default async function ExploracionesPage() {
           </Alert>
         ) : (
           <>
-            <ListaDeExploraciones filas={lista.filas} miCorreo={ctx.teamMember.email} />
+            <ListaDeExploraciones filas={lista.filas} miCorreo={ctx.teamMember.email} equipo={equipo} puedeEditar={puedeEditar} />
             <EmpresasDeHubspot puedeEditar={puedeEditar} />
           </>
         )}

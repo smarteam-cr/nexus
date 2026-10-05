@@ -121,6 +121,8 @@ export async function leerExploracion(id: string): Promise<LecturaDeExploracion>
 
 export interface FilaDeLaLista {
   id: string;
+  /** Para cambiar quién la lleva desde el listado sin abrirla (el PATCH pide la versión). */
+  version: number;
   empresa: string;
   clientId: string;
   hubspotCompanyId: string | null;
@@ -129,6 +131,8 @@ export interface FilaDeLaLista {
   queSigue: string;
   cumplidos: number;
   total: number;
+  /** Los puntos de «lista para proponer», en orden: la barra pinta cuáles faltan, no solo cuántos. */
+  puntos: { id: string; titulo: string; cumplido: boolean }[];
   responsableEmail: string | null;
   /** El nombre de quien la lleva, si es del equipo (para las iniciales de la lista). */
   responsableNombre: string | null;
@@ -175,6 +179,7 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
       }
       return {
         id: f.id,
+        version: f.version,
         empresa: f.client.name,
         clientId: f.clientId,
         hubspotCompanyId: f.client.hubspotCompanyId,
@@ -183,6 +188,7 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
         queSigue: sigue,
         cumplidos: puntos.filter((p) => p.cumplido).length,
         total: puntos.length,
+        puntos: puntos.map((p) => ({ id: p.id, titulo: p.titulo, cumplido: p.cumplido })),
         responsableEmail: f.responsableEmail,
         responsableNombre: f.responsableEmail ? (nombreDe.get(f.responsableEmail.toLowerCase()) ?? null) : null,
         sugeridas: cuantasParaRevisar(estado),
@@ -198,10 +204,15 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
   };
 }
 
+/** Quién puede llevar una preventa: el equipo activo, por nombre (la columna «La lleva» y la cabecera). */
+export async function equipoParaLaPreventa(): Promise<{ email: string; name: string }[]> {
+  return prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true }, orderBy: { name: "asc" } });
+}
+
 // ── Cambiar ───────────────────────────────────────────────────────────────────
 
 export type ResultadoDeCambios =
-  | { estado: "ok"; fila: FilaDeExploracion; confirmado: boolean }
+  | { estado: "ok"; fila: FilaDeExploracion; confirmado: boolean; responsableAntes: string | null }
   | { estado: "no-existe" }
   | { estado: "invalido"; error: string }
   /** Otra persona cambió lo confirmado entretanto: la pantalla recarga en vez de pisar. */
@@ -256,7 +267,7 @@ export async function aplicarCambios(
       },
       select: SELECT_FILA,
     });
-    return { estado: "ok", fila: actualizada, confirmado } as const;
+    return { estado: "ok", fila: actualizada, confirmado, responsableAntes: antes.responsableEmail } as const;
   });
 }
 

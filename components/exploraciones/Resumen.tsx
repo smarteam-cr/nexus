@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Resumen — las ocho tarjetas del marco de calificación, grandes, y lo que sale de cada reunión.
+ * Resumen — las ocho casillas del marco de calificación, en filas a lo ancho, y lo que sale de cada reunión.
  *
  * Pedido de Elías (2026-10-01): el vendedor tiene que ver DE UN VISTAZO qué le falta para poder
  * proponer. Metas, planes, retos y tiempos; presupuesto y quién decide; consecuencias de no actuar e
@@ -78,11 +78,11 @@ function Sugeridas({ n, mas }: { n: number; mas: boolean }) {
 }
 
 /**
- * Una tarjeta del marco, en sus cuatro estados (diseño «Una sugerencia, en su lugar»): falta
- * (punteada); falta con sugerencias (punteada en azul, con lo sugerido en azul todavía sin confirmar);
- * confirmada con algo nuevo (lo confirmado se lee normal y la sugerencia solo se cuenta); confirmada.
+ * Una fila del marco (Elías, 2026-10-05: las cuatro columnas se leían apretadas incluso a 1080). A la
+ * izquierda la letra, el nombre y en qué está (confirmado, sugeridas o falta); a la derecha, lo
+ * confirmado en viñetas a lo ancho, o lo que sugirió el agente en azul. Toda la fila abre la casilla.
  */
-function Tarjeta({ clave, sugeridas, onAbrir }: { clave: (typeof CASILLAS_DEL_RESUMEN)[number]; sugeridas: ItemPropuesto[]; onAbrir: () => void }) {
+function Fila({ clave, sugeridas, onAbrir, ultima }: { clave: (typeof CASILLAS_DEL_RESUMEN)[number]; sugeridas: ItemPropuesto[]; onAbrir: () => void; ultima: boolean }) {
   const { exp, escala, nombreDeNivel } = useLienzo();
   const def = definicionDe(clave);
   const lineas = lineasDe(clave, exp.estado.contenido.casillas[clave]);
@@ -94,43 +94,63 @@ function Tarjeta({ clave, sugeridas, onAbrir }: { clave: (typeof CASILLAS_DEL_RE
       type="button"
       onClick={onAbrir}
       className={cn(
-        "flex min-h-[8.5rem] flex-col gap-2 rounded-xl border p-4 text-left transition-colors hover:bg-surface-hover",
-        vacia ? (n > 0 ? "border-dashed border-info-line bg-surface-muted" : "border-dashed border-line bg-surface-muted") : "border-line bg-surface",
+        "grid w-full gap-x-4 gap-y-2 px-[18px] py-4 text-left transition-colors hover:bg-surface-hover sm:grid-cols-[190px_minmax(0,1fr)_auto]",
+        !ultima && "border-b border-line",
       )}
     >
-      <span className="flex items-center gap-2">
-        <span
-          className={cn(
-            "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-md text-[11px] font-bold",
-            vacia ? "bg-info-surface text-brand" : "bg-success-surface text-success-ink",
+      <span className="flex flex-col gap-1.5">
+        <span className="flex items-center gap-2">
+          <span
+            className={cn(
+              "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-xs font-bold",
+              !vacia ? "bg-success-surface text-success-ink" : n > 0 ? "bg-info-surface text-brand" : "border border-dashed border-line text-fg-muted",
+            )}
+            title={marco}
+          >
+            {letra}
+          </span>
+          <span className="text-[15px] font-semibold text-fg">{def.etiqueta}</span>
+        </span>
+        <span className="flex flex-wrap gap-1.5">
+          {!vacia && (
+            <span className="rounded-full border border-success-line bg-success-surface px-2 py-px text-[11px] font-semibold text-success-ink">✓ Confirmado</span>
           )}
-          title={marco}
-        >
-          {letra}
+          {n > 0 && <Sugeridas n={n} mas={!vacia} />}
+          {vacia && n === 0 && <span className="rounded-full border border-dashed border-line px-2 py-px text-[11px] font-semibold text-fg-muted">Falta</span>}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{def.etiqueta}</span>
-        {n > 0 && <Sugeridas n={n} mas={!vacia} />}
       </span>
-      {vacia ? (
-        n > 0 ? (
-          <span className="line-clamp-3 text-[13px] leading-[1.45] text-brand">{sugeridas.map((it) => `«${describirPropuesta(it, escala, nombreDeNivel)}»`).join(" · ")}</span>
+      <span className="min-w-0">
+        {!vacia ? (
+          <ul className="list-disc space-y-1 pl-[18px] marker:text-fg-muted">
+            {lineas.map((l, i) => (
+              <li key={i} className="text-sm leading-[1.5] text-fg-secondary">
+                {l}
+              </li>
+            ))}
+          </ul>
+        ) : n > 0 ? (
+          <ul className="space-y-1">
+            {sugeridas.map((it) => (
+              <li key={it.id} className="text-sm leading-[1.5] text-brand">
+                «{describirPropuesta(it, escala, nombreDeNivel)}»
+              </li>
+            ))}
+          </ul>
         ) : (
-          <span className="text-xs text-fg-muted">Falta: se pregunta en la próxima sesión</span>
-        )
-      ) : (
-        <span className="space-y-1">
-          {lineas.slice(0, 3).map((l, i) => (
-            <span key={i} className="line-clamp-2 block text-[13px] leading-[1.45] text-fg-secondary">
-              {l}
-            </span>
-          ))}
-          {lineas.length > 3 && <span className="block text-2xs text-fg-muted">y {lineas.length - 3} más</span>}
-        </span>
-      )}
-      {n > 0 && <span className="mt-auto text-xs font-semibold text-brand">Revisar →</span>}
+          <span className="text-[13px] text-fg-muted">Falta: se pregunta en la próxima sesión.</span>
+        )}
+      </span>
+      <span className="self-start pt-0.5 text-xs font-semibold text-brand">{!vacia ? (n > 0 ? "Revisar" : "Editar") : n > 0 ? "Revisar" : "Completar"}</span>
     </button>
   );
 }
+
+/** Las ocho casillas del marco, en tres bloques que se leen como una conversación. */
+const BLOQUES: { titulo: string; claves: (typeof CASILLAS_DEL_RESUMEN)[number][] }[] = [
+  { titulo: "El objetivo", claves: ["metas", "planes", "retos", "tiempos"] },
+  { titulo: "Quién y con qué", claves: ["presupuesto", "autoridad"] },
+  { titulo: "Lo que está en juego", claves: ["consecuencias", "implicaciones"] },
+];
 
 export default function Resumen() {
   const { pendientesPara, puedeEditar, guardando, cambiar, abrirCasilla, abrirRevision } = useLienzo();
@@ -159,9 +179,16 @@ export default function Resumen() {
         </div>
       )}
 
-      <div data-recorrido="preventa.resumen.marco" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {CASILLAS_DEL_RESUMEN.map((clave) => (
-          <Tarjeta key={clave} clave={clave} sugeridas={deLaCasilla(clave)} onAbrir={() => abrirCasilla(clave)} />
+      <div data-recorrido="preventa.resumen.marco" className="space-y-5">
+        {BLOQUES.map((b) => (
+          <section key={b.titulo} className="space-y-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">{b.titulo}</h3>
+            <div className="overflow-hidden rounded-xl border border-line bg-surface">
+              {b.claves.map((clave, i) => (
+                <Fila key={clave} clave={clave} sugeridas={deLaCasilla(clave)} onAbrir={() => abrirCasilla(clave)} ultima={i === b.claves.length - 1} />
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 

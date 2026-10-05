@@ -19,6 +19,7 @@ export const TIPOS_DE_AVISO = {
   "cliente.aprobo-documento": { bueno: true },
   "cliente.aprobo-propuesta": { bueno: true },
   "proyecto.encargado": { bueno: false },
+  "preventa.responsable": { bueno: false },
   "feedback.nuevo": { bueno: false },
   "feedback.respuesta": { bueno: false },
   "feedback.estado": { bueno: false },

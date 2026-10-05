@@ -2,37 +2,86 @@
 
 /**
  * ListaDeExploraciones — las preventas en curso, como en el tablero del listado (sistema de diseño
- * «Nexus · interfaz interna»): filtros en segmentado, una fila por empresa con qué sigue, cuánto le
- * falta para proponer (una barra por punto de «lista para proponer»), la próxima reunión y cuándo se
- * tocó por última vez. Una nueva se abre desde «Planificar con una empresa», debajo, o desde
- * «Llegaron por el test», a la derecha.
+ * «Nexus · interfaz interna»): filtros en segmentado y una fila por empresa con qué sigue, cuánto le
+ * falta para proponer, la próxima reunión y quién la lleva. Una nueva se abre desde «Planificar con
+ * una empresa», debajo, o desde «Llegaron por el test», a la derecha.
+ *
+ * Segunda vuelta (Elías, 2026-10-05, tablero «Preventa · listado y resumen»): «Qué sigue» en dos
+ * renglones (la frase entera y, debajo, las sugeridas); «Para proponer» es una barra ancha con
+ * «N de 7 listos» y lo primero que falta, y al pasar el cursor se ven los siete puntos; y la columna
+ * «La lleva» elige quién lleva la preventa (components/exploraciones/ElegirResponsable.tsx). La fila
+ * entera abre la preventa (el enlace de la empresa se estira); la barra y «La lleva» quedan encima.
  */
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { diaConSemana, haceCuanto } from "@/lib/exploraciones/fechas";
 import type { FilaDeLaLista } from "@/lib/exploraciones/servidor";
+import ElegirResponsable, { type PersonaDelEquipo } from "./ElegirResponsable";
 import { IconoDeSugerencia } from "./FranjaDeSugerencias";
 import Segmentos from "./Segmentos";
 
 type Filtro = "todas" | "mias" | "listas";
 
-const COLUMNAS = "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.6fr)_150px_120px_96px_20px] items-center gap-4";
+const COLUMNAS = "grid grid-cols-[minmax(0,1.25fr)_minmax(0,1.6fr)_180px_112px_176px] items-start gap-4";
 
 const lista = (f: FilaDeLaLista) => f.total > 0 && f.cumplidos === f.total;
 
-/** Lo que va en la columna «Qué sigue»: si es revisar sugerencias, la cuenta la dice la píldora. */
-function textoDeQueSigue(f: FilaDeLaLista): string {
-  return f.sugeridas > 0 && f.queSigue.startsWith("Revisa lo que sugirió el agente") ? "Revisa lo que sugirió el agente" : f.queSigue;
+/** Cada punto de «lista para proponer» dicho corto, para «Falta: …» debajo de la barra. */
+const CORTO: Record<string, string> = {
+  dimensiones: "dónde está cada equipo",
+  meta: "una meta en cifras",
+  autoridad: "quién aprueba",
+  consecuencia: "qué pasa si no actúa",
+  portal: "revisar el portal",
+  siguientePaso: "el siguiente paso con fecha",
+  noExplorado: "lo que nadie exploró",
+};
+
+function queFalta(f: FilaDeLaLista): string {
+  const faltan = f.puntos.filter((p) => !p.cumplido);
+  if (faltan.length === 0) return "";
+  const primero = CORTO[faltan[0].id] ?? faltan[0].titulo;
+  return faltan.length === 1 ? primero : `${primero} y ${faltan.length - 1} más`;
 }
 
-function iniciales(f: FilaDeLaLista): string {
-  const base = f.responsableNombre ?? f.responsableEmail?.split("@")[0] ?? "";
-  const partes = base.split(/[\s._-]+/).filter(Boolean);
-  return ((partes[0]?.[0] ?? "") + (partes[1]?.[0] ?? "")).toUpperCase() || "—";
+/**
+ * La barra de «Para proponer»: un tramo por punto, verde el que está listo. Al pasar el cursor (o
+ * llegar con Tab) se ven los siete puntos: va como `title` de varias líneas, que dibuja la capa de
+ * tooltips de la app (position: fixed, así no la recorta la tabla con scroll horizontal).
+ */
+function ParaProponer({ f }: { f: FilaDeLaLista }) {
+  const listaYa = lista(f);
+  const detalle = ["Lo que pide una propuesta:", ...f.puntos.map((p) => `${p.cumplido ? "✓" : "○"} ${p.titulo}`)].join("\n");
+  return (
+    <span tabIndex={0} title={detalle} className="relative z-10 flex flex-col gap-1.5 rounded outline-none focus-visible:ring-2 focus-visible:ring-brand">
+      <span className="flex gap-[3px]" aria-hidden="true">
+        {f.puntos.map((p) => (
+          <span key={p.id} className={cn("h-2 flex-1 rounded-[3px]", p.cumplido ? "bg-success" : "bg-surface-active")} />
+        ))}
+      </span>
+      <span className="text-xs text-fg-secondary">
+        <span className={cn("font-semibold tabular-nums", listaYa ? "text-success-ink" : "text-fg")}>
+          {f.cumplidos} de {f.total}
+        </span>{" "}
+        listos
+      </span>
+      {!listaYa && f.total > 0 && <span className="text-xs leading-snug text-fg-muted">Falta: {queFalta(f)}</span>}
+    </span>
+  );
 }
 
-export default function ListaDeExploraciones({ filas, miCorreo }: { filas: FilaDeLaLista[]; miCorreo: string }) {
+export default function ListaDeExploraciones({
+  filas,
+  miCorreo,
+  equipo,
+  puedeEditar,
+}: {
+  filas: FilaDeLaLista[];
+  miCorreo: string;
+  equipo: PersonaDelEquipo[];
+  puedeEditar: boolean;
+}) {
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [q, setQ] = useState("");
   const mia = useCallback((f: FilaDeLaLista) => (f.responsableEmail ?? "").toLowerCase() === miCorreo.toLowerCase(), [miCorreo]);
@@ -99,37 +148,33 @@ export default function ListaDeExploraciones({ filas, miCorreo }: { filas: FilaD
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-        <div className="min-w-[760px]">
+        <div className="min-w-[900px]">
           <div className={cn(COLUMNAS, "rounded-t-xl border-b border-line bg-surface-muted px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted")}>
             <span>Empresa</span>
             <span>Qué sigue</span>
             <span>Para proponer</span>
             <span>Próxima reunión</span>
-            <span className="text-right">Actualizada</span>
-            <span />
+            <span>La lleva</span>
           </div>
           {visibles.length === 0 ? (
             <p className="px-4 py-6 text-sm text-fg-muted">Ninguna preventa con este filtro.</p>
           ) : (
             visibles.map((f, i) => (
-              <Link
-                key={f.id}
-                href={`/sales/exploraciones/${f.id}`}
-                className={cn(COLUMNAS, "px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", i > 0 && "border-t border-line")}
-              >
+              <div key={f.id} className={cn(COLUMNAS, "relative p-4 text-fg transition-colors hover:bg-surface-hover", i > 0 && "border-t border-line")}>
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="truncate text-sm font-semibold">{f.empresa}</span>
+                  {/* El enlace se estira sobre toda la fila: tocar cualquier parte abre la preventa. */}
+                  <Link href={`/sales/exploraciones/${f.id}`} className="text-sm font-semibold leading-snug text-fg after:absolute after:inset-0 after:content-['']">
+                    {f.empresa}
+                  </Link>
                   <span className="truncate text-xs text-fg-muted">{[f.edicion ?? "Escala general", f.areas.join(" · ")].filter(Boolean).join(" · ")}</span>
+                  <span className="text-xs text-fg-muted">Actualizada {haceCuanto(f.actualizadaEn)}</span>
                 </span>
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 flex-col items-start gap-1.5">
                   <span
-                    className={cn(
-                      "truncate text-[13px]",
-                      f.sugeridas > 0 ? "text-brand" : lista(f) ? "font-semibold text-success-ink" : "text-fg-secondary",
-                    )}
+                    className={cn("line-clamp-2 text-[13px] leading-[1.4]", lista(f) ? "font-semibold text-success-ink" : "text-fg")}
                     title={f.queSigue}
                   >
-                    {textoDeQueSigue(f)}
+                    {f.queSigue}
                   </span>
                   {f.sugeridas > 0 && (
                     <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-info-line bg-info-surface py-px pl-1.5 pr-2 text-[11px] font-semibold text-brand">
@@ -138,37 +183,26 @@ export default function ListaDeExploraciones({ filas, miCorreo }: { filas: FilaD
                     </span>
                   )}
                 </span>
-                <span className="flex items-center gap-2" title={`${f.cumplidos} de ${f.total} puntos de «lista para proponer»`}>
-                  <span className="flex gap-[3px]" aria-hidden="true">
-                    {Array.from({ length: f.total }, (_, k) => (
-                      <span key={k} className={cn("h-1.5 w-3 rounded-full", k < f.cumplidos ? "bg-success" : "bg-surface-active")} />
-                    ))}
-                  </span>
-                  <span className={cn("text-xs tabular-nums", lista(f) ? "font-semibold text-success-ink" : "text-fg-muted")}>
-                    {f.cumplidos} de {f.total}
-                  </span>
-                </span>
+                <ParaProponer f={f} />
                 <span className={cn("whitespace-nowrap text-[13px]", f.proximaReunion ? "font-medium text-fg" : "text-warn-ink")}>
                   {f.proximaReunion ? diaConSemana(f.proximaReunion) : "Sin agendar"}
                 </span>
-                <span className="flex items-center justify-end gap-2 whitespace-nowrap text-xs text-fg-muted">
-                  {haceCuanto(f.actualizadaEn)}
-                  <span
-                    title={f.responsableNombre ?? f.responsableEmail ?? "Sin responsable"}
-                    className="flex h-[22px] w-[22px] items-center justify-center rounded-full border border-line bg-surface-hover text-[10px] font-semibold text-fg-secondary"
-                  >
-                    {iniciales(f)}
-                  </span>
+                <span className="relative z-10 min-w-0 text-[13px]">
+                  <ElegirResponsable
+                    exploracionId={f.id}
+                    version={f.version}
+                    responsableEmail={f.responsableEmail}
+                    empresa={f.empresa}
+                    equipo={equipo}
+                    puedeEditar={puedeEditar}
+                  />
                 </span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 text-fg-muted" aria-hidden="true">
-                  <path d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
+              </div>
             ))
           )}
         </div>
       </div>
-      <p className="text-xs text-fg-muted">«Para proponer» son los {filas[0]?.total || 7} puntos que pide una preventa antes de armar la propuesta. Lo más reciente, arriba.</p>
+      <p className="text-xs text-fg-muted">«Para proponer» son los {filas[0]?.total || 7} puntos que pide una preventa antes de armar la propuesta: pasa el cursor por la barra para verlos. Lo más reciente, arriba.</p>
     </section>
   );
 }
