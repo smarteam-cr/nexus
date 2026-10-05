@@ -232,6 +232,8 @@ export const DOC_MENU: Record<string, string> = {
   team: "El equipo, sus roles y la matriz de permisos. Solo dirección.",
   roles:
     "Los perfiles de puesto y las propuestas laborales, como documentos que se pueden compartir por enlace.",
+  feedback:
+    "Lo que el equipo reporta desde «Feedback», en el pie del menú: la bandeja, la hoja de ruta y quién reporta. Reportar lo hace cualquiera; revisar, solo dirección.",
   config:
     "Lo que Nexus conecta con el mundo: HubSpot, Google, Claude y Odoo, con el estado de cada conexión y cuánto se gasta en IA.",
 };

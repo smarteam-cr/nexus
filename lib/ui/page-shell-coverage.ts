@@ -58,6 +58,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   escala: { shell: "SHELL_DEFAULT" },
   "escala/[area]": { shell: "SHELL_DEFAULT" },
   "escala/comentarios": { shell: "SHELL_DEFAULT" },
+  feedback: { shell: "SHELL_DEFAULT" },
 
   // ── Contenedor propio legítimo ──────────────────────────────────────────────
   "clients/[id]": { custom: "workspace full-viewport con scroll interno y tab bar sticky" },

@@ -95,6 +95,7 @@ export default function SidebarShell({ user, initialOpen, children }: Props) {
           primer commit. `self-start` hace falta porque un ítem flex estirado a la altura de la
           página no tiene lugar donde pegarse. */}
       <div
+        data-feedback-fijo=""
         className={`sticky top-0 h-screen self-start flex-shrink-0 transition-all duration-200 ease-in-out overflow-hidden ${
           effectiveOpen ? "w-56" : "w-14"
         }`}

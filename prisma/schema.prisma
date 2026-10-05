@@ -5636,3 +5636,133 @@ model GuiaDeExploracion {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
+
+// ── Feedback: el equipo reporta desde cualquier pantalla (2026-10-04) ────────────
+// El botón «Feedback» del pie del menú guarda el reporte en el momento, con la captura de la pantalla y
+// dónde estaba la persona. Lo revisa dirección en /feedback. SQL: scripts/sql/2026-10-04-feedback.sql.
+// Tipos, estados y columnas son TEXT a propósito (INV4): los valores viven en lib/feedback/reglas.ts.
+
+/// Un reporte de una persona del equipo: algo falla, una mejora o algo que no se entiende.
+model FeedbackReporte {
+  id     String @id @default(cuid())
+  /// El número que se cita («F-128»).
+  numero Int    @unique @default(autoincrement())
+
+  autorEmail String
+  /// falla · mejora · duda
+  tipo       String
+  cuerpo     String
+  /// Solo en «falla»: si le frena el trabajo (llega como urgente).
+  meFrena    Boolean @default(false)
+
+  /// Lo que dice la pantalla (su título), para leerlo sin abrir la dirección.
+  pantalla  String
+  /// La dirección exacta, con sus filtros.
+  ruta      String
+  rol       String?
+  navegador String?
+  ventana   String?
+  /// El commit que corría Nexus.
+  version   String?
+  /// Los errores que dio la pantalla en los últimos minutos: [{ mensaje, hace }].
+  errores   Json?
+  /// Path en el almacén PRIVADO de documentos. Solo lo ven quien reportó y quien revisa.
+  capturaPath String?
+  /// Lo que señaló en la pantalla: [{ n, descripcion }].
+  marcas    Json?
+
+  /// sin_revisar · en_hoja · respondido · no_se_hara
+  estado String @default("sin_revisar")
+
+  // nullable porque un reporte sin revisar todavía no está en ningún tema
+  temaId String?
+  tema   FeedbackTema? @relation(fields: [temaId], references: [id], onDelete: SetNull)
+
+  // nullable porque la mayoría de los reportes no responden a un pedido de opinión
+  pedidoId String?
+  pedido   FeedbackPedido? @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+
+  /// El motivo de «No se hará» (lo ve quien reportó).
+  motivoCierre     String?
+  decididoPorEmail String?
+  decididoAt       DateTime?
+  /// Hasta dónde leyó la conversación cada lado (para el punto de «hay algo nuevo»).
+  autorLeyoAt      DateTime?
+  revisorLeyoAt    DateTime?
+
+  mensajes FeedbackMensaje[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([estado, createdAt])
+  @@index([autorEmail, createdAt])
+  @@index([temaId])
+}
+
+/// Un mensaje de la conversación de un reporte.
+model FeedbackMensaje {
+  id String @id @default(cuid())
+
+  reporteId String
+  reporte   FeedbackReporte @relation(fields: [reporteId], references: [id], onDelete: Cascade)
+
+  autorEmail String
+  cuerpo     String
+
+  createdAt DateTime @default(now())
+
+  @@index([reporteId, createdAt])
+}
+
+/// Un tema de la hoja de ruta: junta los reportes que piden lo mismo.
+model FeedbackTema {
+  id      String  @id @default(cuid())
+  titulo  String
+  detalle String?
+  /// Dónde se nota («Clientes», «Cobranza»).
+  pantalla String?
+  /// decidir · planeado · curso · listo
+  columna String @default("decidir")
+  /// reporte · sugerencia · mano
+  origen  String @default("mano")
+  /// El reporte desde el que se creó, si salió de la bandeja (sin FK: el reporte puede cambiar de tema).
+  origenReporteId String?
+  /// A nombre de quién, si lo cargó dirección a mano (lo que alguien dijo en una sesión).
+  aNombreDe       String?
+  creadoPorEmail  String
+  movidoAt        DateTime?
+  listoAt         DateTime?
+
+  reportes FeedbackReporte[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([columna, createdAt])
+}
+
+/// Dirección le pide la opinión a alguien sobre una pantalla.
+model FeedbackPedido {
+  id        String @id @default(cuid())
+  paraEmail String
+  /// Cómo se llama la pantalla («Clientes»).
+  pantalla  String
+  /// El comienzo de la dirección donde aparece («/clients»).
+  ruta      String
+  pregunta  String
+  hasta     DateTime?
+  /// abierto · respondido · descartado
+  estado    String   @default("abierto")
+  vistoVeces   Int       @default(0)
+  respondidoAt DateTime?
+  descartadoAt DateTime?
+  creadoPorEmail String
+
+  reportes FeedbackReporte[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([paraEmail, estado])
+}

@@ -9,6 +9,7 @@ import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
 import { TooltipLayer } from "@/components/ui/Tooltip";
 import AgentRunsProvider from "@/components/ai/AgentRunsProvider";
+import FeedbackProvider from "@/components/feedback/FeedbackProvider";
 
 export default async function AppShell({
   children,
@@ -74,6 +75,9 @@ export default async function AppShell({
     // agentes" consume el mismo feed que dispara los avisos, y al vivir en el layout
     // del route-group el seguimiento sobrevive a navegar entre secciones.
     <AgentRunsProvider>
+      {/* Feedback desde cualquier pantalla (2026-10-04): el botón vive en el pie del menú y el panel
+          no se desmonta al navegar. Va con la versión que corre, para saber qué estaba viendo la persona. */}
+      <FeedbackProvider version={process.env.GIT_SHA?.slice(0, 7) ?? null}>
       <SidebarShell user={userLite} initialOpen={!sidebarCollapsed}>
         {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
             (el componente se auto-apaga para otros roles; render null). */}
@@ -84,6 +88,7 @@ export default async function AppShell({
         <TooltipLayer />
         {children}
       </SidebarShell>
+      </FeedbackProvider>
     </AgentRunsProvider>
   );
 }

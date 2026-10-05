@@ -379,6 +379,16 @@ export const APP_NAV: readonly NavItemConfig[] = [
     ),
   },
   {
+    // Feedback (2026-10-04): la bandeja, la hoja de ruta y quién reporta. Reportar lo hace TODO el equipo
+    // desde el pie del menú; revisar es de dirección (lib/feedback/reglas.ts › esRevisorDeFeedback).
+    key: "feedback",
+    label: "Feedback",
+    href: "/feedback",
+    gate: { kind: "superAdmin" },
+    group: "administracion",
+    icon: icon("M4 5h16v11H10l-6 4z M8 9h8 M8 12h5"),
+  },
+  {
     key: "config",
     /* Se llamaba «Configuración» y competía con el «Configuración» del menú del avatar, que lleva
        a otra pantalla. Dos entradas con el mismo nombre y distinto destino: la persona aprende que

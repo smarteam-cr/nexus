@@ -10,6 +10,7 @@ import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import { APP_NAV, canSeeNavItem, visibleNavChildren } from "./nav-config";
 import NavFlyout, { RolesNavFlyout } from "./NavFlyout";
+import BotonDeFeedback from "@/components/feedback/BotonDeFeedback";
 
 interface UserLite {
   email: string;
@@ -289,6 +290,8 @@ export default function Sidebar({ user, onToggle, isOpen = true }: SidebarProps)
               dropdown hacia arriba que incluye Configuración + Cerrar sesión). ── */}
       <div className="flex-shrink-0 border-t border-gray-800/60 py-2">
         <div className={isOpen ? "px-2" : "px-1"}>
+          {/* Feedback (2026-10-04): reportar desde cualquier pantalla, con la captura de lo que se ve. */}
+          <BotonDeFeedback isOpen={isOpen} />
           <RunsIndicator isOpen={isOpen} />
           <UserAvatar user={user} isOpen={isOpen} />
         </div>

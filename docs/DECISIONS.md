@@ -4576,3 +4576,19 @@ como tokens del sistema y el segmentado nuevo también en Preventa.
   no repite la cuenta de cada una (está en su chip).
 
 **Pendiente.** El isotipo de Smarteam sigue siendo una reconstrucción hasta tener el SVG oficial.
+
+## Feedback desde cualquier pantalla (2026-10-04)
+
+**Contexto.** Elías hace sesiones para que cada persona le diga qué mejorar de la interfaz, y la mitad no se acuerda de lo que le molestó. Pidió un módulo de feedback en todo Nexus: reportar en el momento, con la pantalla guardada, armar una hoja de ruta de mejoras y ver quién reporta más. Diseño aprobado en Claude Design («Feedback · diseño»).
+
+- **«Feedback» vive fijo en el pie del menú** y abre un panel a la derecha que NO tapa la pantalla (como el chat del asistente). Pestañas: «Dar feedback» y «Mis reportes». «Lo que viene» (la hoja de ruta a la vista del equipo) quedó para después, por decisión de Elías.
+- **Tres tipos con palabras de todos los días**: Algo falla · Una mejora · No se entiende. Una falla pregunta si frena el trabajo; si sí, llega como urgente.
+- **La captura se arma en el navegador** (modern-screenshot), sin pedir permiso: un clic. Sale distinta en canvas y mapas; si falla, el reporte sale igual con la dirección. Va al almacén PRIVADO de documentos (puede mostrar datos de un cliente o de Finanzas) y se lee con enlace firmado. «Señalar algo» marca hasta 3 cosas: las marcas salen en la captura y guardan el nombre de lo que se tocó. Con cada reporte van la dirección exacta, el rol, el navegador, la versión de Nexus y los errores de la pantalla de los últimos 10 minutos.
+- **Lo que ve la persona al mandar depende de qué mandó**: una mejora festeja en toda la pantalla (confeti con los colores de MARCA, no los de estado; sin nombres; no bloquea; sin confeti si la computadora pide reducir movimiento). Una falla que frena: «Reportado como urgente», con número (F-128) y lo que ya quedó guardado. Lo demás: el «Recibido» verde.
+- **Revisa el feedback el rol SUPER_ADMIN** (`esRevisorDeFeedback`), en /feedback: Bandeja, Hoja de ruta y Personas.
+- **Un reporte NO es un tema y nada entra solo a la hoja de ruta.** En la Bandeja cada reporte tiene tres salidas: «Llevar a la hoja de ruta» (sumarlo a un tema o crear uno nuevo eligiendo la columna), «Responder y cerrar» y «No se hará» (con motivo, que la persona ve). Un tema nuevo entra en «Por decidir» salvo que se elija otra columna; también se crea a mano con «Nuevo tema» (lo que alguien dijo en una sesión). Cada tarjeta dice de dónde salió.
+- **El estado que ve quien reportó sigue al tema**: si el tema pasa a «Listo», su reporte también, y le llega el aviso.
+- **«Se parece a» no es IA (v1).** La sugerencia de tema sale de contar palabras en común (`lib/feedback/parecidos.ts`), así que va SIN la chispa y dice qué palabras comparten. Pasarla a un agente es una tanda propia (AgentRun, costo, prompt).
+- **Los avisos van por «Para ti», no por un contador propio**: `feedback.nuevo` al frente FEEDBACK (Super Admin lo lleva por defecto), `feedback.respuesta` y `feedback.estado` a quien reportó, con `/para-ti?feedback=<id>`: ese parámetro abre el panel en el reporte desde cualquier pantalla.
+- **El pedido de opinión** es la respuesta a «no se acuerdan»: dirección le pregunta algo concreto a alguien sobre una pantalla, y le aparece al entrar ahí (abajo a la derecha: no se puede meter dentro de cada página) hasta que responda o diga «Ahora no». Responder abre el panel con la pregunta arriba.
+- **El festejo y la capa de «Señalar» no son diálogos**: quedan declarados con su motivo en `lib/ui/token-vocab.test.ts` (`CAPAS_QUE_NO_SON_DIALOGOS`), no como deuda.

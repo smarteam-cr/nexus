@@ -116,6 +116,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   escala: { modo: "own" },
   "escala/[area]": { modo: "own" },
   "escala/comentarios": { modo: "own" },
+  // Feedback (2026-10-04): la bandeja abre por defecto; su skeleton tiene sus tres columnas.
+  feedback: { modo: "own" },
   roles: { modo: "own" },
   "roles/[id]": { modo: "inherits", de: "roles" },
   team: { modo: "own" },

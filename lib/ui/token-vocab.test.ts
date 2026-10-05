@@ -235,12 +235,24 @@ const DEUDA_OVERLAYS: Record<string, number> = {
   "components/flowchart/FlowchartViewer.tsx": 1,
 };
 
+/**
+ * Capas a pantalla completa que NO son diálogos, con el porqué. No son deuda: un Modal acá estaría mal (le
+ * quitaría el foco a la página y bloquearía lo que la persona está mirando). Sumar una exige escribir por qué.
+ */
+const CAPAS_QUE_NO_SON_DIALOGOS: Record<string, string> = {
+  "components/feedback/Festejo.tsx":
+    "el festejo de una mejora: deja pasar los clics (pointer-events-none), no toma el foco y se va solo; es un aviso (role=status), como un toast",
+  "components/feedback/Senalar.tsx":
+    "la capa de «Señalar algo»: toma el mouse para marcar la pantalla; no es un diálogo (Esc la cierra y su barra tiene «Cancelar» y «Listo»)",
+};
+
 describe("Ratchet de overlays: los fixed inset-0 a mano solo ENCOGEN", () => {
   it("ningún overlay nuevo a mano; los migrados a Modal/Drawer salen", () => {
     const norm = (s: string) => s.split(/[\\/]/).join("/");
     const actual = new Map<string, number>();
     for (const rel of archivosUi(EXENTOS_TOKENS)) {
       if (norm(rel).startsWith("components/ui/")) continue;
+      if (CAPAS_QUE_NO_SON_DIALOGOS[norm(rel)]) continue;
       const src = fs.readFileSync(path.join(RAIZ, rel), "utf8");
       let n = 0;
       for (const linea of src.split("\n")) {

@@ -580,3 +580,14 @@
   retiró** el 2026-08-14. Reemplazó a las cuatro tarjetas de texto ese mismo día **sin agregar
   ningún campo obligatorio**, así que las propuestas ya publicadas la estrenan solas: sin
   `titular` cae al rótulo del documento. Ver DECISIONS §«Por qué Smarteam».
+- **Feedback** (botón del pie del menú; revisión en `/feedback`): lo que cualquier persona del equipo reporta
+  sobre Nexus desde la pantalla en la que está, con la captura de esa pantalla. Tres tipos: **Algo falla**,
+  **Una mejora** y **No se entiende**. Lo revisa Super Admin. Ver DECISIONS §Feedback desde cualquier pantalla.
+- **reporte** (`FeedbackReporte`): lo que alguien mandó, con su número (**F-128**), la dirección, el rol, el
+  navegador, la versión, los errores de la pantalla y, si la hubo, la captura y sus **marcas** («Señalar algo»).
+  Es **urgente** si es una falla que le frena el trabajo.
+- **tema de la hoja de ruta** (`FeedbackTema`): junta los reportes que piden lo mismo. Columnas: **Por decidir**
+  (la de entrada) · **Planeado** · **En curso** · **Listo**. Un reporte llega a un tema solo cuando dirección lo
+  lleva desde la Bandeja; el estado que ve quien reportó sigue al tema.
+- **pedido de opinión** (`FeedbackPedido`): dirección le pregunta algo concreto a una persona sobre una pantalla;
+  le aparece al entrar ahí hasta que responde o dice «Ahora no».

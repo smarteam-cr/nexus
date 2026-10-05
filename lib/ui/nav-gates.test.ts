@@ -35,7 +35,7 @@ const visibles = (c: NavContext) =>
 const UNIVERSALES = ["clients", "marketing", "sessions", "knowledge", "documentacion", "escala"];
 
 describe("gates del sidebar congelados (espejo de los booleanos pre-migración)", () => {
-  it("SUPER_ADMIN ve los 14 ítems", () => {
+  it("SUPER_ADMIN ve los 15 ítems", () => {
     const c = ctx(true, {
       clientes: { viewAll: true },
       customerSuccess: { read: true },
@@ -59,6 +59,8 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
       "agents",
       "team",
       "roles",
+      // La bandeja de feedback (2026-10-04): revisar es de dirección; reportar lo hace todo el equipo.
+      "feedback",
       "config",
     ]);
   });
