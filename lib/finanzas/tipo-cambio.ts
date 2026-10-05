@@ -135,6 +135,57 @@ export function leerHoyHacienda(json: unknown): TasaDelDia {
   return { fecha, venta, compra: tasaCreible(compra) ? compra : null, fuente: "HACIENDA" };
 }
 
+// ── Guardar y avisar ────────────────────────────────────────────────────────────
+
+/**
+ * ¿Lo recién traído corrige lo que ya estaba guardado para ese día? Solo si el número cambió (el BCCR corrige a veces
+ * los últimos días) y NUNCA si Hacienda quiere pisar un número que vino del servicio del BCCR: el BCCR es la fuente y
+ * Hacienda, un espejo suyo. Lo usa `guardar` (tipo-cambio-server.ts).
+ */
+export function corrigeLoGuardado(
+  guardada: { venta: number; compra: number | null; fuente: string },
+  traida: Pick<TasaDelDia, "venta" | "compra" | "fuente">,
+): boolean {
+  const distinto =
+    Math.abs(guardada.venta - traida.venta) > 0.00005 ||
+    (traida.compra !== null && Math.abs((guardada.compra ?? 0) - traida.compra) > 0.00005);
+  if (!distinto) return false;
+  return !(guardada.fuente === "BCCR" && traida.fuente === "HACIENDA");
+}
+
+/** Lo que vuelve de «Actualizar» (`ResultadoTipoDeCambio`, tipo-cambio-server.ts), lo justo para decirlo. */
+export interface ResultadoParaAvisar {
+  ok: boolean;
+  nuevos: number;
+  corregidos: number;
+  avisos: readonly string[];
+}
+
+/**
+ * Qué decirle a quien tocó «Actualizar».
+ *   · exito: todas las fuentes respondieron («Ya estaba al día» o lo que se guardó).
+ *   · aviso: hay tasa de la última semana, pero alguna fuente falló; se nombra cuál.
+ *   · error: no quedó ninguna tasa de la última semana.
+ * ⚠ `ok` solo dice que hay ALGUNA tasa de los últimos siete días. Hasta el 2026-10-05 la pantalla decía «Ya estaba al
+ * día» con eso, aunque ninguna fuente hubiera respondido.
+ */
+export function mensajeDeActualizacion(r: ResultadoParaAvisar): { tipo: "exito" | "aviso" | "error"; texto: string } {
+  const nuevos = r.nuevos === 1 ? "1 día nuevo" : `${r.nuevos} días nuevos`;
+  const corregidos = r.corregidos === 1 ? "1 corregido" : `${r.corregidos} corregidos`;
+  const guardado = r.nuevos + r.corregidos === 0 ? null : `${nuevos}${r.corregidos ? `, ${corregidos}` : ""}`;
+  const fallos = r.avisos.join(" · ");
+  if (!r.ok) {
+    return {
+      tipo: "error",
+      texto: `${guardado ? `Se guardaron ${guardado}, pero no` : "No"} hay ninguna tasa de la última semana. ${fallos || "Ninguna fuente respondió"}. Prueba de nuevo en un rato.`,
+    };
+  }
+  if (r.avisos.length > 0) {
+    return { tipo: "aviso", texto: `${guardado ? `${guardado}, pero` : "No hay días nuevos:"} no todas las fuentes respondieron. ${fallos}.` };
+  }
+  return { tipo: "exito", texto: guardado ? `${guardado}.` : "Ya estaba al día." };
+}
+
 // ── Qué tasa le toca a cada cosa ────────────────────────────────────────────────
 
 /** Suma días a una fecha YYYY-MM-DD (en UTC, sin horas: no hay corrimiento por zona). */

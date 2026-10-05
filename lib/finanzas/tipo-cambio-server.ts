@@ -14,11 +14,14 @@
  *  3. La tasa de hoy de Hacienda, sin token. Con eso, aunque falte el histórico, desde hoy cada día queda guardado.
  */
 import { prisma } from "@/lib/db/prisma";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
 import { crDateParts } from "@/lib/jobs/time";
+import { confirmadoPorPersona } from "./cierre";
 import type { TasaDeMes } from "./equilibrio";
 import {
   DIAS_HACIA_ATRAS,
   TIPO_CAMBIO_DESDE,
+  corrigeLoGuardado,
   juntarBccr,
   leerHistoricoHacienda,
   leerHoyHacienda,
@@ -47,10 +50,17 @@ class FalloDeFuente extends Error {
   }
 }
 
+/**
+ * Cuánto se espera a una fuente en CADA pedido. Era 30 s: con Hacienda colgada, un intento tardaba hasta un minuto y
+ * medio (BCCR, histórico y hoy), y el tick de los jobs es secuencial, así que atrasaba a todos los demás. Una respuesta
+ * sana de cualquiera de las dos tarda menos de un par de segundos; diez alcanzan de sobra.
+ */
+const ESPERA_POR_PEDIDO_MS = 10_000;
+
 async function pedirJson(url: string, headers: Record<string, string> = {}): Promise<unknown> {
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: "application/json", ...headers }, signal: AbortSignal.timeout(30_000), cache: "no-store" });
+    res = await fetch(url, { headers: { Accept: "application/json", ...headers }, signal: AbortSignal.timeout(ESPERA_POR_PEDIDO_MS), cache: "no-store" });
   } catch (e) {
     throw new FalloDeFuente(`no respondió (${e instanceof Error ? e.message : String(e)})`, true);
   }
@@ -116,8 +126,7 @@ async function guardar(tasas: readonly TasaDelDia[]): Promise<{ nuevos: number; 
   let corregidos = 0;
   for (const e of existentes) {
     const t = porFecha.get(e.fecha)!;
-    const distinto = Math.abs(Number(e.venta) - t.venta) > 0.00005 || (t.compra !== null && Math.abs(Number(e.compra ?? 0) - t.compra) > 0.00005);
-    if (!distinto || (e.fuente === "BCCR" && t.fuente === "HACIENDA")) continue;
+    if (!corrigeLoGuardado({ venta: Number(e.venta), compra: e.compra === null ? null : Number(e.compra), fuente: e.fuente }, t)) continue;
     await prisma.tipoCambioDia.update({
       where: { fecha: e.fecha },
       data: { venta: t.venta, compra: t.compra ?? e.compra, fuente: t.fuente, traidoEn: ahora },
@@ -144,12 +153,28 @@ export interface ResultadoTipoDeCambio {
   transitorio: boolean;
 }
 
+/** La sincronización que está corriendo en este proceso, si hay una (el candado de `sincronizarTipoDeCambio`). */
+let enCurso: Promise<ResultadoTipoDeCambio> | null = null;
+
 /**
  * Trae lo que falta y lo guarda. Sin histórico (o con huecos al principio), pide desde `TIPO_CAMBIO_DESDE`; si ya lo
  * tiene, desde tres días antes de la última tasa (por si el BCCR corrigió algo). Nunca lanza por una fuente caída: lo
  * dice en `avisos` y prueba la siguiente.
+ *
+ * ⚠ CANDADO: una sola a la vez en el proceso. Sin histórico, una corrida son hasta 45 pedidos a Hacienda (uno por mes
+ * desde 2023), y Hacienda bloquea diez minutos a quien pase de diez por segundo: cada clic en «Actualizar» (o el clic
+ * de otra persona, o el job de las 6) arrancaba otra tanda en paralelo. Ahora quien llega mientras corre una espera esa
+ * misma y se lleva su resultado. Con un rango explícito (solo el script, que corre en su propio proceso) no hay candado.
  */
-export async function sincronizarTipoDeCambio(opciones: { desde?: string; hasta?: string } = {}): Promise<ResultadoTipoDeCambio> {
+export function sincronizarTipoDeCambio(opciones: { desde?: string; hasta?: string } = {}): Promise<ResultadoTipoDeCambio> {
+  if (opciones.desde !== undefined || opciones.hasta !== undefined) return sincronizar(opciones);
+  enCurso ??= sincronizar({}).finally(() => {
+    enCurso = null;
+  });
+  return enCurso;
+}
+
+async function sincronizar(opciones: { desde?: string; hasta?: string }): Promise<ResultadoTipoDeCambio> {
   const hoy = crDateParts(new Date()).dateKey;
   const hasta = opciones.hasta ?? hoy;
   const [primera, ultima] = await Promise.all([
@@ -236,6 +261,10 @@ export interface TasasDelAnio {
 /**
  * Las tasas de un año para el punto de equilibrio y el cierre. ⚠ Si `TipoCambioDia` no existe todavía (el SQL de
  * 2026-10-05 sin aplicar), no tumba nada: avisa en el log y sigue con las de `TipoCambioMes`, como antes.
+ *
+ * ⛔ SOLO eso se traga (tabla o columna que no existe, P2021/P2022 — `esquemaDesactualizado`). Hasta el 2026-10-05 el
+ * `catch` se tragaba cualquier error: una base caída a mitad del reporte (P1001) convertía todos los colones con la tasa
+ * cargada a mano, sin un solo aviso en pantalla. Cualquier otro error se relanza.
  */
 export async function cargarTasasDelAnio(anio: number, hoyISO: string): Promise<TasasDelAnio> {
   const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
@@ -246,7 +275,8 @@ export async function cargarTasasDelAnio(anio: number, hoyISO: string): Promise<
         select: { fecha: true, venta: true },
         orderBy: { fecha: "asc" },
       })
-      .catch(() => {
+      .catch((e: unknown) => {
+        if (!esquemaDesactualizado(e)) throw e;
         console.warn("[tipo-de-cambio] no se pudo leer el tipo de cambio diario (¿falta el SQL de 2026-10-05?): se usa el de cada mes");
         return [];
       }),
@@ -276,11 +306,15 @@ export async function cargarTasasDelAnio(anio: number, hoyISO: string): Promise<
   };
 }
 
-/** ¿El tipo de cambio de este mes ya es firme? El del BCCR con todos los días, o (sin días del BCCR) uno firmado por una persona. */
+/**
+ * ¿El tipo de cambio de este mes ya es firme? El del BCCR con todos los días, o (sin días del BCCR) uno firmado por una
+ * persona. «Firmado por una persona» es UNA regla, la del cierre (`confirmadoPorPersona`): copiada acá, las dos podían
+ * dejar de decir lo mismo y el cierre pedir confirmar un mes que el reporte ya daba por firme.
+ */
 export function tasaFirme(t: TasaDelMesParaReporte | undefined): boolean {
   if (!t) return false;
   if (t.bccr) return t.bccr.completo && !t.bccr.porVenir;
-  return !!t.manual && t.manual.registradoPor.includes("@");
+  return !!t.manual && confirmadoPorPersona(t.manual.registradoPor) !== null;
 }
 
 /** Todo el histórico guardado, del más viejo al más nuevo: para la página del tipo de cambio. */
@@ -297,7 +331,9 @@ export async function leerHistorico(): Promise<{ dias: TasaDelDia[]; traidoEn: s
       })),
       traidoEn: ultima ? ultima.toISOString() : null,
     };
-  } catch {
+  } catch (e) {
+    // Solo la tabla que todavía no existe (la página lo dice); cualquier otro error es un error (ver `cargarTasasDelAnio`).
+    if (!esquemaDesactualizado(e)) throw e;
     console.warn("[tipo-de-cambio] no se pudo leer el histórico (¿falta el SQL de 2026-10-05?)");
     return null;
   }

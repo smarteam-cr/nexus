@@ -2,6 +2,8 @@
  * /api/finanzas/tipo-de-cambio — «Actualizar» de Finanzas › Tipo de cambio (2026-10-05).
  *   POST → trae ahora lo que falta del tipo de cambio del BCCR (lo mismo que hace el job diario) y dice qué guardó.
  * Solo trae datos públicos y los guarda; no toca ningún monto. Pide poder editar Cobranza porque escribe en la base.
+ * Si ya hay una actualización corriendo (otro clic, otra persona, el job de las 6), no arranca otra: espera esa y
+ * contesta con su resultado (el candado vive en `sincronizarTipoDeCambio`). 502 = no quedó ninguna tasa de la semana.
  */
 import { NextResponse } from "next/server";
 import { guardCobranzaEditor } from "@/lib/auth/api-guards";

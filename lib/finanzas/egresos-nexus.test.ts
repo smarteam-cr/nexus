@@ -5,7 +5,16 @@
  * Correr: `npx vitest run lib/finanzas --project unit`.
  */
 import { describe, it, expect } from "vitest";
-import { calidadDeMesDeNexus, costoVigenteEn, egresoDesdeNexus, egresosDeNexus, type CostoParaEgreso } from "./egresos-nexus";
+import {
+  calidadDeMesDeNexus,
+  costoParaEgreso,
+  costoVigenteEn,
+  egresoDesdeNexus,
+  egresosDeNexus,
+  montoDelCostoEn,
+  type CostoParaEgreso,
+  type MovimientoDeCosto,
+} from "./egresos-nexus";
 import { calcularEquilibrio, type EgresoDeMes } from "./equilibrio";
 import { porCobrarEnMercurySinEmparejar } from "./facturado-sin-cuenta";
 
@@ -31,12 +40,85 @@ describe("de dónde sale el gasto", () => {
 });
 
 describe("costoVigenteEn", () => {
-  it("un pausado no cuenta; uno dado de baja cuenta hasta su mes; uno cargado después, desde su mes", () => {
-    expect(costoVigenteEn(costo({ activo: false }), "2026-10")).toBe(false);
+  it("uno dado de baja cuenta hasta su mes; uno cargado después, desde su mes", () => {
     expect(costoVigenteEn(costo({ finalizadoEl: "2026-10-15" }), "2026-10")).toBe(true);
     expect(costoVigenteEn(costo({ finalizadoEl: "2026-10-15" }), "2026-11")).toBe(false);
     expect(costoVigenteEn(costo({ creadoEl: "2026-11-03" }), "2026-10")).toBe(false);
     expect(costoVigenteEn(costo({ creadoEl: "2026-11-03" }), "2026-11")).toBe(true);
+  });
+
+  /* ⚠ CAMBIÓ A PROPÓSITO (auditoría 2026-10-05). Este caso decía «un pausado no cuenta» y lo probaba sin fecha, o sea en
+     NINGÚN mes: era el defecto, no la regla. Pausar un recurrente el 3 de diciembre lo sacaba también de octubre, que ya
+     se había pagado. Ahora una pausa apaga desde su fecha (ver «cada mes con lo que valía ese mes»). Lo que queda de la
+     regla vieja es solo el caso sin historia: sin un movimiento que diga CUÁNDO se pausó, no se inventa una fecha. */
+  it("sin historia, un pausado no cuenta: no hay fecha de la pausa y no se inventa", () => {
+    expect(costoVigenteEn(costo({ activo: false }), "2026-10")).toBe(false);
+  });
+});
+
+describe("cada mes con lo que valía ese mes (la historia de CostoMovimiento)", () => {
+  const mov = (tipo: string, fechaEfectiva: string, monto = 800): MovimientoDeCosto => ({ tipo, fechaEfectiva, monto });
+  const alta = mov("ALTA", "2026-07-01");
+
+  it("un costo pausado el 3 de diciembre sigue contando en octubre y noviembre; diciembre cuenta su mes; enero no", () => {
+    const c = costo({ activo: false, movimientos: [alta, mov("PAUSA", "2026-12-03")] });
+    expect(montoDelCostoEn(c, "2026-10")).toBe(800);
+    expect(montoDelCostoEn(c, "2026-11")).toBe(800);
+    expect(montoDelCostoEn(c, "2026-12")).toBe(800);
+    expect(montoDelCostoEn(c, "2027-01")).toBeNull();
+  });
+
+  it("un aumento en diciembre no cambia octubre; diciembre ya va con el monto nuevo", () => {
+    const c = costo({ monto: 950, movimientos: [alta, mov("CAMBIO_MONTO", "2026-12-15", 950)] });
+    expect(montoDelCostoEn(c, "2026-10")).toBe(800);
+    expect(montoDelCostoEn(c, "2026-11")).toBe(800);
+    expect(montoDelCostoEn(c, "2026-12")).toBe(950);
+  });
+
+  it("pausado el último día del mes: ese mes cuenta y el siguiente no; reactivado, vuelve desde su mes", () => {
+    const c = costo({ movimientos: [alta, mov("PAUSA", "2026-10-31"), mov("REACTIVACION", "2027-01-10")] });
+    expect(montoDelCostoEn(c, "2026-10")).toBe(800);
+    expect(montoDelCostoEn(c, "2026-11")).toBeNull();
+    expect(montoDelCostoEn(c, "2026-12")).toBeNull();
+    expect(montoDelCostoEn(c, "2027-01")).toBe(800);
+  });
+
+  it("un cambio de monto no prende un costo pausado", () => {
+    const c = costo({ activo: false, monto: 900, movimientos: [alta, mov("PAUSA", "2026-10-05"), mov("CAMBIO_MONTO", "2026-11-02", 900)] });
+    expect(montoDelCostoEn(c, "2026-10")).toBe(800);
+    expect(montoDelCostoEn(c, "2026-11")).toBeNull();
+  });
+
+  it("la baja la manda la fila: corregir su fecha deja dos BAJA y no apaga desde la primera", () => {
+    const c = costo({ finalizadoEl: "2026-12-20", movimientos: [alta, mov("BAJA", "2026-10-15"), mov("BAJA", "2026-12-20")] });
+    expect(montoDelCostoEn(c, "2026-11")).toBe(800);
+    expect(montoDelCostoEn(c, "2026-12")).toBe(800);
+    expect(montoDelCostoEn(c, "2027-01")).toBeNull();
+  });
+
+  it("si la historia no termina como la fila de hoy, manda la fila: no se reconstruye a ciegas", () => {
+    // Nació pausado: anota un ALTA y nada más.
+    expect(montoDelCostoEn(costo({ activo: false, movimientos: [alta] }), "2026-10")).toBeNull();
+    // Un monto cambiado sin dejar huella: la historia dice 800 y la fila 1000.
+    expect(montoDelCostoEn(costo({ monto: 1000, movimientos: [alta] }), "2026-10")).toBe(1000);
+  });
+
+  it("los egresos de Nexus llevan el monto de cada mes", () => {
+    const c = costo({ monto: 950, movimientos: [alta, mov("CAMBIO_MONTO", "2026-12-15", 950)] });
+    const lineas = egresosDeNexus(["2026-10", "2026-12"], [c], [], () => "MEDIDO");
+    expect(lineas.map((l) => [l.periodo, l.monto])).toEqual([
+      ["2026-10", 800],
+      ["2026-12", 950],
+    ]);
+  });
+});
+
+describe("el día de alta", () => {
+  it("es el de Costa Rica: cargado el 31 de octubre a las 23:30 (5:30 del 1 de noviembre en UTC) cuenta en octubre", () => {
+    // La fila de prueba trae otro `creadoEl`: el que vale es el que sale de `createdAt`.
+    const c = costoParaEgreso({ ...costo({}), createdAt: new Date("2026-11-01T05:30:00Z") });
+    expect(c.creadoEl).toBe("2026-10-31");
+    expect(costoVigenteEn(c, "2026-10")).toBe(true);
   });
 });
 

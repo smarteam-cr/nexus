@@ -11,6 +11,7 @@
  * servidor por lo que importa (Prisma), no por la marca.
  */
 import { prisma } from "@/lib/db/prisma";
+import { esquemaDesactualizado } from "@/lib/db/esquema";
 
 export const CLAVE_ALIADOS = "aliados-cubren-piso";
 
@@ -25,6 +26,9 @@ export interface DecisionAliados {
  * La decisión tomada, o null si todavía no se decidió.
  * ⚠ Si la tabla no existe (el SQL de 2026-10-05 sin aplicar), no tumba el reporte: lee como «sin decidir» y lo dice
  * en el log. El chequeo de esquema del deploy es el que lo frena antes.
+ * ⛔ SOLO eso (tabla o columna que no existe, P2021/P2022 — `esquemaDesactualizado`). Hasta el 2026-10-05 se tragaba
+ * cualquier error: con la base caída (P1001) el punto de equilibrio volvía a la regla por defecto en silencio, como si
+ * dirección no hubiera decidido nada. Cualquier otro error se relanza.
  */
 export async function leerDecisionAliados(): Promise<DecisionAliados | null> {
   try {
@@ -33,7 +37,8 @@ export async function leerDecisionAliados(): Promise<DecisionAliados | null> {
       select: { valor: true, decididoPor: true, decididoEn: true },
     });
     return d ? { cuentan: d.valor === "SI", decididoPor: d.decididoPor, decididoEn: d.decididoEn.toISOString() } : null;
-  } catch {
+  } catch (e) {
+    if (!esquemaDesactualizado(e)) throw e;
     // Aviso y no error: la página sigue bien con «sin decidir». Con `dev:prod` antes del SQL, un error pintaba la pantalla
     // roja de Next como si algo se hubiera roto.
     console.warn("[equilibrio] no se pudo leer la decisión sobre los aliados (¿falta el SQL de 2026-10-05?): se toma «sin decidir»");

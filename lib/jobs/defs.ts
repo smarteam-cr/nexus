@@ -33,7 +33,7 @@ import { refreshAllCsSignals } from "@/lib/hubspot/cs-signals";
 import { syncPartnerClients } from "@/lib/cs/partner-sync";
 import { syncVentasGanadas } from "@/lib/ventas/sync-ganadas";
 import { watchdogJobs } from "@/lib/cs/watchdog";
-import { claimDateKey, SIN_TURNO, type JobDef } from "./registry";
+import { claimDateKey, correrPasosAislados, SIN_TURNO, type JobDef } from "./registry";
 import { motivoApagado, partnerCreaClientes } from "./requisitos";
 import { WEEKDAYS_MON_FRI } from "./time";
 import { esDiaDeCorte } from "@/lib/cobranza/antiguedad";
@@ -127,27 +127,47 @@ const maintenanceDaily: JobDef = {
   run: async (now) => {
     const { dateKey } = (await import("./time")).crDateParts(now);
     if (!(await claimDateKey("maintenance-daily", dateKey, now))) return SIN_TURNO;
-    const [tokens, attempts] = await Promise.all([
-      prisma.printJobToken.deleteMany({ where: { expiresAt: { lt: now } } }),
-      // Rate-limit de verify-access: filas sin actividad en 24h ya no acotan nada.
-      prisma.externalVerifyAttempt.deleteMany({
-        where: { updatedAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
-      }),
+    /* ⚠ Pasos AISLADOS (2026-10-05): cada uno corre aunque otro falle; si alguno falló, el job LANZA
+       al final con la lista (`correrPasosAislados`, registry.ts). Antes, si el borrado de avisos de
+       «Para ti» lanzaba, las alertas de cobranza no se refrescaban ese día. El turno del día se queda
+       igual que antes: rojo en Integraciones y Sentry, sin martillar la base cada minuto. Lo que sí
+       se hizo, repetirlo mañana no le hace daño. */
+    await correrPasosAislados("maintenance-daily", [
+      {
+        paso: "barrido de tokens de PDF e intentos de acceso",
+        correr: async () => {
+          const [tokens, attempts] = await Promise.all([
+            prisma.printJobToken.deleteMany({ where: { expiresAt: { lt: now } } }),
+            // Rate-limit de verify-access: filas sin actividad en 24h ya no acotan nada.
+            prisma.externalVerifyAttempt.deleteMany({
+              where: { updatedAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+            }),
+          ]);
+          console.log(
+            `[jobs/maintenance] ${dateKey} — ${tokens.count} PrintJobToken expirados, ${attempts.count} ExternalVerifyAttempt viejos barridos`,
+          );
+        },
+      },
+      {
+        // «Para ti» (2026-10-04): los avisos leídos hace más de 90 días y los no leídos de más de 180 se borran.
+        paso: "avisos viejos de «Para ti»",
+        correr: async () => {
+          const { borrarAvisosViejos } = await import("@/lib/para-ti/avisos-server");
+          const avisos = await borrarAvisosViejos(now);
+          if (avisos > 0) console.log(`[jobs/maintenance] ${dateKey} — ${avisos} avisos viejos de «Para ti» borrados`);
+        },
+      },
+      {
+        paso: "alertas de cobranza",
+        correr: async () => {
+          const { refrescarAlertasDeCobranza } = await import("@/lib/cobranza/alertas-refresco");
+          const r = await refrescarAlertasDeCobranza(now);
+          console.log(
+            `[jobs/maintenance] ${dateKey} — alertas de cobranza al ${r.hoy}: ${r.creadas} abiertas, ${r.fundidas} puestas al día, ${r.cerradas} cerradas${r.suprimidas ? `, ${r.suprimidas} suprimidas` : ""}`,
+          );
+        },
+      },
     ]);
-    console.log(
-      `[jobs/maintenance] ${dateKey} — ${tokens.count} PrintJobToken expirados, ${attempts.count} ExternalVerifyAttempt viejos barridos`,
-    );
-    // «Para ti» (2026-10-04): los avisos leídos hace más de 90 días y los no leídos de más de 180 se borran.
-    const { borrarAvisosViejos } = await import("@/lib/para-ti/avisos-server");
-    const avisos = await borrarAvisosViejos(now);
-    if (avisos > 0) console.log(`[jobs/maintenance] ${dateKey} — ${avisos} avisos viejos de «Para ti» borrados`);
-    /* ⚠ Si falla, LANZA y el turno del día se queda: rojo en Integraciones y Sentry, sin martillar
-       la base cada minuto. Lo de arriba ya quedó hecho, y repetirlo mañana no le hace daño. */
-    const { refrescarAlertasDeCobranza } = await import("@/lib/cobranza/alertas-refresco");
-    const r = await refrescarAlertasDeCobranza(now);
-    console.log(
-      `[jobs/maintenance] ${dateKey} — alertas de cobranza al ${r.hoy}: ${r.creadas} abiertas, ${r.fundidas} puestas al día, ${r.cerradas} cerradas${r.suprimidas ? `, ${r.suprimidas} suprimidas` : ""}`,
-    );
   },
 };
 
@@ -350,11 +370,15 @@ const mercuryEspejoDaily: JobDef = {
   },
 };
 
+/** Cuánto espera el tipo de cambio, después de un fallo pasajero (red, 5xx, 429), antes de volver a probar. */
+export const ESPERA_TRAS_FALLO_TIPO_CAMBIO_MS = 30 * 60_000;
+
 /**
  * El tipo de cambio del día (2026-10-05, lib/finanzas/tipo-cambio-server.ts): la venta y la compra de referencia del
  * BCCR, una vez al día ≥ 6:00 CR, para que cada cobro y cada pago se convierta con la tasa de su día. Del servicio del
  * BCCR si hay `BCCR_TOKEN`; si no, del API de Hacienda (sin token). Si todavía falta el histórico, lo intenta traer en
- * la misma corrida. LANZA si no quedó la tasa de hoy (semáforo rojo); el turno se suelta si el fallo fue pasajero.
+ * la misma corrida. LANZA si no quedó la tasa de hoy (semáforo rojo); el turno se suelta si el fallo fue pasajero, y
+ * entonces se vuelve a probar recién pasada `ESPERA_TRAS_FALLO_TIPO_CAMBIO_MS`.
  */
 const tipoCambioDaily: JobDef = {
   key: "tipo-cambio-daily",
@@ -362,6 +386,17 @@ const tipoCambioDaily: JobDef = {
   run: async (now) => {
     const { crDateParts } = await import("./time");
     const { dateKey } = crDateParts(now);
+    /* ⚠ ESPERA después de un fallo pasajero (2026-10-05). El fallo suelta el turno para volver a probar hoy, y el tick
+       corre cada minuto: con Hacienda caída eran cientos de intentos por día, cada uno con su evento en Sentry y el tick
+       (que es secuencial) trabado mientras esperaba a Hacienda. El intento fallido deja el turno SUELTO
+       (`lastRunDateKey` vacío) y su hora en `lastRunAt` (la escribe el claim): hasta que pase la espera, ni se intenta. */
+    const previo = await prisma.cronJobState.findUnique({
+      where: { id: "tipo-cambio-daily" },
+      select: { lastRunDateKey: true, lastRunAt: true },
+    });
+    if (previo?.lastRunDateKey === null && previo.lastRunAt && now.getTime() - previo.lastRunAt.getTime() < ESPERA_TRAS_FALLO_TIPO_CAMBIO_MS) {
+      return SIN_TURNO;
+    }
     if (!(await claimDateKey("tipo-cambio-daily", dateKey, now))) return SIN_TURNO;
     const { sincronizarTipoDeCambio } = await import("@/lib/finanzas/tipo-cambio-server");
     const r = await sincronizarTipoDeCambio();
@@ -373,7 +408,9 @@ const tipoCambioDaily: JobDef = {
       }
       const fallo = new Error(
         `sin la tasa de hoy: ${r.avisos.join(" · ") || "ninguna fuente respondió"}; ` +
-          (r.transitorio ? "turno liberado: reintenta en el próximo tick" : "turno RETENIDO: no reintenta hasta mañana"),
+          (r.transitorio
+            ? `turno liberado: reintenta en ${ESPERA_TRAS_FALLO_TIPO_CAMBIO_MS / 60_000} minutos`
+            : "turno RETENIDO: no reintenta hasta mañana"),
       );
       fallo.name = "TipoDeCambioFallido";
       throw fallo;

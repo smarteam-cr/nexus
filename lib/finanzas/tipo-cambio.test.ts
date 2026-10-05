@@ -5,14 +5,18 @@
  * un día sin tasa tome la del día anterior más cercano sin cruzar más de una semana, que el promedio del mes sea de sus
  * días, y que el punto de equilibrio convierta lo que tiene fecha con la tasa de su día.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
+  corrigeLoGuardado,
   diasDelMes,
   fechaDeRespuesta,
   juntarBccr,
   leerHistoricoHacienda,
   leerHoyHacienda,
   leerSeriesBccr,
+  mensajeDeActualizacion,
   resumenPorMes,
   tasaDelDia,
   tasasDeMesDesdeDias,
@@ -20,6 +24,22 @@ import {
   type TasaDelDia,
 } from "./tipo-cambio";
 import { calcularEquilibrio, type EgresoDeMes, type IngresoDeMes } from "./equilibrio";
+import { cargarTasasDelAnio, leerHistorico, sincronizarTipoDeCambio, tasaFirme, type TasaDelMesParaReporte } from "./tipo-cambio-server";
+import { leerDecisionAliados } from "./decisiones-server";
+
+// La base, simulada: lo de servidor (tipo-cambio-server.ts, decisiones-server.ts) se prueba sin Postgres.
+const { db } = vi.hoisted(() => ({
+  db: {
+    tipoCambioDia: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), createMany: vi.fn(), update: vi.fn() },
+    tipoCambioMes: { findMany: vi.fn() },
+    decisionFinanzas: { findUnique: vi.fn() },
+  },
+}));
+vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
+
+beforeEach(() => {
+  for (const tabla of Object.values(db)) for (const fn of Object.values(tabla)) fn.mockReset();
+});
 
 describe("leer las respuestas", () => {
   it("el BCCR: fecha → valor, sin lo que no es una tasa", () => {
@@ -181,5 +201,149 @@ describe("el punto de equilibrio con la tasa del día", () => {
     const r = calcularEquilibrio(egresos, ingresos, { anio: 2026, hoyISO: HOY, tasas });
     expect(r.meses.find((m) => m.periodo === "2026-09")!.egresosPorRubro.PLANILLA).toBe(940);
     expect(r.fx.convertidosConTasaDelDia).toBe(0);
+  });
+});
+
+// ── Auditoría 2026-10-05 ────────────────────────────────────────────────────────
+
+describe("el número del BCCR manda (Q7)", () => {
+  it("Hacienda no pisa un número que vino del BCCR; el BCCR sí lo corrige; lo que no cambió no se toca", () => {
+    const delBccr = { venta: 462.08, compra: 455.71, fuente: "BCCR" };
+    expect(corrigeLoGuardado(delBccr, { venta: 463, compra: 456, fuente: "HACIENDA" })).toBe(false);
+    expect(corrigeLoGuardado(delBccr, { venta: 463, compra: 456, fuente: "BCCR" })).toBe(true);
+    expect(corrigeLoGuardado({ ...delBccr, fuente: "HACIENDA" }, { venta: 463, compra: null, fuente: "HACIENDA" })).toBe(true);
+    expect(corrigeLoGuardado(delBccr, { venta: 462.08, compra: 455.71, fuente: "BCCR" })).toBe(false);
+    // Solo la compra: también es una corrección, si viene; si no viene, no borra la guardada.
+    expect(corrigeLoGuardado(delBccr, { venta: 462.08, compra: 456, fuente: "BCCR" })).toBe(true);
+    expect(corrigeLoGuardado(delBccr, { venta: 462.08, compra: null, fuente: "BCCR" })).toBe(false);
+  });
+
+  const manual = (registradoPor: string) => ({ crcPorUsd: 500, fuente: "a mano", registradoPor, registradoEn: new Date("2026-10-01T12:00:00Z") });
+  const bccr = (completo: boolean, porVenir = false) => ({ periodo: "2026-09", crcPorUsd: 470.5, dias: 30, completo, porVenir, fuente: "BCCR" });
+  const mes = (b: ReturnType<typeof bccr> | null, m: ReturnType<typeof manual> | null): TasaDelMesParaReporte => ({
+    periodo: "2026-09",
+    crcPorUsd: (b ?? m)?.crcPorUsd ?? 0,
+    fuente: "x",
+    bccr: b,
+    manual: m,
+  });
+
+  it("tasaFirme: con días del BCCR manda el BCCR (completo y no por venir); sin días, la firmada por una persona", () => {
+    expect(tasaFirme(undefined)).toBe(false);
+    expect(tasaFirme(mes(bccr(true), null))).toBe(true);
+    // Un mes del BCCR al que le faltan días NO es firme aunque haya una manual firmada: la manual es solo el respaldo.
+    expect(tasaFirme(mes(bccr(false), manual("alex@smarteamcr.com")))).toBe(false);
+    expect(tasaFirme(mes(bccr(true, true), null))).toBe(false);
+    expect(tasaFirme(mes(null, manual("alex@smarteamcr.com")))).toBe(true);
+    expect(tasaFirme(mes(null, manual("script:cargar-tipo-cambio")))).toBe(false);
+    expect(tasaFirme(mes(null, null))).toBe(false);
+  });
+
+  it("«firmado por una persona» es la regla del cierre (confirmadoPorPersona), no una copia", () => {
+    const src = fs.readFileSync(path.join(process.cwd(), "lib/finanzas/tipo-cambio-server.ts"), "utf8");
+    const desde = src.indexOf("export function tasaFirme");
+    const cuerpo = src.slice(desde, src.indexOf("\n}", desde));
+    expect(desde, "no se encontró tasaFirme").toBeGreaterThan(-1);
+    expect(cuerpo, "tasaFirme no usa confirmadoPorPersona: la regla está copiada").toContain("confirmadoPorPersona(");
+    expect(cuerpo, "tasaFirme repite la regla del @ en vez de usar la del cierre").not.toMatch(/includes\("@"\)/);
+  });
+});
+
+describe("lo que dice «Actualizar» (6)", () => {
+  it("«Ya estaba al día» solo si todas las fuentes respondieron", () => {
+    expect(mensajeDeActualizacion({ ok: true, nuevos: 0, corregidos: 0, avisos: [] })).toEqual({ tipo: "exito", texto: "Ya estaba al día." });
+    expect(mensajeDeActualizacion({ ok: true, nuevos: 3, corregidos: 1, avisos: [] })).toEqual({ tipo: "exito", texto: "3 días nuevos, 1 corregido." });
+  });
+
+  it("si alguna fuente falló es un aviso que la nombra, nunca un éxito, aunque haya tasa de la semana", () => {
+    const sinNada = mensajeDeActualizacion({ ok: true, nuevos: 0, corregidos: 0, avisos: ["El histórico de Hacienda: respondió 503"] });
+    expect(sinNada.tipo).toBe("aviso");
+    expect(sinNada.texto).not.toMatch(/al día/);
+    expect(sinNada.texto).toContain("El histórico de Hacienda: respondió 503");
+    expect(mensajeDeActualizacion({ ok: true, nuevos: 1, corregidos: 0, avisos: ["La tasa de hoy de Hacienda: respondió 503"] })).toEqual({
+      tipo: "aviso",
+      texto: "1 día nuevo, pero no todas las fuentes respondieron. La tasa de hoy de Hacienda: respondió 503.",
+    });
+  });
+
+  it("sin ninguna tasa de la semana es un error que dice qué falló", () => {
+    const r = mensajeDeActualizacion({ ok: false, nuevos: 0, corregidos: 0, avisos: ["El servicio del BCCR: no respondió", "La tasa de hoy de Hacienda: respondió 503"] });
+    expect(r.tipo).toBe("error");
+    expect(r.texto).toBe(
+      "No hay ninguna tasa de la última semana. El servicio del BCCR: no respondió · La tasa de hoy de Hacienda: respondió 503. Prueba de nuevo en un rato.",
+    );
+    expect(mensajeDeActualizacion({ ok: false, nuevos: 0, corregidos: 0, avisos: [] }).texto).toMatch(/Ninguna fuente respondió/);
+  });
+});
+
+describe("solo se traga la tabla o la columna que falta (13)", () => {
+  const caida = Object.assign(new Error("Can't reach database server at `db:5432`"), { code: "P1001" });
+  const sinTabla = Object.assign(new Error("The table `public.TipoCambioDia` does not exist in the current database."), { code: "P2021" });
+  const sinColumna = Object.assign(new Error("The column `DecisionFinanzas.nota` does not exist in the current database."), { code: "P2022" });
+  let silencio: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    silencio = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => silencio.mockRestore());
+
+  it("las tasas del año: con la base caída LANZA; sin la tabla diaria, sigue con las de cada mes", async () => {
+    db.tipoCambioMes.findMany.mockResolvedValue([
+      { periodo: "2026-09", crcPorUsd: 500, fuente: "a mano", registradoPor: "alex@smarteamcr.com", registradoEn: new Date("2026-10-01T12:00:00Z") },
+    ]);
+    db.tipoCambioDia.findMany.mockRejectedValueOnce(caida);
+    await expect(cargarTasasDelAnio(2026, "2026-10-05"), "un P1001 se leyó como «no hay tasas diarias»").rejects.toMatchObject({ code: "P1001" });
+    db.tipoCambioDia.findMany.mockRejectedValueOnce(sinTabla);
+    const r = await cargarTasasDelAnio(2026, "2026-10-05");
+    expect(r.tasas).toEqual([{ periodo: "2026-09", crcPorUsd: 500, fuente: "a mano" }]);
+  });
+
+  it("el histórico de la página: con la base caída LANZA; sin la tabla, null (la página dice que falta)", async () => {
+    db.tipoCambioDia.findMany.mockRejectedValueOnce(caida);
+    await expect(leerHistorico()).rejects.toMatchObject({ code: "P1001" });
+    db.tipoCambioDia.findMany.mockRejectedValueOnce(sinTabla);
+    await expect(leerHistorico()).resolves.toBeNull();
+  });
+
+  it("la decisión sobre los aliados: con la base caída LANZA; sin la columna, «sin decidir»", async () => {
+    db.decisionFinanzas.findUnique.mockRejectedValueOnce(caida);
+    await expect(leerDecisionAliados(), "un P1001 se leyó como «sin decidir»").rejects.toMatchObject({ code: "P1001" });
+    db.decisionFinanzas.findUnique.mockRejectedValueOnce(sinColumna);
+    await expect(leerDecisionAliados()).resolves.toBeNull();
+  });
+});
+
+describe("el candado de «Actualizar» (C6)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("dos pedidos a la vez hacen UNA tanda a las fuentes y reciben el mismo resultado; terminada, se suelta", async () => {
+    vi.stubEnv("BCCR_TOKEN", "");
+    db.tipoCambioDia.findFirst.mockImplementation(async (q: { orderBy: { fecha: string } }) => ({
+      fecha: q.orderBy.fecha === "asc" ? "2023-01-01" : "2026-10-04",
+    }));
+    // El 1 de octubre ya está guardado con el número del BCCR.
+    db.tipoCambioDia.findMany.mockResolvedValue([{ fecha: "2026-10-01", venta: 470.5, compra: 465, fuente: "BCCR" }]);
+    db.tipoCambioDia.createMany.mockResolvedValue({ count: 1 });
+    db.tipoCambioDia.update.mockResolvedValue({});
+    db.tipoCambioDia.count.mockResolvedValue(1);
+    const fuentes = vi.fn(async (url: string) => {
+      await new Promise((r) => setTimeout(r, 5));
+      const cuerpo = url.includes("historico")
+        ? [{ fecha: "2026-10-01", venta: 470, compra: 464 }]
+        : { venta: { fecha: "2026-10-05", valor: 462.08 }, compra: { fecha: "2026-10-05", valor: 455.71 } };
+      return new Response(JSON.stringify(cuerpo), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fuentes);
+
+    const [a, b] = await Promise.all([sincronizarTipoDeCambio(), sincronizarTipoDeCambio()]);
+    expect(fuentes, "cada pedido arrancó su propia tanda: sin candado").toHaveBeenCalledTimes(2); // el histórico y la de hoy, una vez
+    expect(a).toBe(b);
+    // Hacienda trajo otro número para un día que ya tenía el del BCCR: no lo pisó.
+    expect(db.tipoCambioDia.update).not.toHaveBeenCalled();
+
+    await sincronizarTipoDeCambio();
+    expect(fuentes, "el candado no se soltó al terminar").toHaveBeenCalledTimes(4);
   });
 });

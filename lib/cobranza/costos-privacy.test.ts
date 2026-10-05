@@ -565,3 +565,73 @@ describe("P5 · gastos sin salarios: guard propio y nunca un salario", () => {
     expect(src).toMatch(/loadCostos\(\{ sinSalarios: true \}\)/);
   });
 });
+
+// ── P6 · Supervisión de Finanzas: el cierre, la revisión y las decisiones (auditoría 2026-10-05) ──────────────────────
+// Leen la planilla o firman por dirección: su barrera es `guardSupervisionFinanzas`. Cambiarla por el guard de Cobranza
+// (ADMIN) abriría la planilla y el cierre a quien registra.
+describe("P6 · el cierre, la revisión y las decisiones: guardSupervisionFinanzas en cada handler", () => {
+  const raiz = process.cwd();
+  const RUTAS = [
+    "app/api/finanzas/cierre/route.ts",
+    "app/api/finanzas/cierre/tipo-cambio/route.ts",
+    "app/api/finanzas/revision/route.ts",
+    "app/api/finanzas/decisiones/route.ts",
+  ];
+
+  for (const rel of RUTAS) {
+    it(`${rel}: lo primero de cada handler es guardSupervisionFinanzas`, () => {
+      const abs = path.join(raiz, rel);
+      expect(fs.existsSync(abs), `${rel} no existe: si se movió, mover también esta lista`).toBe(true);
+      const src = fs.readFileSync(abs, "utf8");
+      const handlers = [...src.matchAll(/export async function (GET|POST|PATCH|PUT|DELETE)\b[\s\S]*?\n}/g)];
+      expect(handlers.length, `${rel} no exporta handlers`).toBeGreaterThan(0);
+      for (const h of handlers) {
+        const cuerpo = h[0];
+        const primerAwait = cuerpo.indexOf("await ");
+        expect(
+          /^await guardSupervisionFinanzas\(\)/.test(cuerpo.slice(primerAwait)),
+          `${rel} ${h[1]}: lo primero no es guardSupervisionFinanzas()`,
+        ).toBe(true);
+      }
+      // Ningún otro guard de acceso: el de Cobranza o el de Gastos dejarían pasar a quien registra.
+      expect(src, `${rel} usa otro guard`).not.toMatch(/\bguard(Cobranza|Gastos|Costos)\w*\(/);
+    });
+  }
+});
+
+// ── P7 · Recurrentes y tarjetas sin salarios: «que no sea un salario» ANTES de tocar nada (auditoría 2026-10-05) ──
+// El guard de gastos deja pasar a quien registra; lo que impide que edite, borre o asigne un SALARIO por id es
+// `asegurarCostoSinSalario` / `asegurarCostosSinSalario` (lib/finanzas/gastos-server.ts). Sin esa llamada, conocer el id
+// de un salario alcanzaría para cambiarlo.
+describe("P7 · recurrentes y tarjetas: asegurar que no es un salario antes de cada mutación", () => {
+  const raiz = process.cwd();
+  const RUTAS: Array<[string, string]> = [
+    ["app/api/finanzas/recurrentes/[costoId]/route.ts", "asegurarCostoSinSalario"],
+    ["app/api/finanzas/tarjetas/[tarjetaId]/costos/route.ts", "asegurarCostosSinSalario"],
+  ];
+
+  for (const [rel, asegurar] of RUTAS) {
+    it(`${rel}: cada handler llama ${asegurar} antes de la mutación`, () => {
+      const abs = path.join(raiz, rel);
+      expect(fs.existsSync(abs), `${rel} no existe: si se movió, mover también esta lista`).toBe(true);
+      const src = fs.readFileSync(abs, "utf8");
+      // Las mutaciones son lo que importa de lib/cobranza/mutations (updateCosto, deleteCosto, asignarCostoATarjeta…).
+      const importadas = /import \{([^}]*)\} from "@\/lib\/cobranza\/mutations"/.exec(src)?.[1] ?? "";
+      const mutaciones = importadas.split(",").map((s) => s.trim()).filter(Boolean);
+      expect(mutaciones.length, `${rel} no importa ninguna mutación`).toBeGreaterThan(0);
+
+      const handlers = [...src.matchAll(/export async function (GET|POST|PATCH|PUT|DELETE)\b[\s\S]*?\n}/g)];
+      expect(handlers.length, `${rel} no exporta handlers`).toBeGreaterThan(0);
+      for (const h of handlers) {
+        const cuerpo = h[0];
+        const idxAsegurar = cuerpo.indexOf(`await ${asegurar}(`);
+        expect(idxAsegurar, `${rel} ${h[1]}: no llama ${asegurar}`).toBeGreaterThan(-1);
+        for (const m of mutaciones) {
+          const idxMutacion = cuerpo.indexOf(`${m}(`);
+          if (idxMutacion === -1) continue;
+          expect(idxAsegurar < idxMutacion, `${rel} ${h[1]}: ${m} corre antes de ${asegurar}`).toBe(true);
+        }
+      }
+    });
+  }
+});

@@ -43,7 +43,8 @@ vi.mock("@/lib/cobranza/mercury/sync", () => ({ sincronizarMercury }));
 vi.mock("@/lib/cobranza/alertas-refresco", () => ({ refrescarAlertasDeCobranza }));
 vi.mock("@/lib/marketing/cron", () => ({ tickMarketingCron }));
 // «Para ti»: el mantenimiento borra los avisos viejos (la base acá está simulada).
-vi.mock("@/lib/para-ti/avisos-server", () => ({ borrarAvisosViejos: async () => 0 }));
+const borrarAvisosViejos = vi.hoisted(() => vi.fn(async () => 0));
+vi.mock("@/lib/para-ti/avisos-server", () => ({ borrarAvisosViejos }));
 // El resto de lo que importa defs.ts arrastra HubSpot, Anthropic y media app, y acá no corre.
 vi.mock("@/lib/hubspot/cs-signals", () => ({ refreshAllCsSignals: vi.fn() }));
 vi.mock("@/lib/cs/partner-sync", () => ({ syncPartnerClients: vi.fn() }));
@@ -57,6 +58,7 @@ vi.mock("@/lib/cs/watchdog", () => ({
 
 import { allJobs } from "./defs";
 import { SIN_TURNO } from "./registry";
+import { NOMBRE_DE_JOB, nombreDeJob } from "./nombres";
 
 const AHORA = new Date("2026-09-12T12:05:00Z"); // 6:05 en Costa Rica, cuando corre el espejo
 const HOY = "2026-09-12";
@@ -135,6 +137,34 @@ describe("maintenance-daily", () => {
     await expect(job("maintenance-daily").run(MEDIANOCHE)).resolves.toBe(SIN_TURNO);
     expect(barrerTokens).not.toHaveBeenCalled();
     expect(refrescarAlertasDeCobranza).not.toHaveBeenCalled();
+  });
+
+  it("⭐ si el borrado de avisos de «Para ti» lanza, las alertas de cobranza se refrescan igual y el job termina en rojo", async () => {
+    /* Hasta el 2026-10-05 el borrado de avisos corría ANTES del refresco sin aislarlo: si lanzaba, las
+       alertas de cobranza no se refrescaban ese día. La edición que lo pone en rojo: volver a llamar
+       los pasos en fila, sin `correrPasosAislados`. */
+    borrarAvisosViejos.mockRejectedValueOnce(new Error("timeout de la base"));
+    refrescarAlertasDeCobranza.mockResolvedValue({ hoy: "2026-09-13", creadas: 0, fundidas: 0, suprimidas: 0, cerradas: 0 });
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errores = vi.spyOn(console, "error").mockImplementation(() => {});
+    let lanzado: unknown = null;
+    try {
+      await job("maintenance-daily").run(MEDIANOCHE);
+    } catch (e) {
+      lanzado = e;
+    } finally {
+      silencio.mockRestore();
+      errores.mockRestore();
+    }
+    expect(refrescarAlertasDeCobranza, "un paso roto dejó sin refrescar las alertas de cobranza").toHaveBeenCalledWith(MEDIANOCHE);
+    expect(barrerTokens).toHaveBeenCalled();
+    // Y el fallo llega al scheduler: rojo en Integraciones y Sentry, con QUÉ paso falló.
+    expect(lanzado, "el job terminó sin lanzar: el fallo del paso quedó tapado").toMatchObject({
+      name: "PasosDelJobFallidos",
+      fallidos: ["avisos viejos de «Para ti»"],
+    });
+    expect((lanzado as Error).message).toMatch(/avisos viejos de «Para ti»: timeout de la base/);
+    expect(liberarTurno, "el turno del día se queda: no se martilla la base cada minuto").not.toHaveBeenCalled();
   });
 });
 
@@ -258,5 +288,100 @@ describe("marketing-weekly", () => {
     await expect(job("marketing-weekly").run(AHORA)).resolves.toBe(SIN_TURNO);
     tickMarketingCron.mockResolvedValue({ fired: true, runId: "run-1" });
     await expect(job("marketing-weekly").run(AHORA)).resolves.not.toBe(SIN_TURNO);
+  });
+});
+
+describe("cada job tiene nombre legible («Para ti» dice QUÉ falló)", () => {
+  /* Hasta el 2026-10-05 el mapa de nombres vivía escrito a mano en lib/para-ti/fuentes/equipo-y-sistema.ts y un job
+     que no estaba ahí se descartaba en silencio: el fallo de `tipo-cambio-daily`, `google-enrich-retry` o
+     `cs-watchdog-debounce` no le llegaba a nadie. La edición que la pone en rojo: agregar un job a `allJobs()` sin
+     su nombre en lib/jobs/nombres.ts. */
+  it("cada clave de allJobs() está en NOMBRE_DE_JOB", () => {
+    const sinNombre = allJobs()
+      .map((j) => j.key)
+      .filter((k) => !NOMBRE_DE_JOB[k]);
+    expect(sinNombre, "jobs sin nombre legible en lib/jobs/nombres.ts").toEqual([]);
+  });
+
+  it("los que faltaban están, y el vigía diario sigue", () => {
+    for (const k of ["tipo-cambio-daily", "google-enrich-retry", "cs-watchdog-debounce", "cs-watchdog-daily"]) {
+      expect(NOMBRE_DE_JOB[k], k).toBeTruthy();
+    }
+  });
+
+  it("un job sin nombre no se descarta: sale con su clave", () => {
+    expect(nombreDeJob("job-que-no-existe")).toBe("job-que-no-existe");
+    expect(nombreDeJob("odoo-espejo-daily")).toBe("La copia de Odoo");
+  });
+});
+
+// ── tipo-cambio-daily (auditoría 2026-10-05) ─────────────────────────────────────
+// vi.mock y vi.hoisted suben solos al principio del archivo: acá quedan junto a las pruebas que los usan.
+const { sincronizarTipoDeCambio, estadoDelTurno } = vi.hoisted(() => ({ sincronizarTipoDeCambio: vi.fn(), estadoDelTurno: vi.fn() }));
+vi.mock("@/lib/finanzas/tipo-cambio-server", () => ({ sincronizarTipoDeCambio }));
+
+describe("tipo-cambio-daily", () => {
+  const resultado = (c: Record<string, unknown>) => ({
+    ok: true,
+    fuente: "HACIENDA",
+    nuevos: 1,
+    corregidos: 0,
+    desde: "2026-09-09",
+    hasta: HOY,
+    faltaHistorico: false,
+    avisos: [],
+    transitorio: false,
+    ...c,
+  });
+  const pasajero = resultado({ ok: false, fuente: null, nuevos: 0, avisos: ["La tasa de hoy de Hacienda: no respondió (timeout)"], transitorio: true });
+
+  beforeEach(async () => {
+    sincronizarTipoDeCambio.mockReset();
+    estadoDelTurno.mockReset().mockResolvedValue(null);
+    // El estado del turno se lee con findUnique: se cuelga del prisma simulado de arriba sin tocar su forma.
+    const { prisma } = await import("@/lib/db/prisma");
+    (prisma.cronJobState as unknown as { findUnique: typeof estadoDelTurno }).findUnique = estadoDelTurno;
+  });
+
+  it("un fallo pasajero LANZA, suelta el turno y dice cuándo vuelve a probar", async () => {
+    sincronizarTipoDeCambio.mockResolvedValue(pasajero);
+    await expect(job("tipo-cambio-daily").run(AHORA)).rejects.toThrow(/turno liberado: reintenta en 30 minutos/);
+    expect(liberarTurno).toHaveBeenCalledWith({ where: { id: "tipo-cambio-daily", lastRunDateKey: HOY }, data: { lastRunDateKey: null } });
+  });
+
+  it("⭐ después de un fallo pasajero NO reintenta al minuto siguiente: espera, y pasada la espera vuelve a probar", async () => {
+    /* Hasta el 2026-10-05 el turno suelto se volvía a tomar en el tick siguiente: con Hacienda caída eran cientos de
+       intentos por día, cada uno con su evento en Sentry y el tick trabado esperando a Hacienda. La edición que lo pone
+       en rojo: sacar la lectura de `lastRunAt` antes del claim. */
+    const { ESPERA_TRAS_FALLO_TIPO_CAMBIO_MS } = await import("./defs");
+    sincronizarTipoDeCambio.mockResolvedValue(resultado({}));
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      // Un minuto después del fallo: el turno está suelto, pero todavía no pasó la espera.
+      estadoDelTurno.mockResolvedValue({ lastRunDateKey: null, lastRunAt: new Date(AHORA.getTime() - 60_000) });
+      const salida = await job("tipo-cambio-daily").run(AHORA);
+      expect(sincronizarTipoDeCambio, "reintentó un minuto después del fallo").not.toHaveBeenCalled();
+      expect(claimDateKey).not.toHaveBeenCalled();
+      expect(salida, "esperar no es una corrida: no anota «ok»").toBe(SIN_TURNO);
+
+      // Pasada la espera, vuelve a probar.
+      estadoDelTurno.mockResolvedValue({ lastRunDateKey: null, lastRunAt: new Date(AHORA.getTime() - ESPERA_TRAS_FALLO_TIPO_CAMBIO_MS) });
+      await expect(job("tipo-cambio-daily").run(AHORA)).resolves.not.toBe(SIN_TURNO);
+    } finally {
+      silencio.mockRestore();
+    }
+    expect(sincronizarTipoDeCambio).toHaveBeenCalledTimes(1);
+  });
+
+  it("el turno de un día anterior no hace esperar: el primer intento del día corre", async () => {
+    estadoDelTurno.mockResolvedValue({ lastRunDateKey: "2026-09-11", lastRunAt: new Date(AHORA.getTime() - 60_000) });
+    sincronizarTipoDeCambio.mockResolvedValue(resultado({}));
+    const silencio = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(job("tipo-cambio-daily").run(AHORA)).resolves.not.toBe(SIN_TURNO);
+    } finally {
+      silencio.mockRestore();
+    }
+    expect(claimDateKey).toHaveBeenCalledWith("tipo-cambio-daily", HOY, AHORA);
   });
 });

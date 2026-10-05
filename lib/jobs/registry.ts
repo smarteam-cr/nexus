@@ -37,6 +37,48 @@ export interface JobDef {
   run: (now: Date) => Promise<void | typeof SIN_TURNO>;
 }
 
+/** Uno de los pasos INDEPENDIENTES de un job: si falla, los demás corren igual. */
+export interface PasoDeJob {
+  /** Cómo se llama en el log y en el rojo de Integraciones. */
+  paso: string;
+  correr: () => Promise<void>;
+}
+
+/** Lo que lanza `correrPasosAislados` cuando algún paso falló: dice cuáles y por qué. */
+export class PasosDelJobFallidos extends Error {
+  readonly fallidos: string[];
+  constructor(jobKey: string, fallidos: { paso: string; error: Error }[], total: number) {
+    super(`${jobKey}: ${fallidos.length} de ${total} pasos fallaron — ${fallidos.map((f) => `${f.paso}: ${f.error.message}`).join("; ")}`, {
+      cause: fallidos[0]?.error,
+    });
+    this.name = "PasosDelJobFallidos";
+    this.fallidos = fallidos.map((f) => f.paso);
+  }
+}
+
+/**
+ * Corre los pasos de un job UNO TRAS OTRO y AISLADOS (2026-10-05): un paso que lanza se anota en el
+ * log y el siguiente corre igual. Si alguno falló, al final LANZA `PasosDelJobFallidos`, así el
+ * scheduler lo pinta en rojo en Integraciones y lo manda a Sentry como cualquier otro fallo
+ * (lib/jobs/scheduler.ts → lib/jobs/estado.ts).
+ *
+ * ⚠ Existe porque el mantenimiento diario borraba los avisos viejos de «Para ti» ANTES de refrescar
+ * las alertas de cobranza, sin aislarlo: si el borrado lanzaba, las alertas no se refrescaban ese día.
+ */
+export async function correrPasosAislados(jobKey: string, pasos: readonly PasoDeJob[]): Promise<void> {
+  const fallidos: { paso: string; error: Error }[] = [];
+  for (const p of pasos) {
+    try {
+      await p.correr();
+    } catch (e) {
+      const error = e instanceof Error ? e : new Error(String(e));
+      console.error(`[jobs] ${jobKey} — el paso «${p.paso}» falló: ${error.name}: ${error.message}`);
+      fallidos.push({ paso: p.paso, error });
+    }
+  }
+  if (fallidos.length > 0) throw new PasosDelJobFallidos(jobKey, fallidos, pasos.length);
+}
+
 /** Claim atómico del día para `jobKey`: true = este proceso ganó y debe correr;
  *  false = ya corrió hoy (u otro proceso ganó el compare-and-set). */
 export async function claimDateKey(jobKey: string, dateKey: string, now: Date): Promise<boolean> {

@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { Alert, Button, EmptyState, PageHeader, Segmentado } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
-import { resumenPorMes, sumarDias, TIPO_CAMBIO_DESDE, DIAS_HACIA_ATRAS, type TasaDelDia } from "@/lib/finanzas/tipo-cambio";
+import { mensajeDeActualizacion, resumenPorMes, sumarDias, TIPO_CAMBIO_DESDE, DIAS_HACIA_ATRAS, type TasaDelDia } from "@/lib/finanzas/tipo-cambio";
 
 type Rango = "90" | "365" | "todo";
 
@@ -54,18 +54,24 @@ export default function TipoDeCambioClient({
   const [rango, setRango] = useState<Rango>("365");
   const [actualizando, setActualizando] = useState(false);
 
+  /** «Ya estaba al día» solo si respondieron todas las fuentes; si alguna falló, se avisa cuál (lib/finanzas/tipo-cambio.ts). */
+  const contar = (r: Resultado) => {
+    const m = mensajeDeActualizacion(r);
+    if (m.tipo === "exito") toast.success(m.texto);
+    else if (m.tipo === "aviso") toast.info(m.texto);
+    else toast.error(m.texto);
+    router.refresh();
+  };
+
   const actualizar = async () => {
     setActualizando(true);
     try {
-      const r = await fetchJson<Resultado>("/api/finanzas/tipo-de-cambio", { method: "POST" });
-      toast.success(
-        r.nuevos + r.corregidos === 0
-          ? "Ya estaba al día."
-          : `${r.nuevos === 1 ? "1 día nuevo" : `${r.nuevos} días nuevos`}${r.corregidos ? `, ${r.corregidos} corregidos` : ""}.`,
-      );
-      router.refresh();
+      contar(await fetchJson<Resultado>("/api/finanzas/tipo-de-cambio", { method: "POST" }));
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo traer el tipo de cambio.");
+      // Sin ninguna tasa de la semana la ruta contesta 502 con el mismo resultado: se dice qué falló, no «Ocurrió un error».
+      const r = e instanceof ApiError && e.status === 502 ? (e.payload as Partial<Resultado> | null) : null;
+      if (r && Array.isArray(r.avisos)) contar({ ok: false, nuevos: r.nuevos ?? 0, corregidos: r.corregidos ?? 0, faltaHistorico: !!r.faltaHistorico, avisos: r.avisos });
+      else toast.error(e instanceof ApiError ? e.message : "No se pudo traer el tipo de cambio.");
     } finally {
       setActualizando(false);
     }

@@ -108,7 +108,7 @@ import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
 import { cambioDespuesDelCierre, esFaltanteDePlanilla, type NumerosDelCierre } from "@/lib/finanzas/cierre";
 import { cargarTasasDelAnio, tasaFirme } from "@/lib/finanzas/tipo-cambio-server";
 import { leerDecisionAliados, type DecisionAliados } from "@/lib/finanzas/decisiones-server";
-import { calidadDeMesDeNexus, egresoDesdeNexus, egresosDeNexus } from "@/lib/finanzas/egresos-nexus";
+import { calidadDeMesDeNexus, costoParaEgreso, egresoDesdeNexus, egresosDeNexus } from "@/lib/finanzas/egresos-nexus";
 import { crDateParts } from "@/lib/jobs/time";
 import type { ComparacionConExcel } from "@/lib/finanzas/cobranza-contra-excel";
 import { cargarEnLaCalleContraExcel, type PorCobrarParaExcel } from "@/lib/finanzas/cobranza-contra-excel-server";
@@ -2378,7 +2378,16 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
       ? Promise.resolve([])
       : prisma.costoRecurrente.findMany({
           where: { categoria: { in: [...CATEGORIAS_SIN_SALARIO] } },
-          select: { id: true, nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true, activo: true, finalizadoEl: true, createdAt: true },
+          select: {
+            id: true, nombre: true, categoria: true, monto: true, moneda: true, frecuencia: true, activo: true, finalizadoEl: true, createdAt: true,
+            // La historia, para que cada mes cuente con lo que valía ese mes (lib/finanzas/egresos-nexus.ts). Sin los
+            // movimientos cuya foto es un salario: un costo que antes fue salario no reconstruye su pasado de salario.
+            movimientos: {
+              where: { categoria: { in: [...CATEGORIAS_SIN_SALARIO] } },
+              select: { tipo: true, fechaEfectiva: true, monto: true },
+              orderBy: { createdAt: "asc" },
+            },
+          },
         }),
     deNexus.length === 0
       ? Promise.resolve([])
@@ -2460,17 +2469,21 @@ export async function cargarEgresosDelAnio(anio: number, hoyISO: string, divisor
   egresos.push(
     ...egresosDeNexus(
       deNexus,
-      costosNexus.map((c) => ({
-        id: c.id,
-        nombre: c.nombre,
-        categoria: c.categoria as "HERRAMIENTA" | "FIJO_OPERACION",
-        monto: num(c.monto)!,
-        moneda: c.moneda as MonedaEq,
-        frecuencia: c.frecuencia,
-        activo: c.activo,
-        finalizadoEl: isoDay(c.finalizadoEl),
-        creadoEl: c.createdAt.toISOString().slice(0, 10),
-      })),
+      costosNexus.map((c) =>
+        costoParaEgreso({
+          id: c.id,
+          nombre: c.nombre,
+          categoria: c.categoria as "HERRAMIENTA" | "FIJO_OPERACION",
+          monto: num(c.monto)!,
+          moneda: c.moneda as MonedaEq,
+          frecuencia: c.frecuencia,
+          activo: c.activo,
+          finalizadoEl: isoDay(c.finalizadoEl),
+          // El día de alta en hora de Costa Rica, no en UTC (lo resuelve `costoParaEgreso`).
+          createdAt: c.createdAt,
+          movimientos: c.movimientos.map((m) => ({ tipo: m.tipo, fechaEfectiva: isoDay(m.fechaEfectiva)!, monto: num(m.monto)! })),
+        }),
+      ),
       gastosNexus.map((g) => ({ fecha: isoDay(g.fecha)!, monto: num(g.monto)!, moneda: g.moneda as MonedaEq })),
       calidadDe,
     ),
