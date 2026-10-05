@@ -49,6 +49,30 @@ export default function HojaDeRuta({ temas }: { temas: TemaDeHoja[] }) {
     });
   };
 
+  /**
+   * Los cambios de la escala que están en la hoja de ruta, con las columnas de «Cambios pendientes» del
+   * manual (Markdown): se pegan en el manual o en el chat de la escala. Lo que se comenta en la escala
+   * llega acá con esa fila desde el 2026-10-05.
+   */
+  const copiarCambiosDeLaEscala = async () => {
+    try {
+      const r = await fetch("/api/escala/comentarios/exportar", { cache: "no-store" });
+      const d = (await r.json().catch(() => null)) as { markdown?: string; filas?: number; error?: string } | null;
+      if (!r.ok || !d?.markdown) {
+        toast.error(d?.error ?? "No se pudieron leer los cambios de la escala.");
+        return;
+      }
+      if (!d.filas) {
+        toast.info("No hay cambios de la escala en la hoja de ruta.");
+        return;
+      }
+      await navigator.clipboard.writeText(d.markdown);
+      toast.success(`Copiados ${d.filas} ${d.filas === 1 ? "cambio" : "cambios"} de la escala, con las columnas del manual.`);
+    } catch {
+      toast.error("No se pudieron copiar los cambios de la escala.");
+    }
+  };
+
   const mover = async (id: string, columna: Columna, titulo: string) => {
     setMoviendo(null);
     try {
@@ -105,7 +129,15 @@ export default function HojaDeRuta({ temas }: { temas: TemaDeHoja[] }) {
         )}
       </section>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => void copiarCambiosDeLaEscala()}
+          title="Los cambios de la escala que están en la hoja de ruta, en una tabla con las columnas de «Cambios pendientes» del manual."
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg"
+        >
+          Copiar los cambios de la escala
+        </button>
         <button
           type="button"
           onClick={() => setNuevo(true)}

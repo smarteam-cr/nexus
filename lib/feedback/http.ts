@@ -4,20 +4,14 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { guardInternalUser } from "@/lib/auth/api-guards";
+import { ErrorDeFeedback } from "./error";
 import { feedbackDisponible } from "./queries";
 import { esRevisorDeFeedback } from "./reglas";
 
 export const SQL_DEL_FEEDBACK = "scripts/sql/2026-10-04-feedback.sql";
 
-/** Un error que la ruta convierte en respuesta con su código. */
-export class ErrorDeFeedback extends Error {
-  constructor(
-    message: string,
-    public status: number,
-  ) {
-    super(message);
-  }
-}
+// Vive aparte (error.ts) para que lo use `escala-server.ts` sin importar este archivo, que importa queries.ts.
+export { ErrorDeFeedback };
 
 export async function leerCuerpo(req: NextRequest): Promise<unknown | NextResponse> {
   try {

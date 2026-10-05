@@ -184,12 +184,12 @@ export default function VistaDeLaEscala({
   porArea,
   abiertosEnTotal,
   yo,
-  esResponsable,
+  esRevisor,
   comentariosDisponibles,
   inicial,
   almacen = almacenDeLaApi,
   hrefDeArea = (slug) => `/escala/${slug}`,
-  hrefDeLaBandeja = "/escala/comentarios",
+  hrefDeLaBandeja = "/feedback?origen=escala",
   alCambiar,
 }: {
   datos: DatosDeLaVista;
@@ -197,7 +197,11 @@ export default function VistaDeLaEscala({
   porArea: ConteosPorClave;
   abiertosEnTotal: number;
   yo: Autor;
-  esResponsable: boolean;
+  /**
+   * Revisa el feedback (super admin): los comentarios de la escala se deciden en /feedback desde el
+   * 2026-10-05, así que solo a quien revisa le sale el botón que lleva ahí.
+   */
+  esRevisor: boolean;
   comentariosDisponibles: boolean;
   inicial: EstadoInicial;
   almacen?: AlmacenDeLaEscala;
@@ -242,8 +246,8 @@ export default function VistaDeLaEscala({
 
   const abrirComentarios = useCallback((a: string) => setAncla(a), []);
   const contexto = useMemo(
-    () => ({ yo, esResponsable, almacen, conteos, comentariosDisponibles, abrirComentarios }),
-    [yo, esResponsable, almacen, conteos, comentariosDisponibles, abrirComentarios],
+    () => ({ yo, esRevisor, almacen, conteos, comentariosDisponibles, abrirComentarios }),
+    [yo, esRevisor, almacen, conteos, comentariosDisponibles, abrirComentarios],
   );
 
   /** Cambiar de área conserva la vista, la industria, el perfil y las herramientas (no la dimensión ni la celda, que son del área). */
@@ -323,15 +327,24 @@ export default function VistaDeLaEscala({
               <div data-recorrido="escala.leyenda">
               <Leyenda datos={datos} />
               </div>
-              <Link data-recorrido="escala.comentarios" href={hrefDeLaBandeja} className={BOTON_CLARO}>
-                <IconoComentario />
-                Comentarios
-                {abiertosEnTotal > 0 && (
-                  <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold leading-[18px] text-warn-ink">
-                    {abiertosEnTotal} {abiertosEnTotal === 1 ? "abierto" : "abiertos"}
-                  </span>
-                )}
-              </Link>
+              {/* Los comentarios se deciden en /feedback, con el resto del feedback: el botón es de quien
+                  revisa. Los demás los ven sobre cada criterio (contadores y la capa del mapa). */}
+              {esRevisor && (
+                <Link
+                  data-recorrido="escala.comentarios"
+                  href={hrefDeLaBandeja}
+                  className={BOTON_CLARO}
+                  title="Los comentarios de la escala se deciden en Feedback, junto con el resto."
+                >
+                  <IconoComentario />
+                  Comentarios
+                  {abiertosEnTotal > 0 && (
+                    <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold leading-[18px] text-warn-ink">
+                      {abiertosEnTotal} sin revisar
+                    </span>
+                  )}
+                </Link>
+              )}
               <Menu
                 align="end"
                 panelWidth="w-80"

@@ -5684,6 +5684,16 @@ model FeedbackReporte {
   /// Lo que señaló en la pantalla: [{ n, descripcion }].
   marcas    Json?
 
+  /// Lo comentado desde la escala (2026-10-05, lib/feedback/escala.ts): el identificador comentado
+  /// («2.6.F1») y su área («2»), en columnas para contar sin abrir el JSON. Lo demás de la escala va en
+  /// `escala` (EscalaDelReporte). SQL: scripts/sql/2026-10-05-feedback-escala.sql (ANTES del deploy).
+  // nullable porque un reporte de pantalla no se ancla a la escala
+  escalaAncla String?
+  // nullable porque un reporte de pantalla no se ancla a la escala
+  escalaArea  String?
+  // nullable porque un reporte de pantalla no se ancla a la escala
+  escala      Json?
+
   /// sin_revisar · en_hoja · respondido · no_se_hara
   estado String @default("sin_revisar")
 
@@ -5711,6 +5721,8 @@ model FeedbackReporte {
   @@index([estado, createdAt])
   @@index([autorEmail, createdAt])
   @@index([temaId])
+  @@index([escalaArea])
+  @@index([escalaAncla])
 }
 
 /// Un mensaje de la conversación de un reporte.

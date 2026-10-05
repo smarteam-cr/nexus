@@ -8,6 +8,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { avisar } from "@/lib/para-ti/avisos-server";
+import { conLaFilaDelManual } from "./escala-server";
 import { ErrorDeFeedback } from "./http";
 import { COLUMNA, esUrgente, estadoParaElAutor, numeroDeReporte, TIPO, type Columna } from "./reglas";
 import type { CrearReporte, Decidir } from "./schema";
@@ -113,11 +114,15 @@ export async function responder(reporteId: string, quien: { email: string; esRev
   return { id: mensaje.id };
 }
 
-/** Quien revisa decide qué hacer con un reporte. Ver las tres salidas en reglas.ts. */
+/**
+ * Quien revisa decide qué hacer con un reporte. Ver las tres salidas en reglas.ts. Un reporte de la
+ * escala (lib/feedback/escala.ts) llega a la hoja de ruta con la fila de «Cambios pendientes» del
+ * manual: qué cambiaría, el caso y —obligatorio— qué decisión con el cliente cambiaría.
+ */
 export async function decidir(reporteId: string, d: Decidir, revisorEmail: string) {
   const r = await prisma.feedbackReporte.findUnique({
     where: { id: reporteId },
-    select: { id: true, autorEmail: true, pantalla: true, cuerpo: true, estado: true },
+    select: { id: true, autorEmail: true, pantalla: true, cuerpo: true, estado: true, escalaAncla: true, escala: true },
   });
   if (!r) throw new ErrorDeFeedback("Ese reporte no existe.", 404);
   const ahora = new Date();
@@ -133,6 +138,10 @@ export async function decidir(reporteId: string, d: Decidir, revisorEmail: strin
 
   if (d.accion === "llevar") {
     if (!d.temaId && !d.nuevo) throw new ErrorDeFeedback("Elige un tema o crea uno nuevo.", 400);
+    if (r.escalaAncla && !d.cambio) {
+      throw new ErrorDeFeedback("Es de la escala: completa la fila del manual (qué cambiaría y qué decisión con el cliente cambiaría).", 400);
+    }
+    const filaDelManual = r.escalaAncla && d.cambio ? { escala: conLaFilaDelManual(r.escala, r.escalaAncla, d.cambio) } : {};
     const tema = await prisma.$transaction(async (tx) => {
       let t: { id: string; titulo: string; columna: string };
       if (d.temaId) {
@@ -158,7 +167,7 @@ export async function decidir(reporteId: string, d: Decidir, revisorEmail: strin
       }
       await tx.feedbackReporte.update({
         where: { id: reporteId },
-        data: { estado: "en_hoja", temaId: t.id, motivoCierre: null, decididoAt: ahora, decididoPorEmail: revisor, revisorLeyoAt: ahora },
+        data: { estado: "en_hoja", temaId: t.id, motivoCierre: null, decididoAt: ahora, decididoPorEmail: revisor, revisorLeyoAt: ahora, ...filaDelManual },
       });
       return t;
     });

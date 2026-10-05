@@ -1,15 +1,15 @@
 /**
  * POST /api/escala/comentarios/[id]/respuestas — responder un comentario.
  *
- * Responde cualquiera del equipo. Si responde el responsable de la escala y el comentario estaba
- * abierto, pasa a «respondido».
+ * Responde cualquiera del equipo, en la escala. Responder no cambia el estado: eso se decide en la
+ * bandeja de /feedback (desde el 2026-10-05). A quien lo escribió le llega el aviso en «Para ti».
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardInternalUser } from "@/lib/auth/api-guards";
-import { autoriaPorId, responder } from "@/lib/escala/comentarios/consultas";
+import { autoriaPorId, responder } from "@/lib/feedback/escala-server";
+import { esRevisorDeFeedback } from "@/lib/feedback/reglas";
 import { Responder } from "@/lib/escala/comentarios/esquema";
-import { errorDeValidacion, leerCuerpo, sinTablas } from "@/lib/escala/comentarios/http";
-import { esResponsable } from "@/lib/escala/comentarios/reglas";
+import { errorDeValidacion, leerCuerpo, respuestaDeError, sinTablas } from "@/lib/escala/comentarios/http";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await guardInternalUser();
@@ -23,12 +23,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!parsed.success) return errorDeValidacion(parsed.error.issues);
 
   const { id } = await params;
-  if (!(await autoriaPorId(id))) return NextResponse.json({ error: "Ese comentario ya no existe." }, { status: 404 });
-  await responder({
-    comentarioId: id,
-    cuerpo: parsed.data.cuerpo,
-    email: guard.user.email,
-    esResponsable: esResponsable(guard.user.email),
-  });
-  return NextResponse.json({ ok: true }, { status: 201 });
+  try {
+    if (!(await autoriaPorId(id))) return NextResponse.json({ error: "Ese comentario ya no existe." }, { status: 404 });
+    await responder({ comentarioId: id, cuerpo: parsed.data.cuerpo, email: guard.user.email, esRevisor: esRevisorDeFeedback(guard.role) });
+    return NextResponse.json({ ok: true }, { status: 201 });
+  } catch (e) {
+    return respuestaDeError(e);
+  }
 }

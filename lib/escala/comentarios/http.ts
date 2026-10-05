@@ -1,9 +1,14 @@
 /**
  * lib/escala/comentarios/http.ts — piezas compartidas por las rutas de `app/api/escala/`. SERVIDOR.
+ *
+ * Desde el 2026-10-05 los comentarios se guardan como reportes de Feedback (lib/feedback/escala-server.ts):
+ * sin las tablas del feedback, o sin las columnas de la escala, la ruta dice qué SQL falta.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { SQL_DE_LA_ESCALA } from "@/lib/escala/documento/vigente";
-import { comentariosDisponibles, ErrorDeComentario } from "./consultas";
+import { ErrorDeFeedback } from "@/lib/feedback/error";
+import { comentariosDisponibles, SQL_DE_LA_ESCALA_EN_FEEDBACK } from "@/lib/feedback/escala-server";
+
+const SQL_DEL_FEEDBACK = "scripts/sql/2026-10-04-feedback.sql";
 
 export async function leerCuerpo(req: NextRequest): Promise<unknown | NextResponse> {
   try {
@@ -17,7 +22,7 @@ export async function leerCuerpo(req: NextRequest): Promise<unknown | NextRespon
 export function sinTablas(): NextResponse | null {
   if (comentariosDisponibles()) return null;
   return NextResponse.json(
-    { error: `Los comentarios de la escala todavía no están disponibles: falta aplicar ${SQL_DE_LA_ESCALA}.` },
+    { error: `Los comentarios de la escala todavía no están disponibles: falta aplicar ${SQL_DEL_FEEDBACK} y ${SQL_DE_LA_ESCALA_EN_FEEDBACK}.` },
     { status: 503 },
   );
 }
@@ -28,6 +33,6 @@ export function errorDeValidacion(issues: { message: string }[]): NextResponse {
 
 /** Traduce los errores conocidos; el resto sube (lo registra Next). */
 export function respuestaDeError(e: unknown): NextResponse {
-  if (e instanceof ErrorDeComentario) return NextResponse.json({ error: e.message }, { status: e.status });
+  if (e instanceof ErrorDeFeedback) return NextResponse.json({ error: e.message }, { status: e.status });
   throw e;
 }

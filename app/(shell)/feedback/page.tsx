@@ -25,14 +25,14 @@ export const metadata: Metadata = { title: "Feedback" };
 export default async function FeedbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ vista?: string; reporte?: string; periodo?: string }>;
+  searchParams: Promise<{ vista?: string; reporte?: string; periodo?: string; origen?: string }>;
 }) {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx) redirect("/clients");
   if (!esRevisorDeFeedback(ctx.role)) redirect("/para-ti");
 
   const cabecera = (
-    <PageHeader title="Feedback" description="Lo que el equipo reporta desde cualquier pantalla de Nexus. Solo dirección lo ve completo." />
+    <PageHeader title="Feedback" description="Lo que el equipo reporta desde cualquier pantalla de Nexus y lo que comenta en la escala. Solo dirección lo ve completo." />
   );
   if (!feedbackDisponible()) {
     return (
@@ -60,7 +60,14 @@ export default async function FeedbackPage({
       <div className="space-y-6">
         {cabecera}
         <PestanasDeFeedback vista={vista} />
-        {bandeja && <BandejaDeFeedback datos={bandeja} reporteInicial={sp.reporte ?? null} />}
+        {bandeja && (
+          <BandejaDeFeedback
+            datos={bandeja}
+            reporteInicial={sp.reporte ?? null}
+            // Desde el botón «Comentarios» de la escala: solo lo comentado ahí (2026-10-05).
+            origenInicial={sp.origen === "escala" ? "escala" : sp.origen === "pantallas" ? "pantallas" : "todos"}
+          />
+        )}
         {temas && <HojaDeRuta temas={temas} />}
         {personas && <PersonasDeFeedback datos={personas} periodo={dias === null ? "todo" : String(dias)} />}
       </div>

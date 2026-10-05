@@ -3,7 +3,7 @@
 /**
  * components/escala/contexto.tsx — lo que comparten las tres vistas y el panel de comentarios.
  *
- * Quién soy, si soy el responsable de la escala, el almacén de comentarios, cuántos comentarios
+ * Quién soy, si reviso el feedback (ahí se deciden los comentarios), el almacén de comentarios, cuántos comentarios
  * tiene cada ancla y «abrir los comentarios de este criterio». Las vistas solo piden
  * `abrirComentarios(ancla)`; el panel vive una sola vez, arriba.
  */
@@ -13,7 +13,8 @@ import type { AlmacenDeLaEscala } from "./comentarios/almacen";
 
 export interface ContextoDeLaEscala {
   yo: Autor;
-  esResponsable: boolean;
+  /** Revisa el feedback (super admin): decide los comentarios en /feedback y puede borrarlos. */
+  esRevisor: boolean;
   almacen: AlmacenDeLaEscala;
   /** Por ancla (`1.7.F1`), del área que se mira. */
   conteos: ConteosPorClave;

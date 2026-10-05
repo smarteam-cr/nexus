@@ -4,6 +4,9 @@
  * Una interfaz y no llamadas sueltas (el mismo molde que Documentación): la pantalla habla con
  * `AlmacenDeLaEscala`, y el almacén real habla con la API. Así la pantalla se puede probar con un
  * almacén en memoria donde no hay sesión (la base local no tiene login).
+ *
+ * Desde el 2026-10-05 los comentarios se guardan como reportes de Feedback y se DECIDEN en la bandeja
+ * de /feedback: la escala comenta, responde, edita y borra, pero no cambia estados ni exporta.
  */
 import { fetchJson } from "@/lib/api/fetch-json";
 import type { Cierre, Despues } from "@/lib/escala/documento/perfil";
@@ -22,12 +25,6 @@ export interface NuevoComentario {
   edicion?: string | null;
 }
 
-export type NuevoEstado =
-  | { estado: "abierto" }
-  | { estado: "respondido"; respuesta?: string | null }
-  | { estado: "cambio_pendiente"; cambioQue: string; cambioCaso?: string | null; cambioDecision: string }
-  | { estado: "descartado"; motivoDescarte?: string | null };
-
 export interface ClienteParaElegir {
   id: string;
   nombre: string;
@@ -40,11 +37,7 @@ export interface AlmacenDeLaEscala {
   editar(id: string, datos: { cuerpo: string; decisionQueCambiaria: string | null }): Promise<void>;
   borrar(id: string): Promise<void>;
   responder(id: string, cuerpo: string): Promise<void>;
-  editarRespuesta(id: string, cuerpo: string): Promise<void>;
-  borrarRespuesta(id: string): Promise<void>;
-  cambiarEstado(id: string, estado: NuevoEstado): Promise<void>;
   clientes(): Promise<ClienteParaElegir[]>;
-  exportar(): Promise<{ markdown: string; filas: number }>;
 }
 
 const json = (cuerpo: unknown): RequestInit => ({
@@ -72,20 +65,8 @@ export const almacenDeLaApi: AlmacenDeLaEscala = {
   async responder(id, cuerpo) {
     await fetchJson(`/api/escala/comentarios/${id}/respuestas`, { method: "POST", ...json({ cuerpo }) });
   },
-  async editarRespuesta(id, cuerpo) {
-    await fetchJson(`/api/escala/respuestas/${id}`, { method: "PATCH", ...json({ cuerpo }) });
-  },
-  async borrarRespuesta(id) {
-    await fetchJson(`/api/escala/respuestas/${id}`, { method: "DELETE" });
-  },
-  async cambiarEstado(id, estado) {
-    await fetchJson(`/api/escala/comentarios/${id}/estado`, { method: "POST", ...json(estado) });
-  },
   async clientes() {
     const r = await fetchJson<{ clientes: ClienteParaElegir[] }>("/api/escala/clientes");
     return r.clientes;
-  },
-  async exportar() {
-    return fetchJson<{ markdown: string; filas: number }>("/api/escala/comentarios/exportar");
   },
 };

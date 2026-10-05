@@ -12,7 +12,9 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { leerDocumentoPublicado, leerEscalaVigente, versionesPublicadas } from "@/lib/escala/documento/vigente";
 import { leerComoCambia } from "@/lib/escala/documento/manual";
 import { perfilDesdeUrl } from "@/lib/escala/documento/perfil";
-import { comentariosDisponibles, contarPorAncla, contarPorArea } from "@/lib/escala/comentarios/consultas";
+// Desde el 2026-10-05 los comentarios son reportes de Feedback: se cuentan de ahí.
+import { comentariosDisponibles, contarPorAncla, contarPorArea } from "@/lib/feedback/escala-server";
+import { esRevisorDeFeedback } from "@/lib/feedback/reglas";
 import { esResponsable } from "@/lib/escala/comentarios/reglas";
 import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { conteosQueSeVen, datosDeLaVista, vistaDesdeUrl } from "@/lib/escala/vista";
@@ -81,7 +83,7 @@ export default async function PaginaDeLaEscala({
         porArea={porArea}
         abiertosEnTotal={abiertosEnTotal}
         yo={{ email: ctx.user.email, nombre: ctx.teamMember.name, foto: ctx.teamMember.photoUrl }}
-        esResponsable={responsable}
+        esRevisor={esRevisorDeFeedback(ctx.role)}
         comentariosDisponibles={comentariosDisponibles()}
         inicial={{
           vista: vistaDesdeUrl(uno(sp, "vista")),

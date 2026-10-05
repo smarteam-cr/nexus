@@ -77,6 +77,11 @@ export interface MensajeDelHilo {
   id: string;
   autor: { nombre: string; iniciales: string };
   deQuienReporto: boolean;
+  /**
+   * Lo escribió quien está mirando. Hace falta desde que en un comentario de la escala responde
+   * cualquiera del equipo (2026-10-05): ya no alcanza con «no es de quien reportó» para decir «Tú».
+   */
+  esMio?: boolean;
   cuerpo: string;
   creado: string;
 }
@@ -87,7 +92,7 @@ export function Hilo({ mensajes, yoReporte, haceCuanto }: { mensajes: MensajeDel
   return (
     <div className="space-y-3.5">
       {mensajes.map((m) => {
-        const soyYo = yoReporte ? m.deQuienReporto : !m.deQuienReporto;
+        const soyYo = m.esMio ?? (yoReporte ? m.deQuienReporto : !m.deQuienReporto);
         return (
           <div key={m.id} className="flex gap-2.5">
             <Iniciales texto={m.autor.iniciales} />

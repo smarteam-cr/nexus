@@ -2,7 +2,8 @@
  * lib/escala/guardas.test.ts — las guardas de la sección de la escala, congeladas.
  *
  *   · Toda ruta de `app/api/escala/` pide usuario interno (los comentarios son del equipo).
- *   · Cambiar el estado y exportar llaman `esResponsable(`: el estado es solo del responsable.
+ *   · Exportar llama `esRevisorDeFeedback(`: desde el 2026-10-05 los comentarios se deciden en
+ *     /feedback, y los decide cualquier super admin (lib/feedback/escala.test.ts).
  *   · Ningún id se valida con `.cuid()` (hay filas UUID).
  *   · Los agentes no leen los comentarios: «por ahora, nada de análisis con IA» (Elías).
  *   · El SQL deja las tres tablas cerradas para `anon` (RLS + RESTRICTIVE).
@@ -44,17 +45,16 @@ const RUTAS = archivos("app/api/escala", (f) => f === "route.ts");
 
 describe("las rutas de la escala", () => {
   it("existen (si no, el resto pasa por vacío)", () => {
-    expect(RUTAS.length).toBeGreaterThanOrEqual(7);
+    expect(RUTAS.length).toBeGreaterThanOrEqual(6);
   });
 
   it.each(RUTAS)("%s pide usuario interno", (rel) => {
     expect(soloCodigo(leer(rel))).toMatch(/guardInternalUser\(\)/);
   });
 
-  it("cambiar el estado y exportar son del responsable", () => {
-    for (const rel of ["app/api/escala/comentarios/[id]/estado/route.ts", "app/api/escala/comentarios/exportar/route.ts"]) {
-      expect(soloCodigo(leer(rel.replace(/\//g, path.sep))), rel).toMatch(/esResponsable\(/);
-    }
+  it("exportar es de quien revisa el feedback (el estado se decide en /feedback desde el 2026-10-05)", () => {
+    const rel = "app/api/escala/comentarios/exportar/route.ts";
+    expect(soloCodigo(leer(rel.replace(/\//g, path.sep))), rel).toMatch(/esRevisorDeFeedback\(/);
   });
 
   it("ningún id se valida con .cuid()", () => {
@@ -66,10 +66,11 @@ describe("las rutas de la escala", () => {
 
 describe("los agentes no leen los comentarios", () => {
   it("lib/agents, lib/canvas, lib/knowledge y lib/ai no importan lib/escala/comentarios", () => {
-    // lib/exploraciones también: su agente propone con la escala publicada y nada más.
+    // lib/exploraciones también: su agente propone con la escala publicada y nada más. Desde el
+    // 2026-10-05 los comentarios viven en Feedback: tampoco leen lib/feedback/escala.
     for (const dir of ["lib/agents", "lib/canvas", "lib/knowledge", "lib/ai", "lib/exploraciones"]) {
       for (const rel of archivos(dir, (f) => f.endsWith(".ts") || f.endsWith(".tsx"))) {
-        expect(leer(rel), rel).not.toMatch(/escala\/comentarios|escalaComentario/);
+        expect(leer(rel), rel).not.toMatch(/escala\/comentarios|escalaComentario|feedback\/escala/);
       }
     }
   });

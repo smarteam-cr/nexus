@@ -2,22 +2,24 @@
  * lib/escala/comentarios/reglas.ts — las reglas de los comentarios de la escala. PURO.
  *
  * Client-safe (sin Prisma ni zod): lo importan las rutas, las consultas y los componentes. Es el
- * único lugar que decide quién cambia el estado, quién edita y quién borra.
+ * único lugar que decide quién edita y quién borra.
  *
- * ── LAS DECISIONES (Elías, 2026-09-27) ───────────────────────────────────────
- * · Comentan y leen todos los comentarios TODOS los del equipo interno.
- * · El ESTADO lo cambia solo el responsable de la escala («hoy Elías González», dice el manual de
- *   operación). Va fijo por CORREO y no por rol ni por la matriz de /team: SUPER_ADMIN también lo
- *   son otras personas, y la matriz es delegable. Sumar a alguien es una línea de acá.
- * · Cuando el responsable responde un comentario abierto, pasa a «respondido».
- * · El autor edita o borra lo suyo mientras siga abierto y sin respuestas. Después es evidencia:
- *   solo cambia de estado.
+ * ── LAS DECISIONES ───────────────────────────────────────────────────────────
+ * · Comentan, leen y responden TODOS los del equipo interno (Elías, 2026-09-27; lo sostuvo el
+ *   2026-10-05: es una conversación sobre un documento de todos).
+ * · Desde el 2026-10-05 un comentario de la escala es un reporte de Feedback (`lib/feedback/escala.ts`):
+ *   se decide en la bandeja de /feedback, con las tres salidas de todo reporte, y lo decide cualquier
+ *   super admin («Cualquier super admin», Elías). La escala ya no cambia estados: los muestra.
+ * · El autor edita o borra lo suyo mientras siga sin revisar y sin respuestas. Después es evidencia:
+ *   solo lo borra quien revisa.
+ * · El responsable de la escala (por CORREO) sigue existiendo para lo que es suyo: publicar versiones
+ *   y el frente «Escala» de «Para ti».
  * · Tipos y estados son texto en la base (no enum, INV4): los valores válidos son estos.
  */
 import type { Cierre, Despues } from "@/lib/escala/documento/perfil";
 import type { TipoDeAncla } from "@/lib/escala/documento/anclas";
 
-/** Quién decide cómo evoluciona la escala. */
+/** Quién decide cómo evoluciona la escala (publica sus versiones). */
 export const RESPONSABLES_DE_LA_ESCALA: readonly string[] = ["egonzalez@smarteamcr.com"];
 
 const normal = (email: string) => email.trim().toLowerCase();
@@ -63,11 +65,15 @@ export function etiquetaDeTipo(tipo: string): string {
 
 export type EstadoDeComentario = "abierto" | "respondido" | "cambio_pendiente" | "descartado";
 
+/**
+ * Los nombres son los del feedback, donde se decide: «Sin revisar», «Respondido», «En la hoja de
+ * ruta» (la fila de «Cambios pendientes» del manual) y «No se hará».
+ */
 export const ESTADOS_DE_COMENTARIO: readonly { clave: EstadoDeComentario; etiqueta: string }[] = [
-  { clave: "abierto", etiqueta: "Abierto" },
+  { clave: "abierto", etiqueta: "Sin revisar" },
   { clave: "respondido", etiqueta: "Respondido" },
-  { clave: "cambio_pendiente", etiqueta: "Cambio pendiente" },
-  { clave: "descartado", etiqueta: "Descartado" },
+  { clave: "cambio_pendiente", etiqueta: "En la hoja de ruta" },
+  { clave: "descartado", etiqueta: "No se hará" },
 ];
 
 export function etiquetaDeEstado(estado: string): string {
@@ -93,6 +99,11 @@ export interface RespuestaVista {
 
 export interface ComentarioVisto {
   id: string;
+  /**
+   * El número del reporte de Feedback, el que se cita: «F-128». (Opcional solo mientras
+   * `consultas.ts`, las tablas viejas, siga en el repo: se va con ese archivo.)
+   */
+  numero?: number;
   ancla: string;
   tipoDeAncla: TipoDeAncla;
   area: string;
@@ -120,8 +131,11 @@ export interface ComentarioVisto {
   autor: Autor;
   estado: EstadoDeComentario;
   estadoCambiado: { at: string; por: Autor | null } | null;
-  /** La fila de «Cambios pendientes» (solo si pasó a cambio pendiente). */
+  /** La fila de «Cambios pendientes» (solo si está en la hoja de ruta). */
   cambio: { que: string; caso: string; decision: string } | null;
+  /** El tema de la hoja de ruta donde está (solo si está en la hoja de ruta). */
+  tema?: { titulo: string; columna: string } | null;
+  /** El motivo de «No se hará». */
   motivoDescarte: string | null;
   createdAt: string;
   editadoAt: string | null;
@@ -147,22 +161,14 @@ export function autoriaDe(c: ComentarioVisto): Autoria {
   return { autorEmail: c.autor.email, estado: c.estado, respuestas: c.respuestas.length };
 }
 
-/** El autor, mientras esté abierto y nadie haya respondido. */
+/** El autor, mientras siga sin revisar y nadie haya respondido. */
 export function puedeEditarComentario(c: Autoria, miEmail: string): boolean {
   return mismo(c.autorEmail, miEmail) && c.estado === "abierto" && c.respuestas === 0;
 }
 
-/** Lo mismo que editar, más el responsable (para sacar lo que no corresponde). */
-export function puedeBorrarComentario(c: Autoria, miEmail: string): boolean {
-  return puedeEditarComentario(c, miEmail) || esResponsable(miEmail);
-}
-
-export function puedeEditarRespuesta(autorEmail: string, miEmail: string): boolean {
-  return mismo(autorEmail, miEmail);
-}
-
-export function puedeBorrarRespuesta(autorEmail: string, miEmail: string): boolean {
-  return mismo(autorEmail, miEmail) || esResponsable(miEmail);
+/** Lo mismo que editar, más quien revisa el feedback (para sacar lo que no corresponde). */
+export function puedeBorrarComentario(c: Autoria, miEmail: string, esRevisor: boolean): boolean {
+  return puedeEditarComentario(c, miEmail) || esRevisor;
 }
 
 // ── La fila del manual ────────────────────────────────────────────────────────

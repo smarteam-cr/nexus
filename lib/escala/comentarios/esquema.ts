@@ -58,9 +58,11 @@ export const EditarComentario = z.object({
 
 export const Responder = z.object({ cuerpo: texto("Escribe la respuesta.") });
 
-export const EditarRespuesta = z.object({ cuerpo: texto("Escribe la respuesta.") });
-
-/** Cambiar el estado: cada estado pide lo suyo. «Cambio pendiente» exige la fila del manual. */
+/**
+ * ⚠ YA NO ENTRA POR NINGUNA RUTA: desde el 2026-10-05 el estado se decide en la bandeja de /feedback
+ * (lib/feedback/schema.ts, `Decidir`), con la fila del manual al llevarlo a la hoja de ruta. Queda
+ * solo porque `consultas.ts` (las tablas viejas) lo nombra; se va con ese archivo.
+ */
 export const CambiarEstado = z.discriminatedUnion("estado", [
   z.object({ estado: z.literal("abierto") }),
   z.object({ estado: z.literal("respondido"), respuesta: opcional(5000) }),

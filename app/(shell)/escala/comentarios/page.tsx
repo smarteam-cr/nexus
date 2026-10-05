@@ -1,58 +1,17 @@
 /**
- * app/(shell)/escala/comentarios/page.tsx — la bandeja: todos los comentarios de la escala.
+ * app/(shell)/escala/comentarios/page.tsx — la vieja bandeja de comentarios de la escala.
  *
- * La ve todo el equipo; el responsable de la escala, además, cambia estados y exporta los cambios
- * pendientes. El texto de cada ancla se resuelve contra la versión VIGENTE, así la bandeja marca
- * los comentarios cuyo texto cambió (o que ya no existe).
+ * Desde el 2026-10-05 los comentarios de la escala se deciden en la bandeja de /feedback, junto con el
+ * resto (Elías: «es mejor que todo se maneje desde el módulo de feedback nuevo»). Esta dirección queda
+ * para que no se rompa un enlace viejo: a quien revisa el feedback lo lleva a la bandeja con los de la
+ * escala; al resto, a la escala, donde cada comentario se ve sobre su criterio.
  */
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-import { resolverAncla } from "@/lib/escala/documento/anclas";
-import { leerDocumentoPublicado, leerEscalaVigente } from "@/lib/escala/documento/vigente";
-import { leerComoCambia } from "@/lib/escala/documento/manual";
-import { comentariosDisponibles, listarComentarios } from "@/lib/escala/comentarios/consultas";
-import { esResponsable } from "@/lib/escala/comentarios/reglas";
-import Bandeja, { type AnclaEnLaBandeja } from "@/components/escala/Bandeja";
-import EscalaSinPublicar from "@/components/escala/EscalaSinPublicar";
-
-export const metadata: Metadata = { title: "Comentarios de la escala" };
+import { esRevisorDeFeedback } from "@/lib/feedback/reglas";
 
 export default async function BandejaDeLaEscala() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx) redirect("/clients");
-
-  const vigente = await leerEscalaVigente();
-  const responsable = esResponsable(ctx.user.email);
-  if (vigente.estado !== "ok" || !comentariosDisponibles()) {
-    return (
-      <div className={SHELL_DEFAULT}>
-        <EscalaSinPublicar estado={vigente.estado === "ok" ? "sin-tablas" : vigente.estado} responsable={responsable} />
-      </div>
-    );
-  }
-
-  // Cada comentario ya trae lo que dice hoy SU ancla, leída con la edición desde la que se hizo
-  // (`textoDeHoy`, `ruta`). Acá solo hacen falta las dimensiones, para agrupar: con su nombre general.
-  const [comentarios, manual] = await Promise.all([listarComentarios({}, vigente.escala), leerDocumentoPublicado("manual")]);
-  const anclas: Record<string, AnclaEnLaBandeja> = {};
-  for (const id of new Set(comentarios.map((c) => c.dimension))) {
-    const r = resolverAncla(vigente.escala, id);
-    anclas[id] = r ? { ruta: r.ruta, texto: r.texto, area: r.area.slug } : { ruta: null, texto: null, area: null };
-  }
-
-  return (
-    <div className={SHELL_DEFAULT}>
-      <Bandeja
-        comentarios={comentarios}
-        anclas={anclas}
-        areas={vigente.escala.areas.map((a) => ({ id: a.id, nombre: a.nombre, slug: a.slug }))}
-        version={vigente.escala.version}
-        yo={{ email: ctx.user.email, nombre: ctx.teamMember.name, foto: ctx.teamMember.photoUrl }}
-        esResponsable={responsable}
-        comoCambia={leerComoCambia(manual?.texto)}
-      />
-    </div>
-  );
+  redirect(esRevisorDeFeedback(ctx.role) ? "/feedback?origen=escala" : "/escala");
 }

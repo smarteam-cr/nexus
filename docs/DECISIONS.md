@@ -4673,3 +4673,44 @@ como tokens del sistema y el segmentado nuevo también en Preventa.
   a un comentario, el criterio comentado tiene que quedar a la vista en su fila.
 - El esqueleto de carga de `/escala/[área]` dibuja el mapa (la caja de la rueda y el panel del
   detalle), para que la pantalla no salte al cargar.
+
+## Los comentarios de la escala se deciden en Feedback (2026-10-05)
+
+**Contexto.** Elías armó el módulo de Feedback (el equipo reporta desde cualquier pantalla y dirección
+decide en una bandeja) y pidió unirlo con los comentarios de la escala: «es mejor que todo se maneje
+desde el módulo de feedback nuevo». En producción había 0 comentarios de la escala y el feedback
+todavía no estaba desplegado: no hubo nada que mover.
+
+- **Se sigue comentando en la escala, sobre el criterio.** El globito de cada criterio, nivel y
+  dimensión, los contadores y la capa «Comentarios del equipo» del mapa siguen igual. Lo que cambia es
+  dónde se guarda: cada comentario es un reporte de Feedback (`FeedbackReporte`) con su ancla
+  (`escalaAncla`, `escalaArea`) y lo propio de la escala en `escala` (JSON): el texto que se leyó, la
+  versión y la edición, el tipo propio, el cliente y el perfil del caso, «qué decisión cambiaría» y la
+  fila del manual. Una captura no da ese contexto; el ancla sí.
+- **Se decide en la bandeja de /feedback**, con las tres salidas de todo reporte. «Cambio pendiente»
+  pasa a ser **llevarlo a la hoja de ruta**, y eso exige la fila de «Cambios pendientes» del manual
+  (viene propuesta desde el comentario). «Copiar los cambios de la escala», en la hoja de ruta, la
+  saca con las columnas del manual. «Respondido» y «Descartado» son «Responder y cerrar» y «No se
+  hará».
+- **Lo decide cualquier super admin** (Elías, 2026-10-05), como todo el feedback; antes era solo el
+  responsable de la escala por correo, que sigue existiendo para publicar versiones y para el frente
+  «Escala» de «Para ti».
+- **Lo ve y lo responde todo el equipo, en la escala**, como antes (Elías): es una conversación sobre
+  un documento de todos. Un reporte de pantalla, en cambio, sigue siendo privado entre quien lo
+  escribió y quien revisa. Responder ya no cambia el estado.
+- **La escala muestra el estado, no lo cambia.** Los estados se llaman como en Feedback (Sin revisar,
+  Respondido, En la hoja de ruta, No se hará), cada comentario lleva su número («F-31») y, a quien
+  revisa, «Decidir en Feedback →». El botón «Comentarios» de la cabecera es solo de quien revisa y
+  lleva a la bandeja filtrada («De la escala»); `/escala/comentarios` redirige ahí. La bandeja propia
+  de la escala, el control de estado y la edición de respuestas se retiran.
+- **En la bandeja**, un reporte de la escala muestra lo que se comentó en vez de la captura: el
+  criterio, lo que se leyó, lo que dice hoy si cambió, la edición, el cliente y el perfil. «De
+  dónde» filtra pantallas o escala. En una conversación, «Tú» es quien escribió, no «quien no
+  reportó»: en la escala responde cualquiera.
+- **SQL aparte y re-ejecutable** (`2026-10-05-feedback-escala.sql`): tres columnas y dos índices en
+  `FeedbackReporte`, después del SQL del feedback y antes del deploy. Las tablas viejas
+  (`EscalaComentario`, `EscalaRespuesta`) quedan como estaban.
+
+**Pendiente.** `lib/escala/comentarios/consultas.ts` (las tablas viejas) queda sin uso: tiene cambios
+sin guardar de «Para ti» y se borra cuando esa conversación los guarde, junto con lo que solo lo
+sostiene (`CambiarEstado`, los campos opcionales de `ComentarioVisto`).

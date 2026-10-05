@@ -3,33 +3,49 @@
 /**
  * components/escala/comentarios/TarjetaDeComentario.tsx — un comentario de la escala con su hilo.
  *
- * Arriba lo que lo distingue: el tipo, el estado, la versión en que se hizo y, si «no calza», con
- * qué cliente y qué perfil. Si la versión vigente cambió el texto comentado, se ve al lado.
- * Los botones salen de las reglas (`reglas.ts`); la API las vuelve a validar.
+ * Arriba lo que lo distingue: el tipo, el estado, su número de Feedback, la versión en que se hizo y,
+ * si «no calza», con qué cliente y qué perfil. Si la versión vigente cambió el texto comentado, se ve
+ * al lado. Los botones salen de las reglas (`reglas.ts`); la API las vuelve a validar.
+ *
+ * Desde el 2026-10-05 el estado se decide en la bandeja de /feedback (cualquier super admin): acá solo
+ * se ve, y quien revisa tiene el enlace para decidirlo allá. Responder lo puede cualquiera del equipo y
+ * no cambia el estado.
  */
 import { useState } from "react";
 import { Avatar, Button, Textarea } from "@/components/ui";
 import { haceCuanto } from "@/lib/documentacion/comentarios";
 import { describirPerfil } from "@/lib/escala/documento/perfil";
+import { COLUMNA, esColumna, numeroDeReporte } from "@/lib/feedback/reglas";
 import {
   autoriaDe,
+  ESTADOS_DE_COMENTARIO,
   etiquetaDeTipo,
   puedeBorrarComentario,
-  puedeBorrarRespuesta,
   puedeEditarComentario,
-  puedeEditarRespuesta,
   type ComentarioVisto,
+  type EstadoDeComentario,
 } from "@/lib/escala/comentarios/reglas";
 import { cn } from "@/lib/cn";
-import type { NuevoEstado } from "./almacen";
 import CambioDeTexto from "./CambioDeTexto";
-import ControlDeEstado, { EtiquetaDeEstado } from "./ControlDeEstado";
 
 const TONO_DE_TIPO: Record<string, string> = {
   no_se_entiende: "border-line bg-surface-hover text-fg-secondary",
   no_calza: "border-warn-line bg-warn-surface text-warn-ink",
   propuesta: "border-info-line bg-info-surface text-info-ink",
 };
+
+/** El color dice el estado: sin revisar pide atención; respondido está cerrado bien; en la hoja de ruta, en curso. */
+const TONO_DE_ESTADO: Record<EstadoDeComentario, string> = {
+  abierto: "border-warn-line bg-warn-surface text-warn-ink",
+  respondido: "border-success-line bg-success-surface text-success-ink",
+  cambio_pendiente: "border-info-line bg-info-surface text-info-ink",
+  descartado: "border-line bg-surface-hover text-fg-secondary",
+};
+
+export function EtiquetaDeEstado({ estado }: { estado: EstadoDeComentario }) {
+  const e = ESTADOS_DE_COMENTARIO.find((x) => x.clave === estado);
+  return <span className={cn("rounded-full border px-2 py-0.5 text-2xs font-semibold", TONO_DE_ESTADO[estado])}>{e?.etiqueta ?? estado}</span>;
+}
 
 /** Ctrl+Enter (o Cmd+Enter) envía. */
 const esEnviar = (e: React.KeyboardEvent) => e.key === "Enter" && (e.ctrlKey || e.metaKey);
@@ -38,15 +54,12 @@ export interface AccionesDeComentario {
   responder: (id: string, cuerpo: string) => Promise<boolean>;
   editar: (id: string, datos: { cuerpo: string; decisionQueCambiaria: string | null }) => Promise<boolean>;
   borrar: (id: string) => Promise<boolean>;
-  editarRespuesta: (id: string, cuerpo: string) => Promise<boolean>;
-  borrarRespuesta: (id: string) => Promise<boolean>;
-  cambiarEstado: (id: string, estado: NuevoEstado) => Promise<boolean>;
 }
 
 export default function TarjetaDeComentario({
   c,
   yoEmail,
-  esResponsable,
+  esRevisor,
   textoDeHoy,
   versionVigente,
   acciones,
@@ -54,12 +67,13 @@ export default function TarjetaDeComentario({
 }: {
   c: ComentarioVisto;
   yoEmail: string;
-  esResponsable: boolean;
+  /** Quien revisa el feedback (super admin): decide en /feedback y puede borrar. */
+  esRevisor: boolean;
   /** El texto del ancla en la versión vigente (null = ya no existe). */
   textoDeHoy: string | null;
   versionVigente: string;
   acciones: AccionesDeComentario;
-  /** Mostrar a qué identificador se ancla (en la bandeja, donde se mezclan). */
+  /** Mostrar a qué identificador se ancla (cuando se mezclan los de un nivel y sus criterios). */
   conAncla?: boolean;
 }) {
   const [editando, setEditando] = useState(false);
@@ -68,13 +82,12 @@ export default function TarjetaDeComentario({
   const [respuesta, setRespuesta] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [confirmarBorrar, setConfirmarBorrar] = useState(false);
-  const [editandoResp, setEditandoResp] = useState<string | null>(null);
-  const [textoResp, setTextoResp] = useState("");
 
   const autoria = autoriaDe(c);
   const puedoEditar = puedeEditarComentario(autoria, yoEmail);
-  const puedoBorrar = puedeBorrarComentario(autoria, yoEmail);
+  const puedoBorrar = puedeBorrarComentario(autoria, yoEmail, esRevisor);
   const perfil = describirPerfil(c.perfil);
+  const columna = c.tema && esColumna(c.tema.columna) ? COLUMNA[c.tema.columna].nombre : null;
 
   const enviarRespuesta = async () => {
     const t = respuesta.trim();
@@ -89,8 +102,9 @@ export default function TarjetaDeComentario({
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={cn("rounded-full border px-2 py-0.5 text-2xs font-semibold", TONO_DE_TIPO[c.tipo])}>{etiquetaDeTipo(c.tipo)}</span>
         <EtiquetaDeEstado estado={c.estado} />
-        {conAncla && <span className="rounded bg-info-surface px-1.5 py-0.5 font-mono text-2xs text-info-ink">{c.ancla}</span>}
+        {conAncla && <span className="rounded-full border border-line bg-surface px-1.5 py-0.5 text-2xs tabular-nums text-fg-secondary">{c.ancla}</span>}
         <span className="ml-auto text-2xs text-fg-muted" title={new Date(c.createdAt).toLocaleString("es-CR")}>
+          {c.numero ? `${numeroDeReporte(c.numero)} · ` : ""}
           {haceCuanto(c.createdAt)} · en la {c.versionEscala}
         </span>
       </div>
@@ -101,7 +115,7 @@ export default function TarjetaDeComentario({
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-secondary">
           {c.edicion && (
             <span
-              className="rounded bg-success-surface px-1.5 py-0.5 text-2xs text-success-ink"
+              className="rounded-full border border-line bg-surface px-1.5 py-0.5 text-2xs text-fg-secondary"
               title="Se comentó leyendo la escala con esta edición: el texto comentado es el de esa edición."
             >
               Edición {c.edicion.nombre}
@@ -114,7 +128,11 @@ export default function TarjetaDeComentario({
               {!c.cliente.id && <span className="text-fg-muted"> (no está en Nexus)</span>}
             </span>
           )}
-          {perfil && <span className="rounded bg-info-surface px-1.5 py-0.5 text-2xs text-info-ink" title="El perfil de negocio del caso">{perfil}</span>}
+          {perfil && (
+            <span className="rounded-full border border-line bg-surface px-1.5 py-0.5 text-2xs text-fg-secondary" title="El perfil de negocio del caso">
+              {perfil}
+            </span>
+          )}
         </p>
       )}
 
@@ -161,8 +179,9 @@ export default function TarjetaDeComentario({
             Editar
           </button>
         )}
-        {!editando && puedoBorrar && (
-          confirmarBorrar ? (
+        {!editando &&
+          puedoBorrar &&
+          (confirmarBorrar ? (
             <>
               <button type="button" className="font-semibold text-danger-ink" onClick={() => void acciones.borrar(c.id)}>
                 Sí, borrar
@@ -175,32 +194,43 @@ export default function TarjetaDeComentario({
             <button type="button" className="text-fg-muted hover:text-danger-ink" onClick={() => setConfirmarBorrar(true)}>
               Borrar
             </button>
-          )
+          ))}
+        {esRevisor && (
+          <a href={`/feedback?reporte=${c.id}`} className="ml-auto font-semibold text-brand hover:text-brand-light">
+            {c.estado === "abierto" ? "Decidir en Feedback →" : "Ver en Feedback →"}
+          </a>
         )}
       </div>
 
-      {c.estado === "cambio_pendiente" && c.cambio && (
-        <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs leading-relaxed text-warn-ink">
-          <p className="font-semibold">En «Cambios pendientes»</p>
-          <p className="mt-1">
-            <span className="opacity-80">Qué cambiaría · </span>
-            {c.cambio.que}
+      {c.estado === "cambio_pendiente" && (
+        <div className="rounded-lg border border-info-line bg-info-surface px-3 py-2 text-xs leading-relaxed text-info-ink">
+          <p className="font-semibold">
+            En la hoja de ruta{c.tema ? ` · «${c.tema.titulo}»` : ""}
+            {columna ? ` · ${columna}` : ""}
           </p>
-          {c.cambio.caso && (
-            <p>
-              <span className="opacity-80">Caso · </span>
-              {c.cambio.caso}
-            </p>
+          {c.cambio && (
+            <>
+              <p className="mt-1">
+                <span className="opacity-80">Qué cambiaría · </span>
+                {c.cambio.que}
+              </p>
+              {c.cambio.caso && (
+                <p>
+                  <span className="opacity-80">Caso · </span>
+                  {c.cambio.caso}
+                </p>
+              )}
+              <p>
+                <span className="opacity-80">Qué decisión cambiaría · </span>
+                {c.cambio.decision}
+              </p>
+            </>
           )}
-          <p>
-            <span className="opacity-80">Qué decisión cambiaría · </span>
-            {c.cambio.decision}
-          </p>
         </div>
       )}
       {c.estado === "descartado" && c.motivoDescarte && (
         <p className="text-xs text-fg-muted">
-          <span className="font-semibold">Descartado · </span>
+          <span className="font-semibold">No se hará · </span>
           {c.motivoDescarte}
         </p>
       )}
@@ -212,65 +242,9 @@ export default function TarjetaDeComentario({
               <Avatar name={r.autor.nombre} src={r.autor.foto ?? undefined} colorSeed={r.autor.email} size="xs" />
               <div className="min-w-0 flex-1">
                 <p className="text-2xs">
-                  <span className="font-semibold text-fg">{r.autor.nombre}</span>{" "}
-                  <span className="text-fg-muted">
-                    {haceCuanto(r.createdAt)}
-                    {r.editadoAt ? " · editado" : ""}
-                  </span>
+                  <span className="font-semibold text-fg">{r.autor.nombre}</span> <span className="text-fg-muted">{haceCuanto(r.createdAt)}</span>
                 </p>
-                {editandoResp === r.id ? (
-                  <div className="mt-1 space-y-1.5">
-                    <Textarea
-                      autoFocus
-                      rows={2}
-                      value={textoResp}
-                      onChange={(e) => setTextoResp(e.target.value)}
-                      aria-label="Editar la respuesta"
-                      onKeyDown={async (e) => {
-                        if (esEnviar(e) && textoResp.trim() && (await acciones.editarRespuesta(r.id, textoResp.trim()))) setEditandoResp(null);
-                        if (e.key === "Escape") setEditandoResp(null);
-                      }}
-                    />
-                    <div className="flex justify-end gap-1.5">
-                      <Button size="xs" variant="secondary" onClick={() => setEditandoResp(null)}>
-                        Cancelar
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant="primary"
-                        disabled={!textoResp.trim()}
-                        onClick={async () => {
-                          if (await acciones.editarRespuesta(r.id, textoResp.trim())) setEditandoResp(null);
-                        }}
-                      >
-                        Guardar
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-fg">{r.cuerpo}</p>
-                )}
-                {editandoResp !== r.id && (
-                  <div className="mt-0.5 flex gap-2 text-2xs">
-                    {puedeEditarRespuesta(r.autor.email, yoEmail) && (
-                      <button
-                        type="button"
-                        className="text-fg-muted hover:text-fg"
-                        onClick={() => {
-                          setTextoResp(r.cuerpo);
-                          setEditandoResp(r.id);
-                        }}
-                      >
-                        Editar
-                      </button>
-                    )}
-                    {puedeBorrarRespuesta(r.autor.email, yoEmail) && (
-                      <button type="button" className="text-fg-muted hover:text-danger-ink" onClick={() => void acciones.borrarRespuesta(r.id)}>
-                        Borrar
-                      </button>
-                    )}
-                  </div>
-                )}
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-fg">{r.cuerpo}</p>
               </div>
             </li>
           ))}
@@ -281,7 +255,7 @@ export default function TarjetaDeComentario({
         <Textarea
           rows={1}
           value={respuesta}
-          placeholder={esResponsable && c.estado === "abierto" ? "Responder (pasa a «respondido»)…" : "Responder…"}
+          placeholder="Responder…"
           aria-label="Responder el comentario"
           onChange={(e) => setRespuesta(e.target.value)}
           onKeyDown={(e) => {
@@ -296,8 +270,6 @@ export default function TarjetaDeComentario({
           </div>
         )}
       </div>
-
-      {esResponsable && <ControlDeEstado comentario={c} onGuardar={(estado) => acciones.cambiarEstado(c.id, estado)} />}
     </article>
   );
 }

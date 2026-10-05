@@ -622,9 +622,22 @@ function HiloDelReporte({ id, onVolver }: { id: string; onVolver: () => void }) 
             <div className="space-y-2">
               <p className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
                 <IconoDeTipo tipo={reporte.tipo} />
-                {TIPO[reporte.tipo].nombre} · {reporte.pantalla} · {numeroDeReporte(reporte.numero)}
+                {reporte.escala ? reporte.escala.tipo : TIPO[reporte.tipo].nombre} · {reporte.pantalla} · {numeroDeReporte(reporte.numero)}
               </p>
               <p className="whitespace-pre-wrap break-words text-[15px] font-semibold leading-5 text-fg">{reporte.cuerpo}</p>
+              {/* Lo comentado desde la escala (2026-10-05): sobre qué criterio, con su texto. */}
+              {reporte.escala && (
+                <div className="space-y-1 rounded-lg border border-line bg-surface-muted px-3 py-2">
+                  <p className="text-xs text-fg-muted">
+                    <span className="font-semibold tabular-nums text-fg-secondary">{reporte.escala.ancla}</span> ·{" "}
+                    {reporte.escala.ruta ?? "ya no existe en la versión vigente"}
+                  </p>
+                  <p className="text-[13px] leading-snug text-fg-secondary">«{reporte.escala.textoAnclado}»</p>
+                  <a href={reporte.ruta} className="text-xs font-semibold text-brand hover:text-brand-light">
+                    Ver en la escala
+                  </a>
+                </div>
+              )}
               <p className="flex flex-wrap items-center gap-2">
                 <ChipDeEstado estado={reporte.estadoVisible} />
                 {reporte.tema && <span className="text-xs text-fg-muted">En «{reporte.tema.titulo}»</span>}

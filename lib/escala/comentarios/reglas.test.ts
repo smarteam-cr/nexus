@@ -6,9 +6,9 @@ import { leerArchivoDeLaEscala } from "@/lib/escala/documento/archivos";
 import { columnasDelManual, COLUMNAS_DEL_MANUAL_DE_HOY, csv, fechaDelManual, filasDelManual, tablaMarkdown } from "./exportar";
 import {
   esResponsable,
+  etiquetaDeEstado,
   filaSugerida,
   puedeBorrarComentario,
-  puedeBorrarRespuesta,
   puedeEditarComentario,
   RESPONSABLES_DE_LA_ESCALA,
   type ComentarioVisto,
@@ -37,22 +37,30 @@ describe("editar y borrar", () => {
     expect(puedeEditarComentario(abiertoSinRespuestas, "otro@smarteamcr.com")).toBe(false);
   });
 
-  it("después es evidencia: solo el responsable lo borra", () => {
+  it("después es evidencia: solo lo borra quien revisa el feedback (cualquier super admin, 2026-10-05)", () => {
     const respondido = { autorEmail: CSE, estado: "respondido", respuestas: 1 };
-    expect(puedeBorrarComentario(respondido, CSE)).toBe(false);
-    expect(puedeBorrarComentario(respondido, ELIAS)).toBe(true);
-    expect(puedeBorrarComentario(abiertoSinRespuestas, CSE)).toBe(true);
+    expect(puedeBorrarComentario(respondido, CSE, false)).toBe(false);
+    expect(puedeBorrarComentario(respondido, "otro@smarteamcr.com", true)).toBe(true);
+    // Ser el responsable de la escala ya no alcanza: decide quien revisa el feedback.
+    expect(puedeBorrarComentario(respondido, ELIAS, false)).toBe(false);
+    expect(puedeBorrarComentario(abiertoSinRespuestas, CSE, false)).toBe(true);
   });
+});
 
-  it("una respuesta la borra su autor o el responsable", () => {
-    expect(puedeBorrarRespuesta(CSE, CSE)).toBe(true);
-    expect(puedeBorrarRespuesta(CSE, ELIAS)).toBe(true);
-    expect(puedeBorrarRespuesta(CSE, "otro@smarteamcr.com")).toBe(false);
+describe("los estados se llaman como en Feedback, donde se deciden", () => {
+  it("sin revisar, respondido, en la hoja de ruta y no se hará", () => {
+    expect(["abierto", "respondido", "cambio_pendiente", "descartado"].map(etiquetaDeEstado)).toEqual([
+      "Sin revisar",
+      "Respondido",
+      "En la hoja de ruta",
+      "No se hará",
+    ]);
   });
 });
 
 const comentario = (extra: Partial<ComentarioVisto>): ComentarioVisto => ({
   id: "c1",
+  numero: 12,
   ancla: "1.7.F1",
   tipoDeAncla: "criterio",
   area: "1",
@@ -71,6 +79,7 @@ const comentario = (extra: Partial<ComentarioVisto>): ComentarioVisto => ({
   estado: "abierto",
   estadoCambiado: null,
   cambio: null,
+  tema: null,
   motivoDescarte: null,
   createdAt: "2026-09-28T03:00:00.000Z", // 27 de setiembre, 21:00 en Costa Rica
   editadoAt: null,

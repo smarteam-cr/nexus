@@ -5,8 +5,9 @@
  * escala (dimensión, nivel o criterio), en el panel lateral.
  *
  * Arriba, qué se está comentando, con su texto de hoy (y, en un criterio de riesgo, el mensaje que
- * ve el cliente). Después los comentarios —abiertos primero— y al final el formulario. Cada cambio
- * vuelve a pedir la lista y avisa arriba para que los contadores se actualicen.
+ * ve el cliente). Después los comentarios —sin revisar primero— y al final el formulario. Cada cambio
+ * vuelve a pedir la lista y avisa arriba para que los contadores se actualicen. Lo que se hace con
+ * cada comentario se decide en /feedback (2026-10-05).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Drawer, EmptyState, useToast } from "@/components/ui";
@@ -38,7 +39,7 @@ export default function PanelDeComentarios({
   /** Algo cambió: refrescar los contadores de la pantalla. */
   onCambio: () => void;
 }) {
-  const { yo, esResponsable, almacen, comentariosDisponibles, abrirComentarios } = useEscala();
+  const { yo, esRevisor, almacen, comentariosDisponibles, abrirComentarios } = useEscala();
   const toast = useToast();
   // La lista se guarda CON el ancla que la pidió: al cambiar de ancla, la vieja deja de valer sola
   // (sin vaciar el estado dentro de un efecto).
@@ -117,9 +118,6 @@ export default function PanelDeComentarios({
     responder: (id, cuerpo) => hacer(() => almacen.responder(id, cuerpo)),
     editar: (id, d) => hacer(() => almacen.editar(id, d)),
     borrar: (id) => hacer(() => almacen.borrar(id), "Comentario borrado."),
-    editarRespuesta: (id, cuerpo) => hacer(() => almacen.editarRespuesta(id, cuerpo)),
-    borrarRespuesta: (id) => hacer(() => almacen.borrarRespuesta(id)),
-    cambiarEstado: (id, estado) => hacer(() => almacen.cambiarEstado(id, estado), "Estado actualizado."),
   };
 
   const ordenados = (comentarios ?? []).slice().sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado] || b.createdAt.localeCompare(a.createdAt));
@@ -192,7 +190,7 @@ export default function PanelDeComentarios({
                   key={c.id}
                   c={c}
                   yoEmail={yo.email}
-                  esResponsable={esResponsable}
+                  esRevisor={esRevisor}
                   // Lo que dice hoy su ancla leída con la edición desde la que se comentó: lo manda el
                   // servidor. Comparar contra lo que se ve ACÁ marcaría como «cambió» un comentario
                   // hecho desde otra edición, que solo lee el mismo criterio con otras palabras.
@@ -214,7 +212,7 @@ export default function PanelDeComentarios({
                 edicion={datos.edicion ? { slug: datos.edicion.slug, nombre: datos.edicion.nombre } : null}
                 perfilDeLaPantalla={perfil}
                 cargarClientes={() => almacen.clientes()}
-                onEnviar={(nuevo) => hacer(() => almacen.crear(nuevo), "Comentario guardado.")}
+                onEnviar={(nuevo) => hacer(() => almacen.crear(nuevo), "Comentario guardado: lo ve el equipo y se decide en Feedback.")}
               />
             </div>
           )}

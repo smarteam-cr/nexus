@@ -5,11 +5,15 @@
  *
  * Dos caminos: sumarlo a un tema que ya existe (el que se parece va primero) o crear uno nuevo, eligiendo
  * en qué columna entra (por defecto «Por decidir»). Se puede avisar o no a quien reportó.
+ *
+ * Lo comentado desde la escala lleva además la fila de «Cambios pendientes» del manual (qué cambiaría,
+ * el caso y qué decisión con el cliente cambiaría): viene propuesta desde el comentario y se corrige acá.
  */
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Segmentado } from "@/components/ui/Segmentado";
 import { cn } from "@/lib/cn";
+import type { DetalleDeEscala } from "@/lib/feedback/escala";
 import type { ReporteDeBandeja, TemaResumen } from "@/lib/feedback/queries";
 import { COLUMNA, COLUMNAS, type Columna } from "@/lib/feedback/reglas";
 
@@ -20,12 +24,15 @@ const TONO: Record<string, string> = { muted: "text-fg-muted", warning: "text-wa
 
 export default function DialogoLlevar({
   reporte,
+  escala,
   temas,
   sugerido,
   onCerrar,
   onLlevar,
 }: {
   reporte: ReporteDeBandeja;
+  /** Si es de la escala: lo que se comentó y la fila del manual que se propone. */
+  escala: DetalleDeEscala | null;
   temas: TemaResumen[];
   sugerido: string | null;
   onCerrar: () => void;
@@ -38,20 +45,29 @@ export default function DialogoLlevar({
   const [columna, setColumna] = useState<Columna>("decidir");
   const [avisar, setAvisar] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [que, setQue] = useState(escala?.sugerida.que ?? "");
+  const [caso, setCaso] = useState(escala?.sugerida.caso ?? "");
+  const [decision, setDecision] = useState(escala?.sugerida.decision ?? "");
   const nombre = reporte.autor.nombre.split(" ")[0];
+  // Un reporte de la escala que todavía no cargó su detalle no puede llevarse: falta la fila del manual.
+  const deLaEscala = !!reporte.escala;
+  const filaLista = !deLaEscala || (!!escala && que.trim().length >= 3 && decision.trim().length >= 3);
 
   const ordenados = [...temas]
     .sort((a, b) => (a.id === sugerido ? -1 : b.id === sugerido ? 1 : b.personas - a.personas))
     .filter((t) => !busqueda.trim() || t.titulo.toLowerCase().includes(busqueda.trim().toLowerCase()));
   const elegido = temas.find((t) => t.id === temaId) ?? null;
   const destino = modo === "existente" ? elegido?.titulo ?? "" : titulo.trim();
-  const listo = modo === "existente" ? !!elegido : titulo.trim().length >= 3;
+  const listo = (modo === "existente" ? !!elegido : titulo.trim().length >= 3) && filaLista;
 
   const confirmar = async () => {
     if (!listo || guardando) return;
     setGuardando(true);
+    const cambio = deLaEscala ? { cambio: { que: que.trim(), caso: caso.trim(), decision: decision.trim() } } : {};
     await onLlevar(
-      modo === "existente" ? { accion: "llevar", temaId, avisar } : { accion: "llevar", nuevo: { titulo: titulo.trim(), columna }, avisar },
+      modo === "existente"
+        ? { accion: "llevar", temaId, avisar, ...cambio }
+        : { accion: "llevar", nuevo: { titulo: titulo.trim(), columna }, avisar, ...cambio },
       `Llevado a «${destino}».`,
     );
     setGuardando(false);
@@ -162,6 +178,49 @@ export default function DialogoLlevar({
               <p className="text-xs text-fg-muted">{COLUMNA[columna].ayuda}</p>
             </div>
           </>
+        )}
+
+        {deLaEscala && (
+          <div className="space-y-2.5 rounded-lg border border-line bg-surface-muted px-3 py-3">
+            <div className="space-y-0.5">
+              <p className="text-[13px] font-semibold text-fg">La fila del manual · {reporte.escala?.ancla}</p>
+              <p className="text-xs text-fg-muted">Va a «Cambios pendientes» del manual de la escala. Viene propuesta desde el comentario: corrígela.</p>
+            </div>
+            {!escala ? (
+              <p className="text-xs text-fg-muted">Cargando lo que se comentó…</p>
+            ) : (
+              <>
+                <label className="block space-y-1">
+                  <span className="block text-xs font-semibold text-fg-secondary">Qué cambiaría</span>
+                  <textarea
+                    value={que}
+                    onChange={(e) => setQue(e.target.value)}
+                    rows={2}
+                    className="w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-2 text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="block text-xs font-semibold text-fg-secondary">Caso que lo originó (opcional)</span>
+                  <textarea
+                    value={caso}
+                    onChange={(e) => setCaso(e.target.value)}
+                    rows={2}
+                    className="w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-2 text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="block text-xs font-semibold text-fg-secondary">Qué decisión con el cliente cambiaría</span>
+                  <textarea
+                    value={decision}
+                    onChange={(e) => setDecision(e.target.value)}
+                    rows={2}
+                    placeholder="Obligatorio: si no cambia ninguna decisión, no es un cambio a la escala."
+                    className="w-full resize-y rounded-lg border border-line bg-surface px-2.5 py-2 text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none"
+                  />
+                </label>
+              </>
+            )}
+          </div>
         )}
 
         <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2.5">

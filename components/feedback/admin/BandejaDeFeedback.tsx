@@ -9,6 +9,10 @@
  *
  * Arriba del reporte va, si hay, el tema al que se parece. NO es una sugerencia de un agente (sale de
  * contar palabras en común, lib/feedback/parecidos.ts), así que va sin la chispa y dice qué comparten.
+ *
+ * Lo comentado desde la escala (2026-10-05, lib/feedback/escala.ts) llega a la misma bandeja: en vez de
+ * la captura muestra el criterio que se comentó, lo que se leyó y lo que dice hoy; al llevarlo a la hoja
+ * de ruta pide la fila de «Cambios pendientes» del manual. «De dónde» filtra pantallas o escala.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -22,6 +26,7 @@ import { ChipDeEstado, Hilo, IconoDeTipo, Iniciales, MarcaNumerada } from "../pi
 import DialogoLlevar from "./DialogoLlevar";
 
 type Filtro = "sin" | "respondieron" | "todos";
+export type Origen = "todos" | "pantallas" | "escala";
 
 const NOMBRE_DEL_ESTADO: Record<string, string> = {
   sin_revisar: "Sin revisar",
@@ -40,11 +45,21 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; erro
   }
 }
 
-export default function BandejaDeFeedback({ datos, reporteInicial }: { datos: DatosDeBandeja; reporteInicial: string | null }) {
+export default function BandejaDeFeedback({
+  datos,
+  reporteInicial,
+  origenInicial = "todos",
+}: {
+  datos: DatosDeBandeja;
+  reporteInicial: string | null;
+  /** `/feedback?origen=escala`: desde el botón «Comentarios» de la escala. */
+  origenInicial?: Origen;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [filtro, setFiltro] = useState<Filtro>(reporteInicial ? "todos" : "sin");
   const [tipo, setTipo] = useState<TipoDeFeedback | "todos">("todos");
+  const [origen, setOrigen] = useState<Origen>(origenInicial);
   const [busqueda, setBusqueda] = useState("");
   const [sel, setSel] = useState<string | null>(reporteInicial ?? datos.reportes.find((r) => r.estado === "sin_revisar")?.id ?? datos.reportes[0]?.id ?? null);
   const [detalle, setDetalle] = useState<ReporteDetalle | null>(null);
@@ -59,10 +74,12 @@ export default function BandejaDeFeedback({ datos, reporteInicial }: { datos: Da
       if (filtro === "sin" && r.estado !== "sin_revisar" && r.id !== sel) return false;
       if (filtro === "respondieron" && !r.respondio) return false;
       if (tipo !== "todos" && r.tipo !== tipo) return false;
-      if (q && !`${r.cuerpo} ${r.autor.nombre} ${r.pantalla}`.toLowerCase().includes(q)) return false;
+      if (origen === "escala" && !r.escala) return false;
+      if (origen === "pantallas" && r.escala) return false;
+      if (q && !`${r.cuerpo} ${r.autor.nombre} ${r.pantalla} ${r.escala?.ancla ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [datos.reportes, filtro, tipo, busqueda, sel]);
+  }, [datos.reportes, filtro, tipo, origen, busqueda, sel]);
 
   const actual = datos.reportes.find((r) => r.id === sel) ?? null;
 
@@ -156,7 +173,7 @@ export default function BandejaDeFeedback({ datos, reporteInicial }: { datos: Da
             value={tipo}
             onChange={(e) => setTipo(e.target.value as TipoDeFeedback | "todos")}
             aria-label="Tipo"
-            className="flex-none rounded-lg border border-line bg-surface px-2.5 py-[7px] text-[13px] text-fg-secondary"
+            className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-[7px] text-[13px] text-fg-secondary"
           >
             <option value="todos">Todos los tipos</option>
             {TIPOS_DE_FEEDBACK.map((t) => (
@@ -165,14 +182,24 @@ export default function BandejaDeFeedback({ datos, reporteInicial }: { datos: Da
               </option>
             ))}
           </select>
-          <input
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por texto o persona…"
-            aria-label="Buscar reportes"
-            className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-[7px] text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none"
-          />
+          <select
+            value={origen}
+            onChange={(e) => setOrigen(e.target.value as Origen)}
+            aria-label="De dónde"
+            className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-[7px] text-[13px] text-fg-secondary"
+          >
+            <option value="todos">De todas partes</option>
+            <option value="pantallas">De las pantallas</option>
+            <option value="escala">De la escala</option>
+          </select>
         </div>
+        <input
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por texto, persona o criterio…"
+          aria-label="Buscar reportes"
+          className="w-full rounded-lg border border-line bg-surface px-2.5 py-[7px] text-[13px] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none"
+        />
         <div className="space-y-1.5">
           {visibles.length === 0 && <p className="rounded-lg border border-dashed border-line p-3 text-[13px] text-fg-muted">Nada por acá con ese filtro.</p>}
           {visibles.map((r) => (
@@ -203,7 +230,10 @@ export default function BandejaDeFeedback({ datos, reporteInicial }: { datos: Da
                   </button>
                   <button
                     type="button"
-                    onClick={() => void decidir({ accion: "llevar", temaId: temaSugerido.id, avisar: true }, `Llevado a «${temaSugerido.titulo}».`)}
+                    // Lo de la escala lleva la fila del manual: pasa por el diálogo, con este tema ya elegido.
+                    onClick={() =>
+                      actual.escala ? setDialogo(true) : void decidir({ accion: "llevar", temaId: temaSugerido.id, avisar: true }, `Llevado a «${temaSugerido.titulo}».`)
+                    }
                     className="rounded-md border border-line bg-surface px-2.5 py-[5px] text-xs font-semibold text-fg-secondary hover:bg-surface-hover hover:text-fg"
                   >
                     Llevarlo ahí
@@ -224,7 +254,7 @@ export default function BandejaDeFeedback({ datos, reporteInicial }: { datos: Da
                 <span className="flex-1" />
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-secondary">
                   <IconoDeTipo tipo={actual.tipo} />
-                  {TIPO[actual.tipo].nombre}
+                  {actual.escala ? actual.escala.tipo : TIPO[actual.tipo].nombre}
                 </span>
                 {actual.tipo === "falla" && actual.meFrena && (
                   <span className="rounded-full border border-warn-line bg-warn-surface px-2.5 py-0.5 text-xs font-semibold text-warn-ink">Le frena el trabajo</span>
@@ -233,8 +263,14 @@ export default function BandejaDeFeedback({ datos, reporteInicial }: { datos: Da
               <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.55] text-fg">«{actual.cuerpo}»</p>
             </div>
 
-            <Captura detalle={detalle} />
-            <LoQueSeMando detalle={detalle} />
+            {actual.escala ? (
+              <LoQueSeComento detalle={detalle} />
+            ) : (
+              <>
+                <Captura detalle={detalle} />
+                <LoQueSeMando detalle={detalle} />
+              </>
+            )}
             <Conversacion detalle={detalle} nombre={actual.autor.nombre.split(" ")[0]} onEnviado={refrescar} onResponderYCerrar={(t) => decidir({ accion: "responder", respuesta: t }, "Respondido y cerrado.")} />
           </>
         )}
@@ -299,7 +335,10 @@ export default function BandejaDeFeedback({ datos, reporteInicial }: { datos: Da
 
       {dialogo && actual && (
         <DialogoLlevar
+          // Se arma de nuevo cuando llega lo que se comentó en la escala: la fila del manual se propone desde ahí.
+          key={detalle?.id === actual.id && detalle.escala ? "con-escala" : "sin-escala"}
           reporte={actual}
+          escala={detalle?.id === actual.id ? (detalle.escala ?? null) : null}
           temas={datos.temas}
           sugerido={sugerencia?.temaId ?? null}
           onCerrar={() => setDialogo(false)}
@@ -329,7 +368,7 @@ function FilaDeReporte({ r, actual, conSugerencia, onElegir }: { r: ReporteDeBan
         <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
           <IconoDeTipo tipo={r.tipo} />
           <span className="truncate">
-            {TIPO[r.tipo].nombre} · {r.pantalla}
+            {r.escala ? `${r.escala.tipo} · ${r.pantalla} · ${r.escala.ancla}` : `${TIPO[r.tipo].nombre} · ${r.pantalla}`}
           </span>
         </span>
         <span className="flex-none text-xs text-fg-muted">{haceCuanto(r.creado)}</span>
@@ -387,6 +426,59 @@ function Captura({ detalle }: { detalle: ReporteDetalle | null }) {
         </a>
       </figcaption>
     </figure>
+  );
+}
+
+/**
+ * Un comentario de la escala: qué criterio, lo que se leyó al comentar y, si cambió, lo que dice hoy;
+ * con qué edición, cliente y perfil, y qué decisión cambiaría. En vez de la captura de una pantalla.
+ */
+function LoQueSeComento({ detalle }: { detalle: ReporteDetalle | null }) {
+  if (!detalle) return <div className="skeleton-shimmer h-[180px] rounded-xl border border-line" aria-hidden="true" />;
+  const e = detalle.escala;
+  if (!e) return null;
+  const cambio = e.textoDeHoy !== null && e.textoDeHoy !== e.textoAnclado;
+  const hechos: { k: string; v: string }[] = [
+    { k: "Versión de la escala", v: e.versionVigente && e.versionVigente !== e.version ? `${e.version} (hoy rige la ${e.versionVigente})` : e.version },
+    { k: "Edición", v: e.edicion ?? "La escala general" },
+    ...(e.cliente ? [{ k: "Cliente", v: e.cliente.enNexus ? e.cliente.nombre : `${e.cliente.nombre} (no está en Nexus)` }] : []),
+    ...(e.perfil ? [{ k: "Perfil del caso", v: e.perfil }] : []),
+    ...(e.decision ? [{ k: "Qué decisión cambiaría", v: e.decision }] : []),
+  ];
+  return (
+    <div className="space-y-2">
+      <p className={ROTULO_DEL_SISTEMA}>Lo que se comentó en la escala</p>
+      <div className="space-y-3 rounded-xl border border-line bg-surface px-4 py-3.5">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
+          <span className="rounded-full border border-line bg-surface px-[7px] text-[11px] font-semibold tabular-nums leading-[18px] text-fg-secondary">{e.ancla}</span>
+          {e.ruta ?? "Ya no existe en la versión vigente"}
+          <span className="flex-1" />
+          <a href={detalle.ruta} className="font-semibold text-brand hover:text-brand-light">
+            Ver en la escala
+          </a>
+        </p>
+        <p className="text-sm leading-relaxed text-fg">«{e.textoAnclado}»</p>
+        {e.textoDeHoy === null ? (
+          <p className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs text-warn-ink">Ese texto ya no existe en la versión vigente.</p>
+        ) : (
+          cambio && (
+            <p className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 text-xs leading-relaxed text-warn-ink">
+              <span className="font-semibold">Hoy dice: </span>
+              {e.textoDeHoy}
+            </p>
+          )
+        )}
+        <dl className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5 border-t border-line pt-3">
+          {hechos.map((h) => (
+            <div key={h.k} className="min-w-0 space-y-0.5">
+              <dt className="text-xs text-fg-muted">{h.k}</dt>
+              <dd className="break-words text-[13px] text-fg-secondary">{h.v}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="text-xs text-fg-muted">Lo ve todo el equipo en la escala, y cualquiera puede responderlo ahí.</p>
+      </div>
+    </div>
   );
 }
 
@@ -594,6 +686,25 @@ function Salidas({
           <p className="text-sm font-semibold text-fg">{tema?.titulo ?? "…"}</p>
           {tema && <ChipDeEstado estado={estadoParaElAutor({ estado: "en_hoja", tema })} />}
           {tema && <p className="text-xs text-fg-secondary">{nombre} lo ve así: su reporte sigue al tema.</p>}
+          {detalle?.escala?.cambio && (
+            <div className="space-y-0.5 border-t border-line pt-2 text-xs text-fg-secondary">
+              <p className="font-semibold text-fg">La fila del manual</p>
+              <p>
+                <span className="text-fg-muted">Qué cambiaría · </span>
+                {detalle.escala.cambio.que}
+              </p>
+              {detalle.escala.cambio.caso && (
+                <p>
+                  <span className="text-fg-muted">Caso · </span>
+                  {detalle.escala.cambio.caso}
+                </p>
+              )}
+              <p>
+                <span className="text-fg-muted">Qué decisión cambiaría · </span>
+                {detalle.escala.cambio.decision}
+              </p>
+            </div>
+          )}
           <span className="flex flex-wrap gap-3 pt-0.5">
             <a href="/feedback?vista=hoja" className="text-xs font-semibold text-brand hover:text-brand-light">
               Abrir la hoja de ruta

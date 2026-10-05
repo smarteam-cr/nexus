@@ -89,15 +89,18 @@ export const ESCALA: Recorrido = {
     {
       ancla: "escala.criterios",
       titulo: "Los criterios de la celda",
-      texto: "Cada criterio es algo que se comprueba en el cliente. Sus marcas dicen si es un hábito o un riesgo, qué requiere y qué otros lo requieren; el botón de la derecha es para comentarlo.",
+      texto: "Cada criterio es algo que se comprueba en el cliente. Sus marcas dicen si es un hábito o un riesgo, qué requiere y qué otros lo requieren; el botón de la derecha es para comentarlo: lo ve todo el equipo.",
       lado: "left-start",
       accion: ELEGIR_LA_CELDA,
     },
     {
+      // Desde el 2026-10-05 los comentarios de la escala se deciden en Feedback: el botón es de quien
+      // revisa (super admin). Al resto se lo explica el paso de los criterios.
       ancla: "escala.comentarios",
       titulo: "Los comentarios",
-      texto: "Si un criterio no se entiende o no calza con un cliente real, coméntalo en él. En este botón están todos.",
+      texto: "Lo que el equipo comenta en la escala llega a Feedback, junto con el resto: ahí lo decides. Este botón te lleva a los de la escala.",
       lado: "bottom-end",
+      roles: ["SUPER_ADMIN"],
     },
   ],
 };

@@ -41,6 +41,17 @@ export const Decidir = z.discriminatedUnion("accion", [
       })
       .optional(),
     avisar: z.boolean().default(true),
+    /**
+     * Solo para lo comentado desde la escala: la fila de «Cambios pendientes» del manual. La decisión
+     * la exige si el reporte es de la escala (lib/feedback/mutations.ts).
+     */
+    cambio: z
+      .object({
+        que: texto(2000).min(3, "Di qué cambiaría en la escala."),
+        caso: texto(2000).default(""),
+        decision: texto(2000).min(3, "Di qué decisión con el cliente cambiaría."),
+      })
+      .optional(),
   }),
   z.object({ accion: z.literal("responder"), respuesta: texto(MAX_CUERPO).min(1, "Escribe la respuesta.") }),
   z.object({ accion: z.literal("no_se_hara"), motivo: texto(600).min(3, "Escribe el motivo: la persona lo ve.") }),

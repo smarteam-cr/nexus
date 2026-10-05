@@ -57,7 +57,7 @@ export const PAGE_SHELL_COVERAGE: Record<string, ShellDecl> = {
   roles: { shell: "SHELL_DEFAULT" },
   escala: { shell: "SHELL_DEFAULT" },
   "escala/[area]": { shell: "SHELL_DEFAULT" },
-  "escala/comentarios": { shell: "SHELL_DEFAULT" },
+  "escala/comentarios": { custom: "redirect a /feedback: los comentarios de la escala se deciden ahí (2026-10-05)" },
   feedback: { shell: "SHELL_DEFAULT" },
 
   // ── Contenedor propio legítimo ──────────────────────────────────────────────

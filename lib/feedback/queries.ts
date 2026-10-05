@@ -9,6 +9,9 @@ import { prisma } from "@/lib/db/prisma";
 import { modeloDisponible } from "@/lib/db/esquema";
 import { getSignedUrl } from "@/lib/storage/client";
 import { ROLE_LABEL } from "@/lib/auth/roles";
+import { etiquetaDeTipo } from "@/lib/escala/comentarios/reglas";
+import { leerEscalaDelReporte } from "./escala";
+import { detalleDeEscala, type DetalleDeEscala } from "./escala-server";
 import { temaMasParecido } from "./parecidos";
 import {
   COLUMNA,
@@ -144,6 +147,8 @@ export interface MensajeVisible {
   id: string;
   autor: Persona;
   deQuienReporto: boolean;
+  /** Lo escribió quien lo está mirando (en la escala responde cualquiera: no siempre es quien revisa). */
+  esMio: boolean;
   cuerpo: string;
   creado: string;
 }
@@ -171,6 +176,8 @@ export interface ReporteDetalle {
   autor: Persona;
   creado: string;
   mensajes: MensajeVisible[];
+  /** Lo comentado desde la escala (2026-10-05): el criterio, lo que se leyó y lo que dice hoy. */
+  escala: DetalleDeEscala | null;
 }
 
 function comoLista<T>(json: unknown, valido: (x: unknown) => x is T): T[] {
@@ -199,7 +206,7 @@ export async function reporteParaVer(id: string, quien: { email: string; esRevis
   if (!esAutor && !quien.esRevisor) return null;
 
   const gente = await personasPorEmail([r.autorEmail, ...r.mensajes.map((m) => m.autorEmail)]);
-  const capturaUrl = r.capturaPath ? await getSignedUrl(r.capturaPath, 3600) : null;
+  const [capturaUrl, escala] = await Promise.all([r.capturaPath ? getSignedUrl(r.capturaPath, 3600) : null, detalleDeEscala(r)]);
   return {
     id: r.id,
     numero: r.numero,
@@ -226,9 +233,11 @@ export async function reporteParaVer(id: string, quien: { email: string; esRevis
       id: m.id,
       autor: gente.get(m.autorEmail.toLowerCase())!,
       deQuienReporto: m.autorEmail.toLowerCase() === r.autorEmail.toLowerCase(),
+      esMio: m.autorEmail.toLowerCase() === quien.email.toLowerCase(),
       cuerpo: m.cuerpo,
       creado: m.createdAt.toISOString(),
     })),
+    escala,
   };
 }
 
@@ -259,6 +268,8 @@ export interface ReporteDeBandeja {
   /** Quien reportó contestó algo que quien revisa no leyó. */
   respondio: boolean;
   sugerencia: { temaId: string; enComun: string[] } | null;
+  /** Lo comentado desde la escala: su ancla y su tipo propio («No calza con un cliente»). */
+  escala: { ancla: string; tipo: string } | null;
 }
 
 export interface DatosDeBandeja {
@@ -290,6 +301,8 @@ export async function datosDeBandeja(): Promise<DatosDeBandeja> {
         temaId: true,
         capturaPath: true,
         revisorLeyoAt: true,
+        escalaAncla: true,
+        escala: true,
         mensajes: { orderBy: { createdAt: "desc" }, take: 1, select: { autorEmail: true, createdAt: true } },
       },
     }),
@@ -314,6 +327,7 @@ export async function datosDeBandeja(): Promise<DatosDeBandeja> {
       const ultimo = r.mensajes[0];
       const delAutor = ultimo && ultimo.autorEmail.toLowerCase() === r.autorEmail.toLowerCase();
       const sinDecidir = r.estado === "sin_revisar";
+      const escala = r.escalaAncla ? leerEscalaDelReporte(r.escala) : null;
       return {
         id: r.id,
         numero: r.numero,
@@ -329,6 +343,7 @@ export async function datosDeBandeja(): Promise<DatosDeBandeja> {
         sinAbrir: !r.revisorLeyoAt,
         respondio: !!delAutor && ultimo.createdAt.getTime() > (r.revisorLeyoAt?.getTime() ?? 0),
         sugerencia: sinDecidir ? temaMasParecido(r.cuerpo, comparables) : null,
+        escala: r.escalaAncla ? { ancla: r.escalaAncla, tipo: escala ? etiquetaDeTipo(escala.tipo) : "Escala" } : null,
       };
     }),
     temas: temas
