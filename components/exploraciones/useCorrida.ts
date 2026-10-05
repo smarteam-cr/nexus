@@ -75,6 +75,11 @@ export function useCorrida() {
     }
   }, [consultar, recargar, toast]);
 
+  /* Lo que tenía el lienzo al montar: si una corrida arrancó después y ya terminó, el lienzo no la vio
+     (la seguía otra pieza, que se desmontó al cambiar de pieza) y su versión quedó atrás. Sin recargar,
+     el próximo cambio choca como si lo hubiera hecho otra persona (409). */
+  const vistaAlMontar = useRef(exp.actualizadaEn);
+
   useEffect(() => {
     vivo.current = true;
     void (async () => {
@@ -82,11 +87,12 @@ export function useCorrida() {
       if (!vivo.current) return;
       setCorrida(c);
       if (c?.estado === "RUNNING") void seguir();
+      else if (c?.estado === "DONE" && c.empezo > vistaAlMontar.current) await recargar();
     })();
     return () => {
       vivo.current = false;
     };
-  }, [consultar, seguir]);
+  }, [consultar, seguir, recargar]);
 
   /** `sesionId`: para leer una reunión de Meet puntual (la de una pestaña de sesión). */
   const lanzar = useCallback(

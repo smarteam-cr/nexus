@@ -31,6 +31,7 @@ import {
 } from "@/lib/exploraciones/contenido";
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
+import { sePuedeReintentar } from "@/lib/exploraciones/reintento";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import { Casilla } from "./Casilla";
 import ManejoDeObjeciones from "./ManejoDeObjeciones";
@@ -153,12 +154,21 @@ export default function LienzoDeExploracion({
       const base = confirmada.current;
       setGuardando(true);
       try {
-        const res = await fetch(`/api/sales/exploraciones/${base.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ version: base.version, operaciones: ops }),
-        });
-        const data = (await res.json().catch(() => ({}))) as { exploracion?: ExploracionParaLaPantalla; error?: string };
+        const mandar = async (version: number) => {
+          const r = await fetch(`/api/sales/exploraciones/${base.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ version, operaciones: ops }),
+          });
+          return { res: r, data: (await r.json().catch(() => ({}))) as { exploracion?: ExploracionParaLaPantalla; error?: string } };
+        };
+        let { res, data } = await mandar(base.version);
+        /* Chocó, pero lo que cambió en el servidor (casi siempre el agente al preparar) no es lo que
+           cambia esta operación: se manda una vez más sobre lo último, sin molestar a nadie
+           (lib/exploraciones/reintento.ts). */
+        if (res.status === 409 && data.exploracion && sePuedeReintentar(ops, base.estado, data.exploracion.estado)) {
+          ({ res, data } = await mandar(data.exploracion.version));
+        }
         if (res.status === 409) epoca.current += 1;
         if (data.exploracion) {
           confirmada.current = data.exploracion;
