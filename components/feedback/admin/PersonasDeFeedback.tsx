@@ -18,6 +18,7 @@ import { cn } from "@/lib/cn";
 import type { DatosDePersonas, Persona } from "@/lib/feedback/queries";
 import { fechaCorta, haceCuanto } from "@/lib/feedback/reglas";
 import { Iniciales } from "../piezas";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 type Periodo = "30" | "90" | "todo";
 
@@ -193,7 +194,7 @@ export default function PersonasDeFeedback({ datos, periodo }: { datos: DatosDeP
         </div>
       </section>
 
-      <aside className="w-full space-y-4 border-line bg-surface-muted p-5 lg:w-[380px] lg:flex-none lg:border-l">
+      <PanelLateral etiqueta="Personas" ancho="lg:w-[380px] lg:flex-none" className="w-full p-5" gap="gap-4">
         <QueSigue>
           {datos.callados.length === 0
             ? "Todo el equipo dijo algo en este período."
@@ -316,7 +317,7 @@ export default function PersonasDeFeedback({ datos, periodo }: { datos: DatosDeP
             </div>
           ))}
         </div>
-      </aside>
+      </PanelLateral>
     </div>
   );
 }

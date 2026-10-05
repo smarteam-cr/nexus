@@ -20,6 +20,7 @@ import { requireInternalUser } from "@/lib/auth/supabase";
 import { cn } from "@/lib/cn";
 import { escalaParaExplorar, listarExploraciones, SQL_DE_EXPLORACIONES } from "@/lib/exploraciones/servidor";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 export const dynamic = "force-dynamic";
 
@@ -69,9 +70,9 @@ export default async function ExploracionesPage() {
         )}
       </main>
       {lista.estado !== "sin-tablas" && (
-        <aside className="border-t border-line bg-surface-muted px-5 py-8 lg:w-[360px] lg:flex-shrink-0 lg:border-l lg:border-t-0">
+        <PanelLateral etiqueta="Preventa" ancho="lg:w-[360px]" className="py-8">
           <LlegaronPorElTest nombresDeAreas={nombresDeAreas} puedeEditar={puedeEditar} />
-        </aside>
+        </PanelLateral>
       )}
     </div>
   );

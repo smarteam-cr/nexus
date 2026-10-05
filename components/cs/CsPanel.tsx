@@ -30,6 +30,7 @@ import UsoYLicencias from "./cartera/UsoYLicencias";
 import Crecimiento from "./cartera/Crecimiento";
 import Equipo from "./cartera/Equipo";
 import NivelDePartner from "./cartera/NivelDePartner";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 type Pestana = "llamar" | "renovaciones" | "uso" | "crecimiento" | "equipo" | "nivel";
 
@@ -154,11 +155,11 @@ export default function CsPanel({
         {pestana === "nivel" && <NivelDePartner nivel={data.nivel} hoy={data.hoy} />}
       </main>
 
-      <aside className="flex flex-col gap-6 border-t border-line bg-surface-muted px-5 py-8 lg:w-[360px] lg:flex-shrink-0 lg:border-l lg:border-t-0">
+      <PanelLateral etiqueta="Cartera" ancho="lg:w-[360px]" className="py-8">
         <QueSigueDeLaCartera data={data} onVer={setPestana} />
         <Fuentes data={data} puedeCurar={puedeCurar} />
         <Leyenda />
-      </aside>
+      </PanelLateral>
     </div>
   );
 }

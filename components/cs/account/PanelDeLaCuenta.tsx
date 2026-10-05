@@ -16,6 +16,7 @@ import { diasEntre, fmtDia } from "@/lib/cs/formato";
 import { cseDeLaCuenta } from "@/lib/cs/cartera-reglas";
 import type { CsAccountData } from "@/lib/cs/load-account";
 import { Avatar, Chip } from "../piezas";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 const BOTON_AZUL = "inline-flex rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg transition-colors hover:bg-primary-hover";
 
@@ -28,7 +29,7 @@ export default function PanelDeLaCuenta({ data }: { data: CsAccountData }) {
   const deBaja = [...new Set(c.proyectos.filter((x) => x.activo && x.cseDeBaja).map((x) => x.cseDeBaja as string))];
 
   return (
-    <aside className="flex flex-col gap-6 border-t border-line bg-surface-muted px-5 py-6 lg:w-[300px] lg:flex-shrink-0 lg:border-l lg:border-t-0">
+    <PanelLateral etiqueta="La cuenta" ancho="lg:w-[300px]" className="py-6">
       <QueSigue
         accion={
           primero?.clave === "relacionPorVencer" && p?.enlacePortal ? (
@@ -89,7 +90,7 @@ export default function PanelDeLaCuenta({ data }: { data: CsAccountData }) {
           <Fuente nombre="Minutas de reuniones" at={data.minutes[0]?.date ?? null} hoy={data.hoy} viejoDespues={DIAS_MINUTA_VIEJA} />
         </div>
       </section>
-    </aside>
+    </PanelLateral>
   );
 }
 

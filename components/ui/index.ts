@@ -100,5 +100,12 @@ export type { TableProps, TableColumn, TableSkeletonProps } from "./Table";
    `title` de la app; `InfoHint` es el (i) que los encabezados de tabla ya usaban. */
 export { TooltipLayer, InfoHint } from "./Tooltip";
 
+/* La columna derecha de contexto, con su flechita para ocultarla. La preferencia es UNA para
+   toda la app y vive en la cookie `nexus-panel`, que lee `AppShell`. */
+export { default as PanelLateral, PanelLateralProvider, usePanelLateral } from "./PanelLateral";
+// Desde el módulo neutral, como buttonVariants: la lee AppShell, que es Server Component.
+export { panelAbiertoDesdeCookie, COOKIE_PANEL_LATERAL } from "./panel-lateral-cookie";
+export type { PanelLateralProps } from "./PanelLateral";
+
 export { ToastProvider, useToast } from "./Toast";
 export type { ToastApi, ToastOptions, ToastAction, ToastType } from "./Toast";

@@ -10,6 +10,7 @@
 import { PageHeaderSkeleton, Skeleton, SkeletonPanel, SkeletonTabs, TableSkeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 export default function CustomerSuccessLoading() {
   return (
@@ -44,7 +45,7 @@ export default function CustomerSuccessLoading() {
         <TableSkeleton columns={6} rows={8} />
       </main>
 
-      <aside className="flex flex-col gap-6 border-t border-line bg-surface-muted px-5 py-8 lg:w-[360px] lg:flex-shrink-0 lg:border-l lg:border-t-0">
+      <PanelLateral etiqueta="Cartera" ancho="lg:w-[360px]" className="py-8">
         <div className="space-y-2 rounded-xl border border-info-line bg-info-surface p-3.5">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-4 w-full" />
@@ -65,7 +66,7 @@ export default function CustomerSuccessLoading() {
             ))}
           </SkeletonPanel>
         </div>
-      </aside>
+      </PanelLateral>
     </div>
   );
 }

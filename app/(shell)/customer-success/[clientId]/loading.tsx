@@ -8,6 +8,7 @@
  */
 import { Skeleton, SkeletonPanel, SkeletonTabs, SkeletonText } from "@/components/ui";
 import { SHELL_FULL } from "@/lib/ui/page-shell";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 export default function CsClientLoading() {
   return (
@@ -51,7 +52,7 @@ export default function CsClientLoading() {
               </section>
             </div>
           </main>
-          <aside className="flex flex-col gap-6 border-t border-line bg-surface-muted px-5 py-6 lg:w-[300px] lg:flex-shrink-0 lg:border-l lg:border-t-0">
+          <PanelLateral etiqueta="La cuenta" ancho="lg:w-[300px]" className="py-6">
             <div className="space-y-2 rounded-xl border border-info-line bg-info-surface p-3.5">
               <Skeleton className="h-3 w-20" />
               <SkeletonText lines={2} />
@@ -59,7 +60,7 @@ export default function CsClientLoading() {
             <SkeletonPanel minH="min-h-[120px]" bodyClassName="p-3">
               <SkeletonText lines={4} />
             </SkeletonPanel>
-          </aside>
+          </PanelLateral>
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ import type { DatosDeBandeja, ReporteDeBandeja, ReporteDetalle } from "@/lib/fee
 import { COLUMNA, estadoParaElAutor, haceCuanto, numeroDeReporte, TIPO, TIPOS_DE_FEEDBACK, type TipoDeFeedback } from "@/lib/feedback/reglas";
 import { ChipDeEstado, Hilo, IconoDeTipo, Iniciales, MarcaNumerada } from "../piezas";
 import DialogoLlevar from "./DialogoLlevar";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 type Filtro = "sin" | "respondieron" | "todos";
 export type Origen = "todos" | "pantallas" | "escala";
@@ -277,7 +278,7 @@ export default function BandejaDeFeedback({
       </section>
 
       {/* ── Decidir ── */}
-      <aside aria-label="Decidir" className="w-full space-y-5 border-line bg-surface-muted p-5 lg:w-[310px] lg:flex-none lg:border-l">
+      <PanelLateral etiqueta="Decidir" ancho="lg:w-[310px] lg:flex-none" className="w-full p-5" gap="gap-5">
         <QueSigue
           accion={
             masViejo && masViejo.id !== sel ? (
@@ -331,7 +332,7 @@ export default function BandejaDeFeedback({
             </p>
           </div>
         )}
-      </aside>
+      </PanelLateral>
 
       {dialogo && actual && (
         <DialogoLlevar

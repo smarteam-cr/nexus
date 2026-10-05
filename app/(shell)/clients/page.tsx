@@ -14,6 +14,7 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/cn";
 import NuevoProyectoStepper from "@/components/projects/NuevoProyectoStepper";
 import { ClientsTable, ClientsTableZoneSkeleton, PanelDeLaCartera, PanelDeLaCarteraSkeleton } from "./ClientsTable";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 // Render dinámico — la página depende del usuario logueado (sesión Supabase
 // vía cookies), así que no puede cachearse con ISR como antes.
@@ -104,7 +105,7 @@ export default async function ClientsPage() {
           />
         </Suspense>
       </main>
-      <aside className="border-t border-line bg-surface-muted px-5 pb-12 pt-8 lg:w-[340px] lg:flex-shrink-0 lg:border-l lg:border-t-0">
+      <PanelLateral etiqueta="Cartera" ancho="lg:w-[340px]">
         <Suspense fallback={<PanelDeLaCarteraSkeleton />}>
           <PanelDeLaCartera
             user={user}
@@ -113,7 +114,7 @@ export default async function ClientsPage() {
             sharedIds={sharedIds}
           />
         </Suspense>
-      </aside>
+      </PanelLateral>
     </div>
   );
 }

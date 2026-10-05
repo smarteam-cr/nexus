@@ -8,6 +8,8 @@ import { vistaFinanzasDe } from "@/lib/finanzas/vista";
 import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
 import { TooltipLayer } from "@/components/ui/Tooltip";
+import { PanelLateralProvider } from "@/components/ui/PanelLateral";
+import { COOKIE_PANEL_LATERAL, panelAbiertoDesdeCookie } from "@/components/ui/panel-lateral-cookie";
 import AgentRunsProvider from "@/components/ai/AgentRunsProvider";
 import RecorridosProvider from "@/components/recorridos/RecorridosProvider";
 import { COOKIE_DE_RECORRIDOS } from "@/lib/recorridos/vistos";
@@ -74,6 +76,11 @@ export default async function AppShell({
   const sidebarCollapsed = cookieStore.get("nexus-sidebar")?.value === "collapsed";
   // Qué recorridos guiados vio (mismo mecanismo): el punto azul de «Recorrido» nace bien pintado.
   const recorridosVistos = cookieStore.get(COOKIE_DE_RECORRIDOS)?.value ?? null;
+  /* Y si la columna derecha de contexto está abierta o cerrada. UNA preferencia para toda la app
+     (components/ui/PanelLateral.tsx): quien la cierra está pidiendo la tabla ancha, no la tabla
+     ancha en una pantalla. Resuelta acá por lo mismo que el ancho del menú: sin esto, cada carga
+     pintaría la columna abierta y la cerraría de un salto en el primer paint. */
+  const panelAbierto = panelAbiertoDesdeCookie(cookieStore.get(COOKIE_PANEL_LATERAL)?.value);
 
   return (
     // El provider envuelve al shell ENTERO (sidebar incluido): el ítem "Corridas de
@@ -86,6 +93,7 @@ export default async function AppShell({
         {/* Feedback desde cualquier pantalla (2026-10-04): el botón vive en el pie del menú y el panel
             no se desmonta al navegar. Va con la versión que corre, para saber qué estaba viendo la persona. */}
         <FeedbackProvider version={process.env.GIT_SHA?.slice(0, 7) ?? null}>
+        <PanelLateralProvider initialOpen={panelAbierto}>
         <SidebarShell user={userLite} initialOpen={!sidebarCollapsed}>
           {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
               (el componente se auto-apaga para otros roles; render null). */}
@@ -96,6 +104,7 @@ export default async function AppShell({
           <TooltipLayer />
           {children}
         </SidebarShell>
+        </PanelLateralProvider>
         </FeedbackProvider>
       </RecorridosProvider>
     </AgentRunsProvider>

@@ -47,6 +47,7 @@ import CompartirLaPropuesta from "@/components/propuestas/CompartirLaPropuesta";
 import PasosDeLaPropuesta, { type EstadoDelPaso, type PasoDeLaPropuesta } from "@/components/propuestas/PasosDeLaPropuesta";
 import type { PreventaDeLaPropuesta } from "@/components/propuestas/ColumnaPreventa";
 import { useAccesoDeLaPropuesta } from "@/components/propuestas/useAccesoDeLaPropuesta";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 const ROTULO = "text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted";
 const BOTON_AZUL =
@@ -536,7 +537,7 @@ export default function BusinessCaseWorkspace({
               pie={botonGenerar}
             />
           </main>
-          <aside aria-label="Qué sigue" className="flex flex-col gap-5 border-t border-line bg-surface-muted p-5 xl:w-[300px] xl:flex-shrink-0 xl:border-l xl:border-t-0">
+          <PanelLateral etiqueta="Qué sigue" ancho="xl:w-[300px]" breakpoint="xl" className="p-5" gap="gap-5">
             {cajaQueSigue}
             {cuentas && !cuentas.cargando && (
               <div className="flex flex-col gap-2">
@@ -574,7 +575,7 @@ export default function BusinessCaseWorkspace({
                 La preventa ayuda, pero no es un requisito. Una propuesta usa una sola preventa; una preventa puede tener varias propuestas.
               </span>
             </div>
-          </aside>
+          </PanelLateral>
         </div>
       </div>
 
@@ -794,7 +795,7 @@ export default function BusinessCaseWorkspace({
               onRevocada={() => setPublished(false)}
             />
           </main>
-          <aside aria-label="Qué sigue" className="flex flex-col gap-5 border-t border-line bg-surface-muted p-5 xl:w-[300px] xl:flex-shrink-0 xl:border-l xl:border-t-0">
+          <PanelLateral etiqueta="Qué sigue" ancho="xl:w-[300px]" breakpoint="xl" className="p-5" gap="gap-5">
             {cajaQueSigue}
             <div className="flex flex-col gap-1.5">
               <span className={ROTULO}>Cómo la aprueba</span>
@@ -802,7 +803,7 @@ export default function BusinessCaseWorkspace({
                 Al final de la propuesta hay un botón «Aprobar propuesta». Deja su correo y su nombre; no necesita cuenta. Te llega acá y en la lista.
               </span>
             </div>
-          </aside>
+          </PanelLateral>
         </div>
       </div>
     </div>
