@@ -238,7 +238,7 @@ export default function CostosPanel({
   return (
     <div className="space-y-4">
       {/* ── Naturaleza de los datos (banner ámbar) ── */}
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+      <div data-recorrido="fin.planilla.estimado" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
         Cifras estimadas — referencia para dirección, no contabilidad.
       </div>
 
@@ -262,7 +262,7 @@ export default function CostosPanel({
           ))}
         {/* Vive junto a las pills (no dentro de una vista) porque aplica a las TRES:
             costos fijos, gastos y movimientos muestran los mismos montos sensibles. */}
-        <button
+        <button data-recorrido="fin.planilla.mostrar"
           type="button"
           onClick={onToggleMostrar}
           disabled={!mostrarDatos && !puedeRevelar}
@@ -297,7 +297,7 @@ export default function CostosPanel({
             <p className="text-xs text-fg-muted">
               {leyenda ?? "Costos de referencia: salarios all-in, herramientas y fijos de operación."}
             </p>
-            <button
+            <button data-recorrido="fin.planilla.agregar"
               type="button"
               onClick={() => setForm({ abierto: true, costo: null })}
               className="ml-auto text-xs font-medium px-3 py-1.5 rounded-lg border border-brand/30 text-brand bg-brand/10 hover:bg-brand/20 transition-colors"
@@ -360,7 +360,7 @@ export default function CostosPanel({
                   if (subtotal.CRC > 0) partes.push(fmtMontoVisible(subtotal.CRC, "CRC", mostrarDatos));
                   if (subtotal.USD > 0) partes.push(fmtMontoVisible(subtotal.USD, "USD", mostrarDatos));
                   return (
-                    <div
+                    <div data-recorrido="fin.planilla.personas"
                       key={cat}
                       className="rounded-xl border border-line bg-surface overflow-hidden"
                     >

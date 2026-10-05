@@ -42,6 +42,7 @@ import { conteoDe, conteoDeCelda, conteoDeDimension, useEscala } from "./context
 import { COLOR_DE_HERRAMIENTA, HerramientasDelCriterio, MarcaDeHerramienta, useHerramientas } from "./herramientas";
 import { Isotipo, tieneIsotipo } from "./isotipos";
 import { COLOR_DE_NIVEL, PUNTO_DE_NIVEL } from "./niveles";
+import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 import {
   BLOQUE_DE_RESULTADO,
   BOTON_CLARO,
@@ -298,6 +299,23 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
     }, PASO_DEL_RECORRIDO_MS);
     return () => window.clearInterval(t);
   }, [recorriendo, onSeleccion, area.nombre, niveles]);
+
+  // El recorrido guiado elige en la rueda (lib/recorridos/contenido/escala.ts). Elige algo explícito y
+  // nunca alterna: repetirlo al volver con «Anterior» deja lo mismo elegido. «dimension» es la
+  // primera dimensión del área; «dimension.F», esa dimensión en Funcional.
+  useEffect(() => {
+    const alPedido = (e: Event) => {
+      const a = (e as CustomEvent<AccionDelRecorrido>).detail;
+      if (a?.evento !== "escala.seleccionar") return;
+      const primera = dims[0]?.id;
+      if (!a.valor) onSeleccion(null);
+      else if (a.valor === "dimension" && primera) onSeleccion({ tipo: "dimension", dim: primera });
+      else if (a.valor === "dimension.F" && primera) onSeleccion({ tipo: "celda", dim: primera, letra: "F" });
+      else if ((LETRAS as readonly string[]).includes(a.valor)) onSeleccion({ tipo: "nivel", letra: a.valor as Letra });
+    };
+    window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+    return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+  }, [dims, onSeleccion]);
 
   useEffect(
     () => () => {
@@ -623,7 +641,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <section aria-label={`Mapa de ${area.nombre}`} className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-surface p-5">
+      <section data-recorrido="escala.mapa" aria-label={`Mapa de ${area.nombre}`} className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-surface p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0 max-w-[560px]">
             <h2 className="text-lg font-semibold leading-[26px] text-fg">Mapa de {area.nombre}</h2>
@@ -633,6 +651,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
+            <div data-recorrido="escala.capas">
             <GrupoDeControl
               nombre="Qué muestran las celdas"
               ayuda={`Cada celda es una dimensión en un nivel (${dims[0].id}.F es ${dims[0].nombre} en ${nombreNivel("F")}). Su color se intensifica cuanto más hay ahí de lo que elijas. ${CAPAS.map((c) => c.title).join(" ")}${hayPerfil ? "" : " «Escondidos por el perfil» se elige después de elegir un perfil de negocio arriba."}`}
@@ -650,7 +669,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                 ))}
               </Select>
             </GrupoDeControl>
-            <button
+            </div>
+            <button data-recorrido="escala.recorrer"
               type="button"
               onClick={botonRecorrer.alTocar}
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-[9px] text-sm font-semibold leading-tight text-primary-fg transition-colors hover:bg-primary-hover"
@@ -663,7 +683,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
 
         <LeyendaDeLaRueda capa={capa} nombreNivel={nombreNivel} conOrden={hayOrden} conNoAplica={algunaNoAplica} herramientas={hayFiltro ? prendidas : []} />
 
-        <div className="relative" onMouseLeave={soltarEncima}>
+        <div data-recorrido="escala.rueda" className="relative" onMouseLeave={soltarEncima}>
           <svg
             key={area.id}
             viewBox={`0 0 ${W} ${H}`}
@@ -949,7 +969,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               const y = CY - (r0 + r1) / 2 + 5;
               const activo = focoNivel === nv.letra;
               return (
-                <g
+                <g data-recorrido={nv.letra === "F" ? "escala.nivel" : undefined}
                   key={nv.letra}
                   role="button"
                   tabIndex={-1}
@@ -1001,7 +1021,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               const activo = focoDim?.id === d.id;
               const comentarios = conteoDeDimension(conteos, d.id).total;
               return (
-                <g
+                <g data-recorrido={d.id === dims[0]?.id ? "escala.dimension" : undefined}
                   key={d.id}
                   role="button"
                   tabIndex={-1}
@@ -1299,7 +1319,7 @@ function DetalleDelMapa({
     const total = dims.reduce((s, d) => s + conteoDeDimension(conteos, d.id).total, 0);
     const abiertos = dims.reduce((s, d) => s + conteoDeDimension(conteos, d.id).abiertos, 0);
     return (
-      <aside aria-label="Detalle" className={caja}>
+      <aside data-recorrido="escala.detalle" aria-label="Detalle" className={caja}>
         <p className={ROTULO}>{area.nombre}</p>
         <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{area.descripcion}</p>
         <p className="mt-4 text-sm text-fg">
@@ -1319,7 +1339,7 @@ function DetalleDelMapa({
   if (seleccion.tipo === "nivel") {
     const k = LETRAS.indexOf(seleccion.letra);
     return (
-      <aside aria-label="Detalle del nivel" className={caja}>
+      <aside data-recorrido="escala.detalle" aria-label="Detalle del nivel" className={caja}>
         <BotonCerrar onClick={onCerrar} />
         <p className={cn("pr-8", ROTULO)}>Así se ve {area.nombre} en</p>
         <div className="mt-1 flex items-center gap-2">
@@ -1371,7 +1391,7 @@ function DetalleDelMapa({
   if (seleccion.tipo === "dimension") {
     const i = dims.indexOf(d);
     return (
-      <aside aria-label="Detalle de la dimensión" className={caja}>
+      <aside data-recorrido="escala.detalle" aria-label="Detalle de la dimensión" className={caja}>
         <BotonCerrar onClick={onCerrar} />
         <p className="pr-8 text-xs text-fg-muted">
           <span className="tabular-nums">{d.id}</span>
@@ -1468,7 +1488,7 @@ function DetalleDeCelda({
   const visibles = nv.criterios.filter((c) => aplica(c, perfil));
   const ocultos = nv.criterios.length - visibles.length;
   return (
-    <aside aria-label="Detalle de la celda" className={caja}>
+    <aside data-recorrido="escala.detalle" aria-label="Detalle de la celda" className={caja}>
       <BotonCerrar onClick={onCerrar} />
       <p className="pr-8 text-xs text-fg-muted">
         <span className="tabular-nums">{nv.id}</span> · {datos.capas.find((c) => c.clave === d.capa)?.nombre}
@@ -1488,7 +1508,7 @@ function DetalleDeCelda({
         </div>
       )}
       {visibles.length > 0 && (
-        <ul className="mt-2 divide-y divide-line">
+        <ul data-recorrido="escala.criterios" className="mt-2 divide-y divide-line">
           {visibles.map((c) => (
             <li key={c.id} className={cn("flex items-start gap-2 py-2.5 transition-opacity", atenuado(c.id) && "opacity-45 hover:opacity-100")}>
               <div className="min-w-0 flex-1">

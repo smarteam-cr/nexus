@@ -62,7 +62,7 @@ describe("las herramientas en la URL", () => {
   });
 
   it("viajan en la consulta de la escala", () => {
-    expect(consultaDeLaEscala({ vista: "mapa", perfil: SIN_PERFIL, industria: null, herramientas: ["insider", "smarteam"] })).toBe("?vista=mapa&h=insider%2Csmarteam");
-    expect(consultaDeLaEscala({ vista: "matriz", perfil: SIN_PERFIL, industria: null, herramientas: [] })).toBe("");
+    expect(consultaDeLaEscala({ vista: "mapa", perfil: SIN_PERFIL, industria: null, herramientas: ["insider", "smarteam"] })).toBe("?h=insider%2Csmarteam");
+    expect(consultaDeLaEscala({ vista: "mapa", perfil: SIN_PERFIL, industria: null, herramientas: [] })).toBe("");
   });
 });

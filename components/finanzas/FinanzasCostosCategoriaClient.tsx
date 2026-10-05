@@ -25,6 +25,7 @@ export default function FinanzasCostosCategoriaClient({
   descripcion,
   leyenda,
   accion,
+  recorrido,
   initialCostos,
   todayISO,
 }: {
@@ -40,6 +41,8 @@ export default function FinanzasCostosCategoriaClient({
    * qué enterarse.
    */
   accion?: React.ReactNode;
+  /** El recorrido guiado de la pantalla, si tiene (lib/recorridos/registro.ts). */
+  recorrido?: string;
   initialCostos: CostoRecurrenteDTO[];
   todayISO: string;
 }) {
@@ -58,7 +61,7 @@ export default function FinanzasCostosCategoriaClient({
 
   return (
     <div>
-      <PageHeader title={titulo} description={descripcion} action={accion} />
+      <PageHeader title={titulo} description={descripcion} action={accion} recorrido={recorrido} />
       <CostosPanel
         costos={propios}
         gastos={[]}

@@ -92,19 +92,19 @@ export default function GastosDelMesClient({
 
   return (
     <div className="space-y-5">
-      <PageHeader
+      <PageHeader recorrido="finanzas-gastos"
         title="Gastos del mes"
         description="Todo lo que sale en el mes. Lo recurrente se carga solo; lo puntual se anota acá, con su comprobante. Reemplaza al Excel de egresos."
         action={
           puedeEditar && !delExcel && !datos.cerrado ? (
-            <Button variant="primary" onClick={() => setForm({ gasto: null })}>
+            <Button data-recorrido="fin.gastos.registrar" variant="primary" onClick={() => setForm({ gasto: null })}>
               Registrar gasto
             </Button>
           ) : undefined
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div data-recorrido="fin.gastos.mes" className="flex flex-wrap items-center gap-2">
         <button type="button" className={BOTON_BLANCO} disabled={cargando} onClick={() => void cargar(mesAnterior(periodo))} aria-label="Mes anterior">
           ‹ {etiquetaMes(mesAnterior(periodo)).slice(0, 3)}
         </button>
@@ -131,7 +131,7 @@ export default function GastosDelMesClient({
         )}
       </div>
 
-      <section aria-label="Lo que sale en el mes" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <section data-recorrido="fin.gastos.totales" aria-label="Lo que sale en el mes" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-4">
           <span className="text-xs text-fg-muted">Recurrentes</span>
           <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">{montosRecurrentes.length ? textoDeMontos(montosRecurrentes) : "—"}</span>
@@ -177,7 +177,7 @@ export default function GastosDelMesClient({
         </div>
       </section>
 
-      <section aria-label="Gastos puntuales" className="rounded-xl border border-line bg-surface">
+      <section data-recorrido="fin.gastos.puntuales" aria-label="Gastos puntuales" className="rounded-xl border border-line bg-surface">
         <div className="flex items-baseline gap-2.5 border-b border-line px-4 py-3.5">
           <h2 className="text-[15px] font-semibold text-fg">Gastos puntuales de {etiquetaMes(periodo)}</h2>
           <span className="text-xs text-fg-muted">lo que no se repite todos los meses</span>
@@ -244,7 +244,7 @@ export default function GastosDelMesClient({
       </section>
 
       <div className="flex flex-wrap items-start gap-4">
-        <section aria-label="Recurrentes del mes" className="min-w-0 flex-[1_1_380px] rounded-xl border border-line bg-surface">
+        <section data-recorrido="fin.gastos.recurrentes" aria-label="Recurrentes del mes" className="min-w-0 flex-[1_1_380px] rounded-xl border border-line bg-surface">
           <div className="flex items-baseline gap-2.5 border-b border-line px-4 py-3.5">
             <h2 className="text-[15px] font-semibold text-fg">Recurrentes de este mes</h2>
             <Link href="/finanzas/recurrentes" className="ml-auto text-[13px] font-semibold text-brand hover:text-brand-light">
@@ -276,7 +276,7 @@ export default function GastosDelMesClient({
       </div>
 
       {puedeEditar && !delExcel && !datos.cerrado && (
-        <section aria-label="Avisar que están todos" className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-muted px-4 py-3">
+        <section data-recorrido="fin.gastos.avisar" aria-label="Avisar que están todos" className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface-muted px-4 py-3">
           <span className="flex-[1_1_320px] text-[13px] leading-[1.45] text-fg-secondary">
             {datos.gastosListos
               ? "Avisaste que los gastos de este mes están todos. Si aparece uno más, anótalo igual: quien cierra el mes lo ve."

@@ -55,7 +55,7 @@ export default async function CalendarioPlanillaPage({
 
   return (
     <div className={SHELL_DEFAULT}>
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+      <div data-recorrido="fin.calendario.anio" className="flex flex-wrap items-center gap-2 mb-3">
         <Link
           href="/finanzas/costos/planillas"
           className={buttonVariants({ variant: "secondary", size: "sm" })}

@@ -141,6 +141,7 @@ export default function Resumen() {
   return (
     <div className="space-y-6">
       {delResumen.length > 0 && (
+        <div data-recorrido="preventa.resumen.sugerencias">
         <FranjaDeSugerencias
           acciones={
             <>
@@ -155,16 +156,17 @@ export default function Resumen() {
         >
           <strong>El agente sugiere {delResumen.length === 1 ? "una cosa" : `${delResumen.length} cosas`}</strong> para estas tarjetas. Nada se confirma solo.
         </FranjaDeSugerencias>
+        </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div data-recorrido="preventa.resumen.marco" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {CASILLAS_DEL_RESUMEN.map((clave) => (
           <Tarjeta key={clave} clave={clave} sugeridas={deLaCasilla(clave)} onAbrir={() => abrirCasilla(clave)} />
         ))}
       </div>
 
       {/* Lo que sale de cada reunión: lo propone el agente al leerla, con la frase del cliente. */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div data-recorrido="preventa.resumen.casillas" className="grid gap-4 lg:grid-cols-2">
         {CASILLAS_DE_LAS_REUNIONES.map((clave) => (
           <Casilla key={clave} clave={clave} />
         ))}

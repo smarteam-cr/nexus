@@ -4596,3 +4596,80 @@ como tokens del sistema y el segmentado nuevo también en Preventa.
 - **Los avisos van por «Para ti», no por un contador propio**: `feedback.nuevo` al frente FEEDBACK (Super Admin lo lleva por defecto), `feedback.respuesta` y `feedback.estado` a quien reportó, con `/para-ti?feedback=<id>`: ese parámetro abre el panel en el reporte desde cualquier pantalla.
 - **El pedido de opinión** es la respuesta a «no se acuerdan»: dirección le pregunta algo concreto a alguien sobre una pantalla, y le aparece al entrar ahí (abajo a la derecha: no se puede meter dentro de cada página) hasta que responda o diga «Ahora no». Responder abre el panel con la pregunta arriba.
 - **El festejo y la capa de «Señalar» no son diálogos**: quedan declarados con su motivo en `lib/ui/token-vocab.test.ts` (`CAPAS_QUE_NO_SON_DIALOGOS`), no como deuda.
+
+## Recorridos guiados: React Joyride, con el contenido en el repo (2026-10-04)
+
+> Elías pidió una librería de las mejores para recorridos por rol: que se avance con «Siguiente» y
+> «Anterior», y que cada pantalla tenga un botón «Recorrido» para volver a verlo. El diseño está en
+> «Recorridos · diseño» (Claude Design, sistema «Nexus · interfaz interna»). Se aplicó con el
+> ejemplo de la ficha del cliente.
+
+- **La librería es React Joyride v3** (MIT, soporta React 16.8–19, versión 3.2.0). El globo es un
+  componente nuestro (`tooltipComponent`) con los tokens del sistema, el foco queda encerrado en el
+  globo, y la librería se carga recién cuando arranca un recorrido. Se descartaron Shepherd.js e
+  Intro.js (AGPL-3.0: el uso comercial pide licencia paga) y Onborda (sin versiones desde diciembre
+  de 2024). driver.js es la alternativa liviana si Joyride molesta, pero su globo no es React.
+- **El contenido vive en el repo** (`lib/recorridos/registro.ts`), no en la base: se revisa como
+  código y viaja con el deploy («por ahora los manejamos acá», Elías). Sumar un recorrido son tres
+  cosas: una entrada en el registro, un `data-recorrido` en cada cosa que señala y la prop
+  `recorrido` en la cabecera de su pantalla (`PageHeader` o `CabeceraDeFicha`).
+- **Un paso señala lo que está a la vista, o no sale.** El proveedor busca el primer elemento visible
+  con ese `data-recorrido`. Un botón que el permiso esconde, el panel oculto o una propuesta que no
+  existe nunca dejan un globo señalando el vacío. El filtro por rol es aparte y tiene dos capas:
+  quién ve el recorrido y quién ve cada paso.
+- **Lo visto vive en una cookie** (`nexus-recorridos`), como el tema y el ancho del menú: el
+  servidor la lee y el punto azul del botón aparece desde el primer pintado. Perderla cuesta un
+  punto azul de más. Pasarlo a la base (para que valga en las dos computadoras, o para medir dónde
+  se sale la gente) es cambiar solo `lib/recorridos/vistos.ts`.
+- **Subir la `version`** de un recorrido le vuelve a mostrar el punto azul y «Cambió» a quien ya lo
+  vio. Se sube cuando la pantalla cambia lo suficiente.
+- **El recorrido no arranca solo.** La primera vez que alguien entra a una pantalla con un recorrido
+  sin ver, el botón ofrece verlo con una invitación sin velo. Sale una vez por sesión del navegador
+  y se cierra con «Ahora no», que cuenta como saltado. Se apaga con `INVITAR_LA_PRIMERA_VEZ`.
+- **El recorrido va en la capa `TOUR` (90)** de `lib/ui/z.ts`: encima de cajones y modales, debajo
+  de los avisos. La librería pinta el velo y el borde azul como atributos SVG, que no aceptan
+  variables CSS, así que los colores se leen del tema al arrancar.
+- **Esc sale y las flechas avanzan o retroceden.** Las maneja el globo, porque el foco está ahí. Un
+  clic en el velo no hace nada, y mientras dura el recorrido no se puede hacer clic en lo señalado.
+- **Lo que frena el merge** (`lib/recorridos/recorridos.test.ts`): un ancla que no existe en el
+  código, una cabecera que pide un recorrido que no está en el registro, un rol que no existe, un
+  texto en voseo o un texto largo de más.
+- **Una pieza de un lienzo tiene su propio recorrido** (2026-10-04, segunda tanda). El cronograma,
+  la exploración y la información del cliente viven en la misma dirección que la ficha
+  (`/clients/[id]`); las piezas de la preventa, en `/sales/exploraciones/[id]`. Esos recorridos son
+  `porPantalla`: la pieza abierta los declara con `usePantallaDelRecorrido(id)` y el botón
+  «Recorrido» de la cabecera ofrece ese en vez del de la ficha. Al cerrar la pieza vuelve el de la
+  ficha. «Ver» desde la lista, con la ficha abierta en otra pieza, no navega: avisa a qué pieza entrar.
+- **Dirección (SUPER_ADMIN) ve todos los recorridos y todos sus pasos**, aunque sean de otro rol: es
+  quien los revisa.
+- **Las marcas que se repiten en muchas pantallas son una sola**: `que-sigue` (el recuadro
+  «Qué sigue»), `publicar` («Subir al cliente» de `PublishBar`) y `recorrido.boton`. Un paso que las
+  usa sirve en cualquier recorrido.
+- **`Tabs`, `Segmentado`, `Table`, `FranjaDeSugerencias` y los botones del sistema no dejan pasar
+  atributos**: el `data-recorrido` se pone en un envoltorio o en el elemento de la página más
+  cercano. La prueba no lo puede ver (solo lee el texto del código): un ancla puesta en uno de esos
+  componentes se cae en silencio.
+- **El contenido vive por área** en `lib/recorridos/contenido/` (clientes, éxito, preventa y
+  finanzas); `registro.ts` los junta en el orden en que aparecen en «Tus recorridos».
+- **Un paso puede hacer el clic por ti** (2026-10-04, la escala). Un paso declara `accion` (por
+  ejemplo, elegir la primera dimensión, el nivel Funcional o una celda) y el recorrido la pide con un
+  evento del navegador (`EVENTO_DEL_RECORRIDO`) antes de mostrarse; la pantalla que sabe hacerla lo
+  escucha y elige algo EXPLÍCITO, nunca alterna, así volver con «Anterior» deja lo mismo elegido. Un
+  recorrido puede pedir acciones al arrancar (`alArrancar`: la escala abre el mapa y suelta lo
+  elegido). La prueba frena una acción que ninguna pantalla escucha.
+- **Pendiente:** la bienvenida (espera a «Para ti») y los recorridos de Marketing, Sesiones,
+  Documentación y Administración. Fuera del menú quedan sin recorrido Cobranza › Odoo, Mercury e
+  Importar.
+
+## La escala abre en el Mapa (2026-10-04)
+
+> Pedido de Elías: que la vista por defecto de la escala sea el Mapa y que sea la primera opción.
+
+- **El mapa es la vista de entrada** (`VISTA_DE_ENTRADA` en `lib/escala/vista.ts`) y va primero en el
+  selector: Mapa · Matriz · Por dimensión. Sin `?vista`, o con una que ya no existe, se abre el mapa;
+  la dirección solo dice `?vista=` cuando es otra. Un enlace viejo sin `?vista` que antes abría la
+  matriz ahora abre el mapa.
+- **La bandeja de comentarios sigue abriendo la matriz** (`vista=matriz` explícito en el enlace): al ir
+  a un comentario, el criterio comentado tiene que quedar a la vista en su fila.
+- El esqueleto de carga de `/escala/[área]` dibuja el mapa (la caja de la rueda y el panel del
+  detalle), para que la pantalla no salte al cargar.

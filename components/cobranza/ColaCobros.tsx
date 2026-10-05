@@ -362,7 +362,7 @@ export default function ColaCobros({
     <div className="space-y-4">
       {/* ── Tanda de cobro: Smarteam cobra del 1 al 5 y del 15 al 20. Es una VENTANA
              DE TRABAJO — no mueve la fecha de ningún cobro, solo dice si hoy toca. ── */}
-      <div
+      <div data-recorrido="fin.cobranza.tanda"
         className={`rounded-xl border px-4 py-2.5 text-[11px] ${
           tanda.activa
             ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-700"
@@ -382,7 +382,7 @@ export default function ColaCobros({
       </div>
 
       {/* ── Cards de resumen (la verdad del día — no las tocan los filtros) ── */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-recorrido="fin.cobranza.totales" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
           <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide">
             Vencido · {cards.nVencidos} cobro{cards.nVencidos !== 1 ? "s" : ""}
@@ -460,7 +460,7 @@ export default function ColaCobros({
       </div>
 
       {/* ── Filtros (solo estrechan la lista) ── */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div data-recorrido="fin.cobranza.filtros" className="flex flex-wrap items-center gap-2">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -619,7 +619,7 @@ export default function ColaCobros({
       return <p className="mt-1.5 text-xs text-fg-muted">Sin cobros en este grupo.</p>;
     }
     return (
-      <ul className="mt-1.5 space-y-1.5">
+      <ul data-recorrido="fin.cobranza.lista" className="mt-1.5 space-y-1.5">
         {list.map((r) => (
           <li key={r.id} className="rounded-lg border border-line bg-surface px-3 py-2">
             <div className="flex items-center gap-2 flex-wrap">

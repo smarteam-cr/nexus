@@ -59,7 +59,7 @@ export default function ExploracionConCuestionario({
 
   return (
     <div>
-      <div className="flex gap-1 px-6 pt-4">
+      <div data-recorrido="exploracion.vistas" className="flex gap-1 px-6 pt-4">
         {tab("cuestionario", "Cuestionarios")}
         {tab("guia", "Guía de exploración")}
         {informeAnterior && tab("informe", "Informe anterior")}

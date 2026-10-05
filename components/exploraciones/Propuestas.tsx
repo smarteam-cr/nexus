@@ -171,7 +171,7 @@ export function FilaSugerida({ item, texto, destino }: { item: ItemPropuesto; te
   const origen = origenEnUnaLinea(item);
   const hayMas = !!item.razon || item.fuentes.length > 1 || (origen.cita?.length ?? 0) > 70;
   return (
-    <li className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
+    <li data-recorrido="preventa.sugerencia" className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
       <IconoDeSugerencia className="mt-[3px] h-[15px] w-[15px] flex-shrink-0 text-brand" />
       <div className="min-w-0 flex-1">
         {destino && <p className="text-2xs font-semibold text-brand">{destino}</p>}

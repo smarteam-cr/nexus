@@ -398,7 +398,7 @@ export default function DiferenciasOdoo({
   return (
     <div className="space-y-4">
       {juntas && (
-        <div className="flex flex-wrap items-center gap-3">
+        <div data-recorrido="fin.conciliacion.filtros" className="flex flex-wrap items-center gap-3">
           <Segmentado<FiltroQuien>
             etiqueta="Quién lo resuelve"
             valor={filtroQuien}
@@ -429,7 +429,7 @@ export default function DiferenciasOdoo({
           />
         </div>
       )}
-      <div className="rounded-lg border border-line bg-surface px-4 py-3 text-sm">
+      <div data-recorrido="fin.conciliacion.resumen" className="rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <p className="text-fg">
           {/* ⚠ FILAS, no líneas (2026-09-25): una línea con una fila pendiente no pesa lo mismo que una con treinta. */}
           {resumen.filas === 0 ? (
@@ -590,7 +590,7 @@ function Linea({
   };
 
   return (
-    <div className="rounded-lg border border-line bg-surface">
+    <div data-recorrido="fin.conciliacion.diferencia" className="rounded-lg border border-line bg-surface">
       <div className="border-b border-line p-4">
         <div className="flex flex-wrap items-center gap-2">
           {origen && (

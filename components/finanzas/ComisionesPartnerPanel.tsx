@@ -191,11 +191,11 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeader recorrido="finanzas-comisiones-partner"
         title="Comisiones de partner"
         description="Lo que Smarteam gana con cada aliado comercial. Es un ingreso — no entra a la caja neta todavía."
         action={
-          <Button
+          <Button data-recorrido="fin.partner.registrar"
             onClick={() => {
               setEditandoId(null);
               setForm({
@@ -221,7 +221,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
           decirlo — con la proyección de noviembre adentro— y ese número no se podía
           llevar a ninguna reunión. */}
       {data.totales.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div data-recorrido="fin.partner.totales" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-xl border border-line bg-surface px-4 py-3">
             <p className="text-[10px] uppercase tracking-wide text-fg-muted">Cobrado en el año</p>
             <p className="mt-1 text-xl font-bold text-fg tabular-nums">
@@ -275,7 +275,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
 
       {/* ── Historial por aliado, a SU cadencia ───────────────────────────── */}
       {data.historial.length > 0 && (
-        <section className="space-y-2">
+        <section data-recorrido="fin.partner.historial" className="space-y-2">
           <h2 className="text-sm font-semibold text-fg">Historial</h2>
           <p className="text-[11px] text-fg-muted">
             Cada aliado agrupado a su propia frecuencia — estos pagos no son mensuales, así que
@@ -403,7 +403,7 @@ export default function ComisionesPartnerPanel({ initial, clientes, todayISO }: 
 
       {/* ── Aliados: quién nos paga y cada cuánto ─────────────────────────── */}
       <section className="space-y-2">
-        <div className="flex items-baseline justify-between gap-2">
+        <div data-recorrido="fin.partner.aliados" className="flex items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold text-fg">Aliados</h2>
           <Button
             variant="secondary"

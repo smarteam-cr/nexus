@@ -62,12 +62,12 @@ export default function AguinaldoPanel({
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeader recorrido="finanzas-aguinaldo"
         title={`Aguinaldo ${anio}`}
         description={`Todo lo que se le pagó a cada persona entre ${desde} y ${hasta}, dividido entre 12. Es un dato observado del historial de planilla, no una tasa: si a alguien le subieron el salario a mitad de año, su aguinaldo sube solo.`}
         action={
           anios.length > 1 ? (
-            <div className="flex gap-1">
+            <div data-recorrido="fin.aguinaldo.anio" className="flex gap-1">
               {anios.map((a) => (
                 <Link
                   key={a}
@@ -89,7 +89,7 @@ export default function AguinaldoPanel({
           subiendo. Antes esto no estaba en ningún lado y la pantalla se leía
           como si el aguinaldo de diciembre ya estuviera calculado. */}
       {periodoAbierto && (
-        <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2">
+        <div data-recorrido="fin.aguinaldo.abierto" className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2">
           <p className="text-xs text-warn-ink">
             <span className="font-medium">El período todavía no cierra.</span> «Acumulado» es lo que
             se devengó hasta hoy; «total estimado» es a cuánto llega en {etiquetaMes(cierraEn)} si
@@ -100,7 +100,7 @@ export default function AguinaldoPanel({
         </div>
       )}
 
-      <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 space-y-0.5">
+      <div data-recorrido="fin.aguinaldo.totales" className="rounded-lg border border-line bg-surface-muted px-3 py-2 space-y-0.5">
         <p className="text-[11px] text-fg-muted">
           Se suma de <span className="text-fg-secondary">{desde}</span> a{" "}
           <span className="text-fg-secondary">{hasta}</span> · solo las quincenas ya pagadas
@@ -138,7 +138,7 @@ export default function AguinaldoPanel({
           description="El aguinaldo sale del historial de planilla. Registra quincenas como pagadas y aparece solo."
         />
       ) : (
-        <div className="rounded-xl border border-line bg-surface overflow-x-auto">
+        <div data-recorrido="fin.aguinaldo.tabla" className="rounded-xl border border-line bg-surface overflow-x-auto">
           <table className="w-full min-w-[820px]">
             <thead className="bg-surface-muted border-b border-line">
               <tr>

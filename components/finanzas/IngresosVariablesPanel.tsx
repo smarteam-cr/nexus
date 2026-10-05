@@ -232,11 +232,11 @@ export default function IngresosVariablesPanel({
 
   return (
     <div>
-      <PageHeader
+      <PageHeader recorrido="finanzas-ingresos"
         title="Ingresos variables"
         description="La plata que entró y no es venta, junto a los pagos puntuales y rescates que vienen de Cobranza. Las comisiones de aliados van en Comisiones de partner."
         action={
-          <button
+          <button data-recorrido="fin.ingresos.registrar"
             type="button"
             onClick={() => setEditando("nuevo")}
             className="text-sm font-medium px-4 py-2 rounded-lg bg-primary text-primary-fg hover:bg-primary-hover transition-colors"
@@ -248,7 +248,7 @@ export default function IngresosVariablesPanel({
 
       <div className="space-y-4">
         {/* Qué es esto y de dónde sale — honestidad de datos, igual que el resto del módulo. */}
-        <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
+        <div data-recorrido="fin.ingresos.que" className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-xs text-fg-muted">
           Dinero que entró fuera del ciclo quincenal. Los{" "}
           <strong className="text-fg-secondary">registrados</strong> se dan de alta acá (con cliente
           o generales) y <strong className="text-fg-secondary">no son venta</strong>: suman a la caja,
@@ -270,7 +270,7 @@ export default function IngresosVariablesPanel({
         )}
 
         {sinClasificar > 0 && (
-          <p className="text-xs text-warn-ink">
+          <p data-recorrido="fin.ingresos.sincategoria" className="text-xs text-warn-ink">
             {sinClasificar === 1
               ? "1 ingreso registrado no tiene categoría."
               : `${sinClasificar} ingresos registrados no tienen categoría.`}{" "}
@@ -278,7 +278,7 @@ export default function IngresosVariablesPanel({
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div data-recorrido="fin.ingresos.filtros" className="flex flex-wrap items-center gap-1.5">
           {FILTROS.map(([k, lbl]) => (
             <button
               key={k}

@@ -67,7 +67,7 @@ function Tarjeta({
 }) {
   const chip = CHIP[estado];
   return (
-    <article className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+    <article data-recorrido="fin.integraciones.tarjeta" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center gap-2">
         <h2 className="flex-1 text-[15px] font-semibold text-fg">{nombre}</h2>
         <span className={`whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs ${chip.clase}`}>{chip.texto}</span>
@@ -81,7 +81,7 @@ function Tarjeta({
           </div>
         ))}
       </div>
-      <div className="mt-auto flex flex-col gap-1 rounded-lg border border-line bg-surface-muted px-3 py-2.5">
+      <div data-recorrido="fin.integraciones.falta" className="mt-auto flex flex-col gap-1 rounded-lg border border-line bg-surface-muted px-3 py-2.5">
         <span className="text-xs text-fg-muted">{pendienteRotulo}</span>
         <span className="text-sm font-semibold tabular-nums text-fg">{pendiente}</span>
         <span className="text-xs text-fg-secondary">{quien}</span>
@@ -145,7 +145,7 @@ export default async function IntegracionesFinanzasPage() {
 
   return (
     <div className={`${SHELL_DEFAULT} space-y-5`}>
-      <PageHeader
+      <PageHeader recorrido="finanzas-integraciones"
         title="Integraciones"
         description="Si las copias de Odoo, Mercury y HubSpot están al día, y cuánto falta conciliar de cada una. Nexus solo las lee: nunca escribe en ellas ni mueve un cobro solo."
         action={<ActualizarTodo />}
@@ -217,7 +217,7 @@ export default async function IntegracionesFinanzasPage() {
         />
       </div>
 
-      <section
+      <section data-recorrido="fin.integraciones.lectura"
         aria-label="Cómo se lee"
         className="flex flex-wrap gap-x-5 gap-y-2 rounded-xl border border-line bg-surface px-4 py-3 text-xs text-fg-secondary"
       >

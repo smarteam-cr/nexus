@@ -33,6 +33,11 @@
   el campo `businessCaseId`, la ruta `/business-cases` y el slug de pieza `business-case`.
   Cambiar eso rompería links ya pegados y obligaría a migrar datos sin que nadie del equipo viera
   la diferencia. Ver DECISIONS §El renombre.
+- **Recorrido** (`lib/recorridos/`): un tour guiado de una pantalla. Oscurece la pantalla, deja a la vista una
+  cosa a la vez con un borde azul y la explica en un globo con «Saltar», «Anterior» y «Siguiente». Cada pantalla
+  que tiene uno muestra el botón «Recorrido» en su cabecera, con un punto azul si no lo viste o si cambió. Todos
+  los de tu rol están en el menú del avatar, en «Recorridos». El contenido vive en el repo; lo visto, en la cookie
+  `nexus-recorridos`. Ver DECISIONS §Recorridos guiados.
 - **Preventa** (Ventas → Preventa, `/sales/exploraciones`, modelo `ExploracionDeVenta`): el lienzo de
   una empresa en venta, desde que llega (por el test o desde HubSpot) hasta la primera propuesta y el
   traspaso al CSE. Sus piezas: Preparación · Exploración (las reuniones) · La escala · Casos de uso ·

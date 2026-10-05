@@ -1565,7 +1565,7 @@ export default function TimelineGantt({
         </span>
       </div>
 
-      <div className="rounded-2xl border border-line bg-surface overflow-x-auto">
+      <div data-recorrido="cronograma.gantt" className="rounded-2xl border border-line bg-surface overflow-x-auto">
         <div style={{ minWidth: Math.max(640, 300 + total * 34) }}>
           {/* Cabecera de semanas */}
           <div className="grid gap-1 items-center px-4 py-2.5 border-b border-line bg-surface-hover/60" style={gridCols}>

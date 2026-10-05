@@ -106,14 +106,14 @@ export default function CalendarioPlanillaPanel({
 
   return (
     <div>
-      <PageHeader
+      <PageHeader recorrido="finanzas-planilla-calendario"
         title={`Calendario de planilla ${anio}`}
         description="El año de cada persona, quincena por quincena. Lo que se le pagó sale del libro y no se toca; lo que falta se proyecta al salario que rige en esa fecha."
       />
 
       {/* Un aumento no reescribe el pasado, y conviene decirlo antes de que alguien lo
           note por su cuenta mirando dos montos distintos en la misma columna. */}
-      <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 mb-3">
+      <div data-recorrido="fin.calendario.aumento" className="rounded-lg border border-line bg-surface-muted px-3 py-2 mb-3">
         <p className="text-[11px] text-fg-muted">
           Un aumento rige <strong className="text-fg-secondary">desde su fecha efectiva hacia adelante</strong>: las
           quincenas ya anotadas conservan el monto viejo, porque es lo que se pagó. Nada de esto se guarda —
@@ -122,7 +122,7 @@ export default function CalendarioPlanillaPanel({
       </div>
 
       {pendientes > 0 && (
-        <div className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 mb-3 flex flex-wrap items-center gap-2">
+        <div data-recorrido="fin.calendario.pendientes" className="rounded-lg border border-warn-line bg-warn-surface px-3 py-2 mb-3 flex flex-wrap items-center gap-2">
           <p className="text-xs text-warn-ink">
             <strong className="font-medium">
               {pendientes} quincena{pendientes === 1 ? "" : "s"} sin anotar
@@ -225,7 +225,7 @@ function FilaDePersona({
   );
 
   return (
-    <section className="rounded-xl border border-line bg-surface overflow-hidden">
+    <section data-recorrido="fin.calendario.persona" className="rounded-xl border border-line bg-surface overflow-hidden">
       <button
         type="button"
         onClick={onToggle}

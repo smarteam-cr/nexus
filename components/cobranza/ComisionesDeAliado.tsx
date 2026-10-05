@@ -132,7 +132,7 @@ export default function ComisionesDeAliado({
         </div>
       )}
 
-      <div className="rounded-xl border border-line bg-surface overflow-x-auto">
+      <div data-recorrido="fin.partner.tabla" className="rounded-xl border border-line bg-surface overflow-x-auto">
         <table className="w-full min-w-[720px]">
           <thead className="bg-surface-muted border-b border-line">
             <tr>

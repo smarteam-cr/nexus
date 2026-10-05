@@ -1,6 +1,7 @@
 import { cn } from "@/lib/cn";
 import { BackLink } from "./BackLink";
 import { Breadcrumbs, type Crumb } from "./Breadcrumbs";
+import { BotonRecorrido } from "@/components/recorridos/BotonRecorrido";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,8 @@ export interface PageHeaderProps {
   backLabel?: string;
   /** Profundidad 2+: migas arriba del título (excluyente con backHref). */
   crumbs?: Crumb[];
+  /** El id del recorrido guiado de esta pantalla (lib/recorridos/registro.ts): pinta el botón «Recorrido» junto a la acción. */
+  recorrido?: string;
   className?: string;
 }
 
@@ -33,6 +36,7 @@ export function PageHeader({
   backHref,
   backLabel,
   crumbs,
+  recorrido,
   className,
 }: PageHeaderProps) {
   return (
@@ -58,7 +62,14 @@ export function PageHeader({
           )}
           {description && <p className="text-sm text-fg-secondary mt-0.5">{description}</p>}
         </div>
-        {action && <div className="max-w-full flex-shrink-0">{action}</div>}
+        {recorrido ? (
+          <div className="flex max-w-full flex-shrink-0 flex-wrap items-center gap-2">
+            <BotonRecorrido recorrido={recorrido} variante="pagina" />
+            {action}
+          </div>
+        ) : (
+          action && <div className="max-w-full flex-shrink-0">{action}</div>
+        )}
       </div>
     </div>
   );

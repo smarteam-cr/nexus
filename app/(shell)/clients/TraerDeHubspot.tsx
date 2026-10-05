@@ -146,7 +146,7 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
         variant="secondary"
         size="md"
         onClick={abrir}
-        title="Empresas que en HubSpot ya tienen un proyecto y todavía no están acá."
+        title="Empresas que ya tienen un proyecto en HubSpot y todavía no están en Nexus."
       >
         Traer {cuantas} empresa{cuantas !== 1 ? "s" : ""} de HubSpot
       </Button>
@@ -173,7 +173,7 @@ export default function TraerDeHubspot({ cuantas }: { cuantas: number }) {
               proyecto que falta traer.{" "}
               <span className="text-fg-muted">
                 HubSpot tiene {universo.totalConProyecto} con proyecto; {universo.yaEnNexus} ya
-                están acá
+                están en Nexus
                 {universo.yaTraidoBajoOtraFicha > 0
                   ? ` y ${universo.yaTraidoBajoOtraFicha} tienen su trabajo bajo otra ficha`
                   : ""}
@@ -410,7 +410,7 @@ function FilaEmpresa({
                     loading={ocupada}
                     onClick={() => onTraer({ adoptarEnClientId: g.clientId })}
                   >
-                    Es la misma → traer el proyecto acá
+                    Es la misma → traer el proyecto a esta ficha
                   </Button>
                 </div>
               ))}

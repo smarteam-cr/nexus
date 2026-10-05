@@ -149,17 +149,17 @@ export default function CobranzaClient({
 
   return (
     <div>
-      <PageHeader
+      <PageHeader recorrido="finanzas-cobranza"
         title="Cobranza"
         description="Registra los pagos que entran, mira qué está vencido y lleva el control de cada cliente."
         action={
-          <Button variant="primary" onClick={() => setBuscadorOpen(true)}>
+          <Button data-recorrido="fin.cobranza.pago" variant="primary" onClick={() => setBuscadorOpen(true)}>
             Registrar pago
           </Button>
         }
       />
 
-      <div className="flex flex-wrap gap-1 border-b border-line mb-6">
+      <div data-recorrido="fin.cobranza.pestanas" className="flex flex-wrap gap-1 border-b border-line mb-6">
         {TABS.map((t) => {
           const active = tab === t.key;
           return (

@@ -35,13 +35,13 @@ export default async function FinanzasCostosPlanillasPage() {
 
   return (
     <div className={SHELL_DEFAULT}>
-      <FinanzasCostosCategoriaClient
+      <FinanzasCostosCategoriaClient recorrido="finanzas-planilla"
         categoria="SALARIO"
         titulo="Planillas"
         descripcion="Lo que la planilla cuesta por mes con la configuración de hoy, todo incluido. Lo que se pagó de verdad está en Historial."
         leyenda="Costo por persona con las cargas ya adentro. El número que manda es el monto, no la base por el factor."
         accion={
-          <div className="flex flex-wrap gap-2">
+          <div data-recorrido="fin.planilla.atajos" className="flex flex-wrap gap-2">
             <Link
               href="/finanzas/costos/planillas/calendario"
               className={buttonVariants({ variant: "secondary", size: "md" })}

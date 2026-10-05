@@ -215,12 +215,12 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeader recorrido="finanzas-comisiones-vendedor"
         title="Comisiones de vendedor"
         description="Lo que Smarteam le paga a quien vendió, como porcentaje de lo cobrado. Lo devengado se calcula solo; liquidar lo congela."
         backHref="/finanzas/costos"
         action={
-          <Button
+          <Button data-recorrido="fin.vendedor.regla"
             onClick={() => {
               setEditandoId(null);
               setForm(nuevaRegla());
@@ -232,7 +232,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
         }
       />
 
-      <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
+      <div data-recorrido="fin.vendedor.devengado" className="rounded-lg border border-line bg-surface-muted px-3 py-2">
         <p className="text-[11px] text-fg-muted">
           Devengado sin liquidar:{" "}
           {Object.keys(data.totalesDevengado).length === 0 ? (
@@ -249,7 +249,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
       </div>
 
       {/* ── Devengado ─────────────────────────────────────────────────────── */}
-      <section className="space-y-2">
+      <section data-recorrido="fin.vendedor.porliquidar" className="space-y-2">
         <h2 className="text-sm font-semibold text-fg">Por liquidar</h2>
         <p className="text-[11px] text-fg-muted">
           {data.politicaPago.label}. Cada línea es UN pago: junta todo lo que ese
@@ -332,7 +332,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
                           )}
                         </td>
                         <td className={`${TD} text-right`}>
-                          <Button
+                          <Button data-recorrido="fin.vendedor.liquidar"
                             size="sm"
                             onClick={() => liquidar(d)}
                             disabled={liquidando !== null}
@@ -438,7 +438,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
       )}
 
       {/* ── Reglas ────────────────────────────────────────────────────────── */}
-      <section className="space-y-2">
+      <section data-recorrido="fin.vendedor.reglas" className="space-y-2">
         <h2 className="text-sm font-semibold text-fg">Reglas</h2>
         {data.reglas.length === 0 ? (
           <EmptyState

@@ -104,7 +104,7 @@ function Sesiones({ abierta, alElegir }: { abierta: boolean; alElegir: (clave: s
       </span>
     );
   return (
-    <ul className="mb-1.5 ml-[18px] mt-0.5 space-y-0.5 border-l border-line pl-2">
+    <ul data-recorrido="preventa.sesiones" className="mb-1.5 ml-[18px] mt-0.5 space-y-0.5 border-l border-line pl-2">
       {todas.map((p) => {
         const actual = abierta && p.clave === activa.clave;
         return (
@@ -149,7 +149,7 @@ export default function RielDePiezas({
 }) {
   const { sesion, abrirObjeciones } = useLienzo();
   return (
-    <nav aria-label="Piezas de la preventa" className="flex h-full flex-col gap-4">
+    <nav data-recorrido="preventa.riel" aria-label="Piezas de la preventa" className="flex h-full flex-col gap-4">
       <div className="flex flex-wrap gap-0.5 lg:flex-col">
         <div className="lg:w-full">
           <Fila
@@ -187,7 +187,7 @@ export default function RielDePiezas({
           </div>
         ))}
       </div>
-      <div className="lg:mt-auto">
+      <div data-recorrido="preventa.objeciones" className="lg:mt-auto">
         <BotonDeObjeciones onClick={abrirObjeciones} />
       </div>
     </nav>

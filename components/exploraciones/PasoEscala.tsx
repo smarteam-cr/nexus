@@ -55,7 +55,7 @@ function deDonde(p: PosicionEnElMapa): string {
 
 function Leyenda() {
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-fg-muted">
+    <div data-recorrido="preventa.escala.leyenda" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-fg-muted">
       <span className="inline-flex items-center gap-1.5">
         <span className="h-3 w-5 rounded-sm bg-fg-muted" aria-hidden="true" /> Lleno: con evidencia (lo dijo el cliente o se vio)
       </span>
@@ -82,7 +82,7 @@ function ListaDeDimensiones({ area, onElegir }: { area: AreaDelLienzo; onElegir:
   const { mapa, exp, pendientesPara } = useLienzo();
   const sugeridas = new Set(pendientesPara((x) => x.tipo === "aExplorar").map((it) => (it.destino as { dimensionId: string }).dimensionId));
   return (
-    <ul className="divide-y divide-line rounded-xl border border-line">
+    <ul data-recorrido="preventa.escala.dimensiones" className="divide-y divide-line rounded-xl border border-line">
       {area.dimensiones.map((d) => {
         const p = d.aplica ? mapa.posiciones[d.id] : undefined;
         return (
@@ -338,7 +338,7 @@ function AreaDelMapa({ area }: { area: AreaDelLienzo }) {
   const abierta = elegida ? area.dimensiones.find((d) => d.id === elegida) : null;
 
   return (
-    <section className="space-y-4 rounded-xl border border-line bg-surface p-4">
+    <section data-recorrido="preventa.escala.mapa" className="space-y-4 rounded-xl border border-line bg-surface p-4">
       <header className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-base font-semibold text-fg">
@@ -436,7 +436,9 @@ export default function PasoEscala() {
             />
           )}
           <AreaDelMapa key={area.id} area={area} />
+          <div data-recorrido="preventa.escala.primero">
           <QueVaPrimero />
+          </div>
           <PanelDelAgente modoPrincipal="leer" compacto />
         </>
       )}

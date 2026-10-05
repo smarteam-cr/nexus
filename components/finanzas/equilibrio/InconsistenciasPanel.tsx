@@ -131,7 +131,7 @@ export default function InconsistenciasPanel({
 
   if (inconsistencias.length === 0) {
     return (
-      <div className="rounded-xl border border-line bg-surface overflow-hidden">
+      <div data-recorrido="fin.equilibrio.inconsistencias" className="rounded-xl border border-line bg-surface overflow-hidden">
         <div className="px-4 py-2.5 bg-surface-muted border-b border-line">
           <h3 className="text-sm font-medium text-fg">Qué falta para cerrar el año</h3>
         </div>
@@ -146,7 +146,7 @@ export default function InconsistenciasPanel({
   const cuenta = (q: QuienResuelve) => inconsistencias.filter((x) => x.resuelve === q).length;
 
   return (
-    <div className="rounded-xl border border-line bg-surface overflow-hidden">
+    <div data-recorrido="fin.equilibrio.inconsistencias" className="rounded-xl border border-line bg-surface overflow-hidden">
       <div className="px-4 py-3 bg-surface-muted border-b border-line">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0">

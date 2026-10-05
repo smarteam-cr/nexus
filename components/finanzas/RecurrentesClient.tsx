@@ -68,12 +68,12 @@ export default function RecurrentesClient({
 
   return (
     <div className="space-y-5">
-      <PageHeader
+      <PageHeader recorrido="finanzas-recurrentes"
         title="Recurrentes"
         description="Lo que se paga todos los meses: herramientas y fijos de operación. Se cargan solos en Gastos del mes; acá se dan de alta, se cambian y se dan de baja."
         action={
           puedeEditar ? (
-            <Button variant="primary" onClick={() => setForm({ costo: null })}>
+            <Button data-recorrido="fin.recurrentes.agregar" variant="primary" onClick={() => setForm({ costo: null })}>
               Agregar costo
             </Button>
           ) : undefined
@@ -94,7 +94,7 @@ export default function RecurrentesClient({
           ),
         );
         return (
-          <section key={categoria} aria-label={ETIQUETA_CATEGORIA[categoria]} className="rounded-xl border border-line bg-surface">
+          <section data-recorrido="fin.recurrentes.categoria" key={categoria} aria-label={ETIQUETA_CATEGORIA[categoria]} className="rounded-xl border border-line bg-surface">
             <div className="flex flex-wrap items-baseline gap-2.5 border-b border-line px-4 py-3.5">
               <h2 className="text-[15px] font-semibold text-fg">{ETIQUETA_CATEGORIA[categoria]}</h2>
               <span className="text-xs text-fg-muted">{de.length === 1 ? "1 costo" : `${de.length} costos`}</span>
@@ -107,7 +107,7 @@ export default function RecurrentesClient({
                 <table className="w-full min-w-[640px] border-collapse text-[13px]">
                   <tbody>
                     {de.map((c) => (
-                      <tr key={c.id} className="border-b border-line last:border-0">
+                      <tr data-recorrido="fin.recurrentes.fila" key={c.id} className="border-b border-line last:border-0">
                         <td className="px-4 py-2.5">
                           <span className={`font-semibold ${c.activo ? "text-fg" : "text-fg-muted"}`}>{c.nombre}</span>
                           {!c.activo && <span className="ml-2 text-xs text-warn-ink">● En pausa</span>}
@@ -160,7 +160,7 @@ export default function RecurrentesClient({
       )}
 
       {bajas.length > 0 && (
-        <section aria-label="Dados de baja" className="rounded-xl border border-line bg-surface">
+        <section data-recorrido="fin.recurrentes.bajas" aria-label="Dados de baja" className="rounded-xl border border-line bg-surface">
           <button
             type="button"
             onClick={() => setVerBajas((v) => !v)}

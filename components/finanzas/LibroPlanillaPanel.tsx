@@ -107,18 +107,18 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeader recorrido="finanzas-planilla-historial"
         title="Historial de planilla"
         description="Lo que se pagó de verdad, quincena por quincena. Lo que cuesta por mes con la configuración de hoy está en Planillas."
         backHref="/finanzas/costos/planillas"
         action={
-          <Button onClick={generar} disabled={generando}>
+          <Button data-recorrido="fin.historial.generar" onClick={generar} disabled={generando}>
             {generando ? "Generando…" : `Generar ${etiquetaMes(periodoHoy)} · Q${quincenaHoy}`}
           </Button>
         }
       />
 
-      <div className="rounded-lg border border-line bg-surface-muted px-3 py-2">
+      <div data-recorrido="fin.historial.cobertura" className="rounded-lg border border-line bg-surface-muted px-3 py-2">
         <p className="text-[11px] text-fg-muted">
           Cobertura del libro: <span className="text-fg-secondary">{libro.cobertura.texto}</span>
           {pendientes.length > 0 && (
@@ -144,7 +144,7 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
                 if (delQ.length === 0) return null;
                 const t = totalesPorMoneda(delQ);
                 return (
-                  <div key={q} className="rounded-xl border border-line bg-surface overflow-hidden">
+                  <div data-recorrido="fin.historial.quincena" key={q} className="rounded-xl border border-line bg-surface overflow-hidden">
                     <div className="flex items-baseline gap-2 flex-wrap px-3 py-2 bg-surface-muted border-b border-line">
                       <p className="text-[11px] font-medium text-fg-secondary">
                         {q === 1 ? "Q1 · del 1 al 15" : "Q2 · del 16 al fin de mes"}
@@ -268,7 +268,7 @@ function FilaPago({
         </span>
 
         {!pagado && (
-          <Button variant="secondary" size="sm" onClick={onPagar} className="flex-shrink-0">
+          <Button data-recorrido="fin.historial.pagar" variant="secondary" size="sm" onClick={onPagar} className="flex-shrink-0">
             Registrar pago
           </Button>
         )}

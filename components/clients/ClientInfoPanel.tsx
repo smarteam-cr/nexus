@@ -22,6 +22,7 @@ import FichaDelCliente from "./FichaDelCliente";
 import LicenciasDelCliente from "./LicenciasDelCliente";
 import { LogoUploader } from "@/components/ui/LogoUploader";
 import { ScaleSlider } from "@/components/ui/ScaleSlider";
+import { usePantallaDelRecorrido } from "@/components/recorridos/contexto";
 import {
   LOGO_SCALE_DEFAULT, LOGO_SCALE_MAX, LOGO_SCALE_MIN, LOGO_SCALE_STEP,
   logoHeightCalc, logoScaleStyle, resolveLogoScale,
@@ -51,6 +52,8 @@ export default function ClientInfoPanel({
   const params = useParams();
   const clientId = (params?.id as string) ?? "";
   const [tab, setTab] = useState<SubTab>("ficha");
+  // Mientras está abierta, el botón «Recorrido» de la cabecera ofrece el de esta pantalla.
+  usePantallaDelRecorrido("ficha-informacion");
 
   return (
     <div className="px-6 py-4 space-y-4">

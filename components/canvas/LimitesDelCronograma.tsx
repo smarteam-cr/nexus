@@ -164,7 +164,7 @@ export default function LimitesDelCronograma({ projectId, limites, ancla, fases,
   };
 
   return (
-    <section aria-label="Lo acordado con el cliente" className="space-y-2 rounded-xl border border-line bg-surface px-4 py-3">
+    <section data-recorrido="cronograma.limites" aria-label="Lo acordado con el cliente" className="space-y-2 rounded-xl border border-line bg-surface px-4 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-fg">Lo acordado con el cliente</h2>
         {aviso && !aviso.seSale && <span className="text-xs text-success-ink">{aviso.titulo}</span>}

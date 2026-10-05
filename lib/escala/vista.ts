@@ -360,11 +360,13 @@ export function partirPorPalabras(texto: string, palabras: TerminoSubrayado[]): 
 // ── El estado de la pantalla en la URL ───────────────────────────────────────
 
 export type Vista = "matriz" | "dimension" | "mapa";
-export const VISTAS: readonly Vista[] = ["matriz", "dimension", "mapa"];
+/** En el orden en que se ofrecen; la primera es la de entrada (el mapa, desde el 2026-10-04). */
+export const VISTAS: readonly Vista[] = ["mapa", "matriz", "dimension"];
+export const VISTA_DE_ENTRADA: Vista = "mapa";
 
-/** Una vista que ya no existe (`?vista=guia`, de un enlace viejo) abre la matriz. */
+/** Sin `?vista`, o con una que ya no existe (`?vista=guia`, de un enlace viejo), abre el mapa. */
 export function vistaDesdeUrl(v: string | null | undefined): Vista {
-  return (VISTAS as readonly string[]).includes(v ?? "") ? (v as Vista) : "matriz";
+  return (VISTAS as readonly string[]).includes(v ?? "") ? (v as Vista) : VISTA_DE_ENTRADA;
 }
 
 export interface EstadoEnLaUrl {
@@ -390,7 +392,7 @@ export interface EstadoEnLaUrl {
 export function consultaDeLaEscala(e: EstadoEnLaUrl): string {
   const p = new URLSearchParams();
   if (e.industria) p.set("industria", e.industria);
-  if (e.vista !== "matriz") p.set("vista", e.vista);
+  if (e.vista !== VISTA_DE_ENTRADA) p.set("vista", e.vista);
   const u = perfilParaUrl(e.perfil);
   if (u.cierre) p.set("cierre", u.cierre);
   if (u.despues) p.set("despues", u.despues);

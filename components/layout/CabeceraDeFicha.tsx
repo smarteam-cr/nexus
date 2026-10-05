@@ -9,18 +9,22 @@
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BotonRecorrido } from "@/components/recorridos/BotonRecorrido";
 
 export function CabeceraDeFicha({
   volver,
   titulo,
   chips,
   acciones,
+  recorrido,
 }: {
   volver: { href: string; etiqueta: string };
   titulo: string;
   /** Lo que va al lado del nombre: la categoría, la empresa de HubSpot, el chip HS. */
   chips?: ReactNode;
   acciones?: ReactNode;
+  /** El id del recorrido guiado de la ficha (lib/recorridos/registro.ts): «Recorrido» va primero en las acciones. */
+  recorrido?: string;
 }) {
   return (
     <header className="flex h-14 flex-shrink-0 items-center justify-between gap-4 border-b border-line px-4">
@@ -37,7 +41,12 @@ export function CabeceraDeFicha({
           {chips}
         </div>
       </div>
-      {acciones && <div className="flex flex-shrink-0 items-center gap-2">{acciones}</div>}
+      {(acciones || recorrido) && (
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {recorrido && <BotonRecorrido recorrido={recorrido} variante="cabecera" />}
+          {acciones}
+        </div>
+      )}
     </header>
   );
 }

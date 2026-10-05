@@ -118,7 +118,7 @@ export default function GuiaDeExploracion({ projectId }: { projectId: string }) 
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3">
+      <header data-recorrido="exploracion.agente" className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3">
         <div>
           <h3 className="text-base font-semibold text-fg">Guía de exploración</h3>
           <p className="mt-0.5 text-xs text-fg-muted">
@@ -174,7 +174,7 @@ export default function GuiaDeExploracion({ projectId }: { projectId: string }) 
         <Personas v={v} ocupado={ocupado} cambiar={cambiar} />
       </Seccion>
 
-      <details className="rounded-2xl border border-line bg-surface-muted px-4 py-3">
+      <details data-recorrido="exploracion.fuera" className="rounded-2xl border border-line bg-surface-muted px-4 py-3">
         <summary className="cursor-pointer text-sm font-semibold text-fg-secondary">
           Fuera de lo contratado ({c.fueraDeAlcance.length + pend((i) => i.destino.tipo === "fueraDeAlcance").length})
           <span className="ml-2 text-xs font-normal text-fg-muted">no es el centro de la exploración: va al mapa de oportunidades del AM</span>
@@ -259,7 +259,7 @@ function resumen(i: ItemPropuesto, v?: VistaDeLaGuia): ReactNode {
 function Propuestas({ items, ocupado, cambiar, v }: { items: ItemPropuesto[]; ocupado: boolean; cambiar: Cambiar; v?: VistaDeLaGuia }) {
   if (items.length === 0) return null;
   return (
-    <div className="space-y-2 rounded-xl border border-dashed border-brand/40 bg-surface-muted p-3">
+    <div data-recorrido="exploracion.propuestas" className="space-y-2 rounded-xl border border-dashed border-brand/40 bg-surface-muted p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">✨ Propone el agente</p>
         {items.length > 1 && (
@@ -503,7 +503,7 @@ function Sesiones({ v, ocupado, cambiar }: { v: VistaDeLaGuia; ocupado: boolean;
       {sesiones.map((s, i) => {
         const hechas = s.preguntas.filter((q) => q.hecha).length;
         return (
-          <div key={s.id} className="space-y-2 rounded-xl border border-line p-3">
+          <div data-recorrido="exploracion.sesion" key={s.id} className="space-y-2 rounded-xl border border-line p-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="text-sm font-semibold text-fg">
                 {i + 1}. {s.titulo}

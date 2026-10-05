@@ -211,7 +211,7 @@ export default function RevisionDeLaPropuesta({
     <>
       {/* ── LO FIJO: una línea. El título, cómo recorrerla, descartar y aplicar ──
           `id`: el ancla del botón «Revisar la propuesta» del encabezado. */}
-      <div
+      <div data-recorrido="cronograma.propuesta"
         id="cronograma-propuesta"
         ref={barraRef}
         role="region"

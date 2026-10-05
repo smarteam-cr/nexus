@@ -25,7 +25,7 @@ const NOMBRE_DEL_DESPUES: Record<Despues, string> = { única: "Relación única"
 
 export function Tarjeta({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-4 rounded-xl border border-line bg-surface p-5">
+    <section data-recorrido={titulo === "Escala" ? "preventa.escala.edicion" : titulo === "Áreas en juego" ? "preventa.escala.areas" : undefined} className="space-y-4 rounded-xl border border-line bg-surface p-5">
       <div>
         <h3 className="text-sm font-semibold text-fg">{titulo}</h3>
         {ayuda && <p className="text-xs text-fg-muted">{ayuda}</p>}

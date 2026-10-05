@@ -35,6 +35,9 @@ export const Z = {
   MODAL: 70,
   /** Popovers y flyouts anclados a un trigger (menús del sidebar, centro de corridas). */
   POPOVER: 80,
+  /** El recorrido guiado: oscurece la pantalla y su globo explica una cosa a la vez. Por encima de
+   *  todo lo que señala (menús, cajones, modales) y por debajo de los avisos. */
+  TOUR: 90,
   /** Avisos efímeros: toasts. Casi lo más alto — informan por encima de todo lo demás. */
   TOAST: 100,
   /** Barra de deshacer y el prompt de notificaciones: por encima del toast a propósito

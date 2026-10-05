@@ -279,7 +279,7 @@ export default function CajaNetaPanel({
       </div>
 
       {/* ── Banner de honestidad ── */}
-      <div className="rounded-xl border border-line bg-surface-muted px-4 py-3 space-y-1">
+      <div data-recorrido="fin.caja.confiable" className="rounded-xl border border-line bg-surface-muted px-4 py-3 space-y-1">
         {cobertura && ultimoConMetricas ? (
           <p className="text-sm text-fg-secondary">
             El neto es tan confiable como el lado entra: {cobertura.cuentasConfiguradas} de{" "}
@@ -320,7 +320,7 @@ export default function CajaNetaPanel({
       ) : (
         <>
           {/* ── Tiles (neto por moneda, negativo en rojo) ── */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div data-recorrido="fin.caja.totales" className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {tiles.map((t) => (
               <div key={t.label} className="rounded-xl border border-line bg-surface px-4 py-3 text-fg">
                 <LineasNeto totales={t.totales} />
@@ -334,7 +334,7 @@ export default function CajaNetaPanel({
 
           {/* ── Entra vs sale por bucket (solo si hay movimiento que dibujar) ── */}
           {hayMovimiento && (
-            <div className="rounded-xl border border-line bg-surface overflow-hidden">
+            <div data-recorrido="fin.caja.grafico" className="rounded-xl border border-line bg-surface overflow-hidden">
               <div className="px-4 pt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h3 className="text-[13px] font-semibold text-fg">Entra vs sale por período</h3>
                 <div className="ml-auto">
@@ -350,7 +350,7 @@ export default function CajaNetaPanel({
           )}
 
           {/* ── Tabla de buckets ── */}
-          <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+          <div data-recorrido="fin.caja.tabla" className="overflow-x-auto rounded-xl border border-line bg-surface">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-surface-muted border-b border-line">
@@ -388,7 +388,7 @@ export default function CajaNetaPanel({
 
           {/* ── Vencidos en riesgo — APARTE, jamás dentro del neto ── */}
           {vencidosAparte.count > 0 && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600">
+            <div data-recorrido="fin.caja.vencido" className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600">
               <span className="font-semibold">Vencido en riesgo — NO incluido en el neto:</span>{" "}
               {fmtMonto(vencidosAparte.totales.CRC, "CRC")} · {fmtMonto(vencidosAparte.totales.USD, "USD")}{" "}
               ({vencidosAparte.count} cobro{vencidosAparte.count !== 1 ? "s" : ""}). Se gestiona en Cobros

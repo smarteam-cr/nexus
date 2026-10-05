@@ -55,7 +55,7 @@ export default function Bandeja({
   almacen = almacenDeLaApi,
   // Con la industria del comentario: un criterio propio de una edición no existe en la general.
   hrefDeLaEscala = (slug, ancla, edicion) =>
-    `/escala/${slug}?${edicion ? `industria=${encodeURIComponent(edicion)}&` : ""}c=${encodeURIComponent(ancla)}`,
+    `/escala/${slug}?${edicion ? `industria=${encodeURIComponent(edicion)}&` : ""}vista=matriz&c=${encodeURIComponent(ancla)}`,
   comoCambia = null,
 }: {
   comentarios: ComentarioVisto[];

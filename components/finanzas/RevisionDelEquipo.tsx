@@ -112,7 +112,7 @@ export default function RevisionDelEquipo({ inicial }: { inicial: DatosDeRevisio
   const esPago = tipo === "PAGO";
 
   return (
-    <section id="revision" aria-label="Trabajo del equipo por revisar" className="rounded-xl border border-line bg-surface">
+    <section data-recorrido="fin.sup.revision" id="revision" aria-label="Trabajo del equipo por revisar" className="rounded-xl border border-line bg-surface">
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 px-4 pb-2.5 pt-3.5">
         <h2 className="text-[15px] font-semibold text-fg">Trabajo del equipo por revisar</h2>
         <Segmentado

@@ -79,11 +79,11 @@ export default function ConciliacionClient({
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHeader recorrido="finanzas-conciliacion"
         title="Conciliación"
         description="Todo lo que no cuadra entre Nexus, Odoo y Mercury, en una sola lista. Se vuelve a calcular con cada copia: lo que se arregla sale solo."
         action={
-          <div className="flex flex-col items-end gap-1">
+          <div data-recorrido="fin.conciliacion.actualizar" className="flex flex-col items-end gap-1">
             <Button
               variant="secondary"
               size="sm"

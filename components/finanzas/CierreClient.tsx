@@ -77,7 +77,7 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeader recorrido="finanzas-cierre"
         title={`Cierre del mes · ${etiquetaMes(d.periodo, true)}`}
         description={
           cerrado
@@ -85,7 +85,7 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
             : `Lo que falta para cerrar ${mes}. Cuando no falte nada, lo cierras y el punto de equilibrio lo da por bueno.`
         }
         action={
-          <div className="flex flex-col items-end gap-1">
+          <div data-recorrido="fin.cierre.boton" className="flex flex-col items-end gap-1">
             {cerrado ? (
               <Button variant="secondary" onClick={() => setReabriendo(true)} disabled={ocupado !== null}>
                 Reabrir {mes}
@@ -115,7 +115,7 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
         </div>
       )}
 
-      <section aria-label={`${anio}, mes por mes`} className="space-y-2.5 rounded-xl border border-line bg-surface p-4">
+      <section data-recorrido="fin.cierre.anio" aria-label={`${anio}, mes por mes`} className="space-y-2.5 rounded-xl border border-line bg-surface p-4">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <span className="text-[15px] font-semibold text-fg">{anio}, mes por mes</span>
           <Link href={`/finanzas/cierre?mes=${Number(anio) - 1}-12`} className="text-xs font-semibold text-brand hover:text-brand-light">
@@ -155,7 +155,7 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
       </section>
 
       <div className="flex flex-wrap items-start gap-4">
-        <section aria-label={`Para cerrar ${mes}`} className="min-w-0 flex-[2_1_560px] rounded-xl border border-line bg-surface">
+        <section data-recorrido="fin.cierre.falta" aria-label={`Para cerrar ${mes}`} className="min-w-0 flex-[2_1_560px] rounded-xl border border-line bg-surface">
           <div className="flex items-baseline gap-2.5 px-4 pb-2 pt-4">
             <h2 className="text-lg font-semibold text-fg">Para cerrar {mes}</h2>
             <span className="text-xs text-fg-muted">
@@ -190,7 +190,7 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
         </section>
 
         <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-          <section
+          <section data-recorrido="fin.cierre.tc"
             id="tipo-de-cambio"
             aria-label={`Tipo de cambio de ${mes}`}
             className={`flex flex-col gap-2 rounded-xl border p-4 ${
@@ -262,7 +262,7 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
             )}
           </section>
 
-          <section aria-label="Qué sigue" className="flex flex-col gap-1.5 rounded-xl border border-info-line bg-info-surface p-4">
+          <section data-recorrido="que-sigue" aria-label="Qué sigue" className="flex flex-col gap-1.5 rounded-xl border border-info-line bg-info-surface p-4">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-info-ink">Qué sigue</span>
             <span className="text-[13px] leading-[19px] text-fg">
               {cerrado

@@ -37,7 +37,7 @@ function Arquitectura() {
   const confirmadas = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0).length;
   return (
     <Bloque titulo="Arquitectura de la venta" accion={<span className="text-[11px] text-fg-muted">{confirmadas} de 8</span>}>
-      <div className="grid grid-cols-4 gap-1.5">
+      <div data-recorrido="preventa.panel.marco" className="grid grid-cols-4 gap-1.5">
         {CASILLAS_DEL_RESUMEN.map((clave) => {
           const lleno = lineasDe(clave, exp.estado.contenido.casillas[clave]).length > 0;
           const propuestas = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave).length;
@@ -93,9 +93,9 @@ function LaEscala() {
       }
     >
       {areas.length === 0 ? (
-        <p className="text-xs text-fg-muted">Elige las áreas en juego en «La escala».</p>
+        <p data-recorrido="preventa.panel.escala" className="text-xs text-fg-muted">Elige las áreas en juego en «La escala».</p>
       ) : (
-        <ul className="space-y-1.5 rounded-xl border border-line bg-surface px-3 py-2.5">
+        <ul data-recorrido="preventa.panel.escala" className="space-y-1.5 rounded-xl border border-line bg-surface px-3 py-2.5">
           {areas.map((a) => {
             const hipotesis = a.dimensiones.some((d) => d.aplica && mapa.posiciones[d.id]?.clase === "hipotesis");
             return (
@@ -172,7 +172,7 @@ export default function PanelDeContexto({
   const { irA, revisables, abrirRevision } = useLienzo();
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-3.5">
+      <section data-recorrido="que-sigue" className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-3.5">
         <h2 className="text-2xs font-semibold uppercase tracking-[0.08em] text-brand">Qué sigue</h2>
         <p className="text-sm leading-[1.4] text-fg">{sigue.texto}</p>
         {sigue.paso ? (

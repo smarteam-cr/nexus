@@ -188,11 +188,11 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO, apiBa
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeader recorrido="finanzas-tarjetas"
         title="Tarjetas de crédito"
         description="Las tarjetas de la empresa y cuánto queda disponible en cada una."
         action={
-          <Button
+          <Button data-recorrido="fin.tarjetas.agregar"
             onClick={() => {
               setEditandoId(null);
               setForm(VACIO);
@@ -395,7 +395,7 @@ function TarjetaCard({
   const enSuMoneda = t.costos.filter((c) => c.moneda === t.moneda);
   const enOtraMoneda = t.costos.filter((c) => c.moneda !== t.moneda);
   return (
-    <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
+    <div data-recorrido="fin.tarjetas.tarjeta" className="rounded-xl border border-line bg-surface p-4 space-y-3">
       <div className="flex items-start gap-2 flex-wrap">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -433,7 +433,7 @@ function TarjetaCard({
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-          <Button variant="secondary" size="sm" onClick={onSaldo}>
+          <Button data-recorrido="fin.tarjetas.saldo" variant="secondary" size="sm" onClick={onSaldo}>
             Registrar saldo
           </Button>
           <Button variant="secondary" size="sm" onClick={onAsignar}>
@@ -448,7 +448,7 @@ function TarjetaCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div data-recorrido="fin.tarjetas.numeros" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Dato
           titulo="Disponible"
           valor={t.disponible != null ? fmtMonto(t.disponible, moneda) : "—"}

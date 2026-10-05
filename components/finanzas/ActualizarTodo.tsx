@@ -15,7 +15,7 @@ export default function ActualizarTodo() {
   const toast = useToast();
   const [actualizando, setActualizando] = useState(false);
   return (
-    <Button
+    <Button data-recorrido="fin.integraciones.actualizar"
       variant="secondary"
       size="sm"
       disabled={actualizando}

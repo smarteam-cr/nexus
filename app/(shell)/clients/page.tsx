@@ -73,7 +73,7 @@ export default async function ClientsPage() {
 
   return (
     <div className={SHELL_DEFAULT}>
-      <PageHeader
+      <PageHeader recorrido="clientes-listado"
         title="Clientes"
         description={
           empresaCount === 0

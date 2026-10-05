@@ -47,7 +47,7 @@ interface DatosDePreparacion {
 /** El encabezado de una columna: el nombre chico arriba y qué responde. */
 function Columna({ nombre, pregunta, children }: { nombre: string; pregunta: string; children: React.ReactNode }) {
   return (
-    <div className="min-w-0 space-y-4">
+    <div data-recorrido={nombre === "Conexión" ? "preventa.preparacion.conexion" : undefined} className="min-w-0 space-y-4">
       <div className="border-b border-line pb-2">
         <p className="text-2xs font-semibold uppercase tracking-widest text-brand">{nombre}</p>
         <p className="text-sm text-fg-secondary">{pregunta}</p>
@@ -60,7 +60,7 @@ function Columna({ nombre, pregunta, children }: { nombre: string; pregunta: str
 /** Una tarjeta de la pieza: título, una línea de ayuda y su contenido. */
 function Bloque({ titulo, ayuda, children, className }: { titulo: string; ayuda?: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className={cn("space-y-4 rounded-xl border border-line bg-surface p-5", className)}>
+    <section data-recorrido={titulo === "Contacto" ? "preventa.preparacion.contacto" : undefined} className={cn("space-y-4 rounded-xl border border-line bg-surface p-5", className)}>
       <div>
         <h3 className="text-sm font-semibold text-fg">{titulo}</h3>
         {ayuda && <p className="text-xs text-fg-muted">{ayuda}</p>}
@@ -105,7 +105,7 @@ function BarraDelAgente() {
     void lanzar("preparar");
   }, [puedeEditar, preparadaConRadiografia, corriendo, exp.estado.archivada, exp.id, lanzar]);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info-line bg-info-surface px-5 py-4">
+    <div data-recorrido="preventa.preparacion.agente" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info-line bg-info-surface px-5 py-4">
       <div className="min-w-0 space-y-0.5">
         <p className="text-sm font-semibold text-fg">{trabajando ? "El agente está preparando" : ultima ? "Preparada por el agente" : "Prepara la preventa con el agente"}</p>
         <p className="text-xs text-fg-secondary" role={trabajando ? "status" : undefined}>

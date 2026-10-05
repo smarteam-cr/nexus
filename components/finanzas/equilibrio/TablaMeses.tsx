@@ -89,7 +89,7 @@ export default function TablaMeses({ meses, cierres = [], moneda, hayEscenario, 
     setGeneracion((g) => g + 1);
   };
   return (
-    <div className="rounded-xl border border-line bg-surface overflow-hidden">
+    <div data-recorrido="fin.equilibrio.tabla" className="rounded-xl border border-line bg-surface overflow-hidden">
       <div className="px-4 py-2.5 bg-surface-muted border-b border-line flex flex-wrap items-center gap-2">
         <div>
           <h3 className="text-sm font-medium text-fg">Ingresos facturados · escenario editable</h3>

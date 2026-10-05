@@ -38,12 +38,12 @@ export default async function SupervisionPage() {
 
   return (
     <div className={`${SHELL_DEFAULT} space-y-5`}>
-      <PageHeader
+      <PageHeader recorrido="finanzas-supervision"
         title="Supervisión"
         description="Lo que espera tu decisión, el trabajo del equipo por revisar y la cobranza que se está complicando."
       />
 
-      <section aria-label="Resumen" className="grid gap-3 sm:grid-cols-3">
+      <section data-recorrido="fin.sup.resumen" aria-label="Resumen" className="grid gap-3 sm:grid-cols-3">
         <a
           href="#decisiones"
           className={`flex flex-col gap-1 rounded-xl border p-4 ${
@@ -79,7 +79,7 @@ export default async function SupervisionPage() {
 
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[2_1_600px] flex-col gap-5">
-          <section id="decisiones" aria-label="Necesitan tu decisión" className="rounded-xl border border-line bg-surface">
+          <section data-recorrido="fin.sup.decisiones" id="decisiones" aria-label="Necesitan tu decisión" className="rounded-xl border border-line bg-surface">
             <div className="flex flex-wrap items-baseline gap-x-2.5 px-4 pb-2.5 pt-3.5">
               <h2 className="text-[15px] font-semibold text-fg">Necesitan tu decisión</h2>
               <span className="text-xs text-fg-muted">El equipo no las puede cerrar: son preguntas de negocio</span>
@@ -122,7 +122,7 @@ export default async function SupervisionPage() {
         </div>
 
         <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-          <section aria-label="Cobranza que se complica" className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface-muted p-4">
+          <section data-recorrido="fin.sup.cobranza" aria-label="Cobranza que se complica" className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface-muted p-4">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Cobranza que se complica</span>
             <div className={RENGLON}>
               <span className="text-fg-secondary">Vencido hace más de 90 días</span>

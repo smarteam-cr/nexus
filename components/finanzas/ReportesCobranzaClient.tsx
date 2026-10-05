@@ -61,10 +61,11 @@ export default function ReportesCobranzaClient({
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHeader recorrido="finanzas-reportes"
         title="Reportes de cobranza"
         description="Lo que va a entrar en las próximas quincenas, cómo se mueve lo vencido y el corte de cada quincena."
       />
+      <div data-recorrido="fin.reportes.pestanas">
       <Tabs
         aria-label="Reportes de cobranza"
         variant="underline"
@@ -76,6 +77,7 @@ export default function ReportesCobranzaClient({
           { key: "corte", label: "Corte quincenal", title: "La foto de cada quincena: qué apareció y qué se resolvió." },
         ]}
       />
+      </div>
       {tab === "proyeccion" && <ProyeccionPanel proyeccion={proyeccion} onRefresh={refreshProyeccion} />}
       {tab === "reportes" && <ReportesPanel series={series} riesgo={riesgo} role={role} cola={cola} todayISO={todayISO} />}
       {tab === "corte" && <DigestPanel initialSnapshot={initialSnapshot} onDigestDone={refreshReportes} todayISO={todayISO} />}

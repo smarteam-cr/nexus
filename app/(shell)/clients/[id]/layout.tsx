@@ -128,6 +128,9 @@ export default async function ClientLayout({
       <CabeceraDeFicha
         volver={{ href: "/clients", etiqueta: "Clientes" }}
         titulo={client.name}
+        /* El recorrido explica el espacio de proyectos (riel, etapa, resumen): un prospecto o un
+           aliado no lo tienen, así que ahí no se ofrece. */
+        recorrido={enProyectos ? "ficha-cliente" : undefined}
         chips={
           <>
             {/* La CATEGORÍA, cuando no es la de siempre. Un chip «Cliente» en las 155 fichas

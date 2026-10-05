@@ -31,7 +31,7 @@ import {
 } from "@/lib/escala/documento/perfil";
 import { LETRAS, type Letra, type PreguntaDelPerfil } from "@/lib/escala/documento/tipos";
 import type { Autor, ConteosPorClave } from "@/lib/escala/comentarios/reglas";
-import { consultaDeLaEscala, definicionDeOpcion, notaDelCierre, type DatosDeLaVista, type Vista } from "@/lib/escala/vista";
+import { consultaDeLaEscala, definicionDeOpcion, notaDelCierre, VISTAS, type DatosDeLaVista, type Vista } from "@/lib/escala/vista";
 import { activasQueExisten } from "@/lib/escala/herramientas/vista";
 import { almacenDeLaApi, type AlmacenDeLaEscala } from "./comentarios/almacen";
 import PanelDeComentarios from "./comentarios/PanelDeComentarios";
@@ -40,6 +40,7 @@ import Escalera from "./Escalera";
 import { FiltroDeHerramientas, ProveedorDeHerramientas, ResumenDeHerramientas } from "./herramientas";
 import Leyenda from "./Leyenda";
 import Mapa, { type SeleccionDelMapa } from "./Mapa";
+import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 import Matriz from "./Matriz";
 import { BOTON_CLARO, CHIP_DE_CABECERA, GrupoDeControl, IconoChevron, IconoComentario, ParrafoDeLaEscala, Segmentado } from "./piezas";
 
@@ -227,6 +228,16 @@ export default function VistaDeLaEscala({
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
   }, [vista, perfil, industria, dimension, seleccion, ancla, herramientas]);
 
+  // El recorrido guiado de la escala arranca en el mapa (lib/recorridos/contenido/escala.ts).
+  useEffect(() => {
+    const alPedido = (e: Event) => {
+      const a = (e as CustomEvent<AccionDelRecorrido>).detail;
+      if (a?.evento === "escala.vista" && a.valor && (VISTAS as readonly string[]).includes(a.valor)) setVista(a.valor as Vista);
+    };
+    window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+    return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+  }, []);
+
   const prendidas = useMemo(() => ({ activas: herramientas, mapa: datos.herramientas }), [herramientas, datos.herramientas]);
 
   const abrirComentarios = useCallback((a: string) => setAncla(a), []);
@@ -303,14 +314,16 @@ export default function VistaDeLaEscala({
     <ProveedorDeLaEscala value={contexto}>
       <ProveedorDeHerramientas value={prendidas}>
       <div className="space-y-6">
-        <PageHeader
+        <PageHeader recorrido="escala"
           title="Escala de Rendimiento"
           badges={chipsDeLaVersion}
           description="Recórrela por área, dimensión y nivel. Si algo no se entiende o no calza con un cliente real, coméntalo ahí mismo."
           action={
             <div className="flex flex-wrap items-center gap-2">
+              <div data-recorrido="escala.leyenda">
               <Leyenda datos={datos} />
-              <Link href={hrefDeLaBandeja} className={BOTON_CLARO}>
+              </div>
+              <Link data-recorrido="escala.comentarios" href={hrefDeLaBandeja} className={BOTON_CLARO}>
                 <IconoComentario />
                 Comentarios
                 {abiertosEnTotal > 0 && (
@@ -391,34 +404,39 @@ export default function VistaDeLaEscala({
           <Alert variant="info">Los comentarios todavía no están disponibles: falta aplicar el SQL de la escala. Se puede leer igual.</Alert>
         )}
 
+        <div data-recorrido="escala.areas">
         <Tabs
           aria-label="Áreas de la escala"
           value={area.slug}
           onChange={irAlArea}
           items={datos.areas.map((a) => ({ key: a.slug, label: a.nombre, count: porArea[a.id]?.total || undefined }))}
         />
+        </div>
 
         {/* Los filtros, sin tarjeta: cada uno con su rótulo arriba (sistema «Nexus · interfaz interna»). */}
         <section aria-label="Filtros" className="space-y-3">
           <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+            <div data-recorrido="escala.vista">
             <GrupoDeControl
               nombre="Vista"
-              ayuda="Tres formas de recorrer el área que elegiste arriba: la matriz para comparar, una dimensión como escalera para leerla entera y el mapa para ver dónde se concentran los comentarios, los hábitos o los riesgos."
+              ayuda="Tres formas de recorrer el área que elegiste arriba: el mapa para ver dónde se concentran los criterios, los hábitos, los riesgos o los comentarios, la matriz para comparar y una dimensión como escalera para leerla entera."
             >
               <Segmentado<Vista>
                 etiqueta="Vista"
                 valor={vista}
                 onCambio={setVista}
                 opciones={[
+                  { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos, riesgos o comentarios." },
                   { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
                   { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
-                  { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos, riesgos o comentarios." },
                 ]}
               />
             </GrupoDeControl>
+            </div>
 
             {/* Cinco opciones no caben en un segmentado (sirve para dos a cuatro): la industria va en una lista. */}
             {datos.ediciones.length > 0 && (
+              <div data-recorrido="escala.industria">
               <GrupoDeControl
                 nombre="Industria"
                 ayuda={`${datos.edicionesIntro ?? "Cada edición dice la misma escala con las palabras de una industria."} «General» es la escala como está escrita, sin las palabras de ninguna industria. Al elegir una, quedan marcados los criterios que son solo de esa edición y los que dice con sus palabras.${datos.ediciones.some((e) => e.perfilHabitual) ? " Si la edición tiene un perfil habitual, queda elegido." : ""}`}
@@ -442,8 +460,10 @@ export default function VistaDeLaEscala({
                   ))}
                 </Select>
               </GrupoDeControl>
+              </div>
             )}
 
+            <div data-recorrido="escala.perfil">
             <GrupoDeControl
               nombre={datos.perfilDeNegocio.cierre?.pregunta ?? "Cómo se cierra la venta"}
               ayuda={`${datos.perfilDeNegocio.introduccion ?? "El perfil de negocio decide qué criterios aplican."} Elegir un perfil esconde los criterios que no le aplican, con la misma regla de la escala; «Sin filtrar» los muestra todos, cada uno con su marca.`}
@@ -462,6 +482,7 @@ export default function VistaDeLaEscala({
                 ]}
               />
             </GrupoDeControl>
+            </div>
 
             <GrupoDeControl nombre={datos.perfilDeNegocio.despues?.pregunta ?? "Qué pasa después de la venta"}>
               <Segmentado<"todas" | Despues>

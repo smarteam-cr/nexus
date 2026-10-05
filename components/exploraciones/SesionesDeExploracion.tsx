@@ -256,7 +256,7 @@ function AntesDeLaSesion({ pestana, esLaProxima, sesiones, guardar }: { pestana:
         </section>
       )}
 
-      <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div data-recorrido="preventa.sesion.preguntas" className="grid items-start gap-5 xl:grid-cols-2">
         <Columna
           titulo="Arquitectura de la venta"
           detalle={faltan > 0 ? `faltan ${faltan} de 8` : "completa"}
@@ -460,7 +460,7 @@ function DespuesDeLaSesion({
   const marcados = new Set(exp.estado.contenido.sesiones.flatMap((s) => s.explorar ?? [])).size;
   return (
     <div className="space-y-5">
-      <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div data-recorrido="preventa.sesion.salio" className="grid items-start gap-5 xl:grid-cols-2">
         <LoQueSalio />
         <NadieExploro numeroSiguiente={numeroSiguiente} llevar={(texto, item) => armarLaSiguiente({ texto, item })} soltar={soltar} />
       </div>
@@ -490,7 +490,7 @@ function DespuesDeLaSesion({
       </details>
 
       {puedeEditar && (
-        <div className="sticky bottom-0 z-10 -mx-6 -mb-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line bg-surface px-6 py-3.5 xl:-mx-8 xl:px-8">
+        <div data-recorrido="preventa.sesion.siguiente" className="sticky bottom-0 z-10 -mx-6 -mb-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line bg-surface px-6 py-3.5 xl:-mx-8 xl:px-8">
           <p className="min-w-0 flex-1 text-[13.5px] text-fg-secondary">
             {siguientePaso?.que ? (
               <>
@@ -613,7 +613,7 @@ function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pe
   }
 
   return (
-    <header className="space-y-3">
+    <header data-recorrido="preventa.sesion.cabecera" className="space-y-3">
       {/* En pantallas chicas la barra de la izquierda no lista las sesiones: se eligen acá. */}
       <Select className="w-full lg:hidden" aria-label="Elegir la sesión" value={pestana.clave} onChange={(ev) => seleccion.elegir(ev.target.value)}>
         {todas.map((p) => (
@@ -638,7 +638,9 @@ function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pe
           </p>
         </div>
         <span className="flex-1" />
+        <div data-recorrido="preventa.sesion.momento">
         <AntesDespues valor={momento} onCambiar={alMomento} />
+        </div>
         {momento === "antes" && esLaProxima && puedeEditar && (
           <BotonClaro disabled={lanzando || corriendo} onClick={() => void lanzar("guia")} title={guia ? (vieja ? "La guía es de antes de lo último que se supo" : `Guía armada el ${diaYHora(guia.en)}`) : "Todavía es la guía de base"}>
             {lanzando ? "Armando…" : guia ? "Rearmar la guía" : "Armar la guía"}

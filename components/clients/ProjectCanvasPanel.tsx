@@ -40,6 +40,7 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
 import { readCanvasCache } from "@/lib/clients/canvas-cache";
 import { AplicadorDeDocumentoProvider } from "@/components/asistente/aplicador-de-documento";
+import { usePantallaDelRecorrido } from "@/components/recorridos/contexto";
 
 /**
  * Canvases que tienen su PROPIO renderer más abajo (motor de landing, Gantt o vista lineal).
@@ -372,6 +373,10 @@ export default function ProjectCanvasPanel({
     setEnResumen(false);
     setActiveCanvasId(vista.canvasId);
   }, [canvasFromUrl, listLoaded, cronogramaOcupado, urlDeOtroProyecto]);
+
+  // El recorrido de la pieza abierta (el cronograma o la exploración): el botón «Recorrido» de la
+  // cabecera ofrece ese en vez del de la ficha. Va antes del retorno temprano: es un hook.
+  usePantallaDelRecorrido(activeSlug === "timeline" ? "ficha-cronograma" : activeSlug === "exploration" ? "ficha-exploracion" : null);
 
   // La MISMA pieza que pinta app/(shell)/clients/[id]/loading.tsx: el RSC y este gate
   // client-side se ven uno tras otro, así que tienen que hablar el mismo vocabulario.

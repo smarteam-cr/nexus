@@ -30,7 +30,7 @@ export default function FinanzasCajaNetaClient({
 
   return (
     <div>
-      <PageHeader
+      <PageHeader recorrido="finanzas-caja-neta"
         title="Caja neta"
         description="Entra menos sale por bucket — ingresos proyectados de la cartera menos costos fijos estimados."
       />

@@ -25,6 +25,8 @@ import {
   relacionadosCon,
   requeridosDelArea,
   terminosParaSubrayar,
+  VISTAS,
+  vistaDesdeUrl,
 } from "./vista";
 
 const mini = parsearEscala(MINI_ESCALA);
@@ -278,16 +280,24 @@ describe("consultaDeLaEscala: lo que se mira, en la URL", () => {
   const sinPerfil = { cierre: null, despues: null };
 
   it("lo de siempre no va; la industria va primero y nunca se pierde", () => {
-    expect(consultaDeLaEscala({ vista: "matriz", perfil: sinPerfil, industria: null })).toBe("");
-    expect(consultaDeLaEscala({ vista: "matriz", perfil: sinPerfil, industria: "ecommerce-retail" })).toBe("?industria=ecommerce-retail");
+    expect(consultaDeLaEscala({ vista: "mapa", perfil: sinPerfil, industria: null })).toBe("");
+    expect(consultaDeLaEscala({ vista: "mapa", perfil: sinPerfil, industria: "ecommerce-retail" })).toBe("?industria=ecommerce-retail");
     expect(consultaDeLaEscala({ vista: "mapa", perfil: { cierre: "transaccional", despues: "recompra" }, industria: "ecommerce-retail", celda: "1.7.F", ancla: "1.7.F1" })).toBe(
-      "?industria=ecommerce-retail&vista=mapa&cierre=transaccional&despues=recompra&celda=1.7.F&c=1.7.F1",
+      "?industria=ecommerce-retail&cierre=transaccional&despues=recompra&celda=1.7.F&c=1.7.F1",
     );
+    expect(consultaDeLaEscala({ vista: "matriz", perfil: sinPerfil, industria: null })).toBe("?vista=matriz");
+  });
+
+  it("el mapa es la vista de entrada: sin `?vista`, o con una que ya no existe, abre el mapa", () => {
+    expect(VISTAS[0]).toBe("mapa");
+    expect(vistaDesdeUrl(null)).toBe("mapa");
+    expect(vistaDesdeUrl("guia")).toBe("mapa");
+    expect(vistaDesdeUrl("matriz")).toBe("matriz");
   });
 
   it("la dimensión solo viaja en «Por dimensión» y la celda solo en el mapa", () => {
     expect(consultaDeLaEscala({ vista: "dimension", perfil: sinPerfil, industria: null, dimension: "1.7", celda: "1.7.F" })).toBe("?vista=dimension&dim=1.7");
-    expect(consultaDeLaEscala({ vista: "matriz", perfil: sinPerfil, industria: null, dimension: "1.7", celda: "1.7.F" })).toBe("");
+    expect(consultaDeLaEscala({ vista: "matriz", perfil: sinPerfil, industria: null, dimension: "1.7", celda: "1.7.F" })).toBe("?vista=matriz");
   });
 
   it("con las ediciones del archivo real: cada dimensión sigue teniendo su lugar en el orden de su capa", () => {

@@ -82,7 +82,7 @@ export default function RendimientoCobranza({
   if (filas.length === 0) return null;
 
   return (
-    <section aria-labelledby="rendimiento-cobranza" className="rounded-xl border border-line bg-surface overflow-hidden">
+    <section data-recorrido="fin.equilibrio.cobranza" aria-labelledby="rendimiento-cobranza" className="rounded-xl border border-line bg-surface overflow-hidden">
       <div className="px-4 py-2.5 bg-surface-muted border-b border-line">
         <h3 id="rendimiento-cobranza" className="text-sm font-medium text-fg">
           Rendimiento de cobranza {anio}

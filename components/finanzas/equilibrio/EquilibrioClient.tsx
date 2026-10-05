@@ -334,7 +334,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
 
   return (
     <>
-      <PageHeader
+      <PageHeader recorrido="finanzas-equilibrio"
         title="Punto de equilibrio"
         description={`La curva mensual de la operación en ${r.anio}: qué entra, qué sale y cuánto hay que facturar para no perder plata.`}
         action={
@@ -407,7 +407,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
               tags de la leyenda —enfocan, sacan del reporte, devuelven—; los que no, son
               texto: un tile que parece clickeable y no hace nada es peor que uno que no
               lo parece. */}
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
+          <div data-recorrido="fin.equilibrio.indicadores" className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
             {TILES.map((t) => {
               // El indicador enfocado se marca de verdad: número más pesado, borde de
               // acento y una barra de color arriba con el trazo de SU serie. Un ring
@@ -490,7 +490,7 @@ export default function EquilibrioClient({ initialReporte }: { initialReporte: R
             })}
           </div>
 
-          <div className="rounded-xl border border-line bg-surface overflow-hidden">
+          <div data-recorrido="fin.equilibrio.curva" className="rounded-xl border border-line bg-surface overflow-hidden">
             <div className="px-4 py-2.5 bg-surface-muted border-b border-line flex flex-wrap items-center gap-2">
               <div>
                 <h3 className="text-sm font-medium text-fg">La curva mensual de la operación</h3>

@@ -46,6 +46,7 @@ import PasoPropuesta from "./PasoPropuesta";
 import Resumen, { lineasDe } from "./Resumen";
 import RevisarSugerencias from "./RevisarSugerencias";
 import RielDePiezas, { type FilaDelRiel } from "./RielDePiezas";
+import { usePantallaDelRecorrido } from "@/components/recorridos/contexto";
 
 /** Qué es cada pieza, en una línea, debajo de su nombre. Exploración lleva su propio encabezado (la sesión). */
 const DE_QUE_VA: Record<Exclude<PasoDelLienzoUI, "exploracion">, string> = {
@@ -295,6 +296,11 @@ export default function LienzoDeExploracion({
       ponerMomento: (clave, m) => setMomentos((x) => ({ ...x, [clave]: m })),
     },
   };
+
+  // El recorrido de la pieza abierta: el botón «Recorrido» de la cabecera ofrece ese. El del Resumen es el de la cabecera.
+  usePantallaDelRecorrido(
+    paso === "preparacion" ? "preventa-preparacion" : paso === "exploracion" ? "preventa-exploracion" : paso === "escala" ? "preventa-escala" : null,
+  );
 
   const sigue = queSigueConPaso(exp.estado, chequeo, sinLeer);
   const deCadaPaso = (p: PasoDelLienzoUI) => revisables.filter((it) => piezaDelDestino(it.destino) === p).length;

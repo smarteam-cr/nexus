@@ -140,7 +140,7 @@ export default function PublishBar({
     <div style={container}>
       <span style={CHIP}><IconCheck className="w-3 h-3" />Guardado</span>
       <span style={{ flex: 1 }}>{savedMessage}</span>
-      <button
+      <button data-recorrido="publicar"
         onClick={onPublish}
         disabled={publishing}
         style={{

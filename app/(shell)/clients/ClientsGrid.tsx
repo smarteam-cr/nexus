@@ -534,6 +534,7 @@ export default function ClientsGrid({
           recalcularan bajo el filtro, esa capacidad se apagaría sin que nadie lo note. Lo que
           reconcilia el censo con lo que hay en la tabla es la línea de verdad de más abajo. */}
       <div className="flex items-center gap-2 flex-wrap">
+        <div data-recorrido="clientes.categorias">
         <Tabs
           aria-label="Qué se está viendo"
           variant="pill"
@@ -559,6 +560,7 @@ export default function ClientsGrid({
             },
           ]}
         />
+        </div>
         {/* El «Potencial estimado» vivía acá y se sacó (Elías, 2026-08-22): con cero TAM
             cargados decía literalmente «sin datos» en todas las pestañas, o sea un rótulo
             permanente anunciando que no hay nada que anunciar. El dato sigue por cuenta en

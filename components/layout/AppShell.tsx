@@ -9,6 +9,8 @@ import SidebarShell from "./SidebarShell";
 import CsAlertNotifier from "@/components/cs/CsAlertNotifier";
 import { TooltipLayer } from "@/components/ui/Tooltip";
 import AgentRunsProvider from "@/components/ai/AgentRunsProvider";
+import RecorridosProvider from "@/components/recorridos/RecorridosProvider";
+import { COOKIE_DE_RECORRIDOS } from "@/lib/recorridos/vistos";
 import FeedbackProvider from "@/components/feedback/FeedbackProvider";
 
 export default async function AppShell({
@@ -68,27 +70,34 @@ export default async function AppShell({
 
   // Ancho del sidebar resuelto en SSR (mismo mecanismo que la cookie nexus-theme):
   // el primer paint ya nace con el ancho correcto — sin flash ni salto post-hidratación.
-  const sidebarCollapsed = (await cookies()).get("nexus-sidebar")?.value === "collapsed";
+  const cookieStore = await cookies();
+  const sidebarCollapsed = cookieStore.get("nexus-sidebar")?.value === "collapsed";
+  // Qué recorridos guiados vio (mismo mecanismo): el punto azul de «Recorrido» nace bien pintado.
+  const recorridosVistos = cookieStore.get(COOKIE_DE_RECORRIDOS)?.value ?? null;
 
   return (
     // El provider envuelve al shell ENTERO (sidebar incluido): el ítem "Corridas de
     // agentes" consume el mismo feed que dispara los avisos, y al vivir en el layout
     // del route-group el seguimiento sobrevive a navegar entre secciones.
     <AgentRunsProvider>
-      {/* Feedback desde cualquier pantalla (2026-10-04): el botón vive en el pie del menú y el panel
-          no se desmonta al navegar. Va con la versión que corre, para saber qué estaba viendo la persona. */}
-      <FeedbackProvider version={process.env.GIT_SHA?.slice(0, 7) ?? null}>
-      <SidebarShell user={userLite} initialOpen={!sidebarCollapsed}>
-        {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
-            (el componente se auto-apaga para otros roles; render null). */}
-        <CsAlertNotifier role={userLite.role} />
-        {/* LA capa de ayuda. Va UNA vez y acá: adopta el `title` de cualquier elemento de
-            la app —incluidos los que todavía no existen— y lo pinta con el tema en vez de
-            dejar que lo pinte el sistema operativo. Ver components/ui/Tooltip.tsx. */}
-        <TooltipLayer />
-        {children}
-      </SidebarShell>
-      </FeedbackProvider>
+      {/* Los recorridos guiados: el ítem «Recorridos» del menú del avatar y el botón de cada
+          cabecera leen el mismo estado, así que también envuelve al sidebar. */}
+      <RecorridosProvider rol={userLite.role} vistosIniciales={recorridosVistos}>
+        {/* Feedback desde cualquier pantalla (2026-10-04): el botón vive en el pie del menú y el panel
+            no se desmonta al navegar. Va con la versión que corre, para saber qué estaba viendo la persona. */}
+        <FeedbackProvider version={process.env.GIT_SHA?.slice(0, 7) ?? null}>
+        <SidebarShell user={userLite} initialOpen={!sidebarCollapsed}>
+          {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
+              (el componente se auto-apaga para otros roles; render null). */}
+          <CsAlertNotifier role={userLite.role} />
+          {/* LA capa de ayuda. Va UNA vez y acá: adopta el `title` de cualquier elemento de
+              la app —incluidos los que todavía no existen— y lo pinta con el tema en vez de
+              dejar que lo pinte el sistema operativo. Ver components/ui/Tooltip.tsx. */}
+          <TooltipLayer />
+          {children}
+        </SidebarShell>
+        </FeedbackProvider>
+      </RecorridosProvider>
     </AgentRunsProvider>
   );
 }

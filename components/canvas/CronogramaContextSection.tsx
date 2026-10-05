@@ -108,7 +108,7 @@ export default function CronogramaContextSection({
   }, [hayMaterial, onMaterial]);
 
   return (
-    <div className="rounded-xl border border-line bg-surface">
+    <div data-recorrido="cronograma.contexto" className="rounded-xl border border-line bg-surface">
       <button
         onClick={() => setOverride(!abierto)}
         aria-expanded={abierto}

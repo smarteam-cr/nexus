@@ -3745,7 +3745,7 @@ export default function CronogramaCanvas({
           {/* Conversar el cambio ANTES de generarlo. Solo con cronograma armado: un asistente
               sobre un documento vacío no tiene qué modificar. */}
           {canEdit && phases.length > 0 && (
-            <button
+            <button data-recorrido="cronograma.asistente"
               onPointerDown={() => {
                 apretadoDelChatRef.current = Date.now();
               }}
@@ -3834,7 +3834,7 @@ export default function CronogramaCanvas({
               // no mostrar nada (NO caer al botón de avance — no hay avance que chequear
               // sobre un esqueleto sin tareas y el usuario no puede generarlas).
               canGenerateTimeline ? (
-                <button
+                <button data-recorrido="cronograma.generar"
                   onClick={() => void pedirPropuestaDeDetalle("primera")}
                   disabled={armando !== null || tareasDelBorrador?.estado === "armando"}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand hover:bg-brand-dark disabled:opacity-60 transition-colors"
@@ -3854,7 +3854,7 @@ export default function CronogramaCanvas({
               (hasAiDetail && canRegenerateTimeline). Preview de TODAS las fases → curación
               fase por fase en acordeón → aplicar todo en una transacción. */}
           {canEdit && phases.length > 0 && !proposal && hasAiDetail && canRegenerateTimeline && (
-            <button
+            <button data-recorrido="cronograma.generar"
               onClick={() => void pedirPropuestaDeDetalle("regen")}
               disabled={armando !== null || tareasDelBorrador?.estado === "armando"}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-surface-muted border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-60"

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "@/lib/theme";
 import { Menu } from "@/components/ui";
 import RunsIndicator from "@/components/ai/RunsIndicator";
+import { useRecorridos } from "@/components/recorridos/contexto";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import type { VistaFinanzas } from "@/lib/finanzas/vista";
@@ -87,6 +88,8 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
   // desplegable (fixed desde el trigger, click-afuera, scroll externo, teclado) vive
   // en la primitiva <Menu> — se extrajo de acá y no se reescribe nunca más.
   const { isDark, toggle: toggleTheme } = useTheme();
+  // «Recorridos»: los recorridos guiados de su rol, con cuántos no vio o cambiaron.
+  const recorridos = useRecorridos();
 
   const initials = user.name
     .split(/\s+/)
@@ -140,6 +143,29 @@ function UserAvatar({ user, isOpen }: { user: UserLite; isOpen: boolean }) {
             </svg>
           ),
         },
+        ...(recorridos && recorridos.recorridos.length > 0
+          ? [
+              {
+                key: "recorridos",
+                label: (
+                  <span className="flex flex-1 items-center gap-2">
+                    Recorridos
+                    {recorridos.sinVer > 0 && (
+                      <span className="ml-auto min-w-5 rounded-full border border-info-line bg-info-surface px-1.5 text-center text-[11px] font-semibold leading-[18px] text-brand">
+                        {recorridos.sinVer}
+                      </span>
+                    )}
+                  </span>
+                ),
+                onSelect: recorridos.abrirLista,
+                icon: (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                ),
+              },
+            ]
+          : []),
         {
           key: "theme",
           label: isDark ? "Modo claro" : "Modo oscuro",

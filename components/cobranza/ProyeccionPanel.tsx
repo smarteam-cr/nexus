@@ -206,7 +206,7 @@ export default function ProyeccionPanel({
   return (
     <div className="space-y-4">
       {/* ── Encabezado + refresh ── */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div data-recorrido="fin.reportes.que" className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-fg-muted">
           Ingresos proyectados por quincena y mes — CRC y USD por separado (sin tipo de cambio).
         </p>
@@ -229,7 +229,7 @@ export default function ProyeccionPanel({
       ) : (
         <>
           {/* ── Tiles ── */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div data-recorrido="fin.reportes.totales" className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {tiles.map((t) => (
               <div key={t.label} className={`rounded-xl border px-4 py-3 ${t.tone}`}>
                 <LineasMoneda totales={t.totales} />
@@ -250,7 +250,7 @@ export default function ProyeccionPanel({
 
           {/* ── Vencidos en riesgo ── */}
           {vencidos.cobros.length > 0 && (
-            <div className="rounded-xl border border-red-500/30 overflow-hidden">
+            <div data-recorrido="fin.reportes.riesgo" className="rounded-xl border border-red-500/30 overflow-hidden">
               <div className="px-4 py-2.5 bg-red-500/5 border-b border-red-500/30">
                 <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide">
                   En riesgo (vencidos) · {vencidos.cobros.length}
@@ -306,7 +306,7 @@ export default function ProyeccionPanel({
           )}
 
           {/* ── Línea de tiempo de buckets (expandible) ── */}
-          <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+          <div data-recorrido="fin.reportes.linea" className="overflow-x-auto rounded-xl border border-line bg-surface">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-surface-muted border-b border-line">

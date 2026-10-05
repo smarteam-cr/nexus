@@ -75,7 +75,7 @@ export default async function ExploracionPage({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <CabeceraDeFicha
+      <CabeceraDeFicha recorrido="preventa-resumen"
         volver={VOLVER}
         titulo={exp.empresa.nombre}
         chips={

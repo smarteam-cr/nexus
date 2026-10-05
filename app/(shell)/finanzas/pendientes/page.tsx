@@ -64,18 +64,18 @@ export default async function PendientesPage() {
 
   return (
     <div className={`${SHELL_DEFAULT} space-y-5`}>
-      <PageHeader
+      <PageHeader recorrido="finanzas-pendientes"
         title="Pendientes"
         description="Lo que te toca en finanzas, lo más urgente primero. Cada cosa te lleva a la página donde se hace."
         action={
-          <Link href="/cobranza?pago=1" className={buttonVariants({ variant: "primary", size: "lg" })}>
+          <Link data-recorrido="fin.pendientes.pago" href="/cobranza?pago=1" className={buttonVariants({ variant: "primary", size: "lg" })}>
             Registrar pago
           </Link>
         }
       />
 
       <div className="flex flex-wrap items-start gap-5">
-        <div className="flex min-w-0 flex-[2_1_560px] flex-col gap-5">
+        <div data-recorrido="fin.pendientes.lista" className="flex min-w-0 flex-[2_1_560px] flex-col gap-5">
           {tareas.length === 0 && devueltos.length === 0 ? (
             <EmptyState
               title="No tienes nada pendiente en finanzas"
@@ -88,7 +88,7 @@ export default async function PendientesPage() {
             </>
           )}
 
-          <section aria-label={`Devuelto por ${supervisor}`} className={devueltos.length ? "rounded-xl border border-warn-line bg-warn-surface" : "rounded-xl border border-dashed border-line bg-surface-muted p-4"}>
+          <section data-recorrido="fin.pendientes.devuelto" aria-label={`Devuelto por ${supervisor}`} className={devueltos.length ? "rounded-xl border border-warn-line bg-warn-surface" : "rounded-xl border border-dashed border-line bg-surface-muted p-4"}>
             {devueltos.length === 0 ? (
               <div className="space-y-1">
                 <h2 className="text-[15px] font-semibold text-fg">Devuelto por {supervisor}</h2>
@@ -124,7 +124,7 @@ export default async function PendientesPage() {
 
         <aside className="flex min-w-0 flex-[1_1_280px] flex-col gap-4">
           {datos.decisiones > 0 && (
-            <section aria-label={`Esperan a ${supervisor}`} className="space-y-2 rounded-xl border border-line bg-surface-muted p-4">
+            <section data-recorrido="fin.pendientes.esperan" aria-label={`Esperan a ${supervisor}`} className="space-y-2 rounded-xl border border-line bg-surface-muted p-4">
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Esperan a {supervisor}</span>
               <p className="text-[13px] leading-[1.45] text-fg-secondary">
                 {datos.decisiones === 1 ? "1 diferencia es" : `${datos.decisiones} diferencias son`} preguntas de negocio,
