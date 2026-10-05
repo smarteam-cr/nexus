@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import { useMe } from "@/hooks/useMe";
 import {
   Button,
-  Badge,
   Card,
   buttonVariants,
   ConfirmDialog,
@@ -36,18 +35,41 @@ interface Agent {
   _count: { runs: number };
 }
 
-const OUTPUT_LABELS: Record<string, { label: string; color: string }> = {
-  AUDIT_REPORT:       { label: "Auditoría",       color: "text-violet-400 bg-violet-500/10 border-violet-500/20" },
-  CARDS:              { label: "Cards",           color: "text-sky-400 bg-sky-500/10 border-sky-500/20" },
-  FLOWCHART:          { label: "Diagrama",        color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20" },
-  CARDS_AND_FLOWCHARTS:{ label: "Cards + Diagrama", color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20" },
-  CARDS_AND_CHARTS:   { label: "Cards + Gráfico", color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20" },
-  STREAM:             { label: "Stream",          color: "text-green-400 bg-green-500/10 border-green-500/20" },
-};
+/**
+ * Cuándo corrió por última vez, en palabras. «Nunca» no es un hueco: es el dato.
+ *
+ * ⚠ Lo mide contra el reloj del browser y a propósito: la fecha llega en ISO desde el servidor y
+ * acá solo se dice «hace cuánto». Sin esto la columna mostraba un timestamp que nadie compara.
+ */
+function haceCuanto(iso: string | undefined): string {
+  if (!iso) return "Nunca";
+  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (dias <= 0) return "hoy";
+  if (dias === 1) return "ayer";
+  if (dias < 7) return `hace ${dias} días`;
+  if (dias < 60) return `hace ${Math.round(dias / 7)} sem`;
+  return new Date(iso).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+}
 
-const TAG_CLASS = "inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap";
+export interface UltimoErrorDeAgente {
+  /** `null` en una corrida cuyo agente se borró: el error igual se muestra, sin enlace. */
+  agentId: string | null;
+  nombre: string;
+  cuando: string;
+}
 
-export default function AgentsClient({ agents }: { agents: Agent[] }) {
+export default function AgentsClient({
+  agents,
+  ultimaCorrida,
+  corriendo,
+  ultimoError,
+}: {
+  agents: Agent[];
+  /** `agentId` → ISO de su última corrida. Sin entrada = nunca corrió. */
+  ultimaCorrida: Record<string, string>;
+  corriendo: number;
+  ultimoError: UltimoErrorDeAgente | null;
+}) {
   const router = useRouter();
   const me = useMe();
   // Administrar agentes = celda agentes.manage del mapa efectivo (delegable por
@@ -63,10 +85,21 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
     router.refresh();
   }
 
+  /**
+   * Los que NUNCA corrieron salen de las categorías y van a un bloque propio al final.
+   *
+   * Medido el 2026-10-05: nueve de los 34 — más de un cuarto del catálogo — con cero corridas, y
+   * repartidos entre las categorías se veían exactamente igual que el clasificador de sesiones,
+   * que lleva 2.052. Mezclados, el catálogo miente sobre lo que Nexus hace de verdad; juntos, son
+   * una lista corta sobre la que alguien puede decidir si siguen esperando o se retiran.
+   */
+  const nuncaCorrieron = useMemo(() => agents.filter((a) => a._count.runs === 0), [agents]);
+
   // Agrupar por categoría, en el orden curado, omitiendo las vacías.
   const groups = useMemo(() => {
     const byKey = new Map<AgentCategoryKey, Agent[]>();
     for (const a of agents) {
+      if (a._count.runs === 0) continue;
       const key = categorizeAgent(a);
       const list = byKey.get(key) ?? [];
       list.push(a);
@@ -97,46 +130,43 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
       ),
     },
     {
-      key: "status",
-      header: "Estado",
-      sortValue: (a) => a.status,
-      width: "w-28",
-      render: (a) => (
-        <Badge variant={a.status === "ACTIVE" ? "success" : "default"} size="xs">
-          {a.status === "ACTIVE" ? "Activo" : "Borrador"}
-        </Badge>
-      ),
-    },
-    {
-      key: "output",
-      header: "Salida",
-      sortValue: (a) => a.outputType,
-      width: "w-40",
-      hideOnMobile: true,
-      render: (a) => {
-        const o = OUTPUT_LABELS[a.outputType];
-        return o ? (
-          <span className={`${TAG_CLASS} ${o.color}`}>{o.label}</span>
-        ) : (
-          <span className="text-gray-600">—</span>
-        );
-      },
-    },
-    {
       key: "trigger",
       header: "Disparo",
       sortValue: (a) => agentTriggerHint(a),
       width: "w-48",
       hideOnMobile: true,
-      render: (a) => <span className="text-gray-400">{agentTriggerHint(a)}</span>,
+      render: (a) => <span className="text-fg-muted">{agentTriggerHint(a)}</span>,
     },
     {
       key: "runs",
-      header: "Ejecuciones",
+      header: "Corridas",
       sortValue: (a) => a._count.runs,
       align: "right",
+      width: "w-28",
+      /* Cero corridas no es un cero más: es el único dato que distingue un agente que trabaja
+         de uno que nunca arrancó, y los 34 se veían igual porque todos dicen «Activo». */
+      render: (a) =>
+        a._count.runs === 0 ? (
+          <span className="text-fg-muted">Nunca</span>
+        ) : (
+          <span className="tabular-nums font-medium text-fg">{a._count.runs.toLocaleString("es-CR")}</span>
+        ),
+    },
+    {
+      key: "ultima",
+      header: "Última",
+      sortValue: (a) => (ultimaCorrida[a.id] ? new Date(ultimaCorrida[a.id]) : null),
+      align: "right",
       width: "w-32",
-      render: (a) => <span className="tabular-nums text-gray-400">{a._count.runs}</span>,
+      hideOnMobile: true,
+      render: (a) => (
+        <span
+          className={ultimaCorrida[a.id] ? "whitespace-nowrap text-fg-secondary" : "text-fg-muted"}
+          title={ultimaCorrida[a.id] ? new Date(ultimaCorrida[a.id]).toLocaleString("es-ES") : undefined}
+        >
+          {haceCuanto(ultimaCorrida[a.id])}
+        </span>
+      ),
     },
     ...(isSuperAdmin
       ? ([
@@ -179,6 +209,72 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
         }
       />
 
+      {/* ── QUÉ ESTÁ PASANDO, ANTES DEL CATÁLOGO ──────────────────────────────
+          La pregunta que trae alguien a esta pantalla no es «¿qué agentes hay?» sino «¿sigue
+          andando?» y «¿se rompió algo?». Hasta hoy la segunda solo se contestaba entrando a un
+          agente y abriendo su historial de corridas. */}
+      {agents.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <div className="rounded-xl border border-info-line bg-info-surface px-4 py-3.5 flex items-center gap-3">
+            <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" aria-hidden />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-fg">
+                {corriendo === 0
+                  ? "Nada corriendo ahora"
+                  : `${corriendo} corriendo ahora`}
+              </p>
+              <p className="text-xs text-fg-secondary">
+                {agents.length} agentes en el catálogo
+              </p>
+            </div>
+          </div>
+
+          {ultimoError ? (
+            <div className="rounded-xl border border-danger-line bg-danger-surface px-4 py-3.5 flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-fg truncate">Lo último que falló</p>
+                <p className="text-xs text-danger-ink truncate">
+                  {ultimoError.nombre} · {haceCuanto(ultimoError.cuando)}
+                </p>
+              </div>
+              {ultimoError.agentId && (
+                <Link
+                  href={`/agents/${ultimoError.agentId}`}
+                  className="flex-shrink-0 text-[13px] font-semibold text-brand hover:text-brand-light"
+                >
+                  Ver
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-success-line bg-success-surface px-4 py-3.5 flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-success flex-shrink-0" aria-hidden />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-fg">Ninguno falló</p>
+                <p className="text-xs text-success-ink">No hay corridas con error</p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-line bg-surface px-4 py-3.5 flex items-center gap-3">
+            <span className="w-2 h-2 rounded-full bg-fg-muted flex-shrink-0" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-fg">
+                {nuncaCorrieron.length === 0
+                  ? "Todos corrieron alguna vez"
+                  : `${nuncaCorrieron.length} nunca corrieron`}
+              </p>
+              <p className="text-xs text-fg-muted">
+                {nuncaCorrieron.length === 0
+                  ? "El catálogo entero está en uso"
+                  : `De ${agents.length} del catálogo`}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {agents.length === 0 ? (
         <EmptyState
           icon={
@@ -202,7 +298,7 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
             <section key={cat.key}>
               <div className="mb-2 flex items-baseline gap-2">
                 <h2 className="text-sm font-semibold text-fg">{cat.label}</h2>
-                <span className="text-xs tabular-nums text-gray-500">{rows.length}</span>
+                <span className="text-xs tabular-nums text-fg-muted">{rows.length}</span>
               </div>
               <p className="mb-3 text-xs text-fg-muted">{cat.description}</p>
               <Table
@@ -214,6 +310,33 @@ export default function AgentsClient({ agents }: { agents: Agent[] }) {
               />
             </section>
           ))}
+
+          {/* No se apagan solos: alguien decide si siguen esperando o se retiran. Pero primero
+              hay que poder verlos, y mezclados entre los que trabajan son invisibles. */}
+          {nuncaCorrieron.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-baseline gap-2">
+                <h2 className="text-sm font-semibold text-fg">Nunca corrieron</h2>
+                <span className="text-xs tabular-nums text-fg-muted">{nuncaCorrieron.length}</span>
+              </div>
+              <p className="mb-3 text-xs text-fg-muted">
+                Están activos y nadie los disparó todavía. Siguen acá hasta que se decida si
+                esperan o se retiran.
+              </p>
+              <div className="rounded-xl border border-dashed border-line bg-surface-muted p-4 flex flex-wrap gap-2">
+                {nuncaCorrieron.map((a) => (
+                  <Link
+                    key={a.id}
+                    href={`/agents/${a.id}`}
+                    className="text-[13px] text-fg-secondary bg-surface border border-line rounded-full px-3 py-1 hover:border-brand/40 hover:text-fg transition-colors"
+                    title={a.description ?? undefined}
+                  >
+                    {a.name}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 

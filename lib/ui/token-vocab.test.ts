@@ -48,7 +48,6 @@ function contarGrises(rel: string): number {
  */
 const DEUDA_TOKENS: Record<string, number> = {
 
-  "app/(shell)/agents/AgentsClient.tsx": 4,
   "app/(shell)/clients/[id]/error.tsx": 1,
   "app/(shell)/clients/[id]/settings/page.tsx": 42,
   // WorkspaceClient salió de la deuda: el rail de proyectos pintaba la pestaña ACTIVA con
