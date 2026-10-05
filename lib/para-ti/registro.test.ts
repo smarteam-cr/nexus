@@ -44,6 +44,11 @@ describe("las fuentes de «Para ti»", () => {
   it("cada fuente exportada está en el registro", () => {
     const registro = leer("lib/para-ti/registro.ts");
     const exportadas = fuentes.flatMap((t) => [...t.matchAll(/export const ([A-Z_]+): Fuente = /g)].map((m) => m[1]));
+    // Piso: si la forma `export const X: Fuente =` cambia, la lista sale vacía y el `for` no mira nada. Una exportada por
+    // cada clave de fuente: el escaneo tiene que ver TODAS.
+    const claves = fuentes.flatMap((t) => [...t.matchAll(/^\s{2}clave: "([^"]+)",$/gm)]).length;
+    expect(exportadas.length, "el escaneo no encontró las fuentes exportadas").toBeGreaterThan(10);
+    expect(exportadas.length, "hay fuentes con clave que el escaneo no ve como exportadas").toBe(claves);
     for (const nombre of exportadas) expect(registro, `${nombre} no está en FUENTES`).toMatch(new RegExp(`\\b${nombre},`));
   });
 });

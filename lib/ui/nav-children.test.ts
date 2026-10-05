@@ -45,12 +45,12 @@ describe("visibleNavChildren — el filtro costosOnly del Sidebar", () => {
 
   it("sin el permiso de gastos no aparecen Gastos del mes, Recurrentes ni Tarjetas", () => {
     const hs = visibleNavChildren(finanzas, { isCostos: false, vista: "REGISTRA" }).map((c) => c.href);
-    expect(hs).not.toContain("/finanzas/gastos");
-    expect(hs).not.toContain("/finanzas/tarjetas");
+    const DE_GASTOS = ["/finanzas/gastos", "/finanzas/recurrentes", "/finanzas/tarjetas"];
+    for (const h of DE_GASTOS) expect(hs, `${h} aparece sin el permiso de gastos`).not.toContain(h);
+    // Y con el permiso aparecen los tres: si una ruta cambiara de nombre, el «no aparece» de arriba pasaría en vacío.
     const conGastos = { v: 1 as const, sections: { gastos: { read: true } } };
-    expect(visibleNavChildren(finanzas, { isCostos: false, vista: "REGISTRA", permissions: conGastos }).map((c) => c.href)).toContain(
-      "/finanzas/gastos",
-    );
+    const conPermiso = visibleNavChildren(finanzas, { isCostos: false, vista: "REGISTRA", permissions: conGastos }).map((c) => c.href);
+    for (const h of DE_GASTOS) expect(conPermiso, `${h} no aparece ni con el permiso de gastos`).toContain(h);
   });
 
   it("Cobranza la ve cualquier rol con el gate del padre; el resto de Finanzas no", () => {

@@ -34,7 +34,7 @@
  *   8. 403
  */
 import { prisma } from "@/lib/db/prisma";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, TeamMember } from "@prisma/client";
 import { requireInternalUser, ForbiddenError, type AppUserWithTeamMember } from "./supabase";
 import { can } from "./permissions/engine";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
@@ -145,26 +145,18 @@ export async function accessibleClientWhere(
     opts?.kinds === "all" ? {} : { ...CS_CLIENT_WHERE };
 
   // Ve todo: SUPER_ADMIN / VENTAS / CSL / MARKETING, o el flag override vigente.
-  if (tm.roleEnum === "SUPER_ADMIN" || (await can(tm, "clientes", "viewAll"))) {
-    return kindWhere;
-  }
-  if (tm.canViewAllClients && (!tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date())) {
-    return kindWhere;
-  }
+  if (await veTodaLaCartera(tm)) return kindWhere;
 
   // CSE (scoped): owner por proyecto OR GRANT (a mí o a mi rol), menos REVOKE
-  const [grants, revokes] = await Promise.all([
+  const [grants, revocados] = await Promise.all([
     prisma.clientAssignment.findMany({
       where: { kind: "GRANT", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
       select: { clientId: true },
     }),
-    prisma.clientAssignment.findMany({
-      where: { kind: "REVOKE", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
-      select: { clientId: true },
-    }),
+    clientesRevocadosPara(tm),
   ]);
   const grantedIds = grants.map((g) => g.clientId);
-  const revokedIds = revokes.map((r) => r.clientId);
+  const revokedIds = [...revocados];
 
   // ⭐ Mismo filtro de pipeline que en requireAccessToClient, arriba: ser owner de un
   // proyecto "development"/"sitios-web" (hijo de una implementación) no da acceso al
@@ -190,19 +182,48 @@ export async function accessibleClientWhere(
 export async function sharedClientIdsFor(user: AppUserWithTeamMember): Promise<Set<string>> {
   const tm = user.teamMember;
   if (!tm) return new Set<string>();
-  const [grants, revokes] = await Promise.all([
+  const [grants, revocados] = await Promise.all([
     prisma.clientAssignment.findMany({
       where: { kind: "GRANT", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
       select: { clientId: true },
     }),
-    prisma.clientAssignment.findMany({
-      where: { kind: "REVOKE", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
-      select: { clientId: true },
-    }),
+    clientesRevocadosPara(tm),
   ]);
   const ids = new Set(grants.map((g) => g.clientId));
-  for (const r of revokes) ids.delete(r.clientId);
+  for (const id of revocados) ids.delete(id);
   return ids;
+}
+
+/**
+ * ¿Ve toda la cartera? SUPER_ADMIN, el permiso `clientes.viewAll` EFECTIVO o el flag
+ * `canViewAllClients` vigente: los pasos 2-4 de `requireAccessToClient`, los que dejan pasar ANTES
+ * de mirar un REVOKE. Por eso a quien ve toda la cartera un REVOKE no lo alcanza.
+ *
+ * Una sola regla para `accessibleClientWhere` y para «Para ti» (lib/para-ti/alcance-server.ts).
+ */
+export async function veTodaLaCartera(
+  tm: Pick<TeamMember, "roleEnum" | "permissionOverrides" | "canViewAllClients" | "canViewAllExpiresAt">,
+): Promise<boolean> {
+  if (tm.roleEnum === "SUPER_ADMIN") return true;
+  if (await can(tm, "clientes", "viewAll")) return true;
+  return tm.canViewAllClients && (!tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date());
+}
+
+/**
+ * Los clientes con un REVOKE que alcanza a esta persona: el suyo O el de su rol (`targetRole`).
+ * Mismo criterio que el paso 5 de `requireAccessToClient`: cualquier REVOKE que me alcance corta,
+ * y corta ANTES de mirar si soy el encargado en HubSpot.
+ *
+ * ⚠ «Para ti» lo usa para no listar como tuyo un proyecto de una cuenta que te quitaron: hasta el
+ * 2026-10-05 miraba solo el REVOKE por persona, y solo para la cuenta compartida — el proyecto donde
+ * eras encargado seguía apareciendo aunque la cuenta ya no se pudiera abrir.
+ */
+export async function clientesRevocadosPara(tm: Pick<TeamMember, "id" | "roleEnum">): Promise<Set<string>> {
+  const revokes = await prisma.clientAssignment.findMany({
+    where: { kind: "REVOKE", OR: [{ teamMemberId: tm.id }, { targetRole: tm.roleEnum }] },
+    select: { clientId: true },
+  });
+  return new Set(revokes.map((r) => r.clientId));
 }
 
 /**

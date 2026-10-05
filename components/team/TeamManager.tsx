@@ -35,6 +35,14 @@ interface TeamMember {
   deactivatedAt?: string | null;
 }
 
+/** «5 oct 2026»: la fecha en que alguien salió del equipo, legible. */
+function fechaDeSalida(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric" });
+}
+
 // ── Avatar con edición de foto (lápiz al hover) ─────────────────────────────────
 /**
  * Muestra la foto (o iniciales) del miembro. Si `editable`, al pasar el mouse
@@ -80,7 +88,7 @@ function TeamPhotoAvatar({
            mostrar y el genérico no le dice nada a nadie. Se nombra por lo que es. */
         const msg =
           res.status === 413
-            ? "La foto es demasiado pesada para el servidor. Probá con una más liviana."
+            ? "La foto es demasiado pesada para el servidor. Prueba con una más liviana."
             : typeof data?.error === "string"
               ? data.error
               : `No se pudo subir la foto (error ${res.status}).`;
@@ -241,6 +249,24 @@ export default function TeamManager({
           <span className="text-fg-muted">—</span>
         ),
     },
+    /* «Fuera del equipo» promete «la fecha en que salió»: hasta el 2026-10-05 la API la mandaba y la tabla no la
+       pintaba. Solo en esa pestaña: en «Miembros» todos están activos y la columna sería una fila de rayas. */
+    ...(tab === "fuera"
+      ? [
+          {
+            key: "salio",
+            header: "Salió",
+            sortValue: (m: TeamMember) => m.deactivatedAt ?? null,
+            width: "w-36",
+            render: (m: TeamMember) =>
+              m.deactivatedAt ? (
+                <span className="text-xs text-fg-secondary">{fechaDeSalida(m.deactivatedAt)}</span>
+              ) : (
+                <span className="text-fg-muted">—</span>
+              ),
+          } satisfies TableColumn<TeamMember>,
+        ]
+      : []),
   ];
 
   return (
@@ -281,14 +307,14 @@ export default function TeamManager({
             {tab === "fuera"
               ? "Personas que ya no están en el equipo. Siguen acá porque su nombre aparece en reuniones, proyectos y documentos viejos: borrarlas dejaría esos registros sin autor."
               : canAdminPermissions
-                ? "Clickeá un miembro para editar su rol, visibilidad y permisos (los pines pisan la plantilla del rol solo para esa persona). Pasá el mouse sobre una foto para cambiarla."
+                ? "Haz clic en un miembro para editar su rol, visibilidad y permisos (los pines pisan la plantilla del rol solo para esa persona). Pasa el mouse sobre una foto para cambiarla."
                 : canManage
-                  ? "Pasá el mouse sobre una foto para cambiarla; se usan en el selector de equipo del Kickoff. Los permisos los administra un Super Admin."
-                  : "Tu foto la cambiás vos desde tu propia fila. Los roles y permisos los administra un Super Admin."}
+                  ? "Pasa el mouse sobre una foto para cambiarla; se usan en el selector de equipo del Kickoff. Los permisos los administra un Super Admin."
+                  : "Tu foto la cambias tú desde tu propia fila. Los roles y permisos los administra un Super Admin."}
           </div>
 
           {loading ? (
-            <TableSkeleton columns={3} rows={5} toolbar />
+            <TableSkeleton columns={tab === "fuera" ? 4 : 3} rows={5} toolbar />
           ) : members.length === 0 ? (
             <EmptyState
               variant="dashed"
@@ -297,7 +323,7 @@ export default function TeamManager({
                 tab === "fuera"
                   ? "Cuando alguien se dé de baja, queda acá con la fecha en que salió."
                   : canAdminPermissions
-                    ? "Dá de alta a la primera persona: queda habilitada para entrar con su cuenta de Google."
+                    ? "Da de alta a la primera persona: queda habilitada para entrar con su cuenta de Google."
                     : "El alta de miembros la hace un Super Admin desde esta misma página."
               }
               action={tab === "fuera" ? undefined : botonDeAlta}

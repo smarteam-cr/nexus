@@ -102,7 +102,7 @@ export default function HubspotSystemCard({
               que la pantalla celebraba trabajo que no ocurrió. Lo que importa es cuántas son
               NUEVAS. */}
           {importResult.total === 0
-            ? "Ninguna empresa tiene marcada la casilla «Nexus» en HubSpot. Si acabás de marcar una, esperá un momento y volvé a buscar."
+            ? "Ninguna empresa tiene marcada la casilla «Nexus» en HubSpot. Si acabas de marcar una, espera un momento y vuelve a buscar."
             : importResult.total === 1
               ? `1 empresa marcada en HubSpot: ${importResult.created === 1 ? "es nueva en Nexus" : "ya estaba en Nexus"}.`
               : `${importResult.total} empresas marcadas en HubSpot: ${importResult.created} nuevas en Nexus, ${importResult.total - importResult.created} ya estaban.`}

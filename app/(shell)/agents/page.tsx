@@ -1,6 +1,7 @@
 import { requireConsultantSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { wherePorLatido } from "@/lib/agents/run-colgada";
 import AgentsClient from "./AgentsClient";
 
 // Página DINÁMICA (cada page llama a un `require…User` y el layout lee la cookie del tema): un
@@ -44,7 +45,9 @@ export default async function AgentsPage() {
    */
   const [ultimaPorAgente, corriendo, ultimoError] = await Promise.all([
     prisma.agentRun.groupBy({ by: ["agentId"], _max: { createdAt: true } }),
-    prisma.agentRun.count({ where: { status: "RUNNING" } }),
+    /* «Corriendo ahora» con el MISMO corte de latido que el centro de corridas (lib/agents/run-colgada.ts): una
+       fila que quedó en RUNNING tras un reinicio no corre, y el centro ya la muestra como fallada. */
+    prisma.agentRun.count({ where: wherePorLatido().vivas }),
     prisma.agentRun.findFirst({
       where: { status: "ERROR" },
       orderBy: { createdAt: "desc" },

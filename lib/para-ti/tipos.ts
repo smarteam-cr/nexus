@@ -72,8 +72,9 @@ export interface CuentaDeParaTi {
   /** El número del menú: lo de hoy, lo que dejó el agente y los avisos sin leer. */
   cuenta: number;
   avisosNuevos: number;
-  /** El aviso sin leer más nuevo, para la notificación del navegador. */
-  ultimoAviso: { id: string; titulo: string; href: string } | null;
+  /** El aviso sin leer más nuevo, para la notificación del navegador. `creadoAt` (ISO): se notifica solo si es posterior
+   *  al último que la pestaña ya vio (`debeNotificar`, lib/para-ti/armar.ts). */
+  ultimoAviso: { id: string; titulo: string; href: string; creadoAt: string } | null;
 }
 
 /** Una fila de «Del equipo»: una persona o, para dirección, un área. */

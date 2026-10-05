@@ -165,7 +165,10 @@ export default function RoleTemplatesPanel() {
         </p>
       )}
 
+      {/* `key` por rol: cada rol arranca con SUS áreas mezcladas abiertas. La matriz toma ese estado inicial una
+          sola vez (lib/auth/permissions/matriz-plegable.ts); sin el `key`, cambiar de rol heredaría el del anterior. */}
       <PermissionMatrix
+        key={selected}
         getCell={getCell}
         onToggle={row?.editable ? onToggle : undefined}
         onResetSection={row?.editable ? onResetSection : undefined}

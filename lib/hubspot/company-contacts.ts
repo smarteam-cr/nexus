@@ -9,6 +9,12 @@
  * Mismo molde que `tickets.ts`: asociaciones v3 + lectura en lote, 403 = sin permiso (no es
  * error), 401 = reintento con el token del sistema renovado. Scope: `crm.objects.contacts.read`,
  * que la app ya tiene.
+ *
+ * ⛔ «No soportado» y «falló» NO son lo mismo (2026-10-05). Un 403 dice que no hay permiso: se
+ * devuelve `supported: false`. Cualquier otro fallo (un 500, un 429, la red) LANZA: si devolviera
+ * «soportado, cero contactos», la copia de señales pisaría a las personas guardadas con una lista
+ * vacía y el vigía leería «el sponsor dejó de aparecer» por un fallo pasajero de HubSpot. Quien
+ * llama (cs-signals.ts) atrapa el error y conserva los contactos de la copia anterior.
  */
 import type { Client as HsClient } from "@hubspot/api-client";
 import { forceRefreshSystemToken, getSystemHubspotClient } from "./client";
@@ -38,13 +44,26 @@ function instante(v: string | null | undefined): string | null {
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
+/** HubSpot contestó algo que no es ni el dato ni «sin permiso»: no se sabe quiénes son las personas. */
+export class FalloAlLeerContactos extends Error {
+  /** El status de HubSpot, o null si ni siquiera hubo respuesta (la red). */
+  readonly status: number | null;
+  constructor(status: number | null, detalle: string) {
+    super(`no se pudieron leer los contactos de HubSpot: ${detalle}`);
+    this.name = "FalloAlLeerContactos";
+    this.status = status;
+  }
+}
+
+/** `status` 401 vuelve para reintentar con el token renovado; cualquier otro fallo LANZA. */
 async function fetchOnce(hs: HsClient, companyId: string): Promise<{ status: number; result: ContactosDeEmpresa }> {
   const assoc = await hs.apiRequest({
     method: "GET",
     path: `/crm/v3/objects/companies/${companyId}/associations/contacts?limit=100`,
   });
   if (assoc.status === 403) return { status: 403, result: { supported: false, contactos: [] } };
-  if (assoc.status !== 200) return { status: assoc.status, result: { supported: true, contactos: [] } };
+  if (assoc.status === 401) return { status: 401, result: { supported: true, contactos: [] } };
+  if (assoc.status !== 200) throw new FalloAlLeerContactos(assoc.status, `las asociaciones respondieron ${assoc.status}`);
   const ids = (((await assoc.json()) as { results?: { id: string }[] }).results ?? []).map((r) => r.id);
   if (ids.length === 0) return { status: 200, result: { supported: true, contactos: [] } };
 
@@ -57,7 +76,8 @@ async function fetchOnce(hs: HsClient, companyId: string): Promise<{ status: num
     },
   });
   if (lote.status === 403) return { status: 403, result: { supported: false, contactos: [] } };
-  if (lote.status !== 200 && lote.status !== 207) return { status: lote.status, result: { supported: true, contactos: [] } };
+  if (lote.status === 401) return { status: 401, result: { supported: true, contactos: [] } };
+  if (lote.status !== 200 && lote.status !== 207) throw new FalloAlLeerContactos(lote.status, `la lectura en lote respondió ${lote.status}`);
   const data = (await lote.json()) as {
     results?: { id: string; properties: Record<string, string | null | undefined> }[];
   };
@@ -80,16 +100,22 @@ async function fetchOnce(hs: HsClient, companyId: string): Promise<{ status: num
   return { status: 200, result: { supported: true, contactos } };
 }
 
-/** Contactos de la empresa, con degradación de permiso y reintento ante 401. */
+/**
+ * Contactos de la empresa, con degradación de permiso (403 → `supported: false`) y reintento ante 401.
+ * ⛔ Ante cualquier otro fallo LANZA `FalloAlLeerContactos`: nunca devuelve «cero contactos» sin saberlo.
+ */
 export async function fetchCompanyContacts(hs: HsClient, companyId: string): Promise<ContactosDeEmpresa> {
   try {
     let r = await fetchOnce(hs, companyId);
     if (r.status === 401) {
       await forceRefreshSystemToken();
       r = await fetchOnce(await getSystemHubspotClient(), companyId);
+      // Ni con el token renovado: tampoco se sabe quiénes son.
+      if (r.status === 401) throw new FalloAlLeerContactos(401, "401 aun con el token renovado");
     }
     return r.result;
-  } catch {
-    return { supported: true, contactos: [] };
+  } catch (e) {
+    if (e instanceof FalloAlLeerContactos) throw e;
+    throw new FalloAlLeerContactos(null, e instanceof Error ? e.message : String(e));
   }
 }

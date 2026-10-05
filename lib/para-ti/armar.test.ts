@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { armarParaTi, cuentaDelMenu, haceCuanto, loQueMasEspera } from "./armar";
+import { armarParaTi, cuentaDelMenu, debeNotificar, elMasNuevo, haceCuanto, loQueMasEspera } from "./armar";
 import type { Pendiente, ResultadoDeFuente } from "./tipos";
 
 const p = (clave: string, extra: Partial<Pendiente> = {}): Pendiente => ({
@@ -74,5 +74,50 @@ describe("lo que más espera", () => {
     expect(haceCuanto("2026-10-03T10:00:00Z", ahora)).toBe("ayer");
     expect(haceCuanto("2026-09-29T10:00:00Z", ahora)).toBe("hace 5 días");
     expect(haceCuanto(null, ahora)).toBeNull();
+  });
+});
+
+describe("la notificación del menú: solo un aviso POSTERIOR al último que la pestaña ya vio", () => {
+  const VIEJO = { id: "av-viejo", creadoAt: "2026-10-05T09:00:00.000Z" };
+  const MEDIO = { id: "av-medio", creadoAt: "2026-10-05T10:00:00.000Z" };
+  const NUEVO = { id: "av-nuevo", creadoAt: "2026-10-05T11:00:00.000Z" };
+
+  it("la primera lectura solo toma la foto", () => {
+    expect(debeNotificar(undefined, NUEVO)).toBe(false);
+  });
+
+  it("uno nuevo después del que ya vio → notifica", () => {
+    expect(debeNotificar(MEDIO, NUEVO)).toBe(true);
+    expect(debeNotificar(null, NUEVO), "no había ninguno sin leer: el que aparece es nuevo").toBe(true);
+  });
+
+  it("⛔ con dos pestañas: marcar leído el más nuevo deja como «último» uno VIEJO, y no se notifica", () => {
+    /* El bug: la pestaña B vio NUEVO; en la pestaña A se marca leído; el «sin leer más nuevo» pasa a ser MEDIO, con
+       otro id. Comparando solo el id, B lo notificaba como si acabara de llegar. */
+    expect(debeNotificar(NUEVO, MEDIO), "notificó un aviso viejo solo porque cambió el id").toBe(false);
+    expect(debeNotificar(NUEVO, VIEJO)).toBe(false);
+  });
+
+  it("el mismo aviso no se notifica dos veces, ni nada cuando no queda ninguno", () => {
+    expect(debeNotificar(NUEVO, NUEVO)).toBe(false);
+    expect(debeNotificar(NUEVO, null)).toBe(false);
+  });
+
+  it("lo visto nunca retrocede: ni a uno más viejo ni a «nada» por quedar todo leído", () => {
+    expect(elMasNuevo(undefined, NUEVO)).toEqual(NUEVO);
+    expect(elMasNuevo(undefined, null)).toBeNull();
+    expect(elMasNuevo(NUEVO, MEDIO)).toEqual(NUEVO);
+    expect(elMasNuevo(NUEVO, null)).toEqual(NUEVO);
+    expect(elMasNuevo(MEDIO, NUEVO)).toEqual(NUEVO);
+  });
+
+  it("recorrido completo de una pestaña: solo notifica lo que llega después", () => {
+    let visto: Parameters<typeof debeNotificar>[0] = undefined;
+    const notificados: string[] = [];
+    for (const llega of [MEDIO, NUEVO, MEDIO, null, VIEJO]) {
+      if (llega && debeNotificar(visto, llega)) notificados.push(llega.id);
+      visto = elMasNuevo(visto, llega);
+    }
+    expect(notificados).toEqual(["av-nuevo"]);
   });
 });

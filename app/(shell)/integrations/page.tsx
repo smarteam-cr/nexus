@@ -159,15 +159,21 @@ export default async function IntegrationsPage({
           prisma.facturaMercury.count(),
           prisma.syncMercuryCorrida.findFirst({
             orderBy: { iniciadaEn: "desc" },
-            select: { terminadaEn: true },
+            // `ok` y `error`: sin ellos la tarjeta decía «Responde» en verde aunque la última copia hubiera fallado.
+            select: { terminadaEn: true, ok: true, error: true },
           }),
         ]);
+        /* Falló = terminó y no quedó bien. Una corrida sin `terminadaEn` está copiando AHORA (su `ok` vale false
+           hasta que termina): esa todavía no es un fallo. */
+        const ultimaFallo = !!corrida?.terminadaEn && !corrida.ok;
         return {
           motivoApagado: motivoApagado("mercury-espejo-daily", process.env),
           clientes,
           emparejados,
           facturas,
           ultimaCorrida: corrida?.terminadaEn?.toISOString().slice(0, 10) ?? null,
+          ultimaFallo,
+          errorDeLaUltima: ultimaFallo ? (corrida?.error ?? null) : null,
         };
       })()
     : null;

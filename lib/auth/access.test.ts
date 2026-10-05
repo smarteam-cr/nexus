@@ -23,11 +23,54 @@
  * que SÍ se puede afirmar sin base es que ninguna vuelva a consultar `hubspotOwnerEmail` sin
  * `PROYECTO_DE_PIPELINE_CS_WHERE` al lado. `lib/projects/scope.test.ts` ya prueba, sin base,
  * que ese fragmento filtra igual en SQL que en memoria — acá solo falta que `access.ts` lo use.
+ *
+ * ── Y «PARA TI» CORTA CON EL MISMO REVOKE (2026-10-05) ───────────────────────────────────────
+ * Al final del archivo: `alcanceDe` (lib/para-ti/alcance-server.ts) contra una base simulada. Un
+ * REVOKE —por persona o por rol— saca la cuenta entera de «lo que te toca», también el proyecto
+ * donde eres el encargado; a quien ve toda la cartera no lo alcanza, igual que en `requireAccessToClient`.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { RAIZ } from "@/lib/ui/scan-source";
+import { alcanceDe, type MiembroParaAlcance } from "@/lib/para-ti/alcance-server";
+
+/* La base simulada de «Para ti»: las asignaciones se filtran por el `where` que manda el código
+   (persona, rol, tipo), así la prueba se entera si una consulta deja de mirar el rol. */
+const base = vi.hoisted(() => {
+  type Asignacion = { clientId: string; teamMemberId: string | null; targetRole: string | null; kind: "GRANT" | "REVOKE" };
+  type Filtro = { teamMemberId?: string; targetRole?: string; kind?: string; OR?: Filtro[] };
+  const cumple = (a: Asignacion, w: Filtro): boolean =>
+    (w.teamMemberId === undefined || a.teamMemberId === w.teamMemberId) &&
+    (w.targetRole === undefined || a.targetRole === w.targetRole) &&
+    (w.kind === undefined || a.kind === w.kind) &&
+    (w.OR === undefined || w.OR.some((o) => cumple(a, o)));
+  return {
+    asignaciones: [] as Asignacion[],
+    clientes: [] as { id: string; name: string; projects: Record<string, unknown>[] }[],
+    veTodo: { valor: false },
+    cumple,
+  };
+});
+
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/auth/supabase", () => ({ requireInternalUser: vi.fn(), ForbiddenError: class extends Error {} }));
+vi.mock("@/lib/auth/permissions/engine", () => ({
+  can: async () => base.veTodo.valor,
+  getEffectivePermissions: async () => ({ sections: {} }),
+}));
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    clientAssignment: {
+      findMany: async ({ where }: { where: Parameters<typeof base.cumple>[1] }) =>
+        base.asignaciones.filter((a) => base.cumple(a, where)).map((a) => ({ clientId: a.clientId, kind: a.kind })),
+    },
+    client: {
+      findMany: async ({ where }: { where: { id?: { notIn?: string[] } } }) =>
+        base.clientes.filter((c) => !(where.id?.notIn ?? []).includes(c.id)),
+    },
+  },
+}));
 
 /** Blanquea comentarios: mencionar la regla en un docblock no es lo mismo que aplicarla. */
 function soloCodigo(src: string): string {
@@ -107,5 +150,89 @@ describe("⭐ ser owner de un proyecto development/web no es ser dueño de la cu
       cuerpo,
       "requireHandoffAccess dejó de llamar a ownsClient: el arreglo de arriba dejaría de aplicar acá",
     ).toContain("ownsClient(");
+  });
+});
+
+describe("⛔ «Para ti» respeta el REVOKE igual que requireAccessToClient", () => {
+  /* Una persona CSE (no ve toda la cartera) es la encargada en HubSpot de un proyecto de Customer
+     Success abierto. Con los datos de `PROYECTO_BASE` de lib/projects/scope.test.ts. */
+  const ANA: MiembroParaAlcance = {
+    id: "tm-ana",
+    name: "Ana",
+    email: "ana@smarteamcr.com",
+    roleEnum: "CSE",
+    permissionOverrides: null,
+    canViewAllClients: false,
+    canViewAllExpiresAt: null,
+    vistaFinanzas: null,
+    frentes: [],
+    frentesEditadosAt: null,
+  } as unknown as MiembroParaAlcance;
+
+  const CUENTA = {
+    id: "cli-1",
+    name: "Cuenta de prueba",
+    projects: [
+      {
+        id: "p-1",
+        name: "Implementación",
+        status: "active",
+        serviceType: "loop_sales",
+        hubspotServiceId: "123",
+        hubspotPipelineId: "826270797",
+        proyectoInterno: false,
+        hermanoCsProjectId: null,
+        altaEstado: null,
+        hubspotOwnerEmail: "ana@smarteamcr.com",
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    base.asignaciones.length = 0;
+    base.clientes.length = 0;
+    base.clientes.push(CUENTA);
+    base.veTodo.valor = false;
+  });
+
+  const revoke = (por: { teamMemberId?: string; targetRole?: string }) =>
+    base.asignaciones.push({
+      clientId: CUENTA.id,
+      teamMemberId: por.teamMemberId ?? null,
+      targetRole: por.targetRole ?? null,
+      kind: "REVOKE",
+    });
+
+  it("control: la encargada sin REVOKE tiene su proyecto", async () => {
+    expect((await alcanceDe(ANA)).proyectos.map((p) => p.id)).toEqual(["p-1"]);
+  });
+
+  it("encargada + REVOKE por persona → 0 proyectos", async () => {
+    revoke({ teamMemberId: ANA.id });
+    expect(
+      (await alcanceDe(ANA)).proyectos,
+      "«Para ti» le sigue dando trabajo en una cuenta que ya no puede abrir (REVOKE por persona)",
+    ).toEqual([]);
+  });
+
+  it("REVOKE por rol → 0 proyectos", async () => {
+    revoke({ targetRole: "CSE" });
+    expect(
+      (await alcanceDe(ANA)).proyectos,
+      "«Para ti» ignora el REVOKE por rol (`targetRole`), y requireAccessToClient sí lo aplica",
+    ).toEqual([]);
+  });
+
+  it("un REVOKE de OTRO rol no la toca", async () => {
+    revoke({ targetRole: "VENTAS" });
+    expect((await alcanceDe(ANA)).proyectos).toHaveLength(1);
+  });
+
+  it("quien ve toda la cartera no se ve afectado, igual que en requireAccessToClient", async () => {
+    revoke({ teamMemberId: ANA.id });
+    base.veTodo.valor = true;
+    const a = await alcanceDe(ANA);
+    expect(a.veTodaLaCartera).toBe(true);
+    expect(a.proyectos.map((p) => p.id)).toEqual(["p-1"]);
   });
 });

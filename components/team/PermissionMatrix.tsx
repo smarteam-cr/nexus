@@ -20,9 +20,14 @@
  * Casi siempre un área está ENTERA encendida o ENTERA apagada, y eso se dice con una palabra
  * («Todo», «Nada»). Las casillas aparecen donde de verdad hay mezcla —que es donde hay algo que
  * leer— o cuando alguien abre el área a propósito.
+ *
+ * ⚠ La mezcla decide solo cómo ARRANCA cada área (se toma una vez, al montar). Desde que alguien toca
+ * la cabecera, el área es suya: una mezclada se puede plegar, y completarla desde sus casillas no la
+ * cierra en la cara. La regla vive en lib/auth/permissions/matriz-plegable.ts, con su prueba.
  */
 import { useState } from "react";
 import { PERMISSION_SECTIONS } from "@/lib/auth/permissions/registry";
+import { alTocarCabecera, areasAbiertasAlInicio, estaAbierta } from "@/lib/auth/permissions/matriz-plegable";
 import { IconCheck, IconX } from "@/components/ui";
 
 export interface MatrixCellState {
@@ -49,8 +54,21 @@ export default function PermissionMatrix({
   pinLabel = "Distinto de lo heredado",
 }: Props) {
   const interactive = !!onToggle && !disabled;
-  /** Áreas que alguien abrió a mano. Las que tienen mezcla se abren solas. */
-  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+  /** Cómo arranca cada área: abiertas las mezcladas AL MONTAR. Una vez; después no se recalcula. */
+  const [alInicio] = useState(() =>
+    areasAbiertasAlInicio(
+      PERMISSION_SECTIONS.map((section) => {
+        const actions = section.actions.filter((a) => a.enforced);
+        return {
+          key: section.key,
+          encendidas: actions.filter((a) => getCell(section.key, a.key).checked).length,
+          total: actions.length,
+        };
+      }),
+    ),
+  );
+  /** Lo que la persona decidió al tocar la cabecera de cada área. Manda sobre cómo arrancó. */
+  const [decididas, setDecididas] = useState<ReadonlyMap<string, boolean>>(() => new Map());
 
   return (
     <div className="divide-y divide-line rounded-lg border border-line">
@@ -59,8 +77,7 @@ export default function PermissionMatrix({
         if (actions.length === 0) return null;
         const sectionPinned = actions.some((a) => getCell(section.key, a.key).pinned);
         const encendidas = actions.filter((a) => getCell(section.key, a.key).checked).length;
-        const hayMezcla = encendidas > 0 && encendidas < actions.length;
-        const abierta = abiertas.has(section.key) || hayMezcla;
+        const abierta = estaAbierta(section.key, decididas, alInicio);
 
         /* Poner un área entera en un valor: recorre sus acciones y toca SOLO las que hay que
            cambiar. No hay una API de «sección» más abajo, y fabricar una para esto sería inventar
@@ -76,14 +93,7 @@ export default function PermissionMatrix({
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() =>
-                  setAbiertas((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(section.key)) next.delete(section.key);
-                    else next.add(section.key);
-                    return next;
-                  })
-                }
+                onClick={() => setDecididas((prev) => alTocarCabecera(section.key, prev, alInicio))}
                 className="flex flex-1 min-w-0 items-center gap-2 text-left"
                 aria-expanded={abierta}
               >

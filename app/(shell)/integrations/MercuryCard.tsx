@@ -34,6 +34,10 @@ export interface EstadoDeMercury {
   facturas: number;
   /** Cuándo terminó la última corrida, ya formateada por la página. */
   ultimaCorrida: string | null;
+  /** La última copia TERMINÓ con error (una en curso no cuenta). */
+  ultimaFallo: boolean;
+  /** Lo que dejó escrito esa corrida fallada; null si no falló o no dejó texto. */
+  errorDeLaUltima: string | null;
 }
 
 interface Props {
@@ -42,6 +46,11 @@ interface Props {
 }
 
 const miles = (n: number) => n.toLocaleString("es-CR");
+
+const recortar = (t: string, max: number) => {
+  const limpio = t.replace(/\s+/g, " ").trim();
+  return limpio.length <= max ? limpio : `${limpio.slice(0, max - 1).trimEnd()}…`;
+};
 
 export default function MercuryCard({ estado }: Props) {
   /* Sin rol de costos: la tarjeta existe —saber que Mercury está conectado no es plata— pero sin
@@ -60,11 +69,15 @@ export default function MercuryCard({ estado }: Props) {
   const faltanEmparejar = estado.clientes > 0 && estado.emparejados === 0;
   const parcial = estado.emparejados > 0 && estado.emparejados < estado.clientes;
 
+  /* El fallo va ANTES que el emparejado: hasta el 2026-10-05 la página no leía `ok` y la tarjeta decía «Responde» en
+     verde aunque la última copia hubiera fallado. */
   const situacion: EstadoDeConexion = estado.motivoApagado
     ? { tono: "apagado", texto: "Apagado" }
-    : faltanEmparejar
-      ? { tono: "atencion", texto: "Sin emparejar" }
-      : { tono: "ok", texto: "Responde" };
+    : estado.ultimaFallo
+      ? { tono: "error", texto: "Falló" }
+      : faltanEmparejar
+        ? { tono: "atencion", texto: "Sin emparejar" }
+        : { tono: "ok", texto: "Responde" };
 
   return (
     <TarjetaDeConexion
@@ -96,6 +109,16 @@ export default function MercuryCard({ estado }: Props) {
         </Link>
       }
     >
+      {/* La consecuencia primero, el error técnico después y recortado: lo lee quien ve costos, que es quien decide
+          si hay que llamar a alguien. */}
+      {!estado.motivoApagado && estado.ultimaFallo && (
+        <p className="text-xs leading-[17px] text-danger-ink bg-danger-surface border border-danger-line rounded-lg px-3 py-2">
+          La última copia falló: lo que entró al banco después de la copia anterior todavía no está en Nexus.
+          {estado.errorDeLaUltima && (
+            <span className="block mt-1 text-fg-muted break-words">{recortar(estado.errorDeLaUltima, 160)}</span>
+          )}
+        </p>
+      )}
       {/* El aviso dice lo que NO funciona por esto, no «faltan N»: es la diferencia entre un dato
           y una consecuencia. Sin él, un cero se lee como «todavía no lo usamos». */}
       {faltanEmparejar && (

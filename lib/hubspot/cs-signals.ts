@@ -41,6 +41,21 @@ function parseAmount(a: string | null): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * Los contactos que guardó la última copia de señales. Se usan cuando la lectura de HubSpot falla, para
+ * no pisar a las personas con una lista vacía. Si tampoco se puede leer la copia, vacío (la escritura
+ * de abajo va a la misma base y fallaría igual).
+ */
+async function contactosDeLaCopiaAnterior(clientId: string): Promise<ContactoDeEmpresa[]> {
+  try {
+    const previa = await prisma.clientCsSignals.findUnique({ where: { clientId }, select: { engagement: true } });
+    const guardados = (previa?.engagement as { contactos?: unknown } | null | undefined)?.contactos;
+    return Array.isArray(guardados) ? (guardados as ContactoDeEmpresa[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export interface ClientSignalsSummary {
   clientId: string;
   fetchStatus: "ok" | "partial" | "error";
@@ -121,12 +136,15 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
   // Quiénes son y cuándo se habló con cada uno: el agente vigía nota si el sponsor dejó de aparecer.
   // Van DENTRO de `engagement` (Json que ya existe): una columna nueva sería DDL por un dato que
   // solo lee el agente.
+  // ⛔ Si la lectura FALLA (fetchCompanyContacts lanza ante un 500, un 429 o la red) se conservan los
+  // de la copia anterior: escribir una lista vacía le diría al vigía que el sponsor dejó de aparecer.
   let contactos: ContactoDeEmpresa[] = [];
   try {
     const c = await fetchCompanyContacts(hs, client.hubspotCompanyId);
     contactos = c.contactos;
   } catch (e) {
     errors.push(`contactos: ${e instanceof Error ? e.message : "error"}`);
+    contactos = await contactosDeLaCopiaAnterior(clientId);
   }
 
   // ── 3. Tickets (degradación de scope) ──────────────────────────────────────

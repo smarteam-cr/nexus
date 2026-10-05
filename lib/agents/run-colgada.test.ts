@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { MS_SIN_LATIDO_PARA_COLGADA, cortePorLatido, estaColgada } from "./run-colgada";
+import { MS_SIN_LATIDO_PARA_COLGADA, cortePorLatido, estaColgada, wherePorLatido } from "./run-colgada";
 
 /**
  * lib/agents/run-colgada.test.ts — UNA CORRIDA QUE DICE «RUNNING» NO SIEMPRE ESTÁ VIVA.
@@ -69,6 +69,36 @@ describe("cuándo una corrida está colgada", () => {
     expect(estaColgada({ status: "RUNNING", updatedAt: apenasViva }, ahora)).toBe(false);
     expect(estaColgada({ status: "RUNNING", updatedAt: apenasMuerta }, ahora)).toBe(true);
   });
+
+  it("`wherePorLatido` parte las «en curso» igual que `estaColgada`: viva o colgada, nunca las dos", () => {
+    /* Evalúa los dos `where` sobre filas en memoria. Si alguien cambia el corte, los estados o el `gte`/`lt` de uno
+       solo, una corrida cae en los dos baldes (o en ninguno) y /agents cuenta distinto que el centro. */
+    type Fila = { status: string; updatedAt: Date };
+    type Where = {
+      AND?: Where[];
+      status?: { in?: string[] } | string;
+      updatedAt?: { gte?: Date; lt?: Date };
+    };
+    const cumple = (f: Fila, w: Where): boolean =>
+      (w.AND ?? []).every((x) => cumple(f, x)) &&
+      (w.status === undefined ||
+        (typeof w.status === "string" ? f.status === w.status : (w.status.in ?? []).includes(f.status))) &&
+      (w.updatedAt?.gte === undefined || f.updatedAt.getTime() >= w.updatedAt.gte.getTime()) &&
+      (w.updatedAt?.lt === undefined || f.updatedAt.getTime() < w.updatedAt.lt.getTime());
+
+    const ahora = new Date();
+    const { vivas, colgadas } = wherePorLatido(ahora);
+    const edades = [0, 5 * MIN, MS_SIN_LATIDO_PARA_COLGADA - 1, MS_SIN_LATIDO_PARA_COLGADA, MS_SIN_LATIDO_PARA_COLGADA + 1, 546 * 60 * MIN];
+    for (const status of ["PENDING", "RUNNING", "DONE", "ERROR", "ARCHIVED"]) {
+      for (const edad of edades) {
+        const f = { status, updatedAt: new Date(ahora.getTime() - edad) };
+        const enCurso = status === "PENDING" || status === "RUNNING";
+        const caso = `${status} sin latido hace ${edad} ms`;
+        expect(cumple(f, vivas as Where), `${caso}: viva`).toBe(enCurso && !estaColgada(f, ahora));
+        expect(cumple(f, colgadas as Where), `${caso}: colgada`).toBe(estaColgada(f, ahora));
+      }
+    }
+  });
 });
 
 describe("el umbral vive en UN solo lugar", () => {
@@ -93,8 +123,18 @@ describe("el umbral vive en UN solo lugar", () => {
     /* El bug entero era `status: { in: ["PENDING","RUNNING"] }` a secas. Si vuelve esa consulta
        sin el corte por latido, vuelve el "Corriendo…" eterno. */
     const src = leer("app/api/agent-runs/route.ts");
-    expect(src).toContain("cortePorLatido()");
+    expect(src).toContain("wherePorLatido()");
+    expect(src).toContain("porLatido.vivas");
+    expect(src).toContain("porLatido.colgadas");
     expect(src).toContain("estaColgada(");
+  });
+
+  it("⛔ /agents cuenta «corriendo ahora» con el mismo corte que el centro de corridas", () => {
+    /* La edición que la pone en rojo: volver a `count({ where: { status: "RUNNING" } })`. Contaba las colgadas de
+       hace semanas como si corrieran, mientras el centro de corridas ya las mostraba como falladas. */
+    const src = leer("app/(shell)/agents/page.tsx");
+    expect(src, "/agents dejó de usar el corte por latido").toContain("wherePorLatido().vivas");
+    expect(src, "/agents volvió a contar el estado crudo").not.toMatch(/status:\s*"RUNNING"/);
   });
 
   it("Marketing NO se unificó, y está dicho por qué", () => {

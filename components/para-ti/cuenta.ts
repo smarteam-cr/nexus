@@ -13,6 +13,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { notifyAviso } from "@/lib/notifications/client";
+import { debeNotificar, elMasNuevo, type AvisoParaNotificar } from "@/lib/para-ti/armar";
 import type { CuentaDeParaTi } from "@/lib/para-ti/tipos";
 
 export const LATIDO_MS = 90_000;
@@ -21,7 +22,8 @@ export const LATIDO_ESCONDIDO_MS = 5 * 60_000;
 let ultimoPedido = 0;
 
 let actual: CuentaDeParaTi | null = null;
-let ultimoAvisadoId: string | null | undefined = undefined;
+/** El aviso más nuevo que esta pestaña ya vio (`undefined` hasta la primera lectura). Ver `debeNotificar`. */
+let ultimoVisto: AvisoParaNotificar | null | undefined = undefined;
 const oyentes = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let pidiendo = false;
@@ -40,10 +42,10 @@ async function pedir() {
     if (!r.ok) return;
     const c = (await r.json()) as CuentaDeParaTi;
     const nuevo = c.ultimoAviso;
-    if (ultimoAvisadoId !== undefined && nuevo && nuevo.id !== ultimoAvisadoId) {
-      void notifyAviso(nuevo);
-    }
-    ultimoAvisadoId = nuevo?.id ?? null;
+    /* Por FECHA, no por id: al marcar leído el más nuevo (aquí o en otra pestaña) el «sin leer más nuevo» pasa a ser
+       uno viejo con otro id, y no hay que notificarlo como si acabara de llegar. */
+    if (nuevo && debeNotificar(ultimoVisto, nuevo)) void notifyAviso(nuevo);
+    ultimoVisto = elMasNuevo(ultimoVisto, nuevo);
     actual = c;
     emitir();
   } catch {

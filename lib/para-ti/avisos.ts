@@ -31,10 +31,11 @@ export function esBuenaNoticia(tipo: string): boolean {
   return (TIPOS_DE_AVISO as Record<string, { bueno: boolean } | undefined>)[tipo]?.bueno === true;
 }
 
-/** ¿Es una ruta interna de Nexus? (`/clients/x`, sí; `//otro.com`, `https://…`, no). */
-export function esRutaInterna(href: string): boolean {
-  return href.startsWith("/") && !href.startsWith("//") && !/[\r\n]/.test(href);
-}
+/**
+ * ¿Es una ruta interna de Nexus? (`/clients/x`, sí; `//otro.com`, `/\otro.com`, `https://…`, no).
+ * La regla es una sola para todo Nexus: vive en lib/navegacion/ruta-interna.ts.
+ */
+export { esRutaInterna } from "@/lib/navegacion/ruta-interna";
 
 const normal = (e: string) => e.trim().toLowerCase();
 

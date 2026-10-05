@@ -32,6 +32,7 @@
  * —"¿hay algo corriendo como para no arrancar otro?"— que no es "¿esto murió?". Coinciden en
  * ser un número de minutos y en nada más. Ver `findActiveRun` en lib/marketing/runs.ts.
  */
+import type { Prisma } from "@prisma/client";
 
 /** Sin señales de vida por más de esto, la corrida se considera muerta. */
 export const MS_SIN_LATIDO_PARA_COLGADA = 30 * 60 * 1000;
@@ -69,4 +70,27 @@ export function estaColgada(
 /** El instante a partir del cual una corrida sigue contando como viva (para el `where`). */
 export function cortePorLatido(ahora: Date = new Date()): Date {
   return new Date(ahora.getTime() - MS_SIN_LATIDO_PARA_COLGADA);
+}
+
+/**
+ * Los dos `where` de las corridas que dicen estar «en curso» (`PENDING`/`RUNNING`), partidas por el latido:
+ *   · `vivas`    — además dieron señales hace poco: corren de verdad;
+ *   · `colgadas` — hace rato que no: murieron sin escribir su estado final.
+ *
+ * ⚠ Toda consulta que cuente o liste «lo que corre ahora» usa `vivas`, nunca `status: "RUNNING"` a secas: el centro
+ * de corridas (app/api/agent-runs/route.ts) y el «N corriendo ahora» de /agents. Hasta el 2026-10-05 /agents contaba
+ * el estado crudo y sumaba las colgadas de hace semanas que el centro ya mostraba como falladas.
+ *
+ * Solo tipos de Prisma (se borran al compilar): el módulo sigue siendo client-safe.
+ */
+export function wherePorLatido(ahora: Date = new Date()): {
+  vivas: Prisma.AgentRunWhereInput;
+  colgadas: Prisma.AgentRunWhereInput;
+} {
+  const corte = cortePorLatido(ahora);
+  const enCurso: Prisma.AgentRunWhereInput = { status: { in: ["PENDING", "RUNNING"] } };
+  return {
+    vivas: { AND: [enCurso, { updatedAt: { gte: corte } }] },
+    colgadas: { AND: [enCurso, { updatedAt: { lt: corte } }] },
+  };
 }

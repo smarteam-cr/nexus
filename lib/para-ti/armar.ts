@@ -58,6 +58,45 @@ export function cuentaDelMenu(p: Pick<ParaTi, "agente" | "hoy">, avisosNuevos: n
   return p.agente.length + p.hoy.length + avisosNuevos;
 }
 
+/** Lo que el latido del menú necesita de un aviso para decidir si notificarlo. */
+export interface AvisoParaNotificar {
+  id: string;
+  /** ISO de cuándo se escribió el aviso. */
+  creadoAt: string;
+}
+
+/**
+ * ¿El latido del menú (components/para-ti/cuenta.ts) tiene que notificar `nuevo` por el sistema operativo?
+ *
+ * `previo` es el aviso MÁS NUEVO que esta pestaña ya vio (`undefined`: todavía no leyó nada, y la primera lectura solo
+ * toma la foto; `null`: no había ninguno sin leer). Notifica solo un aviso escrito DESPUÉS de ése.
+ *
+ * ⚠ Hasta el 2026-10-05 se comparaba solo el id: si marcabas leído el más nuevo (en esta pestaña o en otra), el «sin
+ * leer más nuevo» pasaba a ser uno VIEJO con otro id, y se notificaba como si acabara de llegar.
+ */
+export function debeNotificar(
+  previo: AvisoParaNotificar | null | undefined,
+  nuevo: AvisoParaNotificar | null,
+): boolean {
+  if (previo === undefined || !nuevo) return false;
+  if (!previo) return true;
+  if (nuevo.id === previo.id) return false;
+  return Date.parse(nuevo.creadoAt) > Date.parse(previo.creadoAt);
+}
+
+/**
+ * Lo que la pestaña recuerda después de una lectura: el más nuevo entre lo que ya vio y lo que llegó. Nunca retrocede
+ * a uno más viejo (marcar leído no «des-ve» nada) ni se olvida porque ya no quede ninguno sin leer.
+ */
+export function elMasNuevo(
+  previo: AvisoParaNotificar | null | undefined,
+  nuevo: AvisoParaNotificar | null,
+): AvisoParaNotificar | null {
+  if (!previo) return nuevo ?? null;
+  if (!nuevo) return previo;
+  return Date.parse(nuevo.creadoAt) > Date.parse(previo.creadoAt) ? nuevo : previo;
+}
+
 /** Todo lo pendiente, en una lista (para contar en «Del equipo»). */
 export function todosLosPendientes(p: ParaTi): Pendiente[] {
   return [...p.agente, ...p.hoy, ...p.semana, ...p.luego];

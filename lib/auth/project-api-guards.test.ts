@@ -883,3 +883,119 @@ describe("⛔ la foto PROPIA la cambia cada persona; la de otro, quien gestiona 
     }
   });
 });
+
+// ── Q3 · Auditoría del portal: el acceso por cliente no se salta ──────────────────────────
+
+describe("⛔ ninguna ruta de auditorías se salta el acceso por cliente", () => {
+  /**
+   * Hasta el 2026-10-04 las rutas de auditorías solo pedían ser del equipo: cualquiera veía y corría
+   * la auditoría del portal de CUALQUIER cliente. El acceso vive hoy en lib/auditoria-portal/acceso.ts:
+   * `guardAuditoria(id)` (la celda `auditoria.read` + el acceso al cliente de ESA auditoría) y
+   * `auditoriasVisiblesWhere(user)` (el filtro del listado). El censo DESCUBRE el árbol y exige:
+   *   · todo handler bajo un segmento dinámico (el id de una auditoría) pasa por guardAuditoria;
+   *   · los de la colección piden la celda, filtran el listado con auditoriasVisiblesWhere y, si
+   *     reciben un cliente, lo cruzan con guardAccessToClient;
+   *   · ninguna otra ruta de app/api lee la tabla de auditorías por su cuenta.
+   * La ficha (app/(shell)/audits/[id]/page.tsx) no puede usar guardAuditoria —contesta JSON, la
+   * página redirige— y COPIA la regla: acá se exige que la copia conserve las dos capas.
+   *
+   * La edición que lo pone en rojo: una ruta nueva bajo app/api/audits/[id] con solo
+   * guardPermission, o un listado de auditorías sin auditoriasVisiblesWhere.
+   */
+  const BASE_AUD = "app/api/audits";
+  const sinComentarios = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  const leerSin = (rel: string) => sinComentarios(fs.readFileSync(path.join(RAIZ, rel), "utf8"));
+  const handlersDe = (rel: string) => {
+    const src = leerSin(rel);
+    const hs = [...src.matchAll(HANDLER)];
+    return hs.map((h, i) => ({ metodo: h[1], cuerpo: src.slice(h.index!, i + 1 < hs.length ? hs[i + 1].index! : src.length) }));
+  };
+  /** ¿La ruta es de UNA auditoría? (tiene un segmento dinámico: `[id]`). */
+  const deUnaAuditoria = (rel: string) => /\/\[[^\]]+\]\//.test(rel);
+  const archivos = routes(BASE_AUD);
+  const deUna = archivos.filter(deUnaAuditoria);
+  const coleccion = archivos.filter((r) => !deUnaAuditoria(r));
+
+  it("el escaneo encuentra el árbol (no pasa en vacío)", () => {
+    expect(archivos.length, `solo ${archivos.length} route.ts bajo ${BASE_AUD}`).toBeGreaterThanOrEqual(5);
+    expect(deUna.length, "rutas de una auditoría").toBeGreaterThanOrEqual(4);
+    expect(coleccion.length, "la colección").toBeGreaterThanOrEqual(1);
+    const total = archivos.reduce((n, r) => n + handlersDe(r).length, 0);
+    expect(total, `solo ${total} handlers — ¿el regex dejó de matchear?`).toBeGreaterThanOrEqual(7);
+  });
+
+  it("⭐ cada handler de UNA auditoría pasa por guardAuditoria", () => {
+    const ofensores: string[] = [];
+    for (const rel of deUna) {
+      for (const h of handlersDe(rel)) if (!h.cuerpo.includes("guardAuditoria(")) ofensores.push(`${rel} → ${h.metodo}`);
+    }
+    expect(
+      ofensores,
+      `Estos handlers reciben el id de una auditoría y no pasan por guardAuditoria (lib/auditoria-portal/acceso.ts):\n${ofensores.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("⭐ la colección pide la celda, filtra el listado con auditoriasVisiblesWhere y cruza el cliente", () => {
+    const ofensores: string[] = [];
+    let listados = 0;
+    for (const rel of coleccion) {
+      for (const h of handlersDe(rel)) {
+        const donde = `${rel} → ${h.metodo}`;
+        if (!h.cuerpo.includes('guardPermission("auditoria"') && !h.cuerpo.includes("guardAuditoria(")) ofensores.push(`${donde}: no pide la celda auditoria`);
+        if (/\baudit\.findMany\(/.test(h.cuerpo)) {
+          listados++;
+          if (!h.cuerpo.includes("auditoriasVisiblesWhere(")) ofensores.push(`${donde}: lista sin auditoriasVisiblesWhere`);
+        }
+        if (/\bclientId\b/.test(h.cuerpo) && !h.cuerpo.includes("guardAccessToClient(")) ofensores.push(`${donde}: recibe un cliente y no lo cruza con guardAccessToClient`);
+      }
+    }
+    expect(listados, "el listado de auditorías desapareció de la colección: ¿se movió?").toBeGreaterThanOrEqual(1);
+    expect(ofensores, ofensores.join("\n")).toEqual([]);
+  });
+
+  it("⛔ ninguna otra ruta de app/api lee la tabla de auditorías por su cuenta", () => {
+    const todas = routes("app/api");
+    expect(todas.length, `solo ${todas.length} route.ts bajo app/api`).toBeGreaterThanOrEqual(100);
+    const ajenas = todas.filter((r) => !r.startsWith(`${BASE_AUD}/`) && /\bprisma\.audit\./.test(leerSin(r)));
+    expect(ajenas, `Leen auditorías fuera de ${BASE_AUD} (sin guardAuditoria ni auditoriasVisiblesWhere):\n${ajenas.join("\n")}`).toEqual([]);
+  });
+
+  it("la guarda compartida conserva las dos capas: la celda y el cliente", () => {
+    const src = leerSin("lib/auditoria-portal/acceso.ts");
+    const i = src.indexOf("export async function guardAuditoria(");
+    const j = src.indexOf("export async function auditoriasVisiblesWhere(");
+    expect(i, "guardAuditoria desapareció de acceso.ts").toBeGreaterThan(-1);
+    expect(j, "auditoriasVisiblesWhere desapareció de acceso.ts").toBeGreaterThan(-1);
+    const guarda = src.slice(i, j > i ? j : src.length);
+    expect(guarda, "guardAuditoria dejó de pedir la celda").toContain('guardPermission("auditoria", "read")');
+    expect(guarda, "guardAuditoria dejó de cruzar el cliente de la auditoría").toContain("guardAccessToClient(audit.clientId)");
+    expect(src.slice(j), "el listado dejó de filtrar por los clientes accesibles").toContain("accessibleClientWhere(");
+  });
+
+  it("⭐ las pantallas: el listado filtra igual y la ficha conserva su copia de la regla", () => {
+    const paginas = (dir: string, acc: string[] = []): string[] => {
+      const abs = path.join(RAIZ, dir);
+      if (!fs.existsSync(abs)) return acc;
+      for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) paginas(rel, acc);
+        else if (e.name === "page.tsx") acc.push(rel);
+      }
+      return acc;
+    };
+    const todas = paginas("app/(shell)/audits");
+    expect(todas.length, "las pantallas de auditorías").toBeGreaterThanOrEqual(2);
+    const ofensores: string[] = [];
+    for (const rel of todas) {
+      const src = leerSin(rel);
+      if (!src.includes('"auditoria", "read"')) ofensores.push(`${rel}: no pide la celda auditoria.read`);
+      if (deUnaAuditoria(rel)) {
+        // La ficha copia guardAuditoria (contesta JSON y la página redirige): la copia cruza el cliente.
+        if (!src.includes("requireAccessToClient(audit.clientId)")) ofensores.push(`${rel}: la ficha dejó de cruzar el cliente de la auditoría`);
+      } else if (/\baudit\.findMany\(/.test(src) && !src.includes("auditoriasVisiblesWhere(")) {
+        ofensores.push(`${rel}: lista auditorías sin auditoriasVisiblesWhere`);
+      }
+    }
+    expect(ofensores, ofensores.join("\n")).toEqual([]);
+  });
+});

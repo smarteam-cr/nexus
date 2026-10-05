@@ -5,6 +5,7 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
+import { nombreDeJob } from "@/lib/jobs/nombres";
 import { plural } from "../armar";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
@@ -151,33 +152,24 @@ export const PEDIDOS_PARA_VENTAS: Fuente = {
 
 const DIAS_DE_UN_PEDIDO_FRESCO = 60;
 
-/** El nombre de cada proceso del servidor, para que «falló» diga cuál. */
-const NOMBRE_DE_JOB: Record<string, string> = {
-  "odoo-espejo-daily": "La copia de Odoo",
-  "mercury-espejo-daily": "La copia de Mercury",
-  "cs-partner-daily": "La copia de HubSpot Partner",
-  "cs-signals-daily": "Las señales de Éxito del cliente",
-  "cs-watchdog-daily": "El vigía de Éxito del cliente",
-  "cobranza-quincenal": "El corte de cobranza",
-  "invariants-daily": "La revisión diaria de la base",
-  "maintenance-daily": "El mantenimiento diario",
-  "ventas-ganadas-daily": "La copia de ventas ganadas",
-  "licencias-renovacion-daily": "Los avisos de renovación",
-  "marketing-weekly": "La tanda de Marketing",
-};
-
 export const PROCESOS_QUE_FALLARON: Fuente = {
   clave: "sistema-jobs",
   frente: "SISTEMA",
   alDia: "Las copias automáticas y los procesos del servidor",
   async medir() {
-    const filas = await prisma.cronJobState.findMany({ select: { id: true, lastResult: true } });
+    /* Solo las filas que son jobs del scheduler: CronJobState también guarda candados y turnos, que no se avisan.
+       La lista sale de `allJobs()` y no de los nombres: hasta el 2026-10-05 un job sin nombre escrito a mano se
+       descartaba en silencio (lib/jobs/nombres.ts). Import diferido, como hace defs.ts con lo suyo: arrastra los jobs. */
+    const { allJobs } = await import("@/lib/jobs/defs");
+    const filas = await prisma.cronJobState.findMany({
+      where: { id: { in: allJobs().map((j) => j.key) } },
+      select: { id: true, lastResult: true },
+    });
     const out: Pendiente[] = [];
     for (const f of filas) {
       const r = f.lastResult as { ok?: unknown; error?: unknown; at?: unknown } | null;
       if (!r || r.ok !== false || typeof r.at !== "string") continue;
-      const nombre = NOMBRE_DE_JOB[f.id];
-      if (!nombre) continue; // las filas que no son jobs (candados, turnos) no se avisan
+      const nombre = nombreDeJob(f.id);
       out.push({
         clave: `sistema-jobs:${f.id}`,
         fuente: "sistema-jobs",

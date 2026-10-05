@@ -9,6 +9,7 @@ import {
   puedeLlevar,
   vistaFinanzasDeFrentes,
 } from "./frentes";
+import { formasDeVoseo } from "@/lib/ui/voseo";
 
 describe("frentesDe: lo que lleva cada persona", () => {
   it("sin elegir, salen del rol", () => {
@@ -109,8 +110,11 @@ describe("el catálogo", () => {
     expect(f?.requisito).toEqual({ tipo: "roles", roles: ["SUPER_ADMIN"] });
   });
 
-  it("tuteo en los textos que ve el equipo", () => {
-    const voseo = /\b(tenés|podés|querés|sabés|elegí|revisá|mirá|hacé|tocá)\b/i;
-    for (const f of FRENTES) expect(`${f.queLlega} ${f.requisitoTexto}`, f.clave).not.toMatch(voseo);
+  it("tuteo en los textos que ve el equipo (el detector por FORMA de lib/ui/voseo.ts, no una lista cerrada)", () => {
+    expect(FRENTES.length, "no pasa en vacío").toBeGreaterThanOrEqual(8);
+    const conVoseo = FRENTES.flatMap((f) =>
+      [f.nombre, f.queLlega, f.requisitoTexto].flatMap((t) => formasDeVoseo(t).map((w) => `${f.clave}: «${w}» en «${t}»`)),
+    );
+    expect(conVoseo).toEqual([]);
   });
 });

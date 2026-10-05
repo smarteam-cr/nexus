@@ -115,6 +115,8 @@ export const AGUDAS_DE_TUTEO: ReadonlySet<string> = new Set([
   "entendí",
   // …y quien registra avisa que terminó el mes («Ya anoté todos los gastos de octubre») o que arregló algo devuelto
   "anoté", "corregí",
+  // …y el ejemplo de cómo contar una falla en Feedback («guardé la fecha y al recargar volvió a la anterior»)
+  "guardé",
   // Sustantivos, gentilicios y nombres
   "país", "multipaís", "inglés", "interés", "cortés", "comité", "caché", "josé", "andrés", "mié",
 ]);

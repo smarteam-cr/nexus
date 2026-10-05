@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth/supabase";
 import { accessibleClientWhere } from "@/lib/auth/access";
 import { can } from "@/lib/auth/permissions/engine";
 import { parseRunError } from "@/lib/agents/run-error";
-import { MOTIVO_COLGADA, cortePorLatido, estaColgada } from "@/lib/agents/run-colgada";
+import { MOTIVO_COLGADA, estaColgada, wherePorLatido } from "@/lib/agents/run-colgada";
 import { canvasDelResultado, resolveRunResultUrl } from "@/lib/agents/run-url";
 import { slugForCanvas } from "@/lib/pieces/registry";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
@@ -83,13 +83,12 @@ export async function GET(req: NextRequest) {
      familia (CS solo mira `cs-account-brief`, Marketing solo lo suyo) y el resto queda afuera
      por omisión. Acá el corte se aplica a todas por igual, incluidas las que no existen aún.
      Ver lib/agents/run-colgada.ts. */
-  const corte = cortePorLatido();
-  const enCurso: Prisma.AgentRunWhereInput = { status: { in: ["PENDING", "RUNNING"] } };
+  const porLatido = wherePorLatido();
 
   const [running, recent] = await Promise.all([
     prisma.agentRun.findMany({
-      // Viva = dice que corre Y dio señales hace poco.
-      where: { AND: [scope, enCurso, { updatedAt: { gte: corte } }] },
+      // Viva = dice que corre Y dio señales hace poco. El MISMO `where` cuenta el «N corriendo ahora» de /agents.
+      where: { AND: [scope, porLatido.vivas] },
       orderBy: { createdAt: "desc" },
       take: 10,
       select,
@@ -99,7 +98,7 @@ export async function GET(req: NextRequest) {
          aparecer arriba de todo explicando que se cortó — no esfumarse sin decir nada. Y como
          el orden es por `updatedAt`, una vieja de 23 días cae sola al fondo y se va del feed. */
       where: {
-        AND: [scope, { OR: [{ status: { in: ["DONE", "ERROR"] } }, { AND: [enCurso, { updatedAt: { lt: corte } }] }] }],
+        AND: [scope, { OR: [{ status: { in: ["DONE", "ERROR"] } }, porLatido.colgadas] }],
       },
       orderBy: { updatedAt: "desc" },
       take,

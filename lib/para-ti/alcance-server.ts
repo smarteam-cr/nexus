@@ -13,6 +13,12 @@
  * ⚠ Por qué no se usa `accessibleClientWhere`: ese responde «qué puede ABRIR» y para quien ve toda la cartera
  * devuelve todo. Eso era justamente el problema: el índice de clientes le mostraba a dirección y a Ventas los avisos
  * de todas las cuentas como si les tocaran.
+ *
+ * ⛔ Pero el REVOKE sí es el de lib/auth/access.ts, con sus mismos helpers (`veTodaLaCartera`,
+ * `clientesRevocadosPara`): un REVOKE por persona O por rol saca la cuenta entera, también los proyectos donde eres
+ * el encargado; y a quien ve toda la cartera no lo alcanza, igual que allí. Hasta el 2026-10-05 se miraba solo el
+ * REVOKE por persona y solo para la cuenta compartida: «Para ti» te seguía dando trabajo en una cuenta que ya no
+ * podías abrir.
  */
 import "server-only";
 import type { TeamMember } from "@prisma/client";
@@ -20,7 +26,8 @@ import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { proyectosAbiertos } from "@/lib/clients/resumen-proyectos";
 import { esProyectoDePipelineCS, PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
-import { can, getEffectivePermissions } from "@/lib/auth/permissions/engine";
+import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
+import { clientesRevocadosPara, veTodaLaCartera } from "@/lib/auth/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { esResponsable } from "@/lib/escala/comentarios/reglas";
 import { frentesDe, type ClaveDeFrente } from "./frentes";
@@ -88,16 +95,20 @@ export function frentesDelMiembro(tm: Pick<MiembroParaAlcance, "roleEnum" | "ema
 
 export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
   const email = tm.email.toLowerCase();
-  const [permisos, veTodo, asignaciones] = await Promise.all([
+  const [permisos, veTodaLaCarteraYa, grants, revocadasAMi] = await Promise.all([
     getEffectivePermissions(tm),
-    tm.roleEnum === "SUPER_ADMIN" ? Promise.resolve(true) : can(tm, "clientes", "viewAll"),
+    veTodaLaCartera(tm),
+    // Compartidas A TI: solo el GRANT por persona. Uno por rol (ej. «todo el equipo CSE») no hace tuya una cuenta.
     prisma.clientAssignment.findMany({
-      where: { teamMemberId: tm.id },
-      select: { clientId: true, kind: true },
+      where: { teamMemberId: tm.id, kind: "GRANT" },
+      select: { clientId: true },
     }),
+    clientesRevocadosPara(tm),
   ]);
-  const compartidas = new Set(asignaciones.filter((a) => a.kind === "GRANT").map((a) => a.clientId));
-  for (const a of asignaciones) if (a.kind === "REVOKE") compartidas.delete(a.clientId);
+  /* Mismo orden que `requireAccessToClient`: quien ve toda la cartera pasa antes de mirar un REVOKE; para el resto,
+     un REVOKE (tuyo o de tu rol) corta antes de mirar si eres el encargado. */
+  const revocadas = veTodaLaCarteraYa ? new Set<string>() : revocadasAMi;
+  const compartidas = new Set(grants.map((g) => g.clientId).filter((id) => !revocadas.has(id)));
 
   const clientes = await prisma.client.findMany({
     where: {
@@ -106,6 +117,7 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
         { projects: { some: { hubspotOwnerEmail: { equals: email, mode: "insensitive" }, ...PROYECTO_DE_PIPELINE_CS_WHERE } } },
         ...(compartidas.size ? [{ id: { in: [...compartidas] } }] : []),
       ],
+      ...(revocadas.size ? { id: { notIn: [...revocadas] } } : {}),
     },
     select: {
       id: true,
@@ -129,6 +141,7 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
 
   const proyectos: ProyectoPropio[] = [];
   for (const c of clientes) {
+    if (revocadas.has(c.id)) continue;
     const abiertos = proyectosAbiertos(c.projects);
     const compartida = compartidas.has(c.id);
     for (const p of abiertos) {
@@ -146,9 +159,6 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
     }
   }
 
-  const veTodaLaCartera =
-    veTodo || (tm.canViewAllClients && (!tm.canViewAllExpiresAt || tm.canViewAllExpiresAt > new Date()));
-
   return {
     email,
     nombre: tm.name,
@@ -156,7 +166,7 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
     teamMemberId: tm.id,
     frentes: frentesDelMiembro(tm),
     permisos,
-    veTodaLaCartera,
+    veTodaLaCartera: veTodaLaCarteraYa,
     proyectos,
   };
 }

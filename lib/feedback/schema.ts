@@ -2,10 +2,12 @@
  * lib/feedback/schema.ts — lo que entra a las rutas de /api/feedback (Zod en la frontera, ARCHITECTURE §3).
  */
 import { z } from "zod";
+import { esRutaInterna } from "@/lib/navegacion/ruta-interna";
 import { COLUMNAS, MAX_CUERPO, MAX_MARCAS, TIPOS_DE_FEEDBACK } from "./reglas";
 
 const texto = (max: number) => z.string().trim().max(max);
-const rutaInterna = z.string().trim().max(1000).refine((r) => r.startsWith("/") && !r.startsWith("//"), "La dirección no es de Nexus.");
+/** La bandeja la muestra como enlace: nunca una dirección afuera (`/\otro.com` también lo es). */
+const rutaInterna = z.string().trim().max(1000).refine(esRutaInterna, "La dirección no es de Nexus.");
 
 export const CrearReporte = z.object({
   tipo: z.enum(TIPOS_DE_FEEDBACK),

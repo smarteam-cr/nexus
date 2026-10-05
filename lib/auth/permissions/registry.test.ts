@@ -9,6 +9,7 @@
  *   F) Todo `agentGroup` del registro de piezas tiene su `case` en artifact-gate, y el
  *      `default` es fail-closed para los que no (A-18): correr sin celda no es una opción.
  *   G) El 403 de «regenerar» se lee bien con cualquier etiqueta (femenino, plural).
+ *   H) La matriz plegable: la mezcla decide cómo arranca un área; la cabecera, la persona.
  *
  * Correr: `npx vitest run lib/auth/permissions/registry.test.ts --project unit`.
  */
@@ -24,6 +25,7 @@ import {
 } from "./registry";
 import { PIECES } from "@/lib/pieces/registry";
 import { artifactGateMessage, resolveArtifactGate, type ArtifactGate } from "./artifact-gate";
+import { alTocarCabecera, areasAbiertasAlInicio, estaAbierta, hayMezcla } from "./matriz-plegable";
 
 // artifact-gate toca prisma en los `case` con señal; acá solo se ejercita el `default`.
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
@@ -123,4 +125,53 @@ test("G — el 403 de regenerar concuerda con cualquier etiqueta (femenino y plu
       /\bgenerad[oa]s?\b/,
     );
   }
+});
+
+// ── H) La matriz plegable (components/team/PermissionMatrix.tsx) ─────────────────────────────
+// Hasta el 2026-10-05 era `abierta = abiertaAMano || hayMezcla`: un área mezclada no se podía plegar, y al
+// completarla desde sus casillas se cerraba sola. La mezcla decide solo el estado INICIAL; la cabecera, la persona.
+test("H) la mezcla decide cómo ARRANCA un área; la cabecera, la persona", () => {
+  const alInicio = areasAbiertasAlInicio([
+    { key: "clientes", encendidas: 1, total: 3 }, // mezclada → arranca abierta
+    { key: "finanzas", encendidas: 3, total: 3 }, // «Todo» → arranca plegada
+    { key: "equipo", encendidas: 0, total: 2 }, // «Nada» → arranca plegada
+  ]);
+  expect([...alInicio]).toEqual(["clientes"]);
+  expect(hayMezcla(1, 3)).toBe(true);
+  expect(hayMezcla(3, 3)).toBe(false);
+  expect(hayMezcla(0, 3)).toBe(false);
+
+  let decididas: ReadonlyMap<string, boolean> = new Map();
+  expect(estaAbierta("clientes", decididas, alInicio)).toBe(true);
+  expect(estaAbierta("finanzas", decididas, alInicio)).toBe(false);
+
+  // ⛔ Un área mezclada se puede plegar: el primer clic cierra lo que SE VE abierto.
+  decididas = alTocarCabecera("clientes", decididas, alInicio);
+  expect(estaAbierta("clientes", decididas, alInicio), "un área mezclada no se deja plegar").toBe(false);
+  decididas = alTocarCabecera("clientes", decididas, alInicio);
+  expect(estaAbierta("clientes", decididas, alInicio)).toBe(true);
+
+  // Una plegada se abre al primer clic, y las demás no se mueven.
+  decididas = alTocarCabecera("finanzas", decididas, alInicio);
+  expect(estaAbierta("finanzas", decididas, alInicio)).toBe(true);
+  expect(estaAbierta("equipo", decididas, alInicio)).toBe(false);
+});
+
+test("H) completar un área mezclada no la cierra sola: el estado inicial se tomó una vez", () => {
+  /* La matriz calcula `alInicio` al montar y no lo vuelve a calcular. Que el área deje de estar mezclada (la persona
+     encendió la última casilla) no cambia ni `alInicio` ni lo decidido: sigue abierta. */
+  const alInicio = areasAbiertasAlInicio([{ key: "clientes", encendidas: 2, total: 3 }]);
+  const sinTocar: ReadonlyMap<string, boolean> = new Map();
+  expect(hayMezcla(3, 3), "ya no está mezclada").toBe(false);
+  expect(estaAbierta("clientes", sinTocar, alInicio), "se cerró sola al completarla").toBe(true);
+});
+
+test("H) la matriz toma el estado inicial UNA vez (en el inicializador de useState), no en cada render", () => {
+  /* La edición que la pone en rojo: calcular `alInicio` suelto en el cuerpo del componente. Se recalcularía con cada
+     casilla y el área se cerraría sola otra vez. */
+  const src = fs.readFileSync(path.join(process.cwd(), "components/team/PermissionMatrix.tsx"), "utf8");
+  expect(src, "la matriz dejó de tomar el estado inicial una sola vez").toMatch(
+    /const \[alInicio\] = useState\(\(\) =>\s*areasAbiertasAlInicio\(/,
+  );
+  expect(src, "la matriz volvió a abrir por mezcla en cada render").not.toMatch(/\|\|\s*hayMezcla/);
 });

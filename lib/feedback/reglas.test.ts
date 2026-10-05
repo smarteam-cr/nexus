@@ -13,6 +13,7 @@ import {
   TIPOS_DE_FEEDBACK,
 } from "./reglas";
 import { huella, temaMasParecido } from "./parecidos";
+import { formasDeVoseo } from "@/lib/ui/voseo";
 
 describe("los tipos y las columnas", () => {
   it("cada tipo tiene su pregunta, su ejemplo y su botón con objeto (nada de «Enviar»)", () => {
@@ -28,10 +29,14 @@ describe("los tipos y las columnas", () => {
     expect(COLUMNA.decidir.nombre).toBe("Por decidir");
   });
 
-  it("tuteo en todo lo que lee el equipo", () => {
-    const voseo = /\b(tenés|podés|querés|sabés|elegí|revisá|mirá|hacé|tocá|contá|escribí|mandá)\b/i;
-    const textos = [...TIPOS_DE_FEEDBACK.flatMap((t) => Object.values(TIPO[t])), ...COLUMNAS.flatMap((c) => [COLUMNA[c].nombre, COLUMNA[c].ayuda])];
-    for (const t of textos) expect(t).not.toMatch(voseo);
+  it("tuteo en todo lo que lee el equipo (el detector por FORMA de lib/ui/voseo.ts, no una lista cerrada)", () => {
+    const textos = [
+      ...TIPOS_DE_FEEDBACK.flatMap((t) => [TIPO[t].nombre, TIPO[t].etiqueta, TIPO[t].ejemplo, TIPO[t].boton]),
+      ...COLUMNAS.flatMap((c) => [COLUMNA[c].nombre, COLUMNA[c].ayuda, COLUMNA[c].corta]),
+    ];
+    expect(textos.length, "no pasa en vacío").toBe(TIPOS_DE_FEEDBACK.length * 4 + COLUMNAS.length * 3);
+    const conVoseo = textos.flatMap((t) => formasDeVoseo(t).map((w) => `«${w}» en «${t}»`));
+    expect(conVoseo).toEqual([]);
   });
 });
 

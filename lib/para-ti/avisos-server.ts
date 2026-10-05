@@ -104,15 +104,25 @@ export async function avisosDe(email: string, cuantos = 30): Promise<AvisoVisto[
   }
 }
 
-/** Cuántos sin leer, y el más nuevo (para la notificación del navegador). */
-export async function avisosNuevosDe(email: string): Promise<{ n: number; ultimo: { id: string; titulo: string; href: string } | null }> {
+/**
+ * Cuántos sin leer, y el más nuevo (para la notificación del navegador). Con su fecha de creación: el menú notifica
+ * solo un aviso posterior al último que ya vio (`debeNotificar`), no cualquiera con otro id.
+ */
+export async function avisosNuevosDe(
+  email: string,
+): Promise<{ n: number; ultimo: { id: string; titulo: string; href: string; creadoAt: string } | null }> {
   if (!modeloDisponible(prisma.aviso)) return { n: 0, ultimo: null };
   try {
     const where = { paraEmail: email.toLowerCase(), leidoAt: null };
-    const [n, ultimo] = await Promise.all([
+    const [n, fila] = await Promise.all([
       prisma.aviso.count({ where }),
-      prisma.aviso.findFirst({ where, orderBy: { creadoAt: "desc" }, select: { id: true, titulo: true, href: true } }),
+      prisma.aviso.findFirst({
+        where,
+        orderBy: { creadoAt: "desc" },
+        select: { id: true, titulo: true, href: true, creadoAt: true },
+      }),
     ]);
+    const ultimo = fila ? { id: fila.id, titulo: fila.titulo, href: fila.href, creadoAt: fila.creadoAt.toISOString() } : null;
     return { n, ultimo };
   } catch (e) {
     if (esquemaDesactualizado(e)) return { n: 0, ultimo: null };
