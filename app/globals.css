@@ -105,6 +105,17 @@
   --color-info-surface:    var(--info-surface);
   --color-info-line:       var(--info-line);
   --color-info-ink:        var(--info-ink);
+  /* Las series de un gráfico (2026-10-05, punto de equilibrio). Paleta CATEGÓRICA: cada serie conserva su color
+     aunque se saquen otras, y el orden de los seis es el que pasa el validador de daltonismo (distancia ≥ 8 entre
+     vecinos). Flipean con el tema: en oscuro son otros pasos del mismo tono. Se usan por número, en orden fijo;
+     una séptima serie no inventa un color: va a «otros» o a otro gráfico. Nunca para un estado (eso es success,
+     warn, danger). */
+  --color-serie-1: var(--serie-1);
+  --color-serie-2: var(--serie-2);
+  --color-serie-3: var(--serie-3);
+  --color-serie-4: var(--serie-4);
+  --color-serie-5: var(--serie-5);
+  --color-serie-6: var(--serie-6);
 
   /* ── Tokens de INTENCIÓN (mismo valor en ambos modos — no flipean) ───────────
    *  Vivían en :root, donde Tailwind v4 NO genera utilidades (estuvieron muertos
@@ -208,6 +219,14 @@ html {
   --info-line:       #1d4ed880;  /* blue-700 @ 50% */
   --info-ink:        #93c5fd;    /* blue-300 — 9,27:1 */
 
+  /* Series de gráficos — pasos OSCUROS (validados sobre #111827: todos ≥ 3:1) */
+  --serie-1: #3987e5;  /* azul */
+  --serie-2: #d95926;  /* naranja */
+  --serie-3: #199e70;  /* aqua */
+  --serie-4: #c98500;  /* amarillo */
+  --serie-5: #d55181;  /* magenta */
+  --serie-6: #008300;  /* verde */
+
   /* Scrollbars temáticos (valores OSCUROS) — html.light los redefine */
   --scrollbar-thumb:       #374151;  /* gray-700 */
   --scrollbar-thumb-hover: #4b5563;  /* gray-600 */
@@ -296,6 +315,15 @@ html.light {
   --info-surface:    #eff6ff;  /* blue-50 */
   --info-line:       #bfdbfe;  /* blue-200 */
   --info-ink:        #1e40af;  /* blue-800 — 8,01:1 */
+
+  /* Series de gráficos — pasos CLAROS (validados sobre #ffffff; aqua, amarillo y magenta quedan bajo 3:1,
+     por eso todo gráfico que los use lleva leyenda con nombre y una vista en tabla) */
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --serie-3: #1baf7a;
+  --serie-4: #eda100;
+  --serie-5: #e87ba4;
+  --serie-6: #008300;
 
   /* Scrollbars temáticos — valores CLAROS */
   --scrollbar-thumb:       #cbd5e1;  /* slate-300 */

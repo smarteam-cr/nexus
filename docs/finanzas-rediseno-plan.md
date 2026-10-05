@@ -46,6 +46,7 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 | ✅ | **Revisión** | Supervisión de Alex: decisiones, revisión con «Devolver», cobranza que se complica | tabla `RevisionRegistro` |
 | ✅ | **Cierre del mes** | Cerrar y reabrir; tipo de cambio en pantalla; meses cerrados en el punto de equilibrio | tabla `CierreMes` |
 | ✅ | **Gasto sin Excel** | El punto de equilibrio lee los gastos de Nexus desde octubre; Mercury en el punto de equilibrio y en «Actualizar» | — |
+| ✅ | **Punto de equilibrio para dirección** | La página rehecha para RevOps, el CFO y el CEO (ver abajo) | tabla `DecisionFinanzas` |
 
 ## Cómo funciona la revisión
 
@@ -71,8 +72,8 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
   Conciliación se muestra con «No frena el cierre».
 - Solo se cierra un mes que terminó. Cerrar guarda quién, cuándo y los números del punto de equilibrio en dólares
   (egresos, facturado, cobrado, ingresos). Reabrir pide un motivo y deja guardados los números del cierre.
-- El punto de equilibrio tiene una columna «Cierre» (✓ Cerrado · Cambió después del cierre · Preliminar) y el margen a
-  la fecha dice qué meses del margen están sin cerrar.
+- El punto de equilibrio marca cada mes (✓ Cerrado · Cambió después del cierre · sin cerrar · qué le falta) y el margen
+  a la fecha dice por qué es preliminar.
 - La calidad de cada mes sale de la misma lista de egresos que el reporte (`cargarEgresosDelAnio`).
 
 ## Cómo funciona el gasto sin Excel
@@ -88,5 +89,25 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 - «Lo que no cuadra» del punto de equilibrio suma «por cobrar en Mercury de clientes sin emparejar» (sin sumar al total:
   no se sabe si el tablero ya lo cuenta). «Actualizar» ya trae también Mercury.
 
+## Cómo funciona el punto de equilibrio (2026-10-05)
+
+- Se lee como la reunión: la respuesta (¿alcanza lo facturado para el piso?, el margen a la fecha y lo que viene), el año
+  mes a mes (líneas, barras o tabla, con la venta, lo facturado, lo cobrado, el gasto y los aliados; resaltar una serie
+  desde la leyenda), de la venta a la caja, qué tan firmes son los números y la agenda para decidir.
+- El margen es **preliminar** hasta que el CFO cierre los meses que cuenta y confirme el tipo de cambio; el «¿Por qué es
+  preliminar?» lo dice con los meses reales (`porQueEsPreliminar`).
+- La agenda (`armarAgenda`) reparte cada línea de «lo que no cuadra» a quien la decide: CEO, CFO o RevOps. Las que ya
+  tienen su lugar en la página (ventas sin cobranza, Odoo, Mercury, egresos incompletos) no se repiten.
+- Si lo de los aliados cuenta para el piso se decide **en la página** (tabla `DecisionFinanzas`, quién y cuándo). Sin
+  decisión vale el criterio de siempre, `PARTNERSHIP_CUBRE_EL_PISO`.
+- Línea nueva de «lo que no cuadra»: la planilla del piso contra la última pagada, si difieren más de 10 %.
+- «¿Y si…?» simula lo que queda del año (facturar más o menos por mes, contar lo estimado de los aliados, un costo nuevo)
+  sin guardar nada.
+- Los componentes viejos (EquilibrioClient, CurvaEquilibrio, TablaMeses, InconsistenciasPanel, DesgloseIngresos,
+  EstructuraCostos, ConfiabilidadDato) quedan sin uso; se borran cuando la otra sesión termine lo que tiene abierto en
+  ellos. RendimientoCobranza sigue en uso, dentro de «Ver la cobranza contra el Excel».
+
 Todo el SQL va en un solo archivo, `scripts/sql/2026-10-03-finanzas-rediseno.sql`, **antes del deploy**. ⚠ La columna de
 `TeamMember` la lee cada página de Nexus: sin el SQL aplicado, nada carga (el deploy lo detecta y vuelve atrás solo).
+El punto de equilibrio suma `scripts/sql/2026-10-05-decisiones-de-finanzas.sql`, también antes del deploy (sin él la
+página carga igual, pero no se puede guardar la decisión de los aliados).
