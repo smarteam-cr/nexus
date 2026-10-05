@@ -1,23 +1,33 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { leerPartner } from "./lectura-partner";
 import {
+  QUE_PONE_CADA_MARCA,
   adopcionPorHub,
+  buscarEnLaLista,
   carteraEnUnaLinea,
   consumoDeLaCartera,
   cuentasParaBuscar,
   cseVigente,
   entregaDeProyectos,
   equipo,
+  leyendaDeSalud,
   listaParaLlamar,
   motivosDeLaCuenta,
   nivelDePartner,
   oportunidades,
+  pasaEntrega,
   primeros90Dias,
   renovacionesProximas,
   saludDeLaCuenta,
+  type AlertaDeCuenta,
+  type ClaveDeMotivo,
   type CuentaDeCartera,
   type ProyectoDeCuenta,
 } from "./cartera-reglas";
+
+const leer = (rel: string) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
 const HOY = "2026-10-04";
 
@@ -71,6 +81,20 @@ const cuenta = (id: string, o: Partial<CuentaDeCartera> & { crudo?: Record<strin
     ...resto,
   };
 };
+
+const alerta = (o: Partial<AlertaDeCuenta> = {}): AlertaDeCuenta => ({
+  id: "a1",
+  severidad: "HIGH",
+  categoria: "CHURN_RISK",
+  titulo: "Dice estar conforme, pero el uso cae",
+  razon: "",
+  accion: null,
+  proyecto: null,
+  estado: "OPEN",
+  delAgente: true,
+  detectadaEn: HOY,
+  ...o,
+});
 
 describe("motivos de una cuenta", () => {
   it("una cuenta sana no tiene motivos", () => {
@@ -304,9 +328,166 @@ describe("la cartera en una línea", () => {
     expect(r.uso).toEqual({ promedio: 45, conPuntaje: 2, cayendo: 1 });
   });
 
-  it("la entrega de proyectos cuenta bloqueados, atrasados y sin CSE", () => {
+  it("la entrega de proyectos: las cuentas bloqueadas y atrasadas, y los proyectos sin CSE", () => {
     const r = entregaDeProyectos([cuenta("a", { proyectos: [proyecto({ bloqueado: true }), proyecto({ atraso: { dias: 3, fase: null }, cseNombre: null })] })]);
-    expect(r).toEqual({ bloqueados: 1, atrasados: 1, alertasAltas: 0, sinCse: 1 });
+    expect(r).toEqual({ bloqueados: ["a"], atrasados: ["a"], alertasAltas: [], sinCse: 1 });
+  });
+
+  it("⭐ una moneda por fila: dos hubs que renuevan el mismo día en monedas distintas no se suman", () => {
+    const c = cuenta("mixta", {
+      crudo: { hs_sales_hub_renewal_date: "2026-11-14" },
+      licenciasManuales: [{ hub: "service", plan: "Pro", fechaRenovacion: "2026-11-14", montoMensual: 300000, moneda: "crc" }],
+    });
+    const filas = renovacionesProximas([c], HOY, 90);
+    expect(filas.map((f) => [f.moneda, f.montoMensual, f.hubs.map((h) => h.hub)])).toEqual([
+      ["USD", 1000, ["sales"]],
+      ["CRC", 300000, ["service"]],
+    ]);
+    // Lo que renueva en dólares en la cartera es solo lo que está en dólares.
+    expect(carteraEnUnaLinea([c], HOY).renuevan90).toEqual({ monto: 1000, cuentas: 1 });
+  });
+
+  it("⭐ la moneda se compara en mayúsculas: una licencia cargada con «usd» cuenta en dólares", () => {
+    const c = cuenta("minusculas", {
+      crudo: null,
+      licenciasManuales: [{ hub: "service", plan: null, fechaRenovacion: "2026-11-01", montoMensual: 500, moneda: "usd" }],
+    });
+    expect(renovacionesProximas([c], HOY, 90)[0].moneda).toBe("USD");
+    expect(carteraEnUnaLinea([c], HOY).renuevan90).toEqual({ monto: 500, cuentas: 1 });
+  });
+
+  it("y se guarda en mayúsculas: la ruta de las licencias normaliza antes de escribir", () => {
+    expect(leer("app/api/clients/[id]/licencias/route.ts")).toMatch(/moneda:\s*normalizarMoneda\(/);
+  });
+});
+
+describe("⭐ entrega de proyectos: el número del botón = las filas que deja su filtro", () => {
+  const RENUEVA_PRONTO = { hs_sales_hub_renewal_date: "2026-11-14" };
+  const cuentas = [
+    // Un atraso tapado por el «riesgo doble»: el motivo principal habla del bloqueo, no del atraso.
+    cuenta("doble", {
+      crudo: RENUEVA_PRONTO,
+      proyectos: [proyecto({ id: "b", bloqueado: true }), proyecto({ id: "t", atraso: { dias: 12, fase: null } })],
+    }),
+    // Un bloqueo tapado por una cancelación: el motivo principal es la cancelación.
+    cuenta("cancelada", { crudo: { ...RENUEVA_PRONTO, hs_cancellation_products: "SALES" }, proyectos: [proyecto({ bloqueado: true })] }),
+    // Una alerta alta que no es del agente (un aviso automático): «A quién llamar» no la muestra.
+    cuenta("aviso", { alertas: [alerta({ id: "x", delAgente: false, categoria: "RENEWAL_RISK" })] }),
+    cuenta("vigia", { alertas: [alerta({ id: "y" })] }),
+    cuenta("sana"),
+  ];
+  const entrega = entregaDeProyectos(cuentas);
+  const filas = listaParaLlamar(cuentas, HOY);
+
+  for (const [filtro, balde] of [
+    ["bloqueados", "bloqueados"],
+    ["atrasados", "atrasados"],
+    ["alertas", "alertasAltas"],
+  ] as const) {
+    it(`«${filtro}»: el filtro lista exactamente las cuentas que cuenta el botón`, () => {
+      const enLaLista = filas.filter((f) => pasaEntrega(f, filtro, entrega)).map((f) => f.clientId);
+      expect(enLaLista.sort()).toEqual([...entrega[balde]].sort());
+    });
+  }
+
+  it("los tres casos que antes no coincidían, contados como cuentas", () => {
+    expect(entrega.atrasados).toEqual(["doble"]);
+    expect([...entrega.bloqueados].sort()).toEqual(["cancelada", "doble"]);
+    expect(entrega.alertasAltas).toEqual(["vigia"]);
+  });
+});
+
+describe("⭐ buscar con un filtro puesto", () => {
+  const cuentas = [
+    cuenta("Banco Atlántico", { proyectos: [proyecto({ atraso: { dias: 5, fase: null } })] }),
+    cuenta("Bancaria Sur", { crudo: { hs_sales_hub_renewal_date: "2026-11-14" }, proyectos: [proyecto({ bloqueado: true })] }),
+    cuenta("Banco Sano"),
+  ];
+  const filas = listaParaLlamar(cuentas, HOY);
+  const todas = cuentasParaBuscar(cuentas, HOY);
+
+  it("una cuenta de la lista que el filtro oculta aparece abajo, no desaparece", () => {
+    // Filtro «Riesgo doble»: solo deja «Bancaria Sur», que no se llama «banco».
+    const r = buscarEnLaLista(filas, todas, { busqueda: "banco", cse: "", pasaLosFiltros: (f) => f.riesgoDoble });
+    expect(r.visibles).toEqual([]);
+    expect(r.otras.map((c) => c.nombre)).toEqual(["Banco Atlántico", "Banco Sano"]);
+  });
+
+  it("lo que ya se ve no se repite abajo; sin búsqueda no hay «otras»", () => {
+    const r = buscarEnLaLista(filas, todas, { busqueda: "banco", cse: "", pasaLosFiltros: () => true });
+    expect(r.visibles.map((f) => f.nombre)).toEqual(["Banco Atlántico"]);
+    expect(r.otras.map((c) => c.nombre)).toEqual(["Banco Sano"]);
+    expect(buscarEnLaLista(filas, todas, { busqueda: " ", cse: "", pasaLosFiltros: () => true }).otras).toEqual([]);
+  });
+
+  it("el filtro por CSE vale para las dos partes", () => {
+    const r = buscarEnLaLista(filas, todas, { busqueda: "banc", cse: "Heiver Gómez", pasaLosFiltros: () => true });
+    expect([...r.visibles, ...r.otras]).toEqual([]);
+  });
+});
+
+describe("⭐ la leyenda de las marcas dice lo que hacen las reglas", () => {
+  /* Una cuenta por cada motivo y prioridad posibles. Si una regla cambia de prioridad o de umbral
+     (p. ej. la relación por vencer pasa a ser urgente a los 20 días), el par que da ya no es el que
+     dice la leyenda y esto se pone en rojo. */
+  const RENUEVA_PRONTO = { hs_sales_hub_renewal_date: "2026-11-14" };
+  const deuda = (diasMax: number) => ({
+    vencidas: { cantidad: 1, montos: { USD: 900 }, diasMax },
+    sinFacturarAtrasadas: { cantidad: 0, diasMax: 0 },
+    promesasIncumplidas: 0,
+    ultimoPago: null,
+  });
+  const casos: CuentaDeCartera[] = [
+    cuenta("cancelacion", { crudo: { hs_cancellation_products: "SERVICE" } }),
+    cuenta("riesgoDoble", { crudo: RENUEVA_PRONTO, proyectos: [proyecto({ bloqueado: true })] }),
+    cuenta("bloqueado", { proyectos: [proyecto({ bloqueado: true })] }),
+    cuenta("deudaGrave", { facturacion: deuda(38) }),
+    cuenta("deudaReciente", { facturacion: deuda(10) }),
+    cuenta("usoTrasCierre", {
+      crudo: { hs_last_4_weeks_usage_score_trend: "-0.15" },
+      proyectos: [proyecto({ activo: false, cerradoEn: "2026-08-08" })],
+    }),
+    cuenta("renuevaConUsoBajo", { crudo: { hs_sales_hub_renewal_date: "2026-10-31", hs_unified_usage_score: "29" } }),
+    cuenta("alertaAlta", { alertas: [alerta({ severidad: "HIGH" })] }),
+    cuenta("alertaMedia", { alertas: [alerta({ severidad: "MEDIUM" })] }),
+    cuenta("relacionUrgente", { crudo: { hs_managed_relationship_estimated_expiration_date: "2026-10-13" } }),
+    cuenta("relacionPorVencer", { crudo: { hs_managed_relationship_estimated_expiration_date: "2026-10-30" } }),
+    cuenta("sinDatos", { crudo: null }),
+    cuenta("inactiva", { crudo: { hs_is_active: "false" } }),
+    cuenta("bajaDePlan", { crudo: { ...RENUEVA_PRONTO, hs_next_renewal_date: "2026-11-14", hs_renewal_mrr_change: "-355" } }),
+    cuenta("atrasado", { proyectos: [proyecto({ atraso: { dias: 9, fase: null } })] }),
+    cuenta("usoCayendo", { crudo: { hs_last_4_weeks_usage_score_trend: "-0.15" } }),
+    cuenta("licenciasSinUsar", {
+      crudo: { ...RENUEVA_PRONTO, hs_sales_seats_assigned: "4", hs_sales_seats_available: "6", hs_sales_seats_limit: "10" },
+    }),
+    cuenta("sinContacto", { ultimoContacto: "2026-08-31T00:00:00Z" }),
+    cuenta("tickets", { ticketsAbiertos: 3 }),
+  ];
+  const motivos = casos.flatMap((c) => motivosDeLaCuenta(c, HOY));
+  const clave = (x: { clave: ClaveDeMotivo; prioridad: string }) => `${x.clave}:${x.prioridad}`;
+  const dan = new Set(motivos.map(clave));
+  const dice = new Set(QUE_PONE_CADA_MARCA.map(clave));
+
+  it("todo motivo y prioridad que dan las reglas está en la leyenda", () => {
+    expect([...dan].filter((k) => !dice.has(k)), "las reglas dan esto y la leyenda no lo dice").toEqual([]);
+  });
+
+  it("y la leyenda no dice nada que las reglas no den", () => {
+    expect([...dice].filter((k) => !dan.has(k)), "la leyenda dice esto y ninguna cuenta lo da").toEqual([]);
+  });
+
+  it("cada texto va en la marca que le pone a la cuenta", () => {
+    const leyenda = leyendaDeSalud();
+    for (const m of motivos) {
+      const fila = QUE_PONE_CADA_MARCA.find((x) => clave(x) === clave(m))!;
+      const marca = leyenda.find((l) => l.salud === saludDeLaCuenta([m]))!;
+      expect(marca.texto, `«${fila.texto}» va en «${marca.nombre}»`).toContain(fila.texto);
+    }
+    expect(leyenda.map((l) => l.salud)).toEqual(["en-riesgo", "en-friccion", "saludable"]);
+  });
+
+  it("el índice pinta esta leyenda, no una escrita a mano", () => {
+    expect(leer("components/cs/CsPanel.tsx")).toContain("leyendaDeSalud()");
   });
 });
 

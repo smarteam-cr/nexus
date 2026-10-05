@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToClient } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { HUBS } from "@/lib/cs/licencias";
+import { normalizarMoneda } from "@/lib/cs/formato";
 import { cargarLicenciasDelCliente } from "@/lib/cs/avisos-de-renovacion";
 import { fechaLocalDeLaReunion } from "@/lib/sessions/compromisos-y-alcance";
 
@@ -44,7 +45,8 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
     fechaCompra: fecha(b?.fechaCompra),
     fechaRenovacion: fecha(b?.fechaRenovacion),
     montoMensual: monto,
-    moneda: texto(b?.moneda, 8),
+    // En mayúsculas: «usd» y «USD» eran dos monedas y las sumas en dólares dejaban afuera una.
+    moneda: normalizarMoneda(texto(b?.moneda, 8)),
     nota: texto(b?.nota, 1000),
   };
   const vacio = Object.values(datos).every((v) => v === null);

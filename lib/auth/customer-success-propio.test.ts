@@ -21,9 +21,10 @@ import { ROLES_DE_EXITO_DEL_CLIENTE, esLiderDeCs } from "@/lib/cs/acceso";
  *    se reparte por plantilla y le abriría el dinero de la cartera a roles que no lo tienen que ver.
  *    `clientes.viewAll` además lo tienen Ventas, Desarrollo y Marketing por default.
  *
- * 2. **Abrir UNA de las tres puertas y no las otras.** Las páginas, las APIs que leen o escriben
- *    por cuenta y el menú tienen que decir lo mismo: un menú que muestra lo que la página rechaza,
- *    o una API que contesta a quien la página echa, son el mismo error con otra cara.
+ * 2. **Abrir UNA de las puertas y no las otras.** Las páginas, las APIs que leen o escriben por
+ *    cuenta, el menú y el atajo «Ver portal del cliente» de la ficha del cliente tienen que decir lo
+ *    mismo: un menú o un botón que muestra lo que la página rechaza, o una API que contesta a quien
+ *    la página echa, son el mismo error con otra cara.
  */
 
 const RAIZ = process.cwd();
@@ -81,11 +82,30 @@ describe("el área es de la CSL y dirección, por rol", () => {
       const src = sinComentarios(p);
       const gate = src.indexOf("if (!ctx || !esLiderDeCs(ctx.role)) redirect(");
       expect(gate, `${p} dejó de pedir el rol`).toBeGreaterThan(0);
-      const carga = Math.min(
-        ...["cargarCarteraDeLaCsl(", "loadCsAccount("].map((f) => src.indexOf(f)).filter((i) => i > 0),
-      );
+      const cargadores = ["cargarCarteraDeLaCsl(", "loadCsAccount("].map((f) => src.indexOf(f)).filter((i) => i > 0);
+      /* Sin esto la comparación de abajo no podía fallar: si se renombra el cargador, la lista
+         queda vacía, Math.min() da Infinity y «gate < Infinity» pasa siempre. */
+      expect(
+        cargadores.length,
+        `${p} ya no llama a ningún cargador conocido: si se renombró, agrégalo a esta lista`,
+      ).toBeGreaterThan(0);
+      const carga = Math.min(...cargadores);
       expect(gate, `${p} carga datos antes de mirar el rol`).toBeLessThan(carga);
     }
+  });
+
+  it("⭐ la cuarta puerta: el atajo «Ver portal del cliente» de la ficha del cliente pide lo mismo que la página", () => {
+    /* Colgaba de «ver todos los clientes» (`seeAllClients`), que Ventas, Desarrollo y Marketing
+       tienen por default: les mostraba un botón que los mandaba a una página que los rebota. */
+    const LAYOUT = "app/(shell)/clients/[id]/layout.tsx";
+    const src = sinComentarios(LAYOUT);
+    const atajo = /\{(\w+) && \(\s*<AccionDeCabecera href=\{`\/customer-success\/\$\{id\}`\}/.exec(src);
+    expect(atajo, `${LAYOUT}: no encuentro el atajo condicionado a /customer-success/[id]`).not.toBeNull();
+    const condicion = new RegExp(`const ${atajo![1]} = ([^;]+);`).exec(src)?.[1] ?? "";
+    expect(condicion, `${LAYOUT}: «${atajo![1]}» tiene que salir del rol, como la página`).toContain("esLiderDeCs(");
+    expect(condicion, `${LAYOUT}: el atajo volvió a colgar de «ver todos los clientes»`).not.toMatch(
+      /seeAllClients|"clientes",\s*"viewAll"/,
+    );
   });
 
   it("las tres APIs por cuenta piden el mismo rol", () => {

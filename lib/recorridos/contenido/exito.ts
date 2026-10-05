@@ -31,7 +31,7 @@ export const EXITO_LISTADO: Recorrido = {
     {
       ancla: "cs.entrega",
       titulo: "Lo que frena la entrega de proyectos",
-      texto: "Cada botón filtra «A quién llamar»: proyectos bloqueados, atrasados o con alertas altas. «Sin CSE» abre la pestaña Equipo.",
+      texto: "Cada botón cuenta las cuentas con un proyecto bloqueado, atrasado o con una alerta alta del agente vigía, y filtra «A quién llamar» para mostrar exactamente esas. «Sin CSE» cuenta proyectos y abre la pestaña Equipo.",
       lado: "bottom-start",
     },
     {

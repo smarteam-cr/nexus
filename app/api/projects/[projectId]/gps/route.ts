@@ -355,13 +355,17 @@ export const GET = withProjectAccess(async (
      proyecto con el 62 % vencido y el 76 % de hace más de 60 días: la lista de siempre (los 20 de
      fecha más vieja) mostraba justo el ruido. El diálogo «Ver todos» sigue leyendo `pendingItems`. */
   const desdeHace4Semanas = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
-  const [pendientesRecientesRows, pendientesAbiertos] = await Promise.all([
+  const whereRecientes = { projectId, done: false, deletedAt: null, createdAt: { gte: desdeHace4Semanas } };
+  /* Tres números y no dos: con solo «abiertos − mostrados», el «y N más antiguos» contaba como
+     antiguos a los recientes que no entraban en los 5 (restoDeLosPendientes, lib/clients). */
+  const [pendientesRecientesRows, pendientesRecientesTotal, pendientesAbiertos] = await Promise.all([
     prisma.actionItem.findMany({
-      where: { projectId, done: false, deletedAt: null, createdAt: { gte: desdeHace4Semanas } },
+      where: whereRecientes,
       orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
       select: actionItemSelect,
       take: 5,
     }),
+    prisma.actionItem.count({ where: whereRecientes }),
     prisma.actionItem.count({ where: { projectId, done: false, deletedAt: null } }),
   ]);
 
@@ -530,9 +534,10 @@ export const GET = withProjectAccess(async (
     etapa, // el bloque "Etapa" — null cuando no hay etapa que mostrar
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
-    /* El panel de la ficha: lo de las últimas 4 semanas (hasta 5, con fecha primero) y cuántos
-       abiertos hay en total, para decir «y N más antiguos» sin traerlos. */
+    /* El panel de la ficha: lo de las últimas 4 semanas (hasta 5, con fecha primero), cuántos hay
+       de esas 4 semanas y cuántos abiertos en total, para decir «y N más» sin traerlos. */
     pendientesRecientes: pendientesRecientesRows.map(toCompat),
+    pendientesRecientesTotal,
     pendientesAbiertos,
     historyItems, // tareas hechas o borradas (tab Histórico)
     setup, // #5 — { handoff, kickoff, cronograma, procesos } para el indicador del widget

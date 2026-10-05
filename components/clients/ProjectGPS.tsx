@@ -19,7 +19,7 @@ import StageBadge from "@/components/lifecycle/StageBadge";
 import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects/ProjectBriefSection";
 import ProjectSessionsReview from "./ProjectSessionsReview";
 import { useContextoDelResumen, type AvisoDePieza } from "./contexto-del-resumen";
-import { porQueEstaAca, queSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
+import { porQueEstaAca, queSigueDelProyecto, restoDeLosPendientes } from "@/lib/clients/que-sigue-del-proyecto";
 
 
 export interface PendingItem {
@@ -162,7 +162,10 @@ interface GPSData {
   /** Lo abierto de las últimas 4 semanas, vencido primero (2026-10-04). Ausente en respuestas
    *  cacheadas viejas: ahí se cae a los abiertos de siempre. */
   pendientesRecientes?: PendingItem[];
-  /** Cuántos abiertos hay en total, para el «y N más antiguos». */
+  /** Cuántos abiertos son de las últimas 4 semanas (el panel muestra hasta 5). Ausente en
+   *  respuestas cacheadas viejas: ahí se dice «y N más» sin decir de cuándo. */
+  pendientesRecientesTotal?: number;
+  /** Cuántos abiertos hay en total, para el «y N más». */
   pendientesAbiertos?: number;
 }
 
@@ -545,7 +548,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   // campo: ahí se cae a los abiertos de siempre.
   const recientes = data.pendientesRecientes ?? data.pendingItems.filter((i) => !i.done).slice(0, 5);
   const abiertosTotal = data.pendientesAbiertos ?? data.pendingItems.filter((i) => !i.done).length;
-  const masAntiguos = Math.max(0, abiertosTotal - recientes.length);
+  // Lo que no se muestra, separado en recientes que no entraron y anteriores (no todo es «antiguo»).
+  const recientesTotal = data.pendientesRecientes ? (data.pendientesRecientesTotal ?? null) : null;
+  const resto = restoDeLosPendientes({ mostrados: recientes.length, recientes: recientesTotal, abiertos: abiertosTotal });
 
   const rotulo = "text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-fg-muted";
   const mixtaBadge = (
@@ -709,7 +714,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
 
       <section className="flex flex-col gap-2.5">
         <div className="flex items-baseline justify-between">
-          <span className={rotulo}>Pendientes recientes · {recientes.length}</span>
+          <span className={rotulo}>Pendientes recientes · {recientesTotal ?? recientes.length}</span>
           <button onClick={() => setItemsDialogOpen(true)} className="text-[11px] text-brand hover:text-brand-light">
             {abiertosTotal > 0 ? `Ver los ${abiertosTotal}` : "Ver el histórico"}
           </button>
@@ -758,9 +763,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
         ) : (
           <p className="text-[13px] text-fg-muted">Nada nuevo en las últimas 4 semanas.</p>
         )}
-        {masAntiguos > 0 && (
+        {resto.texto && (
           <span className="text-[11px] text-fg-muted">
-            y {masAntiguos} {masAntiguos === 1 ? "más antiguo" : "más antiguos"}: están en «Ver los {abiertosTotal}».
+            {resto.texto}: están en «Ver los {abiertosTotal}».
           </span>
         )}
         <button onClick={() => setItemsDialogOpen(true)} className="self-start text-xs text-fg-muted transition-colors hover:text-fg">

@@ -45,13 +45,16 @@ export function CampoDeBusqueda({
   );
 }
 
-/** Las cuentas que coinciden con la búsqueda y no están en la lista de arriba. */
-export function OtrasCuentas({ cuentas, hoy }: { cuentas: readonly CuentaParaBuscar[]; hoy: string }) {
+/**
+ * Las cuentas que coinciden con la búsqueda y no se ven en la lista de arriba. Con un filtro puesto
+ * entran también las de la lista que el filtro deja afuera (cada una dice qué le pasa).
+ */
+export function OtrasCuentas({ cuentas, hoy, conFiltro = false }: { cuentas: readonly CuentaParaBuscar[]; hoy: string; conFiltro?: boolean }) {
   return (
     <section className="space-y-2">
       <p className="text-[13px] font-semibold text-fg">
         Fuera de esta lista · {plural(cuentas.length, "cuenta", "cuentas")}
-        <span className="font-normal text-fg-muted"> sin nada que pida llamar esta semana</span>
+        <span className="font-normal text-fg-muted">{conFiltro ? " que el filtro deja afuera o sin nada que pida llamar esta semana" : " sin nada que pida llamar esta semana"}</span>
       </p>
       <CajaDeTabla minimo="min-w-[820px]">
         <EncabezadoDeTabla columnas={COLUMNAS}>

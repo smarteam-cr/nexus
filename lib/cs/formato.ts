@@ -12,6 +12,16 @@ export function miles(n: number): string {
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
+/**
+ * La moneda como se compara: sin espacios y en mayúsculas («usd » → «USD»); null si no hay.
+ * La de las licencias cargadas a mano era texto libre: «usd» y «USD» contaban como dos monedas, y
+ * las sumas en dólares de la cartera dejaban afuera la que estaba en minúsculas.
+ */
+export function normalizarMoneda(moneda: string | null | undefined): string | null {
+  const m = moneda?.trim().toUpperCase();
+  return m ? m : null;
+}
+
 /** «US$2.455» · «₡1.250.000» · «COP 4.500.000». Sin decimales: es lectura, no contabilidad. */
 export function fmtMonto(n: number, moneda: string | null = "USD"): string {
   const entero = miles(n);

@@ -30,7 +30,9 @@ import {
   type LecturaDePartner,
 } from "./lectura-partner";
 import { hayDeudaDelCliente, textoDeVencidas, type FacturacionDeLaCuenta } from "./facturacion-de-la-cuenta";
-import { diasEntre, fmtDia, fmtMonto, miles, plural } from "./formato";
+import { diasEntre, fmtDia, fmtMonto, miles, normalizarMoneda, plural } from "./formato";
+import { combinarLicencias, type LicenciaDeHub } from "./licencias";
+import { coincideBusqueda, filtrarPorBusqueda } from "@/lib/ui/text-search";
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
 // ── LA ENTRADA ─────────────────────────────────────────────────────────────────────────────
@@ -77,6 +79,40 @@ export interface AlertaDeCuenta {
   /** true = la escribió el agente vigía; false = un aviso automático (p. ej. renovación). */
   delAgente: boolean;
   detectadaEn: string;
+}
+
+/** La fila de `CsAlert` que hace falta para leer una alerta viva (OPEN o SEEN). */
+export interface FilaDeAlerta {
+  id: string;
+  severity: AlertaDeCuenta["severidad"];
+  category: string;
+  title: string;
+  reason: string;
+  suggestedAction: string | null;
+  status: string;
+  agentRunId: string | null;
+  lastDetectedAt: Date | string;
+  project?: { name: string } | null;
+}
+
+/**
+ * Una alerta viva como la lee la cartera. La usan el índice (`lib/cs/cartera.ts`) y la cuenta de
+ * respaldo de la ficha (`lib/cs/load-account.ts`): con una lectura distinta en cada lado, la ficha
+ * decía «Ninguna alerta abierta» de una cuenta con alertas abiertas.
+ */
+export function alertaDeLaCuenta(a: FilaDeAlerta): AlertaDeCuenta {
+  return {
+    id: a.id,
+    severidad: a.severity,
+    categoria: a.category,
+    titulo: a.title,
+    razon: a.reason,
+    accion: a.suggestedAction,
+    proyecto: a.project?.name ?? null,
+    estado: a.status === "OPEN" ? "OPEN" : "SEEN",
+    delAgente: !!a.agentRunId,
+    detectadaEn: typeof a.lastDetectedAt === "string" ? a.lastDetectedAt : a.lastDetectedAt.toISOString(),
+  };
 }
 
 /** Una licencia cargada a mano en la información del cliente (`LicenciaCliente`). */
@@ -149,6 +185,14 @@ export const DIAS_SIN_CONTACTO = 21;
 export const VENTANA_DE_RENOVACION = 90;
 /** Ventana para el cruce «el uso cae desde que se cerró la implementación». */
 export const VENTANA_TRAS_CIERRE = 90;
+/** Una factura vencida hace más de esto (o una promesa de pago incumplida) pone la cuenta en riesgo. */
+export const DIAS_DE_DEUDA_GRAVE = 30;
+/** La relación gestionada que vence dentro de esta ventana es motivo para llamar… */
+export const VENTANA_DE_RELACION = 30;
+/** …y dentro de esta, es urgente. */
+export const VENTANA_DE_RELACION_URGENTE = 14;
+/** Desde estos tickets abiertos se llama, aunque haya contacto reciente. */
+export const TICKETS_PARA_LLAMAR = 3;
 
 const NOMBRE_DE_PRODUCTO: Record<string, string> = {
   SALES: "Sales Hub",
@@ -166,13 +210,48 @@ function nombresDeProductos(hubs: readonly string[]): string {
   return n.length === 1 ? n[0] : `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}`;
 }
 
-/** La próxima renovación de la cuenta desde hoy (por hub, a mano o la general de HubSpot). */
+/**
+ * Las licencias de la cuenta, una por hub: HubSpot Partner manda cuando trae el dato y lo cargado a
+ * mano completa lo que falta. Es `combinarLicencias`, la MISMA regla de la información del cliente:
+ * el estado de la ficha, su pestaña Renovación, el rótulo de esa pestaña y la pestaña Renovaciones
+ * del índice leen de acá, así no pueden dar fechas distintas de la misma cuenta.
+ */
+export function licenciasCombinadas(c: Pick<CuentaDeCartera, "partner" | "licenciasManuales">): LicenciaDeHub[] {
+  const p = c.partner;
+  const monedaDeHubspot = normalizarMoneda(p?.moneda);
+  const desdeHubspot = (p?.hubs ?? []).map((h): LicenciaDeHub => ({
+    hub: h.hub,
+    plan: h.plan,
+    renovacion: h.renovacion,
+    montoMensual: h.montoMensual,
+    moneda: monedaDeHubspot,
+    fechaCompra: null,
+    nota: null,
+    fuenteRenovacion: h.renovacion ? "hubspot" : null,
+  }));
+  return combinarLicencias(
+    desdeHubspot,
+    c.licenciasManuales.map((l) => ({
+      hub: l.hub,
+      plan: l.plan,
+      fechaCompra: null,
+      fechaRenovacion: l.fechaRenovacion,
+      montoMensual: l.montoMensual,
+      moneda: l.moneda,
+      nota: null,
+    })),
+  );
+}
+
+/**
+ * La próxima renovación de la cuenta desde hoy: la de cada hub (HubSpot o, si no la trae, la cargada
+ * a mano) o la general de HubSpot. Una fecha cargada a mano para un hub que HubSpot ya fecha no
+ * cuenta: HubSpot manda, como en el calendario de la ficha.
+ */
 export function proximaRenovacion(c: Pick<CuentaDeCartera, "partner" | "licenciasManuales">, hoy: string): string | null {
-  const fechas = [
-    ...(c.partner?.hubs.map((h) => h.renovacion) ?? []),
-    c.partner?.proximaRenovacion ?? null,
-    ...c.licenciasManuales.map((l) => l.fechaRenovacion),
-  ].filter((f): f is string => !!f && f >= hoy);
+  const fechas = [...licenciasCombinadas(c).map((l) => l.renovacion), c.partner?.proximaRenovacion ?? null].filter(
+    (f): f is string => !!f && f >= hoy,
+  );
   return fechas.length > 0 ? fechas.sort()[0] : null;
 }
 
@@ -249,7 +328,7 @@ export function motivosDeLaCuenta(c: CuentaDeCartera, hoy: string): Motivo[] {
 
   if (hayDeudaDelCliente(c.facturacion)) {
     const f = c.facturacion!;
-    const grave = f.vencidas.diasMax > 30 || f.promesasIncumplidas > 0;
+    const grave = f.vencidas.diasMax > DIAS_DE_DEUDA_GRAVE || f.promesasIncumplidas > 0;
     out.push({
       clave: "facturasVencidas",
       texto:
@@ -326,14 +405,15 @@ export function motivosDeLaCuenta(c: CuentaDeCartera, hoy: string): Motivo[] {
 
   if (p?.gestionada && p.relacionGestionadaVence) {
     const dias = diasEntre(hoy, p.relacionGestionadaVence);
-    if (dias >= 0 && dias <= 30) {
+    if (dias >= 0 && dias <= VENTANA_DE_RELACION) {
       const ultima = p.ultimaActividadDeSmarteam ? `: nadie de Smarteam trabaja en el portal desde el ${fmtDia(p.ultimaActividadDeSmarteam, hoy)}` : "";
+      const urgente = dias <= VENTANA_DE_RELACION_URGENTE;
       out.push({
         clave: "relacionPorVencer",
         texto: `La relación gestionada vence en ${dias} días${ultima}`,
         corto: "Relación por vencer",
-        prioridad: dias <= 14 ? "alta" : "media",
-        peso: dias <= 14 ? 55 : 40,
+        prioridad: urgente ? "alta" : "media",
+        peso: urgente ? 55 : 40,
         fuente: "HubSpot Partner",
       });
     }
@@ -400,7 +480,7 @@ export function motivosDeLaCuenta(c: CuentaDeCartera, hoy: string): Motivo[] {
     }
   }
 
-  if ((c.ticketsAbiertos ?? 0) >= 3 && !out.some((m) => m.clave === "sinContacto")) {
+  if ((c.ticketsAbiertos ?? 0) >= TICKETS_PARA_LLAMAR && !out.some((m) => m.clave === "sinContacto")) {
     out.push({
       clave: "tickets",
       texto: `${plural(c.ticketsAbiertos!, "ticket abierto", "tickets abiertos")} en HubSpot`,
@@ -418,6 +498,58 @@ export function saludDeLaCuenta(motivos: readonly Motivo[]): SaludDeCuenta {
   if (motivos.some((m) => m.prioridad === "alta")) return "en-riesgo";
   if (motivos.length > 0) return "en-friccion";
   return "saludable";
+}
+
+/**
+ * Qué pone a una cuenta en cada marca, en palabras: la leyenda del índice («Qué es cada marca») se
+ * arma desde acá. Una fila por cada motivo y prioridad que `motivosDeLaCuenta` puede dar, en el
+ * orden de su peso. cartera-reglas.test.ts lo comprueba en los dos sentidos: nada de lo que la regla
+ * da falta acá, y nada de acá es inventado. La leyenda que se escribía a mano ponía las facturas
+ * vencidas siempre en riesgo, la relación por vencer siempre en fricción, y no nombraba las
+ * alertas del agente, el uso cayendo ni las cuentas sin datos.
+ */
+export const QUE_PONE_CADA_MARCA: ReadonlyArray<{ clave: ClaveDeMotivo; prioridad: Motivo["prioridad"]; texto: string }> = [
+  { clave: "cancelacion", prioridad: "alta", texto: "cancelación registrada" },
+  { clave: "riesgoDoble", prioridad: "alta", texto: `proyecto bloqueado o atrasado a ${VENTANA_DE_RENOVACION} días de renovar` },
+  { clave: "bloqueado", prioridad: "alta", texto: "proyecto bloqueado" },
+  {
+    clave: "facturasVencidas",
+    prioridad: "alta",
+    texto: `facturas vencidas hace más de ${DIAS_DE_DEUDA_GRAVE} días o promesas de pago incumplidas`,
+  },
+  { clave: "usoTrasCierre", prioridad: "alta", texto: "uso cayendo desde que se cerró la implementación" },
+  { clave: "renuevaConUsoBajo", prioridad: "alta", texto: `renueva en ${VENTANA_DE_RENOVACION} días con el uso bajo o cayendo` },
+  { clave: "alertaDelAgente", prioridad: "alta", texto: "alerta alta del agente vigía" },
+  {
+    clave: "relacionPorVencer",
+    prioridad: "alta",
+    texto: `relación gestionada que vence en ${VENTANA_DE_RELACION_URGENTE} días o menos`,
+  },
+  { clave: "sinDatos", prioridad: "media", texto: "sin datos de uso o inactiva en HubSpot" },
+  { clave: "facturasVencidas", prioridad: "media", texto: `facturas vencidas hace ${DIAS_DE_DEUDA_GRAVE} días o menos` },
+  { clave: "bajaDePlan", prioridad: "media", texto: "HubSpot espera que baje de plan al renovar" },
+  {
+    clave: "relacionPorVencer",
+    prioridad: "media",
+    texto: `relación gestionada que vence en ${VENTANA_DE_RELACION_URGENTE + 1} a ${VENTANA_DE_RELACION} días`,
+  },
+  { clave: "atrasado", prioridad: "media", texto: "proyecto atrasado" },
+  { clave: "usoCayendo", prioridad: "media", texto: "uso cayendo" },
+  { clave: "licenciasSinUsar", prioridad: "media", texto: "licencias pagadas sin asignar cerca de renovar" },
+  { clave: "sinContacto", prioridad: "media", texto: `más de ${DIAS_SIN_CONTACTO} días sin contacto` },
+  { clave: "alertaDelAgente", prioridad: "media", texto: "alerta media del agente vigía" },
+  { clave: "tickets", prioridad: "media", texto: `${TICKETS_PARA_LLAMAR} tickets abiertos o más` },
+];
+
+/** La leyenda de las marcas, armada desde `QUE_PONE_CADA_MARCA` (la marca sale de la prioridad). */
+export function leyendaDeSalud(): Array<{ salud: SaludDeCuenta; nombre: string; texto: string }> {
+  const de = (prioridad: Motivo["prioridad"]) => QUE_PONE_CADA_MARCA.filter((x) => x.prioridad === prioridad).map((x) => x.texto);
+  const enUnaFrase = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} o ${xs[xs.length - 1]}`);
+  return [
+    { salud: "en-riesgo", nombre: "En riesgo", texto: enUnaFrase(de("alta")) },
+    { salud: "en-friccion", nombre: "En fricción", texto: enUnaFrase(de("media")) },
+    { salud: "saludable", nombre: "Saludable", texto: "nada de lo anterior" },
+  ];
 }
 
 export interface FilaParaLlamar {
@@ -527,6 +659,27 @@ export function cuentasParaBuscar(cuentas: readonly CuentaDeCartera[], hoy: stri
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
+/**
+ * La búsqueda de «A quién llamar»: las filas que se VEN (pasan los filtros y coinciden) y las demás
+ * cuentas que coinciden, para abrirlas desde abajo. «Las demás» se calcula contra lo que se ve, no
+ * contra la lista entera: con un filtro puesto, una cuenta de la lista que el filtro ocultaba no
+ * aparecía en ningún lado, y la pantalla decía que ninguna cuenta se llamaba así.
+ * El filtro por CSE vale para las dos partes; los demás filtros, solo para la lista.
+ */
+export function buscarEnLaLista<F extends { clientId: string; nombre: string; cses: readonly string[] }>(
+  filas: readonly F[],
+  todas: readonly CuentaParaBuscar[],
+  opciones: { busqueda: string; cse: string; pasaLosFiltros: (f: F) => boolean },
+): { visibles: F[]; otras: CuentaParaBuscar[] } {
+  const { busqueda, cse, pasaLosFiltros } = opciones;
+  const delCse = (x: { cses: readonly string[] }) => !cse || x.cses.includes(cse);
+  const visibles = filas.filter((f) => delCse(f) && pasaLosFiltros(f) && coincideBusqueda(f.nombre, busqueda));
+  if (busqueda.trim() === "") return { visibles, otras: [] };
+  const seVen = new Set(visibles.map((f) => f.clientId));
+  const otras = filtrarPorBusqueda(todas, (c) => c.nombre, busqueda).filter((c) => !seVen.has(c.clientId) && delCse(c));
+  return { visibles, otras };
+}
+
 // ───────────────────────────────────────────────────────────────────────────────────────────
 // ── RENOVACIONES ───────────────────────────────────────────────────────────────────────────
 // ───────────────────────────────────────────────────────────────────────────────────────────
@@ -546,8 +699,9 @@ export interface FilaDeRenovacion {
   fecha: string;
   dias: number;
   hubs: HubQueRenueva[];
-  /** Suma de lo que paga cada hub que renueva (null si ningún hub trae monto). */
+  /** Suma de lo que paga cada hub que renueva, en `moneda` (null si ningún hub trae monto). */
   montoMensual: number | null;
+  /** En mayúsculas («USD», «CRC»). Una fila por moneda: montos de monedas distintas no se suman. */
   moneda: string | null;
   /** Cambio que espera HubSpot (solo en la fila de su próxima renovación). */
   cambioEsperado: number | null;
@@ -557,70 +711,110 @@ export interface FilaDeRenovacion {
   cse: { nombre: string; email: string | null } | null;
 }
 
+type HubConMoneda = HubQueRenueva & { moneda: string | null };
+
+/** ¿La fila está en dólares? Las sumas de la cartera son en dólares: las otras monedas no se mezclan. */
+export function esEnDolares(f: { moneda: string | null }): boolean {
+  return (normalizarMoneda(f.moneda) ?? "USD") === "USD";
+}
+
 /**
- * Una fila por cuenta y FECHA: si un cliente renueva Marketing en marzo y Sales en julio, sale dos
- * veces. Lo que la cuenta paga se suma por hub; el campo «MRR que renueva» de HubSpot no se usa
- * (suma más que el total de la cartera: no se entiende qué mide).
+ * Reparte por moneda lo que paga cada hub: montos de monedas distintas NUNCA se suman (antes, un hub
+ * en dólares y otro en colones que renovaban el mismo día daban un solo número sin moneda real).
+ * Los hubs sin monto no tienen nada que sumar: van con la moneda preferida si está, o con la primera.
+ */
+export function repartirPorMoneda<T extends { monto: number | null; moneda: string | null }>(
+  items: readonly T[],
+  monedaPreferida: string,
+): Array<{ moneda: string; items: T[]; monto: number | null }> {
+  const grupos = new Map<string, T[]>();
+  for (const x of items) {
+    if (x.monto === null) continue;
+    const m = normalizarMoneda(x.moneda) ?? monedaPreferida;
+    grupos.set(m, [...(grupos.get(m) ?? []), x]);
+  }
+  const sinMonto = items.filter((x) => x.monto === null);
+  if (sinMonto.length > 0) {
+    const destino = grupos.has(monedaPreferida)
+      ? monedaPreferida
+      : (grupos.keys().next().value ?? normalizarMoneda(sinMonto[0].moneda) ?? monedaPreferida);
+    grupos.set(destino, [...(grupos.get(destino) ?? []), ...sinMonto]);
+  }
+  return [...grupos.entries()]
+    .sort(([a], [b]) => (a === monedaPreferida ? -1 : b === monedaPreferida ? 1 : a.localeCompare(b)))
+    .map(([moneda, delGrupo]) => {
+      const montos = delGrupo.map((x) => x.monto).filter((x): x is number => x !== null);
+      return { moneda, items: delGrupo, monto: montos.length > 0 ? montos.reduce((s, x) => s + x, 0) : null };
+    });
+}
+
+/**
+ * Una fila por cuenta, FECHA y moneda: si un cliente renueva Marketing en marzo y Sales en julio,
+ * sale dos veces; si el mismo día renueva un hub en dólares y otro en colones, también. Lo que la
+ * cuenta paga se suma por hub (`licenciasCombinadas`: HubSpot manda, lo cargado a mano completa); el
+ * campo «MRR que renueva» de HubSpot no se usa (suma más que el total de la cartera: no se entiende
+ * qué mide).
  */
 export function renovacionesProximas(cuentas: readonly CuentaDeCartera[], hoy: string, dias: number): FilaDeRenovacion[] {
   const filas: FilaDeRenovacion[] = [];
   for (const c of cuentas) {
-    const porFecha = new Map<string, HubQueRenueva[]>();
-    const vistos = new Set<string>();
-    for (const h of c.partner?.hubs ?? []) {
-      if (!h.renovacion) continue;
-      vistos.add(h.hub);
-      const l = porFecha.get(h.renovacion) ?? [];
-      l.push({ hub: h.hub, nombre: h.nombre, plan: h.plan, uso: h.uso, monto: h.montoMensual });
-      porFecha.set(h.renovacion, l);
-    }
-    for (const m of c.licenciasManuales) {
-      if (!m.fechaRenovacion || vistos.has(m.hub)) continue;
-      const l = porFecha.get(m.fechaRenovacion) ?? [];
-      l.push({
-        hub: m.hub,
-        nombre: NOMBRE_DEL_HUB[m.hub as HubDePartner] ?? m.hub,
-        plan: m.plan,
-        uso: null,
-        monto: m.montoMensual,
-      });
-      porFecha.set(m.fechaRenovacion, l);
+    const monedaDeHubspot = normalizarMoneda(c.partner?.moneda) ?? "USD";
+    const usoPorHub = new Map<string, number | null>((c.partner?.hubs ?? []).map((h) => [h.hub, h.uso]));
+    const porFecha = new Map<string, HubConMoneda[]>();
+    for (const l of licenciasCombinadas(c)) {
+      if (!l.renovacion) continue;
+      porFecha.set(l.renovacion, [
+        ...(porFecha.get(l.renovacion) ?? []),
+        {
+          hub: l.hub,
+          nombre: NOMBRE_DEL_HUB[l.hub as HubDePartner] ?? l.hub,
+          plan: l.plan,
+          uso: usoPorHub.get(l.hub) ?? null,
+          monto: l.montoMensual,
+          moneda: l.moneda,
+        },
+      ]);
     }
     if (porFecha.size === 0 && c.partner?.proximaRenovacion) porFecha.set(c.partner.proximaRenovacion, []);
     if (porFecha.size === 0) continue;
 
     const motivos = motivosDeLaCuenta(c, hoy);
     const salud = saludDeLaCuenta(motivos);
-    for (const [fecha, hubs] of porFecha) {
+    const cancelacion = !!c.partner?.cancelacion;
+    for (const [fecha, hubsDeLaFecha] of porFecha) {
       const d = diasEntre(hoy, fecha);
       if (d < 0 || d > dias) continue;
-      const montos = hubs.map((h) => h.monto).filter((x): x is number => x !== null);
-      const cambio = c.partner?.proximaRenovacion === fecha ? c.partner.cambioAlRenovar : null;
-      const cancelacion = !!c.partner?.cancelacion;
-      filas.push({
-        clientId: c.clientId,
-        nombre: c.nombre,
-        fecha,
-        dias: d,
-        hubs,
-        montoMensual: montos.length > 0 ? montos.reduce((s, x) => s + x, 0) : null,
-        moneda: c.partner?.moneda ?? c.licenciasManuales.find((l) => l.moneda)?.moneda ?? "USD",
-        cambioEsperado: cambio,
-        cancelacion,
-        salud,
-        conversacion: cancelacion
-          ? "Reunión de valor antes de la fecha"
-          : salud === "en-riesgo"
-            ? "Revisión de valor antes de renovar"
-            : cambio !== null && cambio < 0
-              ? "Entender por qué baja de plan"
-              : cambio !== null && cambio > 0
-                ? "Confirmar la subida de plan"
-                : salud === "en-friccion"
-                  ? "Repasar los avisos de la cuenta"
-                  : "Sin acción: va bien",
-        cse: cseDeLaCuenta(c),
-      });
+      const grupos: Array<{ moneda: string; items: HubConMoneda[]; monto: number | null }> =
+        hubsDeLaFecha.length > 0 ? repartirPorMoneda(hubsDeLaFecha, monedaDeHubspot) : [{ moneda: monedaDeHubspot, items: [], monto: null }];
+      // El cambio que espera HubSpot está en su moneda: va en esa fila (o en la única que haya).
+      const grupoDelCambio = grupos.find((g) => g.moneda === monedaDeHubspot) ?? grupos[0];
+      for (const g of grupos) {
+        const cambio = c.partner?.proximaRenovacion === fecha && g === grupoDelCambio ? c.partner.cambioAlRenovar : null;
+        filas.push({
+          clientId: c.clientId,
+          nombre: c.nombre,
+          fecha,
+          dias: d,
+          hubs: g.items.map((h) => ({ hub: h.hub, nombre: h.nombre, plan: h.plan, uso: h.uso, monto: h.monto })),
+          montoMensual: g.monto,
+          moneda: g.moneda,
+          cambioEsperado: cambio,
+          cancelacion,
+          salud,
+          conversacion: cancelacion
+            ? "Reunión de valor antes de la fecha"
+            : salud === "en-riesgo"
+              ? "Revisión de valor antes de renovar"
+              : cambio !== null && cambio < 0
+                ? "Entender por qué baja de plan"
+                : cambio !== null && cambio > 0
+                  ? "Confirmar la subida de plan"
+                  : salud === "en-friccion"
+                    ? "Repasar los avisos de la cuenta"
+                    : "Sin acción: va bien",
+          cse: cseDeLaCuenta(c),
+        });
+      }
     }
   }
   return filas.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
@@ -1000,7 +1194,7 @@ export interface CarteraEnUnaLinea {
 
 export function carteraEnUnaLinea(cuentas: readonly CuentaDeCartera[], hoy: string): CarteraEnUnaLinea {
   const gestionadas = cuentas.filter((c) => c.partner?.gestionada && c.partner.activa);
-  const renov = renovacionesProximas(cuentas, hoy, VENTANA_DE_RENOVACION).filter((r) => (r.moneda ?? "USD") === "USD");
+  const renov = renovacionesProximas(cuentas, hoy, VENTANA_DE_RENOVACION).filter(esEnDolares);
   const cuentasQueRenuevan = new Set(renov.map((r) => r.clientId));
   const enRiesgo = renov.filter((r) => r.salud === "en-riesgo");
   const crecen = new Set([
@@ -1025,19 +1219,48 @@ export function carteraEnUnaLinea(cuentas: readonly CuentaDeCartera[], hoy: stri
   };
 }
 
+/**
+ * La tira «Entrega de proyectos» del índice. Cada botón filtra «A quién llamar», así que cuenta
+ * CUENTAS, y el filtro lista exactamente esas (`pasaEntrega`): antes el botón contaba proyectos y
+ * alertas con una regla y el filtro buscaba palabras en el motivo principal con otra, y no
+ * coincidían (un atraso tapado por el «riesgo doble», un bloqueo tapado por una cancelación, alertas
+ * altas que no eran del agente y la lista no mostraba).
+ */
 export interface EntregaDeProyectos {
-  bloqueados: number;
-  atrasados: number;
-  alertasAltas: number;
+  /** Las cuentas (clientId) con algún proyecto activo bloqueado. */
+  bloqueados: string[];
+  /** Las cuentas con algún proyecto activo atrasado. */
+  atrasados: string[];
+  /** Las cuentas con una alerta ALTA abierta del agente vigía. */
+  alertasAltas: string[];
+  /** Proyectos activos sin CSE. Este botón lleva a Equipo: no filtra la lista. */
   sinCse: number;
 }
 
+/** Los filtros que llegan a «A quién llamar» desde la tira «Entrega de proyectos». */
+export type FiltroDeEntrega = "bloqueados" | "atrasados" | "alertas";
+
+const BALDE_DE_ENTREGA: Record<FiltroDeEntrega, "bloqueados" | "atrasados" | "alertasAltas"> = {
+  bloqueados: "bloqueados",
+  atrasados: "atrasados",
+  alertas: "alertasAltas",
+};
+
 export function entregaDeProyectos(cuentas: readonly CuentaDeCartera[]): EntregaDeProyectos {
-  const activos = cuentas.flatMap((c) => c.proyectos.filter((p) => p.activo));
+  const conProyecto = (pasa: (p: ProyectoDeCuenta) => boolean) =>
+    cuentas.filter((c) => c.proyectos.some((p) => p.activo && pasa(p))).map((c) => c.clientId);
   return {
-    bloqueados: activos.filter((p) => p.bloqueado).length,
-    atrasados: activos.filter((p) => p.atraso).length,
-    alertasAltas: cuentas.reduce((s, c) => s + c.alertas.filter((a) => a.severidad === "HIGH" && a.estado === "OPEN").length, 0),
-    sinCse: activos.filter((p) => !p.cseNombre).length,
+    bloqueados: conProyecto((p) => p.bloqueado),
+    atrasados: conProyecto((p) => !!p.atraso),
+    // Del agente: son las que «A quién llamar» muestra (un aviso automático no es motivo de llamada).
+    alertasAltas: cuentas
+      .filter((c) => c.alertas.some((a) => a.delAgente && a.severidad === "HIGH" && a.estado === "OPEN"))
+      .map((c) => c.clientId),
+    sinCse: cuentas.flatMap((c) => c.proyectos.filter((p) => p.activo && !p.cseNombre)).length,
   };
+}
+
+/** ¿La fila de «A quién llamar» entra en el filtro de entrega? Exactamente las cuentas del botón. */
+export function pasaEntrega(f: { clientId: string }, filtro: FiltroDeEntrega, entrega: EntregaDeProyectos): boolean {
+  return entrega[BALDE_DE_ENTREGA[filtro]].includes(f.clientId);
 }

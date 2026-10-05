@@ -15,19 +15,22 @@ import {
   RielDelClienteSkeleton,
   WorkspaceSkeleton,
 } from "@/components/clients/skeletons";
+import PanelLateral from "@/components/ui/PanelLateral";
 
 export default function ClientWorkspaceLoading() {
   return (
-    <div className="min-h-full bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[14.5rem_minmax(0,1fr)_18.75rem]">
+    <div className="min-h-full bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[14.5rem_minmax(0,1fr)_auto]">
       <aside className="border-b border-line bg-surface px-3 py-4 lg:h-[calc(100vh-57px)] lg:border-b-0 lg:border-r">
         <RielDelClienteSkeleton />
       </aside>
       <main className="min-w-0">
         <WorkspaceSkeleton />
       </main>
-      <aside className="border-t border-line p-5 lg:col-span-2 xl:col-span-1 xl:border-l xl:border-t-0">
+      {/* La MISMA columna que WorkspaceClient (cookie `nexus-panel`): cerrada, el skeleton ya la
+          pinta cerrada. La tercera columna de la grilla es `auto`: la mide el panel. */}
+      <PanelLateral etiqueta="Panel" breakpoint="xl" ancho="xl:w-[18.75rem]" className="py-5" fijas="lg:col-span-2 xl:col-span-1">
         <PanelDeLaFichaSkeleton />
-      </aside>
+      </PanelLateral>
     </div>
   );
 }

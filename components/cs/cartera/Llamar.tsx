@@ -11,30 +11,31 @@ import { useRouter } from "next/navigation";
 import { EmptyState, Segmentado, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { diasEntre, fmtDia, fmtMonto, haceCuanto } from "@/lib/cs/formato";
-import { DIAS_SIN_CONTACTO, type CuentaParaBuscar, type FilaParaLlamar, type Motivo } from "@/lib/cs/cartera-reglas";
-import { coincideBusqueda, filtrarPorBusqueda } from "@/lib/ui/text-search";
+import {
+  DIAS_SIN_CONTACTO,
+  buscarEnLaLista,
+  pasaEntrega,
+  type CuentaParaBuscar,
+  type EntregaDeProyectos,
+  type FilaParaLlamar,
+  type FiltroDeEntrega,
+  type Motivo,
+} from "@/lib/cs/cartera-reglas";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, Flecha } from "../piezas";
 import { CampoDeBusqueda, OtrasCuentas } from "./Buscar";
 
-/** Los filtros que llegan desde la tira «Entrega de proyectos». */
-export type FiltroDeEntrega = "bloqueados" | "atrasados" | "alertas";
+/** Los filtros que llegan desde la tira «Entrega de proyectos» (la regla vive en cartera-reglas). */
+export type { FiltroDeEntrega };
 
 type Filtro = "todas" | "riesgoDoble" | "cruces" | "sinDatos";
 
 const COLUMNAS = "grid-cols-[66px_minmax(0,1fr)_minmax(0,2.2fr)_96px_104px_30px_16px]";
 
 const NOMBRE_DEL_FILTRO_DE_ENTREGA: Record<FiltroDeEntrega, string> = {
-  bloqueados: "proyectos bloqueados",
-  atrasados: "proyectos atrasados",
-  alertas: "alertas del agente vigía",
+  bloqueados: "cuentas con un proyecto bloqueado",
+  atrasados: "cuentas con un proyecto atrasado",
+  alertas: "cuentas con una alerta alta del agente vigía",
 };
-
-function pasaEntrega(f: FilaParaLlamar, filtro: FiltroDeEntrega): boolean {
-  const claves = [f.principal, ...f.otros].map((m) => m.clave);
-  if (filtro === "bloqueados") return claves.includes("bloqueado") || (claves.includes("riesgoDoble") && /bloqueado/.test(f.principal.texto));
-  if (filtro === "atrasados") return claves.includes("atrasado") || (claves.includes("riesgoDoble") && /tarde/.test(f.principal.texto));
-  return claves.includes("alertaDelAgente");
-}
 
 /** El chip de cada motivo extra. El primero, si es un cruce o lo vio la IA, lleva su marca. */
 function ChipDeMotivo({ m }: { m: Motivo }) {
@@ -48,6 +49,7 @@ export default function Llamar({
   cuentas: todasLasCuentas,
   cses,
   hoy,
+  entrega,
   filtroDeEntrega,
   onQuitarFiltro,
 }: {
@@ -57,6 +59,8 @@ export default function Llamar({
   /** Todos los CSE que llevan algún cliente (no solo los de esta lista), sin quienes están de baja. */
   cses: string[];
   hoy: string;
+  /** Las cuentas de cada botón de «Entrega de proyectos»: el filtro lista exactamente esas. */
+  entrega: EntregaDeProyectos;
   filtroDeEntrega: FiltroDeEntrega | null;
   onQuitarFiltro: () => void;
 }) {
@@ -65,6 +69,7 @@ export default function Llamar({
   const [cse, setCse] = useState<string>("");
   const [busqueda, setBusqueda] = useState("");
   const buscando = busqueda.trim() !== "";
+  const hayFiltro = filtro !== "todas" || !!filtroDeEntrega;
 
   const csesOrdenados = useMemo(() => [...cses].sort((a, b) => a.localeCompare(b, "es")), [cses]);
   const cuentas = {
@@ -73,19 +78,19 @@ export default function Llamar({
     cruces: filas.filter((f) => f.cruce).length,
     sinDatos: filas.filter((f) => f.sinDatos).length,
   };
-  const visibles = filas.filter(
-    (f) =>
-      (filtro === "todas" || (filtro === "riesgoDoble" && f.riesgoDoble) || (filtro === "cruces" && f.cruce) || (filtro === "sinDatos" && f.sinDatos)) &&
-      (!cse || f.cses.includes(cse)) &&
-      (!filtroDeEntrega || pasaEntrega(f, filtroDeEntrega)) &&
-      coincideBusqueda(f.nombre, busqueda),
+  // Las filas que se ven y, al buscar, lo que coincide y no se ve (cuentas sin nada que pida llamar
+  // o que el filtro deja afuera): también se abre desde acá.
+  const { visibles, otras } = useMemo(
+    () =>
+      buscarEnLaLista(filas, todasLasCuentas, {
+        busqueda,
+        cse,
+        pasaLosFiltros: (f) =>
+          (filtro === "todas" || (filtro === "riesgoDoble" && f.riesgoDoble) || (filtro === "cruces" && f.cruce) || (filtro === "sinDatos" && f.sinDatos)) &&
+          (!filtroDeEntrega || pasaEntrega(f, filtroDeEntrega, entrega)),
+      }),
+    [filas, todasLasCuentas, busqueda, cse, filtro, filtroDeEntrega, entrega],
   );
-  // Lo que coincide y no está en la lista (cuentas sin nada que pida llamar): también se abre desde acá.
-  const otras = useMemo(() => {
-    if (!buscando) return [];
-    const enLaLista = new Set(filas.map((f) => f.clientId));
-    return filtrarPorBusqueda(todasLasCuentas, (c) => c.nombre, busqueda).filter((c) => !enLaLista.has(c.clientId) && (!cse || c.cses.includes(cse)));
-  }, [buscando, filas, todasLasCuentas, busqueda, cse]);
   // Enter abre la primera que coincide: buscar una cuenta casi siempre es para abrirla.
   const abrirLaPrimera = () => {
     const primera = visibles[0]?.clientId ?? otras[0]?.clientId;
@@ -169,7 +174,9 @@ export default function Llamar({
             {buscando
               ? otras.length > 0
                 ? "Ninguna cuenta de esta lista se llama así: mira abajo."
-                : "Ninguna cuenta de la cartera se llama así. Acá están las empresas marcadas como cliente que te tocan."
+                : cse
+                  ? `Ninguna cuenta de ${cse} se llama así.`
+                  : "Ninguna cuenta de la cartera se llama así. Acá están las empresas marcadas como cliente que te tocan."
               : cse
                 ? `Ninguna cuenta de ${cse} tiene un motivo abierto con este filtro.`
                 : "Ninguna cuenta con este filtro."}
@@ -215,7 +222,7 @@ export default function Llamar({
         Una fila por cuenta. Primero una cancelación registrada, después lo urgente, después las cuentas sin datos y el resto por
         gravedad. El último contacto es la reunión más reciente en Nexus o el último registro en HubSpot.
       </p>
-      {otras.length > 0 && <OtrasCuentas cuentas={otras} hoy={hoy} />}
+      {otras.length > 0 && <OtrasCuentas cuentas={otras} hoy={hoy} conFiltro={hayFiltro} />}
     </div>
   );
 }

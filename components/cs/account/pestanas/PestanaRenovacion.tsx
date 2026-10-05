@@ -4,7 +4,9 @@
  * components/cs/account/pestanas/PestanaRenovacion.tsx — «Renovación»: la plata de la cuenta y lo
  * que tiene que estar bien antes de que el cliente decida (rediseño del 2026-10-05).
  *
- *   1. La próxima renovación, su monto y el cambio que espera HubSpot; la siguiente al lado.
+ *   1. La próxima renovación, su monto y el cambio que espera HubSpot; la siguiente al lado. Las
+ *      fechas y montos salen de HubSpot Partner y de lo cargado a mano (`renovacionDeLaFicha`): la
+ *      misma próxima fecha que el estado de la cuenta y el rótulo de la pestaña.
  *   2. Lista para renovar · N de 6 (`listaParaRenovar`), cada punto con su pestaña.
  *   3. Calendario de renovaciones por hub.
  *   4. Relación gestionada y nivel de partner.
@@ -15,6 +17,7 @@ import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { diasEntre, enCuanto, fmtCambio, fmtDia, fmtMonto, haceCuanto, miles } from "@/lib/cs/formato";
 import { oportunidades } from "@/lib/cs/cartera-reglas";
+import { renovacionDeLaFicha, type HubDeLaRenovacion, type MontosPorMoneda } from "@/lib/cs/ficha-reglas";
 import { listaParaRenovar } from "@/lib/cs/lista-para-renovar";
 import { NOMBRE_DE_LA_PESTANA } from "@/lib/cs/pestanas-de-la-cuenta";
 import { PARTNER_STATE_META } from "@/lib/cs/partner-state";
@@ -26,8 +29,12 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
   const p = data.cuenta.partner;
   const hoy = data.hoy;
   const lista = listaParaRenovar(data.cuenta, data.resultados, hoy);
+  // HubSpot Partner y lo cargado a mano en la información del cliente, con la MISMA próxima fecha
+  // que el estado de la cuenta y el rótulo de esta pestaña (`proximaRenovacion`).
+  const r = renovacionDeLaFicha(data.cuenta, hoy);
+  const sinPartner = data.partnerState === "ok" ? "Sin datos de HubSpot Partner para esta cuenta." : PARTNER_STATE_META[data.partnerState].message;
 
-  if (!p) {
+  if (!p && r.calendario.length === 0) {
     return (
       <div className="flex flex-col gap-8">
         <Vacio>{data.partnerState === "ok" ? "Sin datos de HubSpot Partner para esta cuenta: no hay fechas ni montos de renovación." : PARTNER_STATE_META[data.partnerState].message}</Vacio>
@@ -36,16 +43,11 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
     );
   }
 
-  // La próxima renovación: la que dice HubSpot o, si ya pasó, la primera fecha futura por hub.
-  const futuras = [...new Set(p.hubs.map((h) => h.renovacion).filter((f): f is string => !!f && f >= hoy))].sort();
-  const proxima = p.proximaRenovacion && p.proximaRenovacion >= hoy ? p.proximaRenovacion : (futuras[0] ?? null);
-  const queRenueva = proxima ? p.hubs.filter((h) => h.renovacion === proxima) : [];
-  const montoQueRenueva = queRenueva.reduce((s, h) => s + (h.montoMensual ?? 0), 0);
-  const despues = futuras.find((f) => f !== proxima) ?? null;
-  const queRenuevaDespues = despues ? p.hubs.filter((h) => h.renovacion === despues) : [];
-  const venceEn = p.relacionGestionadaVence ? diasEntre(hoy, p.relacionGestionadaVence) : null;
-  const calendario = [...p.hubs].sort((a, b) => (a.renovacion ?? "9999").localeCompare(b.renovacion ?? "9999"));
-  const lineaDeHub = (hs: typeof p.hubs) => hs.map((h) => `${h.nombre.replace(/ Hub$/, "")}${h.plan ? ` ${h.plan}` : ""}`).join(" y ");
+  const { proxima, queRenueva, despues, queRenuevaDespues, calendario } = r;
+  const venceEn = p?.relacionGestionadaVence ? diasEntre(hoy, p.relacionGestionadaVence) : null;
+  const lineaDeHub = (hs: HubDeLaRenovacion[]) => hs.map((h) => `${h.nombre.replace(/ Hub$/, "")}${h.plan ? ` ${h.plan}` : ""}`).join(" y ");
+  // Cada moneda por su lado: «US$1.200 + ₡300.000», nunca un número que suma las dos.
+  const enMonedas = (m: MontosPorMoneda) => m.map((x) => fmtMonto(x.monto, x.moneda)).join(" + ");
 
   return (
     <div className="flex flex-col gap-8">
@@ -61,20 +63,20 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
               <span className="text-sm text-fg-secondary">{queRenueva.length ? lineaDeHub(queRenueva) : "HubSpot no dice qué hubs renuevan."}</span>
             </>
           ) : (
-            <span className="text-sm text-fg-muted">HubSpot no da una fecha de renovación.</span>
+            <span className="text-sm text-fg-muted">Ni HubSpot ni la información del cliente traen la fecha de renovación.</span>
           )}
         </div>
         <div className="flex min-w-[180px] flex-[0_1_220px] flex-col gap-1 border-line pl-0 sm:border-l sm:pl-5">
           <span className={ROTULO_DEL_SISTEMA}>Al mes</span>
           <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">
-            {montoQueRenueva > 0 ? fmtMonto(montoQueRenueva, p.moneda) : p.mrrTotal !== null ? fmtMonto(p.mrrTotal) : "—"}
+            {r.montos.length > 0 ? enMonedas(r.montos) : p?.mrrTotal != null ? fmtMonto(p.mrrTotal) : "—"}
           </span>
-          {p.cambioAlRenovar !== null && p.cambioAlRenovar !== 0 ? (
+          {p?.cambioAlRenovar != null && p.cambioAlRenovar !== 0 ? (
             <span className={cn("text-xs font-semibold", p.cambioAlRenovar < 0 ? "text-warn-ink" : "text-success-ink")}>
               HubSpot espera un cambio de {fmtCambio(p.cambioAlRenovar, p.moneda)} al mes
             </span>
           ) : (
-            <span className="text-xs text-fg-muted">{p.cambioAlRenovar === 0 ? "HubSpot no espera cambios" : "Sin dato del cambio al renovar"}</span>
+            <span className="text-xs text-fg-muted">{p?.cambioAlRenovar === 0 ? "HubSpot no espera cambios" : "Sin dato del cambio al renovar"}</span>
           )}
         </div>
         {despues && (
@@ -82,10 +84,7 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
             <span className={ROTULO_DEL_SISTEMA}>Después</span>
             <span className="text-[15px] font-semibold text-fg">
               {fmtDia(despues, hoy)}
-              {(() => {
-                const m = queRenuevaDespues.reduce((s, h) => s + (h.montoMensual ?? 0), 0);
-                return m > 0 ? ` · ${fmtMonto(m, p.moneda)} al mes` : "";
-              })()}
+              {r.montosDespues.length > 0 ? ` · ${enMonedas(r.montosDespues)} al mes` : ""}
             </span>
             <span className="text-xs text-fg-muted">{lineaDeHub(queRenuevaDespues)}</span>
           </div>
@@ -110,23 +109,28 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
                 <div key={h.hub} className={cn("grid grid-cols-[minmax(0,1fr)_150px_150px_110px] items-center gap-4 px-4 py-3.5 text-[13px] text-fg", i > 0 && "border-t border-line")}>
                   <span className="flex flex-col gap-px">
                     <span className="text-sm font-semibold">{h.nombre}</span>
-                    <span className="text-xs text-fg-muted">{h.plan ?? "plan sin dato"}</span>
+                    <span className="text-xs text-fg-muted">
+                      {h.plan ?? "plan sin dato"}
+                      {h.fuente === "manual" ? " · fecha cargada a mano" : ""}
+                    </span>
                   </span>
                   <span>{h.renovacion ? fmtDia(h.renovacion, hoy) : <span className="text-fg-muted">sin fecha</span>}</span>
                   <span className={cn(cerca ? "text-warn-ink" : "text-fg-muted")}>
                     {h.renovacion ? (h.renovacion >= hoy ? enCuanto(h.renovacion, hoy) : `pasó el ${fmtDia(h.renovacion, hoy)}`) : "—"}
                   </span>
-                  <span className="text-right tabular-nums">{h.montoMensual !== null ? fmtMonto(h.montoMensual, p.moneda) : "—"}</span>
+                  <span className="text-right tabular-nums">{h.montoMensual !== null ? fmtMonto(h.montoMensual, h.moneda) : "—"}</span>
                 </div>
               );
             })}
             <div className="flex justify-between gap-4 rounded-b-xl border-t border-line bg-surface-muted px-4 py-3 text-[13px]">
               <span className="text-fg-muted">Pago total al mes</span>
-              <b className="font-semibold tabular-nums text-fg">{p.mrrTotal !== null ? fmtMonto(p.mrrTotal) : "sin dato"}</b>
+              <b className="font-semibold tabular-nums text-fg">
+                {p ? (p.mrrTotal !== null ? fmtMonto(p.mrrTotal) : "sin dato") : r.pagoTotal.length > 0 ? enMonedas(r.pagoTotal) : "sin dato"}
+              </b>
             </div>
           </div>
         </div>
-        {p.cancelacion && (
+        {p?.cancelacion && (
           <p className="text-[13px] font-semibold text-warn-ink">
             HubSpot registra una cancelación{p.cancelacion.hubs.length ? ` de ${p.cancelacion.hubs.join(", ")}` : ""}
             {p.cancelacion.fecha ? ` para el ${fmtDia(p.cancelacion.fecha, hoy)}` : ""}.
@@ -134,6 +138,7 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
         )}
       </section>
 
+      {p ? (
       <section className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <div className="rounded-xl border border-line bg-surface px-4 pb-1.5 pt-4">
           <span className="text-[15px] font-semibold text-fg">Relación gestionada</span>
@@ -194,6 +199,9 @@ export default function PestanaRenovacion({ data, irA }: { data: CsAccountData; 
           )}
         </div>
       </section>
+      ) : (
+        <Vacio>{sinPartner} La relación gestionada y el nivel de partner salen de ahí; las fechas de arriba están cargadas a mano en la información del cliente.</Vacio>
+      )}
 
       <Crecimiento data={data} />
     </div>

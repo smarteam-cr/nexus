@@ -15,6 +15,7 @@
  *
  * ⛔ Interno: nunca va a un documento del cliente (lib/delivery/privacidad.test.ts).
  */
+import { normalizarMoneda } from "./formato";
 
 export const HUBS = ["marketing", "sales", "service", "content", "operations", "commerce"] as const;
 export type Hub = (typeof HUBS)[number];
@@ -84,7 +85,7 @@ function monto(v: unknown): number | null {
 export function licenciasDesdePartner(properties: unknown): LicenciaDeHub[] {
   if (!properties || typeof properties !== "object") return [];
   const p = properties as Record<string, unknown>;
-  const moneda = typeof p.hs_managed_local_mrr_currency === "string" ? p.hs_managed_local_mrr_currency : null;
+  const moneda = typeof p.hs_managed_local_mrr_currency === "string" ? normalizarMoneda(p.hs_managed_local_mrr_currency) : null;
   const out: LicenciaDeHub[] = [];
   for (const hub of HUBS) {
     const pre = `hs_${hub}_hub`;
@@ -117,11 +118,13 @@ export function combinarLicencias(partner: readonly LicenciaDeHub[], manuales: r
       hub, plan: null, renovacion: null, montoMensual: null, moneda: null, fechaCompra: null, nota: null, fuenteRenovacion: null,
     };
     const renovacionManual = aFecha(m.fechaRenovacion);
+    // La moneda va con el monto: si el monto sale de lo cargado a mano, su moneda también.
+    const montoManual = base.montoMensual === null && m.montoMensual != null;
     porHub.set(hub, {
       ...base,
       plan: base.plan ?? (m.plan?.trim() || null),
       montoMensual: base.montoMensual ?? m.montoMensual ?? null,
-      moneda: base.moneda ?? (m.moneda?.trim() || null),
+      moneda: montoManual ? (normalizarMoneda(m.moneda) ?? base.moneda) : (base.moneda ?? normalizarMoneda(m.moneda)),
       renovacion: base.renovacion ?? renovacionManual,
       fuenteRenovacion: base.renovacion ? "hubspot" : renovacionManual ? "manual" : null,
       fechaCompra: aFecha(m.fechaCompra),

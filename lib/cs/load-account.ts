@@ -16,7 +16,7 @@ import { serializeAlert, type CsAlertRow } from "@/lib/cs/load-panel";
 import { resolvePartnerState, type PartnerState } from "@/lib/cs/partner-state";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { cargarCuentas, hoyEnCostaRica } from "./cartera";
-import { motivosDeLaCuenta, type CuentaDeCartera, type Motivo } from "./cartera-reglas";
+import { alertaDeLaCuenta, motivosDeLaCuenta, type CuentaDeCartera, type Motivo } from "./cartera-reglas";
 import { estadoDeLaCuenta, type Lectura } from "./ficha-reglas";
 import { leerPartner } from "./lectura-partner";
 import { leerResultadosDelHandoff, porValidar, sinConfirmar, sinDato } from "@/lib/handoff/resultados-medibles";
@@ -244,7 +244,9 @@ export async function loadCsAccount(
   const asArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
   // La cuenta armada como en el índice. Si no entra a la cartera (sin proyecto activo ni
-  // suscripción activa), igual se arma con lo que haya: la ficha no puede quedar vacía.
+  // suscripción activa), igual se arma con lo que haya: la ficha no puede quedar vacía. Las alertas
+  // ya están cargadas arriba y se leen con la misma regla del índice: con una lista vacía, la ficha
+  // decía «Ninguna alerta abierta» de una cuenta que sí las tenía.
   const hoy = hoyEnCostaRica();
   const [armada] = await cargarCuentas(clientWhere, { clientIds: [clientId], filas: projects }).catch(() => []);
   const cuenta: CuentaDeCartera = armada ?? {
@@ -254,7 +256,7 @@ export async function loadCsAccount(
     proyectos: [],
     ultimoContacto: csSignals?.lastEngagementAt?.toISOString() ?? null,
     ticketsAbiertos: csSignals?.ticketsSupported ? csSignals.openTicketCount : null,
-    alertas: [],
+    alertas: alerts.map(alertaDeLaCuenta),
     facturacion: null,
     licenciasManuales: [],
   };

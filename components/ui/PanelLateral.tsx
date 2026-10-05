@@ -81,6 +81,12 @@ export interface PanelLateralProps {
   breakpoint?: "lg" | "xl";
   /** Las clases de la columna ABIERTA: su padding y su separación interna. */
   className?: string;
+  /**
+   * Clases que valen abierta Y cerrada: dónde va en una grilla y si queda fija al hacer scroll. La
+   * ficha del cliente la monta como tercera columna de su grilla (`lg:col-span-2 xl:sticky …`): sin
+   * esto, cerrada perdía su lugar en la grilla.
+   */
+  fijas?: string;
   /** Separación entre los bloques del panel. Default `gap-6`. */
   gap?: string;
 }
@@ -91,6 +97,7 @@ export default function PanelLateral({
   ancho,
   breakpoint = "lg",
   className,
+  fijas,
   gap = "gap-6",
 }: PanelLateralProps) {
   const estado = usePanelLateral();
@@ -107,6 +114,7 @@ export default function PanelLateral({
         /* Solo el ancho anima. `transition-all` arrastraría el padding y los bordes, y el salto se
            ve como un parpadeo del contenido en vez de un panel que se cierra. */
         "transition-[width] duration-200 ease-in-out",
+        fijas,
         abierto
           ? cn("px-5 pb-12 pt-8", ancho, className)
           : cn("px-2 py-3", breakpoint === "xl" ? "xl:w-11" : "lg:w-11"),

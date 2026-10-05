@@ -12,6 +12,7 @@
  * skeleton→skeleton.
  */
 import { PageHeaderSkeleton } from "@/components/ui";
+import PanelLateral from "@/components/ui/PanelLateral";
 import { cn } from "@/lib/cn";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { ClientsTableZoneSkeleton, PanelDeLaCarteraSkeleton } from "./ClientsTable";
@@ -23,9 +24,11 @@ export default function ClientsLoading() {
         <PageHeaderSkeleton titleWidth="w-24" descWidth="w-[28rem]" action />
         <ClientsTableZoneSkeleton showPills />
       </div>
-      <div className="border-t border-line bg-surface-muted px-5 pb-12 pt-8 lg:w-[340px] lg:flex-shrink-0 lg:border-l lg:border-t-0">
+      {/* La MISMA columna que page.tsx: con el panel cerrado (cookie `nexus-panel`), el skeleton
+          ya lo pinta cerrado en vez de abrirlo 340 px y cerrarlo de un salto al cargar. */}
+      <PanelLateral etiqueta="Cartera" ancho="lg:w-[340px]">
         <PanelDeLaCarteraSkeleton />
-      </div>
+      </PanelLateral>
     </div>
   );
 }

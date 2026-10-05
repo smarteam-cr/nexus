@@ -23,8 +23,9 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { cn } from "@/lib/cn";
 import { diasEntre, fmtDia, fmtMonto, haceCuanto, plural } from "@/lib/cs/formato";
 import type { CarteraDeLaCsl } from "@/lib/cs/cartera";
+import { leyendaDeSalud, type FiltroDeEntrega, type SaludDeCuenta } from "@/lib/cs/cartera-reglas";
 import { Punto } from "./piezas";
-import Llamar, { type FiltroDeEntrega } from "./cartera/Llamar";
+import Llamar from "./cartera/Llamar";
 import Renovaciones from "./cartera/Renovaciones";
 import UsoYLicencias from "./cartera/UsoYLicencias";
 import Crecimiento from "./cartera/Crecimiento";
@@ -114,9 +115,10 @@ export default function CsPanel({
 
         <div className="mb-6 flex flex-wrap items-center gap-2" data-recorrido="cs.entrega">
           <span className={cn(ROTULO_DEL_SISTEMA, "mr-1")}>Entrega de proyectos</span>
-          <BotonDeEntrega color="rojo" numero={entrega.bloqueados} texto={entrega.bloqueados === 1 ? "bloqueado" : "bloqueados"} onClick={() => verEnLlamar("bloqueados")} />
-          <BotonDeEntrega color="ambar" numero={entrega.atrasados} texto={entrega.atrasados === 1 ? "atrasado" : "atrasados"} onClick={() => verEnLlamar("atrasados")} />
-          <BotonDeEntrega color="ambar" numero={entrega.alertasAltas} texto={entrega.alertasAltas === 1 ? "alerta alta" : "alertas altas"} onClick={() => verEnLlamar("alertas")} />
+          {/* Cuentan CUENTAS: son las filas que el botón deja en «A quién llamar» (`pasaEntrega`). */}
+          <BotonDeEntrega color="rojo" numero={entrega.bloqueados.length} texto={entrega.bloqueados.length === 1 ? "cuenta bloqueada" : "cuentas bloqueadas"} onClick={() => verEnLlamar("bloqueados")} />
+          <BotonDeEntrega color="ambar" numero={entrega.atrasados.length} texto={entrega.atrasados.length === 1 ? "cuenta atrasada" : "cuentas atrasadas"} onClick={() => verEnLlamar("atrasados")} />
+          <BotonDeEntrega color="ambar" numero={entrega.alertasAltas.length} texto={entrega.alertasAltas.length === 1 ? "cuenta con alerta alta" : "cuentas con alerta alta"} onClick={() => verEnLlamar("alertas")} />
           <BotonDeEntrega color="ambar" numero={entrega.sinCse} texto={entrega.sinCse === 1 ? "proyecto sin CSE" : "proyectos sin CSE"} onClick={() => setPestana("equipo")} />
         </div>
 
@@ -144,6 +146,7 @@ export default function CsPanel({
             cuentas={data.cuentas}
             cses={cses}
             hoy={data.hoy}
+            entrega={entrega}
             filtroDeEntrega={filtroDeEntrega}
             onQuitarFiltro={() => setFiltroDeEntrega(null)}
           />
@@ -362,15 +365,15 @@ function Fuentes({ data, puedeCurar }: { data: CarteraDeLaCsl; puedeCurar: boole
   );
 }
 
+const COLOR_DE_LA_SALUD: Record<SaludDeCuenta, "rojo" | "ambar" | "verde"> = {
+  "en-riesgo": "rojo",
+  "en-friccion": "ambar",
+  saludable: "verde",
+};
+
+/** La leyenda sale de las MISMAS reglas que marcan cada cuenta (`QUE_PONE_CADA_MARCA`): no se escribe a mano. */
 function Leyenda() {
-  const filas = useMemo(
-    () => [
-      { color: "rojo" as const, nombre: "En riesgo", texto: "bloqueado, cancelación registrada, facturas vencidas o renueva con el uso cayendo" },
-      { color: "ambar" as const, nombre: "En fricción", texto: "atrasado, sin contacto o relación por vencer" },
-      { color: "verde" as const, nombre: "Saludable", texto: "nada de lo anterior" },
-    ],
-    [],
-  );
+  const filas = useMemo(() => leyendaDeSalud().map((f) => ({ ...f, color: COLOR_DE_LA_SALUD[f.salud] })), []);
   return (
     <section className="flex flex-col gap-2">
       <p className={ROTULO_DEL_SISTEMA}>Qué es cada marca</p>

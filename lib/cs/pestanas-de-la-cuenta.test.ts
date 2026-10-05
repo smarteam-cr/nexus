@@ -188,8 +188,10 @@ describe("lo que viene", () => {
     expect(eventos[2].detalle).toBe("US$2.340 al mes · HubSpot espera un cambio de −US$355");
   });
 
-  it("lo que cae fuera de la ventana no aparece", () => {
-    const eventos = loQueViene(cuenta(), HOY, 200);
-    expect(eventos.map((e) => e.texto)).toContain("Renueva Service Hub");
+  it("lo que cae fuera de la ventana no aparece (y con una ventana más ancha, sí)", () => {
+    // Service Hub renueva el 2027-02-03: 121 días después de HOY, fuera de los 90 de la ventana.
+    expect(loQueViene(cuenta(), HOY).map((e) => e.texto)).not.toContain("Renueva Service Hub");
+    // El control: con 200 días entra. Sin él, el «no aparece» pasaría también si el evento dejara de existir.
+    expect(loQueViene(cuenta(), HOY, 200).map((e) => e.texto)).toContain("Renueva Service Hub");
   });
 });

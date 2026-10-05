@@ -22,9 +22,11 @@ import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-so
 import { motivoApagado } from "@/lib/jobs/requisitos";
 import { leerPartner } from "./lectura-partner";
 import { resumirFacturacion, type CobroDeLaCuenta } from "./facturacion-de-la-cuenta";
+import { normalizarMoneda } from "./formato";
 import {
   VENTANA_TRAS_CIERRE,
   adopcionPorHub,
+  alertaDeLaCuenta,
   carteraEnUnaLinea,
   consumoDeLaCartera,
   entregaDeProyectos,
@@ -224,20 +226,7 @@ export async function cargarCuentas(
         proyectos,
         ultimoContacto: ultimoContacto?.toISOString() ?? null,
         ticketsAbiertos: senal?.ticketsSupported ? senal.openTicketCount : null,
-        alertas: alertas
-          .filter((a) => a.clientId === cl.id)
-          .map((a) => ({
-            id: a.id,
-            severidad: a.severity,
-            categoria: a.category,
-            titulo: a.title,
-            razon: a.reason,
-            accion: a.suggestedAction,
-            proyecto: a.project?.name ?? null,
-            estado: a.status === "OPEN" ? "OPEN" : "SEEN",
-            delAgente: !!a.agentRunId,
-            detectadaEn: a.lastDetectedAt.toISOString(),
-          })),
+        alertas: alertas.filter((a) => a.clientId === cl.id).map(alertaDeLaCuenta),
         facturacion: resumirFacturacion(cobros, hoy, fin?.creditoDias ?? null),
         licenciasManuales: manuales
           .filter((m) => m.clientId === cl.id)
@@ -246,7 +235,8 @@ export async function cargarCuentas(
             plan: m.plan,
             fechaRenovacion: m.fechaRenovacion ? ymd(m.fechaRenovacion) : null,
             montoMensual: m.montoMensual,
-            moneda: m.moneda,
+            // Texto libre hasta el 2026-10-05: «usd» y «USD» eran dos monedas.
+            moneda: normalizarMoneda(m.moneda),
           })),
       };
     })

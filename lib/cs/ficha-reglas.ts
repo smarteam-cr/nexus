@@ -5,9 +5,16 @@
  * Entrega · Uso · Relación · Renovación. Salen de la MISMA cuenta armada que usa el índice
  * (`CuentaDeCartera`), así la ficha y la lista de la semana no pueden contradecirse.
  */
-import { DIAS_SIN_CONTACTO, VENTANA_DE_RENOVACION, proximaRenovacion, type CuentaDeCartera } from "./cartera-reglas";
-import { porcentajeDeTendencia, usoBajo, usoCayendo } from "./lectura-partner";
-import { diasEntre, fmtCambio, fmtDia, plural } from "./formato";
+import {
+  DIAS_SIN_CONTACTO,
+  VENTANA_DE_RENOVACION,
+  licenciasCombinadas,
+  proximaRenovacion,
+  repartirPorMoneda,
+  type CuentaDeCartera,
+} from "./cartera-reglas";
+import { NOMBRE_DEL_HUB, porcentajeDeTendencia, usoBajo, usoCayendo, type HubDePartner } from "./lectura-partner";
+import { diasEntre, fmtCambio, fmtDia, normalizarMoneda, plural } from "./formato";
 
 export type ColorDeLectura = "rojo" | "ambar" | "verde" | "gris";
 
@@ -84,10 +91,12 @@ function renovacion(c: CuentaDeCartera, hoy: string): Lectura {
   if (p?.cancelacion) {
     return { ...base, color: "rojo", palabra: "Cancelación registrada", porque: `HubSpot registró la cancelación${p.cancelacion.fecha ? ` para el ${fmtDia(p.cancelacion.fecha, hoy)}` : ""}.` };
   }
-  const fecha = proximaRenovacion(c, hoy);
+  const { proxima: fecha, queRenueva } = renovacionDeLaFicha(c, hoy);
   if (!fecha) return { ...base, color: "gris", palabra: "Sin fecha", porque: "Ni HubSpot ni la información del cliente traen la fecha de renovación." };
+  // La fecha cargada a mano se dice como tal: no la trajo HubSpot.
+  const fuente = queRenueva.length > 0 && queRenueva.every((h) => h.fuente === "manual") ? "Información del cliente" : base.fuente;
   const dias = diasEntre(hoy, fecha);
-  const hubs = (p?.hubs ?? []).filter((h) => h.renovacion === fecha).map((h) => h.nombre.replace(" Hub", ""));
+  const hubs = queRenueva.map((h) => h.nombre.replace(" Hub", ""));
   const que = hubs.length ? `${hubs.join(" y ")} Hub, ${fmtDia(fecha, hoy)}` : fmtDia(fecha, hoy);
   const cambio =
     p?.cambioAlRenovar && p.proximaRenovacion === fecha
@@ -95,6 +104,75 @@ function renovacion(c: CuentaDeCartera, hoy: string): Lectura {
         ? ` HubSpot espera que baje ${fmtCambio(p.cambioAlRenovar, p.moneda).replace("−", "")} al mes.`
         : ` HubSpot espera que suba ${fmtCambio(p.cambioAlRenovar, p.moneda).replace("+", "")} al mes.`
       : "";
-  if (dias <= VENTANA_DE_RENOVACION) return { ...base, color: "ambar", palabra: `En ${dias} días`, porque: `${que}.${cambio}` };
-  return { ...base, color: "verde", palabra: fmtDia(fecha, hoy), porque: `${que}. Faltan ${dias} días.` };
+  if (dias <= VENTANA_DE_RENOVACION) return { ...base, fuente, color: "ambar", palabra: `En ${dias} días`, porque: `${que}.${cambio}` };
+  return { ...base, fuente, color: "verde", palabra: fmtDia(fecha, hoy), porque: `${que}. Faltan ${dias} días.` };
+}
+
+export interface HubDeLaRenovacion {
+  hub: string;
+  nombre: string;
+  plan: string | null;
+  /** AAAA-MM-DD, o null. */
+  renovacion: string | null;
+  montoMensual: number | null;
+  /** En mayúsculas («USD», «CRC»), o null. */
+  moneda: string | null;
+  /** De dónde salió la fecha: HubSpot Partner o la información del cliente (cargada a mano). */
+  fuente: "hubspot" | "manual" | null;
+}
+
+export type MontosPorMoneda = Array<{ moneda: string; monto: number }>;
+
+export interface RenovacionDeLaFicha {
+  /** La próxima fecha. Es `proximaRenovacion`: la misma del estado de la cuenta y del rótulo de la pestaña. */
+  proxima: string | null;
+  queRenueva: HubDeLaRenovacion[];
+  /** Lo que renueva en la próxima fecha, sumado por moneda: monedas distintas no se suman. */
+  montos: MontosPorMoneda;
+  /** La fecha siguiente a la próxima. */
+  despues: string | null;
+  queRenuevaDespues: HubDeLaRenovacion[];
+  montosDespues: MontosPorMoneda;
+  /** Todos los hubs, el que renueva primero arriba (los sin fecha, al final). */
+  calendario: HubDeLaRenovacion[];
+  /** Lo que paga por todos sus hubs, por moneda. Con HubSpot, la pantalla usa su total. */
+  pagoTotal: MontosPorMoneda;
+}
+
+/**
+ * La pestaña Renovación de la ficha. Lee las licencias combinadas (HubSpot manda, lo cargado a mano
+ * completa), así una cuenta sin HubSpot Partner pero con su licencia cargada en la información del
+ * cliente muestra su fecha. Antes la pestaña y el rótulo solo miraban HubSpot y decían que no había
+ * renovación mientras el estado de la cuenta mostraba la fecha cargada a mano.
+ */
+export function renovacionDeLaFicha(c: Pick<CuentaDeCartera, "partner" | "licenciasManuales">, hoy: string): RenovacionDeLaFicha {
+  const monedaDeHubspot = normalizarMoneda(c.partner?.moneda) ?? "USD";
+  const hubs: HubDeLaRenovacion[] = licenciasCombinadas(c).map((l) => ({
+    hub: l.hub,
+    nombre: NOMBRE_DEL_HUB[l.hub as HubDePartner] ?? l.hub,
+    plan: l.plan,
+    renovacion: l.renovacion,
+    montoMensual: l.montoMensual,
+    moneda: l.moneda,
+    fuente: l.fuenteRenovacion,
+  }));
+  const proxima = proximaRenovacion(c, hoy);
+  const futuras = [...new Set(hubs.map((h) => h.renovacion).filter((f): f is string => !!f && f >= hoy))].sort();
+  const despues = futuras.find((f) => f !== proxima) ?? null;
+  const de = (fecha: string | null) => (fecha ? hubs.filter((h) => h.renovacion === fecha) : []);
+  const sumar = (hs: HubDeLaRenovacion[]): MontosPorMoneda =>
+    repartirPorMoneda(
+      hs.map((h) => ({ monto: h.montoMensual, moneda: h.moneda })),
+      monedaDeHubspot,
+    ).flatMap((g) => (g.monto !== null ? [{ moneda: g.moneda, monto: g.monto }] : []));
+  return {
+    proxima,
+    queRenueva: de(proxima),
+    montos: sumar(de(proxima)),
+    despues,
+    queRenuevaDespues: de(despues),
+    montosDespues: sumar(de(despues)),
+    calendario: [...hubs].sort((a, b) => (a.renovacion ?? "9999").localeCompare(b.renovacion ?? "9999")),
+    pagoTotal: sumar(hubs),
+  };
 }

@@ -10,7 +10,7 @@ import Link from "next/link";
 import { EmptyState, Segmentado } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { enCuanto, fmtCambio, fmtDia, fmtMonto } from "@/lib/cs/formato";
-import type { FilaDeRenovacion } from "@/lib/cs/cartera-reglas";
+import { esEnDolares, type FilaDeRenovacion } from "@/lib/cs/cartera-reglas";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
 import { Avatar, CajaDeTabla, Chip, EncabezadoDeTabla, GrupoDeTabla, Salud } from "../piezas";
 
@@ -25,7 +25,7 @@ const TRAMOS: Array<{ desde: number; hasta: number; titulo: string }> = [
 ];
 
 function sumaUsd(filas: FilaDeRenovacion[], campo: "montoMensual" | "cambioEsperado"): number {
-  return filas.filter((f) => (f.moneda ?? "USD") === "USD").reduce((s, f) => s + (f[campo] ?? 0), 0);
+  return filas.filter(esEnDolares).reduce((s, f) => s + (f[campo] ?? 0), 0);
 }
 
 export default function Renovaciones({ filas, hoy }: { filas: FilaDeRenovacion[]; hoy: string }) {
@@ -81,7 +81,7 @@ export default function Renovaciones({ filas, hoy }: { filas: FilaDeRenovacion[]
                   const usoBajo = usos.some((h) => (h.uso ?? 100) < UMBRALES.usoBajo);
                   return (
                     <Link
-                      key={`${f.clientId}-${f.fecha}`}
+                      key={`${f.clientId}-${f.fecha}-${f.moneda ?? ""}`}
                       href={`/customer-success/${f.clientId}`}
                       className={cn("grid items-center gap-4 px-4 py-3.5 text-fg transition-colors hover:bg-surface-hover", COLUMNAS, i > 0 && "border-t border-line")}
                     >
@@ -127,7 +127,8 @@ export default function Renovaciones({ filas, hoy }: { filas: FilaDeRenovacion[]
       )}
       <p className="text-xs text-fg-muted">
         Una fila por cuenta y fecha: si un cliente renueva hubs en fechas distintas, sale una vez por fecha. El monto es la suma de
-        lo que paga cada hub que renueva.
+        lo que paga cada hub que renueva, en una sola moneda: si el mismo día renueva algo en otra moneda, va en otra fila. Los
+        totales de arriba son en dólares.
       </p>
     </div>
   );

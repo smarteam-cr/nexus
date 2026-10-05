@@ -132,3 +132,35 @@ export function queSigueDelProyecto(i: {
 
   return { texto: "El proyecto está al día: no hay nada esperando tu decisión.", accion: null };
 }
+
+/**
+ * Lo que el bloque «Pendientes recientes» del panel NO muestra. El panel trae hasta 5 de las
+ * últimas 4 semanas; el resto se cuenta en dos partes: los de estas 4 semanas que no entraron y los
+ * anteriores. Antes era «abiertos − mostrados = más antiguos», y contaba como antiguos a los
+ * recientes que no entraban en los 5.
+ *
+ * `recientes` null = respuesta cacheada vieja sin ese número: se dice «y N más», sin adjetivo.
+ */
+export function restoDeLosPendientes(i: { mostrados: number; recientes: number | null; abiertos: number }): {
+  recientes: number;
+  antiguos: number;
+  texto: string | null;
+} {
+  if (i.recientes === null) {
+    const resto = Math.max(0, i.abiertos - i.mostrados);
+    return { recientes: 0, antiguos: 0, texto: resto > 0 ? `y ${resto} más` : null };
+  }
+  const recientes = Math.max(0, i.recientes - i.mostrados);
+  const antiguos = Math.max(0, i.abiertos - Math.max(i.recientes, i.mostrados));
+  const deEstas = `${recientes} de las últimas 4 semanas`;
+  const anteriores = (n: number) => `${n} ${n === 1 ? "más antiguo" : "más antiguos"}`;
+  const texto =
+    recientes > 0 && antiguos > 0
+      ? `y ${recientes + antiguos} más: ${deEstas} y ${anteriores(antiguos)}`
+      : recientes > 0
+        ? `y ${recientes} más de las últimas 4 semanas`
+        : antiguos > 0
+          ? `y ${anteriores(antiguos)}`
+          : null;
+  return { recientes, antiguos, texto };
+}

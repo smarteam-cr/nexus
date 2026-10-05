@@ -14,8 +14,7 @@ import ClientProcesosPanel from "@/components/clients/ClientProcesosPanel";
 import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
-import { BotonTexto } from "@/components/ui/sistema";
-import { cn } from "@/lib/cn";
+import PanelLateral, { usePanelLateral } from "@/components/ui/PanelLateral";
 import { parseEstadoDeAlta, siguientePaso } from "@/lib/projects/alta";
 import { leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import {
@@ -522,24 +521,11 @@ function ProjectSection({
   const [slotDePiezas, setSlotDePiezas] = useState<HTMLDivElement | null>(null);
   const [slotDelPanel, setSlotDelPanel] = useState<HTMLDivElement | null>(null);
 
-  /* «Ocultar panel»: para proyectar un documento en una reunión. Se recuerda por navegador
-     (decisión del 2026-10-04). El panel arranca visible y el efecto lee lo guardado. */
-  const [panelVisible, setPanelVisible] = useState(true);
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem("nexus-ficha-panel") === "oculto") setPanelVisible(false);
-    } catch {
-      /* sin almacenamiento (ventana privada): queda visible */
-    }
-  }, []);
-  const cambiarPanel = useCallback((visible: boolean) => {
-    setPanelVisible(visible);
-    try {
-      window.localStorage.setItem("nexus-ficha-panel", visible ? "visible" : "oculto");
-    } catch {
-      /* sin almacenamiento: solo dura esta visita */
-    }
-  }, []);
+  /* Ocultar el panel (para proyectar un documento en una reunión) es la MISMA preferencia que la
+     columna derecha de todas las pantallas: `PanelLateral`, con la cookie `nexus-panel` que lee el
+     servidor (components/ui/PanelLateral.tsx). Antes era una preferencia propia guardada en el
+     navegador y leída en un efecto: cada carga pintaba el panel abierto y lo cerraba de un salto. */
+  const panelVisible = usePanelLateral()?.abierto ?? true;
 
   /** Abrir una pieza de un proyecto que no está en el centro (se mira algo de la cuenta). */
   const abrirEnProyecto = useCallback(
@@ -564,13 +550,9 @@ function ProjectSection({
   return (
     /* El lienzo de tres columnas, como la preventa (sistema «Nexus · interfaz interna»): a la
        izquierda el riel (14,5rem), al centro una sola tarea, a la derecha el panel de contexto
-       (18,75rem). Debajo de 1280 px el panel baja al final; debajo de 1024 px el riel se acuesta. */
-    <div
-      className={cn(
-        "min-h-full bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)]",
-        panelVisible ? "xl:grid-cols-[14.5rem_minmax(0,1fr)_18.75rem]" : "xl:grid-cols-[14.5rem_minmax(0,1fr)_2.75rem]",
-      )}
-    >
+       (18,75rem). Debajo de 1280 px el panel baja al final; debajo de 1024 px el riel se acuesta.
+       La tercera columna es `auto`: la mide el ancho del panel, abierto o cerrado. */
+    <div className="min-h-full bg-surface-muted lg:grid lg:grid-cols-[14.5rem_minmax(0,1fr)] xl:grid-cols-[14.5rem_minmax(0,1fr)_auto]">
       <aside className="border-b border-line bg-surface px-3 py-4 lg:sticky lg:top-0 lg:h-[calc(100vh-57px)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r">
         <RielDelCliente
           proyectos={filasDelRiel}
@@ -627,19 +609,17 @@ function ProjectSection({
         )}
       </main>
 
-      <aside
-        className={cn(
-          "border-t border-line bg-surface-muted lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-57px)] xl:self-start xl:overflow-y-auto xl:border-l xl:border-t-0",
-          panelVisible ? "p-5" : "px-5 py-3 xl:px-1.5 xl:py-5",
-        )}
+      <PanelLateral
+        etiqueta="Panel"
+        breakpoint="xl"
+        ancho="xl:w-[18.75rem]"
+        className="py-5"
+        fijas="lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-57px)] xl:self-start xl:overflow-y-auto"
       >
-        {panelVisible ? (
-          <div className="flex flex-col gap-6">
-            <div className="-mb-4 flex justify-end">
-              <BotonTexto onClick={() => cambiarPanel(false)} title="Oculta este panel; por ejemplo, para proyectar un documento">
-                Ocultar panel
-              </BotonTexto>
-            </div>
+        {/* Cerrado, lo de adentro se desmonta (como antes): las piezas del proyecto reciben el
+            espacio del panel solo cuando se ve (`slotDelPanel`), y no pintan en uno oculto. */}
+        {panelVisible && (
+          <>
             {/* El alta que quedó a medio hacer, con su botón de retomar. Va primero en el panel —que
                 se ve en todos los documentos— y no adentro de una pieza: mientras el alta no
                 termine, el proyecto no cobra, no suma a la cartera y no se le publica nada al
@@ -676,23 +656,9 @@ function ProjectSection({
               />
             )}
             <div ref={setSlotDelPanel} className="flex flex-col gap-6" />
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => cambiarPanel(true)}
-            aria-label="Mostrar el panel"
-            title="Mostrar el panel"
-            className="flex w-full items-center justify-center gap-2 rounded-md border border-line bg-surface px-2 py-1.5 text-xs text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg xl:h-8 xl:w-8 xl:px-0"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-              <rect x="3" y="4" width="18" height="16" rx="2" />
-              <path d="M15 4v16" />
-            </svg>
-            <span className="xl:hidden">Mostrar el panel</span>
-          </button>
+          </>
         )}
-      </aside>
+      </PanelLateral>
     </div>
   );
 }

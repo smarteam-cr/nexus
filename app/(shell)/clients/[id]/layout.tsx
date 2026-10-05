@@ -1,6 +1,6 @@
 import { requireAccessToClient } from "@/lib/auth/access";
-import { requireCapability } from "@/lib/auth/roles";
-import { UnauthorizedError, ForbiddenError } from "@/lib/auth/supabase";
+import { UnauthorizedError, ForbiddenError, requireInternalUser } from "@/lib/auth/supabase";
+import { esLiderDeCs } from "@/lib/cs/acceso";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import Link from "next/link";
@@ -104,9 +104,12 @@ export default async function ClientLayout({
 
   const displayCompany = hsCompanyName ?? client.company;
 
-  // CS360 — link a la vista de cuenta de Customer Success (solo roles see-all;
-  // el CSE no tiene acceso a esa sección).
-  const canSeeCs = await requireCapability("seeAllClients").then(() => true).catch(() => false);
+  // El atajo a la ficha de la cuenta en Éxito del cliente, con la MISMA condición que esa página
+  // (`esLiderDeCs`: CSL y dirección, por rol). Colgaba de «ver todos los clientes», que Ventas,
+  // Desarrollo y Marketing tienen por default: les mostraba un botón que los rebotaba.
+  // `requireInternalUser` está memoizado por petición: requireAccessToClient ya lo resolvió arriba.
+  const ctx = await requireInternalUser().catch(() => null);
+  const canSeeCs = !!ctx && esLiderDeCs(ctx.role);
 
   // Dominio del cliente (para filtrar sesiones de Fireflies)
   const clientDomain = (() => {

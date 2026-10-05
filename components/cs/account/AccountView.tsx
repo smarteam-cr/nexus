@@ -23,6 +23,7 @@ import { useSearchParams } from "next/navigation";
 import { Tabs } from "@/components/ui";
 import { CabeceraDeFicha, AccionDeCabecera, ChipHubspot } from "@/components/layout/CabeceraDeFicha";
 import { diasEntre } from "@/lib/cs/formato";
+import { proximaRenovacion } from "@/lib/cs/cartera-reglas";
 import { UMBRALES, usoCayendo } from "@/lib/cs/lectura-partner";
 import { PARTNER_STATE_META } from "@/lib/cs/partner-state";
 import { NOMBRE_DE_LA_PESTANA, PESTANAS_DE_LA_CUENTA, pestanaDeLaUrl, type PestanaDeCuenta } from "@/lib/cs/pestanas-de-la-cuenta";
@@ -64,12 +65,9 @@ export default function AccountView({
   // Lo que marca cada pestaña en su rótulo: dónde hay algo que mirar.
   const adopcionPideAtencion =
     !!p && ((p.uso !== null && p.uso < UMBRALES.usoBajo) || usoCayendo(p) || p.hubs.some((h) => h.activado === false));
-  const proximaRenovacion = p
-    ? (p.proximaRenovacion && p.proximaRenovacion >= hoy
-        ? p.proximaRenovacion
-        : (p.hubs.map((h) => h.renovacion).filter((f): f is string => !!f && f >= hoy).sort()[0] ?? null))
-    : null;
-  const diasARenovar = proximaRenovacion ? diasEntre(hoy, proximaRenovacion) : null;
+  // La MISMA fecha que el estado de la cuenta y la pestaña: HubSpot o, si no la trae, la cargada a mano.
+  const renueva = proximaRenovacion(cuenta, hoy);
+  const diasARenovar = renueva ? diasEntre(hoy, renueva) : null;
 
   const rotulo = (k: PestanaDeCuenta) => {
     const nombre = NOMBRE_DE_LA_PESTANA[k];
