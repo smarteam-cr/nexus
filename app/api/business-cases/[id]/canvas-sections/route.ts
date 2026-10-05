@@ -132,7 +132,7 @@ export async function POST(
   // propia ahí no tendría dónde pegarse (SectionTools ni siquiera se monta).
   if (canvas.version === 0) {
     return NextResponse.json(
-      { error: "Generá una versión de la propuesta antes de agregarle secciones propias." },
+      { error: "Genera una versión de la propuesta antes de agregarle secciones propias." },
       { status: 400 },
     );
   }

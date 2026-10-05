@@ -1,29 +1,30 @@
 /**
- * /business-cases/new — crear un business case sobre una empresa de HubSpot
- * (stepper on-page). Gateado por el área de Ventas (VENTAS/DEV/CSL/SUPER_ADMIN).
+ * /business-cases/new — crear una propuesta sobre una empresa de HubSpot, con o sin preventa
+ * (components/propuestas/NuevaPropuesta.tsx). Gateado por `ventas.read`.
  */
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import BusinessCaseStepper from "@/components/business-cases/BusinessCaseStepper";
+import NuevaPropuesta from "@/components/propuestas/NuevaPropuesta";
 import { can } from "@/lib/auth/permissions/engine";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewBusinessCasePage() {
+export default async function NuevaPropuestaPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
 
   return (
     <div className="px-6 py-8">
-      <Link href="/business-cases" className="text-xs text-fg-muted hover:text-fg">
-        ← Ventas
-      </Link>
-      <PageHeader title="Nueva propuesta" description="Buscá la empresa en HubSpot para arrancar." />
-      <div className="mt-6">
-        <BusinessCaseStepper />
+      <div className="mx-auto max-w-[760px]">
+        <PageHeader
+          title="Nueva propuesta"
+          description="Busca la empresa en HubSpot, elige qué se cotiza y ponle nombre. El contexto se arma después, en la ficha."
+          backHref="/business-cases"
+          backLabel="Propuestas"
+        />
       </div>
+      <NuevaPropuesta />
     </div>
   );
 }

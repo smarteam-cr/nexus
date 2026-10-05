@@ -9,14 +9,13 @@
  *
  * Lo INTERNO (hipótesis, presupuesto, quién decide, lo no explorado…) llega SOLO por acá, a una
  * pantalla interna: al agente del handoff no se le manda (lib/exploraciones/para-el-handoff.ts).
+ * El resumen es el MISMO que el de la columna de la propuesta (lib/exploraciones/en-las-propuestas.ts).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardProjectHandoffAccess } from "@/lib/auth/api-guards";
 import { can } from "@/lib/auth/permissions/engine";
-import type { Meta } from "@/lib/exploraciones/casillas";
 import { exploracionDelProyecto } from "@/lib/exploraciones/handoff";
-import { internoParaElCse } from "@/lib/exploraciones/para-el-handoff";
-import { exploracionParaLaPropuesta } from "@/lib/exploraciones/servidor";
+import { resumenParaElContexto } from "@/lib/exploraciones/en-las-propuestas";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -25,28 +24,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
 
   const id = await exploracionDelProyecto(projectId);
   if (!id) return NextResponse.json({ exploracion: null });
-  const datos = await exploracionParaLaPropuesta(id);
-  if (!datos) return NextResponse.json({ exploracion: null });
-
-  const { estado, escala, chequeo } = datos;
-  const nivel = (l: string | null) => (l ? (escala.niveles.find((n) => n.letra === l)?.nombre ?? l) : null);
-  const metas = ((estado.contenido.casillas.metas ?? []) as Meta[]).map((m) =>
-    [m.que, m.actual && `de ${m.actual}`, m.objetivo && `a ${m.objetivo}`, m.para && `para ${m.para}`].filter(Boolean).join(" "),
-  );
-  return NextResponse.json({
-    exploracion: {
-      id,
-      edicion: escala.edicion?.nombre ?? null,
-      areas: chequeo.areas.map((a) => ({
-        nombre: a.nombre,
-        base: nivel(a.capas.base.nivel),
-        produccion: nivel(a.capas.produccion.nivel),
-        objetivo: nivel(a.objetivo),
-      })),
-      metas,
-      casosDeUso: Object.values(estado.contenido.casosDeUso).map((c) => c.titulo),
-      interno: internoParaElCse(estado, escala),
-      puedeAbrir: await can(guard.teamMember, "ventas", "read"),
-    },
-  });
+  return NextResponse.json({ exploracion: await resumenParaElContexto(id, await can(guard.teamMember, "ventas", "read")) });
 }

@@ -1,8 +1,9 @@
 /**
  * GET  /api/sales/exploraciones/[id]/propuesta
  *   Lo que el paso «Propuesta» del lienzo necesita: los negocios de la empresa en HubSpot (para
- *   elegir el de la propuesta), el catálogo de casos de uso y las propuestas que ya nacieron de esta
- *   exploración. Pide `ventas.read`. Solo lee.
+ *   elegir el de la propuesta), el catálogo de casos de uso y las propuestas de la EMPRESA —las que
+ *   usan esta preventa y las que no, para usarla en una que ya existe (2026-10-05). Pide
+ *   `ventas.read`. Solo lee.
  *
  * POST /api/sales/exploraciones/[id]/propuesta   body: { dealId, nombre? }
  *   Arma la Propuesta de Nexus (lib/exploraciones/propuesta.ts) y devuelve su id; el texto lo
@@ -12,7 +13,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
 import { guardPermission } from "@/lib/auth/api-guards";
-import { armarPropuesta, catalogoDeCasosDeUso, negociosDeLaEmpresa, propuestasDeLaExploracion } from "@/lib/exploraciones/propuesta";
+import { armarPropuesta, catalogoDeCasosDeUso, negociosDeLaEmpresa } from "@/lib/exploraciones/propuesta";
+import { propuestasDeLaEmpresa } from "@/lib/exploraciones/en-las-propuestas";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -33,7 +35,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const [negocios, catalogo, propuestas] = await Promise.all([
     companyId ? negociosDeLaEmpresa(companyId) : Promise.resolve([]),
     catalogoDeCasosDeUso(),
-    propuestasDeLaExploracion(id),
+    propuestasDeLaEmpresa(id),
   ]);
   return NextResponse.json({ negocios, catalogo, propuestas });
 }

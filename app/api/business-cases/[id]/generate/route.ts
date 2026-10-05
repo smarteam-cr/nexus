@@ -188,8 +188,8 @@ export async function POST(
     // Mensaje claro: distinguir "no hay fuentes" de "las sesiones no tienen transcripción aún".
     const error =
       sessionsWithoutTranscript > 0
-        ? "Las sesiones del prospecto todavía no tienen transcripción. Pegá un transcript a mano en “Fuentes manuales” (o esperá a que se transcriba la reunión)."
-        : "Agregá una sesión del prospecto con transcripción o pegá un transcript a mano antes de generar.";
+        ? "Las sesiones del prospecto todavía no tienen transcripción. Pega un transcript a mano en «Fuentes manuales» (o espera a que se transcriba la reunión)."
+        : "Agrega una sesión del prospecto con transcripción o pega un transcript a mano antes de generar.";
     return NextResponse.json({ error }, { status: 400 });
   }
 
@@ -249,7 +249,7 @@ export async function POST(
           `orden pero con los VENDIDOS primero. Los vendidos se escriben como lo que se va a ` +
           `implementar; los NO vendidos, como lo que ese Hub sumaría — el cliente los ve marcados ` +
           `"No incluido", así que NUNCA los presentes como parte del alcance ni les pongas precio.`
-        : `La propuesta no declara qué Hubs se vendieron. Escribí igual una columna por cada uno, ` +
+        : `La propuesta no declara qué Hubs se vendieron. Escribe igual una columna por cada uno, ` +
           `todas en el mismo tono, y no afirmes que alguno está incluido.`),
   );
   {
@@ -305,7 +305,7 @@ export async function POST(
   });
   if (inFlight) {
     return NextResponse.json(
-      { error: "Ya hay una generación en curso para este caso. Esperá a que termine." },
+      { error: "Ya hay una generación en curso para este caso. Espera a que termine." },
       { status: 409 },
     );
   }

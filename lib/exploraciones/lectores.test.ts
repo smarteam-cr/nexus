@@ -36,6 +36,11 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/sales/exploraciones/[id]/preparacion/route.ts": { destino: "ventas", motivo: "Los hechos de HubSpot de la pieza Preparación." },
   "app/api/sales/exploraciones/empresas/route.ts": { destino: "ventas", motivo: "Buscar la empresa." },
   "app/api/sales/exploraciones/sugerencias/route.ts": { destino: "ventas", motivo: "«Llegaron por el test»." },
+  "app/api/business-cases/[id]/preventa/route.ts": {
+    destino: "ventas",
+    motivo: "La columna «Preventa» del contexto de la propuesta (pantalla interna) y usar una preventa de la misma empresa.",
+  },
+  "app/api/business-cases/preventas/route.ts": { destino: "ventas", motivo: "Ofrecer las preventas de la empresa al crear una propuesta." },
   "app/api/business-cases/[id]/generate/route.ts": { destino: "propuesta-al-cliente", motivo: "La exploración como fuente de la propuesta y su posición en la escala." },
   "app/api/business-cases/[id]/canvas-sections/[sectionId]/blocks/regenerate/route.ts": {
     destino: "propuesta-al-cliente",

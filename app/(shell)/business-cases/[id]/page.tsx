@@ -1,37 +1,45 @@
 /**
- * /business-cases/[id] — workspace de un business case (por businessCaseId).
- * F2: shell mínimo (header). El panel de sesiones de contexto, la generación y el
- * editor de canvas se construyen en F3–F5. Gateado por el área de Ventas (VENTAS/DEV/CSL/SUPER_ADMIN).
+ * /business-cases/[id] — la ficha de una propuesta (rediseño del 2026-10-05).
+ *
+ * Con el MISMO caparazón que la ficha del cliente y la de la preventa: la cabecera de la ficha a
+ * todo el ancho (components/layout/CabeceraDeFicha.tsx) y debajo el lienzo de tres pasos
+ * (BusinessCaseWorkspace). El paso con el que abre: el de `?paso=`, o el que toca por su estado
+ * —el Contexto si todavía no se generó ninguna, la Propuesta si ya hay—.
+ * Gateada por `ventas.read`; editar pide `ventas.write`.
  */
 import { redirect, notFound } from "next/navigation";
-import { BackLink } from "@/components/ui";
-import Link from "next/link";
-import { requireInternalUser } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
-/* El envoltorio y no el workspace: el proveedor del aplicador tiene que ser ANCESTRO del editor
-   —el que provee no consume— y esta página es de servidor, así que no puede pasarle la función
-   de abrir el cajón. Ver `PropuestaConChat`. */
-import PropuestaConChat from "@/components/business-cases/PropuestaConChat";
+import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
+/* El envoltorio y no el workspace: el proveedor del aplicador del chat tiene que ser ANCESTRO del
+   editor, y esta página es de servidor. Ver `PropuestaConChat`. */
+import PropuestaConChat from "@/components/business-cases/PropuestaConChat";
+import DeleteBusinessCaseButton from "@/components/business-cases/DeleteBusinessCaseButton";
+import { AccionDeCabecera, CabeceraDeFicha } from "@/components/layout/CabeceraDeFicha";
 import { resolveCaseTypeFor } from "@/lib/business-cases/resolve-template";
 import { getBrandLogos, brandLogoMap } from "@/lib/external/smarteam-logo";
+import { hubspotCompanyUrl, hubspotDealUrl } from "@/lib/hubspot/urls";
+import type { PasoDeLaPropuesta } from "@/components/propuestas/PasosDeLaPropuesta";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Borrador",
-  PUBLISHED: "Publicado",
-  ARCHIVED: "Archivado",
-};
+const PASOS: readonly PasoDeLaPropuesta[] = ["contexto", "propuesta", "compartir"];
 
-export default async function BusinessCasePage({
+/** Los chips de la cabecera, como en la ficha de la preventa: píldoras blancas con borde, de 12 px. */
+const CLASE_DE_CHIP =
+  "inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-[3px] text-xs font-medium text-fg-secondary";
+
+export default async function PropuestaPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ paso?: string }>;
 }) {
-  const { id } = await params;
+  const [{ id }, { paso }] = await Promise.all([params, searchParams]);
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
+  const puedeEditar = await can(ctx.teamMember, "ventas", "write");
 
   const bc = await prisma.businessCase.findUnique({
     where: { id },
@@ -41,75 +49,91 @@ export default async function BusinessCasePage({
       status: true,
       publishedAt: true,
       hubspotDealId: true,
+      hubspotCompanyId: true,
       caseType: true,
       caseSubtype: true,
       language: true,
-      // La exploración de venta de la que nació (Ventas → Exploraciones): se enlaza arriba.
-      exploracionId: true,
-      client: { select: { id: true, name: true, kind: true, logoUrl: true, logoDarkUrl: true, logoScale: true } },
+      client: { select: { id: true, name: true, kind: true, logoUrl: true, logoDarkUrl: true, logoScale: true, hubspotCompanyId: true } },
     },
   });
   if (!bc) notFound();
 
-  // Logos de marca (config global de Nexus: Smarteam + HubSpot + Insider One) —
-  // el hero los pinta en la brand-row.
-  const brandLogos = await getBrandLogos();
-
-  // Tipo/template (columna → __meta del v0 → default hubspot). El v0 siempre existe
-  // para BCs nuevos; para legacy sin __meta la resolución cae al default.
-  const v0 = await prisma.projectCanvas.findFirst({
-    where: { businessCaseId: id, version: 0 },
-    select: { sections: true },
-  });
+  const [brandLogos, v0, generadas, portal] = await Promise.all([
+    // Logos de marca (Smarteam + HubSpot + Insider One): el hero los pinta en la fila de marcas.
+    getBrandLogos(),
+    // Tipo y plantilla (columna → __meta del v0 → hubspot por defecto).
+    prisma.projectCanvas.findFirst({ where: { businessCaseId: id, version: 0 }, select: { sections: true } }),
+    prisma.projectCanvas.count({ where: { businessCaseId: id, version: { gt: 0 } } }),
+    prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } }),
+  ]);
   const resolved = resolveCaseTypeFor(bc, v0?.sections);
+  const subtipo = resolved.caseSubtype
+    ? (resolved.typeDef.subtypes?.find((s) => s.id === resolved.caseSubtype)?.label ?? resolved.caseSubtype)
+    : null;
+  const pasoInicial: PasoDeLaPropuesta = PASOS.includes(paso as PasoDeLaPropuesta)
+    ? (paso as PasoDeLaPropuesta)
+    : generadas > 0
+      ? "propuesta"
+      : "contexto";
+  const empresaUrl = hubspotCompanyUrl(portal?.hubspotPortalId, bc.hubspotCompanyId ?? bc.client.hubspotCompanyId);
+  const tratoUrl = hubspotDealUrl(portal?.hubspotPortalId, bc.hubspotDealId);
 
   return (
-    <div className="px-6 py-8">
-      <BackLink href="/business-cases">Ventas</BackLink>
-      <div className="mt-2 flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-fg truncate">{bc.name}</h1>
-        <span className="flex-shrink-0 flex items-center gap-1.5">
-          <span className="text-[11px] px-2 py-1 rounded border border-line text-fg-muted">
-            {resolved.typeDef.shortLabel}
-            {resolved.caseSubtype
-              ? ` · ${resolved.typeDef.subtypes?.find((s) => s.id === resolved.caseSubtype)?.label ?? resolved.caseSubtype}`
-              : ""}
-          </span>
-          <span className="text-xs px-2 py-1 rounded bg-surface-muted text-fg-muted">
-            {STATUS_LABEL[bc.status] ?? bc.status}
-          </span>
-        </span>
-      </div>
-      <p className="mt-1 text-sm text-fg-muted">
-        {bc.client.name}
-        {bc.client.kind === "PROSPECTO" ? " (prospecto)" : ""}
-        {bc.hubspotDealId ? " · deal vinculado" : ""}
-        {bc.exploracionId && (
+    <div className="flex min-h-screen flex-col">
+      <CabeceraDeFicha
+        volver={{ href: "/business-cases", etiqueta: "Propuestas" }}
+        titulo={bc.name}
+        chips={
           <>
-            {" · "}
-            <Link href={`/sales/exploraciones/${bc.exploracionId}`} className="text-brand-light hover:underline">
-              Viene de la preventa
-            </Link>
+            <span className={CLASE_DE_CHIP}>
+              {bc.client.name}
+              {bc.client.kind === "PROSPECTO" ? " · prospecto" : ""}
+            </span>
+            <span className={CLASE_DE_CHIP}>
+              {resolved.typeDef.shortLabel}
+              {subtipo ? ` · ${subtipo}` : ""}
+            </span>
           </>
-        )}
-      </p>
-
-      <div className="mt-8">
-        <PropuestaConChat
-          bcId={bc.id}
-          clientId={bc.client.id}
-          clientName={bc.client.name}
-          clientLogoUrl={bc.client.logoUrl}
-          clientLogoDarkUrl={bc.client.logoDarkUrl}
-          clientLogoScale={bc.client.logoScale}
-          smarteamLogoUrl={brandLogos.smarteam}
-          brandLogos={brandLogoMap(brandLogos)}
-          status={bc.status}
-          publishedAt={bc.publishedAt ? bc.publishedAt.toISOString() : null}
-          templateId={resolved.templateId}
-          language={bc.language}
-        />
-      </div>
+        }
+        acciones={
+          <>
+            {bc.client.kind === "CLIENTE" && (
+              <AccionDeCabecera href={`/clients/${bc.client.id}`} title="La ficha del cliente">
+                Ver ficha del cliente
+              </AccionDeCabecera>
+            )}
+            {empresaUrl && (
+              <AccionDeCabecera href={empresaUrl} externa title="La empresa en HubSpot">
+                Abrir en HubSpot ↗
+              </AccionDeCabecera>
+            )}
+            {puedeEditar && (
+              <DeleteBusinessCaseButton
+                bcId={bc.id}
+                redirectTo="/business-cases"
+                description={`Se borrará «${bc.name}» de ${bc.client.name} con todas sus versiones. Esto no se puede deshacer.`}
+              />
+            )}
+          </>
+        }
+      />
+      <PropuestaConChat
+        bcId={bc.id}
+        clientId={bc.client.id}
+        clientName={bc.client.name}
+        clientLogoUrl={bc.client.logoUrl}
+        clientLogoDarkUrl={bc.client.logoDarkUrl}
+        clientLogoScale={bc.client.logoScale}
+        smarteamLogoUrl={brandLogos.smarteam}
+        brandLogos={brandLogoMap(brandLogos)}
+        status={bc.status}
+        publishedAt={bc.publishedAt ? bc.publishedAt.toISOString() : null}
+        templateId={resolved.templateId}
+        language={bc.language}
+        pasoInicial={pasoInicial}
+        puedeEditar={puedeEditar}
+        tratoUrl={tratoUrl}
+      />
     </div>
   );
 }

@@ -125,7 +125,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          "Las propuestas ya no se protegen con contraseña: el link es el acceso. Si se filtró, revocalo y volvé a subirla al cliente.",
+          "Las propuestas ya no se protegen con contraseña: el link es el acceso. Si se filtró, revócalo y vuelve a subirla al cliente.",
       },
       { status: 410 },
     );
@@ -135,7 +135,7 @@ export async function PATCH(
   // `null` de setAccessExpiry = el acceso está REVOCADO. No se revive por un ajuste del
   // panel: revivirlo es "Subir al cliente", y solo ahí, porque genera un token nuevo.
   const REVOCADO = {
-    error: "El acceso de esta propuesta está revocado. Volvé a subirla al cliente para generar un link nuevo.",
+    error: "El acceso de esta propuesta está revocado. Vuelve a subirla al cliente para generar un link nuevo.",
   };
 
   if (body.expiresInDays !== undefined) {

@@ -45,7 +45,6 @@ const DEUDA = {
   animatePulse: [
     "app/(shell)/audits/[id]/AuditDetailClient.tsx",
     "app/(shell)/marketing/generacion/EngineClient.tsx",
-    "components/business-cases/BusinessCaseWorkspace.tsx",
     "components/clients/ClientContextCards.tsx",
   ],
   // El aside de /sessions es excelente, pero su panel derecho usa un spinner centrado.

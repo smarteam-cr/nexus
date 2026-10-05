@@ -60,7 +60,7 @@ export async function POST(
   }
 
   if (!/^https?:\/\//i.test(url)) {
-    return NextResponse.json({ error: "Pegá una URL http(s) válida." }, { status: 400 });
+    return NextResponse.json({ error: "Pega una URL http(s) válida." }, { status: 400 });
   }
 
   let title: string;
@@ -88,7 +88,7 @@ export async function POST(
     }
     console.error("[bc transcript/url] fetch error inesperado:", err);
     return NextResponse.json(
-      { error: "No se pudo leer la página. Probá de nuevo en unos segundos." },
+      { error: "No se pudo leer la página. Prueba de nuevo en unos segundos." },
       { status: 500 },
     );
   }

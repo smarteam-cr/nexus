@@ -638,7 +638,8 @@ describe("candado 11 — la propuesta tiene UNA sola puerta: el modo con contras
   it("el panel de Ventas no ofrece la contraseña, y el servidor la rechaza", () => {
     /* La edición que lo pone en rojo: volver a poner el check «Pedir contraseña» en el panel, o que el
        PATCH vuelva a aceptar `requiresPassword: true`. */
-    const panel = lee("components/business-cases/BcAccessButton.tsx");
+    // El paso «Compartir» de la ficha (rediseño del 2026-10-05) y el estado del link que usa.
+    const panel = lee("components/propuestas/CompartirLaPropuesta.tsx") + lee("components/propuestas/useAccesoDeLaPropuesta.ts");
     expect(panel.includes("Pedir contraseña"), "volvió el check al panel").toBe(false);
     expect(/requiresPassword|accessPassword/.test(panel), "el panel volvió a leer o mandar el modo").toBe(false);
     const ruta = lee("app/api/business-cases/[id]/external-access/route.ts");

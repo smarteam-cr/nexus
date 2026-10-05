@@ -45,7 +45,14 @@ export function useExploracionDeVenta(projectId: string): ResumenDeLaExploracion
   return datos;
 }
 
-export function ExploracionDeVentaResumen({ datos }: { datos: ResumenDeLaExploracion }) {
+export function ExploracionDeVentaResumen({
+  datos,
+  alDocumento = "al handoff",
+}: {
+  datos: ResumenDeLaExploracion;
+  /** A qué entra: «al handoff» o «a la propuesta» (la misma columna vive en los dos contextos). */
+  alDocumento?: string;
+}) {
   const filas = [
     ...datos.areas.map((a) => (
       <ContextRow
@@ -65,7 +72,7 @@ export function ExploracionDeVentaResumen({ datos }: { datos: ResumenDeLaExplora
   return (
     <div className="space-y-2">
       <p className="text-[11px] text-fg-muted">
-        Entra al handoff como <span className="font-medium text-fg-secondary">estimado</span>: dice dónde mirar, no es evidencia. Lo marcado «solo interno» no entra: queda acá.
+        Entra {alDocumento} como <span className="font-medium text-fg-secondary">estimado</span>: dice dónde mirar, no es evidencia. Lo marcado «solo interno» no entra: queda acá.
         {datos.edicion ? ` Edición de la escala: ${datos.edicion}.` : ""}
       </p>
       <ContextColumnList empty="La preventa todavía no tiene nada confirmado.">{filas}</ContextColumnList>

@@ -71,7 +71,7 @@ export async function POST(
       {
         error: bodyCanvasId
           ? "Esa propuesta no existe o es la Plantilla (la Plantilla no se publica)."
-          : "Generá una propuesta antes de subir al cliente.",
+          : "Genera una propuesta antes de subirla al cliente.",
       },
       { status: 400 },
     );
@@ -103,7 +103,7 @@ export async function POST(
   );
   if (filled.length === 0) {
     return NextResponse.json(
-      { error: "Generá o escribí contenido antes de subir al cliente." },
+      { error: "Genera o escribe contenido antes de subirla al cliente." },
       { status: 400 },
     );
   }
@@ -119,7 +119,7 @@ export async function POST(
   if (sinMonto.length) {
     return NextResponse.json(
       {
-        error: `Falta el monto de ${sinMonto.length === 1 ? "una licencia" : `${sinMonto.length} licencias`}: ${sinMonto.join(" · ")}. Poné el monto o borrá la línea antes de subir.`,
+        error: `Falta el monto de ${sinMonto.length === 1 ? "una licencia" : `${sinMonto.length} licencias`}: ${sinMonto.join(" · ")}. Pon el monto o borra la línea antes de subirla.`,
       },
       { status: 400 },
     );

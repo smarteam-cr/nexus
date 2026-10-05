@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     if (!searchRes.ok) {
       console.error("[business-cases/lookup] HubSpot search no-ok:", searchRes.status);
       return NextResponse.json(
-        { error: "No se pudo consultar HubSpot. Revisá la conexión del sistema." },
+        { error: "No se pudo consultar HubSpot. Revisa la conexión del sistema." },
         { status: 502 },
       );
     }
