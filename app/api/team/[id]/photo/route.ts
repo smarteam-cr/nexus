@@ -4,13 +4,14 @@
  *   POST   → sube/reemplaza la foto del miembro (FormData "file") → TeamMember.photoUrl
  *   DELETE → quita la foto
  *
- * Guarded con guardCapability("manageTeam") (mismo gate que crear miembros). La foto
+ * La foto PROPIA la cambia cada persona; la de otro miembro exige guardCapability("manageTeam")
+ * (mismo gate que crear miembros) — ver `guardFotoDe`. La foto
  * va al bucket PÚBLICO `public-assets` en un path fijo (team-photos/{memberId}) → URL
  * estable para el selector de equipo del Kickoff (que la snapshotea al seleccionar).
  * Calcado de app/api/clients/[id]/logo/route.ts.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { guardCapability } from "@/lib/auth/api-guards";
+import { guardCapability, guardInternalUser } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { getStorageClient } from "@/lib/storage/client";
 import {
@@ -24,10 +25,20 @@ import { revalidateTeamMembers } from "@/lib/cache/team";
 
 const photoPath = (memberId: string) => `team-photos/${memberId}`;
 
+/* La pantalla de Equipo ofrece el lápiz en la fila PROPIA (d9fbc716: «cada persona cambia su foto»);
+   sin esta excepción la ruta contestaba 403 a 15 de 18 personas. La foto de OTRO miembro sigue
+   siendo de quien gestiona el equipo. */
+async function guardFotoDe(memberId: string) {
+  const yo = await guardInternalUser();
+  if (yo instanceof NextResponse) return yo;
+  if (yo.teamMember.id === memberId) return yo;
+  return guardCapability("manageTeam");
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardCapability("manageTeam");
-  if (guard instanceof NextResponse) return guard;
   const { id } = await params;
+  const guard = await guardFotoDe(id);
+  if (guard instanceof NextResponse) return guard;
 
   if (!getStorageClient()) {
     return NextResponse.json({ error: "El almacenamiento no está configurado." }, { status: 503 });
@@ -42,14 +53,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch (e) {
     console.error(`[team/photo] cuerpo ilegible: ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`);
     return NextResponse.json(
-      { error: "El archivo no llegó completo al servidor. Suele pasar con fotos muy pesadas: probá con una más liviana." },
+      { error: "El archivo no llegó completo al servidor. Suele pasar con fotos muy pesadas: prueba con una más liviana." },
       { status: 400 },
     );
   }
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No se envió ningún archivo." }, { status: 400 });
   if (!isAllowedLogoType(file.type)) {
-    return NextResponse.json({ error: "Formato no soportado. Usá PNG, JPG, WebP o SVG." }, { status: 400 });
+    return NextResponse.json({ error: "Formato no soportado. Usa PNG, JPG, WebP o SVG." }, { status: 400 });
   }
   /* El tope de la FOTO, no el del logo: C-22 bajó `MAX_LOGO_SIZE` a 300 KB por un logo de 30 px
      y esta ruta quedó arrastrada, rechazando casi toda foto de celular con un mensaje que
@@ -71,9 +82,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await guardCapability("manageTeam");
-  if (guard instanceof NextResponse) return guard;
   const { id } = await params;
+  const guard = await guardFotoDe(id);
+  if (guard instanceof NextResponse) return guard;
 
   await removePublicAsset(photoPath(id));
   await prisma.teamMember.update({ where: { id }, data: { photoUrl: null } });

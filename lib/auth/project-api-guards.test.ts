@@ -849,3 +849,37 @@ describe("C-22: el logo tiene tope de 300 KB, con el porqué, en TODAS las rutas
     }
   });
 });
+
+describe("⛔ la foto PROPIA la cambia cada persona; la de otro, quien gestiona el equipo", () => {
+  /**
+   * d9fbc716 mostró el lápiz en la fila propia de /team («cada persona cambia su foto»), pero la
+   * ruta seguía exigiendo `manageTeam` en POST y DELETE: 15 de 18 personas subían la foto y
+   * recibían 403. La regla vive en UN helper de la ruta y la usan los dos métodos.
+   *
+   * La edición que la pone en rojo: volver cualquiera de los dos a `guardCapability("manageTeam")`
+   * directo, o comparar con otra cosa que el id del miembro.
+   */
+  const src = fs
+    .readFileSync(path.join(RAIZ, "app/api/team/[id]/photo/route.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " ");
+
+  it("el helper deja pasar a la persona sobre SU foto y exige manageTeam para la de otro", () => {
+    const i = src.indexOf("async function guardFotoDe(");
+    expect(i, "la ruta perdió el helper guardFotoDe").toBeGreaterThan(-1);
+    const helper = src.slice(i, src.indexOf("\n}", i));
+    expect(helper).toContain("guardInternalUser()");
+    expect(helper, "la excepción es por id del miembro").toMatch(/teamMember\.id\s*===\s*memberId/);
+    expect(helper, "y la de otro sigue exigiendo gestionar el equipo").toContain('guardCapability("manageTeam")');
+  });
+
+  it("POST y DELETE pasan por el helper, no por manageTeam directo", () => {
+    for (const metodo of ["POST", "DELETE"]) {
+      const i = src.indexOf(`export async function ${metodo}(`);
+      expect(i, `${metodo} desapareció`).toBeGreaterThan(-1);
+      const cuerpo = src.slice(i, i + 400);
+      expect(cuerpo, `${metodo} no usa guardFotoDe`).toContain("guardFotoDe(id)");
+      expect(cuerpo, `${metodo} volvió a exigir manageTeam a todos`).not.toContain('guardCapability("manageTeam")');
+    }
+  });
+});
