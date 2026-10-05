@@ -123,7 +123,7 @@ function VistaDeConexion({ e }: { e: EstrategiaDeConexion }) {
 
 // ── Vista de lo confirmado ────────────────────────────────────────────────────
 
-function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown }) {
+export function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown }) {
   const { escala } = useLienzo();
   const tipo = definicionDe(clave).tipo;
   const nombreDim = (id?: string) => (id ? escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.nombre : undefined);

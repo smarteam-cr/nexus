@@ -4,8 +4,8 @@
  * PasoPreparacion — todo lo que hace falta ANTES de escribirle o llamarle (pedido de Elías,
  * 2026-10-02). Dos columnas:
  *
- *   - Identificación: arriba, un resumen con «Por qué ahora» y «Su HubSpot hoy» (Elías, 2026-10-03);
- *     después, el detonante (los hechos de HubSpot y el «por qué ahora»), el contacto, la
+ *   - Identificación: arriba, el resumen con todo lo que escribe la IA (el «por qué ahora», su HubSpot
+ *     hoy y la radiografía), una sola vez (Elías, 2026-10-03); abajo, solo los hechos: el detonante (los hechos de HubSpot y el «por qué ahora»), el contacto, la
  *     radiografía de la empresa (su ficha de HubSpot y lo que el agente investigó en internet) y su
  *     HubSpot hoy. La escala y las áreas en juego viven en Exploración (Elías, 2026-10-03).
  *   - Conexión: cómo abrir la conversación, la hipótesis de valor y la estrategia de conexión (que
@@ -19,12 +19,11 @@ import { Alert, Badge, Button, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { diaConAnio, diaYHora } from "@/lib/exploraciones/fechas";
 import { definicionDe } from "@/lib/exploraciones/casillas";
-import { contactoPrincipal, porQueAhoraSugerido, senalesDe, type ContactoConRastro } from "@/lib/exploraciones/senales";
-import { Casilla } from "./Casilla";
+import { contactoPrincipal, porQueAhoraSugerido, senalesDe, type ContactoConRastro, type Senal } from "@/lib/exploraciones/senales";
+import { Casilla, Vista } from "./Casilla";
 import { useLienzo } from "./contexto";
-import { IconoDeSugerencia } from "./FranjaDeSugerencias";
-import { describirPropuesta } from "./Propuestas";
-import { lineasDe } from "./Resumen";
+import { BotonAzul, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
+import { FilaSugerida } from "./Propuestas";
 import { useCorrida } from "./useCorrida";
 
 interface DatosDePreparacion {
@@ -131,52 +130,68 @@ function BarraDelAgente() {
 }
 
 /**
- * El resumen de la identificación (pedido de Elías, 2026-10-03): lo que dice «Por qué ahora» y «Su
- * HubSpot hoy», para leerlo de un vistazo antes de escribirle. Muestra lo confirmado; si todavía no
- * hay, lo que sugirió el agente, en azul y con su chispa, sin confirmarlo. Tocar una línea abre su
- * casilla, donde se usa o se cambia.
+ * Lo que escribe la IA va ARRIBA y una sola vez (Elías, 2026-10-03: «todos los resúmenes generados por
+ * IA deben estar siempre arriba»; antes «Su HubSpot hoy» y el «por qué ahora» se veían dos veces). Abajo
+ * quedan solo los hechos de HubSpot. Cada línea muestra lo confirmado y, debajo, lo que sugirió el
+ * agente (en azul, con su chispa, para usar o descartar ahí mismo); «Editar» abre su casilla.
  */
-const DEL_RESUMEN = ["detonante", "hubspotActual"] as const;
+const LO_QUE_ESCRIBE_LA_IA = ["detonante", "hubspotActual", "radiografia"] as const;
 
-function ResumenDeLaIdentificacion() {
-  const { exp, escala, nombreDeNivel, pendientesPara, abrirCasilla } = useLienzo();
+function ResumenDeLaIdentificacion({ porQueAhoraDeHubspot }: { porQueAhoraDeHubspot: string | null }) {
+  const { exp, cambiar, puedeEditar, guardando, pendientesPara, abrirCasilla } = useLienzo();
   return (
-    <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
-      <div>
-        <h3 className="text-sm font-semibold text-fg">Resumen</h3>
-        <p className="text-xs text-fg-muted">Por qué hablarle ahora y qué tiene hoy en HubSpot, de un vistazo.</p>
+    <section data-recorrido="preventa.preparacion.resumen" className="space-y-1 rounded-xl border border-line bg-surface p-5">
+      <div className="flex items-start gap-2 pb-2">
+        <IconoDeSugerencia className="mt-0.5 h-[18px] w-[18px] flex-shrink-0 text-brand" />
+        <div>
+          <h3 className="text-sm font-semibold text-fg">Resumen</h3>
+          <p className="text-xs text-fg-muted">Lo que armó el agente con HubSpot e internet. Úsalo, cámbialo o descártalo; abajo, los datos de HubSpot.</p>
+        </div>
       </div>
       <div className="divide-y divide-line">
-        {DEL_RESUMEN.map((clave) => {
-          const confirmado = lineasDe(clave, exp.estado.contenido.casillas[clave]);
-          const sugeridas = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
-          const etiqueta = definicionDe(clave).etiqueta;
+        {LO_QUE_ESCRIBE_LA_IA.map((clave) => {
+          const valor = exp.estado.contenido.casillas[clave];
+          const pendientes = pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
+          const deHubspot = clave === "detonante" && valor === undefined && pendientes.length === 0 ? porQueAhoraDeHubspot : null;
           return (
-            <button
-              key={clave}
-              type="button"
-              onClick={() => abrirCasilla(clave)}
-              className="group block w-full space-y-1 py-3 text-left first:pt-0 last:pb-0"
-            >
-              <span className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">{etiqueta}</span>
-                {confirmado.length === 0 && sugeridas.length > 0 && (
-                  <span className="text-xs font-semibold text-brand group-hover:underline">Revisar →</span>
-                )}
-              </span>
-              {confirmado.length > 0 ? (
-                <span className="line-clamp-3 block text-[13px] leading-[1.45] text-fg-secondary">{confirmado.join(" · ")}</span>
-              ) : sugeridas.length > 0 ? (
-                <span className="flex items-start gap-2">
-                  <IconoDeSugerencia className="mt-[3px] h-[15px] w-[15px] flex-shrink-0 text-brand" />
-                  <span className="line-clamp-3 text-[13px] leading-[1.45] text-brand">
-                    {sugeridas.map((it) => describirPropuesta(it, escala, nombreDeNivel)).join(" · ")}
-                  </span>
-                </span>
-              ) : (
-                <span className="block text-xs text-fg-muted">Falta: el agente lo propone al preparar.</span>
+            <div key={clave} className="space-y-2 py-3 last:pb-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">{definicionDe(clave).etiqueta}</span>
+                {puedeEditar && <BotonTexto onClick={() => abrirCasilla(clave)}>{valor === undefined ? "Escribir" : "Editar"}</BotonTexto>}
+              </div>
+              {valor !== undefined && (
+                <div className="text-[13px] leading-[1.45] text-fg-secondary">
+                  <Vista clave={clave} valor={valor} />
+                </div>
               )}
-            </button>
+              {pendientes.length > 0 && (
+                <ul className="space-y-1.5">
+                  {pendientes.map((it) => (
+                    <FilaSugerida key={it.id} item={it} />
+                  ))}
+                </ul>
+              )}
+              {deHubspot && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-info-line bg-info-surface py-2.5 pl-3 pr-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm leading-[1.45] text-fg">{deHubspot}</p>
+                    <p className="mt-0.5 text-xs text-fg-muted">Sugerido con lo que dice HubSpot</p>
+                  </div>
+                  {puedeEditar && (
+                    <BotonAzul
+                      className="px-[11px] py-[5px]"
+                      disabled={guardando}
+                      onClick={() => void cambiar([{ op: "casilla", clave: "detonante", valor: deHubspot }])}
+                    >
+                      Usar
+                    </BotonAzul>
+                  )}
+                </div>
+              )}
+              {valor === undefined && pendientes.length === 0 && !deHubspot && (
+                <p className="text-xs text-fg-muted">Falta: el agente lo propone al preparar.</p>
+              )}
+            </div>
           );
         })}
       </div>
@@ -184,19 +199,9 @@ function ResumenDeLaIdentificacion() {
   );
 }
 
-function Detonante({ datos }: { datos: DatosDePreparacion | null }) {
-  const { escala, exp, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
-  const principal = datos ? (datos.contactos.find((c) => c.id === datos.principalId) ?? contactoPrincipal(datos.contactos)) : null;
-  const test = datos?.tests[0];
-  const senales = datos
-    ? senalesDe(principal, { test: test ? { area: escala.areas.find((a) => a.id === test.areaId)?.nombre ?? "un área", fecha: test.fecha } : null })
-    : [];
-  /* Mientras la casilla está vacía y el agente no propuso la suya, una sugerida con los hechos: se
-     usa con un clic. */
-  const vacia = exp.estado.contenido.casillas.detonante === undefined && pendientesPara((d) => d.tipo === "casilla" && d.clave === "detonante").length === 0;
-  const sugerencia = vacia ? porQueAhoraSugerido(senales, diaConAnio) : null;
+function Detonante({ datos, senales }: { datos: DatosDePreparacion | null; senales: Senal[] }) {
   return (
-    <Bloque titulo="Detonante" ayuda="Por qué hablar ahora: lo que hizo y de dónde llegó, según HubSpot.">
+    <Bloque titulo="Detonante" ayuda="Lo que hizo y de dónde llegó, según HubSpot.">
       {datos === null ? (
         <div className="space-y-2" aria-hidden>
           <Skeleton className="h-3 w-3/4" />
@@ -214,20 +219,6 @@ function Detonante({ datos }: { datos: DatosDePreparacion | null }) {
           ))}
         </dl>
       )}
-      {sugerencia && (
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-info-line bg-info-surface px-4 py-3">
-          <div className="min-w-0 space-y-1">
-            <p className="text-2xs font-semibold uppercase tracking-wide text-brand">Por qué ahora · sugerido con lo que dice HubSpot</p>
-            <p className="text-sm text-fg">{sugerencia}</p>
-          </div>
-          {puedeEditar && (
-            <Button size="sm" variant="primary" disabled={guardando} onClick={() => void cambiar([{ op: "casilla", clave: "detonante", valor: sugerencia }])}>
-              Usar
-            </Button>
-          )}
-        </div>
-      )}
-      <Casilla clave="detonante" className="rounded-none border-0 border-t border-line bg-transparent p-0 pt-4" />
     </Bloque>
   );
 }
@@ -315,12 +306,12 @@ function Contacto({ datos }: { datos: DatosDePreparacion | null }) {
   );
 }
 
-function RadiografiaDeLaEmpresa({ datos }: { datos: DatosDePreparacion | null }) {
+function FichaEnHubspot({ datos }: { datos: DatosDePreparacion | null }) {
   const empresa = datos?.empresa ?? null;
   const ubicacion = [empresa?.ciudad, empresa?.pais].filter(Boolean).join(", ");
   const sitio = empresa?.sitio ?? (empresa?.dominio ? `https://${empresa.dominio}` : null);
   return (
-    <Bloque titulo="Radiografía de la empresa" ayuda="Su ficha en HubSpot y lo que el agente encontró en internet.">
+    <Bloque titulo="Ficha en HubSpot" ayuda="Lo que HubSpot sabe de la empresa. Lo que el agente encontró en internet está arriba, en el resumen.">
       {datos === null ? (
         <div className="space-y-2" aria-hidden>
           <Skeleton className="h-3 w-2/3" />
@@ -347,7 +338,6 @@ function RadiografiaDeLaEmpresa({ datos }: { datos: DatosDePreparacion | null })
       ) : (
         <p className="text-sm text-fg-muted">La empresa no está en HubSpot.</p>
       )}
-      <Casilla clave="radiografia" sinTitulo className="rounded-none border-0 border-t border-line bg-transparent p-0 pt-4" />
     </Bloque>
   );
 }
@@ -374,7 +364,7 @@ function Conexion({ datos }: { datos: DatosDePreparacion | null }) {
 }
 
 export default function PasoPreparacion() {
-  const { exp } = useLienzo();
+  const { exp, escala } = useLienzo();
   const [datos, setDatos] = useState<DatosDePreparacion | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -406,17 +396,25 @@ export default function PasoPreparacion() {
     };
   }, [exp.id]);
 
+  const principal = datos ? (datos.contactos.find((c) => c.id === datos.principalId) ?? contactoPrincipal(datos.contactos)) : null;
+  const test = datos?.tests[0];
+  const senales = datos
+    ? senalesDe(principal, { test: test ? { area: escala.areas.find((a) => a.id === test.areaId)?.nombre ?? "un área", fecha: test.fecha } : null })
+    : [];
+  /* Mientras «Por qué ahora» está vacía y el agente no propuso la suya, una sugerida con los hechos de
+     HubSpot: se usa con un clic, arriba, en el resumen. */
+  const porQueAhoraDeHubspot = datos ? porQueAhoraSugerido(senales, diaConAnio) : null;
+
   return (
     <div className="space-y-6">
       <BarraDelAgente />
       {error && <Alert variant="warning">{error} Lo demás se puede llenar igual.</Alert>}
       <div className="grid items-start gap-8 xl:grid-cols-2">
         <Columna nombre="Identificación" pregunta="Quién es, qué hace y por qué hablar ahora.">
-          <ResumenDeLaIdentificacion />
-          <Detonante datos={datos} />
+          <ResumenDeLaIdentificacion porQueAhoraDeHubspot={porQueAhoraDeHubspot} />
+          <Detonante datos={datos} senales={senales} />
           <Contacto datos={datos} />
-          <RadiografiaDeLaEmpresa datos={datos} />
-          <Casilla clave="hubspotActual" />
+          <FichaEnHubspot datos={datos} />
         </Columna>
         <Columna nombre="Conexión" pregunta="Qué le duele, qué le ofrecemos y cómo abrir la conversación.">
           <Casilla clave="contexto" />
