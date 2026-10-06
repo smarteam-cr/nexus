@@ -60,20 +60,24 @@ export default function CsAlertNotifier({ role }: { role: string | null }) {
         const fresh = data.alerts ?? [];
         if (fresh.length === 0) return;
         for (const a of fresh) {
+          /* A la FICHA de la cuenta, no al índice (D13, 2026-10-05): el índice solo lista la
+             cartera, así que la alerta de un cliente que no está en ella no se encontraba desde
+             ahí. En la ficha se ve y se resuelve, esté o no en la cartera. */
+          const cuenta = `/customer-success/${encodeURIComponent(a.clientId)}`;
           const outcome = await notifyCsAlert({
             alertId: a.id,
             title: a.title,
             clientName: a.clientName,
-            url: "/customer-success",
+            url: cuenta,
           });
           // La OS no mostró nada (usuario en foco, o sin permiso) → toast in-app,
           // así la alerta nunca avanza el watermark sin haberse visto por ALGÚN canal.
           if (outcome !== "shown") {
             toastRef.current.info(`🚨 ${a.clientName}: ${a.title}`, {
               // `0` = el MÁXIMO que damos (30s), no «para siempre»: una alerta HIGH insiste,
-              // pero su lugar de archivo es el panel de Customer Success, no la pantalla.
+              // pero su lugar de archivo es la ficha de la cuenta, no la pantalla.
               duration: 0,
-              action: { label: "Ver panel", onClick: () => routerRef.current.push("/customer-success") },
+              action: { label: "Ver la cuenta", onClick: () => routerRef.current.push(cuenta) },
             });
           }
         }

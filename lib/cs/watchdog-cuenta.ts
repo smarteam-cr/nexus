@@ -10,7 +10,9 @@
  * base—, así no hace falta re-sembrar el agente (la misma doctrina que el bloque de límites del
  * handoff). Al final va la guía de cruces: qué buscar con todo junto y cómo tipificarlo.
  *
- * Todo resumido, nunca crudo: el vigía corre todos los días sobre la cartera y cada token cuenta.
+ * Todo resumido, nunca crudo: el vigía corre todos los días sobre la cartera y cada token cuenta. La
+ * única lectura de texto crudo es un EXTRACTO acotado de la transcripción de las reuniones que no
+ * tienen minuta (2026-10-05, con topes por reunión y por bloque: lib/cs/transcripcion-del-vigia.ts).
  * ⛔ Lo que se lee acá es interno (facturación, uso, reuniones internas): nada cruza al cliente.
  */
 import "server-only";
@@ -24,6 +26,7 @@ import { SELECT_LIMITES, conSemanaCeroDelPipeline } from "@/lib/timeline/limites
 import { leerPartner, porcentajeDeTendencia, licenciasSumadas, fraccion } from "./lectura-partner";
 import { hayDeudaDelCliente, resumirFacturacion, textoDeVencidas, type CobroDeLaCuenta } from "./facturacion-de-la-cuenta";
 import { diasEntre, fmtCambio, fmtDia } from "./formato";
+import { TOPE_TRANSCRIPCION_CUENTA, extractosDelBloque } from "./transcripcion-del-vigia";
 
 const DIA_MS = 86_400_000;
 /** Reuniones de la cuenta que entran al contexto: las de las últimas 6 semanas, hasta 8. */
@@ -43,6 +46,7 @@ export const GUIA_DE_CRUCES = [
   "- Un resultado del handoff sin línea base o sin forma de medirse con el proyecto avanzado → PROACTIVE_ACTION: sin eso no se va a poder mostrar el valor.",
   "- El contacto que lleva el proyecto (o el sponsor) no aparece hace más de 45 días mientras el proyecto sigue → ENGAGEMENT_COLD.",
   "- Una reunión INTERNA habla de un problema con este cliente (queja, pago, escalamiento, cambio de interlocutor) → la categoría que corresponda; cítala como evidencia.",
+  "- Un «extracto de la transcripción» es un pedazo de la reunión (el principio y el final): cita la frase que leíste y no supongas lo que no está.",
   "- La relación gestionada vence en 30 días o menos → PROACTIVE_ACTION: alguien de Smarteam tiene que trabajar en el portal o se pierden los datos de uso.",
   "En cada alerta pon en evidence.fuentes las fuentes que cruzaste: cronograma, handoff, etapa, facturacion, hubspot, hubspot_partner, reuniones, reuniones_internas.",
   "No inventes cifras ni fechas: si un dato no está arriba, no existe.",
@@ -222,22 +226,37 @@ async function bloqueDeReuniones(clientId: string, yaListadas: ReadonlySet<strin
   ]);
   const propios = buildInternalDomainsSet(categorias);
   const hoy = ymd(ahora);
-  const lineas = sesiones
-    .filter((s) => !yaListadas.has(s.id))
-    .slice(0, TOPE_DE_REUNIONES)
-    .map((s) => {
-      const interna = esReunionDePuertasAdentro({ participants: s.participants, organizerEmail: s.organizerEmail }, propios);
-      const riesgos = Array.isArray(s.minute?.risks)
-        ? (s.minute!.risks as Array<{ text?: string }>).map((r) => r.text).filter(Boolean).slice(0, 2).join(" · ")
-        : "";
-      return [
-        `- [${fmtDia(ymd(s.date), hoy)}] ${interna ? "INTERNA (solo Smarteam)" : "con el cliente"} «${s.title}» sessionId=${s.id}`,
-        s.minute?.summary ? `  minuta: ${s.minute.summary.replace(/\s+/g, " ").slice(0, 360)}` : null,
-        riesgos ? `  riesgos: ${riesgos}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
-    });
+  const lista = sesiones.filter((s) => !yaListadas.has(s.id)).slice(0, TOPE_DE_REUNIONES);
+  /* Las que no tienen minuta se leen por un extracto de su transcripción (2026-10-05: de las internas,
+     la mayoría no tiene minuta). Solo se trae la transcripción de ésas, y con el tope del bloque: ver
+     lib/cs/transcripcion-del-vigia.ts. */
+  const sinMinuta = lista.filter((s) => !s.minute?.summary?.trim()).map((s) => s.id);
+  const transcripciones = sinMinuta.length
+    ? await prisma.firefliesSession.findMany({
+        where: { id: { in: sinMinuta }, transcript: { not: null } },
+        select: { id: true, transcript: true },
+      })
+    : [];
+  const transcripcionDe = new Map(transcripciones.map((t) => [t.id, t.transcript]));
+  const extractos = extractosDelBloque(
+    lista.map((s) => ({ id: s.id, tieneMinuta: !!s.minute?.summary?.trim(), transcript: transcripcionDe.get(s.id) ?? null })),
+    TOPE_TRANSCRIPCION_CUENTA,
+  );
+  const lineas = lista.map((s) => {
+    const interna = esReunionDePuertasAdentro({ participants: s.participants, organizerEmail: s.organizerEmail }, propios);
+    const riesgos = Array.isArray(s.minute?.risks)
+      ? (s.minute!.risks as Array<{ text?: string }>).map((r) => r.text).filter(Boolean).slice(0, 2).join(" · ")
+      : "";
+    const extracto = extractos.get(s.id);
+    return [
+      `- [${fmtDia(ymd(s.date), hoy)}] ${interna ? "INTERNA (solo Smarteam)" : "con el cliente"} «${s.title}» sessionId=${s.id}`,
+      s.minute?.summary?.trim() ? `  minuta: ${(s.minute?.summary ?? "").replace(/\s+/g, " ").slice(0, 360)}` : null,
+      extracto ? `  extracto de la transcripción (no tiene minuta): ${extracto}` : null,
+      riesgos ? `  riesgos: ${riesgos}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  });
   if (lineas.length === 0) return null;
   return ["=== OTRAS REUNIONES DE LA CUENTA (con el cliente e internas sobre el cliente, últimas 6 semanas) ===", ...lineas].join("\n");
 }

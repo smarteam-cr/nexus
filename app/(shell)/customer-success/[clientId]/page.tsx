@@ -5,6 +5,7 @@ import { accessibleClientWhere } from "@/lib/auth/access";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import { loadCsAccount } from "@/lib/cs/load-account";
 import AccountView from "@/components/cs/account/AccountView";
+import DisparoDelVigia from "@/components/cs/DisparoDelVigia";
 // Mismo contenedor que loading.tsx — la fuente única evita que page y skeleton deriven.
 import { SHELL_FULL } from "@/lib/ui/page-shell";
 
@@ -34,6 +35,8 @@ export default async function CustomerSuccessAccountPage({
 
   return (
     <div className={SHELL_FULL}>
+      {/* El agente vigía, en segundo plano, si hace más de 48 h que no revisa este cliente (D14). */}
+      <DisparoDelVigia clientId={data.clientId} />
       <AccountView data={data} puedeCurar={puedeCurar} />
     </div>
   );

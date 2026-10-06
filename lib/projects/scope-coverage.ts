@@ -39,6 +39,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "app/(shell)/clients/[id]/page.tsx": { modo: "criterio", criterio: "navegable" },
   "lib/portfolio/load.ts": { modo: "criterio", criterio: "cartera" },
   "lib/cs/watchdog.ts": { modo: "criterio", criterio: "cartera" },
+  // El vigía de UN cliente (al entrar y a mano, D14): corre para sus proyectos de cartera.
+  "lib/cs/vigia-por-cliente.ts": { modo: "criterio", criterio: "cartera" },
   // «Para ti» (2026-10-04): las implementaciones abiertas, con el criterio de la línea del índice de clientes.
   "lib/para-ti/fuentes/cs.ts": { modo: "criterio", criterio: "clasificable" },
   "lib/cobranza/queries.ts": { modo: "criterio", criterio: "facturable" },

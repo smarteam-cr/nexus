@@ -8,11 +8,19 @@
  * eventos procesados y cierra el AgentRun. Best-effort en todos los disparos
  * automáticos (patrón regenerate-progress: un fallo queda en el run, no tumba nada).
  *
- * 3 vías de disparo (convergen en runWatchdogForProject):
+ * 4 vías de disparo (convergen en runWatchdogForProject):
  *  1. Debounce por eventos: proyectos con TimelineEvent sin procesar cuyo evento
  *     más nuevo tiene >15 min (batch "quiesced"). Claim atómico por updateMany.
  *  2. Sweep diario: pre-filtro determinístico (solo proyectos con algo nuevo).
- *  3. Manual: POST /api/cs/watchdog/run (funciona en dev, sin cron).
+ *  3. Manual: POST /api/cs/watchdog/run (funciona en dev, sin cron). Por cliente o
+ *     proyecto lo pide cualquier interno con acceso al cliente (D14, 2026-10-05).
+ *  4. Al entrar: abrir la ficha de un cliente o su cuenta en Éxito del cliente lo
+ *     corre si hace más de 48 h que no corre para ese cliente (D14). Las vías 3 y 4
+ *     por cliente pasan por lib/cs/vigia-por-cliente.ts (una corrida a la vez por
+ *     cliente, 10 min entre pedidos a mano).
+ *
+ * ⛔ El interruptor de la base (CsSettings.watchdogEnabled) frena LAS CUATRO: se mira
+ * acá adentro, en el punto donde convergen, así ninguna vía nueva nace sin él.
  */
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
@@ -131,16 +139,22 @@ function parseAlerts(rawText: string): ParsedAlert[] {
   return out.slice(0, 6); // techo duro por si el agente desobedece el máx del prompt
 }
 
+/** Por qué vía se disparó una corrida (informativo: va en el stepLabel). */
+export type DisparoDelVigia = "debounce" | "sweep" | "manual" | "entrada";
+
 /** Corre el watchdog para UN proyecto. `trigger` es informativo (stepLabel).
  *  Serializado por proyecto vía mutex en-proceso: un manual + debounce/sweep
  *  solapados corren uno tras otro, así el segundo VE las alertas del primero
- *  y el dedup mergea en vez de duplicar. */
+ *  y el dedup mergea en vez de duplicar.
+ *  `quien` = el correo de la persona que la pidió a mano: su gasto va al presupuesto
+ *  HUMANO (lib/ai/presupuesto.ts). Sin él (automática), al automático. */
 export async function runWatchdogForProject(
   projectId: string,
-  trigger: "debounce" | "sweep" | "manual",
+  trigger: DisparoDelVigia,
+  opciones: { quien?: string | null } = {},
 ): Promise<WatchdogRunResult> {
   const prev = projectLocks.get(projectId) ?? Promise.resolve();
-  const next = prev.catch(() => {}).then(() => runForProjectInner(projectId, trigger));
+  const next = prev.catch(() => {}).then(() => runForProjectInner(projectId, trigger, opciones.quien ?? null));
   projectLocks.set(projectId, next);
   try {
     return await next;
@@ -151,8 +165,15 @@ export async function runWatchdogForProject(
 
 async function runForProjectInner(
   projectId: string,
-  trigger: "debounce" | "sweep" | "manual",
+  trigger: DisparoDelVigia,
+  quien: string | null,
 ): Promise<WatchdogRunResult> {
+  /* El interruptor de la base, ANTES de leer nada (D14, Elías 2026-10-05: «sigue frenando TODO»).
+     Hasta entonces lo miraban el debounce, el sweep y la ruta del sweep, y la corrida manual por
+     proyecto lo salteaba a propósito. Acá, donde convergen las cuatro vías, ninguna lo puede
+     olvidar; y una corrida que esperaba turno en el mutex lo vuelve a mirar al arrancar. */
+  if (!(await watchdogEnabled())) return { status: "skipped", reason: "vigia_apagado", projectId };
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { id: true, clientId: true, healthStatusOverride: true, healthProposed: true },
@@ -246,14 +267,15 @@ async function runForProjectInner(
       }
     }
 
-    // Atribuida (C-01): el vigilante corre solo → presupuesto automático. No se realimenta con el
-    // tope (ver lib/ai/presupuesto.ts): si se agota, esta llamada falla y la corrida queda en ERROR.
+    // Atribuida (C-01): el vigilante que corre solo → presupuesto automático; el que pidió una
+    // persona a mano → el humano, con su correo (D14). No se realimenta con el tope (ver
+    // lib/ai/presupuesto.ts): si se agota, esta llamada falla y la corrida queda en ERROR.
     const ctxDeGasto = {
       agentSlug: AGENT_ID,
       agentRunId: run.id,
       clientId: project.clientId,
       projectId,
-      triggeredByEmail: null,
+      triggeredByEmail: quien,
       origen: "cs/watchdog",
     };
     const msg = await conContextoDeIA(ctxDeGasto, () => anthropic.messages.create({
@@ -263,7 +285,7 @@ async function runForProjectInner(
       messages: [
         {
           role: "user",
-          content: `${ctx.serialized}\n\nTriá este proyecto según tus instrucciones. Devolvé SOLO el JSON.`,
+          content: `${ctx.serialized}\n\nTría este proyecto según tus instrucciones. Devuelve SOLO el JSON.`,
         },
       ],
     }));
@@ -359,7 +381,9 @@ async function runForProjectInner(
   }
 }
 
-/** Kill-switch en DB (CsSettings.watchdogEnabled) — gobierna los disparos AUTOMÁTICOS. */
+/** Kill-switch en DB (CsSettings.watchdogEnabled) — frena TODAS las vías (D14): automáticas, al
+ *  entrar y a mano. Es la palanca para cortar el gasto sin deploy. El barrido por cron además
+ *  depende de CS_WATCHDOG_ENABLED (lib/jobs/requisitos.ts). */
 export async function watchdogEnabled(): Promise<boolean> {
   const settings = await prisma.csSettings.findUnique({ where: { id: "cs" }, select: { watchdogEnabled: true } });
   return settings?.watchdogEnabled ?? true; // sin fila = habilitado (el env ya gatea)

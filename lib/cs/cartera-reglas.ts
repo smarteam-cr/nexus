@@ -33,6 +33,7 @@ import { hayDeudaDelCliente, textoDeVencidas, type FacturacionDeLaCuenta } from 
 import { diasEntre, fmtDia, fmtMonto, miles, normalizarMoneda, plural } from "./formato";
 import { combinarLicencias, type LicenciaDeHub } from "./licencias";
 import { coincideBusqueda, filtrarPorBusqueda } from "@/lib/ui/text-search";
+import { esReunionDePuertasAdentro } from "@/lib/sessions/candidatas-internas";
 
 // ───────────────────────────────────────────────────────────────────────────────────────────
 // ── LA ENTRADA ─────────────────────────────────────────────────────────────────────────────
@@ -130,7 +131,10 @@ export interface CuentaDeCartera {
   /** null = la cuenta no está vinculada a ningún registro de HubSpot Partner. */
   partner: LecturaDePartner | null;
   proyectos: ProyectoDeCuenta[];
-  /** ISO: la última reunión (Nexus) o el último contacto registrado en HubSpot, el más nuevo. */
+  /**
+   * ISO: la última reunión CON EL CLIENTE (Nexus) o el último contacto registrado en HubSpot, el más
+   * nuevo (`ultimoContactoDeLaCuenta`). null = ningún contacto registrado.
+   */
   ultimoContacto: string | null;
   ticketsAbiertos: number | null;
   alertas: AlertaDeCuenta[];
@@ -157,6 +161,7 @@ export type ClaveDeMotivo =
   | "usoCayendo"
   | "licenciasSinUsar"
   | "sinContacto"
+  | "sinContactoRegistrado"
   | "tickets";
 
 export type Fuente = "HubSpot" | "HubSpot Partner" | "Cronograma" | "Reuniones" | "Cobranza" | "Agente vigía";
@@ -181,6 +186,12 @@ export type SaludDeCuenta = "en-riesgo" | "en-friccion" | "saludable";
 
 /** Días sin contacto a partir de los cuales una cuenta está fría (el mismo del vigía). */
 export const DIAS_SIN_CONTACTO = 21;
+/**
+ * Hasta dónde se miran las reuniones para el último contacto: más atrás ya es «hace mucho». Con
+ * HubSpot sin fecha tampoco, una cuenta sin reuniones con el cliente en esta ventana queda «sin
+ * contacto registrado».
+ */
+export const DIAS_DE_REUNIONES_PARA_CONTACTO = 180;
 /** Ventana de renovación que pide conversación. */
 export const VENTANA_DE_RENOVACION = 90;
 /** Ventana para el cruce «el uso cae desde que se cerró la implementación». */
@@ -253,6 +264,38 @@ export function proximaRenovacion(c: Pick<CuentaDeCartera, "partner" | "licencia
     (f): f is string => !!f && f >= hoy,
   );
   return fechas.length > 0 ? fechas.sort()[0] : null;
+}
+
+/** Lo mínimo de una reunión de la cuenta para saber si fue un contacto con el cliente. */
+export interface ReunionDeContacto {
+  date: Date | string;
+  participants: string[];
+  organizerEmail?: string | null;
+}
+
+/**
+ * El último contacto con el cliente (ISO), o null si no hay ninguno registrado: la reunión más nueva
+ * en la que estuvo alguien de afuera, o la última actividad que registró HubSpot, la más nueva de las
+ * dos. `reuniones` son las de la cuenta (la regla única de pertenencia la aplica quien llama).
+ *
+ * Decisión de Elías (2026-10-05): «una reunión interna sobre el cliente, sin nadie del cliente, NO
+ * cuenta como último contacto». Hasta entonces la cartera tomaba cualquier reunión atribuida al
+ * cliente, y una interna de ayer tapaba dos meses sin hablar con él. «De puertas adentro» es la regla
+ * con la que el vigía rotula las internas (`esReunionDePuertasAdentro` con los dominios de las
+ * categorías internas): todos los que estuvieron son de Smarteam. Una reunión sin participantes es un
+ * dato incompleto, no una interna: cuenta, como en el vigía.
+ */
+export function ultimoContactoDeLaCuenta(
+  reuniones: readonly ReunionDeContacto[],
+  ultimoHubspot: Date | string | null,
+  dominiosPropios: ReadonlySet<string>,
+): string | null {
+  const fechas = reuniones
+    .filter((r) => !esReunionDePuertasAdentro({ participants: r.participants, organizerEmail: r.organizerEmail }, dominiosPropios))
+    .map((r) => r.date);
+  if (ultimoHubspot) fechas.push(ultimoHubspot);
+  const tiempos = fechas.map((f) => new Date(f).getTime()).filter((t) => Number.isFinite(t));
+  return tiempos.length > 0 ? new Date(Math.max(...tiempos)).toISOString() : null;
 }
 
 /** El dueño de HubSpot, salvo que esté dado de baja: entonces sin CSE, con su nombre aparte. */
@@ -466,21 +509,36 @@ export function motivosDeLaCuenta(c: CuentaDeCartera, hoy: string): Motivo[] {
     }
   }
 
+  const yTickets = (c.ticketsAbiertos ?? 0) > 0 ? ` y ${plural(c.ticketsAbiertos!, "ticket abierto", "tickets abiertos")}` : "";
   if (c.ultimoContacto) {
     const dias = diasEntre(c.ultimoContacto, hoy);
     if (dias > DIAS_SIN_CONTACTO) {
       out.push({
         clave: "sinContacto",
-        texto: `${dias} días sin reunión ni contacto${(c.ticketsAbiertos ?? 0) > 0 ? ` y ${plural(c.ticketsAbiertos!, "ticket abierto", "tickets abiertos")}` : ""}`,
+        texto: `${dias} días sin reunión ni contacto${yTickets}`,
         corto: `${dias} días sin contacto`,
         prioridad: "media",
         peso: 30,
         fuente: "Reuniones",
       });
     }
+  } else {
+    /* Una cuenta sin NINGÚN contacto registrado pide llamada (Elías, 2026-10-05). Hasta entonces el
+       «sin contacto» solo saltaba con una fecha vieja, así que de la cuenta de la que no se sabe nada
+       —ni una reunión con el cliente ni una actividad en HubSpot— no salía ningún motivo: no tener el
+       dato la volvía sana. Va en el escalón de «sin datos» (`listaParaLlamar` la marca así y `rango`
+       la sube por encima de las de fricción), sin pintarla en riesgo. */
+    out.push({
+      clave: "sinContactoRegistrado",
+      texto: `Sin contacto registrado: ninguna reunión con el cliente en ${Math.round(DIAS_DE_REUNIONES_PARA_CONTACTO / 30)} meses ni actividad en HubSpot${yTickets}`,
+      corto: "Sin contacto registrado",
+      prioridad: "media",
+      peso: 48,
+      fuente: "Reuniones",
+    });
   }
 
-  if ((c.ticketsAbiertos ?? 0) >= TICKETS_PARA_LLAMAR && !out.some((m) => m.clave === "sinContacto")) {
+  if ((c.ticketsAbiertos ?? 0) >= TICKETS_PARA_LLAMAR && !out.some((m) => m.clave === "sinContacto" || m.clave === "sinContactoRegistrado")) {
     out.push({
       clave: "tickets",
       texto: `${plural(c.ticketsAbiertos!, "ticket abierto", "tickets abiertos")} en HubSpot`,
@@ -526,6 +584,7 @@ export const QUE_PONE_CADA_MARCA: ReadonlyArray<{ clave: ClaveDeMotivo; priorida
     texto: `relación gestionada que vence en ${VENTANA_DE_RELACION_URGENTE} días o menos`,
   },
   { clave: "sinDatos", prioridad: "media", texto: "sin datos de uso o inactiva en HubSpot" },
+  { clave: "sinContactoRegistrado", prioridad: "media", texto: "ningún contacto registrado con el cliente" },
   { clave: "facturasVencidas", prioridad: "media", texto: `facturas vencidas hace ${DIAS_DE_DEUDA_GRAVE} días o menos` },
   { clave: "bajaDePlan", prioridad: "media", texto: "HubSpot espera que baje de plan al renovar" },
   {
@@ -601,7 +660,9 @@ export function listaParaLlamar(cuentas: readonly CuentaDeCartera[], hoy: string
       cses: [...new Set(c.proyectos.filter((p) => p.activo && p.cseNombre).map((p) => p.cseNombre as string))],
       riesgoDoble: motivos.some((m) => m.clave === "riesgoDoble"),
       cruce: motivos.some((m) => m.cruce || m.ia),
-      sinDatos: motivos.some((m) => m.clave === "sinDatos"),
+      // «Sin datos» es no saber: de su uso (Partner) o de ningún contacto con el cliente. Las dos van
+      // arriba de las de fricción (`rango`) y las dos las muestra el filtro «Sin datos».
+      sinDatos: motivos.some((m) => m.clave === "sinDatos" || m.clave === "sinContactoRegistrado"),
     });
   }
   return filas.sort(

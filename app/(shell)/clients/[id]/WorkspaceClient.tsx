@@ -15,6 +15,7 @@ import AltaTrabada from "@/components/projects/AltaTrabada";
 import TimelineProposalPendiente from "@/components/projects/TimelineProposalPendiente";
 import RielDelCliente, { type ProyectoDelRiel } from "@/components/clients/RielDelCliente";
 import PanelLateral, { usePanelLateral } from "@/components/ui/PanelLateral";
+import DisparoDelVigia from "@/components/cs/DisparoDelVigia";
 import { parseEstadoDeAlta, siguientePaso } from "@/lib/projects/alta";
 import { leerAutoria, type AutoriaDeLaPropuesta } from "@/lib/timeline/autoria-de-la-propuesta";
 import {
@@ -352,6 +353,8 @@ export default function WorkspaceClient({
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
+      {/* El agente vigía, en segundo plano, si hace más de 48 h que no revisa este cliente (D14). */}
+      <DisparoDelVigia clientId={clientId} />
       {/* Indicador discreto de sync de fondo (F4) — desaparece al terminar bien. */}
       {syncing && (
         <div

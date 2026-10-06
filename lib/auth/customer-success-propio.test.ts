@@ -56,7 +56,12 @@ const AREA = [...PANTALLAS, ...APIS];
 const SE_QUEDAN: Array<{ ruta: string; porque: string }> = [
   {
     ruta: "app/api/cs/watchdog/run/route.ts",
-    porque: "barrido con LLM sobre la cartera entera: es caro y no es por cuenta",
+    /* Desde el 2026-10-05 (D14) la ruta tiene DOS puertas. La corrida de UN cliente o proyecto la
+       pide cualquier interno con acceso a ese cliente («lo puede correr quien sea»), con el freno
+       de una a la vez y 10 min entre pedidos. Lo que se queda en `seeAllClients` es solo el barrido. */
+    porque:
+      "solo el BARRIDO (sin cliente ni proyecto): hasta 10 llamadas a Claude sobre la cartera entera, " +
+      "no es por cuenta. La corrida de un cliente la pide cualquier interno con acceso a él (D14)",
   },
   {
     ruta: "app/api/cs/partner/refresh/route.ts",
@@ -191,5 +196,25 @@ describe("lo que se quedó afuera está declarado, no olvidado", () => {
       );
       expect(s.porque.length, `${s.ruta}: excepción sin motivo escrito`).toBeGreaterThan(20);
     }
+  });
+
+  it("⭐ el vigía de UN cliente lo pide cualquiera con acceso a ese cliente; solo el barrido sigue en seeAllClients (D14)", () => {
+    /* Elías, 2026-10-05: «lo puede correr quien sea». La edición que pone esto en rojo: volver a
+       poner `guardCapability("seeAllClients")` al principio del POST, antes de mirar si el pedido es
+       de un cliente — la corrida por cliente quedaría otra vez solo para quien ve toda la cartera. */
+    const RUTA = "app/api/cs/watchdog/run/route.ts";
+    const src = sinComentarios(RUTA);
+    const porCliente = src.indexOf("await guardAccessToClient(");
+    const porProyecto = src.indexOf("await guardAccessToProject(");
+    const barrido = src.indexOf('guardCapability("seeAllClients")');
+    expect(porCliente, `${RUTA}: la corrida de un cliente dejó de pedir acceso a ESE cliente`).toBeGreaterThan(0);
+    expect(porProyecto, `${RUTA}: la corrida de un proyecto dejó de pedir acceso a su cliente`).toBeGreaterThan(0);
+    expect(barrido, `${RUTA}: el barrido dejó de pedir «ver todos los clientes»`).toBeGreaterThan(0);
+    expect(
+      Math.max(porCliente, porProyecto) < barrido,
+      `${RUTA}: la corrida de un cliente quedó detrás del gate del barrido`,
+    ).toBe(true);
+    // Y el disparo al entrar, igual: quien abre la ficha del cliente.
+    expect(sinComentarios("app/api/cs/watchdog/al-entrar/route.ts")).toContain("await guardAccessToClient(");
   });
 });

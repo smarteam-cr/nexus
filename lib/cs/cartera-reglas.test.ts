@@ -21,6 +21,7 @@ import {
   primeros90Dias,
   renovacionesProximas,
   saludDeLaCuenta,
+  ultimoContactoDeLaCuenta,
   type AlertaDeCuenta,
   type ClaveDeMotivo,
   type CuentaDeCartera,
@@ -159,6 +160,78 @@ describe("motivos de una cuenta", () => {
   it("sin contacto en más de 21 días", () => {
     const c = cuenta("altos", { ultimoContacto: "2026-08-31T00:00:00Z", ticketsAbiertos: 3 });
     expect(motivosDeLaCuenta(c, HOY)[0].texto).toBe("34 días sin reunión ni contacto y 3 tickets abiertos");
+  });
+});
+
+describe("⭐ una cuenta sin NINGÚN contacto registrado pide llamada (D16, Elías 2026-10-05)", () => {
+  /* Antes el «sin contacto» solo saltaba con una fecha vieja: la cuenta de la que no se sabía nada
+     no daba ningún motivo y quedaba como sana, fuera de «A quién llamar». La edición que pone esto
+     en rojo: borrar la rama `else` de `c.ultimoContacto` en motivosDeLaCuenta. */
+  const nunca = cuenta("nunca", { ultimoContacto: null, ticketsAbiertos: 0 });
+
+  it("da su motivo, con el texto que la explica", () => {
+    const [m] = motivosDeLaCuenta(nunca, HOY);
+    expect(m.clave).toBe("sinContactoRegistrado");
+    expect(m.texto).toBe("Sin contacto registrado: ninguna reunión con el cliente en 6 meses ni actividad en HubSpot");
+    expect(m.prioridad).toBe("media");
+  });
+
+  it("aparece en «A quién llamar», arriba de las de fricción y debajo de las de riesgo", () => {
+    const lista = listaParaLlamar(
+      [
+        cuenta("media-atrasada", { proyectos: [proyecto({ atraso: { dias: 9, fase: "Integración" } })] }),
+        nunca,
+        cuenta("alta-bloqueada", { proyectos: [proyecto({ bloqueado: true })] }),
+      ],
+      HOY,
+    );
+    expect(lista.map((f) => f.clientId)).toEqual(["alta-bloqueada", "nunca", "media-atrasada"]);
+    expect(lista[1]).toMatchObject({ prioridad: "media", salud: "en-friccion", sinDatos: true });
+  });
+
+  it("los tickets van en el mismo motivo, no en uno aparte", () => {
+    const m = motivosDeLaCuenta(cuenta("x", { ultimoContacto: null, ticketsAbiertos: 4 }), HOY);
+    expect(m.map((x) => x.clave)).toEqual(["sinContactoRegistrado"]);
+    expect(m[0].texto).toContain("y 4 tickets abiertos");
+  });
+});
+
+describe("⭐ el último contacto es con el CLIENTE: una reunión interna sobre él no cuenta (D15, Elías 2026-10-05)", () => {
+  const PROPIOS = new Set(["smarteamcr.com"]);
+  const interna = {
+    date: "2026-10-03T15:00:00Z",
+    participants: ["ana@smarteamcr.com", "luis@smarteamcr.com", "sala-3@resource.calendar.google.com"],
+    organizerEmail: "ana@smarteamcr.com",
+  };
+  const conElCliente = {
+    date: "2026-09-20T15:00:00Z",
+    participants: ["ana@smarteamcr.com", "gerencia@cliente.com"],
+    organizerEmail: "ana@smarteamcr.com",
+  };
+
+  it("la interna más nueva no tapa a la última reunión con el cliente", () => {
+    /* La edición que lo pone en rojo: sacar el filtro de puertas adentro (volver a «cualquier
+       reunión atribuida al cliente», como hacía cartera.ts hasta el 2026-10-05). */
+    expect(ultimoContactoDeLaCuenta([interna, conElCliente], null, PROPIOS)).toBe("2026-09-20T15:00:00.000Z");
+  });
+
+  it("solo internas y nada en HubSpot → ningún contacto registrado", () => {
+    expect(ultimoContactoDeLaCuenta([interna], null, PROPIOS)).toBeNull();
+  });
+
+  it("gana la fecha más nueva entre la reunión con el cliente y HubSpot", () => {
+    expect(ultimoContactoDeLaCuenta([conElCliente], new Date("2026-09-25T00:00:00Z"), PROPIOS)).toBe("2026-09-25T00:00:00.000Z");
+    expect(ultimoContactoDeLaCuenta([conElCliente], "2026-09-01T00:00:00Z", PROPIOS)).toBe("2026-09-20T15:00:00.000Z");
+    expect(ultimoContactoDeLaCuenta([interna], "2026-09-01T00:00:00Z", PROPIOS)).toBe("2026-09-01T00:00:00.000Z");
+  });
+
+  it("el índice y la cuenta de respaldo de la ficha leen con esta regla", () => {
+    const cartera = leer("lib/cs/cartera.ts");
+    expect(cartera, "cartera.ts dejó de usar la regla").toContain("ultimoContactoDeLaCuenta(");
+    expect(cartera, "las reuniones tienen que traer quién estuvo").toMatch(/participants: true, organizerEmail: true/);
+    expect(leer("lib/cs/load-account.ts"), "la cuenta de respaldo volvió a mirar solo HubSpot").toContain(
+      "ultimoContactoDeUnCliente(",
+    );
   });
 });
 
@@ -461,6 +534,7 @@ describe("⭐ la leyenda de las marcas dice lo que hacen las reglas", () => {
       crudo: { ...RENUEVA_PRONTO, hs_sales_seats_assigned: "4", hs_sales_seats_available: "6", hs_sales_seats_limit: "10" },
     }),
     cuenta("sinContacto", { ultimoContacto: "2026-08-31T00:00:00Z" }),
+    cuenta("sinContactoRegistrado", { ultimoContacto: null }),
     cuenta("tickets", { ticketsAbiertos: 3 }),
   ];
   const motivos = casos.flatMap((c) => motivosDeLaCuenta(c, HOY));

@@ -2,8 +2,9 @@
  * lib/cs/watchdog-context.ts
  *
  * Arma el CONTEXTO COMPACTO que recibe el watchdog de Éxito del cliente para
- * UN proyecto: resúmenes, nunca transcripts crudos. Todo determinístico — el
- * agente razona sobre esto y decide qué amerita alerta.
+ * UN proyecto: resúmenes, nunca transcripts enteros (de una reunión sin minuta
+ * entra solo un extracto acotado: lib/cs/transcripcion-del-vigia.ts). Todo
+ * determinístico — el agente razona sobre esto y decide qué amerita alerta.
  */
 import { prisma } from "@/lib/db/prisma";
 import type { TimelineEvent, CsAlert } from "@prisma/client";
@@ -13,6 +14,7 @@ import { getProjectLifecycle, type ProjectLifecycle } from "@/lib/lifecycle";
 import type { BaselineSnapshot } from "@/lib/timeline/baseline";
 import { computePhaseRanges, addWeeks, projectedEnd } from "@/lib/timeline/weeks";
 import { bloquesDeLaCuenta } from "./watchdog-cuenta";
+import { TOPE_TRANSCRIPCION_PROYECTO, extractosDelBloque } from "./transcripcion-del-vigia";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -204,6 +206,25 @@ export async function buildWatchdogContext(
       },
     },
   });
+  /* Las que no tienen minuta se leen por un extracto acotado de su transcripción (2026-10-05): solo se
+     trae la transcripción de ésas, y con el tope del bloque (lib/cs/transcripcion-del-vigia.ts). */
+  const tieneMinuta = (s: (typeof recentSessions)[number]["session"]) => !!s.minute?.summary?.trim();
+  const sinMinuta = recentSessions.filter((sp) => !tieneMinuta(sp.session)).map((sp) => sp.session.id);
+  const transcripciones = sinMinuta.length
+    ? await prisma.firefliesSession.findMany({
+        where: { id: { in: sinMinuta }, transcript: { not: null } },
+        select: { id: true, transcript: true },
+      })
+    : [];
+  const transcripcionDe = new Map(transcripciones.map((t) => [t.id, t.transcript]));
+  const extractos = extractosDelBloque(
+    recentSessions.map((sp) => ({
+      id: sp.session.id,
+      tieneMinuta: tieneMinuta(sp.session),
+      transcript: transcripcionDe.get(sp.session.id) ?? null,
+    })),
+    TOPE_TRANSCRIPCION_PROYECTO,
+  );
   const sessionsBlock = recentSessions.length
     ? recentSessions
         .map((sp) => {
@@ -213,7 +234,8 @@ export async function buildWatchdogContext(
                 .map((r) => `riesgo(${r.severity ?? "?"}): ${r.text ?? ""}`)
                 .join(" · ")
             : "";
-          return `- [${fmtDate(s.date)}] "${s.title}" sessionId=${s.id}${s.minute ? `\n  minuta: ${(s.minute.summary ?? "").slice(0, 400)}${risks ? `\n  ${risks}` : ""}` : ""}`;
+          const extracto = extractos.get(s.id);
+          return `- [${fmtDate(s.date)}] "${s.title}" sessionId=${s.id}${s.minute ? `\n  minuta: ${(s.minute.summary ?? "").slice(0, 400)}${risks ? `\n  ${risks}` : ""}` : ""}${extracto ? `\n  extracto de la transcripción (no tiene minuta): ${extracto}` : ""}`;
         })
         .join("\n")
     : "(sin sesiones registradas)";
@@ -257,7 +279,7 @@ export async function buildWatchdogContext(
         `- Expansión abierta: $${signals.openExpansionAmount ?? 0}${dealsJson?.expansion?.length ? ` — deals: ${JSON.stringify(dealsJson.expansion).slice(0, 600)}` : ""} · deals abiertos totales: ${signals.openDealCount ?? 0}`,
         `- (snapshot HubSpot de ${fmtDate(signals.fetchedAt)}, estado ${signals.fetchStatus})`,
       ].join("\n")
-    : "(sin snapshot de señales HubSpot para este cliente — omití las señales de HubSpot)";
+    : "(sin snapshot de señales HubSpot para este cliente — omite las señales de HubSpot)";
 
   // ── Alertas existentes (no repetir) ────────────────────────────────────────
   // TODAS las del cliente (incluye proyectos hermanos): las categorías de CUENTA
@@ -365,7 +387,7 @@ export async function buildWatchdogContext(
       ]
         .filter(Boolean)
         .join("\n")
-    : "(sin datos de partner — scope no autorizado o cuenta sin match; omití las señales de uso/licencias)";
+    : "(sin datos de partner — scope no autorizado o cuenta sin match; omite las señales de uso/licencias)";
 
   /* ── La ETAPA — gobierna qué alarmas aplican ────────────────────────────────
      Dos ramas desde que HubSpot manda la etapa de las implementaciones. La línea de las

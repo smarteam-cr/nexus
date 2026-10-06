@@ -19,11 +19,13 @@ import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 import { belongsToClient, whereBelongsToClient } from "@/lib/sessions/project-sources";
+import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { motivoApagado } from "@/lib/jobs/requisitos";
 import { leerPartner } from "./lectura-partner";
 import { resumirFacturacion, type CobroDeLaCuenta } from "./facturacion-de-la-cuenta";
 import { normalizarMoneda } from "./formato";
 import {
+  DIAS_DE_REUNIONES_PARA_CONTACTO,
   VENTANA_TRAS_CIERRE,
   adopcionPorHub,
   alertaDeLaCuenta,
@@ -38,13 +40,12 @@ import {
   oportunidades,
   primeros90Dias,
   renovacionesProximas,
+  ultimoContactoDeLaCuenta,
   type CuentaDeCartera,
   type ProyectoDeCuenta,
 } from "./cartera-reglas";
 
 const DIA_MS = 86_400_000;
-/** Para el último contacto basta mirar unos meses atrás: más que eso ya es «hace mucho». */
-const VENTANA_DE_REUNIONES_DIAS = 180;
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -91,6 +92,39 @@ function proyectoDesdeFila(
 }
 
 /**
+ * El último contacto de cada cliente, con la regla de `ultimoContactoDeLaCuenta`: las reuniones de la
+ * cuenta (regla ÚNICA de pertenencia) de los últimos meses, sin las de puertas adentro, y lo que
+ * registró HubSpot. Una consulta para todos los clientes; devuelve con qué preguntar por cada uno.
+ */
+async function leerContactos(
+  ids: readonly string[],
+  ahora: Date,
+): Promise<(clientId: string, ultimoHubspot: Date | null) => string | null> {
+  const desde = new Date(ahora.getTime() - DIAS_DE_REUNIONES_PARA_CONTACTO * DIA_MS);
+  const [reuniones, categorias] = await Promise.all([
+    prisma.firefliesSession.findMany({
+      where: { OR: ids.flatMap((id) => whereBelongsToClient(id).OR), date: { lte: ahora, gte: desde } },
+      select: { resolvedClientId: true, manualClientId: true, date: true, participants: true, organizerEmail: true },
+    }),
+    // Los dominios propios, como en el vigía (lib/cs/watchdog-cuenta.ts): las categorías internas.
+    prisma.sessionCategory.findMany({ select: { domains: true, kind: true } }),
+  ]);
+  const propios = buildInternalDomainsSet(categorias);
+  return (clientId, ultimoHubspot) =>
+    ultimoContactoDeLaCuenta(
+      reuniones.filter((s) => belongsToClient(s, clientId)),
+      ultimoHubspot,
+      propios,
+    );
+}
+
+/** El último contacto de UN cliente: para la cuenta de respaldo de la ficha (lib/cs/load-account.ts). */
+export async function ultimoContactoDeUnCliente(clientId: string, ultimoHubspot: Date | null): Promise<string | null> {
+  const de = await leerContactos([clientId], new Date());
+  return de(clientId, ultimoHubspot);
+}
+
+/**
  * Las cuentas, ya armadas. `clientIds` = las que se quieren (null = toda la cartera que deja ver
  * `clientWhere`). La cartera es: clientes con proyecto activo de cartera, más los clientes con
  * suscripción activa en HubSpot Partner aunque hoy no tengan proyecto (renuevan igual).
@@ -125,8 +159,7 @@ export async function cargarCuentas(
   ];
   if (ids.length === 0) return [];
 
-  const desde = new Date(ahora.getTime() - VENTANA_DE_REUNIONES_DIAS * DIA_MS);
-  const [clientes, ops, cerrados, senales, reuniones, alertas, cuentasFin, manuales, deBaja] = await Promise.all([
+  const [clientes, ops, cerrados, senales, contactoDe, alertas, cuentasFin, manuales, deBaja] = await Promise.all([
     prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, company: true } }),
     prisma.project.findMany({
       where: { id: { in: filas.map((r) => r.projectId) } },
@@ -147,12 +180,8 @@ export async function cargarCuentas(
       where: { clientId: { in: ids } },
       select: { clientId: true, lastEngagementAt: true, openTicketCount: true, ticketsSupported: true },
     }),
-    // La última reunión, con la regla ÚNICA de pertenencia compuesta para varios clientes.
-    prisma.firefliesSession.findMany({
-      where: { OR: ids.flatMap((id) => whereBelongsToClient(id).OR), date: { lte: ahora, gte: desde } },
-      orderBy: { date: "desc" },
-      select: { resolvedClientId: true, manualClientId: true, date: true },
-    }),
+    // El último contacto: reuniones CON el cliente (regla ÚNICA de pertenencia) o HubSpot.
+    leerContactos(ids, ahora),
     prisma.csAlert.findMany({
       where: { clientId: { in: ids }, status: { in: ["OPEN", "SEEN"] } },
       orderBy: { lastDetectedAt: "desc" },
@@ -204,11 +233,9 @@ export async function cargarCuentas(
             cerradoEn: ymd(p.updatedAt),
           })),
       ];
-      const ultimaReunion = reuniones.find((s) => belongsToClient(s, cl.id))?.date ?? null;
       const senal = senalPorCliente.get(cl.id);
-      const ultimoHubspot = senal?.lastEngagementAt ?? null;
-      const ultimoContacto =
-        ultimaReunion && ultimoHubspot ? (ultimaReunion > ultimoHubspot ? ultimaReunion : ultimoHubspot) : (ultimaReunion ?? ultimoHubspot);
+      // Una reunión de puertas adentro sobre el cliente NO es contacto con él (Elías, 2026-10-05).
+      const ultimoContacto = contactoDe(cl.id, senal?.lastEngagementAt ?? null);
       const fin = cuentasFin.find((c) => c.clientId === cl.id);
       const cobros: CobroDeLaCuenta[] = (fin?.cobros ?? []).map((c) => ({
         estado: c.estado,
@@ -224,7 +251,7 @@ export async function cargarCuentas(
         nombre: cl.company || cl.name,
         partner: partnerPorCliente.get(cl.id) ?? null,
         proyectos,
-        ultimoContacto: ultimoContacto?.toISOString() ?? null,
+        ultimoContacto,
         ticketsAbiertos: senal?.ticketsSupported ? senal.openTicketCount : null,
         alertas: alertas.filter((a) => a.clientId === cl.id).map(alertaDeLaCuenta),
         facturacion: resumirFacturacion(cobros, hoy, fin?.creditoDias ?? null),
@@ -264,13 +291,19 @@ export async function cargarFuentes(cuentas: readonly CuentaDeCartera[]): Promis
     prisma.csSettings.findUnique({ where: { id: "cs" }, select: { watchdogEnabled: true } }),
     prisma.agentRun.findFirst({ where: { agentSlug: "cs-watchdog", status: "DONE" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
   ]);
-  const motivoVigia = motivoApagado("cs-watchdog-daily", process.env) ?? (ajustes && !ajustes.watchdogEnabled ? "Apagado desde los ajustes de Éxito del cliente." : null);
+  /* Encendido = el interruptor de la base, que desde el 2026-10-05 (D14) frena TODAS las vías. Sin
+     la variable del cron el barrido diario no corre, pero el vigía sigue corriendo al abrir cada
+     cliente y a mano: decir «apagado» por la variable era mentir. El motivo del cron queda en `motivo`. */
+  const apagadoEnAjustes = !!ajustes && !ajustes.watchdogEnabled;
+  const motivoVigia = apagadoEnAjustes
+    ? "Apagado desde los ajustes de Éxito del cliente."
+    : motivoApagado("cs-watchdog-daily", process.env);
   return {
     partner: { at: partner._max.fetchedAt?.toISOString() ?? null, apagado: motivoApagado("cs-partner-daily", process.env) },
     puntos: { at: nivelDePartner(cuentas, hoyEnCostaRica()).actualizadoEn },
     senales: { at: senales._max.fetchedAt?.toISOString() ?? null, apagado: motivoApagado("cs-signals-daily", process.env) },
     reuniones: { at: reunion._max.date?.toISOString() ?? null },
-    vigia: { encendido: !motivoVigia, motivo: motivoVigia, ultimaCorrida: corrida?.createdAt.toISOString() ?? null },
+    vigia: { encendido: !apagadoEnAjustes, motivo: motivoVigia, ultimaCorrida: corrida?.createdAt.toISOString() ?? null },
   };
 }
 

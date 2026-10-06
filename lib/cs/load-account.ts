@@ -15,7 +15,7 @@ import { loadPortfolio, type PortfolioRow } from "@/lib/portfolio/load";
 import { serializeAlert, type CsAlertRow } from "@/lib/cs/load-panel";
 import { resolvePartnerState, type PartnerState } from "@/lib/cs/partner-state";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
-import { cargarCuentas, hoyEnCostaRica } from "./cartera";
+import { cargarCuentas, hoyEnCostaRica, ultimoContactoDeUnCliente } from "./cartera";
 import { alertaDeLaCuenta, motivosDeLaCuenta, type CuentaDeCartera, type Motivo } from "./cartera-reglas";
 import { estadoDeLaCuenta, type Lectura } from "./ficha-reglas";
 import { leerPartner } from "./lectura-partner";
@@ -249,12 +249,19 @@ export async function loadCsAccount(
   // decía «Ninguna alerta abierta» de una cuenta que sí las tenía.
   const hoy = hoyEnCostaRica();
   const [armada] = await cargarCuentas(clientWhere, { clientIds: [clientId], filas: projects }).catch(() => []);
+  /* El último contacto de la de respaldo sale de la MISMA regla que el índice (reuniones con el
+     cliente o HubSpot). Con solo HubSpot, una cuenta fuera de la cartera con una reunión la semana
+     pasada decía «Sin contacto registrado» (D16). Si la lectura falla, queda HubSpot. */
+  const ultimoHubspot = csSignals?.lastEngagementAt ?? null;
+  const ultimoContactoDeRespaldo = armada
+    ? null
+    : await ultimoContactoDeUnCliente(clientId, ultimoHubspot).catch(() => ultimoHubspot?.toISOString() ?? null);
   const cuenta: CuentaDeCartera = armada ?? {
     clientId,
     nombre: client.company || client.name,
     partner: includePartner && partner ? leerPartner(partner.properties) : null,
     proyectos: [],
-    ultimoContacto: csSignals?.lastEngagementAt?.toISOString() ?? null,
+    ultimoContacto: ultimoContactoDeRespaldo,
     ticketsAbiertos: csSignals?.ticketsSupported ? csSignals.openTicketCount : null,
     alertas: alerts.map(alertaDeLaCuenta),
     facturacion: null,

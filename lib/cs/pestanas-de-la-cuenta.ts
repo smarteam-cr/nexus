@@ -52,5 +52,6 @@ export const PESTANA_DEL_MOTIVO: Record<ClaveDeMotivo, PestanaDeCuenta | null> =
   usoCayendo: "adopcion",
   licenciasSinUsar: "adopcion",
   sinContacto: "conversaciones",
+  sinContactoRegistrado: "conversaciones",
   tickets: "conversaciones",
 };

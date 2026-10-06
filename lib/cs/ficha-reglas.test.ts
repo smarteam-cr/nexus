@@ -144,4 +144,25 @@ describe("⭐ la cuenta de respaldo de la ficha lleva sus alertas", () => {
     expect(src).not.toMatch(/alertas:\s*\[\]/);
     expect(leer("lib/cs/cartera.ts"), "el índice tiene que leerlas con la misma regla").toContain(".map(alertaDeLaCuenta)");
   });
+
+  it("⭐ y la ficha las deja RESOLVER aunque el cliente no esté en la cartera (D13, 2026-10-05)", () => {
+    /* El panel de la ficha pinta Resolver y Descartar sobre las alertas de la cuenta (también la de
+       respaldo), y la ruta que las cierra solo pide acceso al cliente: si un día exigiera que el
+       cliente sea de la cartera, la alerta de un cliente sin proyecto activo quedaría a la vista y
+       sin forma de cerrarla. La edición que lo pone en rojo: filtrar la ruta por la cartera. */
+    const panel = leer("components/cs/account/PanelDeLaCuenta.tsx");
+    expect(panel).toContain("const alertas = data.cuenta.alertas;");
+    expect(panel).toContain("fetchJson(`/api/cs/alerts/${id}`");
+    expect(panel).toMatch(/cerrar\(a\.id, "RESOLVED"\)/);
+    const ruta = leer("app/api/cs/alerts/[alertId]/route.ts").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+    expect(ruta, "la ruta que cierra alertas volvió a mirar la cartera").not.toMatch(/cartera|PROYECTO_DE_|proyectoDe[A-Z]\w*Where|loadPortfolio/);
+  });
+
+  it("⭐ el aviso de una alerta alta lleva a la ficha de SU cuenta, no al índice (D13)", () => {
+    /* El índice solo lista la cartera: desde «Ver panel», la alerta de un cliente fuera de ella no
+       se encontraba. La edición que lo pone en rojo: volver a mandar al índice. */
+    const src = leer("components/cs/CsAlertNotifier.tsx");
+    expect(src).toContain("`/customer-success/${encodeURIComponent(a.clientId)}`");
+    expect(src).not.toMatch(/push\("\/customer-success"\)|url: "\/customer-success"/);
+  });
 });

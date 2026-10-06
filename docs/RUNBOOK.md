@@ -14,7 +14,7 @@ bajo esa condición:
 |---|---|---|
 | Semáforo de export PDF (máx 2 Chromium + cola de 4) | `lib/print/pdf-runner.ts (cap ÚNICO para todos los tipos del registro de impresión)` | El cap sería POR réplica (2×N Chromiums) |
 | Guard `running` del auto-sync de Google, y corrida única de la sync de Meet (el botón «Sincronizar» recibe la que está en vuelo) | `lib/google/auto-sync.ts`, `lib/google/meet-sync.ts` | El auto-sync queda cubierto por el turno en DB (CronJobState); el botón manual de otra réplica podría correr en paralelo |
-| Locks en-proceso de watchdog / signals / partner refresh | `lib/cs/*` | Dos réplicas podrían correr el mismo sweep en paralelo |
+| Locks en-proceso de watchdog / signals / partner refresh, y el candado por cliente del vigía (al entrar y a mano) | `lib/cs/*`, `lib/cs/vigia-por-cliente.ts` | Dos réplicas podrían correr el mismo sweep en paralelo. El vigía por cliente además mira la corrida RUNNING en la base: entre réplicas solo queda la ventana de segundos entre leer y crear la corrida |
 | Guard 409 anti-doble-generación de BC (AgentRun RUNNING ≤5min) | `generate/route.ts` | Sigue funcionando (es contra DB) |
 
 **Persistido en DB (sobrevive deploys, ya NO es in-memory):** el turno del
@@ -270,7 +270,7 @@ por fecha en `CronJobState`: matar el contenedor a mitad de un job NO re-dispara
 Cada corrida deja su resultado en `CronJobState.lastResult` y el **semáforo de
 Integraciones** lo pinta (B-03); un fallo llega a Sentry con `tags.job` (B-02), y un job que no
 toma el turno del día no anota nada, así que un rojo queda rojo hasta la corrida siguiente. Hasta el
-2026-09-04 esta sección listaba 6 jobs; son 13 (`allJobs()`), más dos disparos por navegación:
+2026-09-04 esta sección listaba 6 jobs; son 13 (`allJobs()`), más tres disparos por navegación:
 
 | Job | Cuándo | Gate | Qué hace |
 |---|---|---|---|
@@ -294,7 +294,7 @@ toma el turno del día no anota nada, así que un rojo queda rojo hasta la corri
 corrió»), igual que a un job que todavía no llegó a su hora; ahora dice **apagado** con el motivo, que
 sale de la misma regla que usa `shouldRun` (`lib/jobs/requisitos.ts`).
 
-**Dos disparos por navegación**, que no pasan por el scheduler:
+**Tres disparos por navegación**, que no pasan por el scheduler:
 - **Auto-sync de Google Meet**: `POST /api/integrations/google/auto-sync` al cargar el shell
   (`components/layout/SidebarShell.tsx`) y la pantalla de sesiones
   (`app/(shell)/sessions/SessionsClient.tsx`), con freno en el servidor desde el 2026-09-21
@@ -306,6 +306,13 @@ sale de la misma regla que usa `shouldRun` (`lib/jobs/requisitos.ts`).
   `lib/google/meet-sync-cambios.ts` (`diasHaciaAtras`).
 - **Espejo de proyectos de HubSpot**: `POST /api/clients/[id]/sync-projects` al abrir la ficha de
   un cliente (`app/(shell)/clients/[id]/WorkspaceClient.tsx`), con cooldown en el servidor.
+- **Agente vigía al entrar a un cliente** (desde el 2026-10-05): `POST /api/cs/watchdog/al-entrar`
+  al abrir la ficha del cliente o su cuenta en Éxito del cliente (`components/cs/DisparoDelVigia.tsx`).
+  Corre para los proyectos de cartera activos del cliente SOLO si el vigía no corrió para ninguno en
+  48 h; una revisión a la vez por cliente, una hora de espera tras un fallo
+  (`lib/cs/vigia-por-cliente.ts`). NO depende de `CS_WATCHDOG_ENABLED`: lo frena
+  `CsSettings.watchdogEnabled`, que desde ese día frena también la corrida a mano. Llama a Claude
+  (una vez por proyecto) aunque el cron del vigía esté apagado.
 
 ### Prender la copia diaria de Éxito del cliente
 
