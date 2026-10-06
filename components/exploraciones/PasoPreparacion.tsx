@@ -19,6 +19,7 @@ import { Alert, Badge, Button, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { diaConAnio, diaYHora } from "@/lib/exploraciones/fechas";
 import { definicionDe } from "@/lib/exploraciones/casillas";
+import { debePrepararSola, estadoDeLaPreparacion, ultimaPreparacion, type CorridasAlAbrir } from "@/lib/exploraciones/preparar-sola";
 import { contactoPrincipal, porQueAhoraSugerido, senalesDe, type ContactoConRastro, type Senal } from "@/lib/exploraciones/senales";
 import { Casilla, Vista } from "./Casilla";
 import { useLienzo } from "./contexto";
@@ -79,30 +80,57 @@ function Dato({ que, children }: { que: string; children: React.ReactNode }) {
   );
 }
 
-/**
- * Desde cuándo «preparar» investiga en internet y propone el «por qué ahora», la radiografía, la
- * hipótesis de valor y la estrategia de conexión. Una exploración que no se preparó desde entonces
- * se prepara sola la primera vez que se abre la pieza (Elías, 2026-10-03: «todo de forma sugerida»).
- */
-const PREPARAR_CON_RADIOGRAFIA_DESDE = "2026-10-02T00:00:00.000Z";
-
 /** Las exploraciones en las que esta pantalla ya lanzó la preparación sola (un montaje doble no lanza dos). */
 const yaPreparadasSolas = new Set<string>();
 
-/** Lo que hace el agente en esta pieza, con su estado. */
+/**
+ * Lo que dice el servidor al abrir la pieza: la última corrida y la última preparación (del AgentRun).
+ * undefined mientras no contesta; null si no se pudo consultar. Es UNA consulta al abrir: el
+ * seguimiento de la corrida sigue siendo el compartido (useCorrida).
+ */
+function useCorridasAlAbrir(exploracionId: string): CorridasAlAbrir | null | undefined {
+  const [alAbrir, setAlAbrir] = useState<CorridasAlAbrir | null | undefined>(undefined);
+  useEffect(() => {
+    let vivo = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/sales/exploraciones/${exploracionId}/agente`);
+        const data = (await res.json().catch(() => ({}))) as Partial<CorridasAlAbrir>;
+        if (vivo) setAlAbrir(res.ok ? { corrida: data.corrida ?? null, preparacion: data.preparacion ?? null } : null);
+      } catch {
+        if (vivo) setAlAbrir(null);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [exploracionId]);
+  return alAbrir;
+}
+
+/** Lo que hace el agente en esta pieza, con su estado: cuándo se actualizó la información y si la última vez falló. */
 function BarraDelAgente() {
   const { exp, puedeEditar } = useLienzo();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const ultima = [...exp.estado.propuesta.corridas].reverse().find((c) => c.modo === "preparar");
   const trabajando = corriendo && corrida?.modo === "preparar";
-  const preparadaConRadiografia = !!ultima && ultima.en >= PREPARAR_CON_RADIOGRAFIA_DESDE;
+  const alAbrir = useCorridasAlAbrir(exp.id);
+  const { fallo } = estadoDeLaPreparacion({ preparadaEn: ultima?.en ?? null, ultima: ultimaPreparacion(alAbrir?.preparacion, corrida) });
 
-  // La primera vez, se prepara sola: lo de esta pieza llega sugerido sin que nadie lo pida.
+  /* La primera vez, se prepara sola: lo de esta pieza llega sugerido sin que nadie lo pida. Decide con
+     lo que contestó el servidor; ⛔ si la última preparación falló, espera el botón (Elías, 2026-10-05). */
+  const prepararSola = debePrepararSola({
+    puedeEditar,
+    archivada: exp.estado.archivada,
+    preparadaEn: ultima?.en ?? null,
+    alAbrir,
+    ocupado: corriendo || lanzando,
+  });
   useEffect(() => {
-    if (!puedeEditar || preparadaConRadiografia || corriendo || exp.estado.archivada || yaPreparadasSolas.has(exp.id)) return;
+    if (!prepararSola || yaPreparadasSolas.has(exp.id)) return;
     yaPreparadasSolas.add(exp.id);
     void lanzar("preparar");
-  }, [puedeEditar, preparadaConRadiografia, corriendo, exp.estado.archivada, exp.id, lanzar]);
+  }, [prepararSola, exp.id, lanzar]);
   return (
     <div data-recorrido="preventa.preparacion.agente" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info-line bg-info-surface px-5 py-4">
       <div className="min-w-0 space-y-0.5">
@@ -111,18 +139,18 @@ function BarraDelAgente() {
           {trabajando
             ? (corrida?.fase ?? "Empezando…")
             : ultima
-              ? `${diaYHora(ultima.en)} · ${ultima.propuestos === 0 ? "nada nuevo que proponer" : `${ultima.propuestos} ${ultima.propuestos === 1 ? "propuesta" : "propuestas"} para revisar`}`
+              ? `Información actualizada el ${diaYHora(ultima.en)} · ${ultima.propuestos === 0 ? "nada nuevo que proponer" : `${ultima.propuestos} ${ultima.propuestos === 1 ? "propuesta" : "propuestas"} para revisar`}`
               : "Investiga la empresa en internet, lee HubSpot y el diagnóstico, y propone el «por qué ahora», la radiografía, la hipótesis de valor y cómo conectar."}
         </p>
       </div>
       {puedeEditar && (
-        <Button size="sm" variant={ultima ? "secondary" : "primary"} loading={lanzando || trabajando} disabled={corriendo} onClick={() => void lanzar("preparar")}>
-          {ultima ? "Volver a preparar" : "Preparar con el agente"}
+        <Button size="sm" variant={ultima && !fallo ? "secondary" : "primary"} loading={lanzando || trabajando} disabled={corriendo} onClick={() => void lanzar("preparar")}>
+          {fallo ? "Volver a intentar" : ultima ? "Volver a preparar" : "Preparar con el agente"}
         </Button>
       )}
-      {corrida?.estado === "ERROR" && corrida.modo === "preparar" && (
-        <Alert variant="danger" className="w-full">
-          {corrida.error}
+      {fallo && !trabajando && (
+        <Alert variant="danger" className="w-full" title={`La última actualización falló el ${diaYHora(fallo.en)}${puedeEditar ? ": vuelve a intentarlo." : "."}`}>
+          {fallo.error}
         </Alert>
       )}
     </div>

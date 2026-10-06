@@ -5,7 +5,8 @@
  *   Pide `ventas.write` (gasta IA).
  *
  * GET /api/sales/exploraciones/[id]/agente
- *   La última corrida de la exploración, para seguir su fase. Pide `ventas.read`.
+ *   La última corrida de la exploración, para seguir su fase, y la última PREPARACIÓN (`preparacion`):
+ *   la pieza Preparación no relanza sola una que falló. Pide `ventas.read`.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -16,6 +17,7 @@ import { estaColgada, MOTIVO_COLGADA } from "@/lib/agents/run-colgada";
 import { lanzarCorrida, ultimaCorrida } from "@/lib/exploraciones/agente";
 import { MODOS_DE_LA_CORRIDA, type ModoDeLaCorrida } from "@/lib/exploraciones/contenido";
 import { leerExploracion } from "@/lib/exploraciones/servidor";
+import type { CorridaEnCurso } from "@/lib/exploraciones/seguimiento-de-corrida";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -43,23 +45,27 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   return NextResponse.json({ runId: r.runId, yaCorria: r.yaCorria }, { status: 202 });
 }
 
-export async function GET(_req: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  const guard = await guardPermission("ventas", "read");
-  if (guard instanceof NextResponse) return guard;
+type FilaDeLaCorrida = NonNullable<Awaited<ReturnType<typeof ultimaCorrida>>>;
 
-  const lectura = await leerExploracion(id);
-  if (lectura.estado !== "ok") return NextResponse.json({ corrida: null });
-  const r = await ultimaCorrida(id, lectura.fila.clientId);
-  if (!r) return NextResponse.json({ corrida: null });
+/** Una corrida como la ve la pantalla (`CorridaEnCurso`, lib/exploraciones/seguimiento-de-corrida.ts). */
+function comoLaVeLaPantalla(r: FilaDeLaCorrida): CorridaEnCurso {
   const filtros = r.filters as { modo?: unknown } | null;
   const modo = (MODOS_DE_LA_CORRIDA as readonly unknown[]).includes(filtros?.modo) ? (filtros?.modo as ModoDeLaCorrida) : null;
 
   // Murió con un reinicio y nadie escribió su final: se informa como lo que es, y los botones vuelven.
   if (r.status === "RUNNING" && estaColgada(r)) {
-    return NextResponse.json({
-      corrida: { id: r.id, modo, estado: "ERROR", etiqueta: r.stepLabel, fase: null, empezo: r.createdAt.toISOString(), propuestos: null, nadaNuevo: false, error: MOTIVO_COLGADA },
-    });
+    return {
+      id: r.id,
+      modo,
+      estado: "ERROR",
+      etiqueta: r.stepLabel,
+      fase: null,
+      empezo: r.createdAt.toISOString(),
+      termino: r.updatedAt.toISOString(),
+      propuestos: null,
+      nadaNuevo: false,
+      error: MOTIVO_COLGADA,
+    };
   }
 
   let salida: { propuestos?: number; nadaNuevo?: boolean; correosSinPermiso?: number } = {};
@@ -70,17 +76,32 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       /* sin resumen */
     }
   }
-  return NextResponse.json({
-    corrida: {
-      id: r.id,
-      modo,
-      estado: r.status,
-      etiqueta: r.stepLabel,
-      fase: r.currentPhase,
-      empezo: r.createdAt.toISOString(),
-      propuestos: typeof salida.propuestos === "number" ? salida.propuestos : null,
-      nadaNuevo: salida.nadaNuevo === true,
-      error: r.status === "ERROR" ? parseRunError(r.output) : null,
-    },
-  });
+  return {
+    id: r.id,
+    modo,
+    estado: r.status as CorridaEnCurso["estado"],
+    etiqueta: r.stepLabel,
+    fase: r.currentPhase,
+    empezo: r.createdAt.toISOString(),
+    termino: r.status === "DONE" || r.status === "ERROR" ? r.updatedAt.toISOString() : null,
+    propuestos: typeof salida.propuestos === "number" ? salida.propuestos : null,
+    nadaNuevo: salida.nadaNuevo === true,
+    error: r.status === "ERROR" ? parseRunError(r.output) : null,
+  };
+}
+
+export async function GET(_req: NextRequest, { params }: Ctx) {
+  const { id } = await params;
+  const guard = await guardPermission("ventas", "read");
+  if (guard instanceof NextResponse) return guard;
+
+  const lectura = await leerExploracion(id);
+  if (lectura.estado !== "ok") return NextResponse.json({ corrida: null, preparacion: null });
+  /* La última corrida (la que se sigue) y la última PREPARACIÓN: si falló, la pieza Preparación no la
+     relanza sola al abrir, espera el botón, y dice cuándo falló (Elías, 2026-10-05). */
+  const r = await ultimaCorrida(id, lectura.fila.clientId);
+  // Sin corridas no hay preparación; si la última ES una preparación, es esa (una consulta menos en cada vuelta del seguimiento).
+  const prep = !r ? null : (r.filters as { modo?: unknown } | null)?.modo === "preparar" ? r : await ultimaCorrida(id, lectura.fila.clientId, undefined, "preparar");
+  const corrida = r ? comoLaVeLaPantalla(r) : null;
+  return NextResponse.json({ corrida, preparacion: prep === r ? corrida : prep ? comoLaVeLaPantalla(prep) : null });
 }

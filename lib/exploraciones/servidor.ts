@@ -204,10 +204,8 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
   };
 }
 
-/** Quién puede llevar una preventa: el equipo activo, por nombre (la columna «La lleva» y la cabecera). */
-export async function equipoParaLaPreventa(): Promise<{ email: string; name: string }[]> {
-  return prisma.teamMember.findMany({ where: { deactivatedAt: null }, select: { email: true, name: true }, orderBy: { name: "asc" } });
-}
+/** Quién puede llevar una preventa: el equipo activo CON ACCESO A VENTAS (Elías, 2026-10-05; responsable.ts). */
+export { equipoParaLaPreventa } from "./responsable";
 
 // ── Cambiar ───────────────────────────────────────────────────────────────────
 
@@ -289,8 +287,11 @@ export async function paraLaPropuesta(
   };
 }
 
-/** La foto es de la última lectura: lo que ya pasó desde entonces no es agenda (se avisa como «sin leer»). */
-function loQueVieneDeLaAgenda(leido: LoLeidoDeHubspot, ahora = Date.now()): LoLeidoDeHubspot {
+/**
+ * La agenda es lo que VIENE: la foto también conserva las reuniones de HubSpot que ya pasaron (las que
+ * se avisan «sin leer» o se listan leídas, lectura.ts › `agendaRenovada`), y esas no son agenda.
+ */
+export function loQueVieneDeLaAgenda(leido: LoLeidoDeHubspot, ahora = Date.now()): LoLeidoDeHubspot {
   return { ...leido, agenda: leido.agenda.filter((a) => Date.parse(a.inicio) > ahora) };
 }
 

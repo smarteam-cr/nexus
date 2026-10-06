@@ -12,7 +12,7 @@ import { guardPermission } from "@/lib/auth/api-guards";
 import { leerContactos, leerEmpresa } from "@/lib/exploraciones/hubspot";
 import { leerLoLeido } from "@/lib/exploraciones/lo-leido";
 import { contactoPrincipal, type ContactoConRastro } from "@/lib/exploraciones/senales";
-import { leerExploracion } from "@/lib/exploraciones/servidor";
+import { leerExploracion, loQueVieneDeLaAgenda } from "@/lib/exploraciones/servidor";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -24,7 +24,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const lectura = await leerExploracion(id);
   if (lectura.estado !== "ok") return NextResponse.json({ error: "Esa preventa no existe." }, { status: 404 });
   const companyId = lectura.fila.client.hubspotCompanyId;
-  const leido = leerLoLeido(lectura.fila.test);
+  // Solo lo que viene: la foto también guarda las reuniones que ya pasaron, y «Ya agendó» no es por una de esas.
+  const leido = loQueVieneDeLaAgenda(leerLoLeido(lectura.fila.test));
   if (!companyId) return NextResponse.json({ empresa: null, contactos: [], principalId: null, tests: [], agenda: leido.agenda });
 
   const [empresa, crudos] = await Promise.all([leerEmpresa(companyId), leerContactos(companyId)]);

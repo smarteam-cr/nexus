@@ -13,7 +13,7 @@ import { listaParaProponer, queSigue, queSigueConPaso } from "./calidad";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { aFecha, diaConAnio, diaCorto } from "./fechas";
 import { esDeLaEmpresa } from "./hubspot";
-import { agendadasQueYaPasaron, debeLeerSola } from "./lectura";
+import { agendadasQueYaPasaron, agendaRenovada, debeLeerSola, PASADAS_QUE_CONSERVA_LA_FOTO, reunionesDeHubspotQueYaPasaron } from "./lectura";
 import { calcularMetricas } from "./metricas";
 import { industriaLegible, sugerirEdicion } from "./industria";
 import { minutosPara, REUNIONES } from "./sesion";
@@ -213,6 +213,52 @@ describe("las reuniones de HubSpot que ya pasaron sin leer", () => {
 
   it("la que también está en Meet cuenta una vez: la de Meet, que trae la transcripción", () => {
     expect(agendadasQueYaPasaron(agenda, [], [{ fecha: "2026-10-08T15:05:00.000Z" }], AHORA).map((r) => r.id)).toEqual(["h1"]);
+  });
+
+  it("las que ya pasaron se listan LEÍDAS o no: la leída se ve leída, no desaparece (Elías, 2026-10-05)", () => {
+    expect(reunionesDeHubspotQueYaPasaron(agenda, ["h1"], [], AHORA).map((r) => [r.id, r.leida])).toEqual([
+      ["h1", true],
+      ["h2", false],
+    ]);
+  });
+});
+
+describe("⛔ la foto nueva conserva las reuniones de HubSpot que ya pasaron (Elías, 2026-10-05)", () => {
+  // El 10 de octubre se vuelve a preparar: HubSpot solo da como agenda la del 15.
+  const AHORA = new Date("2026-10-10T18:00:00.000Z");
+  const anterior = [
+    { id: "h1", titulo: "Revisión del diagnóstico", inicio: "2026-10-02T15:00:00.000Z" },
+    { id: "h2", titulo: "Exploración a fondo", inicio: "2026-10-08T15:00:00.000Z" },
+    { id: "h4", titulo: "Una que se movió", inicio: "2026-10-12T15:00:00.000Z" },
+  ];
+  const nueva = [{ id: "h3", titulo: "Presentación de la propuesta", inicio: "2026-10-15T15:00:00.000Z" }];
+
+  it("la que pasó sin resumen sigue «sin leer» después de volver a preparar; la leída queda leída", () => {
+    const agenda = agendaRenovada({ anterior, nueva, ahora: AHORA });
+    expect(agenda.map((a) => a.id), "h4 todavía no pasó y HubSpot ya no la trae: se canceló o se movió").toEqual(["h1", "h2", "h3"]);
+    expect(agendadasQueYaPasaron(agenda, ["h1"], [], AHORA).map((r) => r.id)).toEqual(["h2"]);
+    expect(reunionesDeHubspotQueYaPasaron(agenda, ["h1"], [], AHORA).find((r) => r.id === "h1")?.leida).toBe(true);
+  });
+
+  it("la que HubSpot dice que no ocurrió deja de avisarse; la que sigue agendada no se repite", () => {
+    const agenda = agendaRenovada({
+      anterior,
+      nueva: [{ id: "h2", titulo: "Exploración a fondo (movida)", inicio: "2026-10-20T15:00:00.000Z" }],
+      noOcurrieron: ["h1"],
+      ahora: AHORA,
+    });
+    expect(agenda).toEqual([{ id: "h2", titulo: "Exploración a fondo (movida)", inicio: "2026-10-20T15:00:00.000Z" }]);
+  });
+
+  it("conserva las más recientes, con tope", () => {
+    const muchas = Array.from({ length: PASADAS_QUE_CONSERVA_LA_FOTO + 5 }, (_, i) => ({
+      id: `p${i}`,
+      titulo: "Reunión",
+      inicio: new Date(Date.parse("2026-06-01T15:00:00.000Z") + i * 86_400_000).toISOString(),
+    }));
+    const agenda = agendaRenovada({ anterior: muchas, nueva: [], ahora: AHORA });
+    expect(agenda).toHaveLength(PASADAS_QUE_CONSERVA_LA_FOTO);
+    expect(agenda.at(-1)?.id).toBe(`p${PASADAS_QUE_CONSERVA_LA_FOTO + 4}`);
   });
 });
 

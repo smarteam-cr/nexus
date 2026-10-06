@@ -276,6 +276,11 @@ export interface ActividadDeLaEmpresa {
    * dejaron la nota pero no la dirección en el contacto: sin esto, la preparación los daba por no hechos.
    */
   enlacesDelTest?: EnlaceDelTest[];
+  /**
+   * Las reuniones que ya pasaron y HubSpot dice que no ocurrieron (se canceló, se reagendó, no se
+   * presentó): la foto deja de avisarlas «sin leer» (lectura.ts › `agendaRenovada`).
+   */
+  noOcurrieron?: string[];
 }
 
 type V1 = {
@@ -395,6 +400,7 @@ export async function leerActividad(companyId: string, contactos: readonly Conta
   const agenda: ActividadDeLaEmpresa["agenda"] = [];
   let correosSinPermiso = 0;
   const enlacesDelTest: EnlaceDelTest[] = [];
+  const noOcurrieron: string[] = [];
   for (const e of lotes.flat()) {
     const enlace = enlaceDeLaNota(e);
     if (enlace && !enlacesDelTest.some((x) => x.url === enlace.url)) enlacesDelTest.push(enlace);
@@ -411,12 +417,13 @@ export async function leerActividad(companyId: string, contactos: readonly Conta
       agenda.push({ id: a.id, titulo: a.titulo || "Reunión", inicio: new Date(a.ts).toISOString() });
       continue;
     }
+    if (a.tipo === "MEETING" && reunionQueNoOcurrio(a.resultado)) noOcurrieron.push(a.id);
     if (!a.texto) continue;
     material.push(a);
   }
   material.sort((a, b) => b.ts - a.ts);
   agenda.sort((a, b) => a.inicio.localeCompare(b.inicio));
-  return { material: material.slice(0, 40), agenda, correosSinPermiso, enlacesDelTest };
+  return { material: material.slice(0, 40), agenda, correosSinPermiso, enlacesDelTest, noOcurrieron };
 }
 
 // ── «Llegaron por el test» ────────────────────────────────────────────────────

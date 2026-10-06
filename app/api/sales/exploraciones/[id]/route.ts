@@ -6,7 +6,8 @@
  * propuso el agente. Se aplican todas o ninguna, con la fila bloqueada. Si otra persona cambió lo
  * confirmado entretanto, 409 con la exploración actual: la pantalla la recarga en vez de pisar.
  * Si cambia quién la lleva, a la persona nueva le llega un aviso y el «Para ti» de las dos se vuelve
- * a medir (la preventa sale de uno y entra al otro).
+ * a medir (la preventa sale de uno y entra al otro). Solo la lleva alguien del equipo con acceso a
+ * Ventas: otro correo es un 400 (lib/exploraciones/responsable.ts).
  * Mirar pide `ventas.read`; cambiar, `ventas.write`.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -22,6 +23,7 @@ import {
   SQL_DE_EXPLORACIONES,
 } from "@/lib/exploraciones/servidor";
 import { paraLaPantallaCompleta } from "@/lib/exploraciones/pantalla";
+import { errorDelResponsable } from "@/lib/exploraciones/responsable";
 import { avisar } from "@/lib/para-ti/avisos-server";
 import { olvidarMedicion } from "@/lib/para-ti/medir-server";
 
@@ -58,6 +60,10 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (escala.estado !== "ok") {
     return NextResponse.json({ error: "La escala no está publicada en Nexus: sin ella no se puede validar el cambio." }, { status: 503 });
   }
+
+  // ⛔ Una preventa solo la lleva alguien con acceso a Ventas (Elías, 2026-10-05): lo mismo que filtra la lista.
+  const sinAcceso = await errorDelResponsable(cuerpo.data.operaciones as Operacion[]);
+  if (sinAcceso) return NextResponse.json({ error: sinAcceso }, { status: 400 });
 
   const r = await aplicarCambios(id, cuerpo.data.version, cuerpo.data.operaciones as Operacion[], escala.general);
   switch (r.estado) {

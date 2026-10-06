@@ -7,9 +7,46 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import type { TeamRole } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import { formasDeVoseo, textosDelFuente } from "@/lib/ui/voseo";
+import { debePrepararSola, estadoDeLaPreparacion, ultimaPreparacion } from "./preparar-sola";
+import { equipoParaLaPreventa, errorDelResponsable } from "./responsable";
 import { crearSeguimiento, type CorridaEnCurso } from "./seguimiento-de-corrida";
+
+/* Para «quién puede llevar una preventa» (responsable.ts): un equipo de mentira, sin base, y los
+   permisos con la matriz REAL por defecto (lib/auth/permissions/defaults.ts) más los ajustes de cada uno. */
+const EQUIPO = vi.hoisted(() => [
+  { email: "ana@smarteam.test", name: "Ana", roleEnum: "VENTAS", permissionOverrides: null as unknown, deactivatedAt: null as Date | null },
+  { email: "carla@smarteam.test", name: "Carla", roleEnum: "CSE", permissionOverrides: null, deactivatedAt: null },
+  { email: "mario@smarteam.test", name: "Mario", roleEnum: "MARKETING", permissionOverrides: null, deactivatedAt: null },
+  { email: "sofia@smarteam.test", name: "Sofía", roleEnum: "CSE", permissionOverrides: { v: 1, sections: { ventas: { read: true } } }, deactivatedAt: null },
+  { email: "beto@smarteam.test", name: "Beto", roleEnum: "VENTAS", permissionOverrides: null, deactivatedAt: new Date("2026-09-01T00:00:00.000Z") },
+]);
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/db/prisma", () => {
+  // Sin `deactivatedAt: null` en el where, trae también a los dados de baja (como Prisma).
+  const activo = (where: { deactivatedAt?: unknown }, m: (typeof EQUIPO)[number]) => where.deactivatedAt !== null || m.deactivatedAt === null;
+  return {
+    prisma: {
+      teamMember: {
+        findMany: async ({ where }: { where: { deactivatedAt?: unknown } }) => EQUIPO.filter((m) => activo(where, m)),
+        findFirst: async ({ where }: { where: { email: { equals: string }; deactivatedAt?: unknown } }) =>
+          EQUIPO.find((m) => m.email.toLowerCase() === where.email.equals.toLowerCase() && activo(where, m)) ?? null,
+      },
+    },
+  };
+});
+vi.mock("@/lib/auth/permissions/engine", async () => {
+  const { computeEffective } = await import("@/lib/auth/permissions/defaults");
+  const { parsePermissionMapLoose } = await import("@/lib/auth/permissions/schema");
+  return {
+    can: async (tm: { roleEnum: TeamRole; permissionOverrides?: unknown }, seccion: string, accion: string) => {
+      const secciones = computeEffective(tm.roleEnum, null, parsePermissionMapLoose(tm.permissionOverrides ?? null)).sections as Record<string, Record<string, boolean> | undefined>;
+      return secciones[seccion]?.[accion] === true;
+    },
+  };
+});
 
 const RAIZ = process.cwd();
 
@@ -165,5 +202,108 @@ describe("⛔ un solo seguimiento de la corrida por exploración (no uno por pie
     s.ponerLanzando(true);
     expect(s.foto().lanzando).toBe(true);
     expect(oyente).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── La preparación que se lanza sola (lib/exploraciones/preparar-sola.ts) ──
+
+describe("⛔ si la preparación automática falla, no se reintenta sola: espera el botón (Elías, 2026-10-05)", () => {
+  const prep = (estado: CorridaEnCurso["estado"], cambios: Partial<CorridaEnCurso> = {}) => corrida("p1", estado, { modo: "preparar", ...cambios });
+  const base = { puedeEditar: true, archivada: false, preparadaEn: null, ocupado: false };
+
+  it("una preventa sin preparar se prepara sola, pero recién cuando el servidor contestó", () => {
+    expect(debePrepararSola({ ...base, alAbrir: undefined }), "decidió antes de la primera consulta").toBe(false);
+    expect(debePrepararSola({ ...base, alAbrir: null }), "sin respuesta del servidor no se lanza").toBe(false);
+    expect(debePrepararSola({ ...base, alAbrir: { corrida: null, preparacion: null } })).toBe(true);
+  });
+
+  it("si la última preparación falló, no se lanza sola, aunque después haya corrido otra cosa", () => {
+    const fallida = prep("ERROR", { error: "Se cortó" });
+    expect(debePrepararSola({ ...base, alAbrir: { corrida: fallida, preparacion: fallida } })).toBe(false);
+    expect(debePrepararSola({ ...base, alAbrir: { corrida: corrida("l1", "DONE", { empezo: "2026-10-05T16:00:00.000Z" }), preparacion: fallida } })).toBe(false);
+  });
+
+  it("tampoco si ya hay una corriendo, si ya se preparó con la radiografía, si no puede editar o si está archivada", () => {
+    const nada = { corrida: null, preparacion: null };
+    expect(debePrepararSola({ ...base, alAbrir: { corrida: corrida("l1", "RUNNING"), preparacion: null } })).toBe(false);
+    expect(debePrepararSola({ ...base, ocupado: true, alAbrir: nada })).toBe(false);
+    expect(debePrepararSola({ ...base, preparadaEn: "2026-10-03T12:00:00.000Z", alAbrir: nada })).toBe(false);
+    expect(debePrepararSola({ ...base, puedeEditar: false, alAbrir: nada })).toBe(false);
+    expect(debePrepararSola({ ...base, archivada: true, alAbrir: nada })).toBe(false);
+    // Preparada bien ANTES de la radiografía: se prepara de nuevo, como siempre.
+    expect(debePrepararSola({ ...base, preparadaEn: "2026-10-01T12:00:00.000Z", alAbrir: { corrida: null, preparacion: prep("DONE", { empezo: "2026-10-01T11:58:00.000Z" }) } })).toBe(true);
+  });
+
+  it("la pantalla dice cuándo se actualizó la información y, si la última falló, cuándo falló", () => {
+    const fallo = prep("ERROR", { empezo: "2026-10-05T15:00:00.000Z", termino: "2026-10-05T15:02:00.000Z", error: "Se cortó" });
+    expect(estadoDeLaPreparacion({ preparadaEn: "2026-10-03T12:00:00.000Z", ultima: fallo })).toEqual({
+      actualizadaEn: "2026-10-03T12:00:00.000Z",
+      fallo: { en: "2026-10-05T15:02:00.000Z", error: "Se cortó" },
+    });
+    // Alguien apretó el botón y salió bien: la falla ya no se ve.
+    const buena = prep("DONE", { id: "p2", empezo: "2026-10-05T15:10:00.000Z" });
+    const ultima = ultimaPreparacion(fallo, buena);
+    expect(ultima?.id).toBe("p2");
+    expect(estadoDeLaPreparacion({ preparadaEn: "2026-10-05T15:11:00.000Z", ultima }).fallo).toBeNull();
+    // Una lectura que corrió después no tapa la preparación que falló.
+    expect(ultimaPreparacion(fallo, corrida("l1", "DONE", { empezo: "2026-10-05T16:00:00.000Z" }))?.id).toBe("p1");
+  });
+
+  it("la pieza Preparación decide con esto (no con lo guardado) y muestra las dos líneas", () => {
+    const codigo = fs.readFileSync(path.join(RAIZ, "components", "exploraciones", "PasoPreparacion.tsx"), "utf8");
+    expect(codigo).toMatch(/debePrepararSola\(\{/);
+    expect(codigo).toMatch(/Información actualizada el \$\{diaYHora\(/);
+    expect(codigo).toMatch(/La última actualización falló el \$\{diaYHora\(fallo\.en\)\}/);
+    const ruta = fs.readFileSync(path.join(RAIZ, "app", "api", "sales", "exploraciones", "[id]", "agente", "route.ts"), "utf8");
+    expect(ruta, "el GET dice cuál fue la última preparación").toMatch(/ultimaCorrida\(id, lectura\.fila\.clientId, undefined, "preparar"\)/);
+  });
+});
+
+// ── Quién lleva la preventa (lib/exploraciones/responsable.ts) ──
+
+describe("⛔ una preventa solo la lleva alguien con acceso a Ventas (Elías, 2026-10-05)", () => {
+  it("la lista de «La lleva» es el equipo activo con `ventas.read` (por su rol o por su ajuste), nadie más", async () => {
+    expect((await equipoParaLaPreventa()).map((p) => p.email)).toEqual(["ana@smarteam.test", "sofia@smarteam.test"]);
+  });
+
+  it("el PATCH rechaza, con un mensaje claro, a quien no tiene acceso a Ventas, a quien se dio de baja y a quien no es del equipo", async () => {
+    for (const email of ["carla@smarteam.test", "mario@smarteam.test", "beto@smarteam.test", "nadie@otra.test"]) {
+      expect(await errorDelResponsable([{ op: "responsable", email }]), email).toBe(`${email} no puede llevar la preventa: solo la lleva alguien del equipo con acceso a Ventas.`);
+    }
+  });
+
+  it("acepta a quien tiene acceso (sin importar mayúsculas), dejarla sin responsable y lo que no toca al responsable", async () => {
+    expect(await errorDelResponsable([{ op: "responsable", email: "Ana@Smarteam.test" }])).toBeNull();
+    expect(await errorDelResponsable([{ op: "responsable", email: "sofia@smarteam.test" }])).toBeNull();
+    expect(await errorDelResponsable([{ op: "responsable", email: null }])).toBeNull();
+    expect(await errorDelResponsable([{ op: "archivar" }])).toBeNull();
+  });
+
+  it("el PATCH valida antes de aplicar el cambio (y antes de avisarle a nadie)", () => {
+    const ruta = fs.readFileSync(path.join(RAIZ, "app", "api", "sales", "exploraciones", "[id]", "route.ts"), "utf8");
+    expect(ruta).toMatch(/const sinAcceso = await errorDelResponsable\(/);
+    expect(ruta.indexOf("errorDelResponsable(cuerpo")).toBeLessThan(ruta.indexOf("aplicarCambios(id"));
+  });
+});
+
+// ── Las reuniones de HubSpot que ya pasaron (lib/exploraciones/lectura.ts › agendaRenovada) ──
+
+describe("⛔ una reunión de HubSpot sin resumen se sigue avisando como pendiente de leer (Elías, 2026-10-05)", () => {
+  it("el agente guarda la foto con la agenda RENOVADA, no solo con lo que trae esta lectura", () => {
+    const codigo = fs.readFileSync(path.join(RAIZ, "lib", "exploraciones", "agente.ts"), "utf8");
+    expect(codigo).toMatch(/agenda: agendaRenovada\(\{ anterior: leerLoLeido\(fila\.test\)\.agenda, nueva: leido\.foto\.agenda/);
+    expect(codigo, "volvió a escribir la foto tal cual la leyó la corrida").not.toMatch(/test: \{ \.\.\.leido\.foto, leidoEn/);
+  });
+
+  it("«sin leer» compara las de HubSpot con TODAS las de Meet: una que ya se leyó en Meet no queda sin leer en HubSpot", () => {
+    const codigo = fs.readFileSync(path.join(RAIZ, "lib", "exploraciones", "fuentes.ts"), "utf8");
+    const sinLeer = codigo.slice(codigo.indexOf("export async function reunionesSinLeer"));
+    expect(sinLeer).toMatch(/agendadasQueYaPasaron\(opts\.leido\.agenda, opts\.propuesta\.leidas\.hubspot, deMeet, ahora\)/);
+    expect(sinLeer).not.toMatch(/s\.date >= desde && !leidas\.has\(s\.id\)/);
+  });
+
+  it("«Ya agendó» en Preparación mira solo lo que viene, no las que la foto conserva", () => {
+    const ruta = fs.readFileSync(path.join(RAIZ, "app", "api", "sales", "exploraciones", "[id]", "preparacion", "route.ts"), "utf8");
+    expect(ruta).toMatch(/loQueVieneDeLaAgenda\(leerLoLeido\(lectura\.fila\.test\)\)/);
   });
 });

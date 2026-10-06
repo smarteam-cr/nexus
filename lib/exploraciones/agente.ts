@@ -7,7 +7,8 @@
  * a nada: cualquier falla deja su causa) y corre en segundo plano; la pantalla sigue su fase.
  *
  * ⛔ El agente PROPONE: lo que guarda es `propuesta` (lo propuesto, lo que ya leyó y sus corridas) y
- * la foto de lo leído en `test`, con la fila BLOQUEADA y releída, como el vendedor: así una corrida
+ * la foto de lo leído en `test` (que conserva de la anterior las reuniones de HubSpot que ya pasaron:
+ * lectura.ts › `agendaRenovada`), con la fila BLOQUEADA y releída, como el vendedor: así una corrida
  * que leyó antes de un «Descartar» no lo resucita, y la lápida de lo descartado se respeta.
  *
  * La ÚNICA excepción es lo que la preparación deja hecho sola (pedido de Elías, 2026-10-01: «debería
@@ -52,7 +53,7 @@ import {
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { leerPropuesta } from "./esquemas";
 import { leerFuentes, type LoQueSeLeyo } from "./fuentes";
-import { debeLeerSola } from "./lectura";
+import { agendaRenovada, debeLeerSola } from "./lectura";
 import { hoyEnCostaRica } from "./fechas";
 import { contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia } from "./guia-pedido";
 import type { GuiaDeLaSesion } from "./guia";
@@ -89,8 +90,13 @@ interface LoQueLeyoLaCorrida {
   /** Cómo lo ve el vendedor, para la historia. */
   leyo: string[];
   leidas: { sesiones: string[]; hubspot: string[]; documentos: string[] };
-  /** La foto de HubSpot (el test, la agenda, los correos). null = no leyó HubSpot: queda la anterior. */
+  /**
+   * La foto de HubSpot (el test, la agenda, los correos). null = no leyó HubSpot: queda la anterior.
+   * Su agenda trae solo lo que viene: las que ya pasaron se conservan de la foto anterior al guardar.
+   */
   foto: Omit<LoLeidoDeHubspot, "leidoEn"> | null;
+  /** Las reuniones que ya pasaron y HubSpot dice que no ocurrieron: dejan de avisarse. */
+  noOcurrieron?: readonly string[];
 }
 
 /** Un fallo con un mensaje que ya está escrito para el vendedor (no hace falta traducirlo). */
@@ -108,10 +114,18 @@ interface OpcionesDeLaCorrida {
   automatica?: boolean;
 }
 
-/** La última corrida de esta exploración (la pantalla la sigue). */
-export async function ultimaCorrida(exploracionId: string, clientId: string, db: Prisma.TransactionClient | typeof prisma = prisma) {
+/**
+ * La última corrida de esta exploración (la pantalla la sigue). Con `modo`, la última de ese modo: la
+ * pieza Preparación mira si la última preparación falló para no relanzarla sola (Elías, 2026-10-05).
+ */
+export async function ultimaCorrida(exploracionId: string, clientId: string, db: Prisma.TransactionClient | typeof prisma = prisma, modo?: ModoDelAgente) {
   return db.agentRun.findFirst({
-    where: { clientId, agentSlug: AGENTE_DE_LA_EXPLORACION, filters: { path: ["exploracionId"], equals: exploracionId } },
+    where: {
+      clientId,
+      agentSlug: AGENTE_DE_LA_EXPLORACION,
+      filters: { path: ["exploracionId"], equals: exploracionId },
+      ...(modo ? { AND: [{ filters: { path: ["modo"], equals: modo } }] } : {}),
+    },
     orderBy: { createdAt: "desc" },
     select: { id: true, status: true, currentPhase: true, createdAt: true, updatedAt: true, output: true, stepLabel: true, filters: true },
   });
@@ -268,6 +282,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         leyo: leido.fuentes.map((f) => f.etiqueta),
         leidas: leido.leidas,
         foto: { tests: leido.tests, agenda: leido.agenda, correosSinPermiso: leido.correosSinPermiso },
+        noOcurrieron: leido.noOcurrieron ?? [],
       },
       { runId, modo, automatica: opts.automatica === true },
     );
@@ -632,9 +647,11 @@ async function guardar(
         perfilDespues: true,
         responsableEmail: true,
         archivadaEn: true,
+        test: true,
       },
     });
     if (!fila) return 0;
+    const ahora = new Date();
     const estado = estadoDesdeFila(fila);
     const antes = new Set(propuestaVigente(estado).map((it) => it.id));
     const fusion = fusionarPropuestas(estado, items);
@@ -662,11 +679,20 @@ async function guardar(
         },
       ].slice(-50),
     };
+    /* La foto nueva conserva de la anterior las reuniones que ya pasaron, leídas o no (Elías, 2026-10-05):
+       la que pasó sin resumen del notetaker se sigue avisando «sin leer» aunque se vuelva a preparar. */
+    const foto = leido.foto
+      ? {
+          ...leido.foto,
+          agenda: agendaRenovada({ anterior: leerLoLeido(fila.test).agenda, nueva: leido.foto.agenda, noOcurrieron: leido.noOcurrieron, ahora }),
+          leidoEn: ahora.toISOString(),
+        }
+      : null;
     await tx.exploracionDeVenta.update({
       where: { id: exploracionId },
       data: {
         propuesta: propuesta as unknown as Prisma.InputJsonValue,
-        ...(leido.foto ? { test: { ...leido.foto, leidoEn: new Date().toISOString() } as unknown as Prisma.InputJsonValue } : {}),
+        ...(foto ? { test: foto as unknown as Prisma.InputJsonValue } : {}),
       },
     });
     return nuevas.length;

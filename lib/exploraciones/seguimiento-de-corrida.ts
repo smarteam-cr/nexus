@@ -21,6 +21,8 @@ export interface CorridaEnCurso {
   etiqueta: string | null;
   fase: string | null;
   empezo: string;
+  /** Cuándo terminó (bien o mal); null mientras corre. Opcional: lo agregó la pieza Preparación (2026-10-05). */
+  termino?: string | null;
   propuestos: number | null;
   nadaNuevo: boolean;
   error: string | null;

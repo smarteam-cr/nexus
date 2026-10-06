@@ -35,7 +35,7 @@ import {
 import { documentosParaLeer, listarDocumentos } from "./documentos";
 import type { ReunionDeLaExploracion } from "./guia";
 import { etiquetaDeLaFuente } from "./senales";
-import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, type ReunionSinLeer } from "./lectura";
+import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, reunionesDeHubspotQueYaPasaron, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
 import { REUNIONES } from "./sesion";
 import { leerSitioWeb } from "./sitio-web";
@@ -49,6 +49,8 @@ export interface LoQueSeLeyo {
   /** Los resultados del test, por área (hipótesis: escala anterior). */
   tests: { contacto: string; resultado: ResultadoDelTest }[];
   agenda: ActividadDeLaEmpresa["agenda"];
+  /** Las reuniones que ya pasaron y no ocurrieron: la foto deja de avisarlas (lectura.ts › `agendaRenovada`). */
+  noOcurrieron?: string[];
   correosSinPermiso: number;
   /** Lo que LEYÓ esta corrida para no volver a leerlo: solo «leer» lo marca (ver abajo). */
   leidas: { sesiones: string[]; hubspot: string[]; documentos: string[] };
@@ -307,6 +309,7 @@ export async function leerFuentes(opts: {
     fuentes,
     tests,
     agenda: actividad.agenda,
+    noOcurrieron: actividad.noOcurrieron ?? [],
     correosSinPermiso: actividad.correosSinPermiso,
     leidas,
     sesionesUsadas,
@@ -315,13 +318,9 @@ export async function leerFuentes(opts: {
 }
 
 /**
- * Las reuniones que el agente todavía no leyó (lib/exploraciones/lectura.ts): las de Meet CON
- * transcripción desde un mes antes del alta, y las de HubSpot que estaban agendadas y ya pasaron.
- * Solo lee la base (nada de HubSpot): se pide al abrir el lienzo.
- */
-/**
  * Todas las reuniones de la exploración, leídas o no: las de Meet con transcripción desde un mes antes
- * del alta, lo que el vendedor sumó a mano y las agendadas en HubSpot que ya pasaron sin leer. Es lo
+ * del alta, lo que el vendedor sumó a mano y las agendadas en HubSpot que ya pasaron, cada una con si
+ * el agente ya la leyó (Elías, 2026-10-05: antes las de HubSpot leídas no se listaban nunca). Es lo
  * que se liga a cada sesión en Exploración (una pestaña por sesión, Elías 2026-10-03).
  */
 export async function reunionesDeLaExploracion(
@@ -351,17 +350,23 @@ export async function reunionesDeLaExploracion(
     origen: "documento",
     leida: docsLeidos.has(d.id),
   }));
-  const deHubspot: ReunionDeLaExploracion[] = agendadasQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora).map((r) => ({ ...r, leida: false }));
+  const deHubspot: ReunionDeLaExploracion[] = reunionesDeHubspotQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora);
   return [...deMeet, ...aMano, ...deHubspot].sort((a, b) => b.fecha.localeCompare(a.fecha));
 }
 
+/**
+ * Las reuniones que el agente todavía no leyó (lib/exploraciones/lectura.ts): las de Meet CON
+ * transcripción desde un mes antes del alta, y las de HubSpot que estaban agendadas y ya pasaron.
+ * Solo lee la base (nada de HubSpot): se pide al abrir el lienzo.
+ */
 export async function reunionesSinLeer(
   opts: { exploracionId: string; clientId: string; creadaEn: Date; propuesta: PropuestaDeExploracion; leido: LoLeidoDeHubspot },
   ahora = new Date(),
 ): Promise<ReunionSinLeer[]> {
   const desde = opts.creadaEn.getTime() - DIAS_ANTES_DEL_ALTA * 24 * 60 * 60 * 1000;
   const leidas = new Set(opts.propuesta.leidas.sesiones);
-  const candidatas = (await getClientSessions(opts.clientId, { take: 10 })).filter((s) => s.date >= desde && !leidas.has(s.id));
+  // Leídas o no: la de HubSpot que también está en Meet se cuenta una vez (abajo), aunque la de Meet ya se haya leído.
+  const candidatas = (await getClientSessions(opts.clientId, { take: 10 })).filter((s) => s.date >= desde);
   const conTranscripcion = candidatas.length
     ? await prisma.firefliesSession.findMany({
         where: {
@@ -374,8 +379,12 @@ export async function reunionesSinLeer(
       })
     : [];
   const deMeet: ReunionSinLeer[] = conTranscripcion.map((s) => ({ id: s.id, titulo: s.title, fecha: s.date.toISOString(), origen: "meet" }));
+  const deMeetSinLeer = deMeet.filter((s) => !leidas.has(s.id));
   // Lo que el vendedor sumó a mano y el agente no leyó (la lectura se lanza sola al sumarlo; esto queda si falló).
   const docs = await documentosParaLeer(opts.exploracionId, { excepto: opts.propuesta.leidas.documentos, cuantos: 5 });
   const aMano: ReunionSinLeer[] = docs.map((d) => ({ id: d.id, titulo: d.titulo, fecha: (d.fecha ?? d.createdAt.toISOString()), origen: "documento" }));
-  return [...deMeet, ...aMano, ...agendadasQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora)];
+  /* La foto conserva las de HubSpot que ya pasaron (lectura.ts › `agendaRenovada`): si la misma reunión
+     está en Meet y ya se leyó, su copia de HubSpot no puede quedar «sin leer» para siempre. Por eso se
+     compara con TODAS las de Meet, no solo con las que faltan. */
+  return [...deMeetSinLeer, ...aMano, ...agendadasQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora)];
 }
