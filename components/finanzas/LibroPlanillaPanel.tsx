@@ -16,7 +16,7 @@
  * salió; el server lo frena con 409 y acá directamente no se ofrece el control.
  *
  * ⭐ 2026-10-06 (pedido de Alex: «hay meses que no están con monto»): el botón de arriba ya no genera solo la quincena
- * de hoy — completa TODAS las que faltan desde la última generada, cada una con el salario que regía en ella. Cada
+ * de hoy — completa TODAS las que faltan (los huecos del último año), cada una con el salario que regía en ella. Cada
  * quincena se paga entera con «Pagar la quincena», y el monto de una fila pendiente se corrige con «Corregir».
  */
 
@@ -50,14 +50,8 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
   const [pagando, setPagando] = useState<PagoPlanillaDTO | null>(null);
   const [pagandoQuincena, setPagandoQuincena] = useState<{ periodo: string; quincena: 1 | 2; pagos: PagoPlanillaDTO[] } | null>(null);
 
-  /* Lo que falta generar: de la siguiente a la última quincena del libro hasta la de hoy. */
-  const porGenerar = useMemo(() => {
-    const ultima = libro.pagos.reduce<{ periodo: string; quincena: number } | null>(
-      (m, p) => (!m || p.periodo > m.periodo || (p.periodo === m.periodo && p.quincena > m.quincena) ? { periodo: p.periodo, quincena: p.quincena } : m),
-      null,
-    );
-    return quincenasPorGenerar(ultima, todayISO);
-  }, [libro.pagos, todayISO]);
+  /* Lo que falta generar: las quincenas del último año, hasta la de hoy, que no tienen ninguna fila. */
+  const porGenerar = useMemo(() => quincenasPorGenerar(libro.pagos, todayISO), [libro.pagos, todayISO]);
 
   const grupos = useMemo(() => {
     const porPeriodo = new Map<string, PagoPlanillaDTO[]>();

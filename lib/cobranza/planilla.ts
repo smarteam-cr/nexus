@@ -154,31 +154,41 @@ export function quincenasDistintas(
 }
 
 /**
- * Las quincenas que faltan GENERAR en el libro (2026-10-06): de la siguiente a la última generada hasta la de hoy,
- * incluida. Es lo que destraba «Completar las que faltan»: el libro se cortó en la 1.ª quincena de agosto y el botón de
- * antes solo generaba la de hoy, así que agosto (2.ª) y septiembre no había cómo crearlas.
+ * Las quincenas que faltan GENERAR en el libro (2026-10-06): las que no tienen NINGUNA fila, desde la primera generada
+ * (o desde hace un año, si el libro es más viejo) hasta la de hoy, incluida. Es lo que destraba «Completar las que
+ * faltan»: el libro se cortó en la 1.ª quincena de agosto y el botón de antes solo generaba la de hoy.
  *
- * ⚠ No rellena huecos de en medio ni hacia atrás del todo: eso lo dice `coberturaDe`, que declara en vez de fabricar.
- * Sin ninguna generada, solo la de hoy. Tope de 24 (un año): más que eso no es un atraso, es un libro que nadie lleva.
+ * ⚠ Huecos, no «de la última en adelante»: medido en prod el 2026-10-06, alguien ya había generado la 1.ª de octubre con
+ * el botón viejo, y agosto (2.ª) y septiembre quedaban EN MEDIO. Mirando solo hacia adelante desde la última, el hueco
+ * no se veía nunca más.
+ * ⚠ Una quincena con alguna fila cuenta como generada: si le falta una persona, eso lo dice el calendario de cada una, no
+ * esto. Sin ninguna generada, solo la de hoy. Más atrás de un año no se mira: eso ya no es un atraso, es un libro que
+ * nadie llevaba (lo declara `coberturaDe`, que no fabrica).
  */
 export function quincenasPorGenerar(
-  ultima: { periodo: string; quincena: number } | null,
+  generadas: ReadonlyArray<{ periodo: string; quincena: number }>,
   hoyISO: string,
 ): Array<{ periodo: Periodo; quincena: 1 | 2 }> {
   const hoy = { periodo: periodoDe(hoyISO), quincena: quincenaDe(hoyISO) };
-  if (!ultima || !esPeriodo(ultima.periodo)) return [hoy];
+  const clave = (p: string, q: number) => `${p}|${q}`;
+  const validas = generadas.filter((g) => esPeriodo(g.periodo) && (g.quincena === 1 || g.quincena === 2));
+  if (validas.length === 0) return [hoy];
+  const ya = new Set(validas.map((g) => clave(g.periodo, g.quincena)));
+  const orden = (p: string, q: number) => `${p}-${q}`;
+  const primera = validas.reduce((m, g) => (orden(g.periodo, g.quincena) < orden(m.periodo, m.quincena) ? g : m));
+  const haceUnAnio = `${Number(hoy.periodo.slice(0, 4)) - 1}${hoy.periodo.slice(4)}`;
+  let periodo = primera.periodo > haceUnAnio ? primera.periodo : haceUnAnio;
+  let quincena: 1 | 2 = primera.periodo > haceUnAnio ? (primera.quincena === 1 ? 1 : 2) : hoy.quincena;
   const out: Array<{ periodo: Periodo; quincena: 1 | 2 }> = [];
-  let periodo = ultima.periodo;
-  let quincena: 1 | 2 = ultima.quincena === 1 ? 1 : 2;
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 26; i++) {
+    if (periodo > hoy.periodo || (periodo === hoy.periodo && quincena > hoy.quincena)) break;
+    if (!ya.has(clave(periodo, quincena))) out.push({ periodo, quincena });
     if (quincena === 1) quincena = 2;
     else {
       quincena = 1;
       const [y, m] = [Number(periodo.slice(0, 4)), Number(periodo.slice(5, 7))];
       periodo = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
     }
-    if (periodo > hoy.periodo || (periodo === hoy.periodo && quincena > hoy.quincena)) break;
-    out.push({ periodo, quincena });
   }
   return out;
 }

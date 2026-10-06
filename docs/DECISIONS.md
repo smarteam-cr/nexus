@@ -5073,8 +5073,9 @@ Alexander Vanegas (CSL) y dirección.
 Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
 
 - **La planilla se completa con el salario que regía, no con el de hoy.** «Completar las que faltan» (historial de
-  planilla) genera de una vez las quincenas que no están en el libro, de la siguiente a la última generada hasta la de
-  hoy (`quincenasPorGenerar`), cada una con `salarioVigenteEn` sobre los movimientos del catálogo. Un aumento de
+  planilla) genera de una vez las quincenas que no están en el libro —los HUECOS del último año hasta la de hoy
+  (`quincenasPorGenerar`), no «de la última en adelante»: el 2026-10-06 el job ya había creado la 1.ª de octubre y
+  agosto y septiembre quedaban en medio—, cada una con `salarioVigenteEn` sobre los movimientos del catálogo. Un aumento de
   septiembre no sube la quincena de agosto; quien no estaba en esa quincena no lleva fila. Todas quedan PENDIENTES: las
   marca pagadas una persona («Pagar la quincena», que pasa fila por fila por `pagarQuincena`, el chokepoint de INV18).
   El job `planilla-quincena-daily` solo asegura la quincena en curso; las atrasadas no las crea solo.

@@ -2222,8 +2222,8 @@ export async function updatePagoPlanilla(
 }
 
 /**
- * «Completar las que faltan» (2026-10-06): genera de una vez las quincenas que no están en el libro, de la siguiente a
- * la última generada hasta la de hoy (`quincenasPorGenerar`). Pedido de Alex (2026-10-05): «hay meses que no están con
+ * «Completar las que faltan» (2026-10-06): genera de una vez las quincenas que no están en el libro —los huecos del
+ * último año hasta la de hoy (`quincenasPorGenerar`)—. Pedido de Alex (2026-10-05): «hay meses que no están con
  * monto»: el libro se cortó en la 1.ª quincena de agosto y «Generar» solo creaba la de hoy.
  *
  * ⭐ Cada quincena con el salario que REGÍA en ella (`salarioVigenteEn`, los movimientos del catálogo con su fecha
@@ -2238,11 +2238,8 @@ export async function completarQuincenas(
   hoyISO: string,
   opciones: { soloLaDeHoy?: boolean } = {},
 ): Promise<{ quincenas: Array<{ periodo: string; quincena: 1 | 2; creadas: number }>; sinSalario: number }> {
-  const ultima = await prisma.pagoPlanilla.findFirst({
-    orderBy: [{ periodo: "desc" }, { quincena: "desc" }],
-    select: { periodo: true, quincena: true },
-  });
-  const lista = opciones.soloLaDeHoy ? [{ periodo: periodoDe(hoyISO), quincena: quincenaDe(hoyISO) }] : quincenasPorGenerar(ultima, hoyISO);
+  const generadas = await prisma.pagoPlanilla.findMany({ distinct: ["periodo", "quincena"], select: { periodo: true, quincena: true } });
+  const lista = opciones.soloLaDeHoy ? [{ periodo: periodoDe(hoyISO), quincena: quincenaDe(hoyISO) }] : quincenasPorGenerar(generadas, hoyISO);
   if (lista.length === 0) return { quincenas: [], sinSalario: 0 };
 
   const salarios = await prisma.costoRecurrente.findMany({
