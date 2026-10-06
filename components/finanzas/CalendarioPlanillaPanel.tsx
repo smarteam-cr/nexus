@@ -8,8 +8,15 @@
  *
  * ⚠ ES OTRO EJE DEL MISMO DATO, no una segunda verdad. El libro (`/historial`) agrupa
  * por mes y quincena —la lectura de "qué sale esta quincena"— y esto lo transpone: una
- * persona, su año entero. Las dos leen las mismas filas de `PagoPlanilla`; ninguna
- * escribe. Es el mismo par que la cola de cobros y el panel de cartera.
+ * persona, su año entero. Las dos leen las mismas filas de `PagoPlanilla`. Es el mismo par
+ * que la cola de cobros y el panel de cartera.
+ *
+ * ── LA TABLA SE EDITA (2026-10-06, pedido de Alex) ──────────────────────────────
+ * «Que le permita editar los espacios que estaban en blanco, para que Nexus recalcule».
+ * Una casilla «falta» se llena con lo que se pagó y queda PAGADA en la fecha de esa
+ * quincena, a nombre de quien la anota (`anotarQuincenaPagada`). Una «sin pagar» corrige
+ * su monto y, si ya pasó, se marca pagada. Las dos escriben por las MISMAS rutas que el
+ * libro, y pagar sigue pasando por el chokepoint de INV18. Una pagada no se toca.
  *
  * ── LAS CINCO CLASES, Y POR QUÉ NO SE FUNDEN ────────────────────────────────────
  * Cada casilla es una de cinco cosas y cada una pide algo distinto de quien la mira.
@@ -36,7 +43,10 @@ import { useRouter } from "next/navigation";
 import type { CalendarioPersonaDTO, CostoRecurrenteDTO } from "@/lib/cobranza";
 import type { ClaseQuincena } from "@/lib/cobranza/calendario-planilla";
 import { montoQuincena } from "@/lib/cobranza/engine";
+import { parseMontoLocal } from "@/lib/cobranza/import-core";
 import { inicioDeQuincena } from "@/lib/cobranza/planilla";
+import { fetchJson, ApiError } from "@/lib/api/fetch-json";
+import { useToast } from "@/components/ui/Toast";
 import { fmtFecha, fmtMonto } from "@/components/cobranza/format";
 import CostoForm from "@/components/cobranza/CostoForm";
 import { PageHeader, EmptyState } from "@/components/ui";
@@ -74,6 +84,15 @@ const CLASE: Record<ClaseQuincena, { label: string; cls: string; vacio: string }
 };
 
 const ORDEN_LEYENDA: ClaseQuincena[] = ["registrada", "proyectada", "faltante", "fuera", "sinDato"];
+
+type Quincena = CalendarioPersonaDTO["quincenas"][number];
+
+/** Se escribe a mano: la que falta (se anota pagada) y la anotada sin pagar (se corrige). Una pagada, nunca. */
+function seEdita(q: Quincena): boolean {
+  return q.clase === "faltante" || (q.clase === "registrada" && q.estado !== "PAGADO" && q.pagoId !== null);
+}
+
+const claveDe = (q: Pick<Quincena, "periodo" | "quincena">) => `${q.periodo}-${q.quincena}`;
 
 export default function CalendarioPlanillaPanel({
   personas,
@@ -116,8 +135,8 @@ export default function CalendarioPlanillaPanel({
       <div data-recorrido="fin.calendario.aumento" className="rounded-lg border border-line bg-surface-muted px-3 py-2 mb-3">
         <p className="text-[11px] text-fg-muted">
           Un aumento rige <strong className="text-fg-secondary">desde su fecha efectiva hacia adelante</strong>: las
-          quincenas ya anotadas conservan el monto viejo, porque es lo que se pagó. Nada de esto se guarda —
-          la proyección se recalcula sola cada vez que se abre.
+          quincenas ya anotadas conservan el monto viejo, porque es lo que se pagó. La proyección no se
+          guarda: se recalcula sola cada vez que se abre.
         </p>
       </div>
 
@@ -127,7 +146,8 @@ export default function CalendarioPlanillaPanel({
             <strong className="font-medium">
               {pendientes} quincena{pendientes === 1 ? "" : "s"} sin anotar
             </strong>{" "}
-            — ya ocurrieron, la persona estaba, y no están en el libro.
+            — ya ocurrieron, la persona estaba, y no están en el libro. Haz clic en cada casilla «falta» y
+            escribe lo que se pagó: el aguinaldo y el punto de equilibrio se recalculan solos.
           </p>
           <button
             type="button"
@@ -156,6 +176,7 @@ export default function CalendarioPlanillaPanel({
                 const c = costoDe.get(p.teamMemberId);
                 if (c) setEditando({ costo: c, desde });
               }}
+              onGuardado={() => router.refresh()}
             />
           ))}
         </div>
@@ -188,6 +209,7 @@ function FilaDePersona({
   onToggle,
   costo,
   onEditar,
+  onGuardado,
 }: {
   persona: CalendarioPersonaDTO;
   anio: number;
@@ -196,8 +218,15 @@ function FilaDePersona({
   onToggle: () => void;
   costo: CostoRecurrenteDTO | null;
   onEditar: (desde?: string) => void;
+  /** Algo se escribió en el libro: el calendario se vuelve a pedir (es derivado, no hay estado local). */
+  onGuardado: () => void;
 }) {
+  const toast = useToast();
   const moneda = p.moneda as "CRC" | "USD";
+  /** La casilla que se está escribiendo (su clave) y lo que lleva el campo. */
+  const [sel, setSel] = useState<string | null>(null);
+  const [valor, setValor] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
   /**
    * Las quincenas donde el monto CAMBIA respecto de la anterior con dato.
@@ -223,6 +252,68 @@ function FilaDePersona({
     () => new Map(p.quincenas.map((q) => [`${q.periodo}-${q.quincena}`, q])),
     [p.quincenas],
   );
+
+  // Tras guardar, el calendario vuelve del servidor: si la casilla ya no se edita (quedó pagada), se suelta sola.
+  const elegida = sel ? (porClave.get(sel) ?? null) : null;
+  const abiertaParaEditar = elegida && seEdita(elegida) ? elegida : null;
+
+  function abrir(q: Quincena) {
+    setSel(claveDe(q));
+    // La que falta trae de sugerencia la quincena del salario que regía; la anotada, su monto. Se reemplaza al escribir.
+    setValor(String(q.clase === "faltante" ? (q.sugerido ?? "") : (q.monto ?? "")));
+  }
+
+  /** «Anotar y pasar a la siguiente»: llenar los huecos de un año es una tanda, no un clic suelto. */
+  function siguienteQueFalta(q: Quincena): Quincena | null {
+    const i = p.quincenas.findIndex((x) => claveDe(x) === claveDe(q));
+    return p.quincenas.slice(i + 1).find((x) => x.clase === "faltante") ?? null;
+  }
+
+  async function guardar(comoPagada: boolean) {
+    const q = abiertaParaEditar;
+    if (!q || guardando) return;
+    const n = parseMontoLocal(valor);
+    if (n === null || !(n > 0)) {
+      toast.error("Escribe un monto mayor que cero.");
+      return;
+    }
+    const json = { "Content-Type": "application/json" };
+    setGuardando(true);
+    try {
+      if (q.clase === "faltante") {
+        await fetchJson("/api/cobranza/costos/pagos-planilla/anotar", {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({ teamMemberId: p.teamMemberId, periodo: q.periodo, quincena: q.quincena, monto: n }),
+        });
+        toast.success(`Anotada: ${fmtMonto(n, moneda)}, pagada el ${fmtFecha(q.fechaProgramada)} a tu nombre.`);
+      } else {
+        if (n !== q.monto) {
+          await fetchJson(`/api/cobranza/costos/pagos-planilla/${q.pagoId}`, {
+            method: "PATCH",
+            headers: json,
+            body: JSON.stringify({ monto: n }),
+          });
+        }
+        if (comoPagada) {
+          await fetchJson(`/api/cobranza/costos/pagos-planilla/${q.pagoId}/pagar`, {
+            method: "PUT",
+            headers: json,
+            body: JSON.stringify({ fechaPago: q.fechaProgramada }),
+          });
+        }
+        toast.success(comoPagada ? `Pagada el ${fmtFecha(q.fechaProgramada)} a tu nombre.` : "Monto corregido.");
+      }
+      const sig = siguienteQueFalta(q);
+      if (sig) abrir(sig);
+      else setSel(null);
+      onGuardado();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo guardar. Recarga la página e inténtalo de nuevo.");
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   return (
     <section data-recorrido="fin.calendario.persona" className="rounded-xl border border-line bg-surface overflow-hidden">
@@ -312,11 +403,10 @@ function FilaDePersona({
               </span>
               acá cambia el monto
             </span>
-            {costo && (
-              <span className="text-[10px] text-fg-muted/80">
-                · clic en una quincena proyectada para fijar un aumento desde ahí
-              </span>
-            )}
+            <span className="text-[10px] text-fg-muted/80">
+              · clic en una casilla «falta» o «sin pagar» para escribir el monto
+              {costo && ", o en una proyectada para fijar un aumento desde ahí"}
+            </span>
           </div>
 
           {/* Doce meses × dos quincenas. Una línea por casilla: el monto y nada más. */}
@@ -344,10 +434,13 @@ function FilaDePersona({
                         moneda={moneda}
                         esHoy={cel.fechaProgramada === todayISO}
                         escalon={escalones.get(`${periodo}-${q}`) ?? null}
-                        onFijarAumento={
-                          costo && cel.clase === "proyectada"
-                            ? () => onEditar(inicioDeQuincena(periodo, q))
-                            : null
+                        elegida={abiertaParaEditar !== null && claveDe(abiertaParaEditar) === claveDe(cel)}
+                        onClic={
+                          seEdita(cel)
+                            ? () => abrir(cel)
+                            : costo && cel.clase === "proyectada"
+                              ? () => onEditar(inicioDeQuincena(periodo, q))
+                              : null
                         }
                       />
                     );
@@ -356,6 +449,19 @@ function FilaDePersona({
               ))}
             </div>
           </div>
+
+          {abiertaParaEditar && (
+            <EditorDeQuincena
+              q={abiertaParaEditar}
+              moneda={moneda}
+              todayISO={todayISO}
+              valor={valor}
+              onValor={setValor}
+              guardando={guardando}
+              onGuardar={guardar}
+              onCancelar={() => setSel(null)}
+            />
+          )}
 
           <p className="text-[11px] text-fg-muted">
             {p.registradas} en el libro · {p.proyectadas} proyectadas
@@ -371,20 +477,122 @@ function FilaDePersona({
   );
 }
 
+const MES_LARGO = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/**
+ * El campo de la casilla elegida, debajo de la grilla: el monto con su moneda y lo que va a pasar al guardar, dicho
+ * antes de guardar. Enter hace lo principal; Esc suelta la casilla.
+ */
+function EditorDeQuincena({
+  q,
+  moneda,
+  todayISO,
+  valor,
+  onValor,
+  guardando,
+  onGuardar,
+  onCancelar,
+}: {
+  q: Quincena;
+  moneda: "CRC" | "USD";
+  todayISO: string;
+  valor: string;
+  onValor: (v: string) => void;
+  guardando: boolean;
+  onGuardar: (comoPagada: boolean) => void;
+  onCancelar: () => void;
+}) {
+  const falta = q.clase === "faltante";
+  const yaPaso = q.fechaProgramada <= todayISO;
+  const mes = MES_LARGO[Number(q.periodo.slice(5, 7)) - 1] ?? q.periodo;
+  const titulo = `${q.quincena === 1 ? "1.ª" : "2.ª"} quincena de ${mes}`;
+  const principal = falta ? "Anotar como pagada" : yaPaso ? "Guardar como pagada" : "Guardar el monto";
+
+  return (
+    <div className="rounded-lg border border-brand/40 bg-surface-muted px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="min-w-[220px] flex-1">
+        <p className="text-xs font-medium text-fg">{titulo}</p>
+        <p className="text-[11px] text-fg-muted">
+          {falta
+            ? `No está en el libro. Escribe lo que se pagó: queda pagada el ${fmtFecha(q.fechaProgramada)}, a tu nombre.`
+            : yaPaso
+              ? `Está en el libro sin pagar. Corrige el monto si hace falta y márcala pagada el ${fmtFecha(q.fechaProgramada)}.`
+              : "Todavía no llega: puedes ajustar el monto. Se paga desde el libro cuando salga la plata."}
+        </p>
+      </div>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onGuardar(falta || yaPaso);
+        }}
+      >
+        <label className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 focus-within:border-brand">
+          <span className="text-[11px] text-fg-muted">{moneda === "CRC" ? "₡" : "$"}</span>
+          <input
+            // Una casilla nueva, un campo nuevo: la sugerencia viene seleccionada y se reemplaza al escribir.
+            key={claveDe(q)}
+            autoFocus
+            onFocus={(e) => e.currentTarget.select()}
+            inputMode="decimal"
+            aria-label={`Monto de la ${titulo}`}
+            value={valor}
+            onChange={(e) => onValor(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") onCancelar();
+            }}
+            className="w-28 bg-transparent text-xs tabular-nums text-fg outline-none"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={guardando}
+          className="text-[11px] px-2.5 py-1 rounded-md bg-brand text-primary-fg font-medium hover:bg-brand-dark disabled:opacity-50"
+        >
+          {guardando ? "Guardando…" : principal}
+        </button>
+        {!falta && yaPaso && (
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={() => onGuardar(false)}
+            className="text-[11px] px-2 py-1 rounded-md border border-line text-fg-secondary hover:bg-surface-hover disabled:opacity-50"
+          >
+            Solo corregir el monto
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onCancelar}
+          className="text-[11px] px-2 py-1 rounded-md text-fg-muted hover:text-fg-secondary"
+        >
+          Cancelar
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function Casilla({
   cel,
   moneda,
   esHoy,
   escalon,
-  onFijarAumento,
+  elegida,
+  onClic,
 }: {
-  cel: CalendarioPersonaDTO["quincenas"][number];
+  cel: Quincena;
   moneda: "CRC" | "USD";
   esHoy: boolean;
   /** El monto cambió respecto de la quincena anterior, y hacia dónde. null = venía igual. */
   escalon: "sube" | "baja" | null;
-  /** Fijar un aumento desde esta quincena. null = la casilla no es accionable. */
-  onFijarAumento: (() => void) | null;
+  /** Es la que se está escribiendo abajo. */
+  elegida: boolean;
+  /** Escribir su monto (falta / sin pagar) o fijar un aumento desde ella (proyectada). null = no es accionable. */
+  onClic: (() => void) | null;
 }) {
   const c = CLASE[cel.clase];
 
@@ -401,18 +609,24 @@ function Casilla({
     cel.salarioMensual !== null ? ` · de ${fmtMonto(cel.salarioMensual, moneda)} al mes` : ""
   }${cel.fechaPago ? ` · pagada el ${fmtFecha(cel.fechaPago)}` : ""}${
     escalon ? ` · el monto ${escalon} desde acá` : ""
-  }${onFijarAumento ? " — clic para fijar un aumento desde acá" : ""}`;
+  }${
+    onClic
+      ? cel.clase === "proyectada"
+        ? " — clic para fijar un aumento desde acá"
+        : " — clic para escribir el monto"
+      : ""
+  }`;
 
   const clases = [
     "rounded-[5px] border px-1 py-1 text-center leading-tight transition-colors",
     c.cls,
-    esHoy ? "ring-1 ring-brand" : "",
+    elegida ? "ring-2 ring-brand" : esHoy ? "ring-1 ring-brand" : "",
     /* El escalón va en negrita + una flecha, NO con un borde de color.
        ⚠ `border-l-brand` se veía gris: `border-line` fija el color de los CUATRO lados y,
        con la misma especificidad, gana el que la hoja generada pone último. Una flecha no
        compite con nada — y encima dice hacia DÓNDE cambió, que un borde no puede. */
     escalon ? "font-semibold text-fg" : "",
-    onFijarAumento ? "cursor-pointer hover:border-brand hover:bg-surface-hover" : "",
+    onClic ? "cursor-pointer hover:border-brand hover:bg-surface-hover" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -431,7 +645,7 @@ function Casilla({
     </>
   );
 
-  if (!onFijarAumento) {
+  if (!onClic) {
     return (
       <div title={titulo} className={clases}>
         {contenido}
@@ -439,7 +653,7 @@ function Casilla({
     );
   }
   return (
-    <button type="button" title={titulo} onClick={onFijarAumento} className={`${clases} w-full`}>
+    <button type="button" title={titulo} onClick={onClic} aria-pressed={elegida} className={`${clases} w-full`}>
       {contenido}
     </button>
   );

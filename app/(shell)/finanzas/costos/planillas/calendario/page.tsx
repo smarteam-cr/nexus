@@ -13,8 +13,10 @@
  *   · `planillas/historial/` lo que se pagó, agrupado por mes y quincena
  *   · `planillas/calendario/` lo mismo transpuesto: una persona, sus 24 quincenas
  *
- * Ninguna de las tres escribe planilla. Esta además NO materializa: las quincenas futuras
- * se calculan al leer y no se guardan, así que un aumento no obliga a reescribir filas.
+ * Es la ENTRADA de «Planilla» en el menú (2026-10-06): Alex pidió la tabla donde ve las
+ * quincenas que faltan y las llena. Lo que escribe va al libro por las mismas rutas que el
+ * historial (ver CalendarioPlanillaPanel). Las quincenas FUTURAS no se materializan: se
+ * calculan al leer, así que un aumento no obliga a reescribir filas.
  */
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -57,23 +59,35 @@ export default async function CalendarioPlanillaPage({
     <div className={SHELL_DEFAULT}>
       <div data-recorrido="fin.calendario.anio" className="flex flex-wrap items-center gap-2 mb-3">
         <Link
-          href="/finanzas/costos/planillas"
-          className={buttonVariants({ variant: "secondary", size: "sm" })}
-        >
-          ← Planillas
-        </Link>
-        <Link
           href={`/finanzas/costos/planillas/calendario?anio=${anio - 1}`}
           className={buttonVariants({ variant: "secondary", size: "sm" })}
         >
-          {anio - 1}
+          ← {anio - 1}
         </Link>
         <Link
           href={`/finanzas/costos/planillas/calendario?anio=${anio + 1}`}
           className={buttonVariants({ variant: "secondary", size: "sm" })}
         >
-          {anio + 1}
+          {anio + 1} →
         </Link>
+        {/* El menú abre acá: el resto de la planilla queda a un clic. */}
+        <span className="ml-auto flex flex-wrap gap-2">
+          <Link href="/finanzas/costos/planillas" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+            Salarios
+          </Link>
+          <Link href="/finanzas/costos/planillas/historial" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+            Historial
+          </Link>
+          <Link href="/finanzas/costos/aguinaldo" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+            Aguinaldo
+          </Link>
+          <Link
+            href="/finanzas/costos/comisiones-vendedor"
+            className={buttonVariants({ variant: "secondary", size: "sm" })}
+          >
+            Comisiones de vendedor
+          </Link>
+        </span>
       </div>
       <CalendarioPlanillaPanel
         personas={personas}

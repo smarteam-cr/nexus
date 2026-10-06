@@ -212,6 +212,41 @@ describe("una persona que se fue", () => {
   });
 });
 
+describe("la tabla que se edita (2026-10-06, pedido de Alex)", () => {
+  it("la que falta trae de SUGERENCIA la quincena del salario que regía, sin volverse monto", () => {
+    const cal = calendarioDePersona(
+      [pago("2026-08", 1, 918)],
+      [mov("2026-01-01", "ALTA", 1836), mov("2026-08-15", "BAJA", 1836)],
+      2026,
+      "2026-08-21",
+    );
+    const ene = cal.quincenas[0]!;
+    expect(ene.sugerido).toBe(918);
+    // Sigue siendo un hueco: la sugerencia es para el campo, no suma al total ni cambia la clase.
+    expect(ene.monto).toBeNull();
+    expect(cal.totalRegistrado).toBe(918);
+  });
+
+  it("solo la que falta lleva sugerencia: la proyectada ya tiene su monto y la anotada el suyo", () => {
+    const cal = calendarioDePersona(PAGOS_ALEJANDRA, MOVS_ALEJANDRA, 2026, "2026-08-21");
+    expect(cal.quincenas.filter((x) => x.sugerido !== null)).toHaveLength(0);
+  });
+
+  it("la anotada lleva el id de su fila del libro, para poder corregirla o pagarla desde la casilla", () => {
+    const cal = calendarioDePersona(
+      [{ ...pago("2026-08", 1, 500, "PENDIENTE"), id: "fila-ago-1" }],
+      MOVS_ALEJANDRA,
+      2026,
+      "2026-08-21",
+    );
+    const ago1 = cal.quincenas.find((x) => x.periodo === "2026-08" && x.quincena === 1)!;
+    expect(ago1.pagoId).toBe("fila-ago-1");
+    expect(ago1.estado).toBe("PENDIENTE");
+    // Las que no están en el libro no tienen fila que tocar.
+    expect(cal.quincenas.filter((x) => x.clase !== "registrada").every((x) => x.pagoId === null)).toBe(true);
+  });
+});
+
 describe("aritmética de la quincena", () => {
   it("un salario impar reparte el centavo sin perderlo", () => {
     const cal = calendarioDePersona([], [mov("2026-01-01", "ALTA", 1000.01)], 2026, "2026-01-01");

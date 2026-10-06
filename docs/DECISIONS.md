@@ -5087,6 +5087,14 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   número de factura que alguien anotó y de una sola cuota: medido el 2026-10-06, los 6 casos de «montos distintos» eran
   pares por cercanía y varios del doble (una factura de dos meses contra una cuota): ahí el botón habría hecho daño.
   Lo que lo revertiría: que dirección decida que la cuota manda sobre la factura.
+- **El calendario de planilla se edita (pedido de Alex, 2026-10-06).** «Planilla» en el menú abre el calendario. Una
+  casilla «falta» (la quincena ya pasó, la persona estaba y no está en el libro) se llena con lo que se pagó y queda
+  PAGADA en la fecha de esa quincena, a nombre de quien la anota (`anotarQuincenaPagada`: crea la fila con la moneda del
+  salario que regía y la paga por `pagarQuincena`, el chokepoint de INV18). Una «sin pagar» corrige su monto y, si ya
+  pasó, se paga en su fecha. Una pagada no se toca. El aguinaldo y el punto de equilibrio leen el libro: se recalculan
+  solos. *Por qué pagada y no pendiente:* Alex llena lo que YA se pagó; dejarla pendiente obligaba a un segundo paso por
+  casilla en el historial. Lo que lo revertiría: querer revisar cada quincena antes de darla por pagada (entonces nace
+  PENDIENTE y se paga desde el libro).
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 

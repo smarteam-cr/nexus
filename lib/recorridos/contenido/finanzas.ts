@@ -369,7 +369,7 @@ export const FINANZAS_PLANILLA_CALENDARIO = pantalla({
   ejemplo: "/finanzas/costos/planillas/calendario",
   roles: DIRECCION,
   pasos: [
-    { ancla: "fin.calendario.anio", titulo: "El año", texto: "Vuelve a Planilla o cambia de año.", lado: "bottom-start" },
+    { ancla: "fin.calendario.anio", titulo: "El año", texto: "Salarios, historial, aguinaldo y comisiones; o cambia de año.", lado: "bottom-start" },
     {
       ancla: "fin.calendario.aumento",
       titulo: "Cómo funciona un aumento",
@@ -379,13 +379,13 @@ export const FINANZAS_PLANILLA_CALENDARIO = pantalla({
     {
       ancla: "fin.calendario.pendientes",
       titulo: "Quincenas sin anotar",
-      texto: "Las que ya pasaron y no tienen pago registrado. Puedes ver solo a esas personas.",
+      texto: "Las que ya pasaron y no tienen pago registrado. Haz clic en cada una y escribe lo que se pagó: Nexus recalcula el aguinaldo.",
       lado: "bottom-start",
     },
     {
       ancla: "fin.calendario.persona",
       titulo: "El año de cada persona",
-      texto: "Ábrela para ver sus 24 quincenas y editar su salario desde una fecha.",
+      texto: "Ábrela para ver sus 24 quincenas, llenar las que faltan y editar su salario desde una fecha.",
       lado: "top-start",
     },
   ],

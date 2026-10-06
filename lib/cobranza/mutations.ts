@@ -2304,6 +2304,88 @@ export async function completarQuincenas(
 }
 
 /**
+ * Anotar desde el calendario una quincena que FALTA (2026-10-06, pedido de Alex: «editar los espacios en blanco para
+ * que Nexus recalcule»). Una quincena que ya pasó y no está en el libro se anota con el monto que escribe quien
+ * supervisa, y queda PAGADA en la fecha de esa quincena, a su nombre (decisión de Elías: está anotando algo que ya se
+ * pagó). El aguinaldo y el punto de equilibrio se recalculan solos: los dos leen el libro.
+ *
+ * Lo que NO decide el cliente: la moneda (la del salario que regía en esa quincena) ni el nombre (el de la persona).
+ * Una quincena que todavía no llega no se anota acá. Pagarla pasa por `pagarQuincena`, el chokepoint de INV18.
+ */
+export async function anotarQuincenaPagada(
+  data: { teamMemberId: string; periodo: string; quincena: 1 | 2; monto: number },
+  byEmail: string,
+  hoyISO: string,
+): Promise<{ id: string }> {
+  const dia = quincenasDelPeriodo(data.periodo).find((q) => q.quincena === data.quincena);
+  if (!dia) throw new CobranzaError("Período o quincena inválidos.", 400);
+  if (dia.fechaProgramada > hoyISO) {
+    throw new CobranzaError("Esa quincena todavía no llegó: se anota cuando se pague.", 409);
+  }
+  const [persona, salarios, existe] = await Promise.all([
+    prisma.teamMember.findUnique({ where: { id: data.teamMemberId }, select: { name: true } }),
+    prisma.costoRecurrente.findMany({
+      where: { categoria: "SALARIO", teamMemberId: data.teamMemberId },
+      select: {
+        monto: true,
+        moneda: true,
+        activo: true,
+        finalizadoEl: true,
+        movimientos: { select: { tipo: true, fechaEfectiva: true, monto: true, montoAnterior: true, moneda: true } },
+      },
+    }),
+    prisma.pagoPlanilla.findFirst({
+      where: { sujetoTeamMemberId: data.teamMemberId, periodo: data.periodo, quincena: data.quincena },
+      select: { id: true },
+    }),
+  ]);
+  if (!persona) throw new CobranzaError("Esa persona no existe.", 404);
+  if (existe) throw new CobranzaError("Esa quincena ya está anotada: recarga la página.", 409);
+  const movimientos: MovimientoDeSalario[] = salarios.flatMap((s) =>
+    s.movimientos.map((m) => ({
+      tipo: m.tipo,
+      fechaEfectiva: m.fechaEfectiva.toISOString().slice(0, 10),
+      monto: Number(m.monto),
+      montoAnterior: m.montoAnterior === null ? null : Number(m.montoAnterior),
+      moneda: m.moneda as string,
+    })),
+  );
+  const actual = salarios.find((s) => s.activo && s.finalizadoEl === null);
+  const vigente =
+    movimientos.length > 0
+      ? salarioVigenteEn(movimientos, dia.fechaProgramada)
+      : actual
+        ? { monto: Number(actual.monto), moneda: actual.moneda as string }
+        : null;
+  if (!vigente) throw new CobranzaError("Esa persona no estaba en planilla en esa quincena.", 409);
+
+  let id: string;
+  try {
+    const fila = await prisma.pagoPlanilla.create({
+      data: {
+        sujetoTeamMemberId: data.teamMemberId,
+        sujetoNombre: persona.name,
+        periodo: data.periodo,
+        quincena: data.quincena,
+        fechaProgramada: dayUTC(dia.fechaProgramada),
+        monto: Math.round(data.monto * 100) / 100,
+        moneda: vigente.moneda as "CRC" | "USD",
+      },
+      select: { id: true },
+    });
+    id = fila.id;
+  } catch (e) {
+    // Otra pestaña (o el job de las 6:00) la creó entre la lectura y el create: la llave única lo frena.
+    if ((e as { code?: string }).code === "P2002") {
+      throw new CobranzaError("Esa quincena ya está anotada: recarga la página.", 409);
+    }
+    throw e;
+  }
+  await pagarQuincena(id, { fechaPago: dia.fechaProgramada }, byEmail);
+  return { id };
+}
+
+/**
  * «Pagar la quincena» (2026-10-06): todas las filas PENDIENTES de una quincena, con la misma fecha. Cada una pasa por
  * `pagarQuincena`, el chokepoint de INV18: esto no escribe `PAGADO` por su cuenta, solo ahorra un clic por persona.
  * Si una falla, las anteriores quedan pagadas (cada una es su propia transacción) y el error dice cuántas alcanzó.

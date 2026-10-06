@@ -40,6 +40,8 @@ import { quincenasDelPeriodo, type Periodo } from "./planilla";
 
 /** Una quincena ya registrada en el libro. */
 export interface PagoRegistrado {
+  /** La fila del libro (`PagoPlanilla.id`), para poder corregirla desde el calendario. */
+  id?: string;
   periodo: string;
   quincena: number;
   fechaProgramada: string;
@@ -101,6 +103,13 @@ export interface QuincenaDelCalendario {
   salarioMensual: number | null;
   /** La quincena ya ocurrió según `hoyISO`. */
   pasada: boolean;
+  /** La fila del libro, en una `registrada` (para corregirla mientras está pendiente). null en las demás. */
+  pagoId: string | null;
+  /**
+   * Lo que correspondía según el salario que regía, en una `faltante` (2026-10-06): el monto con que se ofrece anotarla.
+   * Es una SUGERENCIA para el campo, no un monto: la casilla sigue diciendo «falta» hasta que alguien la anota.
+   */
+  sugerido: number | null;
 }
 
 export interface CalendarioDePersona {
@@ -217,6 +226,8 @@ export function calendarioDePersona(
         fechaPago: reg.fechaPago,
         salarioMensual: null,
         pasada: reg.fechaProgramada <= hoyISO,
+        pagoId: reg.id ?? null,
+        sugerido: null,
       };
     }
 
@@ -252,6 +263,8 @@ export function calendarioDePersona(
       fechaPago: null,
       salarioMensual: clase === "proyectada" ? vigente!.monto : null,
       pasada,
+      pagoId: null,
+      sugerido: clase === "faltante" ? montoQuincena(vigente!.monto, quincena) : null,
     };
   });
 

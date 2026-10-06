@@ -1836,6 +1836,7 @@ export async function loadCalendarioPlanilla(
       where: { periodo: { gte: desde, lte: hasta }, sujetoTeamMemberId: { not: null } },
       orderBy: [{ periodo: "asc" }, { quincena: "asc" }],
       select: {
+        id: true,
         sujetoTeamMemberId: true, sujetoNombre: true, periodo: true, quincena: true,
         fechaProgramada: true, monto: true, moneda: true, estado: true, fechaPago: true,
       },
@@ -1891,6 +1892,7 @@ export async function loadCalendarioPlanilla(
     nombrePorPersona.set(id, p.sujetoNombre);
     const previos = pagosPorPersona.get(id) ?? [];
     previos.push({
+      id: p.id,
       periodo: p.periodo,
       quincena: p.quincena,
       fechaProgramada: isoDay(p.fechaProgramada)!,

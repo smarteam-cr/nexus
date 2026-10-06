@@ -722,6 +722,15 @@ export const planillaPagarSchema = z.object({
 export const planillaPagarQuincenaSchema = planillaGenerarSchema.merge(planillaPagarSchema);
 
 /**
+ * Anotar desde el calendario una quincena que falta, ya pagada (2026-10-06). Sin moneda ni nombre: los pone el servidor
+ * (la moneda del salario que regía, el nombre de la persona).
+ */
+export const planillaAnotarSchema = planillaGenerarSchema.extend({
+  teamMemberId: idDeBase,
+  monto,
+});
+
+/**
  * Editar una quincena. Solo mientras está PENDIENTE — un PAGADO es intocable
  * (la mutación lo frena con 409). Sin `estado` a propósito: pagar tiene su
  * propia ruta, que es el chokepoint de INV18.

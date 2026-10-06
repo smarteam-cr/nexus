@@ -292,13 +292,14 @@ export const APP_NAV: readonly NavItemConfig[] = [
       { href: "/finanzas/gastos", label: "Gastos del mes", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
       { href: "/finanzas/recurrentes", label: "Recurrentes", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
       { href: "/finanzas/tarjetas", label: "Tarjetas", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
-      // ⚠ UNA sola entrada de planilla, solo para Super Admin. Adentro conviven lo que cuesta por mes (configuración) y lo
+      // ⚠ UNA sola entrada de planilla, solo para Super Admin. Abre en el CALENDARIO (2026-10-06, pedido de Alex: la tabla
+      // donde ve las quincenas que faltan y las llena). Adentro conviven lo que cuesta por mes (`planillas`, «Salarios»), lo
       // que se pagó de verdad (`planillas/historial`, botón «Historial»), y desde ahí se llega al aguinaldo y a las
       // comisiones de vendedor, que viven con la planilla. Esas hojas hijas NO se declaran acá a propósito: si
       // estuvieran, el prefijo las marcaría activas dos veces y `nav-children.test` lo frena; con `match` queda
       // iluminada la planilla mientras se las mira.
       {
-        href: "/finanzas/costos/planillas",
+        href: "/finanzas/costos/planillas/calendario",
         label: "Planilla",
         section: "Costos y gastos",
         costosOnly: true,

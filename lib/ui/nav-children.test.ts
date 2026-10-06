@@ -127,7 +127,7 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(bloques[0].items.map((i) => i.href)).toEqual(["/finanzas/pendientes"]);
     const hrefs = bloques.flatMap((b) => b.items.map((i) => i.href));
     expect(hrefs).not.toContain("/finanzas/equilibrio");
-    expect(hrefs).not.toContain("/finanzas/costos/planillas");
+    expect(hrefs).not.toContain("/finanzas/costos/planillas/calendario");
   });
 
   it("quien supervisa: Mi área · Ingresos · Costos y gastos · Cuadre · Reportes, sin la entrada de quien registra", () => {
@@ -136,7 +136,7 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(bloques[0].items.map((i) => i.href)).toEqual(["/finanzas/supervision", "/finanzas/cierre"]);
     const hrefs = bloques.flatMap((b) => b.items.map((i) => i.href));
     expect(hrefs).not.toContain("/finanzas/pendientes");
-    expect(hrefs).toContain("/finanzas/costos/planillas");
+    expect(hrefs).toContain("/finanzas/costos/planillas/calendario");
     expect(hrefs).toContain("/finanzas/reportes");
   });
 
