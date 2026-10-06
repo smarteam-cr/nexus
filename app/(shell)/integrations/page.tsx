@@ -12,6 +12,9 @@ import GoogleMeetCard from "./GoogleMeetCard";
 import ClaudeCard, { type GastoDeClaude } from "./ClaudeCard";
 import OdooCard, { type EstadoDeOdoo } from "./OdooCard";
 import MercuryCard, { type EstadoDeMercury } from "./MercuryCard";
+import TipoDeCambioCard from "./TipoDeCambioCard";
+import { estadoDelTipoDeCambio } from "@/lib/finanzas/tipo-cambio-server";
+import { crDateParts } from "@/lib/jobs/time";
 import { estadoDeLaCopia, type EstadoDeLaCopia } from "./estado-de-la-copia";
 import JobsSemaforo from "./JobsSemaforo";
 import { gastoResumidoDeClaude } from "@/lib/ai/gasto-en-integraciones";
@@ -194,7 +197,7 @@ export default async function IntegrationsPage({
           .then((c) => estadoDeLaCopia(motivoApagado("mercury-espejo-daily", process.env), c)),
       ]);
 
-  const [hubspot, google, googleMeetCount, systemCfg] = await Promise.all([
+  const [hubspot, google, googleMeetCount, systemCfg, tipoDeCambio, puedeVerHistoricoDelTC] = await Promise.all([
     getHubspotSystemStatus(),
     getGoogleStatus(),
     prisma.firefliesSession.count({ where: { source: "google_meet" } }),
@@ -202,6 +205,9 @@ export default async function IntegrationsPage({
       where: { id: "system" },
       select: { smarteamLogoUrl: true, hubspotLogoUrl: true, insiderLogoUrl: true },
     }),
+    // El tipo de cambio del BCCR (2026-10-06): sin gate de costos, una tasa publicada no es plata de nadie.
+    estadoDelTipoDeCambio(),
+    can(ctx.teamMember, "cobranza", "read"),
   ]);
   const smarteamLogoUrl = systemCfg?.smarteamLogoUrl ?? null;
   const hubspotLogoUrl = systemCfg?.hubspotLogoUrl ?? null;
@@ -257,6 +263,16 @@ export default async function IntegrationsPage({
               estado de una conexión no sea un booleano: responde, copia todo y no sirve para
               nada mientras sus clientes no estén emparejados. */}
           <MercuryCard estado={estadoDeMercury} copia={copiaDeMercury} />
+
+          {/* Tipo de cambio — la tasa de cada día del Banco Central, con la que Nexus pasa colones a dólares
+              (2026-10-05). Su job corría sin tarjeta: si un día no llegaba la tasa, nadie lo veía. */}
+          <TipoDeCambioCard
+            estado={tipoDeCambio}
+            ultimaCorrida={jobs.find((j) => j.key === "tipo-cambio-daily")?.resultado ?? null}
+            motivoApagado={motivoApagado("tipo-cambio-daily", process.env)}
+            hoyISO={crDateParts(new Date()).dateKey}
+            puedeVerHistorico={puedeVerHistoricoDelTC}
+          />
         </div>
       </section>
 

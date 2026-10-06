@@ -133,6 +133,7 @@ export default function PuntoDeEquilibrio({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        recorrido="finanzas-equilibrio"
         title={`Punto de equilibrio · ${r.anio}`}
         description="Si lo que se factura alcanza para lo que cuesta operar, cómo se convierte la venta en plata y qué tan firmes son los números. Para revisarlo entre RevOps, el CFO y el CEO."
         action={

@@ -176,8 +176,9 @@ export function itemsDeCierre(
       listo: planilla.listo,
       bloquea: true,
       quien: nombres.supervisa,
-      accion: "Ir a Planilla",
-      href: "/finanzas/costos/planillas",
+      // Al historial y no a la configuración: ahí se generan y se pagan las quincenas (2026-10-06).
+      accion: "Ir al historial de planilla",
+      href: "/finanzas/costos/planillas/historial",
     },
     desdeNexus
       ? {

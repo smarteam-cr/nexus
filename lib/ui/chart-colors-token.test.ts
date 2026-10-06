@@ -68,21 +68,22 @@ describe("el gris del gráfico y el token de la leyenda son el mismo", () => {
 });
 
 describe("ningún color del tema puede aterrizar en HTML desde JS", () => {
-  const CURVA = readFileSync(
-    join(process.cwd(), "components", "finanzas", "equilibrio", "CurvaEquilibrio.tsx"),
+  /* Desde el rediseño del punto de equilibrio (2026-10-05) el gráfico es SVG y HTML, sin canvas: TODO lo que pinta es
+     un nodo que se hidrata. La curva vieja (CurvaEquilibrio, con el swatch que costó la pantalla) se borró el 10-06; la
+     regla sigue, ahora sobre el gráfico nuevo. */
+  const MES_A_MES = readFileSync(
+    join(process.cwd(), "components", "finanzas", "equilibrio", "MesAMes.tsx"),
     "utf8",
   );
 
-  it("el swatch de la leyenda usa el mapa CSS, no el de hex", () => {
-    // Es el único nodo server-rendered de la app que lleva un color del tema. Si alguien
-    // vuelve a poner COLOR[...] acá, vuelve el mismatch — y vuelve para todo el mundo.
-    const swatch = CURVA.slice(CURVA.indexOf("aria-hidden"));
-    expect(swatch).toContain("COLOR_CSS[s.key]");
-    expect(swatch.slice(0, 600)).not.toMatch(/borderTopColor:\s*COLOR\[/);
-    expect(swatch.slice(0, 600)).not.toMatch(/background:\s*COLOR\[/);
+  it("el gráfico del punto de equilibrio no lee colores del hook", () => {
+    // Si alguien vuelve a traer la paleta de JS acá, vuelve el mismatch — y vuelve para todo el mundo.
+    expect(MES_A_MES).not.toMatch(/useChartColors/);
   });
 
-  it("y el color que depende del tema entra como variable CSS", () => {
-    expect(CURVA).toContain('egresos: "var(--fg-muted)"');
+  it("cada serie entra como variable CSS, también la que depende del tema", () => {
+    expect(MES_A_MES).toContain('color: "var(--serie-1)"');
+    expect(MES_A_MES).toContain('color: "var(--fg-muted)"');
+    expect(MES_A_MES).not.toMatch(/color:\s*"#[0-9a-fA-F]{3,8}"/);
   });
 });

@@ -48,6 +48,7 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 | ✅ | **Gasto sin Excel** | El punto de equilibrio lee los gastos de Nexus desde octubre; Mercury en el punto de equilibrio y en «Actualizar» | — |
 | ✅ | **Punto de equilibrio para dirección** | La página rehecha para RevOps, el CFO y el CEO (ver abajo) | tabla `DecisionFinanzas` |
 | ✅ | **Tipo de cambio del BCCR** | La tasa de cada día, del Banco Central, y su histórico (ver abajo) | tabla `TipoCambioDia` |
+| ✅ | **Planilla al día y monto de la factura** | Completar las quincenas que faltan, pagar una quincena entera, corregir un monto pendiente; «Usar el monto de la factura» en la conciliación (ver DECISIONS) | — |
 
 ## Cómo funciona la revisión
 
@@ -105,8 +106,8 @@ en vista Dirección puede abrir cualquier página por su enlace: solo no la tien
 - «¿Y si…?» simula lo que queda del año (facturar más o menos por mes, contar lo estimado de los aliados, un costo nuevo)
   sin guardar nada.
 - Los componentes viejos (EquilibrioClient, CurvaEquilibrio, TablaMeses, InconsistenciasPanel, DesgloseIngresos,
-  EstructuraCostos, ConfiabilidadDato) quedan sin uso; se borran cuando la otra sesión termine lo que tiene abierto en
-  ellos. RendimientoCobranza sigue en uso, dentro de «Ver la cobranza contra el Excel».
+  EstructuraCostos, ConfiabilidadDato) se borraron el 2026-10-06. RendimientoCobranza sigue en uso, dentro de «Ver la
+  cobranza contra el Excel».
 
 ## Cómo funciona el tipo de cambio (2026-10-05)
 

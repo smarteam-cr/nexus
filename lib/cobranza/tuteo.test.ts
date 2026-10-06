@@ -65,7 +65,7 @@ describe("⛔ Cobranza y Finanzas hablan en tuteo, nunca en voseo", () => {
     expect(DE_COBRANZA_Y_FINANZAS.length).toBeGreaterThan(200);
     for (const rel of [
       "components/cobranza/NuevaEmpresaModal.tsx",
-      "components/finanzas/equilibrio/EquilibrioClient.tsx",
+      "components/finanzas/equilibrio/PuntoDeEquilibrio.tsx",
       "app/(shell)/cobranza/importar/page.tsx",
       "app/api/cobranza/cuentas/crear-empresa/route.ts",
       "lib/cobranza/agents/borrador-cobro.ts",

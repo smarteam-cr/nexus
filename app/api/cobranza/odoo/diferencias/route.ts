@@ -4,7 +4,8 @@
  *          le propone a quien mira.
  *   POST → «está bien así» fila por fila (`marcar`) y su «Deshacer» (`deshacer-marcas`); cerrar a mano una factura
  *          soltada que nada puede verificar (`resolver-liberacion`, «Ya está anulada») y su «Deshacer»
- *          (`reabrir-liberacion`).
+ *          (`reabrir-liberacion`); y «Usar el monto de la factura» (`usar-monto-factura`, 2026-10-06), que corrige UNA
+ *          cuota en Nexus con el monto de su factura de Odoo.
  *
  * Acceso: leer, guardCobranzaAccess (ADMIN + SUPER_ADMIN), el mismo gate que el resto del módulo. ⚠ Todo lo que marca
  * o deshace pide EDICIÓN (guardCobranzaEditor), igual que «Ya está anulada» desde el principio: saca cosas de la lista
@@ -25,12 +26,14 @@ import {
   reabrirLiberacion,
   resolverLiberacion,
   ultimosMotivos,
+  usarMontoDeLaFactura,
 } from "@/lib/cobranza/odoo/servicio";
 import {
   odooDeshacerMarcasSchema,
   odooMarcarFilasSchema,
   odooReabrirLiberacionSchema,
   odooResolverLiberacionSchema,
+  odooUsarMontoFacturaSchema,
 } from "@/lib/cobranza/schema";
 
 export const dynamic = "force-dynamic";
@@ -80,6 +83,11 @@ export async function POST(req: NextRequest) {
       if (!p.success) return invalido(p.error.issues);
       await reabrirLiberacion(p.data, editor.user.email);
       return NextResponse.json({ ok: true });
+    }
+    if (accion === "usar-monto-factura") {
+      const p = odooUsarMontoFacturaSchema.safeParse(raw);
+      if (!p.success) return invalido(p.error.issues);
+      return NextResponse.json(await usarMontoDeLaFactura(p.data, editor.user.email));
     }
     return NextResponse.json({ error: "Acción desconocida." }, { status: 400 });
   } catch (e) {

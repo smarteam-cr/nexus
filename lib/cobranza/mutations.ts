@@ -79,7 +79,8 @@ import type {
   partnerPatchSchema,
 } from "./schema";
 import { montoQuincena } from "./engine";
-import { quincenasDelPeriodo } from "./planilla";
+import { periodoDe, quincenaDe, quincenasDelPeriodo, quincenasPorGenerar } from "./planilla";
+import { salarioVigenteEn, type MovimientoDeSalario } from "./calendario-planilla";
 import { buildCarteraEngineInput, loadComisionesVendedor } from "./queries";
 import { huellaDeBorrado, huellaEditadaPorOtro, mismaPersona } from "@/lib/finanzas/revision";
 import { ESTADO_COBRO_LABEL, normalizePartner } from "./schema";
@@ -1021,6 +1022,49 @@ export async function cambiarEstadoCobro(
   byEmail: string,
 ) {
   return prisma.$transaction((tx) => cambiarEstadoCobroTx(tx, cobroId, patch, byEmail));
+}
+
+/**
+ * «Usar el monto de la factura» (2026-10-06): la cuota toma el monto neto de SU factura de Odoo. Es la ÚNICA salida al
+ * 409 de «el monto solo se edita mientras el cobro está PROGRAMADO» del chokepoint, y por eso vive al lado y es angosta:
+ *  · toca el monto y nada más (ni el estado, ni la factura, ni las fechas);
+ *  · el monto no lo manda nadie: es el de la factura, que el llamador ya validó contra el número anotado en el cobro;
+ *  · si el cobro entró en una comisión de vendedor LIQUIDADA, no se toca (la comisión quedó congelada sobre el monto
+ *    viejo): mismo 409 que revertir;
+ *  · deja su línea en la bitácora del cobro, con el monto anterior y quién lo cambió, en la misma transacción.
+ * Pedido de Alex (2026-10-05, ACCCSA): «el monto correcto es 712,50», el de la factura. ⛔ Nexus nunca escribe en Odoo.
+ */
+export async function alinearMontoConFacturaTx(
+  db: ClienteDb,
+  cobroId: string,
+  factura: { numero: string; montoNeto: number },
+  byEmail: string,
+): Promise<{ antes: number; ahora: number }> {
+  const cobro = await db.cobro.findUnique({ where: { id: cobroId }, select: { id: true, cuentaId: true, monto: true, moneda: true } });
+  if (!cobro) throw new CobranzaError("El cobro no existe.", 404);
+  const antes = Number(cobro.monto);
+  const ahora = Math.round(factura.montoNeto * 100) / 100;
+  if (!(ahora > 0)) throw new CobranzaError("La factura no tiene un monto que se pueda usar.", 409);
+  if (Math.round(antes * 100) === Math.round(ahora * 100)) return { antes, ahora };
+  const liquidadas = await db.comisionVendedor.count({ where: { cobroIds: { has: cobroId } } });
+  if (liquidadas > 0) {
+    throw new CobranzaError(
+      "Este cobro ya entró en una comisión liquidada: su monto quedó congelado ahí. Hay que deshacer la liquidación antes de corregirlo.",
+      409,
+    );
+  }
+  await db.cobro.update({ where: { id: cobroId }, data: { monto: ahora } });
+  const fmt = (n: number) => n.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  await db.bitacoraCobro.create({
+    data: {
+      cuentaId: cobro.cuentaId,
+      cobroId,
+      tipo: "NOTA",
+      contenido: `Monto corregido con el de la factura ${factura.numero} de Odoo: ${cobro.moneda} ${fmt(antes)} → ${fmt(ahora)}.`,
+      usuarioEmail: byEmail,
+    },
+  });
+  return { antes, ahora };
 }
 
 // ── Liberar una factura y recuadrar el cronograma ───────────────────────────────
@@ -2174,6 +2218,121 @@ export async function updatePagoPlanilla(
     },
   });
   return { id: pagoId };
+}
+
+/**
+ * «Completar las que faltan» (2026-10-06): genera de una vez las quincenas que no están en el libro, de la siguiente a
+ * la última generada hasta la de hoy (`quincenasPorGenerar`). Pedido de Alex (2026-10-05): «hay meses que no están con
+ * monto»: el libro se cortó en la 1.ª quincena de agosto y «Generar» solo creaba la de hoy.
+ *
+ * ⭐ Cada quincena con el salario que REGÍA en ella (`salarioVigenteEn`, los movimientos del catálogo con su fecha
+ * efectiva), no con el de hoy: un aumento de septiembre no puede subir la quincena de agosto. Quien no estaba en esa
+ * quincena (baja, pausa, o todavía no había entrado) no lleva fila. Una persona sin ningún movimiento en el catálogo
+ * (sembrada sin bitácora) va con su salario actual, como hacía `generarQuincena`.
+ *
+ * Mismo contrato que `generarQuincena`: CREATE-ONLY y PENDIENTE. Nada queda pagado: lo marca una persona, con su fecha.
+ * `soloLaDeHoy`: la que usa el job diario, para que la quincena en curso exista sin que nadie apriete nada.
+ */
+export async function completarQuincenas(
+  hoyISO: string,
+  opciones: { soloLaDeHoy?: boolean } = {},
+): Promise<{ quincenas: Array<{ periodo: string; quincena: 1 | 2; creadas: number }>; sinSalario: number }> {
+  const ultima = await prisma.pagoPlanilla.findFirst({
+    orderBy: [{ periodo: "desc" }, { quincena: "desc" }],
+    select: { periodo: true, quincena: true },
+  });
+  const lista = opciones.soloLaDeHoy ? [{ periodo: periodoDe(hoyISO), quincena: quincenaDe(hoyISO) }] : quincenasPorGenerar(ultima, hoyISO);
+  if (lista.length === 0) return { quincenas: [], sinSalario: 0 };
+
+  const salarios = await prisma.costoRecurrente.findMany({
+    where: { categoria: "SALARIO" },
+    select: {
+      teamMemberId: true,
+      nombre: true,
+      monto: true,
+      moneda: true,
+      activo: true,
+      finalizadoEl: true,
+      teamMember: { select: { name: true } },
+      movimientos: { select: { tipo: true, fechaEfectiva: true, monto: true, montoAnterior: true, moneda: true } },
+    },
+  });
+  /* Por persona, juntando los movimientos de todos sus costos de salario (el nombre del costo cambia con el puesto: se
+     ata por `teamMemberId`, igual que el calendario). Un salario sin persona no entra, como en `generarQuincena`. */
+  const personas = new Map<string, { nombre: string; movimientos: MovimientoDeSalario[]; actual: { monto: number; moneda: string } | null }>();
+  let sinSalario = 0;
+  for (const sal of salarios) {
+    if (!sal.teamMemberId) {
+      if (sal.activo && sal.finalizadoEl === null) sinSalario++;
+      continue;
+    }
+    const p = personas.get(sal.teamMemberId) ?? { nombre: sal.teamMember?.name ?? sal.nombre, movimientos: [], actual: null };
+    p.movimientos.push(
+      ...sal.movimientos.map((m) => ({
+        tipo: m.tipo,
+        fechaEfectiva: m.fechaEfectiva.toISOString().slice(0, 10),
+        monto: Number(m.monto),
+        montoAnterior: m.montoAnterior === null ? null : Number(m.montoAnterior),
+        moneda: m.moneda as string,
+      })),
+    );
+    if (sal.activo && sal.finalizadoEl === null) p.actual = { monto: Number(sal.monto), moneda: sal.moneda as string };
+    personas.set(sal.teamMemberId, p);
+  }
+
+  const quincenas: Array<{ periodo: string; quincena: 1 | 2; creadas: number }> = [];
+  for (const q of lista) {
+    const dia = quincenasDelPeriodo(q.periodo).find((x) => x.quincena === q.quincena);
+    if (!dia) continue;
+    const filas = [...personas.entries()].flatMap(([id, p]) => {
+      const salario = p.movimientos.length > 0 ? salarioVigenteEn(p.movimientos, dia.fechaProgramada) : p.actual;
+      if (!salario) return [];
+      return [
+        {
+          sujetoTeamMemberId: id,
+          sujetoNombre: p.nombre,
+          periodo: q.periodo,
+          quincena: q.quincena,
+          fechaProgramada: dayUTC(dia.fechaProgramada),
+          monto: montoQuincena(salario.monto, q.quincena),
+          moneda: salario.moneda as "CRC" | "USD",
+        },
+      ];
+    });
+    const res = filas.length > 0 ? await prisma.pagoPlanilla.createMany({ data: filas, skipDuplicates: true }) : { count: 0 };
+    quincenas.push({ periodo: q.periodo, quincena: q.quincena, creadas: res.count });
+  }
+  return { quincenas, sinSalario };
+}
+
+/**
+ * «Pagar la quincena» (2026-10-06): todas las filas PENDIENTES de una quincena, con la misma fecha. Cada una pasa por
+ * `pagarQuincena`, el chokepoint de INV18: esto no escribe `PAGADO` por su cuenta, solo ahorra un clic por persona.
+ * Si una falla, las anteriores quedan pagadas (cada una es su propia transacción) y el error dice cuántas alcanzó.
+ */
+export async function pagarQuincenaCompleta(
+  data: { periodo: string; quincena: 1 | 2; fechaPago?: string; notas?: string | null },
+  byEmail: string,
+): Promise<{ pagadas: number }> {
+  const pendientes = await prisma.pagoPlanilla.findMany({
+    where: { periodo: data.periodo, quincena: data.quincena, estado: "PENDIENTE" },
+    select: { id: true },
+    orderBy: { sujetoNombre: "asc" },
+  });
+  if (pendientes.length === 0) throw new CobranzaError("Esa quincena no tiene nada pendiente de pagar.", 409);
+  let pagadas = 0;
+  for (const p of pendientes) {
+    try {
+      await pagarQuincena(p.id, { fechaPago: data.fechaPago, notas: data.notas }, byEmail);
+      pagadas++;
+    } catch (e) {
+      if (e instanceof CobranzaError && pagadas > 0) {
+        throw new CobranzaError(`Se pagaron ${pagadas} de ${pendientes.length}; la siguiente no: ${e.message}`, e.status);
+      }
+      throw e;
+    }
+  }
+  return { pagadas };
 }
 
 /** Borrar una quincena PENDIENTE (se generó de más). Un PAGADO no se borra. */

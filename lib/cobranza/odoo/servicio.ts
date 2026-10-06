@@ -43,6 +43,7 @@ import {
   contarDocumentos,
   decidirMarcas,
   detectarDiferenciasOdoo,
+  esDocumentoVivo,
   facturasPorCliente,
   numeroVerificableEnOdoo,
   textoDeLiberacion,
@@ -64,12 +65,15 @@ import { candidatasParaElCobro, type CandidatasDeCobro } from "./candidatas";
 import { facturacionPorCliente, type FacturacionDelAnio } from "./facturacion-por-cliente";
 import { sincronizarOdoo, ultimaCorrida, ultimaCorridaOk } from "./sync";
 import { crDateParts } from "@/lib/jobs/time";
+import { CobranzaError, alinearMontoConFacturaTx } from "../mutations";
+import { normalizarNumeroFactura } from "../numero-factura";
 import type {
   OdooCuentaVia,
   OdooDeshacerMarcas,
   OdooMarcarFilas,
   OdooReabrirLiberacion,
   OdooResolverLiberacion,
+  OdooUsarMontoFactura,
   OdooVinculoConfirmar,
   OdooVinculoDesvincular,
   OdooVinculoIgnorar,
@@ -1045,6 +1049,58 @@ export async function resolverLiberacion(input: OdooResolverLiberacion, actor: s
     }),
   );
   if (!cerrada) throw new EmparejadoError("Esa liberación ya estaba resuelta: recarga la lista.", 409);
+}
+
+/**
+ * «Usar el monto de la factura» (2026-10-06): la cuota toma el monto neto de su factura de Odoo, en un clic, desde
+ * «cobros con un monto distinto al de su factura». Se vuelve a mirar todo acá, contra la base de AHORA y no contra lo que
+ * vio la pantalla: que la factura siga vigente, que el cobro siga anotando ESE número, la misma moneda y que la factura
+ * no cubra otras cuotas (ahí habría que decidir cuál cambia). La escritura es `alinearMontoConFacturaTx`, al lado del
+ * chokepoint de los cobros. ⛔ Nada de Odoo se toca.
+ */
+export async function usarMontoDeLaFactura(
+  input: OdooUsarMontoFactura,
+  actor: string,
+): Promise<{ antes: number; ahora: number; numero: string; moneda: string }> {
+  const [cobro, factura] = await Promise.all([
+    prisma.cobro.findUnique({
+      where: { id: input.cobroId },
+      select: { id: true, cuentaId: true, moneda: true, numeroFactura: true, estado: true, fechaEmision: true, origen: true },
+    }),
+    prisma.facturaOdoo.findUnique({
+      where: { id: input.facturaId },
+      select: { numero: true, montoNeto: true, moneda: true, cuentaId: true, moveType: true, state: true, paymentState: true, estadoEspejo: true },
+    }),
+  ]);
+  if (!cobro) throw new EmparejadoError("Ese cobro ya no existe: recarga la lista.", 404);
+  if (!factura || factura.estadoEspejo !== "VIGENTE" || !esDocumentoVivo(factura)) {
+    throw new EmparejadoError("Esa factura ya no está vigente en Odoo: recarga la lista.", 409);
+  }
+  const numero = normalizarNumeroFactura(cobro.numeroFactura);
+  if (!numero || numero !== normalizarNumeroFactura(factura.numero) || factura.cuentaId !== cobro.cuentaId) {
+    throw new EmparejadoError("Ese cobro ya no anota esa factura: recarga la lista.", 409);
+  }
+  if (factura.moneda !== cobro.moneda) {
+    throw new EmparejadoError("La factura está en otra moneda que la cuota: eso no se corrige con un clic.", 409);
+  }
+  const comparten = await prisma.cobro.count({ where: { cuentaId: cobro.cuentaId, numeroFactura: cobro.numeroFactura } });
+  if (comparten > 1) {
+    throw new EmparejadoError("Esa factura cubre varias cuotas: hay que decidir cuál cambia. Corrígelo en el plan de pago.", 409);
+  }
+  /* Una cuota del plan sin fecha de emisión la vuelve a escribir la próxima materialización (`esIntocable`): el arreglo
+     duraría hasta el próximo «Generar». Se pide marcarla facturada primero, que es lo que de verdad pasó. */
+  if (cobro.estado === "PROGRAMADO" && !cobro.fechaEmision && cobro.origen === "PLAN") {
+    throw new EmparejadoError("Esa cuota todavía figura sin factura en Nexus: márcala facturada, con su fecha, y vuelve a intentarlo.", 409);
+  }
+  try {
+    const r = await prisma.$transaction((tx) =>
+      alinearMontoConFacturaTx(tx, cobro.id, { numero: factura.numero, montoNeto: Number(factura.montoNeto) }, actor),
+    );
+    return { ...r, numero: factura.numero, moneda: cobro.moneda };
+  } catch (e) {
+    if (e instanceof CobranzaError) throw new EmparejadoError(e.message, e.status);
+    throw e;
+  }
 }
 
 /**

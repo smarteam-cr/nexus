@@ -716,6 +716,12 @@ export const planillaPagarSchema = z.object({
 });
 
 /**
+ * Pagar una quincena ENTERA (2026-10-06): todas sus filas pendientes, con la misma fecha. Cada fila pasa por el
+ * chokepoint de siempre (`pagarQuincena`, INV18): esto solo evita doce clics.
+ */
+export const planillaPagarQuincenaSchema = planillaGenerarSchema.merge(planillaPagarSchema);
+
+/**
  * Editar una quincena. Solo mientras está PENDIENTE — un PAGADO es intocable
  * (la mutación lo frena con 409). Sin `estado` a propósito: pagar tiene su
  * propia ruta, que es el chokepoint de INV18.
@@ -1077,6 +1083,10 @@ export type OdooResolverLiberacion = z.infer<typeof odooResolverLiberacionSchema
 /** «Deshacer» de «Ya está anulada»: la factura soltada vuelve a la lista, y queda quién la reabrió. */
 export const odooReabrirLiberacionSchema = z.object({ liberacionId: idDeBase });
 export type OdooReabrirLiberacion = z.infer<typeof odooReabrirLiberacionSchema>;
+
+/** «Usar el monto de la factura» (2026-10-06): la cuota toma el monto neto de su factura de Odoo. El monto lo pone el servidor. */
+export const odooUsarMontoFacturaSchema = z.object({ cobroId: idDeBase, facturaId: idDeBase });
+export type OdooUsarMontoFactura = z.infer<typeof odooUsarMontoFacturaSchema>;
 
 /* ── Soltar facturas al recuadrar el acuerdo ─────────────────────────────────
  *

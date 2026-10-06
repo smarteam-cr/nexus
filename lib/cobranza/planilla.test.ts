@@ -18,7 +18,37 @@ import {
   quincenaDe,
   quincenasDelPeriodo,
   quincenasDistintas,
+  quincenasPorGenerar,
 } from "./planilla";
+
+describe("quincenasPorGenerar — «Completar las que faltan» (2026-10-06)", () => {
+  it("el libro de Alex: cortado en la 1.ª de agosto, hoy 6 de octubre → 2.ª de agosto, septiembre y la 1.ª de octubre", () => {
+    expect(quincenasPorGenerar({ periodo: "2026-08", quincena: 1 }, "2026-10-06")).toEqual([
+      { periodo: "2026-08", quincena: 2 },
+      { periodo: "2026-09", quincena: 1 },
+      { periodo: "2026-09", quincena: 2 },
+      { periodo: "2026-10", quincena: 1 },
+    ]);
+  });
+
+  it("al día: nada que generar; el 16 ya toca la 2.ª", () => {
+    expect(quincenasPorGenerar({ periodo: "2026-10", quincena: 1 }, "2026-10-15")).toEqual([]);
+    expect(quincenasPorGenerar({ periodo: "2026-10", quincena: 1 }, "2026-10-16")).toEqual([{ periodo: "2026-10", quincena: 2 }]);
+  });
+
+  it("cruza el año", () => {
+    expect(quincenasPorGenerar({ periodo: "2026-12", quincena: 2 }, "2027-01-03")).toEqual([{ periodo: "2027-01", quincena: 1 }]);
+  });
+
+  it("sin nada generado, solo la de hoy (no rellena hacia atrás sin fin); con un libro abandonado, un año como mucho", () => {
+    expect(quincenasPorGenerar(null, "2026-10-06")).toEqual([{ periodo: "2026-10", quincena: 1 }]);
+    expect(quincenasPorGenerar({ periodo: "2024-01", quincena: 1 }, "2026-10-06")).toHaveLength(24);
+  });
+
+  it("una generada por adelantado no fabrica nada", () => {
+    expect(quincenasPorGenerar({ periodo: "2026-11", quincena: 1 }, "2026-10-06")).toEqual([]);
+  });
+});
 
 describe("quincenasDelPeriodo", () => {
   it("un mes de 31 días cierra el 31", () => {

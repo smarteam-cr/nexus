@@ -154,6 +154,36 @@ export function quincenasDistintas(
 }
 
 /**
+ * Las quincenas que faltan GENERAR en el libro (2026-10-06): de la siguiente a la última generada hasta la de hoy,
+ * incluida. Es lo que destraba «Completar las que faltan»: el libro se cortó en la 1.ª quincena de agosto y el botón de
+ * antes solo generaba la de hoy, así que agosto (2.ª) y septiembre no había cómo crearlas.
+ *
+ * ⚠ No rellena huecos de en medio ni hacia atrás del todo: eso lo dice `coberturaDe`, que declara en vez de fabricar.
+ * Sin ninguna generada, solo la de hoy. Tope de 24 (un año): más que eso no es un atraso, es un libro que nadie lleva.
+ */
+export function quincenasPorGenerar(
+  ultima: { periodo: string; quincena: number } | null,
+  hoyISO: string,
+): Array<{ periodo: Periodo; quincena: 1 | 2 }> {
+  const hoy = { periodo: periodoDe(hoyISO), quincena: quincenaDe(hoyISO) };
+  if (!ultima || !esPeriodo(ultima.periodo)) return [hoy];
+  const out: Array<{ periodo: Periodo; quincena: 1 | 2 }> = [];
+  let periodo = ultima.periodo;
+  let quincena: 1 | 2 = ultima.quincena === 1 ? 1 : 2;
+  for (let i = 0; i < 24; i++) {
+    if (quincena === 1) quincena = 2;
+    else {
+      quincena = 1;
+      const [y, m] = [Number(periodo.slice(0, 4)), Number(periodo.slice(5, 7))];
+      periodo = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+    }
+    if (periodo > hoy.periodo || (periodo === hoy.periodo && quincena > hoy.quincena)) break;
+    out.push({ periodo, quincena });
+  }
+  return out;
+}
+
+/**
  * La antigüedad de una persona sale del LIBRO (`min` de sus quincenas), no de un
  * campo nuevo en `TeamMember`: agregarlo rompería `TEAM_MEMBER_SAFE_SELECT`, la
  * allowlist congelada de 12 claves que leen decenas de módulos.

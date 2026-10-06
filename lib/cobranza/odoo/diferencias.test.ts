@@ -1048,6 +1048,32 @@ describe("⭐ el cobro con número se aparea por ese número", () => {
     expect(r.conNumeroSinPar).toEqual([]);
   });
 
+  it("caso 4b · «Usar el monto de la factura» solo donde el par es seguro: por número y de una cuota (2026-10-06)", () => {
+    /* ACCCSA (Alex, 2026-10-05): «el monto correcto es 712,50», el de la factura. */
+    const lineaDe = (cobros: CobroParaCruzar[], facturas: FacturaParaCruzar[]) =>
+      detectarDiferenciasOdoo({ ...alDia, cobros, facturas, liberaciones: [], cuentas: [], cuentasSinVinculo: 0, cuentasTotales: 1, marcas: [] }).find(
+        (i) => i.codigo === "ODOO-MONTO",
+      );
+    const porNumero = lineaDe([cobro({ id: "acccsa", monto: 712, numeroFactura: "FAC/2026/0001" })], [factura({ id: "f1", montoNeto: 712.5 })]);
+    expect(porNumero?.items[0]?.montoDeLaFactura).toEqual({ cobroId: "acccsa", facturaId: "f1", numero: "FAC/2026/0001", desde: 712, hasta: 712.5, moneda: "USD" });
+
+    /* Juntado por cercanía, el par es una suposición: se compara a mano. */
+    const porCercania = lineaDe([cobro({ id: "sin", monto: 712 })], [factura({ id: "f1", montoNeto: 800 })]);
+    expect(porCercania?.items).toHaveLength(1);
+    expect(porCercania?.items[0]?.montoDeLaFactura).toBeUndefined();
+
+    /* Una factura de varias cuotas: no hay cómo repartir la diferencia sin decidir por alguien. */
+    const varias = lineaDe(
+      [
+        cobro({ id: "a", monto: 2300, numeroFactura: "FAC/2026/0329" }),
+        cobro({ id: "b", fechaProgramada: "2026-08-15", monto: 2300, numeroFactura: "FAC/2026/0329" }),
+      ],
+      [factura({ id: "f329", odooMoveId: 329, numero: "FAC/2026/0329", montoNeto: 6900 })],
+    );
+    expect(varias?.items).toHaveLength(1);
+    expect(varias?.items[0]?.montoDeLaFactura).toBeUndefined();
+  });
+
   it("caso 5 · la factura que se llevó un número ya no la puede tomar otro cobro por monto", () => {
     const r = cruzar(
       [
@@ -1263,7 +1289,15 @@ describe("«Lo que no cuadra» con el número de la factura", () => {
     ];
     const antes = lista([a, b], facturas);
     expect(antes.map((i) => i.codigo)).toEqual(expect.arrayContaining(["ODOO-MONTO", "ODOO-FACTURA-SIN-COBRO"]));
-    expect(lista(conNumero, facturas)).toEqual(antes);
+    /* Las filas, sus montos y su identidad (lo que sostiene las marcas) no cambian. Lo único que el número agrega desde el
+       2026-10-06 es la acción «Usar el monto de la factura»: con el número el par deja de ser una suposición. */
+    const sinAcciones = (l: ReturnType<typeof lista>) =>
+      l.map((i) => ({ ...i, items: i.items.map((it) => Object.fromEntries(Object.entries(it).filter(([k]) => k !== "montoDeLaFactura"))) }));
+    const despues = lista(conNumero, facturas);
+    expect(sinAcciones(despues)).toEqual(sinAcciones(antes));
+    const accion = (l: ReturnType<typeof lista>) => l.find((i) => i.codigo === "ODOO-MONTO")?.items[0]?.montoDeLaFactura;
+    expect(accion(antes)).toBeUndefined();
+    expect(accion(despues)).toEqual(expect.objectContaining({ cobroId: "b", facturaId: "fb", desde: 1800, hasta: 1500 }));
   });
 });
 

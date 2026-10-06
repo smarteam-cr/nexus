@@ -334,6 +334,20 @@ export default function DiferenciasOdoo({
     [enviar, toast],
   );
 
+  /* «Usar el monto de la factura» (2026-10-06): la cuota toma el monto de su factura de Odoo. El servidor vuelve a mirar
+     que el par siga siendo ese; Odoo no se toca. */
+  const usarMonto = useCallback(
+    async (inc: DiferenciaOdoo, it: ItemDiferencia, clave: string) => {
+      const m = it.montoDeLaFactura;
+      if (!m) return false;
+      const r = await enviar<{ ahora: number; moneda: string }>(clave, { accion: "usar-monto-factura", cobroId: m.cobroId, facturaId: m.facturaId }, inc.codigo);
+      if (!r) return false;
+      toast.success(`Listo: la cuota quedó en ${textoDeMontos([{ moneda: r.moneda, monto: r.ahora }])}, como la factura ${m.numero}. Queda anotado en su bitácora.`);
+      return true;
+    },
+    [enviar, toast],
+  );
+
   const reabrir = useCallback(
     async (liberacionId: string, clave: string) => {
       if (await enviar(clave, { accion: "reabrir-liberacion", liberacionId }, "ODOO")) {
@@ -516,6 +530,7 @@ export default function DiferenciasOdoo({
             onIrAEmparejar={onIrAEmparejar}
             onMarcar={(items, motivo, clave) => marcar(inc, items, motivo, clave)}
             onAnular={(liberacionId, nota, clave) => anular(inc, liberacionId, nota, clave)}
+            onUsarMonto={(it, clave) => usarMonto(inc, it, clave)}
           />
         ))
       )}
@@ -540,7 +555,12 @@ export default function DiferenciasOdoo({
 /* ── Una línea, con su salida ────────────────────────────────────────────────────── */
 
 /** Qué se está marcando en esta línea: todas sus filas, una fila, o el cierre «Ya está anulada» de una fila. */
-type Editando = { tipo: "grupo" } | { tipo: "fila"; clave: string } | { tipo: "anular"; clave: string } | null;
+type Editando =
+  | { tipo: "grupo" }
+  | { tipo: "fila"; clave: string }
+  | { tipo: "anular"; clave: string }
+  | { tipo: "monto"; clave: string }
+  | null;
 
 function Linea({
   inc,
@@ -555,6 +575,7 @@ function Linea({
   onIrAEmparejar,
   onMarcar,
   onAnular,
+  onUsarMonto,
 }: {
   inc: DiferenciaOdoo;
   /** El título de cada línea por su código, para decir «ya contado en» con palabras. */
@@ -576,6 +597,8 @@ function Linea({
   onMarcar: (items: readonly ItemDiferencia[], motivo: string, clave: string) => Promise<boolean>;
   /** «Ya está anulada» de una factura soltada. Solo lo usan las líneas con `accionPorItem`. */
   onAnular: (liberacionId: string, nota: string, clave: string) => Promise<boolean>;
+  /** «Usar el monto de la factura»: solo las filas que traen `montoDeLaFactura` (un par por número, una sola cuota). */
+  onUsarMonto: (item: ItemDiferencia, clave: string) => Promise<boolean>;
 }) {
   const [verDetalle, setVerDetalle] = useState(false);
   const [editando, setEditando] = useState<Editando>(null);
@@ -724,6 +747,18 @@ function Linea({
                         {inc.accionPorItem.etiqueta}
                       </Button>
                     )}
+                    {puedeEditar && !enEdicion && it.montoDeLaFactura && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={ocupado !== null}
+                        title={`La cuota pasa a ${textoDeMontos([{ moneda: it.montoDeLaFactura.moneda, monto: it.montoDeLaFactura.hasta }])}, el monto de la factura ${it.montoDeLaFactura.numero}. Se corrige en Nexus; Odoo no se toca.`}
+                        onClick={() => setEditando({ tipo: "monto", clave })}
+                        className="shrink-0"
+                      >
+                        Usar el monto de la factura
+                      </Button>
+                    )}
                     {puedeEditar && !enEdicion && (
                       <Button
                         variant="ghost"
@@ -748,6 +783,27 @@ function Linea({
                       onConfirmar={async (motivo) => cerrarSi(await onMarcar([it], motivo, claveDeFila))}
                       onCancelar={() => setEditando(null)}
                     />
+                  )}
+                  {enEdicion === "monto" && it.montoDeLaFactura && (
+                    <div className="mt-2 rounded-md border border-line bg-surface-muted p-3">
+                      <p className="text-sm text-fg">
+                        La cuota pasa de {textoDeMontos([{ moneda: it.montoDeLaFactura.moneda, monto: it.montoDeLaFactura.desde }])} a{" "}
+                        {textoDeMontos([{ moneda: it.montoDeLaFactura.moneda, monto: it.montoDeLaFactura.hasta }])}, el monto de la factura{" "}
+                        {it.montoDeLaFactura.numero}.
+                      </p>
+                      <p className="mt-0.5 text-xs text-fg-muted">
+                        Se corrige solo esta cuota en Nexus y queda en su bitácora con tu nombre. Odoo no se toca. Si quedan cuotas
+                        por venir con el monto viejo, corrige también el plan de pago.
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button size="sm" disabled={ocupado !== null} onClick={async () => cerrarSi(await onUsarMonto(it, claveDeFila))}>
+                          {ocupado === claveDeFila ? "Corrigiendo…" : "Usar el monto de la factura"}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setEditando(null)}>
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
                   )}
                   {enEdicion === "anular" && it.id && (
                     <FormularioDeMotivo

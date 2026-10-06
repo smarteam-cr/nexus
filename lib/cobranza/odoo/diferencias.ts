@@ -91,6 +91,12 @@ export interface ItemDiferencia extends ItemInconsistencia {
    * propio y huella de sus números. Una línea nueva que no la ponga no compila.
    */
   fila: IdentidadDeFila<ClaveDeDocumento>;
+  /**
+   * «Usar el monto de la factura» (2026-10-06): solo en «cobros con un monto distinto al de su factura», y solo cuando el
+   * par se juntó por el NÚMERO que alguien anotó y es una sola cuota. Junto por cercanía, el par es una suposición; en
+   * varias cuotas, no hay cómo repartir la diferencia sin decidir por alguien. Corrige la cuota en Nexus, nunca Odoo.
+   */
+  montoDeLaFactura?: { cobroId: string; facturaId: string; numero: string; desde: number; hasta: number; moneda: string };
 }
 
 /**
@@ -408,6 +414,8 @@ export interface MontoDistinto {
   montoFactura: number;
   moneda: string;
   diferencia: number;
+  /** El par salió del número que alguien anotó en el cobro (primera pasada), no de la cercanía de fechas. */
+  porNumero?: boolean;
 }
 
 export interface ResultadoCruce {
@@ -707,6 +715,7 @@ export function cruzar(cobros: readonly CobroParaCruzar[], facturas: readonly Fa
         montoFactura: doc.montoNeto,
         moneda: primero.moneda,
         diferencia: (CENTAVOS(doc.montoNeto) - suma) / 100,
+        porNumero: true,
       });
     }
   }
@@ -2079,7 +2088,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         donde: "NEXUS",
         pasos: [
           "Abre el cliente en Cobranza y compara su plan de pago contra la factura de Odoo (el número está en cada línea).",
-          "Si el descuento o el ajuste se aplicó al facturar y el plan quedó viejo, corrige el plan en Nexus.",
+          "Si la factura está bien (un descuento o un ajuste que se aplicó al facturar), «Usar el monto de la factura» corrige esa cuota en un clic; si quedan cuotas por venir con el monto viejo, corrige también el plan.",
           "Si el plan estaba bien y la factura salió con otro monto, la corrección va del lado de Odoo.",
         ],
         queSignificaAceptar:
@@ -2095,6 +2104,18 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
             moneda: d.moneda,
             nota: `factura ${d.numero} · Odoo dice ${d.diferencia > 0 ? "más" : "menos"}: ${fmt(Math.abs(d.diferencia), d.moneda)}`,
             fila: filaDeMontoDistinto(d),
+            ...(d.porNumero && d.cuotas === 1
+              ? {
+                  montoDeLaFactura: {
+                    cobroId: d.cobroId,
+                    facturaId: d.facturaId,
+                    numero: d.numero,
+                    desde: d.montoCobro,
+                    hasta: d.montoFactura,
+                    moneda: d.moneda,
+                  },
+                }
+              : {}),
           })),
       };
     });

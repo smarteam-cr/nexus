@@ -24,6 +24,7 @@ export const NOMBRE_DE_JOB: Readonly<Record<string, string>> = {
   "odoo-espejo-daily": "La copia de Odoo",
   "mercury-espejo-daily": "La copia de Mercury",
   "tipo-cambio-daily": "La copia del tipo de cambio del BCCR",
+  "planilla-quincena-daily": "La quincena de planilla en curso",
   "licencias-renovacion-daily": "El aviso de renovaciones de licencias",
   "invariants-daily": "La revisión diaria de la base",
 };

@@ -89,9 +89,6 @@ const DEUDA_ZOD: ReadonlySet<string> = new Set([
   "components/cobranza/TagsInput.tsx → @/lib/cobranza/schema",
   "components/finanzas/ComisionesPartnerPanel.tsx → @/lib/cobranza/schema",
   "components/finanzas/TarjetasPanel.tsx → @/lib/cobranza/schema",
-  "components/finanzas/equilibrio/CurvaEquilibrio.tsx → @/lib/cobranza/schema",
-  "components/finanzas/equilibrio/DesgloseIngresos.tsx → @/lib/cobranza/schema",
-  "components/finanzas/equilibrio/EquilibrioClient.tsx → @/lib/cobranza/schema",
 ]);
 
 /**

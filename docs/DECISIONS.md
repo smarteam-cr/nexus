@@ -5058,3 +5058,22 @@ Alexander Vanegas (CSL) y dirección.
 - **El avance hacia la meta de cada resultado no se mide**: la pestaña lo dice en vez de inventarlo.
 - El recorrido «Una cuenta de Éxito del cliente» pasó a la versión 2: sus pasos de adopción y
   proyectos apuntan a las pestañas, y suma uno sobre las pestañas.
+
+## Planilla al día y «Usar el monto de la factura» (2026-10-06)
+
+Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
+
+- **La planilla se completa con el salario que regía, no con el de hoy.** «Completar las que faltan» (historial de
+  planilla) genera de una vez las quincenas que no están en el libro, de la siguiente a la última generada hasta la de
+  hoy (`quincenasPorGenerar`), cada una con `salarioVigenteEn` sobre los movimientos del catálogo. Un aumento de
+  septiembre no sube la quincena de agosto; quien no estaba en esa quincena no lleva fila. Todas quedan PENDIENTES: las
+  marca pagadas una persona («Pagar la quincena», que pasa fila por fila por `pagarQuincena`, el chokepoint de INV18).
+  El job `planilla-quincena-daily` solo asegura la quincena en curso; las atrasadas no las crea solo.
+- **Alex ya podía editar la planilla:** es Super Admin. Lo que le faltaba era poder crear las quincenas atrasadas (el
+  botón solo generaba la de hoy) y corregir el monto de una fila pendiente (la ruta existía; faltaba el control).
+- **«Usar el monto de la factura» es la única salida al 409 de «el monto solo se edita en PROGRAMADO».** Vive al lado
+  del chokepoint (`alinearMontoConFacturaTx`): toca solo el monto, el monto es el neto de la factura de Odoo, no corre si
+  el cobro entró en una comisión liquidada, y deja su línea en la bitácora. Se ofrece SOLO en un par juntado por el
+  número de factura que alguien anotó y de una sola cuota: medido el 2026-10-06, los 6 casos de «montos distintos» eran
+  pares por cercanía y varios del doble (una factura de dos meses contra una cuota): ahí el botón habría hecho daño.
+  Lo que lo revertiría: que dirección decida que la cuota manda sobre la factura.

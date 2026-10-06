@@ -380,6 +380,32 @@ export const ESPERA_TRAS_FALLO_TIPO_CAMBIO_MS = 30 * 60_000;
  * la misma corrida. LANZA si no quedó la tasa de hoy (semáforo rojo); el turno se suelta si el fallo fue pasajero, y
  * entonces se vuelve a probar recién pasada `ESPERA_TRAS_FALLO_TIPO_CAMBIO_MS`.
  */
+/**
+ * La quincena de planilla en curso (2026-10-06): todos los días ≥ 6:00 CR se asegura de que la quincena de hoy exista en
+ * el libro, con el salario que rige (`completarQuincenas` con `soloLaDeHoy`). Pedido de Alex («que se programe»): el
+ * libro se cortó en agosto porque generarla dependía de que alguien entrara a apretar «Generar» justo esa quincena.
+ * Queda PENDIENTE: pagarla la marca una persona (INV18). Re-generar es un no-op (`skipDuplicates`), así que correr todos
+ * los días no duplica nada y un servidor caído el día 1 o el 16 se pone al día solo.
+ */
+const planillaQuincenaDaily: JobDef = {
+  key: "planilla-quincena-daily",
+  shouldRun: (_now, parts) => parts.hour >= 6,
+  run: async (now) => {
+    const { crDateParts } = await import("./time");
+    const { dateKey } = crDateParts(now);
+    if (!(await claimDateKey("planilla-quincena-daily", dateKey, now))) return SIN_TURNO;
+    const { completarQuincenas } = await import("@/lib/cobranza/mutations");
+    const r = await completarQuincenas(dateKey, { soloLaDeHoy: true });
+    const creadas = r.quincenas.reduce((n, q) => n + q.creadas, 0);
+    if (creadas > 0 || r.sinSalario > 0) {
+      console.log(
+        `[jobs/planilla] ${dateKey} — ${creadas} fila(s) nuevas de la quincena en curso` +
+          (r.sinSalario > 0 ? ` · ⚠ ${r.sinSalario} salario(s) sin persona ligada: no entran` : ""),
+      );
+    }
+  },
+};
+
 const tipoCambioDaily: JobDef = {
   key: "tipo-cambio-daily",
   shouldRun: (_now, parts) => encendido("tipo-cambio-daily") && parts.hour >= 6,
@@ -464,5 +490,5 @@ const licenciasRenovacionDaily: JobDef = {
 
 /** Jobs activos del scheduler (el orden es el orden de ejecución del tick). */
 export function allJobs(): JobDef[] {
-  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, licenciasRenovacionDaily, invariantsDaily];
+  return [marketingWeekly, csSignalsDaily, csPartnerDaily, csWatchdogDaily, csWatchdogDebounce, maintenanceDaily, cobranzaQuincenal, googleEnrichRetry, ventasGanadasDaily, odooEspejoDaily, mercuryEspejoDaily, tipoCambioDaily, planillaQuincenaDaily, licenciasRenovacionDaily, invariantsDaily];
 }

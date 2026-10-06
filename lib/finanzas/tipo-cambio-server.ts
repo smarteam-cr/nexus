@@ -323,6 +323,46 @@ export function tasaFirme(t: TasaDelMesParaReporte | undefined): boolean {
   return !!t.manual && confirmadoPorPersona(t.manual.registradoPor) !== null;
 }
 
+export interface EstadoDelTipoDeCambio {
+  /** La última tasa guardada. */
+  ultima: { fecha: string; venta: number; compra: number | null; fuente: "BCCR" | "HACIENDA" } | null;
+  /** Desde qué día hay tasas guardadas. */
+  desde: string | null;
+  dias: number;
+  /** Hay `BCCR_TOKEN` en este servidor: trae del Banco Central; sin él, de Hacienda. Nunca el token mismo. */
+  conToken: boolean;
+}
+
+/**
+ * Lo que la tarjeta de Integraciones necesita saber del tipo de cambio (2026-10-06). null = la tabla todavía no existe
+ * en esta base (el SQL de 2026-10-05 sin aplicar); cualquier otro error se relanza, como en `cargarTasasDelAnio`.
+ */
+export async function estadoDelTipoDeCambio(): Promise<EstadoDelTipoDeCambio | null> {
+  try {
+    const [ultima, primera, dias] = await Promise.all([
+      prisma.tipoCambioDia.findFirst({ orderBy: { fecha: "desc" }, select: { fecha: true, venta: true, compra: true, fuente: true } }),
+      prisma.tipoCambioDia.findFirst({ orderBy: { fecha: "asc" }, select: { fecha: true } }),
+      prisma.tipoCambioDia.count(),
+    ]);
+    return {
+      ultima: ultima
+        ? {
+            fecha: ultima.fecha,
+            venta: Number(ultima.venta),
+            compra: ultima.compra === null ? null : Number(ultima.compra),
+            fuente: ultima.fuente === "BCCR" ? "BCCR" : "HACIENDA",
+          }
+        : null,
+      desde: primera?.fecha ?? null,
+      dias,
+      conToken: !!process.env.BCCR_TOKEN?.trim(),
+    };
+  } catch (e) {
+    if (!esquemaDesactualizado(e)) throw e;
+    return null;
+  }
+}
+
 /** Todo el histórico guardado, del más viejo al más nuevo: para la página del tipo de cambio. */
 export async function leerHistorico(): Promise<{ dias: TasaDelDia[]; traidoEn: string | null } | null> {
   try {

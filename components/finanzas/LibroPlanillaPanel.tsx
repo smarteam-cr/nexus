@@ -14,6 +14,10 @@
  *
  * ⚠ Una quincena PAGADA es intocable — sin editar y sin borrar. Es plata que ya
  * salió; el server lo frena con 409 y acá directamente no se ofrece el control.
+ *
+ * ⭐ 2026-10-06 (pedido de Alex: «hay meses que no están con monto»): el botón de arriba ya no genera solo la quincena
+ * de hoy — completa TODAS las que faltan desde la última generada, cada una con el salario que regía en ella. Cada
+ * quincena se paga entera con «Pagar la quincena», y el monto de una fila pendiente se corrige con «Corregir».
  */
 
 import { Fragment, useMemo, useState } from "react";
@@ -22,7 +26,7 @@ import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
 import { Button, PageHeader, EmptyState, Modal, Field, Input } from "@/components/ui";
 import { etiquetaMes, fmtFecha, fmtMonto } from "@/components/cobranza/format";
-import { periodoDe, quincenaDe } from "@/lib/cobranza/planilla";
+import { quincenasPorGenerar } from "@/lib/cobranza/planilla";
 
 interface Props {
   initialLibro: LibroPlanillaDTO;
@@ -44,9 +48,16 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
   const [generando, setGenerando] = useState(false);
   const [pagando, setPagando] = useState<PagoPlanillaDTO | null>(null);
+  const [pagandoQuincena, setPagandoQuincena] = useState<{ periodo: string; quincena: 1 | 2; pagos: PagoPlanillaDTO[] } | null>(null);
 
-  const periodoHoy = periodoDe(todayISO);
-  const quincenaHoy = quincenaDe(todayISO);
+  /* Lo que falta generar: de la siguiente a la última quincena del libro hasta la de hoy. */
+  const porGenerar = useMemo(() => {
+    const ultima = libro.pagos.reduce<{ periodo: string; quincena: number } | null>(
+      (m, p) => (!m || p.periodo > m.periodo || (p.periodo === m.periodo && p.quincena > m.quincena) ? { periodo: p.periodo, quincena: p.quincena } : m),
+      null,
+    );
+    return quincenasPorGenerar(ultima, todayISO);
+  }, [libro.pagos, todayISO]);
 
   const grupos = useMemo(() => {
     const porPeriodo = new Map<string, PagoPlanillaDTO[]>();
@@ -83,21 +94,17 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
     setGenerando(true);
     try {
       const r = await fetchJson<{
-        resultado: { creadas: number; yaExistian: number; sinPersona: number };
-      }>("/api/cobranza/costos/pagos-planilla", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ periodo: periodoHoy, quincena: quincenaHoy }),
-      });
+        resultado: { quincenas: Array<{ periodo: string; quincena: number; creadas: number }>; sinSalario: number };
+      }>("/api/cobranza/costos/pagos-planilla/completar", { method: "POST" });
       await refrescar();
-      const { creadas, yaExistian, sinPersona } = r.resultado;
+      const { quincenas, sinSalario } = r.resultado;
+      const filas = quincenas.reduce((n, q) => n + q.creadas, 0);
       toast.success(
-        `${creadas} quincena${creadas === 1 ? "" : "s"} generada${creadas === 1 ? "" : "s"}` +
-          (yaExistian > 0 ? ` · ${yaExistian} ya estaba${yaExistian === 1 ? "" : "n"}` : "") +
-          (sinPersona > 0 ? ` · ${sinPersona} salario${sinPersona === 1 ? "" : "s"} sin persona ligada` : ""),
+        `${quincenas.length === 1 ? "1 quincena generada" : `${quincenas.length} quincenas generadas`} (${filas} fila${filas === 1 ? "" : "s"}), pendientes de pagar` +
+          (sinSalario > 0 ? ` · ${sinSalario} salario${sinSalario === 1 ? "" : "s"} sin persona ligada no entra${sinSalario === 1 ? "" : "n"}` : ""),
       );
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "No se pudo generar la quincena.");
+      toast.error(e instanceof ApiError ? e.message : "No se pudo generar la planilla.");
     } finally {
       setGenerando(false);
     }
@@ -112,9 +119,20 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
         description="Lo que se pagó de verdad, quincena por quincena. Lo que cuesta por mes con la configuración de hoy está en Planillas."
         backHref="/finanzas/costos/planillas"
         action={
-          <Button data-recorrido="fin.historial.generar" onClick={generar} disabled={generando}>
-            {generando ? "Generando…" : `Generar ${etiquetaMes(periodoHoy)} · Q${quincenaHoy}`}
-          </Button>
+          porGenerar.length > 0 ? (
+            <Button
+              data-recorrido="fin.historial.generar"
+              onClick={generar}
+              disabled={generando}
+              title="Cada quincena con el salario que regía en ella. Quedan pendientes: se marcan pagadas después."
+            >
+              {generando
+                ? "Generando…"
+                : porGenerar.length === 1
+                  ? `Generar ${etiquetaMes(porGenerar[0]!.periodo)} · Q${porGenerar[0]!.quincena}`
+                  : `Completar las ${porGenerar.length} que faltan`}
+            </Button>
+          ) : undefined
         }
       />
 
@@ -125,6 +143,12 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
             <> · {pendientes.length} pendiente{pendientes.length === 1 ? "" : "s"} de pagar</>
           )}
         </p>
+        {porGenerar.length > 1 && (
+          <p className="mt-1 text-[11px] text-warn-ink">
+            Faltan generar {porGenerar.map((q) => `${etiquetaMes(q.periodo)} Q${q.quincena}`).join(" · ")}. Se generan con el
+            salario que regía en cada una y quedan pendientes de pagar.
+          </p>
+        )}
       </div>
 
       {libro.pagos.length === 0 ? (
@@ -143,6 +167,7 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
                 const delQ = pagos.filter((p) => p.quincena === q);
                 if (delQ.length === 0) return null;
                 const t = totalesPorMoneda(delQ);
+                const porPagar = delQ.filter((p) => p.estado === "PENDIENTE");
                 return (
                   <div data-recorrido="fin.historial.quincena" key={q} className="rounded-xl border border-line bg-surface overflow-hidden">
                     <div className="flex items-baseline gap-2 flex-wrap px-3 py-2 bg-surface-muted border-b border-line">
@@ -158,6 +183,16 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
+                      {porPagar.length > 0 && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setPagandoQuincena({ periodo, quincena: q, pagos: porPagar })}
+                          title="Marca pagadas todas las filas pendientes de esta quincena, con la misma fecha y a tu nombre."
+                        >
+                          Pagar la quincena ({porPagar.length})
+                        </Button>
+                      )}
                     </div>
                     <ul>
                       {delQ.map((p) => (
@@ -167,6 +202,7 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
                             abierto={abiertos.has(p.id)}
                             onToggle={() => toggle(p.id)}
                             onPagar={() => setPagando(p)}
+                            onCorregido={refrescar}
                           />
                         </Fragment>
                       ))}
@@ -177,6 +213,18 @@ export default function LibroPlanillaPanel({ initialLibro, todayISO }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {pagandoQuincena && (
+        <PagarQuincenaModal
+          {...pagandoQuincena}
+          todayISO={todayISO}
+          onClose={() => setPagandoQuincena(null)}
+          onPagado={async () => {
+            setPagandoQuincena(null);
+            await refrescar();
+          }}
+        />
       )}
 
       {pagando && (
@@ -199,15 +247,42 @@ function FilaPago({
   abierto,
   onToggle,
   onPagar,
+  onCorregido,
 }: {
   p: PagoPlanillaDTO;
   abierto: boolean;
   onToggle: () => void;
   onPagar: () => void;
+  onCorregido: () => Promise<void>;
 }) {
+  const toast = useToast();
   const moneda = p.moneda as "CRC" | "USD";
   const pagado = p.estado === "PAGADO";
   const tieneDetalle = p.comisiones.length > 0;
+  const [corrigiendo, setCorrigiendo] = useState(false);
+  const [monto, setMonto] = useState(String(p.monto));
+  const [guardando, setGuardando] = useState(false);
+
+  /* Corregir el monto de una fila PENDIENTE (el PATCH existía, faltaba el control): «colocar el monto real», Alex. */
+  async function guardarMonto() {
+    const n = Number(monto.replace(",", "."));
+    if (!(n > 0)) return toast.error("El monto tiene que ser un número mayor que cero.");
+    setGuardando(true);
+    try {
+      await fetchJson(`/api/cobranza/costos/pagos-planilla/${p.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ monto: Math.round(n * 100) / 100 }),
+      });
+      toast.success("Monto corregido.");
+      setCorrigiendo(false);
+      await onCorregido();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo corregir el monto.");
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   return (
     <li className="border-b border-line last:border-b-0">
@@ -267,12 +342,40 @@ function FilaPago({
           )}
         </span>
 
+        {!pagado && !corrigiendo && (
+          <Button variant="ghost" size="sm" onClick={() => setCorrigiendo(true)} className="flex-shrink-0" title="Cambia el monto antes de pagarla.">
+            Corregir
+          </Button>
+        )}
         {!pagado && (
           <Button data-recorrido="fin.historial.pagar" variant="secondary" size="sm" onClick={onPagar} className="flex-shrink-0">
             Registrar pago
           </Button>
         )}
       </div>
+
+      {corrigiendo && !pagado && (
+        <div className="flex flex-wrap items-center gap-2 px-3 pb-2 pl-10">
+          <span className="text-[11px] text-fg-muted">Monto de la quincena ({moneda})</span>
+          <Input
+            autoFocus
+            inputMode="decimal"
+            value={monto}
+            onChange={(e) => setMonto(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void guardarMonto();
+              if (e.key === "Escape") setCorrigiendo(false);
+            }}
+            className="w-36 text-sm"
+          />
+          <Button size="sm" variant="secondary" onClick={() => void guardarMonto()} disabled={guardando}>
+            {guardando ? "Guardando…" : "Guardar"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setCorrigiendo(false)}>
+            Cancelar
+          </Button>
+        </div>
+      )}
 
       {abierto && tieneDetalle && (
         <div className="px-3 pb-2 pl-10 space-y-1">
@@ -291,6 +394,75 @@ function FilaPago({
         </div>
       )}
     </li>
+  );
+}
+
+/** «Pagar la quincena»: todas las filas pendientes de una quincena, con la misma fecha (cada una por el chokepoint). */
+function PagarQuincenaModal({
+  periodo,
+  quincena,
+  pagos,
+  todayISO,
+  onClose,
+  onPagado,
+}: {
+  periodo: string;
+  quincena: 1 | 2;
+  pagos: PagoPlanillaDTO[];
+  todayISO: string;
+  onClose: () => void;
+  onPagado: () => void;
+}) {
+  const toast = useToast();
+  /* La fecha que toca: el 15 o el fin de mes de esa quincena, salvo que todavía no llegó. */
+  const programada = pagos[0]?.fechaProgramada?.slice(0, 10) ?? todayISO;
+  const [fecha, setFecha] = useState(programada < todayISO ? programada : todayISO);
+  const [guardando, setGuardando] = useState(false);
+  const t = totalesPorMoneda(pagos);
+
+  async function pagar() {
+    setGuardando(true);
+    try {
+      const r = await fetchJson<{ pagadas: number }>("/api/cobranza/costos/pagos-planilla/pagar-quincena", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ periodo, quincena, fechaPago: fecha }),
+      });
+      toast.success(`${r.pagadas === 1 ? "1 fila pagada" : `${r.pagadas} filas pagadas`} a tu nombre.`);
+      onPagado();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo registrar el pago.");
+      onPagado();
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Pagar la Q${quincena} de ${etiquetaMes(periodo)}`}
+      description="Todas las filas pendientes de esta quincena quedan pagadas a tu nombre, con la misma fecha. Después no se editan."
+    >
+      <div className="space-y-3">
+        <p className="text-xs text-fg-secondary">
+          {pagos.length === 1 ? "1 persona" : `${pagos.length} personas`} ·{" "}
+          {[t.CRC > 0 ? fmtMonto(t.CRC, "CRC") : null, t.USD > 0 ? fmtMonto(t.USD, "USD") : null].filter(Boolean).join(" · ")}
+        </p>
+        <Field label="Fecha del pago" hint="Se puede poner hacia atrás: la plata suele salir antes de registrarse.">
+          <Input type="date" value={fecha} max={todayISO} onChange={(e) => setFecha(e.target.value)} />
+        </Field>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={pagar} disabled={guardando}>
+            {guardando ? "Registrando…" : "Registrar el pago"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
