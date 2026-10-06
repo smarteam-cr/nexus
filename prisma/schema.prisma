@@ -3034,6 +3034,20 @@ model ProjectBrief {
 
 // Config singleton del módulo CS (id="cs"). watchdogEnabled = kill-switch en DB
 // (apagar el watchdog sin redeploy). El estado de cron vive en CronJobState.
+// Los supuestos del cálculo de la carga de Customer Success (lib/carga/config.ts): capacidad, preparación por
+// reunión, horas por tipo de fase, pesos del factor de complejidad, semáforo. Append-only: cada guardado es una fila
+// nueva; la más reciente manda y las anteriores son la historia de quién cambió qué. Sin filas, rigen los de fábrica.
+// SQL: scripts/sql/2026-10-06-config-carga.sql (RLS + deny).
+model ConfigCarga {
+  id        String   @id @default(cuid())
+  valores   Json
+  motivo    String?
+  creadoPor String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model CsSettings {
   id                     String   @id @default("cs")
   watchdogEnabled        Boolean  @default(true)
