@@ -8,6 +8,7 @@ import { cargaDePersona, cargaDelEquipo, horasPorCuenta } from "./utilizacion";
 import { simularTraspasos } from "./simulacion";
 import { proyectarDemanda, sumarMeses, tipoDeTrato } from "./contratacion";
 import { filasDeCobertura, miles, resumenDeCobertura, type MedicionDeCarga } from "./cobertura";
+import { senalesParaLaUnoAUno } from "./senales";
 
 const C = CONFIG_DE_FABRICA;
 const HEIVER = "heiver@smarteamcr.com";
@@ -360,6 +361,14 @@ describe("H · contratación", () => {
     expect(proyectarDemanda({ ...base, tratos, escenario: "todo" }, C).meses[1].pipeline).toBe(8);
     expect(proyectarDemanda({ ...base, tratos, escenario: "todo" }, C).cseQueFaltan).toBe(0);
   });
+  it("H3b un trato por debajo del 50 % no entra, en ningún escenario", () => {
+    const base = { base: 100, capacidad: 160, horasPorCse: 32, hoy: new Date("2026-10-05T15:00:00Z"), meses: 2 };
+    const tratos = [{ id: "1", nombre: "Acme · CRM", pipeline: null, probabilidad: 0.2, cierre: "2025-01-10T00:00:00Z", esClienteActual: false }];
+    const p = proyectarDemanda({ ...base, tratos, escenario: "todo" }, C);
+    expect(p.meses[1].pipeline).toBe(0);
+    expect(p.tratosFueraDelMinimo).toBe(1);
+    expect(p.tratosConCierreVencido).toBe(0);
+  });
   it("H4 sumar meses cruza el año", () => {
     expect(sumarMeses("2026-11", 2)).toBe("2027-01");
     expect(sumarMeses("2026-01", -1)).toBe("2025-12");
@@ -412,5 +421,39 @@ describe("J · quien entró hace poco", () => {
     const eq = cargaDelEquipo([p], C);
     expect(eq.semanas.map((s) => s.disponible)).toEqual([0, 0, 32]);
     expect(eq.utilizacion).toBe(13);
+  });
+});
+
+describe("K · señales para la 1:1", () => {
+  const vacia = { porPersona: new Map(), atrasadas: new Map([[HEIVER, 12]]), sinFecha: new Map() };
+  const semanas = ["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"];
+  const reuniones = semanas.flatMap((l) =>
+    Array.from({ length: 10 }, (_, i) => reunion({ inicio: new Date(Date.parse(`${l}T15:00:00Z`) + i * 3_600_000).toISOString(), duracionMin: 180 })),
+  );
+  const personas = [
+    { email: HEIVER, nombre: "Heiver", baja: null },
+    { email: JC, nombre: "JC", baja: null },
+  ];
+  const tiempo = tiempoEnReuniones(reuniones, personas, [HEIVER, JC]);
+  const h = cargaDePersona({ id: "h1", email: HEIVER, nombre: "Heiver", esCsl: false }, tiempo, vacia, C, { semanas, futuras: ["2026-10-05"] });
+  const j = cargaDePersona({ id: "j1", email: JC, nombre: "JC", esCsl: false }, tiempo, vacia, C, { semanas, futuras: ["2026-10-05"] });
+
+  it("K1 sobrecarga sostenida, cuentas sin CSE y quien no aparece (que no cuenta como espacio)", () => {
+    const s = senalesParaLaUnoAUno([h, j], { horas: 4.7, cuentas: 9 }, C, "2026-10-05");
+    expect(s.map((x) => x.clave)).toEqual([`sobrecarga:${HEIVER}`, "sin-cse", `sin-reuniones:${JC}`]);
+    expect(s[0].texto).toContain("12 tareas atrasadas");
+    expect(s[0].destino).toEqual({ tipo: "persona", id: "h1" });
+    expect(s[2].titulo).toBe("JC no tiene reuniones en el calendario");
+  });
+  it("K1b quien entró hace poco sí es espacio, y no se señala por no tener reuniones", () => {
+    const nuevo = cargaDePersona({ id: "j1", email: JC, nombre: "JC", esCsl: false, desde: "2026-09-28" }, tiempo, vacia, C, { semanas, futuras: ["2026-10-05"] });
+    const s = senalesParaLaUnoAUno([h, nuevo], { horas: 0, cuentas: 0 }, C, "2026-10-05");
+    expect(s.map((x) => x.clave)).toEqual([`sobrecarga:${HEIVER}`, "espacio"]);
+    // El espacio se prueba en la 1:1 de quien está en sobrecarga.
+    expect(s[1].destino).toEqual({ tipo: "persona", id: "h1" });
+    expect(s[1].titulo).toBe("JC tiene unas 32 h libres esta semana");
+  });
+  it("K2 sin nada que decir, no hay señales", () => {
+    expect(senalesParaLaUnoAUno([], { horas: 0, cuentas: 0 }, C, "2026-10-05")).toEqual([]);
   });
 });

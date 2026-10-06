@@ -20,6 +20,8 @@ import type { EntregaEstimada } from "./entrega";
 import type { MinutosDeLaSemana, TiempoEnReuniones } from "./reuniones";
 
 export interface PersonaDeCs {
+  /** El id de la persona en Nexus (para enlazar su 1:1). */
+  id?: string;
   email: string;
   nombre: string;
   esCsl: boolean;
@@ -67,6 +69,9 @@ export interface CargaDePersona extends PersonaDeCs {
   sinFecha: number;
   /** Último lunes con alguna reunión contada, o null. */
   ultimaSemanaConReuniones: string | null;
+  /** Reuniones con clientes en las semanas cerradas, y en cuántas fue la única persona de CS. */
+  reunionesConClientes: number;
+  reunionesSinOtroDeCs: number;
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -187,6 +192,8 @@ export function cargaDePersona(
     atrasadas: entrega.atrasadas.get(email) ?? 0,
     sinFecha: entrega.sinFecha.get(email) ?? 0,
     ultimaSemanaConReuniones,
+    reunionesConClientes: op.semanas.reduce((a, l) => a + (minutos?.get(l)?.reunionesConCliente ?? 0), 0),
+    reunionesSinOtroDeCs: op.semanas.reduce((a, l) => a + (minutos?.get(l)?.reunionesSinOtroDeCs ?? 0), 0),
   };
 }
 

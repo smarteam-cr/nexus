@@ -41,11 +41,17 @@ const sinComentarios = (src: string) =>
 const PANTALLAS = [
   "app/(shell)/customer-success/page.tsx",
   "app/(shell)/customer-success/[clientId]/page.tsx",
+  // La carga del equipo (2026-10-06): horas, sin montos, pero es de la CSL y dirección igual que el resto.
+  "app/(shell)/customer-success/carga/page.tsx",
+  "app/(shell)/customer-success/carga/persona/[id]/page.tsx",
+  "app/(shell)/customer-success/carga/supuestos/page.tsx",
+  "app/(shell)/customer-success/carga/datos/page.tsx",
 ];
 const APIS = [
   "app/api/cs/account-brief/[clientId]/route.ts",
   "app/api/cs/alerts/route.ts",
   "app/api/cs/alerts/[alertId]/route.ts",
+  "app/api/cs/carga/config/route.ts",
 ];
 const AREA = [...PANTALLAS, ...APIS];
 
@@ -82,12 +88,12 @@ describe("el área es de la CSL y dirección, por rol", () => {
     }
   });
 
-  it("las dos pantallas preguntan el rol ANTES de cargar nada", () => {
+  it("las pantallas preguntan el rol ANTES de cargar nada", () => {
     for (const p of PANTALLAS) {
       const src = sinComentarios(p);
       const gate = src.indexOf("if (!ctx || !esLiderDeCs(ctx.role)) redirect(");
       expect(gate, `${p} dejó de pedir el rol`).toBeGreaterThan(0);
-      const cargadores = ["cargarCarteraDeLaCsl(", "loadCsAccount("].map((f) => src.indexOf(f)).filter((i) => i > 0);
+      const cargadores = ["cargarCarteraDeLaCsl(", "loadCsAccount(", "cargarCargaDelEquipo("].map((f) => src.indexOf(f)).filter((i) => i > 0);
       /* Sin esto la comparación de abajo no podía fallar: si se renombra el cargador, la lista
          queda vacía, Math.min() da Infinity y «gate < Infinity» pasa siempre. */
       expect(
@@ -113,7 +119,7 @@ describe("el área es de la CSL y dirección, por rol", () => {
     );
   });
 
-  it("las tres APIs por cuenta piden el mismo rol", () => {
+  it("las APIs del área piden el mismo rol", () => {
     const sinGuard = APIS.filter((r) => !sinComentarios(r).includes("await guardLiderDeCs()"));
     expect(sinGuard, `estas APIs dejaron de pedir el rol:\n${sinGuard.join("\n")}`).toEqual([]);
   });

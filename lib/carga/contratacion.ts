@@ -3,8 +3,9 @@
  *
  * ── LA CUENTA ────────────────────────────────────────────────────────────────
  * Demanda del mes = la carga de hoy (base) + lo que suman los tratos que se ganarían. Un trato suma, desde el mes
- * siguiente a su cierre, las horas por semana de su TIPO (implementación nueva, caso de uso, licencias…). Tres
- * escenarios: solo lo casi cerrado (probabilidad ≥ 80 %), ponderado (horas × probabilidad) y todo.
+ * siguiente a su cierre, las horas por semana de su TIPO (implementación nueva, caso de uso, licencias…). Entran solo
+ * los tratos al 50 % o más (`PROBABILIDAD_MINIMA`). Tres escenarios: solo lo casi cerrado (probabilidad ≥ 80 %),
+ * ponderado (horas × probabilidad) y todo.
  *
  * ── EL TIPO SE DEDUCE ────────────────────────────────────────────────────────
  * Los tratos no dicen qué trabajo traen: el tipo sale de palabras del nombre y, si no hay ninguna, de si la empresa ya
@@ -27,6 +28,11 @@ export const ETIQUETA_DE_ESCENARIO: Record<Escenario, string> = {
 
 /** Probabilidad desde la que un trato cuenta como «casi cerrado». */
 export const PROBABILIDAD_CASI_CERRADO = 0.8;
+/**
+ * Probabilidad desde la que un trato entra a la proyección. Los de menos son demasiado inciertos para contratar por
+ * ellos: sumar 190 tratos al 10 % (muchos con el cierre vencido hace meses) da una demanda que no existe.
+ */
+export const PROBABILIDAD_MINIMA = 0.5;
 
 export interface TratoParaProyectar {
   id: string;
@@ -86,6 +92,8 @@ export interface TratoProyectado extends TratoParaProyectar {
   /** Primer mes en que suma. */
   llega: string;
   cierreVencido: boolean;
+  /** Por debajo de `PROBABILIDAD_MINIMA`: no entra a la proyección. */
+  fueraDelMinimo: boolean;
 }
 
 export interface MesProyectado {
@@ -110,6 +118,8 @@ export interface Proyeccion {
   /** Fecha («AAAA-MM-DD») hasta la que conviene abrir la búsqueda, o null si no hace falta. */
   abrirBusquedaAntesDe: string | null;
   tratosConCierreVencido: number;
+  /** Tratos abiertos por debajo de la probabilidad mínima, que no entran. */
+  tratosFueraDelMinimo: number;
 }
 
 export interface EntradaDeProyeccion {
@@ -135,11 +145,12 @@ export function proyectarDemanda(e: EntradaDeProyeccion, config: ConfigCarga): P
     const { tipo, porNombre } = tipoDeTrato(t.nombre, t.esClienteActual);
     const horasSemana = config.horasPorTrato[tipo];
     const p = Math.max(0, Math.min(1, t.probabilidad));
-    const cuenta = e.escenario === "todo" ? horasSemana : e.escenario === "ponderado" ? horasSemana * p : p >= PROBABILIDAD_CASI_CERRADO ? horasSemana : 0;
+    const fueraDelMinimo = p < PROBABILIDAD_MINIMA;
+    const cuenta = fueraDelMinimo ? 0 : e.escenario === "todo" ? horasSemana : e.escenario === "ponderado" ? horasSemana * p : p >= PROBABILIDAD_CASI_CERRADO ? horasSemana : 0;
     const cierre = t.cierre ? new Date(t.cierre) : null;
     const cierreVencido = !cierre || cierre < e.hoy;
     const desde = cierreVencido ? e.hoy : cierre!;
-    return { ...t, tipo, tipoPorNombre: porNombre, horasSemana: r1(horasSemana), cuenta: r1(cuenta), llega: sumarMeses(periodoDe(desde), 1), cierreVencido };
+    return { ...t, tipo, tipoPorNombre: porNombre, horasSemana: r1(horasSemana), cuenta: r1(cuenta), llega: sumarMeses(periodoDe(desde), 1), cierreVencido, fueraDelMinimo };
   });
 
   const meses = periodos.map((periodo) => {
@@ -167,6 +178,7 @@ export function proyectarDemanda(e: EntradaDeProyeccion, config: ConfigCarga): P
     primerMesSobre: primer?.periodo ?? null,
     cseQueFaltan,
     abrirBusquedaAntesDe,
-    tratosConCierreVencido: tratos.filter((t) => t.cierreVencido).length,
+    tratosConCierreVencido: tratos.filter((t) => t.cierreVencido && !t.fueraDelMinimo).length,
+    tratosFueraDelMinimo: tratos.filter((t) => t.fueraDelMinimo).length,
   };
 }

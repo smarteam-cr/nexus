@@ -8,7 +8,9 @@
  * Una cuenta con dos CSE cuenta para quien lleva más proyectos en ella (si no, la plata se
  * contaría dos veces). Los atrasos y bloqueos son POR PROYECTO, de quien lo lleva.
  */
+import Link from "next/link";
 import { EmptyState } from "@/components/ui";
+import { RUTA_DE_LA_CARGA } from "@/lib/carga/rutas";
 import { cn } from "@/lib/cn";
 import { fmtMonto, plural } from "@/lib/cs/formato";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
@@ -28,6 +30,14 @@ export default function Equipo({
   const n = (x: number, alerta = false) => <span className={cn("text-right tabular-nums", alerta && x > 0 && "font-semibold text-warn-ink")}>{x}</span>;
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+        <span className="text-[13px] text-fg-secondary">
+          <span className="font-semibold text-fg">Carga del equipo:</span> horas por semana de cada persona, señales para la 1:1 y el simulador de traspasos.
+        </span>
+        <Link href={RUTA_DE_LA_CARGA} className="text-xs font-semibold text-brand transition-colors hover:text-brand-light">
+          Ver la carga del equipo
+        </Link>
+      </div>
       <CajaDeTabla minimo="min-w-[1060px]">
         <EncabezadoDeTabla columnas={COLUMNAS}>
           <span>CSE</span>

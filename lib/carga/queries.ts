@@ -118,6 +118,8 @@ export interface DatosDeLaCarga {
   /** Reuniones contadas y descartadas (día completo o sin duración) en la ventana. */
   reuniones: { contadas: number; descartadas: number };
   cobertura: { filas: FilaDeCobertura[]; resumen: ReturnType<typeof resumenDeCobertura> };
+  /** Tareas de trabajo (no sesiones) de los cronogramas activos, por tipo de fase. */
+  tareasPorTipo: Record<string, number>;
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -133,43 +135,11 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
   const hasta = inicioDelLunes(lunesActual);
   const desdeCobertura = inicioDelLunes(sumarSemanas(lunesActual, -SEMANAS_DE_COBERTURA));
 
-  const [miembros, sesiones, cronogramasDb, clientesDb] = await Promise.all([
-    prisma.teamMember.findMany({ select: { email: true, name: true, roleEnum: true, deactivatedAt: true, createdAt: true } }),
-    prisma.firefliesSession.findMany({
-      where: { date: { gte: desde, lt: hasta } },
-      select: { id: true, date: true, duration: true, title: true, participants: true, resolvedClientId: true },
-    }),
-    prisma.projectTimeline.findMany({
-      where: { project: proyectoDeCarteraWhere() },
-      select: {
-        anchorStartDate: true,
-        project: { select: { id: true, clientId: true, hubspotOwnerEmail: true } },
-        phases: {
-          select: {
-            order: true,
-            durationWeeks: true,
-            startWeek: true,
-            activityType: true,
-            sessionCount: true,
-            tasks: { select: { weekIndex: true, status: true, party: true, type: true, dueDateOverride: true, statusChangedByEmail: true } },
-          },
-        },
-      },
-    }),
-    prisma.client.findMany({
-      where: { AND: [CS_CLIENT_WHERE, { projects: { some: proyectoDeCarteraWhere() } }] },
-      select: {
-        id: true,
-        name: true,
-        industry: true,
-        partnerSnapshot: { select: { hubEditions: true, seats: true, uusTrend: true, fetchedAt: true } },
-        projects: {
-          where: proyectoDeCarteraWhere(),
-          select: { hubspotOwnerEmail: true, hubspotOwnerName: true, hubspotPipelineStageLabel: true, tags: true },
-        },
-        _count: { select: { projects: { where: proyectoClasificableWhere({ hubspotPipelineName: { in: PIPELINES_DE_DESARROLLO } }) } } },
-      },
-    }),
+  const [miembros, { reuniones, empresas }, cronogramasDb, clientesDb] = await Promise.all([
+    leerEquipo(),
+    leerReuniones(desde, hasta),
+    leerCronogramasDeCartera(),
+    leerCuentasDeCartera(),
   ]);
 
   // Quiénes llevan cuentas, y quiénes ya no están.
@@ -178,78 +148,15 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
     (m) => !m.deactivatedAt && (ROLES_DE_CS as readonly string[]).includes(m.roleEnum) && !esCuentaDePrueba(m.name),
   );
   const personasParaReuniones = miembros.map((m) => ({ email: norm(m.email), nombre: m.name, baja: m.deactivatedAt }));
-
-  // De quién es cada reunión (la que materializó el clasificador).
-  const idsDeClientes = [...new Set(sesiones.map((s) => s.resolvedClientId).filter((x): x is string => !!x))];
-  const empresas = idsDeClientes.length
-    ? await prisma.client.findMany({ where: { id: { in: idsDeClientes } }, select: { id: true, name: true, kind: true } })
-    : [];
-  const empresaPorId = new Map(empresas.map((e) => [e.id, e]));
-  const reuniones: ReunionParaCarga[] = sesiones.map((s) => {
-    const e = s.resolvedClientId ? empresaPorId.get(s.resolvedClientId) : undefined;
-    return {
-      id: s.id,
-      inicio: s.date,
-      duracionMin: s.duration,
-      titulo: s.title,
-      participantes: s.participants,
-      cliente: e ? { id: e.id, nombre: e.name, tipo: e.kind as TipoDeEmpresa } : null,
-    };
-  });
   const tiempo = tiempoEnReuniones(reuniones, personasParaReuniones, equipoCs.map((m) => m.email));
 
-  // La última reunión de cada cuenta (fuera de la ventana también), para la relación.
-  const idsCartera = clientesDb.map((c) => c.id);
-  const ultimas = idsCartera.length
-    ? await prisma.firefliesSession.groupBy({
-        by: ["resolvedClientId"],
-        where: { resolvedClientId: { in: idsCartera }, date: { lt: ahora }, duration: { gt: 0, lt: 480 } },
-        _max: { date: true },
-      })
-    : [];
-  const ultimaPorCliente = new Map(ultimas.map((u) => [u.resolvedClientId as string, u._max.date]));
-
-  // El factor de complejidad de cada cuenta.
-  const factores = new Map<string, FactorExplicado>();
-  for (const c of clientesDb) {
-    const ps = c.partnerSnapshot;
-    const ediciones = ps?.hubEditions && typeof ps.hubEditions === "object" ? (ps.hubEditions as Record<string, string | null>) : null;
-    const usuarios = usuariosDe(ps?.seats);
-    const ultima = ultimaPorCliente.get(c.id) ?? null;
-    factores.set(
-      c.id,
-      factorDeComplejidad(
-        {
-          ediciones,
-          usuarios,
-          integracion: c._count.projects > 0,
-          migracion: c.projects.some((p) => p.tags.includes("crm_migration")),
-          etapas: [...new Set(c.projects.map((p) => p.hubspotPipelineStageLabel).filter((x): x is string => !!x))],
-          industria: c.industry?.trim() || null,
-          tendenciaDeUso: ps?.uusTrend ?? null,
-          diasSinReunion: ultima ? diasEntre(ultima, ahora) : null,
-          nivelEscala: null,
-        },
-        config,
-      ),
-    );
-  }
+  // La última reunión de cada cuenta (fuera de la ventana también), para la relación, y el factor de complejidad.
+  const ultimaPorCliente = await ultimaReunionPorCliente(clientesDb.map((c) => c.id), ahora);
+  const factores = factoresDeComplejidad(clientesDb, ultimaPorCliente, config, ahora);
   const factorDe = (clienteId: string) => factores.get(clienteId)?.factor ?? 1;
 
   // La entrega estimada de los cronogramas.
-  const cronogramas: CronogramaParaCarga[] = cronogramasDb.map((t) => ({
-    proyectoId: t.project.id,
-    clienteId: t.project.clientId,
-    responsableEmail: t.project.hubspotOwnerEmail,
-    ancla: t.anchorStartDate,
-    fases: t.phases.map((f) => ({
-      orden: f.order,
-      duracionSemanas: f.durationWeeks,
-      semanaInicio: f.startWeek,
-      tipo: f.activityType,
-      tareas: f.tasks.map((x) => ({ weekIndex: x.weekIndex, estado: x.status, parte: x.party, tipo: x.type, fechaManual: x.dueDateOverride })),
-    })),
-  }));
+  const cronogramas = aCronogramas(cronogramasDb);
   const entrega = entregaEstimada(cronogramas, factorDe, config, ahora);
 
   // La carga de cada persona y del equipo.
@@ -261,7 +168,7 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
       // Nexus: para quien estaba desde la primera carga del equipo cae antes de la ventana y no corta nada.
       const desdeLunes = lunesDe(m.createdAt);
       const carga = cargaDePersona(
-        { email: m.email, nombre: m.name, esCsl: m.roleEnum === "CSL", desde: desdeLunes > semanas[0] ? desdeLunes : null },
+        { id: m.id, email: m.email, nombre: m.name, esCsl: m.roleEnum === "CSL", desde: desdeLunes > semanas[0] ? desdeLunes : null },
         tiempo,
         entrega,
         config,
@@ -292,23 +199,14 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
     }
   }
   const base = clientesDb.map((c) => {
-    const conteo = new Map<string, { nombre: string | null; n: number }>();
-    for (const p of c.projects) {
-      const e = norm(p.hubspotOwnerEmail);
-      if (!e) continue;
-      const x = conteo.get(e) ?? { nombre: p.hubspotOwnerName, n: 0 };
-      x.n++;
-      conteo.set(e, x);
-    }
-    const [emailDueno, dueno] = [...conteo.entries()].sort((a, b) => b[1].n - a[1].n)[0] ?? [null, null];
-    const baja = emailDueno ? deBaja.get(emailDueno) ?? null : null;
+    const cse = cseDeLaCuenta(c, deBaja);
     const ultima = ultimaPorCliente.get(c.id) ?? null;
     return {
       clienteId: c.id,
       nombre: c.name,
-      cseNombre: baja ? null : dueno?.nombre ?? null,
-      cseEmail: baja ? null : emailDueno,
-      cseDeBaja: baja ? dueno?.nombre ?? baja : null,
+      cseNombre: cse.nombre,
+      cseEmail: cse.email,
+      cseDeBaja: cse.deBaja,
       factor: factores.get(c.id)!,
       horasSemana: r1((horasPorCliente.get(c.id) ?? 0) / n),
       reunionesEnLaVentana: tiempo.porCuenta.get(c.id)?.reuniones ?? 0,
@@ -327,11 +225,11 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
 
   // Qué datos hay.
   const correosDelEquipo = new Set(miembros.filter((m) => !m.deactivatedAt).map((m) => norm(m.email)));
-  const bloques = sesiones.filter(
-    (s) => s.participants.length === 1 && correosDelEquipo.has(norm(s.participants[0])) && s.duration > 0 && s.duration < 480,
+  const bloques = reuniones.filter(
+    (r) => r.participantes.length === 1 && correosDelEquipo.has(norm(r.participantes[0])) && r.duracionMin > 0 && r.duracionMin < 480,
   );
   const cobertura = await medirCobertura({
-    bloquesDeEjecucion: { eventos: bloques.length, personas: new Set(bloques.map((b) => norm(b.participants[0]))).size },
+    bloquesDeEjecucion: { eventos: bloques.length, personas: new Set(bloques.map((b) => norm(b.participantes[0]))).size },
     desde: desdeCobertura,
     hasta,
     cronogramas: cronogramasDb,
@@ -356,7 +254,150 @@ export async function cargarCargaDelEquipo(ahora = new Date()): Promise<DatosDeL
     sinCse: { horas: r1(sinCseLista.reduce((a, c) => a + c.horasSemana, 0)), cuentas: sinCseLista.length },
     reuniones: { contadas: tiempo.reunionesContadas, descartadas: tiempo.reunionesDescartadas },
     cobertura: { filas: cobertura, resumen: resumenDeCobertura(cobertura) },
+    tareasPorTipo: cronogramasDb
+      .flatMap((t) => t.phases.flatMap((f) => f.tasks.filter((x) => x.type !== "SESSION").map(() => f.activityType ?? "SIN")))
+      .reduce<Record<string, number>>((a, k) => ((a[k] = (a[k] ?? 0) + 1), a), {}),
   };
+}
+
+// ── Lecturas (las reusa lib/rentabilidad) ────────────────────────────────────
+
+export async function leerEquipo() {
+  return prisma.teamMember.findMany({ select: { id: true, email: true, name: true, roleEnum: true, deactivatedAt: true, createdAt: true } });
+}
+export type MiembroDelEquipo = Awaited<ReturnType<typeof leerEquipo>>[number];
+
+/** Las reuniones de un período, con la empresa que materializó el clasificador (`resolvedClientId`). */
+export async function leerReuniones(desde: Date, hasta: Date): Promise<{ reuniones: ReunionParaCarga[]; empresas: Array<{ id: string; name: string; kind: string }> }> {
+  const sesiones = await prisma.firefliesSession.findMany({
+    where: { date: { gte: desde, lt: hasta } },
+    select: { id: true, date: true, duration: true, title: true, participants: true, resolvedClientId: true },
+  });
+  const ids = [...new Set(sesiones.map((s) => s.resolvedClientId).filter((x): x is string => !!x))];
+  const empresas = ids.length ? await prisma.client.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, kind: true } }) : [];
+  const porId = new Map(empresas.map((e) => [e.id, e]));
+  const reuniones = sesiones.map((s) => {
+    const e = s.resolvedClientId ? porId.get(s.resolvedClientId) : undefined;
+    return {
+      id: s.id,
+      inicio: s.date,
+      duracionMin: s.duration,
+      titulo: s.title,
+      participantes: s.participants,
+      cliente: e ? { id: e.id, nombre: e.name, tipo: e.kind as TipoDeEmpresa } : null,
+    };
+  });
+  return { reuniones, empresas };
+}
+
+/** Los cronogramas de los proyectos de cartera, con el dueño de HubSpot de cada proyecto. */
+export async function leerCronogramasDeCartera() {
+  return prisma.projectTimeline.findMany({
+    where: { project: proyectoDeCarteraWhere() },
+    select: {
+      anchorStartDate: true,
+      project: { select: { id: true, clientId: true, hubspotOwnerEmail: true } },
+      phases: {
+        select: {
+          order: true,
+          durationWeeks: true,
+          startWeek: true,
+          activityType: true,
+          sessionCount: true,
+          tasks: { select: { weekIndex: true, status: true, party: true, type: true, dueDateOverride: true, statusChangedByEmail: true } },
+        },
+      },
+    },
+  });
+}
+type CronogramaDb = Awaited<ReturnType<typeof leerCronogramasDeCartera>>[number];
+
+export function aCronogramas(filas: CronogramaDb[]): CronogramaParaCarga[] {
+  return filas.map((t) => ({
+    proyectoId: t.project.id,
+    clienteId: t.project.clientId,
+    responsableEmail: t.project.hubspotOwnerEmail,
+    ancla: t.anchorStartDate,
+    fases: t.phases.map((f) => ({
+      orden: f.order,
+      duracionSemanas: f.durationWeeks,
+      semanaInicio: f.startWeek,
+      tipo: f.activityType,
+      tareas: f.tasks.map((x) => ({ weekIndex: x.weekIndex, estado: x.status, parte: x.party, tipo: x.type, fechaManual: x.dueDateOverride })),
+    })),
+  }));
+}
+
+/** Los clientes de la cartera con lo que pide el factor de complejidad. */
+export async function leerCuentasDeCartera() {
+  return prisma.client.findMany({
+    where: { AND: [CS_CLIENT_WHERE, { projects: { some: proyectoDeCarteraWhere() } }] },
+    select: {
+      id: true,
+      name: true,
+      industry: true,
+      partnerSnapshot: { select: { hubEditions: true, seats: true, uusTrend: true, fetchedAt: true } },
+      projects: {
+        where: proyectoDeCarteraWhere(),
+        select: { hubspotOwnerEmail: true, hubspotOwnerName: true, hubspotPipelineStageLabel: true, tags: true },
+      },
+      _count: { select: { projects: { where: proyectoClasificableWhere({ hubspotPipelineName: { in: PIPELINES_DE_DESARROLLO } }) } } },
+    },
+  });
+}
+export type CuentaDb = Awaited<ReturnType<typeof leerCuentasDeCartera>>[number];
+
+/** La última reunión de cada cuenta (sin ventana), para saber si la relación está fría. */
+export async function ultimaReunionPorCliente(ids: string[], ahora: Date): Promise<Map<string, Date | null>> {
+  if (ids.length === 0) return new Map();
+  const ultimas = await prisma.firefliesSession.groupBy({
+    by: ["resolvedClientId"],
+    where: { resolvedClientId: { in: ids }, date: { lt: ahora }, duration: { gt: 0, lt: 480 } },
+    _max: { date: true },
+  });
+  return new Map(ultimas.map((u) => [u.resolvedClientId as string, u._max.date]));
+}
+
+export function factoresDeComplejidad(cuentas: CuentaDb[], ultimaPorCliente: Map<string, Date | null>, config: ConfigCarga, ahora: Date): Map<string, FactorExplicado> {
+  const factores = new Map<string, FactorExplicado>();
+  for (const c of cuentas) {
+    const ps = c.partnerSnapshot;
+    const ediciones = ps?.hubEditions && typeof ps.hubEditions === "object" ? (ps.hubEditions as Record<string, string | null>) : null;
+    const ultima = ultimaPorCliente.get(c.id) ?? null;
+    factores.set(
+      c.id,
+      factorDeComplejidad(
+        {
+          ediciones,
+          usuarios: usuariosDe(ps?.seats),
+          integracion: c._count.projects > 0,
+          migracion: c.projects.some((p) => p.tags.includes("crm_migration")),
+          etapas: [...new Set(c.projects.map((p) => p.hubspotPipelineStageLabel).filter((x): x is string => !!x))],
+          industria: c.industry?.trim() || null,
+          tendenciaDeUso: ps?.uusTrend ?? null,
+          diasSinReunion: ultima ? diasEntre(ultima, ahora) : null,
+          nivelEscala: null,
+        },
+        config,
+      ),
+    );
+  }
+  return factores;
+}
+
+/** El CSE de una cuenta: el dueño en HubSpot de la mayoría de sus proyectos de cartera, o nadie si ya no está. */
+export function cseDeLaCuenta(c: CuentaDb, deBaja: Map<string, string>): { nombre: string | null; email: string | null; deBaja: string | null } {
+  const conteo = new Map<string, { nombre: string | null; n: number }>();
+  for (const p of c.projects) {
+    const e = norm(p.hubspotOwnerEmail);
+    if (!e) continue;
+    const x = conteo.get(e) ?? { nombre: p.hubspotOwnerName, n: 0 };
+    x.n++;
+    conteo.set(e, x);
+  }
+  const [email, dueno] = [...conteo.entries()].sort((a, b) => b[1].n - a[1].n)[0] ?? [null, null];
+  const baja = email ? deBaja.get(email) ?? null : null;
+  return baja ? { nombre: null, email: null, deBaja: dueno?.nombre ?? baja } : { nombre: dueno?.nombre ?? null, email, deBaja: null };
 }
 
 /** Asientos asignados (core + ventas + servicio), o null si la copia de Partner no los trae. */
@@ -441,4 +482,17 @@ async function medirCobertura(e: EntradaDeCobertura): Promise<FilaDeCobertura[]>
 /** Horas disponibles de un CSE nuevo con los supuestos vigentes (para la contratación). */
 export function horasDeUnCse(config: ConfigCarga): number {
   return horasDisponibles(config, "__nuevo__");
+}
+
+/** Cuántas cuentas tienen el dato de cada variable del factor (para «Cómo se calcula»). */
+export function coberturaDeVariables(cuentas: CuentaConCarga[]): Record<string, { con: number; total: number }> {
+  const out: Record<string, { con: number; total: number }> = {};
+  for (const c of cuentas) {
+    for (const v of c.factor.variables) {
+      const x = (out[v.clave] ??= { con: 0, total: 0 });
+      x.total++;
+      if (v.estado !== "falta") x.con++;
+    }
+  }
+  return out;
 }

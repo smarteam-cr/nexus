@@ -200,3 +200,20 @@ export const ETIQUETA_DEL_SEMAFORO: Record<Semaforo, string> = {
   llena: "Llena",
   sobrecarga: "Sobrecarga",
 };
+
+/** Cómo se lee cada peso en «Cómo se calcula la carga», y a qué variable del factor corresponde. */
+export const DESCRIPCION_DE_PESO: Record<Peso, { nombre: string; cuando: string; variable: string }> = {
+  hub: { nombre: "Hubs pagados", cuando: "Por cada Hub Pro o Enterprise, desde el segundo", variable: "hubs" },
+  topeHubs: { nombre: "Tope de los Hubs", cuando: "Lo máximo que suman los Hubs pagados", variable: "hubs" },
+  enterprise: { nombre: "Edición Enterprise", cuando: "Algún Hub en Enterprise", variable: "enterprise" },
+  integracion: { nombre: "Integración", cuando: "Tiene un proyecto de Desarrollo o acompañamiento técnico activo", variable: "integracion" },
+  migracion: { nombre: "Migración de CRM", cuando: "El proyecto trae la etiqueta de migración", variable: "migracion" },
+  usuarios10: { nombre: "Usuarios", cuando: "De 10 a 29 asientos asignados", variable: "usuarios" },
+  usuarios30: { nombre: "Muchos usuarios", cuando: "30 asientos asignados o más", variable: "usuarios" },
+  implementacion: { nombre: "En implementación", cuando: "Handoff, Exploración, Diagnóstico, Configuración técnica o Entrega", variable: "etapa" },
+  adopcion: { nombre: "En adopción", cuando: "Adopción o Validación de uso (si no está en implementación)", variable: "etapa" },
+  regulada: { nombre: "Industria regulada", cuando: "Gobierno, educación, salud, legal, banca, finanzas o seguros", variable: "industria" },
+  usoCayendo: { nombre: "Uso cayendo", cuando: "El puntaje de uso cayó más de 5 % en 4 semanas", variable: "uso" },
+  relacionFria: { nombre: "Relación fría", cuando: "Más de 21 días sin reunión", variable: "relacion" },
+  escalaBaja: { nombre: "Escala baja", cuando: "Deficiente o Inicial en la Escala", variable: "escala" },
+};

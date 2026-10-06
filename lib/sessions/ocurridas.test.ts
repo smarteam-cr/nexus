@@ -94,6 +94,12 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
     clase: "contexto",
     motivo: "Las reuniones de la CUENTA que lee el vigilante (con el cliente e internas). Corta por fecha desde el primer día.",
   },
+  "lib/carga/queries.ts": {
+    clase: "contexto",
+    motivo:
+      "La carga de CS y la rentabilidad AFIRMAN horas en reuniones: solo leen semanas o meses que ya cerraron (el techo es " +
+      "el lunes de esta semana o el 1 del mes) y la última reunión de cada cuenta corta en `ahora`. Lo que viene se proyecta, no se lee.",
+  },
   "lib/cs/cartera.ts": {
     clase: "contexto",
     motivo: "El último contacto de cada cuenta en la pantalla de la CSL: una reunión agendada no es contacto.",
@@ -248,6 +254,7 @@ const CORTAN_POR_FECHA = [
   "lib/cs/watchdog-context.ts",
   "lib/cs/watchdog-cuenta.ts",
   "lib/cs/cartera.ts",
+  "lib/carga/queries.ts",
   "lib/projects/analyze-participants.ts",
   "lib/lifecycle/load.ts",
   "app/api/clients/[id]/canvas/refresh/route.ts",
