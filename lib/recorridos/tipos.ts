@@ -47,9 +47,19 @@ export interface PasoDelRecorrido {
   texto: string;
   /** Solo para estos roles. Sin `roles` = todos los que ven el recorrido. */
   roles?: readonly TeamRole[];
+  /** Para lo que es más alto que media pantalla, `top`: así la librería deja lugar arriba para el globo. */
   lado?: LadoDelGlobo;
-  /** Se pide antes de mostrar el paso; el elemento se busca después de hacerla. */
-  accion?: AccionDelRecorrido;
+  /**
+   * Se pide antes de mostrar el paso; el elemento se busca después de hacerla. Varias van en orden
+   * (abrir una pieza y, ya abierta, elegir el momento de la sesión).
+   */
+  accion?: AccionDelRecorrido | readonly AccionDelRecorrido[];
+}
+
+/** Las acciones de un paso, siempre como lista. */
+export function accionesDelPaso(p: Pick<PasoDelRecorrido, "accion">): readonly AccionDelRecorrido[] {
+  if (!p.accion) return [];
+  return Array.isArray(p.accion) ? (p.accion as readonly AccionDelRecorrido[]) : [p.accion as AccionDelRecorrido];
 }
 
 export interface Recorrido {
@@ -72,7 +82,7 @@ export interface Recorrido {
   ruta: RegExp;
   /**
    * Para las piezas de un lienzo que comparten dirección (el cronograma y la información del
-   * cliente viven en `/clients/[id]`; las piezas de la preventa, en `/sales/exploraciones/[id]`):
+   * cliente viven en `/clients/[id]`):
    * el recorrido vale solo mientras la pieza lo declara con `usePantallaDelRecorrido(id)`. El botón
    * de la cabecera toma ese recorrido en vez del de la ficha.
    */

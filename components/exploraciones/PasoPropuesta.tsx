@@ -38,7 +38,7 @@ export function ListaParaProponer() {
   const puntos = listaParaProponer(exp.estado, chequeo);
   const cumplidos = puntos.filter((p) => p.cumplido).length;
   return (
-    <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
+    <section data-recorrido="preventa.propuesta.lista" className="space-y-3 rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-fg">Lista para proponer el land</h3>
         <span className="text-xs tabular-nums text-fg-muted">
@@ -307,14 +307,17 @@ export default function PasoPropuesta() {
       {error && <Alert variant="danger">{error}</Alert>}
       <PropuestasDeLaEmpresa propuestas={propuestas} alCambiar={() => setIntento((n) => n + 1)} />
       <ListaParaProponer />
-      {negocios === undefined && !error ? (
-        <div className="space-y-3" aria-hidden>
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      ) : negocios !== undefined ? (
-        <ArmarLaPropuesta key={negocios?.map((n) => n.id).join(",") ?? "sin"} negocios={negocios} alRecargar={() => setIntento((n) => n + 1)} />
-      ) : null}
+      {/* El recorrido la señala aunque HubSpot todavía no haya contestado: ahí va el esqueleto. */}
+      <div data-recorrido="preventa.propuesta.armar">
+        {negocios === undefined && !error ? (
+          <div className="space-y-3" aria-hidden>
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : negocios !== undefined ? (
+          <ArmarLaPropuesta key={negocios?.map((n) => n.id).join(",") ?? "sin"} negocios={negocios} alRecargar={() => setIntento((n) => n + 1)} />
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -40,6 +40,7 @@ import {
 } from "@/lib/exploraciones/guia";
 import { claveDeNotaDeSesion, MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
 import { REUNIONES } from "@/lib/exploraciones/sesion";
+import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 import { Casilla } from "./Casilla";
 import Segmentos from "./Segmentos";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
@@ -586,36 +587,38 @@ function DuranteLaSesion({ pestana }: { pestana: PestanaDeSesion }) {
   );
 
   return (
-    <Tarjeta
-      titulo="Tus notas de la sesión"
-      detalle="lo que sabes y no quedó en la grabación"
-      accion={
-        <span className={cn("text-[12px]", estado === "error" ? "text-danger-ink" : "text-fg-muted")}>
-          {estado === "guardando" ? "Guardando…" : estado === "guardado" ? "Guardado" : estado === "error" ? "No se pudo guardar" : ""}
-        </span>
-      }
-    >
-      <div className="space-y-2.5 p-4">
-        <p className="text-[13px] leading-[1.5] text-fg-secondary">
-          Lo que te contaron por WhatsApp o en el pasillo, cómo entiendes su modelo de negocio, quién crees que decide. El agente lo lee como tu nota, no como palabras del
-          cliente, la próxima vez que prepare o lea una reunión.
-        </p>
-        <textarea
-          value={texto}
-          onChange={(ev) => alEscribir(ev.target.value)}
-          onBlur={() => void guardar(texto)}
-          disabled={!puedeEditar}
-          maxLength={MAX_NOTA_DE_SESION}
-          rows={12}
-          aria-label="Tus notas de la sesión"
-          placeholder="Ej.: Por WhatsApp, Laura contó que el gerente comercial se va en diciembre y que el presupuesto sale del área de mercadeo."
-          className="w-full resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-sm leading-[1.55] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none disabled:opacity-60"
-        />
-        <p className="text-right text-[11.5px] text-fg-muted">
-          {texto.length.toLocaleString("es-CR")} de {MAX_NOTA_DE_SESION.toLocaleString("es-CR")} caracteres
-        </p>
-      </div>
-    </Tarjeta>
+    <div data-recorrido="preventa.sesion.notas">
+      <Tarjeta
+        titulo="Tus notas de la sesión"
+        detalle="lo que sabes y no quedó en la grabación"
+        accion={
+          <span className={cn("text-[12px]", estado === "error" ? "text-danger-ink" : "text-fg-muted")}>
+            {estado === "guardando" ? "Guardando…" : estado === "guardado" ? "Guardado" : estado === "error" ? "No se pudo guardar" : ""}
+          </span>
+        }
+      >
+        <div className="space-y-2.5 p-4">
+          <p className="text-[13px] leading-[1.5] text-fg-secondary">
+            Lo que te contaron por WhatsApp o en el pasillo, cómo entiendes su modelo de negocio, quién crees que decide. El agente lo lee como tu nota, no como palabras del
+            cliente, la próxima vez que prepare o lea una reunión.
+          </p>
+          <textarea
+            value={texto}
+            onChange={(ev) => alEscribir(ev.target.value)}
+            onBlur={() => void guardar(texto)}
+            disabled={!puedeEditar}
+            maxLength={MAX_NOTA_DE_SESION}
+            rows={12}
+            aria-label="Tus notas de la sesión"
+            placeholder="Ej.: Por WhatsApp, Laura contó que el gerente comercial se va en diciembre y que el presupuesto sale del área de mercadeo."
+            className="w-full resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-sm leading-[1.55] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none disabled:opacity-60"
+          />
+          <p className="text-right text-[11.5px] text-fg-muted">
+            {texto.length.toLocaleString("es-CR")} de {MAX_NOTA_DE_SESION.toLocaleString("es-CR")} caracteres
+          </p>
+        </div>
+      </Tarjeta>
+    </div>
   );
 }
 
@@ -827,6 +830,18 @@ export default function SesionesDeExploracion() {
   const { exp, cambiar, sesion: seleccion } = useLienzo();
   const { lanzar } = useCorrida();
   const { sesiones, hoy, pestanas, activa, esLaProxima, momento, guardar } = useSesiones();
+
+  // El recorrido de la preventa muestra los tres momentos de la sesión abierta (lib/recorridos/contenido/preventa.ts).
+  const ponerMomento = seleccion.ponerMomento;
+  const claveActiva = activa.clave;
+  useEffect(() => {
+    const alPedido = (e: Event) => {
+      const a = (e as CustomEvent<AccionDelRecorrido>).detail;
+      if (a?.evento === "preventa.momento" && (a.valor === "antes" || a.valor === "durante" || a.valor === "despues")) ponerMomento(claveActiva, a.valor);
+    };
+    window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+    return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+  }, [ponerMomento, claveActiva]);
 
   /**
    * La siguiente sesión: la próxima planeada después de esta o, si no hay, una nueva (con la fecha

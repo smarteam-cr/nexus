@@ -119,7 +119,7 @@ export default function ListaDeExploraciones({
 
   return (
     <section className="mb-6 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div data-recorrido="preventa.lista.filtros" className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold text-fg">En curso</h2>
           <Segmentos
@@ -161,7 +161,12 @@ export default function ListaDeExploraciones({
             <p className="px-4 py-6 text-sm text-fg-muted">Ninguna preventa con este filtro.</p>
           ) : (
             visibles.map((f, i) => (
-              <div key={f.id} className={cn(COLUMNAS, "relative p-4 text-fg transition-colors hover:bg-surface-hover", i > 0 && "border-t border-line")}>
+              // El recorrido del listado explica la primera fila (lib/recorridos/contenido/preventa.ts).
+              <div
+                key={f.id}
+                data-recorrido={i === 0 ? "preventa.lista.fila" : undefined}
+                className={cn(COLUMNAS, "relative p-4 text-fg transition-colors hover:bg-surface-hover", i > 0 && "border-t border-line")}
+              >
                 <span className="flex min-w-0 flex-col gap-0.5">
                   {/* El enlace se estira sobre toda la fila: tocar cualquier parte abre la preventa. */}
                   <Link href={`/sales/exploraciones/${f.id}`} className="text-sm font-semibold leading-snug text-fg after:absolute after:inset-0 after:content-['']">
@@ -170,7 +175,7 @@ export default function ListaDeExploraciones({
                   <span className="truncate text-xs text-fg-muted">{[f.edicion ?? "Escala general", f.areas.join(" · ")].filter(Boolean).join(" · ")}</span>
                   <span className="text-xs text-fg-muted">Actualizada {haceCuanto(f.actualizadaEn)}</span>
                 </span>
-                <span className="flex min-w-0 flex-col items-start gap-1.5">
+                <span data-recorrido={i === 0 ? "preventa.lista.sigue" : undefined} className="flex min-w-0 flex-col items-start gap-1.5">
                   <span
                     className={cn("line-clamp-2 text-[13px] leading-[1.4]", lista(f) ? "font-semibold text-success-ink" : "text-fg")}
                     title={f.queSigue}
@@ -184,11 +189,13 @@ export default function ListaDeExploraciones({
                     </span>
                   )}
                 </span>
-                <ParaProponer f={f} />
+                <span data-recorrido={i === 0 ? "preventa.lista.proponer" : undefined} className="min-w-0">
+                  <ParaProponer f={f} />
+                </span>
                 <span className={cn("whitespace-nowrap text-[13px]", f.proximaReunion ? "font-medium text-fg" : "text-warn-ink")}>
                   {f.proximaReunion ? diaConSemana(f.proximaReunion) : "Sin agendar"}
                 </span>
-                <span className="relative min-w-0 text-[13px]">
+                <span data-recorrido={i === 0 ? "preventa.lista.lleva" : undefined} className="relative min-w-0 text-[13px]">
                   <ElegirResponsable
                     exploracionId={f.id}
                     version={f.version}

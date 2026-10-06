@@ -21,6 +21,7 @@ import { Z } from "@/lib/ui/z";
 import {
   COOKIE_DE_RECORRIDOS,
   EVENTO_DEL_RECORRIDO,
+  accionesDelPaso,
   escribirVistos,
   estadoDe,
   leerVistos,
@@ -30,6 +31,7 @@ import {
   recorridosDelRol,
   type AccionDelRecorrido,
   type ComoTermino,
+  type LadoDelGlobo,
   type Recorrido,
   type Vistos,
 } from "@/lib/recorridos";
@@ -45,6 +47,8 @@ const PENDIENTE = "nexus-recorrido-pendiente";
 const ESPERA_MAXIMA_MS = 6000;
 /** Cuánto se espera a que una acción (elegir algo en la rueda) pinte el elemento del paso. */
 const ESPERA_DE_ACCION_MS = 2500;
+/** El respiro entre dos acciones de un mismo paso, para que la pantalla que pintó la primera ya escuche. */
+const ENTRE_ACCIONES_MS = 150;
 
 function guardarCookie(vistos: Vistos) {
   const valor = escribirVistos(vistos);
@@ -75,24 +79,43 @@ async function esperarAncla(ancla: string, tope: number) {
   }
 }
 
+/**
+ * Lo que es más alto que la pantalla sin lugar para el globo (el marco de la preventa, una tabla
+ * larga) va con el globo arriba y centrado: es el único lado con el que la librería, al desplazarse,
+ * deja lugar para el globo encima. Con «bottom» el globo no cabía en ningún lado y salía cortado.
+ */
+function ladoQueCabe(el: HTMLElement | null, lado: LadoDelGlobo): LadoDelGlobo {
+  if (!el || lado.startsWith("left") || lado.startsWith("right")) return lado;
+  return el.getBoundingClientRect().height > window.innerHeight * 0.55 ? "top" : lado;
+}
+
 function pasosALaVista(recorrido: Recorrido, rol: TeamRole | null): Step[] {
   const pasos: Step[] = [];
   for (const p of pasosDelRol(recorrido, rol)) {
+    const acciones = accionesDelPaso(p);
     // Un paso con acción recién tiene su elemento después de hacerla: entra siempre y se busca
     // cuando le toca. El resto, solo si ya está a la vista.
-    if (!p.accion && !elementoALaVista(p.ancla)) continue;
-    const accion = p.accion;
+    const el = acciones.length ? null : elementoALaVista(p.ancla);
+    if (!acciones.length && !el) continue;
     pasos.push({
       // Se busca cuando le toca, no al arrancar: un panel que cambia de variante reemplaza su nodo.
       target: () => elementoALaVista(p.ancla),
       title: p.titulo,
       content: p.texto,
-      placement: p.lado ?? "bottom",
+      placement: ladoQueCabe(el, p.lado ?? "bottom"),
       data: { rotulo: recorrido.rotulo },
-      ...(accion
+      ...(acciones.length
         ? {
             before: async () => {
-              pedirAccion(accion);
+              // En orden, dándole a la pantalla un momento entre una y otra: la segunda la escucha
+              // a veces quien recién apareció con la primera (la sesión, al abrir Exploración).
+              for (const [i, a] of acciones.entries()) {
+                pedirAccion(a);
+                if (i < acciones.length - 1) {
+                  await dosCuadros();
+                  await new Promise((listo) => window.setTimeout(listo, ENTRE_ACCIONES_MS));
+                }
+              }
               await esperarAncla(p.ancla, ESPERA_DE_ACCION_MS);
             },
             targetWaitTimeout: ESPERA_DE_ACCION_MS,
@@ -294,6 +317,9 @@ export default function RecorridosProvider({
           scrollToFirstStep
           steps={corrida.pasos}
           tooltipComponent={GloboDelRecorrido}
+          // El globo nunca sale de la pantalla: si no cabe arriba ni abajo de lo que señala (algo más
+          // alto que la pantalla), se corre hacia adentro aunque tape el borde de eso.
+          floatingOptions={{ shiftOptions: { crossAxis: true, padding: 12 } }}
           onEvent={alEvento}
           locale={{ back: "Anterior", close: "Cerrar", last: "Terminar", next: "Siguiente", skip: "Saltar" }}
           options={{

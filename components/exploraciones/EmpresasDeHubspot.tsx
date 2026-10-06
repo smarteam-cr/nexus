@@ -106,7 +106,7 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
   }
 
   return (
-    <section id="planificar" className="scroll-mt-6 space-y-3 rounded-xl border border-line bg-surface p-5">
+    <section id="planificar" data-recorrido="preventa.lista.planificar" className="scroll-mt-6 space-y-3 rounded-xl border border-line bg-surface p-5">
       <div>
         <h2 className="text-sm font-semibold text-fg">Planificar con una empresa</h2>
         <p className="text-xs text-fg-muted">Las del HubSpot de Smarteam. Busca por nombre o dominio; sin búsqueda, ves las de actividad más reciente.</p>

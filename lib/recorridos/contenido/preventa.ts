@@ -1,183 +1,144 @@
 /**
- * Recorridos de la Preventa (`/sales/exploraciones/[id]`), una por pieza del lienzo.
+ * Recorridos de la Preventa: el del listado (`/sales/exploraciones`) y el de una preventa
+ * (`/sales/exploraciones/[id]`), que pasa por TODAS sus piezas en orden: Resumen, Preparación,
+ * Exploración (con los tres momentos de la sesión), La escala, Casos de uso y Propuesta.
  *
- * El del Resumen es el de la cabecera (la pieza de entrada, sin `?pieza=`); los de Preparación,
- * Exploración y La escala son `porPantalla`: los declara `LienzoDeExploracion` según la pieza
- * abierta. Los ve el área de Ventas (`SALES_AREA_ROLES`).
+ * Cada paso pide su pieza (`preventa.pieza`, lo escucha `LienzoDeExploracion`) y, en Exploración, el
+ * momento de la sesión (`preventa.momento`, lo escucha `SesionesDeExploracion`). Así «Anterior» deja
+ * la pantalla igual que la primera vez. Los pasos del riel y del panel no piden nada: se ven en
+ * cualquier pieza. Mientras corre el recorrido, abrir Preparación o Casos de uso no despierta al
+ * agente (se abrieron para mostrarlas, no para trabajarlas).
+ *
+ * Hasta el 2026-10-06 eran cuatro recorridos, uno por pieza (`preventa-resumen`, `-preparacion`,
+ * `-exploracion` y `-escala`): Elías pidió uno solo con todas las piezas. Los ve el área de Ventas
+ * (`SALES_AREA_ROLES`).
  */
-import type { Recorrido } from "../tipos";
+import type { AccionDelRecorrido, Recorrido } from "../tipos";
 
 const ROLES = ["VENTAS", "DEV", "CSL", "SUPER_ADMIN"] as const;
 const RUTA = /^\/sales\/exploraciones\/[^/]+\/?$/;
 const EJEMPLO = "/sales/exploraciones/cmtum4orn00bd07lg0if1q51q";
 const LISTADO = "/sales/exploraciones";
 
-const PASO_QUE_SIGUE = {
-  ancla: "que-sigue",
-  titulo: "Lo próximo que te toca",
-  texto: "Siempre arriba a la derecha, con un botón que te lleva a la pieza donde se hace.",
-  lado: "left-start",
-} as const;
+type Pieza = "resumen" | "preparacion" | "exploracion" | "escala" | "casos" | "propuesta";
+const pieza = (valor: Pieza): AccionDelRecorrido => ({ evento: "preventa.pieza", valor });
+const momento = (valor: "antes" | "durante" | "despues"): readonly AccionDelRecorrido[] => [pieza("exploracion"), { evento: "preventa.momento", valor }];
 
-export const PREVENTA_RESUMEN: Recorrido = {
-  id: "preventa-resumen",
+export const PREVENTA: Recorrido = {
+  id: "preventa",
   version: 1,
-  titulo: "Preventa · Resumen",
-  descripcion: "Las piezas, el marco de la venta y lo que sugiere el agente",
+  titulo: "Una preventa",
+  descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
   invitacion: {
     titulo: "¿Te muestro cómo se usa la preventa?",
-    texto: "Las piezas, lo que hay que saber para proponer y lo que sugiere el agente. Menos de un minuto.",
+    texto: "Todas sus piezas, de la preparación a la propuesta, con lo que hace el agente en cada una. Unos dos minutos.",
   },
   ruta: RUTA,
+  // Siempre desde el principio, sin importar qué pieza esté abierta.
+  alArrancar: [pieza("resumen")],
   ejemplo: EJEMPLO,
   irA: { href: LISTADO, aviso: "Abre cualquier preventa y el recorrido arranca solo." },
   grupo: "ventas",
   roles: ROLES,
   pasos: [
+    // Resumen
     {
       ancla: "preventa.riel",
       titulo: "Las piezas de la preventa",
-      texto: "En orden, de la preparación a la propuesta. El punto dice cómo va cada una: verde con contenido, ámbar con algo que hacer, azul con sugerencias del agente.",
+      texto: "De la preparación a la propuesta, en orden. El punto dice cómo va cada una: verde con contenido, ámbar con algo que hacer y azul con sugerencias del agente.",
       lado: "right-start",
     },
     {
-      ancla: "preventa.resumen.sugerencias",
-      titulo: "Lo que sugirió el agente",
-      texto: "Cuántas cosas dejó para estas tarjetas. Revísalas una por una o úsalas todas: nada se confirma solo.",
-      lado: "bottom-start",
-    },
-    {
       ancla: "preventa.resumen.marco",
-      titulo: "Lo que hay que saber para proponer",
+      titulo: "Resumen: lo que hay que saber para proponer",
       texto: "Metas, planes, retos, tiempos, presupuesto, quién decide y qué pasa si no actúa. Una tarjeta vacía es algo que falta preguntar; tócala para completarla.",
-      lado: "bottom-start",
+      lado: "top",
+      accion: pieza("resumen"),
     },
     {
       ancla: "preventa.resumen.casillas",
       titulo: "Objeciones y particularidades",
       texto: "Lo que el cliente dijo que lo frena y lo propio de la cuenta. El agente lo propone al leer cada reunión.",
-      lado: "top-start",
+      lado: "top",
+      accion: pieza("resumen"),
     },
-    PASO_QUE_SIGUE,
     {
-      ancla: "preventa.panel.marco",
-      titulo: "El marco, desde cualquier pieza",
-      texto: "Las ocho tarjetas en miniatura: verde confirmada, azul sugerida, punteada la que falta.",
+      ancla: "que-sigue",
+      titulo: "Lo próximo que te toca",
+      texto: "A la derecha, en cualquier pieza, con un botón que te lleva a donde se hace.",
       lado: "left-start",
     },
     {
-      ancla: "recorrido.boton",
-      titulo: "Un recorrido por pieza",
-      texto: "Al abrir Preparación, Exploración o La escala, este botón ofrece el recorrido de esa pieza.",
-      lado: "bottom-end",
+      ancla: "preventa.panel.marco",
+      titulo: "El marco, de un vistazo",
+      texto: "Las ocho tarjetas en miniatura: verde la confirmada, azul la sugerida y punteada la que falta.",
+      lado: "left-start",
     },
-  ],
-};
-
-export const PREVENTA_PREPARACION: Recorrido = {
-  id: "preventa-preparacion",
-  version: 1,
-  titulo: "Preventa · Preparación",
-  descripcion: "Qué investigó el agente, con quién hablas y cómo abrir la conversación",
-  rotulo: "Recorrido · Preparación",
-  invitacion: {
-    titulo: "¿Te muestro cómo preparar la reunión?",
-    texto: "Lo que investigó el agente, con quién vas a hablar y cómo abrir la conversación. Menos de un minuto.",
-  },
-  ruta: RUTA,
-  porPantalla: true,
-  ejemplo: EJEMPLO,
-  irA: { href: LISTADO, aviso: "Abre una preventa y entra a «Preparación»: el recorrido arranca solo." },
-  grupo: "ventas",
-  roles: ROLES,
-  pasos: [
+    // Preparación
     {
       ancla: "preventa.preparacion.agente",
-      titulo: "El agente prepara la reunión",
-      texto: "Investiga la empresa en internet, lee HubSpot y el diagnóstico, y te deja propuestos el «por qué ahora», la radiografía y cómo conectar.",
+      titulo: "Preparación: el agente investiga",
+      texto: "Busca la empresa en internet, lee HubSpot y el test, y te deja sugeridos el «por qué ahora», la radiografía y cómo conectar.",
       lado: "bottom-start",
+      accion: pieza("preparacion"),
     },
     {
       ancla: "preventa.preparacion.resumen",
-      titulo: "Lo que escribió la IA",
-      texto: "Por qué ahora, cómo está su HubSpot y la radiografía de la empresa, una sola vez y arriba. Lo usas, lo cambias o lo descartas.",
-      lado: "bottom-start",
-    },
-    {
-      ancla: "preventa.sugerencia",
-      titulo: "Una sugerencia en azul",
-      texto: "Trae de dónde salió. «Usar» la confirma; «Descartar» la quita.",
-      lado: "bottom-start",
+      titulo: "Lo que escribió la IA, arriba",
+      texto: "Por qué ahora, cómo está su HubSpot y la radiografía de la empresa. Cada sugerencia dice de dónde salió: «Usar» la confirma y «Descartar» la quita.",
+      lado: "top",
+      accion: pieza("preparacion"),
     },
     {
       ancla: "preventa.preparacion.contacto",
       titulo: "Con quién vas a hablar",
-      texto: "Su cargo, correo, teléfono y WhatsApp, y si hizo el diagnóstico.",
+      texto: "Su cargo, correo, teléfono y WhatsApp, y si hizo el test.",
       lado: "right-start",
+      accion: pieza("preparacion"),
     },
     {
       ancla: "preventa.preparacion.conexion",
       titulo: "Cómo abrir la conversación",
       texto: "Qué le duele, qué le ofrecemos y cómo conectar. Si ya agendó, la estrategia de conexión queda plegada.",
       lado: "left-start",
+      accion: pieza("preparacion"),
     },
-    PASO_QUE_SIGUE,
-  ],
-};
-
-export const PREVENTA_EXPLORACION: Recorrido = {
-  id: "preventa-exploracion",
-  version: 1,
-  titulo: "Preventa · Exploración",
-  descripcion: "Las sesiones, la guía de antes y lo que salió después",
-  rotulo: "Recorrido · Exploración",
-  invitacion: {
-    titulo: "¿Te muestro cómo llevar las sesiones?",
-    texto: "La guía para preparar cada reunión y qué hacer con lo que salió. Menos de un minuto.",
-  },
-  ruta: RUTA,
-  porPantalla: true,
-  ejemplo: EJEMPLO,
-  irA: { href: LISTADO, aviso: "Abre una preventa y entra a «Exploración»: el recorrido arranca solo." },
-  grupo: "ventas",
-  roles: ROLES,
-  pasos: [
+    // Exploración
     {
       ancla: "preventa.sesiones",
-      titulo: "Las sesiones",
-      texto: "Cada reunión con el cliente es una sesión: ✓ hecha, ● abierta, y en ámbar si el agente no leyó su reunión. «+ Agregar sesión» planea otra.",
+      titulo: "Exploración: una sesión por reunión",
+      texto: "Cada reunión con el cliente es una sesión: ✓ la hecha y ● la que miras. «+ Agregar sesión» planea otra.",
       lado: "right-start",
-    },
-    {
-      ancla: "preventa.sesion.cabecera",
-      titulo: "La sesión que miras",
-      texto: "Su fecha, su tema o la reunión ligada, y si el agente ya la leyó.",
-      lado: "bottom-start",
+      accion: pieza("exploracion"),
     },
     {
       ancla: "preventa.sesion.momento",
-      titulo: "Antes y después",
-      texto: "Antes: la guía para preparar la reunión. Después: lo que salió y lo que queda para la próxima.",
+      titulo: "Antes, durante y después",
+      texto: "Cada sesión tiene tres momentos: la guía para prepararla, tus notas y lo que salió de la reunión.",
       lado: "bottom-end",
+      accion: pieza("exploracion"),
     },
     {
       ancla: "preventa.sesion.preguntas",
-      titulo: "Las preguntas de la guía",
-      texto: "A la izquierda, lo que falta del marco de la venta; a la derecha, lo que falta confirmar de la escala, cada una con sus repreguntas.",
-      lado: "top-start",
+      titulo: "Antes: las preguntas de la guía",
+      texto: "A la izquierda, lo que falta del marco de la venta; a la derecha, lo que falta confirmar de la escala. Cada pregunta trae sus repreguntas.",
+      lado: "top",
+      accion: momento("antes"),
+    },
+    {
+      ancla: "preventa.sesion.notas",
+      titulo: "Durante: tus notas",
+      texto: "Lo que sabes y no quedó en la grabación. Se guarda solo, y el agente lo lee como tu nota, no como palabras del cliente.",
+      lado: "top",
+      accion: momento("durante"),
     },
     {
       ancla: "preventa.sesion.salio",
-      titulo: "Lo que salió de la reunión",
-      texto: "Lo que el agente sacó, con la frase del cliente, para usar o descartar, y lo que se dijo sin explorar, para llevarlo a la próxima.",
-      lado: "top-start",
-    },
-    {
-      ancla: "preventa.sesion.siguiente",
-      titulo: "La próxima sesión",
-      texto: "El siguiente paso acordado y el botón que crea la próxima sesión con su guía.",
-      lado: "top-start",
+      titulo: "Después: lo que salió",
+      texto: "Lo que el agente sacó de la reunión, con la frase del cliente, y lo que se dijo sin explorar, para llevarlo a la próxima sesión.",
+      lado: "top",
+      accion: momento("despues"),
     },
     {
       ancla: "preventa.objeciones",
@@ -185,61 +146,124 @@ export const PREVENTA_EXPLORACION: Recorrido = {
       texto: "A mano en plena reunión: el método, las objeciones de esta empresa y qué hacer si no te deja explorar.",
       lado: "right-end",
     },
-  ],
-};
-
-export const PREVENTA_ESCALA: Recorrido = {
-  id: "preventa-escala",
-  version: 2,
-  titulo: "Preventa · La escala",
-  descripcion: "Dónde parece estar cada equipo y qué conviene trabajar primero",
-  rotulo: "Recorrido · La escala",
-  invitacion: {
-    titulo: "¿Te muestro cómo leer la escala?",
-    texto: "Con qué escala se mide, dónde parece estar cada equipo y qué va primero. Menos de un minuto.",
-  },
-  ruta: RUTA,
-  porPantalla: true,
-  ejemplo: EJEMPLO,
-  irA: { href: LISTADO, aviso: "Abre una preventa y entra a «La escala»: el recorrido arranca solo." },
-  grupo: "ventas",
-  roles: ROLES,
-  pasos: [
+    // La escala
     {
       ancla: "preventa.escala.edicion",
-      titulo: "Con qué se mide",
-      texto: "La industria y cómo vende la empresa se eligen solas. Si no calzan, las cambias. Abajo, país y tamaño para comparar después.",
+      titulo: "La escala: con qué se mide",
+      texto: "La industria y cómo vende la empresa se eligen solas; si no calzan, las cambias. Abajo, el país y el tamaño.",
       lado: "bottom-start",
+      accion: pieza("escala"),
     },
     {
       ancla: "preventa.escala.areas",
       titulo: "Las áreas, como pestañas",
       texto: "Cada área con su nivel. La que no está en juego se suma desde su pestaña, y la que está se saca igual de fácil.",
       lado: "bottom-start",
-    },
-    {
-      ancla: "preventa.escala.leyenda",
-      titulo: "Cómo leer la rueda",
-      texto: "Cada porción se pinta hasta su nivel. ✓ es evidencia, ? es hipótesis (en un tono más claro) y el punto azul es algo nuevo del agente.",
-      lado: "bottom-start",
-    },
-    {
-      ancla: "preventa.escala.mapa",
-      titulo: "El área abierta",
-      texto: "Dónde parece estar el equipo y por qué está ahí: lo que lo frena.",
-      lado: "top-start",
+      accion: pieza("escala"),
     },
     {
       ancla: "preventa.escala.dimensiones",
-      titulo: "Cada dimensión",
-      texto: "Pasa el cursor por una celda para ver qué dice la escala de ese nivel. Tócala para ver qué preguntar y elegir el nivel con un clic.",
-      lado: "top-start",
+      titulo: "Dónde está cada dimensión",
+      texto: "Cada porción se pinta hasta su nivel: ✓ es evidencia y ? es hipótesis. Toca una para ver qué preguntar y elegir el nivel con un clic.",
+      lado: "top",
+      accion: pieza("escala"),
     },
     {
       ancla: "preventa.escala.primero",
       titulo: "Qué va primero",
       texto: "Lo que conviene trabajar primero y por qué. Es lo que el prospecto se lleva de la reunión.",
+      lado: "top",
+      accion: pieza("escala"),
+    },
+    // Casos de uso
+    {
+      ancla: "preventa.casos.agente",
+      titulo: "Casos de uso",
+      texto: "El agente propone casos según dónde está cada equipo. «Usar» los pasa a elegidos, y los elegidos entran a la propuesta.",
+      lado: "bottom-start",
+      accion: pieza("casos"),
+    },
+    // Propuesta
+    {
+      ancla: "preventa.propuesta.lista",
+      titulo: "Lista para proponer el land",
+      texto: "Los siete puntos que pide la propuesta de un primer proyecto acotado. Avisan, no bloquean.",
+      lado: "top",
+      accion: pieza("propuesta"),
+    },
+    {
+      ancla: "preventa.propuesta.armar",
+      titulo: "Armar la propuesta",
+      texto: "Elige el negocio de HubSpot y Nexus la arma con lo confirmado. Lo interno, como el presupuesto o las objeciones, no entra.",
+      lado: "top",
+      accion: pieza("propuesta"),
+    },
+  ],
+};
+
+export const PREVENTA_LISTADO: Recorrido = {
+  id: "preventa-listado",
+  version: 1,
+  titulo: "Preventa · Listado",
+  descripcion: "Las preventas en curso, cómo leerlas y por dónde empezar una",
+  rotulo: "Recorrido · Preventa",
+  invitacion: {
+    titulo: "¿Te muestro cómo se usa el listado?",
+    texto: "Qué sigue en cada preventa, cuánto falta para proponer y por dónde empezar una nueva. Menos de un minuto.",
+  },
+  ruta: /^\/sales\/exploraciones\/?$/,
+  ejemplo: LISTADO,
+  irA: { href: LISTADO },
+  grupo: "ventas",
+  roles: ROLES,
+  pasos: [
+    {
+      ancla: "preventa.lista.filtros",
+      titulo: "Las preventas en curso",
+      texto: "Todas, solo las que llevas tú o las que ya están listas para proponer. El buscador filtra por empresa.",
+      lado: "bottom-start",
+    },
+    {
+      ancla: "preventa.lista.fila",
+      titulo: "Una fila por empresa",
+      texto: "Toca la fila para abrir su preventa. Lo más reciente va arriba.",
+      lado: "bottom-start",
+    },
+    {
+      ancla: "preventa.lista.sigue",
+      titulo: "Qué sigue",
+      texto: "Lo próximo que toca en esa preventa. El chip azul cuenta las sugerencias del agente que esperan que las revises.",
+      lado: "bottom-start",
+    },
+    {
+      ancla: "preventa.lista.proponer",
+      titulo: "Cuánto falta para proponer",
+      texto: "Un tramo por cada punto que pide la propuesta del land: verde el que está listo. Pasa el cursor por la barra para ver los siete.",
+      lado: "bottom-start",
+    },
+    {
+      ancla: "preventa.lista.lleva",
+      titulo: "Quién la lleva",
+      texto: "Elígela aquí mismo. A esa persona le llega un aviso y la preventa entra en su «Para ti».",
+      lado: "bottom-end",
+    },
+    {
+      ancla: "preventa.lista.planificar",
+      titulo: "Empezar una preventa",
+      texto: "Busca cualquier empresa de HubSpot por nombre o dominio y abre su preventa. Sin búsqueda, ves las de actividad más reciente.",
       lado: "top-start",
+    },
+    {
+      ancla: "que-sigue",
+      titulo: "Por dónde empezar",
+      texto: "Quién hizo el test y todavía no tiene reunión: prepara su preventa antes de llamarla.",
+      lado: "left-start",
+    },
+    {
+      ancla: "preventa.lista.test",
+      titulo: "Llegaron por el test",
+      texto: "Las empresas cuyo contacto hizo el test de marketing y todavía no tienen preventa, la más reciente arriba. «Planificar» la abre.",
+      lado: "left-start",
     },
   ],
 };

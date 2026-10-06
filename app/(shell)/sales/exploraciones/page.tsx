@@ -38,6 +38,7 @@ export default async function ExploracionesPage() {
     <div className="flex flex-col lg:min-h-screen lg:flex-row">
       <main className={cn(SHELL_DEFAULT, "min-w-0 flex-1")}>
         <PageHeader
+          recorrido="preventa-listado"
           title="Preventa"
           description="El lienzo de cada prospecto: prepara cada reunión, ubícalo en la escala y llega a la propuesta con sus metas en cifras."
           crumbs={[{ label: "Ventas", href: "/business-cases" }, { label: "Preventa" }]}

@@ -15,7 +15,7 @@ import { formasDeVoseo } from "@/lib/ui/voseo";
 import { RECORRIDOS, recorridoPorId } from "./registro";
 import { escribirVistos, estadoDe, leerVistos, marcarVisto } from "./vistos";
 import { pasosDelRol, recorridoActual, recorridoDeLaRuta, recorridosDelRol } from "./filtro";
-import type { Recorrido } from "./tipos";
+import { accionesDelPaso, type Recorrido } from "./tipos";
 
 const FUENTES = [...listarTsx("app"), ...listarTsx("components")];
 const CODIGO = FUENTES.map((rel) => ({ rel, texto: fs.readFileSync(path.join(RAIZ, rel), "utf8") }));
@@ -95,7 +95,7 @@ describe("el registro de recorridos", () => {
   });
 
   it("cada acción que pide un recorrido la escucha alguna pantalla", () => {
-    const eventos = new Set(RECORRIDOS.flatMap((r) => [...(r.alArrancar ?? []), ...r.pasos.flatMap((p) => (p.accion ? [p.accion] : []))]).map((a) => a.evento));
+    const eventos = new Set(RECORRIDOS.flatMap((r) => [...(r.alArrancar ?? []), ...r.pasos.flatMap((p) => accionesDelPaso(p))]).map((a) => a.evento));
     const sinQuien = [...eventos].filter((ev) => !CODIGO.some(({ texto }) => texto.includes("EVENTO_DEL_RECORRIDO") && texto.includes(`"${ev}"`)));
     expect(sinQuien, "Ninguna pantalla escucha estos eventos del recorrido (EVENTO_DEL_RECORRIDO)").toEqual([]);
   });

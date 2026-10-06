@@ -21,6 +21,7 @@ import { useEffect, useState } from "react";
 import { Alert, Badge, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { esCasoLibre, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
+import { useRecorridos } from "@/components/recorridos/contexto";
 import { useLienzo } from "./contexto";
 import FranjaDeSugerencias, { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
@@ -153,12 +154,14 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   const yaPropuso = e.propuesta.corridas.some((c) => c.modo === "casos");
 
   /* La primera vez que se abre el paso, el agente propone solo. Si en ese momento ya trabajaba en
-     otra cosa, no se insiste: queda el botón. */
+     otra cosa, no se insiste: queda el botón. Un recorrido guiado abre la pieza para mostrarla: ahí
+     no se gasta al agente. */
+  const enRecorrido = !!useRecorridos()?.activo;
   useEffect(() => {
-    if (!puedeEditar || areas.length === 0 || yaPropuso || yaLanzadas.has(exp.id)) return;
+    if (enRecorrido || !puedeEditar || areas.length === 0 || yaPropuso || yaLanzadas.has(exp.id)) return;
     yaLanzadas.add(exp.id);
     void lanzar("casos");
-  }, [puedeEditar, areas.length, yaPropuso, exp.id, lanzar]);
+  }, [enRecorrido, puedeEditar, areas.length, yaPropuso, exp.id, lanzar]);
 
   const quitar = (id: string) => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: null }]);
   const elegirDelCatalogo = (caso: Caso, areaId: string | null) =>
@@ -168,35 +171,37 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
 
   return (
     <div className="space-y-6">
-      <FranjaDeSugerencias
-        acciones={
-          puedeEditar && (
+      <div data-recorrido="preventa.casos.agente">
+        <FranjaDeSugerencias
+          acciones={
+            puedeEditar && (
+              <>
+                <BotonBlanco disabled={lanzando || corriendo || areas.length === 0} onClick={() => void lanzar("casos")}>
+                  {lanzando ? "Pidiendo…" : yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
+                </BotonBlanco>
+                {propuestos.length > 1 && (
+                  <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usarVarias", items: propuestos.map((it) => ({ itemId: it.id, valor: it.valor })) }])}>
+                    Usar los {propuestos.length}
+                  </BotonAzul>
+                )}
+              </>
+            )
+          }
+        >
+          {corriendo && esPropia ? (
+            <span role="status">El agente está pensando los casos: {corrida?.fase ?? "empezando…"}</span>
+          ) : propuestos.length > 0 ? (
             <>
-              <BotonBlanco disabled={lanzando || corriendo || areas.length === 0} onClick={() => void lanzar("casos")}>
-                {lanzando ? "Pidiendo…" : yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
-              </BotonBlanco>
-              {propuestos.length > 1 && (
-                <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usarVarias", items: propuestos.map((it) => ({ itemId: it.id, valor: it.valor })) }])}>
-                  Usar los {propuestos.length}
-                </BotonAzul>
-              )}
+              <strong>
+                El agente sugiere {propuestos.length} {propuestos.length === 1 ? "caso" : "casos"}
+              </strong>
+              {nombresDeAreas ? ` para ${nombresDeAreas}` : ""}, según dónde está cada equipo. Experimental: sin biblioteca ni precio.
             </>
-          )
-        }
-      >
-        {corriendo && esPropia ? (
-          <span role="status">El agente está pensando los casos: {corrida?.fase ?? "empezando…"}</span>
-        ) : propuestos.length > 0 ? (
-          <>
-            <strong>
-              El agente sugiere {propuestos.length} {propuestos.length === 1 ? "caso" : "casos"}
-            </strong>
-            {nombresDeAreas ? ` para ${nombresDeAreas}` : ""}, según dónde está cada equipo. Experimental: sin biblioteca ni precio.
-          </>
-        ) : (
-          <>El agente propone casos de uso según dónde está cada equipo en la escala y lo que contó el cliente. Experimental: sin biblioteca ni precio; cada tanda cuesta unos centavos.</>
-        )}
-      </FranjaDeSugerencias>
+          ) : (
+            <>El agente propone casos de uso según dónde está cada equipo en la escala y lo que contó el cliente. Experimental: sin biblioteca ni precio; cada tanda cuesta unos centavos.</>
+          )}
+        </FranjaDeSugerencias>
+      </div>
 
       {corrida?.estado === "ERROR" && esPropia && <Alert variant="danger">{corrida.error}</Alert>}
       {areas.length === 0 && <p className="text-sm text-fg-muted">Elige primero las áreas en juego (en «La escala»): los casos de uso se proponen por área.</p>}

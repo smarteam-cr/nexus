@@ -21,6 +21,7 @@ import { diaConAnio, diaYHora } from "@/lib/exploraciones/fechas";
 import { definicionDe } from "@/lib/exploraciones/casillas";
 import { debePrepararSola, estadoDeLaPreparacion, ultimaPreparacion, type CorridasAlAbrir } from "@/lib/exploraciones/preparar-sola";
 import { contactoPrincipal, porQueAhoraSugerido, senalesDe, type ContactoConRastro, type Senal } from "@/lib/exploraciones/senales";
+import { useRecorridos } from "@/components/recorridos/contexto";
 import { Casilla, Vista } from "./Casilla";
 import { useLienzo } from "./contexto";
 import { BotonAzul, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
@@ -126,11 +127,13 @@ function BarraDelAgente() {
     alAbrir,
     ocupado: corriendo || lanzando,
   });
+  // Mientras corre un recorrido guiado, la pieza se abrió para mostrarla, no para trabajarla: no se gasta al agente.
+  const enRecorrido = !!useRecorridos()?.activo;
   useEffect(() => {
-    if (!prepararSola || yaPreparadasSolas.has(exp.id)) return;
+    if (enRecorrido || !prepararSola || yaPreparadasSolas.has(exp.id)) return;
     yaPreparadasSolas.add(exp.id);
     void lanzar("preparar");
-  }, [prepararSola, exp.id, lanzar]);
+  }, [enRecorrido, prepararSola, exp.id, lanzar]);
   return (
     <div data-recorrido="preventa.preparacion.agente" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info-line bg-info-surface px-5 py-4">
       <div className="min-w-0 space-y-0.5">

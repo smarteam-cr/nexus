@@ -13,7 +13,7 @@ import type { Recorrido } from "./tipos";
 import { CLIENTES_LISTADO, FICHA_CRONOGRAMA, FICHA_DEL_CLIENTE, FICHA_EXPLORACION, FICHA_INFORMACION } from "./contenido/clientes";
 import { EXITO_CUENTA, EXITO_LISTADO } from "./contenido/exito";
 import { ESCALA } from "./contenido/escala";
-import { PREVENTA_ESCALA, PREVENTA_EXPLORACION, PREVENTA_PREPARACION, PREVENTA_RESUMEN } from "./contenido/preventa";
+import { PREVENTA, PREVENTA_LISTADO } from "./contenido/preventa";
 import {
   FINANZAS_AGUINALDO,
   FINANZAS_CAJA_NETA,
@@ -54,10 +54,8 @@ export const RECORRIDOS: readonly Recorrido[] = [
   EXITO_LISTADO,
   EXITO_CUENTA,
   // Ventas
-  PREVENTA_RESUMEN,
-  PREVENTA_PREPARACION,
-  PREVENTA_EXPLORACION,
-  PREVENTA_ESCALA,
+  PREVENTA_LISTADO,
+  PREVENTA,
   // Finanzas, en el orden del menú
   FINANZAS_PENDIENTES,
   FINANZAS_SUPERVISION,

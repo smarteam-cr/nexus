@@ -13,7 +13,7 @@
  * vive acá, para poder abrirlas desde cualquier columna.
  */
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Drawer, useToast } from "@/components/ui";
 import type { EstadoDePieza } from "@/components/canvas/SelectorDePiezas";
 import type { Letra } from "@/lib/escala/documento/tipos";
@@ -46,7 +46,7 @@ import PasoPropuesta from "./PasoPropuesta";
 import Resumen, { lineasDe } from "./Resumen";
 import RevisarSugerencias from "./RevisarSugerencias";
 import RielDePiezas, { type FilaDelRiel } from "./RielDePiezas";
-import { usePantallaDelRecorrido } from "@/components/recorridos/contexto";
+import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 
 /** Qué es cada pieza, en una línea, debajo de su nombre. Exploración lleva su propio encabezado (la sesión). */
 const DE_QUE_VA: Record<Exclude<PasoDelLienzoUI, "exploracion">, string> = {
@@ -297,10 +297,20 @@ export default function LienzoDeExploracion({
     },
   };
 
-  // El recorrido de la pieza abierta: el botón «Recorrido» de la cabecera ofrece ese. El del Resumen es el de la cabecera.
-  usePantallaDelRecorrido(
-    paso === "preparacion" ? "preventa-preparacion" : paso === "exploracion" ? "preventa-exploracion" : paso === "escala" ? "preventa-escala" : null,
-  );
+  /* El recorrido de la preventa pasa por todas las piezas (lib/recorridos/contenido/preventa.ts): cada
+     paso pide la suya. Se cierran los cajones, que taparían lo que señala. */
+  useEffect(() => {
+    const alPedido = (e: Event) => {
+      const a = (e as CustomEvent<AccionDelRecorrido>).detail;
+      if (a?.evento !== "preventa.pieza" || !esPieza(a.valor)) return;
+      setCasillaAbierta(null);
+      setObjecionesAbiertas(false);
+      setRevision((r) => ({ ...r, abierto: false }));
+      setPaso(a.valor);
+    };
+    window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+    return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+  }, [setPaso]);
 
   const sigue = queSigueConPaso(exp.estado, chequeo, sinLeer);
   const deCadaPaso = (p: PasoDelLienzoUI) => revisables.filter((it) => piezaDelDestino(it.destino) === p).length;

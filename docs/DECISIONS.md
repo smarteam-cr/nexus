@@ -4727,7 +4727,7 @@ la tanda configurada en 1 publicación de empresa y 0 de perfil personal: las ú
   texto en voseo o un texto largo de más.
 - **Una pieza de un lienzo tiene su propio recorrido** (2026-10-04, segunda tanda). El cronograma,
   la exploración y la información del cliente viven en la misma dirección que la ficha
-  (`/clients/[id]`); las piezas de la preventa, en `/sales/exploraciones/[id]`. Esos recorridos son
+  (`/clients/[id]`). Esos recorridos son
   `porPantalla`: la pieza abierta los declara con `usePantallaDelRecorrido(id)` y el botón
   «Recorrido» de la cabecera ofrece ese en vez del de la ficha. Al cerrar la pieza vuelve el de la
   ficha. «Ver» desde la lista, con la ficha abierta en otra pieza, no navega: avisa a qué pieza entrar.
@@ -4748,6 +4748,15 @@ la tanda configurada en 1 publicación de empresa y 0 de perfil personal: las ú
   escucha y elige algo EXPLÍCITO, nunca alterna, así volver con «Anterior» deja lo mismo elegido. Un
   recorrido puede pedir acciones al arrancar (`alArrancar`: la escala abre el mapa y suelta lo
   elegido). La prueba frena una acción que ninguna pantalla escucha.
+- **La preventa tiene UN recorrido que pasa por todas sus piezas** (2026-10-06, pedido de Elías;
+  reemplaza los cuatro `porPantalla` de Resumen, Preparación, Exploración y La escala). Cada paso pide
+  su pieza (`preventa.pieza`) y, en Exploración, el momento de la sesión (`preventa.momento`): un paso
+  puede pedir varias acciones en orden. Arranca siempre en el Resumen. El listado tiene el suyo.
+  ⛔ **Un recorrido no gasta al agente**: abrir Preparación o Casos de uso durante el recorrido no
+  dispara la corrida que esas piezas hacen solas la primera vez (se abrieron para mostrarlas).
+- **El globo nunca se sale de la pantalla** (2026-10-06): si lo señalado es más alto que la pantalla,
+  el globo va arriba (`top`, el único lado con el que la librería deja lugar al desplazarse) y, si
+  igual no cabe, se corre hacia adentro aunque tape el borde de lo señalado. Antes salía cortado.
 - **Pendiente:** la bienvenida (espera a «Para ti») y los recorridos de Marketing, Sesiones,
   Documentación y Administración. Fuera del menú quedan sin recorrido Cobranza › Odoo, Mercury e
   Importar.

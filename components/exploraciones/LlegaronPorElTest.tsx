@@ -54,7 +54,7 @@ function QueSigue({ llegadas }: { llegadas: Llegada[] }) {
   else if (conReunion[0]) texto = `${conReunion[0].empresa} tiene reunión el ${diaConSemana(conReunion[0].proxima as string)}: planifica su preventa primero.`;
   if (!texto) return null;
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-3.5">
+    <section data-recorrido="que-sigue" className="flex flex-col gap-2 rounded-xl border border-info-line bg-info-surface p-3.5">
       <p className={cn(ROTULO, "text-brand")}>Qué sigue</p>
       <p className="text-sm leading-[1.4] text-fg">{texto}</p>
     </section>
@@ -133,7 +133,7 @@ export default function LlegaronPorElTest({ nombresDeAreas, puedeEditar }: { nom
     <div className="flex flex-col gap-4">
       {llegadas && <QueSigue llegadas={llegadas} />}
 
-      <div className="space-y-1">
+      <div data-recorrido="preventa.lista.test" className="space-y-1">
         <div className="flex items-baseline justify-between gap-2">
           <p className={ROTULO}>Llegaron por el test{llegadas ? ` · ${terminaron.length}` : ""}</p>
           {terminaron.length > A_LA_VISTA && (
