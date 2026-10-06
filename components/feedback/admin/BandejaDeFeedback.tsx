@@ -10,9 +10,9 @@
  * Arriba del reporte va, si hay, el tema al que se parece. NO es una sugerencia de un agente (sale de
  * contar palabras en común, lib/feedback/parecidos.ts), así que va sin la chispa y dice qué comparten.
  *
- * Lo comentado desde la escala (2026-10-05, lib/feedback/escala.ts) llega a la misma bandeja: en vez de
- * la captura muestra el criterio que se comentó, lo que se leyó y lo que dice hoy; al llevarlo a la hoja
- * de ruta pide la fila de «Cambios pendientes» del manual. «De dónde» filtra pantallas o escala.
+ * Lo que se manda desde la escala (2026-10-05, lib/feedback/escala.ts) llega a la misma bandeja: arriba
+ * de la captura muestra el criterio, lo que se leía y lo que dice hoy; al llevarlo a la hoja de ruta pide
+ * la fila de «Cambios pendientes» del manual. «De dónde» filtra pantallas o escala.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -53,7 +53,7 @@ export default function BandejaDeFeedback({
 }: {
   datos: DatosDeBandeja;
   reporteInicial: string | null;
-  /** `/feedback?origen=escala`: desde el botón «Comentarios» de la escala. */
+  /** `/feedback?origen=escala`: desde el botón «Feedback» de la escala. */
   origenInicial?: Origen;
 }) {
   const router = useRouter();
@@ -255,7 +255,7 @@ export default function BandejaDeFeedback({
                 <span className="flex-1" />
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-secondary">
                   <IconoDeTipo tipo={actual.tipo} />
-                  {actual.escala ? actual.escala.tipo : TIPO[actual.tipo].nombre}
+                  {TIPO[actual.tipo].nombre}
                 </span>
                 {actual.tipo === "falla" && actual.meFrena && (
                   <span className="rounded-full border border-warn-line bg-warn-surface px-2.5 py-0.5 text-xs font-semibold text-warn-ink">Le frena el trabajo</span>
@@ -264,14 +264,9 @@ export default function BandejaDeFeedback({
               <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.55] text-fg">«{actual.cuerpo}»</p>
             </div>
 
-            {actual.escala ? (
-              <LoQueSeComento detalle={detalle} />
-            ) : (
-              <>
-                <Captura detalle={detalle} />
-                <LoQueSeMando detalle={detalle} />
-              </>
-            )}
+            {actual.escala && <LoQueSeLeia detalle={detalle} />}
+            <Captura detalle={detalle} />
+            <LoQueSeMando detalle={detalle} />
             <Conversacion detalle={detalle} nombre={actual.autor.nombre.split(" ")[0]} onEnviado={refrescar} onResponderYCerrar={(t) => decidir({ accion: "responder", respuesta: t }, "Respondido y cerrado.")} />
           </>
         )}
@@ -369,7 +364,8 @@ function FilaDeReporte({ r, actual, conSugerencia, onElegir }: { r: ReporteDeBan
         <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
           <IconoDeTipo tipo={r.tipo} />
           <span className="truncate">
-            {r.escala ? `${r.escala.tipo} · ${r.pantalla} · ${r.escala.ancla}` : `${TIPO[r.tipo].nombre} · ${r.pantalla}`}
+            {TIPO[r.tipo].nombre} · {r.pantalla}
+            {r.escala ? ` · ${r.escala.ancla}` : ""}
           </span>
         </span>
         <span className="flex-none text-xs text-fg-muted">{haceCuanto(r.creado)}</span>
@@ -431,10 +427,10 @@ function Captura({ detalle }: { detalle: ReporteDetalle | null }) {
 }
 
 /**
- * Un comentario de la escala: qué criterio, lo que se leyó al comentar y, si cambió, lo que dice hoy;
- * con qué edición, cliente y perfil, y qué decisión cambiaría. En vez de la captura de una pantalla.
+ * Mandado desde la escala: qué criterio, lo que se leía al mandarlo y, si cambió, lo que dice hoy; con qué
+ * versión, edición y perfil. Va arriba de la captura.
  */
-function LoQueSeComento({ detalle }: { detalle: ReporteDetalle | null }) {
+function LoQueSeLeia({ detalle }: { detalle: ReporteDetalle | null }) {
   if (!detalle) return <div className="skeleton-shimmer h-[180px] rounded-xl border border-line" aria-hidden="true" />;
   const e = detalle.escala;
   if (!e) return null;
@@ -442,13 +438,11 @@ function LoQueSeComento({ detalle }: { detalle: ReporteDetalle | null }) {
   const hechos: { k: string; v: string }[] = [
     { k: "Versión de la escala", v: e.versionVigente && e.versionVigente !== e.version ? `${e.version} (hoy rige la ${e.versionVigente})` : e.version },
     { k: "Edición", v: e.edicion ?? "La escala general" },
-    ...(e.cliente ? [{ k: "Cliente", v: e.cliente.enNexus ? e.cliente.nombre : `${e.cliente.nombre} (no está en Nexus)` }] : []),
-    ...(e.perfil ? [{ k: "Perfil del caso", v: e.perfil }] : []),
-    ...(e.decision ? [{ k: "Qué decisión cambiaría", v: e.decision }] : []),
+    { k: "Perfil en la pantalla", v: e.perfil ?? "Sin filtrar" },
   ];
   return (
     <div className="space-y-2">
-      <p className={ROTULO_DEL_SISTEMA}>Lo que se comentó en la escala</p>
+      <p className={ROTULO_DEL_SISTEMA}>Sobre la escala</p>
       <div className="space-y-3 rounded-xl border border-line bg-surface px-4 py-3.5">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
           <span className="rounded-full border border-line bg-surface px-[7px] text-[11px] font-semibold tabular-nums leading-[18px] text-fg-secondary">{e.ancla}</span>
@@ -477,7 +471,6 @@ function LoQueSeComento({ detalle }: { detalle: ReporteDetalle | null }) {
             </div>
           ))}
         </dl>
-        <p className="text-xs text-fg-muted">Lo ve todo el equipo en la escala, y cualquiera puede responderlo ahí.</p>
       </div>
     </div>
   );

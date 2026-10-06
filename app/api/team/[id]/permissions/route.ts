@@ -31,7 +31,7 @@ import { revalidateTeamMembers } from "@/lib/cache/team";
 import { VISTAS_ELEGIBLES } from "@/lib/finanzas/vista";
 import { frentesDe, vistaFinanzasDeFrentes } from "@/lib/para-ti/frentes";
 import { frentesSchema } from "@/lib/para-ti/schema";
-import { esResponsable } from "@/lib/escala/comentarios/reglas";
+import { esResponsable } from "@/lib/escala/responsable";
 
 type Params = { params: Promise<{ id: string }> };
 

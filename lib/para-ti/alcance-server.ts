@@ -29,7 +29,7 @@ import { esProyectoDePipelineCS, PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/pro
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import { clientesRevocadosPara, veTodaLaCartera } from "@/lib/auth/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
-import { esResponsable } from "@/lib/escala/comentarios/reglas";
+import { esResponsable } from "@/lib/escala/responsable";
 import { frentesDe, type AccesoParaFrentes, type ClaveDeFrente } from "./frentes";
 
 export interface ProyectoPropio {

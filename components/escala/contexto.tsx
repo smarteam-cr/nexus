@@ -1,26 +1,22 @@
 "use client";
 
 /**
- * components/escala/contexto.tsx — lo que comparten las tres vistas y el panel de comentarios.
+ * components/escala/contexto.tsx — lo que comparten las tres vistas de la escala.
  *
- * Quién soy, si reviso el feedback (ahí se deciden los comentarios), el almacén de comentarios, cuántos comentarios
- * tiene cada ancla y «abrir los comentarios de este criterio». Las vistas solo piden
- * `abrirComentarios(ancla)`; el panel vive una sola vez, arriba.
+ * Si quien mira revisa el feedback (super admin), cuántos reportes de feedback tiene cada ancla (solo lo
+ * ve quien revisa) y «dar feedback sobre esto». Las vistas solo piden `darFeedback(ancla)`: lo resuelve la
+ * sección, que abre el panel de Feedback de siempre con ese criterio, nivel o dimensión puesto
+ * (2026-10-05: la escala ya no tiene un sistema de comentarios propio).
  */
 import { createContext, useContext } from "react";
-import type { Autor, Conteo, ConteosPorClave } from "@/lib/escala/comentarios/reglas";
-import type { AlmacenDeLaEscala } from "./comentarios/almacen";
+import type { Conteo, ConteosPorClave } from "@/lib/feedback/escala";
 
 export interface ContextoDeLaEscala {
-  yo: Autor;
-  /** Revisa el feedback (super admin): decide los comentarios en /feedback y puede borrarlos. */
+  /** Revisa el feedback (super admin): ve los contadores y la capa del mapa. */
   esRevisor: boolean;
-  almacen: AlmacenDeLaEscala;
-  /** Por ancla (`1.7.F1`), del área que se mira. */
+  /** Por ancla (`1.7.F1`), del área que se mira. Vacío para quien no revisa. */
   conteos: ConteosPorClave;
-  /** ¿Están las tablas de comentarios? (sin el SQL, se lee la escala pero no se comenta). */
-  comentariosDisponibles: boolean;
-  abrirComentarios: (ancla: string) => void;
+  darFeedback: (ancla: string) => void;
 }
 
 const Contexto = createContext<ContextoDeLaEscala | null>(null);
@@ -35,7 +31,7 @@ export function useEscala(): ContextoDeLaEscala {
 
 const VACIO: Conteo = { total: 0, abiertos: 0 };
 
-/** Los comentarios de un ancla exacta. */
+/** Los reportes de un ancla exacta. */
 export function conteoDe(conteos: ConteosPorClave, ancla: string): Conteo {
   return conteos[ancla] ?? VACIO;
 }

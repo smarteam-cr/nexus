@@ -9,11 +9,14 @@
  *   2. «Señalar algo»: esconde el panel, deja marcar hasta 3 cosas y vuelve a capturar con las marcas.
  *   3. Muestra el pedido de opinión de dirección cuando la persona entra a esa pantalla.
  *   4. Abre el panel en un reporte cuando la dirección trae `?feedback=<id>` (los avisos de «Para ti»).
+ *   5. Lo abre una pantalla con lo que se está mirando ya puesto: la escala, desde el botón de cada
+ *      criterio, nivel o dimensión (`abrir({ escala })`, 2026-10-05). El reporte queda anclado ahí.
  *
  * El panel NO tapa la pantalla (como el chat del asistente): se sigue viendo lo que se reporta.
  */
 import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import type { SobreLaEscala } from "@/lib/feedback/escala";
 import { pedidoAplica } from "@/lib/feedback/reglas";
 import type { PedidoParaMi } from "@/lib/feedback/queries";
 import { capturarPantalla } from "./captura";
@@ -33,12 +36,12 @@ export interface Captura {
 interface ContextoDeFeedback {
   abierto: boolean;
   alternar: () => void;
-  abrir: (opciones?: { en?: Pestana; reporteId?: string; pedido?: PedidoParaMi }) => void;
+  abrir: (opciones?: { en?: Pestana; reporteId?: string; pedido?: PedidoParaMi; escala?: SobreLaEscala }) => void;
 }
 
 const Contexto = createContext<ContextoDeFeedback | null>(null);
 
-/** Para el botón del pie del menú. Fuera del provider no hace nada (la pantalla de login, por ejemplo). */
+/** Para el botón del pie del menú y la escala. Fuera del provider no hace nada (la pantalla de login, por ejemplo). */
 export function useFeedback(): ContextoDeFeedback | null {
   return useContext(Contexto);
 }
@@ -67,6 +70,8 @@ export default function FeedbackProvider({
   const [festejo, setFestejo] = useState<{ ideas: number } | null>(null);
   const [pedidos, setPedidos] = useState<PedidoParaMi[]>([]);
   const [respondiendo, setRespondiendo] = useState<PedidoParaMi | null>(null);
+  /** Lo que se está mirando en la escala, si el panel se abrió desde ahí. */
+  const [sobreLaEscala, setSobreLaEscala] = useState<SobreLaEscala | null>(null);
   const [reinicio, setReinicio] = useState(0);
   const urlAnterior = useRef<string | null>(null);
 
@@ -106,6 +111,8 @@ export default function FeedbackProvider({
       setPestana(p);
       setReporteId(opciones?.reporteId ?? null);
       if (opciones?.pedido) setRespondiendo(opciones.pedido);
+      // Abrirlo desde otro criterio cambia el ancla; abrirlo desde el pie del menú la quita.
+      setSobreLaEscala(opciones?.escala ?? null);
       if (!abierto) {
         setAbierto(true);
         setMarcas([]);
@@ -124,6 +131,7 @@ export default function FeedbackProvider({
     setSenalando(false);
     setMarcas([]);
     setRespondiendo(null);
+    setSobreLaEscala(null);
     if (urlAnterior.current) URL.revokeObjectURL(urlAnterior.current);
     urlAnterior.current = null;
     setCaptura(SIN_CAPTURA);
@@ -155,7 +163,9 @@ export default function FeedbackProvider({
       </Suspense>
       {abierto && !senalando && (
         <PanelDeFeedback
-          key={reinicio}
+          // Con el panel abierto, «Dar feedback» sobre otro criterio de la escala arranca el formulario de
+          // nuevo: lo escrito sobre uno no se manda anclado a otro.
+          key={`${reinicio}:${sobreLaEscala?.ancla ?? ""}`}
           enPestana={pestana}
           onPestana={setPestana}
           reporteId={reporteId}
@@ -167,6 +177,7 @@ export default function FeedbackProvider({
           onQuitarCaptura={() => ponerCaptura(null)}
           onVolverACapturar={() => void tomarCaptura()}
           respondiendo={respondiendo}
+          sobreLaEscala={sobreLaEscala}
           onRespondido={(id) => {
             quitarPedido(id);
             setRespondiendo(null);

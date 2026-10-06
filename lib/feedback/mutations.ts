@@ -8,7 +8,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { avisar } from "@/lib/para-ti/avisos-server";
-import { conLaFilaDelManual } from "./escala-server";
+import { anclarALaEscala, conLaFilaDelManual } from "./escala-server";
 import { ErrorDeFeedback } from "./http";
 import { COLUMNA, esUrgente, estadoParaElAutor, numeroDeReporte, TIPO, type Columna } from "./reglas";
 import type { CrearReporte, Decidir } from "./schema";
@@ -31,6 +31,9 @@ export async function crearReporte(datos: CrearReporte, autor: { email: string; 
     if (pedido && pedido.paraEmail.toLowerCase() === autor.email.toLowerCase()) pedidoId = pedido.id;
   }
   const meFrena = datos.tipo === "falla" && datos.meFrena;
+  // Desde un criterio de la escala: el reporte se ancla a lo que se leía, y su «pantalla» y su dirección
+  // pasan a ser las del criterio (lib/feedback/escala.ts).
+  const enLaEscala = datos.escala ? await anclarALaEscala(datos.escala) : null;
   const reporte = await prisma.$transaction(async (tx) => {
     const r = await tx.feedbackReporte.create({
       data: {
@@ -38,8 +41,9 @@ export async function crearReporte(datos: CrearReporte, autor: { email: string; 
         tipo: datos.tipo,
         cuerpo: datos.cuerpo,
         meFrena,
-        pantalla: datos.pantalla,
-        ruta: datos.ruta,
+        pantalla: enLaEscala?.pantalla ?? datos.pantalla,
+        ruta: enLaEscala?.ruta ?? datos.ruta,
+        ...(enLaEscala ? { escalaAncla: enLaEscala.escalaAncla, escalaArea: enLaEscala.escalaArea, escala: enLaEscala.escala } : {}),
         rol: autor.rol,
         navegador: datos.navegador ?? null,
         ventana: datos.ventana ?? null,
@@ -59,17 +63,22 @@ export async function crearReporte(datos: CrearReporte, autor: { email: string; 
   });
 
   const urgente = esUrgente(reporte);
-  await avisar({
-    frente: "FEEDBACK",
+  const pantalla = enLaEscala?.pantalla ?? datos.pantalla;
+  const aviso = {
     tipo: "feedback.nuevo",
     titulo: urgente
-      ? `Urgente: a ${autor.nombre} algo le frena el trabajo en «${datos.pantalla}»`
-      : `${TIPO[datos.tipo].nombre} en «${datos.pantalla}» · ${autor.nombre}`,
+      ? `Urgente: a ${autor.nombre} algo le frena el trabajo en «${pantalla}»`
+      : enLaEscala
+        ? `${TIPO[datos.tipo].nombre} en la Escala, en ${enLaEscala.escalaAncla} · ${autor.nombre}`
+        : `${TIPO[datos.tipo].nombre} en «${pantalla}» · ${autor.nombre}`,
     detalle: recorte(datos.cuerpo, 280),
     href: `/feedback?reporte=${reporte.id}`,
     actorEmail: autor.email,
     dedupeKey: `feedback.nuevo:${reporte.id}`,
-  });
+  };
+  await avisar({ ...aviso, frente: "FEEDBACK" });
+  // Lo de la escala, también a quien lleva la Escala (la misma clave: quien lleva los dos frentes lo recibe una vez).
+  if (enLaEscala) await avisar({ ...aviso, frente: "ESCALA" });
   return { id: reporte.id, numero: reporte.numero, urgente };
 }
 

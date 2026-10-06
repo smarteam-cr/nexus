@@ -11,7 +11,7 @@ import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
-import { esResponsable } from "@/lib/escala/comentarios/reglas";
+import { esResponsable } from "@/lib/escala/responsable";
 import { frentesDelMiembro } from "./alcance-server";
 import { destinatarios, esBuenaNoticia, esRutaInterna, textoDeAviso } from "./avisos";
 import { esClaveDeFrente, frente, puedeLlevar, type ClaveDeFrente } from "./frentes";

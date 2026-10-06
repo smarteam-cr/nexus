@@ -56,7 +56,7 @@ export default function HojaDeRuta({ temas }: { temas: TemaDeHoja[] }) {
    */
   const copiarCambiosDeLaEscala = async () => {
     try {
-      const r = await fetch("/api/escala/comentarios/exportar", { cache: "no-store" });
+      const r = await fetch("/api/feedback/cambios-de-la-escala", { cache: "no-store" });
       const d = (await r.json().catch(() => null)) as { markdown?: string; filas?: number; error?: string } | null;
       if (!r.ok || !d?.markdown) {
         toast.error(d?.error ?? "No se pudieron leer los cambios de la escala.");

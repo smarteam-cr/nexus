@@ -64,7 +64,7 @@ export default async function FeedbackPage({
           <BandejaDeFeedback
             datos={bandeja}
             reporteInicial={sp.reporte ?? null}
-            // Desde el botón «Comentarios» de la escala: solo lo comentado ahí (2026-10-05).
+            // Desde el botón «Feedback» de la escala: solo lo mandado desde ahí (2026-10-05).
             origenInicial={sp.origen === "escala" ? "escala" : sp.origen === "pantallas" ? "pantallas" : "todos"}
           />
         )}

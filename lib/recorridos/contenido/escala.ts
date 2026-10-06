@@ -21,7 +21,7 @@ export const ESCALA: Recorrido = {
     titulo: "¿Te muestro cómo se recorre la escala?",
     texto: "Cómo leer la rueda, qué dice cada dimensión y qué pide el nivel Funcional. Un minuto.",
   },
-  // `/escala/comentarios` es la bandeja, otra pantalla: no entra.
+  // `/escala/comentarios` era la bandeja vieja (hoy redirige a Feedback): no entra.
   ruta: /^\/escala\/(?!comentarios(?:\/|$))[^/]+\/?$/,
   ejemplo: "/escala/ventas",
   irA: { href: "/escala" },
@@ -36,7 +36,7 @@ export const ESCALA: Recorrido = {
     {
       ancla: "escala.areas",
       titulo: "Elige el área",
-      texto: "Cada pestaña es un área de la escala, con el número de comentarios que tiene.",
+      texto: "Cada pestaña es un área de la escala. Al cambiar de área se mantienen la vista, la industria y el perfil que elijas abajo.",
       lado: "bottom-start",
     },
     {
@@ -89,16 +89,16 @@ export const ESCALA: Recorrido = {
     {
       ancla: "escala.criterios",
       titulo: "Los criterios de la celda",
-      texto: "Cada criterio es algo que se comprueba en el cliente. Sus marcas dicen si es un hábito o un riesgo, qué requiere y qué otros lo requieren; el botón de la derecha es para comentarlo: lo ve todo el equipo.",
+      texto: "Cada criterio es algo que se comprueba en el cliente. Sus marcas dicen si es un hábito o un riesgo, qué requiere y qué otros lo requieren; el botón de la derecha abre el panel de Feedback sobre él.",
       lado: "left-start",
       accion: ELEGIR_LA_CELDA,
     },
     {
-      // Desde el 2026-10-05 los comentarios de la escala se deciden en Feedback: el botón es de quien
-      // revisa (super admin). Al resto se lo explica el paso de los criterios.
-      ancla: "escala.comentarios",
-      titulo: "Los comentarios",
-      texto: "Lo que el equipo comenta en la escala llega a Feedback, junto con el resto: ahí lo decides. Este botón te lleva a los de la escala.",
+      // Desde el 2026-10-05 lo que se dice de la escala es feedback y se decide en la bandeja: el botón es
+      // de quien revisa (super admin). Al resto se lo explica el paso de los criterios.
+      ancla: "escala.feedback",
+      titulo: "El feedback de la escala",
+      texto: "Lo que el equipo manda desde la escala llega a Feedback, junto con el resto: ahí lo decides. Este botón te lleva a lo de la escala.",
       lado: "bottom-end",
       roles: ["SUPER_ADMIN"],
     },

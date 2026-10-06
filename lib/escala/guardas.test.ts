@@ -1,11 +1,11 @@
 /**
  * lib/escala/guardas.test.ts — las guardas de la sección de la escala, congeladas.
  *
- *   · Toda ruta de `app/api/escala/` pide usuario interno (los comentarios son del equipo).
- *   · Exportar llama `esRevisorDeFeedback(`: desde el 2026-10-05 los comentarios se deciden en
- *     /feedback, y los decide cualquier super admin (lib/feedback/escala.test.ts).
+ *   · Toda ruta de `app/api/escala/` pide usuario interno (la escala es del equipo).
+ *   · La escala no tiene comentarios propios (2026-10-05): lo que se dice de ella se manda con el panel
+ *     de Feedback, anclado al criterio. El sistema viejo no vuelve y nada escribe en sus tablas.
  *   · Ningún id se valida con `.cuid()` (hay filas UUID).
- *   · Los agentes no leen los comentarios: «por ahora, nada de análisis con IA» (Elías).
+ *   · Los agentes no leen lo que el equipo dice de la escala: «por ahora, nada de análisis con IA» (Elías).
  *   · El SQL deja las tres tablas cerradas para `anon` (RLS + RESTRICTIVE).
  *   · FUENTE ÚNICA: ningún texto de la escala aparece escrito en el código de la sección. Todo sale
  *     del documento publicado; si alguien pega un criterio en un componente, esto se pone rojo. Lo
@@ -45,22 +45,43 @@ const RUTAS = archivos("app/api/escala", (f) => f === "route.ts");
 
 describe("las rutas de la escala", () => {
   it("existen (si no, el resto pasa por vacío)", () => {
-    expect(RUTAS.length).toBeGreaterThanOrEqual(6);
+    // Desde el 2026-10-05 queda la descarga de los documentos: los comentarios se fueron a Feedback.
+    expect(RUTAS.length).toBeGreaterThanOrEqual(1);
   });
 
   it.each(RUTAS)("%s pide usuario interno", (rel) => {
     expect(soloCodigo(leer(rel))).toMatch(/guardInternalUser\(\)/);
   });
 
-  it("exportar es de quien revisa el feedback (el estado se decide en /feedback desde el 2026-10-05)", () => {
-    const rel = "app/api/escala/comentarios/exportar/route.ts";
-    expect(soloCodigo(leer(rel.replace(/\//g, path.sep))), rel).toMatch(/esRevisorDeFeedback\(/);
-  });
-
   it("ningún id se valida con .cuid()", () => {
     for (const rel of [...RUTAS, ...archivos("lib/escala", (f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))]) {
       expect(soloCodigo(leer(rel)), rel).not.toMatch(/\.cuid\(\)/);
     }
+  });
+});
+
+describe("la escala no tiene comentarios propios: lo que se dice de ella es feedback (2026-10-05)", () => {
+  it.each(["app/api/escala/comentarios", "app/api/escala/clientes", "components/escala/comentarios", "lib/escala/comentarios"])(
+    "%s no vuelve",
+    (dir) => {
+      expect(archivos(dir, () => true), dir).toEqual([]);
+    },
+  );
+
+  it("el botón de cada criterio, nivel o dimensión abre el panel de Feedback con lo que se mira", () => {
+    const vista = soloCodigo(leer(path.join("components", "escala", "VistaDeLaEscala.tsx")));
+    expect(vista).toMatch(/useFeedback\(\)\?\.abrir/);
+    expect(vista).toMatch(/escala: \{\s*ancla: r\.id,/);
+  });
+
+  it("nada de la sección lee ni escribe las tablas viejas", () => {
+    const seccion = [
+      ...archivos("lib/escala", (f) => /\.tsx?$/.test(f) && !f.endsWith(".test.ts")),
+      ...archivos("components/escala", (f) => /\.tsx?$/.test(f)),
+      ...archivos("app/(shell)/escala", (f) => /\.tsx?$/.test(f)),
+      ...RUTAS,
+    ];
+    for (const rel of seccion) expect(soloCodigo(leer(rel)), rel).not.toMatch(/escalaComentario|escalaRespuesta/);
   });
 });
 
@@ -73,7 +94,7 @@ describe("publicar la escala cuenta los comentarios donde viven", () => {
 });
 
 describe("los agentes no leen los comentarios", () => {
-  it("lib/agents, lib/canvas, lib/knowledge y lib/ai no importan lib/escala/comentarios", () => {
+  it("lib/agents, lib/canvas, lib/knowledge y lib/ai no leen el feedback de la escala", () => {
     // lib/exploraciones también: su agente propone con la escala publicada y nada más. Desde el
     // 2026-10-05 los comentarios viven en Feedback: tampoco leen lib/feedback/escala.
     for (const dir of ["lib/agents", "lib/canvas", "lib/knowledge", "lib/ai", "lib/exploraciones"]) {

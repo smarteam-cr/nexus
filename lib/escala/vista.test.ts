@@ -6,7 +6,6 @@
  * y contra el archivo real (que la versión vigente las tenga todas).
  */
 import { describe, expect, it } from "vitest";
-import { esDelPanelDelNivel, resolverAncla } from "./documento/anclas";
 import { leerArchivoDeLaEscala } from "./documento/archivos";
 import { aplicarEdicion } from "./documento/edicion";
 import { MINI_ESCALA, MINI_ESCALA_CON_EDICION } from "./documento/mini-escala.fixture";
@@ -243,7 +242,7 @@ describe("con una edición por industria", () => {
     expect(lugarEnElOrden(orden, edicion.areas[0].dimensiones[0])).toBe(1);
   });
 
-  it("los contadores de comentarios: lo que se ve con esa edición, y lo RETIRADO", () => {
+  it("los contadores del feedback: lo que se ve con esa edición, y lo RETIRADO", () => {
     // 1.2.F9 no existe en ninguna lectura de la escala: es un criterio retirado.
     const conteos = { "1.2": 1, "1.2.F1": 2, "1.2.F101": 3, "1.2.I1": 4, "1.2.F": 5, "1.2.F9": 6 };
     // En la general no se cuenta el criterio propio de la edición; en la edición, el que ella sacó.
@@ -251,28 +250,9 @@ describe("con una edición por industria", () => {
     expect(anclasDeOtraLectura(edicion, edicion.areas[0])).toEqual(["1.2.I1"]);
     expect(conteosQueSeVen(conteos, general, general.areas[0])).toEqual({ "1.2": 1, "1.2.F1": 2, "1.2.I1": 4, "1.2.F": 5, "1.2.F9": 6 });
     expect(conteosQueSeVen(conteos, edicion, edicion.areas[0])).toEqual({ "1.2": 1, "1.2.F1": 2, "1.2.F101": 3, "1.2.F": 5, "1.2.F9": 6 });
-    // El retirado se sigue sumando a su celda, en las dos lecturas: el panel de ese nivel lo lista,
-    // y sin el número nada en la matriz avisaría que el comentario está (era así antes de las ediciones).
+    // El retirado se sigue sumando a su celda, en las dos lecturas: sin el número, nada en la matriz le
+    // avisaría a quien revisa que llegó feedback sobre él (se lee y se decide en /feedback).
     expect(datosDeLaVista({ escala: edicion, area: edicion.areas[0], publicadaEn: new Date(0), aviso: null, versiones: [] }).anclasDeOtraLectura).toEqual(["1.2.I1"]);
-  });
-
-  it("el panel de un nivel lista lo suyo y lo retirado, con la misma regla que cuenta la celda", () => {
-    const panel = (escala: typeof general, ancla: string) =>
-      esDelPanelDelNivel(
-        ancla,
-        { id: "1.2.F", dimension: "1.2", letra: "F" },
-        { seVe: (x) => !!resolverAncla(escala, x), deOtraLectura: new Set(anclasDeOtraLectura(escala, escala.areas[0])) },
-      );
-    for (const escala of [general, edicion]) {
-      expect(panel(escala, "1.2.F")).toBe(true); // el nivel mismo
-      expect(panel(escala, "1.2.F9")).toBe(true); // un criterio retirado de esa celda
-      expect(panel(escala, "1.2.F1")).toBe(false); // existe: tiene su propio panel
-      expect(panel(escala, "1.2.E9")).toBe(false); // retirado, pero de otra celda
-      expect(panel(escala, "1.2")).toBe(false);
-    }
-    // El propio de la edición: en la general es de otra lectura (no va); en la edición se ve (tiene su panel).
-    expect(panel(general, "1.2.F101")).toBe(false);
-    expect(panel(edicion, "1.2.F101")).toBe(false);
   });
 });
 

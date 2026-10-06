@@ -44,7 +44,7 @@ interface Props {
 }
 
 export default function Escalera({ datos, perfil, dimension, onElegirDimension, anclaAbierta }: Props) {
-  const { conteos, abrirComentarios } = useEscala();
+  const { conteos, darFeedback } = useEscala();
   const { atenuado } = useHerramientas();
   const { area, niveles, capas } = datos;
   const dims = area.dimensiones;
@@ -136,8 +136,8 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
             </h2>
             <BotonComentar
               conteo={conteoDe(conteos, d.id)}
-              onClick={() => abrirComentarios(d.id)}
-              etiqueta="Comentarios de la dimensión entera (su pregunta o su costo)"
+              onClick={() => darFeedback(d.id)}
+              etiqueta="Dar feedback sobre la dimensión entera (su pregunta o su costo)"
               className={cn("mt-1", anclaAbierta === d.id && "border-info-line bg-info-surface text-brand")}
             />
           </div>
@@ -192,8 +192,8 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                       </button>
                       <BotonComentar
                         conteo={conteoDe(conteos, n.id)}
-                        onClick={() => abrirComentarios(n.id)}
-                        etiqueta={`Comentarios del nivel ${nivel.nombre}`}
+                        onClick={() => darFeedback(n.id)}
+                        etiqueta={`Dar feedback sobre el nivel ${nivel.nombre}`}
                         className={cn(anclaAbierta === n.id && "border-info-line bg-info-surface text-brand")}
                       />
                     </div>
@@ -232,7 +232,7 @@ export default function Escalera({ datos, perfil, dimension, onElegirDimension, 
                             <HerramientasDelCriterio criterio={c} conTexto className="mt-2" />
                             <EnlacesDelCriterio criterio={c} datos={datos} perfil={perfil} onIr={irAlCriterio} className="mt-2" />
                           </div>
-                          <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => abrirComentarios(c.id)} etiqueta={`Comentarios de ${c.id}`} />
+                          <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => darFeedback(c.id)} etiqueta={`Dar feedback sobre ${c.id}`} />
                         </li>
                       ))}
                     </ul>

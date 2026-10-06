@@ -1,10 +1,11 @@
 /**
  * lib/escala/documento/anclas.ts — a qué apunta un identificador de la escala. PURO.
  *
- * Un comentario se ancla a un identificador ESTABLE (la especificación garantiza que no se
- * reasignan ni se renumeran): la dimensión (`1.7`), el nivel entero (`1.7.F`) o un criterio
- * (`1.7.F1`). `resolverAncla` dice qué es y cuál es su texto HOY; ese texto se congela en el
- * comentario al crearlo, para mostrar después si una versión nueva lo cambió.
+ * Lo que se manda desde la escala se ancla a un identificador ESTABLE (la especificación garantiza
+ * que no se reasignan ni se renumeran): la dimensión (`1.7`), el nivel entero (`1.7.F`) o un
+ * criterio (`1.7.F1`). `resolverAncla` dice qué es y cuál es su texto HOY; ese texto se congela en
+ * el reporte de feedback al mandarlo (lib/feedback/escala-server.ts), para mostrar después si una
+ * versión nueva lo cambió.
  */
 import { nombreDeNivel } from "./parsear";
 import { LETRAS, type Area, type Criterio, type Dimension, type Escala, type Letra, type Nivel } from "./tipos";
@@ -94,23 +95,6 @@ export function textosPorAncla(escala: Pick<Escala, "areas">): Map<string, strin
 export function estaEnLaCelda(ancla: string, dimension: string, letra: Letra): boolean {
   const celda = `${dimension}.${letra}`;
   return ancla === celda || (ancla.startsWith(celda) && /^\d+$/.test(ancla.slice(celda.length)));
-}
-
-/**
- * ¿El comentario de `ancla` se lista en el panel de un NIVEL? Los del nivel mismo y los de sus
- * criterios RETIRADOS: los que ya no existen en ninguna lectura de la escala (en la matriz no
- * tienen fila, y la evidencia no puede quedar invisible). Los de un criterio que sí existe no van
- * acá: si se ve, tiene su propio panel; si es de otra lectura —propio de otra edición, o uno que
- * esta edición sacó—, se ve donde existe. Es la misma regla que cuenta los comentarios de la celda
- * (`conteosQueSeVen`): el número de la celda y lo que lista el panel dicen lo mismo.
- */
-export function esDelPanelDelNivel(
-  ancla: string,
-  nivel: { id: string; dimension: string; letra: Letra },
-  lectura: { seVe: (ancla: string) => boolean; deOtraLectura: ReadonlySet<string> },
-): boolean {
-  if (ancla === nivel.id) return true;
-  return estaEnLaCelda(ancla, nivel.dimension, nivel.letra) && !lectura.seVe(ancla) && !lectura.deOtraLectura.has(ancla);
 }
 
 /** La dimensión de un ancla (`1.7.F1` → `1.7`). */

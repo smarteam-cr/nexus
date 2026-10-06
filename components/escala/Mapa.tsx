@@ -11,7 +11,7 @@
  *
  * Interactiva a propósito, para recorrer la escala en vez de leerla de corrido:
  *   · Qué muestran las celdas: criterios (al entrar), hábitos, riesgos, los que otros requieren,
- *     los que esconde el perfil o los comentarios del equipo. Cuanto más hay, más intenso el color.
+ *     los que esconde el perfil o, para quien revisa, el feedback recibido. Cuanto más hay, más intenso el color.
  *   · Con una celda en foco, un borde marca las celdas de las que sus criterios requieren algo y
  *     las que requieren algo de ella: de dónde se sostiene cada cosa.
  *   · Pasar el cursor por una celda la levanta, apaga lo que no es su dimensión ni su nivel y lo
@@ -23,7 +23,7 @@
  *     la escala se sube de a un nivel.
  *   · «Recorrer», arriba de la rueda, sube la escala de Deficiente a Óptimo, un nivel a la vez. Es el
  *     único botón azul de la pantalla (sistema «Nexus · interfaz interna», 2026-10-03).
- *   · Con el teclado: ←/→ cambian de dimensión, ↑/↓ de nivel, Enter abre los comentarios, Escape
+ *   · Con el teclado: ←/→ cambian de dimensión, ↑/↓ de nivel, Enter abre el panel de Feedback, Escape
  *     vuelve al área.
  *   · Con herramientas prendidas (el filtro de arriba), cada celda lleva el isotipo de las que ayudan
  *     ahí, en vez de su número, y las celdas donde no ayuda ninguna se aclaran. ⛔ La marca va
@@ -120,8 +120,8 @@ const CAPAS: { clave: CapaDeDatos; etiqueta: string; title: string }[] = [
   },
   {
     clave: "comentarios",
-    etiqueta: "Comentarios del equipo",
-    title: "Cuántos comentarios dejó el equipo en cada celda: lo que no se entiende, lo que no calza con un cliente y las propuestas. Con el color de su nivel si alguno sigue abierto; en gris si ya se cerraron todos.",
+    etiqueta: "Feedback recibido",
+    title: "Cuántos reportes de feedback se mandaron desde cada celda (lo ve solo quien revisa). Con el color de su nivel si alguno sigue sin revisar; en gris si ya se decidió todo.",
   },
 ];
 
@@ -136,7 +136,7 @@ const QUE_CUENTA: Record<CapaDeDatos, string> = {
   riesgos: "criterios de riesgo",
   requeridos: "criterios que otros requieren",
   perfil: "criterios escondidos por el perfil",
-  comentarios: "comentarios",
+  comentarios: "reportes de feedback",
 };
 
 /**
@@ -261,7 +261,7 @@ interface Props {
 }
 
 export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDimension, onVerEnLaMatriz }: Props) {
-  const { conteos, abrirComentarios } = useEscala();
+  const { conteos, darFeedback, esRevisor } = useEscala();
   const { area, niveles, capas } = datos;
   const dims = area.dimensiones;
   const n = dims.length;
@@ -278,6 +278,8 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const seleccionRef = useRef(seleccion);
   const soltarRef = useRef<number | null>(null);
   const hayPerfil = !!(perfil.cierre || perfil.despues);
+  /** «Feedback recibido» es solo para quien revisa: lo que manda cada uno es privado. */
+  const capasALaVista = esRevisor ? CAPAS : CAPAS.filter((c) => c.clave !== "comentarios");
 
   useEffect(() => {
     seleccionRef.current = seleccion;
@@ -415,7 +417,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
   const ordenSegunElCierre = [...ordenes.values()].some((filas) => filas.length > 1);
   const algunaNoAplica = dims.some((d) => !dimensionAplica(d, perfil));
 
-  /** El color es el del nivel; en los comentarios, gris si ya se cerraron todos. */
+  /** El color es el del nivel; en el feedback recibido, gris si ya se decidió todo. */
   const colorDe = (letra: Letra, v: { valor: number; abiertos: number }) =>
     capa === "comentarios" && !v.abiertos ? "var(--color-fg-muted)" : COLOR_DE_NIVEL[letra];
 
@@ -432,7 +434,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
       case "perfil":
         return `${cuantos(v.valor, "escondido", "escondidos")} por el perfil`;
       case "comentarios":
-        return `${cuantos(v.valor, "comentario", "comentarios")}${v.abiertos ? ` · ${cuantos(v.abiertos, "abierto", "abiertos")}` : ""}`;
+        return `${cuantos(v.valor, "reporte", "reportes")}${v.abiertos ? ` · ${v.abiertos} sin revisar` : ""}`;
     }
   };
 
@@ -460,7 +462,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
       mover(...t[e.key]);
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      if (seleccion?.tipo === "celda") abrirComentarios(`${seleccion.dim}.${seleccion.letra}`);
+      if (seleccion?.tipo === "celda") darFeedback(`${seleccion.dim}.${seleccion.letra}`);
       else mover(0, 0);
     } else if (e.key === "Escape") {
       elegir(null);
@@ -654,7 +656,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
             <div data-recorrido="escala.capas">
             <GrupoDeControl
               nombre="Qué muestran las celdas"
-              ayuda={`Cada celda es una dimensión en un nivel (${dims[0].id}.F es ${dims[0].nombre} en ${nombreNivel("F")}). Su color se intensifica cuanto más hay ahí de lo que elijas. ${CAPAS.map((c) => c.title).join(" ")}${hayPerfil ? "" : " «Escondidos por el perfil» se elige después de elegir un perfil de negocio arriba."}`}
+              ayuda={`Cada celda es una dimensión en un nivel (${dims[0].id}.F es ${dims[0].nombre} en ${nombreNivel("F")}). Su color se intensifica cuanto más hay ahí de lo que elijas. ${capasALaVista.map((c) => c.title).join(" ")}${hayPerfil ? "" : " «Escondidos por el perfil» se elige después de elegir un perfil de negocio arriba."}`}
             >
               <Select
                 aria-label="Qué muestran las celdas"
@@ -662,7 +664,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                 onChange={(e) => setCapa(e.target.value as CapaDeDatos)}
                 className="w-auto min-w-[200px] bg-surface py-2 text-[13px] leading-tight text-fg"
               >
-                {CAPAS.map((c) => (
+                {capasALaVista.map((c) => (
                   <option key={c.clave} value={c.clave} title={c.title} disabled={c.clave === "perfil" && !hayPerfil}>
                     {c.etiqueta}
                   </option>
@@ -793,7 +795,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
               ref={grupoRef}
               tabIndex={0}
               role="group"
-              aria-label="Celdas de la rueda. Flechas para moverte, Enter para comentar, Escape para cerrar."
+              aria-label="Celdas de la rueda. Flechas para moverte, Enter para dar feedback, Escape para cerrar."
               onKeyDown={alTeclado}
               onFocus={() => setConFoco(true)}
               onBlur={() => setConFoco(false)}
@@ -1034,7 +1036,7 @@ export default function Mapa({ datos, perfil, seleccion, onSeleccion, onLeerDime
                 >
                   <text x={f(x)} y={f(y0)} style={{ textAnchor: ancla, fontSize: 14, fill: "var(--color-fg-muted)", fontVariantNumeric: "tabular-nums" }}>
                     {d.id}
-                    {comentarios > 0 ? ` · ${cuantos(comentarios, "comentario", "comentarios")}` : ""}
+                    {comentarios > 0 ? ` · ${cuantos(comentarios, "reporte", "reportes")}` : ""}
                   </text>
                   {nombre.map((linea, j) => (
                     <text
@@ -1207,7 +1209,7 @@ function LeyendaDeLaRueda({
               {conHerramientas ? "" : "; el número dice cuántos"}
             </ItemDeLeyenda>
             {capa === "comentarios" && (
-              <ItemDeLeyenda muestra={<span className="h-3.5 w-3.5 rounded-sm bg-fg-muted" aria-hidden />}>Gris: sus comentarios ya se cerraron</ItemDeLeyenda>
+              <ItemDeLeyenda muestra={<span className="h-3.5 w-3.5 rounded-sm bg-fg-muted" aria-hidden />}>Gris: ya se decidió todo lo que llegó</ItemDeLeyenda>
             )}
           </ul>
         </div>
@@ -1309,7 +1311,7 @@ function DetalleDelMapa({
   onLeerDimension: (dim: string) => void;
   onVerEnLaMatriz: () => void;
 }) {
-  const { conteos, abrirComentarios } = useEscala();
+  const { conteos, darFeedback, esRevisor } = useEscala();
   const { area, niveles } = datos;
   const dims = area.dimensiones;
   const nombreNivel = (l: Letra) => niveles.find((x) => x.letra === l)!.nombre;
@@ -1322,15 +1324,19 @@ function DetalleDelMapa({
       <aside data-recorrido="escala.detalle" aria-label="Detalle" className={caja}>
         <p className={ROTULO}>{area.nombre}</p>
         <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{area.descripcion}</p>
-        <p className="mt-4 text-sm text-fg">
-          <span className="text-2xl font-bold tabular-nums">{total}</span> comentarios · <span className="font-semibold">{abiertos}</span> abiertos
-        </p>
+        {/* El feedback recibido lo ve quien revisa (los demás tienen el suyo en «Mis reportes»). */}
+        {esRevisor && (
+          <p className="mt-4 text-sm text-fg">
+            <span className="text-2xl font-bold tabular-nums">{total}</span> {total === 1 ? "reporte" : "reportes"} de feedback ·{" "}
+            <span className="font-semibold">{abiertos}</span> sin revisar
+          </p>
+        )}
         <ul className="mt-4 space-y-1.5 text-xs text-fg-muted">
           <li>Toca una celda para ver sus criterios; tócala otra vez (o la X) para cerrarla.</li>
           <li>Toca el nombre de una dimensión para verla entera.</li>
           <li>Toca el nombre de un nivel (arriba, en la rueda) para ver el área en ese nivel.</li>
           <li>«Recorrer», arriba de la rueda, sube la escala de Deficiente a Óptimo, un nivel a la vez.</li>
-          <li>Con el teclado: flechas para moverte, Enter para comentar, Escape para volver.</li>
+          <li>Con el teclado: flechas para moverte, Enter para dar feedback, Escape para volver.</li>
         </ul>
       </aside>
     );
@@ -1428,7 +1434,7 @@ function DetalleDelMapa({
           ))}
         </ol>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <BotonComentar conteo={conteoDe(conteos, d.id)} onClick={() => abrirComentarios(d.id)} etiqueta="Comentarios de la dimensión" />
+          <BotonComentar conteo={conteoDe(conteos, d.id)} onClick={() => darFeedback(d.id)} etiqueta="Dar feedback sobre la dimensión" />
           <button type="button" onClick={() => onLeerDimension(d.id)} className={BOTON_CLARO}>
             Leer la dimensión
           </button>
@@ -1482,7 +1488,7 @@ function DetalleDeCelda({
   onVerEnLaMatriz: () => void;
   caja: string;
 }) {
-  const { conteos, abrirComentarios } = useEscala();
+  const { conteos, darFeedback } = useEscala();
   const { atenuado } = useHerramientas();
   const nombre = datos.niveles.find((x) => x.letra === nv.letra)!.nombre;
   const visibles = nv.criterios.filter((c) => aplica(c, perfil));
@@ -1526,7 +1532,7 @@ function DetalleDeCelda({
                   className="mt-2"
                 />
               </div>
-              <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => abrirComentarios(c.id)} etiqueta={`Comentarios de ${c.id}`} />
+              <BotonComentar conteo={conteoDe(conteos, c.id)} onClick={() => darFeedback(c.id)} etiqueta={`Dar feedback sobre ${c.id}`} />
             </li>
           ))}
         </ul>
@@ -1538,7 +1544,7 @@ function DetalleDeCelda({
       )}
       <NoAplicanEnLaEdicion nivel={nv} className="mt-2 block text-xs" />
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <BotonComentar conteo={conteoDe(conteos, nv.id)} onClick={() => abrirComentarios(nv.id)} etiqueta={`Comentarios del nivel ${nombre}`} />
+        <BotonComentar conteo={conteoDe(conteos, nv.id)} onClick={() => darFeedback(nv.id)} etiqueta={`Dar feedback sobre el nivel ${nombre}`} />
         <button type="button" onClick={() => onLeerDimension(d.id)} className={BOTON_CLARO}>
           Leer la dimensión
         </button>

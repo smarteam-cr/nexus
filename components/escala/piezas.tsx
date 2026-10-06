@@ -7,21 +7,22 @@
  *     hábito, riesgo o de un perfil. Cada marca explica en su tooltip lo que la escala dice de ella.
  *     Al final, qué otros criterios requiere y cuántos lo requieren a él.
  *   · `EnlacesDelCriterio`: esos requeridos escritos enteros, para leerlos y para ir a ellos.
- *   · `Contador`: cuántos comentarios tiene algo; en ámbar si hay abiertos (piden atención).
+ *   · `Contador`: cuántos reportes de feedback llegaron sobre algo (lo ve quien revisa); en ámbar si
+ *     alguno sigue sin revisar (pide atención).
  *   · `Segmentado`: un grupo de opciones excluyentes (radio), con flechas.
- *   · `BotonComentar`: el globito que abre el panel de comentarios de un ancla.
+ *   · `BotonComentar`: el globito que abre el panel de Feedback sobre un ancla (2026-10-05).
  */
 import { InfoHint } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { explicarMarca, SIN_PERFIL, type Perfil } from "@/lib/escala/documento/perfil";
 import { enlacesQueAplican, type EnlaceDeCriterio } from "@/lib/escala/documento/requeridos";
 import type { BloqueDeTexto, Criterio, Nivel } from "@/lib/escala/documento/tipos";
-import type { Conteo } from "@/lib/escala/comentarios/reglas";
+import type { Conteo } from "@/lib/feedback/escala";
 import { partirPorPalabras, type DatosDeLaVista, type TerminoSubrayado } from "@/lib/escala/vista";
 
 // ── Las piezas del sistema «Nexus · interfaz interna» que la escala repite ──────
 // Medida por medida (2026-10-03). El color dice el estado: azul es lo activo, ámbar lo que pide
-// atención (un riesgo, un comentario abierto) y lo demás va en blanco con su borde.
+// atención (un riesgo, un feedback sin revisar) y lo demás va en blanco con su borde.
 
 /** Rótulo en mayúscula sobre un bloque o un filtro. */
 export const ROTULO = "text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-fg-muted";
@@ -243,10 +244,10 @@ export function NoAplicanEnLaEdicion({ nivel, className }: { nivel: Nivel; class
   );
 }
 
-/** Cuántos comentarios tiene algo: en ámbar si alguno sigue abierto (pide atención), neutro si no. */
+/** Cuántos reportes de feedback llegaron sobre algo: en ámbar si alguno sigue sin revisar (pide atención), neutro si no. */
 export function Contador({ conteo, className, conTexto = false }: { conteo: Conteo; className?: string; conTexto?: boolean }) {
   if (conteo.total === 0) return null;
-  const titulo = `${conteo.total} ${conteo.total === 1 ? "comentario" : "comentarios"}${conteo.abiertos ? ` · ${conteo.abiertos} ${conteo.abiertos === 1 ? "abierto" : "abiertos"}` : ""}`;
+  const titulo = `${conteo.total} ${conteo.total === 1 ? "reporte" : "reportes"} de feedback${conteo.abiertos ? ` · ${conteo.abiertos} sin revisar` : ""}`;
   return (
     <span
       title={titulo}

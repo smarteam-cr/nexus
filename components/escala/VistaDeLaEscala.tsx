@@ -8,13 +8,15 @@
  *   · Mapa: el área como rueda (para recorrerla nivel por nivel y ver dónde se concentra cada cosa).
  *
  * El perfil de negocio filtra las tres igual (la regla de `pruebas_escala.py`). La escala es de
- * SOLO LECTURA: lo único que se escribe son comentarios, anclados a un identificador estable.
- * Lo que se mira queda en la URL (vista, perfil, dimensión, celda, comentario abierto), para
- * poder mandar un enlace exacto.
+ * SOLO LECTURA: lo que alguien quiera decir de un criterio, un nivel o una dimensión lo manda como
+ * feedback, con el panel de Feedback de siempre ya anclado ahí (2026-10-05: la escala no tiene un
+ * sistema de comentarios propio, lib/feedback/escala.ts). Lo que se mira queda en la URL (vista,
+ * perfil, dimensión, celda y el identificador marcado), para poder mandar un enlace exacto.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useFeedback } from "@/components/feedback/FeedbackProvider";
 import { Alert, Menu, PageHeader, Select, Tabs } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import {
@@ -30,11 +32,10 @@ import {
   type Perfil,
 } from "@/lib/escala/documento/perfil";
 import { LETRAS, type Letra, type PreguntaDelPerfil } from "@/lib/escala/documento/tipos";
-import type { Autor, ConteosPorClave } from "@/lib/escala/comentarios/reglas";
+import { resolverAncla } from "@/lib/escala/documento/anclas";
+import { ETIQUETA_DE_ANCLA, EVENTO_DE_FEEDBACK_ENVIADO, type ConteosPorClave } from "@/lib/feedback/escala";
 import { consultaDeLaEscala, definicionDeOpcion, notaDelCierre, VISTAS, type DatosDeLaVista, type Vista } from "@/lib/escala/vista";
 import { activasQueExisten } from "@/lib/escala/herramientas/vista";
-import { almacenDeLaApi, type AlmacenDeLaEscala } from "./comentarios/almacen";
-import PanelDeComentarios from "./comentarios/PanelDeComentarios";
 import { ProveedorDeLaEscala } from "./contexto";
 import Escalera from "./Escalera";
 import { FiltroDeHerramientas, ProveedorDeHerramientas, ResumenDeHerramientas } from "./herramientas";
@@ -183,32 +184,24 @@ export default function VistaDeLaEscala({
   conteos,
   porArea,
   abiertosEnTotal,
-  yo,
   esRevisor,
-  comentariosDisponibles,
   inicial,
-  almacen = almacenDeLaApi,
   hrefDeArea = (slug) => `/escala/${slug}`,
   hrefDeLaBandeja = "/feedback?origen=escala",
-  alCambiar,
 }: {
   datos: DatosDeLaVista;
+  /** Los reportes de feedback por ancla (del área) y por área: solo para quien revisa; vacíos para los demás. */
   conteos: ConteosPorClave;
   porArea: ConteosPorClave;
   abiertosEnTotal: number;
-  yo: Autor;
   /**
-   * Revisa el feedback (super admin): los comentarios de la escala se deciden en /feedback desde el
-   * 2026-10-05, así que solo a quien revisa le sale el botón que lleva ahí.
+   * Revisa el feedback (super admin): ve cuántos reportes llegaron sobre cada cosa y el botón que lleva
+   * a decidirlos en /feedback. Lo que manda cada uno es privado, como todo el feedback.
    */
   esRevisor: boolean;
-  comentariosDisponibles: boolean;
   inicial: EstadoInicial;
-  almacen?: AlmacenDeLaEscala;
   hrefDeArea?: (slug: string) => string;
   hrefDeLaBandeja?: string;
-  /** Después de comentar o cambiar un estado. Por defecto, pedir de nuevo la página (contadores). */
-  alCambiar?: () => void;
 }) {
   const router = useRouter();
   const { area } = datos;
@@ -218,6 +211,7 @@ export default function VistaDeLaEscala({
     inicial.dimension && area.dimensiones.some((d) => d.id === inicial.dimension) ? inicial.dimension : area.dimensiones[0].id,
   );
   const [seleccion, setSeleccion] = useState<SeleccionDelMapa>(seleccionDesde(inicial.celda));
+  /** El identificador marcado: el último sobre el que se dio feedback, o el de la dirección (`?c=`). */
   const [ancla, setAncla] = useState<string | null>(inicial.ancla);
   /** Las herramientas prendidas: un enlace viejo puede nombrar una que el mapa ya no tiene. */
   const [herramientas, setHerramientas] = useState<string[]>(() => activasQueExisten(inicial.herramientas ?? [], datos.herramientas));
@@ -226,7 +220,7 @@ export default function VistaDeLaEscala({
   const industria = datos.edicion?.slug ?? null;
 
   // Lo que se mira, en la URL: sin recargar ni volver a pedir la página (history nativo). La
-  // industria va siempre: un refresco (después de comentar, por ejemplo) no devuelve a la general.
+  // industria va siempre: un refresco (después de mandar feedback, por ejemplo) no devuelve a la general.
   useEffect(() => {
     const url = `${window.location.pathname}${consultaDeLaEscala({ vista, perfil, industria, dimension, celda: seleccionHacia(seleccion), ancla, herramientas })}`;
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
@@ -244,11 +238,40 @@ export default function VistaDeLaEscala({
 
   const prendidas = useMemo(() => ({ activas: herramientas, mapa: datos.herramientas }), [herramientas, datos.herramientas]);
 
-  const abrirComentarios = useCallback((a: string) => setAncla(a), []);
-  const contexto = useMemo(
-    () => ({ yo, esRevisor, almacen, conteos, comentariosDisponibles, abrirComentarios }),
-    [yo, esRevisor, almacen, conteos, comentariosDisponibles, abrirComentarios],
+  /**
+   * «Dar feedback» sobre un criterio, un nivel o una dimensión: abre el panel de Feedback de siempre con
+   * eso puesto (qué es, dónde está y lo que dice hoy, con la edición y el perfil de la pantalla). El
+   * servidor vuelve a leer el texto de la escala publicada: el de acá es solo para mostrarlo.
+   */
+  const abrirElPanel = useFeedback()?.abrir;
+  const darFeedback = useCallback(
+    (a: string) => {
+      setAncla(a);
+      const r = resolverAncla({ areas: [datos.area], niveles: datos.niveles }, a);
+      if (!r || !abrirElPanel) return;
+      abrirElPanel({
+        en: "dar",
+        escala: {
+          ancla: r.id,
+          que: ETIQUETA_DE_ANCLA[r.tipo],
+          ruta: r.ruta,
+          texto: r.texto,
+          edicion: datos.edicion ? { slug: datos.edicion.slug, nombre: datos.edicion.nombre } : null,
+          perfil: { cierre: perfil.cierre, despues: perfil.despues },
+        },
+      });
+    },
+    [abrirElPanel, datos.area, datos.niveles, datos.edicion, perfil.cierre, perfil.despues],
   );
+  const contexto = useMemo(() => ({ esRevisor, conteos, darFeedback }), [esRevisor, conteos, darFeedback]);
+
+  // Quien revisa ve los contadores: al mandar un feedback, se vuelven a pedir.
+  useEffect(() => {
+    if (!esRevisor) return;
+    const alMandar = () => router.refresh();
+    window.addEventListener(EVENTO_DE_FEEDBACK_ENVIADO, alMandar);
+    return () => window.removeEventListener(EVENTO_DE_FEEDBACK_ENVIADO, alMandar);
+  }, [esRevisor, router]);
 
   /** Cambiar de área conserva la vista, la industria, el perfil y las herramientas (no la dimensión ni la celda, que son del área). */
   const irAlArea = (slug: string) => {
@@ -321,23 +344,23 @@ export default function VistaDeLaEscala({
         <PageHeader recorrido="escala"
           title="Escala de Rendimiento"
           badges={chipsDeLaVersion}
-          description="Recórrela por área, dimensión y nivel. Si algo no se entiende o no calza con un cliente real, coméntalo ahí mismo."
+          description="Recórrela por área, dimensión y nivel. Si algo no se entiende o no calza con un cliente real, mándalo como feedback desde ahí mismo."
           action={
             <div className="flex flex-wrap items-center gap-2">
               <div data-recorrido="escala.leyenda">
               <Leyenda datos={datos} />
               </div>
-              {/* Los comentarios se deciden en /feedback, con el resto del feedback: el botón es de quien
-                  revisa. Los demás los ven sobre cada criterio (contadores y la capa del mapa). */}
+              {/* Lo que llega desde la escala se decide en /feedback, con el resto: el botón es de quien revisa
+                  (los demás ven lo suyo en «Mis reportes», en el panel de Feedback). */}
               {esRevisor && (
                 <Link
-                  data-recorrido="escala.comentarios"
+                  data-recorrido="escala.feedback"
                   href={hrefDeLaBandeja}
                   className={BOTON_CLARO}
-                  title="Los comentarios de la escala se deciden en Feedback, junto con el resto."
+                  title="Lo que se manda desde la escala se decide en Feedback, junto con el resto."
                 >
                   <IconoComentario />
-                  Comentarios
+                  Feedback
                   {abiertosEnTotal > 0 && (
                     <span className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold leading-[18px] text-warn-ink">
                       {abiertosEnTotal} sin revisar
@@ -413,9 +436,6 @@ export default function VistaDeLaEscala({
         )}
 
         {datos.aviso && <Alert variant="warning">{datos.aviso}</Alert>}
-        {!comentariosDisponibles && (
-          <Alert variant="info">Los comentarios todavía no están disponibles: falta aplicar el SQL de la escala. Se puede leer igual.</Alert>
-        )}
 
         <div data-recorrido="escala.areas">
         <Tabs
@@ -432,14 +452,14 @@ export default function VistaDeLaEscala({
             <div data-recorrido="escala.vista">
             <GrupoDeControl
               nombre="Vista"
-              ayuda="Tres formas de recorrer el área que elegiste arriba: el mapa para ver dónde se concentran los criterios, los hábitos, los riesgos o los comentarios, la matriz para comparar y una dimensión como escalera para leerla entera."
+              ayuda="Tres formas de recorrer el área que elegiste arriba: el mapa para ver dónde se concentran los criterios, los hábitos o los riesgos, la matriz para comparar y una dimensión como escalera para leerla entera."
             >
               <Segmentado<Vista>
                 etiqueta="Vista"
                 valor={vista}
                 onCambio={setVista}
                 opciones={[
-                  { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos, riesgos o comentarios." },
+                  { clave: "mapa", etiqueta: "Mapa", title: "El área como rueda: cada porción una dimensión, cada anillo un nivel. Para subirla de Deficiente a Óptimo y ver dónde se concentran criterios, hábitos o riesgos." },
                   { clave: "matriz", etiqueta: "Matriz", title: "Las ocho dimensiones del área frente a los cinco niveles, con todos sus criterios: para comparar." },
                   { clave: "dimension", etiqueta: "Por dimensión", title: "Una dimensión a la vez, sus cinco niveles como escalera: para leerla de punta a punta." },
                 ]}
@@ -541,7 +561,6 @@ export default function VistaDeLaEscala({
         </p>
       </div>
 
-      <PanelDeComentarios ancla={ancla} datos={datos} perfil={perfil} onCerrar={() => setAncla(null)} onCambio={alCambiar ?? (() => router.refresh())} />
       </ProveedorDeHerramientas>
     </ProveedorDeLaEscala>
   );

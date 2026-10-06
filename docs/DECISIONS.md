@@ -4806,6 +4806,40 @@ todavía no estaba desplegado: no hubo nada que mover.
 (las tablas viejas, ya sin uso) junto con lo que solo lo sostenía: `CambiarEstado` y los campos
 opcionales de `ComentarioVisto` (`numero` y `tema` pasan a ser obligatorios).
 
+**Reemplazado esa misma noche** por la decisión que sigue: la escala ya no tiene comentarios propios, y
+lo que se manda desde ella es privado como todo el feedback.
+
+## La escala no tiene comentarios propios: lo que se dice de ella es feedback (2026-10-05)
+
+**Contexto.** Esa noche Elías abrió un criterio de la escala y vio el panel de comentarios de siempre:
+«Lo que busco es quitar el sistema antiguo de comentarios y que todos los nuevos comentarios o mejoras
+que me dejen de la escala o de cualquier parte de Nexus funcionen con el nuevo módulo de feedback». En
+producción no había ningún comentario ni ningún reporte de la escala: no hubo nada que mover.
+
+- **Un solo formulario.** El botón de cada criterio, nivel y dimensión (y Enter en el mapa) abre el
+  panel de Feedback de siempre, con lo que se está mirando arriba: qué es, dónde está, lo que dice y la
+  edición. Se manda con los tipos de todo reporte (desde la escala arranca en «Una mejora»), con
+  captura y «Señalar algo». Con el panel abierto, tocar otro criterio arranca el formulario con ese:
+  lo escrito sobre uno no se manda anclado a otro.
+- **El reporte queda anclado.** Viajan el ancla, la edición y el perfil de la pantalla; el texto no:
+  el servidor lo lee de la versión publicada y lo congela (`anclarALaEscala`). La pantalla del reporte
+  es «Escala · Ventas» y su dirección abre el criterio en la matriz. Un ancla o una edición que no
+  existen, o la escala sin publicar, no entran.
+- **Es privado, como todo el feedback.** Cambia lo decidido horas antes («lo ve y lo responde todo el
+  equipo, en la escala»): lo ven quien lo mandó, en «Mis reportes», y quien revisa (cualquier super
+  admin). Los contadores de la escala, el número de cada área, el botón «Feedback» de la cabecera y la
+  capa «Feedback recibido» del mapa son solo de quien revisa.
+- **Se decide en /feedback como cualquier reporte.** Llevarlo a la hoja de ruta sigue pidiendo la fila
+  de «Cambios pendientes» del manual, y «Copiar los cambios de la escala» sale de
+  `/api/feedback/cambios-de-la-escala` (solo quien revisa).
+- **Se fue el sistema viejo:** el panel de comentarios (compositor, tarjetas, selector de cliente),
+  `/api/escala/comentarios/**`, `/api/escala/clientes` y `lib/escala/comentarios/**`. Con él se fueron
+  los tipos propios («no calza con un cliente», con su cliente) y «qué decisión cambiaría» al comentar:
+  eso se dice en el texto. El responsable de la escala pasó a `lib/escala/responsable.ts`; la
+  exportación al manual, a `lib/feedback/manual-de-la-escala.ts`.
+- **Sin SQL nuevo.** Usa las columnas de `2026-10-05-feedback-escala.sql`, ya aplicado en producción.
+  `EscalaComentario` y `EscalaRespuesta` quedan quietas: la app no las lee ni las escribe.
+
 ## «Para ti»: lo que le toca a cada persona, y los avisos (2026-10-04)
 
 > Elías, con el rediseño ya aplicado: «la información sobre qué sigue, qué necesita atención en cada parte de Nexus

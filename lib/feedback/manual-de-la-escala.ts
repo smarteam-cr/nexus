@@ -1,14 +1,16 @@
 /**
- * lib/escala/comentarios/exportar.ts — los cambios pendientes con las columnas del manual. PURO.
+ * lib/feedback/manual-de-la-escala.ts — los cambios de la escala con las columnas del manual. PURO.
  *
  * La tabla «Cambios pendientes» de `manual_operacion_escala.md` tiene cinco columnas: Fecha · Qué
- * cambiaría · Quién lo propone · Caso que lo originó · Qué decisión cambiaría. La exportación sale
- * con esas cinco, en Markdown (para pegar en el manual o en el chat de la escala) y en CSV.
+ * cambiaría · Quién lo propone · Caso que lo originó · Qué decisión cambiaría. Lo que el equipo manda como
+ * feedback desde la escala llega a la hoja de ruta de /feedback con esa fila (se pide al llevarlo); de acá
+ * sale en Markdown (para pegar en el manual o en el chat de la escala) y en CSV.
  *
- * Las columnas se leen del ENCABEZADO de esa tabla en el manual publicado, si se puede: si el
- * manual las renombra, la exportación las sigue. Si no se encuentra la tabla, van las de hoy.
+ * Las columnas se leen del ENCABEZADO de esa tabla en el manual publicado, si se puede: si el manual las
+ * renombra, la exportación las sigue. Si no se encuentra la tabla, van las de hoy.
+ * (Vivía en `lib/escala/comentarios/exportar.ts`, retirado el 2026-10-05.)
  */
-import type { ComentarioVisto } from "./reglas";
+import type { FilaDelManual } from "./escala";
 
 export const COLUMNAS_DEL_MANUAL_DE_HOY = [
   "Fecha",
@@ -40,10 +42,15 @@ export function fechaDelManual(iso: string): string {
   }).format(new Date(iso));
 }
 
-export function filasDelManual(comentarios: ComentarioVisto[]): string[][] {
-  return comentarios
-    .filter((c) => c.cambio)
-    .map((c) => [fechaDelManual(c.createdAt), c.cambio!.que, c.autor.nombre, c.cambio!.caso, c.cambio!.decision]);
+/** Un cambio de la escala en la hoja de ruta: cuándo se mandó, quién y su fila del manual. */
+export interface CambioDeLaEscala {
+  creado: string;
+  autor: string;
+  cambio: FilaDelManual;
+}
+
+export function filasDelManual(cambios: readonly CambioDeLaEscala[]): string[][] {
+  return cambios.map((c) => [fechaDelManual(c.creado), c.cambio.que, c.autor, c.cambio.caso, c.cambio.decision]);
 }
 
 /** Una celda de tabla Markdown: sin saltos de línea y con las barras escapadas. */

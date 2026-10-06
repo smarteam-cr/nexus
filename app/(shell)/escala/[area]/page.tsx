@@ -1,6 +1,7 @@
 /**
  * app/(shell)/escala/[area]/page.tsx — un área de la Escala de Rendimiento: matriz, por dimensión o
- * mapa, con los filtros de perfil y de herramientas y los comentarios del equipo.
+ * mapa, con los filtros de perfil y de herramientas. Desde cada criterio, nivel o dimensión se manda
+ * feedback con el panel de siempre (2026-10-05); cuánto llegó de cada cosa lo ve quien lo revisa.
  *
  * La escala se lee de la versión PUBLICADA en Nexus (nunca del repo: la imagen no lleva .md) y se
  * baja al navegador solo el área que se mira. Es interna: la ve todo el equipo, nadie de afuera.
@@ -12,10 +13,11 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { leerDocumentoPublicado, leerEscalaVigente, versionesPublicadas } from "@/lib/escala/documento/vigente";
 import { leerComoCambia } from "@/lib/escala/documento/manual";
 import { perfilDesdeUrl } from "@/lib/escala/documento/perfil";
-// Desde el 2026-10-05 los comentarios son reportes de Feedback: se cuentan de ahí.
-import { comentariosDisponibles, contarPorAncla, contarPorArea } from "@/lib/feedback/escala-server";
+// Desde el 2026-10-05 lo que se dice de la escala son reportes de Feedback: se cuentan de ahí.
+import type { ConteosPorClave } from "@/lib/feedback/escala";
+import { contarPorAncla, contarPorArea } from "@/lib/feedback/escala-server";
 import { esRevisorDeFeedback } from "@/lib/feedback/reglas";
-import { esResponsable } from "@/lib/escala/comentarios/reglas";
+import { esResponsable } from "@/lib/escala/responsable";
 import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { conteosQueSeVen, datosDeLaVista, vistaDesdeUrl } from "@/lib/escala/vista";
 import { leerMapaDeHerramientasVigente } from "@/lib/escala/herramientas/vigente";
@@ -54,9 +56,13 @@ export default async function PaginaDeLaEscala({
   const area = escala.areas.find((a) => a.slug === slug);
   if (!area) redirect(`/escala/${escala.areas[0].slug}`);
 
+  // Cuánto feedback llegó de cada cosa: solo para quien lo revisa (lo que manda cada uno es privado,
+  // como todo el feedback; lo suyo lo ve en «Mis reportes»).
+  const esRevisor = esRevisorDeFeedback(ctx.role);
+  const nada = async (): Promise<ConteosPorClave> => ({});
   const [conteos, porArea, versiones, manual, mapa] = await Promise.all([
-    contarPorAncla(area.id),
-    contarPorArea(),
+    esRevisor ? contarPorAncla(area.id) : nada(),
+    esRevisor ? contarPorArea() : nada(),
     versionesPublicadas(),
     leerDocumentoPublicado("manual"),
     leerMapaDeHerramientasVigente(),
@@ -82,9 +88,7 @@ export default async function PaginaDeLaEscala({
         conteos={conteosQueSeVen(conteos, escala, area)}
         porArea={porArea}
         abiertosEnTotal={abiertosEnTotal}
-        yo={{ email: ctx.user.email, nombre: ctx.teamMember.name, foto: ctx.teamMember.photoUrl }}
-        esRevisor={esRevisorDeFeedback(ctx.role)}
-        comentariosDisponibles={comentariosDisponibles()}
+        esRevisor={esRevisor}
         inicial={{
           vista: vistaDesdeUrl(uno(sp, "vista")),
           perfil: perfilDesdeUrl({ cierre: uno(sp, "cierre"), despues: uno(sp, "despues") }),

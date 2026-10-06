@@ -97,8 +97,8 @@ export interface MensajeDelHilo {
   autor: { nombre: string; iniciales: string };
   deQuienReporto: boolean;
   /**
-   * Lo escribió quien está mirando. Hace falta desde que en un comentario de la escala responde
-   * cualquiera del equipo (2026-10-05): ya no alcanza con «no es de quien reportó» para decir «Tú».
+   * Lo escribió quien está mirando. Hace falta desde que revisa cualquier super admin (2026-10-05): del
+   * lado de quien revisa ya no alcanza con «no es de quien reportó» para decir «Tú».
    */
   esMio?: boolean;
   cuerpo: string;

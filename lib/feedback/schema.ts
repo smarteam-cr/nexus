@@ -3,6 +3,9 @@
  */
 import { z } from "zod";
 import { esRutaInterna } from "@/lib/navegacion/ruta-interna";
+import { FORMA_DE_ANCLA } from "@/lib/escala/documento/anclas";
+import { FORMA_DE_EDICION } from "@/lib/escala/documento/parsear";
+import { CIERRES, DESPUES } from "@/lib/escala/documento/perfil";
 import { COLUMNAS, MAX_CUERPO, MAX_MARCAS, TIPOS_DE_FEEDBACK } from "./reglas";
 
 const texto = (max: number) => z.string().trim().max(max);
@@ -22,6 +25,18 @@ export const CrearReporte = z.object({
   capturaPath: z.string().max(300).optional(),
   marcas: z.array(z.object({ n: z.number().int().min(1).max(MAX_MARCAS), descripcion: texto(160) })).max(MAX_MARCAS).optional(),
   pedidoId: z.string().max(60).optional(),
+  /**
+   * Si se mandó desde un criterio, un nivel o una dimensión de la escala (lib/feedback/escala.ts): qué
+   * se estaba leyendo. El texto NO viaja: lo congela el servidor desde la versión publicada.
+   */
+  escala: z
+    .object({
+      ancla: z.string().trim().regex(FORMA_DE_ANCLA, "Ese identificador no tiene la forma de la escala."),
+      edicion: z.string().trim().max(80).regex(FORMA_DE_EDICION, "Esa no es la clave de una edición.").nullish(),
+      perfilCierre: z.enum(CIERRES as unknown as [string, ...string[]]).nullish(),
+      perfilDespues: z.enum(DESPUES as unknown as [string, ...string[]]).nullish(),
+    })
+    .optional(),
 });
 export type CrearReporte = z.infer<typeof CrearReporte>;
 
@@ -44,7 +59,7 @@ export const Decidir = z.discriminatedUnion("accion", [
       .optional(),
     avisar: z.boolean().default(true),
     /**
-     * Solo para lo comentado desde la escala: la fila de «Cambios pendientes» del manual. La decisión
+     * Solo para lo mandado desde la escala: la fila de «Cambios pendientes» del manual. La decisión
      * la exige si el reporte es de la escala (lib/feedback/mutations.ts).
      */
     cambio: z

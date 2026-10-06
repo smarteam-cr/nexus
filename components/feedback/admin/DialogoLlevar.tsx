@@ -6,8 +6,8 @@
  * Dos caminos: sumarlo a un tema que ya existe (el que se parece va primero) o crear uno nuevo, eligiendo
  * en qué columna entra (por defecto «Por decidir»). Se puede avisar o no a quien reportó.
  *
- * Lo comentado desde la escala lleva además la fila de «Cambios pendientes» del manual (qué cambiaría,
- * el caso y qué decisión con el cliente cambiaría): viene propuesta desde el comentario y se corrige acá.
+ * Lo mandado desde la escala lleva además la fila de «Cambios pendientes» del manual (qué cambiaría,
+ * el caso y qué decisión con el cliente cambiaría): viene propuesta desde el reporte y se corrige acá.
  */
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
@@ -184,7 +184,7 @@ export default function DialogoLlevar({
           <div className="space-y-2.5 rounded-lg border border-line bg-surface-muted px-3 py-3">
             <div className="space-y-0.5">
               <p className="text-[13px] font-semibold text-fg">La fila del manual · {reporte.escala?.ancla}</p>
-              <p className="text-xs text-fg-muted">Va a «Cambios pendientes» del manual de la escala. Viene propuesta desde el comentario: corrígela.</p>
+              <p className="text-xs text-fg-muted">Va a «Cambios pendientes» del manual de la escala. Viene propuesta desde el reporte: corrígela.</p>
             </div>
             {!escala ? (
               <p className="text-xs text-fg-muted">Cargando lo que se comentó…</p>

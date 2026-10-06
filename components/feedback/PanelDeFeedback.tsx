@@ -7,6 +7,9 @@
  * al mandar depende de qué mandó: una mejora festeja (en toda la pantalla, components/feedback/Festejo),
  * una falla que le frena el trabajo recibe «Reportado como urgente» con su número, y lo demás el
  * «Recibido» verde de siempre.
+ *
+ * Abierto desde la escala (el botón de un criterio, un nivel o una dimensión, 2026-10-05), arriba dice
+ * sobre qué es y el reporte se manda anclado ahí (`escala`): es el mismo formulario de siempre.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -14,6 +17,7 @@ import { Segmentado } from "@/components/ui/Segmentado";
 import { Tabs } from "@/components/ui/Tabs";
 import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
+import { EVENTO_DE_FEEDBACK_ENVIADO, type SobreLaEscala } from "@/lib/feedback/escala";
 import type { PedidoParaMi, ReporteDeLista, ReporteDetalle } from "@/lib/feedback/queries";
 import {
   describirNavegador,
@@ -44,6 +48,8 @@ interface Props {
   onQuitarCaptura: () => void;
   onVolverACapturar: () => void;
   respondiendo: PedidoParaMi | null;
+  /** Abierto desde la escala: lo que se estaba mirando. */
+  sobreLaEscala: SobreLaEscala | null;
   onRespondido: (pedidoId: string) => void;
   version: string | null;
   onFestejar: (ideas: number) => void;
@@ -109,7 +115,9 @@ export function PanelDeFeedback(p: Props) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[15px] font-semibold leading-5 text-fg">Feedback</p>
-            <p className="truncate text-xs text-fg-muted">Sobre «{pantalla}»</p>
+            <p className="truncate text-xs text-fg-muted">
+              {p.sobreLaEscala ? `Sobre la escala · ${p.sobreLaEscala.ancla}` : `Sobre «${pantalla}»`}
+            </p>
           </div>
           <button
             type="button"
@@ -176,7 +184,7 @@ interface Enviado {
 function DarFeedback(
   p: Props & { pantalla: string; ruta: string; cuentaReportes: number | null; onEnviado: () => void },
 ) {
-  const [tipo, setTipo] = useState<TipoDeFeedback>(p.respondiendo ? "mejora" : "falla");
+  const [tipo, setTipo] = useState<TipoDeFeedback>(p.respondiendo || p.sobreLaEscala ? "mejora" : "falla");
   const [cuerpo, setCuerpo] = useState("");
   const [frena, setFrena] = useState<"si" | "no">("no");
   const [detalles, setDetalles] = useState(false);
@@ -217,6 +225,14 @@ function DarFeedback(
           capturaPath,
           marcas: p.marcas.length ? p.marcas.map((m) => ({ n: m.n, descripcion: m.descripcion })) : undefined,
           pedidoId: p.respondiendo?.id,
+          escala: p.sobreLaEscala
+            ? {
+                ancla: p.sobreLaEscala.ancla,
+                edicion: p.sobreLaEscala.edicion?.slug ?? null,
+                perfilCierre: p.sobreLaEscala.perfil.cierre,
+                perfilDespues: p.sobreLaEscala.perfil.despues,
+              }
+            : undefined,
         }),
       });
       const d = (await res.json().catch(() => null)) as { error?: string; reporte?: { numero: number; urgente: boolean }; ideasEn30Dias?: number } | null;
@@ -236,6 +252,7 @@ function DarFeedback(
       if (p.respondiendo) p.onRespondido(p.respondiendo.id);
       if (tipo === "mejora") p.onFestejar(d.ideasEn30Dias ?? 0);
       p.onEnviado();
+      window.dispatchEvent(new Event(EVENTO_DE_FEEDBACK_ENVIADO));
     } catch {
       setError("No hay conexión. Revisa tu internet e inténtalo de nuevo.");
     } finally {
@@ -267,6 +284,20 @@ function DarFeedback(
           <div className="space-y-0.5 rounded-[10px] border border-line bg-surface-muted px-3 py-2.5">
             <p className={ROTULO_DEL_SISTEMA}>Respondes a {p.respondiendo.deQuien}</p>
             <p className="text-[13px] text-fg">{p.respondiendo.pregunta}</p>
+          </div>
+        )}
+
+        {p.sobreLaEscala && (
+          <div className="space-y-1.5 rounded-[10px] border border-line bg-surface-muted px-3 py-2.5">
+            <p className={ROTULO_DEL_SISTEMA}>Sobre la escala · {p.sobreLaEscala.que}</p>
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-fg-muted">
+              <span className="rounded-full border border-line bg-surface px-[7px] text-[11px] font-semibold tabular-nums leading-[18px] text-fg-secondary">
+                {p.sobreLaEscala.ancla}
+              </span>
+              {p.sobreLaEscala.ruta}
+              {p.sobreLaEscala.edicion && <span>· Edición {p.sobreLaEscala.edicion.nombre}</span>}
+            </p>
+            <p className="line-clamp-4 text-[13px] leading-[1.45] text-fg">«{p.sobreLaEscala.texto}»</p>
           </div>
         )}
 
@@ -622,10 +653,10 @@ function HiloDelReporte({ id, onVolver }: { id: string; onVolver: () => void }) 
             <div className="space-y-2">
               <p className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
                 <IconoDeTipo tipo={reporte.tipo} />
-                {reporte.escala ? reporte.escala.tipo : TIPO[reporte.tipo].nombre} · {reporte.pantalla} · {numeroDeReporte(reporte.numero)}
+                {TIPO[reporte.tipo].nombre} · {reporte.pantalla} · {numeroDeReporte(reporte.numero)}
               </p>
               <p className="whitespace-pre-wrap break-words text-[15px] font-semibold leading-5 text-fg">{reporte.cuerpo}</p>
-              {/* Lo comentado desde la escala (2026-10-05): sobre qué criterio, con su texto. */}
+              {/* Si se mandó desde la escala (2026-10-05): sobre qué criterio, con su texto. */}
               {reporte.escala && (
                 <div className="space-y-1 rounded-lg border border-line bg-surface-muted px-3 py-2">
                   <p className="text-xs text-fg-muted">

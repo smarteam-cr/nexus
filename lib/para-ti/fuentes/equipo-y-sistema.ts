@@ -1,6 +1,6 @@
 /**
- * lib/para-ti/fuentes/equipo-y-sistema.ts — los frentes que juntan lo que el EQUIPO deja para alguien: los comentarios
- * de la Escala y de la Documentación, lo que Marketing tiene por revisar, los pedidos de clientes que esperan a Ventas
+ * lib/para-ti/fuentes/equipo-y-sistema.ts — los frentes que juntan lo que el EQUIPO deja para alguien: el feedback
+ * sobre la Escala, los comentarios de la Documentación, lo que Marketing tiene por revisar, los pedidos de clientes que esperan a Ventas
  * y lo que falló en el servidor.
  */
 import "server-only";
@@ -14,10 +14,11 @@ import { recortar } from "./proyectos";
 export const COMENTARIOS_DE_LA_ESCALA: Fuente = {
   clave: "escala-comentarios",
   frente: "ESCALA",
-  alDia: "Los comentarios de la Escala",
+  alDia: "El feedback sobre la Escala",
   async medir() {
-    // Desde el 2026-10-05 un comentario de la Escala es un reporte de Feedback con su ancla (lib/feedback/escala.ts) y
-    // se decide en la bandeja de Feedback. Los que esperan son los que nadie revisó todavía.
+    // Desde el 2026-10-05 lo que se dice de la Escala se manda con el panel de Feedback, anclado al criterio
+    // (lib/feedback/escala.ts), y se decide en la bandeja. Los que esperan son los que nadie revisó todavía.
+    // (La clave sigue siendo «escala-comentarios»: es la de los pendientes ya vistos.)
     const abiertos = await prisma.feedbackReporte.findMany({
       where: { escalaAncla: { not: null }, estado: "sin_revisar" },
       select: { id: true, escalaAncla: true, createdAt: true },
@@ -32,7 +33,7 @@ export const COMENTARIOS_DE_LA_ESCALA: Fuente = {
         fuente: "escala-comentarios",
         cuando: "semana",
         delAgente: false,
-        titulo: `${plural(abiertos.length, "comentario de la Escala espera", "comentarios de la Escala esperan")} una decisión`,
+        titulo: `${plural(abiertos.length, "reporte sobre la Escala espera", "reportes sobre la Escala esperan")} una decisión`,
         detalle: `El más viejo es del ${diaCorto(viejo.createdAt)}, en ${viejo.escalaAncla}.`,
         meta: "Escala · se decide en Feedback",
         accion: "Abrir la bandeja",

@@ -5470,8 +5470,11 @@ model ComentarioDoc {
 
 // ── Escala de Rendimiento: la versión publicada y los comentarios (2026-09-27) ──────
 // SQL: scripts/sql/2026-09-27-escala-lector-y-comentarios.sql (⛔ nunca `db push`).
-// La escala NO se edita desde Nexus: se publica con `scripts/publicar-escala.ts` y se comenta.
-// Tipos y estados son String y no enum (INV4): los valores los fija lib/escala/comentarios/reglas.ts.
+// La escala NO se edita desde Nexus: se publica con `scripts/publicar-escala.ts`.
+// ⚠ Desde el 2026-10-05 la escala NO tiene comentarios propios: lo que se dice de ella se manda como
+// Feedback, anclado al criterio (FeedbackReporte.escalaAncla, lib/feedback/escala.ts). "EscalaComentario"
+// y "EscalaRespuesta" quedan quietas (la app no las lee ni las escribe); siguen en el esquema por su
+// llave a Client, que reapunta scripts/merge-duplicate-clients.ts.
 
 /// Una versión PUBLICADA de un documento de la escala, con su texto exacto. Solo se inserta.
 /// La app lee la última de `documento = "escala"`; la descarga devuelve `texto` tal cual.

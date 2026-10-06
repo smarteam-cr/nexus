@@ -6,10 +6,10 @@
  *
  * Cada dimensión muestra su pregunta y su costo de quedarse; cada nivel, su descripción y, desde
  * Funcional, su línea de resultado; cada criterio, primero su texto y en chico su identificador,
- * cómo se verifica y sus marcas. Todo es clickeable: abre los comentarios de ESE identificador.
+ * cómo se verifica y sus marcas. Todo es clickeable: abre el panel de Feedback sobre ESE identificador.
  *
  * Un criterio puede requerir otros, de otra dimensión o de un nivel anterior. Al pasar el cursor por
- * uno (o con sus comentarios abiertos) se marcan en toda la matriz los que requiere y los que lo
+ * uno (o con él marcado) se marcan en toda la matriz los que requiere y los que lo
  * requieren a él.
  *
  * La matriz tiene su propio scroll (alto de la ventana) para que el encabezado de los niveles y la
@@ -40,7 +40,7 @@ interface Props {
 }
 
 /**
- * El criterio que se mira (bajo el cursor o, si no, el que tiene los comentarios abiertos) y los que
+ * El criterio que se mira (bajo el cursor o, si no, el marcado: el último al que se le dio feedback, o el de la dirección) y los que
  * se relacionan con él: los que requiere y los que lo requieren. Se marcan en toda la matriz.
  */
 interface Relacion {
@@ -125,15 +125,15 @@ function FilaDeDimension({
   relacion: Relacion;
   onLeerDimension: (dimension: string) => void;
 }) {
-  const { conteos, abrirComentarios } = useEscala();
+  const { conteos, darFeedback } = useEscala();
   const aplicaAca = dimensionAplica(d, perfil);
   return (
     <div className={cn("grid border-b border-line", COLUMNAS)}>
       <div className="sticky left-0 z-10 flex flex-col gap-2 border-r border-line bg-surface p-4">
         <button
           type="button"
-          onClick={() => abrirComentarios(d.id)}
-          title="Ver y dejar comentarios sobre la dimensión"
+          onClick={() => darFeedback(d.id)}
+          title="Dar feedback sobre la dimensión"
           className={cn(
             "-mx-1.5 -my-1 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-surface-hover",
             anclaAbierta === d.id && "bg-info-surface",
@@ -198,7 +198,7 @@ function CeldaDeNivel({
   anclaAbierta: string | null;
   relacion: Relacion;
 }) {
-  const { conteos, abrirComentarios } = useEscala();
+  const { conteos, darFeedback } = useEscala();
   const { atenuado } = useHerramientas();
   const visibles = n.criterios.filter((c) => aplica(c, perfil));
   const ocultos = n.criterios.length - visibles.length;
@@ -207,8 +207,8 @@ function CeldaDeNivel({
     <div className="flex min-w-0 flex-col gap-2 border-l border-line p-3">
       <button
         type="button"
-        onClick={() => abrirComentarios(n.id)}
-        title="Ver y dejar comentarios sobre el nivel"
+        onClick={() => darFeedback(n.id)}
+        title="Dar feedback sobre el nivel"
         className={cn(
           "-mx-1 rounded-lg px-1 py-0.5 text-left text-[13px] font-semibold leading-snug text-fg transition-colors hover:bg-surface-hover",
           anclaAbierta === n.id && "bg-info-surface",
@@ -235,11 +235,11 @@ function CeldaDeNivel({
               <li key={c.id}>
                 <button
                   type="button"
-                  onClick={() => abrirComentarios(c.id)}
+                  onClick={() => darFeedback(c.id)}
                   onMouseEnter={conEnlaces ? () => relacion.alEntrar(c.id) : undefined}
                   onMouseLeave={conEnlaces ? relacion.alSalir : undefined}
                   // Con el teclado se marca al LLEGAR con Tab (la tecla se suelta sobre el criterio al que
-                  // se llegó), no con cualquier foco: al cerrar el panel de comentarios el foco vuelve
+                  // se llegó), no con cualquier foco: al cerrar el panel de Feedback el foco vuelve
                   // solo al criterio, y con `onFocus` la marca quedaba puesta sin cursor ni panel.
                   onKeyUp={conEnlaces ? (e) => e.key === "Tab" && relacion.alEntrar(c.id) : undefined}
                   onBlur={conEnlaces ? relacion.alSalir : undefined}

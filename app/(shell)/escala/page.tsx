@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
-import { esResponsable } from "@/lib/escala/comentarios/reglas";
+import { esResponsable } from "@/lib/escala/responsable";
 import EscalaSinPublicar from "@/components/escala/EscalaSinPublicar";
 
 export const metadata: Metadata = { title: "Escala de Rendimiento" };
