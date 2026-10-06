@@ -23,7 +23,7 @@ import { crearLector, nuevoRegistro, VERSION_DEL_REGISTRO } from "./lecturas";
 import { leerInventario } from "./inventario";
 import { leerContextoDelCliente } from "./contexto-del-cliente";
 import { reportesDeLaFoto } from "./reportes";
-import { leerFoto, VERSION_DE_LA_FOTO, type AnalisisGuardado, type FotoDeAuditoria } from "./foto";
+import { corridaPerdida, leerFoto, VERSION_DE_LA_FOTO, type AnalisisGuardado, type FotoDeAuditoria } from "./foto";
 import { armarHechos } from "./analisis/hechos";
 import { MODELO_DEL_ANALISIS, pedidoDelAnalisis, SLUG_DEL_ANALISIS } from "./analisis/prompt";
 import { leerAnalisis, unirConLoConfirmado } from "./analisis/validar";
@@ -126,6 +126,24 @@ export async function capturarAuditoria(auditId: string, accountId: string, quie
     return;
   }
   await analizarAuditoria(auditId, quien);
+}
+
+/**
+ * TOMA la auditoría para volver a generar el análisis (2026-10-05). Con la fila bloqueada: si ya hay
+ * un análisis (o una lectura del portal) en curso, no la toma. Antes la ruta miraba el estado de la
+ * foto que leyó el guard, sin candado: un doble clic en «Volver a generar» veía «lista» dos veces y
+ * lanzaba dos análisis que se pisaban. Una corrida PERDIDA (el proceso murió, `corridaPerdida`) sí se
+ * retoma. Si la toma, la deja en «analizando» con su marca de inicio y devuelve true.
+ */
+export async function tomarParaAnalizar(auditId: string): Promise<boolean> {
+  let tomada = false;
+  await actualizarFoto(auditId, (f) => {
+    const enCurso = (f.estado === "capturando" || f.estado === "analizando") && !corridaPerdida(f);
+    if (enCurso || !f.lifecycleStats) return f;
+    tomada = true;
+    return { ...f, estado: "analizando", analisisIniciadoEn: new Date().toISOString(), analisisError: undefined };
+  });
+  return tomada;
 }
 
 /**

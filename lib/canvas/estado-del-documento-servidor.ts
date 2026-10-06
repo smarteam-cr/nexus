@@ -8,6 +8,7 @@
  * ⚠ Presentar y aprobar toman la foto con `protegida: true`: es la evidencia de qué vio y qué aprobó
  * el cliente, y no la borra el tope de 30 versiones (lib/canvas/versiones.ts).
  */
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { avisar } from "@/lib/para-ti/avisos-server";
 import { urlDeProyecto } from "@/lib/agents/run-url";
@@ -140,7 +141,14 @@ async function devolver(canvasId: string): Promise<ResultadoDeEstado> {
   return estado ? { ok: true, estado } : { ok: false, status: 404, error: "El documento no existe." };
 }
 
-/** PRESENTAR: exige el hilo cerrado y la política revisada; deja la foto protegida de lo presentado. */
+/**
+ * PRESENTAR: exige el hilo cerrado y la política revisada; deja la foto protegida de lo presentado.
+ *
+ * El documento se TOMA al escribir (2026-10-05, como la aprobación): el cambio a «presentado» es
+ * condicional al estado y la versión que se leyeron, en la misma transacción que el hito. Dos
+ * «Presentar» a la vez dejan una sola presentación; presentar mientras el cliente aprueba (o mientras
+ * se regenera) no pisa lo que pasó en el medio.
+ */
 export async function presentarDocumento(canvasId: string, por: string | null): Promise<ResultadoDeEstado> {
   const doc = await cargarDocumento(canvasId);
   if (!doc) return { ok: false, status: 404, error: "El documento no existe." };
@@ -158,12 +166,35 @@ export async function presentarDocumento(canvasId: string, por: string | null): 
   }
   const v = await guardarVersionDelDocumento(canvasId, { origen: `Presentado al cliente (v${version})`, creadaPor: por, protegida: true });
   if (!v.id) return { ok: false, status: 500, error: "No se pudo guardar la foto de lo que se presenta. Vuelve a intentarlo." };
+  const fotoId = v.id;
 
-  await prisma.$transaction([
-    prisma.projectCanvas.update({ where: { id: canvasId }, data: { estadoDocumento: aColumna("presentado"), versionDocumento: version } }),
-    prisma.hitoDeDocumento.create({ data: { canvasId, version, tipo: "presentado", porEmail: por, fotoId: v.id } }),
-  ]);
-  return devolver(canvasId);
+  // Tomar el documento: pasa a «presentado» solo si sigue en el estado y la versión que se leyeron.
+  const hito = await prisma.$transaction(async (tx) => {
+    const tomado = await tx.projectCanvas.updateMany({
+      where: { id: canvasId, estadoDocumento: doc.estadoDocumento, versionDocumento: doc.versionDocumento },
+      data: { estadoDocumento: aColumna("presentado"), versionDocumento: version },
+    });
+    if (tomado.count !== 1) return null;
+    return tx.hitoDeDocumento.create({ data: { canvasId, version, tipo: "presentado", porEmail: por, fotoId }, select: { id: true } });
+  });
+  if (hito) return devolver(canvasId);
+
+  // Alguien se adelantó. Si fue otro «Presentar» de esto mismo (doble clic), ya está presentado.
+  const ahora = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { estadoDocumento: true, versionDocumento: true } });
+  if (leerEstado(ahora?.estadoDocumento) === "presentado" && ahora?.versionDocumento === version) {
+    const p = await ultimoPresentado(canvasId, version);
+    if (p?.foto?.huella === huellaDe(foto)) return devolver(canvasId);
+  }
+  // La foto recién tomada no es evidencia de nada: si nadie la usa, vuelve a ser una versión común.
+  if (!v.motivo) {
+    const usada = await prisma.hitoDeDocumento.findFirst({ where: { fotoId }, select: { id: true } }).catch(() => ({ id: "?" }));
+    if (!usada) {
+      await prisma.versionDeDocumento
+        .update({ where: { id: fotoId }, data: { protegida: false, origen: `Iba a presentarse (v${version}), pero el documento cambió antes` } })
+        .catch(() => {});
+    }
+  }
+  return { ok: false, status: 409, error: "El documento cambió mientras se presentaba: recarga y vuelve a intentarlo." };
 }
 
 /** La aprobación que ya está registrada en esa versión: quién y cuándo, del hito real. */
@@ -337,31 +368,72 @@ export async function documentoAprobado(canvasId: string): Promise<boolean> {
   return leerEstado(c?.estadoDocumento) === "aprobado";
 }
 
+/** Lo que queda en la corrida si el cliente aprobó mientras la IA escribía: lo generado no se guarda. */
+export const MENSAJE_APROBADO_MIENTRAS_SE_REGENERABA =
+  "El cliente aprobó el diagnóstico mientras se regeneraba: lo generado no se guardó y queda lo que aprobó. Si hace falta cambiarlo, reábrelo y vuelve a generar.";
 
 /**
- * Después de REGENERAR: si estaba presentado, lo que sigue es la versión siguiente en borrador (la
- * presentada queda en el historial, con su foto protegida). Nunca tira: es un rastro, no la corrida.
+ * Dentro de una transacción: si el documento está presentado, pasa a la versión siguiente en borrador
+ * (la presentada queda en el historial, con su foto protegida) y deja el hito «reabierto».
  *
  * El cambio es condicional a que SIGA presentado en esa versión (2026-10-05): si entre la lectura y
  * la escritura alguien aprobó, reabrió o presentó otra, no se pisa.
  */
+async function abrirVersionSiguiente(tx: Prisma.TransactionClient, canvasId: string): Promise<void> {
+  const c = await tx.projectCanvas.findUnique({ where: { id: canvasId }, select: { estadoDocumento: true, versionDocumento: true } });
+  if (!c || leerEstado(c.estadoDocumento) !== "presentado") return;
+  const presentada = c.versionDocumento;
+  const version = presentada + 1;
+  const tomado = await tx.projectCanvas.updateMany({
+    where: { id: canvasId, estadoDocumento: aColumna("presentado"), versionDocumento: presentada },
+    data: { estadoDocumento: aColumna("borrador"), versionDocumento: version },
+  });
+  if (tomado.count !== 1) return;
+  await tx.hitoDeDocumento.create({
+    data: { canvasId, version, tipo: "reabierto", motivo: `Se regeneró después de presentarlo: la v${presentada} presentada queda en el historial.` },
+  });
+}
+
+/**
+ * Después de REGENERAR: si estaba presentado, lo que sigue es la versión siguiente en borrador. Nunca
+ * tira: es un rastro, no la corrida. (El diagnóstico lo hace dentro de `escribirLoRegenerado`.)
+ */
 export async function trasRegenerar(canvasId: string): Promise<void> {
   try {
-    const c = await prisma.projectCanvas.findUnique({ where: { id: canvasId }, select: { estadoDocumento: true, versionDocumento: true } });
-    if (!c || leerEstado(c.estadoDocumento) !== "presentado") return;
-    const presentada = c.versionDocumento;
-    const version = presentada + 1;
-    await prisma.$transaction(async (tx) => {
-      const tomado = await tx.projectCanvas.updateMany({
-        where: { id: canvasId, estadoDocumento: aColumna("presentado"), versionDocumento: presentada },
-        data: { estadoDocumento: aColumna("borrador"), versionDocumento: version },
-      });
-      if (tomado.count !== 1) return;
-      await tx.hitoDeDocumento.create({
-        data: { canvasId, version, tipo: "reabierto", motivo: `Se regeneró después de presentarlo: la v${presentada} presentada queda en el historial.` },
-      });
-    });
+    await prisma.$transaction((tx) => abrirVersionSiguiente(tx, canvasId));
   } catch (e) {
     console.error(`[estado-del-documento] no se pudo abrir la versión siguiente de ${canvasId}:`, e instanceof Error ? e.message : e);
   }
+}
+
+/**
+ * ESCRIBIR lo regenerado solo si el documento no quedó aprobado mientras corría la IA (2026-10-05).
+ *
+ * La regeneración revisa «aprobado» al arrancar, pero la IA tarda minutos: si el cliente aprueba en
+ * el medio, lo nuevo se escribía igual sobre lo aprobado. Acá se TOMA el documento en la misma
+ * transacción que la escritura: un UPDATE condicionado a «no aprobado» (bloquea la fila hasta el
+ * commit). Una aprobación que llegó antes se ve y no se escribe nada (`{ tomado: false }`); una que
+ * llega durante la escritura espera, y como lo presentado pasa en esa misma transacción a la versión
+ * siguiente en borrador, encuentra otra versión y no aprueba lo que el cliente no vio.
+ *
+ * `escribir` devuelve cuántas secciones escribió; con cero no se abre versión nueva.
+ */
+export async function escribirLoRegenerado(
+  canvasId: string,
+  escribir: (tx: Prisma.TransactionClient) => Promise<number>,
+): Promise<{ tomado: false } | { tomado: true; escritas: number }> {
+  return prisma.$transaction(
+    async (tx) => {
+      const tomado = await tx.projectCanvas.updateMany({
+        // `estadoDocumento` es null en el borrador: el null va explícito (un «distinto de» no lo incluye).
+        where: { id: canvasId, OR: [{ estadoDocumento: null }, { estadoDocumento: { not: aColumna("aprobado") } }] },
+        data: { contentUpdatedAt: new Date() },
+      });
+      if (tomado.count !== 1) return { tomado: false as const };
+      const escritas = await escribir(tx);
+      if (escritas > 0) await abrirVersionSiguiente(tx, canvasId);
+      return { tomado: true as const, escritas };
+    },
+    { timeout: 60_000, maxWait: 10_000 },
+  );
 }

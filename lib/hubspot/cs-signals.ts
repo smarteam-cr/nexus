@@ -41,18 +41,56 @@ function parseAmount(a: string | null): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Un ítem del registro de actividad tal como lo guarda la copia (`engagement.lastItems`). */
+type ItemDeActividad = { type: string; title: string; date: string | null; ts: number; resumen: string };
+
+/** Lo que guardó la última copia de señales y se conserva cuando una lectura de HubSpot FALLA. */
+interface CopiaAnterior {
+  contactos: ContactoDeEmpresa[];
+  lastEngagementAt: Date | null;
+  engagements90d: number;
+  engagementItems: ItemDeActividad[];
+  ticketsSupported: boolean;
+  openTicketCount: number;
+  ticketsJson: Prisma.InputJsonValue | null;
+}
+
 /**
- * Los contactos que guardó la última copia de señales. Se usan cuando la lectura de HubSpot falla, para
- * no pisar a las personas con una lista vacía. Si tampoco se puede leer la copia, vacío (la escritura
- * de abajo va a la misma base y fallaría igual).
+ * La última copia de señales. Se usa cuando la lectura de HubSpot falla, para no pisar a las personas
+ * con una lista vacía, los tickets abiertos con un cero ni la última actividad con «nunca» (el cliente
+ * se vería frío). Si tampoco se puede leer la copia (o no hay), null: se escribe lo poco que se sabe
+ * (la escritura de abajo va a la misma base y fallaría igual).
  */
-async function contactosDeLaCopiaAnterior(clientId: string): Promise<ContactoDeEmpresa[]> {
+async function leerCopiaAnterior(clientId: string): Promise<CopiaAnterior | null> {
   try {
-    const previa = await prisma.clientCsSignals.findUnique({ where: { clientId }, select: { engagement: true } });
-    const guardados = (previa?.engagement as { contactos?: unknown } | null | undefined)?.contactos;
-    return Array.isArray(guardados) ? (guardados as ContactoDeEmpresa[]) : [];
+    const previa = await prisma.clientCsSignals.findUnique({
+      where: { clientId },
+      select: {
+        engagement: true,
+        tickets: true,
+        lastEngagementAt: true,
+        engagements90d: true,
+        openTicketCount: true,
+        ticketsSupported: true,
+      },
+    });
+    if (!previa) return null;
+    const eng = (previa.engagement ?? null) as { contactos?: unknown; lastItems?: unknown } | null;
+    const personas = eng?.contactos;
+    const items = eng?.lastItems;
+    const ultima = previa.lastEngagementAt ? new Date(previa.lastEngagementAt) : null;
+    return {
+      contactos: Array.isArray(personas) ? (personas as ContactoDeEmpresa[]) : [],
+      lastEngagementAt: ultima && !isNaN(ultima.getTime()) ? ultima : null,
+      engagements90d: previa.engagements90d ?? 0,
+      engagementItems: Array.isArray(items) ? (items as ItemDeActividad[]) : [],
+      ticketsSupported: previa.ticketsSupported ?? false,
+      openTicketCount: previa.openTicketCount ?? 0,
+      ticketsJson:
+        previa.tickets && typeof previa.tickets === "object" ? (previa.tickets as unknown as Prisma.InputJsonValue) : null,
+    };
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -76,6 +114,9 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
   const hs = await getSystemHubspotClient();
   const errors: string[] = [];
   const now = Date.now();
+  // La copia anterior se lee UNA vez y solo si alguna lectura de HubSpot falla.
+  let copia: Promise<CopiaAnterior | null> | undefined;
+  const copiaAnterior = () => (copia ??= leerCopiaAnterior(clientId));
 
   // ── 1. Deals ────────────────────────────────────────────────────────────────
   let deals: AvailableDeal[] = [];
@@ -102,7 +143,7 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
   let engagements90d = 0;
   // `resumen`: las primeras líneas de la nota o llamada (2026-10-04). Las lee el agente vigía: el
   // registro de la empresa en HubSpot cuenta cosas que no pasan por las reuniones de Nexus.
-  let engagementItems: { type: string; title: string; date: string | null; ts: number; resumen: string }[] = [];
+  let engagementItems: ItemDeActividad[] = [];
   try {
     const items = (await fetchCompanyTimelineItems(hs, client.hubspotCompanyId)).filter(
       (i) => i.ts <= now,
@@ -112,7 +153,15 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
     if (latest) lastEngagementAt = new Date(latest);
     engagements90d = items.filter((i) => i.ts >= now - 90 * DAY_MS).length;
   } catch (e) {
+    // ⛔ El registro de HubSpot FALLÓ (fetchCompanyTimelineItems lanza ante un 500, un 429 o la red):
+    // se conserva la última actividad de la copia anterior. Escribir «nunca» haría ver frío al cliente.
     errors.push(`engagement: ${e instanceof Error ? e.message : "error"}`);
+    const previa = await copiaAnterior();
+    if (previa) {
+      lastEngagementAt = previa.lastEngagementAt;
+      engagements90d = previa.engagements90d;
+      engagementItems = previa.engagementItems;
+    }
   }
   // Complemento: la última sesión REAL del cliente (Meet/Fireflies) — reuniones
   // que no pasan por HubSpot no deben marcar al cliente como "frío".
@@ -144,10 +193,13 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
     contactos = c.contactos;
   } catch (e) {
     errors.push(`contactos: ${e instanceof Error ? e.message : "error"}`);
-    contactos = await contactosDeLaCopiaAnterior(clientId);
+    contactos = (await copiaAnterior())?.contactos ?? [];
   }
 
   // ── 3. Tickets (degradación de scope) ──────────────────────────────────────
+  // 403 = sin permiso → `supported: false` (no es error). ⛔ Si la lectura FALLA (fetchCompanyTickets
+  // lanza ante un 500, un 429 o la red) se conservan los de la copia anterior: escribir «0 abiertos»
+  // haría ver tranquilo a un cliente con fricción.
   let ticketsSupported = false;
   let openTicketCount = 0;
   let ticketsJson: Prisma.InputJsonValue = { supported: false, open: [], recent: [] };
@@ -163,6 +215,12 @@ export async function computeClientSignals(clientId: string): Promise<ClientSign
     };
   } catch (e) {
     errors.push(`tickets: ${e instanceof Error ? e.message : "error"}`);
+    const previa = await copiaAnterior();
+    if (previa) {
+      ticketsSupported = previa.ticketsSupported;
+      openTicketCount = previa.openTicketCount;
+      if (previa.ticketsJson) ticketsJson = previa.ticketsJson;
+    }
   }
 
   const fetchStatus: "ok" | "partial" | "error" =

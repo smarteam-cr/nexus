@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+// portal-analyzer.ts (leerPropietariosActivos) trae la base y el cliente de HubSpot: falsos, no se usan.
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
+vi.mock("@/lib/hubspot/client", () => ({ refreshAccessToken: vi.fn(), tokenDeCuenta: vi.fn() }));
+vi.mock("@/lib/hubspot/reader", () => ({ readAccountState: vi.fn() }));
+import { leerPropietariosActivos } from "@/lib/hubspot/portal-analyzer";
 import {
   creadoresDePropiedades,
   dominioDe,
@@ -221,5 +226,39 @@ describe("leerPersonas", () => {
   it("si falla una página de usuarios, «sin leer» (null), nunca una lista a medias", async () => {
     const { lector } = lectorDePrueba(true);
     expect(await leerPersonas(lector)).toBeNull();
+  });
+});
+
+describe("leerPropietariosActivos (el reparto de contactos por propietario)", () => {
+  /** Un portal con más de 500 propietarios activos: la API los da en dos páginas. */
+  const lectorDePropietarios = (fallaLaSegunda = false) => {
+    const rutas: string[] = [];
+    const lector: LectorDeHubspot = {
+      registro: { intentos: 0, fallidas: [] },
+      contar: async () => null,
+      buscar: async () => null,
+      leerPorLote: async () => null,
+      leer: async <T,>(_bloque: unknown, _que: string, ruta: string) => {
+        rutas.push(ruta);
+        if (!ruta.startsWith("/crm/v3/owners?limit=500&archived=false")) return null;
+        if (!ruta.includes("after=")) return { results: [{ id: "1", firstName: "Ana" }], paging: { next: { after: "pag-2" } } } as T;
+        if (fallaLaSegunda) return null;
+        return { results: [{ id: "501", firstName: "Beto" }] } as T;
+      },
+    };
+    return { lector, rutas };
+  };
+
+  it("⭐ lee todas las páginas: el propietario de la página 2 también entra al reparto", async () => {
+    /* Lo que lo pone en rojo: volver a leer solo la primera página de 500 (los demás no salían). */
+    const { lector, rutas } = lectorDePropietarios();
+    const propietarios = await leerPropietariosActivos(lector);
+    expect(propietarios?.map((p) => p.id), "se quedó con la primera página").toEqual(["1", "501"]);
+    expect(rutas).toEqual(["/crm/v3/owners?limit=500&archived=false", "/crm/v3/owners?limit=500&archived=false&after=pag-2"]);
+  });
+
+  it("si falla una página, «sin leer» (null), nunca una lista a medias", async () => {
+    const { lector } = lectorDePropietarios(true);
+    expect(await leerPropietariosActivos(lector)).toBeNull();
   });
 });

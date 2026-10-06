@@ -4,8 +4,27 @@
  * components/feedback/piezas.tsx — las piezas chicas que comparten el panel de Feedback y la bandeja.
  * Solo tokens del sistema «Nexus · interfaz interna».
  */
+import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { TIPO, type EstadoVisible, type TipoDeFeedback } from "@/lib/feedback/reglas";
+import { esRutaInterna } from "@/lib/navegacion/ruta-interna";
+
+/**
+ * El enlace a la pantalla donde se mandó un reporte (o al criterio de la escala que se comentó).
+ * ⛔ Solo es enlace si la dirección guardada es una pantalla de Nexus (`esRutaInterna`): los reportes
+ * guardados ANTES de esa regla pueden traer `//otro.com` o `javascript:…`, y un botón de Nexus que
+ * lleva a otro sitio es justo lo que la regla evita. Esa dirección se muestra como texto, sin enlace.
+ */
+export function EnlaceDeRuta({ ruta, className, children }: { ruta: string; className?: string; children: ReactNode }) {
+  if (!esRutaInterna(ruta)) {
+    return <span className="break-all text-fg-muted">Sin enlace: «{ruta}» no es una pantalla de Nexus.</span>;
+  }
+  return (
+    <a href={ruta} className={className}>
+      {children}
+    </a>
+  );
+}
 
 export function Trazo({ d, className = "h-4 w-4" }: { d: string; className?: string }) {
   return (

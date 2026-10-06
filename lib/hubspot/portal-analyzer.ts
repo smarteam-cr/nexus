@@ -1044,6 +1044,37 @@ export async function getFreshToken(accountId: string): Promise<string> {
   return tokenDeCuenta(account);
 }
 
+/** Un propietario activo, como lo da `/crm/v3/owners`. */
+export type PropietarioActivo = { id: string; firstName?: string; lastName?: string; email?: string };
+
+/** Tope de páginas de propietarios (500 por página): 25.000, más que cualquier portal. */
+const MAX_PAGINAS_DE_PROPIETARIOS = 50;
+
+/**
+ * Los propietarios ACTIVOS del portal, TODAS las páginas (2026-10-05). Antes se leía una sola página
+ * de 500: en un portal con más, los demás no salían en el reparto de contactos. Mismo criterio que
+ * `leerPersonas` (lib/auditoria-portal/inventario.ts): se sigue `paging.next.after`, y si una página
+ * falla (queda anotada en el registro) la lista es «sin leer» (null), nunca una a medias.
+ */
+export async function leerPropietariosActivos(lector: LectorDeHubspot): Promise<PropietarioActivo[] | null> {
+  type Pagina = { results?: PropietarioActivo[]; paging?: { next?: { after?: string } } };
+  const propietarios: PropietarioActivo[] = [];
+  let despues: string | null = null;
+  for (let pagina = 0; pagina < MAX_PAGINAS_DE_PROPIETARIOS; pagina++) {
+    const ruta: string = `/crm/v3/owners?limit=500&archived=false${despues ? `&after=${encodeURIComponent(despues)}` : ""}`;
+    const r: Pagina | null = await lector.leer<Pagina>(
+      "propietarios",
+      pagina === 0 ? "La lista de propietarios del portal" : `La lista de propietarios del portal (página ${pagina + 1})`,
+      ruta,
+    );
+    if (!r) return null;
+    propietarios.push(...(r.results ?? []));
+    despues = r.paging?.next?.after ?? null;
+    if (!despues) return propietarios;
+  }
+  return null;
+}
+
 /**
  * Obtiene estadísticas de asignación de propietarios a contactos:
  *   - Distribución por propietario (contactCount por owner)
@@ -1054,14 +1085,8 @@ export async function getFreshToken(accountId: string): Promise<string> {
  * leer, `owners` queda vacío y la falla anotada: la sección entera se muestra como «sin leer».
  */
 async function fetchOwnerAssignmentStats(lector: LectorDeHubspot): Promise<PropietariosLeidos> {
-  // ── 1. Lista de propietarios ─────────────────────────────────────────────
-  type HubOwner = { id: string; firstName?: string; lastName?: string; email?: string };
-  const ownersData = await lector.leer<{ results?: HubOwner[] }>(
-    "propietarios",
-    "La lista de propietarios del portal",
-    "/crm/v3/owners?limit=500&archived=false",
-  );
-  const owners = ownersData?.results ?? [];
+  // ── 1. Lista de propietarios (todas las páginas) ─────────────────────────
+  const owners = (await leerPropietariosActivos(lector)) ?? [];
   await sleep(300);
 
   // ── 2. Conteo de contactos por propietario (lotes de 4) ─────────────────

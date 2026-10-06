@@ -1,17 +1,33 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import type { AnalisisGuardado, Hallazgo } from "../foto";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AnalisisGuardado, FotoDeAuditoria, Hallazgo } from "../foto";
 import type { HechosDelPortal } from "./hechos";
 import type { DefDeReporte } from "../reportes";
 import { esquemaDelAnalisis, MODELO_DEL_ANALISIS, pedidoDelAnalisis } from "./prompt";
 import { decidirHallazgos, leerAnalisis, MAX_HALLAZGOS, unirConLoConfirmado } from "./validar";
+import { tomarParaAnalizar } from "../servidor";
+import { candadoTomado, soltarCandado, tomarCandado } from "../candado-volver-a-correr";
+import { fotoDePrueba } from "../__fixtures__/foto";
 
 /**
  * lib/auditoria-portal/analisis/validar.test.ts — LO QUE DEVUELVE EL MODELO NO PASA SIN COMPROBAR.
  * Un hallazgo con una cifra que no está en los datos se cae: es la única forma de que el informe no
  * le muestre al cliente un número inventado con cara de dato.
+ *
+ * Y al final (2026-10-05): volver a generar el análisis y volver a correr la auditoría, UNO A LA VEZ.
+ * Para eso la base y lo que lee el portal son falsos (lib/auditoria-portal/servidor.ts los importa).
  */
+const db = vi.hoisted(() => ({ audit: { findUnique: vi.fn(), update: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() }));
+vi.mock("@/lib/db/prisma", () => ({ prisma: db }));
+vi.mock("@/lib/anthropic", () => ({ anthropic: {} }));
+vi.mock("@/lib/hubspot/portal-analyzer", () => ({
+  capturarCicloYPropietarios: vi.fn(),
+  fetchAuditEnrichment: vi.fn(),
+  getFreshToken: vi.fn(),
+  leerCuentaDelPortal: vi.fn(),
+}));
+vi.mock("../contexto-del-cliente", () => ({ leerContextoDelCliente: vi.fn() }));
 
 const HECHOS: HechosDelPortal = {
   hechos: [
@@ -238,5 +254,70 @@ describe("pedidoDelAnalisis", () => {
   it("los reportes del esquema son exactamente los de la pantalla", () => {
     expect(esquemaDelAnalisis(REPORTES).properties.reportes.items.properties.reporte.enum).toEqual(["ciclo.contactos", "pipeline.p1"]);
     expect(esquemaDelAnalisis([]).properties.reportes.items.properties.reporte.enum).toEqual(["ninguno"]);
+  });
+});
+
+describe("volver a generar el análisis: uno a la vez", () => {
+  /* Antes la ruta miraba el estado de la foto que leyó el guard, sin candado: un doble clic en «Volver a
+     generar» veía «lista» dos veces y lanzaba dos análisis. La fila bloqueada la pone Postgres (FOR
+     UPDATE serializa las dos tomas); acá, la segunda lee lo que escribió la primera. */
+  let fila: FotoDeAuditoria;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.$transaction.mockImplementation(async (fn: (tx: typeof db) => unknown) => fn(db));
+    db.$queryRaw.mockResolvedValue([]);
+    db.audit.findUnique.mockImplementation(async () => ({ data: fila }));
+    db.audit.update.mockImplementation(async ({ data }: { data: { data: FotoDeAuditoria } }) => {
+      fila = data.data;
+      return {};
+    });
+  });
+
+  it("⭐ doble clic: el primero la toma y la deja «analizando»; el segundo ya no", async () => {
+    fila = fotoDePrueba({ estado: "lista" });
+    expect(await tomarParaAnalizar("a1")).toBe(true);
+    expect(fila.estado).toBe("analizando");
+    expect(fila.analisisIniciadoEn).toBeTruthy();
+    expect(await tomarParaAnalizar("a1"), "el segundo clic lanzó otro análisis").toBe(false);
+    expect(db.$queryRaw, "decidió sin la fila bloqueada").toHaveBeenCalledTimes(2);
+  });
+
+  it("mientras se lee el portal tampoco; una corrida perdida (el proceso murió) sí se retoma", async () => {
+    fila = fotoDePrueba({ estado: "capturando", capturedAt: new Date().toISOString() });
+    expect(await tomarParaAnalizar("a1")).toBe(false);
+    fila = fotoDePrueba({ estado: "analizando", analisisIniciadoEn: new Date(Date.now() - 20 * 60 * 1000).toISOString() });
+    expect(await tomarParaAnalizar("a1")).toBe(true);
+  });
+
+  it("⭐ la ruta toma la auditoría ANTES de lanzar el análisis, y sin tomarla contesta 409", () => {
+    const ruta = readFileSync(join(process.cwd(), "app/api/audits/[id]/insights/route.ts"), "utf8");
+    const toma = ruta.search(/if \(!\(await tomarParaAnalizar\(id\)\)\) \{\s*return NextResponse\.json\([^;]*status: 409/);
+    expect(toma, "la ruta lanza el análisis sin tomar la auditoría con la fila bloqueada").toBeGreaterThan(-1);
+    expect(toma).toBeLessThan(ruta.indexOf("void analizarAuditoria("));
+  });
+});
+
+describe("volver a correr la auditoría: un solo candado para los dos botones", () => {
+  /* La cabecera y «Qué sigue» usan dos instancias de useVolverACorrer: con un useRef cada una tenía su
+     candado, y apretar una y después la otra creaba dos auditorías. */
+  it("⭐ tomado por un botón, el otro no lo toma (y otra auditoría tiene el suyo)", () => {
+    expect(tomarCandado("a1")).toBe(true);
+    expect(tomarCandado("a1"), "el segundo botón creó otra auditoría").toBe(false);
+    expect(candadoTomado("a1")).toBe(true);
+    expect(tomarCandado("a2")).toBe(true);
+    soltarCandado("a1");
+    soltarCandado("a2");
+    expect(tomarCandado("a1")).toBe(true);
+    soltarCandado("a1");
+  });
+
+  it("⭐ el hook usa el candado del módulo, no uno por instancia, y los dos botones le pasan la auditoría", () => {
+    const hook = readFileSync(join(process.cwd(), "components/auditoria/AccionesDeLaAuditoria.tsx"), "utf8");
+    expect(hook, "el hook no usa el candado compartido").toMatch(/if \(!tomarCandado\(auditId\)\) return;/);
+    expect(hook, "volvió el candado por instancia").not.toMatch(/\.current\) return/);
+    expect(hook).toMatch(/useVolverACorrer\(auditId, clientId\)/);
+    const ficha = readFileSync(join(process.cwd(), "components/auditoria/FichaDeAuditoria.tsx"), "utf8");
+    expect(ficha).toMatch(/useVolverACorrer\(vista\.id, clientId\)/);
   });
 });

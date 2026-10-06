@@ -12,6 +12,13 @@
  *
  * Retry-401 con forceRefreshSystemToken: la cuenta del sistema es compartida
  * (PROD/local/scripts) y el refresh token ROTA — lección de company-timeline.ts.
+ *
+ * ⛔ «No soportado» y «falló» NO son lo mismo (2026-10-05, mismo criterio que company-contacts.ts).
+ * Un 403 dice que no hay permiso: `supported: false`. Cualquier otro fallo (un 500, un 429, la red,
+ * un 401 aun con el token renovado) LANZA `FalloAlLeerTickets`: si devolviera «soportado, cero
+ * tickets», la copia de señales escribiría «0 abiertos» encima de los guardados y el cliente con
+ * fricción se vería tranquilo por un fallo pasajero de HubSpot. Quien llama (cs-signals.ts) atrapa
+ * el error y conserva los tickets de la copia anterior.
  */
 import type { Client as HsClient } from "@hubspot/api-client";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
@@ -31,6 +38,18 @@ export interface CompanyTicketsResult {
   tickets: CompanyTicket[];
 }
 
+/** HubSpot contestó algo que no es ni el dato ni «sin permiso»: no se sabe cuántos tickets hay. */
+export class FalloAlLeerTickets extends Error {
+  /** El status de HubSpot, o null si ni siquiera hubo respuesta (la red). */
+  readonly status: number | null;
+  constructor(status: number | null, detalle: string) {
+    super(`no se pudieron leer los tickets de HubSpot: ${detalle}`);
+    this.name = "FalloAlLeerTickets";
+    this.status = status;
+  }
+}
+
+/** `status` 401 vuelve para reintentar con el token renovado; cualquier otro fallo LANZA. */
 async function fetchOnce(
   hsClient: HsClient,
   companyId: string,
@@ -40,7 +59,8 @@ async function fetchOnce(
     path: `/crm/v3/objects/companies/${companyId}/associations/tickets?limit=100`,
   });
   if (assocRes.status === 403) return { status: 403, result: { supported: false, tickets: [] } };
-  if (assocRes.status !== 200) return { status: assocRes.status, result: { supported: true, tickets: [] } };
+  if (assocRes.status === 401) return { status: 401, result: { supported: true, tickets: [] } };
+  if (assocRes.status !== 200) throw new FalloAlLeerTickets(assocRes.status, `las asociaciones respondieron ${assocRes.status}`);
 
   const assocData = (await assocRes.json()) as { results?: { id: string }[] };
   const ids = (assocData.results ?? []).map((r) => r.id);
@@ -55,8 +75,9 @@ async function fetchOnce(
     },
   });
   if (batchRes.status === 403) return { status: 403, result: { supported: false, tickets: [] } };
+  if (batchRes.status === 401) return { status: 401, result: { supported: true, tickets: [] } };
   if (batchRes.status !== 200 && batchRes.status !== 207) {
-    return { status: batchRes.status, result: { supported: true, tickets: [] } };
+    throw new FalloAlLeerTickets(batchRes.status, `la lectura en lote respondió ${batchRes.status}`);
   }
   const data = (await batchRes.json()) as {
     results?: {
@@ -87,7 +108,11 @@ async function fetchOnce(
   return { status: 200, result: { supported: true, tickets } };
 }
 
-/** Tickets de la company, con degradación de scope y retry-401 (token compartido). */
+/**
+ * Tickets de la company, con degradación de scope (403 → `supported: false`) y retry-401 (token
+ * compartido). ⛔ Ante cualquier otro fallo LANZA `FalloAlLeerTickets`: nunca devuelve «cero
+ * tickets» sin saberlo.
+ */
 export async function fetchCompanyTickets(
   hsClient: HsClient,
   companyId: string,
@@ -97,11 +122,13 @@ export async function fetchCompanyTickets(
     if (r.status === 401) {
       await forceRefreshSystemToken();
       r = await fetchOnce(await getSystemHubspotClient(), companyId);
+      // Ni con el token renovado: tampoco se sabe cuántos hay.
+      if (r.status === 401) throw new FalloAlLeerTickets(401, "401 aun con el token renovado");
     }
     return r.result;
-  } catch {
-    // API caída ≠ scope faltante: se reporta como soportado pero vacío (el
-    // snapshot marca fetchStatus según los errores acumulados).
-    return { supported: true, tickets: [] };
+  } catch (e) {
+    // API caída ≠ scope faltante: el fallo SUBE para que la copia conserve lo que tenía.
+    if (e instanceof FalloAlLeerTickets) throw e;
+    throw new FalloAlLeerTickets(null, e instanceof Error ? e.message : String(e));
   }
 }

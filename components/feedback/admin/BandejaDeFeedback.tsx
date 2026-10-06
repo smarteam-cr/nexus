@@ -22,7 +22,7 @@ import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import type { DatosDeBandeja, ReporteDeBandeja, ReporteDetalle } from "@/lib/feedback/queries";
 import { COLUMNA, estadoParaElAutor, haceCuanto, numeroDeReporte, TIPO, TIPOS_DE_FEEDBACK, type TipoDeFeedback } from "@/lib/feedback/reglas";
-import { ChipDeEstado, Hilo, IconoDeTipo, Iniciales, MarcaNumerada } from "../piezas";
+import { ChipDeEstado, EnlaceDeRuta, Hilo, IconoDeTipo, Iniciales, MarcaNumerada } from "../piezas";
 import DialogoLlevar from "./DialogoLlevar";
 import PanelLateral from "@/components/ui/PanelLateral";
 
@@ -396,9 +396,9 @@ function Captura({ detalle }: { detalle: ReporteDetalle | null }) {
     return (
       <div className="rounded-xl border border-dashed border-line bg-surface p-4 text-[13px] text-fg-muted">
         No mandó captura: queda solo la dirección de la pantalla.{" "}
-        <a href={detalle.ruta} className="font-semibold text-brand hover:text-brand-light">
+        <EnlaceDeRuta ruta={detalle.ruta} className="font-semibold text-brand hover:text-brand-light">
           Ir a la pantalla
-        </a>
+        </EnlaceDeRuta>
       </div>
     );
   }
@@ -422,9 +422,9 @@ function Captura({ detalle }: { detalle: ReporteDetalle | null }) {
         <a href={detalle.capturaUrl} target="_blank" rel="noreferrer" className="font-semibold text-brand hover:text-brand-light">
           Abrir en tamaño real
         </a>
-        <a href={detalle.ruta} className="font-semibold text-brand hover:text-brand-light">
+        <EnlaceDeRuta ruta={detalle.ruta} className="font-semibold text-brand hover:text-brand-light">
           Ir a la pantalla
-        </a>
+        </EnlaceDeRuta>
       </figcaption>
     </figure>
   );
@@ -454,9 +454,9 @@ function LoQueSeComento({ detalle }: { detalle: ReporteDetalle | null }) {
           <span className="rounded-full border border-line bg-surface px-[7px] text-[11px] font-semibold tabular-nums leading-[18px] text-fg-secondary">{e.ancla}</span>
           {e.ruta ?? "Ya no existe en la versión vigente"}
           <span className="flex-1" />
-          <a href={detalle.ruta} className="font-semibold text-brand hover:text-brand-light">
+          <EnlaceDeRuta ruta={detalle.ruta} className="font-semibold text-brand hover:text-brand-light">
             Ver en la escala
-          </a>
+          </EnlaceDeRuta>
         </p>
         <p className="text-sm leading-relaxed text-fg">«{e.textoAnclado}»</p>
         {e.textoDeHoy === null ? (

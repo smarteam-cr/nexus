@@ -5,6 +5,8 @@
  * · La captura va al almacén PRIVADO (una pantalla puede mostrar datos de un cliente o de Finanzas).
  * · Las cuatro tablas nacen con RLS y la policy RESTRICTIVE (el `anon` de Supabase no las lee).
  * · El festejo no nombra a nadie (decisión de Elías, 2026-10-04).
+ * · La dirección guardada de un reporte solo es enlace si es una pantalla de Nexus (2026-10-05): los
+ *   reportes de ANTES de la regla (lib/navegacion/ruta-interna.ts) pueden traer `//otro.com`.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -76,5 +78,43 @@ describe("el festejo", () => {
 
   it("respeta «reducir movimiento»", () => {
     expect(leer("components/feedback/Festejo.tsx")).toContain("prefers-reduced-motion: reduce");
+  });
+});
+
+describe("la dirección guardada de un reporte", () => {
+  /** Los .tsx de components/feedback, con sus subcarpetas. */
+  function componentes(dir: string): string[] {
+    const salida: string[] = [];
+    for (const e of fs.readdirSync(path.join(RAIZ, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) salida.push(...componentes(rel));
+      else if (e.name.endsWith(".tsx")) salida.push(rel);
+    }
+    return salida;
+  }
+  const PIEZAS = "components/feedback/piezas.tsx";
+
+  it("⭐ ningún componente del feedback pinta `href={…ruta}` sin pasar por EnlaceDeRuta", () => {
+    const todos = componentes("components/feedback");
+    expect(todos).toContain("components/feedback/admin/BandejaDeFeedback.tsx");
+    expect(todos).toContain("components/feedback/PanelDeFeedback.tsx");
+    const crudos = todos.filter((f) => f !== PIEZAS && /href=\{[^}]*\bruta\b[^}]*\}/.test(leer(f)));
+    expect(crudos, "un reporte viejo puede traer una dirección de afuera: usa <EnlaceDeRuta> de components/feedback/piezas.tsx").toEqual([]);
+  });
+
+  it("⭐ EnlaceDeRuta revisa esRutaInterna ANTES de pintar el enlace", () => {
+    const src = leer(PIEZAS);
+    expect(src).toMatch(/import \{ esRutaInterna \} from ["']@\/lib\/navegacion\/ruta-interna["']/);
+    const cuerpo = src.slice(src.indexOf("export function EnlaceDeRuta"));
+    expect(cuerpo, "EnlaceDeRuta no existe en piezas.tsx").toMatch(/^export function EnlaceDeRuta/);
+    const chequeo = cuerpo.search(/if \(!esRutaInterna\(ruta\)\) \{?\s*return/);
+    expect(chequeo, "EnlaceDeRuta pinta el enlace sin revisar esRutaInterna(ruta)").toBeGreaterThan(-1);
+    expect(chequeo).toBeLessThan(cuerpo.indexOf("href={ruta}"));
+  });
+
+  it("la bandeja y el panel lo usan", () => {
+    for (const f of ["components/feedback/admin/BandejaDeFeedback.tsx", "components/feedback/PanelDeFeedback.tsx"]) {
+      expect(leer(f), f).toContain("<EnlaceDeRuta ruta=");
+    }
   });
 });

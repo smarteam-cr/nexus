@@ -271,7 +271,8 @@ export default function FichaDeAuditoria({ vista, clientId }: { vista: VistaDeAu
   const inicial: SeccionDeLaFicha = (SECCIONES_DE_LA_FICHA as readonly string[]).includes(pedida ?? "") ? (pedida as SeccionDeLaFicha) : "resumen";
   const [seccion, setSeccion] = useState<SeccionDeLaFicha>(inicial);
   const [ocupado, setOcupado] = useState(false);
-  const { correr: volverACorrer, corriendo } = useVolverACorrer(clientId);
+  // El mismo candado que el botón de la cabecera (uno por auditoría): no se crean dos.
+  const { correr: volverACorrer, corriendo } = useVolverACorrer(vista.id, clientId);
 
   const enCurso = vista.estado === "capturando" || vista.estado === "analizando";
   useEffect(() => {

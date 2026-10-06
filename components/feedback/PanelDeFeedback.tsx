@@ -27,7 +27,7 @@ import { Z } from "@/lib/ui/z";
 import { subirCaptura } from "./captura";
 import { erroresRecientes } from "./errores";
 import type { Captura } from "./FeedbackProvider";
-import { ChipDeEstado, Hilo, ICONO_CERRAR, ICONO_SENALAR, IconoDeTipo, MarcaNumerada, Trazo } from "./piezas";
+import { ChipDeEstado, EnlaceDeRuta, Hilo, ICONO_CERRAR, ICONO_SENALAR, IconoDeTipo, MarcaNumerada, Trazo } from "./piezas";
 import type { Marca } from "./Senalar";
 
 export type Pestana = "dar" | "mis";
@@ -633,9 +633,9 @@ function HiloDelReporte({ id, onVolver }: { id: string; onVolver: () => void }) 
                     {reporte.escala.ruta ?? "ya no existe en la versión vigente"}
                   </p>
                   <p className="text-[13px] leading-snug text-fg-secondary">«{reporte.escala.textoAnclado}»</p>
-                  <a href={reporte.ruta} className="text-xs font-semibold text-brand hover:text-brand-light">
+                  <EnlaceDeRuta ruta={reporte.ruta} className="text-xs font-semibold text-brand hover:text-brand-light">
                     Ver en la escala
-                  </a>
+                  </EnlaceDeRuta>
                 </div>
               )}
               <p className="flex flex-wrap items-center gap-2">

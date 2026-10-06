@@ -5,21 +5,36 @@
  * mismo portal, así queda la historia) y eliminarla (con confirmación). «Volver a correr» es un hook
  * porque lo usa también «Qué sigue».
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast } from "@/components/ui";
 import { BotonTexto } from "@/components/exploraciones/FranjaDeSugerencias";
+import { candadoTomado, escucharElCandado, soltarCandado, tomarCandado } from "@/lib/auditoria-portal/candado-volver-a-correr";
 
-export function useVolverACorrer(clientId: string | null) {
+/**
+ * «Volver a correr» la auditoría `auditId`. ⛔ El candado es del MÓDULO, uno por auditoría
+ * (lib/auditoria-portal/candado-volver-a-correr.ts): la cabecera y «Qué sigue» usan dos instancias de
+ * este hook, y con un useRef cada una tenía el suyo — apretar una y después la otra creaba dos
+ * auditorías. Los dos botones se apagan juntos.
+ */
+export function useVolverACorrer(auditId: string, clientId: string | null) {
   const router = useRouter();
   const toast = useToast();
-  const [corriendo, setCorriendo] = useState(false);
-  // El estado tarda un render en llegar al botón: un doble clic rápido creaba dos auditorías.
-  const enCurso = useRef(false);
+  const corriendo = useSyncExternalStore(escucharElCandado, () => candadoTomado(auditId), () => false);
+  // Si ESTA instancia tomó el candado, lo suelta al irse de la ficha: volver atrás deja correrla otra vez.
+  const loTome = useRef(false);
+  useEffect(
+    () => () => {
+      if (loTome.current) {
+        loTome.current = false;
+        soltarCandado(auditId);
+      }
+    },
+    [auditId],
+  );
   const correr = useCallback(async () => {
-    if (enCurso.current) return;
-    enCurso.current = true;
-    setCorriendo(true);
+    if (!tomarCandado(auditId)) return;
+    loTome.current = true;
     try {
       const res = await fetch("/api/audits", {
         method: "POST",
@@ -31,17 +46,17 @@ export function useVolverACorrer(clientId: string | null) {
       router.push(`/audits/${d.id}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo crear la auditoría");
-      enCurso.current = false;
-      setCorriendo(false);
+      loTome.current = false;
+      soltarCandado(auditId);
     }
-  }, [clientId, router, toast]);
+  }, [auditId, clientId, router, toast]);
   return { correr, corriendo };
 }
 
 export default function AccionesDeLaAuditoria({ auditId, clientId, puedeBorrar }: { auditId: string; clientId: string | null; puedeBorrar: boolean }) {
   const router = useRouter();
   const toast = useToast();
-  const { correr, corriendo } = useVolverACorrer(clientId);
+  const { correr, corriendo } = useVolverACorrer(auditId, clientId);
   const [confirmando, setConfirmando] = useState(false);
 
   const borrar = async () => {

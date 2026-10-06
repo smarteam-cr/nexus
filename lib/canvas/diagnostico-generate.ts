@@ -51,7 +51,12 @@ import { ocultarSeccionesRetiradas } from "@/lib/canvas/retirar-secciones";
 import { cierreAlDia, ordenDelContrato } from "@/lib/canvas/diagnostico-contrato";
 import { resultadosDelProyecto } from "@/lib/handoff/resultados";
 import { leerOProponerResultados } from "@/lib/handoff/proponer-resultados";
-import { documentoAprobado, MENSAJE_APROBADO, trasRegenerar } from "@/lib/canvas/estado-del-documento-servidor";
+import {
+  documentoAprobado,
+  escribirLoRegenerado,
+  MENSAJE_APROBADO,
+  MENSAJE_APROBADO_MIENTRAS_SE_REGENERABA,
+} from "@/lib/canvas/estado-del-documento-servidor";
 
 /** Asegura el canvas "Diagnóstico" del proyecto + reconcilia sus secciones. Idempotente. */
 export async function ensureDiagnosticoCanvas(projectId: string): Promise<string> {
@@ -120,20 +125,28 @@ export async function runDiagnosticoGeneration(opts: {
   // modelo, se ordena acá (lib/canvas/diagnostico-hilo.ts).
   const gen = { ...generado, sections: ordenarObjetivosDelDiagnostico(generado.sections) };
 
+  /* ⛔ Volver a mirar ANTES de escribir (2026-10-05): la IA tarda minutos y el cliente pudo aprobar
+     mientras tanto. Aprobado = no se escribe nada y la corrida queda con el error a la vista. Esta
+     mirada evita la foto de más; la que manda es la toma de `escribirLoRegenerado`, en la misma
+     transacción que la escritura (lib/canvas/estado-del-documento-servidor.ts). */
+  if (await documentoAprobado(canvasId)) throw new Error(MENSAJE_APROBADO_MIENTRAS_SE_REGENERABA);
+
   // La foto ANTES de tocar nada (lib/canvas/versiones.ts): la IA ya respondió bien, y lo que había
   // queda consultable, se puede traer por sección o restaurar entero.
   await guardarVersionDelDocumento(canvasId, { origen: "Antes de regenerar" });
 
   // Persistir 1 CARD/sección EN EL LUGAR. Las solo-lectura y el `cierre` (agentGenerated:false)
   // no vienen en gen.sections → sus bloques quedan intactos hasta el retiro de abajo.
+  // Todo en UNA transacción que primero toma el documento; si estaba presentado, ahí mismo pasa a la
+  // versión siguiente en borrador (la presentada queda intacta en el historial).
   const sectionMap = new Map(prevSecs.map((s) => [s.key, s.id]));
-  let sectionCount = 0;
-  for (const s of gen.sections) {
-    const sectionId = sectionMap.get(s.key);
-    if (!sectionId) continue;
-    await prisma.$transaction([
-      prisma.canvasBlock.deleteMany({ where: { sectionId } }),
-      prisma.canvasBlock.create({
+  const escritura = await escribirLoRegenerado(canvasId, async (tx) => {
+    let escritas = 0;
+    for (const s of gen.sections) {
+      const sectionId = sectionMap.get(s.key);
+      if (!sectionId) continue;
+      await tx.canvasBlock.deleteMany({ where: { sectionId } });
+      await tx.canvasBlock.create({
         data: {
           sectionId,
           blockType: "CARD",
@@ -144,10 +157,13 @@ export async function runDiagnosticoGeneration(opts: {
           status: "CONFIRMED",
           ...(opts.agentRunId ? { agentRunId: opts.agentRunId } : {}),
         },
-      }),
-    ]);
-    sectionCount++;
-  }
+      });
+      escritas++;
+    }
+    return escritas;
+  });
+  if (!escritura.tomado) throw new Error(MENSAJE_APROBADO_MIENTRAS_SE_REGENERABA);
+  const sectionCount = escritura.escritas;
 
   /* El retiro: un diagnóstico regenerado con la estructura nueva no puede seguir MOSTRANDO la escala,
      las causas sueltas o las recomendaciones de la versión anterior — se contradicen con el hilo.
@@ -159,8 +175,6 @@ export async function runDiagnosticoGeneration(opts: {
     await ocultarSeccionesRetiradas(canvasId, prevSecs.map((s) => s.key), SECCIONES_RETIRADAS_DEL_DIAGNOSTICO);
     await llevarAlOrdenDelContrato(canvasId);
     await ponerAlDiaElCierre(canvasId);
-    // Si ya se había presentado, lo regenerado es la versión siguiente: la presentada queda intacta.
-    await trasRegenerar(canvasId);
   }
   return { canvasId, sectionCount };
 }

@@ -16,7 +16,15 @@
  * conversation-intelligence aparte (diferido). El resumen ya captura lo relevante.
  *
  * ⚠️ La API v1 es legacy: si HubSpot la sunsetea habría que migrar (o conseguir los scopes
- * de objeto en la app). Si falla / no hay datos, devuelve "" (no rompe la generación).
+ * de objeto en la app).
+ *
+ * ⛔ «Sin permiso» y «falló» NO son lo mismo (2026-10-05, mismo criterio que company-contacts.ts).
+ * Un 403 (sin permiso) devuelve vacío, como siempre. Cualquier otro fallo (un 500, un 429, la red,
+ * un 401 aun con el token renovado) LANZA `FalloAlLeerElRegistro`: si devolviera «cero ítems», la
+ * copia de señales de Éxito del cliente borraría la última actividad y el cliente se vería «frío»
+ * por un fallo pasajero de HubSpot. cs-signals.ts atrapa el error y conserva lo que tenía. Los
+ * demás llamadores (generación de propuesta, handoff, columnas de HubSpot) ya lo envuelven en
+ * try/catch y siguen sin el timeline: la generación no se rompe.
  */
 import type { Client } from "@hubspot/api-client";
 import { getSystemHubspotClient, forceRefreshSystemToken } from "./client";
@@ -73,20 +81,32 @@ export type TimelineItem = {
   ts: number;
 };
 
-/** Ítems del timeline de la company (notas + llamadas + reuniones), más reciente primero,
- *  o [] si no hay datos / falla la API. Topeado para no inflar. Lo usa el panel y el prompt. */
-/** Una llamada cruda a la v1 de engagements. Devuelve el status para poder reintentar ante 401. */
+/** HubSpot contestó algo que no es ni el dato ni «sin permiso»: no se sabe qué hay en el registro. */
+export class FalloAlLeerElRegistro extends Error {
+  /** El status de HubSpot, o null si ni siquiera hubo respuesta (la red). */
+  readonly status: number | null;
+  constructor(status: number | null, detalle: string) {
+    super(`no se pudo leer el registro de actividad de HubSpot: ${detalle}`);
+    this.name = "FalloAlLeerElRegistro";
+    this.status = status;
+  }
+}
+
+/** Una llamada cruda a la v1 de engagements. 401 vuelve para reintentar; 403 = sin permiso (vacío);
+ *  cualquier otro status LANZA. */
 async function fetchEngagements(hsClient: Client, companyId: string): Promise<{ status: number; results: V1Engagement[] }> {
   const res = await hsClient.apiRequest({
     method: "GET",
     path: `/engagements/v1/engagements/associated/company/${companyId}/paged?limit=100`,
   });
-  if (res.status !== 200) return { status: res.status, results: [] };
+  if (res.status === 401 || res.status === 403) return { status: res.status, results: [] };
+  if (res.status !== 200) throw new FalloAlLeerElRegistro(res.status, `los engagements respondieron ${res.status}`);
   const data = (await res.json()) as { results?: V1Engagement[] };
   return { status: 200, results: data.results ?? [] };
 }
 
-/** Todos los ítems útiles del timeline (sin ventana ni cap), más reciente primero. */
+/** Todos los ítems útiles del timeline (sin ventana ni cap), más reciente primero.
+ *  ⛔ Ante un fallo que no sea «sin permiso» LANZA `FalloAlLeerElRegistro` (ver la cabecera). */
 async function fetchAllTimelineItems(hsClient: Client, companyId: string): Promise<TimelineItem[]> {
   let raw: V1Engagement[] = [];
   try {
@@ -99,10 +119,12 @@ async function fetchAllTimelineItems(hsClient: Client, companyId: string): Promi
     if (r.status === 401) {
       await forceRefreshSystemToken();
       r = await fetchEngagements(await getSystemHubspotClient(), companyId);
+      if (r.status === 401) throw new FalloAlLeerElRegistro(401, "401 aun con el token renovado");
     }
     raw = r.results;
-  } catch {
-    return [];
+  } catch (e) {
+    if (e instanceof FalloAlLeerElRegistro) throw e;
+    throw new FalloAlLeerElRegistro(null, e instanceof Error ? e.message : String(e));
   }
 
   return raw
@@ -123,6 +145,9 @@ async function fetchAllTimelineItems(hsClient: Client, companyId: string): Promi
     .sort((a, b) => b.ts - a.ts);
 }
 
+/** Ítems del timeline de la company (notas + llamadas + reuniones), más reciente primero, o []
+ *  si no hay datos o no hay permiso (403). ⛔ Si la API FALLA, lanza `FalloAlLeerElRegistro`.
+ *  Topeado para no inflar. Lo usa el panel y el prompt. */
 export async function fetchCompanyTimelineItems(
   hsClient: Client,
   companyId: string,
@@ -172,7 +197,8 @@ export function serializeTimeline(items: TimelineItem[], opts?: { perItemChars?:
     .join("\n\n");
 }
 
-/** Timeline serializado a texto (para el contexto del agente), o "" si no hay nada. */
+/** Timeline serializado a texto (para el contexto del agente), o "" si no hay nada.
+ *  ⛔ Si la API falla, lanza `FalloAlLeerElRegistro` (quien lo usa lo envuelve en try/catch). */
 export async function fetchCompanyTimeline(
   hsClient: Client,
   companyId: string,
