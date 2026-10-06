@@ -1653,6 +1653,11 @@ export interface TarjetaDTO {
   ciclo: CicloTarjeta | null;
 
   costos: TarjetaCostoDTO[];
+  /**
+   * Cuántos cortes (estados de cuenta transcritos) tiene: se borran con ella, y la confirmación de «Eliminar» lo dice
+   * (2026-10-05). `null` = no se contó: solo se cuenta para quien supervisa, que es quien puede eliminarla.
+   */
+  cortes: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1662,8 +1667,15 @@ export interface TarjetaDTO {
 /**
  * Las tarjetas. `sinSalarios` (rediseño de Finanzas, 2026-10-03): cada tarjeta trae solo sus costos que no son salarios,
  * para las pantallas de quien registra. El filtro va en la consulta.
+ * `conCortes` (2026-10-05): cuenta sus cortes, para la confirmación de «Eliminar». Solo el número, nunca un monto.
  */
-export async function loadTarjetas(hoyISO: string, opciones: { sinSalarios?: boolean } = {}): Promise<TarjetaDTO[]> {
+export async function loadTarjetas(hoyISO: string, opciones: { sinSalarios?: boolean; conCortes?: boolean } = {}): Promise<TarjetaDTO[]> {
+  // Solo cuántos cortes hay por tarjeta (`groupBy`): ni un monto ni una fecha de un corte sale de acá.
+  const cortesDe = opciones.conCortes
+    ? new Map(
+        (await prisma.corteTarjeta.groupBy({ by: ["tarjetaId"], _count: { _all: true } })).map((g) => [g.tarjetaId, g._count._all]),
+      )
+    : null;
   const filas = await prisma.tarjetaCredito.findMany({
     include: {
       titular: { select: { name: true } },
@@ -1731,6 +1743,7 @@ export async function loadTarjetas(hoyISO: string, opciones: { sinSalarios?: boo
       faltaDato: calc.faltaDato,
       ciclo: cicloDeTarjeta(hoyISO, t.diaCorte, t.diaPago),
       costos,
+      cortes: cortesDe ? (cortesDe.get(t.id) ?? 0) : null,
       createdAt: iso(t.createdAt)!,
       updatedAt: iso(t.updatedAt)!,
     };

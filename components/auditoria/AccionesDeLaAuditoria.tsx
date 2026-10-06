@@ -53,7 +53,18 @@ export function useVolverACorrer(auditId: string, clientId: string | null) {
   return { correr, corriendo };
 }
 
-export default function AccionesDeLaAuditoria({ auditId, clientId, puedeBorrar }: { auditId: string; clientId: string | null; puedeBorrar: boolean }) {
+export default function AccionesDeLaAuditoria({
+  auditId,
+  clientId,
+  puedeBorrar,
+  versionAnterior = false,
+}: {
+  auditId: string;
+  clientId: string | null;
+  puedeBorrar: boolean;
+  /** Una auditoría de antes del rediseño: lo que guardó (sus insights) no se puede volver a generar. */
+  versionAnterior?: boolean;
+}) {
   const router = useRouter();
   const toast = useToast();
   const { correr, corriendo } = useVolverACorrer(auditId, clientId);
@@ -85,7 +96,11 @@ export default function AccionesDeLaAuditoria({ auditId, clientId, puedeBorrar }
         onCancel={() => setConfirmando(false)}
         onConfirm={borrar}
         title="¿Eliminar esta auditoría?"
-        description="Se borran la foto del portal, el análisis y lo que se marcó como revisado. No se puede deshacer."
+        description={
+          versionAnterior
+            ? "Es de la versión anterior: se borran sus totales, sus embudos, sus propietarios y los insights de la IA, que no se pueden volver a generar. Volver a correrla crea una auditoría nueva sin borrar esta. No se puede deshacer."
+            : "Se borran la foto del portal, el análisis y lo que se marcó como revisado. No se puede deshacer."
+        }
         confirmLabel="Eliminar"
         variant="destructive"
       />

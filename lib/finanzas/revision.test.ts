@@ -29,6 +29,8 @@ const { db } = vi.hoisted(() => ({
     cobro: { findMany: vi.fn(), findUnique: vi.fn() },
     gastoPuntual: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
     revisionRegistro: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
+    // Editar o borrar un gasto mira antes si su mes está cerrado (2026-10-05); acá ninguno lo está.
+    cierreMes: { findFirst: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -63,6 +65,7 @@ beforeEach(() => {
   db.gastoPuntual.update.mockResolvedValue({ id: "g1" });
   db.gastoPuntual.delete.mockResolvedValue({ id: "g1" });
   db.revisionRegistro.update.mockResolvedValue({});
+  db.cierreMes.findFirst.mockResolvedValue(null);
 });
 
 const pago = { estado: "COBRADO", monto: 2000, moneda: "USD", fechaCobro: "2026-09-29", referenciaExterna: "TRF-1", numeroFactura: "INV-12" };
@@ -226,7 +229,7 @@ describe("D4 · un gasto revisado que se borra le aparece a quien supervisa", ()
   });
 
   it("editar un gasto revisado de otra persona lo vuelve a la revisión y dice quién lo cambió", async () => {
-    db.gastoPuntual.findUnique.mockResolvedValue({ registradoPor: DINIA });
+    db.gastoPuntual.findUnique.mockResolvedValue({ registradoPor: DINIA, fecha: gastoDeDinia.fecha });
     db.revisionRegistro.findUnique.mockResolvedValue({ estado: "BIEN", huella: huellaDeDinia, revisadoPor: ALEX });
     await updateGasto("g1", { tags: ["oficina"] }, ELIAS);
     const [data] = actualizacionesDeRevision();
@@ -246,7 +249,7 @@ describe("D4 · un gasto revisado que se borra le aparece a quien supervisa", ()
   });
 
   it("si lo edita quien lo anotó o quien lo revisó, no se fuerza nada (la huella ya dice si cambió)", async () => {
-    db.gastoPuntual.findUnique.mockResolvedValue({ registradoPor: DINIA });
+    db.gastoPuntual.findUnique.mockResolvedValue({ registradoPor: DINIA, fecha: gastoDeDinia.fecha });
     db.revisionRegistro.findUnique.mockResolvedValue({ estado: "BIEN", huella: huellaDeDinia, revisadoPor: ALEX });
     await updateGasto("g1", { tags: ["oficina"] }, DINIA);
     await updateGasto("g1", { tags: ["oficina"] }, ALEX);

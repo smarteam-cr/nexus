@@ -83,6 +83,7 @@ import { periodoDe, quincenaDe, quincenasDelPeriodo, quincenasPorGenerar } from 
 import { salarioVigenteEn, type MovimientoDeSalario } from "./calendario-planilla";
 import { buildCarteraEngineInput, loadComisionesVendedor } from "./queries";
 import { huellaDeBorrado, huellaEditadaPorOtro, mismaPersona } from "@/lib/finanzas/revision";
+import { etiquetaMes } from "@/lib/finanzas/gastos";
 import { ESTADO_COBRO_LABEL, normalizePartner } from "./schema";
 
 export class CobranzaError extends Error {
@@ -2456,21 +2457,45 @@ export async function createGasto(data: z.infer<typeof gastoCreateSchema>, regis
   });
 }
 
+/** Lo que contesta la ruta cuando el gasto es de un mes cerrado (o se lo quiere mover a uno). */
+export function mensajeDeMesCerrado(periodo: string): string {
+  const mes = etiquetaMes(periodo, true);
+  return `${mes.charAt(0).toUpperCase()}${mes.slice(1)} está cerrado: no se le cambian ni se le borran gastos. Para cambiar algo, quien supervisa Finanzas tiene que reabrir el mes.`;
+}
+
+/**
+ * ⛔ Un gasto de un mes CERRADO no se edita ni se borra, y no se mueve a un mes cerrado (2026-10-05). Antes solo la
+ * pantalla (Gastos del mes) escondía los botones: las dos rutas (/api/finanzas/gastos/[id] y /api/cobranza/gastos/[id])
+ * dejaban cambiar los números de un mes que ya se cerró. Para cambiarlo, quien supervisa reabre el mes. 409.
+ * El mes de un gasto es el de su `fecha` (el mismo corte que usa el cierre, lib/finanzas/cierre-server.ts).
+ */
+async function frenarSiElMesEstaCerrado(fechas: readonly Date[]): Promise<void> {
+  const periodos = [...new Set(fechas.map((f) => f.toISOString().slice(0, 7)))];
+  const cerrado = await prisma.cierreMes.findFirst({
+    where: { periodo: { in: periodos }, estado: "CERRADO" },
+    select: { periodo: true },
+    orderBy: { periodo: "asc" },
+  });
+  if (cerrado) throw new CobranzaError(mensajeDeMesCerrado(cerrado.periodo), 409);
+}
+
 /**
  * `editadoPor` (2026-10-05): quién lo edita. Si el gasto ya estaba revisado («Está bien») y lo edita alguien que no es
  * quien lo anotó ni quien lo revisó, vuelve a la revisión aunque lo que cambió no entre en la huella (etiquetas,
  * notas), y la revisión dice quién lo cambió (`corregidoPor`/`corregidoEn` de su fila; lib/finanzas/revision.ts).
  * Un gasto devuelto no se toca: ya está esperando que lo miren.
+ * ⛔ Ni el mes del gasto ni el de su nueva fecha pueden estar cerrados (`frenarSiElMesEstaCerrado`).
  */
 export async function updateGasto(gastoId: string, data: z.infer<typeof gastoPatchSchema>, editadoPor: string) {
   const [gasto, revision] = await Promise.all([
-    prisma.gastoPuntual.findUnique({ where: { id: gastoId }, select: { registradoPor: true } }),
+    prisma.gastoPuntual.findUnique({ where: { id: gastoId }, select: { registradoPor: true, fecha: true } }),
     prisma.revisionRegistro.findUnique({
       where: { tipo_registroId: { tipo: "GASTO", registroId: gastoId } },
       select: { estado: true, huella: true, revisadoPor: true },
     }),
   ]);
   if (!gasto) throw new CobranzaError("El gasto no existe.", 404);
+  await frenarSiElMesEstaCerrado(data.fecha !== undefined ? [gasto.fecha, dayUTC(data.fecha)] : [gasto.fecha]);
   /** La huella de su revisión, si lo edita otra persona y hay que devolverlo a la revisión; null si no. */
   const huellaARehacer =
     revision?.estado === "BIEN" && !mismaPersona(editadoPor, gasto.registradoPor) && !mismaPersona(editadoPor, revision.revisadoPor)
@@ -2510,6 +2535,7 @@ export async function updateGasto(gastoId: string, data: z.infer<typeof gastoPat
  * su revisión se queda con la foto del gasto (qué era, el monto, la fecha, quién lo anotó) y quién lo borró y cuándo,
  * y le aparece en la revisión hasta que lo marque como visto (lib/finanzas/revision.ts). Si lo borra la misma persona
  * que lo revisó, nace visto. Un gasto sin revisar se borra como siempre: nadie lo había mirado.
+ * ⛔ El de un mes cerrado no se borra (`frenarSiElMesEstaCerrado`): 409, sin tocar nada.
  */
 export async function deleteGasto(gastoId: string, borradoPor: string) {
   const [g, revision] = await Promise.all([
@@ -2523,6 +2549,7 @@ export async function deleteGasto(gastoId: string, borradoPor: string) {
     }),
   ]);
   if (!g) throw new CobranzaError("El gasto no existe.", 404);
+  await frenarSiElMesEstaCerrado([g.fecha]);
   const ahora = new Date();
   try {
     await prisma.$transaction([

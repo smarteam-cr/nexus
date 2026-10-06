@@ -11,7 +11,7 @@
  */
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { Button, PageHeader } from "@/components/ui";
+import { Button, ConfirmDialog, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api/fetch-json";
 import type { GastoPuntualDTO } from "@/lib/cobranza";
@@ -23,6 +23,10 @@ import { fmtFecha } from "@/components/cobranza/format";
 
 const BOTON_BLANCO =
   "rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-semibold text-fg-secondary hover:bg-surface-hover disabled:opacity-50";
+
+/** Lo que dice la confirmación antes de borrar: qué gasto, cuánto, y que no vuelve. */
+const textoDeBorrarGasto = (g: GastoPuntualDTO) =>
+  `Borrar el gasto «${g.nombre}» de ${textoDeMontos([{ moneda: g.moneda, monto: g.monto }])}. No se puede deshacer.`;
 
 export default function GastosDelMesClient({
   inicial,
@@ -42,6 +46,8 @@ export default function GastosDelMesClient({
   const [cargando, setCargando] = useState(false);
   const [form, setForm] = useState<{ gasto: GastoPuntualDTO | null } | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
+  /** El gasto que se está por borrar: borrar pide confirmación (2026-10-05), antes era un clic. */
+  const [porBorrar, setPorBorrar] = useState<GastoPuntualDTO | null>(null);
   const periodo = datos.periodo;
   const mesActual = todayISO.slice(0, 7);
   const delExcel = periodo < EGRESOS_DESDE_NEXUS;
@@ -64,9 +70,12 @@ export default function GastosDelMesClient({
     setOcupado(g.id);
     try {
       await fetchJson(`/api/finanzas/gastos/${g.id}`, { method: "DELETE" });
+      setPorBorrar(null);
       toast.success("Gasto borrado.");
       await cargar(periodo);
     } catch (e) {
+      // Un mes que se cerró mientras la pantalla estaba abierta contesta 409 con el motivo.
+      setPorBorrar(null);
       toast.error(e instanceof ApiError ? e.message : "No se pudo borrar.");
     } finally {
       setOcupado(null);
@@ -228,7 +237,7 @@ export default function GastosDelMesClient({
                             type="button"
                             className="rounded-md px-2 py-1.5 text-xs font-semibold text-fg-muted hover:text-danger-ink"
                             disabled={ocupado !== null}
-                            onClick={() => void borrar(g)}
+                            onClick={() => setPorBorrar(g)}
                           >
                             {ocupado === g.id ? "Borrando…" : "Borrar"}
                           </button>
@@ -291,6 +300,16 @@ export default function GastosDelMesClient({
           </button>
         </section>
       )}
+
+      <ConfirmDialog
+        open={porBorrar !== null}
+        onCancel={() => setPorBorrar(null)}
+        onConfirm={() => (porBorrar ? borrar(porBorrar) : undefined)}
+        title="¿Borrar este gasto?"
+        description={porBorrar ? textoDeBorrarGasto(porBorrar) : undefined}
+        confirmLabel="Borrar"
+        variant="destructive"
+      />
 
       {form && (
         <GastoForm

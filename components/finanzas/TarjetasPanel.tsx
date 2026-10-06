@@ -25,9 +25,10 @@
 import { useState } from "react";
 import type { TarjetaDTO, TarjetaCostoDTO, CostoRecurrenteDTO } from "@/lib/cobranza";
 import { diffDays } from "@/lib/cobranza/engine";
+import { textoDeEliminarTarjeta } from "@/lib/cobranza/tarjetas";
 import { fetchJson, ApiError } from "@/lib/api/fetch-json";
 import { useToast } from "@/components/ui/Toast";
-import { Button, PageHeader, EmptyState, Modal, Field, Input, Select, Alert } from "@/components/ui";
+import { Button, PageHeader, EmptyState, Modal, Field, Input, Select, Alert, ConfirmDialog } from "@/components/ui";
 import { fmtDiaMes, fmtMonto, INPUT_CLS, LABEL_CLS } from "@/components/cobranza/format";
 import { COBRANZA_MONEDAS } from "@/lib/cobranza/schema";
 
@@ -40,6 +41,11 @@ interface Props {
    * /api/finanzas/tarjetas, que trae y asigna solo costos que no son salarios.
    */
   apiBase?: string;
+  /**
+   * ¿Puede eliminar una tarjeta? Solo quien supervisa Finanzas (2026-10-05): eliminarla se lleva sus cortes. El resto la
+   * edita pero no ve «Eliminar»; la ruta lo vuelve a pedir (403).
+   */
+  puedeEliminar?: boolean;
 }
 
 type FormState = {
@@ -102,9 +108,17 @@ const ESTIMADO_TIP =
 
 const esVigente = (c: TarjetaCostoDTO) => c.activo && c.finalizadoEl === null;
 
-export default function TarjetasPanel({ initialTarjetas, costos, todayISO, apiBase = "/api/cobranza/costos/tarjetas" }: Props) {
+export default function TarjetasPanel({
+  initialTarjetas,
+  costos,
+  todayISO,
+  apiBase = "/api/cobranza/costos/tarjetas",
+  puedeEliminar = false,
+}: Props) {
   const toast = useToast();
   const [tarjetas, setTarjetas] = useState(initialTarjetas);
+  /** La tarjeta que se está por eliminar: pide confirmación con lo que se lleva (2026-10-05); antes era un clic. */
+  const [porEliminar, setPorEliminar] = useState<TarjetaDTO | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [saldoDe, setSaldoDe] = useState<TarjetaDTO | null>(null);
@@ -162,9 +176,11 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO, apiBa
   async function borrarTarjeta(t: TarjetaDTO) {
     try {
       await fetchJson(`${apiBase}/${t.id}`, { method: "DELETE" });
+      setPorEliminar(null);
       await refrescar();
       toast.success("Tarjeta eliminada. Los costos que tenía asignados siguen vivos.");
     } catch (e) {
+      setPorEliminar(null);
       toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar la tarjeta.");
     }
   }
@@ -238,11 +254,25 @@ export default function TarjetasPanel({ initialTarjetas, costos, todayISO, apiBa
               }}
               onSaldo={() => setSaldoDe(t)}
               onAsignar={() => setAsignarA(t)}
-              onBorrar={() => borrarTarjeta(t)}
+              onBorrar={puedeEliminar ? () => setPorEliminar(t) : null}
             />
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={porEliminar !== null}
+        onCancel={() => setPorEliminar(null)}
+        onConfirm={() => (porEliminar ? borrarTarjeta(porEliminar) : undefined)}
+        title="¿Eliminar esta tarjeta?"
+        description={
+          porEliminar
+            ? textoDeEliminarTarjeta({ alias: porEliminar.alias, cortes: porEliminar.cortes, costos: porEliminar.costos.length })
+            : undefined
+        }
+        confirmLabel="Eliminar"
+        variant="destructive"
+      />
 
       {form && (
         <Modal
@@ -387,7 +417,8 @@ function TarjetaCard({
   onEditar: () => void;
   onSaldo: () => void;
   onAsignar: () => void;
-  onBorrar: () => void;
+  /** `null`: quien mira no puede eliminarla (solo quien supervisa Finanzas), y no se le ofrece. */
+  onBorrar: (() => void) | null;
 }) {
   const moneda = t.moneda as "CRC" | "USD";
   // Los que SÍ suman al cargo del ciclo van juntos; los de otra moneda se
@@ -442,9 +473,11 @@ function TarjetaCard({
           <Button variant="secondary" size="sm" onClick={onEditar}>
             Editar
           </Button>
-          <Button variant="secondary" size="sm" onClick={onBorrar}>
-            Eliminar
-          </Button>
+          {onBorrar && (
+            <Button variant="secondary" size="sm" onClick={onBorrar}>
+              Eliminar
+            </Button>
+          )}
         </div>
       </div>
 

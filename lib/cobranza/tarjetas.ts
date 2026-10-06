@@ -215,6 +215,29 @@ function diaClampeado(periodo: string, dia: number): string {
 }
 
 /**
+ * Lo que dice la confirmación de «Eliminar» una tarjeta (2026-10-05). Antes era un clic, y la tarjeta se iba con sus
+ * cortes (CASCADE) sin que nadie lo dijera: ahora dice cuántos cortes se borran con ella y cuántos costos dejan de estar
+ * ligados (los costos siguen vivos). `cortes: null` = no se contaron: se dice sin número, nunca «0».
+ */
+export function textoDeEliminarTarjeta(t: { alias: string; cortes: number | null; costos: number }): string {
+  const cortes =
+    t.cortes === null
+      ? "Se borran con ella todos sus cortes registrados (los estados de cuenta transcritos)."
+      : t.cortes === 0
+        ? "No tiene cortes registrados."
+        : t.cortes === 1
+          ? "Se borra con ella su corte registrado (el estado de cuenta transcrito)."
+          : `Se borran con ella sus ${t.cortes} cortes registrados (los estados de cuenta transcritos).`;
+  const costos =
+    t.costos === 0
+      ? ""
+      : t.costos === 1
+        ? " El costo que tiene asignado deja de estar ligado a ella, pero sigue vivo."
+        : ` Los ${t.costos} costos que tiene asignados dejan de estar ligados a ella, pero siguen vivos.`;
+  return `Eliminar «${t.alias}». ${cortes}${costos} No se puede deshacer.`;
+}
+
+/**
  * Un día del mes utilizable. Lo que NO lo es (null, 0, 32, un decimal) se trata
  * como dato FALTANTE en vez de clamparse: clampear un 32 diría "fin de mes" sin
  * que nadie lo haya escrito. El Zod de la frontera ya acota 1-31.

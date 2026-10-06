@@ -24,7 +24,8 @@ export async function GET() {
   // La fecha de Costa Rica se resuelve acá (misma que la page): el motor del
   // ciclo no lee el reloj — ver lib/cobranza/tarjetas.ts.
   const hoyISO = crDateParts(new Date()).dateKey;
-  return NextResponse.json({ tarjetas: await loadTarjetas(hoyISO) });
+  // Con sus cortes contados: la confirmación de «Eliminar» dice cuántos se van con ella.
+  return NextResponse.json({ tarjetas: await loadTarjetas(hoyISO, { conCortes: true }) });
 }
 
 export async function POST(req: NextRequest) {

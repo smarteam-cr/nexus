@@ -3,7 +3,8 @@
  *
  * Con el caparazón de las fichas (diseño del 2026-10-04): la cabecera de la ficha a todo el ancho y,
  * debajo, el lienzo en tres columnas (secciones, la sección abierta y el panel). Todo lo que la
- * pantalla muestra lo decide `armarVista` (lib/auditoria-portal/vista.ts): la página solo lee.
+ * pantalla muestra lo decide `armarVista` (lib/auditoria-portal/vista.ts): la página solo lee. Una
+ * auditoría de la versión anterior se muestra en solo lectura (`leerFotoAnterior`).
  * Gateada por `auditoria.read` y, si es el portal de un cliente, por el acceso a ese cliente.
  */
 import { notFound, redirect } from "next/navigation";
@@ -16,7 +17,9 @@ import { requireAccessToClient } from "@/lib/auth/access";
 import { can } from "@/lib/auth/permissions/engine";
 import { ForbiddenError, requireInternalUser, UnauthorizedError } from "@/lib/auth/supabase";
 import { prisma } from "@/lib/db/prisma";
+import FotoAnteriorDeAuditoria from "@/components/auditoria/FotoAnterior";
 import { leerFoto } from "@/lib/auditoria-portal/foto";
+import { leerFotoAnterior, ROTULO_DE_LA_VERSION_ANTERIOR } from "@/lib/auditoria-portal/foto-anterior";
 import { armarVista, type AuditoriaAnterior } from "@/lib/auditoria-portal/vista";
 
 export const dynamic = "force-dynamic";
@@ -57,23 +60,39 @@ export default async function AuditoriaPage({ params }: { params: Promise<{ id: 
   const titulo = esDelSistema ? "Portal de Smarteam" : (audit.client?.name ?? "Portal de un cliente");
 
   const foto = leerFoto(audit.data);
-  const acciones = <AccionesDeLaAuditoria auditId={audit.id} clientId={audit.clientId} puedeBorrar={puedeBorrar} />;
 
   // Una foto de antes del rediseño (2026-10-04) no tiene inventario ni registro de lecturas: sus
-  // números podían ser ceros falsos. No se pinta: se vuelve a correr.
+  // números pueden ser ceros falsos. No se migra ni se reescribe, pero lo que guardó (totales,
+  // embudos, propietarios e insights de la IA, que ya se pagaron) se sigue viendo, en SOLO LECTURA
+  // y con el rótulo que lo dice (lib/auditoria-portal/foto-anterior.ts).
   if (!foto) {
+    const anterior = leerFotoAnterior(audit.data);
     return (
       <div className="flex min-h-screen flex-col">
-        <CabeceraDeFicha volver={VOLVER} titulo={titulo} chips={<Chip>{audit.name}</Chip>} acciones={acciones} />
-        <div className="max-w-3xl px-6 py-8">
-          <Alert variant="warning" title="Esta auditoría es de la versión anterior">
-            Se corrió antes de que la auditoría registrara qué lecturas fallaron, así que algunos de sus ceros pueden ser errores de lectura. Vuelve a correrla para
-            ver el portal completo, la configuración y el análisis nuevo.
-          </Alert>
-        </div>
+        <CabeceraDeFicha
+          volver={VOLVER}
+          titulo={titulo}
+          chips={
+            <>
+              <Chip>{audit.name}</Chip>
+              <Chip title="Se muestra tal como quedó guardada">Versión anterior · solo lectura</Chip>
+            </>
+          }
+          acciones={<AccionesDeLaAuditoria auditId={audit.id} clientId={audit.clientId} puedeBorrar={puedeBorrar} versionAnterior />}
+        />
+        {anterior ? (
+          <FotoAnteriorDeAuditoria foto={anterior} />
+        ) : (
+          <div className="max-w-3xl px-6 py-8">
+            <Alert variant="warning" title={ROTULO_DE_LA_VERSION_ANTERIOR}>
+              Esta auditoría no guardó datos que se puedan mostrar. Vuelve a correrla para ver el portal completo, la configuración y el análisis nuevo.
+            </Alert>
+          </div>
+        )}
       </div>
     );
   }
+  const acciones = <AccionesDeLaAuditoria auditId={audit.id} clientId={audit.clientId} puedeBorrar={puedeBorrar} />;
 
   // Las tres anteriores del mismo portal, para ver cómo cambió.
   const previas = audit.accountId

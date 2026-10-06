@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardGastosAccess, guardGastosEditor } from "@/lib/auth/api-guards";
+import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { loadTarjetas } from "@/lib/cobranza/queries";
 import { createTarjeta } from "@/lib/cobranza/mutations";
 import { tarjetaCreateSchema } from "@/lib/cobranza/schema";
@@ -17,7 +18,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const guard = await guardGastosAccess();
   if (guard instanceof NextResponse) return guard;
-  return NextResponse.json({ tarjetas: await loadTarjetas(crDateParts(new Date()).dateKey, { sinSalarios: true }) });
+  // Los cortes se cuentan solo para quien supervisa: es quien puede eliminar una tarjeta, y la confirmación los nombra.
+  const hoyISO = crDateParts(new Date()).dateKey;
+  return NextResponse.json({ tarjetas: await loadTarjetas(hoyISO, { sinSalarios: true, conCortes: isCostosRole(guard.role) }) });
 }
 
 export async function POST(req: NextRequest) {

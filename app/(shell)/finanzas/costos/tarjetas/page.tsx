@@ -22,11 +22,12 @@ export default async function FinanzasTarjetasPage() {
   if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
 
   const todayISO = crDateParts(new Date()).dateKey;
-  const [tarjetas, costos] = await Promise.all([loadTarjetas(todayISO), loadCostos()]);
+  const [tarjetas, costos] = await Promise.all([loadTarjetas(todayISO, { conCortes: true }), loadCostos()]);
 
   return (
     <div className={SHELL_DEFAULT}>
-      <TarjetasPanel initialTarjetas={tarjetas} costos={costos} todayISO={todayISO} />
+      {/* Solo Super Admin llega acá: es quien supervisa Finanzas, y puede eliminar una tarjeta. */}
+      <TarjetasPanel initialTarjetas={tarjetas} costos={costos} todayISO={todayISO} puedeEliminar />
     </div>
   );
 }

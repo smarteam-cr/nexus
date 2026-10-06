@@ -8,6 +8,7 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { can } from "@/lib/auth/permissions/engine";
+import { isCostosRole } from "@/lib/auth/cobranza-roles";
 import { crDateParts } from "@/lib/jobs/time";
 import { loadCostos, loadTarjetas } from "@/lib/cobranza/queries";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -19,13 +20,16 @@ export default async function TarjetasSinSalariosPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !(await can(ctx.teamMember, "gastos", "read"))) redirect("/clients");
   const todayISO = crDateParts(new Date()).dateKey;
+  // Eliminar una tarjeta (se lleva sus cortes) es de quien supervisa Finanzas, la misma condición que
+  // `guardSupervisionFinanzas`; quien registra la edita pero no la elimina (2026-10-05).
+  const supervisa = isCostosRole(ctx.role);
   const [tarjetas, costos] = await Promise.all([
-    loadTarjetas(todayISO, { sinSalarios: true }),
+    loadTarjetas(todayISO, { sinSalarios: true, conCortes: supervisa }),
     loadCostos({ sinSalarios: true }),
   ]);
   return (
     <div className={SHELL_DEFAULT}>
-      <TarjetasPanel initialTarjetas={tarjetas} costos={costos} todayISO={todayISO} apiBase="/api/finanzas/tarjetas" />
+      <TarjetasPanel initialTarjetas={tarjetas} costos={costos} todayISO={todayISO} apiBase="/api/finanzas/tarjetas" puedeEliminar={supervisa} />
     </div>
   );
 }

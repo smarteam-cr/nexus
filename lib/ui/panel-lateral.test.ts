@@ -58,4 +58,38 @@ describe("la columna derecha: una sola preferencia, la de `PanelLateral`", () =>
       expect(leer(rel), `${rel} pinta una columna fija en vez de la de la página`).toContain("<PanelLateral");
     }
   });
+
+  it("⭐ con la columna cerrada, la ficha monta los avisos del proyecto compactos en el centro", () => {
+    /* Cerrar la columna desmonta lo de adentro, y ahí vivían el aviso del alta a medio hacer (con su
+       botón para retomarla) y el de la propuesta de cronograma: con la columna cerrada desaparecían
+       (2026-10-05). La edición que la pone en rojo: sacar el `!panelVisible && …` del <main>, o que
+       el centro deje de pedir la versión compacta. */
+    const sinComentarios = (src: string) =>
+      src.replace(/\r\n/g, "\n").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const ficha = sinComentarios(leer("app/(shell)/clients/[id]/WorkspaceClient.tsx"));
+    const centro = ficha.slice(ficha.indexOf("<main"), ficha.indexOf("</main>"));
+    expect(centro.length, "no se encontró el <main> de la ficha").toBeGreaterThan(100);
+    expect(centro, "con la columna cerrada, los avisos no bajan al centro").toContain(
+      '{!panelVisible && activeProject && <div className="flex flex-col">{avisosDelProyecto("centro")}</div>}',
+    );
+    const panel = ficha.slice(ficha.indexOf("<PanelLateral"), ficha.indexOf("</PanelLateral>"));
+    expect(panel).toContain("{panelVisible && (");
+    expect(panel).toContain('{avisosDelProyecto("panel")}');
+
+    const i = ficha.indexOf('const avisosDelProyecto = (lugar: "panel" | "centro") => {');
+    expect(i, "se fue el armado de los avisos del proyecto").toBeGreaterThan(-1);
+    const avisos = ficha.slice(i, ficha.indexOf("const filasDelRiel", i));
+    // El alta y la propuesta, cada una con su versión compacta cuando van al centro.
+    const iAlta = avisos.indexOf("<AltaTrabada");
+    const iPropuesta = avisos.indexOf("<TimelineProposalPendiente");
+    expect(iAlta).toBeGreaterThan(-1);
+    expect(iPropuesta).toBeGreaterThan(iAlta);
+    expect(avisos.slice(iAlta, iPropuesta)).toContain('variante={lugar === "panel" ? "completo" : "compacto"}');
+    expect(avisos.slice(iPropuesta)).toContain('variante={lugar === "panel" ? "panel" : "compacto"}');
+
+    // La versión compacta del alta lleva el MISMO botón para retomarla.
+    const alta = sinComentarios(leer("components/projects/AltaTrabada.tsx"));
+    const compacto = alta.slice(alta.indexOf('if (variante === "compacto") {'), alta.indexOf("\n  }\n", alta.indexOf('if (variante === "compacto") {')));
+    expect(compacto).toContain("{boton}");
+  });
 });

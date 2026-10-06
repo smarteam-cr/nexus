@@ -548,6 +548,51 @@ function ProjectSection({
     : false;
   const altaPendiente = activeProject ? siguientePaso(parseEstadoDeAlta(activeProject.altaEstado ?? null)) !== null : false;
 
+  /* Los dos avisos del proyecto abierto. Viven en el panel de la derecha («panel»); con el panel
+     CERRADO bajan al centro, arriba del contenido («centro»), en su versión de una línea y con el
+     mismo botón (2026-10-05). Antes desaparecían con el panel, y con ellos la única puerta para
+     retomar el alta. Se montan en un solo lugar a la vez: cerrado, el panel no monta lo de adentro. */
+  const avisosDelProyecto = (lugar: "panel" | "centro") => {
+    if (!activeProject) return null;
+    return (
+      <>
+        {/* El alta que quedó a medio hacer, con su botón de retomar. Va primero —se ve en todos
+            los documentos— y no adentro de una pieza: mientras el alta no termine, el proyecto no
+            cobra, no suma a la cartera y no se le publica nada al cliente, o sea que casi todo lo
+            demás cuenta una versión incompleta de la verdad. */}
+        <AltaTrabada
+          variante={lugar === "panel" ? "completo" : "compacto"}
+          projectId={activeProject.id}
+          altaEstado={activeProject.altaEstado}
+          altaError={activeProject.altaError}
+          altaUltimoIntentoAt={
+            activeProject.altaUltimoIntentoAt
+              ? new Date(activeProject.altaUltimoIntentoAt).toISOString()
+              : null
+          }
+          altaIntentos={activeProject.altaIntentos}
+          altaActorEmail={activeProject.altaActorEmail}
+          onTermino={() => {
+            invalidateGps(activeProject.id);
+            window.location.reload();
+          }}
+        />
+        {/* Tanda M — la propuesta de cronograma sin decidir. Mismo criterio que el alta: se ve
+            sin entrar al cronograma, que es justo donde este aviso vivía enterrado antes. Con
+            ella a la vista, el panel del proyecto no repite otro «Qué sigue». */}
+        {!altaPendiente && (
+          <TimelineProposalPendiente
+            variante={lugar === "panel" ? "panel" : "compacto"}
+            projectId={activeProject.id}
+            clientId={clientId}
+            pending={propuestaViva[activeProject.id]?.pending ?? activeProject.timelineProposalPending ?? false}
+            autoria={propuestaViva[activeProject.id] ? propuestaViva[activeProject.id].autoria : (activeProject.timelineProposalAutoria ?? null)}
+          />
+        )}
+      </>
+    );
+  };
+
   const filasDelRiel: ProyectoDelRiel[] = projects.map((p) => ({ id: p.id, nombre: p.name, ...claseDelProyecto(p, projects) }));
 
   return (
@@ -575,6 +620,9 @@ function ProjectSection({
       </aside>
 
       <main className="min-w-0">
+        {/* Con la columna derecha cerrada, sus avisos del proyecto (alta a medio hacer, propuesta de
+            cronograma) bajan acá, compactos y con el mismo botón. Ver `avisosDelProyecto`. */}
+        {!panelVisible && activeProject && <div className="flex flex-col">{avisosDelProyecto("centro")}</div>}
         {avisoDeSync && <div className="px-6 pt-6">{avisoDeSync}</div>}
 
         {isStrategy && (
@@ -621,41 +669,7 @@ function ProjectSection({
             espacio del panel solo cuando se ve (`slotDelPanel`), y no pintan en uno oculto. */}
         {panelVisible && (
           <>
-            {/* El alta que quedó a medio hacer, con su botón de retomar. Va primero en el panel —que
-                se ve en todos los documentos— y no adentro de una pieza: mientras el alta no
-                termine, el proyecto no cobra, no suma a la cartera y no se le publica nada al
-                cliente, o sea que casi todo lo demás cuenta una versión incompleta de la verdad. */}
-            {activeProject && (
-              <AltaTrabada
-                variante="completo"
-                projectId={activeProject.id}
-                altaEstado={activeProject.altaEstado}
-                altaError={activeProject.altaError}
-                altaUltimoIntentoAt={
-                  activeProject.altaUltimoIntentoAt
-                    ? new Date(activeProject.altaUltimoIntentoAt).toISOString()
-                    : null
-                }
-                altaIntentos={activeProject.altaIntentos}
-                altaActorEmail={activeProject.altaActorEmail}
-                onTermino={() => {
-                  invalidateGps(activeProject.id);
-                  window.location.reload();
-                }}
-              />
-            )}
-            {/* Tanda M — la propuesta de cronograma sin decidir. Mismo criterio que el alta: se ve
-                sin entrar al cronograma, que es justo donde este aviso vivía enterrado antes. Con
-                ella a la vista, el panel del proyecto no repite otro «Qué sigue». */}
-            {activeProject && !altaPendiente && (
-              <TimelineProposalPendiente
-                variante="panel"
-                projectId={activeProject.id}
-                clientId={clientId}
-                pending={propuestaViva[activeProject.id]?.pending ?? activeProject.timelineProposalPending ?? false}
-                autoria={propuestaViva[activeProject.id] ? propuestaViva[activeProject.id].autoria : (activeProject.timelineProposalAutoria ?? null)}
-              />
-            )}
+            {avisosDelProyecto("panel")}
             <div ref={setSlotDelPanel} className="flex flex-col gap-6" />
           </>
         )}
