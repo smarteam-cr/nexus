@@ -13,7 +13,7 @@ import { armarPendientes } from "@/lib/finanzas/pendientes";
 import { devueltosPara } from "@/lib/finanzas/revision-server";
 import { medirSupervision } from "@/lib/finanzas/supervision-server";
 import { tienePermiso } from "../alcance-server";
-import { plural } from "../armar";
+import { detalleDeLaRevision, plural } from "../armar";
 import type { Fuente } from "../fuente";
 import type { Pendiente } from "../tipos";
 
@@ -81,7 +81,7 @@ export const FINANZAS_SUPERVISAR: Fuente = {
         cuando: "hoy",
         delAgente: false,
         titulo: `Revisa ${plural(porRevisar, "registro del equipo", "registros del equipo")}`,
-        detalle: `${plural(d.revision.pagos.length, "pago", "pagos")} y ${plural(d.revision.gastos.length, "gasto", "gastos")} que registró el equipo y nadie miró.`,
+        detalle: detalleDeLaRevision(d.revision.pagos.length, d.revision.gastos.filter((g) => !g.borrado).length, d.revision.gastos.filter((g) => g.borrado).length),
         meta: "Finanzas › Supervisión",
         accion: "Revisarlos",
         href: "/finanzas/supervision",

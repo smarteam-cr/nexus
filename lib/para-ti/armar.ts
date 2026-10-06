@@ -123,3 +123,16 @@ export function haceCuanto(desdeISO: string | null | undefined, ahora: Date): st
 }
 
 export { plural };
+
+/**
+ * El detalle de «Revisa N registros del equipo». Un gasto que borraron DESPUÉS de revisado no es «algo que
+ * nadie miró»: se dice aparte, para que quien supervisa sepa que tiene que verlo, no revisarlo.
+ */
+export function detalleDeLaRevision(pagos: number, gastos: number, borrados: number): string {
+  const partes: string[] = [];
+  if (pagos > 0) partes.push(plural(pagos, "pago", "pagos"));
+  if (gastos > 0) partes.push(plural(gastos, "gasto", "gastos"));
+  const nuevos = partes.length > 0 ? `${partes.join(" y ")} que registró el equipo y nadie miró` : "";
+  const quitados = borrados > 0 ? `${plural(borrados, "gasto que borraron", "gastos que borraron")} después de tu revisión` : "";
+  return `${[nuevos, quitados].filter(Boolean).join("; y ")}.`.replace(/^./, (c) => c.toUpperCase());
+}

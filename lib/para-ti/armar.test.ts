@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { armarParaTi, cuentaDelMenu, debeNotificar, elMasNuevo, haceCuanto, loQueMasEspera } from "./armar";
+import { armarParaTi, cuentaDelMenu, debeNotificar, detalleDeLaRevision, elMasNuevo, haceCuanto, loQueMasEspera } from "./armar";
 import type { Pendiente, ResultadoDeFuente } from "./tipos";
 import type { Alcance } from "./alcance-server";
 import { areaDe, medirEquipo } from "./equipo-server";
@@ -209,5 +209,13 @@ describe("⛔ «Del equipo»: quien lleva Dirección sin ver Cobranza ve de Fina
     const d = await medirEquipo(lidia({ cobranza: { read: true } }), ahora);
     expect(fila(d, "Finanzas")?.espera).toContain("Factura de Wherex por $5.000");
     expect(fila(d, "Customer Success")?.espera).toContain("$1.200");
+  });
+});
+
+describe("el detalle de la revisión de Finanzas", () => {
+  it("un gasto borrado después de revisado se dice aparte, no como «nadie miró»", () => {
+    expect(detalleDeLaRevision(2, 1, 0)).toBe("2 pagos y 1 gasto que registró el equipo y nadie miró.");
+    expect(detalleDeLaRevision(0, 0, 1)).toBe("1 gasto que borraron después de tu revisión.");
+    expect(detalleDeLaRevision(1, 0, 2)).toBe("1 pago que registró el equipo y nadie miró; y 2 gastos que borraron después de tu revisión.");
   });
 });
