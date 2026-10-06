@@ -40,13 +40,17 @@ const deleteBloqueSchema = z.strictObject({ blockId: z.string().min(1).max(64) }
 const jsonInput = (v: Prisma.JsonValue | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull =>
   v === null || v === undefined ? Prisma.DbNull : (v as Prisma.InputJsonValue);
 
-// RBAC: nombre del canvas dueño de una sección (para gatear edición del "Handoff").
-async function canvasNameOfSection(sectionId: string): Promise<string> {
+/* La sección TIENE que ser de un canvas de ESTE proyecto: el guard de arriba solo mira el proyecto de la
+   URL, y sin este cruce alguien con acceso a un proyecto podía crear, editar o borrar bloques de una
+   sección de otro pasando su id (la ruta hermana de secciones ya lo cruzaba). Devuelve además el nombre
+   del canvas, para gatear la edición del «Handoff». */
+async function seccionDelProyecto(sectionId: string, projectId: string): Promise<{ canvasName: string } | null> {
   const s = await prisma.canvasSection.findUnique({
     where: { id: sectionId },
-    select: { canvas: { select: { name: true } } },
+    select: { canvas: { select: { name: true, projectId: true } } },
   });
-  return s?.canvas.name ?? "";
+  if (!s || s.canvas.projectId !== projectId) return null;
+  return { canvasName: s.canvas.name };
 }
 
 // POST: create a block manually — o, con `restaurar`, devolver uno borrado como estaba (deshacer)
@@ -54,7 +58,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
-  const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
+  const seccion = await seccionDelProyecto(sectionId, projectId);
+  if (!seccion) return NextResponse.json({ error: "Sección no encontrada" }, { status: 404 });
+  const denied = await denyHandoffCanvasEditForCse(seccion.canvasName);
   if (denied) return denied;
 
   const parsedPost = postBloqueSchema.safeParse(await req.json().catch(() => null));
@@ -122,7 +128,9 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
-  const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
+  const seccion = await seccionDelProyecto(sectionId, projectId);
+  if (!seccion) return NextResponse.json({ error: "Sección no encontrada" }, { status: 404 });
+  const denied = await denyHandoffCanvasEditForCse(seccion.canvasName);
   if (denied) return denied;
 
   const parsedPut = putBloqueSchema.safeParse(await req.json().catch(() => null));
@@ -187,7 +195,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
-  const denied = await denyHandoffCanvasEditForCse(await canvasNameOfSection(sectionId));
+  const seccion = await seccionDelProyecto(sectionId, projectId);
+  if (!seccion) return NextResponse.json({ error: "Sección no encontrada" }, { status: 404 });
+  const denied = await denyHandoffCanvasEditForCse(seccion.canvasName);
   if (denied) return denied;
 
   const parsedDelete = deleteBloqueSchema.safeParse(await req.json().catch(() => null));

@@ -999,3 +999,27 @@ describe("⛔ ninguna ruta de auditorías se salta el acceso por cliente", () =>
     expect(ofensores, ofensores.join("\n")).toEqual([]);
   });
 });
+
+describe("⛔ toda ruta bajo canvas-sections/[sectionId] cruza la sección con el proyecto de la URL", () => {
+  /**
+   * El guard de proyecto solo mira el `projectId` de la URL. Si la ruta no comprueba que la sección
+   * sea de un canvas de ESE proyecto, quien tiene acceso a un proyecto puede crear, editar o borrar
+   * contenido de otro pasando el id de una sección ajena. La ruta de bloques no lo cruzaba (las
+   * hermanas sí). La edición que la pone en rojo: quitar el cruce de cualquiera de ellas.
+   */
+  it("cada route.ts compara el proyecto del canvas con el de la URL", () => {
+    const base = path.join(RAIZ, "app/api/projects/[projectId]/canvas-sections/[sectionId]");
+    const rutas: string[] = [];
+    const recorrer = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) recorrer(p);
+        else if (e.name === "route.ts") rutas.push(p);
+      }
+    };
+    recorrer(base);
+    expect(rutas.length, "el censo no encontró las rutas: revisar la guarda").toBeGreaterThanOrEqual(4);
+    const sinCruce = rutas.filter((r) => !/canvas\.projectId\s*!==\s*projectId/.test(fs.readFileSync(r, "utf8")));
+    expect(sinCruce.map((r) => path.relative(RAIZ, r)), "estas rutas no cruzan la sección con el proyecto").toEqual([]);
+  });
+});
