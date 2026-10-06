@@ -67,6 +67,7 @@ import {
   trasUnGuardadoFallido,
   versionDelCronograma,
   type CronogramaVersionado,
+  type FaseVersionada,
 } from "./guardado-del-cronograma";
 import { idsBorrablesPorOmision } from "./rescate-progreso";
 import { fingerprintFromTitle } from "./particularidad-identity";
@@ -157,14 +158,14 @@ describe("T2 · versionDelCronograma — la huella de lo que el PUT escribe", ()
       (c) => (c.anchorStartDate = "2026-10-12T00:00:00.000Z"),
       (c) => (c.closeDateOverride = "2026-12-01T00:00:00.000Z"),
       // Una tarea BORRADA, una tarea NUEVA, una fase borrada.
-      (c) => ((c.phases[1] as { tasks: unknown[] }).tasks = c.phases[1].tasks.slice(1)),
-      (c) => ((c.phases[0] as { tasks: unknown[] }).tasks = [...c.phases[0].tasks, { id: "t9", title: "Nueva", weekIndex: 0, order: 1 }]),
+      (c) => ((c.phases[1] as unknown as { tasks: unknown[] }).tasks = c.phases[1].tasks.slice(1)),
+      (c) => ((c.phases[0] as unknown as { tasks: unknown[] }).tasks = [...c.phases[0].tasks, { id: "t9", title: "Nueva", weekIndex: 0, order: 1 }]),
       (c) => (c.phases = c.phases.slice(1)),
       // La MISMA tarea en otra fase (lo que hace el aplicar de una propuesta al mudarla).
       (c) => {
         const t = c.phases[1].tasks[0];
-        (c.phases[1] as { tasks: unknown[] }).tasks = c.phases[1].tasks.slice(1);
-        (c.phases[0] as { tasks: unknown[] }).tasks = [...c.phases[0].tasks, t];
+        (c.phases[1] as unknown as { tasks: unknown[] }).tasks = c.phases[1].tasks.slice(1);
+        (c.phases[0] as unknown as { tasks: unknown[] }).tasks = [...c.phases[0].tasks, t];
       },
     ];
     variantes.forEach((cambiar, i) => {
@@ -396,7 +397,7 @@ function enLaBase(fases: ReturnType<typeof faseDB>[], tl: { anchorStartDate?: Da
   db.projectTimeline.findUnique.mockResolvedValueOnce(prev).mockResolvedValue(null);
   db.projectTimeline.upsert.mockResolvedValue({ id: "tl1" });
   db.timelinePhase.findMany.mockResolvedValue(fases);
-  return versionDelCronograma({ ...prev, phases: fases });
+  return versionDelCronograma({ ...prev, phases: fases as unknown as FaseVersionada[] });
 }
 
 beforeEach(() => {
@@ -525,7 +526,7 @@ describe("⛔ T2 · PUT: una foto VIEJA no pisa lo que escribió el servidor", (
        manda entera: la fase del chat se borraba en cascada. La edición que la pone en rojo: sacar la comparación
        de la versión (o hacerla después de borrar). */
     enLaBase([faseDB("f1", [tareaDB("t1", "Mapear")]), faseDB("f-del-chat", [tareaDB("t9", "Integrar ERP")], { order: 1 })]);
-    const versionDeLaFotoVieja = versionDelCronograma({ anchorStartDate: null, closeDateOverride: null, phases: [faseDB("f1", [tareaDB("t1", "Mapear")])] });
+    const versionDeLaFotoVieja = versionDelCronograma({ anchorStartDate: null, closeDateOverride: null, phases: [faseDB("f1", [tareaDB("t1", "Mapear")])] as unknown as FaseVersionada[] });
     const res = await PUT(
       pedir({ skipAudit: true, version: versionDeLaFotoVieja, phases: [faseBody("f1", [{ id: "t1", title: "Mapear", weekIndex: 0, order: 0 }])] }),
       delProyecto,
