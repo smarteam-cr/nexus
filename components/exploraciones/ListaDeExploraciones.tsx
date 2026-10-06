@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { diaConSemana, haceCuanto } from "@/lib/exploraciones/fechas";
+import type { PuntoDeCalidad } from "@/lib/exploraciones/calidad";
 import type { FilaDeLaLista } from "@/lib/exploraciones/servidor";
 import ElegirResponsable, { type PersonaDelEquipo } from "./ElegirResponsable";
 import { IconoDeSugerencia } from "./FranjaDeSugerencias";
@@ -28,14 +29,14 @@ const COLUMNAS = "grid grid-cols-[minmax(0,1.25fr)_minmax(0,1.6fr)_180px_112px_1
 const lista = (f: FilaDeLaLista) => f.total > 0 && f.cumplidos === f.total;
 
 /** Cada punto de «lista para proponer» dicho corto, para «Falta: …» debajo de la barra. */
-const CORTO: Record<string, string> = {
-  dimensiones: "dónde está cada equipo",
+const CORTO: Record<PuntoDeCalidad["id"], string> = {
+  frena: "qué frena al equipo",
   meta: "una meta en cifras",
-  autoridad: "quién aprueba",
+  tiempos: "para cuándo lo necesita",
+  presupuesto: "el presupuesto",
+  autoridad: "quién firma",
   consecuencia: "qué pasa si no actúa",
-  portal: "revisar el portal",
   siguientePaso: "el siguiente paso con fecha",
-  noExplorado: "lo que nadie exploró",
 };
 
 function queFalta(f: FilaDeLaLista): string {
@@ -52,9 +53,9 @@ function queFalta(f: FilaDeLaLista): string {
  */
 function ParaProponer({ f }: { f: FilaDeLaLista }) {
   const listaYa = lista(f);
-  const detalle = ["Lo que pide una propuesta:", ...f.puntos.map((p) => `${p.cumplido ? "✓" : "○"} ${p.titulo}`)].join("\n");
+  const detalle = ["Lo que pide proponer el land:", ...f.puntos.map((p) => `${p.cumplido ? "✓" : "○"} ${p.titulo}`)].join("\n");
   return (
-    <span tabIndex={0} title={detalle} className="relative z-10 flex flex-col gap-1.5 rounded outline-none focus-visible:ring-2 focus-visible:ring-brand">
+    <span tabIndex={0} title={detalle} className="relative flex flex-col gap-1.5 rounded outline-none focus-visible:ring-2 focus-visible:ring-brand">
       <span className="flex gap-[3px]" aria-hidden="true">
         {f.puntos.map((p) => (
           <span key={p.id} className={cn("h-2 flex-1 rounded-[3px]", p.cumplido ? "bg-success" : "bg-surface-active")} />
@@ -187,7 +188,7 @@ export default function ListaDeExploraciones({
                 <span className={cn("whitespace-nowrap text-[13px]", f.proximaReunion ? "font-medium text-fg" : "text-warn-ink")}>
                   {f.proximaReunion ? diaConSemana(f.proximaReunion) : "Sin agendar"}
                 </span>
-                <span className="relative z-10 min-w-0 text-[13px]">
+                <span className="relative min-w-0 text-[13px]">
                   <ElegirResponsable
                     exploracionId={f.id}
                     version={f.version}
@@ -202,7 +203,7 @@ export default function ListaDeExploraciones({
           )}
         </div>
       </div>
-      <p className="text-xs text-fg-muted">«Para proponer» son los {filas[0]?.total || 7} puntos que pide una preventa antes de armar la propuesta: pasa el cursor por la barra para verlos. Lo más reciente, arriba.</p>
+      <p className="text-xs text-fg-muted">«Para proponer» son los {filas[0]?.total || 7} puntos que pide la propuesta del land (un primer proyecto acotado): pasa el cursor por la barra para verlos. Lo más reciente, arriba.</p>
     </section>
   );
 }

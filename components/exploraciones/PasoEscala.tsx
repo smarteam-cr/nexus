@@ -3,26 +3,34 @@
 /**
  * PasoEscala — dónde parece estar cada equipo en la escala, y por qué.
  *
- * Pedido de Elías (2026-10-01): «la escala con las etapas en las que parece estar el equipo, con una
- * justificación del por qué generada por IA», con lo que tiene evidencia y lo que es hipótesis (se
- * cree que está ahí y hay que explorarlo para saber si está o no). Por área en juego: la rueda
- * (components/exploraciones/RuedaDelEquipo.tsx), el nivel del área con lo que lo deja ahí y, al
- * costado, las ocho dimensiones —o la elegida, con su porqué, sus frases, la pregunta para
- * confirmarla y lo que pide Funcional—. El vendedor no estima a mano: confirma o corrige con un clic.
+ * Copia el tablero «Preventa · La escala» (Claude Design, aprobado por Elías el 2026-10-05), en este
+ * orden:
+ *   1. Arriba, una sola vez, lo que sugiere el agente en esta pieza (niveles, áreas, qué explorar a
+ *      fondo, industria y perfil), para usar o descartar ahí mismo.
+ *   2. Con qué se mide: industria, perfil y los datos para comparar (Identificacion.tsx).
+ *   3. Dónde está hoy: las tres áreas son las pestañas del mapa. La que está en juego muestra su nivel,
+ *      por qué está ahí, la rueda (RuedaDelEquipo.tsx) y, al tocar una dimensión, cómo está hoy, la
+ *      pregunta para confirmarlo, los cinco niveles para elegir y lo que pide Funcional. La que no
+ *      está en juego se suma desde su pestaña, y la que está se saca: las dos cosas se deshacen igual.
+ *   4. Qué va primero y el agente, al pie.
+ * El «Por qué Ventas / Marketing» escrito a mano se fue de la pantalla (lo que dijo el cliente queda
+ * como la fuente de la sugerencia); los porqués guardados se conservan.
  */
 import { useState } from "react";
-import { Alert, Badge, Button, Tabs } from "@/components/ui";
+import { Alert, Button } from "@/components/ui";
 import { PUNTO_DE_NIVEL } from "@/components/escala/niveles";
 import { cn } from "@/lib/cn";
-import type { Letra } from "@/lib/escala/documento/tipos";
-import { esHipotesisDeNivel, type EstimadoGuardado } from "@/lib/exploraciones/contenido";
-import type { AreaDelLienzo, DimensionDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
+import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
+import { esHipotesisDeNivel, type DestinoDePropuesta, type EstimadoGuardado } from "@/lib/exploraciones/contenido";
+import type { AreaDelLienzo, DimensionDelLienzo, EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { cuentaDelArea, loQueLaFrena, type PosicionEnElMapa } from "@/lib/exploraciones/mapa";
 import { useLienzo } from "./contexto";
-import { AreasEnJuego, DatosDeLaMedicion, IndustriaYPerfil } from "./Identificacion";
+import FranjaDeSugerencias, { BotonAzul, IconoDeSugerencia } from "./FranjaDeSugerencias";
+import { ConQueSeMide } from "./Identificacion";
 import PanelDelAgente from "./PanelDelAgente";
-import { Propuestas } from "./Propuestas";
-import { NivelChip, QueVaPrimero } from "./QueVaPrimero";
+import { piezaDelDestino } from "./piezas";
+import { FilaSugerida } from "./Propuestas";
+import { QueVaPrimero } from "./QueVaPrimero";
 import RuedaDelEquipo from "./RuedaDelEquipo";
 
 const LETRAS: Letra[] = ["D", "I", "F", "E", "O"];
@@ -30,18 +38,9 @@ const LETRAS: Letra[] = ["D", "I", "F", "E", "O"];
 /** «A», «A y B», «A, B y C». */
 const enLista = (xs: string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`);
 
-/** «Con evidencia» / «Hipótesis» / «Sin dato», con el color que las distingue. */
-function Clase({ p }: { p: PosicionEnElMapa | undefined }) {
-  if (!p) return <Badge size="xs">Sin dato</Badge>;
-  return p.clase === "evidencia" ? (
-    <Badge size="xs" variant="success">
-      Con evidencia
-    </Badge>
-  ) : (
-    <Badge size="xs" variant="warning" title="Se cree que está ahí: hay que explorarlo en la reunión para saber si está o no.">
-      Hipótesis
-    </Badge>
-  );
+/** El rótulo chico en mayúsculas del tablero. */
+function Rotulo({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <span className={cn("block text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted", className)}>{children}</span>;
 }
 
 /** De dónde sale lo dibujado, en palabras. */
@@ -53,85 +52,118 @@ function deDonde(p: PosicionEnElMapa): string {
   return p.origen === "propuesto" ? "Lo dijo en una reunión (el agente lo leyó de la transcripción)." : "Lo dijo en una reunión.";
 }
 
-function Leyenda() {
+/** Dónde cae una sugerencia de esta pieza, en una línea: «Ventas · Datos», «Áreas», «Con qué se mide». */
+function dondeCae(d: DestinoDePropuesta, escala: EscalaDelLienzo): string {
+  const deDim = (id: string) => {
+    const area = escala.areas.find((a) => a.dimensiones.some((x) => x.id === id));
+    const dim = area?.dimensiones.find((x) => x.id === id);
+    return area && dim ? `${area.nombre} · ${dim.nombre}` : id;
+  };
+  switch (d.tipo) {
+    case "nivel":
+    case "aExplorar":
+      return deDim(d.dimensionId);
+    case "falta":
+      return deDim(d.criterioId.split(".").slice(0, 2).join("."));
+    case "area":
+      return "Áreas";
+    case "edicion":
+    case "perfil":
+      return "Con qué se mide";
+    default:
+      return "La escala";
+  }
+}
+
+// ── 1 · Lo que sugiere el agente, arriba y una vez ──────────────────────────
+
+function SugerenciasDeLaEscala() {
+  const { revisables, escala, cambiar, puedeEditar, guardando } = useLienzo();
+  const items = revisables.filter((it) => piezaDelDestino(it.destino) === "escala");
+  if (items.length === 0) return null;
+  const refrescar = items.some((it) => it.destino.tipo === "edicion" || it.destino.tipo === "perfil");
   return (
-    <div data-recorrido="preventa.escala.leyenda" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-fg-muted">
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-3 w-5 rounded-sm bg-fg-muted" aria-hidden="true" /> Lleno: con evidencia (lo dijo el cliente o se vio)
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className="h-3 w-5 rounded-sm border border-dashed border-fg-muted"
-          style={{ backgroundImage: "repeating-linear-gradient(45deg, var(--color-fg-muted) 0 2px, transparent 2px 5px)" }}
-          aria-hidden="true"
-        />{" "}
-        Rayado: hipótesis, para explorar en la reunión
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-2.5 rounded-full bg-info" aria-hidden="true" /> El agente propone algo nuevo
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-0 w-5 border-t-2 border-dashed border-success" aria-hidden="true" /> Funcional, el objetivo de la primera venta
-      </span>
-    </div>
+    <section aria-label="Lo que sugiere el agente" className="space-y-1.5">
+      <FranjaDeSugerencias
+        acciones={
+          puedeEditar && (
+            <BotonAzul disabled={guardando} onClick={() => void cambiar([{ op: "usarVarias", items: items.map((it) => ({ itemId: it.id, valor: it.valor })) }], { refrescar })}>
+              {items.length === 1 ? "Usar la sugerida" : `Usar las ${items.length}`}
+            </BotonAzul>
+          )
+        }
+      >
+        El agente sugiere {items.length === 1 ? "una cosa" : `${items.length} cosas`} en La escala. Nada se confirma solo.
+      </FranjaDeSugerencias>
+      <ul className="space-y-1.5">
+        {items.map((it) => (
+          <FilaSugerida key={it.id} item={it} destino={dondeCae(it.destino, escala)} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
-/** La lista de las ocho dimensiones del área (al costado de la rueda, cuando no hay una abierta). */
-function ListaDeDimensiones({ area, onElegir }: { area: AreaDelLienzo; onElegir: (id: string) => void }) {
-  const { mapa, exp, pendientesPara } = useLienzo();
-  const sugeridas = new Set(pendientesPara((x) => x.tipo === "aExplorar").map((it) => (it.destino as { dimensionId: string }).dimensionId));
+// ── 3 · Dónde está hoy: las áreas como pestañas ──────────────────────────────
+
+/** Lo que dice la pestaña de un área: su nivel y cuánto tiene con evidencia, o que está fuera. */
+function PestanaDeArea({ area, activa, orden, onElegir }: { area: AreaDelLienzo; activa: boolean; orden: number; onElegir: () => void }) {
+  const { mapa, nombreDeNivel } = useLienzo();
+  const calculo = orden > 0 ? mapa.chequeo.areas.find((a) => a.id === area.id) : undefined;
+  const cuenta = calculo ? cuentaDelArea(calculo, mapa.posiciones) : null;
+  const todo = !!cuenta && cuenta.hipotesis === 0 && cuenta.sinDato === 0;
   return (
-    <ul data-recorrido="preventa.escala.dimensiones" className="divide-y divide-line rounded-xl border border-line">
-      {area.dimensiones.map((d) => {
-        const p = d.aplica ? mapa.posiciones[d.id] : undefined;
-        return (
-          <li key={d.id}>
-            <button
-              type="button"
-              disabled={!d.aplica}
-              onClick={() => onElegir(d.id)}
-              className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-left hover:bg-surface-muted disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
-            >
-              <span className="min-w-0">
-                <span className="flex flex-wrap items-center gap-1.5 text-sm text-fg">
-                  {p?.porRevisar && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-info" aria-label="Algo nuevo del agente" />}
-                  <span>{d.nombre}</span>
-                  {d.id in exp.estado.contenido.aExplorar ? (
-                    <Badge size="xs" variant="primary">
-                      A explorar
-                    </Badge>
-                  ) : (
-                    sugeridas.has(d.id) && (
-                      <Badge size="xs" variant="info">
-                        Sugerida a fondo
-                      </Badge>
-                    )
-                  )}
-                </span>
-                {!d.aplica && <span className="block text-xs text-fg-muted">No aplica a este perfil de negocio</span>}
-              </span>
-              {d.aplica && (
-                <span className="flex flex-shrink-0 items-center gap-2">
-                  <NivelChip nivel={p?.nivel ?? null} />
-                  <Clase p={p} />
-                </span>
-              )}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={activa}
+      onClick={onElegir}
+      className={cn(
+        "flex flex-col items-stretch gap-1 rounded-xl px-3.5 py-3 text-left transition-colors",
+        activa ? "border border-brand bg-surface shadow-[inset_0_0_0_1px_var(--color-brand)]" : orden > 0 ? "border border-line bg-surface hover:bg-surface-hover" : "border border-dashed border-line bg-surface-muted hover:bg-surface-hover",
+      )}
+    >
+      <span className="flex items-center justify-between gap-1.5">
+        <span className="text-sm font-semibold text-fg">{area.nombre}</span>
+        {orden > 0 && <span className="text-[11px] tabular-nums text-fg-muted">{orden}.º en juego</span>}
+      </span>
+      {orden > 0 ? (
+        <>
+          <span className="flex items-center gap-1.5 text-[13px] font-medium text-fg">
+            {calculo?.nivel ? (
+              <>
+                <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[calculo.nivel])} aria-hidden="true" />
+                {nombreDeNivel(calculo.nivel)}
+                <span className={cn("text-[11px] font-semibold", todo ? "text-success-ink" : "text-warn-ink")}>{todo ? "con evidencia" : "parece"}</span>
+              </>
+            ) : (
+              <span className="text-fg-muted">Sin ubicar todavía</span>
+            )}
+          </span>
+          {cuenta && (
+            <span className="text-xs text-fg-muted">
+              {cuenta.conEvidencia} con evidencia · {cuenta.hipotesis} hipótesis{cuenta.sinDato > 0 ? ` · ${cuenta.sinDato} sin dato` : ""}
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          <span className="text-[13px] text-fg-muted">Fuera de la preventa</span>
+          <span className="text-xs text-fg-muted">Súmala desde aquí</span>
+        </>
+      )}
+    </button>
   );
 }
 
-/** Una dimensión abierta: dónde parece estar, por qué, cómo confirmarlo y lo que pide Funcional. */
-function DetalleDeDimension({ area, d, onCerrar }: { area: AreaDelLienzo; d: DimensionDelLienzo; onCerrar: () => void }) {
+/** Una dimensión abierta: cómo está hoy, la pregunta, los cinco niveles y lo que pide Funcional. */
+function DetalleDeDimension({ d, onCerrar }: { d: DimensionDelLienzo; onCerrar: () => void }) {
   const { exp, escala, mapa, cambiar, puedeEditar, guardando, nombreDeNivel, pendientesPara } = useLienzo();
   const p = mapa.posiciones[d.id];
   const confirmado = exp.estado.contenido.chequeo[d.id];
   const marcada = exp.estado.contenido.aExplorar[d.id];
   const nombreDeCapa = escala.capas.find((c) => c.clave === d.capa)?.nombre ?? d.capa;
+  const sugeridoNivel = p?.porRevisar ? (p.pendiente?.valor as EstimadoGuardado | undefined)?.nivel : undefined;
 
   /* El vendedor dice dónde está. Si coincide con lo que propone el agente, se usa esa propuesta (con
      su porqué y su frase); una hipótesis que el vendedor confirma pasa a ser suya. */
@@ -166,282 +198,339 @@ function DetalleDeDimension({ area, d, onCerrar }: { area: AreaDelLienzo; d: Dim
           },
         ]);
 
-  const faltaPendiente = pendientesPara((x) => x.tipo === "falta" && d.funcional.some((c) => c.id === x.criterioId));
+  const porConfirmar = d.funcional.filter((c) => exp.estado.contenido.falta[c.id]?.estado !== "tiene").length;
 
   return (
-    <div className="space-y-4 rounded-xl border border-line bg-surface p-4">
+    <div className="flex flex-col gap-4 border-t border-line pt-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-2xs font-semibold uppercase tracking-wide text-fg-muted">
-            {area.nombre} · {nombreDeCapa}
-          </p>
-          <h3 className="text-base font-semibold text-fg">{d.nombre}</h3>
-          {d.descripcion && <p className="text-xs text-fg-muted">{d.descripcion}</p>}
+          <Rotulo>
+            {nombreDeCapa} · {d.id}
+          </Rotulo>
+          <h4 className="mt-0.5 text-[15px] font-semibold text-fg">{d.nombre}</h4>
+          {d.descripcion && <p className="mt-0.5 text-xs text-fg-muted">{d.descripcion}</p>}
         </div>
-        <Button size="xs" variant="ghost" onClick={onCerrar} aria-label="Volver a la lista">
-          Volver
-        </Button>
+        <button
+          type="button"
+          onClick={onCerrar}
+          aria-label="Cerrar la dimensión"
+          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-line bg-surface text-fg-muted hover:bg-surface-hover hover:text-fg"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
 
-      <div className="space-y-2 rounded-lg bg-surface-muted p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-fg-secondary">{p ? (p.clase === "evidencia" ? "Está en" : "Parece estar en") : "Todavía sin dato"}</span>
-          {p && <NivelChip nivel={p.nivel} className="text-sm" />}
-          <Clase p={p} />
-        </div>
-        {p?.porQue && (
-          <p className="text-sm text-fg">
-            <span className="font-medium">Por qué: </span>
-            {p.porQue}
-          </p>
-        )}
-        {p && <p className="text-xs text-fg-muted">{deDonde(p)}</p>}
-        {p && p.citas.length > 0 && (
-          <ul className="space-y-1">
-            {p.citas.map((c, i) => (
-              <li key={`${c.id}-${i}`} className="text-xs text-fg-secondary">
-                <span className="italic">«{c.cita}»</span> <span className="text-fg-muted">— {c.etiqueta}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {p?.riesgo && (
-          <Alert variant="warning" title={`Dejó ver un riesgo: por eso no se estima por encima de ${nombreDeNivel("F")}.`}>
-            {d.riesgos.map((r) => (
-              <p key={r.id}>{r.mensaje ?? r.texto}</p>
-            ))}
-          </Alert>
-        )}
-        {p?.origen === "propuesto" && p.clase === "hipotesis" && puedeEditar && p.pendiente && (
-          <button
-            type="button"
-            className="text-xs text-fg-muted underline hover:text-fg"
-            disabled={guardando}
-            onClick={() => void cambiar([{ op: "descartar", itemIds: [p.pendiente!.id] }])}
-          >
-            Descartar esta hipótesis
-          </button>
-        )}
-      </div>
-
-      {p?.porRevisar && p.pendiente && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-fg-secondary">El agente propone, por lo que leyó de la reunión:</p>
-          <Propuestas items={[p.pendiente]} />
-        </div>
-      )}
-
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-fg-secondary">Para confirmarlo, pregunta:</p>
-        <p className="rounded-lg border border-info-line bg-info-surface px-3 py-2 text-sm text-fg">{d.pregunta}</p>
-      </div>
-
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-fg-secondary">{puedeEditar ? "¿Dónde está? Elige el nivel que mejor lo describe" : "Lo que describe cada nivel"}</p>
-        <ul className="space-y-1" role="radiogroup" aria-label={`Nivel de ${d.nombre}`}>
-          {LETRAS.map((l) => {
-            const nivel = d.niveles.find((n) => n.letra === l);
-            const actual = p?.nivel === l;
-            return (
-              <li key={l}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Rotulo>Hoy</Rotulo>
+          {p ? (
+            <>
+              <p className="flex flex-wrap items-center gap-2 text-[13px]">
+                <span className="inline-flex items-center gap-1.5 font-semibold text-fg">
+                  <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[p.nivel])} aria-hidden="true" />
+                  {nombreDeNivel(p.nivel)}
+                </span>
+                {p.clase === "evidencia" ? (
+                  <span className="inline-flex rounded-full border border-success-line bg-success-surface px-2 py-px text-[11px] font-semibold text-success-ink">✓ Con evidencia</span>
+                ) : (
+                  <span className="inline-flex rounded-full border border-warn-line bg-warn-surface px-2 py-px text-[11px] font-semibold text-warn-ink">○ Hipótesis</span>
+                )}
+              </p>
+              <p className="text-[13px] text-fg-secondary">{deDonde(p)}</p>
+              {p.porQue && <p className="text-[13px] text-fg-secondary">{p.porQue}</p>}
+              {p.citas.map((c, i) => (
+                <p key={`${c.id}-${i}`} className="text-[13px] italic text-fg-secondary">
+                  «{c.cita}» <span className="not-italic text-fg-muted">— {c.etiqueta}</span>
+                </p>
+              ))}
+              {p.origen === "propuesto" && p.clase === "hipotesis" && puedeEditar && p.pendiente && (
                 <button
                   type="button"
-                  role="radio"
-                  aria-checked={actual}
-                  disabled={!puedeEditar || guardando}
-                  onClick={() => marcar(l)}
-                  className={cn(
-                    "flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
-                    actual ? "border-fg/40 bg-surface-muted" : "border-line hover:bg-surface-muted",
-                    "disabled:cursor-default",
-                  )}
+                  className="self-start text-xs text-fg-muted hover:text-fg hover:underline"
+                  disabled={guardando}
+                  onClick={() => void cambiar([{ op: "descartar", itemIds: [p.pendiente!.id] }])}
                 >
-                  <span className={cn("mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full", PUNTO_DE_NIVEL[l])} aria-hidden="true" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-fg">{nombreDeNivel(l)}</span>
-                    {nivel?.descripcion && <span className="line-clamp-3 block text-xs text-fg-muted">{nivel.descripcion}</span>}
-                  </span>
+                  Descartar esta hipótesis
                 </button>
-              </li>
+              )}
+            </>
+          ) : (
+            <p className="text-[13px] text-fg-muted">Todavía sin dato: pregúntalo en la reunión.</p>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Rotulo>Para confirmarlo, pregunta</Rotulo>
+          <div className="flex items-start gap-2.5">
+            <span className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-[7px] bg-surface-hover text-xs font-bold text-fg-secondary" aria-hidden="true">
+              ?
+            </span>
+            <p className="text-[14.5px] font-semibold leading-[1.45] text-fg">{d.pregunta}</p>
+          </div>
+        </div>
+      </div>
+
+      {p?.riesgo && (
+        <Alert variant="warning" title={`Dejó ver un riesgo: por eso no se estima por encima de ${nombreDeNivel("F")}.`}>
+          {d.riesgos.map((r) => (
+            <p key={r.id}>{r.mensaje ?? r.texto}</p>
+          ))}
+        </Alert>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <Rotulo>{puedeEditar ? "¿Dónde está? Elige el nivel que mejor lo describe" : "Lo que describe cada nivel"}</Rotulo>
+        <div role="radiogroup" aria-label={`Nivel de ${d.nombre}`} className="grid grid-cols-1 gap-1.5 sm:grid-cols-5">
+          {LETRAS.map((l) => {
+            const actual = p?.nivel === l;
+            const sugerido = sugeridoNivel === l;
+            return (
+              <button
+                key={l}
+                type="button"
+                role="radio"
+                aria-checked={actual}
+                disabled={!puedeEditar || guardando}
+                onClick={() => marcar(l)}
+                className={cn(
+                  "flex flex-col gap-1.5 rounded-lg bg-surface p-2.5 text-left transition-colors hover:bg-surface-muted disabled:cursor-default disabled:hover:bg-surface",
+                  actual ? "border border-fg shadow-[inset_0_0_0_1px_var(--color-fg)]" : sugerido ? "border border-dashed border-brand" : "border border-line",
+                )}
+              >
+                <span className="flex items-center justify-between gap-1">
+                  <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-fg">
+                    <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[l])} aria-hidden="true" />
+                    {nombreDeNivel(l)}
+                  </span>
+                  {sugerido && <IconoDeSugerencia className="h-3 w-3 text-brand" />}
+                </span>
+                <span className="line-clamp-4 text-xs leading-[1.4] text-fg-muted">{d.niveles.find((n) => n.letra === l)?.descripcion}</span>
+                {l === "F" && <span className="self-start rounded-full border border-line bg-surface px-[7px] text-[11px] font-semibold text-fg-secondary">La base</span>}
+              </button>
             );
           })}
-        </ul>
+        </div>
       </div>
 
       {d.funcional.length > 0 && (
-        <details className="rounded-lg border border-line" open={!!marcada}>
-          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-fg-secondary">
-            Lo que pide {nombreDeNivel("F")} ({d.funcional.length}): la guía de qué falta
-          </summary>
-          <ul className="space-y-2 border-t border-line px-3 py-2">
+        <div className="flex flex-col gap-1.5">
+          <Rotulo>
+            Lo que pide {nombreDeNivel("F")} · {porConfirmar === 0 ? "lo tiene todo" : `${porConfirmar} de ${d.funcional.length} por confirmar`}
+          </Rotulo>
+          <ul className="divide-y divide-line rounded-lg border border-line">
             {d.funcional.map((c) => {
               const estado = exp.estado.contenido.falta[c.id]?.estado;
               return (
-                <li key={c.id} className="flex items-start gap-2 text-xs">
+                <li key={c.id} className="flex items-start gap-2.5 px-2.5 py-2">
                   <span
                     className={cn(
-                      "mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border text-2xs",
-                      estado === "tiene" ? "border-success-line bg-success-surface text-success-ink" : estado === "no_tiene" ? "border-destructive/40 text-destructive" : "border-line text-fg-muted",
+                      "mt-px flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                      estado === "tiene"
+                        ? "border border-success-line bg-success-surface text-success-ink"
+                        : estado === "no_tiene"
+                          ? "border border-danger-line bg-danger-surface text-danger-ink"
+                          : "border border-dashed border-line text-fg-muted",
                     )}
                     aria-label={estado === "tiene" ? "Lo tiene" : estado === "no_tiene" ? "No lo tiene" : "No se sabe"}
                   >
                     {estado === "tiene" ? "✓" : estado === "no_tiene" ? "✕" : ""}
                   </span>
-                  <span className="min-w-0 text-fg-secondary">
-                    {c.texto}
-                    {c.verificacion === "comprobable" && (
-                      <Badge size="xs" variant="info" className="ml-1.5">
-                        Míralo en el portal
-                      </Badge>
-                    )}
-                  </span>
+                  <span className="min-w-0 flex-1 text-[13px] text-fg-secondary">{c.texto}</span>
+                  {c.verificacion === "comprobable" && (
+                    <span className="flex-shrink-0 rounded-full border border-line bg-surface px-2 text-[11px] font-medium text-fg-secondary">Míralo en el portal</span>
+                  )}
                 </li>
               );
             })}
           </ul>
-          {faltaPendiente.length > 0 && (
-            <div className="border-t border-line px-3 py-2">
-              <Propuestas items={faltaPendiente} compacto />
-            </div>
-          )}
-        </details>
+        </div>
       )}
 
-      {sugerida && !marcada && <p className="text-xs text-fg-muted">El agente sugiere explorarla a fondo: {sugerida.razon ?? "toca una meta o deja ver un riesgo"}.</p>}
       {puedeEditar && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant={marcada ? "ghost" : "secondary"} disabled={guardando} aria-pressed={!!marcada} onClick={explorar}>
-            {marcada ? "✓ Se explora a fondo" : "Explorarla a fondo"}
-          </Button>
-          {sugerida && !marcada && (
-            <button type="button" className="text-xs text-fg-muted underline hover:text-fg" disabled={guardando} onClick={() => void cambiar([{ op: "descartar", itemIds: [sugerida.id] }])}>
-              Descartar la sugerencia
-            </button>
-          )}
+        <div>
+          <button
+            type="button"
+            aria-pressed={!!marcada}
+            disabled={guardando}
+            onClick={explorar}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+              marcada ? "border border-success-line bg-success-surface text-success-ink" : "border border-line bg-surface text-fg-secondary hover:bg-surface-hover",
+            )}
+          >
+            {marcada ? "✓ Se explora a fondo en la próxima sesión" : "Explorarla a fondo en la próxima sesión"}
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-function AreaDelMapa({ area }: { area: AreaDelLienzo }) {
-  const { mapa, escala, nombreDeNivel } = useLienzo();
+/** El área en juego: su nivel, por qué está ahí, la rueda y la dimensión abierta. */
+function AreaEnJuego({ area, onSacar }: { area: AreaDelLienzo; onSacar: () => void }) {
+  const { mapa, escala, nombreDeNivel, puedeEditar, guardando } = useLienzo();
   const [elegida, setElegida] = useState<string | null>(null);
   const calculo = mapa.chequeo.areas.find((a) => a.id === area.id);
   if (!calculo) return null;
   const cuenta = cuentaDelArea(calculo, mapa.posiciones);
   const frena = loQueLaFrena(calculo);
   const nombreDeCapa = (c: string) => escala.capas.find((x) => x.clave === c)?.nombre ?? c;
+  const nombresDeCapa = { base: nombreDeCapa("base"), produccion: nombreDeCapa("produccion") } as Record<ClaveDeCapa, string>;
   const dimDeLaFrena = frena?.dimensiones.map((id) => area.dimensiones.find((d) => d.id === id)).filter((d): d is DimensionDelLienzo => !!d) ?? [];
-  const porQueDeLaFrena = dimDeLaFrena.map((d) => mapa.posiciones[d.id]?.porQue).find(Boolean);
+  const porQueDelAgente = dimDeLaFrena.map((d) => mapa.posiciones[d.id]?.porQue).find(Boolean);
   const todoConEvidencia = cuenta.hipotesis === 0 && cuenta.sinDato === 0;
+  const verbo = todoConEvidencia ? "está en" : "parece estar en";
+  const aplican = area.dimensiones.filter((d) => d.aplica).length;
   const abierta = elegida ? area.dimensiones.find((d) => d.id === elegida) : null;
 
   return (
-    <section data-recorrido="preventa.escala.mapa" className="space-y-4 rounded-xl border border-line bg-surface p-4">
-      <header className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-base font-semibold text-fg">
+    <div role="tabpanel" data-recorrido="preventa.escala.mapa" className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-fg">
             {area.nombre}
             {calculo.nivel ? (
-              <span className="font-normal text-fg-secondary"> {todoConEvidencia ? "está en" : "parece estar en"} </span>
-            ) : null}
-          </h3>
-          {calculo.nivel && (
-            <span className="inline-flex items-center gap-1.5 text-base font-semibold text-fg">
-              <span className={cn("h-3 w-3 rounded-full", PUNTO_DE_NIVEL[calculo.nivel])} aria-hidden="true" />
-              {nombreDeNivel(calculo.nivel)}
+              <>
+                <span className="font-normal text-fg-secondary">{verbo}</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={cn("h-2 w-2 rounded-full", PUNTO_DE_NIVEL[calculo.nivel])} aria-hidden="true" />
+                  {nombreDeNivel(calculo.nivel)}
+                </span>
+              </>
+            ) : (
+              <span className="font-normal text-fg-muted">todavía sin ubicar</span>
+            )}
+          </p>
+          <p className="text-xs text-fg-muted">
+            {cuenta.conEvidencia} de {aplican} con evidencia · {cuenta.hipotesis} hipótesis por confirmar{cuenta.sinDato > 0 ? ` · ${cuenta.sinDato} sin dato` : ""}
+          </p>
+        </div>
+        {puedeEditar && (
+          <button type="button" disabled={guardando} onClick={onSacar} className="px-1.5 py-1 text-xs font-semibold text-fg-muted hover:text-fg hover:underline">
+            Sacar {area.nombre} de la preventa
+          </button>
+        )}
+      </div>
+
+      <div className="flex gap-2.5 rounded-lg border border-info-line bg-info-surface px-3 py-2.5">
+        <IconoDeSugerencia className="mt-0.5 h-[15px] w-[15px] flex-shrink-0 text-brand" />
+        <div className="flex flex-col gap-1 text-[13px] leading-[1.45]">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">Por qué está ahí</span>
+          {calculo.nivel && frena ? (
+            <span className="text-fg">
+              {dimDeLaFrena.length === 1 ? "Lo frena " : "Lo frenan "}
+              {enLista(dimDeLaFrena.map((d) => `«${d.nombre}»`))}, en {nombreDeNivel(frena.nivel)}: {dimDeLaFrena.length === 1 ? "es" : "son"} lo más débil de su{" "}
+              {nombreDeCapa(frena.capa).toLowerCase()}, y la escala ubica al equipo en su capa más baja.
+            </span>
+          ) : (
+            <span className="text-fg">
+              {calculo.faltan.length === 1 ? "Falta una dimensión" : `Faltan ${calculo.faltan.length} dimensiones`} sin dato: pregúntalas en la reunión. Sin las ocho no se sabe cuál es la más débil.
             </span>
           )}
-          <span className="text-xs text-fg-muted">
-            · {cuenta.conEvidencia} con evidencia · {cuenta.hipotesis} hipótesis · {cuenta.sinDato} sin dato
-          </span>
+          {porQueDelAgente && <span className="text-fg-secondary">{porQueDelAgente}</span>}
         </div>
-        {calculo.nivel && frena ? (
-          <p className="text-sm text-fg-secondary">
-            <span className="font-medium text-fg">Por qué: </span>
-            {dimDeLaFrena.length === 1 ? "lo frena " : "lo frenan "}
-            {enLista(dimDeLaFrena.map((d) => `«${d.nombre}»`))}, en {nombreDeNivel(frena.nivel)}: {dimDeLaFrena.length === 1 ? "es" : "son"} lo más débil de su{" "}
-            {nombreDeCapa(frena.capa).toLowerCase()}, y la escala ubica al equipo en su capa más baja.
-            {porQueDeLaFrena ? ` ${porQueDeLaFrena}` : ""}
-          </p>
-        ) : (
-          <p className="text-sm text-fg-muted">
-            {calculo.faltan.length === 1 ? "Falta una dimensión" : `Faltan ${calculo.faltan.length} dimensiones`} sin dato: pregúntalas en la reunión. Sin las ocho no se sabe cuál es la más débil.
-          </p>
-        )}
-        {calculo.objetivo && calculo.nivel && calculo.objetivo !== calculo.nivel && (
-          <p className="text-xs text-fg-muted">Objetivo de la primera venta: {nombreDeNivel(calculo.objetivo)}.</p>
-        )}
-      </header>
+      </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+      <figure className="m-0 flex flex-col gap-3">
         <RuedaDelEquipo
           area={area}
           posiciones={mapa.posiciones}
           niveles={escala.niveles}
+          nombresDeCapa={nombresDeCapa}
           nivelDelArea={calculo.nivel}
+          verbo={verbo}
           elegida={elegida}
           onElegir={setElegida}
         />
-        {abierta ? (
-          <DetalleDeDimension key={abierta.id} area={area} d={abierta} onCerrar={() => setElegida(null)} />
-        ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-fg-muted">Toca una dimensión (en la rueda o aquí) para ver por qué está ahí y cómo confirmarlo.</p>
-            <ListaDeDimensiones area={area} onElegir={setElegida} />
-          </div>
-        )}
+        <figcaption data-recorrido="preventa.escala.leyenda" className="flex flex-wrap items-center gap-x-[18px] gap-y-2 border-t border-line pt-3 text-xs text-fg-secondary">
+          <span className="text-fg-muted">Cada porción se pinta hasta el nivel en que está esa dimensión.</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border-[1.5px] border-success bg-surface text-[11px] font-bold text-success-ink" aria-hidden="true">
+              ✓
+            </span>
+            Con evidencia: lo dijo el cliente o se vio
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border-[1.5px] border-dashed border-warning bg-surface text-[11px] font-bold text-warn-ink" aria-hidden="true">
+              ?
+            </span>
+            Hipótesis: color más claro, se confirma en la reunión
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-info" aria-hidden="true" />
+            El agente sugiere algo
+          </span>
+        </figcaption>
+        {!abierta && <p className="text-xs text-fg-muted">Toca una dimensión o su nombre para ver por qué está ahí y cómo confirmarlo. Al pasar el cursor por una celda, ves qué dice la escala de ese nivel.</p>}
+      </figure>
+
+      {abierta && <DetalleDeDimension key={abierta.id} d={abierta} onCerrar={() => setElegida(null)} />}
+    </div>
+  );
+}
+
+/** Un área fuera de la preventa: se suma desde su pestaña. */
+function AreaFuera({ area, onSumar }: { area: AreaDelLienzo; onSumar: () => void }) {
+  const { puedeEditar, guardando } = useLienzo();
+  return (
+    <div role="tabpanel" className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-surface-muted px-5 py-7 text-center">
+      <p className="text-sm font-semibold text-fg">{area.nombre} no está en juego en esta preventa</p>
+      <p className="max-w-[460px] text-[13px] text-fg-muted">Súmala si el prospecto la nombra o paga licencias que no usa. Al sumarla, el agente la ubica en la escala con lo que ya sabe.</p>
+      {puedeEditar && (
+        <Button size="sm" variant="secondary" className="mt-1" disabled={guardando} onClick={onSumar}>
+          Sumar {area.nombre} a la preventa
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function DondeEstaHoy() {
+  const { exp, escala, cambiar, nombreDeNivel } = useLienzo();
+  const enJuego = exp.estado.areas;
+  const [cual, setCual] = useState<string | null>(null);
+  const activa = escala.areas.find((a) => a.id === cual) ?? escala.areas.find((a) => enJuego.includes(a.id)) ?? escala.areas[0];
+  if (!activa) return null;
+  const orden = (id: string) => enJuego.indexOf(id) + 1;
+  // Sumar o sacar se deshace con el mismo botón: la lista entera, en el orden en que se eligieron.
+  const alternar = (id: string) => void cambiar([{ op: "areas", areas: enJuego.includes(id) ? enJuego.filter((a) => a !== id) : [...enJuego, id] }]);
+
+  return (
+    <section aria-label="Dónde está hoy" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-[15px] font-semibold text-fg">Dónde está hoy</h3>
+        <span className="text-xs text-fg-muted">Objetivo de la primera venta: llevar cada área en juego a {nombreDeNivel("F")}</span>
       </div>
+      <div data-recorrido="preventa.escala.areas" role="tablist" aria-label="Áreas" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {escala.areas.map((a) => (
+          <PestanaDeArea key={a.id} area={a} activa={a.id === activa.id} orden={orden(a.id)} onElegir={() => setCual(a.id)} />
+        ))}
+      </div>
+      {enJuego.includes(activa.id) ? (
+        <AreaEnJuego key={activa.id} area={activa} onSacar={() => alternar(activa.id)} />
+      ) : (
+        <AreaFuera area={activa} onSumar={() => alternar(activa.id)} />
+      )}
     </section>
   );
 }
 
 export default function PasoEscala() {
-  const { exp, escala } = useLienzo();
-  const enJuego = escala.areas.filter((a) => exp.estado.areas.includes(a.id));
-  const [cual, setCual] = useState<string | null>(null);
-  const area = enJuego.find((a) => a.id === cual) ?? enJuego[0];
-
+  const { exp } = useLienzo();
+  const hayAreas = exp.estado.areas.length > 0;
+  // El título y de qué va la pieza los pone el lienzo, como en las demás piezas.
   return (
-    <div className="space-y-4">
-      {/* Con qué se mide: la escala, las áreas en juego y los datos de la medición viven acá desde el
-          2026-10-03 (Exploración quedó para las sesiones). */}
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <IndustriaYPerfil />
-        <div className="space-y-4">
-          <AreasEnJuego />
-          <DatosDeLaMedicion />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-sm text-fg-secondary">
-          Dónde parece estar cada equipo en la Escala de Rendimiento{escala.edicion ? ` (edición ${escala.edicion.nombre})` : ""}. Antes de hablar con el cliente son hipótesis del agente; después de cada reunión, el agente lee la transcripción y propone dónde está, con la frase que lo respalda.
-        </p>
-        <Leyenda />
-      </div>
-
-      {enJuego.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-fg-muted">Elige primero las áreas en juego, arriba.</p>
-      ) : (
-        <>
-          {enJuego.length > 1 && (
-            <Tabs<string>
-              aria-label="Áreas en juego"
-              variant="pill"
-              value={area.id}
-              onChange={setCual}
-              items={enJuego.map((a) => ({ key: a.id, label: a.nombre }))}
-            />
-          )}
-          <AreaDelMapa key={area.id} area={area} />
-          <div data-recorrido="preventa.escala.primero">
+    <div className="flex flex-col gap-5">
+      <SugerenciasDeLaEscala />
+      <ConQueSeMide />
+      <DondeEstaHoy />
+      {hayAreas && (
+        <div data-recorrido="preventa.escala.primero">
           <QueVaPrimero />
-          </div>
-          <PanelDelAgente modoPrincipal="leer" compacto />
-        </>
+        </div>
       )}
+      <PanelDelAgente modoPrincipal="leer" compacto />
     </div>
   );
 }

@@ -75,16 +75,21 @@ export function QueVaPrimero() {
     .some((a) => a.dimensiones.some((d) => d.aplica && mapa.posiciones[d.id]?.clase === "hipotesis"));
 
   return (
-    <div className="space-y-2 rounded-xl border border-info-line bg-info-surface px-4 py-3">
-      <p className="text-2xs font-semibold uppercase tracking-wide text-brand">Qué va primero</p>
+    <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Qué va primero</p>
       <p className="text-sm text-fg">
         <span className="font-semibold">{dim?.nombre}</span>
         {area && <span className="text-fg-secondary"> ({area.nombre})</span>}, para llevarla a {nombreDeNivel(r.objetivo)}.
       </p>
-      <p className="text-xs text-fg-secondary">Por qué: {razones.join("; ")}.</p>
-      {dim && estaDebajo(r.objetivo, "E") && <p className="text-xs text-fg-muted">Lo que le cuesta quedarse así: {dim.costoDeQuedarse}</p>}
-      {resultado && <p className="text-xs text-fg-muted">Lo que ganaría: {resultado}</p>}
-      {conHipotesis && <p className="text-xs text-fg-muted">Sale en parte de hipótesis: confírmalas en la reunión, porque pueden cambiar qué va primero.</p>}
+      <p className="text-[13px] text-fg-secondary">Por qué: {razones.join("; ")}.</p>
+      {dim && estaDebajo(r.objetivo, "E") && <p className="text-[13px] text-fg-secondary">Lo que le cuesta quedarse así: {dim.costoDeQuedarse}</p>}
+      {resultado && <p className="text-[13px] text-fg-secondary">Lo que ganaría: {resultado}</p>}
+      {conHipotesis && (
+        <p className="flex items-center gap-1.5 text-xs text-warn-ink">
+          <span className="h-2 w-2 flex-shrink-0 rounded-full bg-warning" aria-hidden="true" />
+          Sale en parte de hipótesis: confírmalas en la reunión, porque pueden cambiar qué va primero.
+        </p>
+      )}
       {chequeo.parcial && <p className="text-xs text-fg-muted">Falta ubicar {sinDatos.join(" y ")}, y eso también puede cambiar qué va primero.</p>}
     </div>
   );

@@ -33,7 +33,8 @@ import {
   type ResultadoDeReunion,
 } from "./hubspot";
 import { documentosParaLeer, listarDocumentos } from "./documentos";
-import type { ReunionDeLaExploracion } from "./guia";
+import type { ReunionDeLaExploracion, SesionPlaneada } from "./guia";
+import { rotuloDeLaNota } from "./notas-de-sesion";
 import { etiquetaDeLaFuente } from "./senales";
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, reunionesDeHubspotQueYaPasaron, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
@@ -135,12 +136,17 @@ function textoDelTest(r: ResultadoDelTest, contacto: string, escala: EscalaDelLi
   return [`Contestó: ${contacto}${r.fecha ? `, el ${fecha(r.fecha)}` : ""}. Área: ${area?.nombre ?? r.areaId}.`, ...lineas].join("\n");
 }
 
-/** Las notas rápidas que el vendedor dejó en el guion, con el paso al que pertenecen. */
-function textoDeLasNotas(notas: Record<string, string>): string {
+/**
+ * Las notas del vendedor: las de cada sesión (pestaña «Durante») y las rápidas del guion viejo, cada
+ * una con la sesión o el paso al que pertenece.
+ */
+function textoDeLasNotas(notas: Record<string, string>, sesiones: readonly SesionPlaneada[]): string {
   const pasos = REUNIONES.flatMap((r) => r.pasos.map((p) => ({ id: p.id, titulo: `${r.titulo.split(" — ")[0]} · ${p.titulo}` })));
+  const dePaso = (id: string) => pasos.find((p) => p.id === id)?.titulo ?? null;
   return Object.entries(notas)
-    .map(([id, texto]) => `${pasos.find((p) => p.id === id)?.titulo ?? id}: ${texto}`)
-    .join("\n");
+    .filter(([, texto]) => texto.trim())
+    .map(([id, texto]) => `${rotuloDeLaNota(id, sesiones, dePaso) ?? id}: ${texto}`)
+    .join("\n\n");
 }
 
 export async function leerFuentes(opts: {
@@ -152,6 +158,8 @@ export async function leerFuentes(opts: {
   escala: EscalaDelLienzo;
   propuesta: PropuestaDeExploracion;
   notas: Record<string, string>;
+  /** Para nombrar las notas de cada sesión con su número, su fecha y su tema. */
+  sesiones?: readonly SesionPlaneada[];
   modo: "preparar" | "leer";
   /** Para «leer»: una reunión elegida; si no, las que todavía no se leyeron. */
   sesionId?: string | null;
@@ -301,9 +309,9 @@ export async function leerFuentes(opts: {
     if (marcar) leidas.documentos.push(d.id);
   });
 
-  // ── Las notas del vendedor en el guion ──
-  const notas = textoDeLasNotas(opts.notas);
-  if (notas) fuentes.push({ id: "N0", etiqueta: "Notas del vendedor en el guion", texto: notas });
+  // ── Las notas del vendedor: lo que sabe o interpreta y no se dijo en una reunión ──
+  const notas = textoDeLasNotas(opts.notas, opts.sesiones ?? []);
+  if (notas) fuentes.push({ id: "N0", etiqueta: "Notas del vendedor (su contexto y su interpretación, no palabras del cliente)", texto: notas.slice(0, MAX) });
 
   return {
     fuentes,

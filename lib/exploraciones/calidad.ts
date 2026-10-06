@@ -1,54 +1,48 @@
 /**
- * lib/exploraciones/calidad.ts — ¿la exploración está lista para proponer?, y qué sigue. PURO.
+ * lib/exploraciones/calidad.ts — ¿la preventa está lista para proponer el land?, y qué sigue. PURO.
  *
- * El lienzo es el proceso: si el vendedor lo sigue, la exploración queda bien hecha. Estos siete
- * puntos son lo que el caso que originó todo esto no tuvo (ninguna cifra del negocio, el portal sin
- * mirar, una pista grande sin seguir) más lo que sí se hizo bien (siguiente reunión con fecha, quién
- * decide). AVISAN, no bloquean: el vendedor puede proponer igual, y la foto del momento queda para
- * la métrica.
+ * La primera venta es un LAND: un proyecto acotado —un equipo, lo que lo frena, una meta, un
+ * presupuesto— que cierra rápido y prueba valor (Elías, 2026-10-05; la página «Land and Expand» de
+ * Documentación). Por eso los siete puntos no piden la escala entera: piden saber qué frena al equipo
+ * del land, dicho por el cliente, y que la arquitectura de la venta tenga lo que hace falta para
+ * venderlo (meta en cifras, para cuándo, presupuesto, quién firma, qué pasa si no actúa y el
+ * siguiente paso con fecha). Las 8 dimensiones, el portal y lo no explorado siguen en el lienzo y le
+ * sirven al CSE, pero no frenan la propuesta del land. AVISAN, no bloquean: el vendedor puede
+ * proponer igual, y la foto del momento queda para la métrica.
  */
 import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
+import { estaDebajo } from "@/lib/escala/chequeo";
 import { metaEnCifras } from "./casillas";
 import { esFuenteDeHipotesis, esHipotesisDeNivel, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import { diaCorto } from "./fechas";
 import type { ReunionSinLeer } from "./lectura";
 
 export interface PuntoDeCalidad {
-  id: "dimensiones" | "meta" | "autoridad" | "consecuencia" | "portal" | "siguientePaso" | "noExplorado";
+  id: "frena" | "meta" | "tiempos" | "presupuesto" | "autoridad" | "consecuencia" | "siguientePaso";
   titulo: string;
   cumplido: boolean;
 }
 
+/**
+ * ¿Se sabe qué frena al equipo del land? Una dimensión de un área en juego por debajo de Funcional,
+ * dicha por el cliente (`chequeo` es el de lo confirmado con evidencia: una hipótesis no cuenta).
+ */
+function sabeQueLoFrena(chequeo: ResultadoDelChequeo): boolean {
+  return chequeo.areas.some((a) => a.dimensiones.some((d) => d.aplica && d.nivel !== null && estaDebajo(d.nivel, "F")));
+}
+
+const conTexto = (v: unknown) => (Array.isArray(v) ? v.length > 0 : typeof v === "string" && v.trim().length > 0);
+
 export function listaParaProponer(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo): PuntoDeCalidad[] {
   const c = estado.contenido.casillas;
-  const autoridad = c.autoridad ?? [];
-  const pendientesNoExplorado = propuestaVigente(estado).filter(
-    (it) => it.destino.tipo === "casilla" && it.destino.clave === "noExplorado",
-  );
   return [
-    {
-      id: "dimensiones",
-      titulo: "Dónde está cada equipo: las 8 dimensiones de cada área, con evidencia del cliente",
-      cumplido: estado.areas.length > 0 && chequeo.completo,
-    },
+    { id: "frena", titulo: "Qué frena al equipo del land, dicho por el cliente", cumplido: estado.areas.length > 0 && sabeQueLoFrena(chequeo) },
     { id: "meta", titulo: "Al menos una meta en cifras", cumplido: (c.metas ?? []).some(metaEnCifras) },
-    {
-      id: "autoridad",
-      titulo: "Quién aprueba y a quién más le afecta",
-      cumplido: autoridad.some((p) => p.rol === "firma") && autoridad.some((p) => p.rol === "afectado"),
-    },
+    { id: "tiempos", titulo: "Para cuándo lo necesita", cumplido: conTexto(c.tiempos) },
+    { id: "presupuesto", titulo: "El presupuesto o contra qué lo compara", cumplido: conTexto(c.presupuesto) },
+    { id: "autoridad", titulo: "Quién firma", cumplido: (c.autoridad ?? []).some((p) => p.rol === "firma") },
     { id: "consecuencia", titulo: "Qué pasa si no actúa", cumplido: (c.consecuencias ?? []).length > 0 },
-    {
-      id: "portal",
-      titulo: "El portal revisado (o no usa HubSpot)",
-      cumplido: estado.contenido.sinPortal || (c.portal ?? []).length > 0,
-    },
     { id: "siguientePaso", titulo: "Siguiente paso con fecha", cumplido: !!c.siguientePaso?.fecha },
-    {
-      id: "noExplorado",
-      titulo: "Lo que se dijo y nadie exploró, revisado",
-      cumplido: pendientesNoExplorado.length === 0,
-    },
   ];
 }
 
@@ -100,21 +94,16 @@ export function queSigueConPaso(
       paso: "exploracion",
     };
   }
-  if (!chequeo.completo) {
-    const faltan = chequeo.areas.reduce((s, a) => s + a.faltan.length, 0);
-    return {
-      texto: `Falta confirmar ${faltan === 1 ? "una dimensión" : `${faltan} dimensiones`}: míralas en el mapa y pregúntalas en la próxima reunión (sin las 8 no se sabe cuál es la más débil).`,
-      paso: "escala",
-    };
-  }
   const puntos = listaParaProponer(estado, chequeo);
   const falta = (id: PuntoDeCalidad["id"]) => !puntos.find((p) => p.id === id)?.cumplido;
+  if (falta("frena")) return { texto: "Falta saber qué frena al equipo del land, dicho por el cliente: pregúntalo en la próxima reunión con la guía de la escala.", paso: "escala" };
   if (falta("meta")) return { texto: "Falta una meta en cifras: de cuánto a cuánto y para cuándo. Pregúntala en la próxima reunión.", paso: null };
   if (falta("siguientePaso")) return { texto: "Agenda el siguiente paso, con fecha.", paso: "exploracion" };
-  if (falta("autoridad")) return { texto: "Falta saber quién aprueba y a quién más le afecta la decisión.", paso: null };
+  if (falta("autoridad")) return { texto: "Falta saber quién firma.", paso: null };
   if (falta("consecuencia")) return { texto: "Falta qué pasa si no actúa.", paso: null };
-  if (falta("portal")) return { texto: "Revisen el portal en la próxima reunión, o marca que no usa HubSpot.", paso: "exploracion" };
-  return { texto: "Lista para proponer: elige los casos de uso y arma la propuesta.", paso: "casos" };
+  if (falta("tiempos")) return { texto: "Falta para cuándo lo necesita.", paso: null };
+  if (falta("presupuesto")) return { texto: "Falta el presupuesto, o contra qué lo va a comparar.", paso: null };
+  return { texto: "Lista para proponer el land: elige los casos de uso y arma la propuesta.", paso: "casos" };
 }
 
 /** Lo mismo, solo el texto (la lista de exploraciones). */

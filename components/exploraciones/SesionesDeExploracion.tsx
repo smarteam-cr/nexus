@@ -19,7 +19,7 @@
  * La guía de cada sesión se guarda por su id (`propuesta.guias`): la de una sesión que ya pasó
  * muestra lo que se preparó para ella. Qué sesión está abierta lo decide el lienzo (useSesiones).
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { CASILLAS_DEL_RESUMEN, definicionDe, type ClaveDeCasilla } from "@/lib/exploraciones/casillas";
@@ -38,6 +38,7 @@ import {
   type PreguntaParaMostrar,
   type SesionPlaneada,
 } from "@/lib/exploraciones/guia";
+import { claveDeNotaDeSesion, MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
 import { REUNIONES } from "@/lib/exploraciones/sesion";
 import { Casilla } from "./Casilla";
 import Segmentos from "./Segmentos";
@@ -518,15 +519,116 @@ function DespuesDeLaSesion({
   );
 }
 
-// ── La sesión: su encabezado y sus dos momentos ───────────────────────────────
+// ── Durante la sesión: las notas del vendedor ─────────────────────────────────
 
-/** Antes / Después: la opción elegida en blanco sobre el gris, como en el tablero. */
+/**
+ * Lo que el vendedor sabe o interpreta y no está en la transcripción: lo que le contaron por WhatsApp,
+ * cómo entiende su modelo de negocio, una sensación sobre quién decide (Elías, 2026-10-05). Se guarda
+ * solo (al dejar de escribir y al salir del campo) en `contenido.notas`, con la clave de la sesión, y
+ * el agente la lee como nota del vendedor la próxima vez que prepare o lea. Una reunión suelta o la
+ * sesión todavía sin crear se vuelven sesión al escribir la primera nota.
+ */
+function DuranteLaSesion({ pestana }: { pestana: PestanaDeSesion }) {
+  const { exp, cambiar, puedeEditar, sesion: seleccion } = useLienzo();
+  const { sesiones } = useSesiones();
+  const clave = pestana.sesion ? claveDeNotaDeSesion(pestana.sesion.id) : null;
+  const guardada = clave ? (exp.estado.contenido.notas[clave] ?? "") : "";
+  const [texto, setTexto] = useState(guardada);
+  const [estado, setEstado] = useState<"quieto" | "guardando" | "guardado" | "error">("quieto");
+  const ultimo = useRef(guardada);
+  const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const guardar = async (valor: string) => {
+    if (espera.current) clearTimeout(espera.current);
+    espera.current = null;
+    if (valor === ultimo.current) return;
+    setEstado("guardando");
+    let ops: Parameters<typeof cambiar>[0];
+    let id = pestana.sesion?.id ?? null;
+    if (!id) {
+      // La primera nota de una sesión que todavía no existe (o de una reunión suelta): se crea la sesión.
+      id = nuevoIdDeSesion();
+      const r = pestana.reunion;
+      const nueva: SesionPlaneada = { id, ...(r ? { reunion: { id: r.id, origen: r.origen }, fecha: r.fecha.slice(0, 10) } : {}) };
+      ops = [{ op: "sesiones", sesiones: [...sesiones, nueva] }, { op: "nota", paso: claveDeNotaDeSesion(id), texto: valor }];
+    } else {
+      ops = [{ op: "nota", paso: claveDeNotaDeSesion(id), texto: valor }];
+    }
+    const ok = await cambiar(ops);
+    if (!ok) return setEstado("error");
+    ultimo.current = valor;
+    setEstado("guardado");
+    if (!pestana.sesion) {
+      seleccion.elegir(id);
+      seleccion.ponerMomento(id, "durante");
+    }
+  };
+
+  const alEscribir = (v: string) => {
+    setTexto(v);
+    setEstado("quieto");
+    if (espera.current) clearTimeout(espera.current);
+    espera.current = setTimeout(() => void guardar(v), 1500);
+  };
+
+  // Lo que quedó sin guardar al cambiar de sesión o de momento se guarda igual.
+  const pendiente = useRef(texto);
+  pendiente.current = texto;
+  useEffect(
+    () => () => {
+      if (espera.current) {
+        clearTimeout(espera.current);
+        void guardar(pendiente.current);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al desmontar
+    [],
+  );
+
+  return (
+    <Tarjeta
+      titulo="Tus notas de la sesión"
+      detalle="lo que sabes y no quedó en la grabación"
+      accion={
+        <span className={cn("text-[12px]", estado === "error" ? "text-danger-ink" : "text-fg-muted")}>
+          {estado === "guardando" ? "Guardando…" : estado === "guardado" ? "Guardado" : estado === "error" ? "No se pudo guardar" : ""}
+        </span>
+      }
+    >
+      <div className="space-y-2.5 p-4">
+        <p className="text-[13px] leading-[1.5] text-fg-secondary">
+          Lo que te contaron por WhatsApp o en el pasillo, cómo entiendes su modelo de negocio, quién crees que decide. El agente lo lee como tu nota, no como palabras del
+          cliente, la próxima vez que prepare o lea una reunión.
+        </p>
+        <textarea
+          value={texto}
+          onChange={(ev) => alEscribir(ev.target.value)}
+          onBlur={() => void guardar(texto)}
+          disabled={!puedeEditar}
+          maxLength={MAX_NOTA_DE_SESION}
+          rows={12}
+          aria-label="Tus notas de la sesión"
+          placeholder="Ej.: Por WhatsApp, Laura contó que el gerente comercial se va en diciembre y que el presupuesto sale del área de mercadeo."
+          className="w-full resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-sm leading-[1.55] text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none disabled:opacity-60"
+        />
+        <p className="text-right text-[11.5px] text-fg-muted">
+          {texto.length.toLocaleString("es-CR")} de {MAX_NOTA_DE_SESION.toLocaleString("es-CR")} caracteres
+        </p>
+      </div>
+    </Tarjeta>
+  );
+}
+
+// ── La sesión: su encabezado y sus tres momentos ──────────────────────────────
+
+/** Antes / Durante / Después: la opción elegida en blanco sobre el gris, como en el tablero. */
 function AntesDespues({ valor, onCambiar }: { valor: MomentoDeLaSesion; onCambiar: (m: MomentoDeLaSesion) => void }) {
   return (
     <Segmentos
-      etiqueta="Antes y después de la sesión"
+      etiqueta="Antes, durante y después de la sesión"
       opciones={[
         { clave: "antes", nombre: "Antes" },
+        { clave: "durante", nombre: "Durante" },
         { clave: "despues", nombre: "Después" },
       ]}
       valor={valor}
@@ -760,6 +862,8 @@ export default function SesionesDeExploracion() {
       <EncabezadoDeLaSesion pestana={activa} esLaProxima={esLaProxima} momento={momento} alMomento={(m) => seleccion.ponerMomento(activa.clave, m)} />
       {momento === "antes" ? (
         <AntesDeLaSesion pestana={activa} esLaProxima={esLaProxima} sesiones={sesiones} guardar={guardar} />
+      ) : momento === "durante" ? (
+        <DuranteLaSesion key={activa.clave} pestana={activa} />
       ) : (
         <DespuesDeLaSesion armarLaSiguiente={(llevar) => void armarLaSiguiente(llevar)} soltar={soltar} numeroSiguiente={numeroSiguiente} />
       )}

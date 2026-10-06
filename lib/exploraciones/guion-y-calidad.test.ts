@@ -16,6 +16,7 @@ import { esDeLaEmpresa } from "./hubspot";
 import { agendadasQueYaPasaron, agendaRenovada, debeLeerSola, PASADAS_QUE_CONSERVA_LA_FOTO, reunionesDeHubspotQueYaPasaron } from "./lectura";
 import { calcularMetricas } from "./metricas";
 import { industriaLegible, sugerirEdicion } from "./industria";
+import { claveDeNotaDeSesion, rotuloDeLaNota } from "./notas-de-sesion";
 import { minutosPara, REUNIONES } from "./sesion";
 
 describe("el guion", () => {
@@ -109,32 +110,39 @@ function estado(parcial: Partial<EstadoDeExploracion> = {}): EstadoDeExploracion
   };
 }
 
-describe("lista para proponer", () => {
-  it("vacía: ninguno de los siete, salvo lo no explorado (no hay nada pendiente)", () => {
-    const puntos = listaParaProponer(estado(), chequeoCon("FFFIIIII".slice(0, 7)));
+describe("lista para proponer el land", () => {
+  it("vacía: ninguno de los siete", () => {
+    const puntos = listaParaProponer(estado(), chequeoCon("FFFIIII"));
     expect(puntos).toHaveLength(7);
-    expect(puntos.filter((p) => p.cumplido).map((p) => p.id)).toEqual(["noExplorado"]);
+    expect(puntos.filter((p) => p.cumplido).map((p) => p.id)).toEqual(["frena"]);
+    expect(listaParaProponer(estado(), chequeoCon("FFFFFFF")).some((p) => p.cumplido)).toBe(false);
   });
 
-  it("completa: los siete", () => {
+  it("completa: los siete, sin la escala entera (Elías, 2026-10-05: el land no pide las 8 dimensiones)", () => {
     const e = estado({
       contenido: {
         ...contenidoVacio(),
-        chequeo: { "1.1": { nivel: "F", fuente: "reunion" } },
-        sinPortal: true,
+        chequeo: { "1.4": { nivel: "I", fuente: "reunion" } },
         casillas: {
           metas: [{ que: "Cerrar más", objetivo: "7 de cada 10" }],
-          autoridad: [
-            { nombre: "Ana", rol: "firma" },
-            { nombre: "Luis", rol: "afectado" },
-          ],
+          tiempos: ["Lo necesitan antes de marzo"],
+          presupuesto: "Entre 15 y 20 mil dólares",
+          autoridad: [{ nombre: "Ana", rol: "firma" }],
           consecuencias: ["Siguen perdiendo 3 de cada 10"],
           siguientePaso: { que: "Presentar la propuesta", fecha: "2026-10-08" },
         },
       },
     });
-    expect(listaParaProponer(e, chequeoCon("FFFIIIII")).every((p) => p.cumplido)).toBe(true);
-    expect(queSigue(e, chequeoCon("FFFIIIII"))).toMatch(/Lista para proponer/);
+    // Una sola dimensión dicha por el cliente, debajo de Funcional: alcanza para saber qué frena.
+    const una = calcularChequeo([area()], { "1.4": { nivel: "I" as Letra } });
+    expect(una.completo).toBe(false);
+    expect(listaParaProponer(e, una).every((p) => p.cumplido)).toBe(true);
+    expect(queSigue(e, una)).toMatch(/Lista para proponer el land/);
+  });
+
+  it("saber qué frena pide una dimensión DEBAJO de Funcional: todo en Funcional no dice qué vender", () => {
+    expect(listaParaProponer(estado(), chequeoCon("FFFFFFFF")).find((p) => p.id === "frena")!.cumplido).toBe(false);
+    expect(listaParaProponer(estado({ areas: [] }), chequeoCon("IIIIIIII")).find((p) => p.id === "frena")!.cumplido).toBe(false);
   });
 
   it("una meta sin número no cuenta como «en cifras»", () => {
@@ -142,14 +150,14 @@ describe("lista para proponer", () => {
     expect(listaParaProponer(e, chequeoCon("FFFFFFFF")).find((p) => p.id === "meta")!.cumplido).toBe(false);
   });
 
-  it("qué sigue va en el orden del proceso: perfil, áreas, la primera reunión, las dimensiones, la meta", () => {
+  it("qué sigue va en el orden del proceso: perfil, áreas, la primera reunión, qué frena, la meta", () => {
     expect(queSigue(estado({ perfilCierre: null }), chequeoCon("FFFFFFFF"))).toMatch(/perfil/);
     expect(queSigue(estado({ areas: [] }), chequeoCon("FFFFFFFF"))).toMatch(/áreas/);
     // Sin nada que haya dicho el cliente, lo que toca es la primera reunión, con la guía.
     expect(queSigueConPaso(estado(), chequeoCon("FFFFFFF"))).toMatchObject({ paso: "exploracion", texto: expect.stringMatching(/^Haz la primera reunión/) });
     const conEvidencia = estado({ contenido: { ...contenidoVacio(), chequeo: { "1.1": { nivel: "F", fuente: "reunion" } } } });
-    expect(queSigueConPaso(conEvidencia, chequeoCon("FFFFFFF"))).toMatchObject({ paso: "escala", texto: expect.stringMatching(/^Falta confirmar una dimensión/) });
-    expect(queSigue(conEvidencia, chequeoCon("FFFFFFFF"))).toMatch(/meta en cifras/);
+    expect(queSigueConPaso(conEvidencia, chequeoCon("FFFFFFF"))).toMatchObject({ paso: "escala", texto: expect.stringMatching(/^Falta saber qué frena al equipo del land/) });
+    expect(queSigue(conEvidencia, chequeoCon("FFFIIIII"))).toMatch(/meta en cifras/);
     // Una reunión sin leer va antes que todo lo que se llena con ella.
     const sinLeer = [{ id: "s1", titulo: "Revisión del diagnóstico", fecha: "2026-10-01T15:00:00.000Z", origen: "meet" as const }];
     expect(queSigue(estado(), chequeoCon("FFFFFFF"), sinLeer)).toBe("Hay una reunión sin leer («Revisión del diagnóstico», 1 oct): pídele al agente que la lea.");
@@ -288,5 +296,21 @@ describe("la actividad que se lee por un contacto", () => {
     expect(esDeLaEmpresa({ associations: { companyIds: [] } }, "999")).toBe(true);
     expect(esDeLaEmpresa({}, "999")).toBe(true);
     expect(esDeLaEmpresa({ associations: { companyIds: [111] } }, "999")).toBe(false);
+  });
+});
+
+describe("las notas del vendedor de cada sesión (pestaña «Durante», Elías 2026-10-05)", () => {
+  const sesiones = [{ id: "s-uno", fecha: "2026-10-08", titulo: "Revisión del diagnóstico" }, { id: "s-dos" }];
+  const dePaso = (id: string) => (id === "r1-conexion" ? "Revisión · Conexión" : null);
+
+  it("la clave cabe en el registro de notas (máx. 40) y la nota se nombra con su sesión", () => {
+    expect(claveDeNotaDeSesion("s-" + "a".repeat(24)).length).toBeLessThanOrEqual(40);
+    expect(rotuloDeLaNota(claveDeNotaDeSesion("s-uno"), sesiones, dePaso)).toBe("Notas del vendedor de la sesión 1 (8 oct, Revisión del diagnóstico)");
+    expect(rotuloDeLaNota(claveDeNotaDeSesion("s-dos"), sesiones, dePaso)).toBe("Notas del vendedor de la sesión 2");
+  });
+
+  it("una sesión borrada no se pierde, y las notas del guion viejo se siguen nombrando con su paso", () => {
+    expect(rotuloDeLaNota(claveDeNotaDeSesion("s-tres"), sesiones, dePaso)).toMatch(/ya no está/);
+    expect(rotuloDeLaNota("r1-conexion", sesiones, dePaso)).toBe("Revisión · Conexión");
   });
 });

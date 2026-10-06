@@ -132,7 +132,7 @@ export interface FilaDeLaLista {
   cumplidos: number;
   total: number;
   /** Los puntos de «lista para proponer», en orden: la barra pinta cuáles faltan, no solo cuántos. */
-  puntos: { id: string; titulo: string; cumplido: boolean }[];
+  puntos: { id: PuntoDeCalidad["id"]; titulo: string; cumplido: boolean }[];
   responsableEmail: string | null;
   /** El nombre de quien la lleva, si es del equipo (para las iniciales de la lista). */
   responsableNombre: string | null;

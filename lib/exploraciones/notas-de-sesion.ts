@@ -1,0 +1,34 @@
+/**
+ * Las notas del vendedor de cada sesión: lo que sabe o interpreta y no quedó en la grabación (lo que
+ * le contaron por WhatsApp, cómo entiende el modelo de negocio). Elías, 2026-10-05: «el vendedor
+ * podría agregar notas editables con su propio contexto». PURO.
+ *
+ * Viven en `contenido.notas`, el mismo registro de las notas rápidas del guion viejo (que se siguen
+ * leyendo), con la clave `sesion:<id de la sesión>`: así se guardan con la operación `nota` de
+ * siempre, sin SQL, y el agente ya las lee como fuente del vendedor (fuentes.ts, N0).
+ */
+import type { SesionPlaneada } from "./guia";
+import { diaCorto } from "./fechas";
+
+const PREFIJO = "sesion:";
+
+/** El tope de una nota: el mismo que valida `contenido.notas` (esquemas.ts). */
+export const MAX_NOTA_DE_SESION = 4000;
+
+export function claveDeNotaDeSesion(sesionId: string): string {
+  return `${PREFIJO}${sesionId}`;
+}
+
+/**
+ * Cómo se nombra una nota para el agente. Las de una sesión llevan su número, su fecha y su tema;
+ * `rotuloDePaso` nombra las del guion viejo. null = una clave que no se reconoce.
+ */
+export function rotuloDeLaNota(clave: string, sesiones: readonly SesionPlaneada[], rotuloDePaso: (id: string) => string | null): string | null {
+  if (!clave.startsWith(PREFIJO)) return rotuloDePaso(clave);
+  const id = clave.slice(PREFIJO.length);
+  const i = sesiones.findIndex((s) => s.id === id);
+  if (i < 0) return "Notas del vendedor de una sesión que ya no está";
+  const s = sesiones[i];
+  const datos = [s.fecha ? diaCorto(s.fecha) : null, s.titulo ?? null].filter(Boolean).join(", ");
+  return `Notas del vendedor de la sesión ${i + 1}${datos ? ` (${datos})` : ""}`;
+}

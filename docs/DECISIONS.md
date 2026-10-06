@@ -4434,6 +4434,34 @@ cuatro columnas incluso a 1080. Aprobó el tablero «Preventa · listado y resum
 - **El resumen del marco son filas a lo ancho en tres bloques** (el objetivo; quién y con qué; lo que está
   en juego): la letra, el nombre y su estado a la izquierda, lo confirmado en viñetas a la derecha.
 
+## Preventa: lista para proponer el LAND, notas «Durante» y la escala rediseñada (2026-10-05)
+
+**Contexto.** Elías: la barra «Para proponer» tiene que medir qué tan adelantada está una venta pensando
+en el land (el primer proyecto acotado), sin exigir la escala completa; el vendedor necesita dejar en
+cada sesión lo que sabe y no quedó grabado; y aprobó el tablero «Preventa · La escala».
+
+- **«Lista para proponer» es lista para proponer el land** (`lib/exploraciones/calidad.ts`): qué frena
+  al equipo del land dicho por el cliente (una dimensión de un área en juego por debajo de Funcional,
+  con evidencia), una meta en cifras, para cuándo lo necesita, el presupuesto o contra qué lo compara,
+  quién firma, qué pasa si no actúa y el siguiente paso con fecha. Salen las 8 dimensiones completas,
+  «a quién más le afecta», el portal y lo no explorado: siguen en el lienzo y le sirven al CSE, pero no
+  frenan la propuesta del land. «Qué sigue» ya no pide confirmar las 8 dimensiones. Avisa, no bloquea.
+  La métrica sigue igual (`meta` y `siguientePaso` conservan su id); las fotos viejas quedan con sus ids.
+- **«Durante» es la pestaña de las notas del vendedor**, entre «Antes» y «Después». Se guardan solas en
+  `contenido.notas` con la clave `sesion:<id>` (la operación `nota` de siempre, sin SQL), y el agente
+  las lee como fuente del vendedor (N0) al preparar y al leer, nombradas con su sesión y rotuladas como
+  su contexto, no palabras del cliente. La primera nota de una sesión que no existe (o de una reunión
+  suelta) crea la sesión.
+- **La escala, como el tablero**: lo que sugiere el agente va arriba y una vez; «Con qué se mide» es una
+  fila de filtros con país y tamaño en una línea; las tres áreas son las pestañas del mapa y se suman o
+  se sacan desde ahí (se deshace con el mismo botón); los porqués de cada área ya no se escriben (se
+  conservan); la rueda pinta cada porción hasta su nivel con la marca ✓ (evidencia) o ? (hipótesis, más
+  claro), lleva el nombre de las dimensiones y de las dos capas, y al pasar el cursor por una celda dice
+  qué pide ese nivel y dónde está el equipo respecto de él. En esta pieza el panel de la derecha no
+  repite dónde está cada área.
+- **El desplegable de «La lleva» del listado ya no queda debajo de la fila siguiente**: la casilla no
+  crea su propia capa (`z-10`), así el panel fijo sale por encima de todo.
+
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 
 **Contexto.** Smarteam se alió con Insider One. Elías pidió que la escala refleje lo que habilita una

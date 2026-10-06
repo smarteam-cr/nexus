@@ -1,46 +1,101 @@
 "use client";
 
 /**
- * Identificacion — con quién se habla: la industria y el perfil de negocio, y las áreas en juego.
+ * Identificacion — con qué se mide la preventa: la industria (la edición de la escala), el perfil de
+ * negocio y los datos para comparar después (país y tamaño).
  *
- * La industria (la edición de la escala) y el perfil de negocio se ELIGEN SOLOS (pedido de Elías,
- * 2026-10-01): por la industria de HubSpot o, si no alcanza, por el agente que lee todo lo de la
- * empresa; con la edición va su perfil habitual. Se ve quién los eligió y por qué, y se cambian con
- * un clic. Las hipótesis sueltas y «Qué explorar a fondo» se retiraron de acá (2026-10-01): se
- * repetían con el mapa de la escala y la guía de la reunión, que es donde viven.
+ * La industria y el perfil se ELIGEN SOLOS (pedido de Elías, 2026-10-01): por la industria de HubSpot
+ * o, si no alcanza, por el agente que lee todo lo de la empresa; con la edición va su perfil habitual.
+ * Se ve quién los eligió y por qué, y se cambian con un clic.
+ *
+ * Rediseño del 2026-10-05 (tablero «Preventa · La escala»): una fila de filtros, como en la sección
+ * Escala, y país y tamaño en una línea con «Editar». Las áreas en juego pasaron a ser las pestañas
+ * del mapa (PasoEscala); los porqués de cada área se siguen guardando, pero ya no se escriben acá. Lo
+ * que sugiere el agente va arriba de la pieza, una sola vez.
  */
 import { useState } from "react";
-import { Badge, Button, Input, Segmentado, Select } from "@/components/ui";
+import { Badge, Input, Segmentado, Select } from "@/components/ui";
 import { CIERRES, DESPUES, type Cierre, type Despues } from "@/lib/escala/documento/tipos";
-import { industriaDelVendedor, normalizarTexto, type EscalaSugerida } from "@/lib/exploraciones/contenido";
+import { industriaDelVendedor, normalizarTexto, type EscalaSugerida, type Medicion } from "@/lib/exploraciones/contenido";
 import { industriaLegible, sugerirEdicion } from "@/lib/exploraciones/industria";
-import type { Medicion } from "@/lib/exploraciones/contenido";
 import { useLienzo } from "./contexto";
-import { Propuestas } from "./Propuestas";
 import { BotonBlanco } from "./FranjaDeSugerencias";
 import { useCorrida } from "./useCorrida";
 
 const NOMBRE_DEL_CIERRE: Record<Cierre, string> = { "con equipo": "Con equipo", transaccional: "Transaccional", mixta: "Mixta" };
 const NOMBRE_DEL_DESPUES: Record<Despues, string> = { única: "Relación única", recompra: "Recompra", continua: "Relación continua" };
 
-export function Tarjeta({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: React.ReactNode }) {
-  return (
-    <section data-recorrido={titulo === "Escala" ? "preventa.escala.edicion" : titulo === "Áreas en juego" ? "preventa.escala.areas" : undefined} className="space-y-4 rounded-xl border border-line bg-surface p-5">
-      <div>
-        <h3 className="text-sm font-semibold text-fg">{titulo}</h3>
-        {ayuda && <p className="text-xs text-fg-muted">{ayuda}</p>}
-      </div>
+/** El rótulo chico de cada filtro. */
+function Rotulo({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
+  const clase = "block text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted";
+  return htmlFor ? (
+    <label htmlFor={htmlFor} className={clase}>
       {children}
-    </section>
+    </label>
+  ) : (
+    <span className={clase}>{children}</span>
   );
 }
 
-export function IndustriaYPerfil() {
-  const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
+/** País y tamaño: la escala los pide en toda medición, para poder comparar con el tiempo. */
+function ParaComparar() {
+  const { exp, cambiar, puedeEditar } = useLienzo();
+  const guardada = exp.estado.contenido.medicion;
+  const [editando, setEditando] = useState(false);
+  const [m, setM] = useState<Medicion>(guardada);
+  const [vista, setVista] = useState(guardada);
+  if (vista !== guardada) {
+    setVista(guardada);
+    setM(guardada);
+  }
+  const resumen = [
+    guardada.pais,
+    guardada.personasEmpresa && `${guardada.personasEmpresa} personas en la empresa`,
+    guardada.personasEquipo && `${guardada.personasEquipo} en el equipo que se mira`,
+  ].filter(Boolean);
+  const campo = (k: keyof Medicion, etiqueta: string, placeholder: string) => (
+    <label className="space-y-1.5">
+      <span className="block text-xs font-medium text-fg-secondary">{etiqueta}</span>
+      <Input
+        value={m[k] ?? ""}
+        disabled={!puedeEditar}
+        placeholder={placeholder}
+        onChange={(e) => setM((x) => ({ ...x, [k]: e.target.value }))}
+        onBlur={() => {
+          if ((m[k] ?? "") !== (guardada[k] ?? "")) void cambiar([{ op: "medicion", medicion: { [k]: (m[k] ?? "").trim() } }]);
+        }}
+      />
+    </label>
+  );
+  return (
+    <div className="space-y-3 border-t border-line pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] text-fg-secondary">
+        <span>
+          <span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Para comparar después</span>
+          {resumen.length > 0 ? resumen.join(" · ") : <span className="text-fg-muted">sin país ni tamaño todavía</span>}
+        </span>
+        {puedeEditar && (
+          <button type="button" className="px-1.5 py-1 text-xs font-semibold text-brand hover:underline" aria-expanded={editando} onClick={() => setEditando((x) => !x)}>
+            {editando ? "Listo" : "Editar"}
+          </button>
+        )}
+      </div>
+      {editando && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {campo("pais", "País", "Por ejemplo, Costa Rica")}
+          {campo("personasEmpresa", "Personas en la empresa", "Por ejemplo, 120")}
+          {campo("personasEquipo", "Personas en el equipo que se mira", "Por ejemplo, 6")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ConQueSeMide() {
+  const { exp, escala, cambiar, puedeEditar, guardando } = useLienzo();
   const { corriendo, lanzando, lanzar } = useCorrida();
   const e = exp.estado;
   const elegida = e.contenido.edicionElegida;
-  const pendientes = pendientesPara((d) => d.tipo === "edicion" || d.tipo === "perfil");
   const edicion = escala.ediciones.find((x) => x.slug === e.edicion) ?? null;
   const habitual = edicion?.perfilHabitual ?? null;
   const esElHabitual = !!habitual && habitual.cierre === e.perfilCierre && habitual.despues === e.perfilDespues;
@@ -66,8 +121,9 @@ export function IndustriaYPerfil() {
           }
         : null;
     })();
+  const delVendedor = industriaDelVendedor(e);
   const distintaDeLaSugerida =
-    !!sugerida && industriaDelVendedor(e) && (sugerida.edicion !== e.edicion || sugerida.cierre !== e.perfilCierre || sugerida.despues !== e.perfilDespues);
+    !!sugerida && delVendedor && (sugerida.edicion !== e.edicion || sugerida.cierre !== e.perfilCierre || sugerida.despues !== e.perfilDespues);
   const nombreDeLaSugerida = sugerida
     ? [
         sugerida.edicion ? (escala.ediciones.find((x) => x.slug === sugerida.edicion)?.nombre ?? sugerida.edicion) : "Escala general",
@@ -78,25 +134,25 @@ export function IndustriaYPerfil() {
         .join(" · ")
     : null;
 
-  const quien =
-    industriaDelVendedor(e)
-      ? { insignia: "La elegiste tú", texto: "El agente ya no la cambia." }
-      : elegida?.por === "agente"
-        ? { insignia: "Automática", texto: elegida.razon ?? "La eligió el agente con lo que hay en HubSpot." }
-        : elegida?.por === "industria"
-          ? { insignia: "Automática", texto: elegida.razon ?? "Por la industria de la empresa en HubSpot." }
-          : { insignia: null, texto: "El agente la elige al preparar, con lo que hay de la empresa en HubSpot." };
+  const quien = delVendedor
+    ? { insignia: "La elegiste tú", texto: "El agente ya no la cambia." }
+    : elegida?.por === "agente"
+      ? { insignia: "Automática", texto: elegida.razon ?? "La eligió el agente con lo que hay en HubSpot." }
+      : elegida?.por === "industria"
+        ? { insignia: "Automática", texto: elegida.razon ?? "Por la industria de la empresa en HubSpot." }
+        : { insignia: null, texto: "El agente la elige al preparar, con lo que hay de la empresa en HubSpot." };
+  const delHabitual =
+    edicion && habitual
+      ? esElHabitual
+        ? "Es el perfil habitual de esa industria."
+        : `El habitual de «${edicion.nombre}» es ${NOMBRE_DEL_CIERRE[habitual.cierre].toLowerCase()} · ${NOMBRE_DEL_DESPUES[habitual.despues].toLowerCase()}.`
+      : null;
 
   return (
-    <Tarjeta
-      titulo="Escala"
-      ayuda="Con qué edición de la escala se mide y cómo vende la empresa. Se sugieren solas con lo que hay de la empresa; cámbialas si no calzan."
-    >
-      <div className="space-y-5">
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-fg-secondary" htmlFor="exploracion-edicion">
-            Industria (edición de la escala)
-          </label>
+    <section data-recorrido="preventa.escala.edicion" aria-label="Con qué se mide" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+        <div className="flex min-w-[220px] flex-[1_1_220px] flex-col gap-1.5">
+          <Rotulo htmlFor="exploracion-edicion">Industria</Rotulo>
           <Select
             id="exploracion-edicion"
             value={e.edicion ?? ""}
@@ -110,175 +166,74 @@ export function IndustriaYPerfil() {
               </option>
             ))}
           </Select>
-          <p className="flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary">
-            {quien.insignia && (
-              <Badge size="xs" variant={industriaDelVendedor(e) ? "default" : "info"}>
-                {quien.insignia}
-              </Badge>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Rotulo>Cómo se cierra la venta</Rotulo>
+          <Segmentado<Cierre>
+            etiqueta="Cómo se cierra la venta"
+            opciones={opcionesCierre}
+            valor={e.perfilCierre}
+            deshabilitado={!puedeEditar || guardando}
+            onCambio={(c) => void cambiar([{ op: "perfil", cierre: c, despues: e.perfilDespues }], { refrescar: true })}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Rotulo>Qué pasa después de la venta</Rotulo>
+          <Segmentado<Despues>
+            etiqueta="Qué pasa después de la venta"
+            opciones={opcionesDespues}
+            valor={e.perfilDespues}
+            deshabilitado={!puedeEditar || guardando}
+            onCambio={(d) => void cambiar([{ op: "perfil", cierre: e.perfilCierre, despues: d }], { refrescar: true })}
+          />
+        </div>
+      </div>
+
+      <p className="flex flex-wrap items-center gap-1.5 text-xs text-fg-secondary">
+        {quien.insignia && (
+          <Badge size="xs" variant={delVendedor ? "default" : "info"}>
+            {quien.insignia}
+          </Badge>
+        )}
+        <span>
+          {quien.texto}
+          {delHabitual ? ` ${delHabitual}` : ""}
+          {exp.empresa.industria ? ` En HubSpot: ${industriaLegible(exp.empresa.industria)}.` : ""}
+        </span>
+      </p>
+
+      {/* Siempre que la eligió el vendedor hay una salida: volver a la sugerida (aunque sea la misma,
+          así el agente la vuelve a manejar) o, si todavía no hay ninguna, pedírsela al agente. */}
+      {delVendedor && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
+          <p className="min-w-0 flex-1 text-xs text-fg-secondary">
+            {sugerida ? (
+              distintaDeLaSugerida ? (
+                <>
+                  La sugerida es <span className="font-medium text-fg">{nombreDeLaSugerida}</span>
+                  {sugerida.razon ? `: ${sugerida.razon}` : "."}
+                </>
+              ) : (
+                <>Es la misma que sugiere el agente. Restablécela para que la vuelva a manejar él.</>
+              )
+            ) : (
+              <>Todavía no hay una sugerida: el agente la propone al preparar, con lo que hay de la empresa.</>
             )}
-            <span>{quien.texto}</span>
           </p>
-          {/* Siempre que la eligió el vendedor hay una salida: volver a la sugerida (aunque sea la
-              misma, así el agente la vuelve a manejar) o, si todavía no hay ninguna, pedírsela al agente. */}
-          {industriaDelVendedor(e) && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface-muted px-3 py-2">
-              <p className="min-w-0 flex-1 text-xs text-fg-secondary">
-                {sugerida ? (
-                  distintaDeLaSugerida ? (
-                    <>
-                      La sugerida es <span className="font-medium text-fg">{nombreDeLaSugerida}</span>
-                      {sugerida.razon ? `: ${sugerida.razon}` : "."}
-                    </>
-                  ) : (
-                    <>Es la misma que sugiere el agente. Restablécela para que la vuelva a manejar él.</>
-                  )
-                ) : (
-                  <>Todavía no hay una sugerida: el agente la propone al preparar, con lo que hay de la empresa.</>
-                )}
-              </p>
-              {puedeEditar &&
-                (sugerida ? (
-                  <BotonBlanco disabled={guardando} onClick={() => void cambiar([{ op: "restablecerEscala", sugerida }], { refrescar: true })}>
-                    Restablecer la sugerida
-                  </BotonBlanco>
-                ) : (
-                  <BotonBlanco disabled={corriendo || lanzando} onClick={() => void lanzar("preparar")}>
-                    {corriendo || lanzando ? "Preparando…" : "Pedírsela al agente"}
-                  </BotonBlanco>
-                ))}
-            </div>
-          )}
-          {edicion?.descripcion && <p className="text-xs text-fg-muted">{edicion.descripcion}</p>}
-          {exp.empresa.industria && <p className="text-2xs text-fg-muted">En HubSpot: {industriaLegible(exp.empresa.industria)}</p>}
-        </div>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <span className="block text-xs font-medium text-fg-secondary">Cómo se cierra la venta</span>
-            <Segmentado<Cierre>
-              etiqueta="Cómo se cierra la venta"
-              opciones={opcionesCierre}
-              valor={e.perfilCierre}
-              deshabilitado={!puedeEditar || guardando}
-              onCambio={(c) => void cambiar([{ op: "perfil", cierre: c, despues: e.perfilDespues }], { refrescar: true })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <span className="block text-xs font-medium text-fg-secondary">Qué pasa después de la venta</span>
-            <Segmentado<Despues>
-              etiqueta="Qué pasa después de la venta"
-              opciones={opcionesDespues}
-              valor={e.perfilDespues}
-              deshabilitado={!puedeEditar || guardando}
-              onCambio={(d) => void cambiar([{ op: "perfil", cierre: e.perfilCierre, despues: d }], { refrescar: true })}
-            />
-          </div>
-          {edicion && habitual && (
-            <p className="text-xs text-fg-muted">
-              {esElHabitual
-                ? `Es el perfil habitual de «${edicion.nombre}» en la escala.`
-                : `El habitual de «${edicion.nombre}» es ${NOMBRE_DEL_CIERRE[habitual.cierre].toLowerCase()} · ${NOMBRE_DEL_DESPUES[habitual.despues].toLowerCase()}.`}
-            </p>
-          )}
-        </div>
-      </div>
-      <Propuestas items={pendientes} />
-    </Tarjeta>
-  );
-}
-
-export function AreasEnJuego() {
-  const { exp, escala, cambiar, puedeEditar, guardando, pendientesPara } = useLienzo();
-  const e = exp.estado;
-  const pendientes = pendientesPara((d) => d.tipo === "area");
-  const [razones, setRazones] = useState<Record<string, string>>(e.contenido.razonesDeAreas);
-  /* Si las razones cambian por otro lado (usar lo propuesto), los campos las siguen. */
-  const [razonesVistas, setRazonesVistas] = useState(e.contenido.razonesDeAreas);
-  if (razonesVistas !== e.contenido.razonesDeAreas) {
-    setRazonesVistas(e.contenido.razonesDeAreas);
-    setRazones(e.contenido.razonesDeAreas);
-  }
-
-  const alternar = (id: string) => {
-    const areas = e.areas.includes(id) ? e.areas.filter((a) => a !== id) : [...e.areas, id];
-    void cambiar([{ op: "areas", areas }]);
-  };
-
-  return (
-    <Tarjeta
-      titulo="Áreas en juego"
-      ayuda="La del test, más las que el prospecto nombra o paga sin usar. El orden cuenta: a igual nivel, va primero la que se eligió primero."
-    >
-      <div className="flex flex-wrap gap-2">
-        {escala.areas.map((a) => {
-          const i = e.areas.indexOf(a.id);
-          return (
-            <Button
-              key={a.id}
-              size="sm"
-              variant={i >= 0 ? "ghost" : "secondary"}
-              aria-pressed={i >= 0}
-              disabled={!puedeEditar || guardando}
-              onClick={() => alternar(a.id)}
-            >
-              {i >= 0 && <span className="tabular-nums">{i + 1}.</span>} {a.nombre}
-            </Button>
-          );
-        })}
-      </div>
-      {e.areas.length > 0 && (
-        <div className="space-y-2">
-          {e.areas.map((id) => (
-            <div key={id} className="grid items-center gap-2 sm:grid-cols-[10rem_1fr]">
-              <span className="text-xs text-fg-secondary">Por qué {escala.areas.find((a) => a.id === id)?.nombre}</span>
-              <Input
-                value={razones[id] ?? ""}
-                disabled={!puedeEditar}
-                placeholder="Lo que dijo o lo que paga sin usar"
-                onChange={(ev) => setRazones((r) => ({ ...r, [id]: ev.target.value }))}
-                onBlur={() => {
-                  if ((razones[id] ?? "") !== (e.contenido.razonesDeAreas[id] ?? "")) {
-                    void cambiar([{ op: "areas", areas: e.areas, razones: { [id]: (razones[id] ?? "").trim() } }]);
-                  }
-                }}
-              />
-            </div>
-          ))}
+          {puedeEditar &&
+            (sugerida ? (
+              <BotonBlanco disabled={guardando} onClick={() => void cambiar([{ op: "restablecerEscala", sugerida }], { refrescar: true })}>
+                Restablecer la sugerida
+              </BotonBlanco>
+            ) : (
+              <BotonBlanco disabled={corriendo || lanzando} onClick={() => void lanzar("preparar")}>
+                {corriendo || lanzando ? "Preparando…" : "Pedírsela al agente"}
+              </BotonBlanco>
+            ))}
         </div>
       )}
-      <Propuestas items={pendientes} />
-    </Tarjeta>
-  );
-}
 
-/** Los datos que la escala pide en toda medición (país y tamaño), para poder comparar con el tiempo. */
-export function DatosDeLaMedicion() {
-  const { exp, cambiar, puedeEditar } = useLienzo();
-  const guardada = exp.estado.contenido.medicion;
-  const [m, setM] = useState<Medicion>(guardada);
-  const [vista, setVista] = useState(guardada);
-  if (vista !== guardada) {
-    setVista(guardada);
-    setM(guardada);
-  }
-  const campo = (k: keyof Medicion, etiqueta: string, placeholder: string) => (
-    <label className="space-y-1.5">
-      <span className="block text-xs font-medium text-fg-secondary">{etiqueta}</span>
-      <Input
-        value={m[k] ?? ""}
-        disabled={!puedeEditar}
-        placeholder={placeholder}
-        onChange={(e) => setM((x) => ({ ...x, [k]: e.target.value }))}
-        onBlur={() => {
-          if ((m[k] ?? "") !== (guardada[k] ?? "")) void cambiar([{ op: "medicion", medicion: { [k]: (m[k] ?? "").trim() } }]);
-        }}
-      />
-    </label>
-  );
-  return (
-    <div className="grid gap-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-3">
-      {campo("pais", "País", "Por ejemplo, Costa Rica")}
-      {campo("personasEmpresa", "Personas en la empresa", "Por ejemplo, 120")}
-      {campo("personasEquipo", "Personas en el equipo que se mira", "Por ejemplo, 6")}
-    </div>
+      <ParaComparar />
+    </section>
   );
 }

@@ -165,9 +165,12 @@ function Proyectos() {
 export default function PanelDeContexto({
   sigue,
   nombreDelPaso,
+  paso,
 }: {
   sigue: { texto: string; paso: PasoDeQueSigue | null };
   nombreDelPaso: (p: PasoDelLienzoUI) => string;
+  /** La pieza abierta: en «La escala» no se repite dónde está cada área (tablero del 2026-10-05). */
+  paso: PasoDelLienzoUI;
 }) {
   const { irA, revisables, abrirRevision } = useLienzo();
   return (
@@ -188,7 +191,7 @@ export default function PanelDeContexto({
         )}
       </section>
       <Arquitectura />
-      <LaEscala />
+      {paso !== "escala" && <LaEscala />}
       <Objeciones />
       <Proyectos />
     </div>

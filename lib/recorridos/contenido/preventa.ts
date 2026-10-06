@@ -190,7 +190,7 @@ export const PREVENTA_EXPLORACION: Recorrido = {
 
 export const PREVENTA_ESCALA: Recorrido = {
   id: "preventa-escala",
-  version: 1,
+  version: 2,
   titulo: "Preventa · La escala",
   descripcion: "Dónde parece estar cada equipo y qué conviene trabajar primero",
   rotulo: "Recorrido · La escala",
@@ -207,32 +207,32 @@ export const PREVENTA_ESCALA: Recorrido = {
   pasos: [
     {
       ancla: "preventa.escala.edicion",
-      titulo: "Con qué escala se mide",
-      texto: "La edición y cómo vende la empresa se eligen solas. Si no calzan, las cambias.",
+      titulo: "Con qué se mide",
+      texto: "La industria y cómo vende la empresa se eligen solas. Si no calzan, las cambias. Abajo, país y tamaño para comparar después.",
       lado: "bottom-start",
     },
     {
       ancla: "preventa.escala.areas",
-      titulo: "Las áreas en juego",
-      texto: "Qué equipos se miran, cada uno con su porqué.",
+      titulo: "Las áreas, como pestañas",
+      texto: "Cada área con su nivel. La que no está en juego se suma desde su pestaña, y la que está se saca igual de fácil.",
       lado: "bottom-start",
     },
     {
       ancla: "preventa.escala.leyenda",
-      titulo: "Cómo leer el mapa",
-      texto: "Lleno es evidencia, rayado es hipótesis, el punto azul es algo nuevo del agente y la línea verde es Funcional.",
+      titulo: "Cómo leer la rueda",
+      texto: "Cada porción se pinta hasta su nivel. ✓ es evidencia, ? es hipótesis (en un tono más claro) y el punto azul es algo nuevo del agente.",
       lado: "bottom-start",
     },
     {
       ancla: "preventa.escala.mapa",
-      titulo: "El mapa del área",
-      texto: "Dónde parece estar el equipo, qué lo frena y sus ocho dimensiones.",
+      titulo: "El área abierta",
+      texto: "Dónde parece estar el equipo y por qué está ahí: lo que lo frena.",
       lado: "top-start",
     },
     {
       ancla: "preventa.escala.dimensiones",
       titulo: "Cada dimensión",
-      texto: "Tócala para ver por qué está ahí, qué preguntar para confirmarla y elegir el nivel con un clic.",
+      texto: "Pasa el cursor por una celda para ver qué dice la escala de ese nivel. Tócala para ver qué preguntar y elegir el nivel con un clic.",
       lado: "top-start",
     },
     {
@@ -240,12 +240,6 @@ export const PREVENTA_ESCALA: Recorrido = {
       titulo: "Qué va primero",
       texto: "Lo que conviene trabajar primero y por qué. Es lo que el prospecto se lleva de la reunión.",
       lado: "top-start",
-    },
-    {
-      ancla: "preventa.panel.escala",
-      titulo: "La escala, desde cualquier pieza",
-      texto: "El nivel de cada área de un vistazo, con «hipótesis» si falta confirmarlo.",
-      lado: "left-start",
     },
   ],
 };

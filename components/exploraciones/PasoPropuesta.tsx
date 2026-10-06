@@ -40,7 +40,7 @@ export function ListaParaProponer() {
   return (
     <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-fg">Lista para proponer</h3>
+        <h3 className="text-sm font-semibold text-fg">Lista para proponer el land</h3>
         <span className="text-xs tabular-nums text-fg-muted">
           {cumplidos} de {puntos.length}
         </span>

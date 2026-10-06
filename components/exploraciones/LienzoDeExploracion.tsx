@@ -370,7 +370,7 @@ export default function LienzoDeExploracion({
         </main>
 
         <aside className="border-t border-line bg-surface-muted p-5 lg:col-span-2 xl:sticky xl:top-0 xl:col-span-1 xl:h-[calc(100vh-3.5rem)] xl:self-start xl:overflow-y-auto xl:border-l xl:border-t-0">
-          <PanelDeContexto sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} />
+          <PanelDeContexto sigue={sigue} nombreDelPaso={(p) => NOMBRE_DEL_PASO[p]} paso={paso} />
         </aside>
       </div>
 

@@ -84,7 +84,7 @@ describe("armar la propuesta desde la exploración", () => {
     expect(fila.version).toBe(4);
     const fotos = leerContenido(fila.contenido).alProponer;
     expect(fotos).toHaveLength(1);
-    expect(fotos[0]).toMatchObject({ businessCaseId: bc.id, puntos: { meta: true, dimensiones: false } });
+    expect(fotos[0]).toMatchObject({ businessCaseId: bc.id, puntos: { meta: true, frena: false } });
 
     // La métrica la cuenta: una propuesta, con una meta en cifras.
     expect(await metricasDeLasPropuestas()).toMatchObject({ propuestas: 1, conMeta: 1, listas: 0, sinExploracion: 0 });

@@ -81,7 +81,8 @@ export interface Lienzo {
   };
 }
 
-export type MomentoDeLaSesion = "antes" | "despues";
+/** Antes (la guía), durante (las notas del vendedor) y después (la reunión y lo que salió). */
+export type MomentoDeLaSesion = "antes" | "durante" | "despues";
 
 /**
  * Las piezas del lienzo, en el desplegable de arriba (el mismo caparazón que el proyecto). El
