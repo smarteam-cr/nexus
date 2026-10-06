@@ -235,7 +235,7 @@ export function estadoDelMes(
   const actual = hoyISO.slice(0, 7);
   if (m.periodo > actual) return { clave: "porVenir", etiqueta: "Por venir", detalle: "Todavía no pasó: solo hay lo programado.", incompleto: false };
   if (m.periodo === actual) return { clave: "enCurso", etiqueta: "En curso", detalle: "El mes está en curso.", incompleto: false };
-  if (cierre?.cambio) return { clave: "cambio", etiqueta: "Cambió después del cierre", detalle: "Se cerró y algún número cambió después.", incompleto: false };
+  if (cierre?.cambio) return { clave: "cambio", etiqueta: "Cambió después del cierre", detalle: "Se cerró y después cambió un gasto, una factura o una quincena del mes.", incompleto: false };
   if (cierre) return { clave: "cerrado", etiqueta: "Cerrado", detalle: "El CFO lo cerró: sus números quedaron guardados.", incompleto: false };
   if (m.estado === "COMPLETO") return { clave: "sinCerrar", etiqueta: "Sin cerrar", detalle: "El gasto está completo, falta que el CFO lo cierre.", incompleto: false };
   const falta = `Gasto incompleto: sin ${m.faltantes.map(faltanteLegible).join(" ni ") || "parte del dato"}.`;

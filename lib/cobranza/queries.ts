@@ -106,7 +106,7 @@ import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguin
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
 import { facturadoEnOdooSinCuenta, porCobrarEnMercurySinEmparejar } from "@/lib/finanzas/facturado-sin-cuenta";
 import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
-import { cambioDespuesDelCierre, esFaltanteDePlanilla, mandaLaTasaConfirmada, type NumerosDelCierre } from "@/lib/finanzas/cierre";
+import { cambioDespuesDelCierre, esFaltanteDePlanilla, huellasPorMes, mandaLaTasaConfirmada, type HuellaDelMes, type NumerosDelCierre } from "@/lib/finanzas/cierre";
 import { cargarTasasDelAnio, tasaFirme } from "@/lib/finanzas/tipo-cambio-server";
 import { leerDecisionAliados, type DecisionAliados } from "@/lib/finanzas/decisiones-server";
 import { calidadDeMesDeNexus, costoParaEgreso, egresoDesdeNexus, egresosDeNexus } from "@/lib/finanzas/egresos-nexus";
@@ -2350,10 +2350,12 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
   /** Lo que está en la calle según el último Excel de Alex, por moneda, con la diferencia explicada. */
   cobranzaContraExcel: ComparacionConExcel;
   /**
-   * Los meses cerrados (Finanzas › Cierre del mes, 2026-10-03): el día del cierre y si algún número cambió después.
-   * `cambio` null = no se puede saber en esta moneda (los números del cierre se guardan en dólares).
+   * Los meses cerrados (Finanzas › Cierre del mes, 2026-10-03): el día del cierre y si cambió después. Desde 2026-10-06
+   * lo decide la huella (un gasto, una factura o una quincena del mes; cobrar no). `cambio` null = cierre sin huella.
    */
   cierres: Array<{ periodo: string; cerradoEn: string; cambio: boolean | null }>;
+  /** La huella de cada mes del año (lib/finanzas/cierre.ts): la que guarda el cierre y contra la que se compara después. */
+  huellas: Record<string, HuellaDelMes>;
   /**
    * Los meses con el tipo de cambio FIRME: el del Banco Central con todos sus días (2026-10-05) o, en un mes sin días
    * del BCCR o con días que faltan, uno que confirmó una persona desde el cierre. El resto es provisorio.
@@ -2702,6 +2704,14 @@ export async function loadReporteAnual(
 
   const tasas: TasaDeMes[] = tasasDelAnio.tasas;
 
+  // La huella de cada mes para el cierre (2026-10-06): las facturas por fecha de EMISIÓN, cobradas o no, para que cobrar
+  // no la mueva. Las mismas filas que el reporte: los cobros traen todo lo emitido en el año.
+  const huellas = huellasPorMes({
+    egresos,
+    facturas: filasCobro.map((c) => ({ fechaEmisionISO: isoDay(c.fechaEmision), monto: num(c.monto)!, moneda: c.moneda })),
+    comisiones: filasComision.map((c) => ({ fechaISO: isoDay(c.fecha)!, monto: num(c.monto)!, moneda: c.moneda, esProyeccion: c.montoEsProyeccion })),
+  });
+
   const mesesPlanillaIncompleta = periodos.filter((p) => {
     const quincenas = new Set([...planillaAcc.values()].filter((x) => x.periodo === p).map((x) => x.quincena));
     return quincenas.size === 1;
@@ -2770,15 +2780,15 @@ export async function loadReporteAnual(
     }),
     decisionAliados,
     cierres: filasCierre.map((c) => {
-      const fila = reporte.meses.find((m) => m.periodo === c.periodo);
       const guardados = c.numeros as unknown as NumerosDelCierre | null;
       return {
         periodo: c.periodo,
         cerradoEn: c.cerradoEn ? crDateParts(c.cerradoEn).dateKey : "",
-        cambio:
-          fila && guardados && guardados.moneda === reporte.monedaPresentacion ? cambioDespuesDelCierre(guardados, fila) : null,
+        // En moneda original: se sabe en cualquier moneda del reporte.
+        cambio: guardados ? cambioDespuesDelCierre(guardados, huellas.get(c.periodo)) : null,
       };
     }),
+    huellas: Object.fromEntries(periodos.map((p) => [p, huellas.get(p) ?? { gastos: {}, facturas: {} }])),
   };
 }
 

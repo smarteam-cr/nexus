@@ -4,7 +4,8 @@
  *
  * Cerrar un mes es que quien supervisa diga «estos números están bien». Se guarda quién, cuándo y los números de ese
  * momento; **no se congela nada**: si después cambia algo del mes, el punto de equilibrio lo dice («cambió después del
- * cierre») en vez de bloquear la edición.
+ * cierre») en vez de bloquear la edición. Qué cuenta como cambio: un gasto, una factura o una quincena de ese mes; un
+ * cobro no (`HuellaDelMes`, 2026-10-06).
  *
  * ── QUÉ BLOQUEA ─────────────────────────────────────────────────────────────────
  * Lo que hace que el gasto o el ingreso del mes estén completos y revisados:
@@ -366,20 +367,72 @@ export function estadoEnElAnio(
   };
 }
 
-/** Los números que se guardan al cerrar, en dólares: con ellos se sabe después si el mes cambió. */
+/**
+ * Lo que decide si un mes cerrado cambió (decisión de Elías con Alex, 2026-10-06): sus GASTOS y sus FACTURAS, cada uno
+ * por moneda original. «Cobrar es lo normal»: que un cliente pague en octubre una factura de septiembre no marca
+ * septiembre; agregar, corregir o borrar un gasto, una factura o una quincena de planilla de septiembre, sí.
+ *
+ *   · gastos    lo anotado del mes: gastos, recurrentes y las quincenas de planilla. SIN la reserva de aguinaldo: se
+ *               recalcula con cualquier salario del año y no es algo que se haya anotado en ese mes.
+ *   · facturas  las facturas EMITIDAS en el mes, cobradas o no, y las comisiones de aliados con monto confirmado (una
+ *               estimación no). Por fecha de emisión y no por la de cobro: es lo que hace que cobrar no mueva nada.
+ *
+ * En su moneda y no en dólares: el tipo de cambio tampoco marca el mes (no es un gasto ni una factura), y así la marca
+ * se puede saber en cualquier moneda del reporte.
+ */
+// `type` y no `interface`: se guarda como JSON en `CierreMes.numeros`, y una interfaz no entra en el tipo JSON de Prisma.
+export type HuellaDelMes = {
+  gastos: Record<string, number>;
+  facturas: Record<string, number>;
+};
+
+/**
+ * Los números que se guardan al cerrar. `huella` decide si el mes cambió (desde 2026-10-06); el resto es la foto de ese
+ * día en dólares (lo que se guardaba antes: lo facturado y lo cobrado se mueven con cada cobro, por eso ya no deciden).
+ */
 export interface NumerosDelCierre {
   moneda: "USD";
   egresos: number;
   facturado: number;
   cobrado: number;
   ingresosTotales: number;
+  huella?: HuellaDelMes;
 }
 
-/** ¿Cambió el mes después de cerrarlo? Un centavo de redondeo no cuenta. */
-export function cambioDespuesDelCierre(guardados: NumerosDelCierre, hoy: Omit<NumerosDelCierre, "moneda">): boolean {
-  const campos = ["egresos", "facturado", "cobrado", "ingresosTotales"] as const;
-  const centavos = (n: number) => Math.round(n * 100);
-  return campos.some((c) => Math.abs(centavos(guardados[c] ?? 0) - centavos(hoy[c])) > 1);
+/** Lo que alimenta la huella, ya leído de la base (puro: sin Prisma). */
+export interface FuentesDeLaHuella {
+  egresos: ReadonlyArray<{ periodo: string; rubro: string; monto: number; moneda: string }>;
+  facturas: ReadonlyArray<{ fechaEmisionISO: string | null; monto: number; moneda: string }>;
+  comisiones: ReadonlyArray<{ fechaISO: string; monto: number; moneda: string; esProyeccion: boolean }>;
+}
+
+/** La huella de cada mes. En centavos al sumar, para que el orden de las filas no invente una diferencia. */
+export function huellasPorMes(f: FuentesDeLaHuella): Map<string, HuellaDelMes> {
+  const acc = new Map<string, { gastos: Map<string, number>; facturas: Map<string, number> }>();
+  const sumar = (periodo: string, lado: "gastos" | "facturas", moneda: string, monto: number) => {
+    const m = acc.get(periodo) ?? { gastos: new Map(), facturas: new Map() };
+    m[lado].set(moneda, (m[lado].get(moneda) ?? 0) + Math.round(monto * 100));
+    acc.set(periodo, m);
+  };
+  for (const e of f.egresos) if (e.rubro !== "RESERVA_AGUINALDO") sumar(e.periodo, "gastos", e.moneda, e.monto);
+  for (const c of f.facturas) if (c.fechaEmisionISO) sumar(c.fechaEmisionISO.slice(0, 7), "facturas", c.moneda, c.monto);
+  for (const c of f.comisiones) if (!c.esProyeccion) sumar(c.fechaISO.slice(0, 7), "facturas", c.moneda, c.monto);
+  const aObjeto = (m: Map<string, number>) => Object.fromEntries([...m].map(([k, v]) => [k, v / 100]));
+  return new Map([...acc].map(([p, m]) => [p, { gastos: aObjeto(m.gastos), facturas: aObjeto(m.facturas) }]));
+}
+
+/**
+ * ¿Cambió el mes después de cerrarlo? Un centavo de redondeo no cuenta. null = el cierre es anterior a la huella
+ * (2026-10-06) y no se puede saber sin volver a marcarlo por cada cobro.
+ */
+export function cambioDespuesDelCierre(guardados: NumerosDelCierre, hoy: HuellaDelMes | undefined): boolean | null {
+  if (!guardados.huella) return null;
+  const ahora = hoy ?? { gastos: {}, facturas: {} };
+  const distinto = (a: Record<string, number>, b: Record<string, number>) =>
+    [...new Set([...Object.keys(a), ...Object.keys(b)])].some(
+      (m) => Math.abs(Math.round((a[m] ?? 0) * 100) - Math.round((b[m] ?? 0) * 100)) > 1,
+    );
+  return distinto(guardados.huella.gastos, ahora.gastos) || distinto(guardados.huella.facturas, ahora.facturas);
 }
 
 /** El mes que conviene cerrar al entrar: el anterior al de hoy. */

@@ -226,14 +226,17 @@ export async function cerrarMes(periodo: string, actor: string, hoyISO: string):
   const reporte = await loadReporteAnual(Number(periodo.slice(0, 4)), hoyISO, { monedaPresentacion: "USD" });
   const fila = reporte.meses.find((m) => m.periodo === periodo);
   if (!fila) throw new CobranzaError("El punto de equilibrio no tiene ese mes.", 409);
+  // Lo que decide después si el mes cambió (2026-10-06): sus gastos y sus facturas; cobrar no lo marca.
+  const huella = reporte.huellas[periodo] ?? { gastos: {}, facturas: {} };
   const numeros: NumerosDelCierre = {
     moneda: "USD",
     egresos: fila.egresos,
     facturado: fila.facturado,
     cobrado: fila.cobrado,
     ingresosTotales: fila.ingresosTotales,
+    huella,
   };
-  const datos = { estado: "CERRADO", cerradoPor: actor, cerradoEn: new Date(), numeros: { ...numeros } };
+  const datos = { estado: "CERRADO", cerradoPor: actor, cerradoEn: new Date(), numeros: { ...numeros, huella } };
   await prisma.cierreMes.upsert({ where: { periodo }, create: { periodo, ...datos }, update: datos });
   // «Para ti» (2026-10-04): le llega a quien registra (su trabajo de ese mes quedó cerrado) y a dirección. No lanza.
   const aviso = {
@@ -274,7 +277,8 @@ export async function reabrirMes(periodo: string, motivo: string, actor: string)
 
 /**
  * El tipo de cambio del mes: confirmar el que está (queda a nombre de quien confirma) o poner otro, con de dónde sale.
- * No se frena en un mes cerrado: si cambia, el punto de equilibrio lo marca como «cambió después del cierre».
+ * No se frena en un mes cerrado, y desde 2026-10-06 tampoco lo marca como «cambió después del cierre»: la marca es de
+ * gastos y facturas, en su moneda (`HuellaDelMes`). Cambiar la tasa de un mes cerrado es decisión de quien lo cerró.
  *
  * Confirmar es firmar la tasa que el mes está USANDO (la misma lectura que el punto de equilibrio): la cargada a mano
  * en un mes sin días del BCCR, o el promedio de los días que sí trajo en un mes al que le faltan (2026-10-05). Desde

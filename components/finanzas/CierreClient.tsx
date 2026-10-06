@@ -302,7 +302,7 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-info-ink">Qué sigue</span>
             <span className="text-[13px] leading-[19px] text-fg">
               {cerrado
-                ? `El punto de equilibrio muestra ${mes} como cerrado. Si después cambia un número del mes, lo marca como «cambió después del cierre».`
+                ? `El punto de equilibrio muestra ${mes} como cerrado. Si después se agrega, corrige o borra un gasto, una factura o una quincena del mes, lo marca como «cambió después del cierre»; un cobro no.`
                 : `Cuando no falte nada, aprietas «Cerrar ${mes}». El punto de equilibrio lo muestra como cerrado y su margen deja de ser preliminar.`}
             </span>
             <span className="text-[13px] leading-[19px] text-fg">

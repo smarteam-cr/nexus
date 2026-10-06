@@ -134,7 +134,7 @@ export function DetalleDelMes({
               {estado.clave === "sinCerrar"
                 ? "El gasto está completo. Cuando el CFO lo cierre, este mes deja de ser preliminar."
                 : estado.clave === "cambio"
-                  ? "Algún número cambió después del cierre: hay que mirarlo y, si está bien, volver a cerrarlo."
+                  ? "Después del cierre cambió un gasto, una factura o una quincena del mes: hay que mirarlo y, si está bien, volver a cerrarlo."
                   : `${estado.detalle} Con eso completo, el CFO lo puede cerrar.`}
             </span>
             <Link href={`/finanzas/cierre?mes=${m.periodo}`} className="text-[13px] font-semibold text-brand hover:text-brand-light">

@@ -10,11 +10,14 @@ import {
   esFaltanteDePlanilla,
   estadoEnElAnio,
   faltanParaCerrar,
+  huellasPorMes,
   itemsDeCierre,
   mandaLaTasaConfirmada,
   mesParaCerrar,
   quincenasPorMes,
   type DatosDelMes,
+  type FuentesDeLaHuella,
+  type NumerosDelCierre,
 } from "./cierre";
 import { cargarCierre, guardarTipoCambio, reabrirMes } from "./cierre-server";
 
@@ -135,12 +138,77 @@ describe("la tira del año", () => {
   });
 });
 
-describe("cambió después del cierre", () => {
-  const guardados = { moneda: "USD" as const, egresos: 40000, facturado: 50000, cobrado: 30000, ingresosTotales: 52000 };
-  it("un número distinto lo marca; un centavo de redondeo no", () => {
-    expect(cambioDespuesDelCierre(guardados, { egresos: 40000, facturado: 50000, cobrado: 30000, ingresosTotales: 52000 })).toBe(false);
-    expect(cambioDespuesDelCierre(guardados, { egresos: 40000.01, facturado: 50000, cobrado: 30000, ingresosTotales: 52000 })).toBe(false);
-    expect(cambioDespuesDelCierre(guardados, { egresos: 40000, facturado: 50500, cobrado: 30000, ingresosTotales: 52500 })).toBe(true);
+describe("cambió después del cierre (decisión de Elías con Alex, 2026-10-06: cobrar no lo marca)", () => {
+  /** Septiembre al cerrarlo el 5 de octubre: dos gastos, la planilla, la reserva de aguinaldo y dos facturas. */
+  const fuentes: FuentesDeLaHuella = {
+    egresos: [
+      { periodo: "2026-09", rubro: "HERRAMIENTA", monto: 535, moneda: "USD" },
+      { periodo: "2026-09", rubro: "FIJO_OPERACION", monto: 250000, moneda: "CRC" },
+      { periodo: "2026-09", rubro: "PLANILLA", monto: 4400, moneda: "USD" },
+      { periodo: "2026-09", rubro: "RESERVA_AGUINALDO", monto: 800, moneda: "USD" },
+    ],
+    facturas: [
+      { fechaEmisionISO: "2026-09-03", monto: 3373, moneda: "USD" },
+      { fechaEmisionISO: "2026-09-20", monto: 1500, moneda: "USD" },
+      // Sin factura todavía (programado): no es una factura del mes.
+      { fechaEmisionISO: null, monto: 940, moneda: "USD" },
+    ],
+    comisiones: [
+      { fechaISO: "2026-09-30", monto: 1200, moneda: "USD", esProyeccion: false },
+      { fechaISO: "2026-09-30", monto: 51000, moneda: "USD", esProyeccion: true },
+    ],
+  };
+  const sep = (f: FuentesDeLaHuella) => huellasPorMes(f).get("2026-09");
+  const cierre: NumerosDelCierre = { moneda: "USD", egresos: 0, facturado: 0, cobrado: 0, ingresosTotales: 0, huella: sep(fuentes) };
+
+  it("la huella: gastos sin la reserva de aguinaldo y facturas por emisión, cada uno en su moneda", () => {
+    expect(sep(fuentes)).toEqual({ gastos: { USD: 4935, CRC: 250000 }, facturas: { USD: 6073 } });
+  });
+
+  it("EL CASO DEL PEDIDO: el cliente paga el 10 de octubre una factura de septiembre y septiembre no se marca", () => {
+    // Cobrarla no cambia su monto ni su fecha de emisión: la factura sigue siendo de septiembre.
+    expect(cambioDespuesDelCierre(cierre, sep(fuentes))).toBe(false);
+  });
+
+  it("agregar, corregir o borrar un gasto, una factura o una quincena lo marca", () => {
+    const gastoNuevo = { ...fuentes, egresos: [...fuentes.egresos, { periodo: "2026-09", rubro: "GASTO", monto: 80, moneda: "USD" }] };
+    const quincenaCorregida = {
+      ...fuentes,
+      egresos: fuentes.egresos.map((e) => (e.rubro === "PLANILLA" ? { ...e, monto: 4650 } : e)),
+    };
+    const facturaBorrada = { ...fuentes, facturas: fuentes.facturas.slice(1) };
+    expect(cambioDespuesDelCierre(cierre, sep(gastoNuevo))).toBe(true);
+    expect(cambioDespuesDelCierre(cierre, sep(quincenaCorregida))).toBe(true);
+    expect(cambioDespuesDelCierre(cierre, sep(facturaBorrada))).toBe(true);
+  });
+
+  it("una factura que pasa a tener fecha de emisión en septiembre lo marca: es una factura nueva del mes", () => {
+    const emitida = { ...fuentes, facturas: fuentes.facturas.map((f) => (f.fechaEmisionISO ? f : { ...f, fechaEmisionISO: "2026-09-25" })) };
+    expect(cambioDespuesDelCierre(cierre, sep(emitida))).toBe(true);
+  });
+
+  it("la reserva de aguinaldo y una comisión estimada no lo marcan: no son algo anotado en el mes", () => {
+    const aumentoEnNoviembre = {
+      ...fuentes,
+      egresos: fuentes.egresos.map((e) => (e.rubro === "RESERVA_AGUINALDO" ? { ...e, monto: 850 } : e)),
+    };
+    const otraEstimacion = {
+      ...fuentes,
+      comisiones: fuentes.comisiones.map((c) => (c.esProyeccion ? { ...c, monto: 60000 } : c)),
+    };
+    expect(cambioDespuesDelCierre(cierre, sep(aumentoEnNoviembre))).toBe(false);
+    expect(cambioDespuesDelCierre(cierre, sep(otraEstimacion))).toBe(false);
+  });
+
+  it("un centavo de redondeo no cuenta; dos sí", () => {
+    const h = sep(fuentes)!;
+    expect(cambioDespuesDelCierre(cierre, { ...h, gastos: { ...h.gastos, USD: 4935.01 } })).toBe(false);
+    expect(cambioDespuesDelCierre(cierre, { ...h, gastos: { ...h.gastos, USD: 4935.02 } })).toBe(true);
+  });
+
+  it("si se borra todo lo del mes, cambió; un cierre sin huella no se puede saber", () => {
+    expect(cambioDespuesDelCierre(cierre, undefined)).toBe(true);
+    expect(cambioDespuesDelCierre({ ...cierre, huella: undefined }, sep(fuentes))).toBeNull();
   });
 });
 

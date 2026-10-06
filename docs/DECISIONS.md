@@ -5095,6 +5095,15 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   solos. *Por qué pagada y no pendiente:* Alex llena lo que YA se pagó; dejarla pendiente obligaba a un segundo paso por
   casilla en el historial. Lo que lo revertiría: querer revisar cada quincena antes de darla por pagada (entonces nace
   PENDIENTE y se paga desde el libro).
+- **«Cambió después del cierre» ya no lo dispara un cobro (Alex estuvo de acuerdo, 2026-10-06).** Antes se comparaban
+  facturado y cobrado del día del cierre, y los dos se mueven con cada cobro: el facturado del reporte cuenta lo cobrado
+  en el mes en que entró la plata, así que pagar en octubre una factura de septiembre bajaba septiembre y lo marcaba.
+  Ahora el cierre guarda una huella (`HuellaDelMes`, lib/finanzas/cierre.ts) por moneda original: los GASTOS del mes
+  (gastos, recurrentes y quincenas de planilla, sin la reserva de aguinaldo, que se recalcula con cualquier salario del
+  año) y las FACTURAS por fecha de emisión, cobradas o no, más las comisiones de aliados con monto confirmado. Lo marca
+  agregar, corregir o borrar cualquiera de esas; cobrar no. El tipo de cambio tampoco: no es un gasto ni una factura.
+  Un cierre sin huella (anterior a esto) dice «no se puede saber»; al 2026-10-06 no había ninguno en prod. Lo que lo
+  revertiría: querer que el cierre congele también la cobranza del mes.
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 
