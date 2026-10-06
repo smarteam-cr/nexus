@@ -146,7 +146,7 @@ describe("groupNavChildren — los bloques con encabezado del flyout", () => {
     expect(bloques[0].items.map((i) => i.href)).toEqual([
       "/finanzas/equilibrio",
       "/finanzas/caja-neta",
-      "/finanzas/rentabilidad",
+      "/customer-success/rentabilidad",
       "/finanzas/tipo-de-cambio",
       "/finanzas/integraciones",
     ]);

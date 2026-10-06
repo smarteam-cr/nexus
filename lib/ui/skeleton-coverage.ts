@@ -84,10 +84,10 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   "customer-success": { modo: "own" },
   "customer-success/[clientId]": { modo: "own" },
   "customer-success/carga": { modo: "own" },
-  "finanzas/rentabilidad": { modo: "own" },
   "customer-success/carga/persona/[id]": { modo: "own" },
   "customer-success/carga/supuestos": { modo: "own" },
   "customer-success/carga/datos": { modo: "own" },
+  "customer-success/rentabilidad": { modo: "own" },
 
   // ── Marketing (el layout mantiene header + tabs; el loading cubre el slot) ───
   marketing: { modo: "exempt", razon: "redirect a /marketing/contenido" },

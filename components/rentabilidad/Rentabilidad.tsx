@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * components/rentabilidad/Rentabilidad.tsx — Finanzas › Rentabilidad (solo dirección): el margen de cada cuenta con
+ * components/rentabilidad/Rentabilidad.tsx — Éxito del cliente › Rentabilidad (la CSL y dirección): el margen de cada cuenta con
  * sus horas reales, y cuándo hace falta contratar según el pipeline.
  *
  * Todo en dólares, con el tipo de cambio de cada mes. Nunca muestra el costo de una persona: la planilla se usa
@@ -15,7 +15,7 @@ import { Cifra, ENLACE_BLANCO, coma } from "@/components/carga/piezas";
 import { cn } from "@/lib/cn";
 import { ETIQUETA_DE_TRATO, type ConfigCarga } from "@/lib/carga/config";
 import { ETIQUETA_DE_ESCENARIO, PROBABILIDAD_MINIMA, proyectarDemanda, type Escenario, type TratoParaProyectar } from "@/lib/carga/contratacion";
-import { RUTA_DE_LA_CARGA, RUTA_DE_LOS_SUPUESTOS } from "@/lib/carga/rutas";
+import { RUTA_DE_LA_CARGA, RUTA_DE_LA_RENTABILIDAD, RUTA_DE_LOS_SUPUESTOS } from "@/lib/carga/rutas";
 import { ETIQUETA_DEL_PERIODO, tablaDeMargen, type FilaDeMargen, type Periodo } from "@/lib/rentabilidad/margen";
 import type { DatosDeRentabilidad } from "@/lib/rentabilidad/queries";
 
@@ -70,10 +70,11 @@ export default function Rentabilidad({
     <div className={cn(contenedor, "space-y-6")}>
       <PageHeader
         title="Rentabilidad"
+        crumbs={[{ label: "Éxito del cliente", href: "/customer-success" }, { label: "Rentabilidad" }]}
         badges={
           <>
             <ChipDeCabecera>{datos.rango.etiqueta}</ChipDeCabecera>
-            <ChipDeCabecera>Solo dirección</ChipDeCabecera>
+            <ChipDeCabecera>CSL y dirección</ChipDeCabecera>
           </>
         }
         description="El margen de cada cuenta con sus horas reales, contra lo que su cronograma planeaba, y cuándo hace falta contratar. Todo en dólares, con el tipo de cambio de cada mes."
@@ -83,7 +84,7 @@ export default function Rentabilidad({
               {(["mes", "trimestre", "anio"] as Periodo[]).map((p) => (
                 <Link
                   key={p}
-                  href={`/finanzas/rentabilidad?periodo=${p}`}
+                  href={`${RUTA_DE_LA_RENTABILIDAD}?periodo=${p}`}
                   aria-current={datos.rango.periodo === p ? "page" : undefined}
                   className={cn(
                     "rounded-[7px] px-3 py-1 text-[13px] transition-colors",

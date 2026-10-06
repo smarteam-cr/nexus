@@ -1,6 +1,6 @@
 /**
  * components/carga/CargaDelEquipo.tsx — «Carga del equipo»: la utilización de cada persona de CS semana por semana,
- * las señales para la 1:1 y lo que pide cada cuenta frente a su complejidad. Sin montos: el dinero vive en Finanzas.
+ * las señales para la 1:1 y lo que pide cada cuenta frente a su complejidad. Sin montos: el dinero está en Rentabilidad.
  *
  * Componente del servidor (sin estado): recibe todo ya calculado por `cargarCargaDelEquipo`.
  */
@@ -9,7 +9,7 @@ import { Alert, PageHeader } from "@/components/ui";
 import { ChipDeCabecera } from "@/components/cs/piezas";
 import { cn } from "@/lib/cn";
 import type { DatosDeLaCarga } from "@/lib/carga/queries";
-import { RUTA_DE_LOS_DATOS, RUTA_DE_LOS_SUPUESTOS, rutaDeLaUnoAUno } from "@/lib/carga/rutas";
+import { RUTA_DE_LA_RENTABILIDAD, RUTA_DE_LOS_DATOS, RUTA_DE_LOS_SUPUESTOS, rutaDeLaUnoAUno } from "@/lib/carga/rutas";
 import { etiquetaDelLunes } from "@/lib/carga/semana";
 import { horasLibres, sinReunionesRecientes, type Senal } from "@/lib/carga/senales";
 import {
@@ -48,7 +48,7 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
             <ChipDeCabecera>CSL y dirección</ChipDeCabecera>
           </>
         }
-        description="La carga de cada persona de CS: lo que ya tiene en la agenda más lo que su cronograma le pide fuera de las reuniones. Sin montos: el dinero vive en Finanzas."
+        description="La carga de cada persona de CS: lo que ya tiene en la agenda más lo que su cronograma le pide fuera de las reuniones. Sin montos: el dinero está en Rentabilidad."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Link href={RUTA_DE_LOS_DATOS} className={ENLACE_BLANCO}>
@@ -56,6 +56,9 @@ export default function CargaDelEquipo({ datos, senales, contenedor }: { datos: 
             </Link>
             <Link href={RUTA_DE_LOS_SUPUESTOS} className={ENLACE_BLANCO}>
               Ajustar el cálculo
+            </Link>
+            <Link href={RUTA_DE_LA_RENTABILIDAD} className={ENLACE_BLANCO}>
+              Rentabilidad
             </Link>
           </div>
         }

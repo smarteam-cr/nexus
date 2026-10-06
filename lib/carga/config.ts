@@ -12,7 +12,7 @@
  * última manda y las anteriores son la historia de quién cambió qué y cuándo. Sin ninguna fila, rige
  * `CONFIG_DE_FABRICA`.
  *
- * ⛔ Acá no hay montos ni salarios: la carga es de horas. El dinero vive en lib/rentabilidad (solo dirección).
+ * ⛔ Acá no hay montos ni salarios: la carga es de horas. El dinero vive en lib/rentabilidad (la CSL y dirección).
  */
 
 /** Los tipos de fase del cronograma (`TimelineActivityType`) más «SIN» para las fases viejas sin tipo. */

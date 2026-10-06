@@ -226,7 +226,7 @@ export default function Supuestos({
             </Fila>
           </Bloque>
 
-          <Bloque titulo="Contratación (la ve dirección en Finanzas › Rentabilidad)">
+          <Bloque titulo="Contratación (se ve en Rentabilidad)">
             <Fila nombre="Contratar y formar a un CSE" nota="Para saber con cuánta anticipación avisar">
               <Numero valor={c.semanasParaContratar} unidad="semanas" onCambio={(v) => setC({ ...c, semanasParaContratar: Math.round(v) })} parse={num} />
             </Fila>

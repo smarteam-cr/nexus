@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
-import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import { esLiderDeCs } from "@/lib/cs/acceso";
 import { cargarCargaDelEquipo } from "@/lib/carga/queries";
 import { sinReunionesRecientes } from "@/lib/carga/senales";
 import { cargarPipelineParaContratar, cargarRentabilidad } from "@/lib/rentabilidad/queries";
@@ -13,11 +13,12 @@ export const dynamic = "force-dynamic";
 
 const PERIODOS: Periodo[] = ["mes", "trimestre", "anio"];
 
-// RENTABILIDAD — el margen de cada cuenta con sus horas reales y cuándo contratar (2026-10-06). SOLO DIRECCIÓN: usa la
-// planilla entera para el costo de la hora (costos-privacy, P4).
+// RENTABILIDAD — el margen de cada cuenta con sus horas reales y cuándo contratar (2026-10-06). De la CSL y de dirección,
+// como el resto de Éxito del cliente (decisión de Elías): usa la planilla del período SUMADA para el costo de la hora,
+// nunca lo que cobra una persona. Lo vigila lib/auth/customer-success-propio.test.ts.
 export default async function RentabilidadPage({ searchParams }: { searchParams: Promise<{ periodo?: string; vista?: string }> }) {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
+  if (!ctx || !esLiderDeCs(ctx.role)) redirect("/clients");
 
   const sp = await searchParams;
   const periodo = PERIODOS.includes(sp.periodo as Periodo) ? (sp.periodo as Periodo) : "trimestre";

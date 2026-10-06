@@ -5133,9 +5133,12 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
 > Pedido de Elías: medir la carga de cada CSE para la 1:1 semanal de Alex Vanegas (CSL), y para Marco Salas y él, el
 > margen real de cada cuenta y cuándo contratar. Diseño aprobado en el artefacto «Rentabilidad» (versiones 8 a 10).
 
-- **Dos pantallas, dos audiencias, y el dinero en una sola.** «Carga del equipo» (Éxito del cliente, CSL y dirección,
-  por rol) es de HORAS y no muestra un monto. «Rentabilidad» (Finanzas › Reportes, `isCostosRole`) usa la planilla
-  entera para el costo de la hora; nunca muestra el costo de una persona.
+- **Dos pantallas, y el dinero en una sola.** «Carga del equipo» es de HORAS y no muestra un monto. «Rentabilidad» usa
+  la planilla del período SUMADA para el costo de la hora y nunca muestra el costo de una persona. Las dos viven en
+  Éxito del cliente y son de la CSL y de dirección, por rol (`esLiderDeCs`; decisión de Elías del mismo día: la
+  primera versión dejaba Rentabilidad solo a dirección, en Finanzas). Dirección la tiene también en Finanzas › Reportes.
+  ⚠ Con eso la CSL ve el total de la planilla del período (sale de multiplicar el costo de una hora pagada por las
+  horas pagadas), como ADMIN ya ve el total en Gastos del mes. Lo que cobra cada persona sigue siendo solo de dirección.
 - **La carga es tiempo AGENDADO más lo que pide el cronograma, y lo dice.** Reuniones de Calendar (inicio y duración
   del evento; cuenta a todos los invitados hasta leer la asistencia de Meet), preparación por reunión con un cliente
   y la entrega estimada: tareas del cronograma × horas por tipo de fase × factor de complejidad de la cuenta. Una
@@ -5164,4 +5167,4 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   la tasa de cada mes (`convertir`); lo que no tiene tasa no se adivina, se avisa.
 - **Lo que no se construyó todavía, a propósito**: la lectura de la IA arriba de cada pantalla (pide un agente con su
   corrida y su costo), la complejidad en la pestaña de la cuenta, «Tu semana», la asistencia de Meet, las horas por
-  tarea y por caso de uso, y la pregunta «¿cuánto te tomó?» (esa se arma en Feedback).
+  tarea y por caso de uso, y leer en la carga las respuestas de «¿cuánto te tomó?» (ver esa sección).

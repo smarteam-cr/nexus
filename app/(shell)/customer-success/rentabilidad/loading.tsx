@@ -1,5 +1,5 @@
 /**
- * Esqueleto de /finanzas/rentabilidad — FORMA REAL (page.tsx → Rentabilidad): cabecera con el período · pestañas ·
+ * Esqueleto de /customer-success/rentabilidad — FORMA REAL (page.tsx → Rentabilidad): cabecera con el período · pestañas ·
  * 4 cifras · la tabla del margen por cuenta.
  */
 import { CardsSkeleton, PageHeaderSkeleton, SkeletonPanel, SkeletonTabs, TableSkeleton } from "@/components/ui";

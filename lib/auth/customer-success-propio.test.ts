@@ -46,6 +46,8 @@ const PANTALLAS = [
   "app/(shell)/customer-success/carga/persona/[id]/page.tsx",
   "app/(shell)/customer-success/carga/supuestos/page.tsx",
   "app/(shell)/customer-success/carga/datos/page.tsx",
+  // Rentabilidad (2026-10-06): el margen de cada cuenta con la planilla SUMADA. Decisión de Elías: la CSL y dirección.
+  "app/(shell)/customer-success/rentabilidad/page.tsx",
 ];
 const APIS = [
   "app/api/cs/account-brief/[clientId]/route.ts",
@@ -93,7 +95,7 @@ describe("el área es de la CSL y dirección, por rol", () => {
       const src = sinComentarios(p);
       const gate = src.indexOf("if (!ctx || !esLiderDeCs(ctx.role)) redirect(");
       expect(gate, `${p} dejó de pedir el rol`).toBeGreaterThan(0);
-      const cargadores = ["cargarCarteraDeLaCsl(", "loadCsAccount(", "cargarCargaDelEquipo("].map((f) => src.indexOf(f)).filter((i) => i > 0);
+      const cargadores = ["cargarCarteraDeLaCsl(", "loadCsAccount(", "cargarCargaDelEquipo(", "cargarRentabilidad("].map((f) => src.indexOf(f)).filter((i) => i > 0);
       /* Sin esto la comparación de abajo no podía fallar: si se renombra el cargador, la lista
          queda vacía, Math.min() da Infinity y «gate < Infinity» pasa siempre. */
       expect(

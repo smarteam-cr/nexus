@@ -11,7 +11,7 @@ import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 export const dynamic = "force-dynamic";
 
 // CARGA DEL EQUIPO — la utilización de cada persona de CS, para la 1:1 de la CSL (2026-10-06). De la CSL y dirección,
-// por ROL, como el resto de Éxito del cliente. Sin montos: el dinero vive en Finanzas › Rentabilidad.
+// por ROL, como el resto de Éxito del cliente. Sin montos: el dinero está en Rentabilidad.
 export default async function CargaDelEquipoPage() {
   const ctx = await requireInternalUser().catch(() => null);
   if (!ctx || !esLiderDeCs(ctx.role)) redirect("/clients");

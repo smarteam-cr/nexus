@@ -600,7 +600,7 @@
   sumando por variable (Hubs, Enterprise, usuarios, integración, etapa, industria, uso, relación, Escala). Cada variable
   dice si el dato está, es parcial o falta.
 - **Supuestos de la carga** (`ConfigCarga`): los valores editables del cálculo, con quién los cambió y cuándo.
-- **Costo de la hora** (Finanzas › Rentabilidad): **directo** = planilla ÷ horas pagadas; **cargado** = planilla entera ÷
+- **Costo de la hora** (Éxito del cliente › Rentabilidad): **directo** = planilla ÷ horas pagadas; **cargado** = planilla entera ÷
   horas con clientes. El margen de una cuenta es lo cobrado − sus horas reales × el costo de la hora elegido.
 - **Para ti** (`/para-ti`, primer ítem del menú, `lib/para-ti`): lo que le toca a cada persona en Nexus, juntado de
   todos los módulos y recortado a lo suyo y a sus frentes. Arriba lo que dejó un agente; después «Para hoy», «Esta

@@ -10,7 +10,7 @@
  */
 import Link from "next/link";
 import { EmptyState } from "@/components/ui";
-import { RUTA_DE_LA_CARGA } from "@/lib/carga/rutas";
+import { RUTA_DE_LA_CARGA, RUTA_DE_LA_RENTABILIDAD } from "@/lib/carga/rutas";
 import { cn } from "@/lib/cn";
 import { fmtMonto, plural } from "@/lib/cs/formato";
 import { UMBRALES } from "@/lib/cs/lectura-partner";
@@ -32,11 +32,16 @@ export default function Equipo({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
         <span className="text-[13px] text-fg-secondary">
-          <span className="font-semibold text-fg">Carga del equipo:</span> horas por semana de cada persona, señales para la 1:1 y el simulador de traspasos.
+          <span className="font-semibold text-fg">Carga y rentabilidad:</span> horas por semana de cada persona, señales para la 1:1, y el margen de cada cuenta con sus horas reales.
         </span>
-        <Link href={RUTA_DE_LA_CARGA} className="text-xs font-semibold text-brand transition-colors hover:text-brand-light">
-          Ver la carga del equipo
-        </Link>
+        <span className="flex flex-wrap items-center gap-4">
+          <Link href={RUTA_DE_LA_CARGA} className="text-xs font-semibold text-brand transition-colors hover:text-brand-light">
+            Ver la carga del equipo
+          </Link>
+          <Link href={RUTA_DE_LA_RENTABILIDAD} className="text-xs font-semibold text-brand transition-colors hover:text-brand-light">
+            Ver la rentabilidad
+          </Link>
+        </span>
       </div>
       <CajaDeTabla minimo="min-w-[1060px]">
         <EncabezadoDeTabla columnas={COLUMNAS}>
