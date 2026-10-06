@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   if (projectId || pedidoClientId) {
     const guard = projectId ? await guardAccessToProject(projectId) : await guardAccessToClient(pedidoClientId!);
     if (guard instanceof NextResponse) return guard;
-    const clientId = "clientId" in guard ? guard.clientId : pedidoClientId!;
+    const clientId: string = "clientId" in guard && typeof guard.clientId === "string" ? guard.clientId : pedidoClientId!;
     if (projectId && pedidoClientId && pedidoClientId !== clientId) {
       return NextResponse.json({ error: "Ese proyecto no es de ese cliente." }, { status: 400 });
     }
