@@ -28,6 +28,8 @@ import {
   estadoEnElAnio,
   faltanParaCerrar,
   itemsDeCierre,
+  mandaLaTasaConfirmada,
+  quincenasPorMes,
   type DatosDelMes,
   type EstadoEnElAnio,
   type ItemDeCierre,
@@ -54,8 +56,9 @@ export interface CierreDelMesDTO {
     motivo: string | null;
   } | null;
   /**
-   * `bccr`: el mes tiene días del Banco Central (2026-10-05) y la tasa es su promedio; ahí no se confirma a mano.
-   * `registradoEn` es de la tasa cargada a mano (null si la del mes es la del BCCR).
+   * `bccr`: el mes tiene días del Banco Central (2026-10-05). Completo, la tasa es su promedio y no se confirma a mano;
+   * con días que faltan, quien supervisa confirma la tasa (o pone otra) y esa es la que manda.
+   * `registradoEn` es de la tasa confirmada a mano (null si la del mes es la del BCCR).
    */
   tipoCambio: {
     crcPorUsd: number;
@@ -88,7 +91,7 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
   const anio = Number(periodo.slice(0, 4));
   const periodos = Array.from({ length: 12 }, (_, i) => `${anio}-${String(i + 1).padStart(2, "0")}`);
 
-  const [{ egresos, planillaAcc, calidadDada }, tasasDelAnio, cierres, gastos, revision, registra, supervisa, pendientes] = await Promise.all([
+  const [{ egresos, calidadDada }, tasasDelAnio, cierres, gastos, filasPlanilla, revision, registra, supervisa, pendientes] = await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO),
     // La misma lectura que el punto de equilibrio: el BCCR día por día y, sin días, la cargada a mano (2026-10-05).
     cargarTasasDelAnio(anio, hoyISO),
@@ -97,6 +100,9 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
       where: { fecha: { gte: new Date(`${anio}-01-01T00:00:00Z`), lt: new Date(`${anio + 1}-01-01T00:00:00Z`) } },
       select: { fecha: true },
     }),
+    // La planilla del año con el ESTADO de cada fila: el cierre pide las dos quincenas pagadas, no solo generadas
+    // (2026-10-05). Solo periodo, quincena y estado: ni montos ni personas.
+    prisma.pagoPlanilla.findMany({ where: { periodo: { in: periodos } }, select: { periodo: true, quincena: true, estado: true } }),
     cargarRevision(),
     nombreDeQuienRegistra(),
     nombreDeQuienSupervisa(),
@@ -109,11 +115,7 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
     calcularEquilibrio(egresos, [], { anio, hoyISO, tasas, tasasDiarias: tasasDelAnio.tasasDiarias, calidadDada }).meses.map((m) => [m.periodo, m]),
   );
 
-  const quincenas = new Map<string, Set<number>>();
-  for (const p of planillaAcc.values()) {
-    if (!quincenas.has(p.periodo)) quincenas.set(p.periodo, new Set());
-    quincenas.get(p.periodo)!.add(p.quincena);
-  }
+  const quincenas = quincenasPorMes(filasPlanilla);
   const anotados = new Map<string, number>();
   for (const g of gastos) {
     const p = g.fecha.toISOString().slice(0, 7);
@@ -125,13 +127,20 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
   const devueltos = new Map<string, number>();
   for (const f of revision.devueltos) devueltos.set(mesDe(f), (devueltos.get(mesDe(f)) ?? 0) + 1);
   const tasaDe = tasasDelAnio.porMes;
-  /** Lo que el cierre necesita de la tasa del mes. La confirmación a mano solo vale en un mes sin días del BCCR. */
+  /**
+   * ¿Vale la confirmación a mano de este mes? En un mes sin días del BCCR, o con días que faltan (2026-10-05: ahí Alex
+   * cierra confirmando él la tasa, y la confirmada es la que usa el año — `mandaLaTasaConfirmada`). Con el BCCR
+   * completo, no: manda el BCCR.
+   */
+  const valeLaManual = (t: TasaDelMesParaReporte) =>
+    !!t.manual && (t.bccr ? mandaLaTasaConfirmada(t.bccr, t.manual.registradoPor) : true);
+  /** Lo que el cierre necesita de la tasa del mes. */
   const tipoCambioDe = (t: TasaDelMesParaReporte | undefined) =>
     t
       ? {
           crcPorUsd: t.crcPorUsd,
           fuente: t.fuente,
-          confirmadoPor: !t.bccr && t.manual ? confirmadoPorPersona(t.manual.registradoPor) : null,
+          confirmadoPor: valeLaManual(t) ? confirmadoPorPersona(t.manual!.registradoPor) : null,
           bccr: t.bccr && !t.bccr.porVenir ? { dias: t.bccr.dias, completo: t.bccr.completo } : null,
         }
       : null;
@@ -142,7 +151,8 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
     const t = tasaDe.get(p);
     return {
       periodo: p,
-      quincenas: [...(quincenas.get(p) ?? [])].sort(),
+      quincenas: quincenas.get(p)?.anotadas ?? [],
+      quincenasPagadas: quincenas.get(p)?.pagadas ?? [],
       gastosListos: !!cierreDe.get(p)?.gastosListosPor,
       gastosAnotados: anotados.get(p) ?? 0,
       faltantesDelExcel: p >= EGRESOS_DESDE_NEXUS ? [] : (calidad.get(p)?.faltantes ?? []).filter((f) => !esFaltanteDePlanilla(f)),
@@ -193,7 +203,7 @@ export async function cargarCierre(periodo: string, hoyISO: string, opciones: { 
         ? {
             ...tc,
             confirmadoPor: nombre(tc.confirmadoPor),
-            registradoEn: t.manual && !t.bccr ? crDateParts(t.manual.registradoEn).dateKey : null,
+            registradoEn: t.manual && valeLaManual(t) ? crDateParts(t.manual.registradoEn).dateKey : null,
           }
         : null,
     nombres,
@@ -239,30 +249,52 @@ export async function cerrarMes(periodo: string, actor: string, hoyISO: string):
 
 const NOMBRE_DEL_MES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-/** Reabrir un mes cerrado, con el motivo. Los números del cierre quedan guardados como estaban. */
+/**
+ * Reabrir un mes cerrado, con el motivo. Los números del cierre quedan guardados como estaban.
+ *
+ * ⭐ Y el aviso de quien registra («ya anoté todos los gastos») se borra (decisión de Elías, 2026-10-05: «cuando Alex
+ * reabre un mes, Dinia tiene que volver a avisar que los gastos están todos»). Se reabre porque algo del mes cambió:
+ * el aviso de antes ya no dice nada sobre lo que hay ahora.
+ */
 export async function reabrirMes(periodo: string, motivo: string, actor: string): Promise<void> {
   const c = await prisma.cierreMes.findUnique({ where: { periodo }, select: { estado: true } });
   if (c?.estado !== "CERRADO") throw new CobranzaError("Ese mes no está cerrado.", 409);
   await prisma.cierreMes.update({
     where: { periodo },
-    data: { estado: "ABIERTO", reabiertoPor: actor, reabiertoEn: new Date(), motivoReapertura: motivo.trim() },
+    data: {
+      estado: "ABIERTO",
+      reabiertoPor: actor,
+      reabiertoEn: new Date(),
+      motivoReapertura: motivo.trim(),
+      gastosListosPor: null,
+      gastosListosEn: null,
+    },
   });
 }
 
 /**
  * El tipo de cambio del mes: confirmar el que está (queda a nombre de quien confirma) o poner otro, con de dónde sale.
  * No se frena en un mes cerrado: si cambia, el punto de equilibrio lo marca como «cambió después del cierre».
+ *
+ * Confirmar es firmar la tasa que el mes está USANDO (la misma lectura que el punto de equilibrio): la cargada a mano
+ * en un mes sin días del BCCR, o el promedio de los días que sí trajo en un mes al que le faltan (2026-10-05). Desde
+ * ese momento la confirmada manda (`mandaLaTasaConfirmada`). Con el BCCR completo no hay nada que confirmar: 409.
  */
 export async function guardarTipoCambio(
   periodo: string,
   actor: string,
   nuevo: { crcPorUsd: number; fuente: string } | null,
+  hoyISO: string,
 ): Promise<void> {
   if (!MES_RE.test(periodo)) throw new CobranzaError("El mes no es válido.", 400);
   if (!nuevo) {
-    const t = await prisma.tipoCambioMes.findUnique({ where: { periodo }, select: { id: true } });
+    const t = (await cargarTasasDelAnio(Number(periodo.slice(0, 4)), hoyISO)).porMes.get(periodo);
     if (!t) throw new CobranzaError("Ese mes no tiene tipo de cambio para confirmar: pon uno.", 404);
-    await prisma.tipoCambioMes.update({ where: { periodo }, data: { registradoPor: actor, registradoEn: new Date() } });
+    if (t.bccr && t.bccr.completo && !t.bccr.porVenir) {
+      throw new CobranzaError("Ese mes tiene todos los días del Banco Central: su tipo de cambio no se confirma a mano.", 409);
+    }
+    const datos = { crcPorUsd: t.crcPorUsd, fuente: t.fuente, registradoPor: actor, registradoEn: new Date() };
+    await prisma.tipoCambioMes.upsert({ where: { periodo }, create: { periodo, ...datos }, update: datos });
     return;
   }
   const datos = { crcPorUsd: nuevo.crcPorUsd, fuente: nuevo.fuente.trim(), registradoPor: actor, registradoEn: new Date() };

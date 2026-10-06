@@ -14,9 +14,14 @@
  * `estado: null` para quien no tiene ese rol — AUSENTE del payload, no oculto por CSS. Es el mismo
  * patrón que `ClaudeCard`, y por el mismo motivo: pintar un enlace que va a rebotar enseña a
  * desconfiar de los enlaces.
+ *
+ * ⭐ Sin el detalle, igual se ve SI LA COPIA ANDA (decisión de Elías, 2026-10-05): al día, apagada con su motivo, o
+ * falló la última con su fecha (`copia`, ./estado-de-la-copia.ts). Hasta esa fecha decía «Conectado» fijo, aunque
+ * el job estuviera apagado. Sin un solo número.
  */
 import Link from "next/link";
 import TarjetaDeConexion, { type EstadoDeConexion } from "./TarjetaDeConexion";
+import { comoSeVeLaCopia, type EstadoDeLaCopia } from "./estado-de-la-copia";
 
 export interface EstadoDeOdoo {
   /**
@@ -36,21 +41,25 @@ export interface EstadoDeOdoo {
 interface Props {
   /** `null` cuando quien mira NO tiene el rol de costos. Ver el docblock. */
   estado: EstadoDeOdoo | null;
+  /** Solo el estado de la copia, para quien NO tiene el rol de costos (null para quien sí: ve `estado`). */
+  copia: EstadoDeLaCopia | null;
 }
 
 const miles = (n: number) => n.toLocaleString("es-CR");
 
-export default function OdooCard({ estado }: Props) {
-  /* Sin rol de costos: la tarjeta existe —saber que Odoo está conectado no es plata— pero sin un
-     solo número. Es la misma línea que trazan Claude y Mercury. */
+export default function OdooCard({ estado, copia }: Props) {
+  /* Sin rol de costos: la tarjeta existe —saber si Odoo copia bien no es plata— pero sin un solo número. Es la misma
+     línea que trazan Claude y Mercury. */
   if (!estado) {
+    const vista = comoSeVeLaCopia(copia, "El detalle lo ve un Super Admin");
     return (
-      <TarjetaDeConexion
-        nombre="Odoo"
-        queTrae="Las facturas que se cobran"
-        estado={{ tono: "ok", texto: "Conectado" }}
-        pie="El detalle lo ve un Super Admin"
-      />
+      <TarjetaDeConexion nombre="Odoo" queTrae="Las facturas que se cobran" estado={vista.estado} pie={vista.pie}>
+        {copia?.fallo && !copia.motivoApagado && (
+          <p className="text-xs leading-[17px] text-warn-ink bg-warn-surface border border-warn-line rounded-lg px-3 py-2">
+            La última copia falló: puede haber facturas que todavía no llegaron a Nexus.
+          </p>
+        )}
+      </TarjetaDeConexion>
     );
   }
 

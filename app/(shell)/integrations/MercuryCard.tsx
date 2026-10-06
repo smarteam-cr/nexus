@@ -19,9 +19,14 @@
  *
  * ⛔ EL DETALLE ES PLATA. `estado: null` cuando quien mira no tiene el rol de costos — ausente
  * del payload, no escondido con CSS. Mismo patrón y mismo motivo que `OdooCard` y `ClaudeCard`.
+ *
+ * ⭐ Sin el detalle, igual se ve SI LA COPIA ANDA (decisión de Elías, 2026-10-05): al día, apagada con su motivo, o
+ * falló la última con su fecha (`copia`, ./estado-de-la-copia.ts). Hasta esa fecha decía «Conectado» fijo. Sin un solo
+ * número, sin datos de cuentas y sin el texto del error.
  */
 import Link from "next/link";
 import TarjetaDeConexion, { type EstadoDeConexion } from "./TarjetaDeConexion";
+import { comoSeVeLaCopia, type EstadoDeLaCopia } from "./estado-de-la-copia";
 
 export interface EstadoDeMercury {
   /** Por qué el sync diario no corre en este servidor, o null si está encendido. */
@@ -43,6 +48,8 @@ export interface EstadoDeMercury {
 interface Props {
   /** `null` cuando quien mira NO tiene el rol de costos. Ver el docblock. */
   estado: EstadoDeMercury | null;
+  /** Solo el estado de la copia, para quien NO tiene el rol de costos (null para quien sí: ve `estado`). */
+  copia: EstadoDeLaCopia | null;
 }
 
 const miles = (n: number) => n.toLocaleString("es-CR");
@@ -52,17 +59,19 @@ const recortar = (t: string, max: number) => {
   return limpio.length <= max ? limpio : `${limpio.slice(0, max - 1).trimEnd()}…`;
 };
 
-export default function MercuryCard({ estado }: Props) {
-  /* Sin rol de costos: la tarjeta existe —saber que Mercury está conectado no es plata— pero sin
-     un solo número. Es la misma línea que ya trazan Odoo y Claude. */
+export default function MercuryCard({ estado, copia }: Props) {
+  /* Sin rol de costos: la tarjeta existe —saber si Mercury copia bien no es plata— pero sin un solo número. Es la misma
+     línea que ya trazan Odoo y Claude. */
   if (!estado) {
+    const vista = comoSeVeLaCopia(copia, "El detalle lo ve quien ve costos");
     return (
-      <TarjetaDeConexion
-        nombre="Mercury"
-        queTrae="El banco: lo que entró de verdad"
-        estado={{ tono: "ok", texto: "Conectado" }}
-        pie="El detalle lo ve quien ve costos"
-      />
+      <TarjetaDeConexion nombre="Mercury" queTrae="El banco: lo que entró de verdad" estado={vista.estado} pie={vista.pie}>
+        {copia?.fallo && !copia.motivoApagado && (
+          <p className="text-xs leading-[17px] text-danger-ink bg-danger-surface border border-danger-line rounded-lg px-3 py-2">
+            La última copia falló: lo que entró al banco después de la copia anterior todavía no está en Nexus.
+          </p>
+        )}
+      </TarjetaDeConexion>
     );
   }
 

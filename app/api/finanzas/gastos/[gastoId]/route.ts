@@ -1,6 +1,8 @@
 /**
  * /api/finanzas/gastos/[gastoId] — editar o borrar un gasto puntual (rediseño de Finanzas, 2026-10-03).
  * ⚠ PRIVACIDAD: `guardGastosEditor` como PRIMERA línea (costos-privacy.test.ts, P5). Un gasto puntual no es un salario.
+ * Quién edita o borra sale del guard (2026-10-05): un gasto ya revisado que edita otra persona, o que se borra, le
+ * aparece a quien supervisa en su revisión (lib/cobranza/mutations.ts, `updateGasto` y `deleteGasto`).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardGastosEditor } from "@/lib/auth/api-guards";
@@ -17,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const data = await leerCuerpo(req, gastoPatchSchema);
   if (data instanceof NextResponse) return data;
   try {
-    await updateGasto(gastoId, data);
+    await updateGasto(gastoId, data, guard.user.email);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return responderError(e, "gastos");
@@ -29,7 +31,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (guard instanceof NextResponse) return guard;
   const { gastoId } = await params;
   try {
-    await deleteGasto(gastoId);
+    await deleteGasto(gastoId, guard.user.email);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return responderError(e, "gastos");

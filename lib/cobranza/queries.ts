@@ -81,6 +81,7 @@ import { auditarRespaldoDeFactura } from "@/lib/ventas/respaldo-de-factura";
 import {
   calcularEquilibrio,
   convertir,
+  costosDelPiso,
   sumarPorClienteEnPresentacion,
   tipoIngresoDeCobro,
   type CobroDeCliente,
@@ -105,7 +106,7 @@ import { calcularAguinaldo, type AguinaldoResultado } from "@/lib/finanzas/aguin
 import { ingresosNoVentaDelAnio, pendientesDeClasificar } from "./ingresos-no-venta";
 import { facturadoEnOdooSinCuenta, porCobrarEnMercurySinEmparejar } from "@/lib/finanzas/facturado-sin-cuenta";
 import { CATEGORIAS_SIN_SALARIO } from "@/lib/finanzas/gastos";
-import { cambioDespuesDelCierre, esFaltanteDePlanilla, type NumerosDelCierre } from "@/lib/finanzas/cierre";
+import { cambioDespuesDelCierre, esFaltanteDePlanilla, mandaLaTasaConfirmada, type NumerosDelCierre } from "@/lib/finanzas/cierre";
 import { cargarTasasDelAnio, tasaFirme } from "@/lib/finanzas/tipo-cambio-server";
 import { leerDecisionAliados, type DecisionAliados } from "@/lib/finanzas/decisiones-server";
 import { calidadDeMesDeNexus, costoParaEgreso, egresoDesdeNexus, egresosDeNexus } from "@/lib/finanzas/egresos-nexus";
@@ -2340,10 +2341,13 @@ export interface ReporteAnualDTO extends ReporteEquilibrio {
   cierres: Array<{ periodo: string; cerradoEn: string; cambio: boolean | null }>;
   /**
    * Los meses con el tipo de cambio FIRME: el del Banco Central con todos sus días (2026-10-05) o, en un mes sin días
-   * del BCCR, uno que confirmó una persona desde el cierre. El resto es provisorio.
+   * del BCCR o con días que faltan, uno que confirmó una persona desde el cierre. El resto es provisorio.
    */
   tasasConfirmadas: string[];
-  /** Los meses cuya tasa sale del Banco Central (completa o no). Los otros usan la cargada a mano en `TipoCambioMes`. */
+  /**
+   * Los meses cuya tasa sale del Banco Central (completa o no). Los otros usan la cargada a mano en `TipoCambioMes`,
+   * incluido un mes al que al BCCR le faltan días y una persona confirmó la tasa: manda la suya (2026-10-05).
+   */
   mesesConTasaDelBccr: string[];
   /**
    * Si lo que pagan los aliados cuenta para cubrir el piso, decidido por dirección desde el punto de equilibrio.
@@ -2532,7 +2536,7 @@ export async function loadReporteAnual(
   const inicioDelOtroAnio = dayUTC(`${anio + 1}-01-01`);
   const divisor = opciones?.divisorAguinaldo ?? 12;
 
-  const [{ egresos, filasEgreso, planillaAcc, calidadDada }, filasCobro, filasComision, tasasDelAnio, costosActivos, filasVenta, filasNoVenta, filasCierre, decisionAliados] =
+  const [{ egresos, planillaAcc, calidadDada }, filasCobro, filasComision, tasasDelAnio, costosActivos, filasVenta, filasNoVenta, filasCierre, decisionAliados] =
     await Promise.all([
     cargarEgresosDelAnio(anio, hoyISO, divisor),
     prisma.cobro.findMany({
@@ -2689,33 +2693,12 @@ export async function loadReporteAnual(
   });
 
   // ── Los costos vigentes: la fuente del piso de HOY ──────────────────────────
-  const RUBRO_DE_CATEGORIA = {
-    SALARIO: "PLANILLA",
-    HERRAMIENTA: "HERRAMIENTA",
-    FIJO_OPERACION: "FIJO_OPERACION",
-  } as const;
-  const costosVigentes: CostoVigente[] = costosActivos.map((c) => ({
-    rubro: RUBRO_DE_CATEGORIA[c.categoria],
-    concepto: c.nombre,
-    // Un ANUAL entra dividido: el piso es un costo MENSUAL.
-    monto: mensualizado(num(c.monto)!, c.frecuencia),
-    moneda: c.moneda as MonedaEq,
-  }));
-  // La tarjeta no es un CostoRecurrente (no hay tarjetas cargadas): su cargo vive en el
-  // libro de egresos. Se toma el ÚLTIMO mes que lo tenga, que es el vigente.
-  const ultimoTarjeta = filasEgreso
-    .filter((f) => f.categoria === "TARJETA" && f.periodo <= periodoDe(hoyISO) && !egresoDesdeNexus(f.periodo))
-    .sort((a, b) => b.periodo.localeCompare(a.periodo))[0]?.periodo;
-  if (ultimoTarjeta) {
-    for (const f of filasEgreso.filter((x) => x.categoria === "TARJETA" && x.periodo === ultimoTarjeta)) {
-      costosVigentes.push({
-        rubro: "TARJETA",
-        concepto: f.concepto,
-        monto: num(f.monto)!,
-        moneda: f.moneda as MonedaEq,
-      });
-    }
-  }
+  // Solo los recurrentes de Nexus (`costosDelPiso`). ⛔ Hasta el 2026-10-05 se le sumaba la tarjeta del último mes del
+  // Excel de egresos: desactualizada, y contada dos veces (lo que se paga con tarjeta ya es un recurrente). Decisión de
+  // Elías: desde octubre el gasto sale de Nexus. Los meses del Excel no cambian: siguen saliendo de `filasEgreso`.
+  const costosVigentes: CostoVigente[] = costosDelPiso(
+    costosActivos.map((c) => ({ nombre: c.nombre, categoria: c.categoria, monto: num(c.monto)!, moneda: c.moneda as MonedaEq, frecuencia: c.frecuencia })),
+  );
 
   const reporte = calcularEquilibrio(egresos, ingresos, {
     anio,
@@ -2766,7 +2749,10 @@ export async function loadReporteAnual(
     inconsistencias,
     cobranzaContraExcel,
     tasasConfirmadas: periodos.filter((p) => tasaFirme(tasasDelAnio.porMes.get(p))),
-    mesesConTasaDelBccr: periodos.filter((p) => !!tasasDelAnio.porMes.get(p)?.bccr),
+    mesesConTasaDelBccr: periodos.filter((p) => {
+      const t = tasasDelAnio.porMes.get(p);
+      return !!t?.bccr && !mandaLaTasaConfirmada(t.bccr, t.manual?.registradoPor);
+    }),
     decisionAliados,
     cierres: filasCierre.map((c) => {
       const fila = reporte.meses.find((m) => m.periodo === c.periodo);

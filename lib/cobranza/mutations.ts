@@ -81,6 +81,7 @@ import type {
 import { montoQuincena } from "./engine";
 import { quincenasDelPeriodo } from "./planilla";
 import { buildCarteraEngineInput, loadComisionesVendedor } from "./queries";
+import { huellaDeBorrado, huellaEditadaPorOtro, mismaPersona } from "@/lib/finanzas/revision";
 import { ESTADO_COBRO_LABEL, normalizePartner } from "./schema";
 
 export class CobranzaError extends Error {
@@ -2296,28 +2297,102 @@ export async function createGasto(data: z.infer<typeof gastoCreateSchema>, regis
   });
 }
 
-export async function updateGasto(gastoId: string, data: z.infer<typeof gastoPatchSchema>) {
+/**
+ * `editadoPor` (2026-10-05): quién lo edita. Si el gasto ya estaba revisado («Está bien») y lo edita alguien que no es
+ * quien lo anotó ni quien lo revisó, vuelve a la revisión aunque lo que cambió no entre en la huella (etiquetas,
+ * notas), y la revisión dice quién lo cambió (`corregidoPor`/`corregidoEn` de su fila; lib/finanzas/revision.ts).
+ * Un gasto devuelto no se toca: ya está esperando que lo miren.
+ */
+export async function updateGasto(gastoId: string, data: z.infer<typeof gastoPatchSchema>, editadoPor: string) {
+  const [gasto, revision] = await Promise.all([
+    prisma.gastoPuntual.findUnique({ where: { id: gastoId }, select: { registradoPor: true } }),
+    prisma.revisionRegistro.findUnique({
+      where: { tipo_registroId: { tipo: "GASTO", registroId: gastoId } },
+      select: { estado: true, huella: true, revisadoPor: true },
+    }),
+  ]);
+  if (!gasto) throw new CobranzaError("El gasto no existe.", 404);
+  /** La huella de su revisión, si lo edita otra persona y hay que devolverlo a la revisión; null si no. */
+  const huellaARehacer =
+    revision?.estado === "BIEN" && !mismaPersona(editadoPor, gasto.registradoPor) && !mismaPersona(editadoPor, revision.revisadoPor)
+      ? revision.huella
+      : null;
   try {
-    return await prisma.gastoPuntual.update({
-      where: { id: gastoId },
-      data: {
-        ...(data.nombre !== undefined ? { nombre: data.nombre } : {}),
-        ...(data.monto !== undefined ? { monto: data.monto } : {}),
-        ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
-        ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
-        ...(data.tags !== undefined ? { tags: data.tags } : {}),
-        ...(data.notas !== undefined ? { notas: data.notas } : {}),
-      },
-      select: { id: true },
-    });
+    await prisma.$transaction([
+      prisma.gastoPuntual.update({
+        where: { id: gastoId },
+        data: {
+          ...(data.nombre !== undefined ? { nombre: data.nombre } : {}),
+          ...(data.monto !== undefined ? { monto: data.monto } : {}),
+          ...(data.moneda !== undefined ? { moneda: data.moneda } : {}),
+          ...(data.fecha !== undefined ? { fecha: dayUTC(data.fecha) } : {}),
+          ...(data.tags !== undefined ? { tags: data.tags } : {}),
+          ...(data.notas !== undefined ? { notas: data.notas } : {}),
+        },
+        select: { id: true },
+      }),
+      ...(huellaARehacer !== null
+        ? [
+            prisma.revisionRegistro.update({
+              where: { tipo_registroId: { tipo: "GASTO", registroId: gastoId } },
+              data: { huella: huellaEditadaPorOtro(huellaARehacer), corregidoPor: editadoPor, corregidoEn: new Date() },
+            }),
+          ]
+        : []),
+    ]);
+    return { id: gastoId };
   } catch {
     throw new CobranzaError("El gasto no existe.", 404);
   }
 }
 
-export async function deleteGasto(gastoId: string) {
+/**
+ * `borradoPor` (2026-10-05): quién lo borra. Un gasto que quien supervisa ya revisó no se borra sin rastro: la fila de
+ * su revisión se queda con la foto del gasto (qué era, el monto, la fecha, quién lo anotó) y quién lo borró y cuándo,
+ * y le aparece en la revisión hasta que lo marque como visto (lib/finanzas/revision.ts). Si lo borra la misma persona
+ * que lo revisó, nace visto. Un gasto sin revisar se borra como siempre: nadie lo había mirado.
+ */
+export async function deleteGasto(gastoId: string, borradoPor: string) {
+  const [g, revision] = await Promise.all([
+    prisma.gastoPuntual.findUnique({
+      where: { id: gastoId },
+      select: { nombre: true, monto: true, moneda: true, fecha: true, registradoPor: true, createdAt: true },
+    }),
+    prisma.revisionRegistro.findUnique({
+      where: { tipo_registroId: { tipo: "GASTO", registroId: gastoId } },
+      select: { estado: true, comentario: true, revisadoPor: true },
+    }),
+  ]);
+  if (!g) throw new CobranzaError("El gasto no existe.", 404);
+  const ahora = new Date();
   try {
-    await prisma.gastoPuntual.delete({ where: { id: gastoId } });
+    await prisma.$transaction([
+      prisma.gastoPuntual.delete({ where: { id: gastoId } }),
+      ...(revision
+        ? [
+            prisma.revisionRegistro.update({
+              where: { tipo_registroId: { tipo: "GASTO", registroId: gastoId } },
+              data: {
+                // BIEN: lo que dice si está «sin ver» son las fechas (borrado después de la última revisión).
+                estado: "BIEN",
+                huella: huellaDeBorrado({
+                  nombre: g.nombre,
+                  monto: Number(g.monto),
+                  moneda: g.moneda,
+                  fecha: g.fecha.toISOString().slice(0, 10),
+                  registradoPor: g.registradoPor,
+                  registradoEn: crDateParts(g.createdAt).dateKey,
+                  estadoAntes: revision.estado,
+                  comentarioAntes: revision.comentario,
+                }),
+                corregidoPor: borradoPor,
+                corregidoEn: ahora,
+                ...(mismaPersona(borradoPor, revision.revisadoPor) ? { revisadoEn: ahora } : {}),
+              },
+            }),
+          ]
+        : []),
+    ]);
   } catch {
     throw new CobranzaError("El gasto no existe.", 404);
   }

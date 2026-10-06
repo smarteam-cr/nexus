@@ -231,12 +231,34 @@ describe("el número del BCCR manda (Q7)", () => {
   it("tasaFirme: con días del BCCR manda el BCCR (completo y no por venir); sin días, la firmada por una persona", () => {
     expect(tasaFirme(undefined)).toBe(false);
     expect(tasaFirme(mes(bccr(true), null))).toBe(true);
-    // Un mes del BCCR al que le faltan días NO es firme aunque haya una manual firmada: la manual es solo el respaldo.
-    expect(tasaFirme(mes(bccr(false), manual("alex@smarteamcr.com")))).toBe(false);
+    // Un mes del BCCR al que le faltan días ES firme si lo confirmó una persona (decisión de Elías, 2026-10-05: «si al
+    // Banco Central le faltan días de un mes, Alex puede cerrarlo confirmando él la tasa»). Uno de un script, no.
+    expect(tasaFirme(mes(bccr(false), manual("alex@smarteamcr.com")))).toBe(true);
+    expect(tasaFirme(mes(bccr(false), manual("script:cargar-tipo-cambio")))).toBe(false);
+    expect(tasaFirme(mes(bccr(false), null))).toBe(false);
     expect(tasaFirme(mes(bccr(true, true), null))).toBe(false);
     expect(tasaFirme(mes(null, manual("alex@smarteamcr.com")))).toBe(true);
     expect(tasaFirme(mes(null, manual("script:cargar-tipo-cambio")))).toBe(false);
     expect(tasaFirme(mes(null, null))).toBe(false);
+  });
+
+  it("D2 · con días que faltan, la tasa del año es la que confirmó una persona; con el mes completo, la del BCCR", async () => {
+    const diasDe = (n: number) => Array.from({ length: n }, (_, i) => ({ fecha: `2026-09-${String(31 - n + i).padStart(2, "0")}`, venta: 470 }));
+    const manualDe = (registradoPor: string) => [
+      { periodo: "2026-09", crcPorUsd: 480, fuente: "a mano", registradoPor, registradoEn: new Date("2026-10-05T15:00:00Z") },
+    ];
+    const usada = async () => (await cargarTasasDelAnio(2026, "2026-10-05")).tasas.find((t) => t.periodo === "2026-09")?.crcPorUsd;
+
+    db.tipoCambioDia.findMany.mockResolvedValue(diasDe(11));
+    db.tipoCambioMes.findMany.mockResolvedValue(manualDe("alex@smarteamcr.com"));
+    expect(await usada(), "Alex confirmó la tasa de un mes incompleto y el año sigue con el promedio parcial").toBe(480);
+
+    db.tipoCambioMes.findMany.mockResolvedValue(manualDe("script:cargar-tipo-cambio"));
+    expect(await usada(), "un script no le gana al BCCR").toBe(470);
+
+    db.tipoCambioDia.findMany.mockResolvedValue(diasDe(30));
+    db.tipoCambioMes.findMany.mockResolvedValue(manualDe("alex@smarteamcr.com"));
+    expect(await usada(), "con el mes completo manda el BCCR").toBe(470);
   });
 
   it("«firmado por una persona» es la regla del cierre (confirmadoPorPersona), no una copia", () => {

@@ -8,6 +8,10 @@
  *
  * ⛔ La huella se calcula SIEMPRE acá, con lo que hay en la base al momento de revisar: nunca la manda la pantalla. Así
  * un «Está bien» no puede quedar pegado a números que la persona no vio.
+ *
+ * Los gastos revisados que alguien borró (2026-10-05) también entran: su revisión guarda la foto del gasto
+ * (lib/finanzas/revision.ts, «Lo que cambia otro, y lo que se borra»). La escribe `deleteGasto`
+ * (lib/cobranza/mutations.ts); acá se lee y se da por vista.
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
@@ -17,13 +21,17 @@ import { crDateParts } from "@/lib/jobs/time";
 import { fmtMontoLibro } from "@/lib/cobranza/montos";
 import { etiquetaMes } from "./gastos";
 import {
+  PREFIJO_BORRADO,
   REVISION_DESDE,
   avisosDeGasto,
   avisosDePago,
+  borradoSinVer,
   diaCorto,
   enRevision,
   huellaDeGasto,
   huellaDePago,
+  leerBorrado,
+  mismaPersona,
   ordenDeRevision,
   type Devuelto,
   type EnRevision,
@@ -48,10 +56,14 @@ export interface FilaDeRevision {
   registradoEn: string;
   avisos: string[];
   estado: EnRevision;
-  /** El comentario de la devolución (DEVUELTO y CORREGIDO). */
+  /** El comentario de la devolución (DEVUELTO y CORREGIDO; en un BORRADO, el de antes de borrarlo). */
   comentario: string | null;
   /** Dónde se corrige. */
   href: string;
+  /** Lo cambió alguien que no es quien lo registró (nombre de pila), después de tu revisión. */
+  cambiadoPor?: string | null;
+  /** Solo en un BORRADO: quién lo borró (nombre de pila) y el día de Costa Rica. */
+  borrado?: { por: string; en: string } | null;
 }
 
 export interface DatosDeRevision {
@@ -71,6 +83,16 @@ async function quienesRegistran(): Promise<Map<string, string>> {
     select: { email: true, name: true },
   });
   return new Map(miembros.map((m) => [m.email.toLowerCase(), m.name.split(" ")[0] || m.email]));
+}
+
+/** El nombre de pila de cualquiera del equipo (también un Super Admin), por email. Quien no está, queda con su email. */
+async function nombresDe(emails: ReadonlyArray<string | null | undefined>): Promise<(e: string | null | undefined) => string> {
+  const lista = [...new Set(emails.filter((e): e is string => !!e && e.includes("@")).map((e) => e.toLowerCase()))];
+  const ms = lista.length
+    ? await prisma.teamMember.findMany({ where: { email: { in: lista, mode: "insensitive" } }, select: { email: true, name: true } })
+    : [];
+  const mapa = new Map(ms.map((m) => [m.email.toLowerCase(), m.name.split(" ")[0] || m.email]));
+  return (e) => (e ? (mapa.get(e.toLowerCase()) ?? e) : "alguien");
 }
 
 const SELECT_PAGO = {
@@ -174,7 +196,16 @@ function filaDeGasto(g: GastoLeido, nombre: string, estado: EnRevision, comentar
 
 /** Todo lo que está en la revisión: por revisar (pagos y gastos) y lo devuelto que espera corrección. */
 export async function cargarRevision(): Promise<DatosDeRevision> {
-  const [nombres, pagos, gastos] = await Promise.all([quienesRegistran(), leerPagos(), leerGastos()]);
+  const [nombres, pagos, gastos, borrados] = await Promise.all([
+    quienesRegistran(),
+    leerPagos(),
+    leerGastos(),
+    // Los gastos revisados que alguien borró (2026-10-05). Pocos: se filtra en memoria cuáles no se vieron.
+    prisma.revisionRegistro.findMany({
+      where: { tipo: "GASTO", huella: { startsWith: PREFIJO_BORRADO } },
+      select: { registroId: true, huella: true, revisadoEn: true, corregidoPor: true, corregidoEn: true },
+    }),
+  ]);
   const delEquipo = <T>(xs: T[], por: (x: T) => string | null) => xs.filter((x) => nombres.has((por(x) ?? "").toLowerCase()));
   const pagosDelEquipo = delEquipo(pagos, (p) => p.confirmadoPor);
   const gastosDelEquipo = delEquipo(gastos, (g) => g.registradoPor);
@@ -186,9 +217,15 @@ export async function cargarRevision(): Promise<DatosDeRevision> {
         { tipo: "GASTO", registroId: { in: gastosDelEquipo.map((g) => g.id) } },
       ],
     },
-    select: { tipo: true, registroId: true, estado: true, huella: true, comentario: true },
+    select: { tipo: true, registroId: true, estado: true, huella: true, comentario: true, corregidoPor: true },
   });
   const guardada = new Map(guardadas.map((r) => [`${r.tipo}:${r.registroId}`, r]));
+  const sinVer = borrados.filter(borradoSinVer);
+  // Quién cambió un gasto ajeno (en una revisión BIEN, `corregidoPor` lo escribe solo `updateGasto`) y quién borró.
+  const nombre = await nombresDe([
+    ...guardadas.filter((r) => r.estado === "BIEN").map((r) => r.corregidoPor),
+    ...sinVer.flatMap((r) => [r.corregidoPor, leerBorrado(r.huella)?.registradoPor]),
+  ]);
 
   const filas: FilaDeRevision[] = [];
   for (const p of pagosDelEquipo) {
@@ -199,7 +236,34 @@ export async function cargarRevision(): Promise<DatosDeRevision> {
   for (const x of gastosDelEquipo) {
     const g = guardada.get(`GASTO:${x.id}`) ?? null;
     const estado = enRevision(huellaGasto(x), g);
-    if (estado) filas.push(filaDeGasto(x, nombres.get(x.registradoPor!.toLowerCase())!, estado, g?.comentario ?? null));
+    if (!estado) continue;
+    const fila = filaDeGasto(x, nombres.get(x.registradoPor!.toLowerCase())!, estado, g?.comentario ?? null);
+    if (estado === "CAMBIO" && g?.estado === "BIEN" && g.corregidoPor && !mismaPersona(g.corregidoPor, x.registradoPor)) {
+      fila.cambiadoPor = nombre(g.corregidoPor);
+    }
+    filas.push(fila);
+  }
+  for (const r of sinVer) {
+    const g = leerBorrado(r.huella);
+    if (!g) continue;
+    filas.push({
+      tipo: "GASTO",
+      id: r.registroId,
+      titulo: g.nombre,
+      // Quién lo borró y cuándo va en `borrado` (la pantalla lo pone en su chip); el detalle es el del gasto.
+      detalle: `Gasto del ${diaCorto(g.fecha)}`,
+      monto: g.monto,
+      moneda: g.moneda,
+      fecha: g.fecha,
+      registradoPor: nombre(g.registradoPor),
+      registradoPorEmail: (g.registradoPor ?? "").toLowerCase(),
+      registradoEn: g.registradoEn,
+      avisos: [],
+      estado: "BORRADO",
+      comentario: g.comentarioAntes,
+      href: `/finanzas/gastos?mes=${g.fecha.slice(0, 7)}`,
+      borrado: { por: nombre(r.corregidoPor), en: diaCR(r.corregidoEn!) },
+    });
   }
   const ordenadas = ordenDeRevision(filas);
   return {
@@ -227,7 +291,22 @@ async function huellasDeHoy(items: ReadonlyArray<{ tipo: TipoRevisado; id: strin
   return out;
 }
 
-/** «Está bien» (uno o varios) o «Devolver» (uno, con comentario). Quien revisa sale del guard. */
+/** De los gastos pedidos, los que ya no existen y dejaron su foto de borrado en la revisión. */
+async function gastosBorrados(items: ReadonlyArray<{ tipo: TipoRevisado; id: string }>): Promise<Set<string>> {
+  const ids = items.filter((i) => i.tipo === "GASTO").map((i) => i.id);
+  if (ids.length === 0) return new Set();
+  const filas = await prisma.revisionRegistro.findMany({
+    where: { tipo: "GASTO", registroId: { in: ids }, huella: { startsWith: PREFIJO_BORRADO } },
+    select: { registroId: true },
+  });
+  return new Set(filas.map((f) => f.registroId));
+}
+
+/**
+ * «Está bien» (uno o varios) o «Devolver» (uno, con comentario). Quien revisa sale del guard.
+ * Sobre un gasto que borraron (2026-10-05), «Está bien» es «Visto»: firma la revisión con la fecha de hoy y deja la
+ * foto del borrado como rastro. No se devuelve: ya no hay nada que corregir.
+ */
 export async function revisar(
   input: { accion: "BIEN" | "DEVOLVER"; items: Array<{ tipo: TipoRevisado; id: string }>; comentario?: string | null },
   actor: string,
@@ -235,12 +314,18 @@ export async function revisar(
   if (input.accion === "DEVOLVER" && (input.items.length !== 1 || !input.comentario?.trim())) {
     throw new CobranzaError("Para devolver, uno a la vez y con un comentario que diga qué corregir.", 400);
   }
-  const huellas = await huellasDeHoy(input.items);
+  const borrados = await gastosBorrados(input.items);
+  const esBorrado = (i: { tipo: TipoRevisado; id: string }) => i.tipo === "GASTO" && borrados.has(i.id);
+  if (input.accion === "DEVOLVER" && esBorrado(input.items[0]!)) {
+    throw new CobranzaError("Ese gasto ya lo borraron: no hay nada que devolver. Márcalo como visto.", 409);
+  }
+  const vivos = input.items.filter((i) => !esBorrado(i));
+  const huellas = await huellasDeHoy(vivos);
   const ahora = new Date();
   const estado = input.accion === "BIEN" ? "BIEN" : "DEVUELTO";
   const comentario = input.accion === "DEVOLVER" ? input.comentario!.trim() : null;
-  await prisma.$transaction(
-    input.items.map((i) => {
+  await prisma.$transaction([
+    ...vivos.map((i) => {
       const datos = {
         estado,
         huella: huellas.get(`${i.tipo}:${i.id}`)!,
@@ -256,7 +341,14 @@ export async function revisar(
         update: datos,
       });
     }),
-  );
+    // Visto: quién borró y cuándo (`corregidoPor`/`corregidoEn`) y la foto quedan; solo se firma la revisión.
+    ...input.items.filter(esBorrado).map((i) =>
+      prisma.revisionRegistro.update({
+        where: { tipo_registroId: { tipo: i.tipo, registroId: i.id } },
+        data: { revisadoPor: actor, revisadoEn: ahora },
+      }),
+    ),
+  ]);
   if (input.accion === "DEVOLVER") await avisarDevolucion(input.items[0], comentario!, actor, ahora);
   return { n: input.items.length };
 }
@@ -288,16 +380,49 @@ async function avisarDevolucion(item: { tipo: TipoRevisado; id: string }, coment
   });
 }
 
-/** Deshacer una revisión (un «Está bien» o una devolución apretados de más): el registro vuelve a «por revisar». */
+/**
+ * Deshacer una revisión (un «Está bien» o una devolución apretados de más): el registro vuelve a «por revisar». Sobre
+ * un gasto borrado, deshacer el «Visto» lo vuelve a «sin ver» sin perder el rastro (la fila es lo único que queda).
+ */
 export async function deshacerRevision(item: { tipo: TipoRevisado; id: string }): Promise<void> {
+  const r = await prisma.revisionRegistro.findUnique({
+    where: { tipo_registroId: { tipo: item.tipo, registroId: item.id } },
+    select: { huella: true, corregidoEn: true },
+  });
+  if (r && r.huella.startsWith(PREFIJO_BORRADO) && r.corregidoEn) {
+    await prisma.revisionRegistro.update({
+      where: { tipo_registroId: { tipo: item.tipo, registroId: item.id } },
+      data: { revisadoEn: new Date(r.corregidoEn.getTime() - 1) },
+    });
+    return;
+  }
   await prisma.revisionRegistro.deleteMany({ where: { tipo: item.tipo, registroId: item.id } });
 }
 
 /**
- * «Ya lo corregí», de quien lo registró: lo devuelto vuelve a la revisión marcado como corregido. Solo sobre algo
- * devuelto (409 si no). Quién lo corrigió sale del guard.
+ * «Ya lo corregí»: lo devuelto vuelve a la revisión marcado como corregido. Solo sobre algo devuelto (409 si no).
+ *
+ * ⛔ Lo marca quien registró ese pago (`confirmadoPor`) o ese gasto (`registradoPor`), o quien supervisa Finanzas
+ * (`supervisa`: la condición de `guardSupervisionFinanzas`, la decide la ruta). Cualquier otro recibe 403 (decisión de
+ * Elías, 2026-10-05): con solo el permiso de editar Cobranza o gastos, alguien podía dar por corregido lo de otra
+ * persona. Quién lo corrigió sale del guard.
  */
-export async function marcarCorregido(item: { tipo: TipoRevisado; id: string }, actor: string): Promise<void> {
+export async function marcarCorregido(
+  item: { tipo: TipoRevisado; id: string },
+  quien: { email: string; supervisa: boolean },
+): Promise<void> {
+  const dueno =
+    item.tipo === "PAGO"
+      ? await prisma.cobro.findUnique({ where: { id: item.id }, select: { confirmadoPor: true } }).then((p) => (p ? p.confirmadoPor : undefined))
+      : await prisma.gastoPuntual.findUnique({ where: { id: item.id }, select: { registradoPor: true } }).then((g) => (g ? g.registradoPor : undefined));
+  if (dueno === undefined) throw new CobranzaError("Ese registro ya no existe.", 404);
+  if (!quien.supervisa && !mismaPersona(dueno, quien.email)) {
+    const nombre = await nombresDe([dueno]);
+    throw new CobranzaError(
+      `Esto lo registró ${nombre(dueno)}: solo quien lo registró o quien supervisa Finanzas puede marcarlo como corregido.`,
+      403,
+    );
+  }
   const r = await prisma.revisionRegistro.findUnique({
     where: { tipo_registroId: { tipo: item.tipo, registroId: item.id } },
     select: { estado: true },
@@ -306,7 +431,7 @@ export async function marcarCorregido(item: { tipo: TipoRevisado; id: string }, 
   if (r.estado !== "DEVUELTO") throw new CobranzaError("Eso ya no está devuelto: alguien lo marcó antes.", 409);
   await prisma.revisionRegistro.update({
     where: { tipo_registroId: { tipo: item.tipo, registroId: item.id } },
-    data: { estado: "CORREGIDO", corregidoPor: actor, corregidoEn: new Date() },
+    data: { estado: "CORREGIDO", corregidoPor: quien.email, corregidoEn: new Date() },
   });
 }
 

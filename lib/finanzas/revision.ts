@@ -14,7 +14,15 @@
  * ── DEVOLVER ────────────────────────────────────────────────────────────────────
  * «Devolver» lleva un comentario y le llega a quien lo registró en Pendientes. Cuando lo arregla, avisa «Ya lo corregí»
  * y el registro vuelve a la revisión marcado como corregido. Nada se bloquea: devolver no deshace el pago ni borra el
- * gasto, solo pide que se mire.
+ * gasto, solo pide que se mire. «Ya lo corregí» lo marca quien lo registró, o quien supervisa (2026-10-05).
+ *
+ * ── LO QUE CAMBIA OTRO, Y LO QUE SE BORRA (decisiones de Elías, 2026-10-05) ──────────
+ * · Un gasto ya revisado que edita alguien que no es quien lo anotó vuelve a la revisión, aunque lo que cambió no
+ *   entre en la huella (las etiquetas, las notas), y dice quién lo cambió.
+ * · Un gasto ya revisado que alguien BORRA le aparece a quien supervisa: qué era, el monto, quién lo borró y cuándo.
+ *   Sin columna nueva: la fila de su revisión (`RevisionRegistro`) se queda, con la foto del gasto en `huella`
+ *   (`BORRADO:` + JSON) y quién y cuándo en `corregidoPor`/`corregidoEn`. Está «sin ver» mientras se haya borrado
+ *   después de la última revisión; «Visto» la firma con la fecha de hoy y la fila queda como rastro.
  *
  * PURO: sin Prisma ni red.
  */
@@ -22,7 +30,7 @@
 export type TipoRevisado = "PAGO" | "GASTO";
 export type EstadoGuardado = "BIEN" | "DEVUELTO" | "CORREGIDO";
 /** Cómo aparece un registro. null = revisado y sin cambios desde entonces: ya no se muestra. */
-export type EnRevision = "NUEVO" | "CAMBIO" | "CORREGIDO" | "DEVUELTO";
+export type EnRevision = "NUEVO" | "CAMBIO" | "CORREGIDO" | "DEVUELTO" | "BORRADO";
 
 /**
  * Desde cuándo se revisa (por la fecha en que se registró). Agosto de 2026 es el primer mes en que Dinia registró pagos
@@ -38,6 +46,7 @@ export const ETIQUETA_EN_REVISION: Record<EnRevision, string> = {
   CAMBIO: "Cambió después de tu revisión",
   CORREGIDO: "Corregido",
   DEVUELTO: "Devuelto",
+  BORRADO: "Lo borraron después de tu revisión",
 };
 
 export interface PagoParaHuella {
@@ -73,6 +82,71 @@ export function enRevision(huellaActual: string, guardada: { estado: string; hue
   if (guardada.estado === "DEVUELTO") return "DEVUELTO";
   if (guardada.estado === "CORREGIDO") return "CORREGIDO";
   return guardada.huella === huellaActual ? null : "CAMBIO";
+}
+
+/**
+ * La huella que deja la edición de alguien que no anotó el gasto: la de antes con una marca, para que ya no coincida
+ * con ninguna huella de verdad y el gasto vuelva como «cambió después de tu revisión», cambie lo que cambie.
+ */
+export function huellaEditadaPorOtro(huellaAnterior: string): string {
+  return huellaAnterior.startsWith("EDITADO|") ? huellaAnterior : `EDITADO|${huellaAnterior}`;
+}
+
+/** ¿Es la misma persona? Por email, sin mayúsculas. */
+export function mismaPersona(a: string | null | undefined, b: string | null | undefined): boolean {
+  return !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+// ── Los gastos borrados después de revisados ─────────────────────────────────────
+
+/** La foto de un gasto borrado, como queda en la huella de su revisión. */
+export interface GastoBorrado {
+  nombre: string;
+  monto: number;
+  moneda: string;
+  /** YYYY-MM-DD. */
+  fecha: string;
+  /** Quién lo había anotado (email), y el día (de Costa Rica) en que lo anotó. */
+  registradoPor: string | null;
+  registradoEn: string;
+  /** Cómo estaba su revisión antes de borrarlo (BIEN, DEVUELTO, CORREGIDO) y el comentario de la devolución, si hubo. */
+  estadoAntes: string;
+  comentarioAntes: string | null;
+}
+
+export const PREFIJO_BORRADO = "BORRADO:";
+
+export function huellaDeBorrado(g: GastoBorrado): string {
+  return `${PREFIJO_BORRADO}${JSON.stringify(g)}`;
+}
+
+/** La foto de un gasto borrado, o null si la huella no es la de un borrado (o está rota). */
+export function leerBorrado(huella: string): GastoBorrado | null {
+  if (!huella.startsWith(PREFIJO_BORRADO)) return null;
+  try {
+    const g = JSON.parse(huella.slice(PREFIJO_BORRADO.length)) as Partial<GastoBorrado>;
+    if (typeof g.nombre !== "string" || typeof g.monto !== "number" || typeof g.moneda !== "string" || typeof g.fecha !== "string") return null;
+    return {
+      nombre: g.nombre,
+      monto: g.monto,
+      moneda: g.moneda,
+      fecha: g.fecha,
+      registradoPor: typeof g.registradoPor === "string" ? g.registradoPor : null,
+      registradoEn: typeof g.registradoEn === "string" ? g.registradoEn : g.fecha,
+      estadoAntes: typeof g.estadoAntes === "string" ? g.estadoAntes : "BIEN",
+      comentarioAntes: typeof g.comentarioAntes === "string" ? g.comentarioAntes : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ¿Quien supervisa todavía no vio que lo borraron? Sí, mientras se haya borrado después de su última revisión. «Visto»
+ * firma la revisión con la fecha de hoy; si lo borra la misma persona que lo había revisado, nace visto.
+ */
+export function borradoSinVer(r: { huella: string; revisadoEn: Date; corregidoEn: Date | null }): boolean {
+  return r.huella.startsWith(PREFIJO_BORRADO) && !!r.corregidoEn && r.corregidoEn.getTime() > r.revisadoEn.getTime();
 }
 
 /** Días de calendario de una fecha a otra (YYYY-MM-DD o ISO completo; se toma el día). */
@@ -121,8 +195,11 @@ export interface Devuelto {
   href: string;
 }
 
-/** El orden de la revisión: primero lo corregido y lo que cambió (ya se había mirado), después lo más reciente. */
+/**
+ * El orden de la revisión: primero lo borrado, lo corregido y lo que cambió (ya se había mirado), después lo más
+ * reciente.
+ */
 export function ordenDeRevision<T extends { estado: EnRevision; registradoEn: string }>(filas: readonly T[]): T[] {
-  const peso: Record<EnRevision, number> = { CORREGIDO: 0, CAMBIO: 1, NUEVO: 2, DEVUELTO: 3 };
+  const peso: Record<EnRevision, number> = { BORRADO: 0, CORREGIDO: 1, CAMBIO: 2, NUEVO: 3, DEVUELTO: 4 };
   return [...filas].sort((a, b) => peso[a.estado] - peso[b.estado] || b.registradoEn.localeCompare(a.registradoEn));
 }

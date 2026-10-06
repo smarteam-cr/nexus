@@ -149,6 +149,55 @@ describe("lo del SISTEMA vive en Integraciones; lo de la PERSONA, en Preferencia
   });
 });
 
+describe("⭐ quien no ve costos ve si la copia de Odoo y de Mercury anda, sin un solo número (2026-10-05)", () => {
+  /* Decisión de Elías: hasta esa fecha las dos tarjetas le decían «Conectado» fijo a quien no ve costos, aunque el job
+     estuviera apagado o la última copia hubiera fallado. Ahora ve el estado —al día, apagada con su motivo, falló la
+     última con su fecha— y nada más. */
+  const pagina = () => leer("app/(shell)/integrations/page.tsx");
+  const tarjeta = (n: "OdooCard" | "MercuryCard") =>
+    leer(`app/(shell)/integrations/${n}.tsx`).replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+
+  it("las tarjetas ya no dicen «Conectado» fijo: muestran el estado de la copia", () => {
+    for (const n of ["OdooCard", "MercuryCard"] as const) {
+      expect(tarjeta(n), `${n} volvió al «Conectado» fijo`).not.toContain('texto: "Conectado"');
+      expect(tarjeta(n), `${n} no usa el estado de la copia`).toContain("comoSeVeLaCopia(copia");
+    }
+    expect(pagina()).toContain("copia={copiaDeOdoo}");
+    expect(pagina()).toContain("copia={copiaDeMercury}");
+  });
+
+  it("⛔ lo que se le lee a la base para quien no ve costos es CUÁNDO y SI SALIÓ BIEN: ni conteos ni el error", () => {
+    /* La edición que la pone en rojo: sumarle a esta lectura un `count` (facturas, clientes) o el `error` de la
+       corrida, que puede traer datos de cuentas. Eso es el detalle, y el detalle es de quien ve costos. */
+    const src = pagina();
+    const desde = src.indexOf("const [copiaDeOdoo, copiaDeMercury]");
+    expect(desde, "la página ya no arma el estado de la copia").toBeGreaterThan(-1);
+    const bloque = src.slice(desde, src.indexOf("]);", desde));
+    expect(bloque).toMatch(/puedeVerGasto\s*\?\s*\[null, null\]/);
+    expect(bloque, "la lectura de quien no ve costos cuenta algo").not.toMatch(/\.count\(/);
+    expect(bloque, "la lectura de quien no ve costos trae el texto del error").not.toMatch(/error:/);
+    for (const m of bloque.matchAll(/select:\s*\{([^}]*)\}/g)) {
+      expect(m[1]!.replace(/\s/g, ""), "la lectura trae algo más que cuándo y si salió bien").toBe("terminadaEn:true,ok:true");
+    }
+  });
+
+  it("⛔ y el estado de la copia no tiene un solo campo numérico", async () => {
+    const { comoSeVeLaCopia, estadoDeLaCopia } = await import("@/app/(shell)/integrations/estado-de-la-copia");
+    const tipo = leer("app/(shell)/integrations/estado-de-la-copia.ts");
+    const cuerpo = tipo.slice(tipo.indexOf("export interface EstadoDeLaCopia"), tipo.indexOf("\n}", tipo.indexOf("export interface EstadoDeLaCopia")));
+    expect(cuerpo, "el estado de la copia lleva un número").not.toMatch(/:\s*number/);
+
+    const fallo = estadoDeLaCopia(null, { terminadaEn: new Date("2026-10-04T12:00:00Z"), ok: false });
+    expect(fallo).toEqual({ motivoApagado: null, ultimaCopia: "2026-10-04", fallo: true });
+    expect(comoSeVeLaCopia(fallo, "x").estado).toEqual({ tono: "error", texto: "Falló" });
+    expect(comoSeVeLaCopia(fallo, "x").pie).toContain("2026-10-04");
+    const apagado = estadoDeLaCopia("Falta ODOO_PASSWORD en este servidor.", null);
+    expect(comoSeVeLaCopia(apagado, "x")).toEqual({ estado: { tono: "apagado", texto: "Apagado" }, pie: "Falta ODOO_PASSWORD en este servidor." });
+    const alDia = estadoDeLaCopia(null, { terminadaEn: new Date("2026-10-05T12:00:00Z"), ok: true });
+    expect(comoSeVeLaCopia(alDia, "x").estado).toEqual({ tono: "ok", texto: "Al día" });
+  });
+});
+
 describe("⛔ la pantalla pide la MISMA llave que su ítem del menú", () => {
   /**
    * ── EL FALLO QUE LO TRAE ─────────────────────────────────────────────────────────────────────

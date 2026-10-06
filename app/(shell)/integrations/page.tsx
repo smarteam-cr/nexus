@@ -12,6 +12,7 @@ import GoogleMeetCard from "./GoogleMeetCard";
 import ClaudeCard, { type GastoDeClaude } from "./ClaudeCard";
 import OdooCard, { type EstadoDeOdoo } from "./OdooCard";
 import MercuryCard, { type EstadoDeMercury } from "./MercuryCard";
+import { estadoDeLaCopia, type EstadoDeLaCopia } from "./estado-de-la-copia";
 import JobsSemaforo from "./JobsSemaforo";
 import { gastoResumidoDeClaude } from "@/lib/ai/gasto-en-integraciones";
 import { requireInternalUser } from "@/lib/auth/supabase";
@@ -178,6 +179,21 @@ export default async function IntegrationsPage({
       })()
     : null;
 
+  /* ⭐ Quien NO ve costos ve igual SI LA COPIA ANDA (decisión de Elías, 2026-10-05): apagada con su motivo, al día, o
+     falló la última con su fecha. Hasta esa fecha sus dos tarjetas decían «Conectado» fijo. ⛔ Solo eso: de la última
+     corrida que terminó se lee cuándo y si salió bien — ni conteos, ni el texto del error (puede traer datos de
+     cuentas). Ver `estado-de-la-copia.ts`. */
+  const [copiaDeOdoo, copiaDeMercury]: [EstadoDeLaCopia | null, EstadoDeLaCopia | null] = puedeVerGasto
+    ? [null, null]
+    : await Promise.all([
+        prisma.syncOdooCorrida
+          .findFirst({ where: { terminadaEn: { not: null } }, orderBy: { iniciadaEn: "desc" }, select: { terminadaEn: true, ok: true } })
+          .then((c) => estadoDeLaCopia(motivoApagado("odoo-espejo-daily", process.env), c)),
+        prisma.syncMercuryCorrida
+          .findFirst({ where: { terminadaEn: { not: null } }, orderBy: { iniciadaEn: "desc" }, select: { terminadaEn: true, ok: true } })
+          .then((c) => estadoDeLaCopia(motivoApagado("mercury-espejo-daily", process.env), c)),
+      ]);
+
   const [hubspot, google, googleMeetCount, systemCfg] = await Promise.all([
     getHubspotSystemStatus(),
     getGoogleStatus(),
@@ -235,12 +251,12 @@ export default async function IntegrationsPage({
 
           {/* Odoo — el ERP del que salen las facturas de cobranza. Su pantalla se mudó acá desde
               /settings, y sin esta tarjeta se quedaba sin ninguna entrada propia. */}
-          <OdooCard estado={estadoDeOdoo} />
+          <OdooCard estado={estadoDeOdoo} copia={copiaDeOdoo} />
 
           {/* Mercury — el banco. La última en tener tarjeta propia, y la que obligó a que el
               estado de una conexión no sea un booleano: responde, copia todo y no sirve para
               nada mientras sus clientes no estén emparejados. */}
-          <MercuryCard estado={estadoDeMercury} />
+          <MercuryCard estado={estadoDeMercury} copia={copiaDeMercury} />
         </div>
       </section>
 

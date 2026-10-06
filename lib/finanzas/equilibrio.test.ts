@@ -27,6 +27,7 @@
  *   Q. la plata que no es venta: a la caja y a nada más
  *   R. el margen a la fecha no cuenta meses con el gasto a medias
  *   S. lo facturado en años anteriores y sin cobrar sigue en la calle
+ *   T. el piso de hoy son los recurrentes de Nexus, sin la tarjeta del Excel (D8, 2026-10-05)
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -38,6 +39,7 @@ import {
   convertir,
   margenDeMesesCompletos,
   metasDe,
+  costosDelPiso,
   PARTNERSHIP_CUBRE_EL_PISO,
   periodosDelAnio,
   pisoVigente,
@@ -1147,5 +1149,55 @@ describe("S · lo facturado en años anteriores y sin cobrar sigue en la calle",
       { anio: 2026, hoyISO: "2026-12-31" },
     );
     expect(r.porCobrarDeAniosAnteriores).toEqual({});
+  });
+});
+
+// ── T · D8 (decisión de Elías, 2026-10-05): el piso sale de Nexus, sin la tarjeta del Excel ─────────────────────────
+
+describe("T · el piso de hoy son los recurrentes de Nexus, sin la tarjeta del Excel de egresos", () => {
+  const TASA = { periodo: "2026-10", crcPorUsd: 500, fuente: "BCCR" };
+
+  it("T1 los recurrentes vigentes, mensualizados y en su rubro; ninguno es «tarjeta»", () => {
+    const costos = costosDelPiso([
+      { nombre: "Marco", categoria: "SALARIO", monto: 2400, moneda: "USD", frecuencia: "MENSUAL" },
+      { nombre: "HubSpot", categoria: "HERRAMIENTA", monto: 6000, moneda: "USD", frecuencia: "ANUAL" },
+      { nombre: "Oficina", categoria: "FIJO_OPERACION", monto: 250_000, moneda: "CRC", frecuencia: "MENSUAL" },
+    ]);
+    expect(costos).toEqual([
+      { rubro: "PLANILLA", concepto: "Marco", monto: 2400, moneda: "USD" },
+      { rubro: "HERRAMIENTA", concepto: "HubSpot", monto: 500, moneda: "USD" },
+      { rubro: "FIJO_OPERACION", concepto: "Oficina", monto: 250_000, moneda: "CRC" },
+    ]);
+    const piso = pisoVigente(costos, { monedaPresentacion: "USD", tasa: TASA });
+    expect(piso.porRubro.TARJETA).toBe(0);
+    expect(piso.base).toBe(2400 + 500 + 500);
+  });
+
+  it("T2 ⛔ el reporte arma el piso con costosDelPiso y no le suma la tarjeta del Excel", () => {
+    /* La edición que la pone en rojo: volver a empujar a `costosVigentes` las filas TARJETA del último mes del Excel
+       (`filasEgreso`), como hasta el 2026-10-05. Esa tarjeta estaba desactualizada y además contaba dos veces lo que
+       en Nexus ya es un recurrente. Se mide dentro del cuerpo de `loadReporteAnual`, sin comentarios. */
+    const src = readFileSync("lib/cobranza/queries.ts", "utf8");
+    const desde = src.indexOf("export async function loadReporteAnual(");
+    expect(desde, "se movió loadReporteAnual: la guarda no mira nada").toBeGreaterThan(-1);
+    const hasta = src.indexOf("\nfunction ", desde);
+    const cuerpo = src
+      .slice(desde, hasta > desde ? hasta : undefined)
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*\/\/.*$/gm, " ");
+    expect(cuerpo).toMatch(/const costosVigentes: CostoVigente\[\] = costosDelPiso\(/);
+    expect(cuerpo, "el piso volvió a leer la tarjeta del Excel de egresos").not.toMatch(/"TARJETA"/);
+    expect(cuerpo, "el piso volvió a leer el Excel de egresos").not.toMatch(/filasEgreso/);
+    expect(cuerpo, "a costosVigentes se le agrega algo aparte de los recurrentes").not.toMatch(/costosVigentes\.push\(/);
+  });
+
+  it("T3 el aviso del solape ya no dice que el piso está inflado: habla de los meses del Excel", () => {
+    const r = calcularEquilibrio([eg("2026-05", "TARJETA", "Visa", 130.6), eg("2026-05", "HERRAMIENTA", "HubSpot", 535)], [], {
+      anio: 2026,
+      hoyISO: HOY,
+    });
+    const aviso = r.calidad.avisos.find((a) => a.codigo === "TARJETA_SOLAPA_HERRAMIENTAS");
+    expect(aviso?.mensaje).not.toMatch(/el piso está inflado/);
+    expect(aviso?.mensaje).toMatch(/El piso de hoy no suma la tarjeta del Excel/);
   });
 });

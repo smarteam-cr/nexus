@@ -543,9 +543,12 @@ export function detectarInconsistencias(e: EstadoParaAuditar): Inconsistencia[] 
       codigo: "TARJETA_SOLAPA_HERRAMIENTAS",
       severidad: "ALTA",
       titulo: "El cargo de tarjeta y las herramientas se suman los dos",
+      // El piso de hoy ya no suma la tarjeta del Excel (2026-10-05, `costosDelPiso`): lo que queda en duda es el gasto
+      // de los meses que salen del Excel, hasta septiembre de 2026.
       detalle:
-        "Si parte de las herramientas se paga con esa tarjeta, el piso mensual está contando esa plata dos veces. " +
-        "El solape no se puede medir con los datos actuales: no hay registro de qué herramienta se paga con qué tarjeta.",
+        "En los meses que salen del Excel de egresos, si parte de las herramientas se paga con esa tarjeta, el gasto de " +
+        "esos meses cuenta esa plata dos veces. El solape no se puede medir desde el Excel. El piso de hoy no suma esa " +
+        "tarjeta: sale de los recurrentes de Nexus, que ya saben qué costo se paga con qué tarjeta.",
       montoEnJuego: null,
       queHacer: "Confirmar si el cargo de tarjeta es propio (comisiones, intereses) o incluye las herramientas.",
       resuelve: "DIRECCION",

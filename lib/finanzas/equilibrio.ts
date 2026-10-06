@@ -43,6 +43,7 @@ import {
   type LecturaDeCobranza,
 } from "@/lib/cobranza/antiguedad";
 import { DEFAULT_CREDITO_DIAS } from "@/lib/cobranza/engine";
+import { mensualizado } from "@/lib/cobranza/tarjetas";
 import { tasaDelDia } from "./tipo-cambio";
 
 // ── La pregunta abierta de Dirección ────────────────────────────────────────────
@@ -622,6 +623,34 @@ export interface CostoVigente {
   moneda: MonedaEq;
 }
 
+/** La categoría de un recurrente de Nexus → el rubro del piso. Un recurrente nunca es «tarjeta». */
+const RUBRO_DEL_RECURRENTE = {
+  SALARIO: "PLANILLA",
+  HERRAMIENTA: "HERRAMIENTA",
+  FIJO_OPERACION: "FIJO_OPERACION",
+} as const satisfies Record<string, RubroEgreso>;
+
+/**
+ * LOS COSTOS DEL PISO DE HOY: los recurrentes vigentes de Nexus, mensualizados. Nada más.
+ *
+ * ⛔ La tarjeta del Excel de egresos ya NO entra (decisión de Elías, 2026-10-05). Hasta esa fecha el piso le sumaba a
+ * los recurrentes el cargo de «Tarjeta de Credito Flywheel» del último mes del Excel: un monto desactualizado y, además,
+ * contado dos veces, porque en Nexus lo que se paga con tarjeta ES un recurrente (la tarjeta solo dice con cuál se paga:
+ * `TarjetaCreditoCosto`). Desde octubre el gasto sale de Nexus; los meses hasta septiembre siguen con el Excel como
+ * fuente de ESOS meses, pero el piso es de hoy. Por eso el aviso TARJETA_SOLAPA_HERRAMIENTAS ya no habla del piso.
+ */
+export function costosDelPiso(
+  recurrentes: ReadonlyArray<{ nombre: string; categoria: keyof typeof RUBRO_DEL_RECURRENTE; monto: number; moneda: MonedaEq; frecuencia: string }>,
+): CostoVigente[] {
+  return recurrentes.map((c) => ({
+    rubro: RUBRO_DEL_RECURRENTE[c.categoria],
+    concepto: c.nombre,
+    // Un ANUAL entra dividido: el piso es un costo MENSUAL.
+    monto: mensualizado(c.monto, c.frecuencia),
+    moneda: c.moneda,
+  }));
+}
+
 export interface PisoVigente {
   base: number;
   porRubro: Record<RubroEgreso, number>;
@@ -1173,8 +1202,10 @@ export function calcularEquilibrio(
     avisos.push({
       codigo: "TARJETA_SOLAPA_HERRAMIENTAS",
       severidad: "ALTA",
+      // Solo meses del Excel: desde octubre de 2026 la tarjeta no es un rubro, y el piso de hoy ya no la suma
+      // (`costosDelPiso`, 2026-10-05). Lo que puede estar inflado es el gasto de ESOS meses, no el piso.
       mensaje:
-        "El cargo de tarjeta y las herramientas se suman los dos. Si parte de las herramientas se paga CON esa tarjeta, el piso está inflado — el solape no se puede medir desde el Excel, así que se declara en vez de decidirlo en silencio.",
+        "En estos meses del Excel de egresos, el cargo de tarjeta y las herramientas se suman los dos. Si parte de las herramientas se paga CON esa tarjeta, el gasto de esos meses está inflado — el solape no se puede medir desde el Excel, así que se declara en vez de decidirlo en silencio. El piso de hoy no suma la tarjeta del Excel: sale de los recurrentes de Nexus.",
       periodos: mesesConTarjeta.map((m) => m.periodo),
       conceptos: [],
     });

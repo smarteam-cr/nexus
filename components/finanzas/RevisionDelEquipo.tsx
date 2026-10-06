@@ -7,6 +7,9 @@
  * Los pagos que alguien del equipo dio por cobrados y los gastos que anotó, con «Está bien» y «Devolver». Lo devuelto le
  * llega a quien lo registró en su Pendientes, con el comentario; cuando lo corrige, vuelve acá marcado. Un «Está bien»
  * vale para los números que se vieron: si cambian, el registro vuelve con el aviso (lib/finanzas/revision.ts).
+ *
+ * Desde el 2026-10-05 también vuelven los gastos ya revisados que alguien borró (qué era, el monto, quién lo borró y
+ * cuándo: se dan por vistos, no se devuelven) y los que cambió alguien que no es quien los anotó (dice quién).
  */
 import Link from "next/link";
 import { useCallback, useState } from "react";
@@ -19,6 +22,7 @@ import type { DatosDeRevision, FilaDeRevision } from "@/lib/finanzas/revision-se
 
 const CHIP_AVISO = "inline-flex rounded-full border border-warn-line bg-warn-surface px-2 py-px text-[11px] text-warn-ink";
 const CHIP_INFO = "inline-flex rounded-full border border-info-line bg-info-surface px-2 py-px text-[11px] text-fg-secondary";
+const CHIP_BORRADO = "inline-flex rounded-full border border-danger-line bg-danger-surface px-2 py-px text-[11px] text-danger-ink";
 
 /** «Dinia» si todo lo registró la misma persona; si no, «el equipo». */
 function quienRegistro(filas: readonly FilaDeRevision[]): string {
@@ -75,7 +79,9 @@ export default function RevisionDelEquipo({ inicial }: { inicial: DatosDeRevisio
       });
       quitar(ids);
       if (items.length === 1) {
-        toast.success("Revisado.", { action: { label: "Deshacer", onClick: () => void deshacer(items[0]!) } });
+        toast.success(items[0]!.estado === "BORRADO" ? "Visto." : "Revisado.", {
+          action: { label: "Deshacer", onClick: () => void deshacer(items[0]!) },
+        });
       } else {
         toast.success(`${items.length} revisados.`);
       }
@@ -154,9 +160,13 @@ export default function RevisionDelEquipo({ inicial }: { inicial: DatosDeRevisio
               {filas.map((f) => (
                 <tr key={clave(f)}>
                   <td className="border-t border-line px-4 py-2.5 align-top font-semibold text-fg">
-                    <Link href={f.href} className="hover:text-brand">
-                      {f.titulo}
-                    </Link>
+                    {f.estado === "BORRADO" ? (
+                      <span className="text-fg-secondary line-through decoration-fg-muted">{f.titulo}</span>
+                    ) : (
+                      <Link href={f.href} className="hover:text-brand">
+                        {f.titulo}
+                      </Link>
+                    )}
                   </td>
                   <td className="border-t border-line px-4 py-2.5 align-top text-fg-secondary">{f.detalle}</td>
                   <td className="border-t border-line px-4 py-2.5 text-right align-top tabular-nums text-fg">
@@ -168,7 +178,19 @@ export default function RevisionDelEquipo({ inicial }: { inicial: DatosDeRevisio
                       <span>
                         {f.registradoPor} · {diaCorto(f.registradoEn)}
                       </span>
-                      {f.estado === "CAMBIO" && <span className={CHIP_AVISO}>{ETIQUETA_EN_REVISION.CAMBIO}</span>}
+                      {f.estado === "BORRADO" && (
+                        <span
+                          className={CHIP_BORRADO}
+                          title={f.comentario ? `Lo habías devuelto con: «${f.comentario}»` : undefined}
+                        >
+                          {f.borrado ? `Lo borró ${f.borrado.por} el ${diaCorto(f.borrado.en)}` : ETIQUETA_EN_REVISION.BORRADO}
+                        </span>
+                      )}
+                      {f.estado === "CAMBIO" && (
+                        <span className={CHIP_AVISO}>
+                          {f.cambiadoPor ? `Lo cambió ${f.cambiadoPor} después de tu revisión` : ETIQUETA_EN_REVISION.CAMBIO}
+                        </span>
+                      )}
                       {f.estado === "CORREGIDO" && (
                         <span className={CHIP_INFO} title={f.comentario ? `Lo devolviste con: «${f.comentario}»` : undefined}>
                           {ETIQUETA_EN_REVISION.CORREGIDO}
@@ -183,19 +205,25 @@ export default function RevisionDelEquipo({ inicial }: { inicial: DatosDeRevisio
                   </td>
                   <td className="whitespace-nowrap border-t border-line px-4 py-2.5 text-right align-top">
                     <Button variant="secondary" size="sm" onClick={() => void marcarBien([f])} disabled={ocupado !== null}>
-                      {ocupado === clave(f) ? "Guardando…" : "✓ Está bien"}
-                    </Button>{" "}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setDevolviendo(f);
-                        setComentario("");
-                      }}
-                      disabled={ocupado !== null}
-                    >
-                      Devolver
+                      {ocupado === clave(f) ? "Guardando…" : f.estado === "BORRADO" ? "✓ Visto" : "✓ Está bien"}
                     </Button>
+                    {/* Un gasto borrado no se devuelve: ya no hay nada que corregir. */}
+                    {f.estado !== "BORRADO" && (
+                      <>
+                        {" "}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDevolviendo(f);
+                            setComentario("");
+                          }}
+                          disabled={ocupado !== null}
+                        >
+                          Devolver
+                        </Button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -4,6 +4,9 @@
  *   DELETE → borrado duro (un gasto es un hecho; si no ocurrió, se borra).
  * ⚠ PRIVACIDAD: guardCostosAccess (SOLO SUPER_ADMIN) como PRIMERA línea de cada
  * handler — corta ANTES de tocar la DB (403, nunca 404 para un no-autorizado).
+ * Quién edita o borra sale del guard (2026-10-05): un gasto ya revisado que se borra
+ * (o que edita alguien que no es quien lo anotó ni quien lo revisó) le aparece a quien
+ * supervisa en su revisión — ver `updateGasto` y `deleteGasto`.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardCostosAccess } from "@/lib/auth/api-guards";
@@ -32,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   try {
-    await updateGasto(gastoId, parsed.data);
+    await updateGasto(gastoId, parsed.data, guard.user.email);
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof CobranzaError) {
@@ -49,7 +52,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const { gastoId } = await params;
 
   try {
-    await deleteGasto(gastoId);
+    await deleteGasto(gastoId, guard.user.email);
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof CobranzaError) {

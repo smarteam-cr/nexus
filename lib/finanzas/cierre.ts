@@ -8,10 +8,13 @@
  *
  * ── QUÉ BLOQUEA ─────────────────────────────────────────────────────────────────
  * Lo que hace que el gasto o el ingreso del mes estén completos y revisados:
- *   · la planilla, con sus dos quincenas;
+ *   · la planilla, con sus dos quincenas generadas Y marcadas como pagadas (decisión de Elías, 2026-10-05: una
+ *     quincena generada y sin marcar como pagada no deja cerrar);
  *   · los gastos: desde octubre de 2026, el aviso de quien registra («ya anoté todos»); antes, el Excel de egresos
  *     completo (lo que el punto de equilibrio dice que le falta, sin la planilla, que es su propia línea);
- *   · el tipo de cambio, confirmado por una persona (no el que cargó un script);
+ *   · el tipo de cambio: el del Banco Central con todos los días del mes o, si al BCCR le faltan días (o no tiene
+ *     ninguno), uno confirmado por una persona (no el que cargó un script). Decisión de Elías, 2026-10-05: «si al Banco
+ *     Central le faltan días de un mes, Alex puede cerrarlo confirmando él la tasa»;
  *   · la revisión al día: nada de ese mes por revisar ni devuelto.
  * Lo de Conciliación, los pagos que Odoo o Mercury ya dan por pagados, las cuotas por facturar y las comisiones vencidas
  * se MUESTRAN pero no bloquean: hoy son más de cien filas y el mes no se cerraría nunca.
@@ -39,19 +42,25 @@ export interface ItemDeCierre {
 export interface TipoCambioDelMes {
   crcPorUsd: number;
   fuente: string;
-  /** Email de quien lo confirmó, o null si lo cargó un script (todavía no lo confirmó nadie). */
+  /**
+   * Email de quien lo confirmó, o null si lo cargó un script (todavía no lo confirmó nadie). Con el BCCR completo no
+   * cuenta (manda el BCCR): solo vale en un mes sin días del BCCR o con días que faltan (`mandaLaTasaConfirmada`).
+   */
   confirmadoPor: string | null;
   /**
-   * El del Banco Central (2026-10-05): cuántos días del mes trajeron su tasa y si están todos. Con esto el mes no se
-   * confirma a mano: está listo cuando el BCCR tiene todos sus días. null o ausente = el mes no tiene días del BCCR.
+   * El del Banco Central (2026-10-05): cuántos días del mes trajeron su tasa y si están todos. Con todos, el mes no se
+   * confirma a mano. Con días que faltan, lo cierra una persona confirmando la tasa. null o ausente = el mes no tiene
+   * días del BCCR.
    */
   bccr?: { dias: number; completo: boolean } | null;
 }
 
 export interface DatosDelMes {
   periodo: string;
-  /** Las quincenas de planilla anotadas en el libro. */
+  /** Las quincenas de planilla generadas en el libro (con al menos una fila, pagada o no). */
   quincenas: number[];
+  /** De ésas, las que tienen TODAS sus filas en PAGADO (`quincenasPorMes`). */
+  quincenasPagadas: number[];
   /** El aviso de quien registra de que los gastos del mes están todos (meses desde el corte). */
   gastosListos: boolean;
   gastosAnotados: number;
@@ -76,6 +85,71 @@ export function confirmadoPorPersona(registradoPor: string | null | undefined): 
   return registradoPor && registradoPor.includes("@") ? registradoPor : null;
 }
 
+/**
+ * ¿Manda la tasa que confirmó una persona por encima de la del Banco Central? Solo cuando al BCCR le faltan días de un
+ * mes que ya empezó (decisión de Elías, 2026-10-05): ahí Alex cierra el mes confirmando él la tasa, y esa es la que se
+ * usa. Con el mes completo manda el BCCR; sin ningún día del BCCR manda la cargada a mano, como siempre.
+ *
+ * UNA regla para los tres que la necesitan: qué tasa usa el año (`cargarTasasDelAnio`), si es firme (`tasaFirme`) y
+ * si el cierre la da por confirmada (cierre-server.ts). Copiada, una podía dar el mes por cerrado con una tasa que el
+ * punto de equilibrio no usa.
+ */
+export function mandaLaTasaConfirmada(
+  bccr: { completo: boolean; porVenir: boolean } | null | undefined,
+  registradoPor: string | null | undefined,
+): boolean {
+  return !!bccr && !bccr.completo && !bccr.porVenir && confirmadoPorPersona(registradoPor) !== null;
+}
+
+/**
+ * Las quincenas de cada mes según el libro de planilla (una fila por persona y quincena): generadas = con al menos una
+ * fila; pagadas = con TODAS sus filas en PAGADO. Una quincena con alguien todavía en PENDIENTE no está pagada (decisión
+ * de Elías, 2026-10-05: «no se puede cerrar un mes con la planilla generada pero sin marcar como pagada»).
+ */
+export function quincenasPorMes(
+  filas: ReadonlyArray<{ periodo: string; quincena: number; estado: string }>,
+): Map<string, { anotadas: number[]; pagadas: number[] }> {
+  const porQuincena = new Map<string, { periodo: string; quincena: number; pagada: boolean }>();
+  for (const f of filas) {
+    const k = `${f.periodo}|${f.quincena}`;
+    const q = porQuincena.get(k) ?? { periodo: f.periodo, quincena: f.quincena, pagada: true };
+    if (f.estado !== "PAGADO") q.pagada = false;
+    porQuincena.set(k, q);
+  }
+  const out = new Map<string, { anotadas: number[]; pagadas: number[] }>();
+  for (const q of porQuincena.values()) {
+    const m = out.get(q.periodo) ?? { anotadas: [], pagadas: [] };
+    m.anotadas.push(q.quincena);
+    if (q.pagada) m.pagadas.push(q.quincena);
+    out.set(q.periodo, m);
+  }
+  for (const m of out.values()) {
+    m.anotadas.sort((a, b) => a - b);
+    m.pagadas.sort((a, b) => a - b);
+  }
+  return out;
+}
+
+/** «2.ª». */
+const ordinal = (q: number) => `${q}.ª`;
+
+/** Lo que dice la línea de la planilla: qué quincena falta generar y cuál falta marcar como pagada. */
+function detalleDePlanilla(d: Pick<DatosDelMes, "quincenas" | "quincenasPagadas">, mes: string): { listo: boolean; detalle: string } {
+  const faltaGenerar = [1, 2].filter((q) => !d.quincenas.includes(q));
+  const faltaPagar = [1, 2].filter((q) => d.quincenas.includes(q) && !d.quincenasPagadas.includes(q));
+  if (faltaGenerar.length === 0 && faltaPagar.length === 0) return { listo: true, detalle: "Las dos quincenas están pagadas." };
+  if (faltaGenerar.length === 2) return { listo: false, detalle: `Falta toda la planilla de ${mes}.` };
+  const pagar =
+    faltaPagar.length === 2
+      ? "marcar como pagadas las dos quincenas"
+      : faltaPagar.length === 1
+        ? `marcar como pagada la ${ordinal(faltaPagar[0]!)} quincena`
+        : null;
+  if (faltaGenerar.length === 0) return { listo: false, detalle: `Falta ${pagar}.` };
+  const generar = `Falta la ${ordinal(faltaGenerar[0]!)} quincena de ${mes}`;
+  return { listo: false, detalle: pagar ? `${generar}, y marcar como pagada la ${ordinal(faltaPagar[0]!)}.` : `${generar}.` };
+}
+
 /** ¿Este faltante del punto de equilibrio es de la planilla? Ya tiene su propia línea en el cierre. */
 export function esFaltanteDePlanilla(f: string): boolean {
   return f === "planilla" || /^planilla-q\d/.test(f);
@@ -92,19 +166,14 @@ export function itemsDeCierre(
 ): ItemDeCierre[] {
   const mes = etiquetaMes(d.periodo);
   const desdeNexus = d.periodo >= EGRESOS_DESDE_NEXUS;
-  const faltaQ = [1, 2].filter((q) => !d.quincenas.includes(q));
+  const planilla = detalleDePlanilla(d, mes);
   const items: ItemDeCierre[] = [
     {
       clave: "planilla",
       grupo: "Costos y gastos",
       titulo: "Pagar y anotar la planilla",
-      detalle:
-        faltaQ.length === 0
-          ? "Las dos quincenas están anotadas."
-          : faltaQ.length === 2
-            ? `Falta toda la planilla de ${mes}.`
-            : `Falta la ${faltaQ[0]}ª quincena de ${mes}.`,
-      listo: faltaQ.length === 0,
+      detalle: planilla.detalle,
+      listo: planilla.listo,
       bloquea: true,
       quien: nombres.supervisa,
       accion: "Ir a Planilla",
@@ -138,36 +207,51 @@ export function itemsDeCierre(
           accion: "Ver en el punto de equilibrio",
           href: "/finanzas/equilibrio",
         },
-    d.tipoCambio?.bccr
+    d.tipoCambio?.bccr?.completo
       ? {
-          // Desde 2026-10-05 el tipo de cambio sale del Banco Central día por día: nadie lo confirma, se trae.
+          // Desde 2026-10-05 el tipo de cambio sale del Banco Central día por día: con el mes completo nadie lo
+          // confirma, se trae.
           clave: "tipo-cambio",
           grupo: "Costos y gastos",
           titulo: "Tener el tipo de cambio del Banco Central",
-          detalle: d.tipoCambio.bccr.completo
-            ? `${colones(d.tipoCambio.crcPorUsd)} por dólar: el promedio de la venta del BCCR de ${plural(d.tipoCambio.bccr.dias, "día", "días")}.`
-            : `${colones(d.tipoCambio.crcPorUsd)} por dólar con ${plural(d.tipoCambio.bccr.dias, "día", "días")} del BCCR: faltan días del mes.`,
-          listo: d.tipoCambio.bccr.completo,
+          detalle: `${colones(d.tipoCambio.crcPorUsd)} por dólar: el promedio de la venta del BCCR de ${plural(d.tipoCambio.bccr.dias, "día", "días")}.`,
+          listo: true,
           bloquea: true,
           quien: nombres.supervisa,
           accion: "Ver el tipo de cambio",
           href: "/finanzas/tipo-de-cambio",
         }
-      : {
-          clave: "tipo-cambio",
-          grupo: "Costos y gastos",
-          titulo: "Confirmar el tipo de cambio",
-          detalle: !d.tipoCambio
-            ? `${mes} no tiene tipo de cambio: lo que está en colones no se puede sumar.`
-            : d.tipoCambio.confirmadoPor
-              ? `${colones(d.tipoCambio.crcPorUsd)} por dólar, confirmado.`
-              : `${colones(d.tipoCambio.crcPorUsd)} por dólar, sin confirmar: ${d.tipoCambio.fuente}. No hay días del Banco Central para este mes.`,
-          listo: !!d.tipoCambio?.confirmadoPor,
-          bloquea: true,
-          quien: nombres.supervisa,
-          accion: d.tipoCambio ? "Confirmar" : "Poner",
-          href: "#tipo-de-cambio",
-        },
+      : d.tipoCambio?.bccr
+        ? {
+            // Al BCCR le faltan días del mes (decisión de Elías, 2026-10-05): lo cierra quien supervisa confirmando la
+            // tasa. La que confirma es la que usa el punto de equilibrio (`mandaLaTasaConfirmada`).
+            clave: "tipo-cambio",
+            grupo: "Costos y gastos",
+            titulo: "Confirmar el tipo de cambio",
+            detalle: d.tipoCambio.confirmadoPor
+              ? `${colones(d.tipoCambio.crcPorUsd)} por dólar, confirmado. Al Banco Central le faltan días del mes: manda la tasa confirmada.`
+              : `${colones(d.tipoCambio.crcPorUsd)} por dólar con ${plural(d.tipoCambio.bccr.dias, "día", "días")} del BCCR: faltan días del mes. Para cerrarlo, confirma la tasa o pon otra.`,
+            listo: !!d.tipoCambio.confirmadoPor,
+            bloquea: true,
+            quien: nombres.supervisa,
+            accion: "Confirmar",
+            href: "#tipo-de-cambio",
+          }
+        : {
+            clave: "tipo-cambio",
+            grupo: "Costos y gastos",
+            titulo: "Confirmar el tipo de cambio",
+            detalle: !d.tipoCambio
+              ? `${mes} no tiene tipo de cambio: lo que está en colones no se puede sumar.`
+              : d.tipoCambio.confirmadoPor
+                ? `${colones(d.tipoCambio.crcPorUsd)} por dólar, confirmado.`
+                : `${colones(d.tipoCambio.crcPorUsd)} por dólar, sin confirmar: ${d.tipoCambio.fuente}. No hay días del Banco Central para este mes.`,
+            listo: !!d.tipoCambio?.confirmadoPor,
+            bloquea: true,
+            quien: nombres.supervisa,
+            accion: d.tipoCambio ? "Confirmar" : "Poner",
+            href: "#tipo-de-cambio",
+          },
     {
       clave: "revision",
       grupo: "Revisión",

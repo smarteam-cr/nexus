@@ -5,9 +5,9 @@
  * mes»).
  *
  * La tira del año (cómo está cada mes), lo que falta para cerrar el elegido —lo que frena y lo que solo se muestra—, el
- * tipo de cambio (el del Banco Central desde 2026-10-05; para confirmar o cambiar, solo en un mes sin días del BCCR), y
- * los botones de cerrar y reabrir. Cerrar no congela nada: guarda quién,
- * cuándo y los números de ese momento (lib/finanzas/cierre.ts).
+ * tipo de cambio (el del Banco Central desde 2026-10-05; para confirmar o cambiar, en un mes sin días del BCCR o con
+ * días que faltan —decisión de Elías del 2026-10-05—), y los botones de cerrar y reabrir. Cerrar no congela nada:
+ * guarda quién, cuándo y los números de ese momento (lib/finanzas/cierre.ts).
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -50,6 +50,9 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
   const anio = d.periodo.slice(0, 4);
   const cerrado = d.cierre?.estado === "CERRADO";
   const listas = d.items.filter((i) => i.listo).length;
+  const tc = d.tipoCambio;
+  /** Al Banco Central le faltan días del mes: se cierra confirmando la tasa (2026-10-05). */
+  const bccrIncompleto = tc?.bccr && !tc.bccr.completo ? tc.bccr : null;
 
   async function enviar(clave: string, url: string, body: unknown, ok: string) {
     setOcupado(clave);
@@ -191,23 +194,19 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
         </section>
 
         <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-          {d.tipoCambio?.bccr ? (
+          {tc?.bccr?.completo ? (
             <section
               data-recorrido="fin.cierre.tc"
               id="tipo-de-cambio"
               aria-label={`Tipo de cambio de ${mes}`}
-              className={`flex flex-col gap-2 rounded-xl border p-4 ${d.tipoCambio.bccr.completo ? "border-line bg-surface" : "border-warn-line bg-warn-surface"}`}
+              className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4"
             >
-              <span className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${d.tipoCambio.bccr.completo ? "text-fg-muted" : "text-warn-ink"}`}>
-                Tipo de cambio de {mes}
-              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Tipo de cambio de {mes}</span>
               <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">
-                ₡{d.tipoCambio.crcPorUsd.toLocaleString("es-CR", { maximumFractionDigits: 2 })} por dólar
+                ₡{tc.crcPorUsd.toLocaleString("es-CR", { maximumFractionDigits: 2 })} por dólar
               </span>
-              <span className={`text-[13px] leading-[19px] ${d.tipoCambio.bccr.completo ? "text-fg-secondary" : "text-warn-ink"}`}>
-                {d.tipoCambio.bccr.completo
-                  ? `✓ El promedio de la venta del Banco Central de los ${d.tipoCambio.bccr.dias} días. Cada cobro y cada pago con fecha se convierte con la tasa de su día.`
-                  : `● Solo ${d.tipoCambio.bccr.dias === 1 ? "1 día tiene" : `${d.tipoCambio.bccr.dias} días tienen`} la tasa del Banco Central: faltan días del mes.`}
+              <span className="text-[13px] leading-[19px] text-fg-secondary">
+                {`✓ El promedio de la venta del Banco Central de los ${tc.bccr.dias} días. Cada cobro y cada pago con fecha se convierte con la tasa de su día.`}
               </span>
               <Link href="/finanzas/tipo-de-cambio" className="text-[13px] font-semibold text-brand hover:text-brand-light">
                 Ver el histórico
@@ -218,25 +217,32 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
             id="tipo-de-cambio"
             aria-label={`Tipo de cambio de ${mes}`}
             className={`flex flex-col gap-2 rounded-xl border p-4 ${
-              d.tipoCambio?.confirmadoPor ? "border-line bg-surface" : "border-warn-line bg-warn-surface"
+              tc?.confirmadoPor ? "border-line bg-surface" : "border-warn-line bg-warn-surface"
             }`}
           >
-            <span className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${d.tipoCambio?.confirmadoPor ? "text-fg-muted" : "text-warn-ink"}`}>
+            <span className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${tc?.confirmadoPor ? "text-fg-muted" : "text-warn-ink"}`}>
               Tipo de cambio de {mes}
             </span>
             <span className="text-[22px] font-bold leading-7 tabular-nums text-fg">
-              {d.tipoCambio ? `₡${d.tipoCambio.crcPorUsd.toLocaleString("es-CR")} por dólar` : "Sin tipo de cambio"}
+              {tc ? `₡${tc.crcPorUsd.toLocaleString("es-CR", { maximumFractionDigits: 2 })} por dólar` : "Sin tipo de cambio"}
             </span>
-            <span className={`text-[13px] leading-[19px] ${d.tipoCambio?.confirmadoPor ? "text-fg-secondary" : "text-warn-ink"}`}>
-              {d.tipoCambio?.confirmadoPor
-                ? `✓ Confirmado por ${d.tipoCambio.confirmadoPor} el ${fmtFecha(d.tipoCambio.registradoEn)}. ${d.tipoCambio.fuente}`
-                : d.tipoCambio
-                  ? `● Sin confirmar: ${d.tipoCambio.fuente}`
-                  : "Sin él, lo que está en colones no se suma al mes."}
+            <span className={`text-[13px] leading-[19px] ${tc?.confirmadoPor ? "text-fg-secondary" : "text-warn-ink"}`}>
+              {tc?.confirmadoPor
+                ? `✓ Confirmado por ${tc.confirmadoPor} el ${fmtFecha(tc.registradoEn)}. ${tc.fuente}`
+                : bccrIncompleto
+                  ? `● Solo ${bccrIncompleto.dias === 1 ? "1 día tiene" : `${bccrIncompleto.dias} días tienen`} la tasa del Banco Central: faltan días del mes. Para cerrarlo, confirma este promedio o pon otra tasa.`
+                  : tc
+                    ? `● Sin confirmar: ${tc.fuente}`
+                    : "Sin él, lo que está en colones no se suma al mes."}
             </span>
+            {tc?.confirmadoPor && bccrIncompleto && (
+              <span className="text-xs leading-[17px] text-fg-muted">
+                Al Banco Central le faltan días de {mes}: manda la tasa confirmada, hasta que el Banco Central tenga el mes completo.
+              </span>
+            )}
             {!otroTipo ? (
-              <div className="flex flex-wrap gap-2">
-                {d.tipoCambio && !d.tipoCambio.confirmadoPor && (
+              <div className="flex flex-wrap items-center gap-2">
+                {tc && !tc.confirmadoPor && (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -245,12 +251,17 @@ export default function CierreClient({ d }: { d: CierreDelMesDTO }) {
                       void enviar("tasa", "/api/finanzas/cierre/tipo-cambio", { periodo: d.periodo }, "Tipo de cambio confirmado.")
                     }
                   >
-                    {ocupado === "tasa" ? "Confirmando…" : `Confirmar ₡${d.tipoCambio.crcPorUsd.toLocaleString("es-CR")}`}
+                    {ocupado === "tasa" ? "Confirmando…" : `Confirmar ₡${tc.crcPorUsd.toLocaleString("es-CR", { maximumFractionDigits: 2 })}`}
                   </Button>
                 )}
                 <Button variant="ghost" size="sm" onClick={() => setOtroTipo(true)} disabled={ocupado !== null}>
-                  {d.tipoCambio ? "Poner otro" : "Poner el tipo de cambio"}
+                  {tc ? "Poner otro" : "Poner el tipo de cambio"}
                 </Button>
+                {bccrIncompleto && (
+                  <Link href="/finanzas/tipo-de-cambio" className="text-[13px] font-semibold text-brand hover:text-brand-light">
+                    Ver el histórico
+                  </Link>
+                )}
               </div>
             ) : (
               <form
