@@ -5127,3 +5127,41 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
 - **Lo que no se hizo:** agregar o quitar pasos y flechas desde la pantalla (hoy se edita un paso: qué pasa, quién,
   con qué, el dolor, de dónde sale y quitar citas); llevar lo que falta confirmar a la próxima sesión; y que el
   Diagnóstico lea solo hoy y la Planificación solo después (esos dos archivos los estaba cambiando otra sesión).
+
+## La carga de Customer Success y la rentabilidad por cuenta (2026-10-06)
+
+> Pedido de Elías: medir la carga de cada CSE para la 1:1 semanal de Alex Vanegas (CSL), y para Marco Salas y él, el
+> margen real de cada cuenta y cuándo contratar. Diseño aprobado en el artefacto «Rentabilidad» (versiones 8 a 10).
+
+- **Dos pantallas, dos audiencias, y el dinero en una sola.** «Carga del equipo» (Éxito del cliente, CSL y dirección,
+  por rol) es de HORAS y no muestra un monto. «Rentabilidad» (Finanzas › Reportes, `isCostosRole`) usa la planilla
+  entera para el costo de la hora; nunca muestra el costo de una persona.
+- **La carga es tiempo AGENDADO más lo que pide el cronograma, y lo dice.** Reuniones de Calendar (inicio y duración
+  del evento; cuenta a todos los invitados hasta leer la asistencia de Meet), preparación por reunión con un cliente
+  y la entrega estimada: tareas del cronograma × horas por tipo de fase × factor de complejidad de la cuenta. Una
+  reunión de 8 h o más es de día completo y no cuenta; las demás se topan en 4 h. Quien se fue no suma después de su
+  baja y quien entró no cuenta las semanas anteriores. Lo que ya pasó cuenta lo que el plan pedía; lo que viene, solo
+  lo abierto. Las tareas abiertas con fecha pasada no suman: se cuentan aparte (pueden estar hechas sin marcar).
+- **Los supuestos se ven y se editan** (`ConfigCarga`, append-only, CSL y dirección): capacidad (40 h × 80 %),
+  preparación, horas por tipo de fase, pesos del factor, semáforo (70 / 85 %), semanas para la señal, traspaso,
+  semanas para contratar y horas por tipo de trato. Sin fila guardada rigen los de fábrica (`lib/carga/config.ts`).
+  ⚠ La tabla es nueva: `scripts/sql/2026-10-06-config-carga.sql` va ANTES del deploy que traiga el modelo, o
+  `/api/health` responde 503 y el deploy se revierte.
+- **El factor de complejidad es explicable**: base 1,0 más una suma por variable (Hubs pagados, Enterprise,
+  usuarios, integración, migración, etapa, industria regulada, uso cayendo, relación fría, Escala), con tope 3,0.
+  Una variable sin dato suma 0 y se dice «falta»: un «sin dato» no es «simple». No multiplica las reuniones medidas
+  (ya traen la complejidad adentro): pesa la entrega estimada y sirve para comparar cuentas.
+- **Quien no aparece en el calendario no es espacio libre.** Una persona con dos semanas o más sin reuniones se señala
+  y no cuenta en «horas libres» ni en la capacidad de la contratación; quien entró hace poco sí cuenta.
+- **Nexus sugiere; no mueve cuentas ni contrata.** Las señales de la 1:1 y el simulador de traspasos no escriben nada
+  (el dueño se cambia en HubSpot). La contratación PROPONE cuántos CSE y desde cuándo buscar; la confirma dirección.
+- **La proyección cuenta solo los tratos al 50 % o más.** Sumar los 191 tratos abiertos (muchos al 10 % y vencidos
+  hace meses) daba 150 % y 6 CSE; con los 24 que cuentan da 104–109 % y 2. El tipo de trabajo de un trato se deduce
+  de su nombre (y, sin palabras, de si la empresa ya es cliente): hasta que el catálogo de casos de uso tenga horas.
+- **Dos costos de la hora.** Directo = planilla ÷ horas pagadas; cargado = planilla entera ÷ horas con clientes, el
+  que dice si una cuenta deja plata. La planilla sale del libro (una quincena pagada y la persona sigue = la otra
+  está por pagarse) y, sin libro, del salario registrado; más la reserva de aguinaldo (13/12). Todo en dólares con
+  la tasa de cada mes (`convertir`); lo que no tiene tasa no se adivina, se avisa.
+- **Lo que no se construyó todavía, a propósito**: la lectura de la IA arriba de cada pantalla (pide un agente con su
+  corrida y su costo), la complejidad en la pestaña de la cuenta, «Tu semana», la asistencia de Meet, las horas por
+  tarea y por caso de uso, y la pregunta «¿cuánto te tomó?» (esa se arma en Feedback).

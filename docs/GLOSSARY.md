@@ -592,6 +592,16 @@
   retiró** el 2026-08-14. Reemplazó a las cuatro tarjetas de texto ese mismo día **sin agregar
   ningún campo obligatorio**, así que las propuestas ya publicadas la estrenan solas: sin
   `titular` cae al rótulo del documento. Ver DECISIONS §«Por qué Smarteam».
+- **Carga del equipo** (`/customer-success/carga`, `lib/carga`): las horas comprometidas de cada persona de CS por
+  semana —reuniones agendadas, preparación y entrega estimada del cronograma— contra sus horas disponibles (contrato ×
+  parte productiva). **Utilización** = horas ÷ disponibles; semáforo: con espacio (< 70 %), llena (70–85 %), sobrecarga
+  (> 85 %). Las semanas que vienen se **proyectan** con el ritmo de reuniones de las últimas cuatro. Sin montos.
+- **Factor de complejidad** (`lib/carga/complejidad.ts`): cuánto más trabajo pide una cuenta que la base, de 1,0 a 3,0,
+  sumando por variable (Hubs, Enterprise, usuarios, integración, etapa, industria, uso, relación, Escala). Cada variable
+  dice si el dato está, es parcial o falta.
+- **Supuestos de la carga** (`ConfigCarga`): los valores editables del cálculo, con quién los cambió y cuándo.
+- **Costo de la hora** (Finanzas › Rentabilidad): **directo** = planilla ÷ horas pagadas; **cargado** = planilla entera ÷
+  horas con clientes. El margen de una cuenta es lo cobrado − sus horas reales × el costo de la hora elegido.
 - **Para ti** (`/para-ti`, primer ítem del menú, `lib/para-ti`): lo que le toca a cada persona en Nexus, juntado de
   todos los módulos y recortado a lo suyo y a sus frentes. Arriba lo que dejó un agente; después «Para hoy», «Esta
   semana» y «Cuando puedas»; a la derecha los avisos. El número del menú cuenta lo de hoy y los avisos sin leer.
