@@ -14,7 +14,6 @@
  * · no lleva caracteres de control (saltos, tabulaciones, nulos): el navegador los BORRA antes de leer
  *   la dirección, así que `/\t/otro.com` termina siendo `//otro.com`.
  */
-// eslint-disable-next-line no-control-regex -- justamente buscamos los caracteres de control
 const CONTROL = /[\u0000-\u001f\u007f]/;
 
 export function esRutaInterna(href: string): boolean {
