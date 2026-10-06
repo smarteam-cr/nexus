@@ -521,6 +521,12 @@ export default function ChatDelAsistente({
     return true;
   }
 
+  /** Saca el foco del cajón (si lo tiene): Ctrl+Z vuelve a ser del documento, no del texto del chat. */
+  function soltarElFocoDelCajon() {
+    const enfocado = document.activeElement;
+    if (enfocado instanceof HTMLElement && cajonRef.current?.contains(enfocado)) enfocado.blur();
+  }
+
   /**
    * ⚠ `descartadas` es el CONJUNTO de índices, no su tamaño. Era un número, y el número no
    * alcanzaba: ver `notaDeDescarte`. El llamador ya tiene el `Set` a mano.
@@ -546,6 +552,11 @@ export default function ChatDelAsistente({
            perdería lo único útil que tenía. */
         await anotarDesenlace(false, fallo).catch(() => false);
       } else {
+        /* ⭐ EL FOCO SALE DEL CAJÓN AL APLICAR (auditoría del deshacer, 2026-10-05). Si se quedaba en
+           el campo del chat, Ctrl+Z hacía el deshacer nativo de ese texto y no el de lo aplicado,
+           que es lo que la persona quiere deshacer. El aviso «Aplicado · Deshacer» lo pone el
+           deshacer global (los documentos agrupan lo aplicado en UN paso: ChatDelDocumento). */
+        soltarElFocoDelCajon();
         /* ⚠ Los avisos viajan al hilo: son la diferencia entre «se aplicó» y «se aplicó, pero
            el editor hizo otra cosa con una parte». Y como el modelo LEE el hilo, en el próximo
            turno sabe qué no entró y puede proponer otro camino. */

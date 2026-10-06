@@ -30,6 +30,22 @@
  *  - Ctrl+Z se ignora si el foco está en un input/textarea/select/contentEditable
  *    (no pisar el undo nativo del texto) o si no hay entradas.
  *
+ * ── LO QUE CAMBIÓ CON LA AUDITORÍA DEL DESHACER (2026-10-05) ──────────────────────────────
+ *  - ⛔ SOLO LO QUE SE VE. La pila es global, y Ctrl+Z tomaba la última entrada de cualquier
+ *    pantalla montada aunque estuviera oculta. Ahora una pantalla declara su ANCLA (el elemento
+ *    que la representa) al registrar su scope —`useUndoScope(scope, ref)`— o por entrada
+ *    (`pushUndo({ …, ancla })`), y Ctrl+Z deshace la entrada MÁS RECIENTE cuya ancla se ve. Si no
+ *    hay ninguna visible, no hace nada (y no cancela la tecla). Sin ancla declarada la entrada se
+ *    da por visible: compatibilidad con las pantallas que todavía no la declaran (el cronograma).
+ *    La lógica pura vive en lib/ui/deshacer.ts, con su prueba.
+ *  - ⛔ UNA TECLA, UN DESHACER. Si otro manejador ya atendió Ctrl+Z (`defaultPrevented`: el
+ *    diagrama, con su pila propia), el global no actúa. Los locales escuchan en `document` y este
+ *    en `window`, así que en el burbujeo el otro siempre pasa antes.
+ *  - El botón del aviso deshace EXACTAMENTE la entrada que el aviso muestra, y el aviso se va si
+ *    su pantalla deja de verse.
+ *  - `agruparDeshacer(label, fn)`: todo lo que se registre mientras corre `fn` queda en UN paso
+ *    (lo que el chat aplica a un documento de una vez: «Aplicado · Deshacer»).
+ *
  * Montado una vez en app/layout.tsx, DENTRO de <ToastProvider> (usa useToast para el
  * error si un restablecer falla). Redo (Ctrl+Shift+Z) queda fuera de alcance (v1).
  */
@@ -44,6 +60,19 @@ import {
   type ReactNode,
 } from "react";
 import { useToast } from "./Toast";
+import {
+  deshacerEnOrdenInverso,
+  elegirEntradaParaDeshacer,
+  elGlobalAtiende,
+  resolverAncla,
+  seVeEnPantalla,
+  sumarAlGrupo,
+  superficieVisible,
+  type Ancla,
+} from "@/lib/ui/deshacer";
+
+/** Dónde está la pantalla de una entrada: el elemento, un ref o una función que lo devuelve. */
+export type AnclaDeDeshacer = Ancla<Element>;
 
 export interface UndoCommand {
   /** Contexto de la superficie, p. ej. `cronograma:projId`, `canvas:projId:canvasId`, `bc:bcId`. */
@@ -52,20 +81,38 @@ export interface UndoCommand {
   label: string;
   /** scope|entidad|campo — ediciones consecutivas con la misma clave se agrupan (~800 ms). */
   coalesceKey?: string;
-  /** Revierte ESTA acción. Devolvé false (o lanzá) si ya no se puede (el dato cambió). */
+  /** Revierte ESTA acción. Devuelve false (o lanza) si ya no se puede (el dato cambió). */
   undo: () => void | Promise<boolean | void>;
+  /**
+   * Opcional: el elemento que representa la pantalla de ESTA entrada. Sin él vale el ancla con que
+   * la pantalla registró su scope (`useUndoScope(scope, ancla)`); sin ninguna, la entrada se da por
+   * visible. Ctrl+Z solo deshace entradas cuya pantalla se ve.
+   */
+  ancla?: AnclaDeDeshacer;
 }
 
 interface UndoEntry extends UndoCommand {
   id: number;
   ts: number;
+  /** Un GRUPO (`agruparDeshacer`): sus entradas se deshacen juntas, de la última a la primera. */
+  hijos?: UndoEntry[];
 }
 
 interface UndoApi {
   pushUndo: (cmd: UndoCommand) => void;
   clearScope: (scope: string) => void;
-  /** Devuelve un cleanup que purga el scope (lo usa useUndoScope al desmontar). */
-  registerScope: (scope: string) => () => void;
+  /**
+   * Devuelve un cleanup que purga el scope (lo usa useUndoScope al desmontar). `ancla` (opcional):
+   * dónde está la pantalla, para que Ctrl+Z no deshaga lo suyo mientras está oculta.
+   */
+  registerScope: (scope: string, ancla?: AnclaDeDeshacer) => () => void;
+  /**
+   * Corre `fn` y junta TODO lo que se registre mientras tanto en UN solo paso con `label` (sin un
+   * aviso por cada uno). Un grupo dentro de otro se suma al de afuera.
+   * ⚠ Junta lo de cualquier pantalla: es para ráfagas cortas que la persona disparó de una vez
+   * (lo que el chat aplica a un documento), no para envolver una sesión de edición.
+   */
+  agruparDeshacer: <T>(label: string, fn: () => Promise<T>) => Promise<T>;
 }
 
 const UndoContext = createContext<UndoApi | null>(null);
@@ -80,10 +127,30 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   const idRef = useRef(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const deadlineRef = useRef(0);
+  /** Las anclas que cada pantalla declaró para su scope (puede haber más de una montada). */
+  const anclasRef = useRef(new Map<string, AnclaDeDeshacer[]>());
+  /** El grupo abierto por `agruparDeshacer`, si hay uno: lo que se registre va adentro. */
+  const grupoRef = useRef<{ hijos: UndoEntry[] } | null>(null);
 
   // Solo el ÚLTIMO comando muestra contador. El stack vive en un ref (no se renderiza entero).
   const [visible, setVisible] = useState<{ id: number; label: string } | null>(null);
   const [remaining, setRemaining] = useState(0);
+
+  /**
+   * Si la pantalla de una entrada se ve. Un grupo se ve si se ve alguna de las suyas. Se pregunta en
+   * el momento de deshacer (no al registrar): la pantalla pudo ocultarse o volver a verse después.
+   */
+  const entradaVisible = useCallback((e: UndoEntry): boolean => {
+    const ver = (x: UndoEntry): boolean => {
+      if (x.hijos) return x.hijos.some(ver);
+      const anclas = x.ancla !== undefined ? [x.ancla] : (anclasRef.current.get(x.scope) ?? []);
+      return superficieVisible(
+        anclas.map((a) => resolverAncla(a)),
+        seVeEnPantalla,
+      );
+    };
+    return ver(e);
+  }, []);
 
   const stopTick = useCallback(() => {
     if (tickRef.current) {
@@ -107,7 +174,10 @@ export function UndoProvider({ children }: { children: ReactNode }) {
       stopTick();
       tickRef.current = setInterval(() => {
         const left = Math.ceil((deadlineRef.current - Date.now()) / 1000);
-        if (left <= 0) {
+        /* El aviso se va también si su pantalla dejó de verse (la persona pasó a otra pestaña): su
+           botón deshace ESA entrada, y deshacer algo que no está en pantalla es el hueco que se cerró. */
+        const entrada = stackRef.current.find((e) => e.id === id);
+        if (left <= 0 || !entrada || !entradaVisible(entrada)) {
           setVisible(null);
           setRemaining(0);
         } else {
@@ -115,12 +185,19 @@ export function UndoProvider({ children }: { children: ReactNode }) {
         }
       }, 250);
     },
-    [stopTick],
+    [stopTick, entradaVisible],
   );
 
   const pushUndo = useCallback(
     (cmd: UndoCommand) => {
       const now = Date.now();
+      /* Con un grupo abierto, la entrada se suma al grupo y no muestra aviso propio: el aviso es el
+         del grupo, cuando se cierra. */
+      const grupo = grupoRef.current;
+      if (grupo) {
+        grupo.hijos = sumarAlGrupo(grupo.hijos, { ...cmd, id: ++idRef.current, ts: now });
+        return;
+      }
       const stack = stackRef.current;
       const top = stack[stack.length - 1];
       // Coalesce: misma acción consecutiva → conservar la entrada original (su snapshot
@@ -145,13 +222,65 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   );
 
   const clearScope = useCallback((scope: string) => {
-    stackRef.current = stackRef.current.filter((e) => e.scope !== scope);
+    // Un grupo con alguna entrada de ese scope se va entero: una purga nunca aplica un deshacer a
+    // medias sobre una pantalla que ya no está.
+    stackRef.current = stackRef.current.filter(
+      (e) => e.scope !== scope && !e.hijos?.some((h) => h.scope === scope),
+    );
+    if (grupoRef.current) grupoRef.current.hijos = grupoRef.current.hijos.filter((h) => h.scope !== scope);
     setVisible((v) => (v && !stackRef.current.some((e) => e.id === v.id) ? null : v));
   }, []);
 
   const registerScope = useCallback(
-    (scope: string) => () => clearScope(scope),
+    (scope: string, ancla?: AnclaDeDeshacer) => {
+      if (ancla != null) {
+        const m = anclasRef.current;
+        m.set(scope, [...(m.get(scope) ?? []), ancla]);
+      }
+      return () => {
+        if (ancla != null) {
+          const m = anclasRef.current;
+          const resto = (m.get(scope) ?? []).filter((a) => a !== ancla);
+          if (resto.length > 0) m.set(scope, resto);
+          else m.delete(scope);
+        }
+        clearScope(scope);
+      };
+    },
     [clearScope],
+  );
+
+  const agruparDeshacer = useCallback(
+    async <T,>(label: string, fn: () => Promise<T>): Promise<T> => {
+      // Anidado: lo de adentro se suma al grupo de afuera (un acuerdo es UN paso, siempre).
+      if (grupoRef.current) return fn();
+      const grupo: { hijos: UndoEntry[] } = { hijos: [] };
+      grupoRef.current = grupo;
+      try {
+        return await fn();
+      } finally {
+        grupoRef.current = null;
+        const hijos = grupo.hijos;
+        if (hijos.length > 0) {
+          const id = ++idRef.current;
+          stackRef.current.push({
+            scope: hijos[0].scope,
+            label,
+            id,
+            ts: Date.now(),
+            hijos,
+            undo: () =>
+              deshacerEnOrdenInverso(
+                hijos.map((h) => h.undo),
+                (e) => console.error("[undo] falló un paso del grupo", e),
+              ),
+          });
+          if (stackRef.current.length > MAX_STACK) stackRef.current.shift();
+          showToast(id, label);
+        }
+      }
+    },
+    [showToast],
   );
 
   const runUndo = useCallback(
@@ -167,37 +296,50 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     [toast],
   );
 
-  // Pop & run del último comando del stack (el más reciente, sin importar scope: la
-  // purga al desmontar garantiza que el stack solo tenga entradas de superficies montadas).
-  const popAndRun = useCallback(() => {
-    const entry = stackRef.current.pop();
-    if (!entry) return false;
-    setVisible((v) => (v && v.id === entry.id ? null : v));
-    void runUndo(entry);
-    return true;
-  }, [runUndo]);
+  /** Saca de la pila la entrada `idx` y la deshace. */
+  const sacarYDeshacer = useCallback(
+    (idx: number) => {
+      const [entry] = stackRef.current.splice(idx, 1);
+      if (!entry) return;
+      setVisible((v) => (v && v.id === entry.id ? null : v));
+      void runUndo(entry);
+    },
+    [runUndo],
+  );
 
-  // Atajo global Ctrl/Cmd+Z. Guard: no pisar el undo nativo del texto ni actuar sin entradas.
+  /* El botón del aviso deshace EXACTAMENTE la entrada que el aviso muestra —no «la última de la
+     pila», que con varias pantallas montadas puede ser otra—, y solo si su pantalla se ve. */
+  const deshacerDelAviso = useCallback(
+    (id: number) => {
+      const idx = stackRef.current.findIndex((e) => e.id === id);
+      if (idx < 0 || !entradaVisible(stackRef.current[idx])) {
+        setVisible(null);
+        return;
+      }
+      sacarYDeshacer(idx);
+    },
+    [entradaVisible, sacarYDeshacer],
+  );
+
+  /* Atajo global Ctrl/Cmd+Z. Escucha en `window` A PROPÓSITO: los manejadores locales (el diagrama)
+     escuchan en `document`, que en el burbujeo pasa antes, así que acá ya se sabe si alguien la
+     atendió. No pisa el deshacer nativo del texto, y deshace la entrada más reciente cuya pantalla se
+     ve: si no hay ninguna, no cancela la tecla. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
-      if (e.key.toLowerCase() !== "z") return;
-      const el = document.activeElement as HTMLElement | null;
-      if (el) {
-        const tag = el.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable) return;
-      }
-      if (stackRef.current.length === 0) return;
+      if (!elGlobalAtiende(e, document.activeElement as HTMLElement | null)) return;
+      const idx = elegirEntradaParaDeshacer(stackRef.current, entradaVisible);
+      if (idx < 0) return;
       e.preventDefault();
-      popAndRun();
+      sacarYDeshacer(idx);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [popAndRun]);
+  }, [entradaVisible, sacarYDeshacer]);
 
   const api = useMemo<UndoApi>(
-    () => ({ pushUndo, clearScope, registerScope }),
-    [pushUndo, clearScope, registerScope],
+    () => ({ pushUndo, clearScope, registerScope, agruparDeshacer }),
+    [pushUndo, clearScope, registerScope, agruparDeshacer],
   );
 
   return (
@@ -209,7 +351,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
             <style>{`@keyframes nx-undo-in{from{opacity:0;transform:translateY(10px) scale(.975)}to{opacity:1;transform:translateY(0) scale(1)}}.nx-undo-in{animation:nx-undo-in .18s cubic-bezier(.21,1.02,.73,1)}`}</style>
             <span className="text-[13px] font-medium text-fg">{visible.label}</span>
             <button
-              onClick={() => popAndRun()}
+              onClick={() => deshacerDelAviso(visible.id)}
               className="text-xs font-semibold text-brand hover:underline underline-offset-2 whitespace-nowrap"
             >
               Deshacer <span className="text-fg-muted">({remaining}s)</span>
@@ -228,10 +370,23 @@ export function useUndo(): UndoApi {
 }
 
 /**
- * Marca un scope como montado y PURGA sus entradas al desmontar la superficie. Llamalo
+ * Marca un scope como montado y PURGA sus entradas al desmontar la superficie. Llámalo
  * en el componente raíz de cada editor con su scope estable (p. ej. `cronograma:${projectId}`).
+ *
+ * `ancla` (opcional, recomendado): el elemento raíz de la pantalla —un ref sirve—. Con ella, Ctrl+Z
+ * no deshace lo de esta pantalla mientras está oculta (montada pero con `hidden`, en otra pestaña).
  */
-export function useUndoScope(scope: string) {
+export function useUndoScope(scope: string, ancla?: AnclaDeDeshacer) {
   const { registerScope } = useUndo();
-  useEffect(() => registerScope(scope), [registerScope, scope]);
+  // Por ref: un ref o una función inline cambian de identidad en cada render, y re-registrar el
+  // scope por eso lo purgaría a cada rato.
+  const anclaRef = useRef(ancla);
+  useEffect(() => {
+    anclaRef.current = ancla;
+  });
+  const tieneAncla = ancla != null;
+  useEffect(
+    () => registerScope(scope, tieneAncla ? () => resolverAncla(anclaRef.current) : undefined),
+    [registerScope, scope, tieneAncla],
+  );
 }

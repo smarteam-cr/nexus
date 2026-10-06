@@ -42,6 +42,7 @@ import {
   LeadStatusNode,
 } from "./pipeline-nodes";
 import { IconX } from "@/components/ui/AcceptReject";
+import { elDiagramaAtiende, esCampoDeTexto, seVeEnPantalla } from "@/lib/ui/deshacer";
 import { SystemNode } from "./integration-nodes";
 import { DataFlowEdge, SelectableSmoothStepEdge } from "./integration-edges";
 
@@ -416,6 +417,10 @@ function FlowchartInner({
   // ── Undo / Redo ───────────────────────────────────────────────────────────
   const undoStack = useRef<HistoryEntry[]>([]);
   const redoStack = useRef<HistoryEntry[]>([]);
+  // La raíz del diagrama (para saber si se ve y si el último clic cayó adentro) y si la persona
+  // está trabajando en él. Ver el manejador de teclado más abajo.
+  const raizRef = useRef<HTMLDivElement>(null);
+  const activoRef = useRef(false);
 
   // Resetear historial al cambiar el diagrama (nueva ejecución / datos distintos)
   useEffect(() => {
@@ -617,19 +622,53 @@ function FlowchartInner({
     setEdges((eds) => [...eds, ...newEdges]);
   }, [captureSnapshot, setNodes, setEdges, makeOnLabelChangeFor, makeOnResizeFor, makeOnEdgeLabelChangeFor, makeOnEdgeLabelPosFor]);
 
+  // Si la persona está trabajando EN este diagrama: su último clic cayó adentro. Con varios
+  // diagramas montados (o un diagrama y el resto del documento), Ctrl+Z es del que se está usando.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const raiz = raizRef.current;
+      activoRef.current = !!raiz && e.target instanceof Node && raiz.contains(e.target);
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => document.removeEventListener("pointerdown", onDown, true);
+  }, []);
+
   // Ctrl+Z / Ctrl+Shift+Z (undo/redo) + Ctrl+C / Ctrl+V (duplicar selección) — igual que
-  // Miro. Se ignora si el foco está en un input/textarea (edición de etiqueta en curso) y,
-  // para copiar/pegar, si hay texto de verdad seleccionado en la página (no pisar un copy
-  // de texto nativo, ej. seleccionar una palabra de una etiqueta sin entrar en edición).
+  // Miro. Se ignora si el foco está en un campo de texto (input, textarea, select o
+  // contentEditable: edición de etiqueta en curso, o el texto editable de al lado) y, para
+  // copiar/pegar, si hay texto de verdad seleccionado en la página (no pisar un copy de
+  // texto nativo, ej. seleccionar una palabra de una etiqueta sin entrar en edición).
+  //
+  // ⛔ UNA TECLA, UN DESHACER (auditoría del deshacer, 2026-10-05). Este diagrama tiene su pila
+  // propia y el deshacer global (UndoProvider) también escucha Ctrl+Z: los dos atendían la misma
+  // tecla y un Ctrl+Z deshacía dos cosas. Ahora este escucha en `document` (en el burbujeo pasa
+  // ANTES que el global, que está en `window`), cancela la tecla SOLO si de verdad deshizo algo
+  // —con la pila vacía, el global tiene que poder deshacer lo del resto del documento— y el
+  // global respeta la cancelación. La regla vive en `elDiagramaAtiende` (lib/ui/deshacer.ts).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault(); handleUndo();
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
-        e.preventDefault(); handleRedo();
+      const enfocado = document.activeElement as HTMLElement | null;
+      const enCampo = esCampoDeTexto(e.target as HTMLElement | null) || esCampoDeTexto(enfocado);
+      if (enCampo) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const tecla = (e.key ?? "").toLowerCase();
+      const esDeshacer = mod && tecla === "z" && !e.shiftKey;
+      const esRehacer = mod && (tecla === "y" || (tecla === "z" && e.shiftKey));
+      if (esDeshacer || esRehacer) {
+        const raiz = raizRef.current;
+        const atiende = elDiagramaAtiende({
+          yaAtendida: e.defaultPrevented,
+          enCampoDeTexto: enCampo,
+          seVe: !!raiz && seVeEnPantalla(raiz),
+          activo: isFullscreen || activoRef.current || (!!raiz && !!enfocado && raiz.contains(enfocado)),
+          hayHistorial: esDeshacer ? undoStack.current.length > 0 : redoStack.current.length > 0,
+        });
+        if (atiende) {
+          e.preventDefault();
+          if (esDeshacer) handleUndo();
+          else handleRedo();
+        }
+        return;
       }
       if (!canEdit) return;
       const hasTextSelection = !!window.getSelection?.()?.toString();
@@ -640,9 +679,9 @@ function FlowchartInner({
         e.preventDefault(); handlePaste();
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [handleUndo, handleRedo, canEdit, handleCopy, handlePaste]);
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [handleUndo, handleRedo, canEdit, handleCopy, handlePaste, isFullscreen]);
 
   // ── Construcción del grafo ────────────────────────────────────────────────
   // makeOnLabelChange INSIDE buildGraph para evitar que su referencia entre en
@@ -1508,7 +1547,7 @@ function FlowchartInner({
   const selectedCount = nodes.filter((n) => n.selected && !n.id.startsWith("__")).length;
 
   const flowContent = (
-    <div className="relative w-full h-full">
+    <div ref={raizRef} className="relative w-full h-full">
       {/* Resaltado de selección — UNA sola regla cubre los ~18 tipos de nodo (cajas, texto,
           notas) sin tocar cada componente; React Flow ya agrega la clase `selected` al
           wrapper de cada nodo. El borde/radio queda algo "rectangular" en formas tipo

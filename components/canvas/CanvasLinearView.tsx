@@ -14,7 +14,7 @@
  * NO toca SectionBlockList (la grilla sigue sirviendo a los demás canvases).
  */
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import BlockRenderer, { type BlockData } from "./BlockRenderer";
 import { useCanvasSections } from "./useCanvasSections";
 import { CanvasSectionsSkeleton } from "@/components/clients/skeletons";
@@ -27,18 +27,6 @@ import { BotonAzul, BotonTexto, FranjaDeSugerencias, ROTULO_DEL_SISTEMA } from "
 const SECCION_NORMAL = "rounded-xl border border-line bg-surface";
 const SECCION_PRINCIPAL = "rounded-xl border border-line bg-surface lg:col-span-2";
 const CABECERA = "flex items-center gap-2 border-b border-line px-5 py-3.5";
-
-/** Un bloque "tiene contenido" si su texto o su data traen algo (no un manual vacío). */
-function blockHasContent(block: BlockData): boolean {
-  if (block.content && block.content.trim().length > 0) return true;
-  const d = block.data;
-  if (d && typeof d === "object") {
-    return Object.values(d as Record<string, unknown>).some((v) =>
-      Array.isArray(v) ? v.length > 0 : v != null && v !== "",
-    );
-  }
-  return false;
-}
 
 export default function CanvasLinearView({
   projectId,
@@ -58,6 +46,9 @@ export default function CanvasLinearView({
      HANDOFF_SECCION_PRINCIPAL); sin la prop, todas se ven iguales, como siempre. */
   destacarKey?: string;
 }) {
+  // La raíz de la vista: el ancla del deshacer global. Con ella, Ctrl+Z no deshace lo de este
+  // documento mientras está oculto (otra pestaña de la ficha, o el handoff de un proyecto hermano).
+  const raizRef = useRef<HTMLDivElement>(null);
   const {
     sections: allSections,
     loading,
@@ -69,8 +60,7 @@ export default function CanvasLinearView({
     acceptAll: hookAcceptAll,
     error,
     clearError,
-    restoreBlock,
-  } = useCanvasSections(`/api/projects/${projectId}`, canvasId);
+  } = useCanvasSections(`/api/projects/${projectId}`, canvasId, undefined, { anclaDeDeshacer: raizRef });
 
   // Con onlyKey filtramos a una sección; draftCount y "Aceptar todos" se acotan a lo
   // visible (igual que SectionBlockList) para no contar/aceptar otras secciones.
@@ -79,59 +69,32 @@ export default function CanvasLinearView({
     (n, s) => n + s.blocks.filter((b) => b.status === "DRAFT").length,
     0,
   );
-  const acceptAll = onlyKey
-    ? async () => {
-        await Promise.all(
-          sections.flatMap((s) =>
-            s.blocks.filter((b) => b.status === "DRAFT").map((b) => acceptBlock(s.id, b.id)),
-          ),
-        );
-      }
-    : hookAcceptAll;
+  /* «Usar todos» es UN paso de deshacer también con una sola sección: antes, con `onlyKey`, se
+     aceptaba bloque por bloque y quedaban N pasos en la pila. */
+  const acceptAll = () => hookAcceptAll(onlyKey ? sections.map((s) => s.id) : undefined);
 
-  // Borrado con feedback: estado "bloqueado" (color + animación) mientras se borra,
-  // y un toast flotante para deshacer (~10s) si el bloque borrado tenía contenido.
+  /* Borrado con feedback: estado "bloqueado" (color + animación) mientras se borra.
+     ⛔ El deshacer es UNO, el global (aviso «Bloque eliminado · Deshacer» y Ctrl+Z), que registra
+     `deleteBlock`. Acá había un SEGUNDO aviso propio con su propio «Deshacer»: usar los dos
+     recreaba el bloque DOS veces (auditoría del deshacer, 2026-10-05). */
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
-  const [undo, setUndo] = useState<{ sectionId: string; block: BlockData } | null>(null);
-  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
-
-  const dismissUndo = useCallback(() => {
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-    setUndo(null);
-  }, []);
 
   const handleDelete = useCallback(
     async (sectionId: string, block: BlockData) => {
       setDeletingIds((s) => new Set(s).add(block.id));
       await new Promise<void>((r) => setTimeout(r, 350)); // que el estado "bloqueado" se vea
-      const ok = await deleteBlock(sectionId, block.id);
+      await deleteBlock(sectionId, block.id); // si falla, el banner de error avisa y el bloque sigue ahí
       setDeletingIds((s) => { const n = new Set(s); n.delete(block.id); return n; });
-      if (!ok) return; // el banner de error ya avisa; el bloque sigue ahí
-      if (blockHasContent(block)) {
-        if (undoTimer.current) clearTimeout(undoTimer.current);
-        setUndo({ sectionId, block });
-        undoTimer.current = setTimeout(() => setUndo(null), 10000);
-      }
     },
     [deleteBlock],
   );
-
-  const handleUndo = useCallback(async () => {
-    if (!undo) return;
-    const u = undo;
-    dismissUndo();
-    await restoreBlock(u.sectionId, u.block);
-  }, [undo, restoreBlock, dismissUndo]);
 
   // Cáscara de sección (cabecera + bloques de prosa), no slabs: el canvas Handoff tiene
   // 8-10 secciones de ~200-500px, así que 3 rectángulos de 128px no reservaban nada.
   if (loading) return <CanvasSectionsSkeleton count={onlyKey ? 1 : 4} columns={onlyKey ? 1 : 2} />;
 
   return (
-    <>
-    <div className="space-y-4">
+    <div ref={raizRef} className="space-y-4">
       {/* Error de guardado — no silencioso */}
       {error && (
         <Alert variant="danger" title="No se pudo guardar">
@@ -202,17 +165,5 @@ export default function CanvasLinearView({
       })}
       </div>
     </div>
-
-    {/* Toast flotante: deshacer borrado (~10s) — solo aparece para bloques con contenido */}
-    {undo && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 rounded-xl bg-surface border border-line shadow-xl px-4 py-3" role="status">
-        <span className="text-sm text-fg">Bloque eliminado</span>
-        <button onClick={handleUndo} className="text-sm font-semibold text-brand hover:text-brand-dark transition-colors">Deshacer</button>
-        <button onClick={dismissUndo} title="Cerrar" className="text-fg-muted hover:text-fg transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
-    )}
-    </>
   );
 }

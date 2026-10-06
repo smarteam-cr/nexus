@@ -24,6 +24,7 @@ import {
   esOperacionDeDocumento,
   verificarOperacionesDeDocumento,
   type CapacidadesDelDocumento,
+  type EscrituraDeDocumento,
   type OperacionDeDocumento,
   type SeccionActual,
   type CompletadorDeItem,
@@ -166,6 +167,36 @@ export function useEjecutarOperacionesDelChat(
     }
 
     const { plan, avisos, rechazadas } = aplicarOperacionesDeDocumento(secs, ops, caps, comps);
+
+    /**
+     * ⛔ BORRAR UNA SECCIÓN NO SE DESHACE (auditoría del deshacer, 2026-10-05): se va en cascada, con
+     * todo lo que tenga adentro, y el «Aplicado · Deshacer» no la trae de vuelta. El botón «Borrar
+     * sección» pide confirmación; el chat también, ANTES de la primera escritura.
+     * Si la persona dice que no, no se aplica NADA: el resto del plan pudo contar con ese borrado (el
+     * orden, por ejemplo), y aplicarlo a medias dejaría un documento que nadie acordó. El acuerdo
+     * queda vivo para desmarcar esa línea y volver a aplicar.
+     */
+    const borrados = plan.filter(
+      (e): e is Extract<EscrituraDeDocumento, { tipo: "borrar" }> => e.tipo === "borrar",
+    );
+    if (borrados.length > 0) {
+      const nombres = borrados
+        .map((e) => `«${secs.find((s) => s.id === e.sectionId)?.label ?? "sin nombre"}»`)
+        .join(", ");
+      const seguir = window.confirm(
+        `${borrados.length === 1 ? "El acuerdo borra la sección" : "El acuerdo borra las secciones"} ${nombres}.\n\n` +
+          "Borrar una sección no se puede deshacer: se va con todo lo que tenga adentro. ¿Seguir?",
+      );
+      if (!seguir) {
+        return {
+          escribio: false,
+          avisos: [],
+          rechazadas: [
+            `No se aplicó nada: cancelaste el borrado de ${nombres}. Si quieres el resto, desmarca esa línea y vuelve a aplicar.`,
+          ],
+        };
+      }
+    }
 
     /**
      * ⚠ Las creaciones van PRIMERO y en serie: el id lo genera el servidor, así que hasta que no

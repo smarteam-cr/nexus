@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import BlockRenderer, { type BlockData } from "./BlockRenderer";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
 import { CanvasSectionsSkeleton } from "@/components/clients/skeletons";
+import { cuerpoParaRestaurar } from "@/lib/canvas/restaurar-bloque";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,9 +63,12 @@ export default function SectionBlockList({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // ── Undo global ──────────────────────────────────────────────────────────────
+  // Cada paso se registra solo si el guardado salió bien (un deshacer de algo que falló «revierte»
+  // un cambio que no pasó). El ancla es la raíz de la grilla: Ctrl+Z no deshace lo de este canvas
+  // mientras está oculto.
   const { pushUndo } = useUndo();
   const undoScope = `canvas:${projectId}:${canvasId}`;
-  useUndoScope(undoScope); // purga el historial al desmontar (no aplica a otro canvas)
+  useUndoScope(undoScope, containerRef); // purga el historial al desmontar (no aplica a otro canvas)
   const allSectionsRef = useRef(allSections);
   useEffect(() => { allSectionsRef.current = allSections; }); // latest ref (no tocar refs en render)
   const findBlockSnap = (blockId: string): BlockData | undefined =>
@@ -248,29 +252,31 @@ export default function SectionBlockList({
               ? { ...s, blocks: s.blocks.map((b) => b.id === blockId ? { ...b, colSpan, colStart, rowSpan } : b) }
               : s
           ));
-          fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`, {
+          void fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ blockId, colSpan, colStart, rowSpan }),
-          });
-          pushUndo({
-            scope: undoScope,
-            label: type === "resize" ? "Bloque redimensionado" : "Bloque movido",
-            coalesceKey: `${undoScope}|layout|${blockId}`,
-            undo: async () => {
-              setAllSections((ss) => ss.map((s) =>
-                s.id === sectionId
-                  ? { ...s, blocks: s.blocks.map((b) => b.id === blockId ? { ...b, ...prevLayout } : b) }
-                  : s
-              ));
-              await fetch(blocksUrl(sectionId), {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ blockId, ...prevLayout }),
-              });
-              return true;
-            },
-          });
+          }).then((res) => {
+            if (!res.ok) return; // no se guardó: no hay nada que deshacer
+            pushUndo({
+              scope: undoScope,
+              label: type === "resize" ? "Bloque redimensionado" : "Bloque movido",
+              coalesceKey: `${undoScope}|layout|${blockId}`,
+              undo: async () => {
+                setAllSections((ss) => ss.map((s) =>
+                  s.id === sectionId
+                    ? { ...s, blocks: s.blocks.map((b) => b.id === blockId ? { ...b, ...prevLayout } : b) }
+                    : s
+                ));
+                const r = await fetch(blocksUrl(sectionId), {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ blockId, ...prevLayout }),
+                });
+                return r.ok;
+              },
+            });
+          }).catch(() => {});
         }
         return null;
       });
@@ -282,28 +288,34 @@ export default function SectionBlockList({
 
   // ── Block actions ───────────────────────────────────────────────────────
 
+  /** PUT/POST/DELETE al endpoint de bloques; true si salió bien (un fallo de red cuenta como no). */
+  const escribir = async (sectionId: string, method: "PUT" | "POST" | "DELETE", body: unknown): Promise<boolean> => {
+    try {
+      const res = await fetch(blocksUrl(sectionId), {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const handleBlockSave = async (blockId: string, sectionId: string, updates: { content?: string; data?: unknown }) => {
     const snap = findBlockSnap(blockId); // contenido/data ANTES de pisar
-    await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ blockId, ...updates }),
-    });
+    const ok = await escribir(sectionId, "PUT", { blockId, ...updates });
     fetchSections();
-    if (snap) {
+    if (ok && snap) {
       const prev = { content: snap.content ?? "", data: snap.data };
       pushUndo({
         scope: undoScope,
         label: "Bloque editado",
         coalesceKey: `${undoScope}|block|${blockId}`,
         undo: async () => {
-          await fetch(blocksUrl(sectionId), {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ blockId, ...prev }),
-          });
+          const r = await escribir(sectionId, "PUT", { blockId, ...prev });
           fetchSections();
-          return true;
+          return r;
         },
       });
     }
@@ -312,63 +324,63 @@ export default function SectionBlockList({
   const handleBlockAction = async (blockId: string, sectionId: string, action: "accept" | "reject") => {
     const snap = findBlockSnap(blockId);
     if (action === "accept") {
-      await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockId, status: "CONFIRMED" }),
-      });
+      const ok = await escribir(sectionId, "PUT", { blockId, status: "CONFIRMED" });
       fetchSections();
+      if (!ok) return;
       pushUndo({
         scope: undoScope,
         label: "Bloque aceptado",
         undo: async () => {
-          await fetch(blocksUrl(sectionId), {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ blockId, status: "DRAFT" }),
-          });
+          const r = await escribir(sectionId, "PUT", { blockId, status: "DRAFT" });
           fetchSections();
-          return true;
+          return r;
         },
       });
     } else {
-      await fetch(`/api/projects/${projectId}/canvas-sections/${sectionId}/blocks`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blockId }),
-      });
+      const ok = await escribir(sectionId, "DELETE", { blockId });
       fetchSections();
-      // Undo: recrea el bloque (nuevo id, layout por defecto — la grilla reacomoda).
-      if (snap) {
+      /* Undo: el bloque vuelve COMO ESTABA —una sugerencia del agente, pendiente, en su lugar y
+         con su id— con el modo `restaurar` del POST. Antes volvía como uno manual y confirmado:
+         deshacer el descarte la aceptaba. Ver lib/canvas/restaurar-bloque.ts. */
+      if (ok && snap) {
+        const foto = { ...snap };
         pushUndo({
           scope: undoScope,
-          label: "Bloque eliminado",
+          label: snap.status === "DRAFT" ? "Sugerencia descartada" : "Bloque eliminado",
           undo: async () => {
-            await fetch(blocksUrl(sectionId), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ blockType: snap.blockType, content: snap.content ?? "", data: snap.data ?? undefined }),
-            });
+            const r = await escribir(sectionId, "POST", cuerpoParaRestaurar(foto));
             fetchSections();
-            return true;
+            return r;
           },
         });
       }
     }
   };
 
+  /* «Aceptar todos» registra UN paso de deshacer que devuelve a pendiente EXACTAMENTE los que se
+     aceptaron (antes no registraba ninguno, y Ctrl+Z se lo salteaba revirtiendo lo anterior). */
   const acceptAllDrafts = async () => {
-    const promises = sections.flatMap((section) =>
-      section.blocks.filter((b) => b.status === "DRAFT").map((block) =>
-        fetch(`/api/projects/${projectId}/canvas-sections/${section.id}/blocks`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ blockId: block.id, status: "CONFIRMED" }),
-        })
-      )
+    const drafts = sections.flatMap((section) =>
+      section.blocks.filter((b) => b.status === "DRAFT").map((block) => ({ sectionId: section.id, blockId: block.id })),
     );
-    await Promise.all(promises);
+    if (drafts.length === 0) return;
+    const resultados = await Promise.all(
+      drafts.map((d) => escribir(d.sectionId, "PUT", { blockId: d.blockId, status: "CONFIRMED" })),
+    );
     fetchSections();
+    const aceptados = drafts.filter((_, i) => resultados[i]);
+    if (aceptados.length === 0) return;
+    pushUndo({
+      scope: undoScope,
+      label: aceptados.length === 1 ? "Bloque aceptado" : "Bloques aceptados",
+      undo: async () => {
+        const vueltas = await Promise.all(
+          aceptados.map((d) => escribir(d.sectionId, "PUT", { blockId: d.blockId, status: "DRAFT" })),
+        );
+        fetchSections();
+        return vueltas.every(Boolean);
+      },
+    });
   };
 
   const draftCount = sections.reduce((sum, s) => sum + s.blocks.filter((b) => b.status === "DRAFT").length, 0);

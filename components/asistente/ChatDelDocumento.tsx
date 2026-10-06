@@ -26,6 +26,10 @@ import {
   useAplicadorDeDocumento,
   useHayAplicadorDeDocumento,
 } from "./aplicador-de-documento";
+import { useUndo } from "@/components/ui/UndoProvider";
+
+/** El rótulo del aviso de lo aplicado: «Aplicado · Deshacer». */
+const ROTULO_DE_LO_APLICADO = "Aplicado";
 
 export default function ChatDelDocumento({
   base,
@@ -43,6 +47,7 @@ export default function ChatDelDocumento({
 }) {
   const obtenerAplicador = useAplicadorDeDocumento();
   const hayAplicador = useHayAplicadorDeDocumento();
+  const { agruparDeshacer } = useUndo();
 
   async function aplicar(acuerdo: AcuerdoDelChat): Promise<ResultadoDeAplicar> {
     const aplicador = obtenerAplicador();
@@ -56,13 +61,20 @@ export default function ChatDelDocumento({
          volvió a abrir. */
       return {
         fallo: acuerdo.instruccion
-          ? "Esta conversación es anterior al carril nuevo: pedí el cambio otra vez y se aplica solo."
+          ? "Esta conversación es anterior al carril nuevo: pide el cambio otra vez y se aplica solo."
           : "El acuerdo no trae cambios para ejecutar.",
         avisos: [],
       };
     }
     try {
-      const { escribio, avisos, rechazadas } = await aplicador(operaciones);
+      /* ⭐ UN ACUERDO, UN PASO DE DESHACER (auditoría del deshacer, 2026-10-05). El editor ejecuta
+         N operaciones y cada verbo registra la suya: sin agruparlas, deshacer lo aplicado eran N
+         Ctrl+Z y el aviso mostraba solo la última. Juntas, el aviso dice «Aplicado · Deshacer» y un
+         Ctrl+Z (o el botón) lo deshace entero. El foco lo saca del campo el cajón al terminar: si
+         no, Ctrl+Z haría el deshacer nativo del texto del chat. */
+      const { escribio, avisos, rechazadas } = await agruparDeshacer(ROTULO_DE_LO_APLICADO, () =>
+        aplicador(operaciones),
+      );
       /* ⛔ Lo rechazado se DICE siempre: el modelo lee el hilo, y callarlo lo haría re-proponer lo
          que ya entró sobre un vocabulario que no es idempotente.
 

@@ -11,7 +11,8 @@
  * Pega a los MISMOS endpoints que SectionBlockList (contrato compartido), bajo
  * `basePath` (`/api/projects/[id]` o `/api/business-cases/[id]`):
  *   GET    {basePath}/canvas-sections?canvasId=
- *   POST   {basePath}/canvas-sections/[sectionId]/blocks   (crear, HUMAN/CONFIRMED)
+ *   POST   {basePath}/canvas-sections/[sectionId]/blocks   (crear, HUMAN/CONFIRMED; con
+ *          `restaurar`, el deshacer de un borrado: vuelve como estaba)
  *   PUT    .../blocks  { blockId, content?|data?|status? }  (editar / aceptar)
  *   DELETE .../blocks  { blockId }                          (rechazar / eliminar)
  *
@@ -25,8 +26,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { BlockData } from "./BlockRenderer";
-import { useUndo } from "@/components/ui/UndoProvider";
+import { useUndo, type AnclaDeDeshacer } from "@/components/ui/UndoProvider";
 import { useAgentRuns } from "@/components/ai/AgentRunsProvider";
+import { resolverAncla } from "@/lib/ui/deshacer";
+import { cuerpoParaRestaurar, type BloqueBorrado } from "@/lib/canvas/restaurar-bloque";
 
 export interface SectionWithBlocks {
   id: string;
@@ -65,7 +68,9 @@ export function useCanvasSections(
   // agente escribe async (kickoff). El business case lo pone en false: su generación
   // es SÍNCRONA (refetch explícito tras /generate), así que el polling solo causaría
   // re-renders periódicos innecesarios (parpadeo del editor inline).
-  options?: { poll?: boolean },
+  // `anclaDeDeshacer`: el elemento raíz de la vista (un ref sirve). Con él, Ctrl+Z no deshace lo
+  // de este canvas mientras está oculto (montado con `hidden`). Sin él, como siempre.
+  options?: { poll?: boolean; anclaDeDeshacer?: AnclaDeDeshacer },
 ) {
   const pollEnabled = options?.poll !== false;
   // C-09 (2026-09-04): el poll de 5 s solo corre mientras haya una corrida de agente EN CURSO.
@@ -91,7 +96,17 @@ export function useCanvasSections(
   // Scope por canvas (basePath identifica al dueño: proyecto o business case); se purga al desmontar.
   const { pushUndo, registerScope } = useUndo();
   const undoScope = `canvas:${basePath}:${canvasId}`;
-  useEffect(() => registerScope(undoScope), [registerScope, undoScope]);
+  // El ancla por ref: las opciones llegan como objeto literal (identidad nueva en cada render), y
+  // re-registrar el scope por eso lo purgaría a cada rato.
+  const anclaRef = useRef(options?.anclaDeDeshacer);
+  useEffect(() => {
+    anclaRef.current = options?.anclaDeDeshacer;
+  });
+  const tieneAncla = options?.anclaDeDeshacer != null;
+  useEffect(
+    () => registerScope(undoScope, tieneAncla ? () => resolverAncla(anclaRef.current) : undefined),
+    [registerScope, undoScope, tieneAncla],
+  );
   const sectionsRef = useRef(sections);
   const findBlock = useCallback(
     (blockId: string): BlockData | undefined =>
@@ -108,9 +123,7 @@ export function useCanvasSections(
   const saveBlockRef = useRef<
     (sectionId: string, blockId: string, updates: { content?: string; data?: unknown }, skipUndo?: boolean) => Promise<boolean>
   >(null!);
-  const restoreBlockRef = useRef<
-    (sectionId: string, block: { blockType: string; content: string | null; data: unknown }) => Promise<boolean>
-  >(null!);
+  const restoreBlockRef = useRef<(sectionId: string, block: BloqueBorrado) => Promise<boolean>>(null!);
   const setStatusRef = useRef<
     (sectionId: string, blockId: string, status: "DRAFT" | "CONFIRMED", skipUndo?: boolean) => Promise<boolean>
   >(null!);
@@ -118,6 +131,8 @@ export function useCanvasSections(
   const setEyebrowRef = useRef<(sectionId: string, eyebrow: string, skipUndo?: boolean) => Promise<boolean>>(null!);
   const setBriefRef = useRef<(sectionId: string, brief: string, skipUndo?: boolean) => Promise<boolean>>(null!);
   const reorderSectionsRef = useRef<(orderedIds: string[], skipUndo?: boolean) => Promise<boolean>>(null!);
+  const setHiddenRef = useRef<(sectionId: string, hidden: boolean, skipUndo?: boolean) => Promise<boolean>>(null!);
+  const removeSectionRef = useRef<(sectionId: string) => Promise<boolean>>(null!);
 
   const listUrl = `${basePath}/canvas-sections?canvasId=${canvasId}`;
   const blocksUrl = useCallback(
@@ -260,7 +275,7 @@ export function useCanvasSections(
             /* respuesta sin JSON */
           }
           console.error(`[useCanvasSections] ${init.method} → ${res.status} ${detail}`);
-          setError("No se pudo guardar el cambio. Reintentá; si persiste, revisá la conexión o avisá al equipo.");
+          setError("No se pudo guardar el cambio. Vuelve a intentarlo; si persiste, revisa la conexión o avisa al equipo.");
           return false;
         }
         setError(null);
@@ -306,8 +321,10 @@ export function useCanvasSections(
     [setStatus],
   );
 
-  // Rechazar (borrador) y eliminar (confirmado) usan el MISMO endpoint DELETE. Registra undo:
-  // recrea el bloque con su tipo+contenido+data (nuevo id) salvo `skipUndo`.
+  // Rechazar (borrador) y eliminar (confirmado) usan el MISMO endpoint DELETE. Registra undo salvo
+  // `skipUndo`: devuelve el bloque COMO ESTABA —una sugerencia del agente vuelve pendiente, en su
+  // orden, con su origen y su id— con el modo `restaurar` del POST (lib/canvas/restaurar-bloque.ts).
+  // Antes volvía como uno manual, confirmado y al final: deshacer un descarte lo ACEPTABA.
   const deleteBlock = useCallback(
     async (sectionId: string, blockId: string, skipUndo = false): Promise<boolean> => {
       const snap = skipUndo ? undefined : findBlock(blockId);
@@ -315,10 +332,10 @@ export function useCanvasSections(
       if (ok) {
         refetch();
         if (!skipUndo && snap) {
-          const block = { blockType: snap.blockType, content: snap.content, data: snap.data };
+          const block: BloqueBorrado = { ...snap };
           pushUndo({
             scope: undoScope,
-            label: "Bloque eliminado",
+            label: snap.status === "DRAFT" ? "Sugerencia descartada" : "Bloque eliminado",
             undo: () => restoreBlockRef.current(sectionId, block),
           });
         }
@@ -414,7 +431,7 @@ export function useCanvasSections(
             /* sin JSON */
           }
           console.error(`[useCanvasSections] regenerate → ${res.status} ${detail}`);
-          setError("No se pudo regenerar el bloque con IA. Reintentá.");
+          setError("No se pudo regenerar el bloque con IA. Vuelve a intentarlo.");
           return null;
         }
         setError(null);
@@ -441,7 +458,7 @@ export function useCanvasSections(
           body: JSON.stringify({ blockType, content, data }),
         });
         if (!res.ok) {
-          setError("No se pudo agregar el bloque. Reintentá.");
+          setError("No se pudo agregar el bloque. Vuelve a intentarlo.");
           return undefined;
         }
         setError(null);
@@ -520,17 +537,15 @@ export function useCanvasSections(
     [addBlock],
   );
 
-  // Recrea un bloque borrado (undo): POST con su tipo + contenido + data. Vuelve como
-  // HUMAN/CONFIRMED al final de la sección (nuevo id). Devuelve true si guardó.
+  // Devuelve un bloque borrado (undo) COMO ESTABA: con la foto completa (la de `findBlock`) vuelve
+  // con su origen, su estado, su orden y su id; con solo tipo+contenido+data, como uno manual al
+  // final (lo de siempre). Devuelve true si guardó.
   const restoreBlock = useCallback(
-    async (
-      sectionId: string,
-      block: { blockType: string; content: string | null; data: unknown },
-    ): Promise<boolean> => {
+    async (sectionId: string, block: BloqueBorrado): Promise<boolean> => {
       const ok = await mutate(sectionId, {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ blockType: block.blockType, content: block.content ?? "", data: block.data ?? undefined }),
+        body: JSON.stringify(cuerpoParaRestaurar(block)),
       });
       if (ok) refetch();
       return ok;
@@ -570,14 +585,20 @@ export function useCanvasSections(
     [basePath, refetch],
   );
 
+  /* ⛔ El paso de deshacer se registra DESPUÉS de saber que se guardó (auditoría del deshacer,
+     2026-10-05). Antes se registraba antes del PATCH: si fallaba, quedaba en la pila un «deshacer»
+     de algo que no había pasado, y Ctrl+Z «revertía» un cambio inexistente pisando el valor bueno.
+     El optimista sigue siendo inmediato; lo que espera es solo el registro. */
+
   // Título grande. String vacío → vuelve al título por defecto de la plantilla. Optimista.
   const renameSection = useCallback(
-    (sectionId: string, title: string, skipUndo = false): Promise<boolean> => {
+    async (sectionId: string, title: string, skipUndo = false): Promise<boolean> => {
       const prev = skipUndo ? null : findSection(sectionId)?.titleOverride ?? null;
       const t = title.trim() || null;
       writeSeq.current++;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, titleOverride: t } : s)));
-      if (!skipUndo) {
+      const ok = await patchSection(sectionId, { titleOverride: t }, "No se pudo guardar el título. Vuelve a intentarlo.");
+      if (ok && !skipUndo) {
         pushUndo({
           scope: undoScope,
           label: "Título de sección",
@@ -585,19 +606,20 @@ export function useCanvasSections(
           undo: () => renameSectionRef.current(sectionId, prev ?? "", true),
         });
       }
-      return patchSection(sectionId, { titleOverride: t }, "No se pudo guardar el título. Reintentá.");
+      return ok;
     },
     [patchSection, pushUndo, undoScope, findSection],
   );
 
   // Eyebrow (título pequeño). String vacío → default.
   const setEyebrow = useCallback(
-    (sectionId: string, eyebrow: string, skipUndo = false): Promise<boolean> => {
+    async (sectionId: string, eyebrow: string, skipUndo = false): Promise<boolean> => {
       const prev = skipUndo ? null : findSection(sectionId)?.eyebrowOverride ?? null;
       const e = eyebrow.trim() || null;
       writeSeq.current++;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, eyebrowOverride: e } : s)));
-      if (!skipUndo) {
+      const ok = await patchSection(sectionId, { eyebrowOverride: e }, "No se pudo guardar el subtítulo. Vuelve a intentarlo.");
+      if (ok && !skipUndo) {
         pushUndo({
           scope: undoScope,
           label: "Subtítulo de sección",
@@ -605,19 +627,20 @@ export function useCanvasSections(
           undo: () => setEyebrowRef.current(sectionId, prev ?? "", true),
         });
       }
-      return patchSection(sectionId, { eyebrowOverride: e }, "No se pudo guardar el subtítulo. Reintentá.");
+      return ok;
     },
     [patchSection, pushUndo, undoScope, findSection],
   );
 
   // Guía del agente por sección (business case). String vacío → vuelve al brief por defecto.
   const setBrief = useCallback(
-    (sectionId: string, brief: string, skipUndo = false): Promise<boolean> => {
+    async (sectionId: string, brief: string, skipUndo = false): Promise<boolean> => {
       const prev = skipUndo ? null : findSection(sectionId)?.agentBriefOverride ?? null;
       const b = brief.trim() || null;
       writeSeq.current++;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, agentBriefOverride: b } : s)));
-      if (!skipUndo) {
+      const ok = await patchSection(sectionId, { agentBriefOverride: b }, "No se pudo guardar la guía. Vuelve a intentarlo.");
+      if (ok && !skipUndo) {
         pushUndo({
           scope: undoScope,
           label: "Guía de sección",
@@ -625,7 +648,7 @@ export function useCanvasSections(
           undo: () => setBriefRef.current(sectionId, prev ?? "", true),
         });
       }
-      return patchSection(sectionId, { agentBriefOverride: b }, "No se pudo guardar la guía. Reintentá.");
+      return ok;
     },
     [patchSection, pushUndo, undoScope, findSection],
   );
@@ -633,19 +656,30 @@ export function useCanvasSections(
   // Deshacer de 1 nivel (toggle actual↔previous) del título, el eyebrow o la guía de una sección.
   const undoSection = useCallback(
     (sectionId: string, which: "title" | "eyebrow" | "brief"): Promise<boolean> =>
-      patchSection(sectionId, { undo: which }, "No se pudo deshacer. Reintentá."),
+      patchSection(sectionId, { undo: which }, "No se pudo deshacer. Vuelve a intentarlo."),
     [patchSection],
   );
 
   // Ocultar/mostrar una sección de cara al cliente. OPTIMISTA (el toggle responde al
   // instante; sin esto el PATCH+refetch tardaba ~1s y se sentía "lerdo").
+  // Con su paso de deshacer (auditoría 2026-10-05): antes no tenía, y Ctrl+Z se lo salteaba
+  // revirtiendo la acción ANTERIOR. Se registra solo si el guardado salió bien.
   const setHidden = useCallback(
-    (sectionId: string, hidden: boolean): Promise<boolean> => {
+    async (sectionId: string, hidden: boolean, skipUndo = false): Promise<boolean> => {
+      const prev = findSection(sectionId)?.hidden === true;
       writeSeq.current++;
       setSections((cur) => cur.map((s) => (s.id === sectionId ? { ...s, hidden } : s)));
-      return patchSection(sectionId, { hidden }, "No se pudo cambiar la visibilidad. Reintentá.");
+      const ok = await patchSection(sectionId, { hidden }, "No se pudo cambiar la visibilidad. Vuelve a intentarlo.");
+      if (ok && !skipUndo && prev !== hidden) {
+        pushUndo({
+          scope: undoScope,
+          label: hidden ? "Sección oculta" : "Sección visible",
+          undo: () => setHiddenRef.current(sectionId, prev, true),
+        });
+      }
+      return ok;
     },
-    [patchSection],
+    [patchSection, pushUndo, undoScope, findSection],
   );
 
   // Reordenar las SECCIONES del canvas (drag & drop). OPTIMISTA + PATCH al endpoint
@@ -669,7 +703,7 @@ export function useCanvasSections(
           body: JSON.stringify({ canvasId, orderedIds }),
         });
         if (!res.ok) {
-          setError("No se pudo guardar el orden. Reintentá.");
+          setError("No se pudo guardar el orden. Vuelve a intentarlo.");
           refetch();
           return false;
         }
@@ -722,7 +756,7 @@ export function useCanvasSections(
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setError(body?.error ?? "No se pudo agregar la sección. Reintentá.");
+          setError(body?.error ?? "No se pudo agregar la sección. Vuelve a intentarlo.");
           return null;
         }
         const body = (await res.json().catch(() => ({}))) as {
@@ -732,11 +766,28 @@ export function useCanvasSections(
         onContentChangeRef.current?.();
         refetch();
         if (!body.section?.id) return null;
-        return {
+        const creada = {
           id: body.section.id,
           key: body.section.key,
           cardBlockId: body.section.blocks?.find((b) => b.blockType === "CARD")?.id ?? null,
         };
+        /* Su paso de deshacer (auditoría 2026-10-05): sin él, Ctrl+Z se salteaba la creación y
+           revertía la acción ANTERIOR. Deshacer «crear» es BORRAR, y borrar una sección es
+           definitivo y en cascada (se lleva lo que tenga adentro): pide confirmación, igual que el
+           botón «Borrar sección». Si la persona dice que no, la sección se queda. */
+        const nombre = label.trim() || "nueva";
+        pushUndo({
+          scope: undoScope,
+          label: "Sección agregada",
+          undo: async () => {
+            const seguir = window.confirm(
+              `¿Quitar la sección «${nombre}» que se agregó?\n\nSe borra con todo lo que tenga adentro, y eso no se puede deshacer.`,
+            );
+            if (!seguir) return true;
+            return removeSectionRef.current(creada.id);
+          },
+        });
+        return creada;
       } catch {
         setError("Error de conexión al agregar la sección.");
         return null;
@@ -744,9 +795,12 @@ export function useCanvasSections(
         pendingWrites.current--;
       }
     },
-    [basePath, canvasId, refetch],
+    [basePath, canvasId, refetch, pushUndo, undoScope],
   );
 
+  /* ⛔ SIN deshacer: la fila se va en cascada y no hay de dónde recrearla. Lo que protege es la
+     CONFIRMACIÓN antes de llamarlo — el botón «Borrar sección» (SectionTools) y el chat
+     (ejecutar-operaciones) la piden. Quien agregue otra puerta tiene que pedirla también. */
   const removeSection = useCallback(
     async (sectionId: string): Promise<boolean> => {
       pendingWrites.current++;
@@ -754,7 +808,7 @@ export function useCanvasSections(
         const res = await fetch(`${basePath}/canvas-sections/${sectionId}`, { method: "DELETE" });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setError(body?.error ?? "No se pudo borrar la sección. Reintentá.");
+          setError(body?.error ?? "No se pudo borrar la sección. Vuelve a intentarlo.");
           return false;
         }
         setError(null);
@@ -771,32 +825,45 @@ export function useCanvasSections(
     [basePath, refetch],
   );
 
-  const acceptAll = useCallback(async () => {
-    const drafts = sections.flatMap((s) =>
-      s.blocks.filter((b) => b.status === "DRAFT").map((b) => ({ sectionId: s.id, blockId: b.id })),
-    );
-    if (drafts.length === 0) return;
-    await Promise.all(
-      drafts.map((d) =>
-        mutate(d.sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId: d.blockId, status: "CONFIRMED" }) }),
-      ),
-    );
-    refetch();
-    // Undo: vuelve a borrador exactamente los bloques que este "aceptar todos" confirmó.
-    pushUndo({
-      scope: undoScope,
-      label: "Bloques aceptados",
-      undo: async () => {
-        await Promise.all(
-          drafts.map((d) =>
-            mutate(d.sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId: d.blockId, status: "DRAFT" }) }),
-          ),
+  /**
+   * «Aceptar todos» es UN paso de deshacer (no uno por bloque) que devuelve a pendiente EXACTAMENTE
+   * los que se aceptaron: los que fallaron no se tocan, y si no se aceptó ninguno no hay paso.
+   * `soloSecciones`: acota a esas secciones (la vista que muestra una sola).
+   */
+  const acceptAll = useCallback(
+    async (soloSecciones?: readonly string[]) => {
+      // `Array.isArray` y no `!!`: si alguien lo cablea a un onClick, el evento no es una lista.
+      const solo = Array.isArray(soloSecciones) ? soloSecciones : null;
+      const drafts = sections
+        .filter((s) => !solo || solo.includes(s.id))
+        .flatMap((s) =>
+          s.blocks.filter((b) => b.status === "DRAFT").map((b) => ({ sectionId: s.id, blockId: b.id })),
         );
-        refetch();
-        return true;
-      },
-    });
-  }, [sections, mutate, refetch, pushUndo, undoScope]);
+      if (drafts.length === 0) return;
+      const resultados = await Promise.all(
+        drafts.map((d) =>
+          mutate(d.sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId: d.blockId, status: "CONFIRMED" }) }),
+        ),
+      );
+      refetch();
+      const aceptados = drafts.filter((_, i) => resultados[i]);
+      if (aceptados.length === 0) return;
+      pushUndo({
+        scope: undoScope,
+        label: aceptados.length === 1 ? "Bloque aceptado" : "Bloques aceptados",
+        undo: async () => {
+          const vueltas = await Promise.all(
+            aceptados.map((d) =>
+              mutate(d.sectionId, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ blockId: d.blockId, status: "DRAFT" }) }),
+            ),
+          );
+          refetch();
+          return vueltas.every(Boolean);
+        },
+      });
+    },
+    [sections, mutate, refetch, pushUndo, undoScope],
+  );
 
   // "Latest ref" pattern: sincronizamos los refs DESPUÉS del render (no durante) — los closures de
   // undo y el polling siempre ven la versión vigente sin violar las reglas de hooks.
@@ -810,6 +877,8 @@ export function useCanvasSections(
     setEyebrowRef.current = setEyebrow;
     setBriefRef.current = setBrief;
     reorderSectionsRef.current = reorderSections;
+    setHiddenRef.current = setHidden;
+    removeSectionRef.current = removeSection;
   });
 
   const draftCount = sections.reduce(

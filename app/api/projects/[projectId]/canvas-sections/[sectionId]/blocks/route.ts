@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { BlockStatus, BlockType, Prisma } from "@prisma/client";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
+import { datosDelBloqueRestaurado, restaurarBloqueSchema } from "@/lib/canvas/restaurar-bloque";
 import { z } from "zod";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;
@@ -18,6 +19,9 @@ const postBloqueSchema = z.strictObject({
   blockType: z.enum(BlockType).optional(),
   content: z.string().max(200_000).nullable().optional(),
   data: datosDeBloque.nullable().optional(),
+  /* Deshacer un borrado: el bloque vuelve COMO ESTABA (origen, estado, orden, id…), no como uno
+     manual confirmado al final. Ver lib/canvas/restaurar-bloque.ts. Mismo permiso que borrar. */
+  restaurar: restaurarBloqueSchema.optional(),
 });
 const putBloqueSchema = z.strictObject({
   blockId: z.string().min(1).max(64),
@@ -45,7 +49,7 @@ async function canvasNameOfSection(sectionId: string): Promise<string> {
   return s?.canvas.name ?? "";
 }
 
-// POST: create a block manually
+// POST: create a block manually — o, con `restaurar`, devolver uno borrado como estaba (deshacer)
 export async function POST(req: NextRequest, { params }: { params: Params }) {
   const { projectId, sectionId } = await params;
   const guard = await guardAccessToProject(projectId);
@@ -55,7 +59,42 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
 
   const parsedPost = postBloqueSchema.safeParse(await req.json().catch(() => null));
   if (!parsedPost.success) return cuerpoInvalido(parsedPost.error);
-  const { blockType, content, data } = parsedPost.data;
+  const { blockType, content, data, restaurar } = parsedPost.data;
+
+  // Modo restaurar (el deshacer de «Bloque eliminado»): mismo guard que el DELETE, que es su inverso.
+  if (restaurar) {
+    const [ocupado, corrida] = await Promise.all([
+      restaurar.id
+        ? prisma.canvasBlock.findUnique({ where: { id: restaurar.id }, select: { id: true } })
+        : Promise.resolve(null),
+      // La corrida tiene que ser de ESTE proyecto: el cuerpo lo arma el navegador.
+      restaurar.agentRunId
+        ? prisma.agentRun.findFirst({ where: { id: restaurar.agentRunId, projectId }, select: { id: true } })
+        : Promise.resolve(null),
+    ]);
+    const r = datosDelBloqueRestaurado({ restaurar, idLibre: !ocupado, corridaExiste: !!corrida });
+    const restaurado = await prisma.canvasBlock.create({
+      data: {
+        id: r.id,
+        sectionId,
+        blockType: blockType ?? "TEXT",
+        content: content ?? "",
+        data: (data ?? undefined) as Prisma.InputJsonValue | undefined,
+        order: r.order,
+        source: r.source,
+        status: r.status,
+        colSpan: r.colSpan,
+        colStart: r.colStart,
+        rowSpan: r.rowSpan,
+        agentRunId: r.agentRunId,
+        previousContent: r.previousContent,
+        previousData: jsonInput(r.previousData as Prisma.JsonValue | null),
+        createdAt: r.createdAt,
+      },
+    });
+    await touchCanvasContent(sectionId);
+    return NextResponse.json(restaurado, { status: 201 });
+  }
 
   const maxOrder = await prisma.canvasBlock.aggregate({
     where: { sectionId },

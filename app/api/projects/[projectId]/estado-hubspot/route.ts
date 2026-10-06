@@ -87,7 +87,7 @@ export async function PATCH(
       {
         error:
           "Este proyecto todavía no existe en HubSpot, así que no se le puede cambiar el estado. " +
-          "Terminá el alta primero.",
+          "Termina el alta primero.",
       },
       { status: 409 },
     );
@@ -136,7 +136,7 @@ export async function PATCH(
       {
         error:
           "Alguien cambió esto en HubSpot desde que se armó la sugerencia. " +
-          "Revisá el valor nuevo antes de decidir: aceptar ahora pisaría esa decisión.",
+          "Revisa el valor nuevo antes de decidir: aceptar ahora pisaría esa decisión.",
         enHubspot: { estado: vivo.hs_status, etapaStageId: vivo.hs_pipeline_stage },
       },
       { status: 409 },
@@ -154,7 +154,7 @@ export async function PATCH(
       {
         error:
           "En HubSpot este proyecto figura como CERRADO. Reabrirlo no sale de un botón: si de " +
-          "verdad sigue vivo, cambiale el estado allá y volvé a intentar.",
+          "verdad sigue vivo, cámbiale el estado allá y vuelve a intentarlo.",
         enHubspot: { estado: vivo.hs_status, etapaStageId: vivo.hs_pipeline_stage },
       },
       { status: 409 },
@@ -199,7 +199,7 @@ export async function PATCH(
       {
         error:
           `Se guardó en HubSpot, pero Nexus no pudo confirmarlo (${espejo.errors[0]}). ` +
-          `Volvé a intentar en un minuto: el cambio allá ya está hecho y repetirlo no duplica nada.`,
+          `Vuelve a intentarlo en un minuto: el cambio allá ya está hecho y repetirlo no duplica nada.`,
       },
       { status: 502 },
     );

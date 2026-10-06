@@ -1,7 +1,7 @@
 /**
  * Bloques de una sección del canvas de un business case (contrato del hook
  * useCanvasSections; espejo de /api/projects/[projectId]/canvas-sections/[sectionId]/blocks).
- *   POST   → crear bloque manual (HUMAN/CONFIRMED)
+ *   POST   → crear bloque manual (HUMAN/CONFIRMED), o con `restaurar` devolver uno borrado como estaba
  *   PUT    → editar content/data o aceptar/rechazar (status), con undo de 1 nivel
  *   DELETE → eliminar bloque
  * Gateado con guardSalesAccess + pertenencia al caso. SIN gating de handoff.
@@ -12,6 +12,7 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
 import { sectionInBusinessCase } from "@/lib/business-cases/canvas-guard";
+import { datosDelBloqueRestaurado, restaurarBloqueSchema } from "@/lib/canvas/restaurar-bloque";
 
 type Params = Promise<{ id: string; sectionId: string }>;
 
@@ -33,7 +34,47 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   const denied = await guardSection(id, sectionId);
   if (denied) return denied;
 
-  const { blockType, content, data } = await req.json();
+  const { blockType, content, data, restaurar: restaurarCrudo } = await req.json();
+
+  /* Modo restaurar (el deshacer de «Bloque eliminado»): el bloque vuelve COMO ESTABA, no como uno
+     manual confirmado al final. Mismo guard que el DELETE, que es su inverso. Ver
+     lib/canvas/restaurar-bloque.ts (espejo del de proyectos). */
+  if (restaurarCrudo !== undefined) {
+    const parsed = restaurarBloqueSchema.safeParse(restaurarCrudo);
+    if (!parsed.success) return NextResponse.json({ error: "restaurar inválido" }, { status: 400 });
+    const restaurar = parsed.data;
+    const [ocupado, corrida] = await Promise.all([
+      restaurar.id
+        ? prisma.canvasBlock.findUnique({ where: { id: restaurar.id }, select: { id: true } })
+        : Promise.resolve(null),
+      // La corrida tiene que ser de ESTE caso: el cuerpo lo arma el navegador.
+      restaurar.agentRunId
+        ? prisma.agentRun.findFirst({ where: { id: restaurar.agentRunId, businessCaseId: id }, select: { id: true } })
+        : Promise.resolve(null),
+    ]);
+    const r = datosDelBloqueRestaurado({ restaurar, idLibre: !ocupado, corridaExiste: !!corrida });
+    const restaurado = await prisma.canvasBlock.create({
+      data: {
+        id: r.id,
+        sectionId,
+        blockType: blockType ?? "CARD",
+        content: content ?? null,
+        data: data ?? undefined,
+        order: r.order,
+        source: r.source,
+        status: r.status,
+        colSpan: r.colSpan,
+        colStart: r.colStart,
+        rowSpan: r.rowSpan,
+        agentRunId: r.agentRunId,
+        previousContent: r.previousContent,
+        previousData: jsonInput(r.previousData as Prisma.JsonValue | null),
+        createdAt: r.createdAt,
+      },
+    });
+    await touchCanvasContent(sectionId);
+    return NextResponse.json(restaurado, { status: 201 });
+  }
 
   const maxOrder = await prisma.canvasBlock.aggregate({
     where: { sectionId },
