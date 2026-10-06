@@ -19,6 +19,9 @@
  * que lo limpia queda una copia del JSON en `TimelineChange` (kind MANUAL, `snapshot.propuestaDescartada`). Y
  * si la pantalla descarta lo ilegible (`ilegible: true`) pero lo guardado ya es un v1 (se convirtió en el
  * medio, con el mismo token), responde 409 y no borra: la pantalla trae la convertida.
+ *
+ * T4 (auditoría del deshacer, 2026-10-05): descartar un v1 también deja su copia (`RAZON_DESCARTE_PROPUESTA`,
+ * `snapshot.propuestaDescartada` + cómo se descartó), en la misma transacción. Queda recuperable.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardTimelineEdit } from "@/lib/auth/api-guards";
@@ -27,7 +30,7 @@ import { Prisma } from "@prisma/client";
 import { leerEstadoDeLasTareas } from "@/lib/timeline/borrador-del-detalle";
 /* La razón del registro que guarda la copia de lo descartado sin poder leerlo vive en lib (una ruta de Next solo
    exporta sus métodos): la cartera la excluye del porqué de un atraso (revisión de los arreglos). */
-import { esBorradorV1, hayPropuestaParaRevisar, RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+import { esBorradorV1, hayPropuestaParaRevisar, RAZON_DESCARTE_ILEGIBLE, RAZON_DESCARTE_PROPUESTA } from "@/lib/timeline/borrador";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
 
 /**
@@ -143,10 +146,32 @@ export async function DELETE(
     return NextResponse.json({ cleared: true });
   }
 
-  /* Condicionado a la MISMA corrida que se leyó: si otra propuesta entró en el medio, no se borra. */
-  const limpiadas = await prisma.projectTimeline.updateMany({
-    where: { projectId, pendingProposalRunId: existing.pendingProposalRunId },
-    data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
+  /* Condicionado a la MISMA corrida que se leyó: si otra propuesta entró en el medio, no se borra.
+     ⛔ T4 (auditoría del deshacer, 2026-10-05): y deja una COPIA en `TimelineChange`, en la MISMA transacción
+     que la limpia (como lo ilegible, arriba). Antes un v1 se borraba sin rastro: un «Descartar» por error —o el
+     descarte automático cuando una edición a mano igualaba la propuesta, seguido de un Ctrl+Z— la perdía para
+     siempre. Si la limpieza no tocó nada (otra corrida), tampoco se copia. */
+  const comoSeDescarto = body?.reason === "auto-zero-deltas" ? "auto-zero-deltas" : "a-mano";
+  const limpiadas = await prisma.$transaction(async (tx) => {
+    const r = await tx.projectTimeline.updateMany({
+      where: { projectId, pendingProposalRunId: existing.pendingProposalRunId },
+      data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
+    });
+    if (r.count === 0 || existing.pendingProposal === null) return r;
+    await tx.timelineChange.create({
+      data: {
+        timelineId: existing.id,
+        kind: "MANUAL",
+        reason: RAZON_DESCARTE_PROPUESTA,
+        changedByEmail: guard.user.email ?? null,
+        snapshot: {
+          propuestaDescartada: existing.pendingProposal,
+          pendingProposalRunId: existing.pendingProposalRunId,
+          comoSeDescarto,
+        } as Prisma.InputJsonValue,
+      },
+    });
+    return r;
   });
   if (limpiadas.count === 0) {
     return NextResponse.json({ cleared: false, reason: "otra_propuesta" }, { status: 409 });

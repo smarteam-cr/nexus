@@ -10,7 +10,8 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { cuerpoParaRestaurar, datosDelBloqueRestaurado, restaurarBloqueSchema } from "./restaurar-bloque";
+import { cuerpoParaRestaurar, datosDelBloqueRestaurado } from "./restaurar-bloque";
+import { restaurarBloqueSchema } from "./restaurar-bloque-schema";
 
 const RAIZ = path.join(__dirname, "..", "..");
 const leer = (rel: string) => fs.readFileSync(path.join(RAIZ, rel), "utf8");

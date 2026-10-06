@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import { BlockStatus, BlockType, Prisma } from "@prisma/client";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
 import { cuerpoInvalido } from "@/lib/api/cuerpo-invalido";
-import { datosDelBloqueRestaurado, restaurarBloqueSchema } from "@/lib/canvas/restaurar-bloque";
+import { datosDelBloqueRestaurado } from "@/lib/canvas/restaurar-bloque";
+import { restaurarBloqueSchema } from "@/lib/canvas/restaurar-bloque-schema";
 import { z } from "zod";
 
 type Params = Promise<{ projectId: string; sectionId: string }>;

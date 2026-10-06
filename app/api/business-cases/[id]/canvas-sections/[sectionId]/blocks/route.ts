@@ -12,7 +12,8 @@ import { guardSalesAccess } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
 import { touchCanvasContent } from "@/lib/canvas/touch-content";
 import { sectionInBusinessCase } from "@/lib/business-cases/canvas-guard";
-import { datosDelBloqueRestaurado, restaurarBloqueSchema } from "@/lib/canvas/restaurar-bloque";
+import { datosDelBloqueRestaurado } from "@/lib/canvas/restaurar-bloque";
+import { restaurarBloqueSchema } from "@/lib/canvas/restaurar-bloque-schema";
 
 type Params = Promise<{ id: string; sectionId: string }>;
 

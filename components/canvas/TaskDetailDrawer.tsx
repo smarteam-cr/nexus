@@ -193,7 +193,7 @@ export default function TaskDetailDrawer({
                 key={s}
                 onClick={() => canToggle && onToggleStatus(task.id!, s)}
                 disabled={!canToggle}
-                title={!canToggle ? "Guardá el cronograma para poder cambiar el estado" : undefined}
+                title={!canToggle ? "Espera a que el cronograma se guarde para poder cambiar el estado" : undefined}
                 className={`text-[11px] font-semibold px-2.5 py-1 rounded border transition-colors ${
                   task.status === s ? STATUS_META[s].cls : "bg-surface-hover text-fg-muted border-line hover:text-fg-secondary"
                 } ${!canToggle ? "opacity-50 cursor-default" : ""}`}
@@ -259,8 +259,8 @@ export default function TaskDetailDrawer({
               {task.startDateOverride || task.dueDateOverride
                 ? "Fechas con ajuste manual (Borrar en el calendario vuelve a la automática)."
                 : anchor
-                  ? "Automáticas según la semana — elegí una fecha para sobreescribir."
-                  : "Fijá la fecha de arranque del cronograma para ver fechas."}
+                  ? "Automáticas según la semana — elige una fecha para sobrescribirla."
+                  : "Fija la fecha de arranque del cronograma para ver fechas."}
             </p>
           </div>
           <div>
@@ -289,7 +289,7 @@ export default function TaskDetailDrawer({
                 }`}
                 title={task.statusChangedByEmail ?? undefined}
               >
-                {task.statusSource === "AI_CONFIRMED" ? "Detectado por IA · confirmado por vos" : "Por vos"}
+                {task.statusSource === "AI_CONFIRMED" ? "Detectado por IA · confirmado por una persona" : "A mano"}
               </span>
             </div>
           )}
@@ -319,7 +319,7 @@ export default function TaskDetailDrawer({
               Eliminar tarea
             </button>
           ) : (
-            <span className="text-[11px] text-fg-muted">Para sacarla del plan, suspendela (Estado → Suspendida).</span>
+            <span className="text-[11px] text-fg-muted">Para sacarla del plan, suspéndela (Estado → Suspendida).</span>
           )}
           <span className="text-[11px] text-gray-600">Los cambios se guardan solos</span>
         </div>
@@ -328,7 +328,7 @@ export default function TaskDetailDrawer({
       <ConfirmDialog
         open={confirmDelete}
         title="¿Eliminar esta tarea?"
-        description="Se quita del cronograma. Esta acción no se puede deshacer."
+        description="Se quita del cronograma. Si te equivocas, puedes deshacerlo (Ctrl+Z o «Deshacer») mientras sigas en el cronograma."
         confirmLabel="Eliminar tarea"
         z="z-[70]"
         onCancel={() => setConfirmDelete(false)}

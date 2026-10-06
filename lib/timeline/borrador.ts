@@ -803,6 +803,19 @@ export function esBorradorV1(json: unknown): json is Record<string, unknown> {
 export const RAZON_DESCARTE_ILEGIBLE =
   "Se descartó una propuesta guardada que esta versión no sabe leer. Su contenido queda en este registro.";
 
+/**
+ * Auditoría del deshacer (T4, 2026-10-05): la razón del `TimelineChange` (MANUAL) que guarda la copia de
+ * una propuesta (`borrador-v1`) DESCARTADA —a mano o sola, cuando una edición a mano la igualó—. Antes se
+ * borraba sin copia: un descarte por error, o el automático seguido de un Ctrl+Z, la perdía para siempre.
+ * Igual que la de lo ilegible, NO es el porqué de un atraso: la cartera tiene que excluir las dos
+ * (`RAZONES_QUE_NO_SON_EL_PORQUE`, lib/portfolio/load.ts).
+ */
+export const RAZON_DESCARTE_PROPUESTA =
+  "Se descartó la propuesta del cronograma. Su contenido queda en este registro por si hay que recuperarla.";
+
+/** Las razones de `TimelineChange` que son copias de respaldo y no el porqué de un cambio. */
+export const RAZONES_QUE_NO_SON_EL_PORQUE: readonly string[] = [RAZON_DESCARTE_ILEGIBLE, RAZON_DESCARTE_PROPUESTA];
+
 /** La versión de un `borrador-v1` guardado, o null si lo guardado no es un v1 (no hay propuesta que
  *  se sepa leer: aplicar responde 409 y la pantalla trae lo nuevo). */
 export function versionDelBorrador(json: unknown): number | null {

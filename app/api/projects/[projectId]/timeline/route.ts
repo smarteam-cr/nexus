@@ -27,6 +27,14 @@
  *   - El `status` NO viaja por acá: solo por PATCH /timeline/tasks/[taskId]
  *     (PUT = estructura, PATCH = operación).
  *
+ * Auditoría del deshacer (2026-10-05, lib/timeline/guardado-del-cronograma.ts):
+ *   - Un id (de fase o de tarea) que YA NO EXISTE en el cronograma se RECREA, con el `respaldo`
+ *     de la pantalla (estado, origen); la respuesta trae `recreadas` (viejo → nuevo). Es lo que
+ *     manda deshacer un borrado después del autoguardado. Antes era un 400 que trababa todo.
+ *   - Con `version` (la de la foto), si el cronograma cambió desde entonces → 409 CRONOGRAMA_CAMBIO.
+ *   - `borradas`: lo que la persona borró a mano se borra aunque esté protegido (solo el
+ *     autoguardado, con permiso de borrar).
+ *
  * Si no existía cronograma y llega un PUT, se crea sobre la marcha
  * (lastEditedByHuman = now, todas las phases nacen como HUMAN).
  */
@@ -69,6 +77,22 @@ import { loadProjectSummaryDesdeArbol } from "@/lib/portfolio/load";
 import type { ProjectSummary } from "@/lib/portfolio/summary";
 import { limitesDeLaFila, type LimitesDelCronograma } from "@/lib/timeline/limites";
 import { SELECT_LIMITES, conSemanaCeroDelPipeline } from "@/lib/timeline/limites-servidor";
+// Auditoría del deshacer (2026-10-05): la versión de la foto (T2), recrear lo borrado (T1) y el borrado
+// explícito de la persona (T5). Puro, con sus tests en lib/timeline/guardado-del-cronograma.test.ts.
+import {
+  CODIGO_CRONOGRAMA_CAMBIO,
+  MENSAJE_CRONOGRAMA_CAMBIO,
+  datosParaRecrearFase,
+  datosParaRecrearTarea,
+  fotoVieja,
+  honrarBorradas,
+  huellasDeLasRecreadas,
+  leerBorradas,
+  leerVersionBase,
+  queHacerConLaTarea,
+  versionDelCronograma,
+  type IdsRecreados,
+} from "@/lib/timeline/guardado-del-cronograma";
 
 // Normaliza un string de fecha entrante al MISMO ISO que produce el lado DB
 // (Date.toISOString()). El validador acepta cualquier formato parseable: comparar
@@ -141,6 +165,10 @@ export interface ParticularidadDTO {
 
 interface TimelineResponse {
   exists: true;
+  /** T2 (auditoría del deshacer, 2026-10-05): la VERSIÓN de lo que el PUT escribe (fases, tareas, arranque y
+   *  cierre fijado). La pantalla la devuelve en su autoguardado; si el cronograma cambió desde esa versión, el
+   *  PUT responde 409 en vez de pisar con una foto vieja. Ver lib/timeline/guardado-del-cronograma.ts. */
+  version: string;
   /** Señales del proyecto (avance, atrasos, alcance vs lo vendido, alarmas de etapa, estancamiento).
    *  Alimenta el panel "Qué hacer acá" — antes solo existía en la vista de cartera, así que el canvas
    *  no podía consumirlas y el CSE armaba el estado del proyecto de memoria. */
@@ -405,6 +433,12 @@ async function loadTimeline(projectId: string): Promise<TimelineResponse | { exi
   }));
   return {
     exists: true,
+    // T2: con lo MISMO que lee el PUT para compararla (las fases y tareas de la base, el arranque y el cierre).
+    version: versionDelCronograma({
+      anchorStartDate: tl.anchorStartDate,
+      closeDateOverride: tl.closeDateOverride,
+      phases: tl.phases,
+    }),
     summary,
     anchorStartDate: tl.anchorStartDate?.toISOString() ?? null,
     closeDateOverride: tl.closeDateOverride?.toISOString() ?? null,
@@ -521,6 +555,22 @@ export async function PUT(
       { status: 400 },
     );
   }
+  /* ⛔ T2 (auditoría del deshacer, 2026-10-05): la versión en la que se basó la foto que llega. El autoguardado de
+     la pantalla la manda; si el cronograma cambió desde entonces (lo escribió el servidor, otra pestaña u otra
+     persona), la foto es VIEJA y aplicarla borraría en cascada lo que ella no tenía: 409, sin escribir. Sin
+     versión (los demás llamadores) no se compara, como hasta hoy. */
+  const versionBase = leerVersionBase(rawObj);
+  /* T5: lo que la persona borró A MANO (el «Eliminar tarea» del cajón) se borra aunque `isKept` lo proteja: si
+     no, una tarea escrita a mano reaparecía. Solo en el autoguardado y con el permiso de borrar del cronograma
+     (`honrarBorradas`): ni el chat (AI_ASSIST) ni una regeneración pueden usarlo. */
+  const borradasPedidas = changeKind === "MANUAL" ? leerBorradas(rawObj) : [];
+  const puedeBorrar =
+    borradasPedidas.length > 0 && !((await guardTimelineDelete(projectId)) instanceof NextResponse);
+  const borradasAMano = new Set(honrarBorradas(changeKind, puedeBorrar) ? borradasPedidas : []);
+  /* T1: lo que se recreó porque su id ya no existía (viejo → nuevo). Viaja en la respuesta: la pantalla adopta
+     los ids nuevos, o el guardado siguiente volvería a recrearlo. */
+  const fasesRecreadas: Record<string, string> = {};
+  const tareasRecreadas: Record<string, string> = {};
 
   const now = new Date();
   const anchorDate = anchorStartDate ? new Date(anchorStartDate) : null;
@@ -560,9 +610,10 @@ export async function PUT(
         }
       }
       // Anchor previo (solo para detectar ANCHOR_CHANGED — select trivial por PK).
+      // T2: también el cierre fijado, para calcular la versión de lo que había (`versionDelCronograma`).
       const prevTl = await tx.projectTimeline.findUnique({
         where: { projectId },
-        select: { anchorStartDate: true },
+        select: { anchorStartDate: true, closeDateOverride: true },
       });
       // 1. Upsert del timeline
       const tl = await tx.projectTimeline.upsert({
@@ -636,13 +687,38 @@ export async function PUT(
           },
         },
       });
+      /* ⛔ T2 · UNA FOTO VIEJA NO PISA (auditoría del deshacer, 2026-10-05). Ctrl+Z después de que el SERVIDOR
+         escribió (aplicar lo del chat, el avance, una propuesta…) restauraba una foto de antes y el autoguardado la
+         mandaba entera: las fases que esa foto no tenía se borraban en cascada (abajo no se protegen fases). Si la
+         versión de lo que hay no es la de la foto, 409 y la transacción no escribe nada (el upsert de arriba se
+         deshace con ella).
+         Se compara DESPUÉS del upsert a propósito: el upsert toma el candado de la fila del cronograma, así que dos
+         guardados a la vez se ordenan y el segundo ve las fases que escribió el primero. */
+      if (versionBase !== null) {
+        const versionActual = versionDelCronograma({
+          anchorStartDate: prevTl?.anchorStartDate ?? null,
+          closeDateOverride: prevTl?.closeDateOverride ?? null,
+          phases: existingPhases,
+        });
+        if (fotoVieja(versionBase, versionActual)) {
+          throw Object.assign(new Error(MENSAJE_CRONOGRAMA_CAMBIO), { statusCode: 409, code: CODIGO_CRONOGRAMA_CAMBIO });
+        }
+      }
       const existingById = new Map(existingPhases.map((p) => [p.id, p]));
       const incomingIds = new Set(
         incomingPhases.filter((p) => p.id).map((p) => p.id as string),
       );
+      // T1: en qué fase está HOY cada tarea del cronograma. Un id que no aparece acá ya no existe: se recrea.
+      const faseDeCadaTarea = new Map<string, string>();
+      for (const ep of existingPhases) for (const et of ep.tasks) faseDeCadaTarea.set(et.id, ep.id);
       // Se calcula UNA vez sobre el body entero, no por fase: una tarea que se mueve sale de una
       // fase y entra en otra, así que mirar solo la fase de origen no la encontraría.
-      const huellasDeTareasEnMovimiento = huellasEnMovimiento(incomingPhases);
+      // T1: volver a su fase con el id viejo (deshacer «Tarea movida» después del autoguardado) también es
+      // moverse: la copia que quedó en la fase destino se puede borrar (si no, quedaría duplicada).
+      const huellasDeTareasEnMovimiento = new Set([
+        ...huellasEnMovimiento(incomingPhases),
+        ...huellasDeLasRecreadas(incomingPhases, faseDeCadaTarea),
+      ]);
 
       // 3. DELETE: phases en DB que no aparecen en el body (cascade borra tasks).
       // NB: el "no borrar" del CSE se aplica en la UI (sin botones de borrar fase/tarea);
@@ -753,7 +829,10 @@ export async function PUT(
           }
           phaseId = p.id;
         } else {
-          // CREATE: phase nueva, source=HUMAN
+          // CREATE: phase nueva, source=HUMAN.
+          /* T1: con un id que ya no existe (se borró y la persona lo deshizo) vuelve con su estado y su origen
+             (el `respaldo` de la pantalla), y la respuesta dice qué id nuevo tomó. */
+          const recreada = p.id ? datosParaRecrearFase(p.respaldo) : null;
           const created = await tx.timelinePhase.create({
             data: {
               timelineId: tl.id,
@@ -764,11 +843,13 @@ export async function PUT(
               sessionCount: p.sessionCount,
               notes: p.notes,
               activityType: p.activityType ?? null,
-              source: "HUMAN",
+              source: recreada?.source ?? "HUMAN",
+              ...(recreada ? { status: recreada.status } : {}),
             },
             select: { id: true },
           });
           phaseId = created.id;
+          if (p.id) fasesRecreadas[p.id] = created.id;
           draftEvents.push({
             entityType: "PHASE",
             entityId: created.id,
@@ -823,10 +904,12 @@ export async function PUT(
         // encima (DONE/en curso/cargadas a mano). Ver `idsBorrablesPorOmision`: la protección es
         // del CAMINO DE ESCRITURA, no de un llamador. Una protegida sí se borra cuando su título
         // viaja sin id (se está MOVIENDO de fase, y mover es borrar-en-origen + crear-en-destino).
+        // T5: lo que la persona borró a mano (`borradasAMano`) se borra aunque esté protegido.
         const taskIdsToDelete = idsBorrablesPorOmision(
           existingTasks,
           incomingTaskIds,
           huellasDeTareasEnMovimiento,
+          borradasAMano,
         );
         if (taskIdsToDelete.length > 0) {
           await tx.timelineTask.deleteMany({ where: { id: { in: taskIdsToDelete } } });
@@ -844,11 +927,44 @@ export async function PUT(
 
         for (const t of p.tasks) {
           const existingTask = t.id ? existingTaskById.get(t.id) : undefined;
-          if (t.id && !existingTask) {
-            // id que no pertenece a esta fase → error de payload
-            throw Object.assign(new Error(`Task ${t.id} no pertenece a la fase ${phaseId}`), {
-              statusCode: 400,
+          /* ⛔ T1 (auditoría del deshacer, 2026-10-05): un id que no es de esta fase YA NO es un 400 que traba el
+             guardado. Deshacer un borrado (o una fase borrada, o una tarea movida) después del autoguardado manda
+             el id de una fila que ya no existe: se RECREA con lo que la pantalla sabe (`respaldo`). Antes el 400
+             volvía con cada edición siguiente y todo lo editado después se perdía al recargar.
+             Solo un id que existe en OTRA fase sigue siendo un error (el PUT no mueve por id), con un texto claro. */
+          const destino = queHacerConLaTarea(t.id, existingTaskById, faseDeCadaTarea);
+          if (destino === "de-otra-fase") {
+            throw Object.assign(
+              new Error(`La tarea «${t.title}» está en otra fase del cronograma: recarga para ver dónde quedó.`),
+              { statusCode: 400 },
+            );
+          }
+          if (destino === "recrear" && t.id) {
+            const r = datosParaRecrearTarea(t.respaldo, changeKind === "AI_ASSIST" ? "MODIFIED" : "HUMAN");
+            const recreada = await tx.timelineTask.create({
+              data: {
+                phaseId,
+                title: t.title,
+                weekIndex: t.weekIndex,
+                order: t.order,
+                notes: t.notes ?? null,
+                party: t.party ?? null,
+                type: t.type ?? null,
+                startDateOverride: t.startDateOverride ? new Date(t.startDateOverride) : null,
+                dueDateOverride: t.dueDateOverride ? new Date(t.dueDateOverride) : null,
+                ...r,
+              },
+              select: { id: true },
             });
+            tareasRecreadas[t.id] = recreada.id;
+            draftEvents.push({
+              entityType: "TASK",
+              entityId: recreada.id,
+              label: t.title,
+              action: "CREATED",
+              after: { weekIndex: t.weekIndex, party: t.party ?? null, type: t.type ?? null, recreadaDe: t.id },
+            });
+            continue;
           }
           if (t.id && existingTask) {
             // UPDATE solo si cambió contenido — el flip AGENT→MODIFIED y la
@@ -978,6 +1094,10 @@ export async function PUT(
       return NextResponse.json({ error: (err as Error).message }, { status: 400 });
     }
     if (status === 409) {
+      // T2: la foto vieja tiene su propio código (la pantalla deja de reintentar y ofrece recargar).
+      if ((err as { code?: unknown }).code === CODIGO_CRONOGRAMA_CAMBIO) {
+        return NextResponse.json({ error: (err as Error).message, code: CODIGO_CRONOGRAMA_CAMBIO }, { status: 409 });
+      }
       // `error` lleva el texto: es lo que la pantalla y el chat muestran tal cual.
       return NextResponse.json({ error: (err as Error).message, code: "PROPUESTA_ABIERTA" }, { status: 409 });
     }
@@ -1114,9 +1234,16 @@ export async function PUT(
   /* ⚠ Los avisos van EN LA RESPUESTA, no en un log: acortar una fase mueve tareas de semana, y
      eso cambia fechas que el cliente puede estar mirando. Un `console.warn` es exactamente cómo
      esto pasó desapercibido hasta juntar 34 tareas fuera de rango. */
-  return NextResponse.json(
-    avisosDeReubicacion.length > 0 ? { ...updated, avisos: avisosDeReubicacion } : updated,
-  );
+  /* T1: los ids nuevos de lo recreado, para que la pantalla los adopte (por id, nunca por posición). */
+  const recreadas: IdsRecreados | null =
+    Object.keys(fasesRecreadas).length > 0 || Object.keys(tareasRecreadas).length > 0
+      ? { fases: fasesRecreadas, tareas: tareasRecreadas }
+      : null;
+  return NextResponse.json({
+    ...updated,
+    ...(avisosDeReubicacion.length > 0 ? { avisos: avisosDeReubicacion } : {}),
+    ...(recreadas ? { recreadas } : {}),
+  });
 }
 
 // ── DELETE (cascade borra todas las phases y tasks) ──────────────────────────

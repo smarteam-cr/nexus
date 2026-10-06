@@ -34,8 +34,9 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: async (args: { where: Record<string, unknown> }) => {
         const cumple = (valor: unknown, filtro: unknown): boolean => {
           if (filtro && typeof filtro === "object") {
-            const f = filtro as { in?: unknown[]; not?: unknown };
+            const f = filtro as { in?: unknown[]; notIn?: unknown[]; not?: unknown };
             if (f.in && !f.in.includes(valor)) return false;
+            if (f.notIn && f.notIn.includes(valor)) return false;
             if ("not" in f && valor === f.not) return false;
             return true;
           }
@@ -52,7 +53,7 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 
 import { summaryDesdeArbol, ultimasRazonesHumanas, type ArbolDeSummary } from "./load";
-import { borradorVacio, leerBorrador, planDeAplicacion, proyectarConPlan, RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+import { borradorVacio, leerBorrador, planDeAplicacion, proyectarConPlan, RAZON_DESCARTE_ILEGIBLE, RAZON_DESCARTE_PROPUESTA } from "@/lib/timeline/borrador";
 import { leerFixtureGrande, vivoDelFixture } from "@/lib/timeline/__fixtures__/propuesta-grande";
 import { POLITICA_DE_ATRASOS } from "@/lib/timeline/politica-de-atrasos";
 import { conLaReprogramacion, reprogramarDesdeHoy } from "@/lib/timeline/reprogramar-desde-hoy";
@@ -479,6 +480,7 @@ test("⛔ revisión de los arreglos · la copia de una propuesta ilegible descar
     { timelineId: "tl-inve", reason: "El cliente pidió posponer la migración", kind: "MANUAL", changedByEmail: "cse@smarteam.cr", createdAt: new Date("2026-09-20T10:00:00Z") },
     { timelineId: "tl-inve", reason: RAZON_DESCARTE_ILEGIBLE, kind: "MANUAL", changedByEmail: "cse@smarteam.cr", createdAt: new Date("2026-09-25T10:00:00Z") },
     { timelineId: "tl-inve", reason: "avance", kind: "PROGRESS", changedByEmail: null, createdAt: new Date("2026-09-25T11:00:00Z") },
+    { timelineId: "tl-inve", reason: RAZON_DESCARTE_PROPUESTA, kind: "MANUAL", changedByEmail: "cse@smarteam.cr", createdAt: new Date("2026-09-26T10:00:00Z") },
     { timelineId: "tl-otro", reason: "Se sumó una fase de pruebas", kind: "AI_ASSIST", changedByEmail: null, createdAt: new Date("2026-09-24T10:00:00Z") },
   ];
   const razones = await ultimasRazonesHumanas(["tl-inve", "tl-otro"]);

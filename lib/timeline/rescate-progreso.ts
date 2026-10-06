@@ -142,14 +142,23 @@ export interface TareaProtegible {
   source?: string | null;
 }
 
+/**
+ * ⚠ `borradasAMano` (auditoría del deshacer, 2026-10-05): los ids que la PERSONA borró a mano (el
+ * «Eliminar tarea» del cajón). Una tarea escrita a mano nace HUMAN, así que `isKept` la protegía también
+ * de su propia autora: se «borraba» en la pantalla, el guardado la reponía y reaparecía. Lo borrado a mano
+ * se borra aunque esté protegido; lo que solo FALTA en el body sigue protegido. La ruta pasa esta lista
+ * SOLO en el autoguardado y con permiso de borrar (`honrarBorradas`, guardado-del-cronograma.ts): ni el
+ * chat ni una regeneración la usan.
+ */
 export function idsBorrablesPorOmision(
   existentes: readonly TareaProtegible[],
   idsQueLlegan: ReadonlySet<string>,
   enMovimiento: ReadonlySet<string>,
+  borradasAMano: ReadonlySet<string> = new Set(),
 ): string[] {
   return existentes
     .filter((t) => !idsQueLlegan.has(t.id))
-    .filter((t) => !isKept(t) || enMovimiento.has(fingerprintFromTitle(t.title)))
+    .filter((t) => !isKept(t) || enMovimiento.has(fingerprintFromTitle(t.title)) || borradasAMano.has(t.id))
     .map((t) => t.id);
 }
 

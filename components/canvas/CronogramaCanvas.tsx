@@ -76,6 +76,18 @@ import {
 import { grupoDeParticularidad } from "@/lib/timeline/particularidad-to-task";
 import { useToast } from "@/components/ui/Toast";
 import { useUndo, useUndoScope } from "@/components/ui/UndoProvider";
+/* Auditoría del deshacer (2026-10-05): lo que decide el autoguardado y el deshacer del cronograma, puro y con sus
+   pruebas (lib/timeline/guardado-del-cronograma.test.ts). */
+import {
+  adoptarIdsRecreados,
+  AVISO_DESHACER_VACIADO,
+  borradasAMano,
+  idsVigentes,
+  idVigente,
+  leerIdsRecreados,
+  MENSAJE_CRONOGRAMA_CAMBIO,
+  trasUnGuardadoFallido,
+} from "@/lib/timeline/guardado-del-cronograma";
 import { notifyAgentDone, maybeRequestPermission } from "@/lib/notifications/client";
 import { useAgentRun } from "@/hooks/useAgentRun";
 import CronogramaContextSection from "./CronogramaContextSection";
@@ -717,19 +729,57 @@ export default function CronogramaCanvas({
   // el estado con la respuesta del server (evita perder lo que el CSE tipeó mientras guardaba).
   const editSeq = useRef(0);
   const markDirty = () => { editSeq.current++; setDirty(true); };
-  // Undo: captura el estado pre-edición (phases+anchor del render actual) y registra un comando
+  /* ── AUDITORÍA DEL DESHACER (2026-10-05) ── lo que el autoguardado y el deshacer necesitan recordar. Refs: los
+     leen callbacks async y el efecto del autoguardado, y no pintan nada.
+     · `versionRef` (T2): la versión del cronograma en la que se basa lo que hay en pantalla (la traen el GET y cada
+       guardado). El autoguardado la devuelve: si el cronograma cambió desde entonces, el PUT responde 409 en vez
+       de pisar con una foto vieja.
+     · `guardadoBloqueadoRef` (T1): el autoguardado chocó con ese 409. No se reintenta hasta recargar (cada intento
+       sería otro 409); la franja de error ofrece «Recargar».
+     · `idsRecreadosRef` (T1): lo que el servidor recreó porque su id ya no existía (viejo → nuevo): una foto vieja
+       del deshacer se traduce antes de ponerse, y el deshacer de un estado encuentra su fila.
+     · `borradasRef` (T5): las tareas que la persona borró A MANO (el «Eliminar tarea» del cajón).
+     · `hayDeshacerRef` (T2): hay algo en la pila del cronograma (para avisar cuando una escritura del servidor la
+       vacía).
+     · `linajeRef` (T2): las versiones por las que pasó ESTA pantalla desde la última recarga (la que trajo el GET y
+       las que dejaron sus propios guardados). Una foto del deshacer tomada en otra versión es de antes de una
+       escritura del servidor: no se restaura (la pila ya se vacía al recargar; esto cubre lo que se cuele). */
+  const versionRef = useRef<string | null>(null);
+  const linajeRef = useRef(new Set<string | null>([null]));
+  const guardadoBloqueadoRef = useRef(false);
+  const idsRecreadosRef = useRef(new Map<string, string>());
+  const borradasRef = useRef(new Set<string>());
+  const hayDeshacerRef = useRef(false);
+  /* T1: la franja de error ofrece «Recargar» (volver a lo último guardado) cuando el guardado no se puede arreglar
+     solo con la próxima edición. */
+  const [ofrecerRecarga, setOfrecerRecarga] = useState(false);
+  // Undo: captura el estado pre-edición (phases+anchor+cierre del render actual) y registra un comando
   // que lo restaura. El restore llama markDirty (reprograma el autosave) pero NO vuelve a registrar
   // undo → sin loop. Snapshot por referencia: los updates de phases son inmutables (arrays nuevos).
   const pushTimelineUndo = (label: string, coalesceKey?: string) => {
     const snapPhases = phases;
     const snapAnchor = anchor;
+    /* ⛔ T3 (auditoría del deshacer, 2026-10-05): el cierre fijado a mano TAMBIÉN. La foto guardaba fases y
+       arranque pero no el cierre: deshacer «Cierre fijado a mano» no lo soltaba, y deshacer cualquier otra cosa
+       dejaba el cierre de DESPUÉS sobre las fases de antes. */
+    const snapCloseOverride = closeOverride;
+    // T2: en qué versión del cronograma se tomó la foto (ver `linajeRef`).
+    const snapVersion = versionRef.current;
+    hayDeshacerRef.current = true;
     pushUndo({
       scope: undoScope,
       label,
       coalesceKey,
       undo: () => {
-        setPhases(snapPhases);
+        /* ⛔ T2: una foto de ANTES de una escritura del servidor no se restaura: el autoguardado la mandaría entera y
+           borraría lo que el servidor escribió. El aviso «No se pudo deshacer (el contenido cambió)» lo da el
+           proveedor. Con solo guardados propios en el medio, sí (es deshacer lo propio). */
+        if (!linajeRef.current.has(snapVersion)) return Promise.resolve(false);
+        /* T1: con los ids de AHORA. Si una fila de la foto se borró y el servidor ya la recreó con otro id, se
+           edita la recreada en su lugar en vez de recrearla otra vez. */
+        setPhases(adoptarIdsRecreados(snapPhases, idsVigentes(idsRecreadosRef.current)));
         setAnchor(snapAnchor);
+        setCloseOverride(snapCloseOverride);
         markDirty();
       },
     });
@@ -832,6 +882,13 @@ export default function CronogramaCanvas({
         throw new Error(err?.message ?? "No se pudo cargar el cronograma.");
       }
       const data = await res.json();
+      /* T2: lo que hay en pantalla pasa a ser la versión que trajo el GET; lo borrado a mano que no se mandó se va
+         con el resto de lo que no se guardó, y el autoguardado vuelve a andar (T1). */
+      versionRef.current = data.exists && typeof data.version === "string" ? data.version : null;
+      linajeRef.current = new Set([versionRef.current]);
+      borradasRef.current.clear();
+      guardadoBloqueadoRef.current = false;
+      setOfrecerRecarga(false);
       if (data.exists) {
         setPhases(mapServerPhases(data.phases ?? []));
         setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
@@ -922,6 +979,25 @@ export default function CronogramaCanvas({
   useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * ⛔ T2 · DESPUÉS DE QUE EL SERVIDOR ESCRIBIÓ EL CRONOGRAMA, NO HAY DESHACER (auditoría del deshacer,
+   * 2026-10-05). Las fotos de la pila son de ANTES de esa escritura: Ctrl+Z restauraba una y el autoguardado
+   * la mandaba entera, borrando en cascada lo que el servidor acababa de crear (las fases del chat, la tarea
+   * de un hecho convertido…). Toda recarga que viene de una escritura del servidor vacía la pila del
+   * cronograma, DESPUÉS de recargar (también lo que se registró mientras tanto), y si había algo para
+   * deshacer lo dice (`avisar`: el chat no muestra avisos, su hilo cuenta lo que pasó). Si igual llegara
+   * una foto vieja, el PUT la rechaza por versión (409).
+   */
+  const vaciarElDeshacer = (avisar: boolean) => {
+    clearScope(undoScope);
+    if (hayDeshacerRef.current && avisar) toast.info(AVISO_DESHACER_VACIADO);
+    hayDeshacerRef.current = false;
+  };
+  const recargarTrasEscribir = async (opts?: { avisar?: boolean }) => {
+    await load();
+    vaciarElDeshacer(opts?.avisar ?? true);
+  };
 
   /* De DÓNDE salió la propuesta que está en pantalla. Viaja en un ref y no en estado porque solo
      se lee dentro de callbacks async: no pinta nada, y como estado obligaría a meterlo en las deps
@@ -1061,7 +1137,8 @@ export default function CronogramaCanvas({
        «esperar» se reintenta solo cuando la carga en vuelo termina. */
     if (decision === "esperar") return;
     lastTimelineSignal.current = timelineRefreshSignal;
-    if (decision === "recargar-todo") void load();
+    // T2: el handoff ESCRIBIÓ las fases: la pila de deshacer (de antes) se vacía con la recarga.
+    if (decision === "recargar-todo") void recargarTrasEscribir();
     else void refrescarPropuesta();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timelineRefreshSignal, phases.length, loading]);
@@ -1230,6 +1307,12 @@ export default function CronogramaCanvas({
   };
   const removeTask = (phaseKey: string, taskKey: string) => {
     pushTimelineUndo("Tarea eliminada");
+    /* ⛔ T5 (auditoría del deshacer, 2026-10-05): el borrado EXPLÍCITO de la persona viaja aparte. Una tarea escrita
+       a mano nace HUMAN, y el guardado no borra lo protegido por solo faltar en el body: «Eliminar tarea» la sacaba
+       de la pantalla y el guardado la reponía. Si la persona lo deshace, la tarea vuelve a la foto y no se manda
+       (`borradasAMano`). */
+    const borrada = phases.find((p) => p._key === phaseKey)?.tasks.find((t) => t._key === taskKey);
+    if (borrada?.id) borradasRef.current.add(borrada.id);
     setPhases((ps) =>
       ps.map((p) => (p._key === phaseKey ? { ...p, tasks: p.tasks.filter((t) => t._key !== taskKey) } : p)),
     );
@@ -1276,6 +1359,8 @@ export default function CronogramaCanvas({
       if (!moved || fromPhaseKey === undefined) return ps;
       // Mover ENTRE fases: el PUT no permite reasignar la fase de una tarea con id, así que al
       // cruzar de fase soltamos el id → se recrea en la fase destino (pierde estado; aceptable).
+      // T1 (2026-10-05): deshacerlo DESPUÉS del autoguardado devuelve la tarea con su id viejo (ya borrado):
+      // el PUT la recrea en su fase, con su estado, y borra la copia del destino (no queda duplicada).
       const crossPhase = fromPhaseKey !== toPhaseKey;
       const updated: TaskDraft = { ...moved, weekIndex: toWeekIndex, ...(crossPhase ? { id: undefined } : {}) };
       // 2) insertar en la fase destino, en la posición toOrder dentro de su semana.
@@ -1340,10 +1425,27 @@ export default function CronogramaCanvas({
           type: t.type ?? null,
           startDateOverride: t.startDateOverride ?? null,
           dueDateOverride: t.dueDateOverride ?? null,
+          /* T1 (auditoría del deshacer, 2026-10-05): lo que la pantalla sabe de la fila y el PUT no escribe (el
+             estado y su procedencia, el origen). El servidor lo lee SOLO si el id ya no existe (un borrado que la
+             persona deshizo después del autoguardado) para recrearla como estaba. */
+          ...(t.id
+            ? {
+                respaldo: {
+                  status: t.status,
+                  source: t.source,
+                  statusSource: t.statusSource,
+                  statusChangedAt: t.statusChangedAt ?? undefined,
+                  statusChangedByEmail: t.statusChangedByEmail ?? undefined,
+                  needsValidation: t.needsValidation,
+                },
+              }
+            : {}),
         };
       });
       return {
         ...(p.id ? { id: p.id } : {}),
+        // T1: igual que la tarea, por si la fase se borró y la persona lo deshizo.
+        ...(p.id ? { respaldo: { status: p.status, source: p.source } } : {}),
         name: p.name.trim(),
         order: i,
         durationWeeks: p.durationWeeks,
@@ -1392,6 +1494,8 @@ export default function CronogramaCanvas({
   };
   const guardarAhora = async () => {
     const seq = editSeq.current;
+    // T5: lo que la persona borró a mano y esta foto ya no tiene (si lo deshizo, está en la foto y no viaja).
+    const borradas = borradasAMano(borradasRef.current, phases);
     setSaving(true);
     setError(null);
     try {
@@ -1402,17 +1506,46 @@ export default function CronogramaCanvas({
           ...buildPutBody(phases, anchor, closeOverride),
           // Auto-guardado interno: persiste sin escribir TimelineChange (el audit va en "Subir").
           skipAudit: true,
+          // T2: la versión en la que se basa esta foto. Si el cronograma cambió desde entonces, 409 en vez de pisar.
+          ...(versionRef.current ? { version: versionRef.current } : {}),
+          ...(borradas.length > 0 ? { borradas } : {}),
         }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        setError(d?.details?.[0] ?? d?.error ?? "No se pudo guardar el cronograma.");
+        /* ⛔ T1 (auditoría del deshacer, 2026-10-05): un guardado que falla no deja el cronograma trabado. El
+           texto dice qué pasó y la franja ofrece «Recargar» (`trasUnGuardadoFallido`); un 409 de foto vieja no
+           se reintenta (sería otro 409 con cada edición), el resto sí, con la próxima edición. */
+        const tras = trasUnGuardadoFallido(res.status, d);
+        setError(tras.mensaje);
+        setOfrecerRecarga(tras.ofrecerRecarga);
+        if (tras.bloquear) guardadoBloqueadoRef.current = true;
         lastFailedSeqRef.current = seq; // no reintentar hasta una edición nueva
         setSaving(false);
         return;
       }
       const data = await res.json();
       lastFailedSeqRef.current = null; // éxito → habilitar el auto-guardado de nuevo
+      setOfrecerRecarga(false);
+      /* T2: la versión nueva es la base de lo que sigue, también si se editó durante el PUT (lo de pantalla es esta
+         versión más lo editado después). */
+      versionRef.current = typeof data.version === "string" ? data.version : null;
+      // T2: una versión que dejó ESTA pantalla: las fotos del deshacer tomadas antes siguen valiendo.
+      linajeRef.current.add(versionRef.current);
+      // T5: lo borrado a mano ya se mandó.
+      for (const id of borradas) borradasRef.current.delete(id);
+      /* T1: lo que el servidor RECREÓ (un borrado deshecho después del autoguardado) tomó un id nuevo. Se adopta
+         por id —sin esto, el guardado siguiente mandaría el viejo y se recrearía otra vez—, y lo borrado a mano
+         con el id viejo pasa al nuevo. */
+      const recreadas = leerIdsRecreados(data.recreadas);
+      if (recreadas) {
+        for (const [viejo, nuevo] of Object.entries({ ...recreadas.fases, ...recreadas.tareas })) {
+          idsRecreadosRef.current.set(viejo, nuevo);
+        }
+        for (const [viejo, nuevo] of Object.entries(recreadas.tareas ?? {})) {
+          if (borradasRef.current.delete(viejo)) borradasRef.current.add(nuevo);
+        }
+      }
       if (editSeq.current === seq) {
         // Quedó quieto durante el PUT → adoptar el estado canónico (ids nuevos) + limpiar dirty.
         // Si hay borradores en blanco locales (no enviados), preservarlos: mergeServerIds adopta
@@ -1420,7 +1553,9 @@ export default function CronogramaCanvas({
         if (data.exists) {
           const hasBlankDrafts = phases.some((p) => p.tasks.some((t) => !t.title.trim()));
           setPhases((cur) =>
-            hasBlankDrafts ? mergeServerIds(cur, data.phases ?? []) : mapServerPhases(data.phases ?? []),
+            hasBlankDrafts
+              ? mergeServerIds(adoptarIdsRecreados(cur, recreadas), data.phases ?? [])
+              : mapServerPhases(data.phases ?? []),
           );
           setAnchor(data.anchorStartDate ? String(data.anchorStartDate).slice(0, 10) : "");
           setCloseOverride(data.closeDateOverride ? String(data.closeDateOverride).slice(0, 10) : "");
@@ -1429,12 +1564,14 @@ export default function CronogramaCanvas({
       } else if (data.exists) {
         // Editó durante el PUT → preservar su contenido pero adoptar los ids nuevos
         // (evita duplicar ítems sin id en el próximo guardado). dirty queda true → re-guarda.
-        setPhases((cur) => mergeServerIds(cur, data.phases ?? []));
+        setPhases((cur) => mergeServerIds(adoptarIdsRecreados(cur, recreadas), data.phases ?? []));
       }
       // El PUT setea lastEditedByHuman = now → reflejarlo para que aparezca "Subir al cliente".
       setLastEditedAt(new Date().toISOString());
     } catch {
-      setError("Error de conexión al guardar.");
+      const tras = trasUnGuardadoFallido(null, null);
+      setError(tras.mensaje);
+      setOfrecerRecarga(tras.ofrecerRecarga);
       lastFailedSeqRef.current = seq; // idem ante error de red
     }
     setSaving(false);
@@ -1738,6 +1875,9 @@ export default function CronogramaCanvas({
     if (!dirty || saving || !canEdit) return; // el CSE no autosalva (no edita)
     if (validateLocal() !== null) return;
     if (editSeq.current === lastFailedSeqRef.current) return;
+    /* T1: chocó con una foto vieja (409): cada intento sería otro 409. Se vuelve a guardar después de recargar
+       (`load` lo suelta). Es un ref y no va en las deps: cuando cambia, también cambian `saving` o `dirty`. */
+    if (guardadoBloqueadoRef.current) return;
     const t = setTimeout(() => { void autoSave(); }, 1500);
     return () => clearTimeout(t);
     /* ⛔ `closeOverride` VA EN LAS DEPS, y su ausencia perdía el dato en silencio.
@@ -1783,6 +1923,8 @@ export default function CronogramaCanvas({
       const ultimo = ultimoParaGuardarRef.current;
       if (!ultimo.dirty) return null;
       if (ultimo.invalido) return ultimo.invalido;
+      // T1: con el guardado trabado por una foto vieja, el motivo es ése (recargar), no «revísalo».
+      if (guardadoBloqueadoRef.current) return MENSAJE_CRONOGRAMA_CAMBIO;
       if (editSeq.current === lastFailedSeqRef.current) break;
       await ultimo.autoSave();
       await unRespiro();
@@ -2143,7 +2285,8 @@ export default function CronogramaCanvas({
       /* Los avisos del PUT (tareas reubicadas) se suman a los del ejecutor: los dos son «el
          sistema hizo algo además de lo pedido». */
       const delPut: string[] = Array.isArray(data?.avisos) ? data.avisos : [];
-      await load();
+      // T2: el chat escribió el cronograma: la pila de deshacer (de antes) se vacía. Sin aviso: lo cuenta el hilo.
+      await recargarTrasEscribir({ avisar: false });
       return { fallo: null, avisos: [...avisos, ...delPut] };
     } catch {
       const motivo = "Error de conexión al aplicar el cambio.";
@@ -2410,6 +2553,9 @@ export default function CronogramaCanvas({
       setProposal(null);
       setTareasDelBorrador(null);
       await load();
+      /* T2: la pila ya se vació antes de aplicar (arriba); esto se lleva también lo que se haya registrado
+         mientras tanto, y avisa si había algo (desde el chat, no: lo cuenta el hilo). */
+      vaciarElDeshacer(!desdeElChat);
       bumpGpsRefresh();
       /* E2a: si se crearon o quitaron tareas, el avance se vuelve a evaluar con el cronograma nuevo
          (lo mismo que hacía el camino viejo de «Regenerar todo» al aplicar). Best-effort: si falla,
@@ -3009,7 +3155,8 @@ export default function CronogramaCanvas({
         setError(d?.error ?? "No se pudo aplicar el avance.");
       } else {
         setPendingProgress(null);
-        await load();
+        // T2: el servidor marcó el avance: la pila de deshacer (de antes) se vacía con la recarga.
+        await recargarTrasEscribir();
         // El avance es INTERNO (alimenta el panel de cartera) — el cliente NO ve el
         // estado de cada tarea, así que NO dispara el banner de "subir". Toast de cierre.
         toast.success("Avance aplicado — se refleja en el panel de cartera.");
@@ -3049,7 +3196,8 @@ export default function CronogramaCanvas({
       } else {
         const d = await res.json().catch(() => ({}));
         setPendingParticularidades(null);
-        await load(); // trae las particularidades creadas → aparecen en el resumen
+        // Trae las particularidades creadas → aparecen en el resumen. T2: y vacía la pila de deshacer (de antes).
+        await recargarTrasEscribir();
         // El apply ahora FUSIONA: si el hecho ya estaba registrado lo actualiza en vez de duplicarlo.
         const nuevas = (d?.created ?? 0) as number;
         const fusionadas = (d?.updated ?? 0) as number;
@@ -3255,8 +3403,9 @@ export default function CronogramaCanvas({
         return;
       }
       setConvertingParticularidadId(null);
-      // Trae la tarea nueva al Gantt y el link a la fila (que cambia de grupo).
-      await load();
+      // Trae la tarea nueva al Gantt y el link a la fila (que cambia de grupo). T2: y vacía la pila de deshacer:
+      // una foto de antes no tiene la tarea nueva.
+      await recargarTrasEscribir();
       // Si el hecho dejó de mostrarse al cliente, eso recién llega al «Subir».
       if (d?.hiddenFromClient) setParticularidadesDirty(true);
       const fase = phases.find((p) => p.id === payload.phaseId)?.name ?? "el cronograma";
@@ -3281,7 +3430,8 @@ export default function CronogramaCanvas({
         toast.error(d?.error ?? "No se pudo deshacer.");
         return;
       }
-      await load();
+      // T2: el servidor borró la tarea de la conversión: la pila de deshacer (de antes) se vacía con la recarga.
+      await recargarTrasEscribir();
       toast.info("Conversión deshecha.");
     } catch {
       toast.error("Error de conexión al deshacer.");
@@ -3308,11 +3458,13 @@ export default function CronogramaCanvas({
       }
       if (prev !== undefined && prev !== next) {
         const prevStatus = prev;
+        hayDeshacerRef.current = true;
         pushUndo({
           scope: undoScope,
           label: "Estado de tarea cambiado",
           coalesceKey: `${undoScope}|status|${taskId}`,
-          undo: () => { void toggleStatus(taskId, prevStatus, true); },
+          // T1: si la tarea se recreó en el medio (un borrado deshecho), el estado vuelve a la recreada.
+          undo: () => { void toggleStatus(idVigente(taskId, idsRecreadosRef.current), prevStatus, true); },
         });
       }
     }
@@ -4199,6 +4351,17 @@ export default function CronogramaCanvas({
       {error && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-900/20 border border-red-700/50 text-red-300">
           <span className="text-sm font-medium flex-1">{error}</span>
+          {/* T1 (auditoría del deshacer, 2026-10-05): la salida de un guardado que no se puede arreglar solo con la
+              próxima edición. Recarga lo último guardado (lo que no se guardó se pierde, y el texto de arriba lo dice). */}
+          {ofrecerRecarga && (
+            <button
+              onClick={() => void recargarTrasEscribir({ avisar: false })}
+              title="Vuelve a lo último guardado del cronograma"
+              className="text-xs font-semibold text-danger-ink px-2 py-1 rounded border border-line bg-surface hover:bg-surface-hover"
+            >
+              Recargar
+            </button>
+          )}
           <button onClick={() => setError(null)} className="text-xs font-semibold text-red-200 hover:text-white px-2 py-1 rounded hover:bg-red-800/40">Cerrar</button>
         </div>
       )}

@@ -8,6 +8,12 @@
  * E4. Server-side only.
  */
 import type { TimelineActivityType } from "@prisma/client";
+import {
+  leerRespaldoDeFase,
+  leerRespaldoDeTarea,
+  type RespaldoDeFase,
+  type RespaldoDeTarea,
+} from "./guardado-del-cronograma";
 
 export const ACTIVITY_TYPES = [
   "EXPLORACION",
@@ -33,6 +39,10 @@ export interface TaskInput {
   /** #4 — override de fechas (ISO). undefined = no tocar; null = derivar de la semana; string = set */
   startDateOverride?: string | null;
   dueDateOverride?: string | null;
+  /** Auditoría del deshacer (2026-10-05): lo que la pantalla sabe de la fila (estado, origen) por si su
+   *  id ya no existe y hay que RECREARLA. Para una fila que existe se ignora: el estado va por PATCH.
+   *  Ver lib/timeline/guardado-del-cronograma.ts. */
+  respaldo?: RespaldoDeTarea;
 }
 
 export interface PhaseInput {
@@ -47,6 +57,8 @@ export interface PhaseInput {
   activityType?: TimelineActivityType | null;
   /** undefined = no tocar; [] = borrar todas; array = diff completo */
   tasks?: TaskInput[];
+  /** Igual que en la tarea: solo se lee si el id de la fase ya no existe (se recrea). */
+  respaldo?: RespaldoDeFase;
 }
 
 export interface PutBody {
@@ -288,6 +300,8 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
           type: tType,
           startDateOverride: tStart,
           dueDateOverride: tDue,
+          // Tolerante: un respaldo que no se entiende se ignora, nunca traba el guardado.
+          respaldo: leerRespaldoDeTarea((tk as { respaldo?: unknown }).respaldo),
         });
       });
       if (taskError) return;
@@ -304,6 +318,7 @@ export function validateTimelinePayload(raw: unknown): ValidationResult {
       notes,
       activityType,
       tasks,
+      respaldo: leerRespaldoDeFase(ph.respaldo),
     });
   });
 

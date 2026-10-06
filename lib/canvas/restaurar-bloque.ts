@@ -14,31 +14,23 @@
  * Puro: sin Prisma ni red. La ruta resuelve lo que necesita la base (si el id está libre, si la
  * corrida existe) y se lo pasa.
  */
-import { z } from "zod";
+/* El esquema (zod) vive en ./restaurar-bloque-schema.ts y lo usan solo las rutas: este módulo lo
+   importan componentes de cliente, y zod son 266 KB al bundle del navegador (lib/auth/client-safe.test.ts). */
 
-/** Un id de fila: los nuestros son cuid o UUID. ⛔ NO `z.string().cuid()`: hay UUID en la base. */
-const ID_DE_FILA = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
-
-const datosJson = z
-  .record(z.string(), z.unknown())
-  .refine((v) => JSON.stringify(v).length <= 1_000_000, { message: "data supera 1 MB" });
-
-/** Lo que viaja en `restaurar`. Estricto: un campo desconocido es 400. */
-export const restaurarBloqueSchema = z.strictObject({
-  id: ID_DE_FILA.optional(),
-  source: z.enum(["AGENT", "HUMAN", "MODIFIED"]),
-  status: z.enum(["DRAFT", "CONFIRMED"]),
-  order: z.number().int().min(-1_000_000).max(1_000_000),
-  colSpan: z.number().int().min(1).max(4).optional(),
-  colStart: z.number().int().min(1).max(4).nullable().optional(),
-  rowSpan: z.number().int().min(1).max(40).optional(),
-  agentRunId: ID_DE_FILA.nullable().optional(),
-  previousContent: z.string().max(200_000).nullable().optional(),
-  previousData: datosJson.nullable().optional(),
-  createdAt: z.string().max(40).optional(),
-});
-
-export type RestaurarBloque = z.infer<typeof restaurarBloqueSchema>;
+/** Lo que viaja en `restaurar`. Lo valida `restaurarBloqueSchema` (estricto: un campo desconocido es 400). */
+export interface RestaurarBloque {
+  id?: string;
+  source: "AGENT" | "HUMAN" | "MODIFIED";
+  status: "DRAFT" | "CONFIRMED";
+  order: number;
+  colSpan?: number;
+  colStart?: number | null;
+  rowSpan?: number;
+  agentRunId?: string | null;
+  previousContent?: string | null;
+  previousData?: Record<string, unknown> | null;
+  createdAt?: string;
+}
 
 /** La foto de un bloque antes de borrarlo, como la tiene el navegador (`BlockData`). */
 export interface BloqueBorrado {

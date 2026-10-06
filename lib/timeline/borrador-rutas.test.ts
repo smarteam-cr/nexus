@@ -50,6 +50,9 @@ import {
   MENSAJE_PROPUESTA_ABIERTA,
   MENSAJE_PROPUESTA_ILEGIBLE,
   mensajeDeLaPropuestaAbierta,
+  RAZON_DESCARTE_ILEGIBLE,
+  RAZON_DESCARTE_PROPUESTA,
+  RAZONES_QUE_NO_SON_EL_PORQUE,
 } from "@/lib/timeline/borrador";
 import {
   causaDelFallo,
@@ -355,7 +358,14 @@ describe("DELETE /timeline/proposal — el descarte automático no borra un borr
   });
 
   it("un v1 vacío cuya corrida falló SÍ se descarta solo; y a mano se descarta siempre", async () => {
-    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
+    /* ⚠ ACTUALIZADA en la auditoría del deshacer (T4, 2026-10-05), con esta razón: descartar un v1 ahora limpia y
+       guarda su copia en UNA transacción (antes, un `updateMany` suelto). Lo que se pide no cambia: los dos se
+       descartan. La copia tiene su caso abajo («T4 · descartar deja una copia»). */
+    const tx = {
+      projectTimeline: { updateMany: vi.fn(async () => ({ count: 1 })) },
+      timelineChange: { create: vi.fn(async () => ({})) },
+    };
+    db.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => fn(tx));
     db.projectTimeline.findUnique.mockResolvedValue({
       id: "tl",
       pendingProposalRunId: "run-1",
@@ -368,7 +378,7 @@ describe("DELETE /timeline/proposal — el descarte automático no borra un borr
     db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: v1() });
     const aMano = await descartarDELETE(pedir({ runId: "run-1" }), delProyecto);
     expect(await aMano.json()).toEqual({ cleared: true });
-    expect(db.projectTimeline.updateMany).toHaveBeenCalledTimes(2);
+    expect(tx.projectTimeline.updateMany).toHaveBeenCalledTimes(2);
   });
 
   it("⛔ revisión de E3 (#24) · «Descártala» acordada para OTRA propuesta: 409 otra_propuesta, sin borrar nada", async () => {
@@ -428,18 +438,16 @@ describe("⛔ revisión de E4 (#1, #2) · DELETE /timeline/proposal con algo que
     expect(db.timelineChange.create, "la copia quedó fuera de la transacción").not.toHaveBeenCalled();
   });
 
-  it("⛔ si cambió desde que se leyó, 409 y sin copia; un v1 se descarta como siempre, sin copia", async () => {
+  it("⛔ si cambió desde que se leyó, 409 y sin copia", async () => {
+    /* ⚠ REESCRITA en la auditoría del deshacer (T4, 2026-10-05), con esta razón: pedía además que un v1 se
+       descartara «sin copia». Era el hueco: un «Descartar» por error, o el descarte automático cuando una edición a
+       mano igualaba la propuesta, la perdía para siempre. Ahora un v1 también deja su copia (su caso, en el bloque
+       «T4» de abajo). Lo de lo ilegible no cambia. */
     db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: NO_V1 });
     const tx = txFalsa(0);
     const res = await descartarDELETE(pedir({ runId: "run-1", ilegible: true }), delProyecto);
     expect(res.status).toBe(409);
     expect(tx.timelineChange.create, "copió algo que no se limpió").not.toHaveBeenCalled();
-
-    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: v1() });
-    db.projectTimeline.updateMany.mockResolvedValue({ count: 1 });
-    const legible = await descartarDELETE(pedir({ runId: "run-1" }), delProyecto);
-    expect(await legible.json()).toEqual({ cleared: true });
-    expect(db.timelineChange.create).not.toHaveBeenCalled();
   });
 
   it("⛔ la pantalla descarta lo ilegible pero lo guardado ya es un v1 (se convirtió, mismo token): 409, no borra", async () => {
@@ -453,6 +461,86 @@ describe("⛔ revisión de E4 (#1, #2) · DELETE /timeline/proposal con algo que
     expect(await res.json()).toEqual({ cleared: false, reason: "otra_propuesta" });
     expect(db.projectTimeline.updateMany).not.toHaveBeenCalled();
     expect(tx.projectTimeline.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ── T4 (AUDITORÍA DEL DESHACER, 2026-10-05): DESCARTAR UNA PROPUESTA DEJA UNA COPIA ─────────────────────────────
+ * Descartar un v1 la borraba sin rastro (solo lo ilegible guardaba copia). Y el descarte automático la borra cuando
+ * una edición a mano la iguala: si después la persona deshacía su edición, la propuesta ya no estaba. Ahora la copia
+ * queda en `TimelineChange.snapshot.propuestaDescartada`, en la MISMA transacción que la limpia.
+ */
+describe("⛔ T4 · DELETE /timeline/proposal: descartar un v1 deja una copia recuperable", () => {
+  function txFalsa(count: number) {
+    const tx = {
+      projectTimeline: { updateMany: vi.fn(async () => ({ count })) },
+      timelineChange: { create: vi.fn(async () => ({})) },
+    };
+    db.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => fn(tx));
+    return tx;
+  }
+
+  it("⭐ a mano: limpia y copia en la MISMA transacción, con quién y cómo", async () => {
+    /* Las ediciones que la ponen en rojo: limpiar sin la copia, escribirla fuera de la transacción (si una falla,
+       la otra queda), o volver a limpiar con el `updateMany` suelto. */
+    const guardada = v1({ cambios: [{ tipo: "fase-nueva", clave: "f:1" }] });
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: guardada });
+    const tx = txFalsa(1);
+    const res = await descartarDELETE(pedir({ runId: "run-1" }), delProyecto);
+    expect(await res.json()).toEqual({ cleared: true });
+    expect(tx.projectTimeline.updateMany).toHaveBeenCalledWith({
+      where: { projectId: "p1", pendingProposalRunId: "run-1" },
+      data: { pendingProposal: Prisma.DbNull, pendingProposalRunId: null },
+    });
+    expect(tx.timelineChange.create, "descartó la propuesta sin guardar la copia").toHaveBeenCalledWith({
+      data: {
+        timelineId: "tl",
+        kind: "MANUAL",
+        reason: RAZON_DESCARTE_PROPUESTA,
+        changedByEmail: "cse@smarteam.cr",
+        snapshot: { propuestaDescartada: guardada, pendingProposalRunId: "run-1", comoSeDescarto: "a-mano" },
+      },
+    });
+    expect(db.projectTimeline.updateMany, "limpió fuera de la transacción de la copia").not.toHaveBeenCalled();
+    expect(db.timelineChange.create, "la copia quedó fuera de la transacción").not.toHaveBeenCalled();
+  });
+
+  it("el descarte automático (una edición a mano la igualó) también deja su copia", async () => {
+    // Con sus tareas ya listas (uno que las espera no se descarta solo: 423, arriba).
+    db.projectTimeline.findUnique.mockResolvedValue({
+      id: "tl",
+      pendingProposalRunId: "run-1",
+      pendingProposal: v1({ tareas: { corrida: null, listas: true } }),
+    });
+    const tx = txFalsa(1);
+    const res = await descartarDELETE(pedir({ reason: "auto-zero-deltas", runId: "run-1" }), delProyecto);
+    expect(await res.json()).toEqual({ cleared: true });
+    expect(tx.timelineChange.create).toHaveBeenCalledTimes(1);
+    expect(tx.timelineChange.create.mock.calls[0]).toMatchObject([
+      { data: { reason: RAZON_DESCARTE_PROPUESTA, snapshot: { comoSeDescarto: "auto-zero-deltas" } } },
+    ]);
+  });
+
+  it("si otra propuesta entró en el medio, 409 y sin copia; sin nada guardado, no hay qué copiar", async () => {
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: "run-1", pendingProposal: v1() });
+    let tx = txFalsa(0);
+    const res = await descartarDELETE(pedir({ runId: "run-1" }), delProyecto);
+    expect(res.status).toBe(409);
+    expect(tx.timelineChange.create, "copió algo que no se limpió").not.toHaveBeenCalled();
+
+    db.projectTimeline.findUnique.mockResolvedValue({ id: "tl", pendingProposalRunId: null, pendingProposal: null });
+    tx = txFalsa(1);
+    await descartarDELETE(pedir({ runId: null }), delProyecto);
+    expect(tx.timelineChange.create).not.toHaveBeenCalled();
+  });
+
+  it("⛔ la copia no es el porqué de un atraso: su razón está en la lista que la cartera excluye", () => {
+    /* La cartera muestra la última MANUAL de cada cronograma como el porqué de un atraso. ⚠ El filtro vive en
+       lib/portfolio/load.ts (`ultimasRazonesHumanas`), fuera del cronograma: tiene que excluir TODA la lista. La
+       edición que la pone en rojo: sacar la razón nueva de la lista. */
+    expect(RAZONES_QUE_NO_SON_EL_PORQUE).toContain(RAZON_DESCARTE_PROPUESTA);
+    expect(RAZONES_QUE_NO_SON_EL_PORQUE).toContain(RAZON_DESCARTE_ILEGIBLE);
+    expect(RAZON_DESCARTE_PROPUESTA).not.toBe(RAZON_DESCARTE_ILEGIBLE);
   });
 });
 

@@ -25,7 +25,7 @@ import {
 import { canvasOfNested, canvasOfAnyNested } from "@/lib/pieces/canvas-query";
 import { slugForCanvas } from "@/lib/pieces/registry";
 import { diasSinConfirmar, type BorradorFechable } from "@/lib/timeline/avance-sin-confirmar";
-import { RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+import { RAZONES_QUE_NO_SON_EL_PORQUE } from "@/lib/timeline/borrador";
 import { tieneContenidoDeProceso } from "@/lib/procesos/mapa";
 
 /**
@@ -41,7 +41,7 @@ export function ultimasRazonesHumanas(timelineIds: string[]) {
     where: {
       timelineId: { in: timelineIds },
       kind: { in: ["MANUAL", "AI_ASSIST"] },
-      reason: { not: RAZON_DESCARTE_ILEGIBLE },
+      reason: { notIn: [...RAZONES_QUE_NO_SON_EL_PORQUE] },
     },
     orderBy: [{ timelineId: "asc" }, { createdAt: "desc" }],
     distinct: ["timelineId"],
