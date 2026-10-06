@@ -27,10 +27,21 @@ export interface Pendiente {
   plata?: string;
   accion: string;
   href: string;
+  /**
+   * Cuando el ítem junta cosas de VARIOS lugares (alertas de distintas cuentas), cada lugar con su enlace directo. El
+   * botón (`href`) lleva al primero. Sin esto, la única salida sería un índice donde quizá no aparece lo que se avisa.
+   */
+  enlaces?: EnlaceDePendiente[];
   /** Algo FALLÓ (rojo): una copia automática, un proceso del servidor. */
   error?: boolean;
   /** Desde cuándo espera (ISO): ordena dentro del bloque y dice «lo que más espera» en «Del equipo». */
   desde?: string | null;
+}
+
+/** Uno de los lugares de un pendiente que junta varios: «Wherex (2)» → la ficha de Wherex. */
+export interface EnlaceDePendiente {
+  texto: string;
+  href: string;
 }
 
 /** Lo que devuelve una fuente al medirse para una persona. */
@@ -84,7 +95,10 @@ export interface FilaDelEquipo {
   sub: string;
   hoy: number;
   semana: number;
-  /** Lo que más espera, ya dicho; null = al día. Vacío cuando la persona que mira no puede ver esas cuentas. */
+  /**
+   * Lo que más espera, ya dicho; null = al día. Vacío cuando la persona que mira no puede ver esas cuentas, o cuando es
+   * la fila de Finanzas y no ve Cobranza (lib/para-ti/equipo-server.ts).
+   */
   espera: string | null;
   sinDueno?: boolean;
   esTu?: boolean;

@@ -6,6 +6,9 @@
  * · Quien no (un CSE) ve solo cuántas cosas tiene cada persona: nombrar una cuenta que no puede abrir sería mostrarle
  *   lo que su acceso no le muestra.
  * · Dirección (o un Super Admin) lo ve por ÁREA; el resto, las personas de su área.
+ * · ⛔ Quien no ve Cobranza ve de Finanzas solo CUÁNTAS cosas hay, no el detalle (Elías, 2026-10-05): la fila del área
+ *   Finanzas va sin «lo que más espera», y en las demás un pendiente de Finanzas no se usa de ejemplo. Lleva
+ *   «Dirección» cualquiera (no pide permiso), así que esto no lo cubre el frente.
  * · Lo que no tiene dueño (proyectos sin encargado) sale en su propia fila, para que alguien lo tome.
  *
  * Mide a cada persona con `medirConCache`: la misma medición que alimenta su número del menú, y como mucho cuatro a la
@@ -13,11 +16,11 @@
  */
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
-import { alcanceDe, SELECT_MIEMBRO_PARA_ALCANCE, type Alcance, type MiembroParaAlcance } from "./alcance-server";
+import { alcanceDe, SELECT_MIEMBRO_PARA_ALCANCE, tienePermiso, type Alcance, type MiembroParaAlcance } from "./alcance-server";
 import { haceCuanto, loQueMasEspera, plural } from "./armar";
 import { SIN_ENCARGADO } from "./fuentes/cs";
 import { medirConCache } from "./medir-server";
-import type { DelEquipo, FilaDelEquipo, ParaTi } from "./tipos";
+import type { DelEquipo, FilaDelEquipo, ParaTi, Pendiente } from "./tipos";
 
 export type { DelEquipo, FilaDelEquipo };
 
@@ -51,9 +54,21 @@ function cuenta(p: ParaTi) {
   return { hoy: p.agente.length + p.hoy.length, semana: p.semana.length + p.luego.length };
 }
 
+/** Un pendiente de Finanzas (lib/para-ti/fuentes/finanzas.ts: registrar, supervisar, lo devuelto): montos y registros. */
+export function esDeFinanzas(it: Pick<Pendiente, "fuente">): boolean {
+  return it.fuente.startsWith("finanzas-");
+}
+
 export async function medirEquipo(viewer: Alcance, ahora = new Date()): Promise<DelEquipo> {
   const porArea = viewer.rol === "SUPER_ADMIN" || viewer.frentes.includes("DIRECCION");
   const soloNumeros = !viewer.veTodaLaCartera;
+  // De Finanzas, sin Cobranza: solo los números (ver arriba).
+  const veFinanzas = tienePermiso(viewer, "cobranza", "read");
+  const mostrable = (it: Pendiente) => veFinanzas || !esDeFinanzas(it);
+  const sinLoDeFinanzas = (p: ParaTi): ParaTi =>
+    veFinanzas
+      ? p
+      : { ...p, agente: p.agente.filter(mostrable), hoy: p.hoy.filter(mostrable), semana: p.semana.filter(mostrable) };
   const miembros: MiembroParaAlcance[] = await prisma.teamMember.findMany({
     where: { deactivatedAt: null, appUser: { isNot: null } },
     select: SELECT_MIEMBRO_PARA_ALCANCE,
@@ -81,27 +96,34 @@ export async function medirEquipo(viewer: Alcance, ahora = new Date()): Promise<
     filas = [...grupos].map(([area, xs]) => {
       const total = xs.reduce((s, x) => ({ hoy: s.hoy + cuenta(x.p).hoy, semana: s.semana + cuenta(x.p).semana }), { hoy: 0, semana: 0 });
       // Lo más viejo del área: el pendiente con la fecha más antigua de todas sus personas.
-      const todos = xs.flatMap((x) => [...x.p.agente, ...x.p.hoy].map((it) => ({ it, quien: x.a.nombre })));
+      const todos = xs.flatMap((x) => [...x.p.agente, ...x.p.hoy].filter(mostrable).map((it) => ({ it, quien: x.a.nombre })));
       todos.sort((u, v) => (Date.parse(u.it.desde ?? "") || Infinity) - (Date.parse(v.it.desde ?? "") || Infinity));
       const primero = todos[0];
       const hace = primero ? haceCuanto(primero.it.desde, ahora) : null;
+      const callada = soloNumeros || (area === "Finanzas" && !veFinanzas);
       return {
         clave: `area:${area}`,
         quien: area,
         sub: plural(xs.length, "persona", "personas"),
         ...total,
-        espera: soloNumeros ? null : primero ? `${primero.it.titulo} (${primero.quien})${hace && hace !== "hoy" ? ` · ${hace}` : ""}` : null,
+        espera: callada ? null : primero ? `${primero.it.titulo} (${primero.quien})${hace && hace !== "hoy" ? ` · ${hace}` : ""}` : null,
       };
     });
   } else {
-    filas = medidos.map(({ a, p }) => ({
-      clave: `persona:${a.email}`,
-      quien: a.nombre,
-      sub: a.proyectos.length ? plural(a.proyectos.length, "proyecto", "proyectos") : areaDe({ roleEnum: a.rol }, a.frentes),
-      ...cuenta(p),
-      espera: soloNumeros && a.email !== viewer.email ? null : esperaDe(p),
-      esTu: a.email === viewer.email,
-    }));
+    filas = medidos.map(({ a, p }) => {
+      const esTu = a.email === viewer.email;
+      const area = areaDe({ roleEnum: a.rol }, a.frentes);
+      // Lo tuyo lo ves entero; de los demás, lo de Finanzas solo si ves Cobranza.
+      const callada = !esTu && (soloNumeros || (area === "Finanzas" && !veFinanzas));
+      return {
+        clave: `persona:${a.email}`,
+        quien: a.nombre,
+        sub: a.proyectos.length ? plural(a.proyectos.length, "proyecto", "proyectos") : area,
+        ...cuenta(p),
+        espera: callada ? null : esperaDe(esTu ? p : sinLoDeFinanzas(p)),
+        esTu,
+      };
+    });
   }
 
   if (viewer.veTodaLaCartera) {

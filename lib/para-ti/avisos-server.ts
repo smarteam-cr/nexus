@@ -10,9 +10,11 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
+import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
+import { esResponsable } from "@/lib/escala/comentarios/reglas";
 import { frentesDelMiembro } from "./alcance-server";
 import { destinatarios, esBuenaNoticia, esRutaInterna, textoDeAviso } from "./avisos";
-import { esClaveDeFrente, type ClaveDeFrente } from "./frentes";
+import { esClaveDeFrente, frente, puedeLlevar, type ClaveDeFrente } from "./frentes";
 import type { AvisoVisto } from "./tipos";
 
 export interface NuevoAviso {
@@ -30,13 +32,37 @@ export interface NuevoAviso {
   dedupeKey: string;
 }
 
-/** Quiénes llevan un frente hoy (activos, con su default por rol si nunca eligieron). */
-export async function quienesLlevan(frente: ClaveDeFrente): Promise<string[]> {
+/**
+ * Quiénes llevan un frente hoy (activos, con su default por rol si nunca eligieron) Y pueden abrir sus pantallas.
+ * ⛔ Quien lo lleva sin el permiso que pide (`puedeLlevar`, con su acceso EFECTIVO) no recibe el aviso: ni el título
+ * ni el detalle (un reporte de feedback manda hasta 280 caracteres) le llegan hasta que tenga el permiso (Elías,
+ * 2026-10-05). Mismo criterio que `fuentesQueAplican` para los pendientes.
+ */
+export async function quienesLlevan(clave: ClaveDeFrente): Promise<string[]> {
   const miembros = await prisma.teamMember.findMany({
     where: { deactivatedAt: null },
-    select: { email: true, roleEnum: true, frentes: true, frentesEditadosAt: true, vistaFinanzas: true },
+    select: {
+      email: true,
+      roleEnum: true,
+      permissionOverrides: true,
+      frentes: true,
+      frentesEditadosAt: true,
+      vistaFinanzas: true,
+    },
   });
-  return miembros.filter((m) => frentesDelMiembro(m).includes(frente)).map((m) => m.email);
+  const f = frente(clave);
+  const loLlevan = miembros.filter((m) => frentesDelMiembro(m).includes(clave));
+  const pueden = await Promise.all(
+    loLlevan.map(async (m) =>
+      puedeLlevar(f, {
+        role: m.roleEnum,
+        email: m.email,
+        permissions: await getEffectivePermissions(m),
+        esResponsableDeLaEscala: esResponsable(m.email),
+      }),
+    ),
+  );
+  return loLlevan.filter((_, i) => pueden[i]).map((m) => m.email);
 }
 
 /** Escribe el aviso para cada destinatario. Devuelve cuántos se escribieron. NUNCA lanza. */

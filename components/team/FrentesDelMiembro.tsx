@@ -5,12 +5,13 @@
  *
  * El ROL de arriba dice qué puede ver y hacer. Esto dice qué le llega en «Para ti». Tres personas con el mismo rol (los
  * Super Admin) no siguen lo mismo. No da permisos: si marca un frente cuyas pantallas la persona no puede abrir, lo avisa
- * en ámbar en vez de impedirlo (puede ser a propósito, mientras se ajusta su rol).
+ * en ámbar en vez de impedirlo (puede ser a propósito, mientras se ajusta su rol). Ese frente se calla: no le llega nada
+ * de ese tema hasta que tenga el permiso (lib/para-ti/frentes.ts, `puedeLlevar`).
  *
  * `valor`: null = no se tocó en este modal (se muestra lo guardado y no se manda); "rol" = volver a lo de su rol; una
  * lista = elegidos a mano.
  */
-import { FRENTES_ACTIVOS, frentesDe, puedeLlevar, type ClaveDeFrente } from "@/lib/para-ti/frentes";
+import { avisoSinPermiso, FRENTES_ACTIVOS, frentesDe, puedeLlevar, type ClaveDeFrente } from "@/lib/para-ti/frentes";
 
 interface Props {
   role: string;
@@ -76,7 +77,7 @@ export default function FrentesDelMiembro({
                 <span className="block font-medium text-fg">{f.nombre}</span>
                 <span className="block text-fg-muted">{f.queLlega}</span>
                 {marcado && !puede && f.requisitoTexto && (
-                  <span className="mt-0.5 block text-warn-ink">⚠ {f.requisitoTexto} No va a poder abrir lo que le llegue.</span>
+                  <span className="mt-0.5 block text-warn-ink">⚠ {avisoSinPermiso(f)}</span>
                 )}
               </span>
             </label>

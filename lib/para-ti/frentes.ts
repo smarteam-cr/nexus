@@ -5,6 +5,10 @@
  * pregunta: «qué te toca seguir». Tres personas con el mismo acceso (los Super Admin) no siguen lo mismo: dirección,
  * finanzas, la Escala. Por eso un frente NO da acceso a nada: solo decide qué le llega a la persona en «Para ti».
  *
+ * ⛔ Y al revés tampoco: un frente que la persona lleva pero cuyas pantallas no puede abrir (`puedeLlevar` en false)
+ * se CALLA entero — ni pendientes ni avisos, ni montos ni textos — hasta que tenga el permiso (Elías, 2026-10-05).
+ * Lo aplican `fuentesQueAplican` (lib/para-ti/medir-server.ts) y `quienesLlevan` (lib/para-ti/avisos-server.ts).
+ *
  * Lo PERSONAL llega sin frente: un proyecto donde eres encargado, una preventa que llevas, una propuesta que creaste,
  * algo que te devolvieron. Los frentes son para lo que no tiene una persona escrita en el dato (las alertas del vigía,
  * los comentarios de la Escala, los pendientes del área de finanzas…).
@@ -208,11 +212,19 @@ export interface AccesoParaFrentes {
   esResponsableDeLaEscala: boolean;
 }
 
-/** ¿Puede esta persona abrir las pantallas del frente? Si no, Equipo lo avisa (no lo prohíbe). */
+/**
+ * ¿Puede esta persona abrir las pantallas del frente? Si no, Equipo lo avisa en ámbar (no lo prohíbe: puede ser a
+ * propósito mientras se ajusta su rol) y el frente se calla: no le llega nada de ese tema hasta que tenga el permiso.
+ */
 export function puedeLlevar(f: Frente, a: AccesoParaFrentes): boolean {
   const r = f.requisito;
   if (r.tipo === "ninguno") return true;
   if (a.role === "SUPER_ADMIN") return true;
   if (r.tipo === "roles") return !!a.role && r.roles.includes(a.role);
   return a.permissions?.sections?.[r.seccion]?.[r.accion] === true;
+}
+
+/** El aviso ámbar de Equipo cuando alguien lleva un frente que no puede abrir. */
+export function avisoSinPermiso(f: Frente): string {
+  return `${f.requisitoTexto} Mientras no tenga el permiso, no le va a llegar nada de este tema.`.trim();
 }

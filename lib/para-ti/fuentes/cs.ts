@@ -5,6 +5,10 @@
  *
  * Todo enlaza a pantallas que solo abren la CSL y Super Admin (Éxito del cliente), que es justo el requisito del
  * frente (lib/para-ti/frentes.ts).
+ *
+ * ⛔ Lo del vigía lleva DIRECTO a la ficha de la cuenta (`/customer-success/{clientId}`), nunca al índice: el índice
+ * muestra la cartera de quien mira, y una alerta de una cuenta fuera de ella no aparece ahí (2026-10-05). Si son de
+ * varias cuentas, el ítem dice cuántas y trae cada cuenta con su enlace (`enlaces`).
  */
 import "server-only";
 import { Prisma } from "@prisma/client";
@@ -14,9 +18,10 @@ import { PROYECTO_CLASIFICABLE_WHERE, PROYECTO_DE_PIPELINE_CS_WHERE } from "@/li
 import { urlDeProyecto } from "@/lib/agents/run-url";
 import { hayPropuestaParaRevisar } from "@/lib/timeline/borrador";
 import { leerAutoriaDeLasPropuestas } from "@/lib/timeline/leer-autoria";
+import type { PestanaDeCuenta } from "@/lib/cs/pestanas-de-la-cuenta";
 import { haceCuanto, plural } from "../armar";
 import type { Fuente } from "../fuente";
-import type { Pendiente } from "../tipos";
+import type { EnlaceDePendiente, Pendiente } from "../tipos";
 
 /** Desde cuántos días una propuesta de cronograma sin decidir pasa a ser cosa de quien lidera. */
 export const DIAS_PARA_QUE_UNA_PROPUESTA_SE_TRABE = 3;
@@ -41,6 +46,31 @@ async function implementacionesAbiertas(extra: Prisma.ProjectWhereInput = {}) {
   });
 }
 
+/**
+ * La ficha de una cuenta en Éxito del cliente; con `pestana`, abierta en esa pestaña (`?pestana=`, la lee
+ * `pestanaDeLaUrl` en lib/cs/pestanas-de-la-cuenta.ts).
+ */
+export function fichaDeLaCuenta(clientId: string, pestana?: PestanaDeCuenta): string {
+  const ficha = `/customer-success/${encodeURIComponent(clientId)}`;
+  return pestana && pestana !== "estado" ? `${ficha}?pestana=${pestana}` : ficha;
+}
+
+/** Las cuentas de una lista, en el orden en que llegan (la que más espera primero), con cuántas cosas tiene cada una. */
+function porCuenta(xs: readonly { clientId: string; client: { name: string } }[]) {
+  const cuentas = new Map<string, { clientId: string; nombre: string; n: number }>();
+  for (const x of xs) {
+    const c = cuentas.get(x.clientId);
+    if (c) c.n++;
+    else cuentas.set(x.clientId, { clientId: x.clientId, nombre: x.client.name, n: 1 });
+  }
+  return [...cuentas.values()];
+}
+
+function enlacesDe(cuentas: ReturnType<typeof porCuenta>, pestana?: PestanaDeCuenta): EnlaceDePendiente[] | undefined {
+  if (cuentas.length < 2) return undefined;
+  return cuentas.map((c) => ({ texto: c.n > 1 ? `${c.nombre} (${c.n})` : c.nombre, href: fichaDeLaCuenta(c.clientId, pestana) }));
+}
+
 export const VIGIA: Fuente = {
   clave: "cs-vigia",
   frente: "LIDERAR_CS",
@@ -49,48 +79,61 @@ export const VIGIA: Fuente = {
     const [alertas, propuestas] = await Promise.all([
       prisma.csAlert.findMany({
         where: { status: "OPEN", severity: "HIGH" },
-        select: { id: true, firstDetectedAt: true, client: { select: { name: true } } },
+        select: { id: true, clientId: true, firstDetectedAt: true, client: { select: { name: true } } },
         orderBy: { firstDetectedAt: "asc" },
         take: 100,
       }),
       prisma.project.findMany({
         where: { healthProposed: { not: null } },
-        select: { id: true, name: true, healthProposedAt: true, client: { select: { name: true } } },
+        select: { id: true, name: true, clientId: true, healthProposedAt: true, client: { select: { name: true } } },
         orderBy: { healthProposedAt: "asc" },
         take: 50,
       }),
     ]);
     const out: Pendiente[] = [];
     if (alertas.length) {
-      const empresas = [...new Set(alertas.map((x) => x.client.name))];
+      // Las alertas se ven en la ficha de su cuenta, en «Alertas» (a la derecha, en cualquier pestaña).
+      const cuentas = porCuenta(alertas);
+      const una = cuentas.length === 1;
+      const cuantas = plural(alertas.length, "alerta alta sin revisar", "alertas altas sin revisar");
       out.push({
         clave: "cs-vigia:alertas",
         fuente: "cs-vigia",
         cuando: "hoy",
         delAgente: true,
-        titulo: `El vigía dejó ${plural(alertas.length, "alerta alta sin revisar", "alertas altas sin revisar")}`,
-        detalle: listaDeEmpresas(empresas),
+        titulo: una ? `El vigía dejó ${cuantas} en ${cuentas[0].nombre}` : `El vigía dejó ${cuantas} en ${cuentas.length} cuentas`,
+        detalle: una
+          ? "Están en la ficha de la cuenta, a la derecha, en «Alertas»."
+          : "Cada cuenta abre su ficha; las alertas están a la derecha, en «Alertas».",
         meta: "Éxito del cliente · el vigía",
-        accion: "Ir a Éxito del cliente",
-        href: "/customer-success",
+        accion: una ? "Abrir la cuenta" : "Abrir la que más espera",
+        href: fichaDeLaCuenta(cuentas[0].clientId),
+        enlaces: enlacesDe(cuentas),
         desde: alertas[0].firstDetectedAt.toISOString(),
       });
     }
     if (propuestas.length) {
+      // La propuesta de estado se confirma o descarta en la pestaña «Proyectos» de la ficha.
       const p = propuestas[0];
+      const cuentas = porCuenta(propuestas);
+      const uno = propuestas.length === 1;
       out.push({
         clave: "cs-vigia:estados",
         fuente: "cs-vigia",
         cuando: "hoy",
         delAgente: true,
-        titulo:
-          propuestas.length === 1
-            ? `El vigía propone cambiar el estado de «${p.name}» de ${p.client.name}`
-            : `El vigía propone cambiar el estado de ${propuestas.length} proyectos`,
-        detalle: "Confírmalo o descártalo: el estado no cambia solo.",
+        titulo: uno
+          ? `El vigía propone cambiar el estado de «${p.name}» de ${p.client.name}`
+          : cuentas.length === 1
+            ? `El vigía propone cambiar el estado de ${propuestas.length} proyectos de ${p.client.name}`
+            : `El vigía propone cambiar el estado de ${propuestas.length} proyectos en ${cuentas.length} cuentas`,
+        detalle: uno
+          ? "Confírmalo o descártalo en «Proyectos» de la cuenta: el estado no cambia solo."
+          : "Confírmalos o descártalos en «Proyectos» de cada cuenta: el estado no cambia solo.",
         meta: "Éxito del cliente · estado del proyecto",
-        accion: "Revisar",
-        href: "/customer-success",
+        accion: cuentas.length === 1 ? "Revisar" : "Revisar la que más espera",
+        href: fichaDeLaCuenta(p.clientId, "proyectos"),
+        enlaces: enlacesDe(cuentas, "proyectos"),
         desde: p.healthProposedAt?.toISOString() ?? null,
       });
     }

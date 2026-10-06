@@ -8,12 +8,25 @@
  *    hace nada.
  * 3. Cada tipo de aviso que se escribe está en el catálogo (TIPOS_DE_AVISO).
  * 4. La tabla `Aviso` solo se escribe desde lib/para-ti/avisos-server.ts.
+ * 5. Lo del vigía lleva a la ficha de SU cuenta, no al índice. Esta sí carga la fuente (lib/para-ti/fuentes/cs.ts)
+ *    contra una base simulada.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FRENTES_ACTIVOS } from "./frentes";
 import { TIPOS_DE_AVISO } from "./avisos";
+import { VIGIA } from "./fuentes/cs";
+import { pestanaDeLaUrl } from "@/lib/cs/pestanas-de-la-cuenta";
+
+const base = vi.hoisted(() => ({ alertas: [] as unknown[], propuestas: [] as unknown[] }));
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    csAlert: { findMany: async () => base.alertas },
+    project: { findMany: async () => base.propuestas },
+  },
+}));
 
 const RAIZ = join(__dirname, "..", "..");
 const leer = (rel: string) => readFileSync(join(RAIZ, rel), "utf8");
@@ -76,5 +89,60 @@ describe("los avisos", () => {
       .filter(({ texto }) => /\b(prisma|tx)\.aviso\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(/.test(texto))
       .map(({ rel }) => relative(RAIZ, join(RAIZ, rel)).replace(/\\/g, "/"));
     expect(escriben).toEqual(["lib/para-ti/avisos-server.ts"]);
+  });
+});
+
+describe("⛔ lo del vigía lleva a la ficha de su cuenta, no al índice (2026-10-05)", () => {
+  const alerta = (clientId: string, name: string, dia: string) => ({
+    id: `al-${clientId}-${dia}`,
+    clientId,
+    firstDetectedAt: new Date(`2026-10-${dia}T12:00:00Z`),
+    client: { name },
+  });
+  const propuesta = (id: string, clientId: string, name: string) => ({
+    id,
+    name: `Proyecto ${id}`,
+    clientId,
+    healthProposedAt: new Date("2026-10-03T12:00:00Z"),
+    client: { name },
+  });
+  const ctx = { ahora: new Date("2026-10-05T15:00:00Z"), hoyISO: "2026-10-05" };
+  const medir = async () => {
+    const items = await VIGIA.medir({} as never, ctx);
+    return { alertas: items.find((i) => i.clave === "cs-vigia:alertas"), estados: items.find((i) => i.clave === "cs-vigia:estados") };
+  };
+
+  it("una cuenta: el botón abre su ficha", async () => {
+    base.alertas = [alerta("c-wherex", "Wherex", "01"), alerta("c-wherex", "Wherex", "02")];
+    base.propuestas = [propuesta("p-1", "c-wherex", "Wherex")];
+    const { alertas, estados } = await medir();
+    expect(alertas?.href).toBe("/customer-success/c-wherex");
+    expect(alertas?.enlaces).toBeUndefined();
+    expect(estados?.href).toBe("/customer-success/c-wherex?pestana=proyectos");
+  });
+
+  it("varias cuentas: dice cuántas y trae cada cuenta con su enlace", async () => {
+    base.alertas = [alerta("c-wherex", "Wherex", "01"), alerta("c-kolbi", "Kölbi", "02"), alerta("c-wherex", "Wherex", "03")];
+    base.propuestas = [propuesta("p-1", "c-kolbi", "Kölbi"), propuesta("p-2", "c-wherex", "Wherex")];
+    const { alertas, estados } = await medir();
+    expect(alertas?.titulo).toContain("3 alertas altas sin revisar en 2 cuentas");
+    expect(alertas?.href, "el botón: la que más espera").toBe("/customer-success/c-wherex");
+    expect(alertas?.enlaces).toEqual([
+      { texto: "Wherex (2)", href: "/customer-success/c-wherex" },
+      { texto: "Kölbi", href: "/customer-success/c-kolbi" },
+    ]);
+    expect(estados?.enlaces).toEqual([
+      { texto: "Kölbi", href: "/customer-success/c-kolbi?pestana=proyectos" },
+      { texto: "Wherex", href: "/customer-success/c-wherex?pestana=proyectos" },
+    ]);
+  });
+
+  it("nunca el índice, y la pestaña es una que la ficha entiende", async () => {
+    const { alertas, estados } = await medir();
+    for (const href of [alertas?.href, estados?.href, ...(alertas?.enlaces ?? []).map((e) => e.href)]) {
+      expect(href).toMatch(/^\/customer-success\/[^/?]+/);
+    }
+    const pestana = new URL(estados!.href, "https://nexus.local").searchParams.get("pestana");
+    expect(pestanaDeLaUrl(pestana), "la ficha no reconoce el parámetro: abriría en «Estado de la cuenta»").toBe("proyectos");
   });
 });

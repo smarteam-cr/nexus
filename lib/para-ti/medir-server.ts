@@ -1,8 +1,9 @@
 /**
  * lib/para-ti/medir-server.ts — mide «Para ti» para una persona. SERVER-ONLY.
  *
- * Corre las fuentes que le tocan (las personales que aplican y las de sus frentes) EN PARALELO, cada una con un tope de
- * tiempo: una fuente que falla o tarda no frena a las demás ni rompe la página — se nombra en «no se pudo revisar».
+ * Corre las fuentes que le tocan (las personales que aplican y las de los frentes que lleva y puede abrir) EN PARALELO,
+ * cada una con un tope de tiempo: una fuente que falla o tarda no frena a las demás ni rompe la página — se nombra en
+ * «no se pudo revisar».
  *
  * El número del menú se pide cada minuto y medio desde cada pestaña abierta. Por eso la medición se guarda en memoria
  * dos minutos por persona (`medirConCache`): la página mide fresco y deja la medición guardada para el menú. Es correcto
@@ -11,8 +12,9 @@
  */
 import "server-only";
 import { crDateParts } from "@/lib/jobs/time";
-import type { Alcance } from "./alcance-server";
+import { accesoParaFrentes, type Alcance } from "./alcance-server";
 import { armarParaTi } from "./armar";
+import { frente, puedeLlevar } from "./frentes";
 import type { Fuente } from "./fuente";
 import { FUENTES } from "./registro";
 import type { ParaTi, ResultadoDeFuente } from "./tipos";
@@ -22,8 +24,16 @@ export const TOPE_POR_FUENTE_MS = 8_000;
 /** Cuánto dura la medición guardada para el número del menú. */
 export const VIDA_DE_LA_MEDICION_MS = 2 * 60_000;
 
+/**
+ * Las fuentes que se miden para esta persona: las personales que aplican, y las de los frentes que lleva Y PUEDE ABRIR.
+ * ⛔ Un frente cuyo requisito no cumple (`puedeLlevar`) se calla entero: ni pendientes, ni montos, ni textos, hasta que
+ * tenga el permiso (Elías, 2026-10-05). Ni siquiera sale en «al día»: no se mide.
+ */
 export function fuentesQueAplican(a: Alcance, fuentes: readonly Fuente[] = FUENTES): Fuente[] {
-  return fuentes.filter((f) => (f.frente ? a.frentes.includes(f.frente) : (f.aplica?.(a) ?? true)));
+  const acceso = accesoParaFrentes(a);
+  return fuentes.filter((f) =>
+    f.frente ? a.frentes.includes(f.frente) && puedeLlevar(frente(f.frente), acceso) : (f.aplica?.(a) ?? true),
+  );
 }
 
 function conTope<T>(p: Promise<T>, ms: number): Promise<T> {

@@ -11,10 +11,10 @@
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
-import { alcanceDe } from "@/lib/para-ti/alcance-server";
+import { accesoParaFrentes, alcanceDe } from "@/lib/para-ti/alcance-server";
 import { medirParaTi } from "@/lib/para-ti/medir-server";
 import { avisosDe } from "@/lib/para-ti/avisos-server";
-import { frente } from "@/lib/para-ti/frentes";
+import { frente, puedeLlevar } from "@/lib/para-ti/frentes";
 import { plural } from "@/lib/para-ti/armar";
 import ParaTiPantalla from "@/components/para-ti/ParaTiPantalla";
 
@@ -34,10 +34,18 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
   const alcance = await alcanceDe(ctx.teamMember);
   const [medicion, avisos, sp] = await Promise.all([medirParaTi(alcance), avisosDe(alcance.email), searchParams]);
 
+  // Un frente que llevas sin el permiso para abrirlo se calla (lib/para-ti/frentes.ts): se dice, para que no parezca
+  // que está al día.
+  const acceso = accesoParaFrentes(alcance);
+  const llegan = alcance.frentes.filter((f) => puedeLlevar(frente(f), acceso));
+  const callados = alcance.frentes.filter((f) => !llegan.includes(f));
   const partes: string[] = [];
   if (alcance.proyectos.length) partes.push(`De tus ${plural(alcance.proyectos.length, "proyecto", "proyectos")} de implementación`);
-  if (alcance.frentes.length) partes.push(`${partes.length ? "y de lo que llevas" : "De lo que llevas"}: ${alcance.frentes.map((f) => frente(f).nombre).join(", ")}`);
-  const resumen = partes.length ? `${partes.join(" ")}.` : "De lo tuyo en Nexus. En Equipo se elige qué más seguir.";
+  if (llegan.length) partes.push(`${partes.length ? "y de lo que llevas" : "De lo que llevas"}: ${llegan.map((f) => frente(f).nombre).join(", ")}`);
+  const sinPermiso = callados.length
+    ? ` Lo de ${callados.map((f) => `«${frente(f).nombre}»`).join(", ")} no te llega hasta que tengas el permiso.`
+    : "";
+  const resumen = `${partes.length ? `${partes.join(" ")}.` : "De lo tuyo en Nexus. En Equipo se elige qué más seguir."}${sinPermiso}`;
 
   return (
     <div className={`${SHELL_DEFAULT} space-y-6`}>

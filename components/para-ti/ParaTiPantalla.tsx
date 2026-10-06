@@ -232,6 +232,20 @@ export default function ParaTiPantalla({
   );
 }
 
+/** Cuando un pendiente junta varios lugares (alertas de distintas cuentas): cada uno con su enlace directo. */
+function Enlaces({ enlaces }: { enlaces?: Pendiente["enlaces"] }) {
+  if (!enlaces?.length) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-4">
+      {enlaces.map((e) => (
+        <Link key={e.href} href={e.href} className="text-brand hover:text-brand-light">
+          {e.texto}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 function LoDelAgente({ items }: { items: Pendiente[] }) {
   return (
     <section aria-label="Lo que dejó el agente" className="flex flex-col gap-1.5">
@@ -249,6 +263,7 @@ function LoDelAgente({ items }: { items: Pendiente[] }) {
             <div className="text-[11px] font-semibold text-brand">{s.meta}</div>
             <div className="text-sm font-semibold leading-5 text-fg">{s.titulo}</div>
             <div className="mt-0.5 text-xs leading-[17px] text-fg-muted">{s.detalle}</div>
+            <Enlaces enlaces={s.enlaces} />
           </div>
           <Link href={s.href} className={cn(BOTON_BLANCO, "self-center")}>
             {s.accion}
@@ -273,6 +288,7 @@ function Bloque({ titulo, items }: { titulo: string; items: Pendiente[] }) {
           <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-0.5">
             <span className="text-sm font-semibold leading-5 text-fg">{it.titulo}</span>
             <span className="text-[13px] leading-[19px] text-fg-secondary">{it.detalle}</span>
+            <Enlaces enlaces={it.enlaces} />
             <span className={cn("text-xs leading-4", it.error ? "text-danger-ink" : "text-fg-muted")}>{it.meta}</span>
           </div>
           {it.plata && <span className="flex-none text-[13px] tabular-nums text-fg-secondary">{it.plata}</span>}

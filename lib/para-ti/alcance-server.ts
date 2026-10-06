@@ -30,7 +30,7 @@ import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import { clientesRevocadosPara, veTodaLaCartera } from "@/lib/auth/access";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 import { esResponsable } from "@/lib/escala/comentarios/reglas";
-import { frentesDe, type ClaveDeFrente } from "./frentes";
+import { frentesDe, type AccesoParaFrentes, type ClaveDeFrente } from "./frentes";
 
 export interface ProyectoPropio {
   id: string;
@@ -169,6 +169,11 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
     veTodaLaCartera: veTodaLaCarteraYa,
     proyectos,
   };
+}
+
+/** El acceso EFECTIVO de la persona, en la forma que pide `puedeLlevar` (lib/para-ti/frentes.ts). */
+export function accesoParaFrentes(a: Pick<Alcance, "rol" | "email" | "permisos">): AccesoParaFrentes {
+  return { role: a.rol, email: a.email, permissions: a.permisos, esResponsableDeLaEscala: esResponsable(a.email) };
 }
 
 /** ¿Tiene esta celda de la matriz? (lectura del mapa efectivo ya resuelto). */
