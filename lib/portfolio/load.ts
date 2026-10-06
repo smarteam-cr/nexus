@@ -26,6 +26,7 @@ import { canvasOfNested, canvasOfAnyNested } from "@/lib/pieces/canvas-query";
 import { slugForCanvas } from "@/lib/pieces/registry";
 import { diasSinConfirmar, type BorradorFechable } from "@/lib/timeline/avance-sin-confirmar";
 import { RAZON_DESCARTE_ILEGIBLE } from "@/lib/timeline/borrador";
+import { tieneContenidoDeProceso } from "@/lib/procesos/mapa";
 
 /**
  * La última razón "humana" (MANUAL/AI_ASSIST) de cada cronograma: el «porqué» que la tarjeta de un proyecto
@@ -270,9 +271,8 @@ export async function loadPortfolio(
     : [];
   const clientsWithProcesos = new Set<string>();
   for (const b of procesoBlocks) {
-    const nodes = (b.data as { nodes?: unknown[] } | null)?.nodes;
     const clientId = b.section.canvas.project?.clientId;
-    if (clientId && Array.isArray(nodes) && nodes.length > 0) clientsWithProcesos.add(clientId);
+    if (clientId && tieneContenidoDeProceso(b.data)) clientsWithProcesos.add(clientId);
   }
 
   const now = new Date();

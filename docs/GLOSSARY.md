@@ -98,7 +98,14 @@
   Regla de voz: al cliente se le habla de **TÚ** (nunca voseo ni "ustedes"), en las 4 superficies
   externas (verify → kickoff → cronograma → propuesta comercial). La guía de registro más completa vive en
   el `agentIntro` de `components/landing/configs/kickoff.defs.ts`.
-- **Procesos**: bloques de la sección `procesos` del canvas "Información del cliente".
+- **Procesos** (ficha del cliente › La cuenta › Procesos, `lib/procesos`): los procesos de la cuenta, cada uno como un
+  **mapa en carriles** con dos versiones —**hoy** y **después de la implementación**—. Son bloques de la sección
+  `procesos` del canvas "Información del cliente" (`data.formato = "carriles-v1"`). Un **carril** es quién hace el paso
+  (el cliente final, un equipo o un sistema). Cada paso dice de dónde sale: **dicho** o **acordado** por el cliente
+  (con la cita de la reunión, verificada contra la transcripción), **propuesto** por Smarteam o **supuesto** por el
+  agente. El mapa pasa por **borrador del agente → revisado → validado con el cliente**; el kickoff muestra solo la
+  versión de hoy de los validados. Los mapas del formato anterior (`nodes` + `edges`) se siguen viendo hasta volver a
+  mapear. Ver DECISIONS §Procesos.
 - **Proyecto sentinel `__strategy__`**: proyecto especial por cliente que aloja el canvas de
   contexto/estrategia (no es un proyecto real de servicio).
 - **`hubspotCompanyId`** (en `Client`): id de la company de HubSpot ligada al cliente. Habilita

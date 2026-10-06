@@ -5077,3 +5077,44 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   número de factura que alguien anotó y de una sola cuota: medido el 2026-10-06, los 6 casos de «montos distintos» eran
   pares por cercanía y varios del doble (una factura de dos meses contra una cuota): ahí el botón habría hecho daño.
   Lo que lo revertiría: que dirección decida que la cuota manda sobre la factura.
+
+## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
+
+> Elías pidió rediseñar Procesos (ficha del cliente › La cuenta › Procesos) con la línea interna, ver qué saca el
+> agente y si el flowchart alcanza. La meta: por cliente, cómo trabaja hoy y cómo queda después de la implementación.
+
+- **Un proceso es un mapa con dos versiones, hoy y después, en carriles** (una fila por quién hace el paso). Vive en
+  el mismo bloque FLOWCHART de la sección «procesos» de Información del cliente, con `data.formato = "carriles-v1"`;
+  lo que leyó el agente va en un bloque CARD (`procesos-indice-v1`). Sin SQL (`lib/procesos/mapa.ts`).
+- **Cada paso dice de dónde sale**: lo dijo o lo acordó el cliente (con cita), lo propone Smarteam o lo supuso el
+  agente. La cita la verifica el código contra la transcripción (`lib/procesos/citas.ts`); si no aparece tal cual, el
+  paso baja a supuesto (hoy) o propuesto (después). *Por qué:* el agente anterior leía las notas de Gemini cortadas a
+  9.000 caracteres, no marcó nada como inferido en 22 mapas y en FUNDAUNA dibujó la mesa de ayuda al revés (es de los
+  proyectos hacia Fundauna, no de los estudiantes).
+- **El agente lee las reuniones enteras**, solo por el chokepoint (`getClientSessions`) y con techo de fecha, en dos
+  pasos: uno por reunión (hechos con su cita, guardado en `AgentRun` `procesos-lectura`: al volver a mapear solo lee
+  las nuevas) y otro que junta los procesos y arma cada mapa (`lib/procesos/agente.ts`, `claude-opus-5-5`). JSON
+  libre: con `json_schema` el mapa entero da «compiled grammar is too large». Medido en el prototipo, la primera vez:
+  US$5,27 FUNDAUNA, US$6,69 Areyá. Corre en segundo plano (`AgentRun` `procesos-mapeo`); la pantalla lo consulta cada
+  4 s y una corrida de más de 45 minutos se da por muerta.
+- **Lo editado a mano no se pisa.** Un mapa nuevo editado se respeta por su id; el agente reemplaza sus propios mapas,
+  su índice y los mapas de `agent-mapeo-inicial` que nadie tocó. Los editados a mano del formato anterior se siguen
+  viendo, y editando, en «Mapas del formato anterior».
+- **Estado: borrador del agente → revisado → validado con el cliente.** Validado equivale al bloque CONFIRMED. El
+  kickoff (editor, vista del cliente y PDF) muestra SOLO la versión de hoy de los mapas validados, traducida al visor
+  viejo (`lib/procesos/legado.ts`); su «Pasar a borrador» deja el mapa en revisado. Editar un paso de un mapa validado
+  lo vuelve a revisado: lo validado era otra cosa. Revisado y validado no se pintan de verde.
+- **Diagnóstico, Planificación, Ejecución, Entrega y la auditoría del portal leen los dos mapas**
+  (`serializeProcesosForPrompt`), con lo supuesto y lo propuesto marcados y el estado del mapa. Un borrador también:
+  el Diagnóstico lo necesita antes de que el cliente lo valide.
+- **React Flow alcanza.** No trae carriles, así que el acomodo es propio y determinista (`lib/procesos/layout.ts`):
+  columna = el camino más largo, fila = el carril, las vueltas atrás punteadas. Los carriles son nodos de fondo, el
+  dolor es hijo del paso (`parentId`) y el detalle va en un `NodeToolbar`. Se descartaron dagre (no sabe de carriles)
+  y ELK (otra dependencia para lo mismo).
+- **El mapa arranca con un zoom que se lee** (0,8 como mínimo) y se recorre de costado, en vez de encogerse hasta
+  caber entero; sin minimapa, que tapaba pasos. Las medidas de adentro de un paso van en píxeles: en la app 1 rem son
+  18,4 px y un nodo de alto fijo no aguanta espaciados en rem.
+- **Se retira `agent-mapeo-inicial`** (`lib/agents/retirados.ts`): `/analyze` ya no lo despacha. No hay re-siembra.
+- **Lo que no se hizo:** agregar o quitar pasos y flechas desde la pantalla (hoy se edita un paso: qué pasa, quién,
+  con qué, el dolor, de dónde sale y quitar citas); llevar lo que falta confirmar a la próxima sesión; y que el
+  Diagnóstico lea solo hoy y la Planificación solo después (esos dos archivos los estaba cambiando otra sesión).

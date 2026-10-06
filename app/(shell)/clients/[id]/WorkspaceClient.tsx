@@ -589,8 +589,6 @@ function ProjectSection({
           <ClientProcesosPanel
             key={PROCESOS_TAB_ID}
             clientId={clientId}
-            projectId={strategyProjectId}
-            canvasId={strategyCanvasId}
             slotDelPanel={panelVisible ? slotDelPanel : null}
           />
         )}

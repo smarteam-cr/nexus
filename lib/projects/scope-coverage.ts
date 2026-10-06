@@ -55,6 +55,8 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/exploraciones/agente.ts": { modo: "criterio", criterio: "clasificable" },
   // La auditoría del portal lee el Diagnóstico y la Planificación de los proyectos del cliente auditado.
   "lib/auditoria-portal/contexto-del-cliente.ts": { modo: "criterio", criterio: "clasificable" },
+  // El agente de procesos lee qué se vendió y la planificación de los proyectos del cliente.
+  "lib/procesos/agente.ts": { modo: "criterio", criterio: "clasificable" },
   "lib/projects/proyecto-del-cliente.ts": {
     modo: "exento",
     razon:

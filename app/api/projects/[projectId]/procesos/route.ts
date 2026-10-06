@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import { readClientProcesos } from "@/lib/canvas/read-procesos";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
+import { esMapaDeCarriles } from "@/lib/procesos/mapa";
+import { cambiarEstadoDelMapa } from "@/lib/procesos/servidor";
 
 /**
  * GET /api/projects/[projectId]/procesos
@@ -14,7 +16,9 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
  * el cliente externo ve solo los CONFIRMED vía kickoff-view.ts. Guarded.
  *
  * PATCH { blockId, status: "CONFIRMED" | "DRAFT" } → confirma (o vuelve a borrador) un
- * proceso del cliente desde el editor del kickoff. Solo CONFIRMED cruza al cliente.
+ * proceso del cliente desde el editor del kickoff. Solo CONFIRMED cruza al cliente. Un mapa en
+ * carriles (lib/procesos) cambia también su estado: CONFIRMED = validado con el cliente, DRAFT =
+ * revisado, así la pantalla de Procesos y el kickoff dicen lo mismo.
  */
 export async function GET(
   _req: NextRequest,
@@ -72,13 +76,17 @@ export async function PATCH(
           blockType: "FLOWCHART",
           section: { key: "procesos", canvas: canvasOfNested("client-info", { projectId: strategy.id }) },
         },
-        select: { id: true },
+        select: { id: true, data: true },
       })
     : null;
   if (!block) {
     return NextResponse.json({ error: "Proceso no encontrado para este cliente" }, { status: 404 });
   }
 
+  if (esMapaDeCarriles(block.data)) {
+    await cambiarEstadoDelMapa(project.clientId, blockId, wantStatus === "CONFIRMED" ? "validado" : "revisado", guard.user.email ?? "desconocido");
+    return NextResponse.json({ ok: true, blockId, status: wantStatus });
+  }
   await prisma.canvasBlock.update({ where: { id: blockId }, data: { status: wantStatus } });
   return NextResponse.json({ ok: true, blockId, status: wantStatus });
 }

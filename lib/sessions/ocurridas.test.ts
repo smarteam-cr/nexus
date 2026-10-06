@@ -219,6 +219,13 @@ const CENSO: Record<string, { clase: Clase; motivo: string; indirecto?: true }> 
       "Las reuniones de Meet del prospecto van al agente de la exploración con su transcripción completa (las citas se verifican contra ella). " +
       "Los ids salen de getClientSessions (solo las ocurridas) y la consulta de la transcripción vuelve a cortar por fecha.",
   },
+  // Procesos del cliente (2026-10-05): el agente que mapea cada proceso hoy y después.
+  "lib/procesos/agente.ts": {
+    clase: "contexto",
+    motivo:
+      "Lee enteras las reuniones del cliente con transcripción para sacar hechos con cita. Los ids salen de " +
+      "getClientSessions (solo las ocurridas) y la consulta de la transcripción vuelve a cortar por fecha.",
+  },
 };
 
 /**
@@ -249,6 +256,7 @@ const CORTAN_POR_FECHA = [
   "lib/contexto/cargar.ts",
   "lib/timeline/fuentes-de-la-explicacion.ts",
   "lib/exploraciones/fuentes.ts",
+  "lib/procesos/agente.ts",
 ];
 
 const RAIZ = join(__dirname, "..", "..");

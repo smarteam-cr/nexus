@@ -65,7 +65,8 @@ const CANVAS_FLOW_IDS = new Set<string>([
   "agent-implementacion-canvas",
   "agent-entrega-canvas",
   "agent-exploracion-canvas",
-  "agent-mapeo-inicial",
+  // `agent-mapeo-inicial` salió el 2026-10-05: está retirado (lib/agents/retirados.ts) y los procesos
+  // los arma lib/procesos/agente.ts, que no es una fila de Agent.
   "agent-timeline-detail",
 ]);
 
@@ -96,7 +97,6 @@ export function categorizeAgent(a: CategorizableAgent): AgentCategoryKey {
 export function agentTriggerHint(a: CategorizableAgent): string {
   const cat = categorizeAgent(a);
   if (cat === "canvas") {
-    if (a.id === "agent-mapeo-inicial") return "Pestaña Procesos";
     if (a.id === "agent-timeline-detail") return "Canvas Cronograma";
     // AGENT_GROUP_TO_CANVAS devuelve el SLUG de la pieza; acá se muestra en pantalla,
     // así que hay que traducirlo a su nombre visible. Sin `pieceLabel` esto diría

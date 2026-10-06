@@ -19,6 +19,7 @@ import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested, canvasOfAnyNested } from "@/lib/pieces/canvas-query";
 import { slugForCanvas } from "@/lib/pieces/registry";
 import { resolvePipeline } from "@/lib/projects/kind";
+import { tieneContenidoDeProceso } from "@/lib/procesos/mapa";
 
 // Pasos de setup basados en CANVAS (identificados por SLUG de pieza). Extensible: sumar el canvas de
 // diagnóstico/planificación a futuro = una línea acá + su pill en la UI. Cuentan por EXISTENCIA
@@ -131,10 +132,7 @@ export async function loadProjectSetup(
     if (slug && blockCountsForStep(slug, b.status)) steps.add(slug);
   }
 
-  const hasProcesos = procesoBlocks.some((b) => {
-    const nodes = (b.data as { nodes?: unknown[] } | null)?.nodes;
-    return Array.isArray(nodes) && nodes.length > 0;
-  });
+  const hasProcesos = procesoBlocks.some((b) => tieneContenidoDeProceso(b.data));
 
   return deriveSetup({
     steps,

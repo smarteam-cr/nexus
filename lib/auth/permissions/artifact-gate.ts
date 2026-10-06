@@ -28,6 +28,7 @@ import { esAgenteRetirado } from "@/lib/agents/retirados";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/canvas/strategy-project";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
+import { tieneContenidoDeProceso } from "@/lib/procesos/mapa";
 
 export type ArtifactGate = {
   section: "handoff" | "kickoff" | "procesos" | "cronograma" | "desarrollo" | "exploracion" | "diagnostico" | "planificacion" | "implementacion" | "entrega";
@@ -171,10 +172,7 @@ export async function resolveArtifactGate(
           },
           select: { data: true },
         });
-        const has = flowBlocks.some((b) => {
-          const nodes = (b.data as { nodes?: unknown[] } | null)?.nodes;
-          return Array.isArray(nodes) && nodes.length > 0;
-        });
+        const has = flowBlocks.some((b) => tieneContenidoDeProceso(b.data));
         return { section: "procesos", action: has ? "regenerate" : "generate" };
       }
       /* A-18: un grupo del registro de piezas sin `case` arriba se corta acá, ruidoso. Lo que

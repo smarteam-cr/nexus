@@ -9,6 +9,9 @@
 import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { SENTINEL_SERVICE_TYPE as SENTINEL } from "@/lib/projects/kind";
+import { mapaALegado } from "@/lib/procesos/legado";
+import { esMapaDeCarriles } from "@/lib/procesos/mapa";
+import { serializarMapa } from "@/lib/procesos/serializar";
 
 export interface ProcesoFlowchart {
   id: string;
@@ -19,17 +22,14 @@ export interface ProcesoFlowchart {
   status?: string;
 }
 
-export async function readClientProcesos(
-  clientId: string,
-  opts: { onlyConfirmed?: boolean } = {},
-): Promise<ProcesoFlowchart[]> {
+/** Los bloques FLOWCHART de la sección «procesos» del cliente, de los dos formatos. */
+async function leerBloquesDeProcesos(clientId: string, opts: { onlyConfirmed?: boolean }) {
   const strategy = await prisma.project.findFirst({
     where: { clientId, serviceType: SENTINEL },
     select: { id: true },
   });
   if (!strategy) return [];
-
-  const blocks = await prisma.canvasBlock.findMany({
+  return prisma.canvasBlock.findMany({
     where: {
       blockType: "FLOWCHART",
       ...(opts.onlyConfirmed ? { status: "CONFIRMED" } : {}),
@@ -38,14 +38,28 @@ export async function readClientProcesos(
     orderBy: { order: "asc" },
     select: { id: true, content: true, data: true, status: true },
   });
+}
 
-  // Solo flowcharts con nodos (descarta vacíos).
-  return blocks
-    .filter((b) => {
-      const d = b.data as { nodes?: unknown[] } | null;
-      return Array.isArray(d?.nodes) && (d!.nodes as unknown[]).length > 0;
-    })
-    .map((b) => ({ id: b.id, title: b.content, data: b.data, status: b.status }));
+/**
+ * Los procesos que dibuja el kickoff (editor, vista del cliente y PDF), en la forma del visor viejo.
+ * Un mapa NUEVO (lib/procesos) entra solo cuando está validado con el cliente, y entra su versión de
+ * HOY traducida (lib/procesos/legado.ts): el kickoff es lo que el cliente ve, y un borrador del agente
+ * no se le muestra.
+ */
+export async function readClientProcesos(
+  clientId: string,
+  opts: { onlyConfirmed?: boolean } = {},
+): Promise<ProcesoFlowchart[]> {
+  const blocks = await leerBloquesDeProcesos(clientId, opts);
+  return blocks.flatMap<ProcesoFlowchart>((b) => {
+    const data: unknown = b.data;
+    if (esMapaDeCarriles(data)) {
+      return data.estado === "validado" ? [{ id: b.id, title: b.content, data: mapaALegado(data), status: b.status }] : [];
+    }
+    // Formato anterior: solo flowcharts con nodos (descarta vacíos).
+    const d = b.data as { nodes?: unknown[] } | null;
+    return Array.isArray(d?.nodes) && d.nodes.length > 0 ? [{ id: b.id, title: b.content, data: b.data, status: b.status }] : [];
+  });
 }
 
 // ── Serialización para agentes ──────────────────────────────────────────────────
@@ -76,7 +90,8 @@ function textoDe(n: NodoLite): { label: string; sublabel: string; detail: string
 }
 
 /**
- * Serializa los procesos REALES del cliente a texto legible por un agente.
+ * Serializa los procesos REALES del cliente a texto legible por un agente. Los mapas nuevos
+ * (lib/procesos) los escribe `serializarMapa`; lo que sigue describe los del formato anterior.
  *
  * Existe porque el serializador genérico de canvas convierte un FLOWCHART en el
  * placeholder "(diagrama de flujo)" — correcto para no inflar prompts que no lo
@@ -91,12 +106,19 @@ function textoDe(n: NodoLite): { label: string; sublabel: string; detail: string
  */
 export async function serializeProcesosForPrompt(
   clientId: string,
-  opts: { onlyConfirmed?: boolean } = {},
+  opts: { onlyConfirmed?: boolean; version?: "hoy" | "despues" | "ambas" } = {},
 ): Promise<string> {
-  const procesos = await readClientProcesos(clientId, opts);
-  if (!procesos.length) return "";
-
+  const todos = await leerBloquesDeProcesos(clientId, opts);
   const bloques: string[] = [];
+  // Los mapas nuevos van primero y enteros (hoy y después, con de dónde sale cada paso): un borrador
+  // también, marcado como borrador, porque el Diagnóstico lo necesita antes de validarlo.
+  for (const b of todos) if (esMapaDeCarriles(b.data)) bloques.push(serializarMapa(b.data, { version: opts.version }));
+  const procesos = todos
+    .filter((b) => !esMapaDeCarriles(b.data))
+    .filter((b) => Array.isArray((b.data as { nodes?: unknown[] } | null)?.nodes) && ((b.data as { nodes: unknown[] }).nodes.length > 0))
+    .map((b) => ({ id: b.id, title: b.content, data: b.data, status: b.status }));
+  if (!procesos.length && !bloques.length) return "";
+
   for (const p of procesos) {
     const d = p.data as { nodes?: NodoLite[]; edges?: EdgeLite[]; description?: string } | null;
     const nodes = d?.nodes ?? [];
