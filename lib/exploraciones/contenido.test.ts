@@ -12,6 +12,7 @@ import {
   fusionarPropuestas,
   esFuenteDelCliente,
   industriaDelVendedor,
+  laEscalaTieneBase,
   MAX_REUNIONES_ELEGIDAS,
   sinFundamentoDelCliente,
   idDelItem,
@@ -405,5 +406,36 @@ describe("⭐ lo que no dijo ni hizo el cliente no se muestra (2026-10-07)", () 
     const conCita = item({ tipo: "casilla", clave: "retos" }, ["S1"], { texto: "No priorizan leads" });
     e.propuesta.items = [reto, conCita];
     expect(propuestaVigente(e).map((i) => i.id)).toEqual([conCita.id]);
+  });
+});
+
+describe("⭐ los casos de uso esperan a que la escala tenga base (2026-10-07)", () => {
+  const caso = (titulo: string): ItemPropuesto => {
+    const destino: DestinoDePropuesta = { tipo: "casoDeUso", useCaseId: `ia-${titulo}` };
+    const valor = { titulo, areaId: "1", razon: "x" };
+    return { id: idDelItem(destino, valor), destino, valor, fuentes: [], corridaId: "r", en: "2026-10-07T00:00:00.000Z" };
+  };
+  const nivel = (ids: string[]): ItemPropuesto => {
+    const destino: DestinoDePropuesta = { tipo: "nivel", dimensionId: "1.3" };
+    const valor = { nivel: "I", fuente: "hipotesis", porQue: "x" };
+    return { id: idDelItem(destino, valor), destino, valor, fuentes: ids.map((id) => ({ id, etiqueta: id })), corridaId: "r", en: "2026-10-07T00:00:00.000Z" };
+  };
+
+  it("sin un nivel con base, los casos sugeridos no se ven", () => {
+    const e = estado();
+    e.propuesta.items = [caso("pipeline"), nivel(["E0", "W0"])];
+    expect(laEscalaTieneBase(e)).toBe(false);
+    expect(propuestaVigente(e).filter((i) => i.destino.tipo === "casoDeUso")).toEqual([]);
+  });
+
+  it("con un nivel con fundamento del cliente, o uno confirmado, sí", () => {
+    const e = estado();
+    e.propuesta.items = [caso("pipeline"), nivel(["S1"])];
+    expect(laEscalaTieneBase(e)).toBe(true);
+    expect(propuestaVigente(e).some((i) => i.destino.tipo === "casoDeUso")).toBe(true);
+    const confirmado = estado();
+    confirmado.contenido.chequeo = { "1.3": { nivel: "I", fuente: "reunion" } };
+    confirmado.propuesta.items = [caso("pipeline")];
+    expect(laEscalaTieneBase(confirmado)).toBe(true);
   });
 });

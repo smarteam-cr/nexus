@@ -5610,4 +5610,12 @@ retos, copiados casi palabra por palabra de la investigación de su industria en
   Resumen. Los arma la guía desde la casilla «Su industria» (`GuiaDeLaSesion.retosDeLaIndustria`, hasta 3),
   cada uno con la pregunta para saber si le pasa, en la tarjeta «Retos de su industria · Hipótesis» de la
   pestaña Preparación. Sin la investigación, no se piden ni se aceptan.
+- **Los casos de uso esperan a que la escala tenga base** (Elías, el mismo día: «si no, ¿sobre qué base va
+  a sugerir?»; `laEscalaTieneBase`): un nivel confirmado o uno propuesto con fundamento del cliente. Sin eso,
+  el agente no los propone (ni al abrir la pieza ni con el botón: el servidor también lo frena) y los ya
+  sugeridos no se ven. Medido: solo Automóvil Club (9 sugeridos). Cuando tenga su primer nivel, esos 9
+  vuelven a verse: se descartan o se pide otra tanda.
+- **«En vivo» ya no tiene «Antes de colgar».** El siguiente paso no se escribe durante la reunión: la idea
+  de cuál puede ser está en el tramo «Cerrar» de la preparación, y el agente lo saca de la transcripción.
+  Las notas libres suben arriba de las preguntas.
 - **Sin SQL.** Para ver los retos de la industria en una preventa ya preparada, se actualiza su guía.

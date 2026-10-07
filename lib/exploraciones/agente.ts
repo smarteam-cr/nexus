@@ -51,6 +51,7 @@ import {
   destinoValido,
   fusionarPropuestas,
   industriaDelVendedor,
+  laEscalaTieneBase,
   MAX_LECTURAS,
   propuestaVigente,
   type EstadoDeExploracion,
@@ -465,6 +466,9 @@ async function proponerCasos(
   opts: OpcionesDeLaCorrida,
 ) {
   if (ex.estado.areas.length === 0) throw new FalloDeLaExploracion("Elige primero las áreas en juego: los casos de uso se proponen por área.");
+  if (!laEscalaTieneBase(ex.estado)) {
+    throw new FalloDeLaExploracion("Todavía no hay sobre qué basarlos: los casos de uso se proponen cuando la escala tenga sus primeros niveles (el diagnóstico o la primera reunión).");
+  }
   await fase(runId, "Mirando dónde está cada equipo…");
   const pendientes = pendientesVigentes(ex.estado, ex.general, ex.escala);
   const ctx = {

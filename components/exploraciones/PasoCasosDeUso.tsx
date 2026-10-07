@@ -7,7 +7,8 @@
  * arrancar un agente, en modo experimental, que proponga casos de uso sin la biblioteca, porque en
  * este momento está vacía». La PRIMERA vez que se abre el paso, el agente propone solo; después, otra
  * tanda con un botón (cada tanda cuesta unos centavos). El vendedor usa o descarta cada uno; lo
- * descartado no vuelve.
+ * descartado no vuelve. Desde el 2026-10-07, solo con base en la escala (`laEscalaTieneBase`): sin un
+ * nivel, no habría sobre qué apoyarlos.
  *
  * Se ve como en el diseño del 2026-10-03: una franja azul arriba (cuántos sugiere el agente, otra
  * tanda, usar todos), los elegidos como filas con su marca verde, y los sugeridos en dos columnas de
@@ -20,7 +21,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Badge, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { esCasoLibre, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
+import { esCasoLibre, laEscalaTieneBase, type CasoDeUsoElegido, type ItemPropuesto } from "@/lib/exploraciones/contenido";
 import { useRecorridos } from "@/components/recorridos/contexto";
 import { useLienzo } from "./contexto";
 import FranjaDeSugerencias, { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "./FranjaDeSugerencias";
@@ -152,16 +153,17 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
   const propuestos = pendientesPara((d) => d.tipo === "casoDeUso");
   const libres = catalogo.filter((c) => !(c.id in e.contenido.casosDeUso));
   const yaPropuso = e.propuesta.corridas.some((c) => c.modo === "casos");
+  const conBase = laEscalaTieneBase(e);
 
   /* La primera vez que se abre el paso, el agente propone solo. Si en ese momento ya trabajaba en
      otra cosa, no se insiste: queda el botón. Un recorrido guiado abre la pieza para mostrarla: ahí
      no se gasta al agente. */
   const enRecorrido = !!useRecorridos()?.activo;
   useEffect(() => {
-    if (enRecorrido || !puedeEditar || areas.length === 0 || yaPropuso || yaLanzadas.has(exp.id)) return;
+    if (enRecorrido || !puedeEditar || areas.length === 0 || !conBase || yaPropuso || yaLanzadas.has(exp.id)) return;
     yaLanzadas.add(exp.id);
     void lanzar("casos");
-  }, [enRecorrido, puedeEditar, areas.length, yaPropuso, exp.id, lanzar]);
+  }, [enRecorrido, puedeEditar, areas.length, conBase, yaPropuso, exp.id, lanzar]);
 
   const quitar = (id: string) => void cambiar([{ op: "casoDeUso", useCaseId: id, valor: null }]);
   const elegirDelCatalogo = (caso: Caso, areaId: string | null) =>
@@ -176,7 +178,7 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
           acciones={
             puedeEditar && (
               <>
-                <BotonBlanco disabled={lanzando || corriendo || areas.length === 0} onClick={() => void lanzar("casos")}>
+                <BotonBlanco disabled={lanzando || corriendo || areas.length === 0 || !conBase} onClick={() => void lanzar("casos")}>
                   {lanzando ? "Pidiendo…" : yaPropuso || propuestos.length > 0 ? "Proponer otra tanda" : "Proponer casos de uso"}
                 </BotonBlanco>
                 {propuestos.length > 1 && (
@@ -190,6 +192,11 @@ function CasosDeUso({ catalogo }: { catalogo: Caso[] }) {
         >
           {corriendo && esPropia ? (
             <span role="status">El agente está pensando los casos: {corrida?.fase ?? "empezando…"}</span>
+          ) : !conBase ? (
+            <>
+              Los casos de uso se proponen cuando la escala tenga sus primeros niveles: después del diagnóstico o de la primera reunión. Sin eso, no habría sobre qué
+              basarlos.
+            </>
           ) : propuestos.length > 0 ? (
             <>
               <strong>

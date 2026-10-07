@@ -135,8 +135,9 @@ export default function SumarAMano({ abiertoAlInicio = false }: { abiertoAlInici
     </div>
   );
 
+  // Igual que la columna de Reuniones: la lista arriba y el enlace al pie, a la misma altura (Elías, 2026-10-07).
   return (
-    <div className="space-y-2">
+    <div className="flex flex-1 flex-col gap-2">
       <ContextColumnList empty="Nada sumado. Una llamada de Gong, una minuta o el resumen del Smartflow: súmalo y el agente lo lee como una transcripción.">
         {documentos.map((d) => (
           <ContextRow
@@ -154,7 +155,7 @@ export default function SumarAMano({ abiertoAlInicio = false }: { abiertoAlInici
         (formAbierto ? (
           formulario
         ) : (
-          <button type="button" onClick={() => setFormAbierto(true)} className="text-[11px] font-semibold text-brand transition-colors hover:text-brand-dark">
+          <button type="button" onClick={() => setFormAbierto(true)} className="mt-auto self-start text-[11px] font-semibold text-brand transition-colors hover:text-brand-dark">
             + Sumar una sesión o un documento
           </button>
         ))}

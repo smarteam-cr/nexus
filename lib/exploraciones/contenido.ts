@@ -607,6 +607,17 @@ export function sinFundamentoDelCliente(it: Pick<ItemPropuesto, "destino" | "fue
   return pide && !(it.fuentes ?? []).some((f) => esFuenteDelCliente(f.id));
 }
 
+/**
+ * ¿La escala tiene alguna base? Un nivel confirmado, o uno propuesto con fundamento del cliente. Sin
+ * eso, los casos de uso no tienen sobre qué apoyarse (Elías, 2026-10-07: «debería sugerirlo cuando la
+ * escala se empiece a rellenar, si no, ¿sobre qué base va a sugerir?»): ni se proponen ni se muestran.
+ */
+export function laEscalaTieneBase(estado: EstadoDeExploracion): boolean {
+  if (Object.keys(estado.contenido.chequeo).length > 0) return true;
+  const lapidas = new Set(estado.contenido.descartadas);
+  return estado.propuesta.items.some((it) => it.destino.tipo === "nivel" && !lapidas.has(it.id) && !sinFundamentoDelCliente(it));
+}
+
 /** ¿Es la hipótesis de un nivel (del test o del agente)? Es la capa del mapa: no hay que «usarla». */
 export function esHipotesisDeNivel(it: ItemPropuesto): boolean {
   const p = pesoDelNivel(it);
@@ -677,8 +688,15 @@ export function destinoValido(d: DestinoDePropuesta, v: Validez): boolean {
 /** Lo pendiente, quitando lo que ya quedó confirmado por otro camino (el vendedor lo escribió a mano). */
 export function propuestaVigente(estado: EstadoDeExploracion): ItemPropuesto[] {
   const lapidas = new Set(estado.contenido.descartadas);
-  // Lo que el agente propuso antes del 2026-10-07 sin fundamento del cliente tampoco se muestra.
-  return estado.propuesta.items.filter((it) => !lapidas.has(it.id) && !sinFundamentoDelCliente(it) && !yaEstaConfirmado(estado, it.destino, it.valor));
+  // Lo que el agente propuso antes del 2026-10-07 sin fundamento del cliente tampoco se muestra; ni los casos de uso sin base en la escala.
+  const conBase = laEscalaTieneBase(estado);
+  return estado.propuesta.items.filter(
+    (it) =>
+      !lapidas.has(it.id) &&
+      !sinFundamentoDelCliente(it) &&
+      (conBase || it.destino.tipo !== "casoDeUso") &&
+      !yaEstaConfirmado(estado, it.destino, it.valor),
+  );
 }
 
 // ── Las operaciones ───────────────────────────────────────────────────────────

@@ -59,8 +59,7 @@
 - **Sesión de la preventa** (pieza Exploración, `SesionPlaneada`): una reunión con el prospecto, en tres pestañas
   (se llamaban Antes, Durante y Después hasta el 2026-10-07). **Preparación**: en qué estado está la guía, el
   objetivo (lo sugiere el agente), cuándo y con quién, lo que traes de las sesiones anteriores y la guía (abrir,
-  preguntar, cerrar). **En vivo**: cada pregunta con su casilla de hecha y lo que respondió, las notas libres y el
-  siguiente paso. **Análisis**: lo que leyó el agente de esa reunión (resumen y qué se respondió), lo que sugiere y
+  preguntar, cerrar). **En vivo**: las notas libres y cada pregunta con su casilla de hecha y lo que respondió. **Análisis**: lo que leyó el agente de esa reunión (resumen y qué se respondió), lo que sugiere y
   **Quedó abierto**. Una pregunta que viene de antes lleva su etiqueta: **«Quedó abierto en la sesión N»**
   (el vendedor la marcó para llevar) o **«Pasó de la sesión N»** (esa sesión se cortó). Una sesión sin
   conversación pregunta qué pasó: otro canal, se cortó o no se hizo. Ver DECISIONS §Las sesiones de la preventa.

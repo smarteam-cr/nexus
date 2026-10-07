@@ -51,7 +51,8 @@ export function abrirElContextoAdicional() {
 }
 
 export default function ContextoDeLaPreventa() {
-  const { exp, reuniones, documentos, puedeEditar, cambiar, recargar } = useLienzo();
+  const { exp, reuniones, documentos, puedeEditar, cambiar, recargar } =
+    useLienzo();
   const toast = useToast();
   const [buscando, setBuscando] = useState(false);
   const elegidas = new Set(exp.estado.contenido.reunionesElegidas);
@@ -123,35 +124,45 @@ export default function ContextoDeLaPreventa() {
             title="Reuniones"
             count={deCalendario.length}
           >
-            <ContextColumnList empty="Todavía no hay reuniones con la empresa en Meet ni en HubSpot.">
-              {deCalendario.map((r) => (
-                <ContextRow
-                  key={`${r.origen}:${r.id}`}
-                  icon={
-                    r.origen === "hubspot" ? CTX_ICONS.hubspot : CTX_ICONS.meet
-                  }
-                  meta={`${DE_DONDE[r.origen]} · ${diaConAnio(r.fecha)}`}
-                  title={r.titulo}
-                  badge={
-                    r.leida
-                      ? { label: "Leída", tone: "green" }
-                      : { label: "Sin leer", tone: "amber" }
-                  }
-                  {...(puedeEditar && r.origen === "meet" && elegidas.has(r.id)
-                    ? { onRemove: () => void quitar(r.id), removeTitle: "La sumaste con el buscador: quitarla la saca de esta preventa (sigue siendo de la empresa)." }
-                    : {})}
-                />
-              ))}
-            </ContextColumnList>
-            {puedeEditar && (
-              <button
-                type="button"
-                onClick={() => setBuscando(true)}
-                className="mt-2 self-start text-[11px] font-semibold text-brand hover:text-brand-dark"
-              >
-                + Buscar una reunión de Meet
-              </button>
-            )}
+            <div className="flex flex-1 flex-col gap-2">
+              <ContextColumnList empty="Todavía no hay reuniones con la empresa en Meet ni en HubSpot.">
+                {deCalendario.map((r) => (
+                  <ContextRow
+                    key={`${r.origen}:${r.id}`}
+                    icon={
+                      r.origen === "hubspot"
+                        ? CTX_ICONS.hubspot
+                        : CTX_ICONS.meet
+                    }
+                    meta={`${DE_DONDE[r.origen]} · ${diaConAnio(r.fecha)}`}
+                    title={r.titulo}
+                    badge={
+                      r.leida
+                        ? { label: "Leída", tone: "green" }
+                        : { label: "Sin leer", tone: "amber" }
+                    }
+                    {...(puedeEditar &&
+                    r.origen === "meet" &&
+                    elegidas.has(r.id)
+                      ? {
+                          onRemove: () => void quitar(r.id),
+                          removeTitle:
+                            "La sumaste con el buscador: quitarla la saca de esta preventa (sigue siendo de la empresa).",
+                        }
+                      : {})}
+                  />
+                ))}
+              </ContextColumnList>
+              {puedeEditar && (
+                <button
+                  type="button"
+                  onClick={() => setBuscando(true)}
+                  className="mt-auto self-start text-[11px] font-semibold text-brand transition-colors hover:text-brand-dark"
+                >
+                  + Buscar una reunión de Meet
+                </button>
+              )}
+            </div>
           </ContextColumn>
           <ContextColumn
             icon={CTX_ICONS.note}
@@ -173,7 +184,10 @@ export default function ContextoDeLaPreventa() {
           }
         />
       </ContextoAdicional>
-      <BuscarReunionesDeLaPreventa abierto={buscando} onCerrar={() => setBuscando(false)} />
+      <BuscarReunionesDeLaPreventa
+        abierto={buscando}
+        onCerrar={() => setBuscando(false)}
+      />
     </div>
   );
 }

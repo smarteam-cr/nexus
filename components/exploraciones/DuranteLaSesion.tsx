@@ -1,20 +1,22 @@
 "use client";
 
 /**
- * DuranteLaSesion — la reunión en curso (tablero «Durante · Sesión 3», 2026-10-07). Arriba, el
- * objetivo. A la izquierda, las preguntas de la guía en el orden de la conversación, con un filtro
- * por sección (todas, la arquitectura de la venta o la escala): cada una con su casilla de hecha y
- * un campo para lo que respondió; la primera que falta va marcada «Ahora», con su primera
- * repregunta. A la derecha, las notas libres, el siguiente paso antes de colgar y qué hacer si se
- * resiste.
+ * DuranteLaSesion — la pestaña «En vivo» de una sesión: la reunión en curso (tablero «Durante · Sesión
+ * 3», 2026-10-07). Arriba, el objetivo y las notas libres; debajo, las preguntas de la guía en el
+ * orden de la conversación, con un filtro por sección (todas, la arquitectura de la venta o la
+ * escala): cada una con su casilla de hecha y un campo para lo que respondió; la primera que falta va
+ * marcada «Ahora», con su primera repregunta. Al final, qué hacer si se resiste.
+ *
+ * El siguiente paso ya no se escribe acá (Elías, 2026-10-07: «no es para que lo setee o edite en
+ * vivo»): la idea de cuál puede ser está en el tramo «Cerrar» de la preparación, y el agente lo saca
+ * de la transcripción.
  *
  * Todo se guarda solo. Lo que respondió y las notas libres van a `contenido.notas` (una nota por
  * pregunta, `sesion:<id>:<a qué apunta>`), y el agente las lee como contexto del vendedor, nunca como
- * palabras del cliente. El siguiente paso es la casilla de siempre (la confirma el vendedor al escribirla).
+ * palabras del cliente.
  */
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import type { SiguientePaso } from "@/lib/exploraciones/casillas";
 import { ladoDeLaPregunta, type PestanaDeSesion, type PreguntaParaMostrar } from "@/lib/exploraciones/guia";
 import { claveDeNotaDePregunta, claveDeNotaDeSesion, MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
@@ -111,87 +113,11 @@ function NotasLibres({ pestana }: { pestana: PestanaDeSesion }) {
         onBlur={nota.alSalir}
         disabled={!puedeEditar}
         maxLength={MAX_NOTA_DE_SESION}
-        rows={7}
+        rows={3}
         placeholder="Lo que no cae en ninguna pregunta: lo que te contaron, cómo lo dijeron, quién más apareció."
         className={cn(CAMPO, "resize-y leading-[1.5]")}
       />
       <span className="text-xs text-fg-muted">El agente las lee como tu contexto, no como palabras del cliente.</span>
-    </section>
-  );
-}
-
-/** El siguiente paso, con fecha y con quién: la casilla de siempre, escrita antes de colgar. */
-function AntesDeColgar() {
-  const { exp, cambiar, puedeEditar } = useLienzo();
-  const actual = exp.estado.contenido.casillas.siguientePaso as SiguientePaso | undefined;
-  const [que, setQue] = useState(actual?.que ?? "");
-  const [fecha, setFecha] = useState(actual?.fecha ?? "");
-  const [conQuien, setConQuien] = useState(actual?.conQuien ?? "");
-  const guardar = (v: { que: string; fecha: string; conQuien: string }) => {
-    const limpio = { que: v.que.trim(), fecha: v.fecha, conQuien: v.conQuien.trim() };
-    const igual = limpio.que === (actual?.que ?? "") && limpio.fecha === (actual?.fecha ?? "") && limpio.conQuien === (actual?.conQuien ?? "");
-    if (igual) return;
-    // Sin el qué no hay siguiente paso: se espera a que lo escriba (o se borra, si vació todo).
-    if (!limpio.que) {
-      if (!limpio.fecha && !limpio.conQuien && actual) void cambiar([{ op: "casilla", clave: "siguientePaso", valor: null }]);
-      return;
-    }
-    const valor: SiguientePaso = { que: limpio.que, ...(limpio.fecha ? { fecha: limpio.fecha } : {}), ...(limpio.conQuien ? { conQuien: limpio.conQuien } : {}) };
-    void cambiar([{ op: "casilla", clave: "siguientePaso", valor }]);
-  };
-  const campo = (etiqueta: string, control: React.ReactNode) => (
-    <label className="flex flex-col gap-1 text-xs text-fg-muted">
-      {etiqueta}
-      {control}
-    </label>
-  );
-  return (
-    <section data-recorrido="preventa.sesion.siguiente" className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface px-4 py-3.5">
-      <div>
-        <h3 className="text-[15px] font-semibold text-fg">Antes de colgar</h3>
-        <p className="mt-0.5 text-[12.5px] text-fg-muted">El siguiente paso, con fecha y con quién.</p>
-      </div>
-      {campo(
-        "Qué",
-        <input
-          type="text"
-          value={que}
-          maxLength={300}
-          disabled={!puedeEditar}
-          onChange={(ev) => setQue(ev.target.value)}
-          onBlur={() => guardar({ que, fecha, conQuien })}
-          placeholder="Presentar el diagnóstico con números"
-          className={CAMPO}
-        />,
-      )}
-      <div className="grid grid-cols-2 gap-2">
-        {campo(
-          "Fecha",
-          <input
-            type="date"
-            value={fecha}
-            disabled={!puedeEditar}
-            onChange={(ev) => {
-              setFecha(ev.target.value);
-              guardar({ que, fecha: ev.target.value, conQuien });
-            }}
-            className={CAMPO}
-          />,
-        )}
-        {campo(
-          "Con quién",
-          <input
-            type="text"
-            value={conQuien}
-            maxLength={200}
-            disabled={!puedeEditar}
-            onChange={(ev) => setConQuien(ev.target.value)}
-            onBlur={() => guardar({ que, fecha, conQuien })}
-            placeholder="Quién decide y alguien técnico"
-            className={CAMPO}
-          />,
-        )}
-      </div>
     </section>
   );
 }
@@ -230,52 +156,47 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
           </p>
         </section>
       )}
-      <div className="flex flex-wrap items-start gap-5">
-        <section data-recorrido="preventa.sesion.preguntas" className="min-w-0 flex-[999_1_520px] overflow-hidden rounded-xl border border-line bg-surface">
-          <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3">
-            <h3 className="text-[15px] font-semibold text-fg">Preguntas</h3>
-            <span className="text-[12.5px] text-fg-muted">
-              {enOrden.filter((p) => hechas.has(p.para)).length} de {enOrden.length} hechas
-            </span>
-            <span className="flex-1" />
-            <Segmentos
-              etiqueta="Filtrar las preguntas"
-              opciones={[
-                { clave: "todas", nombre: "Todas", cuenta: enOrden.length },
-                { clave: "marco", nombre: "Arquitectura de la venta", cuenta: delMarco.length },
-                { clave: "escala", nombre: "Escala de rendimiento", cuenta: deLaEscala.length },
-              ]}
-              valor={filtro}
-              onCambiar={setFiltro}
-            />
-          </header>
-          {visibles.length ? (
-            <ul>
-              {visibles.map((p) => (
-                <FilaDePregunta
-                  key={p.para}
-                  pestana={pestana}
-                  p={p}
-                  hecha={hechas.has(p.para)}
-                  ahora={p.para === ahora}
-                  conNota={!!s && !!notas[claveDeNotaDePregunta(s.id, p.para)]}
-                  alMarcar={() => marcar(p.para)}
-                  alElegir={() => setElegida(p.para)}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className="px-[18px] py-5 text-[13px] text-fg-muted">
-              {enOrden.length ? "No hay preguntas de esta sección en la guía." : "Esta sesión no tiene guía: anota lo que salga en las notas libres."}
-            </p>
-          )}
-        </section>
-        <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-          <NotasLibres pestana={pestana} />
-          <AntesDeColgar />
-          <SiSeResiste pestana={pestana} esLaProxima={esLaProxima} compacto />
-        </div>
-      </div>
+      <NotasLibres pestana={pestana} />
+      <section data-recorrido="preventa.sesion.preguntas" className="min-w-0 overflow-hidden rounded-xl border border-line bg-surface">
+        <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3">
+          <h3 className="text-[15px] font-semibold text-fg">Preguntas</h3>
+          <span className="text-[12.5px] text-fg-muted">
+            {enOrden.filter((p) => hechas.has(p.para)).length} de {enOrden.length} hechas
+          </span>
+          <span className="flex-1" />
+          <Segmentos
+            etiqueta="Filtrar las preguntas"
+            opciones={[
+              { clave: "todas", nombre: "Todas", cuenta: enOrden.length },
+              { clave: "marco", nombre: "Arquitectura de la venta", cuenta: delMarco.length },
+              { clave: "escala", nombre: "Escala de rendimiento", cuenta: deLaEscala.length },
+            ]}
+            valor={filtro}
+            onCambiar={setFiltro}
+          />
+        </header>
+        {visibles.length ? (
+          <ul>
+            {visibles.map((p) => (
+              <FilaDePregunta
+                key={p.para}
+                pestana={pestana}
+                p={p}
+                hecha={hechas.has(p.para)}
+                ahora={p.para === ahora}
+                conNota={!!s && !!notas[claveDeNotaDePregunta(s.id, p.para)]}
+                alMarcar={() => marcar(p.para)}
+                alElegir={() => setElegida(p.para)}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="px-[18px] py-5 text-[13px] text-fg-muted">
+            {enOrden.length ? "No hay preguntas de esta sección en la guía." : "Esta sesión no tiene guía: anota lo que salga en las notas libres."}
+          </p>
+        )}
+      </section>
+      <SiSeResiste pestana={pestana} esLaProxima={esLaProxima} compacto />
     </div>
   );
 }
