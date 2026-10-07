@@ -11,7 +11,7 @@
  * Abierto desde la escala (el botón de un criterio, un nivel o una dimensión, 2026-10-05), arriba dice
  * sobre qué es y el reporte se manda anclado ahí (`escala`): es el mismo formulario de siempre.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Segmentado } from "@/components/ui/Segmentado";
 import { Tabs } from "@/components/ui/Tabs";
@@ -198,14 +198,36 @@ function DarFeedback(
   const def = TIPO[tipo];
   const vacio = cuerpo.trim().length < 3;
 
+  /* La captura se sube MIENTRAS se escribe (2026-10-06): subirla son tres viajes (permiso, archivo, confirmación) y,
+     hechos al apretar «Mandar», se sumaban al envío del reporte. Arranca con lo primero que se escribe —antes no hay
+     intención de mandar nada— y se reusa si la captura no cambió. Si cambia («Señalar algo», «Volver a capturar»), se
+     sube la nueva: la anterior queda sin reporte en el almacén privado, que es lo que cuesta no esperar. */
+  const subida = useRef<{ blob: Blob; promesa: ReturnType<typeof subirCaptura> } | null>(null);
+  const subirLaCaptura = useCallback(() => {
+    const blob = p.captura.blob;
+    if (!blob) return null;
+    if (subida.current?.blob !== blob) subida.current = { blob, promesa: subirCaptura(blob) };
+    return subida.current.promesa;
+  }, [p.captura.blob]);
+  const empezoAEscribir = cuerpo.trim().length > 0;
+  useEffect(() => {
+    if (empezoAEscribir && p.captura.estado === "lista") void subirLaCaptura();
+  }, [empezoAEscribir, p.captura.estado, subirLaCaptura]);
+
   const mandar = async () => {
     if (vacio || enviando) return;
     setEnviando(true);
     setError(null);
     let capturaPath: string | undefined;
-    if (p.captura.blob) {
-      const subida = await subirCaptura(p.captura.blob);
-      if (subida.ok) capturaPath = subida.path;
+    const pendiente = subirLaCaptura();
+    if (pendiente) {
+      let r = await pendiente;
+      if (!r.ok) {
+        // Lo subido mientras escribía falló (se cortó la red): un intento más ahora.
+        subida.current = null;
+        r = await (subirLaCaptura() ?? pendiente);
+      }
+      if (r.ok) capturaPath = r.path;
       // Si la captura no sube, el reporte sale igual con la dirección: no se pierde lo que escribió.
     }
     try {

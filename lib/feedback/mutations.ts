@@ -20,7 +20,15 @@ export function esPathDeCaptura(path: string): boolean {
   return /^feedback\/[A-Za-z0-9-]+\.(jpg|jpeg|png|webp)$/.test(path);
 }
 
-export async function crearReporte(datos: CrearReporte, autor: { email: string; nombre: string; rol: string | null }) {
+export async function crearReporte(
+  datos: CrearReporte,
+  autor: { email: string; nombre: string; rol: string | null },
+  /**
+   * La ruta pasa `after` (next/server): el aviso a dirección se manda DESPUÉS de responderle a quien reporta, que no
+   * tiene por qué esperar a que se resuelva quién lleva el frente (2026-10-06). Sin esto (las pruebas), se espera.
+   */
+  opciones?: { avisarDespues?: (tarea: () => Promise<void>) => void },
+) {
   if (datos.capturaPath && !esPathDeCaptura(datos.capturaPath)) {
     throw new ErrorDeFeedback("Esa captura no es de este lugar.", 400);
   }
@@ -76,9 +84,13 @@ export async function crearReporte(datos: CrearReporte, autor: { email: string; 
     actorEmail: autor.email,
     dedupeKey: `feedback.nuevo:${reporte.id}`,
   };
-  await avisar({ ...aviso, frente: "FEEDBACK" });
-  // Lo de la escala, también a quien lleva la Escala (la misma clave: quien lleva los dos frentes lo recibe una vez).
-  if (enLaEscala) await avisar({ ...aviso, frente: "ESCALA" });
+  const avisos = async () => {
+    await avisar({ ...aviso, frente: "FEEDBACK" });
+    // Lo de la escala, también a quien lleva la Escala (la misma clave: quien lleva los dos frentes lo recibe una vez).
+    if (enLaEscala) await avisar({ ...aviso, frente: "ESCALA" });
+  };
+  if (opciones?.avisarDespues) opciones.avisarDespues(avisos);
+  else await avisos();
   return { id: reporte.id, numero: reporte.numero, urgente };
 }
 

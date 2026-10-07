@@ -5,7 +5,7 @@
  * POST → manda un reporte desde cualquier pantalla interna. Lo puede mandar todo el equipo interno.
  *        A quien revisa le llega el aviso en «Para ti» (urgente si a la persona le frena el trabajo).
  */
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { guardInternalUser } from "@/lib/auth/api-guards";
 import { errorDeValidacion, leerCuerpo, respuestaDeError, sinTablas } from "@/lib/feedback/http";
 import { crearReporte } from "@/lib/feedback/mutations";
@@ -33,11 +33,12 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return errorDeValidacion(parsed.error.issues);
 
   try {
-    const r = await crearReporte(parsed.data, {
-      email: guard.user.email,
-      nombre: guard.teamMember?.name || guard.user.email,
-      rol: guard.role ?? null,
-    });
+    const r = await crearReporte(
+      parsed.data,
+      { email: guard.user.email, nombre: guard.teamMember?.name || guard.user.email, rol: guard.role ?? null },
+      // El aviso a dirección, después de responder: quien reporta no lo espera.
+      { avisarDespues: (tarea) => after(tarea) },
+    );
     const ideas = parsed.data.tipo === "mejora" ? await ideasEn30Dias(guard.user.email) : 0;
     return NextResponse.json({ reporte: r, ideasEn30Dias: ideas }, { status: 201 });
   } catch (e) {
