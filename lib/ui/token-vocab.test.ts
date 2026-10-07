@@ -239,7 +239,7 @@ describe("Ratchet de overlays: los fixed inset-0 a mano solo ENCOGEN", () => {
     expect(
       subieron,
       `Overlay a mano NUEVO (sin focus-trap, sin Escape, sin role="dialog"). Usá Modal, ` +
-        `Drawer o ConfirmDialog de components/ui:\n${subieron.join("\n")}`,
+        `Drawer, ConfirmDialog o PantallaCompleta (una herramienta que ocupa toda la pantalla) de components/ui:\n${subieron.join("\n")}`,
     ).toEqual([]);
     expect(
       [...paraActualizar, ...paraBorrar.map((f) => `  (borrar la entrada) "${f}"`)],

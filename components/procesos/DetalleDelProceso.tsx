@@ -6,6 +6,9 @@
  * Arriba, lo del agente y una sola vez (la franja azul mientras el mapa es su borrador); después el
  * mapa en carriles (Hoy · Después de la implementación · Comparar), qué cambia para el cliente y lo
  * que se va de hoy. Al panel de la derecha van las preguntas que faltan y de qué reuniones sale.
+ *
+ * Acá el mapa se mira. Se cambia en pantalla completa (`EditorDelMapa`): «Editar el mapa», el botón
+ * de pantalla completa del mapa o «Editar el paso» en el detalle de un paso.
  */
 import { createPortal } from "react-dom";
 import { useCallback, useState } from "react";
@@ -13,8 +16,9 @@ import { ConfirmDialog, Segmentado } from "@/components/ui";
 import { BotonAzul, BotonBlanco, BotonTexto, FranjaDeSugerencias, QueSigue, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { cuentasDelMapa, ETIQUETA_DE_AREA, type EstadoDelMapa, type MapaDeProceso } from "@/lib/procesos/mapa";
-import EditarPaso, { type EdicionDelPaso } from "./EditarPaso";
-import MapaPorCarriles, { fechaCorta, type CualVersion, type VistaDelMapa } from "./MapaPorCarriles";
+import { pedirPantallaCompletaDelNavegador } from "@/components/ui/PantallaCompleta";
+import EditorDelMapa, { type MapaGuardado } from "./EditorDelMapa";
+import MapaPorCarriles, { fechaCorta, IconoPantallaCompleta, type CualVersion, type VistaDelMapa } from "./MapaPorCarriles";
 import { ChipDeEstado } from "./ChipDeEstado";
 
 const VISTAS = [
@@ -63,6 +67,8 @@ function Leyenda({ vista }: { vista: VistaDelMapa }) {
 }
 
 export default function DetalleDelProceso({
+  clientId,
+  blockId,
   mapa,
   editadoAMano,
   puedeEditar,
@@ -70,9 +76,11 @@ export default function DetalleDelProceso({
   ocupado,
   onVolver,
   onEstado,
-  onPaso,
+  onGuardado,
   onQuitar,
 }: {
+  clientId: string;
+  blockId: string;
   mapa: MapaDeProceso;
   editadoAMano: boolean;
   puedeEditar: boolean;
@@ -81,17 +89,17 @@ export default function DetalleDelProceso({
   ocupado: boolean;
   onVolver: () => void;
   onEstado: (estado: EstadoDelMapa) => void;
-  onPaso: (cambio: EdicionDelPaso) => Promise<string | null>;
+  /** Lo que se guardó en el editor de pantalla completa. */
+  onGuardado: (r: MapaGuardado) => void;
   onQuitar: () => void;
 }) {
   const [vista, setVista] = useState<VistaDelMapa>("hoy");
-  const [editando, setEditando] = useState<{ cual: CualVersion; pasoId: string } | null>(null);
-  const [errorDelPaso, setErrorDelPaso] = useState<string | null>(null);
-  const [guardandoPaso, setGuardandoPaso] = useState(false);
+  const [editor, setEditor] = useState<{ cual: CualVersion; pasoId?: string } | null>(null);
   const [confirmarQuitar, setConfirmarQuitar] = useState(false);
-  const abrirEditor = useCallback((cual: CualVersion, pasoId: string) => {
-    setErrorDelPaso(null);
-    setEditando({ cual, pasoId });
+  // Se llama en el clic: el navegador solo da pantalla completa a un gesto de la persona.
+  const abrirEditor = useCallback((cual: CualVersion, pasoId?: string) => {
+    pedirPantallaCompletaDelNavegador();
+    setEditor({ cual, pasoId });
   }, []);
 
   const c = cuentasDelMapa(mapa);
@@ -213,11 +221,19 @@ export default function DetalleDelProceso({
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Segmentado opciones={VISTAS} valor={vista} onCambio={setVista} etiqueta="Qué versión del proceso ver" />
+        <div className="flex flex-wrap items-center gap-3">
+          <Segmentado opciones={VISTAS} valor={vista} onCambio={setVista} etiqueta="Qué versión del proceso ver" />
+          <BotonBlanco onClick={() => abrirEditor(vista === "despues" ? "despues" : "hoy")} disabled={ocupado} className="inline-flex items-center gap-1.5">
+            <span className="h-3.5 w-3.5" aria-hidden="true">
+              <IconoPantallaCompleta />
+            </span>
+            {puedeEditar ? "Editar el mapa" : "Ver en pantalla completa"}
+          </BotonBlanco>
+        </div>
         <Leyenda vista={vista} />
       </div>
 
-      <MapaPorCarriles mapa={mapa} vista={vista} onEditar={puedeEditar ? abrirEditor : undefined} />
+      <MapaPorCarriles mapa={mapa} vista={vista} onAbrirEditor={abrirEditor} puedeEditar={puedeEditar} />
 
       {mapa.cambios.length > 0 && (
         <section className="space-y-2.5">
@@ -255,25 +271,21 @@ export default function DetalleDelProceso({
       )}
 
       <p className="text-xs text-fg-muted">
-        Lo armó el agente el {fechaCorta(mapa.generadoEn.slice(0, 10))} con las reuniones del cliente.
-        {puedeEditar ? " Toca un paso para ver su cita y editarlo." : ""}
+        Lo armó el agente el {fechaCorta(mapa.generadoEn.slice(0, 10))} con las reuniones del cliente. Toca un paso para ver de dónde sale
+        {puedeEditar ? "; para cambiar el mapa, ábrelo en pantalla completa." : "."}
       </p>
 
-      {editando && (
-        <EditarPaso
-          key={`${editando.cual}-${editando.pasoId}`}
+      {editor && (
+        <EditorDelMapa
+          clientId={clientId}
+          blockId={blockId}
           mapa={mapa}
-          cual={editando.cual}
-          pasoId={editando.pasoId}
-          guardando={guardandoPaso}
-          error={errorDelPaso}
-          onCerrar={() => setEditando(null)}
-          onGuardar={async (cambio) => {
-            setGuardandoPaso(true);
-            const error = await onPaso(cambio);
-            setGuardandoPaso(false);
-            if (error) setErrorDelPaso(error);
-            else setEditando(null);
+          inicial={editor}
+          soloLectura={!puedeEditar}
+          onCerrar={() => setEditor(null)}
+          onGuardado={(r) => {
+            setEditor(null);
+            onGuardado(r);
           }}
         />
       )}

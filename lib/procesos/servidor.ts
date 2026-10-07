@@ -4,14 +4,15 @@ import "server-only";
  *
  * Los mapas son bloques de la sección «procesos» del canvas Información del cliente (proyecto
  * centinela). Acá se leen separados en: los mapas nuevos (`carriles-v1`), el índice que deja el
- * agente y los mapas del formato anterior que siguen en pie. Las escrituras son tres: el estado del
- * mapa (revisado / validado con el cliente), editar un paso y quitar un mapa.
+ * agente y los mapas del formato anterior que siguen en pie. Las escrituras son: el estado del mapa
+ * (revisado / validado con el cliente), lo que se guarda desde el editor de pantalla completa, un
+ * mapa del formato anterior editado en el visor viejo, y quitar un mapa.
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { SENTINEL_SERVICE_TYPE } from "@/lib/projects/kind";
-import { ultimaCorrida } from "./agente";
+import { ultimaCorrida, verificarCitas } from "./agente";
 import {
   esIndiceDeProcesos,
   esMapaAnterior,
@@ -19,9 +20,8 @@ import {
   type EstadoDelMapa,
   type IndiceDeProcesos,
   type MapaDeProceso,
-  type OrigenDelPaso,
-  type PasoDelMapa,
 } from "./mapa";
+import { aplicarOperaciones, citasNuevas, completarCitas, ErrorDeOperacion, type OperacionDelMapa } from "./operaciones";
 
 const bloquesDeProcesos = (clientId: string) =>
   prisma.canvasBlock.findMany({
@@ -67,7 +67,8 @@ async function bloqueDelMapa(clientId: string, blockId: string) {
 }
 
 export class ErrorDeProcesos extends Error {
-  constructor(public readonly status: number, mensaje: string) {
+  /** En un 409, el mapa como está ahora en la base. */
+  constructor(public readonly status: number, mensaje: string, public readonly mapaActual?: MapaDeProceso) {
     super(mensaje);
   }
 }
@@ -84,6 +85,8 @@ export async function cambiarEstadoDelMapa(clientId: string, blockId: string, es
     revisadoEn: estado === "borrador" ? null : estado === "revisado" ? ahora : (actual.revisadoEn ?? ahora),
     validadoPor: estado === "validado" ? quien : null,
     validadoEn: estado === "validado" ? ahora : null,
+    // El estado también es un cambio: un editor abierto sobre la versión anterior no lo pisa.
+    version: (actual.version ?? 0) + 1,
   };
   // CONFIRMED = lo puede mostrar el kickoff (solo lo validado con el cliente cruza).
   await prisma.canvasBlock.update({
@@ -93,60 +96,71 @@ export async function cambiarEstadoDelMapa(clientId: string, blockId: string, es
   return mapa;
 }
 
-export interface CambioDePaso {
-  version: "hoy" | "despues";
-  pasoId: string;
-  texto: string;
-  carril: string;
-  herramienta: string;
-  dolor: string;
-  origen: OrigenDelPaso;
-  /** Índices de las citas que se quitan (las citas no se escriben a mano: se eligen de la reunión). */
-  quitarCitas: number[];
+/** Lo que vuelve de guardar el editor. */
+export interface ResultadoDelEditor {
+  mapa: MapaDeProceso;
+  /** Citas que no aparecieron tal cual en su reunión y no se guardaron. */
+  citasDescartadas: number;
 }
 
 /**
- * Edita un paso. Reglas que no dependen de la pantalla:
- *  - «dicho» (hoy) y «acordado» (después) piden al menos una cita: sin cita, es un supuesto;
- *  - un mapa validado con el cliente vuelve a «revisado» al cambiarlo (lo validado era otra cosa);
- *  - el bloque pasa a «editado a mano» y el agente ya no lo pisa al volver a mapear.
+ * Guarda lo que se hizo en el editor de pantalla completa. Reglas que no dependen de la pantalla:
+ *  - se guarda solo sobre la versión que el editor tenía abierta (409 con el mapa de ahora si es otra:
+ *    lo volvió a mapear el agente, lo validó alguien o lo guardó otra persona);
+ *  - las operaciones se aplican con la misma función que usa el editor (lib/procesos/operaciones.ts);
+ *  - cada cita nueva se busca tal cual en la transcripción de su reunión: si no aparece, no se guarda
+ *    y el paso baja de origen si se queda sin citas;
+ *  - un mapa validado con el cliente vuelve a «revisado» (lo validado era otra cosa), y el bloque pasa
+ *    a «editado a mano»: el agente ya no lo pisa al volver a mapear.
  */
-export async function editarPaso(clientId: string, blockId: string, c: CambioDePaso, quien: string): Promise<MapaDeProceso> {
+export async function guardarCambiosDelEditor(
+  clientId: string,
+  blockId: string,
+  version: number,
+  operaciones: OperacionDelMapa[],
+  quien: string,
+): Promise<ResultadoDelEditor> {
   const b = await bloqueDelMapa(clientId, blockId);
-  const mapa: unknown = b?.data;
-  if (!b || !esMapaDeCarriles(mapa)) throw new ErrorDeProcesos(404, "Ese mapa no existe.");
-  const version = c.version === "hoy" ? mapa.hoy : mapa.despues;
-  const i = version.pasos.findIndex((p) => p.id === c.pasoId);
-  if (i === -1) throw new ErrorDeProcesos(404, "Ese paso no existe.");
-  if (!version.carriles.some((x) => x.id === c.carril)) throw new ErrorDeProcesos(400, "Ese carril no existe en el mapa.");
-  const permitidos: OrigenDelPaso[] = c.version === "hoy" ? ["dicho", "supuesto"] : ["acordado", "propuesto", "supuesto"];
-  if (!permitidos.includes(c.origen)) throw new ErrorDeProcesos(400, "Ese origen no vale para esta versión del mapa.");
-  const quitar = new Set(c.quitarCitas);
-  const citas = version.pasos[i].citas.filter((_, k) => !quitar.has(k));
-  if ((c.origen === "dicho" || c.origen === "acordado") && citas.length === 0) {
-    throw new ErrorDeProcesos(400, "Para marcarlo como dicho por el cliente hace falta una cita de una reunión. Sin cita queda como supuesto.");
+  const actual: unknown = b?.data;
+  if (!b || !esMapaDeCarriles(actual)) throw new ErrorDeProcesos(404, "Este mapa ya no existe: se volvió a mapear o alguien lo quitó.");
+  if ((actual.version ?? 0) !== version) throw new ErrorDeProcesos(409, "Este mapa cambió mientras lo editabas.", actual);
+
+  let nuevo: MapaDeProceso;
+  try {
+    nuevo = aplicarOperaciones(actual, operaciones);
+  } catch (e) {
+    if (e instanceof ErrorDeOperacion) throw new ErrorDeProcesos(400, e.message);
+    throw e;
   }
-  const paso: PasoDelMapa = {
-    ...version.pasos[i],
-    texto: c.texto.trim().slice(0, 120) || version.pasos[i].texto,
-    carril: c.carril,
-    herramienta: c.herramienta.trim().slice(0, 80),
-    dolor: c.version === "hoy" ? c.dolor.trim().slice(0, 140) : "",
-    origen: c.origen,
-    citas,
+  const nuevas = citasNuevas(actual, nuevo);
+  const verificadas = await verificarCitas(clientId, nuevas.map((n) => n.cita));
+  const { mapa: conCitas, descartadas } = completarCitas(nuevo, verificadas);
+  const ahora = new Date().toISOString();
+  const final: MapaDeProceso = {
+    ...conCitas,
+    version: version + 1,
+    ...(actual.estado === "validado" ? { estado: "revisado" as const, validadoPor: null, validadoEn: null } : {}),
+    ...(actual.estado !== "borrador" ? { revisadoPor: quien, revisadoEn: ahora } : {}),
   };
-  const pasos = version.pasos.map((p, k) => (k === i ? paso : p));
-  const nuevo: MapaDeProceso = {
-    ...mapa,
-    ...(c.version === "hoy" ? { hoy: { ...mapa.hoy, pasos } } : { despues: { ...mapa.despues, pasos } }),
-    ...(mapa.estado === "validado" ? { estado: "revisado" as const, validadoPor: null, validadoEn: null } : {}),
-    revisadoPor: mapa.estado === "borrador" ? mapa.revisadoPor ?? null : quien,
-  };
-  await prisma.canvasBlock.update({
-    where: { id: blockId },
-    data: { data: nuevo as unknown as Prisma.InputJsonValue, previousData: mapa as unknown as Prisma.InputJsonValue, source: "MODIFIED", status: nuevo.estado === "validado" ? "CONFIRMED" : "DRAFT" },
+
+  // Se vuelve a mirar la versión con la fila tomada: entre leer y escribir pudo guardar otra persona.
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "CanvasBlock" WHERE id = ${blockId} FOR UPDATE`;
+    const fila = await tx.canvasBlock.findUnique({ where: { id: blockId }, select: { data: true } });
+    const ahoraEnLaBase: unknown = fila?.data;
+    if (!esMapaDeCarriles(ahoraEnLaBase)) throw new ErrorDeProcesos(404, "Este mapa ya no existe: se volvió a mapear o alguien lo quitó.");
+    if ((ahoraEnLaBase.version ?? 0) !== version) throw new ErrorDeProcesos(409, "Este mapa cambió mientras lo editabas.", ahoraEnLaBase);
+    await tx.canvasBlock.update({
+      where: { id: blockId },
+      data: {
+        data: final as unknown as Prisma.InputJsonValue,
+        previousData: actual as unknown as Prisma.InputJsonValue,
+        source: "MODIFIED",
+        status: final.estado === "validado" ? "CONFIRMED" : "DRAFT",
+      },
+    });
   });
-  return nuevo;
+  return { mapa: final, citasDescartadas: descartadas };
 }
 
 /** Guarda un mapa del formato anterior editado en el visor viejo. Queda como editado a mano. */

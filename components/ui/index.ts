@@ -51,6 +51,14 @@ export type { ModalProps } from "./Modal";
 export { Drawer }    from "./Drawer";
 export type { DrawerProps } from "./Drawer";
 
+export {
+  PantallaCompleta,
+  pedirPantallaCompletaDelNavegador,
+  salirDePantallaCompletaDelNavegador,
+  useEnPantallaCompletaDelNavegador,
+} from "./PantallaCompleta";
+export type { PantallaCompletaProps } from "./PantallaCompleta";
+
 export { ConfirmDialog } from "./ConfirmDialog";
 export type { ConfirmDialogProps } from "./ConfirmDialog";
 

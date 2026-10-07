@@ -23,7 +23,7 @@ import { cn } from "@/lib/cn";
 import { cuentasDelMapa, ETIQUETA_DE_AREA, type EstadoDelMapa, type IndiceDeProcesos, type MapaDeProceso } from "@/lib/procesos/mapa";
 import { ChipDeEstado } from "./ChipDeEstado";
 import DetalleDelProceso from "./DetalleDelProceso";
-import type { EdicionDelPaso } from "./EditarPaso";
+import type { MapaGuardado } from "./EditorDelMapa";
 import { fechaCorta } from "./MapaPorCarriles";
 import MiniMapa from "./MiniMapa";
 
@@ -238,16 +238,18 @@ export default function ProcesosDeLaCuenta({ clientId, slotDelPanel }: { clientI
     }
   };
 
-  const editarPaso = async (blockId: string, cambio: EdicionDelPaso): Promise<string | null> => {
-    const r = await fetch(`/api/clients/${clientId}/procesos/${blockId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accion: "paso", ...cambio }),
-    });
-    if (!r.ok) return leerError(r, "No se pudo guardar el paso.");
-    const { mapa } = (await r.json()) as { mapa: MapaDeProceso };
+  // El editor de pantalla completa ya guardó (PATCH «operaciones»): acá solo se pone el mapa nuevo.
+  const alGuardarElMapa = (blockId: string, { mapa, citasDescartadas }: MapaGuardado) => {
     setDatos((d) => (d ? { ...d, mapas: d.mapas.map((m) => (m.blockId === blockId ? { ...m, mapa, editadoAMano: true } : m)) } : d));
-    return null;
+    invalidateGps();
+    toast.success("Guardaste el mapa.");
+    if (citasDescartadas > 0) {
+      toast.info(
+        citasDescartadas === 1
+          ? "Una cita nueva no apareció tal cual en su reunión y no quedó."
+          : `${citasDescartadas} citas nuevas no aparecieron tal cual en su reunión y no quedaron.`,
+      );
+    }
   };
 
   const quitar = async (blockId: string) => {
@@ -280,6 +282,8 @@ export default function ProcesosDeLaCuenta({ clientId, slotDelPanel }: { clientI
     return (
       <DetalleDelProceso
         key={elAbierto.blockId}
+        clientId={clientId}
+        blockId={elAbierto.blockId}
         mapa={elAbierto.mapa}
         editadoAMano={elAbierto.editadoAMano}
         puedeEditar={puedeEditar}
@@ -287,7 +291,7 @@ export default function ProcesosDeLaCuenta({ clientId, slotDelPanel }: { clientI
         ocupado={ocupado}
         onVolver={() => setAbierto(null)}
         onEstado={(estado) => void cambiarEstado(elAbierto.blockId, estado)}
-        onPaso={(cambio) => editarPaso(elAbierto.blockId, cambio)}
+        onGuardado={(r) => alGuardarElMapa(elAbierto.blockId, r)}
         onQuitar={() => void quitar(elAbierto.blockId)}
       />
     );

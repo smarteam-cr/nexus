@@ -18,6 +18,16 @@ import {
   slugDeProceso,
   tieneContenidoDeProceso,
 } from "./mapa";
+import {
+  aplicarOperacion,
+  aplicarOperaciones,
+  citasNuevas,
+  claveDeCita,
+  completarCitas,
+  ErrorDeOperacion,
+  TOPES,
+  type OperacionDelMapa,
+} from "./operaciones";
 import { normalizarRespuesta, respuestaDelMapaSchema } from "./respuesta";
 import { cambioDeMapaSchema } from "./schema";
 import { serializarMapa } from "./serializar";
@@ -237,13 +247,163 @@ describe("las cuentas de la tarjeta", () => {
 });
 
 describe("lo que aceptan las rutas", () => {
-  it("un cambio de estado o de paso, nada más", () => {
+  it("un cambio de estado, las operaciones del editor o un mapa del formato anterior", () => {
     expect(cambioDeMapaSchema.safeParse({ accion: "estado", estado: "validado" }).success).toBe(true);
     expect(cambioDeMapaSchema.safeParse({ accion: "estado", estado: "publicado" }).success).toBe(false);
     expect(cambioDeMapaSchema.safeParse({ accion: "estado", estado: "revisado", extra: 1 }).success).toBe(false);
-    const paso = { accion: "paso", version: "hoy", pasoId: "h2", texto: "x", carril: "proyecto", herramienta: "", dolor: "", origen: "supuesto", quitarCitas: [0] };
-    expect(cambioDeMapaSchema.safeParse(paso).success).toBe(true);
-    expect(cambioDeMapaSchema.safeParse({ ...paso, origen: "inventado" }).success).toBe(false);
+    const ops = {
+      accion: "operaciones",
+      version: 3,
+      operaciones: [
+        { tipo: "paso.editar", version: "hoy", pasoId: "h2", cambios: { texto: "x", origen: "supuesto" } },
+        { tipo: "paso.agregar", version: "despues", paso: { id: "p-abc123", carril: "hubspot", texto: "Nuevo", tipo: "paso" }, despuesDe: "d2" },
+        { tipo: "carril.editar", version: "hoy", carrilId: "proyecto", tipoDeCarril: "sistema" },
+      ],
+    };
+    expect(cambioDeMapaSchema.safeParse(ops).success).toBe(true);
+    // Un id nuevo con caracteres raros, un origen inventado o un campo de más: no entran.
+    const conOp = (op: unknown) => ({ ...ops, operaciones: [op] });
+    expect(cambioDeMapaSchema.safeParse(conOp({ tipo: "paso.agregar", version: "hoy", paso: { id: "p 1", carril: "x", texto: "y", tipo: "paso" } })).success).toBe(false);
+    expect(cambioDeMapaSchema.safeParse(conOp({ tipo: "paso.editar", version: "hoy", pasoId: "h2", cambios: { origen: "inventado" } })).success).toBe(false);
+    expect(cambioDeMapaSchema.safeParse(conOp({ tipo: "paso.editar", version: "hoy", pasoId: "h2", cambios: { posicion: 1 } })).success).toBe(false);
+    expect(cambioDeMapaSchema.safeParse({ ...ops, operaciones: [] }).success).toBe(false);
+    // El id de un paso que ya existe puede traer espacios o tildes (los del agente).
+    expect(cambioDeMapaSchema.safeParse(conOp({ tipo: "paso.quitar", version: "hoy", pasoId: "Paso con tilde á" })).success).toBe(true);
+    expect(cambioDeMapaSchema.safeParse({ accion: "paso", version: "hoy", pasoId: "h2" }).success).toBe(false);
     expect(cambioDeMapaSchema.safeParse({ accion: "anterior", data: { nodes: [{ id: "a", type: "process" }], edges: [] } }).success).toBe(true);
+  });
+});
+
+describe("las operaciones del editor (las mismas que va a proponer el chat)", () => {
+  const error = (m: ReturnType<typeof mapaDePrueba>, op: OperacionDelMapa) => {
+    try {
+      aplicarOperacion(m, op);
+    } catch (e) {
+      expect(e).toBeInstanceOf(ErrorDeOperacion);
+      return (e as Error).message;
+    }
+    return null;
+  };
+
+  it("no muta el mapa: devuelve uno nuevo", () => {
+    const m = mapaDePrueba();
+    const copia = JSON.stringify(m);
+    const n = aplicarOperacion(m, { tipo: "paso.editar", version: "hoy", pasoId: "h2", cambios: { texto: "Lo anota en HubSpot" } });
+    expect(JSON.stringify(m)).toBe(copia);
+    expect(n.hoy.pasos.find((p) => p.id === "h2")?.texto).toBe("Lo anota en HubSpot");
+  });
+
+  it("un paso nuevo es supuesto hoy y propuesto (y nuevo) después; con «después de» sale una flecha", () => {
+    let m = mapaDePrueba();
+    m = aplicarOperacion(m, { tipo: "paso.agregar", version: "hoy", paso: { id: "p-1", carril: "proyecto", texto: "  Llama   al aspirante ", tipo: "paso" }, despuesDe: "h2" });
+    const hoy = m.hoy.pasos.find((p) => p.id === "p-1");
+    expect(hoy).toMatchObject({ texto: "Llama al aspirante", origen: "supuesto", cambio: "", citas: [] });
+    expect(m.hoy.flechas).toContainEqual({ de: "h2", a: "p-1", etiqueta: "" });
+    m = aplicarOperacion(m, { tipo: "paso.agregar", version: "despues", paso: { id: "p-2", carril: "hubspot", texto: "Envía un correo", tipo: "paso" } });
+    expect(m.despues.pasos.find((p) => p.id === "p-2")).toMatchObject({ origen: "propuesto", cambio: "nuevo" });
+  });
+
+  it("frena lo que no tiene sentido, con un mensaje para la persona", () => {
+    const m = mapaDePrueba();
+    expect(error(m, { tipo: "paso.agregar", version: "hoy", paso: { id: "h1", carril: "proyecto", texto: "x", tipo: "paso" } })).toMatch(/identificador/);
+    expect(error(m, { tipo: "paso.agregar", version: "hoy", paso: { id: "p-1", carril: "no-existe", texto: "x", tipo: "paso" } })).toMatch(/carril/);
+    expect(error(m, { tipo: "paso.agregar", version: "hoy", paso: { id: "p-1", carril: "proyecto", texto: "   ", tipo: "paso" } })).toMatch(/qué pasa/);
+    expect(error(m, { tipo: "paso.editar", version: "despues", pasoId: "d2", cambios: { dolor: "x" } })).toMatch(/hoy/);
+    expect(error(m, { tipo: "paso.editar", version: "hoy", pasoId: "h2", cambios: { enHubspot: "x" } })).toMatch(/después/);
+    expect(error(m, { tipo: "paso.editar", version: "hoy", pasoId: "h2", cambios: { origen: "acordado" } })).toMatch(/origen/);
+    expect(error(m, { tipo: "paso.quitar", version: "hoy", pasoId: "nada" })).toMatch(/ya no está/);
+    expect(error(m, { tipo: "flecha.agregar", version: "hoy", de: "h2", a: "h2" })).toMatch(/dos pasos distintos/);
+    expect(error(m, { tipo: "carril.quitar", version: "hoy", carrilId: "proyecto" })).toMatch(/Mueve o quita sus pasos/);
+  });
+
+  it("«Lo dijo el cliente» pide una cita; quitar la última baja el paso a supuesto (hoy) o propuesto (después)", () => {
+    let m = mapaDePrueba();
+    expect(error(m, { tipo: "paso.editar", version: "hoy", pasoId: "h3", cambios: { origen: "dicho" } })).toMatch(/hace falta una cita/);
+    const h2 = m.hoy.pasos.find((p) => p.id === "h2")!;
+    m = aplicarOperacion(m, { tipo: "cita.quitar", version: "hoy", pasoId: "h2", sesionId: h2.citas[0].sesionId, cita: h2.citas[0].cita });
+    expect(m.hoy.pasos.find((p) => p.id === "h2")).toMatchObject({ citas: [], origen: "supuesto" });
+    const d1 = m.despues.pasos.find((p) => p.id === "d1")!;
+    m = aplicarOperacion(m, { tipo: "cita.quitar", version: "despues", pasoId: "d1", sesionId: d1.citas[0].sesionId, cita: d1.citas[0].cita });
+    expect(m.despues.pasos.find((p) => p.id === "d1")).toMatchObject({ citas: [], origen: "propuesto" });
+  });
+
+  it("una cita repetida no se suma dos veces y hay un tope por paso", () => {
+    let m = mapaDePrueba();
+    const c = { sesionId: "s9", sesionTitulo: "Otra sesión", fecha: "2026-08-01", cita: "lo hacemos todo a mano en excel" };
+    m = aplicarOperacion(m, { tipo: "cita.agregar", version: "hoy", pasoId: "h3", cita: c });
+    expect(aplicarOperacion(m, { tipo: "cita.agregar", version: "hoy", pasoId: "h3", cita: c })).toBe(m);
+    for (let i = 1; i < TOPES.citasPorPaso; i++) m = aplicarOperacion(m, { tipo: "cita.agregar", version: "hoy", pasoId: "h3", cita: { ...c, cita: `${c.cita} ${i}` } });
+    expect(error(m, { tipo: "cita.agregar", version: "hoy", pasoId: "h3", cita: { ...c, cita: "una cita más que no entra" } })).toMatch(/hasta/);
+  });
+
+  it("quitar un paso de hoy se lleva sus flechas, y lo saca de los cambios, de «reemplaza» y de «se va»", () => {
+    const m = aplicarOperacion(mapaDePrueba(), { tipo: "paso.quitar", version: "hoy", pasoId: "h2" });
+    expect(m.hoy.pasos.some((p) => p.id === "h2")).toBe(false);
+    expect(m.hoy.flechas.some((f) => f.de === "h2" || f.a === "h2")).toBe(false);
+    expect(m.cambios[0].hoy).toEqual([]);
+    expect(m.despues.pasos.find((p) => p.id === "d2")?.reemplaza).toEqual([]);
+    expect(m.despues.seVa).toEqual([]);
+  });
+
+  it("los carriles: agregar, renombrar, cambiar de tipo, mover y quitar el vacío", () => {
+    let m = mapaDePrueba();
+    m = aplicarOperacion(m, { tipo: "carril.agregar", version: "hoy", carril: { id: "c-1", nombre: "Call center", tipo: "equipo" } });
+    m = aplicarOperacion(m, { tipo: "carril.editar", version: "hoy", carrilId: "c-1", nombre: "Centro de llamadas", tipoDeCarril: "sistema" });
+    expect(m.hoy.carriles.at(-1)).toEqual({ id: "c-1", nombre: "Centro de llamadas", tipo: "sistema" });
+    m = aplicarOperacion(m, { tipo: "carril.mover", version: "hoy", carrilId: "c-1", hacia: "arriba" });
+    expect(m.hoy.carriles.map((c) => c.id)).toEqual(["aspirante", "c-1", "proyecto"]);
+    // Mover más allá del borde no cambia nada.
+    const arriba = aplicarOperacion(m, { tipo: "carril.mover", version: "hoy", carrilId: "aspirante", hacia: "arriba" });
+    expect(arriba).toBe(m);
+    m = aplicarOperacion(m, { tipo: "carril.quitar", version: "hoy", carrilId: "c-1" });
+    expect(m.hoy.carriles.map((c) => c.id)).toEqual(["aspirante", "proyecto"]);
+  });
+
+  it("después tiene sus campos: qué cambia, dónde vive en HubSpot y a qué paso de hoy reemplaza (solo de hoy)", () => {
+    const m = aplicarOperacion(mapaDePrueba(), {
+      tipo: "paso.editar",
+      version: "despues",
+      pasoId: "d3",
+      cambios: { cambio: "cambia", enHubspot: "Tarea en el pipeline", reemplaza: ["h3", "h3", "d1", "no-existe"] },
+    });
+    expect(m.despues.pasos.find((p) => p.id === "d3")).toMatchObject({ cambio: "cambia", enHubspot: "Tarea en el pipeline", reemplaza: ["h3"] });
+  });
+
+  it("una lista se aplica en orden y, si una falla, dice cuál", () => {
+    const ops: OperacionDelMapa[] = [
+      { tipo: "paso.editar", version: "hoy", pasoId: "h2", cambios: { carril: "aspirante" } },
+      { tipo: "carril.quitar", version: "hoy", carrilId: "aspirante" },
+    ];
+    expect(() => aplicarOperaciones(mapaDePrueba(), ops)).toThrow(/^Cambio 2: /);
+    const m = aplicarOperaciones(mapaDePrueba(), ops.slice(0, 1));
+    expect(m.hoy.pasos.find((p) => p.id === "h2")?.carril).toBe("aspirante");
+  });
+
+  it("las citas nuevas se verifican en el servidor: la que no aparece se descarta y el paso baja de origen", () => {
+    const antes = mapaDePrueba();
+    const buena = { sesionId: "s2", sesionTitulo: "Sesión 2", fecha: "2026-08-01", cita: "el call center llama a cada uno" };
+    const mala = { sesionId: "s2", sesionTitulo: "Sesión 2", fecha: "2026-08-01", cita: "esto no lo dijo nadie en la reunión" };
+    let despues = aplicarOperaciones(antes, [
+      { tipo: "cita.agregar", version: "hoy", pasoId: "h3", cita: buena },
+      { tipo: "paso.editar", version: "hoy", pasoId: "h3", cambios: { origen: "dicho" } },
+      { tipo: "cita.agregar", version: "despues", pasoId: "d2", cita: mala },
+      { tipo: "paso.editar", version: "despues", pasoId: "d2", cambios: { origen: "acordado" } },
+    ]);
+    const nuevas = citasNuevas(antes, despues);
+    expect(nuevas.map((n) => [n.version, n.pasoId, n.cita.cita])).toEqual([
+      ["hoy", "h3", buena.cita],
+      ["despues", "d2", mala.cita],
+    ]);
+    const verificadas = new Map([
+      [claveDeCita(buena), { ...buena, minuto: "04:10", quien: "Ana" }],
+      [claveDeCita(mala), null],
+    ]);
+    const r = completarCitas(despues, verificadas);
+    despues = r.mapa;
+    expect(r.descartadas).toBe(1);
+    expect(despues.hoy.pasos.find((p) => p.id === "h3")).toMatchObject({ origen: "dicho", citas: [{ minuto: "04:10", quien: "Ana" }] });
+    expect(despues.despues.pasos.find((p) => p.id === "d2")).toMatchObject({ origen: "propuesto", citas: [] });
+    // Las citas que ya estaban no se vuelven a verificar.
+    expect(citasNuevas(antes, antes)).toEqual([]);
   });
 });

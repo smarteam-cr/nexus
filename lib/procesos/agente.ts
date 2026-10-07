@@ -21,7 +21,7 @@ import { prisma } from "@/lib/db/prisma";
 import { ensureProcesosSection } from "@/lib/canvas/sync-procesos-blocks";
 import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { getClientSessions } from "@/lib/sessions/project-sources";
-import { citaAparece, prepararReunion, verificarPasos, type ReunionParaCitar } from "./citas";
+import { citaAparece, prepararReunion, ubicarCita, verificarPasos, type ReunionParaCitar } from "./citas";
 import {
   AREAS,
   esIndiceDeProcesos,
@@ -32,6 +32,7 @@ import {
   slugDeProceso,
   type AreaDelProceso,
   type IndiceDeProcesos,
+  type CitaDelPaso,
   type MapaDeProceso,
 } from "./mapa";
 import { normalizarRespuesta, respuestaDelMapaSchema } from "./respuesta";
@@ -283,6 +284,7 @@ async function mapear(runId: string, clientId: string, triggeredByEmail: string 
       cambios: r.cambios,
       preguntas: r.preguntas,
       estado: "borrador",
+      incluye: [...nombres].slice(0, 20),
       generadoEn,
     };
     return mapa;
@@ -360,4 +362,76 @@ export async function iniciarMapeo(clientId: string, triggeredByEmail: string | 
     }
   });
   return { runId: run.id, yaCorria: false };
+}
+
+// ── Lo que usa el editor de pantalla completa ────────────────────────────────────
+
+/** Un hecho de una reunión que se puede sumar como cita a un paso. */
+export interface HechoParaCitar {
+  sesionId: string;
+  sesionTitulo: string;
+  fecha: string;
+  cita: string;
+  quien: string;
+  accion: string;
+  momento: Hecho["momento"];
+  tipo: Hecho["tipo"];
+}
+
+/**
+ * Los hechos ya leídos de las reuniones del cliente (las lecturas guardadas: no llama al modelo).
+ * Con `incluye`, solo los del proceso. Las reuniones salen del chokepoint, así que una reunión que
+ * dejó de ser del cliente no ofrece citas.
+ */
+export async function hechosParaCitar(clientId: string, incluye: string[] | undefined): Promise<HechoParaCitar[]> {
+  const sesiones = await getClientSessions(clientId, { take: 200 });
+  const porId = new Map(sesiones.map((s) => [s.id, s]));
+  const lecturas = await lecturasGuardadas(clientId, sesiones.map((s) => s.id));
+  const delProceso = incluye && incluye.length ? new Set(incluye) : null;
+  const out: HechoParaCitar[] = [];
+  for (const [id, l] of lecturas) {
+    const s = porId.get(id);
+    if (!s) continue;
+    for (const h of l.hechos) {
+      if (!h?.cita || (delProceso && !delProceso.has(h.proceso))) continue;
+      out.push({
+        sesionId: id,
+        sesionTitulo: s.title,
+        fecha: new Date(s.date).toISOString().slice(0, 10),
+        cita: h.cita,
+        quien: h.quien ?? "",
+        accion: h.accion ?? "",
+        momento: h.momento,
+        tipo: h.tipo,
+      });
+    }
+  }
+  return out.sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
+/**
+ * Verifica contra la transcripción las citas que se sumaron en el editor y les pone el minuto y
+ * quién la dijo. Devuelve, por clave «sesión|cita», la cita completa o null si no aparece tal cual
+ * (o si la reunión no es del cliente).
+ */
+export async function verificarCitas(clientId: string, citas: { sesionId: string; cita: string }[]): Promise<Map<string, CitaDelPaso | null>> {
+  const out = new Map<string, CitaDelPaso | null>();
+  if (citas.length === 0) return out;
+  const sesiones = await getClientSessions(clientId, { take: 200 });
+  const delCliente = new Set(sesiones.map((s) => s.id));
+  const ids = [...new Set(citas.map((c) => c.sesionId))].filter((id) => delCliente.has(id));
+  const filas = ids.length
+    ? await prisma.firefliesSession.findMany({
+        where: { id: { in: ids }, date: { lte: new Date() } },
+        select: { id: true, title: true, date: true, transcript: true },
+      })
+    : [];
+  const reuniones = new Map(
+    filas.map((f) => [f.id, prepararReunion({ id: f.id, titulo: f.title, fecha: f.date.toISOString().slice(0, 10), transcript: f.transcript ?? "" })]),
+  );
+  for (const c of citas) {
+    const r = reuniones.get(c.sesionId);
+    out.set(`${c.sesionId}|${c.cita}`, r && citaAparece(r, c.cita) ? { sesionId: r.id, sesionTitulo: r.titulo, fecha: r.fecha, cita: c.cita, ...ubicarCita(r, c.cita) } : null);
+  }
+  return out;
 }

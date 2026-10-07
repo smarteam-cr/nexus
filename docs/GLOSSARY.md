@@ -119,7 +119,8 @@
   (con la cita de la reunión, verificada contra la transcripción), **propuesto** por Smarteam o **supuesto** por el
   agente. El mapa pasa por **borrador del agente → revisado → validado con el cliente**; el kickoff muestra solo la
   versión de hoy de los validados. Los mapas del formato anterior (`nodes` + `edges`) se siguen viendo hasta volver a
-  mapear. Ver DECISIONS §Procesos.
+  mapear. El mapa se cambia en el **editor de pantalla completa**: cada cambio es una **operación**
+  (`lib/procesos/operaciones.ts`), la misma que va a proponer el chat. Ver DECISIONS §Procesos.
 - **Proyecto sentinel `__strategy__`**: proyecto especial por cliente que aloja el canvas de
   contexto/estrategia (no es un proyecto real de servicio).
 - **`hubspotCompanyId`** (en `Client`): id de la company de HubSpot ligada al cliente. Habilita

@@ -5261,6 +5261,43 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   con qué, el dolor, de dónde sale y quitar citas); llevar lo que falta confirmar a la próxima sesión; y que el
   Diagnóstico lea solo hoy y la Planificación solo después (esos dos archivos los estaba cambiando otra sesión).
 
+## Procesos: el mapa se edita en pantalla completa (2026-10-07)
+
+> Elías: el botón de pantalla completa del mapa no ponía nada en pantalla completa (era el «encuadrar» de React Flow,
+> que tiene ese ícono). Pidió pantalla completa real y, mirando el diseño «Procesos › Editor», que ESA fuera la forma
+> de editar: «después vamos a querer que el chat de Nexus pueda modificar esos procesos».
+
+- **Pantalla completa = modo edición.** En la ficha el mapa se mira; se cambia en `EditorDelMapa`, que cubre todo
+  Nexus: «Editar el mapa», el botón de pantalla completa del mapa o «Editar el paso» en el detalle de un paso. Quien no
+  puede editar lo abre igual, en solo lectura. Reemplaza al cajón de editar un paso (`EditarPaso`, borrado).
+- **La pantalla completa del navegador es de la página entera, no del editor.** Así los avisos y los diálogos, que
+  viven en document.body, se siguen viendo. Esc sale de la pantalla completa del navegador y el editor sigue abierto:
+  se cierra con Guardar o Cancelar, y con cambios sin guardar pide confirmación. La forma es una primitiva nueva,
+  `PantallaCompleta` (components/ui): portal, foco adentro, sin cierre con Esc ni tocando afuera. *Por qué una
+  primitiva:* el ratchet de overlays no deja improvisar una capa a mano, y `Modal` es una tarjeta centrada.
+- **Cada cambio es una operación** (`lib/procesos/operaciones.ts`): agregar, editar o quitar un paso; sumar o quitar
+  una cita; unir, rotular o quitar una flecha; agregar, renombrar, mover o quitar un carril. El editor guarda la lista
+  y la aplica para mostrar cómo queda; deshacer quita la última. Guardar manda la lista con la versión del mapa que
+  estaba abierta (`PATCH accion: "operaciones"`) y el servidor la aplica con la MISMA función. *Por qué:* lo que se ve
+  antes de guardar es lo que queda, y el chat de Nexus va a proponer estas mismas operaciones.
+- **El mapa tiene versión** (`MapaDeProceso.version`, sube con cada cambio guardado). Guardar sobre otra versión da
+  409 con el mapa de ahora: el editor prueba los cambios encima y, si calzan, los deja para revisar y volver a guardar;
+  si no, ofrece empezar de nuevo con la versión nueva. El servidor relee el bloque con `FOR UPDATE` antes de escribir.
+- **Las posiciones no se guardan.** El carril dice quién hace el paso y las flechas el orden; el acomodo sigue siendo
+  automático. Arrastrar un paso a otro carril cambia quién lo hace y nada más. Por eso no está «Reacomodar», que traía
+  el diseño.
+- **Una cita no se escribe: se elige de lo que dijeron.** El editor ofrece los hechos que el agente ya leyó en las
+  reuniones de ese proceso (`GET …/procesos/[blockId]/hechos`, sin llamar al modelo; el mapa guarda en `incluye` con
+  qué nombres lo llamaron las lecturas). Al guardar, el servidor busca cada cita NUEVA en la transcripción de su
+  reunión (por el chokepoint de sesiones); la que no aparece tal cual no queda, el paso baja de origen y la pantalla
+  dice cuántas se descartaron. Sumar la primera cita a un paso supuesto lo pasa a «Lo dijo el cliente» (hoy) o
+  «Acordado» (después), y se puede volver a cambiar.
+- **Las mismas reglas valen venga el cambio del editor o del chat:** «Lo dijo el cliente» y «Acordado» piden una cita;
+  quitar la última baja el paso; el dolor es de hoy; qué cambia, dónde vive en HubSpot y a qué reemplaza son de
+  después; un carril con pasos no se quita; quitar un paso se lleva sus flechas y lo que lo nombraba. Un mapa validado
+  que se edita vuelve a revisado.
+- **Esto cierra** lo que quedó pendiente el 2026-10-05: agregar y quitar pasos y flechas desde la pantalla.
+
 ## La carga de Customer Success y la rentabilidad por cuenta (2026-10-06)
 
 > Pedido de Elías: medir la carga de cada CSE para la 1:1 semanal de Alex Vanegas (CSL), y para Marco Salas y él, el

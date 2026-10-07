@@ -42,7 +42,10 @@ export interface AcomodoPorCarriles {
   ultimaColumna: number;
 }
 
-export function acomodarPorCarriles(version: Pick<VersionDelMapa, "carriles" | "pasos" | "flechas">, opciones: { conDolor: boolean }): AcomodoPorCarriles {
+export function acomodarPorCarriles(
+  version: Pick<VersionDelMapa, "carriles" | "pasos" | "flechas">,
+  opciones: { conDolor: boolean; /** El editor muestra también los carriles sin pasos (uno recién agregado). */ conCarrilesVacios?: boolean },
+): AcomodoPorCarriles {
   const { paso: P, hueco, rotulo, margen, dolor } = MEDIDAS;
   const porId = new Map(version.pasos.map((p) => [p.id, p]));
   const siguientes = new Map<string, string[]>();
@@ -80,7 +83,7 @@ export function acomodarPorCarriles(version: Pick<VersionDelMapa, "carriles" | "
   const carriles: CarrilDelMapa[] = [...version.carriles];
   for (const p of version.pasos) if (!carriles.some((c) => c.id === p.carril)) carriles.push({ id: p.carril, nombre: p.carril, tipo: "equipo" });
   const usados = new Set(version.pasos.map((p) => p.carril));
-  const visibles = carriles.filter((c) => usados.has(c.id));
+  const visibles = opciones.conCarrilesVacios ? carriles : carriles.filter((c) => usados.has(c.id));
   const apilado: Record<string, number> = {};
   const ocupado = new Map<string, number>();
   const maxApilado = new Map<string, number>();

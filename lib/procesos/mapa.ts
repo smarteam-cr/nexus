@@ -98,6 +98,11 @@ export interface MapaDeProceso {
   /** Lo que falta confirmar con el cliente para que el mapa sea cierto. */
   preguntas: string[];
   estado: EstadoDelMapa;
+  /** Sube con cada cambio guardado (editor, estado): guardar sobre otra versión responde 409. Ausente = 0. */
+  version?: number;
+  /** Los nombres con que las lecturas de cada reunión llamaron a este proceso: de ahí salen las citas
+   *  que el editor ofrece para sumar. Ausente en mapas armados antes del 2026-10-07. */
+  incluye?: string[];
   revisadoPor?: string | null;
   revisadoEn?: string | null;
   validadoPor?: string | null;
