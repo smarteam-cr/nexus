@@ -4956,9 +4956,11 @@ producción no había ningún comentario ni ningún reporte de la escala: no hub
   choca con el bloqueo total de RLS. Para unas 20 personas alcanza un pedido cada minuto y medio con la pestaña a la
   vista (cada cinco escondida, para la notificación del navegador), con la medición guardada dos minutos en memoria
   (un solo proceso, RUNBOOK invariante #1). No va en el armado del menú: ese corre en cada navegación.
-- **«Del equipo» no da permisos nuevos.** Quien no puede abrir toda la cartera (un CSE) ve cuántas cosas tiene cada
-  persona, sin nombres de cuentas. Dirección lo ve por área. Lo que no tiene dueño (proyectos sin encargado) tiene su
-  fila, en ámbar.
+- **Se retiró la pestaña «Del equipo»** (2026-10-07, Elías: «no aporta a nadie realmente»). Contaba cuánto tenía cada
+  persona o cada área, pero el número lo llenaban las tareas vencidas de las reuniones: medía quién no las cierra, no
+  cuánto trabajo tiene. Se fue con lo que la calculaba (`lib/para-ti/equipo-server.ts`, `/api/para-ti/equipo`). La
+  carga de cada persona la mide «Carga del equipo», en horas; los proyectos sin encargado le siguen llegando a la CSL
+  en su «Para ti».
 - **El número del menú es lo de HOY** (lo del agente, lo de hoy y los avisos sin leer), no la semana: un número que
   nunca baja se deja de mirar.
 - **Pendiente, a propósito:** el notificador de alertas de la CSL (`CsAlertNotifier`) sigue hasta que el vigía escriba

@@ -97,21 +97,9 @@ export function elMasNuevo(
   return Date.parse(nuevo.creadoAt) > Date.parse(previo.creadoAt) ? nuevo : previo;
 }
 
-/** Todo lo pendiente, en una lista (para contar en «Del equipo»). */
-export function todosLosPendientes(p: ParaTi): Pendiente[] {
-  return [...p.agente, ...p.hoy, ...p.semana, ...p.luego];
-}
-
-/** «Lo que más espera» de una persona: lo más viejo que tiene para hoy (o lo del agente), o null si está al día. */
-export function loQueMasEspera(p: ParaTi): Pendiente | null {
-  const urgentes = ordenar([...p.hoy, ...p.agente]);
-  if (urgentes.length) return urgentes[0];
-  return ordenar(p.semana)[0] ?? null;
-}
-
 const plural = (n: number, uno: string, varios: string) => (n === 1 ? `1 ${uno}` : `${n} ${varios}`);
 
-/** «hace 5 días», «hoy», «ayer». Para el detalle de lo que espera. */
+/** «hace 5 días», «hoy», «ayer». Para el detalle de un pendiente. */
 export function haceCuanto(desdeISO: string | null | undefined, ahora: Date): string | null {
   if (!desdeISO) return null;
   const ms = ahora.getTime() - Date.parse(desdeISO);

@@ -49,8 +49,6 @@ export interface Alcance {
   teamMemberId: string;
   frentes: ClaveDeFrente[];
   permisos: PermissionMap;
-  /** Puede abrir toda la cartera: en «Del equipo» ve los nombres de las cuentas de los demás. */
-  veTodaLaCartera: boolean;
   proyectos: ProyectoPropio[];
 }
 
@@ -166,7 +164,6 @@ export async function alcanceDe(tm: MiembroParaAlcance): Promise<Alcance> {
     teamMemberId: tm.id,
     frentes: frentesDelMiembro(tm),
     permisos,
-    veTodaLaCartera: veTodaLaCarteraYa,
     proyectos,
   };
 }

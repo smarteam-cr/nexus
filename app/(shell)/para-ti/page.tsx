@@ -20,7 +20,7 @@ import ParaTiPantalla from "@/components/para-ti/ParaTiPantalla";
 
 export const dynamic = "force-dynamic";
 
-export default async function ParaTiPage({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
+export default async function ParaTiPage() {
   const ctx = await requireInternalUser().catch(() => null);
   // Sin sesión, el shell ya mandó al inicio. Esto es una cuenta que entra pero no es del equipo: un mensaje, no un
   // redirect (el inicio la vuelve a mandar acá y quedaría dando vueltas).
@@ -32,7 +32,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
     );
   }
   const alcance = await alcanceDe(ctx.teamMember);
-  const [medicion, avisos, sp] = await Promise.all([medirParaTi(alcance), avisosDe(alcance.email), searchParams]);
+  const [medicion, avisos] = await Promise.all([medirParaTi(alcance), avisosDe(alcance.email)]);
 
   // Un frente que llevas sin el permiso para abrirlo se calla (lib/para-ti/frentes.ts): se dice, para que no parezca
   // que está al día.
@@ -53,7 +53,7 @@ export default async function ParaTiPage({ searchParams }: { searchParams: Promi
         title="Para ti"
         description="Lo que te toca hoy en Nexus, lo más urgente primero. Cada cosa te lleva a la pantalla donde se hace."
       />
-      <ParaTiPantalla medicion={medicion} avisos={avisos} resumen={resumen} vistaInicial={sp.ver === "equipo" ? "equipo" : "mio"} />
+      <ParaTiPantalla medicion={medicion} avisos={avisos} resumen={resumen} />
     </div>
   );
 }

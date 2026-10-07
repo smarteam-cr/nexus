@@ -95,23 +95,34 @@ export const REUNIONES_SIN_REVISAR: Fuente = {
     const multi = a.proyectos.filter((p) => p.multiproyecto);
     const porId = new Map(multi.map((p) => [p.id, p]));
     const sinRevisar = await contarSesionesSinRevisar(multi.map((p) => ({ id: p.id, clientId: p.clientId })));
-    const out: Pendiente[] = [];
-    for (const [projectId, n] of sinRevisar) {
-      const p = porId.get(projectId);
-      if (!p || n === 0) continue;
-      out.push({
-        clave: `reuniones-sin-revisar:${p.id}`,
+    const conReuniones = [...sinRevisar]
+      .map(([projectId, n]) => ({ p: porId.get(projectId), n }))
+      .filter((x): x is { p: NonNullable<typeof x.p>; n: number } => !!x.p && x.n > 0)
+      .sort((x, y) => y.n - x.n);
+    if (conReuniones.length === 0) return [];
+    // UNA fila para todos los proyectos (2026-10-05): con una por proyecto, a quien lleva muchos se le llenaba la parte
+    // de arriba de la página. Nombra los dos que más tienen y lleva al primero.
+    const total = conReuniones.reduce((s, x) => s + x.n, 0);
+    const [primero, segundo] = conReuniones;
+    const nombres = segundo
+      ? `«${primero.p.name}» (${primero.n}) y «${segundo.p.name}» (${segundo.n})${conReuniones.length > 2 ? `, y ${conReuniones.length - 2} proyectos más` : ""}`
+      : `«${primero.p.name}» de ${primero.p.empresa}`;
+    return [
+      {
+        clave: "reuniones-sin-revisar",
         fuente: "reuniones-sin-revisar",
         cuando: "hoy",
         delAgente: true,
-        titulo: `Revisa ${plural(n, "reunión que la IA asignó", "reuniones que la IA asignó")} a «${p.name}»`,
-        detalle: `Nadie ${n === 1 ? "la confirmó" : "las confirmó"}: ${n === 1 ? "podría" : "podrían"} ser de otro proyecto de ${p.empresa}.`,
-        meta: `Reuniones · ${p.empresa}`,
-        accion: n === 1 ? "Revisarla" : "Revisarlas",
-        href: urlDeProyecto(p.clientId, p.id),
-      });
-    }
-    return out;
+        titulo:
+          conReuniones.length === 1
+            ? `Revisa ${plural(total, "reunión que la IA asignó", "reuniones que la IA asignó")} a «${primero.p.name}»`
+            : `Revisa ${total} reuniones que la IA asignó en ${conReuniones.length} proyectos`,
+        detalle: `Nadie las confirmó: podrían ser de otro proyecto de la empresa. ${segundo ? `Las que más tienen: ${nombres}.` : ""}`.trim(),
+        meta: conReuniones.length === 1 ? `Reuniones · ${primero.p.empresa}` : "Reuniones",
+        accion: segundo ? "Empezar por la primera" : total === 1 ? "Revisarla" : "Revisarlas",
+        href: urlDeProyecto(primero.p.clientId, primero.p.id),
+      },
+    ];
   },
 };
 
@@ -157,6 +168,9 @@ export const PEDIDOS_FUERA_DE_ALCANCE: Fuente = {
   },
 };
 
+/** Un pendiente vencido hace más que esto ya no se persigue desde «Para ti»: es historia, no lo de hoy. */
+export const DIAS_DE_UN_PENDIENTE_VIGENTE = 30;
+
 export const PENDIENTES_DE_REUNIONES: Fuente = {
   clave: "pendientes-de-reuniones",
   frente: null,
@@ -164,58 +178,61 @@ export const PENDIENTES_DE_REUNIONES: Fuente = {
   async medir(a, c) {
     const inicioDeHoy = new Date(`${c.hoyISO}T00:00:00-06:00`);
     const enUnaSemana = new Date(inicioDeHoy.getTime() + 7 * 86_400_000);
-    const items = await prisma.actionItem.findMany({
-      where: {
-        ownerEmail: { equals: a.email, mode: "insensitive" },
-        done: false,
-        deletedAt: null,
-        status: { not: "DONE" },
-        dueDate: { not: null, lt: enUnaSemana },
-      },
-      select: { id: true, text: true, dueDate: true, clientId: true, projectId: true, client: { select: { name: true } } },
-      orderBy: { dueDate: "asc" },
-      take: 200,
-    });
-    const vencidos = items.filter((i) => i.dueDate! < inicioDeHoy);
-    const proximos = items.filter((i) => i.dueDate! >= inicioDeHoy);
+    // Solo lo vencido en los últimos 30 días (2026-10-05): había ~1.900 pendientes vencidos de meses atrás, y la fila
+    // decía «200» (un tope de la consulta) donde había 449. Ahora el número es la cuenta real de lo reciente.
+    const desde = new Date(inicioDeHoy.getTime() - DIAS_DE_UN_PENDIENTE_VIGENTE * 86_400_000);
+    const base = {
+      ownerEmail: { equals: a.email, mode: "insensitive" as const },
+      done: false,
+      deletedAt: null,
+      status: { not: "DONE" as const },
+    };
+    const vencidosWhere = { ...base, dueDate: { gte: desde, lt: inicioDeHoy } };
+    const proximosWhere = { ...base, dueDate: { gte: inicioDeHoy, lt: enUnaSemana } };
+    const select = { id: true, text: true, dueDate: true, clientId: true, projectId: true, client: { select: { name: true } } } as const;
+    const [nVencidos, nProximos, viejo, siguiente, clientesVencidos, clientesProximos] = await Promise.all([
+      prisma.actionItem.count({ where: vencidosWhere }),
+      prisma.actionItem.count({ where: proximosWhere }),
+      prisma.actionItem.findFirst({ where: vencidosWhere, select, orderBy: { dueDate: "asc" } }),
+      prisma.actionItem.findFirst({ where: proximosWhere, select, orderBy: { dueDate: "asc" } }),
+      prisma.actionItem.groupBy({ by: ["clientId"], where: vencidosWhere }),
+      prisma.actionItem.groupBy({ by: ["clientId"], where: proximosWhere }),
+    ]);
     const out: Pendiente[] = [];
-    const empresas = (lista: typeof items) => new Set(lista.map((i) => i.clientId)).size;
-    const hrefDe = (i: (typeof items)[number]) =>
+    const hrefDe = (i: NonNullable<typeof viejo>) =>
       i.projectId ? urlDeProyecto(i.clientId, i.projectId) : `/clients/${encodeURIComponent(i.clientId)}`;
-    if (vencidos.length) {
-      const v = vencidos[0];
+    if (nVencidos > 0 && viejo) {
       out.push({
         clave: "pendientes-de-reuniones:vencidos",
         fuente: "pendientes-de-reuniones",
         cuando: "hoy",
         delAgente: false,
         titulo:
-          vencidos.length === 1
+          nVencidos === 1
             ? "Venció un pendiente de tus reuniones"
-            : `Vencieron ${vencidos.length} pendientes de tus reuniones`,
-        detalle: `${vencidos.length === 1 ? "Es" : "El más viejo"}: «${recortar(v.text, 90)}», de ${v.client.name} (venció el ${diaCorto(v.dueDate!)}).`,
-        meta: `Pendientes de reuniones · ${plural(empresas(vencidos), "cliente", "clientes")}`,
-        accion: vencidos.length === 1 ? "Ir al pendiente" : "Ir al más viejo",
-        href: hrefDe(v),
-        desde: v.dueDate!.toISOString(),
+            : `Vencieron ${nVencidos} pendientes de tus reuniones en el último mes`,
+        detalle: `${nVencidos === 1 ? "Es" : "El más viejo"}: «${recortar(viejo.text, 90)}», de ${viejo.client.name} (venció el ${diaCorto(viejo.dueDate!)}).`,
+        meta: `Pendientes de reuniones · ${plural(clientesVencidos.length, "cliente", "clientes")}`,
+        accion: nVencidos === 1 ? "Ir al pendiente" : "Ir al más viejo",
+        href: hrefDe(viejo),
+        desde: viejo.dueDate!.toISOString(),
       });
     }
-    if (proximos.length) {
-      const p = proximos[0];
+    if (nProximos > 0 && siguiente) {
       out.push({
         clave: "pendientes-de-reuniones:semana",
         fuente: "pendientes-de-reuniones",
         cuando: "semana",
         delAgente: false,
         titulo:
-          proximos.length === 1
+          nProximos === 1
             ? "Un pendiente de tus reuniones vence esta semana"
-            : `${proximos.length} pendientes de tus reuniones vencen esta semana`,
-        detalle: `${proximos.length === 1 ? "Es" : "El primero"}: «${recortar(p.text, 90)}», de ${p.client.name} (vence el ${diaCorto(p.dueDate!)}).`,
-        meta: `Pendientes de reuniones · ${plural(empresas(proximos), "cliente", "clientes")}`,
-        accion: proximos.length === 1 ? "Ir al pendiente" : "Ir al primero",
-        href: hrefDe(p),
-        desde: p.dueDate!.toISOString(),
+            : `${nProximos} pendientes de tus reuniones vencen esta semana`,
+        detalle: `${nProximos === 1 ? "Es" : "El primero"}: «${recortar(siguiente.text, 90)}», de ${siguiente.client.name} (vence el ${diaCorto(siguiente.dueDate!)}).`,
+        meta: `Pendientes de reuniones · ${plural(clientesProximos.length, "cliente", "clientes")}`,
+        accion: nProximos === 1 ? "Ir al pendiente" : "Ir al primero",
+        href: hrefDe(siguiente),
+        desde: siguiente.dueDate!.toISOString(),
       });
     }
     return out;

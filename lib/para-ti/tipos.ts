@@ -34,7 +34,7 @@ export interface Pendiente {
   enlaces?: EnlaceDePendiente[];
   /** Algo FALLÓ (rojo): una copia automática, un proceso del servidor. */
   error?: boolean;
-  /** Desde cuándo espera (ISO): ordena dentro del bloque y dice «lo que más espera» en «Del equipo». */
+  /** Desde cuándo espera (ISO): ordena dentro del bloque. */
   desde?: string | null;
 }
 
@@ -86,28 +86,4 @@ export interface CuentaDeParaTi {
   /** El aviso sin leer más nuevo, para la notificación del navegador. `creadoAt` (ISO): se notifica solo si es posterior
    *  al último que la pestaña ya vio (`debeNotificar`, lib/para-ti/armar.ts). */
   ultimoAviso: { id: string; titulo: string; href: string; creadoAt: string } | null;
-}
-
-/** Una fila de «Del equipo»: una persona o, para dirección, un área. */
-export interface FilaDelEquipo {
-  clave: string;
-  quien: string;
-  sub: string;
-  hoy: number;
-  semana: number;
-  /**
-   * Lo que más espera, ya dicho; null = al día. Vacío cuando la persona que mira no puede ver esas cuentas, o cuando es
-   * la fila de Finanzas y no ve Cobranza (lib/para-ti/equipo-server.ts).
-   */
-  espera: string | null;
-  sinDueno?: boolean;
-  esTu?: boolean;
-  href?: string;
-}
-
-export interface DelEquipo {
-  porArea: boolean;
-  /** true = quien mira no ve el detalle (solo los números). */
-  soloNumeros: boolean;
-  filas: FilaDelEquipo[];
 }

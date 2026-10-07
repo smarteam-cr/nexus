@@ -159,7 +159,6 @@ describe("⛔ un frente que llevas sin permiso se calla: ni pendientes ni avisos
     teamMemberId: "tm-ana",
     frentes,
     permisos: { v: 1, sections },
-    veTodaLaCartera: false,
     proyectos: [],
   });
   const fuente = (clave: string, delFrente: ClaveDeFrente | null, aplica?: Fuente["aplica"]): Fuente => ({

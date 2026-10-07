@@ -231,8 +231,6 @@ describe("⛔ «Para ti» respeta el REVOKE igual que requireAccessToClient", ()
   it("quien ve toda la cartera no se ve afectado, igual que en requireAccessToClient", async () => {
     revoke({ teamMemberId: ANA.id });
     base.veTodo.valor = true;
-    const a = await alcanceDe(ANA);
-    expect(a.veTodaLaCartera).toBe(true);
-    expect(a.proyectos.map((p) => p.id)).toEqual(["p-1"]);
+    expect((await alcanceDe(ANA)).proyectos.map((p) => p.id)).toEqual(["p-1"]);
   });
 });

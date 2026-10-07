@@ -1,7 +1,7 @@
 /**
  * Loading de /para-ti.
  *
- * FORMA REAL: PageHeader sin acción · el segmentado «Lo mío · Del equipo» con su línea · columna ancha con la franja de
+ * FORMA REAL: PageHeader sin acción · la línea de qué se mide · columna ancha con la franja de
  * lo que dejó el agente y los bloques «Para hoy» y «Esta semana» (encabezado + filas con botón a la derecha) · columna
  * angosta con los avisos y lo que está al día.
  */
@@ -29,10 +29,7 @@ export default function ParaTiLoading() {
   return (
     <div className={`${SHELL_DEFAULT} space-y-6`}>
       <PageHeaderSkeleton titleWidth="w-28" descWidth="w-96 max-w-full" />
-      <div className="flex items-center gap-4">
-        <Skeleton className="h-9 w-56 rounded-[10px]" />
-        <Skeleton className="h-3 w-72 max-w-[40%]" delay={40} />
-      </div>
+      <Skeleton className="h-3 w-96 max-w-full" delay={40} />
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[2_1_560px] flex-col gap-5">
           <SkeletonPanel minH="min-h-[150px]" bodyClassName="p-3 space-y-2">

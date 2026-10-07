@@ -197,7 +197,8 @@ export const CRONOGRAMAS_TRABADOS: Fuente = {
       .slice(0, 3)
       .map((x) => `${x.p.client.name} (${x.p.hubspotOwnerName ?? "sin encargado"}, ${haceCuanto(x.cuando, c.ahora)})`);
     const resto = trabadas.length > 3 ? ` y ${trabadas.length - 3} más` : "";
-    const una = trabadas.length === 1 ? trabadas[0].p : null;
+    const una = trabadas.length === 1;
+    const cronograma = (p: (typeof trabadas)[number]["p"]) => `${urlDeProyecto(p.clientId, p.id)}&canvas=timeline#cronograma-gantt`;
     return [
       {
         clave: "cs-cronogramas-trabados",
@@ -207,8 +208,10 @@ export const CRONOGRAMAS_TRABADOS: Fuente = {
         titulo: `${plural(trabadas.length, "propuesta de cronograma lleva", "propuestas de cronograma llevan")} más de ${DIAS_PARA_QUE_UNA_PROPUESTA_SE_TRABE} días esperando`,
         detalle: `${partes.join(", ")}${resto}.`,
         meta: "Cronogramas del equipo",
-        accion: una ? "Abrir el cronograma" : "Ver «Del equipo»",
-        href: una ? `${urlDeProyecto(una.clientId, una.id)}&canvas=timeline#cronograma-gantt` : "/para-ti?ver=equipo",
+        // Con varias, el botón abre la que más espera y cada una tiene su enlace.
+        accion: una ? "Abrir el cronograma" : "Abrir la que más espera",
+        href: cronograma(trabadas[0].p),
+        enlaces: una ? undefined : trabadas.map((x) => ({ texto: x.p.client.name, href: cronograma(x.p) })),
         desde: trabadas[0].cuando,
       },
     ];
