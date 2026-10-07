@@ -66,6 +66,16 @@ function diaLargo(v: string): string {
 }
 
 /** El rótulo chico de un bloque. */
+/**
+ * Lo que se llevó a la sesión, partido en lo que se dijo y la pregunta para cerrarlo. El agente lo
+ * escribe en un solo texto, «… Qué preguntar: ¿…?»; sin esa marca, todo es lo que se dijo.
+ */
+function separarPregunta(t: string): { dicho: string; pregunta: string | null } {
+  const m = /\s*qu[eé] preguntar\s*:\s*/i.exec(t);
+  if (!m) return { dicho: t.trim(), pregunta: null };
+  return { dicho: t.slice(0, m.index).trim(), pregunta: t.slice(m.index + m[0].length).trim() || null };
+}
+
 function Rotulo({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-muted">{children}</p>;
 }
@@ -232,25 +242,33 @@ function AntesDeLaSesion({ pestana, esLaProxima, sesiones, guardar }: { pestana:
             </div>
           )}
           {traidos.length > 0 && (
-            <div className="min-w-0 flex-[0_1_380px]">
+            <div className="min-w-0 flex-[1_1_380px]">
               <Rotulo>Te llevaste de la sesión {Math.max(1, pestana.numero - 1)}</Rotulo>
-              <ul className="mt-2 flex flex-wrap gap-1.5">
-                {traidos.map((t) => (
-                  <li key={t} className="group inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-[3px] text-xs font-medium text-fg-secondary">
-                    {t}
-                    {puedeEditar && (
-                      <button
-                        type="button"
-                        aria-label={`Quitar «${t}»`}
-                        className="hidden text-fg-muted hover:text-fg group-hover:inline focus:inline"
-                        disabled={guardando}
-                        onClick={() => quitarTraido(t)}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </li>
-                ))}
+              {/* Un punto es un párrafo (lo que se dijo y la pregunta para cerrarlo): va en una lista, no
+                  en una píldora, que con texto largo se leía como un error (Elías, 2026-10-06). */}
+              <ul className="mt-2 divide-y divide-line">
+                {traidos.map((t) => {
+                  const { dicho, pregunta } = separarPregunta(t);
+                  return (
+                    <li key={t} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        {dicho && <p className="text-[13px] leading-normal text-fg-secondary">{dicho}</p>}
+                        {pregunta && <p className="text-[14px] font-medium leading-normal text-fg">{pregunta}</p>}
+                      </div>
+                      {puedeEditar && (
+                        <button
+                          type="button"
+                          aria-label={`Quitar «${t}»`}
+                          className="flex-shrink-0 text-xs text-fg-muted hover:text-fg"
+                          disabled={guardando}
+                          onClick={() => quitarTraido(t)}
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
