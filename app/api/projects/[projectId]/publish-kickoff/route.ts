@@ -18,6 +18,7 @@ import { guardAccessToProject, guardPublicacionDeProyecto } from "@/lib/auth/api
 import { prisma } from "@/lib/db/prisma";
 import { freezeKickoffSnapshot } from "@/lib/canvas/kickoff-snapshot";
 import { maybeReanchorToKickoff } from "@/lib/timeline/reanchor";
+import { alPublicarDocumento } from "@/lib/tiempos/disparar";
 
 export async function GET(
   _req: NextRequest,
@@ -63,6 +64,7 @@ export async function POST(
     );
   }
 
+  const antes = await prisma.project.findUnique({ where: { id: projectId }, select: { kickoffPublishedAt: true } });
   const updated = await prisma.project.update({
     where: { id: projectId },
     data: { kickoffPublishedAt: new Date() },
@@ -77,9 +79,18 @@ export async function POST(
     console.error("[publish-kickoff] re-anclaje best-effort falló:", e);
   }
 
+  // Tiempos (2026-10-05): la primera vez que se publica, «¿cuánto tiempo le dedicaste?» (nunca lanza).
+  const preguntaDeTiempo = await alPublicarDocumento({
+    email: guard.user.email,
+    projectId,
+    documento: "kickoff",
+    yaEstabaPublicado: !!antes?.kickoffPublishedAt,
+  });
+
   return NextResponse.json({
     published: true,
     publishedAt: updated.kickoffPublishedAt?.toISOString() ?? null,
+    preguntaDeTiempo,
   });
 }
 

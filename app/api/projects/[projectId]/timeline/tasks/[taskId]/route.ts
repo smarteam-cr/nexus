@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { TimelineTaskStatus } from "@prisma/client";
 import { actualDatesPatch } from "@/lib/timeline/actual-dates";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
+import { alDesmarcarTareas, alMarcarTareasHechas } from "@/lib/tiempos/disparar";
 
 const STATUSES = ["PENDING", "IN_PROGRESS", "DONE", "SUSPENDED"] as const;
 
@@ -133,5 +134,14 @@ export async function PATCH(
     );
   }
 
-  return NextResponse.json(updated);
+  // Tiempos (2026-10-05): al quedar hecha puede llevar «¿cuánto te tomó?»; al desmarcarla, su pregunta pendiente se
+  // retira. Después de escribir y sin lanzar nunca (lib/tiempos/disparar.ts).
+  let preguntasDeTiempo: Awaited<ReturnType<typeof alMarcarTareasHechas>> = [];
+  if (status === "DONE" && task.status !== "DONE") {
+    preguntasDeTiempo = await alMarcarTareasHechas({ email: guard.user.email, taskIds: [taskId], origen: "cronograma", ahora: now });
+  } else if (task.status === "DONE" && status !== "DONE") {
+    await alDesmarcarTareas([taskId]);
+  }
+
+  return NextResponse.json({ ...updated, preguntasDeTiempo });
 }

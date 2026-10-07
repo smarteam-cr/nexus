@@ -190,6 +190,9 @@ import { usePopoverDismiss } from "@/components/ui/usePopoverDismiss";
 import { diasSinConfirmar } from "@/lib/timeline/avance-sin-confirmar";
 import { TOPE_INSTRUCCIONES_DEL_DOC } from "@/lib/business-cases/section-briefs";
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO } from "@/components/ui/sistema";
+import PreguntaDeTiempo from "@/components/tiempos/PreguntaDeTiempo";
+import PreguntasDelAvance from "@/components/tiempos/PreguntasDelAvance";
+import type { PreguntaParaResponder } from "@/lib/tiempos/tipos";
 
 /* ── E3 P5: LO QUE EL CRONOGRAMA LE CONTESTA AL CHAT (tuteo, cortos: se leen en el botón o en el hilo) ── */
 const MOTIVO_SIN_APLICAR = "Espera: la propuesta se está aplicando o descartando.";
@@ -601,6 +604,10 @@ export default function CronogramaCanvas({
      «Pedir cambio con IA». La razón de un cambio del chat es su resumen (`aplicarOperacionesAcordadas`). */
   // ── Avance detectado por el agente (D.2) — borrador que el CSE confirma ──
   const [pendingProgress, setPendingProgress] = useState<PendingProgress | null>(null);
+  // «¿Cuánto te tomó?» (2026-10-05, lib/tiempos): la de la tarea recién marcada, debajo de su fila; la del avance
+  // aplicado, en una tarjeta arriba del Gantt. Las dos las decide el servidor y llegan en la respuesta.
+  const [preguntaDeTarea, setPreguntaDeTarea] = useState<PreguntaParaResponder | null>(null);
+  const [preguntasDelAvance, setPreguntasDelAvance] = useState<{ preguntas: PreguntaParaResponder[]; marcadas: number } | null>(null);
   const [progressPhaseSel, setProgressPhaseSel] = useState<Set<string>>(new Set());
   const [progressTaskSel, setProgressTaskSel] = useState<Set<string>>(new Set());
   const [progressSuspendedSel, setProgressSuspendedSel] = useState<Set<string>>(new Set());
@@ -3154,6 +3161,10 @@ export default function CronogramaCanvas({
         const d = await res.json().catch(() => ({}));
         setError(d?.error ?? "No se pudo aplicar el avance.");
       } else {
+        const cuerpo = (await res.json().catch(() => null)) as { tasksDone?: number; preguntasDeTiempo?: PreguntaParaResponder[] } | null;
+        if (cuerpo?.preguntasDeTiempo?.length) {
+          setPreguntasDelAvance({ preguntas: cuerpo.preguntasDeTiempo, marcadas: cuerpo.tasksDone ?? cuerpo.preguntasDeTiempo.length });
+        }
         setPendingProgress(null);
         // T2: el servidor marcó el avance: la pila de deshacer (de antes) se vacía con la recarga.
         await recargarTrasEscribir();
@@ -3489,6 +3500,14 @@ export default function CronogramaCanvas({
         body: JSON.stringify({ status: next }),
       });
       if (!res.ok) await load();
+      else if (next === "DONE") {
+        const cuerpo = (await res.json().catch(() => null)) as { preguntasDeTiempo?: PreguntaParaResponder[] } | null;
+        const p = cuerpo?.preguntasDeTiempo?.[0];
+        if (p) setPreguntaDeTarea(p);
+      } else {
+        // Desmarcada: el servidor retiró su pregunta; la de la fila se va con ella.
+        setPreguntaDeTarea((p) => (p?.taskId === taskId ? null : p));
+      }
     } catch {
       await load();
     }
@@ -4587,6 +4606,13 @@ export default function CronogramaCanvas({
           )}
           {/* 2026-10-02 · Lo acordado con el cliente (fecha límite y duración vendida) contra el cronograma de HOY.
               Con una propuesta en pantalla, la barra de arriba dice cómo queda con ella. */}
+          {preguntasDelAvance && !verPropuesta && (
+            <PreguntasDelAvance
+              preguntas={preguntasDelAvance.preguntas}
+              tareasMarcadas={preguntasDelAvance.marcadas}
+              onCerrar={() => setPreguntasDelAvance(null)}
+            />
+          )}
           <LimitesDelCronograma
             projectId={projectId}
             limites={limites}
@@ -4606,6 +4632,23 @@ export default function CronogramaCanvas({
             propuesta={verPropuesta ? (propuestaEnElGantt ?? undefined) : undefined}
             canDelete={canDelete}
             onToggleStatus={toggleStatus}
+            debajoDeLaTarea={
+              preguntaDeTarea && !verPropuesta
+                ? (taskId) =>
+                    taskId === preguntaDeTarea.taskId ? (
+                      <PreguntaDeTiempo
+                        key={preguntaDeTarea.id}
+                        pregunta={preguntaDeTarea}
+                        variante="fila"
+                        onCerrar={() => setPreguntaDeTarea(null)}
+                        onListo={() => {
+                          const id = preguntaDeTarea.id;
+                          window.setTimeout(() => setPreguntaDeTarea((p) => (p?.id === id ? null : p)), 6000);
+                        }}
+                      />
+                    ) : null
+                : undefined
+            }
             onUpdateTask={(phaseKey, taskKey, patch) => updateTask(phaseKey, taskKey, patch)}
             onAddTask={addTask}
             onUpdatePhase={updatePhase}

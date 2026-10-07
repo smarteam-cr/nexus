@@ -36,6 +36,7 @@ import { prisma } from "@/lib/db/prisma";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { publishSurface } from "@/lib/projects/publish-surfaces";
 import { ENTREGA_DEF_BY_KEY } from "@/components/landing/configs/entrega.defs";
+import { alPublicarDocumento } from "@/lib/tiempos/disparar";
 
 const SURFACE = publishSurface("entrega");
 
@@ -128,6 +129,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ pr
     };
   });
 
+  const antes = await prisma.project.findUnique({ where: { id: projectId }, select: { entregaPublishedAt: true } });
   const now = new Date();
   await prisma.$transaction([
     prisma.projectCanvas.update({
@@ -140,7 +142,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ pr
     prisma.project.update({ where: { id: projectId }, data: { entregaPublishedAt: now } }),
   ]);
 
-  return NextResponse.json({ published: true, publishedAt: now.toISOString() });
+  // Tiempos (2026-10-05): la primera vez que se publica, «¿cuánto tiempo le dedicaste?» (nunca lanza).
+  const preguntaDeTiempo = await alPublicarDocumento({
+    email: guard.user.email,
+    projectId,
+    documento: "entrega",
+    yaEstabaPublicado: !!antes?.entregaPublishedAt,
+    ahora: now,
+  });
+  return NextResponse.json({ published: true, publishedAt: now.toISOString(), preguntaDeTiempo });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {

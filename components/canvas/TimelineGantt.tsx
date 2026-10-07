@@ -189,6 +189,8 @@ interface Props {
   readOnly?: boolean; // preview de propuesta IA — sin edición ni toggles
   canDelete?: boolean; // #3 — habilita BORRAR fases/tareas (el CSE no: suspende). Default false.
   onToggleStatus?: (taskId: string, next: GanttTaskStatus) => void;
+  /** Lo que va debajo de la fila de una tarea (hoy: «¿cuánto te tomó?», lib/tiempos). null = nada. */
+  debajoDeLaTarea?: (taskId: string) => ReactNode;
   onUpdateTask?: (phaseKey: string, taskKey: string, patch: { title?: string; notes?: string | null; weekIndex?: number; party?: "CLIENTE" | "SMARTEAM" | "AMBOS" | "DEV" | null; type?: "SESSION" | "TASK" | null }) => void;
   onAddTask?: (phaseKey: string, weekIndex: number) => void;
   // Nota: el borrado de tarea se hace desde el TaskDetailDrawer, no desde la fila del Gantt.
@@ -936,6 +938,7 @@ export default function TimelineGantt({
   readOnly = false,
   canDelete = false,
   onToggleStatus,
+  debajoDeLaTarea,
   onUpdateTask,
   onAddTask,
   onSetAnchor,
@@ -2002,7 +2005,8 @@ export default function TimelineGantt({
                                 const overdue = isOverdueByDate(overduePlannedEnd(anchor, range.start, relWeek), today, t.status);
                                 const canToggle = !readOnly && !!onToggleStatus && !!t.id;
                                 return (
-                                  <SortableRow key={t.key} id={t.key} data={{ type: "task" }} disabled={!editable || !onMoveTask}>
+                                  <Fragment key={t.key}>
+                                  <SortableRow id={t.key} data={{ type: "task" }} disabled={!editable || !onMoveTask}>
                                   {(attributes, listeners) => (
                                   <div
                                     onClick={() => { if (!readOnly && onOpenTask) onOpenTask(p.key, t.key); }}
@@ -2097,6 +2101,8 @@ export default function TimelineGantt({
                                   </div>
                                   )}
                                   </SortableRow>
+                                  {t.id && debajoDeLaTarea?.(t.id)}
+                                  </Fragment>
                                 );
                               })}
                               {weekTasks.length === 0 && editable && (

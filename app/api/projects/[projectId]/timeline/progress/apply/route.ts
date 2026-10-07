@@ -36,6 +36,7 @@ import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { emitTimelineEventsSafe } from "@/lib/cs/timeline-events";
 import { acotarAlBorrador, type BorradorDeAvance } from "@/lib/timeline/confirmar-avance";
+import { alMarcarTareasHechas } from "@/lib/tiempos/disparar";
 
 type ProgressRow = { id: string; status: string; actualStart: Date | null; actualEnd: Date | null };
 
@@ -123,6 +124,17 @@ export async function POST(
       );
     }
   }
+
+  // Tiempos (2026-10-05): las que ESTE avance deja hechas —no las que ya lo estaban— pueden llevar «¿cuánto te tomó?».
+  const sinHacerAntes =
+    taskIds.length === 0
+      ? []
+      : (
+          await prisma.timelineTask.findMany({
+            where: { id: { in: taskIds }, phase: { timelineId: tl.id }, status: { notIn: ["DONE", "SUSPENDED"] } },
+            select: { id: true },
+          })
+        ).map((t) => t.id);
 
   const now = new Date();
   // Procedencia del estado para todo lo que escribe este apply: detectado por IA, confirmado por
@@ -287,5 +299,8 @@ export async function POST(
     ],
   );
 
-  return NextResponse.json({ applied: true, phasesDone, tasksDone, tasksSuspended });
+  // Después de escribir y sin lanzar nunca: a lo sumo una pregunta por tipo de fase, hasta tres (lib/tiempos/reglas.ts).
+  const preguntasDeTiempo = await alMarcarTareasHechas({ email: guard.user.email, taskIds: sinHacerAntes, origen: "avance", ahora: now });
+
+  return NextResponse.json({ applied: true, phasesDone, tasksDone, tasksSuspended, preguntasDeTiempo });
 }

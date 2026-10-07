@@ -221,6 +221,7 @@ model Client {
   importFilasAplicadas   ImportacionFila[] // Cobranza: trazabilidad del importador
   escalaComentarios      EscalaComentario[] // Escala: comentarios «no calza con este cliente» (SET NULL)
   exploracionesDeVenta   ExploracionDeVenta[] // Ventas: el lienzo de la exploración (una VIVA por empresa)
+  preguntasDeTiempo      PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» de su trabajo (SET NULL)
 
   @@unique([source, sourceExternalId]) // NULLs no colisionan en Postgres — los legacy conviven
 }
@@ -519,6 +520,7 @@ model Project {
   serviciosCobranza   ServicioContratado[] // Cobranza: servicios facturables ligados a este proyecto
   stageGates          ProjectStageGate[] // Ciclo de vida: validaciones de salida cumplidas
   devEstimates        DevEstimate[] // Desarrollo: estimaciones de esfuerzo del equipo técnico
+  preguntasDeTiempo   PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» de sus tareas y documentos (SET NULL)
 }
 
 // ── Desarrollo (requerimiento técnico) ────────────────────────────────────────
@@ -881,6 +883,7 @@ model TimelineTask {
   // Huella del hecho que la originó (misma que Particularidad.dedupeKey). Es lo que evita que el
   // agente re-cree la misma tarea en cada corrida — corre por sesión, 26 veces en un proyecto real.
   originFingerprint    String?
+  preguntasDeTiempo    PreguntaDeTiempo[] // Tiempos: «¿cuánto te tomó?» al marcarla hecha (SET NULL)
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
 
@@ -5907,4 +5910,81 @@ model FeedbackPedido {
   updatedAt DateTime @updatedAt
 
   @@index([paraEmail, estado])
+}
+
+// ─── Tiempos (2026-10-05) ─────────────────────────────────────────────────────────────────
+// «¿Cuánto te tomó?» justo cuando se termina algo: al marcar una tarea del cronograma o al
+// publicar un documento. Calibra las horas por tipo de fase de la carga de Customer Success;
+// NO evalúa a nadie (no hay vista por persona). Lo configura dirección en Feedback › Tiempos.
+// Reglas: lib/tiempos/reglas.ts. SQL: scripts/sql/2026-10-05-preguntas-de-tiempo.sql.
+
+/// Una pregunta por momento (tarea hecha · documento publicado · cierre de semana): a quién, en qué y cada cuánto.
+model EncuestaDeTiempo {
+  id                  String   @id @default(cuid())
+  /// TAREA_HECHA · DOCUMENTO_PUBLICADO · CIERRE_SEMANA (texto: sumar un momento no toca la base)
+  momento             String   @unique
+  activa              Boolean  @default(false)
+  /// Json versionado ({v:1,...}); se lee tolerante con leerConfig (lib/tiempos/reglas.ts)
+  config              Json
+  actualizadaPorEmail String?
+
+  preguntas PreguntaDeTiempo[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Cada vez que se le pregunta a alguien cuánto le tomó algo, con la respuesta en minutos.
+model PreguntaDeTiempo {
+  id         String           @id @default(cuid())
+  encuestaId String
+  encuesta   EncuestaDeTiempo @relation(fields: [encuestaId], references: [id], onDelete: Cascade)
+  /// De qué es: «tarea:<id>» o «doc:<proyecto>:<documento>». Una sola pregunta por cosa.
+  clave      String
+
+  personaEmail String
+  /// El rol al preguntar (para exportar sin nombres)
+  rol          String?
+
+  /// pendiente · respondida · omitida · retirada (vencida = pendiente con venceAt pasado; se deriva)
+  estado          String    @default("pendiente")
+  /// omitir · no_lo_hice
+  motivoOmision   String?
+  minutos         Int?
+  /// Lo que suponía la carga al preguntar, para comparar
+  estimadoMinutos Int?
+
+  // nullable porque la pregunta sobrevive a que se borre el proyecto, el cliente o la tarea
+  projectId String?
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  clientId  String?
+  client    Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  taskId    String?
+  task      TimelineTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  /// kickoff · diagnostico · planificacion · entrega (solo DOCUMENTO_PUBLICADO)
+  documento String?
+  /// El tipo de fase al preguntar (EXPLORACION…SEGUIMIENTO o SIN)
+  tipoFase  String?
+  /// Quién la hace: SMARTEAM · AMBOS · CLIENTE · DEV
+  party     String?
+  /// El título de la tarea o el nombre del documento, congelado
+  titulo    String
+  /// cronograma · avance · publicar
+  origen    String
+  /// Las que salieron juntas al aplicar un avance
+  lote      String?
+
+  /// Cuándo se terminó lo que se pregunta (marcada o publicada)
+  ocurrioAt    DateTime
+  venceAt      DateTime
+  respondidaAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([encuestaId, clave])
+  @@index([personaEmail, estado])
+  @@index([encuestaId, ocurrioAt])
+  @@index([taskId])
 }

@@ -10,6 +10,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardAccessToProject, guardPublicacionDeProyecto } from "@/lib/auth/api-guards";
 import { despublicarDocumento, estadoDePublicacion, publicarDocumento } from "@/lib/projects/publicar-documento";
+import { prisma } from "@/lib/db/prisma";
+import { alPublicarDocumento } from "@/lib/tiempos/disparar";
 
 type Params = { params: Promise<{ projectId: string }> };
 
@@ -25,7 +27,17 @@ export async function POST(_req: NextRequest, { params }: Params) {
   // Publicar exige, además del acceso, que el proyecto ADMITA publicación externa.
   const guard = await guardPublicacionDeProyecto(projectId);
   if (guard instanceof NextResponse) return guard;
-  return publicarDocumento(projectId, "diagnostico");
+  const antes = await prisma.project.findUnique({ where: { id: projectId }, select: { diagnosticoPublishedAt: true } });
+  const res = await publicarDocumento(projectId, "diagnostico");
+  if (!res.ok) return res;
+  // Tiempos (2026-10-05): la primera vez que se publica, «¿cuánto tiempo le dedicaste?» (nunca lanza).
+  const preguntaDeTiempo = await alPublicarDocumento({
+    email: guard.user.email,
+    projectId,
+    documento: "diagnostico",
+    yaEstabaPublicado: !!antes?.diagnosticoPublishedAt,
+  });
+  return NextResponse.json({ ...(await res.json()), preguntaDeTiempo });
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {

@@ -15,6 +15,8 @@ import {
   REUNIONES_SIN_REVISAR,
 } from "./fuentes/proyectos";
 import { PREVENTAS } from "./fuentes/preventa";
+import { ETAPA_SUGERIDA } from "./fuentes/etapa";
+import { TIEMPOS_SIN_ANOTAR } from "./fuentes/tiempos";
 import { FINANZAS_DEVUELTO, FINANZAS_REGISTRAR, FINANZAS_SUPERVISAR } from "./fuentes/finanzas";
 import { CRONOGRAMAS_TRABADOS, SIN_ENCARGADO, VIGIA } from "./fuentes/cs";
 import {
@@ -28,12 +30,14 @@ import {
 export const FUENTES: readonly Fuente[] = [
   // Personales: lo que es tuyo por el dato.
   PROPUESTA_DE_CRONOGRAMA,
+  ETAPA_SUGERIDA,
   REUNIONES_SIN_REVISAR,
   ALTA_A_MEDIO_HACER,
   PENDIENTES_DE_REUNIONES,
   PEDIDOS_FUERA_DE_ALCANCE,
   PREVENTAS,
   FINANZAS_DEVUELTO,
+  TIEMPOS_SIN_ANOTAR,
   // Por frente: lo que es tuyo porque lo llevas.
   VIGIA,
   CRONOGRAMAS_TRABADOS,

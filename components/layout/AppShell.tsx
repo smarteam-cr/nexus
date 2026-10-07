@@ -14,6 +14,7 @@ import AgentRunsProvider from "@/components/ai/AgentRunsProvider";
 import RecorridosProvider from "@/components/recorridos/RecorridosProvider";
 import { COOKIE_DE_RECORRIDOS } from "@/lib/recorridos/vistos";
 import FeedbackProvider from "@/components/feedback/FeedbackProvider";
+import PreguntasFlotantes from "@/components/tiempos/PreguntasFlotantes";
 
 export default async function AppShell({
   children,
@@ -98,6 +99,8 @@ export default async function AppShell({
           {/* Alertas HIGH del watchdog CS → notificación de navegador. Solo CSL/SUPER_ADMIN
               (el componente se auto-apaga para otros roles; render null). */}
           <CsAlertNotifier role={userLite.role} />
+          {/* «¿Cuánto te tomó?» al publicar un documento (2026-10-05): la tarjeta fija abajo a la derecha. */}
+          <PreguntasFlotantes />
           {/* LA capa de ayuda. Va UNA vez y acá: adopta el `title` de cualquier elemento de
               la app —incluidos los que todavía no existen— y lo pinta con el tema en vez de
               dejar que lo pinte el sistema operativo. Ver components/ui/Tooltip.tsx. */}
