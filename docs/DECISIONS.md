@@ -4755,13 +4755,20 @@ la tanda configurada en 1 publicación de empresa y 0 de perfil personal: las ú
 - **Tres tipos con palabras de todos los días**: Algo falla · Una mejora · No se entiende. Una falla pregunta si frena el trabajo; si sí, llega como urgente.
 - **La captura se arma en el navegador** (modern-screenshot), sin pedir permiso: un clic. Sale distinta en canvas y mapas; si falla, el reporte sale igual con la dirección. Va al almacén PRIVADO de documentos (puede mostrar datos de un cliente o de Finanzas) y se lee con enlace firmado. «Señalar algo» marca hasta 3 cosas: las marcas salen en la captura y guardan el nombre de lo que se tocó. Con cada reporte van la dirección exacta, el rol, el navegador, la versión de Nexus y los errores de la pantalla de los últimos 10 minutos.
 - **Lo que ve la persona al mandar depende de qué mandó**: una mejora festeja en toda la pantalla (confeti con los colores de MARCA, no los de estado; sin nombres; no bloquea; sin confeti si la computadora pide reducir movimiento). Una falla que frena: «Reportado como urgente», con número (F-128) y lo que ya quedó guardado. Lo demás: el «Recibido» verde.
-- **Revisa el feedback el rol SUPER_ADMIN** (`esRevisorDeFeedback`), en /feedback: Bandeja, Hoja de ruta y Personas.
+- **Revisa el feedback el rol SUPER_ADMIN** (`esRevisorDeFeedback`), en /feedback: Bandeja, Hoja de ruta, Personas y Encuestas.
 - **Un reporte NO es un tema y nada entra solo a la hoja de ruta.** En la Bandeja cada reporte tiene tres salidas: «Llevar a la hoja de ruta» (sumarlo a un tema o crear uno nuevo eligiendo la columna), «Responder y cerrar» y «No se hará» (con motivo, que la persona ve). Un tema nuevo entra en «Por decidir» salvo que se elija otra columna; también se crea a mano con «Nuevo tema» (lo que alguien dijo en una sesión). Cada tarjeta dice de dónde salió.
 - **El estado que ve quien reportó sigue al tema**: si el tema pasa a «Listo», su reporte también, y le llega el aviso.
 - **«Se parece a» no es IA (v1).** La sugerencia de tema sale de contar palabras en común (`lib/feedback/parecidos.ts`), así que va SIN la chispa y dice qué palabras comparten. Pasarla a un agente es una tanda propia (AgentRun, costo, prompt).
 - **Los avisos van por «Para ti», no por un contador propio**: `feedback.nuevo` al frente FEEDBACK (Super Admin lo lleva por defecto), `feedback.respuesta` y `feedback.estado` a quien reportó, con `/para-ti?feedback=<id>`: ese parámetro abre el panel en el reporte desde cualquier pantalla.
 - **El pedido de opinión** es la respuesta a «no se acuerdan»: dirección le pregunta algo concreto a alguien sobre una pantalla, y le aparece al entrar ahí (abajo a la derecha: no se puede meter dentro de cada página) hasta que responda o diga «Ahora no». Responder abre el panel con la pregunta arriba.
 - **El festejo y la capa de «Señalar» no son diálogos**: quedan declarados con su motivo en `lib/ui/token-vocab.test.ts` (`CAPAS_QUE_NO_SON_DIALOGOS`), no como deuda.
+- **«Generar prompt» (2026-10-05, pedido de Elías)**: lo que queda por hacer —un reporte sin revisar o en la hoja de ruta, y cada tema que no está «Listo»— trae un prompt sencillo para aplicarlo en Claude Code. Lo arma una plantilla (`lib/feedback/prompt.ts`), no un agente: sale al instante, no cuesta y no lleva la chispa. Da por hecho que Claude Code ya tiene el proyecto abierto: dice qué hacer con las palabras de quien lo pidió, dónde se ve (la ruta con los ids cambiados por `[id]`, como la carpeta de `app/`), lo que marcó, los errores de la consola y los últimos mensajes. No lleva nombres ni correos (solo el rol y «Dirección»), ni el enlace de la captura (vence en una hora: dice que se pida). Lo de la escala manda a `docs/escala/` y a no publicar. El del reporte se arma en la pantalla con lo que la bandeja ya cargó; el del tema, en el servidor (`GET /api/feedback/temas/[id]`, solo quien revisa).
+- **Rendimiento (2026-10-06, Elías lo sintió lerdo en Clientes).** La captura copiaba `document.body` entero aunque la imagen es solo la ventana, y la librería copia los estilos calculados de cada elemento en el hilo de la pantalla: medido con 12.000 elementos, 15,5 s con el navegador trabado. Ahora deja afuera lo oculto y lo que queda entero debajo o a la derecha de la ventana (`fueraDeLaCaptura`): 1,1 s y la misma imagen, píxel por píxel, también con la página desplazada. Lo de ARRIBA no se saca porque correría lo visible. Además, cada imagen espera como mucho 3 s; la captura se sube mientras se escribe (una captura reemplazada queda sin reporte en el almacén privado); y el aviso a dirección sale con `after()`, después de responderle a quien reporta. Producción estaba sana ese día (el hilo del servidor, sin atraso).
+- **La hoja de ruta, rediseñada (2026-10-06, pedido de Elías; diseño aprobado «Hoja de ruta · rediseño» en Claude Design).** Los temas se arrastran entre columnas con dnd-kit, la librería que ya usan el Gantt y Documentación (sin dependencia nueva): al pasar el mouse aparecen los puntitos para agarrarlos, y con el dedo hay que mantener apretado un momento, así deslizar sigue desplazando la página. Arrastrar cambia la columna, no el orden (el de adentro sale de cuántas personas lo pidieron y a cuántas les frena). Se fueron «Mover a…», la explicación «Cómo llega un tema a la hoja de ruta» y la ayuda debajo de cada columna. Un clic abre el tema en un panel a la derecha que no oscurece el tablero: qué pide (se edita ahí), dónde se nota, de dónde salió, su columna (el camino por teclado: `Segmentado` con `lleno`), «Generar prompt» y cada reporte con «Abrir en la Bandeja» (`reportesDelTema`, por el GET del tema). ~~El panel tapa «Listo», así que arrastrar lo cierra~~ (superado el mismo día por el rediseño de las cuatro pestañas, abajo: el tema se abre en el panel de la página y ya no tapa nada). La tarjeta se ve en su columna nueva antes de que el servidor responda; si falla, vuelve. Pasar a «Listo» un tema que pidió alguien pide confirmación, porque le avisa que ya está en producción. «Generar prompt» es de lo que queda por hacer: un tema «Listo» y un reporte cerrado no lo llevan.
+- **Cada reporte vive en UN lugar (2026-10-06, pedido de Elías).** La Bandeja es para lo que espera una decisión: «Sin revisar», «Te respondieron» (lo cerrado en lo que la persona volvió a escribir) y «Cerrados» (respondido o «No se hará», para buscarlo o deshacerlo). Lo que se lleva a la hoja de ruta SALE de la Bandeja y vive en su tema: en el panel del tema, clic en un reporte lo muestra entero, con las MISMAS piezas que la Bandeja (`DetalleDelReporte.tsx`: la escala, la captura, lo que se mandó y la conversación) y «Devolver a la Bandeja» para decidir de nuevo. *Por qué:* «Todos» mezclaba lo decidido con lo pendiente, y lo de la hoja de ruta se veía a medias en el tema y entero en otra pestaña. La conversación de un reporte que está en un tema se contesta desde el tema: si la persona vuelve a escribir, la tarjeta y la fila del reporte dicen «Te respondió», en ámbar, hasta que lo abres. Un enlace viejo a `/feedback?reporte=` de un reporte que está en un tema (un aviso de «Para ti», por ejemplo) abre ese tema (`enlaceAlTema`).
+- **Las cuatro pestañas, con el esqueleto de Clientes y Preventa (2026-10-06, Elías: «Rediseña todo, es que no se ve bien»; diseño aprobado «Feedback · rediseño completo» en Claude Design).** El panel de la derecha va a toda la altura, al lado del título, y se pliega con su flechita (`PanelLateral`); antes cada pestaña lo ponía debajo de las pestañas, en una franja de borde a borde que se cortaba donde terminaba el contenido (con la Bandeja vacía, media pantalla en blanco). Cada pestaña pinta el esqueleto entero (`components/feedback/admin/Disposicion.tsx`) porque lo que va en el panel depende de lo que se eligió adentro. Debajo de las pestañas va una sola fila de herramientas, y las pestañas llevan su número: lo que espera una decisión en la Bandeja (sin revisar y lo cerrado en lo que te volvieron a escribir) y los temas abiertos (`cuentasDeLasPestanas`). En la Bandeja, los filtros salen de la columna angosta (se partían en dos líneas) a la fila de herramientas, los menús del navegador pasan a botones blancos con su flecha, y la lista y el reporte van en un solo marco, como un correo, con el reporte encabezado por su número, su tipo y si le frena; el tema al que se parece pasa al panel. Sin nada que mostrar, el marco lo dice con su acción en vez de una lista vacía y un «Elige un reporte» suelto. En la Hoja de ruta, el tema se abre en el panel de la página, que se ensancha a 440 px (560 con un reporte abierto) y se queda fijo al bajar: ya no tapa la columna «Listo», así que se puede arrastrar con un tema abierto; sin tema, el panel dice qué sigue. Personas lleva los cuatro números en una sola franja.
+- **«Tiempos» pasa a llamarse «Encuestas» y junta todo lo que le preguntas al equipo (2026-10-06, decisión de Elías).** Él propuso el nombre, más abierto que «Tiempos»; la condición para que el nombre no mintiera era sumar los pedidos de opinión, que vivían en Personas: con el nombre nuevo y sin ellos, quedaban dos lugares para preguntar. Ahora Encuestas tiene «Preguntas a una persona» (cada pedido con lo que contestó: la respuesta es un reporte y se abre en la Bandeja o en su tema, `datosDeEncuestas`) y «¿Cuánto te tomó?», con el formulario «Pedir su opinión» en el panel (el único botón azul; pasó a un cajón el mismo día, ver abajo). Personas queda para quién reporta y quién no: se marca a quién preguntarle y su botón lleva a Encuestas con esas personas elegidas (`?vista=encuestas&para=`). `?vista=tiempos` sigue abriendo Encuestas. El módulo de tiempos (`lib/tiempos`) no cambia de nombre: el nombre de la pestaña es copy.
+- **Encuestas, rediseñada para que se entienda cómo se usa (2026-10-06, Elías: «No es tan entendible la forma de utilizar las encuestas para obtener feedback del equipo»; diseño aprobado «Feedback · Encuestas (v2)» en Claude Design).** Las dos clases se eligen arriba: «Tus preguntas» (las escribe dirección) y «Automáticas» («¿cuánto te tomó?»); la clase va en `?clase=` sin volver a pedir la página. Una pregunta mandada a varias personas se lee como UNA tarjeta y no como una fila por persona (`agruparPedidos`, lib/feedback/encuestas.ts: mismo autor, texto, pantalla y plazo): quién contestó, a quién se le espera y si ya la vio, y lo que dijo cada uno. Está abierta mientras a alguien todavía le aparece (la misma regla de la burbuja, `pedidoAplica`); después, cerrada. El formulario dejó el panel: «Nueva pregunta», el único botón azul, abre un cajón con cuatro pasos y la burbuja tal como la ve la persona (`CuerpoDelPedido`, el mismo componente que la burbuja real, así la vista previa no puede mentir). Sin preguntas, la pestaña explica cómo funciona en tres pasos y ofrece preguntas para empezar. El panel dice qué sigue (primero, las respuestas que esperan una decisión en la Bandeja), quién no reporta hace 30 días con «Preguntarle» y qué es cada clase. En Automáticas, una tarjeta por momento con su interruptor y cómo le aparece a la persona, y debajo lo que dicen las respuestas; los documentos publicados quedaron solo en el CSV, porque la carga todavía no tiene un supuesto por documento.
 
 ## Recorridos guiados: React Joyride, con el contenido en el repo (2026-10-04)
 
@@ -4832,6 +4839,14 @@ la tanda configurada en 1 publicación de empresa y 0 de perfil personal: las ú
 - **El globo nunca se sale de la pantalla** (2026-10-06): si lo señalado es más alto que la pantalla,
   el globo va arriba (`top`, el único lado con el que la librería deja lugar al desplazarse) y, si
   igual no cabe, se corre hacia adentro aunque tape el borde de lo señalado. Antes salía cortado.
+- **Feedback tiene UN recorrido que pasa por sus cuatro pestañas** (2026-10-07, pedido de Elías, como el de
+  la preventa): Bandeja, Hoja de ruta, Personas y Encuestas, en orden (`lib/recorridos/contenido/feedback.ts`,
+  grupo nuevo «Dirección», solo SUPER_ADMIN). Cada paso pide su pestaña (`feedback.pestana`) y, adentro, lo que
+  muestra: abrir o cerrar un tema (`feedback.tema`) o la clase de encuesta (`feedback.encuestas`). Las pestañas
+  viven en `?vista=` y cambiar de una vuelve a pedir la página, así que un paso puede declarar cuánto espera
+  (`PasoDelRecorrido.espera`): el primero y el último de cada pestaña, que son los que se alcanzan cambiando de
+  pestaña con «Siguiente» o «Anterior», esperan 8 s; los demás, lo de siempre (2,5 s), para que un paso cuyo
+  elemento no está (la Bandeja vacía, el panel plegado) no deje la pantalla quieta de más.
 - **Pendiente:** la bienvenida (espera a «Para ti») y los recorridos de Marketing, Sesiones,
   Documentación y Administración. Fuera del menú quedan sin recorrido Cobranza › Odoo, Mercury e
   Importar.
@@ -4963,6 +4978,10 @@ producción no había ningún comentario ni ningún reporte de la escala: no hub
   en su «Para ti».
 - **El número del menú es lo de HOY** (lo del agente, lo de hoy y los avisos sin leer), no la semana: un número que
   nunca baja se deja de mirar.
+- **Un mensaje sin leer va en ámbar** (2026-10-06, pedido de Elías): una respuesta o un comentario que alguien te
+  escribió (`mensaje: true` en `TIPOS_DE_AVISO`: `feedback.respuesta`, `documentacion.comentario` y
+  `documentacion.respuesta`) se pinta con el ámbar del sistema («pendiente, atención») y el rótulo «Mensaje»,
+  hasta que lo lees. Ámbar y no rojo: el rojo es de los errores.
 - **Pendiente, a propósito:** el notificador de alertas de la CSL (`CsAlertNotifier`) sigue hasta que el vigía escriba
   avisos (su archivo lo estaba cambiando otra sesión), y el «Necesitan atención» del índice de clientes sigue con el
   alcance por permiso hasta sumarle «Tuyas · Todas».
@@ -5341,6 +5360,47 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   corrida y su costo), la complejidad en la pestaña de la cuenta, «Tu semana», la asistencia de Meet, las horas por
   tarea y por caso de uso, y leer en la carga las respuestas de «¿cuánto te tomó?» (ver esa sección).
 
+## «¿Cuánto te tomó?»: un módulo propio que Feedback configura (2026-10-05)
+
+**Contexto.** Para el diseño «Rentabilidad y carga», Elías pidió preguntas de tiempo configurables desde /feedback: al
+marcar una tarea hecha o al publicar un documento, «¿cuánto te tomó?», para calibrar las horas por tipo de tarea. Hay
+1.441 tareas en 50 cronogramas activos y ninguna tiene horas. Diseño aprobado: «Encuestas de tiempo · diseño» (Claude
+Design), con la pestaña rehecha para mostrar primero si ya alcanza para calibrar.
+
+- **Módulo propio que Feedback configura, no parte de Feedback** (`lib/tiempos`, `components/tiempos`, tablas
+  `EncuestaDeTiempo` y `PreguntaDeTiempo`; SQL `scripts/sql/2026-10-05-preguntas-de-tiempo.sql`, con RLS y RESTRICTIVE).
+  Lo que guarda son datos de la carga (persona, cliente, proyecto, tarea o documento, minutos), no reportes; y lo
+  disparan el cronograma y la publicación, que llaman a `lib/tiempos/disparar.ts` sin saber nada del feedback. Feedback
+  solo pone las «Automáticas» de su pestaña Encuestas (se llamaba «Tiempos» hasta el 2026-10-06).
+- **Una pregunta por momento, sin «Nueva encuesta»**: tarea hecha, documento publicado y «Tu semana». Con tres momentos
+  fijos en el código, crear encuestas solo sumaba un nivel más. Un momento nuevo es una entrada en `MOMENTOS` y su
+  disparador. «Tu semana» se ve pausada y no se puede activar hasta que exista su pantalla.
+- **Nacen pausadas.** Sin fila, un momento está apagado con su configuración por defecto; la fila nace la primera vez
+  que dirección la guarda o la activa. Así nadie del equipo recibe una pregunta antes de que se le cuente para qué es.
+- **Pregunta quien marca o publica, y «No lo hice yo» existe por eso**: no siempre es quien hizo el trabajo. No cuenta
+  como respuesta ni como omisión en contra de nadie.
+- **Muestreo determinista** (huella de la clave: desmarcar y volver a marcar cae igual). Por defecto, todas hasta tener
+  20 respuestas por tipo de fase y después 1 de cada 3, hasta 3 por día. Un avance de la IA aplicado de golpe pregunta
+  por hasta tres, una por tipo, primero los tipos con menos respuestas: una persona llegó a marcar 94 en un día.
+- **No se pregunta por una tarea marcada más de 14 días después de su semana**: nadie se acuerda de cuánto tomó.
+- **Un documento pregunta solo la primera vez**: la ruta lee si ya estaba publicado antes de escribir, y además hay una
+  sola pregunta por proyecto y documento. Republicar una corrección no es haberlo hecho de nuevo.
+- **Desmarcar retira lo pendiente; lo respondido se queda** (el tiempo se gastó igual). «Vencida» no se guarda: es una
+  pendiente con su plazo de tres días pasado, así que no hace falta un job.
+- **Lo que supone la carga se ve después de responder** por defecto: al lado empuja a elegir ese número y la respuesta
+  deja de servir para corregirlo. Se cambia por pregunta («Al lado» o «No mostrarla»).
+- **Los supuestos son los del diseño** (Configuración 2 h, Planificación 1,5 h…, `SUPUESTO_MINUTOS`). Lo que va a leer la
+  carga es `tiemposAnotados({ desde, hasta })` (solo lo respondido), y con 20 respuestas de un tipo la mediana
+  reemplaza el supuesto (`minutosDeLaCarga`).
+- **Nunca por persona en pantalla**: Feedback › Encuestas cuenta por tipo de fase y por documento, y el CSV lleva el rol y
+  no el nombre. La lectura para la carga sí trae el correo, porque la carga es por persona.
+- **En «Para ti» es un pendiente agrupado que se contesta ahí mismo**, nunca un aviso: no es algo que pasó, es algo que
+  te toca. Se va solo cuando se responde o vence.
+- **Al publicar, la pregunta va en una tarjeta fija abajo a la derecha** (`PreguntasFlotantes`), no debajo de la barra
+  del documento como en el diseño: los documentos se publican desde el pop-up «Acceso», que se cierra enseguida.
+- **Lo que no se hizo**: «Tu semana» (espera su pantalla) y el detalle de cada pregunta (motivos por semana, últimas
+  respuestas: el CSV lo cubre mientras tanto).
+
 ## Las sesiones de la preventa se encadenan: antes, durante y después (2026-10-07)
 
 **Contexto.** Elías revisó las sesiones de CreditForce: «en la sesión 2, que es próxima, me dice "te llevaste de
@@ -5429,3 +5489,36 @@ con los que se inició la exploración se puedan rellenar de forma retroactiva»
   2026-10-07: 4 preventas por leer (Megasuper, Universidad Monterrey, COLFAR y Grupo Monge) y la reunión del 28
   sep de CreditForce por resumir.
 - **Sin SQL**: todo vive en los Json de la preventa.
+
+## La etapa se sincroniza con HubSpot en los dos sentidos, y Nexus solo la escribe con una encuesta (2026-10-07)
+
+**Contexto.** Elías: «Haz que las etapas sincronizadas con HubSpot en ambos sentidos, con sugerencia de mover la etapa
+cuando Nexus lo detecte en una reunión. Para escribir en HS debe salir un pop-up, como si fuese una encuesta. Y el CSE
+debe aprobarlo.» HubSpot → Nexus ya existía (el espejo de `hubspotPipelineStageId`, desde el 2026-07-30 también para las
+implementaciones). Lo de Nexus → HubSpot estaba a medias desde el 2026-08-16: la ruta que escribe (`estado-hubspot`) y
+las columnas de la sugerencia (`Project.etapaPropuesta*`), sin quien sugiriera ni pantalla que las usara.
+
+- **Nexus escribe la etapa SOLO por la encuesta** (`components/clients/EncuestaDeEtapa.tsx`): una pregunta —«¿En qué
+  etapa está el proyecto?»— con una respuesta por etapa movible del tablero («Sigue en Handoff», «Pasó a Diagnóstico»),
+  y el botón «Mover a … en HubSpot». Se abre desde «Cambiar etapa» en la tarjeta de la etapa, desde el «Qué sigue» del
+  proyecto o desde «Para ti». Escribe por `estado-hubspot`, que relee HubSpot en vivo (409 si alguien la movió allá) y
+  devuelve lo que volvió por el espejo. Lo aprueba quien tiene `proyectos.cambiarEstadoHubspot` (CSE, CSL y dirección):
+  los demás ven la pregunta y no la responden. Nunca se ofrece una etapa de cierre.
+- **Cada reunión puede dejar una SUGERENCIA, nunca un cambio** (`lib/projects/etapa-desde-reunion*.ts`, desde el
+  post-proceso de la sesión, con Haiku): si la reunión muestra con hechos que el proyecto ya está en una etapa
+  POSTERIOR, queda en `etapaPropuesta*` con la frase de la reunión y de qué reunión salió. Un plan («la semana que viene
+  presentamos») no cuenta, y la frase tiene que aparecer TAL CUAL en la reunión o la sugerencia se cae (la regla de la
+  preventa para un nivel de la escala). No mira reuniones de más de 21 días, ni proyectos cerrados, ni la etapa en
+  Bloqueado o Continuidad: desde ahí salir no se lee de una reunión. ⛔ No lee el avance del cronograma (la
+  circularidad de `etapa-hubspot.ts`).
+- **La sugerencia se guarda en las columnas de 2026-08-16, sin SQL nuevo.** La cita y la reunión van como JSON con
+  versión dentro de `etapaPropuestaMotivo` (TEXT): una columna nueva era DDL coordinado entre las dos PCs por dos datos
+  que solo lee la encuesta. Un texto plano se sigue leyendo como motivo.
+- **Una sugerencia se apaga sola si alguien ya movió la tarjeta** a esa etapa o más allá (`sugerenciaVigente`, al
+  leer, sin escribir), y una nueva reemplaza a la que hay solo si va MÁS LEJOS. Responder la encuesta (mover a la
+  sugerida, a otra, o «Sigue en …») la borra: `cerrarSugerenciaDeEtapa`, fuera de la ruta, porque `estado-hubspot` tiene
+  prohibido escribir en `Project` (`lib/projects/estado-a-hubspot.test.ts`).
+- **En el «Qué sigue» del proyecto va después de las reuniones sin revisar** y antes del documento de la etapa: el
+  documento «de la etapa» depende de que la etapa sea la verdadera.
+- **Cuesta una llamada a Haiku por reunión** de un proyecto con tablero conocido, registro en HubSpot y alguna etapa a
+  la que avanzar (`agentSlug` `etapa-desde-reunion` en el medidor).

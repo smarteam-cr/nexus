@@ -26,6 +26,11 @@
 - **Tipo de fase** (`tipo` en la salida del handoff, `lib/timeline/acomodar-en-paralelo.ts`): arranque,
   diagnóstico, planificación, configuración, migración, desarrollo, capacitación, pruebas o cierre. Con él,
   el código pone los inicios (lo que va en paralelo); nunca alarga el plan que armó la IA.
+- **Encuesta de la etapa** (`components/clients/EncuestaDeEtapa.tsx`): la única forma en que Nexus escribe la etapa
+  de un proyecto en HubSpot. Una pregunta, «¿En qué etapa está el proyecto?», con una respuesta por etapa del tablero;
+  la aprueba el CSE (o el CSL o dirección). Si una reunión muestra que el proyecto avanzó, queda una **etapa
+  sugerida** (`Project.etapaPropuesta*`) con la frase de la reunión, y esa respuesta viene marcada. HubSpot → Nexus
+  sigue siendo el espejo. Ver DECISIONS §La etapa se sincroniza con HubSpot en los dos sentidos.
 - **Propuesta comercial** (modelo `BusinessCase`): lo que Ventas le arma a un prospecto —qué le
   duele, qué le proponemos, qué gana y cuánto cuesta—. Vive FUERA del proyecto, porque todavía no
   hay proyecto. **Se llamaba "Business Case" hasta el 2026-08-03**; el renombre fue solo del
@@ -57,7 +62,13 @@
   sugiere y **Quedó abierto**. Una pregunta que viene de antes lleva su etiqueta: **«Quedó abierto en la sesión N»**
   (el vendedor la marcó para llevar) o **«Pasó de la sesión N»** (esa sesión se cortó). Una sesión sin
   conversación pregunta qué pasó: otro canal, se cortó o no se hizo. Ver DECISIONS §Las sesiones de la preventa.
-- **Exploración** (canvas "Exploración", `agent-exploracion-canvas`): guía **INTERNA** por
+- **Exploración — Sesiones y Cuestionarios** (desde el 2026-10-05, `lib/guia-exploracion`): la pieza
+  Exploración de un proyecto son dos vistas. **Sesiones**: qué preguntar en cada sesión y con quién, una
+  pestaña por sesión (las que propone el agente, en azul); lo que el CSE anota como «lo que averiguaste»
+  va como sugerencia a **Información del cliente**.
+  **Cuestionarios**: lo que contesta cada persona del cliente antes. El informe de abajo quedó como
+  «Informe anterior», en solo lectura. Ver DECISIONS «La exploración son sesiones y cuestionarios».
+- **Exploración** (canvas "Exploración", `agent-exploracion-canvas`, hasta el 2026-10-02): guía **INTERNA** por
   proyecto para descubrir el negocio del cliente cuando el kickoff ya pasó — qué hay que
   entender, cómo preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.
   Su eje es separar **lo que ya sabemos** (afirmado por el handoff, con su fuente → no se
@@ -639,5 +650,14 @@
 - **tema de la hoja de ruta** (`FeedbackTema`): junta los reportes que piden lo mismo. Columnas: **Por decidir**
   (la de entrada) · **Planeado** · **En curso** · **Listo**. Un reporte llega a un tema solo cuando dirección lo
   lleva desde la Bandeja; el estado que ve quien reportó sigue al tema.
+- **Encuestas** (pestaña de `/feedback`, se llamaba «Tiempos» hasta el 2026-10-06): todo lo que dirección le pregunta
+  al equipo, en dos clases. **Tus preguntas**: las que escribe dirección (los **pedidos de opinión**), una tarjeta por
+  pregunta con lo que contestó cada persona. **Automáticas**: las **preguntas de tiempo**, que se hacen solas.
 - **pedido de opinión** (`FeedbackPedido`): dirección le pregunta algo concreto a una persona sobre una pantalla;
   le aparece al entrar ahí hasta que responde o dice «Ahora no».
+- **pregunta de tiempo** («¿cuánto te tomó?», `lib/tiempos`): se le hace a quien marca una tarea del cronograma como
+  hecha o publica un documento por primera vez. La respuesta va en minutos y calibra las horas de la carga por tipo de
+  fase; nunca se muestra por persona. «Omitir» y «No lo hice yo» quedan registrados. Lo que no se responde queda tres
+  días en «Para ti» y después **vence**. Se configura y se mira en Feedback › Encuestas. Ver DECISIONS §«¿Cuánto te tomó?».
+- **calibrar** (Tiempos): reemplazar el supuesto de horas de un tipo de fase por lo que anotó el equipo. Un tipo
+  **calibra** con 20 respuestas: desde ahí la carga usa su mediana. Con menos de 5 la mediana ni se muestra.
