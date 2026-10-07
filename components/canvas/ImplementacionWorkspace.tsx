@@ -18,8 +18,6 @@ import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-o
 import { CAPACIDADES_POR_PIEZA } from "@/lib/canvas/capacidades-de-documento";
 import { IMPLEMENTACION_DEF_BY_KEY } from "@/components/landing/configs/implementacion.defs";
 import { useEffect, useMemo, useState } from "react";
-import DocumentoContextSection from "./DocumentoContextSection";
-import { documentoConContexto } from "@/lib/contexto/documento";
 import Link from "next/link";
 import LandingView, { type LandingSectionData } from "@/components/landing/LandingView";
 import type { LandingContext } from "@/components/landing/types";
@@ -42,8 +40,6 @@ interface TargetSection {
 const SIN_SECCION =
   "No se pudo guardar ese cambio: esta sección todavía no existe en este documento y no se pudo crear. " +
   "Copiá el texto, recargá la página y volvé a intentarlo.";
-
-const DOC_CONTEXTO = documentoConContexto("implementation")!;
 
 export default function ImplementacionWorkspace({
   projectId,
@@ -153,9 +149,8 @@ export default function ImplementacionWorkspace({
 
   return (
     <>
-    {/* El «Contexto» de este documento (2026-09-29): sus reuniones y notas. FUERA de `.stl`, con
-        los tokens del tema: es del equipo, no del documento. */}
-    <DocumentoContextSection projectId={projectId} doc={DOC_CONTEXTO} generado={hasGeneratedContent} />
+    {/* El «Contexto» de este documento (sus reuniones y notas) lo monta el panel del proyecto ARRIBA
+        del marco del documento (ProjectCanvasPanel, 2026-10-05). */}
     <div className="stl stl-internal">
       {cs.error && (
         <div style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13 }}>

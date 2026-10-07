@@ -14,7 +14,9 @@
  * (lib/sessions/destinos-de-contexto.ts) y el mismo chokepoint.
  *
  * ⚠ Vive FUERA del envoltorio `.stl` del documento: el documento se pinta con la paleta de marca del
- * cliente, y esta sección es del equipo — con los tokens del tema de Nexus.
+ * cliente, y esta sección es del equipo — con los tokens del tema de Nexus. Desde el 2026-10-05 la
+ * monta el panel del proyecto ARRIBA del marco «El documento» (ProjectCanvasPanel), no el documento:
+ * adentro del marco quedaba cerrada debajo de «así lo ve el cliente» y nadie la encontraba.
  */
 import { useCallback, useState } from "react";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
@@ -43,7 +45,7 @@ export default function DocumentoContextSection({
   const setNotas = useCallback((n: number) => setNotasState((c) => (c === n ? c : n)), []);
 
   return (
-    <div className="rounded-xl border border-line bg-surface mx-4 mt-3">
+    <div className="rounded-xl border border-line bg-surface">
       <button
         onClick={() => setOverride(!abierto)}
         aria-expanded={abierto}

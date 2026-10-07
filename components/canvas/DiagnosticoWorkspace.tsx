@@ -25,14 +25,10 @@ import type { LandingContext } from "@/components/landing/types";
 import { useCanvasSections } from "./useCanvasSections";
 import { buildDiagnosticoConfig, buildDiagnosticoSections, ctxDelDiagnostico } from "./diagnostico-landing-adapter";
 import DocumentAssist from "@/components/ai/DocumentAssist";
-import DocumentoContextSection from "./DocumentoContextSection";
-import { documentoConContexto } from "@/lib/contexto/documento";
 import { revisarHilo, seccionesDelHilo } from "@/lib/canvas/revisar-hilo";
 import EstadoDelDocumento from "./EstadoDelDocumento";
 import { lineaDelDocumento, MENSAJE_APROBADO, revisarParaPresentar, type EstadoVista } from "@/lib/canvas/estado-del-documento";
 import { POLITICA_RECTORA_KEY } from "@/components/landing/configs/diagnostico.defs";
-
-const DOC_CONTEXTO = documentoConContexto("diagnosis")!;
 
 const MAXW = 860;
 
@@ -246,9 +242,8 @@ export default function DiagnosticoWorkspace({
 
   return (
     <>
-    {/* El «Contexto del diagnóstico» va FUERA de `.stl`: el documento usa la paleta de marca del
-        cliente, y esto es del equipo (tokens del tema). */}
-    <DocumentoContextSection projectId={projectId} doc={DOC_CONTEXTO} generado={hasGeneratedContent} />
+    {/* El «Contexto» de este documento (sus reuniones y notas) lo monta el panel del proyecto ARRIBA
+        del marco del documento (ProjectCanvasPanel, 2026-10-05). */}
     {/* Borrador → presentado → aprobado (2026-10-02). También fuera de `.stl`: es del equipo. */}
     <EstadoDelDocumento projectId={projectId} canvasId={canvasId} motivosLocales={motivosParaNoPresentar} onEstado={setEstado} />
     <div className="stl">
