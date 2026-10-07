@@ -21,7 +21,7 @@ const VIGENCIA_MS = 3 * 60 * 1000;
 let guardado: { en: number; datos: LlegadasPorElTest } | null = null;
 
 export async function GET() {
-  const guard = await guardPermission("ventas", "read");
+  const guard = await guardPermission("preventa", "read");
   if (guard instanceof NextResponse) return guard;
 
   let datos = guardado && Date.now() - guardado.en < VIGENCIA_MS ? guardado.datos : null;

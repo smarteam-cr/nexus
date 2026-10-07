@@ -51,6 +51,8 @@ export interface Lienzo {
   /** Las propuestas comerciales que nacieron de esta exploración (al abrir y al recargar). */
   propuestas: NonNullable<ExploracionParaLaPantalla["propuestas"]>;
   puedeEditar: boolean;
+  /** Armar y enlazar la propuesta comercial es de Ventas (`ventas.write`); Customer Success trabaja la preventa sin eso. */
+  puedeProponer: boolean;
   guardando: boolean;
   cambiar: (ops: Operacion[], opciones?: OpcionesDeCambio) => Promise<boolean>;
   /** Vuelve a pedir la exploración (el agente terminó y dejó propuestas nuevas). Sale en la misma
@@ -89,7 +91,7 @@ export type MomentoDeLaSesion = "antes" | "durante" | "despues";
  * «Traspaso» se retiró el 2026-10-01: era la explicación de qué recibe el CSE, no algo que hacer; en
  * su lugar está la Propuesta, que es el paso que sigue.
  */
-export type PasoDelLienzoUI = "resumen" | "preparacion" | "exploracion" | "escala" | "casos" | "propuesta";
+export type PasoDelLienzoUI = "resumen" | "preparacion" | "exploracion" | "informacion" | "procesos" | "escala" | "casos" | "propuesta";
 
 export const LienzoContexto = createContext<Lienzo | null>(null);
 

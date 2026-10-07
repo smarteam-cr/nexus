@@ -12,7 +12,8 @@
  * el mapa de visibilidad es un contrato, no un detalle de implementación.
  */
 import { describe, expect, it } from "vitest";
-import { APP_NAV, canSeeNavItem, type NavContext } from "@/components/layout/nav-config";
+import { APP_NAV, canSeeNavItem, visibleNavChildren, type NavContext } from "@/components/layout/nav-config";
+import { DEFAULT_MATRIX } from "@/lib/auth/permissions/defaults";
 import type { PermissionMap } from "@/lib/auth/permissions/types";
 
 function ctx(
@@ -194,5 +195,17 @@ describe("gates del sidebar congelados (espejo de los booleanos pre-migración)"
   it("un permiso con valor false NO abre el gate (solo true explícito)", () => {
     const c = ctx(false, { ventas: { read: false }, agentes: {} });
     expect(visibles(c)).toEqual(UNIVERSALES);
+  });
+
+  it("⭐ todo Customer Success entra a Preventa, y de Ventas solo ve ese hijo (Elías, 2026-10-06)", () => {
+    const ventas = APP_NAV.find((it) => it.key === "sales")!;
+    const hijos = (permissions: PermissionMap) => visibleNavChildren(ventas, { isCostos: false, permissions }).map((c) => c.href);
+    for (const rol of ["CSE", "CSL"] as const) {
+      const permissions = DEFAULT_MATRIX[rol];
+      expect(canSeeNavItem(ventas, { isSuperAdmin: false, permissions, role: rol }), rol).toBe(true);
+    }
+    expect(hijos(DEFAULT_MATRIX.CSE)).toEqual(["/sales/exploraciones"]);
+    expect(hijos(DEFAULT_MATRIX.VENTAS)).toEqual(["/sales/exploraciones", "/business-cases", "/sales/use-cases", "/sales/sicop"]);
+    expect(ventas.entradaEsHijo, "un CSE que hace clic en Ventas no puede caer en Propuestas").toBe(true);
   });
 });

@@ -90,7 +90,7 @@ export default function SumarAMano() {
       <div>
         <h2 className="text-sm font-semibold text-fg">Sumar una sesión o un documento</h2>
         <p className="text-xs text-fg-muted">
-          Para lo que no quedó en Meet ni en HubSpot: pega el texto o sube el archivo (por ejemplo, el resumen del Smartflow). El agente lo lee como una transcripción.
+          Para lo que no quedó en Meet: pega el texto o sube el archivo (la transcripción de una llamada de Gong, una minuta, el resumen del Smartflow). El agente lo lee como una transcripción.
         </p>
       </div>
 
@@ -109,7 +109,7 @@ export default function SumarAMano() {
             <Input
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
-              placeholder={modo === "pegar" ? "De qué es (por ejemplo, Resumen del Smartflow)" : "De qué es (si no, el nombre del archivo)"}
+              placeholder={modo === "pegar" ? "De qué es (por ejemplo, Llamada de Gong con Ana)" : "De qué es (si no, el nombre del archivo)"}
               aria-label="De qué es"
               maxLength={120}
             />

@@ -27,6 +27,7 @@ import {
   CASILLAS,
   CASILLAS_VIGENTES,
   CLASES_DE_OBJECION,
+  conSuOrigen,
   ETIQUETA_DE_LA_OBJECION,
   ETIQUETA_DEL_ROL,
   ROLES_EN_LA_DECISION,
@@ -43,6 +44,7 @@ import {
   MOTIVOS_PARA_EXPLORAR,
   NIVELES,
   normalizarTexto,
+  type AlertaTecnica,
   type ContenidoDeExploracion,
   type DestinoDePropuesta,
   type FuenteCitada,
@@ -58,7 +60,9 @@ export const MODELO_DE_LA_EXPLORACION = "claude-sonnet-4-6";
 export const NOMBRE_DE_LA_HERRAMIENTA = "proponer";
 
 /** Las casillas de texto o de lista que el agente propone con un texto (sin las retiradas). */
-const CASILLAS_DE_TEXTO: ClaveDeCasilla[] = CASILLAS_VIGENTES.filter((c) => c.tipo === "texto" || c.tipo === "lista").map((c) => c.clave);
+/* «Su industria» la escribe solo la investigación en internet (radiografia-pedido.ts): sin búsqueda,
+   el modelo la completaría con lo que cree saber del sector. */
+const CASILLAS_DE_TEXTO: ClaveDeCasilla[] = CASILLAS_VIGENTES.filter((c) => (c.tipo === "texto" || c.tipo === "lista") && c.clave !== "industria").map((c) => c.clave);
 
 export interface ContextoDelPedido {
   modo: "preparar" | "leer";
@@ -217,6 +221,20 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
   }
   // Al preparar todavía no se acordó nada: la reunión agendada ya está a la vista en el lienzo.
   if (ctx.modo === "leer") {
+    /* ¿La conversación se puso técnica? (Elías, 2026-10-06): el Resumen lo avisa para sumar a alguien
+       técnico a la próxima reunión. Solo de la reunión MÁS RECIENTE, y solo con la frase que lo muestra. */
+    properties.conversacionTecnica = {
+      type: "object",
+      description:
+        "Solo de la reunión MÁS RECIENTE que lees: ¿la conversación se puso técnica? Técnica = se habló en detalle de integraciones, APIs, migración de datos, arquitectura, seguridad, desarrollo a la medida o configuración avanzada, más allá de lo que el vendedor puede responder solo. Mencionar una herramienta no alcanza.",
+      properties: {
+        tecnica: { type: "boolean" },
+        temas: { type: "array", items: { type: "string" }, description: "De qué se habló, en pocas palabras cada uno (máximo 4)." },
+        momento: { type: "string", description: "En qué parte de la reunión se puso técnica, en una frase corta." },
+        fuentes,
+      },
+      required: ["tecnica", "fuentes"],
+    };
     properties.siguientePaso = {
       type: "object",
       description: "Solo si se acordó un siguiente paso concreto.",
@@ -335,14 +353,14 @@ function sistema(ctx: ContextoDelPedido): string {
   const enfoque =
     ctx.modo === "preparar"
       ? `ESTA CORRIDA: PREPARAR la primera reunión. Lo que más sirve:
-- contexto («Para conectar»): en cuatro líneas cortas, qué hace la empresa (su sitio web lo dice mejor que nadie), cómo llegó, quién es el contacto (nombre y cargo) y una forma de abrir la conversación desde algo suyo.
-- hubspotActual: qué HubSpot tiene (hubs, ediciones, usuarios, quién lo configuró, renovación), si las fuentes lo dicen.
+- contexto («Para conectar»): SOLO lo que no está en otra casilla de esta preparación. Qué hace la empresa, cómo llegó, quién es el contacto, su CRM, la radiografía, su industria y la hipótesis de valor ya se ven en la pantalla: no los repitas. Acá va lo que importa para abrir la conversación y no está en otro lado (quién lo refirió, una conversación anterior, una sensibilidad, un tema a evitar), en una o dos líneas. Si no hay nada así, no lo propongas.
+- hubspotActual («Su CRM actualmente»): qué CRM usa hoy y cómo, si las fuentes lo dicen. Si es HubSpot: hubs, ediciones, usuarios, quién lo configuró y cuándo renueva. Si es otro (Salesforce, Zoho, Pipedrive, un Excel), cuál y para qué lo usa.
 - areas: las que deberían estar en juego y no están (la del test, lo que menciona, lo que paga sin usar).
 - niveles: tu HIPÓTESIS de dónde está CADA una de las dimensiones de las áreas en juego, con su porQue en lenguaje llano («Creemos que está en Inicial porque las notas dicen que cada vendedor lleva su Excel»). El test es una pista, no la verdad: lo contestó el prospecto con la escala anterior; crúzalo con lo demás. Si una dimensión no tiene pistas directas, dedúcela del cuadro general (lo que tiene en HubSpot, el tamaño, lo que se ve de las dimensiones vecinas) y dilo en el porQue («Sin pistas directas: …»); nunca la pongas por encima de Funcional sin una pista. Es para que el vendedor sepa qué preguntar: el mapa la muestra como hipótesis.
 - aExplorar: las dimensiones donde hay indicios (debajo de Funcional según el test o lo que dijo), que tocan una meta o que dejan ver un riesgo. Máximo 4 por área. La razón, en una frase llana.
 - personas: quién es quién, si las fuentes lo dicen. El papel en la decisión no se deduce del cargo.
 - detonante («Por qué ahora»): en una o dos frases, qué hizo o qué le pasa que vuelve oportuno hablar ahora. Con lo que dicen las fuentes: el diagnóstico que llenó (cuándo, qué área, qué salió), su último formulario, sus visitas, un hito reciente de la empresa.
-- hipotesisDeValor: dos o tres apuestas, cada una «Creemos que… porque…», que crucen los dolores típicos de su tipo de empresa con lo que dejó el diagnóstico y lo que se ve en HubSpot. Son para confirmar en la reunión: nunca las afirmes como hechos.
+- hipotesisDeValor: dos o tres ideas, cada una en UNA línea de 20 palabras como mucho: el dolor probable y cómo lo resolvemos. Sin «Creemos que» ni «porque»: ya están en la sección de hipótesis. Cada idea con la fuente de donde sale (una nota del vendedor N0, la investigación de la empresa W1, la de su industria W2, el diagnóstico, HubSpot): la pantalla dice de dónde sale cada una. Son para confirmar en la reunión: nunca las afirmes como hechos.
 ${ctx.proxima ? "- Ya tiene una reunión agendada: no propongas estrategia de conexión." : "- estrategiaDeConexion: el canal que más sentido tiene (si dejó teléfono y es una empresa chica, WhatsApp o llamada; si es grande, correo o LinkedIn), el ángulo desde su detonante y un primer mensaje corto, de tú, que hable de algo suyo y cierre invitando a agendar. Si el enlace del calendario no está en las fuentes, escribe «[tu calendario]»."}`
       : `ESTA CORRIDA: LEER LA REUNIÓN que acaba de pasar. Lo que más sirve, con la frase del cliente:
 - niveles: el nivel de cada dimensión que la conversación deja ver, por mejor ajuste contra las descripciones, con la frase del cliente y su porQue en lenguaje llano.
@@ -355,7 +373,8 @@ ${ctx.proxima ? "- Ya tiene una reunión agendada: no propongas estrategia de co
 - producto: qué se mostró y para qué reto, si se mostró.
 - objeciones: lo que el cliente dijo que lo frena, con su frase, su clase y cómo se respondió si se respondió.
 - particularidades: lo propio de esta cuenta que cambia cómo venderle o implementar (una restricción, un contrato vigente, una política, una fecha que manda, alguien clave). Un hecho, no una opinión.
-- apertura y siguientePaso, si quedaron claros.`;
+- apertura y siguientePaso, si quedaron claros.
+- conversacionTecnica: si la reunión MÁS RECIENTE se puso técnica (integraciones, APIs, migración de datos, arquitectura, seguridad, desarrollo a la medida), con la frase que lo muestra. Si no se puso técnica, dilo con tecnica: false.`;
   return `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Ayudas a un vendedor a explorar a un prospecto para cerrar la PRIMERA venta: llevar cada área en juego a Funcional en la Escala de Rendimiento de Smarteam. No escribes en el lienzo: PROPONES, y el vendedor usa o descarta cada cosa.
 
 ${enfoque}
@@ -417,6 +436,11 @@ export interface Lectura {
   items: ItemPropuesto[];
   /** Cuántas propuestas se cayeron (forma, ids, o sin una frase verificable donde hacía falta). */
   descartadas: number;
+  /**
+   * Al leer: si la reunión más reciente se puso técnica (con su frase), null si no, y undefined si el
+   * agente no lo dijo o no lo pudo respaldar con una frase literal (entonces no se toca lo que había).
+   */
+  tecnica?: Omit<AlertaTecnica, "en" | "corridaId"> | null;
 }
 
 type Crudo = Record<string, unknown>;
@@ -491,7 +515,9 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
       deUnTexto.set(clave, junto);
       continue;
     }
-    agregar({ tipo: "casilla", clave }, texto, citar(t.fuentes));
+    // Cada hipótesis de valor dice de dónde sale (Elías, 2026-10-06): se lo agrega el código, desde las fuentes que declaró.
+    const fuentes = citar(t.fuentes);
+    agregar({ tipo: "casilla", clave }, clave === "hipotesisDeValor" && texto ? conSuOrigen(texto, fuentes.map((f) => f.id)) : texto, fuentes);
   }
   for (const [clave, { textos, fuentes }] of deUnTexto) {
     const unicas = fuentes.filter((f, i) => fuentes.findIndex((g) => g.id === f.id && g.cita === f.cita) === i);
@@ -590,7 +616,25 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
     const fuentes = citar(f.fuentes);
     agregar({ tipo: "falta", criterioId }, { estado: str(f.estado), ...(fuentes.find((y) => y.cita) ? { cita: fuentes.find((y) => y.cita)!.cita } : {}) }, fuentes, { exigeCita: true });
   }
-  return { items, descartadas };
+  return { items, descartadas, ...(ctx.modo === "leer" ? { tecnica: laConversacionTecnica(input.conversacionTecnica, citar) } : {}) };
+}
+
+/**
+ * La alerta de conversación técnica: solo de una reunión (S) o de lo que sumó el vendedor (M), y
+ * solo con la frase literal que lo muestra. Sin frase, no se afirma ni se niega (undefined).
+ */
+function laConversacionTecnica(x: unknown, citar: (x: unknown) => FuenteCitada[]): Lectura["tecnica"] {
+  if (!esObjeto(x) || typeof x.tecnica !== "boolean") return undefined;
+  if (!x.tecnica) return null;
+  const deReunion = citar(x.fuentes).find((f) => /^[SM]\d/.test(f.id) && f.cita);
+  if (!deReunion) return undefined;
+  const temas = (Array.isArray(x.temas) ? x.temas : [])
+    .map(str)
+    .filter((t): t is string => !!t)
+    .slice(0, 4)
+    .map((t) => t.slice(0, 120));
+  const momento = str(x.momento)?.slice(0, 300);
+  return { reunion: deReunion.etiqueta.slice(0, 300), temas, ...(momento ? { momento } : {}), cita: deReunion.cita!.slice(0, 600) };
 }
 
 /**

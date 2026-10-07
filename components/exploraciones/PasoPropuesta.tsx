@@ -69,7 +69,7 @@ export function ListaParaProponer() {
 function ArmarLaPropuesta({ negocios, alRecargar }: { negocios: Negocio[] | null; alRecargar: () => void }) {
   const router = useRouter();
   const toast = useToast();
-  const { exp, chequeo, puedeEditar, guardando, alDia } = useLienzo();
+  const { exp, chequeo, puedeProponer: puedeEditar, puedeEditar: trabajaLaPreventa, guardando, alDia } = useLienzo();
   const abiertos = (negocios ?? []).filter((n) => !n.isClosed);
   const [dealId, setDealId] = useState(abiertos[0]?.id ?? negocios?.[0]?.id ?? "");
   const [nombre, setNombre] = useState(`Propuesta — ${exp.empresa.nombre}`);
@@ -103,6 +103,17 @@ function ArmarLaPropuesta({ negocios, alRecargar }: { negocios: Negocio[] | null
 
   const etiquetaDelNegocio = (n: Negocio) =>
     `${n.name}${n.stage ? ` · ${n.stage}` : ""}${n.isWon ? " · ganado" : n.isClosed ? " · cerrado" : ""}`;
+
+  if (!puedeEditar && trabajaLaPreventa) {
+    return (
+      <section className="rounded-xl border border-line bg-surface p-4">
+        <h3 className="text-sm font-semibold text-fg">Armar una propuesta nueva</h3>
+        <p className="mt-1 text-xs text-fg-muted">
+          La propuesta comercial la arma Ventas. Cuando la preventa esté lista, avísale a quien la lleve en Ventas.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
@@ -169,7 +180,7 @@ interface PropuestaDeLaEmpresa {
 
 function PropuestasDeLaEmpresa({ propuestas, alCambiar }: { propuestas: PropuestaDeLaEmpresa[]; alCambiar: () => void }) {
   const toast = useToast();
-  const { exp, puedeEditar } = useLienzo();
+  const { exp, puedeProponer: puedeEditar } = useLienzo();
   const [enVuelo, setEnVuelo] = useState<string | null>(null);
   if (propuestas.length === 0) return null;
   const usan = propuestas.filter((p) => p.uso === "esta");
@@ -200,9 +211,13 @@ function PropuestasDeLaEmpresa({ propuestas, alCambiar }: { propuestas: Propuest
   const fila = (p: PropuestaDeLaEmpresa, accion: ReactNode) => (
     <li key={p.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-3 py-2.5">
       <span className="flex min-w-60 flex-1 flex-col gap-0.5">
-        <Link href={`/business-cases/${p.id}`} className="text-sm font-semibold text-fg hover:text-brand">
-          {p.nombre}
-        </Link>
+        {puedeEditar ? (
+          <Link href={`/business-cases/${p.id}`} className="text-sm font-semibold text-fg hover:text-brand">
+            {p.nombre}
+          </Link>
+        ) : (
+          <span className="text-sm font-semibold text-fg">{p.nombre}</span>
+        )}
         <span className="text-xs text-fg-muted">
           {ESTADO_DE_LA_PROPUESTA[p.estado] ?? p.estado} · {p.arma ? `la arma ${p.arma} · ` : ""}
           {diaCorto(p.creadaEn)}
@@ -217,9 +232,11 @@ function PropuestasDeLaEmpresa({ propuestas, alCambiar }: { propuestas: Propuest
     <section className="space-y-3 rounded-xl border border-line bg-surface p-4">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-semibold text-fg">Propuestas de {exp.empresa.nombre}</h3>
-        <Link href="/business-cases" className="text-xs text-brand hover:underline">
-          Ver en Propuestas ›
-        </Link>
+        {puedeEditar && (
+          <Link href="/business-cases" className="text-xs text-brand hover:underline">
+            Ver en Propuestas ›
+          </Link>
+        )}
       </div>
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted">Usan esta preventa</p>
       {usan.length === 0 ? (

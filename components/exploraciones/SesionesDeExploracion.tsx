@@ -47,7 +47,6 @@ import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 import { FilaSugerida } from "./Propuestas";
 import { QueVaPrimero } from "./QueVaPrimero";
 import { LETRA_DEL_MARCO, lineasDe } from "./Resumen";
-import SumarAMano from "./SumarAMano";
 import { useCorrida } from "./useCorrida";
 import { nuevoIdDeSesion, useSesiones } from "./useSesiones";
 
@@ -481,13 +480,6 @@ function DespuesDeLaSesion({
             <Casilla clave="apertura" />
             <Casilla clave="producto" />
           </div>
-        </div>
-      </details>
-
-      <details className="rounded-xl border border-line bg-surface">
-        <summary className="cursor-pointer select-none px-4 py-3.5 text-sm font-semibold text-fg">¿No quedó grabada? Súmala a mano</summary>
-        <div className="border-t border-line p-4">
-          <SumarAMano />
         </div>
       </details>
 

@@ -2,20 +2,23 @@
 
 /**
  * PasoPreparacion — todo lo que hace falta ANTES de escribirle o llamarle (pedido de Elías,
- * 2026-10-02). Dos columnas:
+ * 2026-10-02). Dos pestañas desde el 2026-10-06 (antes, dos columnas: se veía apretado):
  *
- *   - Identificación: arriba, el resumen con todo lo que escribe la IA (el «por qué ahora», su HubSpot
- *     hoy y la radiografía), una sola vez (Elías, 2026-10-03); abajo, solo los hechos: el detonante (los hechos de HubSpot y el «por qué ahora»), el contacto, la
- *     radiografía de la empresa (su ficha de HubSpot y lo que el agente investigó en internet) y su
- *     HubSpot hoy. La escala y las áreas en juego viven en Exploración (Elías, 2026-10-03).
- *   - Conexión: cómo abrir la conversación, la hipótesis de valor y la estrategia de conexión (que
- *     queda plegada si ya agendó: no hace falta contactarlo).
+ *   - Identificación: arriba, el resumen con todo lo que escribe la IA (el «por qué ahora», su CRM
+ *     actualmente, la radiografía de la empresa y la investigación de su industria), una sola vez
+ *     (Elías, 2026-10-03); abajo, solo los hechos de HubSpot: las señales (lo que hizo y de dónde
+ *     llegó) y, en una fila, la ficha de contacto y la ficha de empresa. La escala y las áreas en
+ *     juego viven en La escala.
+ *   - Conexión: lo que todavía no se dijo en Identificación y sirve para abrir la conversación, la
+ *     hipótesis de valor (cada idea con de dónde sale) y la estrategia de conexión (plegada si ya
+ *     agendó: no hace falta contactarlo).
  *
  * Los hechos de HubSpot se leen al abrir la pieza y no se guardan; lo que interpreta el agente vive
  * en sus casillas, como todo lo demás: lo propone y el vendedor lo usa o lo descarta.
  */
 import { useEffect, useState } from "react";
-import { Alert, Badge, Button, Skeleton } from "@/components/ui";
+import { Alert, Badge, Button, Segmentado, Skeleton } from "@/components/ui";
+import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 import { cn } from "@/lib/cn";
 import { diaConAnio, diaYHora } from "@/lib/exploraciones/fechas";
 import { definicionDe } from "@/lib/exploraciones/casillas";
@@ -45,23 +48,17 @@ interface DatosDePreparacion {
   agenda: { id: string; titulo: string; inicio: string }[];
 }
 
-/** El encabezado de una columna: el nombre chico arriba y qué responde. */
-function Columna({ nombre, pregunta, children }: { nombre: string; pregunta: string; children: React.ReactNode }) {
-  return (
-    <div data-recorrido={nombre === "Conexión" ? "preventa.preparacion.conexion" : undefined} className="min-w-0 space-y-4">
-      <div className="border-b border-line pb-2">
-        <p className="text-2xs font-semibold uppercase tracking-widest text-brand">{nombre}</p>
-        <p className="text-sm text-fg-secondary">{pregunta}</p>
-      </div>
-      {children}
-    </div>
-  );
-}
+type Pestana = "identificacion" | "conexion";
+
+const PESTANAS: { clave: Pestana; etiqueta: string; pregunta: string }[] = [
+  { clave: "identificacion", etiqueta: "Identificación", pregunta: "Quién es, qué hace y por qué hablar ahora." },
+  { clave: "conexion", etiqueta: "Conexión", pregunta: "Qué le duele, qué le ofrecemos y cómo abrir la conversación." },
+];
 
 /** Una tarjeta de la pieza: título, una línea de ayuda y su contenido. */
 function Bloque({ titulo, ayuda, children, className }: { titulo: string; ayuda?: string; children: React.ReactNode; className?: string }) {
   return (
-    <section data-recorrido={titulo === "Contacto" ? "preventa.preparacion.contacto" : undefined} className={cn("space-y-4 rounded-xl border border-line bg-surface p-5", className)}>
+    <section data-recorrido={titulo === "Ficha de contacto" ? "preventa.preparacion.contacto" : undefined} className={cn("space-y-4 rounded-xl border border-line bg-surface p-5", className)}>
       <div>
         <h3 className="text-sm font-semibold text-fg">{titulo}</h3>
         {ayuda && <p className="text-xs text-fg-muted">{ayuda}</p>}
@@ -166,7 +163,7 @@ function BarraDelAgente() {
  * quedan solo los hechos de HubSpot. Cada línea muestra lo confirmado y, debajo, lo que sugirió el
  * agente (en azul, con su chispa, para usar o descartar ahí mismo); «Editar» abre su casilla.
  */
-const LO_QUE_ESCRIBE_LA_IA = ["detonante", "hubspotActual", "radiografia"] as const;
+const LO_QUE_ESCRIBE_LA_IA = ["detonante", "hubspotActual", "radiografia", "industria"] as const;
 
 function ResumenDeLaIdentificacion({ porQueAhoraDeHubspot }: { porQueAhoraDeHubspot: string | null }) {
   const { exp, cambiar, puedeEditar, guardando, pendientesPara, abrirCasilla } = useLienzo();
@@ -230,9 +227,9 @@ function ResumenDeLaIdentificacion({ porQueAhoraDeHubspot }: { porQueAhoraDeHubs
   );
 }
 
-function Detonante({ datos, senales }: { datos: DatosDePreparacion | null; senales: Senal[] }) {
+function SenalesDeHubspot({ datos, senales }: { datos: DatosDePreparacion | null; senales: Senal[] }) {
   return (
-    <Bloque titulo="Detonante" ayuda="Lo que hizo y de dónde llegó, según HubSpot.">
+    <Bloque titulo="Señales de HubSpot" ayuda="Lo que hizo y de dónde llegó, según HubSpot.">
       {datos === null ? (
         <div className="space-y-2" aria-hidden>
           <Skeleton className="h-3 w-3/4" />
@@ -258,7 +255,7 @@ function Contacto({ datos }: { datos: DatosDePreparacion | null }) {
   const [verTodos, setVerTodos] = useState(false);
   if (datos === null) {
     return (
-      <Bloque titulo="Contacto">
+      <Bloque titulo="Ficha de contacto">
         <div className="space-y-2" aria-hidden>
           <Skeleton className="h-3 w-1/2" />
           <Skeleton className="h-3 w-2/3" />
@@ -311,7 +308,7 @@ function Contacto({ datos }: { datos: DatosDePreparacion | null }) {
     );
   };
   return (
-    <Bloque titulo="Contacto" ayuda="Con quién vas a hablar. Si es otra persona, está entre los demás contactos.">
+    <Bloque titulo="Ficha de contacto" ayuda="Con quién vas a hablar. Si es otra persona, está entre los demás contactos.">
       {principal ? ficha(principal) : <p className="text-sm text-fg-muted">La empresa no tiene contactos en HubSpot.</p>}
       {otros.length > 0 && (
         <div className="space-y-2">
@@ -337,12 +334,12 @@ function Contacto({ datos }: { datos: DatosDePreparacion | null }) {
   );
 }
 
-function FichaEnHubspot({ datos }: { datos: DatosDePreparacion | null }) {
+function FichaDeEmpresa({ datos }: { datos: DatosDePreparacion | null }) {
   const empresa = datos?.empresa ?? null;
   const ubicacion = [empresa?.ciudad, empresa?.pais].filter(Boolean).join(", ");
   const sitio = empresa?.sitio ?? (empresa?.dominio ? `https://${empresa.dominio}` : null);
   return (
-    <Bloque titulo="Ficha en HubSpot" ayuda="Lo que HubSpot sabe de la empresa. Lo que el agente encontró en internet está arriba, en el resumen.">
+    <Bloque titulo="Ficha de empresa" ayuda="Lo que HubSpot sabe de la empresa. Lo que el agente encontró en internet está arriba, en el resumen.">
       {datos === null ? (
         <div className="space-y-2" aria-hidden>
           <Skeleton className="h-3 w-2/3" />
@@ -398,6 +395,17 @@ export default function PasoPreparacion() {
   const { exp, escala } = useLienzo();
   const [datos, setDatos] = useState<DatosDePreparacion | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pestana, setPestana] = useState<Pestana>("identificacion");
+
+  // El recorrido de la preventa abre la pestaña que señala (lib/recorridos/contenido/preventa.ts).
+  useEffect(() => {
+    const alPedido = (e: Event) => {
+      const a = (e as CustomEvent<AccionDelRecorrido>).detail;
+      if (a?.evento === "preventa.preparacion" && (a.valor === "identificacion" || a.valor === "conexion")) setPestana(a.valor);
+    };
+    window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+    return () => window.removeEventListener(EVENTO_DEL_RECORRIDO, alPedido);
+  }, []);
 
   useEffect(() => {
     let vivo = true;
@@ -440,19 +448,31 @@ export default function PasoPreparacion() {
     <div className="space-y-6">
       <BarraDelAgente />
       {error && <Alert variant="warning">{error} Lo demás se puede llenar igual.</Alert>}
-      <div className="grid items-start gap-8 xl:grid-cols-2">
-        <Columna nombre="Identificación" pregunta="Quién es, qué hace y por qué hablar ahora.">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Segmentado<Pestana>
+          etiqueta="Qué parte de la preparación"
+          opciones={PESTANAS.map((p) => ({ clave: p.clave, etiqueta: p.etiqueta }))}
+          valor={pestana}
+          onCambio={setPestana}
+        />
+        <p className="text-sm text-fg-secondary">{PESTANAS.find((p) => p.clave === pestana)?.pregunta}</p>
+      </div>
+      {pestana === "identificacion" ? (
+        <div className="space-y-4">
           <ResumenDeLaIdentificacion porQueAhoraDeHubspot={porQueAhoraDeHubspot} />
-          <Detonante datos={datos} senales={senales} />
-          <Contacto datos={datos} />
-          <FichaEnHubspot datos={datos} />
-        </Columna>
-        <Columna nombre="Conexión" pregunta="Qué le duele, qué le ofrecemos y cómo abrir la conversación.">
+          <SenalesDeHubspot datos={datos} senales={senales} />
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <Contacto datos={datos} />
+            <FichaDeEmpresa datos={datos} />
+          </div>
+        </div>
+      ) : (
+        <div data-recorrido="preventa.preparacion.conexion" className="space-y-4">
           <Casilla clave="contexto" />
           <Casilla clave="hipotesisDeValor" />
           <Conexion datos={datos} />
-        </Columna>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

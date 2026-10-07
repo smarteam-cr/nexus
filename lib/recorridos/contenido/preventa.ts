@@ -15,7 +15,8 @@
  */
 import type { AccionDelRecorrido, Recorrido } from "../tipos";
 
-const ROLES = ["VENTAS", "DEV", "CSL", "SUPER_ADMIN"] as const;
+// CSE desde el 2026-10-06: todo Customer Success trabaja las preventas (permiso `preventa`).
+const ROLES = ["VENTAS", "DEV", "CSL", "CSE", "SUPER_ADMIN"] as const;
 const RUTA = /^\/sales\/exploraciones\/[^/]+\/?$/;
 const EJEMPLO = "/sales/exploraciones/cmtum4orn00bd07lg0if1q51q";
 const LISTADO = "/sales/exploraciones";
@@ -23,10 +24,13 @@ const LISTADO = "/sales/exploraciones";
 type Pieza = "resumen" | "preparacion" | "exploracion" | "escala" | "casos" | "propuesta";
 const pieza = (valor: Pieza): AccionDelRecorrido => ({ evento: "preventa.pieza", valor });
 const momento = (valor: "antes" | "durante" | "despues"): readonly AccionDelRecorrido[] => [pieza("exploracion"), { evento: "preventa.momento", valor }];
+/** Preparación tiene dos pestañas desde el 2026-10-06 (la escucha PasoPreparacion). */
+const preparacion = (valor: "identificacion" | "conexion"): readonly AccionDelRecorrido[] => [pieza("preparacion"), { evento: "preventa.preparacion", valor }];
 
 export const PREVENTA: Recorrido = {
   id: "preventa",
-  version: 1,
+  // 2 (2026-10-06): Preparación en dos pestañas, la investigación de la industria y las fichas.
+  version: 2,
   titulo: "Una preventa",
   descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
@@ -86,23 +90,23 @@ export const PREVENTA: Recorrido = {
     {
       ancla: "preventa.preparacion.resumen",
       titulo: "Lo que escribió la IA, arriba",
-      texto: "Por qué ahora, cómo está su HubSpot y la radiografía de la empresa. Cada sugerencia dice de dónde salió: «Usar» la confirma y «Descartar» la quita.",
+      texto: "Por qué ahora, su CRM, la radiografía de la empresa y su industria. Cada sugerencia dice de dónde salió: «Usar» la confirma y «Descartar» la quita.",
       lado: "top",
-      accion: pieza("preparacion"),
+      accion: preparacion("identificacion"),
     },
     {
       ancla: "preventa.preparacion.contacto",
       titulo: "Con quién vas a hablar",
-      texto: "Su cargo, correo, teléfono y WhatsApp, y si hizo el test.",
+      texto: "La ficha de contacto: su cargo, correo, teléfono y WhatsApp, y si hizo el test. Al lado, la ficha de la empresa.",
       lado: "right-start",
-      accion: pieza("preparacion"),
+      accion: preparacion("identificacion"),
     },
     {
       ancla: "preventa.preparacion.conexion",
       titulo: "Cómo abrir la conversación",
-      texto: "Qué le duele, qué le ofrecemos y cómo conectar. Si ya agendó, la estrategia de conexión queda plegada.",
-      lado: "left-start",
-      accion: pieza("preparacion"),
+      texto: "La pestaña Conexión: lo que no se dijo arriba, la hipótesis de valor (cada idea con de dónde sale) y cómo conectar. Si ya agendó, la estrategia de conexión queda plegada.",
+      lado: "top",
+      accion: preparacion("conexion"),
     },
     // Exploración
     {
@@ -237,8 +241,8 @@ export const PREVENTA_LISTADO: Recorrido = {
     },
     {
       ancla: "preventa.lista.proponer",
-      titulo: "Cuánto falta para proponer",
-      texto: "Un tramo por cada punto que pide la propuesta del land: verde el que está listo. Pasa el cursor por la barra para ver los siete.",
+      titulo: "Progreso",
+      texto: "Cuánto falta para proponer: un tramo por cada punto que pide la propuesta del land, verde el que está listo. Pasa el cursor por la barra para ver los siete.",
       lado: "bottom-start",
     },
     {

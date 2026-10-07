@@ -83,6 +83,9 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
        tiene. El row-level lo sigue acotando a SUS clientes, y los datos de partner siguen siendo
        de CSL/SUPER_ADMIN por su chequeo propio. */
     customerSuccess: ["read"],
+    /* Preventa (2026-10-06, decisión de Elías): todo Customer Success trabaja las preventas. No le
+       abre el resto de Ventas: proponer sigue siendo `ventas.write`. */
+    preventa: ["read", "write"],
     marketing: ["read"],
   }),
   // VENTAS: ve todo + handoff completo + cronograma (sin regenerar IA) + área
@@ -110,6 +113,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     // propia no le amplía nada — le pone nombre a lo que ya podía.
     proyectos: ["create"],
     ventas: ["read", "write"],
+    preventa: ["read", "write"],
     marketing: ["read"],
     conocimientos: ["write"],
     agentes: ["read"],
@@ -145,6 +149,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
     // implementación.
     proyectos: ["create"],
     ventas: ["read", "write"],
+    preventa: ["read", "write"],
     marketing: ["read"],
     conocimientos: ["write"],
     agentes: ["read"],
@@ -190,6 +195,7 @@ export const DEFAULT_MATRIX: Record<TeamRole, PermissionMap> = {
       "reasignarEncargado",
     ],
     ventas: ["read", "write"],
+    preventa: ["read", "write"],
     marketing: ["read", "write"],
     conocimientos: ["write"],
     agentes: ["read"],

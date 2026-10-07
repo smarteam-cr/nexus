@@ -106,6 +106,7 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       return op.items.every((x) => usoSeguro(x.itemId, antes, ahora));
     case "sinPortal":
     case "descartar":
+    case "alertaTecnicaVista":
     case "archivar":
       return true;
   }

@@ -26,8 +26,8 @@ export const dynamic = "force-dynamic";
 
 export default async function ExploracionesPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
-  const puedeEditar = await can(ctx.teamMember, "ventas", "write");
+  if (!ctx || !(await can(ctx.teamMember, "preventa", "read"))) redirect("/clients");
+  const puedeEditar = await can(ctx.teamMember, "preventa", "write");
 
   const escala = await escalaParaExplorar();
   const [lista, equipo] = await Promise.all([listarExploraciones(escala.estado === "ok" ? escala.general : null), equipoParaLaPreventa()]);

@@ -69,3 +69,15 @@ export function haceCuanto(v: string | number | Date, ahora = new Date()): strin
   if (dias <= 7) return `hace ${dias} días`;
   return diaCorto(v);
 }
+
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"];
+
+/**
+ * «3 oct 2026», armado a mano en la hora de Costa Rica (UTC−6, sin horario de verano). Node y Chrome
+ * abrevian distinto algunos meses («sept» contra «sep»): para un texto que sale igual en el servidor
+ * y en el navegador (la fecha de creación del listado), mejor no pasar por `toLocaleDateString`.
+ */
+export function diaDeCalendario(v: string | number | Date): string {
+  const d = new Date(aFecha(v).getTime() - 6 * 60 * 60 * 1000);
+  return `${d.getUTCDate()} ${MESES_CORTOS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}

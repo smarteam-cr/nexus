@@ -305,10 +305,31 @@ export interface PropuestaDeExploracion {
    * pasó muestra lo que se preparó (pedido de Elías, 2026-10-03: una pestaña por sesión).
    */
   guias: Record<string, GuiaDeLaSesion>;
+  /**
+   * La última reunión que leyó el agente se puso técnica (Elías, 2026-10-06): el Resumen lo avisa.
+   * La reemplaza cada lectura que dice algo de la reunión más reciente; null = no se puso técnica.
+   */
+  alertaTecnica: AlertaTecnica | null;
+}
+
+/** Cuándo una conversación de venta se puso técnica, con la frase que lo muestra. */
+export interface AlertaTecnica {
+  /** La reunión, como la ve el vendedor: «Reunión del 1 oct: Revisión del diagnóstico». */
+  reunion: string;
+  /** De qué se habló: integraciones, migración de datos, una API… (hasta 4). */
+  temas: string[];
+  /** En qué parte de la reunión, si se sabe («al hablar del ERP»). */
+  momento?: string;
+  /** La frase literal que lo muestra (verificada contra la reunión). */
+  cita?: string;
+  en: string;
+  corridaId: string;
+  /** Alguien ya la vio y la cerró. */
+  vista?: boolean;
 }
 
 export function propuestaVacia(): PropuestaDeExploracion {
-  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [], documentos: [] }, corridas: [], guia: null, guias: {} };
+  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [], documentos: [] }, corridas: [], guia: null, guias: {}, alertaTecnica: null };
 }
 
 /** Tope de lo pendiente: lo más viejo se cae primero. */
@@ -628,6 +649,8 @@ export type Operacion =
   | { op: "usarVarias"; items: { itemId: string; valor?: unknown }[] }
   | { op: "descartar"; itemIds: string[] }
   | { op: "responsable"; email: string | null }
+  /** «Entendido» en el aviso de que la última reunión se puso técnica. */
+  | { op: "alertaTecnicaVista" }
   | { op: "archivar" };
 
 export type ResultadoDeOperaciones = { ok: true; estado: EstadoDeExploracion } | { ok: false; error: string };
@@ -849,6 +872,11 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
     }
     case "responsable":
       return { ok: true, estado: { ...estado, responsableEmail: op.email } };
+    case "alertaTecnicaVista": {
+      const a = estado.propuesta.alertaTecnica;
+      if (!a) return { ok: true, estado };
+      return { ok: true, estado: { ...estado, propuesta: { ...estado.propuesta, alertaTecnica: { ...a, vista: true } } } };
+    }
     case "archivar":
       return { ok: true, estado: { ...estado, archivada: true } };
   }

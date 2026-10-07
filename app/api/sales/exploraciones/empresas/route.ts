@@ -14,7 +14,7 @@ import { buscarEmpresas } from "@/lib/exploraciones/hubspot";
 import { industriaLegible } from "@/lib/exploraciones/industria";
 
 export async function GET(req: NextRequest) {
-  const guard = await guardPermission("ventas", "read");
+  const guard = await guardPermission("preventa", "read");
   if (guard instanceof NextResponse) return guard;
 
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 80);

@@ -31,7 +31,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("ventas", "read");
+  const guard = await guardPermission("preventa", "read");
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);
@@ -44,7 +44,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("ventas", "write");
+  const guard = await guardPermission("preventa", "write");
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;
@@ -61,7 +61,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: "La escala no está publicada en Nexus: sin ella no se puede validar el cambio." }, { status: 503 });
   }
 
-  // ⛔ Una preventa solo la lleva alguien con acceso a Ventas (Elías, 2026-10-05): lo mismo que filtra la lista.
+  // ⛔ Una preventa solo la lleva alguien con acceso a Preventa (Elías, 2026-10-05): lo mismo que filtra la lista.
   const sinAcceso = await errorDelResponsable(cuerpo.data.operaciones as Operacion[]);
   if (sinAcceso) return NextResponse.json({ error: sinAcceso }, { status: 400 });
 

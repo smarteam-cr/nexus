@@ -22,6 +22,7 @@ import {
   metaEnCifras,
   QUE_HACE_EL_ROL,
   ROLES_EN_LA_DECISION,
+  separarOrigen,
   type Apertura,
   type ClaveDeCasilla,
   type EstrategiaDeConexion,
@@ -134,9 +135,16 @@ export function Vista({ clave, valor }: { clave: ClaveDeCasilla; valor: unknown 
     case "lista":
       return (
         <ul className="list-disc space-y-1 pl-5 text-sm text-fg-secondary">
-          {(valor as string[]).map((t, i) => (
-            <li key={i}>{t}</li>
-          ))}
+          {(valor as string[]).map((t, i) => {
+            // Una hipótesis de valor trae al final de dónde sale («· De: …»): se pinta aparte, más tenue.
+            const { idea, origen } = separarOrigen(t);
+            return (
+              <li key={i}>
+                {idea}
+                {origen && <span className="text-xs text-fg-muted"> · De: {origen}</span>}
+              </li>
+            );
+          })}
         </ul>
       );
     case "metas":

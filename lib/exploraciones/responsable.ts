@@ -4,8 +4,11 @@
  * Elías, 2026-10-05: «Una preventa solo la puede llevar alguien con acceso a Ventas.» Antes la lista
  * de «La lleva» traía a todo el equipo activo y el PATCH aceptaba cualquier correo (y le mandaba el
  * aviso): se podía asignar una preventa a alguien que después no podía abrirla. La regla es la misma
- * que deja entrar al área: la celda `ventas.read` del mapa EFECTIVO (lib/auth/permissions/engine.ts:
+ * que deja entrar al área: la celda `preventa.read` del mapa EFECTIVO (lib/auth/permissions/engine.ts:
  * el rol, su plantilla y los ajustes de la persona), en alguien del equipo que siga activo.
+ *
+ * Desde el 2026-10-06 la celda es `preventa.read` y no `ventas.read`: todo Customer Success trabaja
+ * las preventas (decisión de Elías), así que también puede llevarlas.
  */
 import "server-only";
 import { can } from "@/lib/auth/permissions/engine";
@@ -14,17 +17,17 @@ import type { Operacion } from "./contenido";
 
 /** El 400 del PATCH cuando la persona elegida no puede llevarla. */
 export function sinAccesoAVentas(email: string): string {
-  return `${email} no puede llevar la preventa: solo la lleva alguien del equipo con acceso a Ventas.`;
+  return `${email} no puede llevar la preventa: solo la lleva alguien del equipo con acceso a Preventa.`;
 }
 
-/** Quién puede llevar una preventa: el equipo activo con acceso a Ventas, por nombre (la columna «La lleva» y la cabecera). */
+/** Quién puede llevar una preventa: el equipo activo con acceso a Preventa, por nombre (la columna «La lleva» y la cabecera). */
 export async function equipoParaLaPreventa(): Promise<{ email: string; name: string }[]> {
   const activos = await prisma.teamMember.findMany({
     where: { deactivatedAt: null },
     select: { email: true, name: true, roleEnum: true, permissionOverrides: true },
     orderBy: { name: "asc" },
   });
-  const conVentas = await Promise.all(activos.map(async (m) => ((await can(m, "ventas", "read")) ? { email: m.email, name: m.name } : null)));
+  const conVentas = await Promise.all(activos.map(async (m) => ((await can(m, "preventa", "read")) ? { email: m.email, name: m.name } : null)));
   return conVentas.filter((m): m is { email: string; name: string } => m !== null);
 }
 
@@ -39,7 +42,7 @@ export async function errorDelResponsable(operaciones: readonly Operacion[]): Pr
       where: { email: { equals: email, mode: "insensitive" }, deactivatedAt: null },
       select: { roleEnum: true, permissionOverrides: true },
     });
-    if (!persona || !(await can(persona, "ventas", "read"))) return sinAccesoAVentas(email);
+    if (!persona || !(await can(persona, "preventa", "read"))) return sinAccesoAVentas(email);
   }
   return null;
 }

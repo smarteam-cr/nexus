@@ -10,13 +10,15 @@ export const NOMBRE_DEL_PASO: Record<PasoDelLienzoUI, string> = {
   resumen: "Resumen",
   preparacion: "Preparación",
   exploracion: "Exploración",
+  informacion: "Información del cliente",
+  procesos: "Procesos",
   escala: "La escala",
   casos: "Casos de uso",
   propuesta: "Propuesta",
 };
 
 /** Las piezas en el orden del recorrido, con el Resumen primero. */
-export const ORDEN_DE_PIEZAS: readonly PasoDelLienzoUI[] = ["resumen", "preparacion", "exploracion", "escala", "casos", "propuesta"];
+export const ORDEN_DE_PIEZAS: readonly PasoDelLienzoUI[] = ["resumen", "preparacion", "exploracion", "informacion", "procesos", "escala", "casos", "propuesta"];
 
 /**
  * En qué pieza se revisa lo que sugirió el agente: cada casilla en la suya (`paso` en casillas.ts),

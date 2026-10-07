@@ -4462,6 +4462,51 @@ cada sesión lo que sabe y no quedó grabado; y aprobó el tablero «Preventa ·
 - **El desplegable de «La lleva» del listado ya no queda debajo de la fila siguiente**: la casilla no
   crea su propia capa (`z-10`), así el panel fijo sale por encima de todo.
 
+## Preventa: la trabaja todo Customer Success, y la Preparación se lee en dos pestañas (2026-10-06)
+
+**Contexto.** Elías pidió que todo Customer Success pudiera trabajar las preventas, y revisó la de
+Polaris Internacional: se veía apretada, repetía información, la hipótesis de valor no decía de dónde
+salía cada idea y no había un camino corto para el prospecto que no llega por el diagnóstico.
+
+- **Preventa tiene su propia sección de permisos (`preventa`: ver y trabajar).** La tienen Ventas, Dev,
+  la CSL y el CSE por defecto. *Por qué una sección y no darle `ventas` al CSE:* `ventas` abre también
+  las propuestas, el TAM y SICOP. Las plantillas guardadas no la traen, así que vale el default sin tocar
+  la base. Armar la propuesta comercial desde el lienzo sigue pidiendo `ventas.write`: quien no lo tiene
+  ve «La propuesta comercial la arma Ventas».
+- **El menú Ventas aparece con `ventas.read` o con `preventa.read`** (gate `anyPermission`), y cada hijo
+  pide su celda: un CSE ve solo Preventa, y el clic en «Ventas» lo lleva ahí (`entradaEsHijo`), no a
+  Propuestas. Quien lleva una preventa se elige entre quienes tienen `preventa.read`.
+- **Un prospecto en preventa es visible para quien trabaja las preventas** (`requireAccessToClient`,
+  razón `preventa`). Hace falta para la ficha y los procesos de la empresa. ⚠ Solo si la empresa es
+  PROSPECTO y la preventa está viva: una empresa que ya es cliente sigue con el acceso de la cartera.
+- **Información del cliente y Procesos son piezas de la preventa, con los MISMOS componentes de la
+  ficha y sobre la MISMA empresa.** No es una copia: lo que se confirma ahí queda en la ficha y en
+  HubSpot, y el CSE lo encuentra escrito cuando la venta pasa a proyecto. Quedan afuera las licencias
+  (un prospecto no compró nada) y, por ahora, los documentos y la marca: viven en el proyecto de
+  estrategia, que la ficha no le crea a un prospecto. Lo que se suma a mano va en Exploración.
+- **Preparación son dos pestañas, Identificación y Conexión.** Identificación: lo que escribe la IA
+  arriba (por qué ahora, su CRM actualmente, la radiografía y su industria), después las señales de
+  HubSpot (antes «Detonante») y, en una fila, la ficha de contacto y la ficha de empresa. Conexión: lo
+  que no se dijo en Identificación, la hipótesis de valor y la estrategia de conexión.
+- **«Su industria» la escribe solo la investigación en internet** (la misma llamada de la radiografía,
+  con una búsqueda más) y entra como fuente W2. El agente principal no la puede proponer: sin búsqueda,
+  la completaría con lo que cree saber.
+- **Cada hipótesis de valor dice de dónde sale, y ese origen lo pone el código** desde las fuentes que
+  declaró el agente (tus notas, la investigación de la empresa o de su industria, el diagnóstico,
+  HubSpot, una reunión), no el modelo. Una línea por idea y sin «Creemos que».
+- **«Para conectar» ya no repite** qué hace la empresa, cómo llegó ni quién es el contacto: solo lo que
+  no está en otro lado. Si no hay nada, el agente no lo propone.
+- **El flujo liviano empieza por la transcripción.** En «Planificar con una empresa», «Con una
+  transcripción» abre la preventa sin prepararla y con «Sumar una sesión o transcripción» abierto (una
+  llamada de Gong, una minuta). Ese panel pasó de estar plegado dentro de «Después» a estar arriba de
+  Exploración.
+- **La alerta de conversación técnica sale de la lectura de cada reunión**, solo de la más reciente y
+  solo con la frase literal que lo muestra. Se guarda en la mitad del agente (`alertaTecnica`), la
+  reemplaza cada lectura que dice algo de la última reunión y «Entendido» la cierra. Solo avisa: no
+  notifica ni cambia nada más.
+- **Listado:** la columna «Para proponer» se llama «Progreso», sale «Próxima reunión» (la sigue usando
+  «Para ti») y la fila dice cuándo se creó la preventa en vez de con qué escala se mide.
+
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 
 **Contexto.** Smarteam se alió con Insider One. Elías pidió que la escala refleje lo que habilita una

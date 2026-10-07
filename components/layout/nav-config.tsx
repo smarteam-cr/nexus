@@ -26,6 +26,8 @@ import { ROLES_DE_EXITO_DEL_CLIENTE } from "@/lib/cs/acceso";
 export type NavGate =
   | { kind: "always" }
   | { kind: "permission"; section: string; action: string }
+  /** Alcanza con UNA de las celdas (Ventas: entra quien tiene Ventas o solo Preventa). */
+  | { kind: "anyPermission"; of: readonly { section: string; action: string }[] }
   | { kind: "superAdmin" }
   /** Dirección, MÁS quien tenga algún documento de Roles compartido (ver `hasSharedDocs`). */
   | { kind: "superAdminOrSharedDocs" }
@@ -77,6 +79,8 @@ export interface NavItemConfig {
   gate?: NavGate;
   /** Presencia ⇒ el ítem abre un flyout con estos hijos. */
   children?: readonly NavChildConfig[];
+  /** `href` es uno de los hijos: si la persona no lo ve, el clic en el ítem lleva al primer hijo que ve. */
+  entradaEsHijo?: boolean;
   /** Hijos cargados por fetch (el flyout de Roles lista los perfiles). */
   dynamicChildren?: "roles";
   /** Lleva un número al lado (lo que pide atención hoy). Solo «Para ti» (components/para-ti/cuenta.ts). */
@@ -108,6 +112,7 @@ export function canSeeNavItem(item: Pick<NavItemConfig, "gate">, ctx: NavContext
     string,
     Record<string, boolean> | undefined
   >;
+  if (gate.kind === "anyPermission") return gate.of.some((p) => sections[p.section]?.[p.action] === true);
   return sections[gate.section]?.[gate.action] === true;
 }
 
@@ -242,21 +247,30 @@ export const APP_NAV: readonly NavItemConfig[] = [
     // SICOP, y sin esto el rail se apagaría al entrar ahí (y el crumb de módulo, que
     // sale de este mismo `match`, no diría "Ventas").
     match: ["/business-cases", "/sales"],
-    gate: { kind: "permission", section: "ventas", action: "read" },
+    entradaEsHijo: true,
+    /* Desde el 2026-10-06 también entra quien tiene solo Preventa (todo Customer Success): ve ese hijo
+       y ningún otro, porque cada hijo pide su celda. */
+    gate: {
+      kind: "anyPermission",
+      of: [
+        { section: "ventas", action: "read" },
+        { section: "preventa", action: "read" },
+      ],
+    },
     group: "operacion",
     children: [
       // El lienzo de cada prospecto antes de la propuesta: prepara las dos reuniones, estima su
       // nivel en la escala y llega a la propuesta con metas en cifras. Va primero: es el orden
       // del proceso (se explora, después se propone).
-      { href: "/sales/exploraciones", label: "Preventa" },
-      { href: "/business-cases", label: "Propuestas" },
+      { href: "/sales/exploraciones", label: "Preventa", permiso: { section: "preventa", action: "read" } },
+      { href: "/business-cases", label: "Propuestas", permiso: { section: "ventas", action: "read" } },
       // El CATÁLOGO de servicios pre-cotizados que el vendedor marca en el checklist de una
       // propuesta. Hasta hoy solo se llegaba por un link chiquito del encabezado de
       // /business-cases; es un área propia y va en el menú como tal.
-      { href: "/sales/use-cases", label: "Casos de uso" },
+      { href: "/sales/use-cases", label: "Casos de uso", permiso: { section: "ventas", action: "read" } },
       // Licitaciones públicas: viven como tickets del pipeline «Gobiernos» de HubSpot,
       // no como tratos. Una hoja se declara acá en la MISMA tanda que crea su ruta.
-      { href: "/sales/sicop", label: "SICOP" },
+      { href: "/sales/sicop", label: "SICOP", permiso: { section: "ventas", action: "read" } },
     ],
     icon: icon("M3 3v18h18M7 14l4-4 3 3 5-6"),
   },

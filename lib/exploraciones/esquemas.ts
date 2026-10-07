@@ -318,6 +318,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   }),
   z.object({ op: z.literal("descartar"), itemIds: z.array(z.string().min(1).max(120)).min(1).max(250) }),
   z.object({ op: z.literal("responsable"), email: z.string().email().max(200).nullable() }),
+  z.object({ op: z.literal("alertaTecnicaVista") }),
   z.object({ op: z.literal("archivar") }),
 ]);
 
@@ -468,6 +469,16 @@ const FuenteSchema = z.object({
   cita: z.string().max(600).optional(),
 });
 
+const AlertaTecnicaSchema = z.object({
+  reunion: z.string().max(300),
+  temas: z.array(z.string().max(120)).max(4),
+  momento: z.string().max(300).optional(),
+  cita: z.string().max(600).optional(),
+  en: z.string().max(40),
+  corridaId: z.string().max(60),
+  vista: z.boolean().optional(),
+});
+
 export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   const p = propuestaVacia();
   if (!esObjeto(raw)) return p;
@@ -497,6 +508,8 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   }
   p.guia = leerGuia(raw.guia);
   p.guias = registroValido(raw.guias, z.string().regex(/^s-[a-z0-9]{1,24}$/), GuiaSchema);
+  const tecnica = AlertaTecnicaSchema.safeParse(raw.alertaTecnica);
+  p.alertaTecnica = tecnica.success ? tecnica.data : null;
   if (!Array.isArray(raw.items)) return p;
   const items: ItemPropuesto[] = [];
   for (const it of raw.items) {

@@ -40,9 +40,11 @@
   `nexus-recorridos`. Ver DECISIONS §Recorridos guiados.
 - **Preventa** (Ventas → Preventa, `/sales/exploraciones`, modelo `ExploracionDeVenta`): el lienzo de
   una empresa en venta, desde que llega (por el test o desde HubSpot) hasta la primera propuesta y el
-  traspaso al CSE. Sus piezas: Preparación · Exploración (las reuniones) · La escala · Casos de uso ·
-  Propuesta. Se llamaba «Exploración de venta» hasta el 2026-10-03; la dirección y el modelo conservan
-  ese nombre. No confundir con el canvas «Exploración» de un proyecto (el del CSE).
+  traspaso al CSE. Sus piezas: Preparación (Identificación y Conexión) · Exploración (las reuniones) ·
+  Información del cliente · Procesos · La escala · Casos de uso · Propuesta. La trabaja todo Customer
+  Success (permiso `preventa`, desde el 2026-10-06); armar la propuesta sigue siendo de Ventas. Se
+  llamaba «Exploración de venta» hasta el 2026-10-03; la dirección y el modelo conservan ese nombre. No
+  confundir con el canvas «Exploración» de un proyecto (el del CSE).
 - **Exploración** (canvas "Exploración", `agent-exploracion-canvas`): guía **INTERNA** por
   proyecto para descubrir el negocio del cliente cuando el kickoff ya pasó — qué hay que
   entender, cómo preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.

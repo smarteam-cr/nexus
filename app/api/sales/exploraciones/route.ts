@@ -1,8 +1,11 @@
 /**
- * POST /api/sales/exploraciones   body: { companyId }
+ * POST /api/sales/exploraciones   body: { companyId, empezar? }
  *
  * Abre la exploración de venta de una empresa del HubSpot de Smarteam (lib/exploraciones/crear.ts):
- * si ya hay una viva para esa empresa, devuelve esa. Pide `ventas.write`.
+ * si ya hay una viva para esa empresa, devuelve esa. Pide `preventa.write`.
+ *
+ * `empezar: "transcripcion"` es el flujo liviano (Elías, 2026-10-06) para quien no llegó por el
+ * diagnóstico: no se prepara sola; el vendedor suma la transcripción de la llamada y el agente la lee.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -14,10 +17,13 @@ import { lanzarCorrida } from "@/lib/exploraciones/agente";
 import { crearExploracion } from "@/lib/exploraciones/crear";
 import { SQL_DE_EXPLORACIONES } from "@/lib/exploraciones/servidor";
 
-const Cuerpo = z.object({ companyId: z.string().trim().regex(/^\d+$/, "Id de empresa de HubSpot inválido") });
+const Cuerpo = z.object({
+  companyId: z.string().trim().regex(/^\d+$/, "Id de empresa de HubSpot inválido"),
+  empezar: z.enum(["preparar", "transcripcion"]).optional(),
+});
 
 export async function POST(req: NextRequest) {
-  const guard = await guardPermission("ventas", "write");
+  const guard = await guardPermission("preventa", "write");
   if (guard instanceof NextResponse) return guard;
   if (!modeloDisponible(prisma.exploracionDeVenta)) {
     return NextResponse.json({ error: `Falta aplicar ${SQL_DE_EXPLORACIONES} y reiniciar.` }, { status: 503 });
@@ -38,7 +44,7 @@ export async function POST(req: NextRequest) {
   /* Una exploración NUEVA arranca preparándose sola: el vendedor la abre y el agente ya está leyendo
      HubSpot, el test y las reuniones. Si no se puede lanzar, la exploración queda igual (el botón
      está en el lienzo). */
-  if (!r.existia) {
+  if (!r.existia && cuerpo.data.empezar !== "transcripcion") {
     await lanzarCorrida(r.id, "preparar", { triggeredByEmail: email || null }).catch((e) =>
       console.error("[exploraciones] no se pudo lanzar la preparación", e),
     );

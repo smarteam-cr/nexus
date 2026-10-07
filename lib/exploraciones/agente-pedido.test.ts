@@ -24,6 +24,7 @@ import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, NIVELES, 
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
 import { leerLaRadiografia, urlComparable } from "./radiografia-pedido";
+import { conSuOrigen, separarOrigen } from "./casillas";
 import { contactoPrincipal, porQueAhoraSugerido, rastroDe, senalesDe } from "./senales";
 
 // ── Una escala de juguete: dos áreas, cuatro dimensiones cada una ─────────────────
@@ -686,5 +687,73 @@ describe("Preparación: el «por qué ahora» sugerido con los hechos", () => {
     ).toBe("Llenó el formulario del diagnóstico de rendimiento de Ventas el 2026-09-23; llegó por búsqueda en Google, vio 12 páginas del sitio.");
     expect(porQueAhoraSugerido([{ que: "Último formulario", valor: "Contacto", fecha: "2026-09-01" }], fecha)).toBe("Llenó el formulario «Contacto» el 2026-09-01.");
     expect(porQueAhoraSugerido([], fecha)).toBeNull();
+  });
+});
+
+describe("Preventa (2026-10-06): industria, hipótesis con su origen y la conversación técnica", () => {
+  it("la radiografía trae también la industria, a su casilla y como fuente W2", () => {
+    const r = leerLaRadiografia(
+      [
+        {
+          type: "tool_use",
+          id: "t1",
+          name: "radiografia",
+          input: { resumen: "Software de crédito.", industria: { resumen: "La banca regional se digitaliza.", retos: ["Seguimiento lento", " "] } },
+        },
+      ] as unknown as Anthropic.Messages.ContentBlock[],
+      "run_1",
+      AHORA,
+    );
+    expect(r.industria?.item.destino).toEqual({ tipo: "casilla", clave: "industria" });
+    expect(r.industria?.item.valor).toBe("La banca regional se digitaliza.\n- Seguimiento lento");
+    expect(r.industria?.fuente.id).toBe("W2");
+  });
+
+  it("sin la industria, la radiografía sigue igual", () => {
+    const r = leerLaRadiografia(
+      [{ type: "tool_use", id: "t1", name: "radiografia", input: { resumen: "Software de crédito." } }] as unknown as Anthropic.Messages.ContentBlock[],
+      "run_1",
+      AHORA,
+    );
+    expect(r.industria).toBeNull();
+    expect(r.item).not.toBeNull();
+  });
+
+  it("cada hipótesis de valor dice de dónde sale, desde sus fuentes, y sin «Creemos que»", () => {
+    expect(conSuOrigen("Creemos que pierden negocios por seguimiento tardío", ["W2", "N0", "N0"])).toBe(
+      "Pierden negocios por seguimiento tardío · De: la investigación de su industria y tus notas",
+    );
+    expect(separarOrigen("Pierden negocios · De: HubSpot")).toEqual({ idea: "Pierden negocios", origen: "HubSpot" });
+    expect(separarOrigen("Sin origen")).toEqual({ idea: "Sin origen", origen: null });
+    const r = leerLaRespuesta(
+      respuesta({ textos: [{ casilla: "hipotesisDeValor", texto: "Nadie sabe en qué etapa va cada negocio", fuentes: [{ id: "S1" }] }] }),
+      ctx({ modo: "preparar" }),
+      "run_1",
+      AHORA,
+    );
+    expect(r.items[0].valor).toBe("Nadie sabe en qué etapa va cada negocio · De: una reunión");
+  });
+
+  it("el agente no escribe «Su industria» por su cuenta: solo la investigación en internet", () => {
+    const r = leerLaRespuesta(
+      respuesta({ textos: [{ casilla: "industria", texto: "El retail crece", fuentes: [{ id: "E0" }] }] }),
+      ctx({ modo: "preparar" }),
+      "run_1",
+      AHORA,
+    );
+    expect(r.items).toEqual([]);
+  });
+
+  it("la conversación técnica entra solo con la frase de la reunión; sin frase no se toca; «no» la apaga", () => {
+    const leer = (conversacionTecnica: unknown) => leerLaRespuesta(respuesta({ conversacionTecnica }), ctx(), "run_1", AHORA).tecnica;
+    expect(
+      leer({ tecnica: true, temas: ["Integración con el ERP"], momento: "Al final", fuentes: [{ id: "S1", cita: "nadie sabe en qué etapa va cada negocio" }] }),
+    ).toEqual({ reunion: "Reunión del 1 oct", temas: ["Integración con el ERP"], momento: "Al final", cita: "nadie sabe en qué etapa va cada negocio" });
+    expect(leer({ tecnica: true, fuentes: [{ id: "S1", cita: "hablamos de la API de SAP" }] })).toBeUndefined();
+    expect(leer({ tecnica: true, fuentes: [{ id: "E0", cita: "Acme Retail, 120 empleados" }] })).toBeUndefined();
+    expect(leer({ tecnica: false, fuentes: [] })).toBeNull();
+    expect(leer(undefined)).toBeUndefined();
+    // Al preparar no hay reunión que leer: no se pregunta.
+    expect(leerLaRespuesta(respuesta({}), ctx({ modo: "preparar" }), "run_1", AHORA).tecnica).toBeUndefined();
   });
 });

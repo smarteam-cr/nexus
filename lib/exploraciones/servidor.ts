@@ -138,8 +138,9 @@ export interface FilaDeLaLista {
   responsableNombre: string | null;
   /** Lo que el agente sugirió y espera que alguien lo use o lo descarte. */
   sugeridas: number;
-  /** La fecha de la próxima reunión: la próxima sesión planeada o, si no hay, la agenda de HubSpot. */
+  /** La fecha de la próxima reunión: la próxima sesión planeada o, si no hay, la agenda de HubSpot. La lee «Para ti». */
   proximaReunion: string | null;
+  creadaEn: string;
   actualizadaEn: string;
 }
 
@@ -198,6 +199,7 @@ export async function listarExploraciones(general: Escala | null): Promise<Lista
           hoy,
           estado.propuesta.leidas.sesiones.length,
         ).fecha,
+        creadaEn: f.createdAt.toISOString(),
         actualizadaEn: f.updatedAt.toISOString(),
       };
     }),

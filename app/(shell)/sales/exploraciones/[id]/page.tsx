@@ -49,8 +49,10 @@ export default async function ExploracionPage({
 }) {
   const [{ id }, { pieza }] = await Promise.all([params, searchParams]);
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !(await can(ctx.teamMember, "ventas", "read"))) redirect("/clients");
-  const puedeEditar = await can(ctx.teamMember, "ventas", "write");
+  if (!ctx || !(await can(ctx.teamMember, "preventa", "read"))) redirect("/clients");
+  const puedeEditar = await can(ctx.teamMember, "preventa", "write");
+  // Customer Success trabaja la preventa; armar la propuesta comercial sigue siendo de Ventas.
+  const puedeProponer = await can(ctx.teamMember, "ventas", "write");
 
   const lectura = await leerExploracion(id);
   if (lectura.estado === "no-existe") notFound();
@@ -135,6 +137,7 @@ export default async function ExploracionPage({
             inicial={exp}
             escala={escalaDeLaExploracion(escala.general, exp.estado)}
             puedeEditar={puedeEditar && !exp.estado.archivada}
+            puedeProponer={puedeProponer}
             piezaInicial={pieza ?? null}
           />
         </>

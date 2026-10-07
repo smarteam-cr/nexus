@@ -37,6 +37,7 @@ import {
   pedidoDeLaIndustria,
   propuestasDelTest,
   type ContextoDelPedido,
+  type Lectura,
 } from "./agente-pedido";
 import { exploracionParaLosCasos } from "./casos-de-uso";
 import {
@@ -97,6 +98,8 @@ interface LoQueLeyoLaCorrida {
   foto: Omit<LoLeidoDeHubspot, "leidoEn"> | null;
   /** Las reuniones que ya pasaron y HubSpot dice que no ocurrieron: dejan de avisarse. */
   noOcurrieron?: readonly string[];
+  /** Al leer: si la reunión más reciente se puso técnica. undefined = no se toca la alerta guardada. */
+  tecnica?: Lectura["tecnica"];
 }
 
 /** Un fallo con un mensaje que ya está escrito para el vendedor (no hace falta traducirlo). */
@@ -238,8 +241,8 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     };
 
     /* Al preparar, primero la radiografía: el agente investiga la empresa en internet. Lo que
-       encuentra se propone en su casilla y entra como fuente (W1) para la hipótesis de valor y el
-       pitch. Si falla, la preparación sigue sin ella. */
+       encuentra se propone en su casilla y entra como fuente (W1, y W2 la industria) para la
+       hipótesis de valor y el pitch. Si falla, la preparación sigue sin ella. */
     let deLaWeb: ItemPropuesto[] = [];
     if (modo === "preparar" && fila.client.hubspotCompanyId) {
       await fase(runId, "Investigando la empresa en internet…");
@@ -248,15 +251,16 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         return null;
       });
       if (r?.item) deLaWeb = [r.item];
-      if (r?.fuente) {
-        leido.fuentes.push(r.fuente);
-        ctx.fuentes = leido.fuentes;
-      }
+      if (r?.industria) deLaWeb.push(r.industria.item);
+      if (r?.fuente) leido.fuentes.push(r.fuente);
+      if (r?.industria) leido.fuentes.push(r.industria.fuente);
+      ctx.fuentes = leido.fuentes;
     }
 
     const delTest = propuestasDelTest(leido.tests, ctx, runId);
     let deLaIA: ItemPropuesto[] = [];
     let descartadas = 0;
+    let tecnica: Lectura["tecnica"];
     const hayQueLeer = modo === "preparar" ? leido.fuentes.length > 0 : leido.fuentes.some((f) => /^[SHM]\d/.test(f.id));
     if (hayQueLeer) {
       await fase(runId, "Pensando qué proponer…");
@@ -273,6 +277,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       const r = leerLaRespuesta(respuesta, ctx, runId);
       deLaIA = r.items;
       descartadas = r.descartadas;
+      tecnica = r.tecnica;
     }
 
     await fase(runId, "Guardando lo propuesto…");
@@ -284,6 +289,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         leidas: leido.leidas,
         foto: { tests: leido.tests, agenda: leido.agenda, correosSinPermiso: leido.correosSinPermiso },
         noOcurrieron: leido.noOcurrieron ?? [],
+        tecnica,
       },
       { runId, modo, automatica: opts.automatica === true },
     );
@@ -667,6 +673,10 @@ async function guardar(
     const propuesta = {
       ...fusion,
       leidas,
+      // Lo dijo esta lectura de la reunión más reciente: reemplaza la alerta anterior (null = no se puso técnica).
+      ...(leido.tecnica !== undefined
+        ? { alertaTecnica: leido.tecnica ? { ...leido.tecnica, en: ahora.toISOString(), corridaId: corrida.runId } : null }
+        : {}),
       corridas: [
         ...fusion.corridas,
         {

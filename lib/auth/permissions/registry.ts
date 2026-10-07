@@ -245,6 +245,18 @@ export const PERMISSION_SECTIONS = [
     ],
   },
   {
+    /* Preventa (2026-10-06): su propia sección para que TODO Customer Success la use sin entrar al
+       resto de Ventas (propuestas, TAM, SICOP). Decisión de Elías: la exploración de una empresa en
+       venta la hace también quien después la implementa. Armar la propuesta comercial desde el
+       lienzo sigue pidiendo `ventas.write`. */
+    key: "preventa",
+    label: "Preventa",
+    actions: [
+      { key: "read", label: "Ver las preventas", enforced: true },
+      { key: "write", label: "Trabajar una preventa (crearla, editarla, correr el agente)", enforced: true },
+    ],
+  },
+  {
     key: "marketing",
     label: "Marketing y Contenido",
     actions: [

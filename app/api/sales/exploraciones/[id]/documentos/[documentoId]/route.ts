@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ id: string; documentoId: string }> };
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const { id, documentoId } = await params;
-  const guard = await guardPermission("ventas", "write");
+  const guard = await guardPermission("preventa", "write");
   if (guard instanceof NextResponse) return guard;
   const ok = await borrarDocumento(id, documentoId);
   if (!ok) return NextResponse.json({ error: "Ese documento ya no está." }, { status: 404 });

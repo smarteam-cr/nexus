@@ -18,7 +18,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("ventas", "read");
+  const guard = await guardPermission("preventa", "read");
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);

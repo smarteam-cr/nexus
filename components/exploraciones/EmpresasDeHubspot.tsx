@@ -79,7 +79,12 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `traer` lee `termino`, que ya está en las dependencias
   }, [termino]);
 
-  async function abrir(e: Empresa) {
+  /**
+   * «Planificar» abre la preventa y el agente la prepara solo. «Con una transcripción» es el flujo
+   * liviano (Elías, 2026-10-06) para quien no llegó por el diagnóstico: no se prepara; se abre en
+   * Exploración con «Sumar una sesión o transcripción» a la vista, y el agente lee lo que se suma.
+   */
+  async function abrir(e: Empresa, empezar: "preparar" | "transcripcion" = "preparar") {
     if (e.exploracionId) {
       router.push(`/sales/exploraciones/${e.exploracionId}`);
       return;
@@ -90,14 +95,14 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
       const res = await fetch("/api/sales/exploraciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId: e.id }),
+        body: JSON.stringify({ companyId: e.id, empezar }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!res.ok || !data.id) {
         setError(data.error ?? "No se pudo abrir la preventa.");
         return;
       }
-      router.push(`/sales/exploraciones/${data.id}`);
+      router.push(empezar === "transcripcion" ? `/sales/exploraciones/${data.id}?pieza=exploracion&sumar=1` : `/sales/exploraciones/${data.id}`);
     } catch {
       setError("No se pudo abrir la preventa. Revisa tu conexión.");
     } finally {
@@ -157,9 +162,20 @@ export default function EmpresasDeHubspot({ puedeEditar }: { puedeEditar: boolea
                   <BotonBlanco onClick={() => void abrir(e)}>Abrir preventa</BotonBlanco>
                 ) : (
                   puedeEditar && (
-                    <BotonBlanco disabled={abriendo !== null} onClick={() => void abrir(e)}>
-                      {abriendo === e.id ? "Abriendo…" : "Planificar"}
-                    </BotonBlanco>
+                    <>
+                      <button
+                        type="button"
+                        disabled={abriendo !== null}
+                        title="Para quien no llegó por el diagnóstico: abre la preventa sin prepararla y suma la transcripción de la llamada"
+                        onClick={() => void abrir(e, "transcripcion")}
+                        className="px-1.5 py-1 text-xs font-semibold text-brand hover:underline disabled:opacity-50"
+                      >
+                        Con una transcripción
+                      </button>
+                      <BotonBlanco disabled={abriendo !== null} onClick={() => void abrir(e)}>
+                        {abriendo === e.id ? "Abriendo…" : "Planificar"}
+                      </BotonBlanco>
+                    </>
                   )
                 )}
               </div>

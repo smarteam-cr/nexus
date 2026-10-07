@@ -332,3 +332,21 @@ describe("las operaciones", () => {
     expect(aplicarOperaciones(estado(), [{ op: "casoDeUso", useCaseId: "uc-1", valor: { titulo: "", areaId: "1" } }], VALIDEZ).ok).toBe(false);
   });
 });
+
+describe("la alerta de conversación técnica (2026-10-06)", () => {
+  const alerta = { reunion: "Reunión del 1 oct", temas: ["API"], cita: "la API de SAP", en: "2026-10-01T15:00:00.000Z", corridaId: "run_1" };
+
+  it("se lee de la propuesta guardada; sin ella, o mal formada, no hay alerta", () => {
+    expect(leerPropuesta({ alertaTecnica: alerta }).alertaTecnica).toEqual(alerta);
+    expect(leerPropuesta({}).alertaTecnica).toBeNull();
+    expect(leerPropuesta({ alertaTecnica: { reunion: 3 } }).alertaTecnica).toBeNull();
+  });
+
+  it("«Entendido» la marca vista sin borrarla; sin alerta no hace nada", () => {
+    const e = estado({ propuesta: { ...estado().propuesta, alertaTecnica: alerta } });
+    const r = aplicarOperaciones(e, [{ op: "alertaTecnicaVista" }], VALIDEZ);
+    expect(r.ok && r.estado.propuesta.alertaTecnica).toEqual({ ...alerta, vista: true });
+    const sin = aplicarOperaciones(estado(), [{ op: "alertaTecnicaVista" }], VALIDEZ);
+    expect(sin.ok && sin.estado.propuesta.alertaTecnica).toBeNull();
+  });
+});

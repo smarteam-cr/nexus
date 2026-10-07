@@ -19,7 +19,7 @@ export const PREVENTAS: Fuente = {
   clave: "preventa",
   frente: null,
   alDia: "Tus preventas",
-  aplica: (a) => tienePermiso(a, "ventas", "read"),
+  aplica: (a) => tienePermiso(a, "preventa", "read"),
   async medir(a, c) {
     const lista = await listarExploraciones(null);
     if (lista.estado !== "ok") return [];

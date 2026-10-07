@@ -13,6 +13,10 @@
  * Debajo, lo que sale de cada reunión (pedido de Elías, 2026-10-01): las objeciones y las
  * particularidades de la cuenta, que el agente propone al leer cada sesión, como el cronograma
  * propone sus particularidades. Y, si ya hay un proyecto, a cuál le llega la exploración.
+ *
+ * Arriba de todo, si la última reunión que leyó el agente se puso técnica (Elías, 2026-10-06), un
+ * aviso con de qué se habló y la frase que lo muestra: para sumar a alguien técnico a la próxima.
+ * Solo avisa; «Entendido» lo cierra hasta que otra reunión vuelva a ponerse técnica.
  */
 import {
   CASILLAS_DE_LAS_REUNIONES,
@@ -152,6 +156,33 @@ const BLOQUES: { titulo: string; claves: (typeof CASILLAS_DEL_RESUMEN)[number][]
   { titulo: "Lo que está en juego", claves: ["consecuencias", "implicaciones"] },
 ];
 
+/** La última reunión se puso técnica: de qué se habló, la frase y qué conviene hacer. */
+function AvisoTecnico() {
+  const { exp, puedeEditar, guardando, cambiar } = useLienzo();
+  const a = exp.estado.propuesta.alertaTecnica;
+  if (!a || a.vista) return null;
+  return (
+    <section data-recorrido="preventa.resumen.tecnica" role="status" className="flex flex-wrap items-start gap-3 rounded-xl border border-warn-line bg-warn-surface px-4 py-3.5">
+      <IconoDeSugerencia className="mt-0.5 h-[18px] w-[18px] flex-shrink-0 text-warn-ink" />
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="text-sm font-semibold text-warn-ink">La última reunión se puso técnica</p>
+        <p className="text-[13px] text-fg-secondary">
+          {a.reunion}
+          {a.temas.length > 0 ? ` · ${a.temas.join(", ")}` : ""}
+          {a.momento ? `. ${a.momento}` : ""}
+        </p>
+        {a.cita && <p className="text-[13px] italic text-fg-secondary">«{a.cita}»</p>}
+        <p className="text-xs text-fg-muted">Suma a alguien técnico a la próxima reunión, o lleva esas preguntas preparadas.</p>
+      </div>
+      {puedeEditar && (
+        <BotonBlanco disabled={guardando} onClick={() => void cambiar([{ op: "alertaTecnicaVista" }])}>
+          Entendido
+        </BotonBlanco>
+      )}
+    </section>
+  );
+}
+
 export default function Resumen() {
   const { pendientesPara, puedeEditar, guardando, cambiar, abrirCasilla, abrirRevision } = useLienzo();
   const deLaCasilla = (clave: ClaveDeCasilla) => pendientesPara((d) => d.tipo === "casilla" && d.clave === clave);
@@ -160,6 +191,7 @@ export default function Resumen() {
 
   return (
     <div className="space-y-6">
+      <AvisoTecnico />
       {delResumen.length > 0 && (
         <div data-recorrido="preventa.resumen.sugerencias">
         <FranjaDeSugerencias

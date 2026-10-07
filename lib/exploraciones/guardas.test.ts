@@ -20,7 +20,7 @@ const EQUIPO = vi.hoisted(() => [
   { email: "ana@smarteam.test", name: "Ana", roleEnum: "VENTAS", permissionOverrides: null as unknown, deactivatedAt: null as Date | null },
   { email: "carla@smarteam.test", name: "Carla", roleEnum: "CSE", permissionOverrides: null, deactivatedAt: null },
   { email: "mario@smarteam.test", name: "Mario", roleEnum: "MARKETING", permissionOverrides: null, deactivatedAt: null },
-  { email: "sofia@smarteam.test", name: "Sofía", roleEnum: "CSE", permissionOverrides: { v: 1, sections: { ventas: { read: true } } }, deactivatedAt: null },
+  { email: "sofia@smarteam.test", name: "Sofía", roleEnum: "MARKETING", permissionOverrides: { v: 1, sections: { preventa: { read: true } } }, deactivatedAt: null },
   { email: "beto@smarteam.test", name: "Beto", roleEnum: "VENTAS", permissionOverrides: null, deactivatedAt: new Date("2026-09-01T00:00:00.000Z") },
 ]);
 vi.mock("server-only", () => ({}));
@@ -261,20 +261,21 @@ describe("⛔ si la preparación automática falla, no se reintenta sola: espera
 
 // ── Quién lleva la preventa (lib/exploraciones/responsable.ts) ──
 
-describe("⛔ una preventa solo la lleva alguien con acceso a Ventas (Elías, 2026-10-05)", () => {
-  it("la lista de «La lleva» es el equipo activo con `ventas.read` (por su rol o por su ajuste), nadie más", async () => {
-    expect((await equipoParaLaPreventa()).map((p) => p.email)).toEqual(["ana@smarteam.test", "sofia@smarteam.test"]);
+describe("⛔ una preventa solo la lleva alguien con acceso a Preventa (Elías, 2026-10-05 y 2026-10-06)", () => {
+  it("la lista de «La lleva» es el equipo activo con `preventa.read` (por su rol —Ventas o Customer Success— o por su ajuste), nadie más", async () => {
+    expect((await equipoParaLaPreventa()).map((p) => p.email)).toEqual(["ana@smarteam.test", "carla@smarteam.test", "sofia@smarteam.test"]);
   });
 
-  it("el PATCH rechaza, con un mensaje claro, a quien no tiene acceso a Ventas, a quien se dio de baja y a quien no es del equipo", async () => {
-    for (const email of ["carla@smarteam.test", "mario@smarteam.test", "beto@smarteam.test", "nadie@otra.test"]) {
-      expect(await errorDelResponsable([{ op: "responsable", email }]), email).toBe(`${email} no puede llevar la preventa: solo la lleva alguien del equipo con acceso a Ventas.`);
+  it("el PATCH rechaza, con un mensaje claro, a quien no tiene acceso a Preventa, a quien se dio de baja y a quien no es del equipo", async () => {
+    for (const email of ["mario@smarteam.test", "beto@smarteam.test", "nadie@otra.test"]) {
+      expect(await errorDelResponsable([{ op: "responsable", email }]), email).toBe(`${email} no puede llevar la preventa: solo la lleva alguien del equipo con acceso a Preventa.`);
     }
   });
 
   it("acepta a quien tiene acceso (sin importar mayúsculas), dejarla sin responsable y lo que no toca al responsable", async () => {
     expect(await errorDelResponsable([{ op: "responsable", email: "Ana@Smarteam.test" }])).toBeNull();
     expect(await errorDelResponsable([{ op: "responsable", email: "sofia@smarteam.test" }])).toBeNull();
+    expect(await errorDelResponsable([{ op: "responsable", email: "carla@smarteam.test" }]), "un CSE la puede llevar").toBeNull();
     expect(await errorDelResponsable([{ op: "responsable", email: null }])).toBeNull();
     expect(await errorDelResponsable([{ op: "archivar" }])).toBeNull();
   });

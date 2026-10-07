@@ -222,6 +222,7 @@ export const CLAVES_DE_CASILLA = [
   "particularidades",
   "detonante",
   "radiografia",
+  "industria",
   "hipotesisDeValor",
   "estrategiaDeConexion",
 ] as const;
@@ -232,7 +233,9 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   {
     clave: "contexto",
     etiqueta: "Para conectar",
-    ayuda: "Qué hace la empresa, cómo llegó, quién es el contacto y cómo abrir la conversación.",
+    /* Desde el 2026-10-06 (Elías): solo lo que NO está ya en Identificación. Qué hace la empresa, cómo
+       llegó y quién es el contacto se ven arriba; repetirlos acá era leer lo mismo dos veces. */
+    ayuda: "Lo importante para abrir la conversación que no está en Identificación: quién lo refirió, una conversación anterior, un tema a evitar.",
     paso: "preparacion",
     tipo: "texto",
     alCliente: false,
@@ -240,8 +243,9 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
   },
   {
     clave: "hubspotActual",
-    etiqueta: "Su HubSpot hoy",
-    ayuda: "Qué hubs y ediciones tiene, cuántos usuarios, quién lo configuró y cuándo renueva.",
+    // La clave sigue diciendo HubSpot (es identidad, la guardan las preventas); el prospecto puede usar otro CRM.
+    etiqueta: "Su CRM actualmente",
+    ayuda: "Qué CRM usa hoy y cómo: si es HubSpot, sus hubs, ediciones, usuarios, quién lo configuró y cuándo renueva.",
     paso: "preparacion",
     tipo: "texto",
     alCliente: true,
@@ -440,12 +444,23 @@ export const CASILLAS: readonly DefinicionDeCasilla[] = [
     alHandoff: "normal",
   },
   {
+    clave: "industria",
+    etiqueta: "Su industria",
+    ayuda: "Cómo se mueve su industria hoy y qué suele dolerle a una empresa como esta, en pocas líneas.",
+    explicacion:
+      "Lo que el agente investigó en internet sobre la industria de la empresa: hacia dónde va y los retos típicos de venta, marketing o servicio en su sector. Sirve para hablar de su mundo, no del nuestro.",
+    paso: "preparacion",
+    tipo: "texto",
+    alCliente: false,
+    alHandoff: "normal",
+  },
+  {
     clave: "hipotesisDeValor",
     etiqueta: "Hipótesis de valor",
-    ayuda: "Lo que creemos que le duele y cómo lo resolvemos, antes de hablar con el cliente.",
+    ayuda: "Lo que probablemente le duele y cómo lo resolvemos, en una línea por idea, con de dónde sale.",
     explicacion:
-      "La interpretación comercial antes de escribir o llamar: cruza los dolores típicos de su tipo de empresa con lo que dejó el diagnóstico y lo que se ve en HubSpot. Es una apuesta para confirmar en la reunión, nunca algo para afirmarle al cliente.",
-    ejemplo: "Creemos que pierden negocios por seguimiento tardío, porque el diagnóstico salió bajo en Datos y su CRM se usa solo para guardar contactos.",
+      "La interpretación comercial antes de escribir o llamar: cruza los dolores típicos de su industria con lo que dejó el diagnóstico, lo que se ve en HubSpot y tus notas. Cada idea dice de dónde sale. Es una apuesta para confirmar en la reunión, nunca algo para afirmarle al cliente.",
+    ejemplo: "Pierden negocios por seguimiento tardío: el CRM solo guarda contactos · De: el diagnóstico y HubSpot",
     paso: "preparacion",
     tipo: "lista",
     alCliente: false,
@@ -513,6 +528,7 @@ export const TIPO_DE_CASILLA = {
   particularidades: "lista",
   detonante: "texto",
   radiografia: "radiografia",
+  industria: "texto",
   hipotesisDeValor: "lista",
   estrategiaDeConexion: "conexion",
 } as const satisfies Record<ClaveDeCasilla, TipoDeCasilla>;
@@ -555,4 +571,40 @@ export const TOPE_DE_LA_LISTA: Record<"lista" | "metas" | "retos" | "autoridad" 
 /** ¿La meta está en cifras? Su objetivo trae un número. */
 export function metaEnCifras(m: Pick<Meta, "objetivo">): boolean {
   return /\d/.test(m.objetivo ?? "");
+}
+
+// ── De dónde sale una hipótesis de valor (Elías, 2026-10-06) ─────────────────
+
+/** Lo que separa la idea de su origen en el texto guardado: «La idea · De: HubSpot y tus notas». */
+const MARCA_DEL_ORIGEN = " · De: ";
+
+/** De dónde sale una fuente del agente, en palabras: por el prefijo de su id (lib/exploraciones/fuentes.ts). */
+export function origenDeLaFuente(id: string): string {
+  if (id === "N0") return "tus notas";
+  if (id === "W1") return "la investigación de la empresa";
+  if (id === "W2") return "la investigación de su industria";
+  if (id === "W0") return "su sitio web";
+  if (/^T\d/.test(id)) return "el diagnóstico";
+  if (/^[SM]\d/.test(id)) return "una reunión";
+  return "HubSpot";
+}
+
+/**
+ * La hipótesis con su origen al final, armado desde las fuentes que declaró el agente (no lo escribe
+ * el modelo). Sin «Creemos que» adelante: la sección ya dice que son hipótesis.
+ */
+export function conSuOrigen(texto: string, idsDeFuentes: readonly string[]): string {
+  const idea = separarOrigen(texto).idea.replace(/^creemos que\s+/i, "");
+  const limpia = idea.charAt(0).toUpperCase() + idea.slice(1);
+  const origenes = [...new Set(idsDeFuentes.map(origenDeLaFuente))].slice(0, 3);
+  if (origenes.length === 0) return limpia;
+  const dicho = origenes.length === 1 ? origenes[0] : `${origenes.slice(0, -1).join(", ")} y ${origenes[origenes.length - 1]}`;
+  return `${limpia}${MARCA_DEL_ORIGEN}${dicho}`;
+}
+
+/** La idea y su origen, para pintarlos por separado. Un texto sin la marca es todo idea. */
+export function separarOrigen(texto: string): { idea: string; origen: string | null } {
+  const i = texto.lastIndexOf(MARCA_DEL_ORIGEN);
+  if (i < 0) return { idea: texto.trim(), origen: null };
+  return { idea: texto.slice(0, i).trim(), origen: texto.slice(i + MARCA_DEL_ORIGEN.length).trim() || null };
 }

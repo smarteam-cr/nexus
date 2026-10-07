@@ -44,7 +44,7 @@ export default function NavFlyout({
   items,
   isOpen,
 }: {
-  item: Pick<NavItemConfig, "href" | "label" | "icon" | "match">;
+  item: Pick<NavItemConfig, "href" | "label" | "icon" | "match" | "entradaEsHijo">;
   items: readonly PanelItem[];
   isOpen: boolean;
 }) {
@@ -59,6 +59,10 @@ export default function NavFlyout({
   useEffect(() => setMounted(true), []);
 
   const active = (item.match ?? [item.href]).some((p) => pathname.startsWith(p));
+  /* El clic en el ítem lleva a su pantalla de entrada. Si esa entrada es un hijo que esta persona no
+     ve (un CSE en Ventas solo ve Preventa), lleva al primer hijo que sí ve. */
+  const destino =
+    item.entradaEsHijo && items.length > 0 && !items.some((c) => c.href === item.href) ? items[0].href : item.href;
 
   const openFlyout = useCallback(() => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -79,7 +83,7 @@ export default function NavFlyout({
   return (
     <div ref={wrapRef} className="relative" onMouseEnter={openFlyout} onMouseLeave={scheduleClose}>
       <Link
-        href={item.href}
+        href={destino}
         onClick={() => setOpen(false)}
         title={!isOpen ? item.label : undefined}
         className={`flex items-center rounded-lg text-sm transition-colors ${

@@ -27,7 +27,7 @@ const carpetaDe = (id: string) => `exploraciones/${id}`;
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("ventas", "read");
+  const guard = await guardPermission("preventa", "read");
   if (guard instanceof NextResponse) return guard;
   const lectura = await leerExploracion(id);
   if (lectura.estado !== "ok") return NextResponse.json({ documentos: [] });
@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
 export async function POST(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const guard = await guardPermission("ventas", "write");
+  const guard = await guardPermission("preventa", "write");
   if (guard instanceof NextResponse) return guard;
 
   const lectura = await leerExploracion(id);

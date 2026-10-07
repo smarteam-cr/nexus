@@ -3,8 +3,11 @@
 /**
  * ListaDeExploraciones — las preventas en curso, como en el tablero del listado (sistema de diseño
  * «Nexus · interfaz interna»): filtros en segmentado y una fila por empresa con qué sigue, cuánto le
- * falta para proponer, la próxima reunión y quién la lleva. Una nueva se abre desde «Planificar con
+ * falta para proponer (su progreso), cuándo se creó y quién la lleva. Una nueva se abre desde «Planificar con
  * una empresa», debajo, o desde «Llegaron por el test», a la derecha.
+ *
+ * Tercera vuelta (Elías, 2026-10-06): la columna se llama «Progreso», la fila dice cuándo se creó la
+ * preventa y deja de decir con qué escala se mide (eso vive en el lienzo), y sale «Próxima reunión».
  *
  * Segunda vuelta (Elías, 2026-10-05, tablero «Preventa · listado y resumen»): «Qué sigue» en dos
  * renglones (la frase entera y, debajo, las sugeridas); «Para proponer» es una barra ancha con
@@ -15,7 +18,7 @@
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
-import { diaConSemana, haceCuanto } from "@/lib/exploraciones/fechas";
+import { diaDeCalendario, haceCuanto } from "@/lib/exploraciones/fechas";
 import type { PuntoDeCalidad } from "@/lib/exploraciones/calidad";
 import type { FilaDeLaLista } from "@/lib/exploraciones/servidor";
 import ElegirResponsable, { type PersonaDelEquipo } from "./ElegirResponsable";
@@ -24,11 +27,11 @@ import Segmentos from "./Segmentos";
 
 type Filtro = "todas" | "mias" | "listas";
 
-const COLUMNAS = "grid grid-cols-[minmax(0,1.25fr)_minmax(0,1.6fr)_180px_112px_176px] items-start gap-4";
+const COLUMNAS = "grid grid-cols-[minmax(0,1.25fr)_minmax(0,1.6fr)_200px_176px] items-start gap-4";
 
 const lista = (f: FilaDeLaLista) => f.total > 0 && f.cumplidos === f.total;
 
-/** Cada punto de «lista para proponer» dicho corto, para «Falta: …» debajo de la barra. */
+/** Cada punto de «lista para proponer» dicho corto, para «Falta: …» debajo de la barra de «Progreso». */
 const CORTO: Record<PuntoDeCalidad["id"], string> = {
   frena: "qué frena al equipo",
   meta: "una meta en cifras",
@@ -47,11 +50,11 @@ function queFalta(f: FilaDeLaLista): string {
 }
 
 /**
- * La barra de «Para proponer»: un tramo por punto, verde el que está listo. Al pasar el cursor (o
+ * La barra de «Progreso» (lo que pide proponer el land): un tramo por punto, verde el que está listo. Al pasar el cursor (o
  * llegar con Tab) se ven los siete puntos: va como `title` de varias líneas, que dibuja la capa de
  * tooltips de la app (position: fixed, así no la recorta la tabla con scroll horizontal).
  */
-function ParaProponer({ f }: { f: FilaDeLaLista }) {
+function Progreso({ f }: { f: FilaDeLaLista }) {
   const listaYa = lista(f);
   const detalle = ["Lo que pide proponer el land:", ...f.puntos.map((p) => `${p.cumplido ? "✓" : "○"} ${p.titulo}`)].join("\n");
   return (
@@ -92,7 +95,7 @@ export default function ListaDeExploraciones({
     return filas.filter(
       (f) =>
         (filtro === "todas" || (filtro === "mias" && mia(f)) || (filtro === "listas" && lista(f))) &&
-        (!t || `${f.empresa} ${f.edicion ?? ""}`.toLowerCase().includes(t)),
+        (!t || f.empresa.toLowerCase().includes(t)),
     );
   }, [filas, filtro, q, mia]);
 
@@ -149,12 +152,11 @@ export default function ListaDeExploraciones({
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-        <div className="min-w-[900px]">
+        <div className="min-w-[820px]">
           <div className={cn(COLUMNAS, "rounded-t-xl border-b border-line bg-surface-muted px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-muted")}>
             <span>Empresa</span>
             <span>Qué sigue</span>
-            <span>Para proponer</span>
-            <span>Próxima reunión</span>
+            <span>Progreso</span>
             <span>La lleva</span>
           </div>
           {visibles.length === 0 ? (
@@ -172,8 +174,9 @@ export default function ListaDeExploraciones({
                   <Link href={`/sales/exploraciones/${f.id}`} className="text-sm font-semibold leading-snug text-fg after:absolute after:inset-0 after:content-['']">
                     {f.empresa}
                   </Link>
-                  <span className="truncate text-xs text-fg-muted">{[f.edicion ?? "Escala general", f.areas.join(" · ")].filter(Boolean).join(" · ")}</span>
-                  <span className="text-xs text-fg-muted">Actualizada {haceCuanto(f.actualizadaEn)}</span>
+                  <span className="text-xs text-fg-muted">
+                    Creada el {diaDeCalendario(f.creadaEn)} · actualizada {haceCuanto(f.actualizadaEn)}
+                  </span>
                 </span>
                 <span data-recorrido={i === 0 ? "preventa.lista.sigue" : undefined} className="flex min-w-0 flex-col items-start gap-1.5">
                   <span
@@ -190,10 +193,7 @@ export default function ListaDeExploraciones({
                   )}
                 </span>
                 <span data-recorrido={i === 0 ? "preventa.lista.proponer" : undefined} className="min-w-0">
-                  <ParaProponer f={f} />
-                </span>
-                <span className={cn("whitespace-nowrap text-[13px]", f.proximaReunion ? "font-medium text-fg" : "text-warn-ink")}>
-                  {f.proximaReunion ? diaConSemana(f.proximaReunion) : "Sin agendar"}
+                  <Progreso f={f} />
                 </span>
                 <span data-recorrido={i === 0 ? "preventa.lista.lleva" : undefined} className="relative min-w-0 text-[13px]">
                   <ElegirResponsable
@@ -210,7 +210,7 @@ export default function ListaDeExploraciones({
           )}
         </div>
       </div>
-      <p className="text-xs text-fg-muted">«Para proponer» son los {filas[0]?.total || 7} puntos que pide la propuesta del land (un primer proyecto acotado): pasa el cursor por la barra para verlos. Lo más reciente, arriba.</p>
+      <p className="text-xs text-fg-muted">«Progreso» son los {filas[0]?.total || 7} puntos que pide la propuesta del land (un primer proyecto acotado): pasa el cursor por la barra para verlos. Lo más reciente, arriba.</p>
     </section>
   );
 }

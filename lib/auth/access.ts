@@ -31,7 +31,11 @@
  *   5. ClientAssignment REVOKE → 403 (corta antes que cualquier otro permiso)
  *   6. ClientAssignment GRANT → OK (reason: granted)
  *   7. Owner en HubSpot (algún Project.hubspotOwnerEmail = email del user) → OK (reason: hubspot-owner)
- *   8. 403
+ *   8. Preventa: un PROSPECTO con una preventa viva, para quien tiene `preventa.read` → OK
+ *      (reason: preventa). Todo Customer Success trabaja las preventas (2026-10-06) y la preventa
+ *      muestra la información y los procesos de la empresa. Una empresa que ya es CLIENTE no entra
+ *      por acá: su acceso sigue siendo el de la cartera.
+ *   9. 403
  */
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma, TeamMember } from "@prisma/client";
@@ -42,7 +46,7 @@ import { PROYECTO_DE_PIPELINE_CS_WHERE } from "@/lib/projects/scope";
 
 /** Por qué se concedió el acceso. Todas las razones son de gente INTERNA: no hay —ni
  *  debe volver a haber— una razón "porque es el cliente dueño". */
-export type AccessReason = "super-admin" | "view-all" | "hubspot-owner" | "granted";
+export type AccessReason = "super-admin" | "view-all" | "hubspot-owner" | "granted" | "preventa";
 
 export interface AccessResult {
   user: AppUserWithTeamMember;
@@ -93,7 +97,15 @@ export async function requireAccessToClient(clientId: string): Promise<AccessRes
   });
   if (ownerProjectCount > 0) return { user, reason: "hubspot-owner" };
 
-  // 7. Sin acceso
+  // 7. Un prospecto en preventa, para quien trabaja las preventas (no una empresa que ya es cliente).
+  if (await can(tm, "preventa", "read")) {
+    const enPreventa = await prisma.exploracionDeVenta.count({
+      where: { clientId, archivadaEn: null, client: { kind: "PROSPECTO" } },
+    });
+    if (enPreventa > 0) return { user, reason: "preventa" };
+  }
+
+  // 8. Sin acceso
   throw new ForbiddenError("Sin acceso a este cliente");
 }
 
