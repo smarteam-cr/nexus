@@ -273,7 +273,7 @@ export function resolverApply(opts: OpcionesDeApply = {}): boolean {
   const r = respaldarTablas(process.env.DATABASE_URL ?? "", plan, opts.pgDump);
   if (!r.ok) {
     console.error(`\n⛔ ABORTADO: sin respaldo no hay escritura. ${r.motivo}.`);
-    console.error("   Instalá las herramientas cliente de PostgreSQL (pg_dump en el PATH) y volvé a correr.");
+    console.error("   Instala las herramientas cliente de PostgreSQL (pg_dump en el PATH) y vuelve a correrlo.");
     console.error("   Para escribir SIN respaldo, a sabiendas: SIN_RESPALDO=1 <mismo comando>.");
     process.exit(1);
   }
@@ -326,7 +326,7 @@ export function abortarSiAllowProdWriteFijo(dir = process.cwd()): void {
   }
   if (!tieneAllowProdWriteFijo(texto)) return;
   console.error("⛔ ABORTADO: ALLOW_PROD_WRITE está FIJA en el .env del repo.");
-  console.error("   Se autoriza por comando, nunca en el archivo: sacala del .env y volvé a correr.");
+  console.error("   Se autoriza por comando, nunca en el archivo: sácala del .env y vuelve a correrlo.");
   process.exit(1);
 }
 
