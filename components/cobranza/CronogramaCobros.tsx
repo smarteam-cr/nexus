@@ -28,6 +28,8 @@ import PromesaDialog from "./PromesaDialog";
 import MarcarFacturadoDialog, { mensajeDeFactura, type DatosDeFactura } from "./MarcarFacturadoDialog";
 import RevertirCobroDialog, { type DatosDeReversion } from "./RevertirCobroDialog";
 import { faltaNumeroDeFactura } from "@/lib/cobranza/numero-factura";
+import type { ProyectoPausadoDTO } from "@/lib/cobranza/proyecto-pausado";
+import AvisoProyectoPausado from "./AvisoProyectoPausado";
 
 /**
  * Las señales de Odoo en castellano. ⚠ «Pagada sin conciliar» NO es lo mismo que pagada: el
@@ -64,6 +66,7 @@ export default function CronogramaCobros({
   onRefresh,
   creditoDias,
   puedeEditar = true,
+  proyectoPausado = null,
 }: {
   /**
    * `cobranza.write`. Apagado, la fila se vuelve de solo lectura: los estados y las fechas se
@@ -79,6 +82,8 @@ export default function CronogramaCobros({
   onRefresh: () => void;
   /** Crédito resuelto de la cuenta (cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS). */
   creditoDias: number;
+  /** El proyecto del servicio está pausado: aviso arriba y en «Marcar facturado» (2026-10-06). */
+  proyectoPausado?: ProyectoPausadoDTO | null;
 }) {
   const toast = useToast();
   const [items, setItems] = useState(cobros);
@@ -188,8 +193,11 @@ export default function CronogramaCobros({
     );
   }
 
+  const hayPendientes = items.some((c) => c.estado !== "COBRADO");
+
   return (
     <>
+      {proyectoPausado && hayPendientes && <AvisoProyectoPausado proyecto={proyectoPausado} compacto />}
       <ul className="space-y-1.5">
         {items.map((c) => {
           const sem = SEMAFORO_META[
@@ -452,7 +460,7 @@ export default function CronogramaCobros({
 
       {facturarCobro && (
         <MarcarFacturadoDialog
-          cobro={facturarCobro}
+          cobro={{ ...facturarCobro, proyectoPausado }}
           todayISO={todayISO}
           onCancel={() => setFacturarCobro(null)}
           onConfirm={async (datos) => {

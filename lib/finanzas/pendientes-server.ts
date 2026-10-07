@@ -7,7 +7,7 @@
  */
 import "server-only";
 import { loadColaCobros, loadComisionesPartner } from "@/lib/cobranza";
-import { resumenAntiguedad } from "@/lib/cobranza/antiguedad";
+import { clasificarCobro, resumenAntiguedad } from "@/lib/cobranza/antiguedad";
 import { marcaPromesa } from "@/lib/cobranza/engine";
 import { comisionesPorCobrar } from "@/lib/cobranza/comisiones-partner";
 import { cargarDiferencias, contarEmparejado } from "@/lib/cobranza/odoo/servicio";
@@ -83,6 +83,8 @@ export function medirDesdeFuentes(f: FuentesDePendientes, todayISO: string): Dat
   const promesas = Object.fromEntries(
     Object.entries(resumen).map(([moneda, m]) => [moneda, { n: m.nPromesaIncumplida, monto: m.promesaIncumplida }]),
   );
+  /* De las que tocaba facturar, las de un proyecto pausado (2026-10-06): con la misma regla de grupo que la cola. */
+  const pausadas = cola.filter((c) => c.proyectoPausado && clasificarCobro(c, todayISO) === "sinFacturar");
   const clientesConPromesaRota = [
     ...new Set(
       cola
@@ -106,6 +108,7 @@ export function medirDesdeFuentes(f: FuentesDePendientes, todayISO: string): Dat
     porFacturar: {
       n: Object.values(porFacturar).reduce((s, v) => s + v.n, 0),
       montos: montosDeResumen(porFacturar),
+      pausados: { n: pausadas.length, clientes: [...new Set(pausadas.map((c) => c.clienteNombre))] },
     },
     promesas: {
       n: Object.values(promesas).reduce((s, v) => s + v.n, 0),

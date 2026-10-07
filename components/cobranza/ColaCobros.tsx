@@ -48,6 +48,7 @@ import BorradorCobroModal from "./BorradorCobroModal";
 import PromesaDialog from "./PromesaDialog";
 import MarcarFacturadoDialog, { mensajeDeFactura, type DatosDeFactura } from "./MarcarFacturadoDialog";
 import { faltaNumeroDeFactura } from "@/lib/cobranza/numero-factura";
+import AvisoProyectoPausado from "./AvisoProyectoPausado";
 
 type Grupo = GrupoCobro;
 type FiltroMoneda = "all" | "CRC" | "USD";
@@ -753,6 +754,7 @@ export default function ColaCobros({
                 </button>
               </div>
             </div>
+            {r.proyectoPausado && <AvisoProyectoPausado proyecto={r.proyectoPausado} compacto />}
           </li>
         ))}
       </ul>

@@ -43,6 +43,8 @@ import {
   type PlataformaDeCobro,
 } from "@/lib/cobranza/sociedades";
 import { fmtFecha, fmtMonto, INPUT_CLS, SELECT_CLS } from "./format";
+import type { ProyectoPausadoDTO } from "@/lib/cobranza/proyecto-pausado";
+import AvisoProyectoPausado from "./AvisoProyectoPausado";
 
 /** Shape mínimo del cobro a facturar — CobroDTO y ColaCobroRow lo satisfacen. */
 export interface CobroFacturarRef {
@@ -56,6 +58,8 @@ export interface CobroFacturarRef {
   /** Con fecha, el diálogo agrega o cambia el número de una factura ya marcada. */
   fechaEmision?: string | null;
   numeroFactura?: string | null;
+  /** El proyecto de la cuota está pausado: el aviso va arriba, antes de facturar (2026-10-06). No frena. */
+  proyectoPausado?: ProyectoPausadoDTO | null;
 }
 
 /** Lo que va en el PATCH del cobro. Número y motivo son excluyentes: uno de los dos viaja en null. */
@@ -199,6 +203,7 @@ export default function MarcarFacturadoDialog({
       }
     >
       <div className="space-y-3">
+        {!yaFacturado && cobro.proyectoPausado && <AvisoProyectoPausado proyecto={cobro.proyectoPausado} />}
         {cargando && <p className="text-xs text-fg-muted">Buscando las facturas de este cliente en el espejo de Odoo…</p>}
         {errorCarga && (
           <Alert variant="warning">

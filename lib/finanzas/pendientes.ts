@@ -15,9 +15,19 @@
 import { textoDeMontos, type MontoEnMoneda } from "@/lib/cobranza/odoo/diferencias";
 import type { Devuelto } from "./revision";
 
+/** El aviso de proyecto pausado dentro de la tarea de facturar (lib/cobranza/proyecto-pausado.ts). */
+function avisoDePausados(p: { n: number; clientes: string[] } | undefined): string {
+  if (!p || p.n === 0) return "";
+  const nombres = `${p.clientes.slice(0, 3).join(", ")}${p.clientes.length > 3 ? " y otros" : ""}`;
+  return ` ⏸ ${p.n === 1 ? "Una es" : `${p.n} son`} de un proyecto pausado (${nombres}): consulta con Customer Success y el líder antes de facturar${p.n === 1 ? "la" : "las"}.`;
+}
+
 export interface DatosDePendientes {
-  /** Cuotas que ya tocaba facturar y siguen sin factura. */
-  porFacturar: { n: number; montos: MontoEnMoneda[] };
+  /**
+   * Cuotas que ya tocaba facturar y siguen sin factura. `pausados`: cuántas son de un proyecto pausado, y de qué clientes
+   * (2026-10-06: antes de facturarlas hay que hablar con Customer Success y el líder).
+   */
+  porFacturar: { n: number; montos: MontoEnMoneda[]; pausados?: { n: number; clientes: string[] } };
   /** Cobros con la promesa de pago vencida, y los clientes, sin repetir. */
   promesas: { n: number; montos: MontoEnMoneda[]; clientes: string[] };
   /** Cuotas que Odoo o Mercury ya dan por pagadas y en Nexus siguen por cobrar. */
@@ -73,7 +83,7 @@ export function armarPendientes(d: DatosDePendientes): TareaPendiente[] {
       clave: "facturar",
       cuando: "hoy",
       titulo: `Facturar ${plural(d.porFacturar.n, "cuota que ya toca", "cuotas que ya tocan")}`,
-      detalle: "Emite la factura en Odoo o en Mercury y márcala en Cobranza con su número.",
+      detalle: `Emite la factura en Odoo o en Mercury y márcala en Cobranza con su número.${avisoDePausados(d.porFacturar.pausados)}`,
       plata: textoDeMontos(d.porFacturar.montos),
       accion: "Facturar",
       href: "/cobranza",

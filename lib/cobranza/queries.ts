@@ -7,7 +7,8 @@
  * defensa sistemática contra el bug silencioso de "Decimal no es serializable".
  */
 import { prisma } from "@/lib/db/prisma";
-import { proyectoClasificableWhere, proyectoFacturableWhere } from "@/lib/projects/scope";
+import { NO_ES_CONTENEDOR_WHERE, proyectoClasificableWhere, proyectoFacturableWhere } from "@/lib/projects/scope";
+import { PROYECTO_PAUSADO_WHERE, proyectoPausadoDe, type ProyectoParaPausa, type ProyectoPausadoDTO } from "./proyecto-pausado";
 import {
   computeCajaNeta,
   computeRiesgoPago,
@@ -214,6 +215,8 @@ export interface ServicioDTO {
   duracionMeses: number | null;
   projectId: string | null;
   projectName: string | null;
+  /** El proyecto del servicio (o, sin proyecto, uno del cliente) está pausado: avisar antes de facturar (2026-10-06). */
+  proyectoPausado?: ProyectoPausadoDTO | null;
   anchorActual: string | null; // anchorStartDate ACTUAL del project (para badge de divergencia)
   estado: string;
   descripcion: string | null;
@@ -293,6 +296,8 @@ export interface AlertaDTO {
   vistaPor: string | null;
   resueltaPor: string | null;
   posponerHasta: string | null; // snooze vigente = la alerta no aparece en el feed
+  /** La cuota de la alerta es de un proyecto pausado (2026-10-06). Se calcula al leer, no se guarda en la alerta. */
+  proyectoPausado?: ProyectoPausadoDTO | null;
 }
 
 // ── Serializadores (Decimal → number, Date → ISO) ───────────────────────────────
@@ -515,7 +520,7 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
       servicios: {
         orderBy: { createdAt: "asc" },
         include: {
-          project: { select: { name: true, timeline: { select: { anchorStartDate: true } } } },
+          project: { select: { ...PROYECTO_PARA_PAUSA_SELECT, timeline: { select: { anchorStartDate: true } } } },
           planes: { where: { activo: true }, include: { cuotas: { orderBy: { orden: "asc" } } }, take: 1 },
           cobros: {
             orderBy: [{ fechaProgramada: "asc" }, { numCuota: "asc" }],
@@ -549,6 +554,10 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
    * espejo dice qué ve Odoo; el semáforo lo sigue moviendo una persona.
    */
   const facturasPorCobro = await aparearFacturasDeOdoo(cuenta.id, cuenta.client.name, cuenta.servicios, cuenta.viaCobro);
+  // Los proyectos pausados del cliente, para los servicios sin proyecto (lib/cobranza/proyecto-pausado.ts).
+  const pausadosDelCliente = cuenta.servicios.some((s) => !s.project)
+    ? ((await cargarPausadosPorCliente([cuenta.clientId])).get(cuenta.clientId) ?? [])
+    : [];
 
   const proyectos = await prisma.project.findMany({
     where: proyectoClasificableWhere({ clientId: cuenta.clientId }),
@@ -584,6 +593,7 @@ export async function getCuentaDetail(cuentaId: string): Promise<CuentaDetailDTO
       duracionMeses: s.duracionMeses,
       projectId: s.projectId,
       projectName: s.project?.name ?? null,
+      proyectoPausado: proyectoPausadoDe(s.project, pausadosDelCliente),
       anchorActual: isoDay(s.project?.timeline?.anchorStartDate ?? null),
       estado: s.estado,
       descripcion: s.descripcion,
@@ -644,8 +654,20 @@ export async function loadAlertas(filters?: {
     },
     orderBy: [{ urgencia: "asc" }, { lastDetectedAt: "desc" }],
     take: 200,
-    include: { cuenta: { select: { client: { select: { name: true } } } } },
+    include: { cuenta: { select: { clientId: true, client: { select: { name: true } } } } },
   });
+  // El proyecto pausado de cada cuota con alerta: `cobroId` no es una relación, así que va en una consulta aparte.
+  const cobroIds = [...new Set(alertas.map((a) => a.cobroId).filter((id): id is string => !!id))];
+  const cobros = cobroIds.length
+    ? await prisma.cobro.findMany({
+        where: { id: { in: cobroIds } },
+        select: { id: true, cuenta: { select: { clientId: true } }, servicio: { select: { project: { select: PROYECTO_PARA_PAUSA_SELECT } } } },
+      })
+    : [];
+  const pausados = await cargarPausadosPorCliente(cobros.filter((c) => !c.servicio.project).map((c) => c.cuenta.clientId));
+  const pausadoDe = new Map(
+    cobros.map((c) => [c.id, proyectoPausadoDe(c.servicio.project, pausados.get(c.cuenta.clientId) ?? [])] as const),
+  );
   return alertas.map((a) => ({
     id: a.id,
     cuentaId: a.cuentaId,
@@ -663,6 +685,7 @@ export async function loadAlertas(filters?: {
     vistaPor: a.vistaPor,
     resueltaPor: a.resueltaPor,
     posponerHasta: iso(a.posponerHasta),
+    proyectoPausado: a.cobroId ? (pausadoDe.get(a.cobroId) ?? null) : null,
   }));
 }
 
@@ -935,6 +958,38 @@ export interface ColaCobroRow {
    * esto hay que abrir cuenta por cuenta para saberlo.
    */
   tipoCuenta: string;
+  /** El proyecto de la cuota está pausado: avisar antes de facturar (lib/cobranza/proyecto-pausado.ts, 2026-10-06). */
+  proyectoPausado: ProyectoPausadoDTO | null;
+}
+
+/** Lo que hace falta de un proyecto para saber si está pausado y con quién hablar. */
+const PROYECTO_PARA_PAUSA_SELECT = {
+  id: true,
+  name: true,
+  status: true,
+  hubspotStatus: true,
+  healthStatusOverride: true,
+  hubspotOwnerName: true,
+} as const;
+
+/**
+ * Los proyectos PAUSADOS de cada cliente, para las cuotas cuyo servicio no tiene proyecto. Sin el contenedor
+ * «Información del cliente», que no es un proyecto. Una sola consulta para toda la lista.
+ */
+export async function cargarPausadosPorCliente(clientIds: ReadonlyArray<string>): Promise<Map<string, ProyectoParaPausa[]>> {
+  const ids = [...new Set(clientIds)];
+  if (ids.length === 0) return new Map();
+  const filas = await prisma.project.findMany({
+    where: { AND: [{ clientId: { in: ids } }, NO_ES_CONTENEDOR_WHERE, PROYECTO_PAUSADO_WHERE] },
+    select: { ...PROYECTO_PARA_PAUSA_SELECT, clientId: true },
+    orderBy: { name: "asc" },
+  });
+  const porCliente = new Map<string, ProyectoParaPausa[]>();
+  for (const { clientId, ...p } of filas) {
+    if (!clientId) continue;
+    porCliente.set(clientId, [...(porCliente.get(clientId) ?? []), p]);
+  }
+  return porCliente;
 }
 
 /**
@@ -961,13 +1016,14 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       fechaEmision: true,
       numeroFactura: true,
       sinNumeroFacturaMotivo: true,
-      servicio: { select: { tipoServicio: true, descripcion: true } },
+      servicio: { select: { tipoServicio: true, descripcion: true, project: { select: PROYECTO_PARA_PAUSA_SELECT } } },
       cuenta: {
         select: { clientId: true, creditoDias: true, tipo: true, client: { select: { name: true } } },
       },
     },
     orderBy: { fechaProgramada: "asc" },
   });
+  const pausados = await cargarPausadosPorCliente(cobros.filter((c) => !c.servicio.project).map((c) => c.cuenta.clientId));
   return cobros.map((c) => {
     const fecha = isoDay(c.fechaProgramada)!;
     return {
@@ -992,6 +1048,7 @@ export async function loadColaCobros(todayISO: string): Promise<ColaCobroRow[]> 
       sinNumeroFacturaMotivo: c.sinNumeroFacturaMotivo,
       creditoDias: c.cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS,
       tipoCuenta: c.cuenta.tipo,
+      proyectoPausado: proyectoPausadoDe(c.servicio.project, pausados.get(c.cuenta.clientId) ?? []),
     };
   });
 }

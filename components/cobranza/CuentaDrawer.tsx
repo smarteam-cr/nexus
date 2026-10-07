@@ -852,6 +852,7 @@ function ServicioCard({
                 onRefresh={onRefresh}
                 puedeEditar={puedeEditar}
                 creditoDias={cuenta.creditoDias ?? DEFAULT_CREDITO_DIAS}
+                proyectoPausado={servicio.proyectoPausado ?? null}
               />
             </>
           )}

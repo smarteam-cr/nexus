@@ -5150,6 +5150,13 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   agregar, corregir o borrar cualquiera de esas; cobrar no. El tipo de cambio tampoco: no es un gasto ni una factura.
   Un cierre sin huella (anterior a esto) dice «no se puede saber»; al 2026-10-06 no había ninguno en prod. Lo que lo
   revertiría: querer que el cierre congele también la cobranza del mes.
+- **Proyecto pausado al facturar (pedido de Elías, 2026-10-06).** Cuando una cuota pendiente es de un proyecto pausado,
+  la cola de cobros, el diálogo de «Marcar facturado», el cronograma de la cuenta, las alertas y la tarea «Facturar» de
+  Pendientes y Para ti dicen: «El proyecto está pausado. Consulta con Customer Success y el líder antes de facturar.»
+  No frena nada. Pausado = `hubspotStatus` on_hold (la única que se usa hoy), salud fijada en PAUSADO o `status`
+  paused; un servicio de cobranza en PAUSADO no cuenta (es de Finanzas, no del proyecto). La cuota toma el proyecto de
+  su servicio; sin proyecto, cualquier pausado del cliente (puede avisar de más: preguntar es barato). Se calcula al
+  leer, nunca en `AlertaCobro.mensaje`, que se conserva entre corridas (`lib/cobranza/proyecto-pausado.ts`).
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 

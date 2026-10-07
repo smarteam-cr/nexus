@@ -21,6 +21,7 @@ import type { AlertaDTO } from "@/lib/cobranza";
 import { TIPO_ALERTA_LABEL } from "@/lib/cobranza/schema";
 import { ETIQUETA_ALERTA_RECURRENCIA, esAlertaDeRecurrencia } from "@/lib/cobranza/engine";
 import { FILTER_SELECT_CLS, fmtFecha, INPUT_CLS } from "./format";
+import AvisoProyectoPausado from "./AvisoProyectoPausado";
 
 const URG_META: Record<string, { label: string; chip: string; dot: string; border: string }> = {
   ALTA: {
@@ -222,6 +223,7 @@ export default function AlertasCobranza({
                   </div>
                   <p className="text-sm font-semibold text-fg mt-1">{a.clienteNombre}</p>
                   <p className="text-xs text-fg-secondary mt-0.5">{a.mensaje}</p>
+                  {a.proyectoPausado && <AvisoProyectoPausado proyecto={a.proyectoPausado} compacto />}
                   {expanded === a.id && tieneEvidencia(a.evidencia) && (
                     <pre className="text-[10px] text-fg-muted mt-2 bg-surface-muted/50 rounded-lg p-2 overflow-x-auto">
                       {JSON.stringify(a.evidencia, null, 2)}
