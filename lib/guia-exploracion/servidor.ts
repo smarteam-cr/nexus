@@ -1,17 +1,19 @@
 import "server-only";
 
 /**
- * lib/guia-exploracion/servidor.ts — leer y cambiar la guía de exploración (molde de
+ * lib/guia-exploracion/servidor.ts — leer y cambiar las sesiones de la exploración (molde de
  * lib/exploraciones/servidor.ts: fila bloqueada con FOR UPDATE + versión).
  *
- * La vista arma, además de lo guardado, lo que NO se copia en la guía porque vive en otro lado:
- *   · los equipos contratados (los hubs del proyecto);
- *   · la escala: dónde quedó en el diagnóstico preliminar (exploración de venta / test en línea), qué
- *     contestó cada persona en el cuestionario de escala y qué confirmó el CSE. Lo preliminar se
- *     muestra como punto de partida, no como evidencia.
+ * La vista arma, además de lo guardado, lo que NO se copia porque vive en otro lado:
+ *   · la escala: dónde quedó cada dimensión en el diagnóstico preliminar y qué contestó cada persona
+ *     en el cuestionario de escala (para las preguntas que apuntan a una dimensión). El nivel ya no se
+ *     confirma acá: lo pone el Diagnóstico, que lee las sesiones;
+ *   · lo que ya dice Información del cliente («Ya lo sabemos») y cuántas sugerencias esperan ahí;
+ *   · la última reunión del proyecto que el agente todavía no leyó.
  */
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { CAMPOS_DE_LA_FICHA, camposPropuestos, leerFicha } from "@/lib/clients/ficha";
 import { compararCuestionarios } from "@/lib/cuestionario/comparar";
 import { obtenerCuestionarios } from "@/lib/cuestionario/servicio";
 import { areasContratadas } from "@/lib/escala/areas-por-hub";
@@ -20,6 +22,7 @@ import { nombreDeNivel } from "@/lib/escala/documento/parsear";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import { ubicacionPreviaDelProyecto } from "@/lib/exploraciones/para-el-cuestionario";
+import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
 import { sanitizeTags } from "@/lib/tags/catalog";
 import {
   EQUIPOS,
@@ -29,6 +32,7 @@ import {
   leerContenido,
   leerPropuesta,
   pendientes,
+  type Averiguado,
   type ClaveDeEquipo,
   type ContenidoDeGuia,
   type ItemPropuesto,
@@ -41,18 +45,12 @@ export const CORRIDA_VENCE_MS = 6 * 60_000;
 export interface DimensionDeLaGuia {
   id: string;
   nombre: string;
+  area: string;
   /** Dónde la ubicó el preliminar (nombre del nivel) y de dónde salió. */
   previo: { letra: string; nivel: string; fuente: "exploracion" | "test" } | null;
   /** Lo que contestó cada persona en el cuestionario de escala. */
   cuestionario: Array<{ persona: string; letra: string | null; nivel: string | null; confirmada: boolean }>;
   desacuerdo: "difieren" | "se-contradicen" | null;
-  confirmado: { letra: string; nivel: string; nota?: string } | null;
-}
-
-export interface AreaDeLaGuia {
-  id: string;
-  nombre: string;
-  dimensiones: DimensionDeLaGuia[];
 }
 
 export interface VistaDeLaGuia {
@@ -61,15 +59,13 @@ export interface VistaDeLaGuia {
   contenido: ContenidoDeGuia;
   pendientes: ItemPropuesto[];
   corrida: { enCurso: boolean; modo: string | null; terminoAt: string | null; error: string | null };
-  ultimasCorridas: Array<{ modo: string; en: string; propuestas: number }>;
   equipos: ClaveDeEquipo[];
-  escala: {
-    disponible: boolean;
-    version: string | null;
-    hayPreliminar: boolean;
-    niveles: Array<{ letra: string; nombre: string }>;
-    areas: AreaDeLaGuia[];
-  };
+  /** Las dimensiones de las áreas contratadas, por id (las preguntas «E» apuntan a una). */
+  escala: { disponible: boolean; hayPreliminar: boolean; dimensiones: DimensionDeLaGuia[] };
+  /** Lo que ya dice Información del cliente. */
+  ficha: { confirmada: boolean; sabido: Array<{ etiqueta: string; texto: string }>; propuestas: number };
+  /** La última reunión del proyecto (ya ocurrida) que el agente todavía no leyó. */
+  reunionSinLeer: { titulo: string; fecha: string } | null;
 }
 
 export class ErrorDeGuia extends Error {
@@ -102,15 +98,45 @@ export function corridaEnCurso(f: { corriendoDesde: Date | null; corridaTerminoA
   );
 }
 
+/** La última reunión del proyecto que ya ocurrió y el agente todavía no leyó (por el chokepoint). */
+export async function ultimaReunionSinLeer(projectId: string, leidas: readonly string[]): Promise<{ id: string; titulo: string; date: number } | null> {
+  const { sessions } = await getProjectMemberSessions(projectId);
+  const ahora = Date.now();
+  const candidata = sessions.filter((s) => s.date <= ahora && !leidas.includes(s.id)).sort((a, b) => b.date - a.date)[0];
+  return candidata ? { id: candidata.id, titulo: candidata.title, date: candidata.date } : null;
+}
+
+/** Las primeras palabras de un campo de la ficha, sin el formato de viñetas: para «Ya lo sabemos». */
+function resumenDelCampo(texto: string, max = 200): string {
+  const plano = texto
+    .split("\n")
+    .map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").replace(/\*\*(.+?)\*\*/g, "$1").trim())
+    .filter(Boolean)
+    .join(" · ");
+  return plano.length > max ? `${plano.slice(0, max - 1).trimEnd()}…` : plano;
+}
+
 export async function vistaDeLaGuia(projectId: string): Promise<VistaDeLaGuia> {
   const [fila, project] = await Promise.all([
     filaDeLaGuia(projectId),
-    prisma.project.findUnique({ where: { id: projectId }, select: { tags: true } }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { tags: true, client: { select: { ficha: true } } } }),
   ]);
   const tags = sanitizeTags(project?.tags ?? []);
   const equipos = EQUIPOS.filter((e) => tags.includes(HUB_DEL_EQUIPO[e]));
   const contenido = fila ? leerContenido(fila.contenido) : contenidoVacio();
   const propuesta = fila ? leerPropuesta(fila.propuesta) : null;
+  const enCurso = fila ? corridaEnCurso(fila) : false;
+
+  const ficha = leerFicha(project?.client?.ficha);
+  const sabido = ficha.confirmadaAt
+    ? CAMPOS_DE_LA_FICHA.filter((c) => c.alCliente && ficha.valores[c.clave].trim()).map((c) => ({
+        etiqueta: c.etiqueta,
+        texto: resumenDelCampo(ficha.valores[c.clave]),
+      }))
+    : [];
+
+  // Mientras el agente corre, la pantalla consulta cada pocos segundos: la reunión sin leer no cambia.
+  const reunion = enCurso ? null : await ultimaReunionSinLeer(projectId, propuesta?.leidas ?? []).catch(() => null);
 
   return {
     existe: !!fila,
@@ -118,19 +144,20 @@ export async function vistaDeLaGuia(projectId: string): Promise<VistaDeLaGuia> {
     contenido,
     pendientes: propuesta ? pendientes(propuesta, contenido) : [],
     corrida: {
-      enCurso: fila ? corridaEnCurso(fila) : false,
+      enCurso,
       modo: fila?.corridaModo ?? null,
       terminoAt: fila?.corridaTerminoAt?.toISOString() ?? null,
-      error: fila && !corridaEnCurso(fila) ? fila.corridaError : null,
+      error: fila && !enCurso ? fila.corridaError : null,
     },
-    ultimasCorridas: (propuesta?.corridas ?? []).slice(0, 5).map((c) => ({ modo: c.modo, en: c.en, propuestas: c.propuestas })),
     equipos,
-    escala: await escalaDeLaGuia(projectId, tags, contenido),
+    escala: await escalaDeLaGuia(projectId, tags),
+    ficha: { confirmada: !!ficha.confirmadaAt, sabido, propuestas: camposPropuestos(ficha).length },
+    reunionSinLeer: reunion ? { titulo: reunion.titulo, fecha: new Date(reunion.date).toISOString() } : null,
   };
 }
 
-async function escalaDeLaGuia(projectId: string, tags: string[], contenido: ContenidoDeGuia): Promise<VistaDeLaGuia["escala"]> {
-  const vacia = { disponible: false, version: null, hayPreliminar: false, niveles: [], areas: [] };
+async function escalaDeLaGuia(projectId: string, tags: string[]): Promise<VistaDeLaGuia["escala"]> {
+  const vacia = { disponible: false, hayPreliminar: false, dimensiones: [] };
   const vigente = await leerEscalaVigente().catch(() => null);
   if (!vigente || !("escala" in vigente)) return vacia;
   const [previo, cuestionarios] = await Promise.all([
@@ -142,55 +169,43 @@ async function escalaDeLaGuia(projectId: string, tags: string[], contenido: Cont
   const porDim = new Map((comparacion?.escala?.dimensiones ?? []).map((d) => [d.ref, d]));
   const nombre = (l: string) => nombreDeNivel(escala, l as Letra);
 
-  const areas = areasContratadas(tags).flatMap((areaId) => {
+  const dimensiones = areasContratadas(tags).flatMap((areaId) => {
     const area = escala.areas.find((a) => a.id === areaId);
     if (!area) return [];
-    return [
-      {
-        id: area.id,
-        nombre: area.nombre,
-        dimensiones: area.dimensiones.map((d) => {
-          const p = previo?.porDimension[d.id];
-          const c = porDim.get(d.id);
-          const conf = contenido.escala[d.id];
-          return {
-            id: d.id,
-            nombre: d.nombre,
-            previo: p ? { letra: p.nivel, nivel: nombre(p.nivel), fuente: p.fuente } : null,
-            cuestionario: (c?.respuestas ?? []).map((r) => ({
-              persona: r.persona,
-              letra: r.nivel,
-              nivel: r.nivel ? nombre(r.nivel) : null,
-              confirmada: r.origen !== "prellenado" || r.confirmada,
-            })),
-            desacuerdo: c?.desacuerdo ?? null,
-            confirmado: conf ? { letra: conf.nivel, nivel: nombre(conf.nivel), ...(conf.nota ? { nota: conf.nota } : {}) } : null,
-          };
-        }),
-      },
-    ];
+    return area.dimensiones.map((d) => {
+      const p = previo?.porDimension[d.id];
+      const c = porDim.get(d.id);
+      return {
+        id: d.id,
+        nombre: d.nombre,
+        area: area.nombre,
+        previo: p ? { letra: p.nivel, nivel: nombre(p.nivel), fuente: p.fuente } : null,
+        cuestionario: (c?.respuestas ?? []).map((r) => ({
+          persona: r.persona,
+          letra: r.nivel,
+          nivel: r.nivel ? nombre(r.nivel) : null,
+          confirmada: r.origen !== "prellenado" || r.confirmada,
+        })),
+        desacuerdo: c?.desacuerdo ?? null,
+      };
+    });
   });
-  return {
-    disponible: true,
-    version: escala.version,
-    hayPreliminar: !!previo && Object.keys(previo.porDimension).length > 0,
-    niveles: escala.niveles.map((n) => ({ letra: n.letra, nombre: n.nombre })),
-    areas,
-  };
+  return { disponible: true, hayPreliminar: !!previo && Object.keys(previo.porDimension).length > 0, dimensiones };
 }
 
 /**
  * Aplica operaciones del CSE a lo CONFIRMADO. Todas o ninguna, con la fila bloqueada; 409 si otra
- * pestaña ya cambió lo confirmado (la versión no coincide).
+ * pestaña ya cambió lo confirmado (la versión no coincide). Devuelve lo averiguado que quedó escrito
+ * o cambió: la ruta lo manda a Información del cliente después de responder.
  */
-export async function aplicarCambios(projectId: string, version: number, ops: OperacionDeGuia[]): Promise<void> {
+export async function aplicarCambios(projectId: string, version: number, ops: OperacionDeGuia[]): Promise<Averiguado[]> {
   await asegurarGuia(projectId);
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const filas = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "GuiaDeExploracion" WHERE "projectId" = ${projectId} FOR UPDATE`;
-    if (filas.length === 0) throw new ErrorDeGuia("La guía no existe.", 404);
+    if (filas.length === 0) throw new ErrorDeGuia("Las sesiones no existen.", 404);
     const f = await tx.guiaDeExploracion.findUniqueOrThrow({ where: { projectId } });
     if (f.version !== version) {
-      throw new ErrorDeGuia("Alguien más cambió la guía mientras la tenías abierta. Recarga para ver lo último.", 409);
+      throw new ErrorDeGuia("Alguien más cambió las sesiones mientras las tenías abiertas. Recarga para ver lo último.", 409);
     }
     const propuesta = leerPropuesta(f.propuesta);
     const r = aplicarOperaciones(leerContenido(f.contenido), propuesta, ops);
@@ -203,5 +218,6 @@ export async function aplicarCambios(projectId: string, version: number, ops: Op
         version: { increment: 1 },
       },
     });
+    return r.averiguado;
   });
 }

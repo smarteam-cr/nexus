@@ -1,18 +1,9 @@
 /**
- * lib/guia-exploracion/lectura.ts — cómo se lee lo que devuelve el agente de la guía. PURO (sin base
- * ni IA) para probarlo: verifica que cada propuesta cite una fuente real y que la cita esté LITERAL en
- * ella; lo que no, se descarta. El agente vive en agente.ts.
+ * lib/guia-exploracion/lectura.ts — cómo se lee lo que devuelve el agente de las sesiones. PURO (sin
+ * base ni IA) para probarlo: verifica que cada propuesta cite una fuente real y que la cita esté
+ * LITERAL en ella; lo que no, se descarta. El agente vive en agente.ts.
  */
-import {
-  ROLES,
-  idDelItem,
-  type ClaveDeEquipo,
-  type ContenidoDeGuia,
-  type DestinoDePropuesta,
-  type Fuente,
-  type ItemPropuesto,
-  type ValorPropuesto,
-} from "./contenido";
+import { idDelItem, type ContenidoDeGuia, type DestinoDePropuesta, type Fuente, type ItemPropuesto, type ValorPropuesto } from "./contenido";
 
 export interface FuenteDeTexto {
   id: string;
@@ -42,7 +33,6 @@ const str = (x: unknown, max = 600) => (typeof x === "string" ? x.replace(/\s+/g
 export function leerLaRespuesta(
   input: unknown,
   fuentes: FuenteDeTexto[],
-  equipos: ClaveDeEquipo[],
   plan: ContenidoDeGuia["sesiones"],
   corridaId: string,
   en: string,
@@ -74,28 +64,6 @@ export function leerLaRespuesta(
     items.push({ id: idDelItem(destino, valor), destino, valor, fuentes: fs, corridaId, en });
   };
 
-  for (const x of lista(r.resultados)) {
-    const que = str(x.que, 300);
-    if (!que) continue;
-    const alcance = x.alcance === "fuera" || x.alcance === "duda" ? x.alcance : "dentro";
-    sumar({ tipo: "resultado" }, { que, quien: str(x.quien, 200), paraQue: str(x.paraQue, 400), alcance }, x);
-  }
-  for (const [clave, tipo] of [["opera", "opera"], ["trabas", "traba"]] as const) {
-    for (const x of lista(r[clave])) {
-      const equipo = str(x.equipo, 20) as ClaveDeEquipo;
-      const texto = str(x.texto);
-      if (!texto || !equipos.includes(equipo)) continue;
-      sumar({ tipo, equipo }, { texto }, x);
-    }
-  }
-  for (const x of lista(r.personas)) {
-    const nombre = str(x.nombre, 120);
-    if (!nombre) continue;
-    const rol = ROLES.includes(x.rol as (typeof ROLES)[number]) ? (x.rol as (typeof ROLES)[number]) : null;
-    sumar({ tipo: "persona" }, { nombre, rol, sabe: str(x.sabe, 400) }, x);
-  }
-  for (const x of lista(r.noRepreguntar)) if (str(x.texto)) sumar({ tipo: "noRepreguntar" }, { texto: str(x.texto) }, x);
-  for (const x of lista(r.fueraDeAlcance)) if (str(x.texto)) sumar({ tipo: "fueraDeAlcance" }, { texto: str(x.texto) }, x);
   for (const x of lista(r.contradicciones)) if (str(x.texto)) sumar({ tipo: "contradiccion" }, { texto: str(x.texto) }, x, true);
   for (const x of lista(r.sesiones)) {
     const titulo = str(x.titulo, 120);
@@ -114,4 +82,3 @@ export function leerLaRespuesta(
   }
   return { items, descartadas };
 }
-

@@ -30,6 +30,7 @@ import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-document
 import { documentoConContexto } from "@/lib/contexto/documento";
 import { guardarVersionDelDocumento } from "@/lib/canvas/versiones";
 import { loadCuestionarioContext } from "@/lib/cuestionario/contexto";
+import { fichaParaPrompt, leerFicha } from "@/lib/clients/ficha";
 import { Prisma } from "@prisma/client";
 import { PLANIFICACION_CANVAS, planificacionSectionSequence } from "@/lib/canvas/canvas-defs";
 import { createOnDemandCanvas, reconcileOnDemandCanvasSections } from "@/lib/canvas/default-canvases";
@@ -116,7 +117,7 @@ export async function runPlanificacionGeneration(opts: {
           name: true,
           tags: true,
           clientId: true,
-          client: { select: { name: true, company: true, industry: true } },
+          client: { select: { name: true, company: true, industry: true, ficha: true } },
         },
       }),
       // Las etapas que el cliente describió en el cuestionario previo = las filas del proceso.
@@ -131,6 +132,10 @@ export async function runPlanificacionGeneration(opts: {
 
   // El «Contexto» de este documento (lib/contexto/material-del-documento.ts): sus reuniones y notas.
   const material = await cargarMaterialDelDocumento(projectId, documentoConContexto("planning")!);
+
+  // La ficha del cliente CONFIRMADA (2026-10-05): lo que la exploración averigua del cliente ya no
+  // viaja en las sesiones, va a la ficha. ⛔ Sin los campos internos: el plan lo ve el cliente.
+  const fichaCtx = fichaParaPrompt(leerFicha(project?.client?.ficha), { paraDocumentoDelCliente: true });
 
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
@@ -148,7 +153,8 @@ export async function runPlanificacionGeneration(opts: {
     "",
     "=== HANDOFF DEL PROYECTO (completo — documento interno) ===",
     handoffCtx || "(Sin handoff generado.)",
-    exploracionCtx ? `\n=== EXPLORACIÓN (lo confirmado y lo supuesto) ===\n${exploracionCtx}` : "",
+    fichaCtx ? `\n${fichaCtx}` : "",
+    exploracionCtx ?`\n=== EXPLORACIÓN (lo confirmado y lo supuesto) ===\n${exploracionCtx}` : "",
     procesosCtx
       ? `\n=== MAPAS DE PROCESOS DEL CLIENTE (qué procesos existen; ⚠ = fricción. Una fuente más: lo que ninguna reunión menciona es, a lo sumo, un supuesto) ===\n${procesosCtx}`
       : "",

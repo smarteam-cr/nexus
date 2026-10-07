@@ -25,6 +25,8 @@ import CanvasAgentButton from "@/components/clients/CanvasAgentButton";
 import { PiezasDelRiel, type FilaDelRielDePiezas } from "./RielDelCliente";
 import PanelDelDocumento from "./PanelDelDocumento";
 import { MarcoDelDocumento } from "./MarcoDelDocumento";
+import DocumentoContextSection from "@/components/canvas/DocumentoContextSection";
+import { documentoConContexto } from "@/lib/contexto/documento";
 import { ProveedorDelResumen, type AvisoDePieza, type ContextoDelResumen } from "./contexto-del-resumen";
 import type { PiezaParaQueSigue, QueSigueDelProyecto } from "@/lib/clients/que-sigue-del-proyecto";
 import { BOTON_DE_HERRAMIENTA, BOTON_DE_HERRAMIENTA_ACTIVO, BotonAzul, BotonBlanco } from "@/components/ui/sistema";
@@ -474,6 +476,8 @@ export default function ProjectCanvasPanel({
     ) : null;
   /** La franja del marco dice si el documento abierto se publica al cliente (registro de piezas). */
   const loVeElCliente = !!(activeSlug && pieceBySlug(activeSlug)?.clientFacing);
+  /** Diagnóstico, planificación y ejecución tienen «Contexto» propio (lib/contexto/documento.ts). */
+  const docConContexto = !enResumen ? documentoConContexto(activeSlug) : null;
   const ctaEnElPanel =
     !!slotDelPanel && !queSigueOcupado && !!botonDelAgente && !!filaActiva && (filaActiva.state !== "generada" || !!filaActiva.stale);
   const queSigueParaElDocumento = queSigueProyecto
@@ -592,6 +596,15 @@ export default function ProjectCanvasPanel({
                 <h2 className="text-[22px] font-bold leading-tight text-fg">
                   {activeSlug ? pieceLabel(activeSlug) : activeCanvas.name}
                 </h2>
+                {/* La exploración es una herramienta de trabajo del equipo, no un documento (2026-10-05). */}
+                {activeSlug === "exploration" && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-px text-[11px] font-semibold text-fg-secondary">
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                      <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.1A9.7 9.7 0 0112 5c5 0 9 4.5 10 7a13 13 0 01-3.2 4.3M6.6 6.6C4.3 8 2.7 10.2 2 12c1 2.5 5 7 10 7a9.6 9.6 0 004.4-1" />
+                    </svg>
+                    Interno · el cliente no lo ve
+                  </span>
+                )}
                 {filaActiva?.stale && (
                   <span
                     className="rounded-full border border-warn-line bg-warn-surface px-2 py-0.5 text-[11px] font-medium text-warn-ink"
@@ -629,7 +642,7 @@ export default function ProjectCanvasPanel({
           {!ctaEnElPanel && botonDelAgente}
           {/* Las fotos que se toman antes de cada regeneración (lib/canvas/versiones.ts): en todo
               documento que la IA reescribe, incluido Desarrollo (su CTA viene por portal). */}
-          {activeCanvas && activeCanvasId && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff") && (
+          {activeCanvas && activeCanvasId && activeSlug !== "exploration" && (CANVAS_PRIMARY_AGENT[activeSlug ?? ""] || activeSlug === "tech-requirements" || activeSlug === "handoff") && (
             <VersionesDelDocumento
               projectId={projectId}
               canvasId={activeCanvasId}
@@ -673,7 +686,7 @@ export default function ProjectCanvasPanel({
           {/* Export PDF. Qué camino toma lo decide el REGISTRO de impresión leyendo la pieza del
               canvas activo. El resumen no se imprime: no es un documento, es la foto de cómo va el
               proyecto — y sus dos piezas (el brief y el handoff) tienen su propio PDF. */}
-          {!enResumen && (
+          {!enResumen && activeSlug !== "exploration" && (
             <PrintDocButton
               projectId={projectId}
               activeSlug={activeSlug ?? null}
@@ -683,13 +696,13 @@ export default function ProjectCanvasPanel({
           {/* Acceso del cliente externo (token + contraseña) — PROJECT-LEVEL: las mismas
               credenciales destraban todas las superficies externas (kickoff, cronograma), por eso
               vive acá y no en un canvas. */}
-          <ExternalAccessButton projectId={projectId} />
+          {activeSlug !== "exploration" && <ExternalAccessButton projectId={projectId} />}
         </div>
       </div>
 
       {/* El panel de la derecha mientras se mira un documento: su «Qué sigue», de dónde salió y el
           índice de secciones. */}
-      {slotDelPanel && !enResumen && activeCanvas && activeCanvasId &&
+      {slotDelPanel && !enResumen && activeCanvas && activeCanvasId && activeSlug !== "exploration" &&
         createPortal(
           <PanelDelDocumento
             key={activeCanvasId}
@@ -770,6 +783,17 @@ export default function ProjectCanvasPanel({
           El marco es OBLIGATORIO en todo canvas del motor: va sin padding para que las bandas de
           sección lleguen a los bordes. Con padding, el hero y el cierre —que llevan fondo propio—
           quedan recortados con calles a los lados. */}
+      {/* El «Contexto» del documento (sus reuniones y notas) va ARRIBA del marco, no adentro: es del
+          equipo, no de lo que ve el cliente, y adentro quedaba cerrado y no se veía (2026-10-05). */}
+      {docConContexto && activeCanvasId && (
+        <DocumentoContextSection
+          key={`contexto-${activeCanvasId}`}
+          projectId={projectId}
+          doc={docConContexto}
+          generado={filaActiva ? filaActiva.state === "generada" : !!activeCanvas?.hasContent}
+        />
+      )}
+
       {activeSlug === "implementation" && activeCanvasId && (
         <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="la ejecución">
@@ -806,20 +830,24 @@ export default function ProjectCanvasPanel({
         </MarcoDelDocumento>
       )}
 
+      {/* Exploración: Sesiones y Cuestionarios (2026-10-05). Es una herramienta de trabajo, no un
+          documento: va FUERA del marco y pinta su propia columna derecha. Solo el informe viejo
+          —del motor de landings— lleva su marco. */}
       {activeSlug === "exploration" && activeCanvasId && (
-        <MarcoDelDocumento loVeElCliente={loVeElCliente}>
-          <CanvasBoundary label="el canvas de Exploración">
-            {/* 4A Cuestionario previo + 4B Informe: la misma fase, dos momentos. */}
-            <ExploracionConCuestionario
-              projectId={projectId}
-              informeAnterior={
-                piezasConContenido.includes("exploration") ? (
+        <CanvasBoundary label="la Exploración">
+          <ExploracionConCuestionario
+            projectId={projectId}
+            clientId={clientId}
+            slotDelPanel={!enResumen ? slotDelPanel : null}
+            informeAnterior={
+              piezasConContenido.includes("exploration") ? (
+                <MarcoDelDocumento loVeElCliente={false}>
                   <ExploracionWorkspace key={`${activeCanvasId}-${agentNonce}`} projectId={projectId} canvasId={activeCanvasId} soloLectura />
-                ) : null
-              }
-            />
-          </CanvasBoundary>
-        </MarcoDelDocumento>
+                </MarcoDelDocumento>
+              ) : null
+            }
+          />
+        </CanvasBoundary>
       )}
 
       {/* Cronograma: Gantt + editor del ProjectTimeline (fases/tareas/semanas).

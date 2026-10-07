@@ -1,8 +1,10 @@
 /**
- * GET/PATCH/POST /api/projects/[projectId]/guia-exploracion — la guía de exploración del CSE.
+ * GET/PATCH/POST /api/projects/[projectId]/guia-exploracion — las sesiones de la exploración del CSE.
  *
- * GET: la vista (lo confirmado, lo que propone el agente, la escala armada y el estado de la corrida).
- * PATCH: `{ version, operaciones }` sobre lo CONFIRMADO (409 si otra pestaña ya lo cambió).
+ * GET: la vista (lo confirmado, lo que propone el agente, la escala y la ficha armadas, la reunión
+ * sin leer y el estado de la corrida).
+ * PATCH: `{ version, operaciones }` sobre lo CONFIRMADO (409 si otra pestaña ya lo cambió). Lo
+ * averiguado que quedó escrito va DESPUÉS, como sugerencia, a Información del cliente.
  * POST: `{ modo: "preparar" | "leer" }` lanza el agente fuera del request (la pantalla sigue por el GET).
  *
  * Editar y lanzar el agente pide lo mismo que el cronograma (dueño del cliente o handoff en cualquier
@@ -11,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { guardAccessToProject, guardProjectHandoffAccess } from "@/lib/auth/api-guards";
+import { llevarLoAveriguadoALaFicha } from "@/lib/guia-exploracion/a-la-ficha";
 import { lanzarCorrida } from "@/lib/guia-exploracion/agente";
 import type { OperacionDeGuia } from "@/lib/guia-exploracion/contenido";
 import { ErrorDeGuia, aplicarCambios, vistaDeLaGuia } from "@/lib/guia-exploracion/servidor";
@@ -22,20 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
   return NextResponse.json(await vistaDeLaGuia(projectId));
 }
 
-const NOMBRES_DE_OPERACION = [
-  "usar",
-  "descartar",
-  "agregarDato",
-  "agregarResultado",
-  "agregarHallazgo",
-  "agregarPersona",
-  "agregarSesion",
-  "agregarPregunta",
-  "editar",
-  "quitar",
-  "marcarPregunta",
-  "confirmarNivel",
-] as const;
+const NOMBRES_DE_OPERACION = ["usar", "descartar", "agregarSesion", "agregarPregunta", "editar", "quitar", "marcarPregunta"] as const;
 
 /* La forma fina de cada operación la valida `aplicarOperaciones` (tolera tipos raros y contesta en
    español). Acá: que sea una lista acotada de objetos con un `op` conocido y sin campos enormes. */
@@ -55,8 +45,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
   const parsed = Cambios.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   try {
-    await aplicarCambios(projectId, parsed.data.version, parsed.data.operaciones as unknown as OperacionDeGuia[]);
-    return NextResponse.json(await vistaDeLaGuia(projectId));
+    const averiguado = await aplicarCambios(projectId, parsed.data.version, parsed.data.operaciones as unknown as OperacionDeGuia[]);
+    llevarLoAveriguadoALaFicha(projectId, averiguado, guard.user.email);
+    return NextResponse.json({ ...(await vistaDeLaGuia(projectId)), averiguadoALaFicha: averiguado.length });
   } catch (e) {
     if (e instanceof ErrorDeGuia) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;

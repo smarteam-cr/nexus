@@ -13,7 +13,7 @@ const EJEMPLO_DE_FICHA = "/clients/cmtum4orn00bd07lg0if1q51q";
 /** La ficha del cliente (rediseño del 2026-10-04): riel, etapa, resumen y «Qué sigue». */
 export const FICHA_DEL_CLIENTE: Recorrido = {
   id: "ficha-cliente",
-  version: 1,
+  version: 2,
   titulo: "Ficha del cliente",
   descripcion: "Los proyectos y sus piezas, la etapa y lo que te toca",
   rotulo: "Recorrido · Ficha del cliente",
@@ -42,7 +42,7 @@ export const FICHA_DEL_CLIENTE: Recorrido = {
     {
       ancla: "ficha.etapa",
       titulo: "En qué etapa va el proyecto",
-      texto: "La barra sale del pipeline de HubSpot. Debajo ves qué se cerró y qué falta para pasar a la siguiente etapa.",
+      texto: "Sale de HubSpot. «Cambiar etapa» la escribe allá. Si una reunión muestra que avanzó, Nexus te lo sugiere y nada se mueve hasta que respondas.",
       lado: "bottom-start",
     },
     {
@@ -197,16 +197,19 @@ export const FICHA_CRONOGRAMA: Recorrido = {
   ],
 };
 
-/** La pieza Exploración de la ficha: los cuestionarios y la guía de las sesiones. */
+/** La pieza Exploración de la ficha: las sesiones y los cuestionarios. */
 export const FICHA_EXPLORACION: Recorrido = {
   id: "ficha-exploracion",
-  version: 1,
+  // v2 (2026-10-05): la guía se retiró. La exploración son Sesiones y Cuestionarios, y lo que se
+  // averigua va como sugerencia a Información del cliente.
+  // v3 (2026-10-05): una pestaña por sesión, como en la preventa.
+  version: 3,
   titulo: "Exploración del proyecto",
-  descripcion: "La guía de las sesiones y lo que propone el agente",
+  descripcion: "Las sesiones, los cuestionarios y adónde va lo que averiguas",
   rotulo: "Recorrido · Exploración",
   invitacion: {
     titulo: "¿Te muestro cómo se usa la exploración?",
-    texto: "Los cuestionarios, la guía de las sesiones y lo que propone el agente. Menos de un minuto.",
+    texto: "Las sesiones, los cuestionarios y adónde va lo que averiguas. Menos de un minuto.",
   },
   ruta: RUTA_DE_LA_FICHA,
   porPantalla: true,
@@ -217,38 +220,38 @@ export const FICHA_EXPLORACION: Recorrido = {
   pasos: [
     {
       ancla: "exploracion.vistas",
-      titulo: "Cuestionarios y guía",
-      texto: "Cambia entre los cuestionarios que se mandan a cada persona del cliente y la guía que usas en las sesiones.",
-      lado: "bottom-start",
-    },
-    {
-      ancla: "exploracion.agente",
-      titulo: "El agente arma la guía",
-      texto: "Prepárala con un clic. Después de cada sesión, «Leer la última reunión» marca qué preguntas ya quedaron respondidas.",
+      titulo: "Una pestaña por sesión",
+      texto: "Cada sesión dice qué preguntar y con quién; las que propone el agente van en azul. Al final, «+ Sesión» y los cuestionarios.",
       lado: "bottom-start",
     },
     {
       ancla: "exploracion.propuestas",
-      titulo: "Lo que propone el agente",
-      texto: "Cada propuesta trae la frase de dónde salió: «Usar» o «Descartar». Lo confirmado nunca se pisa.",
+      titulo: "Lo que sugiere el agente",
+      texto: "Preguntas que una reunión ya respondió, contradicciones y sesiones nuevas. Cada una dice de dónde salió: «Usar» o «Descartar».",
       lado: "bottom-start",
     },
     {
       ancla: "exploracion.sesion",
-      titulo: "El plan de sesiones",
-      texto: "Qué preguntar en cada sesión y con quién. Marca lo que ya preguntaste.",
-      lado: "top-start",
-    },
-    {
-      ancla: "exploracion.fuera",
-      titulo: "Fuera de lo contratado",
-      texto: "Lo que no entra en la exploración y va al mapa de oportunidades.",
+      titulo: "La sesión abierta",
+      texto: "Marca lo que ya preguntaste y anota lo que averiguaste: va como sugerencia a Información del cliente.",
       lado: "top-start",
     },
     {
       ancla: "que-sigue",
       titulo: "Lo próximo que te toca",
-      texto: "Siempre arriba a la derecha, con un solo botón azul.",
+      texto: "Preparar las sesiones, leer la última reunión o revisar lo que sugirió el agente. Un solo botón azul.",
+      lado: "left-start",
+    },
+    {
+      ancla: "exploracion.ficha",
+      titulo: "Lo que ya sabemos",
+      texto: "Sale de Información del cliente: no lo vuelvas a preguntar. Ahí esperan también las sugerencias que dejaron las sesiones.",
+      lado: "left-start",
+    },
+    {
+      ancla: "exploracion.agente",
+      titulo: "El agente",
+      texto: "Vuelve a proponer cuando cambie algo, o lee la última reunión para marcar lo que ya quedó respondido.",
       lado: "left-start",
     },
   ],
@@ -257,7 +260,8 @@ export const FICHA_EXPLORACION: Recorrido = {
 /** «Información del cliente», en la cuenta: la ficha que va a HubSpot y las licencias. */
 export const FICHA_INFORMACION: Recorrido = {
   id: "ficha-informacion",
-  version: 1,
+  // v2 (2026-10-05): los resultados que persigue el cliente se confirman acá (antes, en el Resumen).
+  version: 2,
   titulo: "Información del cliente",
   descripcion: "La ficha que se guarda en HubSpot, lo que propone la IA y las licencias",
   rotulo: "Recorrido · Información del cliente",
@@ -294,6 +298,12 @@ export const FICHA_INFORMACION: Recorrido = {
       ancla: "info.grupo",
       titulo: "Los campos de la ficha",
       texto: "Cada campo dice adónde va en HubSpot. El grupo «Solo el equipo» no lo ve el cliente.",
+      lado: "right-start",
+    },
+    {
+      ancla: "info.resultados",
+      titulo: "Los resultados que persigue",
+      texto: "Salen del handoff de cada proyecto: completa línea base, meta y plazo, y confírmalos. El Resumen solo los muestra.",
       lado: "right-start",
     },
     {

@@ -11,8 +11,8 @@
  *  · «La empresa»: dominios, industria y TAM, tal como los tiene Nexus.
  */
 import { useEffect, useState } from "react";
-import { QueSigue, BotonAzul, BotonBlanco, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
-import { EVENTO_FICHA_CAMBIO, camposPropuestos, type FichaGuardada } from "@/lib/clients/ficha";
+import { QueSigue, BotonAzul, BotonBlanco, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { EVENTO_FICHA_CAMBIO, camposPropuestos, type ClaveDeFicha, type FichaGuardada } from "@/lib/clients/ficha";
 import { NOMBRE_DEL_HUB, avisoDeRenovacion, type LicenciaDeHub } from "@/lib/cs/licencias";
 
 interface Empresa {
@@ -99,9 +99,42 @@ export default function PanelDeLaCuenta({
             }
           : null;
 
+  // De dónde salió cada cosa que propone la IA (2026-10-05): una fila por fuente, con cuántos campos
+  // toca. Lo averiguado en las sesiones de exploración llega acá con «Exploración · <sesión>».
+  const porFuente = new Map<string, number>();
+  if (ficha?.propuesta) {
+    const vivos = new Set<string>(camposPropuestos(ficha));
+    for (const [clave, fuentes] of Object.entries(ficha.propuesta.fuentesPorCampo) as Array<[ClaveDeFicha, string[] | undefined]>) {
+      if (!vivos.has(clave)) continue;
+      for (const f of fuentes ?? []) porFuente.set(f, (porFuente.get(f) ?? 0) + 1);
+    }
+  }
+  const fuentes = [...porFuente.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+
   return (
     <>
       {queSigue && <QueSigue accion={queSigue.accion ?? undefined}>{queSigue.texto}</QueSigue>}
+
+      {fuentes.length > 0 && (
+        <section data-recorrido="info.fuentes" className="flex flex-col gap-2.5">
+          <span className={ROTULO_DEL_SISTEMA}>De dónde vienen las sugerencias</span>
+          <ul className="divide-y divide-line rounded-xl border border-line bg-surface px-3">
+            {fuentes.map(([fuente, n]) => (
+              <li key={fuente} className="flex items-center gap-2 py-2 text-[13px]">
+                <span className="min-w-0 flex-1 text-fg">{fuente}</span>
+                <span
+                  title={`${n} ${n === 1 ? "campo" : "campos"} con una sugerencia de esta fuente`}
+                  className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-info-line bg-info-surface py-0 pl-1 pr-1.5 text-[11px] font-semibold text-brand"
+                >
+                  <IconoDeSugerencia className="h-3 w-3" />
+                  {n}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <span className="text-[11px] text-fg-muted">Cada campo dice debajo de su sugerencia de dónde salió.</span>
+        </section>
+      )}
 
       {licencias && (
         <section data-recorrido="info.licencias" className="flex flex-col gap-2.5">
