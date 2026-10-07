@@ -117,6 +117,21 @@ export function reunionDeLaSesion(s: SesionPlaneada, reuniones: readonly Reunion
   return reuniones.find((r) => diaDe(r.fecha) === s.fecha) ?? null;
 }
 
+/**
+ * La guía con que se planeó una reunión: la guardada para su sesión o la viva, solo si se armó ANTES
+ * de la reunión (`fechaDeLaReunion`, ISO). Una armada después no planeó nada: comparar la reunión
+ * contra ella (o contra lo que falta hoy) le cuenta como «no se preguntó» algo que nadie llevó. Era lo
+ * que pasaba con la primera reunión de CreditForce (28 sep), leída contra una guía del 1 oct.
+ */
+export function guiaDeAntesDeLaReunion(
+  propuesta: { guia: GuiaDeLaSesion | null; guias: Record<string, GuiaDeLaSesion> },
+  sesionId: string | null,
+  fechaDeLaReunion: string,
+): GuiaDeLaSesion | null {
+  const antes = (g: GuiaDeLaSesion | null | undefined) => (g && g.en < fechaDeLaReunion ? g : null);
+  return antes(sesionId ? propuesta.guias[sesionId] : null) ?? antes(propuesta.guia);
+}
+
 /** Una pestaña de Exploración: una sesión planeada o una reunión que no está en ninguna. */
 export interface PestanaDeSesion {
   /** El id de la sesión, o `r-<id>` para una reunión suelta. */

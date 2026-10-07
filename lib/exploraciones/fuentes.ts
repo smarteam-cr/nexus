@@ -37,7 +37,7 @@ import { documentosParaLeer, listarDocumentos } from "./documentos";
 import { LARGO_DE_UNA_TRANSCRIPCION_CORTA, PREGUNTA_DE_BASE, transcripcionCorta, type ReunionDeLaExploracion, type SesionPlaneada } from "./guia";
 import { CLAVE_DE_INSTRUCCIONES, rotuloDeLaNota } from "./notas-de-sesion";
 import { etiquetaDeLaFuente } from "./senales";
-import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, reunionesDeHubspotQueYaPasaron, type ReunionSinLeer } from "./lectura";
+import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, reunionesDeHubspotQueYaPasaron, reunionesLeidasDeHubspot, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
 import { REUNIONES } from "./sesion";
 import { leerSitioWeb } from "./sitio-web";
@@ -65,6 +65,18 @@ export interface LoQueSeLeyo {
    * `propuesta.lecturas` (contenido.ts › `claveDeLaReunion`): el agente las resume una por una.
    */
   reunionesLeidas?: ReunionLeida[];
+  /**
+   * Cuántas reuniones de HubSpot que ya ocurrieron fueron como fuente (leídas o no): la primera
+   * preparación sigue leyendo si encontró alguna (agente.ts › `leerLoQueYaHabia`).
+   */
+  reunionesDeHubspot?: number;
+}
+
+/** Lo que se vuelve a leer, por id, aunque ya se haya leído: para resumir reuniones viejas (y nada más). */
+export interface LoQueSeRelee {
+  sesiones: readonly string[];
+  hubspot: readonly string[];
+  documentos: readonly string[];
 }
 
 export interface ReunionLeida {
@@ -187,6 +199,11 @@ export async function leerFuentes(opts: {
   sesionId?: string | null;
   /** Para «leer»: un documento que el vendedor acaba de sumar (solo ese, sin reuniones de Meet). */
   documentoId?: string | null;
+  /**
+   * Para «leer»: SOLO esto, aunque ya se haya leído, y sin las notas del vendedor. Lo usa el resumen de
+   * las reuniones que el agente leyó antes de que resumiera cada una (agente.ts › `resumirLoYaLeido`).
+   */
+  releer?: LoQueSeRelee;
 }): Promise<LoQueSeLeyo> {
   const nombreDeNivel = (l: Letra) => opts.escala.niveles.find((n) => n.letra === l)?.nombre ?? l;
   const fuentes: Fuente[] = [];
@@ -253,12 +270,19 @@ export async function leerFuentes(opts: {
      nadie sacaría de esa reunión los niveles, las metas ni lo que quedó sin explorar. */
   const marcar = opts.modo === "leer";
 
-  // La actividad de HubSpot: al preparar, toda la reciente; al leer, solo lo que no se leyó.
+  // La actividad de HubSpot: al preparar, toda la reciente; al leer, solo lo que no se leyó (o lo que se relee).
   const yaLeidas = new Set(opts.propuesta.leidas.hubspot);
-  const actividadQueVa = opts.modo === "leer" ? actividad.material.filter((a) => !yaLeidas.has(a.id)) : actividad.material;
+  const releer = opts.modo === "leer" ? opts.releer : undefined;
+  const actividadQueVa = releer
+    ? actividad.material.filter((a) => releer.hubspot.includes(a.id))
+    : opts.modo === "leer"
+      ? actividad.material.filter((a) => !yaLeidas.has(a.id))
+      : actividad.material;
+  let reunionesDeHubspot = 0;
   actividadQueVa.slice(0, 25).forEach((a, i) => {
     const etiqueta = `${NOMBRE_DEL_TIPO[a.tipo]}${a.ts ? ` del ${fecha(a.ts)}` : ""}${a.resultado ? ` (${QUE_PASO[a.resultado]})` : ""}${a.titulo ? `: ${a.titulo}` : ""}`;
     fuentes.push({ id: `H${i + 1}`, etiqueta, texto: a.texto });
+    if (a.tipo === "MEETING" && (!a.resultado || a.resultado === "hecha")) reunionesDeHubspot++;
     if (marcar) leidas.hubspot.push(a.id);
     // Una reunión de HubSpot que se hizo también se resume como reunión (las otras actividades no).
     if (marcar && a.tipo === "MEETING" && (!a.resultado || a.resultado === "hecha")) {
@@ -293,8 +317,9 @@ export async function leerFuentes(opts: {
     });
     return sesiones.filter((s) => filas.some((f) => f.id === s.id));
   };
-  const elegidas =
-    opts.modo === "leer"
+  const elegidas = releer
+    ? sesiones.filter((s) => releer.sesiones.includes(s.id))
+    : opts.modo === "leer"
       ? opts.documentoId
         ? []
         : opts.sesionId
@@ -328,12 +353,16 @@ export async function leerFuentes(opts: {
 
   /* ── Lo que el vendedor sumó a mano: una sesión que no quedó grabada, el resumen del Smartflow,
      una minuta. Se lee como una transcripción (las citas se verifican igual). ── */
-  const docs = await documentosParaLeer(
-    opts.exploracionId,
-    opts.modo === "leer"
-      ? { soloEste: opts.documentoId, excepto: opts.propuesta.leidas.documentos, cuantos: opts.documentoId ? 1 : 3 }
-      : { cuantos: 3 },
-  );
+  const docs = releer
+    ? releer.documentos.length
+      ? (await documentosParaLeer(opts.exploracionId, { cuantos: 20 })).filter((d) => releer.documentos.includes(d.id))
+      : []
+    : await documentosParaLeer(
+        opts.exploracionId,
+        opts.modo === "leer"
+          ? { soloEste: opts.documentoId, excepto: opts.propuesta.leidas.documentos, cuantos: opts.documentoId ? 1 : 3 }
+          : { cuantos: 3 },
+      );
   docs.forEach((d, i) => {
     const etiqueta = `Lo que sumó el vendedor${d.fecha ? ` (sesión del ${fecha(d.fecha)})` : ""}: ${d.titulo}`;
     fuentes.push({ id: `M${i + 1}`, etiqueta, texto: d.texto.slice(0, MAX) });
@@ -360,7 +389,7 @@ export async function leerFuentes(opts: {
     if (para in PREGUNTA_DE_BASE) return PREGUNTA_DE_BASE[para as keyof typeof PREGUNTA_DE_BASE];
     return opts.escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.pregunta ?? null;
   };
-  const notas = textoDeLasNotas(opts.notas, opts.sesiones ?? [], preguntaDe);
+  const notas = releer ? "" : textoDeLasNotas(opts.notas, opts.sesiones ?? [], preguntaDe);
   if (notas) fuentes.push({ id: "N0", etiqueta: "Notas del vendedor (su contexto y su interpretación, no palabras del cliente)", texto: notas.slice(0, MAX) });
 
   return {
@@ -373,6 +402,7 @@ export async function leerFuentes(opts: {
     sesionesUsadas,
     empresa: empresa ? { pais: empresa.pais, empleados: empresa.empleados } : null,
     reunionesLeidas,
+    reunionesDeHubspot,
   };
 }
 
@@ -431,7 +461,9 @@ export async function reunionesDeLaExploracion(
     leida: docsLeidos.has(d.id),
   }));
   const deHubspot: ReunionDeLaExploracion[] = reunionesDeHubspotQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora);
-  return [...deMeet, ...aMano, ...deHubspot].sort((a, b) => b.fecha.localeCompare(a.fecha));
+  // Las de HubSpot que el agente leyó sin que estuvieran en la agenda: salen de su lectura.
+  const leidasDeHubspot: ReunionDeLaExploracion[] = reunionesLeidasDeHubspot(opts.propuesta.lecturas, deHubspot, deMeet);
+  return [...deMeet, ...aMano, ...deHubspot, ...leidasDeHubspot].sort((a, b) => b.fecha.localeCompare(a.fecha));
 }
 
 /**

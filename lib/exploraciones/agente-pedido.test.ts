@@ -7,10 +7,14 @@ import { describe, expect, it } from "vitest";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import {
   citaVerificable,
+  esDelEquipoDeSmarteam,
+  juntarCobertura,
   herramienta,
   leerLaIndustria,
   leerLaRespuesta,
   leerLosCasos,
+  leerLosResumenes,
+  pedidoDeLosResumenes,
   lineaDeHoy,
   MAX_CASOS_POR_AREA,
   pedidoDeCasos,
@@ -842,5 +846,78 @@ describe("⭐ el agente resume cada reunión y dice qué se respondió (2026-10-
   it("la lectura se guarda en la propuesta por reunión, y lo que no tiene la forma se cae", () => {
     const lectura = { etiqueta: "Reunión del 1 oct", resumen: "Algo", cobertura: [], listosAntes: ["frena"], en: "2026-10-01T00:00:00.000Z", corridaId: "run_1" };
     expect(leerPropuesta({ ...propuestaVacia(), lecturas: { "meet:gmeet_1": lectura, "fax:1": lectura, "meet:2": { resumen: 3 } } }).lecturas).toEqual({ "meet:gmeet_1": lectura });
+  });
+});
+
+describe("⭐ nadie del equipo de Smarteam en «Quién decide» (2026-10-07)", () => {
+  it("por nombre, contra el equipo: con dos palabras o más tienen que estar todas; una sola no alcanza", () => {
+    const equipo = ["Andrés Felipe Pinzón", "Elías González"];
+    expect(esDelEquipoDeSmarteam({ nombre: "Andrés Pinzón" }, equipo)).toBe(true);
+    expect(esDelEquipoDeSmarteam({ nombre: "ANDRES PINZON" }, equipo)).toBe(true);
+    expect(esDelEquipoDeSmarteam({ nombre: "Andrés Mora" }, equipo)).toBe(false);
+    expect(esDelEquipoDeSmarteam({ nombre: "Andrés" }, equipo)).toBe(false);
+    expect(esDelEquipoDeSmarteam({ nombre: "Laura Vega", cargo: "Consultora de Smarteam" }, equipo)).toBe(true);
+    expect(esDelEquipoDeSmarteam({ nombre: "Andrés Pinzón" }, [])).toBe(false);
+  });
+
+  it("lo que el agente propone con alguien del equipo se cae, y el pedido le dice quiénes son", () => {
+    const c = ctx({ equipo: ["Andrés Pinzón"] });
+    const cita = [{ id: "S1", cita: "pasar de 20 a 35 cierres por mes antes de junio" }];
+    const r = leerLaRespuesta(
+      respuesta({
+        personas: [
+          { nombre: "Andrés Pinzón", rol: "decide", fuentes: cita },
+          { nombre: "Ana Rojas", rol: "decide", fuentes: cita },
+        ],
+      }),
+      c,
+      "run_1",
+      AHORA,
+    );
+    const personas = r.items.filter((i) => i.destino.tipo === "casilla" && i.destino.clave === "autoridad").map((i) => (i.valor as { nombre: string }).nombre);
+    expect(personas).toEqual(["Ana Rojas"]);
+    expect(r.descartadas).toBe(1);
+    expect(String(pedidoDeLaExploracion(c).messages[0].content)).toContain("Equipo de Smarteam (no son del cliente, nunca van en personas): Andrés Pinzón");
+  });
+});
+
+describe("⭐ el resumen solo de las reuniones que ya se leyeron (2026-10-07)", () => {
+  const reuniones = [{ fuente: "H1", etiqueta: "Reunión en HubSpot del 28 sept 2026: Revisión del diagnóstico" }];
+  const fuentes = [{ id: "H1", etiqueta: reuniones[0].etiqueta, texto: REUNION }];
+
+  it("sin una guía de antes, pide solo el resumen: ni cobertura ni nada para proponer", () => {
+    const p = pedidoDeLosResumenes({ empresa: "Acme Retail", fuentes, reuniones });
+    const tool = p.tools![0] as Anthropic.Messages.Tool;
+    expect(tool.name).toBe("resumir");
+    expect(Object.keys(tool.input_schema.properties as object)).toEqual(["reuniones"]);
+    expect(JSON.stringify(tool.input_schema)).not.toContain("cobertura");
+    expect(String(p.messages[0].content)).toContain("H1: Reunión en HubSpot del 28 sept 2026");
+    expect(String(p.messages[0].content)).not.toContain("LO QUE SE PLANEÓ");
+  });
+
+  it("lee el resumen de cada reunión; la cobertura queda vacía si no había nada planeado", () => {
+    const ctxR = { empresa: "Acme Retail", fuentes, reuniones };
+    const r = {
+      ...respuesta({}),
+      content: [{ type: "tool_use", id: "tu", name: "resumir", input: { reuniones: [{ fuente: "H1", resumen: "Contó que los vendedores usan Excel.", cobertura: [{ para: "metas", respondida: true }] }, { fuente: "S9", resumen: "otra" }] } }],
+    } as unknown as Anthropic.Messages.Message;
+    expect(leerLosResumenes(r, ctxR)).toEqual([{ fuente: "H1", resumen: "Contó que los vendedores usan Excel.", cobertura: [] }]);
+  });
+
+  it("al leer sin nada planeado, la herramienta pide el resumen sin cobertura", () => {
+    const props = herramienta(ctx({ reuniones: [{ fuente: "S1", etiqueta: "Reunión del 1 oct" }], planeado: { objetivo: null, preguntas: [] } })).input_schema.properties as Record<string, unknown>;
+    expect(JSON.stringify(props.reuniones)).toContain('"enum":["S1"]');
+    expect(JSON.stringify(props.reuniones)).not.toContain("cobertura");
+  });
+});
+
+describe("⭐ la misma reunión por Meet y por HubSpot: lo respondido se junta (2026-10-07)", () => {
+  const c = (para: string, respondida: boolean, detalle?: string) => ({ para, pregunta: `¿${para}?`, respondida, ...(detalle ? { detalle } : {}) });
+  it("respondida si se respondió en cualquiera de las dos, con el primer detalle", () => {
+    expect(juntarCobertura([[c("metas", false), c("1.3", true, "lo dijo")], [c("metas", true, "pasar a 35"), c("1.3", false)]])).toEqual([
+      c("metas", true, "pasar a 35"),
+      c("1.3", true, "lo dijo"),
+    ]);
+    expect(juntarCobertura([])).toEqual([]);
   });
 });

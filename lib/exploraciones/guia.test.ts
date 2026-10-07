@@ -15,6 +15,7 @@ import { CASILLAS_DEL_RESUMEN, CLASES_DE_OBJECION } from "./casillas";
 import {
   enfoqueDeLaGuia,
   focoDeLaGuia,
+  guiaDeAntesDeLaReunion,
   guiaVieja,
   huecosDelResumen,
   loQueTraes,
@@ -571,5 +572,22 @@ describe("⭐ la guía sugiere el objetivo y retoma lo llevado (2026-10-07)", ()
     expect(voseoEnLaGuia(g!).sort()).toEqual(["llegás", "vivís", "vos"]);
     const enTuteo = leerLaGuiaDelAgente(respuesta({ apertura: ["Cuéntame qué vives en el día a día."], preguntas: [], objeciones: [] }), ctx(), null);
     expect(voseoEnLaGuia(enTuteo!)).toEqual([]);
+  });
+});
+
+describe("⭐ la reunión se compara solo con la guía que había ANTES (2026-10-07)", () => {
+  const guia = (en: string) => ({ en, corridaId: null, huecos: [], enfoque: [], apertura: [], escalaEnSimple: null, preguntas: [], objeciones: [], pocaApertura: null, cierre: null });
+  const REUNION = "2026-10-02T20:00:00.000Z";
+
+  it("la guardada para su sesión, o la viva, si se armaron antes de la reunión", () => {
+    expect(guiaDeAntesDeLaReunion({ guia: guia("2026-10-05T00:00:00.000Z"), guias: { s1: guia("2026-10-01T13:00:00.000Z") } }, "s1", REUNION)?.en).toBe("2026-10-01T13:00:00.000Z");
+    expect(guiaDeAntesDeLaReunion({ guia: guia("2026-10-01T13:00:00.000Z"), guias: {} }, null, REUNION)?.en).toBe("2026-10-01T13:00:00.000Z");
+    expect(guiaDeAntesDeLaReunion({ guia: guia("2026-10-01T13:00:00.000Z"), guias: {} }, "s-sin-guia", REUNION)?.en).toBe("2026-10-01T13:00:00.000Z");
+  });
+
+  it("una armada después no planeó nada: sin guía (CreditForce, 28 sep, leída contra una guía del 1 oct)", () => {
+    expect(guiaDeAntesDeLaReunion({ guia: guia("2026-10-01T13:00:00.000Z"), guias: {} }, null, "2026-09-28T20:45:00.000Z")).toBeNull();
+    expect(guiaDeAntesDeLaReunion({ guia: guia("2026-10-05T00:00:00.000Z"), guias: { s1: guia("2026-10-03T00:00:00.000Z") } }, "s1", REUNION)).toBeNull();
+    expect(guiaDeAntesDeLaReunion({ guia: null, guias: {} }, null, REUNION)).toBeNull();
   });
 });

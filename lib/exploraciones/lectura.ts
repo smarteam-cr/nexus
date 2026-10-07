@@ -28,6 +28,15 @@ export const DIAS_ANTES_DEL_ALTA = 30;
 const DIA = 24 * 60 * 60 * 1000;
 
 /**
+ * ¿La preparación tiene que seguir leyendo? Sí si quedó sin leer una reunión de Meet con conversación
+ * (una que casi no la tuvo, `corta`, no: pregunta qué pasó) o algo que el vendedor sumó a mano. Las de
+ * HubSpot no cuentan: su actividad ya la miró la preparación, y las que pasaron se avisan «sin leer».
+ */
+export function hayQueLeerAlPreparar(reuniones: readonly { origen: string; leida: boolean; corta?: unknown }[]): boolean {
+  return reuniones.some((r) => !r.leida && ((r.origen === "meet" && !r.corta) || r.origen === "documento"));
+}
+
+/**
  * ¿El agente lee sola esta reunión de Meet? Solo si es de DESPUÉS del alta (las de antes las miró al
  * preparar y quedan avisadas como «sin leer»), tiene a lo sumo 14 días y todavía no se leyó.
  */
@@ -64,6 +73,11 @@ export function agendaRenovada(o: { anterior: Agenda; nueva: Agenda; noOcurriero
   return [...pasadas, ...o.nueva].sort(porFecha);
 }
 
+/** ¿Dos reuniones empiezan a menos de dos horas? Entonces son la misma, vista desde Meet y desde HubSpot. */
+export function mismaReunion(a: string, b: string): boolean {
+  return Math.abs(Date.parse(a) - Date.parse(b)) < 2 * 60 * 60 * 1000;
+}
+
 /**
  * Las reuniones de HubSpot que estaban en la agenda y ya pasaron, LEÍDAS O NO (cada una dice si el
  * agente ya leyó lo que dejó el notetaker). Si la misma reunión también está en Meet (empieza a menos
@@ -75,12 +89,32 @@ export function reunionesDeHubspotQueYaPasaron(
   deMeet: readonly { fecha: string }[],
   ahora: Date,
 ): (ReunionSinLeer & { origen: "hubspot"; leida: boolean })[] {
-  const cerca = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) < 2 * 60 * 60 * 1000;
   const leidas = new Set(leidasDeHubspot);
   return agenda
     .filter((a) => Date.parse(a.inicio) <= ahora.getTime())
-    .filter((a) => !deMeet.some((m) => cerca(m.fecha, a.inicio)))
+    .filter((a) => !deMeet.some((m) => mismaReunion(m.fecha, a.inicio)))
     .map((a) => ({ id: a.id, titulo: a.titulo, fecha: a.inicio, origen: "hubspot" as const, leida: leidas.has(a.id) }));
+}
+
+/**
+ * Las reuniones de HubSpot que el agente leyó sin que estuvieran en la agenda (ya habían pasado la
+ * primera vez que miró HubSpot): salen de su lectura, que guarda la fecha y el título. Sin esto, la
+ * primera reunión de CreditForce (28 sep, solo en HubSpot: Meet no tiene su transcripción) no aparecía
+ * en Exploración y la «Sesión 1» era la llamada de 6 minutos del 2 oct. Una que ya se lista (por la
+ * agenda) o que también está en Meet, con su transcripción, cuenta una vez.
+ */
+export function reunionesLeidasDeHubspot(
+  lecturas: Readonly<Record<string, { fecha?: string; titulo?: string; etiqueta: string }>>,
+  yaEstan: readonly { id: string; origen: string }[],
+  deMeet: readonly { fecha: string }[],
+): (ReunionSinLeer & { origen: "hubspot"; leida: true })[] {
+  return Object.entries(lecturas).flatMap(([clave, l]) => {
+    if (!clave.startsWith("hubspot:") || !l.fecha || Number.isNaN(Date.parse(l.fecha))) return [];
+    const id = clave.slice("hubspot:".length);
+    if (yaEstan.some((r) => r.origen === "hubspot" && r.id === id)) return [];
+    if (deMeet.some((m) => mismaReunion(m.fecha, l.fecha!))) return [];
+    return [{ id, titulo: l.titulo ?? l.etiqueta, fecha: l.fecha, origen: "hubspot" as const, leida: true as const }];
+  });
 }
 
 /** Las de HubSpot que ya pasaron y el agente todavía no leyó: se avisan «sin leer». */

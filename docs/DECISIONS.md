@@ -5353,5 +5353,40 @@ nombres, que las sesiones pasadas cambien la planificación de las que vienen, y
 - **Lo que queda así, a propósito**:
   - Marcar una sesión como cortada no rearma solo la guía de la próxima: la etiqueta «Pasó de la sesión N» aparece
     igual.
-  - Las reuniones leídas antes de este cambio no tienen resumen. «Volver a leer» lo arma, y solo existe para las de
-    Meet.
+  - Las reuniones leídas antes de este cambio no tenían resumen: lo arma `scripts/leer-reuniones-de-preventas.ts`
+    (ver la sección siguiente). «Volver a leer» también, y solo existe para las de Meet.
+
+## La preventa lee lo que ya había, y no compara contra lo que no se planeó (2026-10-07)
+
+**Contexto.** Elías: «la sesión del 2 de octubre de Credit Force se ve sin datos… que para todos los prospectos
+con los que se inició la exploración se puedan rellenar de forma retroactiva». La del 2 oct no tiene conversación
+(6 minutos, «Sí. Ok.»): no hay nada que leer. El análisis encontró lo demás, y Elías lo aprobó («Aplica tus mejoras»).
+
+- **Nadie de Smarteam en «Quién decide».** En CreditForce quedó confirmado Andrés Pinzón, el vendedor, aunque el
+  prompt lo prohíbe: el modelo lee los nombres de la transcripción sin saber de qué lado está cada uno. Ahora el
+  pedido le dice los nombres del equipo (TeamMember, de alta o de baja) y el código descarta a la persona que es
+  del equipo (`esDelEquipoDeSmarteam`): con dos palabras o más, todas en el nombre de alguien del equipo; con una
+  sola no alcanza, para no perder a un «Andrés» del cliente; o el cargo que dice Smarteam. Lo ya confirmado no se
+  toca: lo saca una persona.
+- **Lo planeado es lo que había ANTES de la reunión** (`guiaDeAntesDeLaReunion`). Sin una guía, la lectura
+  comparaba la reunión contra lo que faltaba el día de leerla, y una reunión leída tarde salía con «no se
+  preguntó» en preguntas que nadie llevó. Sin una guía armada antes, la lectura trae solo el resumen, y la
+  pantalla lo dice.
+- **La primera preparación lee sola lo que ya estaba grabado** (`leerLoQueYaHabia`). Solo si el agente nunca
+  leyó, mientras se vende (la misma puerta que la lectura automática: prospecto, seis meses, sin proyecto) y si
+  quedó una reunión de Meet con conversación, algo sumado a mano o una reunión de HubSpot que ya ocurrió. Es una
+  sola lectura (las dos reuniones de Meet más recientes); lo demás queda «sin leer», con su botón. Cuesta una
+  lectura más, unos US$0,20–0,35 con la guía.
+- **Una reunión de HubSpot que el agente leyó aparece en Exploración**, aunque no haya estado en la agenda
+  (`reunionesLeidasDeHubspot`, desde su lectura, que ahora guarda la fecha y el título). La del 28 sep de
+  CreditForce, la primera de verdad, solo existe en HubSpot (Meet no tiene su transcripción) y no se veía: la
+  «Sesión 1» era la llamada de 6 minutos. Si la misma reunión también está en Meet con su transcripción, cuenta
+  una vez, y lo respondido se junta de las dos (`juntarCobertura`).
+- **Lo de antes se pone al día con un script** (`scripts/leer-reuniones-de-preventas.ts`, en seco por defecto,
+  lo corre Elías con `--apply`). Lee lo que nunca se leyó: la lectura de siempre, de a dos reuniones, hasta 4
+  vueltas. De lo leído antes del rediseño arma SOLO el resumen (`resumirLoYaLeido`): no propone nada, no marca
+  nada como leído ni toca la guía, así lo que el vendedor ya usó o descartó no reaparece. Ese resumen no guarda
+  «lo listo antes» (no se sabe qué faltaba ese día), y «Cuánto avanzó» muestra solo lo de hoy. Medido en seco el
+  2026-10-07: 4 preventas por leer (Megasuper, Universidad Monterrey, COLFAR y Grupo Monge) y la reunión del 28
+  sep de CreditForce por resumir.
+- **Sin SQL**: todo vive en los Json de la preventa.

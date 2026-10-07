@@ -11,9 +11,18 @@ import { calcularChequeo, type AreaParaChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { listaParaProponer, queSigue, queSigueConPaso, siguientePasoVigente } from "./calidad";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
+import { leerPropuesta } from "./esquemas";
 import { aFecha, diaConAnio, diaCorto } from "./fechas";
 import { esDeLaEmpresa } from "./hubspot";
-import { agendadasQueYaPasaron, agendaRenovada, debeLeerSola, PASADAS_QUE_CONSERVA_LA_FOTO, reunionesDeHubspotQueYaPasaron } from "./lectura";
+import {
+  agendadasQueYaPasaron,
+  agendaRenovada,
+  debeLeerSola,
+  hayQueLeerAlPreparar,
+  PASADAS_QUE_CONSERVA_LA_FOTO,
+  reunionesDeHubspotQueYaPasaron,
+  reunionesLeidasDeHubspot,
+} from "./lectura";
 import { calcularMetricas } from "./metricas";
 import { industriaLegible, sugerirEdicion } from "./industria";
 import { claveDeNotaDePregunta, claveDeNotaDeSesion, MAX_CLAVE_DE_NOTA, rotuloDeLaNota } from "./notas-de-sesion";
@@ -331,5 +340,41 @@ describe("las notas del vendedor de cada sesión (pestaña «Durante», Elías 2
   it("una sesión borrada no se pierde, y las notas del guion viejo se siguen nombrando con su paso", () => {
     expect(rotuloDeLaNota(claveDeNotaDeSesion("s-tres"), sesiones, dePaso)).toMatch(/ya no está/);
     expect(rotuloDeLaNota("r1-conexion", sesiones, dePaso)).toBe("Revisión · Conexión");
+  });
+});
+
+describe("⭐ la primera preparación sigue leyendo lo que ya estaba grabado (2026-10-07)", () => {
+  it("sigue si quedó sin leer una reunión de Meet con conversación o algo sumado a mano", () => {
+    expect(hayQueLeerAlPreparar([{ origen: "meet", leida: false }])).toBe(true);
+    expect(hayQueLeerAlPreparar([{ origen: "documento", leida: false }])).toBe(true);
+  });
+
+  it("no sigue por una ya leída, por una sin conversación ni por una de HubSpot de la agenda", () => {
+    expect(hayQueLeerAlPreparar([{ origen: "meet", leida: true }])).toBe(false);
+    expect(hayQueLeerAlPreparar([{ origen: "meet", leida: false, corta: { minutos: 6 } }])).toBe(false);
+    expect(hayQueLeerAlPreparar([{ origen: "hubspot", leida: false }])).toBe(false);
+    expect(hayQueLeerAlPreparar([])).toBe(false);
+  });
+});
+
+describe("⭐ una reunión de HubSpot leída aparece en Exploración aunque no estuviera en la agenda (2026-10-07)", () => {
+  const lectura = (fecha?: string) => ({ etiqueta: "Reunión en HubSpot del 28 sept 2026: Revisión", resumen: "x", cobertura: [], en: "2026-10-07T00:00:00.000Z", corridaId: "r", ...(fecha ? { fecha, titulo: "Revisión del diagnóstico" } : {}) });
+
+  it("sale de su lectura, con su fecha y su título", () => {
+    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [], [])).toEqual([
+      { id: "h1", titulo: "Revisión del diagnóstico", fecha: "2026-09-28T20:45:00.000Z", origen: "hubspot", leida: true },
+    ]);
+  });
+
+  it("no se repite: ni la que ya lista la agenda, ni la que también está en Meet, ni una sin fecha ni la de Meet", () => {
+    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [{ id: "h1", origen: "hubspot" }], [])).toEqual([]);
+    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura("2026-09-28T20:45:00.000Z") }, [], [{ fecha: "2026-09-28T21:00:00.000Z" }])).toEqual([]);
+    expect(reunionesLeidasDeHubspot({ "hubspot:h1": lectura() }, [], [])).toEqual([]);
+    expect(reunionesLeidasDeHubspot({ "meet:m1": lectura("2026-09-28T20:45:00.000Z") }, [], [])).toEqual([]);
+  });
+
+  it("la lectura guarda su fecha y su título; sin «lo listo antes» también se lee", () => {
+    const l = { ...lectura("2026-09-28T20:45:00.000Z") };
+    expect(leerPropuesta({ ...propuestaVacia(), lecturas: { "hubspot:h1": l } }).lecturas["hubspot:h1"]).toEqual(l);
   });
 });

@@ -344,8 +344,15 @@ export interface LecturaDeReunion {
   /** El objetivo con que se planeó, si había uno. */
   objetivo?: string;
   cobertura: CoberturaDeLaPregunta[];
-  /** Lo que estaba listo para proponer antes de leerla (los ids de `listaParaProponer`). */
-  listosAntes: string[];
+  /**
+   * Lo que estaba listo para proponer antes de leerla (los ids de `listaParaProponer`). Sin el dato en
+   * el resumen que se armó después de leerla (scripts/leer-reuniones-de-preventas.ts): no se sabe qué
+   * faltaba ese día, y «Cuánto avanzó» muestra solo lo de hoy.
+   */
+  listosAntes?: string[];
+  /** Cuándo fue (ISO) y cómo se llama: con eso una reunión de HubSpot que no estaba en la agenda aparece en Exploración. */
+  fecha?: string;
+  titulo?: string;
   en: string;
   corridaId: string;
 }

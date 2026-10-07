@@ -501,7 +501,9 @@ const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
   cobertura: z
     .array(z.object({ para: z.string().max(40), pregunta: z.string().max(400), respondida: z.boolean(), detalle: z.string().max(300).optional() }))
     .max(16),
-  listosAntes: z.array(z.string().max(40)).max(12),
+  listosAntes: z.array(z.string().max(40)).max(12).optional(),
+  fecha: z.string().max(40).optional(),
+  titulo: z.string().max(300).optional(),
   en: z.string().max(40),
   corridaId: z.string().max(60),
 });

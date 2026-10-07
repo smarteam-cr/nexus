@@ -97,6 +97,7 @@ function LoQueLeyo({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: Le
         Lo que leyó el agente
       </p>
       <p className="text-sm leading-[21px] text-fg">{lectura.resumen}</p>
+      {!c && <p className="text-[12.5px] text-fg-muted">No había una guía armada antes de esta reunión: no hay con qué comparar lo que se preguntó.</p>}
       {c && (
         <div className="flex flex-col gap-1.5 rounded-lg border border-info-line bg-surface px-3.5 py-3">
           <div className="flex flex-wrap items-baseline gap-2">
@@ -211,7 +212,8 @@ function PasoYAvance({ pestana, lectura }: { pestana: PestanaDeSesion; lectura: 
   const esDeEsta = !!paso?.que && hechas[hechas.length - 1]?.clave === pestana.clave;
   const puntos = listaParaProponer(exp.estado, chequeo);
   const listos = puntos.filter((p) => p.cumplido);
-  const antes = lectura ? new Set(lectura.listosAntes) : null;
+  // Sin `listosAntes` (el resumen de una reunión leída antes del rediseño) no se sabe qué faltaba ese día.
+  const antes = lectura?.listosAntes ? new Set(lectura.listosAntes) : null;
   const sumo = antes ? listos.filter((p) => !antes.has(p.id)) : [];
   return (
     <section className="grid gap-[18px] rounded-xl border border-line bg-surface px-[18px] py-4 sm:grid-cols-2">

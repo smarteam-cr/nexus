@@ -26,6 +26,8 @@ vi.mock("./fuentes", () => ({
     sesionesUsadas: [],
     empresa: { pais: "Costa Rica", empleados: "120" },
   }),
+  // Sin reuniones grabadas: la preparación no sigue leyendo (agente.ts › leerLoQueYaHabia).
+  reunionesDeLaExploracion: async () => [],
 }));
 
 /* Claude: elige «banca» para la industria y no propone nada en la preparación. */
