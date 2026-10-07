@@ -7,7 +7,7 @@
  * Sin sesiones planeadas, la primera existe igual (`nueva`): es la que se prepara. Una reunión que
  * no quedó en ninguna sesión aparece como propia, para no perderla.
  */
-import { MAX_SESIONES, pestanasDeSesiones, proximaReunion, type PestanaDeSesion, type SesionPlaneada } from "@/lib/exploraciones/guia";
+import { estadoDeLaSesion, MAX_SESIONES, pestanasDeSesiones, proximaReunion, type PestanaDeSesion, type SesionPlaneada } from "@/lib/exploraciones/guia";
 import { hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import { useLienzo, type MomentoDeLaSesion } from "./contexto";
 
@@ -26,8 +26,11 @@ export function useSesiones() {
 
   const activa = todas.find((p) => p.clave === sesion.elegida) ?? todas.find((p) => p.clave === claveDeLaProxima) ?? todas[0];
   const esLaProxima = activa.clave === claveDeLaProxima;
-  // La próxima sin reunión todavía se prepara; lo demás ya pasó y se mira el «después».
-  const momento: MomentoDeLaSesion = sesion.momentos[activa.clave] ?? (esLaProxima && !activa.reunion ? "antes" : "despues");
+  const estadoDe = (p: PestanaDeSesion) => estadoDeLaSesion(p, claveDeLaProxima);
+  // Lo que ya ocurrió se mira en el «después»; lo que no, se prepara en el «antes» (la próxima y las
+  // que vienen detrás: hasta el 2026-10-06 una sesión de más adelante abría en el «después», y ahí se
+  // veía lo que salió de OTRA reunión como si fuera suyo).
+  const momento: MomentoDeLaSesion = sesion.momentos[activa.clave] ?? (estadoDe(activa) === "ocurrio" ? "despues" : "antes");
 
   const guardar = (lista: SesionPlaneada[]) => cambiar([{ op: "sesiones", sesiones: lista }]);
 
@@ -39,5 +42,5 @@ export function useSesiones() {
     sesion.ponerMomento(id, "antes");
   };
 
-  return { sesiones, hoy, pestanas, todas, proxima, claveDeLaProxima, activa, esLaProxima, momento, guardar, agregar };
+  return { sesiones, hoy, pestanas, todas, proxima, claveDeLaProxima, activa, esLaProxima, estadoDe, momento, guardar, agregar };
 }

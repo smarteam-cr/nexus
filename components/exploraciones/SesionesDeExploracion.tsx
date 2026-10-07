@@ -28,11 +28,13 @@ import { aFecha, conEspaciosComunes, diaConAnio, diaCorto, diaYHora, hoyEnCostaR
 import {
   CIERRE_DE_BASE,
   CONEXION_DE_BASE,
+  ETIQUETA_DEL_ESTADO,
   focoDeLaGuia,
   guiaVieja,
   MAX_PARA_EXPLORAR,
   MAX_SESIONES,
   preguntasParaMostrar,
+  type EstadoDeLaSesion,
   type OrigenDeReunion,
   type PestanaDeSesion,
   type PreguntaParaMostrar,
@@ -199,9 +201,23 @@ function AntesDeLaSesion({ pestana, esLaProxima, sesiones, guardar }: { pestana:
 
   if (!esLaProxima && !guia) {
     return (
-      <p className="rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-center text-[13px] text-fg-muted">
-        No quedó guardada la guía con que se preparó esta sesión. La de la próxima está en su sesión, a la izquierda.
-      </p>
+      <div className="space-y-3 rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-center text-[13px] text-fg-muted">
+        <p>
+          {pestana.hecha
+            ? "No quedó guardada la guía con que se preparó esta sesión. La de la próxima está en su sesión, a la izquierda."
+            : "Su guía se arma cuando sea la próxima sesión: primero va la que está antes."}
+        </p>
+        {!pestana.hecha && traidos.length > 0 && (
+          <div className="mx-auto max-w-xl text-left">
+            <Rotulo>Te llevas a esta sesión</Rotulo>
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[13.5px] text-fg-secondary">
+              {traidos.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -650,6 +666,17 @@ function AntesDespues({ valor, onCambiar }: { valor: MomentoDeLaSesion; onCambia
   );
 }
 
+const TONO_DEL_ESTADO: Record<EstadoDeLaSesion, string> = {
+  ocurrio: "border-success-line bg-success-surface text-success-ink",
+  proxima: "border-info-line bg-info-surface text-brand",
+  despues: "border-line bg-surface-muted text-fg-muted",
+};
+
+/** Si la sesión ya ocurrió, es la próxima o todavía no ocurre (lib/exploraciones/guia.ts). */
+function EstadoDeLaSesionChip({ estado }: { estado: EstadoDeLaSesion }) {
+  return <span className={cn("rounded-full border px-2 py-0.5 text-[11.5px] font-semibold", TONO_DEL_ESTADO[estado])}>{ETIQUETA_DEL_ESTADO[estado]}</span>;
+}
+
 /** El botón blanco con borde del tablero («Rearmar la guía»). */
 function BotonClaro({ children, onClick, disabled, title }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; title?: string }) {
   return (
@@ -667,8 +694,9 @@ function BotonClaro({ children, onClick, disabled, title }: { children: React.Re
 
 function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pestana: PestanaDeSesion; esLaProxima: boolean; momento: MomentoDeLaSesion; alMomento: (m: MomentoDeLaSesion) => void }) {
   const { exp, escala, mapa, reuniones, puedeEditar, guardando, sesion: seleccion } = useLienzo();
-  const { todas, sesiones, guardar, claveDeLaProxima, proxima, agregar } = useSesiones();
+  const { todas, sesiones, guardar, claveDeLaProxima, proxima, agregar, estadoDe } = useSesiones();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
+  const estado = estadoDe(pestana);
   const s = pestana.sesion;
   const r = pestana.reunion;
   const [editando, setEditando] = useState(false);
@@ -742,7 +770,10 @@ function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pe
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="min-w-0">
-          <h2 className="text-[22px] font-bold leading-tight text-fg">Sesión {pestana.numero}</h2>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="text-[22px] font-bold leading-tight text-fg">Sesión {pestana.numero}</h2>
+            <EstadoDeLaSesionChip estado={estado} />
+          </div>
           <p className="mt-0.5 text-[13px] text-fg-muted">
             {datos.map((d, i) => (
               <span key={i}>
@@ -889,8 +920,12 @@ export default function SesionesDeExploracion() {
         <AntesDeLaSesion pestana={activa} esLaProxima={esLaProxima} sesiones={sesiones} guardar={guardar} />
       ) : momento === "durante" ? (
         <DuranteLaSesion key={activa.clave} pestana={activa} />
-      ) : (
+      ) : activa.hecha ? (
         <DespuesDeLaSesion armarLaSiguiente={(llevar) => void armarLaSiguiente(llevar)} soltar={soltar} numeroSiguiente={numeroSiguiente} />
+      ) : (
+        <p className="rounded-xl border border-dashed border-line bg-surface px-4 py-6 text-center text-[13px] text-fg-muted">
+          Esta sesión todavía no ocurre. Cuando llegue su reunión de Meet o HubSpot, o la sumes en «Contexto adicional», acá aparece lo que salió.
+        </p>
       )}
     </div>
   );

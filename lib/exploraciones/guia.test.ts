@@ -24,6 +24,7 @@ import {
   proximaReunion,
   reunionDeLaSesion,
   sesionHecha,
+  estadoDeLaSesion,
   TIPOS_DE_OBJECION,
   type ReunionDeLaExploracion,
 } from "./guia";
@@ -405,5 +406,15 @@ describe("⭐ la guía lee las instrucciones adicionales (2026-10-06)", () => {
     const con = contextoDeLaGuia({ ...base, estado: e });
     expect(String(pedidoDeLaGuia(con).messages[0].content)).toContain("No hables de migraciones todavía.");
     expect(String(pedidoDeLaGuia(contextoDeLaGuia({ ...base, estado: estado() })).messages[0].content)).not.toContain("INSTRUCCIONES ADICIONALES");
+  });
+});
+
+describe("⭐ cada sesión dice si ya ocurrió (2026-10-06)", () => {
+  it("ocurrió, próxima o todavía no ocurre", () => {
+    expect(estadoDeLaSesion({ clave: "s-a", hecha: true }, "s-b")).toBe("ocurrio");
+    expect(estadoDeLaSesion({ clave: "s-b", hecha: false }, "s-b")).toBe("proxima");
+    expect(estadoDeLaSesion({ clave: "s-c", hecha: false }, "s-b")).toBe("despues");
+    // Una que ya pasó nunca es «la próxima», aunque la clave coincida.
+    expect(estadoDeLaSesion({ clave: "s-b", hecha: true }, "s-b")).toBe("ocurrio");
   });
 });

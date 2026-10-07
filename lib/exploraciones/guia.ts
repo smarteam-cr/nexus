@@ -108,6 +108,24 @@ export function pestanasDeSesiones(sesiones: readonly SesionPlaneada[], reunione
   return todas.map((p, i) => ({ clave: p.clave, sesion: p.sesion, reunion: p.reunion, fecha: p.fecha, hecha: p.hecha, numero: i + 1 }));
 }
 
+/**
+ * En qué está una sesión, para decirlo en pantalla (2026-10-06, pedido de Elías: «se debe especificar
+ * si una sesión ya ocurrió o no»). Ocurrió: tiene su reunión, la marcó el vendedor o su fecha pasó.
+ * Próxima: la que se prepara ahora. Más adelante: una planeada después de la próxima.
+ */
+export type EstadoDeLaSesion = "ocurrio" | "proxima" | "despues";
+
+export const ETIQUETA_DEL_ESTADO: Record<EstadoDeLaSesion, string> = {
+  ocurrio: "Ya ocurrió",
+  proxima: "Próxima",
+  despues: "Todavía no ocurre",
+};
+
+export function estadoDeLaSesion(p: Pick<PestanaDeSesion, "clave" | "hecha">, claveDeLaProxima: string): EstadoDeLaSesion {
+  if (p.hecha) return "ocurrio";
+  return p.clave === claveDeLaProxima ? "proxima" : "despues";
+}
+
 /** ¿Ya pasó? La marcó el vendedor, o su fecha es anterior a hoy. */
 export function sesionHecha(s: SesionPlaneada, hoy: string): boolean {
   return !!s.hecha || (!!s.fecha && s.fecha < hoy);

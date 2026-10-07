@@ -107,7 +107,7 @@ function FilaDeCuenta({ etiqueta, activa, onClick, extra }: { etiqueta: string; 
 /** Las sesiones, colgadas de Exploración. */
 function Sesiones({ abierta, alElegir }: { abierta: boolean; alElegir: (clave: string) => void }) {
   const { puedeEditar, guardando } = useLienzo();
-  const { todas, activa, sesiones, agregar } = useSesiones();
+  const { todas, activa, sesiones, agregar, estadoDe } = useSesiones();
   const marca = (p: PestanaDeSesion, actual: boolean) =>
     actual ? (
       <span aria-hidden="true">●</span>
@@ -141,7 +141,11 @@ function Sesiones({ abierta, alElegir }: { abierta: boolean; alElegir: (clave: s
             >
               {marca(p, actual)}
               <span className="min-w-0 flex-1 truncate">Sesión {p.numero}</span>
-              {p.fecha && <span className={cn("flex-shrink-0 text-[11.5px]", actual ? "" : "text-fg-muted")}>{diaCorto(p.fecha)}</span>}
+              {estadoDe(p) === "proxima" ? (
+                <span className="flex-shrink-0 text-[11.5px] font-semibold text-brand">próxima{p.fecha ? ` · ${diaCorto(p.fecha)}` : ""}</span>
+              ) : (
+                p.fecha && <span className={cn("flex-shrink-0 text-[11.5px]", actual ? "" : "text-fg-muted")}>{diaCorto(p.fecha)}</span>
+              )}
             </button>
           </li>
         );
