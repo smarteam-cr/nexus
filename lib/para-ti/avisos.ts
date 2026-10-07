@@ -6,7 +6,9 @@
  * 2. El mismo hecho le avisa UNA vez a cada persona (`dedupeKey`, único por destinatario).
  * 3. Lleva a una pantalla de Nexus: el enlace es una ruta interna, nunca una dirección afuera.
  *
- * El catálogo de TIPOS dice cuáles son buenas noticias (llevan ✓ en verde). Un tipo que no está acá se muestra igual.
+ * El catálogo de TIPOS dice cuáles son buenas noticias (llevan ✓ en verde) y cuáles son un MENSAJE: alguien te
+ * escribió (una respuesta, un comentario). Un mensaje sin leer va en ámbar en «Para ti» (pedido de Elías,
+ * 2026-10-06): es lo que más espera de ti. Un tipo que no está acá se muestra igual.
  */
 
 /** Los tipos que hoy escribe Nexus. Texto con punto: `<módulo>.<qué pasó>`. */
@@ -14,21 +16,28 @@ export const TIPOS_DE_AVISO = {
   "finanzas.devuelto": { bueno: false },
   "finanzas.mes-cerrado": { bueno: true },
   "roles.compartido": { bueno: false },
-  "documentacion.comentario": { bueno: false },
-  "documentacion.respuesta": { bueno: false },
+  "documentacion.comentario": { bueno: false, mensaje: true },
+  "documentacion.respuesta": { bueno: false, mensaje: true },
   "cliente.aprobo-documento": { bueno: true },
   "cliente.aprobo-propuesta": { bueno: true },
   "proyecto.encargado": { bueno: false },
   "preventa.responsable": { bueno: false },
   "feedback.nuevo": { bueno: false },
-  "feedback.respuesta": { bueno: false },
+  "feedback.respuesta": { bueno: false, mensaje: true },
   "feedback.estado": { bueno: false },
-} as const satisfies Record<string, { bueno: boolean }>;
+} as const satisfies Record<string, { bueno: boolean; mensaje?: boolean }>;
 
 export type TipoDeAviso = keyof typeof TIPOS_DE_AVISO;
 
+type DefinicionDeAviso = { bueno: boolean; mensaje?: boolean };
+
 export function esBuenaNoticia(tipo: string): boolean {
-  return (TIPOS_DE_AVISO as Record<string, { bueno: boolean } | undefined>)[tipo]?.bueno === true;
+  return (TIPOS_DE_AVISO as Record<string, DefinicionDeAviso | undefined>)[tipo]?.bueno === true;
+}
+
+/** ¿Alguien te escribió? (una respuesta o un comentario). */
+export function esMensaje(tipo: string): boolean {
+  return (TIPOS_DE_AVISO as Record<string, DefinicionDeAviso | undefined>)[tipo]?.mensaje === true;
 }
 
 /**

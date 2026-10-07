@@ -13,6 +13,8 @@ import { IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { avisarCambioDeParaTi } from "./cuenta";
+import PendienteDeTiempos from "@/components/tiempos/PendienteDeTiempos";
+import { PENDIENTE_DE_TIEMPOS } from "@/lib/tiempos/reglas";
 import type { AvisoVisto, ParaTi, Pendiente } from "@/lib/para-ti/tipos";
 
 const BOTON_BLANCO =
@@ -142,11 +144,17 @@ export default function ParaTiPantalla({
                   onClick={() => a.nuevo && marcar([a.id])}
                   className={cn(
                     "flex items-start gap-2.5 rounded-lg border p-2 text-fg transition-colors",
-                    a.nuevo ? "border-line bg-surface hover:bg-surface-hover" : "border-transparent hover:bg-surface-hover",
+                    // Un mensaje sin leer va en ámbar: alguien te escribió y espera de ti.
+                    a.nuevo && a.mensaje
+                      ? "border-warn-line bg-warn-surface hover:border-warning"
+                      : a.nuevo
+                        ? "border-line bg-surface hover:bg-surface-hover"
+                        : "border-transparent hover:bg-surface-hover",
                   )}
                 >
-                  <span aria-hidden className={cn("mt-1.5 h-2 w-2 flex-none rounded-full", a.nuevo ? "bg-primary" : "bg-transparent")} />
+                  <span aria-hidden className={cn("mt-1.5 h-2 w-2 flex-none rounded-full", a.nuevo ? (a.mensaje ? "bg-warning" : "bg-primary") : "bg-transparent")} />
                   <span className="flex min-w-0 flex-1 flex-col gap-px">
+                    {a.nuevo && a.mensaje && <span className="text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-warn-ink">Mensaje</span>}
                     <span className={cn("text-[13px] leading-[19px]", a.nuevo ? "font-semibold text-fg" : "text-fg-secondary")}>
                       {a.bueno && <span className="font-semibold text-success-ink">✓ </span>}
                       {a.titulo}
@@ -238,7 +246,11 @@ function Bloque({ titulo, items }: { titulo: string; items: Pendiente[] }) {
         <h2 className="text-[15px] font-semibold text-fg">{titulo}</h2>
         <span className="text-xs text-fg-muted">{plural(items.length, "cosa", "cosas")}</span>
       </div>
-      {items.map((it) => (
+      {items.map((it) =>
+        // «¿Cuánto te tomó?» se contesta ahí mismo, sin salir de «Para ti» (2026-10-05).
+        it.fuente === PENDIENTE_DE_TIEMPOS ? (
+          <PendienteDeTiempos key={it.clave} item={it} />
+        ) : (
         <div key={it.clave} className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-t border-line px-4 py-3">
           <span aria-hidden className={cn("h-2 w-2 flex-none rounded-full", it.error ? "bg-destructive" : "bg-warning")} />
           <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-0.5">
@@ -252,7 +264,8 @@ function Bloque({ titulo, items }: { titulo: string; items: Pendiente[] }) {
             {it.accion}
           </Link>
         </div>
-      ))}
+        ),
+      )}
     </section>
   );
 }

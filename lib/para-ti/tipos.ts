@@ -76,6 +76,8 @@ export interface AvisoVisto {
   nuevo: boolean;
   /** Una buena noticia (el cliente aprobó): lleva ✓ en verde. */
   bueno: boolean;
+  /** Alguien te escribió (una respuesta, un comentario): sin leer, va en ámbar. */
+  mensaje: boolean;
 }
 
 /** Lo que pide el menú cada minuto y medio. */

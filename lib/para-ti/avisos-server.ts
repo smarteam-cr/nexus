@@ -13,7 +13,7 @@ import { esquemaDesactualizado, modeloDisponible } from "@/lib/db/esquema";
 import { getEffectivePermissions } from "@/lib/auth/permissions/engine";
 import { esResponsable } from "@/lib/escala/responsable";
 import { frentesDelMiembro } from "./alcance-server";
-import { destinatarios, esBuenaNoticia, esRutaInterna, textoDeAviso } from "./avisos";
+import { destinatarios, esBuenaNoticia, esMensaje, esRutaInterna, textoDeAviso } from "./avisos";
 import { esClaveDeFrente, frente, puedeLlevar, type ClaveDeFrente } from "./frentes";
 import type { AvisoVisto } from "./tipos";
 
@@ -123,6 +123,7 @@ export async function avisosDe(email: string, cuantos = 30): Promise<AvisoVisto[
       creadoAt: f.creadoAt.toISOString(),
       nuevo: f.leidoAt === null,
       bueno: esBuenaNoticia(f.tipo),
+      mensaje: esMensaje(f.tipo),
     }));
   } catch (e) {
     if (esquemaDesactualizado(e)) return [];
