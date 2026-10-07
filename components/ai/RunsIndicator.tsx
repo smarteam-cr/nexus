@@ -168,7 +168,16 @@ export default function RunsIndicator({ isOpen }: { isOpen: boolean }) {
   // Con algo corriendo la etiqueta cuenta la FASE real ("Generando secciones…"),
   // que es la única señal honesta de que el agente avanza. Es el dato que se perdía
   // al navegar: ahora viaja en el feed y se pinta acá, en toda la app.
-  const etiqueta = corriendo > 0 ? (fase ?? "Generando…") : "Corridas de agentes";
+  //
+  // En reposo dice «Corridas», no «Corridas de agentes». Medido en el navegador: el rótulo largo
+  // pide 123 px y, con el contador de corridas sin ver al lado, la caja eran 101 **ya con el menú
+  // ancho** — o sea que se venía cortando en «Corridas de agente…» cada vez que había algo sin
+  // ver, que es justo cuando uno lo mira. Era el único rótulo de toda la columna que no entraba, y
+  // nadie lo había notado porque truncar se ve prolijo.
+  //
+  // El nombre completo sigue donde hay lugar: el título del panel, su `aria-label` y el tooltip
+  // del menú colapsado. Acá, bajo el rayo y a dos filas de «Agentes», «Corridas» alcanza.
+  const etiqueta = corriendo > 0 ? (fase ?? "Generando…") : "Corridas";
 
   return (
     <div ref={rootRef}>

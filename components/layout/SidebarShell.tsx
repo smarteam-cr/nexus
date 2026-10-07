@@ -93,11 +93,23 @@ export default function SidebarShell({ user, initialOpen, children }: Props) {
           se pega a ESTA caja, que no scrollea, y el menú se iba con la página en toda pantalla
           donde scrollea la ventana (Documentación, Conocimientos, las listas largas). Desde el
           primer commit. `self-start` hace falta porque un ítem flex estirado a la altura de la
-          página no tiene lugar donde pegarse. */}
+          página no tiene lugar donde pegarse.
+
+          ── EL ANCHO (`w-48` = 192 px, medido) ──
+          Estuvo en `w-56` (224) desde el principio, sin que nada lo pidiera. Medidos los rótulos
+          con la tipografía real: el más largo del menú es «Documentación», 98 px, y la caja que le
+          toca acá son 118 — veinte de aire, que es lo que hay que dejar para que una palabra nueva
+          entre sin recortarse. En `w-44` (176) quedarían cuatro y el próximo rótulo largo
+          truncaría.
+
+          Son 32 px que gana el centro en TODAS las pantallas, que casi siempre tienen además un
+          panel a la derecha. El desplegable NO sigue este ancho (`NavFlyout` se queda en `w-56`):
+          flota sobre el contenido, no le quita lugar a nadie, y su rótulo más largo —«Comisiones
+          de vendedor», 153 px— no entraría acá. */}
       <div
         data-feedback-fijo=""
         className={`sticky top-0 h-screen self-start flex-shrink-0 transition-all duration-200 ease-in-out overflow-hidden ${
-          effectiveOpen ? "w-56" : "w-14"
+          effectiveOpen ? "w-48" : "w-14"
         }`}
       >
         <Sidebar

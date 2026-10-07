@@ -133,7 +133,7 @@ export function construirNexusParaCse(): PaginaSembrada {
       ),
 
       titulo(2, "La IA, a tu lado"),
-      vinneta("«Generar» en cada documento dispara al agente que lo escribe. Mientras trabaja, lo ves en «Corridas de agentes», en el menú."),
+      vinneta("«Generar» en cada documento dispara al agente que lo escribe. Mientras trabaja, lo ves en «Corridas», al pie del menú."),
       vinneta(
         "Al costado de cada documento hay un chat: le pides un cambio en palabras y te dice qué implica antes de tocar nada. Lo aplicas tú.",
       ),
