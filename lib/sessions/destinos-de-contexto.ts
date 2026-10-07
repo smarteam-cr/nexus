@@ -22,18 +22,37 @@
  *    usan los agentes (`etiquetaDeSala`); una reunión sin participantes registrados no se sugiere.
  *  · PLANIFICACIÓN y EJECUCIÓN (2026-09-29): la misma regla sugerida que el diagnóstico, cada una
  *    con su propia columna — sacar una reunión de un documento no la saca de los otros.
+ *  · KICKOFF, EXPLORACIÓN, INTEGRACIONES y ENTREGA (2026-10-07, «el contexto adicional es de cada
+ *    artefacto»): la misma regla sugerida, cada uno con su columna.
  */
 import { linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import { linkFeedsTimeline } from "@/lib/timeline/session-feeding";
 
-export type DestinoDeContexto = "handoff" | "cronograma" | "diagnostico" | "planificacion" | "ejecucion";
+export type DestinoDeContexto =
+  | "handoff"
+  | "cronograma"
+  | "diagnostico"
+  | "planificacion"
+  | "ejecucion"
+  | "kickoff"
+  | "exploracion"
+  | "integraciones"
+  | "entrega";
 
 /**
  * Los destinos que arrancan SUGERIDOS (diagnóstico desde el 2026-09-28; planificación y ejecución
  * desde el 2026-09-29): toda reunión del proyecto con el cliente alimenta sin que nadie la elija, y
  * cada uno guarda su propio afinado en su columna de `SessionProject`.
  */
-export const DESTINOS_SUGERIDOS = ["diagnostico", "planificacion", "ejecucion"] as const;
+export const DESTINOS_SUGERIDOS = [
+  "diagnostico",
+  "planificacion",
+  "ejecucion",
+  "kickoff",
+  "exploracion",
+  "integraciones",
+  "entrega",
+] as const;
 export type DestinoSugerido = (typeof DESTINOS_SUGERIDOS)[number];
 
 export function esDestinoSugerido(d: DestinoDeContexto): d is DestinoSugerido {
@@ -45,6 +64,10 @@ export const COLUMNA_DEL_DESTINO = {
   diagnostico: "diagnosisOverride",
   planificacion: "planningOverride",
   ejecucion: "implementationOverride",
+  kickoff: "kickoffOverride",
+  exploracion: "explorationOverride",
+  integraciones: "techRequirementsOverride",
+  entrega: "deliveryOverride",
 } as const satisfies Record<DestinoSugerido, string>;
 
 /** `?para=` de la ruta. Cualquier otra cosa es el handoff: es el destino histórico. */
@@ -64,6 +87,10 @@ export interface VinculoDelPanel {
   diagnosisOverride: boolean | null;
   planningOverride: boolean | null;
   implementationOverride: boolean | null;
+  kickoffOverride: boolean | null;
+  explorationOverride: boolean | null;
+  techRequirementsOverride: boolean | null;
+  deliveryOverride: boolean | null;
 }
 
 /** El afinado humano del destino: la X (`false`) o «Agregar» (`true`). */

@@ -44,11 +44,13 @@
   los de tu rol están en el menú del avatar, en «Recorridos». El contenido vive en el repo; lo visto, en la cookie
   `nexus-recorridos`. Ver DECISIONS §Recorridos guiados.
 - **Contexto adicional** (`components/contexto/ContextoAdicional.tsx`): el bloque plegable arriba de
-  una pieza con lo que lee su IA además de lo de siempre: las reuniones (elegidas, en los documentos
-  del cliente; todas las de la empresa, en la preventa), las fuentes manuales y las «Instrucciones
-  adicionales», que pesan más que lo demás y no son evidencia. En todos se puede buscar y sumar cualquier reunión de
-  Meet de tu calendario o del cliente (2026-10-07). Cada artefacto guarda lo suyo; en la preventa, las reuniones y
-  las fuentes son de la empresa y las instrucciones, de cada pieza. Se llamaba «Contexto del cronograma», «del diagnóstico», etc.
+  una pieza con lo que lee su IA además de lo de siempre: las reuniones (en el cronograma, las que elijas; en
+  los demás documentos del proyecto, las del proyecto con el cliente, que se pueden sacar o sumar; en la preventa,
+  todas las de la empresa), las fuentes manuales y las «Instrucciones adicionales», que pesan más que lo demás y
+  no son evidencia. En todos se puede buscar y sumar cualquier reunión de Meet de tu calendario o del cliente
+  (2026-10-07). Cada artefacto guarda lo suyo: en los proyectos, el handoff, el cronograma, el kickoff, la
+  exploración, el diagnóstico, la planificación, integraciones, la ejecución y la entrega; en la preventa, las
+  reuniones y las fuentes son de la empresa y las instrucciones, de cada pieza. Se llamaba «Contexto del cronograma», «del diagnóstico», etc.
   hasta el 2026-10-06.
 - **Preventa** (Ventas → Preventa, `/sales/exploraciones`, modelo `ExploracionDeVenta`): el lienzo de
   una empresa en venta, desde que llega (por el test o desde HubSpot) hasta la primera propuesta y el

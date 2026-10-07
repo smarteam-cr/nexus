@@ -5634,3 +5634,27 @@ había un solo bloque para todas sus piezas.
   reuniones y las fuentes manuales siguen siendo de la empresa y se ven en todas: son la misma conversación.
   Resumen, La escala y Propuesta no tienen agente propio y dicen dónde escribirlas. No había instrucciones
   guardadas en producción (medido): nada que migrar.
+- **En los proyectos, cada documento con IA tiene su «Contexto adicional» completo** (Elías eligió «sí,
+  todo»): el kickoff, la exploración, integraciones y la entrega suman el bloque de reuniones, notas e
+  instrucciones que ya tenían el diagnóstico, la planificación y la ejecución (`DocumentoContextSection`,
+  arriba del documento). Arrancan SUGERIDOS, como el diagnóstico: entra toda reunión del proyecto con el
+  cliente y el CSE saca o agrega; cada uno guarda la X en su columna (`kickoffOverride`, `explorationOverride`,
+  `techRequirementsOverride`, `deliveryOverride`) y sacar una reunión de uno no la saca de los otros. SQL
+  aditivo antes del deploy: scripts/sql/2026-10-07-contexto-de-cada-documento.sql.
+- **Las instrucciones adicionales son de cada documento**: el handoff y los siete documentos de
+  lib/contexto/documento.ts guardan las suyas en su canvas (la entry `__doc`, por doc-brief, sin SQL) y las lee
+  solo su agente, primero en el mensaje (`cargarMaterialDelDocumento` → `material.instrucciones`;
+  `instruccionesDelDocumento` para el handoff y para la lectura de reuniones de la exploración). Guardarlas pide
+  la celda de generar ese documento, la misma que cura sus reuniones; el cronograma conserva su caja y su
+  permiso. La entry `__doc` no es una sección: el índice del panel y el despacho de bloques la saltan.
+- **El kickoff deja de leer solo el handoff.** Supera el «el kickoff NO consume las fuentes crudas» del código:
+  el handoff sigue siendo el ancla y las reuniones completan lo acordado después (quién participa, fechas
+  dichas por el cliente), con tres reglas en el mensaje: nada de precios, descuentos ni negociación; lo dicho
+  puertas adentro no se le atribuye al cliente; y nada agranda lo vendido. Sin reuniones ni notas, el mensaje
+  es el de siempre. Integraciones, igual: el handoff es el ancla y las reuniones precisan.
+- **La entrega lee las reuniones de su bloque**, con su sala, en vez de las últimas de todos los vínculos del
+  proyecto (incluidas las puertas adentro y sin decir de qué sala eran, en un documento que abre el cliente).
+  La cifra «Reuniones de trabajo» que ve el cliente no cambia: sigue saliendo de la membresía del proyecto.
+- **La exploración**: al preparar las sesiones, la guía lee además las reuniones y las notas de su bloque; al
+  leer, la reunión sale del mismo bloque (las del cliente que nadie sacó, más las agregadas). Antes leía
+  cualquier reunión del proyecto, también las internas.

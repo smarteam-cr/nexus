@@ -36,7 +36,8 @@ import { posicionDelDiagnostico } from "@/lib/escala/contexto";
 import { posicionParaLaEntrega } from "@/lib/escala/posicion";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
 import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
-import { fetchTranscriptContent } from "@/lib/sessions/transcript";
+import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
+import { documentoConContexto } from "@/lib/contexto/documento";
 import { loadProjectSummary } from "@/lib/portfolio/load";
 import { summarizeParticularidades } from "@/lib/timeline/particularidades-summary";
 import {
@@ -62,40 +63,13 @@ const KEYS_DERIVADAS = new Set(
   ENTREGA_TEMPLATE.sections.filter((d) => d.agentGenerated === false && d.key !== "cierre").map((d) => d.key),
 );
 
-/**
- * Las reuniones del proyecto, de la más nueva hacia atrás, para que el agente cuente lo que
- * pasó de verdad y no lo que se prometió.
- *
- * ⚠ EL PRESUPUESTO ES DE CARACTERES, Y EL RECORRIDO NO SE CORTA POR CANTIDAD DE REUNIONES.
- * Medido en Wherex: de las 12 más recientes, **solo 4 tenían contenido** (las demás no tienen
- * transcripción ni minuta guardada), así que un `slice(0, 12)` gastaba 6.196 de 18.000
- * caracteres y dejaba 53 reuniones sin mirar. Se camina hacia atrás hasta LLENAR el
- * presupuesto; el tope de lecturas acota el trabajo, no el material.
- *
- * Es la lección de la Tanda L aplicada bien: ahí un cupo fijo de 10 dejaba afuera el 64% del
- * material de un proyecto con ritmo semanal denso.
+/*
+ * LAS REUNIONES (2026-10-07): las del «Contexto adicional» de la Entrega, por el mismo cargador que
+ * el diagnóstico (lib/contexto/material-del-documento.ts). Antes eran las últimas reuniones de TODOS
+ * los vínculos del proyecto, también las de puertas adentro y sin decir de qué sala eran, en un
+ * documento que abre el cliente. Ahora entran las reuniones con el cliente que nadie sacó (más las
+ * agregadas a mano), cada una con su sala, y el CSE ve en la pantalla cuáles son.
  */
-async function ultimasSesiones(
-  projectId: string,
-  presupuesto = 18_000,
-  topeDeLecturas = 40,
-): Promise<{ texto: string; usadas: number; total: number }> {
-  const { sessions } = await getProjectMemberSessions(projectId);
-  const ordenadas = [...sessions].sort((a, b) => +new Date(b.date) - +new Date(a.date));
-  const partes: string[] = [];
-  let gastado = 0;
-  let miradas = 0;
-  for (const s of ordenadas) {
-    if (gastado >= presupuesto || miradas >= topeDeLecturas) break;
-    miradas++;
-    const cupo = Math.min(2000, presupuesto - gastado);
-    const texto = await fetchTranscriptContent(s.id, s.title, { maxChars: cupo }).catch(() => "");
-    if (!texto) continue;
-    partes.push(`[${new Date(s.date).toISOString().slice(0, 10)}] ${s.title}\n${texto}`);
-    gastado += texto.length;
-  }
-  return { texto: partes.join("\n\n"), usadas: partes.length, total: ordenadas.length };
-}
 
 /** Genera (o regenera) el documento de entrega. */
 export async function runEntregaGeneration(opts: {
@@ -149,15 +123,22 @@ export async function runEntregaGeneration(opts: {
     loadProjectSummary(projectId).catch(() => null),
   ]);
 
-  const [procesosCtx, reuniones] = await Promise.all([
+  const [procesosCtx, material, miembros] = await Promise.all([
     project?.clientId ? serializeProcesosForPrompt(project.clientId, { onlyConfirmed: false }) : Promise.resolve(""),
-    ultimasSesiones(projectId),
+    cargarMaterialDelDocumento(projectId, documentoConContexto("delivery")!),
+    /* La cifra «Reuniones de trabajo» que ve el cliente sigue saliendo de la membresía del proyecto,
+       como siempre (lib/delivery/claims.ts): el «Contexto adicional» decide qué LEE el agente, no
+       cuántas reuniones tuvo el proyecto. */
+    getProjectMemberSessions(projectId),
   ]);
+  const r = material.resumen;
 
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
   const hubs = tagLabels(project?.tags ?? []);
 
   const userMessage = [
+    // Las «Instrucciones adicionales» de la Entrega (2026-10-07): primero, porque mandan sobre todo.
+    material.instrucciones,
     `Empresa: ${companyName}`,
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,
     project?.client?.industry ? `Industria: ${project.client.industry}` : "",
@@ -172,13 +153,14 @@ export async function runEntregaGeneration(opts: {
        se pudieron leer concluye con una confianza que el material no respalda — y en un cierre
        eso se traduce en afirmar que algo «no pasó» cuando simplemente no quedó escrito.
        En Wherex son 4 con contenido sobre 65. */
-    reuniones.texto
-      ? `\n=== REUNIONES DEL PROYECTO (lo que pasó de verdad) ===\n` +
-        `Cobertura: ${reuniones.usadas} reuniones con contenido, de ${reuniones.total} que tuvo el ` +
-        `proyecto. Las demás no tienen transcripción ni minuta guardada — eso NO significa que no ` +
+    material.reuniones
+      ? `\n=== REUNIONES DEL PROYECTO CON EL CLIENTE (lo que pasó de verdad; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente) ===\n` +
+        `Cobertura: ${r.leidas} reuniones con contenido, de ${r.ocurridas} que alimentan este documento. ` +
+        `Las demás no tienen transcripción ni minuta guardada, o no cupieron — eso NO significa que no ` +
         `hayan ocurrido, así que no concluyas nada de su ausencia.\n\n` +
-        reuniones.texto
+        material.reuniones
       : "\n=== SIN REUNIONES CON TRANSCRIPCIÓN ===\nNo hay material de sesiones: no inventes citas ni números del negocio del cliente — la sección de impacto va vacía.",
+    material.notas ? `\n=== NOTAS DEL EQUIPO PARA LA ENTREGA ===\n${material.notas}` : "",
     "",
     /* El recordatorio va al FINAL además de estar en el prompt del sistema: es la instrucción
        que más cuesta que se respete, porque escribir «logramos completar el 100%» es el reflejo
@@ -248,7 +230,7 @@ export async function runEntregaGeneration(opts: {
     anchorStartDate: project?.timeline?.anchorStartDate?.toISOString() ?? null,
     closeDateOverride: project?.timeline?.closeDateOverride?.toISOString() ?? null,
     closing: summary?.closing ?? { projectedISO: null, promisedISO: null, driftDays: null },
-    reuniones: reuniones.total,
+    reuniones: miembros.sessions.length,
     /* D-09: el atraso atribuido, sumado por el ÚNICO sumador del repo (solo kind ATRASO; incluye
        las cerradas a propósito: el calendario ya se movió). `buildDeliveryClaims` lo anula si
        da 0. Y la foto del plan: cuánto se sumó a lo prometido. */

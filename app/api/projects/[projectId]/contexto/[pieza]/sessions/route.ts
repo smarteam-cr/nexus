@@ -8,8 +8,9 @@ import { COLUMNA_DEL_DESTINO } from "@/lib/sessions/destinos-de-contexto";
 /**
  * POST /api/projects/[projectId]/contexto/[pieza]/sessions — «Contexto» de un DOCUMENTO (2026-09-28).
  *
- * Hoy solo `diagnosis`. El diagnóstico arranca SUGERIDO (toda reunión con el cliente alimenta), así
- * que esta ruta escribe el afinado del CSE sobre esa sugerencia:
+ * Los documentos de lib/contexto/documento.ts (diagnóstico, planificación, ejecución y, desde el
+ * 2026-10-07, kickoff, exploración, integraciones y entrega). Todos arrancan SUGERIDOS (toda reunión
+ * con el cliente alimenta), así que esta ruta escribe el afinado del CSE sobre esa sugerencia:
  *   { sessionId, feeds: true }  → «Agregar»: entra aunque no sea con el cliente, o aunque todavía no
  *                                 sea del proyecto (se vincula con source=manual, por la misma puerta
  *                                 que el handoff y el cronograma: rechazo cross-cliente y adopción).
@@ -51,7 +52,7 @@ export async function POST(
   });
   if (!prep.ok) return NextResponse.json({ error: prep.error }, { status: prep.status });
 
-  // La columna de ESTE documento (diagnosisOverride, planningOverride, implementationOverride).
+  // La columna de ESTE documento (COLUMNA_DEL_DESTINO): cada uno guarda su afinado por separado.
   const columna = COLUMNA_DEL_DESTINO[doc.destino];
 
   if (!body.feeds) {

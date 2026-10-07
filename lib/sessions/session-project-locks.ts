@@ -15,6 +15,9 @@
  *                                  (`false`) no lockea, por la misma razón que la del cronograma.
  *   - planningOverride / implementationOverride === true → lo mismo en la PLANIFICACIÓN y la
  *                                  EJECUCIÓN (2026-09-29).
+ *   - kickoffOverride / explorationOverride / techRequirementsOverride / deliveryOverride === true →
+ *                                  lo mismo en el KICKOFF, la EXPLORACIÓN, INTEGRACIONES y la ENTREGA
+ *                                  (2026-10-07).
  *
  * Desde la segunda versión (2026-09-23, entra solo lo elegido) la X escribe `null`; un `false` solo
  * queda de la primera. Ninguno de los dos lockea, y el motivo sigue siendo el de abajo.
@@ -44,6 +47,10 @@ export interface SessionProjectLockFields {
   diagnosisOverride: boolean | null;
   planningOverride: boolean | null;
   implementationOverride: boolean | null;
+  kickoffOverride: boolean | null;
+  explorationOverride: boolean | null;
+  techRequirementsOverride: boolean | null;
+  deliveryOverride: boolean | null;
 }
 
 /** ¿Un humano tocó este link? Entonces el clasificador no lo modifica ni lo borra. */
@@ -56,7 +63,11 @@ export function isLockedLink(l: SessionProjectLockFields): boolean {
     l.timelineOverride === true ||
     l.diagnosisOverride === true ||
     l.planningOverride === true ||
-    l.implementationOverride === true
+    l.implementationOverride === true ||
+    l.kickoffOverride === true ||
+    l.explorationOverride === true ||
+    l.techRequirementsOverride === true ||
+    l.deliveryOverride === true
   );
 }
 
@@ -84,5 +95,9 @@ export const WHERE_VINCULO_VIRGEN = {
     { OR: [{ diagnosisOverride: null }, { diagnosisOverride: false }] },
     { OR: [{ planningOverride: null }, { planningOverride: false }] },
     { OR: [{ implementationOverride: null }, { implementationOverride: false }] },
+    { OR: [{ kickoffOverride: null }, { kickoffOverride: false }] },
+    { OR: [{ explorationOverride: null }, { explorationOverride: false }] },
+    { OR: [{ techRequirementsOverride: null }, { techRequirementsOverride: false }] },
+    { OR: [{ deliveryOverride: null }, { deliveryOverride: false }] },
   ],
 };

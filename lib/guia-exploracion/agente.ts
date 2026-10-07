@@ -33,6 +33,8 @@ import { fetchTranscriptContent } from "@/lib/sessions/transcript";
 import { sanitizeTags } from "@/lib/tags/catalog";
 import { EQUIPOS, HUB_DEL_EQUIPO, NOMBRE_DEL_EQUIPO, fusionarPropuestas, leerContenido, leerPropuesta } from "./contenido";
 import { leerLaRespuesta, type FuenteDeTexto } from "./lectura";
+import { cargarMaterialDelDocumento, instruccionesDelDocumento } from "@/lib/contexto/material-del-documento";
+import { documentoConContexto } from "@/lib/contexto/documento";
 import { ErrorDeGuia, asegurarGuia, corridaEnCurso, ultimaReunionSinLeer } from "./servidor";
 
 export const MODELO_DE_LA_GUIA = "claude-sonnet-4-6";
@@ -187,16 +189,39 @@ async function correr(projectId: string, modo: "preparar" | "leer"): Promise<voi
 
   let fuentes: FuenteDeTexto[];
   let leida: string | null = null;
+  /* Las «Instrucciones adicionales» de la exploración (2026-10-07, «el contexto adicional es de cada
+     artefacto»): van primero en las dos corridas. Al preparar, además, las reuniones y las notas de
+     su «Contexto adicional»; al leer, la reunión sale de esas mismas (la X la saca también acá). */
+  let instrucciones: string;
   if (modo === "leer") {
-    const r = await ultimaReunionSinLeer(projectId, propuesta.leidas);
+    const [r, inst] = await Promise.all([
+      ultimaReunionSinLeer(projectId, propuesta.leidas),
+      instruccionesDelDocumento(projectId, "exploration"),
+    ]);
     if (!r) throw new Error("No hay reuniones nuevas del proyecto para leer.");
     const texto = await fetchTranscriptContent(r.id, r.titulo, { maxChars: 60_000 });
     if (!texto) throw new Error(`La reunión «${r.titulo}» no tiene transcripción para leer.`);
     fuentes = [{ id: "R1", etiqueta: `Reunión: ${r.titulo}`, texto }];
     leida = r.id;
+    instrucciones = inst;
   } else {
-    fuentes = await fuentesParaPreparar(projectId, project?.client.ficha);
-    if (fuentes.length === 0) throw new Error("No hay handoff, kickoff, cuestionarios ni ficha de dónde preparar las sesiones.");
+    const [base, material] = await Promise.all([
+      fuentesParaPreparar(projectId, project?.client.ficha),
+      cargarMaterialDelDocumento(projectId, documentoConContexto("exploration")!),
+    ]);
+    fuentes = base;
+    if (material.reuniones) {
+      fuentes.push({
+        id: "R1",
+        etiqueta: "Reuniones del contexto",
+        texto: `(Lo dicho [PUERTAS ADENTRO] es de Smarteam: nunca se le atribuye al cliente.)\n${material.reuniones}`,
+      });
+    }
+    if (material.notas) fuentes.push({ id: "N1", etiqueta: "Notas del equipo", texto: material.notas });
+    instrucciones = material.instrucciones;
+    if (fuentes.length === 0) {
+      throw new Error("No hay handoff, kickoff, cuestionarios, ficha ni reuniones de dónde preparar las sesiones.");
+    }
   }
 
   const plan = contenido.sesiones
@@ -214,6 +239,7 @@ async function correr(projectId: string, modo: "preparar" | "leer"): Promise<voi
       {
         role: "user",
         content:
+          instrucciones +
           `Cliente: ${project?.client.name ?? "—"} · Industria: ${project?.client.industry ?? "—"} · Proyecto: ${project?.name ?? "—"}\n` +
           `Equipos contratados: ${equipos.map((e) => NOMBRE_DEL_EQUIPO[e]).join(", ") || "ninguno de ventas, marketing o servicio"}\n\n` +
           (plan ? `=== PLAN DE SESIONES ACTUAL (no repitas sesiones ni preguntas que ya están) ===\n${plan}\n\n` : "") +

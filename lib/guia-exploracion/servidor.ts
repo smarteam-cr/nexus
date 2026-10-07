@@ -22,7 +22,7 @@ import { nombreDeNivel } from "@/lib/escala/documento/parsear";
 import type { Letra } from "@/lib/escala/documento/tipos";
 import { leerEscalaVigente } from "@/lib/escala/documento/vigente";
 import { ubicacionPreviaDelProyecto } from "@/lib/exploraciones/para-el-cuestionario";
-import { getProjectMemberSessions } from "@/lib/sessions/project-sources";
+import { getProjectDocumentSessions } from "@/lib/sessions/project-sources";
 import { sanitizeTags } from "@/lib/tags/catalog";
 import {
   EQUIPOS,
@@ -98,9 +98,14 @@ export function corridaEnCurso(f: { corriendoDesde: Date | null; corridaTerminoA
   );
 }
 
-/** La última reunión del proyecto que ya ocurrió y el agente todavía no leyó (por el chokepoint). */
+/**
+ * La última reunión del proyecto que ya ocurrió y el agente todavía no leyó (por el chokepoint).
+ * Desde el 2026-10-07 sale del «Contexto adicional» de la exploración: las reuniones con el cliente
+ * que nadie sacó, más las agregadas a mano. Una reunión puertas adentro no responde las preguntas
+ * al cliente, y la X del bloque la saca también de acá.
+ */
 export async function ultimaReunionSinLeer(projectId: string, leidas: readonly string[]): Promise<{ id: string; titulo: string; date: number } | null> {
-  const { sessions } = await getProjectMemberSessions(projectId);
+  const { sessions } = await getProjectDocumentSessions(projectId, "exploracion");
   const ahora = Date.now();
   const candidata = sessions.filter((s) => s.date <= ahora && !leidas.includes(s.id)).sort((a, b) => b.date - a.date)[0];
   return candidata ? { id: candidata.id, titulo: candidata.title, date: candidata.date } : null;

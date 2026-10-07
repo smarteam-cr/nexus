@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * components/canvas/DocumentoContextSection.tsx — el «CONTEXTO» de un documento: diagnóstico
- * (2026-09-28), planificación y ejecución (2026-09-29).
+ * components/canvas/DocumentoContextSection.tsx — el «CONTEXTO ADICIONAL» de un documento: diagnóstico
+ * (2026-09-28), planificación y ejecución (2026-09-29); kickoff, exploración, integraciones y entrega
+ * (2026-10-07), con sus «Instrucciones adicionales» (cada documento las guarda por su lado).
  *
  * Pedido de Elías: «así como el cronograma, cada canvas tenga su espacio para agregar contexto — así
  * queda más claro cuáles sesiones lo están alimentando». El gemelo de CronogramaContextSection, para
@@ -10,6 +11,7 @@
  *   · Google Meet — arranca SUGERIDO: toda reunión del proyecto con el cliente ya alimenta, y el CSE
  *     saca las que no sirven (quedan «Excluida», con «Incluir» para volver) o busca otras.
  *   · Fuentes manuales — notas pegadas a mano (lo que no quedó en ninguna reunión).
+ *   · Instrucciones adicionales — lo que el CSE le pide a la IA de ESTE documento (InstruccionesDelDocumento).
  * Lo que esta sección muestra es exactamente lo que lee el runner: la misma regla
  * (lib/sessions/destinos-de-contexto.ts) y el mismo chokepoint.
  *
@@ -22,6 +24,7 @@ import { useCallback, useState } from "react";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
 import FuentesManualesColumn from "@/components/clients/FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
+import InstruccionesDelDocumento from "@/components/contexto/InstruccionesDelDocumento";
 import { TOPE_NOTAS_DEL_DOCUMENTO, type DocumentoConContexto } from "@/lib/contexto/documento";
 
 export default function DocumentoContextSection({
@@ -41,6 +44,8 @@ export default function DocumentoContextSection({
   const [reuniones, setReunionesState] = useState(0);
   const [notas, setNotasState] = useState(0);
   const [reunionesIlegibles, setReunionesIlegibles] = useState(false);
+  const [instruccionesActivas, setInstruccionesActivasState] = useState(false);
+  const setInstruccionesActivas = useCallback((v: boolean) => setInstruccionesActivasState(v), []);
   const setReuniones = useCallback((n: number) => setReunionesState((c) => (c === n ? c : n)), []);
   const setNotas = useCallback((n: number) => setNotasState((c) => (c === n ? c : n)), []);
 
@@ -66,6 +71,7 @@ export default function DocumentoContextSection({
             ? "no se pudieron cargar las reuniones"
             : `${reuniones} ${reuniones === 1 ? "reunión lo alimenta" : "reuniones lo alimentan"}`}{" "}
           · {notas} nota{notas === 1 ? "" : "s"}
+          {instruccionesActivas ? " · instrucciones activas" : ""}
         </span>
         <span className="ml-auto text-[11px] text-fg-muted flex-shrink-0">{abierto ? "Colapsar" : "Expandir"}</span>
       </button>
@@ -73,7 +79,7 @@ export default function DocumentoContextSection({
       {/* Siempre montado: los contadores de la línea cerrada salen de las columnas. */}
       <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
         <p className="text-[11px] text-fg-muted leading-relaxed">
-          Con esto —más las demás fuentes del documento— la IA escribe {doc.elDocumento}. Arranca con{" "}
+          Con esto —más las demás fuentes del documento— la IA {doc.laIa}. Arranca con{" "}
           <span className="font-medium text-fg-secondary">todas las reuniones del proyecto con el cliente</span>: saca
           las que no sirven y busca las que falten. Si son muchas, se reparten el espacio. Sacarla de acá no la saca
           de los otros documentos ni del proyecto.
@@ -102,6 +108,14 @@ export default function DocumentoContextSection({
             />
           </ContextColumn>
         </div>
+        <InstruccionesDelDocumento
+          projectId={projectId}
+          slug={doc.pieza}
+          elDocumento={doc.elDocumento}
+          ejemplo={doc.ejemplo}
+          soloLectura={!canEdit}
+          onActivas={setInstruccionesActivas}
+        />
       </div>
     </div>
   );

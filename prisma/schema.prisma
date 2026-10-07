@@ -2390,6 +2390,12 @@ model SessionProject {
   // con la misma regla sugerida. Sacar una reunión de uno no la saca del otro.
   planningOverride       Boolean?
   implementationOverride Boolean?
+  // Lo mismo para el KICKOFF, la EXPLORACIÓN, INTEGRACIONES y la ENTREGA (2026-10-07, «el contexto
+  // adicional es de cada artefacto»). SQL: scripts/sql/2026-10-07-contexto-de-cada-documento.sql.
+  kickoffOverride          Boolean?
+  explorationOverride      Boolean?
+  techRequirementsOverride Boolean?
+  deliveryOverride         Boolean?
 
   generatedByAgentRunId String? // FK suave al AgentRun del clasificador
   createdAt             DateTime @default(now())

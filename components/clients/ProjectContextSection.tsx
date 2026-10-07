@@ -11,7 +11,8 @@
  * fuentes), y COLAPSADO una vez generado (ya pesa menos); el toggle manual manda.
  *
  * Reusa los componentes existentes en `columnMode` (HubspotTimelinePanel,
- * SessionSelectionReview, FuentesManualesColumn). La edición la gatea `canEdit` en el padre
+ * SessionSelectionReview, FuentesManualesColumn). Debajo de las columnas, las «Instrucciones
+ * adicionales» del handoff (2026-10-07): las guarda su canvas y solo las lee el agente del handoff. La edición la gatea `canEdit` en el padre
  * (ProjectHandoffSection): el CSE cura el contexto de SUS proyectos. Su gemelo para el
  * CRONOGRAMA (sin la columna de HubSpot) es components/canvas/CronogramaContextSection.tsx.
  */
@@ -22,6 +23,7 @@ import FuentesManualesColumn from "./FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "./context-column";
 import { ExploracionDeVentaResumen, useExploracionDeVenta } from "./ExploracionDeVentaColumn";
 import { FilaDeAlrededor } from "./FilaDeAlrededor";
+import InstruccionesDelDocumento from "@/components/contexto/InstruccionesDelDocumento";
 
 export default function ProjectContextSection({
   projectId,
@@ -60,6 +62,9 @@ export default function ProjectContextSection({
   const exploracion = useExploracionDeVenta(projectId);
   const exploracionCount = exploracion ? 1 : 0;
 
+  const [instruccionesActivas, setInstruccionesActivasState] = useState(false);
+  const setInstruccionesActivas = useCallback((v: boolean) => setInstruccionesActivasState(v), []);
+
   // "Alimentan" = todo lo que entra al handoff (mismo criterio en las 3 columnas). Las
   // excluidas a mano (Meet + HubSpot) se cuentan aparte (no alimentan, pero son gestionables).
   const feedTotal = hubspotCount + meetCount + manualCount + exploracionCount;
@@ -71,7 +76,7 @@ export default function ProjectContextSection({
     <FilaDeAlrededor
       titulo="Contexto adicional"
       ayuda={`Lo que leyó el agente: reuniones, notas de HubSpot, fuentes a mano${exploracion ? " y la preventa" : ""}.`}
-      meta={`${feedTotal} fuente${feedTotal === 1 ? "" : "s"}${excludedTotal > 0 ? ` · ${excludedTotal} excluida${excludedTotal === 1 ? "" : "s"}` : ""}`}
+      meta={`${feedTotal} fuente${feedTotal === 1 ? "" : "s"}${excludedTotal > 0 ? ` · ${excludedTotal} excluida${excludedTotal === 1 ? "" : "s"}` : ""}${instruccionesActivas ? " · instrucciones activas" : ""}`}
       abierto={open}
       onAlternar={() => setOverride(!open)}
     >
@@ -115,6 +120,16 @@ export default function ProjectContextSection({
               <ExploracionDeVentaResumen datos={exploracion} />
             </ContextColumn>
           )}
+        </div>
+        <div className="mt-3">
+          <InstruccionesDelDocumento
+            projectId={projectId}
+            slug="handoff"
+            elDocumento="el handoff"
+            ejemplo="Ej.: se vendió solo Sales Hub; lo de Service se conversó y quedó para otra etapa."
+            soloLectura={!canEdit}
+            onActivas={setInstruccionesActivas}
+          />
         </div>
     </FilaDeAlrededor>
   );

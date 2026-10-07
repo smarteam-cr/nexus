@@ -476,7 +476,7 @@ export default function ProjectCanvasPanel({
     ) : null;
   /** La franja del marco dice si el documento abierto se publica al cliente (registro de piezas). */
   const loVeElCliente = !!(activeSlug && pieceBySlug(activeSlug)?.clientFacing);
-  /** Diagnóstico, planificación y ejecución tienen «Contexto» propio (lib/contexto/documento.ts). */
+  /** Los documentos con «Contexto adicional» propio (lib/contexto/documento.ts). */
   const docConContexto = !enResumen ? documentoConContexto(activeSlug) : null;
   const ctaEnElPanel =
     !!slotDelPanel && !queSigueOcupado && !!botonDelAgente && !!filaActiva && (filaActiva.state !== "generada" || !!filaActiva.stale);
@@ -747,6 +747,19 @@ export default function ProjectCanvasPanel({
         </CanvasBoundary>
       )}
 
+      {/* El «Contexto adicional» del documento (sus reuniones, notas e instrucciones) va ARRIBA del
+          marco, no adentro: es del equipo, no de lo que ve el cliente, y adentro quedaba cerrado y no
+          se veía (2026-10-05). Va antes de TODOS los documentos en el orden de la página: desde el
+          2026-10-07 también lo tienen el kickoff, integraciones, la exploración y la entrega. */}
+      {docConContexto && activeCanvasId && (
+        <DocumentoContextSection
+          key={`contexto-${activeCanvasId}`}
+          projectId={projectId}
+          doc={docConContexto}
+          generado={filaActiva ? filaActiva.state === "generada" : !!activeCanvas?.hasContent}
+        />
+      )}
+
       {/* Kickoff: landing (Camino C) editable in-situ por el CSE, dentro del marco del documento
           (MarcoDelDocumento: sin padding, así las bandas del motor llegan a los bordes). */}
       {activeSlug === "kickoff" && activeCanvasId && (
@@ -783,17 +796,6 @@ export default function ProjectCanvasPanel({
           El marco es OBLIGATORIO en todo canvas del motor: va sin padding para que las bandas de
           sección lleguen a los bordes. Con padding, el hero y el cierre —que llevan fondo propio—
           quedan recortados con calles a los lados. */}
-      {/* El «Contexto» del documento (sus reuniones y notas) va ARRIBA del marco, no adentro: es del
-          equipo, no de lo que ve el cliente, y adentro quedaba cerrado y no se veía (2026-10-05). */}
-      {docConContexto && activeCanvasId && (
-        <DocumentoContextSection
-          key={`contexto-${activeCanvasId}`}
-          projectId={projectId}
-          doc={docConContexto}
-          generado={filaActiva ? filaActiva.state === "generada" : !!activeCanvas?.hasContent}
-        />
-      )}
-
       {activeSlug === "implementation" && activeCanvasId && (
         <MarcoDelDocumento loVeElCliente={loVeElCliente}>
           <CanvasBoundary label="la ejecución">

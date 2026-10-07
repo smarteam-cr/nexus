@@ -38,7 +38,7 @@ export default function PanelDelDocumento({
   accion,
   queSigueDelProyecto,
   queSigueOcupado,
-  secciones,
+  secciones: seccionesCrudas,
 }: {
   projectId: string;
   canvasId: string;
@@ -57,6 +57,9 @@ export default function PanelDelDocumento({
   queSigueOcupado: boolean;
   secciones: Array<{ key: string; label: string }>;
 }) {
+  /* Las entradas reservadas del Json (`__doc`, las «Instrucciones adicionales» del documento) no son
+     secciones: no van al índice. */
+  const secciones = seccionesCrudas.filter((s) => !s.key.startsWith("__"));
   const [corrida, setCorrida] = useState<Corrida | null | undefined>(undefined);
   const [versiones, setVersiones] = useState<number | null>(null);
 

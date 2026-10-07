@@ -61,7 +61,7 @@ export async function reclassifyClientSessions(
     select: {
       id: true,
       projects: {
-        select: { source: true, reviewedAt: true, included: true, handoffOverride: true, timelineOverride: true, diagnosisOverride: true, planningOverride: true, implementationOverride: true },
+        select: { source: true, reviewedAt: true, included: true, handoffOverride: true, timelineOverride: true, diagnosisOverride: true, planningOverride: true, implementationOverride: true, kickoffOverride: true, explorationOverride: true, techRequirementsOverride: true, deliveryOverride: true },
       },
     },
   });

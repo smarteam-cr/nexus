@@ -141,6 +141,8 @@ export async function runPlanificacionGeneration(opts: {
   const hubs = tagLabels(project?.tags ?? []);
 
   const userMessage = [
+    // Las «Instrucciones adicionales» de la planificación (2026-10-07): primero, porque mandan sobre todo.
+    material.instrucciones,
     `Empresa: ${companyName}`,
     `Industria: ${project?.client?.industry ?? "No especificada"}`,
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,

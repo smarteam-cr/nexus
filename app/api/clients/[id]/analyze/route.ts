@@ -100,6 +100,8 @@ import {
   hasTechnicalScope,
 } from "@/lib/tags/catalog";
 import { canvasOf, canvasOfNested } from "@/lib/pieces/canvas-query";
+import { cargarMaterialDelDocumento, instruccionesDelDocumento } from "@/lib/contexto/material-del-documento";
+import { documentoConContexto } from "@/lib/contexto/documento";
 import { pieceByAgentGroup } from "@/lib/pieces/registry";
 import { piezaAplica, pieceReadiness } from "@/lib/flow/piece-readiness";
 
@@ -1843,6 +1845,12 @@ ${excl}
     }
   }
 
+  /* Las «Instrucciones adicionales» del handoff (2026-10-07, «el contexto adicional es de cada
+     artefacto»): la entry `__doc` de SU canvas, rotulada como reglas duras. Van primero, antes de las
+     exclusiones. Sin instrucciones es "" y el mensaje queda igual que antes. */
+  const instruccionesDelHandoff =
+    isHandoffAgent && bodyProjectId ? await instruccionesDelDocumento(bodyProjectId, "handoff") : "";
+
   /* El DOCUMENTO de handoff del hermano MAYOR, como referencia para el zoom (Tanda G,
      2026-08-08 — decisión de Elías: el hermano menor lo lee ADEMÁS de todo el material crudo).
      El rótulo y la allowlist de secciones viven adentro del helper — es el único archivo
@@ -1882,7 +1890,7 @@ ${excl}
 
   const operativaBlock = dealProject ? bloqueDeOperativa(dealProject) : "";
 
-  const baseUserMessage = `${cseExclusionsBlock}Empresa: ${companyName}
+  const baseUserMessage = `${instruccionesDelHandoff}${cseExclusionsBlock}Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 Notas base: ${client.notes ?? "Sin notas"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}` : ""}
@@ -1912,9 +1920,10 @@ ${[
 Analiza toda la información anterior y completa las secciones de contexto del cliente.`;
 
   // ── 10b. Input del agente Kickoff ─────────────────────────────────────────────
-  // El Kickoff NO consume las fuentes crudas (transcripts/docs/deal): su input es
-  // el HANDOFF ya curado (bloques CONFIRMED) + el cronograma. Gateado por id para
-  // no afectar a ningún otro agente (diagnóstico, handoff, etc. quedan intactos).
+  // El Kickoff NO consume las fuentes crudas del handoff (transcripts de venta/docs/deal): su input
+  // es el HANDOFF ya curado + el cronograma + (desde el 2026-10-07) su propio «Contexto adicional»
+  // (reuniones con el cliente, notas e instrucciones; ver más abajo). Gateado por id para no afectar
+  // a ningún otro agente (diagnóstico, handoff, etc. quedan intactos).
   const isKickoffAgent = agent.id === "agent-kickoff-canvas";
   let userMessage = baseUserMessage;
   /* La Escala del Kickoff (2026-09-12): el resumen para posicionar + el estimado que dejó la
@@ -1942,13 +1951,31 @@ Analiza toda la información anterior y completa las secciones de contexto del c
       titulo: "EL ESTIMADO QUE DEJÓ LA PROPUESTA (un antecedente de la venta, no una medición)",
       posicion: await posicionDeLaPropuesta(bodyProjectId),
     });
-    userMessage = `Empresa: ${companyName}
+    /* El «Contexto adicional» del kickoff (2026-10-07, «el contexto adicional es de cada
+       artefacto»): las reuniones con el cliente que nadie sacó, sus notas y sus instrucciones. El
+       handoff sigue siendo el ancla; las reuniones completan lo que se acordó después (nombres,
+       fechas, quién participa). Sin nada de eso, el mensaje es el de siempre, byte por byte. */
+    const materialDelKickoff = await cargarMaterialDelDocumento(bodyProjectId, documentoConContexto("kickoff")!);
+    const conMaterial = !!(materialDelKickoff.reuniones || materialDelKickoff.notas);
+    const reunionesDelKickoff = materialDelKickoff.reuniones
+      ? `=== LAS REUNIONES DEL CONTEXTO DEL KICKOFF (completan el handoff: quién participa, qué se acordó después, fechas dichas por el cliente. Nada de precios, descuentos ni negociación; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente; y nada de acá agranda el alcance vendido) ===
+${materialDelKickoff.reuniones}
+
+`
+      : "";
+    const notasDelKickoff = materialDelKickoff.notas
+      ? `=== NOTAS DEL EQUIPO PARA EL KICKOFF ===
+${materialDelKickoff.notas}
+
+`
+      : "";
+    userMessage = `${materialDelKickoff.instrucciones}Empresa: ${companyName}
 Industria: ${client.industry ?? "No especificada"}
 ${serviceTypeLabel ? `Tipo de servicio contratado: ${serviceTypeLabel}\n` : ""}${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
-=== HANDOFF DEL PROYECTO (ESTA ES TU ÚNICA FUENTE) ===
+=== HANDOFF DEL PROYECTO (${conMaterial ? "TU FUENTE ANCLA" : "ESTA ES TU ÚNICA FUENTE"}) ===
 ${handoffCtx || "(Sin handoff todavía. Dejá vacías las secciones sin respaldo; no inventes contenido.)"}
 
-${timelineCtx ? `${timelineCtx}\n\n` : ""}${escalaDelKickoff.texto}
+${reunionesDelKickoff}${notasDelKickoff}${timelineCtx ? `${timelineCtx}\n\n` : ""}${escalaDelKickoff.texto}
 
 Generá la landing de kickoff de cara al cliente siguiendo tus instrucciones: es una PRESENTACIÓN (poco texto, cards con título corto y detalle de una línea), tono post-venta, sin inflar alcance/objetivos (solo lo respaldado por el handoff), métricas como propuesta de Smarteam si no están explícitas, y NO reproduzcas el cronograma en prosa (la plantilla lo muestra aparte).`;
   }
@@ -2845,7 +2872,8 @@ Generá el plan de implementación siguiendo tus instrucciones: arquitectura de 
       select: { sections: true },
     });
     const secs = (tc?.sections ?? []) as Array<{ key: string }>;
-    targetCanvasSections = secs.map((s) => s.key);
+    // Las entradas reservadas del Json (`__doc`: las instrucciones del documento) no son secciones.
+    targetCanvasSections = secs.map((s) => s.key).filter((k) => !k.startsWith("__"));
   }
   const allKnownSections = [...Object.keys(STANDARD_SECTIONS), ...canvasSections, ...targetCanvasSections];
 

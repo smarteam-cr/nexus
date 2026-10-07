@@ -39,6 +39,10 @@ export interface ProjectSourceSession {
   diagnosisOverride: boolean | null;
   planningOverride: boolean | null;
   implementationOverride: boolean | null;
+  kickoffOverride: boolean | null;
+  explorationOverride: boolean | null;
+  techRequirementsOverride: boolean | null;
+  deliveryOverride: boolean | null;
   /** Link primario de la sesión en ESTE proyecto (política linkFeedsHandoff aguas abajo). */
   isPrimary: boolean;
   /** Confianza del clasificador para este link (null si manual/legacy). */
@@ -175,6 +179,10 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
       diagnosisOverride: true,
       planningOverride: true,
       implementationOverride: true,
+      kickoffOverride: true,
+      explorationOverride: true,
+      techRequirementsOverride: true,
+      deliveryOverride: true,
       isPrimary: true,
       confidence: true,
       source: true,
@@ -215,6 +223,10 @@ export async function getProjectMemberSessions(projectId: string): Promise<Proje
       diagnosisOverride: l.diagnosisOverride,
       planningOverride: l.planningOverride,
       implementationOverride: l.implementationOverride,
+      kickoffOverride: l.kickoffOverride,
+      explorationOverride: l.explorationOverride,
+      techRequirementsOverride: l.techRequirementsOverride,
+      deliveryOverride: l.deliveryOverride,
       isPrimary: l.isPrimary,
       confidence: l.confidence,
     });
@@ -338,6 +350,10 @@ export async function getClientSessions(
     diagnosisOverride: null,
     planningOverride: null,
     implementationOverride: null,
+    kickoffOverride: null,
+    explorationOverride: null,
+    techRequirementsOverride: null,
+    deliveryOverride: null,
     isPrimary: false,
     confidence: null,
   }));

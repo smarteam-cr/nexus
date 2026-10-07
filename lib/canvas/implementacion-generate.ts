@@ -88,6 +88,8 @@ export async function runImplementacionGeneration(opts: {
   const hubs = tagLabels(project?.tags ?? []);
 
   const userMessage = [
+    // Las «Instrucciones adicionales» de la ejecución (2026-10-07): primero, porque mandan sobre todo.
+    material.instrucciones,
     `Empresa: ${companyName}`,
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,
     hubs.length ? `Hubs/alcance del proyecto: ${hubs.join(", ")}` : "",

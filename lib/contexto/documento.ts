@@ -4,9 +4,11 @@
  *
  * Pedido de Elías (2026-09-28): «así como el cronograma, cada canvas (diagnóstico, planificación,
  * implementación) tenga su espacio para agregar contexto — así queda claro qué sesiones lo están
- * alimentando». El diagnóstico entró el 2026-09-28; planificación y ejecución el 2026-09-29. Sumar
- * uno es sumar su fila acá, su columna de afinado en `SessionProject` y su destino en
- * lib/sessions/destinos-de-contexto.ts. Las notas ya son genéricas (`NotaDeContexto.pieza`).
+ * alimentando». El diagnóstico entró el 2026-09-28; planificación y ejecución el 2026-09-29; el
+ * kickoff, la exploración, integraciones y la entrega el 2026-10-07. Sumar uno es sumar su fila acá,
+ * su columna de afinado en `SessionProject` y su destino en lib/sessions/destinos-de-contexto.ts. Las
+ * notas ya son genéricas (`NotaDeContexto.pieza`) y las instrucciones también (la entry `__doc` del
+ * canvas de la pieza, que lee `cargarMaterialDelDocumento`).
  *
  * Módulo PURO: lo usan las rutas, el panel y los runners.
  */
@@ -14,21 +16,95 @@ import type { DestinoSugerido } from "@/lib/sessions/destinos-de-contexto";
 
 export interface DocumentoConContexto {
   /** Slug de la pieza (lib/pieces/registry.ts): va en la URL y en `NotaDeContexto.pieza`. */
-  pieza: "diagnosis" | "planning" | "implementation";
+  pieza: "diagnosis" | "planning" | "implementation" | "kickoff" | "exploration" | "tech-requirements" | "delivery";
   /** El destino de las reglas del panel. */
   destino: DestinoSugerido;
   /** La celda de permisos que habilita curarlo (la de generarlo). */
-  seccion: "diagnostico" | "planificacion" | "implementacion";
+  seccion: SeccionConContexto;
   /** El título del bloque: «Contexto adicional» en toda pieza (2026-10-06, el mismo nombre en preventa y clientes). */
   titulo: string;
   /** Cómo se nombra en una frase: «el diagnóstico», «la planificación». */
   elDocumento: string;
+  /** Qué hace su IA con el contexto, para la explicación del bloque: «escribe el diagnóstico». */
+  laIa: string;
+  /** El ejemplo de la caja de «Instrucciones adicionales». */
+  ejemplo: string;
 }
 
+/** Las celdas de permisos de los documentos con contexto (la de generarlos). */
+export type SeccionConContexto =
+  | "diagnostico"
+  | "planificacion"
+  | "implementacion"
+  | "kickoff"
+  | "exploracion"
+  | "desarrollo"
+  | "entrega";
+
 export const DOCUMENTOS_CON_CONTEXTO: readonly DocumentoConContexto[] = [
-  { pieza: "diagnosis", destino: "diagnostico", seccion: "diagnostico", titulo: "Contexto adicional", elDocumento: "el diagnóstico" },
-  { pieza: "planning", destino: "planificacion", seccion: "planificacion", titulo: "Contexto adicional", elDocumento: "la planificación" },
-  { pieza: "implementation", destino: "ejecucion", seccion: "implementacion", titulo: "Contexto adicional", elDocumento: "la ejecución" },
+  {
+    pieza: "diagnosis",
+    destino: "diagnostico",
+    seccion: "diagnostico",
+    titulo: "Contexto adicional",
+    elDocumento: "el diagnóstico",
+    laIa: "escribe el diagnóstico",
+    ejemplo: "Ej.: enfócate en el área de Servicio; no propongas cambiar de plataforma.",
+  },
+  {
+    pieza: "planning",
+    destino: "planificacion",
+    seccion: "planificacion",
+    titulo: "Contexto adicional",
+    elDocumento: "la planificación",
+    laIa: "escribe la planificación",
+    ejemplo: "Ej.: el pipeline de ventas queda con 6 etapas; no incluyas automatizaciones de Marketing.",
+  },
+  {
+    pieza: "implementation",
+    destino: "ejecucion",
+    seccion: "implementacion",
+    titulo: "Contexto adicional",
+    elDocumento: "la ejecución",
+    laIa: "escribe la ejecución",
+    ejemplo: "Ej.: empieza por las propiedades de Negocios; los workflows se arman a mano.",
+  },
+  {
+    pieza: "kickoff",
+    destino: "kickoff",
+    seccion: "kickoff",
+    titulo: "Contexto adicional",
+    elDocumento: "el kickoff",
+    laIa: "escribe el kickoff",
+    ejemplo: "Ej.: el equipo del cliente lo lidera Laura Mora; no menciones la migración, va en otra etapa.",
+  },
+  {
+    pieza: "exploration",
+    destino: "exploracion",
+    seccion: "exploracion",
+    titulo: "Contexto adicional",
+    elDocumento: "la exploración",
+    laIa: "prepara las sesiones de la exploración y lee cada reunión",
+    ejemplo: "Ej.: con Finanzas hay una sola sesión; pregunta primero por cómo cobran hoy.",
+  },
+  {
+    pieza: "tech-requirements",
+    destino: "integraciones",
+    seccion: "desarrollo",
+    titulo: "Contexto adicional",
+    elDocumento: "el documento de integraciones",
+    laIa: "escribe el documento de integraciones",
+    ejemplo: "Ej.: la integración con el ERP es solo de lectura; los clientes se identifican por cédula jurídica.",
+  },
+  {
+    pieza: "delivery",
+    destino: "entrega",
+    seccion: "entrega",
+    titulo: "Contexto adicional",
+    elDocumento: "la entrega",
+    laIa: "escribe la entrega",
+    ejemplo: "Ej.: destaca lo que logró el equipo de Ventas; el proyecto se llama «Portal de clientes».",
+  },
 ];
 
 export function documentoConContexto(pieza: string | null | undefined): DocumentoConContexto | null {

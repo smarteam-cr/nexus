@@ -30,6 +30,10 @@ function virginLink(overrides: Partial<SessionProjectLockFields> = {}): SessionP
     diagnosisOverride: null,
     planningOverride: null,
     implementationOverride: null,
+    kickoffOverride: null,
+    explorationOverride: null,
+    techRequirementsOverride: null,
+    deliveryOverride: null,
     ...overrides,
   };
 }
@@ -81,6 +85,11 @@ test("E2 — el «Agregar» del diagnóstico lockea; su X NO (misma razón que e
   expect(isLockedLink(virginLink({ planningOverride: false }))).toBe(false);
   expect(isLockedLink(virginLink({ implementationOverride: true }))).toBe(true);
   expect(isLockedLink(virginLink({ implementationOverride: false }))).toBe(false);
+  // Kickoff, exploración, integraciones y entrega (2026-10-07): la misma regla.
+  for (const campo of ["kickoffOverride", "explorationOverride", "techRequirementsOverride", "deliveryOverride"] as const) {
+    expect(isLockedLink(virginLink({ [campo]: true })), campo).toBe(true);
+    expect(isLockedLink(virginLink({ [campo]: false })), campo).toBe(false);
+  }
 });
 
 /** Evaluador mínimo del where compartido, con la semántica de SQL para NULL. */
@@ -112,6 +121,16 @@ test("F — el where del vínculo virgen es el negativo EXACTO del candado", () 
                 casos.push(
                   virginLink({ reviewedAt, included, handoffOverride, timelineOverride, diagnosisOverride, planningOverride, implementationOverride }),
                 );
+  // Las cuatro del 2026-10-07, aparte (todas contra todas multiplicaría los casos por 81).
+  for (const reviewedAt of [null, new Date("2026-07-10")])
+    for (const included of [true, false])
+      for (const kickoffOverride of [null, true, false])
+        for (const explorationOverride of [null, true, false])
+          for (const techRequirementsOverride of [null, true, false])
+            for (const deliveryOverride of [null, true, false])
+              casos.push(
+                virginLink({ reviewedAt, included, kickoffOverride, explorationOverride, techRequirementsOverride, deliveryOverride }),
+              );
   for (const c of casos) {
     expect(coincideConVirgen(c), JSON.stringify(c)).toBe(!isLockedLink(c));
   }

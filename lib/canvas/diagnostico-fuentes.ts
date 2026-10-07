@@ -89,6 +89,8 @@ export async function fuentesDelDiagnostico(projectId: string): Promise<string> 
     : "No hay reuniones con contenido en el contexto de este diagnóstico.";
 
   return [
+    // Las «Instrucciones adicionales» del diagnóstico (2026-10-07): primero, porque mandan sobre todo.
+    material.instrucciones,
     `Empresa: ${companyName}`,
     `Industria: ${project?.client?.industry ?? "No especificada"}`,
     `Proyecto: ${project?.name ?? "(sin nombre)"}`,

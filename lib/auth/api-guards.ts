@@ -41,6 +41,7 @@ import { esAdminDeRoles } from "@/lib/roles/access";
 import { esLiderDeCs } from "@/lib/cs/acceso";
 import type { TeamRole } from "@prisma/client";
 import { pieceByName } from "@/lib/pieces/registry";
+import type { SeccionConContexto } from "@/lib/contexto/documento";
 import {
   hechosDeProyecto,
   motivoNoPublicable,
@@ -335,14 +336,14 @@ export async function guardTimelineEdit(
 }
 
 /**
- * Curar el «Contexto» de un DOCUMENTO (qué reuniones lo alimentan y sus notas): acceso al proyecto
- * + la celda de GENERAR ese documento. Quien puede escribir el diagnóstico con IA puede elegir con qué
- * se escribe; no hace falta una celda nueva. Curar no llama a la IA. Hoy solo el diagnóstico
- * (lib/contexto/documento.ts); planificación e implementación entran sumando su fila allá.
+ * Curar el «Contexto» de un DOCUMENTO (qué reuniones lo alimentan, sus notas y sus instrucciones):
+ * acceso al proyecto + la celda de GENERAR ese documento. Quien puede escribir el diagnóstico con IA
+ * puede elegir con qué se escribe; no hace falta una celda nueva. Curar no llama a la IA. Los
+ * documentos están en lib/contexto/documento.ts; el handoff entra por sus instrucciones (doc-brief).
  */
 export async function guardContextoDelDocumento(
   projectId: string,
-  seccion: "diagnostico" | "planificacion" | "implementacion",
+  seccion: SeccionConContexto | "handoff",
 ): Promise<(Awaited<ReturnType<typeof requirePermission>> & { clientId: string }) | NextResponse> {
   const access = await guardAccessToProject(projectId);
   if (access instanceof NextResponse) return access;

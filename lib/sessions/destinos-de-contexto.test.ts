@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { linkFeedsHandoff } from "@/lib/handoff/session-relevance";
 import {
+  COLUMNA_DEL_DESTINO,
   alimenta,
   excluidaAMano,
   forzadaAMano,
@@ -33,6 +34,10 @@ const base: VinculoDelPanel = {
   diagnosisOverride: null,
   planningOverride: null,
   implementationOverride: null,
+  kickoffOverride: null,
+  explorationOverride: null,
+  techRequirementsOverride: null,
+  deliveryOverride: null,
 };
 
 /** Todas las combinaciones que importan, para comparar contra la regla ORIGINAL del handoff. */
@@ -47,6 +52,11 @@ for (const included of [true, false])
               COMBINACIONES.push({
                 included, isPrimary, confidence, handoffOverride, timelineOverride, diagnosisOverride,
                 planningOverride, implementationOverride: planningOverride === null ? null : !planningOverride,
+                // Las cuatro del 2026-10-07 varían con las de arriba: el handoff tampoco las puede mirar.
+                kickoffOverride: diagnosisOverride,
+                explorationOverride: timelineOverride,
+                techRequirementsOverride: handoffOverride,
+                deliveryOverride: planningOverride,
               });
 
 describe("el HANDOFF no cambia ni una coma", () => {
@@ -172,6 +182,49 @@ describe("PLANIFICACIÓN y EJECUCIÓN: la misma regla sugerida, cada una en su c
   it("parseDestino los reconoce", () => {
     expect(parseDestino("planificacion")).toBe("planificacion");
     expect(parseDestino("ejecucion")).toBe("ejecucion");
+  });
+});
+
+describe("KICKOFF, EXPLORACIÓN, INTEGRACIONES y ENTREGA (2026-10-07): la regla sugerida, cada uno en su columna", () => {
+  const NUEVOS = ["kickoff", "exploracion", "integraciones", "entrega"] as const;
+
+  it("sin tocar, entra si fue con el cliente", () => {
+    for (const d of NUEVOS) {
+      expect(alimenta(d, base, true)).toBe(true);
+      expect(alimenta(d, base, false)).toBe(false);
+      expect(sugiereConElCliente(d)).toBe(true);
+      expect(usaReglaDeRelevancia(d)).toBe(false);
+      expect(origenDelVinculo(d, base)).toBe("sugerida: reunión con el cliente");
+    }
+  });
+
+  it("cada uno lee SU columna", () => {
+    expect(COLUMNA_DEL_DESTINO.kickoff).toBe("kickoffOverride");
+    expect(COLUMNA_DEL_DESTINO.exploracion).toBe("explorationOverride");
+    expect(COLUMNA_DEL_DESTINO.integraciones).toBe("techRequirementsOverride");
+    expect(COLUMNA_DEL_DESTINO.entrega).toBe("deliveryOverride");
+    for (const d of NUEVOS) {
+      const columna = COLUMNA_DEL_DESTINO[d];
+      expect(alimenta(d, { ...base, [columna]: false }, true)).toBe(false);
+      expect(alimenta(d, { ...base, [columna]: true }, false)).toBe(true);
+      expect(excluidaAMano(d, { ...base, [columna]: false })).toBe(true);
+      expect(forzadaAMano(d, { ...base, [columna]: true })).toBe(true);
+    }
+  });
+
+  it("⛔ sacar de uno NO saca de los otros (ni de los de antes)", () => {
+    const sacadaDelKickoff = { ...base, kickoffOverride: false };
+    expect(alimenta("kickoff", sacadaDelKickoff, true)).toBe(false);
+    for (const d of ["exploracion", "integraciones", "entrega", "diagnostico", "planificacion", "ejecucion"] as const) {
+      expect(alimenta(d, sacadaDelKickoff, true), d).toBe(true);
+    }
+    expect(alimenta("entrega", { ...base, diagnosisOverride: false }, true)).toBe(true);
+    expect(alimenta("cronograma", { ...base, deliveryOverride: true }, true)).toBe(false);
+    expect(excluidaAMano("handoff", { ...base, explorationOverride: false })).toBe(false);
+  });
+
+  it("parseDestino los reconoce", () => {
+    for (const d of NUEVOS) expect(parseDestino(d)).toBe(d);
   });
 });
 

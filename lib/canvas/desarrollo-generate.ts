@@ -24,6 +24,8 @@ import { specToDiagram, relacionToDiagram } from "@/lib/flowchart/spec-to-diagra
 import { DESARROLLO_TEMPLATE, DESARROLLO_HANDOFF_KEYS } from "@/components/landing/configs/desarrollo.defs";
 import { tagLabels } from "@/lib/tags/catalog";
 import { canvasOfNested } from "@/lib/pieces/canvas-query";
+import { cargarMaterialDelDocumento } from "@/lib/contexto/material-del-documento";
+import { documentoConContexto } from "@/lib/contexto/documento";
 
 /** Asegura el canvas "Desarrollo" del proyecto (lo crea si falta) + reconcilia sus
  *  secciones. Idempotente. Devuelve el canvasId. */
@@ -56,7 +58,7 @@ export async function runDesarrolloGeneration(opts: {
   // Input: sección `desarrollo` del handoff (+ alcance/dolor/expectativas/stakeholders)
   // + los tags del proyecto (los sistemas/alcance técnico). Independientes entre sí
   // (y del canvas, si ya viene resuelto) → en paralelo en vez de 3 round-trips seguidos.
-  const [canvasId, handoffCtx, project] = await Promise.all([
+  const [canvasId, handoffCtx, project, material] = await Promise.all([
     opts.canvasId ?? ensureDesarrolloCanvas(projectId),
     /* `loadHandoffContext` y no `loadCanvasContext`: para un desarrollo que cuelga de una
        implementación, el alcance vendido vive en el handoff del HERMANO. Con el loader
@@ -70,15 +72,23 @@ export async function runDesarrolloGeneration(opts: {
       where: { id: projectId },
       select: { tags: true, client: { select: { name: true, company: true, industry: true } } },
     }),
+    /* El «Contexto adicional» del documento (2026-10-07): las reuniones con el cliente que nadie sacó
+       (o las que el CSE agregó), sus notas y sus instrucciones. Antes el handoff era la única fuente,
+       y lo que se precisó después con el equipo técnico del cliente no le llegaba. */
+    cargarMaterialDelDocumento(projectId, documentoConContexto("tech-requirements")!),
   ]);
   const tagsLabel = tagLabels(project?.tags ?? []).join(", ");
   const companyName = project?.client?.name ?? project?.client?.company ?? "el cliente";
-  const userMessage = `Empresa: ${companyName}
+  const reunionesCtx = material.reuniones
+    ? `\n=== LAS REUNIONES DEL CONTEXTO DE INTEGRACIONES (precisan el alcance del handoff; lo dicho [PUERTAS ADENTRO] no se le atribuye al cliente y nada de acá agranda lo vendido) ===\n${material.reuniones}\n`
+    : "";
+  const notasCtx = material.notas ? `\n=== NOTAS DEL EQUIPO PARA INTEGRACIONES ===\n${material.notas}\n` : "";
+  const userMessage = `${material.instrucciones}Empresa: ${companyName}
 Industria: ${project?.client?.industry ?? "No especificada"}
 ${tagsLabel ? `Alcance etiquetado (tags del proyecto): ${tagsLabel}\n` : ""}
-=== HANDOFF DEL PROYECTO — DESARROLLO Y ALCANCE (TU ÚNICA FUENTE) ===
+=== HANDOFF DEL PROYECTO — DESARROLLO Y ALCANCE (TU FUENTE ANCLA) ===
 ${handoffCtx || "(Sin handoff con detalle técnico. Proponé la estructura desde buenas prácticas de HubSpot y marcá lo específico del cliente como ⚠️ Por validar.)"}
-
+${reunionesCtx}${notasCtx}
 Generá el requerimiento técnico siguiendo tus instrucciones: preciso y técnico, con nombres de objetos/propiedades/endpoints de HubSpot; marcá con ⚠️ Por validar lo que no esté confirmado en la fuente; no inventes IDs, propiedades, volúmenes ni SLAs.`;
 
   // Carry-forward: la generación sobreescribe los bloques EN EL LUGAR — sin la data

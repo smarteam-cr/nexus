@@ -1,10 +1,11 @@
 /**
  * lib/contexto/material-del-documento.ts — lo que el «Contexto» de un DOCUMENTO le da a su agente:
- * las reuniones que lo alimentan (las mismas que muestra el panel) y las notas del CSE.
+ * las reuniones que lo alimentan (las mismas que muestra el panel), las notas del CSE y, desde el
+ * 2026-10-07, sus «Instrucciones adicionales» (la entry `__doc` del canvas de la pieza).
  *
- * Hoy lo lee el runner del diagnóstico (lib/canvas/diagnostico-generate.ts). Es más simple que el
- * material del cronograma a propósito: el diagnóstico no ubica reuniones en un plan ni arma un
- * calendario, solo necesita LEERLAS.
+ * Lo leen los runners de los documentos de lib/contexto/documento.ts. Es más simple que el material
+ * del cronograma a propósito: estos documentos no ubican reuniones en un plan ni arman un
+ * calendario, solo necesitan LEERLAS.
  *
  * ── LAS REGLAS QUE NO SE NEGOCIAN ────────────────────────────────────────────
  *  · Las reuniones salen del chokepoint (`getProjectDocumentSessions` → `getProjectMemberSessions`):
@@ -25,6 +26,8 @@ import { etiquetaDeSala, prefijoDeSala } from "@/lib/sessions/etiqueta-de-sala";
 import { buildInternalDomainsSet } from "@/lib/sessions/categorize";
 import { getSessionCategories } from "@/lib/cache/session-categories";
 import { modeloDisponible } from "@/lib/db/esquema";
+import { canvasOf } from "@/lib/pieces/canvas-query";
+import { bloqueDeInstruccionesDeDoc, docBriefFrom } from "@/lib/business-cases/section-briefs";
 import {
   MAX_REUNIONES_DEL_DOCUMENTO,
   TOPE_NOTAS_DEL_DOCUMENTO,
@@ -37,8 +40,22 @@ export interface MaterialDelDocumento {
   reuniones: string;
   /** El bloque de notas del CSE ("" si no hay). */
   notas: string;
+  /**
+   * Las «Instrucciones adicionales» de este documento, ya rotuladas como reglas duras
+   * (`bloqueDeInstruccionesDeDoc`), o "" si no hay: así un documento sin instrucciones arma el mismo
+   * mensaje que antes. Van PRIMERO en el mensaje: son lo de más peso.
+   */
+  instrucciones: string;
   /** Para el encuadre del informe («4 sesiones entre el 2 y el 16 de septiembre»). */
-  resumen: { leidas: number; futuras: number; sinContenido: number; desde: number | null; hasta: number | null };
+  resumen: {
+    leidas: number;
+    futuras: number;
+    sinContenido: number;
+    /** Cuántas reuniones que ya ocurrieron lo alimentan (las leídas son las más recientes, si no caben). */
+    ocurridas: number;
+    desde: number | null;
+    hasta: number | null;
+  };
 }
 
 function fecha(ms: number): string {
@@ -49,10 +66,11 @@ export async function cargarMaterialDelDocumento(
   projectId: string,
   doc: DocumentoConContexto,
 ): Promise<MaterialDelDocumento> {
-  const [{ sessions }, categorias, notas] = await Promise.all([
+  const [{ sessions }, categorias, notas, instrucciones] = await Promise.all([
     getProjectDocumentSessions(projectId, doc.destino),
     getSessionCategories(),
     leerNotas(projectId, doc.pieza),
+    leerInstrucciones(projectId, doc.pieza),
   ]);
   const dominiosPropios = buildInternalDomainsSet(categorias);
   const ahora = Date.now();
@@ -80,14 +98,30 @@ export async function cargarMaterialDelDocumento(
   return {
     reuniones: bloques.join("\n\n"),
     notas: bloqueDeNotas(notas),
+    instrucciones,
     resumen: {
       leidas: bloques.length,
       futuras: sessions.length - ocurridas.length,
       sinContenido,
+      ocurridas: ocurridas.length,
       desde: aLeer.length ? aLeer[0].date : null,
       hasta: aLeer.length ? aLeer[aLeer.length - 1].date : null,
     },
   };
+}
+
+/** Las instrucciones del documento: la entry `__doc` de SU canvas (doc-brief), rotuladas. */
+async function leerInstrucciones(projectId: string, pieza: string): Promise<string> {
+  const canvas = await prisma.projectCanvas.findFirst({
+    where: { projectId, ...canvasOf(pieza) },
+    select: { sections: true },
+  });
+  return bloqueDeInstruccionesDeDoc(canvas ? docBriefFrom(canvas.sections) : null);
+}
+
+/** Solo las instrucciones de un documento, para los agentes que no leen su material completo. */
+export async function instruccionesDelDocumento(projectId: string, pieza: string): Promise<string> {
+  return leerInstrucciones(projectId, pieza);
 }
 
 async function leerNotas(projectId: string, pieza: string) {

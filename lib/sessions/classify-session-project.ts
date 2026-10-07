@@ -100,6 +100,10 @@ export async function classifySessionToProjects(
       diagnosisOverride: true,
       planningOverride: true,
       implementationOverride: true,
+      kickoffOverride: true,
+      explorationOverride: true,
+      techRequirementsOverride: true,
+      deliveryOverride: true,
     },
   });
   const lockedByProject = new Map(existing.filter(isLockedLink).map((e) => [e.projectId, e]));
