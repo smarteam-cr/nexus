@@ -41,10 +41,12 @@ export interface FieldProps {
   /** Asterisco visual; la validación real vive en Zod/el submit. */
   required?: boolean;
   className?: string;
+  /** El rótulo con otra medida (los pasos numerados de un cajón: 13 px seminegrita). */
+  labelClassName?: string;
   children: React.ReactNode;
 }
 
-export function Field({ label, hint, error, required, className, children }: FieldProps) {
+export function Field({ label, hint, error, required, className, labelClassName, children }: FieldProps) {
   const id = useId();
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
@@ -52,7 +54,7 @@ export function Field({ label, hint, error, required, className, children }: Fie
 
   return (
     <div className={cn("space-y-1.5", className)}>
-      <label htmlFor={id} className="block text-xs font-medium text-fg-secondary">
+      <label htmlFor={id} className={cn("block text-xs font-medium text-fg-secondary", labelClassName)}>
         {label}
         {required && (
           <span className="ml-0.5 text-red-400" aria-hidden="true">

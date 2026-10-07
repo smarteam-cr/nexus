@@ -23,8 +23,8 @@ export interface OpcionSegmentada<K extends string> {
   title?: string;
   /** Se ve pero no se elige (con su `title` explicando por qué). */
   deshabilitada?: boolean;
-  /** Cuántas filas deja ver la opción («Mis clientes 23»). En 11 px y gris, después del nombre. */
-  cuenta?: number;
+  /** Cuántas filas deja ver la opción («Mis clientes 23», «Automáticas 0 activas»). En 11 px y gris, después del nombre. */
+  cuenta?: number | string;
 }
 
 export interface SegmentadoProps<K extends string> {
@@ -36,9 +36,11 @@ export interface SegmentadoProps<K extends string> {
   className?: string;
   /** Mientras se guarda: se ve igual, pero no se puede cambiar. */
   deshabilitado?: boolean;
+  /** Ocupa todo el ancho y reparte las opciones en partes iguales (la columna de un tema, en un panel angosto). */
+  lleno?: boolean;
 }
 
-export function Segmentado<K extends string>({ opciones, valor, onCambio, etiqueta, className, deshabilitado }: SegmentadoProps<K>) {
+export function Segmentado<K extends string>({ opciones, valor, onCambio, etiqueta, className, deshabilitado, lleno }: SegmentadoProps<K>) {
   const refs = useRef(new Map<K, HTMLButtonElement>());
   const activas = opciones.filter((o) => !o.deshabilitada);
   const conFoco = valor !== null && opciones.some((o) => o.clave === valor) ? valor : (activas[0]?.clave ?? null);
@@ -54,7 +56,7 @@ export function Segmentado<K extends string>({ opciones, valor, onCambio, etique
       role="radiogroup"
       aria-label={etiqueta}
       aria-disabled={deshabilitado || undefined}
-      className={cn("inline-flex max-w-full flex-wrap rounded-[10px] bg-surface-hover p-[3px]", className)}
+      className={cn(lleno ? "flex w-full" : "inline-flex max-w-full flex-wrap", "rounded-[10px] bg-surface-hover p-[3px]", className)}
       onKeyDown={(e) => {
         if (e.key === "ArrowRight" || e.key === "ArrowDown") {
           e.preventDefault();
@@ -82,7 +84,8 @@ export function Segmentado<K extends string>({ opciones, valor, onCambio, etique
             aria-disabled={o.deshabilitada || undefined}
             onClick={() => !o.deshabilitada && !deshabilitado && onCambio(o.clave)}
             className={cn(
-              "whitespace-nowrap rounded-lg px-4 py-[7px] text-[13px] leading-tight transition-colors",
+              lleno ? "min-w-0 flex-1 px-1" : "px-4",
+              "whitespace-nowrap rounded-lg py-[7px] text-[13px] leading-tight transition-colors",
               activo
                 ? "bg-surface font-semibold text-fg shadow-segment"
                 : o.deshabilitada

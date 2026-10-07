@@ -34,6 +34,10 @@ export type { TabsProps, TabItem } from "./Tabs";
 export { Segmentado } from "./Segmentado";
 export type { SegmentadoProps, OpcionSegmentada } from "./Segmentado";
 
+/* Prende o apaga algo que sigue andando solo (una pregunta de tiempo). Con su palabra al lado. */
+export { Interruptor } from "./Interruptor";
+export type { InterruptorProps } from "./Interruptor";
+
 export { Menu } from "./Menu";
 export type { MenuProps, MenuItemDef } from "./Menu";
 
