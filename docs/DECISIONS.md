@@ -5252,6 +5252,14 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   `costos/movimientos`). La entrada «Planilla» del menú deja de ser solo de Super Admin: la ve quien tenga el permiso.
   Siguen solo para Super Admin el resumen de Costos, las tarjetas, la caja neta y el equilibrio. ⚠ Al 2026-10-07 los
   overrides de Dinia estaban vacíos: hay que encenderlos en /team.
+- **Conciliación: «Desestimar» y «Abrir la cuenta» (Elías, 2026-10-07: «se necesita desestimar y editar»).** «Está bien
+  así» pasa a llamarse «Desestimar» en todo lo que se lee (botones, pasos, ayudas, «Desestimadas»): hace lo mismo —saca
+  la fila con un motivo, se deshace, vuelve si cambia un número—, y el nombre viejo se leía como «aprobar». Lo que NO es
+  desestimar se corrige en la cuenta: cada fila que es de una sola cuenta (`cuenta:`, `venta:`, o sus cobros `c:`) trae
+  «Abrir la cuenta», que abre Cobranza con esa cuenta (`?cuenta=`), donde se revierte un cobro, se marca facturado o se
+  ajusta el servicio (`ponerCuentas`, al final de los detectores de Odoo y de Mercury). Casos que lo pidieron: Alliance
+  RH INV-46 (se le devolvió la plata: revertir el cobro y borrar o finalizar el servicio) y Teamnet INV-71/72 (son de la
+  implementación; la web de US$1.000 es aparte: desestimar con ese motivo y marcar facturadas sus cuotas). Sin SQL.
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 

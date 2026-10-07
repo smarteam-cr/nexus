@@ -97,6 +97,41 @@ export interface ItemDiferencia extends ItemInconsistencia {
    * varias cuotas, no hay cómo repartir la diferencia sin decidir por alguien. Corrige la cuota en Nexus, nunca Odoo.
    */
   montoDeLaFactura?: { cobroId: string; facturaId: string; numero: string; desde: number; hasta: number; moneda: string };
+  /**
+   * La cuenta de Nexus de la fila, para «Abrir la cuenta» (2026-10-07, Elías: «se necesita desestimar y editar»): lo que
+   * no es desestimar se corrige en la cuenta —revertir un cobro, marcarlo facturado, ajustar el servicio—. La pone
+   * `ponerCuentas` al final de cada detector; sin una sola cuenta clara, no viene.
+   */
+  cuentaId?: string;
+}
+
+/**
+ * La cuenta de Nexus de una fila: la que nombra (`cuenta:`), la de su venta (`venta:<cuenta>|…`) o la de sus cobros
+ * (`c:`). Si nombra más de una, ninguna: abrir una sola sería abrir la equivocada. Las facturas y movimientos solos no
+ * tienen cuenta todavía (eso es justo lo que les falta).
+ */
+export function cuentaDeLaFila(claves: readonly string[], cuentaDeCobro: (cobroId: string) => string | undefined): string | undefined {
+  const cuentas = new Set<string>();
+  for (const k of claves) {
+    if (k.startsWith("cuenta:")) cuentas.add(k.slice("cuenta:".length));
+    else if (k.startsWith("venta:")) cuentas.add(k.slice("venta:".length).split("|")[0]!);
+    else if (k.startsWith("c:")) {
+      const c = cuentaDeCobro(k.slice(2));
+      if (c) cuentas.add(c);
+    }
+  }
+  return cuentas.size === 1 ? [...cuentas][0] : undefined;
+}
+
+/** Le pone a cada fila de cada línea (pendientes y marcadas) su cuenta, cuando tiene una sola. */
+export function ponerCuentas(lineas: readonly DiferenciaOdoo[], cuentaDeCobro: (cobroId: string) => string | undefined): void {
+  for (const l of lineas) {
+    for (const it of [...l.items, ...l.marcadas.map((m) => m.item)]) {
+      if (it.cuentaId) continue;
+      const c = cuentaDeLaFila([it.fila.clave, ...it.fila.documentos.map((d) => d.clave)], cuentaDeCobro);
+      if (c) it.cuentaId = c;
+    }
+  }
 }
 
 /**
@@ -1909,7 +1944,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
           "Si un cliente de Odoo no es cliente nuestro, márcalo «No es cliente nuestro»: deja de aparecer.",
         ],
         queSignificaAceptar:
-          "«Está bien así» solo quita estas filas de la lista: no vincula el cliente, no crea la cuenta ni carga cobros, y las facturas siguen fuera de la cobranza de Nexus. Casi nunca es lo correcto: lo que corresponde es vincular.",
+          "Desestimar solo quita estas filas de la lista: no vincula el cliente, no crea la cuenta ni carga cobros, y las facturas siguen fuera de la cobranza de Nexus. Casi nunca es lo correcto: lo que corresponde es vincular.",
         queHacer: "Emparejar los clientes de Odoo con las cuentas de Nexus en /cobranza/odoo.",
         resuelve: "COBRANZA",
         items: [...agruparPorPartner(porCobrar, netoPorCobrar, { sufijo }), ...cuentasSinEmparejar.map(itemDeCuentaPorEmparejar)],
@@ -1981,7 +2016,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         "Se muestran porque la factura revertida y su nota siguen en Odoo por ese importe en la moneda equivocada: un reporte de Odoo que sume esa moneda sin descontar las reversiones sale inflado en esa cifra.",
       montos: montosPorMoneda(corregidas.map((c) => ({ moneda: c.equivocada.moneda, monto: c.monto }))),
       donde: "ODOO",
-      pie: "No se cierra sola: la factura revertida y su nota quedan en Odoo. Cuando contabilidad lo confirme, marca sus filas «Está bien así».",
+      pie: "No se cierra sola: la factura revertida y su nota quedan en Odoo. Cuando contabilidad lo confirme, desestima sus filas.",
       pasos: [
         "Confirma con contabilidad que cada nota de crédito quedó aplicada a su factura equivocada (Odoo ya da las dos como cerradas).",
         "Si algún reporte de Odoo del año sale con estos importes, pide que lo saquen sin las facturas revertidas.",
@@ -2582,7 +2617,7 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         pasos: [
           "Si es de un servicio vigente, falta cargar ese servicio o su plan de pago en Cobranza.",
           "Si el cliente está mal emparejado, la factura es de otro: arréglalo en «Emparejar».",
-          "Si es algo que Nexus no planifica, marca esa fila «Está bien así».",
+          "Si es algo que Nexus no planifica, desestima esa fila con el motivo.",
         ],
         queSignificaAceptar:
           "Que estas facturas son de cosas que Nexus no planifica. La línea vuelve si aparece una factura nueva.",
@@ -3015,9 +3050,10 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
         donde: "PREGUNTANDO",
         pasos: [
           "Confirma con quien vendió si la factura de cada fila es la misma venta que las cuotas o el servicio que nombra.",
-          "Si es la misma y hay un cobro de más, sácalo de Cobrado desde el cronograma, con el motivo, y anota el número de la factura en las cuotas que quedan.",
+          "Si es la misma y hay un cobro de más: «Abrir la cuenta», sácalo de Cobrado con el motivo y anota el número de la factura en las cuotas que quedan.",
+          "Si se le devolvió la plata al cliente: «Abrir la cuenta», revierte ese cobro con el motivo («se devolvió») y borra o finaliza el servicio que ya no va.",
           "Si el servicio todavía no generó sus cobros, no los generes sin descontar la factura que ya está cargada.",
-          "Si son ventas distintas, marca esa fila «Está bien así».",
+          "Si son ventas distintas, desestima esa fila con el motivo (por ejemplo, «la factura es de la implementación; la web es aparte»). Si la cuota de esa factura sigue «programado», márcala facturada desde la cuenta.",
         ],
         queSignificaAceptar:
           "Que son ventas distintas y cada una se cuenta una vez. La línea vuelve si aparece otra factura en la misma situación.",
@@ -3036,6 +3072,9 @@ function detectar(estado: EstadoDelCruce): { lineas: DiferenciaOdoo[]; juntados:
       };
     });
   }
+
+  // «Abrir la cuenta» en cada fila que es de una sola cuenta (2026-10-07).
+  ponerCuentas(out, (id) => cobroPorId.get(id)?.cuentaId);
 
   /* «Ya contado en»: la primera línea de arriba que ya suma TODOS los documentos de esta. Solo es una marca
      para quien lee: el encabezado no la necesita, porque cuenta cada documento una vez por su clave. */

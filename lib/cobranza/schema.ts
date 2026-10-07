@@ -1066,7 +1066,7 @@ const codigoDeLinea = z
  */
 export const odooMarcarFilasSchema = z.object({
   linea: codigoDeLinea,
-  motivo: z.string().trim().min(5, "Escribe por qué está bien así (al menos 5 letras)").max(1000),
+  motivo: z.string().trim().min(5, "Escribe por qué se desestima (al menos 5 letras)").max(1000),
   filas: z
     .array(
       z.object({

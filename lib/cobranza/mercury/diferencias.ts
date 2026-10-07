@@ -21,6 +21,7 @@ import {
   filasQueVolvieron,
   indiceDeMarcas,
   montosPorMoneda,
+  ponerCuentas,
   separarMarcadas,
   textoDeMontos,
   type ClaveDeDocumento,
@@ -266,7 +267,7 @@ export function detectarDiferenciasMercury(e: EstadoMercury): DiferenciaOdoo[] {
         "Si todavía no tiene cuenta, créala en Cobranza con «Nueva empresa» y vuelve acá a emparejarla.",
         "Si no es cliente nuestro, márcalo «No es cliente nuestro»: deja de aparecer.",
       ],
-      queSignificaAceptar: "«Está bien así» solo quita estas filas de la lista: las facturas siguen fuera de la cobranza de Nexus. Casi nunca es lo correcto: lo que corresponde es emparejar.",
+      queSignificaAceptar: "Desestimar solo quita estas filas de la lista: las facturas siguen fuera de la cobranza de Nexus. Casi nunca es lo correcto: lo que corresponde es emparejar.",
       queHacer: "Emparejar el cliente de Mercury con su cuenta de Nexus.",
       resuelve: "COBRANZA",
       items: grupos.map((g) => {
@@ -296,7 +297,7 @@ export function detectarDiferenciasMercury(e: EstadoMercury): DiferenciaOdoo[] {
     pasos: [
       "Ve a la pestaña «Emparejar» y busca el cliente de Mercury de esta cuenta (Mercury usa la razón social).",
       "Si la cuenta no factura por Mercury, cambia su vía de cobro en su ficha de Cobranza.",
-      "Si factura por Mercury pero todavía no se le emitió ninguna factura, márcala «Está bien así» con ese motivo.",
+      "Si factura por Mercury pero todavía no se le emitió ninguna factura, desestímala con ese motivo.",
     ],
     queSignificaAceptar: "Que esta cuenta todavía no tiene facturas en Mercury. Si mañana le emiten una, hay que emparejarla igual.",
     queHacer: "Emparejar la cuenta con su cliente de Mercury.",
@@ -517,7 +518,7 @@ export function detectarDiferenciasMercury(e: EstadoMercury): DiferenciaOdoo[] {
     montos: [],
     documentos: xs.flatMap((x) => [`c:${x.c.id}`, `fm:${x.f.id}`]),
     donde: "NEXUS",
-    pasos: ["Abre el cobro en Cobranza y anota el número que propone la fila.", "Si no es esa factura, márcala «Está bien así» con el motivo."],
+    pasos: ["Abre el cobro en Cobranza y anota el número que propone la fila.", "Si no es esa factura, desestímala con el motivo."],
     queSignificaAceptar: "Que esa factura no es la de este cobro.",
     queHacer: "Anotar el número de factura en el cobro.",
     resuelve: "COBRANZA",
@@ -620,13 +621,17 @@ export function detectarDiferenciasMercury(e: EstadoMercury): DiferenciaOdoo[] {
     pasos: [
       "Mira de quién es y de qué es.",
       "Si paga una factura que en Mercury sigue sin pagar: márcala pagada en Mercury.",
-      "Si paga varias facturas juntas, o no es venta (un reembolso, un aporte): márcala «Está bien así» diciendo qué es.",
+      "Si paga varias facturas juntas, o no es venta (un reembolso, un aporte): desestímala diciendo qué es.",
     ],
     queSignificaAceptar: "Que se sabe de qué es esa plata. Escríbelo en el motivo: es lo que queda para el cierre del mes.",
     queHacer: "Identificar de qué es la plata.",
     resuelve: "COBRANZA",
     items: ms.map((m) => ({ texto: `${m.fecha} · ${nombreDeQuienPago(m.quien) || "(sin nombre)"}`, monto: m.monto, moneda: "USD", fila: identidadDeFila(`mov:${m.id}`, [docEntrada(m)]) })),
   }));
+
+  // «Abrir la cuenta» en cada fila que es de una sola cuenta (2026-10-07).
+  const cuentaDeCobro = new Map(e.cobros.map((c) => [c.id, c.cuentaId]));
+  ponerCuentas(out, (id) => cuentaDeCobro.get(id));
 
   return out.sort(
     (a, b) => Number(a.aceptada) - Number(b.aceptada) || (SEVERIDAD_ORDEN[a.severidad] ?? 9) - (SEVERIDAD_ORDEN[b.severidad] ?? 9),

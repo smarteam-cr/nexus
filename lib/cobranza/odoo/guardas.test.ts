@@ -350,7 +350,7 @@ describe("⛔ la sección Odoo de Cobranza habla en tuteo, nunca en voseo", () =
     expect(textos("components/cobranza/EmparejadoOdoo.tsx")).toContain("Está en Mercury");
     expect(textos("lib/cobranza/odoo/diferencias.ts")).toContain("Ve a la pestaña «Emparejar» de esta misma pantalla.");
     const esquemas = textosDeLosEsquemas().map((t) => t.texto);
-    expect(esquemas).toContain("Escribe por qué está bien así (al menos 5 letras)");
+    expect(esquemas).toContain("Escribe por qué se desestima (al menos 5 letras)");
     expect(esquemas).toContain("Escribe cómo se anuló (al menos 5 letras)");
     expect(esquemas, "el filtro dejó entrar los esquemas de otra ruta").not.toContain("Escribe el nombre como sale en la factura");
     /* Y el comentario no cuenta: el de arriba de este bloque cita el voseo y no es un texto. */
@@ -417,16 +417,16 @@ describe("«Cómo funciona» explica las reglas de la lista", () => {
     );
   });
 
-  it("y explica «Está en Mercury», la marca por fila, «Marcadas» y cómo se cuentan los pendientes", () => {
+  it("y explica «Está en Mercury», la marca por fila, «Desestimadas» y cómo se cuentan los pendientes", () => {
     for (const frase of [
       "«Está en Mercury»",
       "«En Mercury»",
       "con todo lo que tenía",
       "No se marca una cuenta que ya tiene su cliente de Odoo",
-      "El botón de la línea marca una por una las filas que ves",
+      "El botón de la línea desestima una por una las filas que ves",
       "Vuelve sola si cambia uno de sus números",
       "Vale solo en esa línea",
-      "«Marcadas»",
+      "«Desestimadas»",
       "ninguna marca se borra",
       "filas pendientes",
       "sin recargar la página",

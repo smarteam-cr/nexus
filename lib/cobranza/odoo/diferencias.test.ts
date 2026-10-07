@@ -17,6 +17,7 @@ import {
   clasificarNumerosSinPar,
   coberturaDelCruce,
   cruzar,
+  cuentaDeLaFila,
   decidirMarcas,
   decidirTraspasoDeGrupo,
   detectarDiferenciasOdoo,
@@ -2744,5 +2745,23 @@ describe("⭐ «Lo que no cuadra» muestra la misma venta contada dos veces", ()
     const anotadas = cobros.map((c) => (c.id.startsWith("rs-") ? { ...c, numeroFactura: "INV-9" } : c));
     const l = detectarDiferenciasOdoo({ ...estado, cobros: anotadas, servicios: [] });
     expect(l.map((i) => i.codigo)).not.toContain("VENTA-CONTADA-DOS-VECES");
+  });
+
+  it("«Editar» (2026-10-07): cada fila lleva su cuenta, para «Abrir la cuenta» y corregir ahí", () => {
+    const l = detectarDiferenciasOdoo(estado).find((i) => i.codigo === "VENTA-CONTADA-DOS-VECES");
+    expect(l?.items.map((i) => i.cuentaId)).toEqual(["rs", "al"]);
+  });
+});
+
+describe("la cuenta de una fila (2026-10-07: «Abrir la cuenta»)", () => {
+  const cuentaDe = (id: string) => ({ c1: "a", c2: "a", c3: "b" })[id as "c1" | "c2" | "c3"];
+  it("la que nombra, la de su venta o la de sus cobros", () => {
+    expect(cuentaDeLaFila(["cuenta:x"], cuentaDe)).toBe("x");
+    expect(cuentaDeLaFila(["venta:al|USD|INV-46"], cuentaDe)).toBe("al");
+    expect(cuentaDeLaFila(["f:9", "c:c1", "c:c2"], cuentaDe)).toBe("a");
+  });
+  it("si nombra dos cuentas, o ninguna, no hay a dónde ir", () => {
+    expect(cuentaDeLaFila(["c:c1", "c:c3"], cuentaDe)).toBeUndefined();
+    expect(cuentaDeLaFila(["f:9", "mov:7"], cuentaDe)).toBeUndefined();
   });
 });

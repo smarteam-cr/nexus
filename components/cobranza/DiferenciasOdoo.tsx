@@ -40,6 +40,7 @@
  * trabaja quien registra, y con eso arranca filtrada la vista de Dinia. Cada «Está bien así» y cada «Deshacer» va a la
  * ruta de su línea.
  */
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, EmptyState, Input, Segmentado, Spinner } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
@@ -99,8 +100,10 @@ const MOTIVO_MINIMO = 5;
 
 /* ⚠ «Está bien así» solo saca filas de la lista (revisión con Alex, 2026-09-29: se leía como «aprobar» o «corregir»).
    El botón lo dice en su ayuda, en una frase, en la línea y en cada fila. */
+/* 2026-10-07 se llama «Desestimar» (Elías: «se necesita desestimar y editar»): «Está bien así» no se entendía como lo
+   que hace. Lo que no es desestimar se corrige en la cuenta: «Abrir la cuenta», en cada fila que tiene una. */
 const TIP_BIEN_ASI =
-  "Solo quita de esta lista, con tu nombre y un motivo. No cambia cobros, cuentas ni facturas; si un número cambia, vuelve a aparecer.";
+  "Desestimar: solo quita de esta lista, con tu nombre y un motivo. No cambia cobros, cuentas ni facturas; si un número cambia, vuelve a aparecer. Para corregir algo, «Abrir la cuenta».";
 
 /** Dónde se arregla, en palabras de quien lo va a hacer. El pie recibe el día de la última copia buena de Odoo. */
 const DONDE: Record<DondeSeArregla, { label: string; chip: string; pie: (espejoAl: string | null) => string }> = {
@@ -295,8 +298,8 @@ export default function DiferenciasOdoo({
       if (r.marcadas > 0) {
         toast.success(
           r.marcadas === 1
-            ? "Listo: la fila sale de la lista y queda en «Marcadas»."
-            : `Listo: ${r.marcadas} filas salen de la lista y quedan en «Marcadas».`,
+            ? "Listo: la fila sale de la lista y queda en «Desestimadas»."
+            : `Listo: ${r.marcadas} filas salen de la lista y quedan en «Desestimadas».`,
         );
       }
       if (r.cambiaron.length > 0) {
@@ -328,7 +331,7 @@ export default function DiferenciasOdoo({
       const r = await enviar(clave, { accion: "resolver-liberacion", liberacionId, linea: inc.codigo, nota }, inc.codigo);
       if (!r) return false;
       setMotivos((m) => ({ ...m, anulada: nota }));
-      toast.success("Anotado. Esa factura sale de la lista y queda en «Marcadas».");
+      toast.success("Anotado. Esa factura sale de la lista y queda en «Desestimadas».");
       return true;
     },
     [enviar, toast],
@@ -677,8 +680,8 @@ function Linea({
           </Button>
           {inc.marcadas.length > 0 && (
             <span className="text-xs text-fg-muted">
-              {inc.marcadas.length === 1 ? "1 fila marcada" : `${inc.marcadas.length} filas marcadas`} «está bien
-              así»: están en «Marcadas», al final.
+              {inc.marcadas.length === 1 ? "1 fila desestimada" : `${inc.marcadas.length} filas desestimadas`}: están en
+              «Desestimadas», al final.
             </span>
           )}
           {puedeEditar && n > 0 && editando?.tipo !== "grupo" && (
@@ -690,7 +693,7 @@ function Linea({
               onClick={() => setEditando({ tipo: "grupo" })}
               title={TIP_BIEN_ASI}
             >
-              {n === 1 ? "Está bien así" : `Las ${n} están bien así`}
+              {n === 1 ? "Desestimar" : `Desestimar las ${n}`}
             </Button>
           )}
         </div>
@@ -699,9 +702,9 @@ function Linea({
             desplegable de códigos sin ninguna explicación. */}
         {editando?.tipo === "grupo" && (
           <FormularioDeMotivo
-            titulo={`Marcar «está bien así» ${n === 1 ? "la fila" : `las ${n} filas`} de esta línea`}
-            ayuda={`${inc.queSignificaAceptar} Se marca cada fila por separado, con los números que ves ahora: si una cambió antes de tu clic, esa no se marca y te avisamos; si cambia después, vuelve sola. Quedan en «Marcadas», al final, donde se pueden deshacer.`}
-            placeholder="Por qué están bien así (queda con tu nombre)"
+            titulo={`Desestimar ${n === 1 ? "la fila" : `las ${n} filas`} de esta línea`}
+            ayuda={`${inc.queSignificaAceptar} Se desestima cada fila por separado, con los números que ves ahora: si una cambió antes de tu clic, esa no se desestima y te avisamos; si cambia después, vuelve sola. Quedan en «Desestimadas», al final, donde se pueden deshacer.`}
+            placeholder="Por qué se desestiman (queda con tu nombre)"
             inicial={motivos.bienAsi}
             guardando={ocupado === claveDelGrupo}
             deshabilitado={ocupado !== null}
@@ -759,6 +762,17 @@ function Linea({
                         Usar el monto de la factura
                       </Button>
                     )}
+                    {/* «Editar»: lo que no se desestima se corrige en la cuenta (revertir un cobro, marcarlo facturado,
+                        ajustar el servicio). Abre la cuenta en Cobranza, con su cronograma. */}
+                    {!enEdicion && it.cuentaId && (
+                      <Link
+                        href={`/cobranza?cuenta=${encodeURIComponent(it.cuentaId)}`}
+                        title="Abre la cuenta en Cobranza para corregir: revertir un cobro, marcarlo facturado, cambiar el número o ajustar el servicio."
+                        className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-surface-hover"
+                      >
+                        Abrir la cuenta
+                      </Link>
+                    )}
                     {puedeEditar && !enEdicion && (
                       <Button
                         variant="ghost"
@@ -768,15 +782,15 @@ function Linea({
                         onClick={() => setEditando({ tipo: "fila", clave })}
                         className="shrink-0"
                       >
-                        Está bien así
+                        Desestimar
                       </Button>
                     )}
                   </div>
                   {enEdicion === "fila" && (
                     <FormularioDeMotivo
-                      titulo="Marcar esta fila «está bien así»"
-                      ayuda="Sale de esta línea con sus números de hoy: si alguno cambia, vuelve sola. En otras líneas sigue a la vista."
-                      placeholder="Por qué está bien así (queda con tu nombre)"
+                      titulo="Desestimar esta fila"
+                      ayuda="Sale de esta línea con sus números de hoy: si alguno cambia, vuelve sola. En otras líneas sigue a la vista. Si hay algo que corregir, mejor «Abrir la cuenta»."
+                      placeholder="Por qué se desestima (queda con tu nombre)"
                       inicial={motivos.bienAsi}
                       guardando={ocupado === claveDeFila}
                       deshabilitado={ocupado !== null}
@@ -932,13 +946,13 @@ function Marcadas({
     <div className="rounded-lg border border-line bg-surface">
       <div className="px-4 py-3">
         <h3 className="text-sm font-semibold text-fg">
-          Marcadas ({filas(total)})
+          Desestimadas ({filas(total)})
           {volvieron > 0 && (
             <span className="font-normal text-warn-ink"> · {volvieron === 1 ? "1 volvió" : `${volvieron} volvieron`} porque cambió</span>
           )}
         </h3>
         <p className="mt-0.5 text-xs text-fg-muted">
-          Lo que alguien revisó y dijo que está bien así, o que ya se anuló. Sale de su línea mientras sus números no
+          Lo que alguien revisó y desestimó, o que ya se anuló. Sale de su línea mientras sus números no
           cambien: si cambian, vuelve sola y aquí se dice que volvió. «Deshacer» lo devuelve a la lista y queda anotado
           quién lo hizo.
         </p>

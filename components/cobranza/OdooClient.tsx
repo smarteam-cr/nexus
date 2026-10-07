@@ -363,7 +363,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
             <li>· Nunca convierte moneda: si el cobro está en dólares y la factura en colones, muestra las dos.</li>
             <li>· No reemplaza el plan de pago. Odoo no sabe en cuántas cuotas se le cobra a cada cliente; eso vive acá.</li>
             <li>
-              · Marcar una fila «Está bien así» no toca el cobro ni Odoo: solo la saca de la lista. Y «Está en
+              · Desestimar una fila no toca el cobro ni Odoo: solo la saca de la lista. Y «Está en
               Mercury» cambia la vía de cobro de la cuenta en Nexus, no en Odoo.
             </li>
           </ul>
@@ -383,8 +383,8 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           </li>
           <li>
             <strong className="text-fg">2. Revisar lo que no cuadra.</strong> Cada línea dice cuánta plata mueve, en
-            qué sistema se arregla y los pasos. Lo que ya revisaste y está bien así se marca fila por fila, con su
-            motivo.
+            qué sistema se arregla y los pasos. Lo que ya revisaste y no es un problema se desestima fila por fila, con
+            su motivo; lo que hay que corregir en Nexus, con «Abrir la cuenta».
           </li>
           <li>
             <strong className="text-fg">3. Mirar de cuándo es la copia.</strong> La copia de Odoo se hace sola cada mañana,
@@ -476,15 +476,15 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         <li>· Solo mira: no cambia nada, ni en Nexus ni en Odoo.</li>
       </Bloque>
 
-      <Bloque titulo="«Está bien así», fila por fila">
+      <Bloque titulo="«Desestimar» y «Abrir la cuenta», fila por fila">
         <li>
-          · <strong className="text-fg">«Está bien así» solo quita la fila de la lista.</strong> No cambia cobros,
+          · <strong className="text-fg">«Desestimar» solo quita la fila de la lista.</strong> No cambia cobros,
           cuentas ni facturas, ni en Nexus ni en Odoo: si lo que la fila acusa hay que arreglarlo, se arregla donde dice
-          su línea.
+          su línea. Si es de una cuenta, «Abrir la cuenta» lleva a Cobranza con esa cuenta abierta.
         </li>
         <li>
-          · Cada fila de «Lo que no cuadra» tiene su «Está bien así», con motivo, y te propone el último motivo que
-          usaste. El botón de la línea marca una por una las filas que ves, con el mismo motivo.
+          · Cada fila de «Lo que no cuadra» tiene su «Desestimar», con motivo, y te propone el último motivo que
+          usaste. El botón de la línea desestima una por una las filas que ves, con el mismo motivo.
         </li>
         <li>
           · Se marca con los números que ves. Si una fila cambió antes de tu clic —por ejemplo, porque llegó una copia
@@ -501,21 +501,21 @@ function QueEs({ conteos }: { conteos: Conteos }) {
           aparece sola, sin traer las ya revisadas.
         </li>
         <li>
-          · <strong className="text-fg">«Marcadas»</strong>, al final de la pestaña, muestra todo lo marcado con su
+          · <strong className="text-fg">«Desestimadas»</strong>, al final de la pestaña, muestra todo lo desestimado con su
           motivo, quién y cuándo, y «Deshacer». Sigue ahí aunque la línea se quede sin filas. Deshacer también queda
           anotado: ninguna marca se borra.
         </li>
         <li>
           · «Ya está anulada», en las facturas soltadas que ninguna copia puede verificar, también pide motivo y también
-          se deshace desde «Marcadas».
+          se deshace desde «Desestimadas».
         </li>
-        <li>· Marcar «Está bien así» o «Está en Mercury», y deshacerlos, piden permiso para editar Cobranza.</li>
+        <li>· Desestimar o marcar «Está en Mercury», y deshacerlos, piden permiso para editar Cobranza.</li>
       </Bloque>
 
       <Bloque titulo="Cómo se cuenta lo pendiente">
         <li>
           · Cada línea muestra, cuenta y suma solo sus filas pendientes. Si se queda sin ninguna, sale de la lista; lo
-          que tenía marcado sigue en «Marcadas».
+          que tenía desestimado sigue en «Desestimadas».
         </li>
         <li>
           · El número de la pestaña y «cosas por resolver» cuentan{" "}
@@ -622,7 +622,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         <Dato
           n={conteos.diferencias}
           etiqueta="cosas por resolver"
-          pie="Las filas pendientes de «Lo que no cuadra», ordenadas por la plata que mueven. Lo marcado «está bien así» no cuenta."
+          pie="Las filas pendientes de «Lo que no cuadra», ordenadas por la plata que mueven. Lo desestimado no cuenta."
         />
       </div>
     </div>

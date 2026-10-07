@@ -265,7 +265,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
               pago lo registra una persona.
             </li>
             <li>· No convierte moneda.</li>
-            <li>· «Está bien así» solo saca la fila de la lista: no arregla nada, ni en Nexus ni en Mercury.</li>
+            <li>· «Desestimar» solo saca la fila de la lista: no arregla nada, ni en Nexus ni en Mercury.</li>
           </ul>
         </div>
       </div>
@@ -278,7 +278,7 @@ function QueEs({ conteos }: { conteos: Conteos }) {
         </li>
         <li>
           · <strong className="text-fg">2. Revisar lo que no cuadra.</strong> Cada línea dice cuánta plata mueve, dónde se
-          arregla y los pasos. Lo que está bien así se marca fila por fila, con su motivo.
+          arregla y los pasos. Lo que no es un problema se desestima fila por fila, con su motivo.
         </li>
         <li>
           · <strong className="text-fg">3. Traer lo último.</strong> Si acabas de marcar una factura pagada en Mercury o de
@@ -289,10 +289,10 @@ function QueEs({ conteos }: { conteos: Conteos }) {
       <Bloque titulo="Las filas vuelven solas">
         <li>· Nada se guarda como «resuelto»: cada vez que se abre la lista se vuelve a comparar todo.</li>
         <li>
-          · Una fila marcada «Está bien así» vuelve si cambia uno de sus números: el monto, el estado, el número de factura o
+          · Una fila desestimada vuelve si cambia uno de sus números: el monto, el estado, el número de factura o
           el cobro.
         </li>
-        <li>· Lo marcado queda en «Marcadas», al final de la lista, con quién, cuándo y por qué, y su «Deshacer».</li>
+        <li>· Lo desestimado queda en «Desestimadas», al final de la lista, con quién, cuándo y por qué, y su «Deshacer».</li>
       </Bloque>
 
       <Bloque titulo="Las reglas, con sus números">
