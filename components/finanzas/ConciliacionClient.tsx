@@ -23,8 +23,10 @@ import type { VistaFinanzas } from "@/lib/finanzas/vista";
 import DiferenciasOdoo from "@/components/cobranza/DiferenciasOdoo";
 import EmparejadoOdoo from "@/components/cobranza/EmparejadoOdoo";
 import EmparejadoMercury from "@/components/cobranza/EmparejadoMercury";
+import GastosContraMercury, { pendientesDeGastos } from "@/components/finanzas/GastosContraMercury";
+import type { GastosContraMercury as DatosDeGastosMercury } from "@/lib/finanzas/gastos-mercury";
 
-type Pestana = "no-cuadra" | "emparejar" | "libro";
+type Pestana = "no-cuadra" | "emparejar" | "libro" | "gastos";
 type Sistema = "odoo" | "mercury";
 
 export default function ConciliacionClient({
@@ -34,6 +36,7 @@ export default function ConciliacionClient({
   copias,
   conteos,
   soloDecisiones = false,
+  gastosMercury = null,
 }: {
   vista: VistaFinanzas;
   /** El nombre de pila de quien supervisa (lib/finanzas/vista-server.ts). */
@@ -46,6 +49,8 @@ export default function ConciliacionClient({
   conteos: { noCuadra: number; porEmparejarOdoo: number; porEmparejarMercury: number };
   /** Se llegó desde Supervisión › «Decidir»: la lista arranca con las decisiones. */
   soloDecisiones?: boolean;
+  /** Los gastos contra Mercury (2026-10-06). null = quien mira no tiene `gastos.read`: la pestaña no aparece. */
+  gastosMercury?: DatosDeGastosMercury | null;
 }) {
   const toast = useToast();
   const [tab, setTab] = useState<Pestana>("no-cuadra");
@@ -120,8 +125,20 @@ export default function ConciliacionClient({
             title: "Decir qué cuenta de Nexus es cada cliente de Odoo y de Mercury.",
           },
           { key: "libro", label: "Libro de Alex", title: "Comparar el Excel de Alex contra Nexus, fila por fila." },
+          ...(gastosMercury
+            ? [
+                {
+                  key: "gastos",
+                  label: "Gastos y Mercury",
+                  count: pendientesDeGastos(gastosMercury),
+                  title: "Los cargos de las tarjetas de Mercury contra los recurrentes y los gastos de Nexus.",
+                },
+              ]
+            : []),
         ]}
       />
+
+      {tab === "gastos" && gastosMercury && <GastosContraMercury datos={gastosMercury} />}
 
       {tab === "no-cuadra" && (
         <DiferenciasOdoo

@@ -5179,6 +5179,17 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   cliente paga su factura, a mes vencido, y se corre si tiene crédito o se atrasa. Andrés 2026: 52 ventas, 164 cuotas;
   enero a septiembre cuadran con su «Total a Pagar»; octubre a diciembre no (la fórmula del Excel deja fuera Total Finco
   y Licencias Bluesat).
+- **Gastos contra Mercury (pedido de Elías, 2026-10-06).** Pestaña «Gastos y Mercury» en Conciliación, para quien tiene
+  `gastos.read`. Cruza los cargos de TARJETA (la de crédito, que es la de herramientas; la de débito) y la suscripción de
+  Mercury con los recurrentes y los gastos de Nexus (`lib/finanzas/gastos-mercury.ts`): qué cobra la tarjeta todos los
+  meses (dos de los últimos tres meses) y a qué precio, con su recurrente al lado («sin registrar» / «precio distinto» si
+  el último mes completo se aleja más de US$2 y del 10%); las herramientas mensuales de Nexus sin cargo en 60 días; y,
+  desde `EGRESOS_DESDE_NEXUS`, los cargos sueltos sin su gasto y los gastos en dólares sin su cargo (mismo monto ±1%,
+  ±5 días). ⛔ Las transferencias (planilla, proveedores) ni se leen: lo ve quien registra. Sin SQL: la copia de Mercury
+  ya traía las salidas (`docs/mercury-decisiones.md`: «las salidas servirán para cruzar gastos»); se recalcula al abrir y
+  no guarda nada. La tarjeta de débito no hace recurrentes (viajes). Los nombres que no se parecen van en `ALIAS`
+  (Anthropic = Claude, OpenAI = Chat GPT, AWS, Google Workspace = Gsuite, Magnific = Freepik). Lo que no se hizo: un
+  «Está bien así» por fila y guardar qué comercio es qué recurrente (necesitaría una tabla).
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 
