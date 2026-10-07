@@ -43,6 +43,7 @@ import { PasoInformacion, PasoProcesos, type InfoDeLaEmpresa } from "./PasoDeLaE
 import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
 import PasoPreparacion from "./PasoPreparacion";
+import ContextoDeLaPreventa from "./ContextoDeLaPreventa";
 import PasoPropuesta from "./PasoPropuesta";
 import Resumen, { lineasDe } from "./Resumen";
 import RevisarSugerencias from "./RevisarSugerencias";
@@ -378,6 +379,13 @@ export default function LienzoDeExploracion({
               <h2 className="text-lg font-semibold text-fg">{NOMBRE_DEL_PASO[paso]}</h2>
               <p className="text-sm text-fg-muted">{DE_QUE_VA[paso]}</p>
             </header>
+          )}
+          {/* El «Contexto adicional» (2026-10-06): el mismo en todas las piezas que lee el agente. La
+              cuenta es la ficha de la empresa y tiene lo suyo. */}
+          {paso !== "informacion" && paso !== "procesos" && (
+            <div className="mb-6">
+              <ContextoDeLaPreventa />
+            </div>
           )}
           {paso === "resumen" && <Resumen />}
           {paso === "preparacion" && <PasoPreparacion />}

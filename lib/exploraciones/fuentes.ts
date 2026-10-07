@@ -34,7 +34,7 @@ import {
 } from "./hubspot";
 import { documentosParaLeer, listarDocumentos } from "./documentos";
 import type { ReunionDeLaExploracion, SesionPlaneada } from "./guia";
-import { rotuloDeLaNota } from "./notas-de-sesion";
+import { CLAVE_DE_INSTRUCCIONES, rotuloDeLaNota } from "./notas-de-sesion";
 import { etiquetaDeLaFuente } from "./senales";
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, reunionesDeHubspotQueYaPasaron, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
@@ -144,7 +144,8 @@ function textoDeLasNotas(notas: Record<string, string>, sesiones: readonly Sesio
   const pasos = REUNIONES.flatMap((r) => r.pasos.map((p) => ({ id: p.id, titulo: `${r.titulo.split(" — ")[0]} · ${p.titulo}` })));
   const dePaso = (id: string) => pasos.find((p) => p.id === id)?.titulo ?? null;
   return Object.entries(notas)
-    .filter(([, texto]) => texto.trim())
+    // Las instrucciones adicionales no son una nota sobre el cliente: van aparte (bloqueDeInstrucciones).
+    .filter(([id, texto]) => id !== CLAVE_DE_INSTRUCCIONES && texto.trim())
     .map(([id, texto]) => `${rotuloDeLaNota(id, sesiones, dePaso) ?? id}: ${texto}`)
     .join("\n\n");
 }

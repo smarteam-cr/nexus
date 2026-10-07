@@ -19,16 +19,16 @@ export interface DocumentoConContexto {
   destino: DestinoSugerido;
   /** La celda de permisos que habilita curarlo (la de generarlo). */
   seccion: "diagnostico" | "planificacion" | "implementacion";
-  /** «Contexto del diagnóstico», «Contexto de la planificación». */
+  /** El título del bloque: «Contexto adicional» en toda pieza (2026-10-06, el mismo nombre en preventa y clientes). */
   titulo: string;
   /** Cómo se nombra en una frase: «el diagnóstico», «la planificación». */
   elDocumento: string;
 }
 
 export const DOCUMENTOS_CON_CONTEXTO: readonly DocumentoConContexto[] = [
-  { pieza: "diagnosis", destino: "diagnostico", seccion: "diagnostico", titulo: "Contexto del diagnóstico", elDocumento: "el diagnóstico" },
-  { pieza: "planning", destino: "planificacion", seccion: "planificacion", titulo: "Contexto de la planificación", elDocumento: "la planificación" },
-  { pieza: "implementation", destino: "ejecucion", seccion: "implementacion", titulo: "Contexto de la ejecución", elDocumento: "la ejecución" },
+  { pieza: "diagnosis", destino: "diagnostico", seccion: "diagnostico", titulo: "Contexto adicional", elDocumento: "el diagnóstico" },
+  { pieza: "planning", destino: "planificacion", seccion: "planificacion", titulo: "Contexto adicional", elDocumento: "la planificación" },
+  { pieza: "implementation", destino: "ejecucion", seccion: "implementacion", titulo: "Contexto adicional", elDocumento: "la ejecución" },
 ];
 
 export function documentoConContexto(pieza: string | null | undefined): DocumentoConContexto | null {

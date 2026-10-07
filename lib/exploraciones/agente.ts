@@ -56,6 +56,7 @@ import { leerPropuesta } from "./esquemas";
 import { leerFuentes, type LoQueSeLeyo } from "./fuentes";
 import { agendaRenovada, debeLeerSola } from "./lectura";
 import { hoyEnCostaRica } from "./fechas";
+import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import { contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia } from "./guia-pedido";
 import type { GuiaDeLaSesion } from "./guia";
 import { leerEmpresa } from "./hubspot";
@@ -399,6 +400,7 @@ async function proponerCasos(
       ...pendientes.filter((it) => it.destino.tipo === "casoDeUso").map((it) => (it.valor as { titulo: string }).titulo),
     ],
     descartados: ex.estado.contenido.casosDescartados,
+    instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas),
   };
   await fase(runId, "Pensando casos de uso…");
   const respuesta = await conContextoDeIA(

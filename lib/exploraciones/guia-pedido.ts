@@ -31,6 +31,7 @@ import {
   type TipoDeObjecion,
 } from "./guia";
 import { diaConAnio, diaYHora } from "./fechas";
+import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import type { PosicionEnElMapa } from "./mapa";
 
 export const MODELO_DE_LA_GUIA = "claude-sonnet-4-6";
@@ -73,6 +74,8 @@ export interface ContextoDeLaGuia {
   objecionesDichas: string[];
   /** Lo que el vendedor se llevó de la sesión anterior para explorar en esta: va primero. */
   paraExplorar: string[];
+  /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
+  instrucciones?: string;
 }
 
 const ESQUEMA_LAER = Object.fromEntries(PASOS_LAER.map((p) => [p.clave, { type: "string" }]));
@@ -157,6 +160,7 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
     `Hoy es ${diaConAnio(ctx.hoy)}. Próxima reunión: la número ${ctx.proxima.numero}${ctx.proxima.titulo ? `, «${ctx.proxima.titulo}»` : ""}, ${cuando}.`,
     `Empresa: ${ctx.empresa}${ctx.industria ? ` · Industria en HubSpot: ${ctx.industria}` : ""}${ctx.perfil ? ` · Perfil: ${ctx.perfil}` : ""} · Edición de la escala: ${ctx.edicion}`,
   );
+  if (ctx.instrucciones) lineas.push(ctx.instrucciones.trim());
   if (ctx.conTest) lineas.push("Hizo el test de marketing: si es la primera reunión, arranca validándolo (qué tan real lo sintió).");
   if (ctx.desdeCero) {
     lineas.push(
@@ -315,6 +319,7 @@ export function contextoDeLaGuia(o: {
     hoy: o.hoy,
     proxima: proximaReunion(c.sesiones, o.agenda, o.hoy, estado.propuesta.leidas.sesiones.length),
     conTest: o.conTest,
+    instrucciones: bloqueDeInstrucciones(c.notas),
     desdeCero: !o.conTest && !conEvidencia && huecosDelResumen(c.casillas).length === CASILLAS_DEL_RESUMEN.length,
     nivelesDeLaEscala: escala.niveles.map((n) => n.nombre),
     paraConectar: textoDe("contexto", estado, o.pendientes)[0] ?? null,

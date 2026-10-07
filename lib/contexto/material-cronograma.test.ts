@@ -1213,7 +1213,7 @@ describe("⭐ la línea de lectura del chat sale del MISMO informe", () => {
       "No pude leer las reuniones elegidas en este turno: contesté solo con el cronograma.",
     );
     expect(lineaDeLectura(base)).toBe(
-      "No elegiste reuniones ni notas en «Contexto del cronograma»: el asistente solo ve el cronograma.",
+      "No elegiste reuniones ni notas en el «Contexto adicional»: el asistente solo ve el cronograma.",
     );
     expect(lineaDeLectura(null)).toBe("");
   });

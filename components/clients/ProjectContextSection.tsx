@@ -69,7 +69,7 @@ export default function ProjectContextSection({
     /* La cabecera es la fila común de «Alrededor del handoff» (FilaDeAlrededor). El cuerpo queda
        montado aunque esté plegado: los contadores de la cabecera los reportan las columnas. */
     <FilaDeAlrededor
-      titulo="Contexto del handoff"
+      titulo="Contexto adicional"
       ayuda={`Lo que leyó el agente: reuniones, notas de HubSpot, fuentes a mano${exploracion ? " y la preventa" : ""}.`}
       meta={`${feedTotal} fuente${feedTotal === 1 ? "" : "s"}${excludedTotal > 0 ? ` · ${excludedTotal} excluida${excludedTotal === 1 ? "" : "s"}` : ""}`}
       abierto={open}

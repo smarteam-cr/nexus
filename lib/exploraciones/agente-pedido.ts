@@ -54,6 +54,7 @@ import {
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
 import { VALIDADOR_ESTRICTO } from "./esquemas";
 import { diaConAnio, diaYHora } from "./fechas";
+import { bloqueDeInstrucciones } from "./notas-de-sesion";
 import type { Fuente } from "./fuentes-tipos";
 
 export const MODELO_DE_LA_EXPLORACION = "claude-sonnet-4-6";
@@ -403,6 +404,7 @@ export function pedidoDeLaExploracion(ctx: ContextoDelPedido): Anthropic.Message
     lineaDeHoy(ctx) +
     `Empresa: ${ctx.empresa}${ctx.industria ? ` · Industria en HubSpot: ${ctx.industria}` : ""}${ctx.perfil ? ` · Perfil: ${ctx.perfil}` : ""}\n` +
     `Edición de la escala: ${ctx.escala.edicion?.nombre ?? "escala general"}\n\n` +
+    bloqueDeInstrucciones(ctx.contenido.notas) +
     `=== LO QUE YA ESTÁ CONFIRMADO ===\n${confirmadoComoTexto(ctx)}\n\n` +
     `=== LA ESCALA (las áreas en juego) ===\n${escalaComoTexto(ctx)}\n\n` +
     ctx.fuentes.map((f) => `=== FUENTE ${f.id}: ${f.etiqueta} ===\n${f.texto}`).join("\n\n");
@@ -777,6 +779,8 @@ export interface ContextoDeCasos {
   /** Lo que ya está elegido o propuesto, y lo que el vendedor descartó: no se repite. */
   yaEstan: string[];
   descartados: string[];
+  /** Las instrucciones adicionales del vendedor (contexto de la preventa), ya como bloque, o "". */
+  instrucciones?: string;
 }
 
 export function pedidoDeCasos(ctx: ContextoDeCasos): Anthropic.Messages.MessageCreateParamsNonStreaming {
@@ -818,6 +822,7 @@ Reglas:
   const cuerpo =
     `Empresa: ${ctx.empresa}\nEdición de la escala: ${ctx.edicion}\n` +
     `Áreas en juego: ${ctx.areas.map((a) => `${a.id} (${a.nombre})`).join(", ")}\n\n` +
+    (ctx.instrucciones ?? "") +
     `=== LA EXPLORACIÓN ===\n${ctx.exploracion}\n\n` +
     `=== LAS DIMENSIONES (para el campo «dimensiones») ===\n` +
     ctx.areas.map((a) => `${a.nombre}: ${a.dimensiones.map((d) => `${d.id} ${d.nombre}`).join("; ")}`).join("\n") +

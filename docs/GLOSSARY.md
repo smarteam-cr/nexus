@@ -38,6 +38,11 @@
   que tiene uno muestra el botón «Recorrido» en su cabecera, con un punto azul si no lo viste o si cambió. Todos
   los de tu rol están en el menú del avatar, en «Recorridos». El contenido vive en el repo; lo visto, en la cookie
   `nexus-recorridos`. Ver DECISIONS §Recorridos guiados.
+- **Contexto adicional** (`components/contexto/ContextoAdicional.tsx`): el bloque plegable arriba de
+  una pieza con lo que lee su IA además de lo de siempre: las reuniones (elegidas, en los documentos
+  del cliente; todas las de la empresa, en la preventa), las fuentes manuales y las «Instrucciones
+  adicionales», que pesan más que lo demás y no son evidencia. Se llamaba «Contexto del cronograma»,
+  «del diagnóstico», etc. hasta el 2026-10-06.
 - **Preventa** (Ventas → Preventa, `/sales/exploraciones`, modelo `ExploracionDeVenta`): el lienzo de
   una empresa en venta, desde que llega (por el test o desde HubSpot) hasta la primera propuesta y el
   traspaso al CSE. Sus piezas: Preparación (Identificación y Conexión) · Exploración (las reuniones) ·

@@ -4508,6 +4508,35 @@ salía cada idea y no había un camino corto para el prospecto que no llega por 
 - **Listado:** la columna «Para proponer» se llama «Progreso», sale «Próxima reunión» (la sigue usando
   «Para ti») y la fila dice cuándo se creó la preventa en vez de con qué escala se mide.
 
+## «Contexto adicional»: el mismo bloque en todas las piezas (2026-10-06)
+
+**Contexto.** En la preventa, lo que no quedó en Meet se sumaba en «¿Una sesión que no quedó en Meet?»,
+arriba de Exploración. Elías pidió el bloque del cronograma en su lugar, y el mismo nombre y la misma
+forma en todas las piezas de preventas y de clientes. Va por tandas: esta es la primera, sin SQL.
+
+- **Se llama «Contexto adicional» en todas partes**: el cronograma, el diagnóstico, la planificación, la
+  ejecución, el handoff (su fila de «Alrededor del handoff») y la preventa. La cáscara es una sola
+  (`components/contexto/ContextoAdicional.tsx`): la línea plegable que, cerrada, dice con qué va a
+  trabajar la IA, y abierta, las columnas y las «Instrucciones adicionales». Cada pieza pone sus
+  columnas, que son las que saben dónde se guarda cada cosa. El chat del cronograma ahora nombra el
+  bloque así (su prompt está en el código: se rehace la caché una vez).
+- **En la preventa, el bloque va arriba de cada pieza, salvo La cuenta** (es la ficha de la empresa).
+  Tres partes: las reuniones de Meet y HubSpot con la empresa, leídas o no; las fuentes manuales (lo
+  que antes era «¿Una sesión que no quedó en Meet?»); y las instrucciones adicionales. Con `?sumar=1`
+  (la preventa que se abre «Con una transcripción») arranca abierto y con el formulario a la vista.
+- **En la preventa las reuniones no se eligen**, a diferencia del cronograma: no hay otro proyecto de
+  la misma empresa con el que confundirlas, y el agente ya lee las más recientes sin leer. Elegirlas es
+  la tanda 2.
+- **Las instrucciones adicionales de la preventa se guardan como una nota más** (`contenido.notas`, la
+  clave `instrucciones`): sin SQL. No son una nota sobre el cliente, así que no entran como fuente
+  (no se citan ni prueban un nivel): van como un bloque aparte, «INSTRUCCIONES ADICIONALES DEL
+  VENDEDOR», que leen la preparación, la lectura de cada reunión, la guía de la próxima sesión y los
+  casos de uso (`bloqueDeInstrucciones`).
+- **Pendiente, tanda 2 (con SQL):** el mismo bloque en el Kickoff, la Exploración del proyecto,
+  Integraciones y la Entrega (una columna `…Override` en `SessionProject` por pieza y que su agente lo
+  lea), instrucciones adicionales en los documentos que todavía no las tienen, y elegir reuniones en
+  la preventa.
+
 ## La escala no nombra herramientas: un mapa al lado dice dónde ayuda cada una (2026-10-01, noche)
 
 **Contexto.** Smarteam se alió con Insider One. Elías pidió que la escala refleje lo que habilita una

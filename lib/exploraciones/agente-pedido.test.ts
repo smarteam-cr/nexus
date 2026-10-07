@@ -25,6 +25,7 @@ import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
 import { leerLaRadiografia, urlComparable } from "./radiografia-pedido";
 import { conSuOrigen, separarOrigen } from "./casillas";
+import { bloqueDeInstrucciones, CLAVE_DE_INSTRUCCIONES } from "./notas-de-sesion";
 import { contactoPrincipal, porQueAhoraSugerido, rastroDe, senalesDe } from "./senales";
 
 // ── Una escala de juguete: dos áreas, cuatro dimensiones cada una ─────────────────
@@ -755,5 +756,39 @@ describe("Preventa (2026-10-06): industria, hipótesis con su origen y la conver
     expect(leer(undefined)).toBeUndefined();
     // Al preparar no hay reunión que leer: no se pregunta.
     expect(leerLaRespuesta(respuesta({}), ctx({ modo: "preparar" }), "run_1", AHORA).tecnica).toBeUndefined();
+  });
+});
+
+describe("⭐ las instrucciones adicionales del «Contexto adicional» (2026-10-06)", () => {
+  const INSTRUCCION = "Enfócate en Servicio: Ventas ya lo resolvieron con otro proveedor.";
+  const conInstrucciones = () => {
+    const c = contenidoVacio();
+    c.notas[CLAVE_DE_INSTRUCCIONES] = INSTRUCCION;
+    return c;
+  };
+
+  it("sin instrucciones no hay bloque; con instrucciones, va rotulado y dice que no son evidencia", () => {
+    expect(bloqueDeInstrucciones({})).toBe("");
+    expect(bloqueDeInstrucciones({ [CLAVE_DE_INSTRUCCIONES]: "   " })).toBe("");
+    const b = bloqueDeInstrucciones({ [CLAVE_DE_INSTRUCCIONES]: INSTRUCCION, "sesion:s-1": "una nota" });
+    expect(b).toContain("INSTRUCCIONES ADICIONALES DEL VENDEDOR");
+    expect(b).toContain(INSTRUCCION);
+    expect(b).toMatch(/no son palabras del cliente ni evidencia/i);
+    expect(b).not.toContain("una nota");
+  });
+
+  it("la preparación y la lectura las reciben antes de lo confirmado; sin ellas el pedido no cambia", () => {
+    for (const modo of ["preparar", "leer"] as const) {
+      const cuerpo = String(pedidoDeLaExploracion(ctx({ modo, contenido: conInstrucciones() })).messages[0].content);
+      expect(cuerpo.indexOf(INSTRUCCION)).toBeGreaterThan(-1);
+      expect(cuerpo.indexOf(INSTRUCCION)).toBeLessThan(cuerpo.indexOf("=== LO QUE YA ESTÁ CONFIRMADO ==="));
+      expect(String(pedidoDeLaExploracion(ctx({ modo })).messages[0].content)).not.toContain("INSTRUCCIONES ADICIONALES");
+    }
+  });
+
+  it("los casos de uso también las reciben", () => {
+    const base = { empresa: "Acme", edicion: "escala general", areas: [{ id: "1", nombre: "Ventas", dimensiones: [{ id: "1.1", nombre: "Proceso" }] }], exploracion: "(x)", yaEstan: [], descartados: [] };
+    expect(String(pedidoDeCasos({ ...base, instrucciones: bloqueDeInstrucciones({ [CLAVE_DE_INSTRUCCIONES]: INSTRUCCION }) }).messages[0].content)).toContain(INSTRUCCION);
+    expect(String(pedidoDeCasos(base).messages[0].content)).not.toContain("INSTRUCCIONES ADICIONALES");
   });
 });

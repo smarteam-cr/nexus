@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * components/canvas/CronogramaContextSection.tsx — «CONTEXTO DEL CRONOGRAMA» (2026-09-23).
+ * components/canvas/CronogramaContextSection.tsx — el «Contexto adicional» del cronograma (2026-09-23;
+ * se llamaba «Contexto del cronograma» hasta el 2026-10-06, cuando el bloque se estandarizó).
  *
  * El gemelo de la sección «Contexto» del handoff (`components/clients/ProjectContextSection.tsx`),
  * para el CRONOGRAMA y sin la columna de HubSpot (pedido de Elías). Dos columnas:
@@ -25,6 +26,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import SessionSelectionReview from "@/components/clients/SessionSelectionReview";
 import FuentesManualesColumn from "@/components/clients/FuentesManualesColumn";
 import { ContextColumn, CTX_ICONS } from "@/components/clients/context-column";
+import ContextoAdicional from "@/components/contexto/ContextoAdicional";
 import {
   TOPE_NOTAS_CRONOGRAMA,
   largoDeLasNotas,
@@ -108,38 +110,24 @@ export default function CronogramaContextSection({
   }, [hayMaterial, onMaterial]);
 
   return (
-    <div data-recorrido="cronograma.contexto" className="rounded-xl border border-line bg-surface">
-      <button
-        onClick={() => setOverride(!abierto)}
-        aria-expanded={abierto}
-        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-surface-hover transition-colors text-left rounded-xl"
-      >
-        <svg
-          className={`w-3.5 h-3.5 text-fg-secondary flex-shrink-0 transition-transform ${abierto ? "" : "-rotate-90"}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-        <span className="text-xs font-semibold text-fg">Contexto del cronograma</span>
-        {/* Cerrada se sigue leyendo con qué se va a generar: sin abrirla, sabes si la IA va a leer
-            reuniones, notas o instrucciones, y si alguna reunión no le llega entera. */}
-        <span className="text-[11px] text-fg-muted truncate">
+    <div data-recorrido="cronograma.contexto">
+    <ContextoAdicional
+      abierto={abierto}
+      onAlternar={() => setOverride(!abierto)}
+      /* Cerrado se sigue leyendo con qué se va a generar: sin abrirlo, sabes si la IA va a leer
+         reuniones, notas o instrucciones, y si alguna reunión no le llega entera. */
+      resumen={
+        <>
           {reunionesIlegibles
             ? "no se pudieron cargar las reuniones elegidas"
             : `${reuniones} ${reuniones === 1 ? "reunión elegida" : "reuniones elegidas"}`}
           {loQueNoEntra ? ` (${loQueNoEntra})` : ""} · {notas} nota
           {notas === 1 ? "" : "s"}
           {instruccionesActivas ? " · instrucciones activas" : ""}
-        </span>
-        <span className="ml-auto text-[11px] text-fg-muted flex-shrink-0">{abierto ? "Colapsar" : "Expandir"}</span>
-      </button>
-
-      {/* Siempre montado: los contadores de la línea cerrada salen de las columnas. Se oculta con
-          `hidden` para no desmontar ni volver a pedir todo al abrir y cerrar. */}
-      <div className={abierto ? "px-4 pb-3 space-y-3" : "hidden"}>
-        <p className="text-[11px] text-fg-muted leading-relaxed">
+        </>
+      }
+      explicacion={
+        <>
           Con esto —y con las instrucciones adicionales de abajo— la IA revisa las fases y sus tiempos
           al «Regenerar todo el cronograma» (tú revisas la propuesta y decides qué se aplica), arma las tareas de
           cada fase, decide cuáles son reuniones con el cliente, y el asistente lo lee cuando le pides un
@@ -148,36 +136,38 @@ export default function CronogramaContextSection({
           búscalas entre las del proyecto o en tu calendario. Cada una entra con su resumen completo
           mientras quepa; si eliges muchas, se reparten el espacio. Sacarla de acá no la saca del
           handoff ni del proyecto.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>
-            <SessionSelectionReview
-              projectId={projectId}
-              destino="cronograma"
-              columnMode
-              onCount={setReuniones}
-              onErrorDeCarga={setReunionesIlegibles}
-              onChange={() => setVersion((v) => v + 1)}
-              materialDelCronograma={informeVivo}
-              readOnly={!canEdit}
-            />
-          </ContextColumn>
-          <ContextColumn icon={CTX_ICONS.note} color="#7c6df2" title="Fuentes manuales" count={notas}>
-            <FuentesManualesColumn
-              endpoint={`/api/projects/${projectId}/timeline/sources`}
-              canEdit={canEdit}
-              onCount={setNotas}
-              tope={TOPE_NOTAS_CRONOGRAMA}
-              largoQueLee={largoDeLasNotas}
-              vacio="Sin notas. Pega aquí lo que no quedó en ninguna reunión."
-              placeholderTitulo="Título, con la fecha si son notas de una reunión (ej. Reunión del 1 ago)"
-              placeholder="Pega la nota, el resumen o la decisión…"
-              etiquetaAgregar="Agregar nota"
-            />
-          </ContextColumn>
-        </div>
-        {children}
+        </>
+      }
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={reuniones}>
+          <SessionSelectionReview
+            projectId={projectId}
+            destino="cronograma"
+            columnMode
+            onCount={setReuniones}
+            onErrorDeCarga={setReunionesIlegibles}
+            onChange={() => setVersion((v) => v + 1)}
+            materialDelCronograma={informeVivo}
+            readOnly={!canEdit}
+          />
+        </ContextColumn>
+        <ContextColumn icon={CTX_ICONS.note} color="#7c6df2" title="Fuentes manuales" count={notas}>
+          <FuentesManualesColumn
+            endpoint={`/api/projects/${projectId}/timeline/sources`}
+            canEdit={canEdit}
+            onCount={setNotas}
+            tope={TOPE_NOTAS_CRONOGRAMA}
+            largoQueLee={largoDeLasNotas}
+            vacio="Sin notas. Pega aquí lo que no quedó en ninguna reunión."
+            placeholderTitulo="Título, con la fecha si son notas de una reunión (ej. Reunión del 1 ago)"
+            placeholder="Pega la nota, el resumen o la decisión…"
+            etiquetaAgregar="Agregar nota"
+          />
+        </ContextColumn>
       </div>
+      {children}
+    </ContextoAdicional>
     </div>
   );
 }
