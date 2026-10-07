@@ -359,6 +359,40 @@ function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
   );
 }
 
+// ── Retos de su industria ─────────────────────────────────────────────────────
+
+/**
+ * Los retos típicos de su industria, de la investigación en internet, como HIPÓTESIS para preguntar
+ * (Elías, 2026-10-07): no van al Resumen, que es lo que dijo o hizo el cliente. Cada uno con la
+ * pregunta para saber si le pasa. Los arma la guía.
+ */
+function RetosDeLaIndustria({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxima: boolean }) {
+  const { guia } = useGuiaDeLaSesion(pestana, esLaProxima);
+  const retos = guia?.retosDeLaIndustria ?? [];
+  if (!retos.length) return null;
+  return (
+    <section className="overflow-hidden rounded-xl border border-line bg-surface">
+      <header className="flex flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-3.5">
+        <h3 className="text-[15px] font-semibold text-fg">Retos de su industria</h3>
+        <span className="rounded-full border border-warn-line bg-warn-surface px-2 py-px text-[11.5px] text-warn-ink">Hipótesis</span>
+        <p className="basis-full text-[12.5px] text-fg-muted">
+          Salen de lo que el agente encontró en internet sobre su industria, no de lo que dijo el cliente. Úsalos solo para preguntar: si le pasa, lo anotas en «En vivo».
+        </p>
+      </header>
+      <ul>
+        {retos.map((r, i) => (
+          <li key={i} className="border-b border-surface-hover px-[18px] py-3 last:border-b-0">
+            <p className="text-[13px] leading-[19px] text-fg-secondary">{r.reto}</p>
+            <p className="mt-1 text-[13.5px] font-semibold leading-[19px] text-fg">
+              <span className="font-normal text-fg-muted">Para confirmarlo: </span>«{r.pregunta.replace(/^«|»$/g, "")}»
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 // ── La guía ───────────────────────────────────────────────────────────────────
 
 /** Un tramo de la sesión: su nombre y sus minutos a la izquierda, lo que se hace a la derecha. */
@@ -600,6 +634,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
       {esLaProxima && <CuandoYConQuien pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}
       <LaGuia pestana={pestana} esLaProxima={esLaProxima} />
+      <RetosDeLaIndustria pestana={pestana} esLaProxima={esLaProxima} />
       {conTest && pestana.numero === 1 && (
         <details className="rounded-xl border border-line bg-surface">
           <summary className="cursor-pointer select-none px-[18px] py-3.5 text-sm font-semibold text-fg">Su plan: qué va primero (es lo que se lleva de esta reunión)</summary>

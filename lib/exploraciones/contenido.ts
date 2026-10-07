@@ -578,6 +578,35 @@ function pesoDelNivel(it: ItemPropuesto): number {
   return f === "test" ? 1 : f === "hipotesis" ? 2 : 3;
 }
 
+/**
+ * ¿La fuente es algo que dijo o hizo el cliente? El test (T), su actividad en HubSpot (H: correos,
+ * notas, reuniones), una reunión de Meet (S), algo sumado a mano (M) y las notas del vendedor (N). La
+ * ficha de la empresa (E0), sus contactos y negocios (C0, D0), su sitio (W0) y lo que se encontró en
+ * internet (W1, W2) no lo son.
+ */
+export function esFuenteDelCliente(id: string): boolean {
+  return /^[THSMN]\d/.test(id);
+}
+
+/**
+ * Las casillas del marco que solo pueden salir de lo que dijo o hizo el cliente (Elías, 2026-10-07).
+ * «Quién decide» no está: los contactos de HubSpot son un hecho, y el papel ya exige que la fuente lo diga.
+ */
+export const CASILLAS_QUE_DICE_EL_CLIENTE = ["metas", "planes", "retos", "tiempos", "presupuesto", "consecuencias", "implicaciones"] as const satisfies readonly ClaveDeCasilla[];
+
+/**
+ * ¿A esta propuesta le falta fundamento del cliente? Un nivel o una casilla del marco que solo cita la
+ * ficha de la empresa, su sitio o lo que se encontró en internet. No se propone ni se muestra: en
+ * Automóvil Club (2026-10-07), sin una sola reunión, el agente había armado un diagnóstico entero (24
+ * niveles desde la ficha y el sitio, y tres retos copiados de la investigación de su industria). Sin
+ * una pista del cliente, la dimensión queda sin nivel y se pregunta en la reunión.
+ */
+export function sinFundamentoDelCliente(it: Pick<ItemPropuesto, "destino" | "fuentes">): boolean {
+  const pide =
+    it.destino.tipo === "nivel" || (it.destino.tipo === "casilla" && (CASILLAS_QUE_DICE_EL_CLIENTE as readonly string[]).includes(it.destino.clave));
+  return pide && !(it.fuentes ?? []).some((f) => esFuenteDelCliente(f.id));
+}
+
 /** ¿Es la hipótesis de un nivel (del test o del agente)? Es la capa del mapa: no hay que «usarla». */
 export function esHipotesisDeNivel(it: ItemPropuesto): boolean {
   const p = pesoDelNivel(it);
@@ -648,7 +677,8 @@ export function destinoValido(d: DestinoDePropuesta, v: Validez): boolean {
 /** Lo pendiente, quitando lo que ya quedó confirmado por otro camino (el vendedor lo escribió a mano). */
 export function propuestaVigente(estado: EstadoDeExploracion): ItemPropuesto[] {
   const lapidas = new Set(estado.contenido.descartadas);
-  return estado.propuesta.items.filter((it) => !lapidas.has(it.id) && !yaEstaConfirmado(estado, it.destino, it.valor));
+  // Lo que el agente propuso antes del 2026-10-07 sin fundamento del cliente tampoco se muestra.
+  return estado.propuesta.items.filter((it) => !lapidas.has(it.id) && !sinFundamentoDelCliente(it) && !yaEstaConfirmado(estado, it.destino, it.valor));
 }
 
 // ── Las operaciones ───────────────────────────────────────────────────────────

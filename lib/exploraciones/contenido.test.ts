@@ -10,8 +10,10 @@ import {
   contenidoVacio,
   destinoValido,
   fusionarPropuestas,
+  esFuenteDelCliente,
   industriaDelVendedor,
   MAX_REUNIONES_ELEGIDAS,
+  sinFundamentoDelCliente,
   idDelItem,
   propuestaVacia,
   propuestaVigente,
@@ -369,5 +371,39 @@ describe("⭐ las reuniones elegidas en el buscador (2026-10-07)", () => {
   it("se guardan y se vuelven a leer; lo viejo sin la lista se lee vacío", () => {
     expect(leerContenido({ ...contenidoVacio(), reunionesElegidas: ["m1", 4, "m2"] }).reunionesElegidas).toEqual(["m1", "m2"]);
     expect(leerContenido({ version: 1 }).reunionesElegidas).toEqual([]);
+  });
+});
+
+describe("⭐ lo que no dijo ni hizo el cliente no se muestra (2026-10-07)", () => {
+  const item = (destino: DestinoDePropuesta, ids: string[], valor: unknown = { texto: "x" }): ItemPropuesto => ({
+    id: idDelItem(destino, valor),
+    destino,
+    valor,
+    fuentes: ids.map((id) => ({ id, etiqueta: id })),
+    corridaId: "r",
+    en: "2026-10-07T00:00:00.000Z",
+  });
+
+  it("el test, HubSpot, las reuniones, lo sumado a mano y las notas son del cliente; la ficha, el sitio e internet no", () => {
+    expect(["T1", "H3", "S1", "M2", "N0"].every(esFuenteDelCliente)).toBe(true);
+    expect(["E0", "C0", "D0", "W0", "W1", "W2"].some(esFuenteDelCliente)).toBe(false);
+  });
+
+  it("un nivel o una casilla del marco solo con la ficha, el sitio o internet queda fuera; lo demás no", () => {
+    expect(sinFundamentoDelCliente(item({ tipo: "nivel", dimensionId: "1.3" }, ["E0", "W0"]))).toBe(true);
+    expect(sinFundamentoDelCliente(item({ tipo: "nivel", dimensionId: "1.3" }, ["T1"]))).toBe(false);
+    expect(sinFundamentoDelCliente(item({ tipo: "casilla", clave: "retos" }, ["W2"]))).toBe(true);
+    expect(sinFundamentoDelCliente(item({ tipo: "casilla", clave: "retos" }, ["W2", "S1"]))).toBe(false);
+    // La radiografía y su industria SÍ salen de internet: no son del marco.
+    expect(sinFundamentoDelCliente(item({ tipo: "casilla", clave: "radiografia" }, ["W1"]))).toBe(false);
+    expect(sinFundamentoDelCliente(item({ tipo: "casilla", clave: "autoridad" }, ["C0"]))).toBe(false);
+  });
+
+  it("lo propuesto antes, sin fundamento, deja de verse como pendiente", () => {
+    const e = estado();
+    const reto = item({ tipo: "casilla", clave: "retos" }, ["W2"], { texto: "Captar socios" });
+    const conCita = item({ tipo: "casilla", clave: "retos" }, ["S1"], { texto: "No priorizan leads" });
+    e.propuesta.items = [reto, conCita];
+    expect(propuestaVigente(e).map((i) => i.id)).toEqual([conCita.id]);
   });
 });

@@ -62,6 +62,7 @@ import {
 import {
   MAX_PREGUNTAS_EN_LA_GUIA,
   MAX_PARA_EXPLORAR,
+  MAX_RETOS_DE_LA_INDUSTRIA,
   MAX_SESIONES,
   REPREGUNTAS_POR_PREGUNTA,
   RESULTADOS_DE_LA_SESION,
@@ -389,6 +390,10 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   ubicaciones: z
     .record(z.string().max(600), z.string().min(1).max(40))
     .refine((r) => Object.keys(r).length <= MAX_PARA_EXPLORAR)
+    .optional(),
+  retosDeLaIndustria: z
+    .array(z.object({ reto: textoDeGuia(300), pregunta: textoDeGuia(300) }))
+    .max(MAX_RETOS_DE_LA_INDUSTRIA)
     .optional(),
   apertura: z.array(textoDeGuia(400)).max(4),
   escalaEnSimple: textoDeGuia(800).nullable(),

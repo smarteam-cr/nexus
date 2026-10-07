@@ -431,6 +431,12 @@ export interface GuiaDeLaSesion {
    * pregunta lo retome (Elías, 2026-10-07: «pensé que aparecían solo las letras… o el número»).
    */
   ubicaciones?: Record<string, string>;
+  /**
+   * Retos típicos de su industria, sacados de la investigación en internet, cada uno con la pregunta
+   * para confirmar si le pasa (Elías, 2026-10-07: «que deje bien claro que son preliminares, y solo
+   * se usen para armar preguntas»). Son hipótesis: no van al Resumen, van a la preparación de la reunión.
+   */
+  retosDeLaIndustria?: RetoDeLaIndustria[];
   /** Cómo abrir la conversación, desde algo de la empresa. */
   apertura: string[];
   /** La escala explicada en simple: solo cuando no hizo el test y todavía no se habló. */
@@ -440,6 +446,14 @@ export interface GuiaDeLaSesion {
   pocaApertura: string | null;
   cierre: string | null;
 }
+
+/** Un reto típico de su industria (hipótesis) y la pregunta para confirmarlo. */
+export interface RetoDeLaIndustria {
+  reto: string;
+  pregunta: string;
+}
+
+export const MAX_RETOS_DE_LA_INDUSTRIA = 3;
 
 export const REPREGUNTAS_POR_PREGUNTA = 3;
 export const MAX_PREGUNTAS_EN_LA_GUIA = 12;

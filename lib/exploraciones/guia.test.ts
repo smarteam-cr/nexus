@@ -672,3 +672,28 @@ describe("⭐ qué cambió desde que se armó la guía (2026-10-07)", () => {
     expect(guiaVieja(guia, ["metas", "retos"], ["1.2"], ["B"])).toBe(true);
   });
 });
+
+describe("⭐ los retos de su industria van a la preparación, como hipótesis (2026-10-07)", () => {
+  const RETOS = { apertura: ["Hola"], preguntas: [], objeciones: [], retosDeLaIndustria: [
+    { reto: "Captar socios cuando hay alternativas gratuitas.", pregunta: "¿Cómo les va hoy con la renovación de socios?" },
+    { reto: "", pregunta: "sin reto" },
+    { reto: "Dos", pregunta: "¿Dos?" },
+    { reto: "Tres", pregunta: "¿Tres?" },
+    { reto: "Cuatro", pregunta: "¿Cuatro?" },
+  ] };
+
+  it("solo si se le dio la investigación de su industria: se piden, se leen y se guardan, hasta 3", () => {
+    const c = ctx({ suIndustria: "Los clubes de automovilismo compiten con servicios gratuitos." });
+    expect((herramientaDeLaGuia(c).input_schema as { properties: Record<string, unknown> }).properties).toHaveProperty("retosDeLaIndustria");
+    expect(String(pedidoDeLaGuia(c).messages[0].content)).toContain("NO lo dijo el cliente");
+    const g = leerLaGuiaDelAgente(respuesta(RETOS), c, null);
+    expect(g?.retosDeLaIndustria?.map((r) => r.reto)).toEqual(["Captar socios cuando hay alternativas gratuitas.", "Dos", "Tres"]);
+    expect(leerPropuesta({ ...propuestaVacia(), guia: g }).guia).toEqual(g);
+  });
+
+  it("sin la investigación no se piden ni se aceptan: serían inventados", () => {
+    const c = ctx({ suIndustria: null });
+    expect((herramientaDeLaGuia(c).input_schema as { properties: Record<string, unknown> }).properties).not.toHaveProperty("retosDeLaIndustria");
+    expect(leerLaGuiaDelAgente(respuesta(RETOS), c, null)?.retosDeLaIndustria).toBeUndefined();
+  });
+});

@@ -4187,7 +4187,8 @@ de uso», con un agente experimental que los proponga sin la biblioteca (vacía)
   vez de pisar.
 - **Hipótesis y evidencia son dos clases de nivel, y el mapa las pinta distinto.** Hipótesis: lo que
   marcó en el test y lo que el agente deduce de HubSpot al preparar (con su porqué, sin frase
-  literal). Evidencia: lo que dijo el cliente (con su frase), lo que se vio en el portal o lo que
+  literal; desde el 2026-10-07, solo con una pista de lo que el cliente dijo o hizo: ver «Preventa: sin
+  una pista del cliente, no hay diagnóstico»). Evidencia: lo que dijo el cliente (con su frase), lo que se vio en el portal o lo que
   marcó el vendedor. Tienen ids distintos (descartar una hipótesis no tapa lo que el cliente diga
   después), una hipótesis nunca pisa lo que dijo el cliente, y lo que dijo el cliente confirma una
   hipótesis aunque sea el mismo nivel (`fusionarPropuestas`, `yaEstaConfirmado`).
@@ -5581,5 +5582,32 @@ ejemplo de Conexión con el cliente ya conectado, las pestañas internas chicas,
   (`prepararReunionParaElCliente`); una de otro cliente se rechaza; sin transcripción no se suma (no hay qué leer).
   Queda en `contenido.reunionesElegidas` (sin SQL) y se lista y se lee aunque sea de antes del alta, por el
   chokepoint (`getClientSessions` con `ids`). Quitarla solo la saca de esa lista: no le cambia el dueño.
-- **Sin SQL.** Lo de Automóvil Club (el agente propone un nivel para cada dimensión al preparar, aun sin pistas)
-  queda como propuesta: cambia la decisión del 2026-10-01 y espera a Elías.
+- **Sin SQL.** Lo de Automóvil Club (el agente proponía un nivel para cada dimensión al preparar, aun sin pistas)
+  se resolvió el mismo día: ver «Preventa: sin una pista del cliente, no hay diagnóstico».
+
+## Preventa: sin una pista del cliente, no hay diagnóstico (2026-10-07)
+
+**Contexto.** Automóvil Club de Costa Rica, recién creada y sin una sola reunión, amaneció con la escala entera
+(24 niveles, Ventas «parece estar en Deficiente») y tres retos en el Resumen. Los niveles salían de la ficha de
+HubSpot (que dice 2 empleados y ningún CRM), de su sitio y de «sin pistas directas, lo más probable es…»; los
+retos, copiados casi palabra por palabra de la investigación de su industria en internet. Era la regla del
+2026-10-01: una hipótesis en cada dimensión. Elías eligió «en blanco hasta hablar».
+
+- **Lo que dijo o hizo el cliente es la única base de un nivel y del marco** (`esFuenteDelCliente`,
+  `sinFundamentoDelCliente` en lib/exploraciones/contenido.ts): el diagnóstico (T), su actividad en HubSpot (H),
+  las reuniones (S, M) y las notas del vendedor (N0). La ficha de la empresa (E0), sus contactos y negocios (C0,
+  D0), su sitio (W0) e internet (W1, W2) no alcanzan. Vale para los niveles y para metas, planes, retos,
+  tiempos, presupuesto, consecuencias e implicaciones; «Quién decide» no, porque los contactos de HubSpot son un
+  hecho y el papel ya exigía que la fuente lo diga.
+- **Sin esa base, la dimensión queda sin nivel** y la guía la pregunta en la reunión. Sin nada del cliente, el
+  agente tampoco propone qué explorar a fondo. Supera lo del 2026-10-01 («las hipótesis son el mapa»): siguen
+  siendo el mapa, pero solo las que tienen una pista.
+- **Se aplica al proponer y al mostrar.** El agente lo tiene en el pedido y lo que mande sin base se descarta;
+  y `propuestaVigente` deja de mostrar lo que se propuso antes sin base, sin tocar los datos. Medido en
+  solo lectura sobre las 9 preventas vivas: Automóvil Club pierde sus 24 niveles y 3 retos, Megasuper 2
+  niveles, y las demás nada. Lo confirmado por una persona no se toca.
+- **Los retos de su industria van a la preparación de la reunión, como hipótesis** (pedido de Elías): no al
+  Resumen. Los arma la guía desde la casilla «Su industria» (`GuiaDeLaSesion.retosDeLaIndustria`, hasta 3),
+  cada uno con la pregunta para saber si le pasa, en la tarjeta «Retos de su industria · Hipótesis» de la
+  pestaña Preparación. Sin la investigación, no se piden ni se aceptan.
+- **Sin SQL.** Para ver los retos de la industria en una preventa ya preparada, se actualiza su guía.

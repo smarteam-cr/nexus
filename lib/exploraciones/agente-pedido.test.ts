@@ -26,7 +26,7 @@ import {
   type ContextoDelPedido,
 } from "./agente-pedido";
 import { leerPropuesta } from "./esquemas";
-import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, NIVELES, propuestaVacia, propuestaVigente, type EstadoDeExploracion } from "./contenido";
+import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, MOTIVOS_PARA_EXPLORAR, NIVELES, propuestaVacia, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
 import { leerLaRadiografia, urlComparable } from "./radiografia-pedido";
@@ -360,8 +360,8 @@ describe("las hipótesis al preparar", () => {
     const r = leerLaRespuesta(
       respuesta({
         niveles: [
-          { dimensionId: "1.1", nivel: "I", porQue: "Las notas dicen que cada vendedor lleva su Excel.", fuentes: [{ id: "E0" }] },
-          { dimensionId: "1.2", nivel: "F", fuentes: [{ id: "E0" }] },
+          { dimensionId: "1.1", nivel: "I", porQue: "Las notas dicen que cada vendedor lleva su Excel.", fuentes: [{ id: "S1" }] },
+          { dimensionId: "1.2", nivel: "F", fuentes: [{ id: "S1" }] },
           { dimensionId: "1.5", nivel: "D", porQue: "Sin fuente.", fuentes: [] },
         ],
       }),
@@ -952,5 +952,42 @@ describe("⭐ con conversación, la estrategia de conexión sobra (2026-10-07)",
     const props = herramienta(ctx({ modo: "preparar", yaHablaron: true })).input_schema.properties as Record<string, unknown>;
     expect(props).not.toHaveProperty("estrategiaDeConexion");
     expect(JSON.stringify(pedidoDeLaExploracion(ctx({ modo: "preparar", yaHablaron: true })))).toContain("Ya hubo una reunión con la empresa");
+  });
+});
+
+describe("⭐ sin una pista del cliente, no hay nivel ni reto (Automóvil Club, 2026-10-07)", () => {
+  it("un nivel o una casilla del marco que solo cita la ficha, el sitio o internet se descarta", () => {
+    const r = leerLaRespuesta(
+      respuesta({
+        niveles: [
+          { dimensionId: "1.1", nivel: "D", porQue: "Sin CRM conocido, lo más probable es que…", fuentes: [{ id: "E0" }] },
+          { dimensionId: "1.2", nivel: "I", porQue: "En la reunión dijo que usa Excel.", fuentes: [{ id: "S1" }] },
+        ],
+        retos: [
+          { texto: "Captar y fidelizar socios en un mercado con alternativas gratuitas.", fuentes: [{ id: "E0" }] },
+          { texto: "Los vendedores no saben qué leads atender primero.", fuentes: [{ id: "S1" }] },
+        ],
+        metas: [{ que: "Crecer en socios", fuentes: [{ id: "E0" }] }],
+      }),
+      ctx({ modo: "preparar" }),
+      "run_1",
+      AHORA,
+    );
+    expect(r.items.map((i) => (i.destino.tipo === "nivel" ? i.destino.dimensionId : i.destino.tipo === "casilla" ? i.destino.clave : i.destino.tipo))).toEqual(["retos", "1.2"]);
+    expect(r.descartadas).toBe(3);
+  });
+
+  it("sin nada del cliente en las fuentes, tampoco propone qué explorar; con algo, sí", () => {
+    const pedido = { aExplorar: [{ dimensionId: "1.2", motivo: MOTIVOS_PARA_EXPLORAR[0], razon: "No se ve un CRM." }] };
+    const sinCliente = leerLaRespuesta(respuesta(pedido), ctx({ modo: "preparar", fuentes: [FUENTES[0]] }), "run_1", AHORA);
+    expect(sinCliente.items).toEqual([]);
+    const conCliente = leerLaRespuesta(respuesta(pedido), ctx({ modo: "preparar" }), "run_1", AHORA);
+    expect(conCliente.items.map((i) => i.destino.tipo)).toEqual(["aExplorar"]);
+  });
+
+  it("el pedido lo dice: la ficha, el sitio e internet no alcanzan", () => {
+    const texto = JSON.stringify(pedidoDeLaExploracion(ctx({ modo: "preparar" })));
+    expect(texto).toContain("NO alcanzan para un nivel");
+    expect(texto).toContain("no es un reto suyo");
   });
 });
