@@ -5167,6 +5167,18 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   aguinaldo no le ofrece los enlaces a la planilla). «Ingresos variables de los colaboradores» = las mismas comisiones
   (Elías). El aguinaldo no tiene nada que editar: sale del libro de planilla. Lo que lo revertiría: abrirle también la
   planilla, con el mismo mecanismo.
+- **El historial de comisiones de cada vendedor, venta por venta y mes por mes (pedido de Elías, 2026-10-06).** Tabla
+  nueva `CuotaComisionVendedor` (⚠ SQL `2026-10-06-cuotas-comision-vendedor.sql` ANTES del deploy), cargada desde la
+  «Tabla de Comisiones» de cada vendedor con `scripts/import-comisiones-vendedor.ts` (Excel o CSV; las columnas, en
+  `lib/finanzas/comisiones-historial.ts`). Lo dudoso entra POR CONFIRMAR y Dinia o Alex responden «¿Se pagó?» en
+  Comisiones de vendedor (queda a su nombre y se deshace). Del Excel: verde = pagada; en CSV, hasta «pagadas hasta» y una
+  celda con «?» = por confirmar. Una cuota que una persona ya confirmó no la pisa una recarga. NO se cruza con
+  `ComisionVendedor` (lo liquidado desde los cobros): dos registros hasta el módulo de comisiones nuevo. Las reglas que
+  dio Elías para ese módulo: servicio = % × monto del contrato repartido en los meses del proyecto (5% del vendedor;
+  2,5% = compartida con Marco, que no la cobra); licencia (Collab) = 10% en tres meses; cada cuota se paga cuando el
+  cliente paga su factura, a mes vencido, y se corre si tiene crédito o se atrasa. Andrés 2026: 52 ventas, 164 cuotas;
+  enero a septiembre cuadran con su «Total a Pagar»; octubre a diciembre no (la fórmula del Excel deja fuera Total Finco
+  y Licencias Bluesat).
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 

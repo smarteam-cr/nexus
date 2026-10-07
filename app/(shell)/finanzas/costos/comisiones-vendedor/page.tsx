@@ -18,6 +18,9 @@ import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
 import ComisionesVendedorPanel from "@/components/finanzas/ComisionesVendedorPanel";
+import HistorialComisiones from "@/components/finanzas/HistorialComisiones";
+import { cargarHistorialComisiones } from "@/lib/finanzas/comisiones-historial-server";
+import { crDateParts } from "@/lib/jobs/time";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +31,8 @@ export default async function FinanzasComisionesVendedorPage() {
     redirect("/clients");
   }
 
-  const [data, personas, clientes] = await Promise.all([
+  const todayISO = crDateParts(new Date()).dateKey;
+  const [data, personas, clientes, historial] = await Promise.all([
     loadComisionesVendedor(),
     // Solo gente activa: una regla nueva para alguien dado de baja no tiene
     // sentido. Las reglas YA cargadas de una persona que se fue siguen listadas
@@ -43,6 +47,8 @@ export default async function FinanzasComisionesVendedorPage() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    // El historial por venta del año (el Excel de comisiones de cada vendedor, 2026-10-06).
+    cargarHistorialComisiones(Number(todayISO.slice(0, 4))),
   ]);
 
   return (
@@ -53,6 +59,13 @@ export default async function FinanzasComisionesVendedorPage() {
         clientes={clientes}
         volverA={isCostosRole(ctx.role) ? "/finanzas/costos" : "/finanzas/pendientes"}
       />
+      <div className="mt-6">
+        <HistorialComisiones
+          data={historial}
+          todayISO={todayISO}
+          puedeEditar={puedePorPersona(ctx.role, ctx.teamMember, { section: "comisionesVendedor", action: "write" })}
+        />
+      </div>
     </div>
   );
 }

@@ -1939,6 +1939,7 @@ model TeamMember {
   pagosPlanilla           PagoPlanilla[]          @relation("PagosDePlanilla")
   reglasComision          ReglaComisionVendedor[] @relation("ReglasDeComision")
   comisionesVendedor      ComisionVendedor[]      @relation("ComisionesDeVendedor")
+  cuotasComisionVendedor  CuotaComisionVendedor[] @relation("CuotasDeComisionVendedor") // ⚠ remuneración (2026-10-06)
   ventasAtribuidas        AtribucionVenta[]       @relation("VentasAtribuidas")
   aguinaldosPagados       AguinaldoPago[]         @relation("AguinaldosDePersona")
 }
@@ -4355,6 +4356,52 @@ model ComisionVendedor {
 
   @@index([teamMemberId, periodo])
   @@index([pagoPlanillaId])
+}
+
+/// Una cuota de comisión de un vendedor: una venta en un mes (2026-10-06). Nace con el historial que se lleva en Excel
+/// (la «Tabla de Comisiones» de cada vendedor: una fila por venta y una columna por mes) y es la base del módulo de
+/// comisiones nuevo. Las reglas de hoy (Elías, 2026-10-06): servicio = % × monto del contrato, repartido en los meses
+/// del proyecto (5% del vendedor; 2,5% = compartida con Marco, que no la cobra); licencia (Collab) = 10% en tres meses.
+/// Cada cuota se paga cuando el cliente paga su factura, a mes vencido, y se corre si el cliente tiene crédito o se atrasa.
+///
+/// `estado`: PAGADA · NO_PAGADA · POR_CONFIRMAR (lo dudoso del Excel: Dinia o Alex lo confirman con un botón). NO se
+/// cruza con `ComisionVendedor` (lo liquidado desde los cobros): son dos registros distintos hasta que el módulo nuevo
+/// los una. ⚠ Remuneración: RLS deny-all y solo Super Admin o quien tenga `comisionesVendedor` por persona.
+/// SQL: scripts/sql/2026-10-06-cuotas-comision-vendedor.sql.
+model CuotaComisionVendedor {
+  id             String     @id @default(cuid())
+  teamMemberId   String
+  teamMember     TeamMember @relation("CuotasDeComisionVendedor", fields: [teamMemberId], references: [id])
+  /// La venta: estable entre importaciones (cliente + fecha de ingreso + tipo, normalizados).
+  ventaClave     String
+  cliente        String
+  /// SERVICIO | LICENCIA
+  tipoVenta      String
+  /// En puntos porcentuales: 5 = 5%.
+  porcentaje     Decimal    @db.Decimal(6, 4)
+  montoContrato  Decimal?   @db.Decimal(12, 2)
+  /// La comisión total de la venta, como la dice el Excel.
+  montoComision  Decimal?   @db.Decimal(12, 2)
+  fechaIngreso   DateTime?  @db.Date
+  /// "YYYY-MM": el mes en que toca pagar la cuota.
+  periodo        String
+  monto          Decimal    @db.Decimal(12, 2)
+  moneda         CobranzaMoneda @default(USD)
+  /// PAGADA | NO_PAGADA | POR_CONFIRMAR
+  estado         String     @default("POR_CONFIRMAR")
+  /// Quién dijo que se pagó (o que no). Un import firma «import:…».
+  confirmadoPor  String?
+  confirmadoEn   DateTime?
+  /// «import:<archivo>» o «manual».
+  origen         String
+  /// Lo demás de la fila del Excel (nacionalidad, tiempo de contrato, la celda tal cual).
+  detalle        Json?
+  notas          String?    @db.Text
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([teamMemberId, ventaClave, periodo])
+  @@index([periodo])
 }
 
 /// En qué rubro cae un egreso del mes. Espeja `CobranzaCategoriaCosto` y le suma los dos

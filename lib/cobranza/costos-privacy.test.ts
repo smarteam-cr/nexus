@@ -27,6 +27,9 @@ const { requireInternalUserMock, prismaTouched } = vi.hoisted(() => ({
 }));
 
 // Identidad mockeada: el test controla qué rol "está logueado".
+// La ruta del historial de comisiones (2026-10-06) importa un módulo `server-only`: en el test no hay servidor.
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/lib/auth/supabase", () => {
   class UnauthorizedError extends Error {}
   class ForbiddenError extends Error {}
@@ -77,6 +80,7 @@ import * as aguinaldoRoute from "@/app/api/cobranza/costos/aguinaldo/route";
 import * as comVendedorRoute from "@/app/api/cobranza/costos/comisiones-vendedor/route";
 import * as comVendedorIdRoute from "@/app/api/cobranza/costos/comisiones-vendedor/[reglaId]/route";
 import * as comVendedorLiquidarRoute from "@/app/api/cobranza/costos/comisiones-vendedor/liquidar/route";
+import * as comVendedorCuotaRoute from "@/app/api/cobranza/costos/comisiones-vendedor/cuotas/[cuotaId]/route";
 
 const MENSAJE_GUARD = "Los costos y la caja neta son solo para dirección (Super Admin).";
 
@@ -142,6 +146,7 @@ describe("P2 · los 28 handlers responden 403 como ADMIN sin tocar Prisma", () =
   const tarjetaParams = { params: Promise.resolve({ tarjetaId: "clx-test-tarjeta-id" }) };
   const pagoParams = { params: Promise.resolve({ pagoId: "clx-test-pago-id" }) };
   const reglaParams = { params: Promise.resolve({ reglaId: "clx-test-regla-id" }) };
+  const cuotaParams = { params: Promise.resolve({ cuotaId: "clx-test-cuota-id" }) };
 
   const superficies: Array<[string, () => Promise<Response>]> = [
     ["GET /api/cobranza/costos", () => costosRoute.GET()],
@@ -214,6 +219,11 @@ describe("P2 · los 28 handlers responden 403 como ADMIN sin tocar Prisma", () =
     [
       "POST /api/cobranza/costos/comisiones-vendedor/liquidar",
       () => comVendedorLiquidarRoute.POST(req("POST")),
+    ],
+    // «¿Se pagó?» de una cuota del historial de comisiones (2026-10-06).
+    [
+      "PATCH /api/cobranza/costos/comisiones-vendedor/cuotas/[cuotaId]",
+      () => comVendedorCuotaRoute.PATCH(req("PATCH"), cuotaParams),
     ],
     [
       "DELETE /api/cobranza/costos/comisiones-vendedor/liquidar",
@@ -340,6 +350,7 @@ describe("P3 · estructurales", () => {
       "PagoPlanilla",
       "ReglaComisionVendedor",
       "ComisionVendedor",
+      "CuotaComisionVendedor",
     ]) {
       const re = new RegExp(
         `CREATE POLICY deny_all_non_superuser ON "${tabla}"[\\s\\S]*?AS RESTRICTIVE`,
@@ -395,6 +406,8 @@ describe("P2b · comisiones de vendedor y aguinaldo por persona", () => {
       expect(src(r)).not.toMatch(lee);
       expect(src(r).match(new RegExp(escribe, "g"))?.length).toBe(2);
     }
+    // Responder «¿Se pagó?» es editar.
+    expect(src("app/api/cobranza/costos/comisiones-vendedor/cuotas/[cuotaId]/route.ts")).toMatch(escribe);
     expect(src("app/api/cobranza/costos/aguinaldo/route.ts")).toMatch(/porPersona: \{ section: "aguinaldo", action: "read" \}/);
   });
 });

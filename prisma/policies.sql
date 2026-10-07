@@ -176,6 +176,16 @@ CREATE POLICY deny_all_non_superuser ON "ComisionVendedor"
   TO PUBLIC
   USING (false);
 
+-- 7b) `CuotaComisionVendedor` (2026-10-06): las cuotas de comisión de cada vendedor, venta por venta y mes por mes (el
+--     historial del Excel de comisiones). Remuneración: el mismo trato que `ComisionVendedor`. Nació en
+--     scripts/sql/2026-10-06-cuotas-comision-vendedor.sql.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "CuotaComisionVendedor";
+CREATE POLICY deny_all_non_superuser ON "CuotaComisionVendedor"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 -- 8) `EgresoMensual` — el libro de egresos mes a mes (2026-08-17, reporte anual de
 --    equilibrio). Lleva la estructura de costos de la empresa concepto por concepto y
 --    el cargo de las tarjetas: pesa lo mismo que `CostoRecurrente` y `TarjetaCredito`,
