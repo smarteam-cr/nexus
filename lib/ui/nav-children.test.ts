@@ -38,9 +38,29 @@ describe("visibleNavChildren — el filtro costosOnly del Sidebar", () => {
     const conGastos = { v: 1 as const, sections: { gastos: { read: true } } };
     const visibles = visibleNavChildren(finanzas, { isCostos: false, permissions: conGastos });
     expect(visibles.every((c) => !c.costosOnly)).toBe(true);
+    // Las de remuneración (comisiones de vendedor, aguinaldo) piden su permiso por persona: con solo gastos no aparecen.
+    const REMUNERACION = ["comisionesVendedor", "aguinaldo"];
     expect(visibles.map((c) => c.href)).toEqual(
-      (finanzas.children ?? []).filter((c) => !c.costosOnly).map((c) => c.href),
+      (finanzas.children ?? [])
+        .filter((c) => !c.costosOnly && !(c.permiso && REMUNERACION.includes(c.permiso.section)))
+        .map((c) => c.href),
     );
+  });
+
+  it("comisiones de vendedor y aguinaldo: quien registra las ve solo con su permiso por persona (2026-10-06, Dinia)", () => {
+    const REM = ["/finanzas/costos/comisiones-vendedor", "/finanzas/costos/aguinaldo"];
+    const sinPermiso = visibleNavChildren(finanzas, {
+      isCostos: false,
+      vista: "REGISTRA",
+      permissions: { v: 1 as const, sections: { gastos: { read: true } } },
+    }).map((c) => c.href);
+    for (const h of REM) expect(sinPermiso).not.toContain(h);
+    const conPermiso = visibleNavChildren(finanzas, {
+      isCostos: false,
+      vista: "REGISTRA",
+      permissions: { v: 1 as const, sections: { gastos: { read: true }, comisionesVendedor: { read: true }, aguinaldo: { read: true } } },
+    }).map((c) => c.href);
+    for (const h of REM) expect(conPermiso).toContain(h);
   });
 
   it("sin el permiso de gastos no aparecen Gastos del mes, Recurrentes ni Tarjetas", () => {

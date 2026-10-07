@@ -14,7 +14,7 @@ import { loadAguinaldo } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 
 export async function GET(req: NextRequest) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "aguinaldo", action: "read" } });
   if (guard instanceof NextResponse) return guard;
 
   const raw = req.nextUrl.searchParams.get("anio");

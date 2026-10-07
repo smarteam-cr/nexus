@@ -12,6 +12,7 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import { puedePorPersona } from "@/lib/auth/salarios-por-persona";
 import { loadComisionesVendedor } from "@/lib/cobranza";
 import { prisma } from "@/lib/db/prisma";
 import { CS_CLIENT_WHERE } from "@/lib/clients/kind";
@@ -22,7 +23,10 @@ export const dynamic = "force-dynamic";
 
 export default async function FinanzasComisionesVendedorPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
+  // Super Admin, o la persona con «Comisiones de vendedor» en su override de /team (2026-10-06: Dinia).
+  if (!ctx || !(isCostosRole(ctx.role) || puedePorPersona(ctx.role, ctx.teamMember, { section: "comisionesVendedor", action: "read" }))) {
+    redirect("/clients");
+  }
 
   const [data, personas, clientes] = await Promise.all([
     loadComisionesVendedor(),
@@ -43,7 +47,12 @@ export default async function FinanzasComisionesVendedorPage() {
 
   return (
     <div className={SHELL_DEFAULT}>
-      <ComisionesVendedorPanel initial={data} personas={personas} clientes={clientes} />
+      <ComisionesVendedorPanel
+        initial={data}
+        personas={personas}
+        clientes={clientes}
+        volverA={isCostosRole(ctx.role) ? "/finanzas/costos" : "/finanzas/pendientes"}
+      />
     </div>
   );
 }

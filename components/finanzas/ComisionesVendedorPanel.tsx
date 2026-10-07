@@ -49,6 +49,8 @@ interface Props {
   initial: ComisionesVendedorDTO;
   personas: Lite[];
   clientes: Lite[];
+  /** A dónde vuelve «←»: Costos es de Super Admin; quien entra por su permiso (2026-10-06) vuelve a Pendientes. */
+  volverA?: string;
 }
 
 const BASE = "/api/cobranza/costos/comisiones-vendedor";
@@ -64,7 +66,7 @@ type ReglaForm = {
   notas: string;
 };
 
-export default function ComisionesVendedorPanel({ initial, personas, clientes }: Props) {
+export default function ComisionesVendedorPanel({ initial, personas, clientes, volverA = "/finanzas/costos" }: Props) {
   const toast = useToast();
   const [data, setData] = useState(initial);
   const [form, setForm] = useState<ReglaForm | null>(null);
@@ -218,7 +220,7 @@ export default function ComisionesVendedorPanel({ initial, personas, clientes }:
       <PageHeader recorrido="finanzas-comisiones-vendedor"
         title="Comisiones de vendedor"
         description="Lo que Smarteam le paga a quien vendió, como porcentaje de lo cobrado. Lo devengado se calcula solo; liquidar lo congela."
-        backHref="/finanzas/costos"
+        backHref={volverA}
         action={
           <Button data-recorrido="fin.vendedor.regla"
             onClick={() => {

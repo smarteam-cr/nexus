@@ -33,9 +33,12 @@ const TD = "px-3 py-2 text-xs text-fg";
 export default function AguinaldoPanel({
   initial,
   anioActual,
+  verPlanilla = true,
 }: {
   initial: AguinaldoResultado;
   anioActual: number;
+  /** La planilla es solo de Super Admin: a quien ve el aguinaldo por su permiso (2026-10-06) no se le ofrece el enlace. */
+  verPlanilla?: boolean;
 }) {
   const {
     anio,
@@ -253,16 +256,18 @@ export default function AguinaldoPanel({
                       : "Nadie le registró ninguna quincena en el historial de planilla."}
                   </p>
                 </div>
-                <Link
-                  href={
-                    f.motivo === "SIN_PERSONA_LIGADA"
-                      ? "/finanzas/costos/planillas"
-                      : "/finanzas/costos/planillas/historial"
-                  }
-                  className={buttonVariants({ variant: "secondary", size: "sm" })}
-                >
-                  {f.motivo === "SIN_PERSONA_LIGADA" ? "Ver el salario" : "Ir al historial"}
-                </Link>
+                {verPlanilla && (
+                  <Link
+                    href={
+                      f.motivo === "SIN_PERSONA_LIGADA"
+                        ? "/finanzas/costos/planillas"
+                        : "/finanzas/costos/planillas/historial"
+                    }
+                    className={buttonVariants({ variant: "secondary", size: "sm" })}
+                  >
+                    {f.motivo === "SIN_PERSONA_LIGADA" ? "Ver el salario" : "Ir al historial"}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

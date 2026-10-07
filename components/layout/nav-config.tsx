@@ -306,6 +306,10 @@ export const APP_NAV: readonly NavItemConfig[] = [
       { href: "/finanzas/gastos", label: "Gastos del mes", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
       { href: "/finanzas/recurrentes", label: "Recurrentes", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
       { href: "/finanzas/tarjetas", label: "Tarjetas", section: "Costos y gastos", vistas: ["REGISTRA", "SUPERVISA"], permiso: { section: "gastos", action: "read" } },
+      // Comisiones de vendedor y aguinaldo para quien registra, SOLO si su override de /team se las da (2026-10-06, Dinia):
+      // son remuneración (lib/auth/salarios-por-persona.ts). Super Admin llega desde la planilla, como siempre.
+      { href: "/finanzas/costos/comisiones-vendedor", label: "Comisiones de vendedor", section: "Costos y gastos", vistas: ["REGISTRA"], permiso: { section: "comisionesVendedor", action: "read" } },
+      { href: "/finanzas/costos/aguinaldo", label: "Aguinaldo", section: "Costos y gastos", vistas: ["REGISTRA"], permiso: { section: "aguinaldo", action: "read" } },
       // ⚠ UNA sola entrada de planilla, solo para Super Admin. Abre en el CALENDARIO (2026-10-06, pedido de Alex: la tabla
       // donde ve las quincenas que faltan y las llena). Adentro conviven lo que cuesta por mes (`planillas`, «Salarios»), lo
       // que se pagó de verdad (`planillas/historial`, botón «Historial»), y desde ahí se llega al aguinaldo y a las
@@ -318,7 +322,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
         section: "Costos y gastos",
         costosOnly: true,
         vistas: ["SUPERVISA"],
-        match: ["/finanzas/costos/planillas", "/finanzas/costos/aguinaldo", "/finanzas/costos/comisiones-vendedor"],
+        // Sin aguinaldo ni comisiones de vendedor desde 2026-10-06: son hijos propios (para quien registra con permiso), y
+        // dos hijos no pueden marcarse activos en la misma ruta.
+        match: ["/finanzas/costos/planillas"],
       },
       // Lo que no cuadra con Odoo y Mercury, en una sola lista. Lo trabaja quien registra; quien supervisa decide lo que
       // es de negocio.

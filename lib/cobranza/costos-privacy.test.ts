@@ -351,6 +351,54 @@ describe("P3 · estructurales", () => {
   });
 });
 
+// ── P2b · La excepción POR PERSONA (2026-10-06, Dinia) ──────────────────────
+// Comisiones de vendedor y aguinaldo se abren a una persona con SU override de /team, nunca con el rol. Todo lo demás
+// de salarios sigue cerrado para ella, y quien no tiene el override sigue en P2 (403, cero consultas).
+describe("P2b · comisiones de vendedor y aguinaldo por persona", () => {
+  const conOverride = (sections: Record<string, Record<string, boolean>>) =>
+    requireInternalUserMock.mockResolvedValue({
+      user: { id: "user-dinia", email: "dinia@smarteam.cr", kind: "INTERNAL" },
+      teamMember: { id: "tm-dinia", name: "Dinia", email: "dinia@smarteam.cr", roleEnum: "ADMIN", permissionOverrides: { v: 1, sections } },
+      role: "ADMIN",
+    });
+  const pasa = (g: unknown) => !(g instanceof NextResponse);
+
+  it("con «ver comisiones» pasa a leerlas, no a editarlas, y la planilla sigue cerrada", async () => {
+    conOverride({ comisionesVendedor: { read: true } });
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "read" } }))).toBe(true);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "write" } }))).toBe(false);
+    expect(pasa(await guardCostosAccess())).toBe(false);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "aguinaldo", action: "read" } }))).toBe(false);
+    expect(prismaTouched).toEqual([]);
+  });
+
+  it("con «editar comisiones» lee y edita; con «aguinaldo» ve el aguinaldo", async () => {
+    conOverride({ comisionesVendedor: { write: true }, aguinaldo: { read: true } });
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "read" } }))).toBe(true);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "write" } }))).toBe(true);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "aguinaldo", action: "read" } }))).toBe(true);
+  });
+
+  it("un override en false o de otra sección no abre nada", async () => {
+    conOverride({ comisionesVendedor: { read: false }, gastos: { read: true, write: true } });
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "read" } }))).toBe(false);
+  });
+
+  it("las rutas de comisiones y aguinaldo piden la excepción con la acción que corresponde", () => {
+    const src = (r: string) => fs.readFileSync(path.join(process.cwd(), r), "utf8");
+    const lee = /guardCostosAccess\(\{ porPersona: \{ section: "comisionesVendedor", action: "read" \} \}\)/;
+    const escribe = /guardCostosAccess\(\{ porPersona: \{ section: "comisionesVendedor", action: "write" \} \}\)/;
+    const general = src("app/api/cobranza/costos/comisiones-vendedor/route.ts");
+    expect(general.slice(general.indexOf("function GET"), general.indexOf("function POST"))).toMatch(lee);
+    expect(general.slice(general.indexOf("function POST"))).toMatch(escribe);
+    for (const r of ["app/api/cobranza/costos/comisiones-vendedor/[reglaId]/route.ts", "app/api/cobranza/costos/comisiones-vendedor/liquidar/route.ts"]) {
+      expect(src(r)).not.toMatch(lee);
+      expect(src(r).match(new RegExp(escribe, "g"))?.length).toBe(2);
+    }
+    expect(src("app/api/cobranza/costos/aguinaldo/route.ts")).toMatch(/porPersona: \{ section: "aguinaldo", action: "read" \}/);
+  });
+});
+
 // ── P4 · Páginas de Finanzas (Pieza 1, tanda 2026-07) ───────────────────────
 // ESCANEO, no lista hardcodeada: antes eran dos paths literales y una hoja nueva
 // de costos nacía sin vigilancia. Ahora TODA página bajo app/(shell)/finanzas/**

@@ -15,7 +15,7 @@ import { liquidarComision, deshacerLiquidacion, CobranzaError } from "@/lib/cobr
 import { liquidarComisionSchema } from "@/lib/cobranza/schema";
 
 export async function POST(req: NextRequest) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "write" } });
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "write" } });
   if (guard instanceof NextResponse) return guard;
 
   const comisionId = req.nextUrl.searchParams.get("comisionId");

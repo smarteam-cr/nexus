@@ -291,6 +291,25 @@ export const PERMISSION_SECTIONS = [
       { key: "write", label: "Anotar y editar gastos, recurrentes y tarjetas", enforced: true },
     ],
   },
+  /* Comisiones de vendedor y aguinaldo para UNA persona (2026-10-06, pedido de Elías: Dinia las ve y las edita, y ve
+     salarios). Son remuneración: se dan solo con el override de cada persona, nunca con la plantilla de un rol
+     (`soloPorPersona`), y el chequeo vive en lib/auth/salarios-por-persona.ts, no en `can()`. Planilla, salarios y caja
+     neta siguen solo para Super Admin. */
+  {
+    key: "comisionesVendedor",
+    label: "Comisiones de vendedor (remuneración)",
+    soloPorPersona: true,
+    actions: [
+      { key: "read", label: "Ver las comisiones de los vendedores y su historial", enforced: true },
+      { key: "write", label: "Liquidar, confirmar si se pagó una cuota y editar las reglas", enforced: true },
+    ],
+  },
+  {
+    key: "aguinaldo",
+    label: "Aguinaldo (muestra lo que ganó cada persona)",
+    soloPorPersona: true,
+    actions: [{ key: "read", label: "Ver el aguinaldo de cada persona", enforced: true }],
+  },
   {
     key: "conocimientos",
     label: "Conocimientos",

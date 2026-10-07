@@ -18,13 +18,13 @@ import { createReglaComision, CobranzaError } from "@/lib/cobranza/mutations";
 import { reglaComisionCreateSchema } from "@/lib/cobranza/schema";
 
 export async function GET() {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "read" } });
   if (guard instanceof NextResponse) return guard;
   return NextResponse.json({ data: await loadComisionesVendedor() });
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "write" } });
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;

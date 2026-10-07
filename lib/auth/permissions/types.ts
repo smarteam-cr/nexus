@@ -42,4 +42,9 @@ export interface SectionDef {
   key: string;
   label: string;
   actions: readonly ActionDef[];
+  /**
+   * Se da solo a una PERSONA (su override en /team), nunca a un rol: la matriz de plantillas por rol no la muestra.
+   * Para lo que deja ver salarios (lib/auth/salarios-por-persona.ts, 2026-10-06).
+   */
+  soloPorPersona?: boolean;
 }

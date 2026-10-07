@@ -33,6 +33,7 @@ import type { ActionKeyOf, SectionKey } from "./permissions/registry";
 // hard-coded (más estricto que cobranza.read y NO editable por la matriz de
 // permisos — los salarios no se abren desde /team). guardCostosAccess lo usa.
 import { isCostosRole } from "./cobranza-roles";
+import { puedePorPersona, type PermisoDeSalario } from "./salarios-por-persona";
 // Roles (/roles): quién administra la sección vive en UN solo lugar (lib/roles/access), del
 // que también sale el filtro de visibilidad y el gate de las pantallas. Este guard lo
 // consume; no lo reimplementa.
@@ -648,12 +649,19 @@ export async function guardSupervisionFinanzas(): Promise<Awaited<ReturnType<typ
  * PRIMERA línea de TODO handler bajo /api/cobranza/costos* y /caja-neta — hay
  * un test estructural que lo verifica.
  */
-export async function guardCostosAccess(): Promise<
+export async function guardCostosAccess(opciones: {
+  /**
+   * La única excepción (2026-10-06): comisiones de vendedor y aguinaldo, para la persona que tenga esa celda en SU
+   * override de /team (lib/auth/salarios-por-persona.ts). Sin consultas a la base: el override viene con el usuario.
+   */
+  porPersona?: PermisoDeSalario;
+} = {}): Promise<
   Awaited<ReturnType<typeof requireInternalUser>> | NextResponse
 > {
   const guard = await guardInternalUser();
   if (guard instanceof NextResponse) return guard;
-  if (!isCostosRole(guard.role)) {
+  const porPersona = opciones.porPersona;
+  if (!isCostosRole(guard.role) && !(porPersona && puedePorPersona(guard.role, guard.teamMember, porPersona))) {
     return NextResponse.json(
       { error: "Los costos y la caja neta son solo para dirección (Super Admin)." },
       { status: 403 },

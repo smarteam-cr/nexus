@@ -174,6 +174,7 @@ export default function RoleTemplatesPanel() {
         onResetSection={row?.editable ? onResetSection : undefined}
         disabled={!row?.editable}
         pinLabel="Distinto del default de código"
+        sinSoloPorPersona
       />
 
       <div className="flex items-center justify-between">

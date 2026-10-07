@@ -5157,6 +5157,16 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   paused; un servicio de cobranza en PAUSADO no cuenta (es de Finanzas, no del proyecto). La cuota toma el proyecto de
   su servicio; sin proyecto, cualquier pausado del cliente (puede avisar de más: preguntar es barato). Se calcula al
   leer, nunca en `AlertaCobro.mensaje`, que se conserva entre corridas (`lib/cobranza/proyecto-pausado.ts`).
+- **Dinia ve y edita comisiones de vendedor y ve el aguinaldo (Elías, 2026-10-06: «que Dinia también vea salarios»).**
+  Cambia la regla del rediseño («Dinia no ve salarios», docs/finanzas-rediseno-plan.md): el aguinaldo de cada persona es
+  lo que ganó en el año. Dos permisos nuevos, `comisionesVendedor` (ver / editar) y `aguinaldo` (ver), que se dan SOLO a
+  una persona desde /team (su override), nunca a un rol: la matriz de roles ni los muestra (`soloPorPersona`). El
+  chequeo (`lib/auth/salarios-por-persona.ts`) lee el override que ya viene con el usuario, sin consultar la base, y
+  entra como excepción explícita de `guardCostosAccess({ porPersona })`: las pruebas de privacidad siguen cubriendo cada
+  ruta y quien no la tiene sigue con 403. Planilla, catálogo de salarios y caja neta siguen solo para Super Admin (el
+  aguinaldo no le ofrece los enlaces a la planilla). «Ingresos variables de los colaboradores» = las mismas comisiones
+  (Elías). El aguinaldo no tiene nada que editar: sale del libro de planilla. Lo que lo revertiría: abrirle también la
+  planilla, con el mismo mecanismo.
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 

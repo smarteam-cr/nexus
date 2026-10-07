@@ -8,6 +8,7 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import { puedePorPersona } from "@/lib/auth/salarios-por-persona";
 import { loadAguinaldo } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -21,7 +22,10 @@ export default async function FinanzasAguinaldoPage({
   searchParams: Promise<{ anio?: string }>;
 }) {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
+  // Super Admin, o la persona con «Aguinaldo» en su override de /team (2026-10-06: Dinia). Muestra lo que ganó cada uno.
+  if (!ctx || !(isCostosRole(ctx.role) || puedePorPersona(ctx.role, ctx.teamMember, { section: "aguinaldo", action: "read" }))) {
+    redirect("/clients");
+  }
 
   const hoyISO = crDateParts(new Date()).dateKey;
   const anioActual = Number(hoyISO.slice(0, 4));
@@ -37,7 +41,7 @@ export default async function FinanzasAguinaldoPage({
 
   return (
     <div className={SHELL_DEFAULT}>
-      <AguinaldoPanel initial={aguinaldo} anioActual={anioActual} />
+      <AguinaldoPanel initial={aguinaldo} anioActual={anioActual} verPlanilla={isCostosRole(ctx.role)} />
     </div>
   );
 }

@@ -44,6 +44,8 @@ interface Props {
   disabled?: boolean;
   /** Tooltip del punto de pin (ej. "Pineado para este usuario"). */
   pinLabel?: string;
+  /** Plantillas por ROL: sin las secciones que solo se dan a una persona (`soloPorPersona`, salarios). */
+  sinSoloPorPersona?: boolean;
 }
 
 export default function PermissionMatrix({
@@ -52,12 +54,14 @@ export default function PermissionMatrix({
   onResetSection,
   disabled = false,
   pinLabel = "Distinto de lo heredado",
+  sinSoloPorPersona = false,
 }: Props) {
+  const secciones = PERMISSION_SECTIONS.filter((s) => !(sinSoloPorPersona && "soloPorPersona" in s && s.soloPorPersona));
   const interactive = !!onToggle && !disabled;
   /** Cómo arranca cada área: abiertas las mezcladas AL MONTAR. Una vez; después no se recalcula. */
   const [alInicio] = useState(() =>
     areasAbiertasAlInicio(
-      PERMISSION_SECTIONS.map((section) => {
+      secciones.map((section) => {
         const actions = section.actions.filter((a) => a.enforced);
         return {
           key: section.key,
@@ -72,7 +76,7 @@ export default function PermissionMatrix({
 
   return (
     <div className="divide-y divide-line rounded-lg border border-line">
-      {PERMISSION_SECTIONS.map((section) => {
+      {secciones.map((section) => {
         const actions = section.actions.filter((a) => a.enforced);
         if (actions.length === 0) return null;
         const sectionPinned = actions.some((a) => getCell(section.key, a.key).pinned);
