@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   COLUMNA,
   COLUMNAS,
+  COLUMNAS_DE_ENTRADA,
+  COLUMNAS_TERMINADAS,
   describirNavegador,
   esRevisorDeFeedback,
   esUrgente,
   estadoParaElAutor,
+  estaTerminada,
   lineaDeIdeas,
+  nombreDesdeElReporte,
   numeroDeReporte,
   pedidoAplica,
   TIPO,
@@ -24,9 +28,16 @@ describe("los tipos y las columnas", () => {
     }
   });
 
-  it("la hoja de ruta tiene cuatro columnas en orden, y la de entrada es «Por decidir»", () => {
-    expect([...COLUMNAS]).toEqual(["decidir", "planeado", "curso", "listo"]);
+  it("la hoja de ruta tiene cinco columnas en orden, y la de entrada es «Por decidir»", () => {
+    expect([...COLUMNAS]).toEqual(["decidir", "planeado", "curso", "listo", "subido"]);
     expect(COLUMNA.decidir.nombre).toBe("Por decidir");
+    expect(COLUMNA.subido.nombre).toBe("En Nexus");
+  });
+
+  it("«Listo» y «En Nexus» están terminadas: un tema nuevo no entra ahí", () => {
+    expect([...COLUMNAS_TERMINADAS]).toEqual(["listo", "subido"]);
+    expect([...COLUMNAS_DE_ENTRADA]).toEqual(["decidir", "planeado", "curso"]);
+    expect(estaTerminada("curso")).toBe(false);
   });
 
   it("tuteo en todo lo que lee el equipo (el detector por FORMA de lib/ui/voseo.ts, no una lista cerrada)", () => {
@@ -57,6 +68,35 @@ describe("quién revisa y qué es urgente", () => {
   });
 });
 
+describe("el nombre que se propone para el tema de un reporte", () => {
+  it("es la primera frase, sin el punto", () => {
+    expect(nombreDesdeElReporte("La etapa quedó atrás. No la puedo cambiar desde la ficha.")).toBe("La etapa quedó atrás");
+  });
+
+  it("es la primera línea con texto", () => {
+    expect(nombreDesdeElReporte("\n  falta el botón de exportar\nlo necesito para el viernes")).toBe("Falta el botón de exportar");
+  });
+
+  it("sin comillas, con mayúscula y respetando la pregunta", () => {
+    expect(nombreDesdeElReporte("«no se entiende el botón»")).toBe("No se entiende el botón");
+    expect(nombreDesdeElReporte("¿se puede exportar a Excel? gracias")).toBe("¿Se puede exportar a Excel?");
+  });
+
+  it("una frase larga se corta en una palabra y lo dice con «…»", () => {
+    const n = nombreDesdeElReporte(
+      "Necesito poder editar al 1200% los montos de salarios porque me equivoque y no me dio la oportunidad de volver a cambiar",
+    );
+    expect(n.endsWith("…")).toBe(true);
+    expect(n.length).toBeLessThanOrEqual(81);
+    expect(n.startsWith("Necesito poder editar al 1200% los montos de salarios")).toBe(true);
+    expect(n).not.toMatch(/\s…$/);
+  });
+
+  it("alcanza para el mínimo del servidor (3 letras)", () => {
+    expect(nombreDesdeElReporte("No anda el filtro").length).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe("el estado que ve quien reportó sigue al tema", () => {
   it("sin decidir es «Recibido»", () => {
     expect(estadoParaElAutor({ estado: "sin_revisar" }).texto).toBe("Recibido");
@@ -66,9 +106,9 @@ describe("el estado que ve quien reportó sigue al tema", () => {
     expect(estadoParaElAutor({ estado: "en_hoja", tema: { columna: "decidir" } }).texto).toBe("En la hoja de ruta");
     expect(estadoParaElAutor({ estado: "en_hoja", tema: { columna: "planeado" } }).texto).toBe("Planeado");
     expect(estadoParaElAutor({ estado: "en_hoja", tema: { columna: "curso" } }).texto).toBe("En curso");
-    const listo = estadoParaElAutor({ estado: "en_hoja", tema: { columna: "listo" } });
-    expect(listo.texto).toBe("Listo");
-    expect(listo.verde).toBe(true);
+    // Hecho todavía no es poder usarlo: verde recién cuando se subió.
+    expect(estadoParaElAutor({ estado: "en_hoja", tema: { columna: "listo" } })).toMatchObject({ texto: "Hecho, en la próxima subida", verde: false });
+    expect(estadoParaElAutor({ estado: "en_hoja", tema: { columna: "subido" } })).toMatchObject({ texto: "Ya está en Nexus", verde: true });
   });
 
   it("respondido es verde; no se hará no lo es", () => {

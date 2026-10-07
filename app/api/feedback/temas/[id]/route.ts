@@ -3,8 +3,8 @@
  *
  * GET: lo que muestra el panel del tema en la hoja de ruta: sus reportes y el prompt para Claude Code
  * (lib/feedback/prompt.ts).
- * PATCH: moverlo de columna o cambiarle el nombre. Al pasarlo a «En curso» o a «Listo», a cada persona que
- * lo pidió le llega el aviso.
+ * PATCH: moverlo de columna o cambiarle el nombre. Al avanzar a «En curso», «Listo» o «En Nexus», a cada persona
+ * que lo pidió le llega el aviso.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { errorDeValidacion, guardRevisorDeFeedback, leerCuerpo, respuestaDeError, sinTablas } from "@/lib/feedback/http";

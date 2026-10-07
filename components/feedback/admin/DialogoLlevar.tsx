@@ -3,8 +3,10 @@
 /**
  * «Llevar a la hoja de ruta»: el diálogo que decide a qué tema va un reporte.
  *
- * Dos caminos: sumarlo a un tema que ya existe (el que se parece va primero) o crear uno nuevo, eligiendo
- * en qué columna entra (por defecto «Por decidir»). Se puede avisar o no a quien reportó.
+ * Dos caminos: su propio tema (lo de siempre: cada reporte tiene su pantalla y su prompt) o, si pide LO MISMO que
+ * otro, sumarlo a ese tema. Abre en «su propio tema», con el nombre propuesto desde el reporte; abre en «con otro»
+ * solo si hay un tema que se le parece (2026-10-07, pedido de Elías: «Finanzas» había juntado dos pedidos distintos
+ * porque el diálogo abría ahí apenas existía un tema). Se puede avisar o no a quien reportó.
  *
  * Lo mandado desde la escala lleva además la fila de «Cambios pendientes» del manual (qué cambiaría,
  * el caso y qué decisión con el cliente cambiaría): viene propuesta desde el reporte y se corrige acá.
@@ -15,10 +17,9 @@ import { Segmentado } from "@/components/ui/Segmentado";
 import { cn } from "@/lib/cn";
 import type { DetalleDeEscala } from "@/lib/feedback/escala";
 import type { ReporteDeBandeja, TemaResumen } from "@/lib/feedback/queries";
-import { COLUMNA, COLUMNAS, type Columna } from "@/lib/feedback/reglas";
+import { COLUMNA, COLUMNAS_DE_ENTRADA, nombreDesdeElReporte, type Columna } from "@/lib/feedback/reglas";
 
 type Modo = "existente" | "nuevo";
-const COLUMNAS_DE_ENTRADA = COLUMNAS.filter((c) => c !== "listo");
 
 const TONO: Record<string, string> = { muted: "text-fg-muted", warning: "text-warning", brand: "text-brand", success: "text-success" };
 
@@ -38,10 +39,10 @@ export default function DialogoLlevar({
   onCerrar: () => void;
   onLlevar: (body: unknown, exito: string) => Promise<void>;
 }) {
-  const [modo, setModo] = useState<Modo>(temas.length ? "existente" : "nuevo");
+  const [modo, setModo] = useState<Modo>(sugerido && temas.some((t) => t.id === sugerido) ? "existente" : "nuevo");
   const [temaId, setTemaId] = useState<string | null>(sugerido);
   const [busqueda, setBusqueda] = useState("");
-  const [titulo, setTitulo] = useState("");
+  const [titulo, setTitulo] = useState(() => nombreDesdeElReporte(reporte.cuerpo));
   const [columna, setColumna] = useState<Columna>("decidir");
   const [avisar, setAvisar] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -102,8 +103,13 @@ export default function DialogoLlevar({
           valor={modo}
           onCambio={setModo}
           opciones={[
-            { clave: "existente", etiqueta: "Sumarlo a un tema", deshabilitada: temas.length === 0, title: temas.length === 0 ? "Todavía no hay temas" : undefined },
-            { clave: "nuevo", etiqueta: "Crear un tema nuevo" },
+            { clave: "nuevo", etiqueta: "Su propio tema" },
+            {
+              clave: "existente",
+              etiqueta: "Con otro que pide lo mismo",
+              deshabilitada: temas.length === 0,
+              title: temas.length === 0 ? "Todavía no hay temas" : undefined,
+            },
           ]}
         />
 
@@ -153,7 +159,10 @@ export default function DialogoLlevar({
               })}
               {ordenados.length === 0 && <p className="text-[13px] text-fg-muted">Ningún tema con ese nombre.</p>}
             </div>
-            <p className="text-xs text-fg-muted">El reporte toma la columna del tema: si el tema pasa a «Listo», a {nombre} le llega el aviso.</p>
+            <p className="text-xs text-fg-muted">
+              Júntalo solo si pide lo mismo: el tema tiene una columna y un prompt para todos sus reportes, y lo que le pasa al tema
+              le llega a {nombre} en «Para ti».
+            </p>
           </>
         ) : (
           <>
@@ -165,7 +174,9 @@ export default function DialogoLlevar({
                 placeholder="Lo que se va a hacer, en pocas palabras"
                 className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none"
               />
-              <span className="block text-xs text-fg-muted">Escríbelo como lo que se va a hacer, no como el problema: «Corregir la etapa desde la ficha».</span>
+              <span className="block text-xs text-fg-muted">
+                Viene del reporte: escríbelo como lo que se va a hacer, no como el problema («Corregir la etapa desde la ficha»).
+              </span>
             </label>
             <div className="space-y-1.5">
               <p className="text-[13px] font-semibold text-fg">En qué columna entra</p>

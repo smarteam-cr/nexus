@@ -10,7 +10,7 @@ import { prisma } from "@/lib/db/prisma";
 import { avisar } from "@/lib/para-ti/avisos-server";
 import { anclarALaEscala, conLaFilaDelManual } from "./escala-server";
 import { ErrorDeFeedback } from "./http";
-import { COLUMNA, esUrgente, estadoParaElAutor, numeroDeReporte, TIPO, type Columna } from "./reglas";
+import { COLUMNAS, esUrgente, estadoParaElAutor, estaTerminada, numeroDeReporte, TIPO, type Columna } from "./reglas";
 import type { CrearReporte, Decidir } from "./schema";
 
 const recorte = (t: string, max = 90) => (t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t);
@@ -143,11 +143,57 @@ export async function responder(reporteId: string, quien: { email: string; esRev
 export async function decidir(reporteId: string, d: Decidir, revisorEmail: string) {
   const r = await prisma.feedbackReporte.findUnique({
     where: { id: reporteId },
-    select: { id: true, autorEmail: true, pantalla: true, cuerpo: true, estado: true, escalaAncla: true, escala: true },
+    select: { id: true, autorEmail: true, pantalla: true, cuerpo: true, estado: true, escalaAncla: true, escala: true, temaId: true },
   });
   if (!r) throw new ErrorDeFeedback("Ese reporte no existe.", 404);
   const ahora = new Date();
   const revisor = revisorEmail.toLowerCase();
+
+  if (d.accion === "separar") {
+    const temaId = r.temaId;
+    if (!temaId) throw new ErrorDeFeedback("Ese reporte ya no está en un tema.", 409);
+    const nuevo = await prisma.$transaction(async (tx) => {
+      // Dos separaciones a la vez no pueden dejar al tema viejo sin reportes.
+      await tx.$queryRaw`SELECT id FROM "FeedbackTema" WHERE id = ${temaId} FOR UPDATE`;
+      const viejo = await tx.feedbackTema.findUnique({
+        where: { id: temaId },
+        select: {
+          id: true,
+          columna: true,
+          origen: true,
+          origenReporteId: true,
+          movidoAt: true,
+          listoAt: true,
+          reportes: { select: { id: true, pantalla: true }, orderBy: { createdAt: "asc" } },
+        },
+      });
+      if (!viejo) throw new ErrorDeFeedback("Ese tema ya no existe.", 404);
+      if (!viejo.reportes.some((x) => x.id === r.id)) throw new ErrorDeFeedback("Ese reporte ya no está en ese tema.", 409);
+      if (viejo.reportes.length < 2) throw new ErrorDeFeedback("Es el único reporte del tema: ya está en su propio tema.", 409);
+      // Misma columna que el tema del que sale: quien lo reportó ve el mismo estado y no le llega ningún aviso.
+      const t = await tx.feedbackTema.create({
+        data: {
+          titulo: d.titulo,
+          pantalla: r.pantalla,
+          columna: viejo.columna,
+          origen: "reporte",
+          origenReporteId: r.id,
+          creadoPorEmail: revisor,
+          movidoAt: viejo.movidoAt ?? ahora,
+          listoAt: viejo.listoAt,
+        },
+        select: { id: true, titulo: true },
+      });
+      await tx.feedbackReporte.update({ where: { id: r.id }, data: { temaId: t.id } });
+      // Si el tema había salido de este reporte, pasa a decir de dónde sale el que queda (el más viejo).
+      if (viejo.origen === "reporte" && viejo.origenReporteId === r.id) {
+        const queda = viejo.reportes.find((x) => x.id !== r.id)!;
+        await tx.feedbackTema.update({ where: { id: viejo.id }, data: { origenReporteId: queda.id, pantalla: queda.pantalla } });
+      }
+      return t;
+    });
+    return { estado: "en_hoja", temaId: nuevo.id, titulo: nuevo.titulo };
+  }
 
   if (d.accion === "deshacer") {
     await prisma.feedbackReporte.update({
@@ -181,7 +227,7 @@ export async function decidir(reporteId: string, d: Decidir, revisorEmail: strin
             origenReporteId: r.id,
             creadoPorEmail: revisor,
             movidoAt: ahora,
-            listoAt: nuevo.columna === "listo" ? ahora : null,
+            listoAt: estaTerminada(nuevo.columna) ? ahora : null,
           },
           select: { id: true, titulo: true, columna: true },
         });
@@ -267,43 +313,73 @@ export async function crearTema(
       aNombreDe: datos.aNombreDe ?? null,
       creadoPorEmail: revisorEmail.toLowerCase(),
       movidoAt: ahora,
-      listoAt: datos.columna === "listo" ? ahora : null,
+      listoAt: estaTerminada(datos.columna) ? ahora : null,
     },
     select: { id: true },
   });
 }
 
-/** Mover o editar un tema. Al pasar a «Listo», a cada persona que lo pidió le llega el aviso. */
+/** Lo que le llega a quien pidió un tema cuando el tema avanza a esa columna (2026-10-07). */
+const AVISO_AL_AVANZAR: Partial<Record<Columna, (tema: string, pantalla: string) => { titulo: string; detalle: string }>> = {
+  curso: (tema, pantalla) => ({ titulo: `En curso: ${tema}`, detalle: `Lo que pediste sobre «${pantalla}» se está haciendo.` }),
+  listo: (tema, pantalla) => ({
+    titulo: `Hecho: ${tema}`,
+    detalle: `Lo que pediste sobre «${pantalla}» ya está hecho. Llega con la próxima subida de Nexus: te avisamos cuando lo puedas probar.`,
+  }),
+  subido: (tema, pantalla) => ({
+    titulo: `Ya puedes probarlo: ${tema}`,
+    detalle: `Lo que pediste sobre «${pantalla}» ya está en Nexus. Pruébalo y, si algo no quedó como esperabas, cuéntalo desde Feedback.`,
+  }),
+};
+
+/**
+ * Mover o editar un tema. Cuando AVANZA a «En curso», «Listo» o «En Nexus», a cada persona que lo pidió le llega lo
+ * suyo: que se está haciendo, que ya está hecho y llega con la próxima subida, o que ya lo puede probar. Volver a una
+ * columna anterior no avisa.
+ */
 export async function cambiarTema(id: string, cambios: { columna?: Columna; titulo?: string; detalle?: string }, revisorEmail: string) {
-  const t = await prisma.feedbackTema.findUnique({ where: { id }, select: { id: true, titulo: true, columna: true } });
+  const t = await prisma.feedbackTema.findUnique({ where: { id }, select: { id: true, titulo: true, columna: true, listoAt: true } });
   if (!t) throw new ErrorDeFeedback("Ese tema ya no existe.", 404);
   const ahora = new Date();
-  const mueve = !!cambios.columna && cambios.columna !== t.columna;
+  const nueva = cambios.columna;
+  const mueve = !!nueva && nueva !== t.columna;
+  // `listoAt` es cuándo quedó hecho: al subirlo se conserva; al volver a una columna abierta se borra.
+  const listoAt = nueva && estaTerminada(nueva) ? (estaTerminada(t.columna) && t.listoAt ? t.listoAt : ahora) : null;
   await prisma.feedbackTema.update({
     where: { id },
     data: {
       ...(cambios.titulo ? { titulo: cambios.titulo } : {}),
       ...(cambios.detalle !== undefined ? { detalle: cambios.detalle || null } : {}),
-      ...(mueve ? { columna: cambios.columna, movidoAt: ahora, listoAt: cambios.columna === "listo" ? ahora : null } : {}),
+      ...(mueve ? { columna: nueva, movidoAt: ahora, listoAt } : {}),
     },
   });
-  if (mueve && (cambios.columna === "listo" || cambios.columna === "curso")) {
+  const avanza = mueve && COLUMNAS.indexOf(nueva) > COLUMNAS.indexOf(t.columna as Columna);
+  const aviso = avanza ? AVISO_AL_AVANZAR[nueva] : undefined;
+  if (aviso) {
     const reportes = await prisma.feedbackReporte.findMany({ where: { temaId: id }, select: { id: true, autorEmail: true, pantalla: true } });
-    const nombre = COLUMNA[cambios.columna].nombre;
     await Promise.all(
       reportes.map((r) =>
         avisar({
           para: r.autorEmail,
           tipo: "feedback.estado",
-          titulo: cambios.columna === "listo" ? `Ya está: ${cambios.titulo ?? t.titulo}` : `${nombre}: ${cambios.titulo ?? t.titulo}`,
-          detalle: cambios.columna === "listo" ? `Lo que pediste sobre «${r.pantalla}» ya está en Nexus.` : `Lo que pediste sobre «${r.pantalla}» se está haciendo.`,
+          ...aviso(cambios.titulo ?? t.titulo, r.pantalla),
           href: `/para-ti?feedback=${r.id}`,
           actorEmail: revisorEmail,
-          dedupeKey: `feedback.estado:${r.id}:${cambios.columna}:${ahora.getTime()}`,
+          dedupeKey: `feedback.estado:${r.id}:${nueva}:${ahora.getTime()}`,
         }),
       ),
     );
   }
+}
+
+/**
+ * «Ya se subió»: después de una subida, todo lo de «Listo» pasa a «En Nexus» y a cada persona que lo pidió le llega que
+ * ya lo puede probar. Uno por uno, con la misma regla que mover un tema a mano.
+ */
+export async function subirLoListo(revisorEmail: string): Promise<{ temas: number }> {
+  const listos = await prisma.feedbackTema.findMany({ where: { columna: "listo" }, select: { id: true }, orderBy: { createdAt: "asc" } });
+  for (const t of listos) await cambiarTema(t.id, { columna: "subido" }, revisorEmail);
+  return { temas: listos.length };
 }
 
 export async function crearPedidos(

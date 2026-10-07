@@ -651,8 +651,9 @@
 - **reporte** (`FeedbackReporte`): lo que alguien mandó, con su número (**F-128**), la dirección, el rol, el
   navegador, la versión, los errores de la pantalla y, si la hubo, la captura y sus **marcas** («Señalar algo»).
   Es **urgente** si es una falla que le frena el trabajo.
-- **tema de la hoja de ruta** (`FeedbackTema`): junta los reportes que piden lo mismo. Columnas: **Por decidir**
-  (la de entrada) · **Planeado** · **En curso** · **Listo**. Un reporte llega a un tema solo cuando dirección lo
+- **tema de la hoja de ruta** (`FeedbackTema`): una tarjeta de la hoja de ruta. Lo normal es un reporte por tema; junta varios solo si piden lo mismo, y un reporte que no pide lo mismo se separa en su propio tema. Columnas: **Por decidir**
+  (la de entrada) · **Planeado** · **En curso** · **Listo** (hecho, espera la próxima subida) · **En Nexus** (ya se subió:
+  quien lo pidió lo puede probar). Un reporte llega a un tema solo cuando dirección lo
   lleva desde la Bandeja; el estado que ve quien reportó sigue al tema.
 - **Encuestas** (pestaña de `/feedback`, se llamaba «Tiempos» hasta el 2026-10-06): todo lo que dirección le pregunta
   al equipo, en dos clases. **Tus preguntas**: las que escribe dirección (los **pedidos de opinión**), una tarjeta por

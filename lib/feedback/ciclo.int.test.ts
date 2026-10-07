@@ -1,15 +1,15 @@
 /**
  * lib/feedback/ciclo.int.test.ts — el ciclo entero de un reporte contra una base REAL.
  *
- * Reportar → llevarlo a la hoja de ruta con un tema nuevo → mover el tema a «Listo»: quien reportó lo ve
- * «Listo» (el estado sigue al tema), y nadie más que quien reportó o quien revisa puede abrirlo.
+ * Reportar → llevarlo a la hoja de ruta con un tema nuevo → «Listo» → «Ya se subió»: quien reportó lo ve «Hecho» y
+ * después «Ya está en Nexus» (el estado sigue al tema), y nadie más que quien reportó o quien revisa puede abrirlo.
  * Correr con la base local: `npm run test:int`.
  */
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { prisma } from "@/lib/db/prisma";
-import { cambiarTema, crearPedidos, crearReporte, decidir, marcarLeido, responder } from "./mutations";
+import { cambiarTema, crearPedidos, crearReporte, decidir, marcarLeido, responder, subirLoListo } from "./mutations";
 import { promptDeTema } from "./prompt";
 import { cuentasDeLasPestanas, datosDeBandeja, datosDeEncuestas, misReportes, reportesDelTema, reporteParaVer, temaParaElPrompt, temasDeLaHoja } from "./queries";
 
@@ -17,7 +17,7 @@ const AUTOR = { email: "marco@test.local", nombre: "Marco Vargas", rol: "CSE" };
 const REVISOR = "elias@test.local";
 
 describe("el ciclo de un reporte", () => {
-  it("reportar, llevar a un tema nuevo, pasarlo a Listo: quien reportó lo ve Listo", async () => {
+  it("reportar, llevar a un tema nuevo, Listo y «Ya se subió»: quien reportó lo ve hecho y después en Nexus", async () => {
     const r = await crearReporte(
       { tipo: "falla", cuerpo: "La etapa de Ferretería El Pino quedó atrás y no la puedo cambiar desde la ficha", meFrena: true, pantalla: "Clientes", ruta: "/clients" },
       AUTOR,
@@ -39,8 +39,21 @@ describe("el ciclo de un reporte", () => {
 
     await cambiarTema(tema.id, { columna: "listo" }, REVISOR);
     const mio = (await misReportes(AUTOR.email))[0];
-    expect(mio.estado.texto).toBe("Listo");
+    expect(mio.estado.texto).toBe("Hecho, en la próxima subida");
     expect(mio.nuevo).toBe(true);
+    const hecho = await prisma.aviso.findFirst({ where: { tipo: "feedback.estado", titulo: { startsWith: "Hecho:" } } });
+    expect(hecho?.detalle).toContain("próxima subida");
+
+    expect(await subirLoListo(REVISOR)).toEqual({ temas: 1 });
+    expect((await misReportes(AUTOR.email))[0].estado.texto).toBe("Ya está en Nexus");
+    expect((await temasDeLaHoja())[0]).toMatchObject({ columna: "subido" });
+    const probarlo = await prisma.aviso.findFirst({ where: { tipo: "feedback.estado", titulo: { startsWith: "Ya puedes probarlo:" } } });
+    expect(probarlo).not.toBeNull();
+
+    // Volver atrás no avisa.
+    const avisos = await prisma.aviso.count();
+    await cambiarTema(tema.id, { columna: "curso" }, REVISOR);
+    expect(await prisma.aviso.count()).toBe(avisos);
   });
 
   it("el prompt de un tema trae sus reportes, con la ruta sin ids y sin el correo de nadie", async () => {
@@ -69,6 +82,33 @@ describe("el ciclo de un reporte", () => {
     expect(p).toContain("- Dirección: ¿Te pasa en todos?");
     expect(p).not.toContain("@test.local");
     expect(await temaParaElPrompt("no-existe")).toBeNull();
+  });
+
+  it("separar un reporte lo deja en su propio tema, en la misma columna y sin cambiarle el estado", async () => {
+    const otro = { email: "ana@test.local", nombre: "Ana Mora", rol: "CSE" };
+    const a = await crearReporte({ tipo: "mejora", cuerpo: "Poder desestimar un cobro", meFrena: false, pantalla: "Conciliación", ruta: "/cobranza" }, AUTOR);
+    const b = await crearReporte({ tipo: "falla", cuerpo: "No puedo corregir una quincena pagada", meFrena: false, pantalla: "Planilla", ruta: "/finanzas" }, otro);
+    await decidir(a.id, { accion: "llevar", nuevo: { titulo: "Finanzas", columna: "decidir" }, avisar: false }, REVISOR);
+    const [finanzas] = await temasDeLaHoja();
+    await decidir(b.id, { accion: "llevar", temaId: finanzas.id, avisar: false }, REVISOR);
+    await cambiarTema(finanzas.id, { columna: "curso" }, REVISOR);
+
+    // Sale el reporte del que nació el tema: el que queda pasa a ser su origen y su pantalla.
+    const avisosAntes = await prisma.aviso.count();
+    const hecho = await decidir(a.id, { accion: "separar", titulo: "Desestimar un cobro" }, REVISOR);
+    const temas = await temasDeLaHoja();
+    expect(temas).toHaveLength(2);
+    const propio = temas.find((t) => t.id === hecho.temaId)!;
+    expect(propio).toMatchObject({ titulo: "Desestimar un cobro", columna: "curso", pantalla: "Conciliación", reportes: 1 });
+    expect(propio.origenTexto).toContain(AUTOR.email);
+    const queda = temas.find((t) => t.id === finanzas.id)!;
+    expect(queda).toMatchObject({ columna: "curso", pantalla: "Planilla", reportes: 1 });
+    expect(queda.origenTexto).toContain(otro.email);
+    expect((await misReportes(AUTOR.email))[0].estado.texto).toBe("En curso");
+    expect(await prisma.aviso.count()).toBe(avisosAntes); // separar no le avisa a nadie
+
+    // El único reporte de un tema ya está en su propio tema.
+    await expect(decidir(b.id, { accion: "separar", titulo: "Corregir una quincena pagada" }, REVISOR)).rejects.toMatchObject({ status: 409 });
   });
 
   it("el panel de un tema lista sus reportes, con quién lo pidió y si le frena", async () => {

@@ -29,6 +29,8 @@ const SOLO_QUIEN_REVISA = [
   "app/api/feedback/[id]/decision/route.ts",
   "app/api/feedback/temas/route.ts",
   "app/api/feedback/temas/[id]/route.ts",
+  // «Ya se subió»: lo de «Listo» pasa a «En Nexus» (2026-10-07).
+  "app/api/feedback/temas/subir/route.ts",
   "app/api/feedback/pedidos/route.ts",
   // Los cambios de la escala en la hoja de ruta, con las columnas del manual (2026-10-05).
   "app/api/feedback/cambios-de-la-escala/route.ts",

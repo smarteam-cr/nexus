@@ -15,8 +15,10 @@ import { temaMasParecido } from "./parecidos";
 import { escalaParaPrompt, type ReporteParaPrompt, type TemaParaPrompt } from "./prompt";
 import {
   COLUMNA,
-  DIAS_DE_LISTO_A_LA_VISTA,
+  COLUMNAS_TERMINADAS,
+  DIAS_EN_NEXUS_A_LA_VISTA,
   esColumna,
+  estaTerminada,
   estadoParaElAutor,
   fechaCorta,
   TIPO,
@@ -306,7 +308,7 @@ export async function datosDeBandeja(): Promise<DatosDeBandeja> {
       },
     }),
     prisma.feedbackTema.findMany({
-      where: { columna: { not: "listo" } },
+      where: { columna: { notIn: [...COLUMNAS_TERMINADAS] } },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -397,9 +399,9 @@ function textoDeOrigen(
 }
 
 export async function temasDeLaHoja(): Promise<TemaDeHoja[]> {
-  const desdeListo = new Date(Date.now() - DIAS_DE_LISTO_A_LA_VISTA * 86400000);
+  const desdeQueSeSubio = new Date(Date.now() - DIAS_EN_NEXUS_A_LA_VISTA * 86400000);
   const temas = await prisma.feedbackTema.findMany({
-    where: { OR: [{ columna: { not: "listo" } }, { listoAt: { gte: desdeListo } }] },
+    where: { OR: [{ columna: { not: "subido" } }, { movidoAt: { gte: desdeQueSeSubio } }] },
     orderBy: { createdAt: "desc" },
     include: { reportes: { select: { autorEmail: true, meFrena: true, tipo: true, revisorLeyoAt: true, mensajes: ULTIMO_MENSAJE } } },
   });
@@ -416,12 +418,15 @@ export async function temasDeLaHoja(): Promise<TemaDeHoja[]> {
       const emails = [...new Set(t.reportes.map((r) => r.autorEmail.toLowerCase()))];
       const o = t.origenReporteId ? origenPorId.get(t.origenReporteId) : undefined;
       const columna = t.columna as Columna;
+      const avisados = emails.length ? ` · se avisó a ${emails.length} ${emails.length === 1 ? "persona" : "personas"}` : "";
       const pie =
-        columna === "listo" && t.listoAt
-          ? `Listo el ${fechaCorta(t.listoAt)} · se avisó a ${emails.length} ${emails.length === 1 ? "persona" : "personas"}`
-          : columna === "curso" && t.movidoAt
-            ? `En curso desde el ${fechaCorta(t.movidoAt)}`
-            : null;
+        columna === "subido" && t.movidoAt
+          ? `En Nexus desde el ${fechaCorta(t.movidoAt)}${avisados}`
+          : columna === "listo" && t.listoAt
+            ? `Hecho el ${fechaCorta(t.listoAt)} · falta subirlo`
+            : columna === "curso" && t.movidoAt
+              ? `En curso desde el ${fechaCorta(t.movidoAt)}`
+              : null;
       return {
         id: t.id,
         titulo: t.titulo,
@@ -585,7 +590,7 @@ export interface DatosDePersonas {
 }
 
 const RESUELTO = (r: { estado: string; tema: { columna: string } | null }) =>
-  r.estado === "respondido" || (r.estado === "en_hoja" && r.tema?.columna === "listo");
+  r.estado === "respondido" || (r.estado === "en_hoja" && !!r.tema && estaTerminada(r.tema.columna));
 
 export async function datosDePersonas(dias: number | null): Promise<DatosDePersonas> {
   const desde = dias ? new Date(Date.now() - dias * 86400000) : null;
@@ -770,7 +775,7 @@ export async function cuentasDeLasPestanas(): Promise<{ bandeja: number; hoja: n
       where: { estado: { in: ["respondido", "no_se_hara"] } },
       select: { autorEmail: true, revisorLeyoAt: true, mensajes: ULTIMO_MENSAJE },
     }),
-    prisma.feedbackTema.count({ where: { columna: { not: "listo" } } }),
+    prisma.feedbackTema.count({ where: { columna: { notIn: [...COLUMNAS_TERMINADAS] } } }),
   ]);
   return { bandeja: sinRevisar + cerrados.filter(teRespondio).length, hoja };
 }

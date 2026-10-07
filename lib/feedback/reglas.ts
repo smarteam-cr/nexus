@@ -9,7 +9,9 @@
  * · Un reporte NO es un tema. Llega a la hoja de ruta solo cuando una persona lo lleva desde la bandeja:
  *   nada entra solo (Elías, 2026-10-04: «¿cómo llega un ítem ahí?»).
  * · Un tema nuevo entra en «Por decidir», salvo que al crearlo se elija otra columna.
- * · El estado que ve quien reportó SIGUE AL TEMA: si el tema pasa a «Listo», su reporte también.
+ * · El estado que ve quien reportó SIGUE AL TEMA: si el tema pasa a «En Nexus», su reporte también.
+ * · «Listo» es hecho y espera la próxima subida; «En Nexus» es ya subido (2026-10-07, Elías: «cuando se ponga en listo,
+ *   que ya está el cambio hecho y en la próxima subida se agregará; cuando se suba, que ya se aplicó y puede probarlo»).
  * · Revisa el feedback el rol SUPER_ADMIN («la parte que voy a ver yo, o los super admins»).
  */
 
@@ -59,8 +61,8 @@ export function esTipoDeFeedback(x: unknown): x is TipoDeFeedback {
 export const ESTADOS_DE_REPORTE = ["sin_revisar", "en_hoja", "respondido", "no_se_hara"] as const;
 export type EstadoDeReporte = (typeof ESTADOS_DE_REPORTE)[number];
 
-/** Las columnas de la hoja de ruta, en orden. */
-export const COLUMNAS = ["decidir", "planeado", "curso", "listo"] as const;
+/** Las columnas de la hoja de ruta, en orden. «Listo» = hecho, espera la próxima subida; «En Nexus» = ya se subió. */
+export const COLUMNAS = ["decidir", "planeado", "curso", "listo", "subido"] as const;
 export type Columna = (typeof COLUMNAS)[number];
 
 export interface DefinicionDeColumna {
@@ -82,7 +84,13 @@ export const COLUMNA: Record<Columna, DefinicionDeColumna> = {
   curso: { nombre: "En curso", ayuda: "Los estás haciendo.", marca: "●", tono: "brand" },
   listo: {
     nombre: "Listo",
-    ayuda: "Ya están en producción. Se avisó a quien los pidió.",
+    ayuda: "Ya están hechos y esperan la próxima subida. Quien los pidió sabe que llegan.",
+    marca: "✓",
+    tono: "brand",
+  },
+  subido: {
+    nombre: "En Nexus",
+    ayuda: "Ya se subieron: quien los pidió los puede probar.",
     marca: "✓",
     tono: "success",
   },
@@ -92,14 +100,25 @@ export function esColumna(x: unknown): x is Columna {
   return typeof x === "string" && (COLUMNAS as readonly string[]).includes(x);
 }
 
+/** Ya no se hace: hecho («Listo») o subido («En Nexus»). No lleva prompt ni cuenta como pendiente. */
+export function estaTerminada(c: string): boolean {
+  return c === "listo" || c === "subido";
+}
+
+/** Las columnas terminadas, para las consultas (`notIn`). */
+export const COLUMNAS_TERMINADAS: readonly Columna[] = COLUMNAS.filter(estaTerminada);
+
+/** Donde entra un tema nuevo: nunca ya hecho. */
+export const COLUMNAS_DE_ENTRADA: readonly Columna[] = COLUMNAS.filter((c) => !estaTerminada(c));
+
 /** De dónde salió un tema. */
 export const ORIGENES_DE_TEMA = ["reporte", "sugerencia", "mano"] as const;
 export type OrigenDeTema = (typeof ORIGENES_DE_TEMA)[number];
 
 export const MAX_CUERPO = 4000;
 export const MAX_MARCAS = 3;
-/** Los «Listo» se muestran en la hoja de ruta durante este tiempo; después quedan en el historial. */
-export const DIAS_DE_LISTO_A_LA_VISTA = 28;
+/** Lo que ya está «En Nexus» se ve en la hoja de ruta durante este tiempo; «Listo» se ve siempre, hasta que se sube. */
+export const DIAS_EN_NEXUS_A_LA_VISTA = 28;
 
 /** Revisa el feedback (bandeja, hoja de ruta, personas) el rol SUPER_ADMIN. */
 export function esRevisorDeFeedback(role: string | null | undefined): boolean {
@@ -109,6 +128,28 @@ export function esRevisorDeFeedback(role: string | null | undefined): boolean {
 /** El número que se cita: «F-128». */
 export function numeroDeReporte(n: number): string {
   return `F-${n}`;
+}
+
+/** El largo del nombre de tema que se propone desde un reporte. */
+const LARGO_DEL_NOMBRE = 80;
+
+/**
+ * El nombre que se propone para el tema propio de un reporte (2026-10-07): su primera frase, sin comillas y cortada en
+ * una palabra. Es un punto de partida: quien revisa lo reescribe como lo que se va a hacer.
+ */
+export function nombreDesdeElReporte(cuerpo: string): string {
+  const linea = cuerpo.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? "";
+  const frase = (linea.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? linea)
+    .replace(/^[«"“]+/, "")
+    .replace(/[»"”]+$/, "")
+    .replace(/\.+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const mayuscula = (s: string) => s.replace(/^([¿¡]?)(\p{Ll})/u, (_, signo: string, letra: string) => signo + letra.toUpperCase());
+  if (frase.length <= LARGO_DEL_NOMBRE) return mayuscula(frase);
+  const espacio = frase.lastIndexOf(" ", LARGO_DEL_NOMBRE);
+  const corte = espacio > LARGO_DEL_NOMBRE / 4 ? frase.slice(0, espacio) : frase.slice(0, LARGO_DEL_NOMBRE);
+  return `${mayuscula(corte.replace(/[\s,;:]+$/, ""))}…`;
 }
 
 /**
@@ -128,7 +169,7 @@ export interface EstadoVisible {
   texto: string;
   marca: "○" | "●" | "✓" | "✕";
   tono: "muted" | "warning" | "brand" | "success";
-  /** Verde = cerrado bien (listo o respondido). */
+  /** Verde = cerrado bien (ya en Nexus o respondido). */
   verde: boolean;
 }
 
@@ -139,7 +180,8 @@ export interface EstadoVisible {
 export function estadoParaElAutor(r: { estado: string; tema?: { columna: string } | null }): EstadoVisible {
   if (r.estado === "en_hoja" && r.tema && esColumna(r.tema.columna)) {
     const c = r.tema.columna;
-    if (c === "listo") return { texto: "Listo", marca: "✓", tono: "success", verde: true };
+    if (c === "subido") return { texto: "Ya está en Nexus", marca: "✓", tono: "success", verde: true };
+    if (c === "listo") return { texto: "Hecho, en la próxima subida", marca: "✓", tono: "brand", verde: false };
     if (c === "curso") return { texto: "En curso", marca: "●", tono: "brand", verde: false };
     if (c === "planeado") return { texto: "Planeado", marca: "●", tono: "warning", verde: false };
     return { texto: "En la hoja de ruta", marca: "○", tono: "muted", verde: false };

@@ -105,7 +105,7 @@ const PASOS: readonly { pestana: Pestana; paso: PasoSinAccion; tambien?: AccionD
     paso: {
       ancla: "feedback.hoja.tablero",
       titulo: "La hoja de ruta",
-      texto: "Cada tema junta los reportes que piden lo mismo, en cuatro columnas: Por decidir, Planeado, En curso y Listo. Arriba en cada columna, lo que pidieron más personas.",
+      texto: "Cada tema pasa por Por decidir, Planeado, En curso, Listo (hecho, espera la próxima subida) y En Nexus (ya se subió). Arriba en cada columna, lo que pidieron más personas.",
       lado: "top",
     },
   },
@@ -115,7 +115,7 @@ const PASOS: readonly { pestana: Pestana; paso: PasoSinAccion; tambien?: AccionD
     paso: {
       ancla: "feedback.hoja.tarjeta",
       titulo: "Arrastra un tema para cambiarlo de columna",
-      texto: "Al pasarlo a «En curso» o a «Listo», a quien lo pidió le llega el aviso. Pasarlo a «Listo» pide confirmación.",
+      texto: "A quien lo pidió le llega cada paso: que se está haciendo, que llega con la próxima subida y que ya lo puede probar. «Listo» y «En Nexus» piden confirmación.",
       lado: "right-start",
     },
   },
@@ -131,11 +131,21 @@ const PASOS: readonly { pestana: Pestana; paso: PasoSinAccion; tambien?: AccionD
   },
   {
     pestana: "hoja",
+    tambien: tema(""),
+    paso: {
+      ancla: "feedback.hoja.subir",
+      titulo: "Después de cada subida",
+      texto: "Cuando la subida ya está en producción, «Ya se subió» pasa todo lo de «Listo» a «En Nexus» y a cada persona le llega que ya lo puede probar.",
+      lado: "bottom-end",
+    },
+  },
+  {
+    pestana: "hoja",
     tambien: tema("primero"),
     paso: {
       ancla: "feedback.hoja.tema",
       titulo: "El tema abierto",
-      texto: "Qué pide, dónde se nota, sus reportes con la conversación y su columna. «Generar prompt» arma el pedido para Claude Code con todo lo que juntó.",
+      texto: "Qué pide, dónde se nota, su columna y sus reportes. Cada reporte abierto tiene su propio prompt, y si no pide lo mismo que el resto, se separa en su propio tema.",
       lado: "left-start",
     },
   },

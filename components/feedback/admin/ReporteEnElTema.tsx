@@ -6,34 +6,49 @@
  * Lo que está en la hoja de ruta salió de la Bandeja: acá se ve entero, con las MISMAS piezas que la Bandeja
  * (DetalleDelReporte.tsx): lo que se leía en la escala, la captura con sus marcas, lo que se mandó con el
  * reporte y la conversación, donde se le contesta a quien lo mandó. Abrirlo lo deja leído (GET /api/feedback/[id]).
- * «Devolver a la Bandeja» lo saca del tema y lo vuelve a «Sin revisar», para decidir de nuevo.
+ *
+ * Cada reporte tiene su propio «Generar prompt» (su pantalla, sus marcas, su conversación), aunque el tema junte
+ * varios, y si no pide lo mismo que el resto se separa en su propio tema, en la misma columna (2026-10-07, pedido de
+ * Elías). «Devolver a la Bandeja» lo saca del tema y lo vuelve a «Sin revisar», para decidir de nuevo.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
+import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
+import { promptDeReporte, reporteParaPromptDesdeElDetalle } from "@/lib/feedback/prompt";
 import type { ReporteDetalle } from "@/lib/feedback/queries";
-import { haceCuanto, numeroDeReporte, TIPO } from "@/lib/feedback/reglas";
+import { COLUMNA, estaTerminada, haceCuanto, nombreDesdeElReporte, numeroDeReporte, TIPO, type Columna } from "@/lib/feedback/reglas";
 import { IconoDeTipo, Iniciales } from "../piezas";
 import { Captura, Conversacion, LoQueSeLeia, LoQueSeMando, postJson } from "./DetalleDelReporte";
 
 export default function ReporteEnElTema({
   id,
+  tema,
   teRespondio,
   onCambio,
   onDevuelto,
+  onPrompt,
 }: {
   id: string;
+  /** El tema en el que está: su columna decide si hay prompt, y con un solo reporte no hay nada que separar. */
+  tema: { titulo: string; columna: Columna; reportes: number };
   /** La persona te volvió a escribir: al abrirlo queda leído y la tarjeta del tema tiene que enterarse. */
   teRespondio: boolean;
   /** Algo cambió (una respuesta, una lectura): el tema y la hoja de ruta se vuelven a leer. */
   onCambio: () => void;
-  /** Salió del tema (volvió a la Bandeja). */
+  /** Salió del tema (volvió a la Bandeja o a su propio tema). */
   onDevuelto: () => void;
+  /** El prompt de este reporte, para el diálogo de la hoja de ruta (que es el que sabe cerrarse con Esc). */
+  onPrompt: (sobre: string, texto: string) => void;
 }) {
   const toast = useToast();
   const [detalle, setDetalle] = useState<ReporteDetalle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [devolviendo, setDevolviendo] = useState(false);
+  /** El nombre del tema propio mientras se separa; null = no se está separando. */
+  const [separando, setSeparando] = useState<string | null>(null);
+  const [guardandoSeparar, setGuardandoSeparar] = useState(false);
+  const separable = tema.reportes >= 2;
 
   const cargar = useCallback(async () => {
     try {
@@ -79,6 +94,21 @@ export default function ReporteEnElTema({
       return;
     }
     toast.success("Volvió a la Bandeja, en «Sin revisar».");
+    onDevuelto();
+  };
+
+  const separar = async () => {
+    const titulo = separando?.trim() ?? "";
+    if (titulo.length < 3 || guardandoSeparar) return;
+    setGuardandoSeparar(true);
+    const r = await postJson(`/api/feedback/${id}/decision`, { accion: "separar", titulo });
+    setGuardandoSeparar(false);
+    if (!r.ok) {
+      toast.error(r.error ?? "No se pudo separar.");
+      return;
+    }
+    setSeparando(null);
+    toast.success(`Quedó en su propio tema: «${titulo}», en «${COLUMNA[tema.columna].nombre}».`);
     onDevuelto();
   };
 
@@ -130,6 +160,23 @@ export default function ReporteEnElTema({
         </div>
       )}
 
+      {detalle && !estaTerminada(tema.columna) && (
+        <div className="space-y-1.5">
+          <p className={ROTULO_DEL_SISTEMA}>Para Claude Code</p>
+          <button
+            type="button"
+            onClick={() => onPrompt(numeroDeReporte(detalle.numero), promptDeReporte(reporteParaPromptDesdeElDetalle(detalle)))}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3.5 py-2 text-[13px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+              <path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 6l-3 12" />
+            </svg>
+            Generar prompt de este reporte
+          </button>
+          <p className="text-xs text-fg-muted">Solo lo que pidió esta persona, en su pantalla, con sus marcas y la conversación.</p>
+        </div>
+      )}
+
       {detalle?.escala && <LoQueSeLeia detalle={detalle} />}
       <Captura detalle={detalle} />
       <LoQueSeMando detalle={detalle} />
@@ -147,16 +194,71 @@ export default function ReporteEnElTema({
       )}
 
       {detalle && (
-        <div className="space-y-1 border-t border-line pt-4">
-          <button
-            type="button"
-            disabled={devolviendo}
-            onClick={() => void devolver()}
-            className="rounded-lg border border-line bg-surface px-3 py-[7px] text-[13px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
-          >
-            {devolviendo ? "Devolviendo…" : "Devolver a la Bandeja"}
-          </button>
-          <p className="text-xs text-fg-muted">Sale de este tema y vuelve a «Sin revisar», para decidir de nuevo qué hacer con él.</p>
+        <div className="space-y-4 border-t border-line pt-4">
+          {separable && (
+            <div className="space-y-1.5">
+              {separando === null ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSeparando(nombreDesdeElReporte(detalle.cuerpo))}
+                    className="rounded-lg border border-line bg-surface px-3 py-[7px] text-[13px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg"
+                  >
+                    Separarlo en su propio tema
+                  </button>
+                  <p className="text-xs text-fg-muted">
+                    Si no pide lo mismo que el resto de «{tema.titulo}». Queda en «{COLUMNA[tema.columna].nombre}», como ahora: a quien lo
+                    pidió no le cambia nada.
+                  </p>
+                </>
+              ) : (
+                <div className="space-y-2 rounded-lg border border-line bg-surface-muted px-3 py-3">
+                  <label className="block space-y-1.5">
+                    <span className="block text-[13px] font-semibold text-fg">Nombre del tema nuevo</span>
+                    <input
+                      autoFocus
+                      value={separando}
+                      onChange={(e) => setSeparando(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void separar();
+                        if (e.key === "Escape") {
+                          // Esc cierra solo esto: no vuelve al tema ni cierra el panel.
+                          e.stopPropagation();
+                          setSeparando(null);
+                        }
+                      }}
+                      className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-brand focus:outline-none"
+                    />
+                    <span className="block text-xs text-fg-muted">Viene del reporte: escríbelo como lo que se va a hacer.</span>
+                  </label>
+                  <div className="flex items-center justify-end gap-2">
+                    <button type="button" onClick={() => setSeparando(null)} className="rounded px-2.5 py-1.5 text-[13px] text-fg-muted hover:text-fg">
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={separando.trim().length < 3 || guardandoSeparar}
+                      onClick={() => void separar()}
+                      className="rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-semibold text-fg transition-colors hover:bg-surface-hover disabled:opacity-50"
+                    >
+                      {guardandoSeparar ? "Separando…" : "Separarlo"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="space-y-1">
+            <button
+              type="button"
+              disabled={devolviendo}
+              onClick={() => void devolver()}
+              className="rounded-lg border border-line bg-surface px-3 py-[7px] text-[13px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+            >
+              {devolviendo ? "Devolviendo…" : "Devolver a la Bandeja"}
+            </button>
+            <p className="text-xs text-fg-muted">Sale de este tema y vuelve a «Sin revisar», para decidir de nuevo qué hacer con él.</p>
+          </div>
         </div>
       )}
     </div>

@@ -73,6 +73,8 @@ export const Decidir = z.discriminatedUnion("accion", [
   z.object({ accion: z.literal("responder"), respuesta: texto(MAX_CUERPO).min(1, "Escribe la respuesta.") }),
   z.object({ accion: z.literal("no_se_hara"), motivo: texto(600).min(3, "Escribe el motivo: la persona lo ve.") }),
   z.object({ accion: z.literal("deshacer") }),
+  /** Sacar un reporte del tema en el que está y dejarlo en un tema propio, en la misma columna (2026-10-07). */
+  z.object({ accion: z.literal("separar"), titulo: texto(160).min(3, "Ponle un nombre al tema.") }),
 ]);
 export type Decidir = z.infer<typeof Decidir>;
 

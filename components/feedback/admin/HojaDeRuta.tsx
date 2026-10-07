@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * La Hoja de ruta de /feedback: los temas, en cuatro columnas (Por decidir · Planeado · En curso · Listo).
+ * La Hoja de ruta de /feedback: los temas, en cinco columnas (Por decidir · Planeado · En curso · Listo · En Nexus).
  * Diseño aprobado el 2026-10-06: «Hoja de ruta · rediseño» (Claude Design).
  *
  * Un tema junta los reportes que piden lo mismo. Llega desde la Bandeja («Llevar a la hoja de ruta»), porque
@@ -11,7 +11,9 @@
  * Un tema se mueve arrastrándolo (dnd-kit, la misma librería del Gantt y de Documentación): al pasar el mouse
  * aparecen los puntitos para agarrarlo. Arrastrar cambia la columna, no el orden. Un clic lo abre en el panel
  * de la derecha: ahí está todo el tema, su columna (el camino por teclado), «Generar prompt» y cada reporte.
- * Pasarlo a «Listo» le avisa a quien lo pidió que ya está en producción, así que pide confirmación.
+ * «Listo» es hecho y espera la próxima subida; «En Nexus», ya subido (2026-10-07). Pasar a cualquiera de las dos le avisa
+ * a quien lo pidió —que llega con la próxima subida, o que ya lo puede probar—, así que pide confirmación. Después de
+ * una subida, «Ya se subió» (en la columna «Listo») pasa todo lo de «Listo» a «En Nexus» de una vez.
  *
  * Desde el 2026-10-06 («Feedback · rediseño completo») el tema se abre en el panel de la página (Disposicion.tsx),
  * que se ensancha a 440 px (560 con un reporte abierto), y no en una capa encima del tablero: ya no tapa la
@@ -41,7 +43,7 @@ import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import type { ReporteDelTema, TemaDeHoja } from "@/lib/feedback/queries";
 import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
-import { COLUMNA, COLUMNAS, numeroDeReporte, TIPO, type Columna } from "@/lib/feedback/reglas";
+import { COLUMNA, COLUMNAS, COLUMNAS_DE_ENTRADA, estaTerminada, numeroDeReporte, TIPO, type Columna } from "@/lib/feedback/reglas";
 import { Iniciales } from "../piezas";
 import { DisposicionDeFeedback } from "./Disposicion";
 import DialogoPrompt from "./DialogoPrompt";
@@ -54,8 +56,20 @@ const VACIA: Record<Columna, string> = {
   decidir: "Lleva un reporte desde la Bandeja o crea un tema.",
   planeado: "Arrastra aquí lo que decidiste hacer.",
   curso: "Arrastra aquí lo que estás haciendo.",
-  listo: "Arrastra aquí lo que ya está en producción.",
+  listo: "Arrastra aquí lo que ya está hecho: entra en la próxima subida.",
+  subido: "Lo que ya se subió. Después de una subida, «Ya se subió» en «Listo» lo trae todo.",
 };
+
+/** Lo que dice la confirmación al pasar un tema a una columna que le avisa a quien lo pidió. */
+const CONFIRMAR: Record<"listo" | "subido", { titulo: (tema: string) => string; aviso: string; boton: string }> = {
+  listo: { titulo: (tema) => `¿«${tema}» ya está hecho?`, aviso: "que ya está hecho y llega con la próxima subida", boton: "Pasar a Listo" },
+  subido: { titulo: (tema) => `¿«${tema}» ya está en Nexus?`, aviso: "que ya está en Nexus y lo puede probar", boton: "Pasar a En Nexus" },
+};
+
+/** Pasar un tema a esta columna le avisa a quien lo pidió: solo si avanza a «En curso», «Listo» o «En Nexus». */
+function avisa(t: TemaDeHoja, columna: Columna): boolean {
+  return t.personas.length > 0 && ["curso", "listo", "subido"].includes(columna) && COLUMNAS.indexOf(columna) > COLUMNAS.indexOf(t.columna);
+}
 
 /** El ícono de «de dónde salió», por el origen del tema. */
 const ICONO_DE_ORIGEN: Record<string, string> = {
@@ -97,7 +111,10 @@ export default function HojaDeRuta({
   const temaRef = useRef<HTMLDivElement>(null);
   const [nuevo, setNuevo] = useState(false);
   const [arrastrando, setArrastrando] = useState<TemaDeHoja | null>(null);
-  const [aListo, setAListo] = useState<TemaDeHoja | null>(null);
+  /** El tema que va a pasar a «Listo» o a «En Nexus», mientras se confirma. */
+  const [aConfirmar, setAConfirmar] = useState<{ t: TemaDeHoja; columna: "listo" | "subido" } | null>(null);
+  /** «Ya se subió»: se confirma antes; `true` mientras el servidor mueve todo. */
+  const [subir, setSubir] = useState<"confirmar" | "subiendo" | null>(null);
   const [abierto, setAbierto] = useState<string | null>(() => (temaInicial && temas.some((t) => t.id === temaInicial) ? temaInicial : null));
   /** El reporte abierto dentro del panel del tema; null = se ve el tema. */
   const [reporteAbierto, setReporteAbierto] = useState<string | null>(() =>
@@ -129,13 +146,13 @@ export default function HojaDeRuta({
   useEffect(() => {
     if (!abierto) return;
     const alTeclear = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || aListo || prompt) return;
+      if (e.key !== "Escape" || aConfirmar || subir || prompt) return;
       if (reporteAbierto) setReporteAbierto(null);
       else setAbierto(null);
     };
     document.addEventListener("keydown", alTeclear);
     return () => document.removeEventListener("keydown", alTeclear);
-  }, [abierto, reporteAbierto, aListo, prompt]);
+  }, [abierto, reporteAbierto, aConfirmar, subir, prompt]);
 
   // Mouse y dedo por separado: con el dedo hay que mantener apretado un momento, así deslizar sigue
   // desplazando la página. Con teclado, la columna se cambia desde el panel.
@@ -189,7 +206,7 @@ export default function HojaDeRuta({
         setReporteAbierto(null);
         return;
       }
-      const t = vistos.find((x) => x.columna !== "listo") ?? vistos[0];
+      const t = vistos.find((x) => !estaTerminada(x.columna)) ?? vistos[0];
       if (t) abrir(t);
     };
     window.addEventListener(EVENTO_DEL_RECORRIDO, alPedido);
@@ -262,8 +279,8 @@ export default function HojaDeRuta({
       }
       marcar(t.id, { columna, enViaje: false });
       toast.success(
-        columna === "listo" && t.personas.length > 0
-          ? `«${t.titulo}» quedó listo: se avisó a quien lo pidió.`
+        avisa(t, columna)
+          ? `«${t.titulo}» pasó a «${COLUMNA[columna].nombre}»: se avisó a quien lo pidió.`
           : `«${t.titulo}» pasó a «${COLUMNA[columna].nombre}».`,
       );
       router.refresh();
@@ -273,15 +290,37 @@ export default function HojaDeRuta({
     }
   };
 
-  /** Pasar a «Listo» le dice a quien lo pidió que ya está en producción: eso se confirma antes. */
+  /** Pasar a «Listo» o a «En Nexus» le dice algo a quien lo pidió: eso se confirma antes. Volver atrás no avisa. */
   const pedirMover = (t: TemaDeHoja, columna: Columna) => {
     if (columna === t.columna || movidas.mapa[t.id]?.enViaje) return;
-    if (columna === "listo" && t.personas.length > 0) {
-      setAListo(t);
+    if ((columna === "listo" || columna === "subido") && avisa(t, columna)) {
+      setAConfirmar({ t, columna });
       return;
     }
     void mover(t, columna);
   };
+
+  /** «Ya se subió»: todo lo de «Listo» pasa a «En Nexus» y a cada persona le llega que ya lo puede probar. */
+  const subirLoListo = async () => {
+    setSubir("subiendo");
+    try {
+      const r = await fetch("/api/feedback/temas/subir", { method: "POST" });
+      const d = (await r.json().catch(() => null)) as { temas?: number; error?: string } | null;
+      if (!r.ok) {
+        toast.error(d?.error ?? "No se pudo pasar a «En Nexus».");
+        return;
+      }
+      const n = d?.temas ?? 0;
+      toast.success(n === 0 ? "No había nada en «Listo»." : `${plural(n, "tema pasó", "temas pasaron")} a «En Nexus»: se avisó a quien los pidió.`);
+      router.refresh();
+    } catch {
+      toast.error("No hay conexión.");
+    } finally {
+      setSubir(null);
+    }
+  };
+  const listos = vistos.filter((t) => t.columna === "listo");
+  const personasDeLoListo = new Set(listos.flatMap((t) => t.personas.map((p) => p.email))).size;
 
   const guardarTexto = async (t: TemaDeHoja, titulo: string, detalle: string): Promise<boolean> => {
     try {
@@ -358,6 +397,7 @@ export default function HojaDeRuta({
         onCerrar={cerrarPanel}
         onMover={(c) => pedirMover(temaAbierto, c)}
         onPrompt={() => void generarPrompt(temaAbierto)}
+        onPromptDelReporte={(sobre, texto) => setPrompt({ sobre, texto, error: null })}
         onReintentar={() => void cargar(temaAbierto.id)}
         onGuardar={(titulo, detalle) => guardarTexto(temaAbierto, titulo, detalle)}
         onCambio={() => alCambiarElTema(temaAbierto.id)}
@@ -377,7 +417,7 @@ export default function HojaDeRuta({
       anchoPanel={temaAbierto ? (reporteAbierto ? "lg:w-[560px]" : "lg:w-[440px]") : "lg:w-[340px]"}
     >
       <DndContext sensors={sensores} collisionDetection={pointerWithin} onDragStart={alEmpezar} onDragEnd={alSoltar} onDragCancel={() => setArrastrando(null)}>
-        <div data-recorrido="feedback.hoja.tablero" className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div data-recorrido="feedback.hoja.tablero" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           {COLUMNAS.map((c) => (
             <ColumnaDeLaHoja
               key={c}
@@ -388,6 +428,7 @@ export default function HojaDeRuta({
               abierto={abierto}
               onAbrir={abrir}
               onPrompt={(t) => void generarPrompt(t)}
+              onSubir={c === "listo" ? () => setSubir("confirmar") : undefined}
             />
           ))}
         </div>
@@ -398,35 +439,71 @@ export default function HojaDeRuta({
       {nuevo && <NuevoTema onCerrar={() => setNuevo(false)} />}
       {prompt && <DialogoPrompt sobre={prompt.sobre} prompt={prompt.texto} error={prompt.error} onCerrar={() => setPrompt(null)} />}
       <Modal
-        open={aListo !== null}
-        onClose={() => setAListo(null)}
+        open={aConfirmar !== null}
+        onClose={() => setAConfirmar(null)}
         size="md"
-        title={aListo ? `¿«${aListo.titulo}» ya está en producción?` : undefined}
+        title={aConfirmar ? CONFIRMAR[aConfirmar.columna].titulo(aConfirmar.t.titulo) : undefined}
         footer={
           <div className="flex items-center justify-end gap-2">
-            <button type="button" onClick={() => setAListo(null)} className="rounded px-2.5 py-2 text-[13px] text-fg-muted hover:text-fg">
+            <button type="button" onClick={() => setAConfirmar(null)} className="rounded px-2.5 py-2 text-[13px] text-fg-muted hover:text-fg">
               Cancelar
             </button>
             <button
               type="button"
               onClick={() => {
-                const t = aListo;
-                setAListo(null);
-                if (t) void mover(t, "listo");
+                const c = aConfirmar;
+                setAConfirmar(null);
+                if (c) void mover(c.t, c.columna);
               }}
               className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
             >
-              Pasar a Listo
+              {aConfirmar ? CONFIRMAR[aConfirmar.columna].boton : ""}
             </button>
           </div>
         }
       >
-        {aListo && (
+        {aConfirmar && (
           <p className="text-sm text-fg-secondary">
-            Al pasarlo a «Listo», {aListo.personas.length === 1 ? "a la persona que lo pidió le llega" : `a las ${aListo.personas.length} personas que lo pidieron les llega`} el
-            aviso de que ya está hecho.
+            {aConfirmar.t.personas.length === 1 ? "A la persona que lo pidió le llega" : `A las ${aConfirmar.t.personas.length} personas que lo pidieron les llega`}{" "}
+            en «Para ti» {CONFIRMAR[aConfirmar.columna].aviso}.
           </p>
         )}
+      </Modal>
+      <Modal
+        open={subir !== null}
+        onClose={() => {
+          if (subir === "confirmar") setSubir(null);
+        }}
+        size="md"
+        title="¿Ya se subió lo que está en «Listo»?"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              disabled={subir === "subiendo"}
+              onClick={() => setSubir(null)}
+              className="rounded px-2.5 py-2 text-[13px] text-fg-muted hover:text-fg disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={subir === "subiendo"}
+              onClick={() => void subirLoListo()}
+              className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+            >
+              {subir === "subiendo" ? "Pasando…" : "Pasar todo a En Nexus"}
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-fg-secondary">
+          {listos.length === 1 ? "El tema de «Listo» pasa" : `Los ${listos.length} temas de «Listo» pasan`} a «En Nexus»
+          {personasDeLoListo > 0
+            ? ` y a ${personasDeLoListo === 1 ? "la persona que lo pidió le llega" : `las ${personasDeLoListo} personas que los pidieron les llega`} en «Para ti» que ya lo pueden probar.`
+            : "."}{" "}
+          Hazlo después de que la subida esté en producción.
+        </p>
       </Modal>
     </DisposicionDeFeedback>
   );
@@ -434,7 +511,8 @@ export default function HojaDeRuta({
 
 /** El panel sin un tema abierto: qué sigue en la hoja de ruta. */
 function PanelSinTema({ temas, onAbrir }: { temas: TemaDeHoja[]; onAbrir: (t: TemaDeHoja) => void }) {
-  const abiertos = temas.filter((t) => t.columna !== "listo");
+  const abiertos = temas.filter((t) => !estaTerminada(t.columna));
+  const listos = temas.filter((t) => t.columna === "listo");
   const conRespuesta = abiertos.filter((t) => t.respondieron > 0);
   const porDecidir = abiertos.filter((t) => t.columna === "decidir");
   const frena = [...abiertos].filter((t) => t.frena > 0).sort((a, b) => b.frena - a.frena || b.personas.length - a.personas.length)[0] ?? null;
@@ -448,6 +526,8 @@ function PanelSinTema({ temas, onAbrir }: { temas: TemaDeHoja[]; onAbrir: (t: Te
     texto = `${plural(porDecidir.length, "tema espera", "temas esperan")} que decidas si se ${porDecidir.length === 1 ? "hace" : "hacen"}.`;
     if (frena) texto += ` «${frena.titulo}» ${frena.frena === 1 ? "le frena el trabajo a una persona" : `les frena el trabajo a ${frena.frena} personas`}.`;
     siguiente = frena ?? porDecidir[0];
+  } else if (listos.length > 0) {
+    texto = `${plural(listos.length, "tema está hecho", "temas están hechos")} y ${listos.length === 1 ? "espera" : "esperan"} la próxima subida. Cuando esté en producción, «Ya se subió» los pasa a «En Nexus» y avisa a quien los pidió.`;
   } else if (abiertos.length > 0) {
     texto = "Nada espera que decidas. Lo que está en curso se ve en su columna.";
   } else {
@@ -470,7 +550,8 @@ function PanelSinTema({ temas, onAbrir }: { temas: TemaDeHoja[]; onAbrir: (t: Te
       <div className="space-y-1.5">
         <p className={ROTULO_DEL_SISTEMA}>Los avisos</p>
         <p className="text-[13px] leading-[1.45] text-fg-secondary">
-          Al pasar un tema a «En curso» o a «Listo», a quien lo pidió le llega el aviso en «Para ti». Pasarlo a «Listo» pide confirmación.
+          Al pasar un tema a «En curso», a «Listo» o a «En Nexus», a quien lo pidió le llega en «Para ti» que se está haciendo, que llega con
+          la próxima subida o que ya lo puede probar. Las dos últimas piden confirmación.
         </p>
       </div>
     </>
@@ -485,6 +566,7 @@ function ColumnaDeLaHoja({
   abierto,
   onAbrir,
   onPrompt,
+  onSubir,
 }: {
   columna: Columna;
   temas: TemaDeHoja[];
@@ -494,6 +576,8 @@ function ColumnaDeLaHoja({
   abierto: string | null;
   onAbrir: (t: TemaDeHoja) => void;
   onPrompt: (t: TemaDeHoja) => void;
+  /** Solo en «Listo»: «Ya se subió». */
+  onSubir?: () => void;
 }) {
   const def = COLUMNA[columna];
   const { setNodeRef, isOver } = useDroppable({ id: columna });
@@ -513,7 +597,18 @@ function ColumnaDeLaHoja({
           <span className={cn("text-xs tracking-normal", TONO[def.tono])}>{def.marca}</span>
           {def.nombre} · {temas.length}
         </p>
-        {columna === "listo" && <span className="text-[11px] text-fg-muted">últimas 4 semanas</span>}
+        {columna === "subido" && <span className="text-[11px] text-fg-muted">últimas 4 semanas</span>}
+        {onSubir && temas.length > 0 && (
+          <button
+            type="button"
+            data-recorrido="feedback.hoja.subir"
+            onClick={onSubir}
+            title="Después de una subida: todo lo de «Listo» pasa a «En Nexus» y se avisa a quien lo pidió."
+            className="text-xs font-semibold text-brand hover:text-brand-light"
+          >
+            Ya se subió
+          </button>
+        )}
       </div>
       {sobre && (
         <p className="rounded-[10px] border border-dashed border-brand bg-surface px-3 py-3.5 text-center text-xs font-semibold text-brand">Suelta para pasarlo a «{def.nombre}»</p>
@@ -620,8 +715,17 @@ function ContenidoDeTarjeta({
       )}
     >
       <div className="flex items-start gap-1.5">
-        {t.columna === "listo" && (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 h-4 w-4 flex-none text-success" aria-hidden="true">
+        {estaTerminada(t.columna) && (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={cn("mt-0.5 h-4 w-4 flex-none", t.columna === "subido" ? "text-success" : "text-brand")}
+            aria-hidden="true"
+          >
             <path d="M5 13l4 4L19 7" />
           </svg>
         )}
@@ -667,7 +771,7 @@ function ContenidoDeTarjeta({
           )}
           <span className="whitespace-nowrap text-xs text-fg-muted">{cuentaDe(t)}</span>
         </span>
-        {!levantada && t.columna !== "listo" && (
+        {!levantada && !estaTerminada(t.columna) && (
           <button
             type="button"
             onClick={(e) => {
@@ -699,6 +803,7 @@ function PanelDelTema({
   onCerrar,
   onMover,
   onPrompt,
+  onPromptDelReporte,
   onReintentar,
   onGuardar,
   onCambio,
@@ -713,6 +818,8 @@ function PanelDelTema({
   onCerrar: () => void;
   onMover: (c: Columna) => void;
   onPrompt: () => void;
+  /** El prompt de un reporte abierto adentro del tema: solo lo suyo. */
+  onPromptDelReporte: (sobre: string, texto: string) => void;
   onReintentar: () => void;
   onGuardar: (titulo: string, detalle: string) => Promise<boolean>;
   /** Una respuesta o una lectura cambió el tema. */
@@ -775,6 +882,8 @@ function PanelDelTema({
           <ReporteEnElTema
             key={reporteAbierto}
             id={reporteAbierto}
+            tema={{ titulo: t.titulo, columna: t.columna, reportes: detalle?.ok ? detalle.reportes.length : t.reportes }}
+            onPrompt={onPromptDelReporte}
             teRespondio={!!(detalle?.ok && detalle.reportes.find((r) => r.id === reporteAbierto)?.respondio)}
             onCambio={onCambio}
             onDevuelto={() => {
@@ -839,10 +948,10 @@ function PanelDelTema({
             deshabilitado={moviendo}
             opciones={COLUMNAS.map((c) => ({ clave: c, etiqueta: COLUMNA[c].nombre }))}
           />
-          <p className="text-xs text-fg-muted">Al pasarlo a «En curso» o a «Listo», a quien lo pidió le llega el aviso.</p>
+          <p className="text-xs text-fg-muted">Al pasarlo a «En curso», «Listo» o «En Nexus», a quien lo pidió le llega el aviso.</p>
         </div>
 
-        {t.columna !== "listo" && (
+        {!estaTerminada(t.columna) && (
           <div className="space-y-1.5">
             <p className={ROTULO_DEL_SISTEMA}>Para Claude Code</p>
             <button
@@ -1000,7 +1109,7 @@ function NuevoTema({ onCerrar }: { onCerrar: () => void }) {
             etiqueta="En qué columna entra"
             valor={columna}
             onCambio={setColumna}
-            opciones={COLUMNAS.filter((c) => c !== "listo").map((c) => ({ clave: c, etiqueta: COLUMNA[c].nombre }))}
+            opciones={COLUMNAS_DE_ENTRADA.map((c) => ({ clave: c, etiqueta: COLUMNA[c].nombre }))}
           />
           <p className="text-xs text-fg-muted">{COLUMNA[columna].ayuda}</p>
         </div>
