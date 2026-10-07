@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Alert, Modal } from "@/components/ui";
-import { BotonAzul, BotonBlanco, QueSigue } from "@/components/ui/sistema";
+import { BotonAzul, BotonBlanco, BotonEnlace, FranjaDeSugerencias, QueSigue } from "@/components/ui/sistema";
 import MinuteDialog from "./MinuteDialog";
 import ActionItemsDialog from "./ActionItemsDialog";
 import { useWorkspace } from "./WorkspaceContext";
@@ -20,6 +20,9 @@ import ProjectBriefSection, { type BriefDeProyecto } from "@/components/projects
 import ProjectSessionsReview from "./ProjectSessionsReview";
 import { useContextoDelResumen, type AvisoDePieza } from "./contexto-del-resumen";
 import { porQueEstaAca, queSigueDelProyecto, restoDeLosPendientes } from "@/lib/clients/que-sigue-del-proyecto";
+import type { EtapaEnHubspot } from "@/lib/projects/etapa-sugerida";
+import { useMe } from "@/hooks/useMe";
+import EncuestaDeEtapa from "./EncuestaDeEtapa";
 
 
 export interface PendingItem {
@@ -167,6 +170,12 @@ interface GPSData {
   pendientesRecientesTotal?: number;
   /** Cuántos abiertos hay en total, para el «y N más». */
   pendientesAbiertos?: number;
+  /**
+   * La encuesta de la etapa (lib/projects/etapa-sugerida.ts): las etapas que se pueden elegir, la
+   * sugerencia de una reunión si sigue en pie, y por qué no se puede mover desde Nexus. Ausente en
+   * respuestas cacheadas viejas; `null` si el proyecto no tiene tablero en HubSpot.
+   */
+  etapaHubspot?: EtapaEnHubspot | null;
 }
 
 /** La RANURA de almacenamiento del frente, no su rótulo — ver `FrenteKey` en kind.ts. */
@@ -212,6 +221,9 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const resumenCtx = useContextoDelResumen();
   const { onEtapa, onQueSigue, onAvisosDePiezas } = resumenCtx;
   const [sesionesAbiertas, setSesionesAbiertas] = useState(false);
+  const [encuestaAbierta, setEncuestaAbierta] = useState(false);
+  const me = useMe();
+  const puedeMoverLaEtapa = me?.permissions?.sections?.proyectos?.cambiarEstadoHubspot === true;
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchGPS = useCallback(async () => {
@@ -486,6 +498,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
             resumenPendiente:
               data.brief === null ? { motivo: null } : data.brief?.vencido ? { motivo: data.brief.motivoDeVencimiento } : null,
             proximaReunion: proximaDeCualquierFrente,
+            etapaSugerida: data.etapaHubspot?.sugerencia ? { hasta: data.etapaHubspot.sugerencia.hasta } : null,
           })
         : null,
     [data, resumenCtx.piezas, sinRevisar, proximaDeCualquierFrente],
@@ -493,6 +506,19 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   useEffect(() => {
     onQueSigue(queSigue);
   }, [queSigue, onQueSigue]);
+
+  /* `?etapa=revisar` (lo manda «Para ti»): abre la encuesta de la etapa apenas llega la etapa, y
+     saca el parámetro para que recargar no la vuelva a abrir. */
+  const hayEncuesta = !!data?.etapaHubspot && !data.etapaHubspot.bloqueo;
+  useEffect(() => {
+    if (!hayEncuesta) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("etapa") !== "revisar") return;
+    url.searchParams.delete("etapa");
+    window.history.replaceState(window.history.state, "", url.toString());
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- abrir por enlace profundo, una vez
+    setEncuestaAbierta(true);
+  }, [hayEncuesta]);
 
   if (error) {
     return (
@@ -543,6 +569,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
   const pctTranscript = cobertura ? pctConTranscript(cobertura) : null;
   const etapa = data.etapa ?? null;
   const lineas = porQueEstaAca(etapa);
+  const encuesta = data.etapaHubspot ?? null;
 
   // Pendientes: lo reciente (decisión del 2026-10-04). Respuestas cacheadas viejas no traen el
   // campo: ahí se cae a los abiertos de siempre.
@@ -678,6 +705,7 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
       ) : undefined;
     }
     if (a.tipo === "sesiones") return <BotonAzul onClick={() => setSesionesAbiertas(true)}>Revisar las reuniones</BotonAzul>;
+    if (a.tipo === "etapa") return <BotonAzul onClick={() => setEncuestaAbierta(true)}>Responder la pregunta</BotonAzul>;
     return undefined;
   })();
 
@@ -849,12 +877,25 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
               </span>
             )}
           </div>
-          {info?.hubspotUrl && (
-            <a href={info.hubspotUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand hover:text-brand-light">
-              Ver en HubSpot ↗
-            </a>
-          )}
+          <div className="flex items-baseline gap-3">
+            {/* Nexus → HubSpot: solo por la encuesta. HubSpot → Nexus: el espejo, como siempre. */}
+            {encuesta && !encuesta.bloqueo && encuesta.opciones.length > 0 && (
+              <BotonEnlace onClick={() => setEncuestaAbierta(true)}>Cambiar etapa</BotonEnlace>
+            )}
+            {info?.hubspotUrl && (
+              <a href={info.hubspotUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand hover:text-brand-light">
+                Ver en HubSpot ↗
+              </a>
+            )}
+          </div>
         </div>
+        {encuesta?.sugerencia && !encuesta.bloqueo && (
+          <FranjaDeSugerencias acciones={<BotonBlanco onClick={() => setEncuestaAbierta(true)}>Ver y responder</BotonBlanco>}>
+            Una reunión muestra que ya pasó a <strong className="font-semibold">{encuesta.sugerencia.hasta}</strong>
+            {encuesta.sugerencia.reunion ? ` («${encuesta.sugerencia.reunion.titulo}»)` : ""}. En HubSpot sigue en{" "}
+            {encuesta.sugerencia.desde ?? "otra etapa"}.
+          </FranjaDeSugerencias>
+        )}
         {etapa && etapa.linea.length > 0 && etapa.posicion && (
           <ol className="grid gap-1" style={{ gridTemplateColumns: `repeat(${etapa.linea.length}, minmax(0, 1fr))` }}>
             {etapa.linea.map((s, k) => {
@@ -892,6 +933,21 @@ export default function ProjectGPS({ projectId, clientId }: { projectId: string;
       </Modal>
 
       {minuteDialogOpen && <MinuteDialog projectId={projectId} onClose={() => setMinuteDialogOpen(false)} />}
+
+      {encuesta && !encuesta.bloqueo && (
+        <EncuestaDeEtapa
+          projectId={projectId}
+          proyecto={info?.name ?? "este proyecto"}
+          etapa={encuesta}
+          abierta={encuestaAbierta}
+          puedeResponder={puedeMoverLaEtapa}
+          onCerrar={() => setEncuestaAbierta(false)}
+          onCambio={() => {
+            invalidateGps(projectId);
+            void fetchGPS();
+          }}
+        />
+      )}
 
       <ActionItemsDialog
         open={itemsDialogOpen}

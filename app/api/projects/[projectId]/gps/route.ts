@@ -18,7 +18,8 @@ import { getProjectLifecycle } from "@/lib/lifecycle";
 import { etapaParaLaUI } from "@/lib/lifecycle/etapa-ui";
 import { loadCanvasesConContenido } from "@/lib/pieces/piece-content";
 import { buildCanvasChips } from "@/lib/flow/canvas-chips";
-import { frentesDeProyecto, hechosDeProyecto, type EquipoDeFrente } from "@/lib/projects/kind";
+import { frentesDeProyecto, hechosDeProyecto, resolvePipeline, type EquipoDeFrente } from "@/lib/projects/kind";
+import { etapaEnHubspot } from "@/lib/projects/etapa-sugerida";
 import { whereBelongsToClient } from "@/lib/sessions/project-sources";
 import { VENTANA_DE_COBERTURA_DIAS, type CoberturaDelCliente } from "@/lib/sessions/cobertura-por-cse";
 import { evaluarFrescura } from "@/lib/projects/brief-vencido";
@@ -123,7 +124,12 @@ export const GET = withProjectAccess(async (
       serviceType: true,
       hubspotServiceId: true,
       hubspotPipelineStageLabel: true,
+      hubspotPipelineStageId: true,
       hubspotStageSyncedAt: true,
+      // La etapa que una reunión sugiere mover en HubSpot (lib/projects/etapa-sugerida.ts).
+      etapaPropuestaStageId: true,
+      etapaPropuestaMotivo: true,
+      etapaPropuestaAt: true,
       hubspotOwnerName: true,
       hubspotOwnerEmail: true,
       hubspotCreatedAt: true,
@@ -154,6 +160,21 @@ export const GET = withProjectAccess(async (
      mudó acá desde su propia sección + su propio endpoint, así que el widget dejó de ser un
      segundo lugar donde leer la etapa y pasó a ser el único. */
   const etapa = etapaParaLaUI(await getProjectLifecycle(projectId));
+
+  /* Lo de la ENCUESTA de la etapa: las etapas que se pueden elegir, la sugerencia de una reunión si
+     sigue en pie, y por qué no se puede mover desde Nexus si no se puede. HubSpot → Nexus es el
+     espejo; Nexus → HubSpot es solo esta encuesta, que aprueba el CSE. */
+  const etapaHubspot = etapaEnHubspot({
+    def: resolvePipeline(project.hubspotPipelineId),
+    hubspotServiceId: project.hubspotServiceId,
+    actualStageId: project.hubspotPipelineStageId,
+    actualLabel: project.hubspotPipelineStageLabel,
+    guardada: {
+      stageId: project.etapaPropuestaStageId,
+      motivo: project.etapaPropuestaMotivo,
+      at: project.etapaPropuestaAt,
+    },
+  });
 
   /* El rótulo PLANO de la etapa, y solo para los proyectos que vienen de HubSpot.
      ⚠ Hasta el 2026-08-18 la rama de abajo INVENTABA uno para los que no: lo armaba con
@@ -532,6 +553,7 @@ export const GET = withProjectAccess(async (
     fronts, // por ranura ("ventas" / "cs"): { next, last } — el mapa de datos
     frentes, // QUÉ frentes pintar y con qué rótulo, en orden (lib/projects/kind.ts)
     etapa, // el bloque "Etapa" — null cuando no hay etapa que mostrar
+    etapaHubspot, // la encuesta de la etapa: opciones, sugerencia de una reunión y bloqueo
     projectInfo,
     actionItems: pendingItemsCompat, // alias semántico
     /* El panel de la ficha: lo de las últimas 4 semanas (hasta 5, con fecha primero), cuántos hay

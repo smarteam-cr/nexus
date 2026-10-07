@@ -56,6 +56,14 @@ describe("qué sigue", () => {
   it("las reuniones sin revisar van primero", () => {
     expect(queSigueDelProyecto({ ...base, etapa: etapa("x", "Diagnóstico"), sesionesSinRevisar: 2 }).accion).toEqual({ tipo: "sesiones" });
   });
+  it("la etapa que sugiere una reunión va después de las reuniones sin revisar y antes del documento", () => {
+    const conSugerencia = { ...base, etapa: etapa("x", "Diagnóstico"), etapaSugerida: { hasta: "Planificación" } };
+    expect(queSigueDelProyecto({ ...conSugerencia, sesionesSinRevisar: 1 }).accion).toEqual({ tipo: "sesiones" });
+    const q = queSigueDelProyecto(conSugerencia);
+    expect(q.accion).toEqual({ tipo: "etapa" });
+    expect(q.texto).toContain("ya pasó a Planificación");
+    expect(q.texto).toContain("se escribe en HubSpot");
+  });
   it("después, el documento de la etapa si falta", () => {
     const q = queSigueDelProyecto({ ...base, etapa: etapa("x", "Diagnóstico") });
     expect(q.accion).toEqual({ tipo: "pieza", slug: "diagnosis", etiqueta: "Diagnóstico" });

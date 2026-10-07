@@ -45,11 +45,26 @@ export const SCOPE_COVERAGE: Record<string, Cobertura> = {
   "lib/carga/queries.ts": { modo: "criterio", criterio: "cartera" },
   // «Para ti» (2026-10-04): las implementaciones abiertas, con el criterio de la línea del índice de clientes.
   "lib/para-ti/fuentes/cs.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/para-ti/fuentes/etapa.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: lee la etapa sugerida de los proyectos del ALCANCE de la " +
+      "persona (`a.proyectos`), que ya salieron de `proyectosAbiertos` en alcance-server.ts. Volver a " +
+      "filtrar con otro criterio podría dejar una pregunta sin responder fuera de «Para ti».",
+  },
+  "lib/projects/etapa-desde-reunion-server.ts": {
+    modo: "exento",
+    razon:
+      "no pregunta «¿qué proyectos cuentan?»: lee y escribe la sugerencia de etapa de UN proyecto por " +
+      "su id (el primario de la reunión, que ya pasó por el clasificador). El cierre de proyecto lo " +
+      "mira solo (`status === \"completed\"`) y la etapa de cierre la descarta `sugerenciaVigente`.",
+  },
   "lib/cobranza/queries.ts": { modo: "criterio", criterio: "facturable" },
   // C-20: las consultas de /sessions viven en el cargador compartido con /api/sessions/grupo.
   "lib/sessions/cargar-sesiones-categorizadas.ts": { modo: "criterio", criterio: "clasificable" },
   // «Actualizar con IA» de la ficha del cliente: los handoffs y encuestas de sus proyectos vivos.
   "lib/clients/ficha-propuesta.ts": { modo: "criterio", criterio: "clasificable" },
+  "lib/handoff/resultados.ts": { modo: "criterio", criterio: "clasificable" },
   "app/(shell)/sessions/[id]/page.tsx": { modo: "criterio", criterio: "clasificable" },
   "app/api/projects/[projectId]/project-sessions/route.ts": { modo: "criterio", criterio: "clasificable" },
   "app/api/clients/[id]/analyze/route.ts": { modo: "criterio", criterio: "clasificable" },

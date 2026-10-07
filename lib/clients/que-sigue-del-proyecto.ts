@@ -5,7 +5,9 @@
  * Una frase con la cosa más importante que hay que hacer en el proyecto, y la acción que la
  * resuelve. El orden lo decidió Elías el 2026-10-04 (alta a medio hacer → propuesta de cronograma
  * → reuniones sin revisar → documento de la etapa sin generar o desactualizado → lo que falta para
- * cerrar la etapa → resumen vencido → agendar la próxima reunión). Los dos primeros los pinta la
+ * cerrar la etapa → resumen vencido → agendar la próxima reunión). Desde el 2026-10-07, después de
+ * las reuniones sin revisar va la etapa que una reunión sugiere mover en HubSpot: es una decisión
+ * que espera al CSE, y el documento «de la etapa» depende de que la etapa sea la verdadera. Los dos primeros los pinta la
  * ficha con sus propios carteles —tienen botones con reglas propias— y este cálculo ni se pide.
  *
  * «Lo que falta para cerrar la etapa» NO sale acá: ya lo dice la tarjeta de la etapa, en el centro,
@@ -28,7 +30,8 @@ export type AccionDeQueSigue =
   | { tipo: "pieza"; slug: string; etiqueta: string }
   | { tipo: "sesiones" }
   | { tipo: "resumen" }
-  | { tipo: "agendar" };
+  | { tipo: "agendar" }
+  | { tipo: "etapa" };
 
 export interface QueSigueDelProyecto {
   texto: string;
@@ -90,12 +93,21 @@ export function queSigueDelProyecto(i: {
   resumenPendiente: { motivo: string | null } | null;
   /** La próxima reunión con el cliente (cualquier frente), en ISO. null = no hay ninguna. */
   proximaReunion: string | null;
+  /** Una reunión muestra que el proyecto ya pasó a otra etapa y nadie respondió (lib/projects/etapa-sugerida.ts). */
+  etapaSugerida?: { hasta: string } | null;
 }): QueSigueDelProyecto {
   if (i.sesionesSinRevisar > 0) {
     const n = i.sesionesSinRevisar;
     return {
       texto: `La IA asignó ${n === 1 ? "una reunión" : `${n} reuniones`} a este proyecto y nadie ${n === 1 ? "la" : "las"} confirmó: ${n === 1 ? "podría" : "podrían"} ser de otro proyecto de la empresa.`,
       accion: { tipo: "sesiones" },
+    };
+  }
+
+  if (i.etapaSugerida) {
+    return {
+      texto: `Una reunión muestra que el proyecto ya pasó a ${i.etapaSugerida.hasta}. Confirma la etapa: se escribe en HubSpot.`,
+      accion: { tipo: "etapa" },
     };
   }
 

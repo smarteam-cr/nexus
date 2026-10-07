@@ -464,6 +464,20 @@ export async function postProcessSession(
     console.error(`[post-session] ficha del cliente falló (no bloqueante):`, e instanceof Error ? e.message : e);
   }
 
+  // La etapa en HubSpot: si la reunión muestra que el proyecto ya pasó a otra etapa, queda como
+  // SUGERENCIA que el CSE aprueba en la encuesta de la etapa (lib/projects/etapa-sugerida.ts). Nada
+  // se escribe en HubSpot desde acá. Con Haiku, porque corre con cada reunión. Best-effort.
+  if (project) {
+    try {
+      const { proponerEtapaDesdeSesion } = await import("@/lib/projects/etapa-desde-reunion-server");
+      const r = await proponerEtapaDesdeSesion(sessionId, project.id);
+      if (r.status === "sugerida") console.log(`[post-session] ✓ etapa sugerida para HubSpot: ${r.stageId}`);
+      if (r.status === "error") console.error(`[post-session] etapa sugerida falló (no bloqueante): ${r.error}`);
+    } catch (e) {
+      console.error(`[post-session] etapa sugerida falló (no bloqueante):`, e instanceof Error ? e.message : e);
+    }
+  }
+
   // Exploración de venta: si la empresa tiene una viva, el agente lee esta reunión y propone qué va
   // en cada casilla (lib/exploraciones/agente.ts decide si corresponde y corre en segundo plano).
   // Solo dispara; best-effort: nunca tumba el post-proceso.

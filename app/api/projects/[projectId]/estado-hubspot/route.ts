@@ -10,6 +10,7 @@ import {
 import { espejarProyectoRecienCreado } from "@/lib/hubspot/sync-projects";
 import { ESTADO_VETADO, esProponible } from "@/lib/projects/estado-hubspot";
 import { etapasProponibles } from "@/lib/projects/etapa-hubspot";
+import { cerrarSugerenciaDeEtapa } from "@/lib/projects/etapa-desde-reunion-server";
 import { resolvePipeline } from "@/lib/projects/kind";
 
 /**
@@ -180,6 +181,7 @@ export async function PATCH(
     /* Ya estaba en ese valor. Se espeja igual: la copia de Nexus era la desactualizada, y
        dejarla vieja haría que el mismo aviso vuelva a aparecer mañana. */
     await espejarProyectoRecienCreado(guard.clientId, proyecto.hubspotServiceId).catch(() => null);
+    if (etapaStageId) await cerrarSugerenciaDeEtapa(projectId);
     return NextResponse.json({ sinCambios: true, ...(await leerDeNexus(projectId)) });
   }
 
@@ -204,6 +206,10 @@ export async function PATCH(
       { status: 502 },
     );
   }
+
+  /* La encuesta de la etapa ya se respondió: la sugerencia que la reunión había dejado (si había)
+     se borra, se haya elegido la etapa sugerida u otra. Borra la PREGUNTA, no toca la etapa. */
+  if (escribirEtapa) await cerrarSugerenciaDeEtapa(projectId);
 
   return NextResponse.json(await leerDeNexus(projectId));
 }
