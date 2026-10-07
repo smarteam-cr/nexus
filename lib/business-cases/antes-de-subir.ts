@@ -15,6 +15,7 @@ import { isBlank } from "@/lib/landing/is-blank";
 import { conciliarLicenciasHub, esInversionLegacy, INVERSION_SECTION_KEY, licenciasDeHubSinMonto, type InversionData } from "@/lib/landing/inversion";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
 import { labelForTag } from "@/lib/tags/catalog";
+import { FORMA_DE_PAGO_SECTION_KEY, problemaDeLaFormaDePago } from "@/lib/landing/forma-de-pago";
 
 export interface SeccionParaRevisar {
   key: string;
@@ -59,6 +60,11 @@ export function antesDeSubir(secciones: readonly SeccionParaRevisar[]): AvisoAnt
       avisos.push({ nivel: "ok", texto: "Todas las licencias tienen precio" });
     }
   }
+
+  // La forma de pago reparte la inversión: si sus porcentajes no cierran, el cliente vería pagos que no suman.
+  const forma = visibles.find((s) => s.key === FORMA_DE_PAGO_SECTION_KEY);
+  const problema = forma ? problemaDeLaFormaDePago(forma.data, inversion) : null;
+  if (problema) avisos.push({ nivel: "aviso", texto: `Forma de pago: ${problema}` });
 
   avisos.push({
     nivel: "ok",

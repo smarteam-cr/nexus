@@ -97,6 +97,39 @@ export function makeDiagramArchitectureDef(
   };
 }
 
+/**
+ * FORMA DE PAGO (2026-10-07, pedido de Elías): «la propuesta muestra el cuadro de inversión, pero no
+ * explica cómo se paga, y es algo que los clientes preguntan mucho». Va DEBAJO de «Inversión» en las
+ * dos propuestas comerciales (HubSpot y sitio web).
+ *
+ * ⭐ El agente escribe la FORMA —cuántas cuotas y cuándo cae cada una, según lo conversado— y NUNCA
+ * un monto: los números salen de la Inversión del mismo documento, en tiempo real
+ * (lib/landing/forma-de-pago.ts). Ventas la ajusta a mano en el documento.
+ */
+export const FORMA_DE_PAGO_DEF: BCSectionDef = {
+  key: "forma_de_pago",
+  canvasLabel: "Forma de pago",
+  label: "Forma de pago",
+  eyebrow: "Cómo se paga",
+  theme: "light",
+  sectionType: "forma_de_pago",
+  empty: { cuotas: "", pagos: [], resumen: "", recurrenteDesde: "", nota: "" },
+  agentHint: "Cuántos pagos y cuándo cae cada uno, según lo conversado. Sin montos.",
+  brief:
+    "Forma de pago: CÓMO se paga la implementación. Los MONTOS NO los escribes nunca: el sistema reparte el total de la sección «Inversión» entre los pagos, con sus descuentos, y muestra las mensualidades aparte. Tú escribes solo la forma.\n\n`cuotas`: cuántos pagos, como texto, entre «1» y «5». Si en las fuentes se conversó cómo quiere pagar el cliente (un anticipo, pagos por hito, en tres meses), respétalo; si no se habló, «4». `pagos`: uno por cuota, en orden. `momento` es cuándo se paga, como lo lee el cliente ('Antes de iniciar el proyecto', '1 mes después del inicio', 'Al salir a producción'); `cuando` es su rótulo corto para el calendario ('Inicio', 'Mes 1', 'Go live'). `porcentaje` SOLO si se conversó un porcentaje para ese pago ('50' para un anticipo del 50 %); vacío = parte igual del resto. Sin nada conversado: el primero 'Antes de iniciar el proyecto' / 'Inicio' y después uno por mes ('1 mes después del inicio' / 'Mes 1', …).\n\n`resumen`: UNA línea de qué cubre la inversión, nombrando lo que se implementa ('Implementación de Marketing, Sales, Service e integración bidireccional.'). `recurrenteDesde`: desde cuándo corre una mensualidad (el mantenimiento de un conector), si se conversó ('mes 5'); vacío = el mes siguiente al último pago. `nota`: condiciones que se hayan dicho (impuestos, facturación, moneda de pago); vacío si no hay. NUNCA inventes plazos, porcentajes ni condiciones que nadie dijo.",
+  schema: {
+    type: "object",
+    properties: {
+      cuotas: str,
+      pagos: arrayOf({ momento: str, cuando: str, porcentaje: str }, ["momento"]),
+      resumen: str,
+      recurrenteDesde: str,
+      nota: str,
+    },
+    required: ["cuotas", "pagos"],
+  },
+};
+
 // ── Casos de uso del catálogo (sección DETERMINÍSTICA) ──────────────────────
 // `agentGenerated:false`: el agente la SALTEA — la escribe el generate con los
 // seleccionados del checklist (títulos/precios EXACTOS del catálogo; cero

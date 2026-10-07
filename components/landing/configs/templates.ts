@@ -33,6 +33,7 @@ import { TechArchitectureSection, ProcessMappingSection, UseCasesSection } from 
 import { DiagramSection } from "../sections-diagram";
 import { HubsClienteSection } from "../sections-hubs";
 import { EscalaPosicionSection } from "../sections-escala";
+import { FormaDePagoSection } from "../sections-forma-de-pago";
 import {
   WebDiagnosisSection,
   SiteArchitectureSection,
@@ -62,6 +63,8 @@ export const SECTION_COMPONENTS: Record<string, FC<SectionProps<any>>> = {
   // snapshot de `registry.test.ts` intacto y hace que los `sectionType` congelados de
   // cualquier snapshot viejo sigan resolviendo. La rama legacy de HubSpot vive adentro.
   inversion: InvestmentSection,
+  // La forma de pago (2026-10-07): debajo de la inversión en las dos propuestas; lee su total por ctx.
+  forma_de_pago: FormaDePagoSection,
   partner: PartnerSection,
   cta: CtaSection,
   // Compartidas entre templates

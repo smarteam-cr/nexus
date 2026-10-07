@@ -32,6 +32,7 @@ import LandingView, { type LandingSectionData } from "@/components/landing/Landi
 import { catalogoLegible, TIPO_POR_DEFECTO } from "@/lib/landing/catalogo-de-secciones";
 import { configForCanvas } from "@/components/landing/configs/templates";
 import { hubsVendidosDe, SOLUCION_SECTION_KEY } from "@/lib/landing/hubs-solucion";
+import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
 import { useCanvasSections, type SectionWithBlocks } from "@/components/canvas/useCanvasSections";
 import { defsForCanvas } from "@/components/landing/configs/templates.defs";
 import { useEjecutarOperacionesDelChat } from "@/components/asistente/ejecutar-operaciones";
@@ -730,7 +731,7 @@ export default function BusinessCaseWorkspace({
                   ctx={{
                     clientName,
                     lang: proposalLang,
-                    propuesta: { hubsVendidos },
+                    propuesta: { hubsVendidos, inversion: inversionDelDocumento(sectionsData) },
                     clientLogoUrl: clientLogo,
                     clientLogoDarkUrl,
                     clientLogoScale,

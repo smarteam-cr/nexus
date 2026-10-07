@@ -2636,3 +2636,127 @@
   .stl .stl-plan-etapa + .stl-plan-etapa::before { content: "↓"; left: 50%; top: -20px; transform: translateX(-50%); }
   .stl .stl-plan-cards { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── FORMA DE PAGO (2026-10-07) ───────────────────────────────────────────────
+   Debajo de la Inversión: el total, en cuántos pagos y de cuánto, el beneficio comercial (los
+   descuentos por línea), la tabla de pagos, lo que se paga por mes después y el calendario. Molde:
+   la sección que Andrés armó a mano para ABG, con los tokens de la marca (y por eso también con la
+   paleta neutra). Los montos salen de la Inversión por ctx: acá no se escribe ninguno. */
+.stl .stl-fp { display: flex; flex-direction: column; gap: 14px; }
+
+.stl .stl-fp-edit {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: 12px; background: var(--bg-soft);
+}
+.stl .stl-fp-edit-label { font-size: 12px; font-weight: 700; color: var(--text-2); }
+.stl .stl-fp-cuotas { display: inline-flex; gap: 4px; }
+.stl .stl-fp-cuota {
+  width: 32px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg);
+  font: inherit; font-size: 13px; font-weight: 700; color: var(--text-2); cursor: pointer;
+}
+.stl .stl-fp-cuota.is-on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.stl .stl-fp-edit-aviso { flex-basis: 100%; font-size: 12px; color: var(--text-2); }
+.stl .stl-fp-edit-aviso.is-error { color: #C2400F; font-weight: 600; }
+
+.stl .stl-fp-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.stl .stl-fp-card {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  padding: 16px 18px; border-radius: 14px; background: var(--bg-soft);
+}
+.stl .stl-fp-card.is-total { background: var(--dark-bg); color: var(--dark-text); }
+.stl .stl-fp-card-label {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted);
+}
+.stl .stl-fp-card.is-total .stl-fp-card-label { color: var(--dark-text-2); }
+.stl .stl-fp-card-value { font-size: 26px; line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; }
+.stl .stl-fp-card-moneda { font-size: 18px; }
+.stl .stl-fp-card-note { font-size: 12px; line-height: 1.45; color: var(--text-2); }
+.stl .stl-fp-card.is-total .stl-fp-card-note { color: var(--dark-text-2); }
+
+.stl .stl-fp-beneficio {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center;
+  padding: 14px 18px; border-radius: 14px; background: var(--teal-soft); border: 1px solid var(--cream-line);
+}
+.stl .stl-fp-beneficio-num { display: flex; flex-direction: column; gap: 2px; padding-right: 18px; border-right: 1px solid var(--cream-line); }
+.stl .stl-fp-beneficio-num .stl-fp-card-label { color: #C2400F; }
+.stl .stl-fp-beneficio-valor { font-size: 26px; font-weight: 800; color: #C2400F; letter-spacing: -0.02em; }
+.stl .stl-fp-beneficio-titulo { display: block; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.stl .stl-fp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.stl .stl-fp-chip {
+  display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 100px;
+  background: var(--bg); font-size: 12px; color: var(--text-2);
+}
+.stl .stl-fp-chip b { color: #C2400F; white-space: nowrap; }
+
+.stl .stl-fp-tabla { border-top: 2px solid var(--text); }
+.stl .stl-fp-fila {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, auto);
+  gap: 16px; align-items: center; padding: 14px 4px; border-bottom: 1px solid var(--border);
+}
+.stl .stl-fp-fila.is-head {
+  padding: 10px 4px; font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted);
+}
+.stl .stl-fp-pago { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.stl .stl-fp-num {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  border-radius: 100px; background: var(--bg-soft); color: var(--blue); font-size: 12px; font-weight: 800;
+}
+.stl .stl-fp-nombre { font-size: 15px; font-weight: 700; }
+.stl .stl-fp-momento { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--text-2); }
+.stl .stl-fp-edit-fila { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--text-muted); }
+.stl .stl-fp-edit-fila label { display: inline-flex; align-items: center; gap: 6px; }
+.stl .stl-fp-edit-fila input {
+  width: 84px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 12px;
+  color: var(--text); background: var(--bg);
+}
+.stl .stl-fp-valor { text-align: right; font-size: 18px; font-weight: 800; white-space: nowrap; }
+.stl .stl-fp-fila.is-head .stl-fp-valor { font-size: 10px; }
+.stl .stl-fp-fila.is-total { border-top: 2px solid var(--text); border-bottom: 0; padding-top: 16px; }
+.stl .stl-fp-total-texto { display: flex; flex-direction: column; gap: 2px; }
+.stl .stl-fp-total-texto b { font-size: 15px; }
+.stl .stl-fp-total-texto span { font-size: 12px; color: var(--text-muted); }
+.stl .stl-fp-total-valor { font-size: 24px; }
+
+.stl .stl-fp-recurrente {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; align-items: center;
+  padding: 16px 18px; border-radius: 14px; background: var(--bg-soft); border: 1px solid var(--border);
+}
+.stl .stl-fp-recurrente-icono {
+  display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border-radius: 10px; background: var(--bg); color: var(--blue); font-size: 18px; font-weight: 800;
+}
+.stl .stl-fp-recurrente-texto { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--text-2); }
+.stl .stl-fp-recurrente-texto b { font-size: 15px; color: var(--text); }
+.stl .stl-fp-recurrente-monto { display: flex; flex-direction: column; align-items: flex-end; }
+.stl .stl-fp-recurrente-monto b { font-size: 22px; font-weight: 800; color: var(--blue); }
+.stl .stl-fp-recurrente-monto span { font-size: 11px; color: var(--text-muted); }
+
+.stl .stl-fp-calendario { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; }
+.stl .stl-fp-linea {
+  position: relative; display: flex; justify-content: space-between; gap: 8px; margin: 0; padding: 0; list-style: none;
+}
+.stl .stl-fp-linea::before {
+  content: ""; position: absolute; left: 16px; right: 16px; top: 15px; height: 2px; background: var(--border);
+}
+.stl .stl-fp-linea li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; }
+.stl .stl-fp-punto {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-bottom: 4px;
+  border-radius: 100px; background: var(--blue); color: #fff; font-size: 11px; font-weight: 800;
+}
+.stl .stl-fp-linea li.is-recurrente .stl-fp-punto { background: var(--dark-bg); }
+.stl .stl-fp-linea b { font-size: 12px; }
+.stl .stl-fp-linea span:last-child { font-size: 11px; color: var(--text-muted); }
+.stl .stl-fp-nota { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+
+@media (max-width: 720px) {
+  .stl .stl-fp-beneficio { grid-template-columns: minmax(0, 1fr); }
+  .stl .stl-fp-beneficio-num { border-right: 0; padding-right: 0; }
+  .stl .stl-fp-fila { grid-template-columns: minmax(0, 1fr) auto; }
+  .stl .stl-fp-fila .stl-fp-momento { grid-column: 1 / -1; grid-row: 2; }
+  .stl .stl-fp-fila.is-head > :nth-child(2) { display: none; }
+  .stl .stl-fp-recurrente { grid-template-columns: minmax(0, 1fr); }
+  .stl .stl-fp-recurrente-icono { display: none; }
+  .stl .stl-fp-recurrente-monto { align-items: flex-start; }
+  .stl .stl-fp-linea { flex-wrap: wrap; justify-content: flex-start; gap: 14px 18px; }
+  .stl .stl-fp-linea::before { display: none; }
+}

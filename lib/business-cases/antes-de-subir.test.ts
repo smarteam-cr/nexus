@@ -36,6 +36,12 @@ describe("antesDeSubir", () => {
     expect(a.some((x) => x.texto === "Todas las licencias tienen precio")).toBe(true);
   });
 
+  it("una forma de pago cuyos porcentajes no cierran avisa, pero no frena", () => {
+    const a = antesDeSubir([hero, { key: "forma_de_pago", hidden: false, data: { cuotas: "2", pagos: [{ porcentaje: "80" }, { porcentaje: "40" }] } }]);
+    expect(frenaLaSubida(a)).toBe(false);
+    expect(a.some((x) => x.nivel === "aviso" && x.texto.startsWith("Forma de pago:"))).toBe(true);
+  });
+
   it("cuenta las secciones con contenido y las ocultas", () => {
     const a = antesDeSubir([hero, { key: "faq", hidden: true, data: { x: "y" } }]);
     expect(a.at(-1)).toEqual({ nivel: "ok", texto: "1 sección con contenido · 1 oculta" });

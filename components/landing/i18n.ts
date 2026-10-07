@@ -56,6 +56,28 @@ const STRINGS = {
   porDefinir: { es: "Por definir", en: "To be defined" },
   // Inversión
   montosEn: { es: "Montos en", en: "Amounts in" },
+  /* La FORMA DE PAGO (2026-10-07): los rótulos fijos de la sección debajo de la Inversión. */
+  fpInversionTotal: { es: "Inversión de la implementación", en: "Implementation investment" },
+  fpFormaDePago: { es: "Forma de pago", en: "Payment terms" },
+  fpPago: { es: "pago", en: "payment" },
+  fpPagos: { es: "pagos", en: "payments" },
+  fpIguales: { es: "Iguales y consecutivos.", en: "Equal and consecutive." },
+  fpValorPorPago: { es: "Valor por pago", en: "Amount per payment" },
+  fpPorCuota: { es: "por cada cuota.", en: "per installment." },
+  fpDelTotal: { es: "del total.", en: "of the total." },
+  fpBeneficio: { es: "Beneficio comercial", en: "Commercial benefit" },
+  fpDescuentosAplicados: { es: "Descuentos aplicados a la implementación", en: "Discounts applied to the implementation" },
+  fpPagoCol: { es: "Pago", en: "Payment" },
+  fpMomentoCol: { es: "Momento", en: "When" },
+  fpValorCol: { es: "Valor", en: "Amount" },
+  fpTotalImplementacion: { es: "Total de la implementación", en: "Implementation total" },
+  fpTotalNota: { es: "Los pagos completan el valor total del proyecto.", en: "The payments add up to the project total." },
+  fpCalendario: { es: "Calendario de inversión", en: "Payment calendar" },
+  fpDesde: { es: "Desde", en: "From" },
+  fpMes: { es: "mes", en: "month" },
+  fpMensual: { es: "mensual", en: "monthly" },
+  fpCuantosPagos: { es: "Pagos", en: "Payments" },
+  fpEnElCalendario: { es: "En el calendario", en: "Calendar label" },
   nota: { es: "Nota", en: "Note" },
   // ⚠ `inversionFase`/`rangoFase` YA NO son el default de la sección: son lo que la
   // propuesta de sitio web DECLARA en su def (`invest`). Se quedan acá porque borrarlas

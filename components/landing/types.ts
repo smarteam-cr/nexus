@@ -445,6 +445,14 @@ export interface LandingContext {
    */
   propuesta?: {
     hubsVendidos?: string[];
+    /**
+     * La sección «Inversión» del MISMO documento (2026-10-07), para la «Forma de pago»: reparte su
+     * total entre los pagos en vivo. A diferencia de `hubsVendidos`, este SÍ lo arman las tres
+     * superficies —el editor, el link del cliente y el PDF— con `inversionDelDocumento`
+     * (lib/landing/forma-de-pago.ts): sin él, la forma de pago saldría sin montos justo donde la lee
+     * el cliente.
+     */
+    inversion?: import("@/lib/landing/inversion").InversionData | null;
   };
   /**
    * Solo el DIAGNÓSTICO (2026-10-02): lo que una sección necesita de OTRA del mismo documento, o de

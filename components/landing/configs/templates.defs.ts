@@ -18,6 +18,7 @@ import type { BCSectionDef } from "./business-case.defs";
 import { BC_SECTION_DEFS } from "./business-case.defs";
 import {
   ESCALA_PROPUESTA_DEF,
+  FORMA_DE_PAGO_DEF,
   makeDiagramArchitectureDef,
   makeProcessMappingDef,
   USE_CASES_DEF,
@@ -45,6 +46,16 @@ export interface BcTemplateDef {
   sections: BCSectionDef[];
 }
 
+/**
+ * La forma de pago va JUSTO DEBAJO de la inversión en las dos propuestas (2026-10-07): se lee como
+ * su continuación —«cuánto» y después «cómo se paga»—. Se inserta por la key y no por posición
+ * para que mover la inversión no deje la forma de pago colgada en otro lado.
+ */
+function despuesDeLaInversion(defs: BCSectionDef[]): BCSectionDef[] {
+  const i = defs.findIndex((d) => d.key === "inversion");
+  return i === -1 ? defs : [...defs.slice(0, i + 1), FORMA_DE_PAGO_DEF, ...defs.slice(i + 1)];
+}
+
 export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
   [HUBSPOT_TEMPLATE_ID]: {
     id: HUBSPOT_TEMPLATE_ID,
@@ -66,7 +77,7 @@ export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
       ESCALA_PROPUESTA_DEF,
       ...BC_SECTION_DEFS.slice(2, 4), // antes_despues · solucion
       USE_CASES_DEF,
-      ...BC_SECTION_DEFS.slice(4), // roi · cronograma · inversion · partner · cta
+      ...despuesDeLaInversion(BC_SECTION_DEFS.slice(4)), // roi · cronograma · inversion · forma_de_pago · partner · cta
       // Motor de diagramas interactivo (la data vieja de tech_architecture se
       // convierte lazy en el renderer — sin migración de DB).
       makeDiagramArchitectureDef({
@@ -90,7 +101,7 @@ export const BC_TEMPLATES: Record<string, BcTemplateDef> = {
       "Sos un consultor de Smarteam (Elite HubSpot Partner · Partner de Insider, LATAM) que arma una PROPUESTA DE SITIO WEB (diseño + desarrollo, típicamente sobre HubSpot Content Hub) para un prospecto, a partir de transcripts de reuniones comerciales y notas. Posicionamiento de la marca: Smarteam no vende software — lo pone a producir.\n\nESTA PROPUESTA SE PRESENTA EN PANTALLA, EN VIVO: escribí en estilo ejecutivo y ESCUETO. Frases cortas; NINGÚN campo de texto de más de 2 líneas (~25 palabras); títulos de 3 a 6 palabras; detalles de UNA línea. Preferí sustantivos concretos sobre narrativa. Menos es más: si dudás entre incluir o recortar, recortá.",
     maxTokens: 12000, // 8 secciones más ricas que las del BC clásico
     features: { useCaseChecklist: false }, // sin sección de materialización en las 8 (F7)
-    sections: WEBSITE_SECTION_DEFS,
+    sections: despuesDeLaInversion(WEBSITE_SECTION_DEFS),
   },
 };
 

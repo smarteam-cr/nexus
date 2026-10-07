@@ -15,6 +15,7 @@ import LandingView from "@/components/landing/LandingView";
 import ExternalShell from "@/components/external/ExternalShell";
 import PropuestaAprobacion from "@/components/external/PropuestaAprobacion";
 import { configForSnapshot } from "@/components/landing/configs/templates";
+import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
 import { brandLogoMap, type BrandLogos } from "@/lib/external/smarteam-logo";
 import type {
   BusinessCaseApproval,
@@ -51,6 +52,10 @@ export default function BusinessCaseLanding({
           clientLogoScale: data.clientLogoScale,
           smarteamLogoUrl: brandLogos.smarteam,
           brandLogos: brandLogoMap(brandLogos),
+          // La forma de pago reparte la Inversión del snapshot: la misma que el cliente ve arriba.
+          propuesta: {
+            inversion: inversionDelDocumento(data.sections.map((s) => ({ key: s.key, data: s.blocks[0]?.data ?? null }))),
+          },
         }}
         sections={data.sections.map((s) => ({
           key: s.key,

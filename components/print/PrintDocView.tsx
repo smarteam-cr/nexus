@@ -19,6 +19,7 @@ import LandingView from "@/components/landing/LandingView";
 import type { LandingConfig, LandingContext } from "@/components/landing/types";
 import type { PrintDocPayload, PrintRow } from "@/lib/print/load-doc";
 import { configForCanvas } from "@/components/landing/configs/templates";
+import { inversionDelDocumento } from "@/lib/landing/forma-de-pago";
 import { landingConfigForRoles } from "@/components/landing/configs/roles";
 import { landingConfigForCronograma } from "@/components/landing/configs/cronograma";
 import {
@@ -92,6 +93,8 @@ const ADAPTADOR_ROLES: Adaptador = {
 const ADAPTADOR_BUSINESS_CASE: Adaptador = {
   config: (keys, templateId) => configForCanvas(templateId, keys.map((key) => ({ key }))),
   sections: (rows) => rows.map((r) => ({ key: r.key, data: r.blocks[0]?.data ?? null })),
+  // La forma de pago reparte la Inversión del MISMO documento, igual que en el editor y en el link.
+  ctx: (sections) => ({ propuesta: { inversion: inversionDelDocumento(sections) } }),
 };
 
 /* El cronograma tampoco necesita adaptador propio: su orden es FIJO (portada + Gantt) y su

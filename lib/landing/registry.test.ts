@@ -420,6 +420,9 @@ describe("un renderer, un contrato de datos", () => {
        `web_investment` lo montan las DOS propuestas comerciales. Su esquema tiene que servirle a
        las dos — que es justo lo que el trinquete de arriba vigila. */
     inversion: "generico",
+    /* La forma de pago (2026-10-07, Elías): debajo de la inversión en las DOS propuestas, igual que
+       ella. Su esquema es solo la forma (cuotas y momentos): los montos los lee de la inversión. */
+    forma_de_pago: "generico",
     /* La posición en la Escala de Rendimiento (2026-09-12): el mismo dato en cuatro momentos
        —Propuesta, Kickoff, Diagnóstico, Entrega—, así que un solo esquema para los cuatro. */
     escala_posicion: "generico",
@@ -567,11 +570,11 @@ describe("BC_TEMPLATES: toda def resuelve renderer y las keys están congeladas"
     // `posicion_escala` (2026-09-12, Elías): la Escala posiciona desde la propuesta.
     expect(BC_TEMPLATES.hubspot_v1.sections.map((d) => d.key)).toEqual([
       "hero", "dolores", "posicion_escala", "antes_despues", "solucion", "casos_de_uso", "roi",
-      "cronograma", "inversion", "partner", "cta", "arquitectura_tecnologica", "mapeo_procesos",
+      "cronograma", "inversion", "forma_de_pago", "partner", "cta", "arquitectura_tecnologica", "mapeo_procesos",
     ]);
     expect(BC_TEMPLATES.website_v1.sections.map((d) => d.key)).toEqual([
       "hero", "diagnostico", "posicion_escala", "arquitectura_sitio", "arquitectura_conexion",
-      "alcance", "metodologia", "inversion", "por_que_smarteam",
+      "alcance", "metodologia", "inversion", "forma_de_pago", "por_que_smarteam",
     ]);
     // Un template nuevo declara acá su snapshot al nacer.
     expect(Object.keys(BC_TEMPLATES).sort()).toEqual(["hubspot_v1", "website_v1"]);
