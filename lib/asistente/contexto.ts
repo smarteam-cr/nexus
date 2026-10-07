@@ -1082,6 +1082,8 @@ export async function contextoDeDocumento(
       oculta: false,
       esCreada: esCustomKey(s.key),
       movible: !def?.pinned,
+      /* Una sección fija se oculta si su def no lo prohíbe (`noHide`), igual que el ojo del editor. */
+      ocultable: !def?.pinned || !def?.noHide,
       /* ⭐ La pregunta NO es «¿el motor le pinta encabezado?» sino «¿escribir el rótulo se va a
          VER?», y `selfTitled` contesta la primera. Falla en las dos direcciones: el cronograma y
          los procesos del kickoff son `selfTitled` y SÍ pintan lo que el motor les pasa, así que el
