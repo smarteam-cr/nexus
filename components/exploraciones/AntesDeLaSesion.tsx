@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * AntesDeLaSesion — preparar la sesión (tableros «Antes · Sesión 3», en orden y por sección,
- * 2026-10-07). De arriba hacia abajo: el objetivo que sugiere el agente (se usa, se edita o se
- * descarta), cuándo y con quién (con lo que falta: quién firma, alguien técnico), lo que traes de las
- * sesiones anteriores (y qué cambió en la guía por eso), y la guía en tres tramos —abrir, preguntar,
- * cerrar— con las preguntas en el orden de la conversación o separadas en «Arquitectura de la venta» y
- * «Escala de rendimiento». Abajo, plegado, qué hacer si se resiste.
+ * AntesDeLaSesion — la pestaña «Preparación» de una sesión (tableros «Antes · Sesión 3», en orden y
+ * por sección, 2026-10-07; se llamaba «Antes» hasta el mismo día). De arriba hacia abajo: en qué
+ * estado está la guía y qué hace actualizarla, el objetivo que sugiere el agente (se usa, se edita o
+ * se descarta), cuándo y con quién (con lo que falta: quién firma, alguien técnico), lo que traes de
+ * las sesiones anteriores, y la guía en tres tramos —abrir, preguntar, cerrar— con las preguntas en el
+ * orden de la conversación o separadas en «Arquitectura de la venta» y «Escala de rendimiento». Abajo,
+ * plegado, qué hacer si se resiste.
  */
 import { useState } from "react";
 import { BotonAzul, BotonBlanco, BotonTexto, IconoDeSugerencia } from "@/components/ui/sistema";
@@ -14,12 +15,14 @@ import { cn } from "@/lib/cn";
 import { puntoQueSePregunta, listaParaProponer } from "@/lib/exploraciones/calidad";
 import { CASILLAS_DEL_RESUMEN, ETIQUETA_DEL_ROL, type Persona, type SiguientePaso } from "@/lib/exploraciones/casillas";
 import { esFuenteDeHipotesis } from "@/lib/exploraciones/contenido";
-import { diaCorto } from "@/lib/exploraciones/fechas";
+import { diaCorto, diaYHora } from "@/lib/exploraciones/fechas";
 import {
   APERTURA_DE_BASE,
+  cambiosDesdeLaGuia,
   CIERRE_DE_BASE,
   CONEXION_DE_BASE,
   DURACION_DE_LA_SESION,
+  ladoDeLaPregunta,
   loQueTraes,
   OBJECION,
   OBJECIONES_DE_BASE,
@@ -34,9 +37,88 @@ import { DeQueEs, diaLargo, EtiquetaDePregunta, nombreDelPara, Rotulo, useEditar
 import { QueVaPrimero } from "./QueVaPrimero";
 import Segmentos from "./Segmentos";
 import { lineasDe } from "./Resumen";
+import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
 
 type Vista = "orden" | "seccion";
+
+// ── El estado de la guía ──────────────────────────────────────────────────────
+
+/** «a, b y c». */
+function enLista(xs: readonly string[]): string {
+  return xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`;
+}
+
+/**
+ * En qué estado está la guía de la próxima sesión y qué hace el botón (Elías, 2026-10-07: «no hay
+ * claridad de qué hace el CTA de rearmar guía»; antes era un botón con un título que solo se veía al
+ * pasar el mouse). Tres casos: la de base (preguntas generales, sin el agente), la armada y al día, y
+ * la armada pero vieja, que dice QUÉ cambió desde entonces.
+ */
+function EstadoDeLaGuia({ pestana }: { pestana: PestanaDeSesion }) {
+  const { escala, puedeEditar } = useLienzo();
+  const { corrida, corriendo, lanzando, lanzar } = useCorrida();
+  const { guia, foco } = useGuiaDeLaSesion(pestana, true);
+  const armando = (corriendo && corrida?.modo === "guia") || lanzando;
+  const cambios = guia ? cambiosDesdeLaGuia(guia, foco.huecos, foco.enfoque, pestana.sesion?.explorar ?? []) : null;
+  const nombre = (para: string) => nombreDelPara(para, escala);
+
+  let titulo: string;
+  let detalle: string;
+  let boton: string;
+  let tono: "info" | "aviso" | "neutro";
+  if (armando) {
+    titulo = "El agente está armando la guía";
+    detalle = corrida?.fase ?? "Empezando…";
+    boton = "Armando…";
+    tono = "info";
+  } else if (!guia) {
+    titulo = "Esta es la guía de base";
+    detalle = "Preguntas generales para lo que falta. «Armar la guía» la adapta a esta empresa: escribe las preguntas con lo que ya se sabe, suma repreguntas, cómo abrir y cómo responder objeciones.";
+    boton = "Armar la guía";
+    tono = "info";
+  } else if (cambios) {
+    const partes = [
+      cambios.respondidas.length ? `ya se respondió ${enLista(cambios.respondidas.map(nombre))}` : null,
+      cambios.nuevas.length ? `ahora también falta ${enLista(cambios.nuevas.map(nombre))}` : null,
+      cambios.dimensiones ? "cambiaron las dimensiones de la escala que conviene preguntar" : null,
+      cambios.llevados ? `te llevaste ${cambios.llevados === 1 ? "un punto" : `${cambios.llevados} puntos`} de otra sesión que la guía todavía no ubica` : null,
+    ].filter((x): x is string => !!x);
+    titulo = `La guía es del ${diaCorto(guia.en)} y desde entonces cambió lo que se sabe`;
+    detalle = `${partes.join("; ").replace(/^\p{Ll}/u, (c) => c.toUpperCase())}. «Actualizar la guía» deja de preguntar lo ya respondido y suma lo nuevo.`;
+    boton = "Actualizar la guía";
+    tono = "aviso";
+  } else {
+    titulo = `Guía armada por el agente el ${diaYHora(guia.en)}`;
+    detalle = "Está al día con lo que se sabe. Si cambió algo que el lienzo no tiene (una nota, una instrucción), puedes volver a armarla.";
+    boton = "Volver a armarla";
+    tono = "neutro";
+  }
+  return (
+    <section
+      role={armando ? "status" : undefined}
+      className={cn(
+        "flex flex-wrap items-center gap-3 rounded-xl border px-[18px] py-3.5",
+        tono === "aviso" ? "border-warn-line bg-warn-surface" : tono === "info" ? "border-info-line bg-info-surface" : "border-line bg-surface",
+      )}
+    >
+      <div className="min-w-0 flex-[1_1_360px] space-y-0.5">
+        <p className={cn("text-sm font-semibold", tono === "aviso" ? "text-warn-ink" : "text-fg")}>{titulo}</p>
+        <p className="text-[13px] leading-[1.45] text-fg-secondary">{detalle}</p>
+      </div>
+      {puedeEditar &&
+        (tono === "neutro" ? (
+          <BotonBlanco disabled={armando || corriendo} onClick={() => void lanzar("guia")}>
+            {boton}
+          </BotonBlanco>
+        ) : (
+          <BotonAzul disabled={armando || corriendo} onClick={() => void lanzar("guia")}>
+            {boton}
+          </BotonAzul>
+        ))}
+    </section>
+  );
+}
 
 // ── El objetivo ───────────────────────────────────────────────────────────────
 
@@ -57,8 +139,8 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
   const [texto, setTexto] = useState("");
 
   const puntos = listaParaProponer(exp.estado, chequeo);
-  const paras = new Set(preguntas.map((p) => p.para));
-  const hayDimensiones = preguntas.some((p) => p.tipo === "dimension");
+  const paras = new Set(preguntas.map((p) => p.apunta?.para ?? p.para));
+  const hayDimensiones = preguntas.some((p) => ladoDeLaPregunta(p) === "dimension");
   const faltan = puntos.filter((p) => !p.cumplido);
   const cubre = faltan.filter((p) => puntoQueSePregunta(p.id, paras, hayDimensiones)).length;
 
@@ -164,11 +246,13 @@ function Objetivo({ pestana, esLaProxima, sugerido, preguntas }: { pestana: Pest
 
 function CuandoYConQuien({ pestana }: { pestana: PestanaDeSesion }) {
   const { exp } = useLienzo();
-  const { hoy, todas } = useSesiones();
+  const { hoy, todas, proxima } = useSesiones();
   const c = exp.estado.contenido.casillas;
   const paso = c.siguientePaso as SiguientePaso | undefined;
   const personas = ((c.autoridad as Persona[] | undefined) ?? []).slice(0, 3);
-  const fecha = pestana.sesion?.fecha ?? pestana.fecha;
+  // Sin fecha propia, la de HubSpot: la cabecera ya la mostraba y acá decía «Sin agendar».
+  const deHubspot = !pestana.sesion?.fecha && !pestana.fecha && proxima.desde === "hubspot" ? proxima.fecha : null;
+  const fecha = pestana.sesion?.fecha ?? pestana.fecha ?? deHubspot;
   const pasoVencido = !!paso?.fecha && paso.fecha < hoy;
   const faltan: string[] = [];
   if (!personas.some((p) => p.rol === "firma")) faltan.push("Falta: quién firma");
@@ -181,7 +265,10 @@ function CuandoYConQuien({ pestana }: { pestana: PestanaDeSesion }) {
     <section className="grid gap-[18px] rounded-xl border border-line bg-surface px-[18px] py-4 sm:grid-cols-2">
       <div className="min-w-0">
         <Rotulo>Cuándo</Rotulo>
-        <p className="mt-1.5 text-sm text-fg">{fecha ? diaLargo(fecha) : "Sin agendar"}</p>
+        <p className="mt-1.5 text-sm text-fg">
+          {fecha ? (deHubspot && fecha.length > 10 ? diaYHora(fecha) : diaLargo(fecha)) : "Sin agendar"}
+          {deHubspot && <span className="text-[13px] text-fg-muted"> · agendada en HubSpot</span>}
+        </p>
         {pasoVencido ? (
           <p className="mt-0.5 text-xs text-warn-ink">No hay un siguiente paso vigente: el último era del {diaCorto(paso!.fecha!)}.</p>
         ) : (
@@ -234,7 +321,7 @@ function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
     <section className="overflow-hidden rounded-xl border border-line bg-surface">
       <header className="border-b border-line px-[18px] py-3.5">
         <h3 className="text-[15px] font-semibold text-fg">Lo que traes de las sesiones anteriores</h3>
-        <p className="mt-0.5 text-[12.5px] text-fg-muted">Esto ya cambió la guía de hoy.</p>
+        <p className="mt-0.5 text-[12.5px] text-fg-muted">Lo que viene de antes va primero en la guía de abajo, con la etiqueta de su sesión.</p>
       </header>
       {filas.map((f) => (
         <div key={f.clave} className="flex gap-4 border-b border-surface-hover px-[18px] py-3.5 last:border-b-0">
@@ -257,15 +344,14 @@ function LoQueTraes({ pestana }: { pestana: PestanaDeSesion }) {
       ))}
       {hayAnteriores && respondidas.length > 0 && (
         <div className="flex gap-4 px-[18px] py-3.5">
-          <div className="w-[110px] flex-none text-xs text-fg-muted">Hasta hoy</div>
+          <div className="w-[110px] flex-none text-xs text-fg-muted">Lo que ya se sabe</div>
           <p className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[13px] leading-[19px] text-fg-secondary">
-            Ya respondido:
             {respondidas.map((c) => (
               <span key={c} className="rounded-full border border-success-line bg-success-surface px-2 py-px text-[11.5px] text-success-ink">
                 ✓ {nombreDelPara(c, escala)}
               </span>
             ))}
-            <span className="font-semibold text-fg">→ no se repregunta.</span>
+            <span className="font-semibold text-fg">→ la guía no lo vuelve a preguntar.</span>
           </p>
         </div>
       )}
@@ -350,9 +436,10 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
   const conEvidencia = Object.values(e.contenido.chequeo).some((x) => !esFuenteDeHipotesis(x.fuente)) || e.propuesta.leidas.sesiones.length > 0;
   const desdeCero = esLaProxima && !conTest && !conEvidencia && pestana.numero === 1;
   const apertura = guia?.apertura ?? [];
-  const deTarjetas = preguntas.filter((p) => p.tipo === "tarjeta");
-  const deDimensiones = preguntas.filter((p) => p.tipo === "dimension");
-  const sueltas = preguntas.filter((p) => p.tipo === "abierto");
+  const deTarjetas = preguntas.filter((p) => ladoDeLaPregunta(p) === "tarjeta");
+  const deDimensiones = preguntas.filter((p) => ladoDeLaPregunta(p) === "dimension");
+  // Solo lo llevado que todavía no se sabe a qué apunta (se llevó después de armar la guía).
+  const sueltas = preguntas.filter((p) => ladoDeLaPregunta(p) === null);
   const faltan = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, e.contenido.casillas[c]).length === 0).length;
   const areasEnJuego = escala.areas.filter((a) => e.areas.includes(a.id)).map((a) => a.nombre);
 
@@ -418,7 +505,8 @@ function LaGuia({ pestana, esLaProxima }: { pestana: PestanaDeSesion; esLaProxim
         <div className="space-y-4 px-[18px] py-4">
           {sueltas.length > 0 && (
             <div className="rounded-xl border border-line px-4 py-3">
-              <p className="mb-2 text-[13px] font-semibold text-fg">Quedó abierto</p>
+              <p className="text-[13px] font-semibold text-fg">Quedó abierto</p>
+              <p className="mb-2 text-xs text-fg-muted">Lo llevaste de otra sesión después de armar la guía: al actualizarla, cada punto va a su sección.</p>
               <ul>
                 {sueltas.map((p) => (
                   <Pregunta key={p.para} p={p} borde />
@@ -507,6 +595,7 @@ export default function AntesDeLaSesion({ pestana, esLaProxima }: { pestana: Pes
 
   return (
     <div className="space-y-5">
+      {esLaProxima && <EstadoDeLaGuia pestana={pestana} />}
       <Objetivo pestana={pestana} esLaProxima={esLaProxima} sugerido={guia?.objetivo ?? null} preguntas={preguntas} />
       {esLaProxima && <CuandoYConQuien pestana={pestana} />}
       {esLaProxima && <LoQueTraes pestana={pestana} />}

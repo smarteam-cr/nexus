@@ -399,7 +399,8 @@ describe("el buscador de cualquier proyecto encuentra las reuniones sin dueño (
        pertenencia que la X del cronograma no revierte—. La decisión de MIN_BUSQUEDA_SIN_DUENIO es que a
        un proyecto normal se le ofrecen ÚNICAMENTE por búsqueda. La edición que la pone en rojo: sacar
        el filtro de dueño de la consulta sin búsqueda, o aplicarlo también buscando. */
-    const ruta = leer("app/api/projects/[projectId]/timeline/calendario/route.ts");
+    // Desde el 2026-10-07 la consulta es una sola para todos los documentos (y la preventa).
+    const ruta = leer("lib/sessions/calendario-de-quien-busca.ts");
     expect(ruta).toMatch(
       /const filtroDuenio = buscando\s*\?\s*Prisma\.empty\s*:\s*Prisma\.sql`AND \(s\."resolvedClientId" IS NOT NULL OR s\."manualClientId" IS NOT NULL\)`;/,
     );

@@ -46,8 +46,9 @@
 - **Contexto adicional** (`components/contexto/ContextoAdicional.tsx`): el bloque plegable arriba de
   una pieza con lo que lee su IA además de lo de siempre: las reuniones (elegidas, en los documentos
   del cliente; todas las de la empresa, en la preventa), las fuentes manuales y las «Instrucciones
-  adicionales», que pesan más que lo demás y no son evidencia. Se llamaba «Contexto del cronograma»,
-  «del diagnóstico», etc. hasta el 2026-10-06.
+  adicionales», que pesan más que lo demás y no son evidencia. En todos se puede buscar y sumar cualquier reunión de
+  Meet de tu calendario o del cliente (2026-10-07). Se llamaba «Contexto del cronograma», «del diagnóstico», etc.
+  hasta el 2026-10-06.
 - **Preventa** (Ventas → Preventa, `/sales/exploraciones`, modelo `ExploracionDeVenta`): el lienzo de
   una empresa en venta, desde que llega (por el test o desde HubSpot) hasta la primera propuesta y el
   traspaso al CSE. Sus piezas: Preparación (Identificación y Conexión) · Exploración (las reuniones) ·
@@ -55,11 +56,12 @@
   Success (permiso `preventa`, desde el 2026-10-06); armar la propuesta sigue siendo de Ventas. Se
   llamaba «Exploración de venta» hasta el 2026-10-03; la dirección y el modelo conservan ese nombre. No
   confundir con el canvas «Exploración» de un proyecto (el del CSE).
-- **Sesión de la preventa** (pieza Exploración, `SesionPlaneada`): una reunión con el prospecto, en tres momentos.
-  **Antes**: el objetivo (lo sugiere el agente), cuándo y con quién, lo que traes de las sesiones anteriores y la
-  guía (abrir, preguntar, cerrar). **Durante**: cada pregunta con su casilla de hecha y lo que respondió, las notas
-  libres y el siguiente paso. **Después**: lo que leyó el agente de esa reunión (resumen y qué se respondió), lo que
-  sugiere y **Quedó abierto**. Una pregunta que viene de antes lleva su etiqueta: **«Quedó abierto en la sesión N»**
+- **Sesión de la preventa** (pieza Exploración, `SesionPlaneada`): una reunión con el prospecto, en tres pestañas
+  (se llamaban Antes, Durante y Después hasta el 2026-10-07). **Preparación**: en qué estado está la guía, el
+  objetivo (lo sugiere el agente), cuándo y con quién, lo que traes de las sesiones anteriores y la guía (abrir,
+  preguntar, cerrar). **En vivo**: cada pregunta con su casilla de hecha y lo que respondió, las notas libres y el
+  siguiente paso. **Análisis**: lo que leyó el agente de esa reunión (resumen y qué se respondió), lo que sugiere y
+  **Quedó abierto**. Una pregunta que viene de antes lleva su etiqueta: **«Quedó abierto en la sesión N»**
   (el vendedor la marcó para llevar) o **«Pasó de la sesión N»** (esa sesión se cortó). Una sesión sin
   conversación pregunta qué pasó: otro canal, se cortó o no se hizo. Ver DECISIONS §Las sesiones de la preventa.
 - **Exploración — Sesiones y Cuestionarios** (desde el 2026-10-05, `lib/guia-exploracion`): la pieza

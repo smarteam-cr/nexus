@@ -224,6 +224,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     const leido = await leerFuentes({
       exploracionId,
       clientId: fila.clientId,
+      elegidas: estado.contenido.reunionesElegidas,
       companyId: fila.client.hubspotCompanyId,
       creadaEn: fila.createdAt,
       escala,
@@ -261,6 +262,9 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       fuentes: leido.fuentes,
       hoy: new Date().toISOString(),
       proxima: leido.agenda[0] ?? null,
+      /* Una reunión que ya pasó: la de HubSpot que se hizo, una de Meet con su texto (S) o algo que el
+         vendedor sumó a mano (M). Con eso no se propone cómo conectar. */
+      ...(modo === "preparar" ? { yaHablaron: (leido.reunionesDeHubspot ?? 0) > 0 || leido.fuentes.some((f) => /^[SM]\d/.test(f.id)) } : {}),
       equipo: await nombresDelEquipo(),
       ...(modo === "leer" ? planDeLaLectura(estado, escala, leido) : {}),
     };
@@ -394,7 +398,14 @@ async function leerLoQueYaHabia(exploracionId: string, huboReunionesEnHubspot: b
   if (propuesta.corridas.some((c) => c.modo === "leer")) return;
   if (!(await seVendeTodavia(fila))) return;
   if (!huboReunionesEnHubspot) {
-    const reuniones = await reunionesDeLaExploracion({ exploracionId, clientId: fila.clientId, creadaEn: fila.createdAt, propuesta, leido: leerLoLeido(fila.test) });
+    const reuniones = await reunionesDeLaExploracion({
+      exploracionId,
+      clientId: fila.clientId,
+      creadaEn: fila.createdAt,
+      propuesta,
+      leido: leerLoLeido(fila.test),
+      elegidas: estadoDesdeFila(fila).contenido.reunionesElegidas,
+    });
     if (!hayQueLeerAlPreparar(reuniones)) return;
   }
   await lanzarCorrida(exploracionId, "leer", { triggeredByEmail: opts.triggeredByEmail, automatica: true });

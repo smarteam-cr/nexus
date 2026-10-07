@@ -32,6 +32,7 @@ import {
 import { idsDeLaEscala, type EscalaDelLienzo } from "@/lib/exploraciones/escala-del-lienzo";
 import { chequeoConfirmado, chequeoDelMapa, posicionesDelMapa } from "@/lib/exploraciones/mapa";
 import { sePuedeReintentar } from "@/lib/exploraciones/reintento";
+import { estadoDeLaConexion } from "@/lib/exploraciones/senales";
 import type { ExploracionParaLaPantalla } from "@/lib/exploraciones/servidor";
 import { Casilla } from "./Casilla";
 import ManejoDeObjeciones from "./ManejoDeObjeciones";
@@ -257,8 +258,13 @@ export default function LienzoDeExploracion({
 
   // Lo pendiente que todavía tiene dónde ir: lo de una dimensión o un criterio que ya no está no se cuenta ni se usa.
   const pendientes = useMemo(() => propuestaVigente(exp.estado).filter((it) => destinoValido(it.destino, validez)), [exp.estado, validez]);
-  // Las hipótesis de nivel son el mapa: no se «usan», se confirman en las reuniones.
-  const revisables = useMemo(() => pendientes.filter((it) => !esHipotesisDeNivel(it)), [pendientes]);
+  /* Las hipótesis de nivel son el mapa: no se «usan», se confirman en las reuniones. Y con conversación
+     (agendada o una reunión que ya pasó), la estrategia de conexión sobra: no se cuenta para revisar. */
+  const enContacto = estadoDeLaConexion({ agenda: exp.leido.agenda, reuniones }).tipo !== "sin-contacto";
+  const revisables = useMemo(
+    () => pendientes.filter((it) => !esHipotesisDeNivel(it) && !(enContacto && it.destino.tipo === "casilla" && it.destino.clave === "estrategiaDeConexion")),
+    [pendientes, enContacto],
+  );
   const mapa = useMemo(() => {
     const posiciones = posicionesDelMapa(exp.estado, pendientes);
     return { posiciones, chequeo: chequeoDelMapa(escala, exp.estado.areas, posiciones) };

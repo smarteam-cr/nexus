@@ -1,23 +1,23 @@
 "use client";
 
 /**
- * SesionesDeExploracion — la sesión elegida en la barra de la izquierda, con su «antes», su «durante»
- * y su «después» (rediseño del 2026-10-07, tableros «Preventa · Sesiones de exploración»). Acá vive
- * el encabezado (el título, si ya ocurrió, la línea de datos y el control Antes/Durante/Después) y lo
- * que cruza de una sesión a otra: llevar lo que quedó abierto a la siguiente, con de qué sesión viene.
- * Cada momento está en su archivo: AntesDeLaSesion, DuranteLaSesion y DespuesDeLaSesion.
+ * SesionesDeExploracion — la sesión elegida en la barra de la izquierda, con su preparación, su «en
+ * vivo» y su análisis (rediseño del 2026-10-07, tableros «Preventa · Sesiones de exploración»; las
+ * pestañas se llamaban Antes, Durante y Después hasta el mismo día, y por dentro siguen esas claves).
+ * Acá vive el encabezado (el título, si ya ocurrió, la línea de datos y las tres pestañas) y lo que
+ * cruza de una sesión a otra: llevar lo que quedó abierto a la siguiente, con de qué sesión viene y a
+ * qué apunta. Cada momento está en su archivo: AntesDeLaSesion, DuranteLaSesion y DespuesDeLaSesion.
+ * El estado de la guía y su botón viven en la preparación (AntesDeLaSesion › EstadoDeLaGuia).
  */
 import { useEffect, useState } from "react";
 import { Alert, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { Persona } from "@/lib/exploraciones/casillas";
 import type { Operacion } from "@/lib/exploraciones/contenido";
-import { aFecha, diaConAnio, diaCorto, diaYHora, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
+import { aFecha, diaConAnio, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import {
   DURACION_DE_LA_SESION,
   ETIQUETA_DEL_ESTADO,
-  focoDeLaGuia,
-  guiaVieja,
   MAX_PARA_EXPLORAR,
   MAX_SESIONES,
   nombreDeLaPestana,
@@ -50,23 +50,8 @@ function EstadoDeLaSesionChip({ estado, noSeHizo }: { estado: EstadoDeLaSesion; 
   return <span className={cn("rounded-full border px-2 py-0.5 text-[11.5px] font-semibold", TONO_DEL_ESTADO[estado])}>{ETIQUETA_DEL_ESTADO[estado]}</span>;
 }
 
-/** El botón blanco con borde del tablero («Rearmar la guía»). */
-function BotonClaro({ children, onClick, disabled, title }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; title?: string }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      disabled={disabled}
-      onClick={onClick}
-      className="rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
-    >
-      {children}
-    </button>
-  );
-}
-
-function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pestana: PestanaDeSesion; esLaProxima: boolean; momento: MomentoDeLaSesion; alMomento: (m: MomentoDeLaSesion) => void }) {
-  const { exp, escala, mapa, reuniones, puedeEditar, guardando, sesion: seleccion } = useLienzo();
+function EncabezadoDeLaSesion({ pestana, momento, alMomento }: { pestana: PestanaDeSesion; momento: MomentoDeLaSesion; alMomento: (m: MomentoDeLaSesion) => void }) {
+  const { exp, reuniones, puedeEditar, guardando, sesion: seleccion } = useLienzo();
   const { todas, sesiones, guardar, claveDeLaProxima, proxima, agregar, estadoDe } = useSesiones();
   const { corrida, corriendo, lanzando, lanzar } = useCorrida();
   const estado = estadoDe(pestana);
@@ -81,10 +66,7 @@ function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pe
     setTitulo(s?.titulo ?? "");
   }
   const cambiarSesion = (nueva: SesionPlaneada) => void guardar(sesiones.map((x) => (x.id === nueva.id ? nueva : x)));
-  const guia = esLaProxima ? exp.estado.propuesta.guia : s ? (exp.estado.propuesta.guias[s.id] ?? null) : null;
   const e = exp.estado;
-  const foco = focoDeLaGuia(e.contenido.casillas, escala, e.areas, mapa.posiciones, e.contenido.aExplorar);
-  const vieja = esLaProxima && !!guia && guiaVieja(guia, foco.huecos, foco.enfoque);
   const leyendo = corriendo && corrida?.modo === "leer";
 
   const elegirReunion = (valor: string) => {
@@ -101,7 +83,7 @@ function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pe
     </button>
   );
 
-  // La línea de datos de debajo del título: en el «después», la reunión; en el «durante», con quién; en el «antes», cuándo.
+  // La línea de datos de debajo del título: en el análisis, la reunión; en vivo, con quién; en la preparación, cuándo.
   const datos: React.ReactNode[] = [];
   if (momento === "despues" && r) {
     datos.push(diaLargo(r.fecha), ORIGEN[r.origen], r.titulo);
@@ -163,22 +145,19 @@ function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pe
         </div>
         <span className="flex-1" />
         <div data-recorrido="preventa.sesion.momento">
+          {/* Preparación, En vivo y Análisis (Elías, 2026-10-07); las claves siguen siendo antes, durante y después. */}
           <Segmentos
-            etiqueta="Antes, durante y después de la sesión"
+            etiqueta="Preparación, en vivo y análisis de la sesión"
+            tamano="grande"
             opciones={[
-              { clave: "antes", nombre: "Antes" },
-              { clave: "durante", nombre: "Durante" },
-              { clave: "despues", nombre: "Después", ...(estado === "ocurrio" ? {} : { desactivada: "Todavía no ocurre" }) },
+              { clave: "antes", nombre: "Preparación" },
+              { clave: "durante", nombre: "En vivo" },
+              { clave: "despues", nombre: "Análisis", ...(estado === "ocurrio" ? {} : { desactivada: "Todavía no ocurre" }) },
             ]}
             valor={momento}
             onCambiar={alMomento}
           />
         </div>
-        {momento === "antes" && esLaProxima && puedeEditar && (
-          <BotonClaro disabled={lanzando || corriendo} onClick={() => void lanzar("guia")} title={guia ? (vieja ? "La guía es de antes de lo último que se supo" : `Guía armada el ${diaYHora(guia.en)}`) : "Todavía es la guía de base"}>
-            {lanzando ? "Armando…" : guia ? "Rearmar la guía" : "Armar la guía"}
-          </BotonClaro>
-        )}
         {momento === "despues" && r && !r.leida && !r.corta && puedeEditar && (
           <button
             type="button"
@@ -254,12 +233,15 @@ function EncabezadoDeLaSesion({ pestana, esLaProxima, momento, alMomento }: { pe
   );
 }
 
-/** Sin los puntos que ya no están en `explorar`: el registro de dónde viene cada uno no crece solo. */
+/** Sin los puntos que ya no están en `explorar`: el registro de dónde viene y a qué apunta cada uno no crece solo. */
 function soloLoQueSigue(s: SesionPlaneada): SesionPlaneada {
-  const de = Object.fromEntries(Object.entries(s.explorarDe ?? {}).filter(([t]) => s.explorar?.includes(t)));
-  const { explorarDe: _viejo, ...resto } = s;
-  void _viejo;
-  return Object.keys(de).length ? { ...resto, explorarDe: de } : resto;
+  const sigue = ([t]: [string, string]) => !!s.explorar?.includes(t);
+  const de = Object.fromEntries(Object.entries(s.explorarDe ?? {}).filter(sigue));
+  const para = Object.fromEntries(Object.entries(s.explorarPara ?? {}).filter(sigue));
+  const { explorarDe: _de, explorarPara: _para, ...resto } = s;
+  void _de;
+  void _para;
+  return { ...resto, ...(Object.keys(de).length ? { explorarDe: de } : {}), ...(Object.keys(para).length ? { explorarPara: para } : {}) };
 }
 
 export default function SesionesDeExploracion() {
@@ -308,6 +290,7 @@ export default function SesionesDeExploracion() {
           ...destino,
           explorar: [...(destino.explorar ?? []).filter((x) => x !== llevar.texto), llevar.texto].slice(-MAX_PARA_EXPLORAR),
           explorarDe: { ...(destino.explorarDe ?? {}), ...(origenId ? { [llevar.texto]: origenId } : {}) },
+          explorarPara: { ...(destino.explorarPara ?? {}), ...(llevar.para ? { [llevar.texto]: llevar.para } : {}) },
         })
       : destino;
     lista = siguiente ? lista.map((s) => (s.id === destino.id ? conLoLlevado : s)) : [...lista, conLoLlevado];
@@ -316,7 +299,7 @@ export default function SesionesDeExploracion() {
     const ok = await cambiar(ops);
     if (!ok) return;
     if (llevar) {
-      // La reunión suelta se volvió sesión: queda elegida, en su «después».
+      // La reunión suelta se volvió sesión: queda elegida, en su análisis.
       if (!activa.sesion && origenId) {
         seleccion.elegir(origenId);
         seleccion.ponerMomento(origenId, "despues");
@@ -337,7 +320,7 @@ export default function SesionesDeExploracion() {
 
   return (
     <div className="space-y-5">
-      <EncabezadoDeLaSesion pestana={activa} esLaProxima={esLaProxima} momento={momento} alMomento={(m) => seleccion.ponerMomento(activa.clave, m)} />
+      <EncabezadoDeLaSesion pestana={activa} momento={momento} alMomento={(m) => seleccion.ponerMomento(activa.clave, m)} />
       {momento === "antes" ? (
         <AntesDeLaSesion key={activa.clave} pestana={activa} esLaProxima={esLaProxima} />
       ) : momento === "durante" ? (

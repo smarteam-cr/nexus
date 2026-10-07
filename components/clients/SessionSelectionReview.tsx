@@ -235,10 +235,11 @@ export default function SessionSelectionReview({
     };
   }, [consultaSinDuenio, projectId, conRegla]);
 
-  /* «De tu calendario» — solo el CRONOGRAMA (2026-09-23): las reuniones de quien busca que todavía
-     no son del proyecto. Sin escribir nada llegan sus más recientes; con MIN_BUSQUEDA_CALENDARIO
-     letras o más, todo su historial. Mismo cuidado que arriba: la respuesta se guarda con la clave
-     que la pidió y «pendiente» se deriva. */
+  /* «De tu calendario» — en TODOS los documentos desde el 2026-10-07 (Elías: «siempre se debe poder
+     buscar y agregar cualquier sesión de Meet del usuario o del cliente»; hasta ese día, solo el
+     cronograma): las reuniones de quien busca que todavía no son del proyecto. Sin escribir nada
+     llegan sus más recientes; con MIN_BUSQUEDA_CALENDARIO letras o más, todo su historial. Mismo
+     cuidado que arriba: la respuesta se guarda con la clave que la pidió y «pendiente» se deriva. */
   const [calendario, setCalendario] = useState<{
     clave: string | null;
     sesiones: CandidateSession[];
@@ -246,15 +247,14 @@ export default function SessionSelectionReview({
     error?: boolean;
   }>({ clave: null, sesiones: [], hayMas: false });
   const consultaCalendario = search.trim();
-  const claveCalendario =
-    showModal && esCronograma ? (consultaCalendario.length >= MIN_BUSQUEDA_CALENDARIO ? consultaCalendario : "") : null;
+  const claveCalendario = showModal ? (consultaCalendario.length >= MIN_BUSQUEDA_CALENDARIO ? consultaCalendario : "") : null;
   const calendarioPendiente = claveCalendario !== null && calendario.clave !== claveCalendario;
   useEffect(() => {
     if (claveCalendario === null) return;
     const ctrl = new AbortController();
     const t = setTimeout(
       () => {
-        fetch(`/api/projects/${projectId}/timeline/calendario?q=${encodeURIComponent(claveCalendario)}`, {
+        fetch(`/api/projects/${projectId}/session-candidates/calendario?para=${destino}&q=${encodeURIComponent(claveCalendario)}`, {
           signal: ctrl.signal,
         })
           .then((r) => {
@@ -275,7 +275,7 @@ export default function SessionSelectionReview({
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [claveCalendario, projectId]);
+  }, [claveCalendario, projectId, destino]);
 
   const reload = useCallback(async () => {
     try {
@@ -356,26 +356,32 @@ export default function SessionSelectionReview({
   /* Las sin dueño van DEBAJO de las del cliente, con su separador, y sin repetir: una que ya está en
      alguna lista (un proyecto interno ya las recibe todas) o que se acaba de agregar no se duplica. */
   const yaListadas = new Set([...feeding, ...excluded, ...candidates].map((s) => s.sessionId));
-  const huerfanasQueCoinciden =
-    consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && sinDuenio.q === consultaSinDuenio
-      ? sinDuenio.sesiones.filter((s) => !yaListadas.has(s.sessionId))
-      : [];
   /* El calendario también se filtra acá con lo escrito: con una o dos letras el servidor devuelve
      las recientes sin filtrar, y la lista tiene que responder igual a lo que se tipea. */
   const delCalendario =
     claveCalendario !== null && calendario.clave === claveCalendario
       ? calendario.sesiones.filter((s) => !yaListadas.has(s.sessionId) && coincideConLaBusqueda(s, search))
       : [];
-  const filasDelModal: FilaDelModal[] = esCronograma
-    ? [
-        ...(filtered.length > 0 ? [{ separador: "Del proyecto" }, ...filtered] : []),
-        ...(delCalendario.length > 0
-          ? [{ separador: "De tu calendario · al elegirla queda como reunión del proyecto" }, ...delCalendario]
-          : []),
-      ]
-    : huerfanasQueCoinciden.length > 0
-      ? [...filtered, { separador: "Sin cliente asignado · al agregarla queda como reunión de este cliente" }, ...huerfanasQueCoinciden]
-      : filtered;
+  // Las sin dueño que ya trajo el calendario no se repiten abajo.
+  const enElCalendario = new Set(delCalendario.map((s) => s.sessionId));
+  const huerfanasQueCoinciden =
+    consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && sinDuenio.q === consultaSinDuenio
+      ? sinDuenio.sesiones.filter((s) => !yaListadas.has(s.sessionId) && !enElCalendario.has(s.sessionId))
+      : [];
+  const filasDelModal: FilaDelModal[] =
+    delCalendario.length === 0 && huerfanasQueCoinciden.length === 0
+      ? esCronograma && filtered.length > 0
+        ? [{ separador: "Del proyecto" }, ...filtered]
+        : filtered
+      : [
+          ...(filtered.length > 0 ? [{ separador: esCronograma ? "Del proyecto" : "Del cliente" }, ...filtered] : []),
+          ...(delCalendario.length > 0
+            ? [{ separador: "De tu calendario · al elegirla queda como reunión del proyecto" }, ...delCalendario]
+            : []),
+          ...(huerfanasQueCoinciden.length > 0
+            ? [{ separador: "Sin cliente asignado · al agregarla queda como reunión de este cliente" }, ...huerfanasQueCoinciden]
+            : []),
+        ];
 
   // Modal de "buscar más sesiones" — compartido por el render normal y el de columna.
   const searchModal = (
@@ -394,7 +400,7 @@ export default function SessionSelectionReview({
         placeholder={
           esCronograma
             ? "Buscar en el proyecto y en tu calendario — título, persona o dominio…"
-            : "Buscar por título, persona o dominio…"
+            : "Buscar en el cliente y en tu calendario — título, persona o dominio…"
         }
         aria-label="Buscar sesiones"
         aria-describedby="ayuda-buscar-sesiones"
@@ -402,45 +408,29 @@ export default function SessionSelectionReview({
         className="w-full px-3 py-2 text-sm bg-surface border border-line rounded-lg text-fg focus:outline-none focus:border-brand mb-1.5"
       />
       <p id="ayuda-buscar-sesiones" className="text-[11px] text-fg-muted mb-3">
-        {esCronograma ? (
-          calendarioPendiente ? (
-            "Buscando en tu calendario…"
-          ) : calendario.error ? (
-            <span className="text-warn-ink">
-              No se pudo buscar en tu calendario. Prueba de nuevo en un momento.
-            </span>
-          ) : claveCalendario ? (
-            `Se buscó en todo tu calendario${calendario.hayMas ? " — hay más resultados: afina la búsqueda" : ""}.`
-          ) : (
-            `Arriba, las reuniones del proyecto; abajo, tus reuniones más recientes que ya tienen cliente. Con ${MIN_BUSQUEDA_CALENDARIO} letras o más se busca en todo tu calendario, también en las que no tienen cliente asignado.`
-          )
-        ) : consultaSinDuenio.length < MIN_BUSQUEDA_SIN_DUENIO ? (
-          `Con ${MIN_BUSQUEDA_SIN_DUENIO} letras o más también se busca en las reuniones que no tienen cliente asignado.`
-        ) : sinDuenioPendiente ? (
-          "Buscando también en las reuniones sin cliente asignado…"
+        {calendarioPendiente || sinDuenioPendiente ? (
+          "Buscando en tu calendario…"
+        ) : calendario.error ? (
+          <span className="text-warn-ink">
+            No se pudo buscar en tu calendario. Prueba de nuevo en un momento.
+          </span>
         ) : sinDuenio.error ? (
           <span className="text-warn-ink">
             No se pudo buscar en las reuniones sin cliente asignado. Prueba de nuevo en un momento.
           </span>
+        ) : claveCalendario ? (
+          `Se buscó en todo tu calendario${esCronograma ? "" : " y en las reuniones sin cliente asignado"}${calendario.hayMas ? " — hay más resultados: afina la búsqueda" : ""}.`
         ) : (
-          "También se buscó en las reuniones sin cliente asignado."
+          `Arriba, las reuniones ${esCronograma ? "del proyecto" : "del cliente"}; abajo, tus reuniones más recientes que ya tienen cliente. Con ${MIN_BUSQUEDA_CALENDARIO} letras o más se busca en todo tu calendario, también en las que no tienen cliente asignado.`
         )}
       </p>
       {filasDelModal.length === 0 ? (
         <p className="text-xs text-fg-muted py-2">
           {sinDuenioPendiente || calendarioPendiente
             ? "Buscando…"
-            : esCronograma
-              ? search.trim()
-                ? `Ninguna reunión coincide con «${search.trim()}», ni en el proyecto ni en tu calendario.`
-                : "No hay reuniones para elegir: ni del proyecto ni en tu calendario."
-              : search.trim()
-              ? `Ninguna reunión coincide con «${search.trim()}»${
-                  consultaSinDuenio.length >= MIN_BUSQUEDA_SIN_DUENIO && !sinDuenio.error
-                    ? ", tampoco entre las que no tienen cliente asignado"
-                    : ""
-                }.`
-              : "No hay más sesiones."}
+            : search.trim()
+              ? `Ninguna reunión coincide con «${search.trim()}», ni ${esCronograma ? "en el proyecto" : "del cliente"} ni en tu calendario.`
+              : `No hay reuniones para elegir: ni ${esCronograma ? "del proyecto" : "del cliente"} ni en tu calendario.`}
         </p>
       ) : (
         // ⚠ El tope va en vh, no en un valor fijo: el cuerpo del Modal YA scrollea dentro de un

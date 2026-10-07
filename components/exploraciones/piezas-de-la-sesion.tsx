@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * piezas-de-la-sesion — lo que comparten el «antes», el «durante» y el «después» de una sesión de
+ * piezas-de-la-sesion — lo que comparten la preparación, el «en vivo» y el análisis de una sesión de
  * exploración (rediseño del 2026-10-07, tableros «Preventa · Sesiones de exploración»): la guía de la
  * sesión con de dónde viene cada pregunta, la etiqueta cuadrada de cada pregunta, el chip de
  * procedencia, la línea de qué es, y cómo se edita una sesión que todavía no existe (una reunión
@@ -14,6 +14,7 @@ import type { Operacion } from "@/lib/exploraciones/contenido";
 import { aFecha, conEspaciosComunes, diaCorto, hoyEnCostaRica } from "@/lib/exploraciones/fechas";
 import {
   focoDeLaGuia,
+  ladoDeLaPregunta,
   MAX_SESIONES,
   ordenDeLaConversacion,
   preguntasParaMostrar,
@@ -103,18 +104,28 @@ export function useGuiaDeLaSesion(pestana: PestanaDeSesion, esLaProxima: boolean
   return { guia, foco, procedencias, preguntas, enOrden: ordenDeLaConversacion(preguntas) };
 }
 
-/** La etiqueta cuadrada de una pregunta: la letra del marco (azul), la dimensión (ámbar) o «¿» para un punto llevado. */
+/**
+ * La etiqueta cuadrada de una pregunta: la letra del marco (azul) o el número de la dimensión (ámbar).
+ * Un punto llevado de otra sesión lleva la de lo que apunta; solo si nadie sabe todavía a qué apunta
+ * (se llevó después de armar la guía), una flecha gris: «viene de antes» (Elías, 2026-10-07: el «¿»
+ * no se entendía).
+ */
 export function EtiquetaDePregunta({ p }: { p: PreguntaParaMostrar }) {
-  const letra =
-    p.tipo === "dimension" ? p.para : p.tipo === "abierto" ? "¿" : (LETRA_DEL_MARCO[p.para as keyof typeof LETRA_DEL_MARCO]?.letra ?? p.para.charAt(0).toUpperCase());
+  const lado = ladoDeLaPregunta(p);
+  const para = p.apunta?.para ?? p.para;
+  const base = "flex h-[26px] min-w-[26px] flex-none items-center justify-center rounded-[7px] px-1 text-[11px] font-bold";
+  if (!lado) {
+    return (
+      <span className={cn(base, "bg-surface-hover text-fg-secondary")} title="Viene de una sesión anterior: actualiza la guía para ubicarla" aria-hidden="true">
+        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 3v5a2 2 0 0 0 2 2h6M9.5 7.5L12 10l-2.5 2.5" />
+        </svg>
+      </span>
+    );
+  }
+  const letra = lado === "dimension" ? para : (LETRA_DEL_MARCO[para as keyof typeof LETRA_DEL_MARCO]?.letra ?? para.charAt(0).toUpperCase());
   return (
-    <span
-      className={cn(
-        "flex h-[26px] min-w-[26px] flex-none items-center justify-center rounded-[7px] px-1 text-[11px] font-bold",
-        p.tipo === "dimension" ? "bg-warn-surface text-warn-ink" : p.tipo === "abierto" ? "bg-surface-hover text-fg-secondary" : "bg-info-surface text-brand",
-      )}
-      aria-hidden="true"
-    >
+    <span className={cn(base, lado === "dimension" ? "bg-warn-surface text-warn-ink" : "bg-info-surface text-brand")} aria-hidden="true">
       {letra}
     </span>
   );
@@ -134,11 +145,13 @@ export function ChipDeProcedencia({ procedencia }: { procedencia: Procedencia })
 export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: PreguntaParaMostrar; corta?: boolean; conProcedencia?: boolean }) {
   const { escala, mapa, exp } = useLienzo();
   const variasAreas = exp.estado.areas.length > 1;
+  const lado = ladoDeLaPregunta(p);
+  const para = p.apunta?.para ?? p.para;
   let que: React.ReactNode;
-  if (p.tipo === "dimension") {
-    const area = escala.areas.find((a) => a.dimensiones.some((d) => d.id === p.para));
-    const pos = mapa.posiciones[p.para];
-    const nombre = [corta ? null : "Escala", variasAreas ? area?.nombre : null, nombreDelPara(p.para, escala)].filter(Boolean).join(" · ");
+  if (lado === "dimension") {
+    const area = escala.areas.find((a) => a.dimensiones.some((d) => d.id === para));
+    const pos = mapa.posiciones[para];
+    const nombre = [corta ? null : "Escala", variasAreas ? area?.nombre : null, nombreDelPara(para, escala)].filter(Boolean).join(" · ");
     que = (
       <>
         <span className="text-xs text-fg-muted">
@@ -148,19 +161,20 @@ export function DeQueEs({ p, corta = false, conProcedencia = true }: { p: Pregun
         {pos?.clase === "hipotesis" && <span className="text-xs text-warn-ink">hipótesis</span>}
       </>
     );
-  } else if (p.tipo === "abierto") {
-    que = p.contexto ? <span className="text-xs text-fg-muted">{p.contexto}</span> : null;
-  } else {
+  } else if (lado === "tarjeta") {
     que = (
       <span className="text-xs text-fg-muted">
-        {[corta ? null : "Arquitectura", nombreDelPara(p.para, escala), p.para === "presupuesto" ? "al final: primero la meta, después la plata" : null].filter(Boolean).join(" · ")}
+        {[corta ? null : "Arquitectura", nombreDelPara(para, escala), para === "presupuesto" ? "al final: primero la meta, después la plata" : null].filter(Boolean).join(" · ")}
       </span>
     );
+  } else {
+    que = null;
   }
   return (
     <div className="mt-[5px] flex flex-wrap items-center gap-1.5">
       {que}
       {conProcedencia && p.procedencia && <ChipDeProcedencia procedencia={p.procedencia} />}
+      {p.tipo === "abierto" && p.contexto && <span className="basis-full text-xs text-fg-muted">Se dijo: {p.contexto}</span>}
     </div>
   );
 }

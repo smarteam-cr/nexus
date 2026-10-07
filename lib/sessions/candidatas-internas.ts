@@ -135,8 +135,8 @@ export function motivoParaNoAdoptar(
 export const MIN_BUSQUEDA_CALENDARIO = 3;
 
 /**
- * ¿Por qué una reunión del CALENDARIO de quien busca no se puede elegir para el cronograma de este
- * proyecto? `null` = se puede. Lo leen el buscador (timeline/session-search) para no ofrecer un botón
+ * ¿Por qué una reunión del CALENDARIO de quien busca no se puede elegir para el documento de este
+ * cliente (el cronograma, el handoff, la preventa…)? `null` = se puede. Lo leen el buscador (timeline/session-search) para no ofrecer un botón
  * que la puerta va a rechazar; la puerta (`prepararVinculoManual`) aplica la misma decisión por su
  * cuenta con `decidirAlAgregar`.
  *
@@ -151,10 +151,12 @@ export function motivoParaNoElegirDelCalendario(i: {
   motivoNoAdoptable: string | null;
   /** El cliente al que pertenece hoy, para decirlo. */
   nombreDelDuenio: string | null;
+  /** Qué documento la quiere: «el cronograma» (por defecto), «el handoff», «la preventa»… */
+  documento?: string;
 }): string | null {
   if (i.perteneceAlCliente) return null;
   if (i.sinDuenio) return i.motivoNoAdoptable;
-  return `Es de «${i.nombreDelDuenio ?? "otro cliente"}»: no puede alimentar el cronograma de otro cliente. Si está mal asignada, corrígela en Sesiones.`;
+  return `Es de «${i.nombreDelDuenio ?? "otro cliente"}»: no puede alimentar ${i.documento ?? "el cronograma"} de otro cliente. Si está mal asignada, corrígela en Sesiones.`;
 }
 
 /** Qué hace la puerta de «Agregar» con una sesión. Ver `decidirAlAgregar`. */

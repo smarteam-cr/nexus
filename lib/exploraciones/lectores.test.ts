@@ -34,6 +34,7 @@ const CENSO: Record<string, { destino: Destino; motivo: string }> = {
   "app/api/sales/exploraciones/[id]/documentos/route.ts": { destino: "ventas", motivo: "Sumar a mano una sesión o un documento, y listarlos." },
   "app/api/sales/exploraciones/[id]/documentos/[documentoId]/route.ts": { destino: "ventas", motivo: "Quitar lo que se sumó a mano." },
   "app/api/sales/exploraciones/[id]/preparacion/route.ts": { destino: "ventas", motivo: "Los hechos de HubSpot de la pieza Preparación." },
+  "app/api/sales/exploraciones/[id]/reuniones/route.ts": { destino: "ventas", motivo: "El buscador de reuniones de «Contexto adicional»: sumar o quitar una reunión elegida." },
   "app/api/sales/exploraciones/empresas/route.ts": { destino: "ventas", motivo: "Buscar la empresa." },
   "app/api/sales/exploraciones/sugerencias/route.ts": { destino: "ventas", motivo: "«Llegaron por el test»." },
   "app/api/business-cases/[id]/preventa/route.ts": {

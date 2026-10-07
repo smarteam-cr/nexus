@@ -182,6 +182,13 @@ export interface ContenidoDeExploracion {
   medicion: Medicion;
   /** El prospecto no usa HubSpot: no hay portal que mirar (cuenta como revisado). */
   sinPortal: boolean;
+  /**
+   * Las reuniones de Meet que el vendedor eligió en el buscador de «Contexto adicional» (sus ids). Se
+   * listan y se leen aunque sean de antes del alta o no estén entre las más recientes (Elías,
+   * 2026-10-07: «siempre se debe poder buscar y agregar cualquier sesión de Meet»). Se leen por el
+   * chokepoint: un id de otro cliente no sale.
+   */
+  reunionesElegidas: string[];
   /** Los casos de uso que van a la propuesta: del catálogo (por su id) o los que propuso el agente (`ia-…`). */
   casosDeUso: Record<string, CasoDeUsoElegido>;
   /** Los títulos de los casos de uso que el vendedor descartó: la próxima tanda no los repite. */
@@ -192,6 +199,9 @@ export interface ContenidoDeExploracion {
   descartadas: string[];
   alProponer: FotoAlProponer[];
 }
+
+/** Cuántas reuniones se pueden elegir a mano en el buscador de la preventa. */
+export const MAX_REUNIONES_ELEGIDAS = 20;
 
 export function contenidoVacio(): ContenidoDeExploracion {
   return {
@@ -206,6 +216,7 @@ export function contenidoVacio(): ContenidoDeExploracion {
     sesiones: [],
     medicion: {},
     sinPortal: false,
+    reunionesElegidas: [],
     casosDeUso: {},
     casosDescartados: [],
     edicionElegida: null,
@@ -688,6 +699,8 @@ export type Operacion =
   | { op: "sesiones"; sesiones: SesionPlaneada[] }
   | { op: "medicion"; medicion: Medicion }
   | { op: "sinPortal"; valor: boolean }
+  /** Sumar o quitar una reunión elegida en el buscador (la adopción, si hace falta, la hace la ruta antes). */
+  | { op: "reunionElegida"; sessionId: string; elegida: boolean }
   | { op: "casoDeUso"; useCaseId: string; valor: CasoDeUsoElegido | null }
   | { op: "usar"; itemId: string; valor?: unknown }
   /** «Usar todas»: cada una por su cuenta; la que ya no está o ya no corresponde se salta. */
@@ -875,6 +888,13 @@ function aplicarUna(estado: EstadoDeExploracion, op: Operacion, validez: Validez
       return { ok: true, estado: { ...estado, contenido: { ...c, medicion: { ...c.medicion, ...op.medicion } } } };
     case "sinPortal":
       return { ok: true, estado: { ...estado, contenido: { ...c, sinPortal: op.valor } } };
+    case "reunionElegida": {
+      const resto = c.reunionesElegidas.filter((id) => id !== op.sessionId);
+      if (op.elegida && resto.length >= MAX_REUNIONES_ELEGIDAS) {
+        return { ok: false, error: `Ya hay ${MAX_REUNIONES_ELEGIDAS} reuniones elegidas: quita una antes de sumar otra.` };
+      }
+      return { ok: true, estado: { ...estado, contenido: { ...c, reunionesElegidas: op.elegida ? [op.sessionId, ...resto] : resto } } };
+    }
     case "casoDeUso": {
       if (op.valor) return aplicarAlDestino(estado, { tipo: "casoDeUso", useCaseId: op.useCaseId }, op.valor, validez, validador);
       const casosDeUso = { ...c.casosDeUso };

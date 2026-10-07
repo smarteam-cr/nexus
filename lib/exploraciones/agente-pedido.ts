@@ -84,6 +84,11 @@ export interface ContextoDelPedido {
   /** La próxima reunión agendada en HubSpot: solo su título y su fecha, para no confundirla con lo que ya pasó. */
   proxima?: { titulo: string; inicio: string } | null;
   /**
+   * Al preparar: ya hubo una reunión con la empresa (de Meet, de HubSpot o sumada a mano). Con eso,
+   * como con una agendada, no se propone cómo conectar: ya hay conversación (Elías, 2026-10-07).
+   */
+  yaHablaron?: boolean;
+  /**
    * Al leer: las reuniones que van como fuente (S1, M1, una reunión de HubSpot), para resumir cada una,
    * y lo que se planeó preguntar en la más reciente (rediseño de las sesiones, 2026-10-07).
    */
@@ -94,6 +99,14 @@ export interface ContextoDelPedido {
    * con uno de ellos en «Quién decide» se descarta (`esDelEquipoDeSmarteam`).
    */
   equipo?: string[];
+}
+
+/**
+ * ¿Esta corrida propone la estrategia de conexión? Solo al preparar y si todavía no hay conversación:
+ * ni una reunión agendada ni una que ya pasó. Con cualquiera de las dos, el correo de ejemplo sobra.
+ */
+export function proponeLaConexion(ctx: Pick<ContextoDelPedido, "modo" | "proxima" | "yaHablaron">): boolean {
+  return ctx.modo === "preparar" && !ctx.proxima && !ctx.yaHablaron;
 }
 
 /** Las palabras de un nombre, sin tildes ni mayúsculas; las de una letra no cuentan (iniciales). */
@@ -290,8 +303,8 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
       },
     },
   };
-  // La estrategia de conexión, solo al preparar y si todavía no agendó: si ya agendó, no hace falta.
-  if (ctx.modo === "preparar" && !ctx.proxima) {
+  // La estrategia de conexión, solo si todavía no hay conversación: si ya agendó o ya hablaron, no hace falta.
+  if (proponeLaConexion(ctx)) {
     properties.estrategiaDeConexion = {
       type: "object",
       description: "Cómo abrir la conversación: el canal, el ángulo y un primer mensaje corto que cierre invitando a agendar.",
@@ -449,7 +462,7 @@ function sistema(ctx: ContextoDelPedido): string {
 - personas: quién es quién, si las fuentes lo dicen. El papel en la decisión no se deduce del cargo.
 - detonante («Por qué ahora»): en una o dos frases, qué hizo o qué le pasa que vuelve oportuno hablar ahora. Con lo que dicen las fuentes: el diagnóstico que llenó (cuándo, qué área, qué salió), su último formulario, sus visitas, un hito reciente de la empresa.
 - hipotesisDeValor: dos o tres ideas, cada una en UNA línea de 20 palabras como mucho: el dolor probable y cómo lo resolvemos. Sin «Creemos que» ni «porque»: ya están en la sección de hipótesis. Cada idea con la fuente de donde sale (una nota del vendedor N0, la investigación de la empresa W1, la de su industria W2, el diagnóstico, HubSpot): la pantalla dice de dónde sale cada una. Son para confirmar en la reunión: nunca las afirmes como hechos.
-${ctx.proxima ? "- Ya tiene una reunión agendada: no propongas estrategia de conexión." : "- estrategiaDeConexion: el canal que más sentido tiene (si dejó teléfono y es una empresa chica, WhatsApp o llamada; si es grande, correo o LinkedIn), el ángulo desde su detonante y un primer mensaje corto, de tú, que hable de algo suyo y cierre invitando a agendar. Si el enlace del calendario no está en las fuentes, escribe «[tu calendario]»."}`
+${ctx.proxima ? "- Ya tiene una reunión agendada: no propongas estrategia de conexión." : ctx.yaHablaron ? "- Ya hubo una reunión con la empresa: no propongas estrategia de conexión." : "- estrategiaDeConexion: el canal que más sentido tiene (si dejó teléfono y es una empresa chica, WhatsApp o llamada; si es grande, correo o LinkedIn), el ángulo desde su detonante y un primer mensaje corto, de tú, que hable de algo suyo y cierre invitando a agendar. Si el enlace del calendario no está en las fuentes, escribe «[tu calendario]»."}`
       : `ESTA CORRIDA: LEER LA REUNIÓN que acaba de pasar. Lo que más sirve, con la frase del cliente:
 - niveles: el nivel de cada dimensión que la conversación deja ver, por mejor ajuste contra las descripciones, con la frase del cliente y su porQue en lenguaje llano.
 - metas (en cifras si las dijo), planes, retos (con su dimensión), consecuencias de no actuar, implicaciones de lograrlo, presupuesto.
@@ -694,7 +707,7 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
     }
     agregar({ tipo: "casilla", clave: "autoridad" }, { nombre: str(p.nombre), cargo: str(p.cargo), rol: str(p.rol), nota: str(p.nota) }, citar(p.fuentes));
   }
-  if (ctx.modo === "preparar" && !ctx.proxima && esObjeto(input.estrategiaDeConexion)) {
+  if (proponeLaConexion(ctx) && esObjeto(input.estrategiaDeConexion)) {
     const e = input.estrategiaDeConexion;
     agregar(
       { tipo: "casilla", clave: "estrategiaDeConexion" },

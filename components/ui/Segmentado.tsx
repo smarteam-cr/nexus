@@ -16,6 +16,9 @@ import { cn } from "@/lib/cn";
 // La forma es la del sistema «Nexus · interfaz interna» (2026-10-03), medida por medida: carril
 // gris de radio 10 sin borde, opciones de 13 px y la elegida blanca con `shadow-segment`, la única
 // sombra de la interfaz. Sirve para dos a cuatro opciones; con más, una lista (`Select`).
+//
+// `tamano="grande"`: cuando el segmentado son las pestañas de una pieza y ordena toda la pantalla de
+// abajo (Identificación / Conexión de la preventa). A 13 px se perdían (Elías, 2026-10-07).
 
 export interface OpcionSegmentada<K extends string> {
   clave: K;
@@ -38,9 +41,12 @@ export interface SegmentadoProps<K extends string> {
   deshabilitado?: boolean;
   /** Ocupa todo el ancho y reparte las opciones en partes iguales (la columna de un tema, en un panel angosto). */
   lleno?: boolean;
+  /** «grande»: las pestañas de una pieza. Por defecto, el tamaño de un filtro. */
+  tamano?: "normal" | "grande";
 }
 
-export function Segmentado<K extends string>({ opciones, valor, onCambio, etiqueta, className, deshabilitado, lleno }: SegmentadoProps<K>) {
+export function Segmentado<K extends string>({ opciones, valor, onCambio, etiqueta, className, deshabilitado, lleno, tamano = "normal" }: SegmentadoProps<K>) {
+  const grande = tamano === "grande";
   const refs = useRef(new Map<K, HTMLButtonElement>());
   const activas = opciones.filter((o) => !o.deshabilitada);
   const conFoco = valor !== null && opciones.some((o) => o.clave === valor) ? valor : (activas[0]?.clave ?? null);
@@ -56,7 +62,7 @@ export function Segmentado<K extends string>({ opciones, valor, onCambio, etique
       role="radiogroup"
       aria-label={etiqueta}
       aria-disabled={deshabilitado || undefined}
-      className={cn(lleno ? "flex w-full" : "inline-flex max-w-full flex-wrap", "rounded-[10px] bg-surface-hover p-[3px]", className)}
+      className={cn(lleno ? "flex w-full" : "inline-flex max-w-full flex-wrap", "bg-surface-hover", grande ? "rounded-xl p-1" : "rounded-[10px] p-[3px]", className)}
       onKeyDown={(e) => {
         if (e.key === "ArrowRight" || e.key === "ArrowDown") {
           e.preventDefault();
@@ -84,8 +90,9 @@ export function Segmentado<K extends string>({ opciones, valor, onCambio, etique
             aria-disabled={o.deshabilitada || undefined}
             onClick={() => !o.deshabilitada && !deshabilitado && onCambio(o.clave)}
             className={cn(
-              lleno ? "min-w-0 flex-1 px-1" : "px-4",
-              "whitespace-nowrap rounded-lg py-[7px] text-[13px] leading-tight transition-colors",
+              lleno ? "min-w-0 flex-1 px-1" : grande ? "px-6" : "px-4",
+              "whitespace-nowrap leading-tight transition-colors",
+              grande ? "rounded-[10px] py-2.5 text-[15px]" : "rounded-lg py-[7px] text-[13px]",
               activo
                 ? "bg-surface font-semibold text-fg shadow-segment"
                 : o.deshabilitada
@@ -94,7 +101,7 @@ export function Segmentado<K extends string>({ opciones, valor, onCambio, etique
             )}
           >
             {o.etiqueta}
-            {o.cuenta !== undefined && <span className="ml-1 text-[11px] font-normal tabular-nums text-fg-muted">{o.cuenta}</span>}
+            {o.cuenta !== undefined && <span className={cn("ml-1 font-normal tabular-nums text-fg-muted", grande ? "text-xs" : "text-[11px]")}>{o.cuenta}</span>}
           </button>
         );
       })}

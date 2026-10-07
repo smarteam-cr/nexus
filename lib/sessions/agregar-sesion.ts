@@ -95,3 +95,55 @@ export async function prepararVinculoManual(i: {
   }
   return { ok: true };
 }
+
+/**
+ * La misma regla para la PREVENTA (2026-10-07), que no tiene proyecto ni vínculo: sumar una reunión
+ * elegida en el buscador de «Contexto adicional». Una del cliente se suma; una sin dueño se ADOPTA
+ * (solo lo que `motivoParaNoAdoptar` deja); una de otro cliente se rechaza (INV1). Sin transcripción
+ * no se suma: la preventa no tendría qué leer. Igual que arriba, relee después de adoptar.
+ */
+export async function prepararReunionParaElCliente(i: {
+  sessionId: string;
+  clientId: string;
+  actorEmail: string | null;
+}): Promise<ResultadoDeAgregar> {
+  const session = await prisma.firefliesSession.findUnique({
+    where: { id: i.sessionId },
+    select: {
+      date: true,
+      resolvedClientId: true,
+      manualClientId: true,
+      participants: true,
+      organizerEmail: true,
+      transcript: true,
+      projects: { select: { project: { select: { clientId: true } } } },
+    },
+  });
+  if (!session) return { ok: false, status: 404, error: "Esa reunión no existe." };
+  if (session.date.getTime() > Date.now()) return { ok: false, status: 400, error: "Esa reunión todavía no ocurre: no hay nada que leer." };
+  if (!(session.transcript ?? "").trim()) {
+    return { ok: false, status: 400, error: "Esa reunión no tiene transcripción: el agente no tendría qué leer." };
+  }
+  if (belongsToClient(session, i.clientId)) return { ok: true };
+  const sinDuenio = session.resolvedClientId === null && session.manualClientId === null;
+  if (!sinDuenio) {
+    return { ok: false, status: 400, error: "Esa reunión es de otro cliente: no puede alimentar esta preventa. Si está mal asignada, corrígela en Sesiones." };
+  }
+  const categorias = await prisma.sessionCategory.findMany({ select: { domains: true, kind: true } });
+  const motivo = motivoParaNoAdoptar(
+    {
+      participants: session.participants,
+      organizerEmail: session.organizerEmail,
+      clientesDeSusProyectos: session.projects.map((p) => p.project.clientId),
+    },
+    i.clientId,
+    buildInternalDomainsSet(categorias),
+  );
+  if (motivo) return { ok: false, status: 400, error: motivo };
+  await adoptarSesionSinDuenio(i.sessionId, i.clientId, i.actorEmail);
+  const ahora = await prisma.firefliesSession.findUnique({ where: { id: i.sessionId }, select: { resolvedClientId: true, manualClientId: true } });
+  if (!ahora || !belongsToClient(ahora, i.clientId)) {
+    return { ok: false, status: 409, error: "Otra persona acaba de asignar esta reunión a otro cliente: revísala en Sesiones." };
+  }
+  return { ok: true };
+}

@@ -5,8 +5,9 @@
  *
  * Pedido de Elías: en vez de «¿Una sesión que no quedó en Meet?», el mismo bloque del cronograma,
  * arriba de cada pieza (salvo La cuenta, que es la ficha de la empresa). Tres partes:
- *   · Reuniones — las de Google Meet y HubSpot con la empresa, leídas o no. El agente las encuentra
- *     solo (no se eligen: en la preventa no hay otro proyecto con el que confundirlas).
+ *   · Reuniones — las de Google Meet y HubSpot con la empresa, leídas o no. El agente encuentra solo
+ *     las recientes; «Buscar una reunión» suma cualquier otra de la empresa o de tu calendario
+ *     (2026-10-07), y la que sumaste se quita con su X.
  *   · Fuentes manuales — lo que no quedó en Meet: una llamada de Gong, una minuta (SumarAMano).
  *   · Instrucciones adicionales — lo que el vendedor le pide a la IA. Se guardan en
  *     `contenido.notas` con la clave CLAVE_DE_INSTRUCCIONES (sin SQL) y las leen la preparación, la
@@ -30,6 +31,8 @@ import {
   CLAVE_DE_INSTRUCCIONES,
   MAX_NOTA_DE_SESION,
 } from "@/lib/exploraciones/notas-de-sesion";
+import { useToast } from "@/components/ui";
+import BuscarReunionesDeLaPreventa from "./BuscarReunionesDeLaPreventa";
 import SumarAMano from "./SumarAMano";
 import { useLienzo } from "./contexto";
 
@@ -48,7 +51,27 @@ export function abrirElContextoAdicional() {
 }
 
 export default function ContextoDeLaPreventa() {
-  const { exp, reuniones, documentos, puedeEditar, cambiar } = useLienzo();
+  const { exp, reuniones, documentos, puedeEditar, cambiar, recargar } = useLienzo();
+  const toast = useToast();
+  const [buscando, setBuscando] = useState(false);
+  const elegidas = new Set(exp.estado.contenido.reunionesElegidas);
+  const quitar = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/sales/exploraciones/${exp.id}/reuniones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, elegida: false }),
+      });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(d.error ?? "No se pudo quitar la reunión.");
+        return;
+      }
+      await recargar();
+    } catch {
+      toast.error("No se pudo quitar la reunión: revisa la conexión.");
+    }
+  };
   const sumarAlAbrir = useSearchParams().get("sumar") === "1";
   const [abierto, setAbierto] = useState(sumarAlAbrir);
   const caja = useRef<HTMLDivElement>(null);
@@ -85,11 +108,11 @@ export default function ContextoDeLaPreventa() {
           <>
             Con esto el agente prepara la preventa, lee cada reunión, arma la
             guía de la próxima sesión y propone los casos de uso. Las reuniones
-            de Meet y de HubSpot con la empresa{" "}
+            recientes de Meet y de HubSpot con la empresa{" "}
             <span className="font-medium text-fg-secondary">
               las encuentra solo
             </span>
-            ; suma a mano lo que no quedó ahí.
+            ; busca cualquier otra de Meet, o suma a mano lo que no quedó ahí.
           </>
         }
       >
@@ -114,9 +137,21 @@ export default function ContextoDeLaPreventa() {
                       ? { label: "Leída", tone: "green" }
                       : { label: "Sin leer", tone: "amber" }
                   }
+                  {...(puedeEditar && r.origen === "meet" && elegidas.has(r.id)
+                    ? { onRemove: () => void quitar(r.id), removeTitle: "La sumaste con el buscador: quitarla la saca de esta preventa (sigue siendo de la empresa)." }
+                    : {})}
                 />
               ))}
             </ContextColumnList>
+            {puedeEditar && (
+              <button
+                type="button"
+                onClick={() => setBuscando(true)}
+                className="mt-2 self-start text-[11px] font-semibold text-brand hover:text-brand-dark"
+              >
+                + Buscar una reunión de Meet
+              </button>
+            )}
           </ContextColumn>
           <ContextColumn
             icon={CTX_ICONS.note}
@@ -138,6 +173,7 @@ export default function ContextoDeLaPreventa() {
           }
         />
       </ContextoAdicional>
+      <BuscarReunionesDeLaPreventa abierto={buscando} onCerrar={() => setBuscando(false)} />
     </div>
   );
 }

@@ -38,6 +38,7 @@ import {
   MAX_CASOS_DESCARTADOS,
   MAX_DESCARTADAS,
   MAX_LECTURAS,
+  MAX_REUNIONES_ELEGIDAS,
   MODOS_DE_LA_CORRIDA,
   MOTIVOS_PARA_EXPLORAR,
   NIVELES,
@@ -303,6 +304,10 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
     .record(z.string().max(600), z.string().regex(/^s-[a-z0-9]{1,24}$/))
     .refine((r) => Object.keys(r).length <= MAX_PARA_EXPLORAR)
     .optional(),
+  explorarPara: z
+    .record(z.string().max(600), z.string().min(1).max(40))
+    .refine((r) => Object.keys(r).length <= MAX_PARA_EXPLORAR)
+    .optional(),
   objetivo: textoLleno(400).optional(),
   objetivoDescartado: textoLleno(400).optional(),
   resultado: z.enum(RESULTADOS_DE_LA_SESION).optional(),
@@ -323,6 +328,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("sesiones"), sesiones: z.array(SesionPlaneadaSchema).max(MAX_SESIONES) }),
   z.object({ op: z.literal("medicion"), medicion: MedicionSchema }),
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
+  z.object({ op: z.literal("reunionElegida"), sessionId: z.string().min(1).max(60), elegida: z.boolean() }),
   z.object({ op: z.literal("casoDeUso"), useCaseId: ID_CASO_DE_USO, valor: CasoDeUsoElegidoSchema.nullable() }),
   z.object({ op: z.literal("usar"), itemId: z.string().min(1).max(120), valor: z.unknown().optional() }),
   z.object({
@@ -380,6 +386,10 @@ const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   huecos: z.array(z.string().max(40)).max(20),
   enfoque: z.array(z.string().max(20)).max(20),
   objetivo: textoDeGuia(400).nullable().optional(),
+  ubicaciones: z
+    .record(z.string().max(600), z.string().min(1).max(40))
+    .refine((r) => Object.keys(r).length <= MAX_PARA_EXPLORAR)
+    .optional(),
   apertura: z.array(textoDeGuia(400)).max(4),
   escalaEnSimple: textoDeGuia(800).nullable(),
   preguntas: z.array(PreguntaDeLaGuiaSchema).max(MAX_PREGUNTAS_EN_LA_GUIA),
@@ -464,6 +474,7 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   const med = MedicionSchema.safeParse(raw.medicion);
   if (med.success) c.medicion = med.data;
   c.sinPortal = raw.sinPortal === true;
+  c.reunionesElegidas = listaDeTextos(raw.reunionesElegidas, MAX_REUNIONES_ELEGIDAS).filter((id) => id.length <= 60);
   c.casosDeUso = registroValido(raw.casosDeUso, ID_CASO_DE_USO, CasoDeUsoElegidoSchema);
   c.casosDescartados = listaDeTextos(raw.casosDescartados, MAX_CASOS_DESCARTADOS);
   const elegida = EdicionElegidaSchema.safeParse(raw.edicionElegida);

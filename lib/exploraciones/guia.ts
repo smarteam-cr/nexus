@@ -29,7 +29,7 @@ export type OrigenDeReunion = "meet" | "hubspot" | "documento";
 
 /**
  * Qué pasó con una sesión cuya reunión no dejó qué leer (rediseño de las sesiones, 2026-10-07): se
- * hizo por otro canal (teléfono, WhatsApp: lo que se anota en «Durante» es lo que lee el agente), se
+ * hizo por otro canal (teléfono, WhatsApp: lo que se anota en «En vivo» es lo que lee el agente), se
  * cortó y hay que reagendarla (lo que tenía preparado pasa a la próxima), o no se hizo (sale de la
  * cuenta de sesiones; la reunión sigue en Meet).
  */
@@ -52,6 +52,11 @@ export interface SesionPlaneada {
   explorar?: string[];
   /** De qué sesión viene cada punto de `explorar` (su id): la guía dice «Quedó abierto en la sesión N». */
   explorarDe?: Record<string, string>;
+  /**
+   * A qué apunta cada punto de `explorar`, si se sabe al llevarlo (una pregunta planeada que no se
+   * hizo: su tarjeta o su dimensión). La guía lo muestra con esa letra o ese número, no con un «¿».
+   */
+  explorarPara?: Record<string, string>;
   /** El objetivo de la sesión, confirmado por el vendedor (lo sugiere el agente con la guía). */
   objetivo?: string;
   /** El objetivo que sugirió el agente y el vendedor descartó: no se vuelve a ofrecer el mismo. */
@@ -420,6 +425,12 @@ export interface GuiaDeLaSesion {
   enfoque: string[];
   /** El objetivo de la sesión, en una frase: lo sugiere el agente y lo confirma el vendedor. */
   objetivo?: string | null;
+  /**
+   * Dónde va cada punto que el vendedor se llevó (su texto → la tarjeta o la dimensión a la que
+   * apunta), según el agente: con eso la guía lo muestra con su letra o su número aunque ninguna
+   * pregunta lo retome (Elías, 2026-10-07: «pensé que aparecían solo las letras… o el número»).
+   */
+  ubicaciones?: Record<string, string>;
   /** Cómo abrir la conversación, desde algo de la empresa. */
   apertura: string[];
   /** La escala explicada en simple: solo cuando no hizo el test y todavía no se habló. */
@@ -433,10 +444,46 @@ export interface GuiaDeLaSesion {
 export const REPREGUNTAS_POR_PREGUNTA = 3;
 export const MAX_PREGUNTAS_EN_LA_GUIA = 12;
 
-/** ¿La guía se armó con otras tarjetas vacías u otras dimensiones en foco que las de hoy? */
-export function guiaVieja(guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque">, huecos: readonly string[], enfoque: readonly string[]): boolean {
-  const igual = (a: readonly string[], b: readonly string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
-  return !igual(guia.huecos, huecos) || !igual(guia.enfoque, enfoque);
+/** Qué cambió desde que se armó la guía. null = está al día. */
+export interface CambiosDesdeLaGuia {
+  /** Tarjetas que estaban vacías al armarla y ya se respondieron: la guía las sigue preguntando. */
+  respondidas: string[];
+  /** Tarjetas que hoy faltan y la guía no pregunta con lo suyo (entraron después). */
+  nuevas: string[];
+  /** Cambiaron las dimensiones de la escala que conviene preguntar. */
+  dimensiones: boolean;
+  /** Puntos que el vendedor se llevó y la guía todavía no ubica (se llevaron después de armarla). */
+  llevados: number;
+}
+
+/**
+ * Qué cambió desde que se armó la guía: lo que ya se respondió, lo que entró, las dimensiones y lo que
+ * el vendedor se llevó de otra sesión después. Con esto la pantalla dice POR QUÉ actualizarla, en vez
+ * de un «la guía es de antes de lo último que se supo» (Elías, 2026-10-07: «no hay claridad de qué hace»).
+ */
+export function cambiosDesdeLaGuia(
+  guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque"> & Partial<Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones">>,
+  huecos: readonly string[],
+  enfoque: readonly string[],
+  llevados: readonly string[] = [],
+): CambiosDesdeLaGuia | null {
+  const respondidas = guia.huecos.filter((h) => !huecos.includes(h));
+  const nuevas = huecos.filter((h) => !guia.huecos.includes(h));
+  const dimensiones = guia.enfoque.length !== enfoque.length || [...guia.enfoque].sort().join() !== [...enfoque].sort().join();
+  const ubicados = new Set([...(guia.preguntas ?? []).flatMap((p) => (p.abierto ? [p.abierto] : [])), ...Object.keys(guia.ubicaciones ?? {})]);
+  const sinUbicar = llevados.filter((t) => !ubicados.has(t)).length;
+  if (!respondidas.length && !nuevas.length && !dimensiones && !sinUbicar) return null;
+  return { respondidas, nuevas, dimensiones, llevados: sinUbicar };
+}
+
+/** ¿La guía se armó con otras tarjetas vacías, otras dimensiones en foco o sin lo que se llevó después? */
+export function guiaVieja(
+  guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque"> & Partial<Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones">>,
+  huecos: readonly string[],
+  enfoque: readonly string[],
+  llevados: readonly string[] = [],
+): boolean {
+  return cambiosDesdeLaGuia(guia, huecos, enfoque, llevados) !== null;
 }
 
 // ── Lo que se muestra ─────────────────────────────────────────────────────────
@@ -468,6 +515,16 @@ export interface PreguntaParaMostrar {
   /** Para un punto llevado: lo que se dijo (la pregunta va en `pregunta`). */
   contexto?: string;
   procedencia?: Procedencia;
+  /**
+   * Para un punto llevado que ninguna pregunta retoma: la tarjeta o la dimensión a la que apunta, si
+   * se sabe (al llevarlo, o porque el agente lo ubicó al armar la guía). Sin esto se muestra aparte.
+   */
+  apunta?: { tipo: "tarjeta" | "dimension"; para: string };
+}
+
+/** De qué lado está una pregunta: la arquitectura de la venta, la escala o ninguno (un punto llevado sin ubicar). */
+export function ladoDeLaPregunta(p: Pick<PreguntaParaMostrar, "tipo" | "apunta">): "tarjeta" | "dimension" | null {
+  return p.tipo === "abierto" ? (p.apunta?.tipo ?? null) : p.tipo;
 }
 
 /**
@@ -488,7 +545,7 @@ export function separarPregunta(t: string): { dicho: string; pregunta: string | 
 export function procedenciasDeLaSesion(
   activa: Pick<PestanaDeSesion, "clave" | "sesion">,
   pestanas: readonly PestanaDeSesion[],
-): { abiertos: Map<string, number>; pasaron: Map<string, number> } {
+): { abiertos: Map<string, number>; pasaron: Map<string, number>; apuntan: Map<string, string> } {
   const idx = pestanas.findIndex((p) => p.clave === activa.clave);
   const antes = (idx < 0 ? pestanas : pestanas.slice(0, idx)).filter((p) => !p.noSeHizo);
   const abiertos = new Map<string, number>();
@@ -506,7 +563,8 @@ export function procedenciasDeLaSesion(
     if (p.sesion?.resultado !== "cortada") continue;
     for (const para of p.sesion.pasaron ?? []) pasaron.set(para, p.numero);
   }
-  return { abiertos, pasaron };
+  const apuntan = new Map(Object.entries(activa.sesion?.explorarPara ?? {}).filter(([t]) => abiertos.has(t)));
+  return { abiertos, pasaron, apuntan };
 }
 
 /**
@@ -515,13 +573,21 @@ export function procedenciasDeLaSesion(
  * dimensión en la escala). Primero las tarjetas, después las dimensiones.
  */
 export function preguntasParaMostrar(
-  guia: Pick<GuiaDeLaSesion, "preguntas"> | null,
+  guia: Pick<GuiaDeLaSesion, "preguntas" | "ubicaciones"> | null,
   huecos: readonly string[],
   enfoque: readonly string[],
   escala: EscalaDelLienzo,
-  procedencias: { abiertos: ReadonlyMap<string, number>; pasaron: ReadonlyMap<string, number> } = { abiertos: new Map(), pasaron: new Map() },
+  procedencias: { abiertos: ReadonlyMap<string, number>; pasaron: ReadonlyMap<string, number>; apuntan?: ReadonlyMap<string, string> } = {
+    abiertos: new Map(),
+    pasaron: new Map(),
+  },
 ): PreguntaParaMostrar[] {
   const preguntaDeLaDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.pregunta ?? null;
+  const ladoDelPara = (para: string | undefined): PreguntaParaMostrar["apunta"] => {
+    if (!para) return undefined;
+    if ((CASILLAS_DEL_RESUMEN as readonly string[]).includes(para)) return { tipo: "tarjeta", para };
+    return escala.areas.some((a) => a.dimensiones.some((d) => d.id === para)) ? { tipo: "dimension", para } : undefined;
+  };
   const out: PreguntaParaMostrar[] = [];
   const retomados = new Set<string>();
   const armar = (para: string, tipo: "tarjeta" | "dimension", base: string | null) => {
@@ -548,6 +614,7 @@ export function preguntasParaMostrar(
   for (const [t, numero] of procedencias.abiertos) {
     if (retomados.has(t)) continue;
     const { dicho, pregunta } = separarPregunta(t);
+    const apunta = ladoDelPara(guia?.ubicaciones?.[t] ?? procedencias.apuntan?.get(t));
     out.push({
       para: paraDeUnAbierto(t),
       tipo: "abierto",
@@ -555,6 +622,7 @@ export function preguntasParaMostrar(
       repreguntas: [],
       ...(pregunta && dicho ? { contexto: dicho } : {}),
       procedencia: { tipo: "abierto", numero },
+      ...(apunta ? { apunta } : {}),
     });
   }
   return out;
@@ -562,7 +630,7 @@ export function preguntasParaMostrar(
 
 /**
  * A qué apunta un punto llevado que ninguna pregunta retoma: `abierto:` y una huella corta de su texto,
- * estable aunque cambien los demás (con ella se guardan su casilla «hecha» y su nota del «Durante»).
+ * estable aunque cambien los demás (con ella se guardan su casilla «hecha» y su nota de «En vivo»).
  */
 export function paraDeUnAbierto(texto: string): string {
   let h = 5381;
@@ -654,7 +722,7 @@ export function loQueTraes(
         consecuencia: pasaron.length ? "pasó a esta sesión." : "lo que falta sigue en la guía.",
       });
     } else if (resultado === "otroCanal") {
-      lineas.push({ texto: "Se hizo por otro canal.", consecuencia: "el agente lee tus notas de «Durante» como tu contexto." });
+      lineas.push({ texto: "Se hizo por otro canal.", consecuencia: "el agente lee tus notas de «En vivo» como tu contexto." });
     }
     const t = o.tecnica;
     if (t && !t.vista && p.reunion && t.reunion.includes(p.reunion.titulo)) {

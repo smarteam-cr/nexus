@@ -187,7 +187,6 @@ describe("⭐ las puertas son las del CRONOGRAMA, no las del handoff", () => {
     "app/api/projects/[projectId]/timeline/sessions/route.ts",
     "app/api/projects/[projectId]/timeline/sources/route.ts",
     "app/api/projects/[projectId]/timeline/sources/[id]/route.ts",
-    "app/api/projects/[projectId]/timeline/calendario/route.ts",
   ];
 
   it("escriben con `guardTimelineEdit` (cronograma.write) y sin el veto del handoff", () => {
@@ -347,11 +346,20 @@ describe("⭐ el CHAT del cronograma también lee el material (decisión de Elí
 });
 
 describe("⭐ el buscador: las reuniones del proyecto y las de TU calendario", () => {
-  const ruta = () => sinComentarios(leer("app/api/projects/[projectId]/timeline/calendario/route.ts"));
+  // Desde el 2026-10-07 la consulta es una sola (lib) y la ruta sirve a todos los documentos.
+  const ruta = () => sinComentarios(leer("lib/sessions/calendario-de-quien-busca.ts"));
+  const rutaHttp = () => sinComentarios(leer("app/api/projects/[projectId]/session-candidates/calendario/route.ts"));
+
+  it("el cronograma busca con SU guard; cada documento, con el de su puerta", () => {
+    const src = rutaHttp();
+    expect(src, "el cronograma perdió su guard").toMatch(/if \(destino === "cronograma"\) return guardTimelineEdit\(projectId\);/);
+    expect(src, "un documento perdió el guard de su puerta").toContain("guardContextoDelDocumento(projectId, doc.seccion)");
+    expect(src).toContain("guardProjectHandoffAccess(projectId)");
+  });
 
   it("el calendario es el de quien busca, y sin futuras", () => {
+    expect(rutaHttp(), "dejó de buscar por el correo de quien usa el buscador").toContain("guard.teamMember.email");
     const src = ruta();
-    expect(src, "dejó de buscar por el correo de quien usa el buscador").toContain("guard.teamMember.email");
     expect(src, "dejó de mirar al organizador").toContain(`lower(s."organizerEmail") = \${email}`);
     expect(src, "dejó de mirar a los invitados").toContain(`WHERE lower(p) = \${email}`);
     expect(src, "volvió a ofrecer reuniones que no ocurrieron").toContain(`s."date" <= \${ahora}`);
@@ -377,10 +385,10 @@ describe("⭐ el buscador: las reuniones del proyecto y las de TU calendario", (
     );
   });
 
-  it("la pantalla pide el calendario solo para el cronograma, y no repite lo ya listado", () => {
+  it("la pantalla pide el calendario en TODOS los documentos (2026-10-07), y no repite lo ya listado", () => {
     const src = leer("components/clients/SessionSelectionReview.tsx");
-    expect(src).toContain("/timeline/calendario?q=");
-    expect(src).toContain("showModal && esCronograma ?");
+    expect(src).toContain("/session-candidates/calendario?para=${destino}&q=");
+    expect(src, "el calendario volvió a ser solo del cronograma").not.toContain("showModal && esCronograma ?");
     expect(src, "el calendario vuelve a mostrar lo que ya está en otra lista").toContain(
       "!yaListadas.has(s.sessionId) && coincideConLaBusqueda(s, search)",
     );

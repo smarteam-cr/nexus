@@ -15,7 +15,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import type { SiguientePaso } from "@/lib/exploraciones/casillas";
-import type { PestanaDeSesion, PreguntaParaMostrar } from "@/lib/exploraciones/guia";
+import { ladoDeLaPregunta, type PestanaDeSesion, type PreguntaParaMostrar } from "@/lib/exploraciones/guia";
 import { claveDeNotaDePregunta, claveDeNotaDeSesion, MAX_NOTA_DE_SESION } from "@/lib/exploraciones/notas-de-sesion";
 import { IconoDeSugerencia } from "@/components/ui/sistema";
 import { SiSeResiste } from "./AntesDeLaSesion";
@@ -205,8 +205,8 @@ export default function DuranteLaSesion({ pestana, esLaProxima }: { pestana: Pes
   const s = pestana.sesion;
   const hechas = new Set(s?.hechas ?? []);
   const notas = exp.estado.contenido.notas;
-  const delMarco = enOrden.filter((p) => p.tipo === "tarjeta");
-  const deLaEscala = enOrden.filter((p) => p.tipo === "dimension");
+  const delMarco = enOrden.filter((p) => ladoDeLaPregunta(p) === "tarjeta");
+  const deLaEscala = enOrden.filter((p) => ladoDeLaPregunta(p) === "dimension");
   const visibles = filtro === "marco" ? delMarco : filtro === "escala" ? deLaEscala : enOrden;
   const ahora = elegida && visibles.some((p) => p.para === elegida) ? elegida : (visibles.find((p) => !hechas.has(p.para))?.para ?? null);
   const objetivo = s?.objetivo ?? guia?.objetivo ?? null;

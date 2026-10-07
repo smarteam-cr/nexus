@@ -104,6 +104,9 @@ function operacionSegura(op: Operacion, antes: EstadoDeExploracion, ahora: Estad
       return usoSeguro(op.itemId, antes, ahora);
     case "usarVarias":
       return op.items.every((x) => usoSeguro(x.itemId, antes, ahora));
+    case "reunionElegida":
+      // Sumar o quitar una no depende de lo demás: la lista se arma en el servidor con lo de ahora.
+      return true;
     case "sinPortal":
     case "descartar":
     case "alertaTecnicaVista":

@@ -7,6 +7,10 @@
  *
  * No es `Segmentado` de components/ui: ese es un grupo de radios con otra forma (lo usa la escala),
  * y cambiarlo movería pantallas que no se están rediseñando.
+ *
+ * `tamano="grande"`: las pestañas de una pieza (los momentos de una sesión), que ordenan toda la
+ * pantalla de abajo. Las de 13 px se perdían (Elías, 2026-10-07: «las pestañas internas deben ser
+ * más grandes»). Los filtros de una lista siguen en el tamaño normal.
  */
 import { cn } from "@/lib/cn";
 
@@ -24,15 +28,18 @@ export default function Segmentos<K extends string>({
   valor,
   onCambiar,
   etiqueta,
+  tamano = "normal",
 }: {
   opciones: readonly Segmento<K>[];
   valor: K;
   onCambiar: (k: K) => void;
   /** Nombre accesible del grupo. */
   etiqueta: string;
+  tamano?: "normal" | "grande";
 }) {
+  const grande = tamano === "grande";
   return (
-    <div role="tablist" aria-label={etiqueta} className="inline-flex max-w-full flex-wrap rounded-[10px] bg-surface-hover p-[3px]">
+    <div role="tablist" aria-label={etiqueta} className={cn("inline-flex max-w-full flex-wrap bg-surface-hover", grande ? "rounded-xl p-1" : "rounded-[10px] p-[3px]")}>
       {opciones.map((o) => {
         const elegida = valor === o.clave;
         return (
@@ -45,12 +52,13 @@ export default function Segmentos<K extends string>({
             title={o.desactivada}
             onClick={() => onCambiar(o.clave)}
             className={cn(
-              "rounded-lg px-4 py-[7px] text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+              "transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+              grande ? "rounded-[10px] px-6 py-2.5 text-[15px]" : "rounded-lg px-4 py-[7px] text-[13px]",
               elegida ? "bg-surface font-semibold text-fg shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-medium text-fg-secondary enabled:hover:text-fg",
             )}
           >
             {o.nombre}
-            {o.cuenta !== undefined && <span className="ml-1 text-[11px] font-normal text-fg-muted">{o.cuenta}</span>}
+            {o.cuenta !== undefined && <span className={cn("ml-1 font-normal text-fg-muted", grande ? "text-xs" : "text-[11px]")}>{o.cuenta}</span>}
           </button>
         );
       })}

@@ -11,6 +11,7 @@ import {
   destinoValido,
   fusionarPropuestas,
   industriaDelVendedor,
+  MAX_REUNIONES_ELEGIDAS,
   idDelItem,
   propuestaVacia,
   propuestaVigente,
@@ -348,5 +349,25 @@ describe("la alerta de conversación técnica (2026-10-06)", () => {
     expect(r.ok && r.estado.propuesta.alertaTecnica).toEqual({ ...alerta, vista: true });
     const sin = aplicarOperaciones(estado(), [{ op: "alertaTecnicaVista" }], VALIDEZ);
     expect(sin.ok && sin.estado.propuesta.alertaTecnica).toBeNull();
+  });
+});
+
+describe("⭐ las reuniones elegidas en el buscador (2026-10-07)", () => {
+  it("se suman arriba sin repetirse, se quitan, y tienen tope", () => {
+    let e = estado();
+    let r = aplicarOperaciones(e, [{ op: "reunionElegida", sessionId: "m1", elegida: true }, { op: "reunionElegida", sessionId: "m2", elegida: true }, { op: "reunionElegida", sessionId: "m1", elegida: true }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.reunionesElegidas).toEqual(["m1", "m2"]);
+    if (!r.ok) return;
+    e = r.estado;
+    r = aplicarOperaciones(e, [{ op: "reunionElegida", sessionId: "m2", elegida: false }], VALIDEZ);
+    expect(r.ok && r.estado.contenido.reunionesElegidas).toEqual(["m1"]);
+    const lleno = estado();
+    lleno.contenido.reunionesElegidas = Array.from({ length: MAX_REUNIONES_ELEGIDAS }, (_, i) => `x${i}`);
+    expect(aplicarOperaciones(lleno, [{ op: "reunionElegida", sessionId: "nueva", elegida: true }], VALIDEZ).ok).toBe(false);
+  });
+
+  it("se guardan y se vuelven a leer; lo viejo sin la lista se lee vacío", () => {
+    expect(leerContenido({ ...contenidoVacio(), reunionesElegidas: ["m1", 4, "m2"] }).reunionesElegidas).toEqual(["m1", "m2"]);
+    expect(leerContenido({ version: 1 }).reunionesElegidas).toEqual([]);
   });
 });

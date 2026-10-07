@@ -24,6 +24,7 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
       propuesta: exp.estado.propuesta,
       // La foto ENTERA: las agendadas que ya pasaron son justamente las que se avisan como «sin leer».
       leido: leerLoLeido(fila.test),
+      elegidas: exp.estado.contenido.reunionesElegidas,
     }).catch((e) => {
       console.error("[exploraciones] no se pudieron contar las reuniones sin leer", e);
       return [];
@@ -46,6 +47,7 @@ export async function paraLaPantallaCompleta(fila: FilaDeExploracion): Promise<E
       creadaEn: fila.createdAt,
       propuesta: exp.estado.propuesta,
       leido: leerLoLeido(fila.test),
+      elegidas: exp.estado.contenido.reunionesElegidas,
     }).catch((e) => {
       console.error("[exploraciones] no se pudieron listar las reuniones", e);
       return [];

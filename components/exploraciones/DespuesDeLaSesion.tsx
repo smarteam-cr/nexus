@@ -29,7 +29,8 @@ import { useCorrida } from "./useCorrida";
 import { useSesiones } from "./useSesiones";
 
 /** Lo que se lleva a la próxima sesión desde «Quedó abierto». */
-export type Llevar = { texto: string; item: ItemPropuesto | null };
+/** Un punto que se lleva a la próxima sesión: su texto, la sugerencia que se usa con él y, si se sabe, a qué apunta. */
+export type Llevar = { texto: string; item: ItemPropuesto | null; para?: string };
 
 /** Dónde aterriza lo propuesto, en una palabra o dos, sobre la fila. */
 function destinoCorto(d: DestinoDePropuesta, nombreDeDimension: (id: string) => string): string {
@@ -272,9 +273,10 @@ function QuedoAbierto({
   const sugeridos = pendientesPara((d) => d.tipo === "casilla" && d.clave === "noExplorado").filter((it) => deEstaReunion(it, lectura, r?.titulo ?? null));
   const noPreguntadas = (lectura?.cobertura ?? []).filter((c) => !c.respondida);
 
-  type Fila = { clave: string; texto: string; titulo: string; sub: string | null; item: ItemPropuesto | null; quitar?: () => void };
+  type Fila = { clave: string; texto: string; titulo: string; sub: string | null; item: ItemPropuesto | null; para?: string; quitar?: () => void };
   const filas: Fila[] = [
-    ...noPreguntadas.map((c) => ({ clave: `np-${c.para}`, texto: `No se preguntó. Qué preguntar: ${c.pregunta}`, titulo: c.pregunta, sub: "No se preguntó", item: null })),
+    // Lo que no se preguntó sabe a qué apunta: la próxima guía lo muestra con su letra o su número.
+    ...noPreguntadas.map((c) => ({ clave: `np-${c.para}`, texto: `No se preguntó. Qué preguntar: ${c.pregunta}`, titulo: c.pregunta, sub: "No se preguntó", item: null, para: c.para })),
     ...sugeridos.map((it) => {
       const t = String(it.valor);
       const { dicho, pregunta } = separarPregunta(t);
@@ -318,7 +320,7 @@ function QuedoAbierto({
                   checked={!!en}
                   disabled={!puedeEditar || guardando}
                   aria-label={`Llevar «${f.titulo}» a la próxima sesión`}
-                  onChange={() => (en ? soltar(f.texto) : llevar({ texto: f.texto, item: f.item }))}
+                  onChange={() => (en ? soltar(f.texto) : llevar({ texto: f.texto, item: f.item, ...(f.para ? { para: f.para } : {}) }))}
                   className="mt-[3px] h-4 w-4 flex-shrink-0 accent-brand"
                 />
                 <div className="min-w-0 flex-1">
@@ -375,7 +377,7 @@ function TusNotas({ pestana, vacio }: { pestana: PestanaDeSesion; vacio?: boolea
         <p className="text-[13px] text-fg-muted">
           Lo que anotes en{" "}
           <button type="button" className="text-brand hover:underline" onClick={() => seleccion.ponerMomento(pestana.clave, "durante")}>
-            «Durante»
+            «En vivo»
           </button>{" "}
           aparece acá y el agente lo usa.
         </p>
@@ -397,7 +399,7 @@ function TusNotas({ pestana, vacio }: { pestana: PestanaDeSesion; vacio?: boolea
 // ── Sin transcripción: qué pasó con la sesión ─────────────────────────────────
 
 const OPCIONES: { clave: ResultadoDeLaSesion; titulo: string; ayuda: (siguiente: number) => string }[] = [
-  { clave: "otroCanal", titulo: "Se hizo por otro canal", ayuda: () => "Teléfono o WhatsApp. Escribe lo que pasó en «Durante» y el agente lo lee como tus notas." },
+  { clave: "otroCanal", titulo: "Se hizo por otro canal", ayuda: () => "Teléfono o WhatsApp. Escribe lo que pasó en «En vivo» y el agente lo lee como tus notas." },
   { clave: "cortada", titulo: "Se cortó: hay que reagendarla", ayuda: (n) => `Lo que tenía preparado pasa a la sesión ${n}.` },
   { clave: "noSeHizo", titulo: "No se hizo", ayuda: () => "Sale de las sesiones. La reunión sigue en Meet." },
 ];

@@ -31,7 +31,8 @@ export const PREVENTA: Recorrido = {
   id: "preventa",
   // 2 (2026-10-06): Preparación en dos pestañas, la investigación de la industria y las fichas.
   // 3 (2026-10-07): las sesiones rediseñadas (objetivo, guía en tramos, Durante con preguntas, lo que leyó el agente).
-  version: 3,
+  // 4 (2026-10-07): las pestañas de la sesión se llaman Preparación, En vivo y Análisis; la guía dice si está al día.
+  version: 4,
   titulo: "Una preventa",
   descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
@@ -119,28 +120,28 @@ export const PREVENTA: Recorrido = {
     },
     {
       ancla: "preventa.sesion.momento",
-      titulo: "Antes, durante y después",
-      texto: "Cada sesión tiene tres momentos: la guía para prepararla, lo que anotas mientras ocurre y lo que salió de la reunión.",
+      titulo: "Preparación, en vivo y análisis",
+      texto: "Cada sesión tiene tres pestañas: la guía para prepararla, lo que anotas mientras ocurre y lo que salió de la reunión.",
       lado: "bottom-end",
       accion: pieza("exploracion"),
     },
     {
       ancla: "preventa.sesion.preguntas",
-      titulo: "Antes: la guía de la sesión",
-      texto: "Abrir, preguntar y cerrar. «En orden» sigue la conversación; «Por sección» separa la arquitectura de la venta y la escala. Lo que viene de una sesión anterior lleva su etiqueta.",
+      titulo: "Preparación: la guía de la sesión",
+      texto: "Arriba dice si la guía está al día y qué cambió. Abrir, preguntar y cerrar: «En orden» sigue la conversación; «Por sección» separa la arquitectura de la venta y la escala.",
       lado: "top",
       accion: momento("antes"),
     },
     {
       ancla: "preventa.sesion.notas",
-      titulo: "Durante: tus notas",
+      titulo: "En vivo: tus notas",
       texto: "Marca cada pregunta hecha y anota lo que respondió; lo demás va acá. Se guarda solo, y el agente lo lee como tu nota, no como palabras del cliente.",
       lado: "top",
       accion: momento("durante"),
     },
     {
       ancla: "preventa.sesion.salio",
-      titulo: "Después: lo que salió",
+      titulo: "Análisis: lo que salió",
       texto: "Lo que leyó el agente: qué se habló, qué se respondió de lo planeado y lo que sugiere. Lo que quedó abierto se lleva a la próxima sesión con una casilla.",
       lado: "top",
       accion: momento("despues"),

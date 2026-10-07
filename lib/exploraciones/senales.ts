@@ -150,3 +150,32 @@ export function porQueAhoraSugerido(senales: readonly Senal[], fecha: (iso: stri
   const [primera, ...resto] = partes;
   return `${primera}${resto.length ? `; ${resto.join(", ")}` : ""}.`;
 }
+
+/**
+ * ¿Ya hay conversación con la empresa? Con una, la estrategia de conexión y su correo de ejemplo sobran
+ * (Elías, 2026-10-07: «aparece un correo de ejemplo que sobra cuando el cliente ya está conectado»).
+ * Antes solo se miraba la agenda de HubSpot, que guarda lo que VIENE: en cuanto la reunión pasaba, el
+ * correo volvía. En orden: una reunión agendada que todavía no ocurre; una que ya pasó (de Meet, de
+ * HubSpot o sumada a mano), la más reciente; que el contacto agendó con la herramienta de reuniones de
+ * HubSpot aunque la reunión no esté en ningún lado.
+ */
+export type EstadoDeLaConexion =
+  | { tipo: "agendada"; titulo: string; inicio: string }
+  | { tipo: "ya-hablaron"; titulo: string; fecha: string; cuantas: number }
+  | { tipo: "agendo"; fecha: string }
+  | { tipo: "sin-contacto" };
+
+export function estadoDeLaConexion(o: {
+  agenda: readonly { titulo: string; inicio: string }[];
+  reuniones: readonly { titulo: string; fecha: string }[];
+  agendo?: string | null;
+  ahora?: number;
+}): EstadoDeLaConexion {
+  const ahora = o.ahora ?? Date.now();
+  const proxima = [...o.agenda].filter((a) => Date.parse(a.inicio) > ahora).sort((a, b) => a.inicio.localeCompare(b.inicio))[0];
+  if (proxima) return { tipo: "agendada", titulo: proxima.titulo, inicio: proxima.inicio };
+  const pasadas = o.reuniones.filter((r) => Date.parse(r.fecha) <= ahora).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  if (pasadas.length) return { tipo: "ya-hablaron", titulo: pasadas[0].titulo, fecha: pasadas[0].fecha, cuantas: pasadas.length };
+  if (o.agendo && !Number.isNaN(Date.parse(o.agendo))) return { tipo: "agendo", fecha: o.agendo };
+  return { tipo: "sin-contacto" };
+}

@@ -8,6 +8,7 @@ import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
 import {
   citaVerificable,
   esDelEquipoDeSmarteam,
+  proponeLaConexion,
   juntarCobertura,
   herramienta,
   leerLaIndustria,
@@ -31,7 +32,7 @@ import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
 import { leerLaRadiografia, urlComparable } from "./radiografia-pedido";
 import { conSuOrigen, separarOrigen } from "./casillas";
 import { bloqueDeInstrucciones, CLAVE_DE_INSTRUCCIONES } from "./notas-de-sesion";
-import { contactoPrincipal, porQueAhoraSugerido, rastroDe, senalesDe } from "./senales";
+import { contactoPrincipal, estadoDeLaConexion, porQueAhoraSugerido, rastroDe, senalesDe } from "./senales";
 
 // ── Una escala de juguete: dos áreas, cuatro dimensiones cada una ─────────────────
 
@@ -919,5 +920,37 @@ describe("⭐ la misma reunión por Meet y por HubSpot: lo respondido se junta (
       c("1.3", true, "lo dijo"),
     ]);
     expect(juntarCobertura([])).toEqual([]);
+  });
+});
+
+describe("⭐ con conversación, la estrategia de conexión sobra (2026-10-07)", () => {
+  const AHORA = Date.parse("2026-10-07T15:00:00.000Z");
+
+  it("agendada, ya hablaron o agendó por HubSpot; y sin nada, sin contacto", () => {
+    expect(estadoDeLaConexion({ agenda: [{ titulo: "Revisión", inicio: "2026-10-09T15:00:00.000Z" }], reuniones: [], ahora: AHORA }).tipo).toBe("agendada");
+    // La agenda que ya pasó no cuenta como agendada: era el error (el correo volvía apenas pasaba la reunión).
+    expect(estadoDeLaConexion({ agenda: [{ titulo: "Revisión", inicio: "2026-10-01T15:00:00.000Z" }], reuniones: [], ahora: AHORA }).tipo).toBe("sin-contacto");
+    expect(
+      estadoDeLaConexion({
+        agenda: [],
+        reuniones: [
+          { titulo: "Primera", fecha: "2026-09-28T15:00:00.000Z" },
+          { titulo: "Segunda", fecha: "2026-10-02T15:00:00.000Z" },
+        ],
+        ahora: AHORA,
+      }),
+    ).toEqual({ tipo: "ya-hablaron", titulo: "Segunda", fecha: "2026-10-02T15:00:00.000Z", cuantas: 2 });
+    expect(estadoDeLaConexion({ agenda: [], reuniones: [], agendo: "2026-09-30", ahora: AHORA })).toEqual({ tipo: "agendo", fecha: "2026-09-30" });
+    expect(estadoDeLaConexion({ agenda: [], reuniones: [], agendo: null, ahora: AHORA }).tipo).toBe("sin-contacto");
+  });
+
+  it("el agente no la propone si ya agendó o ya hablaron", () => {
+    expect(proponeLaConexion({ modo: "preparar", proxima: null, yaHablaron: false })).toBe(true);
+    expect(proponeLaConexion({ modo: "preparar", proxima: { titulo: "x", inicio: "2026-10-09" } })).toBe(false);
+    expect(proponeLaConexion({ modo: "preparar", proxima: null, yaHablaron: true })).toBe(false);
+    expect(proponeLaConexion({ modo: "leer", proxima: null })).toBe(false);
+    const props = herramienta(ctx({ modo: "preparar", yaHablaron: true })).input_schema.properties as Record<string, unknown>;
+    expect(props).not.toHaveProperty("estrategiaDeConexion");
+    expect(JSON.stringify(pedidoDeLaExploracion(ctx({ modo: "preparar", yaHablaron: true })))).toContain("Ya hubo una reunión con la empresa");
   });
 });

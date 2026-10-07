@@ -183,10 +183,26 @@ function textoDeLasNotas(
     .join("\n\n");
 }
 
+/**
+ * Las reuniones de la empresa que mira la preventa: las más recientes (`take`) y las que el vendedor
+ * eligió en el buscador de «Contexto adicional», aunque sean viejas (2026-10-07). Las dos por el
+ * chokepoint: una elegida que no es del cliente no sale.
+ */
+async function sesionesDeLaPreventa(clientId: string, take: number, elegidas: readonly string[] = []) {
+  const [recientes, deLasElegidas] = await Promise.all([
+    getClientSessions(clientId, { take }),
+    elegidas.length ? getClientSessions(clientId, { ids: elegidas }) : Promise.resolve([]),
+  ]);
+  const vistas = new Set(recientes.map((s) => s.id));
+  return [...recientes, ...deLasElegidas.filter((s) => !vistas.has(s.id))].sort((a, b) => b.date - a.date);
+}
+
 export async function leerFuentes(opts: {
   exploracionId: string;
   clientId: string;
   companyId: string | null;
+  /** Las reuniones elegidas a mano en el buscador: se leen aunque sean de antes del alta. */
+  elegidas?: readonly string[];
   /** Cuándo empezó la exploración: «leer» busca reuniones desde un mes antes (como «sin leer»). */
   creadaEn: Date;
   escala: EscalaDelLienzo;
@@ -299,7 +315,8 @@ export async function leerFuentes(opts: {
   });
 
   // ── Las reuniones de Meet (solo las que ya ocurrieron) ──
-  const sesiones = await getClientSessions(opts.clientId, { take: 30 });
+  const sesiones = await sesionesDeLaPreventa(opts.clientId, 30, opts.elegidas);
+  const elegidasA = new Set(opts.elegidas ?? []);
   const yaLeidasS = new Set(opts.propuesta.leidas.sesiones);
   const ahora = new Date();
   /* Al leer sin una reunión elegida: las dos más recientes SIN LEER y CON transcripción, desde un mes
@@ -307,7 +324,7 @@ export async function leerFuentes(opts: {
      elegir dos reuniones sin grabar, no leer nada y dejar sin leer para siempre la que se avisa. */
   const desde = opts.creadaEn.getTime() - DIAS_ANTES_DEL_ALTA * 24 * 60 * 60 * 1000;
   const sinLeerConTranscripcion = async () => {
-    const candidatas = sesiones.filter((s) => !yaLeidasS.has(s.id) && s.date >= desde).map((s) => s.id);
+    const candidatas = sesiones.filter((s) => !yaLeidasS.has(s.id) && (s.date >= desde || elegidasA.has(s.id))).map((s) => s.id);
     if (candidatas.length === 0) return [];
     const filas = await prisma.firefliesSession.findMany({
       where: { id: { in: candidatas }, AND: [{ transcript: { not: null } }, { transcript: { not: "" } }], date: { lte: ahora } },
@@ -413,12 +430,21 @@ export async function leerFuentes(opts: {
  * que se liga a cada sesión en Exploración (una pestaña por sesión, Elías 2026-10-03).
  */
 export async function reunionesDeLaExploracion(
-  opts: { exploracionId: string; clientId: string; creadaEn: Date; propuesta: PropuestaDeExploracion; leido: LoLeidoDeHubspot },
+  opts: {
+    exploracionId: string;
+    clientId: string;
+    creadaEn: Date;
+    propuesta: PropuestaDeExploracion;
+    leido: LoLeidoDeHubspot;
+    /** Las elegidas a mano en el buscador: se listan aunque sean de antes del alta. */
+    elegidas?: readonly string[];
+  },
   ahora = new Date(),
 ): Promise<ReunionDeLaExploracion[]> {
   const desde = opts.creadaEn.getTime() - DIAS_ANTES_DEL_ALTA * 24 * 60 * 60 * 1000;
   const leidas = new Set(opts.propuesta.leidas.sesiones);
-  const candidatas = (await getClientSessions(opts.clientId, { take: 30 })).filter((s) => s.date >= desde);
+  const elegidas = new Set(opts.elegidas ?? []);
+  const candidatas = (await sesionesDeLaPreventa(opts.clientId, 30, opts.elegidas)).filter((s) => s.date >= desde || elegidas.has(s.id));
   const conTranscripcion = candidatas.length
     ? await prisma.firefliesSession.findMany({
         where: {
@@ -472,13 +498,21 @@ export async function reunionesDeLaExploracion(
  * Solo lee la base (nada de HubSpot): se pide al abrir el lienzo.
  */
 export async function reunionesSinLeer(
-  opts: { exploracionId: string; clientId: string; creadaEn: Date; propuesta: PropuestaDeExploracion; leido: LoLeidoDeHubspot },
+  opts: {
+    exploracionId: string;
+    clientId: string;
+    creadaEn: Date;
+    propuesta: PropuestaDeExploracion;
+    leido: LoLeidoDeHubspot;
+    elegidas?: readonly string[];
+  },
   ahora = new Date(),
 ): Promise<ReunionSinLeer[]> {
   const desde = opts.creadaEn.getTime() - DIAS_ANTES_DEL_ALTA * 24 * 60 * 60 * 1000;
   const leidas = new Set(opts.propuesta.leidas.sesiones);
+  const elegidas = new Set(opts.elegidas ?? []);
   // Leídas o no: la de HubSpot que también está en Meet se cuenta una vez (abajo), aunque la de Meet ya se haya leído.
-  const candidatas = (await getClientSessions(opts.clientId, { take: 10 })).filter((s) => s.date >= desde);
+  const candidatas = (await sesionesDeLaPreventa(opts.clientId, 10, opts.elegidas)).filter((s) => s.date >= desde || elegidas.has(s.id));
   const conTranscripcion = candidatas.length
     ? await prisma.firefliesSession.findMany({
         where: {
@@ -499,4 +533,37 @@ export async function reunionesSinLeer(
      está en Meet y ya se leyó, su copia de HubSpot no puede quedar «sin leer» para siempre. Por eso se
      compara con TODAS las de Meet, no solo con las que faltan. */
   return [...deMeetSinLeer, ...aMano, ...agendadasQueYaPasaron(opts.leido.agenda, opts.propuesta.leidas.hubspot, deMeet, ahora)];
+}
+
+/** Una reunión de la empresa para el buscador de «Contexto adicional» de la preventa. */
+export interface ReunionDeLaEmpresa {
+  sessionId: string;
+  title: string;
+  date: string;
+  participants: string[];
+  organizerEmail: string | null;
+  sinTranscripcion: boolean;
+}
+
+/**
+ * Las reuniones de la empresa que se pueden elegir en el buscador de la preventa (2026-10-07): las
+ * que ya ocurrieron, por el chokepoint, con si tienen transcripción (la preventa solo lee esas). La
+ * pantalla saca las que ya lista y filtra con lo que se escribe.
+ */
+export async function reunionesDeLaEmpresaParaElegir(clientId: string, ahora = new Date()): Promise<ReunionDeLaEmpresa[]> {
+  const sesiones = await getClientSessions(clientId, { take: 100 });
+  if (!sesiones.length) return [];
+  const conTexto = await prisma.firefliesSession.findMany({
+    where: { id: { in: sesiones.map((s) => s.id) }, AND: [{ transcript: { not: null } }, { transcript: { not: "" } }], date: { lte: ahora } },
+    select: { id: true },
+  });
+  const tiene = new Set(conTexto.map((s) => s.id));
+  return sesiones.map((s) => ({
+    sessionId: s.id,
+    title: s.title,
+    date: new Date(s.date).toISOString(),
+    participants: s.participants,
+    organizerEmail: null,
+    sinTranscripcion: !tiene.has(s.id),
+  }));
 }

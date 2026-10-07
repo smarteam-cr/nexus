@@ -24,7 +24,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { prisma } from "@/lib/db/prisma";
 import { lanzarCorrida } from "@/lib/exploraciones/agente";
-import { leerPropuesta } from "@/lib/exploraciones/esquemas";
+import { leerContenido, leerPropuesta } from "@/lib/exploraciones/esquemas";
 import { reunionesDeLaExploracion, type LoQueSeRelee } from "@/lib/exploraciones/fuentes";
 import type { ReunionDeLaExploracion } from "@/lib/exploraciones/guia";
 import { hayQueLeerAlPreparar } from "@/lib/exploraciones/lectura";
@@ -47,6 +47,7 @@ const SELECT = {
   clientId: true,
   createdAt: true,
   propuesta: true,
+  contenido: true,
   test: true,
   client: { select: { name: true, kind: true } },
 } as const;
@@ -69,6 +70,7 @@ async function planDe(fila: Fila) {
     creadaEn: fila.createdAt,
     propuesta,
     leido: leerLoLeido(fila.test),
+    elegidas: leerContenido(fila.contenido).reunionesElegidas,
   });
   const sinLeer = reuniones.filter((r) => !r.leida && ((r.origen === "meet" && !r.corta) || r.origen === "documento"));
   const conResumen = (origen: string, id: string) => !!propuesta.lecturas[`${origen}:${id}`];

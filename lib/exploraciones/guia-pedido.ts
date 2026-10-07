@@ -75,6 +75,13 @@ export interface ContextoDeLaGuia {
   objecionesDichas: string[];
   /** Lo que el vendedor se llevó de la sesión anterior para explorar en esta: va primero. */
   paraExplorar: string[];
+  /** A qué apunta cada punto de `paraExplorar`, si se supo al llevarlo (misma posición; null = no se sabe). */
+  paraExplorarApunta?: (string | null)[];
+  /**
+   * Dónde puede ir un punto llevado: las ocho tarjetas del resumen y las dimensiones de las áreas en
+   * juego. El agente dice en «ubicacion» a cuál apunta cada uno, aunque ninguna pregunta lo retome.
+   */
+  ubicables?: { id: string; nombre: string }[];
   /** A qué apuntaba lo que una sesión cortada tenía preparado (tarjetas y dimensiones que siguen faltando): va primero. */
   pasaron?: string[];
   /** Lo que pasó en las sesiones anteriores, en líneas (lo que leyó el agente de cada una): la apertura lo retoma. */
@@ -91,6 +98,7 @@ const idDeAbierto = (i: number) => `A${i + 1}`;
 export function herramientaDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.Tool {
   const para = [...ctx.huecos.map((h) => h.clave), ...ctx.enfoque.map((d) => d.id)];
   const abiertos = ctx.paraExplorar.map((_, i) => idDeAbierto(i));
+  const ubicables = (ctx.ubicables ?? []).map((u) => u.id);
   return {
     name: HERRAMIENTA_DE_LA_GUIA,
     description: "Arma la guía de la próxima reunión. Llámala una sola vez.",
@@ -155,8 +163,21 @@ export function herramientaDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.T
           description: "Cómo se nota en ESTA empresa que no deja explorar, y qué hacer: descartarla o venderle un caso concreto para el resultado que pide.",
         },
         cierre: { type: "string", description: "Cómo cerrar esta reunión: el siguiente paso, con fecha y con quién." },
+        ...(abiertos.length && ubicables.length
+          ? {
+              ubicacion: {
+                type: "array",
+                description: "Dónde va CADA punto que el vendedor se llevó (A1, A2…): la tarjeta de la arquitectura de la venta o la dimensión de la escala a la que apunta. Uno por punto, también si una pregunta ya lo retoma.",
+                items: {
+                  type: "object",
+                  properties: { abierto: { type: "string", enum: abiertos }, para: { type: "string", enum: ubicables } },
+                  required: ["abierto", "para"],
+                },
+              },
+            }
+          : {}),
       },
-      required: ["objetivo", "apertura", "preguntas", "objeciones", "pocaApertura", "cierre"],
+      required: ["objetivo", "apertura", "preguntas", "objeciones", "pocaApertura", "cierre", ...(abiertos.length && ubicables.length ? ["ubicacion"] : [])],
     },
   };
 }
@@ -166,7 +187,7 @@ function sistemaDeLaGuia(): string {
 
 Reglas:
 - El vendedor le habla al cliente de TÚ (tuteo). Nunca voseo (las formas del Río de la Plata) ni «usted». Se escribe así: «tú vives», «puedes», «cuentas», «dices», «crees», «llegas», «quieres», «tienes», «cuéntame», «para ti». Aunque las fuentes estén en voseo, tú escribes en tuteo.
-- Primero lo que viene de antes: lo que el vendedor se llevó de una sesión anterior (A1, A2…) y lo que quedó sin preguntar porque una sesión se cortó. Cada punto llevado va en una pregunta (la de la tarjeta o la dimensión a la que apunta) con su «abierto»; si la sesión anterior se cortó, la apertura lo dice en una frase.
+- Primero lo que viene de antes: lo que el vendedor se llevó de una sesión anterior (A1, A2…) y lo que quedó sin preguntar porque una sesión se cortó. Cada punto llevado va en una pregunta (la de la tarjeta o la dimensión a la que apunta) con su «abierto», y en «ubicacion» dices a qué tarjeta o dimensión apunta cada uno, aunque ninguna pregunta lo retome; si la sesión anterior se cortó, la apertura lo dice en una frase.
 - Preguntas abiertas, cortas y en lenguaje llano. Nada de licencias, usuarios, precios, demos ni funciones de HubSpot: eso es vender antes de diagnosticar.
 - Una pregunta por cada cosa en «para», y nada más. No preguntes lo que ya está confirmado.
 - Las repreguntas siguen el método de la siguiente pregunta lógica: cada una parte de lo que el cliente acaba de decir y va un paso más hondo. Primero el último caso real («¿me cuentas la última vez que pasó?»), después la causa o el dolor de fondo, y al final cuánto le cuesta (horas, plata, clientes perdidos), para cuantificarlo.
@@ -200,8 +221,14 @@ function cuerpoDeLaGuia(ctx: ContextoDeLaGuia): string {
     lineas.push(
       "",
       "=== LO QUE EL VENDEDOR SE LLEVÓ DE UNA SESIÓN ANTERIOR (va primero: cada punto en la pregunta de lo que corresponda, con su «abierto») ===",
-      ...ctx.paraExplorar.map((t, i) => `- ${idDeAbierto(i)}: ${t}`),
+      ...ctx.paraExplorar.map((t, i) => {
+        const apunta = ctx.paraExplorarApunta?.[i];
+        return `- ${idDeAbierto(i)}: ${t}${apunta ? ` [apunta a: ${apunta}]` : ""}`;
+      }),
     );
+    if (ctx.ubicables?.length) {
+      lineas.push("", "=== DÓNDE PUEDE IR CADA PUNTO LLEVADO (para «ubicacion») ===", ctx.ubicables.map((u) => `${u.id} (${u.nombre})`).join(" · "));
+    }
   }
   if (ctx.pasaron?.length) {
     lineas.push("", "=== LO QUE QUEDÓ SIN PREGUNTAR PORQUE UNA SESIÓN SE CORTÓ (va primero) ===", ...ctx.pasaron.map((t) => `- ${t}`));
@@ -247,6 +274,12 @@ export function pedidoDeLaGuia(ctx: ContextoDeLaGuia): Anthropic.Messages.Messag
 const esObjeto = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const textoLimpio = (x: unknown, max: number): string | null => (typeof x === "string" && x.trim() ? x.trim().slice(0, max) : null);
 
+/** El texto del punto llevado que nombra un «A1», «A2»… (o undefined si no es uno de los que se le dieron). */
+function abiertoDe(x: unknown, ctx: Pick<ContextoDeLaGuia, "paraExplorar">): string | undefined {
+  const i = typeof x === "string" && /^A\d+$/.test(x) ? Number(x.slice(1)) - 1 : -1;
+  return i >= 0 ? ctx.paraExplorar[i] : undefined;
+}
+
 /**
  * Lee la guía que devolvió el agente. Se cae lo que no apunta a una tarjeta vacía o a una dimensión
  * en foco, lo repetido y lo vacío. null si no vino nada que sirva (la pantalla muestra la de base).
@@ -268,9 +301,19 @@ export function leerLaGuiaDelAgente(respuesta: Anthropic.Messages.Message, ctx: 
       .filter((r): r is string => !!r)
       .slice(0, REPREGUNTAS_POR_PREGUNTA);
     vistos.add(p.para);
-    const i = typeof p.abierto === "string" && /^A\d+$/.test(p.abierto) ? Number(p.abierto.slice(1)) - 1 : -1;
-    const abierto = i >= 0 ? ctx.paraExplorar[i] : undefined;
+    const abierto = abiertoDe(p.abierto, ctx);
     preguntas.push({ para: p.para, pregunta, repreguntas, ...(abierto ? { abierto } : {}) });
+  }
+
+  /* Dónde va cada punto llevado: lo que dice «ubicacion» y, si no lo dice, la pregunta que lo retoma.
+     Solo a una tarjeta o a una dimensión de las que se le dieron. */
+  const ubicables = new Set((ctx.ubicables ?? []).map((u) => u.id));
+  const ubicaciones: Record<string, string> = {};
+  for (const p of preguntas) if (p.abierto) ubicaciones[p.abierto] = p.para;
+  for (const u of Array.isArray(input.ubicacion) ? input.ubicacion : []) {
+    if (!esObjeto(u) || typeof u.para !== "string" || !ubicables.has(u.para)) continue;
+    const abierto = abiertoDe(u.abierto, ctx);
+    if (abierto) ubicaciones[abierto] = u.para;
   }
 
   const objeciones: Objecion[] = [];
@@ -294,6 +337,7 @@ export function leerLaGuiaDelAgente(respuesta: Anthropic.Messages.Message, ctx: 
     huecos: ctx.huecos.map((h) => h.clave),
     enfoque: ctx.enfoque.map((d) => d.id),
     objetivo: textoLimpio(input.objetivo, 400),
+    ...(Object.keys(ubicaciones).length ? { ubicaciones } : {}),
     apertura,
     escalaEnSimple: ctx.desdeCero ? textoLimpio(input.escalaEnSimple, 800) : null,
     preguntas: preguntas.slice(0, MAX_PREGUNTAS_EN_LA_GUIA),
@@ -408,9 +452,22 @@ export function contextoDeLaGuia(o: {
     }),
     noExplorado: textoDe("noExplorado", estado, o.pendientes).slice(0, 8),
     objecionesDichas: objecionesDichas(estado, o.pendientes).slice(0, 8),
-    paraExplorar: (() => {
+    ...(() => {
       const id = proximaReunion(c.sesiones, o.agenda, o.hoy, estado.propuesta.leidas.sesiones.length).sesionId;
-      return (c.sesiones.find((s) => s.id === id)?.explorar ?? []).slice(0, 10);
+      const s = c.sesiones.find((x) => x.id === id);
+      const paraExplorar = (s?.explorar ?? []).slice(0, 10);
+      if (!paraExplorar.length) return { paraExplorar };
+      // Dónde puede ir cada uno: las ocho tarjetas y las dimensiones de las áreas en juego.
+      const ubicables = [
+        ...CASILLAS_DEL_RESUMEN.map((k) => ({ id: k as string, nombre: definicionDe(k).etiqueta })),
+        ...escala.areas.filter((a) => estado.areas.includes(a.id)).flatMap((a) => a.dimensiones.map((d) => ({ id: d.id, nombre: `${d.nombre} (${a.nombre})` }))),
+      ];
+      const validos = new Set(ubicables.map((u) => u.id));
+      const apunta = paraExplorar.map((t) => {
+        const p = s?.explorarPara?.[t];
+        return p && validos.has(p) ? p : null;
+      });
+      return { paraExplorar, ubicables, ...(apunta.some(Boolean) ? { paraExplorarApunta: apunta } : {}) };
     })(),
     pasaron: (() => {
       const faltan = new Set<string>([...huecos, ...enfoque]);

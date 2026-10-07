@@ -10,8 +10,9 @@
  *     llegó) y, en una fila, la ficha de contacto y la ficha de empresa. La escala y las áreas en
  *     juego viven en La escala.
  *   - Conexión: lo que todavía no se dijo en Identificación y sirve para abrir la conversación, la
- *     hipótesis de valor (cada idea con de dónde sale) y la estrategia de conexión (plegada si ya
- *     agendó: no hace falta contactarlo).
+ *     hipótesis de valor (cada idea con de dónde sale) y la estrategia de conexión. Con conversación
+ *     (agendó, ya hablaron o agendó por HubSpot) la estrategia y su correo de ejemplo sobran: arriba
+ *     lo dice y la estrategia se ve solo si se pide (Elías, 2026-10-07).
  *
  * Los hechos de HubSpot se leen al abrir la pieza y no se guardan; lo que interpreta el agente vive
  * en sus casillas, como todo lo demás: lo propone y el vendedor lo usa o lo descarta.
@@ -23,7 +24,7 @@ import { cn } from "@/lib/cn";
 import { diaConAnio, diaYHora } from "@/lib/exploraciones/fechas";
 import { definicionDe } from "@/lib/exploraciones/casillas";
 import { debePrepararSola, estadoDeLaPreparacion, ultimaPreparacion, type CorridasAlAbrir } from "@/lib/exploraciones/preparar-sola";
-import { contactoPrincipal, porQueAhoraSugerido, senalesDe, type ContactoConRastro, type Senal } from "@/lib/exploraciones/senales";
+import { contactoPrincipal, estadoDeLaConexion, porQueAhoraSugerido, senalesDe, type ContactoConRastro, type EstadoDeLaConexion, type Senal } from "@/lib/exploraciones/senales";
 import { useRecorridos } from "@/components/recorridos/contexto";
 import { Casilla, Vista } from "./Casilla";
 import { useLienzo } from "./contexto";
@@ -295,8 +296,16 @@ function Contacto({ datos }: { datos: DatosDePreparacion | null }) {
                 {tel}
               </a>
               {wa && (
-                <a href={wa} target="_blank" rel="noreferrer" className="text-xs text-fg-muted hover:text-fg hover:underline">
-                  WhatsApp
+                <a
+                  href={wa}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-[5px] text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+                    <path d="M2.5 13.5l.9-2.6A5.5 5.5 0 1 1 5.6 13l-3.1.5z" />
+                  </svg>
+                  Escribir por WhatsApp
                 </a>
               )}
             </span>
@@ -370,29 +379,49 @@ function FichaDeEmpresa({ datos }: { datos: DatosDePreparacion | null }) {
   );
 }
 
-function Conexion({ datos }: { datos: DatosDePreparacion | null }) {
-  const agendada = datos?.agenda[0] ?? null;
-  const [verIgual, setVerIgual] = useState(false);
-  if (agendada && !verIgual) {
-    return (
-      <Bloque titulo="Estrategia de conexión">
-        <div className="space-y-2 rounded-lg border border-success-line bg-success-surface px-4 py-3">
-          <p className="text-sm font-medium text-success-ink">Ya agendó: no hace falta contactarlo.</p>
-          <p className="text-xs text-fg-secondary">
-            «{agendada.titulo}», {diaYHora(agendada.inicio)}. Usa lo de arriba para preparar esa reunión.
-          </p>
-        </div>
-        <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => setVerIgual(true)}>
-          Ver la estrategia igual
-        </button>
-      </Bloque>
-    );
+/** Lo que dice el aviso de arriba de Conexión, según con qué conversación se cuenta. */
+function textoDeLaConexion(c: Exclude<EstadoDeLaConexion, { tipo: "sin-contacto" }>): { titulo: string; detalle: string } {
+  if (c.tipo === "agendada") return { titulo: "Ya agendó: no hace falta contactarlo.", detalle: `«${c.titulo}», ${diaYHora(c.inicio)}. Prepara esa reunión en Exploración.` };
+  if (c.tipo === "ya-hablaron") {
+    const otras = c.cuantas > 1 ? ` Hay ${c.cuantas} reuniones con la empresa.` : "";
+    return { titulo: "Ya hablaron: no hace falta contactarlo.", detalle: `La última reunión fue «${c.titulo}», el ${diaConAnio(c.fecha)}.${otras} Lo que sigue se prepara en Exploración.` };
   }
-  return <Casilla clave="estrategiaDeConexion" />;
+  return { titulo: "Ya agendó por HubSpot: no hace falta contactarlo.", detalle: `Agendó una reunión con la herramienta de reuniones de HubSpot el ${diaConAnio(c.fecha)}.` };
+}
+
+/**
+ * Con conversación, arriba de todo y en verde (Elías, 2026-10-07: «en un momento me parece que ni lo
+ * vi»: iba al final de la pestaña). La estrategia de conexión y su correo de ejemplo se ven solo si se
+ * piden. Sin conversación, la estrategia va al final, como siempre.
+ */
+function Conexion({ conexion }: { conexion: EstadoDeLaConexion }) {
+  const { irA } = useLienzo();
+  const [verIgual, setVerIgual] = useState(false);
+  if (conexion.tipo === "sin-contacto") return <Casilla clave="estrategiaDeConexion" />;
+  const t = textoDeLaConexion(conexion);
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-success-line bg-success-surface px-5 py-4">
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-sm font-semibold text-success-ink">{t.titulo}</p>
+          <p className="text-xs text-fg-secondary">{t.detalle}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => setVerIgual((x) => !x)}>
+            {verIgual ? "Ocultar la estrategia de conexión" : "Ver la estrategia de conexión igual"}
+          </button>
+          <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => irA("exploracion")}>
+            Ir a Exploración
+          </button>
+        </div>
+      </div>
+      {verIgual && <Casilla clave="estrategiaDeConexion" />}
+    </>
+  );
 }
 
 export default function PasoPreparacion() {
-  const { exp, escala } = useLienzo();
+  const { exp, escala, reuniones } = useLienzo();
   const [datos, setDatos] = useState<DatosDePreparacion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pestana, setPestana] = useState<Pestana>("identificacion");
@@ -443,6 +472,8 @@ export default function PasoPreparacion() {
   /* Mientras «Por qué ahora» está vacía y el agente no propuso la suya, una sugerida con los hechos de
      HubSpot: se usa con un clic, arriba, en el resumen. */
   const porQueAhoraDeHubspot = datos ? porQueAhoraSugerido(senales, diaConAnio) : null;
+  // La agenda que viene y las reuniones salen del lienzo (ya están al abrir); lo que agendó, del contacto.
+  const conexion = estadoDeLaConexion({ agenda: exp.leido.agenda, reuniones, agendo: principal?.rastro.agendo ?? null });
 
   return (
     <div className="space-y-6">
@@ -451,6 +482,7 @@ export default function PasoPreparacion() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Segmentado<Pestana>
           etiqueta="Qué parte de la preparación"
+          tamano="grande"
           opciones={PESTANAS.map((p) => ({ clave: p.clave, etiqueta: p.etiqueta }))}
           valor={pestana}
           onCambio={setPestana}
@@ -468,9 +500,10 @@ export default function PasoPreparacion() {
         </div>
       ) : (
         <div data-recorrido="preventa.preparacion.conexion" className="space-y-4">
+          {conexion.tipo !== "sin-contacto" && <Conexion conexion={conexion} />}
           <Casilla clave="contexto" />
           <Casilla clave="hipotesisDeValor" />
-          <Conexion datos={datos} />
+          {conexion.tipo === "sin-contacto" && <Conexion conexion={conexion} />}
         </div>
       )}
     </div>

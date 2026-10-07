@@ -305,18 +305,22 @@ export async function getProjectDocumentSessions(
  * 35 % del de SmartAgro y el 24 % del de Smarteam eran reuniones que no habían pasado
  * (18 clientes afectados). El modelo las recibía como `[fecha] Título`, sin forma de
  * saber que no ocurrieron. Ver `lib/sessions/ocurridas.ts`.
+ *
+ * `ids` (2026-10-07): solo esas reuniones, si son del cliente. Lo usa la preventa para leer las que el
+ * vendedor eligió en el buscador aunque no estén entre las más recientes; un id de otro cliente no sale.
  */
 export async function getClientSessions(
   clientId: string,
-  opts: { before?: Date; take?: number } = {},
+  opts: { before?: Date; take?: number; ids?: readonly string[] } = {},
 ): Promise<ProjectSourceSession[]> {
+  if (opts.ids && opts.ids.length === 0) return [];
   // `before` (cuando viene) acota MÁS, nunca menos: un `before` futuro no puede
   // destapar lo que todavía no ocurrió. De ahí el mínimo entre los dos techos.
   const ahora = new Date();
   const techo = opts.before && opts.before < ahora ? opts.before : ahora;
 
   const rows = await prisma.firefliesSession.findMany({
-    where: { ...whereBelongsToClient(clientId), date: { lte: techo } },
+    where: { ...whereBelongsToClient(clientId), date: { lte: techo }, ...(opts.ids ? { id: { in: [...opts.ids] } } : {}) },
     orderBy: { date: "desc" },
     take: opts.take ?? 200,
     select: { id: true, title: true, date: true, participants: true, organizerEmail: true },

@@ -5542,3 +5542,44 @@ las columnas de la sugerencia (`Project.etapaPropuesta*`), sin quien sugiriera n
   documento «de la etapa» depende de que la etapa sea la verdadera.
 - **Cuesta una llamada a Haiku por reunión** de un proyecto con tablero conocido, registro en HubSpot y alguna etapa a
   la que avanzar (`agentSlug` `etapa-desde-reunion` en el medidor).
+
+## Preventa: lo que se vio al usarla (2026-10-07)
+
+**Contexto.** Elías revisó el módulo y dejó ocho puntos: una pregunta de la guía con un «¿», el botón de WhatsApp
+que no parecía botón, «Rearmar la guía» sin decir qué hace, los nombres de las pestañas de la sesión, el correo de
+ejemplo de Conexión con el cliente ya conectado, las pestañas internas chicas, un diagnóstico que el agente
+«inventó» en Automóvil Club, y poder buscar cualquier reunión de Meet en todos los «Contexto adicional».
+
+- **Las pestañas de una sesión se llaman Preparación, En vivo y Análisis** (antes Antes, Durante y Después). Por
+  dentro las claves siguen siendo `antes`, `durante` y `despues`: es copy. «Preparación» también es el nombre de una
+  pieza; adentro de una sesión no se confunden. El recorrido pasó a la versión 4.
+- **Las pestañas que ordenan una pieza van grandes** (`tamano="grande"` en `Segmentos` y en `Segmentado`): los
+  momentos de la sesión e Identificación / Conexión. Los filtros de una lista siguen en el tamaño normal.
+- **La guía dice en qué estado está y qué hace su botón** (`EstadoDeLaGuia`, arriba de la Preparación): la de base
+  («Armar la guía» la adapta a esta empresa), al día («Volver a armarla») o vieja, con QUÉ cambió desde entonces
+  (`cambiosDesdeLaGuia`: lo que ya se respondió, lo que entró, las dimensiones, lo llevado que no ubica) y
+  «Actualizar la guía». Se fue el botón suelto de la cabecera, que solo se explicaba al pasar el mouse.
+- **Un punto que te llevas de una sesión lleva la letra o el número de lo que apunta, nunca un «¿».** Lo que no se
+  preguntó lo sabe al llevarlo (`SesionPlaneada.explorarPara`); lo demás lo ubica el agente al armar la guía
+  (`GuiaDeLaSesion.ubicaciones`, cada A# en una tarjeta o una dimensión aunque ninguna pregunta lo retome). Sin dato
+  todavía, una flecha gris y la guía avisa que está vieja. La clave de su nota y de su casilla «hecha» no cambia.
+- **«Cuándo» usa la fecha de HubSpot** cuando la sesión no tiene la suya: la cabecera ya la mostraba y abajo decía
+  «Sin agendar».
+- **Con conversación, la estrategia de conexión sobra** (`estadoDeLaConexion`, lib/exploraciones/senales.ts): una
+  reunión agendada, una que ya pasó (Meet, HubSpot o sumada a mano) o que el contacto agendó por HubSpot. Antes solo
+  se miraba la agenda, que guarda lo que VIENE: en cuanto la reunión pasaba, la estrategia y su correo volvían.
+  Ahora el aviso va arriba de Conexión, en verde, la estrategia se ve solo si se pide y su sugerencia no cuenta para
+  revisar; y el agente no la propone si ya hablaron (`yaHablaron`, `proponeLaConexion`).
+- **WhatsApp es un botón** («Escribir por WhatsApp»).
+- **En todo «Contexto adicional» se busca en tu calendario** (supera la decisión del 2026-09-23 de que solo el
+  cronograma lo hacía). La consulta es una sola (`lib/sessions/calendario-de-quien-busca.ts`) y la ruta también
+  (`session-candidates/calendario?para=`), con el guard de la puerta de cada documento: el cronograma sigue con
+  `cronograma.write` y sin el del handoff. Se retiró `timeline/calendario`. Las reglas de qué se ofrece no
+  cambiaron: sin buscar, solo las que ya tienen cliente; las de otro cliente se marcan, no se esconden.
+- **La preventa suma cualquier reunión de Meet** («Buscar una reunión de Meet», de la empresa o de tu calendario).
+  Una de la empresa entra; una sin cliente se adopta con la misma regla de los proyectos
+  (`prepararReunionParaElCliente`); una de otro cliente se rechaza; sin transcripción no se suma (no hay qué leer).
+  Queda en `contenido.reunionesElegidas` (sin SQL) y se lista y se lee aunque sea de antes del alta, por el
+  chokepoint (`getClientSessions` con `ids`). Quitarla solo la saca de esa lista: no le cambia el dueño.
+- **Sin SQL.** Lo de Automóvil Club (el agente propone un nivel para cada dimensión al preparar, aun sin pistas)
+  queda como propuesta: cambia la decisión del 2026-10-01 y espera a Elías.

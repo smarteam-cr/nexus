@@ -13,10 +13,12 @@ import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { CambiosSchema, leerContenido, leerPropuesta } from "./esquemas";
 import { CASILLAS_DEL_RESUMEN, CLASES_DE_OBJECION } from "./casillas";
 import {
+  cambiosDesdeLaGuia,
   enfoqueDeLaGuia,
   focoDeLaGuia,
   guiaDeAntesDeLaReunion,
   guiaVieja,
+  ladoDeLaPregunta,
   huecosDelResumen,
   loQueTraes,
   nombreDeLaPestana,
@@ -589,5 +591,84 @@ describe("⭐ la reunión se compara solo con la guía que había ANTES (2026-10
     expect(guiaDeAntesDeLaReunion({ guia: guia("2026-10-01T13:00:00.000Z"), guias: {} }, null, "2026-09-28T20:45:00.000Z")).toBeNull();
     expect(guiaDeAntesDeLaReunion({ guia: guia("2026-10-05T00:00:00.000Z"), guias: { s1: guia("2026-10-03T00:00:00.000Z") } }, "s1", REUNION)).toBeNull();
     expect(guiaDeAntesDeLaReunion({ guia: null, guias: {} }, null, REUNION)).toBeNull();
+  });
+});
+
+describe("⭐ un punto llevado se muestra con su letra o su número, nunca con un «¿» (2026-10-07)", () => {
+  const LLEVADO = "No se preguntó. Qué preguntar: ¿Cuál es la meta del año?";
+  const abiertos = new Map([[LLEVADO, 1]]);
+
+  it("sin saber a qué apunta, va aparte; con lo que se supo al llevarlo, con su tarjeta", () => {
+    const sin = preguntasParaMostrar(null, [], [], ESCALA, { abiertos, pasaron: new Map() });
+    expect(sin).toHaveLength(1);
+    expect(ladoDeLaPregunta(sin[0])).toBeNull();
+    const con = preguntasParaMostrar(null, [], [], ESCALA, { abiertos, pasaron: new Map(), apuntan: new Map([[LLEVADO, "metas"]]) });
+    expect(con[0].apunta).toEqual({ tipo: "tarjeta", para: "metas" });
+    expect(ladoDeLaPregunta(con[0])).toBe("tarjeta");
+    // La clave de la nota y de la casilla «hecha» no cambia: sigue siendo la del punto.
+    expect(con[0].para).toBe(paraDeUnAbierto(LLEVADO));
+  });
+
+  it("lo que ubicó el agente al armar la guía manda; lo que no es de la escala no se usa", () => {
+    const g = preguntasParaMostrar({ preguntas: [], ubicaciones: { [LLEVADO]: "1.3" } }, [], [], ESCALA, {
+      abiertos,
+      pasaron: new Map(),
+      apuntan: new Map([[LLEVADO, "metas"]]),
+    });
+    expect(g[0].apunta).toEqual({ tipo: "dimension", para: "1.3" });
+    const x = preguntasParaMostrar({ preguntas: [], ubicaciones: { [LLEVADO]: "9.9" } }, [], [], ESCALA, { abiertos, pasaron: new Map() });
+    expect(x[0].apunta).toBeUndefined();
+  });
+
+  it("la sesión recuerda a qué apunta cada punto que se llevó", () => {
+    const p = [
+      { clave: "s-1", numero: 1, sesion: { id: "s-1", fecha: "2026-09-28" }, reunion: null, fecha: "2026-09-28", hecha: true },
+      {
+        clave: "s-2",
+        numero: 2,
+        sesion: { id: "s-2", explorar: [LLEVADO, "otro"], explorarDe: { [LLEVADO]: "s-1", otro: "s-1" }, explorarPara: { [LLEVADO]: "metas", suelto: "planes" } },
+        reunion: null,
+        fecha: null,
+        hecha: false,
+      },
+    ];
+    const proc = procedenciasDeLaSesion(p[1], p);
+    expect([...proc.apuntan]).toEqual([[LLEVADO, "metas"]]);
+  });
+
+  it("la guía lo pide y lo lee: «ubicacion» va a la tarjeta o dimensión de cada punto", () => {
+    const c = ctx({ paraExplorar: [LLEVADO], ubicables: [{ id: "metas", nombre: "Metas" }, { id: "1.3", nombre: "D1.3 (Ventas)" }] });
+    const props = (herramientaDeLaGuia(c).input_schema as { properties: Record<string, unknown>; required: string[] });
+    expect(props.properties).toHaveProperty("ubicacion");
+    expect(props.required).toContain("ubicacion");
+    const g = leerLaGuiaDelAgente(
+      respuesta({ apertura: ["Hola"], preguntas: [], objeciones: [], ubicacion: [{ abierto: "A1", para: "1.3" }, { abierto: "A9", para: "metas" }, { abierto: "A1", para: "9.9" }] }),
+      c,
+      null,
+    );
+    expect(g?.ubicaciones).toEqual({ [LLEVADO]: "1.3" });
+    // Sin puntos llevados, no se pide.
+    expect((herramientaDeLaGuia(ctx()).input_schema as { properties: Record<string, unknown> }).properties).not.toHaveProperty("ubicacion");
+  });
+});
+
+describe("⭐ qué cambió desde que se armó la guía (2026-10-07)", () => {
+  const guia = { huecos: ["metas", "retos"], enfoque: ["1.2"], preguntas: [{ para: "metas", pregunta: "¿?", repreguntas: [], abierto: "A" }] };
+
+  it("al día: nada que decir", () => {
+    expect(cambiosDesdeLaGuia(guia, ["retos", "metas"], ["1.2"], ["A"])).toBeNull();
+    expect(guiaVieja(guia, ["metas", "retos"], ["1.2"])).toBe(false);
+  });
+
+  it("dice lo que ya se respondió, lo que entró, las dimensiones y lo llevado sin ubicar", () => {
+    expect(cambiosDesdeLaGuia(guia, ["retos", "tiempos"], ["1.4"], ["A", "B"])).toEqual({
+      respondidas: ["metas"],
+      nuevas: ["tiempos"],
+      dimensiones: true,
+      llevados: 1,
+    });
+    // Un punto que la guía ubicó sin retomarlo en una pregunta cuenta como ubicado.
+    expect(cambiosDesdeLaGuia({ ...guia, ubicaciones: { B: "planes" } }, ["metas", "retos"], ["1.2"], ["A", "B"])).toBeNull();
+    expect(guiaVieja(guia, ["metas", "retos"], ["1.2"], ["B"])).toBe(true);
   });
 });
