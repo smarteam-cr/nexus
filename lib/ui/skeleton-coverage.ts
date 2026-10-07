@@ -144,5 +144,8 @@ export const SKELETON_COVERAGE: Record<string, Cobertura> = {
   audits: { modo: "own" },
   "audits/[id]": { modo: "own" },
 
+  // ── Página 404 (2026-10-06) ─────────────────────────────────────────────────
+  "[...ruta]": { modo: "exempt", razon: "solo llama a notFound(): el 404 (app/(shell)/not-found.tsx) se pinta sin espera" },
+
   // ── Implementación ──────────────────────────────────────────────────────────
 };

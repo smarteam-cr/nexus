@@ -688,6 +688,64 @@ html.light aside .bg-gray-800 {
   }
 }
 
+/* ── Página 404: la señal que se corta (components/no-encontrada, 2026-10-06) ──── */
+/* El número se enciende como una pantalla vieja y cada 2,4 s tiene un corte de
+   ~0,35 s: dos copias del «404» (con el fondo de la página) se recortan en franjas
+   y se corren de costado. Fuera del corte las copias quedan recortadas a cero, así
+   que sin animación (reduced-motion) se ve el número quieto y entero. Los corrimientos
+   van en `em` para que escalen con el tamaño del número (168 px y 112 px). */
+.nx-404 .nx-404-enciende {
+  transform-origin: center;
+  animation: nx-404-enciende 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.nx-404 .nx-404-corte-a,
+.nx-404 .nx-404-corte-b {
+  clip-path: inset(100% 0 0 0);
+}
+.nx-404 .nx-404-corte-a {
+  animation: nx-404-corte-a 2.4s steps(1, end) 0.9s infinite;
+}
+.nx-404 .nx-404-corte-b {
+  animation: nx-404-corte-b 2.4s steps(1, end) 0.9s infinite;
+}
+.nx-404 .nx-404-base {
+  animation: nx-404-parpadeo 2.4s steps(1, end) 0.9s infinite;
+}
+@keyframes nx-404-enciende {
+  0%   { transform: scale(1.5, 0.01); opacity: 0; filter: blur(4px); }
+  35%  { transform: scale(1, 0.02); opacity: 1; filter: blur(0); }
+  100% { transform: scale(1, 1); opacity: 1; }
+}
+@keyframes nx-404-corte-a {
+  0%, 81%, 100% { clip-path: inset(100% 0 0 0); transform: translateX(0); }
+  82% { clip-path: inset(18% 0 64% 0); transform: translateX(-0.06em); }
+  85% { clip-path: inset(56% 0 26% 0); transform: translateX(0.048em); }
+  88% { clip-path: inset(36% 0 46% 0); transform: translateX(-0.03em); }
+  91% { clip-path: inset(70% 0 12% 0); transform: translateX(0.071em); }
+  94% { clip-path: inset(8% 0 82% 0); transform: translateX(-0.024em); }
+  96% { clip-path: inset(100% 0 0 0); transform: translateX(0); }
+}
+@keyframes nx-404-corte-b {
+  0%, 83%, 100% { clip-path: inset(100% 0 0 0); transform: translateX(0); }
+  84% { clip-path: inset(44% 0 40% 0); transform: translateX(0.054em); }
+  87% { clip-path: inset(12% 0 76% 0); transform: translateX(-0.071em); }
+  90% { clip-path: inset(62% 0 22% 0); transform: translateX(0.036em); }
+  93% { clip-path: inset(28% 0 58% 0); transform: translateX(-0.048em); }
+  96% { clip-path: inset(100% 0 0 0); transform: translateX(0); }
+}
+@keyframes nx-404-parpadeo {
+  0%, 82%, 100% { opacity: 1; }
+  86% { opacity: 0.35; }
+  89% { opacity: 1; }
+  93% { opacity: 0.6; }
+  96% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nx-404 * {
+    animation: none !important;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Markdown renderer para Base de conocimiento (tema oscuro)
    ───────────────────────────────────────────────────────────────────────── */
