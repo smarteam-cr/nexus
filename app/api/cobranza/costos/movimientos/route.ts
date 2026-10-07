@@ -10,7 +10,7 @@ import { guardCostosAccess } from "@/lib/auth/api-guards";
 import { loadMovimientosCostos } from "@/lib/cobranza/queries";
 
 export async function GET() {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "read" } });
   if (guard instanceof NextResponse) return guard;
   return NextResponse.json({ movimientos: await loadMovimientosCostos() });
 }

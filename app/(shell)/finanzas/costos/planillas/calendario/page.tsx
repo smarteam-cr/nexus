@@ -22,6 +22,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import { puedePorPersona } from "@/lib/auth/salarios-por-persona";
 import { loadCalendarioPlanilla, loadCostos } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -36,7 +37,10 @@ export default async function CalendarioPlanillaPage({
   searchParams: Promise<{ anio?: string }>;
 }) {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
+  // Super Admin, o la persona con «Planilla» en su override de /team (2026-10-07: Dinia).
+  if (!ctx || !(isCostosRole(ctx.role) || puedePorPersona(ctx.role, ctx.teamMember, { section: "planilla", action: "read" }))) {
+    redirect("/clients");
+  }
 
   const todayISO = crDateParts(new Date()).dateKey;
   // El año por query param para poder mirar el anterior sin otra pantalla. Se valida:

@@ -18,6 +18,7 @@
 import { redirect } from "next/navigation";
 import { requireInternalUser } from "@/lib/auth/supabase";
 import { isCostosRole } from "@/lib/auth/cobranza-roles";
+import { puedePorPersona } from "@/lib/auth/salarios-por-persona";
 import { loadLibroPlanilla } from "@/lib/cobranza";
 import { crDateParts } from "@/lib/jobs/time";
 import { SHELL_DEFAULT } from "@/lib/ui/page-shell";
@@ -27,7 +28,10 @@ export const dynamic = "force-dynamic";
 
 export default async function FinanzasLibroPlanillaPage() {
   const ctx = await requireInternalUser().catch(() => null);
-  if (!ctx || !isCostosRole(ctx.role)) redirect("/clients");
+  // Super Admin, o la persona con «Planilla» en su override de /team (2026-10-07: Dinia).
+  if (!ctx || !(isCostosRole(ctx.role) || puedePorPersona(ctx.role, ctx.teamMember, { section: "planilla", action: "read" }))) {
+    redirect("/clients");
+  }
 
   const todayISO = crDateParts(new Date()).dateKey;
   const libro = await loadLibroPlanilla();

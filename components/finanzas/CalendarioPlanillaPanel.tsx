@@ -16,7 +16,8 @@
  * Una casilla «falta» se llena con lo que se pagó y queda PAGADA en la fecha de esa
  * quincena, a nombre de quien la anota (`anotarQuincenaPagada`). Una «sin pagar» corrige
  * su monto y, si ya pasó, se marca pagada. Las dos escriben por las MISMAS rutas que el
- * libro, y pagar sigue pasando por el chokepoint de INV18. Una pagada no se toca.
+ * libro, y pagar sigue pasando por el chokepoint de INV18. Una pagada se CORRIGE (2026-10-07, Alex: «cometí un
+ * error y no pude volver a editarlo»): sigue pagada y la corrección queda escrita en sus notas.
  *
  * ── LAS CINCO CLASES, Y POR QUÉ NO SE FUNDEN ────────────────────────────────────
  * Cada casilla es una de cinco cosas y cada una pide algo distinto de quien la mira.
@@ -87,9 +88,12 @@ const ORDEN_LEYENDA: ClaseQuincena[] = ["registrada", "proyectada", "faltante", 
 
 type Quincena = CalendarioPersonaDTO["quincenas"][number];
 
-/** Se escribe a mano: la que falta (se anota pagada) y la anotada sin pagar (se corrige). Una pagada, nunca. */
+/**
+ * Se escribe a mano: la que falta (se anota pagada), la anotada sin pagar (se corrige y se paga) y, desde 2026-10-07, la
+ * pagada (se corrige su monto; la corrección queda escrita en la fila). Alex: «cometí un error y no pude volver a editarlo».
+ */
 function seEdita(q: Quincena): boolean {
-  return q.clase === "faltante" || (q.clase === "registrada" && q.estado !== "PAGADO" && q.pagoId !== null);
+  return q.clase === "faltante" || (q.clase === "registrada" && q.pagoId !== null);
 }
 
 const claveDe = (q: Pick<Quincena, "periodo" | "quincena">) => `${q.periodo}-${q.quincena}`;
@@ -280,6 +284,22 @@ function FilaDePersona({
     const json = { "Content-Type": "application/json" };
     setGuardando(true);
     try {
+      if (q.clase === "registrada" && q.estado === "PAGADO") {
+        // Corregir una pagada: sigue pagada y a nombre de quien la pagó; la corrección queda en sus notas.
+        if (n === q.monto) {
+          setSel(null);
+          return;
+        }
+        await fetchJson(`/api/cobranza/costos/pagos-planilla/${q.pagoId}/corregir`, {
+          method: "PATCH",
+          headers: json,
+          body: JSON.stringify({ monto: n }),
+        });
+        toast.success(`Corregida: ${fmtMonto(n, moneda)} (antes ${fmtMonto(q.monto ?? 0, moneda)}). Queda anotado que la corregiste.`);
+        setSel(null);
+        onGuardado();
+        return;
+      }
       if (q.clase === "faltante") {
         await fetchJson("/api/cobranza/costos/pagos-planilla/anotar", {
           method: "POST",
@@ -404,7 +424,7 @@ function FilaDePersona({
               acá cambia el monto
             </span>
             <span className="text-[10px] text-fg-muted/80">
-              · clic en una casilla «falta» o «sin pagar» para escribir el monto
+              · clic en una casilla «falta» o «sin pagar» para escribir el monto, o en una pagada para corregirla
               {costo && ", o en una proyectada para fijar un aumento desde ahí"}
             </span>
           </div>
@@ -506,17 +526,20 @@ function EditorDeQuincena({
   onCancelar: () => void;
 }) {
   const falta = q.clase === "faltante";
+  const pagada = q.clase === "registrada" && q.estado === "PAGADO";
   const yaPaso = q.fechaProgramada <= todayISO;
   const mes = MES_LARGO[Number(q.periodo.slice(5, 7)) - 1] ?? q.periodo;
   const titulo = `${q.quincena === 1 ? "1.ª" : "2.ª"} quincena de ${mes}`;
-  const principal = falta ? "Anotar como pagada" : yaPaso ? "Guardar como pagada" : "Guardar el monto";
+  const principal = pagada ? "Corregir el monto" : falta ? "Anotar como pagada" : yaPaso ? "Guardar como pagada" : "Guardar el monto";
 
   return (
     <div className="rounded-lg border border-brand/40 bg-surface-muted px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
       <div className="min-w-[220px] flex-1">
         <p className="text-xs font-medium text-fg">{titulo}</p>
         <p className="text-[11px] text-fg-muted">
-          {falta
+          {pagada
+            ? `Pagada${q.fechaPago ? ` el ${fmtFecha(q.fechaPago)}` : ""}. Si el monto está mal, corrígelo: sigue pagada y queda anotado quién la corrigió.`
+            : falta
             ? `No está en el libro. Escribe lo que se pagó: queda pagada el ${fmtFecha(q.fechaProgramada)}, a tu nombre.`
             : yaPaso
               ? `Está en el libro sin pagar. Corrige el monto si hace falta y márcala pagada el ${fmtFecha(q.fechaProgramada)}.`
@@ -554,7 +577,7 @@ function EditorDeQuincena({
         >
           {guardando ? "Guardando…" : principal}
         </button>
-        {!falta && yaPaso && (
+        {!falta && !pagada && yaPaso && (
           <button
             type="button"
             disabled={guardando}
@@ -613,7 +636,9 @@ function Casilla({
     onClic
       ? cel.clase === "proyectada"
         ? " — clic para fijar un aumento desde acá"
-        : " — clic para escribir el monto"
+        : cel.clase === "registrada" && cel.estado === "PAGADO"
+          ? " — clic para corregir el monto"
+          : " — clic para escribir el monto"
       : ""
   }`;
 

@@ -295,6 +295,16 @@ export const PERMISSION_SECTIONS = [
      salarios). Son remuneración: se dan solo con el override de cada persona, nunca con la plantilla de un rol
      (`soloPorPersona`), y el chequeo vive en lib/auth/salarios-por-persona.ts, no en `can()`. Planilla, salarios y caja
      neta siguen solo para Super Admin. */
+  // La planilla por persona (2026-10-07): el calendario, el historial y los salarios. Misma regla: solo override.
+  {
+    key: "planilla",
+    label: "Planilla (salarios de cada persona)",
+    soloPorPersona: true,
+    actions: [
+      { key: "read", label: "Ver el calendario, el historial y los salarios", enforced: true },
+      { key: "write", label: "Anotar, pagar y corregir quincenas, y editar salarios", enforced: true },
+    ],
+  },
   {
     key: "comisionesVendedor",
     label: "Comisiones de vendedor (remuneración)",

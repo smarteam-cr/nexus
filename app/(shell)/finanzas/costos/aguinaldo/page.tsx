@@ -41,7 +41,7 @@ export default async function FinanzasAguinaldoPage({
 
   return (
     <div className={SHELL_DEFAULT}>
-      <AguinaldoPanel initial={aguinaldo} anioActual={anioActual} verPlanilla={isCostosRole(ctx.role)} />
+      <AguinaldoPanel initial={aguinaldo} anioActual={anioActual} verPlanilla={isCostosRole(ctx.role) || puedePorPersona(ctx.role, ctx.teamMember, { section: "planilla", action: "read" })} />
     </div>
   );
 }

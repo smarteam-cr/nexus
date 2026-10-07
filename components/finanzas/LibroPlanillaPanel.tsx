@@ -27,6 +27,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Button, PageHeader, EmptyState, Modal, Field, Input } from "@/components/ui";
 import { etiquetaMes, fmtFecha, fmtMonto } from "@/components/cobranza/format";
 import { quincenasPorGenerar } from "@/lib/cobranza/planilla";
+import { parseMontoLocal } from "@/lib/cobranza/import-core";
 
 interface Props {
   initialLibro: LibroPlanillaDTO;
@@ -257,18 +258,20 @@ function FilaPago({
   const [monto, setMonto] = useState(String(p.monto));
   const [guardando, setGuardando] = useState(false);
 
-  /* Corregir el monto de una fila PENDIENTE (el PATCH existía, faltaba el control): «colocar el monto real», Alex. */
+  /* Corregir el monto: de una fila PENDIENTE («colocar el monto real», Alex) y, desde 2026-10-07, también de una PAGADA
+     («cometí un error y no pude volver a editarlo»): sigue pagada y la corrección queda en sus notas. «625.000» son
+     seiscientos veinticinco mil, no 625 (`parseMontoLocal`). */
   async function guardarMonto() {
-    const n = Number(monto.replace(",", "."));
-    if (!(n > 0)) return toast.error("El monto tiene que ser un número mayor que cero.");
+    const n = parseMontoLocal(monto);
+    if (n === null || !(n > 0)) return toast.error("El monto tiene que ser un número mayor que cero.");
     setGuardando(true);
     try {
-      await fetchJson(`/api/cobranza/costos/pagos-planilla/${p.id}`, {
+      await fetchJson(`/api/cobranza/costos/pagos-planilla/${p.id}${pagado ? "/corregir" : ""}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ monto: Math.round(n * 100) / 100 }),
+        body: JSON.stringify({ monto: n }),
       });
-      toast.success("Monto corregido.");
+      toast.success(pagado ? "Corregida. Queda anotado que la corregiste." : "Monto corregido.");
       setCorrigiendo(false);
       await onCorregido();
     } catch (e) {
@@ -336,8 +339,14 @@ function FilaPago({
           )}
         </span>
 
-        {!pagado && !corrigiendo && (
-          <Button variant="ghost" size="sm" onClick={() => setCorrigiendo(true)} className="flex-shrink-0" title="Cambia el monto antes de pagarla.">
+        {!corrigiendo && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCorrigiendo(true)}
+            className="flex-shrink-0"
+            title={pagado ? "Corrige el monto si te equivocaste: sigue pagada y queda anotado quién la corrigió." : "Cambia el monto antes de pagarla."}
+          >
             Corregir
           </Button>
         )}
@@ -348,7 +357,7 @@ function FilaPago({
         )}
       </div>
 
-      {corrigiendo && !pagado && (
+      {corrigiendo && (
         <div className="flex flex-wrap items-center gap-2 px-3 pb-2 pl-10">
           <span className="text-[11px] text-fg-muted">Monto de la quincena ({moneda})</span>
           <Input
@@ -369,6 +378,16 @@ function FilaPago({
             Cancelar
           </Button>
         </div>
+      )}
+
+      {/* Las correcciones de una pagada quedan en sus notas: se ven acá, a la vista. */}
+      {pagado && p.notas?.includes("Corregida por") && (
+        <p className="px-3 pb-2 pl-10 text-[11px] text-fg-muted whitespace-pre-line">
+          {p.notas
+            .split(/\r?\n/)
+            .filter((l) => l.startsWith("Corregida por"))
+            .join(" · ")}
+        </p>
       )}
 
       {abierto && tieneDetalle && (

@@ -11,7 +11,7 @@ import { pagarQuincenaCompleta, CobranzaError } from "@/lib/cobranza/mutations";
 import { planillaPagarQuincenaSchema } from "@/lib/cobranza/schema";
 
 export async function PUT(req: NextRequest) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "write" } });
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;

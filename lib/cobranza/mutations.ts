@@ -2222,6 +2222,49 @@ export async function updatePagoPlanilla(
 }
 
 /**
+ * Corregir una quincena YA PAGADA (2026-10-07, Alex: «pude editar solo una vez; cometí un error en uno y no pude volver
+ * a editarlo»). Anotar una quincena desde el calendario la deja pagada, y una pagada era intocable: un dedazo quedaba
+ * para siempre. Ahora se corrige el monto (y, si hace falta, la fecha de pago) y la corrección queda escrita en la fila
+ * misma —quién, cuándo, de cuánto a cuánto— al final de sus notas. Sigue PAGADA y a nombre de quien la pagó (INV18):
+ * esto corrige un dato, no vuelve a pagar. El aguinaldo y el punto de equilibrio leen el libro y se recalculan solos.
+ */
+export async function corregirQuincenaPagada(
+  pagoId: string,
+  data: { monto: number; fechaPago?: string },
+  byEmail: string,
+): Promise<{ id: string }> {
+  if (!byEmail) throw new CobranzaError("Corregir una quincena pagada exige un usuario.", 400);
+  const actual = await prisma.pagoPlanilla.findUnique({
+    where: { id: pagoId },
+    select: { estado: true, monto: true, moneda: true, fechaPago: true, notas: true },
+  });
+  if (!actual) throw new CobranzaError("La quincena no existe.", 404);
+  if (actual.estado !== "PAGADO") {
+    throw new CobranzaError("Esa quincena no está pagada: se corrige con «Corregir» del libro o desde la casilla.", 409);
+  }
+  const monto = Math.round(data.monto * 100) / 100;
+  const antes = Number(actual.monto);
+  const fechaAntes = actual.fechaPago ? actual.fechaPago.toISOString().slice(0, 10) : null;
+  const fechaNueva = data.fechaPago ?? fechaAntes;
+  if (monto === antes && fechaNueva === fechaAntes) return { id: pagoId };
+
+  const cambios = [
+    monto !== antes ? `monto ${antes.toFixed(2)} → ${monto.toFixed(2)} ${actual.moneda}` : null,
+    fechaNueva !== fechaAntes ? `fecha de pago ${fechaAntes ?? "—"} → ${fechaNueva}` : null,
+  ].filter(Boolean);
+  const linea = `Corregida por ${byEmail} el ${hoyCR()}: ${cambios.join(", ")}.`;
+  await prisma.pagoPlanilla.update({
+    where: { id: pagoId },
+    data: {
+      monto,
+      ...(fechaNueva && fechaNueva !== fechaAntes ? { fechaPago: dayUTC(fechaNueva) } : {}),
+      notas: actual.notas ? `${actual.notas}\n${linea}` : linea,
+    },
+  });
+  return { id: pagoId };
+}
+
+/**
  * «Completar las que faltan» (2026-10-06): genera de una vez las quincenas que no están en el libro —los huecos del
  * último año hasta la de hoy (`quincenasPorGenerar`)—. Pedido de Alex (2026-10-05): «hay meses que no están con
  * monto»: el libro se cortó en la 1.ª quincena de agosto y «Generar» solo creaba la de hoy.

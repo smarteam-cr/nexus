@@ -17,7 +17,7 @@ import { planillaPagarSchema } from "@/lib/cobranza/schema";
 type Params = { params: Promise<{ pagoId: string }> };
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "write" } });
   if (guard instanceof NextResponse) return guard;
   const { pagoId } = await params;
 

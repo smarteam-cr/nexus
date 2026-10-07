@@ -12,12 +12,15 @@
  * Y por eso este chequeo no consulta la base: lee el override que ya viene con el usuario, y las pruebas de privacidad
  * (costos-privacy.test.ts, P2) siguen exigiendo cero consultas para quien no lo tiene.
  *
- * Lo demás de salarios (planilla, catálogo de salarios, caja neta) sigue solo para Super Admin.
+ * 2026-10-07: también la PLANILLA (calendario, historial y salarios), con el mismo mecanismo: Elías, «Dinia no tiene
+ * ingreso a Planillas … que ella le corresponde». La caja neta, el resumen de Costos y las tarjetas siguen solo para
+ * Super Admin.
  */
 import { isCostosRole } from "./cobranza-roles";
 import { parsePermissionMapLoose } from "./permissions/schema";
 
 export type PermisoDeSalario =
+  | { section: "planilla"; action: "read" | "write" }
   | { section: "comisionesVendedor"; action: "read" | "write" }
   | { section: "aguinaldo"; action: "read" };
 

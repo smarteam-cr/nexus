@@ -5187,7 +5187,7 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   casilla «falta» (la quincena ya pasó, la persona estaba y no está en el libro) se llena con lo que se pagó y queda
   PAGADA en la fecha de esa quincena, a nombre de quien la anota (`anotarQuincenaPagada`: crea la fila con la moneda del
   salario que regía y la paga por `pagarQuincena`, el chokepoint de INV18). Una «sin pagar» corrige su monto y, si ya
-  pasó, se paga en su fecha. Una pagada no se toca. El aguinaldo y el punto de equilibrio leen el libro: se recalculan
+  pasó, se paga en su fecha. Una pagada se corrige (2026-10-07, abajo). El aguinaldo y el punto de equilibrio leen el libro: se recalculan
   solos. *Por qué pagada y no pendiente:* Alex llena lo que YA se pagó; dejarla pendiente obligaba a un segundo paso por
   casilla en el historial. Lo que lo revertiría: querer revisar cada quincena antes de darla por pagada (entonces nace
   PENDIENTE y se paga desde el libro).
@@ -5240,6 +5240,18 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
   no guarda nada. La tarjeta de débito no hace recurrentes (viajes). Los nombres que no se parecen van en `ALIAS`
   (Anthropic = Claude, OpenAI = Chat GPT, AWS, Google Workspace = Gsuite, Magnific = Freepik). Lo que no se hizo: un
   «Está bien así» por fila y guardar qué comercio es qué recurrente (necesitaría una tabla).
+- **Una quincena PAGADA se corrige (Alex, 2026-10-07: «pude editar solo una vez; cometí un error y no pude volver a
+  editarlo»).** Antes una pagada era intocable y un dedazo al anotarla desde el calendario quedaba para siempre. Ahora
+  «Corregir» (en la casilla del calendario y en el historial) cambia el monto —y la fecha de pago por la ruta— con
+  `corregirQuincenaPagada`: sigue PAGADA y a nombre de quien la pagó (INV18), y la corrección (quién, cuándo, de cuánto a
+  cuánto) queda escrita al final de sus notas, que el historial muestra. El PATCH genérico sigue rechazando una pagada.
+  Sin SQL. Lo que lo revertiría: querer una bitácora aparte (tabla) en vez de las notas.
+- **La planilla también por persona (Elías, 2026-10-07: «Dinia no tiene ingreso a Planillas … que ella le corresponde»).**
+  Permiso `planilla` (ver / editar), solo por override en /team como `comisionesVendedor` y `aguinaldo`: abre el
+  calendario, el historial, los salarios y sus rutas (`pagos-planilla/*`, `costos`, `costos/[costoId]`,
+  `costos/movimientos`). La entrada «Planilla» del menú deja de ser solo de Super Admin: la ve quien tenga el permiso.
+  Siguen solo para Super Admin el resumen de Costos, las tarjetas, la caja neta y el equilibrio. ⚠ Al 2026-10-07 los
+  overrides de Dinia estaban vacíos: hay que encenderlos en /team.
 
 ## Procesos: un mapa de hoy y uno de después, en carriles (2026-10-05)
 

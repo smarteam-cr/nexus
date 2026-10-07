@@ -76,6 +76,7 @@ import * as tarjetaCostosRoute from "@/app/api/cobranza/costos/tarjetas/[tarjeta
 import * as planillaRoute from "@/app/api/cobranza/costos/pagos-planilla/route";
 import * as planillaIdRoute from "@/app/api/cobranza/costos/pagos-planilla/[pagoId]/route";
 import * as planillaPagarRoute from "@/app/api/cobranza/costos/pagos-planilla/[pagoId]/pagar/route";
+import * as planillaCorregirRoute from "@/app/api/cobranza/costos/pagos-planilla/[pagoId]/corregir/route";
 import * as aguinaldoRoute from "@/app/api/cobranza/costos/aguinaldo/route";
 import * as comVendedorRoute from "@/app/api/cobranza/costos/comisiones-vendedor/route";
 import * as comVendedorIdRoute from "@/app/api/cobranza/costos/comisiones-vendedor/[reglaId]/route";
@@ -194,6 +195,11 @@ describe("P2 · los 28 handlers responden 403 como ADMIN sin tocar Prisma", () =
     [
       "PUT /api/cobranza/costos/pagos-planilla/[pagoId]/pagar",
       () => planillaPagarRoute.PUT(req("PUT"), pagoParams),
+    ],
+    // Corregir una quincena YA pagada (2026-10-07).
+    [
+      "PATCH /api/cobranza/costos/pagos-planilla/[pagoId]/corregir",
+      () => planillaCorregirRoute.PATCH(req("PATCH"), pagoParams),
     ],
     // Aguinaldo: derivado del libro, así que expone remuneraciones igual.
     [
@@ -388,6 +394,44 @@ describe("P2b · comisiones de vendedor y aguinaldo por persona", () => {
     expect(pasa(await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "read" } }))).toBe(true);
     expect(pasa(await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "write" } }))).toBe(true);
     expect(pasa(await guardCostosAccess({ porPersona: { section: "aguinaldo", action: "read" } }))).toBe(true);
+  });
+
+  it("con «planilla» ve y edita la planilla y los salarios, pero no comisiones ni aguinaldo, y la caja neta sigue cerrada", async () => {
+    conOverride({ planilla: { read: true, write: true } });
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "planilla", action: "read" } }))).toBe(true);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "planilla", action: "write" } }))).toBe(true);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "comisionesVendedor", action: "read" } }))).toBe(false);
+    expect(pasa(await guardCostosAccess({ porPersona: { section: "aguinaldo", action: "read" } }))).toBe(false);
+    expect(pasa(await guardCostosAccess())).toBe(false);
+    expect(prismaTouched).toEqual([]);
+  });
+
+  it("las rutas de planilla y de salarios piden la excepción de planilla; tarjetas, caja neta y equilibrio no", () => {
+    const src = (r: string) => fs.readFileSync(path.join(process.cwd(), r), "utf8");
+    const conPlanilla = [
+      "app/api/cobranza/costos/route.ts",
+      "app/api/cobranza/costos/[costoId]/route.ts",
+      "app/api/cobranza/costos/movimientos/route.ts",
+      "app/api/cobranza/costos/pagos-planilla/route.ts",
+      "app/api/cobranza/costos/pagos-planilla/[pagoId]/route.ts",
+      "app/api/cobranza/costos/pagos-planilla/[pagoId]/pagar/route.ts",
+      "app/api/cobranza/costos/pagos-planilla/[pagoId]/corregir/route.ts",
+      "app/api/cobranza/costos/pagos-planilla/anotar/route.ts",
+      "app/api/cobranza/costos/pagos-planilla/completar/route.ts",
+      "app/api/cobranza/costos/pagos-planilla/pagar-quincena/route.ts",
+    ];
+    for (const r of conPlanilla) {
+      const s = src(r);
+      const handlers = (s.match(/export async function (GET|POST|PUT|PATCH|DELETE)/g) ?? []).length;
+      expect(s.match(/porPersona: \{ section: "planilla"/g)?.length, r).toBe(handlers);
+      // Lo que escribe pide «editar»; solo un GET puede pedir «ver».
+      for (const m of s.matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)[\s\S]*?porPersona: \{ section: "planilla", action: "(read|write)"/g)) {
+        expect(m[2], `${r} ${m[1]}`).toBe(m[1] === "GET" ? "read" : "write");
+      }
+    }
+    for (const r of ["app/api/cobranza/costos/tarjetas/route.ts", "app/api/cobranza/caja-neta/route.ts", "app/api/cobranza/costos/equilibrio/route.ts"]) {
+      expect(src(r), r).not.toMatch(/porPersona/);
+    }
   });
 
   it("un override en false o de otra sección no abre nada", async () => {

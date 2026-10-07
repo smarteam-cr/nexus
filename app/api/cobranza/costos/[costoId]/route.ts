@@ -16,7 +16,7 @@ import { costoPatchSchema } from "@/lib/cobranza/schema";
 type Params = { params: Promise<{ costoId: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "write" } });
   if (guard instanceof NextResponse) return guard;
   const { costoId } = await params;
 
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "write" } });
   if (guard instanceof NextResponse) return guard;
   const { costoId } = await params;
 

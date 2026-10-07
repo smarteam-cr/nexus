@@ -12,7 +12,7 @@ import { planillaAnotarSchema } from "@/lib/cobranza/schema";
 import { crDateParts } from "@/lib/jobs/time";
 
 export async function POST(req: NextRequest) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "write" } });
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;

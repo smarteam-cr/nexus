@@ -13,13 +13,13 @@ import { createCosto, CobranzaError } from "@/lib/cobranza/mutations";
 import { costoCreateSchema } from "@/lib/cobranza/schema";
 
 export async function GET() {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "read" } });
   if (guard instanceof NextResponse) return guard;
   return NextResponse.json({ costos: await loadCostos() });
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "write" } });
   if (guard instanceof NextResponse) return guard;
 
   let raw: unknown;

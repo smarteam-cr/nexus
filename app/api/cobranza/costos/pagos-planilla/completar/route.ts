@@ -11,7 +11,7 @@ import { completarQuincenas, CobranzaError } from "@/lib/cobranza/mutations";
 import { crDateParts } from "@/lib/jobs/time";
 
 export async function POST() {
-  const guard = await guardCostosAccess();
+  const guard = await guardCostosAccess({ porPersona: { section: "planilla", action: "write" } });
   if (guard instanceof NextResponse) return guard;
   try {
     const resultado = await completarQuincenas(crDateParts(new Date()).dateKey);

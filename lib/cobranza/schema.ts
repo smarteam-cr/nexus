@@ -735,6 +735,15 @@ export const planillaAnotarSchema = planillaGenerarSchema.extend({
  * (la mutación lo frena con 409). Sin `estado` a propósito: pagar tiene su
  * propia ruta, que es el chokepoint de INV18.
  */
+/**
+ * Corregir una quincena YA PAGADA (2026-10-07): el monto y, si hace falta, la fecha de pago. La corrección queda escrita
+ * en las notas de la fila (`corregirQuincenaPagada`).
+ */
+export const planillaCorregirSchema = z.object({
+  monto,
+  fechaPago: isoDateReal.optional(),
+});
+
 export const pagoPlanillaPatchSchema = z.object({
   monto: monto.optional(),
   notas: z.string().trim().max(2000).nullable().optional(),

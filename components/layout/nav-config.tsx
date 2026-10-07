@@ -320,8 +320,9 @@ export const APP_NAV: readonly NavItemConfig[] = [
         href: "/finanzas/costos/planillas/calendario",
         label: "Planilla",
         section: "Costos y gastos",
-        costosOnly: true,
-        vistas: ["SUPERVISA"],
+        // Super Admin, o quien registra con «Planilla» en su override de /team (2026-10-07: Dinia).
+        vistas: ["REGISTRA", "SUPERVISA"],
+        permiso: { section: "planilla", action: "read" },
         // Sin aguinaldo ni comisiones de vendedor desde 2026-10-06: son hijos propios (para quien registra con permiso), y
         // dos hijos no pueden marcarse activos en la misma ruta.
         match: ["/finanzas/costos/planillas"],
