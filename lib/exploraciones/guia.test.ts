@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { OBJECIONES_COMUNES, PASOS_LAER, QUE_ES_CADA_PASO } from "./objeciones-comunes";
 import { conEspaciosComunes, diaConAnio, diaCorto, diaYHora } from "./fechas";
 import type { ClaveDeCapa, Letra } from "@/lib/escala/documento/tipos";
-import { CLAVE_DE_INSTRUCCIONES } from "./notas-de-sesion";
+import { claveDeInstrucciones } from "./notas-de-sesion";
 import { contenidoVacio, idDelItem, NIVELES, propuestaVacia, type EstadoDeExploracion, type ItemPropuesto } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { CambiosSchema, leerContenido, leerPropuesta } from "./esquemas";
@@ -412,7 +412,7 @@ describe("leer la guía del agente", () => {
 describe("⭐ la guía lee las instrucciones adicionales (2026-10-06)", () => {
   it("van en el pedido de la guía solo si el vendedor las escribió", () => {
     const e = estado();
-    e.contenido.notas[CLAVE_DE_INSTRUCCIONES] = "No hables de migraciones todavía.";
+    e.contenido.notas[claveDeInstrucciones("exploracion")] = "No hables de migraciones todavía.";
     const base = { empresa: "Acme", industria: null, escala: ESCALA, posiciones: {}, pendientes: [], agenda: [], conTest: false, hoy: "2026-10-01" };
     const con = contextoDeLaGuia({ ...base, estado: e });
     expect(String(pedidoDeLaGuia(con).messages[0].content)).toContain("No hables de migraciones todavía.");

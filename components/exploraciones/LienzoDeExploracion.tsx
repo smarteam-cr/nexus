@@ -45,6 +45,14 @@ import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
 import PasoPreparacion from "./PasoPreparacion";
 import ContextoDeLaPreventa from "./ContextoDeLaPreventa";
+import type { PiezaConInstrucciones } from "@/lib/exploraciones/notas-de-sesion";
+
+/** Qué piezas tienen agente propio, y por eso sus instrucciones (las demás no). */
+const PIEZA_DE_LAS_INSTRUCCIONES: Partial<Record<PasoDelLienzoUI, PiezaConInstrucciones>> = {
+  preparacion: "preparacion",
+  exploracion: "exploracion",
+  casos: "casos",
+};
 import PasoPropuesta from "./PasoPropuesta";
 import Resumen, { lineasDe } from "./Resumen";
 import RevisarSugerencias from "./RevisarSugerencias";
@@ -386,11 +394,12 @@ export default function LienzoDeExploracion({
               <p className="text-sm text-fg-muted">{DE_QUE_VA[paso]}</p>
             </header>
           )}
-          {/* El «Contexto adicional» (2026-10-06): el mismo en todas las piezas que lee el agente. La
-              cuenta es la ficha de la empresa y tiene lo suyo. */}
+          {/* El «Contexto adicional» (2026-10-06): las reuniones y las fuentes, las mismas en todas las
+              piezas; las instrucciones, de cada pieza con agente (2026-10-07). La cuenta es la ficha de
+              la empresa y tiene lo suyo. */}
           {paso !== "informacion" && paso !== "procesos" && (
             <div className="mb-6">
-              <ContextoDeLaPreventa />
+              <ContextoDeLaPreventa pieza={PIEZA_DE_LAS_INSTRUCCIONES[paso] ?? null} />
             </div>
           )}
           {paso === "resumen" && <Resumen />}

@@ -56,16 +56,32 @@ export function rotuloDeLaNota(
 // ── Las instrucciones adicionales de la preventa (2026-10-06) ─────────────────
 
 /**
- * La clave de las «Instrucciones adicionales» del contexto de la preventa (pedido de Elías: el mismo
- * «Contexto adicional» en todas las piezas, como el del cronograma). Viven en `contenido.notas`, con
- * la operación `nota` de siempre: sin SQL. No es una nota del vendedor sobre el cliente: es lo que le
- * pide a la IA, así que no entra como fuente (no se cita ni prueba un nivel).
+ * Las «Instrucciones adicionales» del contexto de la preventa. Desde el 2026-10-07, una por PIEZA
+ * (Elías: «la misma sección, pero guardarse para cada artefacto»), y cada una la lee solo el agente de
+ * esa pieza: la de Preparación, la preparación; la de Exploración, la lectura de cada reunión y la
+ * guía; la de Casos de uso, los casos. Las reuniones y las fuentes manuales siguen siendo de la
+ * empresa y se ven en todas. Viven en `contenido.notas` (`instrucciones:<pieza>`), con la operación
+ * `nota` de siempre: sin SQL. No son una nota del vendedor sobre el cliente: es lo que le pide a la
+ * IA, así que no entran como fuente (no se citan ni prueban un nivel).
  */
+export const PIEZAS_CON_INSTRUCCIONES = ["preparacion", "exploracion", "casos"] as const;
+export type PiezaConInstrucciones = (typeof PIEZAS_CON_INSTRUCCIONES)[number];
+
+/** El prefijo de las claves de instrucciones (y la clave única que hubo hasta el 2026-10-07, sin pieza). */
 export const CLAVE_DE_INSTRUCCIONES = "instrucciones";
 
-/** El bloque que reciben los agentes de la preventa, o "" si no hay instrucciones. */
-export function bloqueDeInstrucciones(notas: Readonly<Record<string, string>>): string {
-  const texto = (notas[CLAVE_DE_INSTRUCCIONES] ?? "").trim();
+export function claveDeInstrucciones(pieza: PiezaConInstrucciones): string {
+  return `${CLAVE_DE_INSTRUCCIONES}:${pieza}`;
+}
+
+/** ¿Esta nota son instrucciones (de cualquier pieza) y no una nota del vendedor? */
+export function esClaveDeInstrucciones(clave: string): boolean {
+  return clave === CLAVE_DE_INSTRUCCIONES || clave.startsWith(`${CLAVE_DE_INSTRUCCIONES}:`);
+}
+
+/** El bloque que recibe el agente de esa pieza, o "" si no hay instrucciones. */
+export function bloqueDeInstrucciones(notas: Readonly<Record<string, string>>, pieza: PiezaConInstrucciones): string {
+  const texto = (notas[claveDeInstrucciones(pieza)] ?? "").trim();
   if (!texto) return "";
   return (
     `=== INSTRUCCIONES ADICIONALES DEL VENDEDOR ===\n${texto}\n` +

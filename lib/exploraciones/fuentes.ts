@@ -35,7 +35,7 @@ import {
 } from "./hubspot";
 import { documentosParaLeer, listarDocumentos } from "./documentos";
 import { LARGO_DE_UNA_TRANSCRIPCION_CORTA, PREGUNTA_DE_BASE, transcripcionCorta, type ReunionDeLaExploracion, type SesionPlaneada } from "./guia";
-import { CLAVE_DE_INSTRUCCIONES, rotuloDeLaNota } from "./notas-de-sesion";
+import { esClaveDeInstrucciones, rotuloDeLaNota } from "./notas-de-sesion";
 import { etiquetaDeLaFuente } from "./senales";
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, reunionesDeHubspotQueYaPasaron, reunionesLeidasDeHubspot, type ReunionSinLeer } from "./lectura";
 import type { LoLeidoDeHubspot } from "./lo-leido";
@@ -178,7 +178,7 @@ function textoDeLasNotas(
   const dePaso = (id: string) => pasos.find((p) => p.id === id)?.titulo ?? null;
   return Object.entries(notas)
     // Las instrucciones adicionales no son una nota sobre el cliente: van aparte (bloqueDeInstrucciones).
-    .filter(([id, texto]) => id !== CLAVE_DE_INSTRUCCIONES && texto.trim())
+    .filter(([id, texto]) => !esClaveDeInstrucciones(id) && texto.trim())
     .map(([id, texto]) => `${rotuloDeLaNota(id, sesiones, dePaso, preguntaDe) ?? id}: ${texto}`)
     .join("\n\n");
 }

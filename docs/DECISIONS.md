@@ -5619,3 +5619,18 @@ retos, copiados casi palabra por palabra de la investigación de su industria en
   de cuál puede ser está en el tramo «Cerrar» de la preparación, y el agente lo saca de la transcripción.
   Las notas libres suben arriba de las preguntas.
 - **Sin SQL.** Para ver los retos de la industria en una preventa ya preparada, se actualiza su guía.
+
+## El «Contexto adicional» es de cada artefacto (2026-10-07)
+
+**Contexto.** Elías: «el contexto adicional debe ser para cada artefacto por separado: la misma sección, pero
+guardarse para cada artefacto». Validado ese día: en los proyectos, el handoff, el cronograma, el diagnóstico,
+la planificación y la ejecución ya guardaban sus reuniones y sus notas por separado (solo el cronograma tenía
+instrucciones), y el kickoff, la exploración, integraciones y la entrega no tenían el bloque. En la preventa
+había un solo bloque para todas sus piezas.
+
+- **En la preventa, las instrucciones son de cada pieza** (Elías eligió «solo las instrucciones»): las de
+  Preparación las lee la preparación; las de Exploración, la lectura de cada reunión y la guía; las de Casos de
+  uso, los casos (`instrucciones:<pieza>` en `contenido.notas`, `bloqueDeInstrucciones(notas, pieza)`). Las
+  reuniones y las fuentes manuales siguen siendo de la empresa y se ven en todas: son la misma conversación.
+  Resumen, La escala y Propuesta no tienen agente propio y dicen dónde escribirlas. No había instrucciones
+  guardadas en producción (medido): nada que migrar.

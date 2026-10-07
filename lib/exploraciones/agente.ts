@@ -483,7 +483,7 @@ async function proponerCasos(
       ...pendientes.filter((it) => it.destino.tipo === "casoDeUso").map((it) => (it.valor as { titulo: string }).titulo),
     ],
     descartados: ex.estado.contenido.casosDescartados,
-    instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas),
+    instrucciones: bloqueDeInstrucciones(ex.estado.contenido.notas, "casos"),
   };
   await fase(runId, "Pensando casos de uso…");
   const respuesta = await conContextoDeIA(

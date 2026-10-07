@@ -9,9 +9,11 @@
  *     las recientes; «Buscar una reunión» suma cualquier otra de la empresa o de tu calendario
  *     (2026-10-07), y la que sumaste se quita con su X.
  *   · Fuentes manuales — lo que no quedó en Meet: una llamada de Gong, una minuta (SumarAMano).
- *   · Instrucciones adicionales — lo que el vendedor le pide a la IA. Se guardan en
- *     `contenido.notas` con la clave CLAVE_DE_INSTRUCCIONES (sin SQL) y las leen la preparación, la
- *     lectura de cada reunión, la guía y los casos de uso (bloqueDeInstrucciones). No son evidencia.
+ *   · Instrucciones adicionales — lo que el vendedor le pide a la IA, una por pieza desde el
+ *     2026-10-07 (`instrucciones:<pieza>` en `contenido.notas`, sin SQL): las de Preparación las lee
+ *     la preparación; las de Exploración, la lectura de cada reunión y la guía; las de Casos de uso,
+ *     los casos. Las piezas sin agente propio (Resumen, La escala, Propuesta) dicen dónde se escriben.
+ *     No son evidencia.
  *
  * Con `?sumar=1` (la preventa que se abre «Con una transcripción») arranca abierto y con el
  * formulario de las fuentes manuales a la vista.
@@ -28,8 +30,9 @@ import ContextoAdicional from "@/components/contexto/ContextoAdicional";
 import InstruccionesAdicionales from "@/components/contexto/InstruccionesAdicionales";
 import { diaConAnio } from "@/lib/exploraciones/fechas";
 import {
-  CLAVE_DE_INSTRUCCIONES,
+  claveDeInstrucciones,
   MAX_NOTA_DE_SESION,
+  type PiezaConInstrucciones,
 } from "@/lib/exploraciones/notas-de-sesion";
 import { useToast } from "@/components/ui";
 import BuscarReunionesDeLaPreventa from "./BuscarReunionesDeLaPreventa";
@@ -50,7 +53,18 @@ export function abrirElContextoAdicional() {
   window.dispatchEvent(new Event(EVENTO_ABRIR));
 }
 
-export default function ContextoDeLaPreventa() {
+/** Qué agente lee las instrucciones de cada pieza (lo dice el bloque). */
+const QUIEN_LAS_LEE: Record<PiezaConInstrucciones, string> = {
+  preparacion: "la preparación: la radiografía, el «por qué ahora», la hipótesis de valor, cómo conectar y las primeras hipótesis",
+  exploracion: "la lectura de cada reunión y la guía de la próxima sesión",
+  casos: "los casos de uso que propone",
+};
+
+/**
+ * El «Contexto adicional» de una pieza. `pieza` dice de quién son las instrucciones: null en las
+ * piezas sin agente propio (Resumen, La escala, Propuesta), que muestran dónde escribirlas.
+ */
+export default function ContextoDeLaPreventa({ pieza }: { pieza: PiezaConInstrucciones | null }) {
   const { exp, reuniones, documentos, puedeEditar, cambiar, recargar } =
     useLienzo();
   const toast = useToast();
@@ -90,8 +104,9 @@ export default function ContextoDeLaPreventa() {
     .filter((r) => r.origen !== "documento")
     .sort((a, b) => b.fecha.localeCompare(a.fecha));
   const sinLeer = deCalendario.filter((r) => !r.leida).length;
-  const instrucciones =
-    exp.estado.contenido.notas[CLAVE_DE_INSTRUCCIONES] ?? "";
+  const instrucciones = pieza
+    ? (exp.estado.contenido.notas[claveDeInstrucciones(pieza)] ?? "")
+    : "";
 
   const resumen = [
     `${deCalendario.length} ${deCalendario.length === 1 ? "reunión" : "reuniones"}${sinLeer ? ` (${sinLeer} sin leer)` : ""}`,
@@ -108,8 +123,10 @@ export default function ContextoDeLaPreventa() {
         explicacion={
           <>
             Con esto el agente prepara la preventa, lee cada reunión, arma la
-            guía de la próxima sesión y propone los casos de uso. Las reuniones
-            recientes de Meet y de HubSpot con la empresa{" "}
+            guía de la próxima sesión y propone los casos de uso. Las reuniones y
+            las fuentes son de la empresa y se ven en todas las piezas; las
+            instrucciones, en cambio, son de cada pieza. Las reuniones recientes
+            de Meet y de HubSpot con la empresa{" "}
             <span className="font-medium text-fg-secondary">
               las encuentra solo
             </span>
@@ -173,16 +190,27 @@ export default function ContextoDeLaPreventa() {
             <SumarAMano abiertoAlInicio={sumarAlAbrir} />
           </ContextColumn>
         </div>
-        <InstruccionesAdicionales
-          guardadas={instrucciones}
-          soloLectura={!puedeEditar}
-          tope={MAX_NOTA_DE_SESION}
-          explicacion="El agente las tiene en cuenta en todo lo que propone en esta preventa: la preparación, lo que saca de cada reunión, la guía y los casos de uso. No cuentan como algo que dijo el cliente."
-          ejemplo='Ej.: "Enfócate en el área de Servicio: Ventas ya la resolvieron con otro proveedor."'
-          onGuardar={(texto) =>
-            cambiar([{ op: "nota", paso: CLAVE_DE_INSTRUCCIONES, texto }])
-          }
-        />
+        {pieza ? (
+          <InstruccionesAdicionales
+            key={pieza}
+            guardadas={instrucciones}
+            soloLectura={!puedeEditar}
+            tope={MAX_NOTA_DE_SESION}
+            explicacion={`Son de esta pieza: las lee solo ${QUIEN_LAS_LEE[pieza]}. No cuentan como algo que dijo el cliente.`}
+            ejemplo='Ej.: "Enfócate en el área de Servicio: Ventas ya la resolvieron con otro proveedor."'
+            onGuardar={(texto) =>
+              cambiar([
+                { op: "nota", paso: claveDeInstrucciones(pieza), texto },
+              ])
+            }
+          />
+        ) : (
+          <p className="rounded-xl border border-dashed border-line px-4 py-3 text-xs text-fg-muted">
+            Esta pieza no tiene agente propio. Las instrucciones para la IA se
+            escriben en la pieza de su agente: Preparación, Exploración o Casos
+            de uso.
+          </p>
+        )}
       </ContextoAdicional>
       <BuscarReunionesDeLaPreventa
         abierto={buscando}

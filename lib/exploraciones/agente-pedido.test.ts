@@ -31,7 +31,7 @@ import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
 import { leerLaRadiografia, urlComparable } from "./radiografia-pedido";
 import { conSuOrigen, separarOrigen } from "./casillas";
-import { bloqueDeInstrucciones, CLAVE_DE_INSTRUCCIONES } from "./notas-de-sesion";
+import { bloqueDeInstrucciones, claveDeInstrucciones } from "./notas-de-sesion";
 import { contactoPrincipal, estadoDeLaConexion, porQueAhoraSugerido, rastroDe, senalesDe } from "./senales";
 
 // ── Una escala de juguete: dos áreas, cuatro dimensiones cada una ─────────────────
@@ -765,36 +765,42 @@ describe("Preventa (2026-10-06): industria, hipótesis con su origen y la conver
   });
 });
 
-describe("⭐ las instrucciones adicionales del «Contexto adicional» (2026-10-06)", () => {
+describe("⭐ las instrucciones adicionales, una por pieza (2026-10-06; por pieza desde el 2026-10-07)", () => {
   const INSTRUCCION = "Enfócate en Servicio: Ventas ya lo resolvieron con otro proveedor.";
-  const conInstrucciones = () => {
+  const conInstrucciones = (pieza: "preparacion" | "exploracion" | "casos") => {
     const c = contenidoVacio();
-    c.notas[CLAVE_DE_INSTRUCCIONES] = INSTRUCCION;
+    c.notas[claveDeInstrucciones(pieza)] = INSTRUCCION;
     return c;
   };
 
   it("sin instrucciones no hay bloque; con instrucciones, va rotulado y dice que no son evidencia", () => {
-    expect(bloqueDeInstrucciones({})).toBe("");
-    expect(bloqueDeInstrucciones({ [CLAVE_DE_INSTRUCCIONES]: "   " })).toBe("");
-    const b = bloqueDeInstrucciones({ [CLAVE_DE_INSTRUCCIONES]: INSTRUCCION, "sesion:s-1": "una nota" });
+    expect(bloqueDeInstrucciones({}, "preparacion")).toBe("");
+    expect(bloqueDeInstrucciones({ [claveDeInstrucciones("preparacion")]: "   " }, "preparacion")).toBe("");
+    const b = bloqueDeInstrucciones({ [claveDeInstrucciones("preparacion")]: INSTRUCCION, "sesion:s-1": "una nota" }, "preparacion");
     expect(b).toContain("INSTRUCCIONES ADICIONALES DEL VENDEDOR");
     expect(b).toContain(INSTRUCCION);
     expect(b).toMatch(/no son palabras del cliente ni evidencia/i);
     expect(b).not.toContain("una nota");
   });
 
-  it("la preparación y la lectura las reciben antes de lo confirmado; sin ellas el pedido no cambia", () => {
+  it("cada agente lee solo las de su pieza: la preparación las de Preparación; la lectura las de Exploración", () => {
+    const pieza = { preparar: "preparacion", leer: "exploracion" } as const;
     for (const modo of ["preparar", "leer"] as const) {
-      const cuerpo = String(pedidoDeLaExploracion(ctx({ modo, contenido: conInstrucciones() })).messages[0].content);
+      const cuerpo = String(pedidoDeLaExploracion(ctx({ modo, contenido: conInstrucciones(pieza[modo]) })).messages[0].content);
       expect(cuerpo.indexOf(INSTRUCCION)).toBeGreaterThan(-1);
       expect(cuerpo.indexOf(INSTRUCCION)).toBeLessThan(cuerpo.indexOf("=== LO QUE YA ESTÁ CONFIRMADO ==="));
+      // Las de otra pieza no le llegan.
+      const otra = pieza[modo] === "preparacion" ? "exploracion" : "preparacion";
+      expect(String(pedidoDeLaExploracion(ctx({ modo, contenido: conInstrucciones(otra) })).messages[0].content)).not.toContain("INSTRUCCIONES ADICIONALES");
       expect(String(pedidoDeLaExploracion(ctx({ modo })).messages[0].content)).not.toContain("INSTRUCCIONES ADICIONALES");
     }
   });
 
-  it("los casos de uso también las reciben", () => {
+  it("los casos de uso reciben las de Casos de uso", () => {
     const base = { empresa: "Acme", edicion: "escala general", areas: [{ id: "1", nombre: "Ventas", dimensiones: [{ id: "1.1", nombre: "Proceso" }] }], exploracion: "(x)", yaEstan: [], descartados: [] };
-    expect(String(pedidoDeCasos({ ...base, instrucciones: bloqueDeInstrucciones({ [CLAVE_DE_INSTRUCCIONES]: INSTRUCCION }) }).messages[0].content)).toContain(INSTRUCCION);
+    const notas = { [claveDeInstrucciones("casos")]: INSTRUCCION };
+    expect(String(pedidoDeCasos({ ...base, instrucciones: bloqueDeInstrucciones(notas, "casos") }).messages[0].content)).toContain(INSTRUCCION);
+    expect(bloqueDeInstrucciones(notas, "preparacion")).toBe("");
     expect(String(pedidoDeCasos(base).messages[0].content)).not.toContain("INSTRUCCIONES ADICIONALES");
   });
 });

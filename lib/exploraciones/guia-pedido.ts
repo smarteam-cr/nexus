@@ -453,7 +453,7 @@ export function contextoDeLaGuia(o: {
     hoy: o.hoy,
     proxima: proximaReunion(c.sesiones, o.agenda, o.hoy, estado.propuesta.leidas.sesiones.length),
     conTest: o.conTest,
-    instrucciones: bloqueDeInstrucciones(c.notas),
+    instrucciones: bloqueDeInstrucciones(c.notas, "exploracion"),
     desdeCero: !o.conTest && !conEvidencia && huecosDelResumen(c.casillas).length === CASILLAS_DEL_RESUMEN.length,
     nivelesDeLaEscala: escala.niveles.map((n) => n.nombre),
     paraConectar: textoDe("contexto", estado, o.pendientes)[0] ?? null,

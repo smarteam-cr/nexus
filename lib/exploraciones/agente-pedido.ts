@@ -511,7 +511,8 @@ export function pedidoDeLaExploracion(ctx: ContextoDelPedido): Anthropic.Message
     `Edición de la escala: ${ctx.escala.edicion?.nombre ?? "escala general"}\n` +
     (ctx.equipo?.length ? `Equipo de Smarteam (no son del cliente, nunca van en personas): ${ctx.equipo.join(", ")}\n` : "") +
     "\n" +
-    bloqueDeInstrucciones(ctx.contenido.notas) +
+    // Las de la pieza de este agente: Preparación al preparar; Exploración al leer.
+    bloqueDeInstrucciones(ctx.contenido.notas, ctx.modo === "preparar" ? "preparacion" : "exploracion") +
     `=== LO QUE YA ESTÁ CONFIRMADO ===\n${confirmadoComoTexto(ctx)}\n\n` +
     `=== LA ESCALA (las áreas en juego) ===\n${escalaComoTexto(ctx)}\n\n` +
     bloqueDeLasReuniones(ctx) +
