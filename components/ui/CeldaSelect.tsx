@@ -180,8 +180,8 @@ export function CeldaSelect({
           role="listbox"
           aria-label={etiqueta}
           onClick={(e) => e.stopPropagation()}
-          className="fixed z-50 w-60 rounded-xl border border-line bg-surface shadow-xl py-1"
-          style={{ ...pos, maxHeight: "min(20rem, calc(100vh - 16px))" }}
+          className="fixed z-50 w-60 overflow-y-auto rounded-xl border border-line bg-surface shadow-xl py-1"
+          style={{ ...pos, maxHeight: typeof pos.maxHeight === "number" ? `min(20rem, ${pos.maxHeight}px)` : "min(20rem, calc(100vh - 16px))" }}
         >
           {conBuscador && (
             <div className="px-2 pb-1 border-b border-line">

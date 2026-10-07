@@ -115,7 +115,7 @@ export function Menu({
             "fixed z-50 bg-surface border border-line rounded-xl shadow-xl py-1.5 overflow-y-auto",
             panelWidth,
           )}
-          style={{ ...pos, maxHeight: "calc(100vh - 16px)" }}
+          style={{ maxHeight: "calc(100vh - 16px)", ...pos }}
         >
           {header && <div className="px-3 py-2 border-b border-line">{header}</div>}
           {items.map((it) => {

@@ -199,7 +199,7 @@ function Margen({ margen, preliminar, usd }: { margen: DesgloseDelMargen | null;
                 ref={panelRef}
                 id="por-que-preliminar"
                 role="tooltip"
-                className="fixed z-50 flex w-[340px] max-w-[calc(100vw-24px)] flex-col gap-2 rounded-[10px] border border-line bg-surface px-4 py-3.5 text-[13px] leading-[19px] text-fg-secondary shadow-xl"
+                className="fixed z-50 flex w-[340px] max-w-[calc(100vw-24px)] flex-col gap-2 overflow-y-auto rounded-[10px] border border-line bg-surface px-4 py-3.5 text-[13px] leading-[19px] text-fg-secondary shadow-xl"
                 style={pos}
               >
                 <span className="font-semibold text-fg">{preliminar.preliminar ? "¿Por qué es preliminar?" : "¿De dónde sale?"}</span>

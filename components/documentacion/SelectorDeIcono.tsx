@@ -140,7 +140,7 @@ export default function SelectorDeIcono({ icono, editable, onElegir }: Props) {
           role="menu"
           aria-label="Íconos"
           className="fixed z-50 w-80 rounded-xl border border-line bg-surface p-2 shadow-xl"
-          style={{ ...pos, maxHeight: "calc(100vh - 16px)", overflowY: "auto" }}
+          style={{ maxHeight: "calc(100vh - 16px)", ...pos, overflowY: "auto" }}
         >
           <input
             autoFocus
