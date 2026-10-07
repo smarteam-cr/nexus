@@ -30,7 +30,8 @@ const preparacion = (valor: "identificacion" | "conexion"): readonly AccionDelRe
 export const PREVENTA: Recorrido = {
   id: "preventa",
   // 2 (2026-10-06): Preparación en dos pestañas, la investigación de la industria y las fichas.
-  version: 2,
+  // 3 (2026-10-07): las sesiones rediseñadas (objetivo, guía en tramos, Durante con preguntas, lo que leyó el agente).
+  version: 3,
   titulo: "Una preventa",
   descripcion: "Todas sus piezas, de la preparación a la propuesta",
   rotulo: "Recorrido · Preventa",
@@ -112,35 +113,35 @@ export const PREVENTA: Recorrido = {
     {
       ancla: "preventa.sesiones",
       titulo: "Exploración: una sesión por reunión",
-      texto: "Cada reunión con el cliente es una sesión: ✓ la hecha y ● la que miras. «+ Agregar sesión» planea otra.",
+      texto: "Cada reunión con el cliente es una sesión: ✓ la hecha, ● la que miras y ● en ámbar la que no dejó qué leer. «+ Agregar sesión» planea otra.",
       lado: "right-start",
       accion: pieza("exploracion"),
     },
     {
       ancla: "preventa.sesion.momento",
       titulo: "Antes, durante y después",
-      texto: "Cada sesión tiene tres momentos: la guía para prepararla, tus notas y lo que salió de la reunión.",
+      texto: "Cada sesión tiene tres momentos: la guía para prepararla, lo que anotas mientras ocurre y lo que salió de la reunión.",
       lado: "bottom-end",
       accion: pieza("exploracion"),
     },
     {
       ancla: "preventa.sesion.preguntas",
-      titulo: "Antes: las preguntas de la guía",
-      texto: "A la izquierda, lo que falta del marco de la venta; a la derecha, lo que falta confirmar de la escala. Cada pregunta trae sus repreguntas.",
+      titulo: "Antes: la guía de la sesión",
+      texto: "Abrir, preguntar y cerrar. «En orden» sigue la conversación; «Por sección» separa la arquitectura de la venta y la escala. Lo que viene de una sesión anterior lleva su etiqueta.",
       lado: "top",
       accion: momento("antes"),
     },
     {
       ancla: "preventa.sesion.notas",
       titulo: "Durante: tus notas",
-      texto: "Lo que sabes y no quedó en la grabación. Se guarda solo, y el agente lo lee como tu nota, no como palabras del cliente.",
+      texto: "Marca cada pregunta hecha y anota lo que respondió; lo demás va acá. Se guarda solo, y el agente lo lee como tu nota, no como palabras del cliente.",
       lado: "top",
       accion: momento("durante"),
     },
     {
       ancla: "preventa.sesion.salio",
       titulo: "Después: lo que salió",
-      texto: "Lo que el agente sacó de la reunión, con la frase del cliente, y lo que se dijo sin explorar, para llevarlo a la próxima sesión.",
+      texto: "Lo que leyó el agente: qué se habló, qué se respondió de lo planeado y lo que sugiere. Lo que quedó abierto se lleva a la próxima sesión con una casilla.",
       lado: "top",
       accion: momento("despues"),
     },

@@ -5,19 +5,30 @@
  * en cualquier pieza (rediseño de escritorio, 2026-10-03). Qué sigue —y, si el agente sugirió algo,
  * un solo botón para revisarlo todo—; cómo va la arquitectura de la venta (las ocho casillas del
  * marco, en una cuadrícula que se lee de un vistazo: verde confirmado, azul sugerido, punteado falta);
- * dónde parece estar cada área; y las objeciones que ya puso el cliente.
+ * qué falta para proponer (verde listo, azul lo que pregunta la guía de la próxima sesión: rediseño
+ * de las sesiones, 2026-10-07); dónde parece estar cada área; y las objeciones que ya puso el cliente.
  *
  * No repite contenido: es un índice. Cada cosa abre su lugar (la casilla en el cajón, la pieza).
  */
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import type { PasoDeQueSigue } from "@/lib/exploraciones/calidad";
+import { listaParaProponer, puntoQueSePregunta, type PasoDeQueSigue } from "@/lib/exploraciones/calidad";
 import { CASILLAS_DEL_RESUMEN, definicionDe, ETIQUETA_DE_LA_OBJECION, type Objecion } from "@/lib/exploraciones/casillas";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import { NivelChip } from "./QueVaPrimero";
 import { LETRA_DEL_MARCO, lineasDe } from "./Resumen";
 import { IconoDeSugerencia } from "./FranjaDeSugerencias";
+import { useGuiaDeLaSesion } from "./piezas-de-la-sesion";
+import { useSesiones } from "./useSesiones";
+
+/** A qué apuntan las preguntas de la guía de la próxima sesión: lo que «se pregunta» en ella. */
+function useLoQueSePreguntaEnLaProxima() {
+  const { todas, claveDeLaProxima } = useSesiones();
+  const proxima = todas.find((p) => p.clave === claveDeLaProxima) ?? todas[todas.length - 1];
+  const { preguntas } = useGuiaDeLaSesion(proxima, true);
+  return { paras: new Set(preguntas.map((p) => p.para)), hayDimensiones: preguntas.some((p) => p.tipo === "dimension") };
+}
 
 function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -34,6 +45,7 @@ function Bloque({ titulo, accion, children }: { titulo: string; accion?: React.R
 /** Las ocho casillas del marco, de a cuatro: verde lo confirmado, azul lo que sugirió el agente, punteado lo que falta. */
 function Arquitectura() {
   const { exp, pendientesPara, abrirCasilla } = useLienzo();
+  const { paras } = useLoQueSePreguntaEnLaProxima();
   const confirmadas = CASILLAS_DEL_RESUMEN.filter((c) => lineasDe(c, exp.estado.contenido.casillas[c]).length > 0).length;
   return (
     <Bloque titulo="Arquitectura de la venta" accion={<span className="text-[11px] text-fg-muted">{confirmadas} de 8</span>}>
@@ -47,7 +59,7 @@ function Arquitectura() {
               key={clave}
               type="button"
               onClick={() => abrirCasilla(clave)}
-              title={`${etiqueta}: ${lleno ? "confirmado" : propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente` : "falta"}`}
+              title={`${etiqueta}: ${lleno ? "confirmado" : propuestas > 0 ? `${propuestas} ${propuestas === 1 ? "sugerida" : "sugeridas"} por el agente` : paras.has(clave) ? "falta · se pregunta en la próxima sesión" : "falta"}`}
               className={cn(
                 "relative flex h-[46px] flex-col items-center justify-center rounded-lg border text-xs font-bold transition-colors",
                 lleno
@@ -75,6 +87,55 @@ function Arquitectura() {
           <span className="h-2 w-2 rounded-full border border-dashed border-line" aria-hidden="true" /> falta
         </span>
       </p>
+    </Bloque>
+  );
+}
+
+/**
+ * Lo que falta para proponer el land, en siete trazos y siete chips: verde lo listo, azul lo que
+ * pregunta la guía de la próxima sesión, punteado lo que ninguna sesión planeada pregunta.
+ */
+function ParaProponer() {
+  const { exp, chequeo, irA } = useLienzo();
+  const { paras, hayDimensiones } = useLoQueSePreguntaEnLaProxima();
+  const puntos = listaParaProponer(exp.estado, chequeo);
+  const listos = puntos.filter((p) => p.cumplido).length;
+  const estado = (p: (typeof puntos)[number]) => (p.cumplido ? "listo" : puntoQueSePregunta(p.id, paras, hayDimensiones) ? "hoy" : "falta");
+  return (
+    <Bloque
+      titulo="Para proponer"
+      accion={
+        <button type="button" className="text-[11px] text-fg-muted hover:text-fg" onClick={() => irA("propuesta")}>
+          {listos} de {puntos.length}
+        </button>
+      }
+    >
+      <div className="grid grid-cols-7 gap-[3px]" aria-hidden="true">
+        {puntos.map((p) => (
+          <span key={p.id} className={cn("h-[5px] rounded-[3px]", { listo: "bg-success", hoy: "bg-info-line", falta: "bg-line" }[estado(p)])} />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {puntos.map((p) => {
+          const e = estado(p);
+          return (
+            <span
+              key={p.id}
+              title={p.titulo}
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[11.5px]",
+                e === "listo" && "border-success-line bg-success-surface text-success-ink",
+                e === "hoy" && "border-info-line bg-info-surface text-brand",
+                e === "falta" && "border-dashed border-line text-fg-muted",
+              )}
+            >
+              {e === "listo" && "✓ "}
+              {p.corto}
+            </span>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-fg-muted">Verde: listo · azul: se pregunta en la próxima sesión</p>
     </Bloque>
   );
 }
@@ -191,6 +252,7 @@ export default function PanelDeContexto({
         )}
       </section>
       <Arquitectura />
+      <ParaProponer />
       {paso !== "escala" && <LaEscala />}
       <Objeciones />
       <Proyectos />

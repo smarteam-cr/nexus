@@ -14,12 +14,14 @@ import type { ResultadoDelChequeo } from "@/lib/escala/chequeo";
 import { estaDebajo } from "@/lib/escala/chequeo";
 import { metaEnCifras } from "./casillas";
 import { esFuenteDeHipotesis, esHipotesisDeNivel, propuestaVigente, type EstadoDeExploracion } from "./contenido";
-import { diaCorto } from "./fechas";
+import { diaCorto, hoyEnCostaRica } from "./fechas";
 import type { ReunionSinLeer } from "./lectura";
 
 export interface PuntoDeCalidad {
   id: "frena" | "meta" | "tiempos" | "presupuesto" | "autoridad" | "consecuencia" | "siguientePaso";
   titulo: string;
+  /** El nombre corto, para un chip (el panel de la derecha). */
+  corto: string;
   cumplido: boolean;
 }
 
@@ -33,17 +35,48 @@ function sabeQueLoFrena(chequeo: ResultadoDelChequeo): boolean {
 
 const conTexto = (v: unknown) => (Array.isArray(v) ? v.length > 0 : typeof v === "string" && v.trim().length > 0);
 
-export function listaParaProponer(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo): PuntoDeCalidad[] {
+/**
+ * ¿El siguiente paso sigue en pie? Tiene fecha y no pasó (rediseño de las sesiones, 2026-10-07: en
+ * CreditForce el siguiente paso era del 28 sep y contaba como listo el 7 oct). `hoy` es `AAAA-MM-DD`.
+ */
+export function siguientePasoVigente(paso: { fecha?: string } | undefined, hoy: string): boolean {
+  return !!paso?.fecha && paso.fecha >= hoy;
+}
+
+export function listaParaProponer(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo, hoy = hoyEnCostaRica()): PuntoDeCalidad[] {
   const c = estado.contenido.casillas;
   return [
-    { id: "frena", titulo: "Qué frena al equipo del land, dicho por el cliente", cumplido: estado.areas.length > 0 && sabeQueLoFrena(chequeo) },
-    { id: "meta", titulo: "Al menos una meta en cifras", cumplido: (c.metas ?? []).some(metaEnCifras) },
-    { id: "tiempos", titulo: "Para cuándo lo necesita", cumplido: conTexto(c.tiempos) },
-    { id: "presupuesto", titulo: "El presupuesto o contra qué lo compara", cumplido: conTexto(c.presupuesto) },
-    { id: "autoridad", titulo: "Quién firma", cumplido: (c.autoridad ?? []).some((p) => p.rol === "firma") },
-    { id: "consecuencia", titulo: "Qué pasa si no actúa", cumplido: (c.consecuencias ?? []).length > 0 },
-    { id: "siguientePaso", titulo: "Siguiente paso con fecha", cumplido: !!c.siguientePaso?.fecha },
+    { id: "frena", titulo: "Qué frena al equipo del land, dicho por el cliente", corto: "Qué frena al equipo", cumplido: estado.areas.length > 0 && sabeQueLoFrena(chequeo) },
+    { id: "meta", titulo: "Al menos una meta en cifras", corto: "Meta en cifras", cumplido: (c.metas ?? []).some(metaEnCifras) },
+    { id: "tiempos", titulo: "Para cuándo lo necesita", corto: "Para cuándo", cumplido: conTexto(c.tiempos) },
+    { id: "presupuesto", titulo: "El presupuesto o contra qué lo compara", corto: "Presupuesto", cumplido: conTexto(c.presupuesto) },
+    { id: "autoridad", titulo: "Quién firma", corto: "Quién firma", cumplido: (c.autoridad ?? []).some((p) => p.rol === "firma") },
+    { id: "consecuencia", titulo: "Qué pasa si no actúa", corto: "Qué pasa si no actúa", cumplido: (c.consecuencias ?? []).length > 0 },
+    { id: "siguientePaso", titulo: "Siguiente paso con fecha", corto: "Siguiente paso con fecha", cumplido: siguientePasoVigente(c.siguientePaso, hoy) },
   ];
+}
+
+/**
+ * ¿La guía de una sesión pregunta por este punto? (el panel lo pinta en azul: «se pregunta en la
+ * próxima sesión»). `paras` son a qué apuntan sus preguntas; el siguiente paso se pide siempre al cerrar.
+ */
+export function puntoQueSePregunta(id: PuntoDeCalidad["id"], paras: ReadonlySet<string>, hayDimensiones: boolean): boolean {
+  switch (id) {
+    case "frena":
+      return hayDimensiones;
+    case "meta":
+      return paras.has("metas");
+    case "tiempos":
+      return paras.has("tiempos");
+    case "presupuesto":
+      return paras.has("presupuesto");
+    case "autoridad":
+      return paras.has("autoridad");
+    case "consecuencia":
+      return paras.has("consecuencias");
+    case "siguientePaso":
+      return true;
+  }
 }
 
 /**
@@ -67,6 +100,7 @@ export function queSigueConPaso(
   estado: EstadoDeExploracion,
   chequeo: ResultadoDelChequeo,
   sinLeer: readonly ReunionSinLeer[] = [],
+  hoy = hoyEnCostaRica(),
 ): { texto: string; paso: PasoDeQueSigue | null } {
   const revisables = cuantasParaRevisar(estado);
   if (!estado.perfilCierre || !estado.perfilDespues) {
@@ -94,11 +128,14 @@ export function queSigueConPaso(
       paso: "exploracion",
     };
   }
-  const puntos = listaParaProponer(estado, chequeo);
+  const puntos = listaParaProponer(estado, chequeo, hoy);
   const falta = (id: PuntoDeCalidad["id"]) => !puntos.find((p) => p.id === id)?.cumplido;
   if (falta("frena")) return { texto: "Falta saber qué frena al equipo del land, dicho por el cliente: pregúntalo en la próxima reunión con la guía de la escala.", paso: "escala" };
   if (falta("meta")) return { texto: "Falta una meta en cifras: de cuánto a cuánto y para cuándo. Pregúntala en la próxima reunión.", paso: null };
-  if (falta("siguientePaso")) return { texto: "Agenda el siguiente paso, con fecha.", paso: "exploracion" };
+  if (falta("siguientePaso")) {
+    const viejo = estado.contenido.casillas.siguientePaso?.fecha;
+    return { texto: viejo ? `El siguiente paso era del ${diaCorto(viejo)} y ya pasó: agenda el próximo, con fecha.` : "Agenda el siguiente paso, con fecha.", paso: "exploracion" };
+  }
   if (falta("autoridad")) return { texto: "Falta saber quién firma.", paso: null };
   if (falta("consecuencia")) return { texto: "Falta qué pasa si no actúa.", paso: null };
   if (falta("tiempos")) return { texto: "Falta para cuándo lo necesita.", paso: null };
@@ -107,6 +144,6 @@ export function queSigueConPaso(
 }
 
 /** Lo mismo, solo el texto (la lista de exploraciones). */
-export function queSigue(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo, sinLeer: readonly ReunionSinLeer[] = []): string {
-  return queSigueConPaso(estado, chequeo, sinLeer).texto;
+export function queSigue(estado: EstadoDeExploracion, chequeo: ResultadoDelChequeo, sinLeer: readonly ReunionSinLeer[] = [], hoy = hoyEnCostaRica()): string {
+  return queSigueConPaso(estado, chequeo, sinLeer, hoy).texto;
 }

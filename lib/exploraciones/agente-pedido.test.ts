@@ -20,6 +20,7 @@ import {
   propuestasDelTest,
   type ContextoDelPedido,
 } from "./agente-pedido";
+import { leerPropuesta } from "./esquemas";
 import { contenidoVacio, fusionarPropuestas, idDeCasoLibre, idDelItem, NIVELES, propuestaVacia, propuestaVigente, type EstadoDeExploracion } from "./contenido";
 import type { DimensionDelLienzo, EscalaDelLienzo } from "./escala-del-lienzo";
 import { hostDelSitio, ipInterna, mismoSitio } from "./sitio-web-reglas";
@@ -790,5 +791,56 @@ describe("⭐ las instrucciones adicionales del «Contexto adicional» (2026-10-
     const base = { empresa: "Acme", edicion: "escala general", areas: [{ id: "1", nombre: "Ventas", dimensiones: [{ id: "1.1", nombre: "Proceso" }] }], exploracion: "(x)", yaEstan: [], descartados: [] };
     expect(String(pedidoDeCasos({ ...base, instrucciones: bloqueDeInstrucciones({ [CLAVE_DE_INSTRUCCIONES]: INSTRUCCION }) }).messages[0].content)).toContain(INSTRUCCION);
     expect(String(pedidoDeCasos(base).messages[0].content)).not.toContain("INSTRUCCIONES ADICIONALES");
+  });
+});
+
+describe("⭐ el agente resume cada reunión y dice qué se respondió (2026-10-07)", () => {
+  const planeado = {
+    objetivo: "Validar el diagnóstico",
+    preguntas: [
+      { para: "1.3", pregunta: "¿Qué tan cerca estuvo el diagnóstico?" },
+      { para: "autoridad", pregunta: "¿Quién decide sobre tecnología?" },
+    ],
+  };
+  const conReunion = ctx({ reuniones: [{ fuente: "S1", etiqueta: "Reunión del 1 oct" }], planeado });
+
+  it("al leer pide un resumen por reunión y la cobertura de lo planeado; al preparar no", () => {
+    const props = herramienta(conReunion).input_schema.properties as Record<string, unknown>;
+    expect(JSON.stringify(props.reuniones)).toContain('"enum":["S1"]');
+    expect(JSON.stringify(props.reuniones)).toContain('"enum":["1.3","autoridad"]');
+    expect((herramienta(ctx({ modo: "preparar" })).input_schema.properties as Record<string, unknown>).reuniones).toBeUndefined();
+    const cuerpo = String(pedidoDeLaExploracion(conReunion).messages[0].content);
+    expect(cuerpo).toContain("S1: Reunión del 1 oct");
+    expect(cuerpo).toContain("- autoridad: ¿Quién decide sobre tecnología?");
+  });
+
+  it("guarda el resumen de las reuniones leídas; la cobertura sigue lo planeado y lo no nombrado no se preguntó", () => {
+    const r = leerLaRespuesta(
+      respuesta({
+        reuniones: [
+          { fuente: "S1", resumen: "Confirmó que los datos están desordenados.", cobertura: [{ para: "1.3", respondida: true, detalle: "lo confirmó, con ejemplos" }, { para: "9.9", respondida: true }] },
+          { fuente: "S9", resumen: "De una reunión que no se leyó" },
+          { fuente: "S1", resumen: "repetida" },
+        ],
+      }),
+      conReunion,
+      "run_1",
+      AHORA,
+    );
+    expect(r.reuniones).toEqual([
+      {
+        fuente: "S1",
+        resumen: "Confirmó que los datos están desordenados.",
+        cobertura: [
+          { para: "1.3", pregunta: "¿Qué tan cerca estuvo el diagnóstico?", respondida: true, detalle: "lo confirmó, con ejemplos" },
+          { para: "autoridad", pregunta: "¿Quién decide sobre tecnología?", respondida: false },
+        ],
+      },
+    ]);
+  });
+
+  it("la lectura se guarda en la propuesta por reunión, y lo que no tiene la forma se cae", () => {
+    const lectura = { etiqueta: "Reunión del 1 oct", resumen: "Algo", cobertura: [], listosAntes: ["frena"], en: "2026-10-01T00:00:00.000Z", corridaId: "run_1" };
+    expect(leerPropuesta({ ...propuestaVacia(), lecturas: { "meet:gmeet_1": lectura, "fax:1": lectura, "meet:2": { resumen: 3 } } }).lecturas).toEqual({ "meet:gmeet_1": lectura });
   });
 });

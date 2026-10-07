@@ -83,6 +83,19 @@ export interface ContextoDelPedido {
   hoy?: string;
   /** La próxima reunión agendada en HubSpot: solo su título y su fecha, para no confundirla con lo que ya pasó. */
   proxima?: { titulo: string; inicio: string } | null;
+  /**
+   * Al leer: las reuniones que van como fuente (S1, M1, una reunión de HubSpot), para resumir cada una,
+   * y lo que se planeó preguntar en la más reciente (rediseño de las sesiones, 2026-10-07).
+   */
+  reuniones?: { fuente: string; etiqueta: string }[];
+  planeado?: { objetivo: string | null; preguntas: { para: string; pregunta: string }[] };
+}
+
+/** Lo que el agente dijo de una reunión: su resumen y qué se respondió de lo planeado. */
+export interface LecturaDeUnaReunion {
+  fuente: string;
+  resumen: string;
+  cobertura: { para: string; pregunta: string; respondida: boolean; detalle?: string }[];
 }
 
 /** La línea de la fecha de hoy y de la próxima reunión, al principio del pedido. */
@@ -236,6 +249,43 @@ export function herramienta(ctx: ContextoDelPedido): Anthropic.Messages.Tool {
       },
       required: ["tecnica", "fuentes"],
     };
+    const deReunion = (ctx.reuniones ?? []).map((r) => r.fuente);
+    const planeadas = (ctx.planeado?.preguntas ?? []).map((p) => p.para);
+    if (deReunion.length) {
+      properties.reuniones = {
+        type: "array",
+        description:
+          "Una entrada por cada reunión que lees (sus fuentes son las de la lista «REUNIONES QUE LEES»): qué se habló y qué quedó, y de lo que se planeó preguntar, qué se respondió en ESA reunión.",
+        items: {
+          type: "object",
+          properties: {
+            fuente: { type: "string", enum: deReunion },
+            resumen: {
+              type: "string",
+              description: "Dos o tres frases, en tercera persona sobre el cliente: qué se habló, qué confirmó y qué quedó. Sin juicios sobre las personas.",
+            },
+            ...(planeadas.length
+              ? {
+                  cobertura: {
+                    type: "array",
+                    description: "Por cada pregunta planeada: si el cliente la respondió en esta reunión y, si la respondió, lo que dijo en pocas palabras.",
+                    items: {
+                      type: "object",
+                      properties: {
+                        para: { type: "string", enum: planeadas },
+                        respondida: { type: "boolean" },
+                        detalle: { type: "string", description: "Lo que respondió, en 3 a 10 palabras. Solo si respondida es true." },
+                      },
+                      required: ["para", "respondida"],
+                    },
+                  },
+                }
+              : {}),
+          },
+          required: ["fuente", "resumen"],
+        },
+      };
+    }
     properties.siguientePaso = {
       type: "object",
       description: "Solo si se acordó un siguiente paso concreto.",
@@ -375,7 +425,8 @@ ${ctx.proxima ? "- Ya tiene una reunión agendada: no propongas estrategia de co
 - objeciones: lo que el cliente dijo que lo frena, con su frase, su clase y cómo se respondió si se respondió.
 - particularidades: lo propio de esta cuenta que cambia cómo venderle o implementar (una restricción, un contrato vigente, una política, una fecha que manda, alguien clave). Un hecho, no una opinión.
 - apertura y siguientePaso, si quedaron claros.
-- conversacionTecnica: si la reunión MÁS RECIENTE se puso técnica (integraciones, APIs, migración de datos, arquitectura, seguridad, desarrollo a la medida), con la frase que lo muestra. Si no se puso técnica, dilo con tecnica: false.`;
+- conversacionTecnica: si la reunión MÁS RECIENTE se puso técnica (integraciones, APIs, migración de datos, arquitectura, seguridad, desarrollo a la medida), con la frase que lo muestra. Si no se puso técnica, dilo con tecnica: false.
+- reuniones: el resumen de cada reunión que lees y, de lo que se planeó preguntar, qué se respondió en ella. Una pregunta está respondida solo si el cliente la contestó en ESA reunión; si no se tocó, respondida: false.`;
   return `Eres el analista de ventas de Smarteam, una consultora que implementa HubSpot. Ayudas a un vendedor a explorar a un prospecto para cerrar la PRIMERA venta: llevar cada área en juego a Funcional en la Escala de Rendimiento de Smarteam. No escribes en el lienzo: PROPONES, y el vendedor usa o descarta cada cosa.
 
 ${enfoque}
@@ -407,6 +458,12 @@ export function pedidoDeLaExploracion(ctx: ContextoDelPedido): Anthropic.Message
     bloqueDeInstrucciones(ctx.contenido.notas) +
     `=== LO QUE YA ESTÁ CONFIRMADO ===\n${confirmadoComoTexto(ctx)}\n\n` +
     `=== LA ESCALA (las áreas en juego) ===\n${escalaComoTexto(ctx)}\n\n` +
+    (ctx.reuniones?.length ? `=== REUNIONES QUE LEES ===\n${ctx.reuniones.map((r) => `${r.fuente}: ${r.etiqueta}`).join("\n")}\n\n` : "") +
+    (ctx.planeado?.preguntas.length
+      ? `=== LO QUE SE PLANEÓ PREGUNTAR EN LA REUNIÓN MÁS RECIENTE ===\n${ctx.planeado.objetivo ? `Objetivo: ${ctx.planeado.objetivo}\n` : ""}${ctx.planeado.preguntas
+          .map((p) => `- ${p.para}: ${p.pregunta}`)
+          .join("\n")}\n\n`
+      : "") +
     ctx.fuentes.map((f) => `=== FUENTE ${f.id}: ${f.etiqueta} ===\n${f.texto}`).join("\n\n");
   return {
     model: MODELO_DE_LA_EXPLORACION,
@@ -443,6 +500,8 @@ export interface Lectura {
    * agente no lo dijo o no lo pudo respaldar con una frase literal (entonces no se toca lo que había).
    */
   tecnica?: Omit<AlertaTecnica, "en" | "corridaId"> | null;
+  /** Al leer: lo que dijo de cada reunión (su resumen y qué se respondió de lo planeado). */
+  reuniones?: LecturaDeUnaReunion[];
 }
 
 type Crudo = Record<string, unknown>;
@@ -618,7 +677,39 @@ export function leerLaRespuesta(respuesta: Anthropic.Messages.Message, ctx: Cont
     const fuentes = citar(f.fuentes);
     agregar({ tipo: "falta", criterioId }, { estado: str(f.estado), ...(fuentes.find((y) => y.cita) ? { cita: fuentes.find((y) => y.cita)!.cita } : {}) }, fuentes, { exigeCita: true });
   }
-  return { items, descartadas, ...(ctx.modo === "leer" ? { tecnica: laConversacionTecnica(input.conversacionTecnica, citar) } : {}) };
+  return {
+    items,
+    descartadas,
+    ...(ctx.modo === "leer" ? { tecnica: laConversacionTecnica(input.conversacionTecnica, citar), ...conReuniones(lasReuniones(input.reuniones, ctx)) } : {}),
+  };
+}
+
+const conReuniones = (reuniones: LecturaDeUnaReunion[]) => (reuniones.length ? { reuniones } : {});
+
+/**
+ * El resumen de cada reunión y qué se respondió de lo planeado. Solo de las reuniones que se leyeron;
+ * la cobertura, de las preguntas planeadas y en su orden (la que el agente no nombró, no se preguntó).
+ */
+function lasReuniones(x: unknown, ctx: ContextoDelPedido): LecturaDeUnaReunion[] {
+  const validas = new Set((ctx.reuniones ?? []).map((r) => r.fuente));
+  const planeado = ctx.planeado?.preguntas ?? [];
+  const out: LecturaDeUnaReunion[] = [];
+  for (const r of lista(x)) {
+    const fuente = str(r.fuente);
+    const resumen = str(r.resumen)?.slice(0, 1200);
+    if (!fuente || !validas.has(fuente) || !resumen || out.some((o) => o.fuente === fuente)) continue;
+    const dichas = new Map(
+      lista(r.cobertura)
+        .filter((c) => typeof c.para === "string" && typeof c.respondida === "boolean")
+        .map((c) => [c.para as string, { respondida: c.respondida as boolean, detalle: str(c.detalle)?.slice(0, 300) }]),
+    );
+    const cobertura = planeado.slice(0, 16).map((p) => {
+      const d = dichas.get(p.para);
+      return { para: p.para, pregunta: p.pregunta.slice(0, 400), respondida: !!d?.respondida, ...(d?.respondida && d.detalle ? { detalle: d.detalle } : {}) };
+    });
+    out.push({ fuente, resumen, cobertura });
+  }
+  return out;
 }
 
 /**

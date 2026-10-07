@@ -5301,3 +5301,57 @@ Antes del deploy del rediseño, a partir de las respuestas de Alex (2026-10-05).
 - **Lo que no se construyó todavía, a propósito**: la lectura de la IA arriba de cada pantalla (pide un agente con su
   corrida y su costo), la complejidad en la pestaña de la cuenta, «Tu semana», la asistencia de Meet, las horas por
   tarea y por caso de uso, y leer en la carga las respuestas de «¿cuánto te tomó?» (ver esa sección).
+
+## Las sesiones de la preventa se encadenan: antes, durante y después (2026-10-07)
+
+**Contexto.** Elías revisó las sesiones de CreditForce: «en la sesión 2, que es próxima, me dice "te llevaste de
+la sesión"… la sesión ni siquiera ha pasado». Pidió auditar el antes, el durante y el después, y rediseñarlos con
+la línea nueva y datos reales. Aprobó el diseño (artefacto «Preventa · Sesiones de exploración», cinco tableros)
+con cuatro pedidos: ver la guía en orden o por sección, conservar la arquitectura de la venta en el panel con sus
+nombres, que las sesiones pasadas cambien la planificación de las que vienen, y filtrar las preguntas en «Durante».
+
+- **Una sesión arranca con un objetivo.** Lo sugiere el agente con la guía (`GuiaDeLaSesion.objetivo`) y lo
+  confirma el vendedor (`SesionPlaneada.objetivo`). Si lo descarta, se guarda el texto para no volver a ofrecerlo.
+  Debajo, «Si sale bien…» dice cuántos de los puntos que faltan para proponer cubre la guía (`puntoQueSePregunta`).
+- **La guía va en tres tramos con sus minutos**: abrir (0–5), preguntar (5–40) y cerrar (40–45), en una sesión de
+  45. «En orden» sigue la conversación (`ordenDeLaConversacion`): primero lo que viene de antes, después la venta y
+  la escala alternadas, y el presupuesto al final. «Por sección» la parte en «Arquitectura de la venta» y «Escala
+  de rendimiento», como antes.
+- **Lo que viene de una sesión anterior se ve, y dice de dónde.** «Quedó abierto en la sesión N» es lo que el
+  vendedor marcó en «Quedó abierto»; cada punto guarda de qué sesión viene (`explorarDe`). «Pasó de la sesión N» es
+  lo que tenía preparado una sesión que se cortó (`pasaron`). El agente de la guía recibe cada punto llevado con un
+  id (A1, A2…) y dice qué pregunta lo retoma. Lo que ninguna pregunta retoma va igual, como su propia pregunta.
+  «Lo que traes de las sesiones anteriores» dice qué cambió en la guía por cada cosa.
+- **«Durante» es la reunión en curso**: las preguntas con su casilla de hecha (`hechas`) y un campo para lo que
+  respondió cada una. Esa respuesta es una nota por pregunta (`sesion:<id>:<a qué apunta>`), y el agente la lee
+  junto a su pregunta, como contexto del vendedor. La primera que falta va marcada «Ahora». Arriba, el filtro Todas
+  / Arquitectura de la venta / Escala de rendimiento. A la derecha, las notas libres y «Antes de colgar», que
+  escribe la casilla del siguiente paso.
+- **«Después» arranca con lo que leyó el agente de ESA reunión.** Al leer, el agente resume cada reunión y dice
+  qué se respondió de lo planeado (`propuesta.lecturas`, por reunión: `meet:<id>`, `hubspot:<id>` o
+  `documento:<id>`; guarda las últimas 24). Lo que sugirió se filtra a esa reunión por la etiqueta de su fuente.
+  «Cuánto avanzó» compara lo que estaba listo para proponer antes de leerla con lo de hoy. «Quedó abierto» junta lo
+  que no se preguntó y lo que se dijo sin explorar, cada cosa con una casilla para llevarla a la próxima sesión.
+- **Una reunión sin conversación no espera una lectura.** Si su transcripción casi no tiene conversación (menos
+  de 400 caracteres dichos por personas, `transcripcionCorta`), la sesión pregunta qué pasó. El caso de CreditForce
+  del 2 oct: duró 6 minutos y solo se dijo «Sí. Ok.». Hay tres respuestas:
+  - se hizo por otro canal: lo que se anota en «Durante» es lo que lee el agente;
+  - se cortó: lo preparado pasa a la próxima sesión;
+  - no se hizo: sale de la cuenta de sesiones y se ve tachada; se deshace tocando el mismo botón.
+
+  En la barra de la izquierda se marca con un ● ámbar.
+- **Un siguiente paso con fecha pasada ya no cuenta para proponer** (`siguientePasoVigente`). En CreditForce, el
+  del 28 sep todavía contaba como listo el 7 oct. «Qué sigue» pide agendar otro.
+- **El panel de la derecha suma «Para proponer»**: los siete puntos, en verde lo que está listo y en azul lo que
+  pregunta la guía de la próxima sesión.
+- **La guía se pide en tuteo, y se revisa.** La de CreditForce salió en voseo («vivís», «podés») porque las
+  fuentes estaban en voseo. Ahora el prompt pone ejemplos en tuteo. Si la guía igual trae voseo (`voseoEnLaGuia`,
+  que no cuenta el futuro), se pide una vez más, avisándolo: es una llamada de más, solo en ese caso. La regla del
+  voseo se separó del parser de TypeScript (`lib/ui/voseo-formas.ts`) para que el servidor la pueda usar.
+- **No lleva SQL.** Todo vive en los Json de la preventa (`contenido.sesiones`, `contenido.notas` y `propuesta`).
+  La clave de una nota sube de 40 a 72 caracteres.
+- **Lo que queda así, a propósito**:
+  - Marcar una sesión como cortada no rearma solo la guía de la próxima: la etiqueta «Pasó de la sesión N» aparece
+    igual.
+  - Las reuniones leídas antes de este cambio no tienen resumen. «Volver a leer» lo arma, y solo existe para las de
+    Meet.

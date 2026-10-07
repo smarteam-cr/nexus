@@ -15,6 +15,8 @@ export interface Segmento<K extends string> {
   nombre: string;
   /** La cuenta al lado del nombre (los filtros de una lista). */
   cuenta?: number;
+  /** No se puede elegir todavía: el porqué va como título (el «Después» de una sesión que no ocurrió). */
+  desactivada?: string;
 }
 
 export default function Segmentos<K extends string>({
@@ -39,10 +41,12 @@ export default function Segmentos<K extends string>({
             type="button"
             role="tab"
             aria-selected={elegida}
+            disabled={!!o.desactivada}
+            title={o.desactivada}
             onClick={() => onCambiar(o.clave)}
             className={cn(
-              "rounded-lg px-4 py-[7px] text-[13px] transition-colors",
-              elegida ? "bg-surface font-semibold text-fg shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-medium text-fg-secondary hover:text-fg",
+              "rounded-lg px-4 py-[7px] text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+              elegida ? "bg-surface font-semibold text-fg shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "font-medium text-fg-secondary enabled:hover:text-fg",
             )}
           >
             {o.nombre}

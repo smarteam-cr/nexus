@@ -19,7 +19,7 @@ import type { EstadoDePieza, FilaDePieza } from "@/components/canvas/SelectorDeP
 import AvisoDeFicha from "@/components/clients/AvisoDeFicha";
 import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
-import { MAX_SESIONES, type PestanaDeSesion } from "@/lib/exploraciones/guia";
+import { MAX_SESIONES, nombreDeLaPestana, type PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { diaCorto } from "@/lib/exploraciones/fechas";
 import { useLienzo, type PasoDelLienzoUI } from "./contexto";
 import { BotonDeObjeciones } from "./ManejoDeObjeciones";
@@ -111,7 +111,15 @@ function Sesiones({ abierta, alElegir }: { abierta: boolean; alElegir: (clave: s
   const marca = (p: PestanaDeSesion, actual: boolean) =>
     actual ? (
       <span aria-hidden="true">●</span>
-    ) : p.reunion && !p.reunion.leida ? (
+    ) : p.noSeHizo ? (
+      <span className="text-fg-muted" aria-label="no se hizo">
+        –
+      </span>
+    ) : p.reunion?.corta && !p.sesion?.resultado ? (
+      <span className="text-warning" title="Sin transcripción: dile qué pasó con ella">
+        ●
+      </span>
+    ) : p.reunion && !p.reunion.leida && !p.reunion.corta ? (
       <span className="text-warning" title="Reunión sin leer">
         ●
       </span>
@@ -140,7 +148,7 @@ function Sesiones({ abierta, alElegir }: { abierta: boolean; alElegir: (clave: s
               )}
             >
               {marca(p, actual)}
-              <span className="min-w-0 flex-1 truncate">Sesión {p.numero}</span>
+              <span className={cn("min-w-0 flex-1 truncate", p.noSeHizo && !actual && "text-fg-muted line-through")}>{nombreDeLaPestana(p)}</span>
               {estadoDe(p) === "proxima" ? (
                 <span className="flex-shrink-0 text-[11.5px] font-semibold text-brand">próxima{p.fecha ? ` · ${diaCorto(p.fecha)}` : ""}</span>
               ) : (

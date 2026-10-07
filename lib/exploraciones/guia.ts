@@ -27,6 +27,15 @@ import { aFecha, hoyEnCostaRica } from "./fechas";
 /** De dónde viene una reunión: Google Meet, HubSpot (el notetaker) o sumada a mano. */
 export type OrigenDeReunion = "meet" | "hubspot" | "documento";
 
+/**
+ * Qué pasó con una sesión cuya reunión no dejó qué leer (rediseño de las sesiones, 2026-10-07): se
+ * hizo por otro canal (teléfono, WhatsApp: lo que se anota en «Durante» es lo que lee el agente), se
+ * cortó y hay que reagendarla (lo que tenía preparado pasa a la próxima), o no se hizo (sale de la
+ * cuenta de sesiones; la reunión sigue en Meet).
+ */
+export const RESULTADOS_DE_LA_SESION = ["otroCanal", "cortada", "noSeHizo"] as const;
+export type ResultadoDeLaSesion = (typeof RESULTADOS_DE_LA_SESION)[number];
+
 /** Una sesión que planea el vendedor. La fecha es `AAAA-MM-DD`; sin fecha, todavía no se agendó. */
 export interface SesionPlaneada {
   id: string;
@@ -41,6 +50,18 @@ export interface SesionPlaneada {
   reunion?: { id: string; origen: OrigenDeReunion };
   /** Lo que quedó de una sesión anterior para explorar en esta (lo que se dijo y nadie siguió). */
   explorar?: string[];
+  /** De qué sesión viene cada punto de `explorar` (su id): la guía dice «Quedó abierto en la sesión N». */
+  explorarDe?: Record<string, string>;
+  /** El objetivo de la sesión, confirmado por el vendedor (lo sugiere el agente con la guía). */
+  objetivo?: string;
+  /** El objetivo que sugirió el agente y el vendedor descartó: no se vuelve a ofrecer el mismo. */
+  objetivoDescartado?: string;
+  /** Qué pasó con ella, cuando su reunión no dejó qué leer. */
+  resultado?: ResultadoDeLaSesion;
+  /** Al marcarla cortada: a qué apuntaba lo que tenía preparado (tarjetas y dimensiones). Pasa a la próxima. */
+  pasaron?: string[];
+  /** Las preguntas que el vendedor marcó hechas durante la reunión (a qué apuntan: `metas`, `1.3`). */
+  hechas?: string[];
 }
 
 export const MAX_SESIONES = 12;
@@ -55,6 +76,33 @@ export interface ReunionDeLaExploracion {
   fecha: string;
   origen: OrigenDeReunion;
   leida: boolean;
+  /**
+   * La transcripción casi no tiene conversación (se cortó, o el notetaker grabó solo el saludo): no
+   * hay qué leer. `minutos` es dónde termina, si la transcripción lo dice.
+   */
+  corta?: { minutos: number | null };
+}
+
+/** Hasta cuántos caracteres se mira una transcripción para saber si tiene conversación. */
+export const LARGO_DE_UNA_TRANSCRIPCION_CORTA = 3000;
+/** Menos de esto dicho por personas (sin el notetaker) no alcanza para leer nada. */
+const CONVERSACION_MINIMA = 400;
+
+/**
+ * ¿La transcripción casi no tiene conversación? (CreditForce, 2 oct: «Esta reunión está siendo
+ * grabada. — Sí. Ok.» y «La transcripción finalizó después de 00:06:26»). Cuenta lo que dicen las
+ * personas, sin el notetaker ni el texto fijo de Meet. null = tiene conversación.
+ */
+export function transcripcionCorta(transcript: string): { minutos: number | null } | null {
+  if (transcript.length >= LARGO_DE_UNA_TRANSCRIPCION_CORTA) return null;
+  const dicho = transcript
+    .split("\n")
+    .map((l) => /^([^:\n]{2,60}):\s+(.+)$/.exec(l.trim()))
+    .filter((m): m is RegExpExecArray => !!m && !/notetaker|transcripci[oó]n/i.test(m[1]))
+    .reduce((n, m) => n + m[2].trim().length, 0);
+  if (dicho >= CONVERSACION_MINIMA) return null;
+  const fin = /finaliz[oó] despu[eé]s de (\d{1,2}):(\d{2}):(\d{2})/i.exec(transcript);
+  return { minutos: fin ? Number(fin[1]) * 60 + Number(fin[2]) + (Number(fin[3]) >= 30 ? 1 : 0) : null };
 }
 
 /** El día de Costa Rica (`AAAA-MM-DD`) de una fecha ISO; una de solo día es ese día (no la medianoche UTC). */
@@ -78,6 +126,13 @@ export interface PestanaDeSesion {
   reunion: ReunionDeLaExploracion | null;
   fecha: string | null;
   hecha: boolean;
+  /** El vendedor dijo que no se hizo: no cuenta como sesión (no lleva número) y se pinta apagada. */
+  noSeHizo?: boolean;
+}
+
+/** Cómo se nombra una pestaña: «Sesión 3», o «No se hizo» si no cuenta. */
+export function nombreDeLaPestana(p: Pick<PestanaDeSesion, "numero" | "noSeHizo">): string {
+  return p.noSeHizo ? "No se hizo" : `Sesión ${p.numero}`;
 }
 
 /**
@@ -105,7 +160,13 @@ export function pestanasDeSesiones(sesiones: readonly SesionPlaneada[], reunione
     ...sueltas.map((r, i) => ({ clave: `r-${r.origen}-${r.id}`, sesion: null, reunion: r, fecha: diaDe(r.fecha), hecha: true, orden: sesiones.length + i })),
   ];
   todas.sort((a, b) => (a.fecha && b.fecha ? a.fecha.localeCompare(b.fecha) || a.orden - b.orden : a.fecha ? -1 : b.fecha ? 1 : a.orden - b.orden));
-  return todas.map((p, i) => ({ clave: p.clave, sesion: p.sesion, reunion: p.reunion, fecha: p.fecha, hecha: p.hecha, numero: i + 1 }));
+  // La que no se hizo no lleva número: las demás se cuentan sin ella.
+  let n = 0;
+  return todas.map((p) => {
+    const noSeHizo = p.sesion?.resultado === "noSeHizo";
+    if (!noSeHizo) n++;
+    return { clave: p.clave, sesion: p.sesion, reunion: p.reunion, fecha: p.fecha, hecha: p.hecha, numero: noSeHizo ? 0 : n, ...(noSeHizo ? { noSeHizo: true } : {}) };
+  });
 }
 
 /**
@@ -142,7 +203,7 @@ export function proximaReunion(
   hoy: string,
   reunionesLeidas = 0,
 ): { numero: number; titulo: string | null; fecha: string | null; desde: "sesion" | "hubspot" | null; sesionId: string | null } {
-  const hechas = Math.max(sesiones.filter((s) => sesionHecha(s, hoy)).length, reunionesLeidas);
+  const hechas = Math.max(sesiones.filter((s) => sesionHecha(s, hoy) && s.resultado !== "noSeHizo").length, reunionesLeidas);
   const pendientes = sesiones
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => !sesionHecha(s, hoy))
@@ -332,6 +393,8 @@ export interface PreguntaDeLaGuia {
   para: string;
   pregunta: string;
   repreguntas: string[];
+  /** El punto de una sesión anterior que esta pregunta retoma (el texto de `explorar`), si retoma uno. */
+  abierto?: string;
 }
 
 export interface GuiaDeLaSesion {
@@ -340,6 +403,8 @@ export interface GuiaDeLaSesion {
   /** Las tarjetas vacías y las dimensiones en foco con que se armó: si cambian, la guía quedó vieja. */
   huecos: string[];
   enfoque: string[];
+  /** El objetivo de la sesión, en una frase: lo sugiere el agente y lo confirma el vendedor. */
+  objetivo?: string | null;
   /** Cómo abrir la conversación, desde algo de la empresa. */
   apertura: string[];
   /** La escala explicada en simple: solo cuando no hizo el test y todavía no se habló. */
@@ -361,11 +426,72 @@ export function guiaVieja(guia: Pick<GuiaDeLaSesion, "huecos" | "enfoque">, huec
 
 // ── Lo que se muestra ─────────────────────────────────────────────────────────
 
+/** Cuánto dura una sesión de exploración, y en qué minutos se abre, se pregunta y se cierra. */
+export const DURACION_DE_LA_SESION = 45;
+export const TRAMOS_DE_LA_SESION = { abrir: [0, 5], preguntar: [5, 40], cerrar: [40, 45] } as const;
+
+/**
+ * De dónde viene lo que se pregunta hoy (rediseño de las sesiones, 2026-10-07: «que la información
+ * de las sesiones pasadas afecte la planificación de las futuras»): quedó abierto en una sesión
+ * anterior y el vendedor lo marcó para llevar, o pasó de una sesión que se cortó.
+ */
+export interface Procedencia {
+  tipo: "abierto" | "paso";
+  numero: number;
+}
+
+export function textoDeLaProcedencia(p: Procedencia): string {
+  return p.tipo === "abierto" ? `Quedó abierto en la sesión ${p.numero}` : `Pasó de la sesión ${p.numero}`;
+}
+
 export interface PreguntaParaMostrar {
+  /** A qué apunta: una tarjeta, una dimensión o, para un punto llevado que ninguna pregunta retoma, `abierto:<n>`. */
   para: string;
-  tipo: "tarjeta" | "dimension";
+  tipo: "tarjeta" | "dimension" | "abierto";
   pregunta: string;
   repreguntas: string[];
+  /** Para un punto llevado: lo que se dijo (la pregunta va en `pregunta`). */
+  contexto?: string;
+  procedencia?: Procedencia;
+}
+
+/**
+ * Lo que se llevó a una sesión, partido en lo que se dijo y la pregunta para cerrarlo. El agente lo
+ * escribe en un solo texto, «… Qué preguntar: ¿…?»; sin esa marca, todo es lo que se dijo.
+ */
+export function separarPregunta(t: string): { dicho: string; pregunta: string | null } {
+  const m = /\s*qu[eé] preguntar\s*:\s*/i.exec(t);
+  if (!m) return { dicho: t.trim(), pregunta: null };
+  return { dicho: t.slice(0, m.index).trim(), pregunta: t.slice(m.index + m[0].length).trim() || null };
+}
+
+/**
+ * De dónde viene lo que se pregunta en una sesión: de qué sesión quedó abierto cada punto llevado
+ * (por su texto) y de qué sesión cortada pasó cada tarjeta o dimensión (por a qué apunta). Las
+ * sesiones son las de antes de esta, en orden; la última que dice algo gana.
+ */
+export function procedenciasDeLaSesion(
+  activa: Pick<PestanaDeSesion, "clave" | "sesion">,
+  pestanas: readonly PestanaDeSesion[],
+): { abiertos: Map<string, number>; pasaron: Map<string, number> } {
+  const idx = pestanas.findIndex((p) => p.clave === activa.clave);
+  const antes = (idx < 0 ? pestanas : pestanas.slice(0, idx)).filter((p) => !p.noSeHizo);
+  const abiertos = new Map<string, number>();
+  // Sin el dato guardado (lo llevado antes del 2026-10-07), viene de la última que se hizo y dejó qué leer.
+  const conConversacion = (p: PestanaDeSesion) => p.hecha && !p.sesion?.resultado && !p.reunion?.corta;
+  const anteriorHecha = [...antes].reverse().find(conConversacion) ?? [...antes].reverse().find((p) => p.hecha);
+  for (const t of activa.sesion?.explorar ?? []) {
+    const de = activa.sesion?.explorarDe?.[t];
+    const origen = de ? pestanas.find((p) => p.sesion?.id === de) : null;
+    const numero = origen && !origen.noSeHizo ? origen.numero : anteriorHecha?.numero;
+    if (numero) abiertos.set(t, numero);
+  }
+  const pasaron = new Map<string, number>();
+  for (const p of antes) {
+    if (p.sesion?.resultado !== "cortada") continue;
+    for (const para of p.sesion.pasaron ?? []) pasaron.set(para, p.numero);
+  }
+  return { abiertos, pasaron };
 }
 
 /**
@@ -378,15 +504,159 @@ export function preguntasParaMostrar(
   huecos: readonly string[],
   enfoque: readonly string[],
   escala: EscalaDelLienzo,
+  procedencias: { abiertos: ReadonlyMap<string, number>; pasaron: ReadonlyMap<string, number> } = { abiertos: new Map(), pasaron: new Map() },
 ): PreguntaParaMostrar[] {
   const preguntaDeLaDimension = (id: string) => escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === id)?.pregunta ?? null;
   const out: PreguntaParaMostrar[] = [];
-  const armar = (para: string, tipo: PreguntaParaMostrar["tipo"], base: string | null) => {
+  const retomados = new Set<string>();
+  const armar = (para: string, tipo: "tarjeta" | "dimension", base: string | null) => {
     const delAgente = guia?.preguntas.filter((p) => p.para === para) ?? [];
-    if (delAgente.length) for (const p of delAgente) out.push({ para, tipo, pregunta: p.pregunta, repreguntas: p.repreguntas });
-    else if (base) out.push({ para, tipo, pregunta: base, repreguntas: [] });
+    const pasoDe = procedencias.pasaron.get(para);
+    if (delAgente.length) {
+      for (const p of delAgente) {
+        const abierto = p.abierto && procedencias.abiertos.has(p.abierto) ? p.abierto : null;
+        if (abierto) retomados.add(abierto);
+        const procedencia: Procedencia | undefined = abierto
+          ? { tipo: "abierto", numero: procedencias.abiertos.get(abierto)! }
+          : pasoDe
+            ? { tipo: "paso", numero: pasoDe }
+            : undefined;
+        out.push({ para, tipo, pregunta: p.pregunta, repreguntas: p.repreguntas, ...(procedencia ? { procedencia } : {}) });
+      }
+    } else if (base) {
+      out.push({ para, tipo, pregunta: base, repreguntas: [], ...(pasoDe ? { procedencia: { tipo: "paso" as const, numero: pasoDe } } : {}) });
+    }
   };
   for (const h of huecos) armar(h, "tarjeta", PREGUNTA_DE_BASE[h as keyof typeof PREGUNTA_DE_BASE] ?? null);
   for (const d of enfoque) armar(d, "dimension", preguntaDeLaDimension(d));
+  // Lo llevado que ninguna pregunta retoma va igual, como su propia pregunta: no se pierde.
+  for (const [t, numero] of procedencias.abiertos) {
+    if (retomados.has(t)) continue;
+    const { dicho, pregunta } = separarPregunta(t);
+    out.push({
+      para: paraDeUnAbierto(t),
+      tipo: "abierto",
+      pregunta: pregunta ?? dicho,
+      repreguntas: [],
+      ...(pregunta && dicho ? { contexto: dicho } : {}),
+      procedencia: { tipo: "abierto", numero },
+    });
+  }
+  return out;
+}
+
+/**
+ * A qué apunta un punto llevado que ninguna pregunta retoma: `abierto:` y una huella corta de su texto,
+ * estable aunque cambien los demás (con ella se guardan su casilla «hecha» y su nota del «Durante»).
+ */
+export function paraDeUnAbierto(texto: string): string {
+  let h = 5381;
+  for (let i = 0; i < texto.length; i++) h = ((h << 5) + h + texto.charCodeAt(i)) >>> 0;
+  return `abierto:${h.toString(36)}`;
+}
+
+/** Cómo abrir cuando el agente todavía no armó la guía. */
+export const APERTURA_DE_BASE = "Recuerda por qué se reúnen, confirma cuánto tiempo tienen y pregunta qué le gustaría llevarse de la reunión.";
+
+/**
+ * El orden de la conversación («En orden»): primero lo que viene de antes (lo que quedó abierto y lo
+ * que pasó de una sesión cortada), después el resto alternando la venta y la escala para que no se
+ * sienta un cuestionario, y el presupuesto al final (hablar de plata antes de la meta es vender antes
+ * de diagnosticar).
+ */
+export function ordenDeLaConversacion(preguntas: readonly PreguntaParaMostrar[]): PreguntaParaMostrar[] {
+  const alFinal = (p: PreguntaParaMostrar) => p.para === "presupuesto";
+  const intercalar = (lista: readonly PreguntaParaMostrar[]) => {
+    const tarjetas = lista.filter((p) => p.tipo === "tarjeta");
+    const dimensiones = lista.filter((p) => p.tipo === "dimension");
+    const out: PreguntaParaMostrar[] = lista.filter((p) => p.tipo === "abierto");
+    for (let i = 0; i < Math.max(tarjetas.length, dimensiones.length); i++) {
+      if (tarjetas[i]) out.push(tarjetas[i]);
+      if (dimensiones[i]) out.push(dimensiones[i]);
+    }
+    return out;
+  };
+  const medio = preguntas.filter((p) => !alFinal(p));
+  return [...intercalar(medio.filter((p) => p.procedencia)), ...intercalar(medio.filter((p) => !p.procedencia)), ...preguntas.filter(alFinal)];
+}
+
+// ── Lo que traes de las sesiones anteriores ───────────────────────────────────
+
+export interface LineaDeLoQueTraes {
+  texto: string;
+  /** Qué cambia hoy por eso («van primero en la guía»). */
+  consecuencia: string;
+}
+
+export interface LoQueTraesDeUnaSesion {
+  clave: string;
+  numero: number;
+  fecha: string | null;
+  /** «ya ocurrió», «se cortó», «por otro canal». */
+  estado: string;
+  /** La sesión no dejó qué leer: el estado se pinta en ámbar. */
+  aviso: boolean;
+  lineas: LineaDeLoQueTraes[];
+}
+
+/** «a, b y c». */
+function enLista(xs: readonly string[]): string {
+  return xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`;
+}
+
+/**
+ * Lo que las sesiones anteriores le dejan a esta (2026-10-07): lo que el vendedor se llevó, lo que
+ * pasó de una sesión cortada y la alerta técnica de una reunión. Cada línea dice qué cambia hoy por
+ * eso. Solo las sesiones que dejan algo; `nombreDe` da el nombre de una tarjeta o dimensión.
+ */
+export function loQueTraes(
+  activa: Pick<PestanaDeSesion, "clave" | "sesion">,
+  pestanas: readonly PestanaDeSesion[],
+  o: { nombreDe: (para: string) => string; tecnica: { reunion: string; temas: string[]; vista?: boolean } | null },
+): LoQueTraesDeUnaSesion[] {
+  const idx = pestanas.findIndex((p) => p.clave === activa.clave);
+  const antes = (idx < 0 ? pestanas : pestanas.slice(0, idx)).filter((p) => p.hecha && !p.noSeHizo);
+  const { abiertos } = procedenciasDeLaSesion(activa, pestanas);
+  const out: LoQueTraesDeUnaSesion[] = [];
+  for (const p of antes) {
+    const lineas: LineaDeLoQueTraes[] = [];
+    const llevados = [...abiertos].filter(([, n]) => n === p.numero).map(([t]) => t);
+    if (llevados.length) {
+      const preguntas = llevados.map((t) => {
+        const { dicho, pregunta } = separarPregunta(t);
+        return (pregunta ?? dicho).replace(/^¿/, "").replace(/\?$/, "").replace(/^\p{Lu}/u, (c) => c.toLowerCase());
+      });
+      lineas.push({
+        texto: `Te llevaste ${llevados.length === 1 ? "1 pregunta" : `${llevados.length} preguntas`}: ${enLista(preguntas)}.`,
+        consecuencia: llevados.length === 1 ? "va primero en la guía." : "van primero en la guía.",
+      });
+    }
+    const resultado = p.sesion?.resultado;
+    if (resultado === "cortada") {
+      const pasaron = (p.sesion?.pasaron ?? []).map((x) => o.nombreDe(x).toLowerCase());
+      lineas.push({
+        texto: pasaron.length ? `Se cortó y no dejó qué leer. Lo que tenía preparado, ${enLista(pasaron)}, quedó sin preguntar.` : "Se cortó y no dejó qué leer.",
+        consecuencia: pasaron.length ? "pasó a esta sesión." : "lo que falta sigue en la guía.",
+      });
+    } else if (resultado === "otroCanal") {
+      lineas.push({ texto: "Se hizo por otro canal.", consecuencia: "el agente lee tus notas de «Durante» como tu contexto." });
+    }
+    const t = o.tecnica;
+    if (t && !t.vista && p.reunion && t.reunion.includes(p.reunion.titulo)) {
+      lineas.push({
+        texto: `Se puso técnica${t.temas.length ? `: ${enLista(t.temas.map((x) => x.toLowerCase()))}` : ""}.`,
+        consecuencia: "«Con quién» pide sumar a alguien técnico.",
+      });
+    }
+    if (!lineas.length) continue;
+    out.push({
+      clave: p.clave,
+      numero: p.numero,
+      fecha: p.fecha,
+      estado: resultado === "cortada" ? "se cortó" : resultado === "otroCanal" ? "por otro canal" : "ya ocurrió",
+      aviso: resultado === "cortada",
+      lineas,
+    });
+  }
   return out;
 }

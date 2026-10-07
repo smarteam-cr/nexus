@@ -13,6 +13,7 @@
  * Una que ya pasó lleva lo que HubSpot dice que pasó con ella: se hizo, se canceló, se reagendó.
  */
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { fetchCompanyDeals } from "@/lib/hubspot/deals";
 import { getSystemHubspotClient } from "@/lib/hubspot/client";
@@ -33,7 +34,7 @@ import {
   type ResultadoDeReunion,
 } from "./hubspot";
 import { documentosParaLeer, listarDocumentos } from "./documentos";
-import type { ReunionDeLaExploracion, SesionPlaneada } from "./guia";
+import { LARGO_DE_UNA_TRANSCRIPCION_CORTA, PREGUNTA_DE_BASE, transcripcionCorta, type ReunionDeLaExploracion, type SesionPlaneada } from "./guia";
 import { CLAVE_DE_INSTRUCCIONES, rotuloDeLaNota } from "./notas-de-sesion";
 import { etiquetaDeLaFuente } from "./senales";
 import { agendadasQueYaPasaron, DIAS_ANTES_DEL_ALTA, reunionesDeHubspotQueYaPasaron, type ReunionSinLeer } from "./lectura";
@@ -59,6 +60,22 @@ export interface LoQueSeLeyo {
   sesionesUsadas: string[];
   /** Los datos de la empresa en HubSpot que la escala pide con toda medición (país, tamaño). */
   empresa: { pais: string | null; empleados: string | null } | null;
+  /**
+   * Las reuniones que leyó esta corrida, cada una con su fuente (S1, M1, H3) y su clave en
+   * `propuesta.lecturas` (contenido.ts › `claveDeLaReunion`): el agente las resume una por una.
+   */
+  reunionesLeidas?: ReunionLeida[];
+}
+
+export interface ReunionLeida {
+  fuente: string;
+  clave: string;
+  etiqueta: string;
+  id: string;
+  origen: "meet" | "hubspot" | "documento";
+  /** ISO. */
+  fecha: string;
+  titulo: string;
 }
 
 const fecha = diaConAnio;
@@ -140,13 +157,17 @@ function textoDelTest(r: ResultadoDelTest, contacto: string, escala: EscalaDelLi
  * Las notas del vendedor: las de cada sesión (pestaña «Durante») y las rápidas del guion viejo, cada
  * una con la sesión o el paso al que pertenece.
  */
-function textoDeLasNotas(notas: Record<string, string>, sesiones: readonly SesionPlaneada[]): string {
+function textoDeLasNotas(
+  notas: Record<string, string>,
+  sesiones: readonly SesionPlaneada[],
+  preguntaDe: (sesionId: string, para: string) => string | null,
+): string {
   const pasos = REUNIONES.flatMap((r) => r.pasos.map((p) => ({ id: p.id, titulo: `${r.titulo.split(" — ")[0]} · ${p.titulo}` })));
   const dePaso = (id: string) => pasos.find((p) => p.id === id)?.titulo ?? null;
   return Object.entries(notas)
     // Las instrucciones adicionales no son una nota sobre el cliente: van aparte (bloqueDeInstrucciones).
     .filter(([id, texto]) => id !== CLAVE_DE_INSTRUCCIONES && texto.trim())
-    .map(([id, texto]) => `${rotuloDeLaNota(id, sesiones, dePaso) ?? id}: ${texto}`)
+    .map(([id, texto]) => `${rotuloDeLaNota(id, sesiones, dePaso, preguntaDe) ?? id}: ${texto}`)
     .join("\n\n");
 }
 
@@ -189,6 +210,7 @@ export async function leerFuentes(opts: {
       : Promise.resolve([]),
   ]);
 
+  const reunionesLeidas: ReunionLeida[] = [];
   const textoEmpresa = textoDeLaEmpresa(empresa, partner);
   if (textoEmpresa) fuentes.push({ id: "E0", etiqueta: "La empresa en HubSpot", texto: textoEmpresa });
 
@@ -235,12 +257,21 @@ export async function leerFuentes(opts: {
   const yaLeidas = new Set(opts.propuesta.leidas.hubspot);
   const actividadQueVa = opts.modo === "leer" ? actividad.material.filter((a) => !yaLeidas.has(a.id)) : actividad.material;
   actividadQueVa.slice(0, 25).forEach((a, i) => {
-    fuentes.push({
-      id: `H${i + 1}`,
-      etiqueta: `${NOMBRE_DEL_TIPO[a.tipo]}${a.ts ? ` del ${fecha(a.ts)}` : ""}${a.resultado ? ` (${QUE_PASO[a.resultado]})` : ""}${a.titulo ? `: ${a.titulo}` : ""}`,
-      texto: a.texto,
-    });
+    const etiqueta = `${NOMBRE_DEL_TIPO[a.tipo]}${a.ts ? ` del ${fecha(a.ts)}` : ""}${a.resultado ? ` (${QUE_PASO[a.resultado]})` : ""}${a.titulo ? `: ${a.titulo}` : ""}`;
+    fuentes.push({ id: `H${i + 1}`, etiqueta, texto: a.texto });
     if (marcar) leidas.hubspot.push(a.id);
+    // Una reunión de HubSpot que se hizo también se resume como reunión (las otras actividades no).
+    if (marcar && a.tipo === "MEETING" && (!a.resultado || a.resultado === "hecha")) {
+      reunionesLeidas.push({
+        fuente: `H${i + 1}`,
+        clave: `hubspot:${a.id}`,
+        etiqueta,
+        id: a.id,
+        origen: "hubspot",
+        fecha: new Date(a.ts || Date.now()).toISOString(),
+        titulo: a.titulo || "Reunión",
+      });
+    }
   });
 
   // ── Las reuniones de Meet (solo las que ya ocurrieron) ──
@@ -287,8 +318,10 @@ export async function leerFuentes(opts: {
         : "";
     const texto = (s.transcript ?? "").trim() || resumen;
     if (!texto) return;
-    fuentes.push({ id: `S${i + 1}`, etiqueta: `Reunión del ${fecha(s.date)}: ${s.title}`, texto: texto.slice(0, MAX) });
+    const etiqueta = `Reunión del ${fecha(s.date)}: ${s.title}`;
+    fuentes.push({ id: `S${i + 1}`, etiqueta, texto: texto.slice(0, MAX) });
     sesionesUsadas.push(s.id);
+    if (marcar) reunionesLeidas.push({ fuente: `S${i + 1}`, clave: `meet:${s.id}`, etiqueta, id: s.id, origen: "meet", fecha: s.date.toISOString(), titulo: s.title });
     // Sin transcripción (solo el resumen) no se marca: se vuelve a leer cuando llegue.
     if (marcar && s.transcript) leidas.sesiones.push(s.id);
   });
@@ -302,16 +335,32 @@ export async function leerFuentes(opts: {
       : { cuantos: 3 },
   );
   docs.forEach((d, i) => {
-    fuentes.push({
-      id: `M${i + 1}`,
-      etiqueta: `Lo que sumó el vendedor${d.fecha ? ` (sesión del ${fecha(d.fecha)})` : ""}: ${d.titulo}`,
-      texto: d.texto.slice(0, MAX),
-    });
-    if (marcar) leidas.documentos.push(d.id);
+    const etiqueta = `Lo que sumó el vendedor${d.fecha ? ` (sesión del ${fecha(d.fecha)})` : ""}: ${d.titulo}`;
+    fuentes.push({ id: `M${i + 1}`, etiqueta, texto: d.texto.slice(0, MAX) });
+    if (marcar) {
+      leidas.documentos.push(d.id);
+      reunionesLeidas.push({
+        fuente: `M${i + 1}`,
+        clave: `documento:${d.id}`,
+        etiqueta,
+        id: d.id,
+        origen: "documento",
+        fecha: d.fecha ?? d.createdAt.toISOString(),
+        titulo: d.titulo,
+      });
+    }
   });
 
   // ── Las notas del vendedor: lo que sabe o interpreta y no se dijo en una reunión ──
-  const notas = textoDeLasNotas(opts.notas, opts.sesiones ?? []);
+  // La pregunta de una nota por pregunta: la de la guía de esa sesión o, si no hay, la de base.
+  const preguntaDe = (sesionId: string, para: string): string | null => {
+    const guia = opts.propuesta.guias[sesionId] ?? opts.propuesta.guia;
+    const delAgente = guia?.preguntas.find((p) => p.para === para)?.pregunta;
+    if (delAgente) return delAgente;
+    if (para in PREGUNTA_DE_BASE) return PREGUNTA_DE_BASE[para as keyof typeof PREGUNTA_DE_BASE];
+    return opts.escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === para)?.pregunta ?? null;
+  };
+  const notas = textoDeLasNotas(opts.notas, opts.sesiones ?? [], preguntaDe);
   if (notas) fuentes.push({ id: "N0", etiqueta: "Notas del vendedor (su contexto y su interpretación, no palabras del cliente)", texto: notas.slice(0, MAX) });
 
   return {
@@ -323,6 +372,7 @@ export async function leerFuentes(opts: {
     leidas,
     sesionesUsadas,
     empresa: empresa ? { pais: empresa.pais, empleados: empresa.empleados } : null,
+    reunionesLeidas,
   };
 }
 
@@ -350,7 +400,28 @@ export async function reunionesDeLaExploracion(
         orderBy: { date: "desc" },
       })
     : [];
-  const deMeet: ReunionDeLaExploracion[] = conTranscripcion.map((s) => ({ id: s.id, titulo: s.title, fecha: s.date.toISOString(), origen: "meet", leida: leidas.has(s.id) }));
+  /* Las que casi no tienen conversación (se cortaron, o el notetaker grabó solo el saludo): la sesión
+     pregunta qué pasó con ella en vez de esperar una lectura que no va a decir nada. Se mira el
+     largo en la base y solo se trae el texto de las cortas. */
+  const cortas = new Map<string, { minutos: number | null }>();
+  if (conTranscripcion.length) {
+    const filas = await prisma.$queryRaw<{ id: string; corto: string | null }[]>`
+      SELECT "id", CASE WHEN length("transcript") < ${LARGO_DE_UNA_TRANSCRIPCION_CORTA}::int THEN "transcript" END AS "corto"
+      FROM "FirefliesSession"
+      WHERE "id" IN (${Prisma.join(conTranscripcion.map((s) => s.id))})`;
+    for (const f of filas) {
+      const c = f.corto ? transcripcionCorta(f.corto) : null;
+      if (c) cortas.set(f.id, c);
+    }
+  }
+  const deMeet: ReunionDeLaExploracion[] = conTranscripcion.map((s) => ({
+    id: s.id,
+    titulo: s.title,
+    fecha: s.date.toISOString(),
+    origen: "meet",
+    leida: leidas.has(s.id),
+    ...(cortas.has(s.id) ? { corta: cortas.get(s.id)! } : {}),
+  }));
   const docsLeidos = new Set(opts.propuesta.leidas.documentos);
   const aMano: ReunionDeLaExploracion[] = (await listarDocumentos(opts.exploracionId)).map((d) => ({
     id: d.id,

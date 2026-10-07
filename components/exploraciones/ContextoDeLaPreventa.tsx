@@ -15,7 +15,7 @@
  * Con `?sumar=1` (la preventa que se abre «Con una transcripción») arranca abierto y con el
  * formulario de las fuentes manuales a la vista.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ContextColumn,
@@ -39,10 +39,27 @@ const DE_DONDE = {
   documento: "Sumada a mano",
 } as const;
 
+/** El evento con que otra pieza abre el «Contexto adicional» (el «Después» de una sesión sin transcripción). */
+const EVENTO_ABRIR = "preventa:abrir-contexto";
+
+/** Abre el «Contexto adicional» y lo trae a la vista, desde cualquier pieza del lienzo. */
+export function abrirElContextoAdicional() {
+  window.dispatchEvent(new Event(EVENTO_ABRIR));
+}
+
 export default function ContextoDeLaPreventa() {
   const { exp, reuniones, documentos, puedeEditar, cambiar } = useLienzo();
   const sumarAlAbrir = useSearchParams().get("sumar") === "1";
   const [abierto, setAbierto] = useState(sumarAlAbrir);
+  const caja = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const abrir = () => {
+      setAbierto(true);
+      caja.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    window.addEventListener(EVENTO_ABRIR, abrir);
+    return () => window.removeEventListener(EVENTO_ABRIR, abrir);
+  }, []);
 
   // Las sumadas a mano ya están en su columna: acá van solo las de Meet y HubSpot, la más nueva arriba.
   const deCalendario = reuniones
@@ -59,7 +76,7 @@ export default function ContextoDeLaPreventa() {
   ].join(" · ");
 
   return (
-    <div data-recorrido="preventa.contexto">
+    <div ref={caja} data-recorrido="preventa.contexto">
       <ContextoAdicional
         abierto={abierto}
         onAlternar={() => setAbierto((v) => !v)}

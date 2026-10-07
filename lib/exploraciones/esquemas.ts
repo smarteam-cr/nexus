@@ -37,6 +37,7 @@ import {
   FUENTES_DEL_NIVEL,
   MAX_CASOS_DESCARTADOS,
   MAX_DESCARTADAS,
+  MAX_LECTURAS,
   MODOS_DE_LA_CORRIDA,
   MOTIVOS_PARA_EXPLORAR,
   NIVELES,
@@ -51,6 +52,7 @@ import {
   type EstimadoGuardado,
   type FotoAlProponer,
   type ItemPropuesto,
+  type LecturaDeReunion,
   type Medicion,
   type Operacion,
   type PropuestaDeExploracion,
@@ -61,10 +63,12 @@ import {
   MAX_PARA_EXPLORAR,
   MAX_SESIONES,
   REPREGUNTAS_POR_PREGUNTA,
+  RESULTADOS_DE_LA_SESION,
   TIPOS_DE_OBJECION,
   type GuiaDeLaSesion,
   type SesionPlaneada,
 } from "./guia";
+import { MAX_CLAVE_DE_NOTA } from "./notas-de-sesion";
 
 const texto = (max: number) => z.string().trim().max(max);
 const textoLleno = (max: number) => z.string().trim().min(1).max(max);
@@ -295,6 +299,15 @@ export const SesionPlaneadaSchema: z.ZodType<SesionPlaneada> = z.object({
   hecha: z.boolean().optional(),
   reunion: z.object({ id: z.string().min(1).max(60), origen: z.enum(["meet", "hubspot", "documento"]) }).optional(),
   explorar: z.array(textoLleno(600)).max(MAX_PARA_EXPLORAR).optional(),
+  explorarDe: z
+    .record(z.string().max(600), z.string().regex(/^s-[a-z0-9]{1,24}$/))
+    .refine((r) => Object.keys(r).length <= MAX_PARA_EXPLORAR)
+    .optional(),
+  objetivo: textoLleno(400).optional(),
+  objetivoDescartado: textoLleno(400).optional(),
+  resultado: z.enum(RESULTADOS_DE_LA_SESION).optional(),
+  pasaron: z.array(z.string().min(1).max(40)).max(20).optional(),
+  hechas: z.array(z.string().min(1).max(40)).max(20).optional(),
 });
 
 export const OperacionSchema = z.discriminatedUnion("op", [
@@ -306,7 +319,7 @@ export const OperacionSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("perfil"), cierre: ENUM_CIERRE.nullable(), despues: ENUM_DESPUES.nullable() }),
   z.object({ op: z.literal("edicion"), edicion: z.string().max(60).nullable() }),
   z.object({ op: z.literal("restablecerEscala"), sugerida: EscalaSugeridaSchema }),
-  z.object({ op: z.literal("nota"), paso: z.string().min(1).max(40), texto: z.string().max(4000) }),
+  z.object({ op: z.literal("nota"), paso: z.string().min(1).max(MAX_CLAVE_DE_NOTA), texto: z.string().max(4000) }),
   z.object({ op: z.literal("sesiones"), sesiones: z.array(SesionPlaneadaSchema).max(MAX_SESIONES) }),
   z.object({ op: z.literal("medicion"), medicion: MedicionSchema }),
   z.object({ op: z.literal("sinPortal"), valor: z.boolean() }),
@@ -359,12 +372,14 @@ const PreguntaDeLaGuiaSchema = z.object({
   para: z.string().min(1).max(40),
   pregunta: textoDeGuia(400),
   repreguntas: z.array(textoDeGuia(300)).max(REPREGUNTAS_POR_PREGUNTA),
+  abierto: z.string().min(1).max(600).optional(),
 });
 const GuiaSchema: z.ZodType<GuiaDeLaSesion> = z.object({
   en: z.string().max(40),
   corridaId: z.string().max(60).nullable(),
   huecos: z.array(z.string().max(40)).max(20),
   enfoque: z.array(z.string().max(20)).max(20),
+  objetivo: textoDeGuia(400).nullable().optional(),
   apertura: z.array(textoDeGuia(400)).max(4),
   escalaEnSimple: textoDeGuia(800).nullable(),
   preguntas: z.array(PreguntaDeLaGuiaSchema).max(MAX_PREGUNTAS_EN_LA_GUIA),
@@ -438,7 +453,7 @@ export function leerContenido(raw: unknown): ContenidoDeExploracion {
   c.falta = registroValido(raw.falta, ID_CRITERIO, EstadoDeCriterioSchema);
   c.aExplorar = registroValido(raw.aExplorar, ID_DIMENSION, AExplorarSchema);
   c.razonesDeAreas = registroValido(raw.razonesDeAreas, ID_AREA, z.string().max(300));
-  c.notas = registroValido(raw.notas, z.string().max(40), z.string().max(4000));
+  c.notas = registroValido(raw.notas, z.string().max(MAX_CLAVE_DE_NOTA), z.string().max(4000));
   if (Array.isArray(raw.sesiones)) {
     c.sesiones = raw.sesiones
       .map((s) => SesionPlaneadaSchema.safeParse(s))
@@ -479,6 +494,21 @@ const AlertaTecnicaSchema = z.object({
   vista: z.boolean().optional(),
 });
 
+const LecturaDeReunionSchema: z.ZodType<LecturaDeReunion> = z.object({
+  etiqueta: z.string().max(300),
+  resumen: z.string().max(1200),
+  objetivo: z.string().max(400).optional(),
+  cobertura: z
+    .array(z.object({ para: z.string().max(40), pregunta: z.string().max(400), respondida: z.boolean(), detalle: z.string().max(300).optional() }))
+    .max(16),
+  listosAntes: z.array(z.string().max(40)).max(12),
+  en: z.string().max(40),
+  corridaId: z.string().max(60),
+});
+
+/** La clave de una reunión en `lecturas` (contenido.ts › `claveDeLaReunion`). */
+const CLAVE_DE_LECTURA = z.string().regex(/^(meet|hubspot|documento):.{1,80}$/);
+
 export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   const p = propuestaVacia();
   if (!esObjeto(raw)) return p;
@@ -510,6 +540,7 @@ export function leerPropuesta(raw: unknown): PropuestaDeExploracion {
   p.guias = registroValido(raw.guias, z.string().regex(/^s-[a-z0-9]{1,24}$/), GuiaSchema);
   const tecnica = AlertaTecnicaSchema.safeParse(raw.alertaTecnica);
   p.alertaTecnica = tecnica.success ? tecnica.data : null;
+  p.lecturas = Object.fromEntries(Object.entries(registroValido(raw.lecturas, CLAVE_DE_LECTURA, LecturaDeReunionSchema)).slice(-MAX_LECTURAS));
   if (!Array.isArray(raw.items)) return p;
   const items: ItemPropuesto[] = [];
   for (const it of raw.items) {

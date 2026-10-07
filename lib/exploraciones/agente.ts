@@ -40,15 +40,18 @@ import {
   type Lectura,
 } from "./agente-pedido";
 import { exploracionParaLosCasos } from "./casos-de-uso";
+import { listaParaProponer } from "./calidad";
 import {
   cambioLoConfirmado,
   claveDelDestino,
   destinoValido,
   fusionarPropuestas,
   industriaDelVendedor,
+  MAX_LECTURAS,
   propuestaVigente,
   type EstadoDeExploracion,
   type ItemPropuesto,
+  type LecturaDeReunion,
   type ModoDeLaCorrida,
 } from "./contenido";
 import type { EscalaDelLienzo } from "./escala-del-lienzo";
@@ -57,14 +60,15 @@ import { leerFuentes, type LoQueSeLeyo } from "./fuentes";
 import { agendaRenovada, debeLeerSola } from "./lectura";
 import { hoyEnCostaRica } from "./fechas";
 import { bloqueDeInstrucciones } from "./notas-de-sesion";
-import { contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia } from "./guia-pedido";
-import type { GuiaDeLaSesion } from "./guia";
+import { avisoDeVoseo, contextoDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaGuia } from "./guia-pedido";
+import { focoDeLaGuia, preguntasParaMostrar, reunionDeLaSesion, type GuiaDeLaSesion } from "./guia";
 import { leerEmpresa } from "./hubspot";
 import { leerLoLeido, type LoLeidoDeHubspot } from "./lo-leido";
 import { leerLaRadiografia, pedidoDeLaRadiografia } from "./radiografia-pedido";
 import { posicionesDelMapa } from "./mapa";
 import {
   bloquearFila,
+  chequeoDe,
   datosParaGuardar,
   escalaDeLaExploracion,
   escalaParaExplorar,
@@ -101,6 +105,8 @@ interface LoQueLeyoLaCorrida {
   noOcurrieron?: readonly string[];
   /** Al leer: si la reunión más reciente se puso técnica. undefined = no se toca la alerta guardada. */
   tecnica?: Lectura["tecnica"];
+  /** Al leer: lo que el agente dijo de cada reunión, por su clave (contenido.ts › `claveDeLaReunion`). */
+  lecturas?: Record<string, LecturaDeReunion>;
 }
 
 /** Un fallo con un mensaje que ya está escrito para el vendedor (no hace falta traducirlo). */
@@ -239,6 +245,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       fuentes: leido.fuentes,
       hoy: new Date().toISOString(),
       proxima: leido.agenda[0] ?? null,
+      ...(modo === "leer" ? planDeLaLectura(estado, escala, leido, posicionesDelMapa(estado, pendientesVigentes(estado, escalaVig.general, escala))) : {}),
     };
 
     /* Al preparar, primero la radiografía: el agente investiga la empresa en internet. Lo que
@@ -262,6 +269,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
     let deLaIA: ItemPropuesto[] = [];
     let descartadas = 0;
     let tecnica: Lectura["tecnica"];
+    let lecturas: Record<string, LecturaDeReunion> | undefined;
     const hayQueLeer = modo === "preparar" ? leido.fuentes.length > 0 : leido.fuentes.some((f) => /^[SHM]\d/.test(f.id));
     if (hayQueLeer) {
       await fase(runId, "Pensando qué proponer…");
@@ -279,6 +287,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
       deLaIA = r.items;
       descartadas = r.descartadas;
       tecnica = r.tecnica;
+      if (modo === "leer") lecturas = lecturasDeLaCorrida(r.reuniones ?? [], { estado, escala, leido, ctx, runId });
     }
 
     await fase(runId, "Guardando lo propuesto…");
@@ -291,6 +300,7 @@ async function correr(runId: string, exploracionId: string, modo: ModoDelAgente,
         foto: { tests: leido.tests, agenda: leido.agenda, correosSinPermiso: leido.correosSinPermiso },
         noOcurrieron: leido.noOcurrieron ?? [],
         tecnica,
+        lecturas,
       },
       { runId, modo, automatica: opts.automatica === true },
     );
@@ -589,21 +599,90 @@ async function armarGuia(runId: string, exploracionId: string, opts: OpcionesDeL
     conTest: loLeido.tests.length > 0,
     hoy: hoyEnCostaRica(ahora),
   });
-  const respuesta = await conContextoDeIA(
-    {
-      agentSlug: AGENTE_DE_LA_EXPLORACION,
-      agentRunId: runId,
-      clientId: fila.clientId,
-      triggeredByEmail: opts.triggeredByEmail,
-      origen: "exploraciones/agente:guia",
-    },
-    () => getAnthropic().messages.create(pedidoDeLaGuia(ctx)),
-  );
-  const guia = leerLaGuiaDelAgente(respuesta, ctx, runId, ahora);
+  const pedir = (aviso = "") =>
+    conContextoDeIA(
+      {
+        agentSlug: AGENTE_DE_LA_EXPLORACION,
+        agentRunId: runId,
+        clientId: fila.clientId,
+        triggeredByEmail: opts.triggeredByEmail,
+        origen: "exploraciones/agente:guia",
+      },
+      () => {
+        const pedido = pedidoDeLaGuia(ctx);
+        return getAnthropic().messages.create(aviso ? { ...pedido, system: `${pedido.system as string}${aviso}` } : pedido);
+      },
+    );
+  let guia = leerLaGuiaDelAgente(await pedir(), ctx, runId, ahora);
   if (!guia) return 0;
+  /* El vendedor lee la guía en voz alta: tiene que estar en tuteo. La de CreditForce (2026-10-01) salió
+     en voseo («vivís», «podés») porque las fuentes lo estaban: si pasa, se pide una vez más avisándolo. */
+  const voseo = voseoEnLaGuia(guia);
+  if (voseo.length) {
+    const otra = leerLaGuiaDelAgente(await pedir(avisoDeVoseo(voseo)), ctx, runId, ahora);
+    if (otra && voseoEnLaGuia(otra).length < voseo.length) guia = otra;
+  }
   // Se guarda como la de su sesión, si la próxima está planeada: así su «antes» queda aunque pase.
   await guardarGuia(exploracionId, guia, registrar ? { runId, automatica: opts.automatica === true } : null, ctx.proxima.sesionId ?? null);
   return guia.preguntas.length;
+}
+
+/**
+ * Lo que se planeó preguntar en la reunión más reciente que se lee: la guía de su sesión (o, si no se
+ * planeó la sesión, la guía viva si es de antes de la reunión) y, sin guía, las preguntas de base de lo
+ * que faltaba. Con eso el agente dice qué se respondió (rediseño de las sesiones, 2026-10-07).
+ */
+function planDeLaLectura(
+  estado: EstadoDeExploracion,
+  escala: EscalaDelLienzo,
+  leido: LoQueSeLeyo,
+  posiciones: Parameters<typeof focoDeLaGuia>[3],
+): Pick<ContextoDelPedido, "reuniones" | "planeado"> {
+  const reuniones = leido.reunionesLeidas ?? [];
+  if (!reuniones.length) return {};
+  const ultima = [...reuniones].sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+  const comoReunion = { id: ultima.id, titulo: ultima.titulo, fecha: ultima.fecha, origen: ultima.origen, leida: true };
+  const sesion = estado.contenido.sesiones.find((s) => reunionDeLaSesion(s, [comoReunion]) !== null) ?? null;
+  const viva = estado.propuesta.guia && estado.propuesta.guia.en < ultima.fecha ? estado.propuesta.guia : null;
+  const guia: GuiaDeLaSesion | null = sesion ? (estado.propuesta.guias[sesion.id] ?? null) : viva;
+  const foco = focoDeLaGuia(estado.contenido.casillas, escala, estado.areas, posiciones, estado.contenido.aExplorar);
+  const preguntas = (guia ? preguntasParaMostrar(guia, guia.huecos, guia.enfoque, escala) : preguntasParaMostrar(null, foco.huecos, foco.enfoque, escala))
+    .filter((p) => p.tipo !== "abierto")
+    .slice(0, 12)
+    .map((p) => ({ para: p.para, pregunta: p.pregunta }));
+  return {
+    reuniones: reuniones.map((r) => ({ fuente: r.fuente, etiqueta: r.etiqueta })),
+    planeado: { objetivo: sesion?.objetivo ?? guia?.objetivo ?? null, preguntas },
+  };
+}
+
+/** Lo que dijo el agente de cada reunión, por su clave. La cobertura es de la más reciente: lo planeado es de ella. */
+function lecturasDeLaCorrida(
+  dichas: NonNullable<Lectura["reuniones"]>,
+  o: { estado: EstadoDeExploracion; escala: EscalaDelLienzo; leido: LoQueSeLeyo; ctx: ContextoDelPedido; runId: string },
+): Record<string, LecturaDeReunion> {
+  const reuniones = o.leido.reunionesLeidas ?? [];
+  const ultima = [...reuniones].sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+  const listosAntes = listaParaProponer(o.estado, chequeoDe(o.escala, o.estado))
+    .filter((p) => p.cumplido)
+    .map((p) => p.id);
+  const en = new Date().toISOString();
+  const out: Record<string, LecturaDeReunion> = {};
+  for (const d of dichas) {
+    const r = reuniones.find((x) => x.fuente === d.fuente);
+    if (!r) continue;
+    const esLaUltima = r.clave === ultima?.clave;
+    out[r.clave] = {
+      etiqueta: r.etiqueta.slice(0, 300),
+      resumen: d.resumen,
+      ...(esLaUltima && o.ctx.planeado?.objetivo ? { objetivo: o.ctx.planeado.objetivo } : {}),
+      cobertura: esLaUltima ? d.cobertura : [],
+      listosAntes,
+      en,
+      corridaId: o.runId,
+    };
+  }
+  return out;
 }
 
 /** Guarda la guía con la fila bloqueada (solo la mitad del agente: lo confirmado no se toca). */
@@ -679,6 +758,8 @@ async function guardar(
       ...(leido.tecnica !== undefined
         ? { alertaTecnica: leido.tecnica ? { ...leido.tecnica, en: ahora.toISOString(), corridaId: corrida.runId } : null }
         : {}),
+      // Lo que dijo de cada reunión: la nueva lectura de una reunión reemplaza a la anterior.
+      ...(leido.lecturas ? { lecturas: Object.fromEntries(Object.entries({ ...fusion.lecturas, ...leido.lecturas }).slice(-MAX_LECTURAS)) } : {}),
       corridas: [
         ...fusion.corridas,
         {

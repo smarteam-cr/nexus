@@ -17,9 +17,16 @@ import {
   focoDeLaGuia,
   guiaVieja,
   huecosDelResumen,
+  loQueTraes,
+  nombreDeLaPestana,
   OBJECIONES_DE_BASE,
+  ordenDeLaConversacion,
+  paraDeUnAbierto,
   pestanasDeSesiones,
   preguntasParaMostrar,
+  procedenciasDeLaSesion,
+  separarPregunta,
+  transcripcionCorta,
   PRIORIDAD_DE_LAS_TARJETAS,
   proximaReunion,
   reunionDeLaSesion,
@@ -28,7 +35,7 @@ import {
   TIPOS_DE_OBJECION,
   type ReunionDeLaExploracion,
 } from "./guia";
-import { contextoDeLaGuia, herramientaDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, type ContextoDeLaGuia } from "./guia-pedido";
+import { contextoDeLaGuia, herramientaDeLaGuia, leerLaGuiaDelAgente, pedidoDeLaGuia, voseoEnLaGuia, type ContextoDeLaGuia } from "./guia-pedido";
 import type { PosicionEnElMapa } from "./mapa";
 
 function dim(id: string, capa: ClaveDeCapa, aplica = true): DimensionDelLienzo {
@@ -254,7 +261,8 @@ describe("una pestaña por sesión (Elías, 2026-10-03)", () => {
       hoy: "2026-10-03",
     });
     expect(c.paraExplorar).toEqual(["Dijo que el gerente no confía en el CRM"]);
-    expect(String(pedidoDeLaGuia(c).messages[0].content)).toContain("LO QUE EL VENDEDOR SE LLEVÓ DE LA SESIÓN ANTERIOR");
+    expect(String(pedidoDeLaGuia(c).messages[0].content)).toContain("LO QUE EL VENDEDOR SE LLEVÓ DE UNA SESIÓN ANTERIOR");
+    expect(String(pedidoDeLaGuia(c).messages[0].content)).toContain("- A1: Dijo que el gerente no confía en el CRM");
   });
 
   it("la sesión guarda su reunión y lo que se lleva; la guía de cada sesión se lee de lo guardado", () => {
@@ -416,5 +424,152 @@ describe("⭐ cada sesión dice si ya ocurrió (2026-10-06)", () => {
     expect(estadoDeLaSesion({ clave: "s-c", hecha: false }, "s-b")).toBe("despues");
     // Una que ya pasó nunca es «la próxima», aunque la clave coincida.
     expect(estadoDeLaSesion({ clave: "s-b", hecha: true }, "s-b")).toBe("ocurrio");
+  });
+});
+
+describe("⭐ las sesiones se encadenan (rediseño del 2026-10-07)", () => {
+  // CreditForce: la revisión del 28 sep, la del 2 oct que se cortó a los 6 minutos y la próxima.
+  const reuniones: ReunionDeLaExploracion[] = [
+    { id: "m1", titulo: "Revisión de Diagnóstico de Rendimiento", fecha: "2026-09-28T15:00:00Z", origen: "meet", leida: true },
+    { id: "m2", titulo: "Comenzando el camino", fecha: "2026-10-02T14:00:00Z", origen: "meet", leida: true, corta: { minutos: 6 } },
+  ];
+  const ABIERTO = "Adriana dijo que el liderazgo revisa números en hojas manuales. Qué preguntar: ¿Quién consolida los números antes de cada revisión?";
+
+  it("lo llevado dice de qué sesión viene; sin el dato, de la última que dejó qué leer (no de la que se cortó)", () => {
+    const sesiones = [{ id: "s-prox", explorar: [ABIERTO] }];
+    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07");
+    const prox = p.find((x) => x.clave === "s-prox")!;
+    expect(procedenciasDeLaSesion(prox, p).abiertos.get(ABIERTO)).toBe(1);
+    const conOrigen = pestanasDeSesiones([{ id: "s-prox", explorar: [ABIERTO], explorarDe: { [ABIERTO]: "s-dos" } }, { id: "s-dos", reunion: { id: "m2", origen: "meet" } }], reuniones, "2026-10-07");
+    expect(procedenciasDeLaSesion(conOrigen.find((x) => x.clave === "s-prox")!, conOrigen).abiertos.get(ABIERTO)).toBe(2);
+  });
+
+  it("lo que tenía preparado una sesión cortada pasa a la próxima, con su número", () => {
+    const sesiones = [
+      { id: "s-dos", reunion: { id: "m2", origen: "meet" as const }, resultado: "cortada" as const, pasaron: ["metas", "tiempos"] },
+      { id: "s-prox" },
+    ];
+    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07");
+    const prox = p.find((x) => x.clave === "s-prox")!;
+    const proc = procedenciasDeLaSesion(prox, p);
+    expect(proc.pasaron.get("metas")).toBe(2);
+    const preguntas = preguntasParaMostrar(null, ["metas", "autoridad", "tiempos", "presupuesto"], ["1.3"], ESCALA, proc);
+    expect(preguntas.find((x) => x.para === "metas")!.procedencia).toEqual({ tipo: "paso", numero: 2 });
+    expect(preguntas.find((x) => x.para === "autoridad")!.procedencia).toBeUndefined();
+  });
+
+  it("una pregunta del agente que retoma lo llevado lo lleva adentro; lo que ninguna retoma va como su propia pregunta", () => {
+    const abiertos = new Map([[ABIERTO, 1], ["Otro punto suelto", 1]]);
+    const guia = { preguntas: [{ para: "1.3", pregunta: "¿Quién consolida los números?", repreguntas: [], abierto: ABIERTO }] };
+    const p = preguntasParaMostrar(guia, ["metas"], ["1.3"], ESCALA, { abiertos, pasaron: new Map() });
+    expect(p.find((x) => x.para === "1.3")!.procedencia).toEqual({ tipo: "abierto", numero: 1 });
+    const suelta = p.find((x) => x.tipo === "abierto")!;
+    expect(suelta).toMatchObject({ pregunta: "Otro punto suelto", para: paraDeUnAbierto("Otro punto suelto"), procedencia: { tipo: "abierto", numero: 1 } });
+    expect(p.filter((x) => x.tipo === "abierto")).toHaveLength(1);
+    expect(paraDeUnAbierto("Otro punto suelto")).toBe(paraDeUnAbierto("Otro punto suelto"));
+  });
+
+  it("en orden: primero lo que viene de antes, después la venta y la escala alternadas, el presupuesto al final", () => {
+    const q = (para: string, tipo: "tarjeta" | "dimension", procedencia?: { tipo: "abierto" | "paso"; numero: number }) => ({ para, tipo, pregunta: para, repreguntas: [], ...(procedencia ? { procedencia } : {}) });
+    const orden = ordenDeLaConversacion([
+      q("metas", "tarjeta", { tipo: "paso", numero: 2 }),
+      q("autoridad", "tarjeta", { tipo: "abierto", numero: 1 }),
+      q("tiempos", "tarjeta"),
+      q("presupuesto", "tarjeta", { tipo: "paso", numero: 2 }),
+      q("1.3", "dimension", { tipo: "abierto", numero: 1 }),
+      q("1.4", "dimension"),
+      q("2.1", "dimension"),
+    ]).map((x) => x.para);
+    expect(orden).toEqual(["metas", "1.3", "autoridad", "tiempos", "1.4", "2.1", "presupuesto"]);
+  });
+
+  it("lo que traes: lo llevado, la sesión cortada y la alerta técnica, cada uno con qué cambia hoy", () => {
+    const sesiones = [
+      { id: "s-dos", reunion: { id: "m2", origen: "meet" as const }, resultado: "cortada" as const, pasaron: ["metas", "tiempos"] },
+      { id: "s-prox", explorar: [ABIERTO] },
+    ];
+    const p = pestanasDeSesiones(sesiones, reuniones, "2026-10-07");
+    const filas = loQueTraes(p.find((x) => x.clave === "s-prox")!, p, {
+      nombreDe: (para) => ({ metas: "Metas", tiempos: "Tiempos" })[para] ?? para,
+      tecnica: { reunion: "Reunión del 28 sep 2026: Revisión de Diagnóstico de Rendimiento", temas: ["Integración"] },
+    });
+    expect(filas.map((f) => [f.numero, f.estado])).toEqual([
+      [1, "ya ocurrió"],
+      [2, "se cortó"],
+    ]);
+    expect(filas[0].lineas.map((l) => l.consecuencia)).toEqual(["va primero en la guía.", "«Con quién» pide sumar a alguien técnico."]);
+    expect(filas[0].lineas[0].texto).toBe("Te llevaste 1 pregunta: quién consolida los números antes de cada revisión.");
+    expect(filas[1].lineas[0].texto).toBe("Se cortó y no dejó qué leer. Lo que tenía preparado, metas y tiempos, quedó sin preguntar.");
+  });
+
+  it("la que no se hizo no lleva número: las demás se cuentan sin ella", () => {
+    const p = pestanasDeSesiones([{ id: "s-dos", reunion: { id: "m2", origen: "meet" }, resultado: "noSeHizo" }, { id: "s-prox" }], reuniones, "2026-10-07");
+    expect(p.map((x) => [x.clave, x.numero, nombreDeLaPestana(x)])).toEqual([
+      ["r-meet-m1", 1, "Sesión 1"],
+      ["s-dos", 0, "No se hizo"],
+      ["s-prox", 2, "Sesión 2"],
+    ]);
+  });
+
+  it("una transcripción sin conversación es corta, con dónde termina; una con conversación no", () => {
+    const corta = `Credit force: Comenzando el camino - Transcripción
+00:00:04
+
+Smarteam's Notetaker: Esta reunión está siendo grabada.
+Andrés Pinzón: Sí. Ok.
+
+
+La transcripción finalizó después de 00:06:26`;
+    expect(transcripcionCorta(corta)).toEqual({ minutos: 6 });
+    expect(transcripcionCorta("Ana: " + "hablamos del pipeline y de los datos. ".repeat(20))).toBeNull();
+    expect(transcripcionCorta("x".repeat(5000))).toBeNull();
+  });
+
+  it("la sesión guarda su objetivo, qué pasó, lo que pasó a la próxima, lo hecho y de dónde viene lo llevado", () => {
+    const s = { id: "s-x", objetivo: "Saber quién decide", resultado: "cortada", pasaron: ["metas"], hechas: ["1.3"], explorar: ["Algo"], explorarDe: { Algo: "s-y" } };
+    expect(leerContenido({ sesiones: [s] }).sesiones).toEqual([s]);
+    expect(leerContenido({ sesiones: [{ ...s, resultado: "otra cosa" }] }).sesiones).toEqual([]);
+    expect(CambiosSchema.safeParse({ version: 1, operaciones: [{ op: "nota", paso: "sesion:s-mgw2b8x0abcd:consecuencias", texto: "Pierden 3 de cada 10" }] }).success).toBe(true);
+  });
+
+  it("separa lo que se dijo de la pregunta para cerrarlo", () => {
+    expect(separarPregunta(ABIERTO)).toEqual({ dicho: "Adriana dijo que el liderazgo revisa números en hojas manuales.", pregunta: "¿Quién consolida los números antes de cada revisión?" });
+    expect(separarPregunta("Solo lo dicho")).toEqual({ dicho: "Solo lo dicho", pregunta: null });
+  });
+});
+
+describe("⭐ la guía sugiere el objetivo y retoma lo llevado (2026-10-07)", () => {
+  it("el objetivo se lee y lo llevado se nombra A1, A2…: la pregunta que lo retoma lo guarda", () => {
+    const c = ctx({ paraExplorar: ["Dijo que el gerente no confía en el CRM"] });
+    const tool = herramientaDeLaGuia(c);
+    expect(JSON.stringify(tool.input_schema)).toContain('"abierto":{"type":"string","enum":["A1"]');
+    const g = leerLaGuiaDelAgente(
+      respuesta({
+        objetivo: "Llevar el diagnóstico a números y saber quién decide.",
+        apertura: ["Hola"],
+        preguntas: [{ para: "metas", pregunta: "¿Qué quieren lograr?", repreguntas: [], abierto: "A1" }],
+        objeciones: [],
+      }),
+      c,
+      null,
+    );
+    expect(g!.objetivo).toBe("Llevar el diagnóstico a números y saber quién decide.");
+    expect(g!.preguntas[0].abierto).toBe("Dijo que el gerente no confía en el CRM");
+    expect(leerPropuesta({ ...propuestaVacia(), guia: g }).guia).toEqual(g);
+  });
+
+  it("encuentra el voseo de una guía real (CreditForce, 1 oct) y deja pasar el tuteo y el futuro", () => {
+    const g = leerLaGuiaDelAgente(
+      respuesta({
+        apertura: ["Quiero entender qué tan cerca estuvo el diagnóstico de lo que vos vivís en el día a día."],
+        preguntas: [{ para: "metas", pregunta: "¿Confías en los números que llegás a presentar?", repreguntas: ["¿Qué podrás mostrar?"] }],
+        objeciones: [],
+      }),
+      ctx(),
+      null,
+    );
+    expect(voseoEnLaGuia(g!).sort()).toEqual(["llegás", "vivís", "vos"]);
+    const enTuteo = leerLaGuiaDelAgente(respuesta({ apertura: ["Cuéntame qué vives en el día a día."], preguntas: [], objeciones: [] }), ctx(), null);
+    expect(voseoEnLaGuia(enTuteo!)).toEqual([]);
   });
 });

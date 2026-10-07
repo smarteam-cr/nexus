@@ -50,6 +50,13 @@
   Success (permiso `preventa`, desde el 2026-10-06); armar la propuesta sigue siendo de Ventas. Se
   llamaba «Exploración de venta» hasta el 2026-10-03; la dirección y el modelo conservan ese nombre. No
   confundir con el canvas «Exploración» de un proyecto (el del CSE).
+- **Sesión de la preventa** (pieza Exploración, `SesionPlaneada`): una reunión con el prospecto, en tres momentos.
+  **Antes**: el objetivo (lo sugiere el agente), cuándo y con quién, lo que traes de las sesiones anteriores y la
+  guía (abrir, preguntar, cerrar). **Durante**: cada pregunta con su casilla de hecha y lo que respondió, las notas
+  libres y el siguiente paso. **Después**: lo que leyó el agente de esa reunión (resumen y qué se respondió), lo que
+  sugiere y **Quedó abierto**. Una pregunta que viene de antes lleva su etiqueta: **«Quedó abierto en la sesión N»**
+  (el vendedor la marcó para llevar) o **«Pasó de la sesión N»** (esa sesión se cortó). Una sesión sin
+  conversación pregunta qué pasó: otro canal, se cortó o no se hizo. Ver DECISIONS §Las sesiones de la preventa.
 - **Exploración** (canvas "Exploración", `agent-exploracion-canvas`): guía **INTERNA** por
   proyecto para descubrir el negocio del cliente cuando el kickoff ya pasó — qué hay que
   entender, cómo preguntarlo, en qué orden y a quién del cliente involucrar en cada sesión.

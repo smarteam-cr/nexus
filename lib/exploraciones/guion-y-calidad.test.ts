@@ -9,14 +9,14 @@ vi.mock("@/lib/hubspot/client", () => ({ getSystemHubspotClient: async () => ({}
 
 import { calcularChequeo, type AreaParaChequeo } from "@/lib/escala/chequeo";
 import type { Letra } from "@/lib/escala/documento/tipos";
-import { listaParaProponer, queSigue, queSigueConPaso } from "./calidad";
+import { listaParaProponer, queSigue, queSigueConPaso, siguientePasoVigente } from "./calidad";
 import { contenidoVacio, propuestaVacia, type EstadoDeExploracion } from "./contenido";
 import { aFecha, diaConAnio, diaCorto } from "./fechas";
 import { esDeLaEmpresa } from "./hubspot";
 import { agendadasQueYaPasaron, agendaRenovada, debeLeerSola, PASADAS_QUE_CONSERVA_LA_FOTO, reunionesDeHubspotQueYaPasaron } from "./lectura";
 import { calcularMetricas } from "./metricas";
 import { industriaLegible, sugerirEdicion } from "./industria";
-import { claveDeNotaDeSesion, rotuloDeLaNota } from "./notas-de-sesion";
+import { claveDeNotaDePregunta, claveDeNotaDeSesion, MAX_CLAVE_DE_NOTA, rotuloDeLaNota } from "./notas-de-sesion";
 import { minutosPara, REUNIONES } from "./sesion";
 
 describe("el guion", () => {
@@ -136,8 +136,16 @@ describe("lista para proponer el land", () => {
     // Una sola dimensión dicha por el cliente, debajo de Funcional: alcanza para saber qué frena.
     const una = calcularChequeo([area()], { "1.4": { nivel: "I" as Letra } });
     expect(una.completo).toBe(false);
-    expect(listaParaProponer(e, una).every((p) => p.cumplido)).toBe(true);
-    expect(queSigue(e, una)).toMatch(/Lista para proponer el land/);
+    expect(listaParaProponer(e, una, "2026-10-05").every((p) => p.cumplido)).toBe(true);
+    expect(queSigue(e, una, [], "2026-10-05")).toMatch(/Lista para proponer el land/);
+  });
+
+  it("un siguiente paso que ya pasó no cuenta: hay que agendar otro (CreditForce, 2026-10-07)", () => {
+    const e = estado({ contenido: { ...contenidoVacio(), casillas: { siguientePaso: { que: "Revisión", fecha: "2026-09-28" } } } });
+    expect(listaParaProponer(e, chequeoCon("FFFIIII"), "2026-10-07").find((p) => p.id === "siguientePaso")!.cumplido).toBe(false);
+    expect(listaParaProponer(e, chequeoCon("FFFIIII"), "2026-09-28").find((p) => p.id === "siguientePaso")!.cumplido).toBe(true);
+    expect(siguientePasoVigente({ fecha: "2026-10-08" }, "2026-10-07")).toBe(true);
+    expect(siguientePasoVigente(undefined, "2026-10-07")).toBe(false);
   });
 
   it("saber qué frena pide una dimensión DEBAJO de Funcional: todo en Funcional no dice qué vender", () => {
@@ -303,10 +311,21 @@ describe("las notas del vendedor de cada sesión (pestaña «Durante», Elías 2
   const sesiones = [{ id: "s-uno", fecha: "2026-10-08", titulo: "Revisión del diagnóstico" }, { id: "s-dos" }];
   const dePaso = (id: string) => (id === "r1-conexion" ? "Revisión · Conexión" : null);
 
-  it("la clave cabe en el registro de notas (máx. 40) y la nota se nombra con su sesión", () => {
-    expect(claveDeNotaDeSesion("s-" + "a".repeat(24)).length).toBeLessThanOrEqual(40);
+  it("la clave cabe en el registro de notas y la nota se nombra con su sesión", () => {
+    expect(claveDeNotaDeSesion("s-" + "a".repeat(24)).length).toBeLessThanOrEqual(MAX_CLAVE_DE_NOTA);
+    // La de una pregunta también, con lo más largo a lo que apunta (una tarjeta o un punto llevado).
+    expect(claveDeNotaDePregunta("s-" + "a".repeat(24), "consecuencias").length).toBeLessThanOrEqual(MAX_CLAVE_DE_NOTA);
+    expect(claveDeNotaDePregunta("s-" + "a".repeat(24), "abierto:" + "z".repeat(7)).length).toBeLessThanOrEqual(MAX_CLAVE_DE_NOTA);
     expect(rotuloDeLaNota(claveDeNotaDeSesion("s-uno"), sesiones, dePaso)).toBe("Notas del vendedor de la sesión 1 (8 oct, Revisión del diagnóstico)");
     expect(rotuloDeLaNota(claveDeNotaDeSesion("s-dos"), sesiones, dePaso)).toBe("Notas del vendedor de la sesión 2");
+  });
+
+  it("la nota de una pregunta se nombra con la pregunta: el agente sabe a qué respondió (2026-10-07)", () => {
+    const preguntaDe = (_: string, para: string) => (para === "metas" ? "¿Qué quieren lograr este año?" : null);
+    expect(rotuloDeLaNota(claveDeNotaDePregunta("s-uno", "metas"), sesiones, dePaso, preguntaDe)).toBe(
+      "Notas del vendedor de la sesión 1 (8 oct, Revisión del diagnóstico), sobre lo que respondió el cliente a «¿Qué quieren lograr este año?»",
+    );
+    expect(rotuloDeLaNota(claveDeNotaDePregunta("s-dos", "1.3"), sesiones, dePaso, preguntaDe)).toBe("Notas del vendedor de la sesión 2, sobre lo que respondió el cliente a lo que apunta a 1.3");
   });
 
   it("una sesión borrada no se pierde, y las notas del guion viejo se siguen nombrando con su paso", () => {

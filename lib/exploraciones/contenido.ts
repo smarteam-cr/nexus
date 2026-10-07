@@ -310,6 +310,44 @@ export interface PropuestaDeExploracion {
    * La reemplaza cada lectura que dice algo de la reunión más reciente; null = no se puso técnica.
    */
   alertaTecnica: AlertaTecnica | null;
+  /**
+   * Lo que el agente leyó de cada reunión (rediseño de las sesiones, 2026-10-07): su resumen y qué
+   * se respondió de lo que se planeó preguntar. Por reunión: `meet:<id>`, `hubspot:<id>`,
+   * `documento:<id>` (`claveDeLaReunion`). Las últimas 24.
+   */
+  lecturas: Record<string, LecturaDeReunion>;
+}
+
+/** La clave de una reunión en `lecturas`: su origen y su id. */
+export function claveDeLaReunion(r: { origen: string; id: string }): string {
+  return `${r.origen}:${r.id}`;
+}
+
+export const MAX_LECTURAS = 24;
+
+/** Una pregunta de lo planeado para una reunión, y si se respondió en ella. */
+export interface CoberturaDeLaPregunta {
+  /** A qué apunta: una tarjeta del resumen o una dimensión (`1.3`). */
+  para: string;
+  pregunta: string;
+  respondida: boolean;
+  /** Lo que respondió, en pocas palabras (solo si se respondió). */
+  detalle?: string;
+}
+
+/** Lo que el agente leyó de una reunión. */
+export interface LecturaDeReunion {
+  /** Cómo la nombró la corrida («Reunión del 28 sep: …»): así se encuentra lo que sugirió de ella. */
+  etiqueta: string;
+  /** Dos o tres frases: qué se habló y qué quedó. */
+  resumen: string;
+  /** El objetivo con que se planeó, si había uno. */
+  objetivo?: string;
+  cobertura: CoberturaDeLaPregunta[];
+  /** Lo que estaba listo para proponer antes de leerla (los ids de `listaParaProponer`). */
+  listosAntes: string[];
+  en: string;
+  corridaId: string;
 }
 
 /** Cuándo una conversación de venta se puso técnica, con la frase que lo muestra. */
@@ -329,7 +367,7 @@ export interface AlertaTecnica {
 }
 
 export function propuestaVacia(): PropuestaDeExploracion {
-  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [], documentos: [] }, corridas: [], guia: null, guias: {}, alertaTecnica: null };
+  return { version: 1, items: [], leidas: { sesiones: [], hubspot: [], documentos: [] }, corridas: [], guia: null, guias: {}, alertaTecnica: null, lecturas: {} };
 }
 
 /** Tope de lo pendiente: lo más viejo se cae primero. */
