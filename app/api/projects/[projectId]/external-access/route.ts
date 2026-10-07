@@ -21,6 +21,8 @@ import bcrypt from "bcrypt";
 import { evaluarContrasena } from "@/lib/external/politica-de-contrasena";
 import { guardAccessToProject } from "@/lib/auth/api-guards";
 import { prisma } from "@/lib/db/prisma";
+import { motivosParaNoPublicar } from "@/lib/projects/motivos-para-no-publicar";
+import { PUBLISH_SURFACES } from "@/lib/projects/publish-surfaces";
 
 // ── Generación de credenciales ───────────────────────────────────────────────
 
@@ -202,7 +204,8 @@ export async function GET(
   const guard = await guardAccessToProject(projectId);
   if (guard instanceof NextResponse) return guard;
 
-  const access = await prisma.projectExternalAccess.findUnique({
+  const [access, proyecto] = await Promise.all([
+    prisma.projectExternalAccess.findUnique({
     where: { projectId },
     select: {
       accessToken: true,
@@ -223,7 +226,11 @@ export async function GET(
         },
       },
     },
-  });
+    }),
+    // El encabezado del pop-up («Proyecto · Cliente») y el mensaje para el cliente.
+    prisma.project.findUnique({ where: { id: projectId }, select: { name: true, client: { select: { name: true } } } }),
+  ]);
+  const nombres = { proyecto: proyecto?.name ?? "", cliente: proyecto?.client?.name ?? "" };
 
   /* ¿Este proyecto ADMITE publicación externa? Sale del guard, que ya lo resolvió con el
      mismo row que usó para el permiso. Va también en la rama "sin acceso" para que el panel
@@ -231,11 +238,23 @@ export async function GET(
   const publicable = guard.capacidades.publicable;
 
   if (!access) {
-    return NextResponse.json({ exists: false, publicable, motivoNoPublicable: guard.motivoNoPublicable });
+    return NextResponse.json({ exists: false, publicable, motivoNoPublicable: guard.motivoNoPublicable, ...nombres });
   }
+
+  /* Por parte: desde cuándo está publicada, y por qué todavía NO se puede publicar (para
+     deshabilitar «Publicar» con el motivo antes del clic; el candado sigue en cada publish-*). */
+  const motivos = await motivosParaNoPublicar(projectId);
+  const partes = Object.fromEntries(
+    PUBLISH_SURFACES.map((s) => {
+      const publicadaEl = access.project[s.flag];
+      return [s.key, { publicadaEl: publicadaEl?.toISOString() ?? null, motivo: publicadaEl ? null : motivos[s.key] ?? null }];
+    }),
+  );
 
   return NextResponse.json({
     exists: true,
+    ...nombres,
+    partes,
     /* El panel deshabilita los toggles CON el motivo en vez de dejar que el usuario coma
        un 409. Un control deshabilitado que explica enseña; uno escondido es
        indistinguible de un bug. El gate real vive en el POST — esto es la cortesía. */

@@ -202,9 +202,6 @@ describe("candado 3 — toda capacidad la lee alguien", () => {
     vigilante:
       "El watchdog no la lee: filtra por PROYECTO_DE_CARTERA_WHERE, que hoy coincide con " +
       "`vigilante` en las tres filas. El día que se separen, esto se cobra.",
-    pestana:
-      "Es `true` en TODAS las filas por decisión explícita (nadie pierde acceso a su " +
-      "proyecto por esta tanda). Leerla sería preguntar algo cuya respuesta ya se sabe.",
   };
 
   it("cada capacidad tiene al menos un lector, o está en la deuda con su motivo", () => {

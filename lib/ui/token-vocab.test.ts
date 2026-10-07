@@ -82,7 +82,6 @@ const DEUDA_TOKENS: Record<string, number> = {
   "components/clients/ClientSharing.tsx": 28,
   "components/clients/CronogramaProgressButton.tsx": 1,
   "components/clients/DocumentUpload.tsx": 23,
-  "components/clients/ExternalAccessPanel.tsx": 3,
   "components/clients/MinuteDialog.tsx": 44,
   "components/clients/ProjectSessionsReview.tsx": 1,
   "components/clients/SectionDiscoveryModal.tsx": 37,
@@ -120,7 +119,6 @@ const DEUDA_ALERTS: Record<string, number> = {
   "components/canvas/CronogramaCanvas.tsx": 2,
   "components/clients/ClientContextCards.tsx": 1,
   "components/clients/DocumentUpload.tsx": 1,
-  "components/clients/ExternalAccessPanel.tsx": 1,
   "components/handoffs/HandoffStepper.tsx": 2,
 };
 

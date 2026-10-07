@@ -18,8 +18,8 @@
 export interface PublishSurface {
   /** La key que usa la UI. */
   key: "kickoff" | "cronograma" | "desarrollo" | "entrega" | "diagnostico" | "planificacion";
-  /** Rótulo del link en el panel de acceso. */
-  label: string;
+  /** Cómo se llama en el panel de acceso («Kickoff», «Cronograma»…). */
+  nombre: string;
   /** Directorio del endpoint bajo `app/api/projects/[projectId]/`. SIEMPRE `publish-*`. */
   endpoint: string;
   /** Campo de `Project` que marca «compartido». El chokepoint lo exige NO-null en cada lectura. */
@@ -35,27 +35,27 @@ export interface PublishSurface {
 }
 
 export const PUBLISH_SURFACES: readonly PublishSurface[] = [
-  { key: "kickoff", label: "Link Kickoff", endpoint: "publish-kickoff", flag: "kickoffPublishedAt", next: null },
-  { key: "cronograma", label: "Link Cronograma", endpoint: "publish-timeline", flag: "timelinePublishedAt", next: "cronograma" },
+  { key: "kickoff", nombre: "Kickoff", endpoint: "publish-kickoff", flag: "kickoffPublishedAt", next: null },
+  { key: "cronograma", nombre: "Cronograma", endpoint: "publish-timeline", flag: "timelinePublishedAt", next: "cronograma" },
   {
     key: "desarrollo",
-    label: "Link Requerimiento técnico",
+    nombre: "Requerimiento técnico",
     endpoint: "publish-desarrollo",
     flag: "desarrolloPublishedAt",
     next: "desarrollo",
   },
-  { key: "entrega", label: "Link Entrega", endpoint: "publish-entrega", flag: "entregaPublishedAt", next: "entrega" },
+  { key: "entrega", nombre: "Entrega", endpoint: "publish-entrega", flag: "entregaPublishedAt", next: "entrega" },
   // El diagnóstico y la planificación como entregables (2026-10-02): mismo mecanismo que la Entrega.
   {
     key: "diagnostico",
-    label: "Link Diagnóstico",
+    nombre: "Diagnóstico",
     endpoint: "publish-diagnostico",
     flag: "diagnosticoPublishedAt",
     next: "diagnostico",
   },
   {
     key: "planificacion",
-    label: "Link Planificación",
+    nombre: "Planificación",
     endpoint: "publish-planificacion",
     flag: "planificacionPublishedAt",
     next: "planificacion",
