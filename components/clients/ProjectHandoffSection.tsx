@@ -10,6 +10,7 @@
  * proyecto (SessionProject) — async + polling.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { usePathname } from "next/navigation";
 import CanvasLinearView from "@/components/canvas/CanvasLinearView";
 import ResultadosMediblesDelHandoff from "./ResultadosMediblesDelHandoff";
 import PedidosFueraDeAlcance from "@/components/clients/PedidosFueraDeAlcance";
@@ -26,7 +27,7 @@ import { BotonAzul, BotonBlanco, BotonEnlace, BotonTexto, IconoDeSugerencia, ROT
 import { FilaDeAlrededor } from "./FilaDeAlrededor";
 import { useContextoDelResumen } from "./contexto-del-resumen";
 import TagsStrip from "@/components/tags/TagsStrip";
-import type { ProjectPipelineKey } from "@/lib/projects/kind";
+import { SENTINEL_SERVICE_TYPE, type ProjectPipelineKey } from "@/lib/projects/kind";
 import { HandoffSectionSkeleton } from "./skeletons";
 import HistorialHandoffModal from "./HistorialHandoffModal";
 import { debeVerHistorial } from "@/lib/agents/historial-corridas";
@@ -216,6 +217,7 @@ export default function ProjectHandoffSection({
   const [showHistorial, setShowHistorial] = useState(false);
   const { bumpTimelineRefresh, bumpGpsRefresh, bumpCanvasRefresh } = useWorkspace();
   const toast = useToast();
+  const pathname = usePathname();
   // RBAC: solo VENTAS/CSL/MARKETING/SUPER_ADMIN editan el handoff (capacidad
   // handoffAnywhere). El CSE lo VE pero no lo genera ni edita.
   const me = useMe();
@@ -795,12 +797,13 @@ export default function ProjectHandoffSection({
       )}
 
       {/* Los resultados del cliente como lista medible (2026-10-02): la única captura de su línea
-          base y su meta — los objetivos del diagnóstico los toman de acá. La confirma el CSE del
-          proyecto (celda `handoff.confirmarResultados`), que no edita el resto del handoff. */}
+          base y su meta — los objetivos del diagnóstico los toman de acá. Desde el 2026-10-05 se
+          editan y se confirman en Información del cliente («Resultados que persigue»): acá solo se
+          leen, con el enlace para ir allá (pedido de Elías: estaban dos veces, en dos formatos). */}
       {generated && visible && (
         <FilaDeAlrededor
           titulo="Resultados que persigue el cliente"
-          ayuda="Línea base, meta y plazo de cada uno."
+          ayuda="Se leen acá; se editan y se confirman en Información del cliente."
           meta={
             cuentaDeResultados === null
               ? undefined
@@ -814,8 +817,9 @@ export default function ProjectHandoffSection({
         >
           <ResultadosMediblesDelHandoff
             projectId={projectId}
-            canEdit={canEdit}
-            canConfirm={me?.permissions?.sections?.handoff?.confirmarResultados === true}
+            canEdit={false}
+            soloLectura
+            enlaceParaEditar={`${pathname}?tab=${SENTINEL_SERVICE_TYPE}`}
             onCuenta={alContarResultados}
           />
         </FilaDeAlrededor>

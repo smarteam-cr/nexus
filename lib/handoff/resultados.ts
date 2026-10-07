@@ -22,7 +22,9 @@
  *
  * ⚠ No tira nunca: la corrida del handoff no puede fallar porque esto no salió.
  */
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { proyectoClasificableWhere } from "@/lib/projects/scope";
 import { anthropic } from "@/lib/anthropic";
 import { loadHandoffContext } from "@/lib/canvas/load-canvas-context";
 import { HANDOFF_SECCION_PRINCIPAL } from "@/lib/canvas/canvas-defs";
@@ -99,6 +101,29 @@ export type LecturaDeResultados =
 export async function resultadosDelProyecto(projectId: string): Promise<ResultadosDelHandoff | null> {
   const p = await prisma.project.findUnique({ where: { id: projectId }, select: { handoffResultados: true } });
   return leerResultadosDelHandoff(p?.handoffResultados);
+}
+
+/**
+ * Las listas de los proyectos del cliente que tienen handoff (o ya una lista), del más nuevo al más
+ * viejo. Es lo que muestra «Resultados que persigue» en Información del cliente (2026-10-05): ahí se
+ * editan y se confirman; el Resumen de cada proyecto solo las lee.
+ */
+export async function resultadosDelCliente(
+  clientId: string,
+): Promise<Array<{ projectId: string; proyecto: string; resultados: ResultadoMedible[] }>> {
+  const proyectos = await prisma.project.findMany({
+    where: proyectoClasificableWhere({
+      clientId,
+      OR: [{ handoffGeneratedAt: { not: null } }, { handoffResultados: { not: Prisma.DbNull } }],
+    }),
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, handoffResultados: true },
+  });
+  return proyectos.map((p) => ({
+    projectId: p.id,
+    proyecto: p.name,
+    resultados: leerResultadosDelHandoff(p.handoffResultados)?.resultados ?? [],
+  }));
 }
 
 /**

@@ -14,6 +14,8 @@ import {
   type FichaGuardada,
 } from "@/lib/clients/ficha";
 import { sincronizarFichaConHubspot } from "@/lib/clients/ficha-hubspot";
+import { resultadosDelCliente } from "@/lib/handoff/resultados";
+import { resultadosParaLaFicha } from "@/lib/handoff/resultados-medibles";
 
 /**
  * /api/clients/[id]/ficha — la ficha del cliente (lib/clients/ficha.ts).
@@ -23,6 +25,11 @@ import { sincronizarFichaConHubspot } from "@/lib/clients/ficha-hubspot";
  *        propósito: si HubSpot falla, lo que el CSE escribió no se pierde y se reintenta
  *        confirmando de nuevo (sin cambios, solo re-sincroniza).
  *      → { descartarPropuesta: true } borra la propuesta de la IA sin tocar lo confirmado.
+ *
+ * «Resultados que persigue» no viaja desde la pantalla: se arma acá con los resultados CONFIRMADOS
+ * de los proyectos del cliente (lib/handoff/resultados.ts › resultadosDelCliente), que se editan en
+ * la misma sección. Sin ninguno confirmado, queda lo que ya estaba confirmado (no se pisa con nada).
+ * Cada respuesta trae los proyectos con lista y ese texto, para que la pantalla los muestre.
  *
  * Solo equipo interno (guardAccessToClient exige INTERNAL): la ficha tiene campos que el cliente
  * nunca debe ver.
@@ -52,8 +59,18 @@ function empresaDelSistema(c: { hubspotCompanyId: string | null; hubspotAccount:
   return c.hubspotAccount ? null : c.hubspotCompanyId;
 }
 
-async function responder(ficha: FichaGuardada, companyId: string | null, extra: Record<string, unknown> = {}) {
-  return NextResponse.json({ ficha, hubspotUrl: await urlDeLaEmpresa(companyId), ...extra });
+/** Los proyectos con lista de resultados y el texto que saldría de los confirmados. */
+async function losResultados(clientId: string) {
+  const listas = await resultadosDelCliente(clientId);
+  return {
+    proyectosConResultados: listas.map((l) => ({ projectId: l.projectId, proyecto: l.proyecto })),
+    resultadosParaLaFicha: resultadosParaLaFicha(listas),
+  };
+}
+
+async function responder(clientId: string, ficha: FichaGuardada, companyId: string | null, extra: Record<string, unknown> = {}) {
+  const [hubspotUrl, resultados] = await Promise.all([urlDeLaEmpresa(companyId), losResultados(clientId)]);
+  return NextResponse.json({ ficha, hubspotUrl, ...resultados, ...extra });
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -63,7 +80,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const client = await cargar(id);
   if (!client) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
-  return responder(leerFicha(client.ficha), empresaDelSistema(client));
+  return responder(id, leerFicha(client.ficha), empresaDelSistema(client));
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
@@ -84,7 +101,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (body?.descartarPropuesta) {
     const nueva: FichaGuardada = { ...actual, propuesta: null };
     await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
-    return responder(nueva, companyId);
+    return responder(id, nueva, companyId);
   }
 
   // El «Descartar» de un campo: se guarda, para que el número de la pestaña se apague y la
@@ -97,11 +114,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (!claves.length) return NextResponse.json({ error: "No hay campos para descartar." }, { status: 400 });
     const nueva = quitarDeLaPropuesta(actual, claves);
     await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
-    return responder(nueva, companyId);
+    return responder(id, nueva, companyId);
   }
 
   const v = validarValores(body?.valores);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
+  // Los resultados no los escribe la pantalla: salen de los confirmados de cada proyecto.
+  const deLosProyectos = (await losResultados(id)).resultadosParaLaFicha;
+  v.valores.resultadosQuePersigue = deLosProyectos || actual.valores.resultadosQuePersigue;
   if (!fichaTieneContenido(v.valores)) {
     return NextResponse.json({ error: "La ficha está vacía: escribe al menos un campo antes de confirmar." }, { status: 400 });
   }
@@ -118,10 +138,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // Nada nuevo que escribir: si había una propuesta, confirmar sin cambios es «la revisé y me quedo
   // con lo que está», así que la propuesta se descarta.
   if (!primeraVez && !cambios.length && escritura.alDia) {
-    if (!actual.propuesta) return responder(actual, companyId, { sinCambios: true });
+    if (!actual.propuesta) return responder(id, actual, companyId, { sinCambios: true });
     const nueva: FichaGuardada = { ...actual, propuesta: null };
     await prisma.client.update({ where: { id }, data: { ficha: nueva as object } });
-    return responder(nueva, companyId, { sinCambios: true });
+    return responder(id, nueva, companyId, { sinCambios: true });
   }
 
   const autor = guard.user.teamMember?.name || guard.user.email;
@@ -159,5 +179,5 @@ export async function PUT(req: NextRequest, { params }: Params) {
     },
   };
   await prisma.client.update({ where: { id }, data: { ficha: final as object } });
-  return responder(final, companyId);
+  return responder(id, final, companyId);
 }

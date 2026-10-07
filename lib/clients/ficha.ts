@@ -59,6 +59,13 @@ export interface CampoDeFicha {
   alCliente: boolean;
   /** Si va al cliente pero con un recorte (p. ej. los stakeholders sin su postura). */
   recorteAlCliente?: string;
+  /**
+   * El campo NO se escribe a mano ni lo propone la IA de la ficha: sale de los resultados medibles
+   * de los proyectos del cliente (lib/handoff/resultados-medibles.ts), que se editan y confirman en
+   * esta misma sección. Al confirmar la ficha, su texto se arma con los resultados confirmados
+   * (decisión de Elías del 2026-10-05: los resultados estaban dos veces, en dos formatos).
+   */
+  deLosResultados?: boolean;
 }
 
 export const GRUPOS_DE_FICHA: ReadonlyArray<{ clave: GrupoDeFicha; titulo: string; bajada: string }> = [
@@ -94,19 +101,22 @@ export const CAMPOS_DE_LA_FICHA: readonly CampoDeFicha[] = [
     alCliente: true,
   },
   {
+    // Primero en «Lo que busca», arriba de los retos (pedido de Elías, 2026-10-05).
+    clave: "resultadosQuePersigue",
+    etiqueta: "Resultados que persigue",
+    ayuda:
+      "Lo que el cliente quiere lograr, medible: cómo se mide, línea base, meta y plazo. Salen del handoff de cada proyecto y se confirman acá; los objetivos del diagnóstico los toman de acá.",
+    grupo: "busca",
+    destino: { tipo: "texto", propiedad: "nexus_resultados_que_persigue" },
+    alCliente: true,
+    deLosResultados: true,
+  },
+  {
     clave: "retosEstrategicos",
     etiqueta: "Retos estratégicos",
     ayuda: "Los desafíos de negocio del cliente, más allá de este proyecto.",
     grupo: "busca",
     destino: { tipo: "texto", propiedad: "nexus_retos_estrategicos" },
-    alCliente: true,
-  },
-  {
-    clave: "resultadosQuePersigue",
-    etiqueta: "Resultados que persigue",
-    ayuda: "Lo que el cliente quiere lograr, idealmente medible: qué número, cuánto y para cuándo.",
-    grupo: "busca",
-    destino: { tipo: "texto", propiedad: "nexus_resultados_que_persigue" },
     alCliente: true,
   },
   {
@@ -339,10 +349,13 @@ export function escrituraEnHubspot(opts: {
 /** Evento de ventana que avisa «la ficha de este cliente cambió» (detail: { clientId }). */
 export const EVENTO_FICHA_CAMBIO = "nexus:ficha-cliente-cambio";
 
+/** Los campos que la IA de la ficha puede proponer (los que salen de los resultados, no). */
+export const CAMPOS_QUE_PROPONE_LA_IA: readonly CampoDeFicha[] = CAMPOS_DE_LA_FICHA.filter((c) => !c.deLosResultados);
+
 /** Los campos que la propuesta pendiente cambiaría respecto de lo confirmado (el número del aviso). */
 export function camposPropuestos(ficha: FichaGuardada): ClaveDeFicha[] {
   const p = ficha.propuesta?.valores ?? {};
-  return CAMPOS_DE_LA_FICHA.filter((c) => {
+  return CAMPOS_QUE_PROPONE_LA_IA.filter((c) => {
     const v = p[c.clave];
     return typeof v === "string" && v.trim() && v.trim() !== ficha.valores[c.clave].trim();
   }).map((c) => c.clave);
@@ -367,6 +380,8 @@ export function quitarDeLaPropuesta(ficha: FichaGuardada, claves: readonly Clave
 
 /** Lo que el agente toma como punto de partida de un campo: lo propuesto si hay, si no lo confirmado. */
 export function valorVigente(ficha: FichaGuardada, clave: ClaveDeFicha): string {
+  // Un campo que sale de los resultados no tiene propuesta que valga (las viejas se ignoran).
+  if (campoDeFicha(clave).deLosResultados) return ficha.valores[clave];
   const propuesto = ficha.propuesta?.valores[clave];
   return typeof propuesto === "string" && propuesto.trim() ? propuesto : ficha.valores[clave];
 }
@@ -396,6 +411,8 @@ export function fusionarPropuesta(
     if (!CLAVES.has(n.clave) || typeof n.valor !== "string") continue;
     const clave = n.clave as ClaveDeFicha;
     const campo = campoDeFicha(clave);
+    // Los resultados salen de la lista medible de cada proyecto, no de lo que proponga la IA.
+    if (campo.deLosResultados) continue;
     const valor = n.valor.replace(/\r\n?/g, "\n").trim().slice(0, MAX_CARACTERES_POR_CAMPO);
     if (!valor) continue;
     if (campo.destino.tipo === "lista" && !OPCIONES_DE_APERTURA.some((o) => o.valor === valor)) continue;

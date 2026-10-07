@@ -5,6 +5,7 @@ import {
   leerRespuestaDeResultados,
   leerResultadosDelHandoff,
   porValidar,
+  resultadosParaLaFicha,
   resultadosParaPrompt,
   sinDato,
   type ResultadoMedible,
@@ -106,5 +107,31 @@ describe("resultados medibles del handoff: se capturan una sola vez", () => {
     expect(t).toContain("R1 · Conocer la conversión");
     expect(t).toContain("línea base: por validar");
     expect(t).toContain("meta: 15%");
+  });
+});
+
+describe("los resultados confirmados son el campo «Resultados que persigue» de Información del cliente", () => {
+  it("solo entra lo confirmado, una viñeta por resultado, sin «por validar»", () => {
+    const texto = resultadosParaLaFicha([
+      {
+        proyecto: "CRM",
+        resultados: [
+          r("R1", "Vista 360 del cliente", { metrica: "uso semanal", meta: "80 %", plazo: "6 semanas", confirmadoAt: "2026-10-05" }),
+          r("R2", "Segmentos confiables"),
+        ],
+      },
+    ]);
+    expect(texto).toBe("- **R1** · Vista 360 del cliente — se mide con: uso semanal — meta: 80 % — plazo: 6 semanas");
+  });
+
+  it("con varios proyectos, cada uno con su nombre; sin nada confirmado, vacío", () => {
+    const ok = { confirmadoAt: "x" };
+    expect(
+      resultadosParaLaFicha([
+        { proyecto: "CRM", resultados: [r("R1", "Uno", ok)] },
+        { proyecto: "Sitio web", resultados: [r("R1", "Dos", ok)] },
+      ]),
+    ).toBe("**CRM**\n- **R1** · Uno\n\n**Sitio web**\n- **R1** · Dos");
+    expect(resultadosParaLaFicha([{ proyecto: "CRM", resultados: [r("R1", "Uno")] }])).toBe("");
   });
 });

@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   CAMPOS_DE_LA_FICHA,
   CAMPOS_EN_PROPIEDAD,
+  CAMPOS_QUE_PROPONE_LA_IA,
   PREFIJO_PROPIEDAD,
   camposPropuestos,
   camposQueCambiaron,
@@ -18,6 +19,7 @@ import {
   quitarDeLaPropuesta,
   textoAHtml,
   validarValores,
+  valorVigente,
   valoresVacios,
   type FichaGuardada,
 } from "./ficha";
@@ -234,6 +236,23 @@ describe("fusionarPropuesta: la propuesta ACUMULA", () => {
     const r = fusionarPropuesta(confirmada, [{ clave: "aperturaAsesoria", valor: "alta", fuentes: ["x"] }], "Sesiones");
     expect(camposPropuestos(r.ficha)).toEqual(["aperturaAsesoria"]);
     expect(camposPropuestos(confirmada)).toEqual([]);
+  });
+
+  it("«Resultados que persigue» sale de los resultados de cada proyecto: la IA de la ficha no lo propone, ni lo viejo cuenta", () => {
+    const r = fusionarPropuesta(confirmada, [{ clave: "resultadosQuePersigue", valor: "- vender más", fuentes: ["S-A"] }], "Sesiones");
+    expect(r.cambiados).toEqual([]);
+    const conVieja: FichaGuardada = {
+      ...confirmada,
+      propuesta: { valores: { resultadosQuePersigue: "- vender más" }, fuentes: [], fuentesPorCampo: {}, at: "", origen: "Handoff" },
+    };
+    expect(camposPropuestos(conVieja)).toEqual([]);
+    expect(valorVigente(conVieja, "resultadosQuePersigue")).toBe("");
+    expect(CAMPOS_QUE_PROPONE_LA_IA.some((c) => c.clave === "resultadosQuePersigue")).toBe(false);
+  });
+
+  it("va primero en «Lo que busca», arriba de los retos", () => {
+    const busca = CAMPOS_DE_LA_FICHA.filter((c) => c.grupo === "busca").map((c) => c.clave);
+    expect(busca.slice(0, 2)).toEqual(["resultadosQuePersigue", "retosEstrategicos"]);
   });
 });
 

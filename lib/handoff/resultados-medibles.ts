@@ -327,3 +327,25 @@ export function resultadosParaPrompt(lista: readonly ResultadoMedible[]): string
     )
     .join("\n");
 }
+
+/**
+ * Los resultados CONFIRMADOS como el texto del campo «Resultados que persigue» de Información del
+ * cliente (lib/clients/ficha.ts): una viñeta por resultado, con el nombre del proyecto arriba si
+ * hay más de uno. Es lo que va a la propiedad de la empresa en HubSpot y lo que leen los agentes
+ * desde la ficha. Lo sin confirmar no entra: la ficha es lo que el CSE ya confirmó. Vacío si no
+ * hay ninguno confirmado (quien llama decide qué hacer: no se pisa un texto con nada).
+ */
+export function resultadosParaLaFicha(listas: ReadonlyArray<{ proyecto: string; resultados: readonly ResultadoMedible[] }>): string {
+  const conDatos = listas
+    .map((l) => ({ proyecto: l.proyecto, resultados: l.resultados.filter((r) => !sinConfirmar(r) && r.resultado.trim()) }))
+    .filter((l) => l.resultados.length);
+  const linea = (r: ResultadoMedible) =>
+    `- **${r.id}** · ${r.resultado.trim()}` +
+    `${r.metrica.trim() ? ` — se mide con: ${r.metrica.trim()}` : ""}` +
+    `${sinDato(r.lineaBase) ? "" : ` — línea base: ${r.lineaBase.trim()}`}` +
+    `${sinDato(r.meta) ? "" : ` — meta: ${r.meta.trim()}`}` +
+    `${r.plazo.trim() ? ` — plazo: ${r.plazo.trim()}` : ""}`;
+  return conDatos
+    .map((l) => (conDatos.length > 1 ? [`**${l.proyecto}**`, ...l.resultados.map(linea)] : l.resultados.map(linea)).join("\n"))
+    .join("\n\n");
+}

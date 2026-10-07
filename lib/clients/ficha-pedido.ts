@@ -6,6 +6,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import {
   CAMPOS_DE_LA_FICHA,
+  CAMPOS_QUE_PROPONE_LA_IA,
   OPCIONES_DE_APERTURA,
   etiquetaDeApertura,
   valorVigente,
@@ -38,7 +39,7 @@ const TOOL: Anthropic.Messages.Tool = {
         items: {
           type: "object",
           properties: {
-            clave: { type: "string", enum: CAMPOS_DE_LA_FICHA.map((c) => c.clave) },
+            clave: { type: "string", enum: CAMPOS_QUE_PROPONE_LA_IA.map((c) => c.clave) },
             valor: {
               type: "string",
               description:
@@ -59,7 +60,8 @@ const TOOL: Anthropic.Messages.Tool = {
 };
 
 function system(): string {
-  const campos = CAMPOS_DE_LA_FICHA.map(
+  // Los resultados no se proponen acá: salen de la lista medible de cada proyecto (ficha.ts › deLosResultados).
+  const campos = CAMPOS_QUE_PROPONE_LA_IA.map(
     (c) => `- ${c.clave} («${c.etiqueta}»${c.alCliente ? "" : ", interno"}): ${c.ayuda}`,
   ).join("\n");
   const aperturas = OPCIONES_DE_APERTURA.map((o) => `${o.valor} (${o.etiqueta})`).join(", ");

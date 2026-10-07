@@ -8,10 +8,16 @@
  * una propuesta, ocupa el lugar del campo que cambiaría —en azul, con la chispa, pintada como va a
  * quedar— con «Usar» y «Descartar»: la IA propone, el CSE confirma — nada llega a HubSpot sin ese
  * botón.
+ *
+ * «Resultados que persigue» no es un texto (2026-10-05): son las listas de resultados medibles de los
+ * proyectos del cliente (ResultadosMediblesDelHandoff), que se editan y confirman acá mismo. El
+ * texto que va a HubSpot lo arma el servidor con lo confirmado; la pantalla lo recibe en cada
+ * respuesta y lo pone en el borrador, así «Confirmar» se enciende cuando cambió.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CAMPOS_DE_LA_FICHA,
+  CAMPOS_QUE_PROPONE_LA_IA,
   EVENTO_FICHA_CAMBIO,
   GRUPOS_DE_FICHA,
   OPCIONES_DE_APERTURA,
@@ -24,15 +30,31 @@ import {
   type FichaGuardada,
   type ValoresDeFicha,
 } from "@/lib/clients/ficha";
-import { BotonAzul, BotonBlanco, BotonTexto, FranjaDeSugerencias, IconoDeSugerencia } from "@/components/ui/sistema";
+import { BotonAzul, BotonBlanco, BotonTexto, FranjaDeSugerencias, IconoDeSugerencia, ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { Alert } from "@/components/ui";
+import { useMe } from "@/hooks/useMe";
 import { TextoConFormato } from "./TextoConFormato";
+import ResultadosMediblesDelHandoff from "./ResultadosMediblesDelHandoff";
+
+interface ProyectoConResultados {
+  projectId: string;
+  proyecto: string;
+}
 
 interface Respuesta {
   ficha: FichaGuardada;
   hubspotUrl: string | null;
+  /** Los proyectos del cliente con lista de resultados (los muestra «Resultados que persigue»). */
+  proyectosConResultados?: ProyectoConResultados[];
+  /** El texto que sale de los resultados confirmados (vacío si no hay ninguno). */
+  resultadosParaLaFicha?: string;
   sinCambios?: boolean;
   error?: string;
+}
+
+/** El valor de «Resultados que persigue» en el borrador: lo confirmado de los proyectos, o lo que había. */
+function conResultados(valores: ValoresDeFicha, deLosProyectos: string | undefined): ValoresDeFicha {
+  return deLosProyectos ? { ...valores, resultadosQuePersigue: deLosProyectos } : valores;
 }
 
 function fecha(iso: string | null | undefined): string {
@@ -53,6 +75,10 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [leyendo, setLeyendo] = useState(false);
+  const [proyectos, setProyectos] = useState<ProyectoConResultados[]>([]);
+  const me = useMe();
+  const puedeEditarResultados = me?.capabilities.includes("handoffAnywhere") ?? false;
+  const puedeConfirmarResultados = me?.permissions?.sections?.handoff?.confirmarResultados === true;
   /* Los campos descartados que ya se mandaron. Cada «Descartar» manda TODOS: si dos pedidos se cruzan
      en el servidor (cada uno lee la ficha y la guarda entera), el último igual lleva los dos. */
   const descartesEnviados = useRef<Set<ClaveDeFicha>>(new Set());
@@ -63,15 +89,19 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
     borradorRef.current = borrador;
   }, [borrador]);
 
-  const aplicar = useCallback((r: { ficha: FichaGuardada; hubspotUrl?: string | null }) => {
+  const aplicar = useCallback(
+    (r: { ficha: FichaGuardada; hubspotUrl?: string | null; proyectosConResultados?: ProyectoConResultados[]; resultadosParaLaFicha?: string }) => {
     setFicha(r.ficha);
     if (r.hubspotUrl !== undefined) setHubspotUrl(r.hubspotUrl);
-    setBorrador(r.ficha.valores);
+    if (r.proyectosConResultados) setProyectos(r.proyectosConResultados);
+    setBorrador(conResultados(r.ficha.valores, r.resultadosParaLaFicha));
     setDescartadas(new Set());
     descartesEnviados.current = new Set();
     // El aviso de la pestaña «Información del cliente» cuenta los campos por revisar.
     window.dispatchEvent(new CustomEvent(EVENTO_FICHA_CAMBIO, { detail: { clientId } }));
-  }, [clientId]);
+    },
+    [clientId],
+  );
 
   async function actualizarConIA() {
     const valoresAlClic = ficha?.valores ?? null;
@@ -80,7 +110,12 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
     setAviso(null);
     try {
       const r = await fetch(`/api/clients/${clientId}/ficha/proponer`, { method: "POST" });
-      const j = (await r.json().catch(() => ({}))) as { ficha?: FichaGuardada; cambiados?: number; sinFuentes?: boolean; error?: string };
+      const j = (await r.json().catch(() => ({}))) as {
+        ficha?: FichaGuardada;
+        cambiados?: number;
+        sinFuentes?: boolean;
+        error?: string;
+      };
       if (!r.ok || !j.ficha) {
         setError(j.error ?? "No se pudo actualizar la ficha con IA.");
         return;
@@ -89,6 +124,7 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
          compara lo que hay en pantalla ahora contra la ficha del momento del clic y eso se conserva
          sobre la ficha nueva. Guarda: lib/clients/ficha.test.ts › conservarLoEscrito. */
       const actual = borradorRef.current;
+      // Lo de los resultados que estaba en el borrador vuelve con conservarLoEscrito (difiere de lo confirmado).
       aplicar({ ficha: j.ficha });
       setBorrador((b) => conservarLoEscrito(valoresAlClic, actual, b));
       setAviso(
@@ -123,10 +159,20 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
 
   const cambios = useMemo(() => (ficha ? camposQueCambiaron(ficha.valores, borrador) : []), [ficha, borrador]);
 
+  /* Se editó, confirmó o releyó una lista de resultados: se pide el texto nuevo que saldría de lo
+     confirmado y se pone en el borrador (nada más: lo escrito en los otros campos sigue ahí). */
+  const refrescarResultados = useCallback(async () => {
+    const r = await fetch(`/api/clients/${clientId}/ficha`).catch(() => null);
+    const j = (await r?.json().catch(() => null)) as Respuesta | null;
+    if (!r?.ok || !j?.ficha) return;
+    if (j.proyectosConResultados) setProyectos(j.proyectosConResultados);
+    setBorrador((b) => ({ ...b, resultadosQuePersigue: j.resultadosParaLaFicha || j.ficha.valores.resultadosQuePersigue }));
+  }, [clientId]);
+
   /** Lo que la IA propone y todavía difiere de lo que hay en pantalla. */
   const propuestas = useMemo(() => {
     const p = ficha?.propuesta?.valores ?? {};
-    return CAMPOS_DE_LA_FICHA.filter((c) => {
+    return CAMPOS_QUE_PROPONE_LA_IA.filter((c) => {
       const v = p[c.clave];
       return typeof v === "string" && v.trim() && v.trim() !== borrador[c.clave].trim() && !descartadas.has(c.clave);
     }).map((c) => c.clave);
@@ -270,7 +316,19 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
               </div>
               <p className="text-xs text-fg-muted">{g.bajada}</p>
             </header>
-            {CAMPOS_DE_LA_FICHA.filter((c) => c.grupo === g.clave).map((c) => (
+            {CAMPOS_DE_LA_FICHA.filter((c) => c.grupo === g.clave).map((c) =>
+              c.deLosResultados ? (
+                <CampoDeResultados
+                  key={c.clave}
+                  campo={c}
+                  proyectos={proyectos}
+                  textoConfirmado={ficha.valores[c.clave]}
+                  cambiado={cambios.includes(c.clave)}
+                  canEdit={puedeEditarResultados}
+                  canConfirm={puedeConfirmarResultados}
+                  onCambio={() => void refrescarResultados()}
+                />
+              ) : (
               <Campo
                 key={c.clave}
                 campo={c}
@@ -282,7 +340,8 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
                 onUsar={() => set(c.clave, ficha.propuesta!.valores[c.clave]!)}
                 onDescartar={() => void descartarCampo(c.clave)}
               />
-            ))}
+              ),
+            )}
           </section>
         ))}
       </div>
@@ -312,7 +371,7 @@ export default function FichaDelCliente({ clientId }: { clientId: string }) {
           </p>
           <div className="flex flex-shrink-0 gap-2">
             {cambios.length > 0 && (
-              <BotonTexto disabled={guardando} onClick={() => setBorrador(ficha.valores)}>
+              <BotonTexto disabled={guardando} onClick={() => setBorrador((b) => ({ ...ficha.valores, resultadosQuePersigue: b.resultadosQuePersigue }))}>
                 Deshacer cambios
               </BotonTexto>
             )}
@@ -466,6 +525,66 @@ function Campo({
         </select>
       ) : (
         <AreaDeTexto id={`ficha-${campo.clave}`} valor={valor} onChange={onChange} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * «Resultados que persigue»: las listas de resultados medibles de los proyectos del cliente, que se
+ * editan y se confirman acá (el Resumen de cada proyecto solo las lee). Con más de un proyecto, cada
+ * lista lleva su nombre.
+ */
+function CampoDeResultados({
+  campo,
+  proyectos,
+  textoConfirmado,
+  cambiado,
+  canEdit,
+  canConfirm,
+  onCambio,
+}: {
+  campo: CampoDeFicha;
+  proyectos: ProyectoConResultados[];
+  /** Lo que la ficha tiene confirmado hoy (de antes de las listas, o de la última confirmación). */
+  textoConfirmado: string;
+  cambiado: boolean;
+  canEdit: boolean;
+  canConfirm: boolean;
+  onCambio: () => void;
+}) {
+  return (
+    <div id={`campo-${campo.clave}`} data-recorrido="info.resultados" className="flex scroll-mt-24 flex-col gap-1.5">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="text-[13px] font-semibold text-fg">{campo.etiqueta}</span>
+        {cambiado && (
+          <span
+            className="rounded-full border border-warn-line bg-warn-surface px-[7px] text-[11px] font-semibold text-warn-ink"
+            title="Lo confirmado cambió: confirma la ficha para llevarlo a HubSpot"
+          >
+            cambiado sin confirmar
+          </span>
+        )}
+        <span className="ml-auto flex-shrink-0 text-[11px] text-fg-muted">Propiedad de la empresa en HubSpot</span>
+      </div>
+      <p className="text-xs text-fg-muted">{campo.ayuda}</p>
+      {proyectos.length === 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[13px] text-fg-muted">Todavía no hay un handoff en los proyectos del cliente: los resultados salen de ahí.</p>
+          {textoConfirmado.trim() && (
+            <div className="rounded-md border border-line bg-surface-muted px-2.5 py-2 text-[13px] text-fg-secondary">
+              <span className={ROTULO_DEL_SISTEMA}>Lo que dice la ficha hoy</span>
+              <TextoConFormato texto={textoConfirmado} />
+            </div>
+          )}
+        </div>
+      ) : (
+        proyectos.map((p) => (
+          <div key={p.projectId} className="flex flex-col gap-2">
+            {proyectos.length > 1 && <span className={ROTULO_DEL_SISTEMA}>{p.proyecto}</span>}
+            <ResultadosMediblesDelHandoff projectId={p.projectId} canEdit={canEdit} canConfirm={canConfirm} onCambio={onCambio} />
+          </div>
+        ))
       )}
     </div>
   );
