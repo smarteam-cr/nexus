@@ -116,9 +116,9 @@ function pasosALaVista(recorrido: Recorrido, rol: TeamRole | null): Step[] {
                   await new Promise((listo) => window.setTimeout(listo, ENTRE_ACCIONES_MS));
                 }
               }
-              await esperarAncla(p.ancla, ESPERA_DE_ACCION_MS);
+              await esperarAncla(p.ancla, p.espera ?? ESPERA_DE_ACCION_MS);
             },
-            targetWaitTimeout: ESPERA_DE_ACCION_MS,
+            targetWaitTimeout: p.espera ?? ESPERA_DE_ACCION_MS,
           }
         : {}),
     });

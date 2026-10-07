@@ -12,6 +12,7 @@ import { ROLE_LABEL } from "@/lib/auth/roles";
 import type { DetalleDeEscala } from "./escala";
 import { detalleDeEscala } from "./escala-server";
 import { temaMasParecido } from "./parecidos";
+import { escalaParaPrompt, type ReporteParaPrompt, type TemaParaPrompt } from "./prompt";
 import {
   COLUMNA,
   DIAS_DE_LISTO_A_LA_VISTA,
@@ -322,8 +323,6 @@ export async function datosDeBandeja(): Promise<DatosDeBandeja> {
   const comparables = temas.map((t) => ({ id: t.id, titulo: t.titulo, detalle: t.detalle, textos: t.reportes.map((r) => r.cuerpo) }));
   return {
     reportes: filas.map((r) => {
-      const ultimo = r.mensajes[0];
-      const delAutor = ultimo && ultimo.autorEmail.toLowerCase() === r.autorEmail.toLowerCase();
       const sinDecidir = r.estado === "sin_revisar";
       return {
         id: r.id,
@@ -338,7 +337,7 @@ export async function datosDeBandeja(): Promise<DatosDeBandeja> {
         temaId: r.temaId,
         tieneCaptura: !!r.capturaPath,
         sinAbrir: !r.revisorLeyoAt,
-        respondio: !!delAutor && ultimo.createdAt.getTime() > (r.revisorLeyoAt?.getTime() ?? 0),
+        respondio: teRespondio(r),
         sugerencia: sinDecidir ? temaMasParecido(r.cuerpo, comparables) : null,
         escala: r.escalaAncla ? { ancla: r.escalaAncla } : null,
       };
@@ -360,6 +359,17 @@ export async function datosDeBandeja(): Promise<DatosDeBandeja> {
 
 // ── La hoja de ruta (dirección) ─────────────────────────────────────────────
 
+/**
+ * ¿Quien reportó escribió después de la última vez que quien revisa abrió el reporte? (el último mensaje es suyo).
+ * Lo mismo en la Bandeja que en la hoja de ruta: un reporte que está en un tema se contesta desde el tema.
+ */
+function teRespondio(r: { autorEmail: string; revisorLeyoAt: Date | null; mensajes: { autorEmail: string; createdAt: Date }[] }): boolean {
+  const ultimo = r.mensajes[0];
+  return !!ultimo && ultimo.autorEmail.toLowerCase() === r.autorEmail.toLowerCase() && ultimo.createdAt.getTime() > (r.revisorLeyoAt?.getTime() ?? 0);
+}
+
+const ULTIMO_MENSAJE = { orderBy: { createdAt: "desc" as const }, take: 1, select: { autorEmail: true, createdAt: true } };
+
 export interface TemaDeHoja {
   id: string;
   titulo: string;
@@ -371,6 +381,8 @@ export interface TemaDeHoja {
   personas: Persona[];
   reportes: number;
   frena: number;
+  /** En cuántos de sus reportes la persona te volvió a escribir y no lo abriste: se contesta desde el tema. */
+  respondieron: number;
   pie: string | null;
 }
 
@@ -389,7 +401,7 @@ export async function temasDeLaHoja(): Promise<TemaDeHoja[]> {
   const temas = await prisma.feedbackTema.findMany({
     where: { OR: [{ columna: { not: "listo" } }, { listoAt: { gte: desdeListo } }] },
     orderBy: { createdAt: "desc" },
-    include: { reportes: { select: { autorEmail: true, meFrena: true, tipo: true } } },
+    include: { reportes: { select: { autorEmail: true, meFrena: true, tipo: true, revisorLeyoAt: true, mensajes: ULTIMO_MENSAJE } } },
   });
   const origenIds = temas.map((t) => t.origenReporteId).filter((x): x is string => !!x);
   const origenes = origenIds.length
@@ -421,10 +433,110 @@ export async function temasDeLaHoja(): Promise<TemaDeHoja[]> {
         personas: emails.map((e) => gente.get(e)!),
         reportes: t.reportes.length,
         frena: t.reportes.filter((r) => r.tipo === "falla" && r.meFrena).length,
+        respondieron: t.reportes.filter(teRespondio).length,
         pie,
       };
     })
     .sort((a, b) => b.personas.length - a.personas.length || b.frena - a.frena);
+}
+
+// ── El prompt de un tema, para Claude Code (dirección) ──────────────────────
+
+/**
+ * Un tema con sus reportes, como lo lee el prompt (lib/feedback/prompt.ts): del más viejo al más nuevo,
+ * con su conversación y, si son de la escala, lo que se leyó. Null si no existe.
+ */
+export async function temaParaElPrompt(id: string): Promise<TemaParaPrompt | null> {
+  const t = await prisma.feedbackTema.findUnique({
+    where: { id },
+    include: {
+      reportes: {
+        orderBy: { createdAt: "asc" },
+        include: { mensajes: { orderBy: { createdAt: "asc" }, select: { autorEmail: true, cuerpo: true } } },
+      },
+    },
+  });
+  if (!t || !esColumna(t.columna)) return null;
+  const reportes = await Promise.all(
+    t.reportes.map(async (r): Promise<ReporteParaPrompt> => {
+      const escala = await detalleDeEscala(r);
+      const rol = r.rol ? etiquetaDeRol(r.rol) : null;
+      return {
+        numero: r.numero,
+        tipo: tipoSeguro(r.tipo),
+        cuerpo: r.cuerpo,
+        meFrena: r.meFrena,
+        pantalla: r.pantalla,
+        ruta: r.ruta,
+        rol,
+        marcas: comoLista(r.marcas, esMarca),
+        errores: comoLista(r.errores, esError),
+        mensajes: r.mensajes.map((m) => ({ deQuienReporto: m.autorEmail.toLowerCase() === r.autorEmail.toLowerCase(), cuerpo: m.cuerpo })),
+        tieneCaptura: !!r.capturaPath,
+        escala: escala ? escalaParaPrompt(escala) : null,
+      };
+    }),
+  );
+  return {
+    titulo: t.titulo,
+    detalle: t.detalle,
+    pantalla: t.pantalla,
+    columna: t.columna,
+    reportes,
+    personas: new Set(t.reportes.map((r) => r.autorEmail.toLowerCase())).size,
+  };
+}
+
+/** Un reporte de un tema, como lo muestra el panel de la hoja de ruta. */
+export interface ReporteDelTema {
+  id: string;
+  numero: number;
+  tipo: TipoDeFeedback;
+  cuerpo: string;
+  /** Una falla que le frena el trabajo a quien la reportó. */
+  frena: boolean;
+  /** Fecha corta («6 oct»), armada en el servidor. */
+  fecha: string;
+  persona: string;
+  rol: string;
+  /** La persona te volvió a escribir y no lo abriste. */
+  respondio: boolean;
+}
+
+/** Los reportes de un tema, del más viejo al más nuevo (solo quien revisa: la ruta lo cuida). */
+export async function reportesDelTema(id: string): Promise<ReporteDelTema[]> {
+  const filas = await prisma.feedbackReporte.findMany({
+    where: { temaId: id },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      numero: true,
+      tipo: true,
+      cuerpo: true,
+      meFrena: true,
+      createdAt: true,
+      autorEmail: true,
+      rol: true,
+      revisorLeyoAt: true,
+      mensajes: ULTIMO_MENSAJE,
+    },
+  });
+  const gente = await personasPorEmail(filas.map((f) => f.autorEmail));
+  return filas.map((f) => {
+    const p = gente.get(f.autorEmail.toLowerCase())!;
+    const tipo = tipoSeguro(f.tipo);
+    return {
+      id: f.id,
+      numero: f.numero,
+      tipo,
+      cuerpo: f.cuerpo,
+      frena: tipo === "falla" && f.meFrena,
+      fecha: fechaCorta(f.createdAt),
+      persona: p.nombre,
+      rol: f.rol ? etiquetaDeRol(f.rol) : p.rol,
+      respondio: teRespondio(f),
+    };
+  });
 }
 
 // ── Personas (dirección) ────────────────────────────────────────────────────
@@ -443,12 +555,19 @@ export interface PedidoVisible {
   id: string;
   para: Persona;
   pantalla: string;
+  /** El comienzo de la dirección donde aparece («/clients»). */
+  ruta: string;
   pregunta: string;
   estado: string;
   hasta: string | null;
   vistoVeces: number;
   respondidoAt: string | null;
+  descartadoAt: string | null;
   creado: string;
+  /** Quién la mandó: con el texto, la pantalla y el plazo, junta los pedidos de un mismo envío. */
+  creadoPor: string;
+  /** Lo que contestó: un reporte (el pedido se responde desde el panel de Feedback). null mientras no responde. */
+  respuesta: { id: string; numero: number; cuerpo: string; estado: string } | null;
 }
 
 export interface DatosDePersonas {
@@ -463,7 +582,6 @@ export interface DatosDePersonas {
   filas: FilaDePersona[];
   callados: (Persona & { ultimo: string | null })[];
   pantallas: { nombre: string; total: number; detalle: string }[];
-  pedidos: PedidoVisible[];
 }
 
 const RESUELTO = (r: { estado: string; tema: { columna: string } | null }) =>
@@ -471,7 +589,7 @@ const RESUELTO = (r: { estado: string; tema: { columna: string } | null }) =>
 
 export async function datosDePersonas(dias: number | null): Promise<DatosDePersonas> {
   const desde = dias ? new Date(Date.now() - dias * 86400000) : null;
-  const [reportes, equipo, sinRevisar, pedidos, ultimos] = await Promise.all([
+  const [reportes, equipo, sinRevisar, ultimos] = await Promise.all([
     prisma.feedbackReporte.findMany({
       where: desde ? { createdAt: { gte: desde } } : {},
       select: {
@@ -490,12 +608,11 @@ export async function datosDePersonas(dias: number | null): Promise<DatosDePerso
       select: { email: true, name: true, roleEnum: true },
     }),
     prisma.feedbackReporte.findMany({ where: { estado: "sin_revisar" }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
-    prisma.feedbackPedido.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
     prisma.feedbackReporte.groupBy({ by: ["autorEmail"], _max: { createdAt: true } }),
   ]);
 
   const porPersona = new Map<string, FilaDePersona>();
-  const gente = await personasPorEmail([...reportes.map((r) => r.autorEmail), ...pedidos.map((p) => p.paraEmail)]);
+  const gente = await personasPorEmail(reportes.map((r) => r.autorEmail));
   for (const r of reportes) {
     const e = r.autorEmail.toLowerCase();
     const fila =
@@ -563,18 +680,99 @@ export async function datosDePersonas(dias: number | null): Promise<DatosDePerso
           .filter(Boolean)
           .join(" · "),
       })),
-    pedidos: pedidos.map((p) => ({
-      id: p.id,
-      para: gente.get(p.paraEmail.toLowerCase())!,
-      pantalla: p.pantalla,
-      pregunta: p.pregunta,
-      estado: p.estado,
-      hasta: p.hasta?.toISOString() ?? null,
-      vistoVeces: p.vistoVeces,
-      respondidoAt: p.respondidoAt?.toISOString() ?? null,
-      creado: p.createdAt.toISOString(),
-    })),
   };
+}
+
+// ── Encuestas (dirección) ───────────────────────────────────────────────────
+
+/** Alguien del equipo a quien se le puede pedir su opinión. */
+export type PersonaParaPreguntar = Persona & {
+  /** Su último reporte, si mandó alguno. */
+  ultimo: string | null;
+  /** No mandó nada en los últimos 30 días: va primero en la lista para elegir. */
+  callado: boolean;
+};
+
+export interface DatosDeEncuestas {
+  pedidos: PedidoVisible[];
+  equipo: PersonaParaPreguntar[];
+}
+
+/**
+ * Lo que la pestaña Encuestas muestra de los pedidos de opinión (2026-10-06): los pedidos con lo que se contestó (la
+ * pantalla los junta por pregunta: lib/feedback/encuestas.ts), y el equipo para elegir a quién preguntarle. Las preguntas de tiempo («¿cuánto te tomó?») son otro módulo
+ * (lib/tiempos/resultados.ts) y se leen aparte.
+ */
+export async function datosDeEncuestas(): Promise<DatosDeEncuestas> {
+  const desde30 = Date.now() - 30 * 86400000;
+  const [pedidos, equipo, ultimos] = await Promise.all([
+    prisma.feedbackPedido.findMany({
+      orderBy: { createdAt: "desc" },
+      // Una pregunta a varias personas son varios pedidos: se leen bastantes para no cortar un envío por la mitad.
+      take: 300,
+      include: { reportes: { orderBy: { createdAt: "asc" }, take: 1, select: { id: true, numero: true, cuerpo: true, estado: true } } },
+    }),
+    prisma.teamMember.findMany({
+      where: { deactivatedAt: null, appUser: { kind: "INTERNAL" } },
+      select: { email: true, name: true, roleEnum: true },
+    }),
+    prisma.feedbackReporte.groupBy({ by: ["autorEmail"], _max: { createdAt: true } }),
+  ]);
+  const gente = await personasPorEmail(pedidos.map((p) => p.paraEmail));
+  const ultimoPorEmail = new Map(ultimos.map((u) => [u.autorEmail.toLowerCase(), u._max.createdAt]));
+  return {
+    pedidos: pedidos.map((p) => {
+      const r = p.reportes[0];
+      return {
+        id: p.id,
+        para: gente.get(p.paraEmail.toLowerCase())!,
+        pantalla: p.pantalla,
+        ruta: p.ruta,
+        pregunta: p.pregunta,
+        estado: p.estado,
+        hasta: p.hasta?.toISOString() ?? null,
+        vistoVeces: p.vistoVeces,
+        respondidoAt: p.respondidoAt?.toISOString() ?? null,
+        descartadoAt: p.descartadoAt?.toISOString() ?? null,
+        creado: p.createdAt.toISOString(),
+        creadoPor: p.creadoPorEmail.toLowerCase(),
+        respuesta: r ? { id: r.id, numero: r.numero, cuerpo: r.cuerpo, estado: r.estado } : null,
+      };
+    }),
+    equipo: equipo
+      .filter((m) => m.roleEnum !== "SUPER_ADMIN")
+      .map((m) => {
+        const nombre = m.name || m.email;
+        const u = ultimoPorEmail.get(m.email.toLowerCase()) ?? null;
+        return {
+          email: m.email.toLowerCase(),
+          nombre,
+          rol: etiquetaDeRol(m.roleEnum),
+          iniciales: iniciales(nombre),
+          ultimo: u ? u.toISOString() : null,
+          callado: !u || u.getTime() < desde30,
+        };
+      })
+      .sort((a, b) => Number(b.callado) - Number(a.callado) || a.nombre.localeCompare(b.nombre)),
+  };
+}
+
+// ── Las pestañas ────────────────────────────────────────────────────────────
+
+/**
+ * Los números de las pestañas de /feedback: lo que espera una decisión tuya en la Bandeja (sin revisar, más lo
+ * cerrado en lo que la persona te volvió a escribir) y los temas abiertos de la hoja de ruta.
+ */
+export async function cuentasDeLasPestanas(): Promise<{ bandeja: number; hoja: number }> {
+  const [sinRevisar, cerrados, hoja] = await Promise.all([
+    prisma.feedbackReporte.count({ where: { estado: "sin_revisar" } }),
+    prisma.feedbackReporte.findMany({
+      where: { estado: { in: ["respondido", "no_se_hara"] } },
+      select: { autorEmail: true, revisorLeyoAt: true, mensajes: ULTIMO_MENSAJE },
+    }),
+    prisma.feedbackTema.count({ where: { columna: { not: "listo" } } }),
+  ]);
+  return { bandeja: sinRevisar + cerrados.filter(teRespondio).length, hoja };
 }
 
 // ── Pedidos de opinión (quien los recibe) ───────────────────────────────────

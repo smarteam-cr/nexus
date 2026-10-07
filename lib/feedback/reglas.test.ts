@@ -32,9 +32,9 @@ describe("los tipos y las columnas", () => {
   it("tuteo en todo lo que lee el equipo (el detector por FORMA de lib/ui/voseo.ts, no una lista cerrada)", () => {
     const textos = [
       ...TIPOS_DE_FEEDBACK.flatMap((t) => [TIPO[t].nombre, TIPO[t].etiqueta, TIPO[t].ejemplo, TIPO[t].boton]),
-      ...COLUMNAS.flatMap((c) => [COLUMNA[c].nombre, COLUMNA[c].ayuda, COLUMNA[c].corta]),
+      ...COLUMNAS.flatMap((c) => [COLUMNA[c].nombre, COLUMNA[c].ayuda]),
     ];
-    expect(textos.length, "no pasa en vacío").toBe(TIPOS_DE_FEEDBACK.length * 4 + COLUMNAS.length * 3);
+    expect(textos.length, "no pasa en vacío").toBe(TIPOS_DE_FEEDBACK.length * 4 + COLUMNAS.length * 2);
     const conVoseo = textos.flatMap((t) => formasDeVoseo(t).map((w) => `«${w}» en «${t}»`));
     expect(conVoseo).toEqual([]);
   });

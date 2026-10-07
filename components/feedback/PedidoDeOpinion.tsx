@@ -51,27 +51,61 @@ export function PedidoDeOpinion({ pedido, onResponder, onAhoraNo }: { pedido: Pe
     <section
       data-feedback-ui=""
       aria-label="Pedido de opinión"
-      className="fixed bottom-6 right-6 flex w-[380px] max-w-[calc(100vw-32px)] flex-col gap-2 rounded-xl border border-line bg-surface p-4"
+      className="fixed bottom-6 right-6 w-[380px] max-w-[calc(100vw-32px)]"
       style={{ zIndex: Z.DRAWER }}
     >
+      <CuerpoDelPedido deQuien={pedido.deQuien} hasta={pedido.hasta} pregunta={pedido.pregunta} onResponder={onResponder} onAhoraNo={ahoraNo} />
+    </section>,
+    document.body,
+  );
+}
+
+/**
+ * Lo que ve la persona, sin la mecánica (dónde va, cuándo cuenta como visto). Feedback › Encuestas lo usa para mostrar
+ * cómo le aparece la pregunta a cada persona antes de mandarla: sin `onResponder`, los botones son de muestra.
+ */
+export function CuerpoDelPedido({
+  deQuien,
+  hasta,
+  pregunta,
+  onResponder,
+  onAhoraNo,
+}: {
+  deQuien: string;
+  hasta: string | null;
+  pregunta: string;
+  onResponder?: () => void;
+  onAhoraNo?: () => void;
+}) {
+  const muestra = !onResponder;
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4 text-left">
       <p className={ROTULO_DEL_SISTEMA}>
-        {pedido.deQuien} te pide tu opinión{pedido.hasta ? ` · hasta el ${fechaCorta(pedido.hasta)}` : ""}
+        {deQuien} te pide tu opinión{hasta ? ` · hasta el ${fechaCorta(hasta)}` : ""}
       </p>
-      <p className="text-[14.5px] font-semibold leading-[21px] text-fg">{pedido.pregunta}</p>
+      <p className={cn("text-[14.5px] font-semibold leading-[21px]", pregunta ? "text-fg" : "text-fg-muted")}>{pregunta || "Tu pregunta aparece acá"}</p>
       <p className="text-xs text-fg-muted">Un minuto. Le llega con una captura de esta pantalla.</p>
-      <div className="mt-1 flex items-center gap-1">
+      <div className="mt-1 flex items-center gap-1" aria-hidden={muestra || undefined}>
         <button
           type="button"
           onClick={onResponder}
-          className={cn("rounded-lg border border-line bg-surface px-3 py-[7px] text-[13px] font-semibold text-fg-secondary transition-colors hover:bg-surface-hover hover:text-fg")}
+          tabIndex={muestra ? -1 : undefined}
+          className={cn(
+            "rounded-lg border border-line bg-surface px-3 py-[7px] text-[13px] font-semibold text-fg-secondary transition-colors",
+            muestra ? "cursor-default" : "hover:bg-surface-hover hover:text-fg",
+          )}
         >
           Responder
         </button>
-        <button type="button" onClick={ahoraNo} className="rounded px-2 py-[7px] text-[13px] text-fg-muted hover:text-fg">
+        <button
+          type="button"
+          onClick={onAhoraNo}
+          tabIndex={muestra ? -1 : undefined}
+          className={cn("rounded px-2 py-[7px] text-[13px] text-fg-muted", muestra ? "cursor-default" : "hover:text-fg")}
+        >
           Ahora no
         </button>
       </div>
-    </section>,
-    document.body,
+    </div>
   );
 }

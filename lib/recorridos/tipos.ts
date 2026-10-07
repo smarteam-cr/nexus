@@ -54,6 +54,11 @@ export interface PasoDelRecorrido {
    * (abrir una pieza y, ya abierta, elegir el momento de la sesión).
    */
   accion?: AccionDelRecorrido | readonly AccionDelRecorrido[];
+  /**
+   * Cuánto se espera, en ms, a que la acción pinte el elemento. Por defecto, lo que tarda la pantalla en
+   * cambiar algo que ya tiene. Más para una acción que vuelve a pedir la página (las pestañas de Feedback).
+   */
+  espera?: number;
 }
 
 /** Las acciones de un paso, siempre como lista. */
@@ -99,7 +104,7 @@ export interface Recorrido {
   pasos: readonly PasoDelRecorrido[];
 }
 
-export type GrupoDeRecorridos = "empieza" | "clientes" | "ventas" | "finanzas" | "marketing" | "equipo";
+export type GrupoDeRecorridos = "empieza" | "clientes" | "ventas" | "finanzas" | "marketing" | "direccion" | "equipo";
 
 export const NOMBRE_DEL_GRUPO: Record<GrupoDeRecorridos, string> = {
   empieza: "Empieza aquí",
@@ -107,7 +112,8 @@ export const NOMBRE_DEL_GRUPO: Record<GrupoDeRecorridos, string> = {
   ventas: "Ventas",
   finanzas: "Finanzas",
   marketing: "Marketing",
+  direccion: "Dirección",
   equipo: "Para todo el equipo",
 };
 
-export const ORDEN_DE_GRUPOS: readonly GrupoDeRecorridos[] = ["empieza", "clientes", "ventas", "finanzas", "marketing", "equipo"];
+export const ORDEN_DE_GRUPOS: readonly GrupoDeRecorridos[] = ["empieza", "clientes", "ventas", "finanzas", "marketing", "direccion", "equipo"];

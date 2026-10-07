@@ -66,8 +66,6 @@ export type Columna = (typeof COLUMNAS)[number];
 export interface DefinicionDeColumna {
   nombre: string;
   ayuda: string;
-  /** Lo que se lee en «Mover a…». */
-  corta: string;
   marca: "○" | "●" | "✓";
   /** Color de la marca (token): solo la marca, nunca el texto. */
   tono: "muted" | "warning" | "brand" | "success";
@@ -77,16 +75,14 @@ export const COLUMNA: Record<Columna, DefinicionDeColumna> = {
   decidir: {
     nombre: "Por decidir",
     ayuda: "Temas que creaste y todavía no decidiste si se hacen.",
-    corta: "guardar para después",
     marca: "○",
     tono: "muted",
   },
-  planeado: { nombre: "Planeado", ayuda: "Decidiste hacerlos; todavía no empezaron.", corta: "se hace", marca: "●", tono: "warning" },
-  curso: { nombre: "En curso", ayuda: "Los estás haciendo.", corta: "lo estás haciendo", marca: "●", tono: "brand" },
+  planeado: { nombre: "Planeado", ayuda: "Decidiste hacerlos; todavía no empezaron.", marca: "●", tono: "warning" },
+  curso: { nombre: "En curso", ayuda: "Los estás haciendo.", marca: "●", tono: "brand" },
   listo: {
     nombre: "Listo",
     ayuda: "Ya están en producción. Se avisó a quien los pidió.",
-    corta: "avisa a quien lo pidió",
     marca: "✓",
     tono: "success",
   },
@@ -113,6 +109,14 @@ export function esRevisorDeFeedback(role: string | null | undefined): boolean {
 /** El número que se cita: «F-128». */
 export function numeroDeReporte(n: number): string {
   return `F-${n}`;
+}
+
+/**
+ * Dónde vive un reporte que ya está en la hoja de ruta: abierto en el panel de su tema (2026-10-06). La Bandeja no lo
+ * muestra; `/feedback?reporte=` de un reporte así manda acá.
+ */
+export function enlaceAlTema(r: { id: string; temaId: string | null }): string {
+  return r.temaId ? `/feedback?vista=hoja&tema=${r.temaId}&reporte=${r.id}` : "/feedback?vista=hoja";
 }
 
 /** Un reporte que le frena el trabajo a alguien llega como urgente. */

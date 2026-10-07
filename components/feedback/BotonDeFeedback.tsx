@@ -16,6 +16,7 @@ export default function BotonDeFeedback({ isOpen }: { isOpen: boolean }) {
   return (
     <button
       type="button"
+      data-recorrido="feedback.boton"
       onClick={feedback.alternar}
       aria-pressed={abierto}
       title={isOpen ? "Dar feedback sobre esta pantalla" : "Feedback"}

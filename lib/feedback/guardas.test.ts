@@ -120,7 +120,8 @@ describe("la dirección guardada de un reporte", () => {
   });
 
   it("la bandeja y el panel lo usan", () => {
-    for (const f of ["components/feedback/admin/BandejaDeFeedback.tsx", "components/feedback/PanelDeFeedback.tsx"]) {
+    // El reporte que ven la Bandeja y el panel de un tema se pinta con las piezas de DetalleDelReporte.tsx (2026-10-06).
+    for (const f of ["components/feedback/admin/DetalleDelReporte.tsx", "components/feedback/PanelDeFeedback.tsx"]) {
       expect(leer(f), f).toContain("<EnlaceDeRuta ruta=");
     }
   });
