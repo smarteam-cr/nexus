@@ -14,6 +14,7 @@ import LienzoDeExploracion from "@/components/exploraciones/LienzoDeExploracion"
 import { AccionDeCabecera, CabeceraDeFicha, ChipHubspot } from "@/components/layout/CabeceraDeFicha";
 import { can } from "@/lib/auth/permissions/engine";
 import { requireInternalUser } from "@/lib/auth/supabase";
+import { ensureClientInfoProject } from "@/lib/canvas/strategy-project";
 import { prisma } from "@/lib/db/prisma";
 import { hubspotCompanyUrl } from "@/lib/hubspot/urls";
 import {
@@ -70,6 +71,10 @@ export default async function ExploracionPage({
   }
 
   const exp = await paraLaPantallaCompleta(lectura.fila);
+  /* La información de la empresa es la MISMA de su ficha de cliente (Elías, 2026-10-06): vive en su
+     proyecto de estrategia, que se crea acá si un prospecto todavía no lo tiene (como al mapear sus
+     procesos). Un prospecto con una preventa ya es una empresa con la que se trabaja. */
+  const infoDeLaEmpresa = await ensureClientInfoProject(exp.empresa.clientId);
   const [escala, equipo] = await Promise.all([escalaParaExplorar(), equipoParaLaPreventa()]);
   const portal = await prisma.hubspotAccount.findFirst({ where: { isSystem: true }, select: { hubspotPortalId: true } });
   const empresaUrl = hubspotCompanyUrl(portal?.hubspotPortalId ?? null, exp.empresa.hubspotCompanyId);
@@ -138,6 +143,7 @@ export default async function ExploracionPage({
             escala={escalaDeLaExploracion(escala.general, exp.estado)}
             puedeEditar={puedeEditar && !exp.estado.archivada}
             puedeProponer={puedeProponer}
+            infoDeLaEmpresa={infoDeLaEmpresa}
             piezaInicial={pieza ?? null}
           />
         </>

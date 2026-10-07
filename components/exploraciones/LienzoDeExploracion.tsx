@@ -39,7 +39,7 @@ import { LienzoContexto, type Lienzo, type MomentoDeLaSesion, type OpcionesDeCam
 import PanelDeContexto from "./PanelDeContexto";
 import { NOMBRE_DEL_PASO, piezaDelDestino } from "./piezas";
 import PasoCasosDeUso from "./PasoCasosDeUso";
-import { PasoInformacion, PasoProcesos } from "./PasoDeLaEmpresa";
+import { PasoInformacion, PasoProcesos, type InfoDeLaEmpresa } from "./PasoDeLaEmpresa";
 import PasoEscala from "./PasoEscala";
 import PasoExploracion from "./PasoExploracion";
 import PasoPreparacion from "./PasoPreparacion";
@@ -49,9 +49,8 @@ import RevisarSugerencias from "./RevisarSugerencias";
 import RielDePiezas, { type FilaDelRiel } from "./RielDePiezas";
 import { EVENTO_DEL_RECORRIDO, type AccionDelRecorrido } from "@/lib/recorridos/tipos";
 
-/** Qué es cada pieza, en una línea, debajo de su nombre. Exploración y Procesos llevan su propio encabezado. */
-const DE_QUE_VA: Record<Exclude<PasoDelLienzoUI, "exploracion" | "procesos">, string> = {
-  informacion: "La misma ficha de la empresa que ve el CSE: la leen los agentes y, al confirmarla, se guarda en HubSpot.",
+/** Qué es cada pieza, en una línea, debajo de su nombre. Exploración y lo de la cuenta llevan su propio encabezado. */
+const DE_QUE_VA: Record<Exclude<PasoDelLienzoUI, "exploracion" | "informacion" | "procesos">, string> = {
   resumen: "Lo que se sabe del prospecto. Toca una tarjeta para completarla o revisar lo que propuso el agente.",
   preparacion: "Con quién vas a hablar, qué es la empresa y cómo abrir la conversación.",
   escala: "Dónde parece estar cada equipo, con hipótesis y evidencia.",
@@ -60,7 +59,7 @@ const DE_QUE_VA: Record<Exclude<PasoDelLienzoUI, "exploracion" | "procesos">, st
 };
 
 /** Las piezas del recorrido, en orden (el Resumen va aparte, arriba de todas). */
-const PIEZAS = ["preparacion", "exploracion", "informacion", "procesos", "escala", "casos", "propuesta"] as const;
+const PIEZAS = ["preparacion", "exploracion", "escala", "casos", "propuesta"] as const;
 
 /** Lo que dice el punto de cada pieza en el title de la fila. */
 const AYUDA_DEL_ESTADO: Record<EstadoDePieza, string> = {
@@ -76,12 +75,15 @@ export default function LienzoDeExploracion({
   escala,
   puedeEditar,
   puedeProponer,
+  infoDeLaEmpresa,
   piezaInicial,
 }: {
   inicial: ExploracionParaLaPantalla;
   escala: EscalaDelLienzo;
   puedeEditar: boolean;
   puedeProponer: boolean;
+  /** Dónde vive la información de la empresa (la misma de la ficha del cliente). */
+  infoDeLaEmpresa: InfoDeLaEmpresa;
   /** La de `?pieza=` en la dirección; sin ella, el Resumen. */
   piezaInicial?: string | null;
 }) {
@@ -340,17 +342,6 @@ export default function LienzoDeExploracion({
         if (!aviso && sinLeer.length > 0) aviso = { corto: `${sinLeer.length} sin leer`, largo: "Reuniones o documentos que el agente todavía no leyó" };
         break;
       }
-      /* La ficha y los procesos son de la empresa y se leen al abrirlos: el riel no los consulta. */
-      case "informacion":
-      case "procesos":
-        return {
-          clave: p,
-          etiqueta: NOMBRE_DEL_PASO[p],
-          estado: "vacia",
-          ayuda: p === "informacion" ? "La ficha de la empresa, la misma que la del cliente" : "Los procesos de la empresa, los mismos que los del cliente",
-          aviso: null,
-          sugeridas: 0,
-        };
       case "escala":
         estado = porRevisar > 0 ? "pendiente" : chequeo.completo ? "generada" : conHipotesis ? "pendiente" : "vacia";
         if (!porRevisar && !chequeo.completo && conHipotesis) aviso = { corto: "hipótesis", largo: "El mapa sale en parte de hipótesis: confírmalas en las reuniones" };
@@ -377,11 +368,12 @@ export default function LienzoDeExploracion({
             onElegir={setPaso}
             resumen={{ sugeridas: delResumen, confirmadas, estado: confirmadas > 0 ? "generada" : "vacia" }}
             filas={PIEZAS.map(filaDe)}
+            clientId={exp.empresa.clientId}
           />
         </aside>
 
         <main className="min-w-0 px-6 pb-10 pt-6 xl:px-8">
-          {paso !== "exploracion" && paso !== "procesos" && (
+          {paso !== "exploracion" && paso !== "informacion" && paso !== "procesos" && (
             <header className="mb-5">
               <h2 className="text-lg font-semibold text-fg">{NOMBRE_DEL_PASO[paso]}</h2>
               <p className="text-sm text-fg-muted">{DE_QUE_VA[paso]}</p>
@@ -390,7 +382,7 @@ export default function LienzoDeExploracion({
           {paso === "resumen" && <Resumen />}
           {paso === "preparacion" && <PasoPreparacion />}
           {paso === "exploracion" && <PasoExploracion />}
-          {paso === "informacion" && <PasoInformacion />}
+          {paso === "informacion" && <PasoInformacion info={infoDeLaEmpresa} />}
           {paso === "procesos" && <PasoProcesos />}
           {paso === "escala" && <PasoEscala />}
           {paso === "casos" && <PasoCasosDeUso />}

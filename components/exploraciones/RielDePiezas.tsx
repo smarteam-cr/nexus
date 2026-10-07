@@ -16,6 +16,8 @@
  * todavía nada. En pantallas chicas se acuesta y las sesiones se eligen en Exploración.
  */
 import type { EstadoDePieza, FilaDePieza } from "@/components/canvas/SelectorDePiezas";
+import AvisoDeFicha from "@/components/clients/AvisoDeFicha";
+import { ROTULO_DEL_SISTEMA } from "@/components/ui/sistema";
 import { cn } from "@/lib/cn";
 import { MAX_SESIONES, type PestanaDeSesion } from "@/lib/exploraciones/guia";
 import { diaCorto } from "@/lib/exploraciones/fechas";
@@ -83,6 +85,25 @@ function Fila({
   );
 }
 
+/** Una fila de «La cuenta», igual que en la ficha del cliente (components/clients/RielDelCliente.tsx). */
+function FilaDeCuenta({ etiqueta, activa, onClick, extra }: { etiqueta: string; activa: boolean; onClick: () => void; extra?: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={activa ? "page" : undefined}
+      className={cn(
+        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors lg:w-full",
+        activa ? "bg-info-surface font-semibold text-brand" : "text-fg-secondary hover:bg-surface-hover hover:text-fg",
+      )}
+    >
+      <span className={cn("h-2 w-2 flex-shrink-0 rounded-full", activa ? "bg-brand" : "bg-fg-muted/30")} aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate">{etiqueta}</span>
+      {extra}
+    </button>
+  );
+}
+
 /** Las sesiones, colgadas de Exploración. */
 function Sesiones({ abierta, alElegir }: { abierta: boolean; alElegir: (clave: string) => void }) {
   const { puedeEditar, guardando } = useLienzo();
@@ -141,11 +162,14 @@ export default function RielDePiezas({
   onElegir,
   resumen,
   filas,
+  clientId,
 }: {
   paso: PasoDelLienzoUI;
   onElegir: (p: PasoDelLienzoUI) => void;
   resumen: { sugeridas: number; confirmadas: number; estado: EstadoDePieza };
   filas: readonly FilaDelRiel[];
+  /** La empresa: «La cuenta» muestra su ficha y sus procesos, los mismos de la ficha del cliente. */
+  clientId: string;
 }) {
   const { sesion, abrirObjeciones } = useLienzo();
   return (
@@ -186,6 +210,12 @@ export default function RielDePiezas({
             )}
           </div>
         ))}
+      </div>
+      {/* Aparte, como en la ficha del cliente: lo de la empresa, compartido con su ficha (2026-10-06). */}
+      <div data-recorrido="preventa.cuenta" className="flex flex-wrap gap-0.5 border-t border-line pt-2.5 lg:flex-col">
+        <p className={cn(ROTULO_DEL_SISTEMA, "w-full px-2.5 pb-1.5")}>La cuenta</p>
+        <FilaDeCuenta etiqueta="Información del cliente" activa={paso === "informacion"} onClick={() => onElegir("informacion")} extra={<AvisoDeFicha clientId={clientId} />} />
+        <FilaDeCuenta etiqueta="Procesos" activa={paso === "procesos"} onClick={() => onElegir("procesos")} />
       </div>
       <div data-recorrido="preventa.objeciones" className="lg:mt-auto">
         <BotonDeObjeciones onClick={abrirObjeciones} />

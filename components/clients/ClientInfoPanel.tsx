@@ -49,24 +49,35 @@ export default function ClientInfoPanel({
   projectId,
   canvasId,
   slotDelPanel = null,
+  clientId: clientIdDado,
+  enLaPreventa = false,
 }: {
   projectId: string;
   canvasId: string;
   /** El panel de la derecha de la ficha (null con el panel oculto). */
   slotDelPanel?: HTMLElement | null;
+  /** La empresa, cuando el panel no vive en /clients/[id] (la preventa). Sin él, sale de la dirección. */
+  clientId?: string;
+  /**
+   * Montado dentro de una preventa (2026-10-06): la MISMA información de la empresa, sin Licencias (un
+   * prospecto todavía no compró nada), sin el margen de la ficha (lo pone el lienzo) y sin ofrecer el
+   * recorrido de la ficha (la preventa tiene el suyo).
+   */
+  enLaPreventa?: boolean;
   // domain/company siguen aceptándose por compatibilidad del caller, pero ya no
   // se usan acá (la sub-pestaña Sesiones que los consumía fue eliminada).
   domain?: string;
   company?: string;
 }) {
   const params = useParams();
-  const clientId = (params?.id as string) ?? "";
+  const clientId = clientIdDado ?? (params?.id as string) ?? "";
   const [tab, setTab] = useState<SubTab>("ficha");
   // Mientras está abierta, el botón «Recorrido» de la cabecera ofrece el de esta pantalla.
-  usePantallaDelRecorrido("ficha-informacion");
+  usePantallaDelRecorrido(enLaPreventa ? null : "ficha-informacion");
+  const pestanas = enLaPreventa ? TABS.filter((t) => t.key !== "licencias") : TABS;
 
   return (
-    <div className="space-y-5 px-8 pb-10 pt-6">
+    <div className={enLaPreventa ? "space-y-5" : "space-y-5 px-8 pb-10 pt-6"}>
       {slotDelPanel && clientId && createPortal(<PanelDeLaCuenta clientId={clientId} tabActual={tab} onIrA={setTab} />, slotDelPanel)}
 
       {/* El título y, a su derecha, las sub-pestañas y el PDF (diseño de la ficha, 2026-10-04). */}
@@ -74,13 +85,15 @@ export default function ClientInfoPanel({
         <div className="min-w-0">
           <h2 className="text-[22px] font-bold leading-tight text-fg">Información del cliente</h2>
           <p className="mt-0.5 text-[13px] text-fg-muted">
-            La ficha que leen los agentes, las licencias, los documentos y la marca del cliente.
+            {enLaPreventa
+              ? "La misma de la ficha del cliente: la leen los agentes y se comparte con la empresa en HubSpot."
+              : "La ficha que leen los agentes, las licencias, los documentos y la marca del cliente."}
           </p>
         </div>
         <span className="flex-1" />
         <Segmentado
           etiqueta="Qué mirar de la cuenta"
-          opciones={TABS.map((t) => ({ clave: t.key, etiqueta: t.label }))}
+          opciones={pestanas.map((t) => ({ clave: t.key, etiqueta: t.label }))}
           valor={tab}
           onCambio={setTab}
         />
@@ -100,7 +113,7 @@ export default function ClientInfoPanel({
       {/* Contenido del sub-tab activo */}
       <div>
         {tab === "ficha" && clientId && <FichaDelCliente clientId={clientId} />}
-        {tab === "licencias" && clientId && <LicenciasDelCliente clientId={clientId} />}
+        {tab === "licencias" && !enLaPreventa && clientId && <LicenciasDelCliente clientId={clientId} />}
 
         {tab === "docs" && <DocumentUpload projectId={projectId} />}
 

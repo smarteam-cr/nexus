@@ -2,22 +2,28 @@
 
 /**
  * PasoDeLaEmpresa — «Información del cliente» y «Procesos» dentro de la preventa (Elías, 2026-10-06:
- * «copia todo el módulo de información del cliente y procesos a las preventas»).
+ * «deben ser los mismos de los clientes … compartido por la misma empresa de HubSpot, y verse aparte,
+ * igual que en el módulo de clientes»).
  *
  * No es una copia: son los MISMOS componentes de la ficha del cliente sobre la MISMA empresa
- * (`exp.empresa.clientId`). Lo que se confirma acá queda en la ficha de la empresa y en HubSpot, y
- * cuando la venta pasa a proyecto, el CSE lo encuentra ya escrito. Quedan afuera las licencias (un
- * prospecto todavía no compró nada) y, por ahora, los documentos y la marca: viven en el proyecto de
- * estrategia del cliente, que la ficha no le crea a un prospecto (app/(shell)/clients/[id]/page.tsx).
- * Lo que se suma a mano en la preventa va en Exploración.
+ * (`exp.empresa.clientId`, que es la ficha de la empresa de HubSpot). Lo que se confirma acá queda en
+ * la ficha y en HubSpot, y cuando la venta pasa a proyecto el CSE lo encuentra ya escrito. En la
+ * barra van aparte, en «La cuenta», como en la ficha del cliente. Quedan afuera las licencias: un
+ * prospecto todavía no compró nada.
  */
-import FichaDelCliente from "@/components/clients/FichaDelCliente";
+import ClientInfoPanel from "@/components/clients/ClientInfoPanel";
 import ProcesosDeLaCuenta from "@/components/procesos/ProcesosDeLaCuenta";
 import { useLienzo } from "./contexto";
 
-export function PasoInformacion() {
+/** El proyecto que guarda la información de la empresa (lib/canvas/strategy-project.ts). */
+export interface InfoDeLaEmpresa {
+  projectId: string;
+  canvasId: string;
+}
+
+export function PasoInformacion({ info }: { info: InfoDeLaEmpresa }) {
   const { exp } = useLienzo();
-  return <FichaDelCliente clientId={exp.empresa.clientId} />;
+  return <ClientInfoPanel projectId={info.projectId} canvasId={info.canvasId} clientId={exp.empresa.clientId} enLaPreventa />;
 }
 
 export function PasoProcesos() {

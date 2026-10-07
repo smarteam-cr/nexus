@@ -4479,11 +4479,12 @@ salía cada idea y no había un camino corto para el prospecto que no llega por 
 - **Un prospecto en preventa es visible para quien trabaja las preventas** (`requireAccessToClient`,
   razón `preventa`). Hace falta para la ficha y los procesos de la empresa. ⚠ Solo si la empresa es
   PROSPECTO y la preventa está viva: una empresa que ya es cliente sigue con el acceso de la cartera.
-- **Información del cliente y Procesos son piezas de la preventa, con los MISMOS componentes de la
-  ficha y sobre la MISMA empresa.** No es una copia: lo que se confirma ahí queda en la ficha y en
-  HubSpot, y el CSE lo encuentra escrito cuando la venta pasa a proyecto. Quedan afuera las licencias
-  (un prospecto no compró nada) y, por ahora, los documentos y la marca: viven en el proyecto de
-  estrategia, que la ficha no le crea a un prospecto. Lo que se suma a mano va en Exploración.
+- **Información del cliente y Procesos van en «La cuenta», aparte de las piezas, como en la ficha del
+  cliente, con los MISMOS componentes y sobre la MISMA empresa de HubSpot.** No es una copia: lo que se
+  confirma ahí queda en la ficha y en HubSpot, y el CSE lo encuentra escrito cuando la venta pasa a
+  proyecto. Queda afuera Licencias (un prospecto no compró nada). Los documentos y la marca viven en el
+  proyecto de estrategia de la empresa, así que abrir la preventa se lo crea a un prospecto que no lo
+  tiene (mapear sus procesos ya lo hacía).
 - **Preparación son dos pestañas, Identificación y Conexión.** Identificación: lo que escribe la IA
   arriba (por qué ahora, su CRM actualmente, la radiografía y su industria), después las señales de
   HubSpot (antes «Detonante») y, en una fila, la ficha de contacto y la ficha de empresa. Conexión: lo
