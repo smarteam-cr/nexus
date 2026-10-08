@@ -1,11 +1,12 @@
 /**
  * lib/escala/documento/validar.ts — las pruebas que una versión pasa ANTES de publicarse. PURO.
  *
- * Replica las pruebas de `docs/escala/pruebas_escala.py` que tocan lo que Nexus lee:
+ * Replica las pruebas de `docs/escala/pruebas_escala.py`:
  *   1 · Ningún nivel vacío (con `aplica`, la misma regla de la pantalla)
+ *   2 · Nada se regala y 3 · Los ejemplos cuadran (las del CÁLCULO, con `calculo`)
  *   4 · Sin identificadores a la vista
  *   5 · Identificadores estables (contra la versión publicada, si hay)
- *   7 · Documentos alineados
+ *   7 · Documentos alineados (desde el 2026-10-08: dicen DESDE qué versión de la escala valen)
  * más la ESTRUCTURA que la pantalla da por hecha (cada nivel con criterios, resultado desde
  * Funcional, cada riesgo con su mensaje…).
  *
@@ -14,15 +15,17 @@
  * «8 · Ediciones coherentes» mira lo que es propio de una edición. Desde la 8.3.0 un criterio puede
  * decir cuáles otros requiere: «9 · Requeridos coherentes» revisa esos enlaces.
  *
- * Las pruebas 2 y 3 son del CÁLCULO: no se copian acá, las corre el mismo `pruebas_escala.py`
- * que llega con cada versión (`scripts/publicar-escala.ts` lo ejecuta). Así el cálculo tiene una
- * sola fuente, la que escribe el dueño de la escala.
+ * Las pruebas 2 y 3 son del CÁLCULO. Hasta el 2026-10-08 solo las corría `pruebas_escala.py`; desde
+ * que la escala se publica con un botón en Nexus (sin Python en el servidor) se corren también acá,
+ * copiadas línea por línea (`nivelDelDiagnostico` es el `nivel()` del Python). El script de
+ * publicación sigue corriendo el Python además: si cualquiera de los dos falla, no se publica.
  */
 import { aplicarEdicion } from "./edicion";
 import { criteriosPropios, FORMA_DE_EDICION, leerEncabezado, leerRetirados, PRIMER_NUMERO_DE_EDICION, todosLosCriterios } from "./parsear";
 import { aplica, CIERRES, DESPUES, dimensionAplica, type Perfil } from "./perfil";
 import { fallasDeRequeridos } from "./requeridos";
-import { LETRAS_CON_RESULTADO, type Escala } from "./tipos";
+import { compararVersiones } from "@/lib/escala/datos/reglas";
+import { LETRAS_CON_RESULTADO, type Criterio, type Dimension, type Escala, type Letra } from "./tipos";
 
 export interface ResultadoDePrueba {
   nombre: string;
@@ -37,6 +40,12 @@ export interface OpcionesDeValidacion {
   especificacion?: string | null;
   /** El texto del manual de operación: prueba 7. */
   manual?: string | null;
+  /**
+   * Correr también las pruebas del CÁLCULO (2 y 3). Piden el texto de la escala (la regla de «por
+   * confirmar» que tiene escrita) y la especificación (sus ejemplos); la 3 mira la dimensión del
+   * ejemplo de la escala real. Por eso van a pedido: al publicar.
+   */
+  calculo?: { texto: string } | null;
 }
 
 /** Los nueve perfiles de la prueba (las dos preguntas contestadas). */
@@ -106,6 +115,95 @@ function ningunNivelVacio(escala: Escala): ResultadoDePrueba {
     }
   }
   return prueba("1 · Ningún nivel vacío", vacios);
+}
+
+// ── El cálculo (pruebas 2 y 3) ─────────────────────────────────────────────────
+
+export type EstadoDelCriterio = "cumplido" | "iniciado" | "no";
+
+/**
+ * El nivel que alcanza una dimensión en un DIAGNÓSTICO, desde Funcional (null si no llega), y si
+ * queda por confirmar. Es el `nivel()` de `pruebas_escala.py`, línea por línea: un nivel se alcanza
+ * si se cumplen sus criterios de decisión y los de riesgo de los niveles anteriores; si solo faltan
+ * hábitos (iniciados, desde la 6.12.0), queda por confirmar. Desde la 6.12.0 un nivel sin criterios
+ * de decisión para el perfil frena; antes no frenaba.
+ */
+export function nivelDelDiagnostico(
+  d: Dimension,
+  perfil: Perfil,
+  estado: (c: Criterio) => EstadoDelCriterio,
+  reglaIniciado: boolean,
+): { alcanzado: Letra | null; porConfirmar: boolean } {
+  let alcanzado: Letra | null = null;
+  let porConfirmar = false;
+  const riesgosPrevios: Criterio[] = [];
+  for (const letra of LETRAS_CON_RESULTADO) {
+    const delNivel = d.niveles.find((n) => n.letra === letra)?.criterios.filter((c) => aplica(c, perfil)) ?? [];
+    const decision = delNivel.filter((c) => !c.riesgo);
+    if (decision.length === 0) {
+      if (reglaIniciado) break;
+      alcanzado = letra;
+      continue;
+    }
+    const faltan = [...decision, ...riesgosPrevios].filter((c) => estado(c) !== "cumplido");
+    if (faltan.length === 0) alcanzado = letra;
+    else if (faltan.every((c) => c.habito && (estado(c) === "iniciado" || !reglaIniciado))) {
+      alcanzado = letra;
+      porConfirmar = true;
+    } else break;
+    riesgosPrevios.push(...delNivel.filter((c) => c.riesgo));
+  }
+  return { alcanzado, porConfirmar };
+}
+
+/** La frase con que la escala escribe la regla de «por confirmar» desde la 6.12.0 (el Python la busca igual). */
+const REGLA_DE_INICIADOS = "solo le faltan hábitos iniciados";
+
+function nadaSeRegala(escala: Escala, texto: string): ResultadoDePrueba {
+  const reglaIniciado = texto.includes(REGLA_DE_INICIADOS);
+  const regalos: string[] = [];
+  for (const vista of vistas(escala)) {
+    for (const perfil of PERFILES_COMPLETOS) {
+      for (const d of vista.escala.areas.flatMap((a) => a.dimensiones)) {
+        if (!dimensionAplica(d, perfil)) continue;
+        const donde = `${vista.donde}${d.id}`;
+        const quien = `(${perfil.cierre}/${perfil.despues})`;
+        const sinNada = nivelDelDiagnostico(d, perfil, () => "no", reglaIniciado);
+        if (sinNada.alcanzado) regalos.push(`${donde} llega a ${sinNada.alcanzado} sin cumplir nada ${quien}`);
+        const sinHabitos = nivelDelDiagnostico(d, perfil, (c) => (c.habito ? "no" : "cumplido"), reglaIniciado);
+        if (sinHabitos.porConfirmar) regalos.push(`${donde} queda por confirmar con hábitos que no se hacen ${quien}`);
+      }
+    }
+  }
+  return prueba("2 · Nada se regala", regalos);
+}
+
+/** El puntaje de un tramo con su avance `num/den`: hacia abajo y sin pasar de 19 (especificación, paso 7). */
+function puntaje(nivel: "D" | "I" | "F" | "E", num: number, den: number): number {
+  return { D: 0, I: 20, F: 40, E: 60 }[nivel] + Math.min(Math.floor((num * 20) / den), 19);
+}
+
+/** Los ejemplos de la especificación dan lo que dicen. Es el «3» de `pruebas_escala.py`, con sus mismos casos. */
+function losEjemplosCuadran(escala: Escala, especificacion: string | null | undefined): ResultadoDePrueba {
+  const fallas: string[] = [];
+  // Diagnóstico: tres dimensiones en Funcional y una en Inicial con 3 de 5 → (1 + 1 + 1 + 3/5) / 4 = 18/20.
+  const capa = puntaje("I", 18, 20);
+  // Chequeo: dos en Funcional y dos en Inicial, a mitad de tramo → (1 + 1 + 1/2 + 1/2) / 4 = 3/4.
+  const chequeo = puntaje("I", 3, 4);
+  // La salida del diagnóstico: la 1.6 en Eficiente, con 1 de sus criterios de Óptimo (con equipo, continua).
+  const dim = escala.areas.flatMap((a) => a.dimensiones).find((d) => d.id === "1.6");
+  const optimo =
+    dim?.niveles.find((n) => n.letra === "O")?.criterios.filter((c) => !c.riesgo && aplica(c, { cierre: "con equipo", despues: "continua" })) ?? [];
+  const dimension = optimo.length ? puntaje("E", 1, optimo.length) : null;
+  if (capa !== 38) fallas.push(`la capa del ejemplo del puntaje da ${capa}, no 38.`);
+  if (chequeo !== 35) fallas.push(`la capa del ejemplo del chequeo da ${chequeo}, no 35.`);
+  if (dimension !== 65) {
+    fallas.push(`la dimensión del ejemplo de la salida da ${dimension ?? "nada (la 1.6 no tiene criterios de Óptimo)"}, no 65: tiene ${optimo.length} criterios de Óptimo.`);
+  }
+  const textos = ["Saca 38.", "saca 35.", "Eficiente, 65, cumple 1 de 4 para Óptimo"];
+  if (!especificacion) fallas.push("no hay especificación contra la cual mirar los ejemplos.");
+  else for (const t of textos) if (!especificacion.includes(t)) fallas.push(`la especificación no dice «${t}».`);
+  return prueba("3 · Los ejemplos cuadran", fallas);
 }
 
 function sinIdentificadoresALaVista(escala: Escala): ResultadoDePrueba {
@@ -187,8 +285,11 @@ function documentosAlineados(escala: Escala, opts: OpcionesDeValidacion): Result
     ["el manual", opts.manual],
   ] as const) {
     if (texto == null) continue;
+    // Desde el 2026-10-08 el encabezado dice DESDE qué versión de la escala vale el documento (Elías:
+    // la especificación y el manual sacan una versión nueva solo cuando cambian ellos).
     const dice = leerEncabezado(texto).escala;
-    if (dice !== escala.version) fallas.push(`${nombre} dice que va con la escala ${dice ?? "(no lo dice)"}; la escala es la ${escala.version}.`);
+    if (!dice || !/^\d+\.\d+\.\d+$/.test(dice)) fallas.push(`${nombre} no dice desde qué versión de la escala vale.`);
+    else if (compararVersiones(dice, escala.version) > 0) fallas.push(`${nombre} vale desde la escala ${dice}, que es posterior a la ${escala.version}.`);
   }
   return prueba("7 · Documentos alineados", fallas);
 }
@@ -340,6 +441,7 @@ export function validarEscala(escala: Escala, opts: OpcionesDeValidacion = {}): 
   return [
     estructura(escala),
     ningunNivelVacio(escala),
+    ...(opts.calculo ? [nadaSeRegala(escala, opts.calculo.texto), losEjemplosCuadran(escala, opts.especificacion)] : []),
     sinIdentificadoresALaVista(escala),
     identificadoresEstables(escala, opts),
     documentosAlineados(escala, opts),

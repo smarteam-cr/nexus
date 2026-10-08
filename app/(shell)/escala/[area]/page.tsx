@@ -18,6 +18,8 @@ import type { ConteosPorClave } from "@/lib/feedback/escala";
 import { contarPorAncla, contarPorArea } from "@/lib/feedback/escala-server";
 import { esRevisorDeFeedback } from "@/lib/feedback/reglas";
 import { esResponsable } from "@/lib/escala/responsable";
+import { puedeEditarLaEscala } from "@/lib/escala/datos/reglas";
+import { versionDelBorrador } from "@/lib/escala/datos/servidor";
 import { aplicarEdicion } from "@/lib/escala/documento/edicion";
 import { conteosQueSeVen, datosDeLaVista, vistaDesdeUrl } from "@/lib/escala/vista";
 import { leerMapaDeHerramientasVigente } from "@/lib/escala/herramientas/vigente";
@@ -60,12 +62,15 @@ export default async function PaginaDeLaEscala({
   // como todo el feedback; lo suyo lo ve en «Mis reportes»).
   const esRevisor = esRevisorDeFeedback(ctx.role);
   const nada = async (): Promise<ConteosPorClave> => ({});
-  const [conteos, porArea, versiones, manual, mapa] = await Promise.all([
+  // Quien edita la escala (super admin) ve el botón del borrador de la próxima versión.
+  const editor = puedeEditarLaEscala(ctx.role);
+  const [conteos, porArea, versiones, manual, mapa, borrador] = await Promise.all([
     esRevisor ? contarPorAncla(area.id) : nada(),
     esRevisor ? contarPorArea() : nada(),
     versionesPublicadas(),
     leerDocumentoPublicado("manual"),
     leerMapaDeHerramientasVigente(),
+    editor ? versionDelBorrador() : null,
   ]);
   const abiertosEnTotal = Object.values(porArea).reduce((s, c) => s + c.abiertos, 0);
 
@@ -89,6 +94,7 @@ export default async function PaginaDeLaEscala({
         porArea={porArea}
         abiertosEnTotal={abiertosEnTotal}
         esRevisor={esRevisor}
+        borrador={editor ? { version: borrador } : null}
         inicial={{
           vista: vistaDesdeUrl(uno(sp, "vista")),
           perfil: perfilDesdeUrl({ cierre: uno(sp, "cierre"), despues: uno(sp, "despues") }),

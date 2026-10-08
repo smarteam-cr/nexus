@@ -201,7 +201,8 @@ async function main() {
 
     // 3 · Las pruebas de Nexus
     titulo("Pruebas de Nexus");
-    for (const r of validarEscala(escala, { anterior, especificacion: textos.especificacion, manual: textos.manual })) {
+    // Con las del cálculo (2 y 3): desde el 2026-10-08 también corren en TypeScript, para publicar desde Nexus.
+    for (const r of validarEscala(escala, { anterior, especificacion: textos.especificacion, manual: textos.manual, calculo: { texto: textos.escala } })) {
       console.log(`${r.ok ? "PASA " : "FALLA"} ${r.nombre}`);
       for (const d of r.detalle.slice(0, 12)) console.log(`        ${d}`);
       if (r.detalle.length > 12) console.log(`        … y ${r.detalle.length - 12} más`);

@@ -8,7 +8,8 @@ Uso:
 La escala trae la matriz y las reglas; la especificación, el cálculo y sus ejemplos. Si se pasa la
 versión anterior de la escala, la prueba 5 revisa que ningún identificador haya desaparecido. Si el
 manual de operación está en la misma carpeta que la especificación, la prueba 7 revisa también su
-encabezado.
+encabezado. Desde la especificación 1.3.7, ese encabezado dice DESDE qué versión de la escala vale el
+documento: una versión nueva de la escala no obliga a sacar una de la especificación ni del manual.
 
 Desde la 8.0.0 la escala trae ediciones por industria, al final del documento. Las pruebas 1, 2, 4
 y 5 corren sobre la escala general y sobre la escala vista por cada edición, y la 8 mira lo que es
@@ -301,7 +302,7 @@ if CON_REQUERIDOS:
     print(f"  Requeridos: {len(CON_REQUERIDOS)} criterios requieren otro")
 for e in ediciones:
     print(f"  Edición «{e['nombre']}»: {len(e['propios'])} criterios propios, {len(e['reescritos'])} reescritos, {len(e['no_aplican'])} que no aplican")
-print(f"{ESPEC} {encabezado(espec, 'version')}, para la escala {encabezado(espec, 'escala')}")
+print(f"{ESPEC} {encabezado(espec, 'version')}, vale desde la escala {encabezado(espec, 'escala')}")
 print(f"Regla de «por confirmar» escrita en esta versión: {'solo hábitos iniciados' if REGLA_INICIADO else 'cualquier hábito que falte'}\n")
 
 # 1 · Ningún nivel vacío
@@ -381,15 +382,20 @@ prueba("5 · Identificadores estables", not (repetidos or reusados or perdidos),
 
 print("\n6 · Casos de referencia: en espera, como la calibración (manual de operación).\n")
 
-# 7 · Documentos alineados
+# 7 · Documentos alineados: la especificación y el manual dicen desde qué versión de la escala valen,
+# y no es posterior a la que se prueba
 vigente = encabezado(s, "version")
+def como_numeros(version):
+    return tuple(int(x) for x in version.split(".")) if version and re.fullmatch(r"\d+\.\d+\.\d+", version) else None
 desalineados = []
-if encabezado(espec, "escala") != vigente:
-    desalineados.append(f"especificación para {encabezado(espec, 'escala')}")
+def revisar_desde(nombre, desde):
+    if como_numeros(desde) is None:
+        desalineados.append(f"{nombre} no dice desde qué escala vale")
+    elif como_numeros(vigente) is None or como_numeros(desde) > como_numeros(vigente):
+        desalineados.append(f"{nombre} vale desde la {desde}, posterior")
+revisar_desde("especificación", encabezado(espec, "escala"))
 if os.path.exists(MANUAL):
-    man = encabezado(abrir(MANUAL), "escala")
-    if man != vigente:
-        desalineados.append(f"manual para {man}")
+    revisar_desde("manual", encabezado(abrir(MANUAL), "escala"))
 prueba("7 · Documentos alineados", not desalineados, f"escala {vigente}; " + ", ".join(desalineados))
 
 # 8 · Ediciones coherentes (solo si la versión trae ediciones, o algo que parece una y no se lee)

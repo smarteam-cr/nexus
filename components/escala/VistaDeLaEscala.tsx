@@ -188,6 +188,7 @@ export default function VistaDeLaEscala({
   inicial,
   hrefDeArea = (slug) => `/escala/${slug}`,
   hrefDeLaBandeja = "/feedback?origen=escala",
+  borrador = null,
 }: {
   datos: DatosDeLaVista;
   /** Los reportes de feedback por ancla (del área) y por área: solo para quien revisa; vacíos para los demás. */
@@ -202,6 +203,11 @@ export default function VistaDeLaEscala({
   inicial: EstadoInicial;
   hrefDeArea?: (slug: string) => string;
   hrefDeLaBandeja?: string;
+  /**
+   * Quien edita la escala (super admin) ve el botón del borrador de la próxima versión, con su número
+   * si hay uno abierto. null para los demás.
+   */
+  borrador?: { version: string | null } | null;
 }) {
   const router = useRouter();
   const { area } = datos;
@@ -366,6 +372,15 @@ export default function VistaDeLaEscala({
                       {abiertosEnTotal} sin revisar
                     </span>
                   )}
+                </Link>
+              )}
+              {borrador && (
+                <Link
+                  href="/escala/borrador"
+                  className={BOTON_CLARO}
+                  title="La próxima versión de la escala: lo que cambió, bajarla, subirle cambios y publicarla."
+                >
+                  {borrador.version ? `Borrador ${borrador.version}` : "Borrador"}
                 </Link>
               )}
               <Menu

@@ -46,7 +46,7 @@ mediciones necesitan consultar criterios con SQL, el catálogo por versión se d
 | ✅ | **Acuerdo: la escala es solo conocimiento** — qué queda en la escala, qué sale y en qué orden. |
 | ✅ | **La escala como datos** — las tablas, el formato de los datos, importar y generar con la prueba de ida y vuelta, y la 8.7.0 publicada pasada a datos. Nadie nota el cambio. |
 | ✅ | **Publicar desde los datos** — el borrador, importar cambios en bloque con bitácora, exportar el `.md` y publicar (con las mismas pruebas de hoy) congelando la versión. El `.md` del repo pasa a ser una exportación. |
-| ⬜ | **El borrador en Nexus** — los super admin ven el borrador en `/escala` con sus cambios, lo descargan, suben cambios en bloque y lo publican con un botón. |
+| ✅ | **El borrador en Nexus** — `/escala/borrador`, para los super admin: abrir el borrador, bajar su `.md`, subirlo con cambios (antes de guardar se ve qué cambia, criterio por criterio), la bitácora y «Revisar y publicar» con las mismas pruebas del script, sin Python. |
 | ⬜ | **El editor** — cambiar un criterio, una frase de nivel, una pregunta o lo que dice una edición desde la pantalla; cada cambio a la bitácora; un reporte de feedback abre su criterio en el borrador. |
 | ⬜ | **Teoría y manual a Documentación** — la Parte 1 y la parte de uso de la Parte 2 salen de la escala; la medición queda en la especificación. |
 | ⬜ | **El banco de preguntas** — el botón «Test» en la escala: preguntas por dimensión, con sus opciones y el nivel de cada una, filtrables por área, dimensión y dónde se preguntan. Lo leen el cuestionario y las exploraciones. |
@@ -57,16 +57,20 @@ mediciones necesitan consultar criterios con SQL, el catálogo por versión se d
 1. Se abre un borrador desde la versión publicada (`npx tsx scripts/escala-datos.ts borrador --version 8.8.0`).
 2. Los cambios entran al borrador: en bloque, importando un `.md` (`importar`), o —cuando esté el
    editor— desde la pantalla. Cada cambio queda en la bitácora.
-3. Se revisa el borrador (exportado, y desde la etapa 3, en la pantalla).
-4. Se publica (`scripts/publicar-escala.ts`, con las mismas pruebas de hoy): la versión se congela y
-   su `.md` queda en `EscalaDocumento`.
+3. Se revisa el borrador: su bitácora en `/escala/borrador` (o exportado).
+4. Se publica desde `/escala/borrador` («Revisar y publicar») o con `scripts/publicar-escala.ts`; las
+   dos corren las mismas pruebas. La versión se congela y su `.md` queda en `EscalaDocumento`.
 
 ⛔ Toda escritura a producción sigue igual: `$env:ALLOW_PROD_WRITE="1"` y `--apply`, en tu PC.
 
-## Lo que sigue pendiente de decidir
+## Decidido en el camino
 
-- **Publicar con un botón** (etapa 3) obliga a llevar a TypeScript las dos pruebas del cálculo que
-  hoy corre `pruebas_escala.py` (2 · Nada se regala, 3 · Los ejemplos cuadran) y a aflojar la prueba
-  7: hoy cada versión de la escala exige una versión nueva de la especificación y del manual, aunque
-  no cambien. Propuesta: que digan desde qué versión de la escala valen.
+- **La especificación y el manual dicen desde qué versión de la escala valen** (Elías, 2026-10-08):
+  sacan una versión nueva solo cuando cambian ellos. La prueba 7 lo mira así en Nexus y en
+  `pruebas_escala.py`; la especificación 1.3.7 lo dice. Por eso el botón publica solo la escala.
+- **Las pruebas del cálculo (2 y 3) corren también en TypeScript** (`lib/escala/documento/validar.ts`,
+  copiadas del Python línea por línea), para publicar sin Python. El script corre las dos.
+
+## Lo que sigue pendiente
+
 - **El mapa de herramientas** sigue como documento aparte; pasarlo a datos es otra tanda.

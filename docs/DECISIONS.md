@@ -5689,3 +5689,21 @@ etapas: docs/escala/plan-escala-como-datos.md.
   dato sin cambiar el texto, no se publica.
 - **Pendiente, antes de un botón «Publicar» en Nexus:** llevar a TypeScript las pruebas 2 y 3 del cálculo y
   aflojar la prueba 7 (hoy cada versión de la escala exige versión nueva de la especificación y del manual).
+
+## El borrador de la escala se publica desde Nexus (2026-10-08)
+
+**Contexto.** Etapa «El borrador en Nexus» del plan de la escala como datos. Elías decidió que la
+especificación y el manual sacan una versión nueva solo cuando cambian ellos.
+
+- **`/escala/borrador`, solo super admin** (`puedeEditarLaEscala`): abrir el borrador, bajar y subir el `.md`,
+  la bitácora y «Revisar y publicar». Al resto la página lo lleva a la escala publicada.
+- **Nada se guarda sin ver antes qué cambia**: subir un `.md` muestra los cambios, criterio por criterio, y
+  recién al confirmar los guarda con su nota. El cuerpo viaja comprimido (gzip): la escala pesa más de medio
+  mega y nginx corta en 1 MB.
+- **El botón corre las mismas pruebas que el script, sin Python.** Las 2 y 3 (el cálculo) se copiaron del
+  Python a `validar.ts` (`nivelDelDiagnostico` es su `nivel()`); el script sigue corriendo el Python además.
+  Frena también lo que una edición dice con sus palabras y quedó viejo, hasta que alguien marca que lo miró.
+- **El botón publica solo la escala.** La prueba 7 ahora pide que la especificación y el manual digan DESDE
+  qué versión valen (no posterior a la que se publica). Especificación 1.3.7; el manual no cambia.
+- **La fecha de la bitácora se escribe a mano en hora de Costa Rica** (`fechaYHora`): con `toLocaleString`, el
+  servidor y el navegador la escribían distinto («p. m.» con otro espacio) y React no hidrataba la pantalla.

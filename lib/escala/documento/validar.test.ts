@@ -68,9 +68,17 @@ describe("la escala de juguete", () => {
     expect(r.find((x) => x.nombre.startsWith("1"))!.detalle).toContain("1.1 E (con equipo/única)");
   });
 
-  it("7 · la especificación o el manual van con otra escala", () => {
+  it("7 · la especificación y el manual dicen DESDE qué escala valen: una anterior sirve (2026-10-08)", () => {
     const r = validarEscala(base, { especificacion: MINI_ESPECIFICACION.replace("escala: 9.9.9", "escala: 9.9.8"), manual: MINI_MANUAL });
-    expect(fallidas(r)).toEqual(["7 · Documentos alineados"]);
+    expect(fallidas(r)).toEqual([]);
+  });
+
+  it("7 · una posterior, o ninguna, no", () => {
+    const posterior = validarEscala(base, { especificacion: MINI_ESPECIFICACION.replace("escala: 9.9.9", "escala: 9.10.0"), manual: MINI_MANUAL });
+    expect(fallidas(posterior)).toEqual(["7 · Documentos alineados"]);
+    expect(posterior.find((x) => !x.ok)!.detalle).toEqual(["la especificación vale desde la escala 9.10.0, que es posterior a la 9.9.9."]);
+    const sin = validarEscala(base, { especificacion: MINI_ESPECIFICACION, manual: MINI_MANUAL.replace("escala: 9.9.9\n", "") });
+    expect(sin.find((x) => !x.ok)!.detalle).toEqual(["el manual no dice desde qué versión de la escala vale."]);
   });
 
   it("estructura · un criterio de riesgo sin mensaje", () => {
@@ -489,5 +497,38 @@ describe("qué cambió entre versiones", () => {
 
   it("iguales, un solo tramo", () => {
     expect(diferenciaPorPalabras("igual", "igual")).toEqual([{ tipo: "igual", texto: "igual" }]);
+  });
+});
+
+describe("las pruebas del cálculo (2 y 3), las mismas de pruebas_escala.py", () => {
+  const texto = leerArchivoDeLaEscala("escala");
+  const especificacion = leerArchivoDeLaEscala("especificacion");
+  const real = parsearEscala(texto);
+  const calculo = (r: ResultadoDePrueba[]) => r.filter((x) => x.nombre.startsWith("2 ·") || x.nombre.startsWith("3 ·"));
+
+  it("van a pedido: sin `calculo` no corren", () => {
+    expect(calculo(validarEscala(real, { especificacion }))).toEqual([]);
+  });
+
+  it("la escala publicada las pasa, como en el Python", () => {
+    const r = calculo(validarEscala(real, { especificacion, calculo: { texto } }));
+    expect(r.map((x) => [x.nombre, x.ok, x.detalle])).toEqual([
+      ["2 · Nada se regala", true, []],
+      ["3 · Los ejemplos cuadran", true, []],
+    ]);
+  });
+
+  it("2 · sin la regla de los hábitos iniciados, un nivel al que solo le faltan hábitos queda por confirmar: se regala", () => {
+    const mini = parsearEscala(MINI_ESCALA);
+    const r = validarEscala(mini, { calculo: { texto: MINI_ESCALA } });
+    expect(r.find((x) => x.nombre === "2 · Nada se regala")!.detalle).toContain("1.1 queda por confirmar con hábitos que no se hacen (con equipo/única)");
+    // Con la regla escrita (desde la 6.12.0), un hábito que no se hace cuenta como no cumplido.
+    const conRegla = validarEscala(mini, { calculo: { texto: `${MINI_ESCALA}\nCuando a una dimensión solo le faltan hábitos iniciados…` } });
+    expect(conRegla.find((x) => x.nombre === "2 · Nada se regala")!.ok).toBe(true);
+  });
+
+  it("3 · si la especificación cambia un ejemplo, frena", () => {
+    const r = validarEscala(real, { especificacion: especificacion.replace("Saca 38.", "Saca 39."), calculo: { texto } });
+    expect(r.find((x) => x.nombre === "3 · Los ejemplos cuadran")!.detalle).toEqual(["la especificación no dice «Saca 38.»."]);
   });
 });

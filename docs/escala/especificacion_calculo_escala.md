@@ -1,15 +1,15 @@
 ---
 documento: Escala de Rendimiento Smarteam — Especificación del cálculo
-version: 1.3.6
+version: 1.3.7
 escala: 8.7.0
-fecha: 2026-10-01
+fecha: 2026-10-08
 ---
 
 # Especificación del cálculo de la Escala de Rendimiento
 
 Esta especificación convierte las reglas de la escala en pasos exactos, para que el chequeo, el cotizador y los agentes de Nexus calculen igual. La leen quienes implementan esos sistemas; para usar la escala no hace falta.
 
-Precisa las reglas de la escala, `escala_rendimiento_smarteam.md`, donde ella no llega: redondeos, desempates y casos borde; en eso manda este documento. Si algo de aquí contradice lo que la escala sí dice, es un error de este documento: se aplica la escala y se corrige aquí. El encabezado dice con qué versión de la escala va.
+Precisa las reglas de la escala, `escala_rendimiento_smarteam.md`, donde ella no llega: redondeos, desempates y casos borde; en eso manda este documento. Si algo de aquí contradice lo que la escala sí dice, es un error de este documento: se aplica la escala y se corrige aquí. El encabezado dice desde qué versión de la escala vale.
 
 ## Identificadores y etiquetas
 
@@ -116,7 +116,7 @@ Cada versión de la escala y de esta especificación, y cada sistema que las imp
 4. **Sin identificadores a la vista.** Ningún texto que ve el cliente —criterios, resultados, costos o mensajes— cita un identificador.
 5. **Identificadores estables.** Ninguno se repite, ninguno retirado se reusa, y ninguno existente cambia de dimensión ni de nivel.
 6. **Casos de referencia.** En espera, igual que la calibración: cuando existan los casos de referencia validados, el cálculo reproduce el diagnóstico correcto de cada uno.
-7. **Documentos alineados.** Esta especificación y el manual de operación dicen en su encabezado con qué versión de la escala van, y es la vigente.
+7. **Documentos alineados.** Esta especificación y el manual de operación dicen en su encabezado desde qué versión de la escala valen, y no es posterior a la que se publica. Sacan una versión nueva solo cuando cambian ellos.
 8. **Ediciones coherentes.** Cada edición tiene su clave, su perfil habitual y su bloque de números. Lo que reescribe o saca existe en la matriz, y un criterio propio no usa un identificador de la matriz ni de otra edición. Si toca los criterios de una dimensión, dice algo de todos los de la matriz: lo reescribe, lo saca o lo deja como está, y una sola de las tres. Un criterio reescrito dice algo distinto de la matriz y conserva las palabras con valor fijo que tiene en ella; la misma palabra con el verbo en plural —«no se dejan envejecer»— es la misma. Una edición no le cambia el nombre a una dimensión de base operativa ni saca una dimensión que en la escala general aplica. Y el título de la parte de las ediciones y el de cada edición tienen que estar escritos con su forma exacta: uno mal escrito haría que la edición se leyera como prosa y desapareciera sin aviso.
 
 9. **Requeridos coherentes.** Lo que un criterio requiere existe, no es él mismo y no se repite. Los dos son de Funcional para arriba. Lo requerido es de un nivel igual o anterior y, si es de la misma dimensión, de un nivel anterior. Hay al menos un perfil de negocio en que los dos aplican. No hay ciclos. En una edición, un criterio propio no requiere algo que esa edición no tiene.
@@ -129,9 +129,11 @@ Las pruebas 1 a 5, la 7, la 8 y la 9 las corre `pruebas_escala.py`:
 python3 pruebas_escala.py escala_rendimiento_smarteam.md especificacion_calculo_escala.md [escala_anterior.md]
 ```
 
-La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación.
+La prueba 5 compara contra la versión anterior de la escala, si se le pasa. La 7 revisa también el manual, si está en la misma carpeta que la especificación. Nexus corre las mismas antes de publicar una versión desde su pantalla.
 
 ## Historial de versiones
+
+**1.3.7 (2026-10-08).** El encabezado de esta especificación y el del manual dicen desde qué versión de la escala valen: una versión nueva de la escala ya no obliga a sacar una de ellos. No cambia el cálculo.
 
 **1.3.6 (2026-10-01).** Acompaña a la escala 8.7.0, que suma siete criterios y precisa seis sin cambiar su identificador. No retira ninguno ni cambia el cálculo.
 
