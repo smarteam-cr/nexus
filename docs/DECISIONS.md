@@ -5660,3 +5660,32 @@ había un solo bloque para todas sus piezas.
 - **La exploración**: al preparar las sesiones, la guía lee además las reuniones y las notas de su bloque; al
   leer, la reunión sale del mismo bloque (las del cliente que nadie sacó, más las agregadas). Antes leía
   cualquier reunión del proyecto, también las internas.
+
+## La escala vive como datos; el `.md` se genera (2026-10-08)
+
+**Contexto.** Elías: la escala deja de ser un `.md`; vive en la base y el `.md` «se forma cada vez que se
+descarga». Es el primer paso antes de la mejora grande (las 13 decisiones de la revisión de la 8.7). Plan y
+etapas: docs/escala/plan-escala-como-datos.md.
+
+- **Una fila por versión, con la estructura entera en JSON** (`EscalaVersion`, lib/escala/datos/tipos.ts), no
+  una tabla por criterio. *Por qué:* una versión publicada se congela entera, y comparar dos versiones es
+  comparar dos documentos; el detalle por criterio lo da la bitácora (`EscalaCambio`). Si las mediciones
+  necesitan consultar criterios con SQL, el catálogo de cada versión se deriva al publicar.
+- **La matriz y las ediciones son estructura; la prosa, bloques de texto en orden.** La prosa (Partes 1, 2 y 4)
+  es la que sale de la escala cuando la teoría y el manual pasen a Documentación: modelarla ahora sería trabajo
+  que se tira.
+- **Ida y vuelta exacta, y la comprueba el importador**: `importarEscala` genera el `.md` desde lo que leyó y
+  frena con la línea si no da el mismo texto. Por eso el importador es ESTRICTO (un párrafo por línea, una línea
+  en blanco entre bloques), al revés del lector, que tolera.
+- **Las pantallas no cambian**: `escalaDeLosDatos` es `parsearEscala(generarMarkdown(datos))`, con el lector de
+  siempre. `EscalaDocumento` sigue guardando el `.md` de cada publicada (ahora generado): es lo que leen y lo que
+  se descarga.
+- **Un solo borrador a la vez** (índice único parcial en la base). Cada cambio sube su `revision` —un cambio
+  ajeno no se pisa: frena— y queda en la bitácora con las anclas del feedback (`1.7.F1`, `1.7.F`, `1.7`, y
+  `edicion:<clave>/…` o `texto:<parte> / <sección>`).
+- **Se publica con `scripts/publicar-escala.ts`, con las mismas pruebas de siempre** (las de Nexus y
+  `pruebas_escala.py`): toma la escala del borrador y lo congela en la misma transacción que inserta los
+  documentos. Sin borrador, la del repo se importa y queda también como datos; si no se puede guardar como
+  dato sin cambiar el texto, no se publica.
+- **Pendiente, antes de un botón «Publicar» en Nexus:** llevar a TypeScript las pruebas 2 y 3 del cálculo y
+  aflojar la prueba 7 (hoy cada versión de la escala exige versión nueva de la especificación y del manual).

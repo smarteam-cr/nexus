@@ -313,6 +313,22 @@ CREATE POLICY deny_all_non_superuser ON "EscalaRespuesta"
   TO PUBLIC
   USING (false);
 
+-- La escala como datos (2026-10-08, scripts/sql/2026-10-08-escala-como-datos.sql): cada versión
+-- (también el borrador en edición) y la bitácora de sus cambios. Solo las lee el servidor.
+DROP POLICY IF EXISTS deny_all_non_superuser ON "EscalaVersion";
+CREATE POLICY deny_all_non_superuser ON "EscalaVersion"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
+DROP POLICY IF EXISTS deny_all_non_superuser ON "EscalaCambio";
+CREATE POLICY deny_all_non_superuser ON "EscalaCambio"
+  AS RESTRICTIVE
+  FOR ALL
+  TO PUBLIC
+  USING (false);
+
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (el runner con --apply ya la corre):

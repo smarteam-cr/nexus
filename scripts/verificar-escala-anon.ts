@@ -24,7 +24,8 @@ import { createClient } from "@supabase/supabase-js";
 import { assertProdWriteAllowed } from "./lib/guard";
 import { createScriptPool } from "./lib/db";
 
-const TABLAS = ["EscalaComentario", "EscalaRespuesta", "EscalaDocumento"] as const;
+// La escala como datos (2026-10-08): sus versiones —también el borrador en edición— y su bitácora.
+const TABLAS = ["EscalaComentario", "EscalaRespuesta", "EscalaDocumento", "EscalaVersion", "EscalaCambio"] as const;
 const CENTINELA = process.argv.includes("--centinela");
 
 async function main() {

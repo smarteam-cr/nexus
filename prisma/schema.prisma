@@ -5570,6 +5570,80 @@ model EscalaDocumento {
   @@index([documento, publicadaEn])
 }
 
+/// La escala como DATOS (2026-10-08, lib/escala/datos/): cada versión con su estructura entera.
+/// `borrador` = la que se está editando (una sola: índice único parcial en el SQL); `publicada` =
+/// congelada, no cambia nunca. El `.md` se genera desde `datos` y, al publicar, va a EscalaDocumento.
+/// SQL: scripts/sql/2026-10-08-escala-como-datos.sql (ANTES del deploy).
+model EscalaVersion {
+  id String @id @default(cuid())
+
+  /// «8.7.0». Para el borrador, la versión que va a ser.
+  version String @unique
+  /// borrador · publicada (lib/escala/datos/reglas.ts)
+  estado  String
+  /// FORMATO_DE_LOS_DATOS con que se guardó.
+  formato Int
+  /// EscalaDatos (lib/escala/datos/tipos.ts).
+  datos   Json
+  /// sha256 del `.md` que generan los datos.
+  huella  String
+  // nullable porque la primera versión pasada a datos no sale de otra
+  basadaEn String?
+  /// Sube con cada cambio al borrador: dos ediciones a la vez no se pisan.
+  revision Int @default(0)
+
+  creadaEn            DateTime  @default(now())
+  // nullable porque la migración inicial la hace un script, no una persona con sesión
+  creadaPorEmail      String?
+  actualizadaEn       DateTime  @default(now())
+  // nullable porque la migración inicial la hace un script, no una persona con sesión
+  actualizadaPorEmail String?
+  // nullable porque un borrador todavía no se publicó
+  publicadaEn         DateTime?
+  // nullable porque un borrador todavía no se publicó
+  publicadaPorEmail   String?
+
+  cambios EscalaCambio[]
+
+  @@index([estado, publicadaEn])
+}
+
+/// La bitácora de una versión de la escala: cada cambio, anclado a lo que tocó, con el antes y el
+/// después. Se escribe al importar cambios en bloque o desde el editor. SQL: el mismo de EscalaVersion.
+model EscalaCambio {
+  id String @id @default(cuid())
+
+  versionId String
+  version   EscalaVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  /// `1.7.F1` · `1.7.F` · `1.7` · `1` · `edicion:ecommerce-retail/1.7.F1` · `texto:Parte 2 — …/## …`
+  ancla       String
+  /// criterio · nivel · dimension · area · edicion · texto · encabezado (lib/escala/datos/reglas.ts)
+  tipoDeAncla String
+  /// agregado · cambiado · quitado
+  accion      String
+  // nullable porque agregar o quitar algo entero no cambia un campo
+  campo       String?
+  // nullable porque lo agregado no tenía un antes
+  antes       String?
+  // nullable porque lo quitado no tiene un después
+  despues     String?
+  /// importacion · editor
+  origen      String
+  // nullable porque solo los cambios en bloque van agrupados
+  lote        String?
+  // nullable porque el porqué es opcional
+  nota        String?
+  // nullable porque no todo cambio sale de un reporte. FK a FeedbackReporte en el SQL (SET NULL).
+  feedbackId  String?
+  autorEmail  String
+
+  createdAt DateTime @default(now())
+
+  @@index([versionId, createdAt])
+  @@index([ancla])
+}
+
 /// Un comentario del equipo anclado a un identificador ESTABLE de la escala: la dimensión (`1.7`),
 /// el nivel (`1.7.F`) o el criterio (`1.7.F1`). Guarda la versión y el texto de ese momento para
 /// mostrar, en una versión nueva, si el texto cambió. El estado lo cambia solo el responsable.

@@ -4,12 +4,19 @@
  * Nexus es la fuente de la escala: la sección la lee de la base, no del repo (la imagen de
  * producción no lleva ningún .md). Una versión nueva entra así:
  *
- *   1. Reemplazas los archivos en `docs/escala/` (escala, especificación, manual, pruebas).
- *   2. Corres este script EN SECO: lee los tres documentos, los valida, corre el
- *      `pruebas_escala.py` que llegó con la versión y te muestra qué cambia contra la publicada
- *      y cuántos comentarios quedan con un texto distinto al que comentaron.
- *   3. Si todo pasa, lo corres con `--apply` y queda publicada. La sección cambia sola, sin deploy
- *      (salvo que la versión nueva traiga un formato que este lector no conoce: eso lo avisa acá).
+ *   1. La escala se cambia en su BORRADOR, como datos (desde el 2026-10-08,
+ *      `scripts/escala-datos.ts`); la especificación, el manual y las pruebas, en `docs/escala/`.
+ *   2. Corres este script EN SECO: toma la escala del borrador (si no hay borrador, del archivo del
+ *      repo, como antes), lee los otros documentos, los valida, corre el `pruebas_escala.py` que
+ *      llegó con la versión y te muestra qué cambia contra la publicada y cuántos comentarios
+ *      quedan con un texto distinto al que comentaron.
+ *   3. Si todo pasa, lo corres con `--apply` y queda publicada: su `.md` (generado desde los datos)
+ *      va a "EscalaDocumento" y el borrador se congela como versión publicada, en la misma
+ *      transacción. La sección cambia sola, sin deploy (salvo que la versión nueva traiga un formato
+ *      que este lector no conoce: eso lo avisa acá).
+ *
+ * Toda escala que se publica queda también como datos ("EscalaVersion"): la que llega por archivo
+ * se importa (y si no se puede guardar como dato sin cambiar el texto, no se publica).
  *
  * ── LO QUE CUIDA ─────────────────────────────────────────────────────────────
  * · El texto se guarda con saltos de línea LF, venga de la máquina que venga: la huella (sha256)
@@ -52,8 +59,12 @@ import { huellaDe } from "@/lib/escala/documento/huella";
 import { parsearMapaDeHerramientas } from "@/lib/escala/herramientas/parsear";
 import { problemasDelMapa } from "@/lib/escala/herramientas/validar";
 import type { MapaDeHerramientas } from "@/lib/escala/herramientas/tipos";
+import { generarMarkdown } from "@/lib/escala/datos/generar";
+import { importarEscala } from "@/lib/escala/datos/importar";
+import type { EscalaDatos } from "@/lib/escala/datos/tipos";
+import { congelarBorrador, guardarPublicada, leerBorrador, leerVersion, ultimaPublicada, type VersionConDatos } from "@/lib/escala/datos/versiones";
 
-const APPLY = resolverApply({ tablas: ["EscalaDocumento"] });
+const APPLY = resolverApply({ tablas: ["EscalaDocumento", "EscalaVersion"] });
 const SIN_PYTHON = process.argv.includes("--sin-python");
 /** Lo que una edición dice con sus palabras y quedó viejo frena la publicación, salvo que se haya mirado. */
 const EDICIONES_REVISADAS = process.argv.includes("--ediciones-revisadas");
@@ -107,6 +118,38 @@ async function main() {
     }
   }
 
+  // 1b · La escala sale de su BORRADOR, si hay uno abierto: desde el 2026-10-08 se edita como datos y
+  // su `.md` se genera. Sin borrador, sale del archivo del repo, como antes, y se pasa a datos.
+  const { prisma, close } = createScriptDb();
+  let borrador: VersionConDatos | null = null;
+  let datosDelArchivo: EscalaDatos | null = null;
+  try {
+    borrador = await leerBorrador(prisma);
+  } catch (e) {
+    await close();
+    if ((e as { code?: string }).code === "P2021") {
+      console.error("⛔ Falta aplicar scripts/sql/2026-10-08-escala-como-datos.sql (la escala como datos).");
+      process.exit(1);
+    }
+    throw e;
+  }
+  if (borrador) {
+    const delRepo = textos.escala;
+    textos.escala = generarMarkdown(borrador.datos);
+    const anotados = await prisma.escalaCambio.count({ where: { versionId: borrador.id } });
+    console.log(`La escala sale del BORRADOR ${borrador.version} (revisión ${borrador.revision}, ${anotados} cambio(s) en su bitácora). El archivo del repo no se usa.`);
+    if (delRepo !== textos.escala) console.log("  El archivo del repo dice otra cosa: después de publicar, `npx tsx scripts/escala-datos.ts exportar --al-repo` lo deja igual.");
+  } else {
+    try {
+      datosDelArchivo = importarEscala(textos.escala);
+    } catch (e) {
+      console.error(`⛔ La escala del repo no se puede guardar como datos: ${e instanceof Error ? e.message : String(e)}`);
+      console.error("   Toda versión publicada queda también como datos. Corrige esa línea, o cambia la escala en un borrador (scripts/escala-datos.ts).");
+      await close();
+      process.exit(1);
+    }
+  }
+
   let escala: Escala;
   try {
     escala = parsearEscala(textos.escala);
@@ -130,7 +173,6 @@ async function main() {
     );
   }
 
-  const { prisma, close } = createScriptDb();
   try {
     // 2 · Lo publicado
     let publicadas: { documento: string; version: string; huella: string; texto: string }[];
@@ -176,7 +218,11 @@ async function main() {
         console.error("⛔ No encontré Python. Instálalo, o corre con --sin-python sabiendo que el cálculo no se prueba.");
         fallas.push("pruebas_escala.py (sin Python)");
       } else {
-        const args = [RUTA_DE_LAS_PRUEBAS, rutaDelArchivo("escala"), rutaDelArchivo("especificacion")];
+        // Se prueba el texto que se va a publicar: el del borrador, o el del repo con saltos LF. El
+        // manual lo busca al lado de la especificación, que sigue en el repo.
+        const aPublicar = path.join(os.tmpdir(), `escala-a-publicar-${escala.version}.md`);
+        fs.writeFileSync(aPublicar, textos.escala, "utf8");
+        const args = [RUTA_DE_LAS_PRUEBAS, aPublicar, rutaDelArchivo("especificacion")];
         let temporal: string | null = null;
         if (anteriorFila) {
           temporal = path.join(os.tmpdir(), `escala-publicada-${anteriorFila.version}.md`);
@@ -185,6 +231,7 @@ async function main() {
         }
         const r = spawnSync(py, args, { encoding: "utf8", env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
         if (temporal) fs.rmSync(temporal, { force: true });
+        fs.rmSync(aPublicar, { force: true });
         process.stdout.write((r.stdout ?? "").replace(/\r/g, "").replace(/^(?=.)/gm, "  "));
         if (r.status !== 0) {
           console.error((r.stderr ?? "").trim());
@@ -311,6 +358,19 @@ async function main() {
       aInsertar.push({ documento: d.clave, version, escalaVersion, archivo: d.archivo, texto, huella });
     }
 
+    // 6b · La escala como datos: el borrador se congela; la que llega por archivo se guarda como datos.
+    const escalaNueva = aInsertar.some((x) => x.documento === "escala");
+    if (borrador && !escalaNueva) {
+      console.error(`⛔ El borrador ${borrador.version} no entra como versión nueva de la escala (mira arriba por qué).`);
+      fallas.push(`borrador ${borrador.version}`);
+    } else if (borrador) {
+      console.log(`■ El borrador ${borrador.version} se congela como versión publicada.`);
+    } else if (escalaNueva) {
+      console.log(`+ La escala ${escala.version} queda también como datos.`);
+    } else if (!(await leerVersion(prisma, escala.version))) {
+      console.log(`⚠ La ${escala.version} publicada todavía no está como datos: npx tsx scripts/escala-datos.ts migrar`);
+    }
+
     if (fallas.length) {
       console.error(`\n⛔ No se publica: ${fallas.join(" · ")}.`);
       process.exit(1);
@@ -332,10 +392,22 @@ async function main() {
       : null;
     const por = miembro?.email ?? null;
     if (candidato && !por) console.log(`(«${candidato}» no es del equipo en Nexus: queda sin autor. Usa --por tu@smarteamcr.com.)`);
+    // Todo o nada: los documentos y la versión como datos, en una transacción.
+    const en = new Date();
     await prisma.$transaction(
-      aInsertar.map((x) => prisma.escalaDocumento.create({ data: { ...x, publicadaPorEmail: por } })),
+      async (tx) => {
+        for (const x of aInsertar) await tx.escalaDocumento.create({ data: { ...x, publicadaEn: en, publicadaPorEmail: por } });
+        if (borrador) await congelarBorrador(tx, { borrador, por, en });
+        else if (escalaNueva && datosDelArchivo) {
+          await guardarPublicada(tx, { datos: datosDelArchivo, por, en, basadaEn: (await ultimaPublicada(tx))?.version ?? null });
+        }
+      },
+      { timeout: 60_000 },
     );
     console.log(`\n✓ Publicado: ${aInsertar.map((x) => `${x.archivo} ${x.version}`).join(" · ")}${por ? ` (por ${por})` : ""}.`);
+    if (borrador) {
+      console.log(`  La ${borrador.version} quedó congelada. Para que el archivo del repo la diga: npx tsx scripts/escala-datos.ts exportar --al-repo`);
+    }
   } finally {
     await close();
   }
