@@ -36,6 +36,7 @@ export function ContextRow({
   action,
   onRemove,
   removeTitle,
+  seleccion,
 }: {
   icon?: string;
   meta: string;
@@ -46,9 +47,20 @@ export function ContextRow({
   action?: { label: string; onClick: () => void; disabled?: boolean };
   onRemove?: () => void;
   removeTitle?: string;
+  /** Una casilla a la izquierda para elegir varias filas (la columna de reuniones de la propuesta). */
+  seleccion?: { marcada: boolean; onCambiar: () => void; etiqueta: string };
 }) {
   return (
-    <li className={`flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-2.5 py-1.5${dim ? " opacity-60" : ""}`}>
+    <li className={`flex items-start gap-2 rounded-lg border border-line bg-surface-muted px-2.5 py-1.5${dim ? " opacity-60" : ""}${seleccion?.marcada ? " border-info-line bg-info-surface" : ""}`}>
+      {seleccion && (
+        <input
+          type="checkbox"
+          checked={seleccion.marcada}
+          onChange={seleccion.onCambiar}
+          aria-label={seleccion.etiqueta}
+          className="mt-1 h-3.5 w-3.5 flex-shrink-0 cursor-pointer accent-brand"
+        />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 text-[10px] text-fg-muted">
           {icon && (

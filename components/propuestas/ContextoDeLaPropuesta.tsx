@@ -27,7 +27,7 @@ import { ContextColumn, ContextColumnList, ContextRow, CTX_ICONS } from "@/compo
 import { FilaDeAlrededor } from "@/components/clients/FilaDeAlrededor";
 import { fechaDeVentas } from "@/lib/business-cases/estado-de-la-propuesta";
 import ColumnaPreventa, { type PreventaDeLaPropuesta } from "./ColumnaPreventa";
-import AccionesDeReuniones from "./AccionesDeReuniones";
+import { useAccionesDeReuniones } from "./AccionesDeReuniones";
 
 type SessionMeta = { sessionId: string; title: string; date: string; participants: string[]; applies: boolean; hasTranscript: boolean; enProyecto?: boolean };
 type Transcript = {
@@ -245,6 +245,17 @@ export default function ContextoDeLaPropuesta({
     [bcId, toast, loadTags],
   );
 
+  // Quitar reuniones de a muchas y deshacerlo con Ctrl+Z (F-4). La X de cada fila pasa por acá también.
+  const acciones = useAccionesDeReuniones({
+    bcId,
+    incluidas: included,
+    onCambio: async () => {
+      await loadSessions();
+      onAfterChange?.();
+    },
+    onBuscar: () => setShowSearch(true),
+  });
+
   const toggleSession = async (sessionId: string, include: boolean) => {
     setBusyId(sessionId);
     try {
@@ -455,18 +466,8 @@ export default function ContextoDeLaPropuesta({
             </ContextColumn>
 
             <ContextColumn icon={CTX_ICONS.meet} color="#16a34a" title="Google Meet" count={included.length}>
-              {/* Quitar todas de una vez, o vaciar y buscar la que sirve (F-4 de Feedback, 2026-10-08). */}
-              {puedeEditar && (
-                <AccionesDeReuniones
-                  bcId={bcId}
-                  incluidas={included.map((s) => s.sessionId)}
-                  onCambio={async () => {
-                    await loadSessions();
-                    onAfterChange?.();
-                  }}
-                  onBuscar={() => setShowSearch(true)}
-                />
-              )}
+              {/* Quitar varias o todas, y deshacerlo con Ctrl+Z (F-4 de Feedback, 2026-10-08). */}
+              {puedeEditar && acciones.barra}
               <ContextColumnList loading={loadingSessions} empty="Sin reuniones elegidas. Agrégalas con «Buscar más sesiones».">
                 {included.map((s) => (
                   <ContextRow
@@ -475,7 +476,8 @@ export default function ContextoDeLaPropuesta({
                     meta={fechaDeVentas(s.date)}
                     title={s.title || "Sin título"}
                     badge={s.hasTranscript ? { label: "Incluida", tone: "green" } : { label: "Sin transcripción", tone: "amber" }}
-                    onRemove={puedeEditar && busyId !== s.sessionId ? () => void toggleSession(s.sessionId, false) : undefined}
+                    seleccion={puedeEditar ? acciones.seleccionDe(s.sessionId, s.title || "Sin título") : undefined}
+                    onRemove={puedeEditar && !acciones.trabajando ? () => void acciones.quitar([s.sessionId]) : undefined}
                     removeTitle="Sacar de esta propuesta"
                   />
                 ))}
